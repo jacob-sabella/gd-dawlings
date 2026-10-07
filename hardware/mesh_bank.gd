@@ -66,7 +66,15 @@ static func parts(size: Vector3, material: Material) -> MeshBank:
 	var bank := _make(size)
 	var tintable := material.duplicate() as Material
 	if tintable is StandardMaterial3D:
-		(tintable as StandardMaterial3D).vertex_color_use_as_albedo = true
+		var std := tintable as StandardMaterial3D
+		std.vertex_color_use_as_albedo = true
+		# AND as sRGB, which is not a detail. `albedo_color` is authored in sRGB and converted
+		# on the way to the shader; a per-instance colour is taken as linear unless this says
+		# otherwise. So the identical Color means two different things depending on which route
+		# it took, and the instanced route comes out visibly lighter and flatter -- which is
+		# exactly how the timeline's blocks looked when this was missing. With it set, claiming
+		# `x` into a bank built from `material(WHITE)` matches `material(x)` drawn loose.
+		std.vertex_color_is_srgb = true
 	bank.material_override = tintable
 	return bank
 
@@ -101,6 +109,21 @@ static func of(path: String, fallback: Material, named: Dictionary = {}) -> Mesh
 	mm.mesh = baked
 	bank.multimesh = mm
 	return bank
+
+
+## A bank whose instances are DIFFERENT SIZES: the mesh is a unit cube and each instance is
+## scaled by its own transform.
+##
+## For a timeline item, which is as wide as it is long. The fixed-size banks above exist because
+## most repetition really is identical and a scale-free transform is easier to reason about;
+## this is the exception that is still repetition -- same box, same finish, different length.
+static func boxes(material: Material) -> MeshBank:
+	return parts(Vector3.ONE, material)
+
+
+## A bank of unit cubes drawn as little lamps; the scale-varying twin of `lamps`.
+static func strips() -> MeshBank:
+	return lamps(Vector3.ONE)
 
 
 static func _make(size: Vector3) -> MeshBank:
@@ -190,6 +213,19 @@ func colour_of(index: int) -> Color:
 ## Where this slot sits, in the bank's own space.
 func transform_of(index: int) -> Transform3D:
 	return _transforms[index] if index >= 0 and index < _transforms.size() else Transform3D.IDENTITY
+
+
+## Draw only the first `n` slots this frame.
+##
+## For a bank whose POPULATION changes without its capacity changing -- the timeline's items,
+## where scrolling the window changes which items are on screen but never how many exist. The
+## alternative is resizing the buffer on every scroll, which is the node churn this was meant
+## to get rid of wearing a different hat. Callers pack the visible ones into the low slots and
+## say how many; the rest keep whatever they last held and are simply not drawn.
+func show_first(n: int) -> void:
+	if not _committed:
+		return
+	multimesh.visible_instance_count = clampi(n, 0, _transforms.size())
 
 
 func count() -> int:

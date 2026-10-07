@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_the_studio_fits_in_a_frame()
 	_test_many_little_boxes_are_one_object()
 	_test_lettering_stops_when_nobody_can_read_it()
+	_test_scrolling_the_timeline_does_not_rebuild_it()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1541,6 +1542,50 @@ func _test_the_studio_fits_in_a_frame() -> void:
 	check("a project that fits in a bank offers no bank controls",
 			not small.can(DAWBackend.Capability.TRACK_BANKING))
 	small.free()
+
+
+func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
+	# THE REGRESSION THIS EXISTS FOR. Dragging the overview scrubber called mark_dirty(), which
+	# tore down and recreated every lane, every lane label, every flag and every item -- once
+	# per frame, for the whole drag. At twelve lanes that was survivable; at ninety it was not.
+	# Scrolling changes WHERE the project is looked at, not what shape it is.
+	DAW.use(OfflineBackend.new())
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+
+	var labels := timeline.find_children("*", "Label3D", true, false)
+	check("the timeline built some lanes to scroll", labels.size() > 4)
+	# Identity, not count: a rebuild that happened to make the same NUMBER of labels would slip
+	# past a count. These must be the same objects afterwards.
+	var lane_label: Label3D = null
+	for node in labels:
+		if (node as Label3D).text.to_upper().contains("KICK"):
+			lane_label = node
+			break
+	check("a lane is labelled with its track", lane_label != null)
+	var before_id := lane_label.get_instance_id() if lane_label else 0
+
+	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
+	check("items are drawn as one object", blocks != null)
+	var drawn_before := blocks.multimesh.visible_instance_count if blocks else -1
+	var first_before := blocks.transform_of(0).origin.x if blocks else 0.0
+
+	# Scroll, the way the scrubber does.
+	timeline._on_view_changed(timeline.view_start + 4.0, timeline.view_span)
+	check("scrolling did not destroy the lanes",
+			lane_label != null and is_instance_id_valid(before_id))
+	check("and did not mark the surface for a rebuild", not timeline._dirty)
+	# It did have to DO something, or it is not a scroll.
+	check("but the items did move",
+			blocks != null and not is_equal_approx(blocks.transform_of(0).origin.x, first_before))
+
+	# Scrolling far past the end empties the window without resizing anything.
+	timeline._on_view_changed(100000.0, timeline.view_span)
+	check("an empty window draws no items", blocks.multimesh.visible_instance_count == 0)
+	check("and the bank kept its capacity", blocks.count() > 0)
+	check("which is more than it is drawing", blocks.count() >= drawn_before)
+	timeline.queue_free()
 
 
 func _test_lettering_stops_when_nobody_can_read_it() -> void:

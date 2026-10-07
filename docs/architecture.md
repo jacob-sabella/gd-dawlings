@@ -333,12 +333,18 @@ patchbay's jacks, which all wear the same two finishes.
 
 Draw calls at the wide pose, as the MultiMesh conversions landed:
 
-| tracks | original | meters | + buttons | + plate, chip, slot |
-|---|---|---|---|---|
-| 13 | - | 1,596 | 1,124 | **1,014** |
-| 24 | - | 2,066 | 1,430 | **1,221** |
-| 48 | - | 3,116 | 2,102 | **1,677** |
-| 90 | **7,600** | 4,911 | 3,295 | **2,492** |
+| tracks | original | meters | + buttons | + plate, chip, slot | + lettering | + timeline |
+|---|---|---|---|---|---|---|
+| 13 | - | 1,596 | 1,124 | 1,014 | 821 | **407** |
+| 24 | - | 2,066 | 1,430 | 1,221 | 951 | **449** |
+| 48 | - | 3,116 | 2,102 | 1,677 | 1,239 | **545** |
+| 90 | **7,600** | 4,911 | 3,295 | 2,492 | 1,757 | **727** |
+
+The timeline step is the largest single one and it is the batching table above doing the work
+rather than instancing: every item block and lane chip was tinted with its own track's colour,
+which made each one its own material and therefore its own unbatchable call. Collapsing ~180
+materials into two banks is worth far more than collapsing 282 objects into 22, and both
+happened at once.
 
 Banking the patchbay's 180 jacks then moved `draws` not at all and `objects` from 4,919 to
 3,845 at 90 tracks, for the reason above. Primitives halved too, 350k to 171k, because a
@@ -458,9 +464,35 @@ one Mesh per asset and hands it to everyone, and painting the shared copy would 
 loose jack in the studio. `Part.paint_for` is the shared rule, so a banked jack and a loose one
 cannot end up different.
 
+**A per-instance colour is linear; `albedo_color` is sRGB.** This is not a detail and it cost a
+visible regression: the timeline's item blocks came back pale and flat because the same `Color`
+means something lighter when it travels as instance data than when it is set on the material.
+`parts()` therefore sets `vertex_color_is_srgb` as well as `vertex_color_use_as_albedo`, so
+that claiming `x` into a bank built from `material(WHITE)` matches `material(x)` drawn loose.
+Caught by an A/B screenshot; invisible to every counter.
+
 The headless-testability problem above applies doubly here, so `MeshBank` **retains** its
 `_transforms` and `_colours` after `commit()`. They are a few hundred bytes per bank and they are
 the only way the suite can see what a bank was asked to draw.
+
+### Scrolling is not a change of shape
+
+The timeline used to call `mark_dirty()` when the overview scrubber moved, which meant a full
+rebuild on the next frame: every lane bed, every lane label, every flag and every item torn
+down and recreated, once per frame, for the whole of a drag. Survivable at twelve lanes and not
+at ninety.
+
+The split is between what the WINDOW decides and what the PROJECT decides. Lanes, their labels
+and their flags are the project's shape and do not move when you scroll. Only the items and the
+ruler's numbers depend on the window. So a scroll now writes transforms into two MultiMeshes
+and rebuilds the ruler -- a bounded handful of nodes whatever the track count -- and a rebuild
+is reserved for the project actually changing.
+
+The items bank is sized to EVERY item in the project, not to the visible ones, because capacity
+is a fact about the project and visibility is a fact about the window. Each layout packs the
+visible items into the low slots and calls `show_first(n)`; the rest keep whatever they last
+held and are not drawn. Resizing the buffer per scroll would be the node churn this removed,
+wearing a different hat.
 
 ## Audio: the gear, not the mix
 

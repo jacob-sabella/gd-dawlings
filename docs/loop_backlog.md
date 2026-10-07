@@ -245,6 +245,27 @@ This also explains the console results in hindsight: what paid there was replaci
 And it says where the remaining draw calls are -- every `Label3D` carries its own glyph
 texture, so 517 labels is close to 517 unbatchable draw calls.
 
+**The timeline's items are banked, and scrolling no longer rebuilds the surface.** Two things in
+one because they are the same code path. Draw calls 1,757 -> 727 at 90 tracks wide -- the
+largest single step of the whole effort, and it is the MATERIAL collapse doing it rather than
+the object collapse: every item block and lane chip carried its own track colour, so each was
+its own material and its own unbatchable call.
+
+The scroll fix is the one worth keeping for its own sake. `mark_dirty()` on a view change meant
+a full rebuild per frame for the length of a drag; the split that fixes it is between what the
+window decides (items, ruler numbers) and what the project decides (lanes, labels, flags). The
+items bank is sized to every item in the project and drawn down with `show_first(n)`, because
+capacity is a fact about the project and visibility is a fact about the window.
+
+**A per-instance colour is linear and `albedo_color` is sRGB**, which made the blocks come back
+pale and flat. No counter would ever have said so -- it was an A/B screenshot, again. That is
+twice now that a draw-call win has quietly changed how something looks, so the A/B is not
+optional on this kind of work.
+
+I also nearly shipped a regression test that did not test anything: reverting the scroll fix
+left it green, because `mark_dirty()` only sets a flag and the test never ran the frame that
+acts on it. The mutation check is what found that, not the test passing.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.
@@ -263,10 +284,10 @@ and re-measuring is what turned "labels are probably the problem" into a number,
 one flag. And the test walks the whole built studio asserting every label has a range, rather
 than testing the helper -- a helper that is correct and uncalled is the actual failure mode
 here. Verified by deleting one call site and watching it fail by name.
-- The timeline is 282 meshes at 90 tracks, the largest mesh population left. Items are uniform
-  boxes in per-track colours, so they bank cleanly AND collapse materials -- both counters.
-- Knobs and fader caps are authored parts and `MeshBank.of` now handles those. They turn and
-  slide, so they need `move_slot` on every value change rather than a one-time claim.
+- Knobs and fader caps are authored parts and `MeshBank.of` handles those. They turn and slide,
+  so they need `move_slot` on every value change rather than a one-time claim. ~180 objects at
+  90 tracks, but they share materials, so expect an `objects` win and little on `draws`.
 - Guest write round-tripping of provisional values; participant roster on a guest.
-- The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
-  Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.
+- Draw calls are at 727 at 90 tracks wide, from 7,600. This is probably the point to stop and
+  put the effort back into the gear itself; the remaining items are small and the measurement
+  tooling is now good enough to catch a regression if one lands.
