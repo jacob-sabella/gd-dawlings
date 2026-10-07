@@ -43,8 +43,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
   medium is not SCREEN, and the left controller's `by_button` runs the two-mark room
   calibration. Untested against an actual runtime -- there is none on this machine -- so what
   is verified is the arithmetic and the construction, not the tracking.
-- **Presentation switching.** `SurfaceMount.set_mode()` works; no UI or binding calls it, so
-  moving a surface between screen and room is currently a code change.
+- **Presentation switching, in a headset.** The flat overlay is the screen participant's tool
+  and is done; the in-world equivalent is a grab handle on the surface itself, which does not
+  exist. Both would call the same `SurfaceMount.set_mode()`.
 
 ## Parked
 

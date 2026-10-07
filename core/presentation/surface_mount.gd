@@ -15,13 +15,39 @@ extends Node3D
 @export var room_anchor: Node3D
 @export var studio_set: Node3D
 
+## Framing margin. The surface does not fill the viewport edge to edge, because a console whose
+## outermost fader is against the frame reads as cropped even when it is not.
+const SCREEN_MARGIN := 1.18
+
 ## {surface_id: Surface}
 var _mounted: Dictionary = {}
+## {surface_id: Transform3D} -- where the studio placed it, which is the authored layout and the
+## only placement in the project a human wrote by hand. Captured at registration because the
+## node's own transform stops being that the moment it is first re-anchored.
+var _authored: Dictionary = {}
 
 
 func register(surface: Surface) -> void:
 	_mounted[surface.surface_id] = surface
+	_authored[surface.surface_id] = surface.transform
+	# Re-framed whenever the surface changes shape. Not a refinement: a surface is registered
+	# before it has built anything, so the FIRST frame is the one that has nothing to measure,
+	# and a console that gained eight tracks is a wider object that no longer fits where it did.
+	surface.rebuilt.connect(_on_surface_rebuilt.bind(surface.surface_id))
 	apply(surface.surface_id)
+
+
+## Only when the viewer has not placed it themselves. Re-framing over someone's own placement
+## would undo it every time Reaper added a track.
+func _on_surface_rebuilt(surface_id: StringName) -> void:
+	if not _mounted.has(surface_id):
+		return
+	var mode := mode_of(surface_id)
+	if mode != Presentation.Mode.SCREEN or Session.layout.has_transform(surface_id, mode):
+		return
+	var surface: Surface = _mounted[surface_id]
+	if surface.get_parent() == screen_stage:
+		surface.transform = _framed_transform(surface)
 
 
 ## Re-anchor one surface according to the local profile.
@@ -34,13 +60,54 @@ func apply(surface_id: StringName) -> void:
 	if target == null:
 		push_warning("SurfaceMount: no anchor for mode %s; leaving %s where it is." % [Presentation.MODE_NAMES.get(mode, mode), surface_id])
 		return
-	if surface.get_parent() != target:
-		var xform := surface.transform
-		surface.get_parent().remove_child(surface)
-		target.add_child(surface)
-		# Placement is per-mode: a console sized for arm's reach in the room is not the same
-		# object on a monitor, so the transform comes from the profile rather than carrying over.
-		surface.transform = Session.layout.transform_for(surface_id, xform)
+	if surface.get_parent() == target:
+		return
+	surface.get_parent().remove_child(surface)
+	target.add_child(surface)
+	# Placement is per-mode: a console at arm's reach in the room is not the same object as a
+	# panel framed to fill a monitor, so the transform is fetched for the mode being entered --
+	# never carried over from the one being left.
+	surface.transform = Session.layout.transform_for(surface_id, mode, _default_transform(surface, mode))
+
+
+## Where a surface goes in a mode the viewer has not placed it in yet.
+func _default_transform(surface: Surface, mode: int) -> Transform3D:
+	var authored: Transform3D = _authored.get(surface.surface_id, Transform3D.IDENTITY)
+	if mode == Presentation.Mode.SCREEN:
+		return _framed_transform(surface)
+	# ROOM and STUDIO are both the authored layout, and that is not a shortcut: the default
+	# layout was written at real heights -- desk at 0.74m, bay at eye level over it -- precisely
+	# so that it describes a believable control room whether the room is virtual or real.
+	return authored
+
+
+## Centre the surface in front of the camera and push it back until it fits.
+##
+## Computed rather than chosen, because the thing being framed changes size with the project.
+## Falls back to the authored placement if the surface has not built its geometry yet, which is
+## the case on the very first frame -- a guessed distance there would be visibly wrong and then
+## silently stay wrong, since nothing recomputes it.
+func _framed_transform(surface: Surface) -> Transform3D:
+	var camera := screen_stage.get_parent() as Camera3D if screen_stage else null
+	var bounds := surface.content_aabb()
+	if camera == null or bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return _authored.get(surface.surface_id, Transform3D.IDENTITY)
+
+	var basis := Basis(Vector3.RIGHT, deg_to_rad(surface.screen_pitch_degrees))
+	# Transform3D, not Basis: a Basis cannot transform an AABB, and what is wanted here is the
+	# footprint of the box once it has been pitched back.
+	var pitched := Transform3D(basis, Vector3.ZERO) * bounds
+	var half_v := tan(deg_to_rad(camera.fov) * 0.5)
+	var aspect := float(camera.get_viewport().get_visible_rect().size.aspect())
+	var distance := maxf(
+			pitched.size.y * 0.5 / half_v,
+			pitched.size.x * 0.5 / (half_v * aspect)) * SCREEN_MARGIN
+
+	# The surface's own origin is not its centre -- a console's origin is at the front edge of
+	# the desk -- so the centre is what gets put on the axis, and the origin follows from it.
+	var centre_in_camera := Vector3(0, 0, -distance)
+	var origin_in_camera := centre_in_camera - basis * bounds.get_center()
+	return screen_stage.transform.affine_inverse() * Transform3D(basis, origin_in_camera)
 
 
 func apply_all() -> void:
@@ -52,6 +119,32 @@ func apply_all() -> void:
 func set_mode(surface_id: StringName, mode: int) -> void:
 	Session.layout.set_mode(surface_id, mode)
 	apply(surface_id)
+	Session.layout.save()
+
+
+func mounted_ids() -> Array:
+	var ids := _mounted.keys()
+	ids.sort()
+	return ids
+
+
+func mode_of(surface_id: StringName) -> int:
+	if not _mounted.has(surface_id):
+		return Presentation.Mode.STUDIO
+	var surface: Surface = _mounted[surface_id]
+	return Session.layout.mode_for(surface_id, surface.surface_kind)
+
+
+## Put a surface back where the studio put it, in the mode it is currently in. The escape hatch
+## for a placement dragged somewhere unreachable, which in a headset is a real way to lose a
+## console entirely.
+func reset_placement(surface_id: StringName) -> void:
+	if not _mounted.has(surface_id):
+		return
+	var surface: Surface = _mounted[surface_id]
+	var mode := mode_of(surface_id)
+	Session.layout.local_transforms.erase(LayoutProfile._key(surface_id, mode))
+	surface.transform = _default_transform(surface, mode)
 	Session.layout.save()
 
 

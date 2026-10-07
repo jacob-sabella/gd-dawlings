@@ -11,6 +11,7 @@ extends Node
 ##   godot --path . -- --reaper                          host, OSC to a local Reaper
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
 ##   godot --path . -- --join 192.168.1.40 --xr --ar     join someone else's session, in passthrough
+##   godot --path . -- --place console=screen --stage    console as a panel, with the mover open
 ##
 ## Ports default to Reaper's own OSC defaults: send to 8000, listen on 9000. They are the numbers
 ## in Reaper's own OSC device dialog, so a mismatch here is the first thing to check when the
@@ -52,6 +53,15 @@ func _ready() -> void:
 
 	_build_hud()
 
+	_apply_cli_placement(args["place"])
+
+	var stage := StageManager.new()
+	stage.name = "StageManager"
+	stage.mount = studio.mount
+	add_child(stage)
+	if args["stage"]:
+		stage.open()
+
 
 ## The link is started BEFORE the studio is built, and the order matters: surfaces build
 ## themselves from whatever is in the state cache, so a studio built first would come up as an
@@ -70,6 +80,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"reaper": false, "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
+		"place": {}, "stage": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -77,6 +88,16 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--reaper": out["reaper"] = true
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
+			"--stage": out["stage"] = true
+			"--place":
+				# `--place console=screen`. Scriptable for the same reason everything else here
+				# is a switch: a hybrid arrangement is tested by launching several of these at
+				# once, and a layout you have to click your way into cannot be screenshotted.
+				i += 1
+				if i < argv.size():
+					var pair := argv[i].split("=")
+					if pair.size() == 2:
+						out["place"][StringName(pair[0])] = pair[1]
 			"--ar":
 				out["xr"] = true
 				out["ar"] = true
@@ -101,6 +122,22 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 	return out
 
 
+## Named modes rather than numbers on the command line, because `--place console=2` is a thing
+## nobody can read back a week later. An unknown name is reported rather than ignored: a typo
+## that silently leaves the console where it was looks exactly like the feature not working.
+func _apply_cli_placement(places: Dictionary) -> void:
+	for id in places:
+		var wanted := String(places[id])
+		var mode := -1
+		for candidate in Presentation.MODE_NAMES:
+			if Presentation.MODE_NAMES[candidate] == wanted:
+				mode = candidate
+		if mode < 0:
+			push_warning("bootstrap: --place %s=%s is not one of %s" % [id, wanted, Presentation.MODE_NAMES.values()])
+			continue
+		studio.mount.set_mode(id, mode)
+
+
 ## A corner readout of what this participant actually is. It exists because every failure mode of
 ## this project looks identical from the inside: a silent OSC port, a guest that thinks it is a
 ## host, and an uncalibrated room all render as a perfectly normal studio.
@@ -120,5 +157,5 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  right-drag orbit, wheel zoom, WASD walk" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  right-drag orbit, wheel zoom, WASD walk, tab to move gear" % [
 		role_name, medium_name, Reaper.link_summary(), Reaper.state.tracks.size()]

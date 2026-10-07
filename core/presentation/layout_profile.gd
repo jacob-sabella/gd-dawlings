@@ -18,8 +18,14 @@ const SAVE_PATH := "user://layout_profile.cfg"
 
 ## {surface_id: int mode}
 var modes: Dictionary = {}
-## {surface_id: Transform3D} -- offsets for SCREEN and STUDIO placement only. ROOM placement is
-## not stored here; see the class note.
+## {"surface_id/mode": Transform3D}. Keyed by MODE as well as surface, because the same console
+## is a different object in each: furniture at arm's reach in the room, and a panel framed to
+## fill a monitor. One transform per surface would mean every switch either arrived at the
+## wrong size or threw away the placement the viewer set in the mode they just left.
+##
+## ROOM placement is still not a preference -- see the class note -- but it is stored here all
+## the same, because a viewer who is not in the physical room has no shared frame to defer to
+## and has to keep their own.
 var local_transforms: Dictionary = {}
 var medium: int = Presentation.Medium.SCREEN
 
@@ -34,12 +40,20 @@ func set_mode(surface_id: StringName, mode: int) -> void:
 	modes[surface_id] = mode
 
 
-func transform_for(surface_id: StringName, fallback: Transform3D) -> Transform3D:
-	return local_transforms.get(surface_id, fallback)
+func transform_for(surface_id: StringName, mode: int, fallback: Transform3D) -> Transform3D:
+	return local_transforms.get(_key(surface_id, mode), fallback)
 
 
-func set_transform(surface_id: StringName, xform: Transform3D) -> void:
-	local_transforms[surface_id] = xform
+func has_transform(surface_id: StringName, mode: int) -> bool:
+	return local_transforms.has(_key(surface_id, mode))
+
+
+func set_transform(surface_id: StringName, mode: int, xform: Transform3D) -> void:
+	local_transforms[_key(surface_id, mode)] = xform
+
+
+static func _key(surface_id: StringName, mode: int) -> String:
+	return "%s/%d" % [surface_id, mode]
 
 
 func save() -> void:

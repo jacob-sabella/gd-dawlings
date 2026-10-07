@@ -21,6 +21,9 @@ var master: MasterSection
 
 func _ready() -> void:
 	surface_kind = &"console"
+	# Compensates the panel's own sixty-degree lay-back, less fifteen, so that on a monitor you
+	# are looking slightly DOWN at the desk rather than straight into its face.
+	screen_pitch_degrees = 45.0
 	if surface_id == &"":
 		surface_id = &"console"
 	super()
@@ -83,3 +86,9 @@ func _rebuild() -> void:
 	master.name = "Master"
 	master.position = Vector3(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 	_panel.add_child(master)
+
+
+## The tilted panel, not the desk. The carcass is twice the height of the controls and carries
+## nothing; on a monitor it is two thirds of the screen spent on a black box.
+func framing_root() -> Node3D:
+	return _panel if _panel else self
