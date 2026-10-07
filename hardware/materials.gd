@@ -63,6 +63,31 @@ static func reel_flange() -> StandardMaterial3D:
 		return m)
 
 
+## A rack blanking panel: the plate that fills a U nobody has put anything in.
+##
+## A SIXTH of the chassis albedo, which looks like far too much written down and is about right
+## on screen. Two things conspire. The first attempt reused the chassis albedo with a rougher
+## finish -- dimmer in the inspector, brighter in the render, because roughness spreads the
+## practicals across the whole panel instead of into one highlight. The second attempt halved
+## the albedo and changed almost nothing visible, which is the part worth remembering: the
+## thing a blank is compared against is a faceplate that is mostly knobs, lettering and the
+## shadows between them, so an unbroken plate of the same paint is simply a brighter object.
+##
+## Matching a number to a number is the wrong instrument here. The two were A/B'd on screen,
+## including one deliberate overshoot to near-black to confirm albedo was the lever at all --
+## after halving it twice with no visible effect, that was no longer obvious.
+##
+## What a blank has to say is "there is room here". A blank finished like a faceplate says
+## "this unit is switched off", and a blank brighter than a faceplate says "look at me".
+static func blanking_panel() -> StandardMaterial3D:
+	return _cached("blanking_panel", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.014, 0.015, 0.017)
+		m.roughness = 0.80
+		m.metallic = 0.20
+		return m)
+
+
 ## The master section's plate. A shade lighter than the chassis and no more: master sections
 ## have always been set apart by finish, but brushed aluminium next to a dark painted desk under
 ## a key light reads as a white rectangle and takes the eye off the twelve channels that are

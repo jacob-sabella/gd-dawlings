@@ -373,6 +373,37 @@ land at 1.00ms / 1.37ms worst, consistent with the figures already recorded here
 history was sound and today's run was the anomaly. The suspicious part was never the value, it
 was that three different poses agreed to the second decimal.
 
+**A part-filled rack bay was a hole you could see the far wall through.** The frame is built
+to the bay's full capacity, because that is what makes two bays line up, and six plugins in a
+twelve-U bay left six rows with nothing in them. Blanking panels now, which is what a real rack
+has in them and the only honest way to draw the gap -- banked, because every blank is the same
+object in a different place.
+
+Same failure family as the bank selector and the rack's page control: the gear misrepresenting
+the project in the direction of looking simpler than it is. That is three instances now, and
+the tell is always the same -- something absent with nothing saying it is absent.
+
+Also the fifth doc-vs-code gap, and the most embarrassing kind: the class header said "A rack
+fills bottom-up" while an inline comment eleven lines below said "Filled from the top down".
+**Two comments in one file contradicting each other, with the code agreeing with the lower
+one.**
+
+**Two things about the blanks' finish are worth keeping.** The first attempt reused the chassis
+albedo with a rougher finish: dimmer in the inspector, BRIGHTER on screen, because roughness
+spreads the practicals across the whole panel instead of into one highlight. The second halved
+the albedo and changed almost nothing visible -- at which point it stopped being obvious that
+albedo was the lever at all, so it was pushed to near-black as a deliberate overshoot to prove
+it was. It is now a sixth of chassis, which looks absurd written down and is right on screen,
+because the thing a blank is compared against is a faceplate that is mostly knobs, lettering
+and the shadows between them.
+
+**And the test caught itself lying.** The first version asserted counts and rows and carried a
+comment claiming it would catch blanks placed in the wrong rows. Mutation said otherwise:
+reversing the row range, so the blanks cover the gear and the hole stays at the bottom, left
+every check green. Same disease as the four found in the source this week -- prose asserting
+what the thing below it does not do -- this time in the suite that exists to catch it. Now
+asserts WHERE: every blank below the lowest unit.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

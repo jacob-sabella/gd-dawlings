@@ -60,6 +60,7 @@ func _ready() -> void:
 	_test_many_little_boxes_are_one_object()
 	_test_lettering_stops_when_nobody_can_read_it()
 	_test_scrolling_the_timeline_does_not_rebuild_it()
+	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -1769,6 +1770,64 @@ func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
 ##
 ## Scoped to hardware/, which is where surfaces live. The mounts and the studio are exactly the
 ## layer that IS allowed to know these things, which is the whole point of the separation.
+## A part-filled rack is a rack with room in it, not a rack with a hole in it.
+##
+## The frame is built to the bay's full capacity because that is what makes two bays line up,
+## so a bay holding six units out of twelve left six empty rows you could see the far wall
+## through. It read as a modelling mistake rather than as space, which is the same class of
+## failure as the bank selector and the rack's own page control: the gear misrepresenting the
+## project, in the direction of looking simpler than it is.
+func _test_an_unfilled_rack_bay_is_blanked_off() -> void:
+	DAW.use(OfflineBackend.new())
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack._process(0.0)
+
+	var units := rack.find_children("*", "RackUnit", true, false)
+	check("the stand-in racks some plugins", units.size() > 0)
+
+	var plates := rack.find_children("BlankPlates", "MeshBank", true, false)
+	check("a part-filled bay is blanked off", plates.size() > 0)
+
+	var unit_height := RackUnit.U * RackUnit.UNITS_TALL
+	var per_bay := int(floor(RackSurface.BAY_HEIGHT / unit_height))
+	var screws := rack.find_children("BlankScrews", "MeshBank", true, false)
+	check("the blanks are screwed in", screws.size() == plates.size())
+
+	var blanked := 0
+	for bank in plates:
+		blanked += (bank as MeshBank).count()
+	# Rows, not counts. The whole bug was a row with nothing in it, so the assertion has to be
+	# that every row of every bay is accounted for -- a blank bank with the right NUMBER of
+	# plates sitting in the wrong bay would satisfy a count and leave the hole exactly where
+	# it was.
+	var bays := int(ceil(float(units.size()) / float(per_bay)))
+	check("the stand-in fills one bay and does not fill it", bays == 1 and units.size() < per_bay)
+	check("every row of the bay is either a unit or a blank",
+			units.size() + blanked == per_bay * bays)
+	check("four screws to a blank", (screws[0] as MeshBank).count() == blanked * 4)
+
+	# Banked, not loose. Six blanks and twenty-four screws as individual meshes would be thirty
+	# objects to say nothing at all, in the surface that already has the most of anything.
+	check("the blanks are one object, not one each", (plates[0] as MeshBank).count() > 1)
+
+	# WHERE, not just how many. The arithmetic above is satisfied by blanks laid over the top of
+	# the units -- the same count, the same rows, the gear hidden behind panels and the hole
+	# still at the bottom. Found by mutation: reversing the row range left every check green.
+	# Units fill top-down, so every blank must sit below the lowest unit.
+	var lowest_unit := INF
+	for unit in units:
+		lowest_unit = minf(lowest_unit, (unit as Node3D).position.y)
+	var highest_blank := -INF
+	for bank in plates:
+		var mesh_bank := bank as MeshBank
+		for i in mesh_bank.count():
+			highest_blank = maxf(highest_blank, mesh_bank.transform_of(i).origin.y)
+	check("the blanks are below the gear, not over it", highest_blank < lowest_unit)
+
+	rack.queue_free()
+
+
 func _test_a_surface_cannot_ask_what_it_is_looking_through() -> void:
 	# Each: a thing a surface must not reach for, and what goes wrong when one does.
 	var forbidden := {
