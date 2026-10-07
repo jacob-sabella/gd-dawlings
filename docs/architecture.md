@@ -700,3 +700,70 @@ hand was, which on a desk three faders wide is audibly the wrong fader.
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.
+
+## The gear goes around the person, not around the room
+
+For six ticks this was a museum of hardware you walk around. Every ergonomic problem it had
+descended from that one decision: gear at fixed room positions, at heights sized for an average
+standing adult, read off 3mm silkscreen, operated by fine dragging. The tell was a single line
+in the renderer -- `const MIN_CAP_ANGLE := 0.0054` -- one person's eyesight baked in as a global
+constant, with nothing anywhere able to ask for a different one.
+
+The deeper failure is worth stating plainly, because it is the thing a 3D DAW has to answer for:
+a screen DAW shows ninety channels with zero travel, and this room made you walk. Space is a
+cost before it is a feature. `FocusRig` is the payment. In a volume, "bring this to me" costs
+nothing and loses nothing: the focused surface comes to a measured working distance at the size
+your eyes want, and the others do not minimise or go behind a tab -- they arc out to the edge of
+vision, full size, still live, one head turn away. No screen can do that.
+
+Three pieces, and the split between them is the design:
+
+* **`Ergonomics`** is a description of a PERSON -- eye height, reach, how far the neck turns,
+  how small a letter they can read, how much motion they tolerate. It owns no nodes. Everything
+  that used to be an assumption about the reader is now a field on it, and `Lettering.reader`
+  points at one, so turning text up buys *distance* rather than merely enlarging glyphs.
+* **`BodyFrame`** is where that person is. Position follows the head immediately; yaw follows
+  only past a deadzone, and then chases the deadzone EDGE rather than the head. Content on the
+  head cannot be looked away from and is nauseating in about a minute; content in the room is
+  what made you walk. This is the thing in between, and the damping is an exponential close so
+  the comfort setting means the same at 72Hz and 120Hz.
+* **`FocusRig`** decides where surfaces go in that frame, and is deliberately not a Mode.
+  `Presentation.Mode` says where a surface LIVES and is a preference someone keeps; focus is
+  what they are doing this minute. Conflating them would hand someone back a session with the
+  compressor still in their face from last Tuesday.
+
+### Three constraints of three different kinds
+
+The placement maths is four lines, and getting it wrong three times was entirely about treating
+the constraints as the same kind of thing. They are not:
+
+* fitting inside the eye-and-neck sweep is a **lower** bound -- any closer and it overflows,
+* reading the smallest label on it is an **upper** bound,
+* and reach is a **preference**, which the other two clamp.
+
+Treating reach as a third hard constraint is what put a 1.2m rack 35cm from the viewer's face.
+It is not true that a surface must be within arm's length, only that you would like it to be; a
+tall rack cannot be both reachable and visible, and the real resolution is that you lean in,
+exactly as at a real rack. The sweep bound also has to be taken on BOTH axes against DIFFERENT
+angles, because a neck yaws much further than it pitches. Asking only about width is what let a
+narrow rack claim it could come close.
+
+When the two bounds genuinely cross, `too_big_to_place` says so instead of returning a
+compromise nobody can use. It is true of the FX rack today, at default settings -- 0.98m to fit
+the sweep against 0.96m of legibility -- and mostly because the rack carries six empty blanking
+units it inherited from being a real 19" rack in a real room. That is the correct report: it is
+a layout problem, not a placement one, and the answer is to bank, arc or trim the surface.
+
+### What a render cannot check
+
+Half of this round's bugs were invisible in a photograph and found only by printing the
+arrangement in body space: parked surfaces at 132 degrees (behind the shoulders, where "visible
+at a glance" is false), parked surfaces nearer than the focused one, and two sign conventions
+for "bearing" disagreeing so the arc was mirrored. All three rendered as a plausible room.
+
+The one that cost the most was the opposite failure -- a render that looked *unchanged*. Focus
+ran at `_ready`, before any surface had built its geometry, so every surface measured as an
+empty box, took the fallback distance and was never corrected. `--focus` appeared to do nothing
+at all, and the first three diagnoses were of the placement maths, which was fine. Surfaces are
+now re-placed on every `rebuilt` signal, which is required anyway: a console that gains twenty
+tracks is a different size, and a distance derived from the old one is wrong.

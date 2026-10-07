@@ -52,11 +52,24 @@ func _ready() -> void:
 	# and it only gets one chance to do it.
 	studio.medium = medium
 	studio.xr_bootstrap = xr
+	# The body before the room, so nothing is ever built for the wrong one and then corrected.
+	if args["no_motion"]:
+		studio.ergonomics.motion_scale = 0.0
+	if args["seated"]:
+		studio.ergonomics = Ergonomics.seated_default()
+	if args["eyes"] > 0.0:
+		studio.ergonomics.text_scale = args["eyes"]
+	Lettering.reader = studio.ergonomics
 	add_child(studio)
 
 	_build_hud()
 
 	_apply_cli_placement(args["place"])
+	_apply_cli_focus(args["focus"])
+	if args["detach_body"] and studio.body != null:
+		# After one frame, so the rig has taken its pose from the head before it is cut loose.
+		studio.body._process(0.0)
+		studio.body.detach()
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
 		studio.timeline.set_view(view.x, view.y)
@@ -94,6 +107,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
+		"focus": "", "detach_body": false, "no_motion": false, "eyes": 0.0, "seated": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -105,6 +119,22 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["tracks"] = int(argv[i])
+			"--focus":
+				# `--focus rack`. Same reason as --place: the summoned arrangement is the
+				# whole claim this feature makes and it cannot be photographed by hand.
+				i += 1
+				if i < argv.size():
+					out["focus"] = argv[i]
+			"--eyes":
+				# `--eyes 2.0` -- this reader needs twice the angular cap height. The one
+				# switch that proves the accessibility work is real rather than declared:
+				# everything in the room has to get closer, not merely larger.
+				i += 1
+				if i < argv.size():
+					out["eyes"] = float(argv[i])
+			"--seated": out["seated"] = true
+			"--detach-body": out["detach_body"] = true
+			"--no-motion": out["no_motion"] = true
 			"--reaper": out["reaper"] = true
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
@@ -167,6 +197,31 @@ func _apply_cli_placement(places: Dictionary) -> void:
 		studio.mount.set_mode(id, mode)
 
 
+## Snapped rather than glided, and the distinction is not a detail. The glide exists so that a
+## surface arriving at your hands reads as having travelled there; a surface that was ALWAYS
+## there has not travelled, and animating it in at startup says something untrue about where it
+## came from. It also meant every screenshot of a focused surface caught it in flight -- the
+## first `--focus rack` render was the rack still sitting in the room, photographed from behind.
+func _apply_cli_focus(wanted: String) -> void:
+	if wanted.is_empty():
+		return
+	if studio.focus == null:
+		# Loud, because the silent version of this cost an afternoon: --focus did nothing, every
+		# screenshot came back as an untouched room, and the renders were read as a placement bug
+		# in the maths rather than as the rig never having been asked.
+		push_warning("bootstrap: --focus %s ignored, this studio has no focus rig" % wanted)
+		return
+	for surface in studio.focus.surfaces:
+		if String(surface.surface_id) == wanted:
+			var motion: float = studio.ergonomics.motion_scale
+			studio.ergonomics.motion_scale = 0.0
+			studio.focus.focus(surface.surface_id)
+			studio.ergonomics.motion_scale = motion
+			return
+	push_warning("bootstrap: --focus %s is not one of %s" % [wanted,
+			studio.focus.surfaces.map(func(s): return String(s.surface_id))])
+
+
 ## A corner readout of what this participant actually is. It exists because every failure mode of
 ## this project looks identical from the inside: a silent OSC port, a guest that thinks it is a
 ## host, and an uncalibrated room all render as a perfectly normal studio.
@@ -186,5 +241,5 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  right-drag orbit, wheel zoom, WASD walk, tab to move gear" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  +/- text size  |  tab move gear" % [
 		role_name, medium_name, DAW.summary(), DAW.state.tracks.size()]

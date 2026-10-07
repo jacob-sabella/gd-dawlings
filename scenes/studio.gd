@@ -75,6 +75,11 @@ var screen_stage: Node3D
 var room_anchor: RoomAnchor
 var studio_set: Node3D
 var mount: SurfaceMount
+var body: BodyFrame
+var focus: FocusRig
+## This participant's body. Everything placed for a person is placed from it, and it is one
+## object rather than a scattering of constants precisely so there is somewhere to change it.
+var ergonomics := Ergonomics.new()
 
 var console: ConsoleSurface
 var rack: RackSurface
@@ -369,6 +374,28 @@ func _build_anchors() -> void:
 	studio_set.name = "StudioSet"
 	add_child(studio_set)
 
+	# The frame a person's own gear sits in, as distinct from the room's. Parented to the studio
+	# rather than the head: it follows the head itself, with a deadzone, which is the whole
+	# reason it exists. See body_frame.gd.
+	body = BodyFrame.new()
+	body.name = "BodyFrame"
+	body.head = head
+	add_child(body)
+
+	# A light that travels with the person. Summoned gear leaves the room's lamps behind -- the
+	# first rack pulled to arm's length arrived in total darkness, which is both useless and a
+	# fair description of what body-relative content is: not in the room any more. A headlamp
+	# would flatten everything it hit, so this sits up and to the working side, which is where
+	# the lamp on a real desk goes and for the same reason.
+	var work_light := OmniLight3D.new()
+	work_light.name = "WorkLight"
+	work_light.position = Vector3(0.42 * signf(ergonomics.handedness), 0.30, 0.10)
+	work_light.light_color = Color(1.0, 0.95, 0.88)
+	work_light.light_energy = 3.2
+	work_light.omni_range = 2.4
+	work_light.shadow_enabled = false
+	body.add_child(work_light)
+
 	mount = SurfaceMount.new()
 	mount.name = "SurfaceMount"
 	mount.screen_stage = screen_stage
@@ -428,6 +455,16 @@ func _build_surfaces() -> void:
 	deck.rotation_degrees = Vector3(-20, -32, 0)
 	studio_set.add_child(deck)
 	mount.register(deck)
+
+	focus = FocusRig.new()
+	focus.name = "FocusRig"
+	focus.body = body
+	focus.ergonomics = ergonomics
+	focus.surfaces = [console, patchbay, rack, deck, timeline]
+	focus.move = _glide
+	add_child(focus)
+	if mount != null:
+		mount.held = focus.holds
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -561,6 +598,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		_orbit_yaw -= event.relative.x * 0.005
 		_orbit_pitch = clampf(_orbit_pitch - event.relative.y * 0.005, -1.4, 1.2)
 		_update_camera()
+	elif event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			# Walk the gear past you one piece at a time, and off either end to put it back.
+			# Shift goes the other way. One key, no modifier needed to start, and the exit is
+			# where you would find it by accident.
+			KEY_F:
+				focus.cycle(-1 if event.shift_pressed else 1)
+			KEY_ESCAPE:
+				focus.release()
+			# Comfort and eyesight, live, because the only way anyone finds the right value is
+			# by changing it while looking at the thing.
+			KEY_EQUAL, KEY_KP_ADD:
+				_set_text_scale(ergonomics.text_scale * 1.15)
+			KEY_MINUS, KEY_KP_SUBTRACT:
+				_set_text_scale(ergonomics.text_scale / 1.15)
+			KEY_0:
+				_set_text_scale(1.0)
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_orbit_distance = maxf(0.4, _orbit_distance - 0.12)
@@ -582,6 +636,40 @@ func _process(delta: float) -> void:
 		var yaw := Basis(Vector3.UP, _orbit_yaw)
 		_orbit_target += yaw * move.normalized() * delta * 1.4
 		_update_camera()
+
+
+## Move a surface to where the focus rig wants it, over time rather than instantly.
+##
+## The glide is not decoration. Something large arriving next to your face with no transit is
+## disorienting and leaves you unsure what you are now looking at; watching it travel tells you
+## which thing came and where it came from. It is also the first thing someone prone to motion
+## sickness needs to turn off, which is why the duration is a property of the person.
+func _glide(surface: Surface, parent: Node3D, local: Transform3D) -> void:
+	# Reparented first, keeping the world pose, so the travel is computed inside the frame it is
+	# travelling to. Reparenting at the END would teleport the surface on arrival; reparenting
+	# without keeping the pose teleports it on departure.
+	if parent != null and surface.get_parent() != parent:
+		surface.reparent(parent, true)
+	var seconds := 0.42 * clampf(ergonomics.motion_scale, 0.0, 2.0)
+	if seconds <= 0.01:
+		surface.transform = local
+		return
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(surface, "transform", local, seconds)
+
+
+## Lettering is sized once, when a label is built, and then enforced by the rendering server.
+## So changing whose eyes it is for means rebuilding the labels -- which is cheap, and is the
+## honest consequence of the visibility range being server-side rather than per-frame script.
+func _set_text_scale(to: float) -> void:
+	ergonomics.text_scale = clampf(to, 0.4, 4.0)
+	Lettering.reader = ergonomics
+	for node in find_children("*", "Node3D", true, false):
+		if node is Surface:
+			(node as Surface).mark_dirty()
+	if focus != null and focus.is_focused():
+		focus.focus(focus.focused_id)
 
 
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot

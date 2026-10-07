@@ -72,6 +72,13 @@ func _on_surface_rebuilt(surface_id: StringName) -> void:
 func apply(surface_id: StringName) -> void:
 	if not _mounted.has(surface_id):
 		return
+	# A surface the focus rig has summoned is not in a mode's anchor and must not be dragged back
+	# into one. Nothing calls this while a surface is summoned today, so the guard is not fixing
+	# a live bug -- it is making the ownership explicit, because the mount and the rig both write
+	# surface transforms and the failure when they disagree is silent: the surface simply ends up
+	# somewhere, and the render still looks like a studio.
+	if held.is_valid() and held.call(surface_id):
+		return
 	var surface: Surface = _mounted[surface_id]
 	var mode := Session.layout.mode_for(surface_id, surface.surface_kind)
 	var target := _anchor_for(mode)
@@ -126,6 +133,11 @@ func _framed_transform(surface: Surface) -> Transform3D:
 	var centre_in_camera := Vector3(0, 0, -distance)
 	var origin_in_camera := centre_in_camera - basis * bounds.get_center()
 	return screen_stage.transform.affine_inverse() * Transform3D(basis, origin_in_camera)
+
+
+## Asked before re-anchoring anything: does something else currently own this surface's
+## transform? Left unset when there is no focus rig, in which case the mount owns everything.
+var held: Callable = Callable()
 
 
 func apply_all() -> void:

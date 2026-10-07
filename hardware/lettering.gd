@@ -26,14 +26,22 @@ extends Object
 ## rendering server with no per-frame script, and it is per-camera -- which is what makes it
 ## correct in a headset, where two eyes and a moving head decide independently.
 
-## Cap height, in radians, below which lettering is taken to be unreadable.
+## Whose eyes this is being decided for.
 ##
-## 0.0054 rad is about 0.31 degrees: three pixels of cap on a 850px viewport at a 75 degree
-## vertical field of view. Three pixels is not a judgement call about taste -- a capital letter
-## three pixels tall cannot carry a glyph. The threshold is deliberately well past the point
-## where text becomes HARD to read and at the point where it becomes impossible, because the
-## failure mode of being too eager is text vanishing while someone was squinting at it.
-const MIN_CAP_ANGLE := 0.0054
+## It used to be a constant -- 0.0054 radians, three pixels of capital on a 850px viewport --
+## and the constant was not wrong so much as unmarked. It is a true statement about one reader.
+## Treating it as a property of TEXT rather than of a PERSON is what made every label in the
+## project silently assume the same eyesight, and it is the smallest, clearest instance of the
+## thing wrong with the whole layout: there is no average body to build for.
+##
+## Static, and not injected into every call, for a boring reason that is worth stating: a
+## visibility range is set once when a label is built and then enforced by the rendering
+## server per camera, so there is no per-frame hook to pass a profile through. Changing the
+## profile therefore needs the labels rebuilt, which `Lettering.reader_changed` asks for.
+static var reader: Ergonomics = Ergonomics.new()
+
+## Kept as the default a fresh Ergonomics carries, so the old behaviour is still named.
+const DEFAULT_MIN_CAP_ANGLE := 0.0054
 
 ## Fades out over the 35% beyond the legibility distance rather than popping. The label is at
 ## full opacity for the whole range it can be read in; the fade happens entirely inside the
@@ -49,7 +57,7 @@ static func cap_height(label: Label3D) -> float:
 
 ## How far away this label can still be read.
 static func legible_to(label: Label3D) -> float:
-	return cap_height(label) / MIN_CAP_ANGLE
+	return reader.legible_to(cap_height(label))
 
 
 ## Stop drawing this label once nobody could read it anyway.

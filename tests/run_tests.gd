@@ -69,6 +69,9 @@ func _ready() -> void:
 	_test_every_grab_tab_is_clipped_to_its_own_gear()
 	_test_a_loom_lies_on_the_floor_and_misses_the_furniture()
 	_test_every_light_in_the_room_comes_out_of_something()
+	_test_a_body_is_measured_rather_than_assumed()
+	_test_the_frame_follows_a_turn_without_chasing_a_glance()
+	_test_summoned_gear_lands_where_a_person_can_use_it()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2927,11 +2930,26 @@ func _test_every_light_in_the_room_comes_out_of_something() -> void:
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 
-	var lamps := studio.find_children("*", "OmniLight3D", true, false)
+	# Two populations, and the distinction is the whole reason this check reads the way it does.
+	# A light in the ROOM is at a place, so it needs a fixture at that place or it is a bug. A
+	# light on the BODY is at a person, travels with them, and has no place to put a fixture --
+	# nor any business having one, since a lamp hanging in front of your own eyes is not a thing
+	# that exists. Lumping them together is what this test did first, and it reported the work
+	# light as a missing lamp stand.
+	var every_light := studio.find_children("*", "OmniLight3D", true, false)
+	var carried := every_light.filter(func(n): return studio.body.is_ancestor_of(n))
+	var lamps := every_light.filter(func(n): return not studio.body.is_ancestor_of(n))
 	var stands := studio.studio_set.get_children().filter(
 			func(n): return n.is_in_group(&"lamp_stand"))
 	check("every practical in the table is a light (%d of %d)"
 			% [lamps.size(), Studio.PRACTICALS.size()], lamps.size() == Studio.PRACTICALS.size())
+	# A carried light is exempt from needing a fixture, so it has to pay for that exemption some
+	# other way: it must cost nothing extra to move. A shadow-casting light bolted to the head
+	# re-renders every shadow in the room on every frame the person turns, which is the one thing
+	# a body-relative light must never do.
+	check("the body carries a work light", carried.size() >= 1)
+	for light in carried:
+		check("%s casts no shadows" % light.name, not (light as OmniLight3D).shadow_enabled)
 	check("every practical in the table has a stand (%d of %d)"
 			% [stands.size(), Studio.PRACTICALS.size()], stands.size() == Studio.PRACTICALS.size())
 
@@ -2962,5 +2980,155 @@ func _test_every_light_in_the_room_comes_out_of_something() -> void:
 		check("lamp %d is inside the room" % i,
 				absf(at.x) < half_width - 0.2 and absf(at.z) < half_depth - 0.2
 				and at.y < Studio.WALL_HEIGHT - 0.2)
+
+	studio.queue_free()
+
+
+func _test_a_body_is_measured_rather_than_assumed() -> void:
+	# For six ticks the only statement this project made about human eyesight was one constant in
+	# the renderer -- MIN_CAP_ANGLE, 0.0054 radians -- and everything downstream silently assumed
+	# the reader was the person who typed it. These checks exist to keep that number, and the
+	# reach and the height beside it, as properties of a PERSON that the layout asks about.
+	var standing := Ergonomics.standing()
+	var seated := Ergonomics.seated_default()
+	check("a seated person's eyes are lower than a standing one's",
+			seated.eye_height < standing.eye_height)
+	check("a seated person looks further down", seated.gaze_down > standing.gaze_down)
+	check("a seated person reaches less far", seated.reach < standing.reach)
+
+	# Legibility scales with the text setting, and that is the whole accessibility claim: turning
+	# text up does not merely enlarge it, it buys DISTANCE, which is what lets a surface be
+	# further away and therefore bigger in the room. A version that only scaled the glyphs would
+	# pass a screenshot and fail the person.
+	var cap := 0.005
+	var plain := standing.legible_to(cap)
+	standing.text_scale = 2.0
+	check("doubling the text setting halves the distance a label must be read from (%.2fm -> %.2fm)"
+			% [plain, standing.legible_to(cap)],
+			is_equal_approx(standing.legible_to(cap) * 2.0, plain))
+	standing.text_scale = 1.0
+
+	# Both axes, against different angles. The width-only version of this put a 1.2m rack 35cm
+	# from the viewer's face, because the rack is narrow and nothing asked about its height.
+	var wide := Vector3(1.2, 0.2, 0.1)
+	var tall := Vector3(0.2, 1.2, 0.1)
+	check("a wide surface is pushed back", standing.fits_in_sweep(wide) > 0.3)
+	check("a tall surface is pushed back further than a wide one of the same span",
+			standing.fits_in_sweep(tall) > standing.fits_in_sweep(wide))
+
+	# Reach is a preference the two bounds clamp, not a third hard constraint. Placing a surface
+	# that cannot fit inside the sweep at arm's length anyway is how it ends up in your face.
+	var big := AABB(Vector3(-0.6, -0.6, 0), Vector3(1.2, 1.2, 0.1))
+	var near := AABB(Vector3(-0.1, -0.05, 0), Vector3(0.2, 0.1, 0.1))
+	var placed_big := standing.place(0.0, big, true, cap)
+	var placed_near := standing.place(0.0, near, true, cap)
+	check("a surface too big for the sweep is placed beyond reach rather than inside it",
+			(placed_big * big.get_center()).length() > standing.reach)
+	check("a small surface is placed at a comfortable working distance (%.2fm)"
+			% (placed_near * near.get_center()).length(),
+			absf((placed_near * near.get_center()).length() - standing.working_distance()) < 0.02)
+	check("nothing is ever placed closer than the near limit",
+			(placed_near * near.get_center()).length() >= Ergonomics.NEAR_LIMIT - 0.001)
+
+	# And when the two bounds genuinely cross, it says so rather than returning a compromise.
+	check("a surface that cannot be both read and swept is reported, not fudged",
+			standing.too_big_to_place(big, 0.0005))
+	check("a surface that can be both is not", not standing.too_big_to_place(near, cap))
+
+	# Placement is bearing-relative, which is what makes the arc an arc.
+	var left := standing.place(-60.0, near, false, cap) * near.get_center()
+	var right := standing.place(60.0, near, false, cap) * near.get_center()
+	check("a bearing to the left puts the surface to the left", left.x < -0.1)
+	check("left and right are mirror images (%.3f vs %.3f)" % [left.x, right.x],
+			is_equal_approx(left.x, -right.x) and is_equal_approx(left.z, right.z))
+
+
+func _test_the_frame_follows_a_turn_without_chasing_a_glance() -> void:
+	# The single most important comfort rule in the project, and the cheapest to get wrong: gear
+	# bolted to the head is gear that can never be looked away from, which is nauseating within
+	# about a minute. Gear bolted to the ROOM is what this studio already was, and it made people
+	# walk. The frame between them follows a deliberate turn and ignores a glance, and these
+	# checks pin exactly that boundary.
+	var dead := 42.0
+	check("a glance inside the deadzone moves nothing",
+			is_equal_approx(BodyFrame.follow_yaw(0.0, deg_to_rad(30.0), dead, 0.5, 1.0), 0.0))
+	check("a glance right to the edge still moves nothing",
+			is_equal_approx(BodyFrame.follow_yaw(0.0, deg_to_rad(41.9), dead, 0.5, 1.0), 0.0))
+
+	# Past the edge it chases the EDGE, not the head. Chasing the head would drag the whole
+	# workspace round with every turn and leave nothing to turn TOWARDS.
+	var turned := BodyFrame.follow_yaw(0.0, deg_to_rad(90.0), dead, 0.0, 1.0)
+	check("a real turn moves the frame to the deadzone edge, not to the head (%.0f deg)"
+			% rad_to_deg(turned), is_equal_approx(rad_to_deg(turned), 90.0 - dead))
+	check("turning the other way is symmetric",
+			is_equal_approx(BodyFrame.follow_yaw(0.0, deg_to_rad(-90.0), dead, 0.0, 1.0), -turned))
+
+	# Damped, and the damping is frame-rate independent -- an exponential close, not a fixed
+	# fraction per tick. A lerp per frame makes the comfort setting mean different things at
+	# 72Hz and 120Hz, which are both headset refresh rates this has to run at.
+	var one_step := BodyFrame.follow_yaw(0.0, deg_to_rad(90.0), dead, 0.5, 0.2)
+	check("damping lands short of the target", absf(one_step) < absf(turned))
+	check("damping moves in the right direction", one_step > 0.0)
+	var halves := BodyFrame.follow_yaw(BodyFrame.follow_yaw(0.0, deg_to_rad(90.0), dead, 0.5, 0.1),
+			deg_to_rad(90.0), dead, 0.5, 0.1)
+	check("two half steps land where one whole step does, so refresh rate does not change feel",
+			absf(halves - one_step) < 0.002)
+
+	# Wrapping. A turn across the back of the compass is a short turn, not a 350-degree one.
+	var wrapped := BodyFrame.follow_yaw(deg_to_rad(175.0), deg_to_rad(-175.0), dead, 0.0, 1.0)
+	check("a turn across the wrap is treated as the short way round",
+			absf(rad_to_deg(angle_difference(wrapped, deg_to_rad(175.0)))) < 1.0)
+
+
+func _test_summoned_gear_lands_where_a_person_can_use_it() -> void:
+	# What a screenshot cannot check. The first arc put two of five surfaces at 132 degrees --
+	# behind the shoulders, where "still visible at a glance" is simply false -- and parked a
+	# small surface at 0.47m while the focused rack sat at 0.98m, so the thing you were NOT using
+	# was nearer than the thing you were. Both rendered as a plausible-looking room.
+	var seen: Array[float] = []
+	for i in 8:
+		var bearing := FocusRig.bearing_for(i)
+		check("parked surface %d is in front of the person (%+.0f deg)" % [i, bearing],
+				absf(bearing) <= FocusRig.MAX_BEARING)
+		check("parked surface %d is clear of the work (%+.0f deg)" % [i, bearing],
+				absf(bearing) >= FocusRig.FIRST_BEARING)
+		seen.append(bearing)
+	check("the arc fills outward from the work alternately, not off one shoulder",
+			seen[0] > 0.0 and seen[1] < 0.0 and absf(seen[2]) > absf(seen[0]))
+
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	studio.ergonomics.motion_scale = 0.0
+	studio.focus.focus(&"rack")
+	studio.body._process(0.0)
+
+	var work := 0.0
+	var parked: Array[float] = []
+	for surface in studio.focus.surfaces:
+		var local := studio.body.global_transform.affine_inverse() * surface.global_transform
+		var centre := local * surface.content_aabb().get_center()
+		if surface.surface_id == &"rack":
+			work = centre.length()
+		else:
+			parked.append(centre.length())
+			check("%s is not behind the viewer (%+.0f deg)" % [surface.surface_id,
+					rad_to_deg(atan2(centre.x, -centre.z))],
+					absf(rad_to_deg(atan2(centre.x, -centre.z))) <= FocusRig.MAX_BEARING + 1.0)
+		check("%s is below eye level, not above it" % surface.surface_id, centre.y < 0.0)
+	for distance in parked:
+		check("nothing parked is nearer than the work (%.2fm vs %.2fm)" % [distance, work],
+				distance > work)
+
+	# Released, everything goes home. Focus is attention, and attention does not persist.
+	studio.focus.release()
+	for surface in studio.focus.surfaces:
+		check("%s went home when focus was released" % surface.surface_id,
+				not studio.body.is_ancestor_of(surface))
+	check("nothing is still held by the rig",
+			studio.focus.surfaces.all(func(s): return not studio.focus.holds(s.surface_id)))
 
 	studio.queue_free()
