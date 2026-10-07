@@ -5,9 +5,13 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Working, verified
 
-- **OSC link.** Codec (encode, decode, bundles, padding), UDP peer, echo guard. 65 headless
+- **DAW abstraction.** `core/daw/` holds the backend contract, the mix cache, the wire
+  vocabulary and the autoload; `core/reaper/` holds only what is Reaper's. Capability queries
+  and the fader taper are per-backend, and `OfflineBackend` is a peer rather than a fallback
+  branch. Adding a second DAW is implementing one class.
+- **OSC link.** Codec (encode, decode, bundles, padding), UDP peer, echo guard. Headless
   checks green via `tools/verify.sh`.
-- **State cache.** Tracks, FX, sends, transport parsed from Reaper's address space.
+- **State cache.** Tracks, FX, sends, transport parsed into `MixState`.
 - **Console.** A strip per track: fader, pan, rec/mute/solo, VU with real ballistics, colour
   chip, dB readout. Built from live track count.
 - **Tape deck.** Transport buttons, position counter, tempo, reels that turn only while Reaper
@@ -20,6 +24,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Capture harness.** `tools/shot.sh`, with reproducible camera framing on the command line.
+- **Presentation switching, both ways.** The flat overlay (Tab) for the screen participant, and
+  a grab handle clipped to each surface for everyone else: tap to cycle anchor, drag to place.
+  Both call the same `SurfaceMount.set_mode()`. The tap/carry split and the anchor cycle are
+  tested; the headset half of it has never met a runtime, like the rest of the XR path.
 - **Guest replication.** Host buffers changes by address at 20Hz, split durable/volatile for
   opposite delivery guarantees, with a full reliable snapshot on join. Verified two ways: the
   snapshot round-trip is asserted field by field in the suite, and `tools/session.sh` brings up
@@ -43,9 +51,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
   medium is not SCREEN, and the left controller's `by_button` runs the two-mark room
   calibration. Untested against an actual runtime -- there is none on this machine -- so what
   is verified is the arithmetic and the construction, not the tracking.
-- **Presentation switching, in a headset.** The flat overlay is the screen participant's tool
-  and is done; the in-world equivalent is a grab handle on the surface itself, which does not
-  exist. Both would call the same `SurfaceMount.set_mode()`.
 
 ## Parked
 

@@ -16,6 +16,11 @@ extends RefCounted
 
 const SAVE_PATH := "user://layout_profile.cfg"
 
+## Where this profile persists. Overridable so a test can exercise save/load without writing
+## over the layout of whoever is running the test -- which, for a profile whose whole content
+## is "where this person likes their gear", is a genuinely annoying thing to clobber.
+var save_path := SAVE_PATH
+
 ## {surface_id: int mode}
 var modes: Dictionary = {}
 ## {"surface_id/mode": Transform3D}. Keyed by MODE as well as surface, because the same console
@@ -63,12 +68,12 @@ func save() -> void:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
 		cfg.set_value("transforms", String(id), local_transforms[id])
-	cfg.save(SAVE_PATH)
+	cfg.save(save_path)
 
 
 func load_saved() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if cfg.load(save_path) != OK:
 		return
 	medium = cfg.get_value("profile", "medium", medium)
 	if cfg.has_section("modes"):

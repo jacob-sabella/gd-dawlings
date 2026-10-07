@@ -109,6 +109,11 @@ func content_aabb() -> AABB:
 	var first := true
 	for node in framing_root().find_children("*", "VisualInstance3D", true, false):
 		var vi := node as VisualInstance3D
+		# Presentation chrome -- the grab handle -- hangs off the surface but is not part of
+		# it. Measuring it would be circular: the handle is placed from this box, so counting
+		# it would grow the box, which moves the handle, which grows the box.
+		if vi.is_in_group(&"presentation_chrome"):
+			continue
 		var box := vi.get_aabb()
 		# Into this surface's frame: a strip is rotated and offset inside the console, and its
 		# own AABB says nothing about where the desk ends.

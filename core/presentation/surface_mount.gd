@@ -19,8 +19,20 @@ extends Node3D
 ## outermost fader is against the frame reads as cropped even when it is not.
 const SCREEN_MARGIN := 1.18
 
+## Room left beside the content for the grab handle, in metres.
+##
+## A fixed allowance rather than part of the measurement, and that is the whole point: the
+## handle is placed from the content box, so measuring the handle would grow the box, which
+## moves the handle. Its size is a constant, so the space it needs can be one too.
+const CHROME_ALLOWANCE := 0.055
+
+## Which modes a tap on a handle walks through, in order.
+const MODE_ORDER := [Presentation.Mode.SCREEN, Presentation.Mode.ROOM, Presentation.Mode.STUDIO]
+
 ## {surface_id: Surface}
 var _mounted: Dictionary = {}
+## {surface_id: SurfaceHandle}
+var _handles: Dictionary = {}
 ## {surface_id: Transform3D} -- where the studio placed it, which is the authored layout and the
 ## only placement in the project a human wrote by hand. Captured at registration because the
 ## node's own transform stops being that the moment it is first re-anchored.
@@ -34,6 +46,12 @@ func register(surface: Surface) -> void:
 	# before it has built anything, so the FIRST frame is the one that has nothing to measure,
 	# and a console that gained eight tracks is a wider object that no longer fits where it did.
 	surface.rebuilt.connect(_on_surface_rebuilt.bind(surface.surface_id))
+	# Built here rather than by the surface: a handle has to ask what mode a surface is in and
+	# tell the mount to change it, and a surface that could answer either question would be a
+	# surface that knows its own presentation. The mount is the one object allowed to.
+	var handle := SurfaceHandle.create(surface, self)
+	_handles[surface.surface_id] = handle
+	surface.add_child(handle)
 	apply(surface.surface_id)
 
 
@@ -101,7 +119,7 @@ func _framed_transform(surface: Surface) -> Transform3D:
 	var aspect := float(camera.get_viewport().get_visible_rect().size.aspect())
 	var distance := maxf(
 			pitched.size.y * 0.5 / half_v,
-			pitched.size.x * 0.5 / (half_v * aspect)) * SCREEN_MARGIN
+			(pitched.size.x * 0.5 + CHROME_ALLOWANCE) / (half_v * aspect)) * SCREEN_MARGIN
 
 	# The surface's own origin is not its centre -- a console's origin is at the front edge of
 	# the desk -- so the centre is what gets put on the axis, and the origin follows from it.
@@ -120,6 +138,57 @@ func set_mode(surface_id: StringName, mode: int) -> void:
 	Session.layout.set_mode(surface_id, mode)
 	apply(surface_id)
 	Session.layout.save()
+	_refresh_handle(surface_id)
+
+
+## The next mode a tap on this surface's handle will move it to.
+##
+## Skips modes with no anchor in this session rather than cycling into them: an AR participant
+## has no virtual set, and a tap that parked the console in a studio that is not being drawn
+## would make it vanish with no way to get it back.
+func next_mode(surface_id: StringName) -> int:
+	var here := mode_of(surface_id)
+	var order := available_modes()
+	if order.is_empty():
+		return here
+	var at := order.find(here)
+	return order[(at + 1) % order.size()] if at >= 0 else order[0]
+
+
+## The modes this session can actually put a surface in, in cycle order.
+func available_modes() -> Array:
+	var out: Array = []
+	for mode in MODE_ORDER:
+		if _anchor_for(mode) != null:
+			out.append(mode)
+	return out
+
+
+## Move a surface one step round the cycle. What a handle tap does.
+func cycle_mode(surface_id: StringName) -> void:
+	var next := next_mode(surface_id)
+	if next != mode_of(surface_id):
+		set_mode(surface_id, next)
+	_refresh_handle(surface_id)
+
+
+## Keep where the viewer just dragged this surface to, for the mode it is currently in.
+func remember_placement(surface_id: StringName) -> void:
+	if not _mounted.has(surface_id):
+		return
+	var surface: Surface = _mounted[surface_id]
+	Session.layout.set_transform(surface_id, mode_of(surface_id), surface.transform)
+	Session.layout.save()
+
+
+func handle_for(surface_id: StringName) -> SurfaceHandle:
+	return _handles.get(surface_id)
+
+
+func _refresh_handle(surface_id: StringName) -> void:
+	var handle: SurfaceHandle = _handles.get(surface_id)
+	if handle != null:
+		handle.refresh()
 
 
 func mounted_ids() -> Array:
@@ -146,6 +215,7 @@ func reset_placement(surface_id: StringName) -> void:
 	Session.layout.local_transforms.erase(LayoutProfile._key(surface_id, mode))
 	surface.transform = _default_transform(surface, mode)
 	Session.layout.save()
+	_refresh_handle(surface_id)
 
 
 func _anchor_for(mode: int) -> Node3D:

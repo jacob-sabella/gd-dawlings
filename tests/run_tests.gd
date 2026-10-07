@@ -37,6 +37,9 @@ func _ready() -> void:
 	_test_rig_calibration_gesture()
 	_test_rig_tip_is_ahead_of_the_grip()
 	_test_ar_studio_draws_no_room()
+	_test_handle_is_chrome_not_gear()
+	_test_handle_cycle_skips_missing_anchors()
+	_test_handle_tap_cycles_and_carry_places()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -485,3 +488,141 @@ func _test_master_is_not_a_track() -> void:
 	check("the snapshot carries the master volume", "/master/volume" in addresses)
 	check("the snapshot carries the master pan", "/master/pan" in addresses)
 	link.free()
+
+
+# --- the in-world grab handle -------------------------------------------------------------
+
+## A surface that is one 20cm cube, so every number below is checkable by hand.
+class BoxSurface extends Surface:
+	func _rebuild() -> void:
+		_clear_built()
+		var m := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.2, 0.2, 0.2)
+		m.mesh = box
+		_adopt(m)
+
+
+## An interactor whose aim is whatever the test says it is.
+class FakeHand extends Interactor:
+	var pose := Transform3D.IDENTITY
+	func aim() -> Transform3D:
+		return pose
+
+
+## Builds a mount with the anchors named in `modes`, one registered BoxSurface, and a throwaway
+## layout profile so the run does not overwrite the layout of whoever is running the tests.
+func _fake_mount(modes: Array) -> Dictionary:
+	var root := Node3D.new()
+	add_child(root)
+	var mount := SurfaceMount.new()
+	root.add_child(mount)
+	for mode in modes:
+		var anchor := Node3D.new()
+		mount.add_child(anchor)
+		match mode:
+			Presentation.Mode.SCREEN: mount.screen_stage = anchor
+			Presentation.Mode.ROOM: mount.room_anchor = anchor
+			Presentation.Mode.STUDIO: mount.studio_set = anchor
+
+	var surface := BoxSurface.new()
+	surface.surface_id = &"box"
+	surface.surface_kind = &"console"
+	mount.add_child(surface)
+
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	mount.register(surface)
+	# Surfaces build on the next _process, and every number the handle needs comes from the
+	# geometry, so the test has to let that frame happen rather than reading an empty box.
+	surface._process(0.0)
+	return {"root": root, "mount": mount, "surface": surface, "saved_layout": saved_layout}
+
+
+func _drop_mount(rig: Dictionary) -> void:
+	Session.layout = rig["saved_layout"]
+	rig["root"].queue_free()
+
+
+## The handle hangs off the surface and travels with it, but a surface framed to fill a monitor
+## must not measure its own handle: the handle is placed from that measurement, so counting it
+## would grow the box, which moves the handle, which grows the box again.
+func _test_handle_is_chrome_not_gear() -> void:
+	var rig := _fake_mount([Presentation.Mode.SCREEN, Presentation.Mode.ROOM, Presentation.Mode.STUDIO])
+	var surface: Surface = rig["surface"]
+	var handle := (rig["mount"] as SurfaceMount).handle_for(&"box")
+
+	check("registering a surface builds it a handle", handle != null)
+	check("the handle rides on the surface", handle.get_parent() == surface)
+
+	var bounds := surface.content_aabb()
+	close_to("the measured width is the gear, not the gear plus a tab", bounds.size.x, 0.2, 0.001)
+	check("the handle sits outside the gear", handle.position.x > bounds.end.x)
+	check("the handle is within a hand's reach of the corner", handle.position.x - bounds.end.x < 0.05)
+
+	_drop_mount(rig)
+
+
+## An AR participant has no virtual set. A tap that parked the console in a studio nobody is
+## drawing would make it vanish with no handle left to tap.
+func _test_handle_cycle_skips_missing_anchors() -> void:
+	var rig := _fake_mount([Presentation.Mode.SCREEN, Presentation.Mode.ROOM])
+	var mount: SurfaceMount = rig["mount"]
+
+	check("a mode with no anchor is not offered", not mount.available_modes().has(Presentation.Mode.STUDIO))
+	check("the two anchored modes are", mount.available_modes().size() == 2)
+
+	mount.set_mode(&"box", Presentation.Mode.SCREEN)
+	check("screen cycles to room", mount.next_mode(&"box") == Presentation.Mode.ROOM)
+	mount.set_mode(&"box", Presentation.Mode.ROOM)
+	check("room wraps back to screen, not into the missing studio",
+			mount.next_mode(&"box") == Presentation.Mode.SCREEN)
+
+	_drop_mount(rig)
+
+
+## The two gestures the handle has to tell apart, and the thing that goes wrong if it cannot:
+## a tap that drifts is a mode switch that also silently nudges the gear, and a carry that
+## reads as a tap throws the surface to another anchor mid-drag.
+func _test_handle_tap_cycles_and_carry_places() -> void:
+	var rig := _fake_mount([Presentation.Mode.SCREEN, Presentation.Mode.ROOM, Presentation.Mode.STUDIO])
+	var mount: SurfaceMount = rig["mount"]
+	var surface: Surface = rig["surface"]
+	var handle := mount.handle_for(&"box")
+
+	var hand := FakeHand.new()
+	hand.set_physics_process(false)
+	rig["root"].add_child(hand)
+
+	mount.set_mode(&"box", Presentation.Mode.ROOM)
+	var before := mount.mode_of(&"box")
+	var resting := surface.global_position
+
+	# A tap: held, jittered by less than the slop, released.
+	handle.grab_begin(hand, handle.global_position)
+	hand.pose = Transform3D(Basis.IDENTITY, Vector3(0, SurfaceHandle.TAP_SLOP * 0.4, 0))
+	handle.grab_move(hand, handle.global_position)
+	handle.grab_end(hand)
+
+	check("a tap moves the surface to the next mode", mount.mode_of(&"box") != before)
+	check("a tap leaves no drift behind",
+			surface.global_position.distance_to(resting) < 0.0001)
+	check("a tap stores no placement",
+			not Session.layout.has_transform(&"box", before))
+
+	# A carry: held and moved well past the slop.
+	var carried_mode := mount.mode_of(&"box")
+	handle.grab_begin(hand, handle.global_position)
+	hand.pose = Transform3D(Basis.IDENTITY, Vector3(0.35, 0, 0))
+	handle.grab_move(hand, handle.global_position)
+	handle.grab_end(hand)
+
+	check("a carry does not also switch modes", mount.mode_of(&"box") == carried_mode)
+	check("a carry moves the surface", surface.global_position.distance_to(resting) > 0.1)
+	check("a carry is remembered for the mode it happened in",
+			Session.layout.has_transform(&"box", carried_mode))
+	check("and not for any other mode",
+			not Session.layout.has_transform(&"box", mount.next_mode(&"box")))
+
+	_drop_mount(rig)
