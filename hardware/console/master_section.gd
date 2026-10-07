@@ -92,6 +92,7 @@ func _label(font_size: int, pos: Vector3) -> Label3D:
 	l.modulate = Color(0.88, 0.89, 0.91)
 	l.outline_size = 0
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(l)
 	return l
 
 

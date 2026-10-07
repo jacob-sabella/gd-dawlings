@@ -62,8 +62,23 @@ func _ready() -> void:
 	if not _active:
 		set_process(false)
 		return
+	_hide_labels = args.has("--hide-labels")
 	# Last, so the scene is up and the backend is installed.
 	await get_tree().process_frame
+
+
+## An ABLATION, not a feature. Hiding every Label3D and re-reading the counters is the only way
+## to find out what the lettering actually costs, as opposed to what counting nodes suggests it
+## costs. Applied after the warmup so the surfaces have finished building the labels first.
+var _hide_labels := false
+
+
+func _ablate() -> void:
+	var n := 0
+	for node in get_tree().root.find_children("*", "Label3D", true, false):
+		(node as Label3D).visible = false
+		n += 1
+	print("BUDGET.ablation hid %d labels" % n)
 
 
 var _delta_ms := 0.0
@@ -75,6 +90,8 @@ func _process(delta: float) -> void:
 	_delta_ms = delta * 1000.0
 	_frames += 1
 	if _frames <= WARMUP:
+		if _frames == WARMUP and _hide_labels:
+			_ablate()
 		return
 	# WALL CLOCK, from delta.
 	#

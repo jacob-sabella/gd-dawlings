@@ -345,10 +345,38 @@ Banking the patchbay's 180 jacks then moved `draws` not at all and `objects` fro
 shadow-casting jack was being submitted to both passes.
 
 A 90-track console is now 222 meshes where it was 1,032, and the patchbay 55 where it was 235.
-What is left is mostly not meshes: 517 `Label3D`s across the studio. Each carries its own glyph
-texture, which makes each its own material -- so by the table above labels are close to a pure
-`draws` cost and no bank helps them at all. A shared atlas, or dropping to drawn marks at
-distance, is the next thing worth measuring.
+
+### Lettering: the largest cost, and nothing to batch it with
+
+What was left after the banks was mostly not meshes: 517 `Label3D`s. An **ablation** settled
+what they cost -- hide every label, re-read the counters, same scene otherwise:
+
+| 90 tracks, wide | draws | objects | frame ms |
+|---|---|---|---|
+| as built | 2,492 | 3,845 | 1.82 |
+| labels hidden | 1,757 | 3,110 | 1.12 |
+
+**30% of the drawing and nearly 40% of the frame, for text.** And by the batching table above
+it is the one thing a MultiMesh cannot touch: every label carries its own glyph texture, which
+makes every label its own material, which makes it an unbatchable draw call by construction.
+
+The fix is not to draw it smaller or less often but **not to draw it when nobody could read
+it**. A console strip's name is a 10mm cap, which subtends about 5.6/d pixels on an 850px
+viewport at 75 degrees -- under five pixels by 1.2m, and unreadable in a screenshot taken
+there. The cost, meanwhile, only arrives as you stand BACK and more of the room enters frame.
+Those are the same axis pointing opposite ways, so there is a free trade in it: `Lettering`
+gives every label a visibility range ending where its own cap height falls below 0.31 degrees
+(three pixels of cap -- not a taste judgement; a capital three pixels tall cannot carry a
+glyph), with a fade band entirely outside the readable range so nothing dims while being read.
+
+Done through `GeometryInstance3D.visibility_range_end`, so the culling happens on the rendering
+server with no per-frame script, and **per camera** -- which is what makes it right in a
+headset, where two eyes and a moving head decide independently.
+
+At 90 tracks wide this is **2,492 -> 1,757 draws and 1.82 -> 1.38ms**, and at a working
+distance nothing changes at all. The test walks the whole built studio and insists every label
+has a range, because the helper being correct is worth little if a new label forgets to call
+it.
 
 Measured on a desktop GPU, so the absolute frame times are not the headset's. The **slope** and
 the **breakdown** are hardware-independent, and they are what the tool is for.

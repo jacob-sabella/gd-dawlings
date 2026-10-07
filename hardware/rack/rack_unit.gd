@@ -100,6 +100,7 @@ func _ready() -> void:
 	_name_label.position = Vector3(-RACK_WIDTH * 0.5 + 0.03, h * 0.5 - 0.016, 0.002)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_name_label.modulate = Color(0.85, 0.86, 0.88)
+	Lettering.range_to_legibility(_name_label)
 	add_child(_name_label)
 
 	_bypass = PanelButton.new()
@@ -144,6 +145,7 @@ func refresh() -> void:
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		caption.modulate = Color(0.66, 0.68, 0.7)
 		caption.name = "Caption%d" % slot
+		Lettering.range_to_legibility(caption)
 		add_child(caption)
 
 	for i in _knobs.size():

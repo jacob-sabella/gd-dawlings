@@ -393,4 +393,5 @@ func _text(content: String, size: int, tint: Color) -> Label3D:
 	l.modulate = tint
 	l.outline_size = 0
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(l)
 	return l

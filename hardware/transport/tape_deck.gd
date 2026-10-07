@@ -64,6 +64,7 @@ func _rebuild() -> void:
 	_counter.position = Vector3(0, 0.105, 0.002)
 	_counter.modulate = Color(0.45, 0.95, 0.6)
 	_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(_counter)
 	_adopt(_counter)
 
 	_tempo_label = Label3D.new()
@@ -72,6 +73,7 @@ func _rebuild() -> void:
 	_tempo_label.position = Vector3(0, -0.115, 0.002)
 	_tempo_label.modulate = Color(0.7, 0.72, 0.75)
 	_tempo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(_tempo_label)
 	_adopt(_tempo_label)
 
 	var play := PanelButton.new()

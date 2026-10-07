@@ -93,6 +93,7 @@ func _ready() -> void:
 	_caption.outline_size = 0
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mark_chrome(_caption)
+	Lettering.range_to_legibility(_caption)
 	add_child(_caption)
 
 	grab_started.connect(func(_by): _light(true))

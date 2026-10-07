@@ -118,6 +118,7 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 	l.outline_size = 0
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.no_depth_test = false
+	Lettering.range_to_legibility(l)
 	return l
 
 

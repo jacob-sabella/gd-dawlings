@@ -91,6 +91,7 @@ func _ready() -> void:
 	caption.position = Vector3(0, -RADIUS - 0.006, 0.001)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.modulate = Color(0.7, 0.72, 0.74)
+	Lettering.range_to_legibility(caption)
 	add_child(caption)
 
 	var shape := CollisionShape3D.new()

@@ -247,10 +247,22 @@ texture, so 517 labels is close to 517 unbatchable draw calls.
 
 ### Still open
 
-- **Labels are the largest remaining draw-call cost** -- 517 `Label3D`s, each with its own glyph
-  texture and therefore its own material, which is the one thing that cannot batch. No bank
-  helps. A shared atlas, or dropping to drawn marks at distance, is the shape of it, and by the
-  finding above it is now clearly the highest-value remaining item.
+**Lettering is culled once it is too small to read**, which was the largest remaining cost.
+An ablation -- hide every Label3D, re-read the counters -- put the 517 labels at 735 of 2,492
+draw calls and 0.70ms of a 1.82ms frame: 30% of the drawing, 38% of the time, for text.
+
+The trade turned out to be free, which is why it is worth recording. Label cost rises as you
+stand back and more of the room enters frame; label VALUE falls as you stand back, and falls
+faster -- a console strip name is already under five pixels of cap height at 1.2m. So culling
+lettering below three pixels of cap removes the cost exactly where the text had stopped saying
+anything. Measured at 1.82 -> 1.38ms at 90 tracks wide, with nothing visibly different at a
+working distance (checked at 0.8m and 1.8m, not assumed).
+
+Two things worth keeping from how this was done. The ABLATION came first: hiding the labels
+and re-measuring is what turned "labels are probably the problem" into a number, and it cost
+one flag. And the test walks the whole built studio asserting every label has a range, rather
+than testing the helper -- a helper that is correct and uncalled is the actual failure mode
+here. Verified by deleting one call site and watching it fail by name.
 - The timeline is 282 meshes at 90 tracks, the largest mesh population left. Items are uniform
   boxes in per-track colours, so they bank cleanly AND collapse materials -- both counters.
 - Knobs and fader caps are authored parts and `MeshBank.of` now handles those. They turn and

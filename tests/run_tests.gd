@@ -57,6 +57,7 @@ func _ready() -> void:
 	_test_the_project_has_a_shape()
 	_test_the_studio_fits_in_a_frame()
 	_test_many_little_boxes_are_one_object()
+	_test_lettering_stops_when_nobody_can_read_it()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1540,6 +1541,68 @@ func _test_the_studio_fits_in_a_frame() -> void:
 	check("a project that fits in a bank offers no bank controls",
 			not small.can(DAWBackend.Capability.TRACK_BANKING))
 	small.free()
+
+
+func _test_lettering_stops_when_nobody_can_read_it() -> void:
+	# THE MEASUREMENT THIS EXISTS FOR. An ablation -- hide every Label3D, re-read the counters --
+	# put the 517 labels in a 90-track session at 735 of 2,492 draw calls and 0.70ms of a 1.82ms
+	# frame. Text was the studio's single largest drawing cost, and it is the one thing a
+	# MultiMesh cannot help with: every label carries its own glyph texture, so every label is
+	# its own material and the renderer has nothing to batch it with.
+
+	var l := Label3D.new()
+	l.font_size = 56
+	l.pixel_size = 0.00018
+	close_to("cap height is pixel_size x font_size", Lettering.cap_height(l), 0.01008, 0.000001)
+
+	var far := Lettering.legible_to(l)
+	var small := Label3D.new()
+	small.font_size = 28
+	small.pixel_size = 0.00018
+	check("smaller lettering stops being readable sooner", Lettering.legible_to(small) < far)
+	close_to("and exactly in proportion to its height", Lettering.legible_to(small) * 2.0, far,
+			0.0001)
+
+	Lettering.range_to_legibility(l)
+	# The label must be at FULL opacity for the whole distance it can be read at. A fade that
+	# started inside the readable range would be dimming text someone is reading.
+	close_to("the fade starts only once the text is unreadable",
+			l.visibility_range_end - l.visibility_range_end_margin, far, 0.0001)
+	check("and it has somewhere to fade over", l.visibility_range_end_margin > 0.0)
+	check("it fades rather than popping",
+			l.visibility_range_fade_mode == GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF)
+	# Nothing is culled for being too CLOSE. A label you have walked up to is the one case where
+	# it certainly matters.
+	close_to("nothing is hidden for being near", l.visibility_range_begin, 0.0)
+	l.free()
+	small.free()
+
+	# --- every label, not just the helper ----------------------------------------------------
+	#
+	# The helper being correct is worth little if a site forgets to call it, and a new label is
+	# exactly the kind of thing added without thinking about draw calls. So this walks what the
+	# surfaces actually built and insists on the property for all of it.
+	# A project of its own, because an earlier test may have left the DAW pointing at an empty
+	# one and a studio with no tracks builds no lettering to check.
+	DAW.use(OfflineBackend.new())
+	var studio := Node3D.new()
+	add_child(studio)
+	for surface in [ConsoleSurface.new(), PatchbaySurface.new(), TimelineSurface.new(),
+			RackSurface.new(), TapeDeck.new()]:
+		studio.add_child(surface)
+		# Surfaces batch their rebuild to a frame boundary, and this test does not run one.
+		# Driving _process by hand is what the engine would have done a frame later.
+		(surface as Surface)._process(0.0)
+	var labels := studio.find_children("*", "Label3D", true, false)
+	check("the studio has lettering to check at all", labels.size() > 20)
+	var unranged: Array[String] = []
+	for node in labels:
+		var label := node as Label3D
+		if label.visibility_range_end <= 0.0:
+			unranged.append(label.get_parent().name if label.get_parent() else label.name)
+	check("every label in the studio stops when it cannot be read: %s" % str(unranged.slice(0, 4)),
+			unranged.is_empty())
+	studio.queue_free()
 
 
 func _test_many_little_boxes_are_one_object() -> void:
