@@ -78,10 +78,14 @@ func _populate() -> void:
 	# like and what makes the master fader visibly NOT at the top of its travel.
 	state.master.volume = 0.69
 	state.master.volume_db = taper_to_db(0.69)
+	# AFTER the tempo is known. The arrangement is laid out in bars converted to seconds, so
+	# arranging first put every section boundary at 120bpm spacing under a 92bpm ruler, and
+	# "Chorus 1" landed three bars away from the bar its marker named.
+	state.tempo = 92.0
 	_arrange()
 
 
-## An arrangement for the stand-in: a 96-bar song at 120bpm with a real structure.
+## An arrangement for the stand-in: a 96-bar song with a real structure.
 ##
 ## Structured rather than random, because a timeline is the one surface where random is
 ## instantly recognisable as wrong -- a drummer who stops for the chorus and a vocal that
@@ -149,8 +153,10 @@ func _arrange() -> void:
 		s.dest_name = "Verb Rtn"
 		s.volume = 0.4 + 0.1 * src / 10.0
 
-	state.tempo = 92.0
-	state.position_string = "17.1.00"
+	# Bar 17, set as SECONDS and left for the clock to spell. Setting the string directly --
+	# which this did -- put the tape deck's counter at bar 17 and the timeline's playhead at
+	# bar 1 in the same photograph, because they read different fields of the same transport.
+	state.position_seconds = 16.0 * 4.0 * 60.0 / state.tempo
 	state.playing = true
 	# The stand-in mix is ROLLING. A still studio photographs as a dead one: meters dark, reels
 	# stopped, every LED off. That is an accurate picture of nothing happening and a useless one

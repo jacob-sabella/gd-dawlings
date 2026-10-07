@@ -44,6 +44,8 @@ func _ready() -> void:
 	_test_timeline_length_covers_the_arrangement()
 	_test_timeline_maps_seconds_onto_the_lane()
 	_test_arrangement_is_durable_not_volatile()
+	_test_timeline_window_scroll_and_zoom()
+	_test_timeline_follows_the_playhead_only_while_rolling()
 	_test_bridge_arrangement_is_parsed()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
@@ -705,8 +707,11 @@ func _test_timeline_maps_seconds_onto_the_lane() -> void:
 	close_to("the start of the song is the start of the lane", timeline._x_for(0.0), left)
 	close_to("the end of the song is the end of the lane", timeline._x_for(span), right)
 	close_to("halfway is halfway", timeline._x_for(span * 0.5), (left + right) * 0.5, 0.0005)
-	close_to("before the start is clamped, not mirrored", timeline._x_for(-30.0), left)
-	close_to("past the end is clamped", timeline._x_for(span * 2.0), right)
+	# Unclamped on purpose. Clamping here would pile everything before the window onto the left
+	# edge and everything after it onto the right, as stacks of zero-width blocks that read as
+	# real content at both ends of every scroll.
+	check("before the window maps left of the lane", timeline._x_for(-30.0) < left)
+	check("past the window maps right of the lane", timeline._x_for(span * 2.0) > right)
 
 	check("the stand-in arrangement is not empty", DAW.state.track(1).items.size() > 0)
 	check("the stand-in has sections named on the ruler", DAW.state.markers.size() >= 4)
@@ -765,3 +770,99 @@ func _test_bridge_arrangement_is_parsed() -> void:
 			link.state.track(1).items.is_empty())
 
 	link.free()
+
+
+## The overview bar's three gestures, and the clamping that keeps a window inside a project
+## whose length changes under it.
+func _test_timeline_window_scroll_and_zoom() -> void:
+	var bar := TimelineScrubber.new()
+	bar.width = 0.4
+	bar.project_length = 200.0
+	bar.view_start = 0.0
+	bar.view_span = 200.0
+	add_child(bar)
+
+	var seen := []
+	bar.view_changed.connect(func(start, span): seen.append([start, span]))
+
+	# Drag the right edge in: the left edge must not move, or a zoom also scrolls.
+	bar.view_span = 100.0
+	bar._grab_start = 0.0
+	bar._grab_span = 100.0
+	bar._grab_x = 0.0
+	bar._zone = TimelineScrubber.Zone.RIGHT
+	bar._on_grab_move(bar.to_global(Vector3(-0.05, 0, 0)))
+	close_to("resizing from the right leaves the left edge alone", bar.view_start, 0.0)
+	check("the window got shorter", bar.view_span < 100.0)
+
+	# Drag the left edge out: the RIGHT edge must not move, for the same reason.
+	bar.view_start = 50.0
+	bar.view_span = 50.0
+	bar._grab_start = 50.0
+	bar._grab_span = 50.0
+	bar._grab_x = 0.0
+	bar._zone = TimelineScrubber.Zone.LEFT
+	bar._on_grab_move(bar.to_global(Vector3(-0.04, 0, 0)))
+	close_to("resizing from the left leaves the right edge alone",
+			bar.view_start + bar.view_span, 100.0, 0.001)
+
+	# Scroll the body hard left: it stops at the start rather than going negative.
+	bar._grab_start = bar.view_start
+	bar._grab_span = bar.view_span
+	bar._grab_x = 0.0
+	bar._zone = TimelineScrubber.Zone.BODY
+	bar._on_grab_move(bar.to_global(Vector3(-0.4, 0, 0)))
+	close_to("scrolling past the start stops at the start", bar.view_start, 0.0)
+
+	# And hard right: the window stops with its end at the end of the project, never past it.
+	bar._grab_start = bar.view_start
+	bar._grab_span = bar.view_span
+	bar._grab_x = 0.0
+	bar._on_grab_move(bar.to_global(Vector3(0.9, 0, 0)))
+	close_to("scrolling past the end stops at the end",
+			bar.view_start + bar.view_span, 200.0, 0.001)
+
+	check("every move was reported", seen.size() >= 4)
+	bar.queue_free()
+
+
+## Following is the behaviour that makes a timeline usable during a take and ruins it during an
+## edit, so which one is happening has to be read off the transport rather than guessed.
+func _test_timeline_follows_the_playhead_only_while_rolling() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new())
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+
+	var project := DAW.state.timeline_length()
+	timeline.view_span = project * 0.25
+	timeline.view_start = 0.0
+
+	# Stopped, playhead far past the window: the view must stay where it was put.
+	DAW.state.playing = false
+	DAW.state.position_seconds = project * 0.8
+	timeline._move_playhead()
+	close_to("a stopped transport does not drag the view around", timeline.view_start, 0.0)
+	check("a playhead outside the window is hidden, not pinned to the edge",
+			not timeline._playhead.visible)
+
+	# Rolling: the window pages to contain it.
+	DAW.state.playing = true
+	timeline._move_playhead()
+	check("rolling past the edge pages the window forward", timeline.view_start > 0.0)
+	check("the playhead is now inside the window",
+			DAW.state.position_seconds >= timeline.view_start
+			and DAW.state.position_seconds <= timeline.view_start + timeline.view_span)
+
+	# Already inside: no paging, or the arrangement would slide under a stationary playhead.
+	var settled := timeline.view_start
+	DAW.state.position_seconds = settled + timeline.view_span * 0.5
+	timeline._move_playhead()
+	close_to("a playhead inside the window moves the line, not the view",
+			timeline.view_start, settled)
+
+	DAW.state.playing = false
+	timeline.queue_free()
+	DAW.use(previous, false)

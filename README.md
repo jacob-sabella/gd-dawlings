@@ -34,6 +34,7 @@ godot --path .                               # offline stand-in, screen particip
 godot --path . -- --reaper                   # host, OSC to a local Reaper
 godot --path . -- --reaper --host            # host, and open the session to peers
 godot --path . -- --join 192.168.1.40 --ar   # join someone else's session, in passthrough
+godot --path . -- --view 20:52              # open the timeline on bars 9-27 (seconds: start:span)
 ```
 
 With no Reaper it comes up on a synthetic 12-track mix with the meters moving, so the studio can

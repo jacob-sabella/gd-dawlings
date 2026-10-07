@@ -57,6 +57,9 @@ func _ready() -> void:
 	_build_hud()
 
 	_apply_cli_placement(args["place"])
+	var view: Vector2 = args["view"]
+	if view.y > 0.0 and studio.timeline != null:
+		studio.timeline.set_view(view.x, view.y)
 
 	var stage := StageManager.new()
 	stage.name = "StageManager"
@@ -88,7 +91,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"reaper": false, "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
-		"place": {}, "stage": false,
+		"place": {}, "stage": false, "view": Vector2.ZERO,
 	}
 	var i := 0
 	while i < argv.size():
@@ -97,6 +100,15 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
 			"--stage": out["stage"] = true
+			"--view":
+				# `--view 32:64` -- start and span in seconds, for photographing the timeline
+				# at a zoom. Same reason as --place: a view you have to drag your way into
+				# cannot be captured reproducibly.
+				i += 1
+				if i < argv.size():
+					var window := argv[i].split(":")
+					if window.size() == 2:
+						out["view"] = Vector2(float(window[0]), float(window[1]))
 			"--place":
 				# `--place console=screen`. Scriptable for the same reason everything else here
 				# is a switch: a hybrid arrangement is tested by launching several of these at

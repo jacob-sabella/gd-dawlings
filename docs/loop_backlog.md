@@ -24,9 +24,12 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Arrange timeline.** A lane per track with the track's colour and flags, a bar ruler from
-  the tempo, section markers, the blocks on each lane, and a playhead that moves without
-  rebuilding the panel. Defaults to SCREEN in every medium, including AR. The seconds→lane
-  mapping and the item wire format are tested.
+  the tempo whose label spacing follows the zoom, section markers, the blocks on each lane, and
+  a playhead that moves without rebuilding the panel. An overview bar underneath scrolls with
+  its body and zooms by either end; the view pages forward on its own while the transport
+  rolls and leaves the window alone while it is stopped. Defaults to SCREEN in every medium,
+  including AR. The window arithmetic, the clipping, the follow rule and the item wire format
+  are tested.
 - **Capture harness.** `tools/shot.sh`, with reproducible camera framing on the command line.
 - **Presentation switching, both ways.** The flat overlay (Tab) for the screen participant, and
   a grab handle clipped to each surface for everyone else: tap to cycle anchor, drag to place.
@@ -72,9 +75,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 - **Track banking.** Fine up to 64 tracks; beyond that the bank has to scroll, and a strip must
   never change which track it means while a hand is on its fader.
-- **Timeline scroll and zoom.** The whole project is fitted to the panel, which is right for a
-  three-minute song and useless for a session. Needs a view window, and a playhead that can be
-  off-screen without the panel looking broken.
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
 - **Audio.** The studio is silent. Reaper's output does not come through this process at all.
@@ -83,6 +83,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 - Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.
+- The timeline rebuilds every lane while the overview bar is being dragged -- one rebuild per
+  frame, which is fine at twelve tracks and will not be at ninety. Items want to be moved
+  rather than recreated, the way the playhead already is.
 - The offline stand-in's meter ballistics are eyeballed, not matched to Reaper's.
 - The master section has no monitor level, dim or mono. Those belong to a monitor controller,
   which Reaper does not know about and has no OSC address for -- deliberately absent rather

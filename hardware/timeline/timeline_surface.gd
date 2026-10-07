@@ -25,14 +25,25 @@ const HEADER_WIDTH := 0.108
 const RULER_HEIGHT := 0.022
 const DEPTH := 0.006
 
-## Bars per ruler label. One number per bar is unreadable past about thirty bars, and a song is
-## never thirty bars.
-const LABEL_EVERY := 8
+## Candidate spacings for ruler labels, in bars. The ruler takes the first one that leaves the
+## numbers far enough apart to read -- a fixed spacing is unreadable zoomed out and useless
+## zoomed in, and the whole point of a zoom is that both happen.
+const LABEL_STEPS := [1, 2, 4, 8, 16, 32, 64, 128]
+## Minimum gap between two ruler numbers, in metres.
+const LABEL_CLEARANCE := 0.042
 
 ## Hairline between abutting items, in metres.
 const EDGE_GAP := 0.0006
 
+const SCRUBBER_BAND := 0.016
+
+## The window onto the project, in seconds. Zero span means "not set yet": the first rebuild
+## that finds a project fits the whole of it, and after that the viewer owns the window.
+var view_start := 0.0
+var view_span := 0.0
+
 var _playhead: Node3D
+var _scrubber: TimelineScrubber
 var _lane_area_x := 0.0
 var _lane_area_width := 0.0
 var _top_y := 0.0
@@ -45,6 +56,14 @@ func _ready() -> void:
 		surface_id = &"timeline"
 	super()
 	DAW.state.timeline_changed.connect(mark_dirty)
+
+	# Built ONCE and never rebuilt, unlike everything else on this panel. A rebuild frees its
+	# children, and the scrubber is the one control here that is held across frames -- freeing
+	# it mid-drag would drop the grab on the very gesture that caused the rebuild.
+	_scrubber = TimelineScrubber.new()
+	_scrubber.name = "Scrubber"
+	_scrubber.view_changed.connect(_on_view_changed)
+	add_child(_scrubber)
 
 
 func _process(delta: float) -> void:
@@ -61,10 +80,15 @@ func _rebuild() -> void:
 		return
 
 	var lanes := indices.size()
-	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP
+	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND
 	_top_y = _height * 0.5
 	_lane_area_x = -WIDTH * 0.5 + HEADER_WIDTH
 	_lane_area_width = WIDTH - HEADER_WIDTH - 0.006
+
+	var project := DAW.state.timeline_length()
+	if view_span <= 0.0:
+		view_span = project
+	_clamp_view(project)
 
 	_build_carcass()
 	_build_ruler()
@@ -76,6 +100,39 @@ func _rebuild() -> void:
 
 	_build_playhead()
 	_build_blindness_notice()
+	_place_scrubber(project)
+
+
+func _place_scrubber(project: float) -> void:
+	_scrubber.width = _lane_area_width
+	_scrubber.project_length = project
+	_scrubber.view_start = view_start
+	_scrubber.view_span = view_span
+	_scrubber.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
+			-_top_y + SCRUBBER_BAND * 0.52, 0.0016)
+	_scrubber.refresh()
+
+
+## Point the window at a part of the project. What the scrubber does, and what `--view` does.
+func set_view(start: float, span: float) -> void:
+	view_span = span
+	view_start = start
+	_clamp_view(DAW.state.timeline_length())
+	mark_dirty()
+
+
+func _on_view_changed(start: float, span: float) -> void:
+	view_start = start
+	view_span = span
+	mark_dirty()
+
+
+## Keeps the window inside the project. Needed on every rebuild and not only on a drag: a song
+## that got shorter -- the last item deleted -- can leave the window entirely past the end,
+## which draws a panel of nothing with no clue that scrolling left would fix it.
+func _clamp_view(project: float) -> void:
+	view_span = clampf(view_span, TimelineScrubber.MIN_SPAN, maxf(project, TimelineScrubber.MIN_SPAN))
+	view_start = clampf(view_start, 0.0, maxf(project - view_span, 0.0))
 
 
 func _build_carcass() -> void:
@@ -105,9 +162,15 @@ func _build_carcass() -> void:
 ## made in bars -- "drop the second chorus" is bar 57, not 1:54. The seconds are still what is
 ## stored; this is only how it is read.
 func _build_ruler() -> void:
-	var span := DAW.state.timeline_length()
 	var bar := 4.0 * 60.0 / maxf(DAW.state.tempo, 1.0)
-	var bars := int(ceil(span / bar))
+	var per_bar := bar / maxf(view_span, 0.0001) * _lane_area_width
+	var step: int = LABEL_STEPS[-1]
+	for candidate in LABEL_STEPS:
+		if candidate * per_bar >= LABEL_CLEARANCE:
+			step = candidate
+			break
+	var first := int(floor(view_start / bar / step)) * step
+	var last := int(ceil((view_start + view_span) / bar))
 
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
@@ -117,10 +180,12 @@ func _build_ruler() -> void:
 	strip.material_override = Materials.recess()
 	_adopt(strip)
 
-	for n in range(0, bars + 1, LABEL_EVERY):
+	for n in range(first, last + 1, step):
+		if n < 0:
+			continue
 		var x := _x_for(n * bar)
-		if x > WIDTH * 0.5:
-			break
+		if x < _lane_area_x - 0.0001 or x > _lane_right():
+			continue
 		var tick := MeshInstance3D.new()
 		var tick_mesh := BoxMesh.new()
 		tick_mesh.size = Vector3(0.0006, RULER_HEIGHT * 0.45, 0.0008)
@@ -137,7 +202,7 @@ func _build_ruler() -> void:
 	# Section markers sit on the ruler, where the arrangement is actually named.
 	for at in DAW.state.markers:
 		var mx := _x_for(float(at))
-		if mx > WIDTH * 0.5:
+		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
 			continue
 		var flag := _text(str(DAW.state.markers[at]).to_upper(), 20, Color(0.88, 0.74, 0.44))
 		flag.position = Vector3(mx + 0.0025, _top_y - RULER_HEIGHT * 0.74, 0.0016)
@@ -208,6 +273,12 @@ func _build_item(item: MixState.ItemState, tint: Color, y: float, lane_muted: bo
 	# what the edge shading of a real arranger does, at a size where shading would be invisible.
 	var left := _x_for(item.start) + EDGE_GAP
 	var right := _x_for(item.end()) - EDGE_GAP
+	if right < _lane_area_x or left > _lane_right():
+		return
+	# Clipped to the lane, not culled. An item that starts before the window and ends inside it
+	# must still be drawn, or scrolling into the middle of a long block shows empty lane.
+	left = maxf(left, _lane_area_x)
+	right = minf(right, _lane_right())
 	var width := right - left
 	if width <= 0.0005:
 		return
@@ -267,20 +338,51 @@ func _build_playhead() -> void:
 func _move_playhead() -> void:
 	if _playhead == null:
 		return
-	var x := _x_for(DAW.state.position_seconds)
-	# Parked at the left edge rather than hidden when the playhead runs off the end: a timeline
-	# with no playhead anywhere reads as broken, and a song that has run past the last bar it
-	# drew is a scroll problem, not a missing transport.
-	_playhead.position.x = clampf(x, _lane_area_x, _lane_area_x + _lane_area_width)
-	_playhead.visible = DAW.state.timeline_length() > 0.0
+	var at := DAW.state.position_seconds
+	if _follow(at):
+		return
+	var x := _x_for(at)
+	# Hidden rather than parked at the edge once it leaves the window. A playhead pinned to the
+	# left edge while the song plays on somewhere else is a lie about where you are, and the
+	# scrubber below already says which part of the project is on screen.
+	_playhead.visible = x >= _lane_area_x and x <= _lane_right()
+	_playhead.position.x = x
 
 
-## Seconds to a position across the lane area. The whole project is fitted to the panel -- there
-## is no scroll and no zoom yet, which for a stand-in song is the right first answer and for a
-## forty-minute session is not. See docs/loop_backlog.md.
+## Pages the window forward when the playhead runs off the right edge during playback.
+##
+## PAGES rather than scrolls continuously, which is the behaviour every arranger offers and most
+## engineers leave on: a view that slides under a stationary playhead makes the whole
+## arrangement move while you are trying to read it. Jumping a window at a time keeps the blocks
+## still and moves the line across them.
+##
+## Only while rolling. Scrubbing by hand with the transport stopped is exactly when someone is
+## looking somewhere other than the playhead, and yanking the view back would fight them.
+func _follow(at: float) -> bool:
+	if not DAW.state.playing or view_span <= 0.0:
+		return false
+	if at >= view_start and at <= view_start + view_span:
+		return false
+	var project := DAW.state.timeline_length()
+	var target := clampf(at - view_span * 0.08, 0.0, maxf(project - view_span, 0.0))
+	if is_equal_approx(target, view_start):
+		return false
+	view_start = target
+	mark_dirty()
+	return true
+
+
+## Seconds to a position across the lane area, through the current window.
+##
+## DELIBERATELY UNCLAMPED. Clamping here would pile everything before the window onto the left
+## edge as a stack of zero-width blocks and everything after it onto the right, which reads as
+## real content at both ends of every scroll. Callers clip instead.
 func _x_for(seconds: float) -> float:
-	var span := DAW.state.timeline_length()
-	return _lane_area_x + clampf(seconds / span, 0.0, 1.0) * _lane_area_width
+	return _lane_area_x + (seconds - view_start) / maxf(view_span, 0.0001) * _lane_area_width
+
+
+func _lane_right() -> float:
+	return _lane_area_x + _lane_area_width
 
 
 func _text(content: String, size: int, tint: Color) -> Label3D:
