@@ -62,6 +62,7 @@ func _ready() -> void:
 	_test_scrolling_the_timeline_does_not_rebuild_it()
 	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
+	_test_one_jack_takes_one_plug()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -1895,6 +1896,81 @@ func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
 				break
 		check("the %s is quiet about a session that fits" % named[0], not shouted)
 		surface.queue_free()
+
+
+func _test_one_jack_takes_one_plug() -> void:
+	# The physical premise of a patchbay, and the thing the bay was quietly breaking: four
+	# tracks sending to the reverb return drew four cables ending in the same bore. Caught in a
+	# screenshot, not here, because the suite had never asked where cables END -- only that the
+	# right number existed.
+	DAW.use(OfflineBackend.new())
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	bay._draw_cables()
+
+	var cables: Array = bay._cables
+	check("the stand-in session patches the bay", cables.size() >= 4)
+
+	# Every plug END in the whole bay, both ends of every cable. A 1/4" sleeve is 6.35mm
+	# across, so two plugs closer than that are inside each other.
+	var ends: Array[Vector3] = []
+	for cable in cables:
+		var c: PatchCable = cable
+		ends.append(c.from_xform.origin)
+		ends.append(c.to_xform.origin)
+	var closest := INF
+	var worst := ""
+	for i in ends.size():
+		for j in range(i + 1, ends.size()):
+			var gap: float = ends[i].distance_to(ends[j])
+			if gap < closest:
+				closest = gap
+				worst = "%.1fmm apart" % (gap * 1000.0)
+	check("no two plugs share a bore (%s)" % worst, closest >= PatchCable.PLUG_RADIUS * 2.0)
+
+	# And the other half: the fan-in did not get dropped on the floor to achieve that. Four
+	# sends into one return is five cables -- four into the mult, one out of it -- and the mult
+	# is visible hardware, not an invisible junction.
+	var mults := bay.find_children("*", "Node3D", true, false).filter(
+			func(n): return n is PatchMult)
+	check("a gathered return grows a mult", mults.size() == 1)
+	var landed := 0
+	var left := 0
+	var mult: PatchMult = mults[0]
+	for cable in cables:
+		var c: PatchCable = cable
+		for way in range(1, 5):
+			if c.to_xform.origin.distance_to(mult.jack_transform(way).origin) < 0.001:
+				landed += 1
+		if c.from_xform.origin.distance_to(mult.trunk_transform().origin) < 0.001:
+			left += 1
+	check("every send lands on its own way of the mult", landed == 4)
+	check("exactly one cable leaves the mult", left == 1)
+
+	# A single send is still a single cable. A mult for one source would be hardware invented
+	# to solve a problem nobody has, and the bay would fill up with them.
+	DAW.use(OfflineBackend.new())
+	var kept := -1
+	for index in DAW.state.track_indices():
+		var t := DAW.state.track(index)
+		if t.sends.is_empty():
+			continue
+		if kept < 0:
+			kept = index
+			continue
+		t.sends.clear()
+	check("the fixture has a send to keep", kept > 0)
+	var plain := PatchbaySurface.new()
+	add_child(plain)
+	plain._process(0.0)
+	plain._draw_cables()
+	var plain_mults := plain.find_children("*", "Node3D", true, false).filter(
+			func(n): return n is PatchMult)
+	check("one source into a return needs no mult", plain_mults.is_empty())
+	check("and draws exactly one cable", plain._cables.size() == 1)
+	plain.queue_free()
+	bay.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:

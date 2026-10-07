@@ -482,3 +482,37 @@ here. Verified by deleting one call site and watching it fail by name.
 - Draw calls are at 727 at 90 tracks wide, from 7,600. This is probably the point to stop and
   put the effort back into the gear itself; the remaining items are small and the measurement
   tooling is now good enough to catch a regression if one lands.
+
+### Tick L -- four plugs in one hole
+
+Swung back to the gear after three audit ticks and photographed the console close up. The desk
+itself reads well. The bay above it did not: four cables fanned down to what turned out to be
+a single input jack. One jack takes one plug, and the bay had been drawing four in one bore
+since the first cable landed.
+
+Worth noting HOW it was found. Not by the suite -- 838 checks and none of them had ever asked
+where a cable ENDS, only that the right number of cables existed. Not by reading the code
+either; `_draw_cables` reads perfectly sensibly, and `patch_cable.gd`'s own class note cites
+"which return has four things landing on it" as a thing the bay is good at showing. It was
+found by cropping a screenshot to 260% and looking at it. That is now three bugs this week
+whose only detector was a photograph.
+
+The fix is a **mult** -- real patchbay hardware, a strip of jacks wired in parallel, hung
+under the bay on two straps. Sources plug into it, one trunk cable leaves for the return. It
+is deliberately the dullest object on the bridge. Multed returns pack left to right in a row
+rather than hanging under their own column, which would collide the moment two neighbouring
+returns were both multed; a mult is a bussed strip and nothing requires it to live beneath the
+jack it feeds. The trunk cable says that.
+
+Two placement mistakes, both caught by the second and third screenshots rather than reasoned
+out: the first mult sat halfway through the meter-bridge crossbar, and the first version had no
+straps, so it floated under the bay reading as a UI panel that happened to be in the scene.
+
+The test is the part worth keeping. `_test_one_jack_takes_one_plug` does not know what a mult
+is. It collects both ends of every cable in the bay and asserts no two are closer than a 1/4"
+sleeve is wide, then separately asserts the fan-in was not simply dropped to achieve that.
+Written that way it would catch any future way of putting two plugs in one hole, including
+ones nobody has thought of. Mutation-checked twice: routing the sources straight at the input
+again fails it at "0.0mm apart", and never building a mult fails it by name.
+
+846 checks, 0 failed.

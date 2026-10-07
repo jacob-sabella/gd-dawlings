@@ -523,6 +523,31 @@ The rack's version of this is why `RackUnit._param_for` is read at the moment of
 rather than captured when the knob was built. A captured index would keep writing page one
 forever, and would look exactly like a knob that does nothing.
 
+## The hardware has to be able to say what the software means
+
+A patchbay is the clearest case, and it broke before anyone noticed. Reaper's send model lets
+any number of tracks send to one track, so four tracks into a reverb return is ordinary. The
+bay drew that as four cables ending at the destination's input jack -- four plugs in one bore.
+At the zoom the studio is usually photographed at it looked like a tidy fan. It was found by
+cropping a screenshot, not by the suite, which had only ever counted cables.
+
+The rule is that a physical metaphor is a constraint, not a decoration. One jack takes one
+plug. If the data says something the hardware cannot, the answer is more hardware, not a
+sprite that cheats -- because the cheat is invisible until the moment someone leans in, and
+the whole premise of the project is that leaning in is allowed.
+
+So fan-in grows a **mult**: a short strip of jacks bussed together, hung under the bay on two
+straps, packed left to right in a row so any number of multed returns at any fan-in still
+lays out. Each source gets its own way; one trunk cable leaves the mult for the return's
+input. Every bore holds exactly one plug, and the extra hardware the routing needs is visible
+as extra hardware. A single send stays a single cable -- a mult for one source would be
+hardware invented to solve a problem nobody has.
+
+The invariant is now pinned directly rather than through a proxy: `_test_one_jack_takes_one_plug`
+collects BOTH ends of every cable in the bay and asserts no two are closer than a 1/4" sleeve
+is wide. It does not know about mults. It would catch any future way of drawing two plugs in
+one hole.
+
 ## Audio: the gear, not the mix
 
 **The mix is not ours to play.** Reaper is already running, through monitors, in the room this

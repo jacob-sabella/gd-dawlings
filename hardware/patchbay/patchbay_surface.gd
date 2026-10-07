@@ -11,12 +11,23 @@ extends Surface
 ## than dropping the gesture. A patchbay that silently fails to patch is worse than one that
 ## admits it cannot: with the former you spend twenty minutes assuming you missed the jack.
 ##
+## A SECOND structural fact, which the geometry has to answer rather than the protocol: one
+## jack takes one plug. Reaper will happily send four tracks to one return, and four cables
+## into one bore is not a picture of that -- it is a picture of nothing. Fan-in is drawn
+## through a mult hung under the bay; see hardware/patchbay/patch_mult.gd.
+##
 ## See core/reaper/script_bridge.gd and reaper/reaper3d_bridge.lua.
 
 const JACK_PITCH := 0.034
 const ROW_GAP := 0.085
+## Where the mult strip hangs, measured from the input row. Clear of the meter-bridge crossbar
+## the bay is bolted to -- the first placement put it halfway through the bar -- and far enough
+## below the input captions to read as separate hardware hung underneath, which is what it is.
+const MULT_ROW_Y := -0.115
+const MULT_SPACING := 0.008
 
 var _cables: Array[PatchCable] = []
+var _mults: Array[PatchMult] = []
 var _outputs: Dictionary = {}
 var _inputs: Dictionary = {}
 
@@ -31,6 +42,7 @@ func _ready() -> void:
 func _rebuild() -> void:
 	_clear_built()
 	_cables.clear()
+	_mults.clear()
 	_outputs.clear()
 	_inputs.clear()
 
@@ -108,7 +120,14 @@ func _draw_cables() -> void:
 	for cable in _cables:
 		cable.queue_free()
 	_cables.clear()
+	for mult in _mults:
+		mult.queue_free()
+	_mults.clear()
 
+	# Gathered before anything is drawn, because the shape of the picture depends on the
+	# fan-in: one source into a return is a cable, several is a mult and several cables. That
+	# is not known until every send has been read.
+	var arrivals: Dictionary = {}
 	for index in DAW.state.track_indices():
 		var t := DAW.state.track(index)
 		for send_index in t.sends:
@@ -116,14 +135,86 @@ func _draw_cables() -> void:
 			var dest := s.resolve(DAW.state)
 			if dest < 0 or not _outputs.has(index) or not _inputs.has(dest):
 				continue
-			var from_jack: PatchPoint = _outputs[index]
-			var to_jack: PatchPoint = _inputs[dest]
-			# Seeded from the pair, so a cable keeps its own slack and bow across rebuilds and
-			# two sends landing on the same return do not draw as one thick line.
-			var cable := PatchCable.create(from_jack.global_transform, to_jack.global_transform,
-					t.colour, hash(Vector2i(index, dest)))
-			_adopt(cable)
-			_cables.append(cable)
+			if not arrivals.has(dest):
+				arrivals[dest] = []
+			arrivals[dest].append(index)
+
+	var destinations := arrivals.keys()
+	destinations.sort()
+
+	var multed: Array[int] = []
+	var row_width := 0.0
+	for dest in destinations:
+		if arrivals[dest].size() < 2:
+			continue
+		multed.append(dest)
+		row_width += PatchMult.width_for(arrivals[dest].size()) + MULT_SPACING
+
+	var mult_bank: MeshBank = null
+	if not multed.is_empty():
+		row_width -= MULT_SPACING
+		mult_bank = MeshBank.of(
+			PatchPoint.MESH_PATH,
+			Materials.brushed_metal(),
+			{"bore": Materials.recess()},
+		)
+		if mult_bank != null:
+			mult_bank.name = "MultSockets"
+			_adopt(mult_bank)
+
+	# Packed left to right from a centred row rather than hung under their destination column.
+	# Under-the-column would collide the moment two neighbouring returns were both multed, and
+	# a mult is a bussed strip -- nothing about it says it has to live beneath the jack it
+	# feeds. The trunk cable says that.
+	var cursor := -row_width * 0.5
+	var mult_for: Dictionary = {}
+	for dest in multed:
+		var ways: int = arrivals[dest].size()
+		var span := PatchMult.width_for(ways)
+		var mult := PatchMult.create(DAW.state.track(dest).display_name(), ways, mult_bank)
+		# Positioned before it enters the tree: a socket claims its slot in the bank out of its
+		# own world transform, and a mult placed after the fact would bank its sockets at the
+		# origin and then walk away from them.
+		mult.strap_length = _panel_bottom_y() - (MULT_ROW_Y + PatchMult.HEIGHT * 0.5)
+		mult.position = Vector3(cursor + span * 0.5, MULT_ROW_Y, 0.004)
+		_adopt(mult)
+		_mults.append(mult)
+		mult_for[dest] = mult
+		cursor += span + MULT_SPACING
+
+	if mult_bank != null:
+		mult_bank.commit()
+
+	for dest in destinations:
+		var sources: Array = arrivals[dest]
+		var to_jack: PatchPoint = _inputs[dest]
+		if sources.size() < 2:
+			var only: int = sources[0]
+			_lay(_outputs[only].global_transform, to_jack.global_transform,
+					DAW.state.track(only).colour, hash(Vector2i(only, dest)))
+			continue
+		var mult: PatchMult = mult_for[dest]
+		for i in sources.size():
+			var src: int = sources[i]
+			_lay(_outputs[src].global_transform, mult.jack_transform(i + 1),
+					DAW.state.track(src).colour, hash(Vector2i(src, dest)))
+		# The one cable that leaves. Tinted like the return it feeds, not like any one source,
+		# because by this point it is carrying all of them.
+		_lay(mult.trunk_transform(), to_jack.global_transform,
+				DAW.state.track(dest).colour, hash(Vector2i(dest, dest)))
+
+
+## The lower edge of the bay's own panel, which is where a hung mult's straps have to reach.
+func _panel_bottom_y() -> float:
+	return ROW_GAP * 0.5 - (ROW_GAP + 0.075) * 0.5
+
+
+## Seeded from the pair, so a cable keeps its own slack and bow across rebuilds and two cables
+## running between the same two pieces of hardware do not draw as one thick line.
+func _lay(from_xform: Transform3D, to_xform: Transform3D, tint: Color, seed_value: int) -> void:
+	var cable := PatchCable.create(from_xform, to_xform, tint, seed_value)
+	_adopt(cable)
+	_cables.append(cable)
 
 
 ## Kept for the OSC-only case, and for the test that pins the ambiguity it cannot fix.
