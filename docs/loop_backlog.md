@@ -318,6 +318,37 @@ Third tick running where an A/B screenshot caught something every counter and ev
 happy with. It is not a nice-to-have on this project; it is the only instrument that measures
 the thing the project is actually for.
 
+**Swept every doc comment for claims the code does not honour**, because two ticks running had
+found one by accident and twice is a pattern. 312 doc lines make a falsifiable claim; the sweep
+narrowed to the absolute ones -- always, never, cannot, must -- and found a third:
+
+`_follow()`, the timeline's auto-page, still called `mark_dirty()`. The manual scroll path was
+fixed last tick and has a regression test; this is the SAME scroll arriving by itself, and it
+is the worse of the two. A drag is something a person is doing on purpose and watching. This
+fires unattended, once per window, for the whole of a rolling take, tearing down and recreating
+every lane label while the transport runs. **Fixing one caller and leaving the other is how a
+bug survives its own fix** -- and the test that was written for the drag could not see it,
+because it tested the caller rather than the rule.
+
+It only bites when zoomed in: the timeline opens showing the whole project, and a playhead
+cannot run off a window that contains everything. That is why it lasted.
+
+**Three invariants are now enforced on the source instead of asserted in a header.**
+presentation.gd says "A surface... must never ask which mode it is in"; surface.gd says the
+same for who is looking and for which process is the host. All three were still true. None was
+checked -- and an invariant that holds today and is guarded by a comment is one reasonable-
+looking `if` away from not holding, written by someone not editing the file the rule lives in.
+There is now a scan over every .gd under hardware/ for the six ways out (`Presentation.`,
+`Medium.`, `XRServer`, `Session.`, `is_authority`, `multiplayer.`), which prints the offending
+file and line. It carries its own self-check: it is pointed at core/presentation, the layer that
+IS allowed to know, and must light up there -- a scan that cannot fail is decoration.
+
+The files come from DirAccess rather than a list, because a list is something a new file gets
+left out of, and a file left out is exempt from every rule without anyone deciding that.
+
+The general lesson, now three for three: **prose makes claims and only the suite holds anyone
+to them.** Worth re-running the sweep whenever a header gets written.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

@@ -60,6 +60,7 @@ func _ready() -> void:
 	_test_many_little_boxes_are_one_object()
 	_test_lettering_stops_when_nobody_can_read_it()
 	_test_scrolling_the_timeline_does_not_rebuild_it()
+	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
@@ -1708,7 +1709,130 @@ func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
 	check("an empty window draws no items", blocks.multimesh.visible_instance_count == 0)
 	check("and the bank kept its capacity", blocks.count() > 0)
 	check("which is more than it is drawing", blocks.count() >= drawn_before)
+
+	# --- and the other caller, which is the one nobody watches -------------------------------
+	#
+	# The drag above is the case that got noticed, because someone was holding the thing when it
+	# stuttered. _follow() is the same scroll arriving by itself: the playhead runs off the right
+	# edge during a take and the window pages. It fired unattended, once per window, for the
+	# whole of a rolling session, and it tore down every lane label while the transport was
+	# running. Fixing one caller and leaving the other is how this kind of bug survives a fix.
+	# Zoomed in, which is the only state paging can happen in: the timeline opens showing the
+	# whole project, and a playhead cannot run off a window that contains everything.
+	timeline._on_view_changed(0.0, 40.0)
+	timeline._process(0.0)
+	var follow_label: Label3D = null
+	for node in timeline.find_children("*", "Label3D", true, false):
+		if (node as Label3D).text.to_upper().contains("KICK"):
+			follow_label = node
+			break
+	check("there is a lane label to lose", follow_label != null)
+	var follow_id := follow_label.get_instance_id() if follow_label else 0
+	var start_before := timeline.view_start
+
+	# Rolling, with the playhead well past the right edge of the window.
+	DAW.state.playing = true
+	DAW.state.position_seconds = timeline.view_start + timeline.view_span * 2.0
+	check("the playhead is off the window, so the view must page",
+			timeline._follow(DAW.state.position_seconds))
+	check("paging moved the window", not is_equal_approx(timeline.view_start, start_before))
+	check("paging did not destroy the lanes",
+			follow_label != null and is_instance_id_valid(follow_id))
+	check("and did not mark the surface for a rebuild", not timeline._dirty)
+
+	# Stopped, it must leave the view alone: that is when someone is deliberately looking
+	# somewhere other than the playhead, and yanking the window back would fight them.
+	DAW.state.playing = false
+	var parked := timeline.view_start
+	DAW.state.position_seconds = parked + timeline.view_span * 1.5
+	check("a stopped transport does not drag the view around",
+			not timeline._follow(DAW.state.position_seconds))
+	check("and the window stayed where it was put", is_equal_approx(timeline.view_start, parked))
+	DAW.state.playing = false
+
 	timeline.queue_free()
+
+
+## The three things a surface is not allowed to know, enforced on the source rather than stated
+## in a header.
+##
+## presentation.gd says it plainly -- "A surface is written once and works in all three. It must
+## never ask which mode it is in" -- and surface.gd repeats it for who is looking and for which
+## process is the host. All three were still true when this was written. None of them was
+## CHECKED, which is a different thing: an invariant that holds today and is enforced by a
+## comment is one careless `if` away from not holding, and the `if` will look reasonable in
+## review because the rule lives in a file nobody is editing at the time.
+##
+## This is the tick's actual lesson. Two bugs in two days were both a header describing a
+## mechanism the code did not have, and a third turned up during the sweep that found this one.
+## Prose makes claims; only the suite holds anyone to them.
+##
+## Scoped to hardware/, which is where surfaces live. The mounts and the studio are exactly the
+## layer that IS allowed to know these things, which is the whole point of the separation.
+func _test_a_surface_cannot_ask_what_it_is_looking_through() -> void:
+	# Each: a thing a surface must not reach for, and what goes wrong when one does.
+	var forbidden := {
+		"Presentation.": "branch on its presentation mode",
+		"Medium.": "branch on screen, AR or VR",
+		"XRServer": "ask whether a headset is on",
+		"Session.": "ask who else is in the room",
+		"is_authority": "ask whether this process is the host",
+		"multiplayer.": "talk to the network directly",
+	}
+	var files := _gd_files_under("res://hardware")
+	check("there are surfaces to check", files.size() > 15)
+
+	var offences: Array[String] = []
+	for path in files:
+		var text := FileAccess.get_file_as_string(path)
+		for line in text.split("\n"):
+			var code := line.strip_edges()
+			# Doc comments may NAME these -- timeline_surface.gd cites Presentation.default_mode
+			# to explain why it is a screen surface, which is the comment doing its job.
+			if code.begins_with("#"):
+				continue
+			for needle in forbidden:
+				if code.contains(needle):
+					offences.append("%s would %s: %s" % [
+							path.get_file(), forbidden[needle], code])
+	if not offences.is_empty():
+		for offence in offences:
+			print("    " + offence)
+	check("no surface asks what it is being looked at through", offences.is_empty())
+
+	# The check has to be able to fail, or it is decoration. Point it at the layer that is
+	# SUPPOSED to know these things and it must light up -- if it does not, the scan is broken
+	# and the green above means nothing.
+	var aware := _gd_files_under("res://core/presentation")
+	var found := false
+	for path in aware:
+		var text := FileAccess.get_file_as_string(path)
+		for line in text.split("\n"):
+			var code := line.strip_edges()
+			if not code.begins_with("#") and code.contains("Presentation."):
+				found = true
+	check("the scan does light up on the layer that is allowed to know", found)
+
+
+## Every .gd under a directory, recursively. Plain DirAccess rather than a preloaded list: a
+## list is something a new file can be left out of, and a file left out is a file exempt from
+## every rule above without anyone deciding that.
+func _gd_files_under(root: String) -> Array[String]:
+	var out: Array[String] = []
+	var dir := DirAccess.open(root)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		var path := root.path_join(entry)
+		if dir.current_is_dir():
+			out.append_array(_gd_files_under(path))
+		elif entry.ends_with(".gd"):
+			out.append(path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	return out
 
 
 func _test_a_rack_unit_reaches_every_parameter() -> void:

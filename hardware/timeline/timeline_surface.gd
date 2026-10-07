@@ -423,8 +423,9 @@ func _move_playhead() -> void:
 	if _playhead == null:
 		return
 	var at := DAW.state.position_seconds
-	if _follow(at):
-		return
+	# Paging relays out in place, so the playhead is positioned through the NEW window in the
+	# same frame. Returning here instead would leave it one frame behind the page it caused.
+	_follow(at)
 	var x := _x_for(at)
 	# Hidden rather than parked at the edge once it leaves the window. A playhead pinned to the
 	# left edge while the song plays on somewhere else is a lie about where you are, and the
@@ -452,7 +453,12 @@ func _follow(at: float) -> bool:
 	if is_equal_approx(target, view_start):
 		return false
 	view_start = target
-	mark_dirty()
+	# NOT mark_dirty(), for the reason in _on_view_changed -- and more so here. A hand drag is
+	# at least something someone is doing on purpose and watching; this fires unattended, in
+	# the middle of a take, once per window. A full rebuild there tears down and recreates
+	# every lane label while the transport is rolling, which is the worst possible moment.
+	_relayout_view()
+	_place_scrubber(DAW.state.timeline_length())
 	return true
 
 
