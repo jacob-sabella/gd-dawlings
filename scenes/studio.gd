@@ -38,6 +38,27 @@ const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 ## loom has to be routed BEHIND it: the first version of that loom took the short way down and
 ## went straight through the bar, which is the sort of thing no amount of reading the code finds
 ## and one photograph finds immediately.
+## The lamps in the room: where the light comes from, what colour, and how hard.
+##
+## One table, read twice -- once by the environment to make the lights and once by the furniture
+## to make the stands under them. They were two floating OmniLights with nothing to come out of,
+## which is the lighting version of the patchbay wired to nothing: a room lit by sources you
+## cannot see. The third is new, and it is there because the measurement said so -- the rack's
+## faceplate read 13.8 against the console's 22.1, and the floor at its foot 9.1 against 29.5.
+const PRACTICALS: Array = [
+	[Vector3(-2.05, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
+	[Vector3(1.62, 1.70, -1.15), Color(0.6, 0.78, 1.0), 5.5],
+	[Vector3(-0.80, 1.72, 0.34), Color(1.0, 0.82, 0.60), 6.5],
+]
+## How far a practical reaches. Short on purpose: at 6.5m each lamp lit all three walls, and
+## three of them made the empty half of the room as bright as the gear (37.0 against 38.7 on
+## the console's face). A floor lamp is a pool, not a sun.
+const LAMP_RANGE := 3.6
+## The lamp head. Wide and low rather than tall and thin: the first pass put a 105mm shade on a
+## two-metre pole, which from across the room is a street light. A floor lamp is shorter than
+## the people using it and its head is the part you notice.
+const LAMP_SHADE_RADIUS := 0.165
+const LAMP_SHADE_HEIGHT := 0.150
 const BRIDGE_POS := Vector3(0, 1.20, -0.35)
 const BRIDGE_SIZE := Vector3(0.70, 0.03, 0.09)
 
@@ -121,7 +142,10 @@ func _build_environment() -> void:
 	env.background_color = Color(0.021, 0.024, 0.030)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.20, 0.23, 0.30)
-	env.ambient_light_energy = 0.58
+	# Dropped from 0.58 when the third practical went in. Ambient is what fills the room rather
+	# than the work, so it is the first thing to come down when more lamps are added: the
+	# alternative is a room where the empty floor reads as brightly as the console.
+	env.ambient_light_energy = 0.46
 
 	# Glow is load-bearing, not a filter. Every LED, meter segment and lamp in this project is an
 	# emissive material above 1.0, and without a glow pass they are merely slightly brighter
@@ -149,15 +173,16 @@ func _build_environment() -> void:
 	key.rotation_degrees = Vector3(-62, 18, 0)
 	add_child(key)
 
-	# Two warm practicals, the lamps an actual control room has. They also give the metal
-	# something to catch: brushed aluminium under a single light source reads as flat grey.
-	for spec in [[Vector3(-1.9, 1.95, 1.1), Color(1.0, 0.78, 0.52), 7.0],
-			[Vector3(1.8, 1.85, -0.9), Color(0.6, 0.78, 1.0), 5.0]]:
+	# The practicals, the lamps an actual control room has. They also give the metal something to
+	# catch: brushed aluminium under a single light source reads as flat grey. The stands that
+	# hold them up are furniture and are built there, because an AR participant has real lamps
+	# in a real room and needs these to light the virtual gear without appearing in front of him.
+	for spec in PRACTICALS:
 		var lamp := OmniLight3D.new()
 		lamp.position = spec[0]
 		lamp.light_color = spec[1]
 		lamp.light_energy = spec[2]
-		lamp.omni_range = 6.5
+		lamp.omni_range = LAMP_RANGE
 		lamp.shadow_enabled = false
 		add_child(lamp)
 
@@ -234,6 +259,8 @@ func _build_furniture() -> void:
 	bridge.position = BRIDGE_POS
 	bridge.material_override = Materials.brushed_metal()
 	studio_set.add_child(bridge)
+
+	_build_lamp_stands()
 
 	# A trolley for the deck. Two uprights and a shelf; a tape machine on a stand is what the
 	# right-hand side of a control room looks like.
@@ -407,6 +434,78 @@ func _build_surfaces() -> void:
 	# across it: a session that gains tracks moves where its own looms land.
 	patchbay.rebuilt.connect(refresh_looms)
 	refresh_looms()
+
+
+## A stand under every practical.
+##
+## A tripod floor lamp rather than a pendant, and that is forced rather than chosen: this room
+## has three walls and no ceiling, so there is nothing for a hanging fixture to hang from, and a
+## stem disappearing into open sky above the wall line would be worse than no fixture at all.
+##
+## The shade is a cone open at the bottom with an emissive disc inside it, so the lamp reads as
+## ON. Nothing about the geometry emits light -- the OmniLight does that, from the middle of the
+## shade -- and that division is why the head sits where the light is rather than the other way
+## round. Move a practical in the table and its stand follows; there is a test on the pairing,
+## because the failure mode is an invisible light source, which is the thing this fixes.
+func _build_lamp_stands() -> void:
+	for spec in PRACTICALS:
+		var at: Vector3 = spec[0]
+		var tint: Color = spec[1]
+		var stand := Node3D.new()
+		stand.name = "LampStand"
+		stand.add_to_group(&"lamp_stand")
+		stand.position = Vector3(at.x, 0.0, at.z)
+		studio_set.add_child(stand)
+
+		var base := MeshInstance3D.new()
+		var base_mesh := CylinderMesh.new()
+		base_mesh.top_radius = 0.085
+		base_mesh.bottom_radius = 0.150
+		base_mesh.height = 0.032
+		base_mesh.radial_segments = 16
+		base.mesh = base_mesh
+		base.position = Vector3(0, 0.016, 0)
+		base.material_override = Materials.chassis()
+		stand.add_child(base)
+
+		# Up to the middle of the shade, so the pole is hidden by the head rather than stopping
+		# just short of it and leaving a gap you can see the wall through.
+		var pole := MeshInstance3D.new()
+		var pole_mesh := CylinderMesh.new()
+		pole_mesh.top_radius = 0.0145
+		pole_mesh.bottom_radius = 0.0205
+		pole_mesh.height = at.y
+		pole_mesh.radial_segments = 10
+		pole.mesh = pole_mesh
+		pole.position = Vector3(0, at.y * 0.5, 0)
+		pole.material_override = Materials.brushed_metal()
+		stand.add_child(pole)
+
+		var shade := MeshInstance3D.new()
+		shade.name = "Shade"
+		var shade_mesh := CylinderMesh.new()
+		shade_mesh.top_radius = LAMP_SHADE_RADIUS * 0.42
+		shade_mesh.bottom_radius = LAMP_SHADE_RADIUS
+		shade_mesh.height = LAMP_SHADE_HEIGHT
+		shade_mesh.radial_segments = 20
+		shade_mesh.cap_bottom = false
+		shade.mesh = shade_mesh
+		shade.position = Vector3(0, at.y, 0)
+		shade.material_override = Materials.cap_plastic(Color(0.17, 0.165, 0.155))
+		stand.add_child(shade)
+
+		# The glowing bit. Above the shade's lower rim so the cone shields it from straight on,
+		# which is what stops a lamp pointing down reading as a bare bulb from across the room.
+		var glow := MeshInstance3D.new()
+		var glow_mesh := CylinderMesh.new()
+		glow_mesh.top_radius = LAMP_SHADE_RADIUS * 0.80
+		glow_mesh.bottom_radius = LAMP_SHADE_RADIUS * 0.80
+		glow_mesh.height = 0.004
+		glow_mesh.radial_segments = 20
+		glow.mesh = glow_mesh
+		glow.position = Vector3(0, at.y - LAMP_SHADE_HEIGHT * 0.28, 0)
+		glow.material_override = Materials.led(tint, true)
+		stand.add_child(glow)
 
 
 # --- looms --------------------------------------------------------------------------------

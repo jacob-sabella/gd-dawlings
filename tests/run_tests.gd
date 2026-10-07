@@ -68,6 +68,7 @@ func _ready() -> void:
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
 	_test_every_grab_tab_is_clipped_to_its_own_gear()
 	_test_a_loom_lies_on_the_floor_and_misses_the_furniture()
+	_test_every_light_in_the_room_comes_out_of_something()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2866,5 +2867,55 @@ func _test_a_loom_lies_on_the_floor_and_misses_the_furniture() -> void:
 					if p.y - loom.floor_y < GearLoom.CORE_RADIUS * 2.0:
 						touched = true
 			check("%s actually lies on the floor" % loom.name, touched)
+
+	studio.queue_free()
+
+
+func _test_every_light_in_the_room_comes_out_of_something() -> void:
+	# The room was lit by two OmniLights floating in mid-air with nothing around them. That is
+	# the same defect as the patchbay wired to nothing, one layer up: the light is real, the
+	# source of it does not exist, and nothing anywhere says so. The pairing is now a table read
+	# twice -- once to make the lights, once to make the stands -- and what this pins is that
+	# both readings agree. Adding a practical and forgetting its stand is the regression.
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+
+	var lamps := studio.find_children("*", "OmniLight3D", true, false)
+	var stands := studio.studio_set.get_children().filter(
+			func(n): return n.is_in_group(&"lamp_stand"))
+	check("every practical in the table is a light (%d of %d)"
+			% [lamps.size(), Studio.PRACTICALS.size()], lamps.size() == Studio.PRACTICALS.size())
+	check("every practical in the table has a stand (%d of %d)"
+			% [stands.size(), Studio.PRACTICALS.size()], stands.size() == Studio.PRACTICALS.size())
+
+	var half_width := Studio.ROOM_WIDTH * 0.5
+	var half_depth := Studio.ROOM_DEPTH * 0.5
+	for i in mini(stands.size(), Studio.PRACTICALS.size()):
+		var at: Vector3 = Studio.PRACTICALS[i][0]
+		var stand: Node3D = stands[i]
+
+		# Standing on the floor, under the light, rather than beside it. A stand offset from its
+		# own lamp lights nothing and the lamp still floats -- it just floats next to a pole.
+		check("lamp %d stands under its own light (%.1fmm off)"
+				% [i, Vector2(stand.position.x - at.x, stand.position.z - at.z).length() * 1000.0],
+				Vector2(stand.position.x - at.x, stand.position.z - at.z).length() < 0.001)
+		check("lamp %d stands on the floor" % i, is_equal_approx(stand.position.y, 0.0))
+
+		var shade: Node3D = stand.get_node_or_null("Shade")
+		check("lamp %d has a shade" % i, shade != null)
+		if shade != null:
+			# And the bulb is INSIDE it. A shade hung above or below its own lamp is the version
+			# of this bug that still renders a fixture, so the count check alone would pass it.
+			var gap: float = absf(shade.global_position.y - at.y)
+			check("lamp %d's light is inside its shade (%.1fmm out)" % [i, gap * 1000.0],
+					gap < Studio.LAMP_SHADE_HEIGHT * 0.5)
+
+		# Inside the room. A stand is a solid object two metres tall, and the lights were placed
+		# back when nothing was drawn at their position, so nothing stopped one being in a wall.
+		check("lamp %d is inside the room" % i,
+				absf(at.x) < half_width - 0.2 and absf(at.z) < half_depth - 0.2
+				and at.y < Studio.WALL_HEIGHT - 0.2)
 
 	studio.queue_free()

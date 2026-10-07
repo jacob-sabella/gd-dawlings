@@ -737,3 +737,50 @@ Not done, deliberately: cable flags. Real looms carry a label at each end, and a
 a dark room it would be four unreadable pixels and a Label3D per loom.
 
 1053 checks, 0 failed.
+
+## Tick R -- the room was lit by light sources that do not exist
+
+Straight on from tick Q: the looms were in, and the rack's run was invisible because that
+corner of the room had no light reaching it.
+
+**Measured first, because the last time I called something "too dark" I was wrong.** In tick N
+the rack's faceplate read 46.9 against the console's 54.1 in a close-up -- 13%, no case to
+answer, hypothesis dropped. This is a different measurement on the wide shot and it is not
+close: rack face 13.8 against console 22.1, and the floor at the rack's foot 9.1 against 29.5
+on the lit side. A factor of two to three.
+
+**And then the actual defect, which was not the darkness.** The room was lit by two OmniLights
+floating in mid-air with no fixture anywhere near them. That is the same shape as the patchbay
+wired to nothing, one layer up: the light is real, the thing it comes out of does not exist,
+and nothing says so. `PRACTICALS` is now one table read twice -- by the environment to make
+the lights and by the furniture to make the stands -- and the stands are furniture, so an AR
+participant keeps the light on the virtual gear without a virtual lamp appearing in his room.
+
+Floor lamps and not pendants, and that is forced rather than chosen: this room has three walls
+and no ceiling, so a hanging fixture would hang from open sky above the wall line.
+
+**Three passes, each one a measurement correcting the one before.**
+
+  1. Stands at the old light positions. Rack face 13.8 -> 21.4, floor at its foot 9.1 -> 19.6,
+     everything up 55-115%. But the RATIO rack-to-console went 0.63 -> 0.59: the gap I set out
+     to close had not closed, the whole picture had simply got brighter. Worth saying plainly,
+     because "everything improved" was true and was not the thing I was after.
+  2. The reason: the old positions were abstract fill, chosen when nothing was drawn there.
+     Two of the three lamps stood over the empty half of the room, and the third was nearly
+     edge-on to the rack's faceplate -- the rack is turned 38 degrees, so a lamp to its left
+     rakes its side. Moved to where someone would actually stand a lamp, including one beside
+     the desk on the rack's face normal: rack face 28.6, ratio 0.74.
+  3. That lit the empty room too: bare floor 37.0 against the console's 38.7. A floor lamp is
+     a pool, not a sun, so `omni_range` came down from 6.5m to 3.6m and ambient from 0.58 to
+     0.46. Final: rack face 24.3, floor at its foot 12.9, console 35.3, bare floor 32.5.
+
+Against the start: rack face +76%, floor at its foot +41%, console +60%, and the gear is no
+longer the dimmest thing in a frame of its own room.
+
+The test pins the pairing, not the brightness. Brightness is taste and belongs in a photograph;
+"a light with no fixture" is a fact. Three mutations, three catches: a fourth practical with no
+stand -> "3 of 4"; a shade hung 300mm above its lamp -> three failures; a stand 250mm to one
+side of its lamp -> three failures. The second one matters because a count check alone would
+pass a fixture that renders in the wrong place.
+
+1070 checks, 0 failed.
