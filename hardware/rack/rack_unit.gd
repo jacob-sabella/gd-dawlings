@@ -26,6 +26,23 @@ const UNITS_TALL := 2
 const MAX_KNOBS := 8
 const MESH_PATH := "res://assets/hardware/rack_panel.glb"
 
+## Where the knob row sits, measured from the middle of the faceplate.
+##
+## It was at a quarter of the plate height below centre, which put the knobs in the bottom
+## fifth with 35mm of empty metal between them and the title and 3mm of clearance under their
+## captions. In a photograph that reads as controls that slid down the panel: the dead space
+## is in the MIDDLE, where nothing on real hardware leaves it, and the labels are pressed
+## against the lower edge. Raised so the knob-and-caption group is centred in the area the
+## header leaves, which gives a bottom margin instead of a hole.
+const KNOB_ROW_Y := -0.012
+## Centre-to-centre along the row. A knob is 22mm across, so this is 30mm of fascia between
+## neighbours -- enough for a caption that is wider than its knob, which most of them are.
+const KNOB_PITCH := 0.052
+const CAPTION_DROP := 0.016
+## The silkscreened rule under the title. Every processor that has a title bar has one, and
+## without it the header and the controls are two things floating on the same slab.
+const RULE_Y := U * UNITS_TALL * 0.5 - 0.027
+
 var track_index: int = 0
 var fx_index: int = 0
 
@@ -113,6 +130,14 @@ func _ready() -> void:
 		add_child(panel)
 	else:
 		add_child(_stand_in(h))
+
+	var rule := MeshInstance3D.new()
+	var rule_mesh := BoxMesh.new()
+	rule_mesh.size = Vector3(RACK_WIDTH - 0.056, 0.0009, 0.001)
+	rule.mesh = rule_mesh
+	rule.position = Vector3(0, RULE_Y, 0.0015)
+	rule.material_override = Materials.cap_plastic(Color(0.34, 0.35, 0.37))
+	add_child(rule)
 
 	_name_label = Label3D.new()
 	_name_label.font_size = 52
@@ -232,7 +257,10 @@ func refresh() -> void:
 	while _knobs.size() < on_this_page:
 		var k := Knob.new()
 		var slot := _knobs.size()
-		k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * 0.052, -height() * 0.25, 0.005)
+		k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * KNOB_PITCH, KNOB_ROW_Y, 0.005)
+		# Named for the same reason the caption is: a failure that says "knob @StaticBody3D@4327"
+		# names nothing, in a test whose job is to say WHICH control went off the plate.
+		k.name = "Knob%d" % slot
 		k.turned.connect(func(v: float):
 			var param_index := _param_for(slot)
 			if param_index >= 0:
@@ -243,7 +271,7 @@ func refresh() -> void:
 		var caption := Label3D.new()
 		caption.font_size = 36
 		caption.pixel_size = 0.00018
-		caption.position = k.position + Vector3(0, -0.016, 0)
+		caption.position = k.position + Vector3(0, -CAPTION_DROP, 0)
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		caption.modulate = Color(0.66, 0.68, 0.7)
 		caption.name = "Caption%d" % slot

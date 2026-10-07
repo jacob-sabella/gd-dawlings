@@ -558,3 +558,38 @@ and hiding unused slots. The rack's mesh count does not grow with the session, s
 little; recorded as a decision rather than an oversight.
 
 858 checks, 0 failed.
+
+### Tick N -- the rack, which had never been looked at closely
+
+The surface carrying the most geometry in the room (65,200 triangles, more than everything
+else combined) and the one I had photographed least. Shot it square on at 1200x1400.
+
+**A finding that measurement killed.** My first reaction to the photograph was that the rack
+is far too dark -- 48 knobs modelled and barely legible, off at the side away from the key
+light. That is a plausible story and it is wrong: mean luminance of a rack faceplate is 47
+against the console panel's 54, a 13% difference. The rack looked dark because it was
+photographed alone against a dark wall, and because the camera was further from it. Dropped,
+and recorded here because the next person to look at that photograph will have the same
+reaction. One `magick -format %[fx:mean]` settled it in a second.
+
+**The real finding, at 300%.** The faceplate layout was wrong in a way that is invisible at
+rack-wide zoom. The knob row sat at a quarter of the plate height below centre, which put 35mm
+of empty metal between the title and the knobs and left 3mm of clearance under the captions.
+Dead space in the MIDDLE of a panel is the one place real hardware never leaves it, and the
+labels were pressed against the lower edge. Raised the row so the knob-and-caption group is
+centred in the area the header leaves -- a bottom margin instead of a hole -- and added the
+silkscreened rule under the title that every processor with a title bar has. Without the rule
+the header and the controls are two things floating on the same slab.
+
+The test is careful about what it claims. It does NOT pin where the row looks best; that was
+settled by a photograph, as it has to be. It pins the BRACKET the row has to stay inside,
+which is geometry rather than taste: raise it and the knobs grow through the rule, drop it and
+the captions walk off the plate. Mutation-checked at both ends -- +0.010 fails 44 checks on
+"keeps knob under the rule", -0.030 fails 44 on "keeps caption on the plate (-4.7mm from the
+edge)". The old value would have passed, which is correct: it was ugly, not broken, and a test
+that failed it would be a test asserting my taste.
+
+Knobs are now named so a failure says `Knob3` rather than `@StaticBody3D@4327`. Third time
+this week an unnamed node made a failure message useless.
+
+971 checks, 0 failed.

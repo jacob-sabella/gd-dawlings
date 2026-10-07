@@ -64,6 +64,7 @@ func _ready() -> void:
 	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_one_jack_takes_one_plug()
 	_test_a_banked_control_still_moves()
+	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2068,6 +2069,65 @@ func _test_a_banked_control_still_moves() -> void:
 			absf(upper - Knob.SWEEP * 0.5) < 0.01)
 
 	desk.queue_free()
+
+
+func _test_nothing_on_a_faceplate_overlaps_or_overhangs() -> void:
+	# What this does NOT pin is where the knob row looks best. That was settled by a
+	# photograph, as it has to be. What it pins is the BRACKET the row has to stay inside,
+	# which is geometry and not taste: raise it and the knobs grow through the rule under the
+	# title; drop it and the captions walk off the bottom of the plate. Both ends are real
+	# failures and neither is visible from any other test in this suite.
+	DAW.use(OfflineBackend.new())
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack._process(0.0)
+
+	var units := rack.find_children("*", "Node3D", true, false).filter(
+			func(n): return n is RackUnit)
+	check("the stand-in session racks some units", units.size() >= 4)
+
+	var half := RackUnit.U * RackUnit.UNITS_TALL * 0.5
+	# Written out rather than read off the label, because a label's own idea of its height is
+	# the thing a font-size change moves and this is what it has to be checked against.
+	var caption_half := 36 * 0.00018 * 0.5
+	var title_half := 52 * 0.00019 * 0.5
+
+	for node in units:
+		var unit: RackUnit = node
+		var named := "%s" % unit.name
+
+		var rules := unit.find_children("*", "MeshInstance3D", false, false).filter(
+				func(n): return (n as MeshInstance3D).mesh is BoxMesh \
+						and ((n as MeshInstance3D).mesh as BoxMesh).size.y < 0.002)
+		check("%s has a rule under its title" % named, rules.size() == 1)
+		if rules.is_empty():
+			continue
+		var rule_y: float = (rules[0] as MeshInstance3D).position.y
+		var rule_w: float = ((rules[0] as MeshInstance3D).mesh as BoxMesh).size.x
+		check("%s keeps its rule on the metal" % named, rule_w < RackUnit.RACK_WIDTH)
+
+		# The title sits above the rule, not through it.
+		var title: Label3D = unit._name_label
+		check("%s keeps its title clear of the rule" % named,
+				title.position.y - title_half > rule_y)
+
+		var knobs := unit.find_children("*", "Node3D", true, false).filter(
+				func(n): return n is Knob and (n as Knob).visible)
+		check("%s carries knobs" % named, not knobs.is_empty())
+		for k in knobs:
+			var knob: Knob = k
+			check("%s keeps knob %s under the rule" % [named, knob.name],
+					knob.position.y + Knob.RADIUS < rule_y)
+
+		for i in knobs.size():
+			var caption := unit.get_node_or_null("Caption%d" % i) as Label3D
+			if caption == null or not caption.visible:
+				continue
+			var lowest: float = caption.position.y - caption_half
+			check("%s keeps caption %d on the plate (%.1fmm from the edge)"
+					% [named, i, (lowest + half) * 1000.0], lowest > -half)
+
+	rack.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:
