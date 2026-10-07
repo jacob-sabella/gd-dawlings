@@ -60,6 +60,7 @@ func _ready() -> void:
 	_test_many_little_boxes_are_one_object()
 	_test_lettering_stops_when_nobody_can_read_it()
 	_test_scrolling_the_timeline_does_not_rebuild_it()
+	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
@@ -1777,6 +1778,90 @@ func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
 ## through. It read as a modelling mistake rather than as space, which is the same class of
 ## failure as the bank selector and the rack's own page control: the gear misrepresenting the
 ## project, in the direction of looking simpler than it is.
+## Every surface that draws one thing per track has to say when it is drawing a BANK.
+##
+## The console has said so since it was written, which is exactly why this went unnoticed for
+## so long: the room contains a desk captioned "17-64 OF 90" standing next to a timeline
+## showing 64 lanes and a patchbay showing 64 pairs of jacks, both captioned nothing. The desk
+## being right made the other two look right.
+##
+## Asserted over a LIST of surfaces rather than one test each, so a fourth surface that draws
+## per-track geometry gets added here and is held to the rule on the day it is written, instead
+## of joining the two that quietly were not.
+func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
+	var state := MixState.new()
+	for i in 64:
+		state.track(i)
+	check("a cache with no project count behind it says nothing", state.bank_caption() == "")
+	state.project_track_count = 64
+	check("a cache holding the whole project says nothing", state.bank_caption() == "")
+
+	state.project_track_count = 90
+	state.bank_offset = 16
+	check("a truncated cache names the window and the whole",
+			state.bank_caption() == "TRACKS 17-80 OF 90")
+
+	# The caption is measured from what is HELD, not from bank_size, and this is the case that
+	# told them apart: the offline stand-in at 90 tracks caches all 90 while bank_size is still
+	# 64, so a bank_size caption read "TRACKS 1-64 OF 90" over ninety drawn lanes. Found by
+	# looking at it. The first version of this test passed, because it only checked that the
+	# number 90 appeared somewhere -- and it did, in the wrong sentence.
+	var everything := MixState.new()
+	for i in 90:
+		everything.track(i)
+	everything.project_track_count = 90
+	everything.bank_size = 64
+	check("a cache holding more than a bank still says nothing",
+			everything.bank_caption() == "")
+
+	# The real shape, which only Reaper produces: banking is on, the cache holds 64 of 90.
+	var big := OfflineBackend.new()
+	big.track_count = 90
+	DAW.use(big)
+	check("banking is available at this size",
+			DAW.can(DAWBackend.Capability.TRACK_BANKING))
+	# Keep the first 64 by sorted order rather than by index value: the stand-in's indices are
+	# Reaper's numbering, not 0..89, so "index >= 64" is not the same set as "the first 64".
+	var held_indices := DAW.state.track_indices()
+	for position in range(64, held_indices.size()):
+		DAW.state.tracks.erase(held_indices[position])
+	check("the cache now holds a bank, not the project", DAW.state.tracks.size() == 64)
+	var whole := str(DAW.state.project_track_count)
+
+	# Named explicitly. get_class() on a scripted node returns the native base -- every one of
+	# these is "Node3D" -- so a failure would name nothing, in the test whose whole job is to
+	# say WHICH surface went quiet.
+	for named in [["console", ConsoleSurface.new()], ["timeline", TimelineSurface.new()],
+			["patchbay", PatchbaySurface.new()]]:
+		var surface: Surface = named[1]
+		add_child(surface)
+		surface._process(0.0)
+		var said := false
+		for node in surface.find_children("*", "Label3D", true, false):
+			if (node as Label3D).text.contains(whole):
+				said = true
+				break
+		check("the %s says how much project it is not showing" % named[0], said)
+		surface.queue_free()
+
+	# And the other half of the rule, which is the half that erodes: a caption that is always
+	# there is one people stop reading. A session that fits must be uncaptioned.
+	DAW.use(OfflineBackend.new())
+	check("the stand-in on its own fits in a bank", not DAW.state.has_more_banks())
+	for named in [["console", ConsoleSurface.new()], ["timeline", TimelineSurface.new()],
+			["patchbay", PatchbaySurface.new()]]:
+		var surface: Surface = named[1]
+		add_child(surface)
+		surface._process(0.0)
+		var shouted := false
+		for node in surface.find_children("*", "Label3D", true, false):
+			if (node as Label3D).text.contains(" OF "):
+				shouted = true
+				break
+		check("the %s is quiet about a session that fits" % named[0], not shouted)
+		surface.queue_free()
+
+
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:
 	DAW.use(OfflineBackend.new())
 	var rack := RackSurface.new()

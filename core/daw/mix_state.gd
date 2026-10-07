@@ -170,6 +170,29 @@ func has_more_banks() -> bool:
 	return project_track_count > bank_size
 
 
+## Which tracks this cache is holding, out of how many exist, or "" when it holds them all.
+##
+## Here rather than in each surface because THREE things now have to say it and they must not
+## drift: a console that says "17-32 OF 90" beside a timeline that says "17-32 of 90 tracks" is
+## two different facts as far as anyone reading the room is concerned.
+##
+## Measured from what is HELD, not from bank_size. has_more_banks() asks whether the project is
+## bigger than a bank, which is a different question and not always the same answer -- the
+## offline stand-in at 90 tracks caches all 90 and a caption derived from bank_size would have
+## read "TRACKS 1-64 OF 90" over ninety drawn lanes. A caption that disagrees with the thing it
+## is captioning is worse than none, since the whole job here is to be believed about what is
+## missing. The range therefore comes from the keys actually in the cache.
+##
+## Empty string for "nothing to say", which is the case a caller must handle: a session that
+## fits needs no caption, and a caption that is always present teaches people to stop reading
+## it exactly when it starts mattering.
+func bank_caption() -> String:
+	var held := tracks.size()
+	if project_track_count <= 0 or held <= 0 or held >= project_track_count:
+		return ""
+	return "TRACKS %d-%d OF %d" % [bank_offset + 1, bank_offset + held, project_track_count]
+
+
 func set_bank(offset: int, size: int = -1) -> void:
 	var new_size := size if size > 0 else bank_size
 	if offset == bank_offset and new_size == bank_size:

@@ -60,6 +60,22 @@ func _rebuild() -> void:
 		socket_bank.name = "JackSockets"
 		_adopt(socket_bank)
 
+	# Says so when these jacks are a BANK rather than the bay. Same reason the timeline does:
+	# a patchbay is read as every jack there is, and the one thing you cannot do with a jack
+	# that was never drawn is notice it is missing.
+	var caption := DAW.state.bank_caption()
+	if caption != "":
+		var notice := Label3D.new()
+		notice.text = caption
+		notice.font_size = 72
+		notice.pixel_size = 0.00024
+		notice.modulate = Color(0.72, 0.60, 0.40)
+		notice.outline_size = 0
+		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		notice.position = Vector3(-width * 0.5 + 0.02, ROW_GAP + 0.048, 0.002)
+		Lettering.range_to_legibility(notice)
+		_adopt(notice)
+
 	var x := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
 	for index in indices:
 		var t := DAW.state.track(index)

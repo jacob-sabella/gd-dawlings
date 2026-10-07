@@ -404,6 +404,32 @@ every check green. Same disease as the four found in the source this week -- pro
 what the thing below it does not do -- this time in the suite that exists to catch it. Now
 asserts WHERE: every blank below the lowest unit.
 
+**The timeline and the patchbay were showing a bank and calling it the project.** Over a real
+Reaper link the cache holds a window of tracks -- 64 of 90 -- and both surfaces drew whatever
+was in it with nothing saying so. The console has had a bank control since it was written,
+which is exactly why this lasted: a desk captioned "17-64 OF 90" standing beside an uncaptioned
+timeline and an uncaptioned patchbay makes the other two look right.
+
+Fourth and fifth instance of the same pattern. The phrase lives on MixState now, not in three
+surfaces, because three things saying the same fact in three wordings is three facts to anyone
+reading the room. The test is written over a LIST of surfaces so a fourth one is held to the
+rule the day it is added, rather than joining the two that quietly were not.
+
+**Then the screenshot caught the caption lying, and the test did not.** The first version keyed
+off `has_more_banks()`, which asks whether the PROJECT is bigger than a bank -- a different
+question from whether this cache is truncated, and not always the same answer. The offline
+stand-in at 90 tracks caches all 90 while bank_size is still 64, so the caption read "TRACKS
+1-64 OF 90" over ninety drawn lanes. The test passed, because it only checked that "90"
+appeared somewhere, and it did -- in the wrong sentence.
+
+A caption that disagrees with the thing it is captioning is worse than no caption, since being
+believed about what is missing is its entire job. It is measured from the keys actually in the
+cache now, and the test asserts the sentence rather than the number.
+
+**A test that looks for a substring is a test that will accept a lie containing it.** That is
+the second time this week a green check was hiding the thing it named -- the rack blanks were
+the first -- and both times mutation or a screenshot found it, never the suite on its own.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

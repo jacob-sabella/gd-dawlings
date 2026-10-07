@@ -147,6 +147,7 @@ func _rebuild() -> void:
 
 	_build_playhead()
 	_build_blindness_notice()
+	_build_bank_notice()
 	_place_scrubber(project)
 	_relayout_view()
 
@@ -284,6 +285,28 @@ func _build_blindness_notice() -> void:
 	var notice := _text("NO ARRANGEMENT FROM %s" % DAW.summary().to_upper(), 24,
 			Color(0.72, 0.60, 0.40))
 	notice.position = Vector3(_lane_area_x + _lane_area_width * 0.5, 0.0, 0.004)
+	_adopt(notice)
+
+
+## Says so, in the gutter, when these lanes are a BANK rather than the project.
+##
+## Same refusal as the notice above and the same failure it prevents, one level less obvious.
+## A control surface protocol streams a window of tracks, so a 90-track session arrives here as
+## 64 lanes -- and a timeline is read as a picture of the whole arrangement, which is exactly
+## what makes a truncated one dangerous. The console has had a bank control since it was
+## written; this surface was showing the same partial project with nothing saying so, and so
+## was the patchbay.
+##
+## A caption and not a control, deliberately. There is one bank and it is a property of the
+## session, so moving it belongs in one place -- two sets of bank buttons that can disagree
+## about which bank you are on is worse than one.
+func _build_bank_notice() -> void:
+	var caption := DAW.state.bank_caption()
+	if caption == "":
+		return
+	var notice := _text(caption, 18, Color(0.72, 0.60, 0.40))
+	notice.position = Vector3(-WIDTH * 0.5 + 0.009, _top_y - RULER_HEIGHT * 0.5, 0.0016)
+	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_adopt(notice)
 
 
