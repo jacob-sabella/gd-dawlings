@@ -266,6 +266,26 @@ I also nearly shipped a regression test that did not test anything: reverting th
 left it green, because `mark_dirty()` only sets a flag and the test never ran the frame that
 acts on it. The mutation check is what found that, not the test passing.
 
+**A rack unit could only reach a plugin's first eight parameters**, and said nothing about the
+rest. The class doc had claimed a page control since it was written; there was never one. Same
+silent failure the console's BankSelector exists to prevent -- gear that looks complete for a
+simpler thing than the one actually loaded -- so it now works the same way, down to deferring
+a page change made while a knob is held.
+
+**It was invisible because the stand-in made it invisible.** Every FX in the offline project
+had exactly four parameters, so the overflow case never arose in the only session anyone can
+open without Reaper running. A real ReaEQ is four bands of four; a real ReaComp is a dozen and
+more. The stand-in now has realistic counts. This is the SECOND time the stand-in has designed
+a problem out of existence by being tidier than reality -- the first was folder structure --
+which makes it a pattern rather than an accident: **the stand-in has to be at least as awkward
+as the thing it stands in for.**
+
+**`verify.sh` now times out.** Its own comment already described the hang -- a parse error in
+run_tests.gd leaves the scene with no script, so nothing calls quit() and the run sits forever
+looking like a slow suite -- but nothing bounded it. I lost two stretches to exactly that
+today, both times assuming the suite had got slow. It is under a second; sixty is the limit,
+and on a timeout it says what the cause almost certainly is.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

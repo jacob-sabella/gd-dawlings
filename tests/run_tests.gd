@@ -59,6 +59,7 @@ func _ready() -> void:
 	_test_many_little_boxes_are_one_object()
 	_test_lettering_stops_when_nobody_can_read_it()
 	_test_scrolling_the_timeline_does_not_rebuild_it()
+	_test_a_rack_unit_reaches_every_parameter()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1586,6 +1587,96 @@ func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
 	check("and the bank kept its capacity", blocks.count() > 0)
 	check("which is more than it is drawing", blocks.count() >= drawn_before)
 	timeline.queue_free()
+
+
+func _test_a_rack_unit_reaches_every_parameter() -> void:
+	# THE GAP THIS EXISTS FOR. A faceplate fits eight knobs, and this showed a plugin's first
+	# eight with nothing saying there were more -- a unit that looked complete for a simpler
+	# plugin than the one loaded. Exactly the failure the console's BankSelector was written to
+	# prevent, in a second place, missed because every FX in the stand-in had four parameters
+	# and so the case never arose.
+	DAW.use(OfflineBackend.new())
+
+	var unit := RackUnit.create(2, 0)
+	add_child(unit)
+	var fx := DAW.state.fx(2, 0)
+	check("the stand-in has a plugin that overflows a faceplate",
+			fx.params.size() > RackUnit.MAX_KNOBS)
+
+	var total := fx.params.size()
+	check("a page control appears when the plugin does not fit", unit._page_label.visible)
+	check("it says which parameters these knobs are",
+			unit._page_label.text == "1-8 OF %d" % total)
+	check("there is nothing before the first page", not unit._page_prev.lit)
+	check("and there is something after it", unit._page_next.lit)
+
+	# The knob must mean the parameter it is CURRENTLY pointed at, not the one it was built
+	# with. A captured index would keep writing the first page forever, silently.
+	check("a knob on the first page means the first parameter", unit._param_for(0) == 0)
+	unit._step_page(1)
+	check("paging moves the window", unit.page_offset == RackUnit.MAX_KNOBS)
+	check("and the knobs are re-pointed", unit._param_for(0) == RackUnit.MAX_KNOBS)
+	check("the readout follows", unit._page_label.text == "9-16 OF %d" % total)
+	check("and now there is something both ways", unit._page_prev.lit and unit._page_next.lit)
+
+	# Turning a knob writes the page it is showing.
+	var before: float = fx.params[RackUnit.MAX_KNOBS]
+	unit._knobs[0].turned.emit(clampf(before + 0.25, 0.0, 1.0))
+	check("turning a knob writes the parameter it currently means",
+			not is_equal_approx(DAW.state.fx(2, 0).params[RackUnit.MAX_KNOBS], before))
+	check("and leaves the parameter it used to mean alone",
+			is_equal_approx(DAW.state.fx(2, 0).params[0], fx.params[0]))
+
+	# The last page is short, and the spare knobs go away rather than showing stale values.
+	while unit._page_next.lit:
+		unit._step_page(1)
+	var left := total - unit.page_offset
+	check("the last page shows only what is left",
+			unit._page_label.text == "%d-%d OF %d" % [unit.page_offset + 1, total, total])
+	var shown := 0
+	for k in unit._knobs:
+		if k.visible:
+			shown += 1
+	check("and hides the knobs with nothing behind them", shown == left)
+	check("there is nothing after the last page", not unit._page_next.lit)
+	var at_end := unit.page_offset
+	unit._step_page(1)
+	check("paging past the end does nothing", unit.page_offset == at_end)
+
+	# --- a page may not change under a hand -------------------------------------------------
+	#
+	# The console's rule in a smaller place: applying immediately would send the NEW parameter
+	# the OLD hand position -- a value nobody asked for, written somewhere nobody was looking.
+	unit.page_offset = 0
+	unit.refresh()
+	var hand := FakeHand.new()
+	hand.set_physics_process(false)
+	add_child(hand)
+	var knob := unit._knobs[0]
+	knob.grab_begin(hand, knob.global_position)
+	check("a held knob is reported as held", unit._anything_held())
+	unit._step_page(1)
+	check("a page asked for under a hand does not land yet", unit.page_offset == 0)
+	unit._process(0.0)
+	check("and still does not while the hand is there", unit.page_offset == 0)
+	knob.grab_end(hand)
+	unit._process(0.0)
+	check("it lands as soon as the hand lets go", unit.page_offset == RackUnit.MAX_KNOBS)
+
+	# A plugin that fits carries no page control, for the same reason the console's bank module
+	# is not built for a session that fits: two dead buttons invite the question of what for.
+	var small := DAW.state.fx(2, 0)
+	small.params.clear()
+	small.param_names.clear()
+	for i in 3:
+		small.params[i] = 0.5
+	var tidy := RackUnit.create(2, 0)
+	add_child(tidy)
+	check("a plugin that fits shows no page control", not tidy._page_label.visible)
+
+	hand.queue_free()
+	unit.queue_free()
+	tidy.queue_free()
 
 
 func _test_lettering_stops_when_nobody_can_read_it() -> void:

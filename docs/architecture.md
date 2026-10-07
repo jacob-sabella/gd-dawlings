@@ -494,6 +494,35 @@ visible items into the low slots and calls `show_first(n)`; the rest keep whatev
 held and are not drawn. Resizing the buffer per scroll would be the node churn this removed,
 wearing a different hat.
 
+## A control that cannot reach everything must say so
+
+Two places now have the same shape, and it is worth naming because the failure mode is
+identical and silent in both.
+
+A control surface protocol streams a BANK of tracks, not a project, so a 90-track session
+arrives as tracks 1..64 and the rest never appear. A rack faceplate fits eight knobs, so a
+plugin with thirty-two parameters shows eight and the rest never appear. In both cases nothing
+errors, nothing is logged, and the gear looks like complete gear for a smaller thing than the
+one that is actually loaded. That is the worst shape a missing feature can take: you do not go
+looking for what you have no reason to believe exists.
+
+So both carry a readout that states the whole, not just the part -- `17-32 OF 90`, `9-16 OF 18`
+-- and two buttons to move. Both build the control ONLY when there is more than fits, because a
+panel carrying two dead buttons invites the question of what they are for. Both light a button
+to mean "there is something that way", because an unlit button at the end is the only thing
+that distinguishes the end from a button that has stopped working.
+
+And both defer a change made while a hand is on a control. On the console a strip must not
+change which track it means while someone holds its fader; on a rack unit a knob must not
+change which parameter it means while someone turns it. Applying immediately sends the new
+target the old hand position -- a value nobody asked for, written somewhere nobody was looking.
+It is deferred rather than refused, because a press that does nothing is its own bug and the
+hand on the control is usually the other hand.
+
+The rack's version of this is why `RackUnit._param_for` is read at the moment of the turn
+rather than captured when the knob was built. A captured index would keep writing page one
+forever, and would look exactly like a knob that does nothing.
+
 ## Audio: the gear, not the mix
 
 **The mix is not ours to play.** Reaper is already running, through monitors, in the room this

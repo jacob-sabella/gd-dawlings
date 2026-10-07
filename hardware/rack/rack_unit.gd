@@ -11,7 +11,14 @@ extends Node3D
 ## for a third-party compressor.
 ##
 ## Eight knobs is the ceiling on a faceplate this size. A plugin with forty parameters gets its
-## first eight and a bank, which is the same compromise every real controller makes.
+## first eight and a PAGE CONTROL, which is the same compromise every real controller makes.
+##
+## The page control is not optional dressing. Without it this showed a plugin's first eight
+## parameters and nothing said there were thirty-two more -- the unit looked like a complete
+## unit for a simpler plugin than the one that is loaded, which is the same failure the
+## console's BankSelector exists to prevent and is stated at length there. It is built only
+## when the plugin overflows, for the same reason: a faceplate carrying two dead buttons
+## invites the question of what they are for.
 
 const RACK_WIDTH := 0.483
 const U := 0.0445
@@ -22,9 +29,22 @@ const MESH_PATH := "res://assets/hardware/rack_panel.glb"
 var track_index: int = 0
 var fx_index: int = 0
 
+## Which eight parameters the knobs currently mean. Always a multiple of MAX_KNOBS.
+var page_offset := 0
+
 var _knobs: Array[Knob] = []
 var _bypass: PanelButton
 var _name_label: Label3D
+var _page_label: Label3D
+var _page_prev: PanelButton
+var _page_next: PanelButton
+## A page change asked for while a hand is on a knob, held until the hand lets go.
+##
+## THE RULE A PAGE MUST NOT BREAK, and it is the console's rule in a smaller place: a knob may
+## never change which parameter it means while someone is turning it. Applying immediately
+## would send the new parameter the old hand position -- a value nobody asked for, written to
+## a parameter nobody was looking at, with nothing about it resembling an error.
+var _pending_page := -1
 
 
 static func create(track_idx: int, fx_idx: int) -> RackUnit:
@@ -111,8 +131,82 @@ func _ready() -> void:
 		DAW.set_fx_enabled(track_index, fx_index, not f.enabled))
 	add_child(_bypass)
 
+	# Right of the name, left of the bypass: the readout is about the knobs, so it sits with
+	# them rather than with the on/off at the far end.
+	_page_label = Label3D.new()
+	_page_label.font_size = 34
+	_page_label.pixel_size = 0.00019
+	_page_label.position = Vector3(RACK_WIDTH * 0.5 - 0.112, h * 0.5 - 0.016, 0.002)
+	_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_page_label.modulate = Color(0.60, 0.63, 0.68)
+	Lettering.range_to_legibility(_page_label)
+	add_child(_page_label)
+
+	_page_prev = PanelButton.new()
+	_page_prev.led_colour = Color(0.45, 0.68, 0.95)
+	_page_prev.position = Vector3(RACK_WIDTH * 0.5 - 0.090, h * 0.5 - 0.016, 0.004)
+	_page_prev.pressed.connect(func(): _step_page(-1))
+	add_child(_page_prev)
+
+	_page_next = PanelButton.new()
+	_page_next.led_colour = Color(0.45, 0.68, 0.95)
+	_page_next.position = Vector3(RACK_WIDTH * 0.5 - 0.068, h * 0.5 - 0.016, 0.004)
+	_page_next.pressed.connect(func(): _step_page(1))
+	add_child(_page_next)
+
 	DAW.state.fx_changed.connect(_on_fx_changed)
+	set_process(true)
 	refresh()
+
+
+## Only ever running to land a deferred page change; see `_pending_page`.
+func _process(_delta: float) -> void:
+	if _pending_page < 0 or _anything_held():
+		return
+	page_offset = _pending_page
+	_pending_page = -1
+	refresh()
+
+
+func _anything_held() -> bool:
+	for k in _knobs:
+		if k.is_held():
+			return true
+	return false
+
+
+## Asked for by the page buttons. Deferred rather than refused: refusing would mean a press
+## that did nothing, and the hand on the knob is usually the other hand.
+func _step_page(direction: int) -> void:
+	var wanted := (_pending_page if _pending_page >= 0 else page_offset) \
+			+ direction * MAX_KNOBS
+	if wanted < 0 or wanted >= _param_count():
+		return
+	if _anything_held():
+		_pending_page = wanted
+		return
+	page_offset = wanted
+	refresh()
+
+
+func _param_count() -> int:
+	var f := DAW.state.fx(track_index, fx_index, false)
+	return f.params.size() if f != null else 0
+
+
+## The parameter index a given knob currently means.
+##
+## Read at the moment of the turn rather than captured when the knob was built, because a knob
+## is re-pointed by a page change and a captured index would keep writing the parameter it was
+## created for. -1 when this slot is past the end of the plugin.
+func _param_for(slot: int) -> int:
+	var f := DAW.state.fx(track_index, fx_index, false)
+	if f == null:
+		return -1
+	var params: Array = f.params.keys()
+	params.sort()
+	var at := page_offset + slot
+	return int(params[at]) if at < params.size() else -1
 
 
 func refresh() -> void:
@@ -125,16 +219,24 @@ func refresh() -> void:
 
 	var params: Array = f.params.keys()
 	params.sort()
-	var count: int = mini(params.size(), MAX_KNOBS)
+	# A plugin can lose parameters -- a different preset, a reload -- and a page left past the
+	# end would show a faceplate of nothing with no clue that paging back would fix it.
+	if page_offset >= params.size():
+		page_offset = maxi((int((params.size() - 1) / MAX_KNOBS)) * MAX_KNOBS, 0)
+	var on_this_page: int = clampi(params.size() - page_offset, 0, MAX_KNOBS)
 
 	# Knobs are created once and then only re-pointed. Rebuilding them on every FX update would
-	# drop a knob that is being turned, and FX updates arrive while you turn it.
-	while _knobs.size() < count:
+	# drop a knob that is being turned, and FX updates arrive while you turn it. A page change
+	# is the same thing for the same reason, which is why a knob asks `_param_for` at the
+	# moment of the turn rather than carrying the index it was built with.
+	while _knobs.size() < on_this_page:
 		var k := Knob.new()
 		var slot := _knobs.size()
 		k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * 0.052, -height() * 0.25, 0.005)
-		var param_index: int = params[slot]
-		k.turned.connect(func(v: float): DAW.set_fx_param(track_index, fx_index, param_index, v))
+		k.turned.connect(func(v: float):
+			var param_index := _param_for(slot)
+			if param_index >= 0:
+				DAW.set_fx_param(track_index, fx_index, param_index, v))
 		add_child(k)
 		_knobs.append(k)
 
@@ -149,14 +251,43 @@ func refresh() -> void:
 		add_child(caption)
 
 	for i in _knobs.size():
-		if i < count:
+		if i < on_this_page:
+			var param_index: int = params[page_offset + i]
 			_knobs[i].visible = true
-			_knobs[i].apply_remote(f.params[params[i]])
+			_knobs[i].apply_remote(f.params[param_index])
 			var caption := get_node_or_null("Caption%d" % i)
 			if caption:
-				caption.text = str(f.param_names.get(params[i], "P%d" % params[i])).to_upper()
+				caption.visible = true
+				caption.text = str(f.param_names.get(param_index, "P%d" % param_index)).to_upper()
 		else:
 			_knobs[i].visible = false
+			var spare := get_node_or_null("Caption%d" % i)
+			if spare:
+				spare.visible = false
+
+	_refresh_page_control(params.size(), on_this_page)
+
+
+## The readout and its two buttons, shown only when the plugin does not fit on the faceplate.
+##
+## "9-16 OF 18" is the whole point of this control: without it a unit showing eight knobs and a
+## unit showing eight OF THIRTY-TWO look identical, and the second one is lying about the
+## plugin. The buttons are what you do about it.
+func _refresh_page_control(total: int, on_this_page: int) -> void:
+	if _page_label == null:
+		return
+	var overflows := total > MAX_KNOBS
+	_page_label.visible = overflows
+	_page_prev.visible = overflows
+	_page_next.visible = overflows
+	if not overflows:
+		return
+	_page_label.text = "%d-%d OF %d" % [page_offset + 1, page_offset + on_this_page, total]
+	# Lit means "there is something that way", as on the console. An unlit page button at the
+	# end of a plugin is the only thing that says you have reached the end rather than that the
+	# button has stopped working.
+	_page_prev.lit = page_offset > 0
+	_page_next.lit = page_offset + MAX_KNOBS < total
 
 
 func _on_fx_changed(t: int, fx: int) -> void:

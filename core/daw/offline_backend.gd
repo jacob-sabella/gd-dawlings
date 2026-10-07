@@ -186,9 +186,23 @@ func _arrange() -> void:
 	state.track(10).solo = true
 
 	# A couple of FX chains, so the racks have something to stand for.
-	for spec in [[2, "ReaEQ", ["Freq", "Gain", "Q", "Type"]], [2, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]],
-			[6, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]], [10, "ReaEQ", ["Freq", "Gain", "Q", "Type"]],
-			[10, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]], [13, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]]]:
+	#
+	# PARAMETER COUNTS ARE REALISTIC ON PURPOSE. These were four knobs apiece, and four knobs
+	# fit on a faceplate -- so the rack's paging was never exercised by the only session anyone
+	# can open without Reaper running, and the fact that it did not exist went unnoticed.
+	# A real ReaEQ is four bands of four, a real ReaComp is a dozen and more. The stand-in has
+	# to be at least as awkward as the thing it stands in for, or it designs the awkwardness
+	# out of the feature. Same lesson as the folder structure.
+	var eq_params := ["Band 1 Freq", "Band 1 Gain", "Band 1 Q", "Band 1 Type",
+			"Band 2 Freq", "Band 2 Gain", "Band 2 Q", "Band 2 Type",
+			"Band 3 Freq", "Band 3 Gain", "Band 3 Q", "Band 3 Type",
+			"Band 4 Freq", "Band 4 Gain", "Band 4 Q", "Band 4 Type", "Wet", "Bypass"]
+	var comp_params := ["Thresh", "Ratio", "Attack", "Release", "Knee", "RMS Size",
+			"Pre-comp", "Makeup", "Dry", "Wet", "Lowpass", "Highpass", "Auto Makeup"]
+	var verb_params := ["Size", "Damping", "Wet", "Dry", "Pre-delay", "Width"]
+	for spec in [[2, "ReaEQ", eq_params], [2, "ReaComp", comp_params],
+			[6, "ReaComp", comp_params], [10, "ReaEQ", eq_params],
+			[10, "ReaVerbate", verb_params], [13, "ReaVerbate", verb_params]]:
 		var track_index: int = spec[0]
 		var f := state.fx(track_index, state.track(track_index).fx.size())
 		f.name = spec[1]
