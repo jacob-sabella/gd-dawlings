@@ -15,6 +15,7 @@ extends ControlAffordance
 const TRAVEL := 0.10
 const WIDTH := 0.014
 const CAP_HEIGHT := 0.022
+const MESH_PATH := "res://assets/hardware/fader_cap.glb"
 
 ## Reaper's normalised taper value. Kept separate from `value` only in name: they are the same
 ## number, and that is the point -- no conversion happens on the way to the DAW.
@@ -41,22 +42,17 @@ func _ready() -> void:
 	slot.position = Vector3(0, TRAVEL * 0.5, 0.002)
 	add_child(slot)
 
-	_cap = MeshInstance3D.new()
-	var cap_mesh := BoxMesh.new()
-	cap_mesh.size = Vector3(WIDTH, CAP_HEIGHT, 0.016)
-	_cap.mesh = cap_mesh
-	_cap.material_override = Materials.cap_plastic(Color(0.17, 0.18, 0.2))
+	# The moulded cap: scooped waist, a lip at each end, the pointer line down in the scoop
+	# where a finger bridges over it (tools/blender/fader_cap.py). Modelled in the orientation
+	# it is used in, so unlike the knob it needs no correcting rotation.
+	_cap = Part.build(
+		MESH_PATH,
+		Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+		{"indicator": Materials.legend()},
+	)
+	if _cap == null:
+		_cap = _stand_in()
 	add_child(_cap)
-
-	# A pale line across the cap. It is the thing you actually read a fader position from at a
-	# glance -- the cap's own silhouette against a dark slot is nearly invisible under low
-	# studio lighting, which is the lighting this scene has.
-	var line := MeshInstance3D.new()
-	var line_mesh := BoxMesh.new()
-	line_mesh.size = Vector3(WIDTH * 1.05, 0.0015, 0.0165)
-	line.mesh = line_mesh
-	line.material_override = Materials.legend()
-	_cap.add_child(line)
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -66,6 +62,24 @@ func _ready() -> void:
 	add_child(shape)
 
 	_on_value_changed()
+
+
+## The pre-Blender cap, kept as the fallback so a missing asset is a plainer desk rather than a
+## desk whose faders you cannot see the position of.
+func _stand_in() -> Node3D:
+	var holder := MeshInstance3D.new()
+	var cap_mesh := BoxMesh.new()
+	cap_mesh.size = Vector3(WIDTH, CAP_HEIGHT, 0.016)
+	holder.mesh = cap_mesh
+	holder.material_override = Materials.cap_plastic(Color(0.17, 0.18, 0.2))
+
+	var line := MeshInstance3D.new()
+	var line_mesh := BoxMesh.new()
+	line_mesh.size = Vector3(WIDTH * 1.05, 0.0015, 0.0165)
+	line.mesh = line_mesh
+	line.material_override = Materials.legend()
+	holder.add_child(line)
+	return holder
 
 
 func _on_grab_begin(at: Vector3) -> void:

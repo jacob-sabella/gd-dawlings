@@ -1010,23 +1010,53 @@ func _test_bank_selector_says_which_tracks_these_are() -> void:
 ## exporter's business; matching them by index would paint the body white and the indicator
 ## black, which is a perfectly plausible-looking knob that is wrong.
 func _test_knob_is_the_moulded_part() -> void:
-	var mesh := Knob.shared_mesh()
-	check("the knob mesh resolves", mesh != null)
-	if mesh == null:
-		return
+	# Authored parts bring two failure modes procedural geometry does not have, and neither one
+	# announces itself.
+	#
+	# The asset can be missing -- unexported, or exported and not imported -- and the control
+	# would then be an empty node with working collision and nothing drawn. The stand-ins cover
+	# that at runtime, but a desk quietly running on stand-ins is still a regression, so the
+	# suite is where it gets noticed.
+	#
+	# And the primitives can come back in either order, because their order is the glTF
+	# exporter's business. Matching by index would paint a knob's body white and its line
+	# black: a perfectly plausible-looking part that is wrong. Everything is matched on the
+	# authored material name instead, so the names are a contract and the suite holds it.
+	var parts := {
+		Knob.MESH_PATH: Vector2(0.0235, 0.0235),
+		Fader.MESH_PATH: Vector2(0.0150, 0.0225),
+	}
+	for path in parts:
+		var mesh := Part.mesh(path)
+		check("%s resolves" % path.get_file(), mesh != null)
+		if mesh == null:
+			continue
+		check("%s is the two-material part, not a primitive" % path.get_file(),
+				mesh.get_surface_count() == 2)
 
-	check("it is the two-material part, not a bare cylinder", mesh.get_surface_count() == 2)
+		var named := 0
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i)
+			if m != null and String(m.resource_name).containsn("indicator"):
+				named += 1
+		check("%s names exactly one surface the indicator" % path.get_file(), named == 1)
 
-	var named := 0
-	for i in mesh.get_surface_count():
-		var m := mesh.surface_get_material(i)
-		if m != null and String(m.resource_name).containsn("indicator"):
-			named += 1
-	check("exactly one surface names itself the indicator", named == 1)
+		# The envelope every panel laid itself out around, before any of this was a mesh.
+		var size: Vector2 = parts[path]
+		var box := mesh.get_aabb()
+		check("%s still fits its footprint" % path.get_file(),
+				box.size.x < size.x and box.size.y < size.y)
 
-	# The envelope the console laid itself out around, before any of this was a mesh.
-	var box := mesh.get_aabb()
-	check("it still fits the 22mm footprint", box.size.x < 0.0235 and box.size.y < 0.0235)
+	# A surface whose material name matches nothing must still be painted, or the importer's
+	# guess ends up on the desk.
+	var dressed := Part.build(Knob.MESH_PATH, Materials.legend(), {"nothing-matches-this": null})
+	if dressed != null:
+		var unpainted := 0
+		for i in dressed.mesh.get_surface_count():
+			if dressed.get_surface_override_material(i) == null:
+				unpainted += 1
+		check("an unmatched surface falls back rather than going unpainted", unpainted == 0)
+		dressed.free()
 
 	var knob := Knob.new()
 	add_child(knob)

@@ -189,11 +189,15 @@ count is, and what makes it read as moulded plastic rather than as a cylinder is
 its chamfers -- the one modelling operation that is painful to write against `ArrayMesh`. Those
 are authored in Blender.
 
-What is committed is the **script**, `tools/blender/knob.py`, not a `.blend`:
+What is committed is the **script**, not a `.blend`:
 
 ```
-blender --background --python tools/blender/knob.py    # writes assets/hardware/knob.glb
+tools/blender/build.sh          # every part -> assets/hardware/*.glb
 ```
+
+Each part is one file in `tools/blender/` holding its own dimensions and its own reasons;
+`_parts.py` holds the shared scaffolding and, once, the Blender-to-Godot axis mapping that
+every part has to get right.
 
 The `.glb` is committed too, so a clone does not need Blender -- but the shape lives in numbers
 next to every other dimension in the project, and changing it is an edit rather than an
@@ -204,10 +208,13 @@ geometry cannot:
 
 - **Match surfaces by material name, never by index.** The exporter decides what order the
   primitives come out in. An index that quietly swaps paints the body white and the indicator
-  black, which is a knob that looks fine and is wrong.
-- **Keep a procedural stand-in.** `Knob` falls back to the old cylinder when the mesh will not
-  resolve, so a missing or unimported asset is a plainer desk rather than a desk with invisible
-  controls on it. `_test_knob_is_the_moulded_part` is what notices that the fallback is in use.
+  black, which is a part that looks fine and is wrong. `Part.build()` is the only loader, so
+  the rule is kept in one place and the authored material names are the contract.
+- **Keep a procedural stand-in.** Every control falls back to the shape it had before, so a
+  missing or unimported asset is a plainer desk rather than a desk with invisible controls on
+  it. `_test_knob_is_the_moulded_part` is what notices the desk is running on stand-ins.
+
+Authored so far: the knob, and the channel fader cap.
 
 ## Things that are deliberately not done yet
 

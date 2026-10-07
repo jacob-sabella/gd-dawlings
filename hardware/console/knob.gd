@@ -24,35 +24,13 @@ const MESH_PATH := "res://assets/hardware/knob.glb"
 
 signal turned(v: float)
 
-## One mesh for every knob on the desk. There are around a hundred of them on a full console and
-## they are all the same object; loading the scene once and handing the same Mesh to each is the
-## difference between one resource and a hundred identical ones.
-static var _shared_mesh: Mesh
-static var _mesh_checked := false
-
 var _spindle: Node3D
 var _grab_angle := 0.0
 var _grab_value := 0.0
 
 
-## Returns null if the asset is missing or has not been imported yet -- a headless run against a
-## cold .godot/ is the normal way that happens, and it is not worth failing over.
 static func shared_mesh() -> Mesh:
-	if _mesh_checked:
-		return _shared_mesh
-	_mesh_checked = true
-	if not ResourceLoader.exists(MESH_PATH):
-		return null
-	var packed := load(MESH_PATH) as PackedScene
-	if packed == null:
-		return null
-	var root := packed.instantiate()
-	for child in root.find_children("*", "MeshInstance3D", true, false):
-		_shared_mesh = (child as MeshInstance3D).mesh
-		break
-	# Not queue_free: this node never entered a tree, so there is no frame for it to be freed on.
-	root.free()
-	return _shared_mesh
+	return Part.mesh(MESH_PATH)
 
 
 func _ready() -> void:
@@ -62,9 +40,17 @@ func _ready() -> void:
 	_spindle = Node3D.new()
 	add_child(_spindle)
 
-	var mesh := shared_mesh()
-	if mesh != null:
-		_spindle.add_child(_moulded(mesh))
+	var moulded := Part.build(
+		MESH_PATH,
+		Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+		{"indicator": Materials.legend()},
+	)
+	if moulded != null:
+		# Modelled axis-up, exported through glTF's Y-up conversion, stood back up here. Same
+		# correction the CylinderMesh needed, for the same reason: a panel knob's axis is the
+		# panel normal, which is local Z.
+		moulded.rotation_degrees = Vector3(90, 0, 0)
+		_spindle.add_child(moulded)
 	else:
 		_spindle.add_child(_stand_in())
 
@@ -77,26 +63,6 @@ func _ready() -> void:
 	add_child(shape)
 
 	_on_value_changed()
-
-
-func _moulded(mesh: Mesh) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	# Modelled axis-up, exported through glTF's Y-up conversion, stood back up here. Same
-	# correction the CylinderMesh needed, for the same reason: a panel knob's axis is the panel
-	# normal, which is local Z.
-	mi.rotation_degrees = Vector3(90, 0, 0)
-	# Surfaces are matched BY MATERIAL NAME rather than by index. The export writes two
-	# primitives and their order is the exporter's business, not ours; an index that silently
-	# swaps paints the whole knob white and the body line black.
-	for i in mesh.get_surface_count():
-		var source := mesh.surface_get_material(i)
-		var id := source.resource_name if source != null else ""
-		if id.containsn("indicator"):
-			mi.set_surface_override_material(i, Materials.legend())
-		else:
-			mi.set_surface_override_material(i, Materials.cap_plastic(Color(0.14, 0.15, 0.17)))
-	return mi
 
 
 ## The pre-Blender knob, kept as the fallback so a missing asset is a plainer desk rather than a
