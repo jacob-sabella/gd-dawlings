@@ -202,6 +202,10 @@ function handlers.GetTimeline()
     tracks = tracks,
     markers = markers,
     length = reaper.GetProjectLength(0),
+    -- Every track in the project, not just the ones with items on them and not just the ones
+    -- in the OSC bank. It rides along here because it changes on roughly the same clock as the
+    -- arrangement, and because nothing else reaper-3d can reach knows the number at all.
+    track_count = reaper.CountTracks(0),
   }
 end
 

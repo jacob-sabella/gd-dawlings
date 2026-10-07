@@ -62,6 +62,19 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "str" and args.size() > 0:
 				state.position_string = str(args[0])
 				state.transport_changed.emit()
+		"project":
+			# reaper-3d's own. OSC says nothing about how big a project is -- only how big the
+			# bank is -- so without this a 90-track session is indistinguishable from a
+			# 64-track one and the bank buttons have nothing to be enabled or greyed by.
+			if p.size() > 1 and p[1] == "tracks" and args.size() > 0:
+				state.project_track_count = int(args[0])
+				state.bank_changed.emit()
+		"bank":
+			# Where the current bank starts, in tracks. Also reaper-3d's own: Reaper is told a
+			# bank NUMBER and never says which one it settled on, so the authority states it
+			# here and every guest learns it the same way it learns everything else.
+			if args.size() > 0:
+				state.set_bank(int(args[0]), int(args[1]) if args.size() > 1 else -1)
 		"timeline":
 			_apply_timeline(state, p, args)
 		"tempo":
@@ -261,7 +274,14 @@ static func _as_bool(args: Array) -> bool:
 ## one for "state left", and a field added to ReaperState is replicated the day it is parsed
 ## rather than the day someone remembers to add it to a serialiser.
 static func snapshot(state: MixState) -> Array:
-	var out: Array = []
+	# FIRST, before a single track message. A bank statement redefines what every index after
+	# it means, and applying one clears the cache -- so a snapshot that stated the bank at the
+	# end would deliver a full project and then throw it away, leaving a guest with an empty
+	# desk and nothing in the log.
+	var out: Array = [
+		["/bank", [state.bank_offset, state.bank_size]],
+		["/project/tracks", [state.project_track_count]],
+	]
 	for index in state.track_indices():
 		var t: MixState.TrackState = state.tracks[index]
 		out.append(["/track/%d/name" % index, [t.name]])

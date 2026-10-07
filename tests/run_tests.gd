@@ -46,6 +46,10 @@ func _ready() -> void:
 	_test_arrangement_is_durable_not_volatile()
 	_test_timeline_window_scroll_and_zoom()
 	_test_timeline_follows_the_playhead_only_while_rolling()
+	_test_bank_redefines_what_an_index_means()
+	_test_bank_is_stated_before_the_tracks_it_renumbers()
+	_test_bank_waits_for_the_hand_to_let_go()
+	_test_bank_selector_says_which_tracks_these_are()
 	_test_bridge_arrangement_is_parsed()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
@@ -866,3 +870,131 @@ func _test_timeline_follows_the_playhead_only_while_rolling() -> void:
 	DAW.state.playing = false
 	timeline.queue_free()
 	DAW.use(previous, false)
+
+
+# --- track banking ------------------------------------------------------------------------
+
+## A bank is not a scroll position, it is a change of meaning: after it, index 1 is a different
+## track. Everything keyed by index is therefore wrong rather than stale, and keeping it would
+## leave the previous bank's names on this bank's faders until each happened to be re-sent.
+func _test_bank_redefines_what_an_index_means() -> void:
+	var state := MixState.new()
+	state.bank_size = 64
+	state.project_track_count = 90
+	state.track(1).name = "Kick"
+	state.track(2).name = "Snare"
+
+	check("a project bigger than the bank has more banks", state.has_more_banks())
+	check("track 1 of bank 0 is track 1 of the project", state.absolute_track_number(1) == 1)
+
+	# An Array and not a bool: a GDScript lambda captures a local by VALUE, so a captured bool
+	# set inside one stays false outside it and the check passes for the wrong reason.
+	var banked: Array = []
+	state.bank_changed.connect(func(): banked.append(true))
+	state.set_bank(64)
+
+	check("moving the bank is announced", banked.size() == 1)
+	check("the old bank's cache is dropped, not kept", state.tracks.is_empty())
+	check("track 1 of bank 1 is track 65 of the project", state.absolute_track_number(1) == 65)
+
+	# Asking for the bank it is already on must not wipe anything: a redundant statement arrives
+	# in every snapshot, and a cache cleared by one would be cleared on arrival.
+	state.track(1).name = "Horns"
+	state.set_bank(64)
+	check("restating the current bank changes nothing", state.track(1).name == "Horns")
+	check("and is not announced either", banked.size() == 1)
+
+	state.project_track_count = 12
+	state.bank_size = 64
+	check("a project smaller than the bank has no second bank", not state.has_more_banks())
+
+
+## Snapshot ORDER, which is normally not a thing a wire format has to care about and is here.
+func _test_bank_is_stated_before_the_tracks_it_renumbers() -> void:
+	var here := MixState.new()
+	here.set_bank(64, 64)
+	here.project_track_count = 90
+	here.track(1).name = "Horns"
+	here.track(2).name = "Trombone"
+
+	var batch := MixWire.snapshot(here)
+	var first: String = batch[0][0]
+	check("the bank is the first thing in a snapshot", first == "/bank")
+
+	# The failure this guards: a bank stated at the END of a snapshot delivers a whole project
+	# and then clears it, leaving a guest with an empty desk and nothing in the log.
+	var there := MixState.new()
+	MixWire.apply_replicated(there, batch)
+	check("the guest kept the tracks", there.track_indices().size() == 2)
+	check("the guest knows which tracks they are", there.absolute_track_number(1) == 65)
+	check("the guest knows how big the project is", there.project_track_count == 90)
+
+
+## The one rule banking must not break.
+func _test_bank_waits_for_the_hand_to_let_go() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new())
+
+	var console := ConsoleSurface.new()
+	add_child(console)
+	console._process(0.0)
+	check("the stand-in needs no bank module", console.bank == null)
+	check("a desk with nothing held reports nothing held", not console._anything_held())
+
+	var hand := FakeHand.new()
+	hand.set_physics_process(false)
+	add_child(hand)
+	var fader := console.strips[0]._fader if console.strips[0].get("_fader") != null else null
+	var grabbed: ControlAffordance = fader
+	if grabbed == null:
+		for node in console.find_children("*", "ControlAffordance", true, false):
+			grabbed = node
+			break
+
+	grabbed.grab_begin(hand, grabbed.global_position)
+	check("a held control is reported held", console._anything_held())
+
+	console._request_bank(64)
+	check("a bank asked for mid-grab is deferred, not applied", console._pending_bank == 64)
+	console._process(0.0)
+	check("and stays deferred while the hand is still on it", console._pending_bank == 64)
+
+	grabbed.grab_end(hand)
+	console._process(0.0)
+	check("and is applied once the hand lets go", console._pending_bank == -1)
+
+	hand.queue_free()
+	console.queue_free()
+	DAW.use(previous, false)
+
+
+## The caption is the feature. Without it a 90-track session looks like a complete desk for a
+## smaller session than the one that is open, which is the worst shape a limitation can take.
+func _test_bank_selector_says_which_tracks_these_are() -> void:
+	var sel := BankSelector.new()
+	sel.bank_offset = 64
+	sel.bank_size = 64
+	sel.project_count = 90
+	add_child(sel)
+
+	check("the caption names the tracks on the desk", sel._range_label.text == "65-90")
+	check("and the size of the project they came from", sel._total_label.text == "OF 90")
+	check("there is a bank behind this one", sel._prev.lit)
+	check("and none in front of it", not sel._next.lit)
+
+	sel.bank_offset = 0
+	sel.refresh()
+	check("the first bank is a full bank", sel._range_label.text == "1-64")
+	check("with nothing behind it", not sel._prev.lit)
+	check("and more in front", sel._next.lit)
+
+	# Asking past the end does nothing rather than paging onto an empty desk.
+	var asked: Array = []
+	sel.bank_requested.connect(func(o): asked.append(o))
+	sel.bank_offset = 64
+	sel._step(1)
+	check("paging past the last track is refused", asked.is_empty())
+	sel._step(-1)
+	check("paging back is not", asked == [0])
+
+	sel.queue_free()

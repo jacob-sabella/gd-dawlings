@@ -68,6 +68,7 @@ func open(options: Dictionary = {}) -> bool:
 	# client that connects after Reaper has started sees nothing until something moves, which
 	# looks exactly like a broken link.
 	_peer.send("/device/track/count", [BANK_TRACKS])
+	_apply("/bank", [0, BANK_TRACKS])
 	_peer.send("/device/fxparam/count", [BANK_FX_PARAMS])
 	_peer.send("/device/send/count", [BANK_SENDS])
 	_peer.send("/device/track/bank/select", [1])
@@ -103,6 +104,12 @@ func summary() -> String:
 ## ReaScript bridge being up. Reported honestly rather than discovered when a drop does nothing.
 func can(capability: StringName) -> bool:
 	if capability == Capability.ROUTING:
+		return _bridge != null and _bridge.is_open()
+	if capability == Capability.TRACK_BANKING:
+		# Reaper can always be told to move its bank. Whether this surface should offer a
+		# button for it depends on knowing the project is bigger than the bank, and only the
+		# ReaScript bridge can say that -- a page-forward button that cannot tell you whether
+		# there is anything to page to is worse than no button.
 		return _bridge != null and _bridge.is_open()
 	if capability == Capability.TIMELINE:
 		# Reaper's OSC surface has no message about media items at all, so this is exactly as
@@ -205,6 +212,20 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	write("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
 
+## Reaper is addressed in whole banks, not in tracks: `/device/track/bank/select 2` with a bank
+## of 64 means "show me tracks 65 to 128". An offset that is not a multiple of the bank width
+## therefore cannot be asked for, and is rounded down rather than silently ignored.
+func set_track_bank(offset: int) -> void:
+	if _peer == null:
+		return
+	var bank := int(floor(float(maxf(offset, 0)) / float(BANK_TRACKS)))
+	_peer.send("/device/track/bank/select", [bank + 1])
+	# Stated locally rather than waited for. Reaper acknowledges a bank change by re-sending
+	# the tracks in it and never by naming the bank, so nothing would ever tell this cache that
+	# its indices now mean something else.
+	_apply("/bank", [bank * BANK_TRACKS, BANK_TRACKS])
+
+
 func transport_play() -> void:
 	write("/play", [1.0])
 
@@ -271,6 +292,10 @@ func _on_timeline(result) -> void:
 			markers.append_array([float(m.get("position", 0.0)), str(m.get("name", ""))])
 	_apply("/timeline/markers", markers)
 	_apply("/timeline/length", [float(result.get("length", 0.0))])
+	# The only channel that knows how big the project actually is. OSC reports the bank and
+	# nothing else, so without this a 90-track session is indistinguishable from a 64-track one.
+	if result.has("track_count"):
+		_apply("/project/tracks", [int(result["track_count"])])
 
 
 ## The bridge's Lua encoder cannot tell an empty list from an empty object, so an empty table

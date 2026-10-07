@@ -42,6 +42,10 @@ const Capability := {
 	ROUTING = &"routing",
 	## Arm tracks for recording.
 	RECORD_ARM = &"record_arm",
+	## Move the visible bank of tracks. True only when the backend has both a way to ask for a
+	## different slice and a way to know how big the project is -- a bank button that can page
+	## forward but cannot say whether there is anything there is worse than no button.
+	TRACK_BANKING = &"track_banking",
 	## Report the arrangement: where the items on each track start and how long they are. A
 	## backend that says false is saying "I cannot see the timeline", which the timeline
 	## surface draws differently from "the timeline is empty" -- the first is a limitation to
@@ -120,6 +124,10 @@ func set_master_pan(_pan: float) -> void: pass
 
 func set_fx_param(_track_index: int, _fx_index: int, _param: int, _value: float) -> void: pass
 func set_fx_enabled(_track_index: int, _fx_index: int, _enabled: bool) -> void: pass
+
+## Show the slice of the project starting at `offset` tracks in. A no-op on a backend that
+## answers false to Capability.TRACK_BANKING.
+func set_track_bank(_offset: int) -> void: pass
 
 func transport_play() -> void: pass
 func transport_stop() -> void: pass

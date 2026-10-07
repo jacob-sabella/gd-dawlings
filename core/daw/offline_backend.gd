@@ -40,8 +40,10 @@ func summary() -> String:
 
 ## No DAW means no routing engine to change. The patchbay reads this and declines the gesture
 ## rather than drawing a cable that stands for nothing.
+## No routing engine to change, and no project beyond the twelve tracks it invented -- so no
+## bank to move either. The console reads the second one and builds no bank module at all.
 func can(capability: StringName) -> bool:
-	return capability != Capability.ROUTING
+	return capability != Capability.ROUTING and capability != Capability.TRACK_BANKING
 
 
 # --- the stand-in mix ---------------------------------------------------------------------
@@ -78,6 +80,8 @@ func _populate() -> void:
 	# like and what makes the master fader visibly NOT at the top of its travel.
 	state.master.volume = 0.69
 	state.master.volume_db = taper_to_db(0.69)
+	state.bank_size = demo.size()
+	state.project_track_count = demo.size()
 	# AFTER the tempo is known. The arrangement is laid out in bars converted to seconds, so
 	# arranging first put every section boundary at 120bpm spacing under a 92bpm ruler, and
 	# "Chorus 1" landed three bars away from the bar its marker named.

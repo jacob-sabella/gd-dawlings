@@ -17,6 +17,15 @@ const PANEL_MARGIN := 0.03
 var _panel: Node3D
 var strips: Array[ChannelStrip] = []
 var master: MasterSection
+var bank: BankSelector
+
+## A bank change asked for while a hand is on a control, held until the hand lets go.
+##
+## THE ONE RULE BANKING MUST NOT BREAK: a strip may never change which track it means while
+## someone is holding its fader. Applying immediately would rebuild the desk out from under a
+## grab -- the fader is freed mid-drag, the hand is left holding nothing, and the last value
+## written went to a track that is no longer there. Worse, nothing about it looks like an error.
+var _pending_bank := -1
 
 
 func _ready() -> void:
@@ -27,19 +36,56 @@ func _ready() -> void:
 	if surface_id == &"":
 		surface_id = &"console"
 	super()
+	DAW.state.bank_changed.connect(_on_bank_changed)
+
+
+func _process(delta: float) -> void:
+	super(delta)
+	if _pending_bank >= 0 and not _anything_held():
+		var wanted := _pending_bank
+		_pending_bank = -1
+		DAW.set_track_bank(wanted)
+
+
+func _on_bank_changed() -> void:
+	mark_dirty()
+
+
+## Asked for by the bank buttons. Deferred rather than refused: refusing would mean a press
+## that did nothing, and the hand on the fader is usually the other hand.
+func _request_bank(offset: int) -> void:
+	if _anything_held():
+		_pending_bank = offset
+		return
+	DAW.set_track_bank(offset)
+
+
+func _anything_held() -> bool:
+	for node in find_children("*", "ControlAffordance", true, false):
+		if (node as ControlAffordance).is_held():
+			return true
+	return false
 
 
 func _rebuild() -> void:
 	_clear_built()
 	strips.clear()
 	master = null
+	bank = null
 
 	var indices := DAW.state.track_indices()
 	if indices.is_empty():
 		return
 
+	# The bank module is only built when there is more project than bank -- a session that fits
+	# on the desk needs no bank controls, and two dead buttons invite the question of what they
+	# are for. See hardware/console/bank_selector.gd.
+	var banking := DAW.can(DAWBackend.Capability.TRACK_BANKING) and DAW.state.has_more_banks()
+	var bank_width := (BankSelector.WIDTH + MasterSection.GAP) if banking else 0.0
+
 	var channels_width := indices.size() * ChannelStrip.WIDTH
-	var width := channels_width + MasterSection.GAP + MasterSection.WIDTH + PANEL_MARGIN * 2.0
+	var width := bank_width + channels_width + MasterSection.GAP + MasterSection.WIDTH \
+			+ PANEL_MARGIN * 2.0
 
 	_panel = Node3D.new()
 	_panel.rotation_degrees = Vector3(-PANEL_TILT, 0, 0)
@@ -74,7 +120,19 @@ func _rebuild() -> void:
 	rest.material_override = Materials.brushed_metal()
 	_adopt(rest)
 
-	var x := -width * 0.5 + PANEL_MARGIN + ChannelStrip.WIDTH * 0.5
+	var x := -width * 0.5 + PANEL_MARGIN
+	if banking:
+		bank = BankSelector.new()
+		bank.name = "Bank"
+		bank.bank_offset = DAW.state.bank_offset
+		bank.bank_size = DAW.state.bank_size
+		bank.project_count = DAW.state.project_track_count
+		bank.position = Vector3(x + BankSelector.WIDTH * 0.5, PANEL_MARGIN, 0.0)
+		bank.bank_requested.connect(_request_bank)
+		_panel.add_child(bank)
+		x += bank_width
+
+	x += ChannelStrip.WIDTH * 0.5
 	for index in indices:
 		var strip := ChannelStrip.create(index)
 		strip.position = Vector3(x, PANEL_MARGIN, 0.0)

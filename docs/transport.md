@@ -108,6 +108,31 @@ One place the bridge is strictly better than OSC: a send's destination. OSC can 
 by **name**, which is ambiguous the moment a project has two tracks called "Verb" — and
 duplicate track names are completely normal. `GetProjectStructure` returns indices.
 
+### The bank is not a scroll position
+
+Reaper streams a **bank** of 64 tracks, not a project. In a 90-track session the OSC indices
+mean tracks 1–64 or 65–90 depending on where the bank is, and **nothing in the message says
+which**. Left alone, a 90-track project is indistinguishable from a 64-track one.
+
+So `MixState` carries `bank_offset`, and moving it **clears the track cache**. That is not
+over-caution: after a bank change every index means a different track, so what is cached is
+wrong rather than stale, and keeping it leaves the previous bank's names on this bank's faders
+until each one happens to be re-sent.
+
+`/device/track/bank/select` takes a bank *number*, so an offset that is not a multiple of the
+bank width cannot be asked for and is rounded down rather than silently ignored. Reaper
+acknowledges by re-sending the tracks and never by naming the bank, so the authority states
+`/bank` locally rather than waiting for a confirmation that never comes.
+
+How big the project actually is comes from `GetTimeline`'s `track_count` — the only channel
+that knows. Without it the bank buttons have nothing to be enabled or greyed by, which is why
+`can(TRACK_BANKING)` is false until the ReaScript bridge is loaded.
+
+**`/bank` is the first entry in a snapshot**, before a single track message. A bank statement
+redefines what every index after it means and applying one clears the cache, so a snapshot that
+stated the bank at the end would deliver a whole project and then throw it away — leaving a
+guest with an empty desk and nothing in the log. The suite asserts the ordering.
+
 ### What the arrangement costs on the wire
 
 Items replicate to guests as **one address per lane holding a flat list** —

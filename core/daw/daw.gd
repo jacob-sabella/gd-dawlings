@@ -28,6 +28,7 @@ const COMMANDS := [
 	&"set_track_volume", &"set_track_pan", &"set_track_mute", &"set_track_solo",
 	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
 	&"set_fx_param", &"set_fx_enabled",
+	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"create_send", &"remove_send",
 ]
@@ -98,6 +99,8 @@ func set_track_pan(index: int, pan: float) -> void: _do(&"set_track_pan", [index
 func set_track_mute(index: int, muted: bool) -> void: _do(&"set_track_mute", [index, muted])
 func set_track_solo(index: int, soloed: bool) -> void: _do(&"set_track_solo", [index, soloed])
 func set_track_rec_arm(index: int, armed: bool) -> void: _do(&"set_track_rec_arm", [index, armed])
+
+func set_track_bank(offset: int) -> void: _do(&"set_track_bank", [offset])
 
 func set_master_volume(taper: float) -> void: _do(&"set_master_volume", [taper])
 func set_master_pan(pan: float) -> void: _do(&"set_master_pan", [pan])

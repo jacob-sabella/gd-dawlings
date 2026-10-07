@@ -30,6 +30,12 @@ because a scaffold that reads as a finished project wastes the next person's aft
   rolls and leaves the window alone while it is stopped. Defaults to SCREEN in every medium,
   including AR. The window arithmetic, the clipping, the follow rule and the item wire format
   are tested.
+- **Track banking.** `MixState` knows which slice of the project its indices mean, moving the
+  bank drops the cache rather than leaving the previous bank's names on this bank's faders,
+  and the desk grows a BANK module saying "65-90 OF 90" when there is more project than bank.
+  A bank asked for while a hand is on a control is deferred until the hand lets go. Tested,
+  but never photographed or run against a project big enough to need it -- the stand-in has
+  twelve tracks and correctly builds no bank module at all.
 - **Capture harness.** `tools/shot.sh`, with reproducible camera framing on the command line.
 - **Presentation switching, both ways.** The flat overlay (Tab) for the screen participant, and
   a grab handle clipped to each surface for everyone else: tap to cycle anchor, drag to place.
@@ -73,8 +79,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Not started
 
-- **Track banking.** Fine up to 64 tracks; beyond that the bank has to scroll, and a strip must
-  never change which track it means while a hand is on its fader.
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
 - **Audio.** The studio is silent. Reaper's output does not come through this process at all.

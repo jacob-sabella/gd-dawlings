@@ -26,6 +26,8 @@ signal fx_changed(track_index: int, fx_index: int)
 ## The arrangement changed shape: items appeared or moved, or the project got longer. Separate
 ## from track_added because a timeline rebuilds on this and a console does not care.
 signal timeline_changed()
+## Which slice of the project the track indices currently mean.
+signal bank_changed()
 
 
 class SendState extends RefCounted:
@@ -117,6 +119,43 @@ var tempo: float = 120.0
 var project_length: float = 0.0
 ## {position_seconds: String name}, in no particular order.
 var markers: Dictionary = {}
+
+## How many of the project's tracks come BEFORE the one this cache calls index 1.
+##
+## The uncomfortable fact this models: a control surface protocol streams a BANK of tracks, not
+## a project. Reaper's bank is 64 wide, so in a 90-track session the indices in this cache mean
+## tracks 1..64 or tracks 65..90 depending on where the bank is, and nothing in the message
+## itself says which. Without this, a 90-track project silently looks like a 64-track one and
+## the fader labelled KICK moves something else after a bank change.
+var bank_offset: int = 0
+## How wide the bank is -- how many tracks the surface can see at once.
+var bank_size: int = 64
+## Tracks in the whole project, or -1 when nothing has said. -1 is not zero: "I have not been
+## told how big this project is" and "this project has no tracks" want opposite things drawn.
+var project_track_count: int = -1
+
+
+## The project-wide number of a track this cache calls `index`. What a human reads off a desk.
+func absolute_track_number(index: int) -> int:
+	return bank_offset + index
+
+
+## True when there is more project than this bank can show.
+func has_more_banks() -> bool:
+	return project_track_count > bank_size
+
+
+func set_bank(offset: int, size: int = -1) -> void:
+	var new_size := size if size > 0 else bank_size
+	if offset == bank_offset and new_size == bank_size:
+		return
+	bank_offset = offset
+	bank_size = new_size
+	# The indices now mean different tracks, so everything keyed by index is wrong rather than
+	# stale. Dropping it is the only honest move: keeping it would leave the previous bank's
+	# names on this bank's faders until each one happened to be re-sent.
+	tracks.clear()
+	bank_changed.emit()
 
 
 ## Replace one track's arrangement wholesale.
