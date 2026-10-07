@@ -42,13 +42,6 @@ const PEAK_HOLD_SEC := 1.2
 ## meter IS and none of them change with the thing being metered.
 var read_level: Callable = Callable()
 
-## Lit segments are driven past 1.0 so the glow pass catches them, which is what `Materials.led`
-## was doing with emission_energy_multiplier and what an unshaded LED has to do by hand.
-const LIT_GAIN := 2.4
-## An off LED is not the absence of an LED -- it keeps its tint so the panel still reads as
-## having a light there. Same number as Materials.led's darkened(0.82), kept in step on purpose.
-const DARK := 0.18
-
 var _multi: MultiMeshInstance3D
 var _mesh: MultiMesh
 var _level := 0.0
@@ -164,7 +157,7 @@ static func segment_y(index: int) -> float:
 static func segment_colour(index: int, lit_count: int, peak_seg: int) -> Color:
 	var base := colour_at(index)
 	var on := index < lit_count or index == peak_seg
-	return (base * LIT_GAIN) if on else (base * DARK)
+	return Materials.lamp_colour(base, on)
 
 
 func _paint(lit_count: int, peak_seg: int) -> void:

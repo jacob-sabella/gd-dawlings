@@ -22,6 +22,11 @@ var _rec: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 
+## Where this strip's button bodies and lamps get drawn, if the console gave it somewhere. See
+## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise.
+var body_bank: MeshBank
+var lamp_bank: MeshBank
+
 
 static func create(index: int) -> ChannelStrip:
 	var s := ChannelStrip.new()
@@ -58,18 +63,24 @@ func _ready() -> void:
 	add_child(_pan)
 
 	_rec = PanelButton.new()
+	_rec.body_bank = body_bank
+	_rec.lamp_bank = lamp_bank
 	_rec.led_colour = Color(0.95, 0.25, 0.22)
 	_rec.position = Vector3(0, HEIGHT - 0.077, 0.004)
 	_rec.pressed.connect(func(): DAW.set_track_rec_arm(track_index, not _state().rec_arm))
 	add_child(_rec)
 
 	_solo = PanelButton.new()
+	_solo.body_bank = body_bank
+	_solo.lamp_bank = lamp_bank
 	_solo.led_colour = Color(0.98, 0.78, 0.2)
 	_solo.position = Vector3(0, HEIGHT - 0.095, 0.004)
 	_solo.pressed.connect(func(): DAW.set_track_solo(track_index, not _state().solo))
 	add_child(_solo)
 
 	_mute = PanelButton.new()
+	_mute.body_bank = body_bank
+	_mute.lamp_bank = lamp_bank
 	_mute.led_colour = Color(0.35, 0.72, 0.98)
 	_mute.position = Vector3(0, HEIGHT - 0.113, 0.004)
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))

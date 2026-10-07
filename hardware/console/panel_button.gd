@@ -6,10 +6,32 @@ extends ControlAffordance
 ## Latching rather than momentary, because every one of those functions is a state in Reaper
 ## rather than an event. The press is reported on grab, not on release: a desk button takes
 ## effect when it goes down, and waiting for the release makes a solo feel broken.
+##
+## DRAWN BY ITSELF, OR BY A BANK
+##
+## A button is two meshes, a body and a lamp, and on a 90-track desk there are 270 buttons --
+## 540 objects, a quarter of everything the studio draws. So a surface that has a lot of them
+## can hand each button a `MeshBank` and the button will claim a slot in it instead of building
+## its own; the whole console's bodies then cost one draw call and its lamps cost one more.
+##
+## Banks are OPTIONAL and a button with none behaves exactly as it always did. That is not
+## politeness about old code: the transport has four buttons and the bank selector has two, and
+## a MultiMesh holding two instances is strictly worse than two meshes. The repetition is the
+## thing that makes a bank pay, so only the places with repetition use one.
 
 signal pressed()
 
 const SIZE := Vector2(0.016, 0.010)
+## Stated once, because a bank needs the same numbers to size its shared mesh as a lone button
+## needs to size its own -- and a bank whose box is a different shape from the button it stands
+## for is a bug that only shows up in a photograph.
+const BODY_SIZE := Vector3(SIZE.x, SIZE.y, 0.006)
+const LAMP_SIZE := Vector3(SIZE.x * 0.66, SIZE.y * 0.42, 0.0015)
+const LAMP_OFFSET := Vector3(0, 0, 0.0038)
+
+
+static func body_material() -> StandardMaterial3D:
+	return Materials.cap_plastic(Color(0.12, 0.13, 0.15))
 
 @export var led_colour: Color = Color(0.95, 0.3, 0.25)
 
@@ -18,26 +40,45 @@ var lit := false:
 		lit = v
 		_refresh()
 
+## Set before the button enters the tree to draw through a bank instead of through meshes of
+## its own. The collider is unaffected either way -- a button still has to be grabbable one at a
+## time, and a collision shape is not a draw call.
+var body_bank: MeshBank
+var lamp_bank: MeshBank
+
 var _lamp: MeshInstance3D
+var _lamp_slot := -1
 
 
 func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 0
 
-	var body := MeshInstance3D.new()
-	var body_mesh := BoxMesh.new()
-	body_mesh.size = Vector3(SIZE.x, SIZE.y, 0.006)
-	body.mesh = body_mesh
-	body.material_override = Materials.cap_plastic(Color(0.12, 0.13, 0.15))
-	add_child(body)
+	if body_bank != null:
+		body_bank.place(self, Color.WHITE)
+	else:
+		var body := MeshInstance3D.new()
+		var body_mesh := BoxMesh.new()
+		body_mesh.size = BODY_SIZE
+		body.mesh = body_mesh
+		body.material_override = body_material()
+		add_child(body)
 
-	_lamp = MeshInstance3D.new()
-	var lamp_mesh := BoxMesh.new()
-	lamp_mesh.size = Vector3(SIZE.x * 0.66, SIZE.y * 0.42, 0.0015)
-	_lamp.mesh = lamp_mesh
-	_lamp.position = Vector3(0, 0, 0.0038)
-	add_child(_lamp)
+	if lamp_bank != null:
+		# A marker node rather than arithmetic, so the lamp's offset is stated once and the
+		# bank is handed a transform instead of a position plus an assumption about rotation.
+		var at := Node3D.new()
+		add_child(at)
+		at.position = LAMP_OFFSET
+		_lamp_slot = lamp_bank.place(at, Materials.lamp_colour(led_colour, lit))
+		at.queue_free()
+	else:
+		_lamp = MeshInstance3D.new()
+		var lamp_mesh := BoxMesh.new()
+		lamp_mesh.size = LAMP_SIZE
+		_lamp.mesh = lamp_mesh
+		_lamp.position = LAMP_OFFSET
+		add_child(_lamp)
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -57,5 +98,7 @@ func _foley_contact() -> AudioStream:
 
 
 func _refresh() -> void:
-	if _lamp:
+	if _lamp_slot >= 0 and lamp_bank != null:
+		lamp_bank.set_colour(_lamp_slot, Materials.lamp_colour(led_colour, lit))
+	elif _lamp:
 		_lamp.material_override = Materials.led(led_colour, lit)

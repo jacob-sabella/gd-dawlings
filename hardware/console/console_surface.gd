@@ -135,6 +135,16 @@ func _rebuild() -> void:
 		_panel.add_child(bank)
 		x += bank_width
 
+	# Built BEFORE the strips and parented to the panel, because a button claims its slot by
+	# converting its own world transform into the bank's -- so the bank has to be in the tree,
+	# and in its final place, before the first strip exists.
+	var body_bank := MeshBank.parts(PanelButton.BODY_SIZE, PanelButton.body_material())
+	body_bank.name = "ButtonBodies"
+	_panel.add_child(body_bank)
+	var lamp_bank := MeshBank.lamps(PanelButton.LAMP_SIZE)
+	lamp_bank.name = "ButtonLamps"
+	_panel.add_child(lamp_bank)
+
 	x += ChannelStrip.WIDTH * 0.5
 	for index in indices:
 		if breaks.has(index):
@@ -143,10 +153,17 @@ func _rebuild() -> void:
 			_group_rule(x - ChannelStrip.WIDTH * 0.5 + GROUP_GAP * 0.5)
 			x += GROUP_GAP
 		var strip := ChannelStrip.create(index)
+		strip.body_bank = body_bank
+		strip.lamp_bank = lamp_bank
 		strip.position = Vector3(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
 		strips.append(strip)
 		x += ChannelStrip.WIDTH
+
+	# After every claim and before anything can light up. A MultiMesh has to know how many
+	# instances it holds before it can hold any, so this is the moment the buffer is sized.
+	body_bank.commit()
+	lamp_bank.commit()
 
 	master = MasterSection.new()
 	master.name = "Master"

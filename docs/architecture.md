@@ -299,26 +299,30 @@ is *not* what a session costs.
 
 Triangles were never the problem. The backlog had framed this as a vertex budget -- "3782 tris
 per reel, ~100 knobs at 1088" -- and the measurement says otherwise: 203k triangles at 90 tracks
-is nothing, while **3,370 draw calls** is firmly over a mobile budget. Those two readings have
+is nothing, while **7,600 draw calls** is far over a mobile budget. Those two readings have
 opposite fixes, which is the entire argument for measuring before optimising.
 
-The per-surface breakdown said where: **1,260 of those draw calls -- 37% of the whole studio --
-were the VU meters**, because there is one per strip and each was fourteen separate
-`MeshInstance3D` segments.
+The per-surface breakdown said where: **the VU meters were 37% of the whole studio**, because
+there is one per strip and each was fourteen separate `MeshInstance3D` segments. Buttons were
+the next block, at two meshes each across every strip.
 
-| tracks | draw calls (before → after) | frame ms | triangles |
+Measured at **two camera poses**, which matters more than it sounds. The default framing fits
+the console to the viewport, so a 90-track desk runs off both edges and more than half of it is
+culled -- and the first version of this tool measured only that pose, reporting numbers
+flattering by **2.3x**. In a headset you can turn your head, and there is no such discount.
+`wide` stands far enough back to hold the whole room and is the worst case.
+
+Draw calls at the wide pose, as the two MultiMesh conversions landed:
+
+| tracks | original | after the meters | after the buttons |
 |---|---|---|---|
-| 13 | 1,236 → **846** | 1.36 → 0.73 | 64k |
-| 24 | 1,869 → **1,193** | 1.92 → 0.85 | 94k |
-| 48 | 2,934 → **1,819** | 3.41 → 1.30 | 151k |
-| 90 | 3,370 → **2,132** | 5.67 → 1.67 | 203k |
+| 13 | - | 1,596 | **1,124** |
+| 24 | - | 2,066 | **1,430** |
+| 48 | - | 3,116 | **2,102** |
+| 90 | **7,600** | 4,911 | **3,295** |
 
 Measured on a desktop GPU, so the absolute frame times are not the headset's. The **slope** and
 the **breakdown** are hardware-independent, and they are what the tool is for.
-
-One caveat the tool cannot remove: draw calls grow sub-linearly past 48 tracks because a desk
-that wide runs off the edge of the frame and gets culled. A single camera position flatters the
-large sessions.
 
 ### Two monitors that lied
 
@@ -343,6 +347,28 @@ server, and the headless server is a stub: `set_instance_color` writes quite hap
 `get_instance_color` returns black forever. Converting any widget to a MultiMesh makes it
 untestable unless the decision is lifted out of the buffer -- which is why `segment_colour` and
 `segment_y` are static functions. `_paint` is the one line that cannot be checked.
+
+### Repetition is one object: MeshBank
+
+`MeshBank` is the meter's trick generalised, because a console is mostly repetition and almost
+all of it was being drawn one box at a time. A surface builds a bank, each widget `claim`s a slot
+and gets a transform and a colour back, and the whole population is one draw call.
+
+Banks are **optional**, and that is what keeps the abstraction honest. A `PanelButton` with no
+bank assigned builds its own two `MeshInstance3D`s exactly as before, so a button in a patchbay,
+a test, or a scene nobody has converted yet still works. Only `ConsoleSurface` -- which already
+knows it is about to build ninety of everything -- hands out banks.
+
+`Materials.lamp_colour` exists so that "what colour is a lamp that is off" has one definition
+rather than one per widget. It also forced a real trade-off into the open: a banked lamp is
+unshaded, so an unlit lamp is a flat fraction of its lit colour instead of a lit surface in a
+dark room. That reads *better* at a distance -- an off button is legible rather than black -- and
+the honest cost is that **an unlit lamp no longer dims when the room does**. For a console face
+that is the right side of the trade; for anything meant to disappear in darkness it would not be.
+
+The headless-testability problem above applies doubly here, so `MeshBank` **retains** its
+`_transforms` and `_colours` after `commit()`. They are a few hundred bytes per bank and they are
+the only way the suite can see what a bank was asked to draw.
 
 ## Audio: the gear, not the mix
 

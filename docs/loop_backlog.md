@@ -195,13 +195,25 @@ worse than absent, because it is the one that gets acted on.
 headless one is a stub that accepts writes and returns black. Any future widget converted this
 way has to lift its decision into a pure function first, or it silently stops being covered.
 
+**The budget tool was measuring one camera angle, and that angle was hiding more than half the
+scene.** The default framing fits the console to the viewport, so at 90 tracks the desk runs off
+both edges and most of it is culled. The numbers reported in the previous entry were flattering
+by **2.3x** -- the real worst case was 4,911 draw calls, not 2,132. `tools/budget.sh` now sweeps
+two poses and `wide` is the one to read. A benchmark whose framing discards the workload is not
+measuring the workload.
+
+**Buttons are now banked too.** `MeshBank` is the general form of the meter's one-off: claim a
+slot, get a transform and a colour back, one draw call for the lot. Console meshes 1,032 -> 492;
+wide-pose draw calls at 90 tracks 4,911 -> 3,295. The bank is optional -- a `PanelButton` with no
+bank builds its own two meshes -- so nothing outside a console surface had to change.
+
 ### Still open
 
-- More draw-call reduction: the console is still ~1,032 meshes at 90 tracks. Buttons (2 meshes
-  each) and the fader slot/cap are the next candidates; the same MultiMesh trick applies to the
-  button lamps. Measure before and after with `tools/budget.sh`, as above.
-- The budget tool measures one camera angle, so culling flatters wide desks. A second pose
-  (nose-to-the-desk, where nothing is culled) would bound the worst case.
+- **Labels are now the single largest category** at ~48% of the remaining objects (517 `Label3D`s
+  at 90 tracks). This is the hard one: each label is its own texture, so no bank helps. A shared
+  atlas, or dropping to drawn glyphs at distance, is the shape of the fix.
+- Cheaper remaining mesh targets: the strip plate + colour chip (180 meshes at 90 tracks) and the
+  fader slot (90). Both are uniform boxes, so both bank cleanly.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
   Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.

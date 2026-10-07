@@ -98,6 +98,24 @@ static func led(colour: Color, on: bool) -> StandardMaterial3D:
 		return m)
 
 
+## Lit segments are driven past 1.0 so the glow pass catches them, which is what `led()` does
+## with emission_energy_multiplier and what an unshaded lamp has to do by hand.
+const LAMP_LIT_GAIN := 2.4
+## An off LED is not the absence of an LED -- it keeps its tint so the panel still reads as
+## having a light there. The same figure as `led()`'s darkened(0.82), by construction.
+const LAMP_DARK := 0.18
+
+
+## What an indicator looks like as a COLOUR rather than as a material.
+##
+## Exists because the cheap way to draw a hundred little lamps is one MultiMesh with per-instance
+## colour, and an instance cannot carry a material. So the thing `led()` expresses as emission
+## has to be expressed as a number above 1 instead, and both routes have to agree -- an LED that
+## looks different depending on whether it was drawn singly or in a bank is worse than either.
+static func lamp_colour(colour: Color, on: bool) -> Color:
+	return (colour * LAMP_LIT_GAIN) if on else (colour * LAMP_DARK)
+
+
 ## Screen-printed legend on a panel.
 static func legend() -> StandardMaterial3D:
 	return _cached("legend", func():

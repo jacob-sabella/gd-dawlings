@@ -56,6 +56,7 @@ func _ready() -> void:
 	_test_the_gear_makes_a_noise()
 	_test_the_project_has_a_shape()
 	_test_the_studio_fits_in_a_frame()
+	_test_many_little_boxes_are_one_object()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1539,3 +1540,117 @@ func _test_the_studio_fits_in_a_frame() -> void:
 	check("a project that fits in a bank offers no bank controls",
 			not small.can(DAWBackend.Capability.TRACK_BANKING))
 	small.free()
+
+
+func _test_many_little_boxes_are_one_object() -> void:
+	# A console is mostly repetition, and the obvious way to draw repetition is one object each.
+	# At 90 tracks that was 540 button bodies and lamps -- a quarter of everything the studio
+	# drew. These pin the bank that replaced them.
+	#
+	# Everything reads MeshBank's own retained copy, never the MultiMesh: its buffer lives in
+	# the rendering server, and headless that server accepts every write and returns black.
+
+	var bank := MeshBank.parts(Vector3(0.01, 0.01, 0.01), Materials.chassis())
+	add_child(bank)
+	check("an empty bank holds nothing", bank.count() == 0)
+
+	var a := bank.claim(Transform3D(Basis.IDENTITY, Vector3(1, 0, 0)), Color.RED)
+	var b := bank.claim(Transform3D(Basis.IDENTITY, Vector3(2, 0, 0)), Color.GREEN)
+	check("claims come back as distinct slots", a == 0 and b == 1)
+	check("the bank counts what it was given", bank.count() == 2)
+	check("a slot remembers its colour", bank.colour_of(a) == Color.RED)
+	close_to("a slot remembers where it is", bank.transform_of(b).origin.x, 2.0)
+
+	# Writable before the buffer exists, because a button sets its lamp in _ready and the
+	# surface does not commit until every strip is built.
+	bank.set_colour(a, Color.BLUE)
+	check("a slot can be recoloured before commit", bank.colour_of(a) == Color.BLUE)
+
+	bank.commit()
+	check("committing sizes the buffer", bank.multimesh.instance_count == 2)
+	check("committing keeps the count", bank.count() == 2)
+	bank.set_colour(b, Color.WHITE)
+	check("a slot can be recoloured after commit", bank.colour_of(b) == Color.WHITE)
+	# Commit is idempotent: a surface should be able to call it without tracking whether it has.
+	bank.commit()
+	check("committing twice changes nothing", bank.count() == 2 and bank.colour_of(a) == Color.BLUE)
+
+	# Out-of-range writes are ignored rather than crashing. A button whose claim was refused
+	# holds -1, and a desk should not die because one lamp has nowhere to go.
+	bank.set_colour(-1, Color.RED)
+	bank.set_colour(99, Color.RED)
+	check("a slot that does not exist is ignored", bank.colour_of(a) == Color.BLUE)
+	bank.queue_free()
+
+	var lamps := MeshBank.lamps(Vector3(0.01, 0.01, 0.001))
+	# A lamp is drawn above 1.0 so it blooms, and a bloomed object that also casts a shadow
+	# reads as a solid lump with a bright face. Lamps light; they do not occlude.
+	check("a lamp bank casts no shadow",
+			lamps.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	check("a lamp bank is unshaded", lamps.material_override is ShaderMaterial)
+	check("a part bank keeps a real lit material",
+			MeshBank.parts(Vector3.ONE, Materials.chassis()).material_override is StandardMaterial3D)
+	lamps.free()
+
+	# --- one definition of what a lit lamp looks like ---------------------------------------
+	#
+	# Two routes draw indicators now -- a material for a lone button, a per-instance colour for
+	# a banked one -- and an LED that looks different depending on which drew it is worse than
+	# either. Materials.lamp_colour is the single definition; VUMeter uses it too.
+	var tint := Color(0.95, 0.25, 0.22)
+	var on := Materials.lamp_colour(tint, true)
+	var off := Materials.lamp_colour(tint, false)
+	check("a lit lamp is brighter than an unlit one", on.r > off.r)
+	check("a lit lamp is driven past 1.0 so it blooms", on.r > 1.0)
+	check("an unlit lamp keeps its tint rather than going black", off.r > 0.02)
+	# Hue is preserved both ways, which is what makes an unlit red mute readable as the mute
+	# rather than as a grey smudge on a desk of ninety strips.
+	check("an unlit lamp keeps its hue", off.r > off.g and off.r > off.b)
+	check("the meter and the buttons agree on what lit means",
+			VUMeter.segment_colour(0, 14, -1) == Materials.lamp_colour(VUMeter.colour_at(0), true))
+
+	# --- a button draws through a bank when it has one, and alone when it does not ------------
+	var lone := PanelButton.new()
+	add_child(lone)
+	check("a button with no bank builds its own meshes",
+			lone.find_children("*", "MeshInstance3D", true, false).size() == 2)
+	lone.queue_free()
+
+	var bodies := MeshBank.parts(PanelButton.BODY_SIZE, PanelButton.body_material())
+	var lit_bank := MeshBank.lamps(PanelButton.LAMP_SIZE)
+	add_child(bodies)
+	add_child(lit_bank)
+	var banked := PanelButton.new()
+	banked.led_colour = Color(0.35, 0.72, 0.98)
+	banked.body_bank = bodies
+	banked.lamp_bank = lit_bank
+	add_child(banked)
+	check("a banked button builds no meshes of its own",
+			banked.find_children("*", "MeshInstance3D", true, false).is_empty())
+	check("a banked button still has a collider",
+			banked.find_children("*", "CollisionShape3D", true, false).size() == 1)
+	check("a banked button claimed a body and a lamp",
+			bodies.count() == 1 and lit_bank.count() == 1)
+	check("a banked button starts unlit",
+			lit_bank.colour_of(0) == Materials.lamp_colour(banked.led_colour, false))
+	banked.lit = true
+	check("lighting a banked button reaches the bank",
+			lit_bank.colour_of(0) == Materials.lamp_colour(banked.led_colour, true))
+	banked.lit = false
+	check("unlighting it reaches the bank too",
+			lit_bank.colour_of(0) == Materials.lamp_colour(banked.led_colour, false))
+
+	# The lamp sits proud of the body, or it is buried inside it and never seen.
+	close_to("the lamp sits on the face of the button",
+			lit_bank.transform_of(0).origin.z - bodies.transform_of(0).origin.z,
+			PanelButton.LAMP_OFFSET.z)
+	# And the bank's shared box is the shape the button thinks its lamp is -- a bank sized from
+	# different numbers than the thing it stands for is a bug that only shows in a photograph.
+	check("the bank draws the button's own lamp shape",
+			(lit_bank.multimesh.mesh as BoxMesh).size == PanelButton.LAMP_SIZE)
+	check("the bank draws the button's own body shape",
+			(bodies.multimesh.mesh as BoxMesh).size == PanelButton.BODY_SIZE)
+
+	banked.queue_free()
+	bodies.queue_free()
+	lit_bank.queue_free()
