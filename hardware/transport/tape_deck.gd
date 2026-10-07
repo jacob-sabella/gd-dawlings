@@ -7,8 +7,10 @@ extends Surface
 ## booleans and a float, and on screen that is read from a highlighted triangle and a number. As
 ## a machine it is read PERIPHERALLY -- you know the thing is rolling from the corner of your eye,
 ## across the room, while looking at something else, which is precisely the situation this project
-## exists for. The reels spin at a rate proportional to playback, so a slow pass and a fast one
-## look different.
+## exists for. The reels turn at a rate derived from how fast the song is actually moving, and
+## each reel turns at its OWN rate, so the takeup starts fast and slows all song while the supply
+## does the opposite. That difference is the signature you read peripherally; two reels sharing
+## one rate are two wheels on a common axle.
 ##
 ## What this does NOT do is pretend to be tape: there is no wind, no spooling time, no latency
 ## added anywhere. Reaper's position is the truth and the reels follow it.
@@ -23,6 +25,29 @@ const MESH_PATH := "res://assets/hardware/reel.glb"
 const PACK_HUB := 0.0215
 const PACK_FULL := 0.0735
 
+## Metres of "tape" drawn past the head per second of song at 1x. Not a real figure -- 15ips is
+## 0.38 -- and it does not want to be, because the reels here are a tenth the diameter of real
+## ones. It is set so a half-wound reel turns at the 2.4 rad/s this deck turned at when the rate
+## was flat, which keeps the look that was already tuned by eye and changes only how it varies.
+const TAPE_SPEED := 0.13
+
+## A locate arrives as a position jump, and a jump divided by one frame is an arbitrarily large
+## number. Real machines have a spool limit for the same reason, so this is a cap rather than a
+## special case: a seek spins the reels hard and briefly, which is what a locate looks like.
+const MAX_SPOOL_RATE := 48.0
+
+## How fast the observed song speed catches up, per second.
+##
+## It has to be smoothed, and the reason is specific rather than cosmetic: position does not
+## arrive every frame. A real Reaper link delivers it over the wire at its own rate, so at 60fps
+## most frames see the same number as the frame before and read as a dead stop. Unsmoothed, the
+## reels stutter to a halt and back several times a second -- which looks like a fault in the
+## machine, and a peripheral display that looks faulty is worse than one that is absent.
+const SPEED_FOLLOW := 6.0
+
+## Below this, in song-seconds per second, the deck is stopped as far as the motor is concerned.
+const MOTOR_FLOOR_SPEED := 0.02
+
 var _left_reel: Node3D
 var _right_reel: Node3D
 var _left_pack: MeshInstance3D
@@ -31,7 +56,8 @@ var _counter: Label3D
 var _tempo_label: Label3D
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
-var _spin := 0.0
+var _song_speed := 0.0
+var _last_position := -1.0
 var _motor: AudioStreamPlayer3D
 
 
@@ -122,14 +148,16 @@ func _make_reel(x: float) -> Node3D:
 	# geometrically fine and visually absent: it falls into the shadow the flange casts and the
 	# windows read as holes in a plate. The whole feature lives or dies on being lit.
 	pack.position = Vector3(0, 0, -0.0065)
-	# Lighter than real tape, for the same reason. Oxide is nearly black, and nearly black at
-	# the bottom of a recess under studio lighting is just black.
-	pack.material_override = Materials.cap_plastic(Color(0.21, 0.135, 0.10))
+	# Lighter than real tape, for the same reason, and lighter than the first attempt at that:
+	# 0.21 albedo was still reading as a hole rather than as tape. Oxide is nearly black, and
+	# nearly black at the bottom of a recess the flange shadows is just black -- the window
+	# then looks like a window with nothing behind it, which is worse than no window at all.
+	pack.material_override = Materials.cap_plastic(Color(0.42, 0.27, 0.18))
 	hub.add_child(pack)
 
 	var flange := Part.build(
 		MESH_PATH,
-		Materials.brushed_metal(),
+		Materials.reel_flange(),
 		{"hub": Materials.cap_plastic(Color(0.6, 0.18, 0.16))},
 	)
 	if flange != null:
@@ -191,6 +219,26 @@ static func pack_radius(fraction: float) -> float:
 	return sqrt(PACK_HUB * PACK_HUB + f * (PACK_FULL * PACK_FULL - PACK_HUB * PACK_HUB))
 
 
+## How fast a reel turns, in radians per second, given the fraction of the song wound ON IT.
+##
+## This is the whole reason a reel is worth drawing rather than animating. Tape crosses the head
+## at one speed whatever the reels are doing, so a reel's angular rate is that speed divided by
+## the radius it is paying out at. The consequence is the thing you recognise: a takeup reel is
+## fastest when it is empty and slowest when it is full, the supply reel is the mirror of that,
+## and the two agree only at the exact middle of the song.
+##
+## Takes the fraction on ONE reel rather than returning a pair, so there is no tuple whose order
+## a caller can get backwards -- which is the mistake this surface is most exposed to, given that
+## supply and takeup are otherwise identical objects.
+##
+## Signed: a negative song speed is a rewind, and turns the reel the other way.
+static func reel_rate(on_reel: float, song_speed: float) -> float:
+	var radius := pack_radius(on_reel)
+	if radius <= 0.0:
+		return 0.0
+	return clampf(TAPE_SPEED * song_speed / radius, -MAX_SPOOL_RATE, MAX_SPOOL_RATE)
+
+
 ## Where the song is, as a fraction, or -1 when nobody has said how long the song is.
 ##
 ## `timeline_length()` always returns a usable number because it floors at one second, which is
@@ -231,30 +279,57 @@ func _process(delta: float) -> void:
 	super(delta)
 	if _left_reel == null:
 		return
-	# Driven by whether Reaper says it is rolling, not by a local animation flag. A deck that
-	# keeps spinning after the DAW stopped is worse than no deck at all -- it is a lie told
-	# peripherally, which is the hardest kind to catch.
-	if DAW.state.playing:
-		_spin += delta * 2.4
-	_left_reel.rotation.z = -_spin
-	_right_reel.rotation.z = -_spin
+	# Driven by where Reaper says the position IS, not by a local animation flag and not by the
+	# playing flag either. Position is the only thing that cannot disagree with the DAW: a deck
+	# that keeps spinning after a stop is a lie told peripherally, and so, less obviously, is a
+	# deck that sits still through a scrub or a rewind. Both fall out of reading one number.
+	_observe_speed(delta)
+	var played := song_fraction(DAW.state)
+	var on_supply := 0.5 if played < 0.0 else 1.0 - played
+	var on_takeup := 0.5 if played < 0.0 else played
+	# Left is supply, right is takeup, matching the packs. Each gets its own rate from its own
+	# radius; sharing one would undo the point of computing it.
+	_left_reel.rotation.z -= reel_rate(on_supply, _song_speed) * delta
+	_right_reel.rotation.z -= reel_rate(on_takeup, _song_speed) * delta
 	_motor_follows_transport(delta)
 	_update_packs()
 	_refresh()
 
 
-## The deck hums while it is rolling, and the hum fades rather than switching.
+## How fast the song is moving, in song-seconds per real second, from watching the position.
 ##
-## Same argument as the spin: it is driven by DAW.state.playing and nothing else, so it cannot
-## outlive a stop. The fade is because a motor does not start at speed -- but mostly because a
-## looping sample cut off at full level clicks, and the click is louder than the hum.
+## Derived rather than asked for because there is nothing to ask: the transport state is three
+## booleans and a position, with no rate in it. Differencing the position is therefore the only
+## source, and it has the side benefit of being backend-agnostic -- a scrub, a locate and a
+## rewind all look like position moving, which is exactly how the deck should treat them.
+func _observe_speed(delta: float) -> void:
+	var now := DAW.state.position_seconds
+	if _last_position < 0.0 or delta <= 0.0:
+		_last_position = now
+		return
+	var observed := (now - _last_position) / delta
+	_last_position = now
+	_song_speed = lerpf(_song_speed, observed, minf(1.0, delta * SPEED_FOLLOW))
+
+
+## The deck hums while tape is moving, and the hum fades rather than switching.
+##
+## Same argument as the reels, and the same source: it follows the observed speed, so it cannot
+## outlive a stop, and a rewind is audible because a rewind moves tape. The fade is because a
+## motor does not start at speed -- but mostly because a looping sample cut off at full level
+## clicks, and the click is louder than the hum.
 func _motor_follows_transport(delta: float) -> void:
 	if _motor == null:
 		_motor = Foley.emitter(Foley.reel_motor(), -80.0)
 		_left_reel.add_child(_motor)
 		_motor.play()
-	var wanted := MOTOR_DB if DAW.state.playing else -80.0
+	var speed := absf(_song_speed)
+	var wanted := MOTOR_DB if speed > MOTOR_FLOOR_SPEED else -80.0
 	_motor.volume_db = move_toward(_motor.volume_db, wanted, delta * MOTOR_FADE_DB_PER_SEC)
+	# A spool-up sounds like one because the pitch rides the speed, 1x landing at unity. Capped
+	# well short of 2x: past that a looping hum stops reading as a faster motor and starts
+	# reading as a different sound, which loses the thing the pitch was there to tell you.
+	_motor.pitch_scale = clampf(0.72 + speed * 0.28, 0.72, 1.9)
 
 
 ## Low: this runs continuously for as long as the transport does, so it sets the noise floor of

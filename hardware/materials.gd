@@ -43,6 +43,26 @@ static func brushed_metal() -> StandardMaterial3D:
 		return m)
 
 
+## A reel flange, which is aluminium but deliberately not a mirror.
+##
+## brushed_metal() at 0.34 roughness is right for a fader cap or a jack nut: small, and angled
+## every which way, so only a few of them catch a highlight at once. A reel flange is a 17cm
+## disc on a deck that is angled towards a practical, which puts the whole face near the mirror
+## angle at once -- and it blows to flat white, taking the spokes, the hub and the windows with
+## it. The same failure master_plate() already documents, at a scale that hides a whole feature.
+##
+## Blasted rather than brushed is also what the real part is, and for the same reason: the lamp
+## over a tape machine is directly above the reels, and an operator watching the pack all day
+## does not want to be looking into it.
+static func reel_flange() -> StandardMaterial3D:
+	return _cached("reel_flange", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.345, 0.365, 0.395)
+		m.roughness = 0.58
+		m.metallic = 0.70
+		return m)
+
+
 ## The master section's plate. A shade lighter than the chassis and no more: master sections
 ## have always been set apart by finish, but brushed aluminium next to a dark painted desk under
 ## a key light reads as a white rectangle and takes the eye off the twelve channels that are

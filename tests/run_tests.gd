@@ -53,6 +53,7 @@ func _ready() -> void:
 	_test_bridge_arrangement_is_parsed()
 	_test_knob_is_the_moulded_part()
 	_test_the_reels_say_how_far_through_the_song_you_are()
+	_test_each_reel_turns_at_its_own_rate()
 	_test_the_gear_makes_a_noise()
 	_test_the_project_has_a_shape()
 	_test_the_studio_fits_in_a_frame()
@@ -1154,6 +1155,127 @@ func _test_the_reels_say_how_far_through_the_song_you_are() -> void:
 		close_to("tape is conserved at %.2f through" % f,
 				(supply * supply - hub_area) + (takeup * takeup - hub_area),
 				full_area - hub_area)
+
+
+## The reels turn from the position, which is the claim the deck's header makes and the one
+## thing about this surface that is read from across the room without being checked.
+##
+## What makes it worth a test rather than an eyeball is that the failure modes are all SILENT:
+## two reels sharing a rate looks like motion, a reel that ignores a rewind looks like motion,
+## and a reel spinning after a stop looks like motion. Each is only wrong if you know what the
+## position was doing at the time.
+func _test_each_reel_turns_at_its_own_rate() -> void:
+	# A half-wound reel turns at the rate the deck was tuned to by eye when the rate was flat.
+	# This is the one number in here chosen for looks, so it is the one worth pinning: a change
+	# to TAPE_SPEED or the pack geometry that moves it has changed how the deck reads.
+	close_to("a half-wound reel turns at the rate the deck was tuned to",
+			TapeDeck.reel_rate(0.5, 1.0), 2.4, 0.02)
+
+	# The signature. An empty reel is paying out at the hub, so it has to turn faster than a
+	# full one to move the same tape -- and the ratio is the radius ratio, not something else.
+	var empty := TapeDeck.reel_rate(0.0, 1.0)
+	var full := TapeDeck.reel_rate(1.0, 1.0)
+	check("an empty reel turns faster than a full one", empty > full)
+	close_to("by exactly the ratio of their radii",
+			empty / full, TapeDeck.PACK_FULL / TapeDeck.PACK_HUB, 0.001)
+
+	# Supply and takeup only ever agree at the exact middle. If they agreed anywhere else the
+	# tape between them would have to stretch.
+	for f in [0.1, 0.35, 0.5, 0.8]:
+		var supply := TapeDeck.reel_rate(1.0 - f, 1.0)
+		var takeup := TapeDeck.reel_rate(f, 1.0)
+		if is_equal_approx(f, 0.5):
+			close_to("at the middle the two reels agree", supply, takeup, 0.0001)
+		else:
+			check("at %.2f through the two reels disagree" % f, absf(supply - takeup) > 0.05)
+
+	check("standing still turns nothing", TapeDeck.reel_rate(0.5, 0.0) == 0.0)
+	check("a rewind turns the other way", TapeDeck.reel_rate(0.5, -1.0) < 0.0)
+	close_to("twice the speed is twice the rate",
+			TapeDeck.reel_rate(0.5, 2.0), TapeDeck.reel_rate(0.5, 1.0) * 2.0, 0.0001)
+
+	# A locate is a position jump, and a jump over one frame divides out to a huge number. It is
+	# capped rather than special-cased, so the reels spin hard and briefly instead of by NaN.
+	check("a locate is capped, not unbounded",
+			TapeDeck.reel_rate(0.5, 10000.0) == TapeDeck.MAX_SPOOL_RATE)
+	check("and capped in both directions",
+			TapeDeck.reel_rate(0.5, -10000.0) == -TapeDeck.MAX_SPOOL_RATE)
+
+	# --- and now the built deck, because a correct rule that is wired up backwards is the
+	# --- actual risk here: supply and takeup are identical objects in different places.
+	DAW.use(OfflineBackend.new())
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+
+	DAW.state.set_project_length(200.0)
+	DAW.state.position_seconds = 20.0
+	deck._process(0.0)
+	var left_before: float = deck._left_reel.rotation.z
+	var right_before: float = deck._right_reel.rotation.z
+
+	# Move the song on by one second of a 200-second project over one second of wall clock, so
+	# the observed speed is 1x, and give the follower long enough to have arrived there.
+	for i in 40:
+		DAW.state.position_seconds += 0.1
+		deck._process(0.1)
+	var left_moved: float = absf(deck._left_reel.rotation.z - left_before)
+	var right_moved: float = absf(deck._right_reel.rotation.z - right_before)
+	check("the supply reel turned", left_moved > 0.01)
+	check("the takeup reel turned", right_moved > 0.01)
+	# Early in the song the takeup is nearly empty and the supply is nearly full, so the takeup
+	# is the faster of the two. Backwards here is the mistake nobody reports and everybody sees.
+	check("early in the song the takeup outruns the supply", right_moved > left_moved)
+
+	# A stop is not a flag the deck is told about; it is the position stopping. The reels must
+	# come to rest from that alone.
+	for i in 40:
+		deck._process(0.1)
+	var resting: float = deck._right_reel.rotation.z
+	deck._process(0.1)
+	close_to("a stopped position stops the reels", deck._right_reel.rotation.z, resting, 0.001)
+
+	# And a rewind runs them backwards, again without being told.
+	var before_rewind: float = deck._right_reel.rotation.z
+	for i in 20:
+		DAW.state.position_seconds = maxf(0.0, DAW.state.position_seconds - 0.4)
+		deck._process(0.1)
+	check("a rewind turns the reels the other way",
+			deck._right_reel.rotation.z > before_rewind)
+
+	# --- the reason the speed is smoothed at all ---------------------------------------------
+	#
+	# Position arrives over a wire at its own rate, not once per frame. This is that case: the
+	# position moves on every third frame and sits still on the other two, which is what a 20Hz
+	# link looks like at 60fps. The raw reading alternates between 3x and nothing, so an
+	# unsmoothed deck stutters to a dead stop twenty times a second and reads as a fault.
+	#
+	# The assertion is on the SPREAD of the per-frame rotation, not on its value: that is the
+	# thing an eye picks up, and it is the thing a raw reading destroys.
+	DAW.state.position_seconds = 20.0
+	deck._last_position = -1.0
+	deck._song_speed = 0.0
+	for i in 60:
+		if i % 3 == 0:
+			DAW.state.position_seconds += 0.05
+		deck._process(1.0 / 60.0)
+	var steps: Array[float] = []
+	var previous: float = deck._right_reel.rotation.z
+	for i in 60:
+		if i % 3 == 0:
+			DAW.state.position_seconds += 0.05
+		deck._process(1.0 / 60.0)
+		steps.append(absf(deck._right_reel.rotation.z - previous))
+		previous = deck._right_reel.rotation.z
+	var smallest := steps[0]
+	var largest := steps[0]
+	for step in steps:
+		smallest = minf(smallest, step)
+		largest = maxf(largest, step)
+	check("a reel on a polled position never stops dead", smallest > 0.0)
+	check("and does not lurch between frames", largest < smallest * 2.0)
+
+	deck.queue_free()
 
 
 func _test_the_gear_makes_a_noise() -> void:

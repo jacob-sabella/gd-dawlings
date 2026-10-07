@@ -286,6 +286,38 @@ looking like a slow suite -- but nothing bounded it. I lost two stretches to exa
 today, both times assuming the suite had got slow. It is under a second; sixty is the limit,
 and on a timeout it says what the cause almost certainly is.
 
+**The reels turned at a flat 2.4 rad/s and both at the same one.** The class header had claimed
+a rate "proportional to playback" since the deck was written -- second doc-ahead-of-code gap in
+two ticks, after the rack's page control. Now derived: tape crosses the head at one speed, so a
+reel's angular rate is that speed over the radius it is paying out at, and the takeup therefore
+starts fast and slows all song while the supply does the reverse. That difference IS the thing
+you read peripherally; two reels on one rate are two wheels on an axle.
+
+Driving it from position rather than from `playing` is what makes a scrub and a rewind work, and
+it costs nothing: the position is the only number that cannot disagree with the DAW. A stop is
+the position stopping.
+
+**The speed has to be smoothed, and not for looks.** Position arrives over the wire at the
+link's rate, not the frame rate, so at 60fps most frames see the same number as the one before
+and read as a dead stop. Unsmoothed the reels stutter to a halt twenty times a second, which
+looks like a fault -- and a peripheral display that looks broken is worse than an absent one.
+The test for this asserts on the SPREAD of per-frame rotation under a deliberately polled
+position, because that is what an eye picks up and what a raw reading destroys.
+
+**And the screenshot found two things no test could.** The left reel was blown to flat white --
+`brushed_metal` at 0.34 roughness is right for a fader cap, which is small and angled, and wrong
+for a 17cm disc angled into a practical, which puts the whole face near the mirror angle at
+once. That is the failure `master_plate` already documents, at a scale that hid a whole feature.
+A reel flange has a real reason to be blasted rather than brushed, so it now has its own
+material. And with the glare gone it was clear the TAPE PACK had never been visible either: at
+0.21 albedo, in the recess the flange shadows, the windows read as holes with nothing behind
+them. Lightened, and the supply/takeup asymmetry the pack exists to show is legible for the
+first time since it was built.
+
+Third tick running where an A/B screenshot caught something every counter and every test was
+happy with. It is not a nice-to-have on this project; it is the only instrument that measures
+the thing the project is actually for.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.
