@@ -19,6 +19,11 @@ const CAP_HEIGHT := 0.022
 ## Reaper's normalised taper value. Kept separate from `value` only in name: they are the same
 ## number, and that is the point -- no conversion happens on the way to the DAW.
 var track_index: int = 0
+## Where a new position goes. Defaults to the track named by `track_index`; the master section
+## points it at the master bus. One fader class, because the FEEL of a fader -- 100mm of travel,
+## grab-the-trough-to-jump, a cap that keeps its offset under the finger -- is the whole of what
+## a fader is, and none of it depends on which number it writes.
+var write_value: Callable = Callable()
 
 var _cap: Node3D
 var _grab_offset := 0.0
@@ -80,7 +85,10 @@ func _on_grab_move(at: Vector3) -> void:
 func _apply_from_local_y(local_y: float) -> void:
 	value = clampf((local_y + _grab_offset) / TRAVEL, 0.0, 1.0)
 	_on_value_changed()
-	Reaper.set_track_volume(track_index, value)
+	if write_value.is_valid():
+		write_value.call(value)
+	else:
+		Reaper.set_track_volume(track_index, value)
 
 
 func _on_value_changed() -> void:

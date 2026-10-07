@@ -32,6 +32,8 @@ func _ready() -> void:
 	_test_room_anchor_ignores_height_difference()
 	_test_room_anchor_rejects_close_marks()
 	_test_layout_defaults()
+	_test_master_parsing()
+	_test_master_is_not_a_track()
 	_test_rig_calibration_gesture()
 	_test_rig_tip_is_ahead_of_the_grip()
 	_test_ar_studio_draws_no_room()
@@ -436,3 +438,44 @@ func _count_meshes(node: Node) -> int:
 		if child is MeshInstance3D:
 			n += 1
 	return n
+
+
+# --- master bus ---------------------------------------------------------------------------
+
+func _test_master_parsing() -> void:
+	var link := Reaper
+	link._apply("/master/volume", [0.5])
+	close_to("master volume is the taper as sent", link.state.master.volume, 0.5, 0.0001)
+	close_to("master dB is derived from the taper", link.state.master.volume_db,
+			ReaperState.taper_to_db(0.5), 0.0001)
+
+	link._apply("/master/volume/db", [-3.5])
+	close_to("an explicit dB overrides the derived one", link.state.master.volume_db, -3.5, 0.0001)
+
+	link._apply("/master/pan", [0.42])
+	close_to("master pan", link.state.master.pan, 0.42, 0.0001)
+
+	link._apply("/master/vu/L", [0.8])
+	link._apply("/master/vu/R", [0.3])
+	close_to("master vu left", link.state.master.vu_l, 0.8, 0.0001)
+	close_to("master vu right", link.state.master.vu_r, 0.3, 0.0001)
+
+	# A device configured with MASTER_VU and not the split pair sends one number. Taking it as
+	# left only would leave the right half of the bus meter dead with nothing to explain why.
+	link._apply("/master/vu", [0.55])
+	close_to("a mono master vu fills both channels (L)", link.state.master.vu_l, 0.55, 0.0001)
+	close_to("a mono master vu fills both channels (R)", link.state.master.vu_r, 0.55, 0.0001)
+
+
+## The master is not track zero, and nothing that walks the track list may pick it up -- the one
+## that forgets puts a MASTER strip on the console twice, or a MASTER jack on the patchbay.
+func _test_master_is_not_a_track() -> void:
+	var before := Reaper.state.tracks.size()
+	Reaper._apply("/master/volume", [0.6])
+	check("a master message creates no track", Reaper.state.tracks.size() == before)
+
+	var addresses: Array = []
+	for entry in Reaper.snapshot():
+		addresses.append(entry[0])
+	check("the snapshot carries the master volume", "/master/volume" in addresses)
+	check("the snapshot carries the master pan", "/master/pan" in addresses)

@@ -60,7 +60,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 - **Arrange timeline.** The one surface that is explicitly *not* hardware — a long flat thing
   that belongs in SCREEN mode. `Presentation.default_mode` already routes `&"timeline"` there.
-- **Master section** on the console: master fader, monitor level, meters.
 - **Track banking.** Fine up to 64 tracks; beyond that the bank has to scroll, and a strip must
   never change which track it means while a hand is on its fader.
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
@@ -72,4 +71,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.
 - The offline stand-in's meter ballistics are eyeballed, not matched to Reaper's.
-- No master-bus meter anywhere, which is the one meter an engineer actually watches.
+- The master section has no monitor level, dim or mono. Those belong to a monitor controller,
+  which Reaper does not know about and has no OSC address for -- deliberately absent rather
+  than faked, and the gap closes only if something other than Reaper ends up driving it.

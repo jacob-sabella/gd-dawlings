@@ -43,6 +43,20 @@ static func brushed_metal() -> StandardMaterial3D:
 		return m)
 
 
+## The master section's plate. A shade lighter than the chassis and no more: master sections
+## have always been set apart by finish, but brushed aluminium next to a dark painted desk under
+## a key light reads as a white rectangle and takes the eye off the twelve channels that are
+## actually moving.
+static func master_plate() -> StandardMaterial3D:
+	return _cached("master_plate", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.135, 0.142, 0.155)
+		m.roughness = 0.5
+		m.metallic = 0.45
+		m.metallic_specular = 0.45
+		return m)
+
+
 ## Fader slot: darker than the chassis so the travel reads as a recess rather than a stripe.
 static func recess() -> StandardMaterial3D:
 	return _cached("recess", func():

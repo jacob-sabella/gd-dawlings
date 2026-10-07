@@ -179,6 +179,8 @@ func _apply(address: String, args: Array) -> void:
 	match p[0]:
 		"track":
 			_apply_track(p, args)
+		"master":
+			_apply_master(p, args)
 		"play":
 			state.playing = _as_bool(args)
 			state.transport_changed.emit()
@@ -204,6 +206,35 @@ func _apply(address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "raw" and args.size() > 0:
 				state.tempo = float(args[0])
 				state.transport_changed.emit()
+
+
+## `/master/volume`, `/master/pan`, `/master/vu/L`, `/master/vu/R`. All four are in the pattern
+## file as MASTER_VOLUME, MASTER_PAN and MASTER_VU_L/R, so none of this is invented.
+##
+## The mono `/master/vu` is accepted and written to BOTH channels, because a device configured
+## with MASTER_VU and not the split pair would otherwise leave the meter dead with no hint why.
+func _apply_master(p: PackedStringArray, args: Array) -> void:
+	if p.size() < 2 or args.is_empty():
+		return
+	match p[1]:
+		"volume":
+			if p.size() == 2:
+				state.set_master_field(&"volume", float(args[0]))
+				state.set_master_field(&"volume_db", ReaperState.taper_to_db(float(args[0])))
+			elif p[2] == "db":
+				state.set_master_field(&"volume_db", float(args[0]))
+		"pan":
+			if p.size() == 2:
+				state.set_master_field(&"pan", float(args[0]))
+		"vu":
+			var level := float(args[0])
+			if p.size() == 2:
+				state.set_master_field(&"vu_l", level)
+				state.set_master_field(&"vu_r", level)
+			elif p[2] == "L":
+				state.set_master_field(&"vu_l", level)
+			elif p[2] == "R":
+				state.set_master_field(&"vu_r", level)
 
 
 func _apply_track(p: PackedStringArray, args: Array) -> void:
@@ -338,6 +369,14 @@ func set_track_volume(index: int, taper: float) -> void:
 	write("/track/%d/volume" % index, [clampf(taper, 0.0, 1.0)])
 
 
+func set_master_volume(taper: float) -> void:
+	write("/master/volume", [clampf(taper, 0.0, 1.0)])
+
+
+func set_master_pan(pan: float) -> void:
+	write("/master/pan", [clampf(pan, 0.0, 1.0)])
+
+
 func set_track_pan(index: int, pan: float) -> void:
 	write("/track/%d/pan" % index, [clampf(pan, 0.0, 1.0)])
 
@@ -453,6 +492,8 @@ func snapshot() -> Array:
 			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
 			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
 
+	out.append(["/master/volume", [state.master.volume]])
+	out.append(["/master/pan", [state.master.pan]])
 	out.append(["/tempo/raw", [state.tempo]])
 	out.append(["/play", [1.0 if state.playing else 0.0]])
 	out.append(["/record", [1.0 if state.recording else 0.0]])
@@ -502,6 +543,11 @@ func populate_offline_demo() -> void:
 		t.colour = d["c"]
 		t.vu_l = 0.0
 		t.vu_r = 0.0
+	# A master sitting a little under unity, which is what a mix that has been balanced looks
+	# like and what makes the master fader visibly NOT at the top of its travel.
+	state.master.volume = 0.69
+	state.master.volume_db = ReaperState.taper_to_db(0.69)
+
 	state.track(1).rec_arm = true
 	state.track(8).rec_arm = true
 	state.track(3).mute = true
@@ -545,6 +591,8 @@ func _drive_offline_meters(delta: float) -> void:
 	var beats := state.position_seconds * state.tempo / 60.0
 	state.position_string = "%d.%d.%02d" % [int(beats / 4.0) + 1, int(fmod(beats, 4.0)) + 1, int(fmod(beats, 1.0) * 100.0)]
 
+	var bus_l := 0.0
+	var bus_r := 0.0
 	for index in state.track_indices():
 		var t: ReaperState.TrackState = state.tracks[index]
 		if t.mute:
@@ -560,9 +608,19 @@ func _drive_offline_meters(delta: float) -> void:
 		# deliberate, since meters are written to the cache without a signal to avoid fanning a
 		# storm out to every surface -- but a guest watching a hosted demo should still see
 		# meters move, so the one thing _apply would have done for them is done here.
+		# Summed as power rather than added, which is what keeps twelve tracks at a sensible
+		# level from pinning the bus at 1.0 the moment the mix has more than a few things in it.
+		bus_l += t.vu_l * t.vu_l
+		bus_r += t.vu_r * t.vu_r
 		if mode != Mode.GUEST:
 			_repl_volatile["/track/%d/vu/L" % index] = [t.vu_l]
 			_repl_volatile["/track/%d/vu/R" % index] = [t.vu_r]
+
+	var m := state.master
+	m.vu_l = clampf(sqrt(bus_l) * m.volume * 0.46, 0.0, 1.0)
+	m.vu_r = clampf(sqrt(bus_r) * m.volume * 0.46, 0.0, 1.0)
 	if mode != Mode.GUEST:
+		_repl_volatile["/master/vu/L"] = [m.vu_l]
+		_repl_volatile["/master/vu/R"] = [m.vu_r]
 		_repl_volatile["/time/str"] = [state.position_string]
 	state.transport_changed.emit()

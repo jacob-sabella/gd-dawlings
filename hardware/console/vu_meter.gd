@@ -23,6 +23,11 @@ const DECAY_PER_SEC := 1.8
 const PEAK_HOLD_SEC := 1.2
 
 @export var track_index: int = 0
+## Where the level comes from, when it is not a track. The master section sets this; an FX
+## return or a monitor path would do the same. A Callable rather than a second meter class,
+## because the ballistics, the colour boundaries and the segment count are the whole of what a
+## meter IS and none of them change with the thing being metered.
+var read_level: Callable = Callable()
 
 var _segments: Array[MeshInstance3D] = []
 var _level := 0.0
@@ -58,10 +63,13 @@ func _colour_at(index: int) -> Color:
 
 
 func _process(delta: float) -> void:
-	var t := Reaper.state.track(track_index, false)
 	var incoming := 0.0
-	if t != null:
-		incoming = maxf(t.vu_l, t.vu_r)
+	if read_level.is_valid():
+		incoming = read_level.call()
+	else:
+		var t := Reaper.state.track(track_index, false)
+		if t != null:
+			incoming = maxf(t.vu_l, t.vu_r)
 
 	# Attack is instant, release is damped. The asymmetry is the whole of meter ballistics: a
 	# symmetric filter either misses transients or looks like it is lagging.

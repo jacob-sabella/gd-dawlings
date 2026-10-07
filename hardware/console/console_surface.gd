@@ -16,6 +16,7 @@ const PANEL_MARGIN := 0.03
 
 var _panel: Node3D
 var strips: Array[ChannelStrip] = []
+var master: MasterSection
 
 
 func _ready() -> void:
@@ -28,12 +29,14 @@ func _ready() -> void:
 func _rebuild() -> void:
 	_clear_built()
 	strips.clear()
+	master = null
 
 	var indices := Reaper.state.track_indices()
 	if indices.is_empty():
 		return
 
-	var width := indices.size() * ChannelStrip.WIDTH + PANEL_MARGIN * 2.0
+	var channels_width := indices.size() * ChannelStrip.WIDTH
+	var width := channels_width + MasterSection.GAP + MasterSection.WIDTH + PANEL_MARGIN * 2.0
 
 	_panel = Node3D.new()
 	_panel.rotation_degrees = Vector3(-PANEL_TILT, 0, 0)
@@ -75,3 +78,8 @@ func _rebuild() -> void:
 		_panel.add_child(strip)
 		strips.append(strip)
 		x += ChannelStrip.WIDTH
+
+	master = MasterSection.new()
+	master.name = "Master"
+	master.position = Vector3(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
+	_panel.add_child(master)

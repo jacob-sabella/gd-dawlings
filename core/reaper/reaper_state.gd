@@ -14,6 +14,7 @@ extends RefCounted
 signal track_added(index: int)
 signal track_changed(index: int, field: StringName)
 signal transport_changed()
+signal master_changed(field: StringName)
 signal fx_changed(track_index: int, fx_index: int)
 
 
@@ -32,6 +33,20 @@ class FXState extends RefCounted:
 	## parameter bank, so a missing key means "not yet told", which is not the same as zero.
 	var params: Dictionary = {}
 	var param_names: Dictionary = {}
+
+
+## The master bus. Deliberately NOT a TrackState with a reserved index.
+##
+## Reaper addresses it as `/master/...`, not as a numbered track, and it has no mute, no solo, no
+## record arm and no sends-to-anywhere. Folding it into the track dictionary would mean every
+## loop over `track_indices()` -- the console's strips, the patchbay's two rows, the rack --
+## having to remember to skip it, and the one that forgets puts a MASTER jack on the patchbay.
+class MasterState extends RefCounted:
+	var volume: float = 0.716
+	var volume_db: float = 0.0
+	var pan: float = 0.5
+	var vu_l: float = 0.0
+	var vu_r: float = 0.0
 
 
 class TrackState extends RefCounted:
@@ -58,6 +73,7 @@ class TrackState extends RefCounted:
 
 
 var tracks: Dictionary = {}
+var master := MasterState.new()
 var playing: bool = false
 var recording: bool = false
 var position_seconds: float = 0.0
@@ -89,6 +105,13 @@ func set_track_field(index: int, field: StringName, value: Variant) -> void:
 		return
 	t.set(field, value)
 	track_changed.emit(index, field)
+
+
+func set_master_field(field: StringName, value: Variant) -> void:
+	if master.get(field) == value:
+		return
+	master.set(field, value)
+	master_changed.emit(field)
 
 
 func fx(track_index: int, fx_index: int, create: bool = true) -> FXState:
