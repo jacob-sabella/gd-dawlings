@@ -130,6 +130,7 @@ func _rebuild() -> void:
 		bank.bank_offset = DAW.state.bank_offset
 		bank.bank_size = DAW.state.bank_size
 		bank.project_count = DAW.state.project_track_count
+		bank.shown_count = DAW.state.tracks.size()
 		bank.position = Vector3(x + BankSelector.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 		bank.bank_requested.connect(_request_bank)
 		_panel.add_child(bank)

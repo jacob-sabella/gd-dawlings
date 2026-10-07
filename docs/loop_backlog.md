@@ -430,6 +430,33 @@ cache now, and the test asserts the sentence rather than the number.
 the second time this week a green check was hiding the thing it named -- the rack blanks were
 the first -- and both times mutation or a screenshot found it, never the suite on its own.
 
+**Audited the suite for the weak-assertion shape** that had slipped twice, and the worst
+instance was in the test written while diagnosing it. The commit for that tick claimed "the
+assertion is on the sentence rather than on the number" -- true of the direct checks, false of
+the surface checks, which still swept every label for "90" and counted a hit as proof. The
+sentence that broke it, "TRACKS 1-64 OF 90" over ninety lanes, contains "90" in passing.
+
+**Then the mutation found two more layers, neither visible by reading.**
+
+*The expectation called the function under test.* The surface checks compared each label
+against `DAW.state.bank_caption()`, so a mutation that changed the caption changed the
+expectation too and both sides moved together. It passed. An expectation has to be written
+independently or it is not an expectation -- it is a restatement.
+
+*The fixture could not tell the formulas apart.* The cache held exactly 64 of a 64 bank, where
+"count what is held" and "assume a full bank" return the same characters. The fixture holds 40
+of 64 now, which is also the more honest shape: a bank still filling, or a backend that capped
+lower than it was asked.
+
+**And the console was still computing its own range from bank_size** while the other two read
+what is held -- the exact drift the shared `bank_caption()` was introduced to prevent, left
+behind in the surface that had been right the longest. BankSelector takes `shown_count` now. A
+caption contradicted by the faders in front of it is worth less than none.
+
+The through-line for the week: **a green check is evidence about the check, not about the
+code.** Three of this week's real bugs were sitting behind passing tests, and in every case it
+was a mutation or a screenshot that found them.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

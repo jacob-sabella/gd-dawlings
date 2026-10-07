@@ -1801,6 +1801,17 @@ func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
 	check("a truncated cache names the window and the whole",
 			state.bank_caption() == "TRACKS 17-80 OF 90")
 
+	# A cache holding FEWER than the bank it asked for. Without this case the suite cannot tell
+	# "count what is held" from "assume a full bank", because with 64 of 64 the two agree to the
+	# character -- and a mutation swapping one for the other sailed through every check above.
+	var partial := MixState.new()
+	for i in 40:
+		partial.track(i)
+	partial.project_track_count = 90
+	partial.bank_size = 64
+	check("a half-filled bank counts what it has, not what it asked for",
+			partial.bank_caption() == "TRACKS 1-40 OF 90")
+
 	# The caption is measured from what is HELD, not from bank_size, and this is the case that
 	# told them apart: the offline stand-in at 90 tracks caches all 90 while bank_size is still
 	# 64, so a bank_size caption read "TRACKS 1-64 OF 90" over ninety drawn lanes. Found by
@@ -1820,28 +1831,52 @@ func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
 	DAW.use(big)
 	check("banking is available at this size",
 			DAW.can(DAWBackend.Capability.TRACK_BANKING))
-	# Keep the first 64 by sorted order rather than by index value: the stand-in's indices are
-	# Reaper's numbering, not 0..89, so "index >= 64" is not the same set as "the first 64".
+	# FORTY, not sixty-four, and the odd number is the point. A cache holding exactly bank_size
+	# cannot tell "count what is held" apart from "assume a full bank" -- both formulas return
+	# the same sentence, and a mutation swapping one for the other passes. That is the bug this
+	# whole test exists for, so the fixture has to be able to see it: a bank still filling, or
+	# a backend that capped lower than it was asked, holds fewer than it was promised.
+	#
+	# Keep the first 40 by sorted order rather than by index value: the stand-in's indices are
+	# Reaper's numbering, not 0..89, so "index >= 40" is not the same set as "the first 40".
 	var held_indices := DAW.state.track_indices()
-	for position in range(64, held_indices.size()):
+	for position in range(40, held_indices.size()):
 		DAW.state.tracks.erase(held_indices[position])
-	check("the cache now holds a bank, not the project", DAW.state.tracks.size() == 64)
-	var whole := str(DAW.state.project_track_count)
+	check("the cache now holds part of a bank, not the project", DAW.state.tracks.size() == 40)
+	check("and fewer than the bank it asked for", DAW.state.tracks.size() < DAW.state.bank_size)
 
+	# EXACT text, not a substring, and this is the correction of last tick's mistake rather than
+	# a flourish. The previous version searched every label for "90" and called a hit proof the
+	# surface had said the right thing. The caption it was meant to be guarding read "TRACKS
+	# 1-64 OF 90" over ninety drawn lanes -- a sentence that is wrong in the only way that
+	# matters and contains "90" in passing. A substring check will accept any lie that contains
+	# the substring, which is most of them.
+	#
+	# The console splits the same fact across two labels because its strip is 40mm wide, so it
+	# is checked as the pair it draws rather than being forced into one string it does not have.
+	var first := DAW.state.bank_offset + 1
+	var last := DAW.state.bank_offset + DAW.state.tracks.size()
+	var total := DAW.state.project_track_count
 	# Named explicitly. get_class() on a scripted node returns the native base -- every one of
 	# these is "Node3D" -- so a failure would name nothing, in the test whose whole job is to
 	# say WHICH surface went quiet.
-	for named in [["console", ConsoleSurface.new()], ["timeline", TimelineSurface.new()],
-			["patchbay", PatchbaySurface.new()]]:
+	# Spelled out here rather than fetched from bank_caption(). Asking the thing under test what
+	# it ought to have said makes both sides of the comparison move together: the mutation that
+	# swapped held for bank_size changed the surface AND the expectation, and passed. An
+	# expectation has to be written independently or it is not an expectation.
+	var sentence := "TRACKS %d-%d OF %d" % [first, last, total]
+	for named in [
+			["console", ConsoleSurface.new(), ["%d-%d" % [first, last], "OF %d" % total]],
+			["timeline", TimelineSurface.new(), [sentence]],
+			["patchbay", PatchbaySurface.new(), [sentence]]]:
 		var surface: Surface = named[1]
 		add_child(surface)
 		surface._process(0.0)
-		var said := false
+		var texts: Array[String] = []
 		for node in surface.find_children("*", "Label3D", true, false):
-			if (node as Label3D).text.contains(whole):
-				said = true
-				break
-		check("the %s says how much project it is not showing" % named[0], said)
+			texts.append((node as Label3D).text)
+		for wanted in named[2]:
+			check("the %s says exactly \"%s\"" % [named[0], wanted], texts.has(wanted))
 		surface.queue_free()
 
 	# And the other half of the rule, which is the half that erodes: a caption that is always

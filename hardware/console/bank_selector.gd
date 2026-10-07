@@ -22,6 +22,14 @@ signal bank_requested(offset: int)
 var bank_offset := 0
 var bank_size := 64
 var project_count := -1
+## How many tracks are actually in the cache behind this desk.
+##
+## Separate from bank_size, and the display reads from THIS. bank_size is what was asked of the
+## protocol; shown_count is what came back, and on the last bank of a project they differ. They
+## can also differ for duller reasons -- a bank still filling, a backend that caps lower than it
+## was asked -- and in every one of those cases the number a person can count on the desk is
+## shown_count. A caption contradicted by the faders in front of it is worth less than none.
+var shown_count := -1
 
 var _prev: PanelButton
 var _next: PanelButton
@@ -71,7 +79,7 @@ func _ready() -> void:
 func refresh() -> void:
 	if _range_label == null:
 		return
-	var last := bank_offset + bank_size
+	var last := bank_offset + (shown_count if shown_count >= 0 else bank_size)
 	if project_count > 0:
 		last = mini(last, project_count)
 	_range_label.text = "%d-%d" % [bank_offset + 1, last]
