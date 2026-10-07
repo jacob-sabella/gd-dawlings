@@ -94,3 +94,20 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - The master section has no monitor level, dim or mono. Those belong to a monitor controller,
   which Reaper does not know about and has no OSC address for -- deliberately absent rather
   than faked, and the gap closes only if something other than Reaper ends up driving it.
+
+## Blender-authored parts
+
+Done: the knob (`tools/blender/knob.py` → `assets/hardware/knob.glb`).
+
+Finding from photographing it: **the knurling does not pay at FX-rack distance.** Front-on, the
+skirt hides behind the cap and 18 flutes cost geometry for a silhouette nobody can resolve. It
+pays where the skirt is actually seen -- the console pan row, looked down on from a seat at the
+desk -- and it will pay in VR. Before authoring the next part, decide what distance it is read
+from and spend the triangles there; 1088 tris is on the heavy side for something there are a
+hundred of, and most of them are in the chamfers, which do pay.
+
+Next candidates, in order of how much screen they own:
+- Fader cap (console, one per strip, and the thing hands reach for most).
+- Tape reels (the one thing in the room that moves continuously, so the spokes matter).
+- Jack sockets and plug shells on the patchbay.
+- Chamfered chassis edges and 19" rack ears.
