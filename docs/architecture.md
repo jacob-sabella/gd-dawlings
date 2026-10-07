@@ -282,6 +282,68 @@ per strip, which would make laying out a 90-track desk quadratic. That optimisat
 while it agrees with the readable definition, so the suite checks the two **against each other**
 rather than checking either alone.
 
+## Drawing budget: measured, not guessed
+
+The headline client is a standalone passthrough headset, which has to draw this entire room
+**twice** -- once per eye -- at 72Hz on a mobile GPU with no tether. That is a hard budget and
+the project had never measured itself against it.
+
+`tools/budget.sh` runs the real studio at several session sizes and prints what it drew.
+`tools/budget.gd` is an autoload, inert unless `--budget` is passed, for the same reason the
+capture harness is one: it observes whatever is running, so measuring needs no cooperation from
+the scene and cannot accidentally measure a different scene from the one that ships.
+`--tracks N` pads the offline stand-in, because the authored thirteen-track demo is readable and
+is *not* what a session costs.
+
+### What it found
+
+Triangles were never the problem. The backlog had framed this as a vertex budget -- "3782 tris
+per reel, ~100 knobs at 1088" -- and the measurement says otherwise: 203k triangles at 90 tracks
+is nothing, while **3,370 draw calls** is firmly over a mobile budget. Those two readings have
+opposite fixes, which is the entire argument for measuring before optimising.
+
+The per-surface breakdown said where: **1,260 of those draw calls -- 37% of the whole studio --
+were the VU meters**, because there is one per strip and each was fourteen separate
+`MeshInstance3D` segments.
+
+| tracks | draw calls (before → after) | frame ms | triangles |
+|---|---|---|---|
+| 13 | 1,236 → **846** | 1.36 → 0.73 | 64k |
+| 24 | 1,869 → **1,193** | 1.92 → 0.85 | 94k |
+| 48 | 2,934 → **1,819** | 3.41 → 1.30 | 151k |
+| 90 | 3,370 → **2,132** | 5.67 → 1.67 | 203k |
+
+Measured on a desktop GPU, so the absolute frame times are not the headset's. The **slope** and
+the **breakdown** are hardware-independent, and they are what the tool is for.
+
+One caveat the tool cannot remove: draw calls grow sub-linearly past 48 tracks because a desk
+that wide runs off the edge of the frame and gets culled. A single camera position flatters the
+large sessions.
+
+### Two monitors that lied
+
+This tool first reported `Performance.TIME_PROCESS` at **177ms per frame** on a scene the wall
+clock timed at 1.85ms -- a hundredfold error that would have been a 6fps crisis that does not
+exist. `Engine.get_frames_per_second()` went the same way: it averages over a wall second while
+this samples forty frames, so on a fast scene it was still reporting the startup.
+
+Both were removed. The raw `delta` was right. A measuring tool should report as few numbers as
+it can defend, because a wrong number in it is worse than a missing one -- it is the number that
+gets acted on.
+
+### The meter is one object
+
+`VUMeter` is a `MultiMesh`: one draw call for the whole ladder, with segment colour travelling
+as per-instance data. That is why it carries a shader at all -- four lines, unshaded, which an
+LED should be anyway (a little lamp adds light, it does not take it) and which renders
+identically under `forward_plus` and `mobile`, as every material here must.
+
+**A MultiMesh is invisible to the test suite.** Its instance buffer lives in the rendering
+server, and the headless server is a stub: `set_instance_color` writes quite happily and
+`get_instance_color` returns black forever. Converting any widget to a MultiMesh makes it
+untestable unless the decision is lifted out of the buffer -- which is why `segment_colour` and
+`segment_y` are static functions. `_paint` is the one line that cannot be checked.
+
 ## Audio: the gear, not the mix
 
 **The mix is not ours to play.** Reaper is already running, through monitors, in the room this

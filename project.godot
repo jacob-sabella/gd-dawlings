@@ -30,6 +30,8 @@ DAW="*res://core/daw/daw.gd"
 ; Observes whatever scene is running, so a capture needs no scene cooperation. Inert
 ; unless --shot is passed. See tools/shot.sh.
 Screenshot="*res://tools/screenshot.gd"
+; Likewise inert unless --budget is passed. See tools/budget.sh.
+Budget="*res://tools/budget.gd"
 
 [display]
 

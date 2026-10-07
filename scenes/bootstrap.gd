@@ -83,7 +83,9 @@ func _start_daw(args: Dictionary) -> void:
 		if DAW.use(ReaperBackend.new(), true, options):
 			return
 		push_warning("bootstrap: could not open the OSC link; falling back to the offline stand-in.")
-	DAW.use(OfflineBackend.new())
+	var offline := OfflineBackend.new()
+	offline.track_count = args["tracks"]
+	DAW.use(offline)
 
 
 func _parse(argv: PackedStringArray) -> Dictionary:
@@ -91,11 +93,18 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"reaper": false, "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
-		"place": {}, "stage": false, "view": Vector2.ZERO,
+		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 	}
 	var i := 0
 	while i < argv.size():
 		match argv[i]:
+			"--tracks":
+				# Pads the offline stand-in out to N tracks. Only the stand-in: with --reaper
+				# the project is whatever Reaper has open, and inventing tracks on top of a
+				# real session would be a lie told to the measuring tool.
+				i += 1
+				if i < argv.size():
+					out["tracks"] = int(argv[i])
 			"--reaper": out["reaper"] = true
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true

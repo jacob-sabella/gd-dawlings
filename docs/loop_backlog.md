@@ -176,9 +176,32 @@ count of 12, and "track 1 has items" where track 1 is now a bus that correctly h
 now assert the intent (guest count *equals host count*; the arrangement is non-empty across the
 project). A test that breaks when the fixture changes shape was testing the fixture.
 
+## Mobile / drawing budget
+
+Measured, and the measurement overturned this list's own framing. See architecture.md.
+
+**This entry was wrong about what the problem was.** It said "re-measure 3782 tris/reel, ~100
+knobs at 1088" -- a triangle budget. Triangles were never the issue: 203k at 90 tracks is
+nothing. Draw calls were, at 3,370, and the single biggest contributor was the VU meters at 37%
+of the whole studio. A vertex problem and a draw-call problem have opposite fixes, so a guess
+here would have cost a tick and fixed nothing.
+
+**Two of the three performance monitors I reached for were wrong by orders of magnitude** --
+`Performance.TIME_PROCESS` by 100x, `Engine.get_frames_per_second()` by enough to be useless on
+a short sample. Both now deleted from the tool. If a number in a measuring tool is wrong it is
+worse than absent, because it is the one that gets acted on.
+
+**A MultiMesh cannot be tested headless.** Its buffer lives in the rendering server and the
+headless one is a stub that accepts writes and returns black. Any future widget converted this
+way has to lift its decision into a pure function first, or it silently stops being covered.
+
 ### Still open
 
-- Mobile renderer pass for standalone headsets. Re-measure: 3782 tris/reel, ~100 knobs at 1088.
+- More draw-call reduction: the console is still ~1,032 meshes at 90 tracks. Buttons (2 meshes
+  each) and the fader slot/cap are the next candidates; the same MultiMesh trick applies to the
+  button lamps. Measure before and after with `tools/budget.sh`, as above.
+- The budget tool measures one camera angle, so culling flatters wide desks. A second pose
+  (nose-to-the-desk, where nothing is culled) would bound the worst case.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
   Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.

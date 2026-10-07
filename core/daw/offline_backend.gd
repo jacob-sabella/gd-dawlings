@@ -14,6 +14,14 @@ extends DAWBackend
 ## rack, the bay and the deck are driven by this without knowing, and nothing above the backend
 ## layer contains a branch for it.
 
+## Pad the synthetic session out to this many tracks. 0 means the authored thirteen.
+##
+## Set before open(). It exists so the two questions a thirteen-track demo cannot answer -- what
+## does the studio COST at session scale, and does the bank paging work -- can be asked without
+## Reaper running, which is the whole point of having a stand-in at all.
+var track_count: int = 0
+
+
 func _process(delta: float) -> void:
 	_drive_meters(delta)
 	tick_replication(delta)
@@ -40,10 +48,16 @@ func summary() -> String:
 
 ## No DAW means no routing engine to change. The patchbay reads this and declines the gesture
 ## rather than drawing a cable that stands for nothing.
-## No routing engine to change, and no project beyond the twelve tracks it invented -- so no
-## bank to move either. The console reads the second one and builds no bank module at all.
+## No routing engine to change, so no patching. Banking IS offered once the synthetic project
+## is larger than a bank, because at that size the stand-in is modelling exactly the situation
+## the bank buttons exist for -- and a 90-track stand-in that silently showed 64 strips would
+## reproduce the bug those buttons were written to make visible.
 func can(capability: StringName) -> bool:
-	return capability != Capability.ROUTING and capability != Capability.TRACK_BANKING
+	if capability == Capability.ROUTING:
+		return false
+	if capability == Capability.TRACK_BANKING:
+		return state != null and state.project_track_count > state.bank_size
+	return true
 
 
 # --- the stand-in mix ---------------------------------------------------------------------
@@ -77,6 +91,21 @@ func _populate() -> void:
 		{"n": "Strings", "v": 0.64, "p": 0.5, "c": Color(0.46, 0.62, 0.78)},
 		{"n": "Verb Rtn", "v": 0.58, "p": 0.5, "c": Color(0.42, 0.68, 0.72)},
 	]
+	# The authored project is thirteen tracks because that is a readable demo. It is NOT what a
+	# session costs: a real desk is forty or ninety strips, and the only honest way to ask what
+	# the studio draws at that size -- or how a 90-track bank behaves -- is to be able to make
+	# one without Reaper open. Extra tracks cycle the authored list with the group pattern
+	# continuing, so a scaled project is still a project rather than a wall of clones.
+	if track_count > demo.size():
+		var authored := demo.size()
+		for i in range(authored, track_count):
+			var source: Dictionary = demo[i % authored].duplicate()
+			source["n"] = "%s %d" % [source["n"], 1 + i / authored]
+			# Hue-rotated per cycle, so two tracks with the same role are not the same colour.
+			var c: Color = source["c"]
+			source["c"] = Color.from_hsv(fposmod(c.h + 0.11 * (i / authored), 1.0), c.s, c.v)
+			demo.append(source)
+
 	for i in demo.size():
 		var d: Dictionary = demo[i]
 		var t := state.track(i + 1)
@@ -92,7 +121,10 @@ func _populate() -> void:
 	# like and what makes the master fader visibly NOT at the top of its travel.
 	state.master.volume = 0.69
 	state.master.volume_db = taper_to_db(0.69)
-	state.bank_size = demo.size()
+	# The BANK is what a control surface streams and Reaper's is 64 wide. Below that the bank is
+	# the project; above it the desk has to page, which is the case the bank buttons exist for
+	# and which a thirteen-track stand-in could never reach.
+	state.bank_size = mini(demo.size(), 64)
 	state.project_track_count = demo.size()
 	# AFTER the tempo is known. The arrangement is laid out in bars converted to seconds, so
 	# arranging first put every section boundary at 120bpm spacing under a 92bpm ruler, and

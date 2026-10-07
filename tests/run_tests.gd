@@ -55,6 +55,7 @@ func _ready() -> void:
 	_test_the_reels_say_how_far_through_the_song_you_are()
 	_test_the_gear_makes_a_noise()
 	_test_the_project_has_a_shape()
+	_test_the_studio_fits_in_a_frame()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1422,3 +1423,119 @@ func _test_the_project_has_a_shape() -> void:
 				routed += 1
 	check("every stand-in send resolves to a track", routed == 4)
 	offline.free()
+
+
+func _test_the_studio_fits_in_a_frame() -> void:
+	# The target is a standalone passthrough headset drawing this whole room twice per frame at
+	# 72Hz. tools/budget.sh is what measures that; these are the facts the measurement depends
+	# on, pinned so a later change cannot quietly undo the win without failing here.
+
+	# --- the meter is ONE object ----------------------------------------------------------
+	#
+	# THE REGRESSION THIS EXISTS FOR. The obvious way to write a segmented ladder is a mesh per
+	# segment, it is what this was, and at 90 tracks it was 1,260 draw calls -- thirty-seven
+	# percent of the entire studio for one widget. Nothing about the scene LOOKS wrong when it
+	# comes back, which is exactly why it needs a test rather than an eye.
+	var meter := VUMeter.new()
+	add_child(meter)
+	var multis := meter.find_children("*", "MultiMeshInstance3D", true, false)
+	var singles := meter.find_children("*", "MeshInstance3D", true, false)
+	check("a meter is one MultiMesh", multis.size() == 1)
+	check("a meter is not a pile of MeshInstance3Ds", singles.is_empty())
+
+	var mm: MultiMesh = (multis[0] as MultiMeshInstance3D).multimesh
+	check("the ladder has every segment", mm.instance_count == VUMeter.SEGMENTS)
+	check("the ladder carries per-instance colour", mm.use_colors)
+	check("the lamp material is shared across meters, not one per meter",
+			(multis[0] as MultiMeshInstance3D).material_override is ShaderMaterial)
+
+	# NOTE: everything below asks the pure functions, not the MultiMesh. Its instance buffer
+	# lives in the rendering server, and headless that server is a stub -- set_instance_color
+	# writes happily and get_instance_color returns black forever. Converting a widget to a
+	# MultiMesh makes it untestable unless the decision is lifted out of the buffer, which is
+	# why VUMeter.segment_colour and segment_y exist at all.
+
+	# Segments climb. A ladder whose instances all sit at the origin draws as one bright block
+	# and measures as a win.
+	check("the ladder actually climbs",
+			VUMeter.segment_y(VUMeter.SEGMENTS - 1) > VUMeter.segment_y(0))
+	close_to("the ladder is evenly spaced",
+			VUMeter.segment_y(2) - VUMeter.segment_y(1),
+			VUMeter.segment_y(1) - VUMeter.segment_y(0))
+	close_to("the ladder is as tall as it says",
+			VUMeter.segment_y(VUMeter.SEGMENTS - 1) + VUMeter.SEG_HEIGHT + VUMeter.SEG_GAP,
+			meter.total_height())
+
+	# --- and it still reads as a meter ------------------------------------------------------
+	var all_dark := VUMeter.segment_colour(0, 0, -1)
+	var all_lit := VUMeter.segment_colour(0, VUMeter.SEGMENTS, -1)
+	check("a lit segment is brighter than a dark one", all_lit.g > all_dark.g)
+	# Over 1.0 on purpose: that is what the glow pass picks up, and without it a lit LED is
+	# only a paler shade of plastic.
+	check("a lit segment is driven past 1.0 so it blooms", all_lit.g > 1.0)
+	check("an unlit segment keeps its tint rather than going black", all_dark.g > 0.01)
+
+	check("segments below the level are lit",
+			VUMeter.segment_colour(0, 3, -1).g > 1.0)
+	check("segments above the level are not",
+			VUMeter.segment_colour(10, 3, -1).g < 1.0)
+	# The peak marker is a lit segment ABOVE an unlit gap, which is the whole point of it.
+	check("the peak marker lights on its own",
+			VUMeter.segment_colour(9, 3, 9).g > 1.0)
+	check("the gap below the peak marker stays dark",
+			VUMeter.segment_colour(7, 3, 9).g < 1.0)
+
+	# Red at the top, amber below it, green beneath. The colour boundaries are the only
+	# calibration a meter at a glance conveys, so they are worth pinning.
+	var top := VUMeter.colour_at(VUMeter.SEGMENTS - 1)
+	var middle := VUMeter.colour_at(int(VUMeter.SEGMENTS * 0.82))
+	var bottom := VUMeter.colour_at(0)
+	check("the top of the ladder is red", top.r > top.g)
+	check("below the top it is amber", middle.r > 0.6 and middle.g > 0.5 and middle.b < 0.3)
+	check("the bottom of the ladder is green", bottom.g > bottom.r)
+
+	# Repainting only on change. A ladder is fourteen buffer writes and a meter spends most of
+	# its life on the same segment count; across ninety strips that is 1,260 writes a frame to
+	# say nothing at all.
+	meter._paint(5, 2)
+	check("the meter remembers what it drew",
+			meter._lit_shown == 5 and meter._peak_shown == 2)
+	meter.queue_free()
+
+	# --- the stand-in can be session-sized ---------------------------------------------------
+	#
+	# The authored demo is thirteen tracks, which is readable and is not what a session costs.
+	# Neither "what does this draw at scale" nor "does the bank paging work" could be asked
+	# without Reaper open until the stand-in could be told to be bigger.
+	var big := OfflineBackend.new()
+	big.state = MixState.new()
+	big.track_count = 90
+	big.open()
+	check("a scaled stand-in has the tracks it was asked for",
+			big.state.track_indices().size() == 90)
+	check("a scaled stand-in reports its real size",
+			big.state.project_track_count == 90)
+	check("a project bigger than a bank still streams only a bank",
+			big.state.bank_size == 64)
+	check("a project bigger than a bank offers the bank controls",
+			big.can(DAWBackend.Capability.TRACK_BANKING))
+	# Names stay distinct, or a 90-strip desk is 90 strips called the same thing and every
+	# layout problem long names cause is hidden again.
+	var seen_names := {}
+	for index in big.state.track_indices():
+		seen_names[big.state.track(index).display_name()] = true
+	check("a scaled stand-in does not repeat track names", seen_names.size() == 90)
+	check("a scaled stand-in keeps a folder tree",
+			ConsoleSurface._group_breaks(big.state, big.state.track_indices()).size() >= 10)
+	big.free()
+
+	var small := OfflineBackend.new()
+	small.state = MixState.new()
+	small.open()
+	check("the authored stand-in is unchanged by the knob existing",
+			small.state.track_indices().size() == 13)
+	# A session that fits on the desk needs no bank controls, and two dead buttons invite the
+	# question of what they are for.
+	check("a project that fits in a bank offers no bank controls",
+			not small.can(DAWBackend.Capability.TRACK_BANKING))
+	small.free()
