@@ -48,6 +48,30 @@ const SPEED_FOLLOW := 6.0
 ## Below this, in song-seconds per second, the deck is stopped as far as the motor is concerned.
 const MOTOR_FLOOR_SPEED := 0.02
 
+## THE TAPE PATH, which this deck did not have.
+##
+## Two reels and nothing between them is not a tape machine; it is two wheels. Everything that
+## makes a deck legible as a deck lives in the gap -- the ribbon itself, the guides that turn
+## it, the heads it is dragged across, the capstan and pinch roller that are the only things
+## actually setting its speed. A photograph of the old deck read as a poster of one.
+##
+## It also makes the reels mean something. The packs already shrink and grow correctly, but a
+## pack with no tape coming off it is a disc that changes size. With a ribbon leaving it on a
+## tangent that MOVES as the pack empties, the same geometry reads as what it is.
+const PATH_Y := -0.050
+const GUIDE_X := 0.040
+const TAPE_WIDTH := 0.0065
+## In front of the chassis and behind the transport buttons. The tape crosses the reel flanges
+## rather than threading behind them, which is a compromise -- on a real machine the path is in
+## the flange plane -- but a ribbon hidden behind two reels is a ribbon nobody can see.
+const TAPE_Z := 0.016
+## Where a run stops: at the flange rim, not at the pack it is tangent to. The pack sits BEHIND
+## the flange and is only visible through the windows, so a run drawn all the way to it ends in
+## the middle of a solid disc -- which is what the first attempt did, and it looked like a stick
+## resting on the reel. Stopping at the rim reads as tape going in behind it. The ANGLE still
+## comes from the pack, which is the part that has to stay true: that is what changes as the
+## reel empties.
+
 var _left_reel: Node3D
 var _right_reel: Node3D
 var _left_pack: MeshInstance3D
@@ -56,6 +80,7 @@ var _counter: Label3D
 var _tempo_label: Label3D
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
+var _tape_runs: Array[MeshInstance3D] = []
 var _song_speed := 0.0
 var _last_position := -1.0
 var _motor: AudioStreamPlayer3D
@@ -96,7 +121,7 @@ func _rebuild() -> void:
 	_tempo_label = Label3D.new()
 	_tempo_label.font_size = 44
 	_tempo_label.pixel_size = 0.00024
-	_tempo_label.position = Vector3(0, -0.115, 0.002)
+	_tempo_label.position = Vector3(0, -0.128, 0.002)
 	_tempo_label.modulate = Color(0.7, 0.72, 0.75)
 	_tempo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(_tempo_label)
@@ -104,7 +129,7 @@ func _rebuild() -> void:
 
 	var play := PanelButton.new()
 	play.led_colour = Color(0.35, 0.95, 0.45)
-	play.position = Vector3(-0.035, -0.075, 0.028)
+	play.position = Vector3(-0.035, -0.096, 0.028)
 	play.scale = Vector3(1.6, 1.6, 1.6)
 	play.pressed.connect(func(): DAW.transport_play())
 	_adopt(play)
@@ -112,21 +137,155 @@ func _rebuild() -> void:
 
 	var stop := PanelButton.new()
 	stop.led_colour = Color(0.8, 0.8, 0.84)
-	stop.position = Vector3(0.0, -0.075, 0.028)
+	stop.position = Vector3(0.0, -0.096, 0.028)
 	stop.scale = Vector3(1.6, 1.6, 1.6)
 	stop.pressed.connect(func(): DAW.transport_stop())
 	_adopt(stop)
 
 	var rec := PanelButton.new()
 	rec.led_colour = Color(0.98, 0.22, 0.2)
-	rec.position = Vector3(0.035, -0.075, 0.028)
+	rec.position = Vector3(0.035, -0.096, 0.028)
 	rec.scale = Vector3(1.6, 1.6, 1.6)
 	rec.pressed.connect(func(): DAW.transport_record())
 	_adopt(rec)
 	_rec_lamp = rec
 
+	_build_tape_path()
+
 	DAW.state.transport_changed.connect(_refresh)
 	_refresh()
+
+
+## Where a tape leaves a pack, which is not a point on the pack -- it is the point where a line
+## to the next guide stops cutting through it.
+##
+## `side` picks which of the two tangents: the tape has to come off the face of the pack that
+## looks at the gap, and which one that is depends on which reel. Static because the whole
+## reason the reels are worth drawing is that this moves, and a thing that moves is worth being
+## able to check without a scene.
+static func tangent_point(centre: Vector2, radius: float, toward: Vector2, side: float) -> Vector2:
+	var d := toward - centre
+	var span := d.length()
+	if span <= radius or radius <= 0.0:
+		# The guide is inside the pack. Cannot happen with the radii this deck uses, and
+		# returning the near point rather than a NaN keeps a geometry change from drawing
+		# nothing at all while somebody works out why.
+		return centre + (d.normalized() * radius if span > 0.0 else Vector2(radius, 0.0))
+	var along := d / span
+	var across := Vector2(-along.y, along.x)
+	var reach := sqrt(span * span - radius * radius)
+	return centre + radius * ((radius / span) * along + side * (reach / span) * across)
+
+
+## Where that tangent line crosses the flange rim on its way in from the guide.
+##
+## Static alongside `tangent_point` and for the same reason: between them they are the whole of
+## where a run is drawn, and neither needs a scene to be wrong in.
+static func rim_crossing(centre: Vector2, guide: Vector2, toward: Vector2, rim: float) -> Vector2:
+	var along := toward - guide
+	if along.length() < 1e-6:
+		return toward
+	along = along.normalized()
+	var offset := guide - centre
+	var half := offset.dot(along)
+	var under := half * half - offset.length_squared() + rim * rim
+	if under <= 0.0:
+		# The run never reaches the reel. Not reachable with this deck's geometry; drawn to the
+		# tangent rather than not drawn, so a layout change shows up as a wrong line instead of
+		# a missing one.
+		return toward
+	var reach := -half - sqrt(under)
+	if reach <= 0.0:
+		return toward
+	return guide + along * reach
+
+
+func _build_tape_path() -> void:
+	var dark := Materials.cap_plastic(Color(0.07, 0.065, 0.06))
+
+	# The head block: a plinth with three heads standing on it -- erase, record, play, in the
+	# order the tape meets them. They are the reason the gap is the width it is.
+	var block := MeshInstance3D.new()
+	var block_mesh := BoxMesh.new()
+	block_mesh.size = Vector3(0.050, 0.018, 0.014)
+	block.mesh = block_mesh
+	block.position = Vector3(-0.008, PATH_Y - 0.0045, TAPE_Z - 0.009)
+	block.material_override = dark
+	_adopt(block)
+
+	for hx in [-0.026, -0.008, 0.010]:
+		var head := MeshInstance3D.new()
+		var head_mesh := BoxMesh.new()
+		head_mesh.size = Vector3(0.009, 0.013, 0.010)
+		head.mesh = head_mesh
+		head.position = Vector3(hx, PATH_Y + 0.0005, TAPE_Z - 0.0055)
+		head.material_override = Materials.brushed_metal()
+		_adopt(head)
+
+	# Guides at each end of the straight run, and the capstan and pinch roller that pull the
+	# tape past the heads. Drawn because they are the parts that explain the motion: the reels
+	# wind and unwind, but nothing on a real machine takes its speed from them.
+	for gx in [-GUIDE_X, GUIDE_X]:
+		var guide := MeshInstance3D.new()
+		var guide_mesh := CylinderMesh.new()
+		guide_mesh.top_radius = 0.0042
+		guide_mesh.bottom_radius = 0.0042
+		guide_mesh.height = 0.013
+		guide_mesh.radial_segments = 16
+		guide.mesh = guide_mesh
+		guide.rotation_degrees = Vector3(90, 0, 0)
+		guide.position = Vector3(gx, PATH_Y, TAPE_Z - 0.002)
+		guide.material_override = Materials.brushed_metal()
+		_adopt(guide)
+
+	for spec in [[-0.0052, 0.0048, Materials.brushed_metal()],
+			[0.0056, 0.0052, dark]]:
+		var roller := MeshInstance3D.new()
+		var roller_mesh := CylinderMesh.new()
+		roller_mesh.top_radius = spec[1]
+		roller_mesh.bottom_radius = spec[1]
+		roller_mesh.height = 0.012
+		roller_mesh.radial_segments = 18
+		roller.mesh = roller_mesh
+		roller.rotation_degrees = Vector3(90, 0, 0)
+		roller.position = Vector3(0.028, PATH_Y + spec[0], TAPE_Z - 0.002)
+		roller.material_override = spec[2]
+		_adopt(roller)
+
+	# Three runs: off the supply, straight across the heads, onto the takeup. The middle one
+	# never moves; the two outer ones are re-laid whenever a pack changes size, which is the
+	# whole point of drawing them.
+	# Oxide, which is nearly black. The first pass used the pack's own brown and the runs came
+	# back reading as wooden battens: a pack is lit through a window at the bottom of a recess
+	# and needs lifting, a run is out in the open and does not.
+	var tape_mat := Materials.cap_plastic(Color(0.042, 0.033, 0.028))
+	_tape_runs.clear()
+	for i in 3:
+		var run := MeshInstance3D.new()
+		run.name = "TapeRun%d" % i
+		var run_mesh := BoxMesh.new()
+		run_mesh.size = Vector3(1.0, TAPE_WIDTH, 0.0012)
+		run.mesh = run_mesh
+		run.material_override = tape_mat
+		_adopt(run)
+		_tape_runs.append(run)
+	_lay_run(_tape_runs[1], Vector2(-GUIDE_X, PATH_Y), Vector2(GUIDE_X, PATH_Y))
+
+
+## Stretch one run between two points on the faceplate. The mesh is a unit-length box and the
+## basis does the work, so re-laying a run is a transform write rather than a new mesh -- which
+## matters because this happens every frame the transport is moving.
+func _lay_run(run: MeshInstance3D, a: Vector2, b: Vector2) -> void:
+	var d := b - a
+	var span := d.length()
+	if span < 0.0008:
+		run.visible = false
+		return
+	run.visible = true
+	var along := Vector3(d.x, d.y, 0.0) / span
+	run.transform = Transform3D(
+			Basis(along * span, Vector3(-along.y, along.x, 0.0), Vector3(0, 0, 1)),
+			Vector3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, TAPE_Z))
 
 
 func _make_reel(x: float) -> Node3D:
@@ -264,6 +423,19 @@ func _update_packs() -> void:
 	(_left_pack.mesh as CylinderMesh).bottom_radius = pack_radius(left)
 	(_right_pack.mesh as CylinderMesh).top_radius = pack_radius(right)
 	(_right_pack.mesh as CylinderMesh).bottom_radius = pack_radius(right)
+
+	if _tape_runs.size() == 3:
+		var supply := Vector2(-REEL_SPACING * 0.5, 0.0)
+		var takeup := Vector2(REEL_SPACING * 0.5, 0.0)
+		var left_guide := Vector2(-GUIDE_X, PATH_Y)
+		var right_guide := Vector2(GUIDE_X, PATH_Y)
+		# Opposite sides, because the two reels are mirror images and one sign would run the
+		# tape off the back of the takeup.
+		_lay_run(_tape_runs[0], rim_crossing(supply, left_guide,
+				tangent_point(supply, pack_radius(left), left_guide, -1.0), REEL_RADIUS),
+				left_guide)
+		_lay_run(_tape_runs[2], right_guide, rim_crossing(takeup, right_guide,
+				tangent_point(takeup, pack_radius(right), right_guide, 1.0), REEL_RADIUS))
 
 
 func _refresh() -> void:

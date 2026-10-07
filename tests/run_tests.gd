@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_one_jack_takes_one_plug()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
+	_test_the_tape_leaves_the_pack_where_the_pack_is()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2128,6 +2129,99 @@ func _test_nothing_on_a_faceplate_overlaps_or_overhangs() -> void:
 					% [named, i, (lowest + half) * 1000.0], lowest > -half)
 
 	rack.queue_free()
+
+
+func _test_the_tape_leaves_the_pack_where_the_pack_is() -> void:
+	# The deck had two reels and nothing between them. Now it has a path, and the one thing
+	# that makes the path worth drawing is that it is not a fixed picture: the tape comes off
+	# the pack on a TANGENT, so the angle it leaves at swings round as the reel empties. A run
+	# drawn to a fixed point on the flange would look identical in a still and dead in motion.
+	var centre := Vector2(-TapeDeck.REEL_SPACING * 0.5, 0.0)
+	var guide := Vector2(-TapeDeck.GUIDE_X, TapeDeck.PATH_Y)
+
+	# A tangent is a tangent: on the circle, and square to the line that reaches it.
+	for fraction in [0.0, 0.25, 0.6, 1.0]:
+		var radius := TapeDeck.pack_radius(fraction)
+		var touch := TapeDeck.tangent_point(centre, radius, guide, -1.0)
+		check("a tangent at %.2f sits on the pack (%.2fmm out)"
+				% [fraction, (touch.distance_to(centre) - radius) * 1000.0],
+				absf(touch.distance_to(centre) - radius) < 1e-5)
+		# Square, which is the whole definition and the thing a sign error breaks silently.
+		var square: float = (touch - centre).normalized().dot((touch - guide).normalized())
+		check("and leaves square to the pack at %.2f (dot %.4f)" % [fraction, square],
+				absf(square) < 1e-4)
+
+	# The two sides are the two tangents, and they are not the same point. A deck that used one
+	# sign for both reels would run the takeup's tape off the back of the machine.
+	var r := TapeDeck.pack_radius(0.5)
+	check("the two tangents are different points",
+			TapeDeck.tangent_point(centre, r, guide, -1.0).distance_to(
+				TapeDeck.tangent_point(centre, r, guide, 1.0)) > 0.005)
+
+	# What is DRAWN stops at the flange rim, because the pack lives behind the flange and a run
+	# drawn to it ends in the middle of a solid disc.
+	var angles: Array[float] = []
+	for fraction in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
+		var radius := TapeDeck.pack_radius(fraction)
+		var touch := TapeDeck.tangent_point(centre, radius, guide, -1.0)
+		var rim := TapeDeck.rim_crossing(centre, guide, touch, TapeDeck.REEL_RADIUS)
+		check("the run at %.1f stops on the rim (%.2fmm out)"
+				% [fraction, (rim.distance_to(centre) - TapeDeck.REEL_RADIUS) * 1000.0],
+				absf(rim.distance_to(centre) - TapeDeck.REEL_RADIUS) < 1e-5)
+		# Between the guide and the pack, not behind the guide and not past the pack.
+		check("and lies between the guide and the pack at %.1f" % fraction,
+				rim.distance_to(guide) > 0.0 and rim.distance_to(guide) < touch.distance_to(guide))
+		angles.append((rim - guide).angle())
+
+	# The payoff: six pack sizes, six different exit angles, moving one way. If this came back
+	# flat the path would be a decal.
+	#
+	# Stepped with angle_difference rather than subtracted. The run crosses due-west partway
+	# through the reel, so the raw angles run 163, 173, 180, -174 -- which a plain subtraction
+	# reads as the tape snapping back through half a turn. That is the test being wrong about
+	# the circle, not the deck; the first version of this failed on it.
+	var swing := 0.0
+	var monotone := true
+	var first := angle_difference(angles[0], angles[1])
+	for i in range(1, angles.size()):
+		var step := angle_difference(angles[i - 1], angles[i])
+		swing += absf(step)
+		if step * first <= 0.0:
+			monotone = false
+	check("the exit angle swings as the reel empties (%.1f deg)" % rad_to_deg(swing),
+			swing > deg_to_rad(6.0))
+	check("and swings one way, not back and forth", monotone)
+
+	# All of the above is the static geometry, and a mutation proved it does not cover the
+	# thing most likely to be got wrong: WHICH tangent each reel uses. Flipping the takeup's
+	# sign left every check above green, because the takeup is never touched by them. The two
+	# reels are mirror images, so with equal packs the tape must leave one and arrive at the
+	# other at mirrored points -- which is exactly what the sign decides.
+	DAW.use(OfflineBackend.new())
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	DAW.state.position_seconds = DAW.state.project_length * 0.5
+	deck._update_packs()
+	check("the deck laid three runs", deck._tape_runs.size() == 3)
+	if deck._tape_runs.size() == 3:
+		# Run 0 was laid rim-first, run 2 rim-last, so the reel end of each is the far one.
+		var off_supply: Vector3 = deck._tape_runs[0].transform.origin \
+				- deck._tape_runs[0].transform.basis.x * 0.5
+		var onto_takeup: Vector3 = deck._tape_runs[2].transform.origin \
+				+ deck._tape_runs[2].transform.basis.x * 0.5
+		check("at half a song the two packs are the same size",
+				absf(TapeDeck.song_fraction(DAW.state) - 0.5) < 0.01)
+		check("so the tape leaves and lands at mirrored heights (%.1fmm apart)"
+				% (absf(off_supply.y - onto_takeup.y) * 1000.0),
+				absf(off_supply.y - onto_takeup.y) < 0.0005)
+		check("and at mirrored distances from the middle (%.1fmm apart)"
+				% (absf(off_supply.x + onto_takeup.x) * 1000.0),
+				absf(off_supply.x + onto_takeup.x) < 0.0005)
+		check("both on the gap side of their own reel",
+				off_supply.x > -TapeDeck.REEL_SPACING * 0.5 \
+				and onto_takeup.x < TapeDeck.REEL_SPACING * 0.5)
+	deck.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:

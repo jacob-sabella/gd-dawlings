@@ -593,3 +593,47 @@ Knobs are now named so a failure says `Knob3` rather than `@StaticBody3D@4327`. 
 this week an unnamed node made a failure message useless.
 
 971 checks, 0 failed.
+
+### Tick O -- the deck had two reels and nothing between them
+
+Shot the tape machine close up for the first time. The reels are good -- the packs already
+shrink and grow at the right rate and the two turn at their own speeds. But there was no tape.
+Two wheels on a slab, with a floating counter and three small buttons. Everything that makes a
+deck legible as a deck lives in the gap between the reels, and the gap was empty.
+
+Built the path: the ribbon, two guides, a three-head block, a capstan and a pinch roller. The
+point of the ribbon is not that it is there -- it is that it comes off the pack on a TANGENT,
+so the angle it leaves at swings round as the reel empties. Measured, that is 33 degrees of
+swing from a full supply to an empty one. A run drawn to a fixed point on the flange would
+look identical in a still photograph and dead in motion.
+
+Three things the photographs corrected, none of which I would have got from the code:
+
+1. **The guides were inside the reels.** At the first PATH_Y the guide posts sat 2mm inside
+   the flange circle, so both runs vanished into the reels and read as sticks resting on them.
+   Moved the path down and the guides in; the buttons and the tempo readout moved down with
+   it.
+2. **The run must stop at the FLANGE RIM, not at the pack.** The pack is drawn behind the
+   flange and is only visible through the windows, so a run drawn all the way to its tangent
+   point ends in the middle of a solid disc. Stopping at the rim reads as tape going in
+   behind it, and the angle still comes from the pack, which is the part that has to stay
+   true.
+3. **The tape was the pack's colour and came back looking like a wooden batten.** A pack is
+   lit through a window at the bottom of a recess and needs lifting; a run is out in the open
+   and does not. Oxide is nearly black and on the path it should look it.
+
+**The mutation that mattered.** The static geometry tests -- tangent on the circle, square to
+the line, run stops on the rim, angle swings one way -- all passed while the takeup reel used
+the WRONG tangent. They only ever exercised the supply. Flipping that sign is the single most
+likely mistake in this feature and the suite was blind to it. Fixed by asserting the thing the
+sign actually decides: with equal packs the two reels are mirror images, so the tape must
+leave one and arrive at the other at mirrored points. The wrong sign now fails by 20.3mm of
+height and 11.3mm of offset.
+
+Also worth recording: the first version of the swing check failed, and the deck was right. The
+run crosses due-west partway through the reel, so the raw angles run 163, 173, 180, -174,
+which a plain subtraction reads as the tape snapping back through half a turn. Stepped with
+`angle_difference` instead. Second time this week a test was wrong about the thing it was
+measuring rather than about the code.
+
+999 checks, 0 failed.
