@@ -83,7 +83,10 @@ func _rebuild() -> void:
 	var banking := DAW.can(DAWBackend.Capability.TRACK_BANKING) and DAW.state.has_more_banks()
 	var bank_width := (BankSelector.WIDTH + MasterSection.GAP) if banking else 0.0
 
-	var channels_width := indices.size() * ChannelStrip.WIDTH
+	# Folder breaks are measured BEFORE the panel is sized, because they make the desk wider.
+	# Sizing the plate first and then inserting gaps is how strips end up hanging off the end.
+	var breaks := _group_breaks(DAW.state, indices)
+	var channels_width := indices.size() * ChannelStrip.WIDTH + breaks.size() * GROUP_GAP
 	var width := bank_width + channels_width + MasterSection.GAP + MasterSection.WIDTH \
 			+ PANEL_MARGIN * 2.0
 
@@ -134,6 +137,11 @@ func _rebuild() -> void:
 
 	x += ChannelStrip.WIDTH * 0.5
 	for index in indices:
+		if breaks.has(index):
+			# A rule in the gap, not just the gap. On a desk tilted away from you a plain space
+			# reads as a missing strip; a line reads as a division, which is what it is.
+			_group_rule(x - ChannelStrip.WIDTH * 0.5 + GROUP_GAP * 0.5)
+			x += GROUP_GAP
 		var strip := ChannelStrip.create(index)
 		strip.position = Vector3(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
@@ -144,6 +152,46 @@ func _rebuild() -> void:
 	master.name = "Master"
 	master.position = Vector3(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 	_panel.add_child(master)
+
+
+## Gap inserted at a folder boundary. Narrow on purpose: this is a seam between sections of one
+## desk, not a gap between two desks, and anything wider starts to read as the latter.
+const GROUP_GAP := 0.013
+
+
+## Which of `indices` begin a new folder group, as a Dictionary used as a set.
+##
+## Returned rather than recomputed per strip because `folder_level` is a running sum over every
+## track before it -- asking per strip makes laying out a 90-track desk quadratic for an answer
+## that does not change during the layout.
+##
+## The FIRST strip is never a break. It begins a group, but there is nothing before it to be
+## divided from, and a rule hanging off the left edge of the panel is just a scratch.
+## Takes the state rather than reaching for the DAW autoload, which is not only testable but
+## correct: this is arithmetic over a project, and a static helper that reads a global can only
+## ever describe the one project that happens to be open.
+static func _group_breaks(state: MixState, indices: Array) -> Dictionary:
+	var out := {}
+	var level := 0
+	var previous := 0
+	for i in indices.size():
+		var index: int = indices[i]
+		var depth: int = state.track(index).folder_depth
+		if i > 0 and (depth > 0 or level < previous):
+			out[index] = true
+		previous = level
+		level = maxi(level + depth, 0)
+	return out
+
+
+func _group_rule(at_x: float) -> void:
+	var rule := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.0014, ChannelStrip.HEIGHT * 0.92, 0.0012)
+	rule.mesh = mesh
+	rule.position = Vector3(at_x, PANEL_MARGIN + ChannelStrip.HEIGHT * 0.5, 0.0008)
+	rule.material_override = Materials.legend()
+	_panel.add_child(rule)
 
 
 ## The tilted panel, not the desk. The carcass is twice the height of the controls and carries

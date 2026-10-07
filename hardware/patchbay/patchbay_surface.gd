@@ -80,7 +80,7 @@ func _draw_cables() -> void:
 		var t := DAW.state.track(index)
 		for send_index in t.sends:
 			var s: MixState.SendState = t.sends[send_index]
-			var dest := _index_by_name(s.dest_name)
+			var dest := s.resolve(DAW.state)
 			if dest < 0 or not _outputs.has(index) or not _inputs.has(dest):
 				continue
 			var from_jack: PatchPoint = _outputs[index]
@@ -93,9 +93,12 @@ func _draw_cables() -> void:
 			_cables.append(cable)
 
 
-## Reaper identifies a send's destination by the track's NAME over OSC, not by index, so this is
-## the only way to resolve one. It is also why two tracks called "Verb" make the bay ambiguous --
-## worth knowing before blaming the cable.
+## Kept for the OSC-only case, and for the test that pins the ambiguity it cannot fix.
+##
+## Over OSC a send's destination is a NAME, so this is the only way to resolve one -- and it is
+## why two tracks called "Verb" made the bay guess. `SendState.resolve` prefers the index the
+## ReaScript bridge supplies and falls back to this, so the bay is exact when the bridge is
+## loaded and still roughly right when it is not.
 func _index_by_name(track_name: String) -> int:
 	if track_name == "":
 		return -1

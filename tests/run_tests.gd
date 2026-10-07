@@ -54,6 +54,7 @@ func _ready() -> void:
 	_test_knob_is_the_moulded_part()
 	_test_the_reels_say_how_far_through_the_song_you_are()
 	_test_the_gear_makes_a_noise()
+	_test_the_project_has_a_shape()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -262,7 +263,10 @@ func _test_snapshot_reconstructs_a_guest() -> void:
 	guest.apply_replicated(host.snapshot())
 
 	check("guest has every track", guest.state.track_indices() == host.state.track_indices())
-	check("guest got some tracks at all", guest.state.tracks.size() == 12)
+	# Against the host rather than against a literal. The count was hard-coded, and the demo
+	# gaining two bus tracks broke a check that was never about how many tracks there are.
+	check("guest got some tracks at all",
+			guest.state.tracks.size() == host.state.tracks.size() and guest.state.tracks.size() > 0)
 
 	for index in host.state.track_indices():
 		var h: MixState.TrackState = host.state.tracks[index]
@@ -720,7 +724,13 @@ func _test_timeline_maps_seconds_onto_the_lane() -> void:
 	check("before the window maps left of the lane", timeline._x_for(-30.0) < left)
 	check("past the window maps right of the lane", timeline._x_for(span * 2.0) > right)
 
-	check("the stand-in arrangement is not empty", DAW.state.track(1).items.size() > 0)
+	# Not track 1: that is the DRUMS bus now, and a bus legitimately carries no media. What
+	# matters is that the arrangement exists at all, on whichever tracks have it.
+	var with_items := 0
+	for index in DAW.state.track_indices():
+		if not DAW.state.track(index).items.is_empty():
+			with_items += 1
+	check("the stand-in arrangement is not empty", with_items >= 8)
 	check("the stand-in has sections named on the ruler", DAW.state.markers.size() >= 4)
 
 	timeline.queue_free()
@@ -1263,3 +1273,152 @@ func _pcm(wav: AudioStreamWAV) -> PackedFloat32Array:
 	for i in out.size():
 		out[i] = float(bytes.decode_s16(i * 2)) / 32767.0
 	return out
+
+
+func _test_the_project_has_a_shape() -> void:
+	# The three things OSC cannot say -- colour, folder structure, and a send's destination as
+	# an index -- now arrive off the ReaScript bridge. Everything here is about the state and
+	# wire layer, which is where the answers land before anything draws them.
+	var state := MixState.new()
+	var names := ["Kick", "Snare", "OH", "Bass", "Verb", "Gtr", "Verb", "Vox"]
+	for i in names.size():
+		state.track(i + 1).name = names[i]
+
+	# --- a send's destination ---------------------------------------------------------------
+	#
+	# THE CASE THAT MATTERS. Two tracks called "Verb" is completely normal in a real project,
+	# and resolving a send by name picks whichever comes first -- silently, and forever. This
+	# is the bug the index fixes, so it is the one worth pinning.
+	var by_name := state.send(1, 0)
+	by_name.dest_name = "Verb"
+	check("a send resolved by name finds a track", by_name.resolve(state) == 5)
+	check("...but picks the FIRST of two tracks with that name, which is the ambiguity",
+			by_name.resolve(state) != 7)
+
+	var by_index := state.send(2, 0)
+	by_index.dest_name = "Verb"
+	by_index.dest_track = 7
+	check("a send carrying an index resolves to it, not to the first name match",
+			by_index.resolve(state) == 7)
+
+	# The index wins even when it disagrees with the name, because the bridge read it off the
+	# destination track itself and OSC only ever guessed.
+	by_index.dest_name = "Kick"
+	check("the index outranks a stale name", by_index.resolve(state) == 7)
+
+	var unknown := state.send(3, 0)
+	check("a send with neither name nor index resolves to nothing", unknown.resolve(state) == -1)
+	unknown.dest_name = "Nothing By This Name"
+	check("a send naming a track that is not here resolves to nothing",
+			unknown.resolve(state) == -1)
+	# -1 is the bridge's "no destination", and it must not be mistaken for track -1 or fall
+	# through to the name.
+	var cleared := state.send(4, 0)
+	cleared.dest_track = -1
+	cleared.dest_name = "Bass"
+	check("a bridge that reports no destination falls back to the name",
+			cleared.resolve(state) == 4)
+
+	# --- folder structure -------------------------------------------------------------------
+	#
+	# Reaper stores a DELTA per track and the level is the running sum, so the arithmetic is
+	# worth pinning on a tree with a nested folder and a double close.
+	var tree := MixState.new()
+	#                         1   2   3   4   5   6   7   8
+	var depths := [1, 0, 1, 0, -1, -1, 0, 0]
+	for i in depths.size():
+		var t := tree.track(i + 1)
+		t.name = "T%d" % (i + 1)
+		t.folder_depth = depths[i]
+	var levels := [0, 1, 1, 2, 2, 1, 0, 0]
+	for i in levels.size():
+		check("track %d sits at folder level %d" % [i + 1, levels[i]],
+				tree.folder_level(i + 1) == levels[i])
+
+	# A delta that would take the level negative is clamped. Reaper will not normally emit one,
+	# but a bank that starts mid-tree hands us the tail of a project whose opening folders are
+	# simply not in the window -- and a negative level would put a break on every strip.
+	var ragged := MixState.new()
+	for i in 3:
+		ragged.track(i + 1).folder_depth = -1
+	check("a bank starting mid-tree does not go below the root",
+			ragged.folder_level(3) == 0 and ragged.folder_level(2) == 0)
+
+	# starts_group is what the desk divides on, and the rule is not "the level changed".
+	check("the first strip is a group start", tree.starts_group(1))
+	check("a folder's parent heads its own group", tree.starts_group(3))
+	# THE CASE THE OBVIOUS RULE GETS WRONG. Track 2 is the first child of the folder track 1
+	# opened; its level differs from track 1's, but cutting there separates a bus from the
+	# tracks it sums. On the demo project that put the VOX bus in with the guitars.
+	check("the first child of a folder is NOT cut off from its parent",
+			not tree.starts_group(2) and not tree.starts_group(4))
+	check("a strip at the same level as the one before it is not a break",
+			not tree.starts_group(5))
+	check("leaving a folder is a break", tree.starts_group(6) and tree.starts_group(7))
+	check("staying at the root is not a break", not tree.starts_group(8))
+
+	# --- and the desk's own copy of that arithmetic -------------------------------------------
+	#
+	# ConsoleSurface recomputes breaks in one pass because asking per strip makes laying out a
+	# 90-track desk quadratic. That optimisation is only safe while it AGREES with the readable
+	# definition, so this checks the two against each other rather than checking either alone.
+	var indices := tree.track_indices()
+	var breaks := ConsoleSurface._group_breaks(tree, indices)
+	for i in indices.size():
+		var index: int = indices[i]
+		var expected := tree.starts_group(index) and i > 0
+		check("the desk and the state agree on a break at %d" % index,
+				breaks.has(index) == expected)
+	check("the desk never rules off the left edge of the panel", not breaks.has(indices[0]))
+	check("the demo tree actually has breaks to draw", breaks.size() >= 3)
+
+	# --- the wire ---------------------------------------------------------------------------
+	#
+	# Colour, folder and dest are reaper-3d's own addresses rather than Reaper's, so they have
+	# to survive the snapshot/apply round trip or a guest sees a grey, ungrouped, mis-cabled
+	# desk while the host sees the real one.
+	var host := MixState.new()
+	host.track(1).name = "Kick"
+	host.track(1).colour = Color(0.86, 0.33, 0.28)
+	host.track(1).folder_depth = 1
+	host.track(2).name = "Snare"
+	host.track(2).folder_depth = -1
+	var hs := host.send(1, 0)
+	hs.dest_name = "Snare"
+	hs.dest_track = 2
+
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(host):
+		MixWire.apply(guest, pair[0], pair[1])
+
+	close_to("colour crosses the wire", guest.track(1).colour.r, 0.86, 0.002)
+	check("folder depth crosses the wire",
+			guest.track(1).folder_depth == 1 and guest.track(2).folder_depth == -1)
+	check("a send's destination index crosses the wire",
+			guest.send(1, 0).dest_track == 2)
+	check("a guest resolves the same cable the host drew",
+			guest.send(1, 0).resolve(guest) == hs.resolve(host))
+
+	# --- the stand-in -------------------------------------------------------------------------
+	#
+	# The offline project is the only session anyone can open without Reaper running, so it is
+	# the one that has to exercise this. A demo at depth zero throughout would make the feature
+	# invisible exactly where it is most likely to be looked at.
+	var offline := OfflineBackend.new()
+	offline.state = MixState.new()
+	offline.open()
+	var demo_breaks := ConsoleSurface._group_breaks(offline.state, offline.state.track_indices())
+	check("the stand-in project has a folder tree", demo_breaks.size() >= 3)
+	var coloured := 0
+	for index in offline.state.track_indices():
+		if offline.state.track(index).colour != Color(0.55, 0.57, 0.6):
+			coloured += 1
+	check("the stand-in project is coloured", coloured >= 10)
+	var routed := 0
+	for index in offline.state.track_indices():
+		for si in offline.state.track(index).sends:
+			var sd: MixState.SendState = offline.state.track(index).sends[si]
+			if sd.resolve(offline.state) > 0:
+				routed += 1
+	check("every stand-in send resolves to a track", routed == 4)
+	offline.free()

@@ -52,18 +52,29 @@ func can(capability: StringName) -> bool:
 ## tracks called "Track 1" through "Track 12" would hide every layout problem that long names
 ## cause, which is most of what this stand-in exists to expose.
 func _populate() -> void:
+	# "f" is Reaper's I_FOLDERDEPTH: 1 opens a folder on this track, -1 closes one, 0 stays.
+	#
+	# PARENT FIRST, which is the part that is easy to get wrong. In Reaper the track carrying
+	# the 1 IS the folder -- it is the submix bus, and it sits at the OUTER level with its
+	# children indented under it. A tree that puts the 1 on "Kick" is legal and is what this
+	# demo had, but it reads as a desk that has divided the kick off from its own drums.
+	#
+	# The stand-in has a real tree at all because the console now draws group breaks from it,
+	# and a demo at depth zero throughout would make that invisible in the only session anybody
+	# can open without Reaper running.
 	var demo := [
+		{"n": "DRUMS", "v": 0.76, "p": 0.5, "c": Color(0.78, 0.40, 0.32), "f": 1},
 		{"n": "Kick", "v": 0.78, "p": 0.5, "c": Color(0.86, 0.33, 0.28)},
 		{"n": "Snare", "v": 0.72, "p": 0.5, "c": Color(0.88, 0.52, 0.24)},
 		{"n": "Hat", "v": 0.61, "p": 0.63, "c": Color(0.84, 0.74, 0.3)},
-		{"n": "OH L/R", "v": 0.67, "p": 0.5, "c": Color(0.55, 0.72, 0.35)},
+		{"n": "OH L/R", "v": 0.67, "p": 0.5, "c": Color(0.55, 0.72, 0.35), "f": -1},
 		{"n": "Bass DI", "v": 0.74, "p": 0.5, "c": Color(0.33, 0.66, 0.6)},
 		{"n": "Rhodes", "v": 0.69, "p": 0.38, "c": Color(0.35, 0.56, 0.82)},
 		{"n": "Gtr Amp", "v": 0.71, "p": 0.66, "c": Color(0.55, 0.45, 0.82)},
+		{"n": "VOX", "v": 0.77, "p": 0.5, "c": Color(0.80, 0.40, 0.60), "f": 1},
 		{"n": "Lead Vox", "v": 0.80, "p": 0.5, "c": Color(0.82, 0.42, 0.66)},
-		{"n": "Vox Dbl", "v": 0.55, "p": 0.3, "c": Color(0.74, 0.46, 0.74)},
+		{"n": "Vox Dbl", "v": 0.55, "p": 0.3, "c": Color(0.74, 0.46, 0.74), "f": -1},
 		{"n": "Strings", "v": 0.64, "p": 0.5, "c": Color(0.46, 0.62, 0.78)},
-		{"n": "Drum Bus", "v": 0.76, "p": 0.5, "c": Color(0.6, 0.6, 0.64)},
 		{"n": "Verb Rtn", "v": 0.58, "p": 0.5, "c": Color(0.42, 0.68, 0.72)},
 	]
 	for i in demo.size():
@@ -74,6 +85,7 @@ func _populate() -> void:
 		t.volume_db = taper_to_db(d["v"])
 		t.pan = d["p"]
 		t.colour = d["c"]
+		t.folder_depth = int(d.get("f", 0))
 		t.vu_l = 0.0
 		t.vu_r = 0.0
 	# A master sitting a little under unity, which is what a mix that has been balanced looks
@@ -104,18 +116,20 @@ func _arrange() -> void:
 	}
 	# Which sections each track plays in, by track index. This is the arrangement.
 	var plays := {
-		1: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		# 1 and 9 are the DRUMS and VOX buses, and a bus carries no media -- the items it
+		# appears to have are its children's, summed. Giving them blocks would draw a lane
+		# that does not exist in the project.
 		2: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
-		3: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
-		4: ["Chorus 1", "Chorus 2", "Outro"],
-		5: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
-		6: ["Intro", "Verse 1", "Verse 2", "Outro"],
-		7: ["Chorus 1", "Verse 2", "Chorus 2", "Outro"],
-		8: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
-		9: ["Chorus 1", "Chorus 2"],
-		10: ["Intro", "Chorus 1", "Chorus 2", "Outro"],
-		11: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
-		12: ["Chorus 1", "Chorus 2", "Outro"],
+		3: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		4: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
+		5: ["Chorus 1", "Chorus 2", "Outro"],
+		6: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		7: ["Intro", "Verse 1", "Verse 2", "Outro"],
+		8: ["Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		10: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
+		11: ["Chorus 1", "Chorus 2"],
+		12: ["Intro", "Chorus 1", "Chorus 2", "Outro"],
+		# 13 is the reverb RETURN, which has no media either -- it has a plugin.
 	}
 	for index in plays:
 		var items: Array = []
@@ -134,15 +148,15 @@ func _arrange() -> void:
 		state.markers[(sections[section][0] - 1) * bar] = section
 	state.set_project_length(96 * bar)
 
-	state.track(1).rec_arm = true
-	state.track(8).rec_arm = true
-	state.track(3).mute = true
-	state.track(8).solo = true
+	state.track(2).rec_arm = true
+	state.track(10).rec_arm = true
+	state.track(4).mute = true
+	state.track(10).solo = true
 
 	# A couple of FX chains, so the racks have something to stand for.
-	for spec in [[1, "ReaEQ", ["Freq", "Gain", "Q", "Type"]], [1, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]],
-			[5, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]], [8, "ReaEQ", ["Freq", "Gain", "Q", "Type"]],
-			[8, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]], [12, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]]]:
+	for spec in [[2, "ReaEQ", ["Freq", "Gain", "Q", "Type"]], [2, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]],
+			[6, "ReaComp", ["Thresh", "Ratio", "Attack", "Release"]], [10, "ReaEQ", ["Freq", "Gain", "Q", "Type"]],
+			[10, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]], [13, "ReaVerbate", ["Size", "Damping", "Wet", "Dry"]]]:
 		var track_index: int = spec[0]
 		var f := state.fx(track_index, state.track(track_index).fx.size())
 		f.name = spec[1]
@@ -151,10 +165,14 @@ func _arrange() -> void:
 			f.param_names[pi] = names[pi]
 			f.params[pi] = 0.3 + 0.5 * fmod(float(track_index * 7 + pi * 3) / 11.0, 1.0)
 
-	# Sends into the reverb return, so the patchbay has real cables.
-	for src in [2, 6, 8, 10]:
+	# Sends into the reverb return, so the patchbay has real cables. BOTH the name and the
+	# index are set, which is what a session with the ReaScript bridge loaded looks like: the
+	# index is what the bay resolves against and the name is the fallback for OSC-only.
+	var verb := 13
+	for src in [3, 7, 10, 12]:
 		var s := state.send(src, 0)
 		s.dest_name = "Verb Rtn"
+		s.dest_track = verb
 		s.volume = 0.4 + 0.1 * src / 10.0
 
 	# Bar 17, set as SECONDS and left for the clock to spell. Setting the string directly --

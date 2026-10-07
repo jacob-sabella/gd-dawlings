@@ -183,6 +183,12 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# starts supplying real colours, they reach every guest without another line.
 			if args.size() >= 3:
 				state.set_track_field(idx, &"colour", Color(float(args[0]), float(args[1]), float(args[2])))
+		"folder":
+			# Also reaper-3d's own, for the same reason as colour: Reaper's OSC surface has no
+			# message for folder structure, and a 32-strip desk with no breaks in it is a wall.
+			# A DELTA, not a level -- see TrackState.folder_depth.
+			if args.size() >= 1:
+				state.set_track_field(idx, &"folder_depth", int(args[0]))
 		"vu":
 			# Meters are written straight onto the cache without a changed signal. At 30Hz per
 			# channel, emitting per update would fan a signal storm out to every one of the
@@ -252,6 +258,9 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	var s := state.send(track_idx, int(p[3]))
 	match p[4]:
 		"name": s.dest_name = str(args[0])
+		# reaper-3d's own again, and the one that makes the patchbay exact rather than
+		# approximate: OSC's `name` cannot tell two tracks called "Verb" apart.
+		"dest": s.dest_track = int(args[0])
 		"volume": s.volume = float(args[0])
 		"pan": s.pan = float(args[0])
 
@@ -293,6 +302,7 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
+		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])
 		if not t.items.is_empty():
 			out.append(["/track/%d/items" % index, _pack_items(t.items)])
 
@@ -314,6 +324,7 @@ static func snapshot(state: MixState) -> Array:
 		for send_index in send_indices:
 			var sd: MixState.SendState = t.sends[send_index]
 			out.append(["/track/%d/send/%d/name" % [index, send_index], [sd.dest_name]])
+			out.append(["/track/%d/send/%d/dest" % [index, send_index], [float(sd.dest_track)]])
 			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
 			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
 

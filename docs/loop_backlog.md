@@ -152,10 +152,33 @@ the count dropped by seventeen while the summary stayed green. Fixed: verify now
 output for `SCRIPT ERROR` and fails the run. This had been true for the whole project and would
 have been true for every future tick.
 
+## GetProjectStructure
+
+Done. Colour, folder structure and send destination indices now come off the bridge on an
+eight-second poll; see architecture.md.
+
+Three findings:
+
+**A level-change rule cuts a bus off from its own children.** The obvious way to draw folder
+breaks is "where the nesting level changes", and it is wrong, because a folder's parent sits at
+the *outer* level -- that is what makes it the parent. It put the VOX bus in with the guitars.
+The rule that works is: break where a track opens a folder, or where the level drops.
+
+**The stand-in project was lying about Reaper's data model.** It had folders with `Kick` as the
+parent, which is legal and is not what a session looks like -- Reaper folders are parent-first
+and the parent is the submix bus. Reordered with `DRUMS` and `VOX` buses at the head of their
+groups. Worth watching for generally: the offline project is the only session anyone can open
+without Reaper running, so anything it models incorrectly is what the feature gets designed
+against.
+
+**Two tests were pinned to incidental demo numbers**, not to what they meant -- a literal track
+count of 12, and "track 1 has items" where track 1 is now a bus that correctly has none. Both
+now assert the intent (guest count *equals host count*; the arrangement is non-empty across the
+project). A test that breaks when the fixture changes shape was testing the fixture.
+
 ### Still open
 
 - Mobile renderer pass for standalone headsets. Re-measure: 3782 tris/reel, ~100 knobs at 1088.
-- Consume `GetProjectStructure` for track colours, folder structure, unambiguous send targets.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
   Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.

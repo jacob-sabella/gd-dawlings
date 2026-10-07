@@ -33,6 +33,27 @@ signal bank_changed()
 class SendState extends RefCounted:
 	var index: int = 0
 	var dest_name: String = ""
+	## The destination's track number, or -1 when only a name is known.
+	##
+	## Both, rather than one, because the two channels disagree about what a send points at.
+	## OSC can only say the destination's NAME, which is ambiguous the moment a project has two
+	## tracks called "Verb" -- and duplicate names are completely normal. The ReaScript bridge
+	## says the index. Whoever draws a cable should prefer the index and fall back to the name,
+	## so the bay is exact when the bridge is loaded and still roughly right when it is not.
+	var dest_track: int = -1
+
+	## The destination, best effort: the index when the bridge supplied one, else resolve the
+	## name against `state`.
+	func resolve(state) -> int:
+		if dest_track > 0:
+			return dest_track
+		if dest_name == "":
+			return -1
+		for index in state.track_indices():
+			if state.track(index).display_name() == dest_name:
+				return index
+		return -1
+
 	var volume: float = 1.0
 	var pan: float = 0.5
 
@@ -93,6 +114,10 @@ class TrackState extends RefCounted:
 	var rec_arm: bool = false
 	var selected: bool = false
 	var colour: Color = Color(0.55, 0.57, 0.6)
+	## Reaper's I_FOLDERDEPTH on this track: 1 opens a folder, 0 stays at the current level, and
+	## a negative number closes that many. It is a DELTA, not a level -- the level is the running
+	## sum over the tracks before it, which is what `MixState.folder_level` works out.
+	var folder_depth: int = 0
 	## Peak 0..1 per channel. Decayed by the meter that draws it, not by Reaper.
 	var vu_l: float = 0.0
 	var vu_r: float = 0.0
@@ -198,6 +223,41 @@ func track(index: int, create: bool = true) -> TrackState:
 	tracks[index] = t
 	track_added.emit(index)
 	return t
+
+
+## How deep in the folder tree a track sits, counting from 0.
+##
+## Reaper stores the DELTA on each track rather than the level, because that is what a .RPP
+## records -- so the level only exists as a running sum, and only in track order. Computed on
+## demand rather than cached: the alternative is a cache invalidated by every structure poll,
+## every bank change and every track insert, which is three chances to show the wrong grouping.
+func folder_level(index: int) -> int:
+	var level := 0
+	for i in track_indices():
+		if i >= index:
+			break
+		level = maxi(level + track(i).folder_depth, 0)
+	return level
+
+
+## True when `index` starts a new group. This is what a console puts a gap at.
+##
+## NOT simply "the level changed", which is the obvious rule and the wrong one. A folder's
+## parent sits at the OUTER level -- that is what makes it the parent -- so a level-change rule
+## cuts between the bus and its own children and leaves the bus lumped in with whatever
+## happened to precede it. On the demo project that put the VOX bus in with the guitars.
+##
+## So: a group starts where a track OPENS a folder (the parent heads its group, the way a track
+## panel draws it) or where the level DROPS back out of one. A rise immediately under a parent
+## is not a break, because the parent already started that group.
+func starts_group(index: int) -> bool:
+	var order := track_indices()
+	var at := order.find(index)
+	if at <= 0:
+		return at == 0
+	if track(index).folder_depth > 0:
+		return true
+	return folder_level(index) < folder_level(order[at - 1])
 
 
 func track_indices() -> Array:

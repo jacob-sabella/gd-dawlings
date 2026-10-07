@@ -90,7 +90,16 @@ end
 local handlers = {}
 
 --- The whole project shape in one call: what reaper-3d builds its racks and patchbay from.
-function handlers.GetProjectStructure()
+--
+-- args[1] == 1 asks for the LIGHT answer: every plugin's name and bypass, but none of its
+-- parameter values. That exists because reaper-3d polls this on a slow clock for the three
+-- things OSC genuinely cannot say -- track colour, folder depth, and a send's destination as an
+-- INDEX -- all of which are one cheap property read each. The parameter sweep is the expensive
+-- part of this handler by a wide margin (32 reads per plugin per track), and OSC already
+-- streams those values continuously, so re-reading them here is duplicated work on the slowest
+-- channel in the system. The full answer is still what a one-off read asks for.
+function handlers.GetProjectStructure(args)
+  local light = (args and args[1] == 1)
   local tracks = {}
   for i = 0, reaper.CountTracks(0) - 1 do
     local tr = reaper.GetTrack(0, i)
@@ -102,13 +111,15 @@ function handlers.GetProjectStructure()
     for f = 0, reaper.TrackFX_GetCount(tr) - 1 do
       local _, fx_name = reaper.TrackFX_GetFXName(tr, f, '')
       local params = {}
-      for p = 0, math.min(reaper.TrackFX_GetNumParams(tr, f), 32) - 1 do
-        local _, p_name = reaper.TrackFX_GetParamName(tr, f, p, '')
-        params[#params + 1] = {
-          index = p,
-          name = p_name,
-          value = reaper.TrackFX_GetParamNormalized(tr, f, p),
-        }
+      if not light then
+        for p = 0, math.min(reaper.TrackFX_GetNumParams(tr, f), 32) - 1 do
+          local _, p_name = reaper.TrackFX_GetParamName(tr, f, p, '')
+          params[#params + 1] = {
+            index = p,
+            name = p_name,
+            value = reaper.TrackFX_GetParamNormalized(tr, f, p),
+          }
+        end
       end
       fx[#fx + 1] = {
         index = f,
@@ -128,9 +139,15 @@ function handlers.GetProjectStructure()
         -- duplicate track names are completely normal. The patchbay prefers this.
         dest_index = math.floor(reaper.GetMediaTrackInfo_Value(dest, 'IP_TRACKNUMBER'))
       end
+      local dest_name = ''
+      if dest then
+        local _, dn = reaper.GetTrackName(dest)
+        dest_name = dn
+      end
       sends[#sends + 1] = {
         index = s,
         dest_track = dest_index,
+        dest_name = dest_name,
         volume = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_VOL'),
         pan = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_PAN'),
       }
@@ -146,7 +163,8 @@ function handlers.GetProjectStructure()
       sends = sends,
     }
   end
-  return {tracks = tracks, tempo = reaper.Master_GetTempo()}
+  return {tracks = tracks, tempo = reaper.Master_GetTempo(),
+          track_count = reaper.CountTracks(0)}
 end
 
 --- The arrangement: where the blocks are. The other thing OSC says nothing whatsoever about.

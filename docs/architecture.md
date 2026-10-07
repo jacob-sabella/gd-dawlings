@@ -230,6 +230,58 @@ across the room without reading anything. The pack grows as a square root, becau
 by area; `TapeDeck.song_fraction()` returns -1 rather than guessing when no backend has said
 how long the project is, and the reels then sit half wound and make no claim.
 
+## What OSC cannot say, and where the answers come from
+
+Three facts about a project exist only in ReaScript, and all three have visible consequences on
+the gear:
+
+| Fact | Why OSC cannot say it | What it changes |
+|---|---|---|
+| **track colour** | no message for it, at all | a colour chip is how you find the kick on 32 identical strips |
+| **folder structure** | no message for it, at all | a 32-strip desk with no breaks is a wall |
+| **a send's destination INDEX** | OSC gives a *name* | two tracks called "Verb" made the patchbay guess |
+
+`ReaperBackend` polls `GetProjectStructure` on an **eight-second** clock against the timeline's
+two, because the two change on completely different schedules: the arrangement moves on every
+drag of every item, while colour, folders and routing change when a person reaches for them. The
+request asks for the **light** form -- plugin names and bypasses but no parameter values -- since
+OSC already streams those continuously and re-reading a thousand of them on the slowest channel
+in the system is pure duplication.
+
+Nothing in that handler writes volume, pan, mute, solo or FX parameters, even though the bridge
+reports some of them. OSC is the authority on those at 30Hz, and painting an eight-second-old
+copy over the top would make every fader stutter backwards once per poll.
+
+All three land on addresses the wire already understands (`/track/N/colour`, `/track/N/folder`,
+`/track/N/send/M/dest`), so they ride the normal replication stream and a guest gets them
+without a second code path. Two of those are reaper-3d's own namespace rather than Reaper's --
+`mix_wire.gd` had defined `colour` in advance for exactly this.
+
+### A send points at two things, and they disagree
+
+`SendState` carries both `dest_name` and `dest_track`, and `resolve()` prefers the index. That
+is not belt-and-braces: with the bridge loaded the bay is *exact*, and without it the bay is
+still roughly right rather than empty. The name is what OSC gives and it is ambiguous the moment
+a project has two tracks called "Verb" -- which is completely normal, and which the old
+name-only lookup resolved silently and wrongly, forever.
+
+### The parent heads its group
+
+Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum
+in track order, which is what `MixState.folder_level` works out.
+
+The console's group breaks are **not** "the level changed", which is the obvious rule and the
+wrong one. A folder's parent sits at the *outer* level -- that is what makes it the parent -- so
+a level-change rule cuts between the bus and its own children and leaves the bus lumped in with
+whatever preceded it. On the demo project that put the VOX bus in with the guitars. The rule is
+instead: a group starts where a track **opens** a folder, or where the level **drops** back out
+of one.
+
+`ConsoleSurface._group_breaks` recomputes this in one pass rather than calling `folder_level`
+per strip, which would make laying out a 90-track desk quadratic. That optimisation is only safe
+while it agrees with the readable definition, so the suite checks the two **against each other**
+rather than checking either alone.
+
 ## Audio: the gear, not the mix
 
 **The mix is not ours to play.** Reaper is already running, through monitors, in the room this

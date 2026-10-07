@@ -38,8 +38,19 @@ const ECHO_GRACE_MSEC := 250
 ## else's edit and load on a project with a few thousand items.
 const TIMELINE_POLL_SECONDS := 2.0
 
+## How often to re-read the project's SHAPE off the bridge.
+##
+## Eight seconds against the timeline's two, because the two change on completely different
+## clocks: the arrangement moves on every drag of every item, while colour, folder structure and
+## routing change when a person reaches for them. This is the slow channel in the system and the
+## answer is the whole project, so the request asks for the LIGHT form -- plugin names and
+## bypasses but no parameter values, which OSC is already streaming continuously.
+const STRUCTURE_POLL_SECONDS := 8.0
+
 var _timeline_due := 0.0
 var _timeline_in_flight := false
+var _structure_due := 0.0
+var _structure_in_flight := false
 
 
 func _ready() -> void:
@@ -123,6 +134,7 @@ func _process(delta: float) -> void:
 	if _bridge:
 		_bridge.poll()
 		_poll_timeline(delta)
+		_poll_structure(delta)
 	if _peer:
 		for m in _peer.poll():
 			_apply(m["address"], m["args"])
@@ -296,6 +308,76 @@ func _on_timeline(result) -> void:
 	# nothing else, so without this a 90-track session is indistinguishable from a 64-track one.
 	if result.has("track_count"):
 		_apply("/project/tracks", [int(result["track_count"])])
+
+
+# --- the project's shape ------------------------------------------------------------------
+
+func _poll_structure(delta: float) -> void:
+	if not _bridge.is_open() or _structure_in_flight:
+		return
+	_structure_due -= delta
+	if _structure_due > 0.0:
+		return
+	_structure_due = STRUCTURE_POLL_SECONDS
+	# 1 == light; see the Lua.
+	_structure_in_flight = _bridge.call_reaper("GetProjectStructure", [1], _on_structure)
+
+
+## The three things OSC cannot say.
+##
+## Colour, folder depth and a send's destination INDEX are each a property Reaper will hand over
+## for the asking and will never volunteer on its control surface. Everything here goes through
+## `_apply` onto addresses the wire already understands, so it rides the normal replication
+## stream and a guest gets all of it without a second code path -- which is exactly what the
+## "colour" case in mix_wire.gd was written in anticipation of.
+##
+## Nothing here touches volume, pan, mute, solo or FX parameters, even though the bridge reports
+## some of them. Those arrive over OSC at 30Hz and are the authority; writing an eight-second-old
+## copy over the top of them would make every fader stutter backwards once per poll.
+func _on_structure(result) -> void:
+	_structure_in_flight = false
+	if result == null or typeof(result) != TYPE_DICTIONARY:
+		return
+
+	var seen := 0
+	for entry in _as_array(result.get("tracks", [])):
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var idx := int(entry.get("index", 0))
+		if idx <= 0:
+			continue
+		seen += 1
+
+		var colour = entry.get("colour", null)
+		if colour is Array and colour.size() >= 3:
+			# Reaper hands back pure black for a track whose colour has never been set, and
+			# black is not a colour -- it is the absence of one, and painting a chip with it
+			# makes an unassigned track look deliberately marked. Left at the default grey.
+			var c := Color(float(colour[0]), float(colour[1]), float(colour[2]))
+			if c.r + c.g + c.b > 0.02:
+				_apply("/track/%d/colour" % idx, [c.r, c.g, c.b])
+
+		if entry.has("folder_depth"):
+			_apply("/track/%d/folder" % idx, [float(entry["folder_depth"])])
+
+		for send in _as_array(entry.get("sends", [])):
+			if typeof(send) != TYPE_DICTIONARY:
+				continue
+			var send_idx := int(send.get("index", -1))
+			if send_idx < 0:
+				continue
+			_apply("/track/%d/send/%d/dest" % [idx, send_idx],
+					[float(int(send.get("dest_track", -1)))])
+			if send.has("dest_name"):
+				_apply("/track/%d/send/%d/name" % [idx, send_idx], [str(send["dest_name"])])
+
+	# Same channel as the timeline's, and for the same reason: OSC reports the BANK, so without
+	# a count from somewhere a 90-track session is indistinguishable from a 64-track one. Two
+	# sources rather than one is deliberate -- whichever of the two polls is running keeps the
+	# bank buttons honest.
+	var count := int(result.get("track_count", seen))
+	if count > 0:
+		_apply("/project/tracks", [count])
 
 
 ## The bridge's Lua encoder cannot tell an empty list from an empty object, so an empty table
