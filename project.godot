@@ -1,0 +1,76 @@
+; reaper-3d — Reaper as a room full of hardware instead of a window full of panels.
+;
+; Reaper is the only source of truth. Nothing here stores a mix; every fader position, meter
+; level and FX parameter in this scene is a READING of a running Reaper, and every grab a
+; participant makes is a WRITE back to it. Close this and the session is unharmed.
+;
+; The session can be a flat screen, a VR studio, or -- the case that shapes the architecture --
+; several people in ONE PHYSICAL ROOM, some looking at monitors and some wearing passthrough
+; headsets, working the same console. See docs/architecture.md before adding a surface, and
+; docs/colocation.md before touching anything spatial.
+
+config_version=5
+
+[application]
+
+config/name="reaper-3d"
+config/description="Reaper DAW rendered as a 3D hardware studio: console, tape deck, FX racks and patchbay, shared between screen and AR participants in the same room."
+run/main_scene="res://scenes/bootstrap.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[autoload]
+
+; Both are inert until something calls start(). An autoload here is not a god object -- it is
+; the answer to "who owns the socket", which must be exactly one thing per process, because two
+; OSC peers bound to one port is a silent packet lottery rather than an error.
+Session="*res://core/session/session.gd"
+Reaper="*res://core/reaper/reaper_link.gd"
+; Observes whatever scene is running, so a capture needs no scene cooperation. Inert
+; unless --shot is passed. See tools/shot.sh.
+Screenshot="*res://tools/screenshot.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/resizable=true
+
+; Vsync on. A 3D studio redrawing free-run would burn a core to draw frames between two
+; consecutive 30Hz OSC meter updates, which is the fastest anything in the scene actually moves.
+window/vsync/vsync_mode=1
+
+[rendering]
+
+; forward_plus for the desktop and tethered-PC-VR case: real-time lights and shadows are most of
+; what makes a rack look like metal in a room rather than a box in a void.
+;
+; The mobile override is NOT cosmetic -- standalone passthrough headsets are the headline
+; hybrid-session client, and forward_plus does not run on them. Keep every material and shader in
+; this project working under BOTH, or the AR half of a hybrid session renders differently from the
+; screen half while both claim to show the same console.
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="mobile"
+anti_aliasing/quality/msaa_3d=2
+
+[xr]
+
+; Enabled at the project level, started at runtime. OpenXR being ON here does not mean a headset
+; is attached: core/xr/xr_bootstrap.gd decides per launch, and a desktop launch with no runtime
+; must stay a working screen session rather than a failed XR one.
+openxr/enabled=true
+shaders/enabled=true
+
+; MUST stay false. With OpenXR enabled and no runtime installed -- which is every desktop launch
+; and every CI run -- Godot otherwise pops a BLOCKING modal alert saying the HMD was not detected,
+; and a windowed launch sits on it forever. That cost an afternoon: the engine printed its startup
+; banner, the OpenXR loader printed five errors, and then nothing, which reads exactly like a hang
+; in project code. The screen half of a hybrid session is not an error case and must never be
+; interrupted to be told that it is.
+openxr/startup_alert=false
+
+[physics]
+
+; Surfaces are grabbed with ray and hand interactors, so the controls need pickable bodies; none
+; of them are simulated. Gravity is zeroed so that a knob accidentally left as a RigidBody falls
+; out of the rack loudly in the editor instead of quietly at a session.
+3d/default_gravity=0.0
