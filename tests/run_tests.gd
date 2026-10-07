@@ -67,6 +67,7 @@ func _ready() -> void:
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
 	_test_every_grab_tab_is_clipped_to_its_own_gear()
+	_test_a_loom_lies_on_the_floor_and_misses_the_furniture()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2770,3 +2771,100 @@ func _test_many_little_boxes_are_one_object() -> void:
 	banked.queue_free()
 	bodies.queue_free()
 	lit_bank.queue_free()
+
+
+func _test_a_loom_lies_on_the_floor_and_misses_the_furniture() -> void:
+	# The looms are the one piece of this room whose shape is entirely a routing problem, and
+	# routing problems fail silently: a cable that goes through the floor renders exactly like
+	# one that does not, from above. Three things are pinned here and each of them was broken
+	# at some point this tick.
+
+	# ONE. The spline's contract, on its own: it passes through the waypoints it was given and
+	# it starts and ends on them rather than a span short. The overshoot BETWEEN them is pinned
+	# further down, on the real geometry, because that is where it was measured and where the
+	# number means something.
+	var route := PackedVector3Array([
+		Vector3(0, 1.20, 0), Vector3(0, 1.12, -0.08),
+		Vector3(-0.35, 0.0, -0.30), Vector3(-1.20, 0.0, -0.30),
+		Vector3(-1.55, 0.18, -0.20), Vector3(-1.60, 0.26, -0.18)])
+	var smoothed := CableSweep.smooth(route, 10)
+	check("the route starts where it was told", smoothed[0].is_equal_approx(route[0]))
+	check("the route ends where it was told",
+			smoothed[smoothed.size() - 1].is_equal_approx(route[route.size() - 1]))
+	for waypoint in route:
+		var nearest := INF
+		for p in smoothed:
+			nearest = minf(nearest, p.distance_to(waypoint))
+		check("the route passes through its waypoints (%.1fmm off)" % (nearest * 1000.0),
+				nearest < 0.002)
+
+	# TWO. Resting on a surface. Above the blend the curve is untouched, below it the curve is
+	# lifted, and it arrives at the level rather than through it.
+	var dipping := PackedVector3Array([
+		Vector3(0, 0.50, 0), Vector3(1, -0.20, 0), Vector3(2, 0.50, 0)])
+	var rested := CableSweep.rest_on(dipping.duplicate(), 0.10, 0.03)
+	check("a point well clear of the floor is left alone", is_equal_approx(rested[0].y, 0.50))
+	check("a point well under the floor is laid on it", is_equal_approx(rested[1].y, 0.10))
+	# C1 at the contact: a clamp would put a corner here, and the whole point of the blend is
+	# that it does not. Sampled either side of the level, the lift has to be continuous.
+	var just_above := CableSweep.rest_on(
+			PackedVector3Array([Vector3(0, 0.1001, 0)]), 0.10, 0.03)[0].y
+	var just_below := CableSweep.rest_on(
+			PackedVector3Array([Vector3(0, 0.0999, 0)]), 0.10, 0.03)[0].y
+	check("the touchdown has no step in it (%.4fmm)" % (absf(just_above - just_below) * 1000.0),
+			absf(just_above - just_below) < 0.0005)
+	check("the touchdown is a curve, not a corner", just_above > 0.1005)
+
+	# THREE. The real looms in the real room.
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	# The looms are measured off the bay, and the bay is as wide as the session has tracks, so
+	# they are not built until it has rebuilt once. Same step as the grab-tab test, same reason.
+	for node in studio.find_children("*", "Node3D", true, false):
+		if node is Surface:
+			(node as Surface)._process(0.0)
+
+	var looms := studio.studio_set.get_children().filter(func(n): return n is GearLoom)
+	check("every machine in the set is wired to the bay", looms.size() == Studio.LOOM_RUNS.size())
+
+	# The crossbar the console's loom went through on its first attempt. Taken from the same
+	# constants the furniture is built from, so moving the bridge moves the test with it.
+	var bar := AABB(Studio.BRIDGE_POS - Studio.BRIDGE_SIZE * 0.5, Studio.BRIDGE_SIZE)
+	bar = bar.grow(-0.002)
+
+	for node in looms:
+		var loom: GearLoom = node
+		var sank := 0.0
+		var rose := 0.0
+		var through := 0
+		for core in GearLoom.CORES:
+			var sp := loom.spine(core)
+			check("%s core %d is a curve, not a line" % [loom.name, core], sp.size() > 20)
+			for p in sp:
+				sank = minf(sank, p.y - loom.floor_y)
+				rose = maxf(rose, p.y - loom.to_point.y)
+				if bar.has_point(p):
+					through += 1
+		# How far the arrival overshoots the gland it is arriving at. This is the number the
+		# centripetal knots bought: with uniform ones the same loom climbed 108mm above its own
+		# entry point and came back down through the face of the bay. 50mm leaves room for the
+		# exit run, which legitimately rises a little on a bay tilted back 18 degrees.
+		check("%s arrives at the bay instead of over it (%.1fmm above)"
+				% [loom.name, rose * 1000.0], rose < 0.050)
+		check("%s does not go through the floor (%.1fmm under)" % [loom.name, -sank * 1000.0],
+				sank > -0.001)
+		check("%s misses the meter bridge (%d samples inside it)" % [loom.name, through],
+				through == 0)
+		if loom.on_floor:
+			# And it does reach the floor. A loom that merely avoided going through it could be
+			# hanging in the air, which is the other way to get this wrong.
+			var touched := false
+			for core in GearLoom.CORES:
+				for p in loom.spine(core):
+					if p.y - loom.floor_y < GearLoom.CORE_RADIUS * 2.0:
+						touched = true
+			check("%s actually lies on the floor" % loom.name, touched)
+
+	studio.queue_free()

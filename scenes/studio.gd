@@ -34,6 +34,12 @@ const TIMELINE_Y := 1.62
 const TIMELINE_Z := -1.02
 const TIMELINE_STAND_TOP := 1.46
 const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
+## The meter bridge's crossbar. Constants rather than numbers in the builder because the console
+## loom has to be routed BEHIND it: the first version of that loom took the short way down and
+## went straight through the bar, which is the sort of thing no amount of reading the code finds
+## and one photograph finds immediately.
+const BRIDGE_POS := Vector3(0, 1.20, -0.35)
+const BRIDGE_SIZE := Vector3(0.70, 0.03, 0.09)
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
 ## detail: it decides whether this participant gets a floor and furniture at all, and a studio
@@ -54,6 +60,34 @@ var rack: RackSurface
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
+
+## Where each machine's loom leaves it, in that machine's own space, and where it lands across
+## the back of the bay. One entry per run: machine, exit point, exit direction, the fraction
+## across the bay's back it arrives at, and the point on the floor its run passes through.
+##
+## The floor points all sit behind the desk rather than in front of it, which is both where real
+## trunking goes and the only place in this room where two metres of cable is not underfoot.
+## Where each machine's loom leaves it, in that machine's own space; where it lands across the
+## back of the bay; and, for the two that take the floor, the point on the floor their run passes
+## through -- and a flag saying which kind it is. The console's does not take the floor: it
+## stands directly under the bay, so its loom is a hanging drop rather than a metre and a half
+## of trunk going the long way round to a destination half a metre above where it started. Its
+## via is the clearance point behind the meter bridge instead.
+const LOOM_RUNS: Array = [
+	# The console's via is level with where it leaves the bay and well behind the crossbar, so
+	# the run goes BACK before it goes down. Dropping first and clearing the bar afterwards is
+	# the shorter cable and it does not fit: the test caught the curve sagging through the top
+	# of the bar fifteen millimetres past the gland.
+	["console", Vector3(0, 0.02, -0.19), Vector3(0, 0.6, -1.0), 0.0,
+			Vector3(0, BRIDGE_POS.y + BRIDGE_SIZE.y * 0.5 + 0.020,
+					BRIDGE_POS.z - BRIDGE_SIZE.z * 0.5 - 0.075), false],
+	["rack", Vector3(0, 0.07, -0.29), Vector3(0, -0.18, -1.0), -0.74,
+			Vector3(-0.92, 0, -1.02), true],
+	["deck", Vector3(0, -0.02, -0.05), Vector3(0, -0.5, -1.0), 0.74,
+			Vector3(0.86, 0, -0.96), true],
+]
+
+var _looms: Array[GearLoom] = []
 
 var _orbit_yaw := 0.0
 var _orbit_pitch := -0.18
@@ -195,9 +229,9 @@ func _build_furniture() -> void:
 
 	var bridge := MeshInstance3D.new()
 	var bridge_mesh := BoxMesh.new()
-	bridge_mesh.size = Vector3(0.70, 0.03, 0.09)
+	bridge_mesh.size = BRIDGE_SIZE
 	bridge.mesh = bridge_mesh
-	bridge.position = Vector3(0, 1.20, -0.35)
+	bridge.position = BRIDGE_POS
 	bridge.material_override = Materials.brushed_metal()
 	studio_set.add_child(bridge)
 
@@ -367,6 +401,53 @@ func _build_surfaces() -> void:
 	deck.rotation_degrees = Vector3(-20, -32, 0)
 	studio_set.add_child(deck)
 	mount.register(deck)
+
+	# After the gear, because a loom is measured off the transforms of the two things it joins.
+	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
+	# across it: a session that gains tracks moves where its own looms land.
+	patchbay.rebuilt.connect(refresh_looms)
+	refresh_looms()
+
+
+# --- looms --------------------------------------------------------------------------------
+
+## The permanent runs from each machine to the back of the patchbay. See hardware/gear_loom.gd
+## for what they are claiming.
+##
+## Skipped for any machine not standing in the virtual set. A surface in SCREEN mode is a panel
+## riding in front of someone's face, and a two-metre cable from a panel in the viewer's head
+## down to the floor of a room they may not even be rendering is worse than no cable: it moves
+## with them, so it reads as the room being dragged around rather than as a loose cable.
+func refresh_looms() -> void:
+	for loom in _looms:
+		if is_instance_valid(loom):
+			loom.queue_free()
+	_looms.clear()
+	if medium == Presentation.Medium.AR or studio_set == null or patchbay == null:
+		return
+	if patchbay.get_parent() != studio_set:
+		return
+	# A bay with no jacks has no width, so every landing fraction resolves to the same point and
+	# the three looms would stack into one. An empty session gets no looms.
+	if patchbay.loom_entry(-1.0).is_equal_approx(patchbay.loom_entry(1.0)):
+		return
+
+	for run in LOOM_RUNS:
+		var machine: Node3D = get(run[0])
+		if machine == null or machine.get_parent() != studio_set:
+			continue
+		var from_at: Vector3 = machine.transform * (run[1] as Vector3)
+		var from_dir: Vector3 = (machine.transform.basis * (run[2] as Vector3)).normalized()
+		var entry: Vector3 = patchbay.loom_entry(run[3])
+		var to_at: Vector3 = patchbay.transform * entry
+		# Into the panel, which is the bay's own -Z however the bay is tilted. Negated because a
+		# loom's axis is the direction it RUNS AWAY along, not the direction it points in.
+		var to_dir: Vector3 = (patchbay.transform.basis * Vector3.BACK).normalized()
+		var loom := GearLoom.create(from_at, from_dir, to_at, to_dir, run[4], hash(run[0]))
+		loom.on_floor = run[5]
+		loom.name = "Loom_%s" % run[0]
+		studio_set.add_child(loom)
+		_looms.append(loom)
 
 
 # --- desktop camera -----------------------------------------------------------------------

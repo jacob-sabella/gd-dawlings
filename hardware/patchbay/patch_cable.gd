@@ -138,69 +138,17 @@ func _spine(a: Vector3, a_axis: Vector3, b: Vector3, b_axis: Vector3) -> PackedV
 	return points
 
 
-## Sweep a tube along the spine using parallel-transport frames.
+## Hand the spine to the shared sweep and dress the result as a patch cable.
 ##
-## The frame is carried forward from the previous segment by the minimal rotation between the
-## two tangents, rather than rebuilt each step from a fixed up vector. The fixed-up version is
-## one line shorter and visibly wrong: where the tangent passes through vertical, the
-## cross-product degenerates and the ring snaps a half-turn. On a hanging cable that happens at
-## the bottom of the sag -- the most visible point on the whole curve.
+## The frame maths lives in CableSweep because the floor looms need exactly the same thing at a
+## different scale. What is specific to a patch cable is only what it is made of.
 func _build_jacket(spine: PackedVector3Array) -> void:
-	var count := spine.size()
-	if count < 2:
+	var mesh := CableSweep.tube(spine, JACKET_RADIUS, RADIAL)
+	if mesh == null:
 		return
-
-	var tangents: Array[Vector3] = []
-	for i in count:
-		var t: Vector3 = spine[mini(i + 1, count - 1)] - spine[maxi(i - 1, 0)]
-		tangents.append(t.normalized() if t.length_squared() > 1e-12 else Vector3.FORWARD)
-
-	var frames: Array[Vector3] = []
-	var normal := tangents[0].cross(Vector3.UP)
-	if normal.length_squared() < 1e-6:
-		normal = tangents[0].cross(Vector3.RIGHT)
-	normal = normal.normalized()
-	frames.append(normal)
-	for i in range(1, count):
-		var rotation := Quaternion(tangents[i - 1], tangents[i])
-		normal = (rotation * normal).normalized()
-		# Re-orthogonalised every step. Without it the carried frame drifts off perpendicular
-		# over 32 segments and the tube tapers into an ellipse.
-		normal = (normal - tangents[i] * normal.dot(tangents[i])).normalized()
-		frames.append(normal)
-
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var length_so_far := 0.0
-	for i in count:
-		if i > 0:
-			length_so_far += spine[i].distance_to(spine[i - 1])
-		var binormal := tangents[i].cross(frames[i]).normalized()
-		for r in RADIAL + 1:
-			var angle := TAU * float(r) / float(RADIAL)
-			var offset := frames[i] * cos(angle) + binormal * sin(angle)
-			st.set_normal(offset)
-			# UVs run along the cable, so a braid or print texture can be added later without
-			# touching this.
-			st.set_uv(Vector2(float(r) / float(RADIAL), length_so_far * 40.0))
-			st.add_vertex(spine[i] + offset * JACKET_RADIUS)
-
-	var ring := RADIAL + 1
-	for i in count - 1:
-		for r in RADIAL:
-			var a := i * ring + r
-			var b := (i + 1) * ring + r
-			st.add_index(a)
-			st.add_index(b)
-			st.add_index(a + 1)
-			st.add_index(a + 1)
-			st.add_index(b)
-			st.add_index(b + 1)
-
-	st.generate_tangents()
 	var jacket := MeshInstance3D.new()
 	jacket.name = "Jacket"
-	jacket.mesh = st.commit()
+	jacket.mesh = mesh
 	jacket.material_override = Materials.cable(colour)
 	# A cable is 4mm across. Without this it disappears from its own shadow map as speckle, and
 	# a patchbay full of shadow acne looks dirty rather than detailed.

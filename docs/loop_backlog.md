@@ -676,3 +676,64 @@ noted in tick N. What IS pinned is the timeline's height and the stand's height 
 constant pair, so moving the panel cannot leave the stand behind.
 
 1020 checks, 0 failed.
+
+## Tick Q -- the room had no wiring in it
+
+**The patchbay was wired to nothing.** The bay draws a cable for every send in the session, and
+for sixteen ticks those were the only cables in the room. The console, the rack and the deck
+stood in the same room as the bay and had no physical relationship to it: the bay's jacks were
+labelled with the names of machines they were visibly not attached to. A patchbay wired to
+nothing is a prop of a patchbay.
+
+So, three looms -- console, rack and deck, each to its own landing across the back of the bay.
+They are the normalling: the permanent run that makes a jack mean a machine, with the per-send
+patches then laid over the top. That is a narrower claim than the patch cables make, and the
+code says so: nothing in the DAW state decides where a loom goes, and the only thing a loom
+asserts is that this machine is wired to the bay, which is true of every machine here.
+
+**The sweep is now shared.** A loom and a patch cable disagree about everything except the hard
+part -- the parallel-transport frame -- so that moved to `hardware/cable_sweep.gd` with the
+commentary, and `PatchCable._build_jacket` is eight lines calling it.
+
+**Three measurements, in the order they were taken.** The first render showed three black
+vertical lines and nothing else, which is what a loom looks like when the route is wrong, the
+colour is wrong and the shape is wrong, all at once.
+
+  * A headless probe of the spines, because the photograph cannot read a number. It said the
+    floor runs dipped 81mm THROUGH the floor and climbed 108mm above the gland they were
+    arriving at. Neither was visible from any angle I had shot.
+  * An ablation on the parameterisation with everything else held still: uniform Catmull-Rom
+    81mm / 108mm, centripetal 39mm / 29mm. So centripetal is worth having and is half a fix,
+    and the comment in `cable_sweep.gd` now says that instead of the "under a millimetre" I had
+    written from memory before measuring. **The first draft of that comment was wrong and the
+    test caught it**, which is the right way round.
+  * The remaining 39mm is not a spline artefact. It is where a slack cable genuinely wants to
+    go, and what stops it is the floor -- so `CableSweep.rest_on` lays a spine on a level it
+    cannot pass through, with a C1 parabola at the contact so the touchdown is a curve rather
+    than the corner a clamp would leave.
+
+**The console's loom is not a floor run.** It stands directly under the bay. A trunk route down
+to the floor and back up would be a longer cable than the one that fits, so it hangs, and its
+via is a clearance point rather than a floor point -- which is the whole reason the via became
+one waypoint with two readings instead of two fields.
+
+**What the test caught that I had already "fixed".** All three looms arrived three centimetres
+INSIDE the meter-bridge crossbar, because the bay's bottom edge is exactly where that bar runs
+and the entry was 24mm up from the bottom edge. Raising it to 68mm fixed the rack and the deck.
+The console still clipped: it was dropping first and clearing the bar afterwards, and the curve
+sagged through the top of the bar fifteen millimetres past the gland. Its via now takes it BACK
+before it goes down. Both of those are corrections to code I had looked at a render of and
+called done.
+
+Four mutations, four catches, each by the assertion that claims to own it: uniform knots ->
+"arrives at the bay instead of over it (110.4mm above)"; no floor contact -> "does not go
+through the floor (39.7mm under)"; entry back at the bottom edge -> three looms inside the
+bridge; via ignored -> the console through the floor.
+
+The bridge is now `BRIDGE_POS` / `BRIDGE_SIZE` so the test and the furniture read the same
+numbers, and moving the bar moves the test with it.
+
+Not done, deliberately: cable flags. Real looms carry a label at each end, and at two metres in
+a dark room it would be four unreadable pixels and a Label3D per loom.
+
+1053 checks, 0 failed.

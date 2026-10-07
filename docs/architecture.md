@@ -585,6 +585,45 @@ collects BOTH ends of every cable in the bay and asserts no two are closer than 
 is wide. It does not know about mults. It would catch any future way of drawing two plugs in
 one hole.
 
+## A cable is a route and a constraint, and they are different statements
+
+Every cable in this room is swept by `hardware/cable_sweep.gd`, and there are two kinds of
+cable that agree on nothing else. A patch cable is 4mm across, spans twenty centimetres and
+ends in a plug. A floor loom is 18mm across, spans two metres and ends in a gland on the back
+of a chassis. What they share is the frame: parallel transport, carried forward by the minimal
+rotation between tangents, because a naive cross-product frame flips where the tangent passes
+vertical -- the bottom of a patch cable's sag, and both ends of a loom's drop.
+
+The looms are what makes the patchbay's labels true. The bay draws a cable per send, which is
+a claim about signal; the loom is the permanent run from each machine to the bay, which is the
+claim that makes a jack labelled RHODES have anything to do with the Rhodes. Before them the
+bay was a prop. They are still scenery in the sense that no DAW state decides where they go,
+and the comment at the top of `gear_loom.gd` says so.
+
+Shaping them turned out to be the interesting part, and it split cleanly in two.
+
+A loom's ROUTE is a list of places the cable has to be: out of the gland, down to the floor,
+along it, up again. That is a Catmull-Rom and not a Bezier, because a Bezier's control points
+are places a curve merely leans towards, and a cable that only leaned towards the floor would
+hover above it. The knots are centripetal -- spaced by the square root of chord length --
+because a loom's spans are wildly unequal, eight centimetres out of a gland then a metre and a
+quarter across the floor, which is the case uniform knots handle worst. Measured on the same
+loom with everything else held still, uniform overshot 108mm above the gland it was arriving
+at; centripetal, 29mm.
+
+The FLOOR is not another waypoint. It is a constraint, and it says something different: not
+where the cable goes but how low it may get on the way. `CableSweep.rest_on` applies it, with a
+parabola tangent to both the free curve and the level so the touchdown is C1. That boundary is
+why the remaining 39mm of dip was left to the floor rather than tuned out of the spline -- 39mm
+is where a slack cable genuinely wants to go, and the reason it does not go there is not the
+maths.
+
+The test that holds all of this (`_test_a_loom_lies_on_the_floor_and_misses_the_furniture`)
+pins the spline's contract, the contact, and the real looms against the meter-bridge crossbar
+they all three ran through on the first attempt. The bridge is a pair of constants the
+furniture and the test both read, so moving the bar moves the test with it.
+
+
 ## Audio: the gear, not the mix
 
 **The mix is not ours to play.** Reaper is already running, through monitors, in the room this

@@ -23,11 +23,20 @@ const ROW_GAP := 0.085
 ## Where the mult strip hangs, measured from the input row. Clear of the meter-bridge crossbar
 ## the bay is bolted to -- the first placement put it halfway through the bar -- and far enough
 ## below the input captions to read as separate hardware hung underneath, which is what it is.
+## How far above the panel's lower edge the permanent looms enter the back of the bay.
+##
+## Not at the bottom, which is where a loom would naturally go, because whatever carries a bay
+## is bolted across the bottom of it -- in this room a meter-bridge crossbar, and the first
+## version of these looms entered at the bottom edge and arrived three centimetres inside it.
+## The bay cannot see the furniture holding it up, so this is a clearance it keeps on principle
+## rather than a number it derived. What checks it is the studio's own test.
+const LOOM_ENTRY_RISE := 0.068
 const MULT_ROW_Y := -0.115
 const MULT_SPACING := 0.008
 
 var _cables: Array[PatchCable] = []
 var _mults: Array[PatchMult] = []
+var _panel_width := 0.0
 var _outputs: Dictionary = {}
 var _inputs: Dictionary = {}
 
@@ -51,6 +60,7 @@ func _rebuild() -> void:
 		return
 
 	var width := indices.size() * JACK_PITCH + 0.04
+	_panel_width = width
 
 	var panel := MeshInstance3D.new()
 	var panel_mesh := BoxMesh.new()
@@ -205,6 +215,17 @@ func _draw_cables() -> void:
 
 
 ## The lower edge of the bay's own panel, which is where a hung mult's straps have to reach.
+## Where a permanent loom enters the back of the bay, at a fraction (-1..1) across it.
+##
+## The bay answers this rather than the room working it out, because the panel is exactly as wide
+## as the session has tracks. A room that assumed a width would hang the glands off the end of a
+## small session's bay and bury them inside a large one's.
+func loom_entry(fraction: float) -> Vector3:
+	var half := maxf(_panel_width * 0.5 - 0.05, 0.0)
+	return Vector3(clampf(fraction, -1.0, 1.0) * half,
+			_panel_bottom_y() + LOOM_ENTRY_RISE, -0.016)
+
+
 func _panel_bottom_y() -> float:
 	return ROW_GAP * 0.5 - (ROW_GAP + 0.075) * 0.5
 
