@@ -34,7 +34,7 @@ func _rebuild() -> void:
 	strips.clear()
 	master = null
 
-	var indices := Reaper.state.track_indices()
+	var indices := DAW.state.track_indices()
 	if indices.is_empty():
 		return
 

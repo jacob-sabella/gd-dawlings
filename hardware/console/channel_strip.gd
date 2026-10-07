@@ -54,25 +54,25 @@ func _ready() -> void:
 
 	_pan = Knob.new()
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
-	_pan.turned.connect(func(v: float): Reaper.set_track_pan(track_index, v))
+	_pan.turned.connect(func(v: float): DAW.set_track_pan(track_index, v))
 	add_child(_pan)
 
 	_rec = PanelButton.new()
 	_rec.led_colour = Color(0.95, 0.25, 0.22)
 	_rec.position = Vector3(0, HEIGHT - 0.077, 0.004)
-	_rec.pressed.connect(func(): Reaper.set_track_rec_arm(track_index, not _state().rec_arm))
+	_rec.pressed.connect(func(): DAW.set_track_rec_arm(track_index, not _state().rec_arm))
 	add_child(_rec)
 
 	_solo = PanelButton.new()
 	_solo.led_colour = Color(0.98, 0.78, 0.2)
 	_solo.position = Vector3(0, HEIGHT - 0.095, 0.004)
-	_solo.pressed.connect(func(): Reaper.set_track_solo(track_index, not _state().solo))
+	_solo.pressed.connect(func(): DAW.set_track_solo(track_index, not _state().solo))
 	add_child(_solo)
 
 	_mute = PanelButton.new()
 	_mute.led_colour = Color(0.35, 0.72, 0.98)
 	_mute.position = Vector3(0, HEIGHT - 0.113, 0.004)
-	_mute.pressed.connect(func(): Reaper.set_track_mute(track_index, not _state().mute))
+	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
 	add_child(_mute)
 
 	_fader = Fader.new()
@@ -88,7 +88,7 @@ func _ready() -> void:
 	_db_label = _make_label(11, Vector3(0, 0.022, 0.001))
 	add_child(_db_label)
 
-	Reaper.state.track_changed.connect(_on_track_changed)
+	DAW.state.track_changed.connect(_on_track_changed)
 	refresh()
 
 
@@ -106,8 +106,8 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 	return l
 
 
-func _state() -> ReaperState.TrackState:
-	return Reaper.state.track(track_index)
+func _state() -> MixState.TrackState:
+	return DAW.state.track(track_index)
 
 
 func _on_track_changed(index: int, _field: StringName) -> void:

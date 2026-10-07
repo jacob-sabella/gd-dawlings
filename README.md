@@ -40,6 +40,26 @@ With no Reaper it comes up on a synthetic 12-track mix with the meters moving, s
 be built, lit and photographed without a DAW in the loop. Right-drag orbits, the wheel zooms,
 WASD walks.
 
+## Other DAWs
+
+Reaper is the first backend, not a hard-coded dependency. Nothing under `hardware/` knows the
+protocol: a fader calls `DAW.set_track_volume(i, v)` on the `DAW` autoload, which holds exactly
+one `DAWBackend`. `ReaperBackend` turns that into OSC; `OfflineBackend` writes it to a cache and
+drives the synthetic mix.
+
+To add one, extend `core/daw/daw_backend.gd`:
+
+- implement the ~20 command verbs (`set_track_volume`, `set_fx_param`, `transport_play`,
+  `create_send`, …) and push incoming state through `MixWire.apply(state, address, args)`;
+- answer `can(capability)` honestly — the patchbay greys out when `ROUTING` is false rather
+  than dropping writes on the floor;
+- override `taper_to_db` / `db_to_taper` if your fader law is not Reaper's, so the dB caption
+  under each fader stays true.
+
+Then hand it to `DAW.use(MyBackend.new(), true, options)` from `scenes/bootstrap.gd`. Surfaces,
+replication and the session layer need no changes — guests speak verbs, not protocols, so a
+guest never learns which backend the host opened.
+
 ## Connecting a real Reaper
 
 Two channels, because one is not enough — see `docs/transport.md` for why.
@@ -56,8 +76,9 @@ Two channels, because one is not enough — see `docs/transport.md` for why.
 
 | Path | What lives there |
 |---|---|
-| `core/reaper/` | OSC codec, UDP peer, the state cache, the ReaScript bridge |
-| `core/session/` | Who is in the room, who may write to Reaper, intent forwarding |
+| `core/daw/` | The DAW-agnostic layer: backend contract, mix state, wire vocabulary, offline mix |
+| `core/reaper/` | The Reaper backend: OSC codec, UDP peer, the ReaScript bridge |
+| `core/session/` | Who is in the room, who may write to the DAW, intent forwarding |
 | `core/presentation/` | Surfaces, and the per-viewer choice of screen / room / set |
 | `core/xr/` | OpenXR startup, and the two-point shared room calibration |
 | `core/input/` | One grab contract for mouse, controller and hand |

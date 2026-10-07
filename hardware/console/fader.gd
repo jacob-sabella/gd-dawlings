@@ -88,7 +88,7 @@ func _apply_from_local_y(local_y: float) -> void:
 	if write_value.is_valid():
 		write_value.call(value)
 	else:
-		Reaper.set_track_volume(track_index, value)
+		DAW.set_track_volume(track_index, value)
 
 
 func _on_value_changed() -> void:

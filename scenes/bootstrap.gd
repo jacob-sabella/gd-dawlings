@@ -36,12 +36,15 @@ func _ready() -> void:
 
 	if args["join"] != "":
 		Session.join(args["join"])
+		# A guest still has a backend: it holds the replicated cache. It just never opens a
+		# link of its own, which is the whole of what "one link per session" means.
+		DAW.use(OfflineBackend.new(), false)
 	elif args["host"]:
 		Session.host()
-		_start_reaper(args)
+		_start_daw(args)
 	else:
 		Session.start_solo()
-		_start_reaper(args)
+		_start_daw(args)
 
 	studio = Studio.new()
 	studio.name = "Studio"
@@ -63,16 +66,21 @@ func _ready() -> void:
 		stage.open()
 
 
-## The link is started BEFORE the studio is built, and the order matters: surfaces build
+## The backend is started BEFORE the studio is built, and the order matters: surfaces build
 ## themselves from whatever is in the state cache, so a studio built first would come up as an
 ## empty room and rebuild a frame later. Cosmetic in a desktop launch and not cosmetic in a
 ## headset, where a frame of empty room at startup is a frame of nothing where the console is.
-func _start_reaper(args: Dictionary) -> void:
+func _start_daw(args: Dictionary) -> void:
 	if args["reaper"]:
-		if Reaper.start_host(args["reaper_host"], args["send_port"], args["listen_port"]):
+		var options := {
+			"host": args["reaper_host"],
+			"send_port": args["send_port"],
+			"listen_port": args["listen_port"],
+		}
+		if DAW.use(ReaperBackend.new(), true, options):
 			return
 		push_warning("bootstrap: could not open the OSC link; falling back to the offline stand-in.")
-	Reaper.populate_offline_demo()
+	DAW.use(OfflineBackend.new())
 
 
 func _parse(argv: PackedStringArray) -> Dictionary:
@@ -158,4 +166,4 @@ func _process(_delta: float) -> void:
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
 	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  right-drag orbit, wheel zoom, WASD walk, tab to move gear" % [
-		role_name, medium_name, Reaper.link_summary(), Reaper.state.tracks.size()]
+		role_name, medium_name, DAW.summary(), DAW.state.tracks.size()]

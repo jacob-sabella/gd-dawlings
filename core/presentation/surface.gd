@@ -3,7 +3,7 @@ extends Node3D
 
 ## A piece of hardware: the console, the tape deck, a rack, the patchbay.
 ##
-## A surface reads ReaperState and builds geometry from it. It is rebuilt when the project's
+## A surface reads MixState and builds geometry from it. It is rebuilt when the project's
 ## SHAPE changes -- a track added, an FX inserted -- and never rebuilt for a VALUE change, which
 ## is the job of the individual controls it spawned. Rebuilding on value change would destroy and
 ## recreate a fader while a hand is holding it.
@@ -37,10 +37,10 @@ var _dirty := true
 func _ready() -> void:
 	if surface_id == &"":
 		surface_id = StringName(name.to_snake_case())
-	var state := Reaper.state
+	var state := DAW.state
 	state.track_added.connect(_on_shape_changed)
 	state.fx_changed.connect(_on_fx_shape_changed)
-	Reaper.connection_changed.connect(_on_connection_changed)
+	DAW.connection_changed.connect(_on_connection_changed)
 	_dirty = true
 
 
@@ -70,7 +70,7 @@ func _on_connection_changed() -> void:
 	mark_dirty()
 
 
-## Build or rebuild geometry from Reaper.state. Override this.
+## Build or rebuild geometry from DAW.state. Override this.
 func _rebuild() -> void:
 	pass
 

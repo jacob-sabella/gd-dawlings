@@ -51,7 +51,7 @@ func _ready() -> void:
 
 	_pan = Knob.new()
 	_pan.position = Vector3(0, height - 0.048, 0.004)
-	_pan.turned.connect(func(v: float): Reaper.set_master_pan(v))
+	_pan.turned.connect(func(v: float): DAW.set_master_pan(v))
 	add_child(_pan)
 
 	var pan_caption := _label(9, Vector3(0, height - 0.068, 0.001))
@@ -59,15 +59,15 @@ func _ready() -> void:
 	add_child(pan_caption)
 
 	_fader = Fader.new()
-	_fader.write_value = func(v: float): Reaper.set_master_volume(v)
+	_fader.write_value = func(v: float): DAW.set_master_volume(v)
 	_fader.position = Vector3(-0.022, 0.040, 0.004)
 	add_child(_fader)
 
 	# Two meters, not one. A mono bus meter cannot show the thing a master meter exists to show:
 	# that the mix has drifted to one side. The channel strips get away with a summed meter
 	# because a single track's balance is already stated by its pan knob.
-	for spec in [[0.012, func() -> float: return Reaper.state.master.vu_l, "L"],
-			[0.030, func() -> float: return Reaper.state.master.vu_r, "R"]]:
+	for spec in [[0.012, func() -> float: return DAW.state.master.vu_l, "L"],
+			[0.030, func() -> float: return DAW.state.master.vu_r, "R"]]:
 		var meter := VUMeter.new()
 		meter.read_level = spec[1]
 		meter.position = Vector3(spec[0], 0.042, 0.002)
@@ -80,7 +80,7 @@ func _ready() -> void:
 	_db_label = _label(12, Vector3(0, 0.020, 0.001))
 	add_child(_db_label)
 
-	Reaper.state.master_changed.connect(func(_field: StringName): refresh())
+	DAW.state.master_changed.connect(func(_field: StringName): refresh())
 	refresh()
 
 
@@ -96,7 +96,7 @@ func _label(font_size: int, pos: Vector3) -> Label3D:
 
 
 func refresh() -> void:
-	var m := Reaper.state.master
+	var m := DAW.state.master
 	_db_label.text = "%+.1f" % m.volume_db if m.volume_db > -150.0 else "-inf"
 	_fader.apply_remote(m.volume)
 	_pan.apply_remote(m.pan)

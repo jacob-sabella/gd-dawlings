@@ -1,9 +1,16 @@
-class_name ReaperState
+class_name MixState
 extends RefCounted
 
 ## The mix, as this process currently believes it to be.
 ##
-## This is a CACHE, never a master copy. Reaper owns the mix; everything here arrived over the
+## DAW-NEUTRAL BY CONSTRUCTION. Nothing in here is a Reaper concept: tracks with a level, a pan,
+## three toggles and a colour; plugins with normalised parameters; sends named by destination;
+## a transport. Every DAW this project could speak to has all of it, and the ones that have more
+## can carry it as additional fields rather than as a second model. The translation from a
+## particular DAW's wire vocabulary into this lives in that DAW's backend and nowhere else --
+## see core/daw/daw_backend.gd.
+##
+## This is a CACHE, never a master copy. The DAW owns the mix; everything here arrived over the
 ## wire and may be stale by a frame. Nothing in the scene may treat a value here as committed:
 ## a fader that has been grabbed shows the hand's position and waits for Reaper to agree.
 ##
@@ -52,7 +59,7 @@ class MasterState extends RefCounted:
 class TrackState extends RefCounted:
 	var index: int = 0
 	var name: String = ""
-	## Reaper's normalised fader taper, 0..1 -- NOT a gain multiplier and NOT dB. Converting it
+	## The DAW's normalised fader position, 0..1 -- NOT a gain multiplier and NOT dB. Converting it
 	## for display is a control's business; storing it converted would lose the round trip.
 	var volume: float = 0.716
 	var volume_db: float = 0.0
@@ -137,16 +144,3 @@ func send(track_index: int, send_index: int, create: bool = true) -> SendState:
 	s.index = send_index
 	t.sends[send_index] = s
 	return s
-
-
-## Reaper's normalised fader position to dB, close enough to its default taper to label a cap
-## that is being dragged. Reaper also sends the true value on TRACK_VOLUME_DB -- prefer that
-## whenever it has arrived, and use this only for a position the user is holding right now.
-static func taper_to_db(v: float) -> float:
-	if v <= 0.0:
-		return -INF
-	return 40.0 * (log(v) / log(10.0))
-
-
-static func db_to_taper(db: float) -> float:
-	return pow(10.0, db / 40.0)

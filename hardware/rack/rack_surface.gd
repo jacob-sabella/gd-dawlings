@@ -26,8 +26,8 @@ func _rebuild() -> void:
 	_clear_built()
 
 	var slots: Array = []
-	for track_index in Reaper.state.track_indices():
-		var t := Reaper.state.track(track_index)
+	for track_index in DAW.state.track_indices():
+		var t := DAW.state.track(track_index)
 		var fx_indices: Array = t.fx.keys()
 		fx_indices.sort()
 		for fx_index in fx_indices:

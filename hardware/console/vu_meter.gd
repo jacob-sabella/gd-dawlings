@@ -67,7 +67,7 @@ func _process(delta: float) -> void:
 	if read_level.is_valid():
 		incoming = read_level.call()
 	else:
-		var t := Reaper.state.track(track_index, false)
+		var t := DAW.state.track(track_index, false)
 		if t != null:
 			incoming = maxf(t.vu_l, t.vu_r)
 

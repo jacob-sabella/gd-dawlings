@@ -1,7 +1,7 @@
 extends Node
 
 ## Autoload `Session`. Who is in the room, what they are each looking through, and who is
-## allowed to write to Reaper.
+## allowed to write to DAW.
 ##
 ## The hard problem this project has that a normal DAW front-end does not: FOUR PEOPLE, ONE
 ## CONSOLE, DIFFERENT EYES. One is at a monitor with a mouse. Two are in passthrough headsets
@@ -11,7 +11,7 @@ extends Node
 ##
 ## Three things are therefore split apart and must stay split:
 ##
-##   AUTHORITY   who may write to Reaper. Exactly one peer: the host. See core/reaper.
+##   AUTHORITY   who may write to DAW. Exactly one peer: the host. See core/reaper.
 ##   PRESENCE    who is here, where their head is, what they are holding. Replicated to all.
 ##   PRESENTATION what each participant sees each surface AS -- a screen panel, a thing standing
 ##               in their actual room, or a thing in a virtual studio. Strictly PER PARTICIPANT
@@ -85,9 +85,10 @@ func join(address: String, port: int = DEFAULT_PORT) -> bool:
 	multiplayer.multiplayer_peer = peer
 	role = Role.GUEST
 	local_peer_id = multiplayer.get_unique_id()
-	# A guest must NOT open its own OSC link. This is the one line that keeps the four-way echo
-	# storm described in core/reaper/reaper_link.gd from ever happening.
-	Reaper.start_guest()
+	# A guest must NOT open a link to the DAW. Its backend holds the replicated cache and
+	# nothing else, and this is the line that keeps the four-way echo storm described in
+	# core/reaper/reaper_backend.gd from ever happening.
+	DAW.use(OfflineBackend.new(), false)
 	role_changed.emit()
 	return true
 
@@ -123,24 +124,27 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 ## A guest's write, forwarded to the host.
 ##
-## Intents carry the OSC address verbatim rather than a hand-rolled enum of actions. That keeps
-## the guest path from drifting behind the host path: anything a control can do locally is
-## already expressible, including FX parameters that nothing in this codebase knows the names of.
-func send_intent(address: String, args: Array) -> void:
+## Intents name a VERB from the DAW vocabulary -- `set_track_volume`, `transport_play` -- and
+## not a wire message. That is what keeps a guest DAW-agnostic: the host may be driving Reaper
+## over OSC and the guest need not contain a single OSC address to take part, which is the same
+## reason the surfaces do not contain one either. See core/daw/daw.gd.
+func send_intent(verb: StringName, args: Array) -> void:
 	if is_authority():
-		Reaper.write(address, args)
+		DAW.apply_intent(verb, args)
 		return
-	_receive_intent.rpc_id(1, address, args)
+	_receive_intent.rpc_id(1, verb, args)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _receive_intent(address: String, args: Array) -> void:
+func _receive_intent(verb: StringName, args: Array) -> void:
 	if not is_authority():
 		return
 	# Trusted-LAN model, stated plainly so nobody mistakes it for a checked one: any peer that
 	# reached this session may move any fader. That is correct for four people in a studio and
-	# wrong for anything exposed beyond it. See docs/architecture.md.
-	Reaper.write(address, args)
+	# wrong for anything exposed beyond it. The verb is still checked against the vocabulary --
+	# see DAW.apply_intent -- because trusting a peer with a fader is not the same as letting it
+	# name any method on an object.
+	DAW.apply_intent(verb, args)
 
 
 # --- state replication --------------------------------------------------------------------
@@ -168,12 +172,12 @@ static func _as_batch(by_address: Dictionary) -> Array:
 
 @rpc("authority", "call_remote", "reliable")
 func _receive_state_durable(batch: Array) -> void:
-	Reaper.apply_replicated(batch)
+	DAW.backend.apply_replicated(batch)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _receive_state_volatile(batch: Array) -> void:
-	Reaper.apply_replicated(batch)
+	DAW.backend.apply_replicated(batch)
 
 
 ## A joining guest gets the whole session at once, reliably, before any delta reaches it.
@@ -184,7 +188,7 @@ func _receive_state_volatile(batch: Array) -> void:
 func _send_snapshot_to(peer_id: int) -> void:
 	if not is_authority() or role == Role.SOLO:
 		return
-	_receive_state_durable.rpc_id(peer_id, Reaper.snapshot())
+	_receive_state_durable.rpc_id(peer_id, DAW.backend.snapshot())
 
 
 # --- presence -----------------------------------------------------------------------------

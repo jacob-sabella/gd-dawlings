@@ -116,8 +116,11 @@ func _test_osc_rejects_short() -> void:
 
 # --- link ---------------------------------------------------------------------------------
 
-func _fresh_link() -> Node:
-	var link = load("res://core/reaper/reaper_link.gd").new()
+## A ReaperBackend on its own, with no socket. Everything these tests exercise -- parsing, the
+## echo guard, the replication split -- happens before a packet would ever leave, so there is
+## nothing to open and nothing to mock.
+func _fresh_link() -> ReaperBackend:
+	var link := ReaperBackend.new()
 	add_child(link)
 	return link
 
@@ -175,7 +178,6 @@ func _test_link_parses_fx_and_sends() -> void:
 ## previous value one frame later and visibly fights the hand holding it.
 func _test_link_ignores_its_own_echo() -> void:
 	var link := _fresh_link()
-	link.mode = 1  # HOST, so write() takes the OSC path and arms the guard.
 	link._apply("/track/1/volume", [0.2])
 	link._echo_guard["/track/1/volume"] = {"v": [0.9], "t": Time.get_ticks_msec()}
 	link._apply("/track/1/volume", [0.9])
@@ -190,8 +192,8 @@ func _test_link_ignores_its_own_echo() -> void:
 
 func _test_taper_roundtrip() -> void:
 	for db in [-24.0, -12.0, -6.0, 0.0, 6.0]:
-		close_to("taper round-trips %.0fdB" % db, ReaperState.taper_to_db(ReaperState.db_to_taper(db)), db, 0.001)
-	check("silence is -inf", ReaperState.taper_to_db(0.0) == -INF)
+		close_to("taper round-trips %.0fdB" % db, DAW.taper_to_db(DAW.backend.db_to_taper(db)), db, 0.001)
+	check("silence is -inf", DAW.taper_to_db(0.0) == -INF)
 
 
 # --- replication --------------------------------------------------------------------------
@@ -200,12 +202,13 @@ func _test_taper_roundtrip() -> void:
 ## is invisible on a loopback test and ruinous on real wifi -- either names arrive late behind a
 ## queue of stale meter readings, or they are dropped and never resent.
 func _test_volatile_classification() -> void:
-	var link = load("res://core/reaper/reaper_link.gd")
+	var link := _fresh_link()
 	for address in ["/track/3/vu", "/track/3/vu/L", "/track/12/vu/R", "/time", "/time/str"]:
-		check("%s is volatile" % address, link._is_volatile(address))
+		check("%s is volatile" % address, link.is_volatile(address))
 	for address in ["/track/3/name", "/track/3/volume", "/track/3/mute",
 			"/track/3/fx/1/fxparam/2/value", "/tempo/raw", "/play"]:
-		check("%s is durable" % address, not link._is_volatile(address))
+		check("%s is durable" % address, not link.is_volatile(address))
+	link.free()
 
 
 ## The buffers are keyed by address so that 30Hz of meter updates collapse into one value per
@@ -213,7 +216,6 @@ func _test_volatile_classification() -> void:
 ## to convey 32 numbers.
 func _test_host_buffers_split_and_dedupe() -> void:
 	var link := _fresh_link()
-	link.mode = 1  # HOST
 	link._apply("/track/1/vu", [0.1])
 	link._apply("/track/1/vu", [0.2])
 	link._apply("/track/1/vu", [0.3])
@@ -233,20 +235,21 @@ func _test_host_buffers_split_and_dedupe() -> void:
 ## the whole multi-user design rests on, and its failure mode is quiet: a missing field does not
 ## error, it just leaves one guest looking at a console that is subtly not the session.
 func _test_snapshot_reconstructs_a_guest() -> void:
-	var host := _fresh_link()
-	host.populate_offline_demo()
+	var host := OfflineBackend.new()
+	add_child(host)
+	host.open()
 	host.set_process(false)
 
 	var guest := _fresh_link()
-	guest.mode = 2  # GUEST
+	guest.is_authority = false
 	guest.apply_replicated(host.snapshot())
 
 	check("guest has every track", guest.state.track_indices() == host.state.track_indices())
 	check("guest got some tracks at all", guest.state.tracks.size() == 12)
 
 	for index in host.state.track_indices():
-		var h: ReaperState.TrackState = host.state.tracks[index]
-		var g: ReaperState.TrackState = guest.state.track(index, false)
+		var h: MixState.TrackState = host.state.tracks[index]
+		var g: MixState.TrackState = guest.state.track(index, false)
 		if g == null:
 			check("guest has track %d" % index, false)
 			continue
@@ -263,7 +266,7 @@ func _test_snapshot_reconstructs_a_guest() -> void:
 		close_to("track %d colour b" % index, g.colour.b, h.colour.b, 0.002)
 		check("track %d fx count" % index, g.fx.size() == h.fx.size())
 		for fx_index in h.fx:
-			var hf: ReaperState.FXState = h.fx[fx_index]
+			var hf: MixState.FXState = h.fx[fx_index]
 			var gf = g.fx.get(fx_index)
 			if gf == null:
 				check("track %d fx %d present" % [index, fx_index], false)
@@ -276,7 +279,7 @@ func _test_snapshot_reconstructs_a_guest() -> void:
 				check("track %d fx %d param %d name" % [index, fx_index, param], gf.param_names.get(param) == hf.param_names[param])
 		check("track %d send count" % index, g.sends.size() == h.sends.size())
 		for send_index in h.sends:
-			var hs: ReaperState.SendState = h.sends[send_index]
+			var hs: MixState.SendState = h.sends[send_index]
 			var gs = g.sends.get(send_index)
 			if gs == null:
 				check("track %d send %d present" % [index, send_index], false)
@@ -443,11 +446,11 @@ func _count_meshes(node: Node) -> int:
 # --- master bus ---------------------------------------------------------------------------
 
 func _test_master_parsing() -> void:
-	var link := Reaper
+	var link := _fresh_link()
 	link._apply("/master/volume", [0.5])
 	close_to("master volume is the taper as sent", link.state.master.volume, 0.5, 0.0001)
 	close_to("master dB is derived from the taper", link.state.master.volume_db,
-			ReaperState.taper_to_db(0.5), 0.0001)
+			DAW.taper_to_db(0.5), 0.0001)
 
 	link._apply("/master/volume/db", [-3.5])
 	close_to("an explicit dB overrides the derived one", link.state.master.volume_db, -3.5, 0.0001)
@@ -465,17 +468,20 @@ func _test_master_parsing() -> void:
 	link._apply("/master/vu", [0.55])
 	close_to("a mono master vu fills both channels (L)", link.state.master.vu_l, 0.55, 0.0001)
 	close_to("a mono master vu fills both channels (R)", link.state.master.vu_r, 0.55, 0.0001)
+	link.free()
 
 
 ## The master is not track zero, and nothing that walks the track list may pick it up -- the one
 ## that forgets puts a MASTER strip on the console twice, or a MASTER jack on the patchbay.
 func _test_master_is_not_a_track() -> void:
-	var before := Reaper.state.tracks.size()
-	Reaper._apply("/master/volume", [0.6])
-	check("a master message creates no track", Reaper.state.tracks.size() == before)
+	var link := _fresh_link()
+	var before := link.state.tracks.size()
+	link._apply("/master/volume", [0.6])
+	check("a master message creates no track", link.state.tracks.size() == before)
 
 	var addresses: Array = []
-	for entry in Reaper.snapshot():
+	for entry in link.snapshot():
 		addresses.append(entry[0])
 	check("the snapshot carries the master volume", "/master/volume" in addresses)
 	check("the snapshot carries the master pan", "/master/pan" in addresses)
+	link.free()

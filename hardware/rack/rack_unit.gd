@@ -84,19 +84,19 @@ func _ready() -> void:
 	_bypass.led_colour = Color(0.4, 0.95, 0.5)
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
 	_bypass.pressed.connect(func():
-		var f := Reaper.state.fx(track_index, fx_index)
-		Reaper.set_fx_enabled(track_index, fx_index, not f.enabled))
+		var f := DAW.state.fx(track_index, fx_index)
+		DAW.set_fx_enabled(track_index, fx_index, not f.enabled))
 	add_child(_bypass)
 
-	Reaper.state.fx_changed.connect(_on_fx_changed)
+	DAW.state.fx_changed.connect(_on_fx_changed)
 	refresh()
 
 
 func refresh() -> void:
-	var f := Reaper.state.fx(track_index, fx_index, false)
+	var f := DAW.state.fx(track_index, fx_index, false)
 	if f == null:
 		return
-	var track := Reaper.state.track(track_index)
+	var track := DAW.state.track(track_index)
 	_name_label.text = "%s   %s" % [track.display_name().to_upper(), f.name]
 	_bypass.lit = f.enabled
 
@@ -111,7 +111,7 @@ func refresh() -> void:
 		var slot := _knobs.size()
 		k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * 0.052, -height() * 0.25, 0.005)
 		var param_index: int = params[slot]
-		k.turned.connect(func(v: float): Reaper.set_fx_param(track_index, fx_index, param_index, v))
+		k.turned.connect(func(v: float): DAW.set_fx_param(track_index, fx_index, param_index, v))
 		add_child(k)
 		_knobs.append(k)
 

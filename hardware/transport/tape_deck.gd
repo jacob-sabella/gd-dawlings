@@ -66,7 +66,7 @@ func _rebuild() -> void:
 	play.led_colour = Color(0.35, 0.95, 0.45)
 	play.position = Vector3(-0.035, -0.075, 0.028)
 	play.scale = Vector3(1.6, 1.6, 1.6)
-	play.pressed.connect(func(): Reaper.transport_play())
+	play.pressed.connect(func(): DAW.transport_play())
 	_adopt(play)
 	_play_lamp = play
 
@@ -74,18 +74,18 @@ func _rebuild() -> void:
 	stop.led_colour = Color(0.8, 0.8, 0.84)
 	stop.position = Vector3(0.0, -0.075, 0.028)
 	stop.scale = Vector3(1.6, 1.6, 1.6)
-	stop.pressed.connect(func(): Reaper.transport_stop())
+	stop.pressed.connect(func(): DAW.transport_stop())
 	_adopt(stop)
 
 	var rec := PanelButton.new()
 	rec.led_colour = Color(0.98, 0.22, 0.2)
 	rec.position = Vector3(0.035, -0.075, 0.028)
 	rec.scale = Vector3(1.6, 1.6, 1.6)
-	rec.pressed.connect(func(): Reaper.transport_record())
+	rec.pressed.connect(func(): DAW.transport_record())
 	_adopt(rec)
 	_rec_lamp = rec
 
-	Reaper.state.transport_changed.connect(_refresh)
+	DAW.state.transport_changed.connect(_refresh)
 	_refresh()
 
 
@@ -133,10 +133,10 @@ func _make_reel(x: float) -> Node3D:
 func _refresh() -> void:
 	if _counter == null:
 		return
-	_counter.text = Reaper.state.position_string
-	_tempo_label.text = "%.1f BPM" % Reaper.state.tempo
-	_play_lamp.lit = Reaper.state.playing
-	_rec_lamp.lit = Reaper.state.recording
+	_counter.text = DAW.state.position_string
+	_tempo_label.text = "%.1f BPM" % DAW.state.tempo
+	_play_lamp.lit = DAW.state.playing
+	_rec_lamp.lit = DAW.state.recording
 
 
 func _process(delta: float) -> void:
@@ -146,7 +146,7 @@ func _process(delta: float) -> void:
 	# Driven by whether Reaper says it is rolling, not by a local animation flag. A deck that
 	# keeps spinning after the DAW stopped is worse than no deck at all -- it is a lie told
 	# peripherally, which is the hardest kind to catch.
-	if Reaper.state.playing:
+	if DAW.state.playing:
 		_spin += delta * 2.4
 	_left_reel.rotation.z = -_spin
 	_right_reel.rotation.z = -_spin

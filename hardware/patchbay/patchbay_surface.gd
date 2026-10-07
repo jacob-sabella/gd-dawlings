@@ -34,7 +34,7 @@ func _rebuild() -> void:
 	_outputs.clear()
 	_inputs.clear()
 
-	var indices := Reaper.state.track_indices()
+	var indices := DAW.state.track_indices()
 	if indices.is_empty():
 		return
 
@@ -50,7 +50,7 @@ func _rebuild() -> void:
 
 	var x := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
 	for index in indices:
-		var t := Reaper.state.track(index)
+		var t := DAW.state.track(index)
 
 		var out_jack := PatchPoint.create(index, PatchPoint.Kind.OUTPUT, t.display_name())
 		out_jack.position = Vector3(x, ROW_GAP, 0.004)
@@ -76,10 +76,10 @@ func _draw_cables() -> void:
 		cable.queue_free()
 	_cables.clear()
 
-	for index in Reaper.state.track_indices():
-		var t := Reaper.state.track(index)
+	for index in DAW.state.track_indices():
+		var t := DAW.state.track(index)
 		for send_index in t.sends:
-			var s: ReaperState.SendState = t.sends[send_index]
+			var s: MixState.SendState = t.sends[send_index]
 			var dest := _index_by_name(s.dest_name)
 			if dest < 0 or not _outputs.has(index) or not _inputs.has(dest):
 				continue
@@ -99,8 +99,8 @@ func _draw_cables() -> void:
 func _index_by_name(track_name: String) -> int:
 	if track_name == "":
 		return -1
-	for index in Reaper.state.track_indices():
-		if Reaper.state.track(index).display_name() == track_name:
+	for index in DAW.state.track_indices():
+		if DAW.state.track(index).display_name() == track_name:
 			return index
 	return -1
 
@@ -113,7 +113,7 @@ func _on_patch_requested(from: PatchPoint, to: PatchPoint) -> void:
 	var dst := to.track_index if from.kind == PatchPoint.Kind.OUTPUT else from.track_index
 	if src == dst:
 		return
-	if not Reaper.create_send(src, dst):
+	if not DAW.create_send(src, dst):
 		# Said out loud, for the reason in the class note.
 		push_warning("Patchbay: cannot create %d -> %d. The ReaScript bridge is not loaded in Reaper, and OSC has no message for making a send." % [src, dst])
 		return

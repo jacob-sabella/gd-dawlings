@@ -20,11 +20,13 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
-; Both are inert until something calls start(). An autoload here is not a god object -- it is
-; the answer to "who owns the socket", which must be exactly one thing per process, because two
-; OSC peers bound to one port is a silent packet lottery rather than an error.
+; Both are inert until something asks. An autoload here is not a god object -- it is the answer
+; to "who owns the socket", which must be exactly one thing per process, because two peers bound
+; to one port is a silent packet lottery rather than an error.
+;
+; Session first: DAW asks it who the authority is while installing its first backend.
 Session="*res://core/session/session.gd"
-Reaper="*res://core/reaper/reaper_link.gd"
+DAW="*res://core/daw/daw.gd"
 ; Observes whatever scene is running, so a capture needs no scene cooperation. Inert
 ; unless --shot is passed. See tools/shot.sh.
 Screenshot="*res://tools/screenshot.gd"
