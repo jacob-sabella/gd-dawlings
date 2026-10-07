@@ -202,6 +202,10 @@ func _build_gland(at: Vector3, axis: Vector3, label: String) -> void:
 	gland.transform = Transform3D(Basis(side, axis, side.cross(axis).normalized()),
 			at + axis * (GLAND_LENGTH * 0.5 - 0.004))
 	gland.material_override = Materials.brushed_metal()
+	# Off, like the rest of the loom. It was left on by oversight and showed up as six extra
+	# shadow-pass draws in the budget: the only part of a cable that cast a shadow was the
+	# 30mm collar at each end, which is both a cost and a lie about where the cable is.
+	gland.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(gland)
 
 	var band := MeshInstance3D.new()

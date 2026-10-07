@@ -1676,6 +1676,51 @@ func _test_the_studio_fits_in_a_frame() -> void:
 			not small.can(DAWBackend.Capability.TRACK_BANKING))
 	small.free()
 
+	# --- the room is a fixed cost ------------------------------------------------------------
+	#
+	# Everything above is about what a TRACK costs. This is about what the room costs, which
+	# should be nothing per track: there are three looms because there are three machines, and
+	# three lamps because someone put three lamps in. The regression to catch is the plausible
+	# one -- a loom per send, a lamp per strip -- which would not look wrong in a screenshot of
+	# thirteen tracks and would be a thousand meshes at ninety.
+	var scenery := func(tracks: int) -> Array:
+		var backend := OfflineBackend.new()
+		backend.state = MixState.new()
+		backend.track_count = tracks
+		DAW.use(backend)
+		var room := Studio.new()
+		room.medium = Presentation.Medium.SCREEN
+		add_child(room)
+		for node in room.find_children("*", "Node3D", true, false):
+			if node is Surface:
+				(node as Surface)._process(0.0)
+		var dressing := room.studio_set.get_children().filter(
+				func(n): return n is GearLoom or n.is_in_group(&"lamp_stand"))
+		var meshes := 0
+		var casting := 0
+		for item in dressing:
+			for mesh in (item as Node3D).find_children("*", "MeshInstance3D", true, false):
+				meshes += 1
+				if (mesh as MeshInstance3D).cast_shadow != \
+						GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+					casting += 1
+		var counted := [dressing.size(), meshes, casting]
+		room.queue_free()
+		return counted
+
+	var thin: Array = scenery.call(13)
+	var fat: Array = scenery.call(64)
+	check("the room has the pieces it was told to have (%d)" % thin[0],
+			thin[0] == Studio.LOOM_RUNS.size() + Studio.PRACTICALS.size())
+	check("the room costs the same at 64 tracks as at 13 (%d vs %d meshes)" % [thin[1], fat[1]],
+			thin == fat)
+	# The looms were drawn into the shadow map by one 30mm collar at each end, left casting by
+	# oversight: twelve draw calls for the shadow of the one part of a cable that is not the
+	# cable. Measured at 90 tracks wide, 976 draws before and 964 after.
+	var lamp_meshes := Studio.PRACTICALS.size() * 4
+	check("nothing on a loom casts a shadow (%d casters, %d lamp parts)"
+			% [thin[2], lamp_meshes], thin[2] <= lamp_meshes)
+
 
 func _test_scrolling_the_timeline_does_not_rebuild_it() -> void:
 	# THE REGRESSION THIS EXISTS FOR. Dragging the overview scrubber called mark_dirty(), which

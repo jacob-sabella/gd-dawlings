@@ -373,6 +373,25 @@ of a two-surface part is a handful of new materials in frame, and the 180 object
 were already sharing materials with each other, so there was never a `draws` win available
 here. `objects` nearly halves and the frame drops a quarter, which is the win that was.
 
+Those figures are from the tick that made them and are not what the room costs now, which is
+worth saying because for five ticks afterwards they were quoted as if they were. Re-measured
+from scratch, 90 tracks wide: **964 draws, 1,359 objects, 0.99ms**. The drift was not the
+instancing coming undone; it was five ticks of things being added, which is what adding things
+costs. The mult, the rack rule, the tape path, the timeline stand, then three looms and three
+lamps.
+
+The last two of those were measured against their own baseline rather than against the number
+above, by building the previous commit in a worktree and running the same tool: 899 -> 964
+draws for three looms and three lamp stands, +65. Twelve of those sixty-five were a mistake --
+the strain-relief collars at the ends of each loom had been left casting shadows while the
+cable itself did not, so the only part of a cable in the shadow map was the one part that is
+not the cable. Predicted from the counter, confirmed by re-running: 976 to 964.
+
+What is pinned, in `_test_the_studio_fits_in_a_frame`, is not a draw count -- a number that
+only a benchmark can produce does not belong in a unit test. It is the SHAPE: the room's
+dressing costs the same at 64 tracks as at 13, because there are three looms because there
+are three machines. A loom per send would not look wrong in a screenshot of thirteen tracks.
+
 The cap is still a node even when banked -- an empty one -- because the slide emitter parents
 to it so the sound comes from where the cap is, and a bank slot is a row in a buffer with
 nowhere to hang a speaker.

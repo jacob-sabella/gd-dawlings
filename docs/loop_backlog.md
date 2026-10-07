@@ -784,3 +784,38 @@ side of its lamp -> three failures. The second one matters because a count check
 pass a fixture that renders in the wrong place.
 
 1070 checks, 0 failed.
+
+## Tick S -- the budget figure in the docs was five ticks stale
+
+Two ticks of scenery went in without re-measuring anything, and the architecture doc still
+quoted 830 draws / 1,225 objects from tick K as if it were current. So: measure.
+
+**90 tracks wide, now: 964 draws, 1,359 objects, 0.99ms.** Against 830/1,225 that looks like a
+sixteen percent regression and it is not one -- the baseline was simply old. Five ticks of
+additions sit between them (the mult, the rack rule, the tape path, the timeline stand, then
+the looms and lamps), and adding things costs something.
+
+**The useful number needed a real baseline, so I built one.** `git worktree` at the pre-tick-Q
+commit, same tool, same two poses: 899 draws / 1,294 objects before, 964 / 1,359 after. Three
+looms and three lamp stands for +65 draws and +65 objects, with frame time flat (1.03 -> 0.99,
+which is noise). That is a number I can defend; "+134 against a figure from last week" is not.
+
+**Twelve of the sixty-five were a mistake.** Every mesh on a loom has `cast_shadow` off except
+the strain-relief collars, which I had simply not set -- so the only part of a cable in the
+shadow map was the 30mm collar at each end, six of them, two passes each. Predicted from the
+counter before changing anything, then confirmed: 976 -> 964.
+
+**One thing measured and then NOT done.** The loom cores are swept at eight segments per span;
+dropping to four saves 3,072 primitives at 90 tracks, which is 3.6% of the fitted pose. Left at
+eight. The saving is small, the cost is faceting on the one curve anybody looks at -- where the
+cable flattens into the floor -- and frame time did not move, so primitives are not what is
+binding here. Writing down that the ablation was run and rejected is the point; otherwise it
+gets re-run in three ticks' time.
+
+The new test pins the SHAPE, not the count. A draw count belongs in a benchmark, not a unit
+test. What a unit test can say is that the room's dressing costs the same at 64 tracks as at
+13 -- three looms because three machines, not one per send. Two mutations: a loom count that
+scales with the session -> "20 vs 29 meshes"; the collars casting again -> "18 casters, 12
+lamp parts".
+
+1073 checks, 0 failed.
