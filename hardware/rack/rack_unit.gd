@@ -17,6 +17,7 @@ const RACK_WIDTH := 0.483
 const U := 0.0445
 const UNITS_TALL := 2
 const MAX_KNOBS := 8
+const MESH_PATH := "res://assets/hardware/rack_panel.glb"
 
 var track_index: int = 0
 var fx_index: int = 0
@@ -38,8 +39,10 @@ func height() -> float:
 	return U * UNITS_TALL
 
 
-func _ready() -> void:
-	var h := height()
+## The pre-Blender faceplate: a slab, two raised ear plates and four pegs. Kept so a missing
+## asset is a plainer rack rather than knobs floating in mid air.
+func _stand_in(h: float) -> Node3D:
+	var holder := Node3D.new()
 
 	var face := MeshInstance3D.new()
 	var face_mesh := BoxMesh.new()
@@ -47,10 +50,8 @@ func _ready() -> void:
 	face.mesh = face_mesh
 	face.position = Vector3(0, 0, -0.006)
 	face.material_override = Materials.chassis()
-	add_child(face)
+	holder.add_child(face)
 
-	# Rack ears with screw holes, at the two standard mounting positions. The detail is cheap and
-	# it is most of what makes a box read as rack gear rather than as a box.
 	for side in [-1.0, 1.0]:
 		var ear := MeshInstance3D.new()
 		var ear_mesh := BoxMesh.new()
@@ -58,7 +59,7 @@ func _ready() -> void:
 		ear.mesh = ear_mesh
 		ear.position = Vector3(side * (RACK_WIDTH * 0.5 - 0.009), 0, 0.002)
 		ear.material_override = Materials.brushed_metal()
-		add_child(ear)
+		holder.add_child(ear)
 		for sy in [-1.0, 1.0]:
 			var screw := MeshInstance3D.new()
 			var screw_mesh := CylinderMesh.new()
@@ -70,7 +71,28 @@ func _ready() -> void:
 			screw.rotation_degrees = Vector3(90, 0, 0)
 			screw.position = Vector3(side * (RACK_WIDTH * 0.5 - 0.009), sy * U * 0.5, 0.005)
 			screw.material_override = Materials.cap_plastic(Color(0.3, 0.31, 0.33))
-			add_child(screw)
+			holder.add_child(screw)
+	return holder
+
+
+func _ready() -> void:
+	var h := height()
+
+	# The faceplate, ears and mounting hardware as one authored part. The ears are not bolted
+	# on: the ends of a rack panel ARE its ears, with oblong holes through them, which is what
+	# the four raised plates this used to draw were getting wrong.
+	var panel := Part.build(
+		MESH_PATH,
+		Materials.chassis(),
+		{"screw": Materials.brushed_metal()},
+	)
+	if panel != null:
+		# Modelled standing, so no correcting rotation -- only the shift that puts its front
+		# face on z = 0, where every knob and label on this unit was laid out against.
+		panel.position = Vector3(0, 0, -0.006)
+		add_child(panel)
+	else:
+		add_child(_stand_in(h))
 
 	_name_label = Label3D.new()
 	_name_label.font_size = 52

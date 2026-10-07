@@ -214,8 +214,8 @@ geometry cannot:
   missing or unimported asset is a plainer desk rather than a desk with invisible controls on
   it. `_test_knob_is_the_moulded_part` is what notices the desk is running on stand-ins.
 
-Authored so far: the knob, the channel fader cap, the tape reel flange, and the patchbay
-jack socket.
+Authored so far: the knob, the channel fader cap, the tape reel flange, the patchbay jack
+socket, and the 2U rack faceplate.
 
 The reel is where the line between the two kinds of geometry is sharpest, and worth reading as
 the example. The flange is the same object in every session, so it is authored -- including its

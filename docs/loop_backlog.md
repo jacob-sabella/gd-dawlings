@@ -117,9 +117,16 @@ readout the transport did not have.
 Done since: the jack socket. The plug shells were already made properly during the cable work
 and did not need redoing -- the socket was the half that was letting them down.
 
-Next candidates, in order of how much screen they own:
-- Chamfered chassis edges and 19" rack ears.
-- The meter bridge arm, which is currently two posts and a shelf.
+Done since: the 2U rack faceplate, which was filed as "rack ears" and was the wrong unit of
+work -- the ears are not a separate part, they are the ends of the panel with holes in them.
+Asking "which half does not depend on the session" gave the right answer again: a rack is as
+tall as the session has plugins, but a 2U panel is 19 inches by 2U in every session there has
+ever been.
+
+That exhausts the parts worth authoring for now. The remaining geometry is either procedural
+by nature (the console, the rack frame, the timeline) or furniture that nobody looks at. The
+meter bridge arm is the one leftover, and it is two posts and a shelf because that is what it
+should be.
 
 Still outstanding from before any of this: the mobile renderer pass (3782 tris per reel is
 fine on desktop and worth re-measuring on a standalone headset), audio, consuming
