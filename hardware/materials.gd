@@ -93,10 +93,57 @@ static func legend() -> StandardMaterial3D:
 		return m)
 
 
+## Cable jacket: rubber, not plastic and not paint.
+##
+## The clearcoat is what sells it. Bare roughness gives a matte noodle that reads as a drawn
+## line; a thin glossy layer over a rough base is exactly what a rubber jacket does under
+## studio practicals -- a soft specular streak runs the length of the cable and follows its
+## curve, which is most of how the eye reads a cable as round and hanging.
 static func cable(colour: Color) -> StandardMaterial3D:
 	var key := "cable_%s" % colour.to_html(false)
 	return _cached(key, func():
 		var m := StandardMaterial3D.new()
-		m.albedo_color = colour
+		# Darkened and desaturated off the track colour. A cable in full UI-chroma looks like a
+		# graph edge; real jacket dye is muted, and the chip on the channel strip is already
+		# carrying the saturated version of this colour.
+		m.albedo_color = colour.darkened(0.42).lerp(Color(0.1, 0.1, 0.11), 0.22)
+		m.roughness = 0.44
+		m.metallic = 0.0
+		m.clearcoat_enabled = true
+		m.clearcoat = 0.55
+		m.clearcoat_roughness = 0.22
+		return m)
+
+
+## Plug barrel and tip. Nickel rather than chrome -- a mirror-bright plug picks up the whole
+## room and reads as a chrome bead rather than as hardware.
+static func plug_metal() -> StandardMaterial3D:
+	return _cached("plug_metal", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.70, 0.71, 0.73)
+		# Nickel, not chrome. A mirror-smooth metal in a dim control room has nothing to
+		# reflect and renders near-black, which is how the plugs vanished the first time;
+		# roughing it up lets the key light make a highlight instead.
+		m.roughness = 0.28
+		m.metallic = 0.88
+		return m)
+
+
+## The insulating rings that separate tip from sleeve on a TS plug. Two thin dark bands, and
+## they are the detail that makes a plug a PLUG rather than a metal pin.
+static func plug_insulator() -> StandardMaterial3D:
+	return _cached("plug_insulator", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.035, 0.035, 0.04)
 		m.roughness = 0.55
+		return m)
+
+
+## Strain-relief boot behind the plug: same dye as the jacket, softer and a shade darker.
+static func cable_boot(colour: Color) -> StandardMaterial3D:
+	var key := "boot_%s" % colour.to_html(false)
+	return _cached(key, func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = colour.darkened(0.45).lerp(Color(0.08, 0.08, 0.09), 0.15)
+		m.roughness = 0.72
 		return m)

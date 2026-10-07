@@ -44,6 +44,16 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Presentation switching.** `SurfaceMount.set_mode()` works; no UI or binding calls it, so
   moving a surface between screen and room is currently a code change.
 
+## Parked
+
+- **Multiplayer.** Not needed for this round (decided 2026-10-07). The replication path works
+  end to end -- two processes, host and guest, durable state reliable and meters unreliable --
+  and it stays in the tree rather than being torn out, because taking it back out and putting
+  it back later costs more than leaving it. Nothing further is invested in it: no avatars, no
+  discovery, no delta compression. The constraint it still imposes on new code is the one worth
+  keeping: a control change goes through `Session.send_intent()` rather than straight at
+  `Reaper`, so that whoever owns the link is a question the surfaces never have to ask.
+
 ## Not started
 
 - **Arrange timeline.** The one surface that is explicitly *not* hardware — a long flat thing
@@ -51,17 +61,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Master section** on the console: master fader, monitor level, meters.
 - **Track banking.** Fine up to 64 tracks; beyond that the bank has to scroll, and a strip must
   never change which track it means while a hand is on its fader.
-- **Participant avatars.** Head poses are replicated and nothing draws them. Seeing where
-  someone is looking is most of the value of being in a room together.
-- **Peer discovery.** `--join <address>` only. mDNS would remove the last typed IP.
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
 - **Audio.** The studio is silent. Reaper's output does not come through this process at all.
 
 ## Known rough edges
-
-- Replication is a full value per changed address; no delta compression. Fine for 64 tracks on
-  a LAN, untested beyond it.
 
 - Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.

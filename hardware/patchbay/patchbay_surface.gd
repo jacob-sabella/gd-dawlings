@@ -85,7 +85,10 @@ func _draw_cables() -> void:
 				continue
 			var from_jack: PatchPoint = _outputs[index]
 			var to_jack: PatchPoint = _inputs[dest]
-			var cable := PatchCable.create(from_jack.global_position, to_jack.global_position, t.colour)
+			# Seeded from the pair, so a cable keeps its own slack and bow across rebuilds and
+			# two sends landing on the same return do not draw as one thick line.
+			var cable := PatchCable.create(from_jack.global_transform, to_jack.global_transform,
+					t.colour, hash(Vector2i(index, dest)))
 			_adopt(cable)
 			_cables.append(cable)
 
