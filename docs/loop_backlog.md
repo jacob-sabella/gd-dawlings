@@ -637,3 +637,42 @@ which a plain subtraction reads as the tape snapping back through half a turn. S
 measuring rather than about the code.
 
 999 checks, 0 failed.
+
+### Tick P -- the wide shot, which is the only one that shows what is missing
+
+Four close reviews in a row, then the framing none of them could substitute for: the whole
+room at 2.6m. Two findings, and both are of a kind a close-up cannot produce, because both are
+about what is NOT in the frame when you stand close.
+
+**A regression I shipped last tick.** There was a small object floating against the right-hand
+wall, a metre from anything. It is the tape deck's grab tab. A tab is placed from its
+surface's content box ONCE, when the surface says it has rebuilt -- and the tape runs I added
+in tick O are unit-length boxes that a transform shrinks to size, with the two outer ones left
+unlaid until the first frame. `rebuilt` fires before that frame. So the handle measured a deck
+with two one-metre planks lying across it and clipped itself to the edge of that, 413mm out.
+Fixed by laying the runs at build time. It had been there for one tick, through a full suite
+run, a close-up of the deck and a mutation campaign, because it is outside every close-up.
+
+The test for it is the general statement rather than the specific bug: every grab tab in the
+built studio must sit just outside its own surface's content box and at the middle of it. It
+does not know what a tape run is. Getting it to BITE took a second try, and the first failure
+is the more useful half: the test built the studio and measured without stepping a frame, so
+it compared the handle against the same wrong box the handle had been placed from, and passed
+the bug cleanly. A test that reads its expectation from the same stale state as the code is
+the same mistake as an expectation that calls the function under test. Stepping one frame
+first is what makes it an expectation. Mutation now fails at "413.0mm out".
+
+**The timeline was hanging in the air.** The rack has a plinth, the deck a trolley, the bay a
+bridge, the console its own carcass -- and then a metre of lit panel at head height with
+nothing holding it. Invisible in a close-up of the timeline, where you are looking at the
+lanes. Obvious the moment the room is in frame: it is the one object in the room that is
+software. Given two legs, two feet and a crossbar, deliberately the same vocabulary as the
+patchbay bridge rather than a new idea -- a room furnished out of three kinds of part looks
+like a room, and one furnished out of six looks like a kit.
+
+No test for the stand, on purpose. Its correctness is "does it read as supported", which only
+a photograph answers; inventing an assertion for it would be asserting my taste, the same trap
+noted in tick N. What IS pinned is the timeline's height and the stand's height as one
+constant pair, so moving the panel cannot leave the stand behind.
+
+1020 checks, 0 failed.

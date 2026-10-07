@@ -66,6 +66,7 @@ func _ready() -> void:
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
+	_test_every_grab_tab_is_clipped_to_its_own_gear()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -2222,6 +2223,62 @@ func _test_the_tape_leaves_the_pack_where_the_pack_is() -> void:
 				off_supply.x > -TapeDeck.REEL_SPACING * 0.5 \
 				and onto_takeup.x < TapeDeck.REEL_SPACING * 0.5)
 	deck.queue_free()
+
+
+func _test_every_grab_tab_is_clipped_to_its_own_gear() -> void:
+	# A grab tab is placed from the surface's content box, ONCE, when the surface says it has
+	# rebuilt. So anything that is the wrong size at that instant parks the tab somewhere it
+	# does not belong -- and nothing complains, because the tab is correct relative to a box
+	# that no longer exists.
+	#
+	# That is not hypothetical. The tape path's runs are unit-length boxes that a transform
+	# shrinks to size, and the two outer runs were left unlaid until the first frame. `rebuilt`
+	# fires before that frame, so the handle measured a deck with two one-metre planks across
+	# it and ended up floating a foot to its right, attached to nothing. Found in a wide shot
+	# of the room; invisible in every close-up, because it is outside every close-up.
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+
+	# Stepped a frame first, and this is the whole point of the test rather than setup. The
+	# handle is placed during the rebuild; anything a surface settles AFTER that -- the tape
+	# runs are laid in the same frame, just later -- is a box the handle never saw. Measuring
+	# without stepping compares the handle against the same wrong box it was placed from, and
+	# the first version of this test passed the bug for exactly that reason.
+	for node in studio.find_children("*", "Node3D", true, false):
+		if node is Surface:
+			(node as Surface)._process(0.0)
+
+	var handles := studio.find_children("*", "Node3D", true, false).filter(
+			func(n): return n is SurfaceHandle)
+	check("the studio hangs a tab on every surface", handles.size() >= 5)
+
+	for node in handles:
+		var handle: SurfaceHandle = node
+		var surface := handle.surface
+		check("a tab knows what it is clipped to", surface != null)
+		if surface == null:
+			continue
+		var bounds := surface.content_aabb()
+		if bounds.size.x <= 0.0:
+			continue
+		var edge := bounds.end.x
+		var over := handle.position.x - edge
+		# Outside the gear, because a tab buried in a fader bank cannot be aimed at. Loose at
+		# the bottom end by a few millimetres: a surface whose content moves after it is built
+		# -- a playhead, a tape run -- grows its own box slightly under a tab already placed.
+		check("%s's tab is not buried in it (%.1fmm past the edge)" % [surface.name, over * 1000.0],
+				over > -0.006)
+		# And ON it. The bug this exists for put the tape deck's tab 388mm past the edge of a
+		# 474mm machine, which no margin explains.
+		check("%s's tab is clipped to the edge, not floating beside it (%.1fmm out)"
+				% [surface.name, over * 1000.0], over < 0.060)
+		# At mid height, which is the framing constraint SurfaceHandle.reposition documents.
+		check("%s's tab sits at the middle of it" % surface.name,
+				absf(handle.position.y - bounds.get_center().y) < 0.020)
+
+	studio.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:

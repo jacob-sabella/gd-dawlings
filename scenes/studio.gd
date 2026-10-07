@@ -27,6 +27,13 @@ const FLOOR_SIZE := 9.0
 const ROOM_WIDTH := 6.4
 const ROOM_DEPTH := 5.0
 const WALL_HEIGHT := 2.8
+## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
+## is why it is a constant rather than a number in two places: move the timeline and this has
+## to follow or the panel floats again, one centimetre higher.
+const TIMELINE_Y := 1.62
+const TIMELINE_Z := -1.02
+const TIMELINE_STAND_TOP := 1.46
+const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
 ## detail: it decides whether this participant gets a floor and furniture at all, and a studio
@@ -227,6 +234,43 @@ func _build_furniture() -> void:
 			post.material_override = Materials.brushed_metal()
 			studio_set.add_child(post)
 
+	# A stand under the timeline, which until now hung in the air.
+	#
+	# It is the only thing in the room that did. The rack has a plinth, the deck a trolley, the
+	# bay a bridge, the console its own carcass -- and then a metre of lit panel floating at
+	# head height with nothing holding it. In a close-up that reads as a screen. In a wide shot
+	# of the room it reads as the one object that is software, which is the single thing this
+	# project is trying not to be.
+	#
+	# Two legs and a crossbar, deliberately the same vocabulary as the patchbay bridge rather
+	# than a new idea: a room furnished out of three kinds of part looks like a room, and one
+	# furnished out of six looks like a kit.
+	for side in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var leg_mesh := BoxMesh.new()
+		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP, 0.05)
+		leg.mesh = leg_mesh
+		leg.position = Vector3(side * 0.36, TIMELINE_STAND_TOP * 0.5, TIMELINE_STAND_Z)
+		leg.material_override = Materials.chassis()
+		studio_set.add_child(leg)
+
+		# A foot, because a 35mm post standing on a floor is a post that fell over a moment ago.
+		var foot := MeshInstance3D.new()
+		var foot_mesh := BoxMesh.new()
+		foot_mesh.size = Vector3(0.10, 0.022, 0.22)
+		foot.mesh = foot_mesh
+		foot.position = Vector3(side * 0.36, 0.011, TIMELINE_STAND_Z)
+		foot.material_override = Materials.chassis()
+		studio_set.add_child(foot)
+
+	var crossbar := MeshInstance3D.new()
+	var crossbar_mesh := BoxMesh.new()
+	crossbar_mesh.size = Vector3(0.79, 0.028, 0.09)
+	crossbar.mesh = crossbar_mesh
+	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.014, TIMELINE_STAND_Z)
+	crossbar.material_override = Materials.brushed_metal()
+	studio_set.add_child(crossbar)
+
 
 func _build_anchors() -> void:
 	# The head and the hands differ by medium; everything downstream of them does not. That is
@@ -313,7 +357,7 @@ func _build_surfaces() -> void:
 	# it is written anyway so that choosing ROOM does not drop it at the origin.
 	timeline = TimelineSurface.new()
 	timeline.name = "Timeline"
-	timeline.position = Vector3(0, 1.62, -1.02)
+	timeline.position = Vector3(0, TIMELINE_Y, TIMELINE_Z)
 	studio_set.add_child(timeline)
 	mount.register(timeline)
 

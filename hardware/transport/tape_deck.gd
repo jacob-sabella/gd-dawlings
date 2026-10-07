@@ -270,6 +270,12 @@ func _build_tape_path() -> void:
 		_adopt(run)
 		_tape_runs.append(run)
 	_lay_run(_tape_runs[1], Vector2(-GUIDE_X, PATH_Y), Vector2(GUIDE_X, PATH_Y))
+	# And the two outer runs NOW, not on the first _process. A run's mesh is a unit-length box
+	# that the transform shrinks to size, so an unlaid run is a one-metre plank lying across
+	# the deck -- and `rebuilt` fires between the rebuild and the first pack update, which is
+	# exactly when the grab handle measures the surface to decide where its edge is. The handle
+	# ended up floating a foot to the right of the machine, attached to nothing.
+	_update_packs()
 
 
 ## Stretch one run between two points on the faceplate. The mesh is a unit-length box and the
