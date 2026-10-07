@@ -43,6 +43,8 @@ func _ready() -> void:
 	_test_timeline_wire_roundtrip()
 	_test_timeline_length_covers_the_arrangement()
 	_test_timeline_maps_seconds_onto_the_lane()
+	_test_arrangement_is_durable_not_volatile()
+	_test_bridge_arrangement_is_parsed()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -711,3 +713,55 @@ func _test_timeline_maps_seconds_onto_the_lane() -> void:
 
 	timeline.queue_free()
 	DAW.use(previous, false)
+
+
+## The arrangement is edge-triggered structure. Classified volatile it would go out unreliably,
+## be dropped by the first lossy frame and never resent -- so a guest would show a project with
+## no items in it, and nothing anywhere would report an error. `/timeline/...` sharing four
+## characters of prefix with `/time` is the entire trap.
+func _test_arrangement_is_durable_not_volatile() -> void:
+	var link := _fresh_link()
+	check("the playhead is volatile", link.is_volatile("/time"))
+	check("the playhead string is volatile", link.is_volatile("/time/str"))
+	check("meters are volatile", link.is_volatile("/track/3/vu/L"))
+	check("the arrangement is NOT volatile", not link.is_volatile("/timeline/length"))
+	check("markers are NOT volatile", not link.is_volatile("/timeline/markers"))
+	check("items are NOT volatile", not link.is_volatile("/track/3/items"))
+	link.free()
+
+
+## What the ReaScript bridge actually hands back, including the two shapes that are easy to get
+## wrong: a track reported by its absence because everything on it was deleted, and an empty
+## Lua table arriving as `{}` rather than `[]`.
+func _test_bridge_arrangement_is_parsed() -> void:
+	var link := _fresh_link()
+	link.state.track(1)
+	link.state.track(2)
+
+	link._on_timeline({
+		"length": 240.0,
+		"markers": [{"position": 0.0, "name": "Intro"}, {"position": 32.0, "name": "Verse"}],
+		"tracks": [
+			{"index": 1, "items": [
+				{"start": 0.0, "length": 16.0, "muted": false, "name": "Kick A"},
+				{"start": 32.0, "length": 16.0, "muted": true, "name": "Kick B"},
+			]},
+			{"index": 2, "items": {}},
+		],
+	})
+
+	check("a lane is filled", link.state.track(1).items.size() == 2)
+	close_to("an item lands where the bridge said", link.state.track(1).items[1].start, 32.0)
+	check("a take name survives", link.state.track(1).items[0].name == "Kick A")
+	check("mute survives", link.state.track(1).items[1].muted)
+	check("an empty lua table is not one broken item", link.state.track(2).items.is_empty())
+	close_to("the project length lands", link.state.project_length, 240.0)
+	check("markers land", link.state.markers.size() == 2)
+
+	# Everything on track 1 deleted. The bridge reports that by OMITTING the track, so a merge
+	# would leave the old blocks on screen with nothing ever clearing them.
+	link._on_timeline({"length": 240.0, "markers": [], "tracks": []})
+	check("a track that lost its items is cleared, not left stale",
+			link.state.track(1).items.is_empty())
+
+	link.free()

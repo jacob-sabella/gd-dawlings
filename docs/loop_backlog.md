@@ -47,13 +47,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
   the roster, so a guest does not know who else is in the session until they speak.
 - **Calibration gesture.** `RoomAnchor.mark_origin/mark_forward` work and are tested; nothing
   calls them from a controller yet. Needs a two-step in-headset prompt.
-- **ReaScript bridge.** Lua side is written and syntax-clean; `GetProjectStructure` is not yet
-  consumed by anything. Track colours, folder structure and unambiguous send destinations are
-  all sitting there unused.
-- **The timeline against a real Reaper.** The surface is done and the wire format carries
-  items, but `ReaperBackend.can(TIMELINE)` is false and says so on the panel, because OSC has
-  no message about media items and nothing reads the arrangement off the bridge yet. The Lua
-  handler and the parse are the remaining work; the surface needs no changes.
+- **ReaScript bridge.** `GetTimeline` is written, parsed and tested against the payload shapes
+  it actually produces, and `can(TIMELINE)` now tracks whether the bridge is loaded -- but none
+  of it has run against a live Reaper, only against replayed answers.
+  `GetProjectStructure` is still not consumed by anything: track colours, folder structure and
+  unambiguous send destinations are all sitting there unused.
 - **XR session.** The rig is built and wired: `XRRig` instantiates the head, both controllers
   and an `XRInteractor` per hand, the studio builds it instead of the desktop camera when the
   medium is not SCREEN, and the left controller's `by_button` runs the two-mark room

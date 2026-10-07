@@ -128,6 +128,18 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 		return
 	var idx := int(p[1])
 	var field := p[2]
+
+	# BEFORE the empty-args guard. For every other field an empty argument list is a malformed
+	# message, but for a lane it is the message: no arguments means nothing is on this track
+	# any more, and dropping it leaves deleted blocks on screen with nothing to clear them.
+	if field == "items":
+		# FLAT, not one address per item field. A forty-item lane would otherwise be a
+		# hundred and sixty messages that must all arrive before the lane is drawable, and
+		# a lane half-populated from a torn update draws blocks that were never there.
+		# One address, one lane, applied whole.
+		state.set_track_items(idx, _unpack_items(args))
+		return
+
 	if args.is_empty():
 		return
 
@@ -170,12 +182,6 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 				t.vu_l = float(args[0])
 			elif p[3] == "R":
 				t.vu_r = float(args[0])
-		"items":
-			# FLAT, not one address per item field. A forty-item lane would otherwise be a
-			# hundred and sixty messages that must all arrive before the lane is drawable, and
-			# a lane half-populated from a torn update draws blocks that were never there.
-			# One address, one lane, applied whole.
-			state.set_track_items(idx, _unpack_items(args))
 		"fx":
 			_apply_fx(state, idx, p, args)
 		"send":

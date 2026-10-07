@@ -29,6 +29,18 @@ var _bridge: ScriptBridge = null
 var _echo_guard: Dictionary = {}
 const ECHO_GRACE_MSEC := 250
 
+## How often to re-read the arrangement off the bridge.
+##
+## Two seconds, not a frame: this is a file round trip through a deferred ReaScript, and the
+## answer is the whole arrangement rather than a delta. It is also not edge-triggered -- Reaper
+## has no notification for "an item moved" on any channel this project can reach -- so a poll
+## is the only honest option, and the rate is a straight trade between latency on someone
+## else's edit and load on a project with a few thousand items.
+const TIMELINE_POLL_SECONDS := 2.0
+
+var _timeline_due := 0.0
+var _timeline_in_flight := false
+
 
 func _ready() -> void:
 	# An autoload that opens a socket on startup would make `godot --headless` in CI try to talk
@@ -93,17 +105,17 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.ROUTING:
 		return _bridge != null and _bridge.is_open()
 	if capability == Capability.TIMELINE:
-		# Not yet, and saying so is the point. Reaper's OSC surface has no message about media
-		# items at all; the arrangement is only reachable through the ReaScript bridge, and
-		# nothing here consumes that part of it yet. Answering true would make the timeline
-		# draw an empty project rather than say it cannot see this one.
-		return false
+		# Reaper's OSC surface has no message about media items at all, so this is exactly as
+		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
+		# the arrangement instead of drawing a project with nothing in it.
+		return _bridge != null and _bridge.is_open()
 	return true
 
 
 func _process(delta: float) -> void:
 	if _bridge:
 		_bridge.poll()
+		_poll_timeline(delta)
 	if _peer:
 		for m in _peer.poll():
 			_apply(m["address"], m["args"])
@@ -206,6 +218,68 @@ func transport_record() -> void:
 
 
 ## Routing changes have no OSC pattern -- Reaper streams send VOLUMES but has no message for
+# --- the arrangement ----------------------------------------------------------------------
+
+func _poll_timeline(delta: float) -> void:
+	if not _bridge.is_open() or _timeline_in_flight:
+		return
+	_timeline_due -= delta
+	if _timeline_due > 0.0:
+		return
+	_timeline_due = TIMELINE_POLL_SECONDS
+	_timeline_in_flight = _bridge.call_reaper("GetTimeline", [], _on_timeline)
+
+
+## Applied through `_apply` rather than written onto the cache, so the arrangement rides the
+## normal replication stream and a guest gets it without a second code path.
+func _on_timeline(result) -> void:
+	_timeline_in_flight = false
+	if result == null or typeof(result) != TYPE_DICTIONARY:
+		return
+
+	# Every lane is cleared first and then refilled. The bridge omits tracks with nothing on
+	# them -- see the Lua -- so a track whose last item was just deleted is reported by its
+	# ABSENCE, and a merge would leave that item on screen forever.
+	var lanes: Dictionary = {}
+	for entry in _as_array(result.get("tracks", [])):
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var idx := int(entry.get("index", 0))
+		if idx <= 0:
+			continue
+		var packed: Array = []
+		for item in _as_array(entry.get("items", [])):
+			if typeof(item) != TYPE_DICTIONARY:
+				continue
+			packed.append_array([
+				float(item.get("start", 0.0)),
+				float(item.get("length", 0.0)),
+				1.0 if item.get("muted", false) else 0.0,
+				str(item.get("name", "")),
+			])
+		lanes[idx] = packed
+
+	for index in state.track_indices():
+		var packed: Array = lanes.get(index, [])
+		if packed.is_empty() and state.track(index).items.is_empty():
+			continue
+		_apply("/track/%d/items" % index, packed)
+
+	var markers: Array = []
+	for m in _as_array(result.get("markers", [])):
+		if typeof(m) == TYPE_DICTIONARY:
+			markers.append_array([float(m.get("position", 0.0)), str(m.get("name", ""))])
+	_apply("/timeline/markers", markers)
+	_apply("/timeline/length", [float(result.get("length", 0.0))])
+
+
+## The bridge's Lua encoder cannot tell an empty list from an empty object, so an empty table
+## arrives as `{}`. Everywhere this project reads a list off the bridge, it may be handed a
+## dictionary meaning "nothing", and treating that as one malformed entry would be worse.
+static func _as_array(value) -> Array:
+	return value if value is Array else []
+
+
 ## "create a send from 3 to 7". The patchbay therefore writes through the ReaScript bridge, and
 ## this returns false when that bridge is absent so the surface can show a cable it cannot yet
 ## plug rather than pretending.

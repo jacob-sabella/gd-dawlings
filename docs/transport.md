@@ -61,13 +61,32 @@ missing most of the session. The shipped file asks for 64, and `ReaperLink` re-s
 ## ReaScript: everything structural
 
 OSC has no message for *how many tracks exist*, *what plugin is in slot 2*, *what colour a track
-is*, or **create a send from track 6 to track 12**. Those exist only in ReaScript.
+is*, *where the items on a track are*, or **create a send from track 6 to track 12**. Those
+exist only in ReaScript.
 
 This is why the patchbay is split down the middle: it **displays** routing from OSC (which
 streams send levels and destination names) and **changes** routing through the bridge. With the
 bridge not loaded, a patch gesture is refused out loud rather than dropped. A patchbay that
 silently fails to patch is worse than one that admits it cannot — with the former you spend
 twenty minutes assuming you missed the jack.
+
+### Two reads, two clocks
+
+`GetProjectStructure` and `GetTimeline` are deliberately separate calls rather than one, because
+they change on completely different schedules. Structure — track count, plugin chains, routing —
+changes when someone reaches for it. The arrangement changes on every drag of every item. Polling
+one at the rate the other needs means either a stale patchbay or a thousand plugin parameters
+re-read twice a second. The timeline is polled every 2s; structure is read on demand.
+
+Reaper has no notification for "an item moved" on any channel this project can reach, so a poll
+is the only honest option and the interval is a straight trade between latency on someone else's
+edit and load on a project with a few thousand items.
+
+`GetTimeline` **omits tracks with nothing on them**, and reaper-3d clears every lane before
+applying the answer. That is not an optimisation: the Lua encoder cannot tell an empty list from
+an empty object, so an explicit empty `items` arrives as `{}` and would have to be guessed at. A
+track that just lost its last item is therefore reported by its *absence* — and a merge rather
+than a replace would leave deleted blocks on screen with nothing to clear them.
 
 ### Why files
 
@@ -88,6 +107,18 @@ which looks like a working bridge right up until the moment it matters.
 One place the bridge is strictly better than OSC: a send's destination. OSC can only identify it
 by **name**, which is ambiguous the moment a project has two tracks called "Verb" — and
 duplicate track names are completely normal. `GetProjectStructure` returns indices.
+
+### What the arrangement costs on the wire
+
+Items replicate to guests as **one address per lane holding a flat list** —
+`/track/3/items [start, length, muted, name, …]` — not one address per field. Forty items would
+otherwise be a hundred and sixty messages that must all arrive before the lane is drawable, and a
+lane half-populated from a torn update draws blocks that were never there.
+
+`/timeline/...` is **durable**, and the prefix is a trap worth naming: the volatile test used to
+be `begins_with("/time")`, which swept the whole arrangement into the unreliable channel. Items
+are edge-triggered — dropped once, they are never resent — so a guest would have shown a project
+with nothing in it and nothing would have errored.
 
 ## The offline stand-in
 

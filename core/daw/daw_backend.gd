@@ -185,8 +185,13 @@ func record_for_replication(key: String, args: Array) -> void:
 
 ## Meters and the playhead. Everything else is durable. Overridable, since a backend whose keys
 ## look nothing like these has to answer for its own.
+##
+## The playhead test is for `/time` EXACTLY and `/time/...`, not for the prefix. `/timeline/...`
+## carries the arrangement, which is edge-triggered structure -- classified volatile it would be
+## sent unreliably, dropped by the first lossy frame, and never resent, so a guest would show a
+## project with no items in it and nothing would report an error.
 func is_volatile(key: String) -> bool:
-	return key.contains("/vu") or key.begins_with("/time")
+	return key.contains("/vu") or key == "/time" or key.begins_with("/time/")
 
 
 func tick_replication(delta: float) -> void:

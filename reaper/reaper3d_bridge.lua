@@ -149,6 +149,62 @@ function handlers.GetProjectStructure()
   return {tracks = tracks, tempo = reaper.Master_GetTempo()}
 end
 
+--- The arrangement: where the blocks are. The other thing OSC says nothing whatsoever about.
+--
+-- Separate from GetProjectStructure rather than folded into it, because the two change on
+-- completely different clocks. The structure -- track count, plugin chains, routing -- changes
+-- when someone reaches for it; the arrangement changes on every drag of every item. Polling one
+-- at the rate the other needs would mean either a stale patchbay or a thousand plugin
+-- parameters re-read twice a second.
+--
+-- Tracks with nothing on them are omitted entirely, and reaper-3d clears every lane before
+-- applying this. That is not an optimisation: the encoder below cannot tell an empty list from
+-- an empty object, so an explicit empty `items` would arrive as `{}` and have to be guessed at.
+function handlers.GetTimeline()
+  local tracks = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, i)
+    local items = {}
+    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      local it = reaper.GetTrackMediaItem(tr, n)
+      local name = ''
+      local take = reaper.GetActiveTake(it)
+      if take then
+        -- GetSetMediaItemTakeInfo_String rather than GetTakeName: the latter is missing on
+        -- older Reaper builds, and a bridge that errors on one is worse than a nameless block.
+        local ok, value = reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', '', false)
+        if ok then name = value end
+      end
+      items[#items + 1] = {
+        start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
+        length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
+        muted = reaper.GetMediaItemInfo_Value(it, 'B_MUTE') > 0.5,
+        name = name,
+      }
+    end
+    if #items > 0 then
+      tracks[#tracks + 1] = {index = i + 1, items = items}
+    end
+  end
+
+  -- Markers only, not regions. A region is a span and the ruler draws points; a region drawn as
+  -- its start marker would silently lose the half of it that matters.
+  local markers = {}
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  for m = 0, marker_count + region_count - 1 do
+    local ok, is_region, pos, _, name = reaper.EnumProjectMarkers(m)
+    if ok ~= 0 and not is_region then
+      markers[#markers + 1] = {position = pos, name = name}
+    end
+  end
+
+  return {
+    tracks = tracks,
+    markers = markers,
+    length = reaper.GetProjectLength(0),
+  }
+end
+
 --- Create a send. The one thing the patchbay exists to do and the one thing OSC cannot express.
 function handlers.CreateTrackSend(args)
   local src = track_from_osc(args[1])
