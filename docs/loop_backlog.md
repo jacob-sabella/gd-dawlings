@@ -349,6 +349,30 @@ left out of, and a file left out is exempt from every rule without anyone decidi
 The general lesson, now three for three: **prose makes claims and only the suite holds anyone
 to them.** Worth re-running the sweep whenever a header gets written.
 
+**The room was one wall, and the stated reason for that did not apply to this renderer.**
+`_build_room` said a fully enclosed room "makes the desk harder to read in a screenshot, because
+every light then bounces into the lens". True with global illumination; this environment is
+AMBIENT_SOURCE_COLOR with no SDFGI, no VoxelGI and no SSIL, so ambient is a flat constant and
+walls bounce nothing. Three walls now, and the wide shot goes from gear parked in front of a
+flat to a corner you are standing in. Measured rather than assumed: 2 draw calls, 2 objects,
+0.01ms. The ceiling stays off and THAT reason does survive -- the key is a DirectionalLight3D
+with shadows on, so a ceiling does not soften the room, it switches the key off.
+
+Fourth doc-vs-code finding in three ticks, and a new shape: not a missing mechanism this time
+but a REASON that was sound somewhere else. Worth checking a justification against this build,
+not just against general graphics knowledge.
+
+**The budget tool was measuring the monitor.** Every pose came back at exactly 8.33ms -- the
+same number whether the camera faced ninety channel strips or a blank wall, and exactly 1/120s.
+That is vsync: the engine sleeps to the refresh and reports the presentation interval. A
+measuring instrument that returns the same answer regardless of what it is pointed at is not
+conservative, it is broken, and it is worse than having none because its numbers look plausible
+enough to write down. `tools/shot.sh` already killed vsync through override.cfg for its own
+reasons; the budget wanted it more and never did it. With it off the poses separate again and
+land at 1.00ms / 1.37ms worst, consistent with the figures already recorded here -- so the
+history was sound and today's run was the anomaly. The suspicious part was never the value, it
+was that three different poses agreed to the second decimal.
+
 ### Still open
 
 **Lettering is culled once it is too small to read**, which was the largest remaining cost.

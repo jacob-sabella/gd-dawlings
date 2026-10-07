@@ -22,6 +22,12 @@ extends Node3D
 
 const FLOOR_SIZE := 9.0
 
+## The walls, which are a room rather than the floor's extent. Floor stays large because its far
+## edge is never in shot from a working position and a small one shows its own border.
+const ROOM_WIDTH := 6.4
+const ROOM_DEPTH := 5.0
+const WALL_HEIGHT := 2.8
+
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
 ## detail: it decides whether this participant gets a floor and furniture at all, and a studio
 ## that learned it a frame late would build a virtual room and then delete it in front of someone
@@ -127,19 +133,38 @@ func _build_room() -> void:
 	floor_mesh.material_override = floor_mat
 	add_child(floor_mesh)
 
-	# Back wall only. A fully enclosed room looks better and makes the desk harder to read in a
-	# screenshot, because every light then bounces into the lens. One wall gives the gear
-	# something to be in front of.
-	var wall := MeshInstance3D.new()
-	var wall_mesh := BoxMesh.new()
-	wall_mesh.size = Vector3(FLOOR_SIZE, 2.8, 0.1)
-	wall.mesh = wall_mesh
-	wall.position = Vector3(0, 1.4, -2.2)
+	# Three walls and no ceiling, which is a corner you are standing in rather than a backdrop
+	# the gear is parked in front of.
+	#
+	# This used to be the back wall alone, on the stated grounds that enclosing the room would
+	# bounce every light into the lens and make the desk harder to read. That is true of a
+	# renderer with global illumination and false of this one: the environment is
+	# AMBIENT_SOURCE_COLOR with no SDFGI, no VoxelGI and no SSIL, so ambient is a flat constant
+	# applied the same whether a wall is there or not. Adding walls adds exactly zero bounced
+	# light. What it adds is the thing a wide shot was missing -- an edge for the room to stop
+	# at, instead of a floor fading into black on both sides.
+	#
+	# The ceiling stays off, and that reason does survive: the key light is a DirectionalLight3D
+	# with shadows on, so a ceiling does not soften the room, it switches the key off.
 	var wall_mat := StandardMaterial3D.new()
 	wall_mat.albedo_color = Color(0.072, 0.076, 0.085)
 	wall_mat.roughness = 0.9
-	wall.material_override = wall_mat
-	add_child(wall)
+
+	# Narrower than the floor. A control room is a room, not a hangar, and the walls have to be
+	# close enough to read as walls from the working position -- at nine metres apart they are
+	# two more grey rectangles in the distance.
+	for spec in [[Vector3(0, WALL_HEIGHT * 0.5, -2.2), Vector3(ROOM_WIDTH, WALL_HEIGHT, 0.1)],
+			[Vector3(-ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5, 0.3),
+					Vector3(0.1, WALL_HEIGHT, ROOM_DEPTH)],
+			[Vector3(ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5, 0.3),
+					Vector3(0.1, WALL_HEIGHT, ROOM_DEPTH)]]:
+		var wall := MeshInstance3D.new()
+		var wall_mesh := BoxMesh.new()
+		wall_mesh.size = spec[1]
+		wall.mesh = wall_mesh
+		wall.position = spec[0]
+		wall.material_override = wall_mat
+		add_child(wall)
 
 
 ## Furniture: the things that hold the gear up.

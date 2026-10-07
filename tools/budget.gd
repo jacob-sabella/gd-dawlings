@@ -63,6 +63,21 @@ func _ready() -> void:
 		set_process(false)
 		return
 	_hide_labels = args.has("--hide-labels")
+
+	# VSYNC OFF, or this measures the monitor instead of the renderer.
+	#
+	# With it on, the engine sleeps until the next refresh and the frame time it reports is the
+	# PRESENTATION interval, not the work. Every pose came back at 8.33ms on this machine -- a
+	# suspiciously round number, and exactly 1/120s -- whether the camera was looking at ninety
+	# channel strips or at a wall. A measuring tool that returns the same answer regardless of
+	# what it is pointed at is not a conservative measuring tool; it is a broken one, and it is
+	# worse than none because its numbers look plausible enough to be written down.
+	#
+	# tools/shot.sh already does this, through override.cfg, for its own reasons: a window on a
+	# workspace nobody is watching is presented about once a second. Same underlying fact, and
+	# the budget wanted it more.
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+
 	# Last, so the scene is up and the backend is installed.
 	await get_tree().process_frame
 
