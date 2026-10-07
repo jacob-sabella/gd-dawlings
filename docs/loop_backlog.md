@@ -20,14 +20,19 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Capture harness.** `tools/shot.sh`, with reproducible camera framing on the command line.
+- **Guest replication.** Host buffers changes by address at 20Hz, split durable/volatile for
+  opposite delivery guarantees, with a full reliable snapshot on join. Verified two ways: the
+  snapshot round-trip is asserted field by field in the suite, and `tools/session.sh` brings up
+  a real headless host and a real guest that renders what it was sent.
 
 ## Scaffolded — the shape is right, the wiring is not finished
 
-- **Guest replication.** Intents travel guest → host and are applied. State does **not** travel
-  back down yet, so a guest currently sees an empty console. This is the single biggest gap:
-  everything else in the multi-user design is built around it.
-  *Next:* host publishes a delta per changed track on a fixed tick; guests apply into the same
-  `ReaperState` the surfaces already read.
+- **Guest writes round-tripping.** Intents reach the host and are applied, and the result
+  replicates back — but a guest's own fader shows its hand position until that round trip
+  completes, which on wifi is long enough to see. Needs the same provisional-value treatment
+  the host's controls already get from the echo guard.
+- **Participant list on a guest.** A guest registers peers it hears from; the host never sends
+  the roster, so a guest does not know who else is in the session until they speak.
 - **Calibration gesture.** `RoomAnchor.mark_origin/mark_forward` work and are tested; nothing
   calls them from a controller yet. Needs a two-step in-headset prompt.
 - **ReaScript bridge.** Lua side is written and syntax-clean; `GetProjectStructure` is not yet
@@ -54,6 +59,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Audio.** The studio is silent. Reaper's output does not come through this process at all.
 
 ## Known rough edges
+
+- Replication is a full value per changed address; no delta compression. Fine for 64 tracks on
+  a LAN, untested beyond it.
 
 - Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.

@@ -99,8 +99,38 @@ meter bridge, a trolley means nothing and is not drawn in ROOM mode at all, beca
 participant already has real furniture. Mixing the two means a rack that cannot stand on the
 floor without inventing a plugin to justify its legs.
 
+## Replication: the OSC address space is the wire format
+
+State reaches guests as `(address, args)` pairs in **the same vocabulary Reaper uses**. That is
+the whole trick: a guest has exactly one code path for "state arrived", the host has one for
+"state left", and a field added to `ReaperState` replicates the day it is *parsed* rather than
+the day someone remembers to add it to a serialiser.
+
+The host buffers changes keyed by address, so repeats collapse, and flushes at 20Hz. The buffer
+is split in two because the halves need opposite guarantees:
+
+| | Carries | Delivery | Why |
+|---|---|---|---|
+| **Durable** | names, volumes, mute/solo, FX params, colour | reliable | edge-triggered — a dropped packet loses that change *permanently* |
+| **Volatile** | meters, playhead | unreliable ordered | level-triggered — arrives again in 50ms anyway |
+
+Getting that split backwards is invisible on loopback and ruinous on real wifi: either names
+queue behind stale meter readings, or they are dropped and never resent.
+
+A joining guest is sent a full snapshot, reliably, before any delta reaches it. Without that it
+would start empty and grow a channel each time someone touched a fader, never showing the tracks
+nobody happened to touch — the deltas are edge-triggered, so there is no second chance.
+
+**One address is not Reaper's.** `/track/N/colour` is reaper-3d's own, because Reaper's OSC
+surface has no colour message and a colour chip is how you find the kick on a desk of 32
+identical strips. It rides the same stream as everything else.
+
+### Testing it needs two processes
+
+A single run is always its own authority, so every replication bug is invisible until there are
+two of them. `tools/session.sh` brings up a headless host and a guest — which is also the shape
+a studio would actually use, with the authority on a machine in a rack.
+
 ## Things that are deliberately not done yet
 
-See `docs/loop_backlog.md`. The short version: state replication between host and guests is
-scaffolded (intents go up, nothing comes back down yet), and the arrange timeline does not
-exist. Both are named rather than hidden.
+See `docs/loop_backlog.md`.

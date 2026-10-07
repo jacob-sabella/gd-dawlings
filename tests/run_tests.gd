@@ -25,6 +25,9 @@ func _ready() -> void:
 	_test_link_parses_fx_and_sends()
 	_test_link_ignores_its_own_echo()
 	_test_taper_roundtrip()
+	_test_volatile_classification()
+	_test_host_buffers_split_and_dedupe()
+	_test_snapshot_reconstructs_a_guest()
 	_test_room_anchor_two_point()
 	_test_room_anchor_ignores_height_difference()
 	_test_room_anchor_rejects_close_marks()
@@ -184,6 +187,107 @@ func _test_taper_roundtrip() -> void:
 	for db in [-24.0, -12.0, -6.0, 0.0, 6.0]:
 		close_to("taper round-trips %.0fdB" % db, ReaperState.taper_to_db(ReaperState.db_to_taper(db)), db, 0.001)
 	check("silence is -inf", ReaperState.taper_to_db(0.0) == -INF)
+
+
+# --- replication --------------------------------------------------------------------------
+
+## Meters and the playhead go out unreliably; everything else must not. Getting this backwards
+## is invisible on a loopback test and ruinous on real wifi -- either names arrive late behind a
+## queue of stale meter readings, or they are dropped and never resent.
+func _test_volatile_classification() -> void:
+	var link = load("res://core/reaper/reaper_link.gd")
+	for address in ["/track/3/vu", "/track/3/vu/L", "/track/12/vu/R", "/time", "/time/str"]:
+		check("%s is volatile" % address, link._is_volatile(address))
+	for address in ["/track/3/name", "/track/3/volume", "/track/3/mute",
+			"/track/3/fx/1/fxparam/2/value", "/tempo/raw", "/play"]:
+		check("%s is durable" % address, not link._is_volatile(address))
+
+
+## The buffers are keyed by address so that 30Hz of meter updates collapse into one value per
+## tick. Without that, a 32-track project would replicate ~1000 messages a second to every guest
+## to convey 32 numbers.
+func _test_host_buffers_split_and_dedupe() -> void:
+	var link := _fresh_link()
+	link.mode = 1  # HOST
+	link._apply("/track/1/vu", [0.1])
+	link._apply("/track/1/vu", [0.2])
+	link._apply("/track/1/vu", [0.3])
+	link._apply("/track/1/name", ["Kick"])
+	link._apply("/track/1/volume", [0.5])
+	link._apply("/track/1/volume", [0.7])
+
+	check("meter collapses to one pending entry", link._repl_volatile.size() == 1)
+	close_to("meter keeps the newest value", link._repl_volatile["/track/1/vu"][0], 0.3)
+	check("two durable addresses pending", link._repl_durable.size() == 2)
+	close_to("durable keeps the newest value", link._repl_durable["/track/1/volume"][0], 0.7)
+	check("meters are not in the durable buffer", not link._repl_durable.has("/track/1/vu"))
+	link.free()
+
+
+## A guest built only from a snapshot must be indistinguishable from the host. This is the test
+## the whole multi-user design rests on, and its failure mode is quiet: a missing field does not
+## error, it just leaves one guest looking at a console that is subtly not the session.
+func _test_snapshot_reconstructs_a_guest() -> void:
+	var host := _fresh_link()
+	host.populate_offline_demo()
+	host.set_process(false)
+
+	var guest := _fresh_link()
+	guest.mode = 2  # GUEST
+	guest.apply_replicated(host.snapshot())
+
+	check("guest has every track", guest.state.track_indices() == host.state.track_indices())
+	check("guest got some tracks at all", guest.state.tracks.size() == 12)
+
+	for index in host.state.track_indices():
+		var h: ReaperState.TrackState = host.state.tracks[index]
+		var g: ReaperState.TrackState = guest.state.track(index, false)
+		if g == null:
+			check("guest has track %d" % index, false)
+			continue
+		check("track %d name" % index, g.name == h.name)
+		close_to("track %d volume" % index, g.volume, h.volume)
+		close_to("track %d pan" % index, g.pan, h.pan)
+		check("track %d mute" % index, g.mute == h.mute)
+		check("track %d solo" % index, g.solo == h.solo)
+		check("track %d recarm" % index, g.rec_arm == h.rec_arm)
+		# Colour is reaper-3d's own address, not Reaper's. It is the thing that makes a strip
+		# findable on a wide desk, so a guest losing it is a real regression rather than cosmetic.
+		close_to("track %d colour r" % index, g.colour.r, h.colour.r, 0.002)
+		close_to("track %d colour g" % index, g.colour.g, h.colour.g, 0.002)
+		close_to("track %d colour b" % index, g.colour.b, h.colour.b, 0.002)
+		check("track %d fx count" % index, g.fx.size() == h.fx.size())
+		for fx_index in h.fx:
+			var hf: ReaperState.FXState = h.fx[fx_index]
+			var gf = g.fx.get(fx_index)
+			if gf == null:
+				check("track %d fx %d present" % [index, fx_index], false)
+				continue
+			check("track %d fx %d name" % [index, fx_index], gf.name == hf.name)
+			check("track %d fx %d param count" % [index, fx_index], gf.params.size() == hf.params.size())
+			for param in hf.params:
+				close_to("track %d fx %d param %d" % [index, fx_index, param], gf.params[param], hf.params[param])
+			for param in hf.param_names:
+				check("track %d fx %d param %d name" % [index, fx_index, param], gf.param_names.get(param) == hf.param_names[param])
+		check("track %d send count" % index, g.sends.size() == h.sends.size())
+		for send_index in h.sends:
+			var hs: ReaperState.SendState = h.sends[send_index]
+			var gs = g.sends.get(send_index)
+			if gs == null:
+				check("track %d send %d present" % [index, send_index], false)
+				continue
+			check("track %d send %d dest" % [index, send_index], gs.dest_name == hs.dest_name)
+			close_to("track %d send %d volume" % [index, send_index], gs.volume, hs.volume)
+
+	close_to("tempo replicated", guest.state.tempo, host.state.tempo)
+	check("transport replicated", guest.state.playing == host.state.playing)
+
+	# Meters are deliberately absent from a snapshot: they are level-triggered and the next
+	# volatile tick carries them 50ms later. A snapshot that included them would be shipping a
+	# value already stale on arrival.
+	check("snapshot carries no meter readings", guest.state.track(1).vu_l == 0.0)
+	host.free()
+	guest.free()
 
 
 # --- co-location --------------------------------------------------------------------------

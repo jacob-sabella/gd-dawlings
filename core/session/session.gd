@@ -108,6 +108,10 @@ func _register(peer_id: int, name_hint: String) -> void:
 
 func _on_peer_connected(peer_id: int) -> void:
 	_register(peer_id, "peer %d" % peer_id)
+	# Deferred by one frame: ENet reports the peer before the far side has finished building its
+	# own scene tree, and an RPC that lands first is delivered to a node that does not exist yet.
+	if is_authority():
+		_send_snapshot_to.call_deferred(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
@@ -137,6 +141,50 @@ func _receive_intent(address: String, args: Array) -> void:
 	# reached this session may move any fader. That is correct for four people in a studio and
 	# wrong for anything exposed beyond it. See docs/architecture.md.
 	Reaper.write(address, args)
+
+
+# --- state replication --------------------------------------------------------------------
+
+## Host -> guests, once per replication tick.
+##
+## Two RPCs rather than one, because the two halves of the batch need opposite guarantees and
+## sending both reliably makes meter traffic block name changes behind it. See the buffers in
+## core/reaper/reaper_link.gd for which is which.
+func broadcast_state(durable: Dictionary, volatile: Dictionary) -> void:
+	if not is_authority() or role == Role.SOLO:
+		return
+	if not durable.is_empty():
+		_receive_state_durable.rpc(_as_batch(durable))
+	if not volatile.is_empty():
+		_receive_state_volatile.rpc(_as_batch(volatile))
+
+
+static func _as_batch(by_address: Dictionary) -> Array:
+	var batch: Array = []
+	for address in by_address:
+		batch.append([address, by_address[address]])
+	return batch
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_state_durable(batch: Array) -> void:
+	Reaper.apply_replicated(batch)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _receive_state_volatile(batch: Array) -> void:
+	Reaper.apply_replicated(batch)
+
+
+## A joining guest gets the whole session at once, reliably, before any delta reaches it.
+##
+## Without this a guest would start empty and fill in only as things were touched -- a console
+## that grows a channel each time someone moves a fader, and never shows the tracks nobody
+## happens to touch. The deltas are edge-triggered, so there is no second chance.
+func _send_snapshot_to(peer_id: int) -> void:
+	if not is_authority() or role == Role.SOLO:
+		return
+	_receive_state_durable.rpc_id(peer_id, Reaper.snapshot())
 
 
 # --- presence -----------------------------------------------------------------------------

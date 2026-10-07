@@ -28,6 +28,11 @@ const BANK_SENDS := 8
 
 signal connection_changed()
 
+## Replication tick. 20Hz, deliberately slower than Reaper's ~30Hz meter stream: the buffers
+## below are keyed by address, so a faster-arriving value simply overwrites the pending one and
+## the tick rate becomes the rate limit for free.
+const REPLICATION_HZ := 20.0
+
 var mode: int = Mode.OFFLINE
 var state := ReaperState.new()
 
@@ -38,6 +43,20 @@ var _bridge: ScriptBridge = null
 ## every single drag update -- visible as a fader that fights the hand holding it.
 var _echo_guard: Dictionary = {}
 const ECHO_GRACE_MSEC := 250
+
+## Pending replication, keyed by OSC address so repeats collapse. Split in two because the two
+## halves need opposite delivery guarantees, and sending both the same way is wrong either way:
+##
+##   DURABLE   names, volumes, mute/solo, FX parameters. Sent RELIABLY. These are edge-triggered
+##             -- a value is only resent when it changes -- so a dropped packet loses that change
+##             permanently, and a guest would show the wrong track name until someone renamed it
+##             again.
+##   VOLATILE  meters and the playhead. Sent UNRELIABLY. These are level-triggered and arrive
+##             again in 50ms regardless. Spending retransmits on a meter reading that is already
+##             stale by the time it lands is how you make the durable half late.
+var _repl_durable: Dictionary = {}
+var _repl_volatile: Dictionary = {}
+var _repl_accumulator := 0.0
 
 
 func _ready() -> void:
@@ -107,15 +126,25 @@ func link_summary() -> String:
 
 
 func _process(delta: float) -> void:
+	# Where state comes from and whether it needs replicating are separate questions, and this
+	# used to answer them in one branch: an OFFLINE host returned early, so a session hosted on
+	# the stand-in mix replicated nothing at all and every guest sat looking at an empty room.
+	# Hosting the demo is exactly how the multi-user path gets demonstrated, so that was the one
+	# configuration most likely to be tried first.
 	if mode == Mode.OFFLINE:
 		_drive_offline_meters(delta)
-		return
-	if _bridge:
-		_bridge.poll()
-	if _peer == null:
-		return
-	for m in _peer.poll():
-		_apply(m["address"], m["args"])
+	else:
+		if _bridge:
+			_bridge.poll()
+		if _peer:
+			for m in _peer.poll():
+				_apply(m["address"], m["args"])
+
+	_repl_accumulator += delta
+	if _repl_accumulator >= 1.0 / REPLICATION_HZ:
+		_repl_accumulator = 0.0
+		_flush_replication()
+
 	var now := Time.get_ticks_msec()
 	for key in _echo_guard.keys():
 		if now - int(_echo_guard[key]["t"]) > ECHO_GRACE_MSEC:
@@ -133,6 +162,16 @@ func _process(delta: float) -> void:
 func _apply(address: String, args: Array) -> void:
 	if _is_echo(address, args):
 		return
+	# Recorded BEFORE parsing, not after. A message this build does not yet understand is still
+	# a message a guest should receive: the guest runs the same parser, so a surface added there
+	# and not here would otherwise be starved of data by its own host.
+	# Not `mode == HOST`: an OFFLINE process hosting a session is just as much the authority,
+	# and the only mode that must never replicate is the one receiving it.
+	if mode != Mode.GUEST:
+		if _is_volatile(address):
+			_repl_volatile[address] = args
+		else:
+			_repl_durable[address] = args
 	var p := address.trim_prefix("/").split("/")
 	if p.is_empty():
 		return
@@ -194,6 +233,14 @@ func _apply_track(p: PackedStringArray, args: Array) -> void:
 			state.set_track_field(idx, &"rec_arm", _as_bool(args))
 		"select":
 			state.set_track_field(idx, &"selected", _as_bool(args))
+		"colour":
+			# NOT a Reaper address. Reaper's OSC surface has no message for track colour, and a
+			# colour chip is how you find the kick on a desk of 32 identical strips -- so
+			# reaper-3d defines one in its own namespace, parsed here and emitted by the host
+			# into the same replication stream as everything else. When the ReaScript bridge
+			# starts supplying real colours, they reach every guest without another line.
+			if args.size() >= 3:
+				state.set_track_field(idx, &"colour", Color(float(args[0]), float(args[1]), float(args[2])))
 		"vu":
 			# Meters are written straight onto the cache without a changed signal. At 30Hz per
 			# channel, emitting per update would fan a signal storm out to every one of the
@@ -344,6 +391,86 @@ func remove_send(from_track: int, send_index: int) -> bool:
 	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index])
 
 
+# --- replication --------------------------------------------------------------------------
+
+## Meters and the playhead. Everything else is durable.
+static func _is_volatile(address: String) -> bool:
+	return address.contains("/vu") or address.begins_with("/time")
+
+
+func _flush_replication() -> void:
+	if _repl_durable.is_empty() and _repl_volatile.is_empty():
+		return
+	if Session.participants.size() <= 1:
+		# Solo, or hosting with nobody connected. Buffers are cleared rather than left to grow
+		# into a backlog that would be delivered in one burst the moment someone joins.
+		_repl_durable.clear()
+		_repl_volatile.clear()
+		return
+	Session.broadcast_state(_repl_durable.duplicate(), _repl_volatile.duplicate())
+	_repl_durable.clear()
+	_repl_volatile.clear()
+
+
+## Everything a freshly joined guest needs to draw the session, as OSC messages.
+##
+## Expressed in the SAME vocabulary as the live stream rather than as a bespoke snapshot struct.
+## That is the whole trick: a guest has exactly one code path for "state arrived", the host has
+## one for "state left", and a field added to ReaperState is replicated the day it is parsed
+## rather than the day someone remembers to add it to a serialiser.
+func snapshot() -> Array:
+	var out: Array = []
+	for index in state.track_indices():
+		var t: ReaperState.TrackState = state.tracks[index]
+		out.append(["/track/%d/name" % index, [t.name]])
+		out.append(["/track/%d/volume" % index, [t.volume]])
+		out.append(["/track/%d/volume/db" % index, [t.volume_db]])
+		out.append(["/track/%d/pan" % index, [t.pan]])
+		out.append(["/track/%d/mute" % index, [1.0 if t.mute else 0.0]])
+		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
+		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
+		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
+		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
+
+		var fx_indices: Array = t.fx.keys()
+		fx_indices.sort()
+		for fx_index in fx_indices:
+			var f: ReaperState.FXState = t.fx[fx_index]
+			out.append(["/track/%d/fx/%d/name" % [index, fx_index], [f.name]])
+			out.append(["/track/%d/fx/%d/bypass" % [index, fx_index], [1.0 if f.enabled else 0.0]])
+			var param_indices: Array = f.params.keys()
+			param_indices.sort()
+			for param in param_indices:
+				out.append(["/track/%d/fx/%d/fxparam/%d/value" % [index, fx_index, param], [f.params[param]]])
+				if f.param_names.has(param):
+					out.append(["/track/%d/fx/%d/fxparam/%d/name" % [index, fx_index, param], [f.param_names[param]]])
+
+		var send_indices: Array = t.sends.keys()
+		send_indices.sort()
+		for send_index in send_indices:
+			var sd: ReaperState.SendState = t.sends[send_index]
+			out.append(["/track/%d/send/%d/name" % [index, send_index], [sd.dest_name]])
+			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
+			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
+
+	out.append(["/tempo/raw", [state.tempo]])
+	out.append(["/play", [1.0 if state.playing else 0.0]])
+	out.append(["/record", [1.0 if state.recording else 0.0]])
+	out.append(["/time/str", [state.position_string]])
+	return out
+
+
+## State arriving from the host. Deliberately NOT routed through write() or the echo guard --
+## this is authority speaking, and a guest has nothing of its own to protect against.
+##
+## Includes track colour, which is a reaper-3d address rather than a Reaper one -- see the
+## "colour" case in _apply_track for why.
+func apply_replicated(batch: Array) -> void:
+	for entry in batch:
+		if entry is Array and entry.size() == 2:
+			_apply(entry[0], entry[1])
+
+
 # --- offline stand-in ---------------------------------------------------------------------
 
 ## Fill the cache with a plausible session so the room can be built without Reaper. The names
@@ -429,4 +556,13 @@ func _drive_offline_meters(delta: float) -> void:
 		var level := clampf(t.volume * (0.18 + 0.8 * hit), 0.0, 1.0)
 		t.vu_l = level
 		t.vu_r = clampf(level * (1.0 - 0.18 * absf(t.pan - 0.5)), 0.0, 1.0)
+		# Pushed straight into the volatile buffer. These never go through _apply -- that is
+		# deliberate, since meters are written to the cache without a signal to avoid fanning a
+		# storm out to every surface -- but a guest watching a hosted demo should still see
+		# meters move, so the one thing _apply would have done for them is done here.
+		if mode != Mode.GUEST:
+			_repl_volatile["/track/%d/vu/L" % index] = [t.vu_l]
+			_repl_volatile["/track/%d/vu/R" % index] = [t.vu_r]
+	if mode != Mode.GUEST:
+		_repl_volatile["/time/str"] = [state.position_string]
 	state.transport_changed.emit()
