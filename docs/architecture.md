@@ -214,7 +214,20 @@ geometry cannot:
   missing or unimported asset is a plainer desk rather than a desk with invisible controls on
   it. `_test_knob_is_the_moulded_part` is what notices the desk is running on stand-ins.
 
-Authored so far: the knob, and the channel fader cap.
+Authored so far: the knob, the channel fader cap, and the tape reel flange.
+
+The reel is where the line between the two kinds of geometry is sharpest, and worth reading as
+the example. The flange is the same object in every session, so it is authored -- including its
+three windows, which exist because a smooth disc spinning is indistinguishable from a disc at
+rest. The **tape pack** is not in the asset: how much tape is on a reel is a function of how
+far through the song you are, so Godot draws it, as a disc behind the flange that is visible
+only through those windows. That is also what the windows are for on a real machine.
+
+Which makes the transport say something it could not say before. It was three booleans and a
+float -- rolling, armed, where -- and now the reels carry *how far through*, readable from
+across the room without reading anything. The pack grows as a square root, because tape winds
+by area; `TapeDeck.song_fraction()` returns -1 rather than guessing when no backend has said
+how long the project is, and the reels then sit half wound and make no claim.
 
 ## Things that are deliberately not done yet
 

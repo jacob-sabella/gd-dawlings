@@ -88,6 +88,23 @@ def cut(obj, cutter):
     return obj
 
 
+def fuse(obj, other):
+    """Union `other` into `obj` and throw it away.
+
+    Not the same as `join`. Joining puts two shells in one mesh and leaves them overlapping;
+    anything cut afterwards is cutting a non-manifold solid, and what comes back is whatever
+    the solver felt like -- in practice, edge loops that silently cease to exist. If two parts
+    occupy the same space and something will be cut out of them later, they have to be fused.
+    """
+    bpy.context.view_layer.objects.active = obj
+    mod = obj.modifiers.new("Fuse", "BOOLEAN")
+    mod.object = other
+    mod.operation = "UNION"
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.data.objects.remove(other, do_unlink=True)
+    return obj
+
+
 def bevel_rings(obj, rings):
     """Chamfer the horizontal edge loops at the given heights.
 

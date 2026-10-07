@@ -15,9 +15,18 @@ extends Surface
 
 const REEL_RADIUS := 0.085
 const REEL_SPACING := 0.26
+const MESH_PATH := "res://assets/hardware/reel.glb"
+
+## The tape pack, which the flange deliberately does not include: it is a function of how far
+## through the song you are, so it is computed rather than authored. Seen only through the
+## flange's three windows, which is what the windows are for on a real machine.
+const PACK_HUB := 0.0215
+const PACK_FULL := 0.0735
 
 var _left_reel: Node3D
 var _right_reel: Node3D
+var _left_pack: MeshInstance3D
+var _right_pack: MeshInstance3D
 var _counter: Label3D
 var _tempo_label: Label3D
 var _play_lamp: PanelButton
@@ -45,6 +54,8 @@ func _rebuild() -> void:
 
 	_left_reel = _make_reel(-REEL_SPACING * 0.5)
 	_right_reel = _make_reel(REEL_SPACING * 0.5)
+	_left_pack = _left_reel.get_node_or_null(^"Pack")
+	_right_pack = _right_reel.get_node_or_null(^"Pack")
 
 	_counter = Label3D.new()
 	_counter.font_size = 72
@@ -94,6 +105,44 @@ func _make_reel(x: float) -> Node3D:
 	hub.position = Vector3(x, 0.0, 0.01)
 	_adopt(hub)
 
+	# BEHIND the flange, so the only way to see it is through the windows -- which is both the
+	# cheapest way to draw a tape pack and the honest one. A pack drawn in front would be a
+	# disc sitting on a reel rather than tape wound inside one.
+	var pack := MeshInstance3D.new()
+	pack.name = "Pack"
+	var pack_mesh := CylinderMesh.new()
+	pack_mesh.height = 0.008
+	pack_mesh.radial_segments = 48
+	pack.mesh = pack_mesh
+	pack.rotation_degrees = Vector3(90, 0, 0)
+	# Pushed up until its face all but touches the back of the flange. A pack sitting deeper is
+	# geometrically fine and visually absent: it falls into the shadow the flange casts and the
+	# windows read as holes in a plate. The whole feature lives or dies on being lit.
+	pack.position = Vector3(0, 0, -0.0065)
+	# Lighter than real tape, for the same reason. Oxide is nearly black, and nearly black at
+	# the bottom of a recess under studio lighting is just black.
+	pack.material_override = Materials.cap_plastic(Color(0.21, 0.135, 0.10))
+	hub.add_child(pack)
+
+	var flange := Part.build(
+		MESH_PATH,
+		Materials.brushed_metal(),
+		{"hub": Materials.cap_plastic(Color(0.6, 0.18, 0.16))},
+	)
+	if flange != null:
+		# Modelled axis-up; the axis here is the panel normal, which is local Z.
+		flange.rotation_degrees = Vector3(90, 0, 0)
+		hub.add_child(flange)
+	else:
+		hub.add_child(_stand_in())
+	return hub
+
+
+## The pre-Blender reel: a plate, three crossing bars and a boss. Kept because a transport you
+## cannot see turning is the one failure this surface exists to avoid.
+func _stand_in() -> Node3D:
+	var holder := Node3D.new()
+
 	var flange := MeshInstance3D.new()
 	var flange_mesh := CylinderMesh.new()
 	flange_mesh.top_radius = REEL_RADIUS
@@ -103,10 +152,8 @@ func _make_reel(x: float) -> Node3D:
 	flange.mesh = flange_mesh
 	flange.rotation_degrees = Vector3(90, 0, 0)
 	flange.material_override = Materials.brushed_metal()
-	hub.add_child(flange)
+	holder.add_child(flange)
 
-	# Three spokes, so rotation is VISIBLE. A smooth disc spinning is indistinguishable from a
-	# disc at rest, which would defeat the entire reason for drawing a reel.
 	for i in 3:
 		var spoke := MeshInstance3D.new()
 		var spoke_mesh := BoxMesh.new()
@@ -115,7 +162,7 @@ func _make_reel(x: float) -> Node3D:
 		spoke.rotation_degrees = Vector3(0, 0, i * 60.0)
 		spoke.position = Vector3(0, 0, 0.004)
 		spoke.material_override = Materials.cap_plastic(Color(0.1, 0.11, 0.12))
-		hub.add_child(spoke)
+		holder.add_child(spoke)
 
 	var centre := MeshInstance3D.new()
 	var centre_mesh := CylinderMesh.new()
@@ -126,8 +173,46 @@ func _make_reel(x: float) -> Node3D:
 	centre.rotation_degrees = Vector3(90, 0, 0)
 	centre.position = Vector3(0, 0, 0.006)
 	centre.material_override = Materials.cap_plastic(Color(0.6, 0.18, 0.16))
-	hub.add_child(centre)
-	return hub
+	holder.add_child(centre)
+	return holder
+
+
+## How much tape is on a reel holding `fraction` of the song, as a radius.
+##
+## Not linear in the fraction, because tape has thickness: a wound pack grows by AREA, so the
+## radius goes as a square root and a reel spends most of a song looking nearly full. Getting
+## this wrong is visible -- a linear pack empties far too fast in the first minute and then
+## crawls -- and it costs one sqrt to get right.
+static func pack_radius(fraction: float) -> float:
+	var f := clampf(fraction, 0.0, 1.0)
+	return sqrt(PACK_HUB * PACK_HUB + f * (PACK_FULL * PACK_FULL - PACK_HUB * PACK_HUB))
+
+
+## Where the song is, as a fraction, or -1 when nobody has said how long the song is.
+##
+## `timeline_length()` always returns a usable number because it floors at one second, which is
+## right for drawing a ruler and wrong for dividing by: against a backend with no timeline it
+## would put both reels hard against their stops and call it a reading. -1 means "unknown", and
+## the reels then sit half wound and stay there, which is a machine with a tape on it rather
+## than a machine making a claim.
+static func song_fraction(state: MixState) -> float:
+	if state.project_length <= 0.0:
+		return -1.0
+	return clampf(state.position_seconds / state.project_length, 0.0, 1.0)
+
+
+func _update_packs() -> void:
+	if _left_pack == null or _right_pack == null:
+		return
+	var played := song_fraction(DAW.state)
+	var left := 0.5 if played < 0.0 else 1.0 - played
+	var right := 0.5 if played < 0.0 else played
+	# Left is the supply reel and empties; right is the takeup and fills. Reversing these is
+	# the kind of mistake nobody reports and everybody notices.
+	(_left_pack.mesh as CylinderMesh).top_radius = pack_radius(left)
+	(_left_pack.mesh as CylinderMesh).bottom_radius = pack_radius(left)
+	(_right_pack.mesh as CylinderMesh).top_radius = pack_radius(right)
+	(_right_pack.mesh as CylinderMesh).bottom_radius = pack_radius(right)
 
 
 func _refresh() -> void:
@@ -150,4 +235,5 @@ func _process(delta: float) -> void:
 		_spin += delta * 2.4
 	_left_reel.rotation.z = -_spin
 	_right_reel.rotation.z = -_spin
+	_update_packs()
 	_refresh()

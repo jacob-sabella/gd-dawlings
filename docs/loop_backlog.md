@@ -106,8 +106,19 @@ desk -- and it will pay in VR. Before authoring the next part, decide what dista
 from and spend the triangles there; 1088 tris is on the heavy side for something there are a
 hundred of, and most of them are in the chamfers, which do pay.
 
+Done since: the fader cap, and the tape reel flange.
+
+The fader cap confirmed the rule -- its scooped silhouette reads at ordinary desk distance
+where the knob's knurling did not. The reel went further and found the better question: not
+"how detailed should this part be" but "which half of it is the same in every session". The
+flange is; the tape pack is not, and splitting them that way turned a cosmetic pass into a
+readout the transport did not have.
+
 Next candidates, in order of how much screen they own:
-- Fader cap (console, one per strip, and the thing hands reach for most).
-- Tape reels (the one thing in the room that moves continuously, so the spokes matter).
 - Jack sockets and plug shells on the patchbay.
 - Chamfered chassis edges and 19" rack ears.
+- The meter bridge arm, which is currently two posts and a shelf.
+
+Still outstanding from before any of this: the mobile renderer pass (3782 tris per reel is
+fine on desktop and worth re-measuring on a standalone headset), audio, consuming
+GetProjectStructure, guest write round-tripping, and the participant roster.

@@ -52,6 +52,7 @@ func _ready() -> void:
 	_test_bank_selector_says_which_tracks_these_are()
 	_test_bridge_arrangement_is_parsed()
 	_test_knob_is_the_moulded_part()
+	_test_the_reels_say_how_far_through_the_song_you_are()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1022,11 +1023,18 @@ func _test_knob_is_the_moulded_part() -> void:
 	# exporter's business. Matching by index would paint a knob's body white and its line
 	# black: a perfectly plausible-looking part that is wrong. Everything is matched on the
 	# authored material name instead, so the names are a contract and the suite holds it.
+	# `accent` is the material-name fragment the control actually passes to Part.build, and the
+	# footprint is the envelope the panel laid itself out around before any of this was a mesh.
+	# The fragment is not a shared convention -- a knob's second surface is its indicator, a
+	# reel's is its hub -- so each part states its own, which is the only way this check means
+	# anything.
 	var parts := {
-		Knob.MESH_PATH: Vector2(0.0235, 0.0235),
-		Fader.MESH_PATH: Vector2(0.0150, 0.0225),
+		Knob.MESH_PATH: {"size": Vector2(0.0235, 0.0235), "accent": "indicator"},
+		Fader.MESH_PATH: {"size": Vector2(0.0150, 0.0225), "accent": "indicator"},
+		TapeDeck.MESH_PATH: {"size": Vector2(0.1705, 0.1705), "accent": "hub"},
 	}
 	for path in parts:
+		var accent: String = parts[path]["accent"]
 		var mesh := Part.mesh(path)
 		check("%s resolves" % path.get_file(), mesh != null)
 		if mesh == null:
@@ -1037,12 +1045,11 @@ func _test_knob_is_the_moulded_part() -> void:
 		var named := 0
 		for i in mesh.get_surface_count():
 			var m := mesh.surface_get_material(i)
-			if m != null and String(m.resource_name).containsn("indicator"):
+			if m != null and String(m.resource_name).containsn(accent):
 				named += 1
-		check("%s names exactly one surface the indicator" % path.get_file(), named == 1)
+		check("%s names exactly one surface '%s'" % [path.get_file(), accent], named == 1)
 
-		# The envelope every panel laid itself out around, before any of this was a mesh.
-		var size: Vector2 = parts[path]
+		var size: Vector2 = parts[path]["size"]
 		var box := mesh.get_aabb()
 		check("%s still fits its footprint" % path.get_file(),
 				box.size.x < size.x and box.size.y < size.y)
@@ -1067,3 +1074,46 @@ func _test_knob_is_the_moulded_part() -> void:
 	# move: at value 1.0 the whole knob has turned half a sweep past centre.
 	close_to("turning the value turns the whole part", spindle.rotation.z, -0.5 * Knob.SWEEP)
 	knob.queue_free()
+
+
+## The tape pack is the one place in this project where authored and computed geometry meet on
+## the same object, so the seam gets its own checks.
+##
+## It is also the first thing on the deck that makes a CLAIM about the song rather than about
+## the transport. A reel that reports progress it does not have is exactly the peripheral lie
+## the deck's own header warns about -- you read it from across the room, at a glance, and
+## never think to doubt it.
+func _test_the_reels_say_how_far_through_the_song_you_are() -> void:
+	var state := MixState.new()
+
+	state.set_project_length(0.0)
+	state.position_seconds = 42.0
+	check("with no timeline, the reels decline to say", TapeDeck.song_fraction(state) < 0.0)
+
+	state.set_project_length(200.0)
+	state.position_seconds = 50.0
+	close_to("a quarter in reads a quarter in", TapeDeck.song_fraction(state), 0.25)
+
+	state.position_seconds = 999.0
+	close_to("past the end is the end, not more than it", TapeDeck.song_fraction(state), 1.0)
+
+	# Tape winds by area, so the radius goes as a square root. The test that matters is not the
+	# endpoints -- any formula gets those -- but the middle: half the song must leave a pack
+	# well over half way out, and a linear one would not.
+	close_to("an empty reel is down to the hub", TapeDeck.pack_radius(0.0), TapeDeck.PACK_HUB)
+	close_to("a full reel is out to the rim", TapeDeck.pack_radius(1.0), TapeDeck.PACK_FULL)
+	var half := TapeDeck.pack_radius(0.5)
+	var linear := (TapeDeck.PACK_HUB + TapeDeck.PACK_FULL) * 0.5
+	check("half the song leaves more than half the tape", half > linear)
+	check("and not all of it", half < TapeDeck.PACK_FULL)
+
+	# The two reels are one tape. Whatever has left the supply is on the takeup, which in radius
+	# terms means the two packs' AREAS add up to one full pack, at every point in the song.
+	var hub_area := TapeDeck.PACK_HUB * TapeDeck.PACK_HUB
+	var full_area := TapeDeck.PACK_FULL * TapeDeck.PACK_FULL
+	for f in [0.0, 0.2, 0.5, 0.85, 1.0]:
+		var supply := TapeDeck.pack_radius(1.0 - f)
+		var takeup := TapeDeck.pack_radius(f)
+		close_to("tape is conserved at %.2f through" % f,
+				(supply * supply - hub_area) + (takeup * takeup - hub_area),
+				full_area - hub_area)
