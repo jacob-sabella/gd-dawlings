@@ -10,8 +10,12 @@ extends MultiMeshInstance3D
 ##
 ## A MultiMesh draws any number of them in ONE call. The price is that an instance cannot carry
 ## its own material: everything in a bank shares one, and the only thing that can vary per
-## instance is its transform and its colour. That is exactly the shape of a lamp, and it is why
-## this is useful here and would not be useful for, say, the knobs.
+## instance is its transform and its colour. That is exactly the shape of a lamp.
+##
+## It is also the shape of a knob and a fader cap, which this note used to say it was not. The
+## objection was that those MOVE, and a bank was read as a thing you fill once. A transform is
+## per-instance, so moving one is `move_slot` and costs a buffer write -- the same write a
+## Node3D would have done. Ninety knobs and ninety caps came off the object count for it.
 ##
 ## HOW IT IS USED
 ##

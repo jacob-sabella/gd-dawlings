@@ -350,7 +350,44 @@ Banking the patchbay's 180 jacks then moved `draws` not at all and `objects` fro
 3,845 at 90 tracks, for the reason above. Primitives halved too, 350k to 171k, because a
 shadow-casting jack was being submitted to both passes.
 
-A 90-track console is now 222 meshes where it was 1,032, and the patchbay 55 where it was 235.
+A 90-track console is now 42 meshes where it was 1,032, and the patchbay 55 where it was 235.
+
+### The moving parts, which were the last 180
+
+Knobs and fader caps were left loose for a long time on an argument that turned out to be
+wrong: a bank is filled once, and these move. The transform is per-instance, so moving one is
+a `move_slot` -- the same buffer write a Node3D would have done for its own transform. The
+only real requirement is that the slot be rewritten from the control's own place in the tree
+rather than from a formula, because a knob sits under a strip under a panel under a tilted
+surface and a second definition of where it is would drift against the first.
+
+That left 180 one-off `MeshInstance3D`s on a 90-track desk, which is what came off:
+
+| 90 tracks, wide | draws | objects | frame ms |
+|---|---|---|---|
+| before | 820 | 2,293 | 1.28 |
+| knobs and caps banked | 830 | **1,225** | **0.95** |
+
+`draws` going UP by ten is the batching table above behaving exactly as it says: two new banks
+of a two-surface part is a handful of new materials in frame, and the 180 objects they replace
+were already sharing materials with each other, so there was never a `draws` win available
+here. `objects` nearly halves and the frame drops a quarter, which is the win that was.
+
+The cap is still a node even when banked -- an empty one -- because the slide emitter parents
+to it so the sound comes from where the cap is, and a bank slot is a row in a buffer with
+nowhere to hang a speaker.
+
+Checked for correctness two ways. A pixel diff of the console before and against after came
+back identical apart from a tape reel that had turned between captures: banked and loose
+geometry land in the same place at the same angle. And `_test_a_banked_control_still_moves`
+mounts one banked and one loose control under a tilted, offset, rotated parent and asserts
+they agree at three values -- then separately asserts the cap crossed its full 100mm and the
+knob its full 270 degrees, because two frozen caps agree with each other perfectly.
+
+Rack knobs are deliberately NOT banked. They are created lazily as a plugin's parameters
+arrive and as pages change, which is after the surface would have committed; sizing a bank for
+the worst case and hiding the unused slots is a different piece of work, and the rack's mesh
+count does not grow with the session anyway.
 
 ### Lettering: the largest cost, and nothing to batch it with
 

@@ -30,12 +30,17 @@ var write_value: Callable = Callable()
 ## One per strip, identical on every strip, and never recoloured -- which is the easiest kind of
 ## thing to bank. See hardware/mesh_bank.gd.
 var slot_bank: MeshBank
+## And where the moulded CAP gets drawn. Same argument as the slot, with the one difference
+## that a cap moves -- so this one is kept and rewritten on every value change rather than
+## claimed once and forgotten. See MeshBank.move_slot.
+var cap_bank: MeshBank
 
 ## Slot geometry, out here because the bank has to size its box before any fader exists.
 const SLOT_SIZE := Vector3(WIDTH * 0.45, TRAVEL + 0.012, 0.004)
 const SLOT_OFFSET := Vector3(0, TRAVEL * 0.5, 0.002)
 
 var _cap: Node3D
+var _cap_slot := -1
 var _grab_offset := 0.0
 var _slide: AudioStreamPlayer3D
 ## Travel per second, smoothed. The slide is the only sound here that is CONTINUOUS, so unlike a
@@ -66,14 +71,22 @@ func _ready() -> void:
 	# The moulded cap: scooped waist, a lip at each end, the pointer line down in the scoop
 	# where a finger bridges over it (tools/blender/fader_cap.py). Modelled in the orientation
 	# it is used in, so unlike the knob it needs no correcting rotation.
-	_cap = Part.build(
-		MESH_PATH,
-		Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
-		{"indicator": Materials.legend()},
-	)
-	if _cap == null:
-		_cap = _stand_in()
-	add_child(_cap)
+	# Banked, the cap is an empty node that the bank slot shadows. It still has to BE a node:
+	# the slide emitter parents to it so the sound comes from where the cap is, and a bank slot
+	# is a row in a buffer with nowhere to hang a speaker.
+	if cap_bank != null:
+		_cap = Node3D.new()
+		add_child(_cap)
+		_cap_slot = cap_bank.place(_cap, Color.WHITE)
+	else:
+		_cap = Part.build(
+			MESH_PATH,
+			Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+			{"indicator": Materials.legend()},
+		)
+		if _cap == null:
+			_cap = _stand_in()
+		add_child(_cap)
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -183,5 +196,8 @@ func _apply_from_local_y(local_y: float) -> void:
 
 
 func _on_value_changed() -> void:
-	if _cap:
-		_cap.position = Vector3(0, value * TRAVEL, 0.009)
+	if _cap == null:
+		return
+	_cap.position = Vector3(0, value * TRAVEL, 0.009)
+	if _cap_slot >= 0:
+		cap_bank.move_slot(_cap_slot, cap_bank.global_transform.affine_inverse() * _cap.global_transform)

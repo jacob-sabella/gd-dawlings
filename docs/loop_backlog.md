@@ -475,9 +475,6 @@ and re-measuring is what turned "labels are probably the problem" into a number,
 one flag. And the test walks the whole built studio asserting every label has a range, rather
 than testing the helper -- a helper that is correct and uncalled is the actual failure mode
 here. Verified by deleting one call site and watching it fail by name.
-- Knobs and fader caps are authored parts and `MeshBank.of` handles those. They turn and slide,
-  so they need `move_slot` on every value change rather than a one-time claim. ~180 objects at
-  90 tracks, but they share materials, so expect an `objects` win and little on `draws`.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - Draw calls are at 727 at 90 tracks wide, from 7,600. This is probably the point to stop and
   put the effort back into the gear itself; the remaining items are small and the measurement
@@ -516,3 +513,48 @@ ones nobody has thought of. Mutation-checked twice: routing the sources straight
 again fails it at "0.0mm apart", and never building a mult fails it by name.
 
 846 checks, 0 failed.
+
+### Tick M -- the last 180 loose objects
+
+Knobs and fader caps, banked. The prediction made when this went on the backlog -- "expect an
+`objects` win and little on `draws`" -- was right, and worth recording because it was made
+from the batching table rather than from a measurement:
+
+| 90 tracks, wide | draws | objects | frame ms |
+|---|---|---|---|
+| before | 820 | 2,293 | 1.28 |
+| after | 830 | **1,225** | **0.95** |
+
+`draws` went UP by ten. Two new banks of a two-surface part add materials to the frame, and
+the 180 objects they replaced already shared materials with each other, so there was no
+`draws` win available. Objects nearly halved; the frame dropped a quarter. The console's loose
+mesh count went 222 -> 42 at 90 tracks.
+
+The argument that had kept these loose was in `mesh_bank.gd`'s own class note: a bank is
+filled once, and these move. That was wrong -- a transform is per-instance, and `move_slot`
+has existed since the bank was written, with a doc comment that says "a fader cap slides and a
+knob turns". The note has been corrected. A stale justification in a docstring is the same
+failure as a stale doc elsewhere in this backlog, and it is worse here because it reads as a
+decision rather than as a description.
+
+One thing the design had to concede: the fader cap stays a node even when banked, an empty
+one, because the slide emitter parents to it so the sound comes from where the cap is. A bank
+slot is a row in a buffer with nowhere to hang a speaker.
+
+Two instruments, because neither alone is enough. A **pixel diff** of the console before
+against after: identical apart from a tape reel that had turned between captures, which is
+what proves banked and loose land at the same place and the same angle -- the test cannot show
+that, because it compares the banked slot against the loose node through the same chain. And
+**`_test_a_banked_control_still_moves`**, which mounts one banked and one loose control under
+a tilted, offset, rotated parent -- a test at the origin agrees with every wrong composition
+-- and then separately asserts the cap crossed its full 100mm and the knob its full 270
+degrees, because two frozen controls agree with each other perfectly. Mutation-checked by
+deleting both `move_slot` calls: seven checks fail, and informatively ("9.00mm", "50.80mm",
+"100.40mm" -- the cap frozen at build position).
+
+Rack knobs left loose on purpose. They are created lazily as parameters arrive and as pages
+change, i.e. after the surface has committed, so banking them means sizing for the worst case
+and hiding unused slots. The rack's mesh count does not grow with the session, so this buys
+little; recorded as a decision rather than an oversight.
+
+858 checks, 0 failed.

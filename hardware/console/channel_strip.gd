@@ -23,14 +23,20 @@ var _name_label: Label3D
 var _db_label: Label3D
 
 ## Where this strip's repeated geometry gets drawn, if the console gave it somewhere. See
-## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise. All five are
-## optional and a strip with none of them builds everything itself, which is what keeps a strip
-## usable outside a console surface.
+## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise. All seven
+## are optional and a strip with none of them builds everything itself, which is what keeps a
+## strip usable outside a console surface.
+##
+## The last two hold the only MOVING geometry on the desk: a knob turns and a cap slides, so
+## their slots are rewritten on every value change rather than claimed once. That is the whole
+## difference between them and the other five.
 var body_bank: MeshBank
 var lamp_bank: MeshBank
 var plate_bank: MeshBank
 var chip_bank: MeshBank
 var slot_bank: MeshBank
+var knob_bank: MeshBank
+var cap_bank: MeshBank
 
 const PLATE_SIZE := Vector3(WIDTH - 0.002, HEIGHT, 0.008)
 const PLATE_OFFSET := Vector3(0, HEIGHT * 0.5, -0.005)
@@ -61,6 +67,7 @@ func _ready() -> void:
 		chip_bank, CHIP_SIZE, CHIP_OFFSET, null, Color.WHITE, "ColourChip")
 
 	_pan = Knob.new()
+	_pan.body_bank = knob_bank
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
 	_pan.turned.connect(func(v: float): DAW.set_track_pan(track_index, v))
 	add_child(_pan)
@@ -92,6 +99,7 @@ func _ready() -> void:
 	_fader = Fader.new()
 	_fader.track_index = track_index
 	_fader.slot_bank = slot_bank
+	_fader.cap_bank = cap_bank
 	_fader.position = Vector3(-0.011, 0.040, 0.004)
 	add_child(_fader)
 

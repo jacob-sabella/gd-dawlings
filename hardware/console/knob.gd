@@ -28,7 +28,18 @@ const MESH_PATH := "res://assets/hardware/knob.glb"
 
 signal turned(v: float)
 
+## Where this knob's body gets drawn, if the desk gave it somewhere. Ninety strips is ninety
+## identical moulded knobs in one finish, which is the shape a bank wants -- the only thing
+## that makes a knob harder than a lamp is that it TURNS, and a bank slot can be moved. See
+## MeshBank.move_slot.
+var body_bank: MeshBank
+
 var _spindle: Node3D
+## The node whose transform the bank slot follows. Kept rather than freed after the claim,
+## because unlike a jack this part does not stay where it was put: every turn has to hand the
+## bank a new transform, and the cheapest way to compute one is to let the scene tree do it.
+var _aim: Node3D
+var _slot := -1
 var _grab_angle := 0.0
 var _grab_value := 0.0
 var _last_detent := -1
@@ -45,19 +56,28 @@ func _ready() -> void:
 	_spindle = Node3D.new()
 	add_child(_spindle)
 
-	var moulded := Part.build(
-		MESH_PATH,
-		Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
-		{"indicator": Materials.legend()},
-	)
-	if moulded != null:
-		# Modelled axis-up, exported through glTF's Y-up conversion, stood back up here. Same
-		# correction the CylinderMesh needed, for the same reason: a panel knob's axis is the
-		# panel normal, which is local Z.
-		moulded.rotation_degrees = Vector3(90, 0, 0)
-		_spindle.add_child(moulded)
+	# Modelled axis-up, exported through glTF's Y-up conversion, stood back up here. Same
+	# correction the CylinderMesh needed, for the same reason: a panel knob's axis is the panel
+	# normal, which is local Z. Done on a holder either way, so the banked knob and the loose
+	# one sit at the same angle.
+	_aim = Node3D.new()
+	_aim.rotation_degrees = Vector3(90, 0, 0)
+	_spindle.add_child(_aim)
+
+	if body_bank != null:
+		_slot = body_bank.place(_aim, Color.WHITE)
 	else:
-		_spindle.add_child(_stand_in())
+		var moulded := Part.build(
+			MESH_PATH,
+			Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+			{"indicator": Materials.legend()},
+		)
+		if moulded != null:
+			_aim.add_child(moulded)
+		else:
+			_aim.queue_free()
+			_aim = null
+			_spindle.add_child(_stand_in())
 
 	var shape := CollisionShape3D.new()
 	var cyl := CylinderShape3D.new()
@@ -142,5 +162,12 @@ func _angle_of(at: Vector3) -> float:
 
 
 func _on_value_changed() -> void:
-	if _spindle:
-		_spindle.rotation = Vector3(0, 0, -(value - 0.5) * SWEEP)
+	if _spindle == null:
+		return
+	_spindle.rotation = Vector3(0, 0, -(value - 0.5) * SWEEP)
+	# Pushed to the bank AFTER the spindle has turned, and read off the aim node's global
+	# transform rather than composed by hand: the knob sits under a strip under a panel under
+	# a tilted surface, and reproducing that chain here would be a second definition of where
+	# the knob is, drifting against the first.
+	if _slot >= 0 and _aim != null:
+		body_bank.move_slot(_slot, body_bank.global_transform.affine_inverse() * _aim.global_transform)

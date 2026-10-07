@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_one_jack_takes_one_plug()
+	_test_a_banked_control_still_moves()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -1971,6 +1972,102 @@ func _test_one_jack_takes_one_plug() -> void:
 	check("and draws exactly one cable", plain._cables.size() == 1)
 	plain.queue_free()
 	bay.queue_free()
+
+
+func _test_a_banked_control_still_moves() -> void:
+	# The knob and the fader cap are the only MOVING geometry that got instanced, and the whole
+	# objection to instancing them was that a bank is filled once. It is not -- a transform is
+	# per-instance -- but that only holds if the move actually reaches the buffer, and a
+	# MultiMesh that never updated would look exactly like a desk whose controls are frozen in
+	# whatever position they were built at. Nothing else in the suite would notice.
+	#
+	# Mounted under a tilted, offset, rotated parent on purpose. A bank slot is composed
+	# through the entire chain from the bank's own transform down, and a test done at the
+	# origin agrees with every wrong composition.
+	DAW.use(OfflineBackend.new())
+	var desk := Node3D.new()
+	desk.position = Vector3(0.31, 0.92, -0.14)
+	desk.rotation_degrees = Vector3(-24.0, 11.0, 0.0)
+	add_child(desk)
+
+	var cap_bank := MeshBank.of(
+		Fader.MESH_PATH,
+		Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+		{"indicator": Materials.legend()})
+	var knob_bank := MeshBank.of(
+		Knob.MESH_PATH,
+		Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+		{"indicator": Materials.legend()})
+	check("the fader cap asset resolves", cap_bank != null)
+	check("the knob asset resolves", knob_bank != null)
+	if cap_bank == null or knob_bank == null:
+		desk.queue_free()
+		return
+	desk.add_child(cap_bank)
+	desk.add_child(knob_bank)
+
+	# One of each on both paths, at the same place, so the comparison is instanced-against-loose
+	# rather than instanced-against-a-formula-written-twice.
+	var banked_fader := Fader.new()
+	banked_fader.cap_bank = cap_bank
+	banked_fader.position = Vector3(0.05, 0.02, 0.004)
+	desk.add_child(banked_fader)
+	var loose_fader := Fader.new()
+	loose_fader.position = Vector3(0.05, 0.02, 0.004)
+	desk.add_child(loose_fader)
+
+	var banked_knob := Knob.new()
+	banked_knob.body_bank = knob_bank
+	banked_knob.position = Vector3(-0.03, 0.11, 0.004)
+	desk.add_child(banked_knob)
+	var loose_knob := Knob.new()
+	loose_knob.position = Vector3(-0.03, 0.11, 0.004)
+	desk.add_child(loose_knob)
+
+	cap_bank.commit()
+	knob_bank.commit()
+
+	var cap_seen: Array[Vector3] = []
+	var knob_seen: Array[Basis] = []
+	for v in [0.0, 0.5, 1.0]:
+		banked_fader.value = v
+		banked_fader._on_value_changed()
+		loose_fader.value = v
+		loose_fader._on_value_changed()
+		var cap_slot := cap_bank.global_transform * cap_bank.transform_of(0)
+		var cap_gap: float = cap_slot.origin.distance_to(loose_fader._cap.global_transform.origin)
+		check("a banked cap at %.1f sits where a loose one does (%.2fmm)" % [v, cap_gap * 1000.0],
+				cap_gap < 0.0002)
+		cap_seen.append(cap_slot.origin)
+
+		banked_knob.value = v
+		banked_knob._on_value_changed()
+		loose_knob.value = v
+		loose_knob._on_value_changed()
+		var knob_slot := knob_bank.global_transform * knob_bank.transform_of(0)
+		var knob_gap: float = knob_slot.origin.distance_to(loose_knob._aim.global_transform.origin)
+		check("a banked knob at %.1f sits where a loose one does (%.2fmm)" % [v, knob_gap * 1000.0],
+				knob_gap < 0.0002)
+		knob_seen.append(knob_slot.basis.orthonormalized())
+
+	# And it moved the right distance, which the agreement above cannot show: two frozen caps
+	# agree with each other perfectly. 100mm of travel, measured end to end.
+	var travelled: float = cap_seen[0].distance_to(cap_seen[2])
+	check("the cap travelled its full throw (%.1fmm)" % (travelled * 1000.0),
+			absf(travelled - Fader.TRAVEL) < 0.0005)
+	check("and half of it at half value",
+			absf(cap_seen[0].distance_to(cap_seen[1]) - Fader.TRAVEL * 0.5) < 0.0005)
+
+	# The knob's 270-degree sweep, taken in two halves because an angle between two vectors
+	# cannot express more than 180 and a single end-to-end reading would come back as 90.
+	var lower: float = knob_seen[0].x.angle_to(knob_seen[1].x)
+	var upper: float = knob_seen[1].x.angle_to(knob_seen[2].x)
+	check("the knob turned half its sweep to centre (%.1f deg)" % rad_to_deg(lower),
+			absf(lower - Knob.SWEEP * 0.5) < 0.01)
+	check("and the other half past it (%.1f deg)" % rad_to_deg(upper),
+			absf(upper - Knob.SWEEP * 0.5) < 0.01)
+
+	desk.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:

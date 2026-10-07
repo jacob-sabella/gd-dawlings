@@ -151,6 +151,25 @@ func _rebuild() -> void:
 	var slot_bank := MeshBank.parts(Fader.SLOT_SIZE, Materials.recess())
 	slot_bank.name = "FaderSlots"
 	_panel.add_child(slot_bank)
+	# The two authored parts. Null when the asset will not resolve, in which case every knob
+	# and cap falls back to building its own mesh and the desk still works -- same contract as
+	# the patchbay's jacks.
+	var knob_bank := MeshBank.of(
+		Knob.MESH_PATH,
+		Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+		{"indicator": Materials.legend()},
+	)
+	if knob_bank != null:
+		knob_bank.name = "PanKnobs"
+		_panel.add_child(knob_bank)
+	var cap_bank := MeshBank.of(
+		Fader.MESH_PATH,
+		Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+		{"indicator": Materials.legend()},
+	)
+	if cap_bank != null:
+		cap_bank.name = "FaderCaps"
+		_panel.add_child(cap_bank)
 	# Unshaded like the lamps, because a colour chip is a lit patch and not a painted one -- it
 	# has to stay findable on a desk of 32 identical strips in a dim room.
 	var chip_bank := MeshBank.lamps(ChannelStrip.CHIP_SIZE)
@@ -170,6 +189,8 @@ func _rebuild() -> void:
 		strip.plate_bank = plate_bank
 		strip.chip_bank = chip_bank
 		strip.slot_bank = slot_bank
+		strip.knob_bank = knob_bank
+		strip.cap_bank = cap_bank
 		strip.position = Vector3(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
 		strips.append(strip)
@@ -182,6 +203,10 @@ func _rebuild() -> void:
 	plate_bank.commit()
 	slot_bank.commit()
 	chip_bank.commit()
+	if knob_bank != null:
+		knob_bank.commit()
+	if cap_bank != null:
+		cap_bank.commit()
 
 	master = MasterSection.new()
 	master.name = "Master"
