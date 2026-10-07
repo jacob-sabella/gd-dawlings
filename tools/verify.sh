@@ -20,6 +20,27 @@ if find . -name '*.gd' -not -path './.godot/*' | while read -r f; do
   godot --headless --path . --editor --quit >/dev/null 2>&1
 fi
 
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
 godot --headless --path . tests/tests.tscn 2>&1 \
-  | grep -vE "OpenXR|RuntimeManifest|RuntimeInterface|xrEnumerate|Failed querying|HMD was not|Check logged|normal mode|^\s*$"
-exit "${PIPESTATUS[0]}"
+  | grep -vE "OpenXR|RuntimeManifest|RuntimeInterface|xrEnumerate|Failed querying|HMD was not|Check logged|normal mode|^\s*$" \
+  | tee "$log"
+status="${PIPESTATUS[0]}"
+
+# A SCRIPT ERROR is a failure even when nothing reported a failure.
+#
+# This is here because of a run that printed "499 checks, 0 failed" while four scripts were not
+# compiling at all. A GDScript that fails to parse does not throw -- it simply is not there, so
+# `Knob.new()` returns null, every check that would have touched a knob never executes, and the
+# count quietly drops by seventeen while the summary stays green. A suite that can pass over a
+# build that does not build is worse than no suite, because it is the one you stop reading.
+if grep -qE "^(SCRIPT ERROR|ERROR: Failed to load script)" "$log"; then
+  echo
+  echo "verify: a script failed to compile or raised at runtime -- see SCRIPT ERROR above."
+  echo "verify: the check count is NOT trustworthy on this run; checks in a broken script"
+  echo "verify: never ran and therefore never failed."
+  status=1
+fi
+
+exit "$status"

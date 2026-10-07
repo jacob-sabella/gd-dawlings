@@ -117,4 +117,8 @@ func _on_patch_requested(from: PatchPoint, to: PatchPoint) -> void:
 		# Said out loud, for the reason in the class note.
 		push_warning("Patchbay: cannot create %d -> %d. The ReaScript bridge is not loaded in Reaper, and OSC has no message for making a send." % [src, dst])
 		return
+	# Only on the send that actually took. A plug sound on a refused patch would say the cable is
+	# in when it is not, which is the one thing the sound is here to be trusted about -- and the
+	# two failures above are already said out loud in the log.
+	Foley.play(to, Foley.plug_seat(), -6.0)
 	mark_dirty()

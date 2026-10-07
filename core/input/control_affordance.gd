@@ -36,6 +36,10 @@ func grab_begin(by: Node, at: Vector3) -> void:
 		return
 	held_by = by
 	_on_grab_begin(at)
+	# After the handler, so a control whose sound depends on where it was grabbed has been told
+	# where that was. Before the signal, because the signal is what the rest of the scene reacts
+	# to and the noise the object makes should not arrive after its consequences.
+	Foley.play(self, _foley_contact(), contact_volume_db)
 	grab_started.emit(by)
 
 
@@ -60,6 +64,22 @@ func apply_remote(v: float) -> void:
 		return
 	value = v
 	_on_value_changed()
+
+
+## What this control sounds like when a hand closes on it, or null for the ones that are silent.
+##
+## The MECHANISM lives here and the SOUND does not, which is the whole point: in a headset every
+## control needs to be able to say "you have me" at the instant it is true, so no control should
+## have to grow its own player to do it. But a fader cap does not click and a patch point does
+## not tick, and a base class that invented a generic noise for everything would be worse than
+## silence -- it would make four different objects feel like the same object.
+func _foley_contact() -> AudioStream:
+	return null
+
+
+## Trimmed per control, because these are not equally loud in life. A button is the loudest thing
+## on a desk and a knob detent is near the floor of what you can hear over a monitor mix.
+var contact_volume_db: float = 0.0
 
 
 func _on_grab_begin(_at: Vector3) -> void: pass

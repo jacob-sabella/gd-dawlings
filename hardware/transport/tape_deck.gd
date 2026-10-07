@@ -32,6 +32,7 @@ var _tempo_label: Label3D
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
 var _spin := 0.0
+var _motor: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -235,5 +236,26 @@ func _process(delta: float) -> void:
 		_spin += delta * 2.4
 	_left_reel.rotation.z = -_spin
 	_right_reel.rotation.z = -_spin
+	_motor_follows_transport(delta)
 	_update_packs()
 	_refresh()
+
+
+## The deck hums while it is rolling, and the hum fades rather than switching.
+##
+## Same argument as the spin: it is driven by DAW.state.playing and nothing else, so it cannot
+## outlive a stop. The fade is because a motor does not start at speed -- but mostly because a
+## looping sample cut off at full level clicks, and the click is louder than the hum.
+func _motor_follows_transport(delta: float) -> void:
+	if _motor == null:
+		_motor = Foley.emitter(Foley.reel_motor(), -80.0)
+		_left_reel.add_child(_motor)
+		_motor.play()
+	var wanted := MOTOR_DB if DAW.state.playing else -80.0
+	_motor.volume_db = move_toward(_motor.volume_db, wanted, delta * MOTOR_FADE_DB_PER_SEC)
+
+
+## Low: this runs continuously for as long as the transport does, so it sets the noise floor of
+## the whole room rather than being an event in it.
+const MOTOR_DB := -20.0
+const MOTOR_FADE_DB_PER_SEC := 90.0

@@ -19,6 +19,10 @@ extends ControlAffordance
 ## themselves out around those numbers before the mesh existed.
 
 const SWEEP := deg_to_rad(270.0)
+## Ticks across the full sweep. Twenty-four puts a detent every eleven degrees, which is about
+## the smallest deliberate nudge a wrist makes; finer than that and the ticks fuse into a rattle
+## that says "something is moving" without saying how much.
+const DETENTS := 24
 const RADIUS := 0.011
 const MESH_PATH := "res://assets/hardware/knob.glb"
 
@@ -27,6 +31,7 @@ signal turned(v: float)
 var _spindle: Node3D
 var _grab_angle := 0.0
 var _grab_value := 0.0
+var _last_detent := -1
 
 
 static func shared_mesh() -> Mesh:
@@ -92,8 +97,20 @@ func _stand_in() -> Node3D:
 	return holder
 
 
+## Well below the buttons. These fire twenty times a second during a sweep, and anything near
+## conversational level becomes the loudest thing in the room the moment someone turns a knob.
+const DETENT_DB := -16.0
+
+
+func _foley_contact() -> AudioStream:
+	# Taking hold of a detented knob moves it off its notch, so it ticks once before you have
+	# turned it anywhere. That is not a flourish; it is the confirmation that you have it.
+	return Foley.knob_detent()
+
+
 func _on_grab_begin(at: Vector3) -> void:
 	_grab_angle = _angle_of(at)
+	_last_detent = detent_of(value)
 	_grab_value = value
 
 
@@ -102,8 +119,21 @@ func _on_grab_move(at: Vector3) -> void:
 	# Wrapped, or a knob dragged past straight-down would jump a full turn.
 	delta = wrapf(delta, -PI, PI)
 	value = clampf(_grab_value - delta / SWEEP, 0.0, 1.0)
+	# One tick per boundary CROSSED, not one per frame in which the value changed. A knob turned
+	# slowly should tick rarely and a knob spun fast should tick fast, and the only thing that
+	# gets both right is counting the boundaries rather than the frames.
+	var detent := detent_of(value)
+	if detent != _last_detent:
+		_last_detent = detent
+		Foley.play(self, Foley.knob_detent(), DETENT_DB)
 	_on_value_changed()
 	turned.emit(value)
+
+
+## Which notch a 0..1 value sits in. Static so the suite can check the thing that matters -- that
+## a full sweep crosses every detent exactly once -- without turning a knob.
+static func detent_of(v: float) -> int:
+	return mini(int(clampf(v, 0.0, 1.0) * DETENTS), DETENTS - 1)
 
 
 func _angle_of(at: Vector3) -> float:

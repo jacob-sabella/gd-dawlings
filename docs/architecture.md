@@ -230,6 +230,60 @@ across the room without reading anything. The pack grows as a square root, becau
 by area; `TapeDeck.song_fraction()` returns -1 rather than guessing when no backend has said
 how long the project is, and the reels then sit half wound and make no claim.
 
+## Audio: the gear, not the mix
+
+**The mix is not ours to play.** Reaper is already running, through monitors, in the room this
+is running in. Rendering the same audio here would put a second copy of a critical listening
+signal a few milliseconds behind the first, which is a comb filter rather than a feature. So
+nothing in this project touches programme audio, and that is a boundary rather than a backlog
+item.
+
+What was missing is the sound the *hardware* makes, and in a headset that is not decoration. A
+fader you have grabbed and a fader you are about to grab look nearly identical, there is nothing
+under your fingers to tell them apart, and a tracked hand is off by a centimetre about as often
+as it is on. Sound is the only channel left that can say "contact" at the instant contact
+happens -- and because it is positional, it also says *which one*.
+
+### Synthesised, for the same reason everything else is computed
+
+`core/audio/foley.gd` builds every sound from arithmetic into an `AudioStreamWAV`. No samples are
+committed. A `.wav` sitting next to all of this would be the one asset nobody could read or
+adjust, and the alternative is a few lines per sound that anyone can tune.
+
+It also makes the suite possible, which matters more than it sounds like. The two ways
+synthesised audio goes wrong are both silent to a reader and obvious in a buffer:
+
+- **a loop that steps at the seam** -- the last sample far from the first, which is a click
+  repeating at the loop rate; inaudible as a defect, impossible to ignore as a rhythm.
+- **a one-shot cut off before it has decayed** -- the same click by another route.
+
+`tests/run_tests.gd` checks both on every sound, plus clipping, DC, duration and that the energy
+is at the front where an attack belongs. `tools/foley_preview.gd` writes the five sounds out as
+playable `.wav` files and one `.svg` of their waveforms, because the only review that finally
+counts on a sound is listening to it.
+
+### Where the sounds attach
+
+`ControlAffordance` owns the *mechanism* -- a `_foley_contact()` virtual, played on grab -- and
+deliberately not the *sound*. Every control gets contact feedback for free without growing its
+own player, but a base class that invented one generic noise for everything would be worse than
+silence: it would make four different objects feel like one object. A fader cap does not click
+and a patch point does not tick, so those return null and say what they do elsewhere.
+
+| Sound | Fires on | Why there |
+|---|---|---|
+| button click | `PanelButton` grab | two transients, because a snap-action switch has two |
+| knob detent | every notch **crossed**, not every frame changed | so a slow turn ticks slowly and a fast one ticks fast |
+| fader slide | held, gain from smoothed speed | continuous, so it needs a loudness rather than a moment |
+| plug seating | only the send that actually took | a sound on a refused patch would say the cable is in |
+| reel motor | `DAW.state.playing`, faded | same rule as the spin: it cannot outlive a stop |
+
+The two continuous sounds are owned by the object making them, because they have a state and
+that object is what knows it. The fader's `_process` is off until a hand arrives, so ninety
+strips cost nothing when nobody is touching them, and its slide player is parented to the *cap*
+-- emitted from the strip origin it would sit at the bottom of the throw no matter where the
+hand was, which on a desk three faders wide is audibly the wrong fader.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

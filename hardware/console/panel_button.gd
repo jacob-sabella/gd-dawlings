@@ -52,6 +52,10 @@ func _on_grab_begin(_at: Vector3) -> void:
 	pressed.emit()
 
 
+func _foley_contact() -> AudioStream:
+	return Foley.button_click()
+
+
 func _refresh() -> void:
 	if _lamp:
 		_lamp.material_override = Materials.led(led_colour, lit)

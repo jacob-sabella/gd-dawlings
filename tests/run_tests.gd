@@ -53,6 +53,7 @@ func _ready() -> void:
 	_test_bridge_arrangement_is_parsed()
 	_test_knob_is_the_moulded_part()
 	_test_the_reels_say_how_far_through_the_song_you_are()
+	_test_the_gear_makes_a_noise()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -1138,3 +1139,127 @@ func _test_the_reels_say_how_far_through_the_song_you_are() -> void:
 		close_to("tape is conserved at %.2f through" % f,
 				(supply * supply - hub_area) + (takeup * takeup - hub_area),
 				full_area - hub_area)
+
+
+func _test_the_gear_makes_a_noise() -> void:
+	# Everything here is about the sample buffer, not about playback. The suite is headless and
+	# the audio driver is a stub, so "does it play" is not a question that can be asked -- but
+	# the two ways synthesised audio actually goes wrong are both plainly visible in the buffer,
+	# and neither of them is visible to someone who is not listening for it.
+	var sounds := {
+		"button": {"stream": Foley.button_click(), "loop": false, "seconds": 0.045},
+		"detent": {"stream": Foley.knob_detent(), "loop": false, "seconds": 0.018},
+		"plug": {"stream": Foley.plug_seat(), "loop": false, "seconds": 0.075},
+		"slide": {"stream": Foley.fader_slide(), "loop": true, "seconds": 0.670},
+		"motor": {"stream": Foley.reel_motor(), "loop": true, "seconds": 0.388},
+	}
+
+	for key in sounds:
+		var spec: Dictionary = sounds[key]
+		var wav := spec["stream"] as AudioStreamWAV
+		check("foley %s synthesises" % key, wav != null)
+		if wav == null:
+			continue
+		var samples := _pcm(wav)
+		check("foley %s is 16-bit mono at 44.1k" % key,
+				wav.format == AudioStreamWAV.FORMAT_16_BITS
+				and wav.mix_rate == Foley.RATE and not wav.stereo)
+		close_to("foley %s runs the length it claims" % key,
+				float(samples.size()) / float(Foley.RATE), spec["seconds"], 0.004)
+
+		# Nothing may clip. A synthesised sound that sums several partials is one careless
+		# amplitude away from wrapping, and a wrapped sample is a buzz, not a louder sound.
+		var peak := 0.0
+		for v in samples:
+			peak = maxf(peak, absf(v))
+		check("foley %s does not clip" % key, peak < 0.999)
+		check("foley %s is not silence" % key, peak > 0.02)
+
+		if spec["loop"]:
+			check("foley %s loops" % key, wav.loop_mode == AudioStreamWAV.LOOP_FORWARD)
+			check("foley %s loops over its whole buffer" % key,
+					wav.loop_begin == 0 and wav.loop_end == samples.size())
+			# THE SEAM. A loop whose last sample is far from its first has a step
+			# discontinuity at the loop point, which is a click repeating at the loop rate --
+			# inaudible as a defect and impossible to ignore as a rhythm.
+			var step: float = absf(samples[samples.size() - 1] - samples[0])
+			check("foley %s has no step at the loop point" % key, step < 0.06)
+		else:
+			check("foley %s is a one-shot" % key, wav.loop_mode == AudioStreamWAV.LOOP_DISABLED)
+			# THE TAIL. A one-shot cut off before it has decayed ends in a step down to
+			# silence, which is the same click by another route.
+			check("foley %s has decayed before it ends" % key,
+					absf(samples[samples.size() - 1]) < 0.02)
+			# ...and it has to actually start at the top, or the attack has been thrown away.
+			var early := 0.0
+			for i in mini(samples.size() / 4, samples.size()):
+				early = maxf(early, absf(samples[i]))
+			check("foley %s puts its energy at the front" % key, early > peak * 0.7)
+
+	# Determinism. The noise is seeded, so a build is the same build -- which is what lets the
+	# checks above mean anything at all on the next run.
+	check("foley is cached rather than re-synthesised",
+			Foley.button_click() == Foley.button_click())
+
+	# The spatial settings are what make a sound say WHICH control, so they are not optional.
+	var emitter := Foley.emitter(Foley.button_click(), -6.0, 1.0)
+	check("foley emits positionally", emitter is AudioStreamPlayer3D)
+	close_to("foley emitter carries the trim", emitter.volume_db, -6.0)
+	check("foley emitter is scaled to a room, not a hall",
+			emitter.unit_size < 1.0 and emitter.max_distance < 20.0)
+	emitter.free()
+
+	# Playing at a node that is not in a tree must be a no-op rather than an error: controls are
+	# built before they are parented, and a missing sound should be silence.
+	var orphan := Node3D.new()
+	Foley.play(orphan, Foley.button_click())
+	check("foley at an unparented node adds nothing", orphan.get_child_count() == 0)
+	Foley.play(null, Foley.button_click())
+	Foley.play(orphan, null)
+	check("foley survives a null sound", true)
+	orphan.free()
+
+	# --- The knob's detents ---------------------------------------------------------------
+	#
+	# What matters is not that a tick fires but that a sweep crosses every notch exactly once:
+	# a knob that skips notches ticks less the faster you turn it, which is backwards.
+	check("a knob at rest sits in the first detent", Knob.detent_of(0.0) == 0)
+	check("a knob wide open sits in the last detent",
+			Knob.detent_of(1.0) == Knob.DETENTS - 1)
+	check("detents clamp past the ends",
+			Knob.detent_of(-3.0) == 0 and Knob.detent_of(9.0) == Knob.DETENTS - 1)
+	var seen := {}
+	var crossings := 0
+	var previous := Knob.detent_of(0.0)
+	for i in range(1, 2001):
+		var d := Knob.detent_of(float(i) / 2000.0)
+		seen[d] = true
+		if d != previous:
+			crossings += 1
+			previous = d
+	check("a full sweep visits every detent", seen.size() == Knob.DETENTS)
+	check("a full sweep crosses each boundary once", crossings == Knob.DETENTS - 1)
+
+	# --- The fader's slide ----------------------------------------------------------------
+	check("a still fader is silent", Fader.slide_gain(0.0) == 0.0)
+	check("a crawling fader is silent", Fader.slide_gain(0.005) == 0.0)
+	check("a moving fader is audible", Fader.slide_gain(0.3) > 0.0)
+	check("the slide gets louder with speed",
+			Fader.slide_gain(2.0) > Fader.slide_gain(0.5))
+	check("the slide tops out", Fader.slide_gain(500.0) <= 1.0 + 0.0001)
+	close_to("the slide reaches full at full speed",
+			Fader.slide_gain(Fader.SPEED_FOR_FULL), 1.0)
+	# The square-root law exists so the slow part of a move is not silent. Half speed should be
+	# well over half as loud, and a linear law is exactly what this would catch.
+	check("the slide favours slow movement over a linear law",
+			Fader.slide_gain(Fader.SPEED_FOR_FULL * 0.25) > 0.4)
+
+
+## Unpack an AudioStreamWAV back to floats so the checks can read it.
+func _pcm(wav: AudioStreamWAV) -> PackedFloat32Array:
+	var bytes := wav.data
+	var out := PackedFloat32Array()
+	out.resize(bytes.size() / 2)
+	for i in out.size():
+		out[i] = float(bytes.decode_s16(i * 2)) / 32767.0
+	return out

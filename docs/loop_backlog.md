@@ -131,3 +131,31 @@ should be.
 Still outstanding from before any of this: the mobile renderer pass (3782 tris per reel is
 fine on desktop and worth re-measuring on a standalone headset), audio, consuming
 GetProjectStructure, guest write round-tripping, and the participant roster.
+
+## Audio
+
+Done. `core/audio/foley.gd` synthesises five sounds; see architecture.md for the shape of it.
+
+Two findings worth keeping:
+
+**The mix was never the gap.** "The studio is silent" had been sitting in this list for a while,
+and the obvious reading of it -- play the audio -- is wrong. Reaper is already making that sound
+through the monitors in the same room, and a second copy a few milliseconds late is a comb
+filter. The gap was the *gear*: a desk you can touch that makes no noise when you touch it.
+Worth remembering the next time something on this list is phrased as an absence; the absence and
+the fix are not always the same thing.
+
+**`tools/verify.sh` could pass over a build that did not build.** A broken `knob.gd` printed
+`499 checks, 0 failed` -- a GDScript that fails to parse does not throw, it simply is not there,
+so `Knob.new()` returned null, every check that would have touched a knob never executed, and
+the count dropped by seventeen while the summary stayed green. Fixed: verify now greps its own
+output for `SCRIPT ERROR` and fails the run. This had been true for the whole project and would
+have been true for every future tick.
+
+### Still open
+
+- Mobile renderer pass for standalone headsets. Re-measure: 3782 tris/reel, ~100 knobs at 1088.
+- Consume `GetProjectStructure` for track colours, folder structure, unambiguous send targets.
+- Guest write round-tripping of provisional values; participant roster on a guest.
+- The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
+  Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.
