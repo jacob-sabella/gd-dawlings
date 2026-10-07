@@ -23,6 +23,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Room calibration.** Two-point maths, gravity flattening, drift detection. Tested.
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
+- **Arrange timeline.** A lane per track with the track's colour and flags, a bar ruler from
+  the tempo, section markers, the blocks on each lane, and a playhead that moves without
+  rebuilding the panel. Defaults to SCREEN in every medium, including AR. The seconds→lane
+  mapping and the item wire format are tested.
 - **Capture harness.** `tools/shot.sh`, with reproducible camera framing on the command line.
 - **Presentation switching, both ways.** The flat overlay (Tab) for the screen participant, and
   a grab handle clipped to each surface for everyone else: tap to cycle anchor, drag to place.
@@ -46,6 +50,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **ReaScript bridge.** Lua side is written and syntax-clean; `GetProjectStructure` is not yet
   consumed by anything. Track colours, folder structure and unambiguous send destinations are
   all sitting there unused.
+- **The timeline against a real Reaper.** The surface is done and the wire format carries
+  items, but `ReaperBackend.can(TIMELINE)` is false and says so on the panel, because OSC has
+  no message about media items and nothing reads the arrangement off the bridge yet. The Lua
+  handler and the parse are the remaining work; the surface needs no changes.
 - **XR session.** The rig is built and wired: `XRRig` instantiates the head, both controllers
   and an `XRInteractor` per hand, the studio builds it instead of the desktop camera when the
   medium is not SCREEN, and the left controller's `by_button` runs the two-mark room
@@ -64,10 +72,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Not started
 
-- **Arrange timeline.** The one surface that is explicitly *not* hardware — a long flat thing
-  that belongs in SCREEN mode. `Presentation.default_mode` already routes `&"timeline"` there.
 - **Track banking.** Fine up to 64 tracks; beyond that the bank has to scroll, and a strip must
   never change which track it means while a hand is on its fader.
+- **Timeline scroll and zoom.** The whole project is fitted to the panel, which is right for a
+  three-minute song and useless for a session. Needs a view window, and a playhead that can be
+  off-screen without the panel looking broken.
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
 - **Audio.** The studio is silent. Reaper's output does not come through this process at all.

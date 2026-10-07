@@ -42,6 +42,11 @@ const Capability := {
 	ROUTING = &"routing",
 	## Arm tracks for recording.
 	RECORD_ARM = &"record_arm",
+	## Report the arrangement: where the items on each track start and how long they are. A
+	## backend that says false is saying "I cannot see the timeline", which the timeline
+	## surface draws differently from "the timeline is empty" -- the first is a limitation to
+	## state and the second is a project to start working in.
+	TIMELINE = &"timeline",
 	## Report plugin parameter names rather than just indices.
 	FX_PARAM_NAMES = &"fx_param_names",
 }

@@ -23,6 +23,9 @@ signal track_changed(index: int, field: StringName)
 signal transport_changed()
 signal master_changed(field: StringName)
 signal fx_changed(track_index: int, fx_index: int)
+## The arrangement changed shape: items appeared or moved, or the project got longer. Separate
+## from track_added because a timeline rebuilds on this and a console does not care.
+signal timeline_changed()
 
 
 class SendState extends RefCounted:
@@ -56,6 +59,25 @@ class MasterState extends RefCounted:
 	var vu_r: float = 0.0
 
 
+## One block of audio or MIDI on the timeline.
+##
+## Deliberately thin. A DAW's item has takes, stretch markers, fades, envelopes and a source
+## file; none of that is drawable at the size a lane is rendered, and carrying it would mean a
+## second model to keep in sync for no pixel gained. What the timeline draws is where a thing
+## starts, how long it is, what it is called and whether it is muted.
+class ItemState extends RefCounted:
+	var index: int = 0
+	## Seconds from the start of the project. Seconds and not bars: tempo can change, and a
+	## position stored in bars would move whenever it did.
+	var start: float = 0.0
+	var length: float = 0.0
+	var name: String = ""
+	var muted: bool = false
+
+	func end() -> float:
+		return start + length
+
+
 class TrackState extends RefCounted:
 	var index: int = 0
 	var name: String = ""
@@ -74,6 +96,9 @@ class TrackState extends RefCounted:
 	var vu_r: float = 0.0
 	var fx: Dictionary = {}
 	var sends: Dictionary = {}
+	## ItemState, in start order. Empty when the backend cannot report an arrangement at all,
+	## which is not the same as a track with nothing on it -- see DAWBackend.Capability.
+	var items: Array = []
 
 	func display_name() -> String:
 		return name if name != "" else "Track %d" % index
@@ -86,6 +111,42 @@ var recording: bool = false
 var position_seconds: float = 0.0
 var position_string: String = "1.1.00"
 var tempo: float = 120.0
+## Seconds. How far the ruler has to run, which is NOT derivable from the items: a project can
+## be longer than its last item, and a timeline that ends at the last block cannot be scrolled
+## into the empty bars you are about to record into.
+var project_length: float = 0.0
+## {position_seconds: String name}, in no particular order.
+var markers: Dictionary = {}
+
+
+## Replace one track's arrangement wholesale.
+##
+## Wholesale and not per item, because the only honest unit of change is the lane: a DAW that
+## reports items at all reports them as a list, and diffing to find the three that moved costs
+## more than redrawing twelve rectangles.
+func set_track_items(index: int, items: Array) -> void:
+	var t := track(index)
+	t.items = items
+	t.items.sort_custom(func(a, b): return a.start < b.start)
+	timeline_changed.emit()
+
+
+func set_project_length(seconds: float) -> void:
+	if is_equal_approx(project_length, seconds):
+		return
+	project_length = seconds
+	timeline_changed.emit()
+
+
+## The length the ruler should actually draw: whatever the DAW says, but never shorter than the
+## last thing on the timeline, and never zero -- a ruler of length zero divides by it.
+func timeline_length() -> float:
+	var out := project_length
+	for index in tracks:
+		var t: TrackState = tracks[index]
+		if not t.items.is_empty():
+			out = maxf(out, t.items[-1].end())
+	return maxf(out, 1.0)
 
 
 func track(index: int, create: bool = true) -> TrackState:

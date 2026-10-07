@@ -78,6 +78,53 @@ func _populate() -> void:
 	# like and what makes the master fader visibly NOT at the top of its travel.
 	state.master.volume = 0.69
 	state.master.volume_db = taper_to_db(0.69)
+	_arrange()
+
+
+## An arrangement for the stand-in: a 96-bar song at 120bpm with a real structure.
+##
+## Structured rather than random, because a timeline is the one surface where random is
+## instantly recognisable as wrong -- a drummer who stops for the chorus and a vocal that
+## starts at bar 17 is what an arrangement looks like, and a field of noise is what a
+## placeholder looks like.
+func _arrange() -> void:
+	var bar := 4.0 * 60.0 / state.tempo
+	# (first bar, last bar) windows per section, named the way a session is.
+	var sections := {
+		"Intro": [1, 9], "Verse 1": [9, 25], "Chorus 1": [25, 41],
+		"Verse 2": [41, 57], "Chorus 2": [57, 73], "Outro": [73, 89],
+	}
+	# Which sections each track plays in, by track index. This is the arrangement.
+	var plays := {
+		1: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		2: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		3: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
+		4: ["Chorus 1", "Chorus 2", "Outro"],
+		5: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		6: ["Intro", "Verse 1", "Verse 2", "Outro"],
+		7: ["Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		8: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2"],
+		9: ["Chorus 1", "Chorus 2"],
+		10: ["Intro", "Chorus 1", "Chorus 2", "Outro"],
+		11: ["Verse 1", "Chorus 1", "Verse 2", "Chorus 2", "Outro"],
+		12: ["Chorus 1", "Chorus 2", "Outro"],
+	}
+	for index in plays:
+		var items: Array = []
+		for section in plays[index]:
+			var window: Array = sections[section]
+			var item := MixState.ItemState.new()
+			item.index = items.size()
+			item.start = (window[0] - 1) * bar
+			item.length = (window[1] - window[0]) * bar
+			item.name = "%s %s" % [state.track(index).name, section]
+			items.append(item)
+		state.set_track_items(index, items)
+
+	state.markers.clear()
+	for section in sections:
+		state.markers[(sections[section][0] - 1) * bar] = section
+	state.set_project_length(96 * bar)
 
 	state.track(1).rec_arm = true
 	state.track(8).rec_arm = true

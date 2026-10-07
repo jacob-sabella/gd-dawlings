@@ -40,6 +40,7 @@ var console: ConsoleSurface
 var rack: RackSurface
 var deck: TapeDeck
 var patchbay: PatchbaySurface
+var timeline: TimelineSurface
 
 var _orbit_yaw := 0.0
 var _orbit_pitch := -0.18
@@ -280,6 +281,16 @@ func _build_surfaces() -> void:
 	rack.rotation_degrees = Vector3(0, 38, 0)
 	studio_set.add_child(rack)
 	mount.register(rack)
+
+	# Hung on the back wall in the virtual set, which is where it goes for anyone who has
+	# chosen to see it as an object. Its default mode is SCREEN in every medium -- a
+	# forty-minute song is not furniture -- so most of the time this placement is unused, and
+	# it is written anyway so that choosing ROOM does not drop it at the origin.
+	timeline = TimelineSurface.new()
+	timeline.name = "Timeline"
+	timeline.position = Vector3(0, 1.62, -1.02)
+	studio_set.add_child(timeline)
+	mount.register(timeline)
 
 	deck = TapeDeck.new()
 	deck.name = "TapeDeck"

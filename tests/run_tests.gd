@@ -40,6 +40,9 @@ func _ready() -> void:
 	_test_handle_is_chrome_not_gear()
 	_test_handle_cycle_skips_missing_anchors()
 	_test_handle_tap_cycles_and_carry_places()
+	_test_timeline_wire_roundtrip()
+	_test_timeline_length_covers_the_arrangement()
+	_test_timeline_maps_seconds_onto_the_lane()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -626,3 +629,85 @@ func _test_handle_tap_cycles_and_carry_places() -> void:
 			not Session.layout.has_transform(&"box", mount.next_mode(&"box")))
 
 	_drop_mount(rig)
+
+
+# --- the arrangement ----------------------------------------------------------------------
+
+func _item(start: float, length: float, name: String, muted := false) -> MixState.ItemState:
+	var i := MixState.ItemState.new()
+	i.start = start
+	i.length = length
+	i.name = name
+	i.muted = muted
+	return i
+
+
+## Items ride the same wire as everything else, so a guest gets the arrangement for free -- but
+## only if the packing survives the trip. A silently truncated lane draws blocks that are the
+## right colour in the wrong bars, which looks like a correct timeline of a different song.
+func _test_timeline_wire_roundtrip() -> void:
+	var here := MixState.new()
+	here.set_track_items(3, [_item(0.0, 8.0, "Kick Intro"), _item(16.0, 32.0, "Kick Verse", true)])
+	here.set_project_length(192.0)
+	here.markers = {0.0: "Intro", 16.0: "Verse 1"}
+
+	var there := MixState.new()
+	MixWire.apply_replicated(there, MixWire.snapshot(here))
+	var items: Array = there.track(3).items
+
+	check("both items arrive", items.size() == 2)
+	close_to("the first starts where it started", items[0].start, 0.0)
+	close_to("the second starts where it started", items[1].start, 16.0)
+	close_to("length survives", items[1].length, 32.0)
+	check("a name with a space in it survives", items[0].name == "Kick Intro")
+	check("muted survives", items[1].muted and not items[0].muted)
+	close_to("the project length survives", there.project_length, 192.0)
+	check("the markers survive", there.markers.size() == 2 and there.markers[16.0] == "Verse 1")
+
+
+## The ruler divides by this, and a timeline is routinely asked for its length before any
+## backend has said anything about one.
+func _test_timeline_length_covers_the_arrangement() -> void:
+	var state := MixState.new()
+	check("an empty project still has a drawable length", state.timeline_length() >= 1.0)
+
+	state.set_project_length(100.0)
+	close_to("the stated length is used", state.timeline_length(), 100.0)
+
+	# A DAW can report a project shorter than the thing on it -- dragging an item past the end
+	# is how a song gets longer -- and a ruler that believed the stated length would draw the
+	# last block running off the panel.
+	state.set_track_items(1, [_item(80.0, 40.0, "Outro")])
+	close_to("an item past the end extends the ruler", state.timeline_length(), 120.0)
+
+	state.set_track_items(2, [_item(30.0, 4.0, "Late"), _item(5.0, 4.0, "Early")])
+	close_to("items are kept in start order", state.track(2).items[0].start, 5.0)
+
+
+## The one piece of arithmetic on this surface: seconds to a position across the lane area.
+## Off-by-a-margin here puts every block in the wrong bar, which nothing errors about.
+func _test_timeline_maps_seconds_onto_the_lane() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new())
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+
+	var span := DAW.state.timeline_length()
+	var left := timeline._lane_area_x
+	var right := left + timeline._lane_area_width
+
+	check("the lane area is to the right of the track headers",
+			left > -TimelineSurface.WIDTH * 0.5)
+	close_to("the start of the song is the start of the lane", timeline._x_for(0.0), left)
+	close_to("the end of the song is the end of the lane", timeline._x_for(span), right)
+	close_to("halfway is halfway", timeline._x_for(span * 0.5), (left + right) * 0.5, 0.0005)
+	close_to("before the start is clamped, not mirrored", timeline._x_for(-30.0), left)
+	close_to("past the end is clamped", timeline._x_for(span * 2.0), right)
+
+	check("the stand-in arrangement is not empty", DAW.state.track(1).items.size() > 0)
+	check("the stand-in has sections named on the ruler", DAW.state.markers.size() >= 4)
+
+	timeline.queue_free()
+	DAW.use(previous, false)

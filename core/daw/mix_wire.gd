@@ -62,6 +62,8 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "str" and args.size() > 0:
 				state.position_string = str(args[0])
 				state.transport_changed.emit()
+		"timeline":
+			_apply_timeline(state, p, args)
 		"tempo":
 			if p.size() == 1 and args.size() > 0:
 				# `n/tempo` is normalised across Reaper's tempo range, not BPM. Only the
@@ -70,6 +72,26 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "raw" and args.size() > 0:
 				state.tempo = float(args[0])
 				state.transport_changed.emit()
+
+
+## `/timeline/length` and `/timeline/markers`. Neither is a Reaper address: Reaper's OSC
+## surface says nothing about the arrangement, so these are reaper-3d's own, filled by whatever
+## channel a given backend has for structure -- the ReaScript bridge, for Reaper.
+static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) -> void:
+	if p.size() < 2 or args.is_empty():
+		return
+	match p[1]:
+		"length":
+			state.set_project_length(float(args[0]))
+		"markers":
+			# Flat [position, name, position, name, ...], for the same reason items are flat.
+			var out: Dictionary = {}
+			var i := 0
+			while i + 1 < args.size():
+				out[float(args[i])] = str(args[i + 1])
+				i += 2
+			state.markers = out
+			state.timeline_changed.emit()
 
 
 ## `/master/volume`, `/master/pan`, `/master/vu/L`, `/master/vu/R`. All four are in the pattern
@@ -148,10 +170,39 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 				t.vu_l = float(args[0])
 			elif p[3] == "R":
 				t.vu_r = float(args[0])
+		"items":
+			# FLAT, not one address per item field. A forty-item lane would otherwise be a
+			# hundred and sixty messages that must all arrive before the lane is drawable, and
+			# a lane half-populated from a torn update draws blocks that were never there.
+			# One address, one lane, applied whole.
+			state.set_track_items(idx, _unpack_items(args))
 		"fx":
 			_apply_fx(state, idx, p, args)
 		"send":
 			_apply_send(state, idx, p, args)
+
+
+## [start, length, muted, name] per item, repeating.
+static func _unpack_items(args: Array) -> Array:
+	var out: Array = []
+	var i := 0
+	while i + 3 < args.size():
+		var item := MixState.ItemState.new()
+		item.index = out.size()
+		item.start = float(args[i])
+		item.length = float(args[i + 1])
+		item.muted = float(args[i + 2]) > 0.5
+		item.name = str(args[i + 3])
+		out.append(item)
+		i += 4
+	return out
+
+
+static func _pack_items(items: Array) -> Array:
+	var out: Array = []
+	for item in items:
+		out.append_array([item.start, item.length, 1.0 if item.muted else 0.0, item.name])
+	return out
 
 
 static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, args: Array) -> void:
@@ -216,6 +267,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
+		if not t.items.is_empty():
+			out.append(["/track/%d/items" % index, _pack_items(t.items)])
 
 		var fx_indices: Array = t.fx.keys()
 		fx_indices.sort()
@@ -244,6 +297,12 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/play", [1.0 if state.playing else 0.0]])
 	out.append(["/record", [1.0 if state.recording else 0.0]])
 	out.append(["/time/str", [state.position_string]])
+	out.append(["/timeline/length", [state.project_length]])
+	if not state.markers.is_empty():
+		var packed: Array = []
+		for at in state.markers:
+			packed.append_array([at, state.markers[at]])
+		out.append(["/timeline/markers", packed])
 	return out
 
 

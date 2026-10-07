@@ -92,6 +92,12 @@ func summary() -> String:
 func can(capability: StringName) -> bool:
 	if capability == Capability.ROUTING:
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.TIMELINE:
+		# Not yet, and saying so is the point. Reaper's OSC surface has no message about media
+		# items at all; the arrangement is only reachable through the ReaScript bridge, and
+		# nothing here consumes that part of it yet. Answering true would make the timeline
+		# draw an empty project rather than say it cannot see this one.
+		return false
 	return true
 
 
