@@ -51,6 +51,7 @@ func _ready() -> void:
 	_test_bank_waits_for_the_hand_to_let_go()
 	_test_bank_selector_says_which_tracks_these_are()
 	_test_bridge_arrangement_is_parsed()
+	_test_knob_is_the_moulded_part()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -998,3 +999,41 @@ func _test_bank_selector_says_which_tracks_these_are() -> void:
 	check("paging back is not", asked == [0])
 
 	sel.queue_free()
+
+
+## The knob is the first thing in the project whose shape lives in a file rather than in code,
+## which brings two failure modes that no other control has.
+##
+## The asset can be missing -- unexported, or exported and not imported -- and the knob would
+## then be a hundred empty nodes on the desk with working collision and nothing drawn. And the
+## two primitives in the file can come back in either order, because their order is the glTF
+## exporter's business; matching them by index would paint the body white and the indicator
+## black, which is a perfectly plausible-looking knob that is wrong.
+func _test_knob_is_the_moulded_part() -> void:
+	var mesh := Knob.shared_mesh()
+	check("the knob mesh resolves", mesh != null)
+	if mesh == null:
+		return
+
+	check("it is the two-material part, not a bare cylinder", mesh.get_surface_count() == 2)
+
+	var named := 0
+	for i in mesh.get_surface_count():
+		var m := mesh.surface_get_material(i)
+		if m != null and String(m.resource_name).containsn("indicator"):
+			named += 1
+	check("exactly one surface names itself the indicator", named == 1)
+
+	# The envelope the console laid itself out around, before any of this was a mesh.
+	var box := mesh.get_aabb()
+	check("it still fits the 22mm footprint", box.size.x < 0.0235 and box.size.y < 0.0235)
+
+	var knob := Knob.new()
+	add_child(knob)
+	knob.value = 1.0
+	knob._on_value_changed()
+	var spindle := knob.get_child(0) as Node3D
+	# The indicator is moulded into the part, so the part itself is the only thing that can
+	# move: at value 1.0 the whole knob has turned half a sweep past centre.
+	close_to("turning the value turns the whole part", spindle.rotation.z, -0.5 * Knob.SWEEP)
+	knob.queue_free()

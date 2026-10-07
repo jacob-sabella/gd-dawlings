@@ -8,39 +8,65 @@ extends ControlAffordance
 ## by turning it is most of why reaching for one feels different from reaching for a slider.
 ##
 ## Sweep is 270 degrees, the convention for a potentiometer, centred on local +Y at value 0.5.
+##
+## THE WHOLE KNOB TURNS, not a marker on top of it. The mesh is a moulded part with a knurled
+## skirt and an indicator flute bent over its top edge (tools/blender/knob.py), so the knurling
+## rotating under the light is itself a readout -- the same reason real skirts are knurled rather
+## than smooth. The old shape was a cylinder with a white box orbiting a stationary body, which
+## at a glance read as a dial with a pointer floating above it.
+##
+## The envelope is unchanged: 22mm across, 13mm deep, centred on this node. Consoles laid
+## themselves out around those numbers before the mesh existed.
 
 const SWEEP := deg_to_rad(270.0)
 const RADIUS := 0.011
+const MESH_PATH := "res://assets/hardware/knob.glb"
 
 signal turned(v: float)
 
-var _indicator: Node3D
+## One mesh for every knob on the desk. There are around a hundred of them on a full console and
+## they are all the same object; loading the scene once and handing the same Mesh to each is the
+## difference between one resource and a hundred identical ones.
+static var _shared_mesh: Mesh
+static var _mesh_checked := false
+
+var _spindle: Node3D
 var _grab_angle := 0.0
 var _grab_value := 0.0
+
+
+## Returns null if the asset is missing or has not been imported yet -- a headless run against a
+## cold .godot/ is the normal way that happens, and it is not worth failing over.
+static func shared_mesh() -> Mesh:
+	if _mesh_checked:
+		return _shared_mesh
+	_mesh_checked = true
+	if not ResourceLoader.exists(MESH_PATH):
+		return null
+	var packed := load(MESH_PATH) as PackedScene
+	if packed == null:
+		return null
+	var root := packed.instantiate()
+	for child in root.find_children("*", "MeshInstance3D", true, false):
+		_shared_mesh = (child as MeshInstance3D).mesh
+		break
+	# Not queue_free: this node never entered a tree, so there is no frame for it to be freed on.
+	root.free()
+	return _shared_mesh
 
 
 func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 0
 
-	var body := MeshInstance3D.new()
-	var body_mesh := CylinderMesh.new()
-	body_mesh.top_radius = RADIUS * 0.88
-	body_mesh.bottom_radius = RADIUS
-	body_mesh.height = 0.013
-	body_mesh.radial_segments = 20
-	body.mesh = body_mesh
-	# Cylinders stand along Y; a panel knob's axis is the panel normal, which is local Z.
-	body.rotation_degrees = Vector3(90, 0, 0)
-	body.material_override = Materials.cap_plastic(Color(0.14, 0.15, 0.17))
-	add_child(body)
+	_spindle = Node3D.new()
+	add_child(_spindle)
 
-	_indicator = MeshInstance3D.new()
-	var ind_mesh := BoxMesh.new()
-	ind_mesh.size = Vector3(0.0018, RADIUS * 0.95, 0.002)
-	_indicator.mesh = ind_mesh
-	_indicator.material_override = Materials.legend()
-	add_child(_indicator)
+	var mesh := shared_mesh()
+	if mesh != null:
+		_spindle.add_child(_moulded(mesh))
+	else:
+		_spindle.add_child(_stand_in())
 
 	var shape := CollisionShape3D.new()
 	var cyl := CylinderShape3D.new()
@@ -51,6 +77,53 @@ func _ready() -> void:
 	add_child(shape)
 
 	_on_value_changed()
+
+
+func _moulded(mesh: Mesh) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	# Modelled axis-up, exported through glTF's Y-up conversion, stood back up here. Same
+	# correction the CylinderMesh needed, for the same reason: a panel knob's axis is the panel
+	# normal, which is local Z.
+	mi.rotation_degrees = Vector3(90, 0, 0)
+	# Surfaces are matched BY MATERIAL NAME rather than by index. The export writes two
+	# primitives and their order is the exporter's business, not ours; an index that silently
+	# swaps paints the whole knob white and the body line black.
+	for i in mesh.get_surface_count():
+		var source := mesh.surface_get_material(i)
+		var id := source.resource_name if source != null else ""
+		if id.containsn("indicator"):
+			mi.set_surface_override_material(i, Materials.legend())
+		else:
+			mi.set_surface_override_material(i, Materials.cap_plastic(Color(0.14, 0.15, 0.17)))
+	return mi
+
+
+## The pre-Blender knob, kept as the fallback so a missing asset is a plainer desk rather than a
+## desk with invisible controls on it.
+func _stand_in() -> Node3D:
+	var holder := Node3D.new()
+
+	var body := MeshInstance3D.new()
+	var body_mesh := CylinderMesh.new()
+	body_mesh.top_radius = RADIUS * 0.88
+	body_mesh.bottom_radius = RADIUS
+	body_mesh.height = 0.013
+	body_mesh.radial_segments = 20
+	body.mesh = body_mesh
+	body.rotation_degrees = Vector3(90, 0, 0)
+	body.material_override = Materials.cap_plastic(Color(0.14, 0.15, 0.17))
+	holder.add_child(body)
+
+	var indicator := MeshInstance3D.new()
+	var ind_mesh := BoxMesh.new()
+	ind_mesh.size = Vector3(0.0018, RADIUS * 0.95, 0.002)
+	indicator.mesh = ind_mesh
+	indicator.position = Vector3(0, RADIUS * 0.5, 0.008)
+	indicator.material_override = Materials.legend()
+	holder.add_child(indicator)
+
+	return holder
 
 
 func _on_grab_begin(at: Vector3) -> void:
@@ -73,7 +146,5 @@ func _angle_of(at: Vector3) -> float:
 
 
 func _on_value_changed() -> void:
-	if _indicator:
-		var angle := (value - 0.5) * SWEEP
-		_indicator.rotation = Vector3(0, 0, -angle)
-		_indicator.position = Vector3(sin(angle) * RADIUS * 0.5, cos(angle) * RADIUS * 0.5, 0.008)
+	if _spindle:
+		_spindle.rotation = Vector3(0, 0, -(value - 0.5) * SWEEP)

@@ -178,6 +178,37 @@ A single run is always its own authority, so every replication bug is invisible 
 two of them. `tools/session.sh` brings up a headless host and a guest — which is also the shape
 a studio would actually use, with the authority on a machine in a rack.
 
+## Geometry: computed by default, authored where bevels matter
+
+Almost every shape in here computes itself at load. That is not laziness -- the console is as
+wide as the project has tracks and the timeline is as long as the song, so most of the hardware
+is genuinely a different object for every session and could not have been modelled in advance.
+
+The exception is the part that is always the same part. A knob is a knob whatever the track
+count is, and what makes it read as moulded plastic rather than as a cylinder is almost entirely
+its chamfers -- the one modelling operation that is painful to write against `ArrayMesh`. Those
+are authored in Blender.
+
+What is committed is the **script**, `tools/blender/knob.py`, not a `.blend`:
+
+```
+blender --background --python tools/blender/knob.py    # writes assets/hardware/knob.glb
+```
+
+The `.glb` is committed too, so a clone does not need Blender -- but the shape lives in numbers
+next to every other dimension in the project, and changing it is an edit rather than an
+appointment with somebody's workstation.
+
+Two rules on the Godot side, both of which exist because an asset can fail in ways procedural
+geometry cannot:
+
+- **Match surfaces by material name, never by index.** The exporter decides what order the
+  primitives come out in. An index that quietly swaps paints the body white and the indicator
+  black, which is a knob that looks fine and is wrong.
+- **Keep a procedural stand-in.** `Knob` falls back to the old cylinder when the mesh will not
+  resolve, so a missing or unimported asset is a plainer desk rather than a desk with invisible
+  controls on it. `_test_knob_is_the_moulded_part` is what notices that the fallback is in use.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.
