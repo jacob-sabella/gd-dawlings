@@ -71,6 +71,38 @@ static func parts(size: Vector3, material: Material) -> MeshBank:
 	return bank
 
 
+## A bank of an AUTHORED part -- jacks, knob bodies, fader caps -- rather than a plain box.
+##
+## Returns null when the asset will not resolve, exactly as `Part.build` does, so a caller can
+## fall back to loose parts rather than drawing nothing.
+##
+## A MultiMeshInstance3D has NO per-surface override: it is a GeometryInstance3D, not a
+## MeshInstance3D, so the only material lever it has is `material_override`, which paints every
+## surface the same. An authored part is two surfaces with two different finishes -- a jack is a
+## brushed bezel around a dark bore -- so a single override would flatten exactly the detail the
+## part was modelled for. The materials are therefore BAKED into a duplicate of the mesh. The
+## duplicate matters: `Part.mesh()` caches one Mesh per asset and hands it to everyone, and
+## painting the shared copy would repaint every loose jack in the studio.
+##
+## Two surfaces stay two draw calls, not two per jack. 180 jacks go from 360 to 2.
+static func of(path: String, fallback: Material, named: Dictionary = {}) -> MeshBank:
+	var source := Part.mesh(path)
+	if source == null:
+		return null
+	var baked := source.duplicate() as ArrayMesh
+	if baked == null:
+		return null
+	for i in baked.get_surface_count():
+		baked.surface_set_material(i, Part.paint_for(source, i, fallback, named))
+	var bank := MeshBank.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = baked
+	bank.multimesh = mm
+	return bank
+
+
 static func _make(size: Vector3) -> MeshBank:
 	var bank := MeshBank.new()
 	var box := BoxMesh.new()
@@ -134,6 +166,19 @@ func set_colour(index: int, colour: Color) -> void:
 	_colours[index] = colour
 	if _committed:
 		multimesh.set_instance_color(index, colour)
+
+
+## Move a slot after the fact. A fader cap slides and a knob turns, so not everything in a bank
+## is static -- but a bank is still sized once, so this never changes the instance COUNT.
+##
+## Not `set_transform`: that is Node3D's own, and quietly overriding it would mean moving the
+## BANK whenever something meant to move one slot in it.
+func move_slot(index: int, at: Transform3D) -> void:
+	if index < 0 or index >= _transforms.size():
+		return
+	_transforms[index] = at
+	if _committed:
+		multimesh.set_instance_transform(index, at)
 
 
 ## What this slot was last told to be. Read from the retained copy rather than from the

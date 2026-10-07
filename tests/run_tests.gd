@@ -1642,6 +1642,44 @@ func _test_many_little_boxes_are_one_object() -> void:
 	close_to("and keeps its hue too", Materials.chip_colour(full).g, 0.4, 0.001)
 
 
+	# --- a bank of an authored part ----------------------------------------------------------
+	#
+	# A MultiMeshInstance3D has no per-surface override, so an authored part's two finishes have
+	# to be baked into a duplicate of the mesh. The duplicate is the part worth pinning: Part
+	# caches one Mesh per asset and hands it to everyone, so painting the shared copy would
+	# repaint every loose jack in the studio.
+	var source := Part.mesh(PatchPoint.MESH_PATH)
+	if source != null:
+		var authored_0 := source.surface_get_material(0)
+		var jacks := MeshBank.of(PatchPoint.MESH_PATH, Materials.brushed_metal(),
+				{"bore": Materials.recess()})
+		check("a bank of an authored part resolves", jacks != null)
+		check("it keeps every surface the part had",
+				jacks.multimesh.mesh.get_surface_count() == source.get_surface_count())
+		check("it paints the surfaces rather than overriding them all at once",
+				jacks.material_override == null)
+		check("the shared mesh is left alone", source.surface_get_material(0) == authored_0)
+		check("the baked mesh is not the shared one", jacks.multimesh.mesh != source)
+		# One rule for both paths, or a banked jack and a loose one are two kinds of jack.
+		check("a bank paints a surface the same way Part.build would",
+				jacks.multimesh.mesh.surface_get_material(1)
+				== Part.paint_for(source, 1, Materials.brushed_metal(),
+						{"bore": Materials.recess()}))
+		jacks.free()
+	check("a bank of a missing part is null rather than empty",
+			MeshBank.of("res://assets/hardware/does_not_exist.glb", Materials.chassis()) == null)
+
+	# A fader cap slides and a knob turns, so a slot has to be movable after it is claimed --
+	# without ever changing the instance count, which is fixed at commit.
+	var movers := MeshBank.parts(Vector3.ONE, Materials.chassis())
+	var slot_a := movers.claim(Transform3D(Basis.IDENTITY, Vector3(1, 0, 0)), Color.WHITE)
+	movers.commit()
+	movers.move_slot(slot_a, Transform3D(Basis.IDENTITY, Vector3(5, 0, 0)))
+	close_to("a slot can be moved after commit", movers.transform_of(slot_a).origin.x, 5.0)
+	movers.move_slot(99, Transform3D(Basis.IDENTITY, Vector3(9, 0, 0)))
+	check("moving a slot that does not exist is ignored", movers.count() == 1)
+	movers.free()
+
 	# --- the rest of a strip banks the same way ----------------------------------------------
 	#
 	# Plate, colour chip and fader slot are each one identical box per strip, which is 270 more

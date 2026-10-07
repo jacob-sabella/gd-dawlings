@@ -48,23 +48,40 @@ func _rebuild() -> void:
 	panel.material_override = Materials.chassis()
 	_adopt(panel)
 
+	# Before the jacks and in its final place, because a jack claims its slot by converting its
+	# own world transform into the bank's. Null when the authored jack will not resolve, in
+	# which case every jack falls back to drawing itself and the bay still works.
+	var socket_bank := MeshBank.of(
+		PatchPoint.MESH_PATH,
+		Materials.brushed_metal(),
+		{"bore": Materials.recess()},
+	)
+	if socket_bank != null:
+		socket_bank.name = "JackSockets"
+		_adopt(socket_bank)
+
 	var x := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
 	for index in indices:
 		var t := DAW.state.track(index)
 
 		var out_jack := PatchPoint.create(index, PatchPoint.Kind.OUTPUT, t.display_name())
+		out_jack.socket_bank = socket_bank
 		out_jack.position = Vector3(x, ROW_GAP, 0.004)
 		out_jack.patch_requested.connect(_on_patch_requested)
 		_adopt(out_jack)
 		_outputs[index] = out_jack
 
 		var in_jack := PatchPoint.create(index, PatchPoint.Kind.INPUT, t.display_name())
+		in_jack.socket_bank = socket_bank
 		in_jack.position = Vector3(x, 0.0, 0.004)
 		in_jack.patch_requested.connect(_on_patch_requested)
 		_adopt(in_jack)
 		_inputs[index] = in_jack
 
 		x += JACK_PITCH
+
+	if socket_bank != null:
+		socket_bank.commit()
 
 	# Cables are drawn after both rows exist, because a send names its destination by NAME and
 	# the jack for that name may belong to a track built later in this same loop.

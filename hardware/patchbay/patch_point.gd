@@ -22,6 +22,10 @@ var track_index: int = 0
 var kind: int = Kind.OUTPUT
 var label_text: String = ""
 
+## Where this jack's socket gets drawn, if the bay gave it somewhere. Two rows of jacks is two
+## meshes per track and 360 draw calls at 90 tracks; see hardware/mesh_bank.gd.
+var socket_bank: MeshBank
+
 var _ring: MeshInstance3D
 
 
@@ -51,23 +55,34 @@ func _ready() -> void:
 
 	# A hex nut, a chamfered mouth and a 20mm barrel behind the panel, which is where most of a
 	# jack lives and where all of a seated plug goes (tools/blender/jack.py).
-	var socket := Part.build(
-		MESH_PATH,
-		Materials.brushed_metal(),
-		{"bore": Materials.recess()},
-	)
-	if socket != null:
+	# Clocked through a parent rather than a third Euler angle, because spinning the part about
+	# ITS axis and spinning it about the panel's are different rotations and the Euler order
+	# quietly picks the wrong one. Built the same way on both paths, so a banked jack and a
+	# loose one sit at the same angle.
+	var spin := Node3D.new()
+	spin.rotation_degrees = Vector3(0, 0, nut_angle(track_index, kind))
+	add_child(spin)
+
+	if socket_bank != null:
 		# Modelled axis-up; the axis here is the panel normal, which is local Z.
-		socket.rotation_degrees = Vector3(90, 0, 0)
-		# Clocked, through a parent rather than a third Euler angle, because spinning the part
-		# about ITS axis and spinning it about the panel's are different rotations and the
-		# Euler order quietly picks the wrong one.
-		var spin := Node3D.new()
-		spin.rotation_degrees = Vector3(0, 0, nut_angle(track_index, kind))
-		spin.add_child(socket)
-		add_child(spin)
+		var at := Node3D.new()
+		at.rotation_degrees = Vector3(90, 0, 0)
+		spin.add_child(at)
+		socket_bank.place(at, Color.WHITE)
+		at.queue_free()
+		spin.queue_free()
 	else:
-		add_child(_stand_in())
+		var socket := Part.build(
+			MESH_PATH,
+			Materials.brushed_metal(),
+			{"bore": Materials.recess()},
+		)
+		if socket != null:
+			socket.rotation_degrees = Vector3(90, 0, 0)
+			spin.add_child(socket)
+		else:
+			spin.queue_free()
+			add_child(_stand_in())
 
 	var caption := Label3D.new()
 	caption.font_size = 32

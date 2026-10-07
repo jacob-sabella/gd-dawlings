@@ -312,7 +312,26 @@ culled -- and the first version of this tool measured only that pose, reporting 
 flattering by **2.3x**. In a headset you can turn your head, and there is no such discount.
 `wide` stands far enough back to hold the whole room and is the worst case.
 
-Draw calls at the wide pose, as the two MultiMesh conversions landed:
+**Two numbers, and they are not the same number.** This took a microbenchmark to pin down, and
+getting it wrong means optimising the thing that is not the problem:
+
+| 400 boxes | draws | objects |
+|---|---|---|
+| loose, one shared material | 7 | 1,100 |
+| loose, a material each | **1,100** | 1,100 |
+| one MultiMesh | 3 | 3 |
+
+`draws` is real draw calls. The renderer batches geometry that shares a material, so this
+number is driven by how many DISTINCT materials are in frame, not by how many objects there
+are. `objects` is per-instance submission, one per visible thing per pass, batched or not --
+CPU-side work that only instancing removes. On a standalone headset the CPU is as likely to be
+the wall as the GPU, so both are worth reading.
+
+The practical consequence: **a MultiMesh over geometry that already shared a material does
+nothing for `draws`**. It still collapses `objects`. That is exactly what happened to the
+patchbay's jacks, which all wear the same two finishes.
+
+Draw calls at the wide pose, as the MultiMesh conversions landed:
 
 | tracks | original | meters | + buttons | + plate, chip, slot |
 |---|---|---|---|---|
@@ -321,11 +340,15 @@ Draw calls at the wide pose, as the two MultiMesh conversions landed:
 | 48 | - | 3,116 | 2,102 | **1,677** |
 | 90 | **7,600** | 4,911 | 3,295 | **2,492** |
 
-A 90-track console is now 222 meshes where it was 1,032. What is left of it is mostly not
-meshes: 189 of its objects are `Label3D`s, and across the whole studio labels are ~39% of
-everything drawn. Each one carries its own glyph texture, so no bank helps them -- that is a
-different fix (a shared atlas, or dropping to drawn marks at distance) and the next one worth
-measuring.
+Banking the patchbay's 180 jacks then moved `draws` not at all and `objects` from 4,919 to
+3,845 at 90 tracks, for the reason above. Primitives halved too, 350k to 171k, because a
+shadow-casting jack was being submitted to both passes.
+
+A 90-track console is now 222 meshes where it was 1,032, and the patchbay 55 where it was 235.
+What is left is mostly not meshes: 517 `Label3D`s across the studio. Each carries its own glyph
+texture, which makes each its own material -- so by the table above labels are close to a pure
+`draws` cost and no bank helps them at all. A shared atlas, or dropping to drawn marks at
+distance, is the next thing worth measuring.
 
 Measured on a desktop GPU, so the absolute frame times are not the headset's. The **slope** and
 the **breakdown** are hardware-independent, and they are what the tool is for.
@@ -396,6 +419,16 @@ the draw-call number would ever have mentioned.
 So `Materials.chip_colour` scales by `CHIP_GAIN` **or by whatever headroom is left, whichever is
 less**. Scaling every channel by one factor preserves hue exactly for any input, where a flat
 multiply rotates it the moment one channel clips.
+
+`MeshBank.of` banks an **authored part** -- a jack, and in principle a knob or a fader cap --
+rather than a plain box. A MultiMeshInstance3D is a `GeometryInstance3D`, not a
+`MeshInstance3D`, so it has no per-surface override: its only material lever is
+`material_override`, which paints every surface alike and would flatten exactly the detail the
+part was modelled for (a jack is a brushed bezel around a dark bore). So the materials are
+baked into a **duplicate** of the mesh. The duplicate is the whole trick: `Part.mesh()` caches
+one Mesh per asset and hands it to everyone, and painting the shared copy would repaint every
+loose jack in the studio. `Part.paint_for` is the shared rule, so a banked jack and a loose one
+cannot end up different.
 
 The headless-testability problem above applies doubly here, so `MeshBank` **retains** its
 `_transforms` and `_colours` after `commit()`. They are a few hundred bytes per bank and they are

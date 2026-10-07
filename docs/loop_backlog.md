@@ -223,13 +223,38 @@ wide, from 3,295; the console itself is 222 meshes, from 1,032 three ticks ago.
   A screenshot A/B found this in seconds; no number in the budget tool would ever have mentioned
   it. Performance work needs a picture as well as a measurement.
 
+**The patchbay's jacks are banked, and the result forced a correction to how this whole effort
+has been measured.** Banking 180 jacks moved the draw-call count *not at all*, while objects
+fell 4,919 -> 3,845 and primitives halved. That looked like a broken counter, so I stopped and
+microbenchmarked it rather than guessing: 400 boxes, loose with one shared material, loose with
+a material each, and as one MultiMesh.
+
+    loose, one shared material     draws 7       objects 1100
+    loose, a material each         draws 1100    objects 1100
+    one MultiMesh                  draws 3       objects 3
+
+Both counters are honest; they measure different things. `draws` is driven by the number of
+DISTINCT MATERIALS in frame, because the renderer batches whatever shares one. `objects` is
+per-instance submission and only instancing removes it. The jacks all wear the same two
+finishes, so they were already batching -- banking them bought CPU submission work and no GPU
+draw calls. Worth having on a standalone headset, where the CPU is as likely to be the wall,
+but it is not the same win as the console's.
+
+This also explains the console results in hindsight: what paid there was replacing per-colour
+`Materials.led()` instances with one unshaded bank, i.e. collapsing MATERIALS, not objects.
+And it says where the remaining draw calls are -- every `Label3D` carries its own glyph
+texture, so 517 labels is close to 517 unbatchable draw calls.
+
 ### Still open
 
-- **Labels are the single largest category** at ~39% of everything drawn (517 `Label3D`s at 90
-  tracks, 189 of them on the console). This is the hard one: each label is its own glyph texture,
-  so no bank helps. A shared atlas, or dropping to drawn marks at distance, is the shape of it.
-- The patchbay (235 meshes at 90 tracks) and timeline (282) are now larger mesh populations than
-  the console. Jack bodies and timeline items are both repetition and both bank cleanly.
+- **Labels are the largest remaining draw-call cost** -- 517 `Label3D`s, each with its own glyph
+  texture and therefore its own material, which is the one thing that cannot batch. No bank
+  helps. A shared atlas, or dropping to drawn marks at distance, is the shape of it, and by the
+  finding above it is now clearly the highest-value remaining item.
+- The timeline is 282 meshes at 90 tracks, the largest mesh population left. Items are uniform
+  boxes in per-track colours, so they bank cleanly AND collapse materials -- both counters.
+- Knobs and fader caps are authored parts and `MeshBank.of` now handles those. They turn and
+  slide, so they need `move_slot` on every value change rather than a one-time claim.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
   Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.

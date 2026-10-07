@@ -52,12 +52,20 @@ static func build(path: String, fallback: Material, named: Dictionary = {}) -> M
 	var mi := MeshInstance3D.new()
 	mi.mesh = found
 	for i in found.get_surface_count():
-		var source := found.surface_get_material(i)
-		var id := source.resource_name if source != null else ""
-		var painted: Material = fallback
-		for fragment in named:
-			if String(id).containsn(String(fragment)):
-				painted = named[fragment]
-				break
-		mi.set_surface_override_material(i, painted)
+		mi.set_surface_override_material(i, paint_for(found, i, fallback, named))
 	return mi
+
+
+## Which material surface `i` of `source` should wear, by the rule described above.
+##
+## Out here because `MeshBank` has to answer the same question and cannot use the same mechanism:
+## a MultiMeshInstance3D has no per-surface override, so it bakes the answer into a duplicate of
+## the mesh instead. Two call sites, one rule -- a bank whose jacks were painted by a slightly
+## different rule from the loose ones would be a bay with two kinds of jack in it.
+static func paint_for(source: Mesh, i: int, fallback: Material, named: Dictionary) -> Material:
+	var authored := source.surface_get_material(i)
+	var id := authored.resource_name if authored != null else ""
+	for fragment in named:
+		if String(id).containsn(String(fragment)):
+			return named[fragment]
+	return fallback

@@ -23,6 +23,26 @@ extends Node
 ## thirteen-track demo costs says nothing about a ninety-track session, and the console is as
 ## wide as the track count by design.
 
+## TWO NUMBERS, AND THEY ARE NOT THE SAME NUMBER
+##
+## `draws` is RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME: actual draw calls issued. The renderer
+## batches geometry that shares a material, so this falls when things share a finish and rises
+## with every DISTINCT material in frame.
+##
+## `objects` is RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME: per-instance submissions, one per visible
+## thing per pass, batched or not. Only instancing removes these.
+##
+## They are easy to conflate and they move independently. Measured directly, 400 boxes:
+##
+##   loose, one shared material     draws 7       objects 1100
+##   loose, a material each         draws 1100    objects 1100
+##   one MultiMesh                  draws 3       objects 3
+##
+## So a MultiMesh over geometry that already shared a material buys nothing on `draws` and still
+## cuts `objects` to almost nothing -- which is exactly what happened to the patchbay's jacks.
+## That is not a null result: `objects` is CPU-side submission and culling work, and on a
+## standalone headset the CPU is as likely to be the wall as the GPU. Read both.
+
 ## Frames to let the scene settle before sampling. The surfaces rebuild on the first frames
 ## they are told about a project, and measuring during a rebuild measures the rebuild.
 const WARMUP := 45
