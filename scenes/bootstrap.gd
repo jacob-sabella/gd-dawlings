@@ -44,6 +44,10 @@ func _ready() -> void:
 
 	studio = Studio.new()
 	studio.name = "Studio"
+	# Both set before the studio enters the tree: _ready() builds the whole room off the medium,
+	# and it only gets one chance to do it.
+	studio.medium = medium
+	studio.xr_bootstrap = xr
 	add_child(studio)
 
 	_build_hud()

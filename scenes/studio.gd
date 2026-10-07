@@ -22,7 +22,15 @@ extends Node3D
 
 const FLOOR_SIZE := 9.0
 
+## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
+## detail: it decides whether this participant gets a floor and furniture at all, and a studio
+## that learned it a frame late would build a virtual room and then delete it in front of someone
+## already wearing the headset.
+var medium: int = Presentation.Medium.SCREEN
+var xr_bootstrap: XRBootstrap = null
+
 var camera: Camera3D
+var rig: XRRig
 var screen_stage: Node3D
 var room_anchor: RoomAnchor
 var studio_set: Node3D
@@ -41,11 +49,21 @@ var _orbit_target := Vector3(0, 0.92, 0)
 
 func _ready() -> void:
 	_build_environment()
-	_build_room()
+	# In AR the room is already there -- it is the one the participant is standing in. Drawing a
+	# virtual floor over a real one is not a smaller version of the VR experience, it is a worse
+	# one: it hides the actual floor and it disagrees with it by however much calibration is off.
+	if medium != Presentation.Medium.AR:
+		_build_room()
 	_build_anchors()
-	_build_furniture()
+	if medium != Presentation.Medium.AR:
+		_build_furniture()
 	_build_surfaces()
-	_update_camera()
+	if camera != null:
+		_update_camera()
+	if medium == Presentation.Medium.AR and xr_bootstrap != null:
+		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
+		# four lines up.
+		xr_bootstrap.apply_passthrough()
 
 
 func _build_environment() -> void:
@@ -185,22 +203,32 @@ func _build_furniture() -> void:
 
 
 func _build_anchors() -> void:
-	camera = Camera3D.new()
-	camera.fov = 58.0
-	camera.near = 0.02
-	add_child(camera)
+	# The head and the hands differ by medium; everything downstream of them does not. That is
+	# the point of putting screen_stage on whichever camera exists rather than on the desktop
+	# one: a surface in SCREEN mode is a panel in front of your face whether your face is behind
+	# a monitor or inside a headset.
+	var head: Node3D
+	if medium == Presentation.Medium.SCREEN:
+		camera = Camera3D.new()
+		camera.fov = 58.0
+		camera.near = 0.02
+		add_child(camera)
+		head = camera
 
-	# Parented to the camera, which is what SCREEN mode means: a panel at a fixed place in the
-	# viewer's own field of view, not a thing in the room.
+		var mouse := MouseInteractor.new()
+		mouse.camera = camera
+		mouse.name = "MouseHand"
+		add_child(mouse)
+	else:
+		rig = XRRig.new()
+		rig.name = "XRRig"
+		add_child(rig)
+		head = rig.head
+
 	screen_stage = Node3D.new()
 	screen_stage.name = "ScreenStage"
 	screen_stage.position = Vector3(0, 0, -0.75)
-	camera.add_child(screen_stage)
-
-	var mouse := MouseInteractor.new()
-	mouse.camera = camera
-	mouse.name = "MouseHand"
-	add_child(mouse)
+	head.add_child(screen_stage)
 
 	room_anchor = RoomAnchor.new()
 	room_anchor.name = "RoomAnchor"
@@ -217,10 +245,16 @@ func _build_anchors() -> void:
 	mount.studio_set = studio_set
 	add_child(mount)
 
-	# A screen participant has no physical room to mark, so they adopt the session frame outright
-	# and stand in the same layout as everyone else. 1.2m is the span the default layout assumes
-	# between the two floor marks.
-	room_anchor.adopt_virtual_frame(1.2)
+	if rig != null:
+		rig.room_anchor = room_anchor
+
+	# A participant with no physical room to mark adopts the session frame outright and stands in
+	# the same layout as everyone else. 1.2m is the span the default layout assumes between the
+	# two floor marks. An AR participant does NOT get this: they have a real room, and handing
+	# them a guessed frame would put the console somewhere plausible and wrong, which is harder
+	# to notice than no console at all.
+	if medium != Presentation.Medium.AR:
+		room_anchor.adopt_virtual_frame(1.2)
 
 
 func _build_surfaces() -> void:
@@ -261,6 +295,8 @@ func _build_surfaces() -> void:
 ## it is how the screen half of a hybrid session gets around, and how every screenshot of this
 ## project is framed.
 func _unhandled_input(event: InputEvent) -> void:
+	if camera == null:
+		return
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_orbit_yaw -= event.relative.x * 0.005
 		_orbit_pitch = clampf(_orbit_pitch - event.relative.y * 0.005, -1.4, 1.2)
@@ -275,6 +311,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if camera == null:
+		return
 	var move := Vector3.ZERO
 	if Input.is_key_pressed(KEY_W): move.z -= 1.0
 	if Input.is_key_pressed(KEY_S): move.z += 1.0
@@ -286,7 +324,11 @@ func _process(delta: float) -> void:
 		_update_camera()
 
 
+## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot
+## harness does not have to know which medium it is pointing at.
 func frame(target: Vector3, distance: float, yaw: float, pitch: float) -> void:
+	if camera == null:
+		return
 	_orbit_target = target
 	_orbit_distance = distance
 	_orbit_yaw = yaw

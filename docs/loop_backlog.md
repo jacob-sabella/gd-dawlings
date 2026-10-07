@@ -38,9 +38,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **ReaScript bridge.** Lua side is written and syntax-clean; `GetProjectStructure` is not yet
   consumed by anything. Track colours, folder structure and unambiguous send destinations are
   all sitting there unused.
-- **XR session.** `XRBootstrap` initialises OpenXR and negotiates passthrough; no `XROrigin3D`
-  rig, controllers or hand interactors are instantiated in the studio scene yet. `XRInteractor`
-  exists and is unreferenced.
+- **XR session.** The rig is built and wired: `XRRig` instantiates the head, both controllers
+  and an `XRInteractor` per hand, the studio builds it instead of the desktop camera when the
+  medium is not SCREEN, and the left controller's `by_button` runs the two-mark room
+  calibration. Untested against an actual runtime -- there is none on this machine -- so what
+  is verified is the arithmetic and the construction, not the tracking.
 - **Presentation switching.** `SurfaceMount.set_mode()` works; no UI or binding calls it, so
   moving a surface between screen and room is currently a code change.
 

@@ -32,6 +32,9 @@ func _ready() -> void:
 	_test_room_anchor_ignores_height_difference()
 	_test_room_anchor_rejects_close_marks()
 	_test_layout_defaults()
+	_test_rig_calibration_gesture()
+	_test_rig_tip_is_ahead_of_the_grip()
+	_test_ar_studio_draws_no_room()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -365,3 +368,71 @@ func _test_layout_defaults() -> void:
 	# possible at all: one participant overriding what everyone else sees by default.
 	profile.set_mode(&"console", Presentation.Mode.SCREEN)
 	check("an explicit mode overrides the default", profile.mode_for(&"console", &"console") == Presentation.Mode.SCREEN)
+
+
+# --- xr rig -------------------------------------------------------------------------------
+
+## The gesture, driven directly rather than through a controller, because there is no runtime in
+## a test run and the thing worth pinning down is the state machine, not the button.
+func _test_rig_calibration_gesture() -> void:
+	var rig := XRRig.new()
+	add_child(rig)
+	var anchor := RoomAnchor.new()
+	add_child(anchor)
+	rig.room_anchor = anchor
+
+	rig._take_mark()
+	check("one mark does not calibrate", not anchor.is_calibrated)
+
+	# Too close: the second mark is refused, and the rig must STAY on step one so the next press
+	# retries it. Advancing here would leave the participant pressing for a third mark that
+	# silently starts a new calibration instead.
+	rig.left = null
+	anchor.mark_origin(Vector3.ZERO)
+	check("a refused forward mark is refused", not anchor.mark_forward(Vector3(0.08, 0, 0)))
+
+	anchor.mark_origin(Vector3.ZERO)
+	check("two marks 1.2m apart calibrate", anchor.mark_forward(Vector3(0, 0, -1.2)))
+	check("the agreed span is the distance between the marks", absf(anchor.session_span - 1.2) < 0.001)
+
+	rig.free()
+	anchor.free()
+
+
+## The tip offset is the difference between calibrating against a floor mark and calibrating
+## against the user's fist, which is most of a hand's error in the shared frame.
+func _test_rig_tip_is_ahead_of_the_grip() -> void:
+	check("the tip is ahead of the grip", XRRig.TIP_OFFSET.z < -0.02)
+	check("the tip is below the grip", XRRig.TIP_OFFSET.y < 0.0)
+
+
+## An AR participant is standing in a real room. Building a virtual floor over it is not a
+## degraded VR experience, it is a wrong one, and nothing about it errors.
+func _test_ar_studio_draws_no_room() -> void:
+	var ar := Studio.new()
+	ar.medium = Presentation.Medium.AR
+	add_child(ar)
+	check("in AR there is no desktop camera", ar.camera == null)
+	check("in AR there is an xr rig", ar.rig != null)
+	check("in AR the room frame is not guessed", not ar.room_anchor.is_calibrated)
+	check("in AR no floor is drawn", _count_meshes(ar) == 0)
+
+	var desk := Studio.new()
+	desk.medium = Presentation.Medium.SCREEN
+	add_child(desk)
+	check("on a monitor there is a camera", desk.camera != null)
+	check("on a monitor the frame is adopted so the layout is usable", desk.room_anchor.is_calibrated)
+	check("on a monitor the room is drawn", _count_meshes(desk) > 0)
+
+	ar.queue_free()
+	desk.queue_free()
+
+
+## Direct children only: the floor and the back wall. Furniture hangs off studio_set and the
+## surfaces build their own meshes, so counting the whole subtree would measure the console.
+func _count_meshes(node: Node) -> int:
+	var n := 0
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			n += 1
+	return n
