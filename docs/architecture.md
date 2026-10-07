@@ -314,12 +314,18 @@ flattering by **2.3x**. In a headset you can turn your head, and there is no suc
 
 Draw calls at the wide pose, as the two MultiMesh conversions landed:
 
-| tracks | original | after the meters | after the buttons |
-|---|---|---|---|
-| 13 | - | 1,596 | **1,124** |
-| 24 | - | 2,066 | **1,430** |
-| 48 | - | 3,116 | **2,102** |
-| 90 | **7,600** | 4,911 | **3,295** |
+| tracks | original | meters | + buttons | + plate, chip, slot |
+|---|---|---|---|---|
+| 13 | - | 1,596 | 1,124 | **1,014** |
+| 24 | - | 2,066 | 1,430 | **1,221** |
+| 48 | - | 3,116 | 2,102 | **1,677** |
+| 90 | **7,600** | 4,911 | 3,295 | **2,492** |
+
+A 90-track console is now 222 meshes where it was 1,032. What is left of it is mostly not
+meshes: 189 of its objects are `Label3D`s, and across the whole studio labels are ~39% of
+everything drawn. Each one carries its own glyph texture, so no bank helps them -- that is a
+different fix (a shared atlas, or dropping to drawn marks at distance) and the next one worth
+measuring.
 
 Measured on a desktop GPU, so the absolute frame times are not the headset's. The **slope** and
 the **breakdown** are hardware-independent, and they are what the tool is for.
@@ -354,6 +360,12 @@ untestable unless the decision is lifted out of the buffer -- which is why `segm
 all of it was being drawn one box at a time. A surface builds a bank, each widget `claim`s a slot
 and gets a transform and a colour back, and the whole population is one draw call.
 
+`MeshBank.parts` **duplicates** the material it is given and switches on
+`vertex_color_use_as_albedo`, which is not an optimisation -- it is the only reason per-instance
+colour does anything on a `StandardMaterial3D`. The first version did neither, and silently drew
+every instance in the shared albedo; nobody noticed, because the only caller at the time claimed
+everything white. Duplicated because `Materials` hands out cached singletons.
+
 Banks are **optional**, and that is what keeps the abstraction honest. A `PanelButton` with no
 bank assigned builds its own two `MeshInstance3D`s exactly as before, so a button in a patchbay,
 a test, or a scene nobody has converted yet still works. Only `ConsoleSurface` -- which already
@@ -365,6 +377,25 @@ unshaded, so an unlit lamp is a flat fraction of its lit colour instead of a lit
 dark room. That reads *better* at a distance -- an off button is legible rather than black -- and
 the honest cost is that **an unlit lamp no longer dims when the room does**. For a console face
 that is the right side of the trade; for anything meant to disappear in darkness it would not be.
+
+### A lamp and a colour chip are not the same thing
+
+Both are unshaded patches of per-instance colour, which made it tempting to drive them the same
+way. They must not be, and the A/B that proved it is worth keeping:
+
+A lamp is an **indicator**. All it says is on or off, so pushing it to 2.4 and letting the
+channels clip costs nothing -- a blown-out red mute light still reads as a red mute light that
+is lit, and the clipping is most of what makes it read as emitting.
+
+A colour chip is an **identifier**. The only thing it says is *which track this is*, and
+clipping is precisely the operation that destroys that. Reaper's palette is largely pastel, so
+at the lamp's gain every chip came back as the same pale wash and a desk of 32 strips went back
+to being 32 identical strips -- visible immediately in a before/after crop, and not something
+the draw-call number would ever have mentioned.
+
+So `Materials.chip_colour` scales by `CHIP_GAIN` **or by whatever headroom is left, whichever is
+less**. Scaling every channel by one factor preserves hue exactly for any input, where a flat
+multiply rotates it the moment one channel clips.
 
 The headless-testability problem above applies doubly here, so `MeshBank` **retains** its
 `_transforms` and `_colours` after `commit()`. They are a few hundred bytes per bank and they are

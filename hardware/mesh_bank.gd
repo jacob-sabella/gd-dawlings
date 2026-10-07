@@ -50,11 +50,24 @@ static func lamps(size: Vector3) -> MeshBank:
 	return bank
 
 
-## A bank of ordinary lit geometry -- button bodies, plates. Per-instance colour tints the shared
-## material, so everything in one of these has to want the same finish.
+## A bank of ordinary lit geometry -- button bodies, plates, fader slots. Everything in one of
+## these shares a finish; only the transform and a tint vary.
+##
+## The material is DUPLICATED and has vertex-colour-as-albedo switched on, which is not an
+## optimisation -- it is the only reason per-instance colour does anything at all. A
+## StandardMaterial3D ignores COLOR unless told not to, so the first version of this silently
+## drew every instance in the shared material's albedo and nobody noticed, because the only
+## caller at the time claimed everything white. Duplicated because Materials hands out cached
+## singletons: flipping the flag on the original would change every non-banked user of that
+## finish somewhere else in the studio.
+##
+## Claim with `Color.WHITE` to get the material's own albedo unchanged; the tint multiplies.
 static func parts(size: Vector3, material: Material) -> MeshBank:
 	var bank := _make(size)
-	bank.material_override = material
+	var tintable := material.duplicate() as Material
+	if tintable is StandardMaterial3D:
+		(tintable as StandardMaterial3D).vertex_color_use_as_albedo = true
+	bank.material_override = tintable
 	return bank
 
 

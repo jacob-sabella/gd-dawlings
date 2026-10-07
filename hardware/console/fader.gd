@@ -26,6 +26,15 @@ var track_index: int = 0
 ## a fader is, and none of it depends on which number it writes.
 var write_value: Callable = Callable()
 
+## The recessed slot the cap travels in, if whoever built this fader has somewhere to put it.
+## One per strip, identical on every strip, and never recoloured -- which is the easiest kind of
+## thing to bank. See hardware/mesh_bank.gd.
+var slot_bank: MeshBank
+
+## Slot geometry, out here because the bank has to size its box before any fader exists.
+const SLOT_SIZE := Vector3(WIDTH * 0.45, TRAVEL + 0.012, 0.004)
+const SLOT_OFFSET := Vector3(0, TRAVEL * 0.5, 0.002)
+
 var _cap: Node3D
 var _grab_offset := 0.0
 var _slide: AudioStreamPlayer3D
@@ -39,13 +48,20 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 0
 
-	var slot := MeshInstance3D.new()
-	var slot_mesh := BoxMesh.new()
-	slot_mesh.size = Vector3(WIDTH * 0.45, TRAVEL + 0.012, 0.004)
-	slot.mesh = slot_mesh
-	slot.material_override = Materials.recess()
-	slot.position = Vector3(0, TRAVEL * 0.5, 0.002)
-	add_child(slot)
+	if slot_bank != null:
+		var at := Node3D.new()
+		add_child(at)
+		at.position = SLOT_OFFSET
+		slot_bank.place(at, Color.WHITE)
+		at.queue_free()
+	else:
+		var slot := MeshInstance3D.new()
+		var slot_mesh := BoxMesh.new()
+		slot_mesh.size = SLOT_SIZE
+		slot.mesh = slot_mesh
+		slot.material_override = Materials.recess()
+		slot.position = SLOT_OFFSET
+		add_child(slot)
 
 	# The moulded cap: scooped waist, a lip at each end, the pointer line down in the scoop
 	# where a finger bridges over it (tools/blender/fader_cap.py). Modelled in the orientation

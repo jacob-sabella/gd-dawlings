@@ -22,10 +22,24 @@ var _rec: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 
-## Where this strip's button bodies and lamps get drawn, if the console gave it somewhere. See
-## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise.
+## Where this strip's repeated geometry gets drawn, if the console gave it somewhere. See
+## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise. All five are
+## optional and a strip with none of them builds everything itself, which is what keeps a strip
+## usable outside a console surface.
 var body_bank: MeshBank
 var lamp_bank: MeshBank
+var plate_bank: MeshBank
+var chip_bank: MeshBank
+var slot_bank: MeshBank
+
+const PLATE_SIZE := Vector3(WIDTH - 0.002, HEIGHT, 0.008)
+const PLATE_OFFSET := Vector3(0, HEIGHT * 0.5, -0.005)
+const CHIP_SIZE := Vector3(WIDTH - 0.008, 0.004, 0.001)
+const CHIP_OFFSET := Vector3(0, HEIGHT - 0.022, 0.0005)
+
+## Slot in `chip_bank`, or -1 when the chip is a mesh of its own. The plate needs no slot kept:
+## nothing ever changes it after it is placed.
+var _chip_slot := -1
 
 
 static func create(index: int) -> ChannelStrip:
@@ -36,26 +50,15 @@ static func create(index: int) -> ChannelStrip:
 
 
 func _ready() -> void:
-	var plate := MeshInstance3D.new()
-	var plate_mesh := BoxMesh.new()
-	plate_mesh.size = Vector3(WIDTH - 0.002, HEIGHT, 0.008)
-	plate.mesh = plate_mesh
-	plate.position = Vector3(0, HEIGHT * 0.5, -0.005)
-	plate.material_override = Materials.chassis()
-	add_child(plate)
+	_claim_or_build(plate_bank, PLATE_SIZE, PLATE_OFFSET, Materials.chassis(), Color.WHITE, "")
 
 	_name_label = _make_label(14, Vector3(0, HEIGHT - 0.012, 0.001))
 	add_child(_name_label)
 
 	# A colour chip carrying Reaper's own track colour. It is how you find the kick on a desk of
 	# 32 identical strips, and it is the one piece of the DAW's visual language worth keeping.
-	var chip := MeshInstance3D.new()
-	var chip_mesh := BoxMesh.new()
-	chip_mesh.size = Vector3(WIDTH - 0.008, 0.004, 0.001)
-	chip.mesh = chip_mesh
-	chip.position = Vector3(0, HEIGHT - 0.022, 0.0005)
-	chip.name = "ColourChip"
-	add_child(chip)
+	_chip_slot = _claim_or_build(
+		chip_bank, CHIP_SIZE, CHIP_OFFSET, null, Color.WHITE, "ColourChip")
 
 	_pan = Knob.new()
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
@@ -88,6 +91,7 @@ func _ready() -> void:
 
 	_fader = Fader.new()
 	_fader.track_index = track_index
+	_fader.slot_bank = slot_bank
 	_fader.position = Vector3(-0.011, 0.040, 0.004)
 	add_child(_fader)
 
@@ -137,6 +141,40 @@ func refresh() -> void:
 	_mute.lit = t.mute
 	_solo.lit = t.solo
 	_rec.lit = t.rec_arm
-	var chip := get_node_or_null("ColourChip")
-	if chip:
-		chip.material_override = Materials.led(t.colour, true)
+	if chip_bank != null:
+		# Banked chips are unshaded, so the emission `led()` would have carried has to be
+		# expressed as a colour above 1 instead -- gently, because a chip is an identifier and
+		# a clipped identifier is no identifier. See Materials.chip_colour.
+		chip_bank.set_colour(_chip_slot, Materials.chip_colour(t.colour))
+	else:
+		var chip := get_node_or_null("ColourChip")
+		if chip:
+			chip.material_override = Materials.led(t.colour, true)
+
+
+## Put one box either into a bank or into the strip, depending on whether there is a bank.
+##
+## Same shape as PanelButton's two branches and worth factoring out here because the strip has
+## three of them. A marker node rather than arithmetic for the bank case: the offset is stated
+## once, and the bank is handed a transform instead of a position plus an assumption about which
+## way the strip is facing.
+func _claim_or_build(bank: MeshBank, size: Vector3, offset: Vector3, material: Material,
+		tint: Color, mesh_name: String) -> int:
+	if bank != null:
+		var at := Node3D.new()
+		add_child(at)
+		at.position = offset
+		var slot := bank.place(at, tint)
+		at.queue_free()
+		return slot
+	var box := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = size
+	box.mesh = box_mesh
+	box.position = offset
+	if material != null:
+		box.material_override = material
+	if mesh_name != "":
+		box.name = mesh_name
+	add_child(box)
+	return -1

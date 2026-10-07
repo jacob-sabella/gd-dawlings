@@ -1588,8 +1588,16 @@ func _test_many_little_boxes_are_one_object() -> void:
 	check("a lamp bank casts no shadow",
 			lamps.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	check("a lamp bank is unshaded", lamps.material_override is ShaderMaterial)
-	check("a part bank keeps a real lit material",
-			MeshBank.parts(Vector3.ONE, Materials.chassis()).material_override is StandardMaterial3D)
+	var part_mat := MeshBank.parts(Vector3.ONE, Materials.chassis()).material_override
+	check("a part bank keeps a real lit material", part_mat is StandardMaterial3D)
+	# Without this flag a StandardMaterial3D ignores per-instance colour entirely, which is how
+	# the first version of parts() silently drew every plate in one shade.
+	check("a part bank actually honours per-instance colour",
+			(part_mat as StandardMaterial3D).vertex_color_use_as_albedo)
+	# Duplicated, not the cached singleton: flipping the flag on Materials.chassis() itself
+	# would change every unbanked thing in the studio that happens to be made of chassis.
+	check("a part bank does not mutate the shared material",
+			not Materials.chassis().vertex_color_use_as_albedo)
 	lamps.free()
 
 	# --- one definition of what a lit lamp looks like ---------------------------------------
@@ -1608,6 +1616,68 @@ func _test_many_little_boxes_are_one_object() -> void:
 	check("an unlit lamp keeps its hue", off.r > off.g and off.r > off.b)
 	check("the meter and the buttons agree on what lit means",
 			VUMeter.segment_colour(0, 14, -1) == Materials.lamp_colour(VUMeter.colour_at(0), true))
+
+	# --- a chip is an identifier, not an indicator -------------------------------------------
+	#
+	# Both are unshaded patches of per-instance colour, so it is tempting to drive them the same
+	# way. They must not be: a lamp only says on or off and can clip freely, while a colour chip
+	# says WHICH TRACK and clipping is exactly what destroys that. Reaper's palette is pastel,
+	# so at the lamp's gain every chip came back the same pale wash.
+	var pastel := Color(0.86, 0.62, 0.44)
+	var chip := Materials.chip_colour(pastel)
+	check("a chip is lit rather than painted", chip.r > pastel.r)
+	check("a chip does not clip its brightest channel", chip.r <= 1.0)
+	check("a chip is gentler than a lamp", chip.r < Materials.lamp_colour(pastel, true).r)
+	# The real property: two different pastels stay different. A gain that clips makes them one.
+	var other := Color(0.62, 0.86, 0.80)
+	check("two chips of different hue stay distinguishable",
+			Materials.chip_colour(other) != chip)
+	# Hue survives exactly, because every channel is scaled by the same factor. A flat multiply
+	# that clipped one channel would rotate the hue and quietly mis-report the track's colour.
+	close_to("a chip keeps its hue", Materials.chip_colour(pastel).g / Materials.chip_colour(pastel).r,
+			pastel.g / pastel.r, 0.001)
+	# A colour with nothing left to give is left alone rather than clipped.
+	var full := Color(1.0, 0.4, 0.1)
+	check("a chip at full brightness is not pushed past it", Materials.chip_colour(full).r <= 1.0)
+	close_to("and keeps its hue too", Materials.chip_colour(full).g, 0.4, 0.001)
+
+
+	# --- the rest of a strip banks the same way ----------------------------------------------
+	#
+	# Plate, colour chip and fader slot are each one identical box per strip, which is 270 more
+	# objects at 90 tracks. Same two-branch contract as the button: a bank if one was given, own
+	# meshes if not, so a strip still works outside a console surface.
+	var plates := MeshBank.parts(ChannelStrip.PLATE_SIZE, Materials.chassis())
+	var chips := MeshBank.lamps(ChannelStrip.CHIP_SIZE)
+	var slots := MeshBank.parts(Fader.SLOT_SIZE, Materials.recess())
+	add_child(plates)
+	add_child(chips)
+	add_child(slots)
+
+	var banked_strip := ChannelStrip.create(0)
+	banked_strip.plate_bank = plates
+	banked_strip.chip_bank = chips
+	banked_strip.slot_bank = slots
+	add_child(banked_strip)
+	check("a banked strip puts its plate in the bank", plates.count() == 1)
+	check("a banked strip puts its chip in the bank", chips.count() == 1)
+	check("a banked strip passes the slot bank down to its fader", slots.count() == 1)
+	check("a banked strip builds no loose colour chip",
+			banked_strip.get_node_or_null("ColourChip") == null)
+	# The chip is the one banked box whose colour changes after the fact, so it has to have kept
+	# its slot. A -1 here would mean every track's colour silently went to the same place.
+	check("a banked chip carries the track's colour, not a lamp's clipped version",
+			chips.colour_of(0) == Materials.chip_colour(DAW.state.track(0).colour))
+
+	var alone := ChannelStrip.create(0)
+	add_child(alone)
+	check("a strip with no banks still builds its own chip",
+			alone.get_node_or_null("ColourChip") != null)
+	banked_strip.queue_free()
+	alone.queue_free()
+	plates.queue_free()
+	chips.queue_free()
+	slots.queue_free()
 
 	# --- a button draws through a bank when it has one, and alone when it does not ------------
 	var lone := PanelButton.new()

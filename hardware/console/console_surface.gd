@@ -144,6 +144,17 @@ func _rebuild() -> void:
 	var lamp_bank := MeshBank.lamps(PanelButton.LAMP_SIZE)
 	lamp_bank.name = "ButtonLamps"
 	_panel.add_child(lamp_bank)
+	var plate_bank := MeshBank.parts(ChannelStrip.PLATE_SIZE, Materials.chassis())
+	plate_bank.name = "StripPlates"
+	_panel.add_child(plate_bank)
+	var slot_bank := MeshBank.parts(Fader.SLOT_SIZE, Materials.recess())
+	slot_bank.name = "FaderSlots"
+	_panel.add_child(slot_bank)
+	# Unshaded like the lamps, because a colour chip is a lit patch and not a painted one -- it
+	# has to stay findable on a desk of 32 identical strips in a dim room.
+	var chip_bank := MeshBank.lamps(ChannelStrip.CHIP_SIZE)
+	chip_bank.name = "ColourChips"
+	_panel.add_child(chip_bank)
 
 	x += ChannelStrip.WIDTH * 0.5
 	for index in indices:
@@ -155,6 +166,9 @@ func _rebuild() -> void:
 		var strip := ChannelStrip.create(index)
 		strip.body_bank = body_bank
 		strip.lamp_bank = lamp_bank
+		strip.plate_bank = plate_bank
+		strip.chip_bank = chip_bank
+		strip.slot_bank = slot_bank
 		strip.position = Vector3(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
 		strips.append(strip)
@@ -164,6 +178,9 @@ func _rebuild() -> void:
 	# instances it holds before it can hold any, so this is the moment the buffer is sized.
 	body_bank.commit()
 	lamp_bank.commit()
+	plate_bank.commit()
+	slot_bank.commit()
+	chip_bank.commit()
 
 	master = MasterSection.new()
 	master.name = "Master"

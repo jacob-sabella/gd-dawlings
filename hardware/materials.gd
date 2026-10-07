@@ -116,6 +116,33 @@ static func lamp_colour(colour: Color, on: bool) -> Color:
 	return (colour * LAMP_LIT_GAIN) if on else (colour * LAMP_DARK)
 
 
+## A track's identity colour as a self-lit patch. NOT the same gain as a lamp, and the difference
+## is the point.
+##
+## A lamp is an indicator: what it has to say is on or off, so driving it to 2.4 and letting the
+## channels clip costs nothing -- a blown-out red lamp still reads as a red lamp that is lit.
+## A colour chip is an IDENTIFIER: the only thing it says is which track this is, and clipping
+## is precisely the operation that destroys that. Reaper's palette is largely pastel, so every
+## chip at 2.4 came back as the same pale wash and the desk went back to being 32 identical
+## strips -- measured as an A/B, not guessed at.
+##
+## Just above 1.0, so the chip still reads as lit rather than painted.
+const CHIP_GAIN := 1.25
+
+
+## Brightened by CHIP_GAIN, or by whatever headroom is left -- whichever is less.
+##
+## The cap is the part that matters. A flat multiply clips the brightest channel first, and a
+## colour with one channel clipped and two scaled is a colour whose HUE HAS MOVED: 0.9/0.5/0.2
+## at 1.25 becomes 1.0/0.63/0.25, less red and more orange than the track is. Scaling by the
+## headroom instead moves every channel by the same factor, so the hue is exactly preserved for
+## any input and a colour already at full brightness is simply left alone.
+static func chip_colour(colour: Color) -> Color:
+	var peak := maxf(colour.r, maxf(colour.g, colour.b))
+	var gain := CHIP_GAIN if peak <= 0.0 else minf(CHIP_GAIN, 1.0 / peak)
+	return Color(colour.r * gain, colour.g * gain, colour.b * gain, colour.a)
+
+
 ## Screen-printed legend on a panel.
 static func legend() -> StandardMaterial3D:
 	return _cached("legend", func():

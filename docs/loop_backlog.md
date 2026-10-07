@@ -207,13 +207,29 @@ slot, get a transform and a colour back, one draw call for the lot. Console mesh
 wide-pose draw calls at 90 tracks 4,911 -> 3,295. The bank is optional -- a `PanelButton` with no
 bank builds its own two meshes -- so nothing outside a console surface had to change.
 
+**The plate, the colour chip and the fader slot are banked too.** 2,492 draw calls at 90 tracks
+wide, from 3,295; the console itself is 222 meshes, from 1,032 three ticks ago.
+
+**Two things the draw-call number could not have told me**, both caught by looking:
+
+- `MeshBank.parts` had never honoured per-instance colour at all. A `StandardMaterial3D` ignores
+  `COLOR` unless `vertex_color_use_as_albedo` is set, and it was not. This was invisible for a
+  whole tick because the only caller claimed everything `Color.WHITE`, so the bug and the
+  intended result were the same picture. The moment something actually needed a tint it would
+  have drawn 90 chips in one shade.
+- **Driving a colour chip like a lamp destroys the thing it is for.** At the lamp's 2.4 gain
+  every pastel track colour clipped to the same pale wash, which is the exact failure the chip
+  exists to prevent. Chips now scale by the headroom available, so hue is preserved exactly.
+  A screenshot A/B found this in seconds; no number in the budget tool would ever have mentioned
+  it. Performance work needs a picture as well as a measurement.
+
 ### Still open
 
-- **Labels are now the single largest category** at ~48% of the remaining objects (517 `Label3D`s
-  at 90 tracks). This is the hard one: each label is its own texture, so no bank helps. A shared
-  atlas, or dropping to drawn glyphs at distance, is the shape of the fix.
-- Cheaper remaining mesh targets: the strip plate + colour chip (180 meshes at 90 tracks) and the
-  fader slot (90). Both are uniform boxes, so both bank cleanly.
+- **Labels are the single largest category** at ~39% of everything drawn (517 `Label3D`s at 90
+  tracks, 189 of them on the console). This is the hard one: each label is its own glyph texture,
+  so no bank helps. A shared atlas, or dropping to drawn marks at distance, is the shape of it.
+- The patchbay (235 meshes at 90 tracks) and timeline (282) are now larger mesh populations than
+  the console. Jack bodies and timeline items are both repetition and both bank cleanly.
 - Guest write round-tripping of provisional values; participant roster on a guest.
 - The timeline rebuilds every lane while the overview scrubber is dragged (one rebuild/frame).
   Fine at 12 tracks, not at 90; items want moving rather than recreating, as the playhead does.
