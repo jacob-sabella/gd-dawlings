@@ -1028,10 +1028,16 @@ func _test_knob_is_the_moulded_part() -> void:
 	# The fragment is not a shared convention -- a knob's second surface is its indicator, a
 	# reel's is its hub -- so each part states its own, which is the only way this check means
 	# anything.
+	# The envelope is stated in all three axes, and in the MESH's own space -- not the panel's,
+	# because the parts are not modelled in one shared orientation and should not be. A knob and
+	# a reel are modelled axis-up and stood up by the importing node; a fader cap is modelled
+	# standing and needs no rotation. Collapsing that to "width and height" quietly compared a
+	# jack's 20mm barrel against a hole spacing and failed on a part that was correct.
 	var parts := {
-		Knob.MESH_PATH: {"size": Vector2(0.0235, 0.0235), "accent": "indicator"},
-		Fader.MESH_PATH: {"size": Vector2(0.0150, 0.0225), "accent": "indicator"},
-		TapeDeck.MESH_PATH: {"size": Vector2(0.1705, 0.1705), "accent": "hub"},
+		Knob.MESH_PATH: {"size": Vector3(0.0230, 0.0140, 0.0230), "accent": "indicator"},
+		Fader.MESH_PATH: {"size": Vector3(0.0152, 0.0224, 0.0140), "accent": "indicator"},
+		TapeDeck.MESH_PATH: {"size": Vector3(0.1705, 0.0160, 0.1705), "accent": "hub"},
+		PatchPoint.MESH_PATH: {"size": Vector3(0.0160, 0.0220, 0.0185), "accent": "bore"},
 	}
 	for path in parts:
 		var accent: String = parts[path]["accent"]
@@ -1049,10 +1055,10 @@ func _test_knob_is_the_moulded_part() -> void:
 				named += 1
 		check("%s names exactly one surface '%s'" % [path.get_file(), accent], named == 1)
 
-		var size: Vector2 = parts[path]["size"]
+		var size: Vector3 = parts[path]["size"]
 		var box := mesh.get_aabb()
-		check("%s still fits its footprint" % path.get_file(),
-				box.size.x < size.x and box.size.y < size.y)
+		check("%s still fits its envelope" % path.get_file(),
+				box.size.x < size.x and box.size.y < size.y and box.size.z < size.z)
 
 	# A surface whose material name matches nothing must still be painted, or the importer's
 	# guess ends up on the desk.
@@ -1064,6 +1070,20 @@ func _test_knob_is_the_moulded_part() -> void:
 				unpainted += 1
 		check("an unmatched surface falls back rather than going unpainted", unpainted == 0)
 		dressed.free()
+
+	# A hexagon repeats every sixty degrees, so a clocking outside that range is turning nuts
+	# further than there is anywhere to turn them, and two jacks a multiple of sixty apart
+	# would be indistinguishable -- which defeats the point of clocking them at all.
+	var angles := {}
+	for t in 12:
+		for k in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
+			var a := PatchPoint.nut_angle(t, k)
+			check("nut clocking stays inside one hex face", a >= 0.0 and a < 60.0)
+			angles[a] = true
+	check("and the bay is not all one angle", angles.size() > 6)
+	close_to("the same jack is clocked the same way twice",
+			PatchPoint.nut_angle(5, PatchPoint.Kind.INPUT),
+			PatchPoint.nut_angle(5, PatchPoint.Kind.INPUT))
 
 	var knob := Knob.new()
 	add_child(knob)

@@ -143,6 +143,26 @@ def bevel_all(obj, offset, segments):
     return obj
 
 
+def paint_faces(obj, slot, predicate):
+    """Put the faces `predicate` accepts into material slot `slot`.
+
+    The alternative is a second object shaped like the surface you want a different colour --
+    a liner inside a bore, say -- and that is both more geometry and a boolean waiting to go
+    wrong: two cylinders of the same radius cannot be subtracted, because the solver has no
+    way to decide which coincident wall survives.
+
+    `predicate` is called with the face's centre, in the object's own space.
+    """
+    painted = 0
+    for face in obj.data.polygons:
+        if predicate(face.center):
+            face.material_index = slot
+            painted += 1
+    if painted == 0:
+        raise RuntimeError("paint_faces matched nothing for slot %d -- geometry moved" % slot)
+    return obj
+
+
 def material(name, colour, roughness=0.45):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True

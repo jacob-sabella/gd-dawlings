@@ -114,8 +114,10 @@ where the knob's knurling did not. The reel went further and found the better qu
 flange is; the tape pack is not, and splitting them that way turned a cosmetic pass into a
 readout the transport did not have.
 
+Done since: the jack socket. The plug shells were already made properly during the cable work
+and did not need redoing -- the socket was the half that was letting them down.
+
 Next candidates, in order of how much screen they own:
-- Jack sockets and plug shells on the patchbay.
 - Chamfered chassis edges and 19" rack ears.
 - The meter bridge arm, which is currently two posts and a shelf.
 
