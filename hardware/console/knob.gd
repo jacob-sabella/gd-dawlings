@@ -24,6 +24,12 @@ const SWEEP := deg_to_rad(270.0)
 ## that says "something is moving" without saying how much.
 const DETENTS := 24
 const RADIUS := 0.011
+## Pixels of vertical mouse travel for the whole sweep. About a fader's length on screen, which
+## is the scale plugin UIs settled on: long enough to set a value in one move, short enough
+## not to run out of desk.
+const PIXELS_PER_SWEEP := 240.0
+## How much finer a fine drag or fine nudge is.
+const FINE := 0.1
 const MESH_PATH := "res://assets/hardware/knob.glb"
 
 signal turned(v: float)
@@ -42,6 +48,8 @@ var _aim: Node3D
 var _slot := -1
 var _grab_angle := 0.0
 var _grab_value := 0.0
+## Where a linear drag started, or NAN when the hand is turning the knob for real.
+var _grab_reading := NAN
 var _last_detent := -1
 
 
@@ -132,13 +140,28 @@ func _on_grab_begin(at: Vector3) -> void:
 	_grab_angle = _angle_of(at)
 	_last_detent = detent_of(value)
 	_grab_value = value
+	_grab_reading = NAN
+	if held_by is Interactor:
+		_grab_reading = (held_by as Interactor).drag_reading()
 
 
 func _on_grab_move(at: Vector3) -> void:
-	var delta := _angle_of(at) - _grab_angle
-	# Wrapped, or a knob dragged past straight-down would jump a full turn.
-	delta = wrapf(delta, -PI, PI)
-	value = Ergonomics.current.quantise(clampf(_grab_value - delta / SWEEP, 0.0, 1.0))
+	var to: float
+	if not is_nan(_grab_reading):
+		# Up and down, not round. The class comment is right that turning a knob is most of what
+		# makes it a knob -- for a HAND. A cursor circling a 15-pixel knob's centre is a few
+		# pixels from a full turn, so the value goes wherever the tremor in the wrist sends it.
+		# Every plugin UI landed on vertical drag for that reason, and a Reaper user's hand
+		# already knows it.
+		var hand := held_by as Interactor
+		var travel := (_grab_reading - hand.drag_reading()) / PIXELS_PER_SWEEP
+		to = _grab_value + travel * (FINE if hand.fine() else 1.0)
+	else:
+		var delta := _angle_of(at) - _grab_angle
+		# Wrapped, or a knob dragged past straight-down would jump a full turn.
+		delta = wrapf(delta, -PI, PI)
+		to = _grab_value - delta / SWEEP
+	value = Ergonomics.current.quantise(clampf(to, 0.0, 1.0))
 	# One tick per boundary CROSSED, not one per frame in which the value changed. A knob turned
 	# slowly should tick rarely and a knob spun fast should tick fast, and the only thing that
 	# gets both right is counting the boundaries rather than the frames.
@@ -174,7 +197,28 @@ func _on_value_changed() -> void:
 
 
 func hint() -> String:
-	return "drag to turn"
+	return "drag up/down or scroll  ·  shift for fine"
+
+
+## One detent per wheel notch, which is the knob's own idea of a deliberate step; fine is a
+## tenth of that. With notches turned on for accessibility, one of THOSE instead, so the wheel
+## and a tap agree on what one step is.
+func _on_nudge(notches: int, fine: bool) -> bool:
+	var erg := Ergonomics.current
+	var to: float
+	if erg.step > 0.0:
+		to = erg.nudge(value, notches)
+	else:
+		to = clampf(value + float(notches) / float(DETENTS) * (FINE if fine else 1.0), 0.0, 1.0)
+	if is_equal_approx(to, value):
+		return true
+	_last_detent = detent_of(value)
+	value = to
+	if detent_of(value) != _last_detent:
+		Foley.play(self, Foley.knob_detent(), DETENT_DB)
+	_on_value_changed()
+	turned.emit(value)
+	return true
 
 
 ## A pan position the way a desk prints one: centre is C, not 50%, and the sides are named.

@@ -29,6 +29,34 @@ func aim() -> Transform3D:
 	return Transform3D(Basis.looking_at(direction, Vector3.UP), origin)
 
 
+func drag_reading() -> float:
+	return pointer().y
+
+
+func fine() -> bool:
+	return Input.is_key_pressed(KEY_SHIFT)
+
+
+## The wheel adjusts whatever the cursor is on, and only falls through to the camera when that
+## is nothing adjustable. Handled here, before the studio sees it, because this is a child of
+## the studio and children get input first -- which is the order wanted: the thing under the
+## pointer has the stronger claim on what the wheel meant.
+func _unhandled_input(event: InputEvent) -> void:
+	var wheel := event as InputEventMouseButton
+	if wheel == null or not wheel.pressed:
+		return
+	var notches := 0
+	if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
+		notches = 1
+	elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		notches = -1
+	if notches == 0:
+		return
+	var target: ControlAffordance = held if held != null else hovered
+	if target != null and is_instance_valid(target) and target.nudge(self, notches, fine()):
+		get_viewport().set_input_as_handled()
+
+
 func is_pressing() -> bool:
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 

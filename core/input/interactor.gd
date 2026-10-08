@@ -29,6 +29,18 @@ func aim() -> Transform3D:
 	return global_transform
 
 
+## Override: a reading along a straight line, for controls that would rather be dragged than
+## twisted. A mouse returns its pointer's height in pixels; a hand returns NAN, because a hand
+## can actually turn a knob and should.
+func drag_reading() -> float:
+	return NAN
+
+
+## Override: is the fine-adjust modifier held. Shift on a keyboard; nothing yet on a hand.
+func fine() -> bool:
+	return false
+
+
 ## Override: is the trigger / mouse button / pinch currently down.
 func is_pressing() -> bool:
 	return false

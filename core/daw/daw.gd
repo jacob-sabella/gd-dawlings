@@ -89,6 +89,10 @@ func taper_to_db(taper: float) -> float:
 	return backend.taper_to_db(taper)
 
 
+func db_to_taper(db: float) -> float:
+	return backend.db_to_taper(db)
+
+
 # --- commands -----------------------------------------------------------------------------
 #
 # One line each, and the uniformity is the feature: a guest's write and a host's write differ

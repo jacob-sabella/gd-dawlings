@@ -103,6 +103,37 @@ func _foley_contact() -> AudioStream:
 var contact_volume_db: float = 0.0
 
 
+# --- nudging ---------------------------------------------------------------------------------
+
+## A relative adjustment with no position: a scroll-wheel notch, a thumbstick flick.
+##
+## The mouse's best gesture and the one this contract was missing. Over a knob in any DAW the
+## wheel turns the knob; here it zoomed the camera, which is the kind of thing that makes
+## a person stop trusting the wheel at all. It is a member of the contract, not a mouse path
+## beside it, for the reason dwell is: it is another way to say "set this", to the same control,
+## and a headset's thumbstick says it too.
+##
+## Returns whether the control took it. A button has no "a bit more", and the wheel should go on
+## meaning zoom over one rather than doing nothing.
+##
+## Refused while someone ELSE holds the control, for the same reason a second grab is: their
+## hand is the value until they let go.
+func nudge(by: Node, notches: int, fine: bool) -> bool:
+	if notches == 0 or (held_by != null and held_by != by):
+		return false
+	if not _on_nudge(notches, fine):
+		return false
+	# A nudge is a whole gesture, so it commits like the end of one. Whatever records history
+	# listens to this, and a wheel turn that it never heard of would be a change nobody can undo.
+	value_committed.emit(value)
+	return true
+
+
+## Override to accept nudges. Move `value`, write it wherever a drag would, return true.
+func _on_nudge(_notches: int, _fine: bool) -> bool:
+	return false
+
+
 # --- saying what it is ----------------------------------------------------------------------
 #
 # A hand on a fader knows it is on the fader. A cursor over one does not: it has no weight, no

@@ -228,4 +228,22 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "drag  ·  click the slot to jump"
+	return "drag or scroll  ·  shift for fine  ·  click the slot to jump"
+
+
+## In dB, because that is how a level is nudged on every desk: a dB a notch, a tenth fine. Out
+## of -inf the first notch up lands on -60 rather than on a dB above minus infinity.
+func _on_nudge(notches: int, fine: bool) -> bool:
+	var erg := Ergonomics.current
+	if erg.step > 0.0:
+		_set_value(erg.nudge(value, notches))
+		return true
+	var db := DAW.taper_to_db(value)
+	if db < -150.0:
+		if notches < 0:
+			return true
+		db = -60.0
+	else:
+		db += float(notches) * (0.1 if fine else 1.0)
+	_set_value(clampf(DAW.db_to_taper(db), 0.0, 1.0))
+	return true

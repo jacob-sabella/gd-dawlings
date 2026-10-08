@@ -87,6 +87,8 @@ func _ready() -> void:
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
 	_test_a_monitor_draws_no_presentation_brackets()
+	_test_the_wheel_adjusts_what_the_cursor_is_on()
+	_test_a_cursor_drags_a_knob_up_and_down()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3999,3 +4001,115 @@ func _test_a_monitor_draws_no_presentation_brackets() -> void:
 		check("no halo or berth with %s focused on a monitor (%d)" % [id, marks.size()],
 				marks.is_empty())
 	studio.queue_free()
+
+
+class _LinearProbe extends Interactor:
+	var reading := 0.0
+	var fine_held := false
+	func drag_reading() -> float:
+		return reading
+	func fine() -> bool:
+		return fine_held
+
+
+## Through the real path: a wheel event pushed into the viewport, caught by the studio's own
+## MouseInteractor, before the studio's camera ever hears of it.
+func _test_the_wheel_adjusts_what_the_cursor_is_on() -> void:
+	var off := OfflineBackend.new()
+	off.track_count = 13
+	DAW.use(off)
+	Ergonomics.current.step = 0.0
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var strip := studio.find_children("*", "ChannelStrip", true, false)[0] as ChannelStrip
+
+	var wheel := func(up: bool) -> void:
+		var e := InputEventMouseButton.new()
+		e.button_index = MOUSE_BUTTON_WHEEL_UP if up else MOUSE_BUTTON_WHEEL_DOWN
+		e.pressed = true
+		get_viewport().push_input(e)
+
+	var zoom := studio._orbit_distance
+	var pan := strip._pan
+	pan.value = 0.5
+	hand.hovered = pan
+	wheel.call(true)
+	close_to("one wheel notch is one detent on a knob", pan.value, 0.5 + 1.0 / Knob.DETENTS)
+	close_to("and the knob wrote it to the mix", DAW.state.track(strip.track_index).pan,
+			pan.value, 0.001)
+	close_to("and the camera did not zoom", studio._orbit_distance, zoom)
+
+	var fader := strip._fader
+	var before := DAW.taper_to_db(fader.value)
+	hand.hovered = fader
+	wheel.call(false)
+	close_to("one wheel notch down is one dB on a fader", DAW.taper_to_db(fader.value),
+			before - 1.0, 0.01)
+	var mid := fader.value
+	fader.nudge(hand, 1, true)
+	close_to("a fine notch is a tenth of a dB", DAW.taper_to_db(fader.value),
+			DAW.taper_to_db(mid) + 0.1, 0.01)
+	fader.value = 0.0
+	fader.nudge(hand, 1, false)
+	close_to("out of -inf the first notch lands on -60 dB", DAW.taper_to_db(fader.value), -60.0, 0.01)
+
+	var committed := [0]
+	pan.value_committed.connect(func(_v: float): committed[0] += 1)
+	pan.nudge(hand, -1, false)
+	check("a nudge commits, so history can hear it", committed[0] == 1)
+
+	var other := FakeHand.new()
+	add_child(other)
+	pan.grab_begin(other, pan.global_position)
+	var held_value := pan.value
+	check("a nudge is refused while another hand holds the control",
+			not pan.nudge(hand, 1, false) and pan.value == held_value)
+	pan.grab_end(other)
+	other.queue_free()
+
+	hand.hovered = strip._mute
+	zoom = studio._orbit_distance
+	wheel.call(true)
+	check("over a button the wheel still zooms (%.2f -> %.2f)" % [zoom, studio._orbit_distance],
+			studio._orbit_distance < zoom)
+	hand.hovered = null
+	studio.queue_free()
+
+
+func _test_a_cursor_drags_a_knob_up_and_down() -> void:
+	Ergonomics.current.step = 0.0
+	var knob := Knob.new()
+	add_child(knob)
+	var probe := _LinearProbe.new()
+	add_child(probe)
+	knob.value = 0.5
+	probe.reading = 400.0
+	knob.grab_begin(probe, knob.global_position + Vector3(0.005, 0, 0))
+	# Sideways across the knob's face, which on a circular drag would be a big turn.
+	probe.reading = 400.0
+	knob.grab_move(probe, knob.global_position + Vector3(-0.005, 0.0, 0))
+	close_to("moving across a knob without moving up does not turn it", knob.value, 0.5)
+	probe.reading = 400.0 - Knob.PIXELS_PER_SWEEP * 0.25
+	knob.grab_move(probe, knob.global_position)
+	close_to("up a quarter of the sweep's pixels is a quarter turn up", knob.value, 0.75)
+	probe.fine_held = true
+	knob.grab_end(probe)
+	knob.grab_begin(probe, knob.global_position)
+	probe.reading -= Knob.PIXELS_PER_SWEEP * 0.25
+	knob.grab_move(probe, knob.global_position)
+	close_to("shift makes the same move a tenth as far", knob.value, 0.775)
+	knob.grab_end(probe)
+
+	var hand := FakeHand.new()
+	add_child(hand)
+	knob.value = 0.5
+	knob.grab_begin(hand, knob.global_position + Vector3(0, 0.008, 0))
+	knob.grab_move(hand, knob.global_position + Vector3(0.008, 0, 0))
+	check("a hand still turns a knob by turning it (%.3f)" % knob.value, knob.value < 0.45)
+	knob.grab_end(hand)
+	for n in [knob, probe, hand]:
+		n.queue_free()
