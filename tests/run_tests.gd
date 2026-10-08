@@ -87,6 +87,7 @@ func _ready() -> void:
 	_test_furniture_is_solid()
 	_test_the_wheel_turns_furniture_only_while_held()
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
+	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -3140,6 +3141,9 @@ func _test_summoned_gear_lands_where_a_person_can_use_it() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
 	studio.ergonomics.motion_scale = 0.0
@@ -3448,6 +3452,9 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	# Halos are a headset cue and a screen studio turns them off; this is a test of the
 	# mechanism, and a headset studio cannot be built without a headset. Switched on by hand,
 	# and `_test_a_monitor_draws_no_presentation_brackets` covers the screen default.
@@ -3621,6 +3628,9 @@ func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
 		var studio := Studio.new()
 		studio.medium = Presentation.Medium.SCREEN
 		add_child(studio)
+		# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+		# default; summoning is one key away and is how a headset works.
+		studio.focus.visits = false
 		studio.ergonomics.motion_scale = 0.0
 		Ergonomics.current = studio.ergonomics
 		for surface in studio.focus.surfaces:
@@ -3715,6 +3725,9 @@ func _test_the_room_gets_out_of_the_way_of_the_gear_that_left_it() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	studio.ergonomics.motion_scale = 0.0
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
@@ -3788,6 +3801,9 @@ func _test_the_desk_is_lit_evenly_end_to_end() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	studio.ergonomics.motion_scale = 0.0
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
@@ -3845,6 +3861,9 @@ func _test_focused_gear_fits_the_frame_it_is_shown_in() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	studio.ergonomics.motion_scale = 0.0
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
@@ -3995,6 +4014,9 @@ func _test_a_monitor_draws_no_presentation_brackets() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Summoning: what this checks is where gear lands when it is BROUGHT. A monitor visits by
+	# default; summoning is one key away and is how a headset works.
+	studio.focus.visits = false
 	studio.ergonomics.motion_scale = 0.0
 	check("a screen studio does not halo", not studio.focus.show_halo)
 	for surface in studio.focus.surfaces:
@@ -4390,6 +4412,9 @@ func _test_a_summoned_surface_goes_home_to_where_its_stand_went() -> void:
 	var hand: FakeHand = rig["hand"]
 	var piece := studio.rack_trolley
 	var offset := piece.transform.affine_inverse() * studio.rack.transform
+	# Summoning, which a monitor no longer does by default; this is about the stand moving
+	# while its gear is away, so the gear has to be away.
+	studio.focus.visits = false
 	studio.focus.focus(&"rack")
 	check("the rack is away being worked on", studio.focus.holds(&"rack"))
 	_push(piece, hand, Vector2(0.0, 0.6))
@@ -4400,4 +4425,89 @@ func _test_a_summoned_surface_goes_home_to_where_its_stand_went() -> void:
 	check("released, the rack goes back onto its stand where the stand now is (%.1fmm off)"
 			% [(studio.rack.transform.origin - expected.origin).length() * 1000.0],
 			studio.rack.transform.is_equal_approx(expected))
+	_drop_floor_studio(rig)
+
+
+## On a monitor, focus walks you to the gear. Everything about the room stays as it was
+## arranged; only the mix position, its light and the camera move.
+func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	check("a monitor visits by default", studio.focus.visits)
+	var before := {}
+	for surface in studio.focus.surfaces:
+		before[surface.surface_id] = [surface.get_parent(), surface.global_transform]
+	var home_seat := studio.body.global_transform
+
+	var rack_seat := func() -> Array:
+		var cam := studio.camera.global_transform
+		var box := studio.rack.global_transform * studio.rack.content_aabb()
+		var centre := box.get_center()
+		var off := rad_to_deg((-cam.basis.z).angle_to(centre - cam.origin))
+		var inside := 0
+		for i in 8:
+			if studio.camera.is_position_in_frustum(box.get_endpoint(i)):
+				inside += 1
+		return [off, inside, cam.origin.distance_to(centre)]
+
+	studio.focus.focus(&"rack")
+	var moved := 0
+	for surface in studio.focus.surfaces:
+		var was: Array = before[surface.surface_id]
+		# A surface on the monitor rides the camera, so it goes wherever you go. That is the
+		# monitor moving, not the gear.
+		if was[0] == studio.screen_stage:
+			continue
+		if surface.get_parent() != was[0] or not surface.global_transform.is_equal_approx(was[1]):
+			moved += 1
+	check("focusing the rack moves no gear (%d moved)" % moved, moved == 0)
+	var hidden := studio.studio_set.find_children("*", "Node3D", true, false).filter(
+			func(n): return n.is_in_group(&"room_furniture") and not n.visible)
+	check("and hides no furniture (%d)" % hidden.size(), hidden.is_empty())
+	# Gear rebuilds whenever Reaper changes shape under it, and the rebuild handler is shared
+	# with summoning. It used to summon: every visit render was really a summoned rack.
+	studio.rack.rebuilt.emit()
+	check("a rebuild while visiting still leaves the rack on its stand",
+			studio.rack.get_parent() == before[&"rack"][0]
+			and studio.rack.global_transform.is_equal_approx(before[&"rack"][1]))
+	check("the monitor's own panels step out from in front of it",
+			not studio.screen_stage.visible
+			and studio.screen_stage.process_mode == Node.PROCESS_MODE_DISABLED)
+	check("the mix position walked over to it",
+			studio.body.global_position.distance_to(home_seat.origin) > 0.3)
+	var seen: Array = rack_seat.call()
+	check("the camera looks straight at the rack (%.1f degrees off)" % seen[0], seen[0] < 3.0)
+	check("all of it is in frame (%d of 8 corners)" % seen[1], seen[1] == 8)
+	var lamp := studio.body.find_children("*", "OmniLight3D", true, false)
+	var reach := 0.0
+	if not lamp.is_empty():
+		reach = (lamp[0] as Node3D).global_position.distance_to(
+				studio.rack.global_transform * studio.rack.content_aabb().get_center()) \
+				/ (lamp[0] as OmniLight3D).omni_range
+	# Well inside its range, where inverse-square still has something to give. At the mix
+	# position the rack is over two metres from it, at the far end of its reach.
+	check("and the work light came along (%.0f%% of its range away)" % [reach * 100.0],
+			not lamp.is_empty() and reach < 0.75)
+
+	# Rearrange the room and go back: the seat is wherever the rack now is.
+	studio.focus.release()
+	check("released, you are back at the mix position",
+			studio.body.global_transform.is_equal_approx(home_seat))
+	check("and the monitor's panels are back", studio.screen_stage.visible
+			and studio.screen_stage.process_mode == Node.PROCESS_MODE_INHERIT)
+	var piece := studio.rack_trolley
+	_push(piece, hand, Vector2(0.5, 0.35))
+	_roll_until_still(piece)
+	studio.focus.focus(&"rack")
+	seen = rack_seat.call()
+	check("a rack wheeled somewhere else is visited where it went (%.1f degrees off)" % seen[0],
+			seen[0] < 3.0 and seen[1] == 8)
+
+	# And bringing is one key away.
+	studio._toggle_summoning()
+	check("G brings the gear instead", not studio.focus.visits and studio.focus.holds(&"rack"))
+	studio._toggle_summoning()
+	check("and G again goes back to visiting", studio.focus.visits and not studio.focus.holds(&"rack")
+			and studio.rack.get_parent() == studio.studio_set)
 	_drop_floor_studio(rig)

@@ -79,6 +79,15 @@ var focused_id: StringName = &""
 ## the halo stands on the face of the surface's box, and a console tilted inside its box puts
 ## that face in mid-air in front of the panel.
 var show_halo := true
+## Go to the gear instead of bringing it here.
+##
+## On a monitor, summoning was the wrong half of the idea. The room is furniture you arrange --
+## racks on wheels, a cart you parked by the lamp -- and focus pulled each piece out of its
+## place, parked the rest in an arc, and put it all back on release: the room you built was
+## never the room you worked in. Visiting leaves the room alone and moves the PERSON: focus
+## answers "where would I stand to work this" and the mix position walks there, carrying its
+## work light. A headset keeps summoning, where bringing a panel to the hands is the point.
+var visits := false
 
 ## {surface_id: [parent, local Transform3D]} -- where it was before anything was summoned.
 var _home: Dictionary = {}
@@ -117,21 +126,59 @@ func is_focused() -> bool:
 ## correcting it, and the renders looked exactly like a studio where focus had never run.
 func _ready() -> void:
 	for surface in surfaces:
-		surface.rebuilt.connect(_on_surface_rebuilt)
+		surface.rebuilt.connect(_on_surface_rebuilt.bind(surface))
 
 
-func _on_surface_rebuilt() -> void:
-	if is_focused():
-		_apply()
+func _on_surface_rebuilt(surface: Surface) -> void:
+	if not is_focused():
+		return
+	# Visiting moves nothing, so there is nothing to redo -- except that whoever walked to the
+	# gear walked to its box, and a surface focused before it had built had no box at all.
+	# `--focus console` sat at the home seat staring over the desk at an empty stand.
+	if visits:
+		if surface.surface_id == focused_id:
+			placed.emit()
+		return
+	_apply()
 
 
 ## Pull one surface to the working place and arc the rest out around it.
 func focus(surface_id: StringName) -> void:
 	if surface_id == focused_id:
 		return
+	if visits and is_focused():
+		release()
 	focused_id = surface_id
-	_apply()
+	if visits:
+		_mark_all()
+		placed.emit()
+	else:
+		_apply()
 	focus_changed.emit(focused_id)
+
+
+## Where a person would stand to work `surface` where it is, in world space: the inverse of
+## summoning. Summoning asks where to put the gear given the person; this asks where to put the
+## person given the gear, and answers with the same rule, so the gear is seen at exactly the
+## size and distance it would have been brought to.
+##
+## Level, because a mix position is somewhere you stand: the gear's own lay-back is not a reason
+## to stand tilted. Pure apart from reading the surface, so it can be tested without a camera.
+func seat_for(surface: Surface) -> Transform3D:
+	var bounds := surface.content_aabb()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return surface.global_transform
+	var wanted := ergonomics.place(0.0, bounds, true, smallest_cap(surface))
+	var seat := surface.global_transform * wanted.affine_inverse()
+	var forward := -seat.basis.z
+	var yaw := atan2(-forward.x, -forward.z)
+	return Transform3D(Basis(Vector3.UP, yaw), seat.origin)
+
+
+func _mark_all() -> void:
+	for surface in surfaces:
+		if is_instance_valid(surface):
+			_mark(surface, surface.surface_id == focused_id)
 
 
 ## Back to wherever everything was before anything was focused.
@@ -139,6 +186,12 @@ func release() -> void:
 	if not is_focused():
 		return
 	focused_id = &""
+	if visits:
+		for surface in surfaces:
+			if is_instance_valid(surface):
+				_unmark(surface)
+		focus_changed.emit(focused_id)
+		return
 	for surface in surfaces:
 		if is_instance_valid(surface) and _home.has(surface.surface_id):
 			var home: Array = _home[surface.surface_id]

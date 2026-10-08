@@ -653,6 +653,7 @@ func _build_surfaces() -> void:
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
 	focus.show_halo = medium != Presentation.Medium.SCREEN
+	focus.visits = medium == Presentation.Medium.SCREEN
 	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
 	# own size and where it ended up. Without this the camera is always aimed using the layout
 	# the desk had before it was summoned, and a paged single-tier console is a very different
@@ -663,6 +664,11 @@ func _build_surfaces() -> void:
 	# down facing where the gear had been a moment before the rig moved it, and nothing fired
 	# again to correct it. `--focus rack` came back as a photograph of the floor.
 	focus.placed.connect(_sit_down)
+	# Release too, whoever releases: a key, a hand, a remote participant handing focus back.
+	# Only the keyboard path used to re-seat, so anything else left you standing at the rack.
+	focus.focus_changed.connect(func(id: StringName) -> void:
+		if id == &"" and focus.visits:
+			_sit_down())
 	focus.room = studio_set
 	focus.move = _glide
 	add_child(focus)
@@ -852,6 +858,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			# are worth the neck. One key, and it is the one the desk is named after.
 			KEY_E:
 				_toggle_expanded()
+			KEY_G:
+				_toggle_summoning()
 			KEY_ESCAPE:
 				focus.release()
 				_sit_down()
@@ -971,6 +979,9 @@ func _follow_viewport_shape() -> void:
 func _sit_down() -> void:
 	if camera == null or body == null or medium != Presentation.Medium.SCREEN:
 		return
+	if focus != null and focus.visits:
+		_walk_to_seat()
+		return
 	# Aimed at where focused gear GOES, not at where the focused surface currently is. Asking
 	# the surface was the first version, and it reads its bounds a frame too early -- focus
 	# moves the surface immediately but the rebuild that gives it its shape happens on the next
@@ -1018,6 +1029,106 @@ func _sit_down() -> void:
 	camera.fov = SEATED_FOV if focus.is_focused() else ROOM_FOV
 	frame(at, back.length(), atan2(back.x, back.z),
 			-atan2(back.y, Vector2(back.x, back.z).length()))
+
+
+## Where the mix position stands when nothing is being visited.
+func _home_seat() -> Transform3D:
+	return Transform3D(Basis.IDENTITY, Vector3(0, ergonomics.eye_height, MIX_POSITION_Z))
+
+
+## Visiting: walk the mix position over to the focused gear and look at it from there.
+##
+## The body goes, not just the lens, because the body is what carries the work light -- and
+## because "where I am standing" is what release has to undo. A surface that is not standing in
+## the room (a timeline on the monitor) has no seat; focusing it leaves you where you are.
+func _walk_to_seat() -> void:
+	var seat := _home_seat()
+	var look_at := Vector3.ZERO
+	var target: Surface = null
+	if focus.is_focused():
+		for surface in focus.surfaces:
+			if surface.surface_id == focus.focused_id:
+				target = surface
+	if target != null and target.get_parent() == studio_set:
+		var box := target.content_aabb()
+		if box.size.y > 0.01:
+			seat = focus.seat_for(target)
+			# Inside the room and at a height a person's eyes can be at. A rack's bottom unit
+			# asks for a seat on the floor; nobody mixes lying down.
+			var bounds := floor_plan.bounds if floor_plan != null \
+					else Rect2(-ROOM_WIDTH * 0.5, -2.15, ROOM_WIDTH, ROOM_DEPTH)
+			seat.origin = Vector3(
+					clampf(seat.origin.x, bounds.position.x + 0.2, bounds.end.x - 0.2),
+					clampf(seat.origin.y, 0.95, 1.95),
+					clampf(seat.origin.z, bounds.position.y + 0.2, bounds.end.y + 0.6))
+			look_at = target.global_transform * box.get_center()
+	elif target != null:
+		return
+	_stand_down_screen(target != null)
+	if look_at == Vector3.ZERO:
+		var drop := deg_to_rad(ergonomics.gaze_down)
+		look_at = seat * (Vector3(0, -sin(drop), -cos(drop)) * ergonomics.working_distance())
+	camera.fov = SEATED_FOV if target != null else ROOM_FOV
+	var back := seat.origin - look_at
+	var to := [look_at, back.length(), atan2(back.x, back.z),
+			-atan2(back.y, Vector2(back.x, back.z).length())]
+	var seconds := 0.55 * clampf(ergonomics.motion_scale, 0.0, 2.0)
+	if seconds <= 0.01 or not is_inside_tree():
+		body.transform = seat
+		frame(to[0], to[1], to[2], to[3])
+		return
+	# Both at once, on one curve. A body that arrived before its camera would leave the work
+	# light lighting the gear from an empty spot for half a second; a camera that arrived first
+	# would see the light swing in after it.
+	var body_from := body.transform
+	var cam_from := camera.global_transform
+	frame(to[0], to[1], to[2], to[3])
+	var cam_to := camera.global_transform
+	camera.global_transform = cam_from
+	if _walk != null and _walk.is_valid():
+		_walk.kill()
+	_walk = create_tween()
+	_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_walk.tween_method(func(t: float) -> void:
+		body.transform = body_from.interpolate_with(seat, t)
+		camera.global_transform = cam_from.interpolate_with(cam_to, t), 0.0, 1.0, seconds)
+
+
+var _walk: Tween
+
+
+## The monitor's own panels step aside while you are over at a piece of gear.
+##
+## A surface on the screen stage hangs off the lens, so walking to the console carries the
+## timeline with you and holds it a hand's width in front of the desk you walked over to see --
+## the first honest visit render was a timeline with a console somewhere behind it. Summoning
+## never showed this because it pulled the timeline into the arc with everything else.
+##
+## Disabled as well as hidden: a hidden ControlAffordance is still in the physics space, and
+## a click aimed at a fader would land on the invisible clip lane in front of it.
+func _stand_down_screen(away: bool) -> void:
+	if screen_stage == null:
+		return
+	screen_stage.visible = not away
+	screen_stage.process_mode = Node.PROCESS_MODE_DISABLED if away \
+			else Node.PROCESS_MODE_INHERIT
+
+
+## Visit the gear, or have it brought. Visiting is the monitor's default; bringing is still
+## the right answer for some work -- a patchbay you want flat in front of you -- and is how a
+## headset works, so it is one key away rather than gone.
+func _toggle_summoning() -> void:
+	var was := focus.focused_id
+	focus.release()
+	focus.visits = not focus.visits
+	if not focus.visits:
+		# Summoned gear lands in front of the mix position, so the mix position has to be back
+		# where it stands before anything is summoned to it.
+		_stand_down_screen(false)
+		body.transform = _home_seat()
+	if was != &"":
+		focus.focus(was)
+	_sit_down()
 
 
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot

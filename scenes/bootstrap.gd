@@ -273,5 +273,5 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), DAW.state.tracks.size()]

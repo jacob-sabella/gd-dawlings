@@ -153,8 +153,12 @@ is yours to arrange, and it stays arranged.
   and knocks, the looms re-route behind it, and where it ended up is saved.
 - A summoned surface whose stand is pushed goes home to where the stand now is.
 - The console is a fixture on purpose: it is what the mix position is measured from.
-- Next: the camera should go to the gear instead of the gear coming to the camera on a monitor
-  (step 5's seats), so a rearranged room stays the room you work in; thumbstick turning in a
+- Done: on a monitor, F now VISITS -- the mix position walks to a seat in front of the gear
+  (`FocusRig.seat_for`, sized by the same ergonomics that sized summoning) and the camera glides
+  with it, while nothing in the room moves. The monitor's own panels (a SCREEN-mode timeline)
+  stand down while you are away, since they hang off the lens. G swaps to bringing the gear
+  instead, which is still the right answer for some work and is how a headset behaves.
+- Next: thumbstick turning in a
   headset; a grip on the rack cabinet itself, not only its plinth; more furniture (speaker
   stands, a sofa) once there are things worth moving for.
 - Shared sets: `FloorPlan` is the one place a move is decided and reports who made it, so it is
