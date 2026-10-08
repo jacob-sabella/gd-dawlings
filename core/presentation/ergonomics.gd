@@ -70,6 +70,40 @@ var gaze_down := 20.0
 ## said "come closer", and nothing was asking about height.
 var gaze_sweep := 30.0
 
+## The vertical field of view of the seated screen view, in degrees.
+##
+## Not a fact about a body, which is why it sits oddly here -- but it IS the binding constraint
+## on a monitor, and the constraints have to be comparable to be combined. A neck turns 55
+## degrees each way; a 54-degree lens shows 27. Size a surface to the neck and present it
+## through the lens and the ends are simply off-screen, which is how the patchbay came to run
+## 75 percent past each edge of the frame while passing every ergonomics check in the suite.
+##
+## Set by the studio per medium: its own SEATED_FOV on a monitor, and something near a
+## headset's own field in VR and AR, where the "frame" is the visor rather than a window. One
+## number either way, so a surface can size itself to what will actually be shown without
+## knowing which medium it is in -- and without a patchbay sized to a 54-degree crop being
+## needlessly stacked into four units inside a headset that would have shown it in one.
+var seated_fov := 54.0
+
+
+## Width over height of the window gear is being presented through. Set by the studio from the
+## viewport, because the frame budget is wider than it is tall and nothing else knows by how
+## much. Defaulted to the narrowest common shape, so an unset rig errs toward standing back.
+var view_aspect := 4.0 / 3.0
+
+
+## Half the width of what the seated lens actually shows at `radius`, doubled -- the span of
+## frame, as against the span of neck that `wrap_span_at` gives. `aspect` is width over height;
+## the caller reads it off the viewport, because a surface cannot know the shape of a window.
+func frame_span(radius: float, aspect: float) -> float:
+	return 2.0 * radius * tan(deg_to_rad(clampf(seated_fov, 10.0, 150.0) * 0.5)) \
+			* maxf(aspect, 0.2)
+
+
+## And the height of it, which is the same number without the aspect.
+func frame_rise(radius: float) -> float:
+	return 2.0 * radius * tan(deg_to_rad(clampf(seated_fov, 10.0, 150.0) * 0.5))
+
 # --- the senses ---------------------------------------------------------------------------
 
 ## Cap height in radians below which THIS PERSON cannot read lettering. The old global constant,
@@ -162,14 +196,51 @@ func legible_to(cap_height: float) -> float:
 
 ## The CLOSEST something this size may be and still be taken in without moving.
 ##
-## The ergonomic replacement for fitting a panel to a monitor. A screen fit asks what the camera
-## can see; this asks what the neck and eyes sweep, which is the constraint that actually tires
-## someone out over a four-hour session. Both axes, against different angles, because a neck
-## yaws much further than it pitches.
-func fits_in_sweep(size: Vector3) -> float:
+## Mostly an ergonomic replacement for fitting a panel to a monitor: a screen fit asks what the
+## camera can see, and this asks what the neck and eyes sweep, which is the constraint that
+## actually tires someone out over a four-hour session. Both axes, against different angles,
+## because a neck yaws much further than it pitches.
+##
+## And then the lens, because "mostly" was doing too much work. A neck yaws 55 degrees either
+## way and a seated 54-degree lens shows 27 up and down; whenever the window is the tighter of
+## the two, a surface placed at the distance the NECK wanted is simply cropped. The patchbay
+## found this -- at 48 tracks it sat where the sweep asked and ran three-quarters of its width
+## past each edge of the frame, having passed every ergonomics check in the suite on the way.
+##
+## Taking the max of the two is right in both directions. On a monitor the frame is tighter and
+## pushes gear back until it is all visible. In a headset `seated_fov` is the visor's own wide
+## field, that term goes slack, and the body is the binding constraint again -- which is what
+## it should be when you can simply turn your head.
+func fits_in_sweep(size: Vector3, aspect: float = 4.0 / 3.0) -> float:
 	var across := (size.x * 0.5) / tan(deg_to_rad(clampf(head_turn, 5.0, 85.0)))
 	var up := (size.y * 0.5) / tan(deg_to_rad(clampf(gaze_sweep, 5.0, 85.0)))
-	return maxf(across, up)
+	var lens := tan(deg_to_rad(clampf(seated_fov, 10.0, 150.0) * 0.5))
+	var framed_across := (size.x * 0.5) / maxf(lens * maxf(aspect, 0.2), 0.01)
+	# The hypotenuse of half-height and half-depth, not half-height. `place` pitches a surface
+	# back by the gaze drop, and a pitched box presents more vertical extent than its own
+	# height: the top-near corner swings up as the top-far corner swings down. Bounding it by
+	# the diagonal costs a little distance on a deep surface and is right for any drop angle,
+	# which beats recomputing this against a drop that has not been chosen yet.
+	var framed_up := Vector2(size.y * 0.5, size.z * 0.5).length() / maxf(lens, 0.01)
+	# Divided by the margin rather than multiplied: this is a DISTANCE, and leaving a border
+	# means standing further back, not nearer.
+	var want := maxf(maxf(across, up), maxf(framed_across, framed_up) / FRAME_MARGIN)
+	# Plus half the depth, because this fits the box's CENTRE to the cone and the corner that
+	# actually overflows is the near one. On a flat panel the difference is nothing; on the FX
+	# rack, which is 20cm deep and a metre tall, it is the whole error -- the rack sat exactly
+	# where the centre fit asked and put its near top corner 28 percent past the frame edge.
+	return want + size.z * 0.5
+
+
+## How much of the frame a surface may fill.
+##
+## Not all of it, for two reasons. Something sized to exactly the frustum touches all four
+## edges, which reads as cropped whether or not it is. And the fit above is a BOUND rather
+## than an exact solve -- it approximates a box pitched by an angle that has not been chosen
+## yet, so it is right to within a few percent rather than to the pixel. The margin absorbs
+## that; `_test_focused_gear_fits_the_frame_it_is_shown_in` is what proves it absorbs enough,
+## and it rejected 0.88 on the tape deck by three percent.
+const FRAME_MARGIN := 0.84
 
 
 ## Where a surface goes for this body, in head space: -Z forward, Y up, origin at the eye.
@@ -350,7 +421,7 @@ func too_big_to_place(bounds: AABB, smallest_cap: float) -> bool:
 
 
 func _distance_for(bounds: AABB, touched: bool, smallest_cap: float) -> float:
-	var nearest := maxf(fits_in_sweep(bounds.size), NEAR_LIMIT)
+	var nearest := maxf(fits_in_sweep(bounds.size, view_aspect), NEAR_LIMIT)
 	var preferred := working_distance() if touched else nearest
 	return clampf(preferred, nearest, maxf(legible_to(smallest_cap), nearest))
 

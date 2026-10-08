@@ -44,6 +44,16 @@ const PERIPHERAL_PUSH := 1.35
 
 signal focus_changed(surface_id: StringName)
 
+## Emitted once everything has been MOVED, as against once a surface has been rebuilt.
+##
+## The camera needs to know where gear ended up, and the obvious way to tell it -- listen to
+## the same `rebuilt` signal the rig listens to -- is a race the rig wins or loses depending
+## on connection order. It lost: the camera seated itself from the surface's old transform,
+## the rig then placed the surface properly, and nothing fired again, so `--focus rack` came
+## back as a photograph of the floor with the rack off at the edge of the frame. Placement is
+## the event the camera actually cares about, so placement is what gets a signal.
+signal placed()
+
 var ergonomics := Ergonomics.new()
 var body: BodyFrame
 ## The part of the scene that IS the room -- what stays put when the viewer walks. Berths are
@@ -340,6 +350,7 @@ func _apply() -> void:
 			others += 1
 		_move(surface, body, placement(surface, index))
 	_clear_the_way()
+	placed.emit()
 
 
 ## Reparented into the body frame rather than placed in world space, and that is the whole

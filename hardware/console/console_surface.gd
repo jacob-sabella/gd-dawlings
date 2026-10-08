@@ -183,8 +183,13 @@ func page_size() -> int:
 func _page_arc() -> float:
 	var erg := Ergonomics.current
 	var radius := maxf(erg.working_distance(), Ergonomics.NEAR_LIMIT)
-	var arc: float = floor(erg.wrap_span_at(radius, 0.0, 0.0) / ChannelStrip.WIDTH) \
-			* ChannelStrip.WIDTH
+	# The narrower of what a neck can face and what the window can show. A page sized to the
+	# neck alone is correct ergonomics and still runs off the sides of a monitor, which is the
+	# same mistake the patchbay made and for the same reason: 55 degrees of yaw against 27 of
+	# lens. In a headset `seated_fov` is the visor's own field and this term goes slack.
+	var facing := minf(erg.wrap_span_at(radius, 0.0, 0.0),
+			erg.frame_span(radius, erg.view_aspect) * Ergonomics.FRAME_MARGIN)
+	var arc: float = floor(facing / ChannelStrip.WIDTH) * ChannelStrip.WIDTH
 	return arc - PANEL_MARGIN * 2.0 - MasterSection.GAP - MasterSection.WIDTH \
 			- BankSelector.WIDTH - MasterSection.GAP
 

@@ -82,6 +82,7 @@ func _ready() -> void:
 	_test_the_desk_knows_how_small_its_own_lettering_is()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
+	_test_focused_gear_fits_the_frame_it_is_shown_in()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3803,6 +3804,72 @@ func _test_the_desk_is_lit_evenly_end_to_end() -> void:
 	var ratio := maxf(at_left, at_right) / maxf(minf(at_left, at_right), 0.0001)
 	check("the desk's two ends are lit within 25%% of each other (%.2fx: %.2f vs %.2f)"
 			% [ratio, at_left, at_right], ratio < 1.25)
+
+	studio.queue_free()
+	remove_child(studio)
+	DAW.use(OfflineBackend.new())
+
+
+## Whatever is focused has to be entirely on screen.
+##
+## The rig sized gear to the BODY -- what a neck yaws and eyes sweep -- which is the right
+## constraint for a headset and the wrong one for a window. A neck turns 55 degrees each way;
+## a seated 54-degree lens shows 27. Wherever those disagree the lens wins, and for a long
+## time nothing noticed: the patchbay at 48 tracks sat exactly where the sweep asked and ran
+## three-quarters of its width past each edge of the frame, having passed every ergonomics
+## check in this file on the way past.
+##
+## Checked by projecting the corners rather than by eye, because a surface overflowing the
+## frame renders as a surface filling the frame, which is what you wanted it to do.
+func _test_focused_gear_fits_the_frame_it_is_shown_in() -> void:
+	var off := OfflineBackend.new()
+	off.track_count = 48
+	DAW.use(off)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var ids: Array[StringName] = []
+	for surface in studio.focus.surfaces:
+		ids.append(surface.surface_id)
+	check("there is gear to focus (%d)" % ids.size(), ids.size() >= 3)
+
+	for id in ids:
+		studio.focus.focus(id)
+		# Twice: the rebuild a focus triggers changes the surface's size, and the placement
+		# that follows is computed from the new size. One pass measures the old shape in the
+		# new place.
+		for _pass in 2:
+			for surface in studio.focus.surfaces:
+				surface._process(0.0)
+		studio._sit_down()
+
+		var focused: Surface = null
+		for surface in studio.focus.surfaces:
+			if surface.surface_id == id:
+				focused = surface
+		var box := focused.content_aabb()
+		if box.size.x <= 0.0:
+			continue
+		var world := focused.global_transform * box
+		var cam := studio.camera
+		var half_v := tan(deg_to_rad(cam.fov * 0.5))
+		var half_h := half_v * studio.ergonomics.view_aspect
+		var worst := 0.0
+		var behind := 0
+		for corner in 8:
+			var local := cam.global_transform.affine_inverse() * world.get_endpoint(corner)
+			if local.z >= -0.01:
+				behind += 1
+				continue
+			worst = maxf(worst, absf(local.x / -local.z) / half_h)
+			worst = maxf(worst, absf(local.y / -local.z) / half_v)
+		check("%s has no corner behind the camera" % id, behind == 0)
+		check("%s fits the frame (worst corner at %.2f of the half-frame)" % [id, worst],
+				worst <= 1.0)
 
 	studio.queue_free()
 	remove_child(studio)

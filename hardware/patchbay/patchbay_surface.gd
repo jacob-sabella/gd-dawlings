@@ -31,12 +31,22 @@ const ROW_GAP := 0.085
 ## The bay cannot see the furniture holding it up, so this is a clearance it keeps on principle
 ## rather than a number it derived. What checks it is the studio's own test.
 const LOOM_ENTRY_RISE := 0.068
+## Vertical pitch from one bay unit to the next, when a session needs more than one.
+## How much of the frame a summoned bay is allowed to fill. Not all of it: a surface sized to
+## exactly the frustum touches all four edges, which reads as cropped whether or not it is.
+const FRAME_MARGIN := 0.88
+
+
+const UNIT_PITCH := ROW_GAP + 0.075 + 0.012
+
+
 const MULT_ROW_Y := -0.115
 const MULT_SPACING := 0.008
 
 var _cables: Array[PatchCable] = []
 var _mults: Array[PatchMult] = []
 var _panel_width := 0.0
+var _units := 1
 var _outputs: Dictionary = {}
 var _inputs: Dictionary = {}
 
@@ -59,16 +69,31 @@ func _rebuild() -> void:
 	if indices.is_empty():
 		return
 
-	var width := indices.size() * JACK_PITCH + 0.04
+	# Broken into bay UNITS once the thing is summoned, rather than run out as one long row.
+	#
+	# A 48-track session makes 1.67m of bay. On the bridge that is fine and is what a real
+	# studio looks like -- a long bay is a long bay. Pulled to arm's length it is not fine: it
+	# ran 75% past each edge of the frame, so the jacks you wanted were off-screen and the ones
+	# on screen were at a bearing you could not read the lettering at. The console solved its
+	# version of this by paging, and a bay should not, because the whole use of a bay is seeing
+	# the normalling. So it stacks instead, which is also what the real hardware does: a 19"
+	# bay is one row-pair wide and you add more bays downward.
+	var per_unit := indices.size()
+	if compact:
+		per_unit = _columns_for(indices.size())
+	_units = maxi(1, int(ceil(float(indices.size()) / float(per_unit))))
+
+	var width := mini(indices.size(), per_unit) * JACK_PITCH + 0.04
 	_panel_width = width
 
-	var panel := MeshInstance3D.new()
-	var panel_mesh := BoxMesh.new()
-	panel_mesh.size = Vector3(width, ROW_GAP + 0.075, 0.014)
-	panel.mesh = panel_mesh
-	panel.position = Vector3(0, ROW_GAP * 0.5, -0.008)
-	panel.material_override = Materials.chassis()
-	_adopt(panel)
+	for unit in _units:
+		var panel := MeshInstance3D.new()
+		var panel_mesh := BoxMesh.new()
+		panel_mesh.size = Vector3(width, ROW_GAP + 0.075, 0.014)
+		panel.mesh = panel_mesh
+		panel.position = Vector3(0, ROW_GAP * 0.5 - float(unit) * UNIT_PITCH, -0.008)
+		panel.material_override = Materials.chassis()
+		_adopt(panel)
 
 	# Before the jacks and in its final place, because a jack claims its slot by converting its
 	# own world transform into the bank's. Null when the authored jack will not resolve, in
@@ -98,25 +123,28 @@ func _rebuild() -> void:
 		Lettering.range_to_legibility(notice)
 		_adopt(notice)
 
-	var x := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
-	for index in indices:
+	var left := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
+	for slot in indices.size():
+		var index: int = indices[slot]
 		var t := DAW.state.track(index)
+		# Downward, so unit zero is the top one and the first track in the project is the
+		# top-left jack. Stacked the other way the bay reads bottom-up, which no rack does.
+		var x := left + float(slot % per_unit) * JACK_PITCH
+		var y := -float(slot / per_unit) * UNIT_PITCH
 
 		var out_jack := PatchPoint.create(index, PatchPoint.Kind.OUTPUT, t.display_name())
 		out_jack.socket_bank = socket_bank
-		out_jack.position = Vector3(x, ROW_GAP, 0.004)
+		out_jack.position = Vector3(x, ROW_GAP + y, 0.004)
 		out_jack.patch_requested.connect(_on_patch_requested)
 		_adopt(out_jack)
 		_outputs[index] = out_jack
 
 		var in_jack := PatchPoint.create(index, PatchPoint.Kind.INPUT, t.display_name())
 		in_jack.socket_bank = socket_bank
-		in_jack.position = Vector3(x, 0.0, 0.004)
+		in_jack.position = Vector3(x, y, 0.004)
 		in_jack.patch_requested.connect(_on_patch_requested)
 		_adopt(in_jack)
 		_inputs[index] = in_jack
-
-		x += JACK_PITCH
 
 	if socket_bank != null:
 		socket_bank.commit()
@@ -226,8 +254,43 @@ func loom_entry(fraction: float) -> Vector3:
 			_panel_bottom_y() + LOOM_ENTRY_RISE, -0.016)
 
 
+## The underside of the LOWEST unit, which is what the mults hang from and where the loom
+## enters. Reading it off unit zero, as it used to, left the mult row threaded through the
+## middle of the stack the moment there was a second unit.
 func _panel_bottom_y() -> float:
-	return ROW_GAP * 0.5 - (ROW_GAP + 0.075) * 0.5
+	return ROW_GAP * 0.5 - (ROW_GAP + 0.075) * 0.5 - float(_units - 1) * UNIT_PITCH
+
+
+## How many jacks go in one unit, chosen so the whole STACK fits the view.
+##
+## Width alone is not the question, which is the mistake the first stacking attempt made. Cap
+## the width and the overflow goes downward instead: at 48 tracks a bay narrow enough to fit
+## across needs four units, and four units is two-thirds of a metre of bay hanging in front of
+## a lens that shows half of one. Rows and columns trade directly against each other and have
+## to be chosen together.
+##
+## Fewest units wins, so the bay stays as close to the one long row-pair it wants to be as the
+## frame allows. Where nothing fits -- a big enough session on a small enough window -- it says
+## so and takes the tallest stack the height allows rather than silently picking a shape.
+func _columns_for(count: int) -> int:
+	var erg := Ergonomics.current
+	var radius := maxf(erg.working_distance(), Ergonomics.NEAR_LIMIT)
+	var across := erg.frame_span(radius, _view_aspect()) * FRAME_MARGIN
+	var down := erg.frame_rise(radius) * FRAME_MARGIN
+	var most := maxi(1, int(floor(down / UNIT_PITCH)))
+	for units in range(1, most + 1):
+		var columns := int(ceil(float(count) / float(units)))
+		if float(columns) * JACK_PITCH + 0.04 <= across:
+			return columns
+	push_warning("patchbay: %d points do not fit the view in %d units; stacking anyway"
+			% [count, most])
+	return maxi(8, int(ceil(float(count) / float(most))))
+
+
+## Width over height of the window this is being presented through, as the rig last measured
+## it. Read rather than assumed: a bay sized for 16:9 on a 4:3 window overruns the sides.
+func _view_aspect() -> float:
+	return Ergonomics.current.view_aspect
 
 
 ## Seeded from the pair, so a cable keeps its own slack and bow across rebuilds and two cables

@@ -137,6 +137,10 @@ const MIX_POSITION_Z := 0.66
 ## degrees every time.
 const ROOM_FOV := 58.0
 const SEATED_FOV := 54.0
+## Roughly what a headset shows vertically. Not a lens anyone sets -- the runtime owns the
+## projection -- but surfaces still need a number to size themselves against, and the visor's
+## own field is the honest one.
+const HEADSET_FOV := 95.0
 
 var _orbit_yaw := 0.0
 var _orbit_pitch := -0.18
@@ -390,6 +394,7 @@ func _build_anchors() -> void:
 	if medium == Presentation.Medium.SCREEN:
 		camera = Camera3D.new()
 		camera.fov = ROOM_FOV
+
 		camera.near = 0.02
 		add_child(camera)
 		head = camera
@@ -442,6 +447,15 @@ func _build_anchors() -> void:
 		# In AR and VR it really is a head, and following it is the whole point. See
 		# body_frame.gd for the deadzone that keeps a glance from dragging the room.
 		body.head = head
+
+	# What a surface may assume it will be seen through. On a monitor that is the seated lens;
+	# in a headset it is the visor, which is far wider, and sizing gear to a 54-degree crop
+	# there would stack a patchbay into four units that would have fitted in one.
+	ergonomics.seated_fov = SEATED_FOV if medium == Presentation.Medium.SCREEN else HEADSET_FOV
+	_follow_viewport_shape()
+	var view := get_viewport()
+	if view != null and not view.size_changed.is_connected(_follow_viewport_shape):
+		view.size_changed.connect(_follow_viewport_shape)
 
 	# A light that travels with the person. Summoned gear leaves the room's lamps behind -- the
 	# first rack pulled to arm's length arrived in total darkness, which is both useless and a
@@ -522,12 +536,16 @@ func _build_surfaces() -> void:
 	focus.body = body
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
-	for surface in focus.surfaces:
-		# Re-seat once the focused surface has rebuilt, which is when it finally knows its own
-		# size. Without this the camera is always aimed using the layout the desk had BEFORE it
-		# was summoned, and a paged single-tier console is a very different object from the
-		# flat 48-track plank it was a frame earlier.
-		surface.rebuilt.connect(_on_focus_rebuilt.bind(surface))
+	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
+	# own size and where it ended up. Without this the camera is always aimed using the layout
+	# the desk had before it was summoned, and a paged single-tier console is a very different
+	# object from the flat 48-track plank it was a frame earlier.
+	#
+	# Placement, not rebuilding. Both this and the rig itself used to listen to `rebuilt`, and
+	# which of them ran first was decided by connection order; this one won, so the camera sat
+	# down facing where the gear had been a moment before the rig moved it, and nothing fired
+	# again to correct it. `--focus rack` came back as a photograph of the floor.
+	focus.placed.connect(_sit_down)
 	focus.room = studio_set
 	focus.move = _glide
 	add_child(focus)
@@ -757,12 +775,6 @@ func _set_text_scale(to: float) -> void:
 ## point of an arc is that it is right from ONE place.
 ##
 ## A no-op in AR and VR, where the camera is a head and moving it is not ours to do.
-## A surface finished rebuilding. Only interesting when it is the one being looked at.
-func _on_focus_rebuilt(surface: Surface) -> void:
-	if focus != null and focus.focused_id == surface.surface_id:
-		_sit_down()
-
-
 ## Swap the focused desk between its paged bank and its full width.
 ##
 ## Only the console has two sizes, so this does nothing anywhere else rather than inventing a
@@ -780,6 +792,27 @@ func _toggle_expanded() -> void:
 		return
 
 
+## Keep the rig's idea of the frame in step with the actual window.
+##
+## Resizing changes how much gear fits in view, and gear placed for the old shape is cropped by
+## the new one. Cheap enough to redo on every resize: it sets one number and marks the surfaces,
+## and a person dragging a window edge is not in the middle of anything precise.
+func _follow_viewport_shape() -> void:
+	var view := get_viewport()
+	if view == null:
+		return
+	var size := view.get_visible_rect().size
+	if size.x <= 0.0 or size.y <= 0.0:
+		return
+	var aspect := size.x / size.y
+	if is_equal_approx(aspect, ergonomics.view_aspect):
+		return
+	ergonomics.view_aspect = aspect
+	if focus != null:
+		for surface in focus.surfaces:
+			surface.mark_dirty()
+
+
 func _sit_down() -> void:
 	if camera == null or body == null or medium != Presentation.Medium.SCREEN:
 		return
@@ -795,18 +828,26 @@ func _sit_down() -> void:
 	# Aimed at the focused surface's own middle once it HAS one. Reading its bounds is only
 	# safe after the rebuild -- focus moves a surface immediately but the rebuild that gives it
 	# its shape happens on the next _process -- so this takes the measurement when it is real
-	# and falls back to the body's working point when it is not. See _on_focus_rebuilt.
+	# and falls back to the body's working point when it is not.
 	if focus != null and focus.is_focused():
 		for surface in focus.surfaces:
 			if surface.surface_id == focus.focused_id:
 				var box := surface.content_aabb()
 				if box.size.y > 0.01:
-					# A quarter of the way up from the middle, not the middle. The box
-					# includes the carcass and the armrest, which hang below the working
-					# surface and carry nothing -- aiming at the true centre put the faders
-					# along the top edge of the frame and spent the bottom half on floor.
-					var aim := box.get_center() + Vector3(0, box.size.y * 0.25, 0)
-					at = surface.global_transform * aim
+					# Aimed at where the surface is GOING, not where it currently is. Gear
+					# glides to the mix position over a few hundred milliseconds, and the
+					# camera is seated the instant placement is decided -- reading the live
+					# transform aims it at a console still halfway across the room, and
+					# nothing fires afterwards to correct it once the tween lands. This is
+					# why `--focus rack` kept coming back as a photograph of the floor even
+					# after the signal race behind it was fixed: two separate bugs with one
+					# symptom, and fixing the first changed the render not at all.
+					#
+					# Dead centre of the box, not a quarter up it. The lift was there to
+					# stop the camera staring into the desk's underside, and the underside
+					# was really the carcass being counted as content, which it no longer is.
+					var target := body.global_transform * focus.placement(surface, 0)
+					at = target * box.get_center()
 	var back := eye - at
 	# Through frame() rather than by assigning the four orbit fields, which is what the version
 	# before that did: those values are only read when something applies them, so setting them
