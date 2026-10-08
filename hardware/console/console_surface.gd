@@ -635,9 +635,13 @@ func _build_cheeks(width: float, lay: float) -> void:
 func _build_slabs(width: float) -> void:
 	var panel_plate := MeshInstance3D.new()
 	var plate_mesh := BoxMesh.new()
-	plate_mesh.size = Vector3(width, ChannelStrip.HEIGHT + PANEL_MARGIN * 2.0, 0.018)
+	# A few millimetres proud of everything it meets, on every side. Cut to the same size, its top
+	# edge lay in exactly the plane of every strip plate's top edge and its ends in the plane of
+	# the body's ends, and two faces in one plane are drawn in whichever order the depth buffer's
+	# rounding picks that frame: a desk whose edges crawl as the camera moves.
+	plate_mesh.size = Vector3(width + 0.004, ChannelStrip.HEIGHT + PANEL_MARGIN * 2.0 + 0.006, 0.018)
 	panel_plate.mesh = plate_mesh
-	panel_plate.position = Vector3(0, ChannelStrip.HEIGHT * 0.5, -0.014)
+	panel_plate.position = Vector3(0, ChannelStrip.HEIGHT * 0.5 + 0.003, -0.014)
 	panel_plate.material_override = Materials.chassis()
 	_panel.add_child(panel_plate)
 
@@ -656,7 +660,8 @@ func _build_slabs(width: float) -> void:
 	# is done entirely by unsupported arm.
 	var rest := MeshInstance3D.new()
 	var rest_mesh := BoxMesh.new()
-	rest_mesh.size = Vector3(width, 0.022, 0.07)
+	# Overhanging the body a little at each end, for the same reason as the panel above.
+	rest_mesh.size = Vector3(width + 0.010, 0.022, 0.07)
 	rest.mesh = rest_mesh
 	rest.position = Vector3(0, 0.005, 0.055)
 	rest.material_override = Materials.brushed_metal()

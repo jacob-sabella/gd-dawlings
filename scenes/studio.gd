@@ -266,10 +266,12 @@ func _build_room() -> void:
 	# close enough to read as walls from the working position -- at nine metres apart they are
 	# two more grey rectangles in the distance.
 	for spec in [[Vector3(0, WALL_HEIGHT * 0.5, -2.2), Vector3(ROOM_WIDTH, WALL_HEIGHT, 0.1)],
-			[Vector3(-ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5, 0.3),
-					Vector3(0.1, WALL_HEIGHT, ROOM_DEPTH)],
-			[Vector3(ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5, 0.3),
-					Vector3(0.1, WALL_HEIGHT, ROOM_DEPTH)]]:
+			# A hair lower than the back wall, whose ends they overlap: level, the two tops met in
+			# one plane at each corner.
+			[Vector3(-ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5 - 0.001, 0.3),
+					Vector3(0.1, WALL_HEIGHT - 0.004, ROOM_DEPTH)],
+			[Vector3(ROOM_WIDTH * 0.5, WALL_HEIGHT * 0.5 - 0.001, 0.3),
+					Vector3(0.1, WALL_HEIGHT - 0.004, ROOM_DEPTH)]]:
 		var wall := MeshInstance3D.new()
 		var wall_mesh := BoxMesh.new()
 		wall_mesh.size = spec[1]
@@ -317,7 +319,9 @@ func _build_furniture() -> void:
 		var leg_mesh := BoxMesh.new()
 		leg_mesh.size = Vector3(0.035, 0.46, 0.05)
 		leg.mesh = leg_mesh
-		leg.position = Vector3(side * 0.30, 1.03, -0.33)
+		# Centred under the bar rather than flush with its face: flush, the leg's front and the
+		# bar's front were one plane and the joint shimmered.
+		leg.position = Vector3(side * 0.30, 1.03, BRIDGE_POS.z)
 		leg.material_override = Materials.chassis()
 		bridge_frame.add_child(leg)
 
@@ -419,7 +423,9 @@ func _build_furniture() -> void:
 	var crossbar_mesh := BoxMesh.new()
 	crossbar_mesh.size = Vector3(0.79, 0.028, 0.09)
 	crossbar.mesh = crossbar_mesh
-	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.014, 0)
+	# Two millimetres under the timeline's scrub rail, which otherwise sat a fifth of a
+	# millimetre off the bar's top face -- near enough to share its depth.
+	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012, 0)
 	crossbar.material_override = Materials.brushed_metal()
 	timeline_stand.add_part(crossbar)
 
@@ -733,10 +739,12 @@ func _build_lamp_stands() -> void:
 		var pole_mesh := CylinderMesh.new()
 		pole_mesh.top_radius = 0.0145
 		pole_mesh.bottom_radius = 0.0205
-		pole_mesh.height = at.y
+		# Rising out of the base rather than standing on the floor inside it, where its foot and
+		# the base's underside were one plane.
+		pole_mesh.height = at.y - 0.02
 		pole_mesh.radial_segments = 10
 		pole.mesh = pole_mesh
-		pole.position = Vector3(0, at.y * 0.5, 0)
+		pole.position = Vector3(0, (at.y + 0.02) * 0.5, 0)
 		pole.material_override = Materials.brushed_metal()
 		stand.add_part(pole)
 

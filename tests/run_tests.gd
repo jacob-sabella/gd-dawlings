@@ -88,6 +88,7 @@ func _ready() -> void:
 	_test_the_wheel_turns_furniture_only_while_held()
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
+	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -4511,3 +4512,30 @@ func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
 	check("and G again goes back to visiting", studio.focus.visits and not studio.focus.holds(&"rack")
 			and studio.rack.get_parent() == studio.studio_set)
 	_drop_floor_studio(rig)
+
+
+## Two visible faces in one plane, facing one way, are drawn in whichever order the depth
+## buffer's rounding picks that frame -- the crawling edges people call z-fighting. It hides in
+## stills and shows the moment the camera moves, so this searches for it instead of looking.
+## The first run found 424 such pairs, the worst being the top edge of every console strip.
+func _test_no_two_faces_in_the_room_share_a_plane() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	# Everything in the room at once, so every pairing that can happen does.
+	for id in [&"console", &"timeline", &"patchbay", &"rack", &"tape_deck"]:
+		Session.layout.set_mode(id, Presentation.Mode.STUDIO)
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var hits := ZFightProbe.scan(studio)
+	var named := hits.slice(0, 3).map(func(h): return "%s | %s" % [
+			ZFightProbe.label(h[0]), ZFightProbe.label(h[1])])
+	check("no two faces in the studio share a plane (%d: %s)" % [hits.size(), ", ".join(named)],
+			hits.is_empty())
+	Session.layout = saved_layout
+	remove_child(studio)
+	studio.free()

@@ -110,21 +110,28 @@ func _blank_from(bay_node: Node3D, filled: int, per_bay: int, unit_height: float
 	screws.commit()
 
 
+## Set back a millimetre behind the faceplates, and the rails a little shallower than the posts.
+## Flush, the face of every unit lay in the plane of the frame's front, and the posts and rails
+## shared both their front and back planes where they cross -- a rack whose corners flickered.
+const FRAME_SETBACK := 0.001
+
+
 func _build_frame(parent: Node3D, inner_height: float) -> void:
 	for side in [-1.0, 1.0]:
 		var post := MeshInstance3D.new()
 		var post_mesh := BoxMesh.new()
 		post_mesh.size = Vector3(0.022, inner_height + 0.05, RAIL_DEPTH)
 		post.mesh = post_mesh
-		post.position = Vector3(side * (RackUnit.RACK_WIDTH * 0.5 + 0.011), inner_height * 0.5, -RAIL_DEPTH * 0.5)
+		post.position = Vector3(side * (RackUnit.RACK_WIDTH * 0.5 + 0.011), inner_height * 0.5,
+				-RAIL_DEPTH * 0.5 - FRAME_SETBACK)
 		post.material_override = Materials.chassis()
 		parent.add_child(post)
 
 	for y in [0.0, inner_height + 0.025]:
 		var cross := MeshInstance3D.new()
 		var cross_mesh := BoxMesh.new()
-		cross_mesh.size = Vector3(RackUnit.RACK_WIDTH + 0.044, 0.022, RAIL_DEPTH)
+		cross_mesh.size = Vector3(RackUnit.RACK_WIDTH + 0.040, 0.022, RAIL_DEPTH - 0.004)
 		cross.mesh = cross_mesh
-		cross.position = Vector3(0, y, -RAIL_DEPTH * 0.5)
+		cross.position = Vector3(0, y, -RAIL_DEPTH * 0.5 - FRAME_SETBACK)
 		cross.material_override = Materials.chassis()
 		parent.add_child(cross)

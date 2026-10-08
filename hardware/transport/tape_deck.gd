@@ -298,7 +298,8 @@ func _lay_run(run: MeshInstance3D, a: Vector2, b: Vector2) -> void:
 	var along := Vector3(d.x, d.y, 0.0) / span
 	run.transform = Transform3D(
 			Basis(along * span, Vector3(-along.y, along.x, 0.0), Vector3(0, 0, 1)),
-			Vector3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, TAPE_Z))
+			Vector3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5,
+					TAPE_Z + 0.0004 * _tape_runs.find(run)))
 
 
 func _make_reel(x: float) -> Node3D:
