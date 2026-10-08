@@ -119,6 +119,9 @@ func _ready() -> void:
 		session_panel.open()
 	if args["play_into"] > 0:
 		Session.guest_midi.target_track = args["play_into"]
+	if args["mic_into"] > 0:
+		Session.guest_audio.target_track = args["mic_into"]
+		Session.guest_audio.record_with_host = true
 	if args["computer_keys"]:
 		session_panel.play_with_computer_keys.call_deferred(true)
 
@@ -178,7 +181,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "computer_keys": false,
+		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 	}
 	var i := 0
@@ -253,6 +256,11 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["play_into"] = int(argv[i])
+			"--mic-into":
+				# `--mic-into 8` -- a guest's microphone goes onto track 8 when the host records.
+				i += 1
+				if i < argv.size():
+					out["mic_into"] = int(argv[i])
 			"--computer-keys": out["computer_keys"] = true
 			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true

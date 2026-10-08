@@ -111,6 +111,7 @@ func _ready() -> void:
 	_test_the_host_places_an_audio_take()
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
+	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -6865,3 +6866,43 @@ func _test_the_built_in_engine_plays_a_recorded_take() -> void:
 	DAW.state.playing = false
 	_offline()
 	take.discard()
+
+
+func _test_a_guest_sets_up_their_microphone_from_the_panel() -> void:
+	_offline()
+	_as_session(Session.Role.GUEST, 5)
+	var ga := Session.guest_audio
+	var made_source := ga.make_source
+	ga.make_source = func() -> MixSource: return _FakeMic.new()
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("the microphone is opt-in: no track, not recording",
+			ga.target_track == 0 and not ga.record_with_host and not ga.mic_open())
+	check("and the panel says what to do first (%s)" % panel._mic_status.text,
+			panel._mic_status.text.begins_with("Choose a track"))
+	var eight := panel._mic_into.get_item_index(8)
+	check("every track of the project is offered", eight > 0
+			and panel._mic_into.item_count == DAW.state.track_indices().size() + 1)
+	panel._mic_into.select(eight)
+	panel._mic_into.item_selected.emit(eight)
+	check("choosing one is the track the take goes onto", ga.target_track == 8)
+	check("which still records nothing until asked (%s)" % panel._mic_status.text,
+			panel._mic_status.text == "Your microphone is off.")
+	panel._mic_record.button_pressed = true
+	check("asked, it records with the host", ga.record_with_host)
+	ga._process(0.016)
+	check("and the microphone opens, so the level shows before the take", ga.mic_open())
+	panel._refresh_mic()
+	check("ready, and says where it will go (%s)" % panel._mic_status.text,
+			panel._mic_status.text.contains("Gtr") or panel._mic_status.text.begins_with("Ready"))
+	check("the keys' and the microphone's switches say which is which",
+			panel._mic_record.text.contains("mic") and panel._record_with.text.contains("keys"))
+	ga.record_with_host = false
+	ga.target_track = 0
+	ga._process(0.016)
+	check("turned off, the microphone closes", not ga.mic_open())
+	ga.make_source = made_source
+	remove_child(panel)
+	panel.free()
+	Session.start_solo()

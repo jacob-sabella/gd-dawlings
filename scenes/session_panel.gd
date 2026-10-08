@@ -25,6 +25,9 @@ const WELL := Color(0.10, 0.11, 0.135)
 const EDGE := Color(1, 1, 1, 0.07)
 
 var _root: PanelContainer
+var _scroll: ScrollContainer
+## Room for the scroll bar, only while there is one.
+var _gutter: MarginContainer
 var _pill: Label
 var _status: Label
 var _name_edit: LineEdit
@@ -50,12 +53,17 @@ var _toasts: VBoxContainer
 var _midi_status: Label
 var _midi_button: Button
 var _play_into: OptionButton
-var _play_into_tracks: Array = []
 var _monitor: CheckButton
 var _monitor_volume: HSlider
 var _record_with: CheckButton
 var _computer_keys: CheckButton
 var _take_status: Label
+var _mic_into: OptionButton
+var _mic_input: OptionButton
+var _mic_inputs: PackedStringArray = []
+var _mic_meter: ProgressBar
+var _mic_record: CheckButton
+var _mic_status: Label
 var _keys: KeyCatcher
 var _keys_hint: Label
 var _strip: HBoxContainer
@@ -118,11 +126,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if not is_open():
 		return
+	_fit_height()
 	_audio_clock += delta
 	if _audio_clock > 0.5:
 		_audio_clock = 0.0
 		_refresh_sound()
 		_refresh_midi()
+	_refresh_mic_level()
 	if Session.role == Session.Role.SOLO:
 		_listen()
 	else:
@@ -130,6 +140,21 @@ func _process(delta: float) -> void:
 
 
 # --- the panel ----------------------------------------------------------------------------
+
+## As tall as what is in it, unless that is taller than the window, which then scrolls.
+func _fit_height() -> void:
+	var room := get_viewport().get_visible_rect().size.y - _root.offset_top - 18.0 - 36.0
+	var need := _gutter.get_combined_minimum_size().y
+	var want := minf(need, maxf(room, 120.0))
+	if not is_equal_approx(_scroll.custom_minimum_size.y, want):
+		_scroll.custom_minimum_size.y = want
+		# The bar takes its room from the card's own padding, so the panel keeps its width.
+		var scrolling := need > want
+		var card := _box(CARD, 14, 18, EDGE)
+		card.content_margin_right = 6 if scrolling else 18
+		_root.add_theme_stylebox_override("panel", card)
+		_gutter.add_theme_constant_override("margin_right", 12 if scrolling else 0)
+		_root.reset_size()
 
 func _build_panel() -> void:
 	_root = PanelContainer.new()
@@ -143,9 +168,17 @@ func _build_panel() -> void:
 	_root.custom_minimum_size = Vector2(WIDTH, 0)
 	add_child(_root)
 
+	# Its own height up to the window's, then it scrolls: a guest with keys and a microphone
+	# is taller than a small window.
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_root.add_child(_scroll)
+	_gutter = MarginContainer.new()
+	_gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_gutter)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 10)
-	_root.add_child(column)
+	_gutter.add_child(column)
 
 	var head := HBoxContainer.new()
 	column.add_child(head)
@@ -274,6 +307,7 @@ func _build_panel() -> void:
 	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guest_box.add_child(_hearing)
 	_build_midi(_guest_box)
+	_build_mic(_guest_box)
 	var leave_button := _button("Leave session", false)
 	leave_button.pressed.connect(func(): Session.leave())
 	_guest_box.add_child(leave_button)
@@ -377,14 +411,7 @@ func _build_midi(box: VBoxContainer) -> void:
 	into_row.add_theme_constant_override("separation", 10)
 	box.add_child(into_row)
 	into_row.add_child(_label("Play into", 14, INK))
-	_play_into = OptionButton.new()
-	_play_into.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_play_into.custom_minimum_size = Vector2(0, 34)
-	_play_into.add_theme_font_size_override("font_size", 14)
-	_play_into.add_theme_stylebox_override("normal", _box(WELL, 8, 10, EDGE))
-	_play_into.add_theme_stylebox_override("hover", _box(WELL.lightened(0.06), 8, 10, EDGE))
-	_play_into.add_theme_stylebox_override("pressed", _box(WELL, 8, 10, EDGE))
-	_play_into.add_theme_stylebox_override("focus", _box(Color(0, 0, 0, 0), 8, 10, Color(1, 1, 1, 0.25)))
+	_play_into = _choice()
 	_play_into.item_selected.connect(func(i: int):
 		Session.guest_midi.target_track = int(_play_into.get_item_id(i)))
 	into_row.add_child(_play_into)
@@ -421,6 +448,150 @@ func _build_midi(box: VBoxContainer) -> void:
 	box.add_child(_take_status)
 	if Session.guest_midi != null:
 		Session.guest_midi.changed.connect(_refresh_take)
+
+
+func _choice() -> OptionButton:
+	var o := OptionButton.new()
+	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.custom_minimum_size = Vector2(0, 34)
+	o.clip_text = true
+	o.fit_to_longest_item = false
+	o.add_theme_font_size_override("font_size", 14)
+	o.add_theme_stylebox_override("normal", _box(WELL, 8, 10, EDGE))
+	o.add_theme_stylebox_override("hover", _box(WELL.lightened(0.06), 8, 10, EDGE))
+	o.add_theme_stylebox_override("pressed", _box(WELL, 8, 10, EDGE))
+	o.add_theme_stylebox_override("focus", _box(Color(0, 0, 0, 0), 8, 10, Color(1, 1, 1, 0.25)))
+	return o
+
+
+# --- a guest's microphone -----------------------------------------------------------------
+
+## Singing or playing into the host's project: which input, which track, how loud it is, and
+## whether to record. Off until both a track is chosen and recording is asked for: the
+## microphone is not even opened before then. See core/session/guest_audio.gd.
+func _build_mic(box: VBoxContainer) -> void:
+	box.add_child(_caption("YOUR MIC"))
+	var input_row := HBoxContainer.new()
+	input_row.add_theme_constant_override("separation", 10)
+	box.add_child(input_row)
+	input_row.add_child(_label("Input", 14, INK))
+	_mic_input = _choice()
+	_mic_input.tooltip_text = "Which of this computer's inputs to record."
+	_mic_input.item_selected.connect(func(i: int):
+		Session.guest_audio.input_device = "" if i == 0 else _mic_inputs[i])
+	input_row.add_child(_mic_input)
+
+	var into_row := HBoxContainer.new()
+	into_row.add_theme_constant_override("separation", 10)
+	box.add_child(into_row)
+	into_row.add_child(_label("Record into", 14, INK))
+	_mic_into = _choice()
+	_mic_into.item_selected.connect(func(i: int):
+		Session.guest_audio.target_track = int(_mic_into.get_item_id(i)))
+	into_row.add_child(_mic_into)
+
+	var level_row := HBoxContainer.new()
+	level_row.add_theme_constant_override("separation", 10)
+	box.add_child(level_row)
+	level_row.add_child(_label("Level", 14, INK))
+	_mic_meter = ProgressBar.new()
+	_mic_meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mic_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_mic_meter.show_percentage = false
+	_mic_meter.min_value = 0.0
+	_mic_meter.max_value = 1.0
+	_mic_meter.custom_minimum_size = Vector2(0, 10)
+	_mic_meter.tooltip_text = "How loud your microphone is. Keep the loudest parts out of the red."
+	_mic_meter.add_theme_stylebox_override("background", _box(WELL, 4, 0, EDGE))
+	_mic_meter.add_theme_stylebox_override("fill", _box(Color(0.38, 0.82, 0.55), 4, 0))
+	level_row.add_child(_mic_meter)
+
+	_mic_record = _toggle("Record when the host records")
+	_mic_record.tooltip_text = "Your microphone opens now, so you can see your level, and records whenever the host does."
+	_mic_record.toggled.connect(func(on: bool): Session.guest_audio.record_with_host = on)
+	box.add_child(_mic_record)
+
+	_mic_status = _label("", 13, DIM)
+	_mic_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_mic_status)
+	if Session.guest_audio != null:
+		Session.guest_audio.changed.connect(_refresh_mic)
+
+
+func _refresh_mic() -> void:
+	var ga := Session.guest_audio
+	if ga == null or _mic_status == null or Session.role != Session.Role.GUEST:
+		return
+	var inputs := PackedStringArray(["Default"])
+	for d in AudioServer.get_input_device_list():
+		if d != "Default":
+			inputs.append(d)
+	if inputs != _mic_inputs:
+		_mic_inputs = inputs
+		_mic_input.clear()
+		for d in inputs:
+			_mic_input.add_item(d)
+	var chosen := maxi(_mic_inputs.find(ga.input_device), 0)
+	if _mic_input.selected != chosen:
+		_mic_input.select(chosen)
+	_fill_tracks(_mic_into, ga.target_track)
+	_mic_record.text = "Record my mic when %s records" % Session.name_of(1)
+	if _mic_record.button_pressed != ga.record_with_host:
+		_mic_record.set_pressed_no_signal(ga.record_with_host)
+
+	if ga.is_recording():
+		_mic_status.text = "●  Recording onto %s  ·  %.1fs" % [_track_name(ga.target_track), ga.take_seconds()]
+		var ppm := ga.drift_ppm()
+		if absf(ppm) >= 1.0:
+			_mic_status.text += "  ·  clock %+d ppm" % roundi(ppm)
+		_mic_status.add_theme_color_override("font_color", Color(0.95, 0.42, 0.38))
+		return
+	_mic_status.add_theme_color_override("font_color", DIM)
+	if ga.target_track <= 0:
+		_mic_status.text = "Choose a track to record your microphone onto."
+	elif not ga.record_with_host:
+		_mic_status.text = "Your microphone is off."
+	elif not ga.mic_open():
+		_mic_status.text = "No microphone. Check the input above, and that this app may use it."
+	elif not ga.last_take.is_empty():
+		var t: Dictionary = ga.last_take
+		_mic_status.text = "Last take: %.1fs onto %s at %s." % [t["seconds"], _track_name(t["track"]),
+				DAW.state.bar_beat(t["start"]) if DAW.state != null else ""]
+	else:
+		_mic_status.text = "Ready. Your microphone goes onto %s when %s records." % [
+				_track_name(ga.target_track), Session.name_of(1)]
+
+
+## The meter and the running take length, which move faster than anything else here.
+func _refresh_mic_level() -> void:
+	var ga := Session.guest_audio
+	if ga == null or _mic_meter == null or Session.role != Session.Role.GUEST:
+		return
+	_mic_meter.value = sqrt(ga.level)
+	var hot := ga.level > 0.9
+	_mic_meter.add_theme_stylebox_override("fill", _box(
+			Color(0.95, 0.42, 0.38) if hot else Color(0.38, 0.82, 0.55), 4, 0))
+	if ga.is_recording():
+		_refresh_mic()
+
+
+## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
+## if it is open.
+func _fill_tracks(choice: OptionButton, selected: int) -> void:
+	var tracks: Array = []
+	if DAW.state != null:
+		for i in DAW.state.track_indices():
+			if DAW.state.in_project(i):
+				tracks.append([i, DAW.state.track(i).display_name()])
+	if tracks != choice.get_meta(&"tracks", []):
+		choice.set_meta(&"tracks", tracks)
+		choice.clear()
+		choice.add_item("Nowhere", 0)
+		for t in tracks:
+			choice.add_item("%d  %s" % [t[0], t[1]], t[0])
+	var at := maxi(choice.get_item_index(selected), 0)
+	if choice.selected != at:
+		choice.select(at)
 
 
 func _toggle(text: String) -> CheckButton:
@@ -490,32 +661,17 @@ func _refresh_midi() -> void:
 	else:
 		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
 		_midi_button.text = "Rescan"
-	# The track list, rebuilt only when it changed: rebuilding closes an open dropdown.
-	var tracks: Array = []
-	if DAW.state != null:
-		for i in DAW.state.track_indices():
-			if DAW.state.in_project(i):
-				tracks.append([i, DAW.state.track(i).display_name()])
-	if tracks != _play_into_tracks:
-		_play_into_tracks = tracks
-		_play_into.clear()
-		_play_into.add_item("Nowhere", 0)
-		for t in tracks:
-			_play_into.add_item("%d  %s" % [t[0], t[1]], t[0])
-	var at := _play_into.get_item_index(gm.target_track)
-	if at < 0:
-		at = 0
-	if _play_into.selected != at:
-		_play_into.select(at)
+	_fill_tracks(_play_into, gm.target_track)
 	if _monitor.button_pressed != gm.monitor:
 		_monitor.set_pressed_no_signal(gm.monitor)
 	_monitor.disabled = not MonitorSynth.available()
 	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
-	_record_with.text = "Record when %s records" % Session.name_of(1)
+	_record_with.text = "Record my keys when %s records" % Session.name_of(1)
 	if _record_with.button_pressed != gm.record_with_host:
 		_record_with.set_pressed_no_signal(gm.record_with_host)
 	_refresh_keys()
 	_refresh_take()
+	_refresh_mic()
 
 
 ## Whether a take is running, and what the last one did. Driven by GuestMidi.changed, so the
