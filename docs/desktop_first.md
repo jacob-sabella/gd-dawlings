@@ -127,3 +127,14 @@ Each step should be usable on its own, so every tick leaves the app better:
 
 Each one gets a test the way the framing work did. The rule from that work still holds: a
 passing test isn't a working app, so each step also gets driven through the real input path.
+
+## Found along the way
+
+- **FX parameters read as a percentage** ("THRESH 44%"). Correct, but nobody sets a compressor
+  in percent. Reaper sends each parameter's formatted value over OSC; the backend should cache
+  it and the rack knob's `describe_value` should prefer it.
+- **The focused surface is still easing at frame 90** of a capture: the rack sat ~30 px apart
+  between frame 40 and frame 90 of the same setup. Something settles long after the 0.42 s glide.
+- **Unfocused gear intrudes into the frame.** With the rack focused, the console fills the
+  bottom-right third of the shot. The furniture-yielding pass only moves `room_furniture`, and
+  the console is a surface.
