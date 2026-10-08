@@ -170,12 +170,18 @@ function handlers.GetProjectStructure(args)
           }
         end
       end
+      local wet = nil
+      local wet_param = reaper.TrackFX_GetParamFromIdent and reaper.TrackFX_GetParamFromIdent(tr, f, ':wet') or -1
+      if wet_param >= 0 then wet = reaper.TrackFX_GetParamNormalized(tr, f, wet_param) end
+      local _, preset = reaper.TrackFX_GetPreset(tr, f, '')
       fx[#fx + 1] = {
         index = f,
         name = fx_name,
         enabled = reaper.TrackFX_GetEnabled(tr, f),
         params = params,
         param_names = param_names,
+        wet = wet,
+        preset = preset or '',
       }
     end
 
@@ -200,6 +206,9 @@ function handlers.GetProjectStructure(args)
         dest_name = dest_name,
         volume = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_VOL'),
         pan = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_PAN'),
+        -- Into channels 3/4 or above: a key for a plugin's detector, not part of the mix. The
+        -- low ten bits are the first channel; the bits above say mono and the like.
+        key = (math.floor(reaper.GetTrackSendInfo_Value(tr, 0, s, 'I_DSTCHAN')) & 1023) >= 2,
       }
     end
 
@@ -343,6 +352,63 @@ function handlers.RemoveTrackSend(args)
   local ok = reaper.RemoveTrackSend(src, 0, math.floor(args[2] or 0))
   reaper.UpdateArrange()
   return {ok = ok}
+end
+
+--- A sidechain: a send into the destination's channels 3/4, which is where Reaper's own
+-- compressors and gates listen when their detector is set to the auxiliary input. The
+-- destination is widened to four channels first, or there would be no 3/4 to send into.
+function handlers.CreateSidechain(args)
+  local src = track_from_osc(args[1])
+  local dst = track_from_osc(args[2])
+  if not src or not dst then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  if reaper.GetMediaTrackInfo_Value(dst, 'I_NCHAN') < 4 then
+    reaper.SetMediaTrackInfo_Value(dst, 'I_NCHAN', 4)
+  end
+  local index = reaper.CreateTrackSend(src, dst)
+  if index >= 0 then
+    reaper.SetTrackSendInfo_Value(src, 0, index, 'I_DSTCHAN', 2)
+  end
+  reaper.UpdateArrange()
+  reaper.Undo_EndBlock('reaper-3d: sidechain', -1)
+  return {ok = index >= 0, send_index = index}
+end
+
+-- args: track, fx, to track, to fx (all 1-based, as OSC), copy. A slot past the end of the
+-- destination's chain is its end, which is what Reaper does with it too.
+function handlers.MoveFx(args)
+  local src = track_from_osc(args[1])
+  local dst = track_from_osc(args[3])
+  if not src or not dst then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  if fx < 0 or fx >= reaper.TrackFX_GetCount(src) then return {ok = false, error = 'no such fx'} end
+  local to = math.min(math.floor(args[4] or 1) - 1, reaper.TrackFX_GetCount(dst))
+  reaper.Undo_BeginBlock()
+  reaper.TrackFX_CopyToTrack(src, fx, dst, math.max(to, 0), not args[5])
+  reaper.Undo_EndBlock(args[5] and 'reaper-3d: copy FX' or 'reaper-3d: move FX', -1)
+  return {ok = true}
+end
+
+-- args: track, fx (1-based), wet 0..1. The plugin's own wet/dry, which every plugin in Reaper
+-- has whether or not it has a mix knob of its own.
+function handlers.SetFxWet(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  local p = reaper.TrackFX_GetParamFromIdent and reaper.TrackFX_GetParamFromIdent(tr, fx, ':wet') or -1
+  if p < 0 then return {ok = false, error = 'no wet control'} end
+  reaper.TrackFX_SetParamNormalized(tr, fx, p, args[3] or 1)
+  return {ok = true}
+end
+
+-- args: track, fx (1-based), direction (1 or -1). Answers with the preset it landed on.
+function handlers.StepFxPreset(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  reaper.TrackFX_NavigatePresets(tr, fx, (args[3] or 1) < 0 and -1 or 1)
+  local _, preset = reaper.TrackFX_GetPreset(tr, fx, '')
+  return {ok = true, preset = preset or ''}
 end
 
 --- What Reaper itself holds right now: the transport, the loop, the history, and every track's

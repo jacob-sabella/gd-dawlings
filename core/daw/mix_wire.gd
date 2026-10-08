@@ -243,6 +243,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			_apply_send(state, idx, p, args)
 		"sends":
 			_apply_send_count(state, idx, int(args[0]))
+		"fxs":
+			_apply_fx_count(state, idx, int(args[0]))
 
 
 ## [start, length, muted, name, selected] per item, repeating -- and, for an item that has
@@ -318,6 +320,15 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 			# Reaper's `bypass` is sent as ENABLED (1 = running). The name is a trap.
 			f.enabled = _as_bool(args)
 			state.fx_changed.emit(track_idx, fx_idx)
+		# reaper-3d's own, from the bridge: OSC has no word for either.
+		"wet":
+			if p.size() == 5 and not is_equal_approx(f.wet, float(args[0])):
+				f.wet = clampf(float(args[0]), 0.0, 1.0)
+				state.fx_changed.emit(track_idx, fx_idx)
+		"preset":
+			if f.preset != str(args[0]):
+				f.preset = str(args[0])
+				state.fx_changed.emit(track_idx, fx_idx)
 		"fxparam":
 			if p.size() >= 7 and p[5].is_valid_int():
 				var param := int(p[5])
@@ -343,7 +354,7 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	# value, and reading "-11.0dB" as a float would zero the level.
 	if p.size() > 5:
 		return
-	var before := [s.dest_name, s.dest_track, s.volume, s.pan]
+	var before := [s.dest_name, s.dest_track, s.volume, s.pan, s.key]
 	match p[4]:
 		"name": s.dest_name = str(args[0])
 		# reaper-3d's own again, and the one that makes the patchbay exact rather than
@@ -351,9 +362,11 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 		"dest": s.dest_track = int(args[0])
 		"volume": s.volume = float(args[0])
 		"pan": s.pan = float(args[0])
+		# Also reaper-3d's own: a send into the destination's key input, not its mix.
+		"key": s.key = _as_bool(args)
 	# Told, so a control showing a send level follows it. Only on a change: Reaper restates
 	# every slot of every track on a refresh, and most of them are empty.
-	if before != [s.dest_name, s.dest_track, s.volume, s.pan]:
+	if before != [s.dest_name, s.dest_track, s.volume, s.pan, s.key]:
 		state.track_changed.emit(track_idx, &"sends")
 
 
@@ -370,6 +383,31 @@ static func _apply_send_count(state: MixState, track_idx: int, count: int) -> vo
 			gone = true
 	if gone:
 		state.track_changed.emit(track_idx, &"sends")
+
+
+## How many plugins a track's chain holds, for the same reason as the send count: a plugin moved
+## to another track leaves its old slot, and only a count can say that slot is now empty. The
+## slots past the count are emptied rather than erased, because OSC goes on restating every slot
+## its device is set up for and an erased one would come straight back.
+##
+## Counted along the slots in order rather than compared with the slot numbers, because Reaper
+## numbers a chain from 1 and the built-in engine from 0.
+static func _apply_fx_count(state: MixState, track_idx: int, count: int) -> void:
+	var t := state.track(track_idx)
+	var order: Array = t.fx.keys()
+	order.sort()
+	for at in order.size():
+		var fx_index: int = order[at]
+		var f: MixState.FXState = t.fx[fx_index]
+		if at >= count and f.name != "":
+			f.name = ""
+			f.params.clear()
+			f.param_names.clear()
+			f.param_text.clear()
+			f.param_text_at.clear()
+			f.wet = 1.0
+			f.preset = ""
+			state.fx_changed.emit(track_idx, int(fx_index))
 
 
 static func _as_bool(args: Array) -> bool:
@@ -420,6 +458,9 @@ static func snapshot(state: MixState) -> Array:
 			var f: MixState.FXState = t.fx[fx_index]
 			out.append(["/track/%d/fx/%d/name" % [index, fx_index], [f.name]])
 			out.append(["/track/%d/fx/%d/bypass" % [index, fx_index], [1.0 if f.enabled else 0.0]])
+			out.append(["/track/%d/fx/%d/wet" % [index, fx_index], [f.wet]])
+			if f.preset != "":
+				out.append(["/track/%d/fx/%d/preset" % [index, fx_index], [f.preset]])
 			var param_indices: Array = f.params.keys()
 			param_indices.sort()
 			for param in param_indices:
@@ -440,6 +481,7 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/send/%d/dest" % [index, send_index], [float(sd.dest_track)]])
 			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
 			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
+			out.append(["/track/%d/send/%d/key" % [index, send_index], [1.0 if sd.key else 0.0]])
 		# After them, so a guest that still holds a send the host has since removed drops it.
 		out.append(["/track/%d/sends" % index, [float(send_indices.max() if not send_indices.is_empty() else 0)]])
 

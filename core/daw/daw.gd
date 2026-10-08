@@ -45,6 +45,7 @@ const COMMANDS := [
 	&"set_track_volume", &"set_track_pan", &"set_track_mute", &"set_track_solo",
 	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
 	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text",
+	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
@@ -163,6 +164,27 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	_do(&"set_fx_enabled", [track_index, fx_index, enabled])
 
 
+func set_fx_wet(track_index: int, fx_index: int, wet: float) -> void:
+	_do(&"set_fx_wet", [track_index, fx_index, clampf(wet, 0.0, 1.0)])
+
+
+func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
+	_do(&"step_fx_preset", [track_index, fx_index, signi(direction)])
+
+
+## Fire and forget, unlike a send: whatever holds the plugin finds it again by watching the
+## chain, because on a guest there is no answer to wait for.
+func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy := false) -> void:
+	_do(&"move_fx", [from_track, fx_index, to_track, maxi(to_fx, 0), copy])
+
+
+func create_sidechain(from_track: int, to_track: int) -> bool:
+	if not Session.is_authority():
+		Session.send_intent(&"create_sidechain", [from_track, to_track])
+		return false
+	return backend.create_sidechain(from_track, to_track)
+
+
 ## A send is named by its track and its 1-based place in that track's sends, as on the wire.
 func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
 	_do(&"set_send_volume", [track_index, send_index, clampf(taper, 0.0, 1.0)])
@@ -274,6 +296,22 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
 			return
 		args = [int(args[0]), int(args[1]), clampf(float(args[2]), 0.0, 1.0)]
+	if verb == &"set_fx_wet":
+		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 0:
+			push_warning("DAW: refused a malformed set_fx_wet intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), clampf(float(args[2]), 0.0, 1.0)]
+	if verb == &"step_fx_preset":
+		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 0:
+			push_warning("DAW: refused a malformed step_fx_preset intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), signi(int(args[2]))]
+	if verb == &"move_fx":
+		if args.size() != 5 or int(args[0]) < 1 or int(args[1]) < 0 or int(args[2]) < 1:
+			push_warning("DAW: refused a malformed move_fx intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), int(args[2]), maxi(int(args[3]), 0),
+				MixWire._as_bool([args[4]])]
 	if verb == &"insert_midi_take":
 		if not midi_take_refusal(args).is_empty():
 			return

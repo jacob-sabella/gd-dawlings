@@ -131,6 +131,43 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	return fx_index
 
 
+## The chain is rearranged in the cache by the stand-in; the effects on the buses follow it, by
+## the name each slot now holds -- a copy is a new effect of the same kind, not the same one.
+func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bool) -> void:
+	var kind: StringName = _kinds.get(from_track, {}).get(fx_index, &"")
+	super(from_track, fx_index, to_track, to_fx, copy)
+	if kind == &"":
+		return
+	for index in [from_track, to_track]:
+		_restack(index, kind)
+
+
+## Lay a track's bus effects down again in the order its chain now says.
+func _restack(track_index: int, moved_kind: StringName) -> void:
+	var by_name := {}
+	for k in FXCatalogue.kinds():
+		by_name[FXCatalogue.kinds()[k]["name"]] = k
+	by_name[FXCatalogue.kinds()[moved_kind]["name"]] = moved_kind
+	var kinds := {}
+	for fx_index in state.track(track_index).plugins():
+		var name: String = state.fx(track_index, fx_index).name
+		if by_name.has(name):
+			kinds[fx_index] = by_name[name]
+	_kinds[track_index] = kinds
+	if not _bus.has(track_index):
+		return
+	var b: int = _bus[track_index]
+	# Everything after the panner, which is the track's own and not a plugin.
+	for i in range(AudioServer.get_bus_effect_count(b) - 1, 0, -1):
+		AudioServer.remove_bus_effect(b, i)
+	var order: Array = kinds.keys()
+	order.sort()
+	for fx_index in order:
+		AudioServer.add_bus_effect(b, FXCatalogue.make(kinds[fx_index]))
+	for fx_index in order:
+		_apply_fx(track_index, fx_index)
+
+
 ## Which track's bus each track sends into: its folder's, or the master's.
 func parent_of(index: int) -> int:
 	var stack: Array = []
@@ -186,7 +223,9 @@ func _build_buses() -> void:
 		var t: MixState.TrackState = state.tracks[index]
 		for send_index in t.sends:
 			var dest: int = (t.sends[send_index] as MixState.SendState).resolve(state)
-			if not _bus.has(dest):
+			# A key goes to a detector, and nothing here listens for one: playing it into the
+			# destination's mix would make a sidechain an ordinary send.
+			if (t.sends[send_index] as MixState.SendState).key or not _bus.has(dest):
 				continue
 			var sb := AudioServer.bus_count
 			AudioServer.add_bus(sb)

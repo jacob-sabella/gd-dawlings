@@ -56,6 +56,9 @@ class SendState extends RefCounted:
 
 	var volume: float = 1.0
 	var pan: float = 0.5
+	## Into the destination's key input (channels 3/4) rather than its mix: a sidechain. Heard
+	## by whatever plugin on that track listens for a key, and by nothing else.
+	var key: bool = false
 
 
 class FXState extends RefCounted:
@@ -73,6 +76,11 @@ class FXState extends RefCounted:
 	## The normalised value each text was read at, where known. Text and value travel apart,
 	## and this is how a reader tells whether the words still describe the knob.
 	var param_text_at: Dictionary = {}
+	## The plugin's own wet/dry, 0..1, where 1 is all plugin. Every plugin in Reaper has one,
+	## outside its own parameters, which is why it is a field and not a param.
+	var wet: float = 1.0
+	## The preset it is on, by the plugin's own name for it. Empty when nobody has said.
+	var preset: String = ""
 
 
 ## The master bus. Deliberately NOT a TrackState with a reserved index.

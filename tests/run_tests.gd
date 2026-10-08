@@ -67,6 +67,9 @@ func _ready() -> void:
 	_test_dragging_across_the_bay_patches_and_unpatches()
 	_test_hovering_a_row_picks_out_its_cables()
 	_test_a_removed_send_leaves_the_mix()
+	_test_a_plugin_moves_and_copies_along_the_chains()
+	_test_wet_and_presets_ride_the_wire()
+	_test_a_sidechain_is_a_send_into_the_key()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2279,6 +2282,93 @@ func _test_a_removed_send_leaves_the_mix() -> void:
 	var snap := MixWire.snapshot(state)
 	var said := snap.filter(func(pair): return pair[0] == "/track/1/sends")
 	check("and the count travels in a snapshot", said.size() == 1 and int(said[0][1][0]) == 2)
+
+
+func _names_on(state: MixState, track_index: int) -> Array:
+	var t := state.track(track_index)
+	return t.plugins().map(func(i): return (t.fx[i] as MixState.FXState).name)
+
+
+func _test_a_plugin_moves_and_copies_along_the_chains() -> void:
+	# Torn off the rack and dropped somewhere else, a plugin has to land there with its settings
+	# and leave its old slot empty -- on the host and, through the wire, on every guest.
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	var state := DAW.state
+	check("the stand-in can rearrange a chain", DAW.can(DAWBackend.Capability.FX_CHAIN))
+	check("track 2 starts EQ then compressor", _names_on(state, 2) == ["ReaEQ", "ReaComp"])
+	var comp_threshold: float = state.fx(2, 1).params[0]
+
+	DAW.move_fx(2, 1, 2, 0)
+	check("moved up its own chain", _names_on(state, 2) == ["ReaComp", "ReaEQ"])
+	check("and took its settings with it", is_equal_approx(state.fx(2, 0).params[0], comp_threshold))
+	check("its names came too", state.fx(2, 0).param_names[0] == "Thresh")
+
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	DAW.move_fx(2, 0, 6, 99)
+	check("moved to the end of another track's chain", _names_on(state, 6) == ["ReaComp", "ReaComp"])
+	check("and gone from where it was", _names_on(state, 2) == ["ReaEQ"])
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	check("a guest sees the slot it left empty", _names_on(guest, 2) == ["ReaEQ"])
+	check("and the plugin where it went", _names_on(guest, 6) == ["ReaComp", "ReaComp"])
+
+	DAW.move_fx(10, 1, 13, 0, true)
+	check("a copy goes in front", _names_on(state, 13) == ["ReaVerbate", "ReaVerbate"])
+	check("and leaves the original", _names_on(state, 10) == ["ReaEQ", "ReaVerbate"])
+
+	DAW.undo()
+	check("undo takes the copy back", _names_on(state, 13) == ["ReaVerbate"])
+	DAW.undo()
+	check("and puts the moved one back", _names_on(state, 2) == ["ReaComp", "ReaEQ"] \
+			and _names_on(state, 6) == ["ReaComp"])
+
+	check("move_fx is a verb a guest may use", &"move_fx" in DAW.COMMANDS)
+	DAW.apply_intent(&"move_fx", [2, -1, 6, 0, false])
+	check("a malformed move from a peer is refused", _names_on(state, 2) == ["ReaComp", "ReaEQ"])
+
+
+func _test_wet_and_presets_ride_the_wire() -> void:
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	var state := DAW.state
+	DAW.set_fx_wet(6, 0, 0.35)
+	check("wet/dry is the plugin's own field", is_equal_approx(state.fx(6, 0).wet, 0.35))
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	check("and a guest hears it", is_equal_approx(guest.fx(6, 0).wet, 0.35))
+	DAW.undo()
+	check("undo puts it back to all plugin", is_equal_approx(state.fx(6, 0).wet, 1.0))
+
+	var before: Dictionary = state.fx(6, 0).params.duplicate()
+	DAW.step_fx_preset(6, 0, 1)
+	var preset := state.fx(6, 0).preset
+	check("stepping lands on a named preset", preset != "" and preset != "Default")
+	check("and the preset moves the knobs", state.fx(6, 0).params != before)
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	check("a guest reads the same preset", guest.fx(6, 0).preset == preset)
+	DAW.step_fx_preset(6, 0, -1)
+	check("and back again", state.fx(6, 0).preset == "Default")
+	for verb in [&"set_fx_wet", &"step_fx_preset"]:
+		check("%s is a verb a guest may use" % verb, verb in DAW.COMMANDS)
+
+
+func _test_a_sidechain_is_a_send_into_the_key() -> void:
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	var state := DAW.state
+	check("a sidechain can be made", DAW.create_sidechain(1, 6))
+	var keyed: Array = state.track(1).sends.values().filter(
+			func(s): return (s as MixState.SendState).resolve(state) == 6)
+	check("as a send to the keyed track", keyed.size() == 1)
+	check("into its key, not its mix", keyed.size() == 1 and (keyed[0] as MixState.SendState).key)
+	check("a second key from the same track is refused", not DAW.create_sidechain(1, 6))
+	check("but an ordinary send alongside it is not", DAW.create_send(1, 6))
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	var guest_keys := guest.track(1).sends.values().filter(func(s): return (s as MixState.SendState).key)
+	check("a guest knows which is the key", guest_keys.size() == 1)
+	check("create_sidechain is a verb a guest may use", &"create_sidechain" in DAW.COMMANDS)
 
 
 func _test_a_banked_control_still_moves() -> void:

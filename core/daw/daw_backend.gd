@@ -61,6 +61,11 @@ const Capability := {
 	## Put a recorded audio file on a track at a song position. Reaper needs the bridge for it,
 	## for the same reason.
 	AUDIO_TAKES = &"audio_takes",
+	## Rearrange a plugin chain: move or copy a plugin to another slot or another track. Reaper
+	## needs the bridge; OSC can turn a plugin's knobs but cannot pick it up.
+	FX_CHAIN = &"fx_chain",
+	## Step through a plugin's presets by name. Only a DAW that knows a plugin's presets can.
+	FX_PRESETS = &"fx_presets",
 }
 
 var state := MixState.new()
@@ -138,6 +143,15 @@ func set_master_pan(_pan: float) -> void: pass
 
 func set_fx_param(_track_index: int, _fx_index: int, _param: int, _value: float) -> void: pass
 func set_fx_enabled(_track_index: int, _fx_index: int, _enabled: bool) -> void: pass
+## The plugin's own wet/dry, 0..1, where 1 is all plugin.
+func set_fx_wet(_track_index: int, _fx_index: int, _wet: float) -> void: pass
+## The plugin's next (1) or previous (-1) preset. A no-op without Capability.FX_PRESETS.
+func step_fx_preset(_track_index: int, _fx_index: int, _direction: int) -> void: pass
+## Take plugin `fx_index` off `from_track` and put it in slot `to_fx` of `to_track`, pushing what
+## is there down -- or leave the original where it is and put a copy there. Slots are numbered as
+## this backend numbers them in the cache, and a `to_fx` past the end of the chain means the
+## end. A no-op without Capability.FX_CHAIN.
+func move_fx(_from_track: int, _fx_index: int, _to_track: int, _to_fx: int, _copy: bool) -> void: pass
 
 ## One send's level and pan. `send_index` is the send as the wire numbers it: 1-based, in the
 ## track's own send order -- `/track/3/send/1` is track 3's first send. Same 0..1 taper as a
@@ -357,6 +371,9 @@ func _restore_lanes(snapshot: Dictionary) -> void:
 ## rather than draw a cable that is not there.
 func create_send(_from_track: int, _to_track: int) -> bool: return false
 func remove_send(_from_track: int, _send_index: int) -> bool: return false
+## A send into `to_track`'s key input (channels 3/4) rather than into its mix: what a compressor
+## or gate on that track listens to when it is set to its sidechain. Removed like any send.
+func create_sidechain(_from_track: int, _to_track: int) -> bool: return false
 
 
 # --- fader law ----------------------------------------------------------------------------

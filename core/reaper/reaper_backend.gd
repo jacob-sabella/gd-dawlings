@@ -52,6 +52,9 @@ var _timeline_in_flight := false
 var _timeline_epoch := 0
 var _edits_in_flight := 0
 var _structure_due := 0.0
+## Wet addresses written from here, and when: see `set_fx_wet`.
+var _wet_written := {}
+const WET_SETTLE_MSEC := 2000
 var _structure_in_flight := false
 ## Seconds after `open` at which to ask Reaper for its whole state again. See `open`.
 var _refresh_after: Array = []
@@ -154,6 +157,9 @@ func can(capability: StringName) -> bool:
 		# Reaper's OSC surface has no message about media items at all, so this is exactly as
 		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
 		# the arrangement instead of drawing a project with nothing in it.
+		return _bridge != null and _bridge.is_open()
+	if capability == Capability.FX_CHAIN or capability == Capability.FX_PRESETS:
+		# OSC can turn a plugin's knobs but cannot pick it up or name its presets.
 		return _bridge != null and _bridge.is_open()
 	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
@@ -277,6 +283,43 @@ func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 		if typeof(result) == TYPE_DICTIONARY and result.has("text"):
 			_apply("/track/%d/fx/%d/fxparam/%d/value/str" % [track_index, fx_index, param],
 					[str(result["text"]), float(result.get("value", -1.0))]))
+
+
+## A plugin's wet/dry is not one of its parameters as OSC numbers them, so it goes by the bridge.
+## Into the cache at once, like any write, and the time noted: the slow structure poll reports
+## the wet too, and an answer read before this write must not drag the knob back.
+func set_fx_wet(track_index: int, fx_index: int, wet: float) -> void:
+	var address := "/track/%d/fx/%d/wet" % [track_index, fx_index]
+	_wet_written[address] = Time.get_ticks_msec()
+	record_for_replication(address, [clampf(wet, 0.0, 1.0)])
+	MixWire.apply(state, address, [clampf(wet, 0.0, 1.0)])
+	if _bridge != null and _bridge.is_open():
+		_bridge.call_reaper("SetFxWet", [track_index, fx_index, clampf(wet, 0.0, 1.0)])
+
+
+func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_bridge.call_reaper("StepFxPreset", [track_index, fx_index, signi(direction)], func(result) -> void:
+		if typeof(result) == TYPE_DICTIONARY and result.has("preset"):
+			_apply("/track/%d/fx/%d/preset" % [track_index, fx_index], [str(result["preset"])]))
+
+
+## Reaper renumbers both chains, and OSC restates what it sees; the structure poll is asked for
+## at once so the slot counts -- which only it knows -- arrive with them rather than eight
+## seconds later.
+func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bool) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_bridge.call_reaper("MoveFx", [from_track, fx_index, to_track, to_fx, copy],
+			func(_result) -> void: _structure_due = 0.0)
+
+
+func create_sidechain(from_track: int, to_track: int) -> bool:
+	if _bridge == null or not _bridge.is_open():
+		return false
+	return _bridge.call_reaper("CreateSidechain", [from_track, to_track],
+			func(_result) -> void: _structure_due = 0.0)
 
 
 ## Both are on Reaper's own OSC surface (TRACK_SEND_VOLUME, TRACK_SEND_PAN), numbered from 1 as
@@ -612,6 +655,8 @@ func _on_structure(result) -> void:
 				continue
 			_apply("/track/%d/send/%d/dest" % [idx, send_idx],
 					[float(int(send.get("dest_track", -1)))])
+			if send.has("key"):
+				_apply("/track/%d/send/%d/key" % [idx, send_idx], [1.0 if send["key"] else 0.0])
 			if send.has("dest_name"):
 				_apply("/track/%d/send/%d/name" % [idx, send_idx], [str(send["dest_name"])])
 		# The bridge lists every send a track has, so a send it no longer lists has been removed.
@@ -620,10 +665,20 @@ func _on_structure(result) -> void:
 
 		# OSC names only the selected track's parameters (see the Lua). Written onto the same
 		# address OSC would have used, so a guest's rack is named by the ordinary stream.
-		for fx in _as_array(entry.get("fx", [])):
+		var chain := _as_array(entry.get("fx", []))
+		if entry.has("fx"):
+			_apply("/track/%d/fxs" % idx, [float(chain.size())])
+		for fx in chain:
 			if typeof(fx) != TYPE_DICTIONARY:
 				continue
 			var fx_idx := int(fx.get("index", -1)) + 1
+			if fx.has("name") and str(fx["name"]) != "":
+				_apply("/track/%d/fx/%d/name" % [idx, fx_idx], [str(fx["name"])])
+			if fx.has("preset"):
+				_apply("/track/%d/fx/%d/preset" % [idx, fx_idx], [str(fx["preset"])])
+			var wet_at := "/track/%d/fx/%d/wet" % [idx, fx_idx]
+			if fx.has("wet") and Time.get_ticks_msec() - int(_wet_written.get(wet_at, -WET_SETTLE_MSEC)) >= WET_SETTLE_MSEC:
+				_apply(wet_at, [float(fx["wet"])])
 			var names := _as_array(fx.get("param_names", []))
 			for p in names.size():
 				_apply("/track/%d/fx/%d/fxparam/%d/name" % [idx, fx_idx, p + 1], [str(names[p])])

@@ -403,6 +403,132 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	record_for_replication("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
 
+func set_fx_wet(track_index: int, fx_index: int, wet: float) -> void:
+	var f := state.fx(track_index, fx_index, false)
+	if f == null:
+		return
+	_remember("/track/%d/fx/%d/wet" % [track_index, fx_index],
+			set_fx_wet.bind(track_index, fx_index, f.wet),
+			set_fx_wet.bind(track_index, fx_index, wet))
+	var key := "/track/%d/fx/%d/wet" % [track_index, fx_index]
+	record_for_replication(key, [clampf(wet, 0.0, 1.0)])
+	MixWire.apply(state, key, [clampf(wet, 0.0, 1.0)])
+
+
+## The stand-in's plugins have no preset files, so they get a handful of named settings each:
+## enough that stepping through them visibly changes the plugin, which is what is being tested.
+const STAND_IN_PRESETS: Array[String] = ["Default", "Gentle", "Punchy", "Wide", "Extreme"]
+
+
+func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
+	var f := state.fx(track_index, fx_index, false)
+	if f == null or f.name == "":
+		return
+	var at := maxi(STAND_IN_PRESETS.find(f.preset), 0)
+	var next := STAND_IN_PRESETS[posmod(at + signi(direction), STAND_IN_PRESETS.size())]
+	var before := _fx_row(f)
+	var after := before.duplicate(true)
+	after["preset"] = next
+	for param in after["params"]:
+		after["params"][param] = 0.5 if next == "Default" \
+				else fposmod(sin(float(hash(next + f.name) % 997) + param * 2.3) * 0.5 + 0.5, 1.0)
+	_remember("/track/%d/fx/%d/preset" % [track_index, fx_index],
+			_write_fx.bind(track_index, fx_index, before),
+			_write_fx.bind(track_index, fx_index, after), false)
+	_write_fx(track_index, fx_index, after)
+
+
+## Rearranging a chain is laying down both chains whole, afterwards, the way a send list is: the
+## wire can say what is in a slot and how many slots there are, and that is all a move is.
+func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bool) -> void:
+	if not state.tracks.has(from_track) or not state.tracks.has(to_track):
+		return
+	var from_order := state.track(from_track).plugins()
+	var at := from_order.find(fx_index)
+	if at < 0:
+		return
+	var to_order := from_order if to_track == from_track else state.track(to_track).plugins()
+	# A slot past the end of the chain is the end of the chain.
+	var slot := to_order.find(to_fx)
+	if slot < 0:
+		slot = to_order.size()
+	var source := _fx_chain_of(from_track)
+	var target := source if to_track == from_track else _fx_chain_of(to_track)
+	var before_from := source.duplicate(true)
+	var before_to := target.duplicate(true)
+	var row: Dictionary = source[at].duplicate(true)
+	if not copy:
+		source.remove_at(at)
+		# The slot was counted with the plugin still in it.
+		if to_track == from_track and slot > at:
+			slot -= 1
+	target.insert(mini(slot, target.size()), row)
+	if to_track == from_track and not copy and before_from == source:
+		return
+	var after_from := source.duplicate(true)
+	var after_to := target.duplicate(true)
+	_remember("/track/%d/fxs" % from_track,
+			_set_fx_chains.bind(from_track, before_from, to_track, before_to),
+			_set_fx_chains.bind(from_track, after_from, to_track, after_to), false)
+	_set_fx_chains(from_track, after_from, to_track, after_to)
+
+
+func _set_fx_chains(a: int, chain_a: Array, b: int, chain_b: Array) -> void:
+	_set_fx_chain(a, chain_a)
+	if b != a:
+		_set_fx_chain(b, chain_b)
+
+
+## The stand-in numbers a chain from 0, as the Godot effects it stands for are numbered on their
+## bus. Reaper numbers from 1; nothing above the backend may assume either.
+const FX_FIRST := 0
+
+
+## A track's plugins in chain order, each as `_fx_row` says it.
+func _fx_chain_of(track_index: int) -> Array:
+	var out := []
+	var t := state.track(track_index)
+	for i in t.plugins():
+		out.append(_fx_row(t.fx[i]))
+	return out
+
+
+static func _fx_row(f: MixState.FXState) -> Dictionary:
+	return {"name": f.name, "enabled": f.enabled, "wet": f.wet, "preset": f.preset,
+			"params": f.params.duplicate(), "param_names": f.param_names.duplicate()}
+
+
+func _set_fx_chain(track_index: int, rows: Array) -> void:
+	for i in rows.size():
+		_write_fx(track_index, i + FX_FIRST, rows[i])
+	record_for_replication("/track/%d/fxs" % track_index, [float(rows.size())])
+	MixWire.apply(state, "/track/%d/fxs" % track_index, [float(rows.size())])
+
+
+## One slot laid down whole, through the wire so a guest sees exactly the same plugin land.
+func _write_fx(track_index: int, fx_index: int, row: Dictionary) -> void:
+	var at := "/track/%d/fx/%d/" % [track_index, fx_index]
+	var f := state.fx(track_index, fx_index)
+	# Words describing the plugin that used to be in this slot would describe the wrong one.
+	if f.name != row["name"]:
+		f.param_text.clear()
+		f.param_text_at.clear()
+		for param in f.params.keys():
+			if not (row["params"] as Dictionary).has(param):
+				f.params.erase(param)
+	var writes := [["name", [row["name"]]], ["bypass", [1.0 if row["enabled"] else 0.0]],
+			["wet", [float(row["wet"])]], ["preset", [str(row["preset"])]]]
+	for param in row["params"]:
+		writes.append(["fxparam/%d/value" % param, [float(row["params"][param])]])
+	for param in row["param_names"]:
+		writes.append(["fxparam/%d/name" % param, [str(row["param_names"][param])]])
+	for w in writes:
+		record_for_replication(at + w[0], w[1])
+		MixWire.apply(state, at + w[0], w[1])
+	# A param value arriving tells nobody (it is a value, not a shape); a whole new plugin is.
+	state.fx_changed.emit(track_index, fx_index)
+
+
 ## A send that is not there is not created by turning its knob: that is `create_send`'s job, and
 ## a level on a send that does not exist would draw a cable for it.
 func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
@@ -432,12 +558,24 @@ func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 func create_send(from_track: int, to_track: int) -> bool:
 	if from_track == to_track or not state.tracks.has(from_track) or not state.tracks.has(to_track):
 		return false
+	return _add_send(from_track, to_track, false)
+
+
+func create_sidechain(from_track: int, to_track: int) -> bool:
+	if from_track == to_track or not state.tracks.has(from_track) or not state.tracks.has(to_track):
+		return false
+	return _add_send(from_track, to_track, true)
+
+
+## One send of each kind between two tracks: a second identical cable is a mistake, but a track
+## both heard on a bus and keying that bus's compressor is an ordinary mix.
+func _add_send(from_track: int, to_track: int, key: bool) -> bool:
 	var before := _sends_of(from_track)
 	for row in before:
-		if int(row[0]) == to_track:
+		if int(row[0]) == to_track and bool(row[4]) == key:
 			return false
 	var after := before.duplicate(true)
-	after.append([to_track, state.track(to_track).display_name(), FaderLaw.to_taper(0.0), 0.5])
+	after.append([to_track, state.track(to_track).display_name(), FaderLaw.to_taper(0.0), 0.5, key])
 	_remember("/track/%d/sends" % from_track, _set_sends.bind(from_track, before),
 			_set_sends.bind(from_track, after), false)
 	_set_sends(from_track, after)
@@ -456,7 +594,7 @@ func remove_send(from_track: int, send_index: int) -> bool:
 	return true
 
 
-## A track's sends in order, as [dest_track, dest_name, volume, pan] rows.
+## A track's sends in order, as [dest_track, dest_name, volume, pan, key] rows.
 func _sends_of(track_index: int) -> Array:
 	var out := []
 	if not state.tracks.has(track_index):
@@ -466,7 +604,7 @@ func _sends_of(track_index: int) -> Array:
 	keys.sort()
 	for k in keys:
 		var sd: MixState.SendState = t.sends[k]
-		out.append([sd.dest_track, sd.dest_name, sd.volume, sd.pan])
+		out.append([sd.dest_track, sd.dest_name, sd.volume, sd.pan, sd.key])
 	return out
 
 
@@ -475,7 +613,8 @@ func _set_sends(track_index: int, rows: Array) -> void:
 	for i in rows.size():
 		var at := "/track/%d/send/%d/" % [track_index, i + 1]
 		for field in [["dest", float(rows[i][0])], ["name", str(rows[i][1])],
-				["volume", float(rows[i][2])], ["pan", float(rows[i][3])]]:
+				["volume", float(rows[i][2])], ["pan", float(rows[i][3])],
+				["key", 1.0 if rows[i][4] else 0.0]]:
 			record_for_replication(at + field[0], [field[1]])
 			MixWire.apply(state, at + field[0], [field[1]])
 	record_for_replication("/track/%d/sends" % track_index, [float(rows.size())])

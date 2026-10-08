@@ -329,6 +329,9 @@ func _run() -> void:
 	marks = await _until_marker(false)
 	check("and one undo takes it out again", not _live_mark(marks))
 
+	# --- a plugin off the rack: wet, preset, move, and a key into it ---------------------------
+	await _plugin_checks()
+
 	# --- put everything back ----------------------------------------------------------------
 	if send_track > 0:
 		var was: Dictionary = _arr(_track(original, send_track)["sends"])[0]
@@ -359,3 +362,85 @@ func _run() -> void:
 	DAW.set_loop_range(float(original["loop_start"]), float(original["loop_end"]))
 	DAW.seek(0.0)
 	await _wait(0.5)
+
+
+func _structure() -> Array:
+	var r = await _reaper("GetProjectStructure", [1])
+	return _arr(r.get("tracks", [])) if r is Dictionary else []
+
+
+static func _chain(tracks: Array, index: int) -> Array:
+	for t in tracks:
+		if int(t.get("index", 0)) == index:
+			return _arr(t.get("fx", []))
+	return []
+
+
+static func _sends_of(tracks: Array, index: int) -> Array:
+	for t in tracks:
+		if int(t.get("index", 0)) == index:
+			return _arr(t.get("sends", []))
+	return []
+
+
+func _until_structure(cond: Callable, timeout := 3.0) -> Array:
+	var started := Time.get_ticks_msec()
+	var tracks: Array = []
+	while Time.get_ticks_msec() - started < timeout * 1000.0:
+		tracks = await _structure()
+		if cond.call(tracks):
+			break
+		await _wait(0.15)
+	return tracks
+
+
+func _plugin_checks() -> void:
+	check("Reaper can rearrange chains with the bridge up", DAW.can(DAWBackend.Capability.FX_CHAIN))
+	var tracks := await _structure()
+	var host := -1
+	var other := -1
+	for t in tracks:
+		var n := _chain(tracks, int(t["index"])).size()
+		if n >= 2 and host < 0:
+			host = int(t["index"])
+		elif n == 0 and other < 0 and int(t["index"]) > 1:
+			other = int(t["index"])
+	check("the rig has a track with two plugins (%d) and one with none (%d)" % [host, other],
+			host > 0 and other > 0)
+	if host < 0 or other < 0:
+		return
+	var names_were: Array = _chain(tracks, host).map(func(f): return str(f["name"]))
+
+	# Wet/dry.
+	var wet_was := float(_chain(tracks, host)[0].get("wet", 1.0))
+	DAW.set_fx_wet(host, 1, 0.4)
+	tracks = await _until_structure(func(x): return absf(float(_chain(x, host)[0].get("wet", 1.0)) - 0.4) < 0.02)
+	check("the tablet's wet/dry sets the plugin's own (%s)" % _chain(tracks, host)[0].get("wet"),
+			absf(float(_chain(tracks, host)[0].get("wet", 1.0)) - 0.4) < 0.02)
+	DAW.set_fx_wet(host, 1, wet_was)
+
+	# Move to the end of an empty chain, then back where it was.
+	DAW.move_fx(host, 1, other, 1)
+	tracks = await _until_structure(func(x): return _chain(x, other).size() == 1)
+	check("a plugin moved to another track lands there (%s)" % [_chain(tracks, other).map(func(f): return f["name"])],
+			_chain(tracks, other).size() == 1 and str(_chain(tracks, other)[0]["name"]) == names_were[0])
+	check("and leaves its own chain", _chain(tracks, host).size() == names_were.size() - 1)
+	await _wait(0.6)
+	check("the desk's cache saw it go (%s)" % [DAW.state.track(host).plugins().size()],
+			DAW.state.track(host).plugins().size() == names_were.size() - 1)
+	DAW.move_fx(other, 1, host, 1)
+	tracks = await _until_structure(func(x): return _chain(x, other).is_empty())
+	check("and moves back to the top of its chain",
+			_chain(tracks, host).map(func(f): return str(f["name"])) == names_were)
+
+	# A key from `other` into `host`.
+	var sends_were := _sends_of(tracks, other).size()
+	DAW.create_sidechain(other, host)
+	tracks = await _until_structure(func(x): return _sends_of(x, other).size() > sends_were)
+	var made: Array = _sends_of(tracks, other)
+	check("a sidechain is a send into channels 3/4 (%s)" % [made],
+			made.size() == sends_were + 1 and bool(made[-1].get("key", false)))
+	if made.size() > sends_were:
+		DAW.remove_send(other, made.size())
+		tracks = await _until_structure(func(x): return _sends_of(x, other).size() == sends_were)
+		check("and comes out like any other send", _sends_of(tracks, other).size() == sends_were)
