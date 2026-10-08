@@ -23,7 +23,14 @@ extends Node3D
 ##   JACKET     clearcoat over a rough base, so a specular streak runs the length and follows
 ##              the curve. That streak is most of how the eye reads a cable as round.
 
-const RADIAL := 10
+## Sixteen sides, up from ten.
+##
+## Ten was plenty while the jacket had a broad middling gloss, because a wide highlight
+## smears across several facets and hides every one of them. Narrowing the clearcoat to get
+## the cable's round back immediately exposed the faceting: the specular line came back
+## dashed, one bright dot per flat, which reads as a chain rather than a cable. Sheen width
+## and tube resolution are the same decision and have to move together.
+const RADIAL := 16
 const SPINE := 32
 const JACKET_RADIUS := 0.0022
 

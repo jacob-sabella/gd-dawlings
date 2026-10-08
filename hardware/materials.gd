@@ -249,15 +249,28 @@ static func cable(colour: Color) -> StandardMaterial3D:
 	var key := "cable_%s" % colour.to_html(false)
 	return _cached(key, func():
 		var m := StandardMaterial3D.new()
-		# Darkened and desaturated off the track colour. A cable in full UI-chroma looks like a
-		# graph edge; real jacket dye is muted, and the chip on the channel strip is already
-		# carrying the saturated version of this colour.
-		m.albedo_color = colour.darkened(0.42).lerp(Color(0.1, 0.1, 0.11), 0.22)
-		m.roughness = 0.44
+		# Deep and SATURATED, which is the opposite of where this started. The first version
+		# darkened the track colour and then lerped it toward grey, on the theory that full
+		# UI-chroma looks like a graph edge. That theory is right about chroma and wrong about
+		# which end to take it out of: a pastel track colour darkened and desaturated lands on
+		# a pale muddy mid-tone, and a 4mm tube of pale muddy mid-tone under a diffuse room is
+		# a plastic drinking straw. Dyed PVC is dark and vivid at once -- low value, high
+		# saturation -- and that is a corner of the space that "darken it a bit" never reaches.
+		var jacket := colour
+		jacket.s = maxf(jacket.s, 0.62)
+		jacket.v = 0.27
+		m.albedo_color = jacket
+
+		# A rough body under a tight clearcoat, rather than one middling gloss. A 4mm cylinder
+		# is almost all grazing angle, so a broad highlight covers most of its apparent width
+		# and the cable reads as the colour of its own sheen -- which is what made these look
+		# pastel even before the albedo was addressed. Narrow the specular and the tube gets
+		# its shading back: a dark body, a bright line along the top, a visible round.
+		m.roughness = 0.58
 		m.metallic = 0.0
 		m.clearcoat_enabled = true
-		m.clearcoat = 0.55
-		m.clearcoat_roughness = 0.22
+		m.clearcoat = 0.85
+		m.clearcoat_roughness = 0.12
 		return m)
 
 
@@ -290,8 +303,14 @@ static func cable_boot(colour: Color) -> StandardMaterial3D:
 	var key := "boot_%s" % colour.to_html(false)
 	return _cached(key, func():
 		var m := StandardMaterial3D.new()
-		m.albedo_color = colour.darkened(0.45).lerp(Color(0.08, 0.08, 0.09), 0.15)
-		m.roughness = 0.72
+		# Darker than the jacket it strain-reliefs, because a boot is moulded rubber and the
+		# jacket is extruded PVC, and because a boot the same value as the cable makes the
+		# plug look like it grew out of it.
+		var rubber := colour
+		rubber.s = maxf(rubber.s, 0.45)
+		rubber.v = 0.14
+		m.albedo_color = rubber
+		m.roughness = 0.78
 		return m)
 
 
