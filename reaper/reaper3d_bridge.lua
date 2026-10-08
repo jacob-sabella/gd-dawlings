@@ -178,13 +178,26 @@ end
 -- Tracks with nothing on them are omitted entirely, and reaper-3d clears every lane before
 -- applying this. That is not an optimisation: the encoder below cannot tell an empty list from
 -- an empty object, so an explicit empty `items` would arrive as `{}` and have to be guessed at.
+-- A track's items in time order. Reaper keeps its own list in the order items were made or
+-- last moved, which is close to time order and not the same thing -- and the desk numbers items
+-- left to right, so every handler that takes or reports an item index goes through this.
+local function sorted_items(tr)
+  local items = {}
+  for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+    items[#items + 1] = reaper.GetTrackMediaItem(tr, n)
+  end
+  table.sort(items, function(a, b)
+    return reaper.GetMediaItemInfo_Value(a, 'D_POSITION') < reaper.GetMediaItemInfo_Value(b, 'D_POSITION')
+  end)
+  return items
+end
+
 function handlers.GetTimeline()
   local tracks = {}
   for i = 0, reaper.CountTracks(0) - 1 do
     local tr = reaper.GetTrack(0, i)
     local items = {}
-    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
-      local it = reaper.GetTrackMediaItem(tr, n)
+    for _, it in ipairs(sorted_items(tr)) do
       local name = ''
       local take = reaper.GetActiveTake(it)
       if take then
@@ -197,6 +210,7 @@ function handlers.GetTimeline()
         start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
         length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
         muted = reaper.GetMediaItemInfo_Value(it, 'B_MUTE') > 0.5,
+        selected = reaper.IsMediaItemSelected(it),
         name = name,
       }
     end
@@ -269,8 +283,7 @@ function handlers.GetState(args)
       fx[#fx + 1] = {enabled = reaper.TrackFX_GetEnabled(tr, f), params = params}
     end
     local items = {}
-    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
-      local it = reaper.GetTrackMediaItem(tr, n)
+    for _, it in ipairs(sorted_items(tr)) do
       items[#items + 1] = {
         start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
         length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
@@ -313,6 +326,81 @@ function handlers.SetTrackValue(args)
   return {ok = true}
 end
 
+-- --- editing ----------------------------------------------------------------------------
+--
+-- Items are addressed as (track, index in lane): the same numbering GetTimeline reports, which
+-- is Reaper's own, left to right. Every edit is one undo point named the way Reaper names its
+-- own, so Edit: Undo from the desk or from Reaper's menu takes it back as one step.
+
+local function item_at(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return nil end
+  return sorted_items(tr)[math.floor(args[2] or -1) + 1]
+end
+
+-- SelectAllMediaItems(0, false) would be the obvious call, and it writes its own "Unselect all
+-- items" undo point -- so a click on the desk pushed the last real edit one undo further away.
+local function unselect_all()
+  for n = reaper.CountSelectedMediaItems(0) - 1, 0, -1 do
+    reaper.SetMediaItemSelected(reaper.GetSelectedMediaItem(0, n), false)
+  end
+end
+
+local function edited(label)
+  reaper.UpdateArrange()
+  reaper.Undo_EndBlock(label, 4)
+  return {ok = true}
+end
+
+-- args: track, index, additive. Not additive replaces the selection, as a click does in Reaper.
+function handlers.SelectItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  -- Not an undo point. Undo on the desk is for things that change the song; a selection
+  -- step in the history means an undo that appears to do nothing.
+  if not args[3] then unselect_all() end
+  reaper.SetMediaItemSelected(it, not (args[3] and reaper.IsMediaItemSelected(it)))
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
+function handlers.ClearItemSelection()
+  unselect_all()
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
+-- args: track, index, new start in seconds.
+function handlers.MoveItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  reaper.SetMediaItemInfo_Value(it, 'D_POSITION', math.max(0, args[3] or 0))
+  return edited('Move media item')
+end
+
+-- args: seconds. Every selected item that spans that point is cut there, and both halves stay
+-- selected -- what Reaper's own "S" does at the edit cursor.
+function handlers.SplitSelected(args)
+  local at = args[1] or reaper.GetCursorPosition()
+  local targets = {}
+  for n = 0, reaper.CountSelectedMediaItems(0) - 1 do
+    local it = reaper.GetSelectedMediaItem(0, n)
+    local start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+    local length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+    if at > start and at < start + length then targets[#targets + 1] = it end
+  end
+  if #targets == 0 then return {ok = true, split = 0} end
+  reaper.Undo_BeginBlock()
+  for _, it in ipairs(targets) do
+    local right = reaper.SplitMediaItem(it, at)
+    if right then reaper.SetMediaItemSelected(right, true) end
+  end
+  local result = edited('Split items')
+  result.split = #targets
+  return result
+end
+
 function handlers.Ping()
   return {ok = true, version = reaper.GetAppVersion()}
 end
@@ -322,12 +410,12 @@ local expected
 local function handle_file(filename)
   local id = filename:match('^request_(%d+)%.json$')
   if not id then return false end
-  expected[id] = nil
-  expected[tostring(tonumber(id) + 1)] = reaper.time_precise()
 
   local path = bridge_dir .. filename
   local f = io.open(path, 'r')
   if not f then return false end
+  expected[id] = nil
+  expected[tostring(tonumber(id) + 1)] = reaper.time_precise()
   local text = f:read('*a')
   f:close()
   -- Deleted BEFORE the handler runs. A handler that errors would otherwise leave the request on

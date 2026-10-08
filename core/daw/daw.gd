@@ -31,6 +31,7 @@ const COMMANDS := [
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"seek", &"set_loop_range", &"undo", &"redo",
+	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 ]
 
@@ -127,6 +128,12 @@ func set_loop_range(start: float, end: float) -> void:
 	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
+func select_item(track_index: int, item_index: int, additive := false) -> void:
+	_do(&"select_item", [track_index, item_index, additive])
+func clear_item_selection() -> void: _do(&"clear_item_selection", [])
+func move_item(track_index: int, item_index: int, start: float) -> void:
+	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
+func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to

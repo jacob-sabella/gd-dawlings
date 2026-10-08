@@ -57,6 +57,11 @@ var _seek_strip: TimelineRuler
 var _loop_strip: TimelineRuler
 ## The loop range drawn on the loop band: a bar between the two ends, lit while looping.
 var _loop_bar: MeshInstance3D
+var _lanes: TimelineLanes
+var _split_key: PanelButton
+var _split_caption: Label3D
+## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
+var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
 var _lane_area_x := 0.0
 var _lane_area_width := 0.0
@@ -101,6 +106,34 @@ func _ready() -> void:
 	_loop_strip.seconds_at = _seconds_at_local_x
 	add_child(_loop_strip)
 	DAW.state.transport_changed.connect(_draw_loop)
+
+	# The lanes, as one control: select, move, zoom. Built once, like the strips, because a move
+	# is a held drag and every edit it makes rebuilds the panel under it.
+	_lanes = TimelineLanes.new()
+	_lanes.name = "Lanes"
+	_lanes.surface = self
+	add_child(_lanes)
+
+	# Split, in the corner over the track names where the ruler has no numbers to show. Built
+	# once for the same reason: pressing it changes the timeline, and a rebuild that freed the
+	# key under the press would drop the release on the floor.
+	_split_key = PanelButton.new()
+	_split_key.name = "SplitKey"
+	_split_key.led_colour = Color(0.95, 0.62, 0.32)
+	_split_key.lamp_scale = Vector2(0.8, 0.5)
+	_split_key.scale = Vector3(1.4, 1.4, 1.4)
+	_split_key.pressed.connect(func(): DAW.split_selected(DAW.state.position_seconds))
+	_split_key.describe_title = func() -> String: return "EDIT  SPLIT AT PLAYHEAD"
+	_split_key.describe_value = func(_v: float) -> String:
+		var n := _splittable()
+		return "%d selected item(s) at %s" % [n, DAW.state.bar_beat(DAW.state.position_seconds)] \
+				if n > 0 else "select an item under the playhead"
+	add_child(_split_key)
+	_split_caption = _text("SPLIT", 26, Color(0.62, 0.64, 0.68))
+	_split_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_split_caption)
+	DAW.state.transport_changed.connect(_light_split_key)
+	DAW.state.timeline_changed.connect(_light_split_key)
 
 
 func _process(delta: float) -> void:
@@ -194,11 +227,82 @@ func _place_strips() -> void:
 			_top_y - LOOP_BAND * 0.5, 0.0018)
 	_loop_strip.refresh()
 
+	var lanes_top := _top_y - RULER_HEIGHT
+	var lanes_bottom := -_top_y + SCRUBBER_BAND
+	_lanes.width = _lane_area_width
+	_lanes.height = maxf(lanes_top - lanes_bottom, 0.001)
+	_lanes.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
+			(lanes_top + lanes_bottom) * 0.5, 0.0018)
+	_lanes.refresh()
+
+	var ruler_mid := _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5
+	_split_key.position = Vector3(-WIDTH * 0.5 + 0.016, ruler_mid, 0.003)
+	_split_caption.position = Vector3(-WIDTH * 0.5 + 0.030, ruler_mid, 0.0016)
+	_light_split_key()
+
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).
 func _seconds_at_local_x(x: float) -> float:
 	var from_left := x + _lane_area_width * 0.5
 	return view_start + from_left / maxf(_lane_area_width, 0.0001) * view_span
+
+
+## Selected items the playhead is inside: what a split would cut.
+func _splittable() -> int:
+	var n := 0
+	var at := DAW.state.position_seconds
+	for pair in DAW.state.selected_items():
+		var item := DAW.state.item(pair[0], pair[1])
+		if item != null and item.contains(at):
+			n += 1
+	return n
+
+
+## Lit when pressing it would cut something. A split key that does nothing when pressed should
+## say so before it is pressed, not after.
+func _light_split_key() -> void:
+	if _split_key != null:
+		_split_key.lit = _splittable() > 0
+
+
+## Seconds under a point in the world, through the current window.
+func seconds_at_point(global_point: Vector3) -> float:
+	var local := to_local(global_point)
+	return _seconds_at_local_x(local.x - (_lane_area_x + _lane_area_width * 0.5))
+
+
+## [track, item] under a point in the world, or [] for bare lane.
+func item_at_point(global_point: Vector3) -> Array:
+	var local := to_local(global_point)
+	var indices := DAW.state.track_indices()
+	var pitch := LANE_HEIGHT + LANE_GAP
+	for i in mini(indices.size(), _lane_y.size()):
+		if absf(local.y - _lane_y[i]) > pitch * 0.5:
+			continue
+		var at := seconds_at_point(global_point)
+		for item in DAW.state.track(indices[i]).items:
+			if at >= item.start and at <= item.end():
+				return [indices[i], item.index]
+		return []
+	return []
+
+
+## Draw an item somewhere other than where it is, for the length of a drag. -1 clears.
+func preview_item(track_index: int, item_index: int, start: float) -> void:
+	_preview = [] if track_index < 0 else [track_index, item_index, start]
+	_relayout_view()
+
+
+## Zoom the window by `factor` (under 1 is in), round the playhead when it is on screen and
+## round the middle when not -- Reaper's own default, so a zoom never loses where you are.
+func zoom_view(factor: float) -> void:
+	var project := DAW.state.timeline_length()
+	var at := DAW.state.position_seconds
+	if at < view_start or at > view_start + view_span:
+		at = view_start + view_span * 0.5
+	var span := clampf(view_span * factor, TimelineScrubber.MIN_SPAN,
+			maxf(project, TimelineScrubber.MIN_SPAN))
+	set_view(at - (at - view_start) * span / maxf(view_span, 0.0001), span)
 
 
 ## The loop range on the loop band. Moved, not rebuilt, and only when it changed.
@@ -461,7 +565,10 @@ func _relayout_view() -> void:
 		for item in t.items:
 			if slot >= _item_blocks.count():
 				break
-			if _place_item(item, t.colour, _lane_y[i], t.mute, slot):
+			var start: float = item.start
+			if not _preview.is_empty() and _preview[0] == indices[i] and _preview[1] == item.index:
+				start = _preview[2]
+			if _place_item(item, start, t.colour, _lane_y[i], t.mute, slot):
 				slot += 1
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
@@ -473,13 +580,13 @@ func _relayout_view() -> void:
 ##
 ## Returns false without writing anything when the item falls outside the window, which is what
 ## lets the caller pack the visible ones into the low slots.
-func _place_item(item: MixState.ItemState, tint: Color, y: float, lane_muted: bool,
-		slot: int) -> bool:
+func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
+		lane_muted: bool, slot: int) -> bool:
 	# Inset, so that two sections that butt up against each other -- which is what an
 	# arrangement mostly is -- read as two blocks rather than one long one. A hairline gap does
 	# what the edge shading of a real arranger does, at a size where shading would be invisible.
-	var left := _x_for(item.start) + EDGE_GAP
-	var right := _x_for(item.end()) - EDGE_GAP
+	var left := _x_for(start) + EDGE_GAP
+	var right := _x_for(start + item.length) - EDGE_GAP
 	if right < _lane_area_x or left > _lane_right():
 		return false
 	# Clipped to the lane, not culled. An item that starts before the window and ends inside it
@@ -498,6 +605,10 @@ func _place_item(item: MixState.ItemState, tint: Color, y: float, lane_muted: bo
 	var body := tint.darkened(0.40).lerp(Color(0.16, 0.17, 0.19), 0.30)
 	if dim:
 		body = body.darkened(0.55)
+	# Selected reads the way it does in every arranger: the block lifts towards white. Lightened
+	# rather than outlined, because an outline at a lane 17mm tall is a hairline nobody sees.
+	if item.selected:
+		body = body.lerp(Color(0.86, 0.88, 0.90), 0.34)
 	# The bank holds unit cubes, so the size of an item IS its instance scale.
 	_item_blocks.move_slot(slot, Transform3D(
 			Basis.IDENTITY.scaled(Vector3(width, block_height, 0.0014)),

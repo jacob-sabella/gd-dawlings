@@ -141,6 +141,115 @@ func set_loop_range(_start: float, _end: float) -> void: pass
 func undo() -> void: pass
 func redo() -> void: pass
 
+## Item editing. Items are (track, index in lane, left to right). `additive` adds to or takes
+## from the selection instead of replacing it.
+func select_item(_track_index: int, _item_index: int, _additive: bool) -> void: pass
+func clear_item_selection() -> void: pass
+func move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
+## Cut every selected item that spans `seconds` there. Both halves stay selected.
+func split_selected(_seconds: float) -> void: pass
+
+
+# --- item edits, on the cache ------------------------------------------------------------
+#
+# The same edits every backend has to show the moment they are made: the offline mix because the
+# cache IS its project, a live one because the DAW's answer is a round trip away and a block that
+# stays put for a beat after you let go of it reads as a drop that did not take.
+
+## Replace one lane, through the same address the timeline arrives on, so it replicates.
+func _write_lane(track_index: int, items: Array) -> void:
+	var packed := MixWire._pack_items(items)
+	record_for_replication("/track/%d/items" % track_index, packed)
+	MixWire.apply(state, "/track/%d/items" % track_index, packed)
+
+
+## A lane's items as fresh objects, so an edit never mutates what a surface is still drawing.
+func _lane_copy(track_index: int) -> Array:
+	return MixWire._unpack_items(MixWire._pack_items(state.track(track_index).items))
+
+
+func _locally_select(track_index: int, item_index: int, additive: bool) -> void:
+	if state.item(track_index, item_index) == null:
+		return
+	for index in state.track_indices():
+		var t := state.track(index)
+		var touched: bool = index == track_index
+		if not additive:
+			for item in t.items:
+				touched = touched or item.selected
+		if not touched:
+			continue
+		var lane := _lane_copy(index)
+		for item in lane:
+			var target: bool = index == track_index and item.index == item_index
+			if target:
+				item.selected = not item.selected if additive else true
+			elif not additive:
+				item.selected = false
+		_write_lane(index, lane)
+
+
+func _locally_clear_selection() -> void:
+	for index in state.track_indices():
+		var any := false
+		for item in state.track(index).items:
+			any = any or item.selected
+		if any:
+			var lane := _lane_copy(index)
+			for item in lane:
+				item.selected = false
+			_write_lane(index, lane)
+
+
+func _locally_move(track_index: int, item_index: int, start: float) -> void:
+	if state.item(track_index, item_index) == null:
+		return
+	var lane := _lane_copy(track_index)
+	lane[item_index].start = maxf(start, 0.0)
+	_write_lane(track_index, lane)
+
+
+## Returns how many items were cut.
+func _locally_split(seconds: float) -> int:
+	var cut := 0
+	for index in state.track_indices():
+		var hit := false
+		for item in state.track(index).items:
+			hit = hit or (item.selected and item.contains(seconds))
+		if not hit:
+			continue
+		var lane := _lane_copy(index)
+		var added: Array = []
+		for item in lane:
+			if item.selected and item.contains(seconds):
+				var right := MixState.ItemState.new()
+				right.start = seconds
+				right.length = item.end() - seconds
+				right.name = item.name
+				right.muted = item.muted
+				right.selected = true
+				item.length = seconds - item.start
+				added.append(right)
+				cut += 1
+		lane.append_array(added)
+		_write_lane(index, lane)
+	return cut
+
+
+## Every lane with something in it, packed, for an undo step to put back.
+func _lanes_snapshot() -> Dictionary:
+	var out := {}
+	for index in state.track_indices():
+		out[index] = MixWire._pack_items(state.track(index).items)
+	return out
+
+
+func _restore_lanes(snapshot: Dictionary) -> void:
+	for index in snapshot:
+		var packed: Array = snapshot[index]
+		record_for_replication("/track/%d/items" % index, packed)
+		MixWire.apply(state, "/track/%d/items" % index, packed)
+
 ## Return false when the routing change could not be made, so a surface can decline the gesture
 ## rather than draw a cable that is not there.
 func create_send(_from_track: int, _to_track: int) -> bool: return false

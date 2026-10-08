@@ -16,6 +16,9 @@ const CONTROL_LAYER := 2
 
 var held: ControlAffordance = null
 var hovered: ControlAffordance = null
+## Where on `hovered` the ray landed, in world space. For a control that is one thing to the
+## hand and many to the eye -- a lane of items -- the readout depends on which part is under it.
+var hover_point := Vector3.ZERO
 
 var _was_pressed := false
 var _rim: HoverRim
@@ -59,6 +62,8 @@ func _physics_process(_delta: float) -> void:
 
 	var hit := _cast(origin, direction)
 	_set_hovered(hit["control"])
+	if hit["control"] != null:
+		hover_point = hit["point"]
 
 	if pressed and not _was_pressed:
 		if hovered != null:

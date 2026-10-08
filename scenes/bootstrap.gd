@@ -96,6 +96,11 @@ func _ready() -> void:
 	if loop.y > loop.x:
 		DAW.set_loop_range(DAW.state.bar_to_seconds(loop.x), DAW.state.bar_to_seconds(loop.y))
 		DAW.set_looping(true)
+	# Selected items and a playhead, for photographing an edit about to be made.
+	for pair in args["select"]:
+		DAW.select_item(pair.x, pair.y, true)
+	if args["at_bar"] > 0.0:
+		DAW.seek(DAW.state.bar_to_seconds(args["at_bar"]))
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
 		studio.timeline.set_view(view.x, view.y)
@@ -137,7 +142,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO,
+		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 	}
 	var i := 0
 	while i < argv.size():
@@ -212,6 +217,19 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					var bars := argv[i].split(":")
 					if bars.size() == 2:
 						out["loop"] = Vector2(float(bars[0]), float(bars[1]))
+			"--select":
+				# `--select 2:0,3:1` -- select those items (track:index in lane).
+				i += 1
+				if i < argv.size():
+					for pair in argv[i].split(","):
+						var parts := pair.split(":")
+						if parts.size() == 2:
+							out["select"].append(Vector2i(int(parts[0]), int(parts[1])))
+			"--at":
+				# `--at 17` -- put the playhead on bar 17.
+				i += 1
+				if i < argv.size():
+					out["at_bar"] = float(argv[i])
 			"--place":
 				# `--place console=screen`. Scriptable for the same reason everything else here
 				# is a switch: a hybrid arrangement is tested by launching several of these at

@@ -229,26 +229,31 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			_apply_send(state, idx, p, args)
 
 
-## [start, length, muted, name] per item, repeating.
+## [start, length, muted, name, selected] per item, repeating.
+const ITEM_WIDTH := 5
+
+
 static func _unpack_items(args: Array) -> Array:
 	var out: Array = []
 	var i := 0
-	while i + 3 < args.size():
+	while i + ITEM_WIDTH - 1 < args.size():
 		var item := MixState.ItemState.new()
 		item.index = out.size()
 		item.start = float(args[i])
 		item.length = float(args[i + 1])
 		item.muted = float(args[i + 2]) > 0.5
 		item.name = str(args[i + 3])
+		item.selected = float(args[i + 4]) > 0.5
 		out.append(item)
-		i += 4
+		i += ITEM_WIDTH
 	return out
 
 
 static func _pack_items(items: Array) -> Array:
 	var out: Array = []
 	for item in items:
-		out.append_array([item.start, item.length, 1.0 if item.muted else 0.0, item.name])
+		out.append_array([item.start, item.length, 1.0 if item.muted else 0.0, item.name,
+				1.0 if item.selected else 0.0])
 	return out
 
 

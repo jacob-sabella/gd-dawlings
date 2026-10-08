@@ -95,6 +95,8 @@ func _ready() -> void:
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
 	_test_the_ruler_moves_the_playhead_and_draws_the_loop()
+	_test_items_are_edited_on_the_timeline()
+	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
@@ -586,8 +588,11 @@ class BoxSurface extends Surface:
 ## An interactor whose aim is whatever the test says it is.
 class FakeHand extends Interactor:
 	var pose := Transform3D.IDENTITY
+	var holding_shift := false
 	func aim() -> Transform3D:
 		return pose
+	func fine() -> bool:
+		return holding_shift
 
 
 ## Builds a mount with the anchors named in `modes`, one registered BoxSurface, and a throwaway
@@ -5000,6 +5005,129 @@ func _test_the_ruler_moves_the_playhead_and_draws_the_loop() -> void:
 	check("the controls are on the control layer", seek.collision_layer == 2 and loop.collision_layer == 2)
 	hand.queue_free()
 	timeline.queue_free()
+
+
+func _test_items_are_edited_on_the_timeline() -> void:
+	_offline()
+	var s := DAW.state
+	DAW.transport_stop()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline.set_view(0.0, s.bar_to_seconds(41.0))
+	var hand := FakeHand.new()
+	add_child(hand)
+	var lanes: TimelineLanes = timeline._lanes
+	var beat := 60.0 / s.tempo
+	var at := func(track_index: int, bar: float) -> Vector3:
+		var i := s.track_indices().find(track_index)
+		return timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(bar)),
+				timeline._lane_y[i], lanes.position.z))
+	var click := func(point: Vector3) -> void:
+		lanes.grab_begin(hand, point)
+		lanes.grab_end(hand)
+
+	check("the lanes are on the control layer", lanes.collision_layer == 2)
+	check("Kick's first item is Verse 1, bar 9", is_equal_approx(s.item(2, 0).start, s.bar_to_seconds(9.0)))
+	click.call(at.call(2, 12.0))
+	check("a click selects the item under it", s.item(2, 0).selected)
+	hand.holding_shift = true
+	click.call(at.call(3, 12.0))
+	hand.holding_shift = false
+	check("shift adds to the selection", s.item(2, 0).selected and s.item(3, 0).selected)
+	click.call(at.call(3, 30.0))
+	check("a plain click replaces it", s.item(3, 1).selected and not s.item(2, 0).selected
+			and not s.item(3, 0).selected)
+	check("selecting is not history (%d)" % s.undo_depth, s.undo_depth <= 0)
+
+	hand.hover_point = at.call(3, 30.0)
+	lanes.hover_enter(hand)
+	check("hovering an item names it (%s)" % lanes.title(), lanes.title().contains("Chorus 1")
+			and lanes.title().contains("SELECTED"))
+	check("and reads out exactly where it is (%s)" % lanes.readout(), lanes.readout().begins_with("25.1.00 - 41.1.00"))
+	lanes.hover_exit(hand)
+
+	# Move: Kick's Verse 1, grabbed at bar 12 and let go 2.3 bars on, lands on the beat.
+	lanes.grab_begin(hand, at.call(2, 12.0))
+	lanes.grab_move(hand, at.call(2, 14.3))
+	check("while dragging, the block is drawn where it is going", not timeline._preview.is_empty())
+	close_to("and the project is not touched until it is let go", s.item(2, 0).start, s.bar_to_seconds(9.0), 0.001)
+	lanes.grab_end(hand)
+	var moved := s.bar_to_seconds(9.0) + 9.0 * beat
+	close_to("let go, it moves, its start snapped to the beat", s.item(2, 0).start, moved, 0.001)
+	check("and the drag draws nothing extra afterwards", timeline._preview.is_empty())
+	check("the moved item is the selection", s.item(2, 0).selected)
+	check("a move is one undo step", s.undo_depth == 1)
+	DAW.undo()
+	close_to("undo puts it back", s.item(2, 0).start, s.bar_to_seconds(9.0), 0.001)
+	DAW.redo()
+	close_to("redo moves it again", s.item(2, 0).start, moved, 0.001)
+	DAW.undo()
+
+	# Split: the selection, at the playhead.
+	click.call(at.call(2, 12.0))
+	var count := s.track(2).items.size()
+	DAW.seek(s.bar_to_seconds(17.0))
+	check("the split key lights when there is something under the playhead to cut", timeline._split_key.lit)
+	timeline._split_key.pressed.emit()
+	check("split cuts the selected item in two (%d -> %d)" % [count, s.track(2).items.size()],
+			s.track(2).items.size() == count + 1)
+	close_to("the left half ends at the playhead", s.item(2, 0).end(), s.bar_to_seconds(17.0), 0.001)
+	close_to("the right half starts there", s.item(2, 1).start, s.bar_to_seconds(17.0), 0.001)
+	close_to("and runs to where the item ended", s.item(2, 1).end(), s.bar_to_seconds(25.0), 0.001)
+	check("both halves stay selected", s.item(2, 0).selected and s.item(2, 1).selected)
+	check("nothing else was cut", s.track(3).items.size() == 4 or s.track(3).items.size() == 5)
+	DAW.undo()
+	check("undo joins it again", s.track(2).items.size() == count)
+	DAW.seek(s.bar_to_seconds(5.0))
+	DAW.split_selected(s.position_seconds)
+	check("a split where nothing selected is under the playhead does nothing", s.track(2).items.size() == count)
+
+	# Bare lane: drop the selection, put the playhead there.
+	click.call(at.call(13, 21.0))
+	check("a click on empty lane drops the selection", s.selected_items().is_empty())
+	close_to("and moves the playhead there", s.position_seconds, s.bar_to_seconds(21.0), 0.01)
+
+	# Zoom, round the playhead.
+	var span := timeline.view_span
+	var x_before := timeline._x_for(s.position_seconds)
+	lanes.nudge(hand, 1, false)
+	check("the wheel zooms in (%.1fs -> %.1fs)" % [span, timeline.view_span], timeline.view_span < span * 0.85)
+	close_to("round the playhead, which stays where it was on the panel",
+			timeline._x_for(s.position_seconds), x_before, 0.001)
+	lanes.nudge(hand, -3, false)
+	check("and out again", timeline.view_span > span)
+
+	# The wire carries the selection, so a guest sees it and Reaper's answer can set it.
+	var copy := MixState.new()
+	MixWire.apply(copy, "/track/2/items", MixWire._pack_items(s.track(2).items))
+	check("selection rides the wire", copy.item(2, 0).selected == s.item(2, 0).selected)
+	hand.queue_free()
+	timeline.queue_free()
+
+
+func _test_a_late_timeline_poll_does_not_undo_an_edit() -> void:
+	var link := ReaperBackend.new()
+	link.state = MixState.new()
+	add_child(link)
+	var item := MixState.ItemState.new()
+	item.start = 10.0
+	item.length = 4.0
+	link.state.set_track_items(1, [item])
+	var asked := link._timeline_epoch
+	# The edit is made locally while a poll is out...
+	link._timeline_epoch += 1
+	link._locally_move(1, 0, 20.0)
+	# ...and the poll comes back with the lanes as they were.
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 1, "items": [
+			{"start": 10.0, "length": 4.0, "muted": false, "name": "", "selected": false}]}]}, asked)
+	close_to("an answer to a poll sent before the edit is not laid over it",
+			link.state.item(1, 0).start, 20.0, 0.001)
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 1, "items": [
+			{"start": 20.0, "length": 4.0, "muted": false, "name": "", "selected": true}]}]},
+			link._timeline_epoch)
+	check("one sent after it is", link.state.item(1, 0).selected)
+	link.queue_free()
 
 
 func _test_undo_takes_back_a_gesture_not_a_frame() -> void:

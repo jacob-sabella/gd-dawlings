@@ -96,9 +96,15 @@ class ItemState extends RefCounted:
 	var length: float = 0.0
 	var name: String = ""
 	var muted: bool = false
+	## Selected in the DAW: what a split or a move acts on. The DAW's own selection, not this
+	## desk's, so a click in Reaper's window and a click on the desk are the same selection.
+	var selected: bool = false
 
 	func end() -> float:
 		return start + length
+
+	func contains(seconds: float) -> bool:
+		return seconds > start and seconds < start + length
 
 
 class TrackState extends RefCounted:
@@ -279,7 +285,28 @@ func set_track_items(index: int, items: Array) -> void:
 	var t := track(index)
 	t.items = items
 	t.items.sort_custom(func(a, b): return a.start < b.start)
+	# An item's index is its place in the lane, left to right -- which is also how Reaper
+	# numbers a track's items -- so it is renumbered after every sort rather than trusted.
+	for i in t.items.size():
+		t.items[i].index = i
 	timeline_changed.emit()
+
+
+## Every selected item as [track_index, item_index], in lane order.
+func selected_items() -> Array:
+	var out: Array = []
+	for index in track_indices():
+		for item in track(index).items:
+			if item.selected:
+				out.append([index, item.index])
+	return out
+
+
+func item(track_index: int, item_index: int) -> ItemState:
+	if not tracks.has(track_index):
+		return null
+	var items: Array = tracks[track_index].items
+	return items[item_index] if item_index >= 0 and item_index < items.size() else null
 
 
 func set_project_length(seconds: float) -> void:

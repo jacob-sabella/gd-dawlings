@@ -49,6 +49,8 @@ const STRUCTURE_POLL_SECONDS := 8.0
 
 var _timeline_due := 0.0
 var _timeline_in_flight := false
+var _timeline_epoch := 0
+var _edits_in_flight := 0
 var _structure_due := 0.0
 var _structure_in_flight := false
 
@@ -305,11 +307,56 @@ const REDO_ACTION := 40030
 func undo() -> void:
 	if _peer != null:
 		_peer.send("/action", [UNDO_ACTION])
+	# Whatever came back may be an edit, and the timeline is only polled every two seconds.
+	_timeline_due = minf(_timeline_due, 0.15)
 
 
 func redo() -> void:
 	if _peer != null:
 		_peer.send("/action", [REDO_ACTION])
+	_timeline_due = minf(_timeline_due, 0.15)
+
+
+# --- editing ------------------------------------------------------------------------------
+#
+# OSC has no message for an item, so every edit goes through the bridge. Each is shown on the
+# cache at once (see DAWBackend) and Reaper's own answer arrives with the next timeline poll,
+# which an edit brings forward.
+
+func select_item(track_index: int, item_index: int, additive: bool) -> void:
+	_locally_select(track_index, item_index, additive)
+	_edit("SelectItem", [track_index, item_index, additive])
+
+
+func clear_item_selection() -> void:
+	_locally_clear_selection()
+	_edit("ClearItemSelection", [])
+
+
+func move_item(track_index: int, item_index: int, start: float) -> void:
+	_locally_move(track_index, item_index, start)
+	_edit("MoveItem", [track_index, item_index, start])
+
+
+func split_selected(seconds: float) -> void:
+	_locally_split(seconds)
+	_edit("SplitSelected", [seconds])
+
+
+## Send one edit, and keep the timeline poll from undoing it on screen.
+##
+## A GetTimeline already on its way when the edit is made can come back with the lanes as they
+## were, and laying that over the cache would snap the block back to where it was dragged from
+## until the next poll. So polls wait while any edit is outstanding, and an answer to a poll that
+## was sent before the latest edit is thrown away.
+func _edit(fn: String, args: Array) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_timeline_epoch += 1
+	_edits_in_flight += 1
+	_bridge.call_reaper(fn, args, func(_result) -> void:
+		_edits_in_flight -= 1
+		_timeline_due = 0.0)
 
 
 ## Routing changes have no OSC pattern -- Reaper streams send VOLUMES but has no message for
@@ -319,17 +366,22 @@ func _poll_timeline(delta: float) -> void:
 	if not _bridge.is_open() or _timeline_in_flight:
 		return
 	_timeline_due -= delta
-	if _timeline_due > 0.0:
+	if _timeline_due > 0.0 or _edits_in_flight > 0:
 		return
 	_timeline_due = TIMELINE_POLL_SECONDS
-	_timeline_in_flight = _bridge.call_reaper("GetTimeline", [], _on_timeline)
+	_timeline_in_flight = _bridge.call_reaper("GetTimeline", [],
+			_on_timeline.bind(_timeline_epoch))
 
 
 ## Applied through `_apply` rather than written onto the cache, so the arrangement rides the
 ## normal replication stream and a guest gets it without a second code path.
-func _on_timeline(result) -> void:
+func _on_timeline(result, asked_at_epoch := -1) -> void:
 	_timeline_in_flight = false
 	if result == null or typeof(result) != TYPE_DICTIONARY:
+		return
+	if asked_at_epoch >= 0 and asked_at_epoch != _timeline_epoch:
+		# Asked before the latest edit; see _edit.
+		_timeline_due = 0.0
 		return
 
 	# Every lane is cleared first and then refilled. The bridge omits tracks with nothing on
@@ -351,6 +403,7 @@ func _on_timeline(result) -> void:
 				float(item.get("length", 0.0)),
 				1.0 if item.get("muted", false) else 0.0,
 				str(item.get("name", "")),
+				1.0 if item.get("selected", false) else 0.0,
 			])
 		lanes[idx] = packed
 

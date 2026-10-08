@@ -1080,6 +1080,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				DAW.redo() if event.shift_pressed else DAW.undo()
 			KEY_Y when event.ctrl_pressed:
 				DAW.redo()
+			# Split the selected items at the playhead. B for blade: S is walking backwards.
+			KEY_B:
+				DAW.split_selected(DAW.state.position_seconds)
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)

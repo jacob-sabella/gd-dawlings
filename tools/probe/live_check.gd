@@ -211,6 +211,54 @@ func _run() -> void:
 	DAW.undo()
 	await _wait(0.6)
 
+	# --- editing --------------------------------------------------------------------------
+	st = await _state()
+	var lane: Array = _arr(_track(st, 7)["items"])
+	check("track 7 has items to edit (%d)" % lane.size(), lane.size() >= 2)
+	if lane.size() >= 2:
+		var first_start := float(lane[0]["start"])
+		DAW.select_item(7, 0, false)
+		st = await _until(func(x): return _arr(_track(x, 7)["items"])[0]["selected"])
+		var others := 0
+		for t in _arr(st["tracks"]):
+			for it in _arr(t["items"]):
+				if it["selected"] and not (int(t["index"]) == 7 and is_equal_approx(float(it["start"]), first_start)):
+					others += 1
+		check("selecting an item on the desk selects it in Reaper, and only it (%d others)" % others,
+				_arr(_track(st, 7)["items"])[0]["selected"] and others == 0)
+		DAW.move_item(7, 0, first_start + 1.0)
+		check("the desk shows the move at once", is_equal_approx(s.item(7, 0).start, first_start + 1.0))
+		st = await _until(func(x): return absf(float(_arr(_track(x, 7)["items"])[0]["start"]) - first_start - 1.0) < 0.001)
+		check("and Reaper has it (%.3f)" % float(_arr(_track(st, 7)["items"])[0]["start"]),
+				absf(float(_arr(_track(st, 7)["items"])[0]["start"]) - first_start - 1.0) < 0.001)
+		await _wait(2.6)
+		check("and the desk still has it after Reaper's own timeline comes back (%.3f)" % s.item(7, 0).start,
+				is_equal_approx(s.item(7, 0).start, first_start + 1.0) and s.item(7, 0).selected)
+
+		var second: Dictionary = _arr(_track(st, 7)["items"])[1]
+		var cut := float(second["start"]) + float(second["length"]) * 0.5
+		DAW.select_item(7, 1, false)
+		DAW.seek(cut)
+		DAW.split_selected(cut)
+		st = await _until(func(x): return _arr(_track(x, 7)["items"]).size() == lane.size() + 1)
+		check("split on the desk splits the item in Reaper (%d -> %d)" % [lane.size(), _arr(_track(st, 7)["items"]).size()],
+				_arr(_track(st, 7)["items"]).size() == lane.size() + 1)
+		check("at the playhead (%.3f)" % float(_arr(_track(st, 7)["items"])[2]["start"]),
+				absf(float(_arr(_track(st, 7)["items"])[2]["start"]) - cut) < 0.001)
+		await _wait(2.6)
+		check("and the desk agrees (%d items)" % s.track(7).items.size(), s.track(7).items.size() == lane.size() + 1)
+
+		DAW.undo()
+		st = await _until(func(x): return _arr(_track(x, 7)["items"]).size() == lane.size())
+		check("undo joins the split in Reaper", _arr(_track(st, 7)["items"]).size() == lane.size())
+		DAW.undo()
+		st = await _until(func(x): return absf(float(_arr(_track(x, 7)["items"])[0]["start"]) - first_start) < 0.001)
+		check("undo takes the move back", absf(float(_arr(_track(st, 7)["items"])[0]["start"]) - first_start) < 0.001)
+		await _wait(2.6)
+		check("and the desk follows Reaper's undo (%d items, first at %.2f)" % [s.track(7).items.size(), s.item(7, 0).start],
+				s.track(7).items.size() == lane.size() and is_equal_approx(s.item(7, 0).start, first_start))
+		DAW.clear_item_selection()
+
 	# --- put everything back ----------------------------------------------------------------
 	for t in original["tracks"]:
 		var i := int(t["index"])
@@ -221,6 +269,16 @@ func _run() -> void:
 		await _reaper("SetTrackValue", [i, "B_MUTE", 1 if t["mute"] else 0])
 		await _reaper("SetTrackValue", [i, "I_SOLO", 1 if t["solo"] else 0])
 		await _reaper("SetTrackValue", [i, "I_RECARM", 1 if t["arm"] else 0])
+	# Item positions too: a run that failed halfway through an edit must not leave the next run
+	# starting from a different arrangement.
+	var now_lanes := await _state()
+	for t in _arr(original["tracks"]):
+		var was: Array = _arr(t["items"])
+		var is_now: Array = _arr(_track(now_lanes, int(t["index"]))["items"])
+		if was.size() == is_now.size():
+			for n in was.size():
+				if absf(float(was[n]["start"]) - float(is_now[n]["start"])) > 0.0005:
+					await _reaper("MoveItem", [int(t["index"]), n, float(was[n]["start"])])
 	if fx_track > 0:
 		DAW.set_fx_param(fx_track, 1, 2, float(_track(original, fx_track)["fx"][0]["params"][1]))
 	DAW.set_loop_range(float(original["loop_start"]), float(original["loop_end"]))

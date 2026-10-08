@@ -434,6 +434,36 @@ func _say_depth() -> void:
 	record_for_replication("/undo", [_undo.size(), _redo.size()])
 
 
+# --- editing ------------------------------------------------------------------------------
+
+func select_item(track_index: int, item_index: int, additive: bool) -> void:
+	# Not a history step: an undo that only changes what is highlighted looks like one that
+	# did nothing. Reaper is told the same -- see the bridge.
+	_locally_select(track_index, item_index, additive)
+
+
+func clear_item_selection() -> void:
+	_locally_clear_selection()
+
+
+func move_item(track_index: int, item_index: int, start: float) -> void:
+	var before := _lanes_snapshot()
+	_locally_move(track_index, item_index, start)
+	_remember_edit(before)
+
+
+func split_selected(seconds: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_split(seconds) > 0:
+		_remember_edit(before)
+
+
+## An edit is one step, never folded: two moves in a row are two things you might take back.
+func _remember_edit(before: Dictionary) -> void:
+	var after := _lanes_snapshot()
+	_remember("edit", _restore_lanes.bind(before), _restore_lanes.bind(after), false)
+
+
 # --- transport ----------------------------------------------------------------------------
 
 func set_looping(on: bool) -> void:
