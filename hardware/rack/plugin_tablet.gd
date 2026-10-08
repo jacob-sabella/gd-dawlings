@@ -1,0 +1,570 @@
+class_name PluginTablet
+extends Surface
+
+## One plugin, torn off the rack: a tablet of its own, laid out from the plugin's parameters.
+##
+## The rack shows eight knobs per unit because a rack unit is two inches tall. A plugin worth
+## tearing off is one somebody is working on, and this is the face for that: twelve named knobs
+## a page, the plugin's own preset list, and the four things a rack unit has no room for --
+##
+##   MIX       the plugin's own wet/dry, which every plugin in Reaper has whether or not it
+##             has a mix knob of its own.
+##   KEY IN    a sidechain: which track the plugin hears on its key input (3/4). Scroll to a
+##             track, click to patch it; click the one that is patched to pull it.
+##   CHAIN     where the plugin sits on its track, and two buttons to move it up and down.
+##   MOVE TO   another track. Click to move it there; the tablet goes with it.
+##
+## THE TABLET FOLLOWS ITS PLUGIN, not a slot. Moving a plugin renumbers its chain, and on Reaper
+## the new numbering arrives later than the move. So the tablet keeps the plugin's name and the
+## slot it expects, and after any change to the chain it looks for the plugin again: where it
+## asked it to go first, then anywhere on the track, then anywhere at all. A tablet that stayed
+## on slot 2 after its compressor moved to slot 1 would turn the EQ that slid into its place.
+##
+## A Surface like the others, so it knows nothing of who is looking or where it stands: the
+## studio puts it on a stand and keeps the list of torn-off plugins. See scenes/studio.gd.
+
+## Asked for by the DOCK button. The studio takes the tablet and its stand away.
+signal dock_requested()
+
+const WIDTH := 0.32
+const HEIGHT := 0.30
+const DEPTH := 0.012
+const COLUMNS := 4
+const ROWS := 3
+const PER_PAGE := COLUMNS * ROWS
+const KNOB_PITCH := Vector2(0.074, 0.048)
+## The first row of knobs, from the top edge.
+const GRID_TOP := HEIGHT * 0.5 - 0.098
+## The footer's controls, from the bottom edge, and the rule over them.
+const FOOTER_Y := -HEIGHT * 0.5 + 0.035
+const FOOTER_RULE := -HEIGHT * 0.5 + 0.070
+const CAPTION_DROP := 0.017
+const CAPTION_SIZE := 38
+## How long after asking for a reading before asking again. See RackUnit.TEXT_ASK_MSEC.
+const TEXT_ASK_MSEC := 150
+
+var track_index := 1
+var fx_index := 0
+## The plugin's name, which is how the tablet finds it again after the chain moves.
+var fx_name := ""
+var page_offset := 0
+## True while the plugin cannot be found anywhere: deleted in Reaper, or the project closed.
+var lost := false
+
+var _knobs: Array[Knob] = []
+var _captions: Array[Label3D] = []
+var _bypass: PanelButton
+var _mix: Knob
+var _mix_label: Label3D
+var _title: Label3D
+var _subtitle: Label3D
+var _chip_material := StandardMaterial3D.new()
+var _preset_label: Label3D
+var _page_label: Label3D
+var _preset_prev: PanelButton
+var _preset_next: PanelButton
+var _page_prev: PanelButton
+var _page_next: PanelButton
+var _chain_label: Label3D
+var _chain_up: PanelButton
+var _chain_down: PanelButton
+var _key: TabletSelector
+var _move_to: TabletSelector
+var _lost_label: Label3D
+var _built_shape := ""
+var _text_asked_msec := 0
+## Where the tablet asked its plugin to go, until the chain says it got there: [track, fx].
+var _expect: Array = []
+
+
+static func create(track: int, fx: int, plugin_name: String) -> PluginTablet:
+	var t := PluginTablet.new()
+	t.track_index = track
+	t.fx_index = fx
+	t.fx_name = plugin_name
+	t.surface_kind = &"plugin"
+	t.name = "Tablet_%s" % plugin_name.validate_node_name()
+	return t
+
+
+func _ready() -> void:
+	super()
+	DAW.track_changed.connect(_on_track_changed)
+
+
+# --- finding the plugin ---------------------------------------------------------------------
+
+func fx() -> MixState.FXState:
+	return DAW.state.fx(track_index, fx_index, false) if DAW.state.tracks.has(track_index) else null
+
+
+## Point at the plugin again after the chain has changed. True when it is found.
+func find_plugin() -> bool:
+	var here := fx()
+	if here != null and here.name == fx_name:
+		lost = false
+		return true
+	var tracks: Array = DAW.state.track_indices()
+	# Where it was sent first, then its own track, then everywhere.
+	var order: Array = []
+	if not _expect.is_empty():
+		order.append(int(_expect[0]))
+	order.append(track_index)
+	order.append_array(tracks)
+	for t in order:
+		if not DAW.state.tracks.has(t):
+			continue
+		var found := -1
+		for i in DAW.state.track(t).plugins():
+			if DAW.state.fx(t, i).name == fx_name:
+				found = i
+				# The last match on the track it was sent to: a move lands at the end, and a
+				# copy of the same plugin may already be sitting earlier in that chain.
+				if _expect.is_empty() or int(_expect[0]) != t:
+					break
+		if found >= 0:
+			track_index = t
+			fx_index = found
+			lost = false
+			return true
+	lost = true
+	return false
+
+
+# --- building -------------------------------------------------------------------------------
+
+func _shape_key() -> String:
+	var f := fx()
+	var count := f.params.size() if f != null else 0
+	return "%s|%d|%d|%d|%s" % [fx_name, count, page_offset, track_index, lost]
+
+
+func _on_fx_shape_changed(_t: int, _fx: int) -> void:
+	var was := [track_index, fx_index]
+	find_plugin()
+	if [track_index, fx_index] != was or _shape_key() != _built_shape:
+		mark_dirty()
+	else:
+		refresh()
+
+
+func _on_track_changed(_index: int, field: StringName) -> void:
+	# A key patched or pulled anywhere is a send on the track doing the keying; names and
+	# colours are the title strip's.
+	if field in [&"sends", &"name", &"colour"]:
+		refresh()
+
+
+func _rebuild() -> void:
+	_clear_built()
+	find_plugin()
+	_built_shape = _shape_key()
+	_knobs.clear()
+	_captions.clear()
+	_build_body()
+	_build_header()
+	_build_grid()
+	_build_footer()
+	refresh()
+
+
+func _build_body() -> void:
+	var shell := MeshInstance3D.new()
+	shell.name = "Shell"
+	var box := BoxMesh.new()
+	box.size = Vector3(WIDTH, HEIGHT, DEPTH)
+	shell.mesh = box
+	shell.position.z = -DEPTH * 0.5
+	shell.material_override = Materials.brushed_metal()
+	_adopt(shell)
+
+	var face := MeshInstance3D.new()
+	face.name = "Face"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(WIDTH - 0.014, HEIGHT - 0.014)
+	face.mesh = quad
+	face.position.z = 0.0004
+	face.material_override = Materials.chassis()
+	_adopt(face)
+
+	# A hairline under the header and over the footer, so the three parts read as three.
+	for y in [HEIGHT * 0.5 - 0.050, FOOTER_RULE]:
+		var rule := MeshInstance3D.new()
+		var line := BoxMesh.new()
+		line.size = Vector3(WIDTH - 0.04, 0.0008, 0.0008)
+		rule.mesh = line
+		rule.position = Vector3(0, y, 0.001)
+		rule.material_override = Materials.cap_plastic(Color(0.32, 0.33, 0.35))
+		_adopt(rule)
+
+
+func _label(text: String, size: int, at: Vector3, colour := Color(0.82, 0.83, 0.86),
+		align := HORIZONTAL_ALIGNMENT_CENTER) -> Label3D:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = size
+	l.pixel_size = 0.0002
+	l.position = at
+	l.horizontal_alignment = align
+	l.modulate = colour
+	Lettering.range_to_legibility(l)
+	_adopt(l)
+	return l
+
+
+func _button(at: Vector3, colour: Color, describe: String, on_press: Callable) -> PanelButton:
+	var b := PanelButton.new()
+	b.position = at
+	b.led_colour = colour
+	b.hit_pad = Vector2(1.6, 1.8)
+	b.describe_title = func() -> String: return "%s  %s" % [_caption(), describe]
+	b.pressed.connect(on_press)
+	_adopt(b)
+	return b
+
+
+func _build_header() -> void:
+	var top := HEIGHT * 0.5
+	var chip := MeshInstance3D.new()
+	chip.name = "Chip"
+	var bar := QuadMesh.new()
+	bar.size = Vector2(0.007, 0.03)
+	chip.mesh = bar
+	chip.position = Vector3(-WIDTH * 0.5 + 0.018, top - 0.026, 0.001)
+	_chip_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	chip.material_override = _chip_material
+	_adopt(chip)
+
+	_title = _label("", 72, Vector3(-WIDTH * 0.5 + 0.028, top - 0.019, 0.001),
+			Color(0.95, 0.94, 0.90), HORIZONTAL_ALIGNMENT_LEFT)
+	_title.name = "Title"
+	_subtitle = _label("", 40, Vector3(-WIDTH * 0.5 + 0.028, top - 0.037, 0.001),
+			Color(0.62, 0.65, 0.70), HORIZONTAL_ALIGNMENT_LEFT)
+	_subtitle.name = "Subtitle"
+
+	_bypass = _button(Vector3(WIDTH * 0.5 - 0.024, top - 0.024, 0.004), Color(0.4, 0.95, 0.5),
+			"POWER", func(): _act(func(): DAW.set_fx_enabled(track_index, fx_index, not fx().enabled)))
+	_bypass.name = "Power"
+	_bypass.describe_value = func(_v: float) -> String: return "ACTIVE" if _bypass.lit else "BYPASSED"
+	_label("POWER", 30, Vector3(WIDTH * 0.5 - 0.024, top - 0.037, 0.001), Color(0.55, 0.58, 0.62))
+
+	var dock := _button(Vector3(WIDTH * 0.5 - 0.056, top - 0.024, 0.004), Color(0.75, 0.78, 0.85),
+			"BACK TO THE RACK", func(): dock_requested.emit())
+	dock.name = "Dock"
+	dock.describe_value = func(_v: float) -> String: return "click to put the tablet away"
+	_label("DOCK", 30, Vector3(WIDTH * 0.5 - 0.056, top - 0.037, 0.001), Color(0.55, 0.58, 0.62))
+
+	# Presets on the left of the second line, pages on the right.
+	var y := top - 0.064
+	_label("PRESET", 30, Vector3(-WIDTH * 0.5 + 0.03, y + 0.001, 0.001), Color(0.55, 0.58, 0.62))
+	_preset_prev = _button(Vector3(-WIDTH * 0.5 + 0.058, y, 0.004), Color(0.95, 0.75, 0.35),
+			"PREVIOUS PRESET", func(): _act(func(): DAW.step_fx_preset(track_index, fx_index, -1)))
+	_preset_next = _button(Vector3(-WIDTH * 0.5 + 0.078, y, 0.004), Color(0.95, 0.75, 0.35),
+			"NEXT PRESET", func(): _act(func(): DAW.step_fx_preset(track_index, fx_index, 1)))
+	_preset_label = _label("", 44, Vector3(-WIDTH * 0.5 + 0.092, y, 0.001), Color(0.98, 0.86, 0.6),
+			HORIZONTAL_ALIGNMENT_LEFT)
+	_preset_label.name = "Preset"
+	for b in [_preset_prev, _preset_next]:
+		(b as PanelButton).describe_value = func(_v: float) -> String: return _preset_label.text
+	_preset_prev.lit = true
+	_preset_next.lit = true
+
+	_page_label = _label("", 38, Vector3(WIDTH * 0.5 - 0.072, y, 0.001), Color(0.62, 0.65, 0.70),
+			HORIZONTAL_ALIGNMENT_RIGHT)
+	_page_prev = _button(Vector3(WIDTH * 0.5 - 0.056, y, 0.004), Color(0.45, 0.68, 0.95),
+			"PREVIOUS PAGE", func(): _step_page(-1))
+	_page_next = _button(Vector3(WIDTH * 0.5 - 0.036, y, 0.004), Color(0.45, 0.68, 0.95),
+			"NEXT PAGE", func(): _step_page(1))
+	for b in [_page_prev, _page_next]:
+		(b as PanelButton).describe_value = func(_v: float) -> String: return _page_label.text
+
+
+func _build_grid() -> void:
+	var f := fx()
+	var count := f.params.size() if f != null else 0
+	var shown := clampi(count - page_offset, 0, PER_PAGE)
+	var left := -KNOB_PITCH.x * (COLUMNS - 1) * 0.5
+	for slot in shown:
+		var at := Vector3(left + (slot % COLUMNS) * KNOB_PITCH.x,
+				GRID_TOP - int(slot / COLUMNS) * KNOB_PITCH.y, 0.005)
+		var k := Knob.new()
+		k.name = "Knob%d" % slot
+		k.position = at
+		k.turned.connect(func(v: float):
+			var param := _param_for(slot)
+			if param >= 0:
+				DAW.set_fx_param(track_index, fx_index, param, v))
+		k.describe_title = func() -> String: return "%s  %s" % [_caption(), _param_name(slot)]
+		k.describe_value = func(v: float) -> String: return _param_reading(slot, v)
+		_adopt(k)
+		_knobs.append(k)
+		var caption := _label("", CAPTION_SIZE, at + Vector3(0, -CAPTION_DROP, -0.004),
+				Color(0.70, 0.72, 0.75))
+		caption.name = "Caption%d" % slot
+		_captions.append(caption)
+
+	_lost_label = _label("PLUGIN NOT FOUND", 64, Vector3(0, 0, 0.002), Color(0.95, 0.55, 0.45))
+	_lost_label.name = "Lost"
+	_lost_label.visible = lost
+
+
+func _build_footer() -> void:
+	var y := FOOTER_Y
+	var head := y + 0.021
+	var muted := Color(0.55, 0.58, 0.62)
+
+	# MIX: the plugin's own wet/dry.
+	_mix = Knob.new()
+	_mix.name = "Mix"
+	_mix.position = Vector3(-WIDTH * 0.5 + 0.034, y - 0.002, 0.005)
+	_mix.turned.connect(func(v: float): _act(func(): DAW.set_fx_wet(track_index, fx_index, v)))
+	_mix.describe_title = func() -> String: return "%s  MIX" % _caption()
+	_mix.describe_value = func(v: float) -> String:
+		return "%d%% wet" % roundi(v * 100.0) if v < 0.995 else "all plugin"
+	_adopt(_mix)
+	_label("MIX", 30, Vector3(-WIDTH * 0.5 + 0.034, head, 0.001), muted)
+	_mix_label = _label("", 32, Vector3(-WIDTH * 0.5 + 0.053, y - 0.002, 0.001),
+			Color(0.82, 0.83, 0.86), HORIZONTAL_ALIGNMENT_LEFT)
+	_mix_label.name = "MixReading"
+
+	# KEY IN: which track the plugin hears on its sidechain.
+	_label("KEY IN", 30, Vector3(-0.044, head, 0.001), muted)
+	_key = TabletSelector.new()
+	_key.name = "KeyIn"
+	_key.size = Vector2(0.066, 0.017)
+	_key.position = Vector3(-0.044, y, 0.001)
+	_key.options = _other_tracks
+	_key.hint_text = "scroll to pick a track  ·  click to key the plugin from it, or to pull it"
+	_key.describe_title = func() -> String: return "%s  KEY IN" % _caption()
+	_key.describe_value = func(_v: float) -> String:
+		return ("%s keys it" if _key.lit else "%s  (click to key)") % _key.words()
+	_key.pressed.connect(_on_key_pressed)
+	_adopt(_key)
+	# Which track keys it now, picked out in the window from the start.
+	var keyed := keyed_by()
+	if not keyed.is_empty():
+		_key.choice = keyed[0]
+
+	# CHAIN: where it sits on its track.
+	_label("CHAIN", 30, Vector3(0.041, head, 0.001), muted)
+	_chain_up = _button(Vector3(0.017, y, 0.004), Color(0.45, 0.68, 0.95), "EARLIER IN THE CHAIN",
+			func(): _shift(-1))
+	_chain_down = _button(Vector3(0.065, y, 0.004), Color(0.45, 0.68, 0.95), "LATER IN THE CHAIN",
+			func(): _shift(1))
+	_chain_label = _label("", 36, Vector3(0.041, y - 0.0005, 0.001), Color(0.82, 0.83, 0.86))
+	_chain_label.name = "Chain"
+	for b in [_chain_up, _chain_down]:
+		(b as PanelButton).describe_value = func(_v: float) -> String: return _chain_words()
+
+	# MOVE TO: another track.
+	_label("MOVE TO", 30, Vector3(0.117, head, 0.001), muted)
+	_move_to = TabletSelector.new()
+	_move_to.name = "MoveTo"
+	_move_to.size = Vector2(0.064, 0.017)
+	_move_to.position = Vector3(0.117, y, 0.001)
+	_move_to.options = _other_tracks
+	_move_to.hint_text = "scroll to pick a track  ·  click to move the plugin there"
+	_move_to.describe_title = func() -> String: return "%s  MOVE TO" % _caption()
+	_move_to.describe_value = func(_v: float) -> String: return "%s  (click to move)" % _move_to.words()
+	_move_to.pressed.connect(func(to: int): move_to_track(to))
+	_adopt(_move_to)
+
+
+# --- reading the plugin ---------------------------------------------------------------------
+
+func refresh() -> void:
+	if _title == null:
+		return
+	var f := fx()
+	var here := f != null and not lost
+	var track := DAW.state.track(track_index) if DAW.state.tracks.has(track_index) else null
+	_title.text = fx_name
+	Lettering.fit(_title, WIDTH - 0.12, 72)
+	_subtitle.text = "%s   ·   %s" % [track.display_name().to_upper() if track else "?", _chain_words()]
+	Lettering.fit(_subtitle, WIDTH - 0.12, 40)
+	_chip_material.albedo_color = Materials.chip_colour(track.colour if track else Color.GRAY)
+	_lost_label.visible = lost
+	if not here:
+		return
+	_bypass.lit = f.enabled
+	_mix.apply_remote(f.wet)
+	_mix_label.text = "%d%%" % roundi(f.wet * 100.0)
+
+	var presets := DAW.can(DAWBackend.Capability.FX_PRESETS)
+	_preset_label.text = f.preset if f.preset != "" else ("—" if presets else "no presets here")
+	Lettering.fit(_preset_label, WIDTH * 0.5 - 0.1, 44)
+	_preset_prev.visible = presets
+	_preset_next.visible = presets
+
+	var params := _params()
+	var shown := clampi(params.size() - page_offset, 0, PER_PAGE)
+	for i in _knobs.size():
+		var on := i < shown
+		_knobs[i].visible = on
+		_captions[i].visible = on
+		if on:
+			_knobs[i].apply_remote(f.params[params[page_offset + i]])
+			_captions[i].text = _param_name(i)
+			Lettering.fit(_captions[i], KNOB_PITCH.x - 0.008, CAPTION_SIZE)
+	var paged := params.size() > PER_PAGE
+	_page_label.visible = paged
+	_page_prev.visible = paged
+	_page_next.visible = paged
+	if paged:
+		_page_label.text = "%d-%d OF %d" % [page_offset + 1, page_offset + shown, params.size()]
+		_page_prev.lit = page_offset > 0
+		_page_next.lit = page_offset + PER_PAGE < params.size()
+
+	_chain_label.text = _chain_words()
+	var order := DAW.state.track(track_index).plugins()
+	var at := order.find(fx_index)
+	var can_chain := DAW.can(DAWBackend.Capability.FX_CHAIN)
+	_chain_up.lit = can_chain and at > 0
+	_chain_down.lit = can_chain and at >= 0 and at < order.size() - 1
+	_move_to.visible = can_chain
+
+	var keyed := keyed_by()
+	_key.refresh()
+	_key.lit = _key.choice in keyed
+	_move_to.refresh()
+
+
+func _params() -> Array:
+	var f := fx()
+	if f == null:
+		return []
+	var keys: Array = f.params.keys()
+	keys.sort()
+	return keys
+
+
+func _param_for(slot: int) -> int:
+	var params := _params()
+	var at := page_offset + slot
+	return int(params[at]) if at < params.size() else -1
+
+
+func _param_name(slot: int) -> String:
+	var f := fx()
+	var index := _param_for(slot)
+	if f == null or index < 0:
+		return "?"
+	return str(f.param_names.get(index, "P%d" % index)).to_upper()
+
+
+## The plugin's own words for a value when it has said them, else a percentage. The same rule as
+## the rack's, for the same reason: see RackUnit._param_reading.
+func _param_reading(slot: int, v: float) -> String:
+	var f := fx()
+	var index := _param_for(slot)
+	if f == null or index < 0:
+		return "%d%%" % roundi(v * 100.0)
+	var at := float(f.param_text_at.get(index, f.params.get(index, -1.0)))
+	if f.param_text.has(index) and absf(at - v) < 0.002:
+		var text := str(f.param_text[index]).strip_edges()
+		if not text.is_empty():
+			return text
+	var now := Time.get_ticks_msec()
+	if now - _text_asked_msec > TEXT_ASK_MSEC:
+		_text_asked_msec = now
+		DAW.read_fx_param_text(track_index, fx_index, index)
+	return "%d%%" % roundi(v * 100.0)
+
+
+func _caption() -> String:
+	var track := DAW.state.track(track_index) if DAW.state.tracks.has(track_index) else null
+	return "%s  %s" % [track.display_name().to_upper() if track else "?", fx_name.to_upper()]
+
+
+func _chain_words() -> String:
+	if not DAW.state.tracks.has(track_index):
+		return ""
+	var order := DAW.state.track(track_index).plugins()
+	return "%d OF %d" % [order.find(fx_index) + 1, order.size()]
+
+
+func _other_tracks() -> Array:
+	var out: Array = []
+	for i in DAW.state.track_indices():
+		if i != track_index:
+			out.append([i, DAW.state.track(i).display_name().to_upper()])
+	return out
+
+
+## The tracks sending into this plugin's track's key input, in track order.
+func keyed_by() -> Array:
+	var out: Array = []
+	for i in DAW.state.track_indices():
+		for s in DAW.state.track(i).sends.values():
+			var send := s as MixState.SendState
+			if send.key and send.resolve(DAW.state) == track_index:
+				out.append(i)
+				break
+	return out
+
+
+# --- acting on it ---------------------------------------------------------------------------
+
+## Nothing is sent for a plugin that is not there: every write is to a slot, and the slot of a
+## plugin that has gone holds something else, or nothing.
+func _act(what: Callable) -> void:
+	if not lost and fx() != null:
+		what.call()
+
+
+func _step_page(direction: int) -> void:
+	var wanted := page_offset + direction * PER_PAGE
+	if wanted < 0 or wanted >= _params().size():
+		return
+	page_offset = wanted
+	mark_dirty()
+
+
+## One place earlier (-1) or later (+1) on its own track.
+func _shift(direction: int) -> void:
+	if lost or not DAW.can(DAWBackend.Capability.FX_CHAIN):
+		return
+	var order := DAW.state.track(track_index).plugins()
+	var at := order.find(fx_index)
+	var to := at + direction
+	if at < 0 or to < 0 or to >= order.size():
+		return
+	# Slots are named as they are now; going down, the slot to aim for is the one past the
+	# plugin being stepped over, or past the end.
+	var aim: int
+	if direction < 0:
+		aim = order[to]
+	else:
+		aim = order[to + 1] if to + 1 < order.size() else int(order[-1]) + 1
+	_expect = [track_index, order[to]]
+	DAW.move_fx(track_index, fx_index, track_index, aim)
+	fx_index = order[to]
+	mark_dirty()
+
+
+func move_to_track(to: int) -> void:
+	if lost or to == track_index or not DAW.state.tracks.has(to) \
+			or not DAW.can(DAWBackend.Capability.FX_CHAIN):
+		return
+	var order := DAW.state.track(to).plugins()
+	var end := int(order[-1]) + 1 if not order.is_empty() else 999
+	_expect = [to, end]
+	DAW.move_fx(track_index, fx_index, to, end)
+	mark_dirty()
+
+
+func _on_key_pressed(from: int) -> void:
+	if lost or from < 0:
+		return
+	# Already keying it: pull that send. Otherwise patch it.
+	var sends := DAW.state.track(from).sends
+	var keys: Array = sends.keys()
+	keys.sort()
+	for k in keys:
+		var send := sends[k] as MixState.SendState
+		if send.key and send.resolve(DAW.state) == track_index:
+			DAW.remove_send(from, int(k))
+			refresh()
+			return
+	DAW.create_sidechain(from, track_index)
+	refresh()

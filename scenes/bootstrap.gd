@@ -131,6 +131,8 @@ func _ready() -> void:
 		session_panel.play_with_computer_keys.call_deferred(true)
 
 	_apply_cli_placement(args["place"])
+	for wanted in args["tablets"]:
+		_apply_cli_tablet(wanted)
 	_apply_cli_focus(args["focus"])
 	if args["detach_body"] and studio.body != null:
 		# After one frame, so the rig has taken its pose from the head before it is cut loose.
@@ -188,7 +190,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
-		"ghost": {},
+		"ghost": {}, "tablets": [],
 	}
 	var i := 0
 	while i < argv.size():
@@ -206,6 +208,14 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["focus"] = argv[i]
+			"--tablet":
+				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
+				# if it had been pulled. For photographing the tablet without a hand to pull it.
+				i += 1
+				if i < argv.size():
+					var parts := argv[i].split(":")
+					if parts.size() == 2:
+						out["tablets"].append(Vector2i(int(parts[0]), int(parts[1])))
 			"--eyes":
 				# `--eyes 2.0` -- this reader needs twice the angular cap height. The one
 				# switch that proves the accessibility work is real rather than declared:
@@ -375,6 +385,15 @@ func _apply_cli_placement(places: Dictionary) -> void:
 			push_warning("bootstrap: --place %s=%s is not one of %s" % [id, wanted, Presentation.MODE_NAMES.values()])
 			continue
 		studio.mount.set_mode(id, mode)
+
+
+func _apply_cli_tablet(wanted: Vector2i) -> void:
+	var f := DAW.state.fx(wanted.x, wanted.y, false)
+	if f == null or f.name == "" or studio.floor_plan == null:
+		push_warning("bootstrap: --tablet %d:%d is not a plugin in this session" % [wanted.x, wanted.y])
+		return
+	var at := studio.rack.global_position
+	studio._on_tear_requested(wanted.x, wanted.y, at)
 
 
 ## Snapped rather than glided, and the distinction is not a detail. The glide exists so that a

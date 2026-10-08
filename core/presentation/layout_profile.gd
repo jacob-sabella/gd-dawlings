@@ -35,6 +35,11 @@ var local_transforms: Dictionary = {}
 var medium: int = Presentation.Medium.SCREEN
 ## Which venue this participant stands in. Empty means the default. See core/venues/venue.gd.
 var venue: StringName = &""
+## The plugins this participant has torn off the rack onto tablets: {stand id: [track, fx, name]}.
+## The name is what finds the plugin again: the slot is only where it was when last saved, and
+## a chain rearranged in Reaper since then has moved it. Where each stand stands is a floor
+## transform like any other piece's, under "floor/<stand id>".
+var tablets: Dictionary = {}
 
 
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
@@ -59,6 +64,12 @@ func set_transform(surface_id: StringName, mode: int, xform: Transform3D) -> voi
 	local_transforms[_key(surface_id, mode)] = xform
 
 
+func clear_transform(surface_id: StringName, mode: int) -> void:
+	# Either spelling: set here as a String, read back from the file as a StringName.
+	local_transforms.erase(_key(surface_id, mode))
+	local_transforms.erase(StringName(_key(surface_id, mode)))
+
+
 static func _key(surface_id: StringName, mode: int) -> String:
 	return "%s/%d" % [surface_id, mode]
 
@@ -72,6 +83,8 @@ func save() -> void:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
 		cfg.set_value("transforms", String(id), local_transforms[id])
+	for id in tablets:
+		cfg.set_value("tablets", String(id), tablets[id])
 	cfg.save(save_path)
 
 
@@ -87,3 +100,8 @@ func load_saved() -> void:
 	if cfg.has_section("transforms"):
 		for key in cfg.get_section_keys("transforms"):
 			local_transforms[StringName(key)] = cfg.get_value("transforms", key)
+	if cfg.has_section("tablets"):
+		for key in cfg.get_section_keys("tablets"):
+			var entry: Variant = cfg.get_value("tablets", key)
+			if entry is Array and entry.size() == 3:
+				tablets[StringName(key)] = [int(entry[0]), int(entry[1]), str(entry[2])]

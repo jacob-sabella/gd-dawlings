@@ -20,6 +20,10 @@ extends Node3D
 ## when the plugin overflows, for the same reason: a faceplate carrying two dead buttons
 ## invites the question of what they are for.
 
+## The grip on the name strip was pulled (or clicked): this plugin wants a tablet. `at` is where
+## the hand let go, in world space.
+signal tear_requested(track: int, fx: int, at: Vector3)
+
 const RACK_WIDTH := 0.483
 const U := 0.0445
 const UNITS_TALL := 2
@@ -162,6 +166,17 @@ func _ready() -> void:
 	_name_label.modulate = Color(0.85, 0.86, 0.88)
 	Lettering.range_to_legibility(_name_label)
 	add_child(_name_label)
+
+	# Over the name, from the left ear to the page readout: the name is what you take hold of.
+	var tab := TearTab.new()
+	tab.name = "TearTab"
+	tab.size = Vector2(0.24, 0.02)
+	tab.position = Vector3(-RACK_WIDTH * 0.5 + 0.018, h * 0.5 - 0.016, 0.001)
+	tab.ghost_colour = DAW.state.track(track_index).colour
+	tab.describe_title = func() -> String: return "%s  ON A TABLET" % _unit_caption()
+	tab.describe_value = func(_v: float) -> String: return "pull to take it off the rack"
+	tab.torn.connect(func(at: Vector3): tear_requested.emit(track_index, fx_index, at))
+	add_child(tab)
 
 	# A rack is the furthest thing from the seat that has buttons this small on it.
 	_bypass = PanelButton.new()

@@ -15,6 +15,9 @@ extends Surface
 ## honest way to draw the gap: a part-filled bay with nothing in the empty rows is a hole you
 ## can see the far wall through, and it reads as a modelling mistake rather than as space.
 
+## A unit's name strip was pulled: whoever placed this rack decides where the tablet stands.
+signal tear_requested(track: int, fx: int, at: Vector3)
+
 const BAY_HEIGHT := 1.1
 const BAY_SPACING := 0.56
 const RAIL_DEPTH := 0.30
@@ -66,6 +69,7 @@ func _rebuild() -> void:
 			if slot_index >= slots.size():
 				break
 			var unit := RackUnit.create(slots[slot_index][0], slots[slot_index][1])
+			unit.tear_requested.connect(func(t: int, f: int, at: Vector3): tear_requested.emit(t, f, at))
 			# Filled from the top down so that the first track's FX are at eye level rather than
 			# at the floor: a 20-unit rack read bottom-up puts channel 1 at your ankles.
 			unit.position = Vector3(0, per_bay * unit_height - (row + 0.5) * unit_height, 0)

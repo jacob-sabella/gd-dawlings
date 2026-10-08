@@ -70,6 +70,10 @@ func _ready() -> void:
 	_test_a_plugin_moves_and_copies_along_the_chains()
 	_test_wet_and_presets_ride_the_wire()
 	_test_a_sidechain_is_a_send_into_the_key()
+	_test_a_tablet_is_built_from_its_plugin()
+	_test_a_tablet_follows_its_plugin_along_the_chain()
+	_test_a_tablet_keys_its_plugin_from_another_track()
+	_test_a_plugin_torn_off_the_rack_gets_a_stand()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2369,6 +2373,163 @@ func _test_a_sidechain_is_a_send_into_the_key() -> void:
 	var guest_keys := guest.track(1).sends.values().filter(func(s): return (s as MixState.SendState).key)
 	check("a guest knows which is the key", guest_keys.size() == 1)
 	check("create_sidechain is a verb a guest may use", &"create_sidechain" in DAW.COMMANDS)
+
+
+## A tablet is a plugin's face laid out from the plugin's own parameters, and every control on it
+## writes the plugin it is showing.
+func _test_a_tablet_is_built_from_its_plugin() -> void:
+	DAW.use(OfflineBackend.new())
+	var state := DAW.state
+	var order := state.track(2).plugins()
+	var slot: int = order[1]
+	var f := state.fx(2, slot)
+	var total := f.params.size()
+	check("the stand-in has a plugin that overflows a tablet", total > PluginTablet.PER_PAGE)
+
+	var tablet := PluginTablet.create(2, slot, f.name)
+	add_child(tablet)
+	tablet._process(0.0)
+	check("a full page of knobs", tablet._knobs.size() == PluginTablet.PER_PAGE)
+	check("captioned with the plugin's own names",
+			tablet._captions[0].text == str(f.param_names[0]).to_upper())
+	check("the title is the plugin", tablet._title.text == f.name)
+	check("it says where on the chain it is", tablet._chain_label.text == "2 OF %d" % order.size())
+	check("and that there are more parameters than knobs",
+			tablet._page_label.visible and tablet._page_label.text == "1-12 OF %d" % total)
+
+	var before: float = f.params[0]
+	tablet._knobs[0].turned.emit(clampf(before + 0.3, 0.0, 1.0) if before < 0.6 else before - 0.3)
+	check("a knob writes its parameter", not is_equal_approx(state.fx(2, slot).params[0], before))
+
+	tablet._step_page(1)
+	tablet._process(0.0)
+	check("the next page holds what is left",
+			tablet._knobs.size() == total - PluginTablet.PER_PAGE and tablet._param_for(0) == PluginTablet.PER_PAGE)
+
+	tablet._bypass.pressed.emit()
+	check("power bypasses it", not state.fx(2, slot).enabled)
+	tablet._mix.turned.emit(0.4)
+	check("mix sets its wet/dry", is_equal_approx(state.fx(2, slot).wet, 0.4))
+	tablet.refresh()
+	check("and the reading follows", tablet._mix_label.text == "40%")
+	tablet._preset_next.pressed.emit()
+	check("a preset can be stepped to", state.fx(2, slot).preset not in ["", "Default"])
+	tablet.refresh()
+	check("and is named on the face", tablet._preset_label.text == state.fx(2, slot).preset)
+	var docked := [false]
+	tablet.dock_requested.connect(func(): docked[0] = true)
+	tablet.get_node("Dock").pressed.emit()
+	check("DOCK asks for the tablet to be put away", docked[0])
+	remove_child(tablet)
+	tablet.free()
+
+
+## Moving a plugin is done from its tablet, and the tablet goes with it.
+func _test_a_tablet_follows_its_plugin_along_the_chain() -> void:
+	DAW.use(OfflineBackend.new())
+	var state := DAW.state
+	var order := state.track(2).plugins()
+	var plugin := state.fx(2, order[1]).name
+	var tablet := PluginTablet.create(2, order[1], plugin)
+	add_child(tablet)
+	tablet._process(0.0)
+	check("the last plugin cannot go later", not tablet._chain_down.lit and tablet._chain_up.lit)
+
+	tablet._shift(-1)
+	tablet._process(0.0)
+	check("it moves up its chain", _names_on(state, 2)[0] == plugin)
+	check("and the tablet still shows it", tablet.fx().name == plugin and not tablet.lost)
+	check("now first", tablet._chain_label.text == "1 OF %d" % order.size())
+	tablet._shift(1)
+	tablet._process(0.0)
+	check("and back down", _names_on(state, 2)[-1] == plugin and tablet.fx().name == plugin)
+
+	tablet.move_to_track(6)
+	tablet._process(0.0)
+	check("it moves to another track", _names_on(state, 6)[-1] == plugin)
+	check("the tablet goes with it", tablet.track_index == 6 and tablet.fx().name == plugin)
+	check("and is not lost", not tablet.lost and not tablet._lost_label.visible)
+
+	# Gone altogether -- deleted, or renamed in the DAW -- it says so, and its controls write
+	# nothing: the slot it was pointing at now holds something else, or nothing.
+	var at := tablet.fx_index
+	var wet: float = state.fx(6, at).wet
+	tablet.fx_name = "Nothing By This Name"
+	tablet._on_fx_shape_changed(6, at)
+	tablet._process(0.0)
+	check("a plugin that has gone is shown as gone", tablet.lost and tablet._lost_label.visible)
+	tablet._mix.turned.emit(0.1)
+	check("and a lost tablet writes nothing", is_equal_approx(state.fx(6, at).wet, wet))
+	remove_child(tablet)
+	tablet.free()
+
+
+func _test_a_tablet_keys_its_plugin_from_another_track() -> void:
+	DAW.use(OfflineBackend.new())
+	var state := DAW.state
+	var order := state.track(2).plugins()
+	var tablet := PluginTablet.create(2, order[1], state.fx(2, order[1]).name)
+	add_child(tablet)
+	tablet._process(0.0)
+	check("nothing keys it yet", tablet.keyed_by().is_empty() and not tablet._key.lit)
+	check("its own track is not offered", not tablet._other_tracks().any(func(o): return o[0] == 2))
+
+	tablet._key.choice = 1
+	tablet._key.pressed.emit(1)
+	check("KEY IN patches a sidechain", tablet.keyed_by() == [1])
+	check("into the key", state.track(1).sends.values().any(
+			func(s): return s.key and s.resolve(state) == 2))
+	check("and the window lights", tablet._key.lit)
+	tablet._key.pressed.emit(1)
+	check("pressed again it pulls it", tablet.keyed_by().is_empty() and not tablet._key.lit)
+	remove_child(tablet)
+	tablet.free()
+
+
+## Pulled off the rack, a plugin stands on the floor on its own stand; docked, the stand goes.
+## The list of what is out is part of the layout, and comes back next time.
+func _test_a_plugin_torn_off_the_rack_gets_a_stand() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.focus.visits = false
+	var order := DAW.state.track(2).plugins()
+	var plugin := DAW.state.fx(2, order[1]).name
+	var surfaces := studio.focus.surfaces.size()
+
+	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
+	check("pulling a plugin off the rack stands it on a tablet", studio.tablets.size() == 1)
+	var id: StringName = studio.tablets.keys()[0]
+	var stand: Trolley = studio.tablets[id][0]
+	var tablet: PluginTablet = studio.tablets[id][1]
+	check("showing that plugin", tablet.fx_name == plugin and tablet.track_index == 2)
+	check("on the floor", is_equal_approx(stand.global_position.y, 0.0))
+	check("in front of the rack, not in it",
+			stand.global_position.distance_to(studio.rack.global_position * Vector3(1, 0, 1)) > 0.4)
+	check("and something F can find", studio.focus.surfaces.size() == surfaces + 1)
+	check("it is written down", Session.layout.tablets.get(id, []) == [2, order[1], plugin])
+
+	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
+	check("pulling the same plugin again brings the same stand", studio.tablets.size() == 1)
+
+	var reloaded := LayoutProfile.new()
+	reloaded.save_path = Session.layout.save_path
+	reloaded.load_saved()
+	check("the stand survives a restart", reloaded.tablets.get(id, []) == [2, order[1], plugin])
+
+	tablet.dock_requested.emit()
+	check("docking puts the stand away", studio.tablets.is_empty() and not is_instance_valid(stand) \
+			or stand.is_queued_for_deletion())
+	check("and F no longer finds it", studio.focus.surfaces.size() == surfaces)
+	check("and it is forgotten", Session.layout.tablets.is_empty())
+	remove_child(studio)
+	studio.free()
+	Session.layout = saved_layout
+	DAW.use(OfflineBackend.new())
 
 
 func _test_a_banked_control_still_moves() -> void:

@@ -107,6 +107,8 @@ var ergonomics := Ergonomics.new()
 
 var console: ConsoleSurface
 var rack: RackSurface
+## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
+var tablets: Dictionary = {}
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
@@ -544,6 +546,158 @@ func _build_patch_stand() -> void:
 	_fit_stand_to_bay()
 
 
+# --- plugin tablets -------------------------------------------------------------------------
+#
+# A plugin pulled off the rack stands on its own music stand: a weighted round foot, a pole, and
+# a cradle holding the tablet tilted back at a standing reader's hands. On the floor rather than
+# on the desk because the desk is the console, and a tablet propped on the faders is in the way
+# of the faders; a stand can be wheeled up beside the chair, or across to the rack, or anywhere.
+
+## The top edge of the tablet on its stand, and how far it leans back. Desk height plus a little:
+## read standing, or pulled up beside the chair.
+const TABLET_TOP := 1.16
+const TABLET_LEAN := 28.0
+const TABLET_FOOT := 0.19
+## How far in front of the rack's face a pulled tablet lands, when it was not pulled anywhere
+## in particular.
+const TABLET_PULL := 0.6
+
+
+func _on_tear_requested(track: int, fx: int, at: Vector3) -> void:
+	var f := DAW.state.fx(track, fx, false)
+	if f == null or f.name == "":
+		return
+	# Out from the rack along its facing, so a tablet pulled straight off lands in front of it
+	# rather than inside it.
+	var out := rack.global_basis.z.normalized()
+	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
+	var id := open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
+	# On a monitor, pulling it off is asking to use it: walk up to it. In a headset you are
+	# already standing where you pulled it.
+	if focus != null and focus.visits:
+		focus.focus(id)
+		_sit_down()
+
+
+## Put a plugin on a stand at `where` on the floor, facing the mix position. One stand per
+## plugin: asking again for one that is already out wheels that stand over instead.
+func open_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
+	for id in tablets:
+		var tablet: PluginTablet = tablets[id][1]
+		if tablet.track_index == track and tablet.fx_index == fx:
+			(tablets[id][0] as Trolley).place(where, _facing_mix(where))
+			return id
+	var n := 1
+	while tablets.has(StringName("tablet_%d" % n)) or (Session.layout != null \
+			and Session.layout.tablets.has(StringName("tablet_%d" % n))):
+		n += 1
+	var id := StringName("tablet_%d" % n)
+	_build_tablet(id, track, fx, plugin_name)
+	(tablets[id][0] as Trolley).place(where, _facing_mix(where))
+	_remember_tablets()
+	return id
+
+
+func _facing_mix(from: Vector2) -> float:
+	var to := Vector2(0, MIX_POSITION_Z) - from
+	return atan2(to.x, to.y)
+
+
+func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> void:
+	var stand := _trolley("PluginStand_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
+	stand.rolls = false
+	stand.follow = 14.0
+	stand.footprint_half = Vector2(TABLET_FOOT, TABLET_FOOT)
+	var foot := MeshInstance3D.new()
+	foot.name = "Foot"
+	var disc := CylinderMesh.new()
+	disc.top_radius = TABLET_FOOT * 0.92
+	disc.bottom_radius = TABLET_FOOT
+	disc.height = 0.025
+	disc.radial_segments = 40
+	foot.mesh = disc
+	foot.position.y = 0.0125
+	foot.material_override = Materials.chassis()
+	stand.add_part(foot)
+	var pole := MeshInstance3D.new()
+	pole.name = "Pole"
+	var tube := CylinderMesh.new()
+	tube.top_radius = 0.012
+	tube.bottom_radius = 0.016
+	var pole_top := TABLET_TOP - PluginTablet.HEIGHT * cos(deg_to_rad(TABLET_LEAN)) * 0.5
+	tube.height = pole_top
+	tube.radial_segments = 16
+	pole.mesh = tube
+	pole.position = Vector3(0, pole_top * 0.5, -0.02)
+	pole.material_override = Materials.brushed_metal()
+	stand.add_part(pole)
+
+	var tablet := PluginTablet.create(track, fx, plugin_name)
+	tablet.surface_id = id
+	# Hung from its top edge's middle, leaning back: the cradle's lip is under its bottom edge.
+	var lean := Basis(Vector3.RIGHT, -deg_to_rad(TABLET_LEAN))
+	tablet.transform = Transform3D(lean, Vector3(0, TABLET_TOP, 0.0)) \
+			* Transform3D(Basis.IDENTITY, Vector3(0, -PluginTablet.HEIGHT * 0.5, 0))
+	var lip := MeshInstance3D.new()
+	lip.name = "Cradle"
+	var ledge := BoxMesh.new()
+	ledge.size = Vector3(PluginTablet.WIDTH * 0.8, 0.012, 0.03)
+	lip.mesh = ledge
+	lip.transform = tablet.transform * Transform3D(Basis.IDENTITY,
+			Vector3(0, -PluginTablet.HEIGHT * 0.5 - 0.006, -0.002))
+	lip.material_override = Materials.brushed_metal()
+	stand.add_part(lip, false)
+	stand.add_child(tablet)
+	tablet.dock_requested.connect(close_tablet.bind(id))
+	# Gear like the rest: F walks to it, and it comes up close to be worked.
+	if focus != null:
+		focus.surfaces.append(tablet)
+		tablet.rebuilt.connect(focus._on_surface_rebuilt.bind(tablet))
+	tablets[id] = [stand, tablet]
+
+
+func close_tablet(id: StringName) -> void:
+	if not tablets.has(id):
+		return
+	var stand: Trolley = tablets[id][0]
+	var tablet: PluginTablet = tablets[id][1]
+	if focus != null:
+		if focus.focused_id == id:
+			focus.release()
+			_sit_down()
+		focus.surfaces.erase(tablet)
+	tablets.erase(id)
+	floor_plan.pieces.erase(stand)
+	stand.queue_free()
+	if Session.layout != null:
+		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
+	_remember_tablets()
+
+
+## The list of what is out, saved whenever a tablet is opened or closed. Not when a tablet finds
+## its plugin somewhere new: the name finds it again next time anyway, and a profile rewritten
+## because a different session happened to be open would be a file changed by looking at it.
+func _remember_tablets() -> void:
+	if Session.layout == null:
+		return
+	var out := {}
+	for id in tablets:
+		var t: PluginTablet = tablets[id][1]
+		out[id] = [t.track_index, t.fx_index, t.fx_name]
+	if out == Session.layout.tablets:
+		return
+	Session.layout.tablets = out
+	Session.layout.save()
+
+
+func _restore_tablets() -> void:
+	if Session.layout == null:
+		return
+	for id in Session.layout.tablets:
+		var entry: Array = Session.layout.tablets[id]
+		_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
+
+
 ## The carcass fills from the plinth up to the bay's lower edge and the cheeks run past its top,
 ## whatever height the session has made the bay.
 func _fit_stand_to_bay() -> void:
@@ -916,6 +1070,10 @@ func _build_surfaces() -> void:
 	console.rebuilt.connect(_fit_room_to_session)
 	patchbay.rebuilt.connect(_fit_stand_to_bay)
 	_fit_room_to_session()
+
+	if floor_plan != null:
+		rack.tear_requested.connect(_on_tear_requested)
+		_restore_tablets()
 
 
 ## A stand under every practical.
@@ -1363,7 +1521,8 @@ func _walk_to_seat() -> void:
 		for surface in focus.surfaces:
 			if surface.surface_id == focus.focused_id:
 				target = surface
-	if target != null and target.get_parent() == studio_set:
+	# Anywhere in the set: a tablet stands on its own stand, a level further down.
+	if target != null and studio_set.is_ancestor_of(target):
 		var box := target.content_aabb()
 		if box.size.y > 0.01:
 			seat = focus.seat_for(target)
