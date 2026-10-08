@@ -43,8 +43,13 @@ enum ColourVision {FULL, DEUTAN, PROTAN, TRITAN, MONO}
 
 ## Eye height from the floor, standing or seated. The single most load-bearing number here:
 ## every surface's height is derived from it, which is why there is no constant anywhere else
-## in the project that means "eye level".
-var eye_height := 1.62
+## in the project that means "eye level". Set from a person's height with `set_height`.
+##
+## The room is NOT derived from it -- the desk, the stands and the walls are the sizes they
+## are -- so a shorter person sees a bigger room, which is the honest effect. The default was
+## 1.62 (someone 1.73 tall), and from there the room read a size small: the desk at a glance
+## rather than in front of you. 1.56 is someone 1.67 tall.
+var eye_height := DEFAULT_HEIGHT - EYE_BELOW_CROWN
 ## Seated changes more than the height. A seated person's comfortable reach is shorter, their
 ## usable downward gaze is wider, and they cannot step back from something -- so a surface that
 ## does not fit has to be moved rather than walked away from.
@@ -151,6 +156,45 @@ var step := 0.0
 const NEAR_LIMIT := 0.35
 
 
+## How tall the default person is, and how far below the top of the head the eyes are.
+const DEFAULT_HEIGHT := 1.67
+const EYE_BELOW_CROWN := 0.11
+## Seated eye height over standing height: 1.21 for someone 1.73 tall, an ordinary chair.
+const SEATED_EYE_RATIO := 1.21 / 1.73
+const HEIGHT_RANGE := Vector2(1.0, 2.2)
+## Where a person's height is remembered between launches.
+const HEIGHT_PATH := "user://body.cfg"
+
+
+## The eye of someone `height` metres tall, standing or seated.
+static func eye_for(height: float, sitting: bool) -> float:
+	var h := clampf(height, HEIGHT_RANGE.x, HEIGHT_RANGE.y)
+	return h * SEATED_EYE_RATIO if sitting else h - EYE_BELOW_CROWN
+
+
+## Make this the body of someone `height` metres tall. Only the eye moves: reach and the angles
+## are a matter of proportion, and proportion does not change much with height.
+func set_height(height: float) -> void:
+	eye_height = eye_for(height, seated)
+
+
+## The height remembered at `path`, or 0.0 when nobody has said.
+static func load_height(path: String) -> float:
+	var file := ConfigFile.new()
+	if path.is_empty() or file.load(path) != OK:
+		return 0.0
+	return clampf(float(file.get_value("body", "height", 0.0)), 0.0, HEIGHT_RANGE.y)
+
+
+static func save_height(height: float, path: String) -> void:
+	if path.is_empty():
+		return
+	var file := ConfigFile.new()
+	file.load(path)
+	file.set_value("body", "height", clampf(height, HEIGHT_RANGE.x, HEIGHT_RANGE.y))
+	file.save(path)
+
+
 static func standing() -> Ergonomics:
 	return Ergonomics.new()
 
@@ -158,7 +202,7 @@ static func standing() -> Ergonomics:
 static func seated_default() -> Ergonomics:
 	var e := Ergonomics.new()
 	e.seated = true
-	e.eye_height = 1.21
+	e.set_height(DEFAULT_HEIGHT)
 	e.reach = 0.56
 	# Wider, because a seated person looks down at a desk more steeply and cannot lean back as
 	# far to compensate.

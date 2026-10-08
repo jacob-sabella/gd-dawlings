@@ -80,6 +80,7 @@ func _ready() -> void:
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_rack_holds_one_track_and_follows_the_selection()
+	_test_a_person_says_how_tall_they_are()
 	_test_the_rack_rebuilds_only_for_its_own_chain()
 	_test_a_flood_from_reaper_is_taken_in_over_frames()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2821,6 +2822,29 @@ func _test_a_banked_control_still_moves() -> void:
 			absf(upper - Knob.SWEEP * 0.5) < 0.01)
 
 	desk.queue_free()
+
+
+## How tall you are moves the eye and nothing else, and is remembered.
+func _test_a_person_says_how_tall_they_are() -> void:
+	var e := Ergonomics.standing()
+	close_to("the default person stands with their eyes at 1.56m", e.eye_height, 1.56, 0.001)
+	var room_desk := e.desk_height()
+	e.set_height(1.50)
+	close_to("someone 1.50 tall has their eyes at 1.39", e.eye_height, 1.39, 0.001)
+	check("and a lower desk to work at", e.desk_height() < room_desk)
+	var sitting := Ergonomics.seated_default()
+	sitting.set_height(1.50)
+	check("sitting, the same person's eyes are lower again", sitting.eye_height < e.eye_height)
+	e.set_height(9.0)
+	close_to("a height nobody is is held to one somebody is", e.eye_height,
+			Ergonomics.HEIGHT_RANGE.y - Ergonomics.EYE_BELOW_CROWN, 0.001)
+
+	var path := "user://test_body.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	check("nobody has said a height yet", Ergonomics.load_height(path) == 0.0)
+	Ergonomics.save_height(1.61, path)
+	close_to("a height said is remembered", Ergonomics.load_height(path), 1.61, 0.001)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 ## A fifty-plugin project racked whole was six bays across and twice the frame time. The rack

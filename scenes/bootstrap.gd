@@ -105,6 +105,14 @@ func _ready() -> void:
 		studio.ergonomics.motion_scale = 0.0
 	if args["seated"]:
 		studio.ergonomics = Ergonomics.seated_default()
+	# How tall you are, said once and remembered: `--height 1.60`. Applied after sitting down,
+	# because a seated eye is a different fraction of the same height.
+	if args["height"] > 0.0:
+		Ergonomics.save_height(args["height"], Ergonomics.HEIGHT_PATH)
+	var height: float = args["height"] if args["height"] > 0.0 \
+			else Ergonomics.load_height(Ergonomics.HEIGHT_PATH)
+	if height > 0.0:
+		studio.ergonomics.set_height(height)
 	if args["eyes"] > 0.0:
 		studio.ergonomics.text_scale = args["eyes"]
 	Ergonomics.current = studio.ergonomics
@@ -187,7 +195,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [],
@@ -301,6 +309,10 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["step"] = float(argv[i])
+			"--height":
+				i += 1
+				if i < argv.size():
+					out["height"] = float(argv[i])
 			"--dwell":
 				i += 1
 				if i < argv.size():
