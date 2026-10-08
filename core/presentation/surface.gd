@@ -48,6 +48,20 @@ var compact := false:
 		compact = value
 		mark_dirty()
 
+## Nonzero when this surface is bent around the viewer, and the radius it is bent on.
+##
+## A flat surface is placed by putting its CENTRE at a distance. That stops working the moment
+## the surface is wider than the person: a 90-track desk is 5.5m across, so its far end is 2.9m
+## from someone standing at the middle of it -- out of reach, out of focus, and at a glancing
+## angle that makes the lettering useless. No distance exists at which that desk works.
+##
+## A wrapped surface is placed by putting its CENTRE OF CURVATURE at the eye instead, which
+## makes every part of it exactly `wrap_radius()` away. The width stops mattering; only the
+## angle does, and angle is something a person can turn through.
+func wrap_radius() -> float:
+	return 0.0
+
+
 var _dirty := true
 
 

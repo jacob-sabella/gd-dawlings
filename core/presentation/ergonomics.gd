@@ -221,6 +221,86 @@ func drop_for(bounds: AABB, distance: float, touched: bool) -> float:
 	return clampf(wanted, 0.0, maxf(room, 0.0))
 
 
+## Place a surface that is bent around the viewer.
+##
+## Its centre of curvature goes at the eye, so every part of it is `radius` away and the
+## question "how far back does this have to be" stops having a width term in it. The gaze drop
+## is then free: tilting about a pivot that is already at the eye costs no translation, so the
+## whole arc swings down together and stays equidistant.
+func place_wrapped(
+		bearing_degrees: float, radius: float, touched: bool, centre_y: float) -> Transform3D:
+	var drop := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
+	# Negative where `place` is positive, and that is not an inconsistency to tidy away. A flat
+	# panel is placed by moving it: the basis turns the panel to face back at the eye, so it
+	# tips the same way the panel hangs. A wrapped one is placed by rotating the whole arc about
+	# the eye at its centre, and rotating a thing about a point ahead of it moves it the
+	# opposite way to tilting it in place. Same twenty degrees of gaze, opposite sign.
+	var basis := Basis(Vector3.UP, -deg_to_rad(bearing_degrees)) * Basis(Vector3.RIGHT, -drop)
+	# The surface's own (0, centre_y, radius) IS the arc's centre of curvature, so putting that
+	# point at the origin puts the eye at the centre -- which is the whole trick: every part of
+	# the surface is then exactly `radius` away, head-on, with no near end and no far end.
+	return Transform3D(basis, -(basis * Vector3(0, centre_y, radius)))
+
+
+## How much ARC, at `radius`, one head-turn each way can bring to the front.
+##
+## The number that makes wrapping worth doing, and the number that shows why wrapping alone is
+## not enough. At arm's length a neck sweeps about a metre of arc -- roughly seventeen channel
+## strips -- so a 90-track desk bent round one circle at reading distance does not become
+## readable, it becomes a tube with sixty strips behind your head. The fix for the rest is rows,
+## not a bigger circle, and that is what wrap_rise is for.
+func wrap_span(radius: float) -> float:
+	return 2.0 * radius * deg_to_rad(clampf(head_turn, 5.0, 85.0))
+
+
+## How much HEIGHT, at `radius`, a glance up and down can cover without moving the head.
+func wrap_rise(radius: float) -> float:
+	return 2.0 * radius * tan(deg_to_rad(clampf(gaze_sweep, 5.0, 85.0)))
+
+
+## How many rows of `pitch` fit the vertical glance at `radius`. At least one, always: a single
+## row that overflows is a layout to report, not a surface to refuse to draw.
+func wrap_rows(radius: float, pitch: float) -> int:
+	if pitch <= 0.0:
+		return 1
+	return maxi(1, int(floor(wrap_rise(radius) / pitch)))
+
+
+## The smallest radius at which `width` of surface, cut into rows of `pitch` and quantised to
+## whole `module` widths, fits inside both sweeps.
+##
+## The three constraints behave exactly as they do for a flat panel, and for the same reasons:
+## reach is where you would LIKE it (the search starts there), the sweep is a lower bound (too
+## near and it wraps past your shoulders), and legibility is a hard upper bound (past it the
+## lettering is gone whatever else is true). What changes is that growing the radius now buys
+## capacity twice over -- a longer arc per row AND room for another row -- so the search
+## converges much faster than pushing a flat panel back, which only ever buys angle.
+##
+## Returns the legible limit when nothing fits. Reporting the overflow is the caller's job; a
+## radius that quietly satisfies one constraint by breaking another is the failure this whole
+## file exists to stop.
+func wrap_radius_for(width: float, pitch: float, module: float, smallest_cap: float) -> float:
+	var ceiling := maxf(legible_to(smallest_cap), NEAR_LIMIT)
+	var radius := maxf(working_distance(), NEAR_LIMIT)
+	while radius < ceiling:
+		if wrap_capacity(radius, pitch, module) >= width:
+			return radius
+		radius += WRAP_SEARCH_STEP
+	return ceiling
+
+
+## Total arc, over every row, available at `radius` -- rounded DOWN to whole modules per row so
+## a row ends on a strip boundary rather than halfway through one.
+func wrap_capacity(radius: float, pitch: float, module: float) -> float:
+	var per_row := wrap_span(radius)
+	if module > 0.0:
+		per_row = floor(per_row / module) * module
+	return per_row * float(wrap_rows(radius, pitch))
+
+
+const WRAP_SEARCH_STEP := 0.01
+
+
 ## True when no distance satisfies both the sweep and the reading constraint.
 func too_big_to_place(bounds: AABB, smallest_cap: float) -> bool:
 	return fits_in_sweep(bounds.size) > legible_to(smallest_cap)

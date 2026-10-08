@@ -147,6 +147,12 @@ func placement(surface: Surface, index_among_unfocused: int) -> Transform3D:
 		# Nothing built yet, so there is nothing to measure and no honest place to put it. Left
 		# where it is, and the rebuild that follows will place it properly.
 		return _local_home(surface)
+	var radius := surface.wrap_radius()
+	if radius > 0.0:
+		var focused := surface.surface_id == focused_id
+		return ergonomics.place_wrapped(
+				0.0 if focused else bearing_for(index_among_unfocused),
+				radius, focused, bounds.get_center().y)
 	if surface.surface_id == focused_id:
 		return ergonomics.place(0.0, bounds, true, cap)
 	var out := ergonomics.place(bearing_for(index_among_unfocused), bounds, false, cap)
@@ -185,14 +191,33 @@ func ring_radius() -> float:
 ## The smallest lettering anywhere on this surface, which is what decides how close it has to
 ## be. The smallest and not the average: a surface is readable when its worst label is, and the
 ## worst label on a console is the one naming the track, which is the one you need.
+##
+## Chrome is skipped, the same way `content_aabb` skips it, and for a sharper reason than
+## symmetry. The smallest label on the console is not a track name at all -- it is the caption
+## on the drag handle, at 5.2mm against the panel's 5.8mm. Counting it made the rig hold every
+## desk 10cm nearer than its own lettering asked for, to keep a label legible that only exists
+## while you are moving the thing it is attached to.
 static func smallest_cap(surface: Surface) -> float:
 	var smallest := INF
 	for node in surface.find_children("*", "Label3D", true, false):
 		var label: Label3D = node
-		if label.text.is_empty() or not label.visible:
+		if label.text.is_empty() or not label.visible or label.is_in_group(&"presentation_chrome"):
+			continue
+		if _chrome_above(label, surface):
 			continue
 		smallest = minf(smallest, Lettering.cap_height(label))
 	return 0.0 if is_inf(smallest) else smallest
+
+
+## True when anything between `node` and `surface` is marked as chrome. Walked rather than
+## tested directly, because a label is usually a child of the chrome rather than the chrome.
+static func _chrome_above(node: Node, surface: Node) -> bool:
+	var at := node.get_parent()
+	while at != null and at != surface:
+		if at.is_in_group(&"presentation_chrome"):
+			return true
+		at = at.get_parent()
+	return false
 
 
 ## Put, or update, the corner brackets on a surface this rig is holding.
@@ -205,6 +230,14 @@ static func smallest_cap(surface: Surface) -> float:
 func _mark(surface: Surface, focused: bool) -> void:
 	var bounds := surface.content_aabb()
 	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+	# A wrapped surface has no corners to mark: its bounding box is a chord-shaped slab that no
+	# part of the geometry actually follows, and brackets on it would hang in mid-air away from
+	# anything. It is also unmistakably summoned -- a 5-metre desk bent round you is not
+	# something anyone will take for furniture standing in the room.
+	if surface.wrap_radius() > 0.0:
+		_unmark(surface)
+		_mark_berth(surface, bounds)
 		return
 	var colour := FocusHalo.FOCUSED_COLOUR if focused else FocusHalo.PARKED_COLOUR
 	var halo := surface.get_node_or_null("FocusHalo") as FocusHalo

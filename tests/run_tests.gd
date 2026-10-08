@@ -78,6 +78,8 @@ func _ready() -> void:
 	_test_you_can_tell_which_surface_has_your_attention()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
+	_test_a_wide_desk_bends_round_you_instead_of_past_you()
+	_test_the_desk_knows_how_small_its_own_lettering_is()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3492,3 +3494,157 @@ func _halo_arm(points: PackedVector3Array, width: float) -> float:
 	for p in points:
 		arm = maxf(arm, width * 0.5 - absf(p.x))
 	return arm
+
+
+## --- A desk too wide to face ---------------------------------------------------------------
+
+func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
+	var erg := Ergonomics.standing()
+	var pitch := ChannelStrip.HEIGHT + ConsoleSurface.ROW_GAP
+
+	# The arithmetic first, where it can be checked against a protractor rather than a render.
+	close_to("one head-turn each way is two radii of arc",
+			erg.wrap_span(1.0), 2.0 * deg_to_rad(erg.head_turn))
+	check("a bigger circle brings more arc to the front",
+			erg.wrap_span(1.0) > erg.wrap_span(0.5))
+	check("a bigger circle also makes room for another row",
+			erg.wrap_rows(1.0, pitch) > erg.wrap_rows(0.5, pitch))
+	check("one row always, even when nothing fits", erg.wrap_rows(0.01, pitch) >= 1)
+	check("capacity is whole strips, never a fraction of one",
+			is_equal_approx(fmod(erg.wrap_capacity(0.8, pitch, ChannelStrip.WIDTH)
+					/ ChannelStrip.WIDTH, 1.0), 0.0))
+
+	# THE number this whole exercise turns on: at arm's length a neck sweeps about a metre of
+	# arc. Seventeen strips. Anyone who expects a wrap to swallow a 90-track session in one
+	# circle is off by a factor of five, and would reach for a bigger circle -- which is why
+	# wrap_radius_for grows rows and radius together rather than radius alone.
+	check("a neck at arm's length sweeps about a metre of arc (%.2fm)" % erg.wrap_span(0.508),
+			erg.wrap_span(0.508) > 0.9 and erg.wrap_span(0.508) < 1.1)
+
+	var narrow := erg.wrap_radius_for(0.9, pitch, ChannelStrip.WIDTH, ConsoleSurface.SMALLEST_CAP)
+	close_to("a desk that already fits is left at arm's length", narrow, erg.working_distance())
+	var wide := erg.wrap_radius_for(5.5, pitch, ChannelStrip.WIDTH, ConsoleSurface.SMALLEST_CAP)
+	check("a desk that does not fit is pushed back (%.2fm)" % wide, wide > narrow)
+	check("but never past the point the lettering gives out (%.2fm)" % wide,
+			wide <= erg.legible_to(ConsoleSurface.SMALLEST_CAP) + 0.0001)
+	check("and the radius it lands on is the smallest one that works",
+			erg.wrap_capacity(wide, pitch, ChannelStrip.WIDTH) >= 5.5
+			and erg.wrap_capacity(wide - Ergonomics.WRAP_SEARCH_STEP, pitch,
+					ChannelStrip.WIDTH) < 5.5)
+	var hopeless := erg.wrap_radius_for(50.0, pitch, ChannelStrip.WIDTH,
+			ConsoleSurface.SMALLEST_CAP)
+	close_to("nothing fits and it says so by stopping at the ceiling, not by going further",
+			hopeless, erg.legible_to(ConsoleSurface.SMALLEST_CAP))
+
+	# The sign. The first wrapped desk was tipped UP by its gaze drop instead of down, because
+	# rotating an arc about a centre AHEAD of it moves it the opposite way to tilting a panel in
+	# place. Every strip was above the horizon and the top row was sixty degrees up.
+	var bounds := AABB(Vector3(-0.5, 0.0, -0.1), Vector3(1.0, 0.9, 0.2))
+	var placed := erg.place_wrapped(0.0, 0.8, true, bounds.get_center().y)
+	var middle: Vector3 = placed * Vector3(0.0, bounds.get_center().y, 0.0)
+	check("a wrapped desk sits below the horizon, not above it (%.2fm)" % middle.y,
+			middle.y < 0.0)
+	close_to("and its middle is exactly a radius away", middle.length(), 0.8, 0.001)
+	# The edge has to be taken off the ARC, not off a ruler: place_wrapped sets where the circle
+	# goes, and the surface's own _seat is what puts a strip on it. A straight x offset of 0.6
+	# is a point floating off the curve, a metre away, which is exactly what it measured.
+	var theta := 0.75
+	var on_arc := Vector3(sin(theta) * 0.8, bounds.get_center().y, 0.8 - cos(theta) * 0.8)
+	var edge: Vector3 = placed * on_arc
+	close_to("so is its edge -- that is the whole point of bending it",
+			edge.length(), 0.8, 0.001)
+	# Two degrees of slack, and they are real rather than sloppy: the gaze drop tilts the whole
+	# circle about the eye, and a tilted circle seen from its own centre reads a point off to
+	# the side as very slightly further round than it is. The bend is exact; the bearing is
+	# what a head actually has to turn, which is the number worth asserting.
+	close_to("and the edge is about that far round (%.0f deg)" % rad_to_deg(theta),
+			absf(rad_to_deg(atan2(edge.x, -edge.z))), rad_to_deg(theta), 2.5)
+
+	# And the desk itself. Before the rows went in, a 90-track console at a fixed arm's-length
+	# radius wrapped to plus or minus 179 degrees: sixty strips behind the mixer's own head,
+	# rendering as a perfectly convincing wall of channels from any camera placed in front.
+	for tracks in [48, 90]:
+		var offline := OfflineBackend.new()
+		offline.track_count = tracks
+		DAW.use(offline)
+		var studio := Studio.new()
+		studio.medium = Presentation.Medium.SCREEN
+		add_child(studio)
+		studio.ergonomics.motion_scale = 0.0
+		Ergonomics.current = studio.ergonomics
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		studio.focus.focus(&"console")
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		studio.focus.focus(&"console")
+
+		var console: ConsoleSurface = null
+		for surface in studio.focus.surfaces:
+			if surface.surface_id == &"console":
+				console = surface
+		check("%d tracks is wide enough to be worth bending" % tracks,
+				console.wrap_radius() > 0.0)
+		var inv := studio.body.global_transform.affine_inverse()
+		var widest := 0.0
+		var furthest := 0.0
+		var below := true
+		for strip in console.find_children("Strip*", "Node3D", true, false):
+			var at: Vector3 = inv * strip.global_position
+			widest = maxf(widest, absf(rad_to_deg(atan2(at.x, -at.z))))
+			furthest = maxf(furthest, at.length())
+			below = below and at.y < studio.ergonomics.shoulder_height() * 0.5
+		check("every one of %d strips is inside a head-turn (worst %+.0f deg)"
+				% [tracks, widest], widest <= studio.ergonomics.head_turn + 7.0)
+		check("and none of them is behind the mixer", widest < 90.0)
+		check("%d tracks stays inside reading distance (%.2fm of %.2fm)"
+				% [tracks, furthest, studio.ergonomics.legible_to(ConsoleSurface.SMALLEST_CAP)],
+				furthest <= studio.ergonomics.legible_to(ConsoleSurface.SMALLEST_CAP) + 0.05)
+		studio.queue_free()
+		remove_child(studio)
+
+	DAW.use(OfflineBackend.new())
+
+
+## The console declares its own smallest lettering, because it has to choose a radius before a
+## single label exists. This is the test that stops the declaration drifting from the truth.
+func _test_the_desk_knows_how_small_its_own_lettering_is() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var console: Surface = null
+	for surface in studio.focus.surfaces:
+		if surface.surface_id == &"console":
+			console = surface
+
+	var smallest := INF
+	for node in console.find_children("*", "Label3D", true, false):
+		var label: Label3D = node
+		if label.text.is_empty() or not label.visible:
+			continue
+		if label.is_in_group(&"presentation_chrome") or FocusRig._chrome_above(label, console):
+			continue
+		smallest = minf(smallest, Lettering.cap_height(label))
+	close_to("the declared smallest cap is the one actually built",
+			ConsoleSurface.SMALLEST_CAP, smallest, 0.00001)
+	close_to("and that is what the rig reads off the desk",
+			FocusRig.smallest_cap(console), smallest, 0.00001)
+
+	# Chrome is not lettering you read the desk by. The handle caption is 5.2mm against the
+	# panel's 5.8mm, and counting it held every desk 10cm nearer than its own legends asked
+	# for -- to keep legible a label that only exists while you are dragging the thing.
+	var chrome_cap := 0.0
+	for node in console.find_children("*", "Label3D", true, false):
+		var label: Label3D = node
+		if FocusRig._chrome_above(label, console) or label.is_in_group(&"presentation_chrome"):
+			chrome_cap = maxf(chrome_cap, Lettering.cap_height(label))
+	if chrome_cap > 0.0:
+		check("chrome lettering exists and is smaller than the desk's own (%.4f)" % chrome_cap,
+				chrome_cap < smallest)
+		check("yet it does not drag the desk nearer",
+				FocusRig.smallest_cap(console) > chrome_cap)
+	studio.queue_free()
+	remove_child(studio)

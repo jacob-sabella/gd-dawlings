@@ -67,8 +67,51 @@ func _anything_held() -> bool:
 	return false
 
 
+## The width past which a flat desk stops being a desk and starts being a wall.
+##
+## Below it a console is a thing you stand at; above it the far end is further away than the
+## near end by more than the near end is away at all, so the lettering goes glancing and the
+## reach goes impossible. 1.6m is about two arm-spans of panel, which is where a real desk
+## stops too -- beyond that, real control rooms angle the wings in.
+const WRAP_MIN_WIDTH := 1.6
+
+## Vertical space between two rows of a wrapped desk. A seam, not a gap: wide enough that the
+## row below is a different row and not a longer strip, narrow enough that a glance crosses it.
+const ROW_GAP := 0.012
+
+## The smallest lettering anywhere on the desk, and therefore how far the desk may be pushed
+## before it stops being readable.
+##
+## Declared rather than measured, because the radius has to be chosen BEFORE a single label
+## exists -- the radius decides the layout and the layout builds the labels. It can be declared
+## safely because every label on this desk is built at the same pixel size and the smallest
+## font any of them asks for is 8, and there is a test that fails if that stops being true.
+const SMALLEST_CAP := 8.0 * 4.0 * 0.00018
+
+## Arc length of one row, and how many rows. Zero and one when the desk is flat.
+var _row_span := 0.0
+var _rows := 1
+## Half the unrolled width, kept because _seat is given x measured from the desk's centre.
+var _half_width := 0.0
+
+var _wrap := 0.0
+
+
+## Bent around the viewer when it is wide enough to need it and presented at the body.
+##
+## Not when it is standing in the room: a curved desk you walk up to has its curve centred on
+## nobody, which is worse than flat. The bend only means anything when the centre of curvature
+## is an actual eye, and the only time this surface knows that is when it has been summoned.
+func wrap_radius() -> float:
+	return _wrap
+
+
 func _rebuild() -> void:
 	_clear_built()
+	_wrap = 0.0
+	_row_span = 0.0
+	_rows = 1
+	_half_width = 0.0
 	strips.clear()
 	master = null
 	bank = null
@@ -90,38 +133,34 @@ func _rebuild() -> void:
 	var width := bank_width + channels_width + MasterSection.GAP + MasterSection.WIDTH \
 			+ PANEL_MARGIN * 2.0
 
+	_half_width = width * 0.5
+
+	if compact and width >= WRAP_MIN_WIDTH:
+		var erg := Ergonomics.current
+		var pitch := ChannelStrip.HEIGHT + ROW_GAP
+		_wrap = erg.wrap_radius_for(width, pitch, ChannelStrip.WIDTH, SMALLEST_CAP)
+		_rows = erg.wrap_rows(_wrap, pitch)
+		_row_span = floor(erg.wrap_span(_wrap) / ChannelStrip.WIDTH) * ChannelStrip.WIDTH
+		# Reported, not hidden. The desk is drawn either way -- a mixer that refuses to appear
+		# is worse than one you have to turn your head for -- but a session this wide has
+		# outgrown the body in front of it and the honest answer is a narrower bank.
+		if _row_span * float(_rows) < width:
+			push_warning(("console: %.2fm of desk into %.2fm of reachable arc (%d rows at "
+					+ "%.2fm); the ends are outside the head-turn. Bank narrower.")
+					% [width, _row_span * float(_rows), _rows, _wrap])
+
 	_panel = Node3D.new()
-	_panel.rotation_degrees = Vector3(-PANEL_TILT, 0, 0)
+	# A wrapped desk is tilted by the RIG, about the eye, where the tilt costs no translation
+	# and keeps every strip equidistant. Tilting the panel here as well would rotate the arc
+	# about its own chord and throw the ends out of reach again.
+	_panel.rotation_degrees = Vector3(0 if _wrap > 0.0 else -PANEL_TILT, 0, 0)
 	_adopt(_panel)
 
-	var panel_plate := MeshInstance3D.new()
-	var plate_mesh := BoxMesh.new()
-	plate_mesh.size = Vector3(width, ChannelStrip.HEIGHT + PANEL_MARGIN * 2.0, 0.018)
-	panel_plate.mesh = plate_mesh
-	panel_plate.position = Vector3(0, ChannelStrip.HEIGHT * 0.5, -0.014)
-	panel_plate.material_override = Materials.chassis()
-	_panel.add_child(panel_plate)
+	# Skipped when wrapped. A single 5-metre box cannot follow an arc, and the strips carry
+	# their own backing plates -- which is why the bend is possible at all.
+	if _wrap <= 0.0:
+		_build_slabs(width)
 
-	# The desk body, which is doing more than decoration: in ROOM mode it is what tells a person
-	# in passthrough that they must not walk through this spot.
-	var body := MeshInstance3D.new()
-	var body_mesh := BoxMesh.new()
-	body_mesh.size = Vector3(width, 0.62, 0.34)
-	body.mesh = body_mesh
-	body.position = Vector3(0, -0.31, -0.10)
-	body.material_override = Materials.chassis()
-	_adopt(body)
-
-	# Armrest along the near edge. Real desks have one, and more usefully it gives a hand in AR
-	# something to rest against while reaching for a fader -- without it, a 100mm throw in mid-air
-	# is done entirely by unsupported arm.
-	var rest := MeshInstance3D.new()
-	var rest_mesh := BoxMesh.new()
-	rest_mesh.size = Vector3(width, 0.022, 0.07)
-	rest.mesh = rest_mesh
-	rest.position = Vector3(0, 0.005, 0.055)
-	rest.material_override = Materials.brushed_metal()
-	_adopt(rest)
 
 	var x := -width * 0.5 + PANEL_MARGIN
 	if banking:
@@ -131,7 +170,7 @@ func _rebuild() -> void:
 		bank.bank_size = DAW.state.bank_size
 		bank.project_count = DAW.state.project_track_count
 		bank.shown_count = DAW.state.tracks.size()
-		bank.position = Vector3(x + BankSelector.WIDTH * 0.5, PANEL_MARGIN, 0.0)
+		bank.transform = _seat(x + BankSelector.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 		bank.bank_requested.connect(_request_bank)
 		_panel.add_child(bank)
 		x += bank_width
@@ -191,7 +230,7 @@ func _rebuild() -> void:
 		strip.slot_bank = slot_bank
 		strip.knob_bank = knob_bank
 		strip.cap_bank = cap_bank
-		strip.position = Vector3(x, PANEL_MARGIN, 0.0)
+		strip.transform = _seat(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
 		strips.append(strip)
 		x += ChannelStrip.WIDTH
@@ -210,7 +249,7 @@ func _rebuild() -> void:
 
 	master = MasterSection.new()
 	master.name = "Master"
-	master.position = Vector3(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
+	master.transform = _seat(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 	_panel.add_child(master)
 
 
@@ -249,7 +288,7 @@ func _group_rule(at_x: float) -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.0014, ChannelStrip.HEIGHT * 0.92, 0.0012)
 	rule.mesh = mesh
-	rule.position = Vector3(at_x, PANEL_MARGIN + ChannelStrip.HEIGHT * 0.5, 0.0008)
+	rule.transform = _seat(at_x, PANEL_MARGIN + ChannelStrip.HEIGHT * 0.5, 0.0008)
 	rule.material_override = Materials.legend()
 	_panel.add_child(rule)
 
@@ -258,3 +297,69 @@ func _group_rule(at_x: float) -> void:
 ## nothing; on a monitor it is two thirds of the screen spent on a black box.
 func framing_root() -> Node3D:
 	return _panel if _panel else self
+
+
+## Where one module sits on the panel: straight along x when flat, bent onto the arc when not.
+##
+## Applied HERE, at the moment a module is positioned, and not as a pass over the finished
+## panel. The MeshBanks read each instance's transform off the node as it enters the tree, so a
+## bend applied afterwards would move the strips and leave every banked knob, cap and lamp
+## standing in the flat positions they were claimed at -- a console of floating controls next
+## to the console they belong to.
+##
+## The arc's centre is at local (0, 0, radius), which is where the eye goes. Each module is
+## turned by -theta so it faces that centre rather than staying square to the room; without the
+## turn the strips stay parallel and the far ones are seen edge-on, which is most of what makes
+## a wide flat desk unreadable in the first place.
+func _seat(x: float, y: float, z: float) -> Transform3D:
+	if _wrap <= 0.0:
+		return Transform3D(Basis.IDENTITY, Vector3(x, y, z))
+	# `x` arrives as one long ruler across a desk that no longer exists. Cut it into rows first,
+	# then bend what is left. The row runs left to right and the rows run bottom to top, because
+	# that is the order the strips are in and reading order is the only thing that makes a
+	# wrapped desk findable: track 40 is where track 40 would be if you unrolled it.
+	var along := x + _half_width
+	var row := 0
+	if _row_span > 0.0:
+		row = clampi(int(floor(along / _row_span)), 0, _rows - 1)
+		along -= float(row) * _row_span
+	var theta := (along - _row_span * 0.5) / _wrap
+	var lift := float(row) * (ChannelStrip.HEIGHT + ROW_GAP)
+	return Transform3D(Basis(Vector3.UP, -theta), Vector3(
+			sin(theta) * (_wrap - z), y + lift, _wrap - cos(theta) * (_wrap - z)))
+
+
+## The three full-width slabs: the panel backing, the desk body and the armrest.
+##
+## Built only for a flat desk. None of them can follow an arc -- a single 5-metre box bent
+## round a viewer is just a box at a jaunty angle -- and a wrapped console has no use for them
+## anyway: it is summoned, so it is not furniture, and the strips bring their own backing.
+func _build_slabs(width: float) -> void:
+	var panel_plate := MeshInstance3D.new()
+	var plate_mesh := BoxMesh.new()
+	plate_mesh.size = Vector3(width, ChannelStrip.HEIGHT + PANEL_MARGIN * 2.0, 0.018)
+	panel_plate.mesh = plate_mesh
+	panel_plate.position = Vector3(0, ChannelStrip.HEIGHT * 0.5, -0.014)
+	panel_plate.material_override = Materials.chassis()
+	_panel.add_child(panel_plate)
+
+	# The desk body, which is doing more than decoration: in ROOM mode it is what tells a person
+	# in passthrough that they must not walk through this spot.
+	var body := MeshInstance3D.new()
+	var body_mesh := BoxMesh.new()
+	body_mesh.size = Vector3(width, 0.62, 0.34)
+	body.mesh = body_mesh
+	body.position = Vector3(0, -0.31, -0.10)
+	body.material_override = Materials.chassis()
+	_adopt(body)
+
+	# Armrest along the near edge. Real desks have one, and more usefully it gives a hand in AR
+	# something to rest against while reaching for a fader -- without it, a 100mm throw in mid-air
+	# is done entirely by unsupported arm.
+	var rest := MeshInstance3D.new()
+	var rest_mesh := BoxMesh.new()
+	rest_mesh.size = Vector3(width, 0.022, 0.07)
+	rest.mesh = rest_mesh
+	rest.position = Vector3(0, 0.005, 0.055)
+	rest.material_override = Materials.brushed_metal()
+	_adopt(rest)

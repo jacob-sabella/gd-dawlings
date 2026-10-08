@@ -964,3 +964,91 @@ place that does not exist. It is also not a berth in any sense -- nothing was va
 the surface was never standing anywhere. With `room` left unset no berths are drawn at all,
 which is the right answer for a rig that has not been told where the room is, rather than a
 guess about it.
+
+## A desk too wide to face
+
+The console was the surface that would not fit. Thirteen tracks is 0.92m of desk and sits
+comfortably at arm's length; forty-eight is 2.99m and ninety is 5.53m, and both of those failed
+`too_big_to_place` — no distance satisfies both "I can sweep it with a head-turn" and "I can
+read the legends". The documented answer was "bank it, arc it, or split it", and nothing did.
+
+So the desk now bends. `Surface.wrap_radius()` returns zero for a flat surface and a radius for
+a curved one; `Ergonomics.place_wrapped` puts the arc's **centre of curvature at the eye**,
+which is the whole trick. Once the eye is at the centre, every strip is exactly one radius
+away, head-on, and the desk has no near end and no far end. Width stops being a distance
+problem and becomes an angle problem.
+
+### What wrapping does not buy you
+
+It does not buy width. An arc is longer than its chord, so for the same angular extent a
+wrapped surface has to sit *further* away than a flat one. Bending the desk makes it worse at
+fitting and better at everything else — uniform distance, uniform obliquity, uniform reach.
+The flat 3m desk was legible in the middle and illegible at the ends; the wrapped one is the
+same everywhere.
+
+The number that governs it: **at arm's length a neck sweeps about a metre of arc.** Seventeen
+channel strips. A 90-track session is five times that, and no radius fixes it, because growing
+the circle to gain arc also pushes the lettering out of range.
+
+What does fix it is **rows**. Growing the radius buys capacity twice over — a longer arc per
+row, and vertical room for another row — so the two together converge where the radius alone
+never would. `Ergonomics.wrap_radius_for` walks outward from reach in centimetre steps and
+stops at the first radius whose rows hold the desk, or at the legibility ceiling if none does.
+
+| tracks | width | radius | rows | worst bearing |
+|--------|-------|--------|------|---------------|
+| 13     | 0.92m | flat   | 1    | ±46°          |
+| 48     | 2.99m | 0.81m  | 2    | ±61°          |
+| 90     | 5.53m | 0.98m  | 3    | ±62°          |
+
+Three constraints of three kinds again, unchanged: reach is where the search *starts*, the
+sweep is a lower bound, legibility is a hard upper bound. When nothing satisfies all three the
+desk is still drawn — a mixer that refuses to appear is worse than one you turn your head for —
+and `push_warning` says how much arc overflowed. Reporting, not hiding.
+
+### Two bugs a render could not have found
+
+**The tube.** The first wrapped desk used a fixed arm's-length radius, and 90 tracks came out at
+±179°: sixty strips behind the mixer's own head. From any camera placed in front it rendered as
+a magnificent wall of channels. Only a probe printing bearings in body space said otherwise.
+
+**The sign.** `place_wrapped` tipped the desk *up* by its gaze drop instead of down, putting the
+top row sixty degrees above the horizon. The cause is worth keeping: a flat panel is placed by
+moving it, so the basis that turns it to face the eye tips it the same way it hangs; a wrapped
+one is placed by rotating the whole arc about a centre *ahead* of it, and that moves it the
+opposite way. Same twenty degrees of gaze, opposite sign. The two functions disagree on purpose.
+
+### Where the bend has to be applied
+
+At the moment each module is positioned, never as a pass over the finished panel. The MeshBanks
+read each instance's transform off the node as it enters the tree, so a bend applied afterwards
+would move the strips and leave every banked knob, cap and lamp standing in the flat positions
+they were claimed at — a console of floating controls next to the console they belong to. This
+is also why the wrapped desk drops its three full-width slabs: a single five-metre box cannot
+follow an arc, and the strips carry their own backing plates, which is what makes the bend
+possible at all.
+
+### The smallest label on the desk was not on the desk
+
+Choosing a radius means asking how far the lettering survives, which means asking for the
+smallest cap height on the surface. `FocusRig.smallest_cap` was answering 5.2mm when the
+smallest legend on the panel is 5.8mm — the extra 0.6mm was the caption on the *drag handle*,
+presentation chrome that only exists while you are moving the thing it is attached to. Every
+surface in the room was being held ten centimetres nearer than its own lettering asked for, to
+keep legible a label nobody reads. `smallest_cap` now skips chrome, the same way `content_aabb`
+already did.
+
+The desk declares its own `SMALLEST_CAP`, because the radius has to be chosen before a single
+label exists — the radius decides the layout and the layout builds the labels. A declared
+constant can drift from the thing it describes, so there is a test that rebuilds the console,
+measures every label it actually made, and fails if the declaration is off by a hundredth of a
+millimetre.
+
+### Still open
+
+At 90 tracks the top row reaches 33° of elevation against a 30° gaze sweep, and the furthest
+strip is 1.09m against a 1.07m reading limit. Both overshoot by about a tenth. More to the
+point, 0.98m is well past the 0.51m reach: you can read a 90-track wrapped desk but you cannot
+touch the far rows. The honest fix is not a cleverer curve — it is a narrower bank, which the
+`BankSelector` already exists to page through. The bank width is currently whatever the protocol
+offers (Reaper's is 64). It should be a body measurement.
