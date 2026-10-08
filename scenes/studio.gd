@@ -164,6 +164,11 @@ const SEATED_FOV := 54.0
 ## own field is the honest one.
 const HEADSET_FOV := 95.0
 
+## You, on foot. The default way to be in the room on a monitor; see walker.gd.
+var walker: Walker
+## The orbit camera instead of the walker: floats, flies, passes through things. For arranging a
+## room and for photographing it. N toggles it.
+var god_mode := false
 var _orbit_yaw := 0.0
 var _orbit_pitch := -0.18
 var _orbit_distance := 2.05
@@ -182,6 +187,7 @@ func _ready() -> void:
 		_build_furniture()
 	_build_surfaces()
 	if camera != null:
+		_build_walker()
 		_update_camera()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
@@ -915,13 +921,56 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 # --- desktop camera -----------------------------------------------------------------------
 
+func _build_walker() -> void:
+	walker = Walker.new()
+	walker.name = "Walker"
+	walker.camera = camera
+	walker.floor_plan = floor_plan
+	walker.solids_parent = studio_set
+	walker.standing_eye = ergonomics.eye_height
+	walker.eye_height = ergonomics.eye_height
+	add_child(walker)
+	# At the mix position, looking down at the desk the way you would standing at it.
+	walker.global_position = Vector3(0, 0, MIX_POSITION_Z)
+	walker.pitch = -0.5
+	walker.active = not god_mode
+	walker._place_camera()
+
+
+## Swap between walking and flying. The handover keeps the view: going up, the orbit takes the
+## walker's eye and a point in front of it; coming down, the walker lands under wherever the
+## camera was, inside the room, facing the same way.
+func set_god_mode(on: bool) -> void:
+	god_mode = on
+	if walker == null:
+		return
+	walker.active = not on
+	if on:
+		var forward := -walker.look_basis().z
+		var at := walker.eye() + forward * 1.6
+		frame(at, 1.6, walker.yaw, walker.pitch)
+	else:
+		var from := camera.global_position
+		var b := floor_plan.bounds if floor_plan != null else Rect2(-3, -2, 6, 4.8)
+		walker.global_position = Vector3(clampf(from.x, b.position.x + 0.3, b.end.x - 0.3), 0.0,
+				clampf(from.z, b.position.y + 0.3, b.end.y - 0.3))
+		walker.velocity = Vector3.ZERO
+		walker.yaw = _orbit_yaw
+		walker.pitch = clampf(_orbit_pitch, -1.2, 0.6)
+		walker.eye_height = walker.standing_eye
+		walker._place_camera()
+
+
 ## Orbit on right-drag, zoom on wheel, WASD to walk. Not a replacement for standing in the room;
 ## it is how the screen half of a hybrid session gets around, and how every screenshot of this
 ## project is framed.
 func _unhandled_input(event: InputEvent) -> void:
 	if camera == null:
 		return
-	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
+			and not god_mode and walker != null:
+		walker.look(event.relative)
+	elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_orbit_yaw -= event.relative.x * 0.005
 		_orbit_pitch = clampf(_orbit_pitch - event.relative.y * 0.005, -1.4, 1.2)
 		_update_camera()
@@ -944,6 +993,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Somewhere else to stand. The setup comes along; only the world changes.
 			KEY_V:
 				cycle_venue()
+			# Leave your body and fly, or come back down into it.
+			KEY_N:
+				set_god_mode(not god_mode)
 			KEY_ESCAPE:
 				focus.release()
 				_sit_down()
@@ -956,7 +1008,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_0:
 				_set_text_scale(1.0)
 	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if not god_mode and walker != null:
+			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				camera.fov = maxf(30.0, camera.fov - 3.0)
+			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				camera.fov = minf(ROOM_FOV, camera.fov + 3.0)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_orbit_distance = maxf(0.4, _orbit_distance - 0.12)
 			_update_camera()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -968,7 +1025,7 @@ func _process(delta: float) -> void:
 	_refresh_looms_if_moved(delta)
 	if venue != null and DAW.state != null:
 		venue.pulse(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
-	if camera == null:
+	if camera == null or not god_mode:
 		return
 	var move := Vector3.ZERO
 	if Input.is_key_pressed(KEY_W): move.z -= 1.0
@@ -1166,6 +1223,15 @@ func _walk_to_seat() -> void:
 	# Both at once, on one curve. A body that arrived before its camera would leave the work
 	# light lighting the gear from an empty spot for half a second; a camera that arrived first
 	# would see the light swing in after it.
+	if walker != null and not god_mode:
+		_orbit_target = to[0]
+		walker.travel_to(seat.origin, look_at, seconds)
+		if _walk != null and _walk.is_valid():
+			_walk.kill()
+		_walk = create_tween()
+		_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+		_walk.tween_property(body, "transform", seat, seconds)
+		return
 	var body_from := body.transform
 	var cam_from := camera.global_transform
 	frame(to[0], to[1], to[2], to[3])
@@ -1226,10 +1292,17 @@ func frame(target: Vector3, distance: float, yaw: float, pitch: float) -> void:
 	_orbit_distance = distance
 	_orbit_yaw = yaw
 	_orbit_pitch = pitch
+	if walker != null and not god_mode:
+		var eye := target + Basis(Vector3.UP, yaw) * (Basis(Vector3.RIGHT, pitch) * Vector3(0, 0, distance))
+		walker.travel_to(eye, target, 0.0)
+		return
 	_update_camera()
 
 
 func _update_camera() -> void:
+	if walker != null and not god_mode:
+		walker._place_camera()
+		return
 	var offset := Basis(Vector3.UP, _orbit_yaw) * (Basis(Vector3.RIGHT, _orbit_pitch) * Vector3(0, 0, _orbit_distance))
 	camera.position = _orbit_target + offset
 	camera.look_at(_orbit_target, Vector3.UP)

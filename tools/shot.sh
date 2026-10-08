@@ -29,6 +29,9 @@ CAM_ARGS=()
 if [ -n "${SHOT_CAM:-}" ]; then
   CAM_ARGS=(--cam "$SHOT_CAM")
 fi
+if [ -n "${SHOT_WALK:-}" ]; then
+  CAM_ARGS+=(--walk "$SHOT_WALK")
+fi
 
 # shellcheck disable=SC2206
 EXTRA=(${SHOT_ARGS:-})

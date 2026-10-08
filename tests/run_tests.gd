@@ -91,6 +91,7 @@ func _ready() -> void:
 	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_gear_never_leaves_its_stand()
+	await _test_you_walk_into_the_room_and_not_through_it()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
@@ -4106,9 +4107,14 @@ func _test_the_wheel_adjusts_what_the_cursor_is_on() -> void:
 	other.queue_free()
 
 	hand.hovered = strip._mute
+	var lens := studio.camera.fov
+	wheel.call(true)
+	check("over a button the wheel still zooms the walker's lens (%.1f -> %.1f)" % [lens,
+			studio.camera.fov], studio.camera.fov < lens)
+	studio.set_god_mode(true)
 	zoom = studio._orbit_distance
 	wheel.call(true)
-	check("over a button the wheel still zooms (%.2f -> %.2f)" % [zoom, studio._orbit_distance],
+	check("and in god mode it zooms the orbit (%.2f -> %.2f)" % [zoom, studio._orbit_distance],
 			studio._orbit_distance < zoom)
 	hand.hovered = null
 	studio.queue_free()
@@ -4695,3 +4701,104 @@ func _test_a_bank_wider_than_the_project_draws_only_the_project() -> void:
 	state.set_bank(64)
 	MixWire.apply(state, "/track/1/name", ["Track 65"])
 	check("past the end on a later bank too", not state.tracks.has(1))
+
+
+func _test_you_walk_into_the_room_and_not_through_it() -> void:
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var walker := studio.walker
+	check("a monitor puts you on foot by default", walker != null and not studio.god_mode)
+	if walker == null:
+		studio.queue_free()
+		return
+	walker.sync_solids()
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	# Drop from a height: gravity brings you to the floor and the floor holds you there.
+	walker.global_position = Vector3(1.5, 0.6, 1.6)
+	for i in 90:
+		walker.step(1.0 / 60.0, Vector3.ZERO)
+	check("you fall to the floor and stand on it (y %.3f)" % walker.global_position.y,
+			absf(walker.global_position.y) < 0.05 and walker.is_on_floor())
+	close_to("and the camera is at your eyes", studio.camera.global_position.y,
+			walker.global_position.y + walker.eye_height, 0.05)
+
+	# Walk straight at the desk from in front of it. The desk stops you.
+	var desk: Array = studio._desk_footprint()
+	check("the desk has a footprint to walk into", desk.size() == 1)
+	if desk.size() == 1:
+		var f: Dictionary = desk[0]
+		var c: Vector2 = f["c"]
+		var half: Vector2 = f["h"]
+		walker.global_position = Vector3(c.x, 0, c.y + half.y + 0.8)
+		walker.velocity = Vector3.ZERO
+		for i in 240:
+			walker.step(1.0 / 60.0, Vector3(0, 0, -Walker.WALK_SPEED))
+		var front := c.y + half.y
+		check("walking into the desk stops at its front edge (z %.2f, desk front %.2f)" % [
+				walker.global_position.z, front],
+				walker.global_position.z > front + Walker.RADIUS - 0.05)
+		check("and you did get there", walker.global_position.z < front + Walker.RADIUS + 0.1)
+
+	# The walls hold too.
+	var b := studio.floor_plan.bounds
+	walker.global_position = Vector3(0, 0, b.end.y - 0.6)
+	walker.velocity = Vector3.ZERO
+	for i in 240:
+		walker.step(1.0 / 60.0, Vector3(0, 0, Walker.SPRINT_SPEED))
+	check("the back wall stops you inside the room (z %.2f, wall %.2f)" % [
+			walker.global_position.z, b.end.y], walker.global_position.z < b.end.y)
+
+	# Momentum: letting go does not stop you dead, but friction does stop you.
+	walker.global_position = Vector3(0, 0, 1.6)
+	walker.velocity = Vector3.ZERO
+	for i in 60:
+		walker.step(1.0 / 60.0, Vector3(Walker.WALK_SPEED, 0, 0))
+	var start_x := walker.global_position.x
+	walker.step(1.0 / 60.0, Vector3.ZERO)
+	check("letting go carries you on a little", walker.global_position.x > start_x)
+	for i in 60:
+		walker.step(1.0 / 60.0, Vector3.ZERO)
+	check("and friction brings you to rest", walker.velocity.length() < 0.01)
+
+	# Jumping leaves the floor and comes back to it.
+	for i in 2:
+		walker.step(1.0 / 60.0, Vector3.ZERO)
+	walker.step(1.0 / 60.0, Vector3.ZERO, true)
+	var peak := 0.0
+	for i in 120:
+		walker.step(1.0 / 60.0, Vector3.ZERO, false)
+		peak = maxf(peak, walker.global_position.y)
+	check("space jumps (peak %.2f m)" % peak, peak > 0.3)
+	check("and you land", absf(walker.global_position.y) < 0.05)
+
+	# God mode takes the view where you were, and hands it back.
+	var eye := walker.eye()
+	studio.set_god_mode(true)
+	check("N leaves your body", studio.god_mode and not walker.active)
+	check("and the orbit starts from your eyes (%.2f m off)" % studio.camera.global_position.distance_to(eye),
+			studio.camera.global_position.distance_to(eye) < 0.05)
+	studio.frame(Vector3(1.0, 0.9, -1.0), 2.0, 0.6, -0.3)
+	check("god mode flies the camera off the floor plan's rules",
+			studio.camera.global_position.distance_to(walker.eye()) > 0.5)
+	studio.set_god_mode(false)
+	check("and N comes back down, inside the room",
+			studio.floor_plan.bounds.has_point(Vector2(walker.global_position.x, walker.global_position.z)))
+
+	# A visit walks you to the seat.
+	studio.focus.focus(&"rack")
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	studio._sit_down()
+	for i in 60:
+		await get_tree().process_frame
+	var seat := studio.body.global_position
+	check("visiting walks you to the seat (%.2f m off)" % walker.eye().distance_to(seat),
+			walker.eye().distance_to(seat) < 0.15)
+	check("and the solids are not on the control layer",
+			walker._solid_body.collision_layer & (1 << (Interactor.CONTROL_LAYER - 1)) == 0)
+	studio.queue_free()

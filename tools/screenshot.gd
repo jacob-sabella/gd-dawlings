@@ -20,6 +20,8 @@ var _shot_frame := 24
 var _quit_after := -1
 var _frames := 0
 var _cam: Array = []
+## x,z,yaw,pitch: stand the walker somewhere and look, instead of flying the god camera.
+var _walk: Array = []
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
@@ -69,6 +71,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _shot_tick = int(args[i + 1])
 			"--turn":
 				if i + 1 < args.size(): _turn = int(args[i + 1])
+			"--walk":
+				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--cam":
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
 	if _shot_tick >= 0:
@@ -93,7 +97,21 @@ func _process(_delta: float) -> void:
 	if _frames == 4 and _cam.size() == 6:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		if studio and studio.has_method("frame"):
+			# A framed shot is a god's-eye view by definition: it hangs wherever it was told to.
+			if studio.has_method("set_god_mode"):
+				studio.set_god_mode(true)
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
+
+	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
+	if _frames == 8 and _walk.size() == 4:
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		if studio and studio.get("walker") != null:
+			var w = studio.walker
+			w.global_position = Vector3(_walk[0], 0.0, _walk[1])
+			w.yaw = _walk[2]
+			w.pitch = _walk[3]
+			w.eye_height = w.standing_eye
+			w._place_camera()
 
 	if _hover.x >= 0.0:
 		for hand in get_tree().root.find_children("*", "MouseInteractor", true, false):
