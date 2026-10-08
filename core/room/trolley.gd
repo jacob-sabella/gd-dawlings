@@ -192,6 +192,22 @@ func _hand_on_floor() -> Variant:
 	return Vector2(local.x, local.z)
 
 
+## Put it somewhere outright, as if it had been rolled there: the floor plan still has the
+## last word, so a stand moved under gear that was put down inside the desk stops at the desk.
+func place(at: Vector2, heading: float) -> void:
+	# Riders first, from where they sit now, or they would be told to stay behind.
+	_capture_riders()
+	var landed := at
+	if floor_plan != null:
+		landed = floor_plan.resolve(self, at, heading)["at"]
+	position = Vector3(landed.x, position.y, landed.y)
+	rotation.y = heading
+	_target = landed
+	_heading_target = heading
+	_velocity = Vector2.ZERO
+	_settle()
+
+
 ## Remember where everything riding on the trolley sits relative to it, as of now.
 ##
 ## Every push, not once at build time: a surface carried off its trolley with its own handle and

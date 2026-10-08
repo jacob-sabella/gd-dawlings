@@ -90,6 +90,7 @@ func _ready() -> void:
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
 	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_venues_change_the_world_and_not_the_setup()
+	_test_gear_never_leaves_its_stand()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -4325,8 +4326,10 @@ func _test_furniture_rolls_where_it_is_pushed() -> void:
 
 	check("where it went is remembered",
 			Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
-	var kept := Session.layout.transform_for(&"rack", Presentation.Mode.STUDIO, Transform3D())
-	check("and so is where the rack went with it", kept.is_equal_approx(studio.rack.transform))
+	# Not saved separately: the rack's place is its plinth's, so remembering the plinth is
+	# remembering the rack.
+	check("and so is where the rack went with it",
+			studio.mount.studio_home(&"rack").is_equal_approx(studio.rack.transform))
 
 	# The cable out of the back follows. Its floor point is written against the authored stand.
 	studio.refresh_looms()
@@ -4619,4 +4622,53 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	check("a saved venue is where the next session starts", again.venue.venue_id() == &"grid")
 	remove_child(again)
 	again.free()
+	Session.layout = saved_layout
+
+
+## The timeline once stood a metre from its stand, square to the room while the stand was at
+## forty-five degrees, because each saved its own place and several paths moved only one. A
+## surface on a stand now has no place but the stand's. Every way of moving either is tried.
+func _test_gear_never_leaves_its_stand() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	for id in [&"timeline", &"tape_deck", &"rack"]:
+		Session.layout.set_mode(id, Presentation.Mode.STUDIO)
+	# The drift as it was found in a real profile: a timeline saved square and far from home.
+	Session.layout.set_transform(&"timeline", Presentation.Mode.STUDIO,
+			Transform3D(Basis.IDENTITY, Vector3(-0.09, 1.62, -2.31)))
+	Session.layout.set_transform(&"floor/timeline_stand", Presentation.Mode.STUDIO,
+			Transform3D(Basis(Vector3.UP, deg_to_rad(45.0)), Vector3(-0.9, 0, -1.63)))
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+
+	var on_stand := func(surface: Surface, piece: Trolley) -> bool:
+		var seat: Transform3D = studio._seated_on[surface.surface_id][1]
+		return (piece.transform * seat).is_equal_approx(surface.transform)
+	check("a drifted saved placement is ignored: the timeline is on its stand",
+			on_stand.call(studio.timeline, studio.timeline_stand))
+	check("and the drift is gone from the profile", not Session.layout.has_transform(
+			&"timeline", Presentation.Mode.STUDIO))
+	check("the deck is on its trolley", on_stand.call(studio.deck, studio.deck_trolley))
+	check("the rack is on its plinth", on_stand.call(studio.rack, studio.rack_trolley))
+
+	studio.deck_trolley.place(Vector2(1.6, 0.9), deg_to_rad(-70.0))
+	check("rolling the trolley carries the deck", on_stand.call(studio.deck, studio.deck_trolley))
+
+	studio.mount.reset_placement(&"tape_deck")
+	check("RESET leaves the deck on its trolley, wherever that is",
+			on_stand.call(studio.deck, studio.deck_trolley))
+
+	var before := studio.timeline_stand.position
+	studio.timeline.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(-20.0)),
+			studio.timeline.transform.origin + Vector3(0.6, 0.0, 0.5))
+	studio.mount.remember_placement(&"timeline")
+	check("dropping the timeline by its handle rolls the stand to it",
+			studio.timeline_stand.position.distance_to(before) > 0.3)
+	check("and the timeline is back on the stand", on_stand.call(studio.timeline, studio.timeline_stand))
+
+	remove_child(studio)
+	studio.free()
 	Session.layout = saved_layout

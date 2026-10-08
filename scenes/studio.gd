@@ -140,6 +140,8 @@ var floor_plan: FloorPlan
 var rack_trolley: Trolley
 var deck_trolley: Trolley
 var timeline_stand: Trolley
+## Surface id -> [the trolley it stands on, where on that trolley].
+var _seated_on := {}
 var _lamps: Array[OmniLight3D] = []
 ## {piece_id: Transform3D} -- where the authored layout stood each piece, for the things that
 ## were written against it: the floor points the looms run through.
@@ -558,9 +560,23 @@ func _ride(piece: Trolley, surface: Surface) -> void:
 				focus.rehome(id, xform)
 			elif standing.call():
 				surface.transform = xform
-			if settled_now and Session.layout != null:
-				Session.layout.set_transform(id, Presentation.Mode.STUDIO, xform),
+			# Nothing saved: a seated surface's place is its stand's, and the stand saves
+			# itself. See SurfaceMount.seats.
+			pass,
 	})
+	var offset: Transform3D = _authored_floor[piece.piece_id].affine_inverse() * mount.authored_of(id)
+	_seated_on[id] = [piece, offset]
+	mount.seat(id, func() -> Transform3D: return piece.transform * offset)
+
+
+## A seated surface put down by its own handle: roll its stand to where that puts it.
+func _reseat(id: StringName, put: Transform3D) -> void:
+	if not _seated_on.has(id):
+		return
+	var piece: Trolley = _seated_on[id][0]
+	var under: Transform3D = put * (_seated_on[id][1] as Transform3D).affine_inverse()
+	var ahead := under.basis.z
+	piece.place(Vector2(under.origin.x, under.origin.z), atan2(ahead.x, ahead.z))
 
 
 func _build_anchors() -> void:
@@ -740,6 +756,7 @@ func _build_surfaces() -> void:
 	# What rides on what. After the rig, because a surface that is summoned rides by its home,
 	# and the rig is what holds that.
 	if floor_plan != null:
+		mount.reseat = _reseat
 		_ride(rack_trolley, rack)
 		_ride(deck_trolley, deck)
 		_ride(timeline_stand, timeline)

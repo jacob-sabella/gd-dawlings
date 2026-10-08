@@ -34,6 +34,8 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/synthwave_sky.gdshader")
 	_sky_mat.set_shader_parameter("sun_dir", SUN_DIR)
+	_sky_mat.set_shader_parameter("sun_energy", 1.1)
+	_sky_mat.set_shader_parameter("horizon", Color(0.72, 0.12, 0.45))
 	var sky := Sky.new()
 	sky.sky_material = _sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_128
@@ -54,15 +56,17 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.fog_depth_curve = 1.6
 	env.fog_sky_affect = 0.0
 
-	env.glow_intensity = 1.0
-	env.glow_bloom = 0.18
-	env.glow_hdr_threshold = 0.9
+	# Restrained, after "a bit too bright": a venue you work in for hours has to be one your
+	# eyes can rest in. The neon should read as lines, not as a haze over the gear.
+	env.glow_intensity = 0.65
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.1
 	env.set_glow_level(3, 1.0)
 	env.set_glow_level(5, 0.8)
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = 0.85
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.15
+	env.adjustment_saturation = 1.05
 	env.adjustment_contrast = 1.05
 	if rich:
 		env.ssr_enabled = true
@@ -99,12 +103,14 @@ func _ready() -> void:
 	_floor_mat = ShaderMaterial.new()
 	_floor_mat.shader = preload("res://core/venues/shaders/grid_floor.gdshader")
 	var c := footprint_corners()
+	_floor_mat.set_shader_parameter("energy", 1.7)
 	_floor_mat.set_shader_parameter("footprint", Vector4(c[0].x, c[0].y, c[2].x, c[2].y))
 	ground.material_override = _floor_mat
 	add_child(ground)
 
 	_wire_mat = ShaderMaterial.new()
 	_wire_mat.shader = preload("res://core/venues/shaders/neon_wire.gdshader")
+	_wire_mat.set_shader_parameter("energy", 1.9)
 
 	var range_node := MeshInstance3D.new()
 	range_node.name = "Mountains"
@@ -182,6 +188,7 @@ func _build_highway() -> void:
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = preload("res://core/venues/shaders/highway.gdshader")
 	_road_mat.set_shader_parameter("half_width", ROAD_HALF)
+	_road_mat.set_shader_parameter("energy", 2.0)
 	road.material_override = _road_mat
 	road.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(road)

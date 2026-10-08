@@ -39,6 +39,36 @@ var _handles: Dictionary = {}
 var _authored: Dictionary = {}
 
 
+## Surfaces that stand on a piece of furniture in the studio: id -> Callable() -> Transform3D,
+## where that furniture holds the surface right now.
+##
+## A seated surface has no studio placement of its own. It used to, saved beside its stand's,
+## and the two drifted apart by every path that moved one and not the other -- RESET put the
+## deck back on its authored spot and left the trolley across the room; a drag by the deck's own
+## handle saved the deck and not the trolley -- until the timeline floated a metre from its
+## stand, square to the room while the stand stood at forty-five degrees. Deriving one from the
+## other makes that state unrepresentable instead of merely unlikely.
+var seats: Dictionary = {}
+## Called with (id, where it was put down) when a seated surface is dragged by its own handle in
+## the studio: the furniture is moved under it, because gear does not hang in the air.
+var reseat: Callable = Callable()
+
+
+func seat(surface_id: StringName, where: Callable) -> void:
+	seats[surface_id] = where
+	# Whatever was saved for it separately is from before it had a seat, and is the drift.
+	Session.layout.local_transforms.erase(LayoutProfile._key(surface_id, Presentation.Mode.STUDIO))
+	if not _mounted.has(surface_id) or (held.is_valid() and held.call(surface_id)):
+		return
+	var surface: Surface = _mounted[surface_id]
+	if mode_of(surface_id) == Presentation.Mode.STUDIO and surface.get_parent() == studio_set:
+		surface.transform = where.call()
+
+
+func authored_of(surface_id: StringName) -> Transform3D:
+	return _authored.get(surface_id, Transform3D.IDENTITY)
+
+
 func register(surface: Surface) -> void:
 	_mounted[surface.surface_id] = surface
 	_authored[surface.surface_id] = surface.transform
@@ -92,6 +122,9 @@ func apply(surface_id: StringName) -> void:
 	# Placement is per-mode: a console at arm's reach in the room is not the same object as a
 	# panel framed to fill a monitor, so the transform is fetched for the mode being entered --
 	# never carried over from the one being left.
+	if mode == Presentation.Mode.STUDIO and seats.has(surface_id):
+		surface.transform = studio_home(surface_id)
+		return
 	surface.transform = Session.layout.transform_for(surface_id, mode, _default_transform(surface, mode))
 
 
@@ -189,6 +222,12 @@ func remember_placement(surface_id: StringName) -> void:
 	if not _mounted.has(surface_id):
 		return
 	var surface: Surface = _mounted[surface_id]
+	if mode_of(surface_id) == Presentation.Mode.STUDIO and seats.has(surface_id):
+		if reseat.is_valid():
+			reseat.call(surface_id, surface.transform)
+		surface.transform = studio_home(surface_id)
+		_refresh_handle(surface_id)
+		return
 	Session.layout.set_transform(surface_id, mode_of(surface_id), surface.transform)
 	Session.layout.save()
 
@@ -196,6 +235,8 @@ func remember_placement(surface_id: StringName) -> void:
 ## Where a surface stands in the virtual set, whether or not it is there right now: the
 ## viewer's own placement if they made one, the authored layout if not.
 func studio_home(surface_id: StringName) -> Transform3D:
+	if seats.has(surface_id):
+		return (seats[surface_id] as Callable).call()
 	return Session.layout.transform_for(surface_id, Presentation.Mode.STUDIO,
 			_authored.get(surface_id, Transform3D.IDENTITY))
 
@@ -232,7 +273,9 @@ func reset_placement(surface_id: StringName) -> void:
 	var surface: Surface = _mounted[surface_id]
 	var mode := mode_of(surface_id)
 	Session.layout.local_transforms.erase(LayoutProfile._key(surface_id, mode))
-	surface.transform = _default_transform(surface, mode)
+	# On its stand, wherever the stand is: the stand is where it lives.
+	surface.transform = studio_home(surface_id) if mode == Presentation.Mode.STUDIO \
+			and seats.has(surface_id) else _default_transform(surface, mode)
 	Session.layout.save()
 	_refresh_handle(surface_id)
 
