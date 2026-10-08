@@ -14,6 +14,13 @@ extends Surface
 ##   CHAIN     where the plugin sits on its track, and two buttons to move it up and down.
 ##   MOVE TO   another track. Click to move it there; the tablet goes with it.
 ##
+## TWO FACES. The knobs are the tablet's own reading of the plugin: every parameter by name, a
+## section a page. UI turns the tablet over to the plugin's own window, as its maker drew it,
+## live, with the pointer passed back into it -- for what parameters never say, a preset browser
+## or a tuner, and for anyone who knows the plugin by its face. The footer stays on both: MIX,
+## KEY IN, CHAIN and MOVE TO are the host's, and no plugin's window has them. Only on the host,
+## where the window is (DAW.shows_plugin_windows).
+##
 ## THE TABLET FOLLOWS ITS PLUGIN, not a slot. Moving a plugin renumbers its chain, and on Reaper
 ## the new numbering arrives later than the move. So the tablet keeps the plugin's name and the
 ## slot it expects, and after any change to the chain it looks for the plugin again: where it
@@ -58,6 +65,8 @@ var fx_name := ""
 var page_offset := 0
 ## True while the plugin cannot be found anywhere: deleted in Reaper, or the project closed.
 var lost := false
+## Showing the plugin's own window rather than the knobs.
+var showing_window := false
 
 var _knobs: Array[Knob] = []
 var _captions: Array[Label3D] = []
@@ -79,6 +88,13 @@ var _chain_down: PanelButton
 var _key: TabletSelector
 var _move_to: TabletSelector
 var _lost_label: Label3D
+var _preset_word: Label3D
+var _window_button: PanelButton
+var _window_word: Label3D
+var _screen: PluginScreen
+var _window: PluginWindow
+## The plugin the window was opened for, [track, fx]: a plugin that moves is a different window.
+var _window_for: Array = []
 var _built_shape := ""
 var _text_asked_msec := 0
 ## Where the tablet asked its plugin to go, until the chain says it got there: [track, fx].
@@ -103,6 +119,10 @@ static func create(track: int, fx: int, plugin_name: String) -> PluginTablet:
 func _ready() -> void:
 	super()
 	DAW.track_changed.connect(_on_track_changed)
+
+
+func _exit_tree() -> void:
+	_close_window()
 
 
 # --- finding the plugin ---------------------------------------------------------------------
@@ -148,7 +168,7 @@ func find_plugin() -> bool:
 
 func _shape_key() -> String:
 	var count := _params().size()
-	return "%s|%d|%d|%d|%s" % [fx_name, count, page_offset, track_index, lost]
+	return "%s|%d|%d|%d|%s|%s" % [fx_name, count, page_offset, track_index, lost, showing_window]
 
 
 func _on_fx_shape_changed(_t: int, _fx: int) -> void:
@@ -176,7 +196,10 @@ func _rebuild() -> void:
 	_captions.clear()
 	_build_body()
 	_build_header()
-	_build_grid()
+	if showing_window and not lost:
+		_build_screen()
+	else:
+		_build_grid()
 	_build_footer()
 	refresh()
 
@@ -267,9 +290,18 @@ func _build_header() -> void:
 	dock.describe_value = func(_v: float) -> String: return "click to put the tablet away"
 	_label("DOCK", 30, Vector3(WIDTH * 0.5 - 0.056, top - 0.037, 0.001), Color(0.55, 0.58, 0.62))
 
+	_window_button = _button(Vector3(WIDTH * 0.5 - 0.088, top - 0.024, 0.004), Color(0.55, 0.85, 0.95),
+			"THE PLUGIN'S OWN WINDOW", func(): _act(func(): show_window(not showing_window)))
+	_window_button.name = "Window"
+	_window_button.describe_value = func(_v: float) -> String:
+		return "showing it  ·  click for the knobs" if showing_window else "click to show it here"
+	_window_word = _label("UI", 30, Vector3(WIDTH * 0.5 - 0.088, top - 0.037, 0.001),
+			Color(0.55, 0.58, 0.62))
+
 	# Presets on the left of the second line, pages on the right.
 	var y := top - 0.064
-	_label("PRESET", 30, Vector3(-WIDTH * 0.5 + 0.03, y + 0.001, 0.001), Color(0.55, 0.58, 0.62))
+	_preset_word = _label("PRESET", 30, Vector3(-WIDTH * 0.5 + 0.03, y + 0.001, 0.001),
+			Color(0.55, 0.58, 0.62))
 	_preset_prev = _button(Vector3(-WIDTH * 0.5 + 0.058, y, 0.004), Color(0.95, 0.75, 0.35),
 			"PREVIOUS PRESET", func(): _act(func(): _step_preset(-1)))
 	_preset_next = _button(Vector3(-WIDTH * 0.5 + 0.078, y, 0.004), Color(0.95, 0.75, 0.35),
@@ -382,6 +414,68 @@ func _build_footer() -> void:
 	_adopt(_move_to)
 
 
+## The plugin's own window, between the header and the footer, where the knobs were.
+func _build_screen() -> void:
+	var top := HEIGHT * 0.5 - 0.050
+	_screen = PluginScreen.new()
+	_screen.name = "Screen"
+	_screen.size = Vector2(WIDTH - 0.03, top - FOOTER_RULE - 0.012)
+	_screen.position = Vector3(0, (top + FOOTER_RULE) * 0.5, 0.001)
+	_screen.window = _window
+	_screen.describe_title = func() -> String: return "%s  OWN WINDOW" % _caption()
+	_adopt(_screen)
+	_lost_label = _label("PLUGIN NOT FOUND", 64, Vector3(0, 0, 0.002), Color(0.95, 0.55, 0.45))
+	_lost_label.name = "Lost"
+	_lost_label.visible = lost
+
+
+# --- the plugin's own window ----------------------------------------------------------------
+
+## Turn the tablet over to the plugin's own window (true) or back to the knobs. Nothing where
+## the window cannot be shown: on a guest, or a DAW that cannot.
+func show_window(on: bool) -> void:
+	if on == showing_window:
+		return
+	if on:
+		if lost or not DAW.shows_plugin_windows():
+			return
+		_open_window()
+		if _window == null:
+			return
+	else:
+		_close_window()
+	showing_window = on
+	mark_dirty()
+
+
+func _open_window() -> void:
+	_close_window()
+	_window = DAW.open_plugin_window(track_index, fx_index)
+	_window_for = [track_index, fx_index]
+	if _screen != null and is_instance_valid(_screen):
+		_screen.window = _window
+
+
+func _close_window() -> void:
+	if _window != null:
+		_window.close()
+	_window = null
+	_window_for = []
+
+
+## The window follows its plugin like the knobs do: moved along the chain or to another track,
+## it is another window in Reaper, under another title, so the old one is put away and the new
+## one opened. Lost, or no longer showable here, and the tablet goes back to its knobs.
+func _follow_window() -> void:
+	if not showing_window:
+		return
+	if lost or not DAW.shows_plugin_windows():
+		show_window(false)
+		return
+	if _window_for != [track_index, fx_index]:
+		_open_window()
+
+
 # --- reading the plugin ---------------------------------------------------------------------
 
 func refresh() -> void:
@@ -391,11 +485,15 @@ func refresh() -> void:
 	var here := f != null and not lost
 	var track := DAW.state.track(track_index) if DAW.state.tracks.has(track_index) else null
 	_title.text = fx_name
-	Lettering.fit(_title, WIDTH - 0.12, 72)
+	var windows := DAW.shows_plugin_windows()
+	Lettering.fit(_title, WIDTH - (0.15 if windows else 0.12), 72)
 	_subtitle.text = "%s   ·   %s" % [track.display_name().to_upper() if track else "?", _chain_words()]
 	Lettering.fit(_subtitle, WIDTH - 0.12, 40)
 	_chip_material.albedo_color = Materials.chip_colour(track.colour if track else Color.GRAY)
 	_lost_label.visible = lost
+	_window_button.visible = windows and here
+	_window_word.visible = _window_button.visible
+	_window_button.lit = showing_window
 	if not here:
 		return
 	_bypass.lit = f.enabled
@@ -414,6 +512,10 @@ func refresh() -> void:
 	Lettering.fit(_preset_label, WIDTH * 0.5 - 0.1, 44)
 	_preset_prev.visible = presets
 	_preset_next.visible = presets
+	# The plugin's own window has its own presets and no pages; the row would only crowd it.
+	for n in [_preset_word, _preset_label, _preset_prev, _preset_next]:
+		if showing_window:
+			(n as Node3D).visible = false
 
 	var params := _params()
 	var shown := _page_size()
@@ -427,7 +529,7 @@ func refresh() -> void:
 				_knobs[i].apply_remote(f.params[index])
 			_captions[i].text = _caption_for(i)
 			Lettering.fit(_captions[i], KNOB_PITCH.x - 0.008, CAPTION_SIZE)
-	var paged := params.size() > PER_PAGE
+	var paged := params.size() > PER_PAGE and not showing_window
 	_page_label.visible = paged
 	_page_prev.visible = paged
 	_page_next.visible = paged
@@ -510,6 +612,7 @@ func _ask_for_list() -> void:
 
 func _process(delta: float) -> void:
 	super(delta)
+	_follow_window()
 	if lost or _knobs.is_empty() or not is_visible_in_tree():
 		return
 	_follow_values()

@@ -76,6 +76,7 @@ func _ready() -> void:
 	_test_a_plugin_torn_off_the_rack_gets_a_stand()
 	_test_a_big_plugin_is_listed_and_named_once()
 	await _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets()
+	_test_a_tablet_turns_over_to_the_plugins_own_window()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2569,6 +2570,69 @@ func _test_a_big_plugin_is_listed_and_named_once() -> void:
 
 ## A tablet on a plugin with sections: a page per section where one fits, the section said once
 ## over the page, and the plugin's own preset buttons used when the DAW has no presets for it.
+func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	var state := DAW.state
+	var slot: int = state.track(2).plugins()[0]
+	var tablet := PluginTablet.create(2, slot, state.fx(2, slot).name)
+	add_child(tablet)
+	tablet._process(0.0)
+	check("no UI button where the window cannot be shown", not tablet._window_button.visible \
+			and not tablet._window_word.visible)
+	tablet.show_window(true)
+	check("and asking for it does nothing", not tablet.showing_window and backend.windows_opened.is_empty())
+
+	backend.stand_in_windows = true
+	tablet.refresh()
+	check("a UI button where it can", tablet._window_button.visible and not tablet._window_button.lit)
+	tablet._window_button.pressed.emit()
+	tablet._process(0.0)
+	check("pressed, the plugin's window is opened", tablet.showing_window and backend.windows_opened.size() == 1)
+	var window: PluginWindow = backend.windows_opened[0]
+	check("and shown where the knobs were", tablet._knobs.is_empty() and is_instance_valid(tablet._screen) \
+			and tablet._screen.window == window and tablet._window_button.lit)
+	check("the footer stays", is_instance_valid(tablet._mix) and is_instance_valid(tablet._key) \
+			and is_instance_valid(tablet._move_to))
+	check("the preset and page rows give it room", not tablet._preset_label.visible \
+			and not tablet._preset_word.visible and not tablet._page_label.visible)
+
+	var screen := tablet._screen
+	screen._process(0.0)
+	check("the picture keeps its shape (%s)" % screen._shown,
+			is_equal_approx(screen._shown.x / screen._shown.y, 400.0 / 300.0) \
+			and screen._shown.y <= screen.size.y + 0.0001 and screen._shown.x <= screen.size.x + 0.0001)
+	screen.grab_begin(self, screen.global_position)
+	check("a press on the picture is a press on the window, there (%s)" % [window.events],
+			window.events.has([&"down", 200, 150, 1]))
+	screen.grab_move(self, screen.to_global(Vector3(screen._shown.x, screen._shown.y, 0)))
+	check("a drag past its edge stays on the window", window.events[-1] == [&"move", 399, 0, 0])
+	screen.grab_end(self)
+	check("and lets go there", window.events[-1] == [&"up", 399, 0, 1])
+	screen.nudge(self, -2, false)
+	check("the wheel turns what is under the pointer", window.events[-1] == [&"wheel", 399, 0, -2])
+
+	tablet.move_to_track(3)
+	tablet._process(0.0)
+	tablet._process(0.0)
+	check("moved, the plugin's new window is opened and the old one put away",
+			tablet.track_index != 2 and backend.windows_opened.size() == 2 and not window.is_open() \
+			and backend.windows_opened[1].is_open())
+	window = backend.windows_opened[1]
+
+	tablet._window_button.pressed.emit()
+	tablet._process(0.0)
+	check("pressed again, the knobs are back and the window put away", not tablet.showing_window \
+			and not tablet._knobs.is_empty() and not window.is_open() and tablet._preset_word.visible)
+
+	tablet.show_window(true)
+	window = backend.windows_opened[-1]
+	remove_child(tablet)
+	tablet.free()
+	check("a tablet put away puts its window away", not window.is_open())
+	DAW.use(OfflineBackend.new())
+
+
 func _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets() -> void:
 	DAW.use(OfflineBackend.new())
 	var state := DAW.state

@@ -916,3 +916,12 @@ lamp parts".
   - 140-210 controls is 15-30 pages; a section jump (scroll the page label through section names) would help.
   - The plugin's own presets step blind: the plugin doesn't tell Reaper the preset's name.
   - The first Wine plugin load can outlast the bridge's 4 s reply timeout (it still loads).
+- The tablet's UI face (the plugin's own window, read off X and clicked through XSendEvent) — open questions:
+  - With the user's own Reaper, the floating window also opens on the desktop wherever Reaper puts it
+    (in the rig it is on workspace 10). Hide it — move it to a Hyprland special workspace, or offscreen
+    and back on close — or leave it? Moving it risks Reaper saving an offscreen position into the project.
+  - Left button, drag and wheel only: no right-click menus, no keyboard (a plugin's text fields can't
+    be typed into), and its popup menus open as separate windows that the tablet doesn't show.
+  - Two copies of the same plugin on one track have the same window title; the tablet shows the first.
+  - The helper is built on first use with `cc` into user://bin; without a compiler or X11 headers the UI
+    button just doesn't appear.

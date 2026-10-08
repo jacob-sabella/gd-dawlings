@@ -339,8 +339,108 @@ func _tablet_checks(track: int, plugin: String, spare: int) -> void:
 	tracks = await _until_structure(func(x): return _chain(x, track).size() == 1)
 	check("and back", _names(tracks, track).size() == 1 and _chain(tracks, spare).is_empty())
 	await _until_desk(func(): return tablet.track_index == track and not tablet.lost)
+	await _window_checks(tablet, plugin)
 	remove_child(tablet)
 	tablet.free()
+
+
+## UI: the plugin's own window on the tablet, read off the display, and a click passed into it.
+func _window_checks(tablet: PluginTablet, plugin: String) -> void:
+	check("the plugin's own window can be shown here", DAW.shows_plugin_windows())
+	if not DAW.shows_plugin_windows():
+		return
+	tablet.show_window(true)
+	tablet._process(0.0)
+	var shown := await _until_desk(func():
+		return is_instance_valid(tablet._screen) and tablet._screen._shown.x > 0.0, 15.0)
+	var window := tablet._window
+	# Shown is the window found; the plugin draws itself into it a moment later.
+	await _wait(2.5)
+	check("UI shows %s's own window (%s)" % [plugin, window.pixel_size() if window else "none"], shown)
+	if not shown:
+		return
+	# The frame as it came off the display: headless, a texture cannot be read back.
+	var picture: Image = (window as ReaperPluginWindow)._frame.duplicate()
+	picture.clear_mipmaps()
+	var colours := {}
+	for y in range(0, picture.get_height(), picture.get_height() / 8):
+		for x in range(0, picture.get_width(), picture.get_width() / 8):
+			colours[picture.get_pixel(x, y).to_html(false)] = true
+	check("and it is a picture, not a blank (%d colours sampled)" % colours.size(), colours.size() > 6)
+	var title := _window_title(tablet)
+	check("Reaper's own strip is left off it (%d of %d)" % [window.pixel_size().y, _window_height(title)],
+			window.pixel_size().y < _window_height(title))
+
+	if plugin == "Archetype Gojira X":
+		# GATE's switch, at the top left of Gojira's face.
+		var before := await _param_text(tablet, "gate")
+		var at := Vector2i(222, 93)
+		window.pointer_move(at)
+		window.pointer_down(at)
+		await _wait(0.08)
+		window.pointer_up(at)
+		await _wait(1.5)
+		var after := await _param_text(tablet, "gate")
+		check("a click on its GATE switch flips it in the plugin (%s -> %s)" % [before, after],
+				before != "" and after != "" and before != after)
+		window.pointer_down(at)
+		await _wait(0.08)
+		window.pointer_up(at)
+		await _wait(1.0)
+		check("and back (%s)" % await _param_text(tablet, "gate"),
+				await _param_text(tablet, "gate") == before)
+
+	tablet._window_button.pressed.emit()
+	tablet._process(0.0)
+	await _wait(1.5)
+	check("UI again puts the window away and brings the knobs back",
+			not tablet.showing_window and tablet._window == null and not tablet._knobs.is_empty())
+	check("and closes it in Reaper", _window_height(title) == 0)
+
+
+## The plugin's words for the first of its parameters whose name has `part` in it.
+func _param_text(tablet: PluginTablet, part: String) -> String:
+	var f := DAW.state.fx(tablet.track_index, tablet.fx_index, false)
+	var param := -1
+	for i in (f.controls() if f else []):
+		if str(f.param_names.get(i, "")).to_lower().contains(part):
+			param = int(i)
+			break
+	if param < 0:
+		return ""
+	var r = await _reaper("GetFxParams", [tablet.track_index, tablet.fx_index, param])
+	if typeof(r) != TYPE_DICTIONARY or _arr(r.get("params")).is_empty():
+		return ""
+	return str(_arr(r["params"])[0].get("text", ""))
+
+
+## The plugin's floating window, as [name, track]: Reaper titles it "VST3: <name> (<maker>) -
+## Track <n> ...", where the desk says only the name.
+func _window_title(tablet: PluginTablet) -> Array:
+	var f := DAW.state.fx(tablet.track_index, tablet.fx_index, false)
+	return [f.name if f else "?", tablet.track_index]
+
+
+## The height of that window on the X display, or 0 when it is not open.
+func _window_height(which: Array) -> int:
+	var out: Array = []
+	# xdotool reads the name as a pattern, and "(Neural DSP)" is a group in one.
+	var pattern := RegEx.create_from_string("([\\\\.^$|?*+()\\[\\]{}])").sub(str(which[0]), "\\$1", true)
+	OS.execute("xdotool", ["search", "--name", pattern], out)
+	for id in str(out[0] if not out.is_empty() else "").strip_edges().split("\n", false):
+		var named: Array = []
+		OS.execute("xdotool", ["getwindowname", id], named)
+		var title := str(named[0] if not named.is_empty() else "").strip_edges()
+		var track := " - Track %d" % which[1]
+		var at := title.find(track)
+		if at < 0 or (title.length() > at + track.length() and title[at + track.length()] != " "):
+			continue
+		var geometry: Array = []
+		OS.execute("xdotool", ["getwindowgeometry", id], geometry)
+		var m := RegEx.create_from_string("Geometry: (\\d+)x(\\d+)").search(str(geometry[0] if not geometry.is_empty() else ""))
+		if m:
+			return int(m.get_string(2))
+	return 0
 
 
 ## Load `second` after what is already on `track`, then use the second one's tablet to swap them.

@@ -211,13 +211,16 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--tablet":
 				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
-				# `--tablet 2:1:5` opens it on its fifth page.
+				# `--tablet 2:1:5` opens it on its fifth page, and `--tablet 2:1:ui` on the
+				# plugin's own window, where the DAW can show it.
 				i += 1
 				if i < argv.size():
 					var parts := argv[i].split(":")
 					if parts.size() in [2, 3]:
-						out["tablets"].append(Vector3i(int(parts[0]), int(parts[1]),
-								int(parts[2]) if parts.size() == 3 else 1))
+						var page := 1
+						if parts.size() == 3:
+							page = CLI_TABLET_WINDOW if parts[2] == "ui" else int(parts[2])
+						out["tablets"].append(Vector3i(int(parts[0]), int(parts[1]), page))
 			"--eyes":
 				# `--eyes 2.0` -- this reader needs twice the angular cap height. The one
 				# switch that proves the accessibility work is real rather than declared:
@@ -389,6 +392,10 @@ func _apply_cli_placement(places: Dictionary) -> void:
 		studio.mount.set_mode(id, mode)
 
 
+## `--tablet T:F:ui`, as the page it asks for.
+const CLI_TABLET_WINDOW := -1
+
+
 func _apply_cli_tablet(wanted: Vector3i) -> void:
 	# A live DAW reports its plugins a moment after the link opens; the stand-in has them already.
 	var waited := 0.0
@@ -402,11 +409,21 @@ func _apply_cli_tablet(wanted: Vector3i) -> void:
 		return
 	var at := studio.rack.global_position
 	studio._on_tear_requested(wanted.x, wanted.y, at)
-	if wanted.z <= 1:
+	if wanted.z == 1:
 		return
 	for id in studio.tablets:
 		var tablet: PluginTablet = studio.tablets[id][1]
 		if tablet.track_index != wanted.x or tablet.fx_index != wanted.y:
+			continue
+		if wanted.z == CLI_TABLET_WINDOW:
+			var asked := 0.0
+			while asked < 10.0 and not DAW.shows_plugin_windows():
+				await get_tree().create_timer(0.25).timeout
+				asked += 0.25
+			tablet.show_window(true)
+			if not tablet.showing_window:
+				push_warning("bootstrap: --tablet %d:%d:ui -- this DAW cannot show the plugin's window here" \
+						% [wanted.x, wanted.y])
 			continue
 		# The page needs the plugin's full list, which a live DAW sends a moment later.
 		var paged := 0.0
