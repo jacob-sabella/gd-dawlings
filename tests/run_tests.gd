@@ -140,6 +140,7 @@ func _ready() -> void:
 	_test_the_computer_keys_are_a_piano_by_position()
 	_test_a_guest_take_follows_the_host_transport_it_hears()
 	_test_the_host_places_a_guest_take_and_says_so()
+	_test_midi_items_show_their_notes_on_the_timeline()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -6267,3 +6268,41 @@ func _test_the_host_places_a_guest_take_and_says_so() -> void:
 			told.size() == 2 and (told[1] as String).contains("was not placed"))
 	Session.notice.disconnect(listen)
 
+
+func _test_midi_items_show_their_notes_on_the_timeline() -> void:
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var notes := timeline.get_node_or_null("ItemNotes") as MeshBank
+	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
+	check("MIDI items get a piano roll, in one object", notes != null and notes.count() > 0)
+	if notes == null or blocks == null:
+		timeline.free()
+		return
+	var drawn := notes.multimesh.visible_instance_count
+	check("drawn where the window is (%d of %d)" % [drawn, notes.count()], drawn > 0)
+	# Every drawn note sits inside some drawn item block.
+	var inside := true
+	for i in drawn:
+		var at := notes.transform_of(i)
+		var held := false
+		for b in blocks.multimesh.visible_instance_count:
+			var box := blocks.transform_of(b)
+			var half := box.basis.get_scale() * 0.5
+			var half_note := at.basis.get_scale() * 0.5
+			if at.origin.x - half_note.x >= box.origin.x - half.x - 0.00001 \
+					and at.origin.x + half_note.x <= box.origin.x + half.x + 0.00001 \
+					and absf(at.origin.y - box.origin.y) + half_note.y <= half.y:
+				held = true
+				break
+		inside = inside and held
+	check("and every note is on its item, inside the block", inside)
+	timeline._on_view_changed(100000.0, timeline.view_span)
+	check("scrolled away, no notes are drawn", notes.multimesh.visible_instance_count == 0)
+	timeline.free()
+	var thin := TimelineSurface.note_layout(PackedFloat32Array([0, 1, 60, 90, 0, 1, 2, 62, 90, 0]))
+	check("two notes a tone apart are drawn on an octave's rows, not stretched to fill",
+			thin["rows"] == 12 and thin["low"] <= 60 and thin["low"] + thin["rows"] > 62)
+	var wide := TimelineSurface.note_layout(PackedFloat32Array([0, 1, 36, 90, 0, 1, 2, 84, 90, 0]))
+	check("a wide part gets a row per semitone it spans", wide["low"] == 36 and wide["rows"] == 49)

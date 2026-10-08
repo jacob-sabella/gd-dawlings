@@ -139,6 +139,24 @@ func _populate() -> void:
 ## instantly recognisable as wrong -- a drummer who stops for the chorus and a vocal that
 ## starts at bar 17 is what an arrangement looks like, and a field of noise is what a
 ## placeholder looks like.
+## The Rhodes part is MIDI, as a keys part mostly is, so the stand-in's timeline has notes on
+## it the way a guest's take will: a bar of each chord, played on beat one and pushed on the
+## "and" of three. Item-relative, in the wire's five-number layout (see MidiTake).
+func _comping(length: float, bar: float) -> PackedFloat32Array:
+	# Am7, Fmaj7, C, G -- bass note then three above.
+	var chords := [[45, 60, 64, 67], [41, 57, 60, 64], [48, 55, 60, 64], [43, 55, 59, 62]]
+	var out := PackedFloat32Array()
+	var beat := bar / 4.0
+	var bars := int(round(length / bar))
+	for b in bars:
+		var chord: Array = chords[b % chords.size()]
+		for hit in [[0.0, 2.25], [2.5, 1.4]]:
+			for pitch in chord:
+				var on: float = b * bar + hit[0] * beat
+				out.append_array([on, on + hit[1] * beat, pitch, 84 if hit[0] == 0.0 else 70, 0])
+	return out
+
+
 func _arrange() -> void:
 	var bar := 4.0 * 60.0 / state.tempo
 	# (first bar, last bar) windows per section, named the way a session is.
@@ -172,6 +190,8 @@ func _arrange() -> void:
 			item.start = (window[0] - 1) * bar
 			item.length = (window[1] - window[0]) * bar
 			item.name = "%s %s" % [state.track(index).name, section]
+			if state.track(index).name == "Rhodes":
+				item.notes = _comping(item.length, bar)
 			items.append(item)
 		state.set_track_items(index, items)
 
