@@ -155,7 +155,7 @@ stay ignorant: a surface is a node, and a node's parent is not its business.
 | Who is here, head poses, pointers, holds | ✅ | you need to see someone point |
 | Which bank the desk shows | ✅ | the host has one Reaper link, so one bank |
 | ROOM placement of a surface | ✅ | a fact about the room, not a taste |
-| The venue, and plugins out on stands | ✅ the host's | one room; a guest asks for a stand and is shown it, and cannot change the venue. Its own wait in its profile (`Session.room`, `Studio.apply_room`) |
+| The venue, plugins out on stands, where every stand and trolley is, where the desk stands | ✅ the host's | one room; a guest asks (rolls the rack, pulls a plugin) and is shown the host's answer, and cannot change the venue. Its own room waits in its profile for when it is on its own (`Session.room`, `Studio.apply_room`) |
 | Which mode a surface is in *for you* | ❌ | **this is the feature** |
 
 Replicating the last row would force one view on the room. The engineer at the desk has the

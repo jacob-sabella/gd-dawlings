@@ -55,6 +55,13 @@ var seats: Dictionary = {}
 ## Called with (id, where it was put down) when a seated surface is dragged by its own handle in
 ## the studio: the furniture is moved under it, because gear does not hang in the air.
 var reseat: Callable = Callable()
+## Where the room has gear that stands on nothing, when the room is someone else's: id ->
+## Transform3D, over this viewer's own studio placement. Their own is kept for later.
+var shared_studio: Dictionary = {}
+## Called with (id, transform) when a surface that stands on nothing is put down in the studio.
+## True means it was dealt with -- sent to whoever keeps the room -- and is not this viewer's to
+## remember; false, and it is saved here as usual.
+var studio_placed: Callable = Callable()
 
 
 func seat(surface_id: StringName, where: Callable) -> void:
@@ -126,7 +133,7 @@ func apply(surface_id: StringName) -> void:
 	# Placement is per-mode: a console at arm's reach in the room is not the same object as a
 	# panel framed to fill a monitor, so the transform is fetched for the mode being entered --
 	# never carried over from the one being left.
-	if mode == Presentation.Mode.STUDIO and seats.has(surface_id):
+	if mode == Presentation.Mode.STUDIO and (seats.has(surface_id) or shared_studio.has(surface_id)):
 		surface.transform = studio_home(surface_id)
 		return
 	surface.transform = Session.layout.transform_for(surface_id, mode, _default_transform(surface, mode))
@@ -244,8 +251,26 @@ func remember_placement(surface_id: StringName) -> void:
 		surface.transform = studio_home(surface_id)
 		_refresh_handle(surface_id)
 		return
+	if mode_of(surface_id) == Presentation.Mode.STUDIO and studio_placed.is_valid() \
+			and studio_placed.call(surface_id, surface.transform):
+		return
 	Session.layout.set_transform(surface_id, mode_of(surface_id), surface.transform)
 	Session.layout.save()
+
+
+## Stand the room's gear where the room says, or, with an empty `placements`, back where this
+## viewer had it. Only what is standing in the studio right now moves; the rest goes there when
+## it next comes back.
+func share_studio(placements: Dictionary) -> void:
+	shared_studio = placements
+	for surface_id in _mounted:
+		if seats.has(surface_id) or mode_of(surface_id) != Presentation.Mode.STUDIO:
+			continue
+		if held.is_valid() and held.call(surface_id):
+			continue
+		var surface: Surface = _mounted[surface_id]
+		if surface.get_parent() == studio_set:
+			surface.transform = studio_home(surface_id)
 
 
 ## Where a surface stands in the virtual set, whether or not it is there right now: the
@@ -253,6 +278,8 @@ func remember_placement(surface_id: StringName) -> void:
 func studio_home(surface_id: StringName) -> Transform3D:
 	if seats.has(surface_id):
 		return (seats[surface_id] as Callable).call()
+	if shared_studio.has(surface_id):
+		return shared_studio[surface_id]
 	return Session.layout.transform_for(surface_id, Presentation.Mode.STUDIO,
 			_authored.get(surface_id, Transform3D.IDENTITY))
 
@@ -288,6 +315,9 @@ func reset_placement(surface_id: StringName) -> void:
 		return
 	var surface: Surface = _mounted[surface_id]
 	var mode := mode_of(surface_id)
+	if mode == Presentation.Mode.STUDIO and not seats.has(surface_id) and studio_placed.is_valid() \
+			and studio_placed.call(surface_id, _authored.get(surface_id, surface.transform)):
+		return
 	Session.layout.local_transforms.erase(LayoutProfile._key(surface_id, mode))
 	# On its stand, wherever the stand is: the stand is where it lives.
 	surface.transform = studio_home(surface_id) if mode == Presentation.Mode.STUDIO \

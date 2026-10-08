@@ -2580,6 +2580,19 @@ func _test_the_room_is_the_hosts() -> void:
 			Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(-0.3, 0.1)))
 	studio._on_room_asked(&"close_tablet", [id], 7)
 	check("and docking it puts it away", studio.tablets.is_empty())
+	var rack_home := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
+	studio._on_room_asked(&"move_piece", [&"rack", rack_home.x - 0.2, rack_home.y + 0.1, 0.4], 7)
+	check("a guest rolling the rack rolls it on the host", Vector2(studio.rack_trolley.position.x,
+			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
+	check("and the room says where it is", Vector2(studio.room_state()["floor"][&"rack"][0],
+			studio.room_state()["floor"][&"rack"][1]).is_equal_approx(rack_home + Vector2(-0.2, 0.1)))
+	var desk_at := studio.mount.studio_home(&"console").translated(Vector3(0.05, 0, 0))
+	studio._on_room_asked(&"place_surface", [&"console", desk_at], 7)
+	check("a guest putting the desk down puts it down on the host",
+			studio.room_state()["placed"][&"console"].is_equal_approx(desk_at))
+	studio._on_room_asked(&"move_piece", [&"rack", rack_home.x, rack_home.y, deg_to_rad(38.0)], 7)
+	Session.layout.local_transforms.clear()
+	studio.mount.share_studio({})
 	check("only what a guest may ask is heard", not Session.room_ask_is_valid(&"set_venue", [&"grid"])
 			and not Session.room_ask_is_valid(&"open_tablet", [2, "x"]))
 
@@ -2597,7 +2610,17 @@ func _test_the_room_is_the_hosts() -> void:
 	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
 	check("a guest's pull waits for the host", studio.tablets.is_empty())
 
-	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+	var host_desk := studio.mount.studio_home(&"console").translated(Vector3(0, 0, 0.04))
+	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]},
+			"floor": {&"rack": [rack_home.x - 0.25, rack_home.y + 0.05, 0.3]}, "placed": {&"console": host_desk}})
+	check("the host's rack is where the host rolled it", Vector2(studio.rack_trolley.position.x,
+			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(-0.25, 0.05)))
+	check("and the host's desk where the host put it", studio.console.transform.is_equal_approx(host_desk))
+	check("none of the furniture written into the guest's own layout",
+			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
+	studio.rack_trolley.place(rack_home + Vector2(-0.1, 0.0), 0.3)
+	check("a guest rolling the rack is not its own layout",
+			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
 	check("the host's venue is the guest's", studio.venue.venue_id() == &"grid")
 	check("and so are its stands", studio.tablets.has(&"tablet_3"))
 	stand = studio.tablets[&"tablet_3"][0]
@@ -2613,6 +2636,9 @@ func _test_the_room_is_the_hosts() -> void:
 	studio._on_role_changed()
 	check("on its own again, the guest is back in its own venue", studio.venue.venue_id() == own_venue)
 	check("without the host's stands", studio.tablets.is_empty())
+	check("with its rack back where it had it", Vector2(studio.rack_trolley.position.x,
+			studio.rack_trolley.position.z).is_equal_approx(rack_home))
+	check("and its own desk", not studio.console.transform.is_equal_approx(host_desk))
 	remove_child(studio)
 	studio.free()
 	Session.role = saved_role

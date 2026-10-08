@@ -131,7 +131,9 @@ var listen_choice := -1
 var layout: LayoutProfile = null
 
 ## The room everyone is standing in, as the host has it: {"venue": id, "tablets": {stand id:
-## [track, fx, plugin name, x, z, heading]}}. A fact about the room, like where the desk is, so
+## [track, fx, plugin name, x, z, heading]}, "floor": {piece id: [x, z, heading]}, "placed":
+## {surface id: Transform3D}} -- the venue, the plugins out on stands, where every stand and
+## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
 ## for when it is on its own again. Empty until the host has said.
 var room: Dictionary = {}
@@ -822,7 +824,9 @@ func _told(text: String) -> void:
 
 ## What a guest may ask of the room. Not the venue: whose room it is decides what it looks like.
 const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOAT, TYPE_FLOAT],
-		&"close_tablet": [TYPE_STRING_NAME], &"move_tablet": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT]}
+		&"close_tablet": [TYPE_STRING_NAME], &"move_tablet": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT],
+		&"move_piece": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT],
+		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.

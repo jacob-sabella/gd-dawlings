@@ -149,8 +149,12 @@ func _host(port: int) -> void:
 	check("the guest's marker is on the host's timeline (%s)" % [DAW.state.markers.values()],
 			_has_guest_mark(DAW.state))
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
-	check("the guest's ask for a stand reached the host (%s)" % [_room_asks], _room_asks.size() == 1
+	check("the guest's ask for a stand reached the host (%s)" % [_room_asks], _room_asks.size() == 3
 			and _room_asks[0][0] == &"open_tablet" and _room_asks[0][2] == guest_id)
+	check("and its rolling the rack", _room_asks.size() == 3 and _room_asks[1][0] == &"move_piece"
+			and _room_asks[1][1][0] == &"rack")
+	check("and its putting the desk down", _room_asks.size() == 3 and _room_asks[2][0] == &"place_surface"
+			and (_room_asks[2][1][1] as Transform3D).origin.is_equal_approx(Vector3(0.1, 0, 0.2)))
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
 	# Reach for the fader the guest is holding: the host's own hand is refused too.
@@ -318,6 +322,8 @@ func _guest(port: int) -> void:
 	check("the host's room came in with me (%s)" % [Session.room], _rooms_heard == 1
 			and Session.room.get("venue") == &"grid" and Session.room.get("tablets", {}).has(&"tablet_1"))
 	Session.ask_room(&"open_tablet", [3, 1, "Comp", 0.1, 0.3])
+	Session.ask_room(&"move_piece", [&"rack", -1.0, -0.4, 0.6])
+	Session.ask_room(&"place_surface", [&"console", Transform3D(Basis.IDENTITY, Vector3(0.1, 0, 0.2))])
 	# Straight at the host, past ask_room's own check: the venue is not a guest's to change.
 	Session._room_asked.rpc_id(1, &"set_venue", [&"chalk"])
 

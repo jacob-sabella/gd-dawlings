@@ -751,7 +751,19 @@ func room_state() -> Dictionary:
 		var t: PluginTablet = tablets[id][1]
 		out[id] = [t.track_index, t.fx_index, t.fx_name, stand.position.x, stand.position.z,
 				stand.rotation.y]
-	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0], "tablets": out}
+	var floor := {}
+	if floor_plan != null:
+		for piece in floor_plan.pieces:
+			var t := piece as Trolley
+			if t != null and is_instance_valid(t) and not tablets.has(t.piece_id):
+				floor[t.piece_id] = [t.position.x, t.position.z, t.rotation.y]
+	var placed := {}
+	if mount != null:
+		for surface_id in mount.mounted_ids():
+			if not mount.seats.has(surface_id):
+				placed[surface_id] = mount.studio_home(surface_id)
+	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0], "tablets": out,
+			"floor": floor, "placed": placed}
 
 
 func _publish_room() -> void:
@@ -791,7 +803,20 @@ func apply_room(state: Dictionary) -> void:
 			if stand.held_by == null and (not at.is_equal_approx(Vector2(stand.position.x, stand.position.z))
 					or not is_equal_approx(stand.rotation.y, float(entry[5]))):
 				stand.place(at, float(entry[5]))
+		var floor: Dictionary = state.get("floor", {})
+		for piece in floor_plan.pieces:
+			var t := piece as Trolley
+			if t == null or not is_instance_valid(t) or not floor.has(t.piece_id) or t.held_by != null:
+				continue
+			var spot: Array = floor[t.piece_id]
+			var at := Vector2(float(spot[0]), float(spot[1]))
+			if not at.is_equal_approx(Vector2(t.position.x, t.position.z)) \
+					or not is_equal_approx(t.rotation.y, float(spot[2])):
+				t.place(at, float(spot[2]))
+	if mount != null:
+		mount.share_studio(state.get("placed", {}))
 	_applying_room = false
+	_looms_dirty = true
 	if walk_to != StringName():
 		_asked_tablet = []
 		if focus != null and focus.visits:
@@ -811,6 +836,44 @@ func _on_room_asked(verb: StringName, args: Array, _from: int) -> void:
 		&"move_tablet":
 			if tablets.has(args[0]):
 				(tablets[args[0]][0] as Trolley).place(Vector2(args[1], args[2]), args[3])
+		&"move_piece":
+			var piece := _floor_piece(args[0])
+			if piece != null:
+				piece.place(Vector2(args[1], args[2]), args[3])
+		&"place_surface":
+			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
+				_place_in_studio(args[0], args[1])
+
+
+func _floor_piece(id: StringName) -> Trolley:
+	if floor_plan == null:
+		return null
+	for piece in floor_plan.pieces:
+		var t := piece as Trolley
+		if t != null and is_instance_valid(t) and t.piece_id == id:
+			return t
+	return null
+
+
+## Gear that stands on nothing, put somewhere in the studio for the room: remembered as the
+## host's own placement, stood there if it is standing in the studio now, and the room told.
+func _place_in_studio(surface_id: StringName, where: Transform3D) -> void:
+	Session.layout.set_transform(surface_id, Presentation.Mode.STUDIO, where)
+	Session.layout.save()
+	mount.share_studio({})
+	if surface_id == &"console":
+		_fit_room_to_session()
+	_publish_room()
+
+
+## The mount's question when the desk is put down in the studio: a guest sends it to the host
+## and keeps nothing; the host saves it as ever and tells the room once it has.
+func _on_studio_placed(surface_id: StringName, where: Transform3D) -> bool:
+	if Session.is_authority():
+		_publish_room.call_deferred()
+		return false
+	Session.ask_room(&"place_surface", [surface_id, where])
+	return true
 
 
 ## Joined someone: their room arrives on its own. Back on our own, or hosting: our own room, and
@@ -830,6 +893,19 @@ func _put_back_own_room() -> void:
 		return
 	for id in tablets.keys():
 		_take_down_tablet(id)
+	if mount != null:
+		mount.share_studio({})
+	if floor_plan != null:
+		_applying_room = true
+		for piece in floor_plan.pieces:
+			var t := piece as Trolley
+			if t == null or not is_instance_valid(t) or not _authored_floor.has(t.piece_id):
+				continue
+			var own: Transform3D = Session.layout.transform_for(StringName("floor/%s" % t.piece_id),
+					Presentation.Mode.STUDIO, _authored_floor[t.piece_id])
+			t.place(Vector2(own.origin.x, own.origin.z), own.basis.get_euler().y)
+		_applying_room = false
+		_fit_room_to_session()
 	var own := Session.layout.venue if Venue.is_known(Session.layout.venue) else Venue.IDS[0]
 	if medium != Presentation.Medium.AR and venue != null and venue.venue_id() != own:
 		set_venue(own, false)
@@ -884,6 +960,10 @@ func _fit_room_to_session() -> void:
 			set_venue(venue.venue_id(), false)
 		if walker != null:
 			walker.rebuild_walls()
+	# A guest's room is fitted by the host, who says where everything went.
+	if _showing_hosts_room:
+		apply_room(Session.room)
+		return
 	_fitting = true
 	for piece in floor_plan.pieces:
 		var t := piece as Trolley
@@ -907,6 +987,7 @@ func _fit_room_to_session() -> void:
 			t.place(here, t.rotation.y)
 	_fitting = false
 	_looms_dirty = true
+	_publish_room()
 
 
 ## The console does not roll. It is the desk the room is arranged around and the one thing in
@@ -950,15 +1031,17 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 
 
 func _on_trolley_settled(piece: Trolley) -> void:
-	if tablets.has(piece.piece_id) and not _fitting and not _applying_room:
+	if not _fitting and not _applying_room:
 		if not Session.is_authority():
 			# Wheeled here, and the host told where it is now; the host's word comes back.
-			Session.ask_room(&"move_tablet", [piece.piece_id, piece.position.x, piece.position.z,
+			var verb := &"move_tablet" if tablets.has(piece.piece_id) else &"move_piece"
+			Session.ask_room(verb, [piece.piece_id, piece.position.x, piece.position.z,
 					piece.rotation.y])
 			_looms_dirty = true
 			return
 		_publish_room()
-	if Session.layout == null or _fitting or (_showing_hosts_room and tablets.has(piece.piece_id)):
+	# Where the host's room has things is not where this guest keeps its own.
+	if Session.layout == null or _fitting or _showing_hosts_room:
 		_looms_dirty = true
 		return
 	Session.layout.set_transform(StringName("floor/%s" % piece.piece_id),
@@ -1203,6 +1286,7 @@ func _build_surfaces() -> void:
 	# and the rig is what holds that.
 	if floor_plan != null:
 		mount.reseat = _reseat
+		mount.studio_placed = _on_studio_placed
 		_ride(rack_trolley, rack)
 		_ride(deck_trolley, deck)
 		_ride(timeline_stand, timeline)
