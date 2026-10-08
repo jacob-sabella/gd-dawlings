@@ -127,6 +127,10 @@ func _ready() -> void:
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
 	_test_meters_go_out_in_parcels_under_the_mtu()
+	_test_the_mix_carries_the_song_position()
+	_test_the_song_clock_runs_between_reports()
+	_test_the_guest_knows_which_moment_it_is_hearing()
+	_test_the_jitter_buffer_knows_which_host_frame_is_next()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -5817,3 +5821,121 @@ func _test_the_room_keeps_listening_across_a_change_of_backend() -> void:
 	check("and the scan would have caught the line that did", RegEx.create_from_string(
 			"DAW\\.state\\.[a-z_]+\\.(connect|is_connected)").search(
 			"DAW.state.timeline_changed.connect(mark_dirty)") != null)
+
+
+# --- recording a guest ------------------------------------------------------------------------
+
+func _test_the_mix_carries_the_song_position() -> void:
+	var frames := PackedVector2Array()
+	frames.resize(MixFeed.FRAMES)
+	var flags := MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING | MixFeed.FLAG_RECORDING
+	var packet := MixFeed.encode(9, frames, 1234.567890123456, flags)
+	check("a stamped packet still fits one datagram (%d bytes)" % packet.size(), packet.size() <= 600)
+	var back := MixFeed.decode(packet)
+	check("the song position survives to the bit (%.12f)" % back.get("position", -1.0),
+			back.get("position", -1.0) == 1234.567890123456)
+	check("and the transport with it", back.get("valid", false) and back.get("playing", false)
+			and back.get("recording", false))
+	var stopped := MixFeed.decode(MixFeed.encode(10, frames, 3.0, MixFeed.FLAG_VALID))
+	check("a stopped transport is said as stopped", not stopped["playing"] and not stopped["recording"])
+	check("an unstamped packet says it does not know", not MixFeed.decode(MixFeed.encode(1, frames))["valid"])
+	var old := packet.duplicate()
+	old.encode_u32(0, 0x41334452)
+	check("a packet from a build without stamps is not misread as one", MixFeed.decode(old).is_empty())
+	check("flags read off a clock", MixFeed.flags_of({"valid": true, "playing": true, "recording": false})
+			== MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING)
+
+
+## Reaper says where its playhead is thirty times a second, late, and the stand-in once a frame.
+## Packets need a position every 2.7ms. The clock runs between reports and is only corrected by
+## them -- and a seek or a stop is taken at once, not eased into.
+func _test_the_song_clock_runs_between_reports() -> void:
+	var clock := SongClock.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var truth := func(usec: int) -> float: return 10.0 + usec / 1000000.0
+	var worst := 0.0
+	var t := 0
+	var next_report := 0
+	while t < 4000000:
+		if t >= next_report:
+			# Up to 3ms stale, and only to the millisecond, the way a busy DAW reports.
+			var said := snappedf(truth.call(t - rng.randi_range(0, 3000)), 0.001)
+			clock.observe(said, true, true, t)
+			next_report = t + 33000 + rng.randi_range(0, 4000)
+		if t > 1000000:
+			worst = maxf(worst, absf(float(clock.at(t)["seconds"]) - truth.call(t)))
+		t += 500
+	check("between coarse, late reports the clock is within 3ms of the song (worst %.2fms)" % (worst * 1000.0),
+			worst < 0.003)
+	var held := clock.at(t)
+	check("it says the transport it was told", held["playing"] and held["recording"] and held["valid"])
+
+	clock.observe(100.0, true, false, t)
+	close_to("a seek is a jump, not drift", clock.at(t + 1000)["seconds"], 100.001, 0.0005)
+	clock.observe(100.0, true, false, t + 50000)
+	close_to("the same report again is no news: the clock keeps running", clock.at(t + 50000)["seconds"],
+			100.05, 0.0005)
+	clock.observe(100.2, false, false, t + 200000)
+	close_to("stopped, it stands still", clock.at(t + 900000)["seconds"], 100.2)
+	check("and is not recording", not clock.at(t + 900000)["recording"])
+	clock.observe(100.2, false, true, t + 950000)
+	check("a record flag without the transport rolling is not a recording",
+			not clock.at(t + 950000)["recording"])
+	check("a fresh clock knows nothing", not SongClock.new().at(0)["valid"])
+
+
+## The guest's speakers, measured as a staircase -- the mixer takes 512 frames at a gulp -- and the
+## song position of whatever frame is coming out of them.
+func _test_the_guest_knows_which_moment_it_is_hearing() -> void:
+	var heard := HeardClock.new()
+	var flags := MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING | MixFeed.FLAG_RECORDING
+	for seq in 200:
+		if seq != 9:
+			heard.stamp(seq, 20.0 + seq * 128 / 48000.0, flags, 0)
+	var at := heard.position_of(1000.0)
+	close_to("a frame is its packet's stamp plus how far into the packet",
+			at["seconds"], 20.0 + 1000.0 / 48000.0, 0.000001)
+	check("with the transport its packet carried", at["playing"] and at["recording"] and at["valid"])
+	close_to("a lost packet's frames count on from the last stamp heard",
+			heard.position_of(9 * 128 + 5.0)["seconds"], 20.0 + (9 * 128 + 5) / 48000.0, 0.000001)
+	heard.stamp(300, 55.5, MixFeed.FLAG_VALID, 0)
+	close_to("a stopped stream stands at its stamp", heard.position_of(300 * 128 + 100.0)["seconds"], 55.5)
+	check("and says it is stopped", not heard.position_of(300 * 128 + 100.0)["playing"])
+	check("a frame before any stamp is not a position", not heard.position_of(-5.0)["valid"])
+
+	# The playhead: the true frame at the speaker runs at 48 a millisecond; what is measured is a
+	# staircase round it, as Godot's mixer gulps.
+	var staircase := HeardClock.new()
+	var worst := 0.0
+	for step in 8000:
+		var usec := step * 500
+		var truth := usec * 0.048
+		staircase.observe(floorf(truth / 512.0) * 512.0 + 256.0, usec)
+		if usec > 2000000:
+			worst = maxf(worst, absf(staircase.frame_at(usec + 250) - (truth + 12.0)))
+	check("a staircase measurement becomes a smooth playhead, within 1ms (worst %.2fms)" % (worst / 48.0),
+			worst < 48.0)
+	staircase.observe(500000.0, 4000000)
+	close_to("a playhead that jumps (a reprime) is followed at once", staircase.frame_at(4000000), 500000.0, 1.0)
+
+	heard.observe(1000.0, 0)
+	check("stamps a second old are not trusted", not heard.at(1500000)["valid"])
+	check("fresh ones are", heard.at(200000)["valid"])
+
+
+func _test_the_jitter_buffer_knows_which_host_frame_is_next() -> void:
+	var jb := JitterBuffer.new()
+	var chunk := PackedVector2Array()
+	chunk.resize(128)
+	for seq in range(10, 40):
+		if seq != 25:
+			jb.push(seq, chunk, seq * 2.67)
+	close_to("before playing, the next frame is the first one that arrived", jb.read_frame(), 10 * 128)
+	var pulled := 0
+	for i in 6:
+		jb.pull(512)
+	pulled = 6 * 512
+	var expected := 10.0 * 128 + pulled
+	check("after playing, it is that many frames on, losses and all (%.1f for %.1f)" % [jb.read_frame(), expected],
+			absf(jb.read_frame() - expected) < pulled * MixFeed.QUEUE_FRAMES * 0.000001 + pulled * JitterBuffer.MAX_BEND + 1.0)

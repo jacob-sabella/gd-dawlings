@@ -21,9 +21,16 @@ extends Node
 
 signal changed()
 
-const MAGIC_AUDIO := 0x41334452 # "RD3A" little-endian
+## "RD3P" little-endian: audio with the song position in its header. Changed from "RD3A" when
+## the header grew, so a mismatched pair of builds hears silence rather than garbage.
+const MAGIC_AUDIO := 0x50334452
 const MAGIC_LISTEN := 0x4C334452 # "RD3L"
-const HEADER := 16
+const HEADER := 24
+## The header's flags. VALID: the host knew its song position. PLAYING and RECORDING: its
+## transport, as of the packet's first frame.
+const FLAG_VALID := 1
+const FLAG_PLAYING := 2
+const FLAG_RECORDING := 4
 const FRAMES := 128
 const RATE := 48000.0
 ## A listener not heard from for this long is taken to have gone.
@@ -57,6 +64,8 @@ var _source: MixSource = null
 var _tickets: Dictionary = {} # ticket -> peer_id
 var _listeners: Dictionary = {} # ticket -> {ip, port, heard, echo}
 var _seq := 0
+## The host's song position, running between the DAW's reports, for stamping packets.
+var song_clock := SongClock.new()
 
 # guest
 var _jitter: JitterBuffer = null
@@ -77,6 +86,8 @@ var _drained := 0
 ## What a drain heard, for the probe: the loudest frame and when each click arrived.
 var heard_peak := 0.0
 var heard_clicks: Array = []
+## Guest: which song position is at the speaker. See heard_position().
+var heard := HeardClock.new()
 
 
 var _report_msec := 0
@@ -88,8 +99,17 @@ func _exit_tree() -> void:
 	stop()
 
 
-## For tools/audio_latency.sh: the guest's own account of where its delay is, once a second.
 func _process(_delta: float) -> void:
+	# The song clock is fed from the main thread, where DAW.state lives, and read from the send
+	# thread. Every frame: repeats are ignored by the clock itself.
+	if sending and DAW.state != null:
+		song_clock.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
+				Time.get_ticks_usec())
+	_report_stats()
+
+
+## For tools/audio_latency.sh: the guest's own account of where its delay is, once a second.
+func _report_stats() -> void:
 	if not listening or not (report or OS.get_environment("R3D_AUDIO_STATS") != ""):
 		return
 	if Time.get_ticks_msec() - _report_msec < 1000:
@@ -117,6 +137,9 @@ func start_sending(at_port: int, source: MixSource) -> bool:
 	source_label = _source.describe()
 	sending = true
 	_seq = 0
+	song_clock.reset()
+	if _source is MixSource.Tone:
+		(_source as MixSource.Tone).clock = song_clock
 	_running = true
 	_thread = Thread.new()
 	_thread.start(_send_loop)
@@ -152,14 +175,27 @@ func listener_count() -> int:
 
 func _send_loop() -> void:
 	var pending := PackedVector2Array()
+	# The song position of pending[0], and the transport it was under.
+	var pending_seconds := 0.0
+	var pending_flags := 0
 	while _running:
 		_hear_listeners()
 		var got := _source.read()
 		if not got.is_empty():
 			pending.append_array(got)
+			# The newest frame was the song's "now" a source-specific moment ago; the frames
+			# before it, one sample each earlier. Re-derived on every read rather than counted
+			# forward, so the stamps follow the DAW's clock and not this machine's sound card.
+			var song := song_clock.at(Time.get_ticks_usec() - int(_source.song_offset_ms() * 1000.0))
+			pending_flags = flags_of(song)
+			pending_seconds = float(song["seconds"])
+			if song["playing"]:
+				pending_seconds -= (pending.size() - 1) / RATE
 		while pending.size() >= FRAMES:
-			var packet := encode(_seq, pending.slice(0, FRAMES))
+			var packet := encode(_seq, pending.slice(0, FRAMES), pending_seconds, pending_flags)
 			pending = pending.slice(FRAMES)
+			if pending_flags & FLAG_PLAYING:
+				pending_seconds += FRAMES / RATE
 			_seq += 1
 			_mutex.lock()
 			var now := Time.get_ticks_msec()
@@ -214,6 +250,8 @@ func listen(address: String, at_port: int, ticket: int) -> bool:
 	_last_heard_msec = 0
 	heard_peak = 0.0
 	heard_clicks.clear()
+	heard.reset()
+	heard.frames_per_packet = FRAMES
 	# No sound card at all (--headless implies the Dummy driver): nothing would ever ask for the
 	# frames, so the clock asks instead. A headless display with a real audio driver -- the
 	# latency tool's guest -- still plays.
@@ -260,6 +298,7 @@ func _listen_loop() -> void:
 				continue
 			var arrived := Time.get_ticks_usec() / 1000.0
 			_jitter.push(decoded["seq"], decoded["frames"], arrived)
+			heard.stamp(decoded["seq"], decoded["position"], decoded["flags"])
 			_last_heard_msec = Time.get_ticks_msec()
 			var rtt := float(Time.get_ticks_msec() - int(decoded["echo"]))
 			if rtt >= 0.0 and rtt < 5000.0:
@@ -283,6 +322,12 @@ func _listen_loop() -> void:
 				_level *= 0.97
 				for f in frames:
 					_level = maxf(_level, absf(f.x))
+			# At the speaker: the read head, less the generator's queue, less the card. Less half a
+			# mixer gulp as well: the mixer takes 512 frames at once and plays them out over the
+			# next 10.7ms, so on average the frame being heard is half a gulp behind the last
+			# frame it took.
+			heard.observe(_jitter.read_frame() - queued - MIX_STEP * 0.5
+					- AudioServer.get_output_latency() * RATE, Time.get_ticks_usec())
 		OS.delay_usec(500)
 
 
@@ -294,6 +339,8 @@ func _drain_by_clock() -> void:
 	if count < FRAMES:
 		return
 	var frames := _jitter.pull(count)
+	# Pulled is heard, in a drain: the frame just taken is the one at the "speaker" now.
+	heard.observe(_jitter.read_frame(), Time.get_ticks_usec())
 	for i in frames.size():
 		var v := absf(frames[i].x)
 		if v > heard_peak:
@@ -301,6 +348,14 @@ func _drain_by_clock() -> void:
 		if v > 0.6 and (heard_clicks.is_empty() or _drained + i - int(heard_clicks[-1]) > int(RATE / 2.0)):
 			heard_clicks.append(_drained + i)
 	_drained += count
+
+
+## The song position coming out of this guest's speakers right now:
+## {seconds, playing, recording, valid}. Invalid when not listening, or before the stream says.
+func heard_position() -> Dictionary:
+	if not listening:
+		return {"seconds": 0.0, "playing": false, "recording": false, "valid": false}
+	return heard.at(Time.get_ticks_usec())
 
 
 func stats() -> Dictionary:
@@ -360,14 +415,20 @@ func stop() -> void:
 
 # --- the wire -----------------------------------------------------------------------------
 
-## [magic u32][seq u32][echo u32][frames u16][reserved u16][frames × L,R s16]
-static func encode(seq: int, frames: PackedVector2Array) -> PackedByteArray:
+## [magic u32][seq u32][echo u32][frames u16][flags u16][song seconds f64][frames × L,R s16]
+##
+## The song position is of the packet's FIRST frame, in seconds from the project start, as a
+## double: a float would be a tenth of a millisecond out by the end of a long song.
+static func encode(seq: int, frames: PackedVector2Array, song_seconds := 0.0,
+		flags := 0) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(HEADER + frames.size() * 4)
 	out.encode_u32(0, MAGIC_AUDIO)
 	out.encode_u32(4, seq)
 	out.encode_u32(8, 0)
 	out.encode_u16(12, frames.size())
+	out.encode_u16(14, flags)
+	out.encode_double(16, song_seconds)
 	var at := HEADER
 	for f in frames:
 		out.encode_s16(at, int(clampf(f.x, -1.0, 1.0) * 32767.0))
@@ -388,7 +449,23 @@ static func decode(packet: PackedByteArray) -> Dictionary:
 	for i in count:
 		frames[i] = Vector2(packet.decode_s16(at) / 32767.0, packet.decode_s16(at + 2) / 32767.0)
 		at += 4
-	return {"seq": packet.decode_u32(4), "echo": packet.decode_u32(8), "frames": frames}
+	var flags := packet.decode_u16(14)
+	return {"seq": packet.decode_u32(4), "echo": packet.decode_u32(8), "frames": frames,
+			"position": packet.decode_double(16), "flags": flags,
+			"valid": (flags & FLAG_VALID) != 0, "playing": (flags & FLAG_PLAYING) != 0,
+			"recording": (flags & FLAG_RECORDING) != 0}
+
+
+## The header's flags for a song clock's reading.
+static func flags_of(song: Dictionary) -> int:
+	var out := 0
+	if song.get("valid", false):
+		out |= FLAG_VALID
+	if song.get("playing", false):
+		out |= FLAG_PLAYING
+	if song.get("recording", false):
+		out |= FLAG_RECORDING
+	return out
 
 
 static func listen_packet(ticket: int, now_msec: int) -> PackedByteArray:

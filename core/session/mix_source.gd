@@ -31,6 +31,13 @@ func latency_ms() -> float:
 	return 0.0
 
 
+## How long before `read` returned it the newest frame was the song's "now", in msec: what the
+## host takes off its song clock when it stamps a packet. See MixFeed and docs/architecture.md,
+## "Recording a guest". Zero for a source that makes its sound on the spot.
+func song_offset_ms() -> float:
+	return 0.0
+
+
 ## Whatever this machine's audio input is set to: on a host, the tap MixTap built over the
 ## DAW's outputs. Read with AudioServer's direct capture, not an AudioStreamMicrophone, so the
 ## mix is never played back out of the host's own speakers on top of itself.
@@ -70,14 +77,28 @@ class Captured extends MixSource:
 	func latency_ms() -> float:
 		return 256.0 * 1000.0 / AudioServer.get_input_mix_rate()
 
+	## The capture fragment, by default: Reaper reports the position it is PLAYING (its own
+	## output latency already allowed for), the tap hears those frames as the sink does, and
+	## they then wait up to a fragment before this process can read them. Not measured against
+	## a real Reaper yet -- R3D_CAPTURE_OFFSET_MS overrides it for a host that has been.
+	func song_offset_ms() -> float:
+		var told := OS.get_environment("R3D_CAPTURE_OFFSET_MS")
+		return float(told) if told.is_valid_float() else latency_ms()
+
 
 ## A tone with a click on every second: something to hear, and something to time. Used where
 ## there is no DAW making sound -- the probe, and a host on the offline stand-in.
+##
+## Given the host's song clock, the clicks fall on every whole second OF THE SONG while it
+## rolls, instead of every second of the wall clock: a click track locked to the song, which is
+## what lets the probe check a guest's take against the beat it actually heard.
 class Tone extends MixSource:
 	var rate := 48000.0
 	var hz := 440.0
+	var clock: SongClock = null
 	var _start_usec := 0
 	var _made := 0
+	var _last_song_second := -1
 
 	func start() -> bool:
 		_start_usec = Time.get_ticks_usec()
@@ -91,13 +112,28 @@ class Tone extends MixSource:
 		if count <= 0:
 			return out
 		out.resize(count)
+		var song := {}
+		if clock != null:
+			song = clock.at(_start_usec + int((_made) * 1000000.0 / rate))
+		var click_left := 0
 		for i in count:
 			var n := _made + i
 			var t := n / rate
 			var s := sin(TAU * hz * t) * 0.2
-			# The click: one millisecond of full scale at the top of each second.
-			if n % int(rate) < int(rate / 1000.0):
+			if song.get("valid", false):
+				if song["playing"]:
+					var second := int(floor(float(song["seconds"]) + i / rate))
+					if _last_song_second >= 0 and second != _last_song_second:
+						click_left = int(rate / 1000.0)
+					_last_song_second = second
+				else:
+					_last_song_second = -1
+			elif n % int(rate) < int(rate / 1000.0):
+				# The click: one millisecond of full scale at the top of each second.
+				click_left = 1
+			if click_left > 0:
 				s = 0.9
+				click_left -= 1
 			out[i] = Vector2(s, s)
 		_made += count
 		return out
