@@ -1,6 +1,18 @@
 class_name Ergonomics
 extends RefCounted
 
+## The person this session is being presented to.
+##
+## A global, and deliberately so. Lettering sizes itself from it, the signal palette is drawn
+## from it, dwell timing is read from it and the focus rig places surfaces with it -- four
+## subsystems that have no business knowing about each other and every business agreeing about
+## who is reading. Threading one object down four unrelated call chains to express that would
+## be ceremony.
+##
+## It lived on Lettering first, which was the wrong home the moment anything but lettering
+## needed it.
+static var current: Ergonomics = Ergonomics.new()
+
 ## One participant's body, senses and comfort, and the geometry that follows from them.
 ##
 ## THE THING THIS REPLACES. Until now the project had exactly one hardcoded human in it. The

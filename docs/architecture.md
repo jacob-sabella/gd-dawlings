@@ -842,3 +842,36 @@ One check in this group was wrong when first written -- it asserted that deutera
 pure red and pure green together. It does not: those two differ hugely in brightness and a
 deuteranope separates them easily. The confusion is between hues matched in lightness, which is
 exactly what a row of equally bright status LEDs is. The check now says that instead.
+
+## Every control needed a steady hand on a small target
+
+That was the only way to work anything here: a press, held, on something a centimetre across.
+It is the one interaction a tremor, a prosthetic, a one-handed session with a cable in the
+other hand, and a cheap tracker all fail at -- and there was no alternative to it anywhere.
+
+Dwell is the alternative: look at a control long enough and it fires. Three decisions in it are
+worth stating, because each one is a way the obvious implementation goes wrong.
+
+**Controls opt in, and almost none do.** Dwell fires from ATTENTION, and attention lands on
+things by accident constantly. A momentary button dwelt on by mistake issues a command that can
+be undone with one press; a fader dwelt on by mistake takes the mix somewhere nobody asked for.
+So `dwell_activates()` is false on `ControlAffordance` and true only on `PanelButton`. Faders
+and knobs are deliberately not dwellable, and a test asserts it.
+
+**It shows its progress, in the lamp.** A timer that fires with no indication of how long is
+left is the interaction equivalent of an unlabelled button -- the first thing anyone does is
+look away in case it goes off, which defeats the mechanism entirely. The button already has the
+one thing a person is staring at while they wait, so the lamp fills in. A separate ring would
+mean watching two things to understand one.
+
+**It latches once spent.** The first version cleared its state on firing, so the count restarted
+the very next frame and the button held itself down -- a command repeating at the frame rate,
+which is far worse than never firing at all. The dwell is now spent until the gaze leaves the
+control. A press cancels an unfinished dwell rather than racing it, for the same reason: someone
+who dwells half way and then presses has pressed, once.
+
+Off by default (`dwell_seconds = 0.0`), because an always-on dwell fires at anything the eye
+rests on. `--dwell 0.8` turns it on.
+
+The transport's play, stop and record buttons are now on the signal palette and carry
+silhouettes too; they had exactly the defect the console strip had.

@@ -75,7 +75,7 @@ func _ready() -> void:
 	_rec = PanelButton.new()
 	_rec.body_bank = body_bank
 	_rec.lamp_bank = lamp_bank
-	_rec.led_colour = Lettering.reader.signal_colour(&"record")
+	_rec.led_colour = Ergonomics.current.signal_colour(&"record")
 	_rec.lamp_scale = Vector2(1.0, 1.0)
 	_rec.position = Vector3(0, HEIGHT - 0.077, 0.004)
 	_rec.pressed.connect(func(): DAW.set_track_rec_arm(track_index, not _state().rec_arm))
@@ -84,7 +84,7 @@ func _ready() -> void:
 	_solo = PanelButton.new()
 	_solo.body_bank = body_bank
 	_solo.lamp_bank = lamp_bank
-	_solo.led_colour = Lettering.reader.signal_colour(&"solo")
+	_solo.led_colour = Ergonomics.current.signal_colour(&"solo")
 	_solo.lamp_scale = Vector2(0.38, 1.0)
 	_solo.position = Vector3(0, HEIGHT - 0.095, 0.004)
 	_solo.pressed.connect(func(): DAW.set_track_solo(track_index, not _state().solo))
@@ -93,7 +93,7 @@ func _ready() -> void:
 	_mute = PanelButton.new()
 	_mute.body_bank = body_bank
 	_mute.lamp_bank = lamp_bank
-	_mute.led_colour = Lettering.reader.signal_colour(&"mute")
+	_mute.led_colour = Ergonomics.current.signal_colour(&"mute")
 	_mute.lamp_scale = Vector2(1.0, 0.40)
 	_mute.position = Vector3(0, HEIGHT - 0.113, 0.004)
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))

@@ -73,6 +73,7 @@ func _ready() -> void:
 	_test_the_frame_follows_a_turn_without_chasing_a_glance()
 	_test_summoned_gear_lands_where_a_person_can_use_it()
 	_test_no_signal_is_carried_by_colour_alone()
+	_test_a_control_can_be_worked_without_a_steady_hand()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -3229,3 +3230,87 @@ func _test_no_signal_is_carried_by_colour_alone() -> void:
 				check("lamp %d and lamp %d are different shapes (%v vs %v)"
 						% [i, j, shapes[i], shapes[j]], shapes[i] != shapes[j])
 	studio.queue_free()
+
+
+func _test_a_control_can_be_worked_without_a_steady_hand() -> void:
+	# Every control in this studio needs a press held steady on a small target. That is the one
+	# interaction a tremor, a prosthetic, a one-handed session or a cheap tracker all fail at,
+	# and until now there was no alternative to it anywhere.
+	var erg := Ergonomics.new()
+	Ergonomics.current = erg
+	var rig := Node3D.new()
+	add_child(rig)
+	var probe := _DwellProbe.new()
+	rig.add_child(probe)
+	var button := PanelButton.new()
+	rig.add_child(button)
+
+	var fired: Array[int] = []
+	button.pressed.connect(func(): fired.append(1))
+
+	# Off by default, and that is the right default: an always-on dwell fires at anything the
+	# eye happens to rest on.
+	erg.dwell_seconds = 0.0
+	probe.hovered = button
+	for i in 20:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("dwell does nothing until someone asks for it", fired.is_empty())
+
+	erg.dwell_seconds = 0.5
+	for i in 3:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("a dwell short of the time does not fire", fired.is_empty())
+	check("but it shows how far through it is (%.2f)" % button.dwell_progress,
+			button.dwell_progress > 0.4 and button.dwell_progress < 1.0)
+	for i in 3:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("a dwell that completes fires exactly once (%d)" % fired.size(), fired.size() == 1)
+	check("and clears its own indicator", is_equal_approx(button.dwell_progress, 0.0))
+
+	# It must not then fire again while the person is still looking at it. A dwell that repeats
+	# is a button that holds itself down.
+	for i in 5:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("it does not repeat while the gaze stays put", fired.size() == 1)
+
+	# Looking away resets it. A dwell that survives looking away has stopped measuring
+	# attention and started measuring elapsed time.
+	probe.hovered = null
+	probe._tick_dwell(Vector3.ZERO, 0.1)
+	probe.hovered = button
+	for i in 4:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("looking away starts the count again", fired.size() == 1)
+
+	# And a press beats it rather than racing it, so a half-finished dwell followed by a real
+	# press does not fire twice.
+	probe.pressing = true
+	for i in 20:
+		probe._tick_dwell(Vector3.ZERO, 0.1)
+	check("pressing cancels an unfinished dwell", fired.size() == 1)
+	probe.pressing = false
+
+	# Only controls where a mistaken activation is cheap opt in. A fader dwelt on by accident
+	# takes a mix somewhere nobody asked for.
+	check("a button opts into dwell", button.dwell_activates())
+	var fader := Fader.new()
+	rig.add_child(fader)
+	check("a fader does not", not fader.dwell_activates())
+	var knob := Knob.new()
+	rig.add_child(knob)
+	check("nor does a knob", not knob.dwell_activates())
+
+	rig.queue_free()
+	Ergonomics.current = Ergonomics.new()
+
+
+## An interactor that points wherever the test says, so dwell can be driven without a mouse,
+## a headset or a physics frame.
+class _DwellProbe extends Interactor:
+	var pressing := false
+
+	func is_pressing() -> bool:
+		return pressing
+
+	func _physics_process(_delta: float) -> void:
+		pass

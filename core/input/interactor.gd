@@ -18,6 +18,9 @@ var held: ControlAffordance = null
 var hovered: ControlAffordance = null
 
 var _was_pressed := false
+var _dwelling: ControlAffordance = null
+var _dwelt := 0.0
+var _dwell_spent := false
 
 
 ## Override: where this interactor is pointing from and in which direction.
@@ -52,6 +55,49 @@ func _physics_process(_delta: float) -> void:
 		held = null
 
 	_was_pressed = pressed
+	_tick_dwell(hit["point"], _delta)
+
+
+## Looking at something long enough to mean it.
+##
+## Reads its timing from the person rather than from a constant, and is off at zero, which is
+## the default -- an always-on dwell would fire at anything the eye rests on.
+##
+## Cancelled by a press rather than racing it: someone who dwells half way and then presses has
+## pressed, and the dwell must not fire a second time a moment later. The same reasoning kills
+## the dwell when the ray moves to a different control, because a dwell that survives looking
+## away is not measuring attention any more.
+func _tick_dwell(at: Vector3, delta: float) -> void:
+	var seconds: float = Ergonomics.current.dwell_seconds
+	var target: ControlAffordance = hovered
+	if seconds <= 0.0 or held != null or is_pressing() \
+			or target == null or not target.dwell_activates():
+		target = null
+
+	if target != _dwelling:
+		if _dwelling != null and is_instance_valid(_dwelling):
+			_dwelling.set_dwell_progress(0.0)
+		_dwelling = target
+		_dwelt = 0.0
+		_dwell_spent = false
+	# Spent until the gaze leaves. Without this latch the count simply restarts the frame after
+	# it fires and the button holds itself down -- which is what happened, and is a far worse
+	# failure than not firing at all, because it is a command repeating at the frame rate.
+	if _dwelling == null or _dwell_spent:
+		return
+
+	_dwelt += delta
+	if _dwelt < seconds:
+		_dwelling.set_dwell_progress(_dwelt / seconds)
+		return
+
+	# Fired. A press and a release, because that is what the control is expecting -- a dwell is
+	# a different way to say the same thing, not a different thing to say.
+	_dwell_spent = true
+	_dwelt = 0.0
+	_dwelling.set_dwell_progress(0.0)
+	_dwelling.grab_begin(self, at)
+	_dwelling.grab_end(self)
 
 
 func _cast(origin: Vector3, direction: Vector3) -> Dictionary:

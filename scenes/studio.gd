@@ -664,7 +664,7 @@ func _glide(surface: Surface, parent: Node3D, local: Transform3D) -> void:
 ## honest consequence of the visibility range being server-side rather than per-frame script.
 func _set_text_scale(to: float) -> void:
 	ergonomics.text_scale = clampf(to, 0.4, 4.0)
-	Lettering.reader = ergonomics
+	Ergonomics.current = ergonomics
 	for node in find_children("*", "Node3D", true, false):
 		if node is Surface:
 			(node as Surface).mark_dirty()

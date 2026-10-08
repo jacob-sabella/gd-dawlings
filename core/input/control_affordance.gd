@@ -29,6 +29,27 @@ func is_held() -> bool:
 
 
 ## `at` is the contact point in global space -- the ray hit, or the fingertip.
+## Can this control be worked by looking at it, without a press?
+##
+## False by default, and the default is the careful one. Dwell is the alternative to a press for
+## anyone who cannot hold a trigger steady, cannot pinch, or is working one-handed with a cable
+## in the other -- but it fires from ATTENTION, and attention lands on things by accident all
+## the time. A momentary button that gets dwelt on fires a command the person can undo; a fader
+## that gets dwelt on takes a mix somewhere they did not ask for and cannot easily get back.
+## So controls opt in, and only the ones where a mistaken activation is cheap do.
+func dwell_activates() -> bool:
+	return false
+
+
+## How far through its dwell this control is, 0 to 1. Override to show it.
+##
+## Not optional in practice. A timer that fires with no indication of how long is left is the
+## interaction equivalent of an unlabelled button: the first thing anyone does is look away in
+## case it goes off, which defeats the mechanism.
+func set_dwell_progress(_fraction: float) -> void:
+	pass
+
+
 func grab_begin(by: Node, at: Vector3) -> void:
 	if held_by != null and held_by != by:
 		# Two people reaching for one fader. First hand wins and the second is simply told no,

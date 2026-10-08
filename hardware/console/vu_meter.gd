@@ -105,10 +105,10 @@ void fragment() {
 static func colour_at(index: int) -> Color:
 	var f := float(index) / float(SEGMENTS - 1)
 	if f > 0.92:
-		return Lettering.reader.signal_colour(&"over")
+		return Ergonomics.current.signal_colour(&"over")
 	if f > 0.76:
-		return Lettering.reader.signal_colour(&"warn")
-	return Lettering.reader.signal_colour(&"ok")
+		return Ergonomics.current.signal_colour(&"warn")
+	return Ergonomics.current.signal_colour(&"ok")
 
 
 func _process(delta: float) -> void:

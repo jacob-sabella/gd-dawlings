@@ -128,7 +128,8 @@ func _rebuild() -> void:
 	_adopt(_tempo_label)
 
 	var play := PanelButton.new()
-	play.led_colour = Color(0.35, 0.95, 0.45)
+	play.led_colour = Ergonomics.current.signal_colour(&"ok")
+	play.lamp_scale = Vector2(1.0, 1.0)
 	play.position = Vector3(-0.035, -0.096, 0.028)
 	play.scale = Vector3(1.6, 1.6, 1.6)
 	play.pressed.connect(func(): DAW.transport_play())
@@ -136,14 +137,16 @@ func _rebuild() -> void:
 	_play_lamp = play
 
 	var stop := PanelButton.new()
-	stop.led_colour = Color(0.8, 0.8, 0.84)
+	stop.led_colour = Ergonomics.current.signal_colour(&"mute")
+	stop.lamp_scale = Vector2(0.45, 1.0)
 	stop.position = Vector3(0.0, -0.096, 0.028)
 	stop.scale = Vector3(1.6, 1.6, 1.6)
 	stop.pressed.connect(func(): DAW.transport_stop())
 	_adopt(stop)
 
 	var rec := PanelButton.new()
-	rec.led_colour = Color(0.98, 0.22, 0.2)
+	rec.led_colour = Ergonomics.current.signal_colour(&"record")
+	rec.lamp_scale = Vector2(1.0, 0.42)
 	rec.position = Vector3(0.035, -0.096, 0.028)
 	rec.scale = Vector3(1.6, 1.6, 1.6)
 	rec.pressed.connect(func(): DAW.transport_record())

@@ -60,13 +60,15 @@ func _ready() -> void:
 		else:
 			push_warning("bootstrap: --vision %s is not one of %s"
 					% [vision, Ergonomics.ColourVision.keys()])
+	if args["dwell"] > 0.0:
+		studio.ergonomics.dwell_seconds = args["dwell"]
 	if args["no_motion"]:
 		studio.ergonomics.motion_scale = 0.0
 	if args["seated"]:
 		studio.ergonomics = Ergonomics.seated_default()
 	if args["eyes"] > 0.0:
 		studio.ergonomics.text_scale = args["eyes"]
-	Lettering.reader = studio.ergonomics
+	Ergonomics.current = studio.ergonomics
 	add_child(studio)
 
 	_build_hud()
@@ -114,7 +116,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "detach_body": false, "no_motion": false, "vision": "", "eyes": 0.0, "seated": false,
+		"focus": "", "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "eyes": 0.0, "seated": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -142,6 +144,10 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
 			"--no-motion": out["no_motion"] = true
+			"--dwell":
+				i += 1
+				if i < argv.size():
+					out["dwell"] = float(argv[i])
 			"--vision":
 				i += 1
 				if i < argv.size():

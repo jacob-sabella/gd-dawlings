@@ -38,7 +38,11 @@ extends Object
 ## visibility range is set once when a label is built and then enforced by the rendering
 ## server per camera, so there is no per-frame hook to pass a profile through. Changing the
 ## profile therefore needs the labels rebuilt, which `Lettering.reader_changed` asks for.
-static var reader: Ergonomics = Ergonomics.new()
+## Kept as a name because the lettering code reads better for it, but the storage is
+## Ergonomics.current -- there is one reader, not one per subsystem.
+static var reader: Ergonomics:
+	get: return Ergonomics.current
+	set(value): Ergonomics.current = value
 
 ## Kept as the default a fresh Ergonomics carries, so the old behaviour is still named.
 const DEFAULT_MIN_CAP_ANGLE := 0.0054

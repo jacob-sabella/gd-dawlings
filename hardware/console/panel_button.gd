@@ -62,6 +62,8 @@ var lamp_bank: MeshBank
 
 var _lamp: MeshInstance3D
 var _lamp_slot := -1
+## How far through a dwell this button is, 0 to 1. Read by the suite, which has no eyes.
+var dwell_progress := 0.0
 
 
 func _ready() -> void:
@@ -104,6 +106,20 @@ func _ready() -> void:
 	_refresh()
 
 
+## Cheap to fire by accident -- a mute you did not mean is one press to undo -- which is the
+## whole test for whether a control should be dwellable.
+func dwell_activates() -> bool:
+	return true
+
+
+func set_dwell_progress(fraction: float) -> void:
+	var to := clampf(fraction, 0.0, 1.0)
+	if is_equal_approx(to, dwell_progress):
+		return
+	dwell_progress = to
+	_refresh()
+
+
 func _on_grab_begin(_at: Vector3) -> void:
 	pressed.emit()
 
@@ -113,7 +129,11 @@ func _foley_contact() -> AudioStream:
 
 
 func _refresh() -> void:
+	# The dwell shows as the lamp filling in. Not a separate ring or bar: the button already has
+	# the one thing a person is looking at while they wait for it, and adding a second indicator
+	# next to it would mean watching two things to understand one.
 	if _lamp_slot >= 0 and lamp_bank != null:
-		lamp_bank.set_colour(_lamp_slot, Materials.lamp_colour(led_colour, lit))
+		lamp_bank.set_colour(_lamp_slot, Materials.lamp_colour(led_colour, lit).lerp(
+				Materials.lamp_colour(led_colour, true), 0.0 if lit else dwell_progress))
 	elif _lamp:
-		_lamp.material_override = Materials.led(led_colour, lit)
+		_lamp.material_override = Materials.led(led_colour, lit or dwell_progress >= 1.0)
