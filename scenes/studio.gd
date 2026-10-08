@@ -124,6 +124,19 @@ const LOOM_RUNS: Array = [
 ]
 
 var _looms: Array[GearLoom] = []
+var _looms_dirty := false
+var _loom_clock := 0.0
+
+## The floor and everything on wheels. Null in AR, where the floor is real and so is the
+## furniture.
+var floor_plan: FloorPlan
+var rack_trolley: Trolley
+var deck_trolley: Trolley
+var timeline_stand: Trolley
+var _lamps: Array[OmniLight3D] = []
+## {piece_id: Transform3D} -- where the authored layout stood each piece, for the things that
+## were written against it: the floor points the looms run through.
+var _authored_floor: Dictionary = {}
 
 ## Where a person stands to work, on a monitor. Far enough forward of the console's home at
 ## z = 0.1 that gear summoned to arm's length lands on the desk rather than through it.
@@ -217,6 +230,7 @@ func _build_environment() -> void:
 		lamp.omni_range = LAMP_RANGE
 		lamp.shadow_enabled = false
 		add_child(lamp)
+		_lamps.append(lamp)
 
 
 func _build_room() -> void:
@@ -289,6 +303,12 @@ func _assembly(of_name: String) -> Node3D:
 
 
 func _build_furniture() -> void:
+	floor_plan = FloorPlan.new()
+	floor_plan.name = "FloorPlan"
+	floor_plan.bounds = Rect2(-ROOM_WIDTH * 0.5 + 0.05, -2.15, ROOM_WIDTH - 0.10, ROOM_DEPTH - 0.05)
+	floor_plan.fixtures.append(_desk_footprint)
+	add_child(floor_plan)
+
 	# Meter bridge: the arm that carries the patchbay up off the back of the desk. Every console
 	# with anything mounted above it has one, and without it the bay hangs in the air.
 	var bridge_frame := _assembly("MeterBridge")
@@ -311,40 +331,54 @@ func _build_furniture() -> void:
 
 	_build_lamp_stands()
 
-	# A trolley for the deck. Two uprights and a shelf; a tape machine on a stand is what the
-	# right-hand side of a control room looks like.
-	var trolley := _assembly("DeckTrolley")
+	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
+	# cart is what the right-hand side of a control room looks like, and it is the thing in
+	# the room most often wheeled somewhere else.
+	deck_trolley = _trolley("DeckTrolley", &"deck_trolley", Vector3(0.80, 0, -0.22), -32.0)
+	deck_trolley.footprint_half = Vector2(0.28, 0.21)
+	deck_trolley.follow = 10.0
+	var base := MeshInstance3D.new()
+	var base_mesh := BoxMesh.new()
+	base_mesh.size = Vector3(0.56, 0.025, 0.42)
+	base.mesh = base_mesh
+	base.position = Vector3(0, Caster.HEIGHT + 0.0125, 0)
+	base.material_override = Materials.chassis()
+	deck_trolley.add_part(base)
 	var shelf := MeshInstance3D.new()
 	var shelf_mesh := BoxMesh.new()
 	shelf_mesh.size = Vector3(0.56, 0.04, 0.42)
 	shelf.mesh = shelf_mesh
-	shelf.position = Vector3(0.80, 0.86, -0.22)
-	shelf.rotation_degrees = Vector3(0, -32, 0)
+	shelf.position = Vector3(0, 0.86, 0)
 	shelf.material_override = Materials.chassis()
-	trolley.add_child(shelf)
-
-	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
-	# control room that has one has it up on something.
-	var rack_base := _assembly("RackPlinth")
-	var plinth := MeshInstance3D.new()
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(0.60, 0.30, 0.34)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(-1.18, 0.15, -0.42) + Basis(Vector3.UP, deg_to_rad(38)) * Vector3(0, 0, -0.15)
-	plinth.rotation_degrees = Vector3(0, 38, 0)
-	plinth.material_override = Materials.chassis()
-	rack_base.add_child(plinth)
-
+	deck_trolley.add_part(shelf)
+	var post_bottom := Caster.HEIGHT + 0.025
 	for dx in [-0.22, 0.22]:
 		for dz in [-0.16, 0.16]:
 			var post := MeshInstance3D.new()
 			var post_mesh := BoxMesh.new()
-			post_mesh.size = Vector3(0.03, 0.86, 0.03)
+			post_mesh.size = Vector3(0.03, 0.84 - post_bottom, 0.03)
 			post.mesh = post_mesh
-			var offset := Basis(Vector3.UP, deg_to_rad(-32)) * Vector3(dx, 0, dz)
-			post.position = Vector3(0.80, 0.43, -0.22) + offset
+			post.position = Vector3(dx, (0.84 + post_bottom) * 0.5, dz)
 			post.material_override = Materials.brushed_metal()
-			trolley.add_child(post)
+			deck_trolley.add_part(post)
+	deck_trolley.add_corner_casters()
+
+	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
+	# control room that has one has it up on something -- and here the something has wheels,
+	# because a rack of outboard is the piece of a studio people actually push about.
+	rack_trolley = _trolley("RackTrolley", &"rack", Vector3(-1.18, 0, -0.42), 38.0)
+	rack_trolley.footprint_centre = Vector2(0, -0.15)
+	rack_trolley.footprint_half = Vector2(0.30, 0.17)
+	# Heavier than anything else on the floor. It is a cabinet full of steel.
+	rack_trolley.follow = 7.5
+	var plinth := MeshInstance3D.new()
+	var plinth_mesh := BoxMesh.new()
+	plinth_mesh.size = Vector3(0.60, 0.30 - Caster.HEIGHT, 0.34)
+	plinth.mesh = plinth_mesh
+	plinth.position = Vector3(0, (0.30 + Caster.HEIGHT) * 0.5, -0.15)
+	plinth.material_override = Materials.chassis()
+	rack_trolley.add_part(plinth)
+	rack_trolley.add_corner_casters(0.05)
 
 	# A stand under the timeline, which until now hung in the air.
 	#
@@ -356,33 +390,115 @@ func _build_furniture() -> void:
 	#
 	# Two legs and a crossbar, deliberately the same vocabulary as the patchbay bridge rather
 	# than a new idea: a room furnished out of three kinds of part looks like a room, and one
-	# furnished out of six looks like a kit.
-	var timeline_stand := _assembly("TimelineStand")
+	# furnished out of six looks like a kit. The feet are on casters, like a whiteboard's.
+	timeline_stand = _trolley("TimelineStand", &"timeline_stand",
+			Vector3(0, 0, TIMELINE_STAND_Z), 0.0)
+	timeline_stand.footprint_half = Vector2(0.41, 0.11)
+	var foot_top := Caster.HEIGHT + 0.022
 	for side in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP, 0.05)
+		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP - foot_top, 0.05)
 		leg.mesh = leg_mesh
-		leg.position = Vector3(side * 0.36, TIMELINE_STAND_TOP * 0.5, TIMELINE_STAND_Z)
+		leg.position = Vector3(side * 0.36, (TIMELINE_STAND_TOP + foot_top) * 0.5, 0)
 		leg.material_override = Materials.chassis()
-		timeline_stand.add_child(leg)
+		timeline_stand.add_part(leg)
 
 		# A foot, because a 35mm post standing on a floor is a post that fell over a moment ago.
 		var foot := MeshInstance3D.new()
 		var foot_mesh := BoxMesh.new()
 		foot_mesh.size = Vector3(0.10, 0.022, 0.22)
 		foot.mesh = foot_mesh
-		foot.position = Vector3(side * 0.36, 0.011, TIMELINE_STAND_Z)
+		foot.position = Vector3(side * 0.36, Caster.HEIGHT + 0.011, 0)
 		foot.material_override = Materials.chassis()
-		timeline_stand.add_child(foot)
+		timeline_stand.add_part(foot)
+		for end in [-0.075, 0.075]:
+			timeline_stand.add_caster(Vector2(side * 0.36, end))
 
 	var crossbar := MeshInstance3D.new()
 	var crossbar_mesh := BoxMesh.new()
 	crossbar_mesh.size = Vector3(0.79, 0.028, 0.09)
 	crossbar.mesh = crossbar_mesh
-	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.014, TIMELINE_STAND_Z)
+	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.014, 0)
 	crossbar.material_override = Materials.brushed_metal()
-	timeline_stand.add_child(crossbar)
+	timeline_stand.add_part(crossbar)
+
+
+## The console does not roll. It is the desk the room is arranged around and the one thing in
+## it the mix position is measured from, so it is a fixture: solid, and in the way.
+##
+## Measured from its home, not its node, because a summoned desk is at the mix position and
+## the place it will come back to still has to be kept clear.
+func _desk_footprint() -> Array:
+	if console == null or mount == null or mount.mode_of(&"console") != Presentation.Mode.STUDIO:
+		return []
+	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
+			else console.transform
+	var box := console.content_aabb()
+	if box.size.x <= 0.0:
+		return []
+	var flat := home * box
+	# Down to the floor and out to the toe of the carcass: the panel is what is measured, and
+	# the desk under it is what a trolley actually runs into.
+	flat = flat.merge(AABB(Vector3(flat.position.x, 0.0, flat.position.z), Vector3(flat.size.x, 0.01, 0.0)))
+	return [FloorPlan.footprint_of_box(flat)]
+
+
+## A piece of furniture that can be pushed around the floor, standing where the layout puts it
+## -- or where this participant last left it.
+func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: float) -> Trolley:
+	var piece := Trolley.new()
+	piece.name = of_name
+	piece.piece_id = id
+	piece.floor_plan = floor_plan
+	piece.position = at
+	piece.rotation_degrees = Vector3(0, heading_degrees, 0)
+	_authored_floor[id] = piece.transform
+	var key := StringName("floor/%s" % id)
+	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
+		piece.transform = Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
+	piece.settled.connect(_on_trolley_settled.bind(piece))
+	piece.moved.connect(func() -> void: _looms_dirty = true)
+	studio_set.add_child(piece)
+	floor_plan.add_piece(piece)
+	return piece
+
+
+func _on_trolley_settled(piece: Trolley) -> void:
+	if Session.layout == null:
+		return
+	Session.layout.set_transform(StringName("floor/%s" % piece.piece_id),
+			Presentation.Mode.STUDIO, piece.transform)
+	Session.layout.save()
+	_looms_dirty = true
+
+
+## The trolley a surface rides on, told how to move that surface's HOME.
+##
+## Not simply "move the node". A surface on a trolley may be somewhere else entirely when its
+## stand is pushed: summoned to the mix position by focus, or sitting on a monitor in SCREEN
+## mode. In both cases the stand still moves, and the surface must come back to where the stand
+## now is -- so what rides is the surface's studio placement, and the node only moves with it
+## when the node is actually standing on the trolley.
+func _ride(piece: Trolley, surface: Surface) -> void:
+	var id := surface.surface_id
+	var standing := func() -> bool:
+		return mount.mode_of(id) == Presentation.Mode.STUDIO and surface.get_parent() == studio_set
+	piece.riders.append({
+		"get": func() -> Transform3D:
+			if focus != null and focus.holds(id):
+				return focus.home_of(id)
+			if standing.call():
+				return surface.transform
+			return mount.studio_home(id),
+		"set": func(xform: Transform3D, settled_now: bool) -> void:
+			if focus != null and focus.holds(id):
+				focus.rehome(id, xform)
+			elif standing.call():
+				surface.transform = xform
+			if settled_now and Session.layout != null:
+				Session.layout.set_transform(id, Presentation.Mode.STUDIO, xform),
+	})
 
 
 func _build_anchors() -> void:
@@ -553,6 +669,13 @@ func _build_surfaces() -> void:
 	if mount != null:
 		mount.held = focus.holds
 
+	# What rides on what. After the rig, because a surface that is summoned rides by its home,
+	# and the rig is what holds that.
+	if floor_plan != null:
+		_ride(rack_trolley, rack)
+		_ride(deck_trolley, deck)
+		_ride(timeline_stand, timeline)
+
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
 	# across it: a session that gains tracks moves where its own looms land.
@@ -575,11 +698,17 @@ func _build_lamp_stands() -> void:
 	for spec in PRACTICALS:
 		var at: Vector3 = spec[0]
 		var tint: Color = spec[1]
-		var stand := Node3D.new()
-		stand.name = "LampStand"
+		var number := PRACTICALS.find(spec) + 1
+		var stand := _trolley("LampStand", StringName("lamp_%d" % number),
+				Vector3(at.x, 0.0, at.z), 0.0)
 		stand.add_to_group(&"lamp_stand")
-		stand.position = Vector3(at.x, 0.0, at.z)
-		studio_set.add_child(stand)
+		stand.rolls = false
+		stand.follow = 15.0
+		stand.footprint_half = Vector2(0.15, 0.15)
+		# The light goes with its lamp. Reparented rather than built here, because an AR
+		# participant gets the lights with no stands at all -- see _build_environment.
+		if number - 1 < _lamps.size():
+			_lamps[number - 1].reparent(stand, true)
 
 		var base := MeshInstance3D.new()
 		var base_mesh := CylinderMesh.new()
@@ -590,7 +719,7 @@ func _build_lamp_stands() -> void:
 		base.mesh = base_mesh
 		base.position = Vector3(0, 0.016, 0)
 		base.material_override = Materials.chassis()
-		stand.add_child(base)
+		stand.add_part(base)
 
 		# Up to the middle of the shade, so the pole is hidden by the head rather than stopping
 		# just short of it and leaving a gap you can see the wall through.
@@ -603,7 +732,7 @@ func _build_lamp_stands() -> void:
 		pole.mesh = pole_mesh
 		pole.position = Vector3(0, at.y * 0.5, 0)
 		pole.material_override = Materials.brushed_metal()
-		stand.add_child(pole)
+		stand.add_part(pole)
 
 		var shade := MeshInstance3D.new()
 		shade.name = "Shade"
@@ -616,7 +745,7 @@ func _build_lamp_stands() -> void:
 		shade.mesh = shade_mesh
 		shade.position = Vector3(0, at.y, 0)
 		shade.material_override = Materials.cap_plastic(Color(0.17, 0.165, 0.155))
-		stand.add_child(shade)
+		stand.add_part(shade)
 
 		# The glowing bit. Above the shade's lower rim so the cone shields it from straight on,
 		# which is what stops a lamp pointing down reading as a bare bulb from across the room.
@@ -629,7 +758,7 @@ func _build_lamp_stands() -> void:
 		glow.mesh = glow_mesh
 		glow.position = Vector3(0, at.y - LAMP_SHADE_HEIGHT * 0.28, 0)
 		glow.material_override = Materials.led(tint, true)
-		stand.add_child(glow)
+		stand.add_part(glow, false)
 
 
 # --- looms --------------------------------------------------------------------------------
@@ -666,11 +795,35 @@ func refresh_looms() -> void:
 		# Into the panel, which is the bay's own -Z however the bay is tilted. Negated because a
 		# loom's axis is the direction it RUNS AWAY along, not the direction it points in.
 		var to_dir: Vector3 = (patchbay.transform.basis * Vector3.BACK).normalized()
-		var loom := GearLoom.create(from_at, from_dir, to_at, to_dir, run[4], hash(run[0]))
+		var via: Vector3 = run[4]
+		# The floor point was written against where the authored layout stood the machine. A
+		# machine that has been wheeled somewhere else takes its run of trunking with it.
+		var stand := _stand_of(String(run[0]))
+		if stand != null and _authored_floor.has(stand.piece_id):
+			via = stand.transform * (_authored_floor[stand.piece_id] as Transform3D).affine_inverse() * via
+		var loom := GearLoom.create(from_at, from_dir, to_at, to_dir, via, hash(run[0]))
 		loom.on_floor = run[5]
 		loom.name = "Loom_%s" % run[0]
 		studio_set.add_child(loom)
 		_looms.append(loom)
+
+
+func _stand_of(machine: String) -> Trolley:
+	match machine:
+		"rack": return rack_trolley
+		"deck": return deck_trolley
+	return null
+
+
+## Looms follow furniture that is being pushed, but not every physics frame: a loom is a swept
+## mesh, and rebuilding three of them sixty times a second for a rack moving two centimetres is
+## the furniture costing more than the console.
+func _refresh_looms_if_moved(delta: float) -> void:
+	_loom_clock += delta
+	if _looms_dirty and _loom_clock >= 0.05:
+		_looms_dirty = false
+		_loom_clock = 0.0
+		refresh_looms()
 
 
 # --- desktop camera -----------------------------------------------------------------------
@@ -720,6 +873,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_refresh_looms_if_moved(delta)
 	if camera == null:
 		return
 	var move := Vector3.ZERO

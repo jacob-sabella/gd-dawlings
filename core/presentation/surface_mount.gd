@@ -193,6 +193,13 @@ func remember_placement(surface_id: StringName) -> void:
 	Session.layout.save()
 
 
+## Where a surface stands in the virtual set, whether or not it is there right now: the
+## viewer's own placement if they made one, the authored layout if not.
+func studio_home(surface_id: StringName) -> Transform3D:
+	return Session.layout.transform_for(surface_id, Presentation.Mode.STUDIO,
+			_authored.get(surface_id, Transform3D.IDENTITY))
+
+
 func handle_for(surface_id: StringName) -> SurfaceHandle:
 	return _handles.get(surface_id)
 

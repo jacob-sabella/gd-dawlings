@@ -97,6 +97,35 @@ static func reel_motor() -> AudioStreamWAV:
 		return _wav(s, true))
 
 
+## Casters on a hard floor: a low rumble with the wheels' seams ticking through it. Looping,
+## held while a piece of furniture is moving and scaled by how fast, the way the fader slide is.
+##
+## The ticks are what make it a WHEEL rather than wind. A real caster has a moulding seam and a
+## flat or two, and it is the irregular knock of those coming round that says "this is rolling"
+## rather than "something is hissing". Irregular on purpose: spaced evenly they are a clock.
+static func caster_roll() -> AudioStreamWAV:
+	return _cached("roll", func() -> AudioStreamWAV:
+		var s := _noise(0.80, 0.30, 37)
+		_lowpass(s, 420.0)
+		_lowpass(s, 420.0)
+		_highpass(s, 45.0)
+		for at in [0.031, 0.142, 0.219, 0.356, 0.418, 0.547, 0.633, 0.702]:
+			_impulse(s, at, 0.10, 0.0040, 260.0, int(at * 1000.0))
+		_seam(s, 0.040)
+		return _wav(s, true))
+
+
+## Furniture meeting something it cannot go through. A heavy, short knock -- the cabinet's mass
+## arriving at a stop -- with a little rattle of whatever is mounted in it a moment later.
+static func gear_bump() -> AudioStreamWAV:
+	return _cached("bump", func() -> AudioStreamWAV:
+		var s := _silence(0.16)
+		_impulse(s, 0.0, 0.60, 0.0180, 85.0, 41)
+		_impulse(s, 0.0, 0.30, 0.0040, 900.0, 43)
+		_impulse(s, 0.022, 0.12, 0.0060, 2300.0, 47)
+		return _wav(s, false))
+
+
 ## Spawn a one-shot at a node and let it clean itself up.
 ##
 ## A player per click rather than a pool, because these fire at the rate a hand can move and

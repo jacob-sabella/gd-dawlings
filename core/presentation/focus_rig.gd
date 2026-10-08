@@ -89,6 +89,19 @@ func holds(surface_id: StringName) -> bool:
 	return _home.has(surface_id)
 
 
+## Where a summoned surface goes back to when it is released, in its home parent's frame.
+func home_of(surface_id: StringName) -> Transform3D:
+	return (_home[surface_id][1] as Transform3D) if _home.has(surface_id) else Transform3D.IDENTITY
+
+
+## Move the home of a surface that is away being worked on. Its stand was pushed across the room
+## while it was summoned, and release has to take it back to where the stand IS, not where the
+## stand was when the surface left it.
+func rehome(surface_id: StringName, local: Transform3D) -> void:
+	if _home.has(surface_id):
+		_home[surface_id][1] = local
+
+
 func is_focused() -> bool:
 	return focused_id != &""
 

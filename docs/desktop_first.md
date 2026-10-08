@@ -138,3 +138,24 @@ passing test isn't a working app, so each step also gets driven through the real
 - **Unfocused gear intrudes into the frame.** With the rack focused, the console fills the
   bottom-right third of the shot. The furniture-yielding pass only moves `room_furniture`, and
   the console is a surface.
+
+
+## The room is furniture (added)
+
+"I want this to also feel like a studio where I can push racks around on wheels and move stuff
+around in general." The focus rig brings gear to you; this is the other half -- the room itself
+is yours to arrange, and it stays arranged.
+
+- Done: the rack plinth, the deck cart and the timeline stand are `Trolley`s on swivel casters;
+  the lamps slide on their bases and carry their light. Grab the structure (never the gear),
+  drag, and it follows with weight; scroll while holding to turn it. It collides with the
+  console, the walls and the other pieces (`FloorPlan`), the casters trail and roll, it rumbles
+  and knocks, the looms re-route behind it, and where it ended up is saved.
+- A summoned surface whose stand is pushed goes home to where the stand now is.
+- The console is a fixture on purpose: it is what the mix position is measured from.
+- Next: the camera should go to the gear instead of the gear coming to the camera on a monitor
+  (step 5's seats), so a rearranged room stays the room you work in; thumbstick turning in a
+  headset; a grip on the rack cabinet itself, not only its plinth; more furniture (speaker
+  stands, a sofa) once there are things worth moving for.
+- Shared sets: `FloorPlan` is the one place a move is decided and reports who made it, so it is
+  where replication goes when the virtual set is shared.

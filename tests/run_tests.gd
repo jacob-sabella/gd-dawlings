@@ -82,6 +82,11 @@ func _ready() -> void:
 	_test_the_desk_knows_how_small_its_own_lettering_is()
 	_test_every_label_is_set_in_the_distance_field_face()
 	_test_fitted_lettering_stays_in_its_slot()
+	_test_footprints_separate_by_the_shallowest_way_out()
+	_test_furniture_rolls_where_it_is_pushed()
+	_test_furniture_is_solid()
+	_test_the_wheel_turns_furniture_only_while_held()
+	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -4171,3 +4176,228 @@ func _test_fitted_lettering_stays_in_its_slot() -> void:
 	check("a wrapping label is fitted by its longest word, not its whole line",
 			word * label.pixel_size <= 0.020 and whole * label.pixel_size > 0.020)
 	label.free()
+
+
+# --- the floor ------------------------------------------------------------------------------
+
+func _test_footprints_separate_by_the_shallowest_way_out() -> void:
+	var a := FloorPlan.footprint(Vector2(0, 0), Vector2(0.5, 0.5), 0.0)
+	var b := FloorPlan.footprint(Vector2(0.9, 0.2), Vector2(0.5, 0.5), 0.0)
+	var push := FloorPlan.separation(a, b)
+	check("two boxes overlapping by 10cm in x are pushed apart in x (%s)" % push,
+			push.x < -0.099 and push.x > -0.102 and is_zero_approx(push.y))
+	var apart := FloorPlan.footprint(Vector2(1.2, 0), Vector2(0.5, 0.5), 0.0)
+	check("boxes that do not touch are left alone", FloorPlan.separation(a, apart) == Vector2.ZERO)
+	# The case an axis-aligned test gets wrong: a diamond whose bounding box overlaps the
+	# square but whose actual corner stops short of it.
+	var diamond := FloorPlan.footprint(Vector2(1.15, 1.15), Vector2(0.5, 0.5), PI / 4.0)
+	check("a turned box clear of the corner is clear", FloorPlan.separation(a, diamond) == Vector2.ZERO)
+	var cornered := FloorPlan.footprint(Vector2(0.75, 0.75), Vector2(0.5, 0.5), PI / 4.0)
+	check("and one into the corner is not", FloorPlan.separation(a, cornered) != Vector2.ZERO)
+
+
+## A studio on its own throwaway layout, because pushing furniture SAVES where it went, and the
+## layout it saves into is the real one of whoever runs the suite.
+func _floor_studio() -> Dictionary:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var hand := FakeHand.new()
+	return {"studio": studio, "hand": hand, "saved_layout": saved_layout}
+
+
+func _drop_floor_studio(rig: Dictionary) -> void:
+	Session.layout = rig["saved_layout"]
+	(rig["hand"] as Node).free()
+	var studio: Studio = rig["studio"]
+	remove_child(studio)
+	studio.free()
+
+
+## A hand straight above a floor point, pointing down at it.
+func _hand_over(hand: FakeHand, at: Vector2) -> void:
+	hand.pose = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), Vector3(at.x, 2.0, at.y))
+
+
+## Run a trolley's physics until it comes to rest, or give up.
+func _roll_until_still(piece: Trolley, frames := 600) -> int:
+	for i in frames:
+		if not piece.is_physics_processing():
+			return i
+		piece._physics_process(1.0 / 60.0)
+	return frames
+
+
+## Push from where the piece stands to `delta` further on, over `frames` frames.
+func _push(piece: Trolley, hand: FakeHand, delta: Vector2, frames := 40) -> void:
+	var start := Vector2(piece.position.x, piece.position.z)
+	_hand_over(hand, start)
+	piece.grab_begin(hand, Vector3(start.x, 0.2, start.y))
+	for i in frames:
+		_hand_over(hand, start + delta * float(i + 1) / float(frames))
+		piece.grab_move(hand, Vector3.ZERO)
+		piece._physics_process(1.0 / 60.0)
+	piece.grab_end(hand)
+
+
+func _test_furniture_rolls_where_it_is_pushed() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var piece := studio.rack_trolley
+	check("the rack stands on a trolley", piece != null and piece.casters().size() == 4)
+	var from := Vector2(piece.position.x, piece.position.z)
+	var rack_from := studio.rack.position
+	var headings := piece.casters().map(func(c): return c.heading())
+	var wheel: Node3D = piece.casters()[0].get_node("Swivel/Wheel")
+	var spin_from := wheel.transform.basis
+
+	var delta := Vector2(-0.30, 0.45)
+	_hand_over(hand, from)
+	piece.grab_begin(hand, Vector3(from.x, 0.2, from.y))
+	_hand_over(hand, from + delta)
+	piece.grab_move(hand, Vector3.ZERO)
+	piece._physics_process(1.0 / 60.0)
+	var first := (Vector2(piece.position.x, piece.position.z) - from).length()
+	# Something with mass accelerates; something dragged by the cursor is simply there. A frame
+	# in, a rack is under two centimetres along a fifty-four centimetre shove -- the speed limit
+	# alone would let an instant follow cover over four.
+	check("a rack starts from rest (%.1fmm in the first frame)" % [first * 1000.0],
+			first > 0.0005 and first < 0.02)
+	for i in 2:
+		piece._physics_process(1.0 / 60.0)
+	var early := Vector2(piece.position.x, piece.position.z) - from
+	# Heavy: three frames after a 54cm shove it has started and is nowhere near there.
+	check("a rack gets going a beat after the push (%.0f%% of the way after 3 frames)"
+			% [early.length() / delta.length() * 100.0],
+			early.length() > 0.001 and early.length() < delta.length() * 0.5)
+	piece.grab_end(hand)
+	var frames := _roll_until_still(piece)
+	check("and comes to rest by itself (%d frames)" % frames, frames < 600)
+
+	var went := Vector2(piece.position.x, piece.position.z) - from
+	check("it ends up where it was pushed (%.1fmm off)" % [(went - delta).length() * 1000.0],
+			(went - delta).length() < 0.01)
+	check("standing on the floor still", is_zero_approx(piece.position.y))
+	var rack_went := studio.rack.position - rack_from
+	check("the rack rides on it (%.1fmm off)"
+			% [(Vector2(rack_went.x, rack_went.z) - went).length() * 1000.0],
+			(Vector2(rack_went.x, rack_went.z) - went).length() < 0.001
+					and is_zero_approx(rack_went.y))
+	var turned := 0
+	for i in piece.casters().size():
+		if absf(piece.casters()[i].heading() - headings[i]) > 0.1:
+			turned += 1
+	check("the casters swung round to trail the push (%d of 4)" % turned, turned == 4)
+	check("and the wheels turned", not wheel.transform.basis.is_equal_approx(spin_from))
+
+	check("where it went is remembered",
+			Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
+	var kept := Session.layout.transform_for(&"rack", Presentation.Mode.STUDIO, Transform3D())
+	check("and so is where the rack went with it", kept.is_equal_approx(studio.rack.transform))
+
+	# The cable out of the back follows. Its floor point is written against the authored stand.
+	studio.refresh_looms()
+	var loom: GearLoom = null
+	for node in studio.studio_set.get_children():
+		if node is GearLoom and not node.is_queued_for_deletion() \
+				and (node as GearLoom).variation_seed == hash("rack"):
+			loom = node
+	var via: Vector3 = Studio.LOOM_RUNS[1][4]
+	check("the rack's loom found", loom != null)
+	if loom != null:
+		var moved_via := Vector2(loom.via.x - via.x, loom.via.z - via.z)
+		check("its run across the floor moved with the rack (%.1fmm off)"
+				% [(moved_via - went).length() * 1000.0], (moved_via - went).length() < 0.001)
+	_drop_floor_studio(rig)
+
+
+func _test_furniture_is_solid() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var piece := studio.rack_trolley
+	var desk: Array = studio._desk_footprint()
+	check("the desk is on the floor plan", desk.size() == 1)
+
+	# Straight at the console, hard, and well past where it stands.
+	var at := Vector2(piece.position.x, piece.position.z)
+	_push(piece, hand, Vector2(0.2, 0.5) - at)
+	_roll_until_still(piece)
+	var mine := piece.footprint_at(Vector2(piece.position.x, piece.position.z), piece.rotation.y)
+	check("a rack pushed into the console stops at it", desk.size() == 1 and \
+			FloorPlan.separation(mine, desk[0]).length() < 0.002)
+	var travelled := Vector2(piece.position.x, piece.position.z) - at
+	check("having got as far as it could (%.0fcm)" % [travelled.length() * 100.0],
+			travelled.length() > 0.3)
+
+	# And into the wall.
+	_push(piece, hand, Vector2(-6.0, 0.0))
+	_roll_until_still(piece)
+	var reach := FloorPlan._reach(piece.footprint_at(
+			Vector2(piece.position.x, piece.position.z), piece.rotation.y))
+	var c: Vector2 = piece.footprint_at(Vector2(piece.position.x, piece.position.z),
+			piece.rotation.y)["c"]
+	check("and one pushed at the wall stays in the room (%.3f)" % (c.x - reach.x),
+			c.x - reach.x >= studio.floor_plan.bounds.position.x - 0.001)
+
+	# Into another trolley.
+	var deck := studio.deck_trolley
+	var deck_at := Vector2(deck.position.x, deck.position.z)
+	var rack_at := Vector2(piece.position.x, piece.position.z)
+	_push(piece, hand, deck_at - rack_at)
+	_roll_until_still(piece)
+	var overlap := FloorPlan.separation(
+			piece.footprint_at(Vector2(piece.position.x, piece.position.z), piece.rotation.y),
+			deck.footprint_at(deck_at, deck.rotation.y))
+	check("and two trolleys do not pass through each other", overlap.length() < 0.002)
+	_drop_floor_studio(rig)
+
+
+func _test_the_wheel_turns_furniture_only_while_held() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var piece := studio.deck_trolley
+	var heading := piece.rotation.y
+	check("over a trolley, the wheel still zooms", not piece.nudge(hand, 1, false))
+	var at := Vector2(piece.position.x, piece.position.z)
+	_hand_over(hand, at)
+	piece.grab_begin(hand, Vector3(at.x, 0.4, at.y))
+	check("holding it, the wheel turns it", piece.nudge(hand, 2, false))
+	check("and shift turns it finely", piece.nudge(hand, -1, true))
+	piece.grab_end(hand)
+	_roll_until_still(piece)
+	var turned := rad_to_deg(wrapf(piece.rotation.y - heading, -PI, PI))
+	check("two notches and one fine notch back is 27 degrees (%.2f)" % turned,
+			absf(turned - 27.0) < 0.05)
+	var deck_turned := rad_to_deg(wrapf(studio.deck.rotation.y - deg_to_rad(-32.0), -PI, PI))
+	check("and the tape machine turned with its cart (%.2f)" % deck_turned,
+			absf(deck_turned - 27.0) < 0.05)
+	_drop_floor_studio(rig)
+
+
+func _test_a_summoned_surface_goes_home_to_where_its_stand_went() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var piece := studio.rack_trolley
+	var offset := piece.transform.affine_inverse() * studio.rack.transform
+	studio.focus.focus(&"rack")
+	check("the rack is away being worked on", studio.focus.holds(&"rack"))
+	_push(piece, hand, Vector2(0.0, 0.6))
+	_roll_until_still(piece)
+	check("its stand stayed in the room", piece.get_parent() == studio.studio_set)
+	studio.focus.release()
+	var expected := piece.transform * offset
+	check("released, the rack goes back onto its stand where the stand now is (%.1fmm off)"
+			% [(studio.rack.transform.origin - expected.origin).length() * 1000.0],
+			studio.rack.transform.is_equal_approx(expected))
+	_drop_floor_studio(rig)

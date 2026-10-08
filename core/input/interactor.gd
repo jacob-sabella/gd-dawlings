@@ -41,6 +41,12 @@ func fine() -> bool:
 	return false
 
 
+## Override: how far this interactor's ray reaches. A hand's ray is for things within a step or
+## two; a cursor is aimed at a picture of the whole room, and furniture across it is fair game.
+func reach() -> float:
+	return RAY_LENGTH
+
+
 ## Override: is the trigger / mouse button / pinch currently down.
 func is_pressing() -> bool:
 	return false
@@ -144,7 +150,7 @@ func _exit_tree() -> void:
 
 func _cast(origin: Vector3, direction: Vector3) -> Dictionary:
 	var space := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * RAY_LENGTH)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * reach())
 	query.collision_mask = 1 << (CONTROL_LAYER - 1)
 	var result := space.intersect_ray(query)
 	if result.is_empty():
