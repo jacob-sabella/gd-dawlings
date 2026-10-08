@@ -54,4 +54,10 @@ if grep -qE "^(SCRIPT ERROR|ERROR: Failed to load script)" "$log"; then
   status=1
 fi
 
+# The Reaper bridge's request decoder, which no Godot run can reach: Lua, when there is one.
+lua_bin="$(command -v lua5.4 || command -v lua || true)"
+if [ -n "$lua_bin" ]; then
+  "$lua_bin" tests/bridge_decode_test.lua || status=1
+fi
+
 exit "$status"

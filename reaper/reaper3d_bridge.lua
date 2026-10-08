@@ -63,20 +63,61 @@ end
 -- Scalar-only decoder, which is all the protocol needs: every request is
 -- {"id":N,"fn":"Name","args":[...]} with numbers and strings in args. A general JSON parser here
 -- would be a hundred lines guarding against input this script writes the other half of.
+-- The args array of a request, read as JSON: numbers, strings with their escapes undone,
+-- true and false. A real scanner rather than a split on commas, because a take's name or a
+-- file's path may hold a comma, a quote or a backslash, and a Windows path always holds the
+-- last. Positions are kept: a null is a hole at its own index, never a shift of the rest.
+local function decode_args(text, from)
+  local args, k, i, n = {}, 0, from, #text
+  local escapes = {n = '\n', t = '\t', r = '\r', b = '\b', f = '\f'}
+  while i <= n do
+    local c = text:sub(i, i)
+    if c == ']' then break
+    elseif c == '"' then
+      local out, j = {}, i + 1
+      while j <= n do
+        local d = text:sub(j, j)
+        if d == '\\' then
+          local e = text:sub(j + 1, j + 1)
+          if e == 'u' then
+            out[#out + 1] = utf8.char(tonumber(text:sub(j + 2, j + 5), 16) or 63)
+            j = j + 6
+          else
+            out[#out + 1] = escapes[e] or e
+            j = j + 2
+          end
+        elseif d == '"' then break
+        else
+          out[#out + 1] = d
+          j = j + 1
+        end
+      end
+      k = k + 1
+      args[k] = table.concat(out)
+      i = j + 1
+    elseif c:match('[%-%d]') then
+      local num = text:match('^[%-%d%.eE%+]+', i)
+      k = k + 1
+      args[k] = tonumber(num)
+      i = i + #num
+    elseif text:sub(i, i + 3) == 'true' then
+      k = k + 1; args[k] = true; i = i + 4
+    elseif text:sub(i, i + 4) == 'false' then
+      k = k + 1; args[k] = false; i = i + 5
+    elseif text:sub(i, i + 3) == 'null' then
+      k = k + 1; i = i + 4
+    else
+      i = i + 1
+    end
+  end
+  return args
+end
+
 local function decode_request(text)
   local id = tonumber(text:match('"id"%s*:%s*(%-?%d+)'))
   local fn = text:match('"fn"%s*:%s*"([^"]*)"')
-  local args = {}
-  local args_body = text:match('"args"%s*:%s*%[(.-)%]')
-  if args_body then
-    for raw in args_body:gmatch('[^,]+') do
-      -- Lua 5.4 makes the loop variable const, so the trim has to land in a new local.
-      local token = raw:match('^%s*(.-)%s*$')
-      local str = token:match('^"(.*)"$')
-      if str then args[#args + 1] = str
-      else args[#args + 1] = tonumber(token) end
-    end
-  end
+  local _, open = text:find('"args"%s*:%s*%[')
+  local args = open and decode_args(text, open + 1) or {}
   return id, fn, args
 end
 
