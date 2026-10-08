@@ -84,6 +84,8 @@ var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
 var _loop_lamp: PanelButton
 var _click_lamp: PanelButton
+var _mark_key: PanelButton
+var _section_label: Label3D
 var _loop_label: Label3D
 var _history_keys: Array[PanelButton] = []
 var _tape_runs: Array[MeshInstance3D] = []
@@ -165,6 +167,8 @@ func _rebuild() -> void:
 	tap_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(tap_caption)
 	_adopt(tap_caption)
+
+	_build_locator()
 
 	# The click, opposite TAP: the two keys about the beat, either side of the transport.
 	var click := PanelButton.new()
@@ -598,6 +602,123 @@ func _update_packs() -> void:
 				tangent_point(takeup, pack_radius(right), right_guide, 1.0), REEL_RADIUS))
 
 
+## THE LOCATOR, between the reels under the counter: back a marker, drop one, on a marker. And
+## above the keys, the section the playhead is in -- read off the markers, which is what they are
+## named for. A performer looks for "where am I in the song", and a bar number is the answer to
+## a different question.
+func _build_locator() -> void:
+	_section_label = Label3D.new()
+	_section_label.name = "Section"
+	_section_label.font_size = 34
+	_section_label.pixel_size = 0.00024
+	_section_label.position = Vector3(0, 0.081, 0.002)
+	_section_label.modulate = Color(0.88, 0.74, 0.44)
+	_section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(_section_label)
+	_adopt(_section_label)
+
+	for spec in [[-1, "PREV"], [0, "MARK"], [1, "NEXT"]]:
+		var way: int = spec[0]
+		var key := PanelButton.new()
+		key.name = "Locate%s" % spec[1].capitalize()
+		key.led_colour = Color(0.88, 0.74, 0.44)
+		key.lamp_scale = Vector2(0.8, 0.45) if way == 0 else Vector2(0.45, 0.45)
+		key.position = Vector3(float(way) * LOCATOR_PITCH, 0.044, 0.006)
+		key.scale = Vector3(1.3, 1.3, 1.3)
+		if way == 0:
+			key.pressed.connect(_drop_marker)
+			key.describe_title = func() -> String: return "TRANSPORT  ADD MARKER"
+			key.describe_value = func(_v: float) -> String:
+				if not DAW.can(DAWBackend.Capability.MARKERS):
+					return "needs the ReaScript bridge"
+				return "%s at %s" % [next_marker_name(DAW.state.markers),
+						DAW.state.bar_beat(DAW.state.position_seconds)]
+			_mark_key = key
+		else:
+			key.pressed.connect(func(): _locate(way))
+			key.describe_title = func() -> String:
+				return "TRANSPORT  " + ("PREVIOUS MARKER" if way < 0 else "NEXT MARKER")
+			key.describe_value = func(_v: float) -> String:
+				var at := marker_before(DAW.state.markers, DAW.state.position_seconds) if way < 0 \
+						else marker_after(DAW.state.markers, DAW.state.position_seconds)
+				if at < 0.0:
+					return "the start" if way < 0 else "no marker after here"
+				return str(DAW.state.markers.get(at, "")) if str(DAW.state.markers.get(at, "")) != "" \
+						else DAW.state.bar_beat(at)
+		_adopt(key)
+
+		var legend := Label3D.new()
+		legend.text = spec[1]
+		legend.font_size = 22
+		legend.pixel_size = 0.00024
+		legend.position = Vector3(float(way) * LOCATOR_PITCH, 0.058, 0.002)
+		legend.modulate = Color(0.6, 0.62, 0.66)
+		legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		Lettering.range_to_legibility(legend)
+		_adopt(legend)
+
+
+## Centre to centre, across the gap between the reels.
+const LOCATOR_PITCH := 0.026
+## How far behind the playhead a marker has to be for PREV to go to it rather than past it.
+## Without it, PREV pressed while rolling lands on the marker just passed, the playhead moves a
+## frame on, and the next press lands on the same marker: a key that cannot get further back.
+const LOCATE_SLACK := 0.4
+
+
+## The latest marker strictly before `seconds` less the slack, or -1 when there is none.
+static func marker_before(markers: Dictionary, seconds: float) -> float:
+	var best := -1.0
+	for at in markers:
+		if float(at) < seconds - LOCATE_SLACK and float(at) > best:
+			best = float(at)
+	return best
+
+
+## The first marker after `seconds`, or -1.
+static func marker_after(markers: Dictionary, seconds: float) -> float:
+	var best := -1.0
+	for at in markers:
+		if float(at) > seconds + 0.001 and (best < 0.0 or float(at) < best):
+			best = float(at)
+	return best
+
+
+## The marker at or before `seconds`: the section the playhead is in. "" before the first.
+static func section_at(markers: Dictionary, seconds: float) -> String:
+	var best := -1.0
+	for at in markers:
+		if float(at) <= seconds + 0.001 and float(at) > best:
+			best = float(at)
+	return str(markers[best]) if best >= 0.0 else ""
+
+
+## What MARK calls the marker it drops: the next free number, the way Reaper numbers markers it
+## was not told the name of.
+static func next_marker_name(markers: Dictionary) -> String:
+	var n := 1
+	while markers.values().has("MARK %d" % n):
+		n += 1
+	return "MARK %d" % n
+
+
+func _locate(way: int) -> void:
+	var s := DAW.state
+	var at := marker_before(s.markers, s.position_seconds) if way < 0 \
+			else marker_after(s.markers, s.position_seconds)
+	if at < 0.0:
+		if way < 0:
+			DAW.seek(0.0)
+		return
+	DAW.seek(at)
+
+
+func _drop_marker() -> void:
+	if not DAW.can(DAWBackend.Capability.MARKERS):
+		return
+	DAW.add_marker(DAW.state.position_seconds, next_marker_name(DAW.state.markers))
+
+
 func _refresh() -> void:
 	if _counter == null:
 		return
@@ -608,6 +729,7 @@ func _refresh() -> void:
 	_rec_lamp.lit = DAW.state.recording
 	_loop_lamp.lit = DAW.state.looping
 	_click_lamp.lit = DAW.state.metronome
+	_section_label.text = section_at(DAW.state.markers, DAW.state.position_seconds).to_upper()
 	_loop_label.text = _loop_text()
 	for i in _history_keys.size():
 		var depth := DAW.state.undo_depth if i == 0 else DAW.state.redo_depth

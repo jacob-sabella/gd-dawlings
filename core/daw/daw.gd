@@ -51,7 +51,7 @@ const COMMANDS := [
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome",
+	&"set_metronome", &"add_marker",
 ]
 
 var backend: DAWBackend
@@ -196,6 +196,11 @@ func clear_item_selection() -> void: _do(&"clear_item_selection", [])
 func move_item(track_index: int, item_index: int, start: float) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
+## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
+## guest's intent should not be able to hand the host a megabyte of name.
+const MARKER_NAME_MAX := 64
+func add_marker(seconds: float, marker_name: String) -> void:
+	_do(&"add_marker", [maxf(seconds, 0.0), marker_name.left(MARKER_NAME_MAX)])
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to
@@ -232,6 +237,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		return
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
+	if verb == &"add_marker":
+		if args.size() != 2:
+			push_warning("DAW: refused a malformed add_marker intent %s." % [args])
+			return
+		args = [maxf(float(args[0]), 0.0), str(args[1]).left(MARKER_NAME_MAX)]
 	if verb == &"set_metronome":
 		if args.size() != 1:
 			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])

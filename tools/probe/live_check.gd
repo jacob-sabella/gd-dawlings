@@ -67,6 +67,26 @@ func _until(cond: Callable, timeout := 3.0) -> Dictionary:
 	return st
 
 
+func _until_marker(present: bool, timeout := 3.0) -> Array:
+	var started := Time.get_ticks_msec()
+	var marks: Array = []
+	while Time.get_ticks_msec() - started < timeout * 1000.0:
+		var r = await _reaper("GetTimeline")
+		marks = _arr(r.get("markers", [])) if r is Dictionary else []
+		if _live_mark(marks) == present:
+			break
+		await _wait(0.1)
+	return marks
+
+
+static func _live_mark(marks: Array) -> bool:
+	for m in marks:
+		if m is Dictionary and absf(float(m.get("position", -1.0)) - 3.5) < 0.01 \
+				and str(m.get("name", "")) == "LIVE CHECK":
+			return true
+	return false
+
+
 func _state() -> Dictionary:
 	var r = await _reaper("GetState", [8])
 	return r if r is Dictionary else {}
@@ -285,6 +305,15 @@ func _run() -> void:
 	DAW.set_metronome(click_was)
 	st = await _until(func(x): return x.get("metronome", not click_was) == click_was)
 	check("and switches it back", st.get("metronome", not click_was) == click_was)
+
+	# --- a marker from the locator: read back from Reaper's own marker list ----------------
+	check("Reaper can take markers with the bridge up", DAW.can(DAWBackend.Capability.MARKERS))
+	DAW.add_marker(3.5, "LIVE CHECK")
+	var marks := await _until_marker(true)
+	check("MARK puts a marker in Reaper's project (%s)" % [marks], _live_mark(marks))
+	DAW.undo()
+	marks = await _until_marker(false)
+	check("and one undo takes it out again", not _live_mark(marks))
 
 	# --- put everything back ----------------------------------------------------------------
 	if send_track > 0:

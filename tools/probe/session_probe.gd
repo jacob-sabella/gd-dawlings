@@ -14,6 +14,7 @@ const KEY := "KICK  VOLUME"
 const GUEST_TEMPO := 133.5
 ## A send level neither the stand-in nor the rig starts at.
 const GUEST_SEND := 0.345
+const GUEST_MARK := 1.25
 
 var _failures := 0
 var _checks := 0
@@ -102,6 +103,8 @@ func _host(port: int) -> void:
 	check("the guest's send level reached the mix (%s)" % [sent], not sent.is_empty()
 			and absf(DAW.state.send(sent[0], sent[1]).volume - GUEST_SEND) < 0.002)
 	check("the guest switched the click on", DAW.state.metronome)
+	check("the guest's marker is on the host's timeline (%s)" % [DAW.state.markers.values()],
+			_has_guest_mark(DAW.state))
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
@@ -163,6 +166,7 @@ func _guest(port: int) -> void:
 	DAW.set_track_volume(2, 0.123)
 	DAW.set_tempo(GUEST_TEMPO)
 	DAW.set_metronome(true)
+	DAW.add_marker(GUEST_MARK, "GUEST")
 	var send := _first_send(DAW.state)
 	check("the snapshot carried a send to turn (%s)" % [send], not send.is_empty())
 	if not send.is_empty():
@@ -174,6 +178,7 @@ func _guest(port: int) -> void:
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("and so did my tempo (%.1f)" % DAW.state.tempo, absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
 	check("and the click I switched on", DAW.state.metronome)
+	check("and my marker (%s)" % [DAW.state.markers.values()], _has_guest_mark(DAW.state))
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)
 
@@ -246,3 +251,9 @@ func check(label: String, ok: bool) -> void:
 	if not ok:
 		_failures += 1
 	print("%s  %s" % ["PASS" if ok else "FAIL", label])
+
+
+# The guest's marker, found by its name: it is dropped at GUEST_MARK seconds, but the guest
+# changes the tempo too, and Reaper's markers keep their beat, so in seconds it moves.
+static func _has_guest_mark(state: MixState) -> bool:
+	return state.markers.values().has("GUEST")

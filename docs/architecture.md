@@ -464,6 +464,15 @@ be taken hold of. The readouts turn amber while flipped, because a desk of send 
 exactly like a desk of levels otherwise. The flip is this participant's view of the desk, never
 replicated, and like a bank change it is refused while a hand is on a fader or knob.
 
+### Markers are made by the bridge and read by the poll
+
+OSC has no message that makes a marker, so `add_marker` is a bridge edit (`AddMarker`, one
+undo point) and markers come back with the timeline poll as they always did. The backend writes
+the new marker into the cache straight away, so MARK shows at once; `_edit` holds the poll that
+was already on its way, so it cannot draw the marker away again for a beat. Markers are keyed by
+seconds, and Reaper keeps a marker on its beat when the tempo changes, so the same marker has a
+different key after a tempo edit. Anything that looks a marker up afterwards goes by name.
+
 ### The parent heads its group
 
 Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum

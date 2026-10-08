@@ -53,6 +53,8 @@ const Capability := {
 	TIMELINE = &"timeline",
 	## Report plugin parameter names rather than just indices.
 	FX_PARAM_NAMES = &"fx_param_names",
+	## Drop a marker on the arrangement. Reaper's OSC can go to a marker but not make one.
+	MARKERS = &"markers",
 }
 
 var state := MixState.new()
@@ -163,6 +165,9 @@ func clear_item_selection() -> void: pass
 func move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
 ## Cut every selected item that spans `seconds` there. Both halves stay selected.
 func split_selected(_seconds: float) -> void: pass
+## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
+## history. A no-op on a backend that answers false to Capability.MARKERS.
+func add_marker(_seconds: float, _marker_name: String) -> void: pass
 
 
 # --- item edits, on the cache ------------------------------------------------------------
@@ -257,6 +262,13 @@ func _lanes_snapshot() -> Dictionary:
 	for index in state.track_indices():
 		out[index] = MixWire._pack_items(state.track(index).items)
 	return out
+
+
+## Every marker, through the address the timeline delivers them on, so it replicates.
+func _write_markers(markers: Dictionary) -> void:
+	var packed := MixWire._pack_markers(markers)
+	record_for_replication("/timeline/markers", packed)
+	MixWire.apply(state, "/timeline/markers", packed)
 
 
 func _restore_lanes(snapshot: Dictionary) -> void:

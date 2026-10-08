@@ -491,6 +491,14 @@ func split_selected(seconds: float) -> void:
 		_remember_edit(before)
 
 
+func add_marker(seconds: float, marker_name: String) -> void:
+	var before: Dictionary = state.markers.duplicate()
+	var after: Dictionary = before.duplicate()
+	after[seconds] = marker_name
+	_write_markers(after)
+	_remember("marker", _write_markers.bind(before), _write_markers.bind(after), false)
+
+
 ## An edit is one step, never folded: two moves in a row are two things you might take back.
 func _remember_edit(before: Dictionary) -> void:
 	var after := _lanes_snapshot()

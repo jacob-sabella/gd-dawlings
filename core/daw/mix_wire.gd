@@ -242,6 +242,16 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 const ITEM_WIDTH := 5
 
 
+## [position, name, position, name, ...], in time order.
+static func _pack_markers(markers: Dictionary) -> Array:
+	var order: Array = markers.keys()
+	order.sort()
+	var out: Array = []
+	for at in order:
+		out.append_array([at, markers[at]])
+	return out
+
+
 static func _unpack_items(args: Array) -> Array:
 	var out: Array = []
 	var i := 0
@@ -399,10 +409,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/loop/end/time", [state.loop_end]])
 	out.append(["/timeline/length", [state.project_length]])
 	if not state.markers.is_empty():
-		var packed: Array = []
-		for at in state.markers:
-			packed.append_array([at, state.markers[at]])
-		out.append(["/timeline/markers", packed])
+		out.append(["/timeline/markers", _pack_markers(state.markers)])
 	return out
 
 

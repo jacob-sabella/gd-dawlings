@@ -421,6 +421,18 @@ function handlers.SplitSelected(args)
   return result
 end
 
+-- args: seconds, name. A marker, one undo point, as Insert marker does from Reaper's own menu --
+-- but at the time given rather than at the edit cursor, which on a desk someone else is
+-- driving is not where the person pressing MARK was listening.
+function handlers.AddMarker(args)
+  local at = math.max(0, args[1] or reaper.GetPlayPosition())
+  reaper.Undo_BeginBlock()
+  local index = reaper.AddProjectMarker2(0, false, at, 0, tostring(args[2] or ''), -1, 0)
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Insert marker', -1)
+  return {ok = index >= 0, index = index}
+end
+
 -- args: track (1-based, as OSC), fx (1-based), param (1-based). The plugin's own words for one
 -- parameter's value -- "-12.0 dB", "4.0:1" -- with the normalised value they describe, so the
 -- caller can tell whether the words still belong to the knob it is looking at. Asked for one

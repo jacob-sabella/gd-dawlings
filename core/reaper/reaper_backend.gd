@@ -147,6 +147,9 @@ func can(capability: StringName) -> bool:
 		# ReaScript bridge can say that -- a page-forward button that cannot tell you whether
 		# there is anything to page to is worse than no button.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.MARKERS:
+		# OSC can go to a marker but not make one; the bridge does that.
+		return _bridge != null and _bridge.is_open()
 	if capability == Capability.TIMELINE:
 		# Reaper's OSC surface has no message about media items at all, so this is exactly as
 		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
@@ -397,6 +400,17 @@ func move_item(track_index: int, item_index: int, start: float) -> void:
 func split_selected(seconds: float) -> void:
 	_locally_split(seconds)
 	_edit("SplitSelected", [seconds])
+
+
+## Shown on the cache at once, like an item edit, and confirmed by the timeline poll the edit
+## brings forward.
+func add_marker(seconds: float, marker_name: String) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	var markers: Dictionary = state.markers.duplicate()
+	markers[seconds] = marker_name
+	_write_markers(markers)
+	_edit("AddMarker", [seconds, marker_name])
 
 
 ## Send one edit, and keep the timeline poll from undoing it on screen.

@@ -103,6 +103,7 @@ func _ready() -> void:
 	_test_the_tempo_is_set_from_the_deck()
 	_test_the_sends_ride_the_faders()
 	_test_the_click_is_switched_from_the_deck()
+	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5463,6 +5464,75 @@ func _test_the_click_is_switched_from_the_deck() -> void:
 	deck._process(0.0)
 	check("and lights its lamp", deck._click_lamp.lit)
 	check("it goes by its name across a session", deck._click_lamp.network_key() == "TRANSPORT  CLICK")
+	deck.queue_free()
+
+
+func _test_markers_are_dropped_and_found_from_the_deck() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var count := s.markers.size()
+	check("the stand-in has sections to find (%d)" % count, count >= 4)
+	check("the offline stand-in can drop markers", DAW.can(DAWBackend.Capability.MARKERS))
+	backend._repl_durable.clear()
+	DAW.add_marker(12.5, "Drop")
+	check("add_marker drops a marker", s.markers.get(12.5) == "Drop" and s.markers.size() == count + 1)
+	check("and replicates the markers", backend._repl_durable.has("/timeline/markers"))
+	DAW.undo()
+	check("a marker is undoable", not s.markers.has(12.5) and s.markers.size() == count)
+	DAW.redo()
+	check("and redoable", s.markers.get(12.5) == "Drop")
+	check("a verb a guest may use", &"add_marker" in DAW.COMMANDS)
+	DAW.apply_intent(&"add_marker", [-4.0, "x".repeat(500)])
+	check("a guest's marker is kept on the timeline and its name to a sane length",
+			s.markers.has(0.0) and str(s.markers[0.0]).length() == DAW.MARKER_NAME_MAX)
+	DAW.apply_intent(&"add_marker", [3.0])
+	check("and a malformed one is refused", not s.markers.has(3.0))
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told every marker", guest.markers.size() == s.markers.size()
+			and guest.markers.get(12.5) == "Drop")
+
+	# Locating, which is arithmetic on the markers and needs no DAW behind it.
+	var m := {10.0: "A", 20.0: "B", 30.0: "C"}
+	close_to("next from between two is the later", TapeDeck.marker_after(m, 15.0), 20.0)
+	close_to("next from on a marker is the one after it", TapeDeck.marker_after(m, 20.0), 30.0)
+	close_to("next past the last is none", TapeDeck.marker_after(m, 31.0), -1.0)
+	close_to("prev from between two is the earlier", TapeDeck.marker_before(m, 25.0), 20.0)
+	close_to("prev just past a marker skips it, so rolling cannot pin the key",
+			TapeDeck.marker_before(m, 20.1), 10.0)
+	close_to("prev before the first is none", TapeDeck.marker_before(m, 5.0), -1.0)
+	check("the section is the marker at or before", TapeDeck.section_at(m, 25.0) == "B" and TapeDeck.section_at(m, 20.0) == "B")
+	check("and nothing before the first", TapeDeck.section_at(m, 2.0) == "")
+	check("MARK names the next free number", TapeDeck.next_marker_name({1.0: "MARK 1", 2.0: "MARK 3"}) == "MARK 2")
+
+	# Reaper: the bridge makes it, and the cache shows it before the timeline poll says so.
+	var link := _fresh_link()
+	check("Reaper without the bridge cannot drop a marker", not link.can(DAWBackend.Capability.MARKERS))
+	link.add_marker(4.0, "Nope")
+	check("and does not pretend to", not link.state.markers.has(4.0))
+	link.free()
+
+	_offline()
+	s = DAW.state
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	DAW.seek(s.bar_to_seconds(30.0))
+	deck._process(0.0)
+	check("the deck names the section the playhead is in (%s)" % deck._section_label.text,
+			deck._section_label.text == "CHORUS 1")
+	var next := TapeDeck.marker_after(s.markers, s.position_seconds)
+	deck._locate(1)
+	close_to("NEXT goes to the next marker", s.position_seconds, next)
+	deck._locate(-1)
+	close_to("PREV from there goes back one", s.position_seconds, s.bar_to_seconds(25.0))
+	DAW.seek(s.bar_to_seconds(27.0))
+	var before := s.markers.size()
+	deck._mark_key.pressed.emit()
+	check("MARK drops a marker at the playhead", s.markers.size() == before + 1
+			and s.markers.get(s.position_seconds) == "MARK 1")
+	check("MARK goes by its name across a session", deck._mark_key.network_key() == "TRANSPORT  ADD MARKER")
 	deck.queue_free()
 
 
