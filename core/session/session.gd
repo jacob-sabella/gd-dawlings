@@ -93,6 +93,8 @@ var solo_backend: Callable = Callable()
 var mix_source: Callable = Callable()
 ## The host's programme audio, out to guests or in from the host.
 var mix_feed: MixFeed = null
+## A guest's keyboard, played into the host's project. See core/session/guest_midi.gd.
+var guest_midi: GuestMidi = null
 ## Whether this guest plays the host's mix. Off for someone in the same room as the host's
 ## speakers would be right -- the same sound twice, a few dozen ms apart, is a comb filter --
 ## but nothing can tell from here who is in which room, so it starts on for anyone joining from
@@ -147,6 +149,9 @@ func _ready() -> void:
 	mix_feed = MixFeed.new()
 	mix_feed.name = "MixFeed"
 	add_child(mix_feed)
+	guest_midi = GuestMidi.new()
+	guest_midi.name = "GuestMidi"
+	add_child(guest_midi)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -619,7 +624,38 @@ func _receive_intent(verb: StringName, args: Array) -> void:
 	# right for a studio LAN, not for anything exposed to the internet. The verb is still checked against the vocabulary --
 	# see DAW.apply_intent -- because trusting a peer with a fader is not the same as letting it
 	# name any method on an object.
+	if verb == &"insert_midi_take":
+		_place_take(multiplayer.get_remote_sender_id(), args)
+		return
 	DAW.apply_intent(verb, args)
+
+
+## A guest's take, placed, and both sides told how it went: the guest because it cannot see a
+## refusal any other way, the host because a new item appearing on its timeline unannounced is
+## a surprise in the middle of a session.
+func _place_take(from: int, args: Array) -> void:
+	var who := name_of(from)
+	var refusal := DAW.midi_take_refusal(args)
+	if not refusal.is_empty():
+		notice.emit("%s's take was not placed. %s" % [who, refusal])
+		if _connected():
+			_told.rpc_id(from, "Your take was not placed. " + refusal)
+		return
+	DAW.apply_intent(&"insert_midi_take", args)
+	var cleaned := MidiTake.clean_args(args)
+	var track: String = DAW.state.track(cleaned[0]).display_name()
+	var at := DAW.state.bar_beat(cleaned[1])
+	var count := (cleaned[3] as Array).size()
+	var notes := "%d %s" % [count, "note" if count == 1 else "notes"]
+	notice.emit("%s played %s onto %s at %s." % [who, notes, track, at])
+	if _connected():
+		_told.rpc_id(from, "Your take is on %s: %s from %s." % [track, notes, at])
+
+
+## Words from the host for this guest alone.
+@rpc("authority", "call_remote", "reliable")
+func _told(text: String) -> void:
+	notice.emit(text)
 
 
 # --- state replication --------------------------------------------------------------------

@@ -17,7 +17,7 @@ godot --headless --path . tools/probe/session_probe.tscn -- --as guest --port "$
 GUEST=$!
 wait "$HOST"; H=$?
 wait "$GUEST"; G=$?
-echo "== host";  grep -E '^(PASS|FAIL|notices)|session checks|SCRIPT ERROR' "$HOST_LOG"
+echo "== host";  grep -E '^(PASS|FAIL|notices|take)|session checks|SCRIPT ERROR' "$HOST_LOG"
 echo "== guest"; grep -E '^(PASS|FAIL|notices|audio)|session checks|SCRIPT ERROR' "$GUEST_LOG"
 rm -f "$HOST_LOG" "$GUEST_LOG"
 [ "$H" -eq 0 ] && [ "$G" -eq 0 ]

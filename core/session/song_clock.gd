@@ -17,9 +17,11 @@ extends RefCounted
 
 ## A report further than this from the running clock is a jump, not drift.
 const SNAP_SECONDS := 0.25
-## How much of a report's disagreement is taken each time. Small, because each report carries
-## its own transport jitter, and the clock it corrects is better than any one of them.
-const GAIN := 0.15
+## How much of a report's disagreement is taken each time, once the clock has settled. Small,
+## because each report carries its own jitter -- Reaper's playhead moves in audio blocks, and a
+## report is read on the next frame, not when it arrived -- and the clock it corrects is better
+## than any one of them.
+const GAIN := 0.04
 
 var _mutex := Mutex.new()
 var _valid := false
@@ -28,6 +30,10 @@ var _recording := false
 var _anchor_seconds := 0.0
 var _anchor_usec := 0
 var _last_report := NAN
+## Reports since the last jump. The first few after a start are averaged evenly (gain 1/n)
+## rather than eased in at GAIN: a clock started from one late report is wrong by that report's
+## lateness, and the mean of the next dozen is a far better guess than 4% of each.
+var _reports := 0
 
 
 ## What the DAW says, whenever the caller has it. Repeats of the same report while rolling are
@@ -43,10 +49,16 @@ func observe(position: float, playing: bool, recording: bool, now_usec: int) -> 
 	_last_report = position
 	if transport_changed or not playing:
 		_anchor_seconds = position
+		_reports = 1
 	else:
 		var predicted := _anchor_seconds + (now_usec - _anchor_usec) / 1000000.0
 		var error := position - predicted
-		_anchor_seconds = position if absf(error) > SNAP_SECONDS else predicted + error * GAIN
+		if absf(error) > SNAP_SECONDS:
+			_anchor_seconds = position
+			_reports = 1
+		else:
+			_reports += 1
+			_anchor_seconds = predicted + error * maxf(GAIN, 1.0 / _reports)
 	_anchor_usec = now_usec
 	_playing = playing
 	_recording = recording

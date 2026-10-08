@@ -136,6 +136,10 @@ func _ready() -> void:
 	_test_a_take_lands_on_the_stand_in_and_comes_off_again()
 	_test_notes_ride_the_wire_with_their_item()
 	_test_reaper_is_asked_for_a_take_in_one_flat_call()
+	_test_the_monitor_piano_sounds_decays_and_shares_its_voices()
+	_test_the_computer_keys_are_a_piano_by_position()
+	_test_a_guest_take_follows_the_host_transport_it_hears()
+	_test_the_host_places_a_guest_take_and_says_so()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -5864,12 +5868,15 @@ func _test_the_song_clock_runs_between_reports() -> void:
 	var next_report := 0
 	while t < 4000000:
 		if t >= next_report:
-			# Up to 3ms stale, and only to the millisecond, the way a busy DAW reports.
-			var said := snappedf(truth.call(t - rng.randi_range(0, 3000)), 0.001)
+			# Up to 3ms stale, only to the millisecond, and read up to a frame (16ms) late, the
+			# way a busy DAW's reports reach a game loop.
+			var said := snappedf(truth.call(t - rng.randi_range(0, 3000) - rng.randi_range(0, 16000)), 0.001)
 			clock.observe(said, true, true, t)
 			next_report = t + 33000 + rng.randi_range(0, 4000)
 		if t > 1000000:
-			worst = maxf(worst, absf(float(clock.at(t)["seconds"]) - truth.call(t)))
+			# Against the truth less the reports' average lateness: that part is a constant, and
+			# a constant is what the capture offset is for.
+			worst = maxf(worst, absf(float(clock.at(t)["seconds"]) - truth.call(t - 9500)))
 		t += 500
 	check("between coarse, late reports the clock is within 3ms of the song (worst %.2fms)" % (worst * 1000.0),
 			worst < 0.003)
@@ -6120,3 +6127,143 @@ func _test_reaper_is_asked_for_a_take_in_one_flat_call() -> void:
 	var item := link.state.item(4, 0)
 	check("Reaper's own copy of a take arrives with its notes", item != null and item.notes.size() == 5)
 	link.free()
+
+
+## The guest's own piano. Rendered straight, as the suite has no sound card: what matters is that
+## a key makes a sound, the sound is a sane level, it dies when let go, and a fistful of keys
+## does not run out of voices into silence or into noise.
+func _test_the_monitor_piano_sounds_decays_and_shares_its_voices() -> void:
+	var synth := MonitorSynth.new()
+	add_child(synth)
+	synth.note_on(60, 100)
+	var first := synth.render(4800)
+	var peak := 0.0
+	var finite := true
+	for f in first:
+		peak = maxf(peak, maxf(absf(f.x), absf(f.y)))
+		finite = finite and is_finite(f.x) and is_finite(f.y)
+	check("a key makes a sound (peak %.3f)" % peak, peak > 0.05)
+	check("at a level that leaves room for the mix", peak < 0.9 and finite)
+	check("it starts without a click: the first frame is near silent", absf(first[0].x) < 0.01)
+	var soft := MonitorSynth.new()
+	add_child(soft)
+	soft.note_on(60, 20)
+	var soft_peak := 0.0
+	for f in soft.render(4800):
+		soft_peak = maxf(soft_peak, absf(f.x))
+	check("a light touch is properly quieter (%.3f against %.3f)" % [soft_peak, peak], soft_peak < peak * 0.5)
+	soft.free()
+	synth.note_off(60)
+	synth.render(48000)
+	check("let go, it dies away", synth.sounding() == 0)
+	for p in 24:
+		synth.note_on(40 + p, 110)
+	var full := synth.render(2400)
+	var full_peak := 0.0
+	finite = true
+	for f in full:
+		full_peak = maxf(full_peak, absf(f.x))
+		finite = finite and is_finite(f.x)
+	check("twenty-four keys share sixteen voices", synth.sounding() == MonitorSynth.VOICES)
+	check("and a fistful saturates rather than clips (%.3f)" % full_peak, full_peak < 1.0 and finite)
+	synth.enabled = false
+	synth.note_on(72, 100)
+	synth.render(48000 * 4)
+	check("turned off, keys make no sound", synth.sounding() == 0)
+	check("with no sound card there is no latency to stamp around", synth.latency_seconds() == 0.0)
+	synth.free()
+
+
+func _test_the_computer_keys_are_a_piano_by_position() -> void:
+	var keys := KeyCatcher.new()
+	var played: Array = []
+	keys.note_on.connect(func(p: int, v: int): played.append(["on", p, v]))
+	keys.note_off.connect(func(p: int): played.append(["off", p]))
+	check("A is middle C", keys.handle(KEY_A, true) and played.back() == ["on", 60, KeyCatcher.VELOCITY])
+	keys.handle(KEY_W, true)
+	check("the row above is the black keys", played.back()[1] == 61)
+	keys.handle(KEY_APOSTROPHE, true)
+	check("and the home row runs on to the F above", played.back()[1] == 77)
+	keys.handle(KEY_X, true)
+	keys.handle(KEY_A, false)
+	check("a key let go after an octave change stops the note it started", played.back() == ["off", 60])
+	keys.handle(KEY_A, true)
+	check("X is an octave up", played.back()[1] == 72 and keys.octave_name() == "C5")
+	check("keys the piano does not use are left for the studio", not keys.handle(KEY_V, true)
+			and not keys.handle(KEY_SPACE, true))
+	for i in 10:
+		keys.handle(KEY_Z, true)
+	check("Z goes down, and not off the bottom", keys.base == KeyCatcher.LOWEST_C)
+	played.clear()
+	keys.release_all()
+	check("giving the keys back lets go of everything still down", played.size() == 3
+			and played.all(func(e): return e[0] == "off"))
+	keys.free()
+
+
+## A take begins when the guest HEARS the host start recording and ends when it hears it stop,
+## and each note carries the song position the guest was hearing when it was played.
+func _test_a_guest_take_follows_the_host_transport_it_hears() -> void:
+	var backend := _offline()
+	var gm := GuestMidi.new()
+	add_child(gm)
+	var now := {"seconds": 40.0, "playing": true, "recording": true, "valid": true}
+	gm.heard_source = func(): return now.duplicate()
+	gm.follow(now)
+	check("no track chosen, nothing is taken", not gm.is_recording())
+	gm.target_track = 7
+	gm.note_on(55, 80)
+	gm.follow(now)
+	check("a track chosen and recording heard, a take begins", gm.is_recording())
+	check("a key already down is in the take from its first moment", gm.take_note_count() == 1)
+	now["seconds"] = 40.5
+	gm.note_on(62, 90)
+	now["seconds"] = 41.0
+	gm.note_off(62)
+	gm.note_off(55)
+	now["seconds"] = 41.25
+	gm.note_on(65, 70)
+	gm.follow(now)
+	now["seconds"] = 42.0
+	gm.follow(now)
+	var before := DAW.state.track(7).items.size()
+	now["recording"] = false
+	now["seconds"] = 42.02
+	gm.follow(now)
+	check("recording heard to stop, the take is sent", not gm.is_recording())
+	check("as one item on the chosen track", DAW.state.track(7).items.size() == before + 1)
+	var item: MixState.ItemState = null
+	for it in DAW.state.track(7).items:
+		if it.name.ends_with(" take 1"):
+			item = it
+	if item != null:
+		close_to("the item starts where recording was heard to start", item.start, 40.0)
+		close_to("and ends where it was last heard running", item.end(), 42.0)
+		var notes := MidiTake.unpack_relative(item.notes, item.start)
+		check("with every note (%s)" % [notes], notes.size() == 3)
+		if notes.size() == 3:
+			check("each at the song position heard when it was played",
+					is_equal_approx(notes[1][0], 40.5) and is_equal_approx(notes[1][1], 41.0)
+					and notes[1][2] == 62 and notes[1][3] == 90)
+			check("and a note still down at the end closed there",
+					notes[2][2] == 65 and is_equal_approx(notes[2][1], 42.0))
+	check("the panel is told what the take did", gm.last_take.get("notes", 0) == 3)
+	gm.follow(now)
+	check("one stop is one take", DAW.state.track(7).items.size() == before + 1)
+	gm.free()
+
+
+func _test_the_host_places_a_guest_take_and_says_so() -> void:
+	_offline()
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var before := DAW.state.track(3).items.size()
+	Session._place_take(1, [3, 8.0, 10.0, [[8.5, 9.0, 60, 100, 0]], "Grace take 1"])
+	check("a guest's take is placed", DAW.state.track(3).items.size() == before + 1)
+	check("and the room is told where (%s)" % [told], told.size() == 1 and (told[0] as String).contains("1 note onto %s at %s." % [DAW.state.track(3).display_name(), DAW.state.bar_beat(8.0)]))
+	Session._place_take(1, [99, 8.0, 10.0, [[8.5, 9.0, 60, 100, 0]], "Grace take 2"])
+	check("a take for a track that is not there is refused out loud (%s)" % [told],
+			told.size() == 2 and (told[1] as String).contains("was not placed"))
+	Session.notice.disconnect(listen)
+

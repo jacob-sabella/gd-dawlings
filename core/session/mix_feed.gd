@@ -86,6 +86,7 @@ var _drained := 0
 ## What a drain heard, for the probe: the loudest frame and when each click arrived.
 var heard_peak := 0.0
 var heard_clicks: Array = []
+var _clicks_mutex := Mutex.new()
 ## Guest: which song position is at the speaker. See heard_position().
 var heard := HeardClock.new()
 
@@ -346,8 +347,22 @@ func _drain_by_clock() -> void:
 		if v > heard_peak:
 			heard_peak = v
 		if v > 0.6 and (heard_clicks.is_empty() or _drained + i - int(heard_clicks[-1]) > int(RATE / 2.0)):
+			_clicks_mutex.lock()
 			heard_clicks.append(_drained + i)
+			_clicks_mutex.unlock()
 	_drained += count
+
+
+## The clicks a drain has heard so far, each as [frame, Time.get_ticks_usec() it was "heard"]:
+## a drain hears frame n exactly n/RATE after it started. Safe from the main thread while the
+## feed's thread is still adding to them. For the probe, which plays notes against them.
+func clicks_heard() -> Array:
+	_clicks_mutex.lock()
+	var out: Array = []
+	for frame in heard_clicks:
+		out.append([int(frame), _drain_start_usec + int(int(frame) * 1000000.0 / RATE)])
+	_clicks_mutex.unlock()
+	return out
 
 
 ## The song position coming out of this guest's speakers right now:
