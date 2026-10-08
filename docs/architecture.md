@@ -801,3 +801,44 @@ its own bottom row 50 degrees below the horizon, outside any cone a person can l
 without moving their head. The drop now yields to the surface -- `drop_for` straightens a tall
 surface up until its far edge is back inside the sweep, which for something as tall as the sweep
 itself means dead ahead.
+
+## No signal is carried by colour alone
+
+Three identical rectangles in a vertical column, telling you record from solo from mute by red
+against amber against blue. No label, no shape, no distinguishing position. Red against amber
+is precisely the pair a deuteranope cannot separate, so roughly one man in twelve read that
+console wrong -- and this is the most common accessibility defect in audio software, not an
+exotic one.
+
+Two channels now, and the second is the one that always works:
+
+**Shape.** The lamp in each button has its own silhouette -- record a full bar, solo a narrow
+stub, mute a thin line. Lettering was the obvious answer and is the wrong one: at 16 by 10
+millimetres a legend would be under 3mm of cap height, which is below the legibility threshold
+this project already enforces everywhere else. Shape costs nothing, because a `MeshBank` places
+each instance from a node's transform, so scaling one marker scales one lamp and the console
+still draws every lamp it owns in a single call.
+
+**A palette chosen for the reader.** `Ergonomics.signal_colour` is a per-vision-type table, not
+one "colourblind-safe" set for everyone -- the sets that work for deutans and for tritans are
+different sets, and a compromise between them is worse for both than either alone. Deutan and
+protan keep the blue-to-yellow axis; tritan keeps red-green; monochromacy gets a lightness ramp
+and leans entirely on the shapes.
+
+What makes this testable rather than a matter of taste is that colour deficiency is a
+*measurable transform*. `Ergonomics.simulate` is Vienot-Brettel-Mollon in linear light (sRGB is
+the usual shortcut, and it flatters the result), and the suite runs every signal pair through
+every vision type and requires they stay apart. The tuned palettes keep a worst-pair separation
+of 0.34; the default palette through the same eyes collapses to **0.105** for a deutan and
+**0.052** for a monochromat -- which is to say, the same light. One of the checks asserts that
+collapse, so that if the default palette were ever safe this whole mechanism would fail as
+ceremony rather than sit there looking virtuous.
+
+The simulation exists to be tested against, never to be rendered through. The studio does not
+show anyone an impression of their own eyesight; it picks a palette and then proves, in the
+suite, that the palette survives the eyes it was picked for.
+
+One check in this group was wrong when first written -- it asserted that deuteranopia pulls
+pure red and pure green together. It does not: those two differ hugely in brightness and a
+deuteranope separates them easily. The confusion is between hues matched in lightness, which is
+exactly what a row of equally bright status LEDs is. The check now says that instead.

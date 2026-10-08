@@ -35,6 +35,20 @@ static func body_material() -> StandardMaterial3D:
 
 @export var led_colour: Color = Color(0.95, 0.3, 0.25)
 
+## The lamp's silhouette, as a fraction of the full window: a wide bar, a narrow stub, a thin
+## line. The redundant half of the coding.
+##
+## Three identical rectangles in a vertical column, telling you record from solo from mute by
+## hue alone, is the textbook form of the most common accessibility defect in audio software --
+## and red against amber is exactly the pair a deutan cannot separate. There is no label to
+## fall back on at 16 by 10 millimetres, and lettering small enough to fit would be below the
+## legibility threshold anyway, so the fallback is shape.
+##
+## Free, which is why it is done this way rather than with three meshes: the bank places an
+## instance from a node's transform, so scaling the marker scales that one lamp and the console
+## still draws every lamp it owns in a single call.
+@export var lamp_scale := Vector2.ONE
+
 var lit := false:
 	set(v):
 		lit = v
@@ -70,12 +84,13 @@ func _ready() -> void:
 		var at := Node3D.new()
 		add_child(at)
 		at.position = LAMP_OFFSET
+		at.scale = Vector3(lamp_scale.x, lamp_scale.y, 1.0)
 		_lamp_slot = lamp_bank.place(at, Materials.lamp_colour(led_colour, lit))
 		at.queue_free()
 	else:
 		_lamp = MeshInstance3D.new()
 		var lamp_mesh := BoxMesh.new()
-		lamp_mesh.size = LAMP_SIZE
+		lamp_mesh.size = Vector3(LAMP_SIZE.x * lamp_scale.x, LAMP_SIZE.y * lamp_scale.y, LAMP_SIZE.z)
 		_lamp.mesh = lamp_mesh
 		_lamp.position = LAMP_OFFSET
 		add_child(_lamp)

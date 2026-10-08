@@ -99,14 +99,16 @@ void fragment() {
 
 
 ## Green to about -9dB, amber to -3, red at the top two. The colour boundaries are the only
-## calibration a meter at a glance actually conveys.
+## calibration a meter at a glance actually conveys -- which is precisely why they cannot be
+## only colour. Read through the reader's palette, so a deficiency that collapses green into
+## amber gets a ramp that does not.
 static func colour_at(index: int) -> Color:
 	var f := float(index) / float(SEGMENTS - 1)
 	if f > 0.92:
-		return Color(0.98, 0.22, 0.18)
+		return Lettering.reader.signal_colour(&"over")
 	if f > 0.76:
-		return Color(0.95, 0.68, 0.18)
-	return Color(0.30, 0.86, 0.42)
+		return Lettering.reader.signal_colour(&"warn")
+	return Lettering.reader.signal_colour(&"ok")
 
 
 func _process(delta: float) -> void:

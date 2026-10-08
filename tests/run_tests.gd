@@ -72,6 +72,7 @@ func _ready() -> void:
 	_test_a_body_is_measured_rather_than_assumed()
 	_test_the_frame_follows_a_turn_without_chasing_a_glance()
 	_test_summoned_gear_lands_where_a_person_can_use_it()
+	_test_no_signal_is_carried_by_colour_alone()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -3149,4 +3150,82 @@ func _test_summoned_gear_lands_where_a_person_can_use_it() -> void:
 	check("nothing is still held by the rig",
 			studio.focus.surfaces.all(func(s): return not studio.focus.holds(s.surface_id)))
 
+	studio.queue_free()
+
+
+func _test_no_signal_is_carried_by_colour_alone() -> void:
+	# The three buttons in a channel strip are identical rectangles in a vertical column, and
+	# until now the only thing separating record from solo from mute was red against amber
+	# against blue -- the exact pair a deutan cannot separate, with no label, shape or position
+	# to fall back on. Roughly one man in twelve reads this console wrong.
+	#
+	# What makes this testable rather than a matter of taste is that colour deficiency is a
+	# measurable transform: run the palette through it and ask whether the signals are still
+	# distinguishable. A tuned palette is not a claim, it is a number.
+	var worst_default := 99.0
+	for vision in [Ergonomics.ColourVision.FULL, Ergonomics.ColourVision.DEUTAN,
+			Ergonomics.ColourVision.PROTAN, Ergonomics.ColourVision.TRITAN,
+			Ergonomics.ColourVision.MONO]:
+		var eyes := Ergonomics.new()
+		eyes.colour_vision = vision
+		var plain := Ergonomics.new()
+		for group in [[&"record", &"solo", &"mute"], [&"ok", &"warn", &"over"]]:
+			for i in group.size():
+				for j in range(i + 1, group.size()):
+					var tuned: float = eyes.separation(eyes.signal_colour(group[i]),
+							eyes.signal_colour(group[j]))
+					check("%s and %s stay apart for vision %d (%.2f)"
+							% [group[i], group[j], vision, tuned], tuned > 0.30)
+					if vision != Ergonomics.ColourVision.FULL:
+						worst_default = minf(worst_default, eyes.separation(
+								plain.signal_colour(group[i]), plain.signal_colour(group[j])))
+
+	# And the palette is actually doing work. If the default one survived every deficiency there
+	# would be nothing here to fix, and this whole mechanism would be ceremony.
+	check("the default palette really does collapse for some reader (worst %.2f)"
+			% worst_default, worst_default < 0.15)
+
+	# Simulation sanity, so a broken matrix cannot quietly make everything look fine.
+	var deutan := Ergonomics.new()
+	deutan.colour_vision = Ergonomics.ColourVision.DEUTAN
+	var mono := Ergonomics.new()
+	mono.colour_vision = Ergonomics.ColourVision.MONO
+	check("full colour vision changes nothing",
+			Ergonomics.new().simulate(Color(0.9, 0.2, 0.1)) == Color(0.9, 0.2, 0.1))
+	# Against full vision rather than against an absolute, because the naive version of this
+	# check is wrong about the science: a deuteranope separates pure red from pure green
+	# perfectly well, by BRIGHTNESS -- green is far lighter. The confusion is of hues matched in
+	# lightness, which is exactly what a row of equally bright status LEDs is.
+	var plain_eyes := Ergonomics.new()
+	var red_green := Color(0.86, 0.42, 0.20)
+	var green_red := Color(0.40, 0.62, 0.24)
+	check("deuteranopia collapses two equally bright red-green hues (%.2f -> %.2f)"
+			% [plain_eyes.separation(red_green, green_red),
+			deutan.separation(red_green, green_red)],
+			deutan.separation(red_green, green_red)
+			< plain_eyes.separation(red_green, green_red) * 0.5)
+	check("deuteranopia leaves blue and yellow apart",
+			deutan.separation(Color.BLUE, Color.YELLOW) > 0.5)
+	var grey := mono.simulate(Color(0.2, 0.9, 0.4))
+	check("monochromacy returns a grey", is_equal_approx(grey.r, grey.g)
+			and is_equal_approx(grey.g, grey.b))
+
+	# The shape half. Colour is never the only channel even when it works, because the palette
+	# is a guess about one reader and the silhouette is a fact about the button.
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.console._process(0.0)
+	var strips := studio.console.find_children("*", "ChannelStrip", true, false)
+	check("there are strips to look at", strips.size() > 0)
+	if strips.size() > 0:
+		var shapes: Array[Vector2] = []
+		for button in strips[0].find_children("*", "PanelButton", true, false):
+			shapes.append((button as PanelButton).lamp_scale)
+		check("a strip has three signal lamps (%d)" % shapes.size(), shapes.size() >= 3)
+		for i in shapes.size():
+			for j in range(i + 1, shapes.size()):
+				check("lamp %d and lamp %d are different shapes (%v vs %v)"
+						% [i, j, shapes[i], shapes[j]], shapes[i] != shapes[j])
 	studio.queue_free()

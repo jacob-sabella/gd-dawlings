@@ -211,3 +211,101 @@ func _distance_for(bounds: AABB, touched: bool, smallest_cap: float) -> float:
 	var nearest := maxf(fits_in_sweep(bounds.size), NEAR_LIMIT)
 	var preferred := working_distance() if touched else nearest
 	return clampf(preferred, nearest, maxf(legible_to(smallest_cap), nearest))
+
+
+## The colours this studio uses to MEAN something, chosen for the eyes reading them.
+##
+## Separate from decoration. A chassis can be any grey; a record light cannot be any red,
+## because its whole job is to be told apart from the solo light next to it. Roughly one man in
+## twelve and one woman in two hundred cannot do that with the default palette, and on a console
+## the three buttons in question are identical rectangles in a vertical column -- there is no
+## shape, position or label to fall back on. That is the definition of colour carrying meaning
+## alone, and it is the single most common accessibility defect in audio software.
+##
+## The palette changes with the reader rather than being one "colourblind-safe" set for
+## everyone, because the sets that work for deutans and for tritans are different sets, and a
+## compromise between them is worse for both than either is alone.
+const SIGNAL_ROLES: Array[StringName] = [&"record", &"solo", &"mute", &"ok", &"warn", &"over"]
+
+const _SIGNALS := {
+	ColourVision.FULL: {
+		&"record": Color(0.95, 0.25, 0.22), &"solo": Color(0.98, 0.78, 0.20),
+		&"mute": Color(0.35, 0.72, 0.98), &"ok": Color(0.30, 0.86, 0.42),
+		&"warn": Color(0.95, 0.68, 0.18), &"over": Color(0.98, 0.22, 0.18),
+	},
+	# Red and green collapse together, so the axis that survives is blue-to-yellow. Record stays
+	# warm because a red record light is a convention worth more than a marginal gain, and is
+	# pulled bright and orange so it separates from solo by LIGHTNESS as well as hue.
+	ColourVision.DEUTAN: {
+		&"record": Color(1.00, 0.42, 0.10), &"solo": Color(0.98, 0.90, 0.35),
+		&"mute": Color(0.30, 0.60, 1.00), &"ok": Color(0.40, 0.70, 1.00),
+		&"warn": Color(0.95, 0.85, 0.30), &"over": Color(1.00, 0.40, 0.10),
+	},
+	ColourVision.PROTAN: {
+		&"record": Color(1.00, 0.50, 0.12), &"solo": Color(0.97, 0.92, 0.42),
+		&"mute": Color(0.28, 0.58, 1.00), &"ok": Color(0.42, 0.72, 1.00),
+		&"warn": Color(0.95, 0.86, 0.34), &"over": Color(1.00, 0.46, 0.12),
+	},
+	# Blue and yellow collapse, so red-green is what is left.
+	ColourVision.TRITAN: {
+		&"record": Color(1.00, 0.24, 0.26), &"solo": Color(0.98, 0.52, 0.72),
+		&"mute": Color(0.35, 0.85, 0.80), &"ok": Color(0.35, 0.88, 0.45),
+		&"warn": Color(1.00, 0.55, 0.55), &"over": Color(0.95, 0.18, 0.20),
+	},
+	# Nothing to tell apart by hue at all, so the palette is a lightness ramp and everything
+	# else has to be carried by the lettering and the notches.
+	ColourVision.MONO: {
+		&"record": Color(1.00, 0.98, 0.96), &"solo": Color(0.72, 0.72, 0.72),
+		&"mute": Color(0.42, 0.44, 0.46), &"ok": Color(0.52, 0.54, 0.55),
+		&"warn": Color(0.78, 0.78, 0.78), &"over": Color(1.00, 1.00, 1.00),
+	},
+}
+
+
+## The colour to use for one of the meanings above.
+func signal_colour(role: StringName) -> Color:
+	var table: Dictionary = _SIGNALS.get(colour_vision, _SIGNALS[ColourVision.FULL])
+	return table.get(role, _SIGNALS[ColourVision.FULL].get(role, Color.WHITE))
+
+
+## What this colour looks like to the person reading it.
+##
+## Viénot-Brettel-Mollon for the two red-green deficiencies and the standard tritan
+## approximation, applied in LINEAR light because that is where the cone response lives --
+## running it on sRGB values is a common shortcut that makes everything look more
+## distinguishable than it is, which defeats the point of simulating at all.
+##
+## Here to be TESTED against, not to be rendered through. The studio does not show anyone a
+## simulation of their own eyesight; it picks a palette and then checks, in the suite, that the
+## palette survives the eyes it was picked for.
+func simulate(colour: Color) -> Color:
+	if colour_vision == ColourVision.FULL:
+		return colour
+	var c := colour.srgb_to_linear()
+	if colour_vision == ColourVision.MONO:
+		var y := 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+		return Color(y, y, y).linear_to_srgb()
+	var m: Array
+	match colour_vision:
+		ColourVision.PROTAN:
+			m = [[0.1121, 0.8853, -0.0005], [0.1127, 0.8897, -0.0001], [0.0045, 0.0085, 1.0000]]
+		ColourVision.DEUTAN:
+			m = [[0.2920, 0.7054, -0.0003], [0.2934, 0.7089, 0.0000], [-0.0209, 0.4912, 0.5273]]
+		_:
+			m = [[1.0000, 0.1440, -0.1440], [0.0000, 0.8591, 0.1409], [0.0000, 0.2137, 0.7863]]
+	return Color(
+			m[0][0] * c.r + m[0][1] * c.g + m[0][2] * c.b,
+			m[1][0] * c.r + m[1][1] * c.g + m[1][2] * c.b,
+			m[2][0] * c.r + m[2][1] * c.g + m[2][2] * c.b).clamp().linear_to_srgb()
+
+
+## How far apart two colours are to the person reading them, 0 to about 1.7.
+##
+## Lightness weighted heavily, because lightness is the one channel every reader keeps -- two
+## signals that differ only in hue are one eye condition away from being the same signal.
+func separation(a: Color, b: Color) -> float:
+	var x := simulate(a)
+	var y := simulate(b)
+	var lightness := absf((0.2126 * x.r + 0.7152 * x.g + 0.0722 * x.b)
+			- (0.2126 * y.r + 0.7152 * y.g + 0.0722 * y.b))
+	return Vector3(x.r - y.r, x.g - y.g, x.b - y.b).length() * 0.5 + lightness
