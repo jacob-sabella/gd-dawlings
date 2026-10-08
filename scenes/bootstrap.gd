@@ -240,6 +240,9 @@ func _apply_cli_focus(wanted: String) -> void:
 			studio.ergonomics.motion_scale = 0.0
 			studio.focus.focus(surface.surface_id)
 			studio.ergonomics.motion_scale = motion
+			# Same as pressing F: summoning gear to the mix position and leaving the camera
+			# across the room shows you the back of it. See studio._sit_down.
+			studio._sit_down()
 			return
 	push_warning("bootstrap: --focus %s is not one of %s" % [wanted,
 			studio.focus.surfaces.map(func(s): return String(s.surface_id))])

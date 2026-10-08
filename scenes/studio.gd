@@ -620,8 +620,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			# where you would find it by accident.
 			KEY_F:
 				focus.cycle(-1 if event.shift_pressed else 1)
+				_sit_down()
 			KEY_ESCAPE:
 				focus.release()
+				_sit_down()
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
 			# by changing it while looking at the thing.
 			KEY_EQUAL, KEY_KP_ADD:
@@ -685,6 +687,39 @@ func _set_text_scale(to: float) -> void:
 			(node as Surface).mark_dirty()
 	if focus != null and focus.is_focused():
 		focus.focus(focus.focused_id)
+
+
+## Put the screen camera where the mixer is standing, looking at whatever they just summoned.
+##
+## Focusing moves the gear to the body. On a monitor that is only half the gesture: the body is
+## a fixed mix position, so without this you summon a console to a spot in the room and then go
+## on watching it from wherever you happened to be orbiting -- usually behind and above it,
+## where a wrapped desk reads as four tiers of scaffolding rather than as a desk. The whole
+## point of an arc is that it is right from ONE place.
+##
+## A no-op in AR and VR, where the camera is a head and moving it is not ours to do.
+func _sit_down() -> void:
+	if camera == null or body == null or medium != Presentation.Medium.SCREEN:
+		return
+	# Aimed at where focused gear GOES, not at where the focused surface currently is. Asking
+	# the surface was the first version, and it reads its bounds a frame too early -- focus
+	# moves the surface immediately but the rebuild that gives it its shape happens on the next
+	# _process, so the camera was aimed using the previous layout's box and ended up on the
+	# floor looking at a lamp. This point is a property of the body, which is already final.
+	var eye := body.global_position
+	var drop := deg_to_rad(ergonomics.gaze_down)
+	var ahead := Vector3(0, -sin(drop), -cos(drop)) * ergonomics.working_distance()
+	var at: Vector3 = eye + body.global_transform.basis * ahead
+	var back := eye - at
+	# Through frame() rather than by assigning the four orbit fields, which is what the version
+	# before that did: those values are only read when something applies them, so setting them
+	# and stopping leaves the camera exactly where it was. The render came back identical twice
+	# and both times read as a placement bug rather than a call that never reached the camera.
+	#
+	# Negative pitch, because the offset is built with Basis(RIGHT, pitch), which sends +pitch
+	# DOWN -- the eye is above the desk, so it wants the sign that lifts it.
+	frame(at, back.length(), atan2(back.x, back.z),
+			-atan2(back.y, Vector2(back.x, back.z).length()))
 
 
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot
