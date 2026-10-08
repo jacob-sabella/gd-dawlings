@@ -902,3 +902,9 @@ scales with the session -> "20 vs 29 meshes"; the collars casting again -> "18 c
 lamp parts".
 
 1073 checks, 0 failed.
+
+## Plugin tablets — follow-ups (2026-10-08)
+- Mark a rack unit whose plugin is out on a tablet (dimmed faceplate, or a "ON TABLET" tag)?
+- Patchbay: draw sidechain (key) sends as a distinct cable colour/style.
+- Offline stand-in shows preset "—" until a preset is stepped; the built-in engine's wet/dry is state-only (not heard).
+- Tablets stand on the floor; placing one on a table/desk top was not done — wanted?
