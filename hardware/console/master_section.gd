@@ -52,6 +52,8 @@ func _ready() -> void:
 	_pan = Knob.new()
 	_pan.position = Vector3(0, height - 0.048, 0.004)
 	_pan.turned.connect(func(v: float): DAW.set_master_pan(v))
+	_pan.describe_title = func() -> String: return "MASTER  BALANCE"
+	_pan.describe_value = Knob.pan_text
 	add_child(_pan)
 
 	var pan_caption := _label(9, Vector3(0, height - 0.068, 0.001))
@@ -60,6 +62,7 @@ func _ready() -> void:
 
 	_fader = Fader.new()
 	_fader.write_value = func(v: float): DAW.set_master_volume(v)
+	_fader.describe_title = func() -> String: return "MASTER  LEVEL"
 	_fader.position = Vector3(-0.022, 0.040, 0.004)
 	add_child(_fader)
 

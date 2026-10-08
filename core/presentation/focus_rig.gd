@@ -68,6 +68,17 @@ var surfaces: Array[Surface] = []
 var move: Callable = Callable()
 
 var focused_id: StringName = &""
+## Whether presented surfaces get corner brackets, and the places they came from get berths.
+## On in a headset and off on a monitor.
+##
+## The halo answers two headset questions: which of five surfaces parked around you is the
+## work, and which gear follows you as against standing in the room. A monitor asks neither --
+## the camera sits down at the focused surface and it fills the frame. What a monitor DOES need
+## brackets for is "this is the control under the cursor" (HoverRim), and one mark meaning two
+## things on one screen is how a cue stops meaning anything. It also never sat right on a desk:
+## the halo stands on the face of the surface's box, and a console tilted inside its box puts
+## that face in mid-air in front of the panel.
+var show_halo := true
 
 ## {surface_id: [parent, local Transform3D]} -- where it was before anything was summoned.
 var _home: Dictionary = {}
@@ -239,6 +250,15 @@ static func _chrome_above(node: Node, surface: Node) -> bool:
 ## not measure them -- they are sized FROM the box, and counting them would grow the box, which
 ## would resize them, which would grow the box.
 func _mark(surface: Surface, focused: bool) -> void:
+	# The berth goes too. It answers "where does this go back to", which is a question for
+	# someone standing in a room with gear following them; a monitor summons a console a few
+	# centimetres from where it stood, and the berth then draws itself round the desk in the
+	# air, the same failure as the halo by a different route. First, because every
+	# branch below draws one or the other.
+	if not show_halo:
+		_unmark(surface)
+		_unmark_berth(surface)
+		return
 	var bounds := surface.content_aabb()
 	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
 		return

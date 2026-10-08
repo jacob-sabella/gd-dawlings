@@ -214,3 +214,18 @@ func _on_value_changed() -> void:
 	_cap.position = Vector3(0, value * TRAVEL, 0.009)
 	if _cap_slot >= 0:
 		cap_bank.move_slot(_cap_slot, cap_bank.global_transform.affine_inverse() * _cap.global_transform)
+
+
+func _default_title() -> String:
+	return "LEVEL"
+
+
+## In dB through the DAW's own law, because that is the unit a mix is argued about in. A
+## position -- "71%" -- is true and useless.
+func _default_readout() -> String:
+	var db := DAW.taper_to_db(value)
+	return "-inf dB" if db < -150.0 else "%+.1f dB" % db
+
+
+func hint() -> String:
+	return "drag  ·  click the slot to jump"

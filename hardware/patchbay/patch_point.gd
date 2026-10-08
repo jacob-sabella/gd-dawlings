@@ -138,3 +138,15 @@ func _on_grab_end() -> void:
 		var target = held_by.hovered
 		if target is PatchPoint and target != self:
 			patch_requested.emit(self, target)
+
+
+func _default_title() -> String:
+	return "%s  %s" % [label_text.to_upper(), "OUT" if kind == Kind.OUTPUT else "IN"]
+
+
+func _default_readout() -> String:
+	return ""
+
+
+func hint() -> String:
+	return "drag to a jack to patch" if kind == Kind.OUTPUT else "drag an output here to patch"

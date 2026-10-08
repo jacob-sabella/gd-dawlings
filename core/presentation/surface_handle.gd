@@ -196,3 +196,15 @@ func _light(on: bool) -> void:
 ## moves the corner, which moves the tab.
 func _mark_chrome(node: Node) -> void:
 	node.add_to_group(&"presentation_chrome")
+
+
+func _default_title() -> String:
+	return "MOVE  %s" % String(surface.surface_id).to_upper() if surface != null else "MOVE"
+
+
+func _default_readout() -> String:
+	return ""
+
+
+func hint() -> String:
+	return "drag to move  ·  click to change mount"

@@ -135,3 +135,15 @@ func _set_window(start: float, span: float) -> void:
 
 func _seconds_at(x: float) -> float:
 	return (x + width * 0.5) / maxf(width, 0.0001) * maxf(project_length, 0.001)
+
+
+func _default_title() -> String:
+	return "TIMELINE VIEW"
+
+
+func _default_readout() -> String:
+	return "%.1fs - %.1fs" % [view_start, view_start + view_span]
+
+
+func hint() -> String:
+	return "drag to scroll"

@@ -68,12 +68,16 @@ func _ready() -> void:
 	_prev.led_colour = Color(0.45, 0.68, 0.95)
 	_prev.position = Vector3(0, height - 0.082, 0.004)
 	_prev.pressed.connect(func(): _step(-1))
+	_prev.describe_title = func() -> String: return "BANK  EARLIER TRACKS"
+	_prev.describe_value = func(_v: float) -> String: return _range_label.text
 	add_child(_prev)
 
 	_next = PanelButton.new()
 	_next.led_colour = Color(0.45, 0.68, 0.95)
 	_next.position = Vector3(0, height - 0.100, 0.004)
 	_next.pressed.connect(func(): _step(1))
+	_next.describe_title = func() -> String: return "BANK  LATER TRACKS"
+	_next.describe_value = func(_v: float) -> String: return _range_label.text
 	add_child(_next)
 
 	_build_position_ladder(height)

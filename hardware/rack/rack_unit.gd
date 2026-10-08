@@ -151,6 +151,8 @@ func _ready() -> void:
 	_bypass = PanelButton.new()
 	_bypass.led_colour = Color(0.4, 0.95, 0.5)
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
+	_bypass.describe_title = func() -> String: return "%s  POWER" % _unit_caption()
+	_bypass.describe_value = func(_v: float) -> String: return "ACTIVE" if _bypass.lit else "BYPASSED"
 	_bypass.pressed.connect(func():
 		var f := DAW.state.fx(track_index, fx_index)
 		DAW.set_fx_enabled(track_index, fx_index, not f.enabled))
@@ -171,12 +173,16 @@ func _ready() -> void:
 	_page_prev.led_colour = Color(0.45, 0.68, 0.95)
 	_page_prev.position = Vector3(RACK_WIDTH * 0.5 - 0.090, h * 0.5 - 0.016, 0.004)
 	_page_prev.pressed.connect(func(): _step_page(-1))
+	_page_prev.describe_title = func() -> String: return "%s  PREVIOUS PAGE" % _unit_caption()
+	_page_prev.describe_value = func(_v: float) -> String: return _page_label.text
 	add_child(_page_prev)
 
 	_page_next = PanelButton.new()
 	_page_next.led_colour = Color(0.45, 0.68, 0.95)
 	_page_next.position = Vector3(RACK_WIDTH * 0.5 - 0.068, h * 0.5 - 0.016, 0.004)
 	_page_next.pressed.connect(func(): _step_page(1))
+	_page_next.describe_title = func() -> String: return "%s  NEXT PAGE" % _unit_caption()
+	_page_next.describe_value = func(_v: float) -> String: return _page_label.text
 	add_child(_page_next)
 
 	DAW.state.fx_changed.connect(_on_fx_changed)
@@ -224,6 +230,22 @@ func _param_count() -> int:
 ## Read at the moment of the turn rather than captured when the knob was built, because a knob
 ## is re-pointed by a page change and a captured index would keep writing the parameter it was
 ## created for. -1 when this slot is past the end of the plugin.
+## "KICK  REAEQ", for the hover card. Asked at hover time, like the knob's parameter, because
+## the unit is re-pointed rather than rebuilt.
+func _unit_caption() -> String:
+	var f := DAW.state.fx(track_index, fx_index, false)
+	var track := DAW.state.track(track_index)
+	return "%s  %s" % [track.display_name().to_upper(), f.name.to_upper() if f != null else "FX"]
+
+
+func _param_name(slot: int) -> String:
+	var f := DAW.state.fx(track_index, fx_index, false)
+	var index := _param_for(slot)
+	if f == null or index < 0:
+		return "?"
+	return str(f.param_names.get(index, "P%d" % index)).to_upper()
+
+
 func _param_for(slot: int) -> int:
 	var f := DAW.state.fx(track_index, fx_index, false)
 	if f == null:
@@ -265,6 +287,7 @@ func refresh() -> void:
 			var param_index := _param_for(slot)
 			if param_index >= 0:
 				DAW.set_fx_param(track_index, fx_index, param_index, v))
+		k.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), _param_name(slot)]
 		add_child(k)
 		_knobs.append(k)
 

@@ -137,3 +137,11 @@ func _refresh() -> void:
 				Materials.lamp_colour(led_colour, true), 0.0 if lit else dwell_progress))
 	elif _lamp:
 		_lamp.material_override = Materials.led(led_colour, lit or dwell_progress >= 1.0)
+
+
+func _default_readout() -> String:
+	return "ON" if lit else "OFF"
+
+
+func hint() -> String:
+	return "click"

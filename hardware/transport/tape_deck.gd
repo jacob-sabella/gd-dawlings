@@ -133,6 +133,7 @@ func _rebuild() -> void:
 	play.position = Vector3(-0.035, -0.096, 0.028)
 	play.scale = Vector3(1.6, 1.6, 1.6)
 	play.pressed.connect(func(): DAW.transport_play())
+	play.describe_title = func() -> String: return "TRANSPORT  PLAY"
 	_adopt(play)
 	_play_lamp = play
 
@@ -142,6 +143,8 @@ func _rebuild() -> void:
 	stop.position = Vector3(0.0, -0.096, 0.028)
 	stop.scale = Vector3(1.6, 1.6, 1.6)
 	stop.pressed.connect(func(): DAW.transport_stop())
+	stop.describe_title = func() -> String: return "TRANSPORT  STOP"
+	stop.describe_value = func(_v: float) -> String: return ""
 	_adopt(stop)
 
 	var rec := PanelButton.new()
@@ -150,6 +153,7 @@ func _rebuild() -> void:
 	rec.position = Vector3(0.035, -0.096, 0.028)
 	rec.scale = Vector3(1.6, 1.6, 1.6)
 	rec.pressed.connect(func(): DAW.transport_record())
+	rec.describe_title = func() -> String: return "TRANSPORT  RECORD"
 	_adopt(rec)
 	_rec_lamp = rec
 

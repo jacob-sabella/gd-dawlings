@@ -103,6 +103,76 @@ func _foley_contact() -> AudioStream:
 var contact_volume_db: float = 0.0
 
 
+# --- saying what it is ----------------------------------------------------------------------
+#
+# A hand on a fader knows it is on the fader. A cursor over one does not: it has no weight, no
+# contact, nothing but a picture of an arrow on top of a picture of a desk. On a monitor the
+# only way to know what you are about to move is for the thing to say so, and to say what it is
+# set to in the units the mix is made of, not as a position.
+#
+# Set by whoever BUILDS the control, because that is what knows the meaning. A knob does not
+# know it is the kick's pan; the strip that put it there does. The defaults are only what the
+# control can say about itself without being told.
+
+## () -> String. What this is: "KICK  PAN", "REACOMP  THRESHOLD".
+var describe_title: Callable = Callable()
+## (value: float) -> String. What it is set to, in its own units: "-4.2 dB", "L 30".
+var describe_value: Callable = Callable()
+
+var _hovered_by: Array[Node] = []
+
+signal hover_changed(hovered: bool)
+
+
+func title() -> String:
+	if describe_title.is_valid():
+		return describe_title.call()
+	return _default_title()
+
+
+func readout() -> String:
+	if describe_value.is_valid():
+		return describe_value.call(value)
+	return _default_readout()
+
+
+## What can be done to it, in words, for anyone who has not been told. Kept short: this sits
+## under the value on the hover card and is read once, then ignored, which is the point.
+func hint() -> String:
+	return ""
+
+
+func is_hovered() -> bool:
+	return not _hovered_by.is_empty()
+
+
+## Counted per interactor, not a flag. Two hands, or a hand and a cursor in a hybrid session,
+## can rest on one control, and the first to leave must not switch the highlight off under
+## the second.
+func hover_enter(by: Node) -> void:
+	if by in _hovered_by:
+		return
+	_hovered_by.append(by)
+	if _hovered_by.size() == 1:
+		hover_changed.emit(true)
+
+
+func hover_exit(by: Node) -> void:
+	if not by in _hovered_by:
+		return
+	_hovered_by.erase(by)
+	if _hovered_by.is_empty():
+		hover_changed.emit(false)
+
+
+func _default_title() -> String:
+	return String(name).to_upper()
+
+
+func _default_readout() -> String:
+	return "%d%%" % roundi(value * 100.0)
+
+
 func _on_grab_begin(_at: Vector3) -> void: pass
 func _on_grab_move(_at: Vector3) -> void: pass
 func _on_grab_end() -> void: pass

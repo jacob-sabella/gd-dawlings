@@ -536,6 +536,7 @@ func _build_surfaces() -> void:
 	focus.body = body
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
+	focus.show_halo = medium != Presentation.Medium.SCREEN
 	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
 	# own size and where it ended up. Without this the camera is always aimed using the layout
 	# the desk had before it was summoned, and a paged single-tier console is a very different

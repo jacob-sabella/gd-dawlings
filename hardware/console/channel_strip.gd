@@ -70,6 +70,8 @@ func _ready() -> void:
 	_pan.body_bank = knob_bank
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
 	_pan.turned.connect(func(v: float): DAW.set_track_pan(track_index, v))
+	_pan.describe_title = func() -> String: return _caption_for("PAN")
+	_pan.describe_value = Knob.pan_text
 	add_child(_pan)
 
 	_rec = PanelButton.new()
@@ -78,6 +80,7 @@ func _ready() -> void:
 	_rec.led_colour = Ergonomics.current.signal_colour(&"record")
 	_rec.lamp_scale = Vector2(1.0, 1.0)
 	_rec.position = Vector3(0, HEIGHT - 0.077, 0.004)
+	_rec.describe_title = func() -> String: return _caption_for("RECORD ARM")
 	_rec.pressed.connect(func(): DAW.set_track_rec_arm(track_index, not _state().rec_arm))
 	add_child(_rec)
 
@@ -87,6 +90,7 @@ func _ready() -> void:
 	_solo.led_colour = Ergonomics.current.signal_colour(&"solo")
 	_solo.lamp_scale = Vector2(0.38, 1.0)
 	_solo.position = Vector3(0, HEIGHT - 0.095, 0.004)
+	_solo.describe_title = func() -> String: return _caption_for("SOLO")
 	_solo.pressed.connect(func(): DAW.set_track_solo(track_index, not _state().solo))
 	add_child(_solo)
 
@@ -96,6 +100,7 @@ func _ready() -> void:
 	_mute.led_colour = Ergonomics.current.signal_colour(&"mute")
 	_mute.lamp_scale = Vector2(1.0, 0.40)
 	_mute.position = Vector3(0, HEIGHT - 0.113, 0.004)
+	_mute.describe_title = func() -> String: return _caption_for("MUTE")
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
 	add_child(_mute)
 
@@ -104,6 +109,7 @@ func _ready() -> void:
 	_fader.slot_bank = slot_bank
 	_fader.cap_bank = cap_bank
 	_fader.position = Vector3(-0.011, 0.040, 0.004)
+	_fader.describe_title = func() -> String: return _caption_for("LEVEL")
 	add_child(_fader)
 
 	var meter := VUMeter.new()
@@ -131,6 +137,12 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 	l.no_depth_test = false
 	Lettering.range_to_legibility(l)
 	return l
+
+
+## The hover-card name of one of this strip's controls. Asked at hover time rather than baked
+## at build, because a strip is re-pointed when the bank moves and a track can be renamed.
+func _caption_for(what: String) -> String:
+	return "%s  %s" % [_state().display_name().to_upper(), what]
 
 
 func _state() -> MixState.TrackState:

@@ -18,6 +18,7 @@ var held: ControlAffordance = null
 var hovered: ControlAffordance = null
 
 var _was_pressed := false
+var _rim: HoverRim
 var _dwelling: ControlAffordance = null
 var _dwelt := 0.0
 var _dwell_spent := false
@@ -39,7 +40,7 @@ func _physics_process(_delta: float) -> void:
 	var direction := -aim().basis.z
 
 	var hit := _cast(origin, direction)
-	hovered = hit["control"]
+	_set_hovered(hit["control"])
 
 	if pressed and not _was_pressed:
 		if hovered != null:
@@ -56,6 +57,18 @@ func _physics_process(_delta: float) -> void:
 
 	_was_pressed = pressed
 	_tick_dwell(hit["point"], _delta)
+	_show_rim()
+
+
+## The held control wins over the hovered one: during a long fader throw the cursor is
+## somewhere else entirely, and the rim jumping to whatever it is passing over would say the
+## grab had let go.
+func _show_rim() -> void:
+	if _rim == null:
+		_rim = HoverRim.new()
+		_rim.name = "HoverRim"
+		add_child(_rim)
+	_rim.show_on(held if held != null else hovered, held != null)
 
 
 ## Looking at something long enough to mean it.
@@ -98,6 +111,23 @@ func _tick_dwell(at: Vector3, delta: float) -> void:
 	_dwelling.set_dwell_progress(0.0)
 	_dwelling.grab_begin(self, at)
 	_dwelling.grab_end(self)
+
+
+func _set_hovered(control: ControlAffordance) -> void:
+	if control == hovered:
+		return
+	if hovered != null and is_instance_valid(hovered):
+		hovered.hover_exit(self)
+	hovered = control
+	if hovered != null:
+		hovered.hover_enter(self)
+
+
+## Let go of everything this interactor is touching, for when it stops existing or stops being
+## the way in -- a headset put on, a window losing the mouse. A highlight left behind by a
+## cursor that has gone is a control claiming attention nobody is paying.
+func _exit_tree() -> void:
+	_set_hovered(null)
 
 
 func _cast(origin: Vector3, direction: Vector3) -> Dictionary:

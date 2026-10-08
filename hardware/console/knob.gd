@@ -171,3 +171,15 @@ func _on_value_changed() -> void:
 	# the knob is, drifting against the first.
 	if _slot >= 0 and _aim != null:
 		body_bank.move_slot(_slot, body_bank.global_transform.affine_inverse() * _aim.global_transform)
+
+
+func hint() -> String:
+	return "drag to turn"
+
+
+## A pan position the way a desk prints one: centre is C, not 50%, and the sides are named.
+static func pan_text(v: float) -> String:
+	var off := roundi((v - 0.5) * 200.0)
+	if off == 0:
+		return "C"
+	return "%s %d" % ["L" if off < 0 else "R", absi(off)]

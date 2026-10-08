@@ -21,6 +21,7 @@ var _quit_after := -1
 var _frames := 0
 var _cam: Array = []
 var _shot_res := Vector2i.ZERO
+var _hover := Vector2(-1, -1)
 
 
 func _ready() -> void:
@@ -35,6 +36,14 @@ func _ready() -> void:
 				if i + 1 < args.size(): _quit_after = int(args[i + 1])
 			"--shot-res":
 				if i + 1 < args.size(): _shot_res = _parse_res(args[i + 1])
+			# Where the cursor is, in viewport pixels. The capture window is on a workspace nobody
+			# is looking at, so the real mouse is not over it -- and a hover card is only evidence
+			# if the same interactor that a person drives produced it. This parks THAT interactor's
+			# pointer rather than drawing a card by hand.
+			"--hover":
+				if i + 1 < args.size():
+					var xy := args[i + 1].split(",")
+					if xy.size() == 2: _hover = Vector2(float(xy[0]), float(xy[1]))
 			"--cam":
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
 	if _shot_path == "" and _quit_after < 0:
@@ -57,6 +66,10 @@ func _process(_delta: float) -> void:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		if studio and studio.has_method("frame"):
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
+
+	if _hover.x >= 0.0:
+		for hand in get_tree().root.find_children("*", "MouseInteractor", true, false):
+			(hand as MouseInteractor).pointer_override = _hover
 
 	if _shot_path != "" and _frames == _shot_frame:
 		_capture()

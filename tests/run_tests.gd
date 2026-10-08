@@ -83,6 +83,10 @@ func _ready() -> void:
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
+	_test_every_control_says_what_it_is()
+	_test_hover_is_counted_per_interactor()
+	_test_the_rim_brackets_what_the_cursor_can_hit()
+	_test_a_monitor_draws_no_presentation_brackets()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3435,6 +3439,10 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# Halos are a headset cue and a screen studio turns them off; this is a test of the
+	# mechanism, and a headset studio cannot be built without a headset. Switched on by hand,
+	# and `_test_a_monitor_draws_no_presentation_brackets` covers the screen default.
+	studio.focus.show_halo = true
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
 	studio.ergonomics.motion_scale = 0.0
@@ -3874,3 +3882,120 @@ func _test_focused_gear_fits_the_frame_it_is_shown_in() -> void:
 	studio.queue_free()
 	remove_child(studio)
 	DAW.use(OfflineBackend.new())
+
+
+## A hover card that says "KNOB3" is the scene graph talking, not the desk. Every control in a
+## built studio has to name itself by what it does -- and the check is against the node name
+## precisely because that is the fallback a builder gets by forgetting.
+func _test_every_control_says_what_it_is() -> void:
+	var off := OfflineBackend.new()
+	off.track_count = 13
+	DAW.use(off)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var controls := studio.find_children("*", "ControlAffordance", true, false)
+	check("the studio has controls to describe (%d)" % controls.size(), controls.size() > 40)
+	var anonymous: Array[String] = []
+	var faders := 0
+	var faders_in_db := 0
+	for node in controls:
+		var c := node as ControlAffordance
+		var t := c.title()
+		if t.strip_edges() == "" or t == String(c.name).to_upper():
+			anonymous.append("%s (%s)" % [c.get_path(), t])
+		if c is Fader:
+			faders += 1
+			if c.readout().ends_with(" dB"):
+				faders_in_db += 1
+	check("every control names itself, not its node (%s)" % ", ".join(anonymous.slice(0, 4)),
+			anonymous.is_empty())
+	check("every fader reads in dB (%d of %d)" % [faders_in_db, faders], faders > 0 \
+			and faders_in_db == faders)
+
+	var strips := studio.find_children("*", "ChannelStrip", true, false)
+	check("there is a channel strip to read (%d)" % strips.size(), not strips.is_empty())
+	if not strips.is_empty():
+		var strip := strips[0] as ChannelStrip
+		var pan := strip._pan
+		check("a pan knob names its track (%s)" % pan.title(),
+				pan.title().begins_with(DAW.state.track(strip.track_index).display_name().to_upper()))
+		pan.value = 0.5
+		check("centre pan reads C (%s)" % pan.readout(), pan.readout() == "C")
+		pan.value = 0.2
+		check("hard-ish left reads L 60 (%s)" % pan.readout(), pan.readout() == "L 60")
+	studio.queue_free()
+
+
+## Two hands, or a hand and a cursor, on one button. The first to leave must not turn the
+## highlight off under the second.
+func _test_hover_is_counted_per_interactor() -> void:
+	var button := PanelButton.new()
+	add_child(button)
+	var events: Array[bool] = []
+	button.hover_changed.connect(func(on: bool): events.append(on))
+	var a := Interactor.new()
+	var b := Interactor.new()
+	add_child(a)
+	add_child(b)
+	a._set_hovered(button)
+	b._set_hovered(button)
+	a._set_hovered(null)
+	check("still hovered while one interactor remains", button.is_hovered())
+	b._set_hovered(null)
+	check("not hovered once both have left", not button.is_hovered())
+	check("one enter and one exit, not one per interactor (%s)" % [events],
+			events == [true, false])
+	b._set_hovered(button)
+	# remove_child rather than queue_free: leaving the tree is the event, and it has to have
+	# happened by the next line rather than at the end of a frame this suite does not wait for.
+	remove_child(b)
+	b.free()
+	check("an interactor that goes away takes its hover with it", not button.is_hovered())
+	a.queue_free()
+	button.queue_free()
+
+
+## The rim marks where a click LANDS. A fader's collision covers its whole travel -- click the
+## slot to jump -- so brackets around the cap alone would misstate the control.
+func _test_the_rim_brackets_what_the_cursor_can_hit() -> void:
+	var fader := Fader.new()
+	add_child(fader)
+	var box := HoverRim.footprint(fader)
+	check("the fader's footprint covers its travel (%.3f >= %.3f)" % [box.size.y, Fader.TRAVEL],
+			box.size.y >= Fader.TRAVEL)
+	var knob := Knob.new()
+	add_child(knob)
+	var round := HoverRim.footprint(knob)
+	check("a knob's footprint faces the panel, not edge-on (%s)" % round.size,
+			round.size.x > 0.015 and round.size.y > 0.015 and round.size.z < round.size.x)
+	fader.queue_free()
+	knob.queue_free()
+
+
+## On a monitor, brackets mean "the control under the cursor" and nothing else. The focus halo
+## and the berth both hung in mid-air round a summoned desk, and both spoke the hover rim's
+## visual language with a different meaning.
+func _test_a_monitor_draws_no_presentation_brackets() -> void:
+	var off := OfflineBackend.new()
+	off.track_count = 13
+	DAW.use(off)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	check("a screen studio does not halo", not studio.focus.show_halo)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	for id in [&"console", &"rack"]:
+		studio.focus.focus(id)
+		for _pass in 2:
+			for surface in studio.focus.surfaces:
+				surface._process(0.0)
+		var marks := studio.find_children("*", "FocusHalo", true, false)
+		check("no halo or berth with %s focused on a monitor (%d)" % [id, marks.size()],
+				marks.is_empty())
+	studio.queue_free()
