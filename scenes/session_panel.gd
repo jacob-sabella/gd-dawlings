@@ -583,7 +583,7 @@ func _fill_tracks(choice: OptionButton, selected: int) -> void:
 		for i in DAW.state.track_indices():
 			if DAW.state.in_project(i):
 				tracks.append([i, DAW.state.track(i).display_name()])
-	if tracks != choice.get_meta(&"tracks", []):
+	if choice.item_count == 0 or tracks != choice.get_meta(&"tracks", []):
 		choice.set_meta(&"tracks", tracks)
 		choice.clear()
 		choice.add_item("Nowhere", 0)
