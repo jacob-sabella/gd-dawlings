@@ -35,6 +35,9 @@ var _expect_tracks := 20
 ## moment to hear the project before it has anything to share.
 var _shift := 0.0
 var _port := 7342
+## The host plays the built-in engine's song instead of a test tone: what the guest hears is
+## then a real mix off the host's master bus, and has no clicks to time.
+var _built_in := false
 
 
 func _ready() -> void:
@@ -53,6 +56,8 @@ func _ready() -> void:
 			_reaper_resource = argv[i + 1]
 		if argv[i] == "--shift" and i + 1 < argv.size():
 			_shift = float(argv[i + 1])
+		if argv[i] == "--built-in":
+			_built_in = true
 		if argv[i] == "--expect-tracks" and i + 1 < argv.size():
 			_expect_tracks = int(argv[i + 1])
 	Session.notice.connect(func(t: String): _notices.append(t))
@@ -82,12 +87,19 @@ func _host(port: int) -> void:
 		var first := _first_send(DAW.state)
 		if not first.is_empty():
 			send_restore = DAW.state.send(first[0], first[1]).volume
+	elif _built_in:
+		var engine := GodotBackend.new()
+		engine.track_count = 20
+		DAW.use(engine)
+		DAW.transport_play()
 	else:
 		var offline := OfflineBackend.new()
 		offline.track_count = 20
 		DAW.use(offline)
 	Session.code = "AB12"
 	Session.mix_source = func(): return MixSource.Tone.new()
+	if _built_in:
+		Session.mix_source = func(): return (DAW.backend as GodotBackend).mix_source()
 	check("hosts", Session.host(port))
 	check("and shares its mix's audio", Session.mix_feed.sending)
 	_keep_publishing(Transform3D(Basis(Vector3.UP, 0.6), Vector3(1.2, 1.62, 0.4)), "MASTER  VOLUME")
@@ -135,13 +147,17 @@ func _host(port: int) -> void:
 	check("so the host can take it now", Session.holder_of(KEY) == 1)
 	Session.release_hold(KEY)
 
-	# The guest records a take against what it hears: see _guest_records.
+	# The guest records a take against what it hears: see _guest_records. Not on the built-in
+	# engine's song, which has no clicks to time the notes against.
 	await _until(7.0)
-	DAW.transport_record()
+	if not _built_in:
+		DAW.transport_record()
 	await _until(11.8)
-	DAW.transport_stop()
+	if not _built_in:
+		DAW.transport_stop()
 	await _until(13.0)
-	_check_placed_take()
+	if not _built_in:
+		_check_placed_take()
 
 	await _until(13.4)
 	Session.leave()
@@ -262,19 +278,24 @@ func _guest(port: int) -> void:
 	var heard := Session.mix_feed.stats()
 	print("audio: ", heard, " clicks ", Session.mix_feed.heard_clicks)
 	check("the host's mix is reaching me", heard.get("hearing", false) and int(heard.get("packets", 0)) > 1000)
-	check("loud enough to be the tone (%.3f)" % Session.mix_feed.heard_peak, Session.mix_feed.heard_peak > 0.15)
-	var clicks: Array = Session.mix_feed.heard_clicks
-	var steady := clicks.size() >= 3
-	for i in range(1, clicks.size()):
-		steady = steady and absi(int(clicks[i]) - int(clicks[i - 1]) - 48000) < 480
-	check("its clicks a second apart, to within 10ms (%s)" % [clicks], steady)
+	check("loud enough to be the music (%.3f)" % Session.mix_feed.heard_peak, Session.mix_feed.heard_peak > 0.15)
+	if not _built_in:
+		var clicks: Array = Session.mix_feed.heard_clicks
+		var steady := clicks.size() >= 3
+		for i in range(1, clicks.size()):
+			steady = steady and absi(int(clicks[i]) - int(clicks[i - 1]) - 48000) < 480
+		check("its clicks a second apart, to within 10ms (%s)" % [clicks], steady)
 	check("without running dry once it started (%d)" % int(heard.get("underruns", -1)),
 			int(heard.get("underruns", 99)) <= 1)
 	check("or losing a packet on loopback (%d)" % int(heard.get("lost", -1)), int(heard.get("lost", 99)) == 0)
-	check("and close enough behind to play along to (%.1fms)" % float(heard.get("latency_ms", 999.0)),
-			float(heard.get("latency_ms", 999.0)) < 30.0)
+	# A real mix is captured off the host's master bus a driver block at a time (about 15ms on
+	# Pulse), which the test tone, made the moment it is asked for, never pays.
+	var bar := 45.0 if _built_in else 30.0
+	check("and close enough behind to play along to (%.1fms, under %.0f)" % [float(heard.get("latency_ms", 999.0)), bar],
+			float(heard.get("latency_ms", 999.0)) < bar)
 
-	await _guest_records()
+	if not _built_in:
+		await _guest_records()
 
 	await _until(14.0)
 	print("notices: ", _notices)

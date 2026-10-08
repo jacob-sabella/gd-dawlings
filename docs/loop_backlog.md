@@ -109,20 +109,21 @@ because a scaffold that reads as a finished project wastes the next person's aft
   calibration. Untested against an actual runtime -- there is none on this machine -- so what
   is verified is the arithmetic and the construction, not the tracking.
 
+## Built-in engine (GodotBackend), next
+
+- Recording into the built-in engine (a track armed takes the mic through `AudioEffectRecord`).
+- The user's own audio files and stems as items, not just the synthesised demo song.
+- MIDI items played through a small built-in synth. A guest's take already lands on the built-in
+  engine (it inherits the stand-in's `insert_midi_take`) but is silent; MonitorSynth is the
+  obvious voice for it.
+- The click and input monitoring are accepted by the built-in engine but make no sound yet.
+- Saving and loading a project, probably as DAWproject (MIT).
+- The demo mix is heavy below 150Hz; worth a pass by ear.
+- The alternatives if more than Godot's effects is wanted: a headless Ardour over OSC (GPL at
+  arm's length, desktop only), or Tracktion Engine (GPLv3 or commercial).
+
 ## Parked
 
-- **A built-in DAW for people without one** (asked 2026-10-08). Researched; the ranked options:
-  1. `GodotBackend`: Godot's AudioServer as a small DAW. One bus per track, the built-in
-     AudioEffects as the rack, stems started together by `AudioStreamSynchronized`. MIT, runs
-     everywhere including Quest, about 80% of the contract (no third-party plugins). Weeks.
-  2. `ArdourBackend`: a headless Ardour run as a separate process over OSC plus Lua. GPL is
-     fine at arm's length. The full contract, desktop only, and we would build and ship the
-     headless binary ourselves.
-  3. Tracktion Engine: the full engine as a library, and the only one that also reaches
-     Android. GPLv3 or a commercial license; in-process needs the commercial one.
-  DAWproject (MIT) is the natural save format for (1).
-  **Question for you:** start on `GodotBackend` (recommended), or is a real external engine
-  wanted first?
 - **More than about ten listeners.** A session admits up to 32 guests (Godot's default), but
   the mix is uncompressed at about 1.5 Mbit/s per listener, and there are 8 colours, so the ninth
   ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the

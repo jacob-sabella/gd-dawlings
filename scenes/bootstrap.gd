@@ -8,6 +8,7 @@ extends Node
 ## A launcher UI is worth building once the arrangement it launches has stopped changing daily.
 ##
 ##   godot --path .                                      offline stand-in, screen participant
+##   godot --path . -- --built-in                         the built-in DAW: Godot's own audio
 ##   godot --path . -- --reaper                          host, OSC to a local Reaper
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
 ##   godot --path . -- --reaper --host --code AB12       host, letting in only those told AB12
@@ -51,6 +52,8 @@ func _ready() -> void:
 	Session.mix_source = func() -> MixSource:
 		if args["mix_tone"]:
 			return MixSource.Tone.new()
+		if DAW.backend is GodotBackend:
+			return (DAW.backend as GodotBackend).mix_source()
 		if not args["reaper"] and args["mix_from"] == "":
 			return MixSource.new()
 		var tapped := MixTap.open(args["mix_from"])
@@ -163,14 +166,14 @@ func _start_daw(args: Dictionary) -> void:
 		if DAW.use(ReaperBackend.new(), true, options):
 			return
 		push_warning("bootstrap: could not open the OSC link; falling back to the offline stand-in.")
-	var offline := OfflineBackend.new()
+	var offline := GodotBackend.new() if args["built_in"] else OfflineBackend.new()
 	offline.track_count = args["tracks"]
 	DAW.use(offline)
 
 
 func _parse(argv: PackedStringArray) -> Dictionary:
 	var out := {
-		"reaper": false, "reaper_host": "127.0.0.1",
+		"reaper": false, "built_in": false, "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
@@ -268,6 +271,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				if i < argv.size():
 					out["vision"] = argv[i]
 			"--reaper": out["reaper"] = true
+			"--built-in": out["built_in"] = true
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
 			"--stage": out["stage"] = true
