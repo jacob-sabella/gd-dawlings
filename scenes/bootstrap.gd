@@ -388,6 +388,12 @@ func _apply_cli_placement(places: Dictionary) -> void:
 
 
 func _apply_cli_tablet(wanted: Vector2i) -> void:
+	# A live DAW reports its plugins a moment after the link opens; the stand-in has them already.
+	var waited := 0.0
+	while waited < 10.0 and (DAW.state.fx(wanted.x, wanted.y, false) == null \
+			or DAW.state.fx(wanted.x, wanted.y, false).name == ""):
+		await get_tree().create_timer(0.25).timeout
+		waited += 0.25
 	var f := DAW.state.fx(wanted.x, wanted.y, false)
 	if f == null or f.name == "" or studio.floor_plan == null:
 		push_warning("bootstrap: --tablet %d:%d is not a plugin in this session" % [wanted.x, wanted.y])
