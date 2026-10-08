@@ -112,6 +112,7 @@ func _ready() -> void:
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
+	_test_a_recorded_take_shows_its_waveform_on_the_timeline()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -6906,3 +6907,42 @@ func _test_a_guest_sets_up_their_microphone_from_the_panel() -> void:
 	remove_child(panel)
 	panel.free()
 	Session.start_solo()
+
+
+func _test_a_recorded_take_shows_its_waveform_on_the_timeline() -> void:
+	# Two seconds: quiet, then loud.
+	var peaks := PackedByteArray()
+	for i in 2 * AudioTake.PEAKS_PER_SECOND:
+		peaks.append(20 if i < AudioTake.PEAKS_PER_SECOND else 240)
+	var cols := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 2.0, 0.0, 0.2, -1.0, 1.0, 0.01)
+	check("a column every centimetre of a 20cm take (%d)" % cols.size(), cols.size() == 20)
+	check("quiet where the take is quiet and loud where it is loud",
+			cols[2][1] < 0.1 and cols[17][1] > 0.9)
+	var right_half := TimelineSurface.wave_columns(peaks, 1.0, 11.0, 1.0, 0.0, 0.1, -1.0, 1.0, 0.01)
+	check("the right half of a cut take draws its own, loud, part",
+			right_half.all(func(c): return c[1] > 0.9))
+	var clipped := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 2.0, 0.0, 0.2, 0.1, 0.15, 0.01)
+	check("and only where the window shows it", clipped.size() == 5
+			and clipped.all(func(c): return c[0] >= 0.1 and c[0] <= 0.15))
+
+	_offline().open()
+	DAW.insert_audio_take(8, 2.0, "suite-wave.wav", 2.0, peaks, "Grace audio 1")
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline._on_view_changed(0.0, 8.0)
+	var waves := timeline.get_node_or_null("ItemWaves") as MeshBank
+	check("a recorded take gets a waveform, in one object", waves != null and waves.count() > 0)
+	if waves != null:
+		var drawn := waves.multimesh.visible_instance_count
+		var tallest := 0.0
+		var shortest := INF
+		for i in drawn:
+			var h := waves.transform_of(i).basis.get_scale().y
+			tallest = maxf(tallest, h)
+			shortest = minf(shortest, h)
+		check("drawn across it (%d columns)" % drawn, drawn > 10)
+		check("its loud second taller than its quiet one (%.1fx)" % (tallest / shortest), tallest > shortest * 3.0)
+		check("and no taller than its lane", tallest < TimelineSurface.LANE_HEIGHT)
+	timeline.free()
+	_offline()
