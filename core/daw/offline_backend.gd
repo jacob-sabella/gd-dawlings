@@ -458,6 +458,13 @@ func split_selected(seconds: float) -> void:
 		_remember_edit(before)
 
 
+func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
+		take_name: String) -> void:
+	var before := _lanes_snapshot()
+	_locally_insert_take(track_index, start, end, notes, take_name)
+	_remember_edit(before)
+
+
 ## An edit is one step, never folded: two moves in a row are two things you might take back.
 func _remember_edit(before: Dictionary) -> void:
 	var after := _lanes_snapshot()
@@ -507,6 +514,9 @@ func transport_stop() -> void:
 	state.recording = false
 	state.transport_changed.emit()
 	record_for_replication("/play", [0.0])
+	# Said as well as implied: a guest only learns the take is over from this, and a guest
+	# still believing the host records is a guest still recording.
+	record_for_replication("/record", [0.0])
 
 
 func transport_record() -> void:

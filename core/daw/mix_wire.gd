@@ -234,7 +234,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			_apply_send(state, idx, p, args)
 
 
-## [start, length, muted, name, selected] per item, repeating.
+## [start, length, muted, name, selected] per item, repeating -- and, for an item that has
+## notes, a sixth entry carrying them (see ItemState.notes). Self-describing rather than a wider
+## fixed stride: an item's first field is always a number and a note payload never is, so a
+## lane from a sender that knows nothing of notes reads exactly as it always did.
 const ITEM_WIDTH := 5
 
 
@@ -249,9 +252,16 @@ static func _unpack_items(args: Array) -> Array:
 		item.muted = float(args[i + 2]) > 0.5
 		item.name = str(args[i + 3])
 		item.selected = float(args[i + 4]) > 0.5
-		out.append(item)
 		i += ITEM_WIDTH
+		if i < args.size() and _is_note_payload(args[i]):
+			item.notes = PackedFloat32Array(args[i])
+			i += 1
+		out.append(item)
 	return out
+
+
+static func _is_note_payload(v) -> bool:
+	return v is PackedFloat32Array or v is PackedFloat64Array or v is Array
 
 
 static func _pack_items(items: Array) -> Array:
@@ -259,6 +269,8 @@ static func _pack_items(items: Array) -> Array:
 	for item in items:
 		out.append_array([item.start, item.length, 1.0 if item.muted else 0.0, item.name,
 				1.0 if item.selected else 0.0])
+		if not item.notes.is_empty():
+			out.append(item.notes)
 	return out
 
 

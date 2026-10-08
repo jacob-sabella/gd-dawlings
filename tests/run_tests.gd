@@ -131,6 +131,11 @@ func _ready() -> void:
 	_test_the_song_clock_runs_between_reports()
 	_test_the_guest_knows_which_moment_it_is_hearing()
 	_test_the_jitter_buffer_knows_which_host_frame_is_next()
+	_test_a_take_is_assembled_from_stamped_notes()
+	_test_a_take_from_a_peer_is_cleaned_before_it_lands()
+	_test_a_take_lands_on_the_stand_in_and_comes_off_again()
+	_test_notes_ride_the_wire_with_their_item()
+	_test_reaper_is_asked_for_a_take_in_one_flat_call()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -5939,3 +5944,179 @@ func _test_the_jitter_buffer_knows_which_host_frame_is_next() -> void:
 	var expected := 10.0 * 128 + pulled
 	check("after playing, it is that many frames on, losses and all (%.1f for %.1f)" % [jb.read_frame(), expected],
 			absf(jb.read_frame() - expected) < pulled * MixFeed.QUEUE_FRAMES * 0.000001 + pulled * JitterBuffer.MAX_BEND + 1.0)
+
+
+func _test_a_take_is_assembled_from_stamped_notes() -> void:
+	var take := MidiTake.new()
+	take.begin(10.0)
+	take.note_on(60, 100, 0, 10.5)
+	take.note_off(60, 0, 11.0)
+	take.note_on(64, 80, 0, 10.75)
+	# Struck again before it was let go: the first strike ends where the second begins.
+	take.note_on(64, 90, 0, 11.25)
+	take.note_off(64, 0, 11.5)
+	# Let go under the pedal: it sounds until the pedal comes up.
+	take.sustain(true, 0, 11.6)
+	take.note_on(67, 70, 0, 11.7)
+	take.note_off(67, 0, 11.8)
+	take.sustain(false, 0, 12.4)
+	# Still down when the take ends.
+	take.note_on(72, 127, 0, 12.8)
+	take.note_off(48, 0, 12.9)
+	take.reach(13.0)
+	check("a key that is down counts as being in the take", take.held_count() == 1)
+	var done := take.finish()
+	var notes: Array = done["notes"]
+	close_to("the take starts where recording was first heard", done["start"], 10.0)
+	close_to("and ends at the furthest position heard", done["end"], 13.0)
+	check("every note is in it, in time order (%d)" % notes.size(), notes.size() == 5
+			and notes.map(func(n): return n[2]) == [60, 64, 64, 67, 72])
+	check("a note is [on, off, pitch, velocity, channel]", notes[0] == [10.5, 11.0, 60, 100, 0])
+	close_to("a retriggered key is cut at the retrigger", notes[1][1], 11.25)
+	close_to("a note let go under the pedal lasts until the pedal is lifted", notes[3][1], 12.4)
+	close_to("a note still held when the take ends is closed at its end", notes[4][1], 13.0)
+	check("a release with no press is ignored", notes.all(func(n): return n[2] != 48))
+
+	var early := MidiTake.new()
+	early.begin(5.0)
+	early.note_on(60, 64, 0, 4.9)
+	early.note_off(60, 0, 4.9)
+	var e: Array = early.finish(6.0)["notes"]
+	check("a note stamped a hair before the take is pulled onto its start, and keeps a length",
+			e.size() == 1 and e[0][0] == 5.0 and e[0][1] > e[0][0])
+
+
+func _test_a_take_from_a_peer_is_cleaned_before_it_lands() -> void:
+	var clean := MidiTake.clean_args([3, 2.0, 6.0, [
+		[1.0, 2.5, 60, 100, 0],        # starts before the take: pulled onto it
+		[3.0, 9.0, 200, 0, 99],        # past the end, out-of-range pitch, velocity, channel
+		[4.0, 3.0, 62, 90],            # off before on, and no channel
+		["x", 4.0, 64, 90, 0],         # not a number
+		[NAN, 4.0, 64, 90, 0],         # not a finite one
+		"not a note",
+	], "Grace, \"take\" [1]"])
+	check("a take with bad notes in it is still a take", clean.size() == 5)
+	var notes: Array = clean[3]
+	check("the unreadable notes are dropped and the rest kept (%d)" % notes.size(), notes.size() == 3)
+	close_to("a note before the take starts at its start", notes[0][0], 2.0)
+	check("a note past the end ends at the end, and its numbers are made MIDI",
+			notes[1] == [3.0, 6.0, 127, 1, 15])
+	check("a note whose off came before its on still has a length and a channel",
+			notes[2][1] > notes[2][0] and notes[2][4] == 0)
+	check("the name keeps its words and loses the bridge's punctuation (%s)" % clean[4],
+			clean[4] == "Grace take 1")
+	check("no track is not a take", MidiTake.clean_args([0, 1.0, 2.0, []]).is_empty())
+	check("an end before the start is not a take", MidiTake.clean_args([1, 5.0, 2.0, []]).is_empty())
+	check("notes that are not a list are not a take", MidiTake.clean_args([1, 1.0, 2.0, "x"]).is_empty())
+	check("a missing argument is not a take", MidiTake.clean_args([1, 1.0, 2.0]).is_empty())
+	var long := MidiTake.clean_args([1, 0.0, 1e9, []])
+	close_to("an endless take is cut to an hour", long[2], MidiTake.MAX_SECONDS)
+	var many: Array = []
+	for i in MidiTake.MAX_NOTES + 50:
+		many.append([0.0, 0.1, 60, 64, 0])
+	check("and a flood of notes to the limit", (MidiTake.clean_args([1, 0.0, 1.0, many])[3] as Array).size()
+			== MidiTake.MAX_NOTES)
+	check("insert_midi_take is a verb a guest may use", &"insert_midi_take" in DAW.COMMANDS)
+
+
+func _test_a_take_lands_on_the_stand_in_and_comes_off_again() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var before := s.track(7).items.size()
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	var notes := [[30.25, 30.5, 60, 100, 0], [31.0, 31.75, 64, 90, 1]]
+	check("the stand-in takes MIDI", DAW.can(DAWBackend.Capability.MIDI_TAKES))
+	check("a good take has nothing to refuse", DAW.midi_take_refusal([7, 30.0, 32.0, notes, "Grace take 1"]).is_empty())
+	DAW.apply_intent(&"insert_midi_take", [7, 30.0, 32.0, notes, "Grace take 1"])
+	check("a guest's take lands as a new item on its track", s.track(7).items.size() == before + 1)
+	var item: MixState.ItemState = null
+	for it in s.track(7).items:
+		if it.name == "Grace take 1":
+			item = it
+	check("named for whoever played it", item != null)
+	if item != null:
+		close_to("where the guest heard it", item.start, 30.0)
+		close_to("as long as the take", item.length, 2.0)
+		var back := MidiTake.unpack_relative(item.notes, item.start)
+		check("with its notes, at the song positions they were stamped with (%s)" % [back],
+				back.size() == 2 and is_equal_approx(back[0][0], 30.25) and is_equal_approx(back[1][1], 31.75)
+				and back[1][2] == 64 and back[1][4] == 1)
+	check("and it replicates on the lane's own address", backend._repl_durable.has("/track/7/items"))
+	check("a take is one undo step (%d -> %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, backend.snapshot())
+	var copied: MixState.ItemState = guest.track(7).items.filter(func(it): return it.name == "Grace take 1").front() \
+			if guest.track(7).items.any(func(it): return it.name == "Grace take 1") else null
+	check("a guest joining later is sent the take, notes and all",
+			copied != null and copied.notes == item.notes)
+	DAW.undo()
+	check("undo takes it off", s.track(7).items.size() == before)
+	DAW.redo()
+	check("redo puts it back", s.track(7).items.size() == before + 1)
+	DAW.undo()
+
+	check("a take onto a track that is not there is refused in words",
+			DAW.midi_take_refusal([99, 1.0, 2.0, notes]).contains("no track"))
+	DAW.apply_intent(&"insert_midi_take", [99, 1.0, 2.0, notes])
+	check("and nothing lands", not s.tracks.has(99) or s.track(99).items.is_empty())
+	check("a take with no notes is refused", not DAW.midi_take_refusal([7, 1.0, 2.0, []]).is_empty())
+	DAW.apply_intent(&"insert_midi_take", [7, 1.0, 2.0, [], "empty"])
+	check("and makes no item", s.track(7).items.size() == before)
+
+	# Cut through the middle of it: the notes go with the half they start in.
+	DAW.insert_midi_take(7, 30.0, 32.0, notes, "cut me")
+	var index := -1
+	for it in s.track(7).items:
+		if it.name == "cut me":
+			index = it.index
+	DAW.select_item(7, index, false)
+	DAW.split_selected(30.75)
+	var halves := s.track(7).items.filter(func(it): return it.name == "cut me")
+	check("a split take is two items", halves.size() == 2)
+	if halves.size() == 2:
+		var left := MidiTake.unpack_relative(halves[0].notes, halves[0].start)
+		var right := MidiTake.unpack_relative(halves[1].notes, halves[1].start)
+		check("each half keeps the notes that start in it",
+				left.size() == 1 and right.size() == 1 and right[0][2] == 64)
+		close_to("and the moved note is still at its song position", right[0][0], 31.0, 0.0001)
+
+
+func _test_notes_ride_the_wire_with_their_item() -> void:
+	var a := _item(4.0, 2.0, "Keys")
+	a.notes = MidiTake.pack_relative([[4.5, 5.0, 60, 100, 0]], 4.0)
+	var b := _item(8.0, 1.0, "Audio")
+	var packed := MixWire._pack_items([a, b])
+	check("an item with notes carries them, one without does not (%d entries)" % packed.size(),
+			packed.size() == 11)
+	var back := MixWire._unpack_items(packed)
+	check("both come back, the second still the second", back.size() == 2 and back[1].name == "Audio")
+	check("with the notes on the first", back[0].notes == a.notes and back[1].notes.is_empty())
+	var legacy := MixWire._unpack_items([1.0, 2.0, 0.0, "Old", 0.0, 3.0, 1.0, 0.0, "Older", 1.0])
+	check("a lane from a sender that knows nothing of notes reads as it always did",
+			legacy.size() == 2 and legacy[1].name == "Older" and legacy[1].selected)
+
+
+func _test_reaper_is_asked_for_a_take_in_one_flat_call() -> void:
+	var args := ReaperBackend.midi_take_request(4, 12.5, 14.0,
+			[[12.75, 13.0, 60, 100, 0], [13.25, 13.9, 67, 80, 2]], "Grace, take [2]")
+	check("the bridge gets one flat list: track, start, end, name, count, then five per note",
+			args.size() == 5 + 10 and args[0] == 4 and args[3] == "Grace take 2" and args[4] == 2
+			and args[5] == 12.75 and args[14] == 2)
+	check("with nothing in it the bridge's decoder would split or end on",
+			not JSON.stringify(args).trim_prefix("[").trim_suffix("]").contains("[")
+			and not (args[3] as String).contains(","))
+
+	var link := _fresh_link()
+	check("without the bridge, Reaper cannot take MIDI", not link.can(DAWBackend.Capability.MIDI_TAKES))
+	link.state.track(4)
+	link.insert_midi_take(4, 1.0, 2.0, [[1.0, 1.5, 60, 100, 0]], "x")
+	check("and a take is not pretended onto its timeline", link.state.track(4).items.is_empty())
+
+	# A MIDI item comes back from the bridge with its notes, relative to the item.
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 4, "items": [
+			{"start": 12.5, "length": 1.5, "muted": false, "name": "Grace take 2", "selected": false,
+			"notes": [0.25, 0.5, 60, 100, 0]}]}]})
+	var item := link.state.item(4, 0)
+	check("Reaper's own copy of a take arrives with its notes", item != null and item.notes.size() == 5)
+	link.free()

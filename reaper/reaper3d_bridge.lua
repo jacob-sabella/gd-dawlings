@@ -201,6 +201,30 @@ local function sorted_items(tr)
   return items
 end
 
+-- A MIDI take's notes for the arranger's mini piano roll: flat {on, off, pitch, velocity,
+-- channel, ...} in seconds from the item's start. Capped, because this rides a poll that runs
+-- every two seconds over the whole project; a sketch of the notes is what a block on a lane
+-- can show, and the cap is far past what one fits.
+local NOTES_PER_ITEM = 512
+local function item_notes(it, take)
+  if not take or not reaper.TakeIsMIDI(take) then return nil end
+  local item_start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local _, count = reaper.MIDI_CountEvts(take)
+  local out = {}
+  for n = 0, math.min(count, NOTES_PER_ITEM) - 1 do
+    local ok, _, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
+    if ok and not muted then
+      out[#out + 1] = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_on) - item_start
+      out[#out + 1] = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_off) - item_start
+      out[#out + 1] = pitch
+      out[#out + 1] = vel
+      out[#out + 1] = chan
+    end
+  end
+  if #out == 0 then return nil end
+  return out
+end
+
 function handlers.GetTimeline()
   local tracks = {}
   for i = 0, reaper.CountTracks(0) - 1 do
@@ -221,6 +245,7 @@ function handlers.GetTimeline()
         muted = reaper.GetMediaItemInfo_Value(it, 'B_MUTE') > 0.5,
         selected = reaper.IsMediaItemSelected(it),
         name = name,
+        notes = item_notes(it, take),
       }
     end
     if #items > 0 then
@@ -407,6 +432,49 @@ function handlers.SplitSelected(args)
   end
   local result = edited('Split items')
   result.split = #targets
+  return result
+end
+
+-- A guest's take, placed by song position. args, flat because the request decoder reads one
+-- flat list: track (1-based, as OSC), start and end in project seconds, take name, note count,
+-- then five numbers per note -- on and off in project seconds, pitch, velocity, channel.
+-- Seconds rather than ticks on the wire, converted here with the take's own PPQ, so a project
+-- with tempo changes places each note where the guest heard it rather than where a constant
+-- tempo would have put it.
+function handlers.InsertMidiTake(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local t0, t1 = args[2] or 0, args[3] or 0
+  if t1 <= t0 then return {ok = false, error = 'empty take'} end
+  local name = type(args[4]) == 'string' and args[4] or ''
+  local count = math.floor(args[5] or 0)
+  reaper.Undo_BeginBlock()
+  local item = reaper.CreateNewMIDIItemInProj(tr, t0, t1, false)
+  local take = item and reaper.GetActiveTake(item)
+  if not take then
+    reaper.Undo_EndBlock('Insert MIDI take', 4)
+    return {ok = false, error = 'could not create a MIDI item'}
+  end
+  if name ~= '' then reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true) end
+  local placed = 0
+  for n = 0, count - 1 do
+    local at = 6 + n * 5
+    local on, off = args[at], args[at + 1]
+    local pitch, vel, chan = args[at + 2], args[at + 3], args[at + 4]
+    if on and off and pitch and vel and chan then
+      local ppq_on = reaper.MIDI_GetPPQPosFromProjTime(take, on)
+      local ppq_off = reaper.MIDI_GetPPQPosFromProjTime(take, off)
+      -- noSort: one sort at the end rather than one per note.
+      if reaper.MIDI_InsertNote(take, false, false, ppq_on, math.max(ppq_off, ppq_on + 1),
+          math.floor(chan), math.floor(pitch), math.floor(vel), true) then
+        placed = placed + 1
+      end
+    end
+  end
+  reaper.MIDI_Sort(take)
+  reaper.UpdateItemInProject(item)
+  local result = edited('Insert MIDI take')
+  result.notes = placed
   return result
 end
 

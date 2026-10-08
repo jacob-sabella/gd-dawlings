@@ -50,6 +50,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
+	&"insert_midi_take",
 ]
 
 var backend: DAWBackend
@@ -184,6 +185,14 @@ func clear_item_selection() -> void: _do(&"clear_item_selection", [])
 func move_item(track_index: int, item_index: int, start: float) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
+## A take of notes onto a track, placed by song position: notes are [on, off, pitch, velocity,
+## channel] rows in seconds. Cleaned here and cleaned again on the host, since a guest's take
+## arrives there as peer input. See MidiTake.
+func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
+		take_name := "") -> void:
+	var args := MidiTake.clean_args([track_index, start, end, notes, take_name])
+	if not args.is_empty():
+		_do(&"insert_midi_take", args)
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to
@@ -220,4 +229,22 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		return
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
+	if verb == &"insert_midi_take":
+		if not midi_take_refusal(args).is_empty():
+			return
+		args = MidiTake.clean_args(args)
 	backend.callv(verb, args)
+
+
+## Why a take from a peer cannot be placed, in words for the person who played it, or "".
+func midi_take_refusal(args: Array) -> String:
+	var cleaned := MidiTake.clean_args(args)
+	if cleaned.is_empty():
+		return "The take could not be read."
+	if backend == null or not backend.can(DAWBackend.Capability.MIDI_TAKES):
+		return "This DAW cannot take MIDI yet: in Reaper, load the reaper-3d bridge script."
+	if not state.tracks.has(cleaned[0]):
+		return "There is no track %d to record onto." % cleaned[0]
+	if (cleaned[3] as Array).is_empty():
+		return "The take had no notes in it."
+	return ""

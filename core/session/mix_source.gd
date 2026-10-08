@@ -90,7 +90,7 @@ class Captured extends MixSource:
 ## there is no DAW making sound -- the probe, and a host on the offline stand-in.
 ##
 ## Given the host's song clock, the clicks fall on every whole second OF THE SONG while it
-## rolls, instead of every second of the wall clock: a click track locked to the song, which is
+## rolls, instead of every second of the wall clock (which they go back to while it is stopped): a click track locked to the song, which is
 ## what lets the probe check a guest's take against the beat it actually heard.
 class Tone extends MixSource:
 	var rate := 48000.0
@@ -120,17 +120,16 @@ class Tone extends MixSource:
 			var n := _made + i
 			var t := n / rate
 			var s := sin(TAU * hz * t) * 0.2
-			if song.get("valid", false):
-				if song["playing"]:
-					var second := int(floor(float(song["seconds"]) + i / rate))
-					if _last_song_second >= 0 and second != _last_song_second:
-						click_left = int(rate / 1000.0)
-					_last_song_second = second
-				else:
-					_last_song_second = -1
-			elif n % int(rate) < int(rate / 1000.0):
+			if song.get("playing", false):
+				var second := int(floor(float(song["seconds"]) + i / rate))
+				if _last_song_second >= 0 and second != _last_song_second:
+					click_left = int(rate / 1000.0)
+				_last_song_second = second
+			else:
+				_last_song_second = -1
 				# The click: one millisecond of full scale at the top of each second.
-				click_left = 1
+				if n % int(rate) < int(rate / 1000.0):
+					click_left = 1
 			if click_left > 0:
 				s = 0.9
 				click_left -= 1
