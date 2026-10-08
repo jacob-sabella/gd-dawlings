@@ -101,6 +101,8 @@ func _ready() -> void:
 	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_the_tempo_is_set_from_the_deck()
+	_test_the_built_in_engine_is_a_real_mix()
+	_test_the_demo_song_loops_on_the_bar()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5290,6 +5292,101 @@ func _test_a_late_timeline_poll_does_not_undo_an_edit() -> void:
 			link._timeline_epoch)
 	check("one sent after it is", link.state.item(1, 0).selected)
 	link.queue_free()
+
+
+func _test_the_built_in_engine_is_a_real_mix() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var bus := func(index: int) -> int: return AudioServer.get_bus_index("%s%d" % [GodotBackend.BUS_PREFIX, index])
+	check("opens stopped at the top, not playing music at whoever opened it",
+			not s.playing and s.position_seconds == 0.0)
+	check("a bus per track", s.track_indices().all(func(i): return bus.call(i) >= 0))
+	check("and a master of its own", AudioServer.get_bus_index(GodotBackend.MASTER_BUS) >= 0)
+	check("the kick plays through the DRUMS folder",
+			AudioServer.get_bus_send(bus.call(2)) == AudioServer.get_bus_name(bus.call(1)))
+	check("the last drum is still in the folder", backend.parent_of(5) == 1)
+	check("the bass is not", backend.parent_of(6) == 0
+			and AudioServer.get_bus_send(bus.call(6)) == GodotBackend.MASTER_BUS)
+
+	DAW.set_track_volume(6, 0.5)
+	close_to("a fader is the bus's gain", AudioServer.get_bus_volume_db(bus.call(6)), backend.taper_to_db(0.5), 0.01)
+	DAW.set_track_pan(6, 1.0)
+	close_to("a pan is the bus's panner", (AudioServer.get_bus_effect(bus.call(6), 0) as AudioEffectPanner).pan, 1.0)
+	check("the demo's muted hat is silent", AudioServer.is_bus_mute(bus.call(4)))
+	DAW.set_track_solo(3, true)
+	check("a solo silences the rest", AudioServer.is_bus_mute(bus.call(6)))
+	check("but not the soloed track", not AudioServer.is_bus_mute(bus.call(3)))
+	check("nor the folder it plays through", not AudioServer.is_bus_mute(bus.call(1)))
+	check("nor the reverb it sends to", not AudioServer.is_bus_mute(bus.call(13)))
+	DAW.undo()
+	check("undo reaches the speakers too", not AudioServer.is_bus_mute(bus.call(6)))
+
+	check("the kick's rack is Godot's EQ and compressor",
+			s.fx(2, 0).name == "EQ6" and s.fx(2, 1).name == "Compressor")
+	DAW.set_fx_param(2, 1, 0, 0.0)
+	var comp := AudioServer.get_bus_effect(bus.call(2), 2) as AudioEffectCompressor
+	close_to("a knob is the effect's parameter", comp.threshold, -60.0, 0.01)
+	DAW.read_fx_param_text(2, 1, 0)
+	check("read in the effect's own units (%s)" % s.fx(2, 1).param_text.get(0, ""),
+			s.fx(2, 1).param_text.get(0, "") == "-60.0 dB")
+	DAW.set_fx_enabled(2, 1, false)
+	check("bypass is the effect switched off", not AudioServer.is_bus_effect_enabled(bus.call(2), 2))
+
+	check("a send is a second player into the return", backend._players[3].size() == 2
+			and AudioServer.get_bus_send(AudioServer.get_bus_index(backend._players[3][1].bus))
+				== AudioServer.get_bus_name(bus.call(13)))
+	check("there is an item under bar 9 on the kick", backend.item_at(2, s.bar_to_seconds(9.5)) != null)
+	check("and none in the intro", backend.item_at(2, s.bar_to_seconds(2.0)) == null)
+	check("it is a meter on the fader law", backend.meter(0.0) > 0.7 and backend.meter(-200.0) == 0.0)
+	check("the host's guests hear its master bus", backend.mix_source() is GodotBackend.BusSource
+			and backend.mix_source().start())
+
+	var resampler := GodotBackend.BusSource.new(backend)
+	var made := 0
+	var last := Vector2.ZERO
+	var smooth := true
+	for block in 10:
+		var tone := PackedVector2Array()
+		for i in 441:
+			var v := sin(TAU * 441.0 * (block * 441 + i) / 44100.0)
+			tone.append(Vector2(v, v))
+		var out := resampler.resample(tone, 44100.0)
+		for f in out:
+			smooth = smooth and (made == 0 or absf(f.x - last.x) < 0.07)
+			last = f
+		made += out.size()
+	check("a 44.1kHz card is sent at the wire's 48kHz (%d of 4800)" % made, absi(made - 4800) <= 1)
+	check("without a seam between blocks", smooth)
+	var same := PackedVector2Array([Vector2.ONE, Vector2.ZERO])
+	check("and a 48kHz one untouched", resampler.resample(same, 48000.0) == same)
+
+	var p := FXCatalogue.params(&"compressor")[1] as FXCatalogue.Param
+	close_to("a log parameter round-trips", p.value_of(p.normalise(4.0)), 4.0, 0.001)
+	check("and prints like a ratio", p.text(p.normalise(4.0)) == "4.0:1")
+
+	_offline()
+	check("leaving the engine takes its buses with it",
+			AudioServer.get_bus_index(GodotBackend.MASTER_BUS) < 0 and bus.call(2) < 0)
+
+
+func _test_the_demo_song_loops_on_the_bar() -> void:
+	check("tracks find their parts by name", DemoSong.role_of("Lead Vox") == "voice"
+			and DemoSong.role_of("Kick 2") == "kick" and DemoSong.role_of("Verb Rtn") == "")
+	var kick := DemoSong.render("kick", 120.0)
+	check("a part is exactly four bars (%d)" % kick.size(), kick.size() == 8 * DemoSong.RATE)
+	var top := 0.0
+	for v in kick:
+		top = maxf(top, absf(v))
+	close_to("and normalised", top, 0.8, 0.001)
+	var first := 0.0
+	for i in 200:
+		first = maxf(first, absf(kick[i]))
+	check("the kick lands on the one", first > 0.3)
+	var wav := DemoSong.to_stream(kick)
+	close_to("and loops as a stream of that length", wav.get_length(), 8.0, 0.001)
+	check("forever", wav.loop_mode == AudioStreamWAV.LOOP_FORWARD)
 
 
 func _test_the_tempo_is_set_from_the_deck() -> void:
