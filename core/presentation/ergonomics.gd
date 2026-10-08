@@ -132,6 +132,14 @@ static func seated_default() -> Ergonomics:
 	return e
 
 
+## Where a working surface goes: elbow height, which is the only height a desk has ever been.
+##
+## Derived from the eye rather than declared, so a short person gets a low desk and a seated
+## one gets a lower desk again, without anybody maintaining a table of them.
+func desk_height() -> float:
+	return eye_height - (0.46 if seated else 0.55)
+
+
 func shoulder_height() -> float:
 	return eye_height - shoulder_drop
 
@@ -229,18 +237,23 @@ func drop_for(bounds: AABB, distance: float, touched: bool) -> float:
 ## whole arc swings down together and stays equidistant.
 func place_wrapped(
 		bearing_degrees: float, radius: float, touched: bool, centre_y: float) -> Transform3D:
-	var drop := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
-	# Negative where `place` is positive, and that is not an inconsistency to tidy away. A flat
-	# panel is placed by moving it: the basis turns the panel to face back at the eye, so it
-	# tips the same way the panel hangs. A wrapped one is placed by rotating the whole arc about
-	# the eye at its centre, and rotating a thing about a point ahead of it moves it the
-	# opposite way to tilting it in place. Same twenty degrees of gaze, opposite sign.
-	var basis := Basis(Vector3.UP, -deg_to_rad(bearing_degrees)) * Basis(Vector3.RIGHT, -drop)
-	# The surface's own (0, centre_y, radius) IS the arc's centre of curvature, so putting that
-	# point at the origin puts the eye at the centre -- which is the whole trick: every part of
-	# the surface is then exactly `radius` away, head-on, with no near end and no far end.
-	return Transform3D(basis, -(basis * Vector3(0, centre_y, radius)))
-
+	# An upright cylinder sat at desk height, NOT the whole arc swung down about the eye.
+	#
+	# Swinging it was the first version, and it is what you get by analogy with `place`: the
+	# gaze drops twenty degrees, so drop the surface twenty degrees. For a flat panel that is
+	# right. For a desk it is wrong twice over. It tips the circle, so its far ends swing out
+	# past the head-turn and its low ends swing wider still; and it hangs the surface off the
+	# eye at reading distance, which put the top edge of a mixing desk level with the eyebrows
+	# and its near edge a hand's width from the chin. Measured rather than guessed: the box ran
+	# from four degrees ABOVE the horizon to fifty-nine below, across sixty-three degrees of a
+	# fifty-four degree lens.
+	#
+	# A desk does not hang off your face. It stands on the floor at elbow height and you look
+	# down at it. So the arc stays upright -- centre of curvature still at the eye in plan,
+	# which is the whole point, every strip equidistant and head-on -- and it is lowered.
+	var basis := Basis(Vector3.UP, -deg_to_rad(bearing_degrees))
+	var sits := (desk_height() - eye_height) if touched else -0.18
+	return Transform3D(basis, Vector3(0, sits, 0) - basis * Vector3(0, centre_y, radius))
 
 ## How much ARC, at `radius`, one head-turn each way can bring to the front.
 ##
@@ -297,8 +310,8 @@ func wrap_radius_for(width: float, pitch: float, module: float, smallest_cap: fl
 ## the flat geometry says, which is how a layout that measured 53 degrees rendered at 65.
 ##
 ## Solved by bisection. The closed form exists and is longer than the loop.
-func wrap_span_at(radius: float, rise: float, touched: bool) -> float:
-	var drop := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
+func wrap_span_at(radius: float, rise: float, tilt: float) -> float:
+	var drop := tilt
 	var limit := deg_to_rad(clampf(head_turn, 5.0, 85.0))
 	var lo := 0.0
 	var hi := PI * 0.5
@@ -320,7 +333,9 @@ func wrap_span_at(radius: float, rise: float, touched: bool) -> float:
 ## cannot count along. One span, set by the bottom tier, is the cheaper answer.
 func wrap_capacity(radius: float, pitch: float, module: float) -> float:
 	var rows := wrap_rows(radius, pitch)
-	var per_row := wrap_span_at(radius, -float(rows - 1) * pitch * 0.5, true)
+	# Zero tilt: the arc is upright, so no tier swings wider than any other. The argument is
+	# kept because the geometry is general and the tilted case is still what place() does.
+	var per_row := wrap_span_at(radius, -float(rows - 1) * pitch * 0.5, 0.0)
 	if module > 0.0:
 		per_row = floor(per_row / module) * module
 	return per_row * float(rows)

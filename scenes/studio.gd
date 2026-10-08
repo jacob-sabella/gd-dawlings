@@ -115,6 +115,19 @@ const LOOM_RUNS: Array = [
 
 var _looms: Array[GearLoom] = []
 
+## Where a person stands to work, on a monitor. Far enough forward of the console's home at
+## z = 0.1 that gear summoned to arm's length lands on the desk rather than through it.
+const MIX_POSITION_Z := 0.66
+
+## Vertical field of view, in degrees: wide enough to take in a room, long enough to work at a
+## desk without the near edge of it bowing away from you.
+## The lens for looking AT the room, as against being seated at one thing in it. Named rather
+## than written twice, because it was written twice -- 58 where the camera is set up and 75
+## where focus is released -- and releasing focus quietly widened the room by seventeen
+## degrees every time.
+const ROOM_FOV := 58.0
+const SEATED_FOV := 54.0
+
 var _orbit_yaw := 0.0
 var _orbit_pitch := -0.18
 var _orbit_distance := 2.05
@@ -245,9 +258,26 @@ func _build_room() -> void:
 ## not; it is set dressing, it means nothing, and in ROOM mode it is not drawn at all because the
 ## participant already has real furniture. Mixing the two would mean a rack that cannot be put
 ## on the floor without inventing a plugin to justify its legs.
+## One piece of furniture, as one node.
+##
+## The furniture used to be a flat heap of boxes under the set: four posts, a shelf, two legs,
+## a crossbar, all siblings. That is fine to LOOK at and useless to move, and moving it is now
+## required -- a surface summoned to the mix position lands exactly where the stand that used
+## to hold it is still standing, and a trolley through the master section is the kind of thing
+## no amount of lighting rescues. A rig can hide an assembly. It cannot hide half a trolley
+## and leave the other two legs up.
+func _assembly(of_name: String) -> Node3D:
+	var node := Node3D.new()
+	node.name = of_name
+	node.add_to_group(&"room_furniture")
+	studio_set.add_child(node)
+	return node
+
+
 func _build_furniture() -> void:
 	# Meter bridge: the arm that carries the patchbay up off the back of the desk. Every console
 	# with anything mounted above it has one, and without it the bay hangs in the air.
+	var bridge_frame := _assembly("MeterBridge")
 	for side in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var leg_mesh := BoxMesh.new()
@@ -255,7 +285,7 @@ func _build_furniture() -> void:
 		leg.mesh = leg_mesh
 		leg.position = Vector3(side * 0.30, 1.03, -0.33)
 		leg.material_override = Materials.chassis()
-		studio_set.add_child(leg)
+		bridge_frame.add_child(leg)
 
 	var bridge := MeshInstance3D.new()
 	var bridge_mesh := BoxMesh.new()
@@ -263,12 +293,13 @@ func _build_furniture() -> void:
 	bridge.mesh = bridge_mesh
 	bridge.position = BRIDGE_POS
 	bridge.material_override = Materials.brushed_metal()
-	studio_set.add_child(bridge)
+	bridge_frame.add_child(bridge)
 
 	_build_lamp_stands()
 
 	# A trolley for the deck. Two uprights and a shelf; a tape machine on a stand is what the
 	# right-hand side of a control room looks like.
+	var trolley := _assembly("DeckTrolley")
 	var shelf := MeshInstance3D.new()
 	var shelf_mesh := BoxMesh.new()
 	shelf_mesh.size = Vector3(0.56, 0.04, 0.42)
@@ -276,10 +307,11 @@ func _build_furniture() -> void:
 	shelf.position = Vector3(0.80, 0.86, -0.22)
 	shelf.rotation_degrees = Vector3(0, -32, 0)
 	shelf.material_override = Materials.chassis()
-	studio_set.add_child(shelf)
+	trolley.add_child(shelf)
 
 	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
 	# control room that has one has it up on something.
+	var rack_base := _assembly("RackPlinth")
 	var plinth := MeshInstance3D.new()
 	var plinth_mesh := BoxMesh.new()
 	plinth_mesh.size = Vector3(0.60, 0.30, 0.34)
@@ -287,7 +319,7 @@ func _build_furniture() -> void:
 	plinth.position = Vector3(-1.18, 0.15, -0.42) + Basis(Vector3.UP, deg_to_rad(38)) * Vector3(0, 0, -0.15)
 	plinth.rotation_degrees = Vector3(0, 38, 0)
 	plinth.material_override = Materials.chassis()
-	studio_set.add_child(plinth)
+	rack_base.add_child(plinth)
 
 	for dx in [-0.22, 0.22]:
 		for dz in [-0.16, 0.16]:
@@ -298,7 +330,7 @@ func _build_furniture() -> void:
 			var offset := Basis(Vector3.UP, deg_to_rad(-32)) * Vector3(dx, 0, dz)
 			post.position = Vector3(0.80, 0.43, -0.22) + offset
 			post.material_override = Materials.brushed_metal()
-			studio_set.add_child(post)
+			trolley.add_child(post)
 
 	# A stand under the timeline, which until now hung in the air.
 	#
@@ -311,6 +343,7 @@ func _build_furniture() -> void:
 	# Two legs and a crossbar, deliberately the same vocabulary as the patchbay bridge rather
 	# than a new idea: a room furnished out of three kinds of part looks like a room, and one
 	# furnished out of six looks like a kit.
+	var timeline_stand := _assembly("TimelineStand")
 	for side in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var leg_mesh := BoxMesh.new()
@@ -318,7 +351,7 @@ func _build_furniture() -> void:
 		leg.mesh = leg_mesh
 		leg.position = Vector3(side * 0.36, TIMELINE_STAND_TOP * 0.5, TIMELINE_STAND_Z)
 		leg.material_override = Materials.chassis()
-		studio_set.add_child(leg)
+		timeline_stand.add_child(leg)
 
 		# A foot, because a 35mm post standing on a floor is a post that fell over a moment ago.
 		var foot := MeshInstance3D.new()
@@ -327,7 +360,7 @@ func _build_furniture() -> void:
 		foot.mesh = foot_mesh
 		foot.position = Vector3(side * 0.36, 0.011, TIMELINE_STAND_Z)
 		foot.material_override = Materials.chassis()
-		studio_set.add_child(foot)
+		timeline_stand.add_child(foot)
 
 	var crossbar := MeshInstance3D.new()
 	var crossbar_mesh := BoxMesh.new()
@@ -335,7 +368,7 @@ func _build_furniture() -> void:
 	crossbar.mesh = crossbar_mesh
 	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.014, TIMELINE_STAND_Z)
 	crossbar.material_override = Materials.brushed_metal()
-	studio_set.add_child(crossbar)
+	timeline_stand.add_child(crossbar)
 
 
 func _build_anchors() -> void:
@@ -346,7 +379,7 @@ func _build_anchors() -> void:
 	var head: Node3D
 	if medium == Presentation.Medium.SCREEN:
 		camera = Camera3D.new()
-		camera.fov = 58.0
+		camera.fov = ROOM_FOV
 		camera.near = 0.02
 		add_child(camera)
 		head = camera
@@ -390,7 +423,11 @@ func _build_anchors() -> void:
 		# height, facing the way the room faces. Summoned gear lands in front of it and stays
 		# there, and the camera is free to fly around and look at it from anywhere. The gear
 		# is still placed from a body -- it is just not a body that chases the lens.
-		body.position = Vector3(0, ergonomics.eye_height, 0)
+		# In FRONT of the desk, not on top of it. The first version stood the mixer at the room
+		# origin, which is where the console's own carcass is, so every summoned surface landed
+		# inside the furniture and the render came back with a table sawn through the middle of
+		# a mixing desk. A mix position is a place you could actually stand.
+		body.position = Vector3(0, ergonomics.eye_height, MIX_POSITION_Z)
 	else:
 		# In AR and VR it really is a head, and following it is the whole point. See
 		# body_frame.gd for the deadzone that keeps a glance from dragging the room.
@@ -475,6 +512,12 @@ func _build_surfaces() -> void:
 	focus.body = body
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
+	for surface in focus.surfaces:
+		# Re-seat once the focused surface has rebuilt, which is when it finally knows its own
+		# size. Without this the camera is always aimed using the layout the desk had BEFORE it
+		# was summoned, and a paged single-tier console is a very different object from the
+		# flat 48-track plank it was a frame earlier.
+		surface.rebuilt.connect(_on_focus_rebuilt.bind(surface))
 	focus.room = studio_set
 	focus.move = _glide
 	add_child(focus)
@@ -621,6 +664,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F:
 				focus.cycle(-1 if event.shift_pressed else 1)
 				_sit_down()
+			# The other half of the desk. A console pages by default, because twelve strips
+			# you can face beats forty-eight you have to turn your head through -- but a
+			# mix is sometimes a thing you want to see all of at once, and then the tiers
+			# are worth the neck. One key, and it is the one the desk is named after.
+			KEY_E:
+				_toggle_expanded()
 			KEY_ESCAPE:
 				focus.release()
 				_sit_down()
@@ -698,6 +747,29 @@ func _set_text_scale(to: float) -> void:
 ## point of an arc is that it is right from ONE place.
 ##
 ## A no-op in AR and VR, where the camera is a head and moving it is not ours to do.
+## A surface finished rebuilding. Only interesting when it is the one being looked at.
+func _on_focus_rebuilt(surface: Surface) -> void:
+	if focus != null and focus.focused_id == surface.surface_id:
+		_sit_down()
+
+
+## Swap the focused desk between its paged bank and its full width.
+##
+## Only the console has two sizes, so this does nothing anywhere else rather than inventing a
+## meaning for "expanded" on a tape deck. The re-seat comes free: the desk emits `rebuilt`, and
+## the camera is already listening for that.
+func _toggle_expanded() -> void:
+	if focus == null or not focus.is_focused():
+		return
+	for surface in focus.surfaces:
+		if surface.surface_id != focus.focused_id:
+			continue
+		var console := surface as ConsoleSurface
+		if console != null:
+			console.expanded = not console.expanded
+		return
+
+
 func _sit_down() -> void:
 	if camera == null or body == null or medium != Presentation.Medium.SCREEN:
 		return
@@ -710,6 +782,21 @@ func _sit_down() -> void:
 	var drop := deg_to_rad(ergonomics.gaze_down)
 	var ahead := Vector3(0, -sin(drop), -cos(drop)) * ergonomics.working_distance()
 	var at: Vector3 = eye + body.global_transform.basis * ahead
+	# Aimed at the focused surface's own middle once it HAS one. Reading its bounds is only
+	# safe after the rebuild -- focus moves a surface immediately but the rebuild that gives it
+	# its shape happens on the next _process -- so this takes the measurement when it is real
+	# and falls back to the body's working point when it is not. See _on_focus_rebuilt.
+	if focus != null and focus.is_focused():
+		for surface in focus.surfaces:
+			if surface.surface_id == focus.focused_id:
+				var box := surface.content_aabb()
+				if box.size.y > 0.01:
+					# A quarter of the way up from the middle, not the middle. The box
+					# includes the carcass and the armrest, which hang below the working
+					# surface and carry nothing -- aiming at the true centre put the faders
+					# along the top edge of the frame and spent the bottom half on floor.
+					var aim := box.get_center() + Vector3(0, box.size.y * 0.25, 0)
+					at = surface.global_transform * aim
 	var back := eye - at
 	# Through frame() rather than by assigning the four orbit fields, which is what the version
 	# before that did: those values are only read when something applies them, so setting them
@@ -718,6 +805,11 @@ func _sit_down() -> void:
 	#
 	# Negative pitch, because the offset is built with Basis(RIGHT, pitch), which sends +pitch
 	# DOWN -- the eye is above the desk, so it wants the sign that lifts it.
+	# A longer lens while you are working at something. The default 75-degree field is right
+	# for walking around a room and wrong for standing over a desk: at half a metre it bows the
+	# arc outward at the edges and spends most of the frame on everything that is not the desk.
+	# Nobody photographs a console on a wide angle either, and for the same reason.
+	camera.fov = SEATED_FOV if focus.is_focused() else ROOM_FOV
 	frame(at, back.length(), atan2(back.x, back.z),
 			-atan2(back.y, Vector2(back.x, back.z).length()))
 

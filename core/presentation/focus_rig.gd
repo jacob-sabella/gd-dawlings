@@ -113,6 +113,7 @@ func release() -> void:
 			_unmark(surface)
 			_move(surface, home[0], home[1])
 	_home.clear()
+	_clear_the_way()
 	focus_changed.emit(focused_id)
 
 
@@ -338,6 +339,7 @@ func _apply() -> void:
 			index = others
 			others += 1
 		_move(surface, body, placement(surface, index))
+	_clear_the_way()
 
 
 ## Reparented into the body frame rather than placed in world space, and that is the whole
@@ -353,3 +355,61 @@ func _move(surface: Surface, parent: Node3D, local: Transform3D) -> void:
 	if parent != null and surface.get_parent() != parent:
 		surface.reparent(parent, false)
 	surface.transform = local
+
+
+## Furniture the summoned gear is currently standing in, hidden until it goes back.
+var _yielded: Array[Node3D] = []
+
+
+## Get the room's furniture out of the way of the gear that left it.
+##
+## A surface summoned to the mix position does not check what is already there, and what is
+## already there is the stand it was sitting on five seconds ago -- plus, at the mix position
+## specifically, the timeline's crossbar and both its legs, which ran straight through the
+## master section of the console. Nothing about that reads as a bug to the renderer. It reads
+## as a mixing desk with a scaffolding pole through it.
+##
+## Hidden rather than moved, and whole assemblies rather than parts. Moving furniture out of
+## the way needs somewhere to move it TO, and every answer to that is a worse picture than an
+## empty floor; a stand holding nothing has no reason to be in shot anyway. The berth marker
+## stays, so the vacated spot is still legible -- it is the one thing that should be there.
+func _clear_the_way() -> void:
+	for node in _yielded:
+		if is_instance_valid(node):
+			node.visible = true
+	_yielded.clear()
+	if room == null or not is_focused():
+		return
+	var taken: Array[AABB] = []
+	for surface in surfaces:
+		# Out of the tree during teardown, and asking an orphan where it is in the world is
+		# an error with a plausible-looking identity transform for an answer.
+		if not is_instance_valid(surface) or not surface.is_inside_tree():
+			continue
+		var box := surface.content_aabb()
+		if box.size.length() > 0.0:
+			taken.append(surface.global_transform * box)
+	for node in room.find_children("*", "Node3D", true, false):
+		var piece := node as Node3D
+		if not piece.is_in_group(&"room_furniture") or not piece.visible \
+				or not piece.is_inside_tree():
+			continue
+		var here := _world_aabb(piece)
+		if here.size.length() <= 0.0:
+			continue
+		for box in taken:
+			if here.intersects(box):
+				piece.visible = false
+				_yielded.append(piece)
+				break
+
+
+static func _world_aabb(node: Node3D) -> AABB:
+	var out := AABB()
+	var first := true
+	for child in node.find_children("*", "VisualInstance3D", true, false):
+		var vi := child as VisualInstance3D
+		var here := vi.global_transform * vi.get_aabb()
+		out = here if first else out.merge(here)
+		first = false
+	return out

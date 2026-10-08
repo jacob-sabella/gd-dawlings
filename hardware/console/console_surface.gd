@@ -44,7 +44,7 @@ func _process(delta: float) -> void:
 	if _pending_bank >= 0 and not _anything_held():
 		var wanted := _pending_bank
 		_pending_bank = -1
-		DAW.set_track_bank(wanted)
+		_go_to_track(wanted)
 
 
 func _on_bank_changed() -> void:
@@ -57,7 +57,26 @@ func _request_bank(offset: int) -> void:
 	if _anything_held():
 		_pending_bank = offset
 		return
-	DAW.set_track_bank(offset)
+	_go_to_track(offset)
+
+
+## Show the page beginning at project track `offset`, fetching a different protocol bank first
+## if that track is not one the DAW has sent us.
+##
+## Two layers that are easy to conflate and must not be: the protocol bank is how many tracks
+## the DAW agreed to stream, the page is how many of those a person can face at once. Paging
+## inside the cached bank costs nothing and happens instantly; walking off its end is a request
+## to the DAW and may take a round trip.
+func _go_to_track(offset: int) -> void:
+	var wanted := maxi(0, offset)
+	var cached := DAW.state.tracks.size()
+	var local := wanted - DAW.state.bank_offset
+	if local < 0 or local >= cached:
+		view_offset = 0
+		DAW.set_track_bank(wanted)
+		return
+	view_offset = local
+	mark_dirty()
 
 
 func _anything_held() -> bool:
@@ -73,7 +92,18 @@ func _anything_held() -> bool:
 ## near end by more than the near end is away at all, so the lettering goes glancing and the
 ## reach goes impossible. 1.6m is about two arm-spans of panel, which is where a real desk
 ## stops too -- beyond that, real control rooms angle the wings in.
-const WRAP_MIN_WIDTH := 1.6
+## Arc per tier, for a desk of `rows` tiers -- budgeted from the WORST tier, which is the
+## bottom one: the gaze drop tips the whole circle and a tilted circle swings its low ends
+## outward. Quantised down to whole strips so a tier ends on a strip boundary.
+func _span_for(erg: Ergonomics, pitch: float, rows: int) -> float:
+	return floor(erg.wrap_span_at(_wrap, -float(rows - 1) * pitch * 0.5, 0.0)
+			/ ChannelStrip.WIDTH) * ChannelStrip.WIDTH
+
+
+## How far the carcass reaches below the armrest. Not to the floor exactly -- a desk summoned
+## for a seated body sits lower, and a skirt sized for standing would then be through it.
+const SKIRT_HEIGHT := 0.46
+
 
 ## Vertical space between two rows of a wrapped desk. A seam, not a gap: wide enough that the
 ## row below is a different row and not a longer strip, narrow enough that a glance crosses it.
@@ -95,6 +125,54 @@ var _rows := 1
 var _half_width := 0.0
 
 var _wrap := 0.0
+
+## Show every track at once, in as many tiers as that takes, instead of one page at a time.
+##
+## Off by default and it should stay that way. A summoned desk showing forty-eight tracks needs
+## three tiers of faders stacked up your field of view, and that is a pit you stand in rather
+## than a desk you work at -- correct by every number in ergonomics.gd and horrible to be in.
+## The default is one tier you can take in at a glance, paged. This is the escape hatch for the
+## moment you genuinely want to see the whole mix at once.
+var expanded := false:
+	set(value):
+		if expanded == value:
+			return
+		expanded = value
+		mark_dirty()
+
+## Which page of the cached bank the single-tier desk is showing. Not the protocol's bank
+## offset, which is a different thing at a different layer: that is how many tracks the DAW
+## agreed to stream, this is how many of them a person can face at once. See page_size.
+var view_offset := 0
+
+
+## How many channel strips fit in ONE tier at arm's length -- the bank width a BODY asks for,
+## as opposed to the one the protocol happens to offer.
+##
+## Reaper streams 64. Nothing about 64 came from a person; it is a round number in a protocol.
+## The number that came from a person is this one: the arc a neck sweeps at reach, less what
+## the master section and the bank buttons take out of it, divided by a strip. It lands near
+## fourteen, which is roughly the width of every small-format desk ever built, and that is not
+## a coincidence -- those were sized by the same measurement.
+func page_size() -> int:
+	return maxi(4, int(floor(_page_arc() / ChannelStrip.WIDTH)))
+
+
+## Arc left for channel strips in one tier at arm's length, once the master section, the bank
+## module and the panel margins have taken theirs.
+func _page_arc() -> float:
+	var erg := Ergonomics.current
+	var radius := maxf(erg.working_distance(), Ergonomics.NEAR_LIMIT)
+	var arc: float = floor(erg.wrap_span_at(radius, 0.0, 0.0) / ChannelStrip.WIDTH) \
+			* ChannelStrip.WIDTH
+	return arc - PANEL_MARGIN * 2.0 - MasterSection.GAP - MasterSection.WIDTH \
+			- BankSelector.WIDTH - MasterSection.GAP
+
+
+## How wide these strips lay out, folder gaps and all.
+func _unrolled_width(indices: Array) -> float:
+	return indices.size() * ChannelStrip.WIDTH \
+			+ _group_breaks(DAW.state, indices).size() * GROUP_GAP
 
 
 ## Bent around the viewer when it is wide enough to need it and presented at the body.
@@ -120,10 +198,32 @@ func _rebuild() -> void:
 	if indices.is_empty():
 		return
 
+	# One tier's worth, when this desk has been summoned to a body and not asked to show
+	# everything. Sliced HERE, before anything is measured, because the page is what the desk
+	# is -- sizing a 48-track panel and then hiding two thirds of it would leave the carcass,
+	# the wrap radius and the tier count all describing a desk that is not on screen.
+	var paged := compact and not expanded
+	var page := page_size()
+	if paged and indices.size() > page:
+		view_offset = clampi(view_offset, 0, maxi(0, indices.size() - 1))
+		view_offset -= view_offset % page
+		indices = indices.slice(view_offset, mini(view_offset + page, indices.size()))
+		# Folder gaps are 13mm each and a page of thirteen strips can carry four of them, so
+		# a page sized purely in strips overflows its own tier and the desk silently grows a
+		# second row -- which is the one thing paging exists to avoid. Drop strips from the
+		# end until what is left genuinely fits.
+		while indices.size() > 4 and _unrolled_width(indices) > _page_arc():
+			indices = indices.slice(0, indices.size() - 1)
+		page = indices.size()
+	else:
+		view_offset = 0
+		paged = false
+
 	# The bank module is only built when there is more project than bank -- a session that fits
 	# on the desk needs no bank controls, and two dead buttons invite the question of what they
 	# are for. See hardware/console/bank_selector.gd.
-	var banking := DAW.can(DAWBackend.Capability.TRACK_BANKING) and DAW.state.has_more_banks()
+	var banking := paged \
+			or (DAW.can(DAWBackend.Capability.TRACK_BANKING) and DAW.state.has_more_banks())
 	var bank_width := (BankSelector.WIDTH + MasterSection.GAP) if banking else 0.0
 
 	# Folder breaks are measured BEFORE the panel is sized, because they make the desk wider.
@@ -135,13 +235,19 @@ func _rebuild() -> void:
 
 	_half_width = width * 0.5
 
-	if compact and width >= WRAP_MIN_WIDTH:
+	if compact:
 		var erg := Ergonomics.current
 		var pitch := _row_pitch()
 		_wrap = erg.wrap_radius_for(width, pitch, ChannelStrip.WIDTH, SMALLEST_CAP)
-		_rows = erg.wrap_rows(_wrap, pitch)
-		_row_span = floor(erg.wrap_span_at(_wrap, -float(_rows - 1) * pitch * 0.5, true)
-				/ ChannelStrip.WIDTH) * ChannelStrip.WIDTH
+		# How many tiers this desk NEEDS, not how many the glance could hold. wrap_rows is a
+		# budget; using all of it would make a fourteen-strip page reserve three tiers and then
+		# size its arc for the lowest of three, pulling a desk that fits on one row inward for
+		# clearance it never uses.
+		var most := erg.wrap_rows(_wrap, pitch)
+		_rows = 1
+		while _rows < most and width > _span_for(erg, pitch, _rows) * float(_rows):
+			_rows += 1
+		_row_span = _span_for(erg, pitch, _rows)
 		# Reported, not hidden. The desk is drawn either way -- a mixer that refuses to appear
 		# is worse than one you have to turn your head for -- but a session this wide has
 		# outgrown the body in front of it and the honest answer is a narrower bank.
@@ -167,10 +273,13 @@ func _rebuild() -> void:
 	if banking:
 		bank = BankSelector.new()
 		bank.name = "Bank"
-		bank.bank_offset = DAW.state.bank_offset
-		bank.bank_size = DAW.state.bank_size
+		# When paged, the caption counts in PROJECT tracks, not in page tracks. "1-14 OF 90" is
+		# the only reading that helps; "1-14 OF 14" would be true of the page and a lie about
+		# the session, which is the exact failure the bank module was written to prevent.
+		bank.bank_offset = DAW.state.bank_offset + (view_offset if paged else 0)
+		bank.bank_size = page if paged else DAW.state.bank_size
 		bank.project_count = DAW.state.project_track_count
-		bank.shown_count = DAW.state.tracks.size()
+		bank.shown_count = indices.size()
 		bank.transform = _seat(x + BankSelector.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 		bank.bank_requested.connect(_request_bank)
 		_panel.add_child(bank)
@@ -248,6 +357,9 @@ func _rebuild() -> void:
 	if cap_bank != null:
 		cap_bank.commit()
 
+	if _wrap > 0.0:
+		_build_shell(width)
+
 	master = MasterSection.new()
 	master.name = "Master"
 	master.transform = _seat(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
@@ -290,7 +402,10 @@ func _group_rule(at_x: float) -> void:
 	mesh.size = Vector3(0.0014, ChannelStrip.HEIGHT * 0.92, 0.0012)
 	rule.mesh = mesh
 	rule.transform = _seat(at_x, PANEL_MARGIN + ChannelStrip.HEIGHT * 0.5, 0.0008)
-	rule.material_override = Materials.legend()
+	# Legend white is what a LABEL is. A folder divider is a seam in a surface, and forty-seven
+	# of them at label brightness turned a desk into a picket fence -- the brightest thing on
+	# the panel after the meters, carrying the least.
+	rule.material_override = Materials.recess()
 	_panel.add_child(rule)
 
 
@@ -312,7 +427,10 @@ func framing_root() -> Node3D:
 ## turned by -theta so it faces that centre rather than staying square to the room; without the
 ## turn the strips stay parallel and the far ones are seen edge-on, which is most of what makes
 ## a wide flat desk unreadable in the first place.
-func _seat(x: float, y: float, z: float) -> Transform3D:
+## `flat` leaves the lay-back off, for the parts of the desk that are horizontal rather than
+## panelled -- the armrest, most of all. Seating the rail in the tilted frame stood a 70mm-deep
+## bar on its end and put a curved wall across the bottom of the view.
+func _seat(x: float, y: float, z: float, flat: bool = false) -> Transform3D:
 	if _wrap <= 0.0:
 		return Transform3D(Basis.IDENTITY, Vector3(x, y, z))
 	# `x` arrives as one long ruler across a desk that no longer exists. Cut it into rows first,
@@ -331,7 +449,7 @@ func _seat(x: float, y: float, z: float) -> Transform3D:
 	# desk you lean over, they are a cell you stand in. The tilt is also what makes the rows
 	# affordable -- a panel laid back sixty degrees is half as tall in your field of view, so
 	# the tiers stack inside the same glance.
-	var lay := Basis(Vector3.RIGHT, -deg_to_rad(PANEL_TILT))
+	var lay := Basis.IDENTITY if flat else Basis(Vector3.RIGHT, -deg_to_rad(PANEL_TILT))
 	return Transform3D(Basis(Vector3.UP, -theta) * lay, Vector3(
 			sin(theta) * (_wrap - z), y + lift, _wrap - cos(theta) * (_wrap - z)))
 
@@ -340,6 +458,98 @@ func _seat(x: float, y: float, z: float) -> Transform3D:
 ## its lay-back, plus a seam.
 func _row_pitch() -> float:
 	return ChannelStrip.HEIGHT * cos(deg_to_rad(PANEL_TILT)) + ROW_GAP
+
+
+## The curved carcass: a continuous backing behind every tier, and an armrest along the near
+## edge of the bottom one.
+##
+## The wrapped desk went out with none of this, and that single omission is most of why it
+## looked wrong. A flat desk gets a backing plate, a body and an armrest; the bent one got
+## forty-eight separate strips hanging in air with the room showing through the gaps between
+## them, which reads as scaffolding rather than as a thing someone built.
+##
+## Drawn across the FULL row span rather than only behind the strips that exist, so every tier
+## is the same length and the desk has an edge. A real console does the same with blank panels,
+## and for the same reason: a ragged end reads as unfinished, not as economical.
+##
+## One box per slot rather than a swept mesh. They overlap by six percent, which closes the
+## wedge-shaped gaps that butting flat boxes along a curve would otherwise leave, and it means
+## the whole carcass is one MultiMesh and one draw call instead of a lathe.
+func _build_shell(width: float) -> void:
+	var per_row := int(round(_row_span / ChannelStrip.WIDTH))
+	if per_row <= 0:
+		return
+	# Enough slots for the WHOLE desk, master section and bank module included, not just for
+	# the channel strips. Sizing it to the strips left the master standing on nothing at the
+	# end of the arc, which read as a separate panel that had drifted off the desk.
+	var slots := maxi(per_row * _rows, int(ceil(width / ChannelStrip.WIDTH)))
+	# Taller than the strip by one row gap, measured in the panel's own tilted plane, so the
+	# tiers close into one stepped surface instead of showing daylight between them.
+	var lay := ROW_GAP / maxf(cos(deg_to_rad(PANEL_TILT)), 0.1)
+	# Eighteen percent wider than a strip, not six. These are flat boxes stood along a curve,
+	# so the wedge between two of them opens up the further you get from the axis -- and the
+	# top of a panel laid back sixty degrees is a long way from the axis. At six percent the
+	# desk came out crenellated, a neat row of battlements along its back edge.
+	var shell := MeshBank.parts(
+			Vector3(ChannelStrip.WIDTH * 1.18, ChannelStrip.HEIGHT + PANEL_MARGIN + lay, 0.016),
+			Materials.chassis())
+	shell.name = "Carcass"
+	_panel.add_child(shell)
+	var rail := MeshBank.parts(
+			Vector3(ChannelStrip.WIDTH * 1.18, 0.022, 0.07), Materials.brushed_metal())
+	rail.name = "Armrest"
+	_panel.add_child(rail)
+	# The back rail, which is the armrest's opposite number and exists for the same reason: a
+	# row of panels stood along a curve ends in a row of separate top edges, and from any seat
+	# that is not dead centre they stagger. One continuous band across them closes the line.
+	# Half again as wide as a strip, where the shell needs only eighteen percent. The rail sits
+	# five centimetres behind the panel face and is nearly flat, so most of it lives at a bigger
+	# radius than the strips do, and the wedge between neighbours opens up accordingly.
+	var crown := MeshBank.parts(
+			Vector3(ChannelStrip.WIDTH * 1.5, 0.016, 0.05), Materials.brushed_metal())
+	crown.name = "BackRail"
+	_panel.add_child(crown)
+	# The carcass down to the floor. Without it the desk hangs in mid-air over its own shadow
+	# and you can see the room underneath it, which is the difference between a console and a
+	# control panel someone has bolted to nothing.
+	var skirt := MeshBank.parts(
+			Vector3(ChannelStrip.WIDTH * 1.18, SKIRT_HEIGHT, 0.17), Materials.chassis())
+	skirt.name = "Carcass"
+	# Set back behind the armrest rather than flush with it, so the desk has a toe recess and
+	# the near edge keeps an overhang to cast a line along itself. Flush, it read as one slab
+	# from the floor to the faders.
+	skirt.add_to_group(&"presentation_chrome")
+	_panel.add_child(skirt)
+
+	for row in _rows:
+		for slot in (slots if _rows == 1 else per_row):
+			var x := float(row) * _row_span + (float(slot) + 0.5) * ChannelStrip.WIDTH \
+					- _half_width
+			# Offset INSIDE the tilted panel, by composing with the seat, rather than by
+			# passing a taller y. _seat's y is a world-vertical lift applied before the
+			# lay-back, so adding half a strip height there raises the backing straight up
+			# instead of sliding it up the slope -- which put a 38cm slab in front of the tier
+			# above and filled the screen with brown.
+			var base := _seat(x, PANEL_MARGIN, 0.0)
+			# Flush with the top of the strip, give or take a two-millimetre lip. Sized from
+			# the old margin-both-ends formula the carcass stood seven centimetres proud of
+			# every panel and the desk's back edge came out castellated.
+			shell.claim(base * Transform3D(Basis.IDENTITY, Vector3(
+					0, ChannelStrip.HEIGHT - (ChannelStrip.HEIGHT + PANEL_MARGIN + lay) * 0.5
+							+ 0.002,
+					-0.014)), Color.WHITE)
+			# Above the panel, not across it. Set level with the top edge the rail lay over
+			# every track name on the desk, which is a stylish way to build a mixer nobody
+			# can use.
+			crown.claim(base * Transform3D(Basis.IDENTITY,
+					Vector3(0, ChannelStrip.HEIGHT + 0.006, -0.018)), Color.WHITE)
+			if row == 0:
+				rail.claim(_seat(x, -0.004, 0.052, true), Color.WHITE)
+				skirt.claim(_seat(x, -SKIRT_HEIGHT * 0.5 - 0.03, -0.11, true), Color.WHITE)
+	shell.commit()
+	rail.commit()
+	crown.commit()
+	skirt.commit()
 
 
 ## The three full-width slabs: the panel backing, the desk body and the armrest.

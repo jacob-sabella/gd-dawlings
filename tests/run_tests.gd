@@ -80,6 +80,7 @@ func _ready() -> void:
 	_test_a_rack_unit_reaches_every_parameter()
 	_test_a_wide_desk_bends_round_you_instead_of_past_you()
 	_test_the_desk_knows_how_small_its_own_lettering_is()
+	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3435,7 +3436,6 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
 	studio.ergonomics.motion_scale = 0.0
-	var before: AABB = studio.focus.surfaces[0].content_aabb()
 	studio.focus.focus(&"rack")
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
@@ -3444,6 +3444,13 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	var parked_colour := Color.BLACK
 	for surface in studio.focus.surfaces:
 		var halo := surface.get_node_or_null("FocusHalo") as FocusHalo
+		if surface.wrap_radius() > 0.0:
+			# A bent surface gets no corner brackets, and that is deliberate rather than a
+			# gap: its bounding box is a chord-shaped slab that no part of the geometry
+			# follows, so brackets drawn on it would hang in space off the ends of the arc.
+			# It is marked by its berth instead, which the next block checks.
+			check("%s is bent, so it is not bracketed" % surface.surface_id, halo == null)
+			continue
 		check("%s is marked while the rig holds it" % surface.surface_id, halo != null)
 		if halo == null:
 			continue
@@ -3454,8 +3461,24 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 			parked_colour = shown
 	check("the focused surface is marked differently from the parked ones",
 			focused_colour != parked_colour)
-	check("marking a surface does not change how big it measures",
-			studio.focus.surfaces[0].content_aabb().size.is_equal_approx(before.size))
+	# What this is really about is chrome never being counted as content, and the first version
+	# tested it by measuring one surface before and after focus. That stopped meaning anything
+	# the moment focusing a console also PAGED it: the box changed because the desk changed,
+	# which is correct, and the test failed for a reason that had nothing to do with halos.
+	# Measured against itself with the chrome taken away instead.
+	var marked: Surface = null
+	for surface in studio.focus.surfaces:
+		if surface.get_node_or_null("FocusHalo") != null:
+			marked = surface
+			break
+	check("some surface in the room is bracketed", marked != null)
+	if marked != null:
+		var with_chrome: AABB = marked.content_aabb()
+		var halo: Node = marked.get_node("FocusHalo")
+		marked.remove_child(halo)
+		halo.queue_free()
+		check("marking a surface does not change how big it measures",
+				marked.content_aabb().size.is_equal_approx(with_chrome.size))
 
 	# The place it came out of is marked too, so a rack frame with its units gone reads as a
 	# vacant berth rather than as a modelling mistake -- but only when the surface really did
@@ -3544,7 +3567,13 @@ func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
 	var middle: Vector3 = placed * Vector3(0.0, bounds.get_center().y, 0.0)
 	check("a wrapped desk sits below the horizon, not above it (%.2fm)" % middle.y,
 			middle.y < 0.0)
-	close_to("and its middle is exactly a radius away", middle.length(), 0.8, 0.001)
+	close_to("and at elbow height, which is where a desk is",
+			middle.y, erg.desk_height() - erg.eye_height, 0.001)
+	# IN PLAN. The arc is a vertical cylinder sat below the eye, so the eye is at its axis and
+	# not at its centre: every point is one radius away measured on the floor, and further than
+	# that measured through the air, by exactly how far down the desk is.
+	close_to("and its middle is exactly a radius away in plan",
+			Vector2(middle.x, middle.z).length(), 0.8, 0.001)
 	# The edge has to be taken off the ARC, not off a ruler: place_wrapped sets where the circle
 	# goes, and the surface's own _seat is what puts a strip on it. A straight x offset of 0.6
 	# is a point floating off the curve, a metre away, which is exactly what it measured.
@@ -3552,13 +3581,16 @@ func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
 	var on_arc := Vector3(sin(theta) * 0.8, bounds.get_center().y, 0.8 - cos(theta) * 0.8)
 	var edge: Vector3 = placed * on_arc
 	close_to("so is its edge -- that is the whole point of bending it",
-			edge.length(), 0.8, 0.001)
+			Vector2(edge.x, edge.z).length(), 0.8, 0.001)
 	# Two degrees of slack, and they are real rather than sloppy: the gaze drop tilts the whole
 	# circle about the eye, and a tilted circle seen from its own centre reads a point off to
 	# the side as very slightly further round than it is. The bend is exact; the bearing is
 	# what a head actually has to turn, which is the number worth asserting.
-	close_to("and the edge is about that far round (%.0f deg)" % rad_to_deg(theta),
-			absf(rad_to_deg(atan2(edge.x, -edge.z))), rad_to_deg(theta), 2.5)
+	# Exact now, not within two degrees. The slack was there because the old placement tipped
+	# the circle and a tilted circle reads its side points as further round than they are; an
+	# upright one does not, so the bearing is simply the angle.
+	close_to("and the edge is exactly that far round (%.0f deg)" % rad_to_deg(theta),
+			absf(rad_to_deg(atan2(edge.x, -edge.z))), rad_to_deg(theta), 0.2)
 
 	# And the desk itself. Before the rows went in, a 90-track console at a fixed arm's-length
 	# radius wrapped to plus or minus 179 degrees: sixty strips behind the mixer's own head,
@@ -3648,3 +3680,72 @@ func _test_the_desk_knows_how_small_its_own_lettering_is() -> void:
 				FocusRig.smallest_cap(console) > chrome_cap)
 	studio.queue_free()
 	remove_child(studio)
+
+
+## A summoned desk arrives where the furniture already is. This is the test that the furniture
+## notices.
+##
+## The collision is BUILT here rather than waited for. In the shipped room nothing currently
+## stands inside the paged desk -- the stands are all further back than the mix position -- so
+## a test that asserted "something got hidden" would have been asserting a coincidence of this
+## year's furniture layout, and would go green for the wrong reason the day someone nudges a
+## trolley. What is worth holding is the rule: while gear is summoned, nothing visible in the
+## room is inside it.
+func _test_the_room_gets_out_of_the_way_of_the_gear_that_left_it() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var furniture: Array[Node3D] = []
+	for node in studio.studio_set.find_children("*", "Node3D", true, false):
+		if node.is_in_group(&"room_furniture"):
+			furniture.append(node)
+	check("the room's furniture comes in assemblies, not loose boxes (%d)" % furniture.size(),
+			furniture.size() >= 4)
+	for piece in furniture:
+		check("%s is whole before anything is focused" % piece.name, piece.visible)
+
+	studio.focus.focus(&"console")
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var console: Surface = null
+	for surface in studio.focus.surfaces:
+		if surface.surface_id == &"console":
+			console = surface
+	var desk := console.global_transform * console.content_aabb()
+
+	# A stand put exactly where the desk now is. Nothing in the room does this today; the
+	# point is that the rig does not depend on nothing in the room doing it.
+	var intruder := Node3D.new()
+	intruder.name = "TestStand"
+	intruder.add_to_group(&"room_furniture")
+	studio.studio_set.add_child(intruder)
+	var pole := MeshInstance3D.new()
+	var pole_mesh := BoxMesh.new()
+	pole_mesh.size = Vector3(0.04, 1.4, 0.04)
+	pole.mesh = pole_mesh
+	pole.position = desk.get_center() - studio.studio_set.global_position
+	intruder.add_child(pole)
+	check("the planted stand really is inside the desk",
+			FocusRig._world_aabb(intruder).intersects(desk))
+
+	studio.focus._clear_the_way()
+	check("and it yields", not intruder.visible)
+	for piece in furniture:
+		if piece.visible:
+			check("%s was clear and stays" % piece.name,
+					not FocusRig._world_aabb(piece).intersects(desk))
+
+	studio.focus.release()
+	check("the planted stand comes back when the gear does", intruder.visible)
+	for piece in furniture:
+		check("%s comes back too" % piece.name, piece.visible)
+
+	studio.queue_free()
+	remove_child(studio)
+	DAW.use(OfflineBackend.new())

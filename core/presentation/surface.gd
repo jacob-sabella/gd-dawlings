@@ -148,9 +148,12 @@ func content_aabb() -> AABB:
 	var first := true
 	for node in framing_root().find_children("*", "VisualInstance3D", true, false):
 		var vi := node as VisualInstance3D
-		# Presentation chrome -- the grab handle -- hangs off the surface but is not part of
-		# it. Measuring it would be circular: the handle is placed from this box, so counting
-		# it would grow the box, which moves the handle, which grows the box.
+		# Chrome hangs off the surface without being part of it. Two kinds qualify. The grab
+		# handle, because measuring it would be circular: the handle is placed from this box,
+		# so counting it would grow the box, which moves the handle, which grows the box. And
+		# the carcass under a desk, because this box is what the camera frames and what the
+		# legibility rig reads, and nobody has ever needed to read a plinth. Counting it put
+		# the mix position half a metre low, staring into the console's own woodwork.
 		if vi.is_in_group(&"presentation_chrome"):
 			continue
 		var box := vi.get_aabb()
