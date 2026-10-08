@@ -273,10 +273,18 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 		"fxparam":
 			if p.size() >= 7 and p[5].is_valid_int():
 				var param := int(p[5])
-				if p[6] == "value":
+				if p[6] == "value" and p.size() >= 8 and p[7] == "str":
+					f.param_text[param] = str(args[0])
+					if args.size() > 1:
+						f.param_text_at[param] = float(args[1])
+					else:
+						f.param_text_at.erase(param)
+				elif p[6] == "value":
 					f.params[param] = float(args[0])
-				elif p[6] == "name":
+				elif p[6] == "name" and f.param_names.get(param) != str(args[0]):
 					f.param_names[param] = str(args[0])
+					# A knob's caption is its name; a rename that told nobody left it saying P3.
+					state.fx_changed.emit(track_idx, fx_idx)
 
 
 static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, args: Array) -> void:
@@ -345,6 +353,11 @@ static func snapshot(state: MixState) -> Array:
 				out.append(["/track/%d/fx/%d/fxparam/%d/value" % [index, fx_index, param], [f.params[param]]])
 				if f.param_names.has(param):
 					out.append(["/track/%d/fx/%d/fxparam/%d/name" % [index, fx_index, param], [f.param_names[param]]])
+				if f.param_text.has(param):
+					var words: Array = [f.param_text[param]]
+					if f.param_text_at.has(param):
+						words.append(f.param_text_at[param])
+					out.append(["/track/%d/fx/%d/fxparam/%d/value/str" % [index, fx_index, param], words])
 
 		var send_indices: Array = t.sends.keys()
 		send_indices.sort()

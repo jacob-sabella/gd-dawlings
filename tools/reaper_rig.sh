@@ -24,7 +24,13 @@ running() { pgrep -f -- "-cfgfile $RIG/reaper.ini" >/dev/null; }
 case "${1:-up}" in
   down)
     pkill -f -- "-cfgfile $RIG/reaper.ini" || true
-    exit 0 ;;
+    # A session with changes in it asks whether to save before it quits, and the rig's window
+    # is on a workspace nobody is looking at. Its session is a scratch copy: discard it.
+    for _ in $(seq 1 25); do running || exit 0; sleep 0.2; done
+    pkill -9 -f -- "-cfgfile $RIG/reaper.ini" || true
+    for _ in $(seq 1 25); do running || exit 0; sleep 0.2; done
+    echo "rig: would not stop" >&2
+    exit 1 ;;
   status)
     running && echo "rig: running ($RIG)" || echo "rig: stopped"
     exit 0 ;;
@@ -68,6 +74,9 @@ if [ -f "$PROJECT" ]; then
 else
   open=("$(pwd)/tools/rig/build_session.lua")
 fi
+# The bridge makes this directory when it starts, and that is what "up" waits for -- so one left
+# by the last run would say up before this Reaper had even launched.
+rm -rf "$RIG/Scripts/reaper3d_bridge_data"
 reaper_bin="$(command -v reaper)"
 ( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
     -nosplash "${open[@]}" >"$RIG/reaper.log" 2>&1 & )
@@ -78,7 +87,7 @@ for _ in $(seq 1 200); do
     # Reaper opens its main window from a later process than the one the compositor launched,
     # so the exec rule does not always catch it; move whatever it opened, by PID, after the fact.
     if [ -n "$OFFSCREEN_WORKSPACE" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-      pid="$(pgrep -f -- "-cfgfile $RIG/reaper.ini" | head -1)"
+      pid="$(pgrep -f -- "-cfgfile $RIG/reaper.ini" | head -1 || true)"
       for _ in $(seq 1 20); do
         hyprctl clients -j 2>/dev/null | grep -q "\"pid\": $pid," && break
         sleep 0.25

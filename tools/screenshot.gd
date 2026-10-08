@@ -26,9 +26,8 @@ var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
 ## move to the second by tick 70, let go. `--turn 2` adds that many wheel notches halfway through.
-var _drag_from := Vector2(-1, -1)
-var _drag_to := Vector2(-1, -1)
-var _drag_frames := Vector2i(-1, -1)
+## [from: Vector2, to: Vector2, first_tick: int, last_tick: int] per --drag; repeatable.
+var _drags: Array = []
 var _turn := 0
 var _ticks := 0
 ## `--shot-tick 240`: capture on that physics tick instead of a drawn frame, for anything that
@@ -36,10 +35,14 @@ var _ticks := 0
 var _shot_tick := -1
 ## Controls addressed by what they are called rather than where they happen to be drawn, so a
 ## step in the walkthrough survives the desk being re-laid out.
-##   --aim "KICK  LEVEL"              park the pointer on it (its hover card is the evidence)
-##   --click "PLAY@40"                press it on tick 40 (repeatable)
-##   --pull "KICK  LEVEL:0,60@40-90"  drag from it by that many pixels over those ticks
+##   --aim KICK_IN__LEVEL               park the pointer on it (its hover card is the evidence)
+##   --click TRANSPORT__PLAY@40         press it on tick 40 (repeatable)
+##   --pull KICK_IN__LEVEL:0,60@40-90   drag from it by that many pixels over those ticks
+## `_` stands for a space. An exact title wins; otherwise the first title containing it.
 var _aim := ""
+## `--look -0.6,-0.1`: turn the head by that much yaw and pitch (radians) where it already is --
+## a look to the side from the seat, rather than --walk's standing somewhere else.
+var _look := Vector2.ZERO
 var _clicks: Array = []
 var _pulls: Array = []
 
@@ -72,11 +75,14 @@ func _ready() -> void:
 						var a := ends[0].split(",")
 						var b := ends[1].split(",")
 						var f := spec[1].split("-")
-						_drag_from = Vector2(float(a[0]), float(a[1]))
-						_drag_to = Vector2(float(b[0]), float(b[1]))
-						_drag_frames = Vector2i(int(f[0]), int(f[1]))
+						_drags.append([Vector2(float(a[0]), float(a[1])),
+								Vector2(float(b[0]), float(b[1])), int(f[0]), int(f[1])])
 			"--shot-tick":
 				if i + 1 < args.size(): _shot_tick = int(args[i + 1])
+			"--look":
+				if i + 1 < args.size():
+					var yp := args[i + 1].split(",")
+					if yp.size() == 2: _look = Vector2(float(yp[0]), float(yp[1]))
 			"--aim":
 				if i + 1 < args.size(): _aim = args[i + 1]
 			"--click":
@@ -114,6 +120,8 @@ func _parse_res(spec: String) -> Vector2i:
 
 func _process(_delta: float) -> void:
 	_frames += 1
+	if _frames % 15 == 0 and OS.get_cmdline_user_args().has("--shot-debug"):
+		print("SHOT_FRAME %d tick %d at %d ms" % [_frames, _ticks, Time.get_ticks_msec()])
 
 	# Framing is applied a few frames in, not at frame 0. The studio builds its surfaces on the
 	# first processed frame, so a camera positioned before that is aimed at an empty room.
@@ -141,6 +149,13 @@ func _process(_delta: float) -> void:
 		if at.x >= 0.0:
 			_hover = at
 	var held := _scripted_hand() != null and _scripted_hand().press_override == 1
+	if _frames == 10 and _look != Vector2.ZERO:
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		if studio and studio.get("walker") != null:
+			var w = studio.walker
+			w.yaw += _look.x
+			w.pitch += _look.y
+			w._place_camera()
 	if _hover.x >= 0.0 and not held:
 		for hand in get_tree().root.find_children("*", "MouseInteractor", true, false):
 			(hand as MouseInteractor).pointer_override = _hover
@@ -169,7 +184,7 @@ func _capture() -> void:
 ## reads its button on the physics tick, like every hand -- had looked once.
 func _physics_process(_delta: float) -> void:
 	_ticks += 1
-	if _drag_frames.x >= 0:
+	if not _drags.is_empty():
 		_drive_drag()
 	_drive_scripted()
 	if _shot_tick >= 0 and _ticks == _shot_tick:
@@ -182,21 +197,27 @@ func _drive_drag() -> void:
 	if hands.is_empty():
 		return
 	var hand := hands[0] as MouseInteractor
-	if _ticks < _drag_frames.x:
-		return
-	if _ticks > _drag_frames.y:
-		hand.press_override = 0
-		return
-	var t := float(_ticks - _drag_frames.x) / float(maxi(1, _drag_frames.y - _drag_frames.x))
-	hand.pointer_override = _drag_from.lerp(_drag_to, t)
-	hand.press_override = 1
-	if _turn != 0 and _ticks == (_drag_frames.x + _drag_frames.y) / 2:
-		for n in absi(_turn):
-			var wheel := InputEventMouseButton.new()
-			wheel.button_index = MOUSE_BUTTON_WHEEL_UP if _turn > 0 else MOUSE_BUTTON_WHEEL_DOWN
-			wheel.pressed = true
-			wheel.position = hand.pointer_override
-			get_viewport().push_input(wheel)
+	for drag in _drags:
+		var first: int = drag[2]
+		var last: int = drag[3]
+		if _ticks == last + 1:
+			hand.press_override = 0
+		if _ticks < first or _ticks > last:
+			continue
+		var t := float(_ticks - first) / float(maxi(1, last - first))
+		hand.pointer_override = (drag[0] as Vector2).lerp(drag[1], t)
+		hand.press_override = 1
+		if _turn != 0 and _ticks == (first + last) / 2:
+			_wheel(hand)
+
+
+func _wheel(hand: MouseInteractor) -> void:
+	for n in absi(_turn):
+		var wheel := InputEventMouseButton.new()
+		wheel.button_index = MOUSE_BUTTON_WHEEL_UP if _turn > 0 else MOUSE_BUTTON_WHEEL_DOWN
+		wheel.pressed = true
+		wheel.position = hand.pointer_override
+		get_viewport().push_input(wheel)
 
 
 func _scripted_hand() -> MouseInteractor:
@@ -206,6 +227,11 @@ func _scripted_hand() -> MouseInteractor:
 
 ## The control whose title is this -- exactly if one is, else the first that contains it.
 func _control_called(title: String) -> ControlAffordance:
+	# `_` for a space: SHOT_ARGS is split on whitespace, and titles are "TRACK  CONTROL".
+	# `+` joins pieces that must all appear, for titles with a part too awkward to spell in a
+	# shell word: LEAD_VOX__REACOMP+POWER finds "LEAD VOX  REACOMP (COCKOS)  POWER".
+	title = title.replace("_", " ")
+	var pieces := title.to_upper().split("+")
 	var loose: ControlAffordance = null
 	var stack: Array = [get_tree().root]
 	while not stack.is_empty():
@@ -215,7 +241,7 @@ func _control_called(title: String) -> ControlAffordance:
 			var t: String = (n as ControlAffordance).title()
 			if t == title:
 				return n
-			if loose == null and t.to_upper().contains(title.to_upper()):
+			if loose == null and Array(pieces).all(func(piece): return t.to_upper().contains(piece)):
 				loose = n
 	return loose
 
@@ -232,6 +258,8 @@ func _screen_of(title: String) -> Vector2:
 		if child is CollisionShape3D:
 			centre = (child as CollisionShape3D).global_position
 			break
+	if OS.get_cmdline_user_args().has("--shot-debug"):
+		print("SHOT_AIM %s -> %s at %s (world %s, cam-local %s)" % [title, c.get_path(), camera.unproject_position(centre), centre, camera.global_transform.affine_inverse() * centre])
 	return camera.unproject_position(centre)
 
 
@@ -241,7 +269,6 @@ func _drive_scripted() -> void:
 		return
 	for click in _clicks:
 		if _ticks == click[1]:
-			_hover = Vector2(-1, -1)
 			hand.pointer_override = _screen_of(click[0])
 			print("SHOT_CLICK %s at %s" % [click[0], hand.pointer_override])
 		if _ticks >= click[1] and _ticks < click[1] + 4:

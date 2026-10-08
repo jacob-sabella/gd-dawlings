@@ -83,6 +83,14 @@ func _on_grab_move(at: Vector3) -> void:
 
 
 func _on_grab_end() -> void:
+	_finish_grab()
+	# Forgotten once the hand lets go. Kept, the hover card went on reading "move to 27.1.00"
+	# under a pointer resting on an item that had long since landed.
+	_hit = []
+	_dragged = false
+
+
+func _finish_grab() -> void:
 	if _hit.is_empty():
 		if not _dragged:
 			DAW.clear_item_selection()
@@ -138,4 +146,4 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "click to select, shift adds; drag to move; wheel zooms; S splits at the playhead"
+	return "click to select, shift adds; drag to move; wheel zooms; B or SPLIT cuts at the playhead"

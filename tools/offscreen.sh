@@ -17,6 +17,14 @@ OFFSCREEN_WORKSPACE="${OFFSCREEN_WORKSPACE-10}"
 offscreen_run() {
   if [ -n "$OFFSCREEN_WORKSPACE" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] \
       && command -v hyprctl >/dev/null 2>&1; then
+    # A workspace someone is looking at is not offscreen -- and it is worse than in the way: a
+    # capture window on the SHOWN workspace, beside the rig's Reaper window, stalls inside the
+    # NVIDIA driver a few seconds in and never finishes. So if 10 is on a monitor right now, the
+    # next free number down is used instead. Nobody's view is moved to make room.
+    local shown ws="$OFFSCREEN_WORKSPACE"
+    shown=" $(hyprctl monitors -j 2>/dev/null | python3 -c 'import json, sys
+print(" ".join(str(m["activeWorkspace"]["id"]) for m in json.load(sys.stdin)))' 2>/dev/null) "
+    while [[ "$shown" == *" $ws "* ]] && [ "$ws" -gt 6 ]; do ws=$((ws - 1)); done
     local dir
     dir="$(mktemp -d)"
     # Through a runner script because the command is launched by the compositor, not by us, and
@@ -32,7 +40,7 @@ offscreen_run() {
     : >"$dir/log"
     # Lua's `hyprctl dispatch` does not take the old `[rules] cmd` form; exec_cmd's second
     # argument is the same thing spelled as a table.
-    if hyprctl eval "hl.exec_cmd('$dir/run.sh', { workspace = '$OFFSCREEN_WORKSPACE silent' })" \
+    if hyprctl eval "hl.exec_cmd('$dir/run.sh', { workspace = '$ws silent' })" \
         2>/dev/null | grep -qx ok; then
       local i=0
       while [ ! -s "$dir/pid" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
@@ -45,7 +53,7 @@ offscreen_run() {
       fi
     fi
     rm -rf "$dir"
-    echo "offscreen: could not hand the window to workspace $OFFSCREEN_WORKSPACE; running it here" >&2
+    echo "offscreen: could not hand the window to workspace $ws; running it here" >&2
   fi
   "$@"
 }

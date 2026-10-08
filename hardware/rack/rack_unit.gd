@@ -56,6 +56,9 @@ const CAPTION_LEADING := -12
 const RULE_Y := U * UNITS_TALL * 0.5 - 0.027
 
 var track_index: int = 0
+## How often a hovered knob may ask Reaper for its reading, and when it last did.
+const TEXT_ASK_MSEC := 150
+var _text_asked_msec := -100000
 var fx_index: int = 0
 
 ## Which eight parameters the knobs currently mean. Always a multiple of MAX_KNOBS.
@@ -262,6 +265,32 @@ func _param_name(slot: int) -> String:
 	return str(f.param_names.get(index, "P%d" % index)).to_upper()
 
 
+## The plugin's own words for a knob's value when Reaper has said them, else a percentage.
+##
+## Only trusted while it belongs to the value on the knob: the text and the number arrive as
+## separate messages, and mid-turn the knob is ahead of both. A "-12.0 dB" left over from
+## before the turn would be exact-looking and wrong, which is worse than an honest "41%".
+##
+## Asked for here, and only here: the card reads this while a knob is under a hand, so the one
+## parameter anyone is looking at is the one fetched. Throttled, because the card asks every
+## frame and a turn changes the value on most of them.
+func _param_reading(slot: int, v: float) -> String:
+	var f := DAW.state.fx(track_index, fx_index, false)
+	var index := _param_for(slot)
+	if f == null or index < 0:
+		return "%d%%" % roundi(v * 100.0)
+	var at := float(f.param_text_at.get(index, f.params.get(index, -1.0)))
+	if f.param_text.has(index) and absf(at - v) < 0.002:
+		var text := str(f.param_text[index]).strip_edges()
+		if not text.is_empty():
+			return text
+	var now := Time.get_ticks_msec()
+	if now - _text_asked_msec > TEXT_ASK_MSEC:
+		_text_asked_msec = now
+		DAW.read_fx_param_text(track_index, fx_index, index)
+	return "%d%%" % roundi(v * 100.0)
+
+
 func _param_for(slot: int) -> int:
 	var f := DAW.state.fx(track_index, fx_index, false)
 	if f == null:
@@ -304,6 +333,7 @@ func refresh() -> void:
 			if param_index >= 0:
 				DAW.set_fx_param(track_index, fx_index, param_index, v))
 		k.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), _param_name(slot)]
+		k.describe_value = func(v: float) -> String: return _param_reading(slot, v)
 		add_child(k)
 		_knobs.append(k)
 

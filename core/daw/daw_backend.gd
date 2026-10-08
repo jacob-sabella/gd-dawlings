@@ -124,6 +124,10 @@ func set_master_pan(_pan: float) -> void: pass
 
 func set_fx_param(_track_index: int, _fx_index: int, _param: int, _value: float) -> void: pass
 func set_fx_enabled(_track_index: int, _fx_index: int, _enabled: bool) -> void: pass
+## Ask for the plugin's own reading of one parameter ("-12.0 dB"), to arrive later as the
+## parameter's text in the cache. A backend that cannot know a plugin's units says nothing, and
+## the rack shows the plain percentage it always could.
+func read_fx_param_text(_track_index: int, _fx_index: int, _param: int) -> void: pass
 
 ## Show the slice of the project starting at `offset` tracks in. A no-op on a backend that
 ## answers false to Capability.TRACK_BANKING.

@@ -242,6 +242,35 @@ func _test_link_parses_fx_and_sends() -> void:
 	close_to("fx param value parsed", f.params[3], 0.42)
 	check("fx param name parsed", f.param_names[3] == "Ratio")
 
+	# The plugin's own reading rides beside the number and must not be mistaken for it: a
+	# "-12.0 dB" read as a float is -12, a normalised value nineteen times off the end.
+	link._apply("/track/2/fx/1/fxparam/3/value/str", ["4.0:1"])
+	check("fx param text parsed", f.param_text.get(3) == "4.0:1")
+	close_to("and the value it sits beside is untouched", f.params[3], 0.42)
+	link._apply("/track/2/fx/1/fxparam/3/value/str", ["-12.0 dB", 0.25])
+	close_to("text read through the bridge carries the value it was read at",
+			float(f.param_text_at.get(3, -1.0)), 0.25)
+	check("a guest is sent both", MixWire.snapshot(link.state).any(func(m):
+			return m[0] == "/track/2/fx/1/fxparam/3/value/str" and m[1] == ["-12.0 dB", 0.25]))
+
+	# A knob's caption is its name, so a name that arrives later has to say so.
+	var told := [0]
+	var count := func(_t, _f): told[0] += 1
+	link.state.fx_changed.connect(count)
+	link._apply("/track/2/fx/1/fxparam/3/name", ["Ratio"])
+	check("a name that has not changed tells nobody", told[0] == 0)
+	link._apply("/track/2/fx/1/fxparam/4/name", ["Knee"])
+	check("a new name is announced", told[0] == 1)
+	link.state.fx_changed.disconnect(count)
+
+	# OSC names only the parameters of the track selected in Reaper; the bridge's slow poll
+	# names the rest, onto the same addresses, 0-based from Lua and 1-based on the wire.
+	link._on_structure({"tracks": [{"index": 5, "fx": [{"index": 0, "name": "ReaEQ",
+			"param_names": ["Freq-Low Shelf", "Gain-Low Shelf"]}]}], "track_count": 5})
+	var eq = link.state.fx(5, 1, false)
+	check("the bridge names every track's parameters (%s)" % (eq.param_names if eq else "no fx"),
+			eq != null and eq.param_names.get(1) == "Freq-Low Shelf" and eq.param_names.get(2) == "Gain-Low Shelf")
+
 	var s = link.state.send(2, 0)
 	check("send destination parsed", s.dest_name == "Verb Rtn")
 	close_to("send volume parsed", s.volume, 0.33)
@@ -5168,6 +5197,11 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	var moved := s.bar_to_seconds(9.0) + 9.0 * beat
 	close_to("let go, it moves, its start snapped to the beat", s.item(2, 0).start, moved, 0.001)
 	check("and the drag draws nothing extra afterwards", timeline._preview.is_empty())
+	hand.hover_point = at.call(2, 14.3)
+	lanes.hover_enter(hand)
+	check("let go, the card reads where it landed, not where it was going (%s)" % lanes.readout(),
+			not lanes.readout().begins_with("move to"))
+	lanes.hover_exit(hand)
 	check("the moved item is the selection", s.item(2, 0).selected)
 	check("a move is one undo step", s.undo_depth == 1)
 	DAW.undo()

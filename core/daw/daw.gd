@@ -27,7 +27,7 @@ signal connection_changed()
 const COMMANDS := [
 	&"set_track_volume", &"set_track_pan", &"set_track_mute", &"set_track_solo",
 	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
-	&"set_fx_param", &"set_fx_enabled",
+	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"seek", &"set_loop_range", &"undo", &"redo",
@@ -117,6 +117,12 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	_do(&"set_fx_enabled", [track_index, fx_index, enabled])
+
+
+## Through `_do` although it changes nothing: only the host can reach Reaper, and the answer
+## replicates to everyone like any other value.
+func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
+	_do(&"read_fx_param_text", [track_index, fx_index, param])
 
 
 func transport_play() -> void: _do(&"transport_play", [])

@@ -258,6 +258,15 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 	write("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [clampf(value, 0.0, 1.0)])
 
 
+func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_bridge.call_reaper("GetParamText", [track_index, fx_index, param], func(result) -> void:
+		if typeof(result) == TYPE_DICTIONARY and result.has("text"):
+			_apply("/track/%d/fx/%d/fxparam/%d/value/str" % [track_index, fx_index, param],
+					[str(result["text"]), float(result.get("value", -1.0))]))
+
+
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	write("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
@@ -502,6 +511,16 @@ func _on_structure(result) -> void:
 					[float(int(send.get("dest_track", -1)))])
 			if send.has("dest_name"):
 				_apply("/track/%d/send/%d/name" % [idx, send_idx], [str(send["dest_name"])])
+
+		# OSC names only the selected track's parameters (see the Lua). Written onto the same
+		# address OSC would have used, so a guest's rack is named by the ordinary stream.
+		for fx in _as_array(entry.get("fx", [])):
+			if typeof(fx) != TYPE_DICTIONARY:
+				continue
+			var fx_idx := int(fx.get("index", -1)) + 1
+			var names := _as_array(fx.get("param_names", []))
+			for p in names.size():
+				_apply("/track/%d/fx/%d/fxparam/%d/name" % [idx, fx_idx, p + 1], [str(names[p])])
 
 	# Same channel as the timeline's, and for the same reason: OSC reports the BANK, so without
 	# a count from somewhere a 90-track session is indistinguishable from a 64-track one. Two

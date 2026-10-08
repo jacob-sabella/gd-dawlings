@@ -111,6 +111,14 @@ function handlers.GetProjectStructure(args)
     for f = 0, reaper.TrackFX_GetCount(tr) - 1 do
       local _, fx_name = reaper.TrackFX_GetFXName(tr, f, '')
       local params = {}
+      -- Names ride even the light poll. OSC only names the parameters of the track selected
+      -- in Reaper, so without these every other rack unit reads P1..P8 -- a faceplate you can
+      -- turn and cannot read. Values stay out: OSC streams those and is their authority.
+      local param_names = {}
+      for p = 0, math.min(reaper.TrackFX_GetNumParams(tr, f), 32) - 1 do
+        local _, p_name = reaper.TrackFX_GetParamName(tr, f, p, '')
+        param_names[#param_names + 1] = p_name
+      end
       if not light then
         for p = 0, math.min(reaper.TrackFX_GetNumParams(tr, f), 32) - 1 do
           local _, p_name = reaper.TrackFX_GetParamName(tr, f, p, '')
@@ -126,6 +134,7 @@ function handlers.GetProjectStructure(args)
         name = fx_name,
         enabled = reaper.TrackFX_GetEnabled(tr, f),
         params = params,
+        param_names = param_names,
       }
     end
 
@@ -399,6 +408,19 @@ function handlers.SplitSelected(args)
   local result = edited('Split items')
   result.split = #targets
   return result
+end
+
+-- args: track (1-based, as OSC), fx (1-based), param (1-based). The plugin's own words for one
+-- parameter's value -- "-12.0 dB", "4.0:1" -- with the normalised value they describe, so the
+-- caller can tell whether the words still belong to the knob it is looking at. Asked for one
+-- knob at a time, by whoever is touching it: OSC can stream these for every track, and doing
+-- so made a single surface refresh 115,000 messages long.
+function handlers.GetParamText(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx, p = (args[2] or 1) - 1, (args[3] or 1) - 1
+  local _, text = reaper.TrackFX_GetFormattedParamValue(tr, fx, p, '')
+  return {ok = true, text = text, value = reaper.TrackFX_GetParamNormalized(tr, fx, p)}
 end
 
 function handlers.Ping()

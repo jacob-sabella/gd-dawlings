@@ -66,6 +66,13 @@ class FXState extends RefCounted:
 	## parameter bank, so a missing key means "not yet told", which is not the same as zero.
 	var params: Dictionary = {}
 	var param_names: Dictionary = {}
+	## The plugin's own reading of each value -- "-12.0 dB", "4.0:1", "250 ms" -- as Reaper
+	## formats it. Only Reaper knows a plugin's units; a 0..1 number shown as a percentage is
+	## exact and still tells you nothing about the threshold you just moved.
+	var param_text: Dictionary = {}
+	## The normalised value each text was read at, where known. Text and value travel apart,
+	## and this is how a reader tells whether the words still describe the knob.
+	var param_text_at: Dictionary = {}
 
 
 ## The master bus. Deliberately NOT a TrackState with a reserved index.
