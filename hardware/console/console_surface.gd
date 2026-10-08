@@ -462,7 +462,17 @@ func _seat(x: float, y: float, z: float, flat: bool = false) -> Transform3D:
 	if _row_span > 0.0:
 		row = clampi(int(floor(along / _row_span)), 0, _rows - 1)
 		along -= float(row) * _row_span
-	var theta := (along - _row_span * 0.5) / _wrap
+	return _seat_in_row(along, row, y, z, flat)
+
+
+## Place something a given distance along a given row.
+##
+## Split out of `_seat` because the end cheeks cannot be addressed through the unrolled ruler:
+## the right-hand one belongs at the far end OF ROW ZERO, and an x that far along the ruler is
+## by definition the start of row one. Everything that is laid out strip by strip still goes
+## through `_seat`, which cuts the ruler and then calls this.
+func _seat_in_row(along: float, row: int, y: float, z: float, flat: bool) -> Transform3D:
+	var theta := (along - _row_span * 0.5) / _wrap if _wrap > 0.0 else 0.0
 	var lift := float(row) * _row_pitch()
 	# Tilted, exactly as the flat desk is tilted, and leaving this out is what made the first
 	# wrapped console unbearable: upright strips at face height on a closed circle are not a
@@ -575,6 +585,38 @@ func _build_shell(width: float) -> void:
 	rail.commit()
 	crown.commit()
 	skirt.commit()
+	_build_cheeks(width, lay)
+
+
+## The timber at each end of the desk.
+##
+## Not decoration, or not only. A console built out of nothing but repeated strips has no edge
+## -- the last panel is the same panel as the first, so the desk stops wherever the geometry
+## happened to run out, and from an angle it reads as a surface that continues off into the
+## dark. A pair of cheeks in the one material nothing else in the room uses says where it ends.
+##
+## Sized from the carcass rather than declared: top edge level with the back rail, bottom edge
+## at the foot of the plinth, so it is one board down the whole side of the thing regardless of
+## how many tiers got built.
+func _build_cheeks(width: float, lay: float) -> void:
+	# In the panel's own plane, tilted with it, and built from the same numbers the shell is
+	# built from. Stood upright beside the desk instead -- which is what a box placed in world
+	# axes does -- a cheek is a slab that happens to be near a console, with a wedge of daylight
+	# between it and the panel that widens as the panel lays back. It has to be a side board of
+	# the thing, not a thing of its own.
+	var thick := 0.026
+	var tall := ChannelStrip.HEIGHT + PANEL_MARGIN + lay + float(_rows - 1) * _row_pitch()
+	var cheek := MeshBank.parts(Vector3(thick, tall, 0.085), Materials.end_cheek())
+	cheek.name = "EndCheeks"
+	_panel.add_child(cheek)
+	# `width`, not the slot count the shell rounds up to. The shell may overrun the desk by
+	# most of a strip and nobody sees it, because it is behind the panels; a cheek that does
+	# the same is a board floating off the end with a gap behind it.
+	for ends in [-thick * 0.5, width + thick * 0.5]:
+		var base := _seat_in_row(ends, 0, PANEL_MARGIN, 0.0, false)
+		cheek.claim(base * Transform3D(Basis.IDENTITY, Vector3(
+				0, ChannelStrip.HEIGHT - tall * 0.5 + 0.002, -0.014)), Color.WHITE)
+	cheek.commit()
 
 
 ## The three full-width slabs: the panel backing, the desk body and the armrest.

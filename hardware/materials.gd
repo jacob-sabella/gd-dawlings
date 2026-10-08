@@ -33,6 +33,30 @@ static func chassis() -> StandardMaterial3D:
 		return m)
 
 
+## The wooden end cheeks on a console, and nothing else in the room.
+##
+## Deliberately the only warm, non-metal, non-plastic surface in the studio. Every other part
+## here is a value of grey chosen for how it behaves under a lamp, which is correct for the
+## parts and leaves the room reading as equipment rather than as a place. One pair of timber
+## cheeks is what makes a desk furniture, and because nothing else uses this material it also
+## does the job of telling you where the desk ends -- the master section no longer trails off
+## into whatever is behind it.
+##
+## Dark walnut rather than anything warmer, and low metallic with high roughness, because the
+## cheeks sit at the two points on the desk a practical catches square-on. The first version
+## was a mid oak at the sort of saturation that looks right in a swatch; under the lamp it came
+## back as a pair of traffic cones, brighter than any control on the desk and the first thing
+## the eye went to. Timber in this room has to be the quietest thing in it.
+static func end_cheek() -> StandardMaterial3D:
+	return _cached("end_cheek", func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.105, 0.062, 0.036)
+		m.roughness = 0.72
+		m.metallic = 0.05
+		m.metallic_specular = 0.25
+		return m)
+
+
 ## Brushed aluminium for rack ears, faceplates, reel hubs.
 static func brushed_metal() -> StandardMaterial3D:
 	return _cached("brushed", func():
