@@ -182,6 +182,10 @@ func _arrange() -> void:
 
 	state.track(2).rec_arm = true
 	state.track(10).rec_arm = true
+	# Armed tracks monitor as people set them: the vocal on auto, so it is heard on a punch-in,
+	# and the other one on, as you would for an instrument you play along with.
+	state.track(2).monitor = 2
+	state.track(10).monitor = 1
 	state.track(4).mute = true
 	# No solo. There was one, on the lead vocal, to light a solo lamp in the demo -- and once
 	# the meters started reading true, a soloed vocal meant every other strip on the desk sat
@@ -339,6 +343,13 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 			set_track_rec_arm.bind(index, armed), false)
 	state.set_track_field(index, &"rec_arm", armed)
 	record_for_replication("/track/%d/recarm" % index, [1.0 if armed else 0.0])
+
+
+func set_track_monitor(index: int, mode: int) -> void:
+	_remember("/track/%d/monitor" % index, set_track_monitor.bind(index, state.track(index).monitor),
+			set_track_monitor.bind(index, mode), false)
+	state.set_track_field(index, &"monitor", mode)
+	record_for_replication("/track/%d/monitor" % index, [float(mode)])
 
 
 func set_master_volume(taper: float) -> void:

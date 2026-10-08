@@ -120,6 +120,9 @@ func set_track_pan(_index: int, _pan: float) -> void: pass
 func set_track_mute(_index: int, _muted: bool) -> void: pass
 func set_track_solo(_index: int, _soloed: bool) -> void: pass
 func set_track_rec_arm(_index: int, _armed: bool) -> void: pass
+## Input monitoring, as Reaper's I_RECMON numbers it: 0 off, 1 on, 2 auto (on while armed and
+## stopped, or recording -- what you hear on a punch-in).
+func set_track_monitor(_index: int, _mode: int) -> void: pass
 
 func set_master_volume(_taper: float) -> void: pass
 func set_master_pan(_pan: float) -> void: pass

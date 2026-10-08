@@ -125,6 +125,8 @@ class TrackState extends RefCounted:
 	var mute: bool = false
 	var solo: bool = false
 	var rec_arm: bool = false
+	## Input monitoring: 0 off, 1 on, 2 auto. Reaper's I_RECMON, and what `/track/N/monitor` says.
+	var monitor: int = 0
 	var selected: bool = false
 	var colour: Color = Color(0.55, 0.57, 0.6)
 	## Reaper's I_FOLDERDEPTH on this track: 1 opens a folder, 0 stays at the current level, and

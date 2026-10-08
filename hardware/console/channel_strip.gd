@@ -1,7 +1,7 @@
 class_name ChannelStrip
 extends Node3D
 
-## One channel of the console: name, pan, rec/mute/solo, fader, meter.
+## One channel of the console: name, pan, rec/solo/mute/monitor, fader, meter.
 ##
 ## Built for a track index and bound to it for life. A rebuild of the console replaces strips
 ## wholesale rather than re-pointing them, because a strip that changes which track it means
@@ -23,6 +23,7 @@ var _pan: Knob
 var _mute: PanelButton
 var _solo: PanelButton
 var _rec: PanelButton
+var _monitor: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 
@@ -59,6 +60,9 @@ const SEND_INK := Color(0.95, 0.72, 0.36)
 ## And grey where a flipped strip has no send to show: it is the answer, but not a reading, and a
 ## row of amber NO SENDs shouted louder than the two sends that were there.
 const ABSENT_INK := Color(0.42, 0.43, 0.46)
+## Input monitoring's lamp blinks while it is on auto: lit is on, dark is off, and auto -- on only
+## when Reaper would let the input through -- is neither, and says so without a new colour.
+const AUTO_BLINK_HZ := 1.2
 const CHIP_SIZE := Vector3(WIDTH - 0.008, 0.004, 0.001)
 const CHIP_OFFSET := Vector3(0, HEIGHT - 0.022, 0.0005)
 
@@ -124,6 +128,21 @@ func _ready() -> void:
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
 	add_child(_mute)
 
+	# Input monitoring, under the three. Its lamp is a dot: the fourth silhouette, after the bar,
+	# the stub and the line, so it is not told from the others by its green alone. A press steps
+	# off -> on -> auto -> off, the order Reaper's own monitor button goes round in.
+	_monitor = PanelButton.new()
+	_monitor.body_bank = body_bank
+	_monitor.lamp_bank = lamp_bank
+	_monitor.led_colour = Ergonomics.current.signal_colour(&"ok")
+	_monitor.lamp_scale = Vector2(0.38, 0.40)
+	_monitor.position = Vector3(0, HEIGHT - 0.131, 0.004)
+	_monitor.describe_title = func() -> String: return _caption_for("INPUT MONITOR")
+	_monitor.describe_value = func(_v: float) -> String:
+		return monitor_text(_state().monitor)
+	_monitor.pressed.connect(func(): DAW.set_track_monitor(track_index, next_monitor(_state().monitor)))
+	add_child(_monitor)
+
 	_fader = Fader.new()
 	_fader.track_index = track_index
 	_fader.slot_bank = slot_bank
@@ -162,6 +181,21 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 
 ## The hover-card name of one of this strip's controls. Asked at hover time rather than baked
 ## at build, because a strip is re-pointed when the bank moves and a track can be renamed.
+static func next_monitor(mode: int) -> int:
+	return (mode + 1) % 3
+
+
+static func monitor_text(mode: int) -> String:
+	match mode:
+		DAW.MONITOR_ON: return "ON"
+		DAW.MONITOR_AUTO: return "AUTO (when armed and stopped, or recording)"
+	return "OFF"
+
+
+func _process(_delta: float) -> void:
+	_monitor.lit = fmod(Time.get_ticks_msec() / 1000.0 * AUTO_BLINK_HZ, 1.0) < 0.5
+
+
 func _caption_for(what: String) -> String:
 	return "%s  %s" % [_state().display_name().to_upper(), what]
 
@@ -266,6 +300,8 @@ func refresh() -> void:
 	_mute.lit = t.mute
 	_solo.lit = t.solo
 	_rec.lit = t.rec_arm
+	_monitor.lit = t.monitor == DAW.MONITOR_ON
+	set_process(t.monitor == DAW.MONITOR_AUTO)
 	if chip_bank != null:
 		# Banked chips are unshaded, so the emission `led()` would have carried has to be
 		# expressed as a colour above 1 instead -- gently, because a chip is an identifier and

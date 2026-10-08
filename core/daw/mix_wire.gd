@@ -204,6 +204,11 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			state.set_track_field(idx, &"solo", _as_bool(args))
 		"recarm":
 			state.set_track_field(idx, &"rec_arm", _as_bool(args))
+		"monitor":
+			# One number, 0 off / 1 on / 2 auto. Reaper's config lists a b/ and an i/ pattern on
+			# this address, but what it sends -- checked on the rig -- is the one float.
+			if not args.is_empty():
+				state.set_track_field(idx, &"monitor", clampi(int(roundf(float(args[0]))), 0, 2))
 		"select":
 			state.set_track_field(idx, &"selected", _as_bool(args))
 		"colour":
@@ -363,6 +368,7 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/mute" % index, [1.0 if t.mute else 0.0]])
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
+		out.append(["/track/%d/monitor" % index, [float(t.monitor)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])

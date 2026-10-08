@@ -257,6 +257,12 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 	write("/track/%d/recarm" % index, [1.0 if armed else 0.0])
 
 
+## Reaper takes the mode as a float on the same address it reports it on -- seen on the rig: 2.0
+## set auto and came back as 2.0, and writing the mode it already had brings no answer.
+func set_track_monitor(index: int, mode: int) -> void:
+	write("/track/%d/monitor" % index, [float(mode)])
+
+
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
 	write("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [clampf(value, 0.0, 1.0)])
 

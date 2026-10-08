@@ -306,6 +306,20 @@ func _run() -> void:
 	st = await _until(func(x): return x.get("metronome", not click_was) == click_was)
 	check("and switches it back", st.get("metronome", not click_was) == click_was)
 
+	# --- input monitoring, both ways ----------------------------------------------------------
+	var mon_was := int(roundf(float(_track(original, 3).get("monitor", 0))))
+	var mon_to := (mon_was + 2) % 3
+	DAW.set_track_monitor(3, mon_to)
+	st = await _until(func(x): return int(roundf(float(_track(x, 3).get("monitor", -1)))) == mon_to)
+	check("the strip's monitor key sets Reaper's input monitoring (%s, want %d)" % [
+			_track(st, 3).get("monitor"), mon_to],
+			int(roundf(float(_track(st, 3).get("monitor", -1)))) == mon_to)
+	var mon_back := (mon_to + 1) % 3
+	await _reaper("SetTrackValue", [3, "I_RECMON", mon_back])
+	await _wait(0.8)
+	check("and monitoring set in Reaper reaches the desk (%d, want %d)" % [s.track(3).monitor, mon_back],
+			s.track(3).monitor == mon_back)
+
 	# --- a marker from the locator: read back from Reaper's own marker list ----------------
 	check("Reaper can take markers with the bridge up", DAW.can(DAWBackend.Capability.MARKERS))
 	DAW.add_marker(3.5, "LIVE CHECK")
@@ -329,6 +343,7 @@ func _run() -> void:
 		await _reaper("SetTrackValue", [i, "B_MUTE", 1 if t["mute"] else 0])
 		await _reaper("SetTrackValue", [i, "I_SOLO", 1 if t["solo"] else 0])
 		await _reaper("SetTrackValue", [i, "I_RECARM", 1 if t["arm"] else 0])
+		await _reaper("SetTrackValue", [i, "I_RECMON", int(roundf(float(t.get("monitor", 0))))])
 	# Item positions too: a run that failed halfway through an edit must not leave the next run
 	# starting from a different arrangement.
 	var now_lanes := await _state()

@@ -51,7 +51,7 @@ const COMMANDS := [
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"add_marker",
+	&"set_metronome", &"add_marker", &"set_track_monitor",
 ]
 
 var backend: DAWBackend
@@ -182,6 +182,12 @@ func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])
 func set_looping(on: bool) -> void: _do(&"set_looping", [on])
 func set_metronome(on: bool) -> void: _do(&"set_metronome", [on])
+## Input monitoring for one track: MONITOR_OFF, MONITOR_ON or MONITOR_AUTO, Reaper's own numbers.
+const MONITOR_OFF := 0
+const MONITOR_ON := 1
+const MONITOR_AUTO := 2
+func set_track_monitor(index: int, mode: int) -> void:
+	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
@@ -242,6 +248,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed add_marker intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0), str(args[1]).left(MARKER_NAME_MAX)]
+	if verb == &"set_track_monitor":
+		if args.size() != 2 or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])
+			return
+		args = [int(args[0]), clampi(int(args[1]), MONITOR_OFF, MONITOR_AUTO)]
 	if verb == &"set_metronome":
 		if args.size() != 1:
 			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])

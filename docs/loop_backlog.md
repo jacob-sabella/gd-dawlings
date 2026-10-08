@@ -40,6 +40,12 @@ because a scaffold that reads as a finished project wastes the next person's aft
   half-sends per real one), and `/send/M/volume/str` was parsed as the level. Verified by the
   suite, `session_probe.sh` (a guest's send level reaches the mix and comes back) and
   `session_probe.sh --reaper`; Reaper was seen to take an OSC send write (-11.0dB, 50%L back).
+- **Input monitoring.** `DAW.set_track_monitor` (Reaper's I_RECMON numbers: 0 off, 1 on, 2 auto;
+  clamped on both sides of a session), undoable offline, `/track/N/monitor` to and from Reaper --
+  which, checked on the rig, sends and takes one float despite its config listing a b/ and an
+  i/ pattern there. A fourth key on every strip under MUTE steps off -> on -> auto; its lamp is
+  a green dot, steady for on and blinking for auto. `live_check` checks both directions against
+  GetState's I_RECMON; `session_probe.sh` (also `--reaper`) has a guest set it.
 - **FX racks.** 19" units, one per FX slot, in Reaper's own order. Knobs are the plugin's first
   eight real parameters with Reaper's names.
 - **Patchbay.** Jacks per track, hanging cables for existing sends, drag-to-patch gesture.

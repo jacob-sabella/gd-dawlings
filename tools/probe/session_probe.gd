@@ -61,12 +61,14 @@ func _host(port: int) -> void:
 	var restore := NAN
 	var tempo_restore := NAN
 	var send_restore := NAN
+	var monitor_restore := -1
 	if _reaper_resource != "":
 		check("opens the link to Reaper", DAW.use(ReaperBackend.new(), true, {
 				"bridge_dir": _reaper_resource.path_join("Scripts/reaper3d_bridge_data")}))
 		await _until(-0.5)
 		restore = DAW.state.track(2).volume
 		tempo_restore = DAW.state.tempo
+		monitor_restore = DAW.state.track(3).monitor
 		var first := _first_send(DAW.state)
 		if not first.is_empty():
 			send_restore = DAW.state.send(first[0], first[1]).volume
@@ -103,6 +105,8 @@ func _host(port: int) -> void:
 	check("the guest's send level reached the mix (%s)" % [sent], not sent.is_empty()
 			and absf(DAW.state.send(sent[0], sent[1]).volume - GUEST_SEND) < 0.002)
 	check("the guest switched the click on", DAW.state.metronome)
+	check("the guest's input monitoring reached the mix (%d)" % DAW.state.track(3).monitor,
+			DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
 	check("the guest's marker is on the host's timeline (%s)" % [DAW.state.markers.values()],
 			_has_guest_mark(DAW.state))
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
@@ -130,6 +134,8 @@ func _host(port: int) -> void:
 	if not is_nan(tempo_restore):
 		DAW.set_tempo(tempo_restore)
 	DAW.set_metronome(false)
+	if monitor_restore >= 0:
+		DAW.set_track_monitor(3, monitor_restore)
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
@@ -167,6 +173,7 @@ func _guest(port: int) -> void:
 	DAW.set_tempo(GUEST_TEMPO)
 	DAW.set_metronome(true)
 	DAW.add_marker(GUEST_MARK, "GUEST")
+	DAW.set_track_monitor(3, DAW.MONITOR_AUTO)
 	var send := _first_send(DAW.state)
 	check("the snapshot carried a send to turn (%s)" % [send], not send.is_empty())
 	if not send.is_empty():
@@ -178,6 +185,7 @@ func _guest(port: int) -> void:
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("and so did my tempo (%.1f)" % DAW.state.tempo, absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
 	check("and the click I switched on", DAW.state.metronome)
+	check("and my input monitoring", DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
 	check("and my marker (%s)" % [DAW.state.markers.values()], _has_guest_mark(DAW.state))
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)

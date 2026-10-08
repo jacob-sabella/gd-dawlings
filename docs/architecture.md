@@ -473,6 +473,14 @@ was already on its way, so it cannot draw the marker away again for a beat. Mark
 seconds, and Reaper keeps a marker on its beat when the tempo changes, so the same marker has a
 different key after a tempo edit. Anything that looks a marker up afterwards goes by name.
 
+### Three states on one lamp
+
+Input monitoring is the only strip key with three states, and a lamp has two. Off is dark and on
+is lit; auto, which lets the input through only while the track is armed and stopped or
+recording, blinks. A blink costs a `_process` on the strip, so a strip only processes while its
+track is on auto. Like the other three keys, the lamp is coded by shape as well as colour -- a
+dot, after record's bar, solo's stub and mute's line -- and the suite checks the four differ.
+
 ### The parent heads its group
 
 Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum

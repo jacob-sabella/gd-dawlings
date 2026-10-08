@@ -315,6 +315,7 @@ function handlers.GetState(args)
       mute = reaper.GetMediaTrackInfo_Value(tr, 'B_MUTE') > 0.5,
       solo = reaper.GetMediaTrackInfo_Value(tr, 'I_SOLO') > 0.5,
       arm = reaper.GetMediaTrackInfo_Value(tr, 'I_RECARM') > 0.5,
+      monitor = reaper.GetMediaTrackInfo_Value(tr, 'I_RECMON'),
       fx = fx,
       items = items,
     }
@@ -338,7 +339,7 @@ end
 
 --- Set one of a track's numeric properties, the way a mouse in Reaper would. For checking that
 -- a change made in REAPER reaches the desk, which the desk cannot test by writing it itself.
-local SETTABLE = {D_VOL = true, D_PAN = true, B_MUTE = true, I_SOLO = true, I_RECARM = true}
+local SETTABLE = {D_VOL = true, D_PAN = true, B_MUTE = true, I_SOLO = true, I_RECARM = true, I_RECMON = true}
 function handlers.SetTrackValue(args)
   local tr = track_from_osc(args[1])
   if not tr or not SETTABLE[args[2] or ''] then return {ok = false, error = 'no such track or key'} end
