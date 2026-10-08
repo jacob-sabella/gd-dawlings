@@ -346,11 +346,98 @@ number matters because nobody can judge by ear, while also trying to play, wheth
 
 - **No codec.** 1.5Mbit/s per listener is nothing on a LAN and too much for a phone tether.
   Godot has no low-latency codec; Opus through a GDExtension would cut it to a tenth.
-- **Playing *into* the session.** A guest's MIDI keyboard into the host's Reaper (Reaper's OSC
-  has a virtual-keyboard path) is the other half of performing remotely. It is not built.
+- **Playing *into* the session** is built for MIDI: see "Recording a guest" below. Audio from a
+  guest is not.
 - **Picture and sound are not aligned.** Meters and the playhead arrive in ~1ms over ENet; the
   sound arrives ~45ms later. That is invisible at mixing speed and visible on a hard transient.
 - **A host whose Reaper restarts** keeps a dead link until the session is hosted again.
+
+### Recording a guest
+
+A guest plays along to the mix they hear, and they hear it late: about 46ms behind the host's
+speakers. If a guest's notes were placed by when they reached the host, every take would land
+late by the whole round trip, plus however long each note took on the network. So takes are
+placed by **song position**. Each note is stamped with the moment of the song that was coming
+out of the guest's speakers when the key went down. A note played in time with what the guest
+heard lands in time with the song.
+
+**Every packet of the mix says which moment it is.** The `MixFeed` header carries the host's
+song position for the packet's first frame (a 64-bit float), plus playing and recording flags.
+The position comes from `SongClock`. Reaper reports its playhead a few dozen times a second.
+Each report is block-quantised and is read on the next frame, not when it arrived. So the clock
+runs on the wall clock between reports and treats each report as a correction. It averages the
+first reports after a start or a jump evenly (gain 1/n), then takes 4% of each one after that. A
+disagreement over 0.25s is taken as a seek. The stamp is read at
+`now - capture offset`, because a captured frame left Reaper that long before the host read it.
+
+**The guest knows which moment it is hearing.** `HeardClock` joins two facts. The first is the
+per-packet stamps, kept in a ring by sequence number. The second is which stream frame is at the
+speaker now: the jitter buffer's read head (`JitterBuffer.read_frame`), less the generator's
+queue, half a mixer gulp, and the card's output latency. That measurement is a 10.7ms staircase,
+so it corrects a smoothed clock (gain 0.002 per half-millisecond measurement). A lost packet
+falls back to the last stamp heard. `Session.mix_feed.heard_position()` returns
+`{seconds, playing, recording, valid}`. A guest that is not listening to the stream (in the
+host's room) falls back to the replicated playhead, which is less exact by however late the
+host's speakers are.
+
+**Playing (`GuestMidi`).** Notes come from `OS.open_midi_inputs()` (InputEventMIDI in `_input`;
+a note-on at velocity 0 counts as a note-off, and CC64 is the sustain pedal). They can also come
+from the computer keyboard: `KeyCatcher`, opt-in from the panel, plays only while it has focus,
+because the studio already uses WASD, Space, F, E, G, V, B and N. A on the home row is C, the
+row above holds the black keys, Z and X change octave, and Esc gives the keys back. The guest
+hears its own keys from `MonitorSynth`, a 16-voice two-operator electric piano rendered on its
+own thread. A round trip through the host's Reaper would be ~90ms, which is unplayable. Each
+note's stamp is moved later by the monitor's own latency. The player lines up the *sound* of
+the key with the mix, so the key went down that much earlier than what they heard.
+
+**A take follows what the guest hears.** It begins when the guest hears the host start
+recording and ends when it hears recording stop. Heard, not told, so the take's edges are on the
+same clock as its notes. Keys already down are in it from the start. Notes still down at the end
+are closed there. The take goes to the host as **one intent**:
+`DAW.insert_midi_take(track, start, end, [[on, off, pitch, velocity, channel], ...], name)`.
+The host checks it (`DAW.midi_take_refusal`: readable, a track that exists, any notes, and a
+backend that can take MIDI), clamps it (`MidiTake.clean_args`: positions, 10,000 notes, a
+64-character name), places it, and tells both the room and the guest. A refusal reaches the guest
+in words; nothing is dropped silently.
+
+**Placing it.** The stand-in makes an item that carries its notes, as one undo step that
+replicates. On the wire, an item has an optional sixth field of item-relative notes. Reaper gets
+the take through the bridge, never OSC: one Undo block around `CreateNewMIDIItemInProj`,
+`MIDI_GetPPQPosFromProjTime` and `MIDI_InsertNote` per note, then `MIDI_Sort`. Without the bridge,
+`can(MIDI_TAKES)` is false and the guest is told to load it. The bridge's timeline poll reports
+MIDI items' notes (up to 512 per item), so takes made in Reaper itself show up too, and the
+timeline draws them as a small piano roll on the item.
+
+**Measured, by `tools/session_probe.sh`.** The guest injects InputEventMIDI notes on the clicks
+of the host's test tone and between them. The tone clicks on every whole song second, so a click
+heard at stream frame *n* says that second was at the speaker then. The host checks each placed
+note against that. **Offline: within 0.25ms. Against the rig's Reaper: 0.7-2.2ms after the first
+second of a take, and up to ~5ms in that first second**, while the song clock still has only a
+few reports. (Before the clock averaged its first reports, that first second was off by 14ms.)
+Reaper itself rounds every note to its PPQ grid.
+
+**Calibration.** The two numbers that are not measured on the fly:
+
+- **Capture offset.** How long a frame of Reaper's output takes to reach the host's capture.
+  The default is the capture fragment, about 5.3ms. Set `R3D_CAPTURE_OFFSET_MS` on the host to
+  override it. The right value is the one that puts a guest's notes on a click recorded in the
+  host's Reaper. A per-host calibration routine for it is not built.
+- **The guest's output latency,** as Godot reports it. A device that reports wrongly puts every
+  take early or late by the error. A loopback measurement (`tools/audio_latency.sh`) is the way to
+  check it.
+
+**Not done:**
+
+- **Audio from a guest.** The stamps are ready for it. `heard_position()` says which song moment
+  any captured frame was played against, and an audio take would be placed by the same arithmetic.
+  The capture, transport and `insert_audio_take` verb are not built.
+- **Live preview on the host while the guest plays.** The host hears a take only once it is
+  placed. Reaper's `/vkb_midi/` OSC path could play the notes late, as a preview, but it is not
+  wired.
+- **Bank offsets.** The take's track index is the one the host's cache uses, as for every other
+  item edit; with Reaper banked past track 1 this is the bank slot.
+- **The guest's own gear's latency.** With "Hear my keys" off, the guest hears its own synth,
+  whose latency is not known here, so no correction is applied.
 
 ### Not done
 

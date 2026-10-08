@@ -33,9 +33,15 @@ because a scaffold that reads as a finished project wastes the next person's aft
   calibration across participants is untested, and nothing is encrypted.
 - **The mix's sound, to guests.** Reaper's outputs are tapped through PipeWire and sent over
   UDP to admitted guests, with an adaptive jitter buffer and clock-drift correction. Measured at
-  46ms end to end by `tools/audio_latency.sh`. Still open: no codec (1.5Mbit/s per listener), no
-  MIDI from a guest into the host's Reaper, picture ~45ms ahead of sound, and Linux/PipeWire
-  hosts only.
+  46ms end to end by `tools/audio_latency.sh`. Still open: no codec (1.5Mbit/s per listener),
+  picture ~45ms ahead of sound, and Linux/PipeWire hosts only.
+- **Recording a guest (MIDI).** Every mix packet carries the host's song position. The guest
+  stamps each note with the moment it heard, monitors on a local electric piano, and sends a take
+  as one `insert_midi_take` when it hears recording stop. The take is placed offline (undoable,
+  replicated) or in Reaper through the bridge, and drawn as a piano roll on the timeline. MIDI
+  keyboards, or the computer keyboard by opt-in. Verified by `tools/session_probe.sh`
+  (also `--reaper`): notes land within 0.25ms offline, and within 2.2ms against Reaper after a
+  take's first second (~5ms in it). See docs/architecture.md, "Recording a guest".
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Arrange timeline.** A lane per track with the track's colour and flags, a bar ruler from
@@ -96,6 +102,15 @@ because a scaffold that reads as a finished project wastes the next person's aft
   colours. Not started: nobody has asked for big rooms yet.
 
 ## Not started
+
+- **Audio takes from guests.** Placed by the same stamps as MIDI takes: a guest's captured
+  audio, stamped with `Session.mix_feed.heard_position()` at capture, sent to the host and
+  placed by song position. Needs a guest capture path, an upload channel (reliable, chunked)
+  and an `insert_audio_take` verb; the clock half is done.
+- **A calibration routine for the capture offset** (`R3D_CAPTURE_OFFSET_MS`): record a guest
+  playing on a click into the host's Reaper and read the offset off the take.
+- **Live preview of a guest's notes on the host** through Reaper's `/vkb_midi/` OSC path,
+  labelled as late.
 
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
