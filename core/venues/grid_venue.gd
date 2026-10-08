@@ -15,6 +15,12 @@ var _floor_mat: ShaderMaterial
 var _sky_mat: ShaderMaterial
 var _wire_mat: ShaderMaterial
 var _solids: Array[Node3D] = []
+var _road_mat: ShaderMaterial
+var _tower_mat: ShaderMaterial
+var _palm_mat: ShaderMaterial
+var _traffic: MultiMesh
+var _cars: Array = []  # [x, z, speed, colour]
+var _pyramids: Array[Node3D] = []
 var _smoothed := 0.0
 var _clock := 0.0
 
@@ -124,6 +130,11 @@ func _ready() -> void:
 		add_child(solid)
 		_solids.append(solid)
 
+	_build_highway()
+	_plant_palms()
+	_raise_city()
+	_hang_pyramids()
+
 
 func _process(delta: float) -> void:
 	_clock += delta
@@ -133,15 +144,198 @@ func _process(delta: float) -> void:
 	if _floor_mat != null:
 		# The floor runs toward you, slowly: you are always arriving at the horizon.
 		_floor_mat.set_shader_parameter("travel", fmod(_clock * 0.12, 1000.0))
+	if _road_mat != null:
+		_road_mat.set_shader_parameter("travel", fmod(_clock * 0.12, 1000.0))
+	_drive(delta)
+	for i in _pyramids.size():
+		var p := _pyramids[i]
+		p.rotate_y(delta * (0.25 - 0.1 * i))
+		p.position.y = p.get_meta(&"rest_y") + sin(_clock * 0.5 + i * 2.0) * 0.6
 
 
 func pulse(level: float) -> void:
 	# Fast up, slow down, like a meter's ballistics: a beat flashes, a gap does not blink.
 	var k := 0.5 if level > _smoothed else 0.06
 	_smoothed = lerpf(_smoothed, clampf(level, 0.0, 1.0), k)
-	for m in [_floor_mat, _sky_mat, _wire_mat]:
+	for m in [_floor_mat, _sky_mat, _wire_mat, _road_mat, _tower_mat, _palm_mat]:
 		if m != null:
 			m.set_shader_parameter("pulse", _smoothed)
+
+
+## A road out of the back of the room straight at the sun, so the eye has somewhere to go.
+## Starts well clear of the working floor: nobody wants traffic through the patchbay.
+const ROAD_START := -6.0
+const ROAD_LENGTH := 400.0
+const ROAD_HALF := 5.0
+const LANES := [-3.75, -1.25, 1.25, 3.75]
+
+
+func _build_highway() -> void:
+	var road := MeshInstance3D.new()
+	road.name = "Highway"
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(ROAD_HALF * 2.0 + 0.6, ROAD_LENGTH)
+	road.mesh = plane
+	# Above the grid by a centimetre, which nobody can see and which keeps the two floors from
+	# fighting over the same plane.
+	road.position = Vector3(0, 0.01, ROAD_START - ROAD_LENGTH * 0.5)
+	_road_mat = ShaderMaterial.new()
+	_road_mat.shader = preload("res://core/venues/shaders/highway.gdshader")
+	_road_mat.set_shader_parameter("half_width", ROAD_HALF)
+	road.material_override = _road_mat
+	road.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(road)
+
+	# Traffic: red tail lights going away on the right, white heads coming home on the left.
+	var light := BoxMesh.new()
+	light.size = Vector3(0.22, 0.10, 1.8)
+	_traffic = MultiMesh.new()
+	_traffic.transform_format = MultiMesh.TRANSFORM_3D
+	_traffic.use_colors = true
+	_traffic.mesh = light
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	for i in 36:
+		var lane: float = LANES[i % LANES.size()]
+		var away := lane > 0.0
+		_cars.append([lane, ROAD_START - rng.randf() * ROAD_LENGTH * 0.8,
+				rng.randf_range(18.0, 34.0) * (1.0 if away else -1.0),
+				Color(1.0, 0.08, 0.2) if away else Color(0.9, 0.95, 1.0)])
+	_traffic.instance_count = _cars.size() * 2
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Traffic"
+	mmi.multimesh = _traffic
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://core/venues/shaders/streak.gdshader")
+	mmi.material_override = mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.custom_aabb = AABB(Vector3(-ROAD_HALF, 0, ROAD_START - ROAD_LENGTH), Vector3(ROAD_HALF * 2, 2, ROAD_LENGTH))
+	add_child(mmi)
+	_drive(0.0)
+
+
+func _drive(delta: float) -> void:
+	if _traffic == null:
+		return
+	var far := ROAD_START - ROAD_LENGTH * 0.8
+	for i in _cars.size():
+		var car: Array = _cars[i]
+		car[1] -= car[2] * delta
+		if car[1] < far:
+			car[1] = ROAD_START - 2.0
+		elif car[1] > ROAD_START - 2.0:
+			car[1] = far
+		for k in 2:
+			var x: float = car[0] + (k * 2 - 1) * 0.55
+			_traffic.set_instance_transform(i * 2 + k,
+					Transform3D(Basis.IDENTITY, Vector3(x, 0.55, car[1])))
+			_traffic.set_instance_color(i * 2 + k, car[3])
+
+
+func _plant_palms() -> void:
+	var source := load("res://assets/models/palms.glb") as PackedScene
+	if source == null:
+		return
+	var holder := source.instantiate()
+	var meshes: Array[ArrayMesh] = []
+	for node in holder.find_children("*", "MeshInstance3D", true, false):
+		meshes.append(wireframe((node as MeshInstance3D).mesh))
+	holder.free()
+	if meshes.is_empty():
+		return
+	_palm_mat = _wire_mat.duplicate() as ShaderMaterial
+	_palm_mat.set_shader_parameter("line_colour", Color(1.0, 0.2, 0.7))
+	_palm_mat.set_shader_parameter("top_colour", Color(0.15, 1.0, 0.85))
+	_palm_mat.set_shader_parameter("top", 7.0)
+	_palm_mat.set_shader_parameter("width", 1.1)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var spots: Array[Vector3] = []
+	for i in 12:
+		var z := ROAD_START - 8.0 - i * 15.0
+		spots.append(Vector3(-ROAD_HALF - 2.5, 0, z))
+		spots.append(Vector3(ROAD_HALF + 2.5, 0, z - 7.5))
+	# And a few near the room, so they are in the shot from the chair, not only on the horizon.
+	spots.append_array([Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-9.0, 0, 6.0),
+			Vector3(10.0, 0, 7.0)])
+	for i in spots.size():
+		var palm := MeshInstance3D.new()
+		palm.name = "Palm"
+		palm.mesh = meshes[i % meshes.size()]
+		palm.material_override = _palm_mat
+		palm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		palm.position = spots[i]
+		# Leaning in toward the road, mostly, the way they are planted along a boulevard.
+		var inward := PI if spots[i].x > 0.0 else 0.0
+		palm.rotation.y = inward + rng.randf_range(-0.6, 0.6)
+		palm.scale = Vector3.ONE * rng.randf_range(0.8, 1.2)
+		add_child(palm)
+
+
+func _raise_city() -> void:
+	_tower_mat = ShaderMaterial.new()
+	_tower_mat.shader = preload("res://core/venues/shaders/tower.gdshader")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	# Two districts either side of the road, laid out on a coarse grid with jitter inside each
+	# cell -- towers in the same cell never touch, so no two walls ever share a plane.
+	for district in [[-62.0, -118.0], [42.0, -126.0]]:
+		for gx in 5:
+			for gz in 4:
+				if rng.randf() < 0.25:
+					continue
+				var w := rng.randf_range(3.0, 6.0)
+				var d := rng.randf_range(3.0, 6.0)
+				var h := rng.randf_range(10.0, 46.0) * (1.0 - absf(gx - 2.0) * 0.15)
+				var tower := MeshInstance3D.new()
+				tower.name = "Tower"
+				var box := BoxMesh.new()
+				box.size = Vector3(w, h, d)
+				tower.mesh = box
+				tower.material_override = _tower_mat
+				tower.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				tower.position = Vector3(district[0] + gx * 8.0 + rng.randf_range(-0.8, 0.8),
+						h * 0.5, district[1] + gz * 8.0 + rng.randf_range(-0.8, 0.8))
+				tower.set_instance_shader_parameter(&"roof", h)
+				add_child(tower)
+
+
+func _hang_pyramids() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 13
+	var colours := [Color(1.0, 0.85, 0.2), Color(0.2, 1.0, 0.9), Color(1.0, 0.3, 0.8)]
+	var spots := [Vector3(-16, 7, -22), Vector3(19, 9, -28), Vector3(-4, 14, -48)]
+	for i in spots.size():
+		var p := MeshInstance3D.new()
+		p.name = "Pyramid"
+		p.mesh = pyramid()
+		var m := _wire_mat.duplicate() as ShaderMaterial
+		m.set_shader_parameter("line_colour", colours[i])
+		m.set_shader_parameter("top_colour", colours[(i + 1) % colours.size()])
+		m.set_shader_parameter("top", 1.0)
+		p.material_override = m
+		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		p.position = spots[i]
+		p.scale = Vector3.ONE * rng.randf_range(2.0, 3.5)
+		p.set_meta(&"rest_y", spots[i].y)
+		add_child(p)
+		_pyramids.append(p)
+
+
+## A square pyramid, apex up, with no diagonals across its base: a wireframe shows every edge
+## it has, so a pyramid built from a cone would draw lines no pyramid has.
+static func pyramid() -> ArrayMesh:
+	var apex := Vector3(0, 1.0, 0)
+	var b := [Vector3(-0.7, -0.4, -0.7), Vector3(0.7, -0.4, -0.7), Vector3(0.7, -0.4, 0.7),
+			Vector3(-0.7, -0.4, 0.7)]
+	var tris := PackedVector3Array()
+	for i in 4:
+		tris.append_array([b[i], b[(i + 1) % 4], apex])
+	# Inverted twin below, an octahedron's lower half, so it reads as a crystal from beneath.
+	var low := Vector3(0, -1.4, 0)
+	for i in 4:
+		tris.append_array([b[(i + 1) % 4], b[i], low])
+	return _barycentric(tris)
 
 
 ## A ring of jagged ridges, low where the sun sets and tall to either side of it, so the sun

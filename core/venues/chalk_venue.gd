@@ -21,6 +21,12 @@ var _rest: Array[Vector3] = []
 var _phase: Array[float] = []
 var _smoothed := 0.0
 var _clock := 0.0
+## Drawings being drawn right now: [node, metres down, metres per second, wipe after].
+var _drawing: Array = []
+var _art: Array[MeshInstance3D] = []
+var _comets: Array = []  # [node, progress, wait]
+var _next_redraw := 5.0
+var _rng := RandomNumberGenerator.new()
 
 
 func venue_id() -> StringName:
@@ -80,9 +86,18 @@ func _ready() -> void:
 	ground.material_override = _floor_mat
 	add_child(ground)
 
+	_rng.seed = SEED + 1
 	_draw_floor()
 	_scatter_doodles()
+	_paint_rainbow()
+	_join_constellations()
+	_throw_comets()
 	_add_dust()
+	# Everything drawn on as you arrive, nearest first, the way a person would start with
+	# what is in front of them and work outward.
+	_art.sort_custom(func(a, b): return a.global_position.length_squared() < b.global_position.length_squared())
+	for i in _art.size():
+		_draw_on(_art[i], 0.15 + i * 0.045)
 
 
 ## The working footprint outlined, a chalk circle around the mix position, and a few marks
@@ -119,12 +134,13 @@ func _draw_floor() -> void:
 		var art := Chalk.drawing(flat, marks[i][3], 0.035, true, 2, SEED + i)
 		art.name = "FloorDoodle"
 		add_child(art)
+		_art.append(art)
 
 
 func _scatter_doodles() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
-	var shapes := Chalk.shapes()
+	var shapes := Chalk.all_shapes()
 	for i in DOODLE_COUNT:
 		var shape: Callable = shapes[i % shapes.size()]
 		var colour: Color = Chalk.NEON[rng.randi() % Chalk.NEON.size()]
@@ -140,6 +156,7 @@ func _scatter_doodles() -> void:
 		var art := Chalk.drawing(shape.call(), colour, 0.05, false, 2, SEED * 31 + i)
 		holder.add_child(art)
 		add_child(holder)
+		_art.append(art)
 		# Face the room, tipped a little so they do not all look like posters.
 		holder.look_at(Vector3(0, 1.5, 0.3), Vector3.UP, true)
 		holder.rotate_object_local(Vector3.FORWARD, rng.randf_range(-0.5, 0.5))
@@ -204,10 +221,124 @@ func _add_dust() -> void:
 
 func _process(delta: float) -> void:
 	_clock += delta
+	_advance_drawing(delta)
+	_advance_comets(delta)
+	# Now and then something is wiped and drawn again, so the zone never sets like a painting.
+	_next_redraw -= delta
+	if _next_redraw <= 0.0 and not _art.is_empty():
+		_next_redraw = _rng.randf_range(1.5, 4.0)
+		_draw_on(_art[_rng.randi() % _art.size()], 0.0)
 	for i in _doodles.size():
 		var bob := sin(_clock * 0.6 + _phase[i]) * 0.08 * _doodles[i].scale.x
 		var kick := _smoothed * 0.12 if _rest[i].length() < 14.0 else 0.0
 		_doodles[i].position = _rest[i] + Vector3(0, bob + kick, 0)
+
+
+## Start drawing `art` from nothing after `delay` seconds, at a pace that finishes any drawing
+## in about a second and a half: a big drawing is drawn by a fast hand, not a slow one.
+func _draw_on(art: MeshInstance3D, delay: float) -> void:
+	var length: float = art.mesh.get_meta(&"length", 0.0) if art.mesh != null else 0.0
+	if length <= 0.0:
+		return
+	for entry in _drawing:
+		if entry[0] == art:
+			return
+	art.set_instance_shader_parameter(&"ink", 0.0)
+	_drawing.append([art, -delay * length / 1.5, length / 1.5, length])
+
+
+func _advance_drawing(delta: float) -> void:
+	var i := 0
+	while i < _drawing.size():
+		var entry: Array = _drawing[i]
+		entry[1] += entry[2] * delta
+		var art: MeshInstance3D = entry[0]
+		if entry[1] >= entry[3]:
+			art.set_instance_shader_parameter(&"ink", 1e6)
+			_drawing.remove_at(i)
+			continue
+		art.set_instance_shader_parameter(&"ink", maxf(entry[1], 0.0))
+		i += 1
+
+
+## A rainbow in six chalks, enormous and far off, half sunk below the floor's edge.
+func _paint_rainbow() -> void:
+	var bands := [Chalk.VIOLET, Chalk.CYAN, Chalk.LIME, Chalk.YELLOW, Chalk.ORANGE, Chalk.PINK]
+	var lines: Array = []
+	var colours: Array = []
+	for i in bands.size():
+		lines.append(Chalk.arc(Vector3.ZERO, 1.0 + i * 0.07, 1.0 + i * 0.07, PI, -PI, 64))
+		colours.append(bands[i])
+	var holder := Node3D.new()
+	holder.name = "Rainbow"
+	holder.position = Vector3(-55, -4, -80)
+	for i in lines.size():
+		var art := Chalk.drawing([lines[i]], colours[i], 0.022, false, 2, SEED + 300 + i)
+		holder.add_child(art)
+		_art.append(art)
+	add_child(holder)
+	holder.look_at(Vector3(0, 1.5, 0.3), Vector3.UP, true)
+	holder.scale = Vector3.ONE * 38.0
+
+
+## Star maps high overhead: a few dots, joined, the way they are in a child's book.
+func _join_constellations() -> void:
+	for c in 5:
+		var centre := Vector3(_rng.randf_range(-40, 40), _rng.randf_range(28, 45),
+				_rng.randf_range(-50, 30))
+		var stars := PackedVector3Array()
+		var at := Vector3.ZERO
+		for k in _rng.randi_range(5, 8):
+			stars.append(at)
+			at += Vector3(_rng.randf_range(-1, 1), _rng.randf_range(-1, 1), 0).normalized() * _rng.randf_range(1.5, 3.0)
+		var lines: Array = [stars]
+		for s in stars:
+			lines.append(Chalk.loop(s, 0.18, 10))
+		var holder := Node3D.new()
+		holder.name = "Constellation"
+		holder.position = centre
+		var art := Chalk.drawing(lines, Chalk.WHITE * 0.8, 0.05, false, 1, SEED + 400 + c)
+		holder.add_child(art)
+		add_child(holder)
+		holder.look_at(Vector3(0, 1.5, 0.3), Vector3.UP, true)
+		holder.scale = Vector3.ONE * 1.8
+		_art.append(art)
+
+
+## Shooting stars: a curve drawn fast and wiped from behind as fast, so all you ever see is the
+## stroke in flight.
+func _throw_comets() -> void:
+	for i in 4:
+		var line := Chalk.arc(Vector3(0, -6, 0), 8.0, 6.0, PI * 0.8, -PI * 0.5, 30)
+		var art := Chalk.drawing([line], Chalk.NEON[i % Chalk.NEON.size()], 0.06, false, 1, SEED + 500 + i)
+		art.name = "Comet"
+		art.set_instance_shader_parameter(&"ink", 0.0)
+		add_child(art)
+		_comets.append([art, 0.0, _rng.randf_range(0.5, 4.0)])
+
+
+func _advance_comets(delta: float) -> void:
+	for comet in _comets:
+		var art: MeshInstance3D = comet[0]
+		if comet[2] > 0.0:
+			comet[2] -= delta
+			if comet[2] <= 0.0:
+				# Somewhere new each time, high up and well out from the room.
+				var a := _rng.randf_range(-PI, PI)
+				var r := _rng.randf_range(25.0, 60.0)
+				art.position = Vector3(sin(a) * r, _rng.randf_range(16, 32), -cos(a) * r)
+				art.look_at(Vector3(0, 1.5, 0.3), Vector3.UP, true)
+				art.rotate_object_local(Vector3.FORWARD, _rng.randf_range(-0.6, 0.6))
+				art.scale = Vector3.ONE * _rng.randf_range(1.0, 2.2)
+				comet[1] = 0.0
+			continue
+		var length: float = art.mesh.get_meta(&"length", 1.0)
+		comet[1] += delta * length / 0.9
+		art.set_instance_shader_parameter(&"ink", comet[1])
+		art.set_instance_shader_parameter(&"tail", comet[1] - length * 0.35)
+		if comet[1] - length * 0.35 > length:
+			art.set_instance_shader_parameter(&"ink", 0.0)
+			comet[2] = _rng.randf_range(1.0, 5.0)
 
 
 func pulse(level: float) -> void:

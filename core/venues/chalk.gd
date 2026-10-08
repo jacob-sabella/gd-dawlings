@@ -43,6 +43,7 @@ static func stroke_mesh(lines: Array, colour: Color, width: float, flat := false
 	var uv2s := PackedVector2Array()
 	var colours := PackedColorArray()
 	var index := PackedInt32Array()
+	var run := 0.0
 	for line: PackedVector3Array in lines:
 		for p in passes:
 			var drawn := line
@@ -50,7 +51,6 @@ static func stroke_mesh(lines: Array, colour: Color, width: float, flat := false
 				drawn = wobble(line, width * 1.6, rng)
 			if drawn.size() < 2:
 				continue
-			var run := 0.0
 			for i in drawn.size():
 				var prev := drawn[maxi(i - 1, 0)]
 				var next := drawn[mini(i + 1, drawn.size() - 1)]
@@ -80,6 +80,7 @@ static func stroke_mesh(lines: Array, colour: Color, width: float, flat := false
 	var mesh := ArrayMesh.new()
 	if not verts.is_empty():
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.set_meta(&"length", run)
 	return mesh
 
 
@@ -204,3 +205,79 @@ static func sparkle() -> Array:
 
 static func shapes() -> Array[Callable]:
 	return [star, spiral, cloud, moon, lightning, heart, planet, note, sparkle]
+
+
+static func rocket() -> Array:
+	var body := PackedVector3Array([Vector3(-0.28, -0.6, 0), Vector3(-0.3, 0.3, 0),
+			Vector3(-0.18, 0.72, 0), Vector3(0, 1.0, 0), Vector3(0.18, 0.72, 0),
+			Vector3(0.3, 0.3, 0), Vector3(0.28, -0.6, 0), Vector3(-0.28, -0.6, 0)])
+	var window := loop(Vector3(0, 0.3, 0), 0.13, 16)
+	var fin_l := PackedVector3Array([Vector3(-0.29, -0.15, 0), Vector3(-0.58, -0.75, 0),
+			Vector3(-0.28, -0.6, 0)])
+	var fin_r := PackedVector3Array([Vector3(0.29, -0.15, 0), Vector3(0.58, -0.75, 0),
+			Vector3(0.28, -0.6, 0)])
+	var flame := PackedVector3Array([Vector3(-0.2, -0.62, 0), Vector3(-0.1, -0.95, 0),
+			Vector3(0, -0.75, 0), Vector3(0.08, -1.1, 0), Vector3(0.2, -0.62, 0)])
+	return [body, window, fin_l, fin_r, flame]
+
+
+static func sun() -> Array:
+	var out: Array = [loop(Vector3.ZERO, 0.45, 30)]
+	for i in 10:
+		var a := TAU * float(i) / 10.0
+		var d := Vector3(cos(a), sin(a), 0)
+		var r0 := 0.6
+		var r1 := 0.95 if i % 2 == 0 else 0.8
+		out.append(PackedVector3Array([d * r0, d * r1]))
+	return out
+
+
+## Two quavers under one beam: the shape everyone draws when they draw "music".
+static func beamed_notes() -> Array:
+	var heads: Array = []
+	for x in [-0.45, 0.45]:
+		var h := loop(Vector3(x, -0.7, 0), 0.2, 18)
+		for i in h.size():
+			h[i] = Vector3(x + (h[i].x - x) * 1.3, h[i].y, 0)
+		heads.append(h)
+	return heads + [PackedVector3Array([Vector3(-0.2, -0.65, 0), Vector3(-0.2, 0.8, 0)]),
+			PackedVector3Array([Vector3(0.7, -0.65, 0), Vector3(0.7, 0.95, 0)]),
+			PackedVector3Array([Vector3(-0.2, 0.8, 0), Vector3(0.7, 0.95, 0)]),
+			PackedVector3Array([Vector3(-0.2, 0.6, 0), Vector3(0.7, 0.75, 0)])]
+
+
+static func headphones() -> Array:
+	var band := arc(Vector3(0, -0.1, 0), 0.75, 0.85, PI * 0.95, -PI * 0.9, 28)
+	var left := PackedVector3Array([Vector3(-0.92, -0.05, 0), Vector3(-0.55, -0.05, 0),
+			Vector3(-0.55, -0.75, 0), Vector3(-0.92, -0.75, 0), Vector3(-0.92, -0.05, 0)])
+	var right := PackedVector3Array()
+	for p in left:
+		right.append(Vector3(-p.x, p.y, 0))
+	return [band, left, right]
+
+
+static func cassette() -> Array:
+	var shell := PackedVector3Array([Vector3(-1, -0.62, 0), Vector3(1, -0.62, 0),
+			Vector3(1, 0.62, 0), Vector3(-1, 0.62, 0), Vector3(-1, -0.62, 0)])
+	var window := PackedVector3Array([Vector3(-0.6, -0.05, 0), Vector3(0.6, -0.05, 0),
+			Vector3(0.6, 0.35, 0), Vector3(-0.6, 0.35, 0), Vector3(-0.6, -0.05, 0)])
+	var foot := PackedVector3Array([Vector3(-0.6, -0.62, 0), Vector3(-0.45, -0.35, 0),
+			Vector3(0.45, -0.35, 0), Vector3(0.6, -0.62, 0)])
+	return [shell, window, loop(Vector3(-0.32, 0.15, 0), 0.12, 14),
+			loop(Vector3(0.32, 0.15, 0), 0.12, 14), foot]
+
+
+static func swoosh() -> Array:
+	var line := PackedVector3Array()
+	for i in 41:
+		var t := float(i) / 40.0
+		line.append(Vector3(lerpf(-1.0, 1.0, t), sin(t * PI * 1.5) * 0.4 - t * 0.2, 0))
+	var head := PackedVector3Array([line[line.size() - 1] + Vector3(-0.25, 0.18, 0),
+			line[line.size() - 1], line[line.size() - 1] + Vector3(-0.08, -0.3, 0)])
+	return [line, head]
+
+
+static func all_shapes() -> Array[Callable]:
+	var out := shapes()
+	out.append_array([rocket, sun, beamed_notes, headphones, cassette, swoosh])
+	return out
