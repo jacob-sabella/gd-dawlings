@@ -89,6 +89,7 @@ func _ready() -> void:
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
 	_test_no_two_faces_in_the_room_share_a_plane()
+	_test_venues_change_the_world_and_not_the_setup()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -491,7 +492,8 @@ func _test_ar_studio_draws_no_room() -> void:
 	add_child(desk)
 	check("on a monitor there is a camera", desk.camera != null)
 	check("on a monitor the frame is adopted so the layout is usable", desk.room_anchor.is_calibrated)
-	check("on a monitor the room is drawn", _count_meshes(desk) > 0)
+	check("on a monitor the room is drawn", desk.venue != null and _count_meshes(desk.venue) > 0)
+	check("in AR no venue is stood in", ar.venue == null)
 
 	ar.queue_free()
 	desk.queue_free()
@@ -4531,11 +4533,90 @@ func _test_no_two_faces_in_the_room_share_a_plane() -> void:
 	add_child(studio)
 	for surface in studio.focus.surfaces:
 		surface._process(0.0)
-	var hits := ZFightProbe.scan(studio)
-	var named := hits.slice(0, 3).map(func(h): return "%s | %s" % [
-			ZFightProbe.label(h[0]), ZFightProbe.label(h[1])])
-	check("no two faces in the studio share a plane (%d: %s)" % [hits.size(), ", ".join(named)],
-			hits.is_empty())
+	# In every venue: the gear is the same, but the floor it stands on is not.
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var hits := ZFightProbe.scan(studio)
+		var named := hits.slice(0, 3).map(func(h): return "%s | %s" % [
+				ZFightProbe.label(h[0]), ZFightProbe.label(h[1])])
+		check("no two faces in the %s share a plane (%d: %s)" % [id, hits.size(),
+				", ".join(named)], hits.is_empty())
 	Session.layout = saved_layout
 	remove_child(studio)
 	studio.free()
+
+
+## A venue is scenery. Changing it must leave every piece of gear where it was, every stand and
+## lamp standing, and the choice remembered for next time; and each one must give you a floor,
+## because gear standing on nothing is the one thing no venue may look like.
+func _test_venues_change_the_world_and_not_the_setup() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	check("a new layout stands in the studio", studio.venue.venue_id() == &"studio")
+
+	var poses := {}
+	for surface in studio.focus.surfaces:
+		poses[surface.surface_id] = surface.global_transform
+	var others := studio.get_child_count()
+	var lamps := studio._lamps.size()
+
+	var seen: Array[StringName] = []
+	var id := studio.venue.venue_id()
+	for step in Venue.IDS.size():
+		var old := studio.venue
+		studio.cycle_venue()
+		id = studio.venue.venue_id()
+		seen.append(id)
+		check("%s: the old venue leaves the room" % id, not old.is_inside_tree())
+		check("%s: one venue at a time" % id,
+				studio.find_children("Venue*", "Venue", false, false).size() == 1)
+		check("%s: nothing else in the studio is added or lost" % id,
+				studio.get_child_count() == others)
+		check("%s: every lamp is still standing" % id, studio._lamps.size() == lamps)
+		check("%s: the lamps shine what the venue says" % id,
+				studio._lamps[0].light_color == studio.venue.lamp_colour(0, Studio.PRACTICALS[0][1]))
+		var moved := []
+		for surface in studio.focus.surfaces:
+			if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
+				moved.append(surface.surface_id)
+		check("%s: no gear moves (%s)" % [id, moved], moved.is_empty())
+		var floor_found := false
+		for child in studio.venue.get_children():
+			if child is MeshInstance3D and child.mesh is PlaneMesh \
+					and absf(child.global_position.y) < 0.001 and child.mesh.size.x >= Studio.ROOM_WIDTH:
+				floor_found = true
+		check("%s: there is a floor under the gear" % id, floor_found)
+		check("%s: the choice is remembered" % id, Session.layout.venue == id)
+		studio.venue.pulse(0.8)
+		studio.venue.pulse(0.0)
+	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
+			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
+
+	studio.set_venue(&"nowhere")
+	check("an unknown venue is the studio", studio.venue.venue_id() == &"studio")
+	studio.set_venue(&"grid")
+	studio.set_venue(&"chalk", false)
+	check("a venue for one run is not written down", Session.layout.venue == &"grid")
+
+	Session.layout.save()
+	var reloaded := LayoutProfile.new()
+	reloaded.save_path = Session.layout.save_path
+	reloaded.load_saved()
+	check("the venue survives a restart", reloaded.venue == &"grid")
+	remove_child(studio)
+	studio.free()
+
+	var again := Studio.new()
+	again.medium = Presentation.Medium.SCREEN
+	add_child(again)
+	check("a saved venue is where the next session starts", again.venue.venue_id() == &"grid")
+	remove_child(again)
+	again.free()
+	Session.layout = saved_layout

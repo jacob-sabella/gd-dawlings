@@ -35,11 +35,13 @@ godot --path . -- --reaper                   # host, OSC to a local Reaper
 godot --path . -- --reaper --host            # host, and open the session to peers
 godot --path . -- --join 192.168.1.40 --ar   # join someone else's session, in passthrough
 godot --path . -- --view 20:52              # open the timeline on bars 9-27 (seconds: start:span)
+godot --path . -- --venue grid               # stand in the grid for one run (studio / grid / chalk)
 ```
 
 With no Reaper it comes up on a synthetic 12-track mix with the meters moving, so the studio can
 be built, lit and photographed without a DAW in the loop. Right-drag orbits, the wheel zooms,
-WASD walks.
+WASD walks. V changes the venue: the studio room, a synthwave grid, or the chalk zone. Only the
+world changes; the gear and the layout stay the same. See `docs/venues.md`.
 
 ## Other DAWs
 
@@ -81,6 +83,7 @@ Two channels, because one is not enough — see `docs/transport.md` for why.
 | `core/reaper/` | The Reaper backend: OSC codec, UDP peer, the ReaScript bridge |
 | `core/session/` | Who is in the room, who may write to the DAW, intent forwarding |
 | `core/presentation/` | Surfaces, and the per-viewer choice of screen / room / set |
+| `core/venues/` | The worlds the studio can stand in, and their shaders |
 | `core/xr/` | OpenXR startup, and the two-point shared room calibration |
 | `core/input/` | One grab contract for mouse, controller and hand |
 | `hardware/` | Console, FX racks, tape deck, patchbay — built from live state |

@@ -20,6 +20,8 @@ extends CanvasLayer
 const TOGGLE_KEY := KEY_TAB
 
 var mount: SurfaceMount
+## For the venue row. Optional: without a studio the panel is only about the gear.
+var studio: Studio
 
 var _panel: PanelContainer
 var _rows: VBoxContainer
@@ -70,6 +72,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func rebuild() -> void:
 	for child in _rows.get_children():
 		child.queue_free()
+	if studio != null and studio.venue != null:
+		_venue_row()
 	if mount == null:
 		return
 
@@ -113,4 +117,34 @@ func _on_mode_chosen(surface_id: StringName, mode: int) -> void:
 
 func _on_reset(surface_id: StringName) -> void:
 	mount.reset_placement(surface_id)
+	rebuild()
+
+
+## Where the whole studio stands. First, because it is the biggest change the panel can make,
+## and set apart from the gear because it moves none of it.
+func _venue_row() -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	_rows.add_child(row)
+	var label := Label.new()
+	label.text = "venue  (V)"
+	label.custom_minimum_size = Vector2(110, 0)
+	label.add_theme_font_size_override("font_size", 13)
+	row.add_child(label)
+	var current := studio.venue.venue_id()
+	for id in Venue.IDS:
+		var button := Button.new()
+		button.text = Venue.make_title(id).to_upper()
+		button.custom_minimum_size = Vector2(76, 0)
+		button.add_theme_font_size_override("font_size", 12)
+		button.toggle_mode = true
+		button.button_pressed = id == current
+		button.disabled = id == current
+		button.pressed.connect(_on_venue_chosen.bind(id))
+		row.add_child(button)
+	_rows.add_child(HSeparator.new())
+
+
+func _on_venue_chosen(id: StringName) -> void:
+	studio.set_venue(id)
 	rebuild()

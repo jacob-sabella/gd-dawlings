@@ -78,6 +78,12 @@ func _ready() -> void:
 	Ergonomics.current = studio.ergonomics
 	add_child(studio)
 
+	if args["venue"] != "":
+		if Venue.is_known(StringName(args["venue"])):
+			studio.set_venue(StringName(args["venue"]), false)
+		else:
+			push_warning("bootstrap: --venue %s is not one of %s" % [args["venue"], Venue.IDS])
+
 	_build_hud()
 
 	_apply_cli_placement(args["place"])
@@ -93,6 +99,7 @@ func _ready() -> void:
 	var stage := StageManager.new()
 	stage.name = "StageManager"
 	stage.mount = studio.mount
+	stage.studio = studio
 	add_child(stage)
 	if args["stage"]:
 		stage.open()
@@ -124,6 +131,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
+		"venue": "",
 	}
 	var i := 0
 	while i < argv.size():
@@ -148,6 +156,12 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["eyes"] = float(argv[i])
+			"--venue":
+				# `--venue grid`. For one run: a look asked for on the command line is not a
+				# change of mind, so it is not written to the layout.
+				i += 1
+				if i < argv.size():
+					out["venue"] = argv[i]
 			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
@@ -264,6 +278,9 @@ func _build_hud() -> void:
 	_hud.position = Vector2(16, 12)
 	_hud.add_theme_color_override("font_color", Color(0.72, 0.78, 0.86))
 	_hud.add_theme_font_size_override("font_size", 13)
+	# Outlined, because some venues put a sunset behind it.
+	_hud.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_hud.add_theme_constant_override("outline_size", 5)
 	layer.add_child(_hud)
 	set_process(true)
 
@@ -273,5 +290,6 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
-		role_name, medium_name, DAW.summary(), DAW.state.tracks.size()]
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  V venue: %s  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+		role_name, medium_name, DAW.summary(), DAW.state.tracks.size(),
+		studio.venue.title() if studio.venue != null else "room"]

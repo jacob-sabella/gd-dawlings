@@ -33,6 +33,8 @@ var modes: Dictionary = {}
 ## and has to keep their own.
 var local_transforms: Dictionary = {}
 var medium: int = Presentation.Medium.SCREEN
+## Which venue this participant stands in. Empty means the default. See core/venues/venue.gd.
+var venue: StringName = &""
 
 
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
@@ -64,6 +66,8 @@ static func _key(surface_id: StringName, mode: int) -> String:
 func save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("profile", "medium", medium)
+	if venue != &"":
+		cfg.set_value("profile", "venue", String(venue))
 	for id in modes:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
@@ -76,6 +80,7 @@ func load_saved() -> void:
 	if cfg.load(save_path) != OK:
 		return
 	medium = cfg.get_value("profile", "medium", medium)
+	venue = StringName(cfg.get_value("profile", "venue", String(venue)))
 	if cfg.has_section("modes"):
 		for key in cfg.get_section_keys("modes"):
 			modes[StringName(key)] = cfg.get_value("modes", key)
