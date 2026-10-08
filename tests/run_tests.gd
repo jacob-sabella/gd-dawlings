@@ -6263,6 +6263,23 @@ func _test_the_song_clock_runs_between_reports() -> void:
 			not clock.at(t + 950000)["recording"])
 	check("a fresh clock knows nothing", not SongClock.new().at(0)["valid"])
 
+	# Reaper, asked to record: playing at once, its playhead still for 130ms.
+	var start := SongClock.new()
+	start.observe(4.0, false, false, 0)
+	start.observe(4.0, true, true, 1000000)
+	start.observe(4.0, true, true, 1050000)
+	var held_still := start.at(1100000)
+	check("a start holds still until the playhead is seen to move",
+			held_still["seconds"] == 4.0 and not held_still["playing"] and not held_still["recording"])
+	start.observe(4.004, true, true, 1134000)
+	close_to("then runs from where it was seen", start.at(1234000)["seconds"], 4.104, 0.0005)
+	check("rolling, and recording", start.at(1234000)["playing"] and start.at(1234000)["recording"])
+	var mute := SongClock.new()
+	mute.observe(7.0, true, false, 0)
+	mute.observe(7.0, true, false, 600000)
+	close_to("a playhead never seen to move is taken as rolling after half a second",
+			mute.at(700000)["seconds"], 7.1, 0.0005)
+
 
 ## The guest's speakers, measured as a staircase -- the mixer takes 512 frames at a gulp -- and the
 ## song position of whatever frame is coming out of them.
