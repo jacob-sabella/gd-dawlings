@@ -461,6 +461,7 @@ func _build_surfaces() -> void:
 	focus.body = body
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
+	focus.room = studio_set
 	focus.move = _glide
 	add_child(focus)
 	if mount != null:

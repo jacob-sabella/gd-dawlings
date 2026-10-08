@@ -46,6 +46,10 @@ signal focus_changed(surface_id: StringName)
 
 var ergonomics := Ergonomics.new()
 var body: BodyFrame
+## The part of the scene that IS the room -- what stays put when the viewer walks. Berths are
+## only drawn inside it. Left null and no berths are drawn at all, which is the right answer
+## for a rig that has not been told where the room is rather than a guess about it.
+var room: Node3D
 ## The surfaces this rig may summon, in the order a cycle walks them.
 var surfaces: Array[Surface] = []
 ## Called with (surface, parent, local_transform). The rig decides WHERE a surface goes and
@@ -105,6 +109,7 @@ func release() -> void:
 		if is_instance_valid(surface) and _home.has(surface.surface_id):
 			var home: Array = _home[surface.surface_id]
 			surface.compact = false
+			_unmark_berth(surface)
 			_unmark(surface)
 			_move(surface, home[0], home[1])
 	_home.clear()
@@ -201,13 +206,61 @@ func _mark(surface: Surface, focused: bool) -> void:
 	var bounds := surface.content_aabb()
 	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
 		return
+	var colour := FocusHalo.FOCUSED_COLOUR if focused else FocusHalo.PARKED_COLOUR
 	var halo := surface.get_node_or_null("FocusHalo") as FocusHalo
 	if halo == null:
-		halo = FocusHalo.create(bounds, focused)
+		halo = FocusHalo.create(bounds, colour)
 		halo.add_to_group(&"presentation_chrome")
 		surface.add_child(halo)
+	else:
+		halo.refresh(bounds, colour)
+	_mark_berth(surface, bounds)
+
+
+## The empty place the surface came out of.
+##
+## A rack frame with its units gone and a stand with nothing on it are honest -- the gear really
+## did leave -- but they read as a modelling mistake, which is the same failure the blanking
+## panels exist to avoid one level down. What they actually are is a vacant berth, so they are
+## drawn as one, in the same language: the brackets that say "this is a presented surface" at
+## the body, dimmer, say "this is where it goes back to" in the room.
+##
+## Sized and placed from `_home`, so it is automatically in the right spot and the right shape
+## for whatever left -- no table of furniture to keep in step with the furniture.
+func _mark_berth(surface: Surface, bounds: AABB) -> void:
+	if not _home.has(surface.surface_id):
 		return
-	halo.refresh(bounds, focused)
+	var home: Array = _home[surface.surface_id]
+	var parent := home[0] as Node3D
+	if parent == null or not is_instance_valid(parent):
+		return
+	# Only where the surface came out of the ROOM. A surface framed on a monitor lives under the
+	# screen stage, which is a child of the camera -- a berth drawn there is parented to the
+	# viewpoint and sails around the room with it, marking a place that does not exist. It also
+	# is not a berth in any sense: nothing was vacated, the surface was never standing anywhere.
+	if room == null or not (parent == room or room.is_ancestor_of(parent)):
+		return
+	var name_of := "Berth_%s" % surface.surface_id
+	var berth := parent.get_node_or_null(name_of) as Node3D
+	if berth == null:
+		berth = Node3D.new()
+		berth.name = name_of
+		berth.add_to_group(&"presentation_chrome")
+		parent.add_child(berth)
+		berth.add_child(FocusHalo.create(bounds, FocusHalo.BERTH_COLOUR))
+	berth.transform = home[1]
+
+
+func _unmark_berth(surface: Surface) -> void:
+	if not _home.has(surface.surface_id):
+		return
+	var parent := (_home[surface.surface_id][0]) as Node3D
+	if parent == null or not is_instance_valid(parent):
+		return
+	var berth := parent.get_node_or_null("Berth_%s" % surface.surface_id)
+	if berth != null:
+		parent.remove_child(berth)
+		berth.queue_free()
 
 
 func _unmark(surface: Surface) -> void:

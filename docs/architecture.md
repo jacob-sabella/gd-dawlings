@@ -945,3 +945,22 @@ stops reading as a corner mark and starts reading as two sides of a box that fai
 Grouped as `presentation_chrome`, so `content_aabb` does not measure them. They are sized FROM
 that box, and counting them would grow the box, which would resize them, which would grow the
 box -- the same circularity the grab handle is excluded for.
+
+### And the hole it left
+
+A rack frame with its units gone and a stand with nothing on it are honest -- the gear really
+did leave -- but they read as a modelling mistake, which is the same failure the blanking
+panels exist to avoid one level down. What they actually are is a vacant berth, so they are
+drawn as one, in the same language: the brackets that say "this is a presented surface" out at
+the body, dimmer still, say "this is where it goes back to" in the room.
+
+Sized and placed from `_home`, so a berth is automatically the right shape in the right spot
+for whatever left, with no table of furniture to keep in step with the furniture.
+
+A berth is only drawn inside the ROOM, and the rig has to be told which node that is rather
+than guessing. The timeline lives under the screen stage, which is a child of the camera: a
+berth drawn there is parented to the viewpoint and sails around the room with it, marking a
+place that does not exist. It is also not a berth in any sense -- nothing was vacated, because
+the surface was never standing anywhere. With `room` left unset no berths are drawn at all,
+which is the right answer for a rig that has not been told where the room is, rather than a
+guess about it.

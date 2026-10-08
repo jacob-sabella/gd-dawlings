@@ -3455,10 +3455,34 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	check("marking a surface does not change how big it measures",
 			studio.focus.surfaces[0].content_aabb().size.is_equal_approx(before.size))
 
+	# The place it came out of is marked too, so a rack frame with its units gone reads as a
+	# vacant berth rather than as a modelling mistake -- but only when the surface really did
+	# come out of the room. The timeline lives under the screen stage, which is a child of the
+	# CAMERA: a berth drawn there is parented to the viewpoint and sails around the room with
+	# it, marking a place that does not exist and that nothing was ever vacated from.
+	var berthed := 0
+	for surface in studio.focus.surfaces:
+		var berth := studio.studio_set.get_node_or_null("Berth_%s" % surface.surface_id)
+		if surface.surface_id == &"timeline":
+			check("a surface that was never standing in the room gets no berth", berth == null)
+			check("and nothing is drawn on the camera for it",
+					studio.camera.find_children("Berth_*", "", true, false).is_empty())
+		else:
+			check("%s leaves a berth behind" % surface.surface_id, berth != null)
+			if berth != null:
+				berthed += 1
+				check("%s's berth is where it was standing" % surface.surface_id,
+						berth.global_position.distance_to(
+						(studio.studio_set.global_transform * (studio.focus._home[
+						surface.surface_id][1] as Transform3D)).origin) < 0.001)
+	check("every room surface left one (%d)" % berthed, berthed == 4)
+
 	studio.focus.release()
 	for surface in studio.focus.surfaces:
 		check("%s loses its marks when released" % surface.surface_id,
 				surface.get_node_or_null("FocusHalo") == null)
+		check("and its berth is cleaned up too",
+				studio.studio_set.get_node_or_null("Berth_%s" % surface.surface_id) == null)
 	studio.queue_free()
 
 

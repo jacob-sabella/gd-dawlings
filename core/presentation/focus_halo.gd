@@ -30,20 +30,23 @@ const STANDOFF := 0.012
 
 const FOCUSED_COLOUR := Color(0.62, 0.86, 1.0)
 const PARKED_COLOUR := Color(0.44, 0.50, 0.58)
+## The empty place a summoned surface came out of. Dimmer than parked, because a berth is not
+## a thing you can use -- it is a note about where something goes back to.
+const BERTH_COLOUR := Color(0.30, 0.34, 0.40)
 
 
-static func create(bounds: AABB, focused: bool) -> FocusHalo:
+static func create(bounds: AABB, colour: Color) -> FocusHalo:
 	var halo := FocusHalo.new()
 	halo.name = "FocusHalo"
-	halo.refresh(bounds, focused)
+	halo.refresh(bounds, colour)
 	halo.cast_shadow = SHADOW_CASTING_SETTING_OFF
 	return halo
 
 
-func refresh(bounds: AABB, focused: bool) -> void:
+func refresh(bounds: AABB, colour: Color) -> void:
 	mesh = brackets(Vector2(bounds.size.x, bounds.size.y))
 	position = bounds.get_center() + Vector3(0, 0, bounds.size.z * 0.5 + STANDOFF)
-	material_override = Materials.halo(FOCUSED_COLOUR if focused else PARKED_COLOUR)
+	material_override = Materials.halo(colour)
 
 
 ## Eight bars: two at each corner, running in from it along each edge.
