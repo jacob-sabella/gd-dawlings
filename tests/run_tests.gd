@@ -3035,6 +3035,24 @@ func _test_a_body_is_measured_rather_than_assumed() -> void:
 			standing.too_big_to_place(big, 0.0005))
 	check("a surface that can be both is not", not standing.too_big_to_place(near, cap))
 
+	# The gaze drop yields to a tall surface. Applied blind to the centre, a 20-degree drop put
+	# the rack's bottom row 50 degrees below the horizon and straight off the bottom of the
+	# frame -- comfortable for the middle of the surface and useless for the ends of it.
+	var flat := AABB(Vector3(-0.2, -0.05, 0), Vector3(0.4, 0.1, 0.05))
+	var high := AABB(Vector3(-0.2, -0.3, 0), Vector3(0.4, 0.6, 0.05))
+	check("a small panel gets the full comfortable drop",
+			is_equal_approx(rad_to_deg(standing.drop_for(flat, 0.5, true)), standing.gaze_down))
+	check("a tall panel straightens up",
+			standing.drop_for(high, 0.5, true) < standing.drop_for(flat, 0.5, true))
+	check("no surface is ever lifted above the horizon",
+			standing.drop_for(AABB(Vector3(-1, -2, 0), Vector3(2, 4, 0.1)), 0.5, true) >= 0.0)
+	for box in [flat, high]:
+		var placed := standing.place(0.0, box, true, cap)
+		var lowest: Vector3 = placed * (box.get_center() - Vector3(0, box.size.y * 0.5, 0))
+		check("the bottom edge of a %.1fm surface stays inside the eye sweep (%.0f deg)"
+				% [box.size.y, rad_to_deg(atan2(-lowest.y, -lowest.z))],
+				rad_to_deg(atan2(-lowest.y, -lowest.z)) <= standing.gaze_sweep + 1.0)
+
 	# Placement is bearing-relative, which is what makes the arc an arc.
 	var left := standing.place(-60.0, near, false, cap) * near.get_center()
 	var right := standing.place(60.0, near, false, cap) * near.get_center()

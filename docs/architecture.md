@@ -767,3 +767,37 @@ empty box, took the fallback distance and was never corrected. `--focus` appeare
 at all, and the first three diagnoses were of the placement maths, which was fine. Surfaces are
 now re-placed on every `rebuilt` signal, which is required anyway: a console that gains twenty
 tracks is a different size, and a distance derived from the old one is wrong.
+
+### Furniture is not instrument
+
+`Surface.compact` asks a surface to drop the parts of itself that only make sense as furniture.
+A rack in a room is a 19" box with blanking panels in the empty U, because that is what a rack
+IS and a part-filled bay with holes in it reads as a modelling mistake. A rack held at your
+hands is not furniture, has no empty U to explain, and those blanks were a metre of nothing
+between the viewer and the controls -- they were most of the reason the FX rack reported itself
+as impossible to place at all. Compact, the same rack is 0.53 x 0.59m, needs 0.52m of standoff
+against 0.96m of legibility, and lands exactly at working distance.
+
+The surface cannot decide this for itself, because it cannot know whether it is standing in a
+room or floating at someone's fingertips. The rig that summoned it can, so the rig sets it.
+
+Trading height for width is the specific move, and it is not arbitrary: a neck yaws much
+further than it pitches, so height is the expensive axis and width is the cheap one. The rack
+picks rows per bay to come out roughly square -- `p = sqrt(n * BAY_SPACING / unit_height)`, from
+setting `(n/p) * BAY_SPACING = p * unit_height`.
+
+### Two bugs that only a measurement finds
+
+**Deferred frees are still in the tree.** `queue_free()` runs at the end of the frame, so the
+geometry a rebuild replaces is still a child for the whole of that rebuild. Anything measuring
+the surface in that window measures both builds at once -- and the focus rig re-places a surface
+the instant it emits `rebuilt`. A rack trimmed from twelve U to six measured as twelve U
+forever, and the trim looked like it had silently done nothing. `_clear_built` now removes
+before it frees.
+
+**A comfortable drop is not comfortable at the edges.** `gaze_down` is applied to the centre of
+a surface, which is right for a panel and wrong for a column: the rack at a 20-degree drop put
+its own bottom row 50 degrees below the horizon, outside any cone a person can look through
+without moving their head. The drop now yields to the surface -- `drop_for` straightens a tall
+surface up until its far edge is back inside the sweep, which for something as tall as the sweep
+itself means dead ahead.

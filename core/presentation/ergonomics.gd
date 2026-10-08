@@ -164,7 +164,7 @@ func fits_in_sweep(size: Vector3) -> float:
 ## and all three of those are decisions for the surface rather than for the person's body.
 func place(bearing_degrees: float, bounds: AABB, touched: bool, smallest_cap: float) -> Transform3D:
 	var distance := _distance_for(bounds, touched, smallest_cap)
-	var drop := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
+	var drop := drop_for(bounds, distance, touched)
 	# The centre of the content on the line of sight, not the surface's origin -- a console's
 	# origin is the front edge of the desk, and centring that puts half the desk out of view.
 	var ahead := Vector3(0, -sin(drop), -cos(drop)) * distance
@@ -178,6 +178,28 @@ func place(bearing_degrees: float, bounds: AABB, touched: bool, smallest_cap: fl
 	var swung := Basis(Vector3.UP, -deg_to_rad(bearing_degrees))
 	var basis := swung * facing
 	return Transform3D(basis, swung * ahead - basis * bounds.get_center())
+
+
+## How far below the horizon the centre of a surface this size should sit, in radians.
+##
+## A work surface belongs below the horizon -- that is where hands are and where a desk is, and
+## looking slightly down all day is what necks are shaped for. But the drop is applied to the
+## CENTRE, and on a tall surface that is not the same as putting the surface somewhere
+## comfortable: the FX rack at a 20-degree drop put its own bottom row 50 degrees below the
+## horizon, outside any cone a person can look through without moving, and the render simply
+## ran off the bottom of the frame.
+##
+## So the drop yields to the surface. A small panel gets the full comfortable drop; a tall one
+## straightens up until its far edge is back inside the sweep, which for something as tall as
+## the sweep itself means dead ahead. Clamped at zero rather than going negative, because a
+## surface tall enough to want lifting ABOVE the horizon is one that should have been split.
+func drop_for(bounds: AABB, distance: float, touched: bool) -> float:
+	var wanted := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
+	if distance <= 0.0:
+		return wanted
+	var half_angle := atan(bounds.size.y * 0.5 / distance)
+	var room := deg_to_rad(clampf(gaze_sweep, 5.0, 85.0)) - half_angle
+	return clampf(wanted, 0.0, maxf(room, 0.0))
 
 
 ## True when no distance satisfies both the sweep and the reading constraint.

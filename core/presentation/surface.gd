@@ -31,6 +31,23 @@ extends Node3D
 ## has to be measured, and before the first build there is nothing to measure.
 signal rebuilt()
 
+## Drop the parts that are furniture rather than instrument.
+##
+## A rack in a room is a 19" box with blanking panels in the empty U, because that is what a
+## rack IS and a part-filled bay with holes in it reads as a modelling mistake. A rack held at
+## your hands is not furniture and has no empty U to explain -- the blanks are just a metre of
+## nothing between you and the controls, and they are the entire reason the FX rack reports
+## itself as too big to place at all.
+##
+## Set by whoever is presenting the surface, not by the surface, because the surface cannot know
+## whether it is standing in a room or floating at someone's fingertips.
+var compact := false:
+	set(value):
+		if compact == value:
+			return
+		compact = value
+		mark_dirty()
+
 var _dirty := true
 
 
@@ -77,9 +94,17 @@ func _rebuild() -> void:
 
 ## Clear previously built geometry. Children added by a rebuild must be marked with the
 ## `built` meta so that hand-authored children of a surface scene survive.
+## Taken out of the tree now, freed whenever the engine gets round to it.
+##
+## queue_free() alone is deferred to the end of the frame, so the old geometry is still a child
+## for the whole of the rebuild that replaces it -- and anything that measures the surface in
+## that window measures both builds at once. That is not hypothetical: the focus rig re-places
+## a surface the moment it emits `rebuilt`, so a rack trimmed from twelve U to six measured as
+## twelve U forever, and the trim looked like it had silently done nothing.
 func _clear_built() -> void:
 	for child in get_children():
 		if child.get_meta("built", false):
+			remove_child(child)
 			child.queue_free()
 
 

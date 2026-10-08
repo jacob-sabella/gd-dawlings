@@ -42,6 +42,19 @@ func _rebuild() -> void:
 
 	var unit_height := RackUnit.U * RackUnit.UNITS_TALL
 	var per_bay := int(floor(BAY_HEIGHT / unit_height))
+	if compact:
+		# Sized to what is in it, and split into enough bays that the result is wider than it is
+		# tall. Not a cosmetic trim: the full-height bay is 1.13m, which needs 0.98m of standoff
+		# to fit the eye sweep while its lettering only carries to 0.96m -- the rack literally
+		# cannot be both seen and read, and six empty U are most of the reason. A neck yaws much
+		# further than it pitches, so trading height for width is trading an expensive axis for
+		# a cheap one.
+		# Rows per bay that make the result about as wide as it is tall. bays = n/p, so
+		# width = (n/p)*BAY_SPACING and height = p*unit_height; setting those equal gives
+		# p = sqrt(n * BAY_SPACING / unit_height). Capped at the number of units there actually
+		# are, so a rack that fits in one bay gets one bay with no blanks in it.
+		var square := int(ceil(sqrt(float(slots.size()) * BAY_SPACING / unit_height)))
+		per_bay = clampi(square, 1, mini(per_bay, slots.size()))
 	var bays := int(ceil(float(slots.size()) / float(per_bay)))
 
 	for bay in bays:

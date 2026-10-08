@@ -104,6 +104,7 @@ func release() -> void:
 	for surface in surfaces:
 		if is_instance_valid(surface) and _home.has(surface.surface_id):
 			var home: Array = _home[surface.surface_id]
+			surface.compact = false
 			_move(surface, home[0], home[1])
 	_home.clear()
 	focus_changed.emit(focused_id)
@@ -213,6 +214,10 @@ func _apply() -> void:
 		# the summoned position of the first as the place to put it back.
 		if not _home.has(surface.surface_id):
 			_home[surface.surface_id] = [surface.get_parent(), surface.transform]
+		# Out of the room, so out of its room shape. Set before placement is computed, but the
+		# rebuild it triggers is batched to the next frame -- which is why placement has to be
+		# redone on `rebuilt` rather than only here.
+		surface.compact = true
 		var index := 0
 		if surface.surface_id != focused_id:
 			index = others
