@@ -35,9 +35,19 @@ uniform sampler2D reflection : filter_linear, repeat_disable;
 uniform vec4 tint : source_color = vec4(1.0);
 uniform float haze = 0.0;
 uniform vec4 haze_colour : source_color = vec4(0.5, 0.5, 0.5, 1.0);
+const float KNEE = 0.8;
 void fragment() {
 	// Left and right swapped: the reflected camera's right is the glass's left.
 	vec3 seen = texture(reflection, vec2(1.0 - UV.x, UV.y)).rgb;
+	// A silvered glass gives back a little less than it is given, and the room's glow blooms
+	// anything over 1. Left alone, a lamp beside the glass lights the ghost in it past that and
+	// it melts into a smear. So highlights roll off above KNEE toward KNEE + 0.5, and everything
+	// darker than that is untouched.
+	float peak = max(max(seen.r, seen.g), seen.b);
+	if (peak > KNEE) {
+		float over = peak - KNEE;
+		seen *= (KNEE + over / (1.0 + over * 2.0)) / peak;
+	}
 	// A little darker toward the edges, the way a silvered back falls off.
 	vec2 c = UV - 0.5;
 	float edge = 1.0 - smoothstep(0.30, 0.72, length(c * vec2(1.0, 0.6)));

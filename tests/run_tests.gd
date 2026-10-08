@@ -7280,6 +7280,8 @@ func _test_every_venue_has_a_mirror_you_can_see_yourself_in() -> void:
 				mirror._camera.cull_mask & Mirror.SELF_ONLY != 0
 				and mirror._camera.cull_mask & Mirror.NOT_REFLECTED == 0)
 		check("and the glass is not in its own reflection", mirror._glass.layers == Mirror.NOT_REFLECTED)
+		check("its glass rolls highlights off rather than handing the room's glow a smear",
+				Mirror.GLASS_SHADER.contains("KNEE + over / (1.0 + over * 2.0)"))
 		var board := mirror.wardrobe
 		check("with a wardrobe beside it", board != null and board.get_parent() == mirror)
 		if board != null:
