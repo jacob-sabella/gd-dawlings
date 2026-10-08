@@ -110,7 +110,26 @@ func make_mirror(env: Environment) -> Mirror:
 	m.environment_from = env
 	m.transform = mirror_spot(m.glass_size)
 	_frame_mirror(m)
+	var board := Wardrobe.new()
+	board.name = "Wardrobe"
+	_dress_wardrobe(board)
+	board.transform = wardrobe_spot(m)
+	m.add_child(board)
+	m.wardrobe = board
 	return m
+
+
+## Where the wardrobe board hangs, in the mirror's frame: beside the glass on its +X side, at
+## hand height, turned a little toward whoever is standing in front of the glass.
+func wardrobe_spot(mirror: Mirror) -> Transform3D:
+	var beside := mirror.glass_size.x * 0.5 + 0.34
+	var hand := 1.25 - mirror.position.y
+	return Transform3D(Basis(Vector3.UP, -0.4), Vector3(beside, hand, 0.06))
+
+
+## The board's materials and ink, in the venue's own style. Left plain by default.
+func _dress_wardrobe(_board: Wardrobe) -> void:
+	pass
 
 
 ## Where the glass's centre stands, facing into the room. By default on the left wall behind

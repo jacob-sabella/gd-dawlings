@@ -356,7 +356,10 @@ func set_venue(id: StringName, persist := true) -> void:
 	venue.dress(env, key_light)
 	world_env.environment = env
 	add_child(venue)
-	venue.add_child(venue.make_mirror(env))
+	var mirror := venue.make_mirror(env)
+	venue.add_child(mirror)
+	mirror.wardrobe.look = Session.local_look
+	mirror.wardrobe.look_changed.connect(Session.set_look)
 	for i in _lamps.size():
 		if i < PRACTICALS.size():
 			_lamps[i].light_color = venue.lamp_colour(i, PRACTICALS[i][1])

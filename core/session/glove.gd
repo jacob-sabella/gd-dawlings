@@ -46,6 +46,7 @@ var _curls: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
 var _knuckles: Array[Node3D] = []
 var _palm := Node3D.new()
 var _cuff_material := StandardMaterial3D.new()
+var _cloth := StandardMaterial3D.new()
 var _clock := randf() * TAU
 var _placed := false
 
@@ -54,7 +55,7 @@ func _init(hand_side := 1.0) -> void:
 	side = hand_side
 	top_level = true
 	add_child(_palm)
-	var cloth := StandardMaterial3D.new()
+	var cloth := _cloth
 	cloth.albedo_color = WHITE
 	cloth.roughness = 0.62
 	cloth.rim_enabled = true
@@ -125,6 +126,13 @@ func _part(mesh: Mesh, material: Material, parent: Node3D) -> MeshInstance3D:
 
 func set_colour(colour: Color) -> void:
 	_cuff_material.albedo_color = colour
+
+
+## What the glove itself is made of: white cloth unless a look says otherwise.
+func set_cloth(colour: Color, metallic := 0.0) -> void:
+	_cloth.albedo_color = colour
+	_cloth.metallic = metallic
+	_cloth.roughness = 0.3 if metallic > 0.0 else 0.62
 
 
 ## Kick the squash spring: negative squashes (a grab), positive stretches (a let-go, a hop).

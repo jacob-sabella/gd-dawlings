@@ -419,6 +419,16 @@ static func _barycentric(tris: PackedVector3Array) -> ArrayMesh:
 
 ## A free-standing mirror outlined in two neon tubes, cyan outside pink, on a black lacquer
 ## stand -- the dressing-room mirror of a club that only exists at 3am in 1986.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	var lacquer := StandardMaterial3D.new()
+	lacquer.albedo_color = Color(0.02, 0.015, 0.03)
+	lacquer.roughness = 0.12
+	lacquer.metallic = 0.4
+	board.board_material = lacquer
+	board.ink = Color(1.0, 0.75, 0.95)
+	board.accent = Color(0.2, 0.95, 1.0)
+
+
 func _frame_mirror(mirror: Mirror) -> void:
 	var lacquer := StandardMaterial3D.new()
 	lacquer.albedo_color = Color(0.02, 0.015, 0.03)

@@ -259,6 +259,15 @@ func mirror_spot(glass: Vector2) -> Transform3D:
 			Vector3(x, centre_y, 2.2))
 
 
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k",
+			0.6, Color(0.78, 0.68, 0.6))
+	# Light wood: the lettering is burnt in, dark, and the arrows are brass.
+	board.ink = Color(0.12, 0.07, 0.04)
+	board.board_ink_fade = Color(0.45, 0.32, 0.22)
+	board.accent = Color(0.95, 0.72, 0.38)
+
+
 func _frame_mirror(mirror: Mirror) -> void:
 	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
 			Color(0.78, 0.68, 0.6))

@@ -63,6 +63,12 @@ func network_key() -> String:
 	return title()
 
 
+## Mine alone: never claimed as a hold or shown as someone's pointer across the session. A
+## wardrobe button by a mirror is; a fader is not.
+func personal() -> bool:
+	return false
+
+
 ## `at` is the contact point in global space -- the ray hit, or the fingertip.
 ## Can this control be worked by looking at it, without a press?
 ##

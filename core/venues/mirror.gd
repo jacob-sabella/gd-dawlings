@@ -55,6 +55,8 @@ var environment_from: Environment
 var tint := Color.WHITE
 var haze := 0.0
 var haze_colour := Color(0.5, 0.5, 0.5)
+## The board beside it for changing what your ghost wears, set by the venue that built it.
+var wardrobe: Wardrobe
 
 var _viewport: SubViewport
 var _camera: Camera3D

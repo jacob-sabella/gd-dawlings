@@ -141,6 +141,10 @@ func _ready() -> void:
 	_test_a_ghost_is_the_size_of_a_large_person()
 	_test_a_glove_flies_with_a_bounce()
 	_test_a_ghosts_hand_goes_to_what_they_touch()
+	_test_a_look_is_kept_and_cleaned()
+	_test_the_roster_carries_what_everyone_wears()
+	_test_a_ghost_wears_its_look()
+	_test_the_wardrobe_changes_my_look()
 	_test_a_mirror_shows_the_room_reversed()
 	_test_every_venue_has_a_mirror_you_can_see_yourself_in()
 	_test_meters_go_out_in_parcels_under_the_mtu()
@@ -7092,6 +7096,134 @@ func _test_a_ghosts_hand_goes_to_what_they_touch() -> void:
 	mine.free()
 
 
+func _test_a_look_is_kept_and_cleaned() -> void:
+	check("a look with nothing in it is the default", GhostLook.clean({}) == GhostLook.default_look())
+	var odd := GhostLook.clean({"hat": 99, "body": -3, "eyes": 2.0, "cape": 1})
+	check("out-of-range choices are pulled into range, and unknown ones dropped",
+			odd["hat"] == GhostLook.HATS.size() - 1 and odd["body"] == 0 and odd["eyes"] == 2
+			and not odd.has("cape"))
+	check("not even a dictionary is still a look", GhostLook.clean("nonsense") == GhostLook.default_look())
+	var last := GhostLook.stepped(GhostLook.default_look(), "hat", -1)
+	check("stepping back from the first hat wraps to the last (%s)" % GhostLook.label(last, "hat"),
+			last["hat"] == GhostLook.HATS.size() - 1)
+	check("and forward from the last wraps to none",
+			GhostLook.label(GhostLook.stepped(last, "hat", 1), "hat") == "None")
+	check("every body has a colour", GhostLook.BODIES.size() == GhostLook.BODY_COLOURS.size())
+	var path := OS.get_temp_dir().path_join("reaper3d_test_look_%d.cfg" % OS.get_process_id())
+	var mine := {"body": 3, "eyes": 1, "hat": 4, "gloves": 2}
+	GhostLook.save_to(mine, path)
+	check("a look survives being put away", GhostLook.load_from(path) == mine)
+	DirAccess.remove_absolute(path)
+	check("with nothing put away, the default", GhostLook.load_from(path) == GhostLook.default_look())
+
+
+func _test_the_roster_carries_what_everyone_wears() -> void:
+	var was_path := Session.look_path
+	var was_look := Session.local_look
+	Session.look_path = ""
+	_as_session(Session.Role.GUEST, 5)
+	var hers := {"body": 2, "eyes": 3, "hat": 2, "gloves": 3}
+	Session.apply_roster([[1, "Ada", 0, 0, hers], [5, "Grace", 0, 1, GhostLook.default_look()]])
+	check("a guest is told what the host wears", Session.participants[1].look == hers)
+	Session.apply_roster([[1, "Ada", 0, 0], [5, "Grace", 0, 1]])
+	check("a host from before looks dresses everyone in the default",
+			Session.participants[1].look == GhostLook.default_look())
+	Session.start_solo()
+	var changed := [0]
+	var count := func() -> void: changed[0] += 1
+	Session.roster_changed.connect(count)
+	Session.set_look({"hat": 3})
+	Session.roster_changed.disconnect(count)
+	check("dressing myself is mine at once", Session.local_participant().look["hat"] == 3
+			and Session.local_look["hat"] == 3)
+	check("and redraws the ghosts", changed[0] == 1)
+	var rows := Session._roster_rows()
+	check("and goes out in the roster", rows[0].size() == 5 and rows[0][4]["hat"] == 3)
+	Session.set_look(was_look)
+	Session.look_path = was_path
+
+
+func _test_a_ghost_wears_its_look() -> void:
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost.snap(Transform3D(Basis.IDENTITY, Vector3(0, 1.62, 0)))
+	ghost._aim_hands()
+	for glove in ghost._hands:
+		glove.step(0.0)
+	ghost.dress("Ada", Session.PALETTE[0], 0, true, {"body": 5})
+	var body: Color = ghost._skin.get_shader_parameter("body")
+	check("the body takes the look's colour (%s)" % body,
+			body.g > body.b and body.is_equal_approx(GhostLook.BODY_COLOURS[5].lerp(Session.PALETTE[0], 0.12)))
+	var dome := 1.62 + Presence.Avatar.TOP * Presence.Avatar.SIZE
+	for i in GhostLook.HATS.size():
+		var hat: String = GhostLook.HATS[i]
+		ghost.dress("Ada", Session.PALETTE[0], 0, true, {"hat": i})
+		ghost._place()
+		var parts := ghost._hat.get_children().filter(func(n): return not n.is_queued_for_deletion())
+		if hat == "None":
+			check("no hat is nothing on the head", parts.is_empty())
+			continue
+		var top := -INF
+		for m in ghost._hat.find_children("*", "MeshInstance3D", true, false):
+			if m.is_queued_for_deletion() or m.get_parent().is_queued_for_deletion():
+				continue
+			top = maxf(top, (m.global_transform * m.get_aabb()).end.y)
+		check("the %s sits on top of the dome (%.2f over it)" % [hat, top - dome], top > dome + 0.01)
+		check("and the name floats over the %s" % hat, ghost._tag.global_position.y > top)
+		var hits := ZFightProbe.scan(ghost._hat)
+		check("the %s has no two faces in one plane (%d)" % [hat, hits.size()], hits.is_empty())
+	ghost.dress("Ada", Session.PALETTE[0], 0, true, {"eyes": GhostLook.EYES.find("Wide")})
+	check("wide eyes open the lids", ghost._lid_rest > Presence.Avatar.LID_AWAKE)
+	ghost.dress("Ada", Session.PALETTE[0], 0, true, {"eyes": GhostLook.EYES.find("Grumpy")})
+	ghost._process(0.016)
+	check("grumpy ones tilt them in", absf(ghost._lids[0].rotation.z) > 0.2
+			and signf(ghost._lids[0].rotation.z) != signf(ghost._lids[1].rotation.z))
+	ghost.dress("Ada", Session.PALETTE[0], 0, true, {"gloves": GhostLook.GLOVES.find("Gold")})
+	check("gold gloves are metal", ghost._hands[0]._cloth.metallic > 0.5)
+	ghost.dress("Ada", Session.PALETTE[0], 0, true, {"gloves": GhostLook.GLOVES.find("My colour")})
+	check("and theirs are their colour", ghost._hands[1]._cloth.albedo_color.is_equal_approx(
+			Session.PALETTE[0].lightened(0.2)))
+	remove_child(ghost)
+	ghost.free()
+
+	var mine := Presence.Avatar.new()
+	add_child(mine)
+	mine.only_in_mirrors()
+	mine.dress("Me", Session.PALETTE[1], 0, true, {"hat": GhostLook.HATS.find("Crown")})
+	var hidden := mine._hat.find_children("*", "MeshInstance3D", true, false).all(
+			func(m): return m.is_queued_for_deletion() or m.layers == Mirror.SELF_ONLY)
+	check("a hat put on in the mirror is only in the mirror too", hidden)
+	remove_child(mine)
+	mine.free()
+
+
+func _test_the_wardrobe_changes_my_look() -> void:
+	var board := Wardrobe.new()
+	add_child(board)
+	var told: Array = []
+	board.look_changed.connect(func(look): told.append(look))
+	board.press("hat", 1)
+	check("next hat puts one on", told.size() == 1 and told[0]["hat"] == 1)
+	check("and the board says which (%s)" % board._values["hat"].text,
+			board._values["hat"].text == GhostLook.HATS[1])
+	board.press("body", -1)
+	check("back from the first body is the last", board.look["body"] == GhostLook.BODIES.size() - 1)
+	check("its swatch shows it", board._swatch.albedo_color.is_equal_approx(GhostLook.BODY_COLOURS[-1]))
+	var button: Wardrobe.Choice = board._buttons[0]
+	check("its buttons are mine alone", button.personal() and not ControlAffordance.new().personal())
+	check("and say what they do", button.title() == "BODY  BACK")
+	var presence := Presence.new()
+	add_child(presence)
+	presence._on_grabbed(button, Interactor.new())
+	check("grabbing one claims nothing in the session", presence._my_claims.is_empty())
+	remove_child(presence)
+	presence.free()
+	board.look = {"eyes": 2}
+	check("set from outside, it shows what I already wear", board._values["eyes"].text == GhostLook.EYES[2])
+	remove_child(board)
+	board.free()
+
+
 func _test_a_mirror_shows_the_room_reversed() -> void:
 	# A glass 0.6 x 1.6 on the left wall, facing +X, centre 0.94m up; an eye in the room.
 	var glass := Vector2(0.6, 1.6)
@@ -7148,6 +7280,19 @@ func _test_every_venue_has_a_mirror_you_can_see_yourself_in() -> void:
 				mirror._camera.cull_mask & Mirror.SELF_ONLY != 0
 				and mirror._camera.cull_mask & Mirror.NOT_REFLECTED == 0)
 		check("and the glass is not in its own reflection", mirror._glass.layers == Mirror.NOT_REFLECTED)
+		var board := mirror.wardrobe
+		check("with a wardrobe beside it", board != null and board.get_parent() == mirror)
+		if board != null:
+			var y := board.global_position.y
+			check("at hand height (%.2fm)" % y, y > 1.05 and y < 1.45)
+			var side := board.position.x - Wardrobe.WIDTH * 0.5
+			check("clear of the glass (%.2fm from its edge)" % (side - mirror.glass_size.x * 0.5),
+					side > mirror.glass_size.x * 0.5 + 0.06)
+			check("facing the room too", board.global_basis.z.dot(at.basis.z) > 0.8)
+			check("its board in the %s's style" % id, board.board_material != null)
+			var hits := ZFightProbe.scan(board)
+			check("no two of its faces share a plane (%d)" % hits.size(), hits.is_empty())
+			check("the studio dresses me from it", board.look_changed.is_connected(Session.set_look))
 	# A panel brought to your face leaves the mirror; sent back to the room, it returns.
 	var panel := MeshInstance3D.new()
 	studio.screen_stage.add_child(panel)

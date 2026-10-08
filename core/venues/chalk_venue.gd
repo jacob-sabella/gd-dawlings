@@ -362,6 +362,16 @@ static func _subdivide(line: PackedVector3Array, step: float) -> PackedVector3Ar
 
 ## A mirror drawn in chalk: a wobbly ornate frame gone over twice, curls at the corners, a star
 ## or two, and glass with a little chalk dust on it. It stands on nothing, like everything here.
+## A little slate, written on in chalk.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	var slate := StandardMaterial3D.new()
+	slate.albedo_color = Color(0.16, 0.22, 0.2)
+	slate.roughness = 0.95
+	board.board_material = slate
+	board.ink = Chalk.WHITE
+	board.accent = Chalk.YELLOW
+
+
 func _frame_mirror(mirror: Mirror) -> void:
 	mirror.haze = 0.035
 	mirror.haze_colour = Color(0.55, 0.58, 0.62)

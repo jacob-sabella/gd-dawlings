@@ -38,12 +38,17 @@ func _ready() -> void:
 	# Without this, a screenshot that pushed a rack would move the rack in the real layout.
 	if args["fresh_layout"]:
 		Session.layout.save_path = "user://scratch_layout.cfg"
+		# Nor does it dress your ghost: whatever a capture puts on stays in that capture.
+		Session.look_path = ""
 	else:
 		Session.layout.load_saved()
 	Session.layout.medium = medium
 
 	if args["name"] != "":
 		Session.local_name = args["name"]
+	if not args["ghost"].is_empty():
+		Session.look_path = ""
+		Session.local_look = GhostLook.clean(args["ghost"])
 	# How this process gets its own mix back after being someone else's guest: the same link
 	# it would have opened on its own, Reaper or the stand-in.
 	Session.solo_backend = func(): _start_daw(args)
@@ -183,6 +188,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
+		"ghost": {},
 	}
 	var i := 0
 	while i < argv.size():
@@ -220,6 +226,15 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["venue"] = argv[i]
+			"--ghost":
+				# `--ghost hat=4,eyes=1` -- what this run's ghost wears, kept for this run only.
+				# Two windows on one machine share a saved look; this tells them apart.
+				i += 1
+				if i < argv.size():
+					for pair in argv[i].split(",", false):
+						var kv := pair.split("=")
+						if kv.size() == 2:
+							out["ghost"][kv[0].strip_edges()] = int(kv[1])
 			"--name":
 				# What everyone else's room calls this participant.
 				i += 1

@@ -71,6 +71,10 @@ var participants: Dictionary = {}
 var local_peer_id: int = 1
 ## What this person is called in everyone else's room. Set before hosting or joining.
 var local_name: String = ""
+## What my ghost wears, as chosen at a mirror. Kept at `look_path` between runs; "" keeps it
+## in memory only, which is what the suite does so as not to dress the real one.
+var local_look: Dictionary = GhostLook.default_look()
+var look_path := GhostLook.PATH
 ## {control key: peer_id}. Owned by the host and replicated whole, because it is small and a
 ## guest that missed a release would otherwise see a fader held forever by someone long gone.
 var holds: Dictionary = {}
@@ -154,6 +158,8 @@ class Participant extends RefCounted:
 
 	var colour: Color:
 		get: return PALETTE[colour_index % PALETTE.size()]
+	## What their ghost wears. See GhostLook.
+	var look: Dictionary = GhostLook.default_look()
 
 
 func _ready() -> void:
@@ -168,6 +174,7 @@ func _ready() -> void:
 	add_child(guest_audio)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
+	local_look = GhostLook.load_from(look_path)
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -344,8 +351,24 @@ func set_local_name(new_name: String) -> void:
 		participants[local_peer_id].display_name = new_name
 	match role:
 		Role.HOST: _broadcast_roster()
-		Role.GUEST when _connected(): _hello.rpc_id(1, new_name, layout.medium if layout != null else 0, _offered_code)
+		Role.GUEST when _connected(): _introduce()
 		_: roster_changed.emit()
+
+
+## Dress my ghost. Kept for next time, and told to the session the same way a rename is.
+func set_look(look: Dictionary) -> void:
+	local_look = GhostLook.clean(look)
+	GhostLook.save_to(local_look, look_path)
+	if participants.has(local_peer_id):
+		participants[local_peer_id].look = local_look.duplicate()
+	match role:
+		Role.HOST: _broadcast_roster()
+		Role.GUEST when _connected(): _introduce()
+		_: roster_changed.emit()
+
+
+func _introduce() -> void:
+	_hello.rpc_id(1, local_name, layout.medium if layout != null else 0, _offered_code, local_look)
 
 
 func _register(peer_id: int, name_hint: String, colour_index: int) -> Participant:
@@ -355,8 +378,10 @@ func _register(peer_id: int, name_hint: String, colour_index: int) -> Participan
 	p.peer_id = peer_id
 	p.display_name = name_hint
 	p.colour_index = colour_index
-	if peer_id == local_peer_id and layout != null:
-		p.medium = layout.medium
+	if peer_id == local_peer_id:
+		p.look = local_look.duplicate()
+		if layout != null:
+			p.medium = layout.medium
 	participants[peer_id] = p
 	participant_joined.emit(peer_id)
 	return p
@@ -428,7 +453,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	_hello.rpc_id(1, local_name, layout.medium if layout != null else 0, _offered_code)
+	_introduce()
 
 
 func _on_connection_failed() -> void:
@@ -449,7 +474,7 @@ func _on_server_disconnected() -> void:
 
 ## A guest introducing itself, and again whenever it renames. The first one is also the knock.
 @rpc("any_peer", "call_remote", "reliable")
-func _hello(display_name: String, medium: int, offered_code: String = "") -> void:
+func _hello(display_name: String, medium: int, offered_code: String = "", look: Dictionary = {}) -> void:
 	if role != Role.HOST:
 		return
 	var from := multiplayer.get_remote_sender_id()
@@ -467,6 +492,7 @@ func _hello(display_name: String, medium: int, offered_code: String = "") -> voi
 	if p.display_name.is_empty():
 		p.display_name = "Guest %d" % participants.size()
 	p.medium = medium
+	p.look = GhostLook.clean(look)
 	_broadcast_roster()
 	if first:
 		_send_holds()
@@ -570,7 +596,7 @@ func _roster_rows() -> Array:
 	var rows: Array = []
 	for id in participants:
 		var p: Participant = participants[id]
-		rows.append([p.peer_id, p.display_name, p.medium, p.colour_index])
+		rows.append([p.peer_id, p.display_name, p.medium, p.colour_index, p.look])
 	return rows
 
 
@@ -601,6 +627,8 @@ func apply_roster(rows: Array) -> void:
 		p.display_name = row[1]
 		p.medium = row[2]
 		p.colour_index = row[3]
+		# A host from before looks existed sends four columns: everyone in its default.
+		p.look = GhostLook.clean(row[4] if row.size() > 4 else {})
 		if arriving and id != local_peer_id and _has_settled:
 			notice.emit("%s joined the session." % p.display_name)
 	for id in participants.keys():

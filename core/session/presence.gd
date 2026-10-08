@@ -137,7 +137,7 @@ func _publish() -> void:
 		if interactor == null or not interactor.is_inside_tree():
 			continue
 		var control: ControlAffordance = interactor.held if interactor.held != null else interactor.hovered
-		if control == null or not is_instance_valid(control):
+		if control == null or not is_instance_valid(control) or control.personal():
 			continue
 		key = control.network_key()
 		local = control.to_local(interactor.hover_point) if interactor.hovered == control \
@@ -169,6 +169,8 @@ func _hook_interactors() -> void:
 
 
 func _on_grabbed(control: ControlAffordance, interactor: Interactor) -> void:
+	if control.personal():
+		return
 	var key := control.network_key()
 	_my_claims[interactor] = key
 	Session.claim_hold(key)
@@ -196,7 +198,7 @@ func _sync_avatars() -> void:
 	if reflection != null:
 		var me = Session.local_participant()
 		reflection.dress(Session.local_name, me.colour if me != null else Session.PALETTE[0],
-				0, Session.role != Session.Role.GUEST)
+				0, Session.role != Session.Role.GUEST, Session.local_look)
 	for id in _avatars.keys():
 		if not Session.participants.has(id) or id == Session.local_peer_id:
 			_avatars[id].queue_free()
@@ -210,7 +212,7 @@ func _sync_avatars() -> void:
 			avatar.name = "Avatar%d" % id
 			add_child(avatar)
 			_avatars[id] = avatar
-		_avatars[id].dress(p.display_name, p.colour, p.medium, id == 1)
+		_avatars[id].dress(p.display_name, p.colour, p.medium, id == 1, p.look)
 
 
 func _on_role_changed() -> void:
@@ -371,6 +373,14 @@ void fragment() {
 	var _eye_size := Vector3.ONE
 	var _beam_material := StandardMaterial3D.new()
 	var _lids: Array[Node3D] = []
+	var _lid_rest := LID_AWAKE
+	var _lid_tilt := 0.0
+	var _hat := Node3D.new()
+	var _propeller: Node3D = null
+	var _hat_key := ""
+	## The top of whatever is on their head, so the name floats over the hat, not through it.
+	var _hat_top := TOP
+	var _look: Dictionary = GhostLook.default_look()
 	var _pupils: Array[Node3D] = []
 	var _pupil_rest: Array[Vector3] = []
 	var _hands: Array[Glove] = []
@@ -407,6 +417,7 @@ void fragment() {
 		_ghost.add_child(_lean)
 		_part(body_mesh(), _skin, _lean)
 		_build_face()
+		_lean.add_child(_hat)
 		_build_hands()
 
 		for label in [_tag, _caption]:
@@ -647,18 +658,174 @@ void fragment() {
 		parent.add_child(m)
 		return m
 
-	func dress(display_name: String, colour: Color, _medium: int, _is_host: bool) -> void:
+	func dress(display_name: String, colour: Color, _medium: int, _is_host: bool,
+			look: Dictionary = {}) -> void:
 		_colour = colour
 		for glove in _hands:
 			glove.set_colour(colour)
 		_tag.text = display_name
 		_tag.modulate = colour.lightened(0.25)
-		_skin.set_shader_parameter("body", BLUE.lerp(colour, 0.12))
-		_lid_skin.set_shader_parameter("body", BLUE.lerp(colour, 0.12).darkened(0.22))
+		wear(look if not look.is_empty() else _look)
 		_skin.set_shader_parameter("glow", colour)
 		(_dot.material_override as StandardMaterial3D).albedo_color = colour.lightened(0.3)
 		_beam_material.albedo_color = Color(colour, 0.55)
 		_rim.tint = colour
+
+	## Put on a look (GhostLook): body colour, eyes, hat, gloves. Their session colour still
+	## glows round the edge and tints what they wear, so a look never hides who someone is.
+	func wear(look: Dictionary) -> void:
+		var tidy := GhostLook.clean(look)
+		_look = tidy
+		var body := GhostLook.body_colour(tidy).lerp(_colour, 0.12)
+		_skin.set_shader_parameter("body", body)
+		_lid_skin.set_shader_parameter("body", body.darkened(0.22))
+		match GhostLook.EYES[tidy["eyes"]]:
+			"Wide": _lid_rest = 1.0; _lid_tilt = 0.0
+			"Sleepy": _lid_rest = -0.4; _lid_tilt = 0.0
+			"Grumpy": _lid_rest = 0.05; _lid_tilt = -0.42
+			_: _lid_rest = LID_AWAKE; _lid_tilt = 0.0
+		for glove in _hands:
+			glove.set_colour(_colour)
+			match GhostLook.GLOVES[tidy["gloves"]]:
+				"Black": glove.set_cloth(Color(0.07, 0.07, 0.08))
+				"My colour": glove.set_cloth(_colour.lightened(0.2))
+				"Gold": glove.set_cloth(Color(1.0, 0.78, 0.32), 0.85)
+				_: glove.set_cloth(Glove.WHITE)
+		var hat: String = GhostLook.HATS[tidy["hat"]]
+		var key := "%s|%s" % [hat, _colour.to_html()]
+		if key != _hat_key:
+			_hat_key = key
+			_put_on_hat(hat)
+
+	## Hats are built in the ghost's own units (eye line 0, dome apex TOP) on the leaning part,
+	## so they nod with the face. Each sits on the dome, never through it where it shows.
+	func _put_on_hat(hat: String) -> void:
+		for old in _hat.get_children():
+			_hat.remove_child(old)
+			old.queue_free()
+		_propeller = null
+		_hat.rotation = Vector3.ZERO
+		_hat_top = {"Beanie": 0.45, "Top hat": 0.63, "Crown": 0.45, "Propeller": 0.43}.get(hat, TOP)
+		var felt := StandardMaterial3D.new()
+		felt.albedo_color = _colour.darkened(0.15)
+		felt.roughness = 0.9
+		var dark := StandardMaterial3D.new()
+		dark.albedo_color = Color(0.06, 0.06, 0.07)
+		dark.roughness = 0.5
+		var gold := StandardMaterial3D.new()
+		gold.albedo_color = Color(1.0, 0.8, 0.3)
+		gold.metallic = 0.9
+		gold.roughness = 0.25
+		match hat:
+			"Beanie":
+				var dome := SphereMesh.new()
+				dome.radius = 0.275
+				dome.height = 0.275
+				dome.is_hemisphere = true
+				var cap := _part(dome, felt, _hat)
+				cap.position.y = 0.16
+				cap.scale = Vector3(1.0, 0.78, 1.0)
+				var cuff := TorusMesh.new()
+				cuff.inner_radius = 0.25
+				cuff.outer_radius = 0.30
+				_part(cuff, felt, _hat).position.y = 0.17
+				var pom := SphereMesh.new()
+				pom.radius = 0.055
+				pom.height = 0.11
+				var white := StandardMaterial3D.new()
+				white.albedo_color = Color(0.95, 0.95, 0.92)
+				white.roughness = 1.0
+				_part(pom, white, _hat).position.y = 0.39
+			"Headphones":
+				# The band is a whole ring; its lower half is inside the body, out of sight.
+				var band := TorusMesh.new()
+				band.inner_radius = 0.345
+				band.outer_radius = 0.385
+				band.rings = 40
+				var arc := _part(band, dark, _hat)
+				arc.rotation.z = PI * 0.5
+				arc.rotation.y = PI * 0.5
+				arc.position = Vector3(0, 0.0, 0.02)
+				for side in [-1.0, 1.0]:
+					var can := CylinderMesh.new()
+					can.top_radius = 0.085
+					can.bottom_radius = 0.095
+					can.height = 0.07
+					var cup := _part(can, dark, _hat)
+					cup.rotation.z = side * PI * 0.5
+					cup.position = Vector3(side * 0.31, 0.0, 0.02)
+					var ring := TorusMesh.new()
+					ring.inner_radius = 0.055
+					ring.outer_radius = 0.08
+					var trim := _part(ring, felt, _hat)
+					trim.rotation.z = PI * 0.5
+					trim.position = Vector3(side * 0.348, 0.0, 0.02)
+			"Top hat":
+				_hat.rotation.z = -0.12
+				var crown := CylinderMesh.new()
+				crown.top_radius = 0.15
+				crown.bottom_radius = 0.14
+				crown.height = 0.3
+				_part(crown, dark, _hat).position.y = 0.44
+				var brim := CylinderMesh.new()
+				brim.top_radius = 0.235
+				brim.bottom_radius = 0.235
+				brim.height = 0.016
+				_part(brim, dark, _hat).position.y = 0.302
+				var ribbon := CylinderMesh.new()
+				ribbon.top_radius = 0.149
+				ribbon.bottom_radius = 0.148
+				ribbon.height = 0.045
+				var band_part := _part(ribbon, felt, _hat)
+				band_part.position.y = 0.333
+			"Crown":
+				_hat.rotation.z = 0.08
+				var ring := CylinderMesh.new()
+				ring.top_radius = 0.15
+				ring.bottom_radius = 0.135
+				ring.height = 0.085
+				_part(ring, gold, _hat).position.y = 0.325
+				for i in 5:
+					var a := TAU * i / 5.0
+					var spike := CylinderMesh.new()
+					spike.top_radius = 0.0
+					spike.bottom_radius = 0.032
+					spike.height = 0.08
+					_part(spike, gold, _hat).position = Vector3(sin(a) * 0.125, 0.405, cos(a) * 0.125)
+					var jewel := SphereMesh.new()
+					jewel.radius = 0.016
+					jewel.height = 0.032
+					var gem := StandardMaterial3D.new()
+					gem.albedo_color = _colour
+					gem.emission_enabled = true
+					gem.emission = _colour * 0.4
+					_part(jewel, gem, _hat).position = Vector3(sin(a) * 0.152, 0.327, cos(a) * 0.152)
+			"Propeller":
+				var dome := SphereMesh.new()
+				dome.radius = 0.24
+				dome.height = 0.24
+				dome.is_hemisphere = true
+				var cap := _part(dome, felt, _hat)
+				cap.position.y = 0.215
+				cap.scale = Vector3(1.0, 0.62, 1.0)
+				var stem := CylinderMesh.new()
+				stem.top_radius = 0.012
+				stem.bottom_radius = 0.012
+				stem.height = 0.07
+				_part(stem, dark, _hat).position.y = 0.38
+				_propeller = Node3D.new()
+				_propeller.position.y = 0.415
+				_hat.add_child(_propeller)
+				var yellow := StandardMaterial3D.new()
+				yellow.albedo_color = Color(1.0, 0.85, 0.2)
+				for i in 2:
+					var blade := BoxMesh.new()
+					blade.size = Vector3(0.14, 0.008, 0.045)
+					var b := _part(blade, yellow if i == 0 else felt, _propeller)
+					b.position.x = 0.075 if i == 0 else -0.075
+					b.rotation.x = 0.25 if i == 0 else -0.25
+		if _mirror_only:
+			only_in_mirrors()
 
 	## Drawn by mirrors and nothing else, casting no shadow on the desk in front of you, and
 	## without the name over its head -- you know who you are.
@@ -698,11 +865,15 @@ void fragment() {
 			_blink = 0.16
 			_blink_in = randf_range(2.5, 6.0)
 		_blink = maxf(0.0, _blink - delta)
-		var want := LID_SLEEPY if _away else LID_AWAKE
+		var want := minf(LID_SLEEPY, _lid_rest) if _away else _lid_rest
 		_lid = lerpf(_lid, want, 1.0 - exp(-delta * 3.0))
 		var angle := LID_SHUT if _blink > 0.0 else _lid
-		for lid in _lids:
-			lid.rotation.x = angle
+		for i in _lids.size():
+			_lids[i].rotation.x = angle
+			# Grumpy: the inner corners down. Blinks still shut them flat.
+			_lids[i].rotation.z = 0.0 if _blink > 0.0 else _lid_tilt * (1.0 if i == 0 else -1.0)
+		if _propeller != null:
+			_propeller.rotation.y += delta * 14.0
 		_place()
 		_aim_hands()
 
@@ -728,8 +899,8 @@ void fragment() {
 			var inside := 1.0 - pow(at.x / half.x, 2) - pow(at.y / half.y, 2)
 			at.z = -half.z * sqrt(maxf(0.05, inside)) - 0.004
 			_pupils[i].position = at
-		_tag.global_position = _pose.origin + Vector3(0, TOP * SIZE + 0.16 + bob, 0)
-		_caption.global_position = _pose.origin + Vector3(0, TOP * SIZE + 0.09 + bob, 0)
+		_tag.global_position = _pose.origin + Vector3(0, _hat_top * SIZE + 0.16 + bob, 0)
+		_caption.global_position = _pose.origin + Vector3(0, _hat_top * SIZE + 0.09 + bob, 0)
 
 	func set_close(close: bool) -> void:
 		if close == _close:

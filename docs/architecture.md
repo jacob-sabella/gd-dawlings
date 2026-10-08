@@ -264,6 +264,19 @@ screen mode are on layer 19, which mirrors never draw, so they do not cover your
 In a headset the mirror is rendered from the centre eye, so it is flat rather than stereo. This
 is where customising your ghost will go.
 
+**The wardrobe.** Beside every mirror hangs a small board (`Wardrobe`, styled by the venue's
+`_dress_wardrobe`) with a row each for body colour, eyes, hat and gloves, stepped with ◀ ▶
+buttons; you watch the change happen in the glass. A look (`GhostLook`) is a Dictionary of small
+indices, cleaned on the way in from anywhere, so a peer with more hats than you never breaks
+you. `Session.set_look` keeps it in `user://ghost_look.cfg` and passes it on the way a rename is:
+a guest re-introduces itself in `_hello`, a host rebroadcasts, and the roster's fifth column
+carries everyone's (a four-column roster from an older host means the default look). Your
+session colour still glows round your edge, tints your hat and cuffs and colours your beam, so a
+look changes what you wear, never who you read as. The wardrobe's buttons are `personal()`:
+never claimed as holds, never published as what you point at. `--ghost hat=4,eyes=1` dresses a
+run without saving, and `--fresh-layout` captures never save a look either.
+`tools/look_preview.tscn` lines up every hat.
+
 ### One hand per control, decided by the host
 
 Two people dragging one fader produce a value that belongs to neither of them. Grabbing a
