@@ -225,11 +225,18 @@ func fits_in_sweep(size: Vector3, aspect: float = 4.0 / 3.0) -> float:
 	# Divided by the margin rather than multiplied: this is a DISTANCE, and leaving a border
 	# means standing further back, not nearer.
 	var want := maxf(maxf(across, up), maxf(framed_across, framed_up) / FRAME_MARGIN)
-	# Plus half the depth, because this fits the box's CENTRE to the cone and the corner that
-	# actually overflows is the near one. On a flat panel the difference is nothing; on the FX
-	# rack, which is 20cm deep and a metre tall, it is the whole error -- the rack sat exactly
-	# where the centre fit asked and put its near top corner 28 percent past the frame edge.
-	return want + size.z * 0.5
+	# Plus how much nearer than the centre the nearest corner can come, because this fits the
+	# box's CENTRE to the cone and the corner that actually overflows is the near one. On the
+	# FX rack, which is 30cm deep, that is the whole error -- the rack sat exactly where the
+	# centre fit asked and put its near top corner 28 percent past the frame edge. Half the
+	# depth was the first answer and holds for a box square to the look; pitched back by the
+	# gaze drop, the near TOP corner comes closer still -- the drop turns some of the height
+	# toward the eye -- which put a four-unit rack's corner a percent past the edge. The drop
+	# is the one `drop_for` would choose here: the full `gaze_down` for something short, and
+	# next to nothing for something as tall as the sweep, which a blanket allowance for the
+	# full drop pushed back a fifth of a metre for no corner at all.
+	var pitch := drop_for(AABB(Vector3.ZERO, size), want + size.z * 0.5, true)
+	return want + size.z * 0.5 * cos(pitch) + size.y * 0.5 * sin(pitch)
 
 
 ## How much of the frame a surface may fill.

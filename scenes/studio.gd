@@ -942,10 +942,12 @@ func _build_anchors() -> void:
 	# first rack pulled to arm's length arrived in total darkness, which is both useless and a
 	# fair description of what body-relative content is: not in the room any more. A headlamp
 	# would flatten everything it hit, so this sits up and to the working side, which is where
-	# the lamp on a real desk goes and for the same reason.
+	# the lamp on a real desk goes and for the same reason. A little ahead of the head rather
+	# than over the shoulder, as a desk lamp is: the light is for what is in front, and the
+	# full-height rack, framed whole, stands nearly two metres off.
 	var work_light := OmniLight3D.new()
 	work_light.name = "WorkLight"
-	work_light.position = Vector3(0.42 * signf(ergonomics.handedness), 0.30, 0.10)
+	work_light.position = Vector3(0.42 * signf(ergonomics.handedness), 0.30, -0.08)
 	work_light.light_color = Color(1.0, 0.95, 0.88)
 	work_light.light_energy = 3.2
 	work_light.omni_range = 2.4
