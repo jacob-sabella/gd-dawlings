@@ -32,13 +32,16 @@ printf '[display]\n\nwindow/vsync/vsync_mode=0\n' >"$OVERRIDE"
 # back to hold the whole room and is the worst case.
 POSE_WIDE="0,-0.35,7.0,0,1.0,0"
 
+# shellcheck source=offscreen.sh
+. tools/offscreen.sh
+
 run() {
   local n="$1"
   local pose="${2:-}"
   local cmd=(godot --path . --resolution 1600x900 -- --budget --tracks "$n" --quit-after 200)
   [ -n "$pose" ] && cmd+=(--cam "$pose")
   if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-    "${cmd[@]}" 2>&1
+    offscreen_run "${cmd[@]}" 2>&1
   else
     xvfb-run -a --server-args="-screen 0 1600x900x24" "${cmd[@]}" 2>&1
   fi

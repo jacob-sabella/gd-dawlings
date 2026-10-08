@@ -38,6 +38,8 @@ RUNNER=(godot --path . --resolution "$SHOT_RES" --
   "${CAM_ARGS[@]}" "${EXTRA[@]}")
 
 LOG="$(mktemp)"
+# shellcheck source=offscreen.sh
+. tools/offscreen.sh
 
 # The window must be the shape that was asked for. project.godot ships resizable=true, because a
 # participant on a 32:9 monitor has to be able to hand the session the whole screen -- but a
@@ -56,7 +58,7 @@ printf '[display]\n\nwindow/size/resizable=false\nwindow/vsync/vsync_mode=0\n' >
 
 echo "asked for: ${SHOT_RES}"
 if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-  "${RUNNER[@]}" 2>&1 | tee "$LOG"
+  offscreen_run "${RUNNER[@]}" 2>&1 | tee "$LOG"
 elif command -v xvfb-run >/dev/null 2>&1; then
   xvfb-run -a --server-args="-screen 0 ${SHOT_RES}x24" "${RUNNER[@]}" 2>&1 | tee "$LOG"
 else
