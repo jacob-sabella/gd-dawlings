@@ -246,7 +246,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 ## [start, length, muted, name, selected] per item, repeating -- and, for an item that has
 ## notes, a sixth entry carrying them (see ItemState.notes). Self-describing rather than a wider
 ## fixed stride: an item's first field is always a number and a note payload never is, so a
-## lane from a sender that knows nothing of notes reads exactly as it always did.
+## lane from a sender that knows nothing of notes reads exactly as it always did. A recorded
+## take carries one more entry the same way, a Dictionary: {source, offset, peaks}.
 const ITEM_WIDTH := 5
 
 
@@ -275,6 +276,13 @@ static func _unpack_items(args: Array) -> Array:
 		if i < args.size() and _is_note_payload(args[i]):
 			item.notes = PackedFloat32Array(args[i])
 			i += 1
+		if i < args.size() and args[i] is Dictionary:
+			var audio: Dictionary = args[i]
+			item.source = str(audio.get("source", "")).get_file()
+			item.source_offset = maxf(float(audio.get("offset", 0.0)), 0.0)
+			var peaks = audio.get("peaks", PackedByteArray())
+			item.peaks = peaks if peaks is PackedByteArray else PackedByteArray()
+			i += 1
 		out.append(item)
 	return out
 
@@ -290,6 +298,8 @@ static func _pack_items(items: Array) -> Array:
 				1.0 if item.selected else 0.0])
 		if not item.notes.is_empty():
 			out.append(item.notes)
+		if not item.source.is_empty():
+			out.append({"source": item.source, "offset": item.source_offset, "peaks": item.peaks})
 	return out
 
 

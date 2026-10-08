@@ -13,6 +13,13 @@ extends RefCounted
 ## than a jump's worth (a seek, a loop wrapping, a stop) is taken as a jump rather than as
 ## drift.
 ##
+## A start is not the song moving. Reaper says it is playing the moment it is asked to, but when
+## it starts RECORDING its playhead stands still for a tenth of a second or more while it opens
+## its files. A clock that ran from the moment it was told would be that far ahead of the song,
+## and spend the next half second being corrected back: every note and every frame of a guest's
+## take stamped in that time would land late. So after a start the clock holds at the start
+## position, and says it is not rolling yet, until a report shows the playhead has left it.
+##
 ## Read from the mix feed's own thread while the main thread writes it, hence the mutex.
 
 ## A report further than this from the running clock is a jump, not drift.
@@ -34,6 +41,12 @@ var _last_report := NAN
 ## rather than eased in at GAIN: a clock started from one late report is wrong by that report's
 ## lateness, and the mean of the next dozen is a far better guess than 4% of each.
 var _reports := 0
+## Started, and the playhead not yet seen to move. See above.
+var _waiting := false
+var _started_usec := 0
+## A DAW whose playhead is never seen to move -- one that only reports now and then -- is taken
+## to be rolling after this long anyway.
+const START_WAIT_USEC := 500000
 
 
 ## What the DAW says, whenever the caller has it. Repeats of the same report while rolling are
@@ -42,6 +55,19 @@ var _reports := 0
 func observe(position: float, playing: bool, recording: bool, now_usec: int) -> void:
 	_mutex.lock()
 	var transport_changed := not _valid or playing != _playing
+	if not transport_changed and playing and _waiting:
+		_recording = recording
+		if position == _anchor_seconds and now_usec - _started_usec < START_WAIT_USEC:
+			_mutex.unlock()
+			return
+		# It has moved: the clock runs from here, this report the first of a fresh average.
+		_waiting = false
+		_anchor_seconds = position
+		_anchor_usec = now_usec
+		_last_report = position
+		_reports = 1
+		_mutex.unlock()
+		return
 	if not transport_changed and playing and position == _last_report:
 		_recording = recording
 		_mutex.unlock()
@@ -50,6 +76,8 @@ func observe(position: float, playing: bool, recording: bool, now_usec: int) -> 
 	if transport_changed or not playing:
 		_anchor_seconds = position
 		_reports = 1
+		_waiting = playing and transport_changed
+		_started_usec = now_usec
 	else:
 		var predicted := _anchor_seconds + (now_usec - _anchor_usec) / 1000000.0
 		var error := position - predicted
@@ -70,9 +98,10 @@ func observe(position: float, playing: bool, recording: bool, now_usec: int) -> 
 func at(now_usec: int) -> Dictionary:
 	_mutex.lock()
 	var seconds := _anchor_seconds
-	if _playing:
+	var rolling := _playing and not _waiting
+	if rolling:
 		seconds += (now_usec - _anchor_usec) / 1000000.0
-	var out := {"seconds": seconds, "playing": _playing, "recording": _recording and _playing,
+	var out := {"seconds": seconds, "playing": rolling, "recording": _recording and rolling,
 			"valid": _valid}
 	_mutex.unlock()
 	return out
@@ -81,5 +110,6 @@ func at(now_usec: int) -> Dictionary:
 func reset() -> void:
 	_mutex.lock()
 	_valid = false
+	_waiting = false
 	_last_report = NAN
 	_mutex.unlock()

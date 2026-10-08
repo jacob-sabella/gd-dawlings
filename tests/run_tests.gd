@@ -107,6 +107,12 @@ func _ready() -> void:
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
 	_test_the_demo_song_loops_on_the_bar()
+	_test_a_recorded_take_is_a_wav_with_an_overview()
+	_test_the_host_places_an_audio_take()
+	_test_a_guest_microphone_stays_on_the_song()
+	_test_the_built_in_engine_plays_a_recorded_take()
+	_test_a_guest_sets_up_their_microphone_from_the_panel()
+	_test_a_recorded_take_shows_its_waveform_on_the_timeline()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -6263,6 +6269,23 @@ func _test_the_song_clock_runs_between_reports() -> void:
 			not clock.at(t + 950000)["recording"])
 	check("a fresh clock knows nothing", not SongClock.new().at(0)["valid"])
 
+	# Reaper, asked to record: playing at once, its playhead still for 130ms.
+	var start := SongClock.new()
+	start.observe(4.0, false, false, 0)
+	start.observe(4.0, true, true, 1000000)
+	start.observe(4.0, true, true, 1050000)
+	var held_still := start.at(1100000)
+	check("a start holds still until the playhead is seen to move",
+			held_still["seconds"] == 4.0 and not held_still["playing"] and not held_still["recording"])
+	start.observe(4.004, true, true, 1134000)
+	close_to("then runs from where it was seen", start.at(1234000)["seconds"], 4.104, 0.0005)
+	check("rolling, and recording", start.at(1234000)["playing"] and start.at(1234000)["recording"])
+	var mute := SongClock.new()
+	mute.observe(7.0, true, false, 0)
+	mute.observe(7.0, true, false, 600000)
+	close_to("a playhead never seen to move is taken as rolling after half a second",
+			mute.at(700000)["seconds"], 7.1, 0.0005)
+
 
 ## The guest's speakers, measured as a staircase -- the mixer takes 512 frames at a gulp -- and the
 ## song position of whatever frame is coming out of them.
@@ -6672,3 +6695,254 @@ func _test_midi_items_show_their_notes_on_the_timeline() -> void:
 			thin["rows"] == 12 and thin["low"] <= 60 and thin["low"] + thin["rows"] > 62)
 	var wide := TimelineSurface.note_layout(PackedFloat32Array([0, 1, 36, 90, 0, 1, 2, 84, 90, 0]))
 	check("a wide part gets a row per semitone it spans", wide["low"] == 36 and wide["rows"] == 49)
+
+
+func _test_a_recorded_take_is_a_wav_with_an_overview() -> void:
+	var take := AudioTake.create("suite-take.wav")
+	check("a take is a file in the takes folder", take != null and take.path.begins_with(AudioTake.DIR))
+	if take == null:
+		return
+	var second := PackedVector2Array()
+	second.resize(AudioTake.RATE)
+	for i in second.size():
+		second[i] = Vector2(0.5, 0.3) if i < AudioTake.RATE / 2 else Vector2.ZERO
+	check("written as it arrives", take.append(AudioTake.encode(second)))
+	take.finish()
+	var bytes := FileAccess.get_file_as_bytes(take.path)
+	check("a whole RIFF/WAVE file, its sizes filled in (%d bytes)" % bytes.size(),
+			bytes.size() == AudioTake.HEADER_BYTES + AudioTake.RATE * 2
+			and bytes.decode_u32(0) == 0x46464952 and bytes.decode_u32(40) == AudioTake.RATE * 2
+			and bytes.decode_u32(24) == AudioTake.RATE and bytes.decode_u16(22) == 1)
+	check("one channel, the two sides of the input averaged",
+			bytes.decode_s16(AudioTake.HEADER_BYTES) == int(round(0.4 * 32767.0)))
+	var wav := AudioStreamWAV.load_from_file(take.path)
+	check("and Godot opens it", wav != null and is_equal_approx(wav.get_length(), 1.0))
+	var peaks := take.peaks()
+	check("with an overview of 50 a second (%d)" % peaks.size(), peaks.size() == AudioTake.PEAKS_PER_SECOND)
+	check("loud where the sound is and silent where it is not",
+			peaks[0] == int(round(0.4 * 32767.0) / 128.5) and peaks[AudioTake.PEAKS_PER_SECOND - 1] == 0)
+	take.discard()
+	check("and a discarded take leaves nothing behind", not FileAccess.file_exists(take.path))
+	var named := AudioTake.file_name_for("Zoë/../D'Arcy", 3)
+	check("a file name every disk takes (%s)" % named, not named.contains("/") and not named.contains("'")
+			and named.begins_with("Zo__") and named.ends_with(".wav") and named.contains("take3"))
+
+
+func _test_the_host_places_an_audio_take() -> void:
+	var backend := _offline(13)
+	var peaks := PackedByteArray([10, 200, 30])
+	DAW.insert_audio_take(6, 12.0, "../../etc/nonsense/x.wav", 3.0, peaks, "Grace audio 1")
+	var lane: Array = DAW.state.track(6).items
+	var at := lane.find_custom(func(it): return it.name == "Grace audio 1")
+	var item: MixState.ItemState = lane[at] if at >= 0 else MixState.ItemState.new()
+	check("the host's take is an item where it was played", item.start == 12.0 and item.length == 3.0
+			and item.name == "Grace audio 1")
+	check("naming its file, never a path", item.source == "x.wav")
+	check("and carrying its overview", item.peaks == peaks)
+	var round_trip: Array = MixWire._unpack_items(MixWire._pack_items(DAW.state.track(6).items))
+	var back: MixState.ItemState = round_trip[at] if at >= 0 else MixState.ItemState.new()
+	check("which travels with the item", back.source == "x.wav" and back.peaks == peaks
+			and back.start == 12.0)
+	check("and a lane from before takes carries none", (MixWire._unpack_items(
+			[1.0, 2.0, 0.0, "old", 0.0]) [0] as MixState.ItemState).source == "")
+
+	DAW.select_item(6, at, false)
+	DAW.split_selected(13.25)
+	var halves: Array = DAW.state.track(6).items.filter(func(it): return it.source == "x.wav")
+	var right: MixState.ItemState = halves[0] if halves[0].start > 12.0 else halves[1]
+	check("cut, its right half plays on from where the cut was", halves.size() == 2
+			and absf(right.source_offset - 1.25) < 0.0001)
+	DAW.undo()
+	DAW.undo()
+	check("and one undo takes the take off", DAW.state.track(6).items.all(func(it): return it.source == ""))
+
+	var before: int = DAW.state.track(6).items.size()
+	DAW.apply_intent(&"insert_audio_take", [6, 1.0, "x.wav", 1.0, PackedByteArray(), "sneaky"])
+	check("a guest cannot name a file for the host to place", DAW.state.track(6).items.size() == before)
+	check("a take for a track that is not there is refused in words",
+			DAW.audio_take_refusal(99, 1.0).begins_with("There is no track 99"))
+	DAW.insert_audio_take(99, 1.0, "x.wav", 1.0, PackedByteArray(), "lost")
+	check("and nothing happens", DAW.state.tracks.values().all(func(t): return t.items.all(
+			func(it): return it.name != "lost")))
+	check("an empty take is refused too", DAW.audio_take_refusal(6, 0.0) == "The take had no sound in it.")
+
+
+## A microphone that is a perfect player's: a clap every second of its own clock.
+class _FakeMic extends MixSource:
+	var made := 0
+	var latency := 0.01
+
+	func read() -> PackedVector2Array:
+		var out := PackedVector2Array()
+		out.resize(480)
+		for i in 480:
+			if (made + i) % 48000 < 24:
+				out[i] = Vector2(0.9, 0.9)
+		made += 480
+		return out
+
+	func latency_ms() -> float:
+		return latency * 1000.0
+
+	func rate() -> float:
+		return 48000.0
+
+
+class _TakeRecorder extends RefCounted:
+	var start := NAN
+	var pcm := PackedByteArray()
+	var ended := false
+
+	func send_audio_begin(_id: int, _track: int, at: float, _name: String) -> void:
+		start = at
+
+	func send_audio_chunk(_id: int, bytes: PackedByteArray) -> void:
+		pcm.append_array(bytes)
+
+	func send_audio_end(_id: int) -> void:
+		ended = true
+
+
+func _test_a_guest_microphone_stays_on_the_song() -> void:
+	# The song runs 300 parts per million faster than the microphone's clock, and the take
+	# begins 0.3s before the top of the song -- a take started at zero and heard late.
+	var drift := 300e-6
+	var song := func(wall: float) -> float: return -0.3 + wall * (1.0 + drift)
+	var ga := GuestAudio.new()
+	var rec := _TakeRecorder.new()
+	var mic := _FakeMic.new()
+	ga.sink = rec
+	ga.target_track = 3
+	ga._source = mic
+	var ticks := 1500
+	for tick in ticks:
+		var got := ga._read()
+		# The newest frame left the microphone mic.latency before this read.
+		var read_at := float(mic.made - 1) / 48000.0 + mic.latency
+		ga.follow({"seconds": song.call(read_at), "playing": true, "recording": tick < ticks - 1,
+				"valid": true}, got)
+	check("the take was sent and ended", rec.ended and not is_nan(rec.start))
+	check("nothing from before the song's first moment (%.5f)" % rec.start,
+			rec.start >= 0.0 and rec.start < 1.0 / 48000.0 * 2.0)
+	close_to("the loop found the clocks' difference (%.0f ppm)" % ga.drift_ppm(), ga.drift_ppm(), 300.0, 60.0)
+	var worst := 0.0
+	var claps := 0
+	var last := -48000
+	for i in range(0, rec.pcm.size() - 1, 2):
+		var k := i / 2
+		if rec.pcm.decode_s16(i) > 16000 and k - last > 24000:
+			last = k
+			var placed := rec.start + float(k) / 48000.0
+			# Which clap of the microphone's this is: the one nearest in its own clock.
+			var wall := roundf(placed / (1.0 + drift) + 0.3)
+			if wall >= 3.0:
+				worst = maxf(worst, absf(placed - song.call(wall)))
+			claps += 1
+	check("every clap of a 15 second take is there (%d)" % claps, claps >= 14)
+	check("and each where the song was when it was made, once settled (worst %.3fms)" % (worst * 1000.0),
+			worst < 0.0005)
+
+
+func _test_the_built_in_engine_plays_a_recorded_take() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var take := AudioTake.create("suite-engine-take.wav")
+	var tone := PackedVector2Array()
+	tone.resize(AudioTake.RATE * 2)
+	for i in tone.size():
+		tone[i] = Vector2.ONE * sin(TAU * 220.0 * i / AudioTake.RATE) * 0.5
+	take.append(AudioTake.encode(tone))
+	take.finish()
+	DAW.insert_audio_take(6, 300.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 1")
+	DAW.state.position_seconds = 300.5
+	DAW.state.playing = true
+	backend._sync_players()
+	var own: AudioStreamPlayer = backend._players[6][0]
+	check("a recorded take plays on its track's bus",
+			own.playing and own.stream == backend.take_stream(take.file_name()) and own.stream != null)
+	DAW.state.position_seconds = 302.5
+	backend._sync_players()
+	check("and stops where the take does", not own.playing)
+	DAW.state.playing = false
+	_offline()
+	take.discard()
+
+
+func _test_a_guest_sets_up_their_microphone_from_the_panel() -> void:
+	_offline()
+	_as_session(Session.Role.GUEST, 5)
+	var ga := Session.guest_audio
+	var made_source := ga.make_source
+	ga.make_source = func() -> MixSource: return _FakeMic.new()
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("the microphone is opt-in: no track, not recording",
+			ga.target_track == 0 and not ga.record_with_host and not ga.mic_open())
+	check("and the panel says what to do first (%s)" % panel._mic_status.text,
+			panel._mic_status.text.begins_with("Choose a track"))
+	var eight := panel._mic_into.get_item_index(8)
+	check("every track of the project is offered", eight > 0
+			and panel._mic_into.item_count == DAW.state.track_indices().size() + 1)
+	panel._mic_into.select(eight)
+	panel._mic_into.item_selected.emit(eight)
+	check("choosing one is the track the take goes onto", ga.target_track == 8)
+	check("which still records nothing until asked (%s)" % panel._mic_status.text,
+			panel._mic_status.text == "Your microphone is off.")
+	panel._mic_record.button_pressed = true
+	check("asked, it records with the host", ga.record_with_host)
+	ga._process(0.016)
+	check("and the microphone opens, so the level shows before the take", ga.mic_open())
+	panel._refresh_mic()
+	check("ready, and says where it will go (%s)" % panel._mic_status.text,
+			panel._mic_status.text.contains("Gtr") or panel._mic_status.text.begins_with("Ready"))
+	check("the keys' and the microphone's switches say which is which",
+			panel._mic_record.text.contains("mic") and panel._record_with.text.contains("keys"))
+	ga.record_with_host = false
+	ga.target_track = 0
+	ga._process(0.016)
+	check("turned off, the microphone closes", not ga.mic_open())
+	ga.make_source = made_source
+	remove_child(panel)
+	panel.free()
+	Session.start_solo()
+
+
+func _test_a_recorded_take_shows_its_waveform_on_the_timeline() -> void:
+	# Two seconds: quiet, then loud.
+	var peaks := PackedByteArray()
+	for i in 2 * AudioTake.PEAKS_PER_SECOND:
+		peaks.append(20 if i < AudioTake.PEAKS_PER_SECOND else 240)
+	var cols := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 2.0, 0.0, 0.2, -1.0, 1.0, 0.01)
+	check("a column every centimetre of a 20cm take (%d)" % cols.size(), cols.size() == 20)
+	check("quiet where the take is quiet and loud where it is loud",
+			cols[2][1] < 0.1 and cols[17][1] > 0.9)
+	var right_half := TimelineSurface.wave_columns(peaks, 1.0, 11.0, 1.0, 0.0, 0.1, -1.0, 1.0, 0.01)
+	check("the right half of a cut take draws its own, loud, part",
+			right_half.all(func(c): return c[1] > 0.9))
+	var clipped := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 2.0, 0.0, 0.2, 0.1, 0.15, 0.01)
+	check("and only where the window shows it", clipped.size() == 5
+			and clipped.all(func(c): return c[0] >= 0.1 and c[0] <= 0.15))
+
+	_offline().open()
+	DAW.insert_audio_take(8, 2.0, "suite-wave.wav", 2.0, peaks, "Grace audio 1")
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline._on_view_changed(0.0, 8.0)
+	var waves := timeline.get_node_or_null("ItemWaves") as MeshBank
+	check("a recorded take gets a waveform, in one object", waves != null and waves.count() > 0)
+	if waves != null:
+		var drawn := waves.multimesh.visible_instance_count
+		var tallest := 0.0
+		var shortest := INF
+		for i in drawn:
+			var h := waves.transform_of(i).basis.get_scale().y
+			tallest = maxf(tallest, h)
+			shortest = minf(shortest, h)
+		check("drawn across it (%d columns)" % drawn, drawn > 10)
+		check("its loud second taller than its quiet one (%.1fx)" % (tallest / shortest), tallest > shortest * 3.0)
+		check("and no taller than its lane", tallest < TimelineSurface.LANE_HEIGHT)
+	timeline.free()
+	_offline()

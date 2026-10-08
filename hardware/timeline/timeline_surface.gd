@@ -64,6 +64,10 @@ const MIN_NOTE_WIDTH := 0.0008
 const MIN_NOTE_HEIGHT := 0.0016
 ## An item's piano roll is at least this many semitones tall.
 const MIN_NOTE_ROWS := 12
+## A recorded take's waveform is drawn in columns this wide, each the loudest moment under it,
+## and at most this many across the whole panel.
+const WAVE_COLUMN := 0.0016
+const MAX_DRAWN_WAVE := 1600
 
 ## The window onto the project, in seconds. Until the viewer zooms or scrolls, every rebuild
 ## fits the whole project; after that the viewer owns the window. Not "the first rebuild": with
@@ -104,6 +108,8 @@ var _item_blocks: MeshBank
 var _item_strips: MeshBank
 ## The notes of MIDI items, drawn on the items as a little piano roll. See _place_notes.
 var _item_notes: MeshBank
+## The loudness of recorded takes, drawn on their items. See _place_wave.
+var _item_waves: MeshBank
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
 var _lane_y: Array[float] = []
 
@@ -257,6 +263,17 @@ func _rebuild() -> void:
 	for i in mini(total_notes, MAX_DRAWN_NOTES):
 		_item_notes.claim(Transform3D(), Color.WHITE)
 	_item_notes.commit()
+	_item_waves = MeshBank.strips()
+	_item_waves.name = "ItemWaves"
+	_adopt(_item_waves)
+	var any_wave := false
+	for index in indices:
+		for item in DAW.state.track(index).items:
+			any_wave = any_wave or not item.peaks.is_empty()
+	if any_wave:
+		for i in MAX_DRAWN_WAVE:
+			_item_waves.claim(Transform3D(), Color.WHITE)
+	_item_waves.commit()
 
 	_build_loop_bar()
 	_build_playhead()
@@ -671,6 +688,7 @@ func _relayout_view() -> void:
 	var indices := _shown()
 	var slot := 0
 	var note_slot := 0
+	var wave_slot := 0
 	for i in indices.size():
 		if i >= _lane_y.size():
 			break
@@ -685,10 +703,13 @@ func _relayout_view() -> void:
 				slot += 1
 				note_slot = _place_notes(item, start, t.colour, _lane_y[i], item.muted or t.mute,
 						note_slot)
+				wave_slot = _place_wave(item, start, t.colour, _lane_y[i], item.muted or t.mute,
+						wave_slot)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
 	_item_notes.show_first(note_slot)
+	_item_waves.show_first(wave_slot)
 	_draw_loop()
 
 
@@ -781,6 +802,64 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 		_item_notes.set_colour(slot, colour)
 		slot += 1
 	return slot
+
+
+## A recorded take's loudness, on the item, as an arranger draws a waveform: a column for every
+## few millimetres of panel, as tall as the loudest moment under it, mirrored about the middle
+## of the block below its strip. Read from the item's overview (AudioTake.peaks), from where in
+## the file the item starts, so the halves of a cut take each show their own part. Returns the
+## next free slot.
+func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, dim: bool,
+		slot: int) -> int:
+	if item.peaks.is_empty():
+		return slot
+	var columns := wave_columns(item.peaks, item.source_offset, start, item.length,
+			_x_for(start) + EDGE_GAP, _x_for(start + item.length) - EDGE_GAP,
+			_lane_area_x, _lane_right(), WAVE_COLUMN)
+	var block_height := LANE_HEIGHT - 0.0024
+	var top := y + block_height * 0.5 - 0.0026
+	var bottom := y - block_height * 0.5 + 0.0007
+	var middle := (top + bottom) * 0.5
+	var colour := tint.darkened(0.72)
+	if dim:
+		colour = colour.darkened(0.6)
+	for c in columns:
+		if slot >= _item_waves.count():
+			break
+		# On a square-root scale: a voice peaking at -12dB fills half the block, not a quarter,
+		# so a take recorded at a sensible level is a shape and not a hairline.
+		var height := maxf(sqrt(c[1]) * (top - bottom), MIN_NOTE_HEIGHT * 0.5)
+		_item_waves.move_slot(slot, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(WAVE_COLUMN * 0.7, height, 0.0004)),
+				Vector3(c[0], middle, 0.0022)))
+		_item_waves.set_colour(slot, colour)
+		slot += 1
+	return slot
+
+
+## The columns a take's overview draws as: [[x, loudness 0-1], ...], one per `column` of panel
+## between `left` and `right`, clipped to [clip_left, clip_right]. Each is the loudest peak in
+## the stretch of the file under it.
+static func wave_columns(peaks: PackedByteArray, offset: float, start: float, length: float,
+		left: float, right: float, clip_left: float, clip_right: float, column: float) -> Array:
+	var out := []
+	if peaks.is_empty() or right - left <= 0.0 or length <= 0.0:
+		return out
+	var per_metre := length / (right - left)
+	var x := maxf(left, clip_left) + column * 0.5
+	var end := minf(right, clip_right)
+	while x < end:
+		var from := offset + (x - column * 0.5 - left) * per_metre
+		var to := offset + (x + column * 0.5 - left) * per_metre
+		var a := clampi(int(floor(from * AudioTake.PEAKS_PER_SECOND)), 0, peaks.size())
+		var b := clampi(int(ceil(to * AudioTake.PEAKS_PER_SECOND)), a, peaks.size())
+		var loudest := 0
+		for i in range(a, b):
+			loudest = maxi(loudest, peaks[i])
+		if b > a:
+			out.append([x, loudest / 255.0])
+		x += column
+	return out
 
 
 ## The pitch rows an item's notes are drawn on: {low, rows}. At least an octave tall, so three

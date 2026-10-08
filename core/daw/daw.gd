@@ -281,6 +281,31 @@ func apply_intent(verb: StringName, args: Array) -> void:
 	backend.callv(verb, args)
 
 
+## A recorded file onto a track, by song position. The host's own verb and not an intent: a
+## guest's audio reaches the host through Session as sound, and the host decides the file. Not
+## in COMMANDS, so apply_intent refuses it from any peer. See AudioTake.
+func insert_audio_take(track_index: int, start: float, source: String, length: float,
+		peaks: PackedByteArray, take_name := "") -> void:
+	if not Session.is_authority():
+		push_warning("DAW: only the host places an audio take.")
+		return
+	if not audio_take_refusal(track_index, length).is_empty():
+		return
+	backend.insert_audio_take(track_index, maxf(start, 0.0), source.get_file(), length, peaks,
+			MidiTake.clean_name(take_name))
+
+
+## Why a recorded take cannot be placed, in words for the person who played it, or "".
+func audio_take_refusal(track_index: int, length: float) -> String:
+	if backend == null or not backend.can(DAWBackend.Capability.AUDIO_TAKES):
+		return "This DAW cannot take audio yet: in Reaper, load the reaper-3d bridge script."
+	if not state.tracks.has(track_index):
+		return "There is no track %d to record onto." % track_index
+	if length <= 0.0:
+		return "The take had no sound in it."
+	return ""
+
+
 ## Why a take from a peer cannot be placed, in words for the person who played it, or "".
 func midi_take_refusal(args: Array) -> String:
 	var cleaned := MidiTake.clean_args(args)
