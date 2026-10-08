@@ -218,7 +218,7 @@ is their camera.
 An avatar stays hidden until its participant has been heard from. A headless host has no head.
 
 Everyone is drawn as a big blue ghost: a 1.3 m lathe-turned body with a scalloped, drifting hem, two oversized heavy-lidded eyes and a pair of stubby arms. It turns with its owner's yaw, leans a little and rolls its pupils with their pitch, blinks, and bobs. The blue is shared; who it is shows in the glow round its edge, its name tag, its pointer beam (from the raised right arm) and the rim on what it holds. When its owner goes quiet the glow fades and the lids droop.
-Its body also hides within 0.45m of your own eye, because somebody standing inside you is
+Its body also hides within 0.6m of your own eye, because somebody standing inside you is
 noise, not information.
 
 ### One hand per control, decided by the host
