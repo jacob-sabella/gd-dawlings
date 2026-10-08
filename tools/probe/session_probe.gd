@@ -42,6 +42,10 @@ var _port := 7342
 var _built_in := false
 ## Host: the guest's recording, as Session placed it.
 var _audio_placed := {}
+## Host: what guests asked of the room, as [verb, args, from].
+var _room_asks: Array = []
+## Guest: how many times the host's room arrived.
+var _rooms_heard := 0
 
 
 func _ready() -> void:
@@ -106,6 +110,14 @@ func _host(port: int) -> void:
 	if _built_in:
 		Session.mix_source = func(): return (DAW.backend as GodotBackend).mix_source()
 	check("hosts", Session.host(port))
+	# The room as the studio would publish it, and answered the way the studio answers.
+	Session.publish_room({"venue": &"grid", "tablets": {&"tablet_1": [2, 1, "EQ", 0.4, 0.2, 0.0]}})
+	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
+		_room_asks.append([verb, args, from])
+		if verb == &"open_tablet":
+			var room: Dictionary = Session.room.duplicate(true)
+			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
+			Session.publish_room(room))
 	check("and shares its mix's audio", Session.mix_feed.sending)
 	_keep_publishing(Transform3D(Basis(Vector3.UP, 0.6), Vector3(1.2, 1.62, 0.4)), "MASTER  VOLUME")
 
@@ -137,6 +149,8 @@ func _host(port: int) -> void:
 	check("the guest's marker is on the host's timeline (%s)" % [DAW.state.markers.values()],
 			_has_guest_mark(DAW.state))
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
+	check("the guest's ask for a stand reached the host (%s)" % [_room_asks], _room_asks.size() == 1
+			and _room_asks[0][0] == &"open_tablet" and _room_asks[0][2] == guest_id)
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
 	# Reach for the fader the guest is holding: the host's own hand is refused too.
@@ -279,6 +293,7 @@ func _guest(port: int) -> void:
 	# On the host's own machine, which would ordinarily mean not listening: the host's speakers
 	# are already in the room. Asked for here, because the probe is what is listening.
 	Session.listen_choice = 1
+	Session.room_changed.connect(func(): _rooms_heard += 1)
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
 	await _until(1.4)
@@ -300,6 +315,11 @@ func _guest(port: int) -> void:
 			Vector3(1.2, 1.62, 0.4)))
 	check("and what it is pointing at", host != null and host.pointing_at == "MASTER  VOLUME")
 	check("told who I joined", _notices.has("Joined Ada's session."))
+	check("the host's room came in with me (%s)" % [Session.room], _rooms_heard == 1
+			and Session.room.get("venue") == &"grid" and Session.room.get("tablets", {}).has(&"tablet_1"))
+	Session.ask_room(&"open_tablet", [3, 1, "Comp", 0.1, 0.3])
+	# Straight at the host, past ask_room's own check: the venue is not a guest's to change.
+	Session._room_asked.rpc_id(1, &"set_venue", [&"chalk"])
 
 	DAW.set_track_volume(2, 0.123)
 	DAW.set_tempo(GUEST_TEMPO)
@@ -319,6 +339,8 @@ func _guest(port: int) -> void:
 	check("and the click I switched on", DAW.state.metronome)
 	check("and my input monitoring", DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
 	check("and my marker (%s)" % [DAW.state.markers.values()], _has_guest_mark(DAW.state))
+	check("the stand I asked for is in the host's room now", _rooms_heard == 2
+			and Session.room.get("tablets", {}).has(&"tablet_2") and Session.room.get("venue") == &"grid")
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)
 

@@ -109,6 +109,13 @@ var console: ConsoleSurface
 var rack: RackSurface
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
+## A guest's tear the host has not answered yet: [track, fx]. The stand that arrives for it is
+## walked up to, as a host's own would be.
+var _asked_tablet: Array = []
+## While the host's room is being put up here: a stand set down by it is not news to send back.
+var _applying_room := false
+## Whether what stands here is the host's room rather than this participant's own.
+var _showing_hosts_room := false
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
@@ -366,14 +373,25 @@ func set_venue(id: StringName, persist := true) -> void:
 		if i < PRACTICALS.size():
 			_lamps[i].light_color = venue.lamp_colour(i, PRACTICALS[i][1])
 			_lamps[i].light_energy = venue.lamp_energy(i, PRACTICALS[i][2])
-	if persist and Session.layout != null:
+	if persist and Session.layout != null and Session.is_authority():
 		Session.layout.venue = id
 		Session.layout.save()
 	venue_changed.emit(id)
+	_publish_room()
+
+
+## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
+## asking is told so rather than taken somewhere nobody else is.
+func choose_venue(id: StringName) -> bool:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can change the venue." % Session.name_of(1))
+		return false
+	set_venue(id)
+	return true
 
 
 func cycle_venue() -> void:
-	set_venue(Venue.next_after(venue.venue_id() if venue != null else Venue.IDS[0]))
+	choose_venue(Venue.next_after(venue.venue_id() if venue != null else Venue.IDS[0]))
 
 
 ## Whether this participant gets the whole renderer: global illumination, screen-space
@@ -571,6 +589,11 @@ func _on_tear_requested(track: int, fx: int, at: Vector3) -> void:
 	# rather than inside it.
 	var out := rack.global_basis.z.normalized()
 	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
+	if not Session.is_authority():
+		# The host puts the stand out, for everyone at once; it arrives with the room.
+		_asked_tablet = [track, fx]
+		Session.ask_room(&"open_tablet", [track, fx, f.name, landing.x, landing.z])
+		return
 	var id := open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
 	# On a monitor, pulling it off is asking to use it: walk up to it. In a headset you are
 	# already standing where you pulled it.
@@ -595,6 +618,7 @@ func open_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> St
 	_build_tablet(id, track, fx, plugin_name)
 	(tablets[id][0] as Trolley).place(where, _facing_mix(where))
 	_remember_tablets()
+	_publish_room()
 	return id
 
 
@@ -648,7 +672,7 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	lip.material_override = Materials.brushed_metal()
 	stand.add_part(lip, false)
 	stand.add_child(tablet)
-	tablet.dock_requested.connect(close_tablet.bind(id))
+	tablet.dock_requested.connect(_dock_tablet.bind(id))
 	# Gear like the rest: F walks to it, and it comes up close to be worked.
 	if focus != null:
 		focus.surfaces.append(tablet)
@@ -659,6 +683,15 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 func close_tablet(id: StringName) -> void:
 	if not tablets.has(id):
 		return
+	_take_down_tablet(id)
+	if Session.layout != null and Session.is_authority():
+		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
+	_remember_tablets()
+	_publish_room()
+
+
+## The stand gone from this room, and nothing remembered or told about it.
+func _take_down_tablet(id: StringName) -> void:
 	var stand: Trolley = tablets[id][0]
 	var tablet: PluginTablet = tablets[id][1]
 	if focus != null:
@@ -669,16 +702,22 @@ func close_tablet(id: StringName) -> void:
 	tablets.erase(id)
 	floor_plan.pieces.erase(stand)
 	stand.queue_free()
-	if Session.layout != null:
-		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
-	_remember_tablets()
+
+
+## Put back on the rack: here if the room is ours, by asking if it is the host's.
+func _dock_tablet(id: StringName) -> void:
+	if Session.is_authority():
+		close_tablet(id)
+	else:
+		Session.ask_room(&"close_tablet", [id])
 
 
 ## The list of what is out, saved whenever a tablet is opened or closed. Not when a tablet finds
 ## its plugin somewhere new: the name finds it again next time anyway, and a profile rewritten
 ## because a different session happened to be open would be a file changed by looking at it.
 func _remember_tablets() -> void:
-	if Session.layout == null:
+	# A guest's tablets are the host's room, not its own: its own wait for it in the profile.
+	if Session.layout == null or not Session.is_authority():
 		return
 	var out := {}
 	for id in tablets:
@@ -691,11 +730,111 @@ func _remember_tablets() -> void:
 
 
 func _restore_tablets() -> void:
-	if Session.layout == null:
+	if Session.layout == null or not Session.is_authority():
 		return
 	for id in Session.layout.tablets:
 		var entry: Array = Session.layout.tablets[id]
 		_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
+
+
+# --- the shared room -----------------------------------------------------------------------
+#
+# The venue and the plugins out on stands are facts about the room, like where the desk is, so
+# in a session they are the host's: one room, everyone in it. A guest asks and is shown; its own
+# venue and tablets wait in its profile for when it is on its own again.
+
+## The room as it stands here, in the shape Session.room carries.
+func room_state() -> Dictionary:
+	var out := {}
+	for id in tablets:
+		var stand: Trolley = tablets[id][0]
+		var t: PluginTablet = tablets[id][1]
+		out[id] = [t.track_index, t.fx_index, t.fx_name, stand.position.x, stand.position.z,
+				stand.rotation.y]
+	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0], "tablets": out}
+
+
+func _publish_room() -> void:
+	if Session.role == Session.Role.HOST and not _applying_room:
+		Session.publish_room(room_state())
+
+
+func _on_room_changed() -> void:
+	if not Session.is_authority():
+		apply_room(Session.room)
+
+
+## Make this room the one `state` describes: its venue, and the same stands in the same places.
+func apply_room(state: Dictionary) -> void:
+	_applying_room = true
+	_showing_hosts_room = true
+	var id_wanted := StringName(state.get("venue", &""))
+	if venue != null and Venue.is_known(id_wanted) and venue.venue_id() != id_wanted:
+		set_venue(id_wanted, false)
+	var wanted: Dictionary = state.get("tablets", {})
+	for id in tablets.keys():
+		var entry: Variant = wanted.get(id)
+		var t: PluginTablet = tablets[id][1]
+		if entry == null or int(entry[0]) != t.track_index or int(entry[1]) != t.fx_index:
+			_take_down_tablet(id)
+	var walk_to := StringName()
+	if floor_plan != null:
+		for id in wanted:
+			var entry: Array = wanted[id]
+			if not tablets.has(id):
+				_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
+				if _asked_tablet == [int(entry[0]), int(entry[1])]:
+					walk_to = id
+			var stand: Trolley = tablets[id][0]
+			var at := Vector2(float(entry[3]), float(entry[4]))
+			# Not out from under a hand that is wheeling it here.
+			if stand.held_by == null and (not at.is_equal_approx(Vector2(stand.position.x, stand.position.z))
+					or not is_equal_approx(stand.rotation.y, float(entry[5]))):
+				stand.place(at, float(entry[5]))
+	_applying_room = false
+	if walk_to != StringName():
+		_asked_tablet = []
+		if focus != null and focus.visits:
+			focus.focus(walk_to)
+			_sit_down()
+
+
+## The host, answering someone's ask. The same calls the host's own hands make, so the room is
+## then published the way any change to it is.
+func _on_room_asked(verb: StringName, args: Array, _from: int) -> void:
+	match verb:
+		&"open_tablet":
+			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
+				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
+		&"close_tablet":
+			close_tablet(args[0])
+		&"move_tablet":
+			if tablets.has(args[0]):
+				(tablets[args[0]][0] as Trolley).place(Vector2(args[1], args[2]), args[3])
+
+
+## Joined someone: their room arrives on its own. Back on our own, or hosting: our own room, and
+## as host, everyone is told what it is.
+func _on_role_changed() -> void:
+	if Session.role == Session.Role.GUEST:
+		return
+	if _showing_hosts_room:
+		_put_back_own_room()
+	_publish_room()
+
+
+func _put_back_own_room() -> void:
+	_showing_hosts_room = false
+	_asked_tablet = []
+	if Session.layout == null:
+		return
+	for id in tablets.keys():
+		_take_down_tablet(id)
+	var own := Session.layout.venue if Venue.is_known(Session.layout.venue) else Venue.IDS[0]
+	if medium != Presentation.Medium.AR and venue != null and venue.venue_id() != own:
+		set_venue(own, false)
+	if floor_plan != null:
+		_restore_tablets()
 
 
 ## The carcass fills from the plinth up to the bay's lower edge and the cheeks run past its top,
@@ -811,7 +950,15 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 
 
 func _on_trolley_settled(piece: Trolley) -> void:
-	if Session.layout == null or _fitting:
+	if tablets.has(piece.piece_id) and not _fitting and not _applying_room:
+		if not Session.is_authority():
+			# Wheeled here, and the host told where it is now; the host's word comes back.
+			Session.ask_room(&"move_tablet", [piece.piece_id, piece.position.x, piece.position.z,
+					piece.rotation.y])
+			_looms_dirty = true
+			return
+		_publish_room()
+	if Session.layout == null or _fitting or (_showing_hosts_room and tablets.has(piece.piece_id)):
 		_looms_dirty = true
 		return
 	Session.layout.set_transform(StringName("floor/%s" % piece.piece_id),
@@ -1076,6 +1223,10 @@ func _build_surfaces() -> void:
 	if floor_plan != null:
 		rack.tear_requested.connect(_on_tear_requested)
 		_restore_tablets()
+	Session.room_changed.connect(_on_room_changed)
+	Session.room_asked.connect(_on_room_asked)
+	Session.role_changed.connect(_on_role_changed)
+	_publish_room()
 
 
 ## A stand under every practical.

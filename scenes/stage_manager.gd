@@ -139,12 +139,13 @@ func _venue_row() -> void:
 		button.add_theme_font_size_override("font_size", 12)
 		button.toggle_mode = true
 		button.button_pressed = id == current
-		button.disabled = id == current
+		# The room is the host's: a guest sees where it is standing and cannot pick another.
+		button.disabled = id == current or not Session.is_authority()
 		button.pressed.connect(_on_venue_chosen.bind(id))
 		row.add_child(button)
 	_rows.add_child(HSeparator.new())
 
 
 func _on_venue_chosen(id: StringName) -> void:
-	studio.set_venue(id)
+	studio.choose_venue(id)
 	rebuild()

@@ -64,6 +64,11 @@ signal hold_refused(control_key: String, holder: int)
 signal notice(text: String)
 ## Host: a guest's recording was placed. {peer, track, start, seconds, path, name}.
 signal audio_take_placed(info: Dictionary)
+## Guest: the host's word on the room arrived; see `room`.
+signal room_changed()
+## Host: someone asked to change the room. One of ROOM_VERBS, already checked for shape; the
+## studio decides, and says what the room now is with `publish_room`.
+signal room_asked(verb: StringName, args: Array, from: int)
 
 var role: int = Role.SOLO
 ## {peer_id: Participant}
@@ -124,6 +129,12 @@ var _audio_port := 0
 var listen_choice := -1
 
 var layout: LayoutProfile = null
+
+## The room everyone is standing in, as the host has it: {"venue": id, "tablets": {stand id:
+## [track, fx, plugin name, x, z, heading]}}. A fact about the room, like where the desk is, so
+## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
+## for when it is on its own again. Empty until the host has said.
+var room: Dictionary = {}
 
 ## Whether this guest has had its first roster yet. Everyone on the first one is "arriving",
 ## and greeting each of them by name would be noise.
@@ -222,6 +233,7 @@ func start_solo() -> void:
 		mix_feed.stop()
 	_audio_ticket = 0
 	role = Role.SOLO
+	room = {}
 	local_peer_id = 1
 	participants.clear()
 	holds.clear()
@@ -244,6 +256,7 @@ func host(at_port: int = DEFAULT_PORT) -> bool:
 	# still waiting at the door can be kept from talking to the people already inside.
 	multiplayer.server_relay = false
 	role = Role.HOST
+	room = {}
 	port = at_port
 	local_peer_id = 1
 	participants.clear()
@@ -271,6 +284,7 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	multiplayer.multiplayer_peer = peer
 	multiplayer.server_relay = false
 	role = Role.GUEST
+	room = {}
 	port = at_port
 	joined_address = address
 	# Same machine, same speakers: the host's Reaper is already audible here.
@@ -517,6 +531,8 @@ func admission_refusal(offered: String) -> String:
 ## desk they are about to be shown is never empty; the roster and holds follow from `_hello`.
 func admit(peer_id: int) -> void:
 	_send_snapshot_to(peer_id)
+	if not room.is_empty() and _connected():
+		_receive_room.rpc_id(peer_id, room)
 	if mix_feed != null and mix_feed.sending and _connected():
 		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
 
@@ -800,6 +816,55 @@ func _finish_take(from: int) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _told(text: String) -> void:
 	notice.emit(text)
+
+
+# --- the room -----------------------------------------------------------------------------
+
+## What a guest may ask of the room. Not the venue: whose room it is decides what it looks like.
+const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOAT, TYPE_FLOAT],
+		&"close_tablet": [TYPE_STRING_NAME], &"move_tablet": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT]}
+
+
+## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.
+func publish_room(state: Dictionary) -> void:
+	if role != Role.HOST:
+		return
+	room = state
+	for id in _audience():
+		_receive_room.rpc_id(id, state)
+
+
+## Guest: ask the host to change the room. The host's own asks go straight to its studio.
+func ask_room(verb: StringName, args: Array) -> void:
+	if not room_ask_is_valid(verb, args):
+		return
+	if is_authority():
+		room_asked.emit(verb, args, local_peer_id)
+	elif _connected():
+		_room_asked.rpc_id(1, verb, args)
+
+
+static func room_ask_is_valid(verb: StringName, args: Array) -> bool:
+	if not ROOM_VERBS.has(verb) or args.size() != ROOM_VERBS[verb].size():
+		return false
+	for i in args.size():
+		if typeof(args[i]) != ROOM_VERBS[verb][i]:
+			return false
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_room(state: Dictionary) -> void:
+	room = state
+	room_changed.emit()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _room_asked(verb: StringName, args: Array) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from) or not room_ask_is_valid(verb, args):
+		return
+	room_asked.emit(verb, args, from)
 
 
 # --- state replication --------------------------------------------------------------------

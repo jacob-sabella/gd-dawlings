@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_a_tablet_follows_its_plugin_along_the_chain()
 	_test_a_tablet_keys_its_plugin_from_another_track()
 	_test_a_plugin_torn_off_the_rack_gets_a_stand()
+	_test_the_room_is_the_hosts()
 	_test_a_big_plugin_is_listed_and_named_once()
 	await _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets()
 	_test_a_tablet_turns_over_to_the_plugins_own_window()
@@ -2545,6 +2546,76 @@ func _test_a_plugin_torn_off_the_rack_gets_a_stand() -> void:
 	check("and it is forgotten", Session.layout.tablets.is_empty())
 	remove_child(studio)
 	studio.free()
+	Session.layout = saved_layout
+	DAW.use(OfflineBackend.new())
+
+
+## In a session the room is the host's: the venue and the plugins out on stands are the same for
+## everyone in it. A guest asks for a stand and is shown the host's room; it cannot change the
+## venue; and its own room comes back when it is on its own again.
+func _test_the_room_is_the_hosts() -> void:
+	var saved_layout := Session.layout
+	var saved_role := Session.role
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.focus.visits = false
+	var order := DAW.state.track(2).plugins()
+	var plugin := DAW.state.fx(2, order[1]).name
+
+	# The host, answering a guest: the same stand its own hand would have pulled.
+	studio._on_room_asked(&"open_tablet", [2, order[1], plugin, 0.4, 0.2], 7)
+	check("a guest's ask puts a stand out on the host", studio.tablets.size() == 1)
+	var id: StringName = studio.tablets.keys()[0]
+	var room := studio.room_state()
+	check("and the room says so, where it stands (%s)" % [room], room["tablets"].has(id)
+			and room["tablets"][id][0] == 2 and room["tablets"][id][2] == plugin
+			and Vector2(room["tablets"][id][3], room["tablets"][id][4]).is_equal_approx(Vector2(0.4, 0.2)))
+	studio._on_room_asked(&"move_tablet", [id, -0.3, 0.1, 0.5], 7)
+	var stand: Trolley = studio.tablets[id][0]
+	check("a guest wheeling it moves it on the host",
+			Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(-0.3, 0.1)))
+	studio._on_room_asked(&"close_tablet", [id], 7)
+	check("and docking it puts it away", studio.tablets.is_empty())
+	check("only what a guest may ask is heard", not Session.room_ask_is_valid(&"set_venue", [&"grid"])
+			and not Session.room_ask_is_valid(&"open_tablet", [2, "x"]))
+
+	# A guest, shown the host's room.
+	Session.role = Session.Role.GUEST
+	var own_venue := studio.venue.venue_id()
+	var own_choice := Session.layout.venue
+	var notices: Array[String] = []
+	var heard := func(t: String): notices.append(t)
+	Session.notice.connect(heard)
+	check("a guest cannot change the venue", not studio.choose_venue(&"grid")
+			and studio.venue.venue_id() == own_venue)
+	check("and is told why", notices.size() == 1 and notices[0].begins_with("Only "))
+	Session.notice.disconnect(heard)
+	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
+	check("a guest's pull waits for the host", studio.tablets.is_empty())
+
+	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+	check("the host's venue is the guest's", studio.venue.venue_id() == &"grid")
+	check("and so are its stands", studio.tablets.has(&"tablet_3"))
+	stand = studio.tablets[&"tablet_3"][0]
+	check("where the host has them", Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(0.4, 0.2))
+			and is_equal_approx(stand.rotation.y, 0.25))
+	check("none of it written into the guest's own layout",
+			Session.layout.tablets.is_empty() and Session.layout.venue == own_choice)
+	studio.apply_room({"venue": &"grid", "tablets": {}})
+	check("a stand the host docks goes from the guest's room too", studio.tablets.is_empty())
+	studio.apply_room({"venue": &"chalk", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+
+	Session.role = Session.Role.SOLO
+	studio._on_role_changed()
+	check("on its own again, the guest is back in its own venue", studio.venue.venue_id() == own_venue)
+	check("without the host's stands", studio.tablets.is_empty())
+	remove_child(studio)
+	studio.free()
+	Session.role = saved_role
 	Session.layout = saved_layout
 	DAW.use(OfflineBackend.new())
 
