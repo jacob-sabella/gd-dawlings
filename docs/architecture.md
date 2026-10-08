@@ -111,6 +111,7 @@ stay ignorant: a surface is a node, and a node's parent is not its business.
 | | Shared | Why |
 |---|---|---|
 | Track values, FX, transport | ✅ | it is the mix |
+| The mix's sound | ✅ to guests who ask | they are not in the room with the speakers |
 | Who is here, head poses, pointers, holds | ✅ | you need to see someone point |
 | Which bank the desk shows | ✅ | the host has one Reaper link, so one bank |
 | ROOM placement of a surface | ✅ | a fact about the room, not a taste |
@@ -254,13 +255,108 @@ each restatement was announced as a bank change, cutting a drag off about a seco
 Volatile state goes out in parcels of at most 1100 bytes. An unreliable packet over the MTU is
 dropped whole, and a 40-track meter frame was over it.
 
+### A code at the door
+
+A host can ask for a session code (**Ask for a code** in the panel, or `--code`). Four
+characters, drawn from an alphabet with nothing that can be misread across a room: no 0/O,
+1/I/L, 5/S, 2/Z or 8/B. It is compared without regard to case or spaces, because it gets read
+aloud.
+
+The code is a door, not encryption. What it buys depends on the host deciding who is in the
+room, not on what the transport happens to deliver:
+
+- A new connection is **pending**, not a participant. Its first `_hello` carries the code. A
+  wrong code gets a reason (`_turned_away`) and is hung up on 0.3s later, so the explanation
+  arrives before the disconnect. Silence for 6s is also hung up on.
+- Until it is admitted, nothing reaches it: no snapshot, no roster, no presence, no audio
+  ticket. Everything the host says goes to `_audience()`, the admitted guests, never to
+  `.rpc()`, which would reach every socket.
+- Guests do not talk to each other directly. `server_relay` is off. A guest's presence goes to
+  the host, which forwards it as `_presence_of(peer_id, ...)` to the others. A guest at the door
+  therefore cannot reach the people inside, and nobody can send a pose under another's id.
+- Intents, claims and releases from anyone not admitted are dropped.
+
+The beacon says `locked`, and the nearby list shows "code needed".
+
+### Hearing the mix from another room
+
+A guest who is not in the host's room hears nothing, because Reaper plays to the host's
+speakers and nowhere else. With the mix carried to them, a guest can do more than watch
+faders: they can mix. With the latency low enough, they can play along.
+
+**Measured: 46ms from the host's speakers to the guest's** (`tools/audio_latency.sh`, on one
+machine). It is measured, not estimated. A click track goes to the host's tap and, at the same
+time, straight into a null sink. The guest plays into the same sink, and the gap between the two
+clicks in a recording of it is the delay a person hears. Over a wired LAN the network adds well
+under a millisecond. Wifi adds its jitter, which the buffer measures and absorbs.
+
+Where the 46ms goes:
+
+| Stage | ms | Why that much |
+|---|---|---|
+| Host capture | ~5 | `PULSE_LATENCY_MSEC=3` on the capture stream only. Godot's default fragment is 1024 frames, which is 21ms. |
+| Packet | 2.7 | 128 frames of 16-bit stereo, 528 bytes, under any MTU. |
+| Jitter buffer + generator queue | ~15 | Godot's mixer takes 512 frames at a time; the queue has to hold one gulp plus the measured lateness. |
+| Guest output | ~20 | `audio/driver/output_latency=5`. 3 measured no better. |
+
+**Getting the sound (host).** The DAW plays to the OS, so `MixTap` (core/audio) adds a
+listener. On PipeWire it creates a virtual source, `reaper3d_tap`, and links Reaper's output
+ports into it alongside whatever they already feed. Nothing is unlinked, so the engineer's
+monitoring is untouched. It is not the default sink's monitor: that would carry this app's own
+fader clicks and every notification chime to every guest. Linux with PipeWire only; elsewhere
+the host is told in plain words why guests will not hear anything, and the session carries on.
+The capture is read with `AudioServer.get_input_frames`, never an `AudioStreamMicrophone`, so
+the host never plays its own mix back on top of itself.
+
+**Sending it (`MixFeed`).** Its own UDP socket and its own threads. ENet is serviced once a
+frame on the main thread, which would put up to 16ms of jitter on every packet, and every
+millisecond of jitter is a millisecond of buffer. The threads wake every half millisecond.
+Admission rides on the session's: an admitted guest is handed a random ticket over the reliable
+channel. The audio socket ignores anything without one. The guest speaks first, so the replies
+come back through its own NAT. A keepalive every 250ms carries a timestamp the host echoes,
+which times the round trip on the path the sound actually takes.
+
+**Playing it (`JitterBuffer`).** Two disagreements, each with its own answer:
+
+- **Jitter.** The target depth is the measured *lateness* (how much later the latest recent
+  packet was than the earliest), plus one mixer gulp. It is not the average jitter, because a
+  buffer sized for the typical packet runs dry on the untypical one.
+- **Drift.** Two sound cards are two clocks; 0.1% apart is a second an hour. The read rate is
+  bent by at most 0.2% (about three cents, inaudible), steering the combined depth of jitter
+  buffer and generator queue to the target. Tested over twenty simulated minutes against a fast
+  clock and a slow one.
+
+Arriving audio goes straight on to Godot's generator a packet at a time, so there is one buffer
+and not two in a row. The first version kept a fixed queue in the generator and refilled it from
+a buffer sized for 128-frame reads. Godot's mixer takes 512 at a time, and it ran dry fifteen
+times a second. Real dropouts are read from the generator's own skip counter, since only it
+knows when the listener actually heard a gap. A lost packet is filled with the last frame faded
+out rather than closed up, so what follows is not pulled early. A packet that arrives after its
+gap was filled is dropped.
+
+**Who hears it.** On for a guest on another machine; off for a guest on the host's own machine,
+whose speakers already play it. Nothing can tell from here who shares a room with whom, so the
+panel has **Hear the mix**, your own level, and the number: "46 ms behind Ada's speakers". The
+number matters because nobody can judge by ear, while also trying to play, whether they are at
+40ms or 120.
+
+**Not done:**
+
+- **No codec.** 1.5Mbit/s per listener is nothing on a LAN and too much for a phone tether.
+  Godot has no low-latency codec; Opus through a GDExtension would cut it to a tenth.
+- **Playing *into* the session.** A guest's MIDI keyboard into the host's Reaper (Reaper's OSC
+  has a virtual-keyboard path) is the other half of performing remotely. It is not built.
+- **Picture and sound are not aligned.** Meters and the playhead arrive in ~1ms over ENet; the
+  sound arrives ~45ms later. That is invisible at mixing speed and visible on a hard transient.
+- **A host whose Reaper restarts** keeps a dead link until the session is hosted again.
+
 ### Not done
 
 - **XR calibration across participants is untested.** There is no headset runtime on this
   machine, so this rests on the arithmetic only.
 - **No delta compression.** The full volatile frame goes out every tick.
-- **Trusted LAN only.** There is no authentication. Anyone who can reach the port can join and
-  move any fader.
+- **A door, not a lock.** With a session code, only those told it get in. Nothing is encrypted,
+  so the code is for a studio LAN with a neighbour on the wifi, not for the open internet.
 
 ## Geometry: computed by default, authored where bevels matter
 
@@ -729,11 +825,14 @@ furniture and the test both read, so moving the bar moves the test with it.
 
 ## Audio: the gear, not the mix
 
-**The mix is not ours to play.** Reaper is already running, through monitors, in the room this
-is running in. Rendering the same audio here would put a second copy of a critical listening
-signal a few milliseconds behind the first, which is a comb filter rather than a feature. So
-nothing in this project touches programme audio, and that is a boundary rather than a backlog
-item.
+**The mix is not ours to play -- in the room where Reaper is.** Reaper is already running,
+through monitors, in the room this is running in. Rendering the same audio here would put a
+second copy of a critical listening signal a few milliseconds behind the first, which is a comb
+filter rather than a feature. So the host never plays programme audio, and that is a boundary
+rather than a backlog item.
+
+A guest in another room is the one exception, and it is the whole of *Hearing the mix from
+another room*, under Multiplayer: there is no first copy for a second one to comb against.
 
 What was missing is the sound the *hardware* makes, and in a headset that is not decoration. A
 fader you have grabbed and a fader you are about to grab look nearly identical, there is nothing

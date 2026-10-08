@@ -18,6 +18,12 @@ config/description="Reaper DAW rendered as a 3D hardware studio: console, tape d
 run/main_scene="res://scenes/bootstrap.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
+[audio]
+
+driver/enable_input=true
+driver/mix_rate=48000
+driver/output_latency=5
+
 [autoload]
 
 ; Both are inert until something asks. An autoload here is not a god object -- it is the answer

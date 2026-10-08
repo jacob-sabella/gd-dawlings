@@ -26,8 +26,14 @@ const DEFAULT_PORT := 7332
 ## Where a hosting session says so to the LAN, once a second. One above the game port so a
 ## firewall rule written for one is easy to widen to the other.
 const DISCOVERY_PORT := 7333
+## The mix's audio, on a socket of its own. See core/session/mix_feed.gd for why not ENet.
+const AUDIO_PORT_OFFSET := 2
 const BEACON_SECONDS := 1.0
 const GOODBYE_SECONDS := 0.3
+## How long a connection may sit unintroduced before the host hangs up on it. Long enough for a
+## guest on a slow wifi hop to build its scene and say hello; short enough that a port scan does
+## not leave a row of ghosts holding slots.
+const ADMIT_SECONDS := 6.0
 
 ## Handed out in join order, and the host's is the first. Chosen against every venue rather
 ## than for one: each has to read as a light on a dark studio AND on the chalk room's pale
@@ -69,11 +75,36 @@ var holds: Dictionary = {}
 ## The address this session was joined at, for the panel to say back.
 var joined_address: String = ""
 var port: int = DEFAULT_PORT
+## The code a guest must give to be let in, or "" for an open session. Host side only.
+var code: String = ""
+## The code this guest will offer. Kept apart from `code` so that joining with one does not
+## turn the next session this process hosts into a locked one.
+var _offered_code: String = ""
+## Connections the host has heard from the transport but not yet from the person: peer -> msec.
+## Nothing reaches them -- no mix, no roster, no faces -- until their hello is accepted.
+var _pending: Dictionary = {}
 
 ## How this process gets its own mix back when it stops being a guest -- reopen Reaper, or
 ## bring up the stand-in. Given by whoever started the DAW in the first place, because only
 ## that knows whether this machine has a Reaper of its own.
 var solo_backend: Callable = Callable()
+## How a host gets the mix's sound to pass on: returns a MixSource. Set by bootstrap, which
+## knows whether this machine has a DAW making any, for the same reason as `solo_backend`.
+var mix_source: Callable = Callable()
+## The host's programme audio, out to guests or in from the host.
+var mix_feed: MixFeed = null
+## Whether this guest plays the host's mix. Off for someone in the same room as the host's
+## speakers would be right -- the same sound twice, a few dozen ms apart, is a comb filter --
+## but nothing can tell from here who is in which room, so it starts on for anyone joining from
+## another machine and off for a guest on the host's own machine, and the panel turns it over.
+var hear_mix := true:
+	set(v):
+		hear_mix = v
+		_apply_listening()
+var _audio_ticket := 0
+var _audio_port := 0
+## -1 to decide by address when joining, else 0/1: what --listen / --no-listen asked for.
+var listen_choice := -1
 
 var layout: LayoutProfile = null
 
@@ -113,6 +144,9 @@ class Participant extends RefCounted:
 
 
 func _ready() -> void:
+	mix_feed = MixFeed.new()
+	mix_feed.name = "MixFeed"
+	add_child(mix_feed)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -139,6 +173,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_tick_beacon(delta)
+	_tick_admission()
 	for peer in _closing_peers:
 		peer.poll()
 
@@ -157,6 +192,9 @@ static func _default_name() -> String:
 ## Start a solo session: no network, this process also owns the Reaper link.
 func start_solo() -> void:
 	_close_peer()
+	if mix_feed != null:
+		mix_feed.stop()
+	_audio_ticket = 0
 	role = Role.SOLO
 	local_peer_id = 1
 	participants.clear()
@@ -175,30 +213,43 @@ func host(at_port: int = DEFAULT_PORT) -> bool:
 		notice.emit("Could not open port %d -- is another session already hosting here?" % at_port)
 		return false
 	multiplayer.multiplayer_peer = peer
+	# No guest-to-guest traffic through the host's socket behind its back. Everything a guest
+	# says to the room goes to the host, which decides who it reaches -- the only way a guest
+	# still waiting at the door can be kept from talking to the people already inside.
+	multiplayer.server_relay = false
 	role = Role.HOST
 	port = at_port
 	local_peer_id = 1
 	participants.clear()
 	holds.clear()
+	_pending.clear()
 	joined_address = ""
 	_register(1, local_name, 0)
 	_open_beacon()
+	if mix_feed != null:
+		mix_feed.start_sending(at_port + AUDIO_PORT_OFFSET,
+				mix_source.call() if mix_source.is_valid() else MixSource.new())
 	role_changed.emit()
 	roster_changed.emit()
 	return true
 
 
-func join(address: String, at_port: int = DEFAULT_PORT) -> bool:
+func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") -> bool:
 	_close_peer()
+	_offered_code = with_code.strip_edges()
 	var peer := ENetMultiplayerPeer.new()
 	if peer.create_client(address, at_port) != OK:
 		push_error("Session: cannot reach %s:%d" % [address, at_port])
 		notice.emit("Could not reach %s." % address)
 		return false
 	multiplayer.multiplayer_peer = peer
+	multiplayer.server_relay = false
 	role = Role.GUEST
 	port = at_port
 	joined_address = address
+	# Same machine, same speakers: the host's Reaper is already audible here.
+	var local := address.begins_with("127.") or address == "localhost" or address == "::1"
+	hear_mix = (not local) if listen_choice < 0 else listen_choice == 1
 	_has_settled = false
 	local_peer_id = multiplayer.get_unique_id()
 	participants.clear()
@@ -271,7 +322,7 @@ func set_local_name(new_name: String) -> void:
 		participants[local_peer_id].display_name = new_name
 	match role:
 		Role.HOST: _broadcast_roster()
-		Role.GUEST when _connected(): _hello.rpc_id(1, new_name, layout.medium if layout != null else 0)
+		Role.GUEST when _connected(): _hello.rpc_id(1, new_name, layout.medium if layout != null else 0, _offered_code)
 		_: roster_changed.emit()
 
 
@@ -322,16 +373,19 @@ func _on_peer_connected(peer_id: int) -> void:
 	# them here as well would give them a name and colour the host never chose.
 	if role != Role.HOST:
 		return
-	_register(peer_id, "joining…", _free_colour())
-	# Deferred by one frame: ENet reports the peer before the far side has finished building its
-	# own scene tree, and an RPC that lands first is delivered to a node that does not exist yet.
-	_send_snapshot_to.call_deferred(peer_id)
-	_broadcast_roster.call_deferred()
-	_send_holds.call_deferred()
+	# At the door, not in the room. They are let in by their hello, which carries the code.
+	_pending[peer_id] = Time.get_ticks_msec()
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if role != Role.HOST:
+		return
+	_pending.erase(peer_id)
+	if mix_feed != null:
+		mix_feed.revoke(peer_id)
+	if not participants.has(peer_id):
+		# Turned away, or never said hello. Nobody was told they arrived, so nobody is told
+		# they left.
 		return
 	var who := name_of(peer_id)
 	participants.erase(peer_id)
@@ -350,7 +404,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	_hello.rpc_id(1, local_name, layout.medium if layout != null else 0)
+	_hello.rpc_id(1, local_name, layout.medium if layout != null else 0, _offered_code)
 
 
 func _on_connection_failed() -> void:
@@ -369,23 +423,115 @@ func _on_server_disconnected() -> void:
 	notice.emit("Lost the connection to %s's session. Back on your own mix." % host_name)
 
 
-## A guest introducing itself, and again whenever it renames.
+## A guest introducing itself, and again whenever it renames. The first one is also the knock.
 @rpc("any_peer", "call_remote", "reliable")
-func _hello(display_name: String, medium: int) -> void:
+func _hello(display_name: String, medium: int, offered_code: String = "") -> void:
 	if role != Role.HOST:
 		return
 	var from := multiplayer.get_remote_sender_id()
 	var p: Participant = participants.get(from)
-	if p == null:
+	var first := p == null
+	if first:
+		var refusal := admission_refusal(offered_code)
+		if not refusal.is_empty():
+			_turn_away(from, refusal)
+			return
+		_pending.erase(from)
 		p = _register(from, display_name, _free_colour())
-	var first := p.display_name == "joining…"
+		admit(from)
 	p.display_name = display_name.strip_edges().substr(0, 24)
 	if p.display_name.is_empty():
 		p.display_name = "Guest %d" % participants.size()
 	p.medium = medium
 	_broadcast_roster()
 	if first:
+		_send_holds()
 		notice.emit("%s joined the session." % p.display_name)
+
+
+## Why a knock with this code is not let in, or "" if it is. Compared case- and space-blind: a
+## code is read aloud across a room, and "ab 12" typed for "AB12" is the same code.
+func admission_refusal(offered: String) -> String:
+	if code.is_empty():
+		return ""
+	var want := code.replace(" ", "").to_upper()
+	var got := offered.replace(" ", "").to_upper()
+	if got.is_empty():
+		return "%s's session needs a code. Ask %s for it." % [local_name, local_name]
+	if got != want:
+		return "That is not %s's code." % local_name
+	return ""
+
+
+## Everything a newly admitted guest needs, in the order it needs it: the mix first, so the
+## desk they are about to be shown is never empty; the roster and holds follow from `_hello`.
+func admit(peer_id: int) -> void:
+	_send_snapshot_to(peer_id)
+	if mix_feed != null and mix_feed.sending and _connected():
+		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
+
+
+## The host's leave to listen. Sent over the reliable, admitted channel; the audio socket
+## answers nothing that does not carry one.
+@rpc("authority", "call_remote", "reliable")
+func _give_audio_ticket(ticket: int, audio_port: int) -> void:
+	_audio_ticket = ticket
+	_audio_port = audio_port
+	_apply_listening()
+
+
+func _apply_listening() -> void:
+	if mix_feed == null or role != Role.GUEST:
+		return
+	if hear_mix and _audio_ticket != 0:
+		if not mix_feed.listening:
+			mix_feed.listen(joined_address, _audio_port, _audio_ticket)
+	elif mix_feed.listening:
+		mix_feed.stop()
+
+
+func _turn_away(peer_id: int, reason: String) -> void:
+	_pending.erase(peer_id)
+	if _connected():
+		_turned_away.rpc_id(peer_id, reason)
+	notice.emit("Someone tried to join without the right code.")
+	# Hung up a moment later, for the same reason the host's goodbye is: closed now, the
+	# disconnect overtakes the explanation and the guest is left guessing.
+	var peer := multiplayer.multiplayer_peer
+	get_tree().create_timer(GOODBYE_SECONDS).timeout.connect(func():
+		if multiplayer.multiplayer_peer == peer and peer is ENetMultiplayerPeer:
+			(peer as ENetMultiplayerPeer).disconnect_peer(peer_id))
+
+
+@rpc("authority", "call_remote", "reliable")
+func _turned_away(reason: String) -> void:
+	start_solo()
+	_restore_own_mix()
+	notice.emit(reason)
+
+
+func _tick_admission() -> void:
+	if role != Role.HOST or _pending.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	for peer_id in _pending.keys():
+		if now - int(_pending[peer_id]) > int(ADMIT_SECONDS * 1000.0):
+			_pending.erase(peer_id)
+			if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
+				(multiplayer.multiplayer_peer as ENetMultiplayerPeer).disconnect_peer(peer_id)
+
+
+## The people in the room other than me -- who a host's word goes to. Not every connection: a
+## guest at the door has a socket and no seat.
+func _audience() -> Array:
+	if role != Role.HOST or not _connected():
+		return []
+	return participants.keys().filter(func(id): return id != 1)
+
+
+## Whether a message claiming to come from `peer_id` is from someone in the room.
+func _is_member(peer_id: int) -> bool:
+	return participants.has(peer_id)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -408,7 +554,9 @@ func _broadcast_roster() -> void:
 	if role != Role.HOST:
 		return
 	if _connected():
-		_receive_roster.rpc(_roster_rows())
+		var rows := _roster_rows()
+		for id in _audience():
+			_receive_roster.rpc_id(id, rows)
 	roster_changed.emit()
 
 
@@ -464,11 +612,11 @@ func send_intent(verb: StringName, args: Array) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _receive_intent(verb: StringName, args: Array) -> void:
-	if not is_authority():
+	if not is_authority() or not _is_member(multiplayer.get_remote_sender_id()):
 		return
-	# Trusted-LAN model, stated plainly so nobody mistakes it for a checked one: any peer that
-	# reached this session may move any fader. That is correct for four people in a studio and
-	# wrong for anything exposed beyond it. The verb is still checked against the vocabulary --
+	# Anyone the host let in may move any fader. With a session code that means anyone who was
+	# told the code; without one, anyone on the network. The code is a door, not encryption:
+	# right for a studio LAN, not for anything exposed to the internet. The verb is still checked against the vocabulary --
 	# see DAW.apply_intent -- because trusting a peer with a fader is not the same as letting it
 	# name any method on an object.
 	DAW.apply_intent(verb, args)
@@ -484,14 +632,18 @@ func _receive_intent(verb: StringName, args: Array) -> void:
 func broadcast_state(durable: Dictionary, volatile: Dictionary) -> void:
 	if not is_authority() or role == Role.SOLO:
 		return
+	var audience := _audience()
 	if not durable.is_empty():
-		_receive_state_durable.rpc(_as_batch(durable))
+		var batch := _as_batch(durable)
+		for id in audience:
+			_receive_state_durable.rpc_id(id, batch)
 	if not volatile.is_empty():
 		# In parcels under the MTU. An unreliable packet ENet has to fragment is lost whenever
 		# ANY fragment is, so one 1.5KB meter frame on wifi fails several times as often as
 		# two small ones -- and forty tracks of meters is more than one packet.
 		for parcel in _parcels(_as_batch(volatile)):
-			_receive_state_volatile.rpc(parcel)
+			for id in audience:
+				_receive_state_volatile.rpc_id(id, parcel)
 
 
 const PARCEL_BYTES := 1100
@@ -559,7 +711,11 @@ func publish_presence(head_in_session_space: Transform3D, pointing_at: String,
 		me.pointing_local = pointing_local
 	if not _connected():
 		return
-	_receive_presence.rpc(head_in_session_space, pointing_at, pointing_local)
+	if role == Role.HOST:
+		for id in _audience():
+			_presence_of.rpc_id(id, local_peer_id, head_in_session_space, pointing_at, pointing_local)
+	else:
+		_receive_presence.rpc_id(1, head_in_session_space, pointing_at, pointing_local)
 
 
 func publish_head(head_in_session_space: Transform3D) -> void:
@@ -568,12 +724,35 @@ func publish_head(head_in_session_space: Transform3D) -> void:
 			me.pointing_at if me != null else "", me.pointing_local if me != null else Vector3.ZERO)
 
 
+## A guest's pose, to the host, which keeps it and passes it on to everyone else in the room.
+## Relayed by hand rather than by ENet's server relay so the host decides who hears it -- see
+## `host()`.
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _receive_presence(head: Transform3D, pointing_at: String, pointing_local: Vector3) -> void:
+	if role != Role.HOST:
+		return
 	# The sender as the transport saw it, never as the packet claims. A pose arriving with
 	# someone else's id would put a stranger's head on a friend's name tag.
 	var from := multiplayer.get_remote_sender_id()
-	var p: Participant = participants.get(from)
+	if not _is_member(from):
+		return
+	_heard_presence(from, head, pointing_at, pointing_local)
+	for id in _audience():
+		if id != from:
+			_presence_of.rpc_id(id, from, head, pointing_at, pointing_local)
+
+
+## Somebody's pose, from the host. The id is the host's word, which the host got from the
+## transport -- a guest cannot put words in another guest's mouth through it.
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _presence_of(peer_id: int, head: Transform3D, pointing_at: String, pointing_local: Vector3) -> void:
+	if peer_id == local_peer_id:
+		return
+	_heard_presence(peer_id, head, pointing_at, pointing_local)
+
+
+func _heard_presence(peer_id: int, head: Transform3D, pointing_at: String, pointing_local: Vector3) -> void:
+	var p: Participant = participants.get(peer_id)
 	# Not registered from here: the roster is the host's, and a pose that outruns the roster
 	# by a packet is simply early. The next one lands on a participant that exists.
 	if p == null:
@@ -621,13 +800,13 @@ func holder_of(key: String) -> int:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _claim(key: String) -> void:
-	if role == Role.HOST:
+	if role == Role.HOST and _is_member(multiplayer.get_remote_sender_id()):
 		_grant(multiplayer.get_remote_sender_id(), key)
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func _release_remote(key: String) -> void:
-	if role == Role.HOST:
+	if role == Role.HOST and _is_member(multiplayer.get_remote_sender_id()):
 		_release(multiplayer.get_remote_sender_id(), key)
 
 
@@ -659,7 +838,8 @@ func _send_holds() -> void:
 	if role != Role.HOST:
 		return
 	if _connected():
-		_receive_holds.rpc(holds)
+		for id in _audience():
+			_receive_holds.rpc_id(id, holds)
 	holds_changed.emit()
 
 
@@ -715,5 +895,6 @@ func beacon_payload() -> Dictionary:
 		"name": local_name,
 		"port": port,
 		"people": participants.size(),
+		"locked": not code.is_empty(),
 		"tracks": DAW.state.project_track_count if DAW.state != null else 0,
 	}

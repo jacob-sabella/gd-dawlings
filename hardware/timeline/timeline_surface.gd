@@ -110,7 +110,7 @@ func _ready() -> void:
 	if surface_id == &"":
 		surface_id = &"timeline"
 	super()
-	DAW.state.timeline_changed.connect(mark_dirty)
+	DAW.timeline_changed.connect(mark_dirty)
 
 	# Built ONCE and never rebuilt, unlike everything else on this panel. A rebuild frees its
 	# children, and the scrubber is the one control here that is held across frames -- freeing
@@ -131,7 +131,7 @@ func _ready() -> void:
 	_loop_strip.kind = TimelineRuler.Kind.LOOP
 	_loop_strip.seconds_at = _seconds_at_local_x
 	add_child(_loop_strip)
-	DAW.state.transport_changed.connect(_draw_loop)
+	DAW.transport_changed.connect(_draw_loop)
 
 	# The lanes, as one control: select, move, zoom. Built once, like the strips, because a move
 	# is a held drag and every edit it makes rebuilds the panel under it.
@@ -163,8 +163,8 @@ func _ready() -> void:
 	_split_caption = _text("SPLIT", 26, Color(0.62, 0.64, 0.68))
 	_split_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_split_caption)
-	DAW.state.transport_changed.connect(_light_split_key)
-	DAW.state.timeline_changed.connect(_light_split_key)
+	DAW.transport_changed.connect(_light_split_key)
+	DAW.timeline_changed.connect(_light_split_key)
 
 
 func _process(delta: float) -> void:

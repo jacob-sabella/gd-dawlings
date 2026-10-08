@@ -10,6 +10,7 @@ extends Node
 ##   godot --path .                                      offline stand-in, screen participant
 ##   godot --path . -- --reaper                          host, OSC to a local Reaper
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
+##   godot --path . -- --reaper --host --code AB12       host, letting in only those told AB12
 ##   godot --path . -- --join 192.168.1.40 --xr --ar     join someone else's session, in passthrough
 ##   godot --path . -- --place console=screen --stage    console as a panel, with the mover open
 ##
@@ -45,12 +46,30 @@ func _ready() -> void:
 	# How this process gets its own mix back after being someone else's guest: the same link
 	# it would have opened on its own, Reaper or the stand-in.
 	Session.solo_backend = func(): _start_daw(args)
+	# What a host passes on to its guests' ears: the DAW's own output where there is a DAW,
+	# a test tone where asked for one, and silence on the offline stand-in, which has none.
+	Session.mix_source = func() -> MixSource:
+		if args["mix_tone"]:
+			return MixSource.Tone.new()
+		if not args["reaper"] and args["mix_from"] == "":
+			return MixSource.new()
+		var tapped := MixTap.open(args["mix_from"])
+		if not MixTap.why_not.is_empty():
+			# Said where the host will see it: a session that is silent for a reason nobody was
+			# told looks like a session that is broken.
+			Session.notice.emit("Guests won't hear the mix. " + MixTap.why_not)
+		return tapped
+	Session.listen_choice = args["listen"]
+	Session.mix_feed.report = args["audio_stats"]
+	if args["audio_out"] != "":
+		AudioServer.output_device = args["audio_out"]
 	if args["join"] != "":
 		# A guest still has a backend: it holds the replicated cache. It just never opens a
 		# link of its own, which is the whole of what "one link per session" means.
-		Session.join(args["join"])
+		Session.join(args["join"], args["session_port"], args["code"])
 	elif args["host"]:
-		Session.host()
+		Session.code = args["code"]
+		Session.host(args["session_port"])
 		_start_daw(args)
 	else:
 		Session.start_solo()
@@ -152,7 +171,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"name": "", "session_panel": false,
+		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 	}
 	var i := 0
@@ -196,6 +215,31 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["name"] = argv[i]
+			"--code":
+				# The session code: the one a host asks for, or the one a guest offers.
+				i += 1
+				if i < argv.size():
+					out["code"] = argv[i]
+			"--mix-tone": out["mix_tone"] = true
+			"--audio-stats": out["audio_stats"] = true
+			"--session-port":
+				# Two sessions on one machine -- the tooling's, beside a real one.
+				i += 1
+				if i < argv.size():
+					out["session_port"] = int(argv[i])
+			"--mix-from":
+				# A PipeWire node to tap instead of whichever REAPER registered first.
+				i += 1
+				if i < argv.size():
+					out["mix_from"] = argv[i]
+			"--listen": out["listen"] = 1
+			"--no-listen": out["listen"] = 0
+			"--audio-out":
+				# Where this process plays, by PipeWire/Pulse sink name. For the tooling: a guest
+				# whose sound goes to a null sink can be recorded instead of heard.
+				i += 1
+				if i < argv.size():
+					out["audio_out"] = argv[i]
 			"--session-panel": out["session_panel"] = true
 			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true
@@ -360,3 +404,9 @@ func _track_count() -> int:
 	if known > 0:
 		return known
 	return DAW.state.tracks.size()
+
+
+## The mix tap, if this process made it, goes with it. A virtual source left behind is harmless,
+## but it is a device in someone's sound settings that they did not add.
+func _exit_tree() -> void:
+	MixTap.close()

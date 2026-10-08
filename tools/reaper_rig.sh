@@ -78,6 +78,8 @@ fi
 # by the last run would say up before this Reaper had even launched.
 rm -rf "$RIG/Scripts/reaper3d_bridge_data"
 reaper_bin="$(command -v reaper)"
+BEFORE="$(mktemp)"
+python3 tools/rig/route_audio.py snapshot "$BEFORE" 2>/dev/null || echo '[]' >"$BEFORE"
 ( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
     -nosplash "${open[@]}" >"$RIG/reaper.log" 2>&1 & )
 
@@ -94,6 +96,9 @@ for _ in $(seq 1 200); do
       done
       hyprctl eval "hl.dispatch(hl.dsp.window.move({ workspace = $OFFSCREEN_WORKSPACE, silent = true, window = 'pid:$pid' }))" >/dev/null 2>&1 || true
     fi
+    # PULSE_SINK above is not enough on its own: see tools/rig/route_audio.py.
+    python3 tools/rig/route_audio.py route "$BEFORE" "$SINK" || true
+    rm -f "$BEFORE"
     echo "rig: up ($RIG)"
     exit 0
   fi

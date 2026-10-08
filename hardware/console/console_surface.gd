@@ -56,7 +56,7 @@ func _ready() -> void:
 	if surface_id == &"":
 		surface_id = &"console"
 	super()
-	DAW.state.bank_changed.connect(_on_bank_changed)
+	DAW.bank_changed.connect(_on_bank_changed)
 
 
 func _process(delta: float) -> void:

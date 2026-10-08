@@ -204,7 +204,7 @@ func _ready() -> void:
 	_page_next.describe_value = func(_v: float) -> String: return _page_label.text
 	add_child(_page_next)
 
-	DAW.state.fx_changed.connect(_on_fx_changed)
+	DAW.fx_changed.connect(_on_fx_changed)
 	set_process(true)
 	refresh()
 

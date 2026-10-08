@@ -37,6 +37,15 @@ var _address_edit: LineEdit
 var _nearby: VBoxContainer
 var _nearby_empty: Label
 var _addresses: Label
+var _ask_code: CheckBox
+var _code_edit: LineEdit
+var _code_shown: Label
+var _code_box: VBoxContainer
+var _hear: CheckButton
+var _volume: HSlider
+var _hearing: Label
+var _sharing: Label
+var _audio_clock := 0.0
 var _toasts: VBoxContainer
 var _strip: HBoxContainer
 
@@ -94,9 +103,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_open():
 		return
+	_audio_clock += delta
+	if _audio_clock > 0.5:
+		_audio_clock = 0.0
+		_refresh_sound()
 	if Session.role == Session.Role.SOLO:
 		_listen()
 	else:
@@ -160,15 +173,30 @@ func _build_panel() -> void:
 	_solo_box = VBoxContainer.new()
 	_solo_box.add_theme_constant_override("separation", 8)
 	column.add_child(_solo_box)
+	var host_row := HBoxContainer.new()
+	host_row.add_theme_constant_override("separation", 10)
+	_solo_box.add_child(host_row)
 	var host_button := _button("Host a session", true)
-	host_button.pressed.connect(func(): Session.host())
-	_solo_box.add_child(host_button)
+	host_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	host_button.pressed.connect(_host)
+	host_row.add_child(host_button)
+	# A code is for the room with a neighbour on the same wifi. Off by default: four people in
+	# one studio should not have to read each other numbers to get started.
+	_ask_code = CheckBox.new()
+	_ask_code.text = "Ask for a code"
+	_ask_code.add_theme_font_size_override("font_size", 13)
+	_ask_code.add_theme_color_override("font_color", DIM)
+	host_row.add_child(_ask_code)
 	_solo_box.add_child(_caption("ON THIS NETWORK"))
 	_nearby = VBoxContainer.new()
 	_nearby.add_theme_constant_override("separation", 6)
 	_solo_box.add_child(_nearby)
 	_nearby_empty = _label("Looking for sessions…", 13, DIM)
 	_solo_box.add_child(_nearby_empty)
+	_solo_box.add_child(_caption("SESSION CODE  ·  IF THE HOST GAVE YOU ONE"))
+	_code_edit = _edit("AB12")
+	_code_edit.max_length = 12
+	_solo_box.add_child(_code_edit)
 	_solo_box.add_child(_caption("JOIN BY ADDRESS"))
 	var join_row := HBoxContainer.new()
 	join_row.add_theme_constant_override("separation", 8)
@@ -185,6 +213,13 @@ func _build_panel() -> void:
 	_host_box = VBoxContainer.new()
 	_host_box.add_theme_constant_override("separation", 8)
 	column.add_child(_host_box)
+	_code_box = VBoxContainer.new()
+	_code_box.add_theme_constant_override("separation", 2)
+	_host_box.add_child(_code_box)
+	_code_box.add_child(_caption("SESSION CODE"))
+	_code_shown = _label("", 30, INK)
+	_code_shown.add_theme_constant_override("outline_size", 0)
+	_code_box.add_child(_code_shown)
 	_host_box.add_child(_caption("OTHERS JOIN AT"))
 	_addresses = _label("", 14, INK)
 	_host_box.add_child(_addresses)
@@ -192,8 +227,39 @@ func _build_panel() -> void:
 	end_button.pressed.connect(func(): Session.leave())
 	_host_box.add_child(end_button)
 
+	_host_box.add_child(_caption("SOUND"))
+	_sharing = _label("", 13, DIM)
+	_sharing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_host_box.add_child(_sharing)
+	# The way out stays last.
+	_host_box.move_child(end_button, -1)
+
 	_guest_box = VBoxContainer.new()
+	_guest_box.add_theme_constant_override("separation", 8)
 	column.add_child(_guest_box)
+	_guest_box.add_child(_caption("SOUND"))
+	var hear_row := HBoxContainer.new()
+	hear_row.add_theme_constant_override("separation", 10)
+	_guest_box.add_child(hear_row)
+	_hear = CheckButton.new()
+	_hear.text = "Hear the mix"
+	_hear.add_theme_font_size_override("font_size", 14)
+	_hear.add_theme_color_override("font_color", INK)
+	_hear.toggled.connect(func(on: bool): Session.hear_mix = on)
+	hear_row.add_child(_hear)
+	_volume = HSlider.new()
+	_volume.min_value = -30.0
+	_volume.max_value = 6.0
+	_volume.step = 0.5
+	_volume.value = 0.0
+	_volume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_volume.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_volume.tooltip_text = "Your level for the host's mix. Changes nothing for anyone else."
+	_volume.value_changed.connect(func(v: float): Session.mix_feed.volume_db = v if v > -29.9 else -80.0)
+	hear_row.add_child(_volume)
+	_hearing = _label("", 13, DIM)
+	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_guest_box.add_child(_hearing)
 	var leave_button := _button("Leave session", false)
 	leave_button.pressed.connect(func(): Session.leave())
 	_guest_box.add_child(leave_button)
@@ -222,9 +288,15 @@ func _refresh() -> void:
 			_set_pill("JOINED", host.colour if host != null else colour)
 			_status.text = "In %s's session at %s. Their Reaper, your view." % [
 					Session.name_of(1), Session.joined_address]
+	_refresh_sound()
 	_solo_box.visible = Session.role == Session.Role.SOLO
 	_host_box.visible = Session.role == Session.Role.HOST
 	_guest_box.visible = Session.role == Session.Role.GUEST
+	_code_box.visible = not Session.code.is_empty()
+	var spaced := PackedStringArray()
+	for c in Session.code:
+		spaced.append(c)
+	_code_shown.text = " ".join(spaced)
 	_addresses.text = "\n".join(_lan_addresses().map(
 			func(a): return "%s : %d" % [a, Session.port]))
 
@@ -235,6 +307,35 @@ func _refresh() -> void:
 	for id in ids:
 		_roster.add_child(_roster_row(Session.participants[id]))
 	_refresh_strip()
+
+
+## What this person hears, and how late. The number is the point: "the mix" is useless to play
+## along to at 120ms and fine at 40, and nobody can tell which they have by listening while
+## they are also trying to play.
+func _refresh_sound() -> void:
+	var feed := Session.mix_feed
+	if feed == null:
+		return
+	var s := feed.stats()
+	if Session.role == Session.Role.HOST:
+		var n := int(s.get("listeners", 0))
+		var source: String = s.get("source", "")
+		_sharing.text = "%s\n%s" % [source if source != "" else "No mix audio to share.",
+				"Nobody listening yet." if n == 0 else "%d listening." % n]
+	elif Session.role == Session.Role.GUEST:
+		if _hear.button_pressed != Session.hear_mix:
+			_hear.set_pressed_no_signal(Session.hear_mix)
+		_volume.editable = Session.hear_mix
+		if not Session.hear_mix:
+			_hearing.text = "Off. Turn it on unless you can already hear %s's speakers." % Session.name_of(1)
+		elif not s.get("listening", false):
+			_hearing.text = "%s is not sharing sound." % Session.name_of(1)
+		elif not s.get("hearing", false):
+			_hearing.text = "Waiting for sound…"
+		else:
+			var drops := int(s.get("underruns", 0)) + int(s.get("lost", 0))
+			_hearing.text = "%d ms behind %s's speakers%s" % [roundi(s.get("latency_ms", 0.0)),
+					Session.name_of(1), "" if drops == 0 else "  ·  %d dropouts" % drops]
 
 
 func _roster_row(p) -> Control:
@@ -275,24 +376,46 @@ func _rename(text: String) -> void:
 		Session.set_local_name(text)
 
 
+func _host() -> void:
+	_rename(_name_edit.text)
+	Session.code = make_code() if _ask_code.button_pressed else ""
+	Session.host()
+
+
+## Four characters, from an alphabet with nothing in it that can be misread across a room or
+## misheard when spoken: no 0/O, 1/I/L, 5/S, 2/Z, 8/B.
+static func make_code() -> String:
+	const ALPHABET := "ACDEFGHJKMNPQRTUVWXY34679"
+	var out := ""
+	for i in 4:
+		out += ALPHABET[randi() % ALPHABET.length()]
+	return out
+
+
 func _join(address: String, port: int) -> void:
 	address = address.strip_edges()
 	if address.is_empty():
 		_address_edit.grab_focus()
 		return
 	_rename(_name_edit.text)
-	if Session.join(address, port):
+	if Session.join(address, port, _code_edit.text):
 		toast("Joining %s…" % address)
 
 
-## This machine's addresses a person across the room could type. Loopback is useless to them
-## and link-local means the network has not handed out an address at all.
+## This machine's addresses a person across the room could type. Loopback is useless to them,
+## link-local means the network has not handed out an address at all, and a container or VM
+## bridge (docker0, br-…, virbr0, veth…) is a network that exists only inside this machine.
 static func _lan_addresses() -> Array:
 	var out: Array = []
-	for a in IP.get_local_addresses():
-		if a.contains(":") or a.begins_with("127.") or a.begins_with("169.254."):
+	for iface in IP.get_local_interfaces():
+		var named: String = iface.get("name", "")
+		if ["docker", "br-", "virbr", "veth", "lo"].any(
+				func(p): return named.begins_with(p)):
 			continue
-		out.append(a)
+		for a in iface.get("addresses", []):
+			if a.contains(":") or a.begins_with("127.") or a.begins_with("169.254."):
+				continue
+			out.append(a)
 	if out.is_empty():
 		out.append("127.0.0.1")
 	return out
@@ -353,8 +476,9 @@ func _draw_nearby() -> void:
 		words.add_theme_constant_override("separation", 0)
 		words.add_child(_label("%s's session" % said.get("name", "?"), 14, INK))
 		var people := int(said.get("people", 1))
-		words.add_child(_label("%d tracks · %d %s · %s" % [int(said.get("tracks", 0)), people,
-				"person" if people == 1 else "people", entry["ip"]], 12, DIM))
+		words.add_child(_label("%d tracks · %d %s · %s%s" % [int(said.get("tracks", 0)), people,
+				"person" if people == 1 else "people", entry["ip"],
+				"  ·  code needed" if said.get("locked", false) else ""], 12, DIM))
 		row.add_child(words)
 		var join := _button("Join", true)
 		var ip: String = entry["ip"]

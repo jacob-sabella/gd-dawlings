@@ -113,6 +113,13 @@ func _ready() -> void:
 	_test_a_cursor_drags_a_knob_up_and_down()
 	_test_a_released_control_ignores_its_own_late_echoes()
 	_test_a_surface_never_rebuilds_under_a_hand()
+	_test_the_mix_survives_the_wire()
+	_test_the_jitter_buffer_rides_out_a_bad_network()
+	_test_the_jitter_buffer_follows_a_drifting_clock()
+	_test_the_jitter_buffer_fills_losses_and_drops_the_late()
+	_test_the_jitter_buffer_feeds_a_mixer_that_gulps()
+	_test_the_room_keeps_listening_across_a_change_of_backend()
+	_test_a_session_code_is_a_door()
 	_test_a_restated_project_size_is_not_a_new_bank()
 	_test_a_control_held_elsewhere_refuses_hands_but_still_moves()
 	_test_the_roster_is_the_hosts_word()
@@ -5567,3 +5574,204 @@ func _test_a_restated_project_size_is_not_a_new_bank() -> void:
 	check("the project size announces a bank change once, not per restatement", count[0] == 1)
 	MixWire.apply(state, "/project/tracks", [41])
 	check("and again when it really changes", count[0] == 2)
+
+
+func _test_the_mix_survives_the_wire() -> void:
+	var frames := PackedVector2Array()
+	for i in MixFeed.FRAMES:
+		frames.append(Vector2(sin(i * 0.1) * 0.5, -0.25 if i % 2 == 0 else 1.5))
+	var packet := MixFeed.encode(77, frames)
+	check("a packet of audio fits in one datagram (%d bytes)" % packet.size(), packet.size() <= 600)
+	var back := MixFeed.decode(packet)
+	check("and decodes to the same sequence number", back.get("seq") == 77)
+	var worst := 0.0
+	for i in frames.size():
+		worst = maxf(worst, absf(back["frames"][i].x - frames[i].x))
+	check("with every frame within one 16-bit step (%f)" % worst, worst <= 1.0 / 32767.0 + 1e-6)
+	check("and an over-full sample clipped rather than wrapped", is_equal_approx(back["frames"][1].y, 1.0))
+	check("a listen packet is not mistaken for audio", MixFeed.decode(MixFeed.listen_packet(5, 9)).is_empty())
+	check("nor is a stranger's datagram", MixFeed.decode(PackedByteArray([1, 2, 3])).is_empty())
+
+
+## Packets every 2.7ms, arriving with up to 6ms of jitter, read in 512-frame gulps the way a
+## sound card reads. After priming it must never run dry.
+func _test_the_jitter_buffer_rides_out_a_bad_network() -> void:
+	var jb := JitterBuffer.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var packet_ms := MixFeed.FRAMES * 1000.0 / 48000.0
+	var arrivals: Array = []
+	for seq in 3000:
+		arrivals.append([seq * packet_ms + rng.randf_range(0.0, 6.0), seq])
+	arrivals.sort_custom(func(a, b): return a[0] < b[0])
+	var chunk := PackedVector2Array()
+	chunk.resize(MixFeed.FRAMES)
+	chunk.fill(Vector2(0.1, 0.1))
+	var next := 0
+	var underruns_after_prime := -1
+	var t := 0.0
+	while t < 3000 * packet_ms - 50.0:
+		while next < arrivals.size() and arrivals[next][0] <= t:
+			jb.push(arrivals[next][1], chunk, arrivals[next][0])
+			next += 1
+		jb.pull(512)
+		if underruns_after_prime < 0 and jb.depth() > 0:
+			underruns_after_prime = jb.underruns
+		t += 512 * 1000.0 / 48000.0
+	check("a jittery network is measured as jittery (%.2fms)" % jb.jitter_ms(), jb.jitter_ms() > 0.5)
+	check("and the buffer is kept deep enough that it never runs dry (%d)" % jb.underruns,
+			jb.underruns == underruns_after_prime)
+	check("but no deeper than a few deviations of it (%d frames)" % jb.target, jb.target < 1600)
+	check("reordered packets are counted, not played (%d late)" % jb.late, jb.late > 0)
+
+
+## The host's card at 48048Hz against the guest's at 48000: a tenth of a percent, a whole
+## second of drift an hour. The read rate must bend to hold the depth.
+func _test_the_jitter_buffer_follows_a_drifting_clock() -> void:
+	for host_rate in [48048.0, 47952.0]:
+		var jb := JitterBuffer.new()
+		var chunk := PackedVector2Array()
+		chunk.resize(MixFeed.FRAMES)
+		var packet_ms: float = MixFeed.FRAMES * 1000.0 / host_rate
+		var seq := 0
+		var t := 0.0
+		var pull_ms := 256 * 1000.0 / 48000.0
+		var next_pull := 0.0
+		# Twenty minutes, compressed: long enough that an uncorrected buffer would have drifted
+		# by over a second.
+		while t < 20.0 * 60.0 * 1000.0:
+			if t >= seq * packet_ms:
+				jb.push(seq, chunk, t)
+				seq += 1
+			if t >= next_pull:
+				jb.pull(256)
+				next_pull += pull_ms
+			t = minf(seq * packet_ms, next_pull)
+		check("a %s host clock is followed (depth %d against target %d, %d underruns)" % [
+				"fast" if host_rate > 48000.0 else "slow", jb.depth(), jb.target, jb.underruns],
+				absi(jb.depth() - jb.target) < 400 and jb.underruns <= 1)
+		check("by bending the read rate the right way (%.5f)" % jb.ratio(),
+				(jb.ratio() > 1.0) == (host_rate > 48000.0))
+
+
+func _test_the_jitter_buffer_fills_losses_and_drops_the_late() -> void:
+	var jb := JitterBuffer.new()
+	var chunk := PackedVector2Array()
+	chunk.resize(128)
+	chunk.fill(Vector2(0.5, 0.5))
+	jb.push(0, chunk, 0.0)
+	jb.push(1, chunk, 2.7)
+	jb.push(4, chunk, 10.7)
+	check("two lost packets are counted", jb.lost == 2)
+	check("and their time is filled, so what follows is not pulled early", jb.depth() == 128 * 5)
+	jb.push(2, chunk, 11.0)
+	check("a packet that arrives after its gap was filled is dropped", jb.late == 1 and jb.depth() == 128 * 5)
+	var quiet := JitterBuffer.new()
+	quiet.push(0, chunk, 0.0)
+	var out := quiet.pull(256)
+	check("a buffer still priming plays silence, not its first packet at once",
+			out.size() == 256 and out[0] == Vector2.ZERO)
+
+
+func _test_a_session_code_is_a_door() -> void:
+	var was := Session.local_name
+	Session.local_name = "Ada"
+	Session.code = ""
+	check("an open session lets anyone in", Session.admission_refusal("").is_empty())
+	Session.code = "K7QX"
+	check("a locked one does not let in no code", Session.admission_refusal("") != "")
+	check("nor the wrong one", Session.admission_refusal("K7QY") == "That is not Ada's code.")
+	check("and does not care how it was typed", Session.admission_refusal(" k7 qx ").is_empty())
+	var code := SessionPanel.make_code()
+	check("a made code is four characters with nothing to misread (%s)" % code,
+			code.length() == 4 and not code.contains("0") and not code.contains("O")
+			and not code.contains("1") and not code.contains("I"))
+	Session.code = ""
+	Session.local_name = was
+
+
+## The shape Godot actually consumes in: a generator queue the mixer empties 512 frames at a
+## time, refilled from the jitter buffer a packet at a time as packets land. The first version
+## of this sized the buffer for the packet and ran dry fifteen times a second on the gulp.
+func _test_the_jitter_buffer_feeds_a_mixer_that_gulps() -> void:
+	var jb := JitterBuffer.new()
+	jb.step_frames = MixFeed.MIX_STEP
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var chunk := PackedVector2Array()
+	chunk.resize(MixFeed.FRAMES)
+	chunk.fill(Vector2(0.2, 0.2))
+	var packet_ms := MixFeed.FRAMES * 1000.0 / 48000.0
+	var step_ms := MixFeed.MIX_STEP * 1000.0 / 48000.0
+	var arrivals: Array = []
+	for seq in 4000:
+		arrivals.append([seq * packet_ms + rng.randf_range(0.0, 2.0), seq])
+	arrivals.sort_custom(func(a, b): return a[0] < b[0])
+	var queued := 0
+	var next := 0
+	var next_step := 0.0
+	var started := false
+	var buffered_ms: Array = []
+	var t := 0.0
+	while t < 3900 * packet_ms:
+		while next < arrivals.size() and arrivals[next][0] <= t:
+			jb.push(arrivals[next][1], chunk, arrivals[next][0])
+			next += 1
+		while queued + MixFeed.FRAMES <= MixFeed.QUEUE_FRAMES:
+			if jb.take(MixFeed.FRAMES, queued).is_empty():
+				break
+			queued += MixFeed.FRAMES
+			started = true
+		if t >= next_step:
+			if queued < MixFeed.MIX_STEP:
+				jb.reprime()
+			queued = maxi(0, queued - MixFeed.MIX_STEP)
+			next_step += step_ms
+			if started:
+				buffered_ms.append((jb.depth() + queued) * 1000.0 / 48000.0)
+		t += 0.5
+	buffered_ms.sort()
+	var median: float = buffered_ms[buffered_ms.size() / 2]
+	check("a gulping mixer never finds the queue short (%d)" % jb.underruns, jb.underruns == 0)
+	check("and the queue is not kept needlessly deep either (median %.1fms buffered)" % median,
+			median < 20.0)
+	var fresh := JitterBuffer.new()
+	fresh.reprime()
+	check("a player that starts before the first packet is not a dropout", fresh.underruns == 0)
+
+
+## Joining a session, leaving one, falling back to the stand-in: each replaces the backend, and
+## its MixState with it. A surface subscribed to the state it was built under would go on
+## listening to a mix nobody changes any more -- a guest who fell back to solo kept the host's
+## forty-track timeline on the stand.
+func _test_the_room_keeps_listening_across_a_change_of_backend() -> void:
+	var previous := DAW.backend
+	var heard := [0]
+	var hear := func(): heard[0] += 1
+	DAW.use(OfflineBackend.new(), false)
+	var first := DAW.backend
+	DAW.timeline_changed.connect(hear)
+	DAW.use(OfflineBackend.new(), false)
+	heard[0] = 0
+	DAW.state.timeline_changed.emit()
+	check("a change to the new mix reaches whoever listened through DAW", heard[0] == 1)
+	if is_instance_valid(first):
+		first.state.timeline_changed.emit()
+	check("and the old mix, if anything still stirs it, does not", heard[0] == 1)
+	DAW.timeline_changed.disconnect(hear)
+	DAW.use(previous, false)
+
+	var offences: Array[String] = []
+	for path in _gd_files_under("res://hardware") + _gd_files_under("res://core/presentation") + _gd_files_under("res://scenes"):
+		for line in FileAccess.get_file_as_string(path).split("\n"):
+			var code := line.strip_edges()
+			if code.begins_with("#"):
+				continue
+			if RegEx.create_from_string("DAW\\.state\\.[a-z_]+\\.(connect|is_connected)").search(code) != null:
+				offences.append("%s: %s" % [path.get_file(), code])
+	for offence in offences:
+		print("    " + offence)
+	check("nothing subscribes to a mix that can be swapped out from under it", offences.is_empty())
+	check("and the scan would have caught the line that did", RegEx.create_from_string(
+			"DAW\\.state\\.[a-z_]+\\.(connect|is_connected)").search(
+			"DAW.state.timeline_changed.connect(mark_dirty)") != null)

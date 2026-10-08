@@ -83,7 +83,7 @@ func _ready() -> void:
 	_db_label = _label(15, Vector3(0, 0.020, 0.001))
 	add_child(_db_label)
 
-	DAW.state.master_changed.connect(func(_field: StringName): refresh())
+	DAW.master_changed.connect(func(_field: StringName): refresh())
 	refresh()
 
 

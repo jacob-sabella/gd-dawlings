@@ -128,7 +128,7 @@ func _ready() -> void:
 	_db_label = _make_label(DB_SIZE / 4, Vector3(0, 0.022, 0.001))
 	add_child(_db_label)
 
-	DAW.state.track_changed.connect(_on_track_changed)
+	DAW.track_changed.connect(_on_track_changed)
 	refresh()
 
 

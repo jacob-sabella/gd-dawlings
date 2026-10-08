@@ -63,8 +63,15 @@ func _host(port: int) -> void:
 		var offline := OfflineBackend.new()
 		offline.track_count = 20
 		DAW.use(offline)
+	Session.code = "AB12"
+	Session.mix_source = func(): return MixSource.Tone.new()
 	check("hosts", Session.host(port))
+	check("and shares its mix's audio", Session.mix_feed.sending)
 	_keep_publishing(Transform3D(Basis(Vector3.UP, 0.6), Vector3(1.2, 1.62, 0.4)), "MASTER  VOLUME")
+
+	await _until(1.1)
+	check("a knock with the wrong code is not let in", Session.participants.size() == 1)
+	check("and the host hears about it", _notices.has("Someone tried to join without the right code."))
 
 	await _until(3.6)
 	var guest_id := _other_id()
@@ -78,6 +85,7 @@ func _host(port: int) -> void:
 	check("the guest's fader move reached the mix (%.4f)" % DAW.state.track(2).volume,
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
+	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
 	# Reach for the fader the guest is holding: the host's own hand is refused too.
 	Session.claim_hold(KEY)
@@ -103,8 +111,16 @@ func _host(port: int) -> void:
 
 func _guest(port: int) -> void:
 	Session.local_name = "Grace"
-	await _until(0.6)
-	check("joins", Session.join("127.0.0.1", port))
+	# On the host's own machine, which would ordinarily mean not listening: the host's speakers
+	# are already in the room. Asked for here, because the probe is what is listening.
+	Session.listen_choice = 1
+	await _until(0.3)
+	Session.join("127.0.0.1", port, "XX99")
+	await _until(1.1)
+	check("the wrong code is turned away (%s)" % [_notices], _notices.has("That is not Ada's code."))
+	check("back on my own after it", Session.role == Session.Role.SOLO)
+	# Read across a room and typed in a hurry: spaces and case are not the code.
+	check("joins", Session.join("127.0.0.1", port, "ab 12"))
 	check("as a guest that never opens the DAW", not Session.is_authority())
 	_keep_publishing(Transform3D(Basis.IDENTITY, Vector3(-0.8, 1.5, 0.9)), "")
 
@@ -133,10 +149,27 @@ func _guest(port: int) -> void:
 	await _until(5.2)
 	check("my release emptied the table", Session.holds.is_empty())
 
+	await _until(6.8)
+	var heard := Session.mix_feed.stats()
+	print("audio: ", heard, " clicks ", Session.mix_feed.heard_clicks)
+	check("the host's mix is reaching me", heard.get("hearing", false) and int(heard.get("packets", 0)) > 1000)
+	check("loud enough to be the tone (%.3f)" % Session.mix_feed.heard_peak, Session.mix_feed.heard_peak > 0.15)
+	var clicks: Array = Session.mix_feed.heard_clicks
+	var steady := clicks.size() >= 3
+	for i in range(1, clicks.size()):
+		steady = steady and absi(int(clicks[i]) - int(clicks[i - 1]) - 48000) < 480
+	check("its clicks a second apart, to within 10ms (%s)" % [clicks], steady)
+	check("without running dry once it started (%d)" % int(heard.get("underruns", -1)),
+			int(heard.get("underruns", 99)) <= 1)
+	check("or losing a packet on loopback (%d)" % int(heard.get("lost", -1)), int(heard.get("lost", 99)) == 0)
+	check("and close enough behind to play along to (%.1fms)" % float(heard.get("latency_ms", 999.0)),
+			float(heard.get("latency_ms", 999.0)) < 30.0)
+
 	await _until(7.6)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
+	check("and no longer listening", not Session.mix_feed.listening)
 	check("with a mix of my own again", DAW.is_live() and DAW.state.tracks.size() > 0)
 
 

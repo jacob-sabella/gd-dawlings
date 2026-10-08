@@ -24,10 +24,15 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Multiplayer.** A host-owned roster with colours, avatars, and pointers addressed by control
   key. The host arbitrates holds, so a control has one hand. Late echoes are ignored after
   release. Sessions are found by LAN discovery and managed from the session panel (**M**). A
-  goodbye is sent on leave, and a guest falls back to solo when its host is gone. Verified by
-  `tools/session_probe.sh` (also `--reaper`) and `tools/session_shot.sh`. Still open: XR
-  calibration across participants is untested, there is no delta compression, and only a
-  trusted LAN is supported.
+  goodbye is sent on leave, and a guest falls back to solo when its host is gone. An optional
+  session code admits only those told it; nothing reaches a guest until it is admitted. Verified
+  by `tools/session_probe.sh` (also `--reaper`) and `tools/session_shot.sh`. Still open: XR
+  calibration across participants is untested, and nothing is encrypted.
+- **The mix's sound, to guests.** Reaper's outputs are tapped through PipeWire and sent over
+  UDP to admitted guests, with an adaptive jitter buffer and clock-drift correction. Measured at
+  46ms end to end by `tools/audio_latency.sh`. Still open: no codec (1.5Mbit/s per listener), no
+  MIDI from a guest into the host's Reaper, picture ~45ms ahead of sound, and Linux/PipeWire
+  hosts only.
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Arrange timeline.** A lane per track with the track's colour and flags, a bar ruler from

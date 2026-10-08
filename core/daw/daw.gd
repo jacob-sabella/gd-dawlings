@@ -21,6 +21,23 @@ extends Node
 
 signal connection_changed()
 
+## The mix's own signals, relayed from whichever MixState is current. Connect to THESE, never to
+## `DAW.state.<signal>`: the state belongs to the backend and is replaced with it -- joining a
+## session, leaving one, dropping to the stand-in -- and a surface connected to the old one is
+## left listening to a mix nobody is changing any more. That was not hypothetical: a guest
+## falling back to its own mix kept the host's forty-track timeline on the stand, because the
+## timeline was still subscribed to the host's replicated cache.
+signal track_added(index: int)
+signal track_changed(index: int, field: StringName)
+signal transport_changed()
+signal master_changed(field: StringName)
+signal fx_changed(track_index: int, fx_index: int)
+signal timeline_changed()
+signal bank_changed()
+
+const RELAYED := [&"track_added", &"track_changed", &"transport_changed", &"master_changed",
+		&"fx_changed", &"timeline_changed", &"bank_changed"]
+
 ## Every verb a surface may use, as data. The same list as the methods on DAWBackend -- it is
 ## here as well because a guest's intent names its verb, and a verb missing from this list is a
 ## verb that silently stops working for everyone who is not the host.
@@ -49,15 +66,35 @@ func _ready() -> void:
 ## the command line has been read.
 func use(new_backend: DAWBackend, start: bool = true, options: Dictionary = {}) -> bool:
 	if backend:
+		_relay(backend.state, false)
 		backend.close()
 		backend.queue_free()
 	backend = new_backend
 	add_child(backend)
+	_relay(backend.state, true)
 	backend.connection_changed.connect(func(): connection_changed.emit())
 	backend.is_authority = Session.is_authority()
 	var ok := backend.open(options) if start else true
 	connection_changed.emit()
+	# Everything listening has been looking at a different mix until now; tell it all at once
+	# rather than leave each part to notice when its own corner next happens to change.
+	bank_changed.emit()
+	transport_changed.emit()
+	timeline_changed.emit()
+	master_changed.emit(&"")
 	return ok
+
+
+func _relay(from: MixState, on: bool) -> void:
+	if from == null:
+		return
+	for sig in RELAYED:
+		var out := Signal(self, sig)
+		var source := Signal(from, sig)
+		if on and not source.is_connected(out.emit):
+			source.connect(out.emit)
+		elif not on and source.is_connected(out.emit):
+			source.disconnect(out.emit)
 
 
 ## The mix cache. Reads go straight to it from every surface -- a meter polling two floats a

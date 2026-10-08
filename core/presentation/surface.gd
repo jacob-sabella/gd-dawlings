@@ -79,9 +79,9 @@ var _dirty := true
 func _ready() -> void:
 	if surface_id == &"":
 		surface_id = StringName(name.to_snake_case())
-	var state := DAW.state
-	state.track_added.connect(_on_shape_changed)
-	state.fx_changed.connect(_on_fx_shape_changed)
+	# Through DAW, which relays whichever mix is current -- not DAW.state, which is replaced.
+	DAW.track_added.connect(_on_shape_changed)
+	DAW.fx_changed.connect(_on_fx_shape_changed)
 	DAW.connection_changed.connect(_on_connection_changed)
 	_dirty = true
 

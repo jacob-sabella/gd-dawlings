@@ -25,8 +25,14 @@ if [ -e "$OVERRIDE" ]; then
   echo "$OVERRIDE already exists; refusing to overwrite it." >&2
   exit 4
 fi
-HOST_LOG="$(mktemp)"; GUEST_LOG="$(mktemp)"
-trap 'rm -f "$OVERRIDE" "$HOST_LOG" "$GUEST_LOG"' EXIT
+# SHOT_LOGS=path/prefix keeps both processes' output as prefix.host.log / prefix.guest.log.
+if [ -n "${SHOT_LOGS:-}" ]; then
+  HOST_LOG="$SHOT_LOGS.host.log"; GUEST_LOG="$SHOT_LOGS.guest.log"
+  trap 'rm -f "$OVERRIDE"' EXIT
+else
+  HOST_LOG="$(mktemp)"; GUEST_LOG="$(mktemp)"
+  trap 'rm -f "$OVERRIDE" "$HOST_LOG" "$GUEST_LOG"' EXIT
+fi
 printf '[display]\n\nwindow/size/resizable=false\nwindow/vsync/vsync_mode=0\n' >"$OVERRIDE"
 # shellcheck source=offscreen.sh
 . tools/offscreen.sh

@@ -248,8 +248,8 @@ func _rebuild() -> void:
 
 	# Once: this runs on every rebuild, and a second connection is an error from the engine
 	# and a second refresh per transport change.
-	if not DAW.state.transport_changed.is_connected(_refresh):
-		DAW.state.transport_changed.connect(_refresh)
+	if not DAW.transport_changed.is_connected(_refresh):
+		DAW.transport_changed.connect(_refresh)
 	_refresh()
 
 
