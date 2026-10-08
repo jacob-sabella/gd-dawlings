@@ -32,6 +32,12 @@ fi
 
 # shellcheck disable=SC2206
 EXTRA=(${SHOT_ARGS:-})
+# The authored room, not whoever-ran-this-last's. A shot that depends on what someone clicked
+# yesterday is not reproducible, and one that pushes furniture would save it. SHOT_LAYOUT=user
+# photographs the real saved layout instead.
+if [ "${SHOT_LAYOUT:-fresh}" != "user" ]; then
+  EXTRA+=(--fresh-layout)
+fi
 
 RUNNER=(godot --path . --resolution "$SHOT_RES" --
   --shot "$ABS" --shot-frame "$FRAME" --quit-after "$QUIT" --shot-res "$SHOT_RES"

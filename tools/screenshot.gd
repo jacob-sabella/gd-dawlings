@@ -22,6 +22,16 @@ var _frames := 0
 var _cam: Array = []
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
+## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
+## move to the second by tick 70, let go. `--turn 2` adds that many wheel notches halfway through.
+var _drag_from := Vector2(-1, -1)
+var _drag_to := Vector2(-1, -1)
+var _drag_frames := Vector2i(-1, -1)
+var _turn := 0
+var _ticks := 0
+## `--shot-tick 240`: capture on that physics tick instead of a drawn frame, for anything that
+## moves in simulated time -- a pushed rack coasting to a stop -- rather than in frames.
+var _shot_tick := -1
 
 
 func _ready() -> void:
@@ -44,9 +54,27 @@ func _ready() -> void:
 				if i + 1 < args.size():
 					var xy := args[i + 1].split(",")
 					if xy.size() == 2: _hover = Vector2(float(xy[0]), float(xy[1]))
+			"--drag":
+				if i + 1 < args.size():
+					var spec := args[i + 1].split("@")
+					var ends := spec[0].split(":")
+					if spec.size() == 2 and ends.size() == 2:
+						var a := ends[0].split(",")
+						var b := ends[1].split(",")
+						var f := spec[1].split("-")
+						_drag_from = Vector2(float(a[0]), float(a[1]))
+						_drag_to = Vector2(float(b[0]), float(b[1]))
+						_drag_frames = Vector2i(int(f[0]), int(f[1]))
+			"--shot-tick":
+				if i + 1 < args.size(): _shot_tick = int(args[i + 1])
+			"--turn":
+				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--cam":
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
-	if _shot_path == "" and _quit_after < 0:
+	if _shot_tick >= 0:
+		_shot_frame = -1
+		_quit_after = -1
+	if _shot_path == "" and _quit_after < 0 and _shot_tick < 0:
 		set_process(false)
 
 
@@ -88,3 +116,37 @@ func _capture() -> void:
 	# stated can be compared against the wrong thing without anyone noticing -- a window manager
 	# that packs the window produces a smaller PNG that still looks like a successful shot.
 	print("SHOT_SAVED %s %dx%d" % [_shot_path, image.get_width(), image.get_height()])
+
+
+## Driven on physics ticks, not rendered frames. Captures run with vsync off, so hundreds of
+## frames are drawn per tick, and a drag paced by frames was over before the interactor -- which
+## reads its button on the physics tick, like every hand -- had looked once.
+func _physics_process(_delta: float) -> void:
+	_ticks += 1
+	if _drag_frames.x >= 0:
+		_drive_drag()
+	if _shot_tick >= 0 and _ticks == _shot_tick:
+		_shot_frame = _frames + 2
+		_quit_after = _frames + 6
+
+
+func _drive_drag() -> void:
+	var hands := get_tree().root.find_children("*", "MouseInteractor", true, false)
+	if hands.is_empty():
+		return
+	var hand := hands[0] as MouseInteractor
+	if _ticks < _drag_frames.x:
+		return
+	if _ticks > _drag_frames.y:
+		hand.press_override = 0
+		return
+	var t := float(_ticks - _drag_frames.x) / float(maxi(1, _drag_frames.y - _drag_frames.x))
+	hand.pointer_override = _drag_from.lerp(_drag_to, t)
+	hand.press_override = 1
+	if _turn != 0 and _ticks == (_drag_frames.x + _drag_frames.y) / 2:
+		for n in absi(_turn):
+			var wheel := InputEventMouseButton.new()
+			wheel.button_index = MOUSE_BUTTON_WHEEL_UP if _turn > 0 else MOUSE_BUTTON_WHEEL_DOWN
+			wheel.pressed = true
+			wheel.position = hand.pointer_override
+			get_viewport().push_input(wheel)

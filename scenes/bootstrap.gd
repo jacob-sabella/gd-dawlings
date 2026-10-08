@@ -31,7 +31,12 @@ func _ready() -> void:
 
 	add_child(xr)
 	var medium := xr.start(args["xr"], args["ar"])
-	Session.layout.load_saved()
+	# A capture or a demo starts from the authored room and keeps whatever it moves to itself.
+	# Without this, a screenshot that pushed a rack would move the rack in the real layout.
+	if args["fresh_layout"]:
+		Session.layout.save_path = "user://scratch_layout.cfg"
+	else:
+		Session.layout.load_saved()
 	Session.layout.medium = medium
 
 	if args["join"] != "":
@@ -118,7 +123,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -143,6 +148,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["eyes"] = float(argv[i])
+			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
 			"--no-motion": out["no_motion"] = true
@@ -267,5 +273,5 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  E expand desk  |  +/- text size  |  tab move gear" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), DAW.state.tracks.size()]

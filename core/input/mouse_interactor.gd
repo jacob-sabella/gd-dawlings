@@ -12,6 +12,14 @@ extends Interactor
 var _card: HoverCard
 ## A pointer position to use instead of the mouse, for captures. Negative is "use the mouse".
 var pointer_override := Vector2(-1, -1)
+## The left button, for captures: -1 reads the mouse, 0 is up, 1 is down. With the pointer
+## override this lets a capture DRAG something through the same path a hand on the mouse does,
+## rather than poking the control directly and photographing a result no person could produce.
+var press_override := -1
+
+
+func reach() -> float:
+	return 12.0
 
 
 func pointer() -> Vector2:
@@ -58,6 +66,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func is_pressing() -> bool:
+	if press_override >= 0:
+		return press_override == 1
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
 
