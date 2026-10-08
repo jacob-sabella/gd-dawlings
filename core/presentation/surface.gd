@@ -26,6 +26,17 @@ extends Node3D
 ## panel is laid back sixty degrees inside the console itself, and viewed dead on that is a desk
 ## seen edge first.
 @export var screen_pitch_degrees := 0.0
+## Where on the monitor this surface is framed, as the fraction of the view's height its
+## top edge sits below the top of the frame -- or negative to centre it.
+##
+## Centred is right for a surface that IS the screen. It is wrong for a panel shown over the
+## studio, because the middle of a seated view is the desk: a timeline framed dead centre lands
+## on the strip names and pan knobs, the one row of the console that is only read and never
+## leaned over. Hung from the top instead it fills the wall above the meters, which is where a
+## studio puts its arrange screen anyway.
+@export var screen_top := -1.0
+## The most of the view's height a top-hung panel may take.
+@export var screen_band := 0.33
 
 ## Emitted after geometry exists. The mount listens, because a surface framed to fill a screen
 ## has to be measured, and before the first build there is nothing to measure.
@@ -83,6 +94,13 @@ func _process(_delta: float) -> void:
 		_dirty = false
 		_rebuild()
 		rebuilt.emit()
+
+
+## Told by the mount, before it is placed, whether it has a wide frame to fill -- a monitor --
+## or a fixed one, like a stand built to its size. Not which mode: a surface does not branch on
+## how it is being looked at, only on how much room it has been given.
+func set_wide(_wide: bool) -> void:
+	pass
 
 
 func mark_dirty() -> void:
@@ -143,6 +161,15 @@ func framing_root() -> Node3D:
 ## project: a 6-track console and a 48-track one are different pieces of furniture, and a
 ## hard-coded extent would frame one of them wrongly. Returns an empty AABB before the first
 ## build, which the caller must treat as "not yet known" rather than as "zero-sized".
+func _shown_within(node: Node) -> bool:
+	var n := node
+	while n != null and n != self:
+		if n is Node3D and not (n as Node3D).visible:
+			return false
+		n = n.get_parent()
+	return true
+
+
 func content_aabb() -> AABB:
 	var out := AABB()
 	var first := true
@@ -155,6 +182,11 @@ func content_aabb() -> AABB:
 		# legibility rig reads, and nobody has ever needed to read a plinth. Counting it put
 		# the mix position half a metre low, staring into the console's own woodwork.
 		if vi.is_in_group(&"presentation_chrome"):
+			continue
+		# Nor anything switched off. A part hidden until it is needed -- the timeline's lane
+		# ladder, below sixteen tracks -- is not on screen to frame, and a hidden unit box
+		# measured as a metre cube shrank a thirteen-track timeline to a third of the monitor.
+		if not _shown_within(vi):
 			continue
 		var box := vi.get_aabb()
 		# Into this surface's frame: a strip is rotated and offset inside the console, and its

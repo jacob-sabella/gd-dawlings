@@ -26,6 +26,9 @@ const SCREEN_MARGIN := 1.18
 ## moves the handle. Its size is a constant, so the space it needs can be one too.
 const CHROME_ALLOWANCE := 0.055
 
+## How far from the eye a panel on the monitor actually sits, in metres. See _framed_transform.
+const SCREEN_NEAR := 0.42
+
 ## Which modes a tap on a handle walks through, in order.
 const MODE_ORDER := [Presentation.Mode.SCREEN, Presentation.Mode.ROOM, Presentation.Mode.STUDIO]
 
@@ -115,6 +118,7 @@ func apply(surface_id: StringName) -> void:
 	if target == null:
 		push_warning("SurfaceMount: no anchor for mode %s; leaving %s where it is." % [Presentation.MODE_NAMES.get(mode, mode), surface_id])
 		return
+	surface.set_wide(mode == Presentation.Mode.SCREEN)
 	if surface.get_parent() == target:
 		return
 	surface.get_parent().remove_child(surface)
@@ -157,15 +161,27 @@ func _framed_transform(surface: Surface) -> Transform3D:
 	var pitched := Transform3D(basis, Vector3.ZERO) * bounds
 	var half_v := tan(deg_to_rad(camera.fov) * 0.5)
 	var aspect := float(camera.get_viewport().get_visible_rect().size.aspect())
-	var distance := maxf(
-			pitched.size.y * 0.5 / half_v,
-			(pitched.size.x * 0.5 + CHROME_ALLOWANCE) / (half_v * aspect)) * SCREEN_MARGIN
+	var by_width := (pitched.size.x * 0.5 + CHROME_ALLOWANCE) / (half_v * aspect) * SCREEN_MARGIN
+	var distance := maxf(pitched.size.y * 0.5 / half_v * SCREEN_MARGIN, by_width)
+	var lift := 0.0
+	if surface.screen_top >= 0.0:
+		# Hung from the top of the frame: as close as the band and the width allow, then raised
+		# until its top edge is where it was asked to be.
+		distance = maxf(pitched.size.y / (2.0 * half_v * surface.screen_band), by_width)
+		var half_view := distance * half_v
+		lift = half_view * (1.0 - 2.0 * surface.screen_top) - pitched.size.y * 0.5
 
+	# Then the whole framing is shrunk toward the eye until it sits at SCREEN_NEAR. It looks the
+	# same -- the same angle at the eye -- but a panel a metre out is IN the room, and a room
+	# has a patchbay at that distance: its jacks drew behind the timeline and still took the
+	# clicks aimed at it. Nearer than any furniture can stand, nothing comes between.
+	var k := minf(1.0, SCREEN_NEAR / distance)
 	# The surface's own origin is not its centre -- a console's origin is at the front edge of
 	# the desk -- so the centre is what gets put on the axis, and the origin follows from it.
-	var centre_in_camera := Vector3(0, 0, -distance)
-	var origin_in_camera := centre_in_camera - basis * bounds.get_center()
-	return screen_stage.transform.affine_inverse() * Transform3D(basis, origin_in_camera)
+	var centre_in_camera := Vector3(0, lift, -distance) * k
+	var scaled := basis.scaled(Vector3.ONE * k)
+	var origin_in_camera := centre_in_camera - scaled * bounds.get_center()
+	return screen_stage.transform.affine_inverse() * Transform3D(scaled, origin_in_camera)
 
 
 ## Asked before re-anchoring anything: does something else currently own this surface's

@@ -29,6 +29,11 @@ const BODY_SIZE := Vector3(SIZE.x, SIZE.y, 0.006)
 const LAMP_SIZE := Vector3(SIZE.x * 0.66, SIZE.y * 0.42, 0.0015)
 const LAMP_OFFSET := Vector3(0, 0, 0.0038)
 
+## How much bigger than the cap the place that takes the click is. Larger where the button is
+## always seen from further off than it is drawn for -- a rack beyond the end of a forty-track
+## desk -- and where nothing is close enough beside it for the pad to steal from.
+var hit_pad := Vector2(1.2, 1.4)
+
 
 static func body_material() -> StandardMaterial3D:
 	return Materials.cap_plastic(Color(0.12, 0.13, 0.15))
@@ -99,7 +104,7 @@ func _ready() -> void:
 
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(SIZE.x * 1.2, SIZE.y * 1.4, 0.01)
+	box.size = Vector3(SIZE.x * hit_pad.x, SIZE.y * hit_pad.y, 0.01)
 	shape.shape = box
 	add_child(shape)
 

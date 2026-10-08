@@ -23,6 +23,7 @@ extends Node3D
 const RACK_WIDTH := 0.483
 const U := 0.0445
 const UNITS_TALL := 2
+const RACK_HIT_PAD := Vector2(1.3, 2.1)
 const MAX_KNOBS := 8
 const MESH_PATH := "res://assets/hardware/rack_panel.glb"
 
@@ -159,7 +160,9 @@ func _ready() -> void:
 	Lettering.range_to_legibility(_name_label)
 	add_child(_name_label)
 
+	# A rack is the furthest thing from the seat that has buttons this small on it.
 	_bypass = PanelButton.new()
+	_bypass.hit_pad = RACK_HIT_PAD
 	_bypass.led_colour = Color(0.4, 0.95, 0.5)
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
 	_bypass.describe_title = func() -> String: return "%s  POWER" % _unit_caption()
@@ -181,6 +184,7 @@ func _ready() -> void:
 	add_child(_page_label)
 
 	_page_prev = PanelButton.new()
+	_page_prev.hit_pad = RACK_HIT_PAD
 	_page_prev.led_colour = Color(0.45, 0.68, 0.95)
 	_page_prev.position = Vector3(RACK_WIDTH * 0.5 - 0.090, h * 0.5 - 0.016, 0.004)
 	_page_prev.pressed.connect(func(): _step_page(-1))
@@ -189,6 +193,7 @@ func _ready() -> void:
 	add_child(_page_prev)
 
 	_page_next = PanelButton.new()
+	_page_next.hit_pad = RACK_HIT_PAD
 	_page_next.led_colour = Color(0.45, 0.68, 0.95)
 	_page_next.position = Vector3(RACK_WIDTH * 0.5 - 0.068, h * 0.5 - 0.016, 0.004)
 	_page_next.pressed.connect(func(): _step_page(1))

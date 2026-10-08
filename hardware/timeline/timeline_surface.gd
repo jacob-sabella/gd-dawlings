@@ -19,6 +19,11 @@ extends Surface
 
 ## Panel geometry, in metres. Sized for a monitor at SCREEN_MARGIN and comfortable in the room.
 const WIDTH := 0.86
+## Given a wide frame the panel is wider than on its stand: the stand is built for WIDTH, but a
+## screen is sixteen by nine and the band the timeline gets on it is short and long. More
+## width is more time per lane, which is the one thing a timeline cannot have too much of.
+const SCREEN_WIDTH := 1.30
+var width := WIDTH
 const LANE_HEIGHT := 0.0168
 const LANE_GAP := 0.0022
 const HEADER_WIDTH := 0.108
@@ -45,10 +50,19 @@ const LABEL_CLEARANCE := 0.042
 const EDGE_GAP := 0.0006
 
 const SCRUBBER_BAND := 0.016
+## Most lanes the panel shows at once. Past this the panel stopped being a timeline and became a
+## wall: at 40 tracks it was 0.8 m tall and hung down over the middle of the console, hiding the
+## faders a person had sat down to use. The rest scroll -- the wheel over the track names.
+const MAX_LANES := 16
 
 ## The window onto the project, in seconds. Zero span means "not set yet": the first rebuild
 ## that finds a project fits the whole of it, and after that the viewer owns the window.
 var view_start := 0.0
+## Index into the track list of the top lane shown.
+var lane_first := 0
+var _header: TimelineHeader
+var _lane_slot: MeshInstance3D
+var _lane_thumb: MeshInstance3D
 var view_span := 0.0
 
 var _playhead: Node3D
@@ -79,8 +93,17 @@ var _item_strips: MeshBank
 var _lane_y: Array[float] = []
 
 
+func set_wide(wide: bool) -> void:
+	var wanted := SCREEN_WIDTH if wide else WIDTH
+	if not is_equal_approx(wanted, width):
+		width = wanted
+		mark_dirty()
+
+
 func _ready() -> void:
 	surface_kind = &"timeline"
+	# Clear of the HUD line, above the desk.
+	screen_top = 0.06
 	if surface_id == &"":
 		surface_id = &"timeline"
 	super()
@@ -114,6 +137,11 @@ func _ready() -> void:
 	_lanes.surface = self
 	add_child(_lanes)
 
+	_header = TimelineHeader.new()
+	_header.name = "Header"
+	_header.surface = self
+	add_child(_header)
+
 	# Split, in the corner over the track names where the ruler has no numbers to show. Built
 	# once for the same reason: pressing it changes the timeline, and a rebuild that freed the
 	# key under the press would drop the release on the floor.
@@ -145,15 +173,15 @@ func _rebuild() -> void:
 	_clear_built()
 	_playhead = null
 
-	var indices := DAW.state.track_indices()
+	var indices := _shown()
 	if indices.is_empty():
 		return
 
 	var lanes := indices.size()
 	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND
 	_top_y = _height * 0.5
-	_lane_area_x = -WIDTH * 0.5 + HEADER_WIDTH
-	_lane_area_width = WIDTH - HEADER_WIDTH - 0.006
+	_lane_area_x = -width * 0.5 + HEADER_WIDTH
+	_lane_area_width = width - HEADER_WIDTH - 0.006
 
 	var project := DAW.state.timeline_length()
 	if view_span <= 0.0:
@@ -222,9 +250,11 @@ func _place_strips() -> void:
 			_top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0018)
 	_seek_strip.refresh()
 	_loop_strip.width = _lane_area_width
-	_loop_strip.height = LOOP_BAND
+	# Taller than the band it draws on, and only upward: above the top edge there is nothing
+	# else to hit, and an eight-millimetre band seen across a forty-track room is a few pixels.
+	_loop_strip.height = LOOP_BAND * 1.6
 	_loop_strip.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
-			_top_y - LOOP_BAND * 0.5, 0.0018)
+			_top_y - LOOP_BAND + LOOP_BAND * 0.8, 0.0018)
 	_loop_strip.refresh()
 
 	var lanes_top := _top_y - RULER_HEIGHT
@@ -235,9 +265,15 @@ func _place_strips() -> void:
 			(lanes_top + lanes_bottom) * 0.5, 0.0018)
 	_lanes.refresh()
 
+	_header.width = HEADER_WIDTH - 0.010
+	_header.height = _lanes.height
+	_header.position = Vector3(-width * 0.5 + (HEADER_WIDTH - 0.010) * 0.5, _lanes.position.y, 0.0018)
+	_header.refresh()
+	_place_lane_ladder(lanes_top, lanes_bottom)
+
 	var ruler_mid := _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5
-	_split_key.position = Vector3(-WIDTH * 0.5 + 0.016, ruler_mid, 0.003)
-	_split_caption.position = Vector3(-WIDTH * 0.5 + 0.030, ruler_mid, 0.0016)
+	_split_key.position = Vector3(-width * 0.5 + 0.016, ruler_mid, 0.003)
+	_split_caption.position = Vector3(-width * 0.5 + 0.030, ruler_mid, 0.0016)
 	_light_split_key()
 
 
@@ -245,6 +281,24 @@ func _place_strips() -> void:
 func _seconds_at_local_x(x: float) -> float:
 	var from_left := x + _lane_area_width * 0.5
 	return view_start + from_left / maxf(_lane_area_width, 0.0001) * view_span
+
+
+## The tracks whose lanes are on the panel, top to bottom.
+func _shown() -> Array:
+	var all := DAW.state.track_indices()
+	lane_first = clampi(lane_first, 0, maxi(all.size() - MAX_LANES, 0))
+	return all.slice(lane_first, lane_first + MAX_LANES)
+
+
+## Scroll the lanes by `lanes` (positive is further down the track list).
+func scroll_lanes(lanes: int) -> bool:
+	var before := lane_first
+	lane_first += lanes
+	_shown()
+	if lane_first == before:
+		return false
+	mark_dirty()
+	return true
 
 
 ## Selected items the playhead is inside: what a split would cut.
@@ -265,6 +319,37 @@ func _light_split_key() -> void:
 		_split_key.lit = _splittable() > 0
 
 
+## Which part of the track list is on the panel, drawn the way the bank selector draws it: a
+## slot the length of the list and a lit block the length of what is shown. Only when there is
+## more list than panel -- a ladder with nothing to scroll invites the question of why.
+func _place_lane_ladder(top: float, bottom: float) -> void:
+	if _lane_slot == null:
+		_lane_slot = MeshInstance3D.new()
+		_lane_slot.mesh = BoxMesh.new()
+		_lane_slot.material_override = Materials.recess()
+		add_child(_lane_slot)
+		_lane_thumb = MeshInstance3D.new()
+		var thumb := BoxMesh.new()
+		thumb.size = Vector3(0.0024, 1.0, 0.0010)
+		_lane_thumb.mesh = thumb
+		_lane_thumb.material_override = Materials.indicator_bar(Color(0.38, 0.60, 0.92))
+		add_child(_lane_thumb)
+	var total := DAW.state.track_indices().size()
+	var scrolls := total > MAX_LANES
+	_lane_slot.visible = scrolls
+	_lane_thumb.visible = scrolls
+	if not scrolls:
+		return
+	var x := _lane_area_x - 0.0045
+	var span := top - bottom - 0.004
+	(_lane_slot.mesh as BoxMesh).size = Vector3(0.0034, span, 0.0008)
+	_lane_slot.position = Vector3(x, (top + bottom) * 0.5, 0.0010)
+	var tall := span * float(MAX_LANES) / float(total)
+	var down := span * float(lane_first) / float(total)
+	_lane_thumb.scale = Vector3(1, tall, 1)
+	_lane_thumb.position = Vector3(x, top - 0.002 - down - tall * 0.5, 0.0016)
+
+
 ## Seconds under a point in the world, through the current window.
 func seconds_at_point(global_point: Vector3) -> float:
 	var local := to_local(global_point)
@@ -274,7 +359,7 @@ func seconds_at_point(global_point: Vector3) -> float:
 ## [track, item] under a point in the world, or [] for bare lane.
 func item_at_point(global_point: Vector3) -> Array:
 	var local := to_local(global_point)
-	var indices := DAW.state.track_indices()
+	var indices := _shown()
 	var pitch := LANE_HEIGHT + LANE_GAP
 	for i in mini(indices.size(), _lane_y.size()):
 		if absf(local.y - _lane_y[i]) > pitch * 0.5:
@@ -333,7 +418,7 @@ func _draw_loop() -> void:
 func _build_loop_bar() -> void:
 	var band := MeshInstance3D.new()
 	var band_mesh := BoxMesh.new()
-	band_mesh.size = Vector3(WIDTH, LOOP_BAND, 0.0012)
+	band_mesh.size = Vector3(width, LOOP_BAND, 0.0012)
 	band.mesh = band_mesh
 	band.position = Vector3(0, _top_y - LOOP_BAND * 0.5, 0.0007)
 	band.material_override = Materials.chassis()
@@ -391,7 +476,7 @@ func _clamp_view(project: float) -> void:
 func _build_carcass() -> void:
 	var panel := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(WIDTH, _height, DEPTH)
+	mesh.size = Vector3(width, _height, DEPTH)
 	panel.mesh = mesh
 	panel.position = Vector3(0, 0, -DEPTH * 0.5)
 	panel.material_override = Materials.chassis()
@@ -403,7 +488,7 @@ func _build_carcass() -> void:
 	var gutter_mesh := BoxMesh.new()
 	gutter_mesh.size = Vector3(HEADER_WIDTH, _height - RULER_HEIGHT, 0.0012)
 	gutter.mesh = gutter_mesh
-	gutter.position = Vector3(-WIDTH * 0.5 + HEADER_WIDTH * 0.5,
+	gutter.position = Vector3(-width * 0.5 + HEADER_WIDTH * 0.5,
 			-(RULER_HEIGHT * 0.5), 0.0007)
 	gutter.material_override = Materials.recess()
 	_adopt(gutter)
@@ -436,7 +521,7 @@ func _build_ruler() -> void:
 
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
-	strip_mesh.size = Vector3(WIDTH, NUMBERS_HEIGHT, 0.0012)
+	strip_mesh.size = Vector3(width, NUMBERS_HEIGHT, 0.0012)
 	strip.mesh = strip_mesh
 	strip.position = Vector3(0, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0007)
 	strip.material_override = Materials.recess()
@@ -504,7 +589,7 @@ func _build_bank_notice() -> void:
 	if caption == "":
 		return
 	var notice := _text(caption, 18, Color(0.72, 0.60, 0.40))
-	notice.position = Vector3(-WIDTH * 0.5 + 0.009, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0016)
+	notice.position = Vector3(-width * 0.5 + 0.009, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0016)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_adopt(notice)
 
@@ -515,14 +600,14 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), Color.WHITE)
 	# chip_colour and not lamp_colour, for the reason in Materials: this is the track's identity
 	# and a clipped identity is no identity.
-	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-WIDTH * 0.5 + 0.0035, y, 0.0014)),
+	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-width * 0.5 + 0.0035, y, 0.0014)),
 			Materials.chip_colour(t.colour))
 
 	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
 	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
 	# `fit` holds it there without letting it go below the size every name used to be.
 	var name_label := _text(t.display_name(), 38, Color(0.82, 0.84, 0.87))
-	name_label.position = Vector3(-WIDTH * 0.5 + 0.009, y, 0.0016)
+	name_label.position = Vector3(-width * 0.5 + 0.009, y, 0.0016)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	Lettering.fit(name_label, NAME_SPAN, 38 * 4, 22 * 4)
 	_adopt(name_label)
@@ -539,7 +624,7 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	if flags != "":
 		var flag_label := _text(flags, 32,
 				Color(0.90, 0.38, 0.33) if t.rec_arm else Color(0.72, 0.74, 0.78))
-		flag_label.position = Vector3(_lane_area_x - 0.004, y, 0.0016)
+		flag_label.position = Vector3(_lane_area_x - 0.0085, y, 0.0016)
 		flag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_adopt(flag_label)
 
@@ -556,7 +641,7 @@ func _relayout_view() -> void:
 		return
 	_build_ruler()
 
-	var indices := DAW.state.track_indices()
+	var indices := _shown()
 	var slot := 0
 	for i in indices.size():
 		if i >= _lane_y.size():
@@ -593,8 +678,8 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 	# must still be drawn, or scrolling into the middle of a long block shows empty lane.
 	left = maxf(left, _lane_area_x)
 	right = minf(right, _lane_right())
-	var width := right - left
-	if width <= 0.0005:
+	var span := right - left
+	if span <= 0.0005:
 		return false
 
 	var dim := item.muted or lane_muted
@@ -611,15 +696,15 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 		body = body.lerp(Color(0.86, 0.88, 0.90), 0.34)
 	# The bank holds unit cubes, so the size of an item IS its instance scale.
 	_item_blocks.move_slot(slot, Transform3D(
-			Basis.IDENTITY.scaled(Vector3(width, block_height, 0.0014)),
-			Vector3(left + width * 0.5, y, 0.0014)))
+			Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0014)),
+			Vector3(left + span * 0.5, y, 0.0014)))
 	_item_blocks.set_colour(slot, body)
 
 	# The take strip along the top edge, which is how a block reads as a block rather than a
 	# bar on a chart.
 	_item_strips.move_slot(slot, Transform3D(
-			Basis.IDENTITY.scaled(Vector3(width, 0.0022, 0.0006)),
-			Vector3(left + width * 0.5, y + block_height * 0.5 - 0.0011, 0.0022)))
+			Basis.IDENTITY.scaled(Vector3(span, 0.0022, 0.0006)),
+			Vector3(left + span * 0.5, y + block_height * 0.5 - 0.0011, 0.0022)))
 	_item_strips.set_colour(slot, Materials.chip_colour(tint) if not dim
 			else Materials.lamp_colour(tint, false))
 	return true

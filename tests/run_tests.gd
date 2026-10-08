@@ -92,6 +92,7 @@ func _ready() -> void:
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
+	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
 	_test_the_ruler_moves_the_playhead_and_draws_the_loop()
@@ -4720,6 +4721,116 @@ func _test_a_bank_wider_than_the_project_draws_only_the_project() -> void:
 	state.set_bank(64)
 	MixWire.apply(state, "/track/1/name", ["Track 65"])
 	check("past the end on a later bank too", not state.tracks.has(1))
+
+
+## Seated where the walk starts -- the mix position -- turn to face each control in the room in
+## turn and click its middle. The click must land on THAT control: not on a neighbour standing
+## proud of it, not on a panel in front of it, not on nothing. And the target must be big enough
+## on a 1600x900 monitor to hit without aiming twice. This is the goal's "every control can be
+## clicked from the seat without a misclick", as a search rather than a tour with a mouse.
+const SEAT_MIN_PIXELS := 7.0
+
+
+func _test_every_control_is_clickable_from_the_seat() -> void:
+	for tracks in [13, 40]:
+		await _seat_audit(tracks)
+
+
+func _seat_audit(tracks: int) -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var backend := OfflineBackend.new()
+	backend.track_count = tracks
+	DAW.use(backend)
+	# A monitor's shape, not the headless window's: screen framing is computed from the aspect,
+	# and audited through a 64px square it describes a layout no one sees.
+	var monitor := SubViewport.new()
+	monitor.size = Vector2i(1600, 900)
+	add_child(monitor)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	monitor.add_child(studio)
+	for i in 3:
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		await get_tree().physics_frame
+	for i in 4:
+		await get_tree().process_frame
+	await get_tree().physics_frame
+	var hand: Interactor = studio.get_node("MouseHand")
+	var eye := studio.camera.global_position
+	var px_per_rad := 900.0 / deg_to_rad(studio.camera.fov)
+
+	var controls: Array = []
+	var stack: Array = [studio]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is ControlAffordance and n.is_visible_in_tree() and (n.collision_layer & 2) != 0:
+			controls.append(n)
+		stack.append_array(n.get_children())
+
+	var missed: Array = []
+	var small: Array = []
+	var smallest := INF
+	for c: ControlAffordance in controls:
+		var shape: CollisionShape3D = null
+		for child in c.get_children():
+			if child is CollisionShape3D:
+				shape = child
+				break
+		if shape == null or shape.disabled:
+			continue
+		var centre := shape.global_position
+		var to := centre - eye
+		var box := shape.shape as BoxShape3D
+		var hit: Dictionary = hand._cast(eye, to.normalized())
+		if hit["control"] != c and box != null:
+			# Its middle is covered -- a stand's middle is under what it carries. It still has
+			# to be reachable, so: does a third of its face answer to a click?
+			var answered := 0
+			for gx in 5:
+				for gy in 5:
+					var at := shape.global_transform * Vector3(
+							(gx / 4.0 - 0.5) * 0.8 * box.size.x, (gy / 4.0 - 0.5) * 0.8 * box.size.y, 0)
+					if hand._cast(eye, (at - eye).normalized())["control"] == c:
+						answered += 1
+			if answered * 3 >= 25:
+				hit = {"control": c, "point": centre}
+		if hit["control"] != c:
+			var other: Node = hit["control"]
+			missed.append("%s (got %s at %.2fm, wanted %.2fm)" % [_who(c), _who(other) if other != null else "nothing",
+					(hit["point"] - eye).length(), to.length()])
+			continue
+		if box == null:
+			continue
+		# The face's smaller side, through the shape's scale, at that distance.
+		var basis := shape.global_transform.basis
+		var w := (basis.x * box.size.x).length()
+		var h := (basis.y * box.size.y).length()
+		var pixels := minf(w, h) / to.length() * px_per_rad
+		smallest = minf(smallest, pixels)
+		if pixels < SEAT_MIN_PIXELS:
+			small.append("%s %.1fpx" % [_who(c), pixels])
+
+	check("%d tracks: from the seat, a click on each of %d controls lands on it (%d miss: %s)" % [
+			tracks, controls.size(), missed.size(), ", ".join(missed.slice(0, 8))], missed.is_empty())
+	check("%d tracks: and each is at least %.0fpx to aim at (smallest %.1fpx; %d under: %s)" % [
+			tracks, SEAT_MIN_PIXELS, smallest, small.size(), ", ".join(small.slice(0, 8))], small.is_empty())
+	monitor.queue_free()
+	await get_tree().process_frame
+	Session.layout = saved_layout
+
+
+func _who(n: Node) -> String:
+	if n == null:
+		return "?"
+	var label := ""
+	if n is ControlAffordance:
+		label = n.title()
+	var parent := n.get_parent()
+	var trail := "%s/%s" % [parent.name if parent else "", n.name]
+	return "%s[%s]" % [label, trail] if label != "" else trail
 
 
 func _test_you_walk_into_the_room_and_not_through_it() -> void:

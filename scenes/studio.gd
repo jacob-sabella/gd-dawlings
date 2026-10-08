@@ -47,7 +47,8 @@ const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 ## faceplate read 13.8 against the console's 22.1, and the floor at its foot 9.1 against 29.5.
 const PRACTICALS: Array = [
 	[Vector3(-2.05, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
-	[Vector3(1.62, 1.70, -1.15), Color(0.6, 0.78, 1.0), 5.5],
+	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
+	[Vector3(2.05, 1.70, -0.55), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -69,7 +70,7 @@ const LAMP_RANGE := 3.6
 ## the people using it and its head is the part you notice.
 const LAMP_SHADE_RADIUS := 0.165
 const LAMP_SHADE_HEIGHT := 0.150
-const BRIDGE_POS := Vector3(0, 1.20, -0.35)
+const BRIDGE_POS := Vector3(0, 1.06, -0.35)
 const BRIDGE_SIZE := Vector3(0.70, 0.03, 0.09)
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
@@ -390,11 +391,11 @@ func _build_furniture() -> void:
 	for side in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.035, 0.46, 0.05)
+		leg_mesh.size = Vector3(0.035, BRIDGE_POS.y + 0.06 - 0.80, 0.05)
 		leg.mesh = leg_mesh
 		# Centred under the bar rather than flush with its face: flush, the leg's front and the
 		# bar's front were one plane and the joint shimmered.
-		leg.position = Vector3(side * 0.30, 1.03, BRIDGE_POS.z)
+		leg.position = Vector3(side * 0.30, (0.80 + BRIDGE_POS.y + 0.06) * 0.5, BRIDGE_POS.z)
 		leg.material_override = Materials.chassis()
 		bridge_frame.add_child(leg)
 		_bridge_legs.append(leg)
@@ -778,7 +779,7 @@ func _build_surfaces() -> void:
 
 	patchbay = PatchbaySurface.new()
 	patchbay.name = "Patchbay"
-	patchbay.position = Vector3(0, 1.23, -0.33)
+	patchbay.position = Vector3(0, 1.09, -0.33)
 	patchbay.rotation_degrees = Vector3(-18, 0, 0)
 	studio_set.add_child(patchbay)
 	mount.register(patchbay)
