@@ -47,6 +47,17 @@ var _hearing: Label
 var _sharing: Label
 var _audio_clock := 0.0
 var _toasts: VBoxContainer
+var _midi_status: Label
+var _midi_button: Button
+var _play_into: OptionButton
+var _play_into_tracks: Array = []
+var _monitor: CheckButton
+var _monitor_volume: HSlider
+var _record_with: CheckButton
+var _computer_keys: CheckButton
+var _take_status: Label
+var _keys: KeyCatcher
+var _keys_hint: Label
 var _strip: HBoxContainer
 
 var _listener: PacketPeerUDP = null
@@ -58,6 +69,7 @@ func _ready() -> void:
 	_build_panel()
 	_build_toasts()
 	_build_strip()
+	_build_keys()
 	_root.visible = false
 	Session.notice.connect(toast)
 	Session.roster_changed.connect(_refresh)
@@ -110,6 +122,7 @@ func _process(delta: float) -> void:
 	if _audio_clock > 0.5:
 		_audio_clock = 0.0
 		_refresh_sound()
+		_refresh_midi()
 	if Session.role == Session.Role.SOLO:
 		_listen()
 	else:
@@ -260,6 +273,7 @@ func _build_panel() -> void:
 	_hearing = _label("", 13, DIM)
 	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guest_box.add_child(_hearing)
+	_build_midi(_guest_box)
 	var leave_button := _button("Leave session", false)
 	leave_button.pressed.connect(func(): Session.leave())
 	_guest_box.add_child(leave_button)
@@ -289,6 +303,7 @@ func _refresh() -> void:
 			_status.text = "In %s's session at %s. Their Reaper, your view." % [
 					Session.name_of(1), Session.joined_address]
 	_refresh_sound()
+	_refresh_midi()
 	_solo_box.visible = Session.role == Session.Role.SOLO
 	_host_box.visible = Session.role == Session.Role.HOST
 	_guest_box.visible = Session.role == Session.Role.GUEST
@@ -336,6 +351,203 @@ func _refresh_sound() -> void:
 			var drops := int(s.get("underruns", 0)) + int(s.get("lost", 0))
 			_hearing.text = "%d ms behind %s's speakers%s" % [roundi(s.get("latency_ms", 0.0)),
 					Session.name_of(1), "" if drops == 0 else "  ·  %d dropouts" % drops]
+
+
+# --- a guest's keys -----------------------------------------------------------------------
+
+## Playing into the host's project: which keyboard, which track, whether to hear it, and whether
+## to record. See core/session/guest_midi.gd.
+func _build_midi(box: VBoxContainer) -> void:
+	box.add_child(_caption("YOUR KEYS"))
+	var device_row := HBoxContainer.new()
+	device_row.add_theme_constant_override("separation", 10)
+	box.add_child(device_row)
+	_midi_status = _label("", 13, DIM)
+	_midi_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_midi_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	device_row.add_child(_midi_status)
+	_midi_button = _button("Open MIDI", false)
+	_midi_button.tooltip_text = "Listen to every MIDI keyboard this computer can see."
+	_midi_button.pressed.connect(func():
+		Session.guest_midi.open_midi()
+		_refresh_midi())
+	device_row.add_child(_midi_button)
+
+	var into_row := HBoxContainer.new()
+	into_row.add_theme_constant_override("separation", 10)
+	box.add_child(into_row)
+	into_row.add_child(_label("Play into", 14, INK))
+	_play_into = OptionButton.new()
+	_play_into.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_play_into.custom_minimum_size = Vector2(0, 34)
+	_play_into.add_theme_font_size_override("font_size", 14)
+	_play_into.add_theme_stylebox_override("normal", _box(WELL, 8, 10, EDGE))
+	_play_into.add_theme_stylebox_override("hover", _box(WELL.lightened(0.06), 8, 10, EDGE))
+	_play_into.add_theme_stylebox_override("pressed", _box(WELL, 8, 10, EDGE))
+	_play_into.add_theme_stylebox_override("focus", _box(Color(0, 0, 0, 0), 8, 10, Color(1, 1, 1, 0.25)))
+	_play_into.item_selected.connect(func(i: int):
+		Session.guest_midi.target_track = int(_play_into.get_item_id(i)))
+	into_row.add_child(_play_into)
+
+	var monitor_row := HBoxContainer.new()
+	monitor_row.add_theme_constant_override("separation", 10)
+	box.add_child(monitor_row)
+	_monitor = _toggle("Hear my keys")
+	_monitor.tooltip_text = "A piano here, so you hear your keys at once. Off if your keyboard makes its own sound."
+	_monitor.toggled.connect(func(on: bool): Session.guest_midi.monitor = on)
+	monitor_row.add_child(_monitor)
+	_monitor_volume = HSlider.new()
+	_monitor_volume.min_value = -30.0
+	_monitor_volume.max_value = 6.0
+	_monitor_volume.step = 0.5
+	_monitor_volume.value = Session.guest_midi.monitor_db if Session.guest_midi != null else -6.0
+	_monitor_volume.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_monitor_volume.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_monitor_volume.tooltip_text = "How loud your own keys are. Only you hear this."
+	_monitor_volume.value_changed.connect(func(v: float):
+		Session.guest_midi.monitor_db = v if v > -29.9 else -80.0)
+	monitor_row.add_child(_monitor_volume)
+
+	_record_with = _toggle("Record when the host records")
+	_record_with.toggled.connect(func(on: bool): Session.guest_midi.record_with_host = on)
+	box.add_child(_record_with)
+	_computer_keys = _toggle("Play with the computer keys")
+	_computer_keys.tooltip_text = "A to ' play from C, the row above plays the black keys, Z and X change octave. Esc gives the keys back."
+	_computer_keys.toggled.connect(func(on: bool): _keys.set_active(on))
+	box.add_child(_computer_keys)
+
+	_take_status = _label("", 13, DIM)
+	_take_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_take_status)
+	if Session.guest_midi != null:
+		Session.guest_midi.changed.connect(_refresh_take)
+
+
+func _toggle(text: String) -> CheckButton:
+	var b := CheckButton.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", 14)
+	b.add_theme_color_override("font_color", INK)
+	b.add_theme_color_override("font_hover_color", INK)
+	b.add_theme_color_override("font_pressed_color", INK)
+	b.add_theme_color_override("font_hover_pressed_color", INK)
+	b.add_theme_color_override("font_focus_color", INK)
+	return b
+
+
+## The computer-keyboard piano, outside the panel so it keeps playing with the panel closed,
+## and its reminder at the foot of the screen while it has the keys.
+func _build_keys() -> void:
+	_keys = KeyCatcher.new()
+	_keys.name = "KeyCatcher"
+	add_child(_keys)
+	_keys.note_on.connect(func(pitch: int, velocity: int):
+		if Session.guest_midi != null:
+			Session.guest_midi.note_on(pitch, velocity))
+	_keys.note_off.connect(func(pitch: int):
+		if Session.guest_midi != null:
+			Session.guest_midi.note_off(pitch))
+	_keys_hint = _label("", 13, INK)
+	_keys_hint.add_theme_stylebox_override("normal", _box(CARD, 10, 14, EDGE))
+	_keys_hint.anchor_left = 0.5
+	_keys_hint.anchor_right = 0.5
+	_keys_hint.anchor_top = 1.0
+	_keys_hint.anchor_bottom = 1.0
+	_keys_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_keys_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_keys_hint.offset_bottom = -70
+	_keys_hint.visible = false
+	add_child(_keys_hint)
+	_keys.active_changed.connect(func(_on: bool): _refresh_keys())
+	Session.role_changed.connect(func():
+		if Session.role != Session.Role.GUEST:
+			_keys.set_active(false))
+
+
+## The computer keyboard as a piano, on or off. See KeyCatcher.
+func play_with_computer_keys(on: bool) -> void:
+	_keys.set_active(on)
+
+
+func _refresh_keys() -> void:
+	var on := _keys.is_active()
+	if _computer_keys != null and _computer_keys.button_pressed != on:
+		_computer_keys.set_pressed_no_signal(on)
+	_keys_hint.visible = on
+	_keys_hint.text = "Keys play  ·  A–' from %s  ·  Z X octave  ·  Esc stops" % _keys.octave_name()
+
+
+func _refresh_midi() -> void:
+	var gm := Session.guest_midi
+	if gm == null or _midi_status == null or Session.role != Session.Role.GUEST:
+		return
+	if not gm.midi_open:
+		_midi_status.text = "No MIDI keyboard open."
+		_midi_button.text = "Open MIDI"
+	elif gm.devices.is_empty():
+		_midi_status.text = "No MIDI keyboard found. Plug one in and look again."
+		_midi_button.text = "Rescan"
+	else:
+		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
+		_midi_button.text = "Rescan"
+	# The track list, rebuilt only when it changed: rebuilding closes an open dropdown.
+	var tracks: Array = []
+	if DAW.state != null:
+		for i in DAW.state.track_indices():
+			if DAW.state.in_project(i):
+				tracks.append([i, DAW.state.track(i).display_name()])
+	if tracks != _play_into_tracks:
+		_play_into_tracks = tracks
+		_play_into.clear()
+		_play_into.add_item("Nowhere", 0)
+		for t in tracks:
+			_play_into.add_item("%d  %s" % [t[0], t[1]], t[0])
+	var at := _play_into.get_item_index(gm.target_track)
+	if at < 0:
+		at = 0
+	if _play_into.selected != at:
+		_play_into.select(at)
+	if _monitor.button_pressed != gm.monitor:
+		_monitor.set_pressed_no_signal(gm.monitor)
+	_monitor.disabled = not MonitorSynth.available()
+	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
+	_record_with.text = "Record when %s records" % Session.name_of(1)
+	if _record_with.button_pressed != gm.record_with_host:
+		_record_with.set_pressed_no_signal(gm.record_with_host)
+	_refresh_keys()
+	_refresh_take()
+
+
+## Whether a take is running, and what the last one did. Driven by GuestMidi.changed, so the
+## count moves with the notes.
+func _refresh_take() -> void:
+	var gm := Session.guest_midi
+	if gm == null or _take_status == null:
+		return
+	if gm.is_recording():
+		var notes := gm.take_note_count()
+		_take_status.text = "●  Recording onto %s  ·  %d %s" % [_track_name(gm.target_track), notes,
+				"note" if notes == 1 else "notes"]
+		_take_status.add_theme_color_override("font_color", Color(0.95, 0.42, 0.38))
+		return
+	_take_status.add_theme_color_override("font_color", DIM)
+	if gm.target_track <= 0:
+		_take_status.text = "Choose a track and your keys are recorded when %s records." % Session.name_of(1)
+	elif not gm.record_with_host:
+		_take_status.text = "Playing for yourself. Nothing is recorded."
+	elif not gm.last_take.is_empty():
+		var t: Dictionary = gm.last_take
+		_take_status.text = "Last take: %d notes onto %s at %s." % [t["notes"],
+				_track_name(t["track"]), DAW.state.bar_beat(t["start"]) if DAW.state != null else ""]
+	else:
+		_take_status.text = "Ready. Your keys go onto %s when %s records." % [
+				_track_name(gm.target_track), Session.name_of(1)]
+
+
+static func _track_name(index: int) -> String:
+	if DAW.state == null or not DAW.state.tracks.has(index):
+		return "track %d" % index
+	return DAW.state.track(index).display_name()
 
 
 func _roster_row(p) -> Control:

@@ -131,6 +131,20 @@ func _ready() -> void:
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
 	_test_meters_go_out_in_parcels_under_the_mtu()
+	_test_the_mix_carries_the_song_position()
+	_test_the_song_clock_runs_between_reports()
+	_test_the_guest_knows_which_moment_it_is_hearing()
+	_test_the_jitter_buffer_knows_which_host_frame_is_next()
+	_test_a_take_is_assembled_from_stamped_notes()
+	_test_a_take_from_a_peer_is_cleaned_before_it_lands()
+	_test_a_take_lands_on_the_stand_in_and_comes_off_again()
+	_test_notes_ride_the_wire_with_their_item()
+	_test_reaper_is_asked_for_a_take_in_one_flat_call()
+	_test_the_monitor_piano_sounds_decays_and_shares_its_voices()
+	_test_the_computer_keys_are_a_piano_by_position()
+	_test_a_guest_take_follows_the_host_transport_it_hears()
+	_test_the_host_places_a_guest_take_and_says_so()
+	_test_midi_items_show_their_notes_on_the_timeline()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -6086,3 +6100,478 @@ func _test_the_room_keeps_listening_across_a_change_of_backend() -> void:
 	check("and the scan would have caught the line that did", RegEx.create_from_string(
 			"DAW\\.state\\.[a-z_]+\\.(connect|is_connected)").search(
 			"DAW.state.timeline_changed.connect(mark_dirty)") != null)
+
+
+# --- recording a guest ------------------------------------------------------------------------
+
+func _test_the_mix_carries_the_song_position() -> void:
+	var frames := PackedVector2Array()
+	frames.resize(MixFeed.FRAMES)
+	var flags := MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING | MixFeed.FLAG_RECORDING
+	var packet := MixFeed.encode(9, frames, 1234.567890123456, flags)
+	check("a stamped packet still fits one datagram (%d bytes)" % packet.size(), packet.size() <= 600)
+	var back := MixFeed.decode(packet)
+	check("the song position survives to the bit (%.12f)" % back.get("position", -1.0),
+			back.get("position", -1.0) == 1234.567890123456)
+	check("and the transport with it", back.get("valid", false) and back.get("playing", false)
+			and back.get("recording", false))
+	var stopped := MixFeed.decode(MixFeed.encode(10, frames, 3.0, MixFeed.FLAG_VALID))
+	check("a stopped transport is said as stopped", not stopped["playing"] and not stopped["recording"])
+	check("an unstamped packet says it does not know", not MixFeed.decode(MixFeed.encode(1, frames))["valid"])
+	var old := packet.duplicate()
+	old.encode_u32(0, 0x41334452)
+	check("a packet from a build without stamps is not misread as one", MixFeed.decode(old).is_empty())
+	check("flags read off a clock", MixFeed.flags_of({"valid": true, "playing": true, "recording": false})
+			== MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING)
+
+
+## Reaper says where its playhead is thirty times a second, late, and the stand-in once a frame.
+## Packets need a position every 2.7ms. The clock runs between reports and is only corrected by
+## them -- and a seek or a stop is taken at once, not eased into.
+func _test_the_song_clock_runs_between_reports() -> void:
+	var clock := SongClock.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var truth := func(usec: int) -> float: return 10.0 + usec / 1000000.0
+	var worst := 0.0
+	var t := 0
+	var next_report := 0
+	while t < 4000000:
+		if t >= next_report:
+			# Up to 3ms stale, only to the millisecond, and read up to a frame (16ms) late, the
+			# way a busy DAW's reports reach a game loop.
+			var said := snappedf(truth.call(t - rng.randi_range(0, 3000) - rng.randi_range(0, 16000)), 0.001)
+			clock.observe(said, true, true, t)
+			next_report = t + 33000 + rng.randi_range(0, 4000)
+		if t > 1000000:
+			# Against the truth less the reports' average lateness: that part is a constant, and
+			# a constant is what the capture offset is for.
+			worst = maxf(worst, absf(float(clock.at(t)["seconds"]) - truth.call(t - 9500)))
+		t += 500
+	check("between coarse, late reports the clock is within 3ms of the song (worst %.2fms)" % (worst * 1000.0),
+			worst < 0.003)
+	var held := clock.at(t)
+	check("it says the transport it was told", held["playing"] and held["recording"] and held["valid"])
+
+	clock.observe(100.0, true, false, t)
+	close_to("a seek is a jump, not drift", clock.at(t + 1000)["seconds"], 100.001, 0.0005)
+	clock.observe(100.0, true, false, t + 50000)
+	close_to("the same report again is no news: the clock keeps running", clock.at(t + 50000)["seconds"],
+			100.05, 0.0005)
+	clock.observe(100.2, false, false, t + 200000)
+	close_to("stopped, it stands still", clock.at(t + 900000)["seconds"], 100.2)
+	check("and is not recording", not clock.at(t + 900000)["recording"])
+	clock.observe(100.2, false, true, t + 950000)
+	check("a record flag without the transport rolling is not a recording",
+			not clock.at(t + 950000)["recording"])
+	check("a fresh clock knows nothing", not SongClock.new().at(0)["valid"])
+
+
+## The guest's speakers, measured as a staircase -- the mixer takes 512 frames at a gulp -- and the
+## song position of whatever frame is coming out of them.
+func _test_the_guest_knows_which_moment_it_is_hearing() -> void:
+	var heard := HeardClock.new()
+	var flags := MixFeed.FLAG_VALID | MixFeed.FLAG_PLAYING | MixFeed.FLAG_RECORDING
+	for seq in 200:
+		if seq != 9:
+			heard.stamp(seq, 20.0 + seq * 128 / 48000.0, flags, 0)
+	var at := heard.position_of(1000.0)
+	close_to("a frame is its packet's stamp plus how far into the packet",
+			at["seconds"], 20.0 + 1000.0 / 48000.0, 0.000001)
+	check("with the transport its packet carried", at["playing"] and at["recording"] and at["valid"])
+	close_to("a lost packet's frames count on from the last stamp heard",
+			heard.position_of(9 * 128 + 5.0)["seconds"], 20.0 + (9 * 128 + 5) / 48000.0, 0.000001)
+	heard.stamp(300, 55.5, MixFeed.FLAG_VALID, 0)
+	close_to("a stopped stream stands at its stamp", heard.position_of(300 * 128 + 100.0)["seconds"], 55.5)
+	check("and says it is stopped", not heard.position_of(300 * 128 + 100.0)["playing"])
+	check("a frame before any stamp is not a position", not heard.position_of(-5.0)["valid"])
+
+	# The playhead: the true frame at the speaker runs at 48 a millisecond; what is measured is a
+	# staircase round it, as Godot's mixer gulps.
+	var staircase := HeardClock.new()
+	var worst := 0.0
+	for step in 8000:
+		var usec := step * 500
+		var truth := usec * 0.048
+		staircase.observe(floorf(truth / 512.0) * 512.0 + 256.0, usec)
+		if usec > 2000000:
+			worst = maxf(worst, absf(staircase.frame_at(usec + 250) - (truth + 12.0)))
+	check("a staircase measurement becomes a smooth playhead, within 1ms (worst %.2fms)" % (worst / 48.0),
+			worst < 48.0)
+	staircase.observe(500000.0, 4000000)
+	close_to("a playhead that jumps (a reprime) is followed at once", staircase.frame_at(4000000), 500000.0, 1.0)
+
+	heard.observe(1000.0, 0)
+	check("stamps a second old are not trusted", not heard.at(1500000)["valid"])
+	check("fresh ones are", heard.at(200000)["valid"])
+
+
+func _test_the_jitter_buffer_knows_which_host_frame_is_next() -> void:
+	var jb := JitterBuffer.new()
+	var chunk := PackedVector2Array()
+	chunk.resize(128)
+	for seq in range(10, 40):
+		if seq != 25:
+			jb.push(seq, chunk, seq * 2.67)
+	close_to("before playing, the next frame is the first one that arrived", jb.read_frame(), 10 * 128)
+	var pulled := 0
+	for i in 6:
+		jb.pull(512)
+	pulled = 6 * 512
+	var expected := 10.0 * 128 + pulled
+	check("after playing, it is that many frames on, losses and all (%.1f for %.1f)" % [jb.read_frame(), expected],
+			absf(jb.read_frame() - expected) < pulled * MixFeed.QUEUE_FRAMES * 0.000001 + pulled * JitterBuffer.MAX_BEND + 1.0)
+
+
+func _test_a_take_is_assembled_from_stamped_notes() -> void:
+	var take := MidiTake.new()
+	take.begin(10.0)
+	take.note_on(60, 100, 0, 10.5)
+	take.note_off(60, 0, 11.0)
+	take.note_on(64, 80, 0, 10.75)
+	# Struck again before it was let go: the first strike ends where the second begins.
+	take.note_on(64, 90, 0, 11.25)
+	take.note_off(64, 0, 11.5)
+	# Let go under the pedal: it sounds until the pedal comes up.
+	take.sustain(true, 0, 11.6)
+	take.note_on(67, 70, 0, 11.7)
+	take.note_off(67, 0, 11.8)
+	take.sustain(false, 0, 12.4)
+	# Still down when the take ends.
+	take.note_on(72, 127, 0, 12.8)
+	take.note_off(48, 0, 12.9)
+	take.reach(13.0)
+	check("a key that is down counts as being in the take", take.held_count() == 1)
+	var done := take.finish()
+	var notes: Array = done["notes"]
+	close_to("the take starts where recording was first heard", done["start"], 10.0)
+	close_to("and ends at the furthest position heard", done["end"], 13.0)
+	check("every note is in it, in time order (%d)" % notes.size(), notes.size() == 5
+			and notes.map(func(n): return n[2]) == [60, 64, 64, 67, 72])
+	check("a note is [on, off, pitch, velocity, channel]", notes[0] == [10.5, 11.0, 60, 100, 0])
+	close_to("a retriggered key is cut at the retrigger", notes[1][1], 11.25)
+	close_to("a note let go under the pedal lasts until the pedal is lifted", notes[3][1], 12.4)
+	close_to("a note still held when the take ends is closed at its end", notes[4][1], 13.0)
+	check("a release with no press is ignored", notes.all(func(n): return n[2] != 48))
+
+	var early := MidiTake.new()
+	early.begin(5.0)
+	early.note_on(60, 64, 0, 4.9)
+	early.note_off(60, 0, 4.9)
+	var e: Array = early.finish(6.0)["notes"]
+	check("a note stamped a hair before the take is pulled onto its start, and keeps a length",
+			e.size() == 1 and e[0][0] == 5.0 and e[0][1] > e[0][0])
+
+
+func _test_a_take_from_a_peer_is_cleaned_before_it_lands() -> void:
+	var clean := MidiTake.clean_args([3, 2.0, 6.0, [
+		[1.0, 2.5, 60, 100, 0],        # starts before the take: pulled onto it
+		[3.0, 9.0, 200, 0, 99],        # past the end, out-of-range pitch, velocity, channel
+		[4.0, 3.0, 62, 90],            # off before on, and no channel
+		["x", 4.0, 64, 90, 0],         # not a number
+		[NAN, 4.0, 64, 90, 0],         # not a finite one
+		"not a note",
+	], "Grace, \"take\" [1]"])
+	check("a take with bad notes in it is still a take", clean.size() == 5)
+	var notes: Array = clean[3]
+	check("the unreadable notes are dropped and the rest kept (%d)" % notes.size(), notes.size() == 3)
+	close_to("a note before the take starts at its start", notes[0][0], 2.0)
+	check("a note past the end ends at the end, and its numbers are made MIDI",
+			notes[1] == [3.0, 6.0, 127, 1, 15])
+	check("a note whose off came before its on still has a length and a channel",
+			notes[2][1] > notes[2][0] and notes[2][4] == 0)
+	check("the name keeps its words and loses the bridge's punctuation (%s)" % clean[4],
+			clean[4] == "Grace take 1")
+	check("no track is not a take", MidiTake.clean_args([0, 1.0, 2.0, []]).is_empty())
+	check("an end before the start is not a take", MidiTake.clean_args([1, 5.0, 2.0, []]).is_empty())
+	check("notes that are not a list are not a take", MidiTake.clean_args([1, 1.0, 2.0, "x"]).is_empty())
+	check("a missing argument is not a take", MidiTake.clean_args([1, 1.0, 2.0]).is_empty())
+	var long := MidiTake.clean_args([1, 0.0, 1e9, []])
+	close_to("an endless take is cut to an hour", long[2], MidiTake.MAX_SECONDS)
+	var many: Array = []
+	for i in MidiTake.MAX_NOTES + 50:
+		many.append([0.0, 0.1, 60, 64, 0])
+	check("and a flood of notes to the limit", (MidiTake.clean_args([1, 0.0, 1.0, many])[3] as Array).size()
+			== MidiTake.MAX_NOTES)
+	check("insert_midi_take is a verb a guest may use", &"insert_midi_take" in DAW.COMMANDS)
+
+
+func _test_a_take_lands_on_the_stand_in_and_comes_off_again() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var before := s.track(7).items.size()
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	var notes := [[30.25, 30.5, 60, 100, 0], [31.0, 31.75, 64, 90, 1]]
+	check("the stand-in takes MIDI", DAW.can(DAWBackend.Capability.MIDI_TAKES))
+	check("a good take has nothing to refuse", DAW.midi_take_refusal([7, 30.0, 32.0, notes, "Grace take 1"]).is_empty())
+	DAW.apply_intent(&"insert_midi_take", [7, 30.0, 32.0, notes, "Grace take 1"])
+	check("a guest's take lands as a new item on its track", s.track(7).items.size() == before + 1)
+	var item: MixState.ItemState = null
+	for it in s.track(7).items:
+		if it.name == "Grace take 1":
+			item = it
+	check("named for whoever played it", item != null)
+	if item != null:
+		close_to("where the guest heard it", item.start, 30.0)
+		close_to("as long as the take", item.length, 2.0)
+		var back := MidiTake.unpack_relative(item.notes, item.start)
+		check("with its notes, at the song positions they were stamped with (%s)" % [back],
+				back.size() == 2 and is_equal_approx(back[0][0], 30.25) and is_equal_approx(back[1][1], 31.75)
+				and back[1][2] == 64 and back[1][4] == 1)
+	check("and it replicates on the lane's own address", backend._repl_durable.has("/track/7/items"))
+	check("a take is one undo step (%d -> %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, backend.snapshot())
+	var copied: MixState.ItemState = guest.track(7).items.filter(func(it): return it.name == "Grace take 1").front() \
+			if guest.track(7).items.any(func(it): return it.name == "Grace take 1") else null
+	check("a guest joining later is sent the take, notes and all",
+			copied != null and copied.notes == item.notes)
+	DAW.undo()
+	check("undo takes it off", s.track(7).items.size() == before)
+	DAW.redo()
+	check("redo puts it back", s.track(7).items.size() == before + 1)
+	DAW.undo()
+
+	check("a take onto a track that is not there is refused in words",
+			DAW.midi_take_refusal([99, 1.0, 2.0, notes]).contains("no track"))
+	DAW.apply_intent(&"insert_midi_take", [99, 1.0, 2.0, notes])
+	check("and nothing lands", not s.tracks.has(99) or s.track(99).items.is_empty())
+	check("a take with no notes is refused", not DAW.midi_take_refusal([7, 1.0, 2.0, []]).is_empty())
+	DAW.apply_intent(&"insert_midi_take", [7, 1.0, 2.0, [], "empty"])
+	check("and makes no item", s.track(7).items.size() == before)
+
+	# Cut through the middle of it: the notes go with the half they start in.
+	DAW.insert_midi_take(7, 30.0, 32.0, notes, "cut me")
+	var index := -1
+	for it in s.track(7).items:
+		if it.name == "cut me":
+			index = it.index
+	DAW.select_item(7, index, false)
+	DAW.split_selected(30.75)
+	var halves := s.track(7).items.filter(func(it): return it.name == "cut me")
+	check("a split take is two items", halves.size() == 2)
+	if halves.size() == 2:
+		var left := MidiTake.unpack_relative(halves[0].notes, halves[0].start)
+		var right := MidiTake.unpack_relative(halves[1].notes, halves[1].start)
+		check("each half keeps the notes that start in it",
+				left.size() == 1 and right.size() == 1 and right[0][2] == 64)
+		close_to("and the moved note is still at its song position", right[0][0], 31.0, 0.0001)
+
+
+func _test_notes_ride_the_wire_with_their_item() -> void:
+	var a := _item(4.0, 2.0, "Keys")
+	a.notes = MidiTake.pack_relative([[4.5, 5.0, 60, 100, 0]], 4.0)
+	var b := _item(8.0, 1.0, "Audio")
+	var packed := MixWire._pack_items([a, b])
+	check("an item with notes carries them, one without does not (%d entries)" % packed.size(),
+			packed.size() == 11)
+	var back := MixWire._unpack_items(packed)
+	check("both come back, the second still the second", back.size() == 2 and back[1].name == "Audio")
+	check("with the notes on the first", back[0].notes == a.notes and back[1].notes.is_empty())
+	var legacy := MixWire._unpack_items([1.0, 2.0, 0.0, "Old", 0.0, 3.0, 1.0, 0.0, "Older", 1.0])
+	check("a lane from a sender that knows nothing of notes reads as it always did",
+			legacy.size() == 2 and legacy[1].name == "Older" and legacy[1].selected)
+
+
+func _test_reaper_is_asked_for_a_take_in_one_flat_call() -> void:
+	var args := ReaperBackend.midi_take_request(4, 12.5, 14.0,
+			[[12.75, 13.0, 60, 100, 0], [13.25, 13.9, 67, 80, 2]], "Grace, take [2]")
+	check("the bridge gets one flat list: track, start, end, name, count, then five per note",
+			args.size() == 5 + 10 and args[0] == 4 and args[3] == "Grace take 2" and args[4] == 2
+			and args[5] == 12.75 and args[14] == 2)
+	check("with nothing in it the bridge's decoder would split or end on",
+			not JSON.stringify(args).trim_prefix("[").trim_suffix("]").contains("[")
+			and not (args[3] as String).contains(","))
+
+	var link := _fresh_link()
+	check("without the bridge, Reaper cannot take MIDI", not link.can(DAWBackend.Capability.MIDI_TAKES))
+	link.state.track(4)
+	link.insert_midi_take(4, 1.0, 2.0, [[1.0, 1.5, 60, 100, 0]], "x")
+	check("and a take is not pretended onto its timeline", link.state.track(4).items.is_empty())
+
+	# A MIDI item comes back from the bridge with its notes, relative to the item.
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 4, "items": [
+			{"start": 12.5, "length": 1.5, "muted": false, "name": "Grace take 2", "selected": false,
+			"notes": [0.25, 0.5, 60, 100, 0]}]}]})
+	var item := link.state.item(4, 0)
+	check("Reaper's own copy of a take arrives with its notes", item != null and item.notes.size() == 5)
+	link.free()
+
+
+## The guest's own piano. Rendered straight, as the suite has no sound card: what matters is that
+## a key makes a sound, the sound is a sane level, it dies when let go, and a fistful of keys
+## does not run out of voices into silence or into noise.
+func _test_the_monitor_piano_sounds_decays_and_shares_its_voices() -> void:
+	var synth := MonitorSynth.new()
+	add_child(synth)
+	synth.note_on(60, 100)
+	var first := synth.render(4800)
+	var peak := 0.0
+	var finite := true
+	for f in first:
+		peak = maxf(peak, maxf(absf(f.x), absf(f.y)))
+		finite = finite and is_finite(f.x) and is_finite(f.y)
+	check("a key makes a sound (peak %.3f)" % peak, peak > 0.05)
+	check("at a level that leaves room for the mix", peak < 0.9 and finite)
+	check("it starts without a click: the first frame is near silent", absf(first[0].x) < 0.01)
+	var soft := MonitorSynth.new()
+	add_child(soft)
+	soft.note_on(60, 20)
+	var soft_peak := 0.0
+	for f in soft.render(4800):
+		soft_peak = maxf(soft_peak, absf(f.x))
+	check("a light touch is properly quieter (%.3f against %.3f)" % [soft_peak, peak], soft_peak < peak * 0.5)
+	soft.free()
+	synth.note_off(60)
+	synth.render(48000)
+	check("let go, it dies away", synth.sounding() == 0)
+	for p in 24:
+		synth.note_on(40 + p, 110)
+	var full := synth.render(2400)
+	var full_peak := 0.0
+	finite = true
+	for f in full:
+		full_peak = maxf(full_peak, absf(f.x))
+		finite = finite and is_finite(f.x)
+	check("twenty-four keys share sixteen voices", synth.sounding() == MonitorSynth.VOICES)
+	check("and a fistful saturates rather than clips (%.3f)" % full_peak, full_peak < 1.0 and finite)
+	synth.enabled = false
+	synth.note_on(72, 100)
+	synth.render(48000 * 4)
+	check("turned off, keys make no sound", synth.sounding() == 0)
+	check("with no sound card there is no latency to stamp around", synth.latency_seconds() == 0.0)
+	synth.free()
+
+
+func _test_the_computer_keys_are_a_piano_by_position() -> void:
+	var keys := KeyCatcher.new()
+	var played: Array = []
+	keys.note_on.connect(func(p: int, v: int): played.append(["on", p, v]))
+	keys.note_off.connect(func(p: int): played.append(["off", p]))
+	check("A is middle C", keys.handle(KEY_A, true) and played.back() == ["on", 60, KeyCatcher.VELOCITY])
+	keys.handle(KEY_W, true)
+	check("the row above is the black keys", played.back()[1] == 61)
+	keys.handle(KEY_APOSTROPHE, true)
+	check("and the home row runs on to the F above", played.back()[1] == 77)
+	keys.handle(KEY_X, true)
+	keys.handle(KEY_A, false)
+	check("a key let go after an octave change stops the note it started", played.back() == ["off", 60])
+	keys.handle(KEY_A, true)
+	check("X is an octave up", played.back()[1] == 72 and keys.octave_name() == "C5")
+	check("keys the piano does not use are left for the studio", not keys.handle(KEY_V, true)
+			and not keys.handle(KEY_SPACE, true))
+	for i in 10:
+		keys.handle(KEY_Z, true)
+	check("Z goes down, and not off the bottom", keys.base == KeyCatcher.LOWEST_C)
+	played.clear()
+	keys.release_all()
+	check("giving the keys back lets go of everything still down", played.size() == 3
+			and played.all(func(e): return e[0] == "off"))
+	keys.free()
+
+
+## A take begins when the guest HEARS the host start recording and ends when it hears it stop,
+## and each note carries the song position the guest was hearing when it was played.
+func _test_a_guest_take_follows_the_host_transport_it_hears() -> void:
+	var backend := _offline()
+	var gm := GuestMidi.new()
+	add_child(gm)
+	var now := {"seconds": 40.0, "playing": true, "recording": true, "valid": true}
+	gm.heard_source = func(): return now.duplicate()
+	gm.follow(now)
+	check("no track chosen, nothing is taken", not gm.is_recording())
+	gm.target_track = 7
+	gm.note_on(55, 80)
+	gm.follow(now)
+	check("a track chosen and recording heard, a take begins", gm.is_recording())
+	check("a key already down is in the take from its first moment", gm.take_note_count() == 1)
+	now["seconds"] = 40.5
+	gm.note_on(62, 90)
+	now["seconds"] = 41.0
+	gm.note_off(62)
+	gm.note_off(55)
+	now["seconds"] = 41.25
+	gm.note_on(65, 70)
+	gm.follow(now)
+	now["seconds"] = 42.0
+	gm.follow(now)
+	var before := DAW.state.track(7).items.size()
+	now["recording"] = false
+	now["seconds"] = 42.02
+	gm.follow(now)
+	check("recording heard to stop, the take is sent", not gm.is_recording())
+	check("as one item on the chosen track", DAW.state.track(7).items.size() == before + 1)
+	var item: MixState.ItemState = null
+	for it in DAW.state.track(7).items:
+		if it.name.ends_with(" take 1"):
+			item = it
+	if item != null:
+		close_to("the item starts where recording was heard to start", item.start, 40.0)
+		close_to("and ends where it was last heard running", item.end(), 42.0)
+		var notes := MidiTake.unpack_relative(item.notes, item.start)
+		check("with every note (%s)" % [notes], notes.size() == 3)
+		if notes.size() == 3:
+			check("each at the song position heard when it was played",
+					is_equal_approx(notes[1][0], 40.5) and is_equal_approx(notes[1][1], 41.0)
+					and notes[1][2] == 62 and notes[1][3] == 90)
+			check("and a note still down at the end closed there",
+					notes[2][2] == 65 and is_equal_approx(notes[2][1], 42.0))
+	check("the panel is told what the take did", gm.last_take.get("notes", 0) == 3)
+	gm.follow(now)
+	check("one stop is one take", DAW.state.track(7).items.size() == before + 1)
+	gm.free()
+
+
+func _test_the_host_places_a_guest_take_and_says_so() -> void:
+	_offline()
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var before := DAW.state.track(3).items.size()
+	Session._place_take(1, [3, 8.0, 10.0, [[8.5, 9.0, 60, 100, 0]], "Grace take 1"])
+	check("a guest's take is placed", DAW.state.track(3).items.size() == before + 1)
+	check("and the room is told where (%s)" % [told], told.size() == 1 and (told[0] as String).contains("1 note onto %s at %s." % [DAW.state.track(3).display_name(), DAW.state.bar_beat(8.0)]))
+	Session._place_take(1, [99, 8.0, 10.0, [[8.5, 9.0, 60, 100, 0]], "Grace take 2"])
+	check("a take for a track that is not there is refused out loud (%s)" % [told],
+			told.size() == 2 and (told[1] as String).contains("was not placed"))
+	Session.notice.disconnect(listen)
+
+
+func _test_midi_items_show_their_notes_on_the_timeline() -> void:
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var notes := timeline.get_node_or_null("ItemNotes") as MeshBank
+	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
+	check("MIDI items get a piano roll, in one object", notes != null and notes.count() > 0)
+	if notes == null or blocks == null:
+		timeline.free()
+		return
+	var drawn := notes.multimesh.visible_instance_count
+	check("drawn where the window is (%d of %d)" % [drawn, notes.count()], drawn > 0)
+	# Every drawn note sits inside some drawn item block.
+	var inside := true
+	for i in drawn:
+		var at := notes.transform_of(i)
+		var held := false
+		for b in blocks.multimesh.visible_instance_count:
+			var box := blocks.transform_of(b)
+			var half := box.basis.get_scale() * 0.5
+			var half_note := at.basis.get_scale() * 0.5
+			if at.origin.x - half_note.x >= box.origin.x - half.x - 0.00001 \
+					and at.origin.x + half_note.x <= box.origin.x + half.x + 0.00001 \
+					and absf(at.origin.y - box.origin.y) + half_note.y <= half.y:
+				held = true
+				break
+		inside = inside and held
+	check("and every note is on its item, inside the block", inside)
+	timeline._on_view_changed(100000.0, timeline.view_span)
+	check("scrolled away, no notes are drawn", notes.multimesh.visible_instance_count == 0)
+	timeline.free()
+	var thin := TimelineSurface.note_layout(PackedFloat32Array([0, 1, 60, 90, 0, 1, 2, 62, 90, 0]))
+	check("two notes a tone apart are drawn on an octave's rows, not stretched to fill",
+			thin["rows"] == 12 and thin["low"] <= 60 and thin["low"] + thin["rows"] > 62)
+	var wide := TimelineSurface.note_layout(PackedFloat32Array([0, 1, 36, 90, 0, 1, 2, 84, 90, 0]))
+	check("a wide part gets a row per semitone it spans", wide["low"] == 36 and wide["rows"] == 49)

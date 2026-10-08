@@ -155,6 +155,9 @@ func can(capability: StringName) -> bool:
 		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
 		# the arrangement instead of drawing a project with nothing in it.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.MIDI_TAKES:
+		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
+		return _bridge != null and _bridge.is_open()
 	return true
 
 
@@ -419,6 +422,29 @@ func add_marker(seconds: float, marker_name: String) -> void:
 	_edit("AddMarker", [seconds, marker_name])
 
 
+## A take, as one bridge call: a MIDI item created at `start` and filled note by note, inside one
+## undo block. Shown on the cache at once like every other edit; the next timeline poll brings
+## back Reaper's own copy, notes and all.
+func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
+		take_name: String) -> void:
+	if _bridge == null or not _bridge.is_open():
+		push_warning("insert_midi_take needs the ReaScript bridge; OSC cannot create an item.")
+		return
+	_locally_insert_take(track_index, start, end, notes, take_name)
+	_edit("InsertMidiTake", midi_take_request(track_index, start, end, notes, take_name))
+
+
+## The bridge's argument list for a take. Flat, because the bridge's request decoder reads one
+## flat list of numbers and strings: track, start, end, name, note count, then five numbers per
+## note -- on and off in project seconds, pitch, velocity, channel.
+static func midi_take_request(track_index: int, start: float, end: float, notes: Array,
+		take_name: String) -> Array:
+	var out: Array = [track_index, start, end, MidiTake.clean_name(take_name), notes.size()]
+	for n in notes:
+		out.append_array([float(n[0]), float(n[1]), int(n[2]), int(n[3]), int(n[4])])
+	return out
+
+
 ## Send one edit, and keep the timeline poll from undoing it on screen.
 ##
 ## A GetTimeline already on its way when the edit is made can come back with the lanes as they
@@ -481,6 +507,10 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 				str(item.get("name", "")),
 				1.0 if item.get("selected", false) else 0.0,
 			])
+			# A MIDI item's notes, relative to its start; see the bridge's GetTimeline.
+			var notes = item.get("notes", [])
+			if notes is Array and not notes.is_empty():
+				packed.append(PackedFloat32Array(notes))
 		lanes[idx] = packed
 
 	for index in state.track_indices():

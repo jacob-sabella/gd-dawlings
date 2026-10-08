@@ -54,6 +54,16 @@ const SCRUBBER_BAND := 0.016
 ## wall: at 40 tracks it was 0.8 m tall and hung down over the middle of the console, hiding the
 ## faders a person had sat down to use. The rest scroll -- the wheel over the track names.
 const MAX_LANES := 16
+## Notes drawn on MIDI items, at most: a dense take on every lane is still one draw call, but
+## its buffer is sized at build time.
+const MAX_DRAWN_NOTES := 6000
+## A note's least width, so a staccato note is a mark and not nothing.
+const MIN_NOTE_WIDTH := 0.0008
+## And least height: a millimetre is about a pixel at the distance the panel is read from, and a
+## note thinner than that is not drawn at all. Neighbouring rows overlap rather than vanish.
+const MIN_NOTE_HEIGHT := 0.0016
+## An item's piano roll is at least this many semitones tall.
+const MIN_NOTE_ROWS := 12
 
 ## The window onto the project, in seconds. Until the viewer zooms or scrolls, every rebuild
 ## fits the whole project; after that the viewer owns the window. Not "the first rebuild": with
@@ -92,6 +102,8 @@ var _ruler: Node3D
 ## project and drawn down to whatever the window currently shows.
 var _item_blocks: MeshBank
 var _item_strips: MeshBank
+## The notes of MIDI items, drawn on the items as a little piano roll. See _place_notes.
+var _item_notes: MeshBank
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
 var _lane_y: Array[float] = []
 
@@ -209,6 +221,9 @@ func _rebuild() -> void:
 	_item_strips = MeshBank.strips()
 	_item_strips.name = "ItemStrips"
 	_adopt(_item_strips)
+	_item_notes = MeshBank.strips()
+	_item_notes.name = "ItemNotes"
+	_adopt(_item_notes)
 
 	var bed_bank := MeshBank.parts(Vector3(_lane_area_width, LANE_HEIGHT, 0.0010),
 			Materials.recess())
@@ -235,6 +250,13 @@ func _rebuild() -> void:
 		_item_strips.claim(Transform3D(), Color.WHITE)
 	_item_blocks.commit()
 	_item_strips.commit()
+	var total_notes := 0
+	for index in indices:
+		for item in DAW.state.track(index).items:
+			total_notes += item.notes.size() / MidiTake.NOTE_WIDTH
+	for i in mini(total_notes, MAX_DRAWN_NOTES):
+		_item_notes.claim(Transform3D(), Color.WHITE)
+	_item_notes.commit()
 
 	_build_loop_bar()
 	_build_playhead()
@@ -648,6 +670,7 @@ func _relayout_view() -> void:
 
 	var indices := _shown()
 	var slot := 0
+	var note_slot := 0
 	for i in indices.size():
 		if i >= _lane_y.size():
 			break
@@ -660,9 +683,12 @@ func _relayout_view() -> void:
 				start = _preview[2]
 			if _place_item(item, start, t.colour, _lane_y[i], t.mute, slot):
 				slot += 1
+				note_slot = _place_notes(item, start, t.colour, _lane_y[i], item.muted or t.mute,
+						note_slot)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
+	_item_notes.show_first(note_slot)
 	_draw_loop()
 
 
@@ -713,6 +739,67 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 	_item_strips.set_colour(slot, Materials.chip_colour(tint) if not dim
 			else Materials.lamp_colour(tint, false))
 	return true
+
+
+## A MIDI item's notes, on the item, as an arranger draws them: time across, pitch up, the
+## item's own range of pitches filling the block below its strip, so a bass line and a chord
+## part both read as shapes rather than as a few dots at the bottom of a 128-note well. Clipped
+## to the window like the block. Returns the next free slot.
+func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float, dim: bool,
+		slot: int) -> int:
+	if item.notes.is_empty():
+		return slot
+	var layout := note_layout(item.notes)
+	var low: int = layout["low"]
+	var rows: int = layout["rows"]
+	var block_height := LANE_HEIGHT - 0.0024
+	# Below the take strip and clear of the block's bottom edge.
+	var top := y + block_height * 0.5 - 0.0026
+	var bottom := y - block_height * 0.5 + 0.0007
+	var row := (top - bottom) / rows
+	var left_edge := maxf(_x_for(start) + EDGE_GAP, _lane_area_x)
+	var right_edge := minf(_x_for(start + item.length) - EDGE_GAP, _lane_right())
+	# Ink on the block rather than light on it: the blocks are already the light thing on this
+	# panel, and pale notes on a pale block read as a texture, not as notes.
+	var colour := tint.darkened(0.62)
+	if dim:
+		colour = colour.darkened(0.6)
+	var n := 0
+	while n + MidiTake.NOTE_WIDTH <= item.notes.size() and slot < _item_notes.count():
+		var on := start + item.notes[n]
+		var off := start + item.notes[n + 1]
+		var pitch := int(item.notes[n + 2])
+		n += MidiTake.NOTE_WIDTH
+		var left := maxf(_x_for(on), left_edge)
+		var right := minf(maxf(_x_for(off), _x_for(on) + MIN_NOTE_WIDTH), right_edge)
+		if right - left <= 0.0:
+			continue
+		var centre_y := bottom + (pitch - low + 0.5) * row
+		_item_notes.move_slot(slot, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(right - left, maxf(row * 0.8, MIN_NOTE_HEIGHT), 0.0004)),
+				Vector3((left + right) * 0.5, centre_y, 0.0022)))
+		_item_notes.set_colour(slot, colour)
+		slot += 1
+	return slot
+
+
+## The pitch rows an item's notes are drawn on: {low, rows}. At least an octave tall, so three
+## notes a semitone apart do not fill the block like three bars.
+static func note_layout(notes: PackedFloat32Array) -> Dictionary:
+	var low := 127
+	var high := 0
+	var n := 0
+	while n + MidiTake.NOTE_WIDTH <= notes.size():
+		low = mini(low, int(notes[n + 2]))
+		high = maxi(high, int(notes[n + 2]))
+		n += MidiTake.NOTE_WIDTH
+	if high < low:
+		return {"low": 60, "rows": 12}
+	var rows := high - low + 1
+	if rows < MIN_NOTE_ROWS:
+		low = maxi(0, low - (MIN_NOTE_ROWS - rows) / 2)
+		rows = MIN_NOTE_ROWS
+	return {"low": low, "rows": rows}
 
 
 ## A vertical line, kept as a node and MOVED each frame rather than rebuilt.

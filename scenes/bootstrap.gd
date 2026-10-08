@@ -114,6 +114,10 @@ func _ready() -> void:
 	add_child(session_panel)
 	if args["session_panel"]:
 		session_panel.open()
+	if args["play_into"] > 0:
+		Session.guest_midi.target_track = args["play_into"]
+	if args["computer_keys"]:
+		session_panel.play_with_computer_keys.call_deferred(true)
 
 	_apply_cli_placement(args["place"])
 	_apply_cli_focus(args["focus"])
@@ -171,7 +175,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false,
+		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 	}
 	var i := 0
@@ -241,6 +245,12 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				if i < argv.size():
 					out["audio_out"] = argv[i]
 			"--session-panel": out["session_panel"] = true
+			"--play-into":
+				# `--play-into 7` -- a guest's keys go onto track 7 when the host records.
+				i += 1
+				if i < argv.size():
+					out["play_into"] = int(argv[i])
+			"--computer-keys": out["computer_keys"] = true
 			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true

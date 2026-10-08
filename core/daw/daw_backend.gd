@@ -55,6 +55,9 @@ const Capability := {
 	FX_PARAM_NAMES = &"fx_param_names",
 	## Drop a marker on the arrangement. Reaper's OSC can go to a marker but not make one.
 	MARKERS = &"markers",
+	## Put a take of MIDI notes on a track at a song position. Reaper needs the ReaScript bridge
+	## for it; OSC has no message that creates an item.
+	MIDI_TAKES = &"midi_takes",
 }
 
 var state := MixState.new()
@@ -172,6 +175,13 @@ func split_selected(_seconds: float) -> void: pass
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
 
+## A take of notes, placed by song position: a new MIDI item on `track_index` from `start` to
+## `end` seconds, holding `notes` as [on, off, pitch, velocity, channel] rows in absolute
+## seconds. One undo step. Arguments arrive already cleaned (MidiTake.clean_args). A backend
+## that cannot do it answers false to Capability.MIDI_TAKES.
+func insert_midi_take(_track_index: int, _start: float, _end: float, _notes: Array,
+		_name: String) -> void: pass
+
 
 # --- item edits, on the cache ------------------------------------------------------------
 #
@@ -251,12 +261,44 @@ func _locally_split(seconds: float) -> int:
 				right.name = item.name
 				right.muted = item.muted
 				right.selected = true
+				_split_notes(item, right, seconds)
 				item.length = seconds - item.start
 				added.append(right)
 				cut += 1
 		lane.append_array(added)
 		_write_lane(index, lane)
 	return cut
+
+
+## A cut MIDI item's notes go with the half they start in, and a note that runs over the cut is
+## shortened to it: what Reaper does with a split that crosses a held note.
+func _split_notes(left: MixState.ItemState, right: MixState.ItemState, seconds: float) -> void:
+	if left.notes.is_empty():
+		return
+	var keep: Array = []
+	var moved: Array = []
+	for n in MidiTake.unpack_relative(left.notes, left.start):
+		if n[0] < seconds:
+			n[1] = minf(n[1], seconds)
+			keep.append(n)
+		else:
+			moved.append(n)
+	left.notes = MidiTake.pack_relative(keep, left.start)
+	right.notes = MidiTake.pack_relative(moved, seconds)
+
+
+## A take's item, drawn at once: the offline project's whole edit, and a live DAW's preview of
+## the answer the bridge is about to give.
+func _locally_insert_take(track_index: int, start: float, end: float, notes: Array,
+		take_name: String) -> void:
+	var lane := _lane_copy(track_index)
+	var item := MixState.ItemState.new()
+	item.start = start
+	item.length = end - start
+	item.name = take_name
+	item.notes = MidiTake.pack_relative(notes, start)
+	lane.append(item)
+	_write_lane(track_index, lane)
 
 
 ## Every lane with something in it, packed, for an undo step to put back.

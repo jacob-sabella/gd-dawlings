@@ -63,6 +63,14 @@ var _pull_frames := 0
 var step_frames := 0
 var _priming := true
 var _ratio := 1.0
+## The host's frame number of `_frames[0]`, counted from its first packet: what turns the read
+## head into a place in the host's stream, which is what a song position is stamped against.
+var _base := 0
+
+
+## The host's frame number at the read head: the next frame to be handed on. See HeardClock.
+func read_frame() -> float:
+	return _base + _pos
 
 
 ## Frames waiting to be played.
@@ -101,12 +109,16 @@ func push(seq: int, frames: PackedVector2Array, arrival_ms: float) -> void:
 	_next_seq = seq + 1
 	packets += 1
 	_frames.append_array(frames)
+	# Taken from the newest packet every time rather than kept as a running count: a long loss
+	# is filled with less than it lost (see above), and a count would carry that error forever.
+	_base = (seq + 1) * frames.size() - _frames.size()
 	_measure_lateness(seq, arrival_ms, packet_ms)
 	# A runaway backlog -- the guest's tab was asleep, the network burst ten seconds at once --
 	# is cut back to the target, from the old end. Old audio is the least useful audio.
 	if depth() > MAX_TARGET * 2:
 		var drop := depth() - target
 		_frames = _frames.slice(int(_pos) + drop)
+		_base += int(_pos) + drop
 		_pos = 0.0
 
 
@@ -149,6 +161,7 @@ func take(count: int, queued: int) -> PackedVector2Array:
 	if _pos > 4096.0:
 		var cut := int(_pos)
 		_frames = _frames.slice(cut)
+		_base += cut
 		_pos -= cut
 	return out
 
@@ -198,5 +211,6 @@ func pull(count: int) -> PackedVector2Array:
 	if _pos > 4096.0:
 		var cut := int(_pos)
 		_frames = _frames.slice(cut)
+		_base += cut
 		_pos -= cut
 	return out

@@ -52,6 +52,7 @@ const COMMANDS := [
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"add_marker", &"set_track_monitor",
+	&"insert_midi_take",
 ]
 
 var backend: DAWBackend
@@ -207,6 +208,14 @@ func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(second
 const MARKER_NAME_MAX := 64
 func add_marker(seconds: float, marker_name: String) -> void:
 	_do(&"add_marker", [maxf(seconds, 0.0), marker_name.left(MARKER_NAME_MAX)])
+## A take of notes onto a track, placed by song position: notes are [on, off, pitch, velocity,
+## channel] rows in seconds. Cleaned here and cleaned again on the host, since a guest's take
+## arrives there as peer input. See MidiTake.
+func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
+		take_name := "") -> void:
+	var args := MidiTake.clean_args([track_index, start, end, notes, take_name])
+	if not args.is_empty():
+		_do(&"insert_midi_take", args)
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to
@@ -265,4 +274,22 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
 			return
 		args = [int(args[0]), int(args[1]), clampf(float(args[2]), 0.0, 1.0)]
+	if verb == &"insert_midi_take":
+		if not midi_take_refusal(args).is_empty():
+			return
+		args = MidiTake.clean_args(args)
 	backend.callv(verb, args)
+
+
+## Why a take from a peer cannot be placed, in words for the person who played it, or "".
+func midi_take_refusal(args: Array) -> String:
+	var cleaned := MidiTake.clean_args(args)
+	if cleaned.is_empty():
+		return "The take could not be read."
+	if backend == null or not backend.can(DAWBackend.Capability.MIDI_TAKES):
+		return "This DAW cannot take MIDI yet: in Reaper, load the reaper-3d bridge script."
+	if not state.tracks.has(cleaned[0]):
+		return "There is no track %d to record onto." % cleaned[0]
+	if (cleaned[3] as Array).is_empty():
+		return "The take had no notes in it."
+	return ""

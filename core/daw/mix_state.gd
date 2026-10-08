@@ -106,6 +106,10 @@ class ItemState extends RefCounted:
 	## Selected in the DAW: what a split or a move acts on. The DAW's own selection, not this
 	## desk's, so a click in Reaper's window and a click on the desk are the same selection.
 	var selected: bool = false
+	## A MIDI item's notes, flat: [on, off, pitch, velocity, channel] repeating, seconds from
+	## the item's left edge so that moving the item moves its notes. Empty for audio, and for a
+	## backend that cannot read an item's contents. See MidiTake.
+	var notes := PackedFloat32Array()
 
 	func end() -> float:
 		return start + length
