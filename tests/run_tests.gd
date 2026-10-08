@@ -74,6 +74,7 @@ func _ready() -> void:
 	_test_summoned_gear_lands_where_a_person_can_use_it()
 	_test_no_signal_is_carried_by_colour_alone()
 	_test_a_control_can_be_worked_without_a_steady_hand()
+	_test_a_value_can_be_set_without_a_precise_drag()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -3314,3 +3315,72 @@ class _DwellProbe extends Interactor:
 
 	func _physics_process(_delta: float) -> void:
 		pass
+
+
+func _test_a_value_can_be_set_without_a_precise_drag() -> void:
+	# The other half of the same problem as dwell. Dwell removed the PRESS; this removes the
+	# DRAG, which is the harder one: a press is a moment, a drag is a press sustained while the
+	# hand moves accurately, and nothing in this studio could set a value without one.
+	var erg := Ergonomics.new()
+	Ergonomics.current = erg
+
+	erg.step = 0.0
+	check("notches are off by default, so nobody loses resolution they were using",
+			is_equal_approx(erg.quantise(0.4137), 0.4137))
+	check("and nudging does nothing when they are off",
+			is_equal_approx(erg.nudge(0.4137, 1), 0.4137))
+
+	erg.step = 0.05
+	check("a value lands on the nearest notch", is_equal_approx(erg.quantise(0.4137), 0.40))
+	check("rounding goes to the nearer one", is_equal_approx(erg.quantise(0.4812), 0.50))
+	check("notches never leave the range", is_equal_approx(erg.quantise(1.4), 1.0)
+			and is_equal_approx(erg.quantise(-0.3), 0.0))
+
+	# Off the current value, not off the nearest notch. Snapping first and moving second loses
+	# the first tap, and losing the first tap is how a stepped control earns a reputation for
+	# being unresponsive.
+	check("a nudge from between notches still moves a full notch",
+			is_equal_approx(erg.nudge(0.4137, 1), 0.4637))
+	check("and down as well as up", is_equal_approx(erg.nudge(0.4137, -1), 0.3637))
+	check("a nudge cannot walk off the end", is_equal_approx(erg.nudge(0.99, 1), 1.0)
+			and is_equal_approx(erg.nudge(0.01, -1), 0.0))
+
+	# The fader, which is where it has to actually work. A tap on the trough with notches on is
+	# a nudge rather than a jump -- the jump is the behaviour that demands precisely the aim
+	# this whole mechanism exists to stop needing.
+	var rig := Node3D.new()
+	add_child(rig)
+	var fader := Fader.new()
+	var written: Array[float] = []
+	fader.write_value = func(v: float): written.append(v)
+	rig.add_child(fader)
+
+	erg.step = 0.0
+	fader.value = 0.5
+	fader._on_grab_begin(fader.to_global(Vector3(0, 0.95 * Fader.TRAVEL, 0)))
+	check("with notches off, a tap on the trough still jumps where you tapped (%.2f)"
+			% fader.value, fader.value > 0.9)
+	fader._on_grab_end()
+
+	erg.step = 0.05
+	fader.value = 0.5
+	fader._on_grab_begin(fader.to_global(Vector3(0, 0.95 * Fader.TRAVEL, 0)))
+	check("with notches on, the same tap moves one notch (%.2f)" % fader.value,
+			is_equal_approx(fader.value, 0.55))
+	fader._on_grab_end()
+	fader._on_grab_begin(fader.to_global(Vector3(0, 0.02 * Fader.TRAVEL, 0)))
+	check("and a tap below moves one notch down (%.2f)" % fader.value,
+			is_equal_approx(fader.value, 0.50))
+	fader._on_grab_end()
+	check("every nudge was reported onward, not just drawn", written.size() >= 2)
+
+	# A drag still works, and lands on notches.
+	fader.value = 0.5
+	fader._on_grab_begin(fader.to_global(Vector3(0, 0.5 * Fader.TRAVEL, 0)))
+	fader._on_grab_move(fader.to_global(Vector3(0, 0.637 * Fader.TRAVEL, 0)))
+	check("a drag still works and lands on a notch (%.3f)" % fader.value,
+			is_equal_approx(fader.value, erg.quantise(fader.value)))
+	fader._on_grab_end()
+
+	rig.queue_free()
+	Ergonomics.current = Ergonomics.new()

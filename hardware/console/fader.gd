@@ -156,7 +156,16 @@ func _on_grab_begin(at: Vector3) -> void:
 	# needing two colliders.
 	var local_y := to_local(at).y
 	var cap_y := value * TRAVEL
-	_grab_offset = (cap_y - local_y) if absf(local_y - cap_y) < CAP_HEIGHT else 0.0
+	var on_cap := absf(local_y - cap_y) < CAP_HEIGHT
+	_grab_offset = (cap_y - local_y) if on_cap else 0.0
+	# With notches on, a tap on the trough is a NUDGE rather than a jump, and that single
+	# change is what makes the fader usable without a drag at all: tap above the cap to go up,
+	# below it to go down, one notch a time, with no precision required anywhere. Jumping to the
+	# tap would demand exactly the accuracy stepping exists to remove.
+	if not on_cap and Ergonomics.current.step > 0.0:
+		_grab_offset = 0.0
+		_set_value(Ergonomics.current.nudge(value, 1 if local_y > cap_y else -1))
+		return
 	_apply_from_local_y(local_y)
 
 
@@ -187,7 +196,11 @@ func _process(delta: float) -> void:
 
 
 func _apply_from_local_y(local_y: float) -> void:
-	value = clampf((local_y + _grab_offset) / TRAVEL, 0.0, 1.0)
+	_set_value(clampf((local_y + _grab_offset) / TRAVEL, 0.0, 1.0))
+
+
+func _set_value(to: float) -> void:
+	value = Ergonomics.current.quantise(to)
 	_on_value_changed()
 	if write_value.is_valid():
 		write_value.call(value)

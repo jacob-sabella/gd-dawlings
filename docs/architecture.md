@@ -875,3 +875,42 @@ rests on. `--dwell 0.8` turns it on.
 
 The transport's play, stop and record buttons are now on the signal palette and carry
 silhouettes too; they had exactly the defect the console strip had.
+
+## And the drag
+
+Dwell removed the press. This removes the drag, which is the harder one: a press is a moment, a
+drag is a press *sustained while the hand moves accurately*, and nothing in this studio could
+set a value without one.
+
+`Ergonomics.step` turns on notches, and it changes two things at once because only one of them
+would be useless:
+
+* a drag lands on notches rather than anywhere, and
+* a TAP on the trough moves one notch instead of jumping to where it was tapped.
+
+The second is the one that matters. Jumping to the tap is the behaviour that demands precisely
+the aim the mechanism exists to stop needing; nudging means tap above the cap to go up, below
+to go down, with no accuracy required anywhere and no drag at all. Quantising the drag alone
+would have been a feature nobody could reach.
+
+`nudge` works off the CURRENT value rather than off the nearest notch. A control sitting between
+notches -- because Reaper set it, or because it was dragged before stepping was switched on --
+still moves exactly one notch on the first tap. The snap-then-move version silently eats that
+first tap, and eating the first tap is how a stepped control earns a reputation for being
+unresponsive.
+
+Off by default, because quantising a mix engineer's fader without being asked takes resolution
+away from someone who had a use for it. `--step 0.05` turns it on.
+
+### The accessibility flags, in one place
+
+| flag | what it changes |
+|---|---|
+| `--eyes N` | text scale; buys DISTANCE, not just bigger glyphs |
+| `--seated` | lower eyes, shorter reach, steeper gaze |
+| `--vision deutan\|protan\|tritan\|mono` | signal palette chosen for those eyes |
+| `--dwell N` | look-to-activate, in seconds; replaces the press |
+| `--step N` | notches and tap-to-nudge; replaces the drag |
+| `--no-motion` | surfaces cut rather than glide |
+| `--focus ID` | start with a surface summoned |
+| `--detach-body` | freeze the body frame, to photograph it from outside |

@@ -138,7 +138,7 @@ func _on_grab_move(at: Vector3) -> void:
 	var delta := _angle_of(at) - _grab_angle
 	# Wrapped, or a knob dragged past straight-down would jump a full turn.
 	delta = wrapf(delta, -PI, PI)
-	value = clampf(_grab_value - delta / SWEEP, 0.0, 1.0)
+	value = Ergonomics.current.quantise(clampf(_grab_value - delta / SWEEP, 0.0, 1.0))
 	# One tick per boundary CROSSED, not one per frame in which the value changed. A knob turned
 	# slowly should tick rarely and a knob spun fast should tick fast, and the only thing that
 	# gets both right is counting the boundaries rather than the frames.

@@ -97,10 +97,17 @@ var motion_scale := 1.0
 ## Hold-to-act instead of click-to-act, in seconds. 0 disables. For anyone who can aim but
 ## cannot reliably click, or cannot hold a controller at all.
 var dwell_seconds := 0.0
-## One keyboard or button step of a continuous control, as a fraction of its range. The reason
-## this exists is that a knob you can only operate by dragging is a knob some people cannot
-## operate, and "drag precisely" is the single least accessible gesture in the project.
-var step := 0.02
+## The size of one notch of a continuous control, as a fraction of its range. 0 is continuous.
+##
+## A knob you can only operate by dragging is a knob some people cannot operate, and "drag
+## precisely, and hold while you do" is the single least accessible gesture in the project.
+## Turning this on changes two things at once, and both are needed: a drag lands on notches
+## instead of anywhere, and a TAP on the trough or the dial moves one notch instead of jumping
+## to where it was tapped. The second is the one that matters -- it removes the drag entirely.
+##
+## Off by default, because quantising a mix engineer's fader without being asked is taking
+## resolution away from someone who had a use for it.
+var step := 0.0
 
 # --- derived geometry -----------------------------------------------------------------------
 
@@ -223,6 +230,26 @@ func _distance_for(bounds: AABB, touched: bool, smallest_cap: float) -> float:
 	var nearest := maxf(fits_in_sweep(bounds.size), NEAR_LIMIT)
 	var preferred := working_distance() if touched else nearest
 	return clampf(preferred, nearest, maxf(legible_to(smallest_cap), nearest))
+
+
+## The nearest notch to a value, or the value itself when notches are off.
+func quantise(value: float) -> float:
+	if step <= 0.0:
+		return value
+	return clampf(round(value / step) * step, 0.0, 1.0)
+
+
+## One notch along from where you are, in the given direction.
+##
+## Off the CURRENT value rather than off the nearest notch, so a control sitting between notches
+## -- because Reaper set it, or because it was dragged before stepping was turned on -- still
+## moves by exactly one notch on the first tap instead of snapping somewhere else first. The
+## snap-then-move version loses a tap, and losing the first tap is how a stepped control gets
+## the reputation of being unresponsive.
+func nudge(value: float, direction: int) -> float:
+	if step <= 0.0 or direction == 0:
+		return value
+	return clampf(value + signf(direction) * step, 0.0, 1.0)
 
 
 ## The colours this studio uses to MEAN something, chosen for the eyes reading them.
