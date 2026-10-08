@@ -42,6 +42,14 @@ const CAPTION_DROP := 0.017
 const CAPTION_SIZE := 38
 ## How long after asking for a reading before asking again. See RackUnit.TEXT_ASK_MSEC.
 const TEXT_ASK_MSEC := 150
+## How often the page on show is read again. OSC streams only a plugin's first 32 parameters;
+## everything past them is only as fresh as the last read, and a plugin's own GUI or automation
+## can move them at any time.
+const PAGE_READ_MSEC := 700
+## A plugin's own preset buttons, exposed as parameters. Neural DSP's presets live inside the
+## plugin, where Reaper cannot list them, and these are how the plugin lets a host step them.
+const PRESET_NEXT := "Preset Next"
+const PRESET_PREVIOUS := "Preset Previous"
 
 var track_index := 1
 var fx_index := 0
@@ -75,13 +83,18 @@ var _built_shape := ""
 var _text_asked_msec := 0
 ## Where the tablet asked its plugin to go, until the chain says it got there: [track, fx].
 var _expect: Array = []
+## The plugin whose parameter list was last asked for, so it is asked once and not per rebuild.
+var _listed := ""
+var _page_read_msec := 0
+var _starts: Array = [0]
+var _starts_for := ""
 
 
 static func create(track: int, fx: int, plugin_name: String) -> PluginTablet:
 	var t := PluginTablet.new()
 	t.track_index = track
 	t.fx_index = fx
-	t.fx_name = plugin_name
+	t.fx_name = MixState.FXState.bare_name(plugin_name)
 	t.surface_kind = &"plugin"
 	t.name = "Tablet_%s" % plugin_name.validate_node_name()
 	return t
@@ -134,8 +147,7 @@ func find_plugin() -> bool:
 # --- building -------------------------------------------------------------------------------
 
 func _shape_key() -> String:
-	var f := fx()
-	var count := f.params.size() if f != null else 0
+	var count := _params().size()
 	return "%s|%d|%d|%d|%s" % [fx_name, count, page_offset, track_index, lost]
 
 
@@ -158,6 +170,7 @@ func _on_track_changed(_index: int, field: StringName) -> void:
 func _rebuild() -> void:
 	_clear_built()
 	find_plugin()
+	_ask_for_list()
 	_built_shape = _shape_key()
 	_knobs.clear()
 	_captions.clear()
@@ -258,9 +271,9 @@ func _build_header() -> void:
 	var y := top - 0.064
 	_label("PRESET", 30, Vector3(-WIDTH * 0.5 + 0.03, y + 0.001, 0.001), Color(0.55, 0.58, 0.62))
 	_preset_prev = _button(Vector3(-WIDTH * 0.5 + 0.058, y, 0.004), Color(0.95, 0.75, 0.35),
-			"PREVIOUS PRESET", func(): _act(func(): DAW.step_fx_preset(track_index, fx_index, -1)))
+			"PREVIOUS PRESET", func(): _act(func(): _step_preset(-1)))
 	_preset_next = _button(Vector3(-WIDTH * 0.5 + 0.078, y, 0.004), Color(0.95, 0.75, 0.35),
-			"NEXT PRESET", func(): _act(func(): DAW.step_fx_preset(track_index, fx_index, 1)))
+			"NEXT PRESET", func(): _act(func(): _step_preset(1)))
 	_preset_label = _label("", 44, Vector3(-WIDTH * 0.5 + 0.092, y, 0.001), Color(0.98, 0.86, 0.6),
 			HORIZONTAL_ALIGNMENT_LEFT)
 	_preset_label.name = "Preset"
@@ -280,9 +293,8 @@ func _build_header() -> void:
 
 
 func _build_grid() -> void:
-	var f := fx()
-	var count := f.params.size() if f != null else 0
-	var shown := clampi(count - page_offset, 0, PER_PAGE)
+	var count := _params().size()
+	var shown := mini(_page_size(), count)
 	var left := -KNOB_PITCH.x * (COLUMNS - 1) * 0.5
 	for slot in shown:
 		var at := Vector3(left + (slot % COLUMNS) * KNOB_PITCH.x,
@@ -391,29 +403,41 @@ func refresh() -> void:
 	_mix_label.text = "%d%%" % roundi(f.wet * 100.0)
 
 	var presets := DAW.can(DAWBackend.Capability.FX_PRESETS)
-	_preset_label.text = f.preset if f.preset != "" else ("—" if presets else "no presets here")
+	var own := _own_presets()
+	if f.preset_count == 0 and own:
+		_preset_label.text = "plugin's own"
+	elif f.preset_count == 0:
+		_preset_label.text = "none saved"
+		presets = false
+	else:
+		_preset_label.text = f.preset if f.preset != "" else ("—" if presets else "no presets here")
 	Lettering.fit(_preset_label, WIDTH * 0.5 - 0.1, 44)
 	_preset_prev.visible = presets
 	_preset_next.visible = presets
 
 	var params := _params()
-	var shown := clampi(params.size() - page_offset, 0, PER_PAGE)
+	var shown := _page_size()
 	for i in _knobs.size():
 		var on := i < shown
 		_knobs[i].visible = on
 		_captions[i].visible = on
 		if on:
-			_knobs[i].apply_remote(f.params[params[page_offset + i]])
-			_captions[i].text = _param_name(i)
+			var index: int = params[page_offset + i]
+			if f.params.has(index):
+				_knobs[i].apply_remote(f.params[index])
+			_captions[i].text = _caption_for(i)
 			Lettering.fit(_captions[i], KNOB_PITCH.x - 0.008, CAPTION_SIZE)
 	var paged := params.size() > PER_PAGE
 	_page_label.visible = paged
 	_page_prev.visible = paged
 	_page_next.visible = paged
 	if paged:
-		_page_label.text = "%d-%d OF %d" % [page_offset + 1, page_offset + shown, params.size()]
+		var section := _page_section()
+		_page_label.text = ("%s   " % section if section != "" else "") \
+				+ "%d-%d OF %d" % [page_offset + 1, page_offset + shown, params.size()]
+		Lettering.fit(_page_label, WIDTH * 0.5 - 0.02, 38)
 		_page_prev.lit = page_offset > 0
-		_page_next.lit = page_offset + PER_PAGE < params.size()
+		_page_next.lit = page_offset + shown < params.size()
 
 	_chain_label.text = _chain_words()
 	var order := DAW.state.track(track_index).plugins()
@@ -433,15 +457,178 @@ func _params() -> Array:
 	var f := fx()
 	if f == null:
 		return []
-	var keys: Array = f.params.keys()
-	keys.sort()
-	return keys
+	var out := f.controls()
+	# A plugin's own preset buttons are the PRESET buttons here, not two knobs that do nothing
+	# until they are flicked.
+	if _own_presets():
+		out = out.filter(func(i): return str(f.param_names.get(i, "")) not in [PRESET_NEXT, PRESET_PREVIOUS])
+	return out
+
+
+## The parameter called `called`, or -1.
+func _named(called: String) -> int:
+	var f := fx()
+	if f == null:
+		return -1
+	for i in f.controls():
+		if str(f.param_names.get(i, "")) == called:
+			return int(i)
+	return -1
+
+
+## Whether the plugin steps its own presets, and Reaper has none of its own to step.
+func _own_presets() -> bool:
+	var f := fx()
+	return f != null and f.preset_count == 0 and _named(PRESET_NEXT) >= 0 and _named(PRESET_PREVIOUS) >= 0
+
+
+func _step_preset(direction: int) -> void:
+	if not _own_presets():
+		DAW.step_fx_preset(track_index, fx_index, direction)
+		return
+	# Flicked like the button it is: on, then off again, so the next press is a change too.
+	var param := _named(PRESET_NEXT if direction > 0 else PRESET_PREVIOUS)
+	DAW.set_fx_param(track_index, fx_index, param, 1.0)
+	var t := track_index
+	var at := fx_index
+	get_tree().create_timer(0.12).timeout.connect(func(): DAW.set_fx_param(t, at, param, 0.0))
+	_page_read_msec = 0
+
+
+## Ask for the plugin's full list of parameters, once per plugin, when the cache does not have
+## it. On the stand-in the cache has everything and this asks for nothing.
+func _ask_for_list() -> void:
+	var f := fx()
+	if f == null or lost or not f.param_list.is_empty():
+		return
+	var who := "%d|%d|%s" % [track_index, fx_index, fx_name]
+	if _listed == who:
+		return
+	_listed = who
+	DAW.read_fx_params(track_index, fx_index, [])
+
+
+func _process(delta: float) -> void:
+	super(delta)
+	if lost or _knobs.is_empty() or not is_visible_in_tree():
+		return
+	_follow_values()
+	var now := Time.get_ticks_msec()
+	if now - _page_read_msec < PAGE_READ_MSEC:
+		return
+	_page_read_msec = now
+	var f := fx()
+	if f == null or f.param_list.is_empty():
+		return
+	var page: Array = []
+	for i in _knobs.size():
+		var index := _param_for(i)
+		if index >= 0:
+			page.append(index)
+	DAW.read_fx_params(track_index, fx_index, page)
+
+
+## Parameter values arrive without a signal -- OSC streams them by the hundred a second -- so
+## the knobs on show are matched to the cache every frame instead. Twelve comparisons.
+func _follow_values() -> void:
+	var f := fx()
+	if f == null:
+		return
+	for i in _knobs.size():
+		var index := _param_for(i)
+		if index >= 0 and f.params.has(index) and not is_equal_approx(_knobs[i].value, f.params[index]):
+			_knobs[i].apply_remote(f.params[index])
+
+
+## The words every name on this page starts with -- "HOT AMP" over HOT Amp Gain, HOT Amp Bass
+## and the rest -- so the page can say them once and each caption only what is its own. Empty
+## when the page has nothing in common, or when taking it off would leave a caption empty.
+func _page_section() -> String:
+	var names: Array = []
+	for i in _knobs.size():
+		if _param_for(i) >= 0:
+			names.append((_param_name(i) as String).split(" ", false))
+	if names.size() < 2:
+		return ""
+	var common: Array = names[0].duplicate()
+	for words in names:
+		var n := 0
+		while n < common.size() and n < words.size() - 1 and common[n] == words[n]:
+			n += 1
+		common = common.slice(0, n)
+	return " ".join(common)
+
+
+func _caption_for(slot: int) -> String:
+	var whole := _param_name(slot)
+	var section := _page_section()
+	if section == "" or not whole.begins_with(section + " "):
+		return whole
+	return whole.substr(section.length() + 1)
 
 
 func _param_for(slot: int) -> int:
 	var params := _params()
 	var at := page_offset + slot
-	return int(params[at]) if at < params.size() else -1
+	return int(params[at]) if slot < _page_size() and at < params.size() else -1
+
+
+## Where each page starts in `_params()`. Twelve to a page, but a plugin's controls come in
+## sections -- Gojira's CLN, RST and HOT amps, Mantra's EQ bands -- and a section that would not
+## fit on what is left of a page starts the next one, so a page is one section's controls rather
+## than the tail of one and the head of another. Sections are runs of names sharing a first word;
+## one big enough to be worth a page (half of one) gets a page to itself, and the scraps share.
+func _page_starts() -> Array:
+	var params := _params()
+	if _starts_for == _shape_seed(params):
+		return _starts
+	var f := fx()
+	var starts: Array = [0]
+	var used := 0
+	var i := 0
+	while i < params.size():
+		var word := _first_word(f, params[i])
+		var run := 1
+		while i + run < params.size() and _first_word(f, params[i + run]) == word:
+			run += 1
+		var big := run >= PER_PAGE / 2
+		if used > 0 and (big or used + run > PER_PAGE):
+			starts.append(i)
+			used = 0
+		used += run
+		while used > PER_PAGE:
+			starts.append(int(starts[-1]) + PER_PAGE)
+			used -= PER_PAGE
+		# Nothing else on a section's own page, except a last scrap that would be a page alone:
+		# Bypass, on its own at the end of every Neural DSP plugin.
+		var left := params.size() - (i + run)
+		if big and left > 0 and not (left <= 2 and used + left <= PER_PAGE):
+			starts.append(i + run)
+			used = 0
+		i += run
+	_starts = starts
+	_starts_for = _shape_seed(params)
+	return starts
+
+
+func _shape_seed(params: Array) -> String:
+	return "%s|%d|%d" % [fx_name, params.size(), hash(params)]
+
+
+static func _first_word(f: MixState.FXState, index: int) -> String:
+	var words := str(f.param_names.get(index, "")).to_upper().split(" ", false)
+	return words[0] if not words.is_empty() else ""
+
+
+## How many knobs the page at `page_offset` has.
+func _page_size() -> int:
+	var starts := _page_starts()
+	var total := _params().size()
+	var at := starts.find(page_offset)
+	if at < 0:
+		return clampi(total - page_offset, 0, PER_PAGE)
+	var end: int = starts[at + 1] if at + 1 < starts.size() else total
+	return mini(end - page_offset, PER_PAGE)
 
 
 func _param_name(slot: int) -> String:
@@ -449,7 +636,7 @@ func _param_name(slot: int) -> String:
 	var index := _param_for(slot)
 	if f == null or index < 0:
 		return "?"
-	return str(f.param_names.get(index, "P%d" % index)).to_upper()
+	return str(f.param_names.get(index, "P%d" % index)).to_upper().strip_edges()
 
 
 ## The plugin's own words for a value when it has said them, else a percentage. The same rule as
@@ -513,10 +700,17 @@ func _act(what: Callable) -> void:
 
 
 func _step_page(direction: int) -> void:
-	var wanted := page_offset + direction * PER_PAGE
-	if wanted < 0 or wanted >= _params().size():
+	var starts := _page_starts()
+	var at := starts.find(page_offset)
+	if at < 0:
+		# Pages are drawn by the names, and the names have changed under this one: start over.
+		page_offset = 0
+		mark_dirty()
 		return
-	page_offset = wanted
+	var to := at + signi(direction)
+	if to < 0 or to >= starts.size() or int(starts[to]) >= _params().size():
+		return
+	page_offset = starts[to]
 	mark_dirty()
 
 

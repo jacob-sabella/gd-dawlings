@@ -314,8 +314,18 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 	var f := state.fx(track_idx, fx_idx)
 	match p[4]:
 		"name":
-			f.name = str(args[0])
+			f.name = MixState.FXState.bare_name(str(args[0]))
 			state.fx_changed.emit(track_idx, fx_idx)
+		# reaper-3d's own: the plugin's real parameters, listed by the bridge.
+		"paramlist":
+			var listed: Array = args.map(func(a): return int(a))
+			if listed != f.param_list:
+				f.param_list = listed
+				state.fx_changed.emit(track_idx, fx_idx)
+		"presets":
+			if p.size() == 5 and f.preset_count != int(args[0]):
+				f.preset_count = int(args[0])
+				state.fx_changed.emit(track_idx, fx_idx)
 		"bypass":
 			# Reaper's `bypass` is sent as ENABLED (1 = running). The name is a trap.
 			f.enabled = _as_bool(args)
@@ -407,6 +417,8 @@ static func _apply_fx_count(state: MixState, track_idx: int, count: int) -> void
 			f.param_text_at.clear()
 			f.wet = 1.0
 			f.preset = ""
+			f.preset_count = -1
+			f.param_list = []
 			state.fx_changed.emit(track_idx, int(fx_index))
 
 
@@ -461,10 +473,13 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/fx/%d/wet" % [index, fx_index], [f.wet]])
 			if f.preset != "":
 				out.append(["/track/%d/fx/%d/preset" % [index, fx_index], [f.preset]])
-			var param_indices: Array = f.params.keys()
-			param_indices.sort()
-			for param in param_indices:
-				out.append(["/track/%d/fx/%d/fxparam/%d/value" % [index, fx_index, param], [f.params[param]]])
+			if f.preset_count >= 0:
+				out.append(["/track/%d/fx/%d/presets" % [index, fx_index], [float(f.preset_count)]])
+			if not f.param_list.is_empty():
+				out.append(["/track/%d/fx/%d/paramlist" % [index, fx_index], f.param_list.map(func(i): return float(i))])
+			for param in f.controls():
+				if f.params.has(param):
+					out.append(["/track/%d/fx/%d/fxparam/%d/value" % [index, fx_index, param], [f.params[param]]])
 				if f.param_names.has(param):
 					out.append(["/track/%d/fx/%d/fxparam/%d/name" % [index, fx_index, param], [f.param_names[param]]])
 				if f.param_text.has(param):

@@ -54,6 +54,8 @@ var _edits_in_flight := 0
 var _structure_due := 0.0
 ## Wet addresses written from here, and when: see `set_fx_wet`.
 var _wet_written := {}
+## The same for parameters: when each was last written from here, by address.
+var _param_written := {}
 const WET_SETTLE_MSEC := 2000
 var _structure_in_flight := false
 ## Seconds after `open` at which to ask Reaper for its whole state again. See `open`.
@@ -273,7 +275,45 @@ func set_track_monitor(index: int, mode: int) -> void:
 
 
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
-	write("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [clampf(value, 0.0, 1.0)])
+	if param <= BANK_FX_PARAMS:
+		_param_written["/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param]] = Time.get_ticks_msec()
+		write("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [clampf(value, 0.0, 1.0)])
+		return
+	# Past the parameters OSC carries: by the bridge, into the cache at once like any write, and
+	# the time noted so a page read already on its way does not drag the knob back.
+	var address := "/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param]
+	_param_written[address] = Time.get_ticks_msec()
+	record_for_replication(address, [clampf(value, 0.0, 1.0)])
+	MixWire.apply(state, address, [clampf(value, 0.0, 1.0)])
+	if _bridge != null and _bridge.is_open():
+		_bridge.call_reaper("SetFxParam", [track_index, fx_index, param, clampf(value, 0.0, 1.0)])
+
+
+## A plugin's real parameters (no params named), or a page of them: values, names and the
+## plugin's own words, onto the addresses OSC would have used, so they replicate like the rest.
+func read_fx_params(track_index: int, fx_index: int, params: Array) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	var at := "/track/%d/fx/%d" % [track_index, fx_index]
+	if params.is_empty():
+		_bridge.call_reaper("ListFxParams", [track_index, fx_index], func(result) -> void:
+			if typeof(result) != TYPE_DICTIONARY or not result.get("ok", false):
+				return
+			var listed := _as_array(result.get("params", []))
+			for entry in listed:
+				_apply("%s/fxparam/%d/name" % [at, int(entry["index"])], [str(entry["name"])])
+			_apply("%s/paramlist" % at, listed.map(func(e): return float(e["index"]))))
+		return
+	_bridge.call_reaper("GetFxParams", [track_index, fx_index] + params, func(result) -> void:
+		if typeof(result) != TYPE_DICTIONARY or not result.get("ok", false):
+			return
+		var now := Time.get_ticks_msec()
+		for entry in _as_array(result.get("params", [])):
+			var p := "%s/fxparam/%d" % [at, int(entry["index"])]
+			if now - int(_param_written.get(p + "/value", -WET_SETTLE_MSEC)) >= WET_SETTLE_MSEC:
+				_apply(p + "/value", [float(entry["value"])])
+			_apply(p + "/name", [str(entry["name"])])
+			_apply(p + "/value/str", [str(entry["text"]), float(entry["value"])]))
 
 
 func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
@@ -676,6 +716,8 @@ func _on_structure(result) -> void:
 				_apply("/track/%d/fx/%d/name" % [idx, fx_idx], [str(fx["name"])])
 			if fx.has("preset"):
 				_apply("/track/%d/fx/%d/preset" % [idx, fx_idx], [str(fx["preset"])])
+			if fx.has("preset_count"):
+				_apply("/track/%d/fx/%d/presets" % [idx, fx_idx], [float(fx["preset_count"])])
 			var wet_at := "/track/%d/fx/%d/wet" % [idx, fx_idx]
 			if fx.has("wet") and Time.get_ticks_msec() - int(_wet_written.get(wet_at, -WET_SETTLE_MSEC)) >= WET_SETTLE_MSEC:
 				_apply(wet_at, [float(fx["wet"])])

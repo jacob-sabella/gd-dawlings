@@ -908,3 +908,11 @@ lamp parts".
 - Patchbay: draw sidechain (key) sends as a distinct cable colour/style.
 - Offline stand-in shows preset "—" until a preset is stepped; the built-in engine's wet/dry is state-only (not heard).
 - Tablets stand on the floor; placing one on a table/desk top was not done — wanted?
+- Tested against Neural DSP (Gojira X, Tim Henson X, Mantra) in the rig: tools/probe/plugin_tablet_live.tscn,
+  85 checks. Still open from that:
+  - The RACK still only reaches a plugin's first 32 parameters, and rack knobs don't follow values changed
+    in Reaper (no signal for param values; the tablet polls its visible knobs, the rack doesn't).
+  - On/off parameters ("Gate Active", "REV Active") are knobs on the tablet; switches would read better.
+  - 140-210 controls is 15-30 pages; a section jump (scroll the page label through section names) would help.
+  - The plugin's own presets step blind: the plugin doesn't tell Reaper the preset's name.
+  - The first Wine plugin load can outlast the bridge's 4 s reply timeout (it still loads).

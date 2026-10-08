@@ -44,7 +44,7 @@ const RELAYED := [&"track_added", &"track_changed", &"transport_changed", &"mast
 const COMMANDS := [
 	&"set_track_volume", &"set_track_pan", &"set_track_mute", &"set_track_solo",
 	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
-	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text",
+	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text", &"read_fx_params",
 	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
@@ -196,8 +196,18 @@ func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 
 ## Through `_do` although it changes nothing: only the host can reach Reaper, and the answer
 ## replicates to everyone like any other value.
+## The most parameters one read_fx_params may name.
+const READ_PARAMS_MAX := 32
+
+
 func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 	_do(&"read_fx_param_text", [track_index, fx_index, param])
+
+
+## Ask for some of a plugin's parameters -- value, name and words -- or, with none named, for the
+## list of every real parameter it has. Through `_do` for the same reason as the text.
+func read_fx_params(track_index: int, fx_index: int, params: Array = []) -> void:
+	_do(&"read_fx_params", [track_index, fx_index, params])
 
 
 func transport_play() -> void: _do(&"transport_play", [])
@@ -306,6 +316,14 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed step_fx_preset intent %s." % [args])
 			return
 		args = [int(args[0]), int(args[1]), signi(int(args[2]))]
+	if verb == &"read_fx_params":
+		# A page of a tablet at most: a peer asking for a thousand reads is asking for a stall.
+		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 0 or not args[2] is Array \
+				or (args[2] as Array).size() > READ_PARAMS_MAX \
+				or (args[2] as Array).any(func(a): return not (a is float or a is int) or int(a) < 0):
+			push_warning("DAW: refused a malformed read_fx_params intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), (args[2] as Array).map(func(a): return int(a))]
 	if verb == &"move_fx":
 		if args.size() != 5 or int(args[0]) < 1 or int(args[1]) < 0 or int(args[2]) < 1:
 			push_warning("DAW: refused a malformed move_fx intent %s." % [args])

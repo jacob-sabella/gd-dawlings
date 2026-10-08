@@ -81,6 +81,39 @@ class FXState extends RefCounted:
 	var wet: float = 1.0
 	## The preset it is on, by the plugin's own name for it. Empty when nobody has said.
 	var preset: String = ""
+	## How many presets the DAW itself holds for it, or -1 when nobody has said. A plugin can
+	## have presets of its own the DAW cannot see: Neural DSP's live inside the plugin, and
+	## Reaper reports none.
+	var preset_count: int = -1
+	## The plugin's real parameters, in its own order, once the DAW has listed them. A VST3 in
+	## Reaper reports two thousand MIDI CC slots after its own couple of hundred controls, and
+	## OSC only ever streams the first 32; this is the list worth showing. Empty until listed,
+	## and then `params` is the list.
+	var param_list: Array = []
+
+	## Every parameter there is to show, in order.
+	func controls() -> Array:
+		if not param_list.is_empty():
+			return param_list
+		var keys: Array = params.keys()
+		for k in param_names:
+			if not keys.has(k):
+				keys.append(k)
+		keys.sort()
+		return keys
+
+
+	## A plugin by the name a person calls it. Reaper's own lists say "VST3: Mantra (Neural DSP)"
+	## and its OSC says "Mantra (Neural DSP)", and a tablet that found its plugin by name lost it
+	## every time the other road reported.
+	static func bare_name(raw: String) -> String:
+		var colon := raw.find(": ")
+		if colon > 0 and colon <= 6 and raw.substr(0, colon) in TYPE_PREFIXES:
+			return raw.substr(colon + 2)
+		return raw
+
+	const TYPE_PREFIXES := ["VST", "VSTi", "VST3", "VST3i", "JS", "CLAP", "CLAPi", "AU", "AUi",
+			"LV2", "LV2i", "DX", "DXi"]
 
 
 ## The master bus. Deliberately NOT a TrackState with a reserved index.

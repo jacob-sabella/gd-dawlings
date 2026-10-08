@@ -74,6 +74,8 @@ func _ready() -> void:
 	_test_a_tablet_follows_its_plugin_along_the_chain()
 	_test_a_tablet_keys_its_plugin_from_another_track()
 	_test_a_plugin_torn_off_the_rack_gets_a_stand()
+	_test_a_big_plugin_is_listed_and_named_once()
+	await _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2529,6 +2531,101 @@ func _test_a_plugin_torn_off_the_rack_gets_a_stand() -> void:
 	remove_child(studio)
 	studio.free()
 	Session.layout = saved_layout
+	DAW.use(OfflineBackend.new())
+
+
+## Reaper names a plugin two ways depending on who is asked, and a VST3 reports thousands of MIDI
+## CC slots past its own controls. What reaches the cache is one name and the real list.
+func _test_a_big_plugin_is_listed_and_named_once() -> void:
+	check("the type comes off a plugin's name",
+			MixState.FXState.bare_name("VST3: Mantra (Neural DSP)") == "Mantra (Neural DSP)")
+	check("and a name with a colon of its own keeps it",
+			MixState.FXState.bare_name("Pro-Q 3: Mid") == "Pro-Q 3: Mid")
+	var state := MixState.new()
+	MixWire.apply(state, "/track/1/fx/1/name", ["VST3: Archetype Gojira X (Neural DSP)"])
+	check("whichever road it came by", state.fx(1, 1).name == "Archetype Gojira X (Neural DSP)")
+	MixWire.apply(state, "/track/1/fx/1/paramlist", [1.0, 2.0, 40.0, 139.0])
+	MixWire.apply(state, "/track/1/fx/1/fxparam/40/name", ["HOT Amp Gain"])
+	MixWire.apply(state, "/track/1/fx/1/presets", [0.0])
+	check("the real list is the plugin's controls", state.fx(1, 1).controls() == [1, 2, 40, 139])
+	check("and Reaper's preset count is kept", state.fx(1, 1).preset_count == 0)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(state))
+	check("a guest gets the list", guest.fx(1, 1).controls() == [1, 2, 40, 139])
+	check("the names on it", guest.fx(1, 1).param_names.get(40) == "HOT Amp Gain")
+	check("and the preset count", guest.fx(1, 1).preset_count == 0)
+	MixWire.apply(state, "/track/1/fxs", [0.0])
+	check("an emptied slot forgets its list", state.fx(1, 1).param_list.is_empty() \
+			and state.fx(1, 1).preset_count == -1)
+
+	DAW.use(OfflineBackend.new())
+	check("read_fx_params is a verb a guest may use", &"read_fx_params" in DAW.COMMANDS)
+	var refused := [0]
+	for bad in [[2, 0], [2, 0, "all"], [0, 0, []], [2, 0, range(DAW.READ_PARAMS_MAX + 1)]]:
+		DAW.apply_intent(&"read_fx_params", bad)
+		refused[0] += 1
+	check("and malformed reads are refused without a crash", refused[0] == 4)
+
+
+## A tablet on a plugin with sections: a page per section where one fits, the section said once
+## over the page, and the plugin's own preset buttons used when the DAW has no presets for it.
+func _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets() -> void:
+	DAW.use(OfflineBackend.new())
+	var state := DAW.state
+	var slot: int = state.track(2).plugins()[0]
+	var f := state.fx(2, slot)
+	var names := ["Input Gain", "Output Gain", "Preset Previous", "Preset Next"]
+	for amp in ["CLN", "HOT"]:
+		for knob in ["Gain", "Bass", "Mid", "Treble", "Master", "Output"]:
+			names.append("%s Amp %s" % [amp, knob])
+	names.append("Bypass")
+	f.params.clear()
+	f.param_names.clear()
+	f.param_list = []
+	for i in names.size():
+		f.params[i] = 0.5
+		f.param_names[i] = names[i]
+		f.param_list.append(i)
+	f.preset_count = 0
+	var tablet := PluginTablet.create(2, slot, f.name)
+	add_child(tablet)
+	tablet._process(0.0)
+
+	check("the plugin's preset buttons are not knobs", not tablet._params().has(2) and not tablet._params().has(3))
+	check("they are the PRESET buttons", tablet._own_presets() and tablet._preset_next.visible \
+			and tablet._preset_label.text == "plugin's own")
+	check("the first page stops where a section begins (%s)" % tablet._page_label.text,
+			tablet._knobs.size() == 2)
+	tablet._step_page(1)
+	tablet._process(0.0)
+	check("a section gets its own page", tablet._knobs.size() == 6 and tablet._page_section() == "CLN AMP")
+	check("named once, over the page (%s)" % tablet._page_label.text, tablet._page_label.text.begins_with("CLN AMP"))
+	check("so each knob says only what is its own", tablet._captions[0].text == "GAIN")
+	tablet._step_page(1)
+	tablet._process(0.0)
+	check("and a last scrap joins the page before it", tablet._knobs.size() == 7 \
+			and tablet._captions[6].text == "BYPASS" and not tablet._page_next.lit)
+	tablet._step_page(-1)
+	tablet._step_page(-1)
+	tablet._process(0.0)
+	check("and back to the start", tablet.page_offset == 0)
+
+	tablet._preset_next.pressed.emit()
+	check("PRESET ▶ presses the plugin's own button", is_equal_approx(state.fx(2, slot).params[3], 1.0))
+	await get_tree().create_timer(0.2).timeout
+	check("and lets go of it", is_equal_approx(state.fx(2, slot).params[3], 0.0))
+
+	# Moved from anywhere else -- the plugin's own window, automation -- the knob follows.
+	state.fx(2, slot).params[0] = 0.9
+	tablet._process(0.0)
+	check("a knob follows its parameter", is_equal_approx(tablet._knobs[0].value, 0.9))
+
+	f.param_names[3] = "Something Else"
+	tablet.refresh()
+	check("with no presets anywhere it says so", tablet._preset_label.text == "none saved" \
+			and not tablet._preset_next.visible)
+	remove_child(tablet)
+	tablet.free()
 	DAW.use(OfflineBackend.new())
 
 

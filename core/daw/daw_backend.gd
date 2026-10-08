@@ -162,6 +162,10 @@ func set_send_pan(_track_index: int, _send_index: int, _pan: float) -> void: pas
 ## parameter's text in the cache. A backend that cannot know a plugin's units says nothing, and
 ## the rack shows the plain percentage it always could.
 func read_fx_param_text(_track_index: int, _fx_index: int, _param: int) -> void: pass
+## Read `params` of a plugin into the cache -- values, names, the plugin's words -- or with none,
+## list its real parameters as FXState.param_list. A backend whose cache already holds every
+## parameter, like the stand-in, has nothing to fetch.
+func read_fx_params(_track_index: int, _fx_index: int, _params: Array) -> void: pass
 
 ## Show the slice of the project starting at `offset` tracks in. A no-op on a backend that
 ## answers false to Capability.TRACK_BANKING.

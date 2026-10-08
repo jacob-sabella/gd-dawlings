@@ -174,6 +174,7 @@ function handlers.GetProjectStructure(args)
       local wet_param = reaper.TrackFX_GetParamFromIdent and reaper.TrackFX_GetParamFromIdent(tr, f, ':wet') or -1
       if wet_param >= 0 then wet = reaper.TrackFX_GetParamNormalized(tr, f, wet_param) end
       local _, preset = reaper.TrackFX_GetPreset(tr, f, '')
+      local _, preset_count = reaper.TrackFX_GetPresetIndex(tr, f)
       fx[#fx + 1] = {
         index = f,
         name = fx_name,
@@ -182,6 +183,7 @@ function handlers.GetProjectStructure(args)
         param_names = param_names,
         wet = wet,
         preset = preset or '',
+        preset_count = preset_count or -1,
       }
     end
 
@@ -409,6 +411,90 @@ function handlers.StepFxPreset(args)
   reaper.TrackFX_NavigatePresets(tr, fx, (args[3] or 1) < 0 and -1 or 1)
   local _, preset = reaper.TrackFX_GetPreset(tr, fx, '')
   return {ok = true, preset = preset or ''}
+end
+
+-- The parameters a plugin really has, by 1-based index. Not Reaper's own Bypass, Wet and Delta,
+-- which it appends to every plugin and which the tablet has its own controls for, and not the
+-- MIDI CC slots a VST3 with MIDI mapping reports: sixteen channels of 130 of them, which is
+-- 2080 of Archetype Gojira X's 2222 "parameters".
+local function real_params(tr, fx)
+  local skip = {}
+  if reaper.TrackFX_GetParamFromIdent then
+    for _, ident in ipairs({':bypass', ':wet', ':delta'}) do
+      local at = reaper.TrackFX_GetParamFromIdent(tr, fx, ident)
+      if at >= 0 then skip[at] = true end
+    end
+  end
+  local out = {}
+  for p = 0, reaper.TrackFX_GetNumParams(tr, fx) - 1 do
+    if not skip[p] then
+      local _, name = reaper.TrackFX_GetParamName(tr, fx, p, '')
+      if not name:match('^MIDI CC %d+|%d+$') then
+        out[#out + 1] = {index = p + 1, name = name}
+      end
+    end
+  end
+  return out
+end
+
+-- args: track, fx (1-based). The plugin's real parameters and their names.
+function handlers.ListFxParams(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  if fx < 0 or fx >= reaper.TrackFX_GetCount(tr) then return {ok = false, error = 'no such fx'} end
+  return {ok = true, params = real_params(tr, fx)}
+end
+
+-- args: track, fx, then 1-based parameter indices, flat: the request decoder reads one level. Each one's value, name and the
+-- plugin's own words for it: what a tablet showing parameters past OSC's 32 reads its page by.
+function handlers.GetFxParams(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  local total = reaper.TrackFX_GetNumParams(tr, fx)
+  local out = {}
+  for a = 3, #args do
+    local p = math.floor(args[a] or 0) - 1
+    if p >= 0 and p < total then
+      local _, name = reaper.TrackFX_GetParamName(tr, fx, p, '')
+      local _, text = reaper.TrackFX_GetFormattedParamValue(tr, fx, p, '')
+      out[#out + 1] = {index = p + 1, name = name, value = reaper.TrackFX_GetParamNormalized(tr, fx, p), text = text}
+    end
+  end
+  return {ok = true, params = out}
+end
+
+-- args: track, fx, parameter (all 1-based), value 0..1. For a parameter OSC does not carry.
+function handlers.SetFxParam(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local ok = reaper.TrackFX_SetParamNormalized(tr, math.floor(args[2] or 1) - 1,
+      math.floor(args[3] or 1) - 1, args[4] or 0)
+  return {ok = ok}
+end
+
+-- args: track (1-based), plugin name as Reaper's browser lists it. Appends it to the chain and
+-- answers with its 1-based slot, or ok = false when Reaper has no plugin by that name. Used by
+-- tools/probe to load real third-party plugins into the rig; the desk does not add plugins yet.
+function handlers.AddFx(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  local fx = reaper.TrackFX_AddByName(tr, tostring(args[2] or ''), false, -1)
+  reaper.Undo_EndBlock('reaper-3d: add FX', -1)
+  if fx < 0 then return {ok = false, error = 'no such plugin'} end
+  return {ok = true, fx = fx + 1, params = reaper.TrackFX_GetNumParams(tr, fx)}
+end
+
+-- args: track, fx (1-based).
+function handlers.DeleteFx(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  local ok = reaper.TrackFX_Delete(tr, math.floor(args[2] or 1) - 1)
+  reaper.Undo_EndBlock('reaper-3d: delete FX', -1)
+  return {ok = ok}
 end
 
 --- What Reaper itself holds right now: the transport, the loop, the history, and every track's
