@@ -210,6 +210,21 @@ func read_fx_params(track_index: int, fx_index: int, params: Array = []) -> void
 	_do(&"read_fx_params", [track_index, fx_index, params])
 
 
+## The plugin's own window, as its maker drew it, live and workable -- or null. The host's own
+## verb and not an intent: the window is on the host's desktop, and a guest has nothing to show.
+## Whoever opens it closes it (PluginWindow.close), which closes it in the DAW too.
+func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
+	if not shows_plugin_windows():
+		return null
+	return backend.open_plugin_window(track_index, fx_index)
+
+
+## Whether a plugin's own window can be shown here: only on the host, and only by a DAW that can.
+func shows_plugin_windows() -> bool:
+	return Session.is_authority() and backend != null \
+			and backend.can(DAWBackend.Capability.PLUGIN_WINDOW)
+
+
 func transport_play() -> void: _do(&"transport_play", [])
 func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])

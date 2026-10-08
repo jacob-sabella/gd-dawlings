@@ -20,6 +20,12 @@ extends DAWBackend
 ## does the studio COST at session scale, and does the bank paging work -- can be asked without
 ## Reaper running, which is the whole point of having a stand-in at all.
 var track_count: int = 0
+## Plugin windows for the suite: the stand-in has no plugins to draw, so it says it cannot show
+## their windows unless this is set, and then shows a plain picture that records what was done
+## to it (PluginWindow). Never set by anything that ships.
+var stand_in_windows := false
+## The windows the stand-in has handed out, newest last, for whoever is checking.
+var windows_opened: Array[PluginWindow] = []
 
 
 func _process(delta: float) -> void:
@@ -54,7 +60,20 @@ func summary() -> String:
 func can(capability: StringName) -> bool:
 	if capability == Capability.TRACK_BANKING:
 		return state != null and state.project_track_count > state.bank_size
+	if capability == Capability.PLUGIN_WINDOW:
+		return stand_in_windows
 	return true
+
+
+func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
+	if not stand_in_windows or not state.tracks.has(track_index) \
+			or state.fx(track_index, fx_index, false) == null:
+		return null
+	var picture := Image.create(400, 300, false, Image.FORMAT_RGBA8)
+	picture.fill(Color(0.12, 0.13, 0.15))
+	var w := PluginWindow.showing(picture)
+	windows_opened.append(w)
+	return w
 
 
 # --- the stand-in mix ---------------------------------------------------------------------

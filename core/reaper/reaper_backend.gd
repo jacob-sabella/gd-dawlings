@@ -23,6 +23,8 @@ const BANK_SENDS := 8
 
 var _peer: OSCPeer = null
 var _bridge: ScriptBridge = null
+## Plugin windows on show, closed with the link.
+var _windows: Array[ReaperPluginWindow] = []
 ## Addresses this process wrote within the last few frames, with the value it wrote. Reaper
 ## echoes every change back, so without this a fader snaps to a stale value for one frame on
 ## every single drag update -- visible as a fader that fights the hand holding it.
@@ -118,6 +120,9 @@ func open(options: Dictionary = {}) -> bool:
 
 
 func close() -> void:
+	for w in _windows:
+		w.close()
+	_windows.clear()
 	if _peer:
 		_peer.close()
 		_peer = null
@@ -163,6 +168,9 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.FX_CHAIN or capability == Capability.FX_PRESETS:
 		# OSC can turn a plugin's knobs but cannot pick it up or name its presets.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.PLUGIN_WINDOW:
+		# The bridge opens the window; the display is where it is read from.
+		return _bridge != null and _bridge.is_open() and ReaperPluginWindow.available()
 	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
 		return _bridge != null and _bridge.is_open()
@@ -287,6 +295,38 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 	MixWire.apply(state, address, [clampf(value, 0.0, 1.0)])
 	if _bridge != null and _bridge.is_open():
 		_bridge.call_reaper("SetFxParam", [track_index, fx_index, param, clampf(value, 0.0, 1.0)])
+
+
+## The plugin's floating window, opened by the bridge and read off the display. The bridge says
+## what the window's title is and whether it was open already; one that was is left open when
+## this is closed, because somebody at Reaper opened it and is perhaps looking at it.
+func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
+	if not can(Capability.PLUGIN_WINDOW):
+		return null
+	var was := {"answered": false, "open": false}
+	var bridge := _bridge
+	var hide := func() -> void:
+		if not was["open"] and bridge != null and bridge.is_open():
+			bridge.call_reaper("ShowFx", [track_index, fx_index, false])
+	var w := ReaperPluginWindow.opening(func() -> void:
+		if was["answered"]:
+			hide.call())
+	_bridge.call_reaper("ShowFx", [track_index, fx_index, true], func(result) -> void:
+		was["answered"] = true
+		if typeof(result) != TYPE_DICTIONARY or not result.get("ok", false):
+			w.close()
+			return
+		was["open"] = bool(result.get("was_open", false))
+		if not w.is_open():
+			# Put away before Reaper had even opened it.
+			hide.call()
+			return
+		w.start(str(result.get("title", ""))))
+	for o in _windows.duplicate():
+		if not o.is_open():
+			_windows.erase(o)
+	_windows.append(w)
+	return w
 
 
 ## A plugin's real parameters (no params named), or a page of them: values, names and the

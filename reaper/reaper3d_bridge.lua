@@ -487,6 +487,27 @@ function handlers.AddFx(args)
   return {ok = true, fx = fx + 1, params = reaper.TrackFX_GetNumParams(tr, fx)}
 end
 
+-- args: track, fx (1-based), show. Opens the plugin's own window, floating, or closes it.
+-- Answers with what the window's title says -- "<plugin> - Track <n>", how something outside
+-- Reaper finds it -- and whether it was open already, so whoever opened it closes only what
+-- they opened.
+function handlers.ShowFx(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  if fx < 0 or fx >= reaper.TrackFX_GetCount(tr) then return {ok = false, error = 'no such fx'} end
+  local was_open = reaper.TrackFX_GetFloatingWindow(tr, fx) ~= nil
+  reaper.TrackFX_Show(tr, fx, args[3] == false and 2 or 3)
+  local _, name = reaper.TrackFX_GetFXName(tr, fx, '')
+  local number = math.floor(reaper.GetMediaTrackInfo_Value(tr, 'IP_TRACKNUMBER'))
+  return {
+    ok = true,
+    was_open = was_open,
+    open = reaper.TrackFX_GetFloatingWindow(tr, fx) ~= nil,
+    title = string.format('%s - Track %d', name, number),
+  }
+end
+
 -- args: track, fx (1-based).
 function handlers.DeleteFx(args)
   local tr = track_from_osc(args[1])

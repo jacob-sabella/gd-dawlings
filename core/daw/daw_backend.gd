@@ -66,6 +66,8 @@ const Capability := {
 	FX_CHAIN = &"fx_chain",
 	## Step through a plugin's presets by name. Only a DAW that knows a plugin's presets can.
 	FX_PRESETS = &"fx_presets",
+	## Show a plugin's own window somewhere else and work it from there: see PluginWindow.
+	PLUGIN_WINDOW = &"plugin_window",
 }
 
 var state := MixState.new()
@@ -166,6 +168,9 @@ func read_fx_param_text(_track_index: int, _fx_index: int, _param: int) -> void:
 ## list its real parameters as FXState.param_list. A backend whose cache already holds every
 ## parameter, like the stand-in, has nothing to fetch.
 func read_fx_params(_track_index: int, _fx_index: int, _params: Array) -> void: pass
+## The plugin's own window, live, or null without Capability.PLUGIN_WINDOW. Whoever opens it
+## closes it.
+func open_plugin_window(_track_index: int, _fx_index: int) -> PluginWindow: return null
 
 ## Show the slice of the project starting at `offset` tracks in. A no-op on a backend that
 ## answers false to Capability.TRACK_BANKING.
