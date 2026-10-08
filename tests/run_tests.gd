@@ -138,6 +138,7 @@ func _ready() -> void:
 	_test_the_roster_is_the_hosts_word()
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
+	_test_a_ghost_is_the_size_of_a_large_person()
 	_test_meters_go_out_in_parcels_under_the_mtu()
 	_test_the_mix_carries_the_song_position()
 	_test_the_song_clock_runs_between_reports()
@@ -6946,3 +6947,31 @@ func _test_a_recorded_take_shows_its_waveform_on_the_timeline() -> void:
 		check("and no taller than its lane", tallest < TimelineSurface.LANE_HEIGHT)
 	timeline.free()
 	_offline()
+
+
+func _test_a_ghost_is_the_size_of_a_large_person() -> void:
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost._pose = Transform3D(Basis.IDENTITY, Vector3(0, 1.62, 0))
+	ghost._place()
+	var box := AABB()
+	var first := true
+	for m in ghost.find_children("*", "MeshInstance3D", true, false):
+		if not m.is_visible_in_tree() or m.top_level:
+			continue
+		var b: AABB = m.global_transform * m.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	# A standing person's eye is at 1.62m, the top of their head ~1.75m, the desk ~0.75m.
+	check("a little taller than the person it stands for (dome at %.2fm)" % box.end.y,
+			box.end.y > 1.75 and box.end.y < 1.95)
+	check("its hem near the desk, not on the floor or over the gear (%.2fm)" % box.position.y,
+			box.position.y > 0.7 and box.position.y < 1.05)
+	var body := ghost._lean.get_child(0) as MeshInstance3D
+	var girth: float = (body.global_transform * body.get_aabb()).size.x
+	check("rotund, but about as wide as a person, arms aside (%.2fm)" % girth, girth > 0.45 and girth < 0.6)
+	check("and its arms within reach of its sides (%.2fm across)" % box.size.x, box.size.x < 0.8)
+	check("its skin takes no shadow from itself, which crawls as it sways",
+			Presence.Avatar.SKIN_SHADER.contains("shadows_disabled"))
+	remove_child(ghost)
+	ghost.free()

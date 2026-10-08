@@ -278,7 +278,11 @@ func _from_session(session: Transform3D) -> Transform3D:
 ## size than tipping the whole body over a fader.
 class Avatar extends Node3D:
 	const BLUE := Color(0.30, 0.55, 0.98)
-	## Dome apex above the eye line, and the hem below it. 1.3 m of ghost.
+	## The whole ghost, scaled about the eye. Modelled at 1.3m; at 0.72 the dome is a hand above a
+	## standing person's head and the hem is at desk height, so the gear -- built to real sizes,
+	## 55mm channel strips -- reads as gear and the ghost as a large person, not a building.
+	const SIZE := 0.72
+	## Dome apex above the eye line, and the hem below it, before SIZE.
 	const TOP := 0.34
 	const HEM := -0.96
 	const BELLY := 0.37
@@ -291,6 +295,9 @@ class Avatar extends Node3D:
 
 	const SKIN_SHADER := """
 shader_type spatial;
+// Not shadowed, only lit: a smooth body this size self-shadows into stripes (acne) that
+// crawl as it sways and read as z-fighting. It has its own glow; it still casts a shadow.
+render_mode shadows_disabled;
 uniform vec4 body : source_color = vec4(0.42, 0.64, 0.95, 1.0);
 uniform vec4 glow : source_color = vec4(1.0);
 uniform float glow_amount = 1.0;
@@ -613,8 +620,9 @@ void fragment() {
 		_pitch = asin(clampf(forward.y, -1.0, 1.0))
 		forward.y = 0.0
 		var yaw := atan2(-forward.x, -forward.z) if forward.length() > 0.01 else 0.0
-		var bob := sin(_clock * 1.6 + _phase) * 0.018
-		_ghost.global_transform = Transform3D(Basis(Vector3.UP, yaw), _pose.origin + Vector3(0, bob, 0))
+		var bob := sin(_clock * 1.6 + _phase) * 0.018 * SIZE
+		_ghost.global_transform = Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * SIZE),
+				_pose.origin + Vector3(0, bob, 0))
 		# Lean about the belly, not the eye, so the face dips toward the desk.
 		var lean := clampf(_pitch, -0.6, 0.6) * 0.3
 		_lean.transform = Transform3D(Basis(Vector3.RIGHT, lean), Vector3.ZERO)
@@ -626,8 +634,8 @@ void fragment() {
 			var inside := 1.0 - pow(at.x / half.x, 2) - pow(at.y / half.y, 2)
 			at.z = -half.z * sqrt(maxf(0.05, inside)) - 0.004
 			_pupils[i].position = at
-		_tag.global_position = _pose.origin + Vector3(0, TOP + 0.16 + bob, 0)
-		_caption.global_position = _pose.origin + Vector3(0, TOP + 0.09 + bob, 0)
+		_tag.global_position = _pose.origin + Vector3(0, TOP * SIZE + 0.16 + bob, 0)
+		_caption.global_position = _pose.origin + Vector3(0, TOP * SIZE + 0.09 + bob, 0)
 
 	func set_close(close: bool) -> void:
 		if close == _close:
