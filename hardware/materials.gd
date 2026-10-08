@@ -149,6 +149,24 @@ static func cap_plastic(tint: Color = Color(0.2, 0.21, 0.23)) -> StandardMateria
 
 ## A lit indicator. `energy` above 1 is what makes glow pick it up, so an LED that is ON reads as
 ## on in peripheral vision -- which is the entire job of a mute light on a console of 48.
+## A lit bar, as against a lit dot.
+##
+## `led()` runs at 2.4x emission, which is right for a 4mm indicator: a speck has to overdrive
+## to read as lit at all, and it is too small to matter that it clips. A twelve-centimetre bar
+## at the same energy is a hole punched in the exposure -- it came back pure white, lost its
+## colour, and bloomed over the captions beside it. Area and brightness trade off, and this is
+## the same note `reel_flange` and `master_plate` are already written in.
+static func indicator_bar(colour: Color) -> StandardMaterial3D:
+	return _cached("bar_%s" % colour.to_html(false), func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = colour.darkened(0.25)
+		m.emission_enabled = true
+		m.emission = colour
+		m.emission_energy_multiplier = 0.85
+		m.roughness = 0.4
+		return m)
+
+
 static func led(colour: Color, on: bool) -> StandardMaterial3D:
 	var key := "led_%s_%s" % [colour.to_html(false), on]
 	return _cached(key, func():

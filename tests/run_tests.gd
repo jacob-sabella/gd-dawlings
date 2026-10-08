@@ -81,6 +81,7 @@ func _ready() -> void:
 	_test_a_wide_desk_bends_round_you_instead_of_past_you()
 	_test_the_desk_knows_how_small_its_own_lettering_is()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
+	_test_the_desk_is_lit_evenly_end_to_end()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -3745,6 +3746,63 @@ func _test_the_room_gets_out_of_the_way_of_the_gear_that_left_it() -> void:
 	check("the planted stand comes back when the gear does", intruder.visible)
 	for piece in furniture:
 		check("%s comes back too" % piece.name, piece.visible)
+
+	studio.queue_free()
+	remove_child(studio)
+	DAW.use(OfflineBackend.new())
+
+
+## One lamp too close to one end of the desk, and that end blows to white.
+##
+## This is a thing renders show and nobody reads as a bug, because an overexposed panel looks
+## like a lit panel until you put the other end beside it. The third practical used to stand
+## 0.71m from the left end of a summoned desk and 1.55m from the right -- five to one from
+## that lamp alone, 1.74x once every other light in the room is added in, which is what this
+## measures and what it rejected when the old position was put back to check. The left end
+## blew to white: the BANK module read as a hole in the panel and its indicator bar came back
+## white instead of blue.
+##
+## Inverse square only, no range curve and no shadowing, so this is a model and not a render.
+## That is enough: the failure was never subtle, and the thing worth catching is somebody
+## moving a lamp or turning one up without looking at what is standing under it.
+func _test_the_desk_is_lit_evenly_end_to_end() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	studio.focus.focus(&"console")
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var console: Surface = null
+	for surface in studio.focus.surfaces:
+		if surface.surface_id == &"console":
+			console = surface
+	var desk := console.global_transform * console.content_aabb()
+	var mid := desk.get_center()
+	var left := Vector3(desk.position.x, mid.y, mid.z)
+	var right := Vector3(desk.position.x + desk.size.x, mid.y, mid.z)
+
+	var lamps: Array = []
+	for node in studio.find_children("*", "OmniLight3D", true, false):
+		var lamp: OmniLight3D = node
+		lamps.append([lamp.global_position, lamp.light_energy])
+	check("there are lamps to measure (%d)" % lamps.size(), lamps.size() >= 2)
+
+	var at_left := 0.0
+	var at_right := 0.0
+	for lamp in lamps:
+		var pos: Vector3 = lamp[0]
+		var energy: float = lamp[1]
+		at_left += energy / maxf(pos.distance_squared_to(left), 0.01)
+		at_right += energy / maxf(pos.distance_squared_to(right), 0.01)
+
+	var ratio := maxf(at_left, at_right) / maxf(minf(at_left, at_right), 0.0001)
+	check("the desk's two ends are lit within 25%% of each other (%.2fx: %.2f vs %.2f)"
+			% [ratio, at_left, at_right], ratio < 1.25)
 
 	studio.queue_free()
 	remove_child(studio)

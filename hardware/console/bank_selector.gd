@@ -35,6 +35,9 @@ var _prev: PanelButton
 var _next: PanelButton
 var _range_label: Label3D
 var _total_label: Label3D
+var _window: MeshInstance3D
+var _slot_span := 0.0
+var _slot_base := 0.0
 
 
 func _ready() -> void:
@@ -73,7 +76,41 @@ func _ready() -> void:
 	_next.pressed.connect(func(): _step(1))
 	add_child(_next)
 
+	_build_position_ladder(height)
+
 	refresh()
+
+
+## Where this bank sits inside the project, drawn rather than spelled.
+##
+## The caption already says "17-32 OF 90" and that is the precise answer, but precise is not
+## the question you ask of a bank control. The question is "how much further", and reading two
+## numbers and dividing them is not how anyone answers it on a desk -- you look at the handle
+## and see that you are about a third of the way down. So: a recessed slot the length of the
+## project, and a lit block the length of the bank sitting at its offset.
+##
+## It also fills twenty-five centimetres of panel that was blank. A module with four captions
+## crowded into its top inch and nothing below them reads as unfinished, which is a bad thing
+## for the one control on the desk that exists to tell you something is missing.
+func _build_position_ladder(height: float) -> void:
+	_slot_base = 0.022
+	_slot_span = height - 0.128 - _slot_base
+
+	var slot := MeshInstance3D.new()
+	var slot_mesh := BoxMesh.new()
+	slot_mesh.size = Vector3(0.015, _slot_span, 0.005)
+	slot.mesh = slot_mesh
+	slot.position = Vector3(0, _slot_base + _slot_span * 0.5, 0.002)
+	slot.material_override = Materials.recess()
+	add_child(slot)
+
+	# Unit height, scaled in `refresh`, so the bank size can change without rebuilding a mesh.
+	_window = MeshInstance3D.new()
+	var window_mesh := BoxMesh.new()
+	window_mesh.size = Vector3(0.009, 1.0, 0.004)
+	_window.mesh = window_mesh
+	_window.material_override = Materials.indicator_bar(Color(0.38, 0.60, 0.92))
+	add_child(_window)
 
 
 func refresh() -> void:
@@ -89,6 +126,26 @@ func refresh() -> void:
 	# has stopped working.
 	_prev.lit = bank_offset > 0
 	_next.lit = project_count < 0 or last < project_count
+
+	if _window != null:
+		# Unknown project size means the slot cannot say anything honest about proportion, and
+		# a full-length block would say the loudest wrong thing available: that this is all of
+		# it. Blank is the truthful reading.
+		_window.visible = project_count > 0
+		if project_count > 0:
+			var span := float(maxi(1, last - bank_offset)) / float(project_count)
+			var at := float(bank_offset) / float(project_count)
+			# A floor on the block, because a twelve-of-ninety window is a tenth of the slot
+			# and a tenth of 12cm is a speck that reads as a fault in the panel.
+			var tall := maxf(span * _slot_span, 0.012)
+			_window.scale = Vector3(1, tall, 1)
+			# From the TOP down, because the track list it indexes runs that way and so do the
+			# two buttons above it -- up is earlier. Measured from the bottom instead, bank 1
+			# of 48 put the lit block at the floor of the slot, which says the opposite of
+			# every other indication on the module.
+			var down := minf(at * _slot_span, _slot_span - tall)
+			_window.position = Vector3(
+					0, _slot_base + _slot_span - down - tall * 0.5, 0.005)
 
 
 func _step(direction: int) -> void:

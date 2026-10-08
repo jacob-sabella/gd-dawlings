@@ -48,7 +48,17 @@ const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 const PRACTICALS: Array = [
 	[Vector3(-2.05, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
 	[Vector3(1.62, 1.70, -1.15), Color(0.6, 0.78, 1.0), 5.5],
-	[Vector3(-0.80, 1.72, 0.34), Color(1.0, 0.82, 0.60), 6.5],
+	# Moved back and out, and turned down, once the desk started being summoned to the mix
+	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
+	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
+	# one console, and the left end blew to white -- the BANK module read as a hole in the
+	# panel and its indicator bar lost its colour entirely. It also stood 80cm to the left of
+	# the mix position and 30cm in front of it, which is somewhere you would kick it.
+	#
+	# From here, against the body's own work light, inverse-square irradiance at the two ends
+	# comes out within a couple of percent. Summoned gear is lit by the work light; the room's
+	# lamps light the ROOM. `_test_the_desk_is_lit_evenly_end_to_end` holds the balance.
+	[Vector3(-1.50, 1.72, 0.95), Color(1.0, 0.82, 0.60), 4.5],
 ]
 ## How far a practical reaches. Short on purpose: at 6.5m each lamp lit all three walls, and
 ## three of them made the empty half of the room as bright as the gear (37.0 against 38.7 on
