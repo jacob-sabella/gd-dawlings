@@ -62,6 +62,8 @@ signal hold_refused(control_key: String, holder: int)
 ## Something a person in the room should be told in words -- someone came in, the host went
 ## away. Owned by whoever draws the session's UI; nothing here waits on it being read.
 signal notice(text: String)
+## Host: a guest's recording was placed. {peer, track, start, seconds, path, name}.
+signal audio_take_placed(info: Dictionary)
 
 var role: int = Role.SOLO
 ## {peer_id: Participant}
@@ -95,6 +97,15 @@ var mix_source: Callable = Callable()
 var mix_feed: MixFeed = null
 ## A guest's keyboard, played into the host's project. See core/session/guest_midi.gd.
 var guest_midi: GuestMidi = null
+## This guest's microphone, recorded into the host's project. See core/session/guest_audio.gd.
+var guest_audio: GuestAudio = null
+## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
+## fader move or a hold behind it.
+const AUDIO_TAKE_CHANNEL := 3
+## Host: the take each guest is sending now, by peer id -- {id, take, track, start, name, refused}.
+var _incoming_takes := {}
+## Takes written on this host this run, for naming their files.
+var _takes_made := 0
 ## Whether this guest plays the host's mix. Off for someone in the same room as the host's
 ## speakers would be right -- the same sound twice, a few dozen ms apart, is a comb filter --
 ## but nothing can tell from here who is in which room, so it starts on for anyone joining from
@@ -152,6 +163,9 @@ func _ready() -> void:
 	guest_midi = GuestMidi.new()
 	guest_midi.name = "GuestMidi"
 	add_child(guest_midi)
+	guest_audio = GuestAudio.new()
+	guest_audio.name = "GuestAudio"
+	add_child(guest_audio)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -275,6 +289,9 @@ func leave() -> void:
 	if role == Role.SOLO:
 		return
 	var was_guest := role == Role.GUEST
+	# Takes still arriving are placed while this is still the host's mix to place them in.
+	for peer_id in _incoming_takes.keys():
+		_finish_take(peer_id)
 	if role == Role.HOST and multiplayer.multiplayer_peer is ENetMultiplayerPeer:
 		_goodbye.rpc()
 		# The socket is shut a moment later rather than now, still serviced in between. Closed
@@ -393,6 +410,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		# they left.
 		return
 	var who := name_of(peer_id)
+	# A take still arriving is kept: what was sung before the line dropped is still a take.
+	_finish_take(peer_id)
 	participants.erase(peer_id)
 	participant_left.emit(peer_id)
 	# Whatever they had their hand on is free the moment they are gone. A fader held by an
@@ -650,6 +669,103 @@ func _place_take(from: int, args: Array) -> void:
 	notice.emit("%s played %s onto %s at %s." % [who, notes, track, at])
 	if _connected():
 		_told.rpc_id(from, "Your take is on %s: %s from %s." % [track, notes, at])
+
+
+# --- a guest's recording --------------------------------------------------------------------
+#
+# Not an intent: an intent is a verb with a few arguments, and a take is minutes of sound. The
+# guest streams it while it records (GuestAudio), the host writes it to a WAV as it arrives
+# (AudioTake), and when it ends the host places the file with its own DAW.insert_audio_take. A
+# guest never names a file; the host does.
+
+func send_audio_begin(take_id: int, track: int, start: float, take_name: String) -> void:
+	if role == Role.GUEST and _connected():
+		_audio_begin.rpc_id(1, take_id, track, start, take_name)
+
+
+func send_audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
+	if role == Role.GUEST and _connected():
+		_audio_chunk.rpc_id(1, take_id, pcm)
+
+
+func send_audio_end(take_id: int) -> void:
+	if role == Role.GUEST and _connected():
+		_audio_end.rpc_id(1, take_id)
+
+
+@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
+func _audio_begin(take_id: int, track: int, start: float, take_name: String) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if not is_authority() or not _is_member(from):
+		return
+	# One take at a time from each guest: a begin while one is open ends that one first.
+	_finish_take(from)
+	var entry := {"id": take_id, "take": null, "track": track, "start": maxf(start, 0.0),
+			"name": MidiTake.clean_name(take_name), "refused": false}
+	_incoming_takes[from] = entry
+	var refusal := DAW.audio_take_refusal(track, 1.0)
+	if refusal.is_empty():
+		_takes_made += 1
+		entry["take"] = AudioTake.create(AudioTake.file_name_for(name_of(from), _takes_made))
+		if entry["take"] == null:
+			refusal = "The host could not write the recording to its disk."
+	if not refusal.is_empty():
+		entry["refused"] = true
+		notice.emit("%s's recording was not kept. %s" % [name_of(from), refusal])
+		_told.rpc_id(from, "Your recording is not being kept. " + refusal)
+
+
+@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
+func _audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	var entry: Dictionary = _incoming_takes.get(from, {})
+	if entry.is_empty() or entry["id"] != take_id or entry["take"] == null:
+		return
+	if not (entry["take"] as AudioTake).append(pcm):
+		# At its limit: placed as it stands, and the rest of it ignored.
+		_finish_take(from)
+
+
+@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
+func _audio_end(take_id: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	var entry: Dictionary = _incoming_takes.get(from, {})
+	if not entry.is_empty() and entry["id"] == take_id:
+		_finish_take(from)
+
+
+## A guest's take closed and placed, and both sides told: the guest because a recording that
+## vanished would be a disaster they could not see, the host because a new item appearing on its
+## timeline unannounced is a surprise in the middle of a session.
+func _finish_take(from: int) -> void:
+	var entry: Dictionary = _incoming_takes.get(from, {})
+	_incoming_takes.erase(from)
+	var take: AudioTake = entry.get("take")
+	if take == null:
+		return
+	take.finish()
+	if take.frames == 0:
+		take.discard()
+		return
+	var who := name_of(from)
+	var refusal := DAW.audio_take_refusal(entry["track"], take.seconds())
+	var still_here := _connected() and multiplayer.get_peers().has(from)
+	if not refusal.is_empty():
+		notice.emit("%s's recording was not placed. %s It is kept at %s." % [who, refusal,
+				ProjectSettings.globalize_path(take.path)])
+		if still_here:
+			_told.rpc_id(from, "Your recording was not placed. " + refusal)
+		return
+	DAW.insert_audio_take(entry["track"], entry["start"], take.file_name(), take.seconds(),
+			take.peaks(), entry["name"])
+	var track: String = DAW.state.track(entry["track"]).display_name()
+	var at := DAW.state.bar_beat(entry["start"])
+	var length := "%.1fs" % take.seconds()
+	notice.emit("%s recorded %s onto %s at %s." % [who, length, track, at])
+	if still_here:
+		_told.rpc_id(from, "Your recording is on %s: %s from %s." % [track, length, at])
+	audio_take_placed.emit({"peer": from, "track": entry["track"], "start": entry["start"],
+			"seconds": take.seconds(), "path": take.path, "name": entry["name"]})
 
 
 ## Words from the host for this guest alone.

@@ -17,6 +17,8 @@ const GUEST_SEND := 0.345
 const GUEST_MARK := 1.25
 ## The track the guest records onto.
 const TAKE_TRACK := 7
+## The track the guest's microphone records onto, in the same take as its keys.
+const AUDIO_TRACK := 8
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
@@ -38,6 +40,8 @@ var _port := 7342
 ## The host plays the built-in engine's song instead of a test tone: what the guest hears is
 ## then a real mix off the host's master bus, and has no clicks to time.
 var _built_in := false
+## Host: the guest's recording, as Session placed it.
+var _audio_placed := {}
 
 
 func _ready() -> void:
@@ -72,6 +76,7 @@ func _ready() -> void:
 
 
 func _host(port: int) -> void:
+	Session.audio_take_placed.connect(func(info: Dictionary): _audio_placed = info)
 	Session.local_name = "Ada"
 	var restore := NAN
 	var tempo_restore := NAN
@@ -158,6 +163,8 @@ func _host(port: int) -> void:
 	await _until(13.0)
 	if not _built_in:
 		_check_placed_take()
+		_check_audio_take()
+		await _undo_takes()
 
 	await _until(13.4)
 	Session.leave()
@@ -213,11 +220,58 @@ func _check_placed_take() -> void:
 	var hanging: Array = placed.filter(func(n): return int(n[2]) == int(expected["hanging"]))
 	check("a note still down when recording stopped ends with the take",
 			hanging.size() == 1 and absf(hanging[0][1] - item.end()) < 0.002)
-	var depth := DAW.state.undo_depth
+
+
+## The guest's recording, as the host placed it: every clap the guest's microphone heard, where
+## in the song the guest heard the click it clapped on. The tone clicks on whole song seconds.
+func _check_audio_take() -> void:
+	check("the guest's recording was placed (%s)" % [_audio_placed], not _audio_placed.is_empty())
+	check("and the room was told", _notices.any(func(t): return t.begins_with("Grace recorded")))
+	if _audio_placed.is_empty():
+		return
+	var item: MixState.ItemState = null
+	for it in DAW.state.track(AUDIO_TRACK).items:
+		if it.name == _audio_placed["name"]:
+			item = it
+	check("as an item on track %d" % AUDIO_TRACK, item != null)
+	if item == null:
+		return
+	check("where it was placed (%.4f, %.4f)" % [item.start, _audio_placed["start"]],
+			absf(item.start - float(_audio_placed["start"])) < 0.001)
+	var wav := FileAccess.get_file_as_bytes(_audio_placed["path"])
+	check("its file is a WAV of the whole take (%.2fs)" % _audio_placed["seconds"],
+			wav.size() == AudioTake.HEADER_BYTES + int(round(float(_audio_placed["seconds"]) * AudioTake.RATE)) * 2
+			and wav.decode_u32(0) == 0x46464952)
+	var claps: Array[float] = []
+	var last := -AudioTake.RATE
+	for i in range(AudioTake.HEADER_BYTES, wav.size() - 1, 2):
+		var frame := (i - AudioTake.HEADER_BYTES) / 2
+		if wav.decode_s16(i) > 16000 and frame - last > AudioTake.RATE / 2:
+			claps.append(item.start + float(frame) / AudioTake.RATE)
+			last = frame
+	var worst := 0.0
+	var first := NAN
+	for at in claps:
+		var off := at - roundf(at)
+		if at - item.start < 1.0:
+			first = off
+			continue
+		worst = maxf(worst, absf(off))
+	print("audio take: claps ", claps, " first_ms %.3f worst_ms %.3f" % [first * 1000.0, worst * 1000.0])
+	check("with a clap on every click the guest heard (%d)" % claps.size(), claps.size() >= 3)
+	check("each on the song second it was heard on, worst %.2fms" % (worst * 1000.0),
+			worst < TAKE_TOLERANCE)
+
+
+## Both takes off again: the host's undo, once for each, latest first.
+func _undo_takes() -> void:
+	DAW.undo()
 	DAW.undo()
 	await get_tree().create_timer(0.3).timeout
-	var still := DAW.state.track(TAKE_TRACK).items.any(func(it): return it.name == "Grace take 1")
-	check("and one undo takes it off again", not still)
+	var midi := DAW.state.track(TAKE_TRACK).items.any(func(it): return it.name == "Grace take 1")
+	var taken: String = _audio_placed.get("name", "-")
+	var audio := DAW.state.track(AUDIO_TRACK).items.any(func(it): return it.name == taken)
+	check("and an undo each takes them off again", not midi and not audio)
 
 
 func _guest(port: int) -> void:
@@ -295,7 +349,20 @@ func _guest(port: int) -> void:
 			float(heard.get("latency_ms", 999.0)) < bar)
 
 	if not _built_in:
+		var ga := Session.guest_audio
+		ga.make_source = func() -> MixSource: return Clapper.new()
+		ga.target_track = AUDIO_TRACK
+		ga.record_with_host = true
 		await _guest_records()
+		print("audio drift found: %.0f ppm" % ga.drift_ppm())
+		check("my recording was sent when I heard the recording stop (%s)" % [ga.last_take],
+				not ga.is_recording() and float(ga.last_take.get("seconds", 0.0)) > 3.0)
+		check("the host told me where my recording went",
+				_notices.any(func(t): return t.begins_with("Your recording is on")))
+		var mine: Array = DAW.state.track(AUDIO_TRACK).items.filter(func(it): return it.source != "")
+		check("and it came back to me with its waveform",
+				mine.size() == 1 and mine[0].peaks.size() > 100)
+		ga.record_with_host = false
 
 	await _until(14.0)
 	print("notices: ", _notices)
@@ -439,3 +506,41 @@ func check(label: String, ok: bool) -> void:
 # changes the tempo too, and Reaper's markers keep their beat, so in seconds it moves.
 static func _has_guest_mark(state: MixState) -> bool:
 	return state.markers.values().has("GUEST")
+
+
+## A microphone in front of a perfect player: a clap on every click the guest hears, at the
+## moment it hears it. Frames are made by the wall clock, HOLD_MS behind it, so every click is
+## heard before the frames around it are made -- which makes HOLD_MS this microphone's latency.
+class Clapper extends MixSource:
+	const HOLD_MS := 40.0
+	const RATE := 48000.0
+	var _start_usec := 0
+	var _made := 0
+
+	func start() -> bool:
+		_start_usec = Time.get_ticks_usec()
+		_made = 0
+		return true
+
+	func read() -> PackedVector2Array:
+		var due := int((Time.get_ticks_usec() - _start_usec - HOLD_MS * 1000.0) * RATE / 1000000.0)
+		var out := PackedVector2Array()
+		if due <= _made:
+			return out
+		out.resize(due - _made)
+		for c in Session.mix_feed.clicks_heard():
+			var at := int((int(c[1]) - _start_usec) * RATE / 1000000.0)
+			for k in 48:
+				if at + k >= _made and at + k < due:
+					out[at + k - _made] = Vector2(0.9, 0.9)
+		_made = due
+		return out
+
+	func latency_ms() -> float:
+		return HOLD_MS
+
+	func rate() -> float:
+		return RATE
+
+	func describe() -> String:
+		return "A clapping test microphone"
