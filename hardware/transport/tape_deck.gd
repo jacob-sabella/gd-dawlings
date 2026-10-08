@@ -173,13 +173,15 @@ func _rebuild() -> void:
 	_adopt(loop)
 	_loop_lamp = loop
 
-	# Legends under the keys. Five unmarked lamps in a row is a transport you learn by pressing.
+	# Legends over the keys, not under: the keys stand proud of the panel and, from a seat
+	# above the deck, hide the strip of panel below them. Five unmarked lamps in a row is a
+	# transport you learn by pressing.
 	for spec in [[-0.070, "RTZ"], [-0.035, "PLAY"], [0.0, "STOP"], [0.035, "REC"], [0.070, "LOOP"]]:
 		var legend := Label3D.new()
 		legend.text = spec[1]
 		legend.font_size = 26
 		legend.pixel_size = 0.00024
-		legend.position = Vector3(spec[0], -0.118, 0.002)
+		legend.position = Vector3(spec[0], -0.080, 0.002)
 		legend.modulate = Color(0.6, 0.62, 0.66)
 		legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		Lettering.range_to_legibility(legend)
