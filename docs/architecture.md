@@ -447,6 +447,23 @@ still roughly right rather than empty. The name is what OSC gives and it is ambi
 a project has two tracks called "Verb" -- which is completely normal, and which the old
 name-only lookup resolved silently and wrongly, forever.
 
+Sends are numbered **from 1** everywhere above the bridge, because that is how OSC numbers them:
+`/track/3/send/1` is track 3's first send. ReaScript counts from 0, so `_on_structure` adds one
+and `remove_send` takes it off again. Until that was written down, the bridge's destination
+landed on send 0 and OSC's level on send 1, and the bay drew every real send twice. The stand-in
+numbers from 1 for the same reason.
+
+### Sends on faders
+
+Send level and pan are verbs (`set_send_volume`, `set_send_pan`) on Reaper's own OSC addresses,
+so a send is ridden like a fader and replicates like one. They are **on** the faders: the
+master section's SENDS key flips the whole desk so that each strip's fader and pan are that
+strip's send to one return, the next press moves to the next return, and past the last the
+faders are levels again. A strip with no send to that return reads NO SEND and its fader cannot
+be taken hold of. The readouts turn amber while flipped, because a desk of send levels looks
+exactly like a desk of levels otherwise. The flip is this participant's view of the desk, never
+replicated, and like a bank change it is refused while a hand is on a fader or knob.
+
 ### The parent heads its group
 
 Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum

@@ -19,6 +19,14 @@ because a scaffold that reads as a finished project wastes the next person's aft
   (three taps or more, averaged over the run). `DAW.set_tempo` is clamped to Reaper's 1-960 on
   both sides of a session, is undoable offline, and goes to Reaper as `/tempo/raw`. A guest's
   tempo reaching a live Reaper and coming back is checked by `session_probe.sh --reaper`.
+- **Send level and pan.** `DAW.set_send_volume` / `set_send_pan` (a send is a track and its
+  1-based slot, as OSC numbers it; a guest's intent is checked and clamped on the host), undoable
+  offline, `/track/N/send/M/volume|pan` to Reaper. On the desk as SENDS ON FADERS: the master
+  section's SENDS key flips every strip's fader and pan to its send to one return, then the next,
+  then back. Fixed on the way: the bridge's sends were 0-based against OSC's 1-based (two
+  half-sends per real one), and `/send/M/volume/str` was parsed as the level. Verified by the
+  suite, `session_probe.sh` (a guest's send level reaches the mix and comes back) and
+  `session_probe.sh --reaper`; Reaper was seen to take an OSC send write (-11.0dB, 50%L back).
 - **FX racks.** 19" units, one per FX slot, in Reaper's own order. Knobs are the plugin's first
   eight real parameters with Reaper's names.
 - **Patchbay.** Jacks per track, hanging cables for existing sends, drag-to-patch gesture.

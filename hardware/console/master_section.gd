@@ -19,9 +19,17 @@ const WIDTH := 0.082
 ## for exactly the same reason in a headset, where the hand is less precise than a mouse.
 const GAP := 0.022
 
+## Pressed to move the faders on to the next return's sends, and from the last back to levels.
+## The console decides what that means; the master section only has the key.
+signal sends_pressed()
+
 var _fader: Fader
 var _pan: Knob
 var _db_label: Label3D
+var _sends_key: PanelButton
+var _sends_label: Label3D
+## What the sends key says it is showing, for its hover card: "" when the faders are levels.
+var _sends_to := ""
 
 
 func _ready() -> void:
@@ -60,6 +68,30 @@ func _ready() -> void:
 	pan_caption.text = "BAL"
 	add_child(pan_caption)
 
+	# SENDS ON FADERS. Between the balance and the fader, where a desk keeps its flip key: one
+	# press puts every strip's send to the first return on its fader and pan, the next press
+	# the second return's, and past the last the faders are levels again. The faders are the
+	# longest, finest controls on the desk, and a send level is set as finely as a level is.
+	var sends_caption := _label(13, Vector3(0, height - 0.084, 0.001))
+	sends_caption.text = "SENDS"
+	add_child(sends_caption)
+
+	_sends_key = PanelButton.new()
+	_sends_key.name = "SendsKey"
+	_sends_key.led_colour = ChannelStrip.SEND_INK
+	_sends_key.lamp_scale = Vector2(1.0, 0.5)
+	_sends_key.position = Vector3(0, height - 0.099, 0.004)
+	_sends_key.scale = Vector3(1.3, 1.3, 1.3)
+	_sends_key.pressed.connect(func(): sends_pressed.emit())
+	_sends_key.describe_title = func() -> String: return "MASTER  SENDS ON FADERS"
+	_sends_key.describe_value = func(_v: float) -> String:
+		return "levels" if _sends_to == "" else "sends to " + _sends_to
+	add_child(_sends_key)
+
+	_sends_label = _label(13, Vector3(0, height - 0.114, 0.001))
+	_sends_label.modulate = ChannelStrip.SEND_INK
+	add_child(_sends_label)
+
 	_fader = Fader.new()
 	_fader.write_value = func(v: float): DAW.set_master_volume(v)
 	_fader.describe_title = func() -> String: return "MASTER  LEVEL"
@@ -96,6 +128,14 @@ func _label(font_size: int, pos: Vector3) -> Label3D:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)
 	return l
+
+
+## What the faders are showing: "" for levels, or the name of the return whose sends they are.
+func show_sends(return_name: String) -> void:
+	_sends_to = return_name
+	_sends_key.lit = return_name != ""
+	_sends_label.text = return_name
+	Lettering.fit(_sends_label, WIDTH - 0.008, 52, ConsoleSurface.SMALLEST_FONT)
 
 
 func refresh() -> void:

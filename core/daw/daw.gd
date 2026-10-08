@@ -50,6 +50,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
+	&"set_send_volume", &"set_send_pan",
 ]
 
 var backend: DAWBackend
@@ -160,6 +161,15 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	_do(&"set_fx_enabled", [track_index, fx_index, enabled])
 
 
+## A send is named by its track and its 1-based place in that track's sends, as on the wire.
+func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
+	_do(&"set_send_volume", [track_index, send_index, clampf(taper, 0.0, 1.0)])
+
+
+func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
+	_do(&"set_send_pan", [track_index, send_index, clampf(pan, 0.0, 1.0)])
+
+
 ## Through `_do` although it changes nothing: only the host can reach Reaper, and the answer
 ## replicates to everyone like any other value.
 func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
@@ -220,4 +230,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		return
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
+	if verb in [&"set_send_volume", &"set_send_pan"]:
+		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
+		# level outside the taper is a fader past its end stop.
+		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 1:
+			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
+			return
+		args = [int(args[0]), int(args[1]), clampf(float(args[2]), 0.0, 1.0)]
 	backend.callv(verb, args)

@@ -216,9 +216,12 @@ func _arrange() -> void:
 	# Sends into the reverb return, so the patchbay has real cables. BOTH the name and the
 	# index are set, which is what a session with the ReaScript bridge loaded looks like: the
 	# index is what the bay resolves against and the name is the fallback for OSC-only.
+	# Send 1, not 0: sends are numbered from one on the wire, as Reaper's OSC numbers them, and
+	# a stand-in that counted from zero would be the one session where a send-level write and
+	# the cable it moves disagreed about which send was meant.
 	var verb := 13
 	for src in [3, 7, 10, 12]:
-		var s := state.send(src, 0)
+		var s := state.send(src, 1)
 		s.dest_name = "Verb Rtn"
 		s.dest_track = verb
 		s.volume = 0.4 + 0.1 * src / 10.0
@@ -370,6 +373,36 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	f.enabled = enabled
 	state.fx_changed.emit(track_index, fx_index)
 	record_for_replication("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
+
+
+## A send that is not there is not created by turning its knob: the stand-in has no routing
+## engine (see `can`), and a level on a send that does not exist would draw a cable for it.
+func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
+	var sd := state.send(track_index, send_index, false)
+	if sd == null:
+		return
+	_remember("/track/%d/send/%d/volume" % [track_index, send_index],
+			set_send_volume.bind(track_index, send_index, sd.volume),
+			set_send_volume.bind(track_index, send_index, taper))
+	_write_send(track_index, send_index, "volume", clampf(taper, 0.0, 1.0))
+
+
+func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
+	var sd := state.send(track_index, send_index, false)
+	if sd == null:
+		return
+	_remember("/track/%d/send/%d/pan" % [track_index, send_index],
+			set_send_pan.bind(track_index, send_index, sd.pan),
+			set_send_pan.bind(track_index, send_index, pan))
+	_write_send(track_index, send_index, "pan", clampf(pan, 0.0, 1.0))
+
+
+## Through the wire vocabulary rather than onto the field, so the change signal and the
+## replication are the same ones a send level arriving from Reaper gets.
+func _write_send(track_index: int, send_index: int, field: String, v: float) -> void:
+	var key := "/track/%d/send/%d/%s" % [track_index, send_index, field]
+	record_for_replication(key, [v])
+	MixWire.apply(state, key, [v])
 
 
 # --- history ------------------------------------------------------------------------------

@@ -101,6 +101,7 @@ func _ready() -> void:
 	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_the_tempo_is_set_from_the_deck()
+	_test_the_sends_ride_the_faders()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5331,6 +5332,90 @@ func _test_the_tempo_is_set_from_the_deck() -> void:
 	deck._tempo_knob.turned.emit(TapeDeck.bpm_to_knob(150.0))
 	close_to("turning it sets the tempo", DAW.state.tempo, 150.0)
 	deck.queue_free()
+
+
+func _test_the_sends_ride_the_faders() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var verb := 13
+	var snare := s.send(3, 1, false)
+	check("the stand-in numbers its sends from 1, as the wire does", snare != null and s.send(3, 0, false) == null)
+	var before := snare.volume
+	backend._repl_durable.clear()
+	DAW.set_send_volume(3, 1, 0.5)
+	close_to("set_send_volume sets the send's level", snare.volume, 0.5)
+	check("and replicates it on the send's own address", backend._repl_durable.has("/track/3/send/1/volume"))
+	DAW.set_send_pan(3, 1, 0.2)
+	close_to("set_send_pan sets the send's pan", snare.pan, 0.2)
+	DAW.undo()
+	DAW.undo()
+	close_to("a send level is undoable", snare.volume, before)
+	DAW.set_send_volume(2, 4, 0.9)
+	check("turning a send that is not there does not make one", s.send(2, 4, false) == null)
+	check("both are verbs a guest may use", &"set_send_volume" in DAW.COMMANDS and &"set_send_pan" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_send_volume", [3, 1, 7.0])
+	close_to("a guest's send level is clamped", snare.volume, 1.0)
+	DAW.apply_intent(&"set_send_volume", [3, 0, 0.1])
+	DAW.apply_intent(&"set_send_volume", [3])
+	close_to("a malformed send intent is refused", snare.volume, 1.0)
+
+	# The wire. Reaper spells every send level a second time as text, and that must not be read
+	# as the number.
+	var told := [0]
+	var count := func(_i: int, field: StringName): if field == &"sends": told[0] += 1
+	s.track_changed.connect(count)
+	MixWire.apply(s, "/track/3/send/1/volume", [0.25])
+	MixWire.apply(s, "/track/3/send/1/volume/str", ["-11.0dB"])
+	close_to("a send level's text is not its level", snare.volume, 0.25)
+	MixWire.apply(s, "/track/3/send/1/volume", [0.25])
+	check("a send change is told once, and a restatement not at all (%d)" % told[0], told[0] == 1)
+	s.track_changed.disconnect(count)
+
+	# Reaper: ReaScript counts sends from 0 and OSC from 1, and both describe the same send.
+	var link := _fresh_link()
+	link._apply("/track/4/send/1/name", ["Verb Rtn"])
+	link._apply("/track/4/send/1/volume", [0.7])
+	link._on_structure({"tracks": [{"index": 4, "sends": [{"index": 0, "dest_track": 26,
+			"dest_name": "Verb Rtn"}]}], "track_count": 40})
+	check("the bridge's send 0 is OSC's send 1 (%s)" % [link.state.track(4).sends.keys()],
+			link.state.track(4).sends.size() == 1 and link.state.send(4, 1).dest_track == 26)
+	link.set_send_volume(4, 1, 0.4)
+	close_to("Reaper's backend writes the send level on its OSC address", link.state.send(4, 1).volume, 0.4)
+	link.set_send_pan(4, 1, 0.9)
+	close_to("and the send pan", link.state.send(4, 1).pan, 0.9)
+	link.free()
+
+	# The desk: SENDS ON FADERS.
+	_offline()
+	s = DAW.state
+	var console := ConsoleSurface.new()
+	add_child(console)
+	console._process(0.0)
+	check("the returns the SENDS key steps through (%s)" % [ConsoleSurface.send_destinations(s)],
+			ConsoleSurface.send_destinations(s) == [verb])
+	var by_track := {}
+	for strip in console.strips:
+		by_track[strip.track_index] = strip
+	var snare_strip: ChannelStrip = by_track[3]
+	var kick_strip: ChannelStrip = by_track[2]
+	console.cycle_sends()
+	check("one press puts the sends to the return on the faders", console.send_dest == verb and snare_strip.send_dest == verb)
+	close_to("the snare's fader is its send level", snare_strip._fader.value, s.send(3, 1).volume)
+	check("and says so by name (%s)" % snare_strip._fader.title(), snare_strip._fader.title() == "SNARE  SEND TO VERB RTN")
+	check("a strip with no send has a fader nobody can take hold of", kick_strip._fader.collision_layer == 0)
+	check("and says it has none", kick_strip._db_label.text == "NO SEND")
+	snare_strip._fader._set_value(0.3)
+	close_to("moving it moves the send", s.send(3, 1).volume, 0.3, 0.02)
+	close_to("and not the snare", s.track(3).volume, 0.72)
+	snare_strip._pan.turned.emit(0.1)
+	close_to("the pan knob is the send's pan", s.send(3, 1).pan, 0.1)
+	close_to("not the track's", s.track(3).pan, 0.5)
+	check("the master's key is lit", console.master._sends_key.lit)
+	console.cycle_sends()
+	check("past the last return the faders are levels again", console.send_dest == 0 and snare_strip.send_dest == 0)
+	close_to("and the snare's fader is its level", snare_strip._fader.value, s.track(3).volume)
+	check("with a fader anyone can take hold of", kick_strip._fader.collision_layer == 2)
+	console.queue_free()
 
 
 func _test_undo_takes_back_a_gesture_not_a_frame() -> void:

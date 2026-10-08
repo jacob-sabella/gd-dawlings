@@ -267,6 +267,16 @@ func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 					[str(result["text"]), float(result.get("value", -1.0))]))
 
 
+## Both are on Reaper's own OSC surface (TRACK_SEND_VOLUME, TRACK_SEND_PAN), numbered from 1 as
+## the bridge's sends are not -- see `_on_structure`.
+func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
+	write("/track/%d/send/%d/volume" % [track_index, send_index], [clampf(taper, 0.0, 1.0)])
+
+
+func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
+	write("/track/%d/send/%d/pan" % [track_index, send_index], [clampf(pan, 0.0, 1.0)])
+
+
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	write("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
@@ -510,8 +520,12 @@ func _on_structure(result) -> void:
 		for send in _as_array(entry.get("sends", [])):
 			if typeof(send) != TYPE_DICTIONARY:
 				continue
-			var send_idx := int(send.get("index", -1))
-			if send_idx < 0:
+			# +1: ReaScript counts a track's sends from 0 and OSC from 1. Written 0-based, the
+			# bridge's destination landed on a send OSC never mentions and OSC's level on one
+			# the bridge never placed -- two half-sends for every real one, and the patchbay
+			# drew both, as a mult fed twice by the same track.
+			var send_idx := int(send.get("index", -1)) + 1
+			if send_idx < 1:
 				continue
 			_apply("/track/%d/send/%d/dest" % [idx, send_idx],
 					[float(int(send.get("dest_track", -1)))])
@@ -557,7 +571,8 @@ func create_send(from_track: int, to_track: int) -> bool:
 func remove_send(from_track: int, send_index: int) -> bool:
 	if _bridge == null or not _bridge.is_open():
 		return false
-	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index])
+	# 1-based here as everywhere above the bridge; the Lua takes ReaScript's 0-based index.
+	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index - 1])
 
 
 # --- replication --------------------------------------------------------------------------

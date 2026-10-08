@@ -296,6 +296,11 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	if p.size() < 5 or not p[3].is_valid_int():
 		return
 	var s := state.send(track_idx, int(p[3]))
+	# Only the exact field address: `volume/str` and `pan/str` are Reaper's spelling of the same
+	# value, and reading "-11.0dB" as a float would zero the level.
+	if p.size() > 5:
+		return
+	var before := [s.dest_name, s.dest_track, s.volume, s.pan]
 	match p[4]:
 		"name": s.dest_name = str(args[0])
 		# reaper-3d's own again, and the one that makes the patchbay exact rather than
@@ -303,6 +308,10 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 		"dest": s.dest_track = int(args[0])
 		"volume": s.volume = float(args[0])
 		"pan": s.pan = float(args[0])
+	# Told, so a control showing a send level follows it. Only on a change: Reaper restates
+	# every slot of every track on a refresh, and most of them are empty.
+	if before != [s.dest_name, s.dest_track, s.volume, s.pan]:
+		state.track_changed.emit(track_idx, &"sends")
 
 
 static func _as_bool(args: Array) -> bool:

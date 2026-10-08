@@ -124,6 +124,12 @@ func set_master_pan(_pan: float) -> void: pass
 
 func set_fx_param(_track_index: int, _fx_index: int, _param: int, _value: float) -> void: pass
 func set_fx_enabled(_track_index: int, _fx_index: int, _enabled: bool) -> void: pass
+
+## One send's level and pan. `send_index` is the send as the wire numbers it: 1-based, in the
+## track's own send order -- `/track/3/send/1` is track 3's first send. Same 0..1 taper as a
+## track fader for the level, 0.5 centre for the pan.
+func set_send_volume(_track_index: int, _send_index: int, _taper: float) -> void: pass
+func set_send_pan(_track_index: int, _send_index: int, _pan: float) -> void: pass
 ## Ask for the plugin's own reading of one parameter ("-12.0 dB"), to arrive later as the
 ## parameter's text in the cache. A backend that cannot know a plugin's units says nothing, and
 ## the rack shows the plain percentage it always could.
