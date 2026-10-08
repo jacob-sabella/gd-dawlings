@@ -107,7 +107,6 @@ func _ready() -> void:
 	caption.position = Vector3(0, -HEIGHT * 0.5 + 0.007, 0.002)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.modulate = Color(0.68, 0.60, 0.46)
-	caption.outline_size = 0
 	Lettering.range_to_legibility(caption)
 	add_child(caption)
 

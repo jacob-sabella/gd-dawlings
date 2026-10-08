@@ -85,13 +85,17 @@ func _ready() -> void:
 			add_child(_stand_in())
 
 	var caption := Label3D.new()
-	caption.font_size = 32
+	# 52, fitted to the jack pitch, up from 32: measured at 7.9px with the bay focused at
+	# 1600x900, which is a name you squint at. There are 85mm between rows and only 34mm
+	# between jacks, so it is the pitch that limits it and `fit` that enforces it.
+	caption.font_size = 52
 	caption.pixel_size = 0.00017
 	caption.text = label_text.to_upper()
-	caption.position = Vector3(0, -RADIUS - 0.006, 0.001)
+	caption.position = Vector3(0, -RADIUS - 0.0085, 0.001)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.modulate = Color(0.7, 0.72, 0.74)
 	Lettering.range_to_legibility(caption)
+	Lettering.fit(caption, 0.031, 52)
 	add_child(caption)
 
 	var shape := CollisionShape3D.new()

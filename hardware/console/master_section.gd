@@ -35,7 +35,7 @@ func _ready() -> void:
 	plate.material_override = Materials.master_plate()
 	add_child(plate)
 
-	var caption := _label(16, Vector3(0, height - 0.014, 0.001))
+	var caption := _label(20, Vector3(0, height - 0.014, 0.001))
 	caption.text = "MASTER"
 	add_child(caption)
 
@@ -56,7 +56,7 @@ func _ready() -> void:
 	_pan.describe_value = Knob.pan_text
 	add_child(_pan)
 
-	var pan_caption := _label(9, Vector3(0, height - 0.068, 0.001))
+	var pan_caption := _label(15, Vector3(0, height - 0.068, 0.001))
 	pan_caption.text = "BAL"
 	add_child(pan_caption)
 
@@ -76,11 +76,11 @@ func _ready() -> void:
 		meter.position = Vector3(spec[0], 0.042, 0.002)
 		add_child(meter)
 
-		var channel := _label(8, Vector3(spec[0], 0.032, 0.001))
+		var channel := _label(10, Vector3(spec[0], 0.032, 0.001))
 		channel.text = spec[2]
 		add_child(channel)
 
-	_db_label = _label(12, Vector3(0, 0.020, 0.001))
+	_db_label = _label(15, Vector3(0, 0.020, 0.001))
 	add_child(_db_label)
 
 	DAW.state.master_changed.connect(func(_field: StringName): refresh())
@@ -93,7 +93,6 @@ func _label(font_size: int, pos: Vector3) -> Label3D:
 	l.pixel_size = 0.00018
 	l.position = pos
 	l.modulate = Color(0.88, 0.89, 0.91)
-	l.outline_size = 0
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)
 	return l

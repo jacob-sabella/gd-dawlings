@@ -22,6 +22,9 @@ const WIDTH := 0.86
 const LANE_HEIGHT := 0.0168
 const LANE_GAP := 0.0022
 const HEADER_WIDTH := 0.108
+## What a track name may use of the header: the header less the chip at its left and room for
+## three state flags at its right.
+const NAME_SPAN := HEADER_WIDTH - 0.036
 const RULER_HEIGHT := 0.022
 const DEPTH := 0.006
 
@@ -257,7 +260,7 @@ func _build_ruler() -> void:
 		tick.material_override = Materials.legend()
 		_ruler.add_child(tick)
 
-		var label := _text(str(n + 1), 24, Color(0.60, 0.64, 0.70))
+		var label := _text(str(n + 1), 34, Color(0.60, 0.64, 0.70))
 		label.position = Vector3(x + 0.0025, _top_y - RULER_HEIGHT * 0.26, 0.0016)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(label)
@@ -267,7 +270,7 @@ func _build_ruler() -> void:
 		var mx := _x_for(float(at))
 		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
 			continue
-		var flag := _text(str(DAW.state.markers[at]).to_upper(), 20, Color(0.88, 0.74, 0.44))
+		var flag := _text(str(DAW.state.markers[at]).to_upper(), 28, Color(0.88, 0.74, 0.44))
 		flag.position = Vector3(mx + 0.0025, _top_y - RULER_HEIGHT * 0.74, 0.0016)
 		flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(flag)
@@ -319,9 +322,13 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-WIDTH * 0.5 + 0.0035, y, 0.0014)),
 			Materials.chip_colour(t.colour))
 
-	var name_label := _text(t.display_name(), 22, Color(0.82, 0.84, 0.87))
+	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
+	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
+	# `fit` holds it there without letting it go below the size every name used to be.
+	var name_label := _text(t.display_name(), 38, Color(0.82, 0.84, 0.87))
 	name_label.position = Vector3(-WIDTH * 0.5 + 0.009, y, 0.0016)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	Lettering.fit(name_label, NAME_SPAN, 38 * 4, 22 * 4)
 	_adopt(name_label)
 
 	# The three states that change what you are looking at, as one glyph rather than three
@@ -334,7 +341,7 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	if t.solo:
 		flags += "S"
 	if flags != "":
-		var flag_label := _text(flags, 20,
+		var flag_label := _text(flags, 32,
 				Color(0.90, 0.38, 0.33) if t.rec_arm else Color(0.72, 0.74, 0.78))
 		flag_label.position = Vector3(_lane_area_x - 0.004, y, 0.0016)
 		flag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -504,7 +511,6 @@ func _text(content: String, size: int, tint: Color) -> Label3D:
 	l.font_size = size * 4
 	l.pixel_size = 0.000055
 	l.modulate = tint
-	l.outline_size = 0
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)
 	return l

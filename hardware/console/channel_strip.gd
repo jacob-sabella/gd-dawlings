@@ -40,6 +40,14 @@ var cap_bank: MeshBank
 
 const PLATE_SIZE := Vector3(WIDTH - 0.002, HEIGHT, 0.008)
 const PLATE_OFFSET := Vector3(0, HEIGHT * 0.5, -0.005)
+## Font sizes for the two things a strip says. Set from a measurement at 1600x900 with the desk
+## focused: the old 56 and 44 came out at about 9 and 8 pixels, under the twelve where reading
+## stops being an effort. 80 and 60 reach it, and `Lettering.fit` brings any name that would run
+## off the strip back down, so a long one costs itself and not every other strip.
+const NAME_SIZE := 80
+const DB_SIZE := 60
+## How much of the strip's width lettering may use: the panel less a few millimetres a side.
+const LETTER_SPAN := WIDTH - 0.006
 const CHIP_SIZE := Vector3(WIDTH - 0.008, 0.004, 0.001)
 const CHIP_OFFSET := Vector3(0, HEIGHT - 0.022, 0.0005)
 
@@ -58,7 +66,7 @@ static func create(index: int) -> ChannelStrip:
 func _ready() -> void:
 	_claim_or_build(plate_bank, PLATE_SIZE, PLATE_OFFSET, Materials.chassis(), Color.WHITE, "")
 
-	_name_label = _make_label(14, Vector3(0, HEIGHT - 0.012, 0.001))
+	_name_label = _make_label(NAME_SIZE / 4, Vector3(0, HEIGHT - 0.011, 0.001))
 	add_child(_name_label)
 
 	# A colour chip carrying Reaper's own track colour. It is how you find the kick on a desk of
@@ -117,7 +125,7 @@ func _ready() -> void:
 	meter.position = Vector3(0.016, 0.042, 0.002)
 	add_child(meter)
 
-	_db_label = _make_label(11, Vector3(0, 0.022, 0.001))
+	_db_label = _make_label(DB_SIZE / 4, Vector3(0, 0.022, 0.001))
 	add_child(_db_label)
 
 	DAW.state.track_changed.connect(_on_track_changed)
@@ -132,7 +140,6 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 	l.pixel_size = 0.00018
 	l.position = pos
 	l.modulate = Color(0.86, 0.87, 0.89)
-	l.outline_size = 0
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.no_depth_test = false
 	Lettering.range_to_legibility(l)
@@ -160,6 +167,8 @@ func refresh() -> void:
 	var t := _state()
 	_name_label.text = t.display_name().to_upper()
 	_db_label.text = "%+.1f" % t.volume_db if t.volume_db > -150.0 else "-inf"
+	Lettering.fit(_name_label, LETTER_SPAN, NAME_SIZE, ConsoleSurface.SMALLEST_FONT)
+	Lettering.fit(_db_label, LETTER_SPAN, DB_SIZE, ConsoleSurface.SMALLEST_FONT)
 	_fader.apply_remote(t.volume)
 	_pan.apply_remote(t.pan)
 	_mute.lit = t.mute

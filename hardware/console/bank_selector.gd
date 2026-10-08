@@ -51,14 +51,14 @@ func _ready() -> void:
 	plate.material_override = Materials.master_plate()
 	add_child(plate)
 
-	var caption := _label(10, Vector3(0, height - 0.012, 0.001))
+	var caption := _label(14, Vector3(0, height - 0.012, 0.001))
 	caption.text = "BANK"
 	add_child(caption)
 
-	_range_label = _label(13, Vector3(0, height - 0.040, 0.001))
+	_range_label = _label(16, Vector3(0, height - 0.040, 0.001))
 	add_child(_range_label)
 
-	_total_label = _label(9, Vector3(0, height - 0.056, 0.001))
+	_total_label = _label(13, Vector3(0, height - 0.056, 0.001))
 	_total_label.modulate = Color(0.58, 0.61, 0.66)
 	add_child(_total_label)
 
@@ -124,7 +124,10 @@ func refresh() -> void:
 	if project_count > 0:
 		last = mini(last, project_count)
 	_range_label.text = "%d-%d" % [bank_offset + 1, last]
+	# "41-48" at full size is wider than the module; fitted, so "1-9" keeps the size it can.
+	Lettering.fit(_range_label, WIDTH - 0.004, 64, ConsoleSurface.SMALLEST_FONT)
 	_total_label.text = "OF %d" % project_count if project_count > 0 else "OF ?"
+	Lettering.fit(_total_label, WIDTH - 0.004, 52, ConsoleSurface.SMALLEST_FONT)
 	# Lit means "there is something that way". An unlit bank button at the end of a project is
 	# the only thing that tells you that you have reached the end rather than that the button
 	# has stopped working.
@@ -167,7 +170,6 @@ func _label(font_size: int, pos: Vector3) -> Label3D:
 	l.pixel_size = 0.00018
 	l.position = pos
 	l.modulate = Color(0.86, 0.88, 0.91)
-	l.outline_size = 0
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)
 	return l

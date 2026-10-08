@@ -86,11 +86,10 @@ func _ready() -> void:
 	add_child(_accent)
 
 	_caption = Label3D.new()
-	_caption.font_size = 40
+	_caption.font_size = 52
 	_caption.pixel_size = 0.00013
 	_caption.position = Vector3(0, -BAR.y * 0.5 - 0.010, BAR.z * 0.5)
 	_caption.modulate = Color(0.60, 0.66, 0.76)
-	_caption.outline_size = 0
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mark_chrome(_caption)
 	Lettering.range_to_legibility(_caption)
@@ -146,6 +145,8 @@ func refresh() -> void:
 		return
 	var next := mount.next_mode(surface.surface_id)
 	_caption.text = "→ %s" % String(Presentation.MODE_NAMES.get(next, "?")).to_upper()
+	# Wider than the bar it hangs from is fine; wider than the gap beside it is not.
+	Lettering.fit(_caption, BAR.x * 1.4, 52, 40)
 
 
 func _on_grab_begin(_at: Vector3) -> void:

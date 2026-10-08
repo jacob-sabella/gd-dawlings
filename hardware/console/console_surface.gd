@@ -135,8 +135,11 @@ const ROW_GAP := 0.012
 ## Declared rather than measured, because the radius has to be chosen BEFORE a single label
 ## exists -- the radius decides the layout and the layout builds the labels. It can be declared
 ## safely because every label on this desk is built at the same pixel size and the smallest
-## font any of them asks for is 8, and there is a test that fails if that stops being true.
-const SMALLEST_CAP := 8.0 * 4.0 * 0.00018
+## font any of them asks for is 40 -- the master's L/R, and the floor `Lettering.fit` is given
+## for a strip's name and level, so a session with long track names cannot quietly go under it.
+## There is a test that fails if that stops being true.
+const SMALLEST_FONT := 40
+const SMALLEST_CAP := SMALLEST_FONT * 0.00018
 
 ## Arc length of one row, and how many rows. Zero and one when the desk is flat.
 var _row_span := 0.0

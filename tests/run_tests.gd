@@ -80,6 +80,8 @@ func _ready() -> void:
 	_test_a_rack_unit_reaches_every_parameter()
 	_test_a_wide_desk_bends_round_you_instead_of_past_you()
 	_test_the_desk_knows_how_small_its_own_lettering_is()
+	_test_every_label_is_set_in_the_distance_field_face()
+	_test_fitted_lettering_stays_in_its_slot()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -4113,3 +4115,59 @@ func _test_a_cursor_drags_a_knob_up_and_down() -> void:
 	knob.grab_end(hand)
 	for n in [knob, probe, hand]:
 		n.queue_free()
+
+
+## The face is the readability fix, so a label built without it is a regression nobody would
+## see in a diff: the engine's default font draws fine, just soft and grey at a desk's distance.
+func _test_every_label_is_set_in_the_distance_field_face() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var face := Lettering.face()
+	check("the face is a distance field", face != null and face.multichannel_signed_distance_field)
+	var bare := PackedStringArray()
+	var seen := 0
+	for surface in studio.focus.surfaces:
+		for node in surface.find_children("*", "Label3D", true, false):
+			var label: Label3D = node
+			if label.text.is_empty():
+				continue
+			seen += 1
+			if label.font != face or label.outline_size <= 0 \
+					or label.texture_filter != BaseMaterial3D.TEXTURE_FILTER_LINEAR:
+				bare.append("%s/%s" % [surface.surface_id, label.text])
+	check("the studio has lettering to judge (%d)" % seen, seen > 20)
+	check("every label wears the face, an outline and a linear filter %s" % [bare], bare.is_empty())
+	studio.queue_free()
+	remove_child(studio)
+
+
+func _test_fitted_lettering_stays_in_its_slot() -> void:
+	var label := Label3D.new()
+	label.pixel_size = 0.00018
+	Lettering.dress(label)
+	var f := Lettering.face()
+	label.text = "1-9"
+	Lettering.fit(label, 0.036, 64, 40)
+	check("a short legend keeps the size it was offered", label.font_size == 64)
+	label.text = "1017-1080"
+	Lettering.fit(label, 0.036, 64, 40)
+	var wide := f.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size).x
+	check("a long one shrinks until it fits (%d)" % label.font_size,
+			label.font_size < 64 and wide * label.pixel_size <= 0.036)
+	check("and its outline follows it down",
+			label.outline_size == maxi(2, roundi(label.font_size * Lettering.OUTLINE_FRACTION)))
+	label.text = "AN ABSURDLY LONG LEGEND NOBODY COULD FIT"
+	Lettering.fit(label, 0.036, 64, 40)
+	check("but never below the floor it was given", label.font_size == 40)
+	label.text = "RMS SIZE"
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	Lettering.fit(label, 0.020, 64, 20)
+	var word := f.get_string_size("SIZE", HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size).x
+	var whole := f.get_string_size("RMS SIZE", HORIZONTAL_ALIGNMENT_LEFT, -1, label.font_size).x
+	check("a wrapping label is fitted by its longest word, not its whole line",
+			word * label.pixel_size <= 0.020 and whole * label.pixel_size > 0.020)
+	label.free()

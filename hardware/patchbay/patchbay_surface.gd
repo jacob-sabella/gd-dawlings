@@ -117,7 +117,6 @@ func _rebuild() -> void:
 		notice.font_size = 72
 		notice.pixel_size = 0.00024
 		notice.modulate = Color(0.72, 0.60, 0.40)
-		notice.outline_size = 0
 		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		notice.position = Vector3(-width * 0.5 + 0.02, ROW_GAP + 0.048, 0.002)
 		Lettering.range_to_legibility(notice)

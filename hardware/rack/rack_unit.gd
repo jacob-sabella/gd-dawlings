@@ -34,11 +34,22 @@ const MESH_PATH := "res://assets/hardware/rack_panel.glb"
 ## is in the MIDDLE, where nothing on real hardware leaves it, and the labels are pressed
 ## against the lower edge. Raised so the knob-and-caption group is centred in the area the
 ## header leaves, which gives a bottom margin instead of a hole.
-const KNOB_ROW_Y := -0.012
+##
+## Raised again, by 5mm, when captions went to two lines. They had to: at a size that reads on
+## a monitor, "BAND 1 FREQ" is 70mm on one line and the knobs are 52mm apart. Two lines of a
+## readable size need the space a squeezed single line was leaving empty below it.
+const KNOB_ROW_Y := -0.007
 ## Centre-to-centre along the row. A knob is 22mm across, so this is 30mm of fascia between
 ## neighbours -- enough for a caption that is wider than its knob, which most of them are.
 const KNOB_PITCH := 0.052
-const CAPTION_DROP := 0.016
+## From the knob's centre to the TOP of its caption, which hangs down from there.
+const CAPTION_DROP := 0.0125
+## Caption size before fitting. Was 36, which measured 6.3px with the rack focused at 1600x900 --
+## about 4.5px of capital. 50, wrapped, is as large as the slot under a knob holds.
+const CAPTION_SIZE := 50
+## Font pixels between wrapped lines, tightened from the face's default so two lines fit the
+## space a single one used to stand in.
+const CAPTION_LEADING := -12
 ## The silkscreened rule under the title. Every processor that has a title bar has one, and
 ## without it the header and the controls are two things floating on the same slab.
 const RULE_Y := U * UNITS_TALL * 0.5 - 0.027
@@ -140,7 +151,7 @@ func _ready() -> void:
 	add_child(rule)
 
 	_name_label = Label3D.new()
-	_name_label.font_size = 52
+	_name_label.font_size = 64
 	_name_label.pixel_size = 0.00019
 	_name_label.position = Vector3(-RACK_WIDTH * 0.5 + 0.03, h * 0.5 - 0.016, 0.002)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -161,7 +172,7 @@ func _ready() -> void:
 	# Right of the name, left of the bypass: the readout is about the knobs, so it sits with
 	# them rather than with the on/off at the far end.
 	_page_label = Label3D.new()
-	_page_label.font_size = 34
+	_page_label.font_size = 42
 	_page_label.pixel_size = 0.00019
 	_page_label.position = Vector3(RACK_WIDTH * 0.5 - 0.112, h * 0.5 - 0.016, 0.002)
 	_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -292,7 +303,10 @@ func refresh() -> void:
 		_knobs.append(k)
 
 		var caption := Label3D.new()
-		caption.font_size = 36
+		caption.font_size = CAPTION_SIZE
+		caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caption.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		caption.line_spacing = CAPTION_LEADING
 		caption.pixel_size = 0.00018
 		caption.position = k.position + Vector3(0, -CAPTION_DROP, 0)
 		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -310,6 +324,10 @@ func refresh() -> void:
 			if caption:
 				caption.visible = true
 				caption.text = str(f.param_names.get(param_index, "P%d" % param_index)).to_upper()
+				# Wrap width is in font pixels and has to be restated whenever fitting changes
+				# the font size, or a smaller size wraps as if it were the larger one.
+				Lettering.fit(caption, KNOB_PITCH - 0.006, CAPTION_SIZE)
+				caption.width = (KNOB_PITCH - 0.006) / caption.pixel_size
 		else:
 			_knobs[i].visible = false
 			var spare := get_node_or_null("Caption%d" % i)
