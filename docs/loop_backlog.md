@@ -21,6 +21,13 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Patchbay.** Jacks per track, hanging cables for existing sends, drag-to-patch gesture.
 - **Presentation split.** Three anchors, per-viewer layout profile, runtime reparenting.
 - **Room calibration.** Two-point maths, gravity flattening, drift detection. Tested.
+- **Multiplayer.** A host-owned roster with colours, avatars, and pointers addressed by control
+  key. The host arbitrates holds, so a control has one hand. Late echoes are ignored after
+  release. Sessions are found by LAN discovery and managed from the session panel (**M**). A
+  goodbye is sent on leave, and a guest falls back to solo when its host is gone. Verified by
+  `tools/session_probe.sh` (also `--reaper`) and `tools/session_shot.sh`. Still open: XR
+  calibration across participants is untested, there is no delta compression, and only a
+  trusted LAN is supported.
 - **Offline stand-in.** 12-track synthetic mix with moving meters, so everything above is
   developable and photographable with no DAW running.
 - **Arrange timeline.** A lane per track with the track's colour and flags, a bar ruler from
@@ -69,13 +76,8 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Parked
 
-- **Multiplayer.** Not needed for this round (decided 2026-10-07). The replication path works
-  end to end -- two processes, host and guest, durable state reliable and meters unreliable --
-  and it stays in the tree rather than being torn out, because taking it back out and putting
-  it back later costs more than leaving it. Nothing further is invested in it: no avatars, no
-  discovery, no delta compression. The constraint it still imposes on new code is the one worth
-  keeping: a control change goes through `Session.send_intent()` rather than straight at
-  `Reaper`, so that whoever owns the link is a question the surfaces never have to ask.
+- **Nothing parked.** Multiplayer was parked on 2026-10-07 and picked up again on 2026-10-08.
+  It is now listed under *Working, verified*.
 
 ## Not started
 

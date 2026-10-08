@@ -86,9 +86,14 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			# bank is -- so without this a 90-track session is indistinguishable from a
 			# 64-track one and the bank buttons have nothing to be enabled or greyed by.
 			if p.size() > 1 and p[1] == "tracks" and args.size() > 0:
-				state.project_track_count = int(args[0])
+				# Only on a change. The bridge restates the count every few hundred ms, and a
+				# bank_changed per restatement rebuilt the desk under whoever was mid-drag.
+				var count := int(args[0])
+				var changed := count != state.project_track_count
+				state.project_track_count = count
 				state.trim_to_project()
-				state.bank_changed.emit()
+				if changed:
+					state.bank_changed.emit()
 		"bank":
 			# Where the current bank starts, in tracks. Also reaper-3d's own: Reaper is told a
 			# bank NUMBER and never says which one it settled on, so the authority states it

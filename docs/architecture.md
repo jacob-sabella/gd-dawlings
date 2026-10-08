@@ -111,7 +111,8 @@ stay ignorant: a surface is a node, and a node's parent is not its business.
 | | Shared | Why |
 |---|---|---|
 | Track values, FX, transport | ✅ | it is the mix |
-| Who is here, head poses | ✅ | you need to see someone point |
+| Who is here, head poses, pointers, holds | ✅ | you need to see someone point |
+| Which bank the desk shows | ✅ | the host has one Reaper link, so one bank |
 | ROOM placement of a surface | ✅ | a fact about the room, not a taste |
 | Which mode a surface is in *for you* | ❌ | **this is the feature** |
 
@@ -177,6 +178,89 @@ identical strips. It rides the same stream as everything else.
 A single run is always its own authority, so every replication bug is invisible until there are
 two of them. `tools/session.sh` brings up a headless host and a guest — which is also the shape
 a studio would actually use, with the authority on a machine in a rack.
+
+`tools/session_probe.sh` is the scripted version: a host ("Ada") and a guest ("Grace") check
+the roster, colours, heads, snapshot, an intent round-trip, hold refusal, release, the goodbye
+and the guest's fall back to solo. `--reaper` runs the host against the rig's real Reaper.
+`tools/session_shot.sh` opens two visible windows, has the host drag a fader while the guest
+aims at another, and photographs both sides.
+
+## Multiplayer: people in the room, not just values on the wire
+
+Replication moves the mix between processes. Everything below is about the *people*: who is in
+the session, where they are looking, and what they are holding. All of it lives in
+`core/session/` (the `Session` autoload and the `Presence` node the studio builds). Nothing in
+`hardware/` knows any of it exists. `tools/verify.sh` enforces that.
+
+### The roster is the host's word
+
+The host owns the participant list and broadcasts it whole, as rows of
+`[peer_id, name, medium, colour_index]`, whenever anyone joins, leaves or renames. A guest never
+edits its own copy. Colours come from an eight-entry palette, handed out first-free by the host,
+so two people never share a colour, and a colour is kept for as long as its owner is in the
+session.
+
+### Presence travels as a control key, never as a position
+
+Each participant sends their head pose and pointer at 20Hz, unreliable and ordered. The
+pointer is **a control key plus an offset on that control**, not a world point. Everyone's
+layout is their own (see *What is shared and what is not*), so Ada's KICK fader may be in front
+of her and on a monitor for Grace. A world-space beam would point at empty air. A beam aimed at
+"KICK LEVEL, 3cm up its throw" lands on the KICK fader wherever Grace has put it.
+
+`ControlAffordance.network_key()` is the title by default. A surface whose title is not unique
+overrides it (the timeline answers `TIMELINE`).
+
+The head is sent in session space, relative to the room anchor. A desktop participant's head
+is their camera.
+
+An avatar stays hidden until its participant has been heard from. A headless host has no head.
+Its body also hides within 0.45m of your own eye, because somebody standing inside you is
+noise, not information.
+
+### One hand per control, decided by the host
+
+Two people dragging one fader produce a value that belongs to neither of them. Grabbing a
+control therefore **claims** it from the host, which keeps a `holds{key: peer}` table and
+grants claims first-come. Everyone else is told; their copy of the control gets `claimed_by`.
+It then refuses grabs and nudges, wears the holder's colour on its rim, and still follows the
+holder's values as they arrive. A losing claim gets `hold_refused` and the local grab is let
+go. A participant who leaves frees every hold they had.
+
+### A control ignores its own echo
+
+After release, a control ignores incoming values for 450ms (`SETTLE_MSEC`). Before that, the
+round trip through host and DAW delivered stale values that snapped a released fader back a
+step. Remote values land again once the echo window is over.
+
+### Surfaces never rebuild under a hand
+
+A rebuild frees every control a surface built. If one lands mid-drag, the hand is left holding
+nothing. `Surface._process` therefore holds a dirty rebuild until no control on that surface is
+held. This was found on a live host: Reaper restates the project size a few times a second, and
+each restatement was announced as a bank change, cutting a drag off about a second in.
+`MixWire` now announces a bank change only when the size actually changes.
+
+### Finding a session, and leaving one
+
+- **Discovery.** A host broadcasts a small JSON beacon every second on UDP 7333, to
+  255.255.255.255 and to 127.0.0.1. The session panel (**M**) lists what it hears with a Join
+  button. You can also join by address.
+- **Leaving.** A host that ends the session sends a `_goodbye` and keeps polling for 0.3s so
+  the goodbye is not overtaken by the disconnect. Quitting the app does the same.
+- **Falling back.** A guest that loses its host, for any reason, returns to solo on its own
+  backend and says why with a toast. It does not sit staring at a frozen mix.
+
+Volatile state goes out in parcels of at most 1100 bytes. An unreliable packet over the MTU is
+dropped whole, and a 40-track meter frame was over it.
+
+### Not done
+
+- **XR calibration across participants is untested.** There is no headset runtime on this
+  machine, so this rests on the arithmetic only.
+- **No delta compression.** The full volatile frame goes out every tick.
+- **Trusted LAN only.** There is no authentication. Anyone who can reach the port can join and
+  move any fader.
 
 ## Geometry: computed by default, authored where bevels matter
 

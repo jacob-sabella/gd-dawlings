@@ -90,7 +90,12 @@ func _process(_delta: float) -> void:
 	# Rebuilds are batched to a frame boundary. Reaper announces a 30-track project as 30
 	# separate track messages inside a few milliseconds; rebuilding per message would build and
 	# throw away 29 consoles.
-	if _dirty:
+	#
+	# And held off entirely while a hand is on one of this surface's controls. A rebuild frees
+	# every control it built, so one landing mid-drag leaves the hand holding nothing and the
+	# rest of the gesture going nowhere. Reaper re-announces things that have not changed often
+	# enough that this is not an edge case: a live drag was being cut off a second in.
+	if _dirty and not _anything_held():
 		_dirty = false
 		_rebuild()
 		rebuilt.emit()
@@ -101,6 +106,13 @@ func _process(_delta: float) -> void:
 ## how it is being looked at, only on how much room it has been given.
 func set_wide(_wide: bool) -> void:
 	pass
+
+
+func _anything_held() -> bool:
+	for node in find_children("*", "ControlAffordance", true, false):
+		if (node as ControlAffordance).is_held():
+			return true
+	return false
 
 
 func mark_dirty() -> void:

@@ -68,7 +68,16 @@ func _unhandled_input(event: InputEvent) -> void:
 func is_pressing() -> bool:
 	if press_override >= 0:
 		return press_override == 1
+	# A click on a panel is a click on the panel. Without this, pressing a button in the
+	# session panel also grabbed whatever fader happened to be behind it in the room.
+	if held == null and _over_gui():
+		return false
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+
+
+func _over_gui() -> bool:
+	var vp := get_viewport()
+	return vp != null and vp.gui_get_hovered_control() != null
 
 
 func _physics_process(delta: float) -> void:
@@ -83,4 +92,5 @@ func _physics_process(delta: float) -> void:
 	if camera == null or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_card.hide_card()
 		return
+	_forget_freed()
 	_card.show_for(held if held != null else hovered, pointer())

@@ -126,6 +126,13 @@ func _pointer_item() -> MixState.ItemState:
 	return null if hit.is_empty() else DAW.state.item(hit[0], hit[1])
 
 
+## The lanes as a whole, not the item under the pointer. The title follows the pointer, so it
+## would name a different control on every frame of a drag -- and on every other desk, where
+## the pointer is somebody else's.
+func network_key() -> String:
+	return "TIMELINE"
+
+
 func _default_title() -> String:
 	var item := _pointer_item()
 	if item == null:

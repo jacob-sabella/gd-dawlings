@@ -33,6 +33,9 @@ var _ticks := 0
 ## `--shot-tick 240`: capture on that physics tick instead of a drawn frame, for anything that
 ## moves in simulated time -- a pushed rack coasting to a stop -- rather than in frames.
 var _shot_tick := -1
+## `--quit-tick 900`: stay up until then after a --shot-tick capture. For a capture that is one
+## half of a pair -- a guest that has to still be in the room when the host takes ITS picture.
+var _quit_tick := -1
 ## Controls addressed by what they are called rather than where they happen to be drawn, so a
 ## step in the walkthrough survives the desk being re-laid out.
 ##   --aim KICK_IN__LEVEL               park the pointer on it (its hover card is the evidence)
@@ -102,6 +105,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--walk":
 				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
+			"--quit-tick":
+				if i + 1 < args.size(): _quit_tick = int(args[i + 1])
 			"--cam":
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
 	if _shot_tick >= 0:
@@ -189,7 +194,10 @@ func _physics_process(_delta: float) -> void:
 	_drive_scripted()
 	if _shot_tick >= 0 and _ticks == _shot_tick:
 		_shot_frame = _frames + 2
-		_quit_after = _frames + 6
+		if _quit_tick < 0:
+			_quit_after = _frames + 6
+	if _quit_tick > 0 and _ticks >= _quit_tick and _ticks > _shot_tick:
+		get_tree().quit()
 
 
 func _drive_drag() -> void:

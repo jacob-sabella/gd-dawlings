@@ -13,6 +13,13 @@ const RAY_LENGTH := 3.0
 ## Layer 2 is controls. Separate from the room's geometry so a ray does not stop on the console
 ## chassis a centimetre in front of the fader it was aimed at.
 const CONTROL_LAYER := 2
+const GROUP := &"interactors"
+
+## This hand closed on a control and the control took it. Not emitted for a dwell, which is a
+## press and release in one frame and holds nothing long enough for anyone else to want it.
+signal grabbed(control: ControlAffordance)
+## `control` is null when the control was freed under the hand rather than let go of.
+signal released(control: ControlAffordance)
 
 var held: ControlAffordance = null
 var hovered: ControlAffordance = null
@@ -21,6 +28,7 @@ var hovered: ControlAffordance = null
 var hover_point := Vector3.ZERO
 
 var _was_pressed := false
+var _held_id := 0
 var _rim: HoverRim
 var _dwelling: ControlAffordance = null
 var _dwelt := 0.0
@@ -56,6 +64,7 @@ func is_pressing() -> bool:
 
 
 func _physics_process(_delta: float) -> void:
+	_forget_freed()
 	var pressed := is_pressing()
 	var origin := aim().origin
 	var direction := -aim().basis.z
@@ -67,20 +76,43 @@ func _physics_process(_delta: float) -> void:
 
 	if pressed and not _was_pressed:
 		if hovered != null:
-			held = hovered
-			held.grab_begin(self, hit["point"])
+			hovered.grab_begin(self, hit["point"])
+			# Only if it took the hand. A control someone else is holding says no, and a hand
+			# that believed it was holding anyway would drag nothing and then "release" a fader
+			# out from under the person who really has it.
+			if hovered.held_by == self:
+				held = hovered
+				_held_id = held.get_instance_id()
+				grabbed.emit(held)
 	elif pressed and held != null:
 		# Keeps driving the held control even once the ray has wandered off it. A fader dragged
 		# to the end of its travel is no longer under the cursor, and letting the grab lapse
 		# there makes long throws impossible.
 		held.grab_move(self, _plane_point(origin, direction, held))
 	elif not pressed and held != null:
-		held.grab_end(self)
-		held = null
+		let_go()
 
 	_was_pressed = pressed
 	_tick_dwell(hit["point"], _delta)
 	_show_rim()
+
+
+## A control can be freed under the hand: a bank moves, a rack page turns, a desk is rebuilt
+## when the project's tracks arrive -- sometimes from inside the very grab_move that changed
+## the mix. Whatever it was, it is not held or hovered now. Checked again before anything is
+## drawn from them, because the free can land between the top of a tick and the bottom.
+##
+## By instance id, not `held != null`: a freed object compares equal to null, so that test
+## waves exactly the case it exists for straight through.
+func _forget_freed() -> void:
+	if _held_id != 0 and not is_instance_id_valid(_held_id):
+		_held_id = 0
+		held = null
+		released.emit(null)
+	if not is_instance_valid(held):
+		held = null
+	if not is_instance_valid(hovered):
+		hovered = null
 
 
 ## The held control wins over the hovered one: during a long fader throw the cursor is
@@ -91,6 +123,7 @@ func _show_rim() -> void:
 		_rim = HoverRim.new()
 		_rim.name = "HoverRim"
 		add_child(_rim)
+	_forget_freed()
 	_rim.show_on(held if held != null else hovered, held != null)
 
 
@@ -151,6 +184,25 @@ func _set_hovered(control: ControlAffordance) -> void:
 ## cursor that has gone is a control claiming attention nobody is paying.
 func _exit_tree() -> void:
 	_set_hovered(null)
+
+
+func _enter_tree() -> void:
+	add_to_group(GROUP)
+
+
+## Open the hand. Also how the session takes a control back from someone who reached for it a
+## moment after somebody else did -- see Session.hold_refused.
+func let_go() -> void:
+	if _held_id == 0 and not is_instance_valid(held):
+		return
+	var was = held
+	held = null
+	_held_id = 0
+	if is_instance_valid(was):
+		was.grab_end(self)
+		released.emit(was)
+	else:
+		released.emit(null)
 
 
 func _cast(origin: Vector3, direction: Vector3) -> Dictionary:

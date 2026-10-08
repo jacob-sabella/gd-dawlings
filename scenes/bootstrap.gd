@@ -24,6 +24,7 @@ var studio: Studio
 var xr := XRBootstrap.new()
 
 var _hud: Label
+var session_panel: SessionPanel
 
 
 func _ready() -> void:
@@ -39,11 +40,15 @@ func _ready() -> void:
 		Session.layout.load_saved()
 	Session.layout.medium = medium
 
+	if args["name"] != "":
+		Session.local_name = args["name"]
+	# How this process gets its own mix back after being someone else's guest: the same link
+	# it would have opened on its own, Reaper or the stand-in.
+	Session.solo_backend = func(): _start_daw(args)
 	if args["join"] != "":
-		Session.join(args["join"])
 		# A guest still has a backend: it holds the replicated cache. It just never opens a
 		# link of its own, which is the whole of what "one link per session" means.
-		DAW.use(OfflineBackend.new(), false)
+		Session.join(args["join"])
 	elif args["host"]:
 		Session.host()
 		_start_daw(args)
@@ -85,6 +90,11 @@ func _ready() -> void:
 			push_warning("bootstrap: --venue %s is not one of %s" % [args["venue"], Venue.IDS])
 
 	_build_hud()
+	session_panel = SessionPanel.new()
+	session_panel.name = "SessionPanel"
+	add_child(session_panel)
+	if args["session_panel"]:
+		session_panel.open()
 
 	_apply_cli_placement(args["place"])
 	_apply_cli_focus(args["focus"])
@@ -142,6 +152,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
+		"name": "", "session_panel": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 	}
 	var i := 0
@@ -180,6 +191,12 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["venue"] = argv[i]
+			"--name":
+				# What everyone else's room calls this participant.
+				i += 1
+				if i < argv.size():
+					out["name"] = argv[i]
+			"--session-panel": out["session_panel"] = true
 			"--fresh-layout": out["fresh_layout"] = true
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
@@ -329,7 +346,7 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",
 		studio.venue.title() if studio.venue != null else "room"]

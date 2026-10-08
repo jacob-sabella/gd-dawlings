@@ -23,8 +23,13 @@ const MARGIN := 0.003
 ## metre, where a millimetre is about one pixel.
 const STROKE := 0.0016
 
+## Somebody else's colour, for the rim drawn around what another participant is pointing at or
+## holding. Transparent means "mine", and the rim keeps its own two colours.
+var tint := Color(0, 0, 0, 0)
+
 var _target: ControlAffordance = null
 var _held := false
+var _built_tint := Color(0, 0, 0, 0)
 var _mesh := ImmediateMesh.new()
 var _material := StandardMaterial3D.new()
 
@@ -48,7 +53,7 @@ func _ready() -> void:
 func show_on(control: ControlAffordance, held: bool) -> void:
 	if control != null and not is_instance_valid(control):
 		control = null
-	if control != _target or held != _held:
+	if control != _target or held != _held or tint != _built_tint:
 		_target = control
 		_held = held
 		_rebuild()
@@ -58,6 +63,7 @@ func show_on(control: ControlAffordance, held: bool) -> void:
 
 
 func _rebuild() -> void:
+	_built_tint = tint
 	_mesh.clear_surfaces()
 	if _target == null:
 		return
@@ -65,13 +71,16 @@ func _rebuild() -> void:
 	if box.size == Vector3.ZERO:
 		return
 	box = box.grow(MARGIN)
-	_material.albedo_color = HELD_COLOUR if _held else COLOUR
+	if tint.a > 0.0:
+		_material.albedo_color = Color(tint, 1.0 if _held else 0.8)
+	else:
+		_material.albedo_color = HELD_COLOUR if _held else COLOUR
 	var z := box.end.z + 0.001
 	var lo := Vector2(box.position.x, box.position.y)
 	var hi := Vector2(box.end.x, box.end.y)
 	# A third of the shorter side, so a long fader travel gets brackets, not rails.
 	var arm := minf(hi.x - lo.x, hi.y - lo.y) * 0.34
-	var w := STROKE * (1.5 if _held else 1.0)
+	var w := STROKE * (2.0 if _held and tint.a > 0.0 else 1.5 if _held else 1.0)
 	_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for corner in [Vector2(lo.x, lo.y), Vector2(hi.x, lo.y), Vector2(hi.x, hi.y), Vector2(lo.x, hi.y)]:
 		var sx := 1.0 if corner.x == lo.x else -1.0

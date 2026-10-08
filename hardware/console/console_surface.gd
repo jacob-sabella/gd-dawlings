@@ -99,13 +99,6 @@ func _go_to_track(offset: int) -> void:
 	mark_dirty()
 
 
-func _anything_held() -> bool:
-	for node in find_children("*", "ControlAffordance", true, false):
-		if (node as ControlAffordance).is_held():
-			return true
-	return false
-
-
 ## The width past which a flat desk stops being a desk and starts being a wall.
 ##
 ## Below it a console is a thing you stand at; above it the far end is further away than the

@@ -95,6 +95,7 @@ var studio_set: Node3D
 var mount: SurfaceMount
 var body: BodyFrame
 var focus: FocusRig
+var presence: Presence
 ## This participant's body. Everything placed for a person is placed from it, and it is one
 ## object rather than a scattering of constants precisely so there is somewhere to change it.
 var ergonomics := Ergonomics.new()
@@ -769,6 +770,14 @@ func _build_anchors() -> void:
 	if medium != Presentation.Medium.AR:
 		room_anchor.adopt_virtual_frame(1.2)
 
+	# Everyone else. Built for a solo run too, empty: a session can be hosted from the panel at
+	# any moment, and the people who then walk in need somewhere to stand.
+	presence = Presence.new()
+	presence.name = "Presence"
+	presence.head_node = head
+	presence.frame = room_anchor
+	add_child(presence)
+
 
 func _build_surfaces() -> void:
 	# These transforms are the DEFAULT LAYOUT, used until a participant moves something and their
@@ -1122,6 +1131,9 @@ func _process(delta: float) -> void:
 	if venue != null and DAW.state != null:
 		venue.pulse(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
 	if camera == null or not god_mode:
+		return
+	# Not while typing a name into the session panel, or every "s" in it flies backwards.
+	if get_viewport().gui_get_focus_owner() != null:
 		return
 	var move := Vector3.ZERO
 	if Input.is_key_pressed(KEY_W): move.z -= 1.0

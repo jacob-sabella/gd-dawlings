@@ -111,6 +111,14 @@ func _ready() -> void:
 	_test_a_monitor_draws_no_presentation_brackets()
 	_test_the_wheel_adjusts_what_the_cursor_is_on()
 	_test_a_cursor_drags_a_knob_up_and_down()
+	_test_a_released_control_ignores_its_own_late_echoes()
+	_test_a_surface_never_rebuilds_under_a_hand()
+	_test_a_restated_project_size_is_not_a_new_bank()
+	_test_a_control_held_elsewhere_refuses_hands_but_still_moves()
+	_test_the_roster_is_the_hosts_word()
+	_test_the_host_keeps_one_hand_per_control()
+	_test_presence_marks_what_others_hold()
+	_test_meters_go_out_in_parcels_under_the_mtu()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -5356,3 +5364,206 @@ func _test_a_late_arrangement_is_still_fitted() -> void:
 	close_to("once the viewer has zoomed, the window is theirs", timeline.view_span, 30.0)
 	timeline.queue_free()
 	DAW.use(previous)
+
+
+# --- the session ----------------------------------------------------------------------------
+
+func _test_a_released_control_ignores_its_own_late_echoes() -> void:
+	var control := ControlAffordance.new()
+	add_child(control)
+	var hand := Interactor.new()
+	control.grab_begin(hand, Vector3.ZERO)
+	control.value = 0.8
+	control.grab_end(hand)
+	# Replies still in flight from the drag, describing where the fader was a moment ago.
+	control.apply_remote(0.3)
+	check("an echo from before the release does not drag the fader back", is_equal_approx(control.value, 0.8))
+	control.apply_remote(0.8)
+	check("the echo of the value the hand left ends the wait", not control.is_settling())
+	control.apply_remote(0.5)
+	check("after which the mix moves it as normal", is_equal_approx(control.value, 0.5))
+
+	# A mix that really did settle somewhere else still has the last word, once the wait is over.
+	control.grab_begin(hand, Vector3.ZERO)
+	control.value = 0.9
+	control.grab_end(hand)
+	control.apply_remote(0.85)
+	check("a different settle is held back while it might be stale", is_equal_approx(control.value, 0.9))
+	control._settle_until = 0
+	control._echo_wait_over()
+	check("and applied when the wait runs out", is_equal_approx(control.value, 0.85))
+
+	check("controls are findable by group", control.is_in_group(ControlAffordance.GROUP))
+	hand.free()
+	remove_child(control)
+	control.free()
+
+
+func _test_a_control_held_elsewhere_refuses_hands_but_still_moves() -> void:
+	var control := ControlAffordance.new()
+	add_child(control)
+	var hand := Interactor.new()
+	control.claimed_by = RefCounted.new()
+	control.grab_begin(hand, Vector3.ZERO)
+	check("a hand is refused a control someone else in the session holds", control.held_by == null)
+	check("and so is the wheel", not control.nudge(hand, 1, false))
+	control.apply_remote(0.4)
+	check("but it still follows the mix they are moving", is_equal_approx(control.value, 0.4))
+	control.claimed_by = null
+	control.grab_begin(hand, Vector3.ZERO)
+	check("let go of, it can be taken", control.held_by == hand)
+	control.grab_end(hand)
+	hand.free()
+	remove_child(control)
+	control.free()
+
+
+## Session state is global; every session test leaves it solo, as it found it.
+func _as_session(role: int, me: int) -> void:
+	Session.start_solo()
+	Session.role = role
+	Session.local_peer_id = me
+	Session.participants.clear()
+	Session.holds.clear()
+
+
+func _test_the_roster_is_the_hosts_word() -> void:
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	_as_session(Session.Role.GUEST, 5)
+	Session._has_settled = false
+	Session.apply_roster([[1, "Ada", 0, 0], [5, "Grace", 0, 1]])
+	check("a guest takes names from the host's roster", Session.name_of(1) == "Ada" and Session.name_of(5) == "Grace")
+	check("and colours", Session.participants[5].colour == Session.PALETTE[1])
+	check("and says whose session it joined, once (%s)" % [notices], notices == ["Joined Ada's session."])
+	notices.clear()
+	Session.apply_roster([[1, "Ada", 0, 0], [5, "Grace", 0, 1], [9, "Lin", 2, 2]])
+	check("a later arrival is announced (%s)" % [notices], notices == ["Lin joined the session."])
+	check("with the medium they came in", Session.participants[9].medium == 2)
+	notices.clear()
+	Session.apply_roster([[1, "Ada", 0, 0], [5, "Grace", 0, 1]])
+	check("and a departure (%s)" % [notices], notices == ["Lin left the session."])
+	check("who is then gone", not Session.participants.has(9))
+
+	_as_session(Session.Role.HOST, 1)
+	Session._register(1, "Ada", Session._free_colour())
+	Session._register(2, "joining…", Session._free_colour())
+	Session._register(3, "joining…", Session._free_colour())
+	Session.participants.erase(2)
+	check("a colour given up is the next one handed out",
+			Session._register(4, "joining…", Session._free_colour()).colour_index == 1)
+	Session.notice.disconnect(hear)
+	Session.start_solo()
+
+
+func _test_the_host_keeps_one_hand_per_control() -> void:
+	var refused: Array = []
+	var hear := func(k: String, h: int): refused.append([k, h])
+	Session.hold_refused.connect(hear)
+	_as_session(Session.Role.HOST, 1)
+	Session._grant(7, "KICK  LEVEL")
+	check("the first hand gets the control", Session.holder_of("KICK  LEVEL") == 7)
+	Session._grant(1, "KICK  LEVEL")
+	check("the second is refused, and told by whom (%s)" % [refused], refused == [["KICK  LEVEL", 7]])
+	check("and the first keeps it", Session.holder_of("KICK  LEVEL") == 7)
+	Session._release(1, "KICK  LEVEL")
+	check("nobody can let go of a control for somebody else", Session.holder_of("KICK  LEVEL") == 7)
+	Session._release(7, "KICK  LEVEL")
+	check("its holder can", Session.holder_of("KICK  LEVEL") == 0)
+	Session._grant(1, "KICK  LEVEL")
+	check("after which anyone may take it", Session.holder_of("KICK  LEVEL") == 1)
+
+	# Somebody leaving with their hand on a fader must not leave it held forever.
+	Session._register(7, "Grace", 1)
+	Session._grant(7, "SNARE  PAN")
+	Session._on_peer_disconnected(7)
+	check("a departed holder's controls are freed", Session.holder_of("SNARE  PAN") == 0)
+	check("and nobody else's", Session.holder_of("KICK  LEVEL") == 1)
+	Session.hold_refused.disconnect(hear)
+	Session.start_solo()
+
+
+func _test_presence_marks_what_others_hold() -> void:
+	var control := ControlAffordance.new()
+	control.describe_title = func() -> String: return "TEST  PRESENCE FADER"
+	add_child(control)
+	var presence := Presence.new()
+	add_child(presence)
+	_as_session(Session.Role.GUEST, 5)
+	Session.apply_roster([[1, "Ada", 0, 0], [5, "Grace", 0, 1]])
+	check("an avatar for everyone but me", presence._avatars.size() == 1 and presence._avatars.has(1))
+	presence._scan_msec = -100000
+	check("a control is found by the name it goes by", presence.find_control("TEST  PRESENCE FADER") == control)
+	Session.holds = {"TEST  PRESENCE FADER": 1}
+	presence._apply_holds()
+	check("a control the host holds is claimed on my desk", control.claimed_by == Session.participants[1])
+	Session.holds = {"TEST  PRESENCE FADER": 5}
+	presence._apply_holds()
+	check("one I hold is not refused to me", control.claimed_by == null)
+	Session.holds = {}
+	presence._apply_holds()
+	check("and a released one is free", control.claimed_by == null)
+	Session.start_solo()
+	presence._sync_avatars()
+	check("alone again, the avatars go", presence._avatars.is_empty())
+	remove_child(presence)
+	presence.free()
+	remove_child(control)
+	control.free()
+
+
+func _test_meters_go_out_in_parcels_under_the_mtu() -> void:
+	var batch: Array = []
+	for t in 64:
+		batch.append(["/track/%d/vu/L" % t, [0.123456]])
+		batch.append(["/track/%d/vu/R" % t, [0.654321]])
+	var parcels := Session._parcels(batch)
+	var biggest := 0
+	var count := 0
+	for parcel in parcels:
+		biggest = maxi(biggest, var_to_bytes(parcel).size())
+		count += parcel.size()
+	check("sixty-four tracks of meters is several parcels (%d)" % parcels.size(), parcels.size() > 1)
+	check("none of them fragmented (%d bytes)" % biggest, biggest < 1300)
+	check("and nothing lost on the way", count == batch.size())
+
+
+## A rebuild frees every control a surface built, so one that lands mid-drag leaves the hand
+## holding nothing. Found live: Reaper restating its project size cut a fader drag off a second in.
+func _test_a_surface_never_rebuilds_under_a_hand() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new())
+	var console := ConsoleSurface.new()
+	add_child(console)
+	console._process(0.0)
+	var hand := FakeHand.new()
+	hand.set_physics_process(false)
+	add_child(hand)
+	var grabbed: ControlAffordance = null
+	for node in console.find_children("*", "ControlAffordance", true, false):
+		grabbed = node
+		break
+	grabbed.grab_begin(hand, grabbed.global_position)
+	console.mark_dirty()
+	console._process(0.0)
+	check("a dirty surface keeps the control a hand is on", is_instance_valid(grabbed)
+			and not grabbed.is_queued_for_deletion() and grabbed.is_inside_tree())
+	grabbed.grab_end(hand)
+	console._process(0.0)
+	check("and rebuilds once the hand lets go", not grabbed.is_inside_tree())
+	hand.queue_free()
+	console.queue_free()
+	DAW.use(previous, false)
+
+
+func _test_a_restated_project_size_is_not_a_new_bank() -> void:
+	var state := MixState.new()
+	var count := [0]
+	state.bank_changed.connect(func(): count[0] += 1)
+	MixWire.apply(state, "/project/tracks", [40])
+	MixWire.apply(state, "/project/tracks", [40])
+	MixWire.apply(state, "/project/tracks", [40])
+	check("the project size announces a bank change once, not per restatement", count[0] == 1)
+	MixWire.apply(state, "/project/tracks", [41])
+	check("and again when it really changes", count[0] == 2)

@@ -22,10 +22,45 @@ signal value_committed(value: float)
 @export var value: float = 0.0
 
 var held_by: Node = null
+## Somebody ELSE in the session has their hand on this -- on their own copy of it, in their own
+## room. Set from outside (core/session/presence.gd), from the host's table of who holds what,
+## and refused like a second local hand. Not `held_by`: a local hold also stops the control
+## listening to the mix, and a fader somebody else is moving must keep moving under your eyes.
+var claimed_by: Object = null
+
+## How long after a hand lets go the control keeps its own value against older echoes.
+##
+## A guest's fader writes go to the host and come back, and the replies still in flight at the
+## moment of release describe where the fader WAS -- so a released fader jumped back down its
+## travel and then up again as the queue drained, which reads as the desk refusing the move.
+## For this long, an echo that is not the value the hand left is held back; the one that is
+## ends the wait early; and when the wait runs out the newest held-back value is applied, so a
+## mix that really did settle somewhere else (Reaper clamps, quantises) still has the last word.
+const SETTLE_MSEC := 450
+
+var _settle_until := 0
+var _settle_value := 0.0
+var _settle_pending := NAN
+
+
+const GROUP := &"controls"
+
+
+func _enter_tree() -> void:
+	add_to_group(GROUP)
 
 
 func is_held() -> bool:
 	return held_by != null
+
+
+## The name this control goes by across the session: how one participant's "I am holding
+## this" is matched to the same control on everyone else's desk. Stable across machines by
+## construction, because it is what the control SAYS it is -- "KICK  VOLUME" -- and not where it
+## sits in a scene tree that each participant has arranged differently. Override where the
+## title is about the pointer rather than the control.
+func network_key() -> String:
+	return title()
 
 
 ## `at` is the contact point in global space -- the ray hit, or the fingertip.
@@ -51,6 +86,8 @@ func set_dwell_progress(_fraction: float) -> void:
 
 
 func grab_begin(by: Node, at: Vector3) -> void:
+	if claimed_by != null:
+		return
 	if held_by != null and held_by != by:
 		# Two people reaching for one fader. First hand wins and the second is simply told no,
 		# rather than the two averaging into a value neither person asked for.
@@ -75,6 +112,7 @@ func grab_end(by: Node) -> void:
 		return
 	_on_grab_end()
 	held_by = null
+	_hold_against_echoes()
 	grab_ended.emit(by)
 	value_committed.emit(value)
 
@@ -83,8 +121,36 @@ func grab_end(by: Node) -> void:
 func apply_remote(v: float) -> void:
 	if is_held():
 		return
+	if Time.get_ticks_msec() < _settle_until:
+		if absf(v - _settle_value) < 0.0005:
+			_settle_until = 0
+			_settle_pending = NAN
+		else:
+			_settle_pending = v
+			return
 	value = v
 	_on_value_changed()
+
+
+func is_settling() -> bool:
+	return Time.get_ticks_msec() < _settle_until
+
+
+func _hold_against_echoes() -> void:
+	_settle_value = value
+	_settle_pending = NAN
+	_settle_until = Time.get_ticks_msec() + SETTLE_MSEC
+	if is_inside_tree():
+		get_tree().create_timer(SETTLE_MSEC / 1000.0 + 0.01).timeout.connect(_echo_wait_over)
+
+
+func _echo_wait_over() -> void:
+	if not is_instance_valid(self) or is_held() or is_settling():
+		return
+	if not is_nan(_settle_pending):
+		var v := _settle_pending
+		_settle_pending = NAN
+		apply_remote(v)
 
 
 ## What this control sounds like when a hand closes on it, or null for the ones that are silent.
@@ -119,10 +185,11 @@ var contact_volume_db: float = 0.0
 ## Refused while someone ELSE holds the control, for the same reason a second grab is: their
 ## hand is the value until they let go.
 func nudge(by: Node, notches: int, fine: bool) -> bool:
-	if notches == 0 or (held_by != null and held_by != by):
+	if notches == 0 or claimed_by != null or (held_by != null and held_by != by):
 		return false
 	if not _on_nudge(notches, fine):
 		return false
+	_hold_against_echoes()
 	# A nudge is a whole gesture, so it commits like the end of one. Whatever records history
 	# listens to this, and a wheel turn that it never heard of would be a change nobody can undo.
 	value_committed.emit(value)
