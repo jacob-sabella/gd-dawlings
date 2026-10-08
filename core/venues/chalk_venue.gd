@@ -357,3 +357,40 @@ static func _subdivide(line: PackedVector3Array, step: float) -> PackedVector3Ar
 			out.append(line[i].lerp(line[i + 1], float(k) / float(n)))
 	out.append(line[line.size() - 1])
 	return out
+
+
+
+## A mirror drawn in chalk: a wobbly ornate frame gone over twice, curls at the corners, a star
+## or two, and glass with a little chalk dust on it. It stands on nothing, like everything here.
+func _frame_mirror(mirror: Mirror) -> void:
+	mirror.haze = 0.035
+	mirror.haze_colour = Color(0.55, 0.58, 0.62)
+	var w := mirror.glass_size.x * 0.5 + 0.03
+	var h := mirror.glass_size.y * 0.5 + 0.03
+	var z := 0.01
+	var lines: Array = []
+	for grow in [0.0, 0.055]:
+		var a: float = w + grow
+		var b: float = h + grow
+		lines.append(PackedVector3Array([Vector3(-a, -b, z), Vector3(a, -b, z), Vector3(a, b, z),
+				Vector3(-a, b, z), Vector3(-a, -b - 0.02, z)]))
+	# Curls at the four corners, between the two lines.
+	for cx in [-1.0, 1.0]:
+		for cy in [-1.0, 1.0]:
+			var at := Vector3(cx * (w + 0.028), cy * (h + 0.028), z)
+			lines.append(Chalk.arc(at, 0.045, 0.045, 0.0, TAU * 1.15, 20))
+	# A crest on top: an arch with a star in it.
+	lines.append(Chalk.arc(Vector3(0, h + 0.055, z), 0.16, 0.13, 0.0, PI, 24))
+	var frame := Chalk.drawing(lines, Chalk.WHITE * 0.9, 0.007, false, 2, SEED * 7)
+	frame.name = "ChalkFrame"
+	mirror.add_child(frame)
+	var crest := Chalk.drawing(Chalk.star(), Chalk.YELLOW, 0.006, false, 2, SEED * 13)
+	crest.scale = Vector3.ONE * 0.06
+	crest.position = Vector3(0, h + 0.11, z)
+	mirror.add_child(crest)
+	for side in [-1.0, 1.0]:
+		var twinkle := Chalk.drawing(Chalk.star(4), Chalk.PINK if side < 0 else Chalk.CYAN, 0.005,
+				false, 2, SEED * 17 + int(side))
+		twinkle.scale = Vector3.ONE * 0.05
+		twinkle.position = Vector3(side * (w + 0.16), h * 0.55, z)
+		mirror.add_child(twinkle)

@@ -139,6 +139,8 @@ func _ready() -> void:
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
 	_test_a_ghost_is_the_size_of_a_large_person()
+	_test_a_mirror_shows_the_room_reversed()
+	_test_every_venue_has_a_mirror_you_can_see_yourself_in()
 	_test_meters_go_out_in_parcels_under_the_mtu()
 	_test_the_mix_carries_the_song_position()
 	_test_the_song_clock_runs_between_reports()
@@ -6973,5 +6975,84 @@ func _test_a_ghost_is_the_size_of_a_large_person() -> void:
 	check("and its arms within reach of its sides (%.2fm across)" % box.size.x, box.size.x < 0.8)
 	check("its skin takes no shadow from itself, which crawls as it sways",
 			Presence.Avatar.SKIN_SHADER.contains("shadows_disabled"))
+	var hits := ZFightProbe.scan(ghost)
+	check("and no two of its faces share a plane (%d)" % hits.size(), hits.is_empty())
 	remove_child(ghost)
 	ghost.free()
+
+
+func _test_a_mirror_shows_the_room_reversed() -> void:
+	# A glass 0.6 x 1.6 on the left wall, facing +X, centre 0.94m up; an eye in the room.
+	var glass := Vector2(0.6, 1.6)
+	var at := Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-3.0, 0.94, 2.2))
+	var eye := Vector3(-1.2, 1.62, 1.4)
+	var r := Mirror.reflection(at, glass, eye)
+	check("the camera stands at the eye reflected through the glass",
+			r["transform"].origin.is_equal_approx(Vector3(-4.8, 1.62, 1.4)))
+	close_to("its near plane is the glass", r["near"], 1.8, 0.0001)
+	# A point in the room, seen in the glass: where the line from the eye to its mirror image
+	# crosses the glass is where the reflected camera must put it.
+	var thing := Vector3(-2.2, 1.1, 1.9)
+	var image := Vector3(-3.8, 1.1, 1.9)
+	var through := eye.lerp(image, (eye.x - (-3.0)) / (eye.x - image.x))
+	var cam: Transform3D = r["transform"]
+	var local := cam.affine_inverse() * thing
+	var near: float = r["near"]
+	var half_h: float = r["size"] * 0.5
+	var half_w := half_h * glass.x / glass.y
+	var ndc := Vector2((local.x * near / -local.z - r["offset"].x) / half_w,
+			(local.y * near / -local.z - r["offset"].y) / half_h)
+	# Texture u runs with the camera's right; the glass draws it at 1 - u.
+	var glass_u := 1.0 - (ndc.x + 1.0) * 0.5
+	var glass_v := (ndc.y + 1.0) * 0.5
+	var drawn_at := at * Vector3((glass_u - 0.5) * glass.x, (glass_v - 0.5) * glass.y, 0.0)
+	check("a thing in the room is drawn where its reflection is seen (%.4fm off)" % drawn_at.distance_to(through),
+			drawn_at.distance_to(through) < 0.0005)
+	check("and nothing is drawn from behind the glass", Mirror.reflection(at, glass,
+			Vector3(-3.4, 1.6, 2.2)).is_empty())
+
+
+func _test_every_venue_has_a_mirror_you_can_see_yourself_in() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	check("your own view never draws your own ghost",
+			studio.camera.cull_mask & Mirror.SELF_ONLY == 0)
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var mirror := studio.venue.get_node_or_null("Mirror") as Mirror
+		check("the %s has a mirror" % id, mirror != null)
+		if mirror == null:
+			continue
+		var at := mirror.global_transform
+		var half := studio.room_width * 0.5
+		check("inside the %s's footprint, on the floor plan's edge (%s)" % [id, at.origin],
+				absf(at.origin.x) < half and at.origin.z < Studio.ROOM_DEPTH * 0.5 + 0.3
+				and absf(at.origin.x) > half - 0.4)
+		check("facing into the room", at.basis.z.dot(Vector3(0, 0, Studio.MIX_POSITION_Z) - at.origin) > 0.0)
+		check("framed in the %s's own style (%d parts)" % [id, mirror.get_child_count()],
+				mirror.get_child_count() >= 4)
+		check("its camera draws you, and not the panels on your face",
+				mirror._camera.cull_mask & Mirror.SELF_ONLY != 0
+				and mirror._camera.cull_mask & Mirror.NOT_REFLECTED == 0)
+		check("and the glass is not in its own reflection", mirror._glass.layers == Mirror.NOT_REFLECTED)
+	# A panel brought to your face leaves the mirror; sent back to the room, it returns.
+	var panel := MeshInstance3D.new()
+	studio.screen_stage.add_child(panel)
+	check("a panel in front of your face is not reflected", panel.layers == Mirror.NOT_REFLECTED)
+	panel.reparent(studio)
+	check("and back in the room it is", panel.layers == 1)
+	panel.queue_free()
+
+	var presence := studio.presence
+	presence._make_reflection()
+	presence._sync_avatars()
+	var only_mirrors := presence.reflection.find_children("*", "VisualInstance3D", true, false).all(
+			func(v): return v.layers == Mirror.SELF_ONLY)
+	check("you have a ghost of your own, drawn only in mirrors", only_mirrors)
+	presence._process(0.016)
+	check("standing where your eye is", presence.reflection.head_position().is_equal_approx(
+			presence.head_node.global_position))
+	remove_child(studio)
+	studio.free()

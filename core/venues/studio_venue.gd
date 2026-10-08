@@ -245,3 +245,35 @@ func _dress_room() -> void:
 	rug.material_override = Materials.scanned(StandardMaterial3D.new(), "wool_boucle", "1k",
 			0.9, Color(0.20, 0.19, 0.19))
 	add_child(rug)
+
+
+## A tall walnut floor mirror, leant against the left wall the way one is in every live room:
+## top a few centimetres off the plaster, a backboard, and two feet on the parquet.
+func mirror_spot(glass: Vector2) -> Transform3D:
+	var lean := 0.06
+	var wall := -room_width * 0.5 + 0.05
+	var centre_y := 0.16 + glass.y * 0.5 * cos(lean)
+	# Bottom edge stood 13cm off the wall, the top leaning in by the lean.
+	var x := wall + 0.13 - glass.y * 0.5 * sin(lean)
+	return Transform3D(Basis(Vector3.UP, PI * 0.5) * Basis(Vector3.RIGHT, -lean),
+			Vector3(x, centre_y, 2.2))
+
+
+func _frame_mirror(mirror: Mirror) -> void:
+	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
+			Color(0.78, 0.68, 0.6))
+	Venue.frame_bars(mirror, 0.065, 0.045, 0.012, walnut)
+	var back := MeshInstance3D.new()
+	var board := BoxMesh.new()
+	board.size = Vector3(mirror.glass_size.x + 0.1, mirror.glass_size.y + 0.1, 0.012)
+	back.mesh = board
+	back.material_override = walnut
+	back.position = Vector3(0, 0, -0.03)
+	mirror.add_child(back)
+	# A thin brass fillet inside the wood, which is what makes a frame a frame and not a box.
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.78, 0.6, 0.32)
+	brass.metallic = 1.0
+	brass.roughness = 0.32
+	# Lapped 2mm over the glass, so its inner face is never in the wood's plane.
+	Venue.frame_bars(mirror, 0.01, 0.02, 0.016, brass, 0.002)

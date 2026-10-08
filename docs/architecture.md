@@ -249,9 +249,20 @@ is their camera.
 
 An avatar stays hidden until its participant has been heard from. A headless host has no head.
 
-Everyone is drawn as a big blue ghost: a 1.3 m lathe-turned body with a scalloped, drifting hem, two oversized heavy-lidded eyes and a pair of stubby arms. It turns with its owner's yaw, leans a little and rolls its pupils with their pitch, blinks, and bobs. The blue is shared; who it is shows in the glow round its edge, its name tag, its pointer beam (from the raised right arm) and the rim on what it holds. When its owner goes quiet the glow fades and the lids droop.
+Everyone is drawn as a big blue ghost: a lathe-turned body (modelled at 1.3m, drawn at 0.72 of
+that, so the dome is a hand above a standing person's head and the hem is at desk height) with a scalloped, drifting hem, two oversized heavy-lidded eyes and a pair of stubby arms. It turns with its owner's yaw, leans a little and rolls its pupils with their pitch, blinks, and bobs. The blue is shared; who it is shows in the glow round its edge, its name tag, its pointer beam (from the raised right arm) and the rim on what it holds. When its owner goes quiet the glow fades and the lids droop.
 Its body also hides within 0.6m of your own eye, because somebody standing inside you is
 noise, not information.
+
+**Mirrors.** Every venue has a mirror, framed in its style (walnut in the studio, neon on the
+grid, chalk in the chalk zone), on the left wall behind the treatment. It is a true planar
+mirror: a second camera at your eye reflected through the glass, with an off-axis frustum fitted
+to the glass and its near plane on it, rendered only while the glass is in view (`Mirror`,
+`core/venues/mirror.gd`). You see yourself because Presence keeps a ghost of you at your eye on
+render layer 20, which only mirror cameras draw. The panels that ride in front of your face in
+screen mode are on layer 19, which mirrors never draw, so they do not cover your reflection.
+In a headset the mirror is rendered from the centre eye, so it is flat rather than stereo. This
+is where customising your ghost will go.
 
 ### One hand per control, decided by the host
 

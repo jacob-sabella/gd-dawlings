@@ -47,6 +47,8 @@ func _ready() -> void:
 	# Near plane tight: in a headset your own hands come well inside the 0.02 a desk camera can
 	# get away with, and a hand clipping through its own controller is very hard to unsee.
 	head.near = 0.02
+	# Everything but your own ghost, which only mirrors draw. See core/venues/mirror.gd.
+	head.cull_mask = Mirror.MAIN_VIEW_MASK
 	add_child(head)
 
 	left = _build_hand(&"left_hand", "LeftHand")

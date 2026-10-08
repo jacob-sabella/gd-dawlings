@@ -33,6 +33,8 @@ var head_node: Node3D
 var frame: Node3D
 
 var _avatars: Dictionary = {}
+## You, as others see you, at your own eye, on a layer only mirrors draw. Null with no display.
+var reflection: Avatar = null
 var _publish_clock := 0.0
 var _by_key: Dictionary = {}
 var _scan_msec := -100000
@@ -60,7 +62,16 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		_make_reflection()
 	_sync_avatars()
+
+
+func _make_reflection() -> void:
+	reflection = Avatar.new()
+	reflection.name = "Reflection"
+	add_child(reflection)
+	reflection.only_in_mirrors()
 
 
 func _physics_process(delta: float) -> void:
@@ -80,6 +91,8 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	var eye := head_node.global_position if head_node != null else Vector3(0, 1e6, 0)
+	if reflection != null and head_node != null:
+		reflection.snap(head_node.global_transform)
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -165,6 +178,10 @@ func _on_hold_refused(key: String, holder: int) -> void:
 # --- in -----------------------------------------------------------------------------------
 
 func _sync_avatars() -> void:
+	if reflection != null:
+		var me = Session.local_participant()
+		reflection.dress(Session.local_name, me.colour if me != null else Session.PALETTE[0],
+				0, Session.role != Session.Role.GUEST)
 	for id in _avatars.keys():
 		if not Session.participants.has(id) or id == Session.local_peer_id:
 			_avatars[id].queue_free()
@@ -580,6 +597,19 @@ void fragment() {
 		(_dot.material_override as StandardMaterial3D).albedo_color = colour.lightened(0.3)
 		_beam_material.albedo_color = Color(colour, 0.55)
 		_rim.tint = colour
+
+	## Drawn by mirrors and nothing else, casting no shadow on the desk in front of you, and
+	## without the name over its head -- you know who you are.
+	func only_in_mirrors() -> void:
+		for node in find_children("*", "VisualInstance3D", true, false):
+			var drawn := node as VisualInstance3D
+			drawn.layers = Mirror.SELF_ONLY
+			if drawn is GeometryInstance3D:
+				(drawn as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_tag.visible = false
+		_caption.visible = false
+		_beam.visible = false
+		_dot.visible = false
 
 	func set_caption(text: String) -> void:
 		if _caption.text != text:

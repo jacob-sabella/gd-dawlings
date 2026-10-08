@@ -100,3 +100,47 @@ func footprint_corners() -> PackedVector2Array:
 	var back := -Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.05
 	return PackedVector2Array([Vector2(-hw, back), Vector2(hw, back), Vector2(hw, front),
 			Vector2(-hw, front)])
+
+
+## A mirror in this venue's style, where this venue keeps it. See core/venues/mirror.gd.
+func make_mirror(env: Environment) -> Mirror:
+	var m := Mirror.new()
+	m.name = "Mirror"
+	m.rich = rich
+	m.environment_from = env
+	m.transform = mirror_spot(m.glass_size)
+	_frame_mirror(m)
+	return m
+
+
+## Where the glass's centre stands, facing into the room. By default on the left wall behind
+## the treatment, facing across the room: a step back and a turn left from the mix position,
+## clear of every piece of gear in the floor plan.
+func mirror_spot(glass: Vector2) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, PI * 0.5),
+			Vector3(-room_width * 0.5 + 0.16, 0.14 + glass.y * 0.5, 2.2))
+
+
+## Build the frame round `mirror`'s glass, as its children. The glass faces +Z and is centred
+## on the mirror; a frame stands proud of it, never in front of the glass's face.
+func _frame_mirror(_mirror: Mirror) -> void:
+	pass
+
+
+## Four bars round the glass, `bar` wide and `depth` deep, set back so their faces sit `proud`
+## in front of the glass, and `inset` over its edge. Shared by the venues whose frames are solid.
+static func frame_bars(mirror: Mirror, bar: float, depth: float, proud: float,
+		material: Material, inset := 0.0) -> void:
+	var w := mirror.glass_size.x - inset * 2.0
+	var h := mirror.glass_size.y - inset * 2.0
+	for spec in [[Vector3(0, (h + bar) * 0.5, 0), Vector3(w + bar * 2.0, bar, depth)],
+			[Vector3(0, -(h + bar) * 0.5, 0), Vector3(w + bar * 2.0, bar, depth)],
+			[Vector3((w + bar) * 0.5, 0, 0), Vector3(bar, h, depth)],
+			[Vector3(-(w + bar) * 0.5, 0, 0), Vector3(bar, h, depth)]]:
+		var piece := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = spec[1]
+		piece.mesh = box
+		piece.material_override = material
+		piece.position = spec[0] + Vector3(0, 0, proud - depth * 0.5)
+		mirror.add_child(piece)

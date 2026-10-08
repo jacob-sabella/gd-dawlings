@@ -318,6 +318,27 @@ func _tune_renderer() -> void:
 ##
 ## `persist` false for a venue asked for on the command line, which is a look for one run and
 ## not a change of mind.
+## What rides in front of your face in screen mode is seen, never reflected: in a mirror it
+## would be the backs of the panels, over your own face. Whatever moves back into the room is
+## reflected again. See core/venues/mirror.gd.
+func _keep_out_of_mirrors(node: Node) -> void:
+	var drawn := node as VisualInstance3D
+	if drawn == null or screen_stage == null or not is_instance_valid(screen_stage):
+		return
+	if screen_stage.is_ancestor_of(drawn):
+		if drawn.layers == 1:
+			drawn.layers = Mirror.NOT_REFLECTED
+			drawn.set_meta(&"kept_out_of_mirrors", true)
+	elif drawn.has_meta(&"kept_out_of_mirrors"):
+		drawn.layers = 1
+		drawn.remove_meta(&"kept_out_of_mirrors")
+
+
+func _exit_tree() -> void:
+	if get_tree().node_added.is_connected(_keep_out_of_mirrors):
+		get_tree().node_added.disconnect(_keep_out_of_mirrors)
+
+
 func set_venue(id: StringName, persist := true) -> void:
 	if medium == Presentation.Medium.AR:
 		return
@@ -335,6 +356,7 @@ func set_venue(id: StringName, persist := true) -> void:
 	venue.dress(env, key_light)
 	world_env.environment = env
 	add_child(venue)
+	venue.add_child(venue.make_mirror(env))
 	for i in _lamps.size():
 		if i < PRACTICALS.size():
 			_lamps[i].light_color = venue.lamp_colour(i, PRACTICALS[i][1])
@@ -675,6 +697,8 @@ func _build_anchors() -> void:
 	if medium == Presentation.Medium.SCREEN:
 		camera = Camera3D.new()
 		camera.fov = ROOM_FOV
+		# Everything but your own ghost, which only mirrors draw. See core/venues/mirror.gd.
+		camera.cull_mask = Mirror.MAIN_VIEW_MASK
 
 		camera.near = 0.02
 		add_child(camera)
@@ -694,6 +718,8 @@ func _build_anchors() -> void:
 	screen_stage.name = "ScreenStage"
 	screen_stage.position = Vector3(0, 0, -0.75)
 	head.add_child(screen_stage)
+	if not get_tree().node_added.is_connected(_keep_out_of_mirrors):
+		get_tree().node_added.connect(_keep_out_of_mirrors)
 
 	room_anchor = RoomAnchor.new()
 	room_anchor.name = "RoomAnchor"

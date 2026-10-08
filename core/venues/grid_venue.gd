@@ -415,3 +415,39 @@ static func _barycentric(tris: PackedVector3Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
+
+
+## A free-standing mirror outlined in two neon tubes, cyan outside pink, on a black lacquer
+## stand -- the dressing-room mirror of a club that only exists at 3am in 1986.
+func _frame_mirror(mirror: Mirror) -> void:
+	var lacquer := StandardMaterial3D.new()
+	lacquer.albedo_color = Color(0.02, 0.015, 0.03)
+	lacquer.roughness = 0.12
+	lacquer.metallic = 0.4
+	Venue.frame_bars(mirror, 0.05, 0.04, 0.008, lacquer)
+	for tube in [[0.0, 0.012, Color(1.0, 0.3, 0.85)], [0.05, 0.010, Color(0.1, 0.9, 1.0)]]:
+		var neon := StandardMaterial3D.new()
+		neon.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		neon.albedo_color = tube[2] * 2.2
+		# The pink just inside the glass's edge; the cyan round the outside of the lacquer.
+		Venue.frame_bars(mirror, tube[1], tube[1], 0.016, neon, -tube[0] + 0.004)
+	var back := MeshInstance3D.new()
+	var board := BoxMesh.new()
+	# Inside the lacquer's outer edge, never flush with it.
+	board.size = Vector3(mirror.glass_size.x + 0.08, mirror.glass_size.y + 0.08, 0.014)
+	back.mesh = board
+	back.material_override = lacquer
+	back.position = Vector3(0, 0, -0.028)
+	mirror.add_child(back)
+	# Two splayed legs behind it, down to the floor.
+	var floor_y := -mirror.transform.origin.y
+	for side in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var rod := BoxMesh.new()
+		var reach := Vector3(side * 0.22, floor_y, -0.32)
+		var from := Vector3(side * (mirror.glass_size.x * 0.5 - 0.04), 0.0, -0.04)
+		rod.size = Vector3(0.025, 0.025, (reach - from).length())
+		leg.mesh = rod
+		leg.material_override = lacquer
+		leg.transform = Transform3D(Basis.looking_at(reach - from, Vector3.UP), from + (reach - from) * 0.5)
+		mirror.add_child(leg)
