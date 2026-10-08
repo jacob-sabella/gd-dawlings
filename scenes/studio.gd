@@ -379,8 +379,22 @@ func _build_anchors() -> void:
 	# reason it exists. See body_frame.gd.
 	body = BodyFrame.new()
 	body.name = "BodyFrame"
-	body.head = head
 	add_child(body)
+	if medium == Presentation.Medium.SCREEN:
+		# On a monitor the camera is NOT a head, and pretending it is makes people ill. The
+		# orbit camera swings on a two-metre boom; letting the body take its position meant a
+		# mouse drag carried the console bodily around the room on the end of that boom,
+		# through the furniture, while the mixer stood still. A drag on a screen is a LOOK.
+		#
+		# So the body is a mix position instead: a fixed standing spot in the room at eye
+		# height, facing the way the room faces. Summoned gear lands in front of it and stays
+		# there, and the camera is free to fly around and look at it from anywhere. The gear
+		# is still placed from a body -- it is just not a body that chases the lens.
+		body.position = Vector3(0, ergonomics.eye_height, 0)
+	else:
+		# In AR and VR it really is a head, and following it is the whole point. See
+		# body_frame.gd for the deadzone that keeps a glance from dragging the room.
+		body.head = head
 
 	# A light that travels with the person. Summoned gear leaves the room's lamps behind -- the
 	# first rack pulled to arm's length arrived in total darkness, which is both useless and a

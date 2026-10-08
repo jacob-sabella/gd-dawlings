@@ -3500,7 +3500,7 @@ func _halo_arm(points: PackedVector3Array, width: float) -> float:
 
 func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
 	var erg := Ergonomics.standing()
-	var pitch := ChannelStrip.HEIGHT + ConsoleSurface.ROW_GAP
+	var pitch := ChannelStrip.HEIGHT * cos(deg_to_rad(ConsoleSurface.PANEL_TILT)) + ConsoleSurface.ROW_GAP
 
 	# The arithmetic first, where it can be checked against a protractor rather than a render.
 	close_to("one head-turn each way is two radii of arc",
@@ -3510,9 +3510,9 @@ func _test_a_wide_desk_bends_round_you_instead_of_past_you() -> void:
 	check("a bigger circle also makes room for another row",
 			erg.wrap_rows(1.0, pitch) > erg.wrap_rows(0.5, pitch))
 	check("one row always, even when nothing fits", erg.wrap_rows(0.01, pitch) >= 1)
-	check("capacity is whole strips, never a fraction of one",
-			is_equal_approx(fmod(erg.wrap_capacity(0.8, pitch, ChannelStrip.WIDTH)
-					/ ChannelStrip.WIDTH, 1.0), 0.0))
+	var in_strips := erg.wrap_capacity(0.8, pitch, ChannelStrip.WIDTH) / ChannelStrip.WIDTH
+	check("capacity is whole strips, never a fraction of one (%.3f)" % in_strips,
+			absf(in_strips - roundf(in_strips)) < 0.001)
 
 	# THE number this whole exercise turns on: at arm's length a neck sweeps about a metre of
 	# arc. Seventeen strips. Anyone who expects a wrap to swallow a 90-track session in one

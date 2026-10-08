@@ -137,10 +137,11 @@ func _rebuild() -> void:
 
 	if compact and width >= WRAP_MIN_WIDTH:
 		var erg := Ergonomics.current
-		var pitch := ChannelStrip.HEIGHT + ROW_GAP
+		var pitch := _row_pitch()
 		_wrap = erg.wrap_radius_for(width, pitch, ChannelStrip.WIDTH, SMALLEST_CAP)
 		_rows = erg.wrap_rows(_wrap, pitch)
-		_row_span = floor(erg.wrap_span(_wrap) / ChannelStrip.WIDTH) * ChannelStrip.WIDTH
+		_row_span = floor(erg.wrap_span_at(_wrap, -float(_rows - 1) * pitch * 0.5, true)
+				/ ChannelStrip.WIDTH) * ChannelStrip.WIDTH
 		# Reported, not hidden. The desk is drawn either way -- a mixer that refuses to appear
 		# is worse than one you have to turn your head for -- but a session this wide has
 		# outgrown the body in front of it and the honest answer is a narrower bank.
@@ -324,9 +325,21 @@ func _seat(x: float, y: float, z: float) -> Transform3D:
 		row = clampi(int(floor(along / _row_span)), 0, _rows - 1)
 		along -= float(row) * _row_span
 	var theta := (along - _row_span * 0.5) / _wrap
-	var lift := float(row) * (ChannelStrip.HEIGHT + ROW_GAP)
-	return Transform3D(Basis(Vector3.UP, -theta), Vector3(
+	var lift := float(row) * _row_pitch()
+	# Tilted, exactly as the flat desk is tilted, and leaving this out is what made the first
+	# wrapped console unbearable: upright strips at face height on a closed circle are not a
+	# desk you lean over, they are a cell you stand in. The tilt is also what makes the rows
+	# affordable -- a panel laid back sixty degrees is half as tall in your field of view, so
+	# the tiers stack inside the same glance.
+	var lay := Basis(Vector3.RIGHT, -deg_to_rad(PANEL_TILT))
+	return Transform3D(Basis(Vector3.UP, -theta) * lay, Vector3(
 			sin(theta) * (_wrap - z), y + lift, _wrap - cos(theta) * (_wrap - z)))
+
+
+## How much height one tier of a wrapped desk costs. The panel's own height, foreshortened by
+## its lay-back, plus a seam.
+func _row_pitch() -> float:
+	return ChannelStrip.HEIGHT * cos(deg_to_rad(PANEL_TILT)) + ROW_GAP
 
 
 ## The three full-width slabs: the panel backing, the desk body and the armrest.

@@ -289,13 +289,41 @@ func wrap_radius_for(width: float, pitch: float, module: float, smallest_cap: fl
 	return ceiling
 
 
+## The arc a head-turn reaches on a row sitting `rise` above (or below) the middle of the arc.
+##
+## Not the same as `wrap_span`, and the difference is the one the tilted desk walked into. The
+## gaze drop tips the whole circle about the eye, and a tilted circle swings its LOW ends
+## outward: on a three-tier desk the bottom row reads about seven degrees further round than
+## the flat geometry says, which is how a layout that measured 53 degrees rendered at 65.
+##
+## Solved by bisection. The closed form exists and is longer than the loop.
+func wrap_span_at(radius: float, rise: float, touched: bool) -> float:
+	var drop := deg_to_rad(gaze_down if touched else gaze_down * 0.4)
+	var limit := deg_to_rad(clampf(head_turn, 5.0, 85.0))
+	var lo := 0.0
+	var hi := PI * 0.5
+	for _i in 28:
+		var mid := (lo + hi) * 0.5
+		var swung := atan2(radius * sin(mid), rise * sin(drop) + radius * cos(mid) * cos(drop))
+		if swung > limit:
+			hi = mid
+		else:
+			lo = mid
+	return 2.0 * radius * lo
+
+
 ## Total arc, over every row, available at `radius` -- rounded DOWN to whole modules per row so
 ## a row ends on a strip boundary rather than halfway through one.
+##
+## Every row gets the WORST row's span, not its own. Rows of different widths would hold
+## different numbers of strips, and a desk whose tiers end in different places is a desk you
+## cannot count along. One span, set by the bottom tier, is the cheaper answer.
 func wrap_capacity(radius: float, pitch: float, module: float) -> float:
-	var per_row := wrap_span(radius)
+	var rows := wrap_rows(radius, pitch)
+	var per_row := wrap_span_at(radius, -float(rows - 1) * pitch * 0.5, true)
 	if module > 0.0:
 		per_row = floor(per_row / module) * module
-	return per_row * float(wrap_rows(radius, pitch))
+	return per_row * float(rows)
 
 
 const WRAP_SEARCH_STEP := 0.01
