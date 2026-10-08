@@ -9,6 +9,8 @@ extends ControlAffordance
 ## passed on the way to the one that was meant.
 
 signal pressed(choice: int)
+## The wheel moved the window to another choice.
+signal chosen(choice: int)
 
 ## The window's size on the panel, centred on this node.
 var size := Vector2(0.07, 0.016)
@@ -98,6 +100,7 @@ func _on_nudge(notches: int, _fine: bool) -> bool:
 			at = i
 	choice = int(list[posmod(at + signi(notches), list.size())][0])
 	refresh()
+	chosen.emit(choice)
 	return true
 
 

@@ -63,6 +63,15 @@ var _structure_in_flight := false
 ## Seconds after `open` at which to ask Reaper for its whole state again. See `open`.
 var _refresh_after: Array = []
 var _refresh_clock := 0.0
+## What Reaper has said and this has not yet applied, oldest first, and how far through it is.
+##
+## A control-surface refresh is fifty thousand messages arriving at once -- every parameter of
+## every plugin in the bank -- and applied in one frame they froze the room for two seconds.
+## They are applied a few milliseconds' worth a frame instead, so a busy project settles over a
+## handful of frames rather than stopping the world while it does.
+var _inbox: Array[Dictionary] = []
+var _inbox_at := 0
+const APPLY_BUDGET_USEC := 6000
 
 
 func _ready() -> void:
@@ -177,6 +186,8 @@ func can(capability: StringName) -> bool:
 	return true
 
 
+
+
 func _process(delta: float) -> void:
 	if _peer and not _refresh_after.is_empty():
 		# Clamped: the first frame after a long build reports the whole build as its delta.
@@ -189,8 +200,8 @@ func _process(delta: float) -> void:
 		_poll_timeline(delta)
 		_poll_structure(delta)
 	if _peer:
-		for m in _peer.poll():
-			_apply(m["address"], m["args"])
+		_inbox.append_array(_peer.poll())
+		_apply_inbox()
 
 	tick_replication(delta)
 
@@ -201,6 +212,25 @@ func _process(delta: float) -> void:
 
 
 # --- inbound ------------------------------------------------------------------------------
+
+func catching_up() -> bool:
+	return _inbox_at < _inbox.size()
+
+
+## Apply what has arrived, oldest first, until this frame's share of time is spent. Checked
+## every few dozen messages rather than every one: reading the clock is not free either.
+func _apply_inbox() -> void:
+	var until := Time.get_ticks_usec() + APPLY_BUDGET_USEC
+	while _inbox_at < _inbox.size():
+		var m := _inbox[_inbox_at]
+		_inbox_at += 1
+		_apply(m["address"], m["args"])
+		if _inbox_at % 32 == 0 and Time.get_ticks_usec() > until:
+			break
+	if _inbox_at >= _inbox.size():
+		_inbox.clear()
+		_inbox_at = 0
+
 
 ## Reaper speaks the project's own mix vocabulary almost exactly -- see core/daw/mix_wire.gd
 ## for why that is not a coincidence -- so inbound parsing is a delegation rather than a second

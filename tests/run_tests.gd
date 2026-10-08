@@ -79,6 +79,9 @@ func _ready() -> void:
 	_test_a_tablet_turns_over_to_the_plugins_own_window()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
+	_test_the_rack_holds_one_track_and_follows_the_selection()
+	_test_the_rack_rebuilds_only_for_its_own_chain()
+	_test_a_flood_from_reaper_is_taken_in_over_frames()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
 	_test_every_grab_tab_is_clipped_to_its_own_gear()
 	_test_a_loom_lies_on_the_floor_and_misses_the_furniture()
@@ -2459,6 +2462,7 @@ func _test_a_tablet_follows_its_plugin_along_the_chain() -> void:
 	var wet: float = state.fx(6, at).wet
 	tablet.fx_name = "Nothing By This Name"
 	tablet._on_fx_shape_changed(6, at)
+	tablet._run_later()
 	tablet._process(0.0)
 	check("a plugin that has gone is shown as gone", tablet.lost and tablet._lost_label.visible)
 	tablet._mix.turned.emit(0.1)
@@ -2819,6 +2823,171 @@ func _test_a_banked_control_still_moves() -> void:
 	desk.queue_free()
 
 
+## A fifty-plugin project racked whole was six bays across and twice the frame time. The rack
+## holds one track's chain: whichever track is selected in Reaper, or whichever the window over
+## it is scrolled to, and a track with nothing on it says so rather than standing empty.
+func _test_the_rack_holds_one_track_and_follows_the_selection() -> void:
+	DAW.use(OfflineBackend.new())
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack._process(0.0)
+
+	var with_plugins: Array = []
+	var bare := -1
+	for t in DAW.state.track_indices():
+		if DAW.state.track(t).plugins().is_empty():
+			bare = t if bare < 0 else bare
+		else:
+			with_plugins.append(t)
+	check("the stand-in has two tracks with plugins (%d)" % with_plugins.size(), with_plugins.size() >= 2)
+	var racked := func() -> Array:
+		var out: Array = []
+		for n in rack.find_children("*", "Node3D", true, false):
+			if n is RackUnit and not n.is_queued_for_deletion():
+				out.append([(n as RackUnit).track_index, (n as RackUnit).fx_index])
+		return out
+	var first: int = with_plugins[0]
+	check("with nothing selected it racks the first track with plugins (%d)" % rack.track_index,
+			rack.track_index == first)
+	var want: Array = []
+	for i in DAW.state.track(first).plugins():
+		want.append([first, i])
+	check("and exactly that track's chain, in order", racked.call() == want)
+
+	var other: int = with_plugins[1]
+	DAW.state.set_track_field(other, &"selected", true)
+	rack._process(0.0)
+	check("selecting a track in Reaper racks it (%d)" % rack.track_index, rack.track_index == other)
+	check("and only its plugins", racked.call().all(func(u): return u[0] == other))
+	check("the window over the rack says it is following Reaper", rack._picker.lit)
+
+	rack._picker.choice = first
+	rack._picker.chosen.emit(first)
+	rack._process(0.0)
+	check("scrolling the window racks another track", rack.track_index == first)
+	check("and then it is no longer following", not rack._picker.lit)
+
+	var banked: MeshBank = rack.find_child("Faceplates", true, false)
+	if banked != null:
+		check("the faceplates are drawn as one bank (%d plates)" % banked.multimesh.instance_count,
+				banked.multimesh.instance_count == racked.call().size())
+	var bodies: MeshBank = rack.find_child("ButtonBodies", true, false)
+	check("so are the power buttons", bodies != null and bodies.multimesh.instance_count == racked.call().size())
+
+	if bare >= 0:
+		rack.show_track(bare)
+		rack._process(0.0)
+		check("a track with no plugins racks no units", racked.call().is_empty())
+		var empty: Label3D = rack.find_child("Empty", true, false)
+		check("and says so", empty != null and empty.text == "NO PLUGINS ON THIS TRACK")
+		check("and keeps the window to scroll away from it", is_instance_valid(rack._picker))
+	DAW.state.set_track_field(other, &"selected", false)
+	rack.queue_free()
+	remove_child(rack)
+
+
+## Reaper refreshing its control surface is some fifty thousand messages at once. Applied in one
+## frame they stopped the room for two seconds; they are applied a few milliseconds' worth a
+## frame, gear waits for them to finish before rebuilding, and a patchbay asked a thousand times
+## in a frame whether its sends changed looks once.
+func _test_a_flood_from_reaper_is_taken_in_over_frames() -> void:
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	for i in 60000:
+		reaper._inbox.append({"address": "/track/1/fx/1/fxparam/%d/value" % (i % 32 + 1), "args": [0.25]})
+	reaper._inbox.append({"address": "/track/1/fx/1/fxparam/7/value", "args": [0.75]})
+	var t0 := Time.get_ticks_usec()
+	reaper._apply_inbox()
+	var took := (Time.get_ticks_usec() - t0) / 1000.0
+	check("one frame takes in only its share (%.1fms, %d of 60001)" % [took, reaper._inbox_at],
+			took < 20.0 and reaper._inbox_at > 0 and reaper._inbox_at < 60001)
+	check("and says it is still catching up", reaper.catching_up())
+	var frames := 1
+	while reaper.catching_up() and frames < 2000:
+		reaper._apply_inbox()
+		frames += 1
+	check("the rest arrives over the next frames (%d)" % frames, not reaper.catching_up() and frames > 1)
+	close_to("in order: the last word is the one that stands",
+			float(reaper.state.fx(1, 1).params.get(7, -1.0)), 0.75)
+
+	# Gear holds its rebuild while the DAW is catching up -- but not for ever.
+	DAW.use(reaper, false)
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	reaper._inbox.append({"address": "/track/1/volume", "args": [0.5]})
+	bay.mark_dirty()
+	bay._process(0.0)
+	check("a rebuild waits while news is still arriving", bay._dirty)
+	bay._dirty_since -= Surface.HOLD_FOR_NEWS_MSEC + 1
+	bay._process(0.0)
+	check("and stops waiting after a while", not bay._dirty)
+	reaper._inbox.clear()
+	reaper._inbox_at = 0
+	bay.mark_dirty()
+	bay._process(0.0)
+	check("with nothing arriving it rebuilds at once", not bay._dirty)
+
+	for i in 1000:
+		DAW.track_changed.emit(i % 8, &"sends")
+	check("a thousand sends in a frame are one look at the bay (%d)" % bay._later.size(),
+			bay._later.size() == 1)
+	bay._run_later()
+	bay.queue_free()
+	remove_child(bay)
+	DAW.use(OfflineBackend.new())
+
+
+## What made a busy project hitch: every plugin anywhere reporting anything rebuilt the rack. A
+## parameter list arriving, or a plugin on another track, is not a reason; the racked chain
+## gaining, losing or swapping a plugin is.
+func _test_the_rack_rebuilds_only_for_its_own_chain() -> void:
+	DAW.use(OfflineBackend.new())
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack._process(0.0)
+	var mine := rack.track_index
+	var elsewhere := -1
+	for t in DAW.state.track_indices():
+		if t != mine and not DAW.state.track(t).plugins().is_empty():
+			elsewhere = t
+			break
+	var slot: int = DAW.state.track(mine).plugins()[0]
+
+	rack._dirty = false
+	for i in 50:
+		DAW.fx_changed.emit(mine, slot)
+	check("fifty reports in a frame are looked at once (%d checks)" % rack._later.size(),
+			rack._later.size() == 1)
+	rack._run_later()
+	check("a plugin on the racked track reporting in does not rebuild it", not rack._dirty)
+	if elsewhere >= 0:
+		DAW.fx_changed.emit(elsewhere, DAW.state.track(elsewhere).plugins()[0])
+		rack._run_later()
+		check("nor does one on another track", not rack._dirty)
+	var was := DAW.state.fx(mine, slot).name
+	DAW.state.fx(mine, slot).name = was + " II"
+	DAW.fx_changed.emit(mine, slot)
+	rack._run_later()
+	check("a different plugin in the racked chain does", rack._dirty)
+	DAW.state.fx(mine, slot).name = was
+	rack.queue_free()
+	remove_child(rack)
+
+	# And gear that draws no plugins does not rebuild for one at all. The console and patchbay
+	# did, for every plugin's every report, and that was most of the hitch.
+	for pair in [["console", ConsoleSurface], ["patchbay", PatchbaySurface]]:
+		var gear: Surface = pair[1].new()
+		add_child(gear)
+		gear._process(0.0)
+		gear._dirty = false
+		DAW.fx_changed.emit(mine, slot)
+		check("a plugin reporting in leaves the %s alone" % pair[0], not gear._dirty)
+		gear.queue_free()
+		remove_child(gear)
+
+
 func _test_nothing_on_a_faceplate_overlaps_or_overhangs() -> void:
 	# What this does NOT pin is where the knob row looks best. That was settled by a
 	# photograph, as it has to be. What it pins is the BRACKET the row has to stay inside,
@@ -2830,8 +2999,15 @@ func _test_nothing_on_a_faceplate_overlaps_or_overhangs() -> void:
 	add_child(rack)
 	rack._process(0.0)
 
-	var units := rack.find_children("*", "Node3D", true, false).filter(
-			func(n): return n is RackUnit)
+	# Every plugin in the stand-in, a track's chain at a time, as the rack shows them.
+	var units: Array = []
+	for t in DAW.state.track_indices():
+		if DAW.state.track(t).plugins().is_empty():
+			continue
+		rack.show_track(t)
+		rack._process(0.0)
+		units.append_array(rack.find_children("*", "Node3D", true, false).filter(
+				func(n): return n is RackUnit and not n.is_queued_for_deletion()))
 	check("the stand-in session racks some units", units.size() >= 4)
 
 	var half := RackUnit.U * RackUnit.UNITS_TALL * 0.5

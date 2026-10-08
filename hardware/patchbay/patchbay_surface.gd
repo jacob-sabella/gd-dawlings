@@ -76,7 +76,14 @@ func _ready() -> void:
 func _on_track_changed(_index: int, field: StringName) -> void:
 	# A level is a level: the plug says it when asked. Only a change to what is patched, or to
 	# how a row is labelled, changes the bay.
-	if field in [&"sends", &"name", &"colour"] and _shape_key() != _built_key:
+	# Looked at once a frame rather than per message: a refresh from Reaper is a thousand of
+	# these in one go, and the key is every track and every send.
+	if field in [&"sends", &"name", &"colour"]:
+		_once_this_frame(_check_shape)
+
+
+func _check_shape() -> void:
+	if _shape_key() != _built_key:
 		mark_dirty()
 
 

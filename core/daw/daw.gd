@@ -115,6 +115,11 @@ func is_live() -> bool:
 	return backend != null and backend.is_live()
 
 
+## See DAWBackend.catching_up.
+func catching_up() -> bool:
+	return backend != null and backend.catching_up()
+
+
 func summary() -> String:
 	if backend == null:
 		return "no backend"

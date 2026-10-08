@@ -112,6 +112,14 @@ func is_live() -> bool:
 	return false
 
 
+## True while the DAW has said more than this has yet taken in: a refresh from Reaper is tens of
+## thousands of messages, applied a few milliseconds' worth a frame. Gear holds its rebuilds
+## until it is false, so a busy project is built once when it has arrived, not once a frame
+## as each piece of it does.
+func catching_up() -> bool:
+	return false
+
+
 ## One line for the corner readout. Every failure mode of this project looks identical from the
 ## inside -- a silent port, a wrong bank size, an idle DAW -- so this says which one it is.
 func summary() -> String:

@@ -192,8 +192,19 @@ func _on_value_changed() -> void:
 	# transform rather than composed by hand: the knob sits under a strip under a panel under
 	# a tilted surface, and reproducing that chain here would be a second definition of where
 	# the knob is, drifting against the first.
-	if _slot >= 0 and _aim != null:
+	if _slot >= 0 and _aim != null and is_visible_in_tree():
 		body_bank.move_slot(_slot, body_bank.global_transform.affine_inverse() * _aim.global_transform)
+
+
+## A banked knob is drawn by the bank, not by this node, so hiding the node has to take its slot
+## out of the picture too: a rack unit's spare knobs are hidden, and they were still on the plate.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_VISIBILITY_CHANGED or _slot < 0 or _aim == null:
+		return
+	if is_visible_in_tree():
+		_on_value_changed()
+	else:
+		body_bank.move_slot(_slot, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
 
 
 func hint() -> String:

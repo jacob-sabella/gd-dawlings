@@ -74,6 +74,10 @@ func wrap_radius() -> float:
 
 
 var _dirty := true
+## When it was first marked dirty since it was last built; -1 when it is not.
+var _dirty_since := -1
+const HOLD_FOR_NEWS_MSEC := 1500
+var _later: Array[Callable] = []
 
 
 func _ready() -> void:
@@ -95,8 +99,14 @@ func _process(_delta: float) -> void:
 	# every control it built, so one landing mid-drag leaves the hand holding nothing and the
 	# rest of the gesture going nowhere. Reaper re-announces things that have not changed often
 	# enough that this is not an edge case: a live drag was being cut off a second in.
-	if _dirty and not _anything_held():
+	#
+	# And while the DAW is still catching up on a flood of news, up to a point: rebuilt once a
+	# frame as a refresh trickled in, the patchbay alone took the room to thirty frames a second
+	# for most of a second. Never for longer than HOLD_FOR_NEWS, so a DAW that never stops
+	# talking cannot keep gear from ever being built.
+	if _dirty and not _anything_held() and not _waiting_for_news():
 		_dirty = false
+		_dirty_since = -1
 		_rebuild()
 		rebuilt.emit()
 
@@ -116,15 +126,47 @@ func _anything_held() -> bool:
 
 
 func mark_dirty() -> void:
+	if _dirty_since < 0:
+		_dirty_since = Time.get_ticks_msec()
 	_dirty = true
+
+
+func _waiting_for_news() -> bool:
+	return DAW.catching_up() and _dirty_since >= 0 \
+			and Time.get_ticks_msec() - _dirty_since < HOLD_FOR_NEWS_MSEC
+
+
+## Run `check` once, at the end of this frame, however many times it is asked for in it.
+##
+## For a handler that has to look at the whole session to decide anything. Reaper refreshing
+## its control surface sends some fifty thousand messages in a frame -- a thousand of them
+## sends, a thousand plugin names -- and a patchbay that measured every track's sends for each
+## one spent two seconds deciding, a thousand times over, that nothing had changed.
+func _once_this_frame(check: Callable) -> void:
+	if _later.has(check):
+		return
+	if _later.is_empty():
+		_run_later.call_deferred()
+	_later.append(check)
+
+
+func _run_later() -> void:
+	var due := _later
+	_later = []
+	for check in due:
+		if check.is_valid():
+			check.call()
 
 
 func _on_shape_changed(_index: int) -> void:
 	mark_dirty()
 
 
+## A plugin changed. Nothing here by default: only gear that draws plugins has a reason to
+## listen, and rebuilding on every one was the half-second hitch in a busy project -- each
+## plugin reporting its parameters in rebuilt the whole console and patchbay, which show none.
 func _on_fx_shape_changed(_track_index: int, _fx_index: int) -> void:
-	mark_dirty()
+	pass
 
 
 func _on_connection_changed() -> void:

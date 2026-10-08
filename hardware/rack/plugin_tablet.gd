@@ -178,7 +178,13 @@ func _shape_key() -> String:
 	return "%s|%d|%d|%d|%s|%s" % [fx_name, count, page_offset, track_index, lost, showing_window]
 
 
+## Looked at once a frame: Reaper names a thousand plugins in one refresh, and finding this
+## one again is a walk through all of them.
 func _on_fx_shape_changed(_t: int, _fx: int) -> void:
+	_once_this_frame(_check_plugin)
+
+
+func _check_plugin() -> void:
 	var was := [track_index, fx_index]
 	find_plugin()
 	if [track_index, fx_index] != was or _shape_key() != _built_shape:
@@ -191,7 +197,7 @@ func _on_track_changed(_index: int, field: StringName) -> void:
 	# A key patched or pulled anywhere is a send on the track doing the keying; names and
 	# colours are the title strip's.
 	if field in [&"sends", &"name", &"colour"]:
-		refresh()
+		_once_this_frame(refresh)
 
 
 func _rebuild() -> void:

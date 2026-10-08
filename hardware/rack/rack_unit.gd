@@ -68,6 +68,14 @@ var fx_index: int = 0
 ## Which eight parameters the knobs currently mean. Always a multiple of MAX_KNOBS.
 var page_offset := 0
 
+## Where the faceplates, knobs and power buttons are drawn, if the rack gave this unit somewhere:
+## a dozen units is a dozen identical plates and a hundred identical knobs, one object each. Set
+## before the unit enters the tree; the rack commits them once every unit has claimed its slots.
+var panel_bank: MeshBank
+var knob_bank: MeshBank
+var body_bank: MeshBank
+var lamp_bank: MeshBank
+
 var _knobs: Array[Knob] = []
 var _bypass: PanelButton
 var _name_label: Label3D
@@ -137,16 +145,23 @@ func _ready() -> void:
 	# The faceplate, ears and mounting hardware as one authored part. The ears are not bolted
 	# on: the ends of a rack panel ARE its ears, with oblong holes through them, which is what
 	# the four raised plates this used to draw were getting wrong.
-	var panel := Part.build(
-		MESH_PATH,
-		Materials.chassis(),
-		{"screw": Materials.brushed_metal()},
-	)
+	var panel: Node3D = null
+	if panel_bank != null:
+		panel = Node3D.new()
+		panel.name = "Panel"
+	else:
+		panel = Part.build(
+			MESH_PATH,
+			Materials.chassis(),
+			{"screw": Materials.brushed_metal()},
+		)
 	if panel != null:
 		# Modelled standing, so no correcting rotation -- only the shift that puts its front
 		# face on z = 0, where every knob and label on this unit was laid out against.
 		panel.position = Vector3(0, 0, -0.006)
 		add_child(panel)
+		if panel_bank != null:
+			panel_bank.place(panel, Color.WHITE)
 	else:
 		add_child(_stand_in(h))
 
@@ -180,6 +195,8 @@ func _ready() -> void:
 
 	# A rack is the furthest thing from the seat that has buttons this small on it.
 	_bypass = PanelButton.new()
+	_bypass.body_bank = body_bank
+	_bypass.lamp_bank = lamp_bank
 	_bypass.hit_pad = RACK_HIT_PAD
 	_bypass.led_colour = Color(0.4, 0.95, 0.5)
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
@@ -218,6 +235,11 @@ func _ready() -> void:
 	_page_next.describe_title = func() -> String: return "%s  NEXT PAGE" % _unit_caption()
 	_page_next.describe_value = func(_v: float) -> String: return _page_label.text
 	add_child(_page_next)
+
+	# All eight now, used or not: a bank is sized once, so a knob made later -- when a plugin's
+	# parameters arrive after its name, as Reaper's do -- would have nowhere to be drawn.
+	while _knobs.size() < MAX_KNOBS:
+		_add_knob()
 
 	DAW.fx_changed.connect(_on_fx_changed)
 	set_process(true)
@@ -336,35 +358,6 @@ func refresh() -> void:
 	# drop a knob that is being turned, and FX updates arrive while you turn it. A page change
 	# is the same thing for the same reason, which is why a knob asks `_param_for` at the
 	# moment of the turn rather than carrying the index it was built with.
-	while _knobs.size() < on_this_page:
-		var k := Knob.new()
-		var slot := _knobs.size()
-		k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * KNOB_PITCH, KNOB_ROW_Y, 0.005)
-		# Named for the same reason the caption is: a failure that says "knob @StaticBody3D@4327"
-		# names nothing, in a test whose job is to say WHICH control went off the plate.
-		k.name = "Knob%d" % slot
-		k.turned.connect(func(v: float):
-			var param_index := _param_for(slot)
-			if param_index >= 0:
-				DAW.set_fx_param(track_index, fx_index, param_index, v))
-		k.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), _param_name(slot)]
-		k.describe_value = func(v: float) -> String: return _param_reading(slot, v)
-		add_child(k)
-		_knobs.append(k)
-
-		var caption := Label3D.new()
-		caption.font_size = CAPTION_SIZE
-		caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		caption.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-		caption.line_spacing = CAPTION_LEADING
-		caption.pixel_size = 0.00018
-		caption.position = k.position + Vector3(0, -CAPTION_DROP, 0)
-		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		caption.modulate = Color(0.66, 0.68, 0.7)
-		caption.name = "Caption%d" % slot
-		Lettering.range_to_legibility(caption)
-		add_child(caption)
-
 	for i in _knobs.size():
 		if i < on_this_page:
 			var param_index: int = params[page_offset + i]
@@ -385,6 +378,42 @@ func refresh() -> void:
 				spare.visible = false
 
 	_refresh_page_control(params.size(), on_this_page)
+
+
+## One knob and its caption, in the next slot along.
+func _add_knob() -> void:
+	var k := Knob.new()
+	k.body_bank = knob_bank
+	var slot := _knobs.size()
+	k.position = Vector3(-RACK_WIDTH * 0.5 + 0.055 + slot * KNOB_PITCH, KNOB_ROW_Y, 0.005)
+	# Named for the same reason the caption is: a failure that says "knob @StaticBody3D@4327"
+	# names nothing, in a test whose job is to say WHICH control went off the plate.
+	k.name = "Knob%d" % slot
+	k.turned.connect(func(v: float):
+		var param_index := _param_for(slot)
+		if param_index >= 0:
+			DAW.set_fx_param(track_index, fx_index, param_index, v))
+	k.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), _param_name(slot)]
+	k.describe_value = func(v: float) -> String: return _param_reading(slot, v)
+	add_child(k)
+	# Hidden until a parameter is pointed at it; after it is in the tree, so a banked knob's
+	# slot goes with it.
+	k.visible = false
+	_knobs.append(k)
+
+	var caption := Label3D.new()
+	caption.font_size = CAPTION_SIZE
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	caption.line_spacing = CAPTION_LEADING
+	caption.pixel_size = 0.00018
+	caption.position = k.position + Vector3(0, -CAPTION_DROP, 0)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.modulate = Color(0.66, 0.68, 0.7)
+	caption.name = "Caption%d" % slot
+	Lettering.range_to_legibility(caption)
+	caption.visible = false
+	add_child(caption)
 
 
 ## The readout and its two buttons, shown only when the plugin does not fit on the faceplate.
