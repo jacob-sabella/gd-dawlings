@@ -5,6 +5,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Working, verified
 
+- **Guest audio takes.** A guest's microphone records onto the host's track, placed by the song
+  position the guest heard and kept there by a rate loop against clock drift. Within 1ms of the
+  click offline and on Reaper (`tools/session_probe.sh`). Drawn as a waveform on the timeline,
+  played by the built-in engine, placed through the bridge on Reaper.
 - **DAW abstraction.** `core/daw/` holds the backend contract, the mix cache, the wire
   vocabulary and the autoload; `core/reaper/` holds only what is Reaper's. Capability queries
   and the fader taper are per-backend, and `OfflineBackend` is a peer rather than a fallback
@@ -124,6 +128,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Parked
 
+- **Where the host keeps guests' recordings.** Takes are written to `user://takes/` and, on
+  Reaper, copied beside the project when it has been saved. Unsaved, Reaper points at the copy
+  in `user://takes/`. Whether the host should choose a folder (or be asked on first take) is a
+  decision for the user.
+
 - **More than about ten listeners.** A session admits up to 32 guests (Godot's default), but
   the mix is uncompressed at about 1.5 Mbit/s per listener, and there are 8 colours, so the ninth
   ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the
@@ -131,10 +140,12 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Not started
 
-- **Audio takes from guests.** Placed by the same stamps as MIDI takes: a guest's captured
-  audio, stamped with `Session.mix_feed.heard_position()` at capture, sent to the host and
-  placed by song position. Needs a guest capture path, an upload channel (reliable, chunked)
-  and an `insert_audio_take` verb; the clock half is done.
+- **A guest's microphone, calibrated.** Audio takes from guests work (see "Recording a guest"
+  in docs/architecture.md), measured with a synthetic microphone. A real card that misreports
+  its input latency puts takes early or late by the error; a clap-on-the-click calibration that
+  sets `GuestAudio.offset_ms` would close it.
+- **Hearing your own microphone** through the game while recording, with its latency allowed
+  for the way "Hear my keys" is.
 - **A calibration routine for the capture offset** (`R3D_CAPTURE_OFFSET_MS`): record a guest
   playing on a click into the host's Reaper and read the offset off the take.
 - **Live preview of a guest's notes on the host** through Reaper's `/vkb_midi/` OSC path,

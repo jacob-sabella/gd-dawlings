@@ -402,6 +402,11 @@ first reports after a start or a jump evenly (gain 1/n), then takes 4% of each o
 disagreement over 0.25s is taken as a seek. The stamp is read at
 `now - capture offset`, because a captured frame left Reaper that long before the host read it.
 
+After a start the clock **holds at the start point** until the reported position moves (or half
+a second passes), and reports not-playing and not-recording meanwhile. Reaper says it is playing
+before its playhead has left the start, by about 130ms on the rig. Before the hold, the clock ran
+from the moment Reaper said "playing", and every take recorded on Reaper landed that much early.
+
 **The guest knows which moment it is hearing.** `HeardClock` joins two facts. The first is the
 per-packet stamps, kept in a ring by sequence number. The second is which stream frame is at the
 speaker now: the jitter buffer's read head (`JitterBuffer.read_frame`), less the generator's
@@ -443,10 +448,48 @@ timeline draws them as a small piano roll on the item.
 **Measured, by `tools/session_probe.sh`.** The guest injects InputEventMIDI notes on the clicks
 of the host's test tone and between them. The tone clicks on every whole song second, so a click
 heard at stream frame *n* says that second was at the speaker then. The host checks each placed
-note against that. **Offline: within 0.25ms. Against the rig's Reaper: 0.7-2.2ms after the first
-second of a take, and up to ~5ms in that first second**, while the song clock still has only a
-few reports. (Before the clock averaged its first reports, that first second was off by 14ms.)
-Reaper itself rounds every note to its PPQ grid.
+note against that. **Offline: within 0.25ms. Against the rig's Reaper: 0.4-1.4ms**, since the
+song clock holds at the start (it was 0.7-2.2ms, and up to ~5ms in a take's first second,
+before). Reaper itself rounds every note to its PPQ grid.
+
+**Singing (`GuestAudio`).** A microphone take works the same way, for sound. It is opt-in: the
+panel's YOUR MIC section chooses an input and a track, and the microphone is not opened until
+"Record my mic when the host records" is on. From then on it is read every frame, which drives
+the level meter, and a take begins and ends on what the guest *hears* of the host's record
+button, exactly like a MIDI take.
+
+- **Where it starts.** The newest frame a read returns left the microphone the input's latency
+  before the read. At that moment the guest was hearing `heard - latency`, so every read is an
+  estimate of where the take's first frame sits in the song. Capture arrives in blocks, so one
+  estimate is jittery by up to a block. The take's start is the median of every estimate over
+  its first second, and nothing is sent until that second is over. Frames from before the top
+  of the song are trimmed off.
+- **Staying there.** The microphone has its own clock. Two sound cards 100 parts per million
+  apart drift 18ms over a three-minute take. After the first second the same estimate keeps
+  being made, against where the take's own frames say they are, and the difference steers the
+  resampler's rate: a critically damped PI loop (`TRACK_GAIN` 1, `DRIFT_GAIN` 0.25, limit
+  ±2000ppm) that settles in a few seconds. A jump of more than 0.25s (a loop going round, a seek)
+  ends the take there.
+- **Getting it to the host.** The take streams up as it is made, a fifth of a second of 48kHz
+  mono 16-bit at a time, as reliable RPCs on its own ENet channel (3), so it never queues behind
+  the mix or the room. The host writes it to `user://takes/<who>-take<n>-<time>.wav` as it
+  arrives. When the take ends there is almost nothing left to send. It is placed with
+  `DAW.insert_audio_take` when the guest stops, when they leave, or when the host closes the
+  session. **A guest never names a file.** The host makes the name; `insert_audio_take` is not
+  in `DAW.COMMANDS`, so no peer can ask the host to place a file of its choosing. A take is cut
+  off at 30 minutes.
+- **Placing it.** The stand-in keeps an undoable item. Reaper copies the WAV beside a saved
+  project and adds it through the bridge (`InsertAudioTake`: `AddMediaItemToTrack`,
+  `PCM_Source_CreateFromFile`, one undo block). The built-in engine plays it on the track's bus
+  from `AudioStreamWAV.load_from_file`. An item carries its file's name, where in the file it
+  starts (`source_offset`, so the right half of a cut plays on from the cut), and a 50-per-second
+  loudness overview, which travels with the item to every guest and is drawn on the timeline as
+  a waveform.
+- **Measured, by `tools/session_probe.sh`.** The guest's probe microphone claps on every click it
+  hears of the host's test tone, and the host finds the claps in the WAV it wrote. **Offline:
+  within 0.7ms. Against the rig's Reaper: within 1ms**, with the loop finding a clock difference
+  of a few hundred ppm between the two processes' audio.
+
 
 **Calibration.** The two numbers that are not measured on the fly:
 
@@ -460,9 +503,13 @@ Reaper itself rounds every note to its PPQ grid.
 
 **Not done:**
 
-- **Audio from a guest.** The stamps are ready for it. `heard_position()` says which song moment
-  any captured frame was played against, and an audio take would be placed by the same arithmetic.
-  The capture, transport and `insert_audio_take` verb are not built.
+- **A guest's microphone on a real sound card.** The probe's microphone is synthetic. The
+  arithmetic is the same for a real one, but a card that misreports its input latency puts every
+  take early or late by the error, and there is no calibration step for the input yet
+  (`GuestAudio.offset_ms` is where it would go).
+- **Hearing yourself.** A guest hears their voice through the room or headphones, not through the
+  game: there is no input monitoring of the microphone.
+- **Stereo takes.** The two sides of the input are averaged into one channel.
 - **Live preview on the host while the guest plays.** The host hears a take only once it is
   placed. Reaper's `/vkb_midi/` OSC path could play the notes late, as a preview, but it is not
   wired.
