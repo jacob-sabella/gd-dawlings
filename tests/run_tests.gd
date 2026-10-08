@@ -139,6 +139,8 @@ func _ready() -> void:
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
 	_test_a_ghost_is_the_size_of_a_large_person()
+	_test_a_glove_flies_with_a_bounce()
+	_test_a_ghosts_hand_goes_to_what_they_touch()
 	_test_a_mirror_shows_the_room_reversed()
 	_test_every_venue_has_a_mirror_you_can_see_yourself_in()
 	_test_meters_go_out_in_parcels_under_the_mtu()
@@ -6956,10 +6958,15 @@ func _test_a_ghost_is_the_size_of_a_large_person() -> void:
 	add_child(ghost)
 	ghost._pose = Transform3D(Basis.IDENTITY, Vector3(0, 1.62, 0))
 	ghost._place()
+	# Hands at its sides, where they float, not both still at the origin they were made at.
+	ghost._aim_hands()
+	for glove in ghost._hands:
+		glove.step(0.0)
 	var box := AABB()
 	var first := true
 	for m in ghost.find_children("*", "MeshInstance3D", true, false):
-		if not m.is_visible_in_tree() or m.top_level:
+		# The gloves float free of the body; they are measured on their own.
+		if not m.is_visible_in_tree() or m.top_level or m.find_parent("*Hand") != null:
 			continue
 		var b: AABB = m.global_transform * m.get_aabb()
 		box = b if first else box.merge(b)
@@ -6972,13 +6979,117 @@ func _test_a_ghost_is_the_size_of_a_large_person() -> void:
 	var body := ghost._lean.get_child(0) as MeshInstance3D
 	var girth: float = (body.global_transform * body.get_aabb()).size.x
 	check("rotund, but about as wide as a person, arms aside (%.2fm)" % girth, girth > 0.45 and girth < 0.6)
-	check("and its arms within reach of its sides (%.2fm across)" % box.size.x, box.size.x < 0.8)
 	check("its skin takes no shadow from itself, which crawls as it sways",
 			Presence.Avatar.SKIN_SHADER.contains("shadows_disabled"))
 	var hits := ZFightProbe.scan(ghost)
 	check("and no two of its faces share a plane (%d)" % hits.size(), hits.is_empty())
 	remove_child(ghost)
 	ghost.free()
+
+
+func _test_a_glove_flies_with_a_bounce() -> void:
+	var glove := Glove.new(1.0)
+	add_child(glove)
+	glove.step(0.0)
+	glove.target = Transform3D(Basis.IDENTITY, Vector3(0.5, 0, 0))
+	var furthest := 0.0
+	for i in 120:
+		glove.step(1.0 / 60.0)
+		furthest = maxf(furthest, glove.global_position.x)
+	check("it flies past where it was sent, and comes back (%.3fm over)" % (furthest - 0.5),
+			furthest > 0.52 and furthest < 0.65)
+	check("and settles there (%.4fm off)" % absf(glove.global_position.x - 0.5),
+			absf(glove.global_position.x - 0.5) < 0.002)
+	glove.poke(-0.6)
+	var low := 0.0
+	var high := 0.0
+	for i in 30:
+		glove.step(1.0 / 60.0)
+		low = minf(low, glove.squash)
+		if low < -0.1:
+			high = maxf(high, glove.squash)
+	check("a grab squashes it (%.2f) and it boings back past round (%.2f)" % [low, high],
+			low < -0.2 and high > 0.03)
+	for i in 120:
+		glove.step(1.0 / 60.0)
+	check("before it settles round again (%.3f)" % glove.squash, absf(glove.squash) < 0.01)
+	var open := glove.curls()
+	glove.pose = Glove.Pose.POINT
+	for i in 60:
+		glove.step(1.0 / 60.0)
+	var pointing := glove.curls()
+	check("pointing, the index stays out and the rest curl (%.2f vs %.2f)" % [pointing[0], pointing[1]],
+			pointing[0] < 0.3 and pointing[1] > 1.0)
+	glove.pose = Glove.Pose.GRIP
+	for i in 60:
+		glove.step(1.0 / 60.0)
+	var gripping := glove.curls()
+	check("gripping, every finger curls (%.2f index)" % gripping[0],
+			gripping[0] > 1.0 and gripping[0] > open[0] + 0.7)
+	var hits := ZFightProbe.scan(glove)
+	check("no two of its faces share a plane (%d)" % hits.size(), hits.is_empty())
+	remove_child(glove)
+	glove.free()
+
+
+func _test_a_ghosts_hand_goes_to_what_they_touch() -> void:
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost.snap(Transform3D(Basis.IDENTITY, Vector3(0, 1.62, 0)))
+	var right: Glove = ghost._hands[1]
+	var settle := func(seconds: float) -> void:
+		for i in roundi(seconds * 60.0):
+			ghost._process(1.0 / 60.0)
+			for glove in ghost._hands:
+				glove.step(1.0 / 60.0)
+	settle.call(1.0)
+	var rest := right.global_position
+	check("it has two hands and no arms", ghost._hands.size() == 2)
+	check("the right floats at its right, beside its belly (%.2f, %.2f)" % [rest.x, rest.y],
+			rest.x > 0.25 and rest.x < 0.5 and rest.y > 1.2 and rest.y < 1.45)
+	var control := ControlAffordance.new()
+	add_child(control)
+	control.position = Vector3(0.3, 1.0, -0.6)
+	var spot := Vector3(0.3, 1.0, -0.6)
+	ghost.point_at(control, spot, false)
+	settle.call(1.5)
+	ghost.point_at(control, spot, false)
+	check("pointing at something in reach, its fingertip goes to it (%.3fm off)" % right.fingertip().distance_to(spot),
+			right.fingertip().distance_to(spot) < 0.04)
+	check("with no beam to draw", not ghost._beam.visible)
+	ghost.point_at(control, spot, true)
+	check("and taking hold squashes it", right._squash_speed < -5.0)
+	settle.call(1.5)
+	check("then it grips (%.2f)" % right.curls()[0], right.curls()[0] > 1.0)
+	check("palm on it (%.3fm off)" % right.global_position.distance_to(spot),
+			right.global_position.distance_to(spot) < 0.08)
+	var far := Vector3(3.0, 1.0, -4.0)
+	ghost.point_at(control, far, false)
+	settle.call(1.5)
+	ghost.point_at(control, far, false)
+	check("out of reach, it goes only as far as it can (%.2fm)" % right.global_position.distance_to(rest),
+			right.global_position.distance_to(rest) < Presence.Avatar.REACH + 0.05)
+	check("and the beam carries the rest", ghost._beam.visible)
+	ghost.point_at(null, Vector3.ZERO, false)
+	settle.call(2.0)
+	var home := ghost._rest(1.0).origin
+	check("let go of, it comes home (%.3fm off)" % right.global_position.distance_to(home),
+			right.global_position.distance_to(home) < 0.03)
+	var hits := ZFightProbe.scan(ghost)
+	check("nothing on the ghost shares a plane with its gloves (%d)" % hits.size(), hits.is_empty())
+	remove_child(ghost)
+	ghost.free()
+	control.free()
+
+	var mine := Presence.Avatar.new()
+	add_child(mine)
+	mine.only_in_mirrors()
+	var drawn := true
+	for m in mine._hands[1].find_children("*", "MeshInstance3D", true, false):
+		drawn = drawn and (m as MeshInstance3D).layers == Mirror.SELF_ONLY
+	check("your own gloves are drawn only in mirrors", drawn)
+	remove_child(mine)
+	mine.free()
 
 
 func _test_a_mirror_shows_the_room_reversed() -> void:

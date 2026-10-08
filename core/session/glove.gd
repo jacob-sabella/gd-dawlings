@@ -1,0 +1,208 @@
+class_name Glove
+extends Node3D
+
+## A floating cartoon glove: no arm, no wrist, just a hand that goes where it is sent and
+## overshoots a little getting there.
+##
+## Everything about it is a spring. Where it is sent (`target`) it flies to, underdamped, so it
+## lands with a bounce. How it is squashed (`poke`) rings out the same way: a grab is a squash,
+## a let-go a stretch, and both wobble before they settle. Its fingers curl on springs of their
+## own toward a pose: open, pointing (the index stays out), or gripping. And it stretches along
+## its own length while it is moving fast, which is most of what makes a thing look thrown.
+##
+## Modelled pointing down -Z, palm down (-Y): so a right hand's thumb is toward -X and a
+## left's toward +X. `top_level`, so it flies in world space however its owner is posed.
+
+enum Pose { OPEN, POINT, GRIP }
+
+## Palm-to-fingertip length in metres at scale 1.
+const LENGTH := 0.15
+## Stiffness and damping of the flight. Damping ratio ~0.4: one clear overshoot, a small second.
+const STIFFNESS := 130.0
+const DAMPING := 9.0
+## The squash spring: stiffer and a touch less damped, so a grab reads as a "boing".
+const SQUASH_STIFFNESS := 260.0
+const SQUASH_DAMPING := 10.0
+const CURL_RATE := 18.0
+## Integration step. Fixed, so a slow frame cannot fling it through the wall.
+const STEP := 1.0 / 120.0
+
+const WHITE := Color(0.97, 0.97, 0.95)
+
+## Where it is going. The basis is the attitude it should arrive at; its scale is ignored.
+var target := Transform3D.IDENTITY
+var pose := Pose.OPEN
+## Its overall size; 1 is a glove for a ghost.
+var size := 1.0
+## -1 for a left hand.
+var side := 1.0
+
+var velocity := Vector3.ZERO
+## Positive stretches along the fingers, negative squashes.
+var squash := 0.0
+var _squash_speed := 0.0
+var _curls: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+## Index, middle, ring, little, then the thumb: the knuckle each curls about.
+var _knuckles: Array[Node3D] = []
+var _palm := Node3D.new()
+var _cuff_material := StandardMaterial3D.new()
+var _clock := randf() * TAU
+var _placed := false
+
+
+func _init(hand_side := 1.0) -> void:
+	side = hand_side
+	top_level = true
+	add_child(_palm)
+	var cloth := StandardMaterial3D.new()
+	cloth.albedo_color = WHITE
+	cloth.roughness = 0.62
+	cloth.rim_enabled = true
+	cloth.rim = 0.35
+	cloth.rim_tint = 0.2
+	_cuff_material.albedo_color = Color(0.3, 0.55, 0.98)
+	_cuff_material.roughness = 0.45
+
+	# The palm: a puffy, flattened ball.
+	var palm := SphereMesh.new()
+	palm.radius = 0.045
+	palm.height = 0.09
+	palm.radial_segments = 20
+	palm.rings = 10
+	_part(palm, cloth, _palm).scale = Vector3(1.0, 0.62, 0.95)
+
+	# Four fat fingers off the front of it, a little splayed, the little one shortest.
+	var lengths: Array[float] = [0.072, 0.078, 0.072, 0.06]
+	for i in 4:
+		var across := -(0.0285 - i * 0.019) * side
+		_finger(Vector3(across, 0.004, -0.03), lengths[i], (1.5 - i) * 0.07 * side, 0.0, cloth)
+	# The thumb, round the side and forward, lying across under the palm when it curls.
+	_finger(Vector3(-side * 0.04, -0.006, 0.0), 0.06, side * 0.95, 0.35, cloth)
+
+	# A flared cuff at the back, rolled at its open end: the one bit in their colour.
+	var bell := CylinderMesh.new()
+	bell.top_radius = 0.026
+	bell.bottom_radius = 0.04
+	bell.height = 0.04
+	bell.radial_segments = 20
+	bell.rings = 1
+	var flare := _part(bell, _cuff_material, _palm)
+	flare.rotation = Vector3(PI * 0.5, 0, 0)
+	flare.position = Vector3(0, 0, 0.052)
+	var rim := TorusMesh.new()
+	rim.inner_radius = 0.033
+	rim.outer_radius = 0.051
+	rim.rings = 24
+	rim.ring_segments = 10
+	var roll := _part(rim, _cuff_material, _palm)
+	roll.rotation = Vector3(PI * 0.5, 0, 0)
+	roll.position = Vector3(0, 0, 0.074)
+
+
+func _finger(root: Vector3, length: float, splay: float, droop: float, cloth: Material) -> void:
+	var knuckle := Node3D.new()
+	knuckle.position = root
+	knuckle.rotation = Vector3(-droop, splay, 0)
+	_palm.add_child(knuckle)
+	var bone := CapsuleMesh.new()
+	bone.radius = 0.0145 if length > 0.065 else 0.0135
+	bone.height = length
+	bone.radial_segments = 12
+	bone.rings = 4
+	var finger := _part(bone, cloth, knuckle)
+	finger.rotation = Vector3(PI * 0.5, 0, 0)
+	finger.position = Vector3(0, 0, -length * 0.5 + bone.radius)
+	_knuckles.append(knuckle)
+
+
+func _part(mesh: Mesh, material: Material, parent: Node3D) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	m.material_override = material
+	parent.add_child(m)
+	return m
+
+
+func set_colour(colour: Color) -> void:
+	_cuff_material.albedo_color = colour
+
+
+## Kick the squash spring: negative squashes (a grab), positive stretches (a let-go, a hop).
+func poke(amount: float) -> void:
+	_squash_speed += amount * 22.0
+
+
+## Jump straight to the target, nothing in flight.
+func snap() -> void:
+	_placed = true
+	velocity = Vector3.ZERO
+	global_transform = Transform3D(target.basis.orthonormalized().scaled(Vector3.ONE * size),
+			target.origin)
+
+
+## Where the index fingertip is from the glove's centre, in its own frame, at its size.
+func tip_offset() -> Vector3:
+	return Vector3(-0.04 * side, 0.0, -0.108) * size
+
+
+## Where the index fingertip is: where a beam comes from.
+func fingertip() -> Vector3:
+	return global_transform * Vector3(-0.04 * side, 0.0, -0.108)
+
+
+func _process(delta: float) -> void:
+	step(delta)
+
+
+func step(delta: float) -> void:
+	if not _placed:
+		snap()
+	_clock += delta
+	var at := global_position
+	var left := minf(delta, 0.1)
+	while left > 0.0:
+		var dt := minf(STEP, left)
+		left -= dt
+		velocity += ((target.origin - at) * STIFFNESS - velocity * DAMPING) * dt
+		at += velocity * dt
+		_squash_speed += (-squash * SQUASH_STIFFNESS - _squash_speed * SQUASH_DAMPING) * dt
+		squash += _squash_speed * dt
+	# Turning is eased, not sprung: a hand that overshoots its angle looks broken, not bouncy.
+	var turned := Quaternion(global_basis.orthonormalized()).slerp(
+			Quaternion(target.basis.orthonormalized()), 1.0 - exp(-delta * 14.0))
+	var basis := Basis(turned)
+	# Stretched along the fingers by speed, and by the squash spring; puffed out across to keep
+	# its volume, which is what sells a squash as soft rather than shrunk.
+	var stretch := clampf(squash + velocity.length() * 0.05, -0.45, 0.6)
+	var across := 1.0 / sqrt(maxf(0.3, 1.0 + stretch))
+	basis = basis * Basis.from_scale(Vector3(across, across, 1.0 + stretch) * size)
+	global_transform = Transform3D(basis, at)
+	_curl(delta)
+
+
+func _curl(delta: float) -> void:
+	var want: Array[float]
+	match pose:
+		Pose.GRIP:
+			want = [1.25, 1.3, 1.3, 1.25, 0.7]
+		Pose.POINT:
+			want = [0.0, 1.35, 1.4, 1.35, 0.6]
+		_:
+			# Relaxed, and never quite still: the fingers drum a little.
+			want = [0.2, 0.25, 0.3, 0.35, 0.1]
+			for i in 4:
+				want[i] += sin(_clock * 3.1 + i * 0.9) * 0.08
+	var weight := 1.0 - exp(-delta * CURL_RATE)
+	for i in _knuckles.size():
+		_curls[i] = lerpf(_curls[i], want[i], weight)
+		var k := _knuckles[i]
+		if i < 4:
+			k.rotation.x = -_curls[i]
+		else:
+			# The thumb folds in across the palm.
+			k.rotation.y = side * (0.95 - _curls[i] * 0.9)
+
+
+## How far each finger is curled: index, middle, ring, little, thumb.
+func curls() -> Array[float]:
+	return _curls.duplicate()

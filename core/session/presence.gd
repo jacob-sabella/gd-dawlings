@@ -93,6 +93,8 @@ func _process(delta: float) -> void:
 	var eye := head_node.global_position if head_node != null else Vector3(0, 1e6, 0)
 	if reflection != null and head_node != null:
 		reflection.snap(head_node.global_transform)
+		var mine := _my_pointing()
+		reflection.point_at(mine["control"], mine["point"], mine["holding"])
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -142,6 +144,19 @@ func _publish() -> void:
 				else Vector3.ZERO
 		break
 	Session.publish_presence(_to_session(head_node.global_transform), key, local)
+
+
+## What my own hand is on, for the ghost the mirrors show: {control, point, holding}.
+func _my_pointing() -> Dictionary:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor == null or not interactor.is_inside_tree():
+			continue
+		var control: ControlAffordance = interactor.held if interactor.held != null else interactor.hovered
+		if control == null or not is_instance_valid(control):
+			continue
+		return {"control": control, "point": interactor.hover_point, "holding": interactor.held == control}
+	return {"control": null, "point": Vector3.ZERO, "holding": false}
 
 
 func _hook_interactors() -> void:
@@ -309,6 +324,8 @@ class Avatar extends Node3D:
 	const LID_AWAKE := 0.18
 	const LID_SLEEPY := -0.55
 	const LID_SHUT := -1.45
+	## How far a hand will fly from its side to reach something, in metres.
+	const REACH := 0.95
 
 	const SKIN_SHADER := """
 shader_type spatial;
@@ -356,8 +373,11 @@ void fragment() {
 	var _lids: Array[Node3D] = []
 	var _pupils: Array[Node3D] = []
 	var _pupil_rest: Array[Vector3] = []
-	var _arm := Node3D.new()
-	var _arm_rest := Basis.IDENTITY
+	var _hands: Array[Glove] = []
+	var _pointing: ControlAffordance = null
+	var _point := Vector3.ZERO
+	var _holding := false
+	var _mirror_only := false
 	var _colour := Color.WHITE
 	var _close := false
 	var _away := false
@@ -387,7 +407,7 @@ void fragment() {
 		_ghost.add_child(_lean)
 		_part(body_mesh(), _skin, _lean)
 		_build_face()
-		_build_arms()
+		_build_hands()
 
 		for label in [_tag, _caption]:
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -563,22 +583,62 @@ void fragment() {
 		m.scale = Vector3(0.11, 0.022, 0.03)
 		m.position = Vector3(0, my, -radius_at(my) + 0.008)
 
-	## Two stubby nubs. The right one lifts toward whatever they are pointing at.
-	func _build_arms() -> void:
+	## No arms: two gloves that float at its sides, the way a cartoon's do. The right one goes
+	## to whatever they are pointing at -- all the way, if it is in reach -- and grips what they
+	## hold; the left one cheers it on.
+	func _build_hands() -> void:
 		for side in [-1.0, 1.0]:
-			var y := -0.42
-			var shoulder := Node3D.new()
-			shoulder.position = Vector3(side * (radius_at(y) - 0.04), y, -0.02)
-			_lean.add_child(shoulder)
-			var nub := CapsuleMesh.new()
-			nub.radius = 0.055
-			nub.height = 0.22
-			var arm := _part(nub, _skin, shoulder)
-			arm.position = Vector3(0, -0.09, 0)
-			shoulder.rotation = Vector3(0.15, 0, side * 0.75)
-			if side > 0:
-				_arm = shoulder
-				_arm_rest = shoulder.basis
+			var glove := Glove.new(side)
+			glove.size = 1.25
+			glove.name = "RightHand" if side > 0 else "LeftHand"
+			add_child(glove)
+			_hands.append(glove)
+
+	## Where a hand floats when it has nothing to do: beside the belly, a little forward,
+	## fingers down and palm in, bobbing out of step with the body.
+	func _rest(side: float) -> Transform3D:
+		var at := _ghost.global_transform * Vector3(side * (radius_at(-0.4) + 0.14), -0.42, -0.1)
+		var droop := 0.12 if _away else 0.0
+		var speed := 3.6 if _holding else 2.3
+		at.y += sin(_clock * speed + side * 1.3 + _phase) * 0.022 - droop
+		var turn := Basis(Vector3.UP, _ghost.global_basis.orthonormalized().get_euler().y)
+		var fingers := turn * Vector3(side * 0.25, -0.8, -0.5).normalized()
+		var inward := turn * Vector3(-side, 0, 0)
+		return Transform3D(_attitude(fingers, inward), at)
+
+	## A glove's basis with its fingers along `fingers` and its palm turned toward `palm`.
+	static func _attitude(fingers: Vector3, palm: Vector3) -> Basis:
+		var z := -fingers.normalized()
+		var y := -palm - z * (-palm).dot(z)
+		if y.length() < 0.01:
+			y = Vector3.UP - z * Vector3.UP.dot(z)
+		y = y.normalized()
+		return Basis(y.cross(z), y, z)
+
+	func _aim_hands() -> void:
+		var left: Glove = _hands[0]
+		var right: Glove = _hands[1]
+		left.target = _rest(-1.0)
+		left.pose = Glove.Pose.GRIP if _holding else Glove.Pose.OPEN
+		var rest := _rest(1.0)
+		if _pointing == null:
+			right.target = rest
+			right.pose = Glove.Pose.OPEN
+			return
+		var span := _point - rest.origin
+		var dist := span.length()
+		if dist < 0.01:
+			right.target = rest
+			return
+		var toward := span / dist
+		# Fingertip on the point, or palm on it when gripping; out of reach, as far as it goes.
+		var attitude := _attitude(toward, Vector3.DOWN)
+		var on := _point - attitude * (Vector3(0, 0, -0.05 * right.size) if _holding else right.tip_offset())
+		var go := on - rest.origin
+		if go.length() > REACH:
+			go = go.normalized() * REACH
+		right.target = Transform3D(attitude, rest.origin + go)
+		right.pose = Glove.Pose.GRIP if _holding else Glove.Pose.POINT
 
 	func _part(mesh: Mesh, material: Material, parent: Node3D) -> MeshInstance3D:
 		var m := MeshInstance3D.new()
@@ -589,6 +649,8 @@ void fragment() {
 
 	func dress(display_name: String, colour: Color, _medium: int, _is_host: bool) -> void:
 		_colour = colour
+		for glove in _hands:
+			glove.set_colour(colour)
 		_tag.text = display_name
 		_tag.modulate = colour.lightened(0.25)
 		_skin.set_shader_parameter("body", BLUE.lerp(colour, 0.12))
@@ -601,6 +663,7 @@ void fragment() {
 	## Drawn by mirrors and nothing else, casting no shadow on the desk in front of you, and
 	## without the name over its head -- you know who you are.
 	func only_in_mirrors() -> void:
+		_mirror_only = true
 		for node in find_children("*", "VisualInstance3D", true, false):
 			var drawn := node as VisualInstance3D
 			drawn.layers = Mirror.SELF_ONLY
@@ -641,6 +704,7 @@ void fragment() {
 		for lid in _lids:
 			lid.rotation.x = angle
 		_place()
+		_aim_hands()
 
 	## Yaw from the pose; a slight lean for pitch; the eyes take the rest. And a slow bob,
 	## so nobody is ever quite standing still.
@@ -672,6 +736,8 @@ void fragment() {
 			return
 		_close = close
 		_ghost.visible = not close
+		for glove in _hands:
+			glove.visible = not close
 		_tag.visible = not close
 		_caption.visible = not close
 
@@ -683,30 +749,39 @@ void fragment() {
 		_skin.set_shader_parameter("glow_amount", 0.25 if away else 1.0)
 		_tag.modulate = Color(0.6, 0.6, 0.62) if away else _colour.lightened(0.25)
 
-	## A beam from the tip of their raised nub to the point on MY copy of what they mean.
+	## Their right glove flies to what they mean on MY copy of it -- points at it, or grips it --
+	## and a beam runs from its fingertip to the spot when it cannot reach. Every change is a
+	## bounce: a new target, a grab (a squash, and the other hand jumps), a let-go (a boing).
 	func point_at(control: ControlAffordance, at: Vector3, holding: bool) -> void:
+		var right: Glove = _hands[1]
+		var left: Glove = _hands[0]
+		if control != _pointing and control != null:
+			right.poke(0.35)
+		elif control == null and _pointing != null:
+			right.poke(0.2)
+		if holding and not _holding:
+			right.poke(-0.6)
+			left.poke(0.35)
+		elif _holding and not holding:
+			right.poke(0.5)
+			left.poke(0.25)
+		_pointing = control
+		_holding = holding and control != null
+		_point = at
+		if _mirror_only:
+			return
 		_rim.show_on(control, holding)
 		var on := control != null
-		_beam.visible = on and not _close
 		_dot.visible = on
 		if not on:
-			_arm.basis = _arm.basis.slerp(_arm_rest, 0.2)
+			_beam.visible = false
 			return
-		# Swing the right nub toward the target: its "down" (the way it hangs) becomes the
-		# direction of the point.
-		var to_target := (_arm.get_parent() as Node3D).global_transform.affine_inverse().basis \
-				* (at - _arm.global_position)
-		if to_target.length() > 0.01:
-			var down := -to_target.normalized()
-			var side := down.cross(Vector3.FORWARD if absf(down.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
-			var aim := Basis(side, down, side.cross(down).normalized())
-			_arm.basis = _arm.basis.slerp(aim.orthonormalized(), 0.25)
-		var from := _arm.global_transform * Vector3(0, -0.2, 0)
+		_dot.global_position = at
+		var from := right.fingertip()
 		var span := at - from
 		var length := span.length()
-		_dot.global_position = at
-		if length < 0.01 or _close:
-			_beam.visible = false
+		_beam.visible = not _close and length > 0.04
+		if not _beam.visible:
 			return
 		var y := span / length
 		var x := y.cross(Vector3.FORWARD if absf(y.dot(Vector3.FORWARD)) < 0.95 else Vector3.RIGHT).normalized()
