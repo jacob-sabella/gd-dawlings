@@ -2907,7 +2907,7 @@ func _test_a_banked_control_still_moves() -> void:
 ## How tall you are moves the eye and nothing else, and is remembered.
 func _test_a_person_says_how_tall_they_are() -> void:
 	var e := Ergonomics.standing()
-	close_to("the default person stands with their eyes at 1.56m", e.eye_height, 1.56, 0.001)
+	close_to("the default person stands with their eyes at 1.47m", e.eye_height, 1.47, 0.001)
 	var room_desk := e.desk_height()
 	e.set_height(1.50)
 	close_to("someone 1.50 tall has their eyes at 1.39", e.eye_height, 1.39, 0.001)

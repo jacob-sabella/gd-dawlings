@@ -48,7 +48,8 @@ enum ColourVision {FULL, DEUTAN, PROTAN, TRITAN, MONO}
 ## The room is NOT derived from it -- the desk, the stands and the walls are the sizes they
 ## are -- so a shorter person sees a bigger room, which is the honest effect. The default was
 ## 1.62 (someone 1.73 tall), and from there the room read a size small: the desk at a glance
-## rather than in front of you. 1.56 is someone 1.67 tall.
+## rather than in front of you. 1.56 (1.67 tall) still did; 1.47 is someone 1.58 tall, chosen
+## from pictures of the four candidates side by side.
 var eye_height := DEFAULT_HEIGHT - EYE_BELOW_CROWN
 ## Seated changes more than the height. A seated person's comfortable reach is shorter, their
 ## usable downward gaze is wider, and they cannot step back from something -- so a surface that
@@ -157,7 +158,7 @@ const NEAR_LIMIT := 0.35
 
 
 ## How tall the default person is, and how far below the top of the head the eyes are.
-const DEFAULT_HEIGHT := 1.67
+const DEFAULT_HEIGHT := 1.58
 const EYE_BELOW_CROWN := 0.11
 ## Seated eye height over standing height: 1.21 for someone 1.73 tall, an ordinary chair.
 const SEATED_EYE_RATIO := 1.21 / 1.73
