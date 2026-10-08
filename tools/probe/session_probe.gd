@@ -69,7 +69,9 @@ func _host(port: int) -> void:
 	check("and shares its mix's audio", Session.mix_feed.sending)
 	_keep_publishing(Transform3D(Basis(Vector3.UP, 0.6), Vector3(1.2, 1.62, 0.4)), "MASTER  VOLUME")
 
-	await _until(1.1)
+	# Between the guest's wrong knock (0.3) and its right one (1.4), with room either side: two
+	# processes started a moment apart do not share a clock to the millisecond.
+	await _until(0.9)
 	check("a knock with the wrong code is not let in", Session.participants.size() == 1)
 	check("and the host hears about it", _notices.has("Someone tried to join without the right code."))
 
@@ -116,7 +118,7 @@ func _guest(port: int) -> void:
 	Session.listen_choice = 1
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
-	await _until(1.1)
+	await _until(1.4)
 	check("the wrong code is turned away (%s)" % [_notices], _notices.has("That is not Ada's code."))
 	check("back on my own after it", Session.role == Session.Role.SOLO)
 	# Read across a room and typed in a hurry: spaces and case are not the code.
