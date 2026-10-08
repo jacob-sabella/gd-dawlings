@@ -211,11 +211,13 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--tablet":
 				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
+				# `--tablet 2:1:5` opens it on its fifth page.
 				i += 1
 				if i < argv.size():
 					var parts := argv[i].split(":")
-					if parts.size() == 2:
-						out["tablets"].append(Vector2i(int(parts[0]), int(parts[1])))
+					if parts.size() in [2, 3]:
+						out["tablets"].append(Vector3i(int(parts[0]), int(parts[1]),
+								int(parts[2]) if parts.size() == 3 else 1))
 			"--eyes":
 				# `--eyes 2.0` -- this reader needs twice the angular cap height. The one
 				# switch that proves the accessibility work is real rather than declared:
@@ -387,7 +389,7 @@ func _apply_cli_placement(places: Dictionary) -> void:
 		studio.mount.set_mode(id, mode)
 
 
-func _apply_cli_tablet(wanted: Vector2i) -> void:
+func _apply_cli_tablet(wanted: Vector3i) -> void:
 	# A live DAW reports its plugins a moment after the link opens; the stand-in has them already.
 	var waited := 0.0
 	while waited < 10.0 and (DAW.state.fx(wanted.x, wanted.y, false) == null \
@@ -400,6 +402,20 @@ func _apply_cli_tablet(wanted: Vector2i) -> void:
 		return
 	var at := studio.rack.global_position
 	studio._on_tear_requested(wanted.x, wanted.y, at)
+	if wanted.z <= 1:
+		return
+	for id in studio.tablets:
+		var tablet: PluginTablet = studio.tablets[id][1]
+		if tablet.track_index != wanted.x or tablet.fx_index != wanted.y:
+			continue
+		# The page needs the plugin's full list, which a live DAW sends a moment later.
+		var paged := 0.0
+		while paged < 10.0 and tablet._page_starts().size() < wanted.z:
+			await get_tree().create_timer(0.25).timeout
+			tablet._process(0.0)
+			paged += 0.25
+		for step in wanted.z - 1:
+			tablet._step_page(1)
 
 
 ## Snapped rather than glided, and the distinction is not a detail. The glide exists so that a

@@ -433,8 +433,8 @@ func refresh() -> void:
 	_page_next.visible = paged
 	if paged:
 		var section := _page_section()
-		_page_label.text = ("%s   " % section if section != "" else "") \
-				+ "%d-%d OF %d" % [page_offset + 1, page_offset + shown, params.size()]
+		var span := "%d" % (page_offset + 1) if shown == 1 else "%d-%d" % [page_offset + 1, page_offset + shown]
+		_page_label.text = ("%s   " % section if section != "" else "") + "%s OF %d" % [span, params.size()]
 		Lettering.fit(_page_label, WIDTH * 0.5 - 0.02, 38)
 		_page_prev.lit = page_offset > 0
 		_page_next.lit = page_offset + shown < params.size()
@@ -550,13 +550,22 @@ func _page_section() -> String:
 			names.append((_param_name(i) as String).split(" ", false))
 	if names.size() < 2:
 		return ""
+	var common := _common_words(names)
+	# A section's own on/off often leads its page under a name of its own; the page is still
+	# that section.
+	if common.is_empty() and names.size() >= 3:
+		common = _common_words(names.slice(1))
+	return " ".join(common)
+
+
+static func _common_words(names: Array) -> Array:
 	var common: Array = names[0].duplicate()
 	for words in names:
 		var n := 0
 		while n < common.size() and n < words.size() - 1 and common[n] == words[n]:
 			n += 1
 		common = common.slice(0, n)
-	return " ".join(common)
+	return common
 
 
 func _caption_for(slot: int) -> String:
@@ -606,6 +615,21 @@ func _page_starts() -> Array:
 			starts.append(i + run)
 			used = 0
 		i += run
+	# A page of one or two -- "Active Post FX Section" between the EQs and the delay -- joins the
+	# page after it, or else the one before, wherever they fit together.
+	var k := 0
+	while k < starts.size() and starts.size() > 1:
+		var end: int = starts[k + 1] if k + 1 < starts.size() else params.size()
+		var size: int = end - int(starts[k])
+		if size <= 2:
+			var next_end: int = starts[k + 2] if k + 2 < starts.size() else params.size()
+			if k + 1 < starts.size() and next_end - int(starts[k]) <= PER_PAGE:
+				starts.remove_at(k + 1)
+				continue
+			if k > 0 and end - int(starts[k - 1]) <= PER_PAGE:
+				starts.remove_at(k)
+				continue
+		k += 1
 	_starts = starts
 	_starts_for = _shape_seed(params)
 	return starts

@@ -2574,7 +2574,7 @@ func _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets() -> void
 	var state := DAW.state
 	var slot: int = state.track(2).plugins()[0]
 	var f := state.fx(2, slot)
-	var names := ["Input Gain", "Output Gain", "Preset Previous", "Preset Next"]
+	var names := ["Input Gain", "Output Gain", "Preset Previous", "Preset Next", "Transpose"]
 	for amp in ["CLN", "HOT"]:
 		for knob in ["Gain", "Bass", "Mid", "Treble", "Master", "Output"]:
 			names.append("%s Amp %s" % [amp, knob])
@@ -2595,7 +2595,7 @@ func _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets() -> void
 	check("they are the PRESET buttons", tablet._own_presets() and tablet._preset_next.visible \
 			and tablet._preset_label.text == "plugin's own")
 	check("the first page stops where a section begins (%s)" % tablet._page_label.text,
-			tablet._knobs.size() == 2)
+			tablet._knobs.size() == 3)
 	tablet._step_page(1)
 	tablet._process(0.0)
 	check("a section gets its own page", tablet._knobs.size() == 6 and tablet._page_section() == "CLN AMP")
@@ -2609,6 +2609,27 @@ func _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets() -> void
 	tablet._step_page(-1)
 	tablet._process(0.0)
 	check("and back to the start", tablet.page_offset == 0)
+
+	# A page of one or two is folded into its neighbour, and a page led by a section's own
+	# on/off is still that section's page.
+	f.param_list = [5, 6, 7, 8, 9, 10, 0, 11, 12, 13, 14, 15, 16]
+	f.param_names[0] = "Active Hot Section"
+	tablet._step_page(1)
+	tablet._process(0.0)
+	tablet.page_offset = 0
+	tablet.mark_dirty()
+	tablet._process(0.0)
+	check("a stray switch joins the section after it (%s)" % [tablet._page_starts()],
+			tablet._page_starts() == [0, 6])
+	tablet._step_page(1)
+	tablet._process(0.0)
+	check("which keeps its heading (%s)" % tablet._page_label.text, tablet._page_section() == "HOT AMP" \
+			and tablet._captions[0].text == "ACTIVE HOT SECTION" and tablet._captions[1].text == "GAIN")
+	f.param_names[0] = "Input Gain"
+	f.param_list = range(names.size())
+	tablet.page_offset = 0
+	tablet.mark_dirty()
+	tablet._process(0.0)
 
 	tablet._preset_next.pressed.emit()
 	check("PRESET ▶ presses the plugin's own button", is_equal_approx(state.fx(2, slot).params[3], 1.0))
