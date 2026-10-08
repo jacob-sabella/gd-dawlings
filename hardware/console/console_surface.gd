@@ -11,6 +11,26 @@ extends Surface
 
 ## Degrees off vertical. 60 is a desk you lean over rather than a panel you face: it keeps the
 ## faders within reach of a standing hand and the legends readable from above.
+## Whether a summoned desk bends around you or runs straight across. It runs straight.
+##
+## The bend was built to solve a real problem -- a desk wide enough for a session is wider than
+## a person can face -- and it does solve it, but it turns out not to be the part that does the
+## work. What fixed the desk was PAGING: twelve strips you can face, with the bank buttons
+## moving the window. Twelve strips do not need bending; they already fit. The curve was then
+## doing nothing except equalising distances that were already nearly equal, and charging a
+## fanned gap between every pair of panels for it.
+##
+## Everything else the wrap brought stays, because none of it was really about the curve: the
+## radius search that decides how wide a tier may be, the row splitting above that, the desk at
+## elbow height, and `_page_arc` sizing the page from a head-turn. Those are measurements of a
+## person. The bend was a shape.
+##
+## Left as a constant rather than deleted. In a headset, where turning your head is free and a
+## flat desk really does run away from you at the ends, the arithmetic behind it is still right
+## and this is the switch.
+const CURVED := false
+
+
 const PANEL_TILT := 60.0
 const PANEL_MARGIN := 0.03
 
@@ -450,6 +470,11 @@ func _seat(x: float, y: float, z: float, flat: bool = false) -> Transform3D:
 	# affordable -- a panel laid back sixty degrees is half as tall in your field of view, so
 	# the tiers stack inside the same glance.
 	var lay := Basis.IDENTITY if flat else Basis(Vector3.RIGHT, -deg_to_rad(PANEL_TILT))
+	if not CURVED:
+		# Straight, with the rows and the lay-back kept. The bend is the one part of this that
+		# is optional: it buys uniformity -- every strip the same distance away, head-on -- and
+		# costs a lot of arithmetic to get right. The rows and the tilt are not optional.
+		return Transform3D(lay, Vector3(along - _row_span * 0.5, y + lift, z))
 	return Transform3D(Basis(Vector3.UP, -theta) * lay, Vector3(
 			sin(theta) * (_wrap - z), y + lift, _wrap - cos(theta) * (_wrap - z)))
 

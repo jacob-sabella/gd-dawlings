@@ -967,6 +967,14 @@ guess about it.
 
 ## A desk too wide to face
 
+> **Later:** the desk no longer bends. Everything below is still how the sizing works -- the
+> radius search, the tiers, the span arithmetic, the elbow-height placement -- but the final
+> yaw is off (`ConsoleSurface.CURVED`). Paging turned out to be the fix; once a desk is twelve
+> strips wide it already fits in front of you, and bending it only buys a fanned gap between
+> every pair of panels. Read the section for why the numbers are what they are, not for the
+> shape.
+
+
 The console was the surface that would not fit. Thirteen tracks is 0.92m of desk and sits
 comfortably at arm's length; forty-eight is 2.99m and ninety is 5.53m, and both of those failed
 `too_big_to_place` — no distance satisfies both "I can sweep it with a head-turn" and "I can
