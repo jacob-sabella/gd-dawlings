@@ -25,7 +25,13 @@ const HEADER_WIDTH := 0.108
 ## What a track name may use of the header: the header less the chip at its left and room for
 ## three state flags at its right.
 const NAME_SPAN := HEADER_WIDTH - 0.036
-const RULER_HEIGHT := 0.022
+## The ruler is two bands: the loop band along the top, where the loop range is drawn and
+## dragged out, and the bar numbers under it, which are clicked and dragged to move the playhead.
+## Two strips rather than one with a modifier key, because a headset has no shift key and a
+## gesture that changes meaning with a key you cannot see is one people get wrong.
+const LOOP_BAND := 0.008
+const NUMBERS_HEIGHT := 0.022
+const RULER_HEIGHT := LOOP_BAND + NUMBERS_HEIGHT
 const DEPTH := 0.006
 
 ## Candidate spacings for ruler labels, in bars. The ruler takes the first one that leaves the
@@ -47,6 +53,11 @@ var view_span := 0.0
 
 var _playhead: Node3D
 var _scrubber: TimelineScrubber
+var _seek_strip: TimelineRuler
+var _loop_strip: TimelineRuler
+## The loop range drawn on the loop band: a bar between the two ends, lit while looping.
+var _loop_bar: MeshInstance3D
+var _drawn_loop := Vector3(-1, -1, -1)
 var _lane_area_x := 0.0
 var _lane_area_width := 0.0
 var _top_y := 0.0
@@ -77,6 +88,19 @@ func _ready() -> void:
 	_scrubber.name = "Scrubber"
 	_scrubber.view_changed.connect(_on_view_changed)
 	add_child(_scrubber)
+
+	# The ruler's two bands, built once for the same reason: a scrub is held across frames.
+	_seek_strip = TimelineRuler.new()
+	_seek_strip.name = "SeekStrip"
+	_seek_strip.kind = TimelineRuler.Kind.SEEK
+	_seek_strip.seconds_at = _seconds_at_local_x
+	add_child(_seek_strip)
+	_loop_strip = TimelineRuler.new()
+	_loop_strip.name = "LoopStrip"
+	_loop_strip.kind = TimelineRuler.Kind.LOOP
+	_loop_strip.seconds_at = _seconds_at_local_x
+	add_child(_loop_strip)
+	DAW.state.transport_changed.connect(_draw_loop)
 
 
 func _process(delta: float) -> void:
@@ -148,11 +172,76 @@ func _rebuild() -> void:
 	_item_blocks.commit()
 	_item_strips.commit()
 
+	_build_loop_bar()
 	_build_playhead()
 	_build_blindness_notice()
 	_build_bank_notice()
 	_place_scrubber(project)
 	_relayout_view()
+
+
+func _place_strips() -> void:
+	if _seek_strip == null:
+		return
+	_seek_strip.width = _lane_area_width
+	_seek_strip.height = NUMBERS_HEIGHT
+	_seek_strip.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
+			_top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0018)
+	_seek_strip.refresh()
+	_loop_strip.width = _lane_area_width
+	_loop_strip.height = LOOP_BAND
+	_loop_strip.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
+			_top_y - LOOP_BAND * 0.5, 0.0018)
+	_loop_strip.refresh()
+
+
+## Seconds under a point given in a strip's own x (centred on the lane area).
+func _seconds_at_local_x(x: float) -> float:
+	var from_left := x + _lane_area_width * 0.5
+	return view_start + from_left / maxf(_lane_area_width, 0.0001) * view_span
+
+
+## The loop range on the loop band. Moved, not rebuilt, and only when it changed.
+func _draw_loop() -> void:
+	if _loop_bar == null or not is_instance_valid(_loop_bar):
+		return
+	var s := DAW.state
+	var key := Vector3(s.loop_start, s.loop_end, (1.0 if s.looping else 0.0) + view_start * 1000.0 + view_span)
+	if key == _drawn_loop:
+		return
+	_drawn_loop = key
+	if not s.has_loop_range():
+		_loop_bar.visible = false
+		return
+	var left := maxf(_x_for(s.loop_start), _lane_area_x)
+	var right := minf(_x_for(s.loop_end), _lane_right())
+	_loop_bar.visible = right > left
+	if right <= left:
+		return
+	_loop_bar.scale = Vector3(right - left, 1, 1)
+	_loop_bar.position = Vector3((left + right) * 0.5, _top_y - LOOP_BAND * 0.5, 0.0014)
+	# The bar-graph material, not an LED: a lit LED this long blooms into a smear that hides
+	# the bar numbers under it.
+	_loop_bar.material_override = Materials.indicator_bar(Color(0.36, 0.62, 0.98) if s.looping
+			else Color(0.30, 0.36, 0.46))
+
+
+func _build_loop_bar() -> void:
+	var band := MeshInstance3D.new()
+	var band_mesh := BoxMesh.new()
+	band_mesh.size = Vector3(WIDTH, LOOP_BAND, 0.0012)
+	band.mesh = band_mesh
+	band.position = Vector3(0, _top_y - LOOP_BAND * 0.5, 0.0007)
+	band.material_override = Materials.chassis()
+	_adopt(band)
+	_loop_bar = MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	# Unit width, scaled to the range, so moving the range is a transform and not a mesh.
+	mesh.size = Vector3(1.0, LOOP_BAND * 0.62, 0.0010)
+	_loop_bar.mesh = mesh
+	_adopt(_loop_bar)
+	_drawn_loop = Vector3(-1, -1, -1)
+	_draw_loop()
 
 
 func _place_scrubber(project: float) -> void:
@@ -163,6 +252,9 @@ func _place_scrubber(project: float) -> void:
 	_scrubber.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
 			-_top_y + SCRUBBER_BAND * 0.52, 0.0016)
 	_scrubber.refresh()
+	_place_strips()
+	_drawn_loop = Vector3(-1, -1, -1)
+	_draw_loop()
 
 
 ## Point the window at a part of the project. What the scrubber does, and what `--view` does.
@@ -240,9 +332,9 @@ func _build_ruler() -> void:
 
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
-	strip_mesh.size = Vector3(WIDTH, RULER_HEIGHT, 0.0012)
+	strip_mesh.size = Vector3(WIDTH, NUMBERS_HEIGHT, 0.0012)
 	strip.mesh = strip_mesh
-	strip.position = Vector3(0, _top_y - RULER_HEIGHT * 0.5, 0.0007)
+	strip.position = Vector3(0, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0007)
 	strip.material_override = Materials.recess()
 	_ruler.add_child(strip)
 
@@ -254,14 +346,14 @@ func _build_ruler() -> void:
 			continue
 		var tick := MeshInstance3D.new()
 		var tick_mesh := BoxMesh.new()
-		tick_mesh.size = Vector3(0.0006, RULER_HEIGHT * 0.45, 0.0008)
+		tick_mesh.size = Vector3(0.0006, NUMBERS_HEIGHT * 0.45, 0.0008)
 		tick.mesh = tick_mesh
-		tick.position = Vector3(x, _top_y - RULER_HEIGHT * 0.72, 0.0014)
+		tick.position = Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.72, 0.0014)
 		tick.material_override = Materials.legend()
 		_ruler.add_child(tick)
 
 		var label := _text(str(n + 1), 34, Color(0.60, 0.64, 0.70))
-		label.position = Vector3(x + 0.0025, _top_y - RULER_HEIGHT * 0.26, 0.0016)
+		label.position = Vector3(x + 0.0025, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.26, 0.0016)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(label)
 
@@ -271,7 +363,7 @@ func _build_ruler() -> void:
 		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
 			continue
 		var flag := _text(str(DAW.state.markers[at]).to_upper(), 28, Color(0.88, 0.74, 0.44))
-		flag.position = Vector3(mx + 0.0025, _top_y - RULER_HEIGHT * 0.74, 0.0016)
+		flag.position = Vector3(mx + 0.0025, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
 		flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(flag)
 
@@ -308,7 +400,7 @@ func _build_bank_notice() -> void:
 	if caption == "":
 		return
 	var notice := _text(caption, 18, Color(0.72, 0.60, 0.40))
-	notice.position = Vector3(-WIDTH * 0.5 + 0.009, _top_y - RULER_HEIGHT * 0.5, 0.0016)
+	notice.position = Vector3(-WIDTH * 0.5 + 0.009, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0016)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_adopt(notice)
 
@@ -374,6 +466,7 @@ func _relayout_view() -> void:
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
+	_draw_loop()
 
 
 ## Put one item in the banks at `slot`, or report that it is not on screen.
@@ -441,7 +534,7 @@ func _build_playhead() -> void:
 	var head_mesh := BoxMesh.new()
 	head_mesh.size = Vector3(0.0042, 0.0042, 0.0012)
 	head.mesh = head_mesh
-	head.position = Vector3(0, _top_y - 0.0021, 0.0028)
+	head.position = Vector3(0, _top_y - LOOP_BAND - 0.0021, 0.0028)
 	head.material_override = Materials.led(Color(0.96, 0.86, 0.45), true)
 	_playhead.add_child(head)
 

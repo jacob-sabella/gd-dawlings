@@ -80,6 +80,9 @@ var _counter: Label3D
 var _tempo_label: Label3D
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
+var _loop_lamp: PanelButton
+var _loop_label: Label3D
+var _history_keys: Array[PanelButton] = []
 var _tape_runs: Array[MeshInstance3D] = []
 var _song_speed := 0.0
 var _last_position := -1.0
@@ -118,14 +121,96 @@ func _rebuild() -> void:
 	Lettering.range_to_legibility(_counter)
 	_adopt(_counter)
 
+	# Beside the counter rather than under the transport keys, where it was: the keys stand
+	# proud of the panel and, from a seat above the deck, hid the tempo completely.
 	_tempo_label = Label3D.new()
-	_tempo_label.font_size = 44
+	_tempo_label.font_size = 40
 	_tempo_label.pixel_size = 0.00024
-	_tempo_label.position = Vector3(0, -0.128, 0.002)
+	_tempo_label.position = Vector3(-0.165, 0.108, 0.002)
 	_tempo_label.modulate = Color(0.7, 0.72, 0.75)
 	_tempo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(_tempo_label)
 	_adopt(_tempo_label)
+
+	_loop_label = Label3D.new()
+	_loop_label.font_size = 40
+	_loop_label.pixel_size = 0.00024
+	_loop_label.position = Vector3(0.165, 0.108, 0.002)
+	_loop_label.modulate = Color(0.45, 0.68, 0.98)
+	_loop_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(_loop_label)
+	_adopt(_loop_label)
+
+	# Back to the start: of the loop when there is one, of the song when not. The key every
+	# transport has at its left end, and the one pressed most after play.
+	var home := PanelButton.new()
+	home.led_colour = Color(0.75, 0.78, 0.82)
+	home.lamp_scale = Vector2(0.9, 0.42)
+	home.position = Vector3(-0.070, -0.096, 0.028)
+	home.scale = Vector3(1.6, 1.6, 1.6)
+	home.pressed.connect(func(): DAW.seek(DAW.state.loop_start
+			if DAW.state.looping and DAW.state.has_loop_range() else 0.0))
+	home.describe_title = func() -> String: return "TRANSPORT  RETURN TO START"
+	home.describe_value = func(_v: float) -> String:
+		return "to %s" % DAW.state.bar_beat(DAW.state.loop_start
+				if DAW.state.looping and DAW.state.has_loop_range() else 0.0)
+	_adopt(home)
+
+	var loop := PanelButton.new()
+	loop.led_colour = Color(0.36, 0.62, 0.98)
+	loop.lamp_scale = Vector2(1.0, 0.6)
+	loop.position = Vector3(0.070, -0.096, 0.028)
+	loop.scale = Vector3(1.6, 1.6, 1.6)
+	loop.pressed.connect(func():
+		# Nothing to loop yet: the four bars from the playhead, the commonest thing to want.
+		if not DAW.state.has_loop_range():
+			var start := DAW.state.bar_to_seconds(floorf(
+					DAW.state.position_seconds / DAW.state.bar_to_seconds(2.0)) + 1.0)
+			DAW.set_loop_range(start, start + DAW.state.bar_to_seconds(5.0))
+		DAW.set_looping(not DAW.state.looping))
+	loop.describe_title = func() -> String: return "TRANSPORT  LOOP"
+	loop.describe_value = func(_v: float) -> String: return _loop_text()
+	_adopt(loop)
+	_loop_lamp = loop
+
+	# Legends under the keys. Five unmarked lamps in a row is a transport you learn by pressing.
+	for spec in [[-0.070, "RTZ"], [-0.035, "PLAY"], [0.0, "STOP"], [0.035, "REC"], [0.070, "LOOP"]]:
+		var legend := Label3D.new()
+		legend.text = spec[1]
+		legend.font_size = 26
+		legend.pixel_size = 0.00024
+		legend.position = Vector3(spec[0], -0.118, 0.002)
+		legend.modulate = Color(0.6, 0.62, 0.66)
+		legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		Lettering.range_to_legibility(legend)
+		_adopt(legend)
+
+	# History, in the bottom corners, away from the transport so a reach for stop never lands on
+	# undo. Lit while there is something to undo or redo.
+	_history_keys.clear()
+	for spec in [[-1.0, "UNDO"], [1.0, "REDO"]]:
+		var key := PanelButton.new()
+		key.led_colour = Color(0.92, 0.72, 0.38)
+		key.lamp_scale = Vector2(0.8, 0.5)
+		key.position = Vector3(spec[0] * 0.185, -0.122, 0.028)
+		key.scale = Vector3(1.4, 1.4, 1.4)
+		var is_undo: bool = spec[0] < 0.0
+		key.pressed.connect(func(): DAW.undo() if is_undo else DAW.redo())
+		key.describe_title = func() -> String: return "EDIT  " + ("UNDO" if is_undo else "REDO")
+		key.describe_value = func(_v: float) -> String:
+			var depth := DAW.state.undo_depth if is_undo else DAW.state.redo_depth
+			return "%d step(s)" % depth if depth >= 0 else "in Reaper's history"
+		_adopt(key)
+		_history_keys.append(key)
+		var caption := Label3D.new()
+		caption.text = spec[1]
+		caption.font_size = 30
+		caption.pixel_size = 0.00024
+		caption.position = Vector3(spec[0] * 0.185, -0.105, 0.002)
+		caption.modulate = Color(0.6, 0.62, 0.66)
+		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		Lettering.range_to_legibility(caption)
+		_adopt(caption)
 
 	var play := PanelButton.new()
 	play.led_colour = Ergonomics.current.signal_colour(&"ok")
@@ -462,6 +547,21 @@ func _refresh() -> void:
 	_tempo_label.text = "%.1f BPM" % DAW.state.tempo
 	_play_lamp.lit = DAW.state.playing
 	_rec_lamp.lit = DAW.state.recording
+	_loop_lamp.lit = DAW.state.looping
+	_loop_label.text = _loop_text()
+	for i in _history_keys.size():
+		var depth := DAW.state.undo_depth if i == 0 else DAW.state.redo_depth
+		_history_keys[i].lit = depth != 0
+
+
+func _loop_text() -> String:
+	var s := DAW.state
+	if not s.has_loop_range():
+		return "NO LOOP"
+	var a := s.bar_beat(s.loop_start)
+	var b := s.bar_beat(s.loop_end)
+	return "LOOP %s-%s" % [a.get_slice(".", 0) + "." + a.get_slice(".", 1),
+			b.get_slice(".", 0) + "." + b.get_slice(".", 1)]
 
 
 func _process(delta: float) -> void:

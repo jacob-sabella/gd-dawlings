@@ -148,7 +148,22 @@ var playing: bool = false
 var recording: bool = false
 var position_seconds: float = 0.0
 var position_string: String = "1.1.00"
+## The clock as the DAW spells it in minutes and seconds, when it says. Bar/beat is the one a
+## desk shows; this is for the readout that wants both.
+var time_string: String = ""
 var tempo: float = 120.0
+## Beats in a bar. Reaper's OSC surface does not send the time signature, so this is 4 unless
+## a bridge says otherwise -- and only the bar number of a computed position depends on it.
+var beats_per_bar: int = 4
+## Whether playback wraps round the loop range. Reaper calls it repeat.
+var looping: bool = false
+## The loop range, in seconds. In Reaper this is the time selection when the two are linked,
+## which is how almost everyone runs it, so one pair stands for both. Equal ends mean no range.
+var loop_start: float = 0.0
+var loop_end: float = 0.0
+## How many steps there are to undo and redo, when the backend knows. -1: it does not say.
+var undo_depth: int = -1
+var redo_depth: int = -1
 ## Seconds. How far the ruler has to run, which is NOT derivable from the items: a project can
 ## be longer than its last item, and a timeline that ends at the last block cannot be scrolled
 ## into the empty bars you are about to record into.
@@ -169,6 +184,24 @@ var bank_size: int = 64
 ## Tracks in the whole project, or -1 when nothing has said. -1 is not zero: "I have not been
 ## told how big this project is" and "this project has no tracks" want opposite things drawn.
 var project_track_count: int = -1
+
+
+## `seconds` as bar.beat.hundredths at the project tempo, counted from bar 1. Constant tempo:
+## a project with tempo changes gets the DAW's own string when the DAW sends one.
+func bar_beat(seconds: float) -> String:
+	var beats := maxf(seconds, 0.0) * tempo / 60.0
+	var per_bar := float(maxi(beats_per_bar, 1))
+	return "%d.%d.%02d" % [int(beats / per_bar) + 1, int(fmod(beats, per_bar)) + 1,
+			int(fmod(beats, 1.0) * 100.0)]
+
+
+## Seconds at the start of `bar` (1-based).
+func bar_to_seconds(bar: float) -> float:
+	return (bar - 1.0) * float(maxi(beats_per_bar, 1)) * 60.0 / maxf(tempo, 1.0)
+
+
+func has_loop_range() -> bool:
+	return loop_end > loop_start + 0.001
 
 
 ## The project-wide number of a track this cache calls `index`. What a human reads off a desk.

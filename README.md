@@ -78,6 +78,10 @@ Two channels, because one is not enough — see `docs/transport.md` for why.
    `Scripts/` folder and run it once from the action list. Without it you get a full console,
    a working transport and live racks; what you lose is the ability to *create* routing from the
    patchbay, because OSC has no message for it.
+3. **Recording from the desk.** Untick *Preferences → Recording → Prompt to save/delete/rename
+   new files* (or tick its "only when stopping" options off). With it on, every take you stop
+   from the desk opens a dialog in Reaper's window, and while that dialog is open Reaper ignores
+   OSC entirely — the desk goes dead until someone clicks it away.
 
 ## Layout
 

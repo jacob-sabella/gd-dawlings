@@ -132,6 +132,14 @@ func set_track_bank(_offset: int) -> void: pass
 func transport_play() -> void: pass
 func transport_stop() -> void: pass
 func transport_record() -> void: pass
+## Playback wraps round the loop range, or does not.
+func set_looping(_on: bool) -> void: pass
+## Move the playhead. Seconds from the project start.
+func seek(_seconds: float) -> void: pass
+## The loop range / time selection, in seconds.
+func set_loop_range(_start: float, _end: float) -> void: pass
+func undo() -> void: pass
+func redo() -> void: pass
 
 ## Return false when the routing change could not be made, so a surface can decline the gesture
 ## rather than draw a cable that is not there.
@@ -143,17 +151,14 @@ func remove_send(_from_track: int, _send_index: int) -> bool: return false
 
 ## Normalised fader position to dB, for labelling a cap that is being dragged right now.
 ##
-## A DAW's taper is its own: this default is the 40*log10 curve Reaper uses, which is also close
-## to several others, and a backend whose DAW differs overrides it. Prefer a dB value the DAW
-## actually sent over calling this -- it is an approximation of someone else's curve.
+## The default is Reaper's own taper, measured (see FaderLaw); a backend whose DAW differs
+## overrides both. Prefer a dB value the DAW actually sent over calling this.
 func taper_to_db(taper: float) -> float:
-	if taper <= 0.0:
-		return -INF
-	return 40.0 * (log(taper) / log(10.0))
+	return FaderLaw.to_db(taper)
 
 
 func db_to_taper(db: float) -> float:
-	return pow(10.0, db / 40.0)
+	return FaderLaw.to_taper(db)
 
 
 # --- replication --------------------------------------------------------------------------
@@ -199,7 +204,8 @@ func record_for_replication(key: String, args: Array) -> void:
 ## sent unreliably, dropped by the first lossy frame, and never resent, so a guest would show a
 ## project with no items in it and nothing would report an error.
 func is_volatile(key: String) -> bool:
-	return key.contains("/vu") or key == "/time" or key.begins_with("/time/")
+	return key.contains("/vu") or key == "/time" or key.begins_with("/time/") \
+			or key == "/beat/str"
 
 
 func tick_replication(delta: float) -> void:

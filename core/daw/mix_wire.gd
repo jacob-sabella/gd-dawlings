@@ -20,13 +20,10 @@ extends RefCounted
 ## into these keys, or write into MixState directly and leave replication to the base class.
 ## What it must not do is leak its own vocabulary upward -- see core/daw/daw_backend.gd.
 
-## The same 40*log10 curve DAWBackend documents. Duplicated as a static here rather than
-## reached for through an instance, because parsing is a pure function of the message and must
-## not need a backend to exist.
+## Reaper's taper (FaderLaw). Static because parsing is a pure function of the message and
+## must not need a backend to exist.
 static func _taper_to_db(taper: float) -> float:
-	if taper <= 0.0:
-		return -INF
-	return 40.0 * (log(taper) / log(10.0))
+	return FaderLaw.to_db(taper)
 
 
 ## Route one OSC message into the state cache.
@@ -60,7 +57,29 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 				state.position_seconds = float(args[0])
 				state.transport_changed.emit()
 			elif p.size() > 1 and p[1] == "str" and args.size() > 0:
+				state.time_string = str(args[0])
+				state.transport_changed.emit()
+		"beat":
+			# Reaper's own bar/beat string, which knows about tempo changes and time
+			# signatures. Preferred over working it out from seconds whenever it is sent.
+			if p.size() > 1 and p[1] == "str" and args.size() > 0:
 				state.position_string = str(args[0])
+				state.transport_changed.emit()
+		"repeat":
+			state.looping = _as_bool(args)
+			state.transport_changed.emit()
+		"loop":
+			if p.size() > 2 and p[2] == "time" and args.size() > 0:
+				if p[1] == "start":
+					state.loop_start = float(args[0])
+				elif p[1] == "end":
+					state.loop_end = float(args[0])
+				state.transport_changed.emit()
+		"undo":
+			# reaper-3d's own: how deep the history is, from the bridge.
+			if args.size() > 1:
+				state.undo_depth = int(args[0])
+				state.redo_depth = int(args[1])
 				state.transport_changed.emit()
 		"project":
 			# reaper-3d's own. OSC says nothing about how big a project is -- only how big the
@@ -336,7 +355,11 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/tempo/raw", [state.tempo]])
 	out.append(["/play", [1.0 if state.playing else 0.0]])
 	out.append(["/record", [1.0 if state.recording else 0.0]])
-	out.append(["/time/str", [state.position_string]])
+	out.append(["/beat/str", [state.position_string]])
+	out.append(["/time", [state.position_seconds]])
+	out.append(["/repeat", [1.0 if state.looping else 0.0]])
+	out.append(["/loop/start/time", [state.loop_start]])
+	out.append(["/loop/end/time", [state.loop_end]])
 	out.append(["/timeline/length", [state.project_length]])
 	if not state.markers.is_empty():
 		var packed: Array = []

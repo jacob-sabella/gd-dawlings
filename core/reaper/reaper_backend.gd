@@ -184,6 +184,13 @@ func write(address: String, args: Array = []) -> void:
 		return
 	_echo_guard[address] = {"v": args, "t": Time.get_ticks_msec()}
 	_peer.send(address, args)
+	# And into the cache now, not when Reaper answers. The echo guard drops Reaper's answer when
+	# it agrees with what was sent -- which is the point of it, a fader must not fight its own
+	# echo -- so without this the cache never learnt a write the desk made: the control showed
+	# it, and every OTHER view of the same track (the second participant, the timeline's mute
+	# flag, the hover readout) went on showing the old value.
+	record_for_replication(address, args)
+	MixWire.apply(state, address, args)
 
 
 func _is_echo(address: String, args: Array) -> bool:
@@ -260,6 +267,49 @@ func transport_stop() -> void:
 
 func transport_record() -> void:
 	write("/record", [1.0])
+
+
+func set_looping(on: bool) -> void:
+	# A toggle on Reaper's side, and a toggle is a button: 1 is the press that flips it and 0 is
+	# the release, which Reaper ignores -- so "/repeat 0" never turned looping off. It is only
+	# sent when it would change something, always as a press, and the cache is told the value
+	# that press is for rather than the press itself.
+	if state.looping == on:
+		return
+	var value := [1.0 if on else 0.0]
+	if _peer != null:
+		_echo_guard["/repeat"] = {"v": value, "t": Time.get_ticks_msec()}
+		_peer.send("/repeat", [1.0])
+	record_for_replication("/repeat", value)
+	MixWire.apply(state, "/repeat", value)
+
+
+func seek(seconds: float) -> void:
+	write("/time", [maxf(seconds, 0.0)])
+	_apply("/time", [maxf(seconds, 0.0)])
+
+
+func set_loop_range(start: float, end: float) -> void:
+	write("/loop/start/time", [start])
+	write("/loop/end/time", [end])
+	_apply("/loop/start/time", [start])
+	_apply("/loop/end/time", [end])
+
+
+## Reaper's own Edit: Undo and Edit: Redo, so what is undone is whatever Reaper's history says
+## was last -- a fader move made on this desk, an edit made with a mouse in Reaper, either.
+const UNDO_ACTION := 40029
+const REDO_ACTION := 40030
+
+
+func undo() -> void:
+	if _peer != null:
+		_peer.send("/action", [UNDO_ACTION])
+
+
+func redo() -> void:
+	if _peer != null:
+		_peer.send("/action", [REDO_ACTION])
 
 
 ## Routing changes have no OSC pattern -- Reaper streams send VOLUMES but has no message for

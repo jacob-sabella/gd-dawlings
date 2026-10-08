@@ -1075,6 +1075,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Somewhere else to stand. The setup comes along; only the world changes.
 			KEY_V:
 				cycle_venue()
+			# The history, from anywhere in the room. The deck has keys for it too.
+			KEY_Z when event.ctrl_pressed:
+				DAW.redo() if event.shift_pressed else DAW.undo()
+			KEY_Y when event.ctrl_pressed:
+				DAW.redo()
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)

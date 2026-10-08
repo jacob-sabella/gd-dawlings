@@ -92,6 +92,10 @@ func _ready() -> void:
 		# After one frame, so the rig has taken its pose from the head before it is cut loose.
 		studio.body._process(0.0)
 		studio.body.detach()
+	var loop: Vector2 = args["loop"]
+	if loop.y > loop.x:
+		DAW.set_loop_range(DAW.state.bar_to_seconds(loop.x), DAW.state.bar_to_seconds(loop.y))
+		DAW.set_looping(true)
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
 		studio.timeline.set_view(view.x, view.y)
@@ -133,7 +137,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"venue": "", "reaper_resource": "",
+		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO,
 	}
 	var i := 0
 	while i < argv.size():
@@ -200,6 +204,14 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					var window := argv[i].split(":")
 					if window.size() == 2:
 						out["view"] = Vector2(float(window[0]), float(window[1]))
+			"--loop":
+				# `--loop 9:17` -- loop bars 9 to 17 and switch looping on. For photographing the
+				# loop and for starting a session already looping the section being worked on.
+				i += 1
+				if i < argv.size():
+					var bars := argv[i].split(":")
+					if bars.size() == 2:
+						out["loop"] = Vector2(float(bars[0]), float(bars[1]))
 			"--place":
 				# `--place console=screen`. Scriptable for the same reason everything else here
 				# is a switch: a hybrid arrangement is tested by launching several of these at

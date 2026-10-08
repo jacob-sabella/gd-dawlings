@@ -93,6 +93,10 @@ func _ready() -> void:
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
+	_test_the_transport_is_driven_from_the_desk()
+	_test_the_ruler_moves_the_playhead_and_draws_the_loop()
+	_test_undo_takes_back_a_gesture_not_a_frame()
+	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
@@ -260,6 +264,15 @@ func _test_taper_roundtrip() -> void:
 	for db in [-24.0, -12.0, -6.0, 0.0, 6.0]:
 		close_to("taper round-trips %.0fdB" % db, DAW.taper_to_db(DAW.backend.db_to_taper(db)), db, 0.001)
 	check("silence is -inf", DAW.taper_to_db(0.0) == -INF)
+	# What Reaper itself reported on /track/n/volume for each of these, measured on a live rig.
+	# A fader cap labelled from any other curve tells you a number Reaper does not agree with.
+	var reaper := {12.0: 1.0, 6.0: 0.8523, 0.0: 0.716, -6.0: 0.5928, -12.0: 0.4839,
+			-24.0: 0.3133, -40.0: 0.1710, -60.0: 0.0795, -90.0: 0.0251, -120.0: 0.00795}
+	for db in reaper:
+		close_to("Reaper puts %.0f dB at %.4f of travel" % [db, reaper[db]],
+				DAW.db_to_taper(db), reaper[db], 0.0006)
+		close_to("and %.4f of travel reads %.0f dB" % [reaper[db], db],
+				DAW.taper_to_db(reaper[db]), db, 0.02 if db > -60.0 else 0.1)
 
 
 # --- replication --------------------------------------------------------------------------
@@ -4855,3 +4868,190 @@ func _test_the_room_is_laid_out_for_the_size_of_the_session() -> void:
 	check("fitting the room wrote nothing to the saved layout",
 			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
 	Session.layout.save_path = saved_path
+
+
+func _offline(tracks := 13) -> OfflineBackend:
+	var backend := OfflineBackend.new()
+	backend.state = MixState.new()
+	backend.track_count = tracks
+	DAW.use(backend)
+	return backend
+
+
+func _test_the_transport_is_driven_from_the_desk() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	close_to("bar 1 is zero seconds", s.bar_to_seconds(1.0), 0.0)
+	check("bar/beat is spelled from seconds (%s)" % s.bar_beat(s.bar_to_seconds(17.0) + 60.0 / s.tempo),
+			s.bar_beat(s.bar_to_seconds(17.0) + 60.0 / s.tempo) == "17.2.00")
+
+	DAW.transport_stop()
+	var at := s.position_seconds
+	backend._drive_meters(0.5)
+	close_to("a stopped transport does not move the playhead", s.position_seconds, at)
+	for i in 40:
+		backend._drive_meters(0.05)
+	check("and the meters fall to nothing (%.3f)" % s.track(1).vu_l, s.track(1).vu_l < 0.001)
+	check("the master too", s.master.vu_l < 0.001)
+
+	DAW.seek(s.bar_to_seconds(9.0))
+	close_to("seek puts the playhead where it was asked", s.position_seconds, s.bar_to_seconds(9.0))
+	check("and the desk's counter says bar 9 (%s)" % s.position_string, s.position_string.begins_with("9.1."))
+
+	DAW.transport_play()
+	backend._drive_meters(0.25)
+	close_to("play runs the clock", s.position_seconds, s.bar_to_seconds(9.0) + 0.25, 0.001)
+	check("and the meters move (%.3f, playing %s, mute %s)" % [s.track(1).vu_l, s.playing, s.track(1).mute], s.track(1).vu_l > 0.0)
+
+	# Solo: what is not soloed is not heard, and does not meter.
+	DAW.set_track_solo(2, true)
+	for i in 40:
+		backend._drive_meters(0.05)
+	check("solo silences every other meter (track 1 at %.3f)" % s.track(1).vu_l, s.track(1).vu_l < 0.001)
+	check("and the soloed one still moves", s.track(2).vu_l > 0.0)
+	DAW.set_track_solo(2, false)
+
+	DAW.set_loop_range(s.bar_to_seconds(5.0), s.bar_to_seconds(7.0))
+	DAW.set_looping(true)
+	DAW.seek(s.bar_to_seconds(7.0) - 0.1)
+	backend._drive_meters(0.3)
+	check("a loop wraps the playhead back to its start (at %.2f, loop %.2f-%.2f)" % [
+			s.position_seconds, s.loop_start, s.loop_end],
+			s.position_seconds >= s.loop_start and s.position_seconds < s.loop_start + 0.5)
+	DAW.set_looping(false)
+	DAW.seek(s.bar_to_seconds(7.0) - 0.1)
+	backend._drive_meters(0.3)
+	check("and with looping off it plays straight through", s.position_seconds > s.loop_end)
+
+	# The deck's own keys.
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	var keys := deck.find_children("*", "PanelButton", true, false)
+	var by_title := {}
+	for k in keys:
+		by_title[(k as PanelButton).title()] = k
+	for wanted in ["TRANSPORT  PLAY", "TRANSPORT  STOP", "TRANSPORT  RECORD", "TRANSPORT  LOOP",
+			"TRANSPORT  RETURN TO START", "EDIT  UNDO", "EDIT  REDO"]:
+		check("the deck has %s" % wanted, by_title.has(wanted))
+	if by_title.has("TRANSPORT  LOOP") and by_title.has("TRANSPORT  RETURN TO START"):
+		(by_title["TRANSPORT  LOOP"] as PanelButton).pressed.emit()
+		check("the deck's loop key turns looping on", s.looping)
+		check("and its lamp says so", (by_title["TRANSPORT  LOOP"] as PanelButton).lit)
+		check("and the deck shows the range (%s)" % deck._loop_label.text, deck._loop_label.text.begins_with("LOOP 5.1"))
+		DAW.seek(s.bar_to_seconds(30.0))
+		(by_title["TRANSPORT  RETURN TO START"] as PanelButton).pressed.emit()
+		close_to("return-to-start goes to the loop's start while looping", s.position_seconds, s.loop_start)
+		(by_title["TRANSPORT  LOOP"] as PanelButton).pressed.emit()
+		(by_title["TRANSPORT  RETURN TO START"] as PanelButton).pressed.emit()
+		close_to("and to the top of the song when not", s.position_seconds, 0.0)
+	(by_title["TRANSPORT  STOP"] as PanelButton).pressed.emit()
+	check("stop stops", not s.playing)
+	(by_title["TRANSPORT  PLAY"] as PanelButton).pressed.emit()
+	check("play plays", s.playing)
+	(by_title["TRANSPORT  RECORD"] as PanelButton).pressed.emit()
+	check("record records", s.recording)
+	check("and the counter on the deck is the bar/beat", deck._counter.text == s.position_string)
+	DAW.transport_stop()
+	deck.queue_free()
+
+
+func _test_the_ruler_moves_the_playhead_and_draws_the_loop() -> void:
+	_offline()
+	var s := DAW.state
+	DAW.transport_stop()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline.set_view(0.0, s.bar_to_seconds(33.0))
+	var hand := FakeHand.new()
+	add_child(hand)
+	var seek: TimelineRuler = timeline._seek_strip
+	var loop: TimelineRuler = timeline._loop_strip
+	var at_bar := func(strip: TimelineRuler, bar: float) -> Vector3:
+		var x := timeline._x_for(s.bar_to_seconds(bar))
+		return timeline.to_global(Vector3(x, strip.position.y, strip.position.z))
+
+	seek.grab_begin(hand, at_bar.call(seek, 13.0))
+	close_to("a click on the ruler puts the playhead on that bar", s.position_seconds, s.bar_to_seconds(13.0), 0.01)
+	seek.grab_move(hand, at_bar.call(seek, 21.03))
+	close_to("dragging scrubs it, snapped to the beat", s.position_seconds, s.bar_to_seconds(21.0), 0.01)
+	seek.grab_end(hand)
+	timeline._process(0.0)
+	close_to("and the playhead line is drawn there", timeline._playhead.position.x,
+			timeline._x_for(s.bar_to_seconds(21.0)), 0.0005)
+	check("the ruler reads out the exact position (%s)" % seek.readout(), seek.readout().begins_with("21.1.00"))
+
+	loop.grab_begin(hand, at_bar.call(loop, 9.0))
+	loop.grab_move(hand, at_bar.call(loop, 17.0))
+	loop.grab_end(hand)
+	close_to("dragging the loop band sets the loop start", s.loop_start, s.bar_to_seconds(9.0), 0.01)
+	close_to("and its end", s.loop_end, s.bar_to_seconds(17.0), 0.01)
+	check("and turns looping on", s.looping)
+	timeline._process(0.0)
+	var bar := timeline._loop_bar
+	check("the loop is drawn on the band", bar.visible)
+	close_to("from its start", bar.position.x - bar.scale.x * 0.5, timeline._x_for(s.loop_start), 0.0005)
+	close_to("to its end", bar.position.x + bar.scale.x * 0.5, timeline._x_for(s.loop_end), 0.0005)
+	loop.grab_begin(hand, at_bar.call(loop, 12.0))
+	loop.grab_end(hand)
+	check("a click on the band switches looping off", not s.looping)
+	close_to("and keeps the range", s.loop_end, s.bar_to_seconds(17.0), 0.01)
+	check("the controls are on the control layer", seek.collision_layer == 2 and loop.collision_layer == 2)
+	hand.queue_free()
+	timeline.queue_free()
+
+
+func _test_undo_takes_back_a_gesture_not_a_frame() -> void:
+	_offline()
+	var s := DAW.state
+	var before := s.track(3).volume
+	for i in 20:
+		DAW.set_track_volume(3, before - 0.01 * i)
+	var dragged := s.track(3).volume
+	check("one drag is one step (%d)" % s.undo_depth, s.undo_depth == 1)
+	DAW.set_track_mute(3, true)
+	DAW.set_fx_enabled(1, 1, false)
+	check("each switch is its own step", s.undo_depth == 3)
+	DAW.undo()
+	check("undo puts the plugin back in", s.fx(1, 1).enabled)
+	DAW.undo()
+	check("then unmutes", not s.track(3).mute)
+	DAW.undo()
+	close_to("then puts the fader back where the drag started", s.track(3).volume, before)
+	check("and there is nothing left to undo", s.undo_depth == 0 and s.redo_depth == 3)
+	DAW.redo()
+	close_to("redo puts it where the drag ended", s.track(3).volume, dragged)
+	DAW.set_track_pan(3, 0.2)
+	check("a new change clears what could be redone", s.redo_depth == 0)
+	DAW.transport_play()
+	DAW.seek(10.0)
+	check("the transport is not history", s.undo_depth == 2)
+
+
+func _test_reaper_hears_the_transport_in_its_own_words() -> void:
+	var state := MixState.new()
+	MixWire.apply(state, "/repeat", [1.0])
+	check("/repeat is the loop switch", state.looping)
+	MixWire.apply(state, "/loop/start/time", [8.0])
+	MixWire.apply(state, "/loop/end/time", [16.0])
+	check("/loop/start|end/time is the range", state.loop_start == 8.0 and state.loop_end == 16.0)
+	MixWire.apply(state, "/beat/str", ["33.2.50"])
+	check("/beat/str is the bar/beat counter", state.position_string == "33.2.50")
+	MixWire.apply(state, "/time/str", ["1:23.456"])
+	check("/time/str does not overwrite it", state.position_string == "33.2.50" and state.time_string == "1:23.456")
+
+	var reaper := ReaperBackend.new()
+	var sent: Array = []
+	reaper.state = MixState.new()
+	add_child(reaper)
+	# No socket: write() applies locally, which is what the desk sees between send and echo.
+	reaper.set_looping(true)
+	check("set_looping turns looping on", reaper.state.looping)
+	reaper.seek(42.0)
+	close_to("seek is /time in seconds", reaper.state.position_seconds, 42.0)
+	reaper.set_loop_range(4.0, 12.0)
+	check("the loop range goes as two times", reaper.state.loop_start == 4.0 and reaper.state.loop_end == 12.0)
+	check("undo and redo are Reaper's own actions", ReaperBackend.UNDO_ACTION == 40029 and ReaperBackend.REDO_ACTION == 40030)
+	reaper.queue_free()
+	_offline()

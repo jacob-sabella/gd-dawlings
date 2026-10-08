@@ -31,6 +31,9 @@ const TIMEOUT_MSEC := 4000
 
 func open(dir: String = DEFAULT_DIR) -> bool:
 	_dir = dir.replace("~", OS.get_environment("HOME"))
+	# Ids from the clock, not from 1: the dropbox is shared, and a second client (a probe, a
+	# restarted app) counting from 1 would pick up answers that were written for the first.
+	_next_id = int(Time.get_unix_time_from_system() * 1000.0) % 1000000000
 	# Deliberately does NOT create the directory. The bridge script creates it when it starts;
 	# if it is missing, Reaper is not running the companion script, and silently creating an
 	# empty one would turn that into requests that are never answered.
@@ -58,12 +61,15 @@ func call_reaper(fn: String, args: Array = [], cb: Callable = Callable()) -> boo
 	var id := _next_id
 	_next_id += 1
 	var payload := JSON.stringify({"id": id, "fn": fn, "args": args})
-	var f := FileAccess.open("%s/request_%d.json" % [_dir, id], FileAccess.WRITE)
+	# Written aside and renamed, so the script never reads half a request.
+	var final := "%s/request_%d.json" % [_dir, id]
+	var f := FileAccess.open(final + ".tmp", FileAccess.WRITE)
 	if f == null:
 		push_error("ScriptBridge: cannot write request to %s" % _dir)
 		return false
 	f.store_string(payload)
 	f.close()
+	DirAccess.rename_absolute(final + ".tmp", final)
 	_pending[id] = {"fn": fn, "t": Time.get_ticks_msec(), "cb": cb}
 	return true
 
@@ -77,10 +83,14 @@ func poll() -> void:
 		var path := "%s/response_%d.json" % [_dir, id]
 		if FileAccess.file_exists(path):
 			var text := FileAccess.get_file_as_string(path)
+			var parsed = JSON.parse_string(text)
+			# An older bridge script writes in place; a response caught half-written is left to
+			# finish and read again next poll, up to the timeout, rather than handed on as null.
+			if parsed == null and now - int(_pending[id]["t"]) <= TIMEOUT_MSEC:
+				continue
 			DirAccess.remove_absolute(path)
 			var entry: Dictionary = _pending[id]
 			_pending.erase(id)
-			var parsed = JSON.parse_string(text)
 			if entry["cb"].is_valid():
 				entry["cb"].call(parsed)
 		elif now - int(_pending[id]["t"]) > TIMEOUT_MSEC:

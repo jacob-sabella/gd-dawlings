@@ -46,11 +46,15 @@ csurf_cnt=1
 csurf_0=OSC "Reaper3D" 7 8000 "127.0.0.1" 9000 16384 1 "Reaper3D"
 splashscreen=0
 autosavemode=0
+promptendrec=0
 undomaxmem=64
 [verchk]
 lastt=4102444800
 INI
 fi
+# Stopping a take must not open a modal: while "save/delete new files?" is up, Reaper drops
+# every OSC message, and the link looks broken for a reason the link cannot see.
+grep -q '^promptendrec=' "$RIG/reaper.ini" || sed -i 's/^\[REAPER\]$/[REAPER]\npromptendrec=0/' "$RIG/reaper.ini"
 python3 tools/rig/make_media.py "$RIG/rig_media" >/dev/null
 
 if ! pactl list short sinks 2>/dev/null | grep -q "$SINK"; then
@@ -71,6 +75,16 @@ reaper_bin="$(command -v reaper)"
 # Up means answering: the bridge writes its data directory when it starts.
 for _ in $(seq 1 200); do
   if [ -d "$RIG/Scripts/reaper3d_bridge_data" ] && { [ -f "$PROJECT" ] || [ "${open[0]}" = "$PROJECT" ]; }; then
+    # Reaper opens its main window from a later process than the one the compositor launched,
+    # so the exec rule does not always catch it; move whatever it opened, by PID, after the fact.
+    if [ -n "$OFFSCREEN_WORKSPACE" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+      pid="$(pgrep -f -- "-cfgfile $RIG/reaper.ini" | head -1)"
+      for _ in $(seq 1 20); do
+        hyprctl clients -j 2>/dev/null | grep -q "\"pid\": $pid," && break
+        sleep 0.25
+      done
+      hyprctl eval "hl.dispatch(hl.dsp.window.move({ workspace = $OFFSCREEN_WORKSPACE, silent = true, window = 'pid:$pid' }))" >/dev/null 2>&1 || true
+    fi
     echo "rig: up ($RIG)"
     exit 0
   fi

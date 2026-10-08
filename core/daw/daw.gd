@@ -30,6 +30,7 @@ const COMMANDS := [
 	&"set_fx_param", &"set_fx_enabled",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
+	&"set_looping", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"create_send", &"remove_send",
 ]
 
@@ -120,6 +121,12 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 func transport_play() -> void: _do(&"transport_play", [])
 func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])
+func set_looping(on: bool) -> void: _do(&"set_looping", [on])
+func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
+func set_loop_range(start: float, end: float) -> void:
+	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
+func undo() -> void: _do(&"undo", [])
+func redo() -> void: _do(&"redo", [])
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to

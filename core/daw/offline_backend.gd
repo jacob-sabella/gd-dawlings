@@ -183,7 +183,9 @@ func _arrange() -> void:
 	state.track(2).rec_arm = true
 	state.track(10).rec_arm = true
 	state.track(4).mute = true
-	state.track(10).solo = true
+	# No solo. There was one, on the lead vocal, to light a solo lamp in the demo -- and once
+	# the meters started reading true, a soloed vocal meant every other strip on the desk sat
+	# dead, which is right for a solo and wrong for a picture of a mix.
 
 	# A couple of FX chains, so the racks have something to stand for.
 	#
@@ -239,17 +241,34 @@ func _arrange() -> void:
 ## together and the pads sit still. Anything more elaborate would be a music generator, and the
 ## only question this has to answer is whether twelve meters moving at once look like a mix.
 func _drive_meters(delta: float) -> void:
-	state.position_seconds += delta
+	# The clock runs only while the transport does, and wraps round the loop when there is one
+	# -- which is what makes a stopped transport, a seek and a loop testable without Reaper.
+	if state.playing:
+		state.position_seconds += delta
+		if state.looping and state.has_loop_range() and state.position_seconds >= state.loop_end:
+			state.position_seconds = state.loop_start + fmod(state.position_seconds - state.loop_end,
+					state.loop_end - state.loop_start)
 	var beats := state.position_seconds * state.tempo / 60.0
-	state.position_string = "%d.%d.%02d" % [int(beats / 4.0) + 1, int(fmod(beats, 4.0)) + 1, int(fmod(beats, 1.0) * 100.0)]
+	state.position_string = state.bar_beat(state.position_seconds)
+	# Solo is exclusive: while anything is soloed, everything that is not is silent. A meter that
+	# kept moving on a track you cannot hear is a meter that does not read true.
+	var any_solo := false
+	for index in state.track_indices():
+		if (state.tracks[index] as MixState.TrackState).solo:
+			any_solo = true
+			break
 
 	var bus_l := 0.0
 	var bus_r := 0.0
 	for index in state.track_indices():
 		var t: MixState.TrackState = state.tracks[index]
-		if t.mute:
-			t.vu_l = 0.0
-			t.vu_r = 0.0
+		if t.mute or (any_solo and not t.solo) or not state.playing:
+			# Falling, not snapping: a real meter's ballistics, and the reason a stop reads as
+			# the music stopping rather than as the meters being switched off.
+			t.vu_l = maxf(0.0, t.vu_l - delta * 2.5)
+			t.vu_r = maxf(0.0, t.vu_r - delta * 2.5)
+			bus_l += t.vu_l * t.vu_l * (0.0 if t.mute or (any_solo and not t.solo) else 1.0)
+			bus_r += t.vu_r * t.vu_r * (0.0 if t.mute or (any_solo and not t.solo) else 1.0)
 			continue
 		var phase := fmod(beats + index * 0.37, 4.0)
 		var hit := exp(-phase * 2.2) if index <= 4 else 0.45 + 0.35 * sin(beats * 0.8 + index)
@@ -271,7 +290,8 @@ func _drive_meters(delta: float) -> void:
 	m.vu_r = clampf(sqrt(bus_r) * m.volume * 0.46, 0.0, 1.0)
 	record_for_replication("/master/vu/L", [m.vu_l])
 	record_for_replication("/master/vu/R", [m.vu_r])
-	record_for_replication("/time/str", [state.position_string])
+	record_for_replication("/beat/str", [state.position_string])
+	record_for_replication("/time", [state.position_seconds])
 	state.transport_changed.emit()
 
 
@@ -283,44 +303,60 @@ func _drive_meters(delta: float) -> void:
 
 func set_track_volume(index: int, taper: float) -> void:
 	var t := state.track(index)
+	_remember("/track/%d/volume" % index, set_track_volume.bind(index, t.volume),
+			set_track_volume.bind(index, taper))
 	state.set_track_field(index, &"volume", clampf(taper, 0.0, 1.0))
 	state.set_track_field(index, &"volume_db", taper_to_db(t.volume))
 	record_for_replication("/track/%d/volume" % index, [t.volume])
 
 
 func set_track_pan(index: int, pan: float) -> void:
+	_remember("/track/%d/pan" % index, set_track_pan.bind(index, state.track(index).pan),
+			set_track_pan.bind(index, pan))
 	state.set_track_field(index, &"pan", clampf(pan, 0.0, 1.0))
 	record_for_replication("/track/%d/pan" % index, [state.track(index).pan])
 
 
 func set_track_mute(index: int, muted: bool) -> void:
+	_remember("/track/%d/mute" % index, set_track_mute.bind(index, state.track(index).mute),
+			set_track_mute.bind(index, muted), false)
 	state.set_track_field(index, &"mute", muted)
 	record_for_replication("/track/%d/mute" % index, [1.0 if muted else 0.0])
 
 
 func set_track_solo(index: int, soloed: bool) -> void:
+	_remember("/track/%d/solo" % index, set_track_solo.bind(index, state.track(index).solo),
+			set_track_solo.bind(index, soloed), false)
 	state.set_track_field(index, &"solo", soloed)
 	record_for_replication("/track/%d/solo" % index, [1.0 if soloed else 0.0])
 
 
 func set_track_rec_arm(index: int, armed: bool) -> void:
+	_remember("/track/%d/recarm" % index, set_track_rec_arm.bind(index, state.track(index).rec_arm),
+			set_track_rec_arm.bind(index, armed), false)
 	state.set_track_field(index, &"rec_arm", armed)
 	record_for_replication("/track/%d/recarm" % index, [1.0 if armed else 0.0])
 
 
 func set_master_volume(taper: float) -> void:
+	_remember("/master/volume", set_master_volume.bind(state.master.volume),
+			set_master_volume.bind(taper))
 	state.set_master_field(&"volume", clampf(taper, 0.0, 1.0))
 	state.set_master_field(&"volume_db", taper_to_db(state.master.volume))
 	record_for_replication("/master/volume", [state.master.volume])
 
 
 func set_master_pan(pan: float) -> void:
+	_remember("/master/pan", set_master_pan.bind(state.master.pan), set_master_pan.bind(pan))
 	state.set_master_field(&"pan", clampf(pan, 0.0, 1.0))
 	record_for_replication("/master/pan", [state.master.pan])
 
 
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
 	var f := state.fx(track_index, fx_index)
+	_remember("/track/%d/fx/%d/fxparam/%d" % [track_index, fx_index, param],
+			set_fx_param.bind(track_index, fx_index, param, float(f.params.get(param, 0.0))),
+			set_fx_param.bind(track_index, fx_index, param, value))
 	f.params[param] = clampf(value, 0.0, 1.0)
 	state.fx_changed.emit(track_index, fx_index)
 	record_for_replication("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [f.params[param]])
@@ -328,9 +364,97 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	var f := state.fx(track_index, fx_index)
+	_remember("/track/%d/fx/%d/bypass" % [track_index, fx_index],
+			set_fx_enabled.bind(track_index, fx_index, f.enabled),
+			set_fx_enabled.bind(track_index, fx_index, enabled), false)
 	f.enabled = enabled
 	state.fx_changed.emit(track_index, fx_index)
 	record_for_replication("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
+
+
+# --- history ------------------------------------------------------------------------------
+#
+# Reaper keeps its own undo history and this backend has to stand in for it, or undo would be
+# a feature that only exists with Reaper running -- and untestable without it. What is kept is
+# what Reaper keeps: changes to the mix, not the transport. A fader drag is many writes and ONE
+# step, the way it is in Reaper: writes to the same control close together in time fold into the
+# step that is already open, keeping where it started.
+
+## Writes to one control closer together than this are one gesture.
+const GESTURE_MS := 700
+
+var _undo: Array = []
+var _redo: Array = []
+var _replaying := false
+
+
+func _remember(key: String, back: Callable, again: Callable, folds := true) -> void:
+	if _replaying:
+		return
+	var now := Time.get_ticks_msec()
+	if folds and not _undo.is_empty():
+		var last: Dictionary = _undo[-1]
+		if last["key"] == key and now - int(last["t"]) < GESTURE_MS:
+			last["again"] = again
+			last["t"] = now
+			return
+	_undo.append({"key": key, "back": back, "again": again, "t": now})
+	_redo.clear()
+	_say_depth()
+
+
+func undo() -> void:
+	if _undo.is_empty():
+		return
+	var step: Dictionary = _undo.pop_back()
+	_replaying = true
+	(step["back"] as Callable).call()
+	_replaying = false
+	_redo.append(step)
+	_say_depth()
+
+
+func redo() -> void:
+	if _redo.is_empty():
+		return
+	var step: Dictionary = _redo.pop_back()
+	_replaying = true
+	(step["again"] as Callable).call()
+	_replaying = false
+	# Re-opening a gesture by redoing it would be wrong: the next drag is a new step.
+	step["t"] = 0
+	_undo.append(step)
+	_say_depth()
+
+
+func _say_depth() -> void:
+	state.undo_depth = _undo.size()
+	state.redo_depth = _redo.size()
+	state.transport_changed.emit()
+	record_for_replication("/undo", [_undo.size(), _redo.size()])
+
+
+# --- transport ----------------------------------------------------------------------------
+
+func set_looping(on: bool) -> void:
+	state.looping = on
+	state.transport_changed.emit()
+	record_for_replication("/repeat", [1.0 if on else 0.0])
+
+
+func seek(seconds: float) -> void:
+	state.position_seconds = maxf(seconds, 0.0)
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/time", [state.position_seconds])
+
+
+func set_loop_range(start: float, end: float) -> void:
+	state.loop_start = start
+	state.loop_end = end
+	state.transport_changed.emit()
+	record_for_replication("/loop/start/time", [start])
+	record_for_replication("/loop/end/time", [end])
 
 
 func transport_play() -> void:

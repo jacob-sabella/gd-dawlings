@@ -245,17 +245,89 @@ function handlers.RemoveTrackSend(args)
   return {ok = ok}
 end
 
+--- What Reaper itself holds right now: the transport, the loop, the history, and every track's
+-- mix settings and plugin states. OSC already streams most of this, which is exactly why it is
+-- here: a test that checks the desk against the desk's own echo proves nothing, and this reads
+-- the project directly, by a different road.
+--
+-- args[1], when given, caps how many parameters per plugin are reported (default 8).
+function handlers.GetState(args)
+  local cap = math.floor((args and args[1]) or 8)
+  local state = reaper.GetPlayState()
+  local playing = (state & 1) == 1
+  local loop_start, loop_end = reaper.GetSet_LoopTimeRange(false, true, 0, 0, false)
+  local sel_start, sel_end = reaper.GetSet_LoopTimeRange(false, false, 0, 0, false)
+  local tracks = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, i)
+    local fx = {}
+    for f = 0, reaper.TrackFX_GetCount(tr) - 1 do
+      local params = {}
+      for p = 0, math.min(reaper.TrackFX_GetNumParams(tr, f), cap) - 1 do
+        params[#params + 1] = reaper.TrackFX_GetParamNormalized(tr, f, p)
+      end
+      fx[#fx + 1] = {enabled = reaper.TrackFX_GetEnabled(tr, f), params = params}
+    end
+    local items = {}
+    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      local it = reaper.GetTrackMediaItem(tr, n)
+      items[#items + 1] = {
+        start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
+        length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
+        selected = reaper.IsMediaItemSelected(it),
+      }
+    end
+    tracks[#tracks + 1] = {
+      index = i + 1,
+      volume = reaper.GetMediaTrackInfo_Value(tr, 'D_VOL'),
+      pan = reaper.GetMediaTrackInfo_Value(tr, 'D_PAN'),
+      mute = reaper.GetMediaTrackInfo_Value(tr, 'B_MUTE') > 0.5,
+      solo = reaper.GetMediaTrackInfo_Value(tr, 'I_SOLO') > 0.5,
+      arm = reaper.GetMediaTrackInfo_Value(tr, 'I_RECARM') > 0.5,
+      fx = fx,
+      items = items,
+    }
+  end
+  return {
+    ok = true,
+    playing = playing,
+    recording = (state & 4) == 4,
+    position = playing and reaper.GetPlayPosition() or reaper.GetCursorPosition(),
+    cursor = reaper.GetCursorPosition(),
+    repeating = reaper.GetSetRepeat(-1) == 1,
+    loop_start = loop_start, loop_end = loop_end,
+    selection_start = sel_start, selection_end = sel_end,
+    can_undo = reaper.Undo_CanUndo2(0) or '',
+    can_redo = reaper.Undo_CanRedo2(0) or '',
+    tracks = tracks,
+  }
+end
+
+--- Set one of a track's numeric properties, the way a mouse in Reaper would. For checking that
+-- a change made in REAPER reaches the desk, which the desk cannot test by writing it itself.
+local SETTABLE = {D_VOL = true, D_PAN = true, B_MUTE = true, I_SOLO = true, I_RECARM = true}
+function handlers.SetTrackValue(args)
+  local tr = track_from_osc(args[1])
+  if not tr or not SETTABLE[args[2] or ''] then return {ok = false, error = 'no such track or key'} end
+  reaper.SetMediaTrackInfo_Value(tr, args[2], args[3])
+  return {ok = true}
+end
+
 function handlers.Ping()
   return {ok = true, version = reaper.GetAppVersion()}
 end
 
+local expected
+
 local function handle_file(filename)
   local id = filename:match('^request_(%d+)%.json$')
-  if not id then return end
+  if not id then return false end
+  expected[id] = nil
+  expected[tostring(tonumber(id) + 1)] = reaper.time_precise()
 
   local path = bridge_dir .. filename
   local f = io.open(path, 'r')
-  if not f then return end
+  if not f then return false end
   local text = f:read('*a')
   f:close()
   -- Deleted BEFORE the handler runs. A handler that errors would otherwise leave the request on
@@ -272,23 +344,63 @@ local function handle_file(filename)
     result = ok and value or {ok = false, error = tostring(value)}
   end
 
-  local out = io.open(bridge_dir .. 'response_' .. tostring(req_id or id) .. '.json', 'w')
+  -- Written aside and renamed into place, so the reader never sees half an answer. A response
+  -- with forty tracks of state in it is big enough to be caught mid-write by a 60 Hz poll.
+  local final = bridge_dir .. 'response_' .. tostring(req_id or id) .. '.json'
+  local out = io.open(final .. '.tmp', 'w')
   if out then
     out:write(encode(result))
     out:close()
+    os.remove(final)
+    os.rename(final .. '.tmp', final)
+  end
+  return true
+end
+
+-- The id each client is expected to send next, and when that was last true.
+--
+-- EnumerateFiles answers from a listing Reaper caches for about half a second, with no call
+-- that refreshes it -- so a bridge that only listed the directory made every request wait for
+-- that cache to expire: 0.5 s a request, back to back, from a script that runs thirty times a
+-- second. Clients number their requests in sequence, so once one has been heard from, its next
+-- request has a name known in advance and can simply be opened. Listing is left for a client's
+-- first request, and for anyone who does not count.
+expected = {}
+
+local function handle_expected()
+  local progressed = true
+  while progressed do
+    progressed = false
+    local now = reaper.time_precise()
+    for next_id, seen in pairs(expected) do
+      if now - seen > 30 then
+        expected[next_id] = nil
+      else
+        local name = 'request_' .. next_id .. '.json'
+        local f = io.open(bridge_dir .. name, 'r')
+        if f then
+          f:close()
+          handle_file(name)
+          progressed = true
+          break
+        end
+      end
+    end
   end
 end
 
 local function tick()
+  handle_expected()
   local i = 0
   while true do
     local filename = reaper.EnumerateFiles(bridge_dir, i)
     if not filename then break end
     -- Collected and handled without advancing the index when a file is consumed, because
     -- EnumerateFiles re-indexes after a deletion and skipping forward would miss every second
-    -- request in a burst.
-    if filename:match('^request_%d+%.json$') then
-      handle_file(filename)
+    -- request in a burst. A name the cache still lists but that is already handled fails to
+    -- open in handle_file and is stepped over.
+    if filename:match('^request_%d+%.json$') and handle_file(filename) then
+      -- consumed
     else
       i = i + 1
     end
@@ -297,5 +409,16 @@ local function tick()
 end
 
 ensure_dir()
+-- Answers left by a previous run are for clients that have long since given up on them.
+do
+  local stale, i = {}, 0
+  while true do
+    local name = reaper.EnumerateFiles(bridge_dir, i)
+    if not name then break end
+    if name:match('^response_') then stale[#stale + 1] = name end
+    i = i + 1
+  end
+  for _, name in ipairs(stale) do os.remove(bridge_dir .. name) end
+end
 reaper.ShowConsoleMsg('reaper-3d bridge running: ' .. bridge_dir .. '\n')
 tick()
