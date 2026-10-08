@@ -52,6 +52,8 @@ var _parts := {}
 var _parts_tempo := 0.0
 var _master_bus := -1
 var _capture: AudioEffectCapture
+## Recorded take file name -> its sound, or null when the file is not on this machine.
+var _take_streams := {}
 
 
 func summary() -> String:
@@ -352,45 +354,64 @@ func _on_transport_changed() -> void:
 		_render_parts()
 
 
-## The item under the playhead on this track, or null. Muted items are not there.
+## The item under the playhead on this track, or null. Muted items are not there. Where items
+## overlap, the newest one plays: a take recorded over the song is what you want to hear there.
 func item_at(index: int, seconds: float) -> MixState.ItemState:
-	for item in (state.tracks[index] as MixState.TrackState).items:
-		var it := item as MixState.ItemState
+	var items: Array = (state.tracks[index] as MixState.TrackState).items
+	for n in range(items.size() - 1, -1, -1):
+		var it := items[n] as MixState.ItemState
 		if not it.muted and seconds >= it.start and seconds < it.start + it.length:
 			return it
 	return null
 
 
-## Keeps every part's players where the song clock says they should be: playing inside an
-## item, silent outside one, and put back when they have drifted. The part is locked to the
-## song's bar grid rather than to the item's start, so splitting or moving an item never
-## shifts the music inside it off the beat.
+## Keeps every track's players where the song clock says they should be: playing inside an
+## item, silent outside one, and put back when they have drifted. A demo part is locked to the
+## song's bar grid rather than to the item's start, so splitting or moving an item never shifts
+## the music inside it off the beat. A recorded take is locked to its item instead: it is that
+## item's sound, from where in the file the item begins.
 func _sync_players() -> void:
 	var pos := state.position_seconds
 	var since := AudioServer.get_time_since_last_mix()
 	for index in _players:
-		var role := DemoSong.role_of(state.tracks[index].name)
-		var part: AudioStreamWAV = _parts.get(role)
-		var want := state.playing and part != null and item_at(index, pos) != null
+		var it := item_at(index, pos) if state.playing else null
+		var stream: AudioStreamWAV = null
+		var expected := 0.0
+		var wraps := false
+		if it != null and not it.source.is_empty():
+			stream = take_stream(it.source)
+			expected = pos - it.start + it.source_offset
+			if stream != null and expected >= stream.get_length():
+				stream = null
+		elif it != null:
+			stream = _parts.get(DemoSong.role_of(state.tracks[index].name))
+			if stream != null:
+				expected = fposmod(pos, stream.get_length())
+				wraps = true
 		for p in _players[index]:
 			var player := p as AudioStreamPlayer
-			if not want:
+			if stream == null:
 				if player.playing:
 					player.stop()
 				continue
-			var length := part.get_length()
-			var expected := fposmod(pos, length)
-			if player.stream != part:
-				player.stream = part
+			if player.stream != stream or not player.playing:
+				player.stream = stream
 				player.play(expected)
 				continue
-			if not player.playing:
+			var off := player.get_playback_position() + since - expected
+			if wraps:
+				var length := stream.get_length()
+				off = wrapf(off, -length * 0.5, length * 0.5)
+			if absf(off) > DRIFT_SECONDS:
 				player.play(expected)
-				continue
-			var drift := absf(wrapf(player.get_playback_position() + since - expected,
-					-length * 0.5, length * 0.5))
-			if drift > DRIFT_SECONDS:
-				player.play(expected)
+
+
+## A recorded take's sound, read from the host's takes folder once and kept.
+func take_stream(source: String) -> AudioStreamWAV:
+	if not _take_streams.has(source):
+		var path := AudioTake.DIR.path_join(source.get_file())
+		_take_streams[source] = AudioStreamWAV.load_from_file(path) if FileAccess.file_exists(path) else null
+	return _take_streams[source]
 
 
 func _drive_meters(delta: float) -> void:
@@ -431,16 +452,13 @@ func mix_source() -> MixSource:
 
 class BusSource extends MixSource:
 	var _backend: GodotBackend
+	var _resampler := Resampler.new()
 
 	func _init(backend: GodotBackend) -> void:
 		_backend = backend
 
 	func start() -> bool:
 		return _backend._capture != null
-
-	## Where the last block's resampling left off, in input frames, and that block's last frame.
-	var _phase := 0.0
-	var _last := Vector2.ZERO
 
 	func read() -> PackedVector2Array:
 		var c := _backend._capture
@@ -450,22 +468,8 @@ class BusSource extends MixSource:
 		var got := c.get_buffer(n) if n > 0 else PackedVector2Array()
 		return resample(got, AudioServer.get_mix_rate())
 
-	## The wire is 48kHz. The project asks the driver for that, but a sound card can insist on
-	## 44.1kHz, and played as 48kHz the guest would hear the song 9% sharp and fast.
 	func resample(got: PackedVector2Array, from_rate: float) -> PackedVector2Array:
-		if is_equal_approx(from_rate, MixFeed.RATE) or got.is_empty():
-			return got
-		var step := from_rate / MixFeed.RATE
-		var out := PackedVector2Array()
-		# Positions run from -1 (the previous block's last frame) to the end of this one.
-		while _phase < got.size() - 1:
-			var i := floori(_phase)
-			var a := _last if i < 0 else got[i]
-			out.append(a.lerp(got[i + 1], _phase - i))
-			_phase += step
-		_phase -= got.size()
-		_last = got[got.size() - 1]
-		return out
+		return _resampler.resample(got, from_rate, MixFeed.RATE)
 
 	func describe() -> String:
 		return "The built-in mix"

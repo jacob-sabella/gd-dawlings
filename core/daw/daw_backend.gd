@@ -58,9 +58,15 @@ const Capability := {
 	## Put a take of MIDI notes on a track at a song position. Reaper needs the ReaScript bridge
 	## for it; OSC has no message that creates an item.
 	MIDI_TAKES = &"midi_takes",
+	## Put a recorded audio file on a track at a song position. Reaper needs the bridge for it,
+	## for the same reason.
+	AUDIO_TAKES = &"audio_takes",
 }
 
 var state := MixState.new()
+## The overview of every take placed through this backend, by file name: a DAW that reports
+## its items back (Reaper) reports the file, never the overview.
+var take_peaks := {}
 
 ## Pending replication, keyed so repeats collapse. Split in two because the two halves need
 ## opposite delivery guarantees, and sending both the same way is wrong either way:
@@ -182,6 +188,14 @@ func add_marker(_seconds: float, _marker_name: String) -> void: pass
 func insert_midi_take(_track_index: int, _start: float, _end: float, _notes: Array,
 		_name: String) -> void: pass
 
+## A recorded take: a new audio item on `track_index` at `start` seconds, `length` long, playing
+## `source` -- a file name in AudioTake.DIR on this machine -- from its beginning. `peaks` is the
+## file's overview, for drawing. One undo step. Only ever called on the host, by the host: a
+## guest's audio arrives through Session, never as an intent, so no peer can name a file. A
+## backend that cannot do it answers false to Capability.AUDIO_TAKES.
+func insert_audio_take(_track_index: int, _start: float, _source: String, _length: float,
+		_peaks: PackedByteArray, _name: String) -> void: pass
+
 
 # --- item edits, on the cache ------------------------------------------------------------
 #
@@ -261,6 +275,9 @@ func _locally_split(seconds: float) -> int:
 				right.name = item.name
 				right.muted = item.muted
 				right.selected = true
+				right.source = item.source
+				right.peaks = item.peaks
+				right.source_offset = item.source_offset + (seconds - item.start)
 				_split_notes(item, right, seconds)
 				item.length = seconds - item.start
 				added.append(right)
@@ -297,6 +314,20 @@ func _locally_insert_take(track_index: int, start: float, end: float, notes: Arr
 	item.length = end - start
 	item.name = take_name
 	item.notes = MidiTake.pack_relative(notes, start)
+	lane.append(item)
+	_write_lane(track_index, lane)
+
+
+func _locally_insert_audio(track_index: int, start: float, source: String, length: float,
+		peaks: PackedByteArray, take_name: String) -> void:
+	take_peaks[source] = peaks
+	var lane := _lane_copy(track_index)
+	var item := MixState.ItemState.new()
+	item.start = start
+	item.length = length
+	item.name = take_name
+	item.source = source
+	item.peaks = peaks
 	lane.append(item)
 	_write_lane(track_index, lane)
 

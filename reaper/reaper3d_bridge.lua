@@ -280,6 +280,15 @@ function handlers.GetTimeline()
         local ok, value = reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', '', false)
         if ok then name = value end
       end
+      -- An audio item's file, by name only, and how far into it the item begins: what lets the
+      -- desk draw a guest's take it recorded, split or moved in Reaper or not.
+      local source, offset = '', 0
+      if take and not reaper.TakeIsMIDI(take) then
+        local src = reaper.GetMediaItemTake_Source(take)
+        local path = src and reaper.GetMediaSourceFileName(src, '') or ''
+        source = path:match('([^/\\]+)$') or ''
+        offset = reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS')
+      end
       items[#items + 1] = {
         start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
         length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
@@ -287,6 +296,8 @@ function handlers.GetTimeline()
         selected = reaper.IsMediaItemSelected(it),
         name = name,
         notes = item_notes(it, take),
+        source = source,
+        offset = offset,
       }
     end
     if #items > 0 then
@@ -540,6 +551,55 @@ function handlers.InsertMidiTake(args)
   reaper.UpdateItemInProject(item)
   local result = edited('Insert MIDI take')
   result.notes = placed
+  return result
+end
+
+-- A copy of a file, byte for byte, or false.
+local function copy_file(from, to)
+  local src = io.open(from, 'rb')
+  if not src then return false end
+  local data = src:read('*a')
+  src:close()
+  local dst = io.open(to, 'wb')
+  if not dst then return false end
+  dst:write(data)
+  dst:close()
+  return true
+end
+
+-- A guest's recorded take. args: track (1-based, as OSC), start in project seconds, the WAV's
+-- absolute path on this machine, take name. A saved project gets its own copy of the file in
+-- its media folder, the place Reaper puts its own recordings, so the project still opens once
+-- the desk's copy is gone; an unsaved one, which has no folder yet, uses the file where it is.
+function handlers.InsertAudioTake(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local path = type(args[3]) == 'string' and args[3] or ''
+  if path == '' or not reaper.file_exists(path) then return {ok = false, error = 'no such file'} end
+  local _, project_file = reaper.EnumProjects(-1)
+  if project_file and project_file ~= '' then
+    local folder = reaper.GetProjectPathEx(0)
+    reaper.RecursiveCreateDirectory(folder, 0)
+    local name = path:match('([^/\\]+)$')
+    local kept = folder .. '/' .. name
+    if copy_file(path, kept) then path = kept end
+  end
+  reaper.Undo_BeginBlock()
+  local item = reaper.AddMediaItemToTrack(tr)
+  local take = reaper.AddTakeToMediaItem(item)
+  local source = reaper.PCM_Source_CreateFromFile(path)
+  reaper.SetMediaItemTake_Source(take, source)
+  local length = reaper.GetMediaSourceLength(source)
+  reaper.SetMediaItemInfo_Value(item, 'D_POSITION', math.max(0, args[2] or 0))
+  reaper.SetMediaItemInfo_Value(item, 'D_LENGTH', length)
+  local name = type(args[4]) == 'string' and args[4] or ''
+  if name ~= '' then reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true) end
+  reaper.UpdateItemInProject(item)
+  -- Build any missing peaks, so the item has a waveform in Reaper's own window at once.
+  reaper.Main_OnCommand(40047, 0)
+  local result = edited('Insert audio take')
+  result.path = path
+  result.length = length
   return result
 end
 

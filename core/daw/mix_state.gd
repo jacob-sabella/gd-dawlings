@@ -110,6 +110,13 @@ class ItemState extends RefCounted:
 	## the item's left edge so that moving the item moves its notes. Empty for audio, and for a
 	## backend that cannot read an item's contents. See MidiTake.
 	var notes := PackedFloat32Array()
+	## A recorded take's file, by name, in the host's AudioTake.DIR; empty for anything else. A
+	## name and not a path, so a guest holding the item learns nothing about the host's disk.
+	var source: String = ""
+	## Seconds into the file at the item's left edge: not zero once the item has been split.
+	var source_offset: float = 0.0
+	## The file's overview, AudioTake.PEAKS_PER_SECOND bytes a second, for drawing.
+	var peaks := PackedByteArray()
 
 	func end() -> float:
 		return start + length

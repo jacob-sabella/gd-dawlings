@@ -537,6 +537,13 @@ func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
 	_remember_edit(before)
 
 
+func insert_audio_take(track_index: int, start: float, source: String, length: float,
+		peaks: PackedByteArray, take_name: String) -> void:
+	var before := _lanes_snapshot()
+	_locally_insert_audio(track_index, start, source, length, peaks, take_name)
+	_remember_edit(before)
+
+
 ## An edit is one step, never folded: two moves in a row are two things you might take back.
 func _remember_edit(before: Dictionary) -> void:
 	var after := _lanes_snapshot()

@@ -155,7 +155,7 @@ func can(capability: StringName) -> bool:
 		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
 		# the arrangement instead of drawing a project with nothing in it.
 		return _bridge != null and _bridge.is_open()
-	if capability == Capability.MIDI_TAKES:
+	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
 		return _bridge != null and _bridge.is_open()
 	return true
@@ -434,6 +434,18 @@ func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
 	_edit("InsertMidiTake", midi_take_request(track_index, start, end, notes, take_name))
 
 
+## The file, by its absolute path, since Reaper is on this machine; the bridge copies it into a
+## saved project's media folder. Shown on the cache at once, like every edit.
+func insert_audio_take(track_index: int, start: float, source: String, length: float,
+		peaks: PackedByteArray, take_name: String) -> void:
+	if _bridge == null or not _bridge.is_open():
+		push_warning("insert_audio_take needs the ReaScript bridge; OSC cannot create an item.")
+		return
+	_locally_insert_audio(track_index, start, source, length, peaks, take_name)
+	var path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(source))
+	_edit("InsertAudioTake", [track_index, start, path, MidiTake.clean_name(take_name)])
+
+
 ## The bridge's argument list for a take. Flat, because the bridge's request decoder reads one
 ## flat list of numbers and strings: track, start, end, name, note count, then five numbers per
 ## note -- on and off in project seconds, pitch, velocity, channel.
@@ -511,6 +523,12 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			var notes = item.get("notes", [])
 			if notes is Array and not notes.is_empty():
 				packed.append(PackedFloat32Array(notes))
+			# One of the takes recorded through this desk: its file and its overview, so it
+			# is drawn as the sound it is wherever Reaper has put it since.
+			var source := str(item.get("source", "")).get_file()
+			if take_peaks.has(source):
+				packed.append({"source": source, "offset": float(item.get("offset", 0.0)),
+						"peaks": take_peaks[source]})
 		lanes[idx] = packed
 
 	for index in state.track_indices():
