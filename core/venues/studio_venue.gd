@@ -126,12 +126,12 @@ func _ready() -> void:
 	# Narrower than the floor. A control room is a room, not a hangar, and the walls have to be
 	# close enough to read as walls from the working position -- at nine metres apart they are
 	# two more grey rectangles in the distance.
-	for spec in [[Vector3(0, Studio.WALL_HEIGHT * 0.5, -2.2), Vector3(Studio.ROOM_WIDTH, Studio.WALL_HEIGHT, 0.1)],
+	for spec in [[Vector3(0, Studio.WALL_HEIGHT * 0.5, -2.2), Vector3(room_width, Studio.WALL_HEIGHT, 0.1)],
 			# A hair lower than the back wall, whose ends they overlap: level, the two tops met in
 			# one plane at each corner.
-			[Vector3(-Studio.ROOM_WIDTH * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
+			[Vector3(-room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
 					Vector3(0.1, Studio.WALL_HEIGHT - 0.004, Studio.ROOM_DEPTH)],
-			[Vector3(Studio.ROOM_WIDTH * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
+			[Vector3(room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
 					Vector3(0.1, Studio.WALL_HEIGHT - 0.004, Studio.ROOM_DEPTH)]]:
 		var wall := MeshInstance3D.new()
 		var wall_mesh := BoxMesh.new()
@@ -154,7 +154,7 @@ func _dress_room() -> void:
 	var ceiling := MeshInstance3D.new()
 	ceiling.name = "Ceiling"
 	var lid := BoxMesh.new()
-	lid.size = Vector3(Studio.ROOM_WIDTH + 0.1, 0.08, Studio.ROOM_DEPTH + 0.1)
+	lid.size = Vector3(room_width + 0.1, 0.08, Studio.ROOM_DEPTH + 0.1)
 	ceiling.mesh = lid
 	ceiling.position = Vector3(0, Studio.WALL_HEIGHT + 0.041, 0.3)
 	var lid_mat := Materials.painted_wall(Color(0.075, 0.076, 0.08))
@@ -176,7 +176,8 @@ func _dress_room() -> void:
 		can.height = 0.012
 		can.radial_segments = 24
 		fitting.mesh = can
-		fitting.position = Vector3(at.x, Studio.WALL_HEIGHT - 0.005, at.z)
+		var spread := SessionLayout.widen(Vector2(at.x, at.z), room_width)
+		fitting.position = Vector3(spread.x, Studio.WALL_HEIGHT - 0.005, spread.y)
 		fitting.material_override = Materials.brushed_metal()
 		add_child(fitting)
 		var lens := MeshInstance3D.new()
@@ -223,7 +224,10 @@ func _dress_room() -> void:
 		var slab := BoxMesh.new()
 		slab.size = spec[1]
 		panel.mesh = slab
-		panel.position = spec[0]
+		var p: Vector3 = spec[0]
+		# Side-wall panels stay on the side walls; back-wall ones spread with the room.
+		var grow := (room_width - SessionLayout.BASE_WIDTH) * 0.5
+		panel.position = Vector3(p.x + signf(p.x) * grow * (1.0 if absf(p.x) > 3.0 else 0.6), p.y, p.z)
 		panel.rotation_degrees = Vector3(0, spec[2], 0)
 		panel.material_override = Materials.cached_scanned("panel_" + spec[3], "rough_linen", "1k",
 				0.35, cloth[spec[3]])
@@ -234,7 +238,8 @@ func _dress_room() -> void:
 	var rug := MeshInstance3D.new()
 	rug.name = "Rug"
 	var mat := BoxMesh.new()
-	mat.size = Vector3(3.0, 0.008, 2.2)
+	# Under the desk and the chair, so as wide as the desk is long, with a margin.
+	mat.size = Vector3(3.0 + (room_width - SessionLayout.BASE_WIDTH), 0.008, 2.2)
 	rug.mesh = mat
 	rug.position = Vector3(0, 0.0045, 0.25)
 	rug.material_override = Materials.scanned(StandardMaterial3D.new(), "wool_boucle", "1k",

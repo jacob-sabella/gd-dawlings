@@ -92,6 +92,7 @@ func _ready() -> void:
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
+	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
@@ -4802,3 +4803,55 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("and the solids are not on the control layer",
 			walker._solid_body.collision_layer & (1 << (Interactor.CONTROL_LAYER - 1)) == 0)
 	studio.queue_free()
+
+
+func _test_the_room_is_laid_out_for_the_size_of_the_session() -> void:
+	# The rule on its own: the authored room is what a thirteen-track desk gets.
+	var small := SessionLayout.fit(0.461)
+	close_to("a small desk keeps the authored room width", small["room_width"], SessionLayout.BASE_WIDTH)
+	check("and the rack where it was authored", (small["rack"][0] as Vector2).distance_to(SessionLayout.RACK_AT) < 0.01)
+	check("and the deck", (small["deck_trolley"][0] as Vector2).distance_to(SessionLayout.DECK_AT) < 0.01)
+	var huge := SessionLayout.fit(3.0)
+	check("a six-metre desk gets a wider room (%.1f m)" % huge["room_width"],
+			huge["room_width"] > 6.0 + SessionLayout.RACK_GAP * 2.0)
+	check("in whole steps", is_equal_approx(fmod(huge["room_width"] - SessionLayout.BASE_WIDTH,
+			SessionLayout.WIDTH_STEP), 0.0) or is_equal_approx(fmod(huge["room_width"]
+			- SessionLayout.BASE_WIDTH, SessionLayout.WIDTH_STEP), SessionLayout.WIDTH_STEP))
+
+	var saved_path := Session.layout.save_path
+	for tracks in [13, 40, 64]:
+		var backend := OfflineBackend.new()
+		backend.state = MixState.new()
+		backend.track_count = tracks
+		DAW.use(backend)
+		var room := Studio.new()
+		room.medium = Presentation.Medium.SCREEN
+		add_child(room)
+		for node in room.find_children("*", "Node3D", true, false):
+			if node is Surface:
+				(node as Surface)._process(0.0)
+		var desk: Dictionary = room._desk_footprint()[0]
+		var bounds := room.floor_plan.bounds
+		var lost: Array = []
+		for piece in room.floor_plan.pieces:
+			var at := Vector2(piece.position.x, piece.position.z)
+			if not room.floor_plan.is_clear(piece, at, piece.rotation.y):
+				lost.append(piece.piece_id)
+		check("%d tracks: nothing on the floor overlaps the desk or anything else %s" % [tracks, lost],
+				lost.is_empty())
+		var desk_ends := (desk["h"] as Vector2).x
+		check("%d tracks: the room is wider than the desk with the rack and deck beside it (%.1f m for a %.1f m desk)" % [
+				tracks, room.room_width, desk_ends * 2.0], bounds.size.x > desk_ends * 2.0 + 1.0)
+		close_to("%d tracks: the venue was drawn to the same width" % tracks, room.venue.room_width, room.room_width)
+		var bar := (room._bridge_bar.mesh as BoxMesh).size.x
+		var bay := room.patchbay.content_aabb().size.x
+		check("%d tracks: the meter bridge spans the bay it carries (%.2f for %.2f)" % [tracks, bar, bay],
+				bar >= bay)
+		check("%d tracks: and the rack still faces the desk from its left" % tracks,
+				room.rack_trolley.position.x < -desk_ends)
+		check("%d tracks: and the deck from its right" % tracks,
+				room.deck_trolley.position.x > desk_ends)
+		room.free()
+	check("fitting the room wrote nothing to the saved layout",
+			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
+	Session.layout.save_path = saved_path

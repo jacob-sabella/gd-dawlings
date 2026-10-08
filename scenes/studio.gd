@@ -146,6 +146,14 @@ var _lamps: Array[OmniLight3D] = []
 ## {piece_id: Transform3D} -- where the authored layout stood each piece, for the things that
 ## were written against it: the floor points the looms run through.
 var _authored_floor: Dictionary = {}
+## How wide the room is right now. Starts at the authored width and grows with the desk; see
+## SessionLayout.
+var room_width := ROOM_WIDTH
+## True while the room is moving furniture to fit the session, so those moves are not saved as
+## if this participant had pushed everything.
+var _fitting := false
+var _bridge_legs: Array[MeshInstance3D] = []
+var _bridge_bar: MeshInstance3D
 
 ## Where a person stands to work, on a monitor. Far enough forward of the console's home at
 ## z = 0.1 that gear summoned to arm's length lands on the desk rather than through it.
@@ -316,6 +324,7 @@ func set_venue(id: StringName, persist := true) -> void:
 	venue = Venue.make(id)
 	venue.name = "Venue"
 	venue.rich = rich_rendering()
+	venue.room_width = room_width
 	var env := _house_environment()
 	_house_key(key_light)
 	venue.dress(env, key_light)
@@ -371,7 +380,7 @@ func _assembly(of_name: String) -> Node3D:
 func _build_furniture() -> void:
 	floor_plan = FloorPlan.new()
 	floor_plan.name = "FloorPlan"
-	floor_plan.bounds = Rect2(-ROOM_WIDTH * 0.5 + 0.05, -2.15, ROOM_WIDTH - 0.10, ROOM_DEPTH - 0.05)
+	floor_plan.bounds = _room_bounds()
 	floor_plan.fixtures.append(_desk_footprint)
 	add_child(floor_plan)
 
@@ -388,8 +397,10 @@ func _build_furniture() -> void:
 		leg.position = Vector3(side * 0.30, 1.03, BRIDGE_POS.z)
 		leg.material_override = Materials.chassis()
 		bridge_frame.add_child(leg)
+		_bridge_legs.append(leg)
 
 	var bridge := MeshInstance3D.new()
+	_bridge_bar = bridge
 	var bridge_mesh := BoxMesh.new()
 	bridge_mesh.size = BRIDGE_SIZE
 	bridge.mesh = bridge_mesh
@@ -494,6 +505,70 @@ func _build_furniture() -> void:
 	timeline_stand.add_part(crossbar)
 
 
+func _room_bounds() -> Rect2:
+	return Rect2(-room_width * 0.5 + 0.05, -2.15, room_width - 0.10, ROOM_DEPTH - 0.05)
+
+
+## Move the room round the desk. See SessionLayout for the rule.
+##
+## A piece this participant has put somewhere themselves stays there unless the desk has grown
+## into it, and then it is pushed just clear, the way a person would shove it -- not sent back to
+## a default they had already rejected. A piece still where the room put it goes where the room
+## would put it now.
+func _fit_room_to_session() -> void:
+	if floor_plan == null or console == null:
+		return
+	var desk := _desk_footprint()
+	if desk.is_empty():
+		return
+	var fit := SessionLayout.fit((desk[0]["h"] as Vector2).x)
+	var width: float = fit["room_width"]
+	if not is_equal_approx(width, room_width):
+		room_width = width
+		floor_plan.bounds = _room_bounds()
+		if venue != null:
+			set_venue(venue.venue_id(), false)
+		if walker != null:
+			walker.rebuild_walls()
+	_fitting = true
+	for piece in floor_plan.pieces:
+		var t := piece as Trolley
+		if t == null or not is_instance_valid(t):
+			continue
+		var id := String(t.piece_id)
+		var want: Variant = null
+		if fit.has(id):
+			want = [fit[id][0], deg_to_rad(fit[id][1])]
+		elif id.begins_with("lamp_") and _authored_floor.has(t.piece_id):
+			var home: Transform3D = _authored_floor[t.piece_id]
+			want = [SessionLayout.widen(Vector2(home.origin.x, home.origin.z), room_width),
+					home.basis.get_euler().y]
+		var saved := Session.layout != null and Session.layout.has_transform(
+				StringName("floor/%s" % id), Presentation.Mode.STUDIO)
+		var here := Vector2(t.position.x, t.position.z)
+		if want != null and not saved:
+			if not (want[0] as Vector2).is_equal_approx(here) or not floor_plan.is_clear(t, here, t.rotation.y):
+				t.place(want[0], want[1])
+		elif not floor_plan.is_clear(t, here, t.rotation.y):
+			t.place(here, t.rotation.y)
+	_fitting = false
+	_fit_bridge_to_bay()
+	_looms_dirty = true
+
+
+## The meter bridge spans the bay it carries. Built for a 48cm patchbay; a forty-track bay is
+## 1.4 metres, and hung off a 70cm bar it was two thirds in the air.
+func _fit_bridge_to_bay() -> void:
+	if _bridge_bar == null or patchbay == null:
+		return
+	var box := patchbay.content_aabb()
+	var width := maxf(BRIDGE_SIZE.x, box.size.x + 0.06) if box.size.x > 0.0 else BRIDGE_SIZE.x
+	(_bridge_bar.mesh as BoxMesh).size = Vector3(width, BRIDGE_SIZE.y, BRIDGE_SIZE.z)
+	for i in _bridge_legs.size():
+		var side := -1.0 if i == 0 else 1.0
+		_bridge_legs[i].position.x = side * (width * 0.5 - 0.05)
+
+
 ## The console does not roll. It is the desk the room is arranged around and the one thing in
 ## it the mix position is measured from, so it is a fixture: solid, and in the way.
 ##
@@ -535,7 +610,8 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 
 
 func _on_trolley_settled(piece: Trolley) -> void:
-	if Session.layout == null:
+	if Session.layout == null or _fitting:
+		_looms_dirty = true
 		return
 	Session.layout.set_transform(StringName("floor/%s" % piece.piece_id),
 			Presentation.Mode.STUDIO, piece.transform)
@@ -772,6 +848,12 @@ func _build_surfaces() -> void:
 	# across it: a session that gains tracks moves where its own looms land.
 	patchbay.rebuilt.connect(refresh_looms)
 	refresh_looms()
+
+	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
+	# arrive after the room is built, and a project that gains a bank gains a metre of console.
+	console.rebuilt.connect(_fit_room_to_session)
+	patchbay.rebuilt.connect(_fit_bridge_to_bay)
+	_fit_room_to_session()
 
 
 ## A stand under every practical.
@@ -1199,7 +1281,7 @@ func _walk_to_seat() -> void:
 			# Inside the room and at a height a person's eyes can be at. A rack's bottom unit
 			# asks for a seat on the floor; nobody mixes lying down.
 			var bounds := floor_plan.bounds if floor_plan != null \
-					else Rect2(-ROOM_WIDTH * 0.5, -2.15, ROOM_WIDTH, ROOM_DEPTH)
+					else _room_bounds()
 			seat.origin = Vector3(
 					clampf(seat.origin.x, bounds.position.x + 0.2, bounds.end.x - 0.2),
 					clampf(seat.origin.y, 0.95, 1.95),

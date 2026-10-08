@@ -13,13 +13,18 @@ extends Node3D
 ## different venues around the same console; nothing about the mix depends on what the room
 ## looks like, so nothing about the venue is replicated.
 ##
-## Every venue keeps the same working footprint (Studio.ROOM_WIDTH x ROOM_DEPTH) because the
+## Every venue keeps the same working footprint (room_width x Studio.ROOM_DEPTH) because the
 ## furniture's floor plan is that rectangle. A venue with no walls marks it instead -- a lit
 ## border on the grid, a chalk outline in the chalk zone -- so the edge you will bump a rack
 ## into is never invisible.
 
 ## Registry, in cycling order. The first is the default.
 const IDS: Array[StringName] = [&"studio", &"grid", &"chalk"]
+
+## How wide the working footprint is. Set by the studio before the venue enters the tree; the
+## room grows with the desk (see SessionLayout), and a venue drawn for the old width would put
+## its walls through the rack.
+var room_width := Studio.ROOM_WIDTH
 
 ## Set by the studio before the venue enters the tree: whether the full desktop renderer is
 ## running. A venue must look right without it -- a headset runs the mobile renderer.
@@ -89,8 +94,8 @@ func pulse(_level: float) -> void:
 
 
 ## A lit or drawn outline of the working footprint, at floor level, as a set of corners.
-static func footprint_corners() -> PackedVector2Array:
-	var hw := Studio.ROOM_WIDTH * 0.5 - 0.05
+func footprint_corners() -> PackedVector2Array:
+	var hw := room_width * 0.5 - 0.05
 	var front := Studio.ROOM_DEPTH * 0.5 + 0.3 - 0.05
 	var back := -Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.05
 	return PackedVector2Array([Vector2(-hw, back), Vector2(hw, back), Vector2(hw, front),
