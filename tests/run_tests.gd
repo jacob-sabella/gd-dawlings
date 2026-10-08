@@ -91,6 +91,7 @@ func _ready() -> void:
 	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_gear_never_leaves_its_stand()
+	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
@@ -4672,3 +4673,25 @@ func _test_gear_never_leaves_its_stand() -> void:
 	remove_child(studio)
 	studio.free()
 	Session.layout = saved_layout
+
+
+## Found against a live Reaper: a 40-track session in a 64-wide OSC bank arrived as 64 tracks,
+## the last 24 named "Track 41".."Track 64" with faders at -inf, and every track carried sixteen
+## plugin slots because Reaper reports the empty ones too, with empty names.
+func _test_a_bank_wider_than_the_project_draws_only_the_project() -> void:
+	var state := MixState.new()
+	MixWire.apply(state, "/track/39/name", ["Room Rtn"])
+	MixWire.apply(state, "/track/41/name", ["Track 41"])
+	MixWire.apply(state, "/track/41/volume", [0.003])
+	check("before the project's size is known, every slot is admitted", state.tracks.has(41))
+	MixWire.apply(state, "/project/tracks", [40])
+	check("once it is, slots past the end are dropped", not state.tracks.has(41) and state.tracks.has(39))
+	MixWire.apply(state, "/track/44/name", ["Track 44"])
+	check("and later ones are not admitted", not state.tracks.has(44))
+	MixWire.apply(state, "/track/39/fx/1/name", ["VST: ReaVerbate (Cockos)"])
+	MixWire.apply(state, "/track/39/fx/2/name", [""])
+	MixWire.apply(state, "/track/39/fx/3/name", [""])
+	check("empty plugin slots are not plugins", state.track(39).plugins() == [1])
+	state.set_bank(64)
+	MixWire.apply(state, "/track/1/name", ["Track 65"])
+	check("past the end on a later bank too", not state.tracks.has(1))

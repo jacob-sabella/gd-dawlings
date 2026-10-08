@@ -116,6 +116,8 @@ func _start_daw(args: Dictionary) -> void:
 			"send_port": args["send_port"],
 			"listen_port": args["listen_port"],
 		}
+		if args["reaper_resource"] != "":
+			options["bridge_dir"] = args["reaper_resource"].path_join("Scripts/reaper3d_bridge_data")
 		if DAW.use(ReaperBackend.new(), true, options):
 			return
 		push_warning("bootstrap: could not open the OSC link; falling back to the offline stand-in.")
@@ -131,7 +133,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false,
-		"venue": "",
+		"venue": "", "reaper_resource": "",
 	}
 	var i := 0
 	while i < argv.size():
@@ -156,6 +158,13 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["eyes"] = float(argv[i])
+			"--reaper-resource":
+				# The resource path of a Reaper that is not the default one -- the live rig's,
+				# or a portable install. Implies --reaper.
+				i += 1
+				if i < argv.size():
+					out["reaper_resource"] = argv[i]
+					out["reaper"] = true
 			"--venue":
 				# `--venue grid`. For one run: a look asked for on the command line is not a
 				# change of mind, so it is not written to the layout.

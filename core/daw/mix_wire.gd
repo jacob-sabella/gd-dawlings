@@ -68,6 +68,7 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			# 64-track one and the bank buttons have nothing to be enabled or greyed by.
 			if p.size() > 1 and p[1] == "tracks" and args.size() > 0:
 				state.project_track_count = int(args[0])
+				state.trim_to_project()
 				state.bank_changed.emit()
 		"bank":
 			# Where the current bank starts, in tracks. Also reaper-3d's own: Reaper is told a
@@ -141,6 +142,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 		return
 	var idx := int(p[1])
 	var field := p[2]
+	if not state.in_project(idx):
+		return
 
 	# BEFORE the empty-args guard. For every other field an empty argument list is a malformed
 	# message, but for a lane it is the message: no arguments means nothing is on this track

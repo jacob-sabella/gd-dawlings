@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# A real Reaper for proving the link against, kept entirely apart from yours.
+#
+#   tools/reaper_rig.sh up      # build the rig if needed, start Reaper on it, wait for OSC
+#   tools/reaper_rig.sh down    # stop it
+#   tools/reaper_rig.sh status
+#
+# Its own resource directory (-cfgfile), so it never opens your last project, never touches
+# your preferences, and has the OSC device and the bridge installed without you doing either.
+# Its audio goes to a null sink: a rig that plays forty tracks of test tones out of your
+# speakers at 3am is not a test harness. And its window goes to the offscreen workspace like
+# every other window the tooling opens.
+#
+# The session is built once by tools/rig/build_session.lua -- forty tracks, folders, colours,
+# stock Cockos plugins, sends, markers, a loop -- and reopened every run after.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+RIG="${REAPER_RIG:-$HOME/.cache/reaper-3d/rig}"
+SINK=reaper3d_null
+. tools/offscreen.sh
+
+running() { pgrep -f -- "-cfgfile $RIG/reaper.ini" >/dev/null; }
+
+case "${1:-up}" in
+  down)
+    pkill -f -- "-cfgfile $RIG/reaper.ini" || true
+    exit 0 ;;
+  status)
+    running && echo "rig: running ($RIG)" || echo "rig: stopped"
+    exit 0 ;;
+  up) ;;
+  *) echo "usage: $0 up|down|status" >&2; exit 2 ;;
+esac
+
+if running; then echo "rig: already running"; exit 0; fi
+
+mkdir -p "$RIG/OSC" "$RIG/Scripts" "$RIG/rig_media" "$RIG/rig_session"
+[ -f "$HOME/.config/REAPER/reaper-license.rk" ] && cp -n "$HOME/.config/REAPER/reaper-license.rk" "$RIG/" || true
+cp reaper/Reaper3D.ReaperOSC "$RIG/OSC/"
+cp reaper/reaper3d_bridge.lua "$RIG/Scripts/"
+printf 'dofile(reaper.GetResourcePath() .. "/Scripts/reaper3d_bridge.lua")\n' > "$RIG/Scripts/__startup.lua"
+if [ ! -f "$RIG/reaper.ini" ]; then
+  cat > "$RIG/reaper.ini" <<INI
+[REAPER]
+csurf_cnt=1
+csurf_0=OSC "Reaper3D" 7 8000 "127.0.0.1" 9000 16384 1 "Reaper3D"
+splashscreen=0
+autosavemode=0
+undomaxmem=64
+[verchk]
+lastt=4102444800
+INI
+fi
+python3 tools/rig/make_media.py "$RIG/rig_media" >/dev/null
+
+if ! pactl list short sinks 2>/dev/null | grep -q "$SINK"; then
+  pactl load-module module-null-sink "sink_name=$SINK" \
+      "sink_properties=device.description=reaper-3d-rig" >/dev/null
+fi
+
+PROJECT="$RIG/rig_session/rig.RPP"
+if [ -f "$PROJECT" ]; then
+  open=("$PROJECT")
+else
+  open=("$(pwd)/tools/rig/build_session.lua")
+fi
+reaper_bin="$(command -v reaper)"
+( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
+    -nosplash "${open[@]}" >"$RIG/reaper.log" 2>&1 & )
+
+# Up means answering: the bridge writes its data directory when it starts.
+for _ in $(seq 1 200); do
+  if [ -d "$RIG/Scripts/reaper3d_bridge_data" ] && { [ -f "$PROJECT" ] || [ "${open[0]}" = "$PROJECT" ]; }; then
+    echo "rig: up ($RIG)"
+    exit 0
+  fi
+  sleep 0.2
+done
+echo "rig: Reaper started but the bridge did not answer; see $RIG/reaper.log" >&2
+exit 1

@@ -62,6 +62,10 @@ func _ready() -> void:
 ## `options`: host (String), send_port (int), listen_port (int). Reaper's own OSC defaults are
 ## 8000 out and 9000 in, which are the numbers in its device dialog -- a mismatch here is the
 ## first thing to check when the link stays silent. See docs/transport.md.
+## Reaper action 41743, "Control surface: Refresh all surfaces".
+const REFRESH_SURFACES := 41743
+
+
 func open(options: Dictionary = {}) -> bool:
 	close()
 	_peer = OSCPeer.new()
@@ -72,7 +76,9 @@ func open(options: Dictionary = {}) -> bool:
 		_peer = null
 		return false
 	_bridge = ScriptBridge.new()
-	_bridge.open()
+	# A Reaper on its own resource path (tools/reaper_rig.sh, or a portable install) keeps
+	# its bridge drop there too.
+	_bridge.open(options.get("bridge_dir", ScriptBridge.DEFAULT_DIR))
 	set_process(true)
 
 	# Tell Reaper how wide this surface is, then ask for a full resend. Without the resend a
@@ -83,6 +89,12 @@ func open(options: Dictionary = {}) -> bool:
 	_peer.send("/device/fxparam/count", [BANK_FX_PARAMS])
 	_peer.send("/device/send/count", [BANK_SENDS])
 	_peer.send("/device/track/bank/select", [1])
+	# And then ask for everything. Reaper sends a surface its whole state when the surface
+	# starts and when its bank changes -- never because a client turned up. Selecting bank 1
+	# when bank 1 is already selected changes nothing, so a desk opened against a Reaper that
+	# was already running came up with whatever trickled in: meters, and almost no names.
+	# "Control surface: Refresh all surfaces" is the one message that makes it start over.
+	_peer.send("/action", [REFRESH_SURFACES])
 	connection_changed.emit()
 	return true
 

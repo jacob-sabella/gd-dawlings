@@ -16,10 +16,17 @@ var packets_sent: int = 0
 var last_receive_msec: int = 0
 
 
+const RECV_BUFFER := 8 * 1024 * 1024
+
+
 func open(reaper_host: String, send_port: int, listen_port: int) -> Error:
 	# Bind before setting the destination: binding is the half that can fail, and failing after
 	# the destination is set leaves a peer that looks configured and silently drops every send.
-	var err := _udp.bind(listen_port, "0.0.0.0")
+	# A deep receive buffer, because Reaper sends a whole bank's state in one burst on connect
+	# and on every bank change -- names, volumes, pans, FX names for 64 tracks, thousands of
+	# messages inside a few milliseconds. At the 64KB default the kernel dropped most of it and
+	# a 40-track session came up with a dozen names, a different dozen every time.
+	var err := _udp.bind(listen_port, "0.0.0.0", RECV_BUFFER)
 	if err != OK:
 		push_error("OSCPeer: cannot bind UDP %d (in use by another OSC client?): %s" % [listen_port, error_string(err)])
 		return err

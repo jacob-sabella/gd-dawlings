@@ -127,6 +127,17 @@ class TrackState extends RefCounted:
 	## which is not the same as a track with nothing on it -- see DAWBackend.Capability.
 	var items: Array = []
 
+	## The plugin slots that hold a plugin, in chain order. Reaper's OSC reports every slot its
+	## device is configured for -- sixteen here -- and the empty ones arrive with empty names.
+	func plugins() -> Array:
+		var out: Array = []
+		var order: Array = fx.keys()
+		order.sort()
+		for i in order:
+			if (fx[i] as FXState).name != "":
+				out.append(i)
+		return out
+
 	func display_name() -> String:
 		return name if name != "" else "Track %d" % index
 
@@ -163,6 +174,26 @@ var project_track_count: int = -1
 ## The project-wide number of a track this cache calls `index`. What a human reads off a desk.
 func absolute_track_number(index: int) -> int:
 	return bank_offset + index
+
+
+## Whether `index` is a track that exists. Reaper's OSC reports every slot of its bank, so a
+## 40-track session in a 64-wide bank arrives with 24 more tracks that are not there -- named
+## "Track 41", faders at -inf -- and a desk that drew them was a desk 47 strips wide that lied
+## about the session in front of it. Unknown project size admits everything.
+func in_project(index: int) -> bool:
+	return project_track_count <= 0 or absolute_track_number(index) <= project_track_count
+
+
+## Drop whatever the cache holds past the end of the project. For when the project's size
+## arrives after the bank's slots already have.
+func trim_to_project() -> void:
+	var gone := false
+	for index in tracks.keys():
+		if not in_project(index):
+			tracks.erase(index)
+			gone = true
+	if gone:
+		bank_changed.emit()
 
 
 ## True when there is more project than this bank can show.

@@ -33,9 +33,7 @@ func _rebuild() -> void:
 	var slots: Array = []
 	for track_index in DAW.state.track_indices():
 		var t := DAW.state.track(track_index)
-		var fx_indices: Array = t.fx.keys()
-		fx_indices.sort()
-		for fx_index in fx_indices:
+		for fx_index in t.plugins():
 			slots.append([track_index, fx_index])
 	if slots.is_empty():
 		return
