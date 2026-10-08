@@ -212,7 +212,8 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
 				# `--tablet 2:1:5` opens it on its fifth page, and `--tablet 2:1:ui` on the
-				# plugin's own window, where the DAW can show it.
+				# plugin's own window, where the DAW can show it -- the one way to turn that
+				# face on while it is parked (PluginTablet.window_face).
 				i += 1
 				if i < argv.size():
 					var parts := argv[i].split(":")
@@ -416,6 +417,7 @@ func _apply_cli_tablet(wanted: Vector3i) -> void:
 		if tablet.track_index != wanted.x or tablet.fx_index != wanted.y:
 			continue
 		if wanted.z == CLI_TABLET_WINDOW:
+			PluginTablet.window_face = true
 			var asked := 0.0
 			while asked < 10.0 and not DAW.shows_plugin_windows():
 				await get_tree().create_timer(0.25).timeout

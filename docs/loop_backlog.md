@@ -916,7 +916,11 @@ lamp parts".
   - 140-210 controls is 15-30 pages; a section jump (scroll the page label through section names) would help.
   - The plugin's own presets step blind: the plugin doesn't tell Reaper the preset's name.
   - The first Wine plugin load can outlast the bridge's 4 s reply timeout (it still loads).
-- The tablet's UI face (the plugin's own window, read off X and clicked through XSendEvent) — open questions:
+- The tablet's UI face (the plugin's own window, read off X and clicked through XSendEvent) is PARKED:
+  built and tested but switched off (`PluginTablet.window_face = false`; `--tablet T:F:ui` turns it on for
+  a run) until the window can be kept off the desktop. Best idea so far: the helper moves the plugin's
+  window to a Hyprland special workspace (`hyprctl dispatch movetoworkspacesilent special:...`, matched by
+  title) — Reaper doesn't save workspaces, so the project's window positions are untouched. Open questions:
   - With the user's own Reaper, the floating window also opens on the desktop wherever Reaper puts it
     (in the rig it is on workspace 10). Hide it — move it to a Hyprland special workspace, or offscreen
     and back on close — or leave it? Moving it risks Reaper saving an offscreen position into the project.

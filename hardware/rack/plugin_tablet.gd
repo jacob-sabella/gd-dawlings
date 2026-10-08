@@ -21,6 +21,10 @@ extends Surface
 ## KEY IN, CHAIN and MOVE TO are the host's, and no plugin's window has them. Only on the host,
 ## where the window is (DAW.shows_plugin_windows).
 ##
+## PARKED: the UI face is off (`window_face`) until the plugin's window can be kept off the
+## desktop while the tablet shows it; see docs/loop_backlog.md. Everything behind it stays built
+## and tested, and `--tablet T:F:ui` still turns it on for a run.
+##
 ## THE TABLET FOLLOWS ITS PLUGIN, not a slot. Moving a plugin renumbers its chain, and on Reaper
 ## the new numbering arrives later than the move. So the tablet keeps the plugin's name and the
 ## slot it expects, and after any change to the chain it looks for the plugin again: where it
@@ -57,6 +61,9 @@ const PAGE_READ_MSEC := 700
 ## plugin, where Reaper cannot list them, and these are how the plugin lets a host step them.
 const PRESET_NEXT := "Preset Next"
 const PRESET_PREVIOUS := "Preset Previous"
+
+## Whether tablets offer the UI face at all. Off for now: see the note at the top.
+static var window_face := false
 
 var track_index := 1
 var fx_index := 0
@@ -437,7 +444,7 @@ func show_window(on: bool) -> void:
 	if on == showing_window:
 		return
 	if on:
-		if lost or not DAW.shows_plugin_windows():
+		if lost or not _windows_here():
 			return
 		_open_window()
 		if _window == null:
@@ -446,6 +453,10 @@ func show_window(on: bool) -> void:
 		_close_window()
 	showing_window = on
 	mark_dirty()
+
+
+func _windows_here() -> bool:
+	return window_face and DAW.shows_plugin_windows()
 
 
 func _open_window() -> void:
@@ -469,7 +480,7 @@ func _close_window() -> void:
 func _follow_window() -> void:
 	if not showing_window:
 		return
-	if lost or not DAW.shows_plugin_windows():
+	if lost or not _windows_here():
 		show_window(false)
 		return
 	if _window_for != [track_index, fx_index]:
@@ -485,7 +496,7 @@ func refresh() -> void:
 	var here := f != null and not lost
 	var track := DAW.state.track(track_index) if DAW.state.tracks.has(track_index) else null
 	_title.text = fx_name
-	var windows := DAW.shows_plugin_windows()
+	var windows := _windows_here()
 	Lettering.fit(_title, WIDTH - (0.15 if windows else 0.12), 72)
 	_subtitle.text = "%s   ·   %s" % [track.display_name().to_upper() if track else "?", _chain_words()]
 	Lettering.fit(_subtitle, WIDTH - 0.12, 40)

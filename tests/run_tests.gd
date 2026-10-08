@@ -2578,6 +2578,14 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 	var tablet := PluginTablet.create(2, slot, state.fx(2, slot).name)
 	add_child(tablet)
 	tablet._process(0.0)
+	backend.stand_in_windows = true
+	tablet.refresh()
+	check("no UI button while the UI face is parked", not tablet._window_button.visible)
+	tablet.show_window(true)
+	check("and asking for it does nothing", not tablet.showing_window and backend.windows_opened.is_empty())
+	PluginTablet.window_face = true
+	backend.stand_in_windows = false
+	tablet.refresh()
 	check("no UI button where the window cannot be shown", not tablet._window_button.visible \
 			and not tablet._window_word.visible)
 	tablet.show_window(true)
@@ -2630,6 +2638,7 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 	remove_child(tablet)
 	tablet.free()
 	check("a tablet put away puts its window away", not window.is_open())
+	PluginTablet.window_face = false
 	DAW.use(OfflineBackend.new())
 
 
