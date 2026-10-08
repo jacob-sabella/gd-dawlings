@@ -914,3 +914,34 @@ away from someone who had a use for it. `--step 0.05` turns it on.
 | `--no-motion` | surfaces cut rather than glide |
 | `--focus ID` | start with a surface summoned |
 | `--detach-body` | freeze the body frame, to photograph it from outside |
+
+## Which of these five am I using?
+
+The rig moves five surfaces at once and only one of them is the work. From inside the arc the
+only thing distinguishing them was distance -- and distance is also what changes when a surface
+is a different size, so a small surface close by and a large one further out read identically.
+State needed its own channel.
+
+`FocusHalo` puts corner brackets on every surface the rig is holding: bright on the focused
+one, dim on the parked ones. It does a second job at the same time, which is why it marks the
+parked surfaces too rather than only the focused one -- it says the thing is SUMMONED rather
+than standing in the room. That difference is real and worth drawing, because gear on the body
+frame follows you and gear in the room does not, and someone who cannot tell which is which
+will walk away from a console expecting it to stay put.
+
+Brackets rather than a full border: a closed rectangle around a panel reads as a frame the
+panel is mounted in, which is furniture again, while four corner marks read as something
+projected over it. They are also a quarter of the geometry, and the whole set is built into one
+ArrayMesh with a shared unshaded material per state, so the entire arc costs two draw calls
+rather than one per surface.
+
+Unshaded deliberately. A bracket that dimmed when the lamp was far away would be a state
+indicator that stopped indicating in exactly the corner of the room where it is needed.
+
+The arm length is a fraction of the surface, capped. A fixed arm is a border on a patchbay and
+a speck on a ninety-track desk; an uncapped fraction puts a 15cm bracket on the console, which
+stops reading as a corner mark and starts reading as two sides of a box that failed to meet.
+
+Grouped as `presentation_chrome`, so `content_aabb` does not measure them. They are sized FROM
+that box, and counting them would grow the box, which would resize them, which would grow the
+box -- the same circularity the grab handle is excluded for.

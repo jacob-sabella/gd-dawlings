@@ -105,6 +105,7 @@ func release() -> void:
 		if is_instance_valid(surface) and _home.has(surface.surface_id):
 			var home: Array = _home[surface.surface_id]
 			surface.compact = false
+			_unmark(surface)
 			_move(surface, home[0], home[1])
 	_home.clear()
 	focus_changed.emit(focused_id)
@@ -189,6 +190,33 @@ static func smallest_cap(surface: Surface) -> float:
 	return 0.0 if is_inf(smallest) else smallest
 
 
+## Put, or update, the corner brackets on a surface this rig is holding.
+##
+## Owned by the rig and not by the surface, for the same reason `compact` is set from out here:
+## a surface has no idea whether it is being presented or merely standing in a room, and the
+## brackets mean exactly that difference. Grouped as presentation chrome so `content_aabb` does
+## not measure them -- they are sized FROM the box, and counting them would grow the box, which
+## would resize them, which would grow the box.
+func _mark(surface: Surface, focused: bool) -> void:
+	var bounds := surface.content_aabb()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+	var halo := surface.get_node_or_null("FocusHalo") as FocusHalo
+	if halo == null:
+		halo = FocusHalo.create(bounds, focused)
+		halo.add_to_group(&"presentation_chrome")
+		surface.add_child(halo)
+		return
+	halo.refresh(bounds, focused)
+
+
+func _unmark(surface: Surface) -> void:
+	var halo := surface.get_node_or_null("FocusHalo")
+	if halo != null:
+		surface.remove_child(halo)
+		halo.queue_free()
+
+
 ## Where a surface's home is, expressed in the body's frame.
 ##
 ## The conversion matters: home is recorded against the parent it came from, and everything this
@@ -218,6 +246,7 @@ func _apply() -> void:
 		# rebuild it triggers is batched to the next frame -- which is why placement has to be
 		# redone on `rebuilt` rather than only here.
 		surface.compact = true
+		_mark(surface, surface.surface_id == focused_id)
 		var index := 0
 		if surface.surface_id != focused_id:
 			index = others

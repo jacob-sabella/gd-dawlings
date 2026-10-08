@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_no_signal_is_carried_by_colour_alone()
 	_test_a_control_can_be_worked_without_a_steady_hand()
 	_test_a_value_can_be_set_without_a_precise_drag()
+	_test_you_can_tell_which_surface_has_your_attention()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
 
@@ -3384,3 +3385,86 @@ func _test_a_value_can_be_set_without_a_precise_drag() -> void:
 
 	rig.queue_free()
 	Ergonomics.current = Ergonomics.new()
+
+
+func _test_you_can_tell_which_surface_has_your_attention() -> void:
+	# The rig moves five surfaces at once and only one of them is the work. From inside the arc
+	# the only thing distinguishing them was distance -- which is also what changes when a
+	# surface is a different size, so a small surface close by and a large one further out read
+	# identically. State needs its own channel.
+	var size := Vector2(0.5, 0.3)
+	var marks := FocusHalo.brackets(size)
+	check("the brackets are one mesh, so the whole arc costs one draw per state",
+			marks.get_surface_count() == 1)
+	var points: PackedVector3Array = marks.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	check("there are eight bars, two per corner", points.size() == 8 * 6)
+
+	# Present at every corner and nowhere in the middle. A bracket set that drifted to one side
+	# would still render as something and still look deliberate.
+	var corners := 0
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			var want := Vector2(sx * size.x * 0.5, sy * size.y * 0.5)
+			for p in points:
+				if Vector2(p.x, p.y).distance_to(want) < FocusHalo.THICKNESS:
+					corners += 1
+					break
+	check("every corner is marked (%d of 4)" % corners, corners == 4)
+	for p in points:
+		check("nothing is drawn across the middle of the surface",
+				absf(p.x) > size.x * 0.25 or absf(p.y) > size.y * 0.25)
+
+	# The arm scales with the surface but is capped. A fixed arm is a border on a patchbay and
+	# a speck on a ninety-track desk; an uncapped fraction is two sides of a box that failed
+	# to meet.
+	var small: PackedVector3Array = FocusHalo.brackets(Vector2(0.2, 0.2)).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var huge: PackedVector3Array = FocusHalo.brackets(Vector2(4.0, 2.0)).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	check("a bigger surface gets a longer arm",
+			_halo_arm(huge, 4.0) > _halo_arm(small, 0.2))
+	check("but never longer than the cap (%.3f)" % _halo_arm(huge, 4.0),
+			_halo_arm(huge, 4.0) <= FocusHalo.MAX_ARM + 0.001)
+
+	# And in the studio: marked while held, gone when released, and never counted as part of
+	# the surface it is sized from.
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	studio.ergonomics.motion_scale = 0.0
+	var before: AABB = studio.focus.surfaces[0].content_aabb()
+	studio.focus.focus(&"rack")
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+
+	var focused_colour := Color.BLACK
+	var parked_colour := Color.BLACK
+	for surface in studio.focus.surfaces:
+		var halo := surface.get_node_or_null("FocusHalo") as FocusHalo
+		check("%s is marked while the rig holds it" % surface.surface_id, halo != null)
+		if halo == null:
+			continue
+		var shown: Color = (halo.material_override as StandardMaterial3D).albedo_color
+		if surface.surface_id == &"rack":
+			focused_colour = shown
+		else:
+			parked_colour = shown
+	check("the focused surface is marked differently from the parked ones",
+			focused_colour != parked_colour)
+	check("marking a surface does not change how big it measures",
+			studio.focus.surfaces[0].content_aabb().size.is_equal_approx(before.size))
+
+	studio.focus.release()
+	for surface in studio.focus.surfaces:
+		check("%s loses its marks when released" % surface.surface_id,
+				surface.get_node_or_null("FocusHalo") == null)
+	studio.queue_free()
+
+
+## The longest distance any bracket vertex runs in from its own corner.
+func _halo_arm(points: PackedVector3Array, width: float) -> float:
+	var arm := 0.0
+	for p in points:
+		arm = maxf(arm, width * 0.5 - absf(p.x))
+	return arm

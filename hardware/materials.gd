@@ -251,3 +251,18 @@ static func cable_boot(colour: Color) -> StandardMaterial3D:
 		m.albedo_color = colour.darkened(0.45).lerp(Color(0.08, 0.08, 0.09), 0.15)
 		m.roughness = 0.72
 		return m)
+
+
+## The corner brackets the focus rig draws. Unshaded, because they are not in the room's light
+## -- they are drawn over it, and a bracket that dimmed when the lamp was far away would be a
+## state indicator that stopped indicating in exactly the corner of the room where you need it.
+static func halo(colour: Color) -> StandardMaterial3D:
+	return _cached("halo_%s" % colour.to_html(false), func():
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = colour
+		m.emission_enabled = true
+		m.emission = colour
+		m.emission_energy_multiplier = 1.6
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		return m)
