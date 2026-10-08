@@ -21,6 +21,74 @@ static func _cached(key: String, factory: Callable) -> StandardMaterial3D:
 	return _cache[key]
 
 
+## A scanned surface from assets/textures: colour, normal, and the packed AO/rough/metal map
+## read a channel at a time. Triplanar, because nearly everything here is a BoxMesh, whose own
+## UVs stretch one copy of the texture across each face however big the face is -- a two-metre
+## wall and a two-centimetre cheek would get the same number of planks.
+##
+## `metres` is how much surface one repeat of the texture covers.
+static func scanned(m: StandardMaterial3D, id: String, res: String, metres: float,
+		tint := Color.WHITE) -> StandardMaterial3D:
+	var base := "res://assets/textures/%s/%s_%%s_%s.jpg" % [id, id, res]
+	m.albedo_texture = load(base % "diff")
+	m.albedo_color = tint
+	m.normal_enabled = true
+	m.normal_texture = load(base % "nor_gl")
+	var orm: Texture2D = load(base % "arm")
+	m.roughness = 1.0
+	m.roughness_texture = orm
+	m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	m.ao_enabled = true
+	m.ao_texture = orm
+	m.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE / metres
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## Emulsion on plasterboard: matt, nearly flat, with the faint orange-peel a roller leaves.
+static func painted_wall(colour: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = colour
+	m.roughness = 0.88
+	m.normal_enabled = true
+	m.normal_texture = grain("roller", 0.6, 0.8)
+	m.normal_scale = 0.3
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 3.0
+	return m
+
+
+## scanned(), made once per key and shared.
+static func cached_scanned(key: String, id: String, res: String, metres: float,
+		tint := Color.WHITE) -> StandardMaterial3D:
+	return _cached("scan_" + key, func():
+		return scanned(StandardMaterial3D.new(), id, res, metres, tint))
+
+
+## Fine surface noise as a normal map, for finishes too small to scan: powder coat, the
+## grain of brushed aluminium. Made once per kind and shared.
+static func grain(key: String, frequency: float, bump: float, stretch := 1.0) -> Texture2D:
+	var k := "grain_%s" % key
+	if not _cache.has(k):
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.frequency = frequency
+		noise.fractal_octaves = 3
+		var tex := NoiseTexture2D.new()
+		# Stretched along one axis for brushing: a long thin noise is what a Scotch-Brite pad
+		# leaves behind.
+		tex.width = 512
+		tex.height = maxi(8, int(512.0 / stretch))
+		tex.seamless = true
+		tex.as_normal_map = true
+		tex.bump_strength = bump
+		tex.noise = noise
+		_cache[k] = tex
+	return _cache[k]
+
+
 ## The console shell: dark, slightly rough, not quite black. Pure black reads as a hole in the
 ## scene because it takes no shading at all.
 static func chassis() -> StandardMaterial3D:
@@ -30,6 +98,13 @@ static func chassis() -> StandardMaterial3D:
 		m.roughness = 0.62
 		m.metallic = 0.35
 		m.metallic_specular = 0.4
+		# Powder coat: a finish with a tooth to it, which is what keeps a large dark panel from
+		# reading as a flat polygon -- the highlight breaks up instead of sliding across it.
+		m.normal_enabled = true
+		m.normal_texture = grain("powder", 0.35, 1.2)
+		m.normal_scale = 0.35
+		m.uv1_triplanar = true
+		m.uv1_scale = Vector3.ONE * 9.0
 		return m)
 
 
@@ -49,11 +124,9 @@ static func chassis() -> StandardMaterial3D:
 ## the eye went to. Timber in this room has to be the quietest thing in it.
 static func end_cheek() -> StandardMaterial3D:
 	return _cached("end_cheek", func():
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.105, 0.062, 0.036)
-		m.roughness = 0.72
-		m.metallic = 0.05
-		m.metallic_specular = 0.25
+		var m := scanned(StandardMaterial3D.new(), "black_walnut_veneer_01", "2k", 0.6,
+				Color(0.62, 0.55, 0.5))
+		m.metallic_specular = 0.3
 		return m)
 
 
@@ -64,6 +137,15 @@ static func brushed_metal() -> StandardMaterial3D:
 		m.albedo_color = Color(0.56, 0.58, 0.61)
 		m.roughness = 0.34
 		m.metallic = 0.85
+		# Brushed, not merely grey: the grain runs one way and so does the highlight, which is
+		# the whole difference between aluminium and grey plastic under a lamp.
+		m.anisotropy_enabled = true
+		m.anisotropy = 0.6
+		m.normal_enabled = true
+		m.normal_texture = grain("brushed", 0.9, 0.6, 24.0)
+		m.normal_scale = 0.25
+		m.uv1_triplanar = true
+		m.uv1_scale = Vector3.ONE * 6.0
 		return m)
 
 
