@@ -127,6 +127,18 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
 
+- **Reaper parity, still missing** (after sends on faders, the click, the locator and input
+  monitoring):
+  - Send mute: there is no OSC address for it, so it would be a bridge edit.
+  - Pre-roll and count-in.
+  - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
+    for the selected track.
+  - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).
+  - Tracks: adding, renaming and recolouring them.
+  - Markers: renaming and deleting them, and regions of any kind.
+  - Time signature.
+  - `tools/shot.sh --focus patchbay` frames only the floor.
+
 ## Known rough edges
 
 - Rack unit labels can overlap their first knob caption on long plugin names.
