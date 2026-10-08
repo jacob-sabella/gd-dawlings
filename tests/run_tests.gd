@@ -100,6 +100,7 @@ func _ready() -> void:
 	_test_a_late_arrangement_is_still_fitted()
 	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
+	_test_the_tempo_is_set_from_the_deck()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5289,6 +5290,47 @@ func _test_a_late_timeline_poll_does_not_undo_an_edit() -> void:
 			link._timeline_epoch)
 	check("one sent after it is", link.state.item(1, 0).selected)
 	link.queue_free()
+
+
+func _test_the_tempo_is_set_from_the_deck() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var before := s.tempo
+	backend._repl_durable.clear()
+	DAW.set_tempo(96.0)
+	close_to("set_tempo sets the tempo", s.tempo, 96.0)
+	check("and replicates it as /tempo/raw", backend._repl_durable.has("/tempo/raw"))
+	DAW.undo()
+	close_to("tempo is undoable", s.tempo, before)
+	DAW.set_tempo(5000.0)
+	close_to("clamped to Reaper's limit", s.tempo, DAW.TEMPO_MAX)
+	DAW.apply_intent(&"set_tempo", [-3.0])
+	close_to("a guest's intent is clamped too", s.tempo, DAW.TEMPO_MIN)
+	check("set_tempo is a verb a guest may use", &"set_tempo" in DAW.COMMANDS)
+
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper.set_tempo(132.5)
+	close_to("Reaper's backend speaks /tempo/raw in BPM", reaper.state.tempo, 132.5)
+	reaper.free()
+
+	close_to("knob bottom is the low tempo", TapeDeck.knob_to_bpm(0.0), TapeDeck.TEMPO_LOW)
+	close_to("knob round-trips", TapeDeck.knob_to_bpm(TapeDeck.bpm_to_knob(128.0)), 128.0)
+	close_to("four taps half a second apart is 120", TapeDeck.tapped_bpm([0, 500, 1000, 1500]), 120.0)
+	close_to("one rushed tap moves it a little", TapeDeck.tapped_bpm([0, 500, 1000, 1400]), 128.6, 0.1)
+	check("one tap is no tempo", TapeDeck.tapped_bpm([100]) == 0.0)
+
+	_offline()
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	DAW.set_tempo(100.0)
+	close_to("the deck's knob follows the tempo", deck._tempo_knob.value, TapeDeck.bpm_to_knob(100.0))
+	check("the knob goes by its name across a session", deck._tempo_knob.network_key() == "TRANSPORT  TEMPO")
+	deck._tempo_knob.turned.emit(TapeDeck.bpm_to_knob(150.0))
+	close_to("turning it sets the tempo", DAW.state.tempo, 150.0)
+	deck.queue_free()
 
 
 func _test_undo_takes_back_a_gesture_not_a_frame() -> void:

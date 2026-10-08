@@ -78,6 +78,8 @@ var _left_pack: MeshInstance3D
 var _right_pack: MeshInstance3D
 var _counter: Label3D
 var _tempo_label: Label3D
+var _tempo_knob: Knob
+var _taps: Array[int] = []
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
 var _loop_lamp: PanelButton
@@ -131,6 +133,37 @@ func _rebuild() -> void:
 	_tempo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(_tempo_label)
 	_adopt(_tempo_label)
+
+	# Tempo, beside its own readout: turned for a nudge, tapped for a feel. The knob is the
+	# deck's whole tempo range, so a scroll notch is about eight BPM and a fine notch under one.
+	_tempo_knob = Knob.new()
+	_tempo_knob.name = "TempoKnob"
+	_tempo_knob.position = Vector3(-0.105, 0.108, 0.006)
+	_tempo_knob.turned.connect(func(v: float): DAW.set_tempo(knob_to_bpm(v)))
+	_tempo_knob.describe_title = func() -> String: return "TRANSPORT  TEMPO"
+	_tempo_knob.describe_value = func(v: float) -> String: return "%.1f BPM" % knob_to_bpm(v)
+	_adopt(_tempo_knob)
+
+	var tap := PanelButton.new()
+	tap.name = "TapKey"
+	tap.led_colour = Color(0.95, 0.80, 0.42)
+	tap.lamp_scale = Vector2(0.8, 0.5)
+	tap.position = Vector3(-0.130, -0.122, 0.028)
+	tap.scale = Vector3(1.4, 1.4, 1.4)
+	tap.pressed.connect(_tap)
+	tap.describe_title = func() -> String: return "TRANSPORT  TAP TEMPO"
+	tap.describe_value = func(_v: float) -> String:
+		return "tap on the beat" if _taps.size() < 2 else "%.1f BPM" % tapped_bpm(_taps)
+	_adopt(tap)
+	var tap_caption := Label3D.new()
+	tap_caption.text = "TAP"
+	tap_caption.font_size = 30
+	tap_caption.pixel_size = 0.00024
+	tap_caption.position = Vector3(-0.130, -0.105, 0.002)
+	tap_caption.modulate = Color(0.6, 0.62, 0.66)
+	tap_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(tap_caption)
+	_adopt(tap_caption)
 
 	_loop_label = Label3D.new()
 	_loop_label.font_size = 40
@@ -547,6 +580,7 @@ func _refresh() -> void:
 		return
 	_counter.text = DAW.state.position_string
 	_tempo_label.text = "%.1f BPM" % DAW.state.tempo
+	_tempo_knob.apply_remote(bpm_to_knob(DAW.state.tempo))
 	_play_lamp.lit = DAW.state.playing
 	_rec_lamp.lit = DAW.state.recording
 	_loop_lamp.lit = DAW.state.looping
@@ -554,6 +588,46 @@ func _refresh() -> void:
 	for i in _history_keys.size():
 		var depth := DAW.state.undo_depth if i == 0 else DAW.state.redo_depth
 		_history_keys[i].lit = depth != 0
+
+
+## The knob's sweep, in BPM. Wider than most songs and narrower than Reaper's 1-960, because a
+## knob that spends nine tenths of its travel on tempos nobody plays is a knob you cannot set.
+const TEMPO_LOW := 40.0
+const TEMPO_HIGH := 240.0
+## Taps further apart than this start a new count rather than averaging into the old one.
+const TAP_GAP_MSEC := 2000
+const TAPS_KEPT := 6
+
+
+static func knob_to_bpm(v: float) -> float:
+	return snappedf(lerpf(TEMPO_LOW, TEMPO_HIGH, clampf(v, 0.0, 1.0)), 0.1)
+
+
+static func bpm_to_knob(bpm: float) -> float:
+	return clampf(inverse_lerp(TEMPO_LOW, TEMPO_HIGH, bpm), 0.0, 1.0)
+
+
+## The tempo a run of taps means: the average gap across the whole run, not the last one, so
+## one rushed tap moves it a little rather than a lot. 0 until there are two.
+static func tapped_bpm(taps_msec: Array) -> float:
+	if taps_msec.size() < 2:
+		return 0.0
+	var span := float(int(taps_msec[-1]) - int(taps_msec[0]))
+	if span <= 0.0:
+		return 0.0
+	return snappedf(60000.0 * float(taps_msec.size() - 1) / span, 0.1)
+
+
+func _tap() -> void:
+	var now := Time.get_ticks_msec()
+	if not _taps.is_empty() and now - _taps[-1] > TAP_GAP_MSEC:
+		_taps.clear()
+	_taps.append(now)
+	while _taps.size() > TAPS_KEPT:
+		_taps.pop_front()
+	# Three taps before the tempo moves: two is one interval, and one interval is a guess.
+	if _taps.size() >= 3:
+		DAW.set_tempo(tapped_bpm(_taps))
 
 
 func _loop_text() -> String:

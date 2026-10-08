@@ -138,6 +138,9 @@ func transport_stop() -> void: pass
 func transport_record() -> void: pass
 ## Playback wraps round the loop range, or does not.
 func set_looping(_on: bool) -> void: pass
+## The project tempo, in beats per minute. Constant-tempo projects only: a project with a tempo
+## map has its first marker moved, which is what Reaper's own tempo field does.
+func set_tempo(_bpm: float) -> void: pass
 ## Move the playhead. Seconds from the project start.
 func seek(_seconds: float) -> void: pass
 ## The loop range / time selection, in seconds.

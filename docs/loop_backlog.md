@@ -15,7 +15,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 - **Console.** A strip per track: fader, pan, rec/mute/solo, VU with real ballistics, colour
   chip, dB readout. Built from live track count.
 - **Tape deck.** Transport buttons, position counter, tempo, reels that turn only while Reaper
-  says it is rolling.
+  says it is rolling. The tempo is set from the deck: a knob beside the BPM readout (40-240) and a TAP key
+  (three taps or more, averaged over the run). `DAW.set_tempo` is clamped to Reaper's 1-960 on
+  both sides of a session, is undoable offline, and goes to Reaper as `/tempo/raw`. A guest's
+  tempo reaching a live Reaper and coming back is checked by `session_probe.sh --reaper`.
 - **FX racks.** 19" units, one per FX slot, in Reaper's own order. Knobs are the plugin's first
   eight real parameters with Reaper's names.
 - **Patchbay.** Jacks per track, hanging cables for existing sends, drag-to-patch gesture.
@@ -60,12 +63,6 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Scaffolded — the shape is right, the wiring is not finished
 
-- **Guest writes round-tripping.** Intents reach the host and are applied, and the result
-  replicates back — but a guest's own fader shows its hand position until that round trip
-  completes, which on wifi is long enough to see. Needs the same provisional-value treatment
-  the host's controls already get from the echo guard.
-- **Participant list on a guest.** A guest registers peers it hears from; the host never sends
-  the roster, so a guest does not know who else is in the session until they speak.
 - **Calibration gesture.** `RoomAnchor.mark_origin/mark_forward` work and are tested; nothing
   calls them from a controller yet. Needs a two-step in-headset prompt.
 - **ReaScript bridge.** `GetTimeline` is written, parsed and tested against the payload shapes
@@ -81,14 +78,27 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Parked
 
-- **Nothing parked.** Multiplayer was parked on 2026-10-07 and picked up again on 2026-10-08.
-  It is now listed under *Working, verified*.
+- **A built-in DAW for people without one** (asked 2026-10-08). Researched; the ranked options:
+  1. `GodotBackend`: Godot's AudioServer as a small DAW. One bus per track, the built-in
+     AudioEffects as the rack, stems started together by `AudioStreamSynchronized`. MIT, runs
+     everywhere including Quest, about 80% of the contract (no third-party plugins). Weeks.
+  2. `ArdourBackend`: a headless Ardour run as a separate process over OSC plus Lua. GPL is
+     fine at arm's length. The full contract, desktop only, and we would build and ship the
+     headless binary ourselves.
+  3. Tracktion Engine: the full engine as a library, and the only one that also reaches
+     Android. GPLv3 or a commercial license; in-process needs the commercial one.
+  DAWproject (MIT) is the natural save format for (1).
+  **Question for you:** start on `GodotBackend` (recommended), or is a real external engine
+  wanted first?
+- **More than about ten listeners.** A session admits up to 32 guests (Godot's default), but
+  the mix is uncompressed at about 1.5 Mbit/s per listener, and there are 8 colours, so the ninth
+  ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the
+  colours. Not started: nobody has asked for big rooms yet.
 
 ## Not started
 
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
-- **Audio.** The studio is silent. Reaper's output does not come through this process at all.
 
 ## Known rough edges
 

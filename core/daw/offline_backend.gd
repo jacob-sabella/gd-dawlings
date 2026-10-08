@@ -472,6 +472,15 @@ func set_looping(on: bool) -> void:
 	record_for_replication("/repeat", [1.0 if on else 0.0])
 
 
+func set_tempo(bpm: float) -> void:
+	_remember("/tempo/raw", set_tempo.bind(state.tempo), set_tempo.bind(bpm))
+	state.tempo = bpm
+	# The counter is spelled from seconds at the tempo, so it changes with it.
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/tempo/raw", [bpm])
+
+
 func seek(seconds: float) -> void:
 	state.position_seconds = maxf(seconds, 0.0)
 	state.position_string = state.bar_beat(state.position_seconds)

@@ -10,6 +10,8 @@ extends Node
 ## step. Prints PASS/FAIL per check and exits non-zero on any failure.
 
 const KEY := "KICK  VOLUME"
+## Not the stand-in's tempo nor the rig's, so arriving at it means the write travelled.
+const GUEST_TEMPO := 133.5
 
 var _failures := 0
 var _checks := 0
@@ -54,11 +56,13 @@ func _ready() -> void:
 func _host(port: int) -> void:
 	Session.local_name = "Ada"
 	var restore := NAN
+	var tempo_restore := NAN
 	if _reaper_resource != "":
 		check("opens the link to Reaper", DAW.use(ReaperBackend.new(), true, {
 				"bridge_dir": _reaper_resource.path_join("Scripts/reaper3d_bridge_data")}))
 		await _until(-0.5)
 		restore = DAW.state.track(2).volume
+		tempo_restore = DAW.state.tempo
 	else:
 		var offline := OfflineBackend.new()
 		offline.track_count = 20
@@ -86,6 +90,8 @@ func _host(port: int) -> void:
 				Vector3(-0.8, 1.5, 0.9)))
 	check("the guest's fader move reached the mix (%.4f)" % DAW.state.track(2).volume,
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
+	check("the guest's tempo reached the mix (%.1f)" % DAW.state.tempo,
+			absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
@@ -108,6 +114,8 @@ func _host(port: int) -> void:
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
 	if not is_nan(restore):
 		DAW.set_track_volume(2, restore)
+	if not is_nan(tempo_restore):
+		DAW.set_tempo(tempo_restore)
 	await _until(8.0)
 
 
@@ -139,11 +147,13 @@ func _guest(port: int) -> void:
 	check("told who I joined", _notices.has("Joined Ada's session."))
 
 	DAW.set_track_volume(2, 0.123)
+	DAW.set_tempo(GUEST_TEMPO)
 	Session.claim_hold(KEY)
 	await _until(3.2)
 	check("my grab is in the table", Session.holder_of(KEY) == Session.local_peer_id)
 	check("my fader move came back from the host (%.4f)" % DAW.state.track(2).volume,
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
+	check("and so did my tempo (%.1f)" % DAW.state.tempo, absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
 
 	await _until(4.4)
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)

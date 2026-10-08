@@ -47,12 +47,16 @@ const COMMANDS := [
 	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
-	&"set_looping", &"seek", &"set_loop_range", &"undo", &"redo",
+	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 ]
 
 var backend: DAWBackend
+
+## Reaper's own limits on a project tempo.
+const TEMPO_MIN := 1.0
+const TEMPO_MAX := 960.0
 
 
 func _ready() -> void:
@@ -166,6 +170,9 @@ func transport_play() -> void: _do(&"transport_play", [])
 func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])
 func set_looping(on: bool) -> void: _do(&"set_looping", [on])
+## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
+## the same function, because it arrives here rather than at the backend.
+func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
 func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
 func set_loop_range(start: float, end: float) -> void:
 	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
@@ -211,4 +218,6 @@ func apply_intent(verb: StringName, args: Array) -> void:
 	if verb not in COMMANDS:
 		push_warning("DAW: refused an intent for unknown verb '%s'." % verb)
 		return
+	if verb == &"set_tempo" and args.size() == 1:
+		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
 	backend.callv(verb, args)

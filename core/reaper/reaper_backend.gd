@@ -297,6 +297,12 @@ func transport_record() -> void:
 	write("/record", [1.0])
 
 
+## `/tempo/raw` takes beats per minute as a plain number, unlike `/tempo`, which is normalised
+## over a range Reaper does not publish.
+func set_tempo(bpm: float) -> void:
+	write("/tempo/raw", [bpm])
+
+
 func set_looping(on: bool) -> void:
 	# A toggle on Reaper's side, and a toggle is a button: 1 is the press that flips it and 0 is
 	# the release, which Reaper ignores -- so "/repeat 0" never turned looping off. It is only
