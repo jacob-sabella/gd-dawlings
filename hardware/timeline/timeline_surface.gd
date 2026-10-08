@@ -55,9 +55,12 @@ const SCRUBBER_BAND := 0.016
 ## faders a person had sat down to use. The rest scroll -- the wheel over the track names.
 const MAX_LANES := 16
 
-## The window onto the project, in seconds. Zero span means "not set yet": the first rebuild
-## that finds a project fits the whole of it, and after that the viewer owns the window.
+## The window onto the project, in seconds. Until the viewer zooms or scrolls, every rebuild
+## fits the whole project; after that the viewer owns the window. Not "the first rebuild": with
+## a live Reaper the first rebuild comes before the arrangement does, and fitting THAT pinned
+## the window to a four-second stub of a four-minute song.
 var view_start := 0.0
+var _view_owned := false
 ## Index into the track list of the top lane shown.
 var lane_first := 0
 var _header: TimelineHeader
@@ -184,7 +187,7 @@ func _rebuild() -> void:
 	_lane_area_width = width - HEADER_WIDTH - 0.006
 
 	var project := DAW.state.timeline_length()
-	if view_span <= 0.0:
+	if view_span <= 0.0 or not _view_owned:
 		view_span = project
 	_clamp_view(project)
 
@@ -448,6 +451,7 @@ func _place_scrubber(project: float) -> void:
 
 ## Point the window at a part of the project. What the scrubber does, and what `--view` does.
 func set_view(start: float, span: float) -> void:
+	_view_owned = true
 	view_span = span
 	view_start = start
 	_clamp_view(DAW.state.timeline_length())
@@ -456,6 +460,7 @@ func set_view(start: float, span: float) -> void:
 
 
 func _on_view_changed(start: float, span: float) -> void:
+	_view_owned = true
 	view_start = start
 	view_span = span
 	# NOT mark_dirty(). Scrolling changes WHERE the project is looked at, not what shape it is,

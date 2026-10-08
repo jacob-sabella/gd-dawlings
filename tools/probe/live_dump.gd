@@ -18,6 +18,7 @@ func _ready() -> void:
 	DAW.use(backend, true, options)
 	await get_tree().create_timer(_wait).timeout
 	var s := DAW.state
+	print(backend.summary())
 	print("tracks in cache: %d  project_track_count: %d  bank %d/%d" % [s.tracks.size(),
 			s.project_track_count, s.bank_offset, s.bank_size])
 	for i in s.track_indices():

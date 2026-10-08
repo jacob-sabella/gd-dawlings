@@ -90,6 +90,11 @@ func _track(st: Dictionary, index: int) -> Dictionary:
 func _run() -> void:
 	var s := DAW.state
 	check("the desk sees the whole project (%d tracks)" % s.tracks.size(), s.tracks.size() == 40)
+	var named := 0
+	for i in s.track_indices():
+		if not s.track(i).name.begins_with("Track "):
+			named += 1
+	check("and every track's name (%d of 40)" % named, named == 40)
 	var st := await _state()
 	check("Reaper answers GetState", not st.is_empty())
 	if st.is_empty():

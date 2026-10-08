@@ -34,6 +34,14 @@ var _ticks := 0
 ## `--shot-tick 240`: capture on that physics tick instead of a drawn frame, for anything that
 ## moves in simulated time -- a pushed rack coasting to a stop -- rather than in frames.
 var _shot_tick := -1
+## Controls addressed by what they are called rather than where they happen to be drawn, so a
+## step in the walkthrough survives the desk being re-laid out.
+##   --aim "KICK  LEVEL"              park the pointer on it (its hover card is the evidence)
+##   --click "PLAY@40"                press it on tick 40 (repeatable)
+##   --pull "KICK  LEVEL:0,60@40-90"  drag from it by that many pixels over those ticks
+var _aim := ""
+var _clicks: Array = []
+var _pulls: Array = []
 
 
 func _ready() -> void:
@@ -69,6 +77,21 @@ func _ready() -> void:
 						_drag_frames = Vector2i(int(f[0]), int(f[1]))
 			"--shot-tick":
 				if i + 1 < args.size(): _shot_tick = int(args[i + 1])
+			"--aim":
+				if i + 1 < args.size(): _aim = args[i + 1]
+			"--click":
+				if i + 1 < args.size():
+					var at := args[i + 1].rsplit("@", true, 1)
+					if at.size() == 2: _clicks.append([at[0], int(at[1])])
+			"--pull":
+				if i + 1 < args.size():
+					var at := args[i + 1].rsplit("@", true, 1)
+					var what := at[0].rsplit(":", true, 1)
+					if at.size() == 2 and what.size() == 2:
+						var by := what[1].split(",")
+						var span := at[1].split("-")
+						_pulls.append([what[0], Vector2(float(by[0]), float(by[1])),
+								int(span[0]), int(span[1])])
 			"--turn":
 				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--walk":
@@ -113,7 +136,12 @@ func _process(_delta: float) -> void:
 			w.eye_height = w.standing_eye
 			w._place_camera()
 
-	if _hover.x >= 0.0:
+	if _aim != "" and _scripted_hand() != null and _ticks > 2:
+		var at := _screen_of(_aim)
+		if at.x >= 0.0:
+			_hover = at
+	var held := _scripted_hand() != null and _scripted_hand().press_override == 1
+	if _hover.x >= 0.0 and not held:
 		for hand in get_tree().root.find_children("*", "MouseInteractor", true, false):
 			(hand as MouseInteractor).pointer_override = _hover
 
@@ -143,6 +171,7 @@ func _physics_process(_delta: float) -> void:
 	_ticks += 1
 	if _drag_frames.x >= 0:
 		_drive_drag()
+	_drive_scripted()
 	if _shot_tick >= 0 and _ticks == _shot_tick:
 		_shot_frame = _frames + 2
 		_quit_after = _frames + 6
@@ -168,3 +197,66 @@ func _drive_drag() -> void:
 			wheel.pressed = true
 			wheel.position = hand.pointer_override
 			get_viewport().push_input(wheel)
+
+
+func _scripted_hand() -> MouseInteractor:
+	var hands := get_tree().root.find_children("*", "MouseInteractor", true, false)
+	return hands[0] as MouseInteractor if not hands.is_empty() else null
+
+
+## The control whose title is this -- exactly if one is, else the first that contains it.
+func _control_called(title: String) -> ControlAffordance:
+	var loose: ControlAffordance = null
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is ControlAffordance and (n as Node3D).is_visible_in_tree():
+			var t: String = (n as ControlAffordance).title()
+			if t == title:
+				return n
+			if loose == null and t.to_upper().contains(title.to_upper()):
+				loose = n
+	return loose
+
+
+func _screen_of(title: String) -> Vector2:
+	var c := _control_called(title)
+	var camera := get_viewport().get_camera_3d()
+	if c == null or camera == null:
+		if c == null:
+			push_warning("SHOT: no control called %s" % title)
+		return Vector2(-1, -1)
+	var centre := c.global_position
+	for child in c.get_children():
+		if child is CollisionShape3D:
+			centre = (child as CollisionShape3D).global_position
+			break
+	return camera.unproject_position(centre)
+
+
+func _drive_scripted() -> void:
+	var hand := _scripted_hand()
+	if hand == null:
+		return
+	for click in _clicks:
+		if _ticks == click[1]:
+			_hover = Vector2(-1, -1)
+			hand.pointer_override = _screen_of(click[0])
+			print("SHOT_CLICK %s at %s" % [click[0], hand.pointer_override])
+		if _ticks >= click[1] and _ticks < click[1] + 4:
+			hand.press_override = 1
+		elif _ticks == click[1] + 4:
+			hand.press_override = 0
+	for pull in _pulls:
+		var a: int = pull[2]
+		var b: int = pull[3]
+		if _ticks == a - 2:
+			pull.append(_screen_of(pull[0]))
+			hand.pointer_override = pull[4]
+		if _ticks >= a and _ticks <= b and pull.size() > 4:
+			var t := float(_ticks - a) / float(maxi(1, b - a))
+			hand.pointer_override = (pull[4] as Vector2) + (pull[1] as Vector2) * t
+			hand.press_override = 1
+		elif _ticks == b + 1:
+			hand.press_override = 0

@@ -97,6 +97,7 @@ func _ready() -> void:
 	_test_the_transport_is_driven_from_the_desk()
 	_test_the_ruler_moves_the_playhead_and_draws_the_loop()
 	_test_items_are_edited_on_the_timeline()
+	_test_a_late_arrangement_is_still_fitted()
 	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_reaper_hears_the_transport_in_its_own_words()
@@ -5294,3 +5295,30 @@ func _test_reaper_hears_the_transport_in_its_own_words() -> void:
 	check("undo and redo are Reaper's own actions", ReaperBackend.UNDO_ACTION == 40029 and ReaperBackend.REDO_ACTION == 40030)
 	reaper.queue_free()
 	_offline()
+
+
+## A live Reaper's arrangement arrives over the bridge after the timeline has already built once
+## with nothing on it. Fitting only the first build pinned the window to that empty stub.
+func _test_a_late_arrangement_is_still_fitted() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	backend.track_count = 4
+	DAW.use(backend)
+	for index in DAW.state.track_indices():
+		DAW.state.set_track_items(index, [])
+	DAW.state.project_length = 0.0
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	close_to("an empty project is shown whole", timeline.view_span, maxf(DAW.state.timeline_length(), TimelineScrubber.MIN_SPAN))
+	DAW.state.set_track_items(2, [_item(0.0, 180.0, "Song")])
+	timeline.mark_dirty()
+	timeline._process(0.0)
+	close_to("the song that turned up later is shown whole too", timeline.view_span, 180.0)
+	timeline.set_view(20.0, 30.0)
+	DAW.state.set_track_items(2, [_item(0.0, 240.0, "Longer")])
+	timeline.mark_dirty()
+	timeline._process(0.0)
+	close_to("once the viewer has zoomed, the window is theirs", timeline.view_span, 30.0)
+	timeline.queue_free()
+	DAW.use(previous)

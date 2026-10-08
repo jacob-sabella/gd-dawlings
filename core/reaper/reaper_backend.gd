@@ -53,6 +53,9 @@ var _timeline_epoch := 0
 var _edits_in_flight := 0
 var _structure_due := 0.0
 var _structure_in_flight := false
+## Seconds after `open` at which to ask Reaper for its whole state again. See `open`.
+var _refresh_after: Array = []
+var _refresh_clock := 0.0
 
 
 func _ready() -> void:
@@ -97,6 +100,14 @@ func open(options: Dictionary = {}) -> bool:
 	# was already running came up with whatever trickled in: meters, and almost no names.
 	# "Control surface: Refresh all surfaces" is the one message that makes it start over.
 	_peer.send("/action", [REFRESH_SURFACES])
+	# And again once the app is running. Asked only here, in `open` -- before the studio and
+	# the window exist -- a desktop launch received twelve packets of the dump and then
+	# nothing, because a stopped Reaper has nothing more to say: four names out of forty, every
+	# time. A headless client asking at the same moment gets the lot, even with its main
+	# thread stalled, so where the rest goes is not pinned down; asking again once the frames
+	# are running is what was measured to fix it.
+	_refresh_after = [0.5, 2.5]
+	_refresh_clock = 0.0
 	connection_changed.emit()
 	return true
 
@@ -145,6 +156,12 @@ func can(capability: StringName) -> bool:
 
 
 func _process(delta: float) -> void:
+	if _peer and not _refresh_after.is_empty():
+		# Clamped: the first frame after a long build reports the whole build as its delta.
+		_refresh_clock += minf(delta, 0.1)
+		if _refresh_clock >= float(_refresh_after[0]):
+			_refresh_after.pop_front()
+			_peer.send("/action", [REFRESH_SURFACES])
 	if _bridge:
 		_bridge.poll()
 		_poll_timeline(delta)
