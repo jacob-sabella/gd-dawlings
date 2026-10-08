@@ -53,6 +53,8 @@ const Capability := {
 	TIMELINE = &"timeline",
 	## Report plugin parameter names rather than just indices.
 	FX_PARAM_NAMES = &"fx_param_names",
+	## Drop a marker on the arrangement. Reaper's OSC can go to a marker but not make one.
+	MARKERS = &"markers",
 }
 
 var state := MixState.new()
@@ -118,12 +120,21 @@ func set_track_pan(_index: int, _pan: float) -> void: pass
 func set_track_mute(_index: int, _muted: bool) -> void: pass
 func set_track_solo(_index: int, _soloed: bool) -> void: pass
 func set_track_rec_arm(_index: int, _armed: bool) -> void: pass
+## Input monitoring, as Reaper's I_RECMON numbers it: 0 off, 1 on, 2 auto (on while armed and
+## stopped, or recording -- what you hear on a punch-in).
+func set_track_monitor(_index: int, _mode: int) -> void: pass
 
 func set_master_volume(_taper: float) -> void: pass
 func set_master_pan(_pan: float) -> void: pass
 
 func set_fx_param(_track_index: int, _fx_index: int, _param: int, _value: float) -> void: pass
 func set_fx_enabled(_track_index: int, _fx_index: int, _enabled: bool) -> void: pass
+
+## One send's level and pan. `send_index` is the send as the wire numbers it: 1-based, in the
+## track's own send order -- `/track/3/send/1` is track 3's first send. Same 0..1 taper as a
+## track fader for the level, 0.5 centre for the pan.
+func set_send_volume(_track_index: int, _send_index: int, _taper: float) -> void: pass
+func set_send_pan(_track_index: int, _send_index: int, _pan: float) -> void: pass
 ## Ask for the plugin's own reading of one parameter ("-12.0 dB"), to arrive later as the
 ## parameter's text in the cache. A backend that cannot know a plugin's units says nothing, and
 ## the rack shows the plain percentage it always could.
@@ -138,6 +149,8 @@ func transport_stop() -> void: pass
 func transport_record() -> void: pass
 ## Playback wraps round the loop range, or does not.
 func set_looping(_on: bool) -> void: pass
+## The click, on or off.
+func set_metronome(_on: bool) -> void: pass
 ## The project tempo, in beats per minute. Constant-tempo projects only: a project with a tempo
 ## map has its first marker moved, which is what Reaper's own tempo field does.
 func set_tempo(_bpm: float) -> void: pass
@@ -155,6 +168,9 @@ func clear_item_selection() -> void: pass
 func move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
 ## Cut every selected item that spans `seconds` there. Both halves stay selected.
 func split_selected(_seconds: float) -> void: pass
+## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
+## history. A no-op on a backend that answers false to Capability.MARKERS.
+func add_marker(_seconds: float, _marker_name: String) -> void: pass
 
 
 # --- item edits, on the cache ------------------------------------------------------------
@@ -249,6 +265,13 @@ func _lanes_snapshot() -> Dictionary:
 	for index in state.track_indices():
 		out[index] = MixWire._pack_items(state.track(index).items)
 	return out
+
+
+## Every marker, through the address the timeline delivers them on, so it replicates.
+func _write_markers(markers: Dictionary) -> void:
+	var packed := MixWire._pack_markers(markers)
+	record_for_replication("/timeline/markers", packed)
+	MixWire.apply(state, "/timeline/markers", packed)
 
 
 func _restore_lanes(snapshot: Dictionary) -> void:

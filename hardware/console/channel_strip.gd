@@ -1,7 +1,7 @@
 class_name ChannelStrip
 extends Node3D
 
-## One channel of the console: name, pan, rec/mute/solo, fader, meter.
+## One channel of the console: name, pan, rec/solo/mute/monitor, fader, meter.
 ##
 ## Built for a track index and bound to it for life. A rebuild of the console replaces strips
 ## wholesale rather than re-pointing them, because a strip that changes which track it means
@@ -13,12 +13,17 @@ const WIDTH := 0.055
 const HEIGHT := 0.30
 
 var track_index: int = 0
+## Whose sends the fader and pan are showing: 0 for this track's own level and pan, or the index
+## of a return, when the desk has been flipped to put the sends to it on the faders. Set by the
+## console through `show_sends_to`, never while a hand is on the strip.
+var send_dest: int = 0
 
 var _fader: Fader
 var _pan: Knob
 var _mute: PanelButton
 var _solo: PanelButton
 var _rec: PanelButton
+var _monitor: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 
@@ -48,6 +53,16 @@ const NAME_SIZE := 80
 const DB_SIZE := 60
 ## How much of the strip's width lettering may use: the panel less a few millimetres a side.
 const LETTER_SPAN := WIDTH - 0.006
+## The level readout's ink: the desk's ordinary lettering, and amber while the strip is showing
+## a send rather than the track.
+const LEVEL_INK := Color(0.86, 0.87, 0.89)
+const SEND_INK := Color(0.95, 0.72, 0.36)
+## And grey where a flipped strip has no send to show: it is the answer, but not a reading, and a
+## row of amber NO SENDs shouted louder than the two sends that were there.
+const ABSENT_INK := Color(0.42, 0.43, 0.46)
+## Input monitoring's lamp blinks while it is on auto: lit is on, dark is off, and auto -- on only
+## when Reaper would let the input through -- is neither, and says so without a new colour.
+const AUTO_BLINK_HZ := 1.2
 const CHIP_SIZE := Vector3(WIDTH - 0.008, 0.004, 0.001)
 const CHIP_OFFSET := Vector3(0, HEIGHT - 0.022, 0.0005)
 
@@ -77,8 +92,9 @@ func _ready() -> void:
 	_pan = Knob.new()
 	_pan.body_bank = knob_bank
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
-	_pan.turned.connect(func(v: float): DAW.set_track_pan(track_index, v))
-	_pan.describe_title = func() -> String: return _caption_for("PAN")
+	_pan.turned.connect(_on_pan_turned)
+	_pan.describe_title = func() -> String:
+		return _caption_for("PAN") if send_dest <= 0 else _caption_for("SEND PAN TO " + _dest_name())
 	_pan.describe_value = Knob.pan_text
 	add_child(_pan)
 
@@ -112,12 +128,29 @@ func _ready() -> void:
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
 	add_child(_mute)
 
+	# Input monitoring, under the three. Its lamp is a dot: the fourth silhouette, after the bar,
+	# the stub and the line, so it is not told from the others by its green alone. A press steps
+	# off -> on -> auto -> off, the order Reaper's own monitor button goes round in.
+	_monitor = PanelButton.new()
+	_monitor.body_bank = body_bank
+	_monitor.lamp_bank = lamp_bank
+	_monitor.led_colour = Ergonomics.current.signal_colour(&"ok")
+	_monitor.lamp_scale = Vector2(0.38, 0.40)
+	_monitor.position = Vector3(0, HEIGHT - 0.131, 0.004)
+	_monitor.describe_title = func() -> String: return _caption_for("INPUT MONITOR")
+	_monitor.describe_value = func(_v: float) -> String:
+		return monitor_text(_state().monitor)
+	_monitor.pressed.connect(func(): DAW.set_track_monitor(track_index, next_monitor(_state().monitor)))
+	add_child(_monitor)
+
 	_fader = Fader.new()
 	_fader.track_index = track_index
 	_fader.slot_bank = slot_bank
 	_fader.cap_bank = cap_bank
 	_fader.position = Vector3(-0.011, 0.040, 0.004)
-	_fader.describe_title = func() -> String: return _caption_for("LEVEL")
+	_fader.write_value = _on_fader_moved
+	_fader.describe_title = func() -> String:
+		return _caption_for("LEVEL") if send_dest <= 0 else _caption_for("SEND TO " + _dest_name())
 	add_child(_fader)
 
 	var meter := VUMeter.new()
@@ -148,12 +181,78 @@ func _make_label(font_size: int, pos: Vector3) -> Label3D:
 
 ## The hover-card name of one of this strip's controls. Asked at hover time rather than baked
 ## at build, because a strip is re-pointed when the bank moves and a track can be renamed.
+static func next_monitor(mode: int) -> int:
+	return (mode + 1) % 3
+
+
+static func monitor_text(mode: int) -> String:
+	match mode:
+		DAW.MONITOR_ON: return "ON"
+		DAW.MONITOR_AUTO: return "AUTO (when armed and stopped, or recording)"
+	return "OFF"
+
+
+func _process(_delta: float) -> void:
+	_monitor.lit = fmod(Time.get_ticks_msec() / 1000.0 * AUTO_BLINK_HZ, 1.0) < 0.5
+
+
 func _caption_for(what: String) -> String:
 	return "%s  %s" % [_state().display_name().to_upper(), what]
 
 
 func _state() -> MixState.TrackState:
 	return DAW.state.track(track_index)
+
+
+## Put the sends to track `dest` on this strip's fader and pan, or the track's own back with 0.
+func show_sends_to(dest: int) -> void:
+	send_dest = maxi(dest, 0)
+	refresh()
+	# Past any echo wait: what the controls were waiting to hear about is the other number.
+	var t := _state()
+	var slot := send_slot()
+	if send_dest <= 0:
+		_fader.snap_to(t.volume)
+		_pan.snap_to(t.pan)
+	else:
+		_fader.snap_to((t.sends[slot] as MixState.SendState).volume if slot > 0 else 0.0)
+		_pan.snap_to((t.sends[slot] as MixState.SendState).pan if slot > 0 else 0.5)
+
+
+## This track's send to `send_dest`, as its 1-based slot, or 0 when it has none. The lowest slot
+## wins when a track sends to the same return twice, which Reaper allows and nobody means.
+func send_slot() -> int:
+	if send_dest <= 0:
+		return 0
+	var t := _state()
+	var order: Array = t.sends.keys()
+	order.sort()
+	for i in order:
+		if int(i) >= 1 and (t.sends[i] as MixState.SendState).resolve(DAW.state) == send_dest:
+			return int(i)
+	return 0
+
+
+func _dest_name() -> String:
+	return DAW.state.track(send_dest).display_name().to_upper()
+
+
+func _on_fader_moved(v: float) -> void:
+	if send_dest <= 0:
+		DAW.set_track_volume(track_index, v)
+		return
+	var slot := send_slot()
+	if slot > 0:
+		DAW.set_send_volume(track_index, slot, v)
+
+
+func _on_pan_turned(v: float) -> void:
+	if send_dest <= 0:
+		DAW.set_track_pan(track_index, v)
+		return
+	var slot := send_slot()
+	if slot > 0:
+		DAW.set_send_pan(track_index, slot, v)
 
 
 func _on_track_changed(index: int, _field: StringName) -> void:
@@ -166,14 +265,43 @@ func _on_track_changed(index: int, _field: StringName) -> void:
 func refresh() -> void:
 	var t := _state()
 	_name_label.text = t.display_name().to_upper()
-	_db_label.text = "%+.1f" % t.volume_db if t.volume_db > -150.0 else "-inf"
+	var level := t.volume
+	var pan := t.pan
+	var db := t.volume_db
+	# Flipped: the fader is a send. Lettered in the send colour so a desk of send levels is
+	# never read as a desk of track levels -- the two look identical otherwise, and a fader
+	# pulled down "to fix the vocal" would be the reverb on it.
+	_db_label.modulate = SEND_INK if send_dest > 0 else LEVEL_INK
+	var slot := send_slot()
+	var live := send_dest <= 0 or slot > 0
+	if send_dest > 0:
+		if slot > 0:
+			var sd: MixState.SendState = t.sends[slot]
+			level = sd.volume
+			pan = sd.pan
+			db = DAW.taper_to_db(sd.volume)
+		else:
+			level = 0.0
+			pan = 0.5
+	if live:
+		_db_label.text = "%+.1f" % db if db > -150.0 else "-inf"
+	else:
+		_db_label.text = "NO SEND"
+		_db_label.modulate = ABSENT_INK
+	# A strip with no send to the return has nothing for the fader to move. Taken off the
+	# collision layer rather than left grabbable: a cap that slides and changes nothing is a
+	# control lying about what it does.
+	_fader.collision_layer = 2 if live else 0
+	_pan.collision_layer = 2 if live else 0
 	Lettering.fit(_name_label, LETTER_SPAN, NAME_SIZE, ConsoleSurface.SMALLEST_FONT)
 	Lettering.fit(_db_label, LETTER_SPAN, DB_SIZE, ConsoleSurface.SMALLEST_FONT)
-	_fader.apply_remote(t.volume)
-	_pan.apply_remote(t.pan)
+	_fader.apply_remote(level)
+	_pan.apply_remote(pan)
 	_mute.lit = t.mute
 	_solo.lit = t.solo
 	_rec.lit = t.rec_arm
+	_monitor.lit = t.monitor == DAW.MONITOR_ON
+	set_process(t.monitor == DAW.MONITOR_AUTO)
 	if chip_bank != null:
 		# Banked chips are unshaded, so the emission `led()` would have carried has to be
 		# expressed as a colour above 1 instead -- gently, because a chip is an identifier and

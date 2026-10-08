@@ -299,13 +299,23 @@ function handlers.GetState(args)
         selected = reaper.IsMediaItemSelected(it),
       }
     end
+    -- Sends as the desk numbers them: the first is [1], as /track/N/send/1 is on the wire.
+    local sends = {}
+    for s = 0, reaper.GetTrackNumSends(tr, 0) - 1 do
+      sends[#sends + 1] = {
+        volume = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_VOL'),
+        pan = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_PAN'),
+      }
+    end
     tracks[#tracks + 1] = {
       index = i + 1,
+      sends = sends,
       volume = reaper.GetMediaTrackInfo_Value(tr, 'D_VOL'),
       pan = reaper.GetMediaTrackInfo_Value(tr, 'D_PAN'),
       mute = reaper.GetMediaTrackInfo_Value(tr, 'B_MUTE') > 0.5,
       solo = reaper.GetMediaTrackInfo_Value(tr, 'I_SOLO') > 0.5,
       arm = reaper.GetMediaTrackInfo_Value(tr, 'I_RECARM') > 0.5,
+      monitor = reaper.GetMediaTrackInfo_Value(tr, 'I_RECMON'),
       fx = fx,
       items = items,
     }
@@ -317,6 +327,8 @@ function handlers.GetState(args)
     position = playing and reaper.GetPlayPosition() or reaper.GetCursorPosition(),
     cursor = reaper.GetCursorPosition(),
     repeating = reaper.GetSetRepeat(-1) == 1,
+    -- 40364, Options: Toggle metronome.
+    metronome = reaper.GetToggleCommandState(40364) == 1,
     loop_start = loop_start, loop_end = loop_end,
     selection_start = sel_start, selection_end = sel_end,
     can_undo = reaper.Undo_CanUndo2(0) or '',
@@ -327,7 +339,7 @@ end
 
 --- Set one of a track's numeric properties, the way a mouse in Reaper would. For checking that
 -- a change made in REAPER reaches the desk, which the desk cannot test by writing it itself.
-local SETTABLE = {D_VOL = true, D_PAN = true, B_MUTE = true, I_SOLO = true, I_RECARM = true}
+local SETTABLE = {D_VOL = true, D_PAN = true, B_MUTE = true, I_SOLO = true, I_RECARM = true, I_RECMON = true}
 function handlers.SetTrackValue(args)
   local tr = track_from_osc(args[1])
   if not tr or not SETTABLE[args[2] or ''] then return {ok = false, error = 'no such track or key'} end
@@ -408,6 +420,18 @@ function handlers.SplitSelected(args)
   local result = edited('Split items')
   result.split = #targets
   return result
+end
+
+-- args: seconds, name. A marker, one undo point, as Insert marker does from Reaper's own menu --
+-- but at the time given rather than at the edit cursor, which on a desk someone else is
+-- driving is not where the person pressing MARK was listening.
+function handlers.AddMarker(args)
+  local at = math.max(0, args[1] or reaper.GetPlayPosition())
+  reaper.Undo_BeginBlock()
+  local index = reaper.AddProjectMarker2(0, false, at, 0, tostring(args[2] or ''), -1, 0)
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Insert marker', -1)
+  return {ok = index >= 0, index = index}
 end
 
 -- args: track (1-based, as OSC), fx (1-based), param (1-based). The plugin's own words for one

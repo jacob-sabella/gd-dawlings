@@ -67,6 +67,26 @@ func _until(cond: Callable, timeout := 3.0) -> Dictionary:
 	return st
 
 
+func _until_marker(present: bool, timeout := 3.0) -> Array:
+	var started := Time.get_ticks_msec()
+	var marks: Array = []
+	while Time.get_ticks_msec() - started < timeout * 1000.0:
+		var r = await _reaper("GetTimeline")
+		marks = _arr(r.get("markers", [])) if r is Dictionary else []
+		if _live_mark(marks) == present:
+			break
+		await _wait(0.1)
+	return marks
+
+
+static func _live_mark(marks: Array) -> bool:
+	for m in marks:
+		if m is Dictionary and absf(float(m.get("position", -1.0)) - 3.5) < 0.01 \
+				and str(m.get("name", "")) == "LIVE CHECK":
+			return true
+	return false
+
+
 func _state() -> Dictionary:
 	var r = await _reaper("GetState", [8])
 	return r if r is Dictionary else {}
@@ -264,7 +284,56 @@ func _run() -> void:
 				s.track(7).items.size() == lane.size() and is_equal_approx(s.item(7, 0).start, first_start))
 		DAW.clear_item_selection()
 
+	# --- sends and the click --------------------------------------------------------------
+	var send_track := 0
+	for t in _arr(original["tracks"]):
+		if send_track == 0 and not _arr(t.get("sends", [])).is_empty():
+			send_track = int(t["index"])
+	check("there is a track with a send (%d)" % send_track, send_track > 0)
+	if send_track > 0:
+		DAW.set_send_volume(send_track, 1, DAW.db_to_taper(-9.0))
+		DAW.set_send_pan(send_track, 1, 0.25)
+		st = await _until(func(x): return absf(float(_arr(_track(x, send_track)["sends"])[0]["pan"]) + 0.5) < 0.02)
+		var sent: Dictionary = _arr(_track(st, send_track)["sends"])[0]
+		var sent_db := 20.0 * log(maxf(float(sent["volume"]), 1e-9)) / log(10.0)
+		check("a send level from the desk is Reaper's send level (%.2f dB, want -9)" % sent_db, absf(sent_db + 9.0) < 0.3)
+		check("and its pan is Reaper's (%.2f)" % float(sent["pan"]), absf(float(sent["pan"]) + 0.5) < 0.02)
+	var click_was: bool = original.get("metronome", false)
+	DAW.set_metronome(not click_was)
+	st = await _until(func(x): return x.get("metronome", click_was) != click_was)
+	check("the deck's CLICK switches Reaper's metronome (%s)" % st.get("metronome"), st.get("metronome", click_was) != click_was)
+	DAW.set_metronome(click_was)
+	st = await _until(func(x): return x.get("metronome", not click_was) == click_was)
+	check("and switches it back", st.get("metronome", not click_was) == click_was)
+
+	# --- input monitoring, both ways ----------------------------------------------------------
+	var mon_was := int(roundf(float(_track(original, 3).get("monitor", 0))))
+	var mon_to := (mon_was + 2) % 3
+	DAW.set_track_monitor(3, mon_to)
+	st = await _until(func(x): return int(roundf(float(_track(x, 3).get("monitor", -1)))) == mon_to)
+	check("the strip's monitor key sets Reaper's input monitoring (%s, want %d)" % [
+			_track(st, 3).get("monitor"), mon_to],
+			int(roundf(float(_track(st, 3).get("monitor", -1)))) == mon_to)
+	var mon_back := (mon_to + 1) % 3
+	await _reaper("SetTrackValue", [3, "I_RECMON", mon_back])
+	await _wait(0.8)
+	check("and monitoring set in Reaper reaches the desk (%d, want %d)" % [s.track(3).monitor, mon_back],
+			s.track(3).monitor == mon_back)
+
+	# --- a marker from the locator: read back from Reaper's own marker list ----------------
+	check("Reaper can take markers with the bridge up", DAW.can(DAWBackend.Capability.MARKERS))
+	DAW.add_marker(3.5, "LIVE CHECK")
+	var marks := await _until_marker(true)
+	check("MARK puts a marker in Reaper's project (%s)" % [marks], _live_mark(marks))
+	DAW.undo()
+	marks = await _until_marker(false)
+	check("and one undo takes it out again", not _live_mark(marks))
+
 	# --- put everything back ----------------------------------------------------------------
+	if send_track > 0:
+		var was: Dictionary = _arr(_track(original, send_track)["sends"])[0]
+		DAW.set_send_volume(send_track, 1, DAW.db_to_taper(20.0 * log(maxf(float(was["volume"]), 1e-9)) / log(10.0)))
+		DAW.set_send_pan(send_track, 1, (float(was["pan"]) + 1.0) * 0.5)
 	for t in original["tracks"]:
 		var i := int(t["index"])
 		if i > 8:
@@ -274,6 +343,7 @@ func _run() -> void:
 		await _reaper("SetTrackValue", [i, "B_MUTE", 1 if t["mute"] else 0])
 		await _reaper("SetTrackValue", [i, "I_SOLO", 1 if t["solo"] else 0])
 		await _reaper("SetTrackValue", [i, "I_RECARM", 1 if t["arm"] else 0])
+		await _reaper("SetTrackValue", [i, "I_RECMON", int(roundf(float(t.get("monitor", 0))))])
 	# Item positions too: a run that failed halfway through an edit must not leave the next run
 	# starting from a different arrangement.
 	var now_lanes := await _state()

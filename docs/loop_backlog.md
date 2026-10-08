@@ -19,6 +19,33 @@ because a scaffold that reads as a finished project wastes the next person's aft
   (three taps or more, averaged over the run). `DAW.set_tempo` is clamped to Reaper's 1-960 on
   both sides of a session, is undoable offline, and goes to Reaper as `/tempo/raw`. A guest's
   tempo reaching a live Reaper and coming back is checked by `session_probe.sh --reaper`.
+  A CLICK key opposite TAP switches the metronome (`DAW.set_metronome`, `/click` on the wire).
+  Reaper's `/click` is a toggle like `/repeat` -- checked on the rig: 1 flips it, 0 is ignored,
+  and Reaper answers with the state -- so a press is sent only when it would change something.
+  `live_check` reads the metronome back through the bridge's GetState (action 40364's toggle
+  state), and checks a send level and pan the same way.
+  A locator between the reels: the section the playhead is in (the last marker at or before it)
+  under the counter, and PREV / MARK / NEXT keys. MARK is `DAW.add_marker` -- undoable offline,
+  the bridge's `AddMarker` in Reaper (one "Insert marker" undo point), so it needs the bridge
+  (`Capability.MARKERS`). PREV inside 0.4s past a marker goes to the one before it, so pressing
+  it while rolling is not pinned in place. Checked by the suite, `session_probe.sh` (a guest's
+  marker reaches the host, also `--reaper`) and `live_check` (Reaper's marker list has it, and
+  one undo takes it out). Reaper's markers keep their beat, so a tempo change moves them in
+  seconds -- seen on the rig when the probe's guest tempo moved its own marker.
+- **Send level and pan.** `DAW.set_send_volume` / `set_send_pan` (a send is a track and its
+  1-based slot, as OSC numbers it; a guest's intent is checked and clamped on the host), undoable
+  offline, `/track/N/send/M/volume|pan` to Reaper. On the desk as SENDS ON FADERS: the master
+  section's SENDS key flips every strip's fader and pan to its send to one return, then the next,
+  then back. Fixed on the way: the bridge's sends were 0-based against OSC's 1-based (two
+  half-sends per real one), and `/send/M/volume/str` was parsed as the level. Verified by the
+  suite, `session_probe.sh` (a guest's send level reaches the mix and comes back) and
+  `session_probe.sh --reaper`; Reaper was seen to take an OSC send write (-11.0dB, 50%L back).
+- **Input monitoring.** `DAW.set_track_monitor` (Reaper's I_RECMON numbers: 0 off, 1 on, 2 auto;
+  clamped on both sides of a session), undoable offline, `/track/N/monitor` to and from Reaper --
+  which, checked on the rig, sends and takes one float despite its config listing a b/ and an
+  i/ pattern there. A fourth key on every strip under MUTE steps off -> on -> auto; its lamp is
+  a green dot, steady for on and blinking for auto. `live_check` checks both directions against
+  GetState's I_RECMON; `session_probe.sh` (also `--reaper`) has a guest set it.
 - **FX racks.** 19" units, one per FX slot, in Reaper's own order. Knobs are the plugin's first
   eight real parameters with Reaper's names.
 - **Patchbay.** Jacks per track, hanging cables for existing sends, drag-to-patch gesture.
@@ -99,6 +126,18 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 - **Mobile renderer pass.** `project.godot` sets the override; nothing has been tested on a
   standalone headset, and the headline hybrid client is exactly that.
+
+- **Reaper parity, still missing** (after sends on faders, the click, the locator and input
+  monitoring):
+  - Send mute: there is no OSC address for it, so it would be a bridge edit.
+  - Pre-roll and count-in.
+  - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
+    for the selected track.
+  - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).
+  - Tracks: adding, renaming and recolouring them.
+  - Markers: renaming and deleting them, and regions of any kind.
+  - Time signature.
+  - `tools/shot.sh --focus patchbay` frames only the floor.
 
 ## Known rough edges
 

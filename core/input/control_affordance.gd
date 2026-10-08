@@ -132,6 +132,16 @@ func apply_remote(v: float) -> void:
 	_on_value_changed()
 
 
+## Take `v` now, past the echo wait: for when the control has been pointed at a different
+## value altogether (a strip flipped to show a send), so what it was waiting for is moot.
+func snap_to(v: float) -> void:
+	if is_held():
+		return
+	_settle_until = 0
+	_settle_pending = NAN
+	apply_remote(v)
+
+
 func is_settling() -> bool:
 	return Time.get_ticks_msec() < _settle_until
 

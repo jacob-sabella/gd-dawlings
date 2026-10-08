@@ -12,6 +12,9 @@ extends Node
 const KEY := "KICK  VOLUME"
 ## Not the stand-in's tempo nor the rig's, so arriving at it means the write travelled.
 const GUEST_TEMPO := 133.5
+## A send level neither the stand-in nor the rig starts at.
+const GUEST_SEND := 0.345
+const GUEST_MARK := 1.25
 
 var _failures := 0
 var _checks := 0
@@ -57,12 +60,18 @@ func _host(port: int) -> void:
 	Session.local_name = "Ada"
 	var restore := NAN
 	var tempo_restore := NAN
+	var send_restore := NAN
+	var monitor_restore := -1
 	if _reaper_resource != "":
 		check("opens the link to Reaper", DAW.use(ReaperBackend.new(), true, {
 				"bridge_dir": _reaper_resource.path_join("Scripts/reaper3d_bridge_data")}))
 		await _until(-0.5)
 		restore = DAW.state.track(2).volume
 		tempo_restore = DAW.state.tempo
+		monitor_restore = DAW.state.track(3).monitor
+		var first := _first_send(DAW.state)
+		if not first.is_empty():
+			send_restore = DAW.state.send(first[0], first[1]).volume
 	else:
 		var offline := OfflineBackend.new()
 		offline.track_count = 20
@@ -92,6 +101,14 @@ func _host(port: int) -> void:
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("the guest's tempo reached the mix (%.1f)" % DAW.state.tempo,
 			absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
+	var sent := _first_send(DAW.state)
+	check("the guest's send level reached the mix (%s)" % [sent], not sent.is_empty()
+			and absf(DAW.state.send(sent[0], sent[1]).volume - GUEST_SEND) < 0.002)
+	check("the guest switched the click on", DAW.state.metronome)
+	check("the guest's input monitoring reached the mix (%d)" % DAW.state.track(3).monitor,
+			DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
+	check("the guest's marker is on the host's timeline (%s)" % [DAW.state.markers.values()],
+			_has_guest_mark(DAW.state))
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
@@ -116,6 +133,12 @@ func _host(port: int) -> void:
 		DAW.set_track_volume(2, restore)
 	if not is_nan(tempo_restore):
 		DAW.set_tempo(tempo_restore)
+	DAW.set_metronome(false)
+	if monitor_restore >= 0:
+		DAW.set_track_monitor(3, monitor_restore)
+	if not is_nan(send_restore):
+		var first := _first_send(DAW.state)
+		DAW.set_send_volume(first[0], first[1], send_restore)
 	await _until(8.0)
 
 
@@ -148,12 +171,24 @@ func _guest(port: int) -> void:
 
 	DAW.set_track_volume(2, 0.123)
 	DAW.set_tempo(GUEST_TEMPO)
+	DAW.set_metronome(true)
+	DAW.add_marker(GUEST_MARK, "GUEST")
+	DAW.set_track_monitor(3, DAW.MONITOR_AUTO)
+	var send := _first_send(DAW.state)
+	check("the snapshot carried a send to turn (%s)" % [send], not send.is_empty())
+	if not send.is_empty():
+		DAW.set_send_volume(send[0], send[1], GUEST_SEND)
 	Session.claim_hold(KEY)
 	await _until(3.2)
 	check("my grab is in the table", Session.holder_of(KEY) == Session.local_peer_id)
 	check("my fader move came back from the host (%.4f)" % DAW.state.track(2).volume,
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("and so did my tempo (%.1f)" % DAW.state.tempo, absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
+	check("and the click I switched on", DAW.state.metronome)
+	check("and my input monitoring", DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
+	check("and my marker (%s)" % [DAW.state.markers.values()], _has_guest_mark(DAW.state))
+	check("and my send level", not send.is_empty()
+			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)
 
 	await _until(4.4)
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)
@@ -193,6 +228,19 @@ func _keep_publishing(head: Transform3D, pointing: String) -> void:
 	add_child(timer)
 
 
+## The first send that goes somewhere, as [track, slot]: the same answer on both halves, since
+## the guest's copy of the project is the host's.
+static func _first_send(state: MixState) -> Array:
+	for index in state.track_indices():
+		var t := state.track(index)
+		var slots: Array = t.sends.keys()
+		slots.sort()
+		for slot in slots:
+			if int(slot) >= 1 and (t.sends[slot] as MixState.SendState).resolve(state) > 0:
+				return [index, int(slot)]
+	return []
+
+
 func _other_id() -> int:
 	for id in Session.participants:
 		if id != Session.local_peer_id:
@@ -211,3 +259,9 @@ func check(label: String, ok: bool) -> void:
 	if not ok:
 		_failures += 1
 	print("%s  %s" % ["PASS" if ok else "FAIL", label])
+
+
+# The guest's marker, found by its name: it is dropped at GUEST_MARK seconds, but the guest
+# changes the tempo too, and Reaper's markers keep their beat, so in seconds it moves.
+static func _has_guest_mark(state: MixState) -> bool:
+	return state.markers.values().has("GUEST")

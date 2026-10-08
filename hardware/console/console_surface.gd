@@ -47,6 +47,11 @@ var bank: BankSelector
 ## written went to a track that is no longer there. Worse, nothing about it looks like an error.
 var _pending_bank := -1
 
+## Which return's sends the faders are showing, or 0 for levels. This participant's view of the
+## desk, not the mix's -- the engineer can be riding reverb sends while the person beside them
+## watches levels on their own copy -- so it lives here and is never replicated.
+var send_dest := 0
+
 
 func _ready() -> void:
 	surface_kind = &"console"
@@ -385,6 +390,51 @@ func _rebuild() -> void:
 	master.name = "Master"
 	master.transform = _seat(x + MasterSection.GAP + MasterSection.WIDTH * 0.5, PANEL_MARGIN, 0.0)
 	_panel.add_child(master)
+	master.sends_pressed.connect(cycle_sends)
+	# A return that has gone -- deleted, or banked away -- takes the flip with it.
+	if send_dest > 0 and not send_destinations(DAW.state).has(send_dest):
+		send_dest = 0
+	_show_sends()
+
+
+## Every track something sends to, in track order: what the SENDS key steps through.
+static func send_destinations(state: MixState) -> Array:
+	var out: Array = []
+	for index in state.track_indices():
+		var t := state.track(index)
+		for slot in t.sends:
+			if int(slot) < 1:
+				continue
+			var dest: int = (t.sends[slot] as MixState.SendState).resolve(state)
+			if dest > 0 and state.tracks.has(dest) and not out.has(dest):
+				out.append(dest)
+	out.sort()
+	return out
+
+
+## Faders on to the next return's sends; past the last, back to levels.
+##
+## Refused while a hand is on anything, by the rule banking keeps: a fader that changed what it
+## writes in the middle of a drag would put the rest of the drag on the wrong number.
+func cycle_sends() -> void:
+	# Faders and knobs only: the SENDS key is itself held while it is being pressed.
+	for node in find_children("*", "ControlAffordance", true, false):
+		if (node is Fader or node is Knob) and (node as ControlAffordance).is_held():
+			return
+	var dests := send_destinations(DAW.state)
+	var at := dests.find(send_dest)
+	send_dest = dests[at + 1] if at + 1 < dests.size() else 0
+	if dests.is_empty():
+		send_dest = 0
+	_show_sends()
+
+
+func _show_sends() -> void:
+	for strip in strips:
+		strip.show_sends_to(send_dest)
+	if master != null:
+		master.show_sends("" if send_dest <= 0
+				else DAW.state.track(send_dest).display_name().to_upper())
 
 
 ## Gap inserted at a folder boundary. Narrow on purpose: this is a seam between sections of one

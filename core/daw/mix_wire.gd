@@ -68,6 +68,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 		"repeat":
 			state.looping = _as_bool(args)
 			state.transport_changed.emit()
+		"click":
+			# Reaper's METRONOME, which it states as it changes and on a refresh.
+			state.metronome = _as_bool(args)
+			state.transport_changed.emit()
 		"loop":
 			if p.size() > 2 and p[2] == "time" and args.size() > 0:
 				if p[1] == "start":
@@ -200,6 +204,11 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			state.set_track_field(idx, &"solo", _as_bool(args))
 		"recarm":
 			state.set_track_field(idx, &"rec_arm", _as_bool(args))
+		"monitor":
+			# One number, 0 off / 1 on / 2 auto. Reaper's config lists a b/ and an i/ pattern on
+			# this address, but what it sends -- checked on the rig -- is the one float.
+			if not args.is_empty():
+				state.set_track_field(idx, &"monitor", clampi(int(roundf(float(args[0]))), 0, 2))
 		"select":
 			state.set_track_field(idx, &"selected", _as_bool(args))
 		"colour":
@@ -236,6 +245,16 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 
 ## [start, length, muted, name, selected] per item, repeating.
 const ITEM_WIDTH := 5
+
+
+## [position, name, position, name, ...], in time order.
+static func _pack_markers(markers: Dictionary) -> Array:
+	var order: Array = markers.keys()
+	order.sort()
+	var out: Array = []
+	for at in order:
+		out.append_array([at, markers[at]])
+	return out
 
 
 static func _unpack_items(args: Array) -> Array:
@@ -296,6 +315,11 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	if p.size() < 5 or not p[3].is_valid_int():
 		return
 	var s := state.send(track_idx, int(p[3]))
+	# Only the exact field address: `volume/str` and `pan/str` are Reaper's spelling of the same
+	# value, and reading "-11.0dB" as a float would zero the level.
+	if p.size() > 5:
+		return
+	var before := [s.dest_name, s.dest_track, s.volume, s.pan]
 	match p[4]:
 		"name": s.dest_name = str(args[0])
 		# reaper-3d's own again, and the one that makes the patchbay exact rather than
@@ -303,6 +327,10 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 		"dest": s.dest_track = int(args[0])
 		"volume": s.volume = float(args[0])
 		"pan": s.pan = float(args[0])
+	# Told, so a control showing a send level follows it. Only on a change: Reaper restates
+	# every slot of every track on a refresh, and most of them are empty.
+	if before != [s.dest_name, s.dest_track, s.volume, s.pan]:
+		state.track_changed.emit(track_idx, &"sends")
 
 
 static func _as_bool(args: Array) -> bool:
@@ -340,6 +368,7 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/mute" % index, [1.0 if t.mute else 0.0]])
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
+		out.append(["/track/%d/monitor" % index, [float(t.monitor)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])
@@ -381,14 +410,12 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/beat/str", [state.position_string]])
 	out.append(["/time", [state.position_seconds]])
 	out.append(["/repeat", [1.0 if state.looping else 0.0]])
+	out.append(["/click", [1.0 if state.metronome else 0.0]])
 	out.append(["/loop/start/time", [state.loop_start]])
 	out.append(["/loop/end/time", [state.loop_end]])
 	out.append(["/timeline/length", [state.project_length]])
 	if not state.markers.is_empty():
-		var packed: Array = []
-		for at in state.markers:
-			packed.append_array([at, state.markers[at]])
-		out.append(["/timeline/markers", packed])
+		out.append(["/timeline/markers", _pack_markers(state.markers)])
 	return out
 
 

@@ -101,6 +101,10 @@ func _ready() -> void:
 	_test_a_late_timeline_poll_does_not_undo_an_edit()
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_the_tempo_is_set_from_the_deck()
+	_test_the_sends_ride_the_faders()
+	_test_the_click_is_switched_from_the_deck()
+	_test_markers_are_dropped_and_found_from_the_deck()
+	_test_input_monitoring_is_set_from_the_strip()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5330,6 +5334,271 @@ func _test_the_tempo_is_set_from_the_deck() -> void:
 	check("the knob goes by its name across a session", deck._tempo_knob.network_key() == "TRANSPORT  TEMPO")
 	deck._tempo_knob.turned.emit(TapeDeck.bpm_to_knob(150.0))
 	close_to("turning it sets the tempo", DAW.state.tempo, 150.0)
+	deck.queue_free()
+
+
+func _test_the_sends_ride_the_faders() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var verb := 13
+	var snare := s.send(3, 1, false)
+	check("the stand-in numbers its sends from 1, as the wire does", snare != null and s.send(3, 0, false) == null)
+	var before := snare.volume
+	backend._repl_durable.clear()
+	DAW.set_send_volume(3, 1, 0.5)
+	close_to("set_send_volume sets the send's level", snare.volume, 0.5)
+	check("and replicates it on the send's own address", backend._repl_durable.has("/track/3/send/1/volume"))
+	DAW.set_send_pan(3, 1, 0.2)
+	close_to("set_send_pan sets the send's pan", snare.pan, 0.2)
+	DAW.undo()
+	DAW.undo()
+	close_to("a send level is undoable", snare.volume, before)
+	DAW.set_send_volume(2, 4, 0.9)
+	check("turning a send that is not there does not make one", s.send(2, 4, false) == null)
+	check("both are verbs a guest may use", &"set_send_volume" in DAW.COMMANDS and &"set_send_pan" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_send_volume", [3, 1, 7.0])
+	close_to("a guest's send level is clamped", snare.volume, 1.0)
+	DAW.apply_intent(&"set_send_volume", [3, 0, 0.1])
+	DAW.apply_intent(&"set_send_volume", [3])
+	close_to("a malformed send intent is refused", snare.volume, 1.0)
+
+	# The wire. Reaper spells every send level a second time as text, and that must not be read
+	# as the number.
+	var told := [0]
+	var count := func(_i: int, field: StringName): if field == &"sends": told[0] += 1
+	s.track_changed.connect(count)
+	MixWire.apply(s, "/track/3/send/1/volume", [0.25])
+	MixWire.apply(s, "/track/3/send/1/volume/str", ["-11.0dB"])
+	close_to("a send level's text is not its level", snare.volume, 0.25)
+	MixWire.apply(s, "/track/3/send/1/volume", [0.25])
+	check("a send change is told once, and a restatement not at all (%d)" % told[0], told[0] == 1)
+	s.track_changed.disconnect(count)
+
+	# Reaper: ReaScript counts sends from 0 and OSC from 1, and both describe the same send.
+	var link := _fresh_link()
+	link._apply("/track/4/send/1/name", ["Verb Rtn"])
+	link._apply("/track/4/send/1/volume", [0.7])
+	link._on_structure({"tracks": [{"index": 4, "sends": [{"index": 0, "dest_track": 26,
+			"dest_name": "Verb Rtn"}]}], "track_count": 40})
+	check("the bridge's send 0 is OSC's send 1 (%s)" % [link.state.track(4).sends.keys()],
+			link.state.track(4).sends.size() == 1 and link.state.send(4, 1).dest_track == 26)
+	link.set_send_volume(4, 1, 0.4)
+	close_to("Reaper's backend writes the send level on its OSC address", link.state.send(4, 1).volume, 0.4)
+	link.set_send_pan(4, 1, 0.9)
+	close_to("and the send pan", link.state.send(4, 1).pan, 0.9)
+	link.free()
+
+	# The desk: SENDS ON FADERS.
+	_offline()
+	s = DAW.state
+	var console := ConsoleSurface.new()
+	add_child(console)
+	console._process(0.0)
+	check("the returns the SENDS key steps through (%s)" % [ConsoleSurface.send_destinations(s)],
+			ConsoleSurface.send_destinations(s) == [verb])
+	var by_track := {}
+	for strip in console.strips:
+		by_track[strip.track_index] = strip
+	var snare_strip: ChannelStrip = by_track[3]
+	var kick_strip: ChannelStrip = by_track[2]
+	console.cycle_sends()
+	check("one press puts the sends to the return on the faders", console.send_dest == verb and snare_strip.send_dest == verb)
+	close_to("the snare's fader is its send level", snare_strip._fader.value, s.send(3, 1).volume)
+	check("and says so by name (%s)" % snare_strip._fader.title(), snare_strip._fader.title() == "SNARE  SEND TO VERB RTN")
+	check("a strip with no send has a fader nobody can take hold of", kick_strip._fader.collision_layer == 0)
+	check("and says it has none", kick_strip._db_label.text == "NO SEND")
+	snare_strip._fader._set_value(0.3)
+	close_to("moving it moves the send", s.send(3, 1).volume, 0.3, 0.02)
+	close_to("and not the snare", s.track(3).volume, 0.72)
+	snare_strip._pan.turned.emit(0.1)
+	close_to("the pan knob is the send's pan", s.send(3, 1).pan, 0.1)
+	close_to("not the track's", s.track(3).pan, 0.5)
+	check("the master's key is lit", console.master._sends_key.lit)
+	console.cycle_sends()
+	check("past the last return the faders are levels again", console.send_dest == 0 and snare_strip.send_dest == 0)
+	close_to("and the snare's fader is its level", snare_strip._fader.value, s.track(3).volume)
+	check("with a fader anyone can take hold of", kick_strip._fader.collision_layer == 2)
+	console.queue_free()
+
+
+func _test_the_click_is_switched_from_the_deck() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	check("the stand-in starts with the click off", not s.metronome)
+	backend._repl_durable.clear()
+	DAW.set_metronome(true)
+	check("set_metronome turns it on", s.metronome)
+	check("and replicates it as /click", backend._repl_durable.get("/click", []) == [1.0])
+	check("a verb a guest may use", &"set_metronome" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_metronome", [0.0])
+	check("a guest's intent switches it off", not s.metronome)
+	DAW.apply_intent(&"set_metronome", ["1"])
+	check("whatever shape the value arrives in", s.metronome)
+	DAW.apply_intent(&"set_metronome", [])
+	check("and an empty one is refused", s.metronome)
+
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told the click is on", guest.metronome)
+
+	# Reaper's /click is a toggle: 1 flips it and 0 is ignored, so a release must never be sent
+	# and a press must never be sent twice.
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper.set_metronome(true)
+	check("Reaper's backend takes the click on", reaper.state.metronome)
+	reaper.set_metronome(true)
+	check("and asking again leaves it on rather than flipping it", reaper.state.metronome)
+	reaper._apply("/click", [0.0])
+	check("Reaper switching it off is heard", not reaper.state.metronome)
+	reaper.free()
+
+	_offline()
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	check("the deck's CLICK lamp is dark with the click off", not deck._click_lamp.lit)
+	deck._click_lamp.pressed.emit()
+	check("pressing CLICK turns the click on", DAW.state.metronome)
+	deck._process(0.0)
+	check("and lights its lamp", deck._click_lamp.lit)
+	check("it goes by its name across a session", deck._click_lamp.network_key() == "TRANSPORT  CLICK")
+	deck.queue_free()
+
+
+func _test_input_monitoring_is_set_from_the_strip() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	check("the stand-in's armed vocal monitors on auto", s.track(2).monitor == DAW.MONITOR_AUTO)
+	check("and an unarmed track not at all", s.track(1).monitor == DAW.MONITOR_OFF)
+	backend._repl_durable.clear()
+	DAW.set_track_monitor(1, DAW.MONITOR_ON)
+	check("set_track_monitor turns it on", s.track(1).monitor == DAW.MONITOR_ON)
+	check("and replicates it as Reaper's own address", backend._repl_durable.get("/track/1/monitor", []) == [1.0])
+	DAW.undo()
+	check("it is undoable", s.track(1).monitor == DAW.MONITOR_OFF)
+	DAW.redo()
+	check("and redoable", s.track(1).monitor == DAW.MONITOR_ON)
+	DAW.set_track_monitor(1, 7)
+	check("a mode past auto is auto", s.track(1).monitor == DAW.MONITOR_AUTO)
+	check("a verb a guest may use", &"set_track_monitor" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_track_monitor", [1, -3])
+	check("a guest's intent is clamped to Reaper's three modes", s.track(1).monitor == DAW.MONITOR_OFF)
+	DAW.apply_intent(&"set_track_monitor", [0, 1])
+	DAW.apply_intent(&"set_track_monitor", [1])
+	check("and one naming no track, or no mode, is refused", s.track(1).monitor == DAW.MONITOR_OFF)
+
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told every track's monitoring", guest.track(2).monitor == DAW.MONITOR_AUTO
+			and guest.track(10).monitor == DAW.MONITOR_ON)
+	MixWire.apply(guest, "/track/2/monitor", [9.0])
+	check("and a reading off the end of the scale is kept on it", guest.track(2).monitor == DAW.MONITOR_AUTO)
+
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper.set_track_monitor(3, DAW.MONITOR_AUTO)
+	check("Reaper's backend takes the mode", reaper.state.track(3).monitor == DAW.MONITOR_AUTO)
+	reaper._apply("/track/3/monitor", [1.0])
+	check("and hears Reaper change it", reaper.state.track(3).monitor == DAW.MONITOR_ON)
+	reaper.free()
+
+	check("a press goes off, on, auto, off", ChannelStrip.next_monitor(0) == 1
+			and ChannelStrip.next_monitor(1) == 2 and ChannelStrip.next_monitor(2) == 0)
+	_offline()
+	s = DAW.state
+	var strip := ChannelStrip.create(1)
+	add_child(strip)
+	check("the strip's monitor lamp is dark when monitoring is off", not strip._monitor.lit
+			and not strip.is_processing())
+	strip._monitor.pressed.emit()
+	check("pressing it turns monitoring on", s.track(1).monitor == DAW.MONITOR_ON)
+	check("and lights it steady", strip._monitor.lit and not strip.is_processing())
+	strip._monitor.pressed.emit()
+	check("again puts it on auto, and the lamp blinks", s.track(1).monitor == DAW.MONITOR_AUTO
+			and strip.is_processing())
+	check("which the card says in words", strip._monitor.describe_value.call(0.0).begins_with("AUTO"))
+	check("it goes by its track's name across a session",
+			strip._monitor.network_key() == s.track(1).display_name().to_upper() + "  INPUT MONITOR")
+	var lamps := {}
+	for b in [strip._rec, strip._solo, strip._mute, strip._monitor]:
+		lamps[b.lamp_scale] = true
+	check("its lamp has a shape of its own among the four", lamps.size() == 4)
+	strip._monitor.pressed.emit()
+	check("and a third press turns it off", s.track(1).monitor == DAW.MONITOR_OFF)
+	strip.queue_free()
+
+
+func _test_markers_are_dropped_and_found_from_the_deck() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var count := s.markers.size()
+	check("the stand-in has sections to find (%d)" % count, count >= 4)
+	check("the offline stand-in can drop markers", DAW.can(DAWBackend.Capability.MARKERS))
+	backend._repl_durable.clear()
+	DAW.add_marker(12.5, "Drop")
+	check("add_marker drops a marker", s.markers.get(12.5) == "Drop" and s.markers.size() == count + 1)
+	check("and replicates the markers", backend._repl_durable.has("/timeline/markers"))
+	DAW.undo()
+	check("a marker is undoable", not s.markers.has(12.5) and s.markers.size() == count)
+	DAW.redo()
+	check("and redoable", s.markers.get(12.5) == "Drop")
+	check("a verb a guest may use", &"add_marker" in DAW.COMMANDS)
+	DAW.apply_intent(&"add_marker", [-4.0, "x".repeat(500)])
+	check("a guest's marker is kept on the timeline and its name to a sane length",
+			s.markers.has(0.0) and str(s.markers[0.0]).length() == DAW.MARKER_NAME_MAX)
+	DAW.apply_intent(&"add_marker", [3.0])
+	check("and a malformed one is refused", not s.markers.has(3.0))
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told every marker", guest.markers.size() == s.markers.size()
+			and guest.markers.get(12.5) == "Drop")
+
+	# Locating, which is arithmetic on the markers and needs no DAW behind it.
+	var m := {10.0: "A", 20.0: "B", 30.0: "C"}
+	close_to("next from between two is the later", TapeDeck.marker_after(m, 15.0), 20.0)
+	close_to("next from on a marker is the one after it", TapeDeck.marker_after(m, 20.0), 30.0)
+	close_to("next past the last is none", TapeDeck.marker_after(m, 31.0), -1.0)
+	close_to("prev from between two is the earlier", TapeDeck.marker_before(m, 25.0), 20.0)
+	close_to("prev just past a marker skips it, so rolling cannot pin the key",
+			TapeDeck.marker_before(m, 20.1), 10.0)
+	close_to("prev before the first is none", TapeDeck.marker_before(m, 5.0), -1.0)
+	check("the section is the marker at or before", TapeDeck.section_at(m, 25.0) == "B" and TapeDeck.section_at(m, 20.0) == "B")
+	check("and nothing before the first", TapeDeck.section_at(m, 2.0) == "")
+	check("MARK names the next free number", TapeDeck.next_marker_name({1.0: "MARK 1", 2.0: "MARK 3"}) == "MARK 2")
+
+	# Reaper: the bridge makes it, and the cache shows it before the timeline poll says so.
+	var link := _fresh_link()
+	check("Reaper without the bridge cannot drop a marker", not link.can(DAWBackend.Capability.MARKERS))
+	link.add_marker(4.0, "Nope")
+	check("and does not pretend to", not link.state.markers.has(4.0))
+	link.free()
+
+	_offline()
+	s = DAW.state
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	DAW.seek(s.bar_to_seconds(30.0))
+	deck._process(0.0)
+	check("the deck names the section the playhead is in (%s)" % deck._section_label.text,
+			deck._section_label.text == "CHORUS 1")
+	var next := TapeDeck.marker_after(s.markers, s.position_seconds)
+	deck._locate(1)
+	close_to("NEXT goes to the next marker", s.position_seconds, next)
+	deck._locate(-1)
+	close_to("PREV from there goes back one", s.position_seconds, s.bar_to_seconds(25.0))
+	DAW.seek(s.bar_to_seconds(27.0))
+	var before := s.markers.size()
+	deck._mark_key.pressed.emit()
+	check("MARK drops a marker at the playhead", s.markers.size() == before + 1
+			and s.markers.get(s.position_seconds) == "MARK 1")
+	check("MARK goes by its name across a session", deck._mark_key.network_key() == "TRANSPORT  ADD MARKER")
 	deck.queue_free()
 
 

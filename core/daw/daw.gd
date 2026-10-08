@@ -50,6 +50,8 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
+	&"set_send_volume", &"set_send_pan",
+	&"set_metronome", &"add_marker", &"set_track_monitor",
 ]
 
 var backend: DAWBackend
@@ -160,6 +162,15 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	_do(&"set_fx_enabled", [track_index, fx_index, enabled])
 
 
+## A send is named by its track and its 1-based place in that track's sends, as on the wire.
+func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
+	_do(&"set_send_volume", [track_index, send_index, clampf(taper, 0.0, 1.0)])
+
+
+func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
+	_do(&"set_send_pan", [track_index, send_index, clampf(pan, 0.0, 1.0)])
+
+
 ## Through `_do` although it changes nothing: only the host can reach Reaper, and the answer
 ## replicates to everyone like any other value.
 func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
@@ -170,6 +181,13 @@ func transport_play() -> void: _do(&"transport_play", [])
 func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])
 func set_looping(on: bool) -> void: _do(&"set_looping", [on])
+func set_metronome(on: bool) -> void: _do(&"set_metronome", [on])
+## Input monitoring for one track: MONITOR_OFF, MONITOR_ON or MONITOR_AUTO, Reaper's own numbers.
+const MONITOR_OFF := 0
+const MONITOR_ON := 1
+const MONITOR_AUTO := 2
+func set_track_monitor(index: int, mode: int) -> void:
+	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
@@ -184,6 +202,11 @@ func clear_item_selection() -> void: _do(&"clear_item_selection", [])
 func move_item(track_index: int, item_index: int, start: float) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
+## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
+## guest's intent should not be able to hand the host a megabyte of name.
+const MARKER_NAME_MAX := 64
+func add_marker(seconds: float, marker_name: String) -> void:
+	_do(&"add_marker", [maxf(seconds, 0.0), marker_name.left(MARKER_NAME_MAX)])
 
 
 ## Routing is the one command whose answer a surface needs immediately -- the patchbay has to
@@ -220,4 +243,26 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		return
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
+	if verb == &"add_marker":
+		if args.size() != 2:
+			push_warning("DAW: refused a malformed add_marker intent %s." % [args])
+			return
+		args = [maxf(float(args[0]), 0.0), str(args[1]).left(MARKER_NAME_MAX)]
+	if verb == &"set_track_monitor":
+		if args.size() != 2 or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])
+			return
+		args = [int(args[0]), clampi(int(args[1]), MONITOR_OFF, MONITOR_AUTO)]
+	if verb == &"set_metronome":
+		if args.size() != 1:
+			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])
+			return
+		args = [MixWire._as_bool([args[0]])]
+	if verb in [&"set_send_volume", &"set_send_pan"]:
+		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
+		# level outside the taper is a fader past its end stop.
+		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 1:
+			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
+			return
+		args = [int(args[0]), int(args[1]), clampf(float(args[2]), 0.0, 1.0)]
 	backend.callv(verb, args)

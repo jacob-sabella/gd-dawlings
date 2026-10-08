@@ -447,6 +447,40 @@ still roughly right rather than empty. The name is what OSC gives and it is ambi
 a project has two tracks called "Verb" -- which is completely normal, and which the old
 name-only lookup resolved silently and wrongly, forever.
 
+Sends are numbered **from 1** everywhere above the bridge, because that is how OSC numbers them:
+`/track/3/send/1` is track 3's first send. ReaScript counts from 0, so `_on_structure` adds one
+and `remove_send` takes it off again. Until that was written down, the bridge's destination
+landed on send 0 and OSC's level on send 1, and the bay drew every real send twice. The stand-in
+numbers from 1 for the same reason.
+
+### Sends on faders
+
+Send level and pan are verbs (`set_send_volume`, `set_send_pan`) on Reaper's own OSC addresses,
+so a send is ridden like a fader and replicates like one. They are **on** the faders: the
+master section's SENDS key flips the whole desk so that each strip's fader and pan are that
+strip's send to one return, the next press moves to the next return, and past the last the
+faders are levels again. A strip with no send to that return reads NO SEND and its fader cannot
+be taken hold of. The readouts turn amber while flipped, because a desk of send levels looks
+exactly like a desk of levels otherwise. The flip is this participant's view of the desk, never
+replicated, and like a bank change it is refused while a hand is on a fader or knob.
+
+### Markers are made by the bridge and read by the poll
+
+OSC has no message that makes a marker, so `add_marker` is a bridge edit (`AddMarker`, one
+undo point) and markers come back with the timeline poll as they always did. The backend writes
+the new marker into the cache straight away, so MARK shows at once; `_edit` holds the poll that
+was already on its way, so it cannot draw the marker away again for a beat. Markers are keyed by
+seconds, and Reaper keeps a marker on its beat when the tempo changes, so the same marker has a
+different key after a tempo edit. Anything that looks a marker up afterwards goes by name.
+
+### Three states on one lamp
+
+Input monitoring is the only strip key with three states, and a lamp has two. Off is dark and on
+is lit; auto, which lets the input through only while the track is armed and stopped or
+recording, blinks. A blink costs a `_process` on the strip, so a strip only processes while its
+track is on auto. Like the other three keys, the lamp is coded by shape as well as colour -- a
+dot, after record's bar, solo's stub and mute's line -- and the suite checks the four differ.
+
 ### The parent heads its group
 
 Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum

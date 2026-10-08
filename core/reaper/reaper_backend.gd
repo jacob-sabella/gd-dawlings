@@ -147,6 +147,9 @@ func can(capability: StringName) -> bool:
 		# ReaScript bridge can say that -- a page-forward button that cannot tell you whether
 		# there is anything to page to is worse than no button.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.MARKERS:
+		# OSC can go to a marker but not make one; the bridge does that.
+		return _bridge != null and _bridge.is_open()
 	if capability == Capability.TIMELINE:
 		# Reaper's OSC surface has no message about media items at all, so this is exactly as
 		# true as the ReaScript bridge is loaded. Without it the timeline says it cannot see
@@ -254,6 +257,12 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 	write("/track/%d/recarm" % index, [1.0 if armed else 0.0])
 
 
+## Reaper takes the mode as a float on the same address it reports it on -- seen on the rig: 2.0
+## set auto and came back as 2.0, and writing the mode it already had brings no answer.
+func set_track_monitor(index: int, mode: int) -> void:
+	write("/track/%d/monitor" % index, [float(mode)])
+
+
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
 	write("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [clampf(value, 0.0, 1.0)])
 
@@ -265,6 +274,16 @@ func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 		if typeof(result) == TYPE_DICTIONARY and result.has("text"):
 			_apply("/track/%d/fx/%d/fxparam/%d/value/str" % [track_index, fx_index, param],
 					[str(result["text"]), float(result.get("value", -1.0))]))
+
+
+## Both are on Reaper's own OSC surface (TRACK_SEND_VOLUME, TRACK_SEND_PAN), numbered from 1 as
+## the bridge's sends are not -- see `_on_structure`.
+func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
+	write("/track/%d/send/%d/volume" % [track_index, send_index], [clampf(taper, 0.0, 1.0)])
+
+
+func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
+	write("/track/%d/send/%d/pan" % [track_index, send_index], [clampf(pan, 0.0, 1.0)])
 
 
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
@@ -316,6 +335,20 @@ func set_looping(on: bool) -> void:
 		_peer.send("/repeat", [1.0])
 	record_for_replication("/repeat", value)
 	MixWire.apply(state, "/repeat", value)
+
+
+## The same kind of toggle as /repeat, checked against the rig: `/click 1` flips the metronome,
+## `/click 0` does nothing at all, and Reaper answers with the state it landed on. So a press is
+## sent only when it would change something, and the cache is told the value it is for.
+func set_metronome(on: bool) -> void:
+	if state.metronome == on:
+		return
+	var value := [1.0 if on else 0.0]
+	if _peer != null:
+		_echo_guard["/click"] = {"v": value, "t": Time.get_ticks_msec()}
+		_peer.send("/click", [1.0])
+	record_for_replication("/click", value)
+	MixWire.apply(state, "/click", value)
 
 
 func seek(seconds: float) -> void:
@@ -373,6 +406,17 @@ func move_item(track_index: int, item_index: int, start: float) -> void:
 func split_selected(seconds: float) -> void:
 	_locally_split(seconds)
 	_edit("SplitSelected", [seconds])
+
+
+## Shown on the cache at once, like an item edit, and confirmed by the timeline poll the edit
+## brings forward.
+func add_marker(seconds: float, marker_name: String) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	var markers: Dictionary = state.markers.duplicate()
+	markers[seconds] = marker_name
+	_write_markers(markers)
+	_edit("AddMarker", [seconds, marker_name])
 
 
 ## Send one edit, and keep the timeline poll from undoing it on screen.
@@ -510,8 +554,12 @@ func _on_structure(result) -> void:
 		for send in _as_array(entry.get("sends", [])):
 			if typeof(send) != TYPE_DICTIONARY:
 				continue
-			var send_idx := int(send.get("index", -1))
-			if send_idx < 0:
+			# +1: ReaScript counts a track's sends from 0 and OSC from 1. Written 0-based, the
+			# bridge's destination landed on a send OSC never mentions and OSC's level on one
+			# the bridge never placed -- two half-sends for every real one, and the patchbay
+			# drew both, as a mult fed twice by the same track.
+			var send_idx := int(send.get("index", -1)) + 1
+			if send_idx < 1:
 				continue
 			_apply("/track/%d/send/%d/dest" % [idx, send_idx],
 					[float(int(send.get("dest_track", -1)))])
@@ -557,7 +605,8 @@ func create_send(from_track: int, to_track: int) -> bool:
 func remove_send(from_track: int, send_index: int) -> bool:
 	if _bridge == null or not _bridge.is_open():
 		return false
-	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index])
+	# 1-based here as everywhere above the bridge; the Lua takes ReaScript's 0-based index.
+	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index - 1])
 
 
 # --- replication --------------------------------------------------------------------------
