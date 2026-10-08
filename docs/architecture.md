@@ -25,6 +25,7 @@ becomes an OSC packet, a ReaScript file drop, or a write straight into a cache.
 hardware/ ──verb──▶ DAW (autoload) ──▶ DAWBackend
                                         ├── ReaperBackend   OSC + ReaScript bridge
                                         └── OfflineBackend  synthetic mix, no DAW running
+                                              └── GodotBackend  the same mix, actually played
 ```
 
 `core/daw/` holds the four pieces that are not Reaper's:
@@ -55,6 +56,37 @@ backend read a lie on the dB caption.
 open, it drives real meters, and it is what the test suite and every screenshot in `shots/` are
 built on. Keeping it a peer of `ReaperBackend` rather than a `if not connected` branch is what
 keeps the abstraction honest — a seam with one implementation is just indirection.
+
+### The built-in engine: `GodotBackend`
+
+`--built-in` swaps the stand-in for one that makes sound, for anyone without a DAW. It is the
+offline backend's own mix, with its state, undo and replication, turned into Godot's
+`AudioServer` (`core/built_in/`):
+
+- **A bus per track**, named `R3D <n>`, sending to its folder's bus or to `R3D Master`, so a
+  folder fader moves its children the way it does in Reaper. Slot 0 is a panner and the rack
+  starts at slot 1. Volume, mute and pan go straight onto the bus.
+- **Solo is solo-in-place**: a soloed track keeps the folders above it and the returns it sends
+  to audible. `audible()` is the rule, and is tested on its own.
+- **The rack is Godot's own effects** (`FXCatalogue`): EQ6, compressor, reverb, delay, chorus,
+  low-pass, drive, phaser, limiter. Each knob is a `Param` with a range and unit, and
+  `read_fx_param_text` answers in those units, the way Reaper answers with the plugin's text.
+- **A send is a second player** on the same part, routed to the return's bus, at the send
+  level times the fader.
+- **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
+  rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
+  a new set and swaps all of it at once, so no part plays at the old tempo against the new.
+  Each part starts at the song position modulo its loop, only under its track's items, and is
+  nudged back if it drifts more than 60ms from the transport.
+- **Meters are the buses' real peaks**, through the same fader law.
+- **Guests hear the master bus**: an `AudioEffectCapture` on `R3D Master` is the session's
+  `MixSource` (`BusSource`), resampled to the wire's 48kHz if a sound card insists on another
+  rate. `tools/session_probe.sh --built-in` checks the guest hears it, 26 to 33ms behind. It runs
+  the host on a real audio driver into the null sink, because headless Godot's dummy driver mixes
+  in 85ms lumps.
+
+Not there yet: recording, your own audio files, playing MIDI items through a synth, and
+third-party plugins, which Godot cannot host.
 
 ## Authority: the backend is the truth, one process holds the pen
 
