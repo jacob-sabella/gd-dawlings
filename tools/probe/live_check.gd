@@ -264,7 +264,33 @@ func _run() -> void:
 				s.track(7).items.size() == lane.size() and is_equal_approx(s.item(7, 0).start, first_start))
 		DAW.clear_item_selection()
 
+	# --- sends and the click --------------------------------------------------------------
+	var send_track := 0
+	for t in _arr(original["tracks"]):
+		if send_track == 0 and not _arr(t.get("sends", [])).is_empty():
+			send_track = int(t["index"])
+	check("there is a track with a send (%d)" % send_track, send_track > 0)
+	if send_track > 0:
+		DAW.set_send_volume(send_track, 1, DAW.db_to_taper(-9.0))
+		DAW.set_send_pan(send_track, 1, 0.25)
+		st = await _until(func(x): return absf(float(_arr(_track(x, send_track)["sends"])[0]["pan"]) + 0.5) < 0.02)
+		var sent: Dictionary = _arr(_track(st, send_track)["sends"])[0]
+		var sent_db := 20.0 * log(maxf(float(sent["volume"]), 1e-9)) / log(10.0)
+		check("a send level from the desk is Reaper's send level (%.2f dB, want -9)" % sent_db, absf(sent_db + 9.0) < 0.3)
+		check("and its pan is Reaper's (%.2f)" % float(sent["pan"]), absf(float(sent["pan"]) + 0.5) < 0.02)
+	var click_was: bool = original.get("metronome", false)
+	DAW.set_metronome(not click_was)
+	st = await _until(func(x): return x.get("metronome", click_was) != click_was)
+	check("the deck's CLICK switches Reaper's metronome (%s)" % st.get("metronome"), st.get("metronome", click_was) != click_was)
+	DAW.set_metronome(click_was)
+	st = await _until(func(x): return x.get("metronome", not click_was) == click_was)
+	check("and switches it back", st.get("metronome", not click_was) == click_was)
+
 	# --- put everything back ----------------------------------------------------------------
+	if send_track > 0:
+		var was: Dictionary = _arr(_track(original, send_track)["sends"])[0]
+		DAW.set_send_volume(send_track, 1, DAW.db_to_taper(20.0 * log(maxf(float(was["volume"]), 1e-9)) / log(10.0)))
+		DAW.set_send_pan(send_track, 1, (float(was["pan"]) + 1.0) * 0.5)
 	for t in original["tracks"]:
 		var i := int(t["index"])
 		if i > 8:

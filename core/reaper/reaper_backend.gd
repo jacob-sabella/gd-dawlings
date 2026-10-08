@@ -328,6 +328,20 @@ func set_looping(on: bool) -> void:
 	MixWire.apply(state, "/repeat", value)
 
 
+## The same kind of toggle as /repeat, checked against the rig: `/click 1` flips the metronome,
+## `/click 0` does nothing at all, and Reaper answers with the state it landed on. So a press is
+## sent only when it would change something, and the cache is told the value it is for.
+func set_metronome(on: bool) -> void:
+	if state.metronome == on:
+		return
+	var value := [1.0 if on else 0.0]
+	if _peer != null:
+		_echo_guard["/click"] = {"v": value, "t": Time.get_ticks_msec()}
+		_peer.send("/click", [1.0])
+	record_for_replication("/click", value)
+	MixWire.apply(state, "/click", value)
+
+
 func seek(seconds: float) -> void:
 	write("/time", [maxf(seconds, 0.0)])
 	_apply("/time", [maxf(seconds, 0.0)])

@@ -102,6 +102,7 @@ func _ready() -> void:
 	_test_undo_takes_back_a_gesture_not_a_frame()
 	_test_the_tempo_is_set_from_the_deck()
 	_test_the_sends_ride_the_faders()
+	_test_the_click_is_switched_from_the_deck()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
 	_test_the_room_gets_out_of_the_way_of_the_gear_that_left_it()
@@ -5416,6 +5417,53 @@ func _test_the_sends_ride_the_faders() -> void:
 	close_to("and the snare's fader is its level", snare_strip._fader.value, s.track(3).volume)
 	check("with a fader anyone can take hold of", kick_strip._fader.collision_layer == 2)
 	console.queue_free()
+
+
+func _test_the_click_is_switched_from_the_deck() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	check("the stand-in starts with the click off", not s.metronome)
+	backend._repl_durable.clear()
+	DAW.set_metronome(true)
+	check("set_metronome turns it on", s.metronome)
+	check("and replicates it as /click", backend._repl_durable.get("/click", []) == [1.0])
+	check("a verb a guest may use", &"set_metronome" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_metronome", [0.0])
+	check("a guest's intent switches it off", not s.metronome)
+	DAW.apply_intent(&"set_metronome", ["1"])
+	check("whatever shape the value arrives in", s.metronome)
+	DAW.apply_intent(&"set_metronome", [])
+	check("and an empty one is refused", s.metronome)
+
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told the click is on", guest.metronome)
+
+	# Reaper's /click is a toggle: 1 flips it and 0 is ignored, so a release must never be sent
+	# and a press must never be sent twice.
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper.set_metronome(true)
+	check("Reaper's backend takes the click on", reaper.state.metronome)
+	reaper.set_metronome(true)
+	check("and asking again leaves it on rather than flipping it", reaper.state.metronome)
+	reaper._apply("/click", [0.0])
+	check("Reaper switching it off is heard", not reaper.state.metronome)
+	reaper.free()
+
+	_offline()
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	check("the deck's CLICK lamp is dark with the click off", not deck._click_lamp.lit)
+	deck._click_lamp.pressed.emit()
+	check("pressing CLICK turns the click on", DAW.state.metronome)
+	deck._process(0.0)
+	check("and lights its lamp", deck._click_lamp.lit)
+	check("it goes by its name across a session", deck._click_lamp.network_key() == "TRANSPORT  CLICK")
+	deck.queue_free()
 
 
 func _test_undo_takes_back_a_gesture_not_a_frame() -> void:

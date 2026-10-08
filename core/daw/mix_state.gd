@@ -168,6 +168,8 @@ var tempo: float = 120.0
 ## Beats in a bar. Reaper's OSC surface does not send the time signature, so this is 4 unless
 ## a bridge says otherwise -- and only the bar number of a computed position depends on it.
 var beats_per_bar: int = 4
+## Whether the click is on. Reaper's metronome, which is a transport setting there as here.
+var metronome: bool = false
 ## Whether playback wraps round the loop range. Reaper calls it repeat.
 var looping: bool = false
 ## The loop range, in seconds. In Reaper this is the time selection when the two are linked,

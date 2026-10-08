@@ -68,6 +68,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 		"repeat":
 			state.looping = _as_bool(args)
 			state.transport_changed.emit()
+		"click":
+			# Reaper's METRONOME, which it states as it changes and on a refresh.
+			state.metronome = _as_bool(args)
+			state.transport_changed.emit()
 		"loop":
 			if p.size() > 2 and p[2] == "time" and args.size() > 0:
 				if p[1] == "start":
@@ -390,6 +394,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/beat/str", [state.position_string]])
 	out.append(["/time", [state.position_seconds]])
 	out.append(["/repeat", [1.0 if state.looping else 0.0]])
+	out.append(["/click", [1.0 if state.metronome else 0.0]])
 	out.append(["/loop/start/time", [state.loop_start]])
 	out.append(["/loop/end/time", [state.loop_end]])
 	out.append(["/timeline/length", [state.project_length]])

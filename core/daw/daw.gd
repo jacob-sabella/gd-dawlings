@@ -51,6 +51,7 @@ const COMMANDS := [
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
+	&"set_metronome",
 ]
 
 var backend: DAWBackend
@@ -180,6 +181,7 @@ func transport_play() -> void: _do(&"transport_play", [])
 func transport_stop() -> void: _do(&"transport_stop", [])
 func transport_record() -> void: _do(&"transport_record", [])
 func set_looping(on: bool) -> void: _do(&"set_looping", [on])
+func set_metronome(on: bool) -> void: _do(&"set_metronome", [on])
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
@@ -230,6 +232,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		return
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
+	if verb == &"set_metronome":
+		if args.size() != 1:
+			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])
+			return
+		args = [MixWire._as_bool([args[0]])]
 	if verb in [&"set_send_volume", &"set_send_pan"]:
 		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
 		# level outside the taper is a fader past its end stop.

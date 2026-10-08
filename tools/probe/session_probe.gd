@@ -101,6 +101,7 @@ func _host(port: int) -> void:
 	var sent := _first_send(DAW.state)
 	check("the guest's send level reached the mix (%s)" % [sent], not sent.is_empty()
 			and absf(DAW.state.send(sent[0], sent[1]).volume - GUEST_SEND) < 0.002)
+	check("the guest switched the click on", DAW.state.metronome)
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
 
@@ -125,6 +126,7 @@ func _host(port: int) -> void:
 		DAW.set_track_volume(2, restore)
 	if not is_nan(tempo_restore):
 		DAW.set_tempo(tempo_restore)
+	DAW.set_metronome(false)
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
@@ -160,6 +162,7 @@ func _guest(port: int) -> void:
 
 	DAW.set_track_volume(2, 0.123)
 	DAW.set_tempo(GUEST_TEMPO)
+	DAW.set_metronome(true)
 	var send := _first_send(DAW.state)
 	check("the snapshot carried a send to turn (%s)" % [send], not send.is_empty())
 	if not send.is_empty():
@@ -170,6 +173,7 @@ func _guest(port: int) -> void:
 	check("my fader move came back from the host (%.4f)" % DAW.state.track(2).volume,
 			absf(DAW.state.track(2).volume - 0.123) < 0.002)
 	check("and so did my tempo (%.1f)" % DAW.state.tempo, absf(DAW.state.tempo - GUEST_TEMPO) < 0.05)
+	check("and the click I switched on", DAW.state.metronome)
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)
 

@@ -299,8 +299,17 @@ function handlers.GetState(args)
         selected = reaper.IsMediaItemSelected(it),
       }
     end
+    -- Sends as the desk numbers them: the first is [1], as /track/N/send/1 is on the wire.
+    local sends = {}
+    for s = 0, reaper.GetTrackNumSends(tr, 0) - 1 do
+      sends[#sends + 1] = {
+        volume = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_VOL'),
+        pan = reaper.GetTrackSendInfo_Value(tr, 0, s, 'D_PAN'),
+      }
+    end
     tracks[#tracks + 1] = {
       index = i + 1,
+      sends = sends,
       volume = reaper.GetMediaTrackInfo_Value(tr, 'D_VOL'),
       pan = reaper.GetMediaTrackInfo_Value(tr, 'D_PAN'),
       mute = reaper.GetMediaTrackInfo_Value(tr, 'B_MUTE') > 0.5,
@@ -317,6 +326,8 @@ function handlers.GetState(args)
     position = playing and reaper.GetPlayPosition() or reaper.GetCursorPosition(),
     cursor = reaper.GetCursorPosition(),
     repeating = reaper.GetSetRepeat(-1) == 1,
+    -- 40364, Options: Toggle metronome.
+    metronome = reaper.GetToggleCommandState(40364) == 1,
     loop_start = loop_start, loop_end = loop_end,
     selection_start = sel_start, selection_end = sel_end,
     can_undo = reaper.Undo_CanUndo2(0) or '',

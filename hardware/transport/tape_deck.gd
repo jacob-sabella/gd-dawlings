@@ -83,6 +83,7 @@ var _taps: Array[int] = []
 var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
 var _loop_lamp: PanelButton
+var _click_lamp: PanelButton
 var _loop_label: Label3D
 var _history_keys: Array[PanelButton] = []
 var _tape_runs: Array[MeshInstance3D] = []
@@ -164,6 +165,28 @@ func _rebuild() -> void:
 	tap_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(tap_caption)
 	_adopt(tap_caption)
+
+	# The click, opposite TAP: the two keys about the beat, either side of the transport.
+	var click := PanelButton.new()
+	click.name = "ClickKey"
+	click.led_colour = Color(0.95, 0.80, 0.42)
+	click.lamp_scale = Vector2(0.45, 0.8)
+	click.position = Vector3(0.130, -0.122, 0.028)
+	click.scale = Vector3(1.4, 1.4, 1.4)
+	click.pressed.connect(func(): DAW.set_metronome(not DAW.state.metronome))
+	click.describe_title = func() -> String: return "TRANSPORT  CLICK"
+	click.describe_value = func(_v: float) -> String: return "on" if DAW.state.metronome else "off"
+	_adopt(click)
+	_click_lamp = click
+	var click_caption := Label3D.new()
+	click_caption.text = "CLICK"
+	click_caption.font_size = 30
+	click_caption.pixel_size = 0.00024
+	click_caption.position = Vector3(0.130, -0.105, 0.002)
+	click_caption.modulate = Color(0.6, 0.62, 0.66)
+	click_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(click_caption)
+	_adopt(click_caption)
 
 	_loop_label = Label3D.new()
 	_loop_label.font_size = 40
@@ -584,6 +607,7 @@ func _refresh() -> void:
 	_play_lamp.lit = DAW.state.playing
 	_rec_lamp.lit = DAW.state.recording
 	_loop_lamp.lit = DAW.state.looping
+	_click_lamp.lit = DAW.state.metronome
 	_loop_label.text = _loop_text()
 	for i in _history_keys.size():
 		var depth := DAW.state.undo_depth if i == 0 else DAW.state.redo_depth

@@ -19,6 +19,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
   (three taps or more, averaged over the run). `DAW.set_tempo` is clamped to Reaper's 1-960 on
   both sides of a session, is undoable offline, and goes to Reaper as `/tempo/raw`. A guest's
   tempo reaching a live Reaper and coming back is checked by `session_probe.sh --reaper`.
+  A CLICK key opposite TAP switches the metronome (`DAW.set_metronome`, `/click` on the wire).
+  Reaper's `/click` is a toggle like `/repeat` -- checked on the rig: 1 flips it, 0 is ignored,
+  and Reaper answers with the state -- so a press is sent only when it would change something.
+  `live_check` reads the metronome back through the bridge's GetState (action 40364's toggle
+  state), and checks a send level and pan the same way.
 - **Send level and pan.** `DAW.set_send_volume` / `set_send_pan` (a send is a track and its
   1-based slot, as OSC numbers it; a guest's intent is checked and clamped on the host), undoable
   offline, `/track/N/send/M/volume|pan` to Reaper. On the desk as SENDS ON FADERS: the master

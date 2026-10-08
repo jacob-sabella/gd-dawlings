@@ -505,6 +505,13 @@ func set_looping(on: bool) -> void:
 	record_for_replication("/repeat", [1.0 if on else 0.0])
 
 
+## Not a history step, as it is not in Reaper: the click is how you are listening, not the mix.
+func set_metronome(on: bool) -> void:
+	state.metronome = on
+	state.transport_changed.emit()
+	record_for_replication("/click", [1.0 if on else 0.0])
+
+
 func set_tempo(bpm: float) -> void:
 	_remember("/tempo/raw", set_tempo.bind(state.tempo), set_tempo.bind(bpm))
 	state.tempo = bpm
