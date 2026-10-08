@@ -330,6 +330,16 @@ func _process(_delta: float) -> void:
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
 	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
-		role_name, medium_name, DAW.summary(), DAW.state.tracks.size(),
+		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",
 		studio.venue.title() if studio.venue != null else "room"]
+
+
+## The project's size once Reaper has said it, and only until then the slots that have arrived.
+## Reaper streams its bank before the project's count, so counting the cache read 43 or 44 for
+## a moment on a 40-track session -- a number contradicted by the desk right under it.
+func _track_count() -> int:
+	var known: int = DAW.state.project_track_count
+	if known > 0:
+		return known
+	return DAW.state.tracks.size()

@@ -159,6 +159,9 @@ var _bridge_bar: MeshInstance3D
 ## Where a person stands to work, on a monitor. Far enough forward of the console's home at
 ## z = 0.1 that gear summoned to arm's length lands on the desk rather than through it.
 const MIX_POSITION_Z := 0.66
+## Where the opening view looks: (metres ahead of the mix position, height). Where a standing
+## eye's half-radian glance lands on the console, kept for every other eye height.
+const DESK_GAZE := Vector2(0.96, 1.096)
 
 ## Vertical field of view, in degrees: wide enough to take in a room, long enough to work at a
 ## desk without the near edge of it bowing away from you.
@@ -1013,9 +1016,11 @@ func _build_walker() -> void:
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height
 	add_child(walker)
-	# At the mix position, looking down at the desk the way you would standing at it.
+	# At the mix position, looking down at the desk. Aimed at a POINT on it rather than set to
+	# an angle, because the desk does not move when the eye does: -0.5 rad was right from a
+	# standing 1.62 m and, from a seated 1.21 m, put the faders' tops up under the timeline.
 	walker.global_position = Vector3(0, 0, MIX_POSITION_Z)
-	walker.pitch = -0.5
+	walker.pitch = -atan2(ergonomics.eye_height - DESK_GAZE.y, DESK_GAZE.x)
 	walker.active = not god_mode
 	walker._place_camera()
 
