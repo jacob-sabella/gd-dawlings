@@ -45,8 +45,16 @@ C API implements the same twenty methods and every surface works unchanged.
 
 **Capabilities are asked, not assumed.** `DAW.can(Capability.ROUTING)` is false until Reaper's
 ReaScript bridge is actually writable, and false forever for a backend that has no way to patch.
-The patchbay greys itself out rather than silently dropping writes. Same for `RECORD_ARM` and
-`FX_PARAM_NAMES`.
+The patchbay says READ ONLY on its own face rather than silently dropping writes. Same for
+`RECORD_ARM` and `FX_PARAM_NAMES`. The stand-in backend keeps its own sends, so it can patch.
+
+**The patchbay reads left to right.** FROM (every track's output) down the left, TO (every
+track's input) down the right, and every send a cable across the gap between them. A row is the
+thing you aim at -- chip, name, jacks -- and a cable goes in the row's free jack; each row has one
+more jack than the busiest row needs, so no two plugs share one. Drag a row across to patch, drag
+a plug to another row to re-patch, pull it off to unplug, scroll it for the level. A removed send
+travels as `/track/N/sends` (the count), which is the only address that can say a send is gone.
+The bay stands in its own cabinet on the floor, off to the right of the desk.
 
 **The taper is the backend's.** `taper_to_db` is virtual, because a fader's 0..1 travel maps to
 dB differently in every DAW, and baking Reaper's curve into the mesh would make every other
@@ -171,7 +179,7 @@ produces a value neither person asked for.
 ## Furniture is not a surface
 
 A surface exists because the project has tracks or plugins, and its size follows them. A stand, a
-meter bridge, a trolley means nothing and is not drawn in ROOM mode at all, because the
+cabinet, a trolley means nothing and is not drawn in ROOM mode at all, because the
 participant already has real furniture. Mixing the two means a rack that cannot stand on the
 floor without inventing a plugin to justify its legs.
 

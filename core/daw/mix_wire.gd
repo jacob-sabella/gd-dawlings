@@ -241,6 +241,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			_apply_fx(state, idx, p, args)
 		"send":
 			_apply_send(state, idx, p, args)
+		"sends":
+			_apply_send_count(state, idx, int(args[0]))
 
 
 ## [start, length, muted, name, selected] per item, repeating -- and, for an item that has
@@ -355,6 +357,21 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 		state.track_changed.emit(track_idx, &"sends")
 
 
+## How many sends a track has, which is the only way a send that was REMOVED stops being drawn.
+## Every other send address can only say what a send is; none can say it is gone, and a pulled
+## patch cable that stayed on the bay is the bay lying. Reaper renumbers a track's sends when one
+## is removed, so the count is enough: anything numbered past it no longer exists.
+static func _apply_send_count(state: MixState, track_idx: int, count: int) -> void:
+	var t := state.track(track_idx)
+	var gone := false
+	for send_index in t.sends.keys():
+		if int(send_index) > count:
+			t.sends.erase(send_index)
+			gone = true
+	if gone:
+		state.track_changed.emit(track_idx, &"sends")
+
+
 static func _as_bool(args: Array) -> bool:
 	if args.is_empty():
 		return true  # a bare trigger message, e.g. `t/play`
@@ -423,6 +440,8 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/send/%d/dest" % [index, send_index], [float(sd.dest_track)]])
 			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
 			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
+		# After them, so a guest that still holds a send the host has since removed drops it.
+		out.append(["/track/%d/sends" % index, [float(send_indices.max() if not send_indices.is_empty() else 0)]])
 
 	out.append(["/master/volume", [state.master.volume]])
 	out.append(["/master/pan", [state.master.pan]])

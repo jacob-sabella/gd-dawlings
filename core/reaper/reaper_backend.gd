@@ -599,7 +599,8 @@ func _on_structure(result) -> void:
 		if entry.has("folder_depth"):
 			_apply("/track/%d/folder" % idx, [float(entry["folder_depth"])])
 
-		for send in _as_array(entry.get("sends", [])):
+		var sends := _as_array(entry.get("sends", []))
+		for send in sends:
 			if typeof(send) != TYPE_DICTIONARY:
 				continue
 			# +1: ReaScript counts a track's sends from 0 and OSC from 1. Written 0-based, the
@@ -613,6 +614,9 @@ func _on_structure(result) -> void:
 					[float(int(send.get("dest_track", -1)))])
 			if send.has("dest_name"):
 				_apply("/track/%d/send/%d/name" % [idx, send_idx], [str(send["dest_name"])])
+		# The bridge lists every send a track has, so a send it no longer lists has been removed.
+		if entry.has("sends"):
+			_apply("/track/%d/sends" % idx, [float(sends.size())])
 
 		# OSC names only the selected track's parameters (see the Lua). Written onto the same
 		# address OSC would have used, so a guest's rack is named by the ordinary stream.

@@ -34,10 +34,6 @@ const TIMELINE_Y := 1.62
 const TIMELINE_Z := -1.02
 const TIMELINE_STAND_TOP := 1.46
 const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
-## The meter bridge's crossbar. Constants rather than numbers in the builder because the console
-## loom has to be routed BEHIND it: the first version of that loom took the short way down and
-## went straight through the bar, which is the sort of thing no amount of reading the code finds
-## and one photograph finds immediately.
 ## The lamps in the room: where the light comes from, what colour, and how hard.
 ##
 ## One table, read twice -- once by the environment to make the lights and once by the furniture
@@ -48,7 +44,9 @@ const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 const PRACTICALS: Array = [
 	[Vector3(-2.05, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
 	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
-	[Vector3(2.05, 1.70, -0.55), Color(0.6, 0.78, 1.0), 5.5],
+	# Forward on the right since the patch stand took that side of the room: anywhere behind it
+	# the stand was in the way from the seat.
+	[Vector3(2.30, 1.70, 0.95), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -70,8 +68,15 @@ const LAMP_RANGE := 3.6
 ## the people using it and its head is the part you notice.
 const LAMP_SHADE_RADIUS := 0.165
 const LAMP_SHADE_HEIGHT := 0.150
-const BRIDGE_POS := Vector3(0, 1.06, -0.35)
-const BRIDGE_SIZE := Vector3(0.70, 0.03, 0.09)
+## The patch stand: the bay's own cabinet, out to the right of the desk past the deck, turned to
+## face the mix position. Its own station rather than a strip on a meter bridge between the timeline and
+## the console, where it was a hand's width tall and read as part of both. Where on the stand the
+## bay's top edge is, and how far the cabinet under it reaches back.
+const PATCH_STAND_AT := Vector3(SessionLayout.PATCH_AT.x, 0, SessionLayout.PATCH_AT.y)
+const PATCH_STAND_HEADING := SessionLayout.PATCH_HEADING
+const PATCH_BAY_TOP := 1.78
+const PATCH_BAY_FRONT := 0.03
+const PATCH_CABINET_DEPTH := 0.12
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
 ## detail: it decides whether this participant gets a floor and furniture at all, and a studio
@@ -115,19 +120,13 @@ var timeline: TimelineSurface
 ## Where each machine's loom leaves it, in that machine's own space; where it lands across the
 ## back of the bay; and, for the two that take the floor, the point on the floor their run passes
 ## through -- and a flag saying which kind it is. The console's does not take the floor: it
-## stands directly under the bay, so its loom is a hanging drop rather than a metre and a half
-## of trunk going the long way round to a destination half a metre above where it started. Its
-## via is the clearance point behind the meter bridge instead.
+## stood under the bay once, when the bay rode a meter bridge over it; now the bay has its own
+## stand, every run takes the floor behind the desk.
 const LOOM_RUNS: Array = [
-	# The console's via is level with where it leaves the bay and well behind the crossbar, so
-	# the run goes BACK before it goes down. Dropping first and clearing the bar afterwards is
-	# the shorter cable and it does not fit: the test caught the curve sagging through the top
-	# of the bar fifteen millimetres past the gland.
 	["console", Vector3(0, 0.02, -0.19), Vector3(0, 0.6, -1.0), 0.0,
-			Vector3(0, BRIDGE_POS.y + BRIDGE_SIZE.y * 0.5 + 0.020,
-					BRIDGE_POS.z - BRIDGE_SIZE.z * 0.5 - 0.075), false],
+			Vector3(0.30, 0, -0.72), true],
 	["rack", Vector3(0, 0.07, -0.29), Vector3(0, -0.18, -1.0), -0.74,
-			Vector3(-0.92, 0, -1.02), true],
+			Vector3(-0.70, 0, -0.72), true],
 	["deck", Vector3(0, -0.02, -0.05), Vector3(0, -0.5, -1.0), 0.74,
 			Vector3(0.86, 0, -0.96), true],
 ]
@@ -142,6 +141,7 @@ var floor_plan: FloorPlan
 var rack_trolley: Trolley
 var deck_trolley: Trolley
 var timeline_stand: Trolley
+var patch_stand: Trolley
 ## Surface id -> [the trolley it stands on, where on that trolley].
 var _seated_on := {}
 var _lamps: Array[OmniLight3D] = []
@@ -154,8 +154,8 @@ var room_width := ROOM_WIDTH
 ## True while the room is moving furniture to fit the session, so those moves are not saved as
 ## if this participant had pushed everything.
 var _fitting := false
-var _bridge_legs: Array[MeshInstance3D] = []
-var _bridge_bar: MeshInstance3D
+var _patch_cabinet: MeshInstance3D
+var _patch_cheeks: Array[MeshInstance3D] = []
 
 ## Where a person stands to work, on a monitor. Far enough forward of the console's home at
 ## z = 0.1 that gear summoned to arm's length lands on the desk rather than through it.
@@ -414,30 +414,6 @@ func _build_furniture() -> void:
 	floor_plan.fixtures.append(_desk_footprint)
 	add_child(floor_plan)
 
-	# Meter bridge: the arm that carries the patchbay up off the back of the desk. Every console
-	# with anything mounted above it has one, and without it the bay hangs in the air.
-	var bridge_frame := _assembly("MeterBridge")
-	for side in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.035, BRIDGE_POS.y + 0.06 - 0.80, 0.05)
-		leg.mesh = leg_mesh
-		# Centred under the bar rather than flush with its face: flush, the leg's front and the
-		# bar's front were one plane and the joint shimmered.
-		leg.position = Vector3(side * 0.30, (0.80 + BRIDGE_POS.y + 0.06) * 0.5, BRIDGE_POS.z)
-		leg.material_override = Materials.chassis()
-		bridge_frame.add_child(leg)
-		_bridge_legs.append(leg)
-
-	var bridge := MeshInstance3D.new()
-	_bridge_bar = bridge
-	var bridge_mesh := BoxMesh.new()
-	bridge_mesh.size = BRIDGE_SIZE
-	bridge.mesh = bridge_mesh
-	bridge.position = BRIDGE_POS
-	bridge.material_override = Materials.brushed_metal()
-	bridge_frame.add_child(bridge)
-
 	_build_lamp_stands()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
@@ -497,8 +473,8 @@ func _build_furniture() -> void:
 	# of the room it reads as the one object that is software, which is the single thing this
 	# project is trying not to be.
 	#
-	# Two legs and a crossbar, deliberately the same vocabulary as the patchbay bridge rather
-	# than a new idea: a room furnished out of three kinds of part looks like a room, and one
+	# Two legs and a crossbar, deliberately the same vocabulary as the patch stand rather than
+	# a new idea: a room furnished out of three kinds of part looks like a room, and one
 	# furnished out of six looks like a kit. The feet are on casters, like a whiteboard's.
 	timeline_stand = _trolley("TimelineStand", &"timeline_stand",
 			Vector3(0, 0, TIMELINE_STAND_Z), 0.0)
@@ -533,6 +509,61 @@ func _build_furniture() -> void:
 	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012, 0)
 	crossbar.material_override = Materials.brushed_metal()
 	timeline_stand.add_part(crossbar)
+
+	_build_patch_stand()
+
+
+## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
+## running up past its top, so the bay stands in a frame rather than on a post. The carcass and
+## cheeks are sized to the bay once it knows how many rows it has (`_fit_stand_to_bay`).
+func _build_patch_stand() -> void:
+	patch_stand = _trolley("PatchStand", &"patch_stand", PATCH_STAND_AT, PATCH_STAND_HEADING)
+	patch_stand.footprint_centre = Vector2(0, -0.03)
+	patch_stand.footprint_half = Vector2(0.62, 0.15)
+	patch_stand.follow = 9.0
+	var plinth := MeshInstance3D.new()
+	var plinth_mesh := BoxMesh.new()
+	plinth_mesh.size = Vector3(1.20, 0.03, 0.28)
+	plinth.mesh = plinth_mesh
+	plinth.position = Vector3(0, Caster.HEIGHT + 0.015, -0.03)
+	plinth.material_override = Materials.chassis()
+	patch_stand.add_part(plinth)
+	_patch_cabinet = MeshInstance3D.new()
+	_patch_cabinet.name = "Cabinet"
+	_patch_cabinet.mesh = BoxMesh.new()
+	_patch_cabinet.material_override = Materials.chassis()
+	patch_stand.add_part(_patch_cabinet)
+	for side in [-1.0, 1.0]:
+		var cheek := MeshInstance3D.new()
+		cheek.name = "Cheek"
+		cheek.mesh = BoxMesh.new()
+		cheek.material_override = Materials.end_cheek()
+		patch_stand.add_part(cheek)
+		_patch_cheeks.append(cheek)
+	patch_stand.add_corner_casters(0.06)
+	_fit_stand_to_bay()
+
+
+## The carcass fills from the plinth up to the bay's lower edge and the cheeks run past its top,
+## whatever height the session has made the bay.
+func _fit_stand_to_bay() -> void:
+	if _patch_cabinet == null:
+		return
+	var height := patchbay.panel_height() if patchbay != null else 0.0
+	if height <= 0.0:
+		height = 0.8
+	var floor_top := Caster.HEIGHT + 0.03
+	var under := maxf(PATCH_BAY_TOP - height - 0.004, floor_top + 0.01)
+	(_patch_cabinet.mesh as BoxMesh).size = Vector3(PatchbaySurface.PANEL_WIDTH,
+			under - floor_top, PATCH_CABINET_DEPTH)
+	_patch_cabinet.position = Vector3(0, (under + floor_top) * 0.5,
+			PATCH_BAY_FRONT - PatchbaySurface.PANEL_DEPTH - PATCH_CABINET_DEPTH * 0.5 + 0.01)
+	var top := PATCH_BAY_TOP + 0.03
+	for i in _patch_cheeks.size():
+		var side := -1.0 if i == 0 else 1.0
+		(_patch_cheeks[i].mesh as BoxMesh).size = Vector3(0.035, top - floor_top, 0.16)
+		_patch_cheeks[i].position = Vector3(side * (PatchbaySurface.PANEL_WIDTH * 0.5 + 0.0175),
+				(top + floor_top) * 0.5, PATCH_BAY_FRONT - 0.06)
 
 
 func _room_bounds() -> Rect2:
@@ -582,21 +613,7 @@ func _fit_room_to_session() -> void:
 		elif not floor_plan.is_clear(t, here, t.rotation.y):
 			t.place(here, t.rotation.y)
 	_fitting = false
-	_fit_bridge_to_bay()
 	_looms_dirty = true
-
-
-## The meter bridge spans the bay it carries. Built for a 48cm patchbay; a forty-track bay is
-## 1.4 metres, and hung off a 70cm bar it was two thirds in the air.
-func _fit_bridge_to_bay() -> void:
-	if _bridge_bar == null or patchbay == null:
-		return
-	var box := patchbay.content_aabb()
-	var width := maxf(BRIDGE_SIZE.x, box.size.x + 0.06) if box.size.x > 0.0 else BRIDGE_SIZE.x
-	(_bridge_bar.mesh as BoxMesh).size = Vector3(width, BRIDGE_SIZE.y, BRIDGE_SIZE.z)
-	for i in _bridge_legs.size():
-		var side := -1.0 if i == 0 else 1.0
-		_bridge_legs[i].position.x = side * (width * 0.5 - 0.05)
 
 
 ## The console does not roll. It is the desk the room is arranged around and the one thing in
@@ -818,10 +835,12 @@ func _build_surfaces() -> void:
 	studio_set.add_child(console)
 	mount.register(console)
 
+	# On its stand, as authored: the stand's own placement times where the bay sits on it. The
+	# stand may since have been wheeled somewhere else; riding it (below) takes care of that.
 	patchbay = PatchbaySurface.new()
 	patchbay.name = "Patchbay"
-	patchbay.position = Vector3(0, 1.09, -0.33)
-	patchbay.rotation_degrees = Vector3(-18, 0, 0)
+	patchbay.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(PATCH_STAND_HEADING)),
+			PATCH_STAND_AT) * Transform3D(Basis.IDENTITY, Vector3(0, PATCH_BAY_TOP, PATCH_BAY_FRONT))
 	studio_set.add_child(patchbay)
 	mount.register(patchbay)
 
@@ -884,6 +903,7 @@ func _build_surfaces() -> void:
 		_ride(rack_trolley, rack)
 		_ride(deck_trolley, deck)
 		_ride(timeline_stand, timeline)
+		_ride(patch_stand, patchbay)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -894,7 +914,7 @@ func _build_surfaces() -> void:
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
 	console.rebuilt.connect(_fit_room_to_session)
-	patchbay.rebuilt.connect(_fit_bridge_to_bay)
+	patchbay.rebuilt.connect(_fit_stand_to_bay)
 	_fit_room_to_session()
 
 
@@ -1012,6 +1032,15 @@ func refresh_looms() -> void:
 		# Into the panel, which is the bay's own -Z however the bay is tilted. Negated because a
 		# loom's axis is the direction it RUNS AWAY along, not the direction it points in.
 		var to_dir: Vector3 = (patchbay.transform.basis * Vector3.BACK).normalized()
+		# A bay standing in its cabinet takes its looms in low, through the cheek on the end
+		# that faces the desk, the way a floor-standing bay is wired: from there they go
+		# straight to the floor and away behind the desk instead of round the carcass.
+		if _stands_in_cabinet():
+			var side := -(PatchbaySurface.PANEL_WIDTH * 0.5 + 0.035)
+			var fraction: float = run[3]
+			to_at = patch_stand.transform * Vector3(side, Caster.HEIGHT + 0.14 + (fraction + 1.0) * 0.045,
+					PATCH_BAY_FRONT - 0.06 + fraction * 0.035)
+			to_dir = (patch_stand.transform.basis * Vector3.LEFT).normalized()
 		var via: Vector3 = run[4]
 		# The floor point was written against where the authored layout stood the machine. A
 		# machine that has been wheeled somewhere else takes its run of trunking with it.
@@ -1023,6 +1052,11 @@ func refresh_looms() -> void:
 		loom.name = "Loom_%s" % run[0]
 		studio_set.add_child(loom)
 		_looms.append(loom)
+
+
+func _stands_in_cabinet() -> bool:
+	return patch_stand != null and _patch_cabinet != null and _seated_on.has(patchbay.surface_id) \
+			and (_patch_cabinet.mesh as BoxMesh).size.y > 0.2
 
 
 func _stand_of(machine: String) -> Trolley:

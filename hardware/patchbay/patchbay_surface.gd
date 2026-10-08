@@ -1,54 +1,68 @@
 class_name PatchbaySurface
 extends Surface
 
-## The routing bay: every track's output on the top row, every track's input on the bottom, and
-## a cable for every send Reaper currently has.
+## The routing bay: where sends are made, moved and pulled out, laid out to be read.
 ##
-## THE HONEST LIMITATION, stated here because it is structural rather than a gap to be filled in
-## later. Reaper's OSC surface streams send LEVELS but has no message that creates or destroys a
-## send; that is only reachable from ReaScript. So this bay DISPLAYS routing from OSC and CHANGES
-## routing through the file bridge, and when the bridge is not loaded in Reaper it says so rather
-## than dropping the gesture. A patchbay that silently fails to patch is worse than one that
-## admits it cannot: with the former you spend twenty minutes assuming you missed the jack.
+## Two columns facing each other across a gap. FROM, on the left, is every track's output; TO, on
+## the right, is every track's input; and every send is a cable from a row on the left to a row
+## on the right. Signal flows one way, left to right, every time -- so which track feeds which is
+## something you see, not something you work out from which row of identical jacks a plug is in.
+## Each row is a colour chip and the track's name as large as the row allows, and the jacks sit
+## on the inside edge of each column so the cables live in the gap and not over the names.
 ##
-## A SECOND structural fact, which the geometry has to answer rather than the protocol: one
-## jack takes one plug. Reaper will happily send four tracks to one return, and four cables
-## into one bore is not a picture of that -- it is a picture of nothing. Fan-in is drawn
-## through a mult hung under the bay; see hardware/patchbay/patch_mult.gd.
+## Every row has one more jack than its busiest row needs, so there is always a free one and no
+## two cables share a bore: one jack takes one plug, and four cables into one hole is a picture of
+## nothing. The free jack is where a new cable comes from, and where one dropped on the row goes.
 ##
-## See core/reaper/script_bridge.gd and reaper/reaper3d_bridge.lua.
+## What you can do, all with the same press-drag-release a fader uses (PatchPoint, PatchPlug):
+##   - drag from a row to a row in the other column: a send
+##   - drag a plug to another row in its own column: that send, re-patched
+##   - drag a plug off anywhere else: that send, removed
+##   - scroll over a plug: that send's level
+## Hover a row and its cables stay lit while the rest dim, so one track's routing can be picked
+## out of a busy bay.
+##
+## THE HONEST LIMITATION. Reaper's OSC surface streams send LEVELS but has no message that creates
+## or destroys a send; that is only reachable from ReaScript. So against Reaper this bay CHANGES
+## routing through the file bridge, and when the bridge is not loaded it says so on its own face
+## rather than dropping the gesture. See core/reaper/script_bridge.gd.
 
-const JACK_PITCH := 0.034
-const ROW_GAP := 0.085
-## Where the mult strip hangs, measured from the input row. Clear of the meter-bridge crossbar
-## the bay is bolted to -- the first placement put it halfway through the bar -- and far enough
-## below the input captions to read as separate hardware hung underneath, which is what it is.
+const PANEL_WIDTH := 1.1
+const PANEL_DEPTH := 0.02
+## One column's width, and where its centre is from the middle of the bay. What is left between
+## the two columns is the gap the cables run through.
+const COLUMN_WIDTH := 0.44
+const COLUMN_X := 0.32
+## Between neighbouring jacks in a row, and the most jacks a row is given.
+const SLOT_PITCH := 0.028
+const MAX_SLOTS := 7
+## How tall a row is: as tall as fits ROWS_SPAN, within these. 50mm is a name read from across the
+## room; 26mm is about the smallest a row stays easy to hit from the seat.
+const ROW_MAX := 0.05
+const ROW_MIN := 0.026
+const ROWS_SPAN := 0.9
+## The strip above the rows that says which column is which, and the one below that says what to do.
+const HEADER := 0.085
+const FOOTER := 0.05
 ## How far above the panel's lower edge the permanent looms enter the back of the bay.
-##
-## Not at the bottom, which is where a loom would naturally go, because whatever carries a bay
-## is bolted across the bottom of it -- in this room a meter-bridge crossbar, and the first
-## version of these looms entered at the bottom edge and arrived three centimetres inside it.
-## The bay cannot see the furniture holding it up, so this is a clearance it keeps on principle
-## rather than a number it derived. What checks it is the studio's own test.
 const LOOM_ENTRY_RISE := 0.068
-## Vertical pitch from one bay unit to the next, when a session needs more than one.
-## How much of the frame a summoned bay is allowed to fill. Not all of it: a surface sized to
-## exactly the frustum touches all four edges, which reads as cropped whether or not it is.
-const FRAME_MARGIN := 0.88
+## How far the cables droop crossing the gap. A cable to the bottom row at the usual droop hung
+## below the bay and over the words at its foot.
+const CABLE_SAG := 0.05
 
-
-const UNIT_PITCH := ROW_GAP + 0.075 + 0.012
-
-
-const MULT_ROW_Y := -0.115
-const MULT_SPACING := 0.008
-
-var _cables: Array[PatchCable] = []
-var _mults: Array[PatchMult] = []
-var _panel_width := 0.0
-var _units := 1
 var _outputs: Dictionary = {}
 var _inputs: Dictionary = {}
+## Vector2i(source, send index) -> {src, send, dst, out_slot, in_slot, cable, plugs}
+var _routes: Dictionary = {}
+var _cables: Array[PatchCable] = []
+var _plugs: Array[PatchPlug] = []
+var _slots := 2
+var _pitch := ROW_MAX
+var _height := 0.0
+## What the bay was last built from, so a send's level moving does not rebuild it.
+var _built_key := ""
+## The cable being carried, while one is: {from, fixed, cable, hidden, target}.
+var _drag: Dictionary = {}
 
 
 func _ready() -> void:
@@ -56,279 +70,471 @@ func _ready() -> void:
 	if surface_id == &"":
 		surface_id = &"patchbay"
 	super()
+	DAW.track_changed.connect(_on_track_changed)
+
+
+func _on_track_changed(_index: int, field: StringName) -> void:
+	# A level is a level: the plug says it when asked. Only a change to what is patched, or to
+	# how a row is labelled, changes the bay.
+	if field in [&"sends", &"name", &"colour"] and _shape_key() != _built_key:
+		mark_dirty()
 
 
 func _rebuild() -> void:
 	_clear_built()
-	_cables.clear()
-	_mults.clear()
 	_outputs.clear()
 	_inputs.clear()
+	_routes.clear()
+	_cables.clear()
+	_plugs.clear()
+	_drag.clear()
+	_built_key = _shape_key()
 
 	var indices := DAW.state.track_indices()
 	if indices.is_empty():
+		_height = 0.0
 		return
 
-	# Broken into bay UNITS once the thing is summoned, rather than run out as one long row.
-	#
-	# A 48-track session makes 1.67m of bay. On the bridge that is fine and is what a real
-	# studio looks like -- a long bay is a long bay. Pulled to arm's length it is not fine: it
-	# ran 75% past each edge of the frame, so the jacks you wanted were off-screen and the ones
-	# on screen were at a bearing you could not read the lettering at. The console solved its
-	# version of this by paging, and a bay should not, because the whole use of a bay is seeing
-	# the normalling. So it stacks instead, which is also what the real hardware does: a 19"
-	# bay is one row-pair wide and you add more bays downward.
-	var per_unit := indices.size()
-	if compact:
-		per_unit = _columns_for(indices.size())
-	_units = maxi(1, int(ceil(float(indices.size()) / float(per_unit))))
+	# Which row each track is on, top to bottom, and every send that can be drawn.
+	var order := {}
+	for r in indices.size():
+		order[indices[r]] = r
+	var routes := _sends()
+	var leaving := {}
+	var arriving := {}
+	for route in routes:
+		if not leaving.has(route["src"]):
+			leaving[route["src"]] = []
+		leaving[route["src"]].append(route)
+		if not arriving.has(route["dst"]):
+			arriving[route["dst"]] = []
+		arriving[route["dst"]].append(route)
+	# Each row's plugs in the order of the row at their far end, so the cables out of one row
+	# fan out the way they are going instead of crossing each other on the way.
+	var busiest := 0
+	for src in leaving:
+		var list: Array = leaving[src]
+		list.sort_custom(func(a, b): return order[a["dst"]] < order[b["dst"]])
+		for i in list.size():
+			list[i]["out_slot"] = mini(i, MAX_SLOTS - 1)
+		busiest = maxi(busiest, list.size())
+	for dst in arriving:
+		var list: Array = arriving[dst]
+		list.sort_custom(func(a, b): return order[a["src"]] < order[b["src"]])
+		for i in list.size():
+			list[i]["in_slot"] = mini(i, MAX_SLOTS - 1)
+		busiest = maxi(busiest, list.size())
+	_slots = clampi(busiest + 1, 2, MAX_SLOTS)
 
-	var width := mini(indices.size(), per_unit) * JACK_PITCH + 0.04
-	_panel_width = width
+	_pitch = clampf(ROWS_SPAN / float(indices.size()), ROW_MIN, ROW_MAX)
+	_height = HEADER + _pitch * indices.size() + FOOTER
 
-	for unit in _units:
-		var panel := MeshInstance3D.new()
-		var panel_mesh := BoxMesh.new()
-		panel_mesh.size = Vector3(width, ROW_GAP + 0.075, 0.014)
-		panel.mesh = panel_mesh
-		panel.position = Vector3(0, ROW_GAP * 0.5 - float(unit) * UNIT_PITCH, -0.008)
-		panel.material_override = Materials.chassis()
-		_adopt(panel)
+	# The origin is the middle of the panel's TOP edge: a bigger session grows the bay downward,
+	# the way a rack fills, and the top row stays where you last read it.
+	var panel := MeshInstance3D.new()
+	panel.name = "Panel"
+	var box := BoxMesh.new()
+	box.size = Vector3(PANEL_WIDTH, _height, PANEL_DEPTH)
+	panel.mesh = box
+	panel.position = Vector3(0, -_height * 0.5, -PANEL_DEPTH * 0.5)
+	panel.material_override = Materials.chassis()
+	_adopt(panel)
 
-	# Before the jacks and in its final place, because a jack claims its slot by converting its
-	# own world transform into the bank's. Null when the authored jack will not resolve, in
-	# which case every jack falls back to drawing itself and the bay still works.
-	var socket_bank := MeshBank.of(
-		PatchPoint.MESH_PATH,
-		Materials.brushed_metal(),
-		{"bore": Materials.recess()},
-	)
+	_lettering()
+
+	# Before the rows and in its final place, because a socket claims its slot in the bank by
+	# converting its own world transform into the bank's. Null when the authored jack will not
+	# resolve, in which case every row draws its own and the bay still works.
+	var socket_bank := MeshBank.of(PatchPoint.MESH_PATH, Materials.brushed_metal(),
+			{"bore": Materials.recess()})
 	if socket_bank != null:
 		socket_bank.name = "JackSockets"
 		_adopt(socket_bank)
 
-	# Says so when these jacks are a BANK rather than the bay. Same reason the timeline does:
-	# a patchbay is read as every jack there is, and the one thing you cannot do with a jack
-	# that was never drawn is notice it is missing.
-	var caption := DAW.state.bank_caption()
-	if caption != "":
-		var notice := Label3D.new()
-		notice.text = caption
-		notice.font_size = 72
-		notice.pixel_size = 0.00024
-		notice.modulate = Color(0.72, 0.60, 0.40)
-		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		notice.position = Vector3(-width * 0.5 + 0.02, ROW_GAP + 0.048, 0.002)
-		Lettering.range_to_legibility(notice)
-		_adopt(notice)
-
-	var left := -width * 0.5 + 0.02 + JACK_PITCH * 0.5
-	for slot in indices.size():
-		var index: int = indices[slot]
+	for r in indices.size():
+		var index: int = indices[r]
 		var t := DAW.state.track(index)
-		# Downward, so unit zero is the top one and the first track in the project is the
-		# top-left jack. Stacked the other way the bay reads bottom-up, which no rack does.
-		var x := left + float(slot % per_unit) * JACK_PITCH
-		var y := -float(slot / per_unit) * UNIT_PITCH
-
-		var out_jack := PatchPoint.create(index, PatchPoint.Kind.OUTPUT, t.display_name())
-		out_jack.socket_bank = socket_bank
-		out_jack.position = Vector3(x, ROW_GAP + y, 0.004)
-		out_jack.patch_requested.connect(_on_patch_requested)
-		_adopt(out_jack)
-		_outputs[index] = out_jack
-
-		var in_jack := PatchPoint.create(index, PatchPoint.Kind.INPUT, t.display_name())
-		in_jack.socket_bank = socket_bank
-		in_jack.position = Vector3(x, y, 0.004)
-		in_jack.patch_requested.connect(_on_patch_requested)
-		_adopt(in_jack)
-		_inputs[index] = in_jack
+		for kind in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
+			var row := PatchPoint.create(index, kind, t.display_name())
+			row.colour = t.colour
+			row.size = Vector2(COLUMN_WIDTH, _pitch)
+			row.banded = r % 2 == 1
+			row.socket_bank = socket_bank
+			var out := row.outward()
+			for k in _slots:
+				row.jack_xs.append(out * (-(COLUMN_WIDTH * 0.5 - 0.025) + k * SLOT_PITCH))
+			var ends: Dictionary = leaving if kind == PatchPoint.Kind.OUTPUT else arriving
+			row.used = (ends[index] as Array).size() if ends.has(index) else 0
+			row.position = Vector3(out * COLUMN_X, -HEADER - _pitch * (r + 0.5), 0)
+			row.drag_began.connect(_on_drag_began)
+			row.drag_moved.connect(_on_drag_moved)
+			row.drag_finished.connect(_on_drag_finished)
+			row.hover_changed.connect(_on_hover.bind(row))
+			_adopt(row)
+			if kind == PatchPoint.Kind.OUTPUT:
+				_outputs[index] = row
+			else:
+				_inputs[index] = row
 
 	if socket_bank != null:
 		socket_bank.commit()
 
-	# Cables are drawn after both rows exist, because a send names its destination by NAME and
-	# the jack for that name may belong to a track built later in this same loop.
+	for route in routes:
+		_routes[Vector2i(route["src"], route["send"])] = route
+		route["plugs"] = []
+		for end in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
+			var row: PatchPoint = _outputs[route["src"]] if end == PatchPoint.Kind.OUTPUT \
+					else _inputs[route["dst"]]
+			var slot: int = route["out_slot"] if end == PatchPoint.Kind.OUTPUT else route["in_slot"]
+			var plug := PatchPlug.create(route["src"], route["send"], route["dst"], end)
+			plug.row = row
+			plug.position = row.position + Vector3(row.jack_xs[slot], 0, PatchPoint.JACK_Z)
+			plug.drag_began.connect(_on_drag_began)
+			plug.drag_moved.connect(_on_drag_moved)
+			plug.drag_finished.connect(_on_drag_finished)
+			plug.hover_changed.connect(_on_hover.bind(plug))
+			_adopt(plug)
+			_plugs.append(plug)
+			route["plugs"].append(plug)
+
+	# Cables are laid once the rows have their final world transforms, which is after this
+	# returns and the bay is placed.
 	call_deferred("_draw_cables")
+
+
+func _lettering() -> void:
+	var half := PANEL_WIDTH * 0.5
+	_print("FROM", Vector3(-half + 0.03, -0.034, 0.001), 86, HORIZONTAL_ALIGNMENT_LEFT,
+			Color(0.95, 0.93, 0.88))
+	_print("TRACK OUTPUTS", Vector3(-half + 0.03, -0.066, 0.001), 40, HORIZONTAL_ALIGNMENT_LEFT,
+			Color(0.62, 0.63, 0.66))
+	_print("TO", Vector3(half - 0.03, -0.034, 0.001), 86, HORIZONTAL_ALIGNMENT_RIGHT,
+			Color(0.95, 0.93, 0.88))
+	_print("SENDS INTO", Vector3(half - 0.03, -0.066, 0.001), 40, HORIZONTAL_ALIGNMENT_RIGHT,
+			Color(0.62, 0.63, 0.66))
+	_print("→", Vector3(0, -0.036, 0.001), 110, HORIZONTAL_ALIGNMENT_CENTER,
+			Color(0.75, 0.70, 0.55))
+
+	# The head of the bay says how to use it -- or, against a Reaper that cannot be patched from
+	# here, says so, so a drag that does nothing is never the first anyone hears of it. At the
+	# head, not the foot: cables into the bottom rows hang over the foot.
+	var words := "DRAG A ROW ACROSS TO PATCH  ·  PULL A PLUG OFF TO UNPLUG  ·  SCROLL A PLUG FOR LEVEL"
+	var tint := Color(0.62, 0.63, 0.66)
+	if not DAW.can(DAWBackend.Capability.ROUTING):
+		words = "READ ONLY: PATCHING NEEDS THE REAPER-3D BRIDGE LOADED IN REAPER"
+		tint = Color(0.86, 0.66, 0.38)
+	var how := _print(words, Vector3(0, -0.068, 0.001), 34, HORIZONTAL_ALIGNMENT_CENTER, tint)
+	Lettering.fit(how, PANEL_WIDTH - 0.5, 34)
+
+	# Says so when these rows are a BANK rather than the session: a bay is read as every track
+	# there is, and the one thing you cannot do with a row that was never drawn is miss it.
+	var caption := DAW.state.bank_caption()
+	if caption != "":
+		_print(caption, Vector3(0, -_height + FOOTER * 0.5, 0.001), 36,
+				HORIZONTAL_ALIGNMENT_CENTER, Color(0.86, 0.66, 0.38))
+
+
+func _print(text: String, at: Vector3, size: int, align: int, tint: Color) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.pixel_size = 0.0003
+	label.font_size = size
+	label.horizontal_alignment = align
+	label.modulate = tint
+	label.position = at
+	Lettering.range_to_legibility(label)
+	_adopt(label)
+	return label
+
+
+## Every send this bay can draw: from a track it shows to another track it shows.
+func _sends() -> Array:
+	var out := []
+	for index in DAW.state.track_indices():
+		var t := DAW.state.track(index)
+		var keys: Array = t.sends.keys()
+		keys.sort()
+		for k in keys:
+			var dst := (t.sends[k] as MixState.SendState).resolve(DAW.state)
+			if dst < 0 or dst == index or not DAW.state.tracks.has(dst):
+				continue
+			out.append({"src": index, "send": int(k), "dst": dst, "out_slot": 0, "in_slot": 0})
+	return out
+
+
+func _shape_key() -> String:
+	var parts := PackedStringArray()
+	for index in DAW.state.track_indices():
+		var t := DAW.state.track(index)
+		parts.append("%d:%s:%s" % [index, t.display_name(), t.colour.to_html(false)])
+	for route in _sends():
+		parts.append("%d.%d>%d" % [route["src"], route["send"], route["dst"]])
+	return "|".join(parts)
 
 
 func _draw_cables() -> void:
 	for cable in _cables:
-		cable.queue_free()
+		if is_instance_valid(cable):
+			cable.queue_free()
 	_cables.clear()
-	for mult in _mults:
-		mult.queue_free()
-	_mults.clear()
-
-	# Gathered before anything is drawn, because the shape of the picture depends on the
-	# fan-in: one source into a return is a cable, several is a mult and several cables. That
-	# is not known until every send has been read.
-	var arrivals: Dictionary = {}
-	for index in DAW.state.track_indices():
-		var t := DAW.state.track(index)
-		for send_index in t.sends:
-			var s: MixState.SendState = t.sends[send_index]
-			var dest := s.resolve(DAW.state)
-			if dest < 0 or not _outputs.has(index) or not _inputs.has(dest):
-				continue
-			if not arrivals.has(dest):
-				arrivals[dest] = []
-			arrivals[dest].append(index)
-
-	var destinations := arrivals.keys()
-	destinations.sort()
-
-	var multed: Array[int] = []
-	var row_width := 0.0
-	for dest in destinations:
-		if arrivals[dest].size() < 2:
+	if not is_inside_tree():
+		return
+	for key in _routes:
+		var route: Dictionary = _routes[key]
+		if not _outputs.has(route["src"]) or not _inputs.has(route["dst"]):
 			continue
-		multed.append(dest)
-		row_width += PatchMult.width_for(arrivals[dest].size()) + MULT_SPACING
-
-	var mult_bank: MeshBank = null
-	if not multed.is_empty():
-		row_width -= MULT_SPACING
-		mult_bank = MeshBank.of(
-			PatchPoint.MESH_PATH,
-			Materials.brushed_metal(),
-			{"bore": Materials.recess()},
-		)
-		if mult_bank != null:
-			mult_bank.name = "MultSockets"
-			_adopt(mult_bank)
-
-	# Packed left to right from a centred row rather than hung under their destination column.
-	# Under-the-column would collide the moment two neighbouring returns were both multed, and
-	# a mult is a bussed strip -- nothing about it says it has to live beneath the jack it
-	# feeds. The trunk cable says that.
-	var cursor := -row_width * 0.5
-	var mult_for: Dictionary = {}
-	for dest in multed:
-		var ways: int = arrivals[dest].size()
-		var span := PatchMult.width_for(ways)
-		var mult := PatchMult.create(DAW.state.track(dest).display_name(), ways, mult_bank)
-		# Positioned before it enters the tree: a socket claims its slot in the bank out of its
-		# own world transform, and a mult placed after the fact would bank its sockets at the
-		# origin and then walk away from them.
-		mult.strap_length = _panel_bottom_y() - (MULT_ROW_Y + PatchMult.HEIGHT * 0.5)
-		mult.position = Vector3(cursor + span * 0.5, MULT_ROW_Y, 0.004)
-		_adopt(mult)
-		_mults.append(mult)
-		mult_for[dest] = mult
-		cursor += span + MULT_SPACING
-
-	if mult_bank != null:
-		mult_bank.commit()
-
-	for dest in destinations:
-		var sources: Array = arrivals[dest]
-		var to_jack: PatchPoint = _inputs[dest]
-		if sources.size() < 2:
-			var only: int = sources[0]
-			_lay(_outputs[only].global_transform, to_jack.global_transform,
-					DAW.state.track(only).colour, hash(Vector2i(only, dest)))
-			continue
-		var mult: PatchMult = mult_for[dest]
-		for i in sources.size():
-			var src: int = sources[i]
-			_lay(_outputs[src].global_transform, mult.jack_transform(i + 1),
-					DAW.state.track(src).colour, hash(Vector2i(src, dest)))
-		# The one cable that leaves. Tinted like the return it feeds, not like any one source,
-		# because by this point it is carrying all of them.
-		_lay(mult.trunk_transform(), to_jack.global_transform,
-				DAW.state.track(dest).colour, hash(Vector2i(dest, dest)))
+		var from_row: PatchPoint = _outputs[route["src"]]
+		var to_row: PatchPoint = _inputs[route["dst"]]
+		# Seeded from the pair, so a cable keeps its own slack and bow across rebuilds.
+		var cable := PatchCable.create(from_row.jack_transform(route["out_slot"]),
+				to_row.jack_transform(route["in_slot"]), from_row.colour,
+				hash(Vector2i(route["src"], route["dst"])))
+		cable.sag_ratio = CABLE_SAG
+		_adopt(cable)
+		_cables.append(cable)
+		route["cable"] = cable
 
 
-## The lower edge of the bay's own panel, which is where a hung mult's straps have to reach.
-## Where a permanent loom enters the back of the bay, at a fraction (-1..1) across it.
-##
-## The bay answers this rather than the room working it out, because the panel is exactly as wide
-## as the session has tracks. A room that assumed a width would hang the glands off the end of a
-## small session's bay and bury them inside a large one's.
-func loom_entry(fraction: float) -> Vector3:
-	var half := maxf(_panel_width * 0.5 - 0.05, 0.0)
-	return Vector3(clampf(fraction, -1.0, 1.0) * half,
-			_panel_bottom_y() + LOOM_ENTRY_RISE, -0.016)
+# --- carrying a cable ---------------------------------------------------------------------
 
-
-## The underside of the LOWEST unit, which is what the mults hang from and where the loom
-## enters. Reading it off unit zero, as it used to, left the mult row threaded through the
-## middle of the stack the moment there was a second unit.
-func _panel_bottom_y() -> float:
-	return ROW_GAP * 0.5 - (ROW_GAP + 0.075) * 0.5 - float(_units - 1) * UNIT_PITCH
-
-
-## How many jacks go in one unit, chosen so the whole STACK fits the view.
-##
-## Width alone is not the question, which is the mistake the first stacking attempt made. Cap
-## the width and the overflow goes downward instead: at 48 tracks a bay narrow enough to fit
-## across needs four units, and four units is two-thirds of a metre of bay hanging in front of
-## a lens that shows half of one. Rows and columns trade directly against each other and have
-## to be chosen together.
-##
-## Fewest units wins, so the bay stays as close to the one long row-pair it wants to be as the
-## frame allows. Where nothing fits -- a big enough session on a small enough window -- it says
-## so and takes the tallest stack the height allows rather than silently picking a shape.
-func _columns_for(count: int) -> int:
-	var erg := Ergonomics.current
-	var radius := maxf(erg.working_distance(), Ergonomics.NEAR_LIMIT)
-	var across := erg.frame_span(radius, _view_aspect()) * FRAME_MARGIN
-	var down := erg.frame_rise(radius) * FRAME_MARGIN
-	var most := maxi(1, int(floor(down / UNIT_PITCH)))
-	for units in range(1, most + 1):
-		var columns := int(ceil(float(count) / float(units)))
-		if float(columns) * JACK_PITCH + 0.04 <= across:
-			return columns
-	push_warning("patchbay: %d points do not fit the view in %d units; stacking anyway"
-			% [count, most])
-	return maxi(8, int(ceil(float(count) / float(most))))
-
-
-## Width over height of the window this is being presented through, as the rig last measured
-## it. Read rather than assumed: a bay sized for 16:9 on a 4:3 window overruns the sides.
-func _view_aspect() -> float:
-	return Ergonomics.current.view_aspect
-
-
-## Seeded from the pair, so a cable keeps its own slack and bow across rebuilds and two cables
-## running between the same two pieces of hardware do not draw as one thick line.
-func _lay(from_xform: Transform3D, to_xform: Transform3D, tint: Color, seed_value: int) -> void:
-	var cable := PatchCable.create(from_xform, to_xform, tint, seed_value)
+func _on_drag_began(from: ControlAffordance, at: Vector3) -> void:
+	_light_all(PatchPoint.Light.PLAIN, false)
+	var fixed: Transform3D
+	var tint: Color
+	var hidden: PatchCable = null
+	if from is PatchPlug:
+		# The cable comes out of THIS end and stays in the other.
+		var plug := from as PatchPlug
+		var route: Dictionary = _routes.get(Vector2i(plug.source, plug.send_index), {})
+		if route.is_empty():
+			return
+		var other: PatchPoint = _inputs[route["dst"]] if plug.end == PatchPoint.Kind.OUTPUT \
+				else _outputs[route["src"]]
+		fixed = other.jack_transform(route["in_slot"] if plug.end == PatchPoint.Kind.OUTPUT
+				else route["out_slot"])
+		tint = (_outputs[route["src"]] as PatchPoint).colour
+		hidden = route.get("cable")
+		if hidden != null and is_instance_valid(hidden):
+			hidden.visible = false
+		Foley.play(plug, Foley.plug_seat(), -8.0, 0.8)
+	else:
+		var row := from as PatchPoint
+		fixed = row.jack_transform(row.free_slot())
+		tint = row.colour
+	var cable := PatchCable.create(fixed, _loose_end(at), tint, from.get_instance_id())
+	cable.name = "CarriedCable"
+	cable.sag_ratio = CABLE_SAG
 	_adopt(cable)
-	_cables.append(cable)
+	_drag = {"from": from, "fixed": fixed, "cable": cable, "hidden": hidden, "target": null}
+	for row in _candidates(from):
+		row.set_light(PatchPoint.Light.CANDIDATE)
 
 
-## Kept for the OSC-only case, and for the test that pins the ambiguity it cannot fix.
-##
-## Over OSC a send's destination is a NAME, so this is the only way to resolve one -- and it is
-## why two tracks called "Verb" made the bay guess. `SendState.resolve` prefers the index the
-## ReaScript bridge supplies and falls back to this, so the bay is exact when the bridge is
-## loaded and still roughly right when it is not.
-func _index_by_name(track_name: String) -> int:
-	if track_name == "":
-		return -1
-	for index in DAW.state.track_indices():
-		if DAW.state.track(index).display_name() == track_name:
-			return index
-	return -1
-
-
-func _on_patch_requested(from: PatchPoint, to: PatchPoint) -> void:
-	if from.kind == to.kind:
-		push_warning("Patchbay: %s to %s is output-to-output; a send needs an output and an input." % [from.label_text, to.label_text])
+func _on_drag_moved(from: ControlAffordance, at: Vector3, over: ControlAffordance) -> void:
+	if _drag.is_empty() or _drag["from"] != from:
 		return
-	var src := from.track_index if from.kind == PatchPoint.Kind.OUTPUT else to.track_index
-	var dst := to.track_index if from.kind == PatchPoint.Kind.OUTPUT else from.track_index
-	if src == dst:
+	var target := _target_for(from, over)
+	var before: PatchPoint = _drag["target"]
+	if before != target:
+		if before != null:
+			before.set_light(PatchPoint.Light.CANDIDATE)
+		if target != null:
+			target.set_light(PatchPoint.Light.TARGET)
+		_drag["target"] = target
+	# Over somewhere it can go, the plug jumps to the jack it would go in: that is the answer to
+	# "what happens if I let go now", given before you do.
+	var cable: PatchCable = _drag["cable"]
+	cable.to_xform = target.jack_transform(target.free_slot()) if target != null else _loose_end(at)
+	cable.rebuild()
+
+
+func _on_drag_finished(from: ControlAffordance, over: ControlAffordance) -> void:
+	if _drag.is_empty() or _drag["from"] != from:
 		return
-	if not DAW.create_send(src, dst):
-		# Said out loud, for the reason in the class note.
-		push_warning("Patchbay: cannot create %d -> %d. The ReaScript bridge is not loaded in Reaper, and OSC has no message for making a send." % [src, dst])
+	var target := _target_for(from, over)
+	var carried: PatchCable = _drag["cable"]
+	if is_instance_valid(carried):
+		carried.queue_free()
+	var hidden: PatchCable = _drag["hidden"]
+	if hidden != null and is_instance_valid(hidden):
+		hidden.visible = true
+	_drag.clear()
+	_light_all(PatchPoint.Light.PLAIN, false)
+
+	if from is PatchPoint:
+		var row := from as PatchPoint
+		if target == null:
+			return
+		var src := row.track_index if row.kind == PatchPoint.Kind.OUTPUT else target.track_index
+		var dst := target.track_index if row.kind == PatchPoint.Kind.OUTPUT else row.track_index
+		if _patch(src, dst):
+			Foley.play(target, Foley.plug_seat(), -6.0)
 		return
-	# Only on the send that actually took. A plug sound on a refused patch would say the cable is
-	# in when it is not, which is the one thing the sound is here to be trusted about -- and the
-	# two failures above are already said out loud in the log.
-	Foley.play(to, Foley.plug_seat(), -6.0)
+
+	var plug := from as PatchPlug
+	if target != null:
+		# Re-patched: the old send out, and one from the end that stayed to the row it went to.
+		var src := plug.source if plug.end == PatchPoint.Kind.INPUT else target.track_index
+		var dst := target.track_index if plug.end == PatchPoint.Kind.INPUT else plug.dest
+		if _unpatch(plug.source, plug.send_index) and _patch(src, dst):
+			Foley.play(target, Foley.plug_seat(), -6.0)
+		return
+	# Let go where it came from -- on its own plug or its own row -- and nothing has changed.
+	if over == plug or over == plug.row:
+		return
+	_unpatch(plug.source, plug.send_index)
+
+
+## The rows a cable carried from `from` could be let go on.
+func _candidates(from: ControlAffordance) -> Array[PatchPoint]:
+	var out: Array[PatchPoint] = []
+	if from is PatchPoint:
+		var row := from as PatchPoint
+		var others: Dictionary = _inputs if row.kind == PatchPoint.Kind.OUTPUT else _outputs
+		for index in others:
+			var src: int = row.track_index if row.kind == PatchPoint.Kind.OUTPUT else index
+			var dst: int = index if row.kind == PatchPoint.Kind.OUTPUT else row.track_index
+			if src != dst and not _patched(src, dst):
+				out.append(others[index])
+	elif from is PatchPlug:
+		var plug := from as PatchPlug
+		var same: Dictionary = _outputs if plug.end == PatchPoint.Kind.OUTPUT else _inputs
+		for index in same:
+			var src: int = index if plug.end == PatchPoint.Kind.OUTPUT else plug.source
+			var dst: int = plug.dest if plug.end == PatchPoint.Kind.OUTPUT else index
+			if src != dst and not _patched(src, dst):
+				out.append(same[index])
+	return out
+
+
+func _target_for(from: ControlAffordance, over: ControlAffordance) -> PatchPoint:
+	var row: PatchPoint = null
+	if over is PatchPoint:
+		row = over
+	elif over is PatchPlug:
+		row = (over as PatchPlug).row
+	if row == null or not row in _candidates(from):
+		return null
+	return row
+
+
+## Where the end of a carried cable hangs when it is over nothing: at the pointer, a little proud
+## of the panel, pointing in, as a plug you are about to push home.
+func _loose_end(at: Vector3) -> Transform3D:
+	var basis := global_transform.basis.orthonormalized()
+	return Transform3D(basis, at + basis.z * 0.03)
+
+
+func _patched(src: int, dst: int) -> bool:
+	for key in _routes:
+		if _routes[key]["src"] == src and _routes[key]["dst"] == dst:
+			return true
+	return false
+
+
+## Through DAW like every change. Asked first whether routing can be changed at all, because the
+## answer to the call itself is not the whole story: a guest's is an intent the host carries out,
+## so "sent" is as much as it can know, and the host refusing is said by the host.
+func _patch(src: int, dst: int) -> bool:
+	if src == dst or _patched(src, dst) or not _can_route():
+		return false
+	DAW.create_send(src, dst)
 	mark_dirty()
+	return true
+
+
+func _unpatch(src: int, send_index: int) -> bool:
+	if not _can_route():
+		return false
+	DAW.remove_send(src, send_index)
+	mark_dirty()
+	return true
+
+
+func _can_route() -> bool:
+	if DAW.can(DAWBackend.Capability.ROUTING):
+		return true
+	# Said out loud, for the reason in the class note.
+	push_warning("Patchbay: routing cannot be changed from here. The ReaScript bridge is not loaded in Reaper, and OSC has no message for making or removing a send.")
+	return false
+
+
+# --- picking one track out --------------------------------------------------------------------
+
+func _on_hover(on: bool, node: ControlAffordance) -> void:
+	if not _drag.is_empty() or not is_instance_valid(node):
+		return
+	_light_all(PatchPoint.Light.PLAIN, false)
+	if not on:
+		return
+	var lit := []
+	for key in _routes:
+		var route: Dictionary = _routes[key]
+		var mine := false
+		if node is PatchPlug:
+			mine = (node as PatchPlug).source == route["src"] \
+					and (node as PatchPlug).send_index == route["send"]
+		elif node is PatchPoint:
+			var row := node as PatchPoint
+			mine = route["src" if row.kind == PatchPoint.Kind.OUTPUT else "dst"] == row.track_index
+		if mine:
+			lit.append(route)
+	if node is PatchPoint:
+		(node as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
+	if lit.is_empty():
+		return
+	for cable in _cables:
+		if is_instance_valid(cable):
+			cable.dimmed = true
+	for route in lit:
+		var cable: PatchCable = route.get("cable")
+		if cable != null and is_instance_valid(cable):
+			cable.dimmed = false
+		(_outputs[route["src"]] as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
+		(_inputs[route["dst"]] as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
+
+
+func _light_all(how: int, dim: bool) -> void:
+	for row in _outputs.values() + _inputs.values():
+		if is_instance_valid(row):
+			(row as PatchPoint).set_light(how)
+	for cable in _cables:
+		if is_instance_valid(cable):
+			cable.dimmed = dim
+
+
+# --- measurements -----------------------------------------------------------------------------
+
+## The panel's height, which grows with the session; zero before the first build.
+func panel_height() -> float:
+	return _height
+
+
+## How many jacks each row has right now.
+func slots() -> int:
+	return _slots
+
+
+## Where a permanent loom enters the back of the bay, at a fraction (-1..1) across it.
+func loom_entry(fraction: float) -> Vector3:
+	if _height <= 0.0:
+		return Vector3.ZERO
+	var half := PANEL_WIDTH * 0.5 - 0.06
+	return Vector3(clampf(fraction, -1.0, 1.0) * half, -_height + LOOM_ENTRY_RISE, -PANEL_DEPTH)
+
+
+func output_row(track_index: int) -> PatchPoint:
+	return _outputs.get(track_index)
+
+
+func input_row(track_index: int) -> PatchPoint:
+	return _inputs.get(track_index)
+
+
+func plugs_of(src: int, send_index: int) -> Array:
+	var route: Dictionary = _routes.get(Vector2i(src, send_index), {})
+	return route.get("plugs", [])
+
+
+func cable_count() -> int:
+	return _cables.size()

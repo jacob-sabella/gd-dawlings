@@ -35,6 +35,10 @@ const RACK_HALF := 0.30
 const DECK_AT := Vector2(0.80, -0.22)
 const DECK_HEADING := -32.0
 const DECK_HALF := 0.28
+## The patch stand, out to the right past the deck, a walkway clear of it.
+const PATCH_AT := Vector2(1.80, -0.30)
+const PATCH_HEADING := -72.0
+const PATCH_GAP := 1.0
 
 
 ## `desk_half`: half the console's width on the floor, in metres. Returns room_width, and for each
@@ -43,7 +47,8 @@ static func fit(desk_half: float) -> Dictionary:
 	# Never closer in than authored: a desk smaller than the default leaves the room as it was.
 	var rack_x := minf(RACK_AT.x, -(desk_half + RACK_GAP))
 	var deck_x := maxf(DECK_AT.x, desk_half + DECK_GAP)
-	var reach := maxf(-rack_x + RACK_HALF, deck_x + DECK_HALF) + WALL_CLEARANCE
+	var patch_x := maxf(PATCH_AT.x, deck_x + PATCH_GAP)
+	var reach := maxf(-rack_x + RACK_HALF, maxf(deck_x + DECK_HALF, patch_x + 0.2)) + WALL_CLEARANCE
 	var width := BASE_WIDTH
 	if reach * 2.0 > BASE_WIDTH:
 		width = BASE_WIDTH + ceilf((reach * 2.0 - BASE_WIDTH) / WIDTH_STEP) * WIDTH_STEP
@@ -51,6 +56,7 @@ static func fit(desk_half: float) -> Dictionary:
 		"room_width": width,
 		"rack": [Vector2(rack_x, RACK_AT.y), RACK_HEADING],
 		"deck_trolley": [Vector2(deck_x, DECK_AT.y), DECK_HEADING],
+		"patch_stand": [Vector2(patch_x, PATCH_AT.y), PATCH_HEADING],
 	}
 
 

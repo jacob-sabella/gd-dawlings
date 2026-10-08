@@ -65,7 +65,7 @@ const EXIT_PER_SPAN := 0.28
 const EXIT_MAX := 0.17
 ## A Bezier reaches roughly three quarters of the way to its control points, so the visible
 ## droop ends up close to SAG_RATIO x span. Tuned against the furniture: anything past about
-## 0.14 and a long patch across the bay hangs through the meter-bridge crossbar below it.
+## 0.14 and a long patch across the bay hangs down over the rows below it.
 const SAG_RATIO := 0.13
 const MIN_SAG := 0.016
 
@@ -75,6 +75,18 @@ var colour: Color = Color(0.82, 0.74, 0.3)
 ## Seeds the per-cable variation. Two cables between adjacent jacks laid out identically read as
 ## one object drawn twice; real ones differ in how they were coiled.
 var variation_seed: int = 0
+## How far it droops, as a share of its span. A bay whose cables cross a gap sideways wants less
+## than one whose cables loop between rows of the same panel.
+var sag_ratio := SAG_RATIO
+## Pushed back while something else on the bay is being looked at.
+var dimmed := false:
+	set(v):
+		if dimmed != v:
+			dimmed = v
+			_paint()
+
+var _jacket: MeshInstance3D
+var _boots: Array[MeshInstance3D] = []
 
 
 static func create(a: Transform3D, b: Transform3D, tint: Color, seed_value: int = 0) -> PatchCable:
@@ -93,6 +105,8 @@ func _ready() -> void:
 func rebuild() -> void:
 	for child in get_children():
 		child.queue_free()
+	_jacket = null
+	_boots.clear()
 
 	# Built in LOCAL space from two GLOBAL transforms, so a cable survives its surface being
 	# reparented from a monitor to the room -- the one operation this project does that would
@@ -110,6 +124,17 @@ func rebuild() -> void:
 	_build_plug(a, colour)
 	_build_plug(b, colour)
 	_build_jacket(_spine(a_start, a_axis, b_start, b_axis))
+	_paint()
+
+
+## A dimmed cable keeps its colour and loses most of its light, so the ones still lit are the
+## ones the eye follows.
+func _paint() -> void:
+	var tint := colour.darkened(0.7) if dimmed else colour
+	if _jacket != null:
+		_jacket.material_override = Materials.cable(tint)
+	for boot in _boots:
+		boot.material_override = Materials.cable_boot(tint)
 
 
 ## A cubic Bézier whose control points lie along the two jack axes.
@@ -121,7 +146,7 @@ func rebuild() -> void:
 ## whole thing a single smooth cubic instead of a curve with a sag bolted on.
 func _spine(a: Vector3, a_axis: Vector3, b: Vector3, b_axis: Vector3) -> PackedVector3Array:
 	var span := a.distance_to(b)
-	var sag := maxf(span * SAG_RATIO, MIN_SAG)
+	var sag := maxf(span * sag_ratio, MIN_SAG)
 
 	# Deterministic per cable: same jacks, same cable, every rebuild. A random() here would make
 	# the bundle shimmer every time the patchbay was rebuilt.
@@ -161,6 +186,7 @@ func _build_jacket(spine: PackedVector3Array) -> void:
 	# a patchbay full of shadow acne looks dirty rather than detailed.
 	jacket.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(jacket)
+	_jacket = jacket
 
 
 ## Tip, two insulating rings, sleeve, boot. Built from primitives rather than swept, because at
@@ -194,6 +220,7 @@ func _build_plug(at: Transform3D, tint: Color) -> void:
 	boot.material_override = Materials.cable_boot(tint)
 	boot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	plug.add_child(boot)
+	_boots.append(boot)
 
 
 func _segment(parent: Node3D, radius: float, length: float, offset: float,

@@ -63,6 +63,10 @@ func _ready() -> void:
 	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_one_jack_takes_one_plug()
+	_test_the_bay_reads_left_to_right()
+	_test_dragging_across_the_bay_patches_and_unpatches()
+	_test_hovering_a_row_picks_out_its_cables()
+	_test_a_removed_send_leaves_the_mix()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_tape_leaves_the_pack_where_the_pack_is()
@@ -2083,10 +2087,9 @@ func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
 
 
 func _test_one_jack_takes_one_plug() -> void:
-	# The physical premise of a patchbay, and the thing the bay was quietly breaking: four
-	# tracks sending to the reverb return drew four cables ending in the same bore. Caught in a
-	# screenshot, not here, because the suite had never asked where cables END -- only that the
-	# right number existed.
+	# The physical premise of a patchbay: four tracks sending to the reverb return must not be
+	# four cables ending in the same bore. The bay gives every row one more jack than its busiest
+	# row needs, so each cable has its own.
 	DAW.use(OfflineBackend.new())
 	var bay := PatchbaySurface.new()
 	add_child(bay)
@@ -2095,66 +2098,187 @@ func _test_one_jack_takes_one_plug() -> void:
 
 	var cables: Array = bay._cables
 	check("the stand-in session patches the bay", cables.size() >= 4)
-
-	# Every plug END in the whole bay, both ends of every cable. A 1/4" sleeve is 6.35mm
-	# across, so two plugs closer than that are inside each other.
 	var ends: Array[Vector3] = []
 	for cable in cables:
 		var c: PatchCable = cable
 		ends.append(c.from_xform.origin)
 		ends.append(c.to_xform.origin)
 	var closest := INF
-	var worst := ""
 	for i in ends.size():
 		for j in range(i + 1, ends.size()):
-			var gap: float = ends[i].distance_to(ends[j])
-			if gap < closest:
-				closest = gap
-				worst = "%.1fmm apart" % (gap * 1000.0)
-	check("no two plugs share a bore (%s)" % worst, closest >= PatchCable.PLUG_RADIUS * 2.0)
-
-	# And the other half: the fan-in did not get dropped on the floor to achieve that. Four
-	# sends into one return is five cables -- four into the mult, one out of it -- and the mult
-	# is visible hardware, not an invisible junction.
-	var mults := bay.find_children("*", "Node3D", true, false).filter(
-			func(n): return n is PatchMult)
-	check("a gathered return grows a mult", mults.size() == 1)
-	var landed := 0
-	var left := 0
-	var mult: PatchMult = mults[0]
-	for cable in cables:
-		var c: PatchCable = cable
-		for way in range(1, 5):
-			if c.to_xform.origin.distance_to(mult.jack_transform(way).origin) < 0.001:
-				landed += 1
-		if c.from_xform.origin.distance_to(mult.trunk_transform().origin) < 0.001:
-			left += 1
-	check("every send lands on its own way of the mult", landed == 4)
-	check("exactly one cable leaves the mult", left == 1)
-
-	# A single send is still a single cable. A mult for one source would be hardware invented
-	# to solve a problem nobody has, and the bay would fill up with them.
-	DAW.use(OfflineBackend.new())
-	var kept := -1
-	for index in DAW.state.track_indices():
-		var t := DAW.state.track(index)
-		if t.sends.is_empty():
-			continue
-		if kept < 0:
-			kept = index
-			continue
-		t.sends.clear()
-	check("the fixture has a send to keep", kept > 0)
-	var plain := PatchbaySurface.new()
-	add_child(plain)
-	plain._process(0.0)
-	plain._draw_cables()
-	var plain_mults := plain.find_children("*", "Node3D", true, false).filter(
-			func(n): return n is PatchMult)
-	check("one source into a return needs no mult", plain_mults.is_empty())
-	check("and draws exactly one cable", plain._cables.size() == 1)
-	plain.queue_free()
+			closest = minf(closest, ends[i].distance_to(ends[j]))
+	check("no two plugs share a bore (%.1fmm apart)" % (closest * 1000.0),
+			closest >= PatchCable.PLUG_RADIUS * 2.0)
+	# The four into the return fill four jacks, and the row still has a free one.
+	var verb := bay.input_row(13)
+	check("the return's row has a plug per send", verb != null and verb.used == 4)
+	check("and a jack to spare", verb.jack_xs.size() > verb.used)
+	check("every row has as many jacks", bay.output_row(1).jack_xs.size() == verb.jack_xs.size())
 	bay.queue_free()
+
+
+func _test_the_bay_reads_left_to_right() -> void:
+	# FROM on the left, TO on the right, every cable crossing the gap between them: which track
+	# feeds which is something you see.
+	DAW.use(OfflineBackend.new())
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	bay._draw_cables()
+	for index in DAW.state.track_indices():
+		check("%d's output is on the left" % index, bay.output_row(index).position.x < 0.0)
+		check("%d's input is on the right" % index, bay.input_row(index).position.x > 0.0)
+	var crossing := true
+	for cable in bay._cables:
+		var c: PatchCable = cable
+		var a := bay.to_local(c.from_xform.origin)
+		var b := bay.to_local(c.to_xform.origin)
+		crossing = crossing and a.x < -0.05 and b.x > 0.05
+	check("every cable runs from the FROM column to the TO column", crossing)
+	# Names inside the bay: the jacks are on the gap side of each column, the names outside.
+	var row := bay.output_row(1)
+	var name_label := row.get_node("Name") as Label3D
+	check("a FROM row's name is outside its jacks", name_label.position.x < row.jack_xs.min())
+	var to_row := bay.input_row(1)
+	check("a TO row's name is outside its jacks",
+			(to_row.get_node("Name") as Label3D).position.x > to_row.jack_xs.max())
+	check("a row's name is big enough to read across a room (%.1fmm caps)"
+			% (Lettering.cap_height(name_label) * 1000.0), Lettering.cap_height(name_label) >= 0.012)
+	bay.queue_free()
+
+
+## A fake hand for the drag tests: an Interactor that is told what it is over.
+func _bay_hand(over: ControlAffordance) -> Interactor:
+	var hand := Interactor.new()
+	hand.hovered = over
+	return hand
+
+
+func _drag(hand: Interactor, from: ControlAffordance, to: ControlAffordance) -> void:
+	from.grab_begin(hand, from.global_position)
+	hand.hovered = to
+	from.grab_move(hand, to.global_position if to != null else from.global_position + Vector3(0, -2, 0))
+	from.grab_end(hand)
+
+
+func _test_dragging_across_the_bay_patches_and_unpatches() -> void:
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	bay._draw_cables()
+	check("the stand-in can patch now", DAW.can(DAWBackend.Capability.ROUTING))
+
+	# A new send: drag the kick's row across to the bass's.
+	var before := DAW.state.track(1).sends.size()
+	var hand := _bay_hand(null)
+	var from := bay.output_row(1)
+	from.grab_begin(hand, from.global_position)
+	check("picking up a row carries a cable", bay.find_child("CarriedCable", true, false) != null)
+	check("the rows it could go to light up",
+			bay.input_row(4).light() == PatchPoint.Light.CANDIDATE)
+	check("but not its own input", bay.input_row(1).light() == PatchPoint.Light.PLAIN)
+	hand.hovered = bay.input_row(4)
+	from.grab_move(hand, bay.input_row(4).global_position)
+	check("the row under it says it is where the cable goes",
+			bay.input_row(4).light() == PatchPoint.Light.TARGET)
+	from.grab_end(hand)
+	check("letting go there makes the send", DAW.state.track(1).sends.size() == before + 1)
+	var made: MixState.SendState = DAW.state.track(1).sends[before + 1]
+	check("to the row it was let go on", made.resolve(DAW.state) == 4)
+	check("at unity", absf(FaderLaw.to_db(made.volume)) < 0.05)
+	check("and nothing is left lit", bay.input_row(4).light() == PatchPoint.Light.PLAIN)
+
+	# Dropped on nothing, nothing happens.
+	bay._process(0.0)
+	bay._draw_cables()
+	var count := DAW.state.track(2).sends.size()
+	_drag(hand, bay.output_row(2), null)
+	check("a cable let go over nothing goes back", DAW.state.track(2).sends.size() == count)
+	# Nor twice into the same place.
+	bay._process(0.0)
+	_drag(hand, bay.output_row(1), bay.input_row(4))
+	check("the same send twice is refused", DAW.state.track(1).sends.size() == before + 1)
+
+	# Scroll a plug: the level.
+	bay._process(0.0)
+	bay._draw_cables()
+	var plug: PatchPlug = bay.plugs_of(1, before + 1)[0]
+	check("the new cable has a plug to hold", plug != null)
+	check("which names the send", plug.title() == "%s  →  %s" % [
+			DAW.state.track(1).display_name().to_upper(), DAW.state.track(4).display_name().to_upper()])
+	plug.nudge(hand, -6, false)
+	close_to("scrolling a plug sets the send level", FaderLaw.to_db(made.volume), -6.0, 0.05)
+	check("and says so", plug.readout() == "-6.0 dB")
+
+	# Re-patch the TO end to another row.
+	var into: PatchPlug = bay.plugs_of(1, before + 1)[1]
+	_drag(hand, into, bay.input_row(6))
+	var moved: Array = DAW.state.track(1).sends.values().map(
+			func(sd): return (sd as MixState.SendState).resolve(DAW.state))
+	check("a plug dragged to another row re-patches", moved.has(6) and not moved.has(4))
+
+	# Pull it off: gone.
+	bay._process(0.0)
+	bay._draw_cables()
+	var last := DAW.state.track(1).sends.size()
+	var pulled: PatchPlug = bay.plugs_of(1, last)[0]
+	_drag(hand, pulled, null)
+	check("a plug pulled off the bay unplugs the send", DAW.state.track(1).sends.size() == last - 1)
+	# A wiggle -- picked up and put back on its own row -- changes nothing.
+	bay._process(0.0)
+	bay._draw_cables()
+	var verb_sends := DAW.state.track(3).sends.size()
+	var wiggled: PatchPlug = bay.plugs_of(3, 1)[0]
+	_drag(hand, wiggled, wiggled.row)
+	check("a plug put back where it was stays patched", DAW.state.track(3).sends.size() == verb_sends)
+
+	# And the whole lot is one undo per change, like Reaper.
+	backend.undo()
+	check("undo puts the unplugged send back", DAW.state.track(1).sends.size() == last)
+	hand.free()
+	bay.queue_free()
+
+
+func _test_hovering_a_row_picks_out_its_cables() -> void:
+	DAW.use(OfflineBackend.new())
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	bay._draw_cables()
+	var hand := Node.new()
+	bay.output_row(3).hover_enter(hand)
+	var lit := 0
+	var dim := 0
+	for cable in bay._cables:
+		if (cable as PatchCable).dimmed:
+			dim += 1
+		else:
+			lit += 1
+	check("hovering a row keeps its own cable lit", lit == 1)
+	check("and dims the rest", dim == bay._cables.size() - 1)
+	check("and lights the row at the other end",
+			bay.input_row(13).light() == PatchPoint.Light.EMPHASIS)
+	bay.output_row(3).hover_exit(hand)
+	check("leaving it lights everything again",
+			bay._cables.all(func(c): return not (c as PatchCable).dimmed))
+	hand.free()
+	bay.queue_free()
+
+
+func _test_a_removed_send_leaves_the_mix() -> void:
+	# Every other send address can only say what a send IS; this one says how many there are,
+	# which is the only way a pulled cable stops being drawn -- on the host and on every guest.
+	var state := MixState.new()
+	state.project_track_count = 4
+	for k in [1, 2, 3]:
+		MixWire.apply(state, "/track/1/send/%d/dest" % k, [float(k + 1)])
+	MixWire.apply(state, "/track/1/sends", [2.0])
+	check("a send past the count is gone", state.track(1).sends.keys() == [1, 2])
+	var snap := MixWire.snapshot(state)
+	var said := snap.filter(func(pair): return pair[0] == "/track/1/sends")
+	check("and the count travels in a snapshot", said.size() == 1 and int(said[0][1][0]) == 2)
 
 
 func _test_a_banked_control_still_moves() -> void:
@@ -3008,9 +3132,11 @@ func _test_a_loom_lies_on_the_floor_and_misses_the_furniture() -> void:
 	var looms := studio.studio_set.get_children().filter(func(n): return n is GearLoom)
 	check("every machine in the set is wired to the bay", looms.size() == Studio.LOOM_RUNS.size())
 
-	# The crossbar the console's loom went through on its first attempt. Taken from the same
-	# constants the furniture is built from, so moving the bridge moves the test with it.
-	var bar := AABB(Studio.BRIDGE_POS - Studio.BRIDGE_SIZE * 0.5, Studio.BRIDGE_SIZE)
+	# The bay's own cabinet, which the looms climb up behind: measured off the built mesh, in
+	# the set's space, so moving the stand moves the test with it.
+	var cabinet := studio._patch_cabinet
+	var bar := (studio.studio_set.global_transform.affine_inverse() * cabinet.global_transform) \
+			* cabinet.get_aabb()
 	bar = bar.grow(-0.002)
 
 	for node in looms:
@@ -3023,8 +3149,10 @@ func _test_a_loom_lies_on_the_floor_and_misses_the_furniture() -> void:
 			check("%s core %d is a curve, not a line" % [loom.name, core], sp.size() > 20)
 			for p in sp:
 				sank = minf(sank, p.y - loom.floor_y)
-				rose = maxf(rose, p.y - loom.to_point.y)
-				if bar.has_point(p):
+				# Only on the way in: a loom into a low gland comes DOWN from higher gear.
+				if Vector2(p.x - loom.to_point.x, p.z - loom.to_point.z).length() < 0.2:
+					rose = maxf(rose, p.y - loom.to_point.y)
+				if bar.has_point(studio.studio_set.to_local(loom.to_global(p))):
 					through += 1
 		# How far the arrival overshoots the gland it is arriving at. This is the number the
 		# centripetal knots bought: with uniform ones the same loom climbed 108mm above its own
@@ -3034,7 +3162,7 @@ func _test_a_loom_lies_on_the_floor_and_misses_the_furniture() -> void:
 				% [loom.name, rose * 1000.0], rose < 0.050)
 		check("%s does not go through the floor (%.1fmm under)" % [loom.name, -sank * 1000.0],
 				sank > -0.001)
-		check("%s misses the meter bridge (%d samples inside it)" % [loom.name, through],
+		check("%s misses the patch stand's cabinet (%d samples inside it)" % [loom.name, through],
 				through == 0)
 		if loom.on_floor:
 			# And it does reach the floor. A loom that merely avoided going through it could be
@@ -4449,9 +4577,13 @@ func _test_furniture_rolls_where_it_is_pushed() -> void:
 	var via: Vector3 = Studio.LOOM_RUNS[1][4]
 	check("the rack's loom found", loom != null)
 	if loom != null:
-		var moved_via := Vector2(loom.via.x - via.x, loom.via.z - via.z)
-		check("its run across the floor moved with the rack (%.1fmm off)"
-				% [(moved_via - went).length() * 1000.0], (moved_via - went).length() < 0.001)
+		# Moved AND turned with it: a push that leaves the plinth a fraction of a degree round
+		# swings a floor point half a metre away by a millimetre.
+		var authored: Transform3D = studio._authored_floor[&"rack"]
+		var want := piece.transform * authored.affine_inverse() * via
+		var off := Vector2(loom.via.x - want.x, loom.via.z - want.z).length()
+		check("its run across the floor moved with the rack (%.1fmm off, pushed %.0fmm)"
+				% [off * 1000.0, went.length() * 1000.0], off < 0.001 and went.length() > 0.05)
 	_drop_floor_studio(rig)
 
 
@@ -5053,10 +5185,13 @@ func _test_the_room_is_laid_out_for_the_size_of_the_session() -> void:
 		check("%d tracks: the room is wider than the desk with the rack and deck beside it (%.1f m for a %.1f m desk)" % [
 				tracks, room.room_width, desk_ends * 2.0], bounds.size.x > desk_ends * 2.0 + 1.0)
 		close_to("%d tracks: the venue was drawn to the same width" % tracks, room.venue.room_width, room.room_width)
-		var bar := (room._bridge_bar.mesh as BoxMesh).size.x
-		var bay := room.patchbay.content_aabb().size.x
-		check("%d tracks: the meter bridge spans the bay it carries (%.2f for %.2f)" % [tracks, bar, bay],
-				bar >= bay)
+		var cabinet_top := room._patch_cabinet.position.y + (room._patch_cabinet.mesh as BoxMesh).size.y * 0.5
+		var bay_bottom := Studio.PATCH_BAY_TOP - room.patchbay.panel_height()
+		check("%d tracks: the patch stand's cabinet comes up to the bay (%.2f under %.2f)" % [
+				tracks, cabinet_top, bay_bottom], cabinet_top <= bay_bottom + 0.001
+				and cabinet_top > bay_bottom - 0.02 or bay_bottom < 0.2)
+		check("%d tracks: and the stand is right of the deck" % tracks,
+				room.patch_stand.position.x > room.deck_trolley.position.x)
 		check("%d tracks: and the rack still faces the desk from its left" % tracks,
 				room.rack_trolley.position.x < -desk_ends)
 		check("%d tracks: and the deck from its right" % tracks,

@@ -46,15 +46,12 @@ func summary() -> String:
 	return "offline: synthetic mix"
 
 
-## No DAW means no routing engine to change. The patchbay reads this and declines the gesture
-## rather than drawing a cable that stands for nothing.
-## No routing engine to change, so no patching. Banking IS offered once the synthetic project
+## Routing is offered: the stand-in keeps its own sends (see `create_send`), and the built-in
+## engine that extends it plays them. Banking IS offered once the synthetic project
 ## is larger than a bank, because at that size the stand-in is modelling exactly the situation
 ## the bank buttons exist for -- and a 90-track stand-in that silently showed 64 strips would
 ## reproduce the bug those buttons were written to make visible.
 func can(capability: StringName) -> bool:
-	if capability == Capability.ROUTING:
-		return false
 	if capability == Capability.TRACK_BANKING:
 		return state != null and state.project_track_count > state.bank_size
 	return true
@@ -406,8 +403,8 @@ func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	record_for_replication("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
 
-## A send that is not there is not created by turning its knob: the stand-in has no routing
-## engine (see `can`), and a level on a send that does not exist would draw a cable for it.
+## A send that is not there is not created by turning its knob: that is `create_send`'s job, and
+## a level on a send that does not exist would draw a cable for it.
 func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
 	var sd := state.send(track_index, send_index, false)
 	if sd == null:
@@ -426,6 +423,63 @@ func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 			set_send_pan.bind(track_index, send_index, sd.pan),
 			set_send_pan.bind(track_index, send_index, pan))
 	_write_send(track_index, send_index, "pan", clampf(pan, 0.0, 1.0))
+
+
+## Patched the way Reaper patches: a new send goes on the end of the source's list at 0 dB, and
+## removing one closes the gap, so every send after it moves down a number. Refused for a track
+## into itself and for a pair that is already patched -- Reaper would allow the second, and two
+## identical sends is a doubled level nobody meant, not routing.
+func create_send(from_track: int, to_track: int) -> bool:
+	if from_track == to_track or not state.tracks.has(from_track) or not state.tracks.has(to_track):
+		return false
+	var before := _sends_of(from_track)
+	for row in before:
+		if int(row[0]) == to_track:
+			return false
+	var after := before.duplicate(true)
+	after.append([to_track, state.track(to_track).display_name(), FaderLaw.to_taper(0.0), 0.5])
+	_remember("/track/%d/sends" % from_track, _set_sends.bind(from_track, before),
+			_set_sends.bind(from_track, after), false)
+	_set_sends(from_track, after)
+	return true
+
+
+func remove_send(from_track: int, send_index: int) -> bool:
+	var before := _sends_of(from_track)
+	if send_index < 1 or send_index > before.size():
+		return false
+	var after := before.duplicate(true)
+	after.remove_at(send_index - 1)
+	_remember("/track/%d/sends" % from_track, _set_sends.bind(from_track, before),
+			_set_sends.bind(from_track, after), false)
+	_set_sends(from_track, after)
+	return true
+
+
+## A track's sends in order, as [dest_track, dest_name, volume, pan] rows.
+func _sends_of(track_index: int) -> Array:
+	var out := []
+	if not state.tracks.has(track_index):
+		return out
+	var t := state.track(track_index)
+	var keys: Array = t.sends.keys()
+	keys.sort()
+	for k in keys:
+		var sd: MixState.SendState = t.sends[k]
+		out.append([sd.dest_track, sd.dest_name, sd.volume, sd.pan])
+	return out
+
+
+## Lay a track's sends down whole, numbered from one, through the wire like any other change.
+func _set_sends(track_index: int, rows: Array) -> void:
+	for i in rows.size():
+		var at := "/track/%d/send/%d/" % [track_index, i + 1]
+		for field in [["dest", float(rows[i][0])], ["name", str(rows[i][1])],
+				["volume", float(rows[i][2])], ["pan", float(rows[i][3])]]:
+			record_for_replication(at + field[0], [field[1]])
+			MixWire.apply(state, at + field[0], [field[1]])
+	record_for_replication("/track/%d/sends" % track_index, [float(rows.size())])
+	MixWire.apply(state, "/track/%d/sends" % track_index, [float(rows.size())])
 
 
 ## Through the wire vocabulary rather than onto the field, so the change signal and the
