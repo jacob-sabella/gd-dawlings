@@ -22,6 +22,7 @@ func _ready() -> void:
 	_test_osc_bundle()
 	_test_osc_rejects_short()
 	_test_link_parses_track_fields()
+	_test_no_hud_is_a_launch_switch()
 	_test_link_parses_fx_and_sends()
 	_test_link_ignores_its_own_echo()
 	_test_taper_roundtrip()
@@ -266,6 +267,14 @@ func _fresh_link() -> ReaperBackend:
 	var link := ReaperBackend.new()
 	add_child(link)
 	return link
+
+
+## A photograph has no debugging readout in its corner; an ordinary launch keeps it.
+func _test_no_hud_is_a_launch_switch() -> void:
+	var boot: Node = load("res://scenes/bootstrap.gd").new()
+	check("an ordinary launch has the corner readout", not boot._parse(PackedStringArray([]))["no_hud"])
+	check("--no-hud leaves it out", boot._parse(PackedStringArray(["--no-hud"]))["no_hud"])
+	boot.free()
 
 
 func _test_link_parses_track_fields() -> void:
