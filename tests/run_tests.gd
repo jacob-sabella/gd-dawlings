@@ -138,6 +138,10 @@ func _ready() -> void:
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
 	await _test_a_named_input_is_read_whole_frames_at_a_time()
+	_test_the_keys_helper_plays_the_monitor_synth_note_for_note()
+	_test_the_monitor_synth_holds_notes_under_the_pedal()
+	_test_the_keys_helper_is_understood()
+	_test_a_note_the_helper_heard_is_stamped_when_it_went_down()
 	_test_a_recorded_take_shows_its_waveform_on_the_timeline()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
@@ -8727,6 +8731,133 @@ func _test_a_named_input_is_read_whole_frames_at_a_time() -> void:
 			and "--property=node.name=reaper3d_mix_tap" in tapped.arguments())
 	check("an input is Godot's own while the ports are shut",
 			MixSource.input("", "x", "mic") is MixSource.Captured)
+
+
+## The keys' own node (native/keys.c) is MonitorSynth in C: the same notes make the same sound,
+## at the volume the app gives it (-6dB, which MonitorSynth leaves to its player).
+func _test_the_keys_helper_plays_the_monitor_synth_note_for_note() -> void:
+	var helper := NativeKeys.helper()
+	check("the keys helper builds here", helper != "")
+	if helper == "":
+		return
+	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/keys.raw")
+	OS.execute("sh", ["-c", "printf 'on 60 100\\non 67 64\\noff 99\\n' | '%s' --render 9600 > '%s'" % [helper, file]])
+	var native := FileAccess.get_file_as_bytes(file).to_float32_array()
+	var synth := MonitorSynth.new()
+	synth.allow_native = false
+	add_child(synth)
+	synth.note_on(60, 100)
+	synth.note_on(67, 64)
+	var ours := synth.render(9600)
+	check("it renders what it was asked (%d samples)" % native.size(), native.size() == 9600 * 2)
+	var worst := 0.0
+	var loudest := 0.0
+	for i in mini(ours.size(), native.size() / 2):
+		worst = maxf(worst, absf(native[i * 2] / 0.5 - ours[i].x) + absf(native[i * 2 + 1] / 0.5 - ours[i].y))
+		loudest = maxf(loudest, absf(ours[i].x))
+	check("and it is the same sound (worst difference %.5f of %.3f)" % [worst, loudest], loudest > 0.05 and worst < 0.002)
+	synth.free()
+
+
+## The pedal: a key let go while it is down rings on, and stops when it comes up -- in both synths.
+func _test_the_monitor_synth_holds_notes_under_the_pedal() -> void:
+	var tail := func(make: Callable) -> float:
+		var out: PackedVector2Array = make.call()
+		var e := 0.0
+		for i in range(out.size() - 4800, out.size()):
+			e = maxf(e, absf(out[i].x))
+		return e
+	var played := func(pedal: bool, lift: bool) -> PackedVector2Array:
+		var synth := MonitorSynth.new()
+		synth.allow_native = false
+		add_child(synth)
+		synth.note_on(60, 100)
+		synth.render(2400)
+		if pedal:
+			synth.sustain(true)
+		synth.note_off(60)
+		var out := synth.render(24000)
+		if lift:
+			synth.sustain(false)
+			out = synth.render(24000)
+		synth.free()
+		return out
+	var damped: float = tail.call(func(): return played.call(false, false))
+	var held: float = tail.call(func(): return played.call(true, false))
+	var lifted: float = tail.call(func(): return played.call(true, true))
+	check("a key let go stops (%.4f)" % damped, damped < 0.001)
+	check("under the pedal it rings on (%.4f)" % held, held > 0.02)
+	check("until the pedal comes up (%.4f)" % lifted, lifted < 0.001)
+	var helper := NativeKeys.helper()
+	if helper == "":
+		return
+	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/keys_pedal.raw")
+	OS.execute("sh", ["-c", "printf 'on 60 100\\nsus 1\\noff 60\\n' | '%s' --render 24000 > '%s'" % [helper, file]])
+	var native := FileAccess.get_file_as_bytes(file).to_float32_array()
+	var end := 0.0
+	for i in range(native.size() - 9600, native.size(), 2):
+		end = maxf(end, absf(native[i]))
+	check("and the helper holds it too (%.4f)" % end, end > 0.01)
+
+
+## What the helper says: MIDI it has played, with when it arrived; the sources it took; how late.
+func _test_the_keys_helper_is_understood() -> void:
+	var keys := NativeKeys.new()
+	var now := 1000.0
+	keys.hear("ready 48000 128", now)
+	keys.hear("midi-from MPC Key 37 MIDI 1", now)
+	keys.hear("midi-from MPC Key 37 MIDI 1", now)
+	keys.hear("note 1 60 100 2 999990000", now)
+	keys.hear("sus 1 2 999995000", now)
+	keys.hear("note 0 60 0 2 1000000000", now)
+	keys.hear("latency 4650", now)
+	keys.hear("seq 128:0", now)
+	check("it is ready", keys.ready)
+	check("a source taken is named once", keys.devices == PackedStringArray(["MPC Key 37 MIDI 1"]))
+	check("its latency is read (%.4f)" % keys.latency, is_equal_approx(keys.latency, 0.00465))
+	var got := keys.take()
+	check("its MIDI comes through in order", got.size() == 3 and got[0]["on"] and got[0]["pitch"] == 60
+			and got[0]["velocity"] == 100 and got[0]["channel"] == 2 and got[1]["sustain"] and not got[2]["on"])
+	check("aged by when it arrived (%.4f)" % got[0]["age"], is_equal_approx(got[0]["age"], 0.01)
+			and is_equal_approx(got[2]["age"], 0.0))
+	check("and taken once", keys.take().is_empty())
+	var ports := AudioPorts.new()
+	AudioPorts.target = "reaper3d_null"
+	check("every port plays where the app was told to", "--device=reaper3d_null" in ports.player_args(AudioPorts.GEAR))
+	ports.device = "elsewhere"
+	check("unless it was told otherwise", "--device=elsewhere" in ports.player_args(AudioPorts.GEAR))
+	AudioPorts.target = ""
+	ports.free()
+
+
+## A note the helper played reaches the app a frame later; it goes into the take where the key
+## went down, not where the app heard about it.
+func _test_a_note_the_helper_heard_is_stamped_when_it_went_down() -> void:
+	_offline()
+	_as_session(Session.Role.GUEST, 5)
+	var gm := Session.guest_midi
+	gm.heard_source = func() -> Dictionary:
+		return {"seconds": 20.0, "playing": true, "recording": true, "valid": true}
+	gm.target_track = 3
+	gm.record_with_host = true
+	gm.follow(gm.heard())
+	gm.synth.native = NativeKeys.new()
+	gm.synth._running = true
+	gm.synth.native.latency = 0.005
+	var now := Time.get_unix_time_from_system()
+	gm.synth.native.hear("note 1 64 90 0 %d" % int((now - 0.03) * 1e6), now)
+	gm._take_native_midi()
+	check("the key is held", gm.held.get(64) == 90)
+	var down: Array = gm._take._held.get("0:64", [-1.0]) if gm._take != null else [-1.0]
+	check("stamped when it went down, plus its sound's way to the ear (%.4f)" % down[0],
+			absf(down[0] - (20.0 - 0.03 + 0.005)) < 0.002)
+	gm.synth.native = null
+	gm.synth._running = false
+	gm._take = null
+	gm.held.clear()
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	Session.start_solo()
 
 
 func _test_a_guest_sets_up_their_microphone_from_the_panel() -> void:

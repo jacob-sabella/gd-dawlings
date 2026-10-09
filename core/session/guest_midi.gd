@@ -16,7 +16,10 @@ extends Node
 
 signal changed()
 
-## Notes from MIDI devices (OS.open_midi_inputs) and from the computer keyboard both land here.
+## Notes from MIDI devices and from the computer keyboard both land here. MIDI comes from the
+## monitor keys' helper where it runs (NativeKeys: read from the sequencer the moment it
+## arrives, heard at once, and passed on here stamped with when), and from Godot's own MIDI
+## input (OS.open_midi_inputs, read once a frame) where it does not.
 ## The track a take goes onto; 0 for none chosen.
 var target_track := 0:
 	set(v):
@@ -43,7 +46,10 @@ var monitor_db := -6.0:
 var synth: MonitorSynth
 ## The MIDI devices the OS reported when inputs were last opened.
 var devices := PackedStringArray()
+## Whether MIDI is wanted: asked for from the panel.
 var midi_open := false
+## Whether Godot's own MIDI input is what is open, rather than the helper's.
+var _os_midi := false
 ## What the last take did, for the panel: {notes, track, start, end} or empty.
 var last_take := {}
 ## How many takes this guest has sent, for naming them.
@@ -69,26 +75,37 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	if midi_open:
+	if _os_midi:
 		OS.close_midi_inputs()
 
 
-## Open every MIDI input the OS can see. Asked for, rather than done at startup, because on some
+## Open every MIDI input there is. Asked for, rather than done at startup, because on some
 ## systems opening the inputs takes the devices away from other applications.
 func open_midi() -> void:
-	if midi_open:
-		OS.close_midi_inputs()
-	OS.open_midi_inputs()
-	devices = OS.get_connected_midi_inputs()
 	midi_open = true
-	changed.emit()
+	_route_midi()
 
 
 func close_midi() -> void:
-	if midi_open:
-		OS.close_midi_inputs()
 	midi_open = false
-	devices = PackedStringArray()
+	_route_midi()
+
+
+## MIDI from wherever it is quickest: the helper's sequencer port while it runs, Godot's own
+## input while it does not. Never both -- the same device opened twice is refused, or doubled.
+func _route_midi() -> void:
+	var native := synth.native if synth != null else null
+	var by_os := midi_open and native == null
+	if _os_midi and not by_os:
+		OS.close_midi_inputs()
+	if by_os:
+		if _os_midi:
+			OS.close_midi_inputs()
+		OS.open_midi_inputs()
+	_os_midi = by_os
+	if native != null:
+		native.take_midi(midi_open)
+	devices = OS.get_connected_midi_inputs() if by_os else PackedStringArray()
 	changed.emit()
 
 
@@ -104,11 +121,13 @@ func _on_role_changed() -> void:
 	if Session.role == Session.Role.GUEST:
 		if MonitorSynth.available():
 			synth.start()
+		_route_midi()
 		return
 	# Out of the session: a take in progress has nowhere to go any more.
 	_take = null
 	_release_all()
 	synth.stop()
+	_route_midi()
 	target_track = 0
 
 
@@ -130,25 +149,48 @@ func _input(event: InputEvent) -> void:
 				sustain(midi.controller_value >= 64, midi.channel)
 
 
-func note_on(pitch: int, velocity: int, channel := 0) -> void:
-	synth.note_on(pitch, velocity)
+## A key down. `age`: how long ago it went down, for a note that was heard before it got here
+## (the helper's); `sounded`: whether it has been heard already, so it is not played twice.
+func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
+	if not sounded:
+		synth.note_on(pitch, velocity)
 	held[pitch] = velocity
 	if _take != null:
-		_take.note_on(pitch, velocity, channel, stamp())
+		_take.note_on(pitch, velocity, channel, stamp(age))
 	changed.emit()
 
 
-func note_off(pitch: int, channel := 0) -> void:
-	synth.note_off(pitch)
+func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
+	if not sounded:
+		synth.note_off(pitch)
 	held.erase(pitch)
 	if _take != null:
-		_take.note_off(pitch, channel, stamp())
+		_take.note_off(pitch, channel, stamp(age))
 	changed.emit()
 
 
-func sustain(down: bool, channel := 0) -> void:
+func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
+	if not sounded:
+		synth.sustain(down)
 	if _take != null:
-		_take.sustain(down, channel, stamp())
+		_take.sustain(down, channel, stamp(age))
+
+
+## What the helper heard and played since the last frame, into the take.
+func _take_native_midi() -> void:
+	var native := synth.native
+	if native == null:
+		return
+	if native.devices != devices:
+		devices = native.devices.duplicate()
+		changed.emit()
+	for e in native.take():
+		if e.has("sustain"):
+			sustain(e["sustain"], e["channel"], e["age"], true)
+		elif e["on"]:
+			note_on(e["pitch"], e["velocity"], e["channel"], e["age"], true)
+		else:
+			note_off(e["pitch"], e["channel"], e["age"], true)
 
 
 ## The song position this guest is hearing now: the mix stream's stamp when listening to it,
@@ -173,17 +215,21 @@ func heard() -> Dictionary:
 ## the note's own sound takes to reach the guest's ears through the monitor synth. The player
 ## lines up the SOUND of the key with the sound of the mix; the key went down that much earlier.
 ## With the monitor off they hear their own gear, whose latency is theirs and is not known here.
-func stamp() -> float:
+## `age`: how long ago the key went down, for one that is only being told of now.
+func stamp(age := 0.0) -> float:
 	var h := heard()
 	var seconds: float = h["seconds"]
-	if h["playing"] and monitor and synth.is_running():
-		seconds += synth.latency_seconds()
+	if h["playing"]:
+		seconds -= age
+		if monitor and synth.is_running():
+			seconds += synth.latency_seconds()
 	return seconds
 
 
 func _process(_delta: float) -> void:
 	if Session.role != Session.Role.GUEST:
 		return
+	_take_native_midi()
 	if DAW.state != null:
 		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
 				Time.get_ticks_usec())

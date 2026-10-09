@@ -665,6 +665,13 @@ func _refresh_midi() -> void:
 	if _monitor.button_pressed != gm.monitor:
 		_monitor.set_pressed_no_signal(gm.monitor)
 	_monitor.disabled = not MonitorSynth.available()
+	# How late your own keys are, said where you choose to hear them: a few milliseconds through
+	# the keys' own node, tens through the app's mixer.
+	var late := gm.synth.latency_seconds() * 1000.0 if gm.synth.is_running() and gm.monitor else 0.0
+	_monitor.text = "Hear my keys  ·  %.1f ms" % late if late > 0.0 else "Hear my keys"
+	_monitor.tooltip_text = ("A piano here, so you hear your keys at once. Off if your keyboard makes its own sound."
+			+ ("\nPlayed by its own audio node, %.1f ms from key to output, before your sound card's own." % late
+					if gm.synth.native != null else ""))
 	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
 	_record_with.text = "Record my keys when %s records" % Session.name_of(1)
 	if _record_with.button_pressed != gm.record_with_host:

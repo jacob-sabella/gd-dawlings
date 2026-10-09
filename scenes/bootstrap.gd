@@ -541,11 +541,16 @@ func _exit_tree() -> void:
 ## The buses are made either way, so every player has its own to name.
 func _open_ports(args: Dictionary) -> void:
 	AudioPorts.ensure_buses()
+	AudioPorts.target = args["audio_out"]
+	AudioPorts.direct = args["direct_audio"]
 	if args["direct_audio"] or AudioServer.get_driver_name() == "Dummy":
 		return
 	ports = AudioPorts.new()
 	ports.name = "AudioPorts"
-	ports.device = args["audio_out"]
+	if NativeKeys.available():
+		# A guest's keys are their own node, made when the session starts. The helper was just
+		# built if it needed to be, so that start does not wait for a compiler.
+		ports.skip = [AudioPorts.MONITOR]
 	add_child(ports)
 	if not ports.open():
 		Session.notice.emit("The app's sound plays through one output. " + AudioPorts.why_not)

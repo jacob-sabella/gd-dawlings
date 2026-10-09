@@ -14,8 +14,12 @@ extends Node
 ## is what makes it pleasant to play rather than merely audible. Sixteen voices; the oldest is
 ## taken when they run out.
 ##
-## Rendered on its own thread, half a millisecond at a time, into a generator kept as short as
-## Godot's mixer allows -- the same reasoning, and the same numbers, as MixFeed's playback.
+## Where it can, it does not play through Godot at all: NativeKeys runs the same synth as a
+## PipeWire node of its own, in the graph's realtime callback, with MIDI read straight from the
+## sequencer -- about 4.5ms key to sink against 30-50ms through Godot's mixer. `native` is that
+## helper while it runs. Where it cannot, this renders on its own thread, half a millisecond at a
+## time, into a generator kept as short as Godot's mixer allows -- the same reasoning, and the
+## same numbers, as MixFeed's playback.
 
 const RATE := 48000.0
 const VOICES := 16
@@ -23,11 +27,14 @@ const VOICES := 16
 const MIX_STEP := 512
 const QUEUE_FRAMES := 768
 const TABLE := 4096
+enum { OFF, ON, SUSTAIN }
 
 ## Whether anything is played. Off for a guest monitoring through their own gear.
 var enabled := true:
 	set(v):
 		enabled = v
+		if native != null:
+			native.enable(v)
 		if not v:
 			all_off()
 var volume_db := -6.0:
@@ -35,6 +42,12 @@ var volume_db := -6.0:
 		volume_db = v
 		if _player != null:
 			_player.volume_db = v
+		if native != null:
+			native.volume(v)
+## The helper this plays through, while it runs; null when playing through Godot.
+var native: NativeKeys = null
+## Off: always through Godot. For the suite, and R3D_GODOT_KEYS=1 to compare.
+var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
 
 var _player: AudioStreamPlayer = null
 var _playback: AudioStreamGeneratorPlayback = null
@@ -44,6 +57,9 @@ var _running := false
 var _mutex := Mutex.new()
 ## Note events from the main thread, applied by the render thread: [on?, pitch, velocity].
 var _events: Array = []
+var _sustain := false
+## Per voice: whether its key is still down. A key let go under the pedal rings until it lifts.
+var _held := PackedByteArray()
 var _sine := PackedFloat32Array()
 
 # Voices, as parallel arrays: the render loop is the hot path of this whole feature.
@@ -79,6 +95,7 @@ func _ready() -> void:
 	_pan.resize(VOICES)
 	_strike.resize(VOICES)
 	_born.resize(VOICES)
+	_held.resize(VOICES)
 	_pitch.fill(-1)
 	_amp.fill(0.0)
 
@@ -96,6 +113,14 @@ static func available() -> bool:
 func start() -> void:
 	if _running or not available():
 		return
+	if allow_native and not AudioPorts.direct and NativeKeys.available():
+		var keys := NativeKeys.new()
+		if keys.start(AudioPorts.target):
+			native = keys
+			native.volume(volume_db)
+			native.enable(enabled)
+			_running = true
+			return
 	var stream := AudioStreamGenerator.new()
 	stream.mix_rate = RATE
 	stream.buffer_length = 4096.0 / RATE
@@ -115,6 +140,9 @@ func start() -> void:
 
 func stop() -> void:
 	_running = false
+	if native != null:
+		native.stop()
+		native = null
 	if _thread != null and _thread.is_started():
 		_thread.wait_to_finish()
 	_thread = null
@@ -135,22 +163,56 @@ func is_running() -> bool:
 func latency_seconds() -> float:
 	if not _running:
 		return 0.0
+	if native != null:
+		# Before its first note it has not counted: two cycles is what it measures at.
+		return native.latency if native.latency > 0.0 else 2.0 * NativeKeys.QUANTUM / RATE
 	return QUEUE_FRAMES / RATE + AudioServer.get_output_latency()
 
 
 func note_on(pitch: int, velocity: int) -> void:
 	if not enabled:
 		return
-	_queue([true, pitch, velocity])
+	if native != null:
+		native.note_on(pitch, velocity)
+		return
+	_queue([ON, pitch, velocity])
 
 
 func note_off(pitch: int) -> void:
-	_queue([false, pitch, 0])
+	if native != null:
+		native.note_off(pitch)
+		return
+	_queue([OFF, pitch, 0])
+
+
+## The sustain pedal: keys let go while it is down ring on until it comes up.
+func sustain(down: bool) -> void:
+	if native != null:
+		native.sustain(down)
+		return
+	_queue([SUSTAIN, int(down), 0])
 
 
 func all_off() -> void:
+	if native != null:
+		native.panic()
+		return
+	_queue([SUSTAIN, 0, 0])
 	for p in 128:
-		_queue([false, p, 0])
+		_queue([OFF, p, 0])
+
+
+## The helper's news, read; and if it has gone, playing on through Godot.
+func _process(_delta: float) -> void:
+	if native == null:
+		return
+	native.poll()
+	if not native.running():
+		push_warning("The monitor keys' helper stopped; playing them through the app instead.")
+		native = null
+		_running = false
+		allow_native = false
+		start()
 
 
 func _queue(event: Array) -> void:
@@ -175,14 +237,27 @@ func _apply_events() -> void:
 	_events = []
 	_mutex.unlock()
 	for e in events:
-		if e[0]:
-			_start_voice(e[1], e[2])
-		else:
-			for v in VOICES:
-				if _pitch[v] == e[1] and _release[v] == 1.0:
-					# Damper down: 60dB in about 150ms, quick enough to stop, slow enough not to
-					# click.
-					_release[v] = 0.99904
+		match e[0]:
+			ON:
+				_start_voice(e[1], e[2])
+			OFF:
+				for v in VOICES:
+					if _pitch[v] == e[1] and _held[v] == 1:
+						_held[v] = 0
+						if not _sustain:
+							_damp(v)
+			SUSTAIN:
+				_sustain = e[1] == 1
+				if not _sustain:
+					for v in VOICES:
+						if _pitch[v] >= 0 and _held[v] == 0:
+							_damp(v)
+
+
+## Damper down: 60dB in about 150ms, quick enough to stop, slow enough not to click.
+func _damp(v: int) -> void:
+	if _release[v] == 1.0:
+		_release[v] = 0.99904
 
 
 func _start_voice(pitch: int, velocity: int) -> void:
@@ -210,6 +285,7 @@ func _start_voice(pitch: int, velocity: int) -> void:
 	var ring := clampf(6.0 * pow(0.5, (pitch - 40) / 24.0), 1.5, 6.0)
 	_decay[v] = pow(0.001, 1.0 / (ring * RATE))
 	_release[v] = 1.0
+	_held[v] = 1
 	_pan[v] = clampf((pitch - 64) / 90.0, -0.35, 0.35)
 	# The strike partial sits fourteen times up; above the top of hearing it would only alias.
 	_strike[v] = _amp[v] * 0.35 if hz * 14.0 < 16000.0 else 0.0

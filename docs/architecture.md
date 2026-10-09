@@ -466,9 +466,11 @@ a note-on at velocity 0 counts as a note-off, and CC64 is the sustain pedal). Th
 from the computer keyboard: `KeyCatcher`, opt-in from the panel, plays only while it has focus,
 because the studio already uses WASD, Space, F, E, G, V, B and N. A on the home row is C, the
 row above holds the black keys, Z and X change octave, and Esc gives the keys back. The guest
-hears its own keys from `MonitorSynth`, a 16-voice two-operator electric piano rendered on its
-own thread. A round trip through the host's Reaper would be ~90ms, which is unplayable. Each
-note's stamp is moved later by the monitor's own latency. The player lines up the *sound* of
+hears its own keys from `MonitorSynth`, a 16-voice two-operator electric piano with a sustain
+pedal. A round trip through the host's Reaper would be ~90ms, which is unplayable. Where it can,
+the synth is its own PipeWire node and reads MIDI itself (see *Your own keys in four
+milliseconds*, under Audio). Each note's stamp is moved later by the monitor's own latency, and a
+note the helper heard is moved earlier by how long ago it arrived. The player lines up the *sound* of
 the key with the mix, so the key went down that much earlier than what they heard.
 
 **A take follows what the guest hears.** It begins when the guest hears the host start
@@ -1135,7 +1137,7 @@ arrives on one, so a patchbay (qpwgraph, Helvum, pavucontrol) can send each anyw
 | Stream | What | Made by |
 |---|---|---|
 | `reaper-3d · mix` | the built-in engine's master; on a guest, the host's mix it hears | `MixFeed`, `GodotBackend` |
-| `reaper-3d · monitor` | a guest's own keys, played the instant they are pressed | `MonitorSynth` |
+| `reaper-3d · monitor` | a guest's own keys, played the instant they are pressed | `NativeKeys` (`MonitorSynth` where not) |
 | `reaper-3d · gear` | the room: buttons, detents, faders, plugs, reel motors | `Foley.emitter` |
 | `reaper-3d · mic` (in) | what a guest records | `GuestAudio`, via `MixSource.Piped` |
 | `reaper-3d · mix tap` (in) | what a host passes on to its guests | `MixTap`, via `MixSource.Piped` |
@@ -1166,6 +1168,40 @@ measures the old way.
 `--direct-audio`: the buses play to Master and everything comes out of Godot's one stream as it
 did before. A player that dies mid-session (its server restarted) is taken down and its bus goes
 back to Master, so the sound is heard from the app's own output rather than not at all.
+
+### Your own keys in four milliseconds
+
+Asked for: "all audio that could be performance based to be low latency". That is a guest's own
+keys -- the one sound here that answers a hand. The mix a guest plays along to is late by design
+and stamped for it (*Hearing the mix from another room*); the gear's clicks and the room are
+not played; a voice is best heard through the interface's own direct monitoring, before any
+software.
+
+Through Godot, a key cost 30-50ms: read once a frame (up to 17ms), queued deep enough to feed
+Godot's 512-frame mix (16ms), then behind an output (10-20ms), with PipeWire's default 1024-frame
+cycle (21ms) under all of it. So the keys left Godot. `native/keys.c` is MonitorSynth in C, a
+PipeWire stream of its own (`reaper-3d · monitor`) rendered in the graph's realtime callback. It
+asks for a 128-frame cycle (2.7ms; `R3D_KEYS_QUANTUM`), and reads MIDI from the ALSA sequencer
+the moment it arrives, on a port of its own ("reaper-3d: keys in", so anything can be routed to
+it) linked to every hardware source when MIDI is opened from the panel. Notes from the computer
+keyboard and the panel go to it as commands. It passes every MIDI note back to `GuestMidi`
+stamped with when it arrived, so the take is made in the app as before -- and more exactly
+than before, since a note is no longer stamped by the frame that read it.
+
+`NativeKeys` builds it with `cc` the first time (0.4s, at startup) and whenever the source is
+newer. No compiler, no PipeWire or ALSA headers, not Linux, the Dummy driver, `--direct-audio`
+or `R3D_GODOT_KEYS=1`: MonitorSynth plays through Godot as before. If the helper dies, the keys
+go back to Godot mid-session.
+
+**Measured.** `tools/keys_latency.sh` sends sequencer notes to the helper and times their sound
+arriving at the rig's null sink by the graph's own clock: 2026-10-09, key to sink 4.3-4.7ms
+median at a 128-frame cycle (34ms at PipeWire's default 1024, 3.0ms at 64), the same 4.3ms with
+the helper started by a guest in a running session. A real card adds its own output latency
+after the sink. The helper's own account of each note, which the stamps use, is checked against
+it. The panel shows it beside "Hear my keys".
+
+The cost: the graph runs at the smallest cycle any node asks for, so while a guest session is
+open everything on that card runs at 128 frames -- more wakeups for every program on it.
 
 ## Things that are deliberately not done yet
 

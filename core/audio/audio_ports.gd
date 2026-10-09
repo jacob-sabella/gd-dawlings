@@ -47,13 +47,21 @@ const LATENCY_MS := 8
 static var active := false
 ## Why not, for the session panel. Empty when they are open.
 static var why_not := ""
+## Where every stream of the app's starts, by sink name; empty for the session manager's choice.
+## --audio-out. The ports and the monitor keys' helper both play there.
+static var target := ""
+## --direct-audio: one stream out of this process, nothing else -- not even the keys' own node.
+static var direct := false
 
 ## The program that plays a stream from a pipe: `pacat`, or a stand-in the suite gives.
 var player_tool := "pacat"
 ## Extra arguments in front of the player's own, for a stand-in that is a shell.
 var player_prefix: PackedStringArray = []
-## Where the ports play to, by sink name; empty for the session manager's choice.
+## Where the ports play to, by sink name; empty for `target`.
 var device := ""
+## Kinds that are not to be ported: MONITOR where the keys are their own node (NativeKeys), so
+## there are not two streams by one name.
+var skip: Array[StringName] = []
 ## {kind: {"pid", "pipe": FileAccess, "capture": AudioEffectCapture, "dropped": int, "sent": int}}
 var ports := {}
 
@@ -101,6 +109,8 @@ func open() -> bool:
 		why_not = "Separate audio outputs need PipeWire (or PulseAudio) and its pacat tool."
 		return false
 	for kind in KINDS:
+		if kind in skip:
+			continue
 		var piped := OS.execute_with_pipe(player_tool, player_prefix + player_args(kind), false)
 		if piped.is_empty():
 			close()
@@ -129,8 +139,9 @@ func player_args(kind: StringName) -> PackedStringArray:
 			"--client-name=" + title, "--stream-name=" + title,
 			"--property=node.name=reaper3d_" + NAMES[kind], "--property=node.description=" + title,
 			"--property=application.name=" + title, "--property=media.role=Music"])
-	if not device.is_empty():
-		args.append("--device=" + device)
+	var to := device if not device.is_empty() else target
+	if not to.is_empty():
+		args.append("--device=" + to)
 	return args
 
 
