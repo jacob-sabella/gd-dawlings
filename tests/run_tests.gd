@@ -6441,6 +6441,48 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			and station.ring_point(-1.0, 40.0).x < -round_ring.x + 0.01)
 	var station_dust := station.find_child("Dust", true, false) as GPUParticles3D
 	check("the dust hangs in the lattice", station_dust != null and lattice_box.has_point(station_dust.global_position))
+
+	# The underwater dome: the vault's glass clears every zone, the deck's edge is railed, the
+	# kelp stands outside the glass and clear of the sub, the sub is outside with the collar run
+	# from the booth's back to it, and the floors carry caustics.
+	studio.set_venue(&"dome", false)
+	var dome := studio.venue as DomeVenue
+	var r := dome.radius()
+	var clear := true
+	for box: AABB in dome.zones().values():
+		for x in [box.position.x, box.end.x]:
+			clear = clear and sqrt(r * r - x * x) > box.end.y + 0.3
+	check("dome: the vault clears every zone's head room (radius %.2f)" % r, clear)
+	var railed := dome.find_children("RailGlass*", "", false, false).size()
+	# Front, right, and left up to the booth; the booth's own back is the edge past it.
+	check("the deck's edge is railed, front and sides (%d panes)" % railed, railed >= 3)
+	var kelp_out := true
+	var sub_at := dome.sub_spot()
+	for spot in dome.kelp_spots:
+		var p := spot.origin
+		var out := absf(p.x) - r if p.z > DomeVenue.NOSE else Vector2(p.x, p.z - DomeVenue.NOSE).length() - r
+		kelp_out = kelp_out and out > 1.0 and Vector2(p.x - sub_at.x, p.z - sub_at.z).length() > 3.0
+	check("the kelp stands outside the glass and clear of the sub (%d stalks)" % dome.kelp_spots.size(),
+			kelp_out and dome.kelp_spots.size() > 100)
+	var collar := dome.find_child("Collar", false, false) as MeshInstance3D
+	var booth_box: AABB = dome.zones()[&"vocals"]
+	var reach := (collar.mesh as CylinderMesh).height
+	check("the sub is docked outside the glass, its collar run from the booth's back to it",
+			dome.find_child("Sub", false, false) != null and absf(sub_at.x) - 0.85 > r
+			and absf(collar.position.x + reach * 0.5 - booth_box.position.x) < 0.1
+			and absf(collar.position.x - reach * 0.5 - (sub_at.x + DomeVenue.SUB_FLANGE)) < 0.01)
+	var deck := dome.find_child("Floor", false, false) as MeshInstance3D
+	var sand := dome.find_child("Sand", false, false) as MeshInstance3D
+	var caustic := func(m: MeshInstance3D) -> bool:
+		var mat := m.material_override as ShaderMaterial
+		return mat != null and mat.shader.resource_path.ends_with("caustic_ground.gdshader") \
+				and float(mat.get_shader_parameter("strength")) > 0.0
+	check("caustics play on the deck and the sand", caustic.call(deck) and caustic.call(sand)
+			and sand.position.y < -0.3)
+	var leaning := dome.shafts.size() >= 12
+	for shaft in dome.shafts:
+		leaning = leaning and shaft.basis.y.normalized().dot(DomeVenue.SUN_DIR.normalized()) > 0.999
+	check("the shafts of light lean the way the sun comes down", leaning)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

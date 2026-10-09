@@ -186,7 +186,9 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [x] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
   - [ ] Station follow-up: the matrix in true zero-g (its cells bobbing slowly), and a slow
         turn of the planet and the stars, the station's orbit seen through the viewports.
-- [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
+- [x] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
+  - [ ] Dome follow-up: a school of small fish wheeling round the vault, rocks and a little coral
+        in the trench.
 - [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
 - [ ] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.

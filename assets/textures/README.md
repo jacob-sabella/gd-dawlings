@@ -15,5 +15,7 @@ channel at a time by `Materials.scanned`).
 - `snow_02` — the snow outside the cabin
 - `wood_planks_grey` — the rooftop's deck
 - `gravel` — the rooftop's ballast (1k)
+- `coast_sand_01` — the sea floor round the underwater dome (1k)
+- `blue_metal_plate` — the dome's bulkhead, plinths and skirts
 
 Fetched with `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/<res>/<id>/<id>_<map>_<res>.jpg`.
