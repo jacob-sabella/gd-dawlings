@@ -134,6 +134,11 @@ func on_put_down() -> void:
 	pass
 
 
+## Override: it has just been thrown.
+func on_launch() -> void:
+	pass
+
+
 ## Override: it hit something in flight, at `speed` into it (m/s).
 func on_bounce(_speed: float) -> void:
 	pass
@@ -146,7 +151,8 @@ func centre_height() -> float:
 
 ## Override: how it flies. `bounce` is how much of its speed into a surface it gets back, `roll`
 ## how quickly it slows sliding along the floor (m/s²), `drag` the air's, per second. A rubber
-## duck is mostly a thud; a bouncy ball is mostly bounce.
+## duck is mostly a thud; a bouncy ball is mostly bounce. `wing`, for something that glides
+## (`Flight.fly`).
 func flies() -> Dictionary:
 	return {"bounce": 0.35, "roll": 3.0, "drag": 0.08}
 
@@ -221,6 +227,7 @@ func launch(f: Flight, with: Array, stays := true) -> void:
 	_velocity = Vector3.ZERO
 	_arc_length = 0.0
 	_set_state(State.LOOSE)
+	on_launch()
 
 
 func is_flying() -> bool:

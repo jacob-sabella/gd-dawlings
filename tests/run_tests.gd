@@ -118,6 +118,7 @@ func _ready() -> void:
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_the_duck_is_the_rooms()
 	await _test_a_ball_is_thrown_and_flies_the_same_everywhere()
+	await _test_a_paper_plane_glides()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6447,6 +6448,98 @@ func _test_a_ball_is_thrown_and_flies_the_same_everywhere() -> void:
 	Session.start_solo()
 
 	room.asked.disconnect(heard)
+	Session.layout = saved_layout
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## The paper plane (docs/items_loop.md): a good throw crosses the room, a bad one noses into the
+## floor, a hard one flutters and falls short, a lean turns it, and touching anything ends the
+## glide.
+func _test_a_paper_plane_glides() -> void:
+	var box: Array = [Rect2(-20, -20, 40, 40)]
+	var q := Quaternion.IDENTITY
+	var paper: Dictionary = PlaneItem.new().flies()
+	var wing: Dictionary = paper["wing"]
+	var level := func(speed: float, pitch: float, lean := 0.0, floor := box) -> Flight:
+		var w := wing.duplicate()
+		w["bank"] = lean
+		return Flight.fly(Vector3(0, 1.4, 0), Vector3(0, sin(pitch), -cos(pitch)) * speed, Vector3.ZERO, q,
+				floor, [], paper["bounce"], paper["roll"], paper["drag"], w)
+	var down := func(f: Flight) -> Vector3:
+		for p in f.points:
+			if p.y <= 0.001:
+				return p
+		return f.rest
+	var good: Flight = level.call(4.5, 0.16)
+	var thrown := Flight.fly(Vector3(0, 1.4, 0), Vector3(0, sin(0.16), -cos(0.16)) * 4.5, Vector3.ZERO, q, box, [],
+			paper["bounce"], paper["roll"], paper["drag"])
+	check("a good throw glides: it comes down %.1fm out, where the same throw without wings falls at %.1fm"
+			% [-(down.call(good) as Vector3).z, -(down.call(thrown) as Vector3).z],
+			-(down.call(good) as Vector3).z > 6.0 and -(down.call(thrown) as Vector3).z < 3.0)
+	var top := 0.0
+	for p in good.points:
+		top = maxf(top, p.y)
+	check("level, not up into the ceiling (%.2fm at most)" % top, top < 1.7)
+	check("and it is the same glide every time", (level.call(4.5, 0.16) as Flight).points == good.points)
+	var dive: Flight = level.call(4.5, -0.6)
+	check("thrown at the floor, it noses in close (%.1fm)" % -(down.call(dive) as Vector3).z,
+			-(down.call(dive) as Vector3).z < 2.5)
+	var hard: Flight = level.call(8.0, 0.16)
+	check("thrown as hard as you can, the paper flutters and it goes little further (%.1fm)" % -(down.call(hard) as Vector3).z,
+			-(down.call(hard) as Vector3).z < -(down.call(good) as Vector3).z + 3.0)
+	var weak: Flight = level.call(2.2, 0.16)
+	check("and lobbed, it drops (%.1fm)" % -(down.call(weak) as Vector3).z, -(down.call(weak) as Vector3).z < 2.5)
+	var right: Flight = level.call(4.5, 0.16, 0.3)
+	var left: Flight = level.call(4.5, 0.16, -0.3)
+	check("leaning right it turns right, and left, left (%.1f, %.1f)" % [right.rest.x, left.rest.x],
+			right.rest.x > 1.0 and left.rest.x < -1.0)
+	var near: Array = [Rect2(-2, -2, 4, 4)]
+	var walled: Flight = level.call(4.5, 0.16, 0.0, near)
+	check("into a wall, it stops gliding and drops at its foot (%s)" % [walled.rest],
+			walled.rest.z > -2.0 and walled.rest.z < -1.4 and walled.seconds() < good.seconds())
+
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var plane: Item = room.items.get(&"plane")
+	check("the shelf has a paper plane on it", plane is PlaneItem and plane.state == Item.State.HOME
+			and plane.position.is_equal_approx(studio.venue.item_spots()[2].origin))
+	var walker := studio.walker
+	var by_wall := Vector2.INF
+	for r: Rect2 in walker.walkable:
+		var p := Vector2(r.position.x + 0.06, r.get_center().y)
+		if walker.reachable(p) and not walker.fits(p):
+			by_wall = p
+			break
+	check("a thing against a wall can lie there, though nobody could stand there (%s)" % [by_wall],
+			by_wall != Vector2.INF)
+	var shelf_print: Dictionary = studio.venue.solids().back()
+	check("but not inside the shelf, nor off the floor", not walker.reachable(shelf_print["c"])
+			and not walker.reachable(Vector2(1000, 1000)))
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(plane)
+	var start := hand.carry_pose().origin
+	hand.throw_with(0.4)
+	check("thrown, it is in the air on a glide (%.1fs)" % (plane.flight.seconds() if plane.flight else 0.0),
+			plane.is_flying() and plane.flight.seconds() > 0.6)
+	var entry: Array = room.state()[&"plane"]
+	var other := ItemRoom.new()
+	other.floor_rects = room.floor_rects
+	other.solids = room.solids
+	other.fits = room.fits
+	other.ground_at = room.ground_at
+	studio.studio_set.add_child(other)
+	other.apply({&"plane": entry})
+	var theirs: Item = other.items[&"plane"]
+	check("and anyone else's copy flies the same glide", theirs.is_flying()
+			and theirs.flight.points == plane.flight.points)
+	other.queue_free()
 	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame

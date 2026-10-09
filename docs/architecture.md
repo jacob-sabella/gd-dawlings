@@ -1258,6 +1258,21 @@ rest, so a copy that has not flown that throw flies it. It does not collide with
 that comes down where nobody could stand goes home once it has landed. `Item.flies()` gives each
 kind its bounce, roll and drag (a duck thuds, `BallItem` bounces), and `on_bounce` its sound.
 
+A `PlaneItem` glides. Its `flies()` carries a `wing` (trim speed, glide ratio, stall speed, most
+lift, flutter speed, settle time, lean), and `Flight` flies it as a point mass with lift across
+its path that grows with the square of its speed and is tipped sideways by the lean, so it turns.
+It has drag along its path, extra drag above its flutter speed, and lift that ramps in over the
+first `settle` seconds out of the hand. Thrown level at about walking pace, it crosses the live
+room. Thrown at the floor, it hits the floor before its wing takes hold. Thrown hard, it
+flutters and falls short. The first thing it touches ends the glide; after that it is a sheet
+sliding to a stop.
+
+Where a loose item may lie is `Walker.reachable`, not `fits`. The spot must be on the floor (or
+something you step up onto) and inside nothing, with somewhere a person fits within `ARM` of it.
+So a ball in a corner stays in the corner. A put-down's aim is stopped by the gear's footprints
+(`ItemRoom.gear`): aimed past the console at the floor behind it, the item was aimed at the
+console, and goes home.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

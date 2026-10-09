@@ -263,6 +263,35 @@ func fits(p: Vector2) -> bool:
 	return true
 
 
+## How far a hand reaches down to the floor from where a person stands.
+const ARM := 0.6
+
+
+## Whether something small lying at `p` could be picked up again: on the floor or on something
+## you step up onto, not inside or under anything, and with somewhere a person fits within arm's
+## reach of it. Looser than `fits`, which wants a whole body there: a ball in a corner is still a
+## ball you can reach into the corner for.
+func reachable(p: Vector2) -> bool:
+	var floor: Array[Rect2] = walkable if not walkable.is_empty() else [floor_plan.bounds]
+	if not floor.any(func(r: Rect2) -> bool: return r.has_point(p)):
+		return false
+	for f in fixed:
+		if f.get("top", SOLID_HEIGHT) > STEP_HEIGHT and _gap(f, p) <= 0.02:
+			return false
+	for f in footprints():
+		if _gap(f, p) <= 0.02:
+			return false
+	if fits(p):
+		return true
+	for ring in range(1, int(ARM / 0.1) + 1):
+		var r := ring * 0.1
+		var n := maxi(8, int(TAU * r / 0.1))
+		for k in n:
+			if fits(p + Vector2.from_angle(TAU * k / n) * r):
+				return true
+	return false
+
+
 ## The floor's height at `p`: the top of anything there you step up onto, or 0.
 func ground_at(p: Vector2) -> float:
 	var top := 0.0

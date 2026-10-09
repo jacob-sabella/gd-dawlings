@@ -1677,10 +1677,11 @@ func _build_items() -> void:
 	items = ItemRoom.new()
 	items.name = "Items"
 	if walker != null:
-		items.fits = walker.fits
+		items.fits = walker.reachable
 		items.ground_at = walker.ground_at
 		items.floor_rects = func() -> Array: return walker.walkable
 		items.solids = func() -> Array: return walker.fixed
+		items.gear = walker.footprints
 	studio_set.add_child(items)
 	items.set_spots(venue.item_spots())
 	items.asked.connect(_on_items_asked)

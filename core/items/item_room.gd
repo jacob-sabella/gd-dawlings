@@ -14,11 +14,11 @@ extends Node3D
 ## then stands, or puts it back.
 ##
 ## A put-down is judged here, not by the hand, because only the room knows its floor. An item
-## lies only where a person could stand to pick it up again (`Walker.fits`): on the floor or on
-## something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
+## lies only where a person could reach to pick it up again (`Walker.reachable`): on the floor or
+## on something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
 
 ## The items there are, in the order they take the shelf's spots.
-const KINDS: Array[StringName] = [&"duck", &"ball"]
+const KINDS: Array[StringName] = [&"duck", &"ball", &"plane"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -34,14 +34,17 @@ signal moved(item: Item)
 
 ## {id: Item}.
 var items: Dictionary = {}
-## Says whether a person fits at a floor spot (Vector2, this node's frame) and how high the
-## floor is there: the walker's `fits` and `ground_at`. Unset, the whole floor plan is floor.
+## Says whether something lying at a floor spot (Vector2, this node's frame) could be picked up
+## again and how high the floor is there: the walker's `reachable` and `ground_at`. Unset, the whole floor plan is floor.
 var fits: Callable = Callable()
 var ground_at: Callable = Callable()
 ## What a throw flies in: the walkable floor (Array of Rect2, walls at its edges) and the venue's
 ## solids (Walker.fixed), in this node's frame. The walker's, read when the throw is made.
 var floor_rects: Callable = Callable()
 var solids: Callable = Callable()
+## The gear's footprints (the walker's `footprints`), for a put-down aimed through the gear at
+## the floor behind it.
+var gear: Callable = Callable()
 var _spots: Array[Transform3D] = []
 
 
@@ -51,6 +54,8 @@ static func make(kind: StringName) -> Item:
 			return DuckItem.new()
 		&"ball":
 			return BallItem.new()
+		&"plane":
+			return PlaneItem.new()
 	return null
 
 
@@ -194,7 +199,7 @@ func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
 	var facing := Quaternion(Basis(Vector3.UP, atan2(-velocity.x, -velocity.z)))
 	var f := Flight.fly(start, velocity, spin, facing, floor,
 			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
-			how.get("drag", 0.08))
+			how.get("drag", 0.08), how.get("wing", {}))
 	item.launch(f, [origin, velocity, spin], _can_lie(Vector2(f.rest.x, f.rest.z)))
 
 
@@ -234,6 +239,11 @@ func put_down(item: Item, aim: Transform3D) -> void:
 		if along > 0.0 and along < PUT_REACH:
 			var hit := origin + toward * along
 			spot = Vector2(hit.x, hit.z)
+			# Aimed at the floor through the gear: it was aimed at the gear.
+			if _through_gear(origin, hit):
+				item.go_home()
+				asked.emit(&"home_item", [item.id])
+				return
 	if spot == Vector2.INF:
 		var ahead := Vector2(toward.x, toward.z)
 		ahead = ahead.normalized() if ahead.length() > 0.01 else Vector2(0, -1)
@@ -244,6 +254,23 @@ func put_down(item: Item, aim: Transform3D) -> void:
 		asked.emit(&"put_item", [item.id, spot.x, spot.y, yaw])
 	else:
 		asked.emit(&"home_item", [item.id])
+
+
+## Whether the line from `from` to `to` passes through any gear below its top: a hand reaching
+## past a console puts the thing on the console, not on the floor behind it.
+func _through_gear(from: Vector3, to: Vector3) -> bool:
+	if not gear.is_valid():
+		return false
+	var prints: Array = gear.call()
+	var n := maxi(1, int(from.distance_to(to) / 0.05))
+	for i in n + 1:
+		var p := from.lerp(to, float(i) / n)
+		if p.y >= Walker.SOLID_HEIGHT:
+			continue
+		for f: Dictionary in prints:
+			if Walker._gap(f, Vector2(p.x, p.z)) <= 0.0:
+				return true
+	return false
 
 
 func _can_lie(at: Vector2) -> bool:

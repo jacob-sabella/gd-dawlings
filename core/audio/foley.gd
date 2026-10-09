@@ -186,6 +186,32 @@ static func ball_bounce() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## Paper leaving a hand: a breathy rush of air, bright, swelling and gone in a third of a
+## second.
+static func paper_swish() -> AudioStreamWAV:
+	return _cached("paper_swish", func() -> AudioStreamWAV:
+		var seconds := 0.32
+		var s := _noise(seconds, 0.5, 53)
+		_highpass(s, 900.0)
+		_lowpass(s, 5200.0)
+		for i in s.size():
+			var t := float(i) / float(RATE) / seconds
+			# Up fast, down slow: the arm comes through and the air closes in behind it.
+			s[i] *= sin(PI * pow(t, 0.6)) * (1.0 - t)
+		return _wav(s, false))
+
+
+## Folded paper landing: a dry tick and a short scuff, no ring to it at all.
+static func paper_tap() -> AudioStreamWAV:
+	return _cached("paper_tap", func() -> AudioStreamWAV:
+		var s := _noise(0.07, 0.35, 59)
+		_highpass(s, 1400.0)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.014)
+		_impulse(s, 0.0, 0.12, 0.003, 3100.0, 61)
+		return _wav(s, false))
+
+
 static func play(on: Node3D, stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> void:
 	if on == null or stream == null or not on.is_inside_tree():
 		return

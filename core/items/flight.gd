@@ -9,6 +9,12 @@ extends RefCounted
 ## path out: no clock, no randomness, a fixed step. So a duck thrown across the room is in the
 ## same place on every screen without one position being sent while it flies.
 ##
+## Something with wings (`wing`, see `fly`) glides instead of falling, until it touches
+## anything: lift across its path that grows with the square of its speed, drag along it, and a
+## bank that tips the lift sideways into a turn. Thrown at its gliding speed it crosses the room;
+## thrown hard it climbs, runs out of speed and stalls; thrown at the floor it noses in. Once it
+## has touched something it is paper on the floor, and falls and slides like anything else.
+##
 ## It is all worked out up front rather than stepped as it goes. A flight is a few seconds, a
 ## few hundred steps of arithmetic, and having the end of it at the start is what lets the room
 ## say where it will land the moment it is thrown, and an item decide then whether it can stay
@@ -66,22 +72,38 @@ func at(t: float) -> Transform3D:
 ## `turn`, in a room with `floor` (walkable rects) and `solids` (Walker.fixed footprints).
 ## `bounce` is how much of its speed into a surface it gets back; `roll` how fast it slows
 ## sliding along the floor (m/s²); `drag`, the air's, per second.
+## `wing`, for a glider: {"trim": the speed it glides at (m/s), "glide": how far it goes forward
+## for each metre it sinks, "stall": the speed below which its wings stop holding it up,
+## "most": the most lift it can make, in g (a paper wing flexes and spills the rest), "bank":
+## how far it leans of itself (rad, + to the right), "flutter": faster than this, the paper
+## flutters and slows hard ("flap" how hard), "settle": how long out of the hand before its wing
+## holds it up}.
 static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quaternion,
-		floor: Array, solids: Array, bounce := 0.35, roll := 3.0, drag := 0.08) -> Flight:
+		floor: Array, solids: Array, bounce := 0.35, roll := 3.0, drag := 0.08,
+		wing := {}) -> Flight:
 	var f := Flight.new()
 	var p := origin
 	var v := velocity
 	var w := spin
 	var q := turn.normalized()
 	var grounded := false
+	var gliding := not wing.is_empty() and velocity.length() > 0.01
+	var bank := 0.0
+	if gliding:
+		# A throw with a twist about the way it is going leans it over further.
+		bank = clampf(float(wing.get("bank", 0.0)) + spin.dot(velocity.normalized()) * 0.05, -0.9, 0.9)
+		q = _wings(velocity.normalized(), bank)
 	var steps := int(LONGEST / STEP)
 	f.points.append(p)
 	f.turns.append(q)
 	for n in steps:
 		var dt := STEP
-		if not grounded:
-			v.y -= GRAVITY * dt
-		v -= v * drag * dt
+		if gliding:
+			v += _glide(v, bank, wing, n * dt) * dt
+		else:
+			if not grounded:
+				v.y -= GRAVITY * dt
+			v -= v * drag * dt
 		var next := p + v * dt
 		var hit := 0.0
 
@@ -152,10 +174,18 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 			v = Vector3(flat.x, 0.0, flat.y)
 			w = w.lerp(Vector3.ZERO, minf(1.0, 6.0 * dt))
 
+		if gliding and (hit > 0.0 or next.y <= ground + 0.001):
+			# Touched something: from here it is paper, not a wing. Its nose catches and it
+			# tips over the way it was going.
+			gliding = false
+			w = Basis(q).x * -minf(v.length(), 4.0)
 		if hit > 0.3:
 			f.hits.append((n + 1) * dt)
 			f.hit_speeds.append(hit)
-		if w.length() > 0.0001:
+		if gliding:
+			if v.length() > 0.01:
+				q = _wings(v.normalized(), bank)
+		elif w.length() > 0.0001:
 			q = (Quaternion(w.normalized(), w.length() * dt) * q).normalized()
 		p = next
 		f.points.append(p)
@@ -166,6 +196,51 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 	var forward := Basis(q) * Vector3.FORWARD
 	f.rest_yaw = atan2(-forward.x, -forward.z) if Vector2(forward.x, forward.z).length() > 0.01 else 0.0
 	return f
+
+
+## How a wing speeds up, `v` going and leaning `bank`: gravity, drag along its path, and lift
+## across it -- tipped by the bank, so a leaning wing turns. Lift is set so that at its trim
+## speed it holds its weight exactly; slower than its stall speed it falls away fast.
+static func _glide(v: Vector3, bank: float, wing: Dictionary, since: float) -> Vector3:
+	var speed := v.length()
+	var a := Vector3.DOWN * GRAVITY
+	if speed < 0.01:
+		return a
+	var along := v / speed
+	var trim: float = wing.get("trim", 4.0)
+	var lift := GRAVITY * (speed * speed) / (trim * trim)
+	var stall: float = wing.get("stall", trim * 0.6)
+	if speed < stall:
+		var under := speed / stall
+		lift *= under * under
+	lift = minf(lift, GRAVITY * float(wing.get("most", 1.8)))
+	# Out of the hand it is still a thrown thing: the wing takes a moment to settle into the air
+	# and start holding it up. So a throw at the floor goes into it, rather than pulling out of
+	# the dive the instant it is let go.
+	var settle: float = wing.get("settle", 0.0)
+	if since < settle:
+		lift *= since / settle
+	# Drag is lift at trim over the glide ratio, so at trim it sinks one metre in `glide`.
+	var drag := GRAVITY * (speed * speed) / (trim * trim) / float(wing.get("glide", 5.0))
+	# Faster than it is built for, paper flutters and the air takes the speed off it.
+	var flutter: float = wing.get("flutter", INF)
+	if speed > flutter:
+		drag += GRAVITY * (speed - flutter) * (speed - flutter) * float(wing.get("flap", 0.5))
+	a += _lift_way(along, bank) * lift - along * drag
+	return a
+
+
+## Square off its path and leaning over by `bank`: which way its wings push.
+static func _lift_way(along: Vector3, bank: float) -> Vector3:
+	var up := Vector3.UP - along * along.dot(Vector3.UP)
+	if up.length() < 0.001:
+		up = Vector3.BACK - along * along.dot(Vector3.BACK)
+	return up.normalized().rotated(along, bank)
+
+
+## Nose along its path, wings level but for `bank`.
+static func _wings(along: Vector3, bank: float) -> Quaternion:
+	return Basis.looking_at(along, _lift_way(along, bank)).get_rotation_quaternion()
 
 
 static func _on_floor(floor: Array, at: Vector2) -> bool:

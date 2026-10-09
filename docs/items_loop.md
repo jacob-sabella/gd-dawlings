@@ -190,8 +190,17 @@ ergonomics.
       gear is fine: coming down on a desk is "somewhere it can't stay", and it goes home after
       landing. A multi-exposure strip (`--throw W@TICK`, one shot a tick, `magick
       -evaluate-sequence max`) is the way to judge a throw from stills.
-- [ ] The paper plane: a glide model (lift, drag, a bank into a turn, a stall), thrown from the
+- [x] The paper plane: a glide model (lift, drag, a bank into a turn, a stall), thrown from the
       hand, so a good throw crosses the room and a bad one noses into the floor.
+      Done: `Flight.fly` takes a `wing` and glides until the first touch (lift ∝ speed², capped;
+      stall below 3 m/s; flutter drag above 5; lift ramps in over 0.4 s out of the hand; a lean
+      turns it). `PlaneItem` (Blender, `tools/blender/plane.py`, single faces drawn both sides)
+      with a paper swish on launch (`Item.on_launch`) and a paper tick on touching. Learned: a
+      point-mass wing with lift on at once pulls out of any dive, so a throw at the floor never
+      reached it until the lift was made to settle in. `fits` (room for a body) was the wrong
+      test for where a thing may lie: thrown items landing near walls kept going home. Items now
+      use `Walker.reachable`, and a put-down's aim stops at the gear, which `fits` had been
+      catching by accident. `--spectate` in `tools/screenshot.gd` watches a flight from the side.
 - [ ] Catching and handing over: an item thrown at someone is caught if their hand is free and
       near, and an item held out to someone is taken from you by their grab.
 - [ ] The handheld mic: picking it up asks to arm your input on a track (through

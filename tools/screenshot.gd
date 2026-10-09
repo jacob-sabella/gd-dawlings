@@ -29,6 +29,9 @@ var _carry := ""
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
 var _throw := Vector2(-1, -1)
+## `--spectate 3,1.2,0:0,0.8,-2`: once --throw has thrown, watch from a camera there looking at
+## that point (studio space), to see a flight from the side rather than from behind it.
+var _spectate: Array = []
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
@@ -116,6 +119,14 @@ func _ready() -> void:
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
 					_throw = Vector2(float(parts[0]), int(parts[1]) if parts.size() > 1 else 200)
+			"--spectate":
+				if i + 1 < args.size():
+					var ends := args[i + 1].split(":")
+					if ends.size() == 2:
+						var a := ends[0].split(",")
+						var b := ends[1].split(",")
+						_spectate = [Vector3(float(a[0]), float(a[1]), float(a[2])),
+								Vector3(float(b[0]), float(b[1]), float(b[2]))]
 			"--walk":
 				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--quit-tick":
@@ -229,6 +240,12 @@ func _physics_process(_delta: float) -> void:
 		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
 		if hand != null:
 			hand.throw_with(_throw.x)
+		if studio != null and _spectate.size() == 2:
+			var watcher := Camera3D.new()
+			watcher.fov = 70.0
+			studio.add_child(watcher)
+			watcher.look_at_from_position(_spectate[0], _spectate[1])
+			watcher.make_current()
 	if _shot_tick >= 0 and _ticks == _shot_tick:
 		_shot_frame = _frames + 2
 		if _quit_tick < 0:
