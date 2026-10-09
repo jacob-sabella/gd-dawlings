@@ -1412,6 +1412,10 @@ handed to the hoop (`ItemRoom.basket`, `Hoop.sink`), which swishes and springs i
 comes from the one launch, like everything else in a flight, so every machine sees the same
 basket. The model comes from `tools/blender/hoop.py`.
 
+The Newton's cradle (`CradleItem`) is a third `FidgetItem`. Its tricks lift one, two or three
+balls; its swing is a function of time alone (`swing`, `strikes` for the clacks). A fidget put
+home by `Item.snap_home`, not only by `go_home`, is put down (`on_put_down`), so it stops.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

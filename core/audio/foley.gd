@@ -381,6 +381,21 @@ static func board_thud(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## Two steel balls of a Newton's cradle meeting: a hard, bright tick and the short ring of the
+## steel after it. The sound the toy is for.
+static func cradle_click(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("cradle_click_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.09)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 491 + take * 41
+		_impulse(s, 0.0, 0.5, 0.0012, rng.randf_range(3300.0, 3600.0), 493 + take)
+		_impulse(s, 0.0, 0.18, 0.012, rng.randf_range(6900.0, 7300.0), 495 + take)
+		_impulse(s, 0.0, 0.08, 0.02, rng.randf_range(10200.0, 10800.0), 497 + take)
+		_highpass(s, 1200.0)
+		return _wav(s, false))
+
+
 static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

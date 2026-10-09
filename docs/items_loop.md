@@ -427,8 +427,21 @@ ergonomics.
       - `--lob x,y,z,speed@tick` in the shot tool throws exactly at a point, for a shot of
         something getting there.
       Not tried in a headset, where a basket is a real throw and should be very satisfying.
-- [ ] Toys round the room, the rest: a Newton's cradle by the desk, a yo-yo. Each venue gets one
-      toy of its own (a snowball, a beach ball, a slinky...).
+- [x] Toys round the room, third: a Newton's cradle.
+      Done: a chrome-framed cradle on a black plinth, five steel balls on V threads, standing at
+      the back of the prop shelf's top in the middle. It is a `FidgetItem`: picked up, each click
+      lifts one, then two, then three end balls and lets go. The row clacks back and forth on its
+      own for a few seconds, each clack a little quieter, and a click mid-swing stops it dead and
+      starts the next. The swing is the textbook one (one group out at a time, a damped pendulum,
+      `CradleItem.swing`), so the trick count is all of its state, as for the chips. Learnings:
+      - `Item.snap_home` never called `on_put_down`, so a fidget sent home by the room (a host's
+        word, a reset) went on playing its trick on the shelf. It does now, as `go_home` does.
+      - Its first spot, the back-left corner, was hidden behind the ball and out of the shelf
+        lamp's light. The back middle, behind the low duck and the flat plane, shows it.
+      Not tried in a headset, where pulling a ball out by hand is the obvious thing to want.
+- [ ] Toys round the room, the rest: a yo-yo. Each venue gets one toy of its own (a snowball, a
+      beach ball, a slinky...). The desk itself could have a toy (the cradle's twin by the
+      console), if one fits without coming between the seat and the controls.
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's

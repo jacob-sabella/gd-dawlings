@@ -260,6 +260,13 @@ func cards_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI - 0.25), Vector3(0.38, ZoneKit.SHELF.y, 0.13))
 
 
+## Where the Newton's cradle stands, in studio space: at the back of the prop shelf's top, in the
+## middle, its row of balls along the shelf -- behind the duck and the plane and taller than them,
+## under the shelf lamp, not hidden behind the ball in the dark corner.
+func cradle_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.04, ZoneKit.SHELF.y, -0.135))
+
+
 ## Where the dartboard's face is, in studio space: its middle, facing out into the room (+Z).
 func dartboard_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DARTBOARD_FACE_Z))

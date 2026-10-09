@@ -137,6 +137,7 @@ func _ready() -> void:
 	await _test_chips_and_cards_do_their_tricks_in_turn()
 	await _test_darts_stick_in_the_board_and_score()
 	await _test_a_ball_goes_through_the_hoop()
+	await _test_the_cradle_swings_and_clacks()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6086,8 +6087,8 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
 			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
-			# keytar, the chips, the cards and the darts, which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 10 \
+			# keytar, the chips, the cards, the darts and the cradle, which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 11 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11170,6 +11171,85 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+func _test_the_cradle_swings_and_clacks() -> void:
+	# The swing: pulled out, let go, and only ever one group out at a time, dying away to still.
+	check("pulled out first, then let go from all the way out",
+			CradleItem.swing(0.0) == 0.0 and is_equal_approx(CradleItem.swing(CradleItem.LIFT), CradleItem.LIFT_ANGLE))
+	var quarter := CradleItem.LIFT + PI * 0.5 / CradleItem.SWING_RATE
+	var half := CradleItem.LIFT + PI / CradleItem.SWING_RATE
+	check("a quarter swing later it strikes the row, and half a swing later the far group is out",
+			absf(CradleItem.swing(quarter)) < 0.001 and CradleItem.swing(half) < -0.3)
+	check("each swing a little less than the last", absf(CradleItem.swing(half)) < CradleItem.LIFT_ANGLE
+			and absf(CradleItem.swing(half + PI / CradleItem.SWING_RATE)) < absf(CradleItem.swing(half)))
+	check("and played out, it is still", CradleItem.swing(CradleItem.RUNS) == 0.0)
+	var strikes := CradleItem.strikes()
+	check("it clacks at every strike, a dozen times or more (%d)" % strikes.size(), strikes.size() >= 12
+			and absf(strikes[0] - (quarter - CradleItem.LIFT)) < 0.0001)
+
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var cradle := studio.items.items.get(&"cradle") as CradleItem
+	check("there is a cradle, five balls, at home on the shelf", cradle != null and cradle.balls.size() == CradleItem.BALLS
+			and cradle.state == Item.State.HOME and cradle.own_home)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var on_shelf := studio.venue.prop_shelf_spot().affine_inverse() * cradle.home.origin
+		if absf(on_shelf.x) + 0.11 > ZoneKit.SHELF.x * 0.5 or absf(on_shelf.z) + 0.06 > ZoneKit.SHELF.z * 0.5 \
+				or absf(on_shelf.y - ZoneKit.SHELF.y) > 0.001:
+			wrong.append(id)
+	check("in every venue it stands on the shelf's top, all of it (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"studio", false)
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(cradle)
+	check("in the hand it offers to swing one", cradle.hint().contains("swing one"))
+	cradle.work(true)
+	cradle.work(false)
+	cradle._process(CradleItem.LIFT + 0.05)
+	var out := cradle.balls.map(func(b: Node3D) -> float: return b.rotation.z)
+	check("a click pulls the end ball out and lets it go, the rest hanging still (%s)" % [out],
+			out[4] > 0.5 and out.slice(0, 4).all(func(a: float) -> bool: return a == 0.0))
+	cradle._process(PI / CradleItem.SWING_RATE)
+	out = cradle.balls.map(func(b: Node3D) -> float: return b.rotation.z)
+	check("half a swing on, the ball at the other end is out instead (%s)" % [out],
+			out[0] < -0.3 and out.slice(1).all(func(a: float) -> bool: return a == 0.0))
+	cradle.work(true)
+	cradle.work(false)
+	cradle._process(CradleItem.LIFT)
+	out = cradle.balls.map(func(b: Node3D) -> float: return b.rotation.z)
+	check("the next click stops it dead and swings two (%s)" % [out], cradle.playing == 1
+			and out[3] > 0.5 and out[4] > 0.5 and out.slice(0, 3).all(func(a: float) -> bool: return a == 0.0))
+	cradle.work(true)
+	cradle.work(false)
+	cradle._process(CradleItem.LIFT + PI / CradleItem.SWING_RATE)
+	out = cradle.balls.map(func(b: Node3D) -> float: return b.rotation.z)
+	check("and three: the middle one goes out with both groups (%s)" % [out], cradle.playing == 2
+			and out[0] < -0.3 and out[1] < -0.3 and out[2] < -0.3 and out[3] == 0.0 and out[4] == 0.0)
+	for step in 20:
+		cradle._process(0.5)
+	check("left alone it swings itself still", cradle.playing == -1
+			and cradle.balls.all(func(b: Node3D) -> bool: return b.rotation.z == 0.0))
+	cradle.work(true)
+	cradle.work(false)
+	cradle._process(CradleItem.LIFT)
+	cradle.snap_home()
+	check("put away mid-swing, it is still on the shelf", cradle.playing == -1 and cradle.tricks_done == 0
+			and cradle.balls.all(func(b: Node3D) -> bool: return b.rotation.z == 0.0))
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
 
 
 func _test_a_ball_goes_through_the_hoop() -> void:

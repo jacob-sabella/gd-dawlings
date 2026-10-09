@@ -396,12 +396,16 @@ func go_home() -> void:
 
 ## Straight onto its spot, no flight: for building a room, and for a shelf that has moved.
 func snap_home() -> void:
+	# Out of a hand is put down, as it is for go_home: a toy mid-trick does not carry on on the shelf.
+	var was_held := state == State.HELD
 	_leave_hand()
 	_set_state(State.HOME)
 	transform = home
 	_size = 1.0
 	_velocity = Vector3.ZERO
 	_arc_length = 0.0
+	if was_held:
+		on_put_down()
 
 
 func _leave_hand() -> void:
