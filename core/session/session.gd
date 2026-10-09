@@ -69,6 +69,9 @@ signal room_changed()
 ## Host: someone asked to change the room. One of ROOM_VERBS, already checked for shape; the
 ## studio decides, and says what the room now is with `publish_room`.
 signal room_asked(verb: StringName, args: Array, from: int)
+## Something in the room being pushed right now, by `from`: where it is this moment. Unconfirmed
+## and unsaved -- the ask when it is let go is what counts -- and only for drawing it moving.
+signal room_motion(piece: StringName, x: float, z: float, heading: float, from: int)
 
 var role: int = Role.SOLO
 ## {peer_id: Participant}
@@ -111,6 +114,9 @@ var guest_audio: GuestAudio = null
 ## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
 ## fader move or a hold behind it.
 const AUDIO_TAKE_CHANNEL := 3
+## Things being pushed about the room: unreliable and ordered, on a channel of their own so a
+## rack being wheeled is never queued behind anyone's head.
+const MOTION_CHANNEL := 4
 ## Host: the take each guest is sending now, by peer id -- {id, take, track, start, name, refused}.
 var _incoming_takes := {}
 ## Takes written on this host this run, for naming their files.
@@ -137,6 +143,12 @@ var layout: LayoutProfile = null
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
 ## for when it is on its own again. Empty until the host has said.
 var room: Dictionary = {}
+## Guest: the number of the last ask sent. The host's room says which it has answered, so
+## whatever is newer is still this guest's prediction and is put back on top of the host's word.
+var room_seq := 0
+## Host: the last ask heard from each guest, sent with the room as "acks".
+var _room_acks: Dictionary = {}
+var _room_sent := false
 
 ## Whether this guest has had its first roster yet. Everyone on the first one is "arriving",
 ## and greeting each of them by name would be noise.
@@ -259,6 +271,7 @@ func host(at_port: int = DEFAULT_PORT) -> bool:
 	multiplayer.server_relay = false
 	role = Role.HOST
 	room = {}
+	_room_acks.clear()
 	port = at_port
 	local_peer_id = 1
 	participants.clear()
@@ -287,6 +300,7 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	multiplayer.server_relay = false
 	role = Role.GUEST
 	room = {}
+	room_seq = 0
 	port = at_port
 	joined_address = address
 	# Same machine, same speakers: the host's Reaper is already audible here.
@@ -534,7 +548,7 @@ func admission_refusal(offered: String) -> String:
 func admit(peer_id: int) -> void:
 	_send_snapshot_to(peer_id)
 	if not room.is_empty() and _connected():
-		_receive_room.rpc_id(peer_id, room)
+		_receive_room.rpc_id(peer_id, _room_with_acks())
 	if mix_feed != null and mix_feed.sending and _connected():
 		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
 
@@ -834,18 +848,59 @@ func publish_room(state: Dictionary) -> void:
 	if role != Role.HOST:
 		return
 	room = state
+	_room_sent = true
 	for id in _audience():
-		_receive_room.rpc_id(id, state)
+		_receive_room.rpc_id(id, _room_with_acks())
 
 
-## Guest: ask the host to change the room. The host's own asks go straight to its studio.
-func ask_room(verb: StringName, args: Array) -> void:
+func _room_with_acks() -> Dictionary:
+	var out := room.duplicate()
+	out["acks"] = _room_acks.duplicate()
+	return out
+
+
+## Guest: ask the host to change the room, and get back the ask's number -- the guest goes ahead
+## and does it, and the number is how it learns the host has answered. 0 when nothing was sent:
+## the host's own asks go straight to its studio, and there is nobody to predict for.
+func ask_room(verb: StringName, args: Array) -> int:
 	if not room_ask_is_valid(verb, args):
-		return
+		return 0
 	if is_authority():
 		room_asked.emit(verb, args, local_peer_id)
-	elif _connected():
-		_room_asked.rpc_id(1, verb, args)
+		return 0
+	if not _connected():
+		return 0
+	room_seq += 1
+	_room_asked.rpc_id(1, room_seq, verb, args)
+	return room_seq
+
+
+## Where something being pushed is right now, to everyone else. Often and unreliably, like a head:
+## a lost one is overtaken by the next.
+func send_motion(piece: StringName, x: float, z: float, heading: float) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_motion.rpc_id(id, piece, x, z, heading, local_peer_id)
+	else:
+		_motion_up.rpc_id(1, piece, x, z, heading)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _motion_up(piece: StringName, x: float, z: float, heading: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	room_motion.emit(piece, x, z, heading, from)
+	for id in _audience():
+		if id != from:
+			_motion.rpc_id(id, piece, x, z, heading, from)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _motion(piece: StringName, x: float, z: float, heading: float, from: int) -> void:
+	room_motion.emit(piece, x, z, heading, from)
 
 
 static func room_ask_is_valid(verb: StringName, args: Array) -> bool:
@@ -864,11 +919,18 @@ func _receive_room(state: Dictionary) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _room_asked(verb: StringName, args: Array) -> void:
+func _room_asked(seq: int, verb: StringName, args: Array) -> void:
 	var from := multiplayer.get_remote_sender_id()
-	if role != Role.HOST or not _is_member(from) or not room_ask_is_valid(verb, args):
+	if role != Role.HOST or not _is_member(from):
 		return
-	room_asked.emit(verb, args, from)
+	# Answered even when refused: the answer to an ask the host will not do is the room as it
+	# is, and that is what takes the guest's prediction back.
+	_room_acks[from] = maxi(int(_room_acks.get(from, 0)), seq)
+	_room_sent = false
+	if room_ask_is_valid(verb, args):
+		room_asked.emit(verb, args, from)
+	if not _room_sent:
+		publish_room(room)
 
 
 # --- state replication --------------------------------------------------------------------

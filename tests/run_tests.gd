@@ -2608,7 +2608,14 @@ func _test_the_room_is_the_hosts() -> void:
 	check("and is told why", notices.size() == 1 and notices[0].begins_with("Only "))
 	Session.notice.disconnect(heard)
 	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
-	check("a guest's pull waits for the host", studio.tablets.is_empty())
+	check("a guest's pull is out at once, under a name of its own (%s)" % [studio.tablets.keys()],
+			studio.tablets.size() == 1 and String(studio.tablets.keys()[0]).begins_with("mine_"))
+	check("and waits on the host's answer", studio._predictions.size() == 1
+			and studio._predictions[0]["verb"] == &"open_tablet")
+	for predicted in studio.tablets.keys():
+		studio._take_down_tablet(predicted)
+	studio._predictions.clear()
+	Session.room_seq = 0
 
 	var host_desk := studio.mount.studio_home(&"console").translated(Vector3(0, 0, 0.04))
 	studio.apply_room({"venue": &"grid", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]},
@@ -2632,6 +2639,8 @@ func _test_the_room_is_the_hosts() -> void:
 	check("a stand the host docks goes from the guest's room too", studio.tablets.is_empty())
 	studio.apply_room({"venue": &"chalk", "tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
 
+	_check_a_guest_predicts_and_rolls_back(studio, order, plugin, rack_home)
+
 	Session.role = Session.Role.SOLO
 	studio._on_role_changed()
 	check("on its own again, the guest is back in its own venue", studio.venue.venue_id() == own_venue)
@@ -2644,6 +2653,67 @@ func _test_the_room_is_the_hosts() -> void:
 	Session.role = saved_role
 	Session.layout = saved_layout
 	DAW.use(OfflineBackend.new())
+
+
+## A guest's own moves happen at once and are kept over the host's room until the host has
+## answered them; answered, the room is the truth, and what the host would not do goes back.
+## Someone else's push rolls the stand after their hand rather than putting it down.
+func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin: String, rack_home: Vector2) -> void:
+	var me := Session.local_peer_id
+	var room := func(acked: int, tablets: Dictionary, rack: Vector2) -> Dictionary:
+		return {"venue": &"chalk", "tablets": tablets, "floor": {&"rack": [rack.x, rack.y, 0.3]},
+				"placed": {}, "acks": {me: acked}}
+	studio.apply_room(room.call(0, {}, rack_home), false)
+	check("the room is empty to start with", studio.tablets.is_empty())
+
+	# Pulled off the rack: out at once, under the guest's own name.
+	studio._predictions.clear()
+	var mine := studio._predicted_tablet(2, order[1], plugin, Vector2(0.4, 0.2))
+	var pulled: int = studio._predictions[-1]["seq"]
+	var stand: Trolley = studio.tablets[mine][0]
+	# And the rack wheeled, before the host has heard of either.
+	studio.rack_trolley.place(rack_home + Vector2(0.15, 0.0), 0.3)
+	var rolled: int = studio._predictions[-1]["seq"]
+	check("both are waiting on the host", studio._predictions.size() == 2 and rolled > pulled
+			and studio._predictions[-1]["verb"] == &"move_piece")
+
+	studio.apply_room(room.call(pulled - 1, {}, rack_home), false)
+	check("a room from before the ask does not take the guest's stand back", studio.tablets.has(mine))
+	check("nor its rack", Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
+			.is_equal_approx(rack_home + Vector2(0.15, 0.0)))
+
+	studio.apply_room(room.call(pulled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
+	check("answered, the guest's stand takes the host's name", studio.tablets.has(&"tablet_9")
+			and not studio.tablets.has(mine))
+	check("and is the same stand, not a new one", studio.tablets.get(&"tablet_9", [null])[0] == stand)
+	check("the rack, not yet answered, stays where the guest put it", Vector2(studio.rack_trolley.position.x,
+			studio.rack_trolley.position.z).is_equal_approx(rack_home + Vector2(0.15, 0.0)))
+
+	studio.apply_room(room.call(rolled, {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]}, rack_home), false)
+	check("the host would not move the rack, so it goes back", Vector2(studio.rack_trolley.position.x,
+			studio.rack_trolley.position.z).is_equal_approx(rack_home))
+	check("and nothing is left waiting (%s)" % [studio._predictions], studio._predictions.is_empty())
+
+	# A pull the host turns down.
+	var refused := studio._predicted_tablet(3, 0, "Nothing", Vector2(0.0, 0.4))
+	studio.apply_room(room.call(studio._predictions[-1]["seq"], {&"tablet_9": [2, order[1], plugin, 0.4, 0.2, 0.0]},
+			rack_home), false)
+	check("a stand the host would not put out is taken back", not studio.tablets.has(refused))
+
+	# Someone else wheeling the rack: it rolls after them, and its coming to rest is not news.
+	var asked := studio._predictions.size()
+	studio._on_room_motion(&"rack", rack_home.x - 0.3, rack_home.y, 0.3, 5)
+	studio.rack_trolley._physics_process(1.0 / 60.0)
+	var moved_by := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z).distance_to(rack_home)
+	check("someone else's push rolls the rack rather than putting it there (%.3f)" % moved_by,
+			moved_by > 0.0 and moved_by < 0.3)
+	for i in 240:
+		studio.rack_trolley._physics_process(1.0 / 60.0)
+	check("and it gets there", Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
+			.distance_to(rack_home + Vector2(-0.3, 0.0)) < 0.01)
+	check("without the guest telling the host it moved it", studio._predictions.size() == asked
+			and not studio.rack_trolley.steered)
+	studio._take_down_tablet(&"tablet_9")
 
 
 ## Reaper names a plugin two ways depending on who is asked, and a VST3 reports thousands of MIDI

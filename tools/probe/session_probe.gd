@@ -44,6 +44,8 @@ var _built_in := false
 var _audio_placed := {}
 ## Host: what guests asked of the room, as [verb, args, from].
 var _room_asks: Array = []
+## Host: where the guest said something was while pushing it.
+var _motions: Array = []
 ## Guest: how many times the host's room arrived.
 var _rooms_heard := 0
 
@@ -112,6 +114,8 @@ func _host(port: int) -> void:
 	check("hosts", Session.host(port))
 	# The room as the studio would publish it, and answered the way the studio answers.
 	Session.publish_room({"venue": &"grid", "tablets": {&"tablet_1": [2, 1, "EQ", 0.4, 0.2, 0.0]}})
+	Session.room_motion.connect(func(piece: StringName, x: float, z: float, h: float, from: int):
+		_motions.append([piece, x, z, h, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
 		if verb == &"open_tablet":
@@ -151,6 +155,8 @@ func _host(port: int) -> void:
 	check("the guest's grab is in the host's table", Session.holder_of(KEY) == guest_id and guest_id != 0)
 	check("the guest's ask for a stand reached the host (%s)" % [_room_asks], _room_asks.size() == 3
 			and _room_asks[0][0] == &"open_tablet" and _room_asks[0][2] == guest_id)
+	check("the guest's push reached the host while it moved (%s)" % [_motions], _motions.size() == 1
+			and _motions[0][0] == &"rack" and is_equal_approx(_motions[0][1], -0.9) and _motions[0][4] == guest_id)
 	check("and its rolling the rack", _room_asks.size() == 3 and _room_asks[1][0] == &"move_piece"
 			and _room_asks[1][1][0] == &"rack")
 	check("and its putting the desk down", _room_asks.size() == 3 and _room_asks[2][0] == &"place_surface"
@@ -325,7 +331,10 @@ func _guest(port: int) -> void:
 	Session.ask_room(&"move_piece", [&"rack", -1.0, -0.4, 0.6])
 	Session.ask_room(&"place_surface", [&"console", Transform3D(Basis.IDENTITY, Vector3(0.1, 0, 0.2))])
 	# Straight at the host, past ask_room's own check: the venue is not a guest's to change.
-	Session._room_asked.rpc_id(1, &"set_venue", [&"chalk"])
+	Session.room_seq += 1
+	Session._room_asked.rpc_id(1, Session.room_seq, &"set_venue", [&"chalk"])
+	# The rack being wheeled, as the hand pushing it sends it while it moves.
+	Session.send_motion(&"rack", -0.9, -0.35, 0.5)
 
 	DAW.set_track_volume(2, 0.123)
 	DAW.set_tempo(GUEST_TEMPO)
@@ -345,7 +354,9 @@ func _guest(port: int) -> void:
 	check("and the click I switched on", DAW.state.metronome)
 	check("and my input monitoring", DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
 	check("and my marker (%s)" % [DAW.state.markers.values()], _has_guest_mark(DAW.state))
-	check("the stand I asked for is in the host's room now", _rooms_heard == 2
+	check("the host answered all four of my asks, the refused one too (%s)" % [Session.room.get("acks")],
+			int((Session.room.get("acks", {}) as Dictionary).get(Session.local_peer_id, 0)) == 4)
+	check("the stand I asked for is in the host's room now", _rooms_heard >= 2
 			and Session.room.get("tablets", {}).has(&"tablet_2") and Session.room.get("venue") == &"grid")
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)

@@ -158,6 +158,17 @@ stay ignorant: a surface is a node, and a node's parent is not its business.
 | The venue, plugins out on stands, where every stand and trolley is, where the desk stands | ✅ the host's | one room; a guest asks (rolls the rack, pulls a plugin) and is shown the host's answer, and cannot change the venue. Its own room waits in its profile for when it is on its own (`Session.room`, `Studio.apply_room`) |
 | Which mode a surface is in *for you* | ❌ | **this is the feature** |
 
+**The room is predicted, not waited for.** A guest's push, pull or dock happens on its own screen
+at once and is sent to the host as a numbered ask (`Session.ask_room`). The host's room comes
+back carrying the last number it answered for each guest (`"acks"`); `Studio.apply_room` puts
+the host's room up and then the guest's still-unanswered moves back on top, so a room published
+a moment before the ask arrived never flicks a stand back. Once answered, the room is the truth:
+whatever the host would not do goes back -- the rollback. While a stand is being pushed its place
+streams to everyone a few dozen times a second, unreliably on its own channel
+(`Session.send_motion`), and everyone else's copy rolls after it on the trolley's own spring
+(`Trolley.roll_to`) rather than being put down. Only positions: the mix is never predicted, and
+nothing here touches audio.
+
 Replicating the last row would force one view on the room. The engineer at the desk has the
 console as a panel on a 32:9 monitor while two people behind them see it as a physical object
 between them, and nobody is wrong.

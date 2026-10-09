@@ -41,6 +41,9 @@ var footprint_half := Vector2(0.2, 0.2)
 ## entirely at the moment -- summoned to the mix position, or on a monitor -- and only the
 ## studio knows how to move its HOME without moving it.
 var riders: Array = []
+## Being moved from elsewhere -- someone else's hand, or the room's keeper putting it back. It
+## rolls where it is told, and when it comes to rest that is not news to tell anyone.
+var steered := false
 
 ## Turned this far per wheel notch while held, and this far with the fine modifier.
 const TURN_STEP := deg_to_rad(15.0)
@@ -140,6 +143,8 @@ static func _floor_rotate(v: Vector2, heading: float) -> Vector2:
 # --- being pushed ---------------------------------------------------------------------------
 
 func _on_grab_begin(at: Vector3) -> void:
+	# Taken hold of here: whatever was rolling it from elsewhere, it is this hand's now.
+	steered = false
 	_grab_height = at.y
 	var hand = _hand_on_floor()
 	if hand == null:
@@ -206,6 +211,18 @@ func place(at: Vector2, heading: float) -> void:
 	_heading_target = heading
 	_velocity = Vector2.ZERO
 	_settle()
+
+
+## Roll it to `at`, the way a push would: the spring takes it there, so a stand moved by someone
+## across the room glides after their hand instead of jumping to wherever the last word put it.
+func roll_to(at: Vector2, heading: float) -> void:
+	steered = true
+	if not _active:
+		_capture_riders()
+		_wake()
+	_target = at
+	# The short way round, as the spring reads the heading by the angle between.
+	_heading_target = rotation.y + wrapf(heading - rotation.y, -PI, PI)
 
 
 ## Remember where everything riding on the trolley sits relative to it, as of now.

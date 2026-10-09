@@ -261,7 +261,8 @@ func remember_placement(surface_id: StringName) -> void:
 ## Stand the room's gear where the room says, or, with an empty `placements`, back where this
 ## viewer had it. Only what is standing in the studio right now moves; the rest goes there when
 ## it next comes back.
-func share_studio(placements: Dictionary) -> void:
+## `seconds` above zero slides it there rather than putting it there.
+func share_studio(placements: Dictionary, seconds := 0.0) -> void:
 	shared_studio = placements
 	for surface_id in _mounted:
 		if seats.has(surface_id) or mode_of(surface_id) != Presentation.Mode.STUDIO:
@@ -269,8 +270,16 @@ func share_studio(placements: Dictionary) -> void:
 		if held.is_valid() and held.call(surface_id):
 			continue
 		var surface: Surface = _mounted[surface_id]
-		if surface.get_parent() == studio_set:
-			surface.transform = studio_home(surface_id)
+		if surface.get_parent() != studio_set:
+			continue
+		var to := studio_home(surface_id)
+		if surface.transform.is_equal_approx(to):
+			continue
+		if seconds > 0.0 and surface.is_inside_tree():
+			var slide := surface.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			slide.tween_property(surface, "transform", to, seconds)
+		else:
+			surface.transform = to
 
 
 ## Where a surface stands in the virtual set, whether or not it is there right now: the

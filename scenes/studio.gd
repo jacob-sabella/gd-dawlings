@@ -109,13 +109,15 @@ var console: ConsoleSurface
 var rack: RackSurface
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
-## A guest's tear the host has not answered yet: [track, fx]. The stand that arrives for it is
-## walked up to, as a host's own would be.
-var _asked_tablet: Array = []
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
 var _applying_room := false
 ## Whether what stands here is the host's room rather than this participant's own.
 var _showing_hosts_room := false
+## A guest's asks the host has not answered yet: {seq, verb, args, id}. See apply_room.
+var _predictions: Array = []
+var _motion_sent_msec := 0
+## Guest: how many stands it has put out on its own say-so, for naming them until the host does.
+var _predicted_tablets := 0
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
@@ -589,12 +591,15 @@ func _on_tear_requested(track: int, fx: int, at: Vector3) -> void:
 	# rather than inside it.
 	var out := rack.global_basis.z.normalized()
 	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
-	if not Session.is_authority():
-		# The host puts the stand out, for everyone at once; it arrives with the room.
-		_asked_tablet = [track, fx]
-		Session.ask_room(&"open_tablet", [track, fx, f.name, landing.x, landing.z])
-		return
-	var id := open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
+	var id: StringName
+	if Session.is_authority():
+		id = open_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
+	else:
+		# Out at once, under a name of this guest's own, and asked for: the host's room renames
+		# it when it answers, or takes it back if the host would not.
+		id = _predicted_tablet(track, fx, f.name, Vector2(landing.x, landing.z))
+		if id == StringName():
+			return
 	# On a monitor, pulling it off is asking to use it: walk up to it. In a headset you are
 	# already standing where you pulled it.
 	if focus != null and focus.visits:
@@ -704,12 +709,29 @@ func _take_down_tablet(id: StringName) -> void:
 	stand.queue_free()
 
 
-## Put back on the rack: here if the room is ours, by asking if it is the host's.
+## Put back on the rack: here if the room is ours; if it is the host's, here at once and asked.
 func _dock_tablet(id: StringName) -> void:
 	if Session.is_authority():
 		close_tablet(id)
-	else:
-		Session.ask_room(&"close_tablet", [id])
+	elif tablets.has(id) and _predict(&"close_tablet", [id]) > 0:
+		_take_down_tablet(id)
+
+
+func _predicted_tablet(track: int, fx: int, plugin_name: String, where: Vector2) -> StringName:
+	for id in tablets:
+		var t: PluginTablet = tablets[id][1]
+		if t.track_index == track and t.fx_index == fx:
+			(tablets[id][0] as Trolley).place(where, _facing_mix(where))
+			return id
+	_predicted_tablets += 1
+	var id := StringName("mine_%d" % _predicted_tablets)
+	if _predict(&"open_tablet", [track, fx, plugin_name, where.x, where.y], id) == 0:
+		return StringName()
+	_build_tablet(id, track, fx, plugin_name)
+	_applying_room = true
+	(tablets[id][0] as Trolley).place(where, _facing_mix(where))
+	_applying_room = false
+	return id
 
 
 ## The list of what is out, saved whenever a tablet is opened or closed. Not when a tablet finds
@@ -773,55 +795,157 @@ func _publish_room() -> void:
 
 func _on_room_changed() -> void:
 	if not Session.is_authority():
-		apply_room(Session.room)
+		apply_room(Session.room, true)
 
 
-## Make this room the one `state` describes: its venue, and the same stands in the same places.
-func apply_room(state: Dictionary) -> void:
+## Make this room the one `state` describes -- its venue, the same stands in the same places, the
+## desk where it stands -- and then put this guest's own unanswered moves back on top.
+##
+## That last part is the prediction. A guest does what it asked for at once, on its own screen,
+## and keeps a note of it until the host's room says the ask was answered: until then the note
+## wins over the room, so a stand does not flick back to where it was because a room published a
+## moment before the ask arrived crossed it on the wire. Once answered, the room is the truth --
+## and if the host would not do it, the stand goes back. That is the rollback.
+##
+## `glide` rolls things to where the room has them, as if pushed, instead of putting them there.
+func apply_room(state: Dictionary, glide := false) -> void:
 	_applying_room = true
 	_showing_hosts_room = true
+	var answered := int((state.get("acks", {}) as Dictionary).get(Session.local_peer_id, 0))
+	_predictions = _predictions.filter(func(p: Dictionary) -> bool: return int(p["seq"]) > answered)
+	var pending_open := {}
+	var pending_close := {}
+	var pending_move := {}
+	var pending_place := {}
+	for p in _predictions:
+		match p["verb"]:
+			&"open_tablet": pending_open[p["id"]] = true
+			&"close_tablet": pending_close[p["args"][0]] = true
+			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
+			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
+
 	var id_wanted := StringName(state.get("venue", &""))
 	if venue != null and Venue.is_known(id_wanted) and venue.venue_id() != id_wanted:
 		set_venue(id_wanted, false)
+
 	var wanted: Dictionary = state.get("tablets", {})
 	for id in tablets.keys():
-		var entry: Variant = wanted.get(id)
 		var t: PluginTablet = tablets[id][1]
-		if entry == null or int(entry[0]) != t.track_index or int(entry[1]) != t.fx_index:
-			_take_down_tablet(id)
-	var walk_to := StringName()
+		var entry: Variant = wanted.get(id)
+		if entry != null and int(entry[0]) == t.track_index and int(entry[1]) == t.fx_index:
+			continue
+		if pending_open.has(id):
+			continue
+		# The host's answer to this guest's pull: the same stand, under the name the host gave
+		# it, rather than this one taken away and that one put up in its place.
+		var named := _hosts_name_for(wanted, t.track_index, t.fx_index)
+		if named != StringName() and not tablets.has(named):
+			_rename_tablet(id, named)
+			continue
+		_take_down_tablet(id)
+
 	if floor_plan != null:
 		for id in wanted:
+			if pending_close.has(id):
+				continue
 			var entry: Array = wanted[id]
 			if not tablets.has(id):
 				_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
-				if _asked_tablet == [int(entry[0]), int(entry[1])]:
-					walk_to = id
-			var stand: Trolley = tablets[id][0]
-			var at := Vector2(float(entry[3]), float(entry[4]))
-			# Not out from under a hand that is wheeling it here.
-			if stand.held_by == null and (not at.is_equal_approx(Vector2(stand.position.x, stand.position.z))
-					or not is_equal_approx(stand.rotation.y, float(entry[5]))):
-				stand.place(at, float(entry[5]))
+				(tablets[id][0] as Trolley).place(Vector2(float(entry[3]), float(entry[4])), float(entry[5]))
+			elif not pending_move.has(id):
+				_follow_room(tablets[id][0], float(entry[3]), float(entry[4]), float(entry[5]), glide)
 		var floor: Dictionary = state.get("floor", {})
 		for piece in floor_plan.pieces:
 			var t := piece as Trolley
-			if t == null or not is_instance_valid(t) or not floor.has(t.piece_id) or t.held_by != null:
+			if t == null or not is_instance_valid(t) or not floor.has(t.piece_id) or pending_move.has(t.piece_id):
 				continue
 			var spot: Array = floor[t.piece_id]
-			var at := Vector2(float(spot[0]), float(spot[1]))
-			if not at.is_equal_approx(Vector2(t.position.x, t.position.z)) \
-					or not is_equal_approx(t.rotation.y, float(spot[2])):
-				t.place(at, float(spot[2]))
+			_follow_room(t, float(spot[0]), float(spot[1]), float(spot[2]), glide)
+
 	if mount != null:
-		mount.share_studio(state.get("placed", {}))
+		var placed: Dictionary = (state.get("placed", {}) as Dictionary).duplicate()
+		placed.merge(pending_place, true)
+		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
 	_applying_room = false
 	_looms_dirty = true
-	if walk_to != StringName():
-		_asked_tablet = []
-		if focus != null and focus.visits:
-			focus.focus(walk_to)
-			_sit_down()
+
+
+## The time a desk put down across the room takes to get there on this screen.
+const GLIDE_SECONDS := 0.25
+
+
+## A piece to where the room has it -- unless a hand here has hold of it, which wins.
+func _follow_room(t: Trolley, x: float, z: float, heading: float, glide: bool) -> void:
+	if t.held_by != null:
+		return
+	var at := Vector2(x, z)
+	if at.is_equal_approx(Vector2(t.position.x, t.position.z)) and is_equal_approx(t.rotation.y, heading):
+		return
+	if glide:
+		t.roll_to(at, heading)
+	else:
+		t.steered = true
+		t.place(at, heading)
+
+
+func _hosts_name_for(wanted: Dictionary, track: int, fx: int) -> StringName:
+	for id in wanted:
+		if int(wanted[id][0]) == track and int(wanted[id][1]) == fx:
+			return id
+	return StringName()
+
+
+## The same stand, known by another name: the one the host gave the stand this guest put out.
+func _rename_tablet(from: StringName, to: StringName) -> void:
+	var stand: Trolley = tablets[from][0]
+	var tablet: PluginTablet = tablets[from][1]
+	tablets.erase(from)
+	tablets[to] = [stand, tablet]
+	stand.piece_id = to
+	tablet.surface_id = to
+	_authored_floor[to] = _authored_floor.get(from, stand.transform)
+	_authored_floor.erase(from)
+	if focus != null and focus.focused_id == from:
+		focus.focused_id = to
+	for p in _predictions:
+		if p["verb"] != &"open_tablet" and p["args"].size() > 0 and p["args"][0] == from:
+			p["args"][0] = to
+
+
+## A guest's ask, sent, and done here at once. See apply_room.
+func _predict(verb: StringName, args: Array, id := StringName()) -> int:
+	var seq := Session.ask_room(verb, args)
+	if seq > 0:
+		_predictions.append({"seq": seq, "verb": verb, "args": args, "id": id})
+	return seq
+
+
+## A stand being pushed by a hand here, told to everyone else a few dozen times a second so
+## theirs rolls after it. The settled place is sent as an ask when it comes to rest.
+func _on_trolley_moved(piece: Trolley) -> void:
+	_looms_dirty = true
+	if piece.held_by == null or not Session.is_networked():
+		return
+	var now := Time.get_ticks_msec()
+	if now - _motion_sent_msec < MOTION_MSEC:
+		return
+	_motion_sent_msec = now
+	Session.send_motion(piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y)
+
+
+const MOTION_MSEC := 50
+
+
+## Someone else's hand on a stand: roll ours after it. Not one this guest is pushing, nor one it
+## has let go of and not yet heard the host answer for.
+func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: int) -> void:
+	var t := _floor_piece(id)
+	if t == null or t.held_by != null:
+		return
+	for p in _predictions:
+		if (p["verb"] == &"move_piece" or p["verb"] == &"move_tablet") and p["args"][0] == id:
+			return
+	t.roll_to(Vector2(x, z), heading)
 
 
 ## The host, answering someone's ask. The same calls the host's own hands make, so the room is
@@ -833,10 +957,7 @@ func _on_room_asked(verb: StringName, args: Array, _from: int) -> void:
 				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
 		&"close_tablet":
 			close_tablet(args[0])
-		&"move_tablet":
-			if tablets.has(args[0]):
-				(tablets[args[0]][0] as Trolley).place(Vector2(args[1], args[2]), args[3])
-		&"move_piece":
+		&"move_tablet", &"move_piece":
 			var piece := _floor_piece(args[0])
 			if piece != null:
 				piece.place(Vector2(args[1], args[2]), args[3])
@@ -872,7 +993,10 @@ func _on_studio_placed(surface_id: StringName, where: Transform3D) -> bool:
 	if Session.is_authority():
 		_publish_room.call_deferred()
 		return false
-	Session.ask_room(&"place_surface", [surface_id, where])
+	if _predict(&"place_surface", [surface_id, where]) > 0:
+		var placed := mount.shared_studio.duplicate()
+		placed[surface_id] = where
+		mount.shared_studio = placed
 	return true
 
 
@@ -888,7 +1012,7 @@ func _on_role_changed() -> void:
 
 func _put_back_own_room() -> void:
 	_showing_hosts_room = false
-	_asked_tablet = []
+	_predictions.clear()
 	if Session.layout == null:
 		return
 	for id in tablets.keys():
@@ -1024,19 +1148,20 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
 		piece.transform = Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
 	piece.settled.connect(_on_trolley_settled.bind(piece))
-	piece.moved.connect(func() -> void: _looms_dirty = true)
+	piece.moved.connect(_on_trolley_moved.bind(piece))
 	studio_set.add_child(piece)
 	floor_plan.add_piece(piece)
 	return piece
 
 
 func _on_trolley_settled(piece: Trolley) -> void:
-	if not _fitting and not _applying_room:
+	var steered := piece.steered
+	piece.steered = false
+	if not _fitting and not _applying_room and not (steered and not Session.is_authority()):
 		if not Session.is_authority():
-			# Wheeled here, and the host told where it is now; the host's word comes back.
+			# Wheeled here: it stays here, and the host is told; see apply_room.
 			var verb := &"move_tablet" if tablets.has(piece.piece_id) else &"move_piece"
-			Session.ask_room(verb, [piece.piece_id, piece.position.x, piece.position.z,
-					piece.rotation.y])
+			_predict(verb, [piece.piece_id, piece.position.x, piece.position.z, piece.rotation.y])
 			_looms_dirty = true
 			return
 		_publish_room()
@@ -1310,6 +1435,7 @@ func _build_surfaces() -> void:
 	Session.room_changed.connect(_on_room_changed)
 	Session.room_asked.connect(_on_room_asked)
 	Session.role_changed.connect(_on_role_changed)
+	Session.room_motion.connect(_on_room_motion)
 	_publish_room()
 
 
