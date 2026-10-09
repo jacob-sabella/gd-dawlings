@@ -86,7 +86,7 @@ func _enrich(env: Environment) -> void:
 	env.volumetric_fog_ambient_inject = 0.0
 
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
-	env.tonemap_exposure = 1.25
+	env.tonemap_exposure = 1.0
 	env.glow_intensity = 0.7
 	env.glow_bloom = 0.06
 	env.adjustment_enabled = true

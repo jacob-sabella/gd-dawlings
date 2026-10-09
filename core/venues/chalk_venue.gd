@@ -72,7 +72,9 @@ func lamp_colour(index: int, _authored: Color) -> Color:
 
 
 func lamp_energy(_index: int, authored: float) -> float:
-	return authored * 1.2
+	# Saturated colour at full strength stained the gear nearest each lamp -- the timeline went
+	# lime -- so the chalk lamps are tints, not floods.
+	return authored * 0.6
 
 
 func _ready() -> void:

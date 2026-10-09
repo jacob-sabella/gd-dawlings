@@ -1304,7 +1304,7 @@ func _build_anchors() -> void:
 	work_light.name = "WorkLight"
 	work_light.position = Vector3(0.42 * signf(ergonomics.handedness), 0.30, -0.08)
 	work_light.light_color = Color(1.0, 0.95, 0.88)
-	work_light.light_energy = 3.2
+	work_light.light_energy = 1.0
 	work_light.omni_range = 2.4
 	work_light.shadow_enabled = false
 	body.add_child(work_light)
