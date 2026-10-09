@@ -401,6 +401,7 @@ func _walk_where_the_venue_lets() -> void:
 		walker.walkable = _walkable()
 		walker.fixed = venue.zone_solids() if venue != null else []
 		walker.rebuild_walls()
+		walker.unstick()
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest

@@ -96,13 +96,9 @@ func lamp_energy(_index: int, authored: float) -> float:
 
 ## One room: the floor either side of the desk joins the far end, as in the loft.
 func rooms() -> Array[Rect2]:
-	var half := live_room_half()
-	var cr := room_width * 0.5
-	var depth := Studio.ROOM_DEPTH - 0.05
-	var z := FRONT + 0.05
-	return [back_of_house(),
-			Rect2(-half + 0.05, z, half - cr, depth),
-			Rect2(cr - 0.05, z, half - cr, depth)]
+	var out: Array[Rect2] = [back_of_house()]
+	out.append_array(beside_the_desk())
+	return out
 
 
 func stove_spot() -> Vector2:

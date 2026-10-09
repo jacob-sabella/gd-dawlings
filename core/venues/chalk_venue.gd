@@ -25,6 +25,9 @@ const SKETCHED_ROOM := 1
 const ROOM_HEIGHT := 4.2
 const BOARD_HEIGHT := 5.2
 const BOARD_Z := LIVE_ROOM_BACK + 0.15
+## How far the floor runs past the room every way under the open sky. The sketched room is drawn
+## round the room's own width, so there it stops at the lines.
+const OPEN_FLOOR := 3.0
 ## The most sections the board has room for across its top.
 const BOARD_SECTIONS := 8
 ## Seconds to rub old writing out (the new is drawn on as it goes), and between looks at the
@@ -173,6 +176,18 @@ func _draw_floor() -> void:
 		art.name = "FloorDoodle"
 		add_child(art)
 		_art.append(art)
+
+
+## The board is the whole world, and the floor is wherever you walk on it. Under the open sky it
+## runs past the room every way, round the zones and in front of the desk; the sketched room is
+## drawn round the zones' width, so there it is the desk, the floor either side of it out to the
+## lines, and the zones.
+func rooms() -> Array[Rect2]:
+	if variant == OPEN_SKY:
+		return [open_floor(OPEN_FLOOR)]
+	var out: Array[Rect2] = [back_of_house()]
+	out.append_array(beside_the_desk())
+	return out
 
 
 ## The room, drawn: its outline on the floor, its corners up to a ceiling that is a line, and

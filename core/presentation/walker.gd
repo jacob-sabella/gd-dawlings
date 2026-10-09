@@ -210,6 +210,83 @@ func rebuild_walls() -> void:
 		_build_walls()
 
 
+## Out of anything the room has just put round you. Rooms are not all the same shape: a venue
+## changed under your feet can leave you inside its riser, or out past its walls on floor the
+## last one had and this one does not -- and the ground goes on for ever out there. If where you
+## stand is not on the floor or not clear of what stands on it, you are moved to the nearest spot
+## that is, and stood on whatever you can step onto there. True when you were moved.
+func unstick() -> bool:
+	if floor_plan == null:
+		return false
+	var plan := _plan_frame()
+	var here := plan.affine_inverse() * global_position
+	var at := Vector2(here.x, here.z)
+	var spot := free_spot(at)
+	if spot.is_equal_approx(at):
+		return false
+	global_position = plan * Vector3(spot.x, ground_at(spot), spot.y)
+	velocity = Vector3.ZERO
+	return true
+
+
+## The nearest place to `at` (in the floor plan's frame) where a person fits: on the floor, and
+## clear of every solid but those you step up onto. `at` itself when it is one already; `at`
+## when there is none within eight metres.
+func free_spot(at: Vector2) -> Vector2:
+	if fits(at):
+		return at
+	for ring in range(1, 81):
+		var r := ring * 0.1
+		var n := maxi(8, int(TAU * r / 0.1))
+		for k in n:
+			var p := at + Vector2.from_angle(TAU * k / n) * r
+			if fits(p):
+				return p
+	return at
+
+
+## Whether a person stands clear at `p`: the whole of the body on the floor, nothing too tall to
+## step onto within reach of it.
+func fits(p: Vector2) -> bool:
+	var floor: Array[Rect2] = walkable if not walkable.is_empty() else [floor_plan.bounds]
+	var reach := RADIUS + 0.03
+	for k in 9:
+		var probe := p if k == 8 else p + Vector2.from_angle(TAU * k / 8.0) * reach
+		if not floor.any(func(r: Rect2) -> bool: return r.has_point(probe)):
+			return false
+	for f in fixed:
+		if f.get("top", SOLID_HEIGHT) > STEP_HEIGHT and _gap(f, p) < reach:
+			return false
+	for f in footprints():
+		if _gap(f, p) < reach:
+			return false
+	return true
+
+
+## The floor's height at `p`: the top of anything there you step up onto, or 0.
+func ground_at(p: Vector2) -> float:
+	var top := 0.0
+	for f in fixed:
+		var t: float = f.get("top", SOLID_HEIGHT)
+		if t <= STEP_HEIGHT and _gap(f, p) <= 0.0:
+			top = maxf(top, t)
+	return top
+
+
+## How far `p` is from a footprint's box, 0 inside it.
+static func _gap(f: Dictionary, p: Vector2) -> float:
+	var centre: Vector2 = f["c"]
+	var local := Basis(Vector3.UP, f["a"]).inverse() * Vector3(p.x - centre.x, 0.0, p.y - centre.y)
+	var q := Vector2(absf(local.x), absf(local.z)) - (f["h"] as Vector2)
+	return Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length()
+
+
+## The frame the footprints and the floor are measured in.
+func _plan_frame() -> Transform3D:
+	return solids_parent.global_transform if solids_parent != null and solids_parent.is_inside_tree() \
+			else Transform3D.IDENTITY
+
+
 ## Stand every footprint up as a box. Shapes are reused across ticks; only their size and pose
 ## change, which is a handful of assignments for a room with a dozen things in it.
 func sync_solids() -> void:

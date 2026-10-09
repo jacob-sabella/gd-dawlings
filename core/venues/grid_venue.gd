@@ -10,6 +10,15 @@ extends Venue
 
 const FLOOR_EXTENT := 420.0
 const SUN_DIR := Vector3(0.0, 0.11, -1.0)
+## How far the floor runs past the room every way: in front toward the road (which begins just
+## past it), out past the zones, behind them.
+const OPEN_FLOOR := 3.0
+## The palms near the room, there so they are in the shot from the chair and not only on the
+## horizon. Walked round: the floor reaches some of them.
+const NEAR_PALMS: Array[Vector3] = [Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-9.0, 0, 6.0),
+		Vector3(10.0, 0, 7.0)]
+## A palm trunk's footprint, half a side.
+const TRUNK := 0.3
 
 var _floor_mat: ShaderMaterial
 var _sky_mat: ShaderMaterial
@@ -213,10 +222,20 @@ func _dress_zones() -> void:
 	_neon_edges(synth, slab, at, pink, 0.012)
 
 
+## Out on the plain nothing stands round the room but more plain: you walk out beside the desk
+## and in front of it, and round the zones, as well as between them.
+func rooms() -> Array[Rect2]:
+	return [open_floor(OPEN_FLOOR)]
+
+
 ## The riser, the table and the stand are glass and stop you; the booth is only its neon edges,
-## and an invisible wall between them would be a wall you could not see.
+## and an invisible wall between them would be a wall you could not see. The palms near the room
+## stand on the floor and are walked round.
 func zone_solids() -> Array:
-	return ZoneKit.solids(zones(), false)
+	var out := ZoneKit.solids(zones(), false)
+	for palm in NEAR_PALMS:
+		out.append({"c": Vector2(palm.x, palm.z), "h": Vector2.ONE * TRUNK, "a": 0.0, "top": 3.0})
+	return out
 
 
 func _neon_edges(parent: Node3D, size: Vector3, at: Vector3, material: Material,
@@ -350,9 +369,7 @@ func _plant_palms() -> void:
 		var z := ROAD_START - 8.0 - i * 15.0
 		spots.append(Vector3(-ROAD_HALF - 2.5, 0, z))
 		spots.append(Vector3(ROAD_HALF + 2.5, 0, z - 7.5))
-	# And a few near the room, so they are in the shot from the chair, not only on the horizon.
-	spots.append_array([Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-9.0, 0, 6.0),
-			Vector3(10.0, 0, 7.0)])
+	spots.append_array(NEAR_PALMS)
 	for i in spots.size():
 		var palm := MeshInstance3D.new()
 		palm.name = "Palm"

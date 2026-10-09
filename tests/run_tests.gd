@@ -6223,7 +6223,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			return not Rect2(zones[&"matrix"].position.x, zones[&"matrix"].position.z,
 					zones[&"matrix"].size.x, zones[&"matrix"].size.z).has_point(f["c"])))
 	check("the grid's booth, only neon edges, has no walls you cannot see",
-			GridVenue.new().zone_solids().size() == ZoneKit.solids(zones, true).size() - 4)
+			GridVenue.new().zone_solids().size() == ZoneKit.solids(zones, true).size() - 4 + GridVenue.NEAR_PALMS.size())
 	check("and the chalk zone's sketches are walked through", ChalkVenue.new().zone_solids().is_empty())
 
 	# The studio arranged with its live room beside: through the window you only look; the door
@@ -6676,6 +6676,60 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("the old writing is gone once rubbed out, the new is all there",
 			before_rewrite.is_queued_for_deletion() and fresh.find_children("*", "Label3D", false, false).all(
 				func(l: Label3D): return l.modulate.a > 0.5))
+	studio.set_venue(&"studio", false)
+
+	# Open ground round the room: in the grid and the chalk's open sky the floor runs past the
+	# zones and in front of the desk, and a palm's trunk is something you walk round.
+	var plan := walker._plan_frame()
+	var plan_spot := func() -> Vector2:
+		var p := plan.affine_inverse() * walker.global_position
+		return Vector2(p.x, p.z)
+	var stand_at := func(p: Vector2) -> void:
+		walker.global_position = plan * Vector3(p.x, 0, p.y)
+		walker.velocity = Vector3.ZERO
+	for open: Array in [[&"grid", 0, GridVenue.OPEN_FLOOR], [&"chalk", ChalkVenue.OPEN_SKY, ChalkVenue.OPEN_FLOOR]]:
+		studio.set_venue(open[0], false, open[1])
+		var half: float = studio.venue.live_room_half()
+		var front := -Studio.ROOM_DEPTH * 0.5 + 0.35
+		var round_the_room := [Vector2(-half - open[2] + 0.5, 3.0), Vector2(half + open[2] - 0.5, 3.0),
+				Vector2(-half, Venue.LIVE_ROOM_BACK + open[2] - 0.5), Vector2(0, front - open[2] + 0.5),
+				Vector2(-studio.room_width * 0.5 - 1.0, 0.0)]
+		var shut := round_the_room.filter(func(p: Vector2) -> bool: return not walker.fits(p))
+		check("%s: you can stand past the zones, beside the desk and in front of it (shut: %s)" % [open[0], shut],
+				shut.is_empty())
+	studio.set_venue(&"grid", false)
+	var palm := Vector2(GridVenue.NEAR_PALMS[0].x, GridVenue.NEAR_PALMS[0].z)
+	check("grid: a palm's trunk is solid", not walker.fits(palm)
+			and not walker.fits(palm + Vector2(GridVenue.TRUNK, 0)))
+	stand_at.call(palm)
+	check("and standing in one, you are put beside it", walker.unstick() and walker.fits(plan_spot.call())
+			and plan_spot.call().distance_to(palm) < GridVenue.TRUNK + Walker.RADIUS + 0.2)
+
+	# A venue changed under your feet never leaves you where you cannot be: out on open ground the
+	# next room has walled off, or inside something it has put there.
+	var out_there := Vector2(-studio.venue.live_room_half() - GridVenue.OPEN_FLOOR + 0.5, 3.0)
+	for next: StringName in Venue.IDS:
+		studio.set_venue(&"grid", false)
+		stand_at.call(out_there)
+		studio.set_venue(next, false)
+		var now: Vector2 = plan_spot.call()
+		check("grid's open ground to %s: you are put where you fit (%.2f, %.2f)" % [next, now.x, now.y],
+				walker.fits(now) and walker.walkable.any(func(r: Rect2) -> bool: return r.has_point(now)))
+	studio.set_venue(&"studio", false)
+	var inside_something := false
+	for f in walker.fixed:
+		if f.get("top", Walker.SOLID_HEIGHT) > Walker.STEP_HEIGHT:
+			stand_at.call(f["c"])
+			inside_something = true
+			break
+	check("standing inside something solid, you are moved clear of it",
+			inside_something and walker.unstick() and walker.fits(plan_spot.call()))
+	# And at the desk, in every venue, you are left where you are.
+	for id: StringName in Venue.IDS:
+		stand_at.call(Vector2(0, Studio.MIX_POSITION_Z))
+		studio.set_venue(id, false)
+		check("%s: at the desk a change of venue leaves you be" % id,
+				plan_spot.call().is_equal_approx(Vector2(0, Studio.MIX_POSITION_Z)) and not walker.unstick())
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

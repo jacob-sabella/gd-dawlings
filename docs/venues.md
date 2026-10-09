@@ -87,12 +87,24 @@ The studio puts its zones in a live room: `LIVE_ROOM_HALF` either side, back to 
 You can walk to the zones in every venue. `Venue.back_of_house()` is the floor behind the
 footprint, and the walker's walls stand round the footprint and that floor together
 (`Walker.walkable`, `Walker.outline`). Where the two meet there is an open doorway. Furniture
-still stays inside the footprint.
+still stays inside the footprint. A venue without a control room adds the floor either side of
+the desk (`Venue.beside_the_desk()`): the loft, the cabin, the rooftop, the station and the
+chalk zone's sketched room. Out on open ground (the grid, and the chalk zone under the open sky)
+there is nothing round the room but more ground, so the floor is one `Venue.open_floor()` that
+runs three metres past everything: past the zones, behind them, beside the desk and in front of
+it. The grid's four palms near the room stand on it and are walked round.
+
+Rooms differ in shape, so a venue changed under your feet could leave you out past its walls or
+inside something it has put there. `Walker.unstick()` runs after every change and moves you to
+the nearest spot where you fit (`Walker.free_spot`, `Walker.fits`), standing on anything there
+you can step onto. At the desk you always fit, so you are left where you are.
+`tools/probe/walk_map.tscn` draws every venue's floor, walls and solids as SVGs in
+`~/.cache/reaper-3d/tmp/walkmap`.
 
 What stands in a zone is solid where it looks it. `Venue.zone_solids()` hands the walker
 footprints with a height (`Walker.fixed`). The studio's riser, table, keyboard stand and booth
 walls are solid, and the booth has a doorway. The grid's riser, table and stand are solid, but its
-booth is only neon edges, so it has no walls. The chalk zone's sketches are walked through. The
+booth is only neon edges, so it has no walls, and the palms' trunks are solid. The chalk zone's sketches are walked through. The
 walker steps up onto anything no taller than `Walker.STEP_HEIGHT`, which includes the riser.
 
 ## Adding one

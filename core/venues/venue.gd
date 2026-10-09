@@ -210,6 +210,28 @@ func rooms() -> Array[Rect2]:
 	return [back_of_house()]
 
 
+## The floor either side of the working footprint, out to the live room's width, from the
+## footprint's front edge to where the back of house begins: for a venue with nothing beside the
+## desk but more of itself (a deck, a roof, a plaza), so you can walk round the gear rather
+## than only between it.
+func beside_the_desk() -> Array[Rect2]:
+	var half := live_room_half()
+	var cr := room_width * 0.5
+	var z := -Studio.ROOM_DEPTH * 0.5 + 0.35
+	var depth := Studio.ROOM_DEPTH - 0.05
+	return [Rect2(-half + 0.05, z, half - cr, depth), Rect2(cr - 0.05, z, half - cr, depth)]
+
+
+## One floor round everything -- the desk, the zones, the live room -- `margin` past them on
+## every side: for a venue with nothing round the room but more open ground, so the zones can be
+## walked round and the desk approached from in front. It overlaps the footprint rather than
+## meeting it, which Walker.outline takes as floor on both sides.
+func open_floor(margin: float) -> Rect2:
+	var half := live_room_half() + margin
+	var front := -Studio.ROOM_DEPTH * 0.5 + 0.35 - margin
+	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK + margin - front)
+
+
 ## Half the live room's width, grown with the desk the way the zones are.
 func live_room_half() -> float:
 	return LIVE_ROOM_HALF + _grow()
