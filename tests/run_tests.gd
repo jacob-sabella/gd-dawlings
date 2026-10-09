@@ -6374,6 +6374,19 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	past = past and not terrace.grow(1.6).has_point(roof.stair_house_spot())
 	check("the tanks and the stair house stand on the roof past the parapet", past
 			and roof.find_children("WaterTank*", "", false, false).size() == 2)
+	var seen_on := false
+	var seen_off := false
+	for i in 60:
+		roof._process(1.0 / 20.0)
+		seen_on = seen_on or roof.beacons.all(func(b: MeshInstance3D) -> bool: return b.visible)
+		seen_off = seen_off or roof.beacons.all(func(b: MeshInstance3D) -> bool: return not b.visible)
+	check("the tanks' red lights blink", roof.beacons.size() == 2 and seen_on and seen_off)
+	var by_night := Venue.make(&"rooftop", RooftopVenue.NIGHT)
+	add_child(by_night)
+	var string_energy := func(v: Venue) -> float:
+		return (v.find_child("StringLight*", false, false) as SpotLight3D).light_energy
+	check("and at night the strings are turned up", string_energy.call(by_night) > string_energy.call(roof) * 1.2)
+	by_night.free()
 	# Its three evenings: one per title, the sun brightest at golden hour and the sky darkest at
 	# night, the sun's disc only while it is up.
 	var keys: Array[float] = []

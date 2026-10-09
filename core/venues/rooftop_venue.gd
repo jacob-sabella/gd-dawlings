@@ -64,8 +64,17 @@ const EVENINGS := [
 			"key": [Color(0.6, 0.7, 1.0), 0.14, -40.0], "windows": 1.1},
 ]
 
+## At night the strings are all the terrace has, and are turned up this much.
+const NIGHT_STRINGS := 1.5
+## The tanks' aircraft lights: on this long, once in this long.
+const BEACON_ON := 0.3
+const BEACON_EVERY := 1.6
+
 var _sky_mat: ShaderMaterial
 var _city_mat: ShaderMaterial
+## The red lights on the tanks' finials, which blink.
+var beacons: Array[MeshInstance3D] = []
+var _clock := 0.0
 
 
 func venue_id() -> StringName:
@@ -334,6 +343,10 @@ func _build_stair_house(brick: Material, steel: Material) -> void:
 	ZoneKit.block(self, Vector3(0.16, 0.12, 0.1), lamp_at, ZoneKit.glow(Color(1.0, 0.74, 0.46), 2.0), "Bulkhead")
 	var wash := ZoneKit.spot_down(self, lamp_at + Vector3(0, -0.08, -0.04), Color(1.0, 0.72, 0.46), 2.4, 70.0, 4.5)
 	wash.name = "DoorLamp"
+	# Wired glass in the door's top half, the stairwell lit behind it. Proud of the door's face
+	# and sunk into the brick behind, so it shares a plane with neither.
+	ZoneKit.block(self, Vector3(0.42, 0.55, 0.07), Vector3(at.x, base + 1.6, door_z - 0.03),
+			ZoneKit.glow(Color(1.0, 0.82, 0.55), 0.9), "DoorWindow")
 
 
 ## The tanks (assets/models/water_tank.glb): cedar staves gone grey, black iron, a tarred cap.
@@ -349,6 +362,28 @@ func _raise_tanks(steel: Material) -> void:
 		var tank := _model("water_tank.glb", Vector3(spots[i].x, -DECK_LIFT, spots[i].y), t.z,
 				{"staves": staves, "steel": steel, "cap": cap})
 		tank.name = "WaterTank%d" % i
+		# A red light on the finial, for the helicopters: tanks are the tallest thing up here.
+		var beacon := MeshInstance3D.new()
+		beacon.name = "Beacon%d" % i
+		var bulb := SphereMesh.new()
+		bulb.radius = 0.07
+		bulb.height = 0.14
+		bulb.radial_segments = 10
+		bulb.rings = 5
+		beacon.mesh = bulb
+		beacon.material_override = ZoneKit.glow(Color(1.0, 0.08, 0.05), 3.0)
+		beacon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		beacon.position = Vector3(spots[i].x, -DECK_LIFT + 6.6 + 0.05, spots[i].y)
+		add_child(beacon)
+		beacons.append(beacon)
+
+
+func _process(delta: float) -> void:
+	_clock += delta
+	# Both together, the way the pair on one roof are wired.
+	var lit := fmod(_clock, BEACON_EVERY) < BEACON_ON
+	for b in beacons:
+		b.visible = lit
 
 
 ## The building's plant on the far side of the roof: two condenser units and a run of duct.
@@ -420,7 +455,8 @@ func _string_the_lights(steel: Material) -> void:
 	var holder := MultiMeshInstance3D.new()
 	holder.name = "Festoons"
 	holder.multimesh = mm
-	holder.material_override = ZoneKit.glow(Color(1.0, 0.72, 0.4), 1.6)
+	var up := NIGHT_STRINGS if variant == NIGHT else 1.0
+	holder.material_override = ZoneKit.glow(Color(1.0, 0.72, 0.4), 1.6 * up)
 	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(holder)
 	# The wire: from each bulb's cap to the next, and from the end ones to the poles.
@@ -445,7 +481,7 @@ func _string_the_lights(steel: Material) -> void:
 		# Two soft lights down from the string, a third of the way from each end.
 		for t in [0.3, 0.7]:
 			var over := a.lerp(b, t) - Vector3(0, SAG * 4.0 * t * (1.0 - t) + 0.1, 0)
-			var glow := ZoneKit.spot_down(self, over, Color(1.0, 0.7, 0.42), 2.2, 72.0, 6.0)
+			var glow := ZoneKit.spot_down(self, over, Color(1.0, 0.7, 0.42), 2.2 * up, 72.0, 6.0)
 			glow.name = "StringLight"
 	var wire := BoxMesh.new()
 	wire.size = Vector3(0.008, 0.008, 1.0)

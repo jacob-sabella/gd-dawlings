@@ -173,9 +173,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       (`RooftopVenue.EVENINGS`: sky bands, sun and disc, stars, ambient, haze, key and window
       brightness per evening. Golden hour wide 0.22 is the brightest view of any venue, just
       inside the budget; night's back view 0.034 is as dark as the cabin's was.)
-- [ ] Rooftop at night: the back view is dark (0.034); a lamp on the stair house is all that
+- [x] Rooftop at night: the back view is dark (0.034); a lamp on the stair house is all that
       reaches it. Give the night its own touches -- the strings brighter, a lit window in the
       stair house door, a red aircraft light on each water tank.
+      (Strings x1.5 at night, wired glass lit in the stair house door, blinking red beacons on
+      the tanks' finials. Night back view 0.034 -> 0.046.)
 - [ ] Rooftop: the deck reads red-brown under the strings; a greyer board texture (or a
       Poly Haven decking) would read as weathered hardwood. And the roof beyond the terrace is
       one flat black: gravel ballast, a few vents and a skylight would give it something.
