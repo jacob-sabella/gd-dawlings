@@ -57,6 +57,8 @@ var _rooms_heard := 0
 ## Heard from the other side: [item, local or down, from] for carries and uses.
 var _carries: Array = []
 var _uses: Array = []
+## Notes heard from the other half, as Session.note_played gives them.
+var _notes: Array = []
 ## Who the host's table said had the duck when the guest's put-down reached it.
 var _duck_holder_at_put := -1
 ## Who has had the plane, in turn, as the host's table said.
@@ -133,6 +135,8 @@ func _host(port: int) -> void:
 		_carries.append([item, local, from]))
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
+	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int):
+		_notes.append([kind, pitch, velocity, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
 		if verb == &"put_item":
@@ -197,6 +201,9 @@ func _host(port: int) -> void:
 
 	# Reach for the fader the guest is holding: the host's own hand is refused too.
 	Session.claim_hold(KEY)
+	# A key on the host's keys, as played, for whoever is patched into them.
+	Session.guest_midi.note_on(67, 80)
+	Session.guest_midi.note_off(67)
 	await _until(4.0)
 	check("the host is refused a control the guest holds",
 			_refused.size() == 1 and _refused[0][0] == KEY and _refused[0][1] == guest_id)
@@ -211,6 +218,8 @@ func _host(port: int) -> void:
 			and _room_asks[3][1] == [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	check("its put-down of the duck arrived while it still had it (%d)" % _duck_holder_at_put,
 			_room_asks.size() == 6 and _room_asks[4][0] == &"put_item" and _duck_holder_at_put == _other_id())
+	check("the guest's keys as it played them, a note on and its note off (%s)" % [_notes],
+			_notes == [[Session.Note.ON, 60, 100, guest_id], [Session.Note.OFF, 60, 0, guest_id]])
 	check("and its plug in the MIX send, for its own headphones (%s)" % [_room_asks[5] if _room_asks.size() > 5 else null],
 			_room_asks.size() == 6 and _room_asks[5][0] == &"patch" and _room_asks[5][1] == [1, &"mix"]
 			and _room_asks[5][2] == guest_id)
@@ -348,6 +357,8 @@ func _guest(port: int) -> void:
 	Session.room_changed.connect(func(): _rooms_heard += 1)
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
+	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int):
+		_notes.append([kind, pitch, velocity, from]))
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
 	await _until(1.4)
@@ -421,10 +432,15 @@ func _guest(port: int) -> void:
 	Session.release_hold(DUCK)
 	# A plug off my tablet into the desk's MIX send, for my headphones.
 	Session.ask_room(&"patch", [1, &"mix"])
+	# And a key, as played, for anyone patched into my keys.
+	Session.guest_midi.note_on(60, 100)
+	Session.guest_midi.note_off(60)
 	await _until(5.2)
 	check("my releases left only the plane I took from the host's hand (%s)" % [Session.holds],
 			Session.holds == {PLANE: Session.local_peer_id})
 	Session.release_hold(PLANE)
+	check("the host's keys reached me as played (%s)" % [_notes],
+			_notes == [[Session.Note.ON, 67, 80, 1], [Session.Note.OFF, 67, 0, 1]])
 	check("and the host answered my throw, put-down and patch", int((Session.room.get("acks", {}) as Dictionary)
 			.get(Session.local_peer_id, 0)) == 7)
 

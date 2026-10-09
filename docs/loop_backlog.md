@@ -156,6 +156,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
   in one stream. Options: Reaper cue sends to a hardware output the game taps; per-listener
   stems streamed to a guest (upload cost grows with every listener); or leave per-track cue to
   the built-in engine. The user's call.
+- **Another player's mic in the personal mix.** Their keys are notes and cost nothing to send
+  (`TheirKeys`), but a mic is audio: it would be captured on their machine, encoded and streamed
+  to every listener who patched it. That costs the singer's upload per listener (or one stream to
+  the host, relayed), adds an encode, a jitter buffer and the network trip (tens of ms), and needs
+  a mic item to plug into first. The user's call, once there is a mic.
 - **"Their monitor": hearing what another player hears.** Captured on the performer's machine
   (their mix with their own playing, in time as they hear it) and sent on: a staged performance,
   not a way to keep everyone in time at once. Who may be listened to, the upload it costs, and

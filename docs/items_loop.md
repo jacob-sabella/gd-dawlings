@@ -284,9 +284,26 @@ ergonomics.
       button's click box, so its own box stands out in front of the panel, where a plug does.
       A row of bright nickel nuts read as white rings, louder than the lamps, so they are dark
       satin now.
-- [ ] Other players' gear into the personal mix: a send socket on someone else's instrument or mic.
+- [x] Other players' gear into the personal mix: a send socket on someone else's instrument or mic.
       Needs their notes (played here on the same instrument) or their audio sent across the
       session. Say what latency it adds.
+      Done: every other player's ghost wears a KEYS pack on its hip (`Avatar.wear_keys_pack`):
+      a little transmitter with an aerial, a lamp in their colour, and a `SendSocket` named
+      `keys_N` by peer id (`PersonalMix.player_socket`), labelled "NAME'S KEYS". Their notes
+      travel, not their audio: `GuestMidi` hands each note on, off and pedal to
+      `Session.send_note`, which relays it on its own reliable channel (`KEYS_CHANNEL`), and
+      `TheirKeys` plays it here on a `MonitorSynth` of that player's own, on a bus of its own
+      ("Their keys N"), only while headphones are on and the pack is patched. So it is heard
+      the same on a host, a guest, Reaper or the built-in engine. Latency: no jitter buffer, a
+      note is played when it arrives, so it lands one network trip after it was played (host to
+      guest, or guest to host), two through the host for guest to guest, plus the synth's own
+      ~16 ms and the output buffer. The notice says "about N ms", from ENet's round trip
+      (`Session.note_delay_ms`). A player who leaves takes their pack, and the host puts any
+      plugs in it back in their trays. Their mic (live audio) is parked in docs/loop_backlog.md.
+      Learned: a ghost is not scaled until it has a pose, so the pack's socket test checks scale
+      relative to the ghost, not absolutely. `tools/screenshot.gd --visitor x,z,yaw` stands a
+      second player in a shot. A player's synth and bus are kept once made rather than freed
+      when unpatched, since a bus removed under a playing synth is a script error a frame later.
 - [ ] "Their monitor": patch into what another player hears, captured on their machine (their mix
       with their own playing, in time as they hear it) and sent on. It cannot keep everyone in
       time at once, but it can stage a performance: the performer's machine is the reference,

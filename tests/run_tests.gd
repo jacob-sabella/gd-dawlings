@@ -128,6 +128,7 @@ func _ready() -> void:
 	await _test_the_tablet_patches_your_headphones()
 	_test_a_track_has_a_cue_for_headphones()
 	await _test_a_strip_send_puts_one_track_in_your_headphones()
+	await _test_a_players_keys_pack_puts_their_playing_in_your_headphones()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6926,6 +6927,14 @@ func _test_a_personal_mix_adds_up_its_receivers() -> void:
 	check("where they are, it is the track's cue", changes[0] == before + 1 and not mix.unheard(0)
 			and mix.bus_of(0) == GodotBackend.cue_bus(5) and mix.ears_levels().has(GodotBackend.cue_bus(2)))
 	check("the tracks patched, each once, in order", mix.tracks() == [2, 5])
+	check("a player's keys, by their peer", PersonalMix.player_socket(7) == &"keys_7"
+			and PersonalMix.player_of(&"keys_7") == 7 and PersonalMix.valid_socket(&"keys_7")
+			and PersonalMix.player_of(&"keys") == 0 and PersonalMix.player_of(&"track_7") == 0)
+	mix.hears_tracks = false
+	mix.set_sockets(["keys_7", "keys_7", "keys_3"])
+	check("heard wherever this machine is: their notes are played here (%s)" % [mix.ears_levels()],
+			not mix.unheard(0) and mix.bus_of(0) == TheirKeys.bus_of(7) and mix.players() == [3, 7]
+			and mix.ears_levels().has(TheirKeys.bus_of(3)))
 
 
 ## The tablet in the studio: it lies on the shelf's lower tier, shows your personal mix on its
@@ -7157,6 +7166,87 @@ func _test_a_strip_send_puts_one_track_in_your_headphones() -> void:
 	Session.role = saved_role
 	Session.layout = saved_layout
 	_offline()
+
+
+## Another player's keys: their ghost wears a pack with a SEND socket, a plug from your tablet
+## in it plays their notes here, in your headphones, and nobody else's.
+func _test_a_players_keys_pack_puts_their_playing_in_your_headphones() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.HOST, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	for spec in [[1, "Ada", 0], [7, "Lin", 1]]:
+		var p := Session.Participant.new()
+		p.peer_id = spec[0]
+		p.display_name = spec[1]
+		p.colour_index = spec[2]
+		Session.participants[spec[0]] = p
+	Session.roster_changed.emit()
+	await get_tree().process_frame
+	var ghost := studio.presence.avatar_of(7)
+	check("another player's ghost wears a keys pack with a SEND socket", ghost != null and ghost.send != null
+			and ghost.send.source == &"keys_7" and ghost.send.title().contains("LIN'S KEYS"))
+	check("at its real size, on a ghost scaled down (%.3f, the ghost %.3f)" % [
+			ghost.send.global_basis.get_scale().x, ghost._ghost.global_basis.get_scale().x],
+			is_equal_approx(ghost.send.global_basis.get_scale().x * Presence.Avatar.SIZE,
+					ghost._ghost.global_basis.get_scale().x))
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var tablet := studio.items.items[&"tablet"] as TabletItem
+	hand.pick_up(tablet)
+	var sender: TabletFace.Sender = tablet.face._senders[0]
+	sender.grab_begin(hand, sender.global_position)
+	hand.hovered = ghost.send
+	sender.grab_end(hand)
+	hand.hovered = null
+	check("plug A dropped on it is in it, for everyone to see (%s)" % [studio.patches],
+			studio.patches.get(1) == ["keys_7", "", "", ""] and ghost.send.plug_count() == 1)
+	check("and you are told whose keys (%s)" % [told], told.size() == 1
+			and (told[0] as String).contains("Plug A in SEND LIN'S KEYS"))
+	check("its row says so", (tablet.face._rows[0]["source"] as Label3D).text == "LIN'S KEYS")
+	check("with headphones off, nothing of theirs is played", studio.their_keys.players().is_empty())
+	hand.lose_carrying()
+	tablet.snap_home()
+	var phones := studio.items.items[&"headphones"] as HeadphonesItem
+	hand.pick_up(phones)
+	hand.wear()
+	var bus := TheirKeys.bus_of(7)
+	check("on, their keys are played here, on a bus of their own, in your ears alone",
+			studio.their_keys.players() == [7] and AudioServer.get_bus_index(bus) >= 0
+			and is_zero_approx(Ears.gain_db(bus)) and Ears.gain_db(Ears.MIX) == Ears.OFF_DB)
+	var synth: MonitorSynth = studio.their_keys.synths[7]
+	synth._events.clear()
+	Session.note_played.emit(Session.Note.ON, 60, 100, 7)
+	Session.note_played.emit(Session.Note.ON, 64, 90, 9)
+	Session.note_played.emit(Session.Note.PEDAL_DOWN, 0, 0, 7)
+	Session.note_played.emit(Session.Note.OFF, 60, 0, 7)
+	check("their notes play, and nobody else's (%s)" % [synth._events],
+			synth._events == [[MonitorSynth.ON, 60, 100], [MonitorSynth.SUSTAIN, 1, 0], [MonitorSynth.OFF, 60, 0]])
+	studio.personal.set_level(0, -10.0)
+	check("at the receiver's level", is_equal_approx(Ears.gain_db(bus), -10.0))
+
+	Session.participants.erase(7)
+	Session.roster_changed.emit()
+	await get_tree().process_frame
+	check("when they leave, the plug in their keys comes back to its tray, and they are not played",
+			not studio.patches.has(1) and studio.their_keys.players().is_empty()
+			and studio.presence.avatar_of(7) == null)
+	Session.notice.disconnect(listen)
+	hand.take_off()
+	hand.lose_carrying()
+	phones.snap_home()
+	studio.queue_free()
+	await get_tree().process_frame
+	check("headphones gone with the studio, their bus is silent", Ears.gain_db(bus) == Ears.OFF_DB)
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
 
 
 func _test_every_control_is_clickable_from_the_seat() -> void:

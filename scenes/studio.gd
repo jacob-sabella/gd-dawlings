@@ -115,6 +115,8 @@ var mic_arm := MicArm.new()
 var _heard_phones := false
 ## The personal mix of whoever is at this machine: the tablet's receivers (docs/items_loop.md).
 var personal := PersonalMix.new()
+## Other players' keys, played here for the personal mix's plugs in them.
+var their_keys: TheirKeys
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
 ## The room's, so the host's: everyone sees everyone's plugs. Whoever is at this machine hears
 ## their own row (`personal`).
@@ -1747,6 +1749,10 @@ func _build_items() -> void:
 		tablet.colour = _colour_of(Session.local_peer_id)
 		tablet.patch_asked.connect(_on_patch_asked)
 	personal.changed.connect(_on_personal_changed)
+	their_keys = TheirKeys.new()
+	their_keys.name = "TheirKeys"
+	add_child(their_keys)
+	Session.note_played.connect(their_keys.play)
 	console.rebuilt.connect(_show_patches)
 	Session.roster_changed.connect(_on_roster_for_patches)
 	_show_patches()
@@ -1792,6 +1798,8 @@ func _on_personal_changed() -> void:
 func _listen() -> void:
 	if DAW.backend is GodotBackend:
 		(DAW.backend as GodotBackend).set_cues(personal.tracks() if _heard_phones and personal.hears_tracks else [])
+	if their_keys != null:
+		their_keys.set_players(personal.players() if _heard_phones else [])
 	Ears.listen(_heard_phones, personal.ears_levels())
 
 
@@ -1817,8 +1825,13 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 		Session.notice.emit("Plug %s in SEND %s. One track by itself is not heard here: %s" % [letter,
 				PersonalMix.title_of(socket), _why_no_tracks()])
 	else:
-		Session.notice.emit("Plug %s in SEND %s: in your headphones%s." % [letter,
-				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on"])
+		var late := ""
+		var player := PersonalMix.player_of(socket)
+		if player > 0 and Session.note_delay_ms(player) >= 0.0:
+			late = " Their notes are played here, about %d ms after they play them." \
+					% roundi(Session.note_delay_ms(player))
+		Session.notice.emit("Plug %s in SEND %s: in your headphones%s.%s" % [letter,
+				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on", late])
 
 
 ## Why a single track is not heard on this machine (`_hears_tracks`).
@@ -1858,6 +1871,10 @@ func _show_patches() -> void:
 	var sockets: Array[SendSocket] = console.master.sends.duplicate()
 	for strip in console.strips:
 		sockets.append(strip.send)
+	if presence != null:
+		for avatar: Presence.Avatar in presence.avatars():
+			if avatar.send != null:
+				sockets.append(avatar.send)
 	for socket in sockets:
 		if not socket.pressed.is_connected(_on_send_pressed):
 			socket.pressed.connect(_on_send_pressed.bind(socket.source))
@@ -1893,7 +1910,16 @@ func _on_roster_for_patches() -> void:
 			if not Session.participants.has(peer):
 				patches.erase(peer)
 				_publish_room_soon()
-	_show_patches()
+		# And the plugs in the keys of whoever left come back to their trays.
+		for peer in patches.keys():
+			var row: Array = patches[peer]
+			for i in row.size():
+				var into := PersonalMix.player_of(StringName(row[i]))
+				if into > 0 and not Session.participants.has(into):
+					_set_patch(peer, i, &"", false)
+					_publish_room_soon()
+	# After the ghosts: a new one's pack is made on the same news.
+	_show_patches.call_deferred()
 
 
 func _colour_of(peer: int) -> Color:

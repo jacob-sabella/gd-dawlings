@@ -22,6 +22,9 @@ const TITLES := {&"mix": "MIX", &"keys": "MY KEYS"}
 ## A channel strip's send socket is named for its track: "track_5". Its sound here is the track's
 ## cue (GodotBackend.cue_bus), where this machine plays the tracks itself.
 const TRACK := "track_"
+## A player's keys, on the pack their ghost wears: "keys_7", by peer id. Their notes are played
+## here (TheirKeys), so wherever this machine is, it hears them.
+const PLAYER := "keys_"
 ## A receiver's level: from off, through unity, to a little gain for a quiet source.
 const FLOOR_DB := -60.0
 const TOP_DB := 6.0
@@ -49,7 +52,7 @@ func _init() -> void:
 
 ## A socket a plug may go into: one there is, or none.
 static func valid_socket(socket: StringName) -> bool:
-	return socket == &"" or SOURCES.has(socket) or track_of(socket) > 0
+	return socket == &"" or SOURCES.has(socket) or track_of(socket) > 0 or player_of(socket) > 0
 
 
 static func track_socket(index: int) -> StringName:
@@ -58,16 +61,32 @@ static func track_socket(index: int) -> StringName:
 
 ## The track a socket is on a strip of, or 0 for the master's.
 static func track_of(socket: StringName) -> int:
+	return _numbered(socket, TRACK)
+
+
+static func player_socket(peer: int) -> StringName:
+	return StringName(PLAYER + str(peer))
+
+
+## The player whose keys a socket is on, or 0.
+static func player_of(socket: StringName) -> int:
+	return _numbered(socket, PLAYER)
+
+
+static func _numbered(socket: StringName, prefix: String) -> int:
 	var s := String(socket)
-	if not s.begins_with(TRACK) or not s.substr(TRACK.length()).is_valid_int():
+	if not s.begins_with(prefix) or not s.substr(prefix.length()).is_valid_int():
 		return 0
-	return maxi(int(s.substr(TRACK.length())), 0)
+	return maxi(int(s.substr(prefix.length())), 0)
 
 
 ## What a socket is called: the master's by TITLES, a strip's by its track's name.
 static func title_of(socket: StringName) -> String:
 	if TITLES.has(socket):
 		return TITLES[socket]
+	var peer := player_of(socket)
+	if peer > 0:
+		return "%s'S KEYS" % Session.name_of(peer).to_upper()
 	var index := track_of(socket)
 	if index <= 0:
 		return ""
@@ -122,6 +141,8 @@ func bus_of(receiver: int) -> StringName:
 	var s := sockets[receiver]
 	if SOURCES.has(s):
 		return SOURCES[s]
+	if player_of(s) > 0:
+		return TheirKeys.bus_of(player_of(s))
 	var index := track_of(s)
 	return GodotBackend.cue_bus(index) if index > 0 and hears_tracks else &""
 
@@ -138,5 +159,16 @@ func tracks() -> Array[int]:
 		var index := track_of(s)
 		if index > 0 and index not in out:
 			out.append(index)
+	out.sort()
+	return out
+
+
+## The players whose keys are patched, each once, in order.
+func players() -> Array[int]:
+	var out: Array[int] = []
+	for s in sockets:
+		var peer := player_of(s)
+		if peer > 0 and peer not in out:
+			out.append(peer)
 	out.sort()
 	return out

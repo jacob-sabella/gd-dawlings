@@ -78,6 +78,13 @@ signal item_carried(item: StringName, local: Transform3D, from: int)
 ## Something in `from`'s hand, used: a duck squeezed (`down`) or let go of. Reliable, because a
 ## squeak is an event, and a lost one is a silence nobody can account for.
 signal item_used(item: StringName, down: bool, from: int)
+## A key or the pedal on `from`'s keys, as they play it (`send_note`): for anyone patched into
+## their keys to play here (TheirKeys). Reliable and ordered, because a lost note-off is a note
+## that never stops.
+signal note_played(kind: int, pitch: int, velocity: int, from: int)
+
+## What a `note_played` is.
+enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
 
 var role: int = Role.SOLO
 ## {peer_id: Participant}
@@ -126,6 +133,8 @@ const AUDIO_TAKE_CHANNEL := 3
 ## Things being pushed about the room: unreliable and ordered, on a channel of their own so a
 ## rack being wheeled is never queued behind anyone's head.
 const MOTION_CHANNEL := 4
+## Notes as they are played: their own channel, so a key is never queued behind a room update.
+const KEYS_CHANNEL := 5
 ## Host: the take each guest is sending now, by peer id -- {id, take, track, start, name, refused}.
 var _incoming_takes := {}
 ## Takes written on this host this run, for naming their files.
@@ -970,6 +979,60 @@ func _item_use_up(item: StringName, down: bool) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _item_use(item: StringName, down: bool, from: int) -> void:
 	item_used.emit(item, down, from)
+
+
+## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and
+## come in tens a second at most, so they go to everyone rather than being asked for; whoever is
+## patched into my keys plays them.
+func send_note(kind: int, pitch: int, velocity: int) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_note.rpc_id(id, kind, pitch, velocity, local_peer_id)
+	else:
+		_note_up.rpc_id(1, kind, pitch, velocity)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _note_up(kind: int, pitch: int, velocity: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	note_played.emit(kind, pitch, velocity, from)
+	for id in _audience():
+		if id != from:
+			_note.rpc_id(id, kind, pitch, velocity, from)
+
+
+@rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
+func _note(kind: int, pitch: int, velocity: int, from: int) -> void:
+	note_played.emit(kind, pitch, velocity, from)
+
+
+## The round trip to `peer` in milliseconds, as the connection measures it: a host knows it for
+## every guest, a guest only for the host. -1 where there is no such connection.
+func round_trip_ms(peer: int) -> float:
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet == null or not _connected():
+		return -1.0
+	var packet := enet.get_peer(peer) if role == Role.HOST else enet.get_peer(1)
+	if packet == null:
+		return -1.0
+	return packet.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME)
+
+
+## Roughly how long after `peer` plays a key its note reaches this machine: one way to the host,
+## and one way on to here unless this is the host. A guest does not know the other guest's leg,
+## and takes it to be its own.
+func note_delay_ms(peer: int) -> float:
+	if role == Role.HOST:
+		var rtt := round_trip_ms(peer)
+		return rtt * 0.5 if rtt >= 0.0 else -1.0
+	var mine := round_trip_ms(1)
+	if mine < 0.0:
+		return -1.0
+	return mine * 0.5 if peer == 1 else mine
 
 
 static func room_ask_is_valid(verb: StringName, args: Array) -> bool:

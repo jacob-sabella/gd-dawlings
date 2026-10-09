@@ -325,6 +325,7 @@ func _sync_avatars() -> void:
 			var avatar := Avatar.new()
 			avatar.name = "Avatar%d" % id
 			add_child(avatar)
+			avatar.wear_keys_pack(id)
 			_avatars[id] = avatar
 		_avatars[id].dress(p.display_name, p.colour, p.medium, id == 1, p.look)
 
@@ -388,6 +389,16 @@ func _apply_items() -> void:
 
 ## Where the item in `peer`'s hand is: their ghost's palm, or where it is now if they have no
 ## ghost here to hold it.
+## The ghost of `peer`, or null: nobody's for this machine's own.
+func avatar_of(peer: int) -> Avatar:
+	return _avatars.get(peer)
+
+
+## Everyone else's ghosts.
+func avatars() -> Array:
+	return _avatars.values()
+
+
 func _palm_of(peer: int, item: Item) -> Transform3D:
 	var avatar: Avatar = _avatars.get(peer)
 	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
@@ -589,6 +600,9 @@ void fragment() {
 	## What the left glove carries (docs/items_loop.md): a look of the item, sat on its palm, in
 	## a mirror; nothing of its own for somebody else's ghost, whose glove the real item rides.
 	var _carried: Node3D = null
+	## The SEND socket on this player's keys pack (`wear_keys_pack`); null on a reflection.
+	var send: SendSocket = null
+	var _keys_lamp: MeshInstance3D = null
 	var _carried_kind := &""
 	## Where the carried item is, relative to the eye, as its holder last said; until they have,
 	## held out in front of the chest.
@@ -889,6 +903,10 @@ void fragment() {
 		(_dot.material_override as StandardMaterial3D).albedo_color = colour.lightened(0.3)
 		_beam_material.albedo_color = Color(colour, 0.55)
 		_rim.tint = colour
+		if _keys_lamp != null:
+			_keys_lamp.material_override = Materials.led(colour, true)
+		if send != null:
+			send.label = display_name.to_upper() + "'S KEYS"
 
 	## Put on a look (GhostLook): body colour, eyes, hat, gloves. Their session colour still
 	## glows round the edge and tints what they wear, so a look never hides who someone is.
@@ -1155,6 +1173,53 @@ void fragment() {
 		var at := lean.global_transform.orthonormalized() * Transform3D(Basis.IDENTITY, _hat.position)
 		# Forward a little, as the hat's headphones are: the dome's widest is in front of its middle.
 		return Transform3D(at.basis.scaled(Vector3.ONE * unit * HEAD_FIT), at * Vector3(0, 0, 0.02 * unit))
+
+	## The pack their keys send from, low on their belly: a SEND socket anyone can drag a plug
+	## from their tablet into, to hear this player's keys (PersonalMix, TheirKeys). Built in the
+	## ghost's own units, so it sways with it; the socket is at its real size, as every socket is.
+	func wear_keys_pack(peer: int) -> void:
+		if send != null:
+			return
+		var y := -0.42
+		# A little to the ghost's left of its middle, clear of where its hands come to rest.
+		var turn := 0.5
+		var out := Vector3(sin(turn), 0, -cos(turn))
+		var pack := Node3D.new()
+		pack.name = "KeysPack"
+		var z := out
+		var x := Vector3.UP.cross(z).normalized()
+		pack.transform = Transform3D(Basis(x, Vector3.UP, z), out * (radius_at(y) + 0.012) + Vector3(0, y, 0))
+		_lean.add_child(pack)
+		var body := BoxMesh.new()
+		body.size = Vector3(0.085, 0.11, 0.03)
+		var case := StandardMaterial3D.new()
+		case.albedo_color = Color(0.08, 0.085, 0.095)
+		case.roughness = 0.6
+		_part(body, case, pack)
+		var aerial := CylinderMesh.new()
+		aerial.top_radius = 0.004
+		aerial.bottom_radius = 0.005
+		aerial.height = 0.07
+		aerial.radial_segments = 8
+		aerial.rings = 1
+		_part(aerial, case, pack).position = Vector3(0.028, 0.09, 0)
+		var lamp := BoxMesh.new()
+		lamp.size = Vector3(0.012, 0.006, 0.002)
+		_keys_lamp = _part(lamp, Materials.led(_colour, true), pack)
+		_keys_lamp.position = Vector3(-0.025, 0.04, 0.0155)
+		var word := Label3D.new()
+		word.text = "KEYS"
+		word.font_size = 40
+		word.pixel_size = 0.0007
+		word.position = Vector3(0.008, 0.038, 0.0155)
+		word.modulate = Color(0.86, 0.87, 0.89)
+		pack.add_child(word)
+		send = SendSocket.new()
+		send.source = PersonalMix.player_socket(peer)
+		send.label = _tag.text.to_upper() + "'S KEYS" if _tag.text != "" else "KEYS"
+		send.position = Vector3(0, -0.012, 0.015)
+		send.scale = Vector3.ONE / SIZE
+		pack.add_child(send)
 
 	## Something real is on its head: its own hat comes off while it is, so they do not sit one
 	## in the other.

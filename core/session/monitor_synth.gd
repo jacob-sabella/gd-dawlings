@@ -48,6 +48,9 @@ var volume_db := -6.0:
 var native: NativeKeys = null
 ## Off: always through Godot. For the suite, and R3D_GODOT_KEYS=1 to compare.
 var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
+## The bus it plays on through Godot: the keys' own (Monitor) unless told otherwise -- another
+## player's keys played here have a bus of their own (TheirKeys).
+var bus: StringName = &""
 
 var _player: AudioStreamPlayer = null
 var _playback: AudioStreamGeneratorPlayback = null
@@ -126,7 +129,7 @@ func start() -> void:
 	stream.buffer_length = 4096.0 / RATE
 	_player = AudioStreamPlayer.new()
 	_player.name = "MonitorSynth"
-	_player.bus = AudioPorts.bus(AudioPorts.MONITOR)
+	_player.bus = bus if bus != &"" else AudioPorts.bus(AudioPorts.MONITOR)
 	_player.stream = stream
 	_player.volume_db = volume_db
 	add_child(_player)

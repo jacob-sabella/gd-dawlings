@@ -10,6 +10,9 @@ extends Node
 ## hears its own keys from a small local synth, never round trip. See docs/architecture.md,
 ## "Recording a guest".
 ##
+## Every note also goes to everyone as it is played (Session.send_note), the host's keys and
+## guests' alike, for whoever has a plug in this player's keys (TheirKeys).
+##
 ## A take follows the host's transport: it begins when the guest HEARS the host start recording
 ## and ends when it hears the recording stop -- heard, not told, so the take's edges are on the
 ## same clock as its notes.
@@ -154,6 +157,7 @@ func _input(event: InputEvent) -> void:
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.note_on(pitch, velocity)
+	Session.send_note(Session.Note.ON, pitch, velocity)
 	held[pitch] = velocity
 	if _take != null:
 		_take.note_on(pitch, velocity, channel, stamp(age))
@@ -163,6 +167,7 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.note_off(pitch)
+	Session.send_note(Session.Note.OFF, pitch, 0)
 	held.erase(pitch)
 	if _take != null:
 		_take.note_off(pitch, channel, stamp(age))
@@ -172,6 +177,7 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.sustain(down)
+	Session.send_note(Session.Note.PEDAL_DOWN if down else Session.Note.PEDAL_UP, 0, 0)
 	if _take != null:
 		_take.sustain(down, channel, stamp(age))
 

@@ -1339,6 +1339,15 @@ Master, never into the mix a host sends its guests. The strips' sockets are one 
 (`MeshBank.meshed`) with shadows off; a lit ring and plugs are made only for a socket with
 plugs in it.
 
+Every other player's ghost wears a KEYS pack (`Avatar.wear_keys_pack`, `core/session/presence.gd`)
+with a send socket named `keys_N` for their peer id. Their notes come here, not their audio:
+`GuestMidi` passes each note to `Session.send_note`, which relays it on `KEYS_CHANNEL` (reliable)
+and emits `note_played` everywhere else. `TheirKeys` (`core/audio/their_keys.gd`) plays the patched
+players' notes on a `MonitorSynth` each, on bus "Their keys N", only while headphones are on.
+Notes are played on arrival with no jitter buffer, so they land one network trip late (two, guest
+to guest) plus the synth's queue. The notice gives the figure from ENet's round trip
+(`Session.note_delay_ms`).
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

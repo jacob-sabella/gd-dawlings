@@ -28,6 +28,9 @@ var _walk_mirror := 0.0
 ## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
 ## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's).
 var _carry := ""
+## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
+## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
+var _visitor: Array = []
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
 var _throw := Vector2(-1, -1)
@@ -117,6 +120,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--carry":
 				if i + 1 < args.size(): _carry = args[i + 1]
+			"--visitor":
+				if i + 1 < args.size(): _visitor = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--throw":
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
@@ -185,6 +190,17 @@ func _process(_delta: float) -> void:
 			w.pitch = _walk[3]
 			w.eye_height = w.standing_eye
 			w._place_camera()
+
+	if _frames == 5 and _visitor.size() >= 3:
+		var lin := Session.Participant.new()
+		lin.peer_id = 7
+		lin.display_name = "Lin"
+		lin.colour_index = 2
+		lin.head = Transform3D(Basis(Vector3.UP, _visitor[2]), Vector3(_visitor[0], 1.55, _visitor[1]))
+		Session.participants[7] = lin
+		Session.roster_changed.emit()
+	if _frames >= 5 and Session.participants.has(7):
+		(Session.participants[7] as Session.Participant).heard_msec = Time.get_ticks_msec()
 
 	if _frames == 9 and _carry != "":
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
