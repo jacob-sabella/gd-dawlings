@@ -126,6 +126,9 @@ func _ready() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	# VENUE=<id> scans that venue rather than the one the layout last chose.
+	if OS.get_environment("VENUE") != "":
+		studio.set_venue(StringName(OS.get_environment("VENUE")), false, 0)
 	for i in 6:
 		await get_tree().process_frame
 	var hits := scan(studio)
@@ -141,7 +144,7 @@ func _ready() -> void:
 	for k in keys:
 		var h: Array = kinds[k][1]
 		print("%5d  %s   e.g. %s | %s  gap %.5f" % [kinds[k][0], k, label(h[0]), label(h[1]), h[2]])
-		if h[2] < 0.0006:
+		if h[2] < 0.0006 or OS.get_environment("VENUE") != "":
 			for m in [h[0], h[1]]:
 				var mm: Node3D = m[0] if m is Array else m
 				var mesh: Mesh = mm.multimesh.mesh if m is Array else mm.mesh

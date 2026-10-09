@@ -189,7 +189,9 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [x] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
   - [ ] Dome follow-up: a school of small fish wheeling round the vault, rocks and a little coral
         in the trench.
-- [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
+- [x] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
+  - [ ] Club follow-up: an upright piano or a bass on its side on the stage, a coat left on a
+    booth bench, glasses left on the tables; slow dust turning in the spot's beam.
 - [ ] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
 - [ ] Pass over every venue: shoot them side by side and even out anything that drifted (light,

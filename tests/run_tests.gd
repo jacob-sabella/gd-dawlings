@@ -6483,6 +6483,45 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	for shaft in dome.shafts:
 		leaning = leaning and shaft.basis.y.normalized().dot(DomeVenue.SUN_DIR.normalized()) > 0.999
 	check("the shafts of light lean the way the sun comes down", leaning)
+
+	# The jazz club: one spot on the stage, the furniture along the side walls, the bottles on
+	# their shelves, the stools turned up on the bar, the curtain behind the stage.
+	studio.set_venue(&"club", false)
+	var club := studio.venue as ClubVenue
+	var stage_box: AABB = club.zones()[&"drums"]
+	var beam_dir := -club.spot.global_transform.basis.z.normalized()
+	var drop := club.spot.global_position.y - ZoneKit.RISER_HEIGHT
+	var lands := club.spot.global_position + beam_dir * (drop / -beam_dir.y)
+	check("club: the one spot lands on the stage (%.2f, %.2f), and casts shadows" % [lands.x, lands.z],
+			stage_box.grow(-0.3).has_point(Vector3(lands.x, 1.0, lands.z)) and club.spot.shadow_enabled
+			and club.find_children("*", "SpotLight3D", true, false).filter(
+				func(l): return l.light_energy > 5.0).size() == 1)
+	var club_house := club.back_of_house()
+	var club_strips := club.rooms().slice(1)
+	var furniture_ok := true
+	for solid: Dictionary in club.zone_solids().slice(ZoneKit.solids(club.zones(), true).size()):
+		var c: Vector2 = solid["c"]
+		furniture_ok = furniture_ok and not club_house.has_point(c) and club_strips.any(
+				func(s: Rect2): return s.has_point(c))
+	check("the bar, booths and stools are solid, along the sides, not in the back of house",
+			furniture_ok and club.zone_solids().size() > ZoneKit.solids(club.zones(), true).size() + 6)
+	var shelved := club.bottle_spots.size() > 40
+	for spot in club.bottle_spots:
+		shelved = shelved and club.bottle_levels.any(func(y): return absf(spot.origin.y - y) < 0.001) \
+				and spot.origin.x > ClubVenue.BAR_FRONT + ClubVenue.COUNTER_DEPTH
+	check("every bottle stands on a shelf behind the counter (%d)" % club.bottle_spots.size(), shelved)
+	var upturned := 0
+	for stool in club.find_children("Stool*", "", false, false):
+		if (stool as Node3D).basis.y.y < -0.99 and (stool as Node3D).position.y > ClubVenue.BAR_TOP:
+			upturned += 1
+	check("after hours: the stools are up on the bar, all but two (%d)" % upturned,
+			upturned == club.stool_spots().size() - 2 and upturned > 0)
+	var curtain := club.find_child("Curtain", false, false) as MeshInstance3D
+	check("the curtain hangs behind the stage, facing the room",
+			curtain.position.z > stage_box.end.z and curtain.global_transform.basis.z.z < -0.99)
+	var flame_before := club.candles[0].light_energy
+	club._process(0.13)
+	check("the candles flicker", club.candles.size() == 3 and club.candles[0].light_energy != flame_before)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
