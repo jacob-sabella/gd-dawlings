@@ -9,9 +9,8 @@ extends Node3D
 ## the air, and how all of it is lit. Swapping one is a change of scenery, never of setup, which
 ## is why it is safe to do mid-session and why it is one key.
 ##
-## PER PARTICIPANT, like the layout it is saved in. Two people in one session can stand in two
-## different venues around the same console; nothing about the mix depends on what the room
-## looks like, so nothing about the venue is replicated.
+## Saved in the layout on your own; in a session, the HOST'S, like everything else about the room
+## (see Session.room). A guest is shown the host's venue and keeps its own for later.
 ##
 ## Every venue keeps the same working footprint (room_width x Studio.ROOM_DEPTH) because the
 ## furniture's floor plan is that rectangle. A venue with no walls marks it instead -- a lit

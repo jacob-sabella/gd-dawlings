@@ -18,9 +18,13 @@ colour the lamps shine.
 - `--venue <id>` on the command line applies for one run only and is not saved.
 - Otherwise the choice is saved in the layout profile (`[profile] venue`) and comes back next session.
 
-The choice is per participant and never replicated. Two people at one console can stand in
-different worlds; nothing about the mix depends on the scenery. In AR there is no venue at all,
-because the room is the real one.
+On your own the choice is yours. In a session it is the host's: the venue is part of the room
+everyone stands in (`Session.room`), a guest is shown it and cannot change it, and the guest's own
+choice comes back when it is on its own again. In AR there is no venue at all, because the room
+is the real one.
+
+Iterating on venues has its own brief: `docs/environments_loop.md`. `tools/light_check.sh` is the
+light budget every venue must stay within.
 
 ## Contract
 
