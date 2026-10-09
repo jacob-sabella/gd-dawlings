@@ -411,8 +411,24 @@ ergonomics.
         the view. Shots are 1600x900: crop from that, not from 1080p guesses.
       - A copy that is told a dart is stuck must not keep an old score from an earlier throw.
       Not tried in a headset, where a throw is a real arm's throw and wants no aim assist.
-- [ ] Toys round the room, the rest: a mini hoop over a door, a Newton's cradle by the desk, a
-      yo-yo. Each venue gets one toy of its own (a snowball, a beach ball, a slinky...).
+- [x] Toys round the room, second: a mini hoop.
+      Done: a mini hoop on a weighted stand, against the right-hand wall at the front of the live
+      room, across the room from the shelf the ball lives on. It has a 23 cm rim, a lined
+      backboard and a cord net, a lamp on an arm over the board, and the venue's own steel or
+      chrome. In the chalk zone it is drawn. A thrown ball comes off the rim (a clang) and off the
+      board (a smack). Dropping down through the ring is a basket: the net swishes, stretches and
+      swings, and "SWISH" (touched nothing) or "IN" rises over the board. Only round things meet
+      it; a duck flies through as if it were not there. It adds 42 draws and about 9.7k triangles
+      to the wide view, and nothing per frame at rest. Learnings:
+      - A net has to be a wall, not just drag: with drag alone, a ball going in at a slant ran
+        out through the side of the net and on under the board.
+      - A ball's air drag puts a drag-free lob about 3 cm short over 2 m, which is the difference
+        between a swish and the front of the rim. Aim a touch long.
+      - `--lob x,y,z,speed@tick` in the shot tool throws exactly at a point, for a shot of
+        something getting there.
+      Not tried in a headset, where a basket is a real throw and should be very satisfying.
+- [ ] Toys round the room, the rest: a Newton's cradle by the desk, a yo-yo. Each venue gets one
+      toy of its own (a snowball, a beach ball, a slinky...).
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's

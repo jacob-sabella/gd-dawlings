@@ -72,6 +72,7 @@ var loose_for := 0.0
 var flight: Flight = null
 var _flight_t := 0.0
 var _hits_played := 0
+var _baskets_played := 0
 ## How many times it has been thrown in this room. The room carries it, so a copy that has
 ## already flown a throw does not fly it again when the room says it was thrown.
 var throws := 0
@@ -290,6 +291,7 @@ func launch(f: Flight, with: Array, stays := true) -> void:
 	flight = f
 	_flight_t = 0.0
 	_hits_played = 0
+	_baskets_played = 0
 	throws += 1
 	launched_with = with
 	_size = 1.0
@@ -511,9 +513,19 @@ func _fly(delta: float) -> void:
 	position = pose.origin + middle - pose.basis * middle
 	while _hits_played < flight.hits.size() and flight.hits[_hits_played] <= _flight_t:
 		var speed := flight.hit_speeds[_hits_played]
+		var on := flight.hit_on[_hits_played] if _hits_played < flight.hit_on.size() else Flight.FLOOR
 		_hits_played += 1
 		poke(-clampf(speed * 0.05, 0.0, 0.4))
-		on_bounce(speed)
+		# A hoop's rim or board makes its own noise; the room has the hoop.
+		var room := ItemRoom.of(self)
+		if on == Flight.FLOOR or room == null or not room.hoop_struck(on, speed, global_position):
+			on_bounce(speed)
+	while _baskets_played < flight.baskets.size() and flight.baskets[_baskets_played]["t"] <= _flight_t:
+		var basket: Dictionary = flight.baskets[_baskets_played]
+		_baskets_played += 1
+		var room := ItemRoom.of(self)
+		if room != null:
+			room.basket(self, basket["hoop"], basket["clean"])
 	_squash_speed += (-_squash * 300.0 - _squash_speed * 12.0) * delta
 	_squash += _squash_speed * delta
 	var s := clampf(_squash, -0.45, 0.45)

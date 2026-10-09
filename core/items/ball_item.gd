@@ -55,7 +55,8 @@ func centre_height() -> float:
 
 ## Most of its speed back off anything it hits, and it rolls a long way.
 func flies() -> Dictionary:
-	return {"bounce": 0.78, "roll": 0.7, "drag": 0.05}
+	# Round, so it goes off a hoop's rim and through its net (Flight.fly's `hoops`).
+	return {"bounce": 0.78, "roll": 0.7, "drag": 0.05, "radius": RADIUS}
 
 
 func use(down: bool) -> void:

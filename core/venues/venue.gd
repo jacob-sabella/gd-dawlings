@@ -284,6 +284,24 @@ func dart_spot(n: int) -> Transform3D:
 	return dartboard_spot() * Transform3D(Basis(Vector3.RIGHT, 0.15), Vector3(on.x, on.y, -DartItem.POINT_IN))
 
 
+## Where the mini hoop stands, in studio space: its foot, its board facing into the room. On
+## the right-hand wall at the front of the live room, the opposite side from the shelf the ball
+## lives on: in front of the bricks table and the synth stand, clear of both, a throw across the
+## room from the shelf.
+func hoop_spot() -> Transform3D:
+	var x := live_room_half() - 0.12 + Hoop.POLE_Z
+	var z := Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.32
+	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, z))
+
+
+## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop
+## that sounds it as its "node" when the venue has stood one.
+func hoops() -> Array:
+	var shape := Hoop.shape(hoop_spot())
+	shape["node"] = get_node_or_null("Hoop")
+	return [shape]
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.
@@ -312,6 +330,7 @@ func solids() -> Array:
 		out.append({"c": Vector2(spot.origin.x, spot.origin.z),
 				"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
 				"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
+		out.append_array(Hoop.solids(hoop_spot()))
 	return out
 
 
@@ -330,6 +349,10 @@ func _dress_prop_shelf(top: Material, frame: Material, lamp := Color(1.0, 0.76, 
 	holder.transform = prop_shelf_spot()
 	add_child(holder)
 	ZoneKit.prop_shelf(holder, top, frame, lamp)
+	# The hoop across the room is the shelf's: its stand in the shelf's frame.
+	var hoop := Hoop.new(frame, null, false, lamp)
+	hoop.transform = hoop_spot()
+	add_child(hoop)
 	return holder
 
 

@@ -53,6 +53,9 @@ var solids: Callable = Callable()
 var gear: Callable = Callable()
 ## What a dart sticks in (Flight.fly's `boards`), in this node's frame: the venue's dartboard.
 var boards: Array = []
+## The baskets in the room (Venue.hoops), in its frame, for a round thing thrown at one: the
+## shapes Flight.fly takes, and each its "node", the Hoop that swishes and clangs.
+var hoops: Array = []
 var _spots: Array[Transform3D] = []
 ## Homes of their own, off the shelf's top, by kind: the mic's stand, the headphones' hook, the
 ## tablet's lower tier.
@@ -263,8 +266,42 @@ func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
 	var facing := Quaternion(Basis(Vector3.UP, atan2(-velocity.x, -velocity.z)))
 	var f := Flight.fly(start, velocity, spin, facing, floor,
 			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
-			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0))
+			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0),
+			hoops if how.has("radius") else [], how.get("radius", 0.0))
 	item.launch(f, [origin, velocity, spin], f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z)))
+
+
+## Something in flight hit a hoop's rim or board (Flight.RIM, Flight.BOARD) at `at` (world
+## space): the nearest hoop sounds it. Whether there was one to.
+func hoop_struck(on: int, speed: float, at: Vector3) -> bool:
+	var hoop := _nearest_hoop(at)
+	if hoop == null:
+		return false
+	hoop.struck(on == Flight.RIM, speed)
+	return true
+
+
+## `item` has just dropped through hoop `index`, touching nothing on the way if `clean`.
+func basket(item: Item, index: int, clean: bool) -> void:
+	if index < 0 or index >= hoops.size():
+		return
+	var hoop = hoops[index].get("node")
+	if hoop is Hoop and is_instance_valid(hoop):
+		(hoop as Hoop).sink(clean, item)
+
+
+func _nearest_hoop(at: Vector3) -> Hoop:
+	var best: Hoop = null
+	var nearest := INF
+	for h: Dictionary in hoops:
+		var node = h.get("node")
+		if not (node is Hoop) or not is_instance_valid(node):
+			continue
+		var d := (node as Hoop).global_position.distance_to(at)
+		if d < nearest:
+			nearest = d
+			best = node
+	return best
 
 
 ## What `aim` (world space) is aimed at, for a thrown thing that is aimed (Item.aim_scatter):

@@ -435,6 +435,7 @@ func _walk_where_the_venue_lets() -> void:
 		walker.unstick()
 	if items != null and venue != null:
 		items.boards = venue.dart_boards()
+		items.hoops = venue.hoops()
 		items.set_spots(venue.item_spots(), _item_homes())
 
 
@@ -1757,6 +1758,7 @@ func _build_items() -> void:
 				func(item: Item) -> bool: return item.network_key() == key)
 	studio_set.add_child(items)
 	items.boards = venue.dart_boards()
+	items.hoops = venue.hoops()
 	items.set_spots(venue.item_spots(), _item_homes())
 	var mic := items.items.get(&"mic") as MicItem
 	if mic != null:

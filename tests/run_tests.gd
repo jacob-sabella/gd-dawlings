@@ -136,6 +136,7 @@ func _ready() -> void:
 	await _test_a_keytar_plays_your_keys_and_shows_them()
 	await _test_chips_and_cards_do_their_tricks_in_turn()
 	await _test_darts_stick_in_the_board_and_score()
+	await _test_a_ball_goes_through_the_hoop()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -11169,6 +11170,112 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+func _test_a_ball_goes_through_the_hoop() -> void:
+	# A hoop at the origin, its board facing +Z; a ball lobbed at it from across the room.
+	var shape := Hoop.shape(Transform3D.IDENTITY)
+	var rim: Vector3 = (shape["at"] as Transform3D).origin
+	var from := Vector3(0.1, 1.5, 2.6)
+	var fly := func(to: Vector3, speed: float, radius := BallItem.RADIUS) -> Flight:
+		return Flight.fly(from, ItemRoom.lob(from, to, speed), Vector3.ZERO, Quaternion.IDENTITY, [], [],
+				0.78, 0.7, 0.0, {}, [], 0.0, [shape], radius)
+	var swish: Flight = fly.call(rim, 3.0)
+	check("a ball lobbed down into the middle of the rim goes through it, a swish (%s)" % [swish.baskets],
+			swish.baskets.size() == 1 and swish.baskets[0]["clean"] and swish.baskets[0]["hoop"] == 0
+			and not swish.hit_on.has(Flight.RIM) and not swish.hit_on.has(Flight.BOARD))
+	var under := swish.at(swish.baskets[0]["t"] + 0.1).origin
+	check("and drops out of the net below it (%s)" % [under], under.y < rim.y - 0.1
+			and Vector2(under.x - rim.x, under.z - rim.z).length() < Hoop.RIM_RADIUS)
+	var clang: Flight = fly.call(rim + Vector3(0, 0.0, Hoop.RIM_RADIUS), 3.0)
+	check("one dropped onto the front of the rim comes off it (%s)" % [clang.hit_on],
+			clang.hit_on.size() > 0 and clang.hit_on[0] == Flight.RIM)
+	var banked: Flight = fly.call(Vector3(0, Hoop.BOARD_Y, 0), 6.0)
+	check("one thrown at the board comes back off it, in front of it (%s)" % [banked.hit_on],
+			banked.hit_on.size() > 0 and banked.hit_on[0] == Flight.BOARD
+			and banked.at(banked.hits[0] + 0.05).origin.z > Hoop.BOARD_FRONT + BallItem.RADIUS * 0.9)
+	var rimmed_in := false
+	for dx in [-0.06, -0.04, 0.04, 0.06]:
+		for dz in [-0.05, 0.05, 0.08]:
+			var f: Flight = fly.call(rim + Vector3(dx, 0, dz), 3.0)
+			if f.baskets.size() == 1 and not f.baskets[0]["clean"]:
+				rimmed_in = true
+	check("one that touches the rim on its way in still counts, not as a swish", rimmed_in)
+	var nothing := Flight.fly(from, ItemRoom.lob(from, rim, 3.0), Vector3.ZERO, Quaternion.IDENTITY, [], [])
+	check("and with no hoop there is no basket", nothing.baskets.is_empty())
+
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+
+	# In every venue: a hoop, standing where it can be walked up to, in nobody's way.
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var spot := studio.venue.hoop_spot()
+		var hoop := studio.venue.get_node_or_null("Hoop") as Hoop
+		if hoop == null or studio.items.hoops.size() != 1 or studio.items.hoops[0].get("node") != hoop:
+			wrong.append("%s: no hoop" % id)
+			continue
+		var front := spot * Vector3(0, 0, 1.0)
+		if not Flight._on_floor(studio.walker.walkable, Vector2(front.x, front.z)) \
+				or Flight._over_solid(studio.walker.fixed, Vector2(front.x, front.z)):
+			wrong.append("%s: nowhere to stand in front of it" % id)
+		var own := Hoop.solids(spot)
+		for corner in [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(1, 0, 1), Vector3(-1, 0, 1)]:
+			var at := spot * Vector3(corner.x * Hoop.BASE_HALF.x, 0, Hoop.BASE_Z + corner.z * Hoop.BASE_HALF.y)
+			for s: Dictionary in studio.walker.fixed:
+				if not own.has(s) and Walker._gap(s, Vector2(at.x, at.z)) <= 0.0:
+					wrong.append("%s: its base is in something" % id)
+		var foot := Vector2(spot.origin.x, spot.origin.z)
+		if absf(foot.x) < studio.venue.room_width * 0.5 + 0.3:
+			wrong.append("%s: on the footprint" % id)
+	check("in every venue there is a hoop, with floor in front of it and nothing under it (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"studio", false)
+
+	# Thrown through it in the room: it swishes, and says so.
+	var hoop := studio.venue.get_node("Hoop") as Hoop
+	var ball := studio.items.items[&"ball"] as BallItem
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var room_rim := studio.items.global_transform * (studio.items.hoops[0]["at"] as Transform3D).origin
+	var stand := studio.items.global_transform * (studio.venue.hoop_spot() * Vector3(0.1, 1.5, 2.2))
+	hand.pick_up(ball)
+	# Aimed a touch long, as a thrower does: the air takes a little off a ball on the way.
+	var long := room_rim + (room_rim - stand) * Vector3(1, 0, 1) * 0.015
+	studio.items.throw(ball, stand, ItemRoom.lob(stand, long, 3.0), Vector3.ZERO)
+	check("a ball thrown at the hoop is flying into it", ball.is_flying() and ball.flight.baskets.size() == 1)
+	for step in 600:
+		ball._physics_process(1.0 / 60.0)
+		if not ball.is_flying():
+			break
+	var said := hoop.get_node_or_null("Said") as Label3D
+	check("through it, the hoop counts it and says so (%s)" % [said.text if said else "nothing"],
+			hoop.made == 1 and said != null and said.text == "SWISH")
+	check("and its net swings", hoop.is_processing())
+	for step in 400:
+		hoop._process(1.0 / 60.0)
+	check("and settles, and stops costing anything", not hoop.is_processing() and hoop.net.scale.is_equal_approx(Vector3.ONE))
+	check("the ball comes down in front of it, on the floor", ball.state == Item.State.LOOSE or ball.state == Item.State.HOME)
+	var duck := studio.items.items[&"duck"] as Item
+	hand.pick_up(duck)
+	studio.items.throw(duck, stand, ItemRoom.lob(stand, long, 3.0), Vector3.ZERO)
+	check("a duck is not a ball: thrown the same way, the hoop is not there for it",
+			duck.flight != null and duck.flight.baskets.is_empty() and not duck.flight.hit_on.has(Flight.RIM))
+	duck.snap_home()
+	hoop.struck(true, 3.0)
+	check("a ball off its rim swings it too", hoop.is_processing())
+	ball.snap_home()
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
 
 
 func _test_darts_stick_in_the_board_and_score() -> void:

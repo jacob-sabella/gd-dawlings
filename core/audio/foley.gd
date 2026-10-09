@@ -332,6 +332,55 @@ static func dart_clatter(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A ball dropping through a cord net: the swish, a breath of noise that rises and falls as the
+## cords drag over it, bright at the start and darker as it slows.
+static func net_swish(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("net_swish_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.32, 1.0, 461 + take * 23)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 463 + take * 29
+		var peak := rng.randf_range(0.07, 0.1)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			# Up fast as it goes in, and away as it leaves the bottom of the net.
+			var env := clampf(t / peak, 0.0, 1.0) * exp(-maxf(0.0, t - peak) / 0.07)
+			s[i] *= 0.3 * env
+		_highpass(s, 900.0)
+		_lowpass(s, 5500.0)
+		return _wav(s, false))
+
+
+## A ball off a hoop's steel rim: a ring, high and short, with the clank of the bracket under it.
+static func rim_clang(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("rim_clang_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.5)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 467 + take * 31
+		var ring := rng.randf_range(820.0, 900.0)
+		# A steel ring's partials are not harmonic: struck, it rings at a few unrelated pitches.
+		_impulse(s, 0.0, 0.3, 0.16, ring, 469 + take)
+		_impulse(s, 0.0, 0.16, 0.1, ring * 2.76, 471 + take)
+		_impulse(s, 0.0, 0.08, 0.05, ring * 5.4, 473 + take)
+		_impulse(s, 0.0, 0.35, 0.012, rng.randf_range(260.0, 320.0), 475 + take)
+		return _wav(s, false))
+
+
+## A ball off a hoop's backboard: a flat plastic smack, and the sheet's short boom on its frame.
+static func board_thud(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("board_thud_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.2)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 479 + take * 37
+		_impulse(s, 0.0, 0.45, 0.006, rng.randf_range(1400.0, 1700.0), 481 + take)
+		_impulse(s, 0.0, 0.5, 0.04, rng.randf_range(110.0, 140.0), 483 + take)
+		_impulse(s, 0.002, 0.2, 0.025, rng.randf_range(330.0, 380.0), 485 + take)
+		_lowpass(s, 4000.0)
+		return _wav(s, false))
+
+
 static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

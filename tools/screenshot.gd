@@ -40,6 +40,11 @@ var _on_air := 0
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
 var _throw := Vector2(-1, -1)
+## `--lob 5.93,2.0,3.12,3@200`: throw what --carry picked up from the hand to that point (studio
+## space) at that speed (m/s), on that physics tick: a throw that goes exactly where it is
+## pointed, for a shot of it getting there. --spectate watches it as for --throw.
+var _lob := PackedFloat32Array()
+var _lob_tick := -1
 ## `--spectate 3,1.2,0:0,0.8,-2`: once --throw has thrown, watch from a camera there looking at
 ## that point (studio space), to see a flight from the side rather than from behind it.
 var _spectate: Array = []
@@ -134,6 +139,11 @@ func _ready() -> void:
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
 					_throw = Vector2(float(parts[0]), int(parts[1]) if parts.size() > 1 else 200)
+			"--lob":
+				if i + 1 < args.size():
+					var parts := args[i + 1].split("@")
+					_lob = PackedFloat32Array(Array(parts[0].split(",")).map(func(v): return float(v)))
+					_lob_tick = int(parts[1]) if parts.size() > 1 else 200
 			"--spectate":
 				if i + 1 < args.size():
 					var ends := args[i + 1].split(":")
@@ -301,6 +311,16 @@ func _capture() -> void:
 	print("SHOT_SAVED %s %dx%d" % [_shot_path, image.get_width(), image.get_height()])
 
 
+## --spectate's camera, from the moment of a throw.
+func _watch_the_throw(studio: Node) -> void:
+	if studio != null and _spectate.size() == 2:
+		var watcher := Camera3D.new()
+		watcher.fov = 70.0
+		studio.add_child(watcher)
+		watcher.look_at_from_position(_spectate[0], _spectate[1])
+		watcher.make_current()
+
+
 ## Driven on physics ticks, not rendered frames. Captures run with vsync off, so hundreds of
 ## frames are drawn per tick, and a drag paced by frames was over before the interactor -- which
 ## reads its button on the physics tick, like every hand -- had looked once.
@@ -309,6 +329,14 @@ func _physics_process(_delta: float) -> void:
 	if not _drags.is_empty():
 		_drive_drag()
 	_drive_scripted()
+	if _lob.size() == 4 and _ticks == _lob_tick:
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
+		if hand != null and hand.carrying is Item:
+			var from := hand.carry_pose().origin
+			var to := Vector3(_lob[0], _lob[1], _lob[2])
+			hand.throw_item(ItemRoom.lob(from, to, _lob[3]), Vector3.ZERO)
+		_watch_the_throw(studio)
 	if _throw.y > 0 and _ticks == int(_throw.y):
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
@@ -317,12 +345,7 @@ func _physics_process(_delta: float) -> void:
 			if hand.pointer_override.x < 0.0 and hand.camera != null:
 				hand.pointer_override = hand.camera.get_viewport().get_visible_rect().size * 0.5
 			hand.throw_with(_throw.x)
-		if studio != null and _spectate.size() == 2:
-			var watcher := Camera3D.new()
-			watcher.fov = 70.0
-			studio.add_child(watcher)
-			watcher.look_at_from_position(_spectate[0], _spectate[1])
-			watcher.make_current()
+		_watch_the_throw(studio)
 	if _shot_tick >= 0 and _ticks == _shot_tick:
 		_shot_frame = _frames + 2
 		if _quit_tick < 0:

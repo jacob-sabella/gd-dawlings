@@ -57,6 +57,21 @@ var stuck := false
 var stuck_on := Vector2.ZERO
 var stuck_board := -1
 var rest_turn := Quaternion.IDENTITY
+## What each hit was against, by hit: FLOOR (the floor, a wall, a solid), RIM or BOARD (a hoop's).
+var hit_on := PackedByteArray()
+## Each time it dropped through a hoop (`fly`'s `hoops`): {"t": seconds from launch, "hoop": which,
+## "clean": whether it touched nothing of the hoop on the way -- a swish}.
+var baskets: Array[Dictionary] = []
+
+enum { FLOOR, RIM, BOARD }
+## How much of its speed into a hoop's rim, and its backboard, a thing gets back: a rim is a
+## stiff steel ring, a board a sprung plastic sheet.
+const RIM_BOUNCE := 0.55
+const BOARD_BOUNCE := 0.6
+## How hard a net holds back what drops through it, per second.
+const NET_DRAG := 12.0
+## How much narrower a net is at the bottom than at the rim.
+const NET_NARROWS := 0.65
 
 
 ## How long it flies for.
@@ -89,9 +104,14 @@ func at(t: float) -> Transform3D:
 ## and where it crosses one of `boards` -- {"at": the board's Transform3D, facing +Z; "half": how
 ## far either way of its middle it can stick, or "radius": how far round it} -- going into the face,
 ## it stops there, `point` in.
+## `hoops`, for something round (`radius` m) thrown at a basket: each {"at": the middle of its
+## rim, y up and z out of its board; "rim": the rim's radius; "tube": the rim's own thickness;
+## "board": its board's face, {"z": how far behind the rim's middle, "y": its middle's height
+## over the rim, "half": Vector2 its half width and height}; "net": how far the net hangs}. It
+## bounces off the rim and the board, and dropping down through the rim is a basket.
 static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quaternion,
 		floor: Array, solids: Array, bounce := 0.35, roll := 3.0, drag := 0.08,
-		wing := {}, boards: Array = [], point := 0.0) -> Flight:
+		wing := {}, boards: Array = [], point := 0.0, hoops: Array = [], radius := 0.0) -> Flight:
 	var f := Flight.new()
 	var p := origin
 	var v := velocity
@@ -105,6 +125,8 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 		bank = clampf(float(wing.get("bank", 0.0)) + spin.dot(velocity.normalized()) * 0.05, -0.9, 0.9)
 		q = _wings(velocity.normalized(), bank)
 	var steps := int(LONGEST / STEP)
+	# Which hoops it has touched, by index: a basket after touching nothing is clean.
+	var touched := {}
 	f.points.append(p)
 	f.turns.append(q)
 	for n in steps:
@@ -117,6 +139,30 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 			v -= v * drag * dt
 		var next := p + v * dt
 		var hit := 0.0
+		var hit_kind := FLOOR
+
+		# A hoop's board and rim, and through it. Worked in the hoop's own frame.
+		for i in hoops.size():
+			var h: Dictionary = hoops[i]
+			var frame: Transform3D = h["at"]
+			var inv := frame.affine_inverse()
+			var was := inv * p
+			var now := inv * next
+			var lv := inv.basis * v
+			var met := _hoop_step(h, was, now, lv, radius, dt)
+			if met.is_empty():
+				continue
+			now = met["now"]
+			lv = met["v"]
+			next = frame * now
+			v = frame.basis * lv
+			if met["hit"] > hit:
+				hit = met["hit"]
+				hit_kind = met["on"]
+			if met["hit"] > 0.0:
+				touched[i] = true
+			if met["through"]:
+				f.baskets.append({"t": (n + 1) * dt, "hoop": i, "clean": not touched.get(i, false)})
 
 		# Into a board's face: stuck there, as far in as the point goes.
 		if point > 0.0 and not grounded:
@@ -133,6 +179,7 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 				f.turns.append(f.rest_turn)
 				f.hits.append((n + 1) * dt)
 				f.hit_speeds.append(v.length())
+				f.hit_on.append(BOARD)
 				var forward_now := nose * Vector3.FORWARD
 				f.rest_yaw = atan2(-forward_now.x, -forward_now.z)
 				return f
@@ -215,6 +262,7 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 		if hit > 0.3:
 			f.hits.append((n + 1) * dt)
 			f.hit_speeds.append(hit)
+			f.hit_on.append(hit_kind)
 		if gliding:
 			if v.length() > 0.01:
 				q = _wings(v.normalized(), bank)
@@ -301,6 +349,68 @@ static func _into_board(boards: Array, p: Vector3, next: Vector3) -> Dictionary:
 		if inside:
 			return {"board": i, "at": cross, "on": Vector2(local.x, local.y)}
 	return {}
+
+
+## One step from `was` to `now` (moving `v`) by hoop `h`, all in its frame, for a ball `radius`
+## round: off its board, off its rim, slowed in its net. Empty if it was nowhere near; else
+## {"now", "v": where it is and how it goes after, "hit": how hard it met something (0 if it did
+## not), "on": RIM or BOARD, "through": whether this step took it down through the rim}.
+static func _hoop_step(h: Dictionary, was: Vector3, now: Vector3, v: Vector3, radius: float,
+		dt: float) -> Dictionary:
+	var rim: float = h["rim"]
+	var board: Dictionary = h["board"]
+	var half: Vector2 = board["half"]
+	var near := Vector2(half.x + radius, half.y + radius).length() + absf(float(board["z"])) + 0.5
+	if was.length() > near and now.length() > near:
+		return {}
+	var hit := 0.0
+	var on := FLOOR
+	# The board: a sheet facing out, met from in front.
+	var face := -float(board["z"]) + radius
+	var by: float = board["y"]
+	if was.z >= face and now.z < face and absf(now.x) <= half.x and absf(now.y - by) <= half.y:
+		if v.z < 0.0:
+			hit = -v.z
+			on = BOARD
+			v.z = -v.z * BOARD_BOUNCE
+		now.z = face
+	# The rim: a ring of steel. Off the nearest point of it, along the line from there to the
+	# ball's middle.
+	var tube: float = h["tube"]
+	var flat := Vector2(now.x, now.z)
+	var ring := flat.normalized() * rim if flat.length() > 0.00001 else Vector2(rim, 0.0)
+	var from_ring := now - Vector3(ring.x, 0.0, ring.y)
+	var gap := from_ring.length()
+	if gap < radius + tube and gap > 0.00001:
+		var out := from_ring / gap
+		var into := v.dot(out)
+		if into < 0.0:
+			if -into > hit:
+				hit = -into
+				on = RIM
+			v -= out * into * (1.0 + RIM_BOUNCE)
+		now = Vector3(ring.x, 0.0, ring.y) + out * (radius + tube)
+	# Down through the middle of the ring: in.
+	var through := was.y >= 0.0 and now.y < 0.0 and v.y < 0.0 and Vector2(now.x, now.z).length() < rim
+	# In the net it is held: the cords are a wall round it, narrowing as it drops, and they take
+	# the speed off it sideways. Only what came in through the top: a ball that drops past the
+	# outside of the net brushes by.
+	var hang: float = h.get("net", 0.0)
+	if now.y < 0.0 and now.y > -hang and (was.y >= 0.0 or Vector2(was.x, was.z).length() < rim):
+		var wide := lerpf(rim, rim * NET_NARROWS, -now.y / hang) - radius * 0.5
+		var off := Vector2(now.x, now.z)
+		if off.length() > wide:
+			off = off.normalized() * wide
+			var out := Vector3(off.x, 0.0, off.y).normalized()
+			var into_net := v.dot(out)
+			if into_net > 0.0:
+				v -= out * into_net * 1.2
+			now = Vector3(off.x, now.y, off.y)
+		var hold := minf(1.0, NET_DRAG * dt)
+		v.x -= v.x * hold
+		v.z -= v.z * hold
+		v.y -= v.y * hold * 0.3
+	return {"now": now, "v": v, "hit": hit, "on": on, "through": through}
 
 
 static func _over_solid(solids: Array, at: Vector2) -> bool:

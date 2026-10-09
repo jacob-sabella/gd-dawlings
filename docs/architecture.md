@@ -1399,6 +1399,19 @@ check is skipped over solid footprints (`_over_solid`), because the walkable flo
 the shelf and a dart thrown at the board hit an invisible wall there. The models come from
 `tools/blender/darts.py`.
 
+The mini hoop (`Hoop`) is furniture, not an item. Each venue stands one at `Venue.hoop_spot`,
+built with the prop shelf, and gives its shape to the room as `Venue.hoops` (`ItemRoom.hoops`).
+Something thrown that says it is round (a `"radius"` in `flies()`: the ball) flies against it in
+`Flight.fly`, in the hoop's own frame (`_hoop_step`): off the board, off the rim (the nearest
+point of the ring), and held by the net, which is a narrowing wall that takes the speed out of a
+ball sideways. Dropping down through the ring is recorded in the flight as a basket
+(`Flight.baskets`, clean if it touched nothing of that hoop). Each hit records what it was
+against (`Flight.hit_on`). As the item plays its flight, a rim or board hit is sounded by the
+nearest hoop (`ItemRoom.hoop_struck`) rather than as the item's own bounce, and a basket is
+handed to the hoop (`ItemRoom.basket`, `Hoop.sink`), which swishes and springs its net. All of it
+comes from the one launch, like everything else in a flight, so every machine sees the same
+basket. The model comes from `tools/blender/hoop.py`.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

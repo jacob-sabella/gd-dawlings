@@ -658,6 +658,41 @@ func _draw_zones() -> void:
 	board_art.name = "Dartboard"
 	shelf.add_child(board_art)
 	_art.append(board_art)
+	# The hoop across the room, drawn: its base and pole, its board, its rim and the net hanging
+	# from it. A ball goes off it and through it all the same (Venue.hoops).
+	var hoop := Hoop.new(null, null, true)
+	hoop.transform = hoop_spot()
+	add_child(hoop)
+	var hoop_lines := _box_lines(Vector3(Hoop.BASE_HALF.x * 2.0, Hoop.BASE_TOP, Hoop.BASE_HALF.y * 2.0),
+			Vector3(0, Hoop.BASE_TOP * 0.5, Hoop.BASE_Z))
+	hoop_lines.append(PackedVector3Array([Vector3(0, Hoop.BASE_TOP, Hoop.POLE_Z), Vector3(0, Hoop.POLE_TOP, Hoop.POLE_Z)]))
+	hoop_lines.append_array(_box_lines(Vector3(Hoop.BOARD_HALF.x * 2.0, Hoop.BOARD_HALF.y * 2.0, 0.012),
+			Vector3(0, Hoop.BOARD_Y, Hoop.BOARD_FRONT - 0.006)))
+	var rim := PackedVector3Array()
+	var bottom := PackedVector3Array()
+	var low := 0.65
+	for k in 33:
+		var a := k * TAU / 32.0
+		rim.append(Vector3(sin(a) * Hoop.RIM_RADIUS, Hoop.RIM_Y, Hoop.RIM_Z + cos(a) * Hoop.RIM_RADIUS))
+		bottom.append(Vector3(sin(a) * Hoop.RIM_RADIUS * low, Hoop.RIM_Y - Hoop.NET_DROP,
+				Hoop.RIM_Z + cos(a) * Hoop.RIM_RADIUS * low))
+	hoop_lines.append(rim)
+	hoop_lines.append(bottom)
+	for k in 12:
+		# The net's cords, each slanting a little round as it goes down.
+		var a := k * TAU / 12.0
+		var b := a + TAU / 24.0
+		hoop_lines.append(PackedVector3Array([
+				Vector3(sin(a) * Hoop.RIM_RADIUS, Hoop.RIM_Y, Hoop.RIM_Z + cos(a) * Hoop.RIM_RADIUS),
+				Vector3(sin(b) * Hoop.RIM_RADIUS * low, Hoop.RIM_Y - Hoop.NET_DROP,
+						Hoop.RIM_Z + cos(b) * Hoop.RIM_RADIUS * low)]))
+	var hoop_drawn: Array = []
+	for line: PackedVector3Array in hoop_lines:
+		hoop_drawn.append(_subdivide(line, 0.2))
+	var hoop_art := Chalk.drawing(hoop_drawn, Chalk.YELLOW * 0.4, 0.008, false, 2, SEED * 23)
+	hoop_art.name = "HoopSketch"
+	hoop.add_child(hoop_art)
+	_art.append(hoop_art)
 
 
 ## What stands in zone `id`, as chalk lines in the zone's floor-centred frame.

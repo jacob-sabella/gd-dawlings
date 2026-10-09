@@ -196,6 +196,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- The hoop: a desktop throw of the ball goes along the view with a loft, not at a target, so a
+  basket from the desk takes practice; there is no aim assist and no shot count or streak. The
+  base solid stops the walker but the ball rolls under the lamp arm's height freely. The chalk
+  hoop is drawn but has no net of its own to swing.
 - Darts: no game round them (rounds of three, a running total, 501 down to zero); each throw
   is scored alone. A dart that misses lies flat on the floor with its flights sunk in it. The
   aimed throw is desktop only; in a headset a dart flies as the arm throws it, untried.
