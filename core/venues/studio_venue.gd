@@ -275,11 +275,6 @@ func _dress_room() -> void:
 	# Acoustic panels: fabric over rockwool, framed, standing a few centimetres off the wall.
 	# Charcoal with two in the room's warm and cool colours, so the walls have rhythm rather
 	# than being one plaster plane from corner to corner.
-	var cloth := {
-		"charcoal": Color(0.07, 0.07, 0.075),
-		"rust": Color(0.22, 0.09, 0.05),
-		"slate": Color(0.06, 0.09, 0.13),
-	}
 	for spec in ACOUSTIC_PANELS:
 		# Not on a window.
 		if variant == BESIDE and (spec[0] as Vector3).x < -3.0:
@@ -294,8 +289,7 @@ func _dress_room() -> void:
 		var grow := (room_width - SessionLayout.BASE_WIDTH) * 0.5
 		panel.position = Vector3(p.x + signf(p.x) * grow * (1.0 if absf(p.x) > 3.0 else 0.6), p.y, p.z)
 		panel.rotation_degrees = Vector3(0, spec[2], 0)
-		panel.material_override = Materials.cached_scanned("panel_" + spec[3], "rough_linen", "1k",
-				0.35, cloth[spec[3]])
+		panel.material_override = _cloth(spec[3])
 		add_child(panel)
 
 	# A rug under the desk and the chair that would be at it: the one soft thing on a hard floor,
@@ -456,7 +450,9 @@ func _build_side_room(wall_mat: Material) -> void:
 	var z0 := -Studio.ROOM_DEPTH * 0.5 + 0.3
 	var z1 := Studio.ROOM_DEPTH * 0.5 + 0.3
 	var mid_z := (z0 + z1) * 0.5
-	var live_wall := Materials.painted_wall(Color(0.10, 0.092, 0.085))
+	# Lighter than the live room behind, which is lit from more fittings: this one's walls are
+	# what its three sconces have to show, and at the back room's near-black they showed nothing.
+	var live_wall := Materials.painted_wall(Color(0.19, 0.17, 0.15))
 	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
 			Color(0.55, 0.45, 0.38))
 	var shy := 0.004
@@ -506,17 +502,60 @@ func _build_side_room(wall_mat: Material) -> void:
 	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(lid)
 
+	_treat_side_room(far, near, z0, z1)
+
 	# Fill from two sconces: on the far wall past the walkway, and on the walkway's wall between
 	# the door and the booth.
 	var brass := _sconce_brass()
-	_hang_sconce(4, Vector3(far + 0.05, 2.1, 1.6), Vector3(1, 0, 0), brass)
-	_hang_sconce(5, Vector3((far + near) * 0.5 + 0.4, 2.1, z1 - 0.06), Vector3(0, 0, -1), brass)
+	# Brighter than the back room's, and further: these walls are all treatment, and fabric
+	# drinks light that plaster would throw back.
+	_hang_sconce(4, Vector3(far + 0.05, 2.1, 1.6), Vector3(1, 0, 0), brass, 4.0, 4.6)
+	_hang_sconce(5, Vector3((far + near) * 0.5 + 0.4, 2.1, z1 - 0.06), Vector3(0, 0, -1), brass, 4.0, 4.6)
 	# And one on the back wall in the gap between the booth and the riser, washing both.
 	var booth: AABB = zones()[&"vocals"]
 	var kit: AABB = zones()[&"drums"]
-	_hang_sconce(6, Vector3((booth.end.x + kit.position.x) * 0.5, 2.3, z0 + 0.06), Vector3(0, 0, 1), brass)
+	_hang_sconce(6, Vector3((booth.end.x + kit.position.x) * 0.5, 2.3, z0 + 0.06), Vector3(0, 0, 1), brass,
+			4.0, 4.6)
 	# Over the way from the door to both, as the live room behind has over its own.
 	_hang_pendant(Vector3((far + near) * 0.5, 0, (kit.end.z + z1) * 0.5))
+
+
+## The treatment's fabric, in the room's three colours.
+func _cloth(colour: String) -> Material:
+	var cloth := {
+		"charcoal": Color(0.07, 0.07, 0.075),
+		"rust": Color(0.22, 0.09, 0.05),
+		"slate": Color(0.06, 0.09, 0.13),
+	}
+	return Materials.cached_scanned("panel_" + colour, "rough_linen", "1k", 0.35, cloth[colour])
+
+
+## The side room's treatment: a live room for a kit is the most treated room in a studio. Bass
+## traps up the corners the booth and the riser leave free, a run of panels behind the kit, and
+## two on the walkway wall in the room's warm and cool colours, so the walls have something on
+## them for the sconces to light.
+func _treat_side_room(far: float, near: float, z0: float, z1: float) -> void:
+	# A square column turned 45 degrees and stood on the corner: what shows is a triangle of
+	# fabric filling it, floor to just under the sconces.
+	for corner in [Vector2(far, z1), Vector2(near, z1), Vector2(near, z0)]:
+		# Its foot 6 mm up, clear of the walls' feet (2 mm) it runs into.
+		var trap := ZoneKit.block(self, Vector3(0.5, 2.4, 0.5), Vector3(corner.x, 1.206, corner.y),
+				_cloth("charcoal"), "BassTrap")
+		trap.rotation.y = PI * 0.25
+	var kit: AABB = zones()[&"drums"]
+	var face_back := z0 + 0.06
+	var face_front := z1 - 0.06
+	var panels := [
+		# Behind the kit, high: the riser's cymbals are what the back wall hears first.
+		[Vector3(kit.get_center().x - 0.62, 2.0, face_back + 0.045), Vector3(1.1, 1.0, 0.09), "rust"],
+		[Vector3(kit.get_center().x + 0.62, 2.0, face_back + 0.045), Vector3(1.1, 1.0, 0.09), "slate"],
+		# Along the walkway, either side of its sconce.
+		[Vector3(far + 1.6, 1.45, face_front - 0.045), Vector3(1.2, 1.2, 0.09), "slate"],
+		[Vector3(near - 1.3, 1.45, face_front - 0.045), Vector3(1.2, 1.2, 0.09), "rust"],
+	]
+	for i in panels.size():
+		var spec: Array = panels[i]
+		ZoneKit.block(self, spec[1], spec[0], _cloth(spec[2]), "SideRoomPanel%d" % i)
 
 
 func _glass() -> StandardMaterial3D:
@@ -540,7 +579,8 @@ func _sconce_brass() -> StandardMaterial3D:
 
 
 ## One sconce, its back to the wall at `at`, facing `facing` into the room.
-func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material) -> void:
+func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material, energy := 2.4,
+		reach := 3.8) -> void:
 	var sconce := Node3D.new()
 	sconce.name = "Sconce%d" % i
 	sconce.transform = Transform3D(Basis.looking_at(facing, Vector3.UP, true), at)
@@ -558,9 +598,9 @@ func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material) -> void
 		# Up or down, leaning a little off the wall so the wall catches the light at a graze.
 		wash.rotation = Vector3(dir * (PI * 0.5 + 0.12), 0, 0)
 		wash.light_color = Color(1.0, 0.76, 0.52)
-		wash.light_energy = 2.4
+		wash.light_energy = energy
 		wash.spot_angle = 48.0
-		wash.spot_range = 3.8
+		wash.spot_range = reach
 		wash.spot_angle_attenuation = 1.4
 		wash.light_specular = 0.05
 		wash.shadow_enabled = false
@@ -696,6 +736,9 @@ func zone_solids() -> Array:
 				"top": LIVE_ROOM_HEIGHT})
 		out.append({"c": Vector2(x, (open + z1) * 0.5), "h": Vector2(0.06, (z1 - open) * 0.5), "a": 0.0,
 				"top": LIVE_ROOM_HEIGHT})
+		# The bass traps up the side room's free corners (_treat_side_room).
+		for corner in [Vector2(x - SIDE_ROOM_WIDTH, z1), Vector2(x - 0.06, z1), Vector2(x - 0.06, z0)]:
+			out.append({"c": corner, "h": Vector2(0.25, 0.25), "a": PI * 0.25, "top": 2.4})
 	return out
 
 

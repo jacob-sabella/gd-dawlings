@@ -136,9 +136,12 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       ("Live room beside": `StudioVenue.BESIDE`, a 6 m side room through a window and a door,
       `Venue.rooms()`. The walker now takes its old walls out of the tree at once, or a room
       rearranged mid-frame kept them standing in its new doorways.)
-- [ ] The studio's side room is lit but its walls are bare plaster in the dark (inside view mean
+- [x] The studio's side room is lit but its walls are bare plaster in the dark (inside view mean
       0.04). Give it treatment of its own (bass traps in the corners, a cloud over the kit) so
       it reads from the door; and `light_check` has no view of it yet -- add one for `studio:1`.
+      (Three corner traps, solid; four panels in rust and slate; lighter warm plaster and
+      brighter sconces, because fabric drinks the light. `light_check`'s `side` view, 0.051.
+      No cloud: it would have shaded the kit's own spot.)
 - [ ] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
 - [ ] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
 - [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.

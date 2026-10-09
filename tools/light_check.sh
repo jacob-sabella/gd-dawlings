@@ -39,9 +39,10 @@ if [ $# -eq 0 ]; then
 fi
 
 shoot() {
-  local file=$1 cam=$2 args=$3 frame=${4:-30}
+  local file=$1 cam=$2 args=$3 frame=${4:-30} walk=${5:-}
   local env=(SHOT_RES=1280x720 "SHOT_ARGS=$args" PULSE_SINK=reaper3d_null PIPEWIRE_NODE=reaper3d_null)
   [ -n "$cam" ] && env+=("SHOT_CAM=$cam")
+  [ -n "$walk" ] && env+=("SHOT_WALK=$walk")
   env "${env[@]}" flock "$HOME/.cache/reaper-3d/shared.lock" tools/shot.sh "$file" "$frame" \
     "$((frame + 6))" 2>&1 \
     | grep -E "SCRIPT ERROR" && return 1
@@ -59,13 +60,21 @@ white() {
 over=0
 printf "%-10s %-6s %8s %8s\n" venue view mean white%
 for v in "${VENUES[@]}"; do
-  for view in seat wide back; do
+  views=(seat wide back)
+  # The studio's side room (StudioVenue.BESIDE), which none of the others can see into.
+  [ "$v" = studio:1 ] && views+=(side)
+  for view in "${views[@]}"; do
     file="$OUT/${v}_${view}.png"
     if [ "$view" = seat ]; then
       shoot "$file" "" "--no-hud --venue $v" || { echo "$v $view: no picture"; over=1; continue; }
       limit=$MEAN_MAX
     elif [ "$view" = wide ]; then
       shoot "$file" "0.35,-0.25,4.2,0,1.0,-0.3" "--no-hud --venue $v --place timeline=studio" \
+        || { echo "$v $view: no picture"; over=1; continue; }
+      limit=$WIDE_MEAN_MAX
+    elif [ "$view" = side ]; then
+      # Standing in its far corner, looking past the booth and the kit to the window.
+      shoot "$file" "" "--no-hud --venue $v --place timeline=studio" 60 "-8.6,2.4,-0.55,-0.2" \
         || { echo "$v $view: no picture"; over=1; continue; }
       limit=$WIDE_MEAN_MAX
     else
