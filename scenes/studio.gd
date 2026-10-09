@@ -119,6 +119,8 @@ var personal := PersonalMix.new()
 var their_keys: TheirKeys
 ## Other players' monitors, rebuilt here in time for the personal mix's plugs in them.
 var their_monitor: TheirMonitor
+## The hand percussion played here, taken down onto the armed track while recording.
+var hit_recorder: HitRecorder
 ## Who is ON AIR, by peer id: whose monitor anyone may plug into. The room's, like `patches`.
 var on_air: Array = []
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
@@ -1723,7 +1725,8 @@ func _refresh_looms_if_moved(delta: float) -> void:
 func _item_homes() -> Dictionary:
 	if venue == null:
 		return {}
-	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot()}
+	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
+			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot()}
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
@@ -1777,6 +1780,12 @@ func _build_items() -> void:
 	_show_patches()
 	items.asked.connect(_on_items_asked)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
+	hit_recorder = HitRecorder.new()
+	hit_recorder.name = "HitRecorder"
+	add_child(hit_recorder)
+	hit_recorder.unarmed.connect(func() -> void:
+		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
+	items.played.connect(_on_item_played)
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
 	if presence != null:
 		presence.items = items
@@ -1857,6 +1866,14 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 				late += " Reaper's mix is not the game's to copy, so only their notes are heard."
 		Session.notice.emit("Plug %s in SEND %s: in your headphones%s.%s" % [letter,
 				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on", late])
+
+
+## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
+## click is out already, as a use.
+func _on_item_played(item: InstrumentItem, velocity: int, struck: bool) -> void:
+	hit_recorder.hit(item, velocity)
+	if not struck:
+		Session.send_item_hit(item.id, velocity)
 
 
 ## Why a single track is not heard on this machine (`_hears_tracks`).

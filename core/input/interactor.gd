@@ -81,6 +81,13 @@ func carry_pose() -> Transform3D:
 	return aim()
 
 
+## Where a carried thing is being shaken from, for an instrument to hear its strokes
+## (InstrumentItem): a controller's hand, in the world. A mouse's is its wiggle, in the view, so
+## turning round is not a shake (MouseInteractor).
+func shake_point() -> Vector3:
+	return carry_pose().origin
+
+
 ## Override: whether this hand needs drawing to be seen holding something. A controller is
 ## drawn by the headset's rig; a mouse is nothing, so it gets a glove of its own to carry with.
 func draws_own_hand() -> bool:

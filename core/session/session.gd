@@ -83,6 +83,9 @@ signal item_used(item: StringName, down: bool, from: int)
 ## position they were hearing as they played it, or -1 with their transport stopped. Reliable
 ## and ordered, because a lost note-off is a note that never stops.
 signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float)
+## An instrument in `from`'s hand shaken into a hit (InstrumentItem), `velocity` 1 to 127: for
+## everyone else to hear from their hand. A click is a use (`item_used`), not this.
+signal item_hit(item: StringName, velocity: int, from: int)
 
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
@@ -981,6 +984,34 @@ func _item_use_up(item: StringName, down: bool) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _item_use(item: StringName, down: bool, from: int) -> void:
 	item_used.emit(item, down, from)
+
+
+## A shake of the instrument in my hand, to everyone else.
+func send_item_hit(item: StringName, velocity: int) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_item_hit.rpc_id(id, item, velocity, local_peer_id)
+	else:
+		_item_hit_up.rpc_id(1, item, velocity)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _item_hit_up(item: StringName, velocity: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	velocity = clampi(velocity, 1, 127)
+	item_hit.emit(item, velocity, from)
+	for id in _audience():
+		if id != from:
+			_item_hit.rpc_id(id, item, velocity, from)
+
+
+@rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
+func _item_hit(item: StringName, velocity: int, from: int) -> void:
+	item_hit.emit(item, velocity, from)
 
 
 ## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and

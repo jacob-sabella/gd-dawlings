@@ -18,7 +18,8 @@ extends Node3D
 ## on something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
 
 ## The items there are, in the order they take the shelf's spots.
-const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet"]
+const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
+		&"tambourine"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -31,6 +32,8 @@ signal asked(verb: StringName, args: Array)
 signal used(item: Item, down: bool)
 ## Something about where an item is changed: for a host to tell the room.
 signal moved(item: Item)
+## An instrument played by a hand here (InstrumentItem.played): for the session and the take.
+signal played(item: InstrumentItem, velocity: int, struck: bool)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -65,6 +68,10 @@ static func make(kind: StringName) -> Item:
 			return HeadphonesItem.new()
 		&"tablet":
 			return TabletItem.new()
+		&"shaker":
+			return ShakerItem.new()
+		&"tambourine":
+			return TambourineItem.new()
 	return null
 
 
@@ -98,6 +105,9 @@ func _ready() -> void:
 		item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
 		item.landed.connect(func() -> void: moved.emit(item))
 		item.worn_changed.connect(func() -> void: moved.emit(item))
+		if item is InstrumentItem:
+			(item as InstrumentItem).played.connect(func(velocity: int, struck: bool) -> void:
+				played.emit(item, velocity, struck))
 	_rehome()
 
 

@@ -131,6 +131,8 @@ func _ready() -> void:
 	await _test_a_players_keys_pack_puts_their_playing_in_your_headphones()
 	await _test_their_monitor_plays_their_notes_where_they_heard_them()
 	await _test_on_air_puts_a_monitor_socket_on_your_pack()
+	await _test_a_shaker_plays_when_a_stroke_stops()
+	await _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6079,8 +6081,9 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones and the tablet, which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 2 \
+			# A spot on the shelf for everything but the headphones, the tablet and the percussion,
+			# which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 4 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -10710,6 +10713,194 @@ func _test_on_air_puts_a_monitor_socket_on_your_pack() -> void:
 	hand.take_off()
 	hand.lose_carrying()
 	phones.snap_home()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
+
+
+func _test_a_shaker_plays_when_a_stroke_stops() -> void:
+	var shaker := ShakerItem.new()
+	add_child(shaker)
+	var hits: Array = []
+	shaker.played.connect(func(v: int, struck: bool) -> void: hits.append([v, struck]))
+	var dt := 1.0 / 60.0
+	var at := Vector3.ZERO
+	# Drifting the hand about is not playing it.
+	for i in 30:
+		at.x += 0.2 * dt
+		shaker._since += dt
+		shaker.feel(at, dt)
+	at.x -= 0.0
+	for i in 5:
+		shaker._since += dt
+		shaker.feel(at, dt)
+	check("moving it slowly plays nothing (%s)" % [hits], hits.is_empty())
+	# A brisk stroke one way, brought up short.
+	for i in 6:
+		at.x += 1.6 * dt
+		shaker._since += dt
+		shaker.feel(at, dt)
+	shaker._since += dt
+	shaker.feel(at, dt)
+	check("a stroke that stops is one hit (%s)" % [hits], hits.size() == 1 and not hits[0][1])
+	check("as hard as the stroke was fast", hits.size() == 1 and hits[0][0] == InstrumentItem.velocity_for(1.6))
+	# Back the other way, harder: the turn is the next hit.
+	for i in 6:
+		at.x -= 2.4 * dt
+		shaker._since += dt
+		shaker.feel(at, dt)
+	for i in 6:
+		at.x += 2.4 * dt
+		shaker._since += dt
+		shaker.feel(at, dt)
+	check("turned round, a stroke the other way is a hit too, and harder (%s)" % [hits],
+			hits.size() == 2 and hits[1][0] > hits[0][0])
+	check("velocities run from soft to full", InstrumentItem.velocity_for(0.1) == 0
+			and InstrumentItem.velocity_for(InstrumentItem.STROKE_MIN) == 40
+			and InstrumentItem.velocity_for(9.0) == 127)
+	# Strokes faster than the beads can cross are one hit.
+	hits.clear()
+	shaker._since = 0.0
+	for i in 2:
+		at.y += 2.0 * dt
+		shaker.feel(at, dt)
+	shaker.feel(at, dt)
+	check("a stop sooner than the beads can travel is not a second hit", hits.is_empty())
+	shaker.use(true)
+	check("loose, a click is heard in the room, not played (%s)" % [hits], hits.is_empty())
+	shaker.queue_free()
+
+	# A mouse shakes it by wiggling: the hand follows the cursor a little way and springs back.
+	var hand := MouseInteractor.new()
+	add_child(hand)
+	hand.wiggle(Vector2(400, 300), dt)
+	check("with nothing in the hand, the mouse does not wiggle it", hand.shake_point() == Vector3.ZERO)
+	var shaken := ShakerItem.new()
+	add_child(shaken)
+	hand.carrying = shaken
+	hand.wiggle(Vector2(400, 300), dt)
+	hand.wiggle(Vector2(460, 300), dt)
+	var moved := hand.shake_point()
+	check("with an instrument, a flick of the mouse moves the hand that way (%s)" % moved, moved.x > 0.02
+			and moved.x <= MouseInteractor.WIGGLE_MOST)
+	for i in 60:
+		hand.wiggle(Vector2(460, 300), dt)
+	check("and it springs back when the mouse rests (%s)" % hand.shake_point(), hand.shake_point().length() < 0.002)
+	hand.wiggle(Vector2(5000, 300), dt)
+	check("however far the flick, the hand moves a little", hand.shake_point().x <= MouseInteractor.WIGGLE_MOST + 1e-6)
+	hand.carrying = null
+	shaken.queue_free()
+	hand.queue_free()
+	await get_tree().process_frame
+
+
+func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var shaker := room.items.get(&"shaker") as ShakerItem
+	var tambourine := room.items.get(&"tambourine") as TambourineItem
+	check("there is a shaker and a tambourine, at home", shaker != null and tambourine != null
+			and shaker.state == Item.State.HOME and tambourine.state == Item.State.HOME)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var shelf := studio.venue.prop_shelf_spot()
+		for spec in [[shaker, studio.venue.shaker_spot()], [tambourine, studio.venue.tambourine_spot()]]:
+			var item: Item = spec[0]
+			var local: Vector3 = shelf.affine_inverse() * item.home.origin
+			if not item.home.is_equal_approx(spec[1]) or not item.own_home \
+					or not is_equal_approx(local.y, ZoneKit.SHELF_LOWER_TOP) \
+					or absf(local.x) > ZoneKit.SHELF.x * 0.5 - 0.14 or absf(local.z) > ZoneKit.SHELF.z * 0.5 - 0.1:
+				wrong.append([id, item.id])
+	check("in every venue they lie on the shelf's lower tier (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"studio", false)
+	var tablet_x := (studio.venue.prop_shelf_spot().affine_inverse() * studio.venue.tablet_spot().origin).x
+	var apart := func(a: Vector3, b: Vector3) -> float:
+		var shelf := studio.venue.prop_shelf_spot().affine_inverse()
+		return absf((shelf * a).x - (shelf * b).x)
+	check("clear of each other and of the tablet", apart.call(shaker.home.origin, tambourine.home.origin)
+			> TambourineItem.RADIUS + 0.03 and tablet_x - (studio.venue.prop_shelf_spot().affine_inverse()
+			* shaker.home.origin).x > 0.15)
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var played: Array = []
+	room.played.connect(func(item: InstrumentItem, v: int, struck: bool) -> void: played.append([item.id, v, struck]))
+	hand.pick_up(shaker)
+	shaker.use(true)
+	check("in the hand, a click strikes it, firmly (%s)" % [played],
+			played == [[&"shaker", InstrumentItem.STRUCK, true]])
+	var mine := shaker.get_children().filter(func(n: Node) -> bool: return n is AudioStreamPlayer)
+	check("and you hear it at once, on your own keys' bus", mine.size() == 1
+			and (mine[0] as AudioStreamPlayer).bus == AudioPorts.bus(AudioPorts.MONITOR))
+
+	# The take: hits stamped by the song position heard, onto the first armed track.
+	var heard := {"seconds": 10.0, "playing": true, "recording": false, "valid": true}
+	var rec := studio.hit_recorder
+	rec.heard_source = func() -> Dictionary: return heard
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	for t: MixState.TrackState in DAW.state.tracks.values():
+		t.rec_arm = false
+	heard["recording"] = true
+	rec.follow(heard)
+	shaker.play(90)
+	check("recording with nothing armed, the hit has nowhere to go, and you are told once (%s)" % [told],
+			not rec.is_recording() and told.size() == 1 and (told[0] as String).contains("Arm a track"))
+	shaker.play(90)
+	check("only once", told.size() == 1)
+	heard["recording"] = false
+	rec.follow(heard)
+	DAW.state.track(5).rec_arm = true
+	DAW.state.track(3).rec_arm = true
+	var before := DAW.state.track(3).items.size()
+	heard["seconds"] = 20.0
+	heard["recording"] = true
+	rec.follow(heard)
+	check("recording with a track armed, a take is running", rec.is_recording())
+	heard["seconds"] = 20.5
+	shaker.play(100)
+	var lands := 20.5 + AudioServer.get_output_latency()
+	heard["seconds"] = 21.25
+	hand.lose_carrying()
+	shaker.snap_home()
+	hand.pick_up(tambourine)
+	tambourine.use(true)
+	heard["seconds"] = 22.0
+	heard["recording"] = false
+	rec.follow(heard)
+	check("stopped, the take lands on the first armed track (%s)" % [rec.last_take],
+			DAW.state.track(3).items.size() == before + 1 and rec.last_take.get("track") == 3
+			and rec.last_take.get("notes") == 2)
+	var taken := DAW.state.track(3).items.filter(func(it: MixState.ItemState) -> bool: return it.name.contains("percussion"))
+	check("the take is named for the percussion", taken.size() == 1)
+	var item: MixState.ItemState = taken.front() if taken.size() == 1 else MixState.ItemState.new()
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	check("each hit a drum note, where it was heard (%s)" % [notes], notes.size() == 2
+			and is_equal_approx(notes[0][0], lands) and notes[0][2] == ShakerItem.new().pitch() and notes[0][3] == 100
+			and notes[0][4] == HitRecorder.CHANNEL and notes[1][2] == 54 and notes[1][3] == InstrumentItem.STRUCK
+			and is_equal_approx(notes[0][1] - notes[0][0], InstrumentItem.NOTE_SECONDS))
+	Session.notice.disconnect(listen)
+
+	# Somebody else's: heard in the room from their hand, and only from whoever has it.
+	hand.lose_carrying()
+	tambourine.snap_home()
+	var sounds_before := tambourine._take
+	studio.presence._item_holders[&"tambourine"] = 7
+	Session.item_hit.emit(&"tambourine", 80, 9)
+	check("a hit from somebody not holding it is not played", tambourine._take == sounds_before)
+	Session.item_hit.emit(&"tambourine", 80, 7)
+	check("one from whoever has it is", tambourine._take == sounds_before + 1)
+	studio.presence._item_holders.erase(&"tambourine")
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)

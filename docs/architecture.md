@@ -1356,6 +1356,16 @@ head of the Mix bus into a per-performer delay line ("Their monitor N"), and eac
 when the delayed backing reaches its stamp. The line grows when a note misses it and never
 shrinks while plugged in.
 
+Hand percussion (`InstrumentItem`: `ShakerItem`, `TambourineItem`) is played by moving the hand
+that holds it. A stroke that stops or turns back is a hit, as hard as the stroke was fast. The
+movement is `Interactor.shake_point`: the controller in a headset, and the mouse's wiggle of the
+carried pose on a desktop (`MouseInteractor.wiggle`). The player hears the hit at once on their
+own keys' bus. Everyone else gets `Session.item_hit` and hears it in the room, from the hand that
+holds it (`Presence._on_item_hit`). `HitRecorder` (`core/items/hit_recorder.gd`) follows the
+transport as `GuestMidi.heard()` reports it and records each hit as a drum note, stamped by song
+position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
+players' hits are only heard in the room, never in a personal mix.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

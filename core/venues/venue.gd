@@ -231,6 +231,16 @@ func tablet_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0.17, ZoneKit.SHELF_LOWER_TOP, 0.03))
 
 
+## Where the hand percussion lies, in studio space: on the prop shelf's lower tier, at the far end
+## from the tablet: the tambourine flat, head up, and the shaker beside it, along the shelf's depth.
+func tambourine_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(-0.23, ZoneKit.SHELF_LOWER_TOP, 0.01))
+
+
+func shaker_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-0.04, ZoneKit.SHELF_LOWER_TOP, 0.02))
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.

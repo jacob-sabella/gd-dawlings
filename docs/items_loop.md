@@ -331,9 +331,27 @@ ergonomics.
       that counts frames finishes before the sound has played, so cap max_fps and use the clock.
       A host's own keys go to its DAW and are not relayed, so ON AIR is for players whose keys
       come through GuestMidi (a guest's).
-- [ ] Instruments, the first two: a shaker and a tambourine, played by shaking (mouse motion
+- [x] Instruments, the first two: a shaker and a tambourine, played by shaking (mouse motion
       while held on a desktop, controller velocity in a headset). They are heard at once on the
       low-latency path and recorded as MIDI hits on the armed track by song position.
+      Done: both are modelled in `tools/blender/percussion.py` and live on the prop shelf's lower
+      tier beside the tablet. `InstrumentItem` turns the hand's movement into hits: it keeps the
+      fastest point of a stroke and plays when the stroke stops or turns back, 0.35 m/s to
+      2.4 m/s mapped to velocity 40 to 127, at most one hit per 60 ms. A click is a firm strike.
+      The hand's movement comes from `Interactor.shake_point`. In a headset that is the
+      controller. On a desktop the mouse wiggles the hand while it carries an instrument: the
+      hand follows the cursor a little way (at most 7 cm) and springs back. A hit is heard at
+      once on the player's own keys' bus, Foley takes generated in code. It goes to everyone as
+      `Session.item_hit` and is heard from the holder's hand in the room. It is recorded by
+      `HitRecorder` while the song records: the first armed track gets a General MIDI drum note
+      on channel 10 per hit, at the song position heard plus the output latency, in one
+      `insert_midi_take` when recording stops. With nothing armed, the player is told once.
+      Learned: held face on, a tambourine is a disc that hides half the desk. Held nearly flat
+      and turned a little across, the head reads at a slant and the jingles show. A pale skin
+      right under the shelf lamp burned out to white. A tan skin and bright nickel jingles read
+      as a tambourine. Smooth shading on the head's thin disc drew a seam across it. A Vector3
+      holds 32-bit floats, so a value clamped to a constant can read a hair over it in a check.
+      Not yet tried in a headset.
 - [ ] A keytar into `GuestMidi`: played from its keys (the computer keyboard's piano rows, or a
       MIDI device) while you walk round holding it.
 - [ ] Chips and cards: a stack of chips that riffles, splits and flips in your hand (the

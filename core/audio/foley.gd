@@ -212,6 +212,86 @@ static func paper_tap() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## How many takes of each hand-percussion sound there are, so a run of hits is not one sample
+## said again and again: a shaker played at sixteenths would be a machine gun otherwise.
+const TAKES := 4
+
+
+## A shaker stroke stopping: the beads thrown into the end of the tube, a dense spray of tiny
+## clicks over a few tens of milliseconds, all top end. Grains, not a noise burst: a burst is a
+## hiss, and the clatter is what says beads.
+static func shaker(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("shaker_%d" % take, func() -> AudioStreamWAV:
+		var seconds := 0.11
+		var s := _silence(seconds)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 101 + take * 7
+		# Most beads land at once and the rest trail after, thinning out.
+		for g in 140:
+			var at := pow(rng.randf(), 2.2) * 0.06
+			var level := rng.randf_range(0.05, 0.16) * exp(-at / 0.03)
+			var start := int(at * RATE)
+			var length := int(0.0018 * RATE)
+			for i in range(start, mini(start + length, s.size())):
+				var t := float(i - start) / float(RATE)
+				s[i] += level * exp(-t / 0.0004) * rng.randf_range(-1.0, 1.0)
+		_highpass(s, 3200.0)
+		_highpass(s, 2400.0)
+		_lowpass(s, 12000.0)
+		return _wav(s, false))
+
+
+## Tambourine jingles shaken: pairs of thin metal discs clashing, a bright inharmonic ring over a
+## splash, the pairs a few milliseconds apart because no shake moves them all at once.
+static func jingle(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("jingle_%d" % take, func() -> AudioStreamWAV:
+		return _wav(_jingles(0.32, take, 0.0), false))
+
+
+## The tambourine's head struck by a hand: a skin's short thump, and the jingles thrown with it.
+static func tambourine_hit(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("tambourine_hit_%d" % take, func() -> AudioStreamWAV:
+		var s := _jingles(0.34, take + 20, 0.004)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * lerpf(210.0, 150.0, minf(1.0, t / 0.04)) / float(RATE)
+			s[i] += 0.32 * exp(-t / 0.035) * sin(phase)
+		_impulse(s, 0.0, 0.18, 0.003, 1900.0, 211 + take)
+		return _wav(s, false))
+
+
+static func _jingles(seconds: float, take: int, after: float) -> PackedFloat32Array:
+	var s := _silence(seconds)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 151 + take * 11
+	for pair in 5:
+		var at := after + rng.randf_range(0.0, 0.009)
+		var start := int(at * RATE)
+		# A thin disc's modes: inharmonic, high, each its own decay; detuned pair to pair.
+		for mode in [[3150.0, 0.16, 0.06], [4870.0, 0.12, 0.1], [6720.0, 0.1, 0.09], [8390.0, 0.07, 0.08],
+				[10480.0, 0.05, 0.07]]:
+			var hz: float = mode[0] * rng.randf_range(0.95, 1.05)
+			var decay: float = mode[1] * rng.randf_range(0.8, 1.2)
+			var level: float = mode[2] * rng.randf_range(0.7, 1.0)
+			var step := TAU * hz / float(RATE)
+			for i in range(start, s.size()):
+				var t := float(i - start) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.001:
+					break
+				s[i] += level * env * sin(step * float(i - start))
+		# The clash itself: a few milliseconds of bright noise.
+		for i in range(start, mini(start + int(0.012 * RATE), s.size())):
+			var t := float(i - start) / float(RATE)
+			s[i] += 0.12 * exp(-t / 0.0025) * rng.randf_range(-1.0, 1.0)
+	_highpass(s, 1800.0)
+	return s
+
+
 static func play(on: Node3D, stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> void:
 	if on == null or stream == null or not on.is_inside_tree():
 		return

@@ -196,6 +196,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Hand percussion: another player's hits are heard in the room only. No socket carries them into a
+  personal mix, and they are not in their ON AIR monitor. On a desktop, sweeping the cursor
+  across the room with an instrument in hand can play a hit when the sweep stops. Not yet played
+  in a headset.
+
 - Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.
 - The timeline rebuilds every lane while the overview bar is being dragged -- one rebuild per

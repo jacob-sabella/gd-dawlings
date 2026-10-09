@@ -64,11 +64,13 @@ func _enter_tree() -> void:
 	Session.role_changed.connect(_on_role_changed)
 	Session.item_carried.connect(_on_item_carried)
 	Session.item_used.connect(_on_item_used)
+	Session.item_hit.connect(_on_item_hit)
 
 
 func _exit_tree() -> void:
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_used.disconnect(_on_item_used)
+	Session.item_hit.disconnect(_on_item_hit)
 	Session.roster_changed.disconnect(_sync_avatars)
 	Session.holds_changed.disconnect(_apply_holds)
 	Session.hold_refused.disconnect(_on_hold_refused)
@@ -439,6 +441,15 @@ func _on_item_used(id: StringName, down: bool, from: int) -> void:
 	var item: Item = items.items.get(id)
 	if item != null:
 		item.use(down)
+
+
+## Somebody else shook the instrument in their hand: ours plays the hit, in their glove.
+func _on_item_hit(id: StringName, velocity: int, from: int) -> void:
+	if items == null or _item_holders.get(id, 0) != from:
+		return
+	var item := items.items.get(id) as InstrumentItem
+	if item != null:
+		item.heard(velocity)
 
 
 ## The control `peer_id` has their hand on -- not an item they carry, which is in the other glove.

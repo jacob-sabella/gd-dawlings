@@ -51,8 +51,42 @@ func carry_pose() -> Transform3D:
 	var view := camera.global_transform.orthonormalized()
 	# Drawn back over the shoulder as a throw winds up, and tipped back with it.
 	var wound := charge()
-	var at := CARRY_AT + Vector3(0.04, 0.07, 0.16) * wound
+	var at := CARRY_AT + Vector3(0.04, 0.07, 0.16) * wound + _wiggle
 	return Transform3D(view.basis * Basis(Vector3.RIGHT, CARRY_TIP - 0.6 * wound), view * at)
+
+
+# --- shaking -------------------------------------------------------------------------------
+#
+# An instrument in the hand is shaken by moving the mouse: the hand follows the cursor's
+# movement a little way and springs back, so a wiggle of the mouse is a shake of the shaker, and
+# each stroke that stops is a hit (InstrumentItem). Only while an instrument is carried: a duck
+# rides still while the cursor points at things.
+
+## How far the hand moves for a pixel of the cursor's, and the most it moves (m).
+const WIGGLE_PER_PIXEL := 0.0007
+const WIGGLE_MOST := 0.07
+## How quickly the hand comes back to its place once the mouse stops (s).
+const WIGGLE_SETTLE := 0.09
+
+var _wiggle := Vector3.ZERO
+var _wiggle_anchor := Vector2(-1, -1)
+
+
+func shake_point() -> Vector3:
+	return _wiggle
+
+
+## The hand's wiggle for where the cursor is now, `delta` seconds on.
+func wiggle(at: Vector2, delta: float) -> void:
+	if not (carrying is InstrumentItem):
+		_wiggle = Vector3.ZERO
+		_wiggle_anchor = Vector2(-1, -1)
+		return
+	if _wiggle_anchor.x < 0.0:
+		_wiggle_anchor = at
+	_wiggle_anchor = _wiggle_anchor.lerp(at, 1.0 - exp(-delta / WIGGLE_SETTLE))
+	var d := (at - _wiggle_anchor) * WIGGLE_PER_PIXEL
+	_wiggle = Vector3(clampf(d.x, -WIGGLE_MOST, WIGGLE_MOST), clampf(-d.y, -WIGGLE_MOST, WIGGLE_MOST), 0)
 
 
 # --- throwing ------------------------------------------------------------------------------
@@ -167,6 +201,8 @@ func _over_gui() -> bool:
 
 func _physics_process(delta: float) -> void:
 	super(delta)
+	if camera != null or pointer_override.x >= 0.0:
+		wiggle(pointer(), delta)
 	if _card == null:
 		_card = HoverCard.new()
 		_card.name = "HoverCard"
