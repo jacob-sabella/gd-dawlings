@@ -225,6 +225,12 @@ func headphones_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), hang)
 
 
+## Where the tablet lies, in studio space: face up on the prop shelf's lower tier, toward the
+## lamp's end and out of the headphones' way, its tray toward the back.
+func tablet_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0.17, ZoneKit.SHELF_LOWER_TOP, 0.03))
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.

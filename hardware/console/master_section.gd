@@ -11,13 +11,18 @@ extends Node3D
 ## than an absent one on a surface whose entire premise is that the thing is real hardware.
 ##
 ## Everything here maps to an address in the pattern file: MASTER_VOLUME, MASTER_PAN,
-## MASTER_VU_L and MASTER_VU_R.
+## MASTER_VU_L and MASTER_VU_R. Except the two SEND sockets (SendSocket), which are not the DAW's
+## at all: a wireless plug from somebody's tablet in one of them puts what it carries into that
+## person's own headphones, and nothing else.
 
 const WIDTH := 0.082
 ## The air between the last channel and the master. On a real desk this is a physical gap, and
 ## it is the reason you never grab the master when you meant the last channel -- worth keeping
 ## for exactly the same reason in a headset, where the hand is less precise than a mouse.
 const GAP := 0.022
+## Where the SEND sockets sit: over the fader's top end stop (its cap's top is 0.151 up) and
+## under the flip key, where a desk keeps its headphone and cue sockets.
+const SENDS_Y := 0.163
 
 ## Pressed to move the faders on to the next return's sends, and from the last back to levels.
 ## The console decides what that means; the master section only has the key.
@@ -28,6 +33,8 @@ var _pan: Knob
 var _db_label: Label3D
 var _sends_key: PanelButton
 var _sends_label: Label3D
+## The SEND sockets, MIX then KEYS: for the studio to show and take plugs.
+var sends: Array[SendSocket] = []
 ## What the sends key says it is showing, for its hover card: "" when the faders are levels.
 var _sends_to := ""
 
@@ -91,6 +98,19 @@ func _ready() -> void:
 	_sends_label = _label(13, Vector3(0, height - 0.114, 0.001))
 	_sends_label.modulate = ChannelStrip.SEND_INK
 	add_child(_sends_label)
+
+	# The personal mix's sends: the whole mix, and the keys of whoever is at the desk.
+	for spec in [[-0.018, &"mix", "MIX"], [0.018, &"keys", "KEYS"]]:
+		var socket := SendSocket.new()
+		socket.name = "Send" + spec[2].capitalize()
+		socket.source = spec[1]
+		socket.label = spec[2]
+		socket.position = Vector3(spec[0], SENDS_Y, 0.001)
+		add_child(socket)
+		sends.append(socket)
+		var name_label := _label(10, Vector3(spec[0], SENDS_Y + 0.0115, 0.001))
+		name_label.text = spec[2]
+		add_child(name_label)
 
 	_fader = Fader.new()
 	_fader.write_value = func(v: float): DAW.set_master_volume(v)

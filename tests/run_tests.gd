@@ -124,6 +124,8 @@ func _ready() -> void:
 	await _test_the_mic_lives_in_the_stand_and_is_live_in_a_hand()
 	_test_headphones_shut_the_room_out()
 	await _test_headphones_go_on_your_head()
+	_test_a_personal_mix_adds_up_its_receivers()
+	await _test_the_tablet_patches_your_headphones()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6072,8 +6074,8 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones, which hang on its hook.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 1 \
+			# A spot on the shelf for everything but the headphones and the tablet, which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 2 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -6874,6 +6876,147 @@ func _test_headphones_go_on_your_head() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	check("leaving the studio with them on gives you the room back", is_zero_approx(Ears.gain_db(Ears.ROOM)))
+	Session.role = saved_role
+	Session.layout = saved_layout
+
+
+## A personal mix: four receivers, each plugged into a source or not, each at a level, and what
+## a pair of headphones plays is what they add up to.
+func _test_a_personal_mix_adds_up_its_receivers() -> void:
+	var mix := PersonalMix.new()
+	var changes := [0]
+	mix.changed.connect(func() -> void: changes[0] += 1)
+	check("a new one has four receivers, all in the tray", mix.sockets.size() == PersonalMix.RECEIVERS
+			and not mix.is_patched())
+	check("with nothing patched, headphones play the mix and your keys", mix.ears_levels() == Ears.PERSONAL)
+	mix.set_sockets(["mix"])
+	check("one plug in MIX: the mix alone, at unity (%s)" % [mix.ears_levels()],
+			mix.ears_levels() == {Ears.MIX: 0.0} and mix.bus_of(0) == Ears.MIX and mix.bus_of(1) == &"")
+	mix.set_level(0, -6.0)
+	check("at its receiver's level", is_equal_approx(float(mix.ears_levels()[Ears.MIX]), -6.0))
+	mix.set_level(0, 0.0)
+	mix.set_sockets(["mix", "mix"])
+	check("two receivers on one source add up (%.2f dB)" % float(mix.ears_levels()[Ears.MIX]),
+			absf(float(mix.ears_levels()[Ears.MIX]) - 6.02) < 0.01)
+	mix.set_sockets(["mix", "keys"])
+	mix.set_level(1, PersonalMix.FLOOR_DB)
+	check("a receiver turned all the way down is not in it", mix.ears_levels() == {Ears.MIX: 0.0})
+	mix.set_level(1, 100.0)
+	check("and one turned all the way up stops at the top", mix.levels_db[1] == PersonalMix.TOP_DB)
+	var before: int = changes[0]
+	mix.set_sockets(["mix", "keys"])
+	mix.set_level(1, PersonalMix.TOP_DB)
+	check("telling it what it already is changes nothing", changes[0] == before)
+	mix.set_sockets(["nowhere"])
+	check("a socket there is not is the tray", not mix.is_patched())
+	check("the sockets there are", PersonalMix.valid_socket(&"mix") and PersonalMix.valid_socket(&"keys")
+			and PersonalMix.valid_socket(&"") and not PersonalMix.valid_socket(&"talkback"))
+
+
+## The tablet in the studio: it lies on the shelf's lower tier, shows your personal mix on its
+## glass only in your hand, its plugs go into the desk's SEND sockets for everyone to see, and
+## headphones play what they patch.
+func _test_the_tablet_patches_your_headphones() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	AudioPorts.ensure_buses()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var tablet := room.items.get(&"tablet") as TabletItem
+	check("there is a tablet, at home", tablet != null and tablet.state == Item.State.HOME)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var shelf := studio.venue.prop_shelf_spot().affine_inverse() * tablet.home.origin
+		if not tablet.home.is_equal_approx(studio.venue.tablet_spot()) or shelf.y > ZoneKit.SHELF.y \
+				or absf(shelf.x) + 0.13 > ZoneKit.SHELF.x * 0.5 or absf(shelf.z) + 0.1 > ZoneKit.SHELF.z * 0.5:
+			wrong.append(id)
+	check("in every venue it lies on the shelf's lower tier (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"studio", false)
+	check("at home its glass is dark and shows nothing", tablet.face == null
+			and tablet._glass.emission_energy_multiplier == 0.0)
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(tablet)
+	var face := tablet.face
+	check("in your hand its glass lights with your personal mix", face != null and face.is_inside_tree()
+			and tablet._glass.emission_energy_multiplier > 0.0 and face.mix == studio.personal)
+	check("four receivers, each with a level and a plug", face._rows.size() == 4 and face._senders.size() == 4)
+	var sends := studio.console.master.sends
+	check("the desk has a SEND socket for the mix and one for your keys", sends.size() == 2
+			and sends[0].source == &"mix" and sends[1].source == &"keys")
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var sender: TabletFace.Sender = face._senders[0]
+	sender.grab_begin(hand, sender.global_position)
+	sender.grab_move(hand, sends[0].global_position)
+	hand.hovered = sends[0]
+	sender.grab_end(hand)
+	hand.hovered = null
+	var me := Session.local_peer_id
+	check("plug A dropped on SEND MIX is in it (%s)" % [studio.patches], studio.patches.get(me) == ["mix", "", "", ""]
+			and studio.personal.sockets[0] == &"mix")
+	check("for everyone to see, in your colour", sends[0].plug_count() == 1 and sends[1].plug_count() == 0)
+	check("its place in the tray is empty, and its row says MIX", not sender._plug.visible
+			and (face._rows[0]["source"] as Label3D).text == "MIX")
+	check("and you are told (%s)" % [told], told.size() == 1 and (told[0] as String).contains("Plug A in SEND MIX"))
+	check("the room carries it", (studio.room_state()["patches"] as Dictionary).get(me) == ["mix", "", "", ""])
+	sender.grab_begin(hand, sender.global_position)
+	sender.grab_move(hand, sender.global_position + Vector3(0, 0.1, 0))
+	hand.hovered = null
+	sender.grab_end(hand)
+	check("dragged off nowhere, a plug stays where it was", studio.patches.get(me) == ["mix", "", "", ""])
+
+	hand.lose_carrying()
+	tablet.snap_home()
+	check("put back, its glass goes dark, and the plug stays in", tablet.face == null
+			and studio.personal.sockets[0] == &"mix" and sends[0].plug_count() == 1)
+	var phones := room.items[&"headphones"] as HeadphonesItem
+	hand.pick_up(phones)
+	hand.wear()
+	check("headphones on play what is patched: the mix, not your keys",
+			is_zero_approx(Ears.gain_db(Ears.MIX)) and Ears.gain_db(Ears.KEYS) == Ears.OFF_DB)
+	studio.personal.set_level(0, -9.0)
+	check("at the receiver's level, at once", is_equal_approx(Ears.gain_db(Ears.MIX), -9.0))
+	studio._on_patch_asked(1, &"keys")
+	check("a second plug in KEYS brings your keys in", is_zero_approx(Ears.gain_db(Ears.KEYS))
+			and sends[1].plug_count() == 1)
+	studio._on_send_pressed(&"mix")
+	check("clicking SEND MIX brings your plug back from it", studio.patches.get(me) == ["", "keys", "", ""]
+			and sends[0].plug_count() == 0 and Ears.gain_db(Ears.MIX) == Ears.OFF_DB)
+	told.clear()
+	studio._on_send_pressed(&"mix")
+	check("with none of yours in it, it says where the plugs are (%s)" % [told], told.size() == 1
+			and (told[0] as String).contains("lower tier"))
+	Session.notice.disconnect(listen)
+
+	studio._on_room_asked(&"patch", [2, &"mix"], 7)
+	check("a host puts a guest's plug where they asked", studio.patches.get(7) == ["", "", "mix", ""]
+			and sends[0].plug_count() == 1)
+	check("and it is not in your ears", studio.personal.sockets[2] == &"")
+	studio._on_room_asked(&"patch", [2, &"talkback"], 7)
+	check("but not into a socket there is not", studio.patches.get(7) == ["", "", "mix", ""])
+	studio._on_room_asked(&"patch", [2, &""], 7)
+	check("and a guest with every plug back in the tray has no row", not studio.patches.has(7))
+	studio.apply_room({"patches": {7: ["keys", "", "", ""]}})
+	check("the host's room says where everyone's plugs are, yours too", studio.patches == {7: ["keys", "", "", ""]}
+			and not studio.personal.is_patched() and sends[1].plug_count() == 1)
+	check("and with none of yours in, the headphones are back to the mix and your keys",
+			is_zero_approx(Ears.gain_db(Ears.MIX)) and is_zero_approx(Ears.gain_db(Ears.KEYS)))
+
+	hand.take_off()
+	hand.lose_carrying()
+	phones.snap_home()
+	studio.queue_free()
+	await get_tree().process_frame
 	Session.role = saved_role
 	Session.layout = saved_layout
 

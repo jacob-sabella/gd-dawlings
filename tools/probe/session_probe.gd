@@ -207,10 +207,13 @@ func _host(port: int) -> void:
 	check("the plane went from the host's hand to the guest's, and was let go (%s)" % [_plane_holders],
 			_plane_holders == [1, _other_id(), 0])
 	check("its throw of the duck arrived whole: the launch, as vectors (%s)" % [_room_asks[3] if _room_asks.size() > 3 else null],
-			_room_asks.size() == 5 and _room_asks[3][0] == &"throw_item"
+			_room_asks.size() == 6 and _room_asks[3][0] == &"throw_item"
 			and _room_asks[3][1] == [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	check("its put-down of the duck arrived while it still had it (%d)" % _duck_holder_at_put,
-			_room_asks.size() == 5 and _room_asks[4][0] == &"put_item" and _duck_holder_at_put == _other_id())
+			_room_asks.size() == 6 and _room_asks[4][0] == &"put_item" and _duck_holder_at_put == _other_id())
+	check("and its plug in the MIX send, for its own headphones (%s)" % [_room_asks[5] if _room_asks.size() > 5 else null],
+			_room_asks.size() == 6 and _room_asks[5][0] == &"patch" and _room_asks[5][1] == [1, &"mix"]
+			and _room_asks[5][2] == guest_id)
 	Session.claim_hold(KEY)
 	check("so the host can take it now", Session.holder_of(KEY) == 1)
 	Session.release_hold(KEY)
@@ -416,12 +419,14 @@ func _guest(port: int) -> void:
 	Session.ask_room(&"throw_item", [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	Session.ask_room(&"put_item", [&"duck", 0.4, 1.9, 0.2])
 	Session.release_hold(DUCK)
+	# A plug off my tablet into the desk's MIX send, for my headphones.
+	Session.ask_room(&"patch", [1, &"mix"])
 	await _until(5.2)
 	check("my releases left only the plane I took from the host's hand (%s)" % [Session.holds],
 			Session.holds == {PLANE: Session.local_peer_id})
 	Session.release_hold(PLANE)
-	check("and the host answered my throw and put-down", int((Session.room.get("acks", {}) as Dictionary)
-			.get(Session.local_peer_id, 0)) == 6)
+	check("and the host answered my throw, put-down and patch", int((Session.room.get("acks", {}) as Dictionary)
+			.get(Session.local_peer_id, 0)) == 7)
 
 	await _until(6.8)
 	var heard := Session.mix_feed.stats()

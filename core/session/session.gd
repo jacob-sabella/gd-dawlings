@@ -148,7 +148,8 @@ var layout: LayoutProfile = null
 ## The room everyone is standing in, as the host has it: {"venue": id, "tablets": {stand id:
 ## [track, fx, plugin name, x, z, heading]}, "floor": {piece id: [x, z, heading]}, "placed":
 ## {surface id: Transform3D}, "items": {item id: [x, y, z, yaw] on the floor -- and, while it is
-## in the air, [..., throws, origin, velocity, spin] -- or [] in a hand}}
+## in the air, [..., throws, origin, velocity, spin] -- or [] in a hand, [true] on a head},
+## "patches": {peer id: [SEND socket per tablet receiver, "" for none]}}
 ## -- the venue, the plugins out on stands, where every stand and
 ## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
@@ -854,7 +855,7 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D],
 		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME],
 		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
-		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL]}
+		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"patch": [TYPE_INT, TYPE_STRING_NAME]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.

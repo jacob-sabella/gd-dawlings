@@ -244,7 +244,7 @@ ergonomics.
       `--walk mirror[,distance]` in `tools/screenshot.gd` stands you in front of the venue's
       mirror; a hand-picked walk point was black inside a wall twice. The patchbay's
       `PatchPlug`/`PatchCable` (`hardware/patchbay/`) are there to build the senders from.
-- [ ] The tablet is your personal mixer (the user's design, 2026-10-09). A handheld tablet whose
+- [x] The tablet is your personal mixer (the user's design, 2026-10-09). A handheld tablet whose
       face is a patch panel only you see: a row of receivers, each with a level and a meter, and
       what they add up to is what your headphones play. Its senders are wireless patch plugs that
       everyone sees: pull one off the tablet's edge and plug it into a send socket out in the
@@ -253,6 +253,18 @@ ergonomics.
       plugs are room state, so everyone sees who is listening to what; the levels are yours. A
       later page of the same tablet carries a control surface (a mixer page, meters, transport,
       a plugin's page), working the same way on a desktop and in a headset.
+      Done: `TabletItem` (Blender model and the wireless plug from `tools/blender/tablet.py`),
+      `TabletFace` drawn on its glass only while a hand here holds it, `PersonalMix` (four
+      receivers, a level each, summed per bus for `Ears.listen`), and `SendSocket`s for MIX and
+      KEYS on the master section, where everyone's plugs stack in their owners' colours. The
+      plugs are the room's `patches` (verb `patch`); clicking a send pulls your own plug back.
+      Home is the shelf's lower tier, because the top's spots are full in venues with no stand.
+      Learned: a face that looked skewed held at an angle was right square-on, so look square-on
+      before blaming the layout. On a desktop the tablet is held facing the eye
+      (`TabletItem.facing_eye`) with its left edge in the hand, where the glove covers no row.
+      The glass is matte under an unshaded backlight quad, so the room's lamps neither glare on
+      it nor grey it. Lying flat, it is near edge-on from the seat, so its grip box is taller
+      than the slate. Still to come: the control-surface page.
 - [ ] Single tracks into the personal mix: a send socket on each channel strip. Heard where the
       track's audio is in this process: the built-in engine's per-track buses. A guest gets the
       host's whole mix in one stream, and a host on Reaper hears Reaper, so per-track cue there

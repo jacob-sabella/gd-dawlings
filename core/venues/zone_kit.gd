@@ -179,6 +179,8 @@ static func table(parent: Node3D, size: Vector3, height: float, leg: float, top:
 const SHELF := Vector3(0.95, 0.78, 0.42)
 ## How many items it has room for along its top.
 const SHELF_SPOTS := 4
+## The top of the shelf's lower tier: its middle (0.22) and half its board (0.035 * 0.8).
+const SHELF_LOWER_TOP := 0.22 + 0.035 * 0.8 * 0.5
 
 
 static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Color) -> void:

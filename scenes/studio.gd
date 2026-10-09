@@ -113,6 +113,12 @@ var items: ItemRoom
 var mic_arm := MicArm.new()
 ## Whether the headphones are on a head here, as Ears was last told.
 var _heard_phones := false
+## The personal mix of whoever is at this machine: the tablet's receivers (docs/items_loop.md).
+var personal := PersonalMix.new()
+## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
+## The room's, so the host's: everyone sees everyone's plugs. Whoever is at this machine hears
+## their own row (`personal`).
+var patches: Dictionary = {}
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
@@ -839,7 +845,8 @@ func room_state() -> Dictionary:
 				placed[surface_id] = mount.studio_home(surface_id)
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
-			"floor": floor, "placed": placed, "items": items.state() if items != null else {}}
+			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
+			"patches": patches.duplicate(true)}
 
 
 func _publish_room() -> void:
@@ -875,6 +882,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	for p in _predictions:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item": pending_items[p["args"][0]] = true
+			&"patch": pass
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -926,6 +934,13 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
+	if state.has("patches"):
+		patches = (state["patches"] as Dictionary).duplicate(true)
+		# This guest's plugs it has moved and not heard back about, on top.
+		for p in _predictions:
+			if p["verb"] == &"patch":
+				_set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
+		_show_patches()
 	_applying_room = false
 	_looms_dirty = true
 
@@ -1012,6 +1027,10 @@ func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: 
 ## then published the way any change to it is.
 func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 	match verb:
+		&"patch":
+			if PersonalMix.valid_socket(args[1]):
+				_set_patch(from, args[0], args[1])
+				_publish_room_soon()
 		&"open_tablet":
 			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
 				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
@@ -1686,7 +1705,7 @@ func _refresh_looms_if_moved(delta: float) -> void:
 func _item_homes() -> Dictionary:
 	if venue == null:
 		return {}
-	var out := {&"headphones": venue.headphones_spot()}
+	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot()}
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
@@ -1720,6 +1739,15 @@ func _build_items() -> void:
 	if phones != null:
 		phones.worn_changed.connect(_on_phones_changed)
 		phones.state_changed.connect(func(_s: Item.State) -> void: _on_phones_changed())
+	var tablet := items.items.get(&"tablet") as TabletItem
+	if tablet != null:
+		tablet.mix = personal
+		tablet.colour = _colour_of(Session.local_peer_id)
+		tablet.patch_asked.connect(_on_patch_asked)
+	personal.changed.connect(_on_personal_changed)
+	console.rebuilt.connect(_show_patches)
+	Session.roster_changed.connect(_on_roster_for_patches)
+	_show_patches()
 	items.asked.connect(_on_items_asked)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
@@ -1737,13 +1765,111 @@ func _on_phones_changed() -> void:
 	if now == _heard_phones:
 		return
 	_heard_phones = now
-	Ears.listen(now)
+	Ears.listen(now, personal.ears_levels())
+	var tablet := items.items.get(&"tablet") as TabletItem
+	if tablet != null:
+		tablet.listening = now
 	if not now:
 		return
-	if Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
-		Session.notice.emit("Headphones on: the mix and your keys, the room shut out. H takes them off.")
-	else:
+	if not Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
 		Session.notice.emit("Headphones on: the room shut out. You hear Reaper itself, through the system.")
+	elif personal.is_patched():
+		Session.notice.emit("Headphones on: your personal mix, the room shut out. H takes them off.")
+	else:
+		Session.notice.emit("Headphones on: the mix and your keys, the room shut out. The tablet patches what is in them.")
+
+
+## The personal mix changed -- a plug moved, a level -- and the headphones, if they are on,
+## play it at once.
+func _on_personal_changed() -> void:
+	if _heard_phones:
+		Ears.listen(true, personal.ears_levels())
+
+
+## A plug dropped on a socket by a hand here, or brought back to the tray: done here at once,
+## and asked of the host, whose table it is.
+func _on_patch_asked(receiver: int, socket: StringName) -> void:
+	if not PersonalMix.valid_socket(socket) or receiver < 0 or receiver >= PersonalMix.RECEIVERS:
+		return
+	var letter: String = PersonalMix.LETTERS[receiver]
+	_set_patch(Session.local_peer_id, receiver, socket)
+	if Session.is_authority():
+		_publish_room_soon()
+	else:
+		_predict(&"patch", [receiver, socket])
+	if socket == &"":
+		Session.notice.emit("Plug %s is back in the tray." % letter)
+	else:
+		Session.notice.emit("Plug %s in SEND %s: %s, in your headphones%s." % [letter,
+				String(socket).to_upper(), PersonalMix.TITLES[socket].to_lower(),
+				"" if _heard_phones else " when you put them on"])
+
+
+## Put `peer`'s receiver `receiver`'s plug in `socket`, or back in its tray (empty).
+func _set_patch(peer: int, receiver: int, socket: StringName, show := true) -> void:
+	if receiver < 0 or receiver >= PersonalMix.RECEIVERS:
+		return
+	var row: Array = []
+	for i in PersonalMix.RECEIVERS:
+		var had: Array = patches.get(peer, [])
+		row.append(String(had[i]) if i < had.size() else "")
+	row[receiver] = String(socket)
+	if row.all(func(s: String) -> bool: return s == ""):
+		patches.erase(peer)
+	else:
+		patches[peer] = row
+	if show:
+		_show_patches()
+
+
+## Everyone's plugs in the sockets, in their colours, and this person's own in their ears.
+func _show_patches() -> void:
+	personal.set_sockets(patches.get(Session.local_peer_id, []))
+	if console == null or console.master == null:
+		return
+	var peers := patches.keys()
+	peers.sort()
+	for socket in console.master.sends:
+		if not socket.pressed.is_connected(_on_send_pressed):
+			socket.pressed.connect(_on_send_pressed.bind(socket.source))
+		var colours: Array[Color] = []
+		for peer in peers:
+			for s: String in patches[peer]:
+				if StringName(s) == socket.source:
+					colours.append(_colour_of(peer))
+		socket.set_plugs(colours)
+
+
+## A SEND socket clicked: this person's plugs in it come back to their tray. With none in it,
+## where the plugs are.
+func _on_send_pressed(source: StringName) -> void:
+	var mine: Array = patches.get(Session.local_peer_id, [])
+	var any := false
+	for i in mine.size():
+		if StringName(mine[i]) == source:
+			_on_patch_asked(i, &"")
+			any = true
+	if not any:
+		Session.notice.emit("Drag a plug onto SEND %s from your tablet: it lies on the prop shelf's lower tier."
+				% String(source).to_upper())
+
+
+## Who is here changed: colours may have, and a guest who left takes their plugs with them.
+func _on_roster_for_patches() -> void:
+	var tablet := items.items.get(&"tablet") as TabletItem if items != null else null
+	if tablet != null:
+		tablet.colour = _colour_of(Session.local_peer_id)
+	if Session.role == Session.Role.HOST:
+		for peer in patches.keys():
+			if not Session.participants.has(peer):
+				patches.erase(peer)
+				_publish_room_soon()
+	_show_patches()
+
+
+func _colour_of(peer: int) -> Color:
+	var p: Session.Participant = Session.participants.get(peer)
+	return p.colour if p != null else SendSocket.LAMP
 
 
 ## A hand here put an item down, or sent it home: a guest asks the host, having done it already.

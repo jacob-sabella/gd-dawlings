@@ -1318,6 +1318,17 @@ the mix and your keys until the tablet's patches say otherwise (docs/items_loop.
 Reaper hears Reaper through the system, which the game cannot quiet (`Ears.reaches_mix`), and is
 told so.
 
+The tablet (`TabletItem`) is the personal mixer. Its home is the shelf's lower tier
+(`Venue.tablet_spot`, `ZoneKit.SHELF_LOWER_TOP`). While a hand here holds it, its glass shows a
+`TabletFace`, which is a body child, so nobody else and no mirror sees it. The face has four
+receiver rows (meter, level slider) and four wireless plugs in a tray. Dropping a plug on a
+`SendSocket` patches it there; the master section has one for MIX and one for KEYS
+(`hardware/console/send_socket.gd`). Where the plugs are is room state: `patches`, {peer id:
+[socket per receiver]}, changed with the `patch` verb and predicted on a guest like every room
+ask. The sockets draw everyone's plugs, stacked in their owners' colours. The levels are local
+(`PersonalMix`, `core/audio/personal_mix.gd`), as is what they add up to: `ears_levels()` sums the
+receivers per bus for `Ears.listen`. With nothing patched, it is the mix and your keys.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.
