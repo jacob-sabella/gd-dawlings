@@ -22,8 +22,9 @@ const BOOTH_DOOR_SIDE := Vector3(1, 0, 0)
 
 
 ## What in the zones stops you, as walker footprints ({c, h, a, top}) in studio space: the
-## riser (a step: low enough to walk up onto), the table, the keyboard stand and -- when the
-## venue builds one with walls -- the booth's four walls, less its doorway. The lattice's zone
+## riser (a step: low enough to walk up onto), the table, the keyboard stand, the mic stand and,
+## when the
+## venue builds one with walls, the booth's four walls, less its doorway. The lattice's zone
 ## is open floor; you walk into it.
 static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	var out: Array = []
@@ -33,6 +34,10 @@ static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	out.append(_print(zones[&"bricks"], Vector2(TABLE_TOP.x, TABLE_TOP.z) * 0.5, TABLE_HEIGHT))
 	# The stand's feet are half a metre deep and its decks a little over a metre up.
 	out.append(_print(zones[&"synth"], Vector2(0.25, STAND_WIDTH * 0.5), 1.05))
+	# The mic stand's base and pole: small, but you would kick it.
+	var booth_zone: AABB = zones[&"vocals"]
+	out.append({"c": Vector2(booth_zone.get_center().x + MIC_AT.x, booth_zone.get_center().z + MIC_AT.z),
+			"h": Vector2(0.15, 0.15), "a": 0.0, "top": MIC_HEIGHT})
 	if booth_walls:
 		var booth: AABB = zones[&"vocals"]
 		var c := Vector2(booth.get_center().x, booth.get_center().z)
@@ -181,11 +186,24 @@ static func keyboard_stand(parent: Node3D, width: float, metal: Material, deck: 
 	block(parent, Vector3(0.28, 0.025, width * 0.9), Vector3(0.14, 1.02, 0), deck, "UpperDeck")
 
 
-## A mic stand with nothing in its clip: a round base, a pole, a boom reaching toward -Z.
-static func mic_stand(parent: Node3D, at: Vector3, metal: Material) -> void:
+## Where the booth's mic stand stands, in the booth's frame, and which way its boom reaches: by
+## the glass on the door side, at the closed end, boom back toward the middle where the singer
+## stands facing out through the glass into the room. In the middle it crossed the singer's eyes.
+const MIC_AT := Vector3(0.5, 0.0, -0.35)
+const MIC_YAW := PI * 0.5
+## The end of the boom: at a standing mouth -- a little under the default eye height
+## (Ergonomics), where a singer actually sings, not overhead.
+const MIC_HEIGHT := 1.38
+const MIC_REACH := 0.68
+
+
+## A mic stand with nothing in its clip: a round base, a pole, a boom reaching out along its own
+## -Z (turned by `yaw`) and gently up to MIC_HEIGHT.
+static func mic_stand(parent: Node3D, at: Vector3, metal: Material, yaw := 0.0) -> void:
 	var stand := Node3D.new()
 	stand.name = "MicStand"
 	stand.position = at
+	stand.rotation.y = yaw
 	parent.add_child(stand)
 	var base := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
@@ -196,27 +214,43 @@ static func mic_stand(parent: Node3D, at: Vector3, metal: Material) -> void:
 	base.position.y = 0.015
 	base.material_override = metal
 	stand.add_child(base)
+	# Fifteen degrees up from level: the boom rises this much over its reach.
+	var tilt := deg_to_rad(15.0)
+	var arm_length := MIC_REACH / cos(tilt)
+	var join := MIC_HEIGHT - MIC_REACH * tan(tilt)
 	var pole := MeshInstance3D.new()
 	var rod := CylinderMesh.new()
 	rod.top_radius = 0.011
 	rod.bottom_radius = 0.013
-	rod.height = 1.45
+	# From the base up to the boom's joint, and a couple of centimetres past it for the clamp.
+	rod.height = join - 0.03 + 0.02
 	pole.mesh = rod
-	pole.position.y = 0.75
+	pole.position.y = 0.03 + rod.height * 0.5
 	pole.material_override = metal
 	stand.add_child(pole)
 	var boom := MeshInstance3D.new()
+	boom.name = "Boom"
 	var arm := CylinderMesh.new()
 	arm.top_radius = 0.009
 	arm.bottom_radius = 0.009
-	arm.height = 0.7
+	arm.height = arm_length
 	boom.mesh = arm
-	# Up and out at forty degrees from just below the top of the pole, toward the singer.
-	var tilt := deg_to_rad(-50.0)
-	boom.rotation = Vector3(tilt, 0, 0)
-	boom.position = Vector3(0, 1.40, 0) + Vector3(0, cos(tilt), sin(tilt)) * arm.height * 0.5
+	# The cylinder's +Y laid toward -Z, then lifted by the tilt.
+	boom.rotation = Vector3(-(PI * 0.5 - tilt), 0, 0)
+	boom.position = Vector3(0, join, 0) + Vector3(0, sin(tilt), -cos(tilt)) * arm_length * 0.5
 	boom.material_override = metal
 	stand.add_child(boom)
+	# The empty clip at the end, where a mic goes when one is called up.
+	var clip := MeshInstance3D.new()
+	clip.name = "Clip"
+	var ring := CylinderMesh.new()
+	ring.top_radius = 0.018
+	ring.bottom_radius = 0.014
+	ring.height = 0.05
+	clip.mesh = ring
+	clip.position = Vector3(0, MIC_HEIGHT + 0.03, -MIC_REACH)
+	clip.material_override = metal
+	stand.add_child(clip)
 
 
 ## A light that belongs to a zone: soft, shadowless (they would cost a shadow map apiece and the

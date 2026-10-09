@@ -448,7 +448,7 @@ func _dress_zones() -> void:
 			Vector3(0, 0.005, 0), Materials.cached_scanned("booth_felt", "rough_linen", "1k", 0.5,
 			Color(0.10, 0.10, 0.12)), "BoothFloor")
 	# On the felt, not sunk through it.
-	ZoneKit.mic_stand(vocals, Vector3(0, 0.01, 0.25), metal)
+	ZoneKit.mic_stand(vocals, ZoneKit.MIC_AT + Vector3(0, 0.01, 0), metal, ZoneKit.MIC_YAW)
 	# One warm can in the booth's lid, over the singer.
 	ZoneKit.spot_down(vocals, Vector3(0, booth_box.size.y - 0.08 - 0.046, 0.1), Color(1.0, 0.68, 0.42),
 			1.4, 60.0, 3.2, metal)

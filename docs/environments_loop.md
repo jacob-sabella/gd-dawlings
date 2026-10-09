@@ -113,9 +113,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       zone's dressing footprints the walker collides with (the booth's walls with its doorway,
       the table, the stand) and make the riser a step you can walk up onto.
       (`Venue.zone_solids()`, `ZoneKit.solids`, `Walker.fixed`, `Walker.STEP_HEIGHT`.)
-- [ ] Little things seen from inside the booth: the empty mic stand's boom crosses your eyes when
+- [x] Little things seen from inside the booth: the empty mic stand's boom crosses your eyes when
       you stand in the middle of the booth (stand it nearer the glass, boom toward the room), and
       the stand is not solid.
+      (`ZoneKit.MIC_AT` / `MIC_YAW` / `MIC_HEIGHT`: by the glass, boom reaching in, clip at mouth
+      height; solid in the studio and the grid; the chalk sketch matches.)
 - [x] The studio's live room is very dark from the opening (`light_check` back view, mean 0.02,
       against about 0.18 for the open venues). It reads as moody up close, but the corners are
       black. Add one or two practicals (a wall sconce by the booth, a lamp by the keys) rather

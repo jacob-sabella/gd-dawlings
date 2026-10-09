@@ -5746,6 +5746,17 @@ func _test_every_venue_leaves_room_for_the_activities() -> void:
 						return absf(aim.y) > 0.9 and aim.dot(n.global_transform.basis.z) > 0.0))
 				check("%s: the live room has sconces washing its walls (%d)" % [tag, sconces.size()],
 						sconces.size() >= 4 and washing)
+			var stand := venue.find_child("MicStand", true, false) as Node3D
+			if stand != null:
+				var clip := (stand.get_node("Clip") as Node3D).global_position
+				var booth: AABB = zones[&"vocals"]
+				var middle := Vector2(booth.get_center().x, booth.get_center().z)
+				check("%s: the booth's mic waits at a singer's mouth (%.2f m up)" % [tag, clip.y],
+						clip.y > 1.25 and clip.y < Ergonomics.DEFAULT_HEIGHT - 0.1)
+				check("%s: its boom reaches in from the glass, not across the middle" % tag,
+						Vector2(clip.x, clip.z).distance_to(middle)
+						< Vector2(stand.global_position.x, stand.global_position.z).distance_to(middle)
+						and Vector2(stand.global_position.x, stand.global_position.z).distance_to(middle) > 0.4)
 			if id == &"chalk":
 				var in_the_way := 0
 				for doodle in venue.find_children("Doodle", "Node3D", false, false):

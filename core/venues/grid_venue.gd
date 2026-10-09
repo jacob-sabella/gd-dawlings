@@ -169,7 +169,7 @@ func _dress_zones() -> void:
 	var booth: AABB = z[&"vocals"]
 	_neon_edges(vocals, booth.size - Vector3(0.1, 0, 0.1), Vector3(0, booth.size.y * 0.5, 0), cyan,
 			0.02)
-	ZoneKit.mic_stand(vocals, Vector3(0, 0, 0.25), chrome)
+	ZoneKit.mic_stand(vocals, ZoneKit.MIC_AT, chrome, ZoneKit.MIC_YAW)
 
 	# The lattice's volume drawn at a third of the strength of everything else: a promise of the
 	# thing, not the thing, and dim enough not to light the grid round it.

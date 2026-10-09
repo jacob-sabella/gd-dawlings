@@ -225,8 +225,14 @@ func _zone_sketch(id: StringName, box: AABB) -> Array:
 					true))
 		&"vocals":
 			lines.append_array(_box_lines(box.size - Vector3(0.2, 0, 0.2), Vector3(0, box.size.y * 0.5, 0)))
-			lines.append(PackedVector3Array([Vector3(0, 0.0, 0.25), Vector3(0, 1.45, 0.25)]))
-			lines.append(_placed(Chalk.loop(Vector3.ZERO, 0.06, 16), Vector3(0, 1.62, 0.05), 0.0))
+			# The stand where the other venues stand theirs, boom reaching in, mic at its end.
+			var foot := ZoneKit.MIC_AT
+			var reach := Basis(Vector3.UP, ZoneKit.MIC_YAW) * Vector3(0, 0, -ZoneKit.MIC_REACH)
+			var top := foot + Vector3(0, ZoneKit.MIC_HEIGHT - 0.18, 0)
+			lines.append(PackedVector3Array([foot, top]))
+			lines.append(PackedVector3Array([top, foot + reach + Vector3(0, ZoneKit.MIC_HEIGHT, 0)]))
+			lines.append(_placed(Chalk.loop(Vector3.ZERO, 0.05, 16),
+					foot + reach + Vector3(0, ZoneKit.MIC_HEIGHT + 0.06, 0), ZoneKit.MIC_YAW))
 		&"matrix":
 			var side := 3.0
 			lines.append_array(_box_lines(Vector3.ONE * side, Vector3(0, side * 0.5, 0)))
