@@ -160,9 +160,10 @@ func _dress_zones() -> void:
 	var cyan := ZoneKit.glow(Color(0.15, 0.9, 1.0), 1.5)
 
 	var drums := ZoneKit.holder(self, &"drums", z[&"drums"])
-	var deck := Vector2(z[&"drums"].size.x, z[&"drums"].size.z) - Vector2(0.2, 0.2)
-	ZoneKit.riser(drums, deck, 0.3, glass, glass)
-	_neon_edges(drums, Vector3(deck.x, 0.3, deck.y), Vector3(0, 0.15, 0), pink, 0.018)
+	var deck := Vector2(z[&"drums"].size.x, z[&"drums"].size.z) - Vector2.ONE * ZoneKit.RISER_INSET
+	ZoneKit.riser(drums, deck, ZoneKit.RISER_HEIGHT, glass, glass)
+	_neon_edges(drums, Vector3(deck.x, ZoneKit.RISER_HEIGHT, deck.y),
+			Vector3(0, ZoneKit.RISER_HEIGHT * 0.5, 0), pink, 0.018)
 
 	var vocals := ZoneKit.holder(self, &"vocals", z[&"vocals"])
 	var booth: AABB = z[&"vocals"]
@@ -177,17 +178,24 @@ func _dress_zones() -> void:
 			ZoneKit.glow(Color(0.65, 0.35, 1.0), 0.9), 0.012)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
-	ZoneKit.table(bricks, Vector3(1.0, 0.05, 2.0), 0.92, 0.04, glass, chrome)
-	_neon_edges(bricks, Vector3(1.0, 0.05, 2.0), Vector3(0, 0.895, 0), cyan, 0.012)
+	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.04, glass, chrome)
+	_neon_edges(bricks, ZoneKit.TABLE_TOP, Vector3(0, ZoneKit.TABLE_HEIGHT - ZoneKit.TABLE_TOP.y * 0.5, 0),
+			cyan, 0.012)
 
 	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
-	ZoneKit.keyboard_stand(synth, 1.5, chrome, glass)
+	ZoneKit.keyboard_stand(synth, ZoneKit.STAND_WIDTH, chrome, glass)
 	# A tall slab of black glass behind the stand for the modules, edged in pink: the grid's
 	# version of a wall to put a rack on, since it has no walls.
 	var slab := Vector3(0.06, 1.1, 1.6)
 	var at := Vector3(z[&"synth"].size.x * 0.5 - 0.05, 1.55, 0)
 	ZoneKit.block(synth, slab, at, glass, "ModulePanel")
 	_neon_edges(synth, slab, at, pink, 0.012)
+
+
+## The riser, the table and the stand are glass and stop you; the booth is only its neon edges,
+## and an invisible wall between them would be a wall you could not see.
+func zone_solids() -> Array:
+	return ZoneKit.solids(zones(), false)
 
 
 func _neon_edges(parent: Node3D, size: Vector3, at: Vector3, material: Material,

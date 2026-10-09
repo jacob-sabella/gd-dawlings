@@ -9,6 +9,50 @@ extends RefCounted
 ## floor centre; everything in it is in that local frame.
 
 
+## The sizes every venue's dressing shares, so what you bump into is where the thing is drawn.
+const RISER_INSET := 0.2
+const RISER_HEIGHT := 0.3
+const TABLE_TOP := Vector3(1.0, 0.05, 2.0)
+const TABLE_HEIGHT := 0.92
+const STAND_WIDTH := 1.5
+const BOOTH_POST := 0.07
+const BOOTH_DOOR := 0.8
+## Which wall of the booth the door is in: the one facing the middle of the room.
+const BOOTH_DOOR_SIDE := Vector3(1, 0, 0)
+
+
+## What in the zones stops you, as walker footprints ({c, h, a, top}) in studio space: the
+## riser (a step: low enough to walk up onto), the table, the keyboard stand and -- when the
+## venue builds one with walls -- the booth's four walls, less its doorway. The lattice's zone
+## is open floor; you walk into it.
+static func solids(zones: Dictionary, booth_walls: bool) -> Array:
+	var out: Array = []
+	var drums: AABB = zones[&"drums"]
+	out.append(_print(drums, Vector2(drums.size.x, drums.size.z) * 0.5 - Vector2.ONE * RISER_INSET * 0.5,
+			RISER_HEIGHT))
+	out.append(_print(zones[&"bricks"], Vector2(TABLE_TOP.x, TABLE_TOP.z) * 0.5, TABLE_HEIGHT))
+	# The stand's feet are half a metre deep and its decks a little over a metre up.
+	out.append(_print(zones[&"synth"], Vector2(0.25, STAND_WIDTH * 0.5), 1.05))
+	if booth_walls:
+		var booth: AABB = zones[&"vocals"]
+		var c := Vector2(booth.get_center().x, booth.get_center().z)
+		var hx := booth.size.x * 0.5
+		var hz := booth.size.z * 0.5
+		var t := BOOTH_POST * 0.5
+		out.append({"c": c + Vector2(0, -hz + t), "h": Vector2(hx, t), "a": 0.0, "top": booth.size.y})
+		out.append({"c": c + Vector2(0, hz - t), "h": Vector2(hx, t), "a": 0.0, "top": booth.size.y})
+		out.append({"c": c + Vector2(-hx + t, 0), "h": Vector2(t, hz), "a": 0.0, "top": booth.size.y})
+		# The door side: wall from the -Z corner up to the doorway at the +Z end, as `booth` builds it.
+		var wall := booth.size.z - BOOTH_DOOR
+		out.append({"c": c + Vector2(hx - t, -hz + wall * 0.5), "h": Vector2(t, wall * 0.5), "a": 0.0,
+				"top": booth.size.y})
+	return out
+
+
+static func _print(zone: AABB, half: Vector2, top: float) -> Dictionary:
+	return {"c": Vector2(zone.get_center().x, zone.get_center().z), "h": half, "a": 0.0, "top": top}
+
+
 ## The node a zone's dressing goes in, added to `venue` and stood at the zone's floor centre.
 static func holder(venue: Node3D, id: StringName, box: AABB) -> Node3D:
 	var node := Node3D.new()
@@ -79,7 +123,7 @@ static func riser(parent: Node3D, size: Vector2, tall: float, top: Material,
 ## origin.
 static func booth(parent: Node3D, size: Vector3, door: Vector3, frame: Material,
 		glass: Material) -> void:
-	var post := 0.07
+	var post := BOOTH_POST
 	var hx := size.x * 0.5
 	var hz := size.z * 0.5
 	for cx in [-1.0, 1.0]:
@@ -91,7 +135,7 @@ static func booth(parent: Node3D, size: Vector3, door: Vector3, frame: Material,
 	block(parent, Vector3(size.x, 0.08, size.z), Vector3(0, size.y - 0.04, 0), frame, "Lid")
 	# A sill under each pane: glass to the floor reads as a shop window, not a booth.
 	var sill := 0.32
-	var door_width := 0.8
+	var door_width := BOOTH_DOOR
 	for side: Vector3 in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
 		var along_x := side.x == 0.0
 		var span := (size.x if along_x else size.z) - post * 2.0

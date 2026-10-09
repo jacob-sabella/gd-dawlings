@@ -5990,7 +5990,8 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	at = walk_until_still.call(Vector3(b.end.x + 1.0, 0, live.position.y + 1.0), Vector3(0, 0, -1))
 	check("beside the doorway, the live room's front wall holds (z %.2f, wall %.2f)" % [
 			at.z, live.position.y], at.z > live.position.y and at.z < live.position.y + Walker.RADIUS + 0.1)
-	at = walk_until_still.call(Vector3(0, 0, live.get_center().y), Vector3(1, 0, 0))
+	# Along the front of the live room, clear of the table and the keys.
+	at = walk_until_still.call(Vector3(0, 0, live.position.y + 0.45), Vector3(1, 0, 0))
 	check("and so does its side wall (x %.2f, wall %.2f)" % [at.x, live.end.x],
 			at.x < live.end.x and at.x > live.end.x - Walker.RADIUS - 0.1)
 	var zone_reached := true
@@ -6000,6 +6001,40 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		if not room_floor.has_point(Vector2(box.get_center().x, box.get_center().z)):
 			zone_reached = false
 	check("every zone's centre is somewhere you can stand", zone_reached)
+
+	# And what stands in the zones is solid where it should be.
+	var zones := studio.venue.zones()
+	var riser: AABB = zones[&"drums"]
+	var riser_edge := riser.end.x - ZoneKit.RISER_INSET * 0.5
+	# A few steps at a walk, then stand: far enough to be up on it, not across it and off.
+	walker.global_position = Vector3(riser_edge + 0.5, 0, riser.get_center().z)
+	walker.velocity = Vector3.ZERO
+	for i in 75:
+		walker.step(1.0 / 60.0, Vector3(-Walker.WALK_SPEED, 0, 0))
+	for i in 60:
+		walker.step(1.0 / 60.0, Vector3.ZERO)
+	at = walker.global_position
+	check("you walk up onto the drum riser (x %.2f, y %.2f)" % [at.x, at.y],
+			at.x < riser_edge - 0.3 and absf(at.y - ZoneKit.RISER_HEIGHT) < 0.03)
+	var desk_zone: AABB = zones[&"bricks"]
+	var table_edge := desk_zone.get_center().x - ZoneKit.TABLE_TOP.x * 0.5
+	at = walk_until_still.call(Vector3(table_edge - 1.0, 0, desk_zone.get_center().z), Vector3(1, 0, 0))
+	check("the brick table stops you (x %.2f, its edge %.2f)" % [at.x, table_edge],
+			at.x < table_edge and at.x > table_edge - Walker.RADIUS - 0.1)
+	var booth: AABB = zones[&"vocals"]
+	at = walk_until_still.call(Vector3(booth.get_center().x, 0, booth.position.z - 0.8), Vector3(0, 0, 1))
+	check("the booth's glass stops you (z %.2f, glass %.2f)" % [at.z, booth.position.z],
+			at.z < booth.position.z and at.z > booth.position.z - Walker.RADIUS - 0.1)
+	var doorway := Vector3(booth.end.x + Walker.RADIUS + 0.03, 0, booth.end.z - ZoneKit.BOOTH_DOOR * 0.5)
+	at = walk_until_still.call(doorway, Vector3(-1, 0, 0))
+	check("and its door lets you in (x %.2f, booth %.2f..%.2f)" % [at.x, booth.position.x, booth.end.x],
+			at.x < booth.end.x - 0.5 and at.x > booth.position.x)
+	check("the lattice's zone is open floor", ZoneKit.solids(zones, true).all(func(f):
+			return not Rect2(zones[&"matrix"].position.x, zones[&"matrix"].position.z,
+					zones[&"matrix"].size.x, zones[&"matrix"].size.z).has_point(f["c"])))
+	check("the grid's booth, only neon edges, has no walls you cannot see",
+			GridVenue.new().zone_solids().size() == ZoneKit.solids(zones, true).size() - 4)
+	check("and the chalk zone's sketches are walked through", ChalkVenue.new().zone_solids().is_empty())
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
 	var edges := Walker.outline([Rect2(-1, 0, 2, 2), Rect2(-3, 2, 6, 2)])

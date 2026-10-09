@@ -380,7 +380,8 @@ func _dress_zones() -> void:
 	var drum_box: AABB = z[&"drums"]
 	var carpet := Materials.cached_scanned("riser_carpet", "wool_boucle", "1k", 0.7,
 			Color(0.20, 0.07, 0.06))
-	ZoneKit.riser(drums, Vector2(drum_box.size.x, drum_box.size.z) - Vector2(0.2, 0.2), 0.3,
+	ZoneKit.riser(drums, Vector2(drum_box.size.x, drum_box.size.z) - Vector2.ONE * ZoneKit.RISER_INSET,
+			ZoneKit.RISER_HEIGHT,
 			carpet, walnut)
 	# From the high ceiling, so reaching well past the floor: a spot's light runs out AT its
 	# range, and one that only just reaches the floor leaves no pool on it.
@@ -394,8 +395,7 @@ func _dress_zones() -> void:
 	glass.albedo_color = Color(0.55, 0.62, 0.66, 0.12)
 	glass.roughness = 0.04
 	glass.metallic_specular = 0.8
-	# The door faces the room's middle, toward the kit.
-	ZoneKit.booth(vocals, booth_box.size, Vector3(1, 0, 0), walnut, glass)
+	ZoneKit.booth(vocals, booth_box.size, ZoneKit.BOOTH_DOOR_SIDE, walnut, glass)
 	ZoneKit.block(vocals, Vector3(booth_box.size.x - 0.2, 0.01, booth_box.size.z - 0.2),
 			Vector3(0, 0.005, 0), Materials.cached_scanned("booth_felt", "rough_linen", "1k", 0.5,
 			Color(0.10, 0.10, 0.12)), "BoothFloor")
@@ -419,7 +419,7 @@ func _dress_zones() -> void:
 			36.0, LIVE_ROOM_HEIGHT * 1.7, metal)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
-	ZoneKit.table(bricks, Vector3(1.0, 0.05, 2.0), 0.92, 0.06, walnut, metal)
+	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, walnut, metal)
 	ZoneKit.spot_down(bricks, Vector3(0, 2.4, 0), Color(1.0, 0.8, 0.6), 2.4, 50.0, 4.0)
 	var pendant := MeshInstance3D.new()
 	var shade := CylinderMesh.new()
@@ -445,7 +445,7 @@ func _dress_zones() -> void:
 
 	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
 	var keys: AABB = z[&"synth"]
-	ZoneKit.keyboard_stand(synth, 1.5, metal, walnut)
+	ZoneKit.keyboard_stand(synth, ZoneKit.STAND_WIDTH, metal, walnut)
 	# The modules' rack on the wall above the stand: a dark case, and rows of jack-sized lights
 	# that are what a rack wall looks like across a dark room.
 	var wall_x := keys.size.x * 0.5 - 0.06
@@ -479,6 +479,10 @@ func _dress_zones() -> void:
 	synth.add_child(leds)
 	ZoneKit.spot_down(synth, Vector3(-0.2, LIVE_ROOM_HEIGHT - 0.05, 0), Color(1.0, 0.82, 0.66), 2.6,
 			40.0, 6.0, metal)
+
+
+func zone_solids() -> Array:
+	return ZoneKit.solids(zones(), true)
 
 
 ## A tall walnut floor mirror, leant against the left wall the way one is in every live room:

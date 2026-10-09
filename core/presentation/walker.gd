@@ -34,6 +34,9 @@ const JUMP_SPEED := 3.1
 const LOOK_SPEED := 0.005
 ## How tall a footprint stands. Above a desk, below a lamp's shade; nobody steps over a console.
 const SOLID_HEIGHT := 1.25
+## The highest edge you walk up onto without jumping: a riser, a stair. A kerb-and-a-bit; below
+## anything in the room you should have to go round.
+const STEP_HEIGHT := 0.32
 
 var camera: Camera3D
 var floor_plan: FloorPlan
@@ -41,6 +44,10 @@ var floor_plan: FloorPlan
 ## the furniture stays in the working footprint, but a person can walk out of it into a venue's
 ## live room. Empty means the floor plan's bounds. The walls stand round the union.
 var walkable: Array[Rect2] = []
+## Things that stand still and stop you, as footprints with a "top": a venue's riser, table,
+## booth walls. Stood up with the walls; a footprint whose top is a step or less is one you walk
+## up onto rather than into.
+var fixed: Array = []
 ## The frame the floor plan's footprints are measured in. The solids live there, so a footprint
 ## and the box standing on it can never disagree about where the floor is.
 var solids_parent: Node3D
@@ -114,6 +121,17 @@ func _build_walls() -> void:
 		var c := CollisionShape3D.new()
 		c.shape = box
 		c.position = Vector3(mid.x, tall * 0.5, mid.y)
+		c.set_meta("wall", true)
+		_solid_body.add_child(c)
+	for f in fixed:
+		var half: Vector2 = f["h"]
+		var centre: Vector2 = f["c"]
+		var top: float = f.get("top", SOLID_HEIGHT)
+		var box := BoxShape3D.new()
+		box.size = Vector3(half.x * 2.0, top, half.y * 2.0)
+		var c := CollisionShape3D.new()
+		c.shape = box
+		c.transform = Transform3D(Basis(Vector3.UP, f["a"]), Vector3(centre.x, top * 0.5, centre.y))
 		c.set_meta("wall", true)
 		_solid_body.add_child(c)
 
@@ -321,6 +339,8 @@ func step(delta: float, wish_velocity: Vector3, jump := false) -> void:
 		velocity.y -= GRAVITY * delta
 	_jump_held = jump
 	move_and_slide()
+	if grounded and wish_velocity != Vector3.ZERO and is_on_wall():
+		_step_up(Vector3(wish_velocity.x, 0, wish_velocity.z).normalized())
 	# A step's worth of bob, scaled by how fast you are actually going, so standing still is
 	# perfectly still -- a camera that breathes while you are reading a meter is a distraction.
 	var pace := Vector2(velocity.x, velocity.z).length()
@@ -329,6 +349,24 @@ func step(delta: float, wish_velocity: Vector3, jump := false) -> void:
 	else:
 		_bob = lerpf(_bob, roundf(_bob / PI) * PI, minf(1.0, delta * 8.0))
 	_place_camera()
+
+
+## Stopped by something you are walking into: if it is no taller than a step and there is room
+## on top, you are on it. A body's legs do this without being asked; a capsule has to be told.
+func _step_up(toward: Vector3) -> void:
+	var up := Vector3(0, STEP_HEIGHT, 0)
+	var ahead := toward * (RADIUS * 0.5)
+	if test_move(global_transform, up):
+		return
+	var raised := global_transform.translated(up)
+	if test_move(raised, ahead):
+		return
+	global_position += up + ahead
+	# Down onto whatever is there, now rather than over the next few frames of gravity.
+	var drop := KinematicCollision3D.new()
+	if test_move(global_transform, -up, drop):
+		global_position += drop.get_travel()
+	velocity.y = 0.0
 
 
 func _place_camera() -> void:

@@ -131,6 +131,13 @@ func zones() -> Dictionary:
 	return out
 
 
+## What in the zones stops a person walking, as walker footprints ({c, h, a, top}) in studio
+## space. Nothing by default: a zone that is only drawn (the chalk zone's sketches) is walked
+## through, the way everything drawn in the air there is.
+func zone_solids() -> Array:
+	return []
+
+
 ## The floor behind the working footprint that a person can walk on to reach the zones: the
 ## footprint's far edge back to the live room's back, wall to wall. Furniture stays out of it;
 ## it is for people. In the studio it is the live room; in an open venue, where nothing else

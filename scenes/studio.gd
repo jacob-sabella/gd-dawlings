@@ -393,6 +393,7 @@ func _walkable() -> Array[Rect2]:
 func _walk_where_the_venue_lets() -> void:
 	if walker != null:
 		walker.walkable = _walkable()
+		walker.fixed = venue.zone_solids() if venue != null else []
 		walker.rebuild_walls()
 
 
@@ -1619,6 +1620,7 @@ func _build_walker() -> void:
 	walker.camera = camera
 	walker.floor_plan = floor_plan
 	walker.walkable = _walkable()
+	walker.fixed = venue.zone_solids() if venue != null else []
 	walker.solids_parent = studio_set
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height

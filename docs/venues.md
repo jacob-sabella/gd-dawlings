@@ -69,6 +69,12 @@ footprint, and the walker's walls stand round the footprint and that floor toget
 (`Walker.walkable`, `Walker.outline`). Where the two meet there is an open doorway. Furniture
 still stays inside the footprint.
 
+What stands in a zone is solid where it looks it. `Venue.zone_solids()` hands the walker
+footprints with a height (`Walker.fixed`). The studio's riser, table, keyboard stand and booth
+walls are solid, and the booth has a doorway. The grid's riser, table and stand are solid, but its
+booth is only neon edges, so it has no walls. The chalk zone's sketches are walked through. The
+walker steps up onto anything no taller than `Walker.STEP_HEIGHT`, which includes the riser.
+
 ## Adding one
 
 1. Subclass `Venue` and override `venue_id`, `dress`, and optionally `lamp_colour`,
