@@ -6492,6 +6492,31 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	for shaft in dome.shafts:
 		leaning = leaning and shaft.basis.y.normalized().dot(DomeVenue.SUN_DIR.normalized()) > 0.999
 	check("the shafts of light lean the way the sun comes down", leaning)
+	var on_sand := dome.reef.size() > 40
+	var in_front := 0
+	for piece: Array in dome.reef:
+		var reef_at: Vector3 = (piece[1] as Transform3D).origin
+		var off_deck := reef_at.z < DomeVenue.NOSE or absf(reef_at.x) > dome.live_room_half()
+		on_sand = on_sand and off_deck and absf(reef_at.y + DomeVenue.TRENCH) < 0.001
+		if reef_at.z < DomeVenue.NOSE and Vector2(reef_at.x, reef_at.z - DomeVenue.NOSE).length() < r:
+			in_front += 1
+	check("dome: rocks and coral sit in the sand, none on the deck, most of them in front (%d of %d)"
+			% [in_front, dome.reef.size()], on_sand and in_front >= 25)
+	var clear_of_glass := dome.fish_paths.size() > 40
+	for f in dome.fish_paths:
+		for k in 85:
+			var swim_a := -PI * 0.5 + DomeVenue.SCHOOL_SWEEP * (k / 42.0 - 1.0)
+			var swim_p := DomeVenue.school_point(swim_a, f.y, f.z)
+			var swim_out := absf(swim_p.x) - r if swim_p.z > DomeVenue.NOSE \
+					else (swim_p - Vector3(0, 0, DomeVenue.NOSE)).length() - r
+			clear_of_glass = clear_of_glass and swim_out > 0.5 and swim_p.y > 0.5 \
+					and swim_p.z < DomeVenue.BACK - 0.3
+	check("the schools sweep round outside the glass and turn before the bulkhead (%d fish)" % dome.fish_paths.size(),
+			clear_of_glass)
+	var fish_node := dome.find_child("Fish", false, false) as MultiMeshInstance3D
+	check("and swim in their shader, each with its own path",
+			fish_node.multimesh.use_custom_data and fish_node.multimesh.instance_count == dome.fish_paths.size()
+			and (fish_node.multimesh.mesh.surface_get_material(0) as ShaderMaterial).shader.resource_path.ends_with("fish.gdshader"))
 
 	# The jazz club: one spot on the stage, the furniture along the side walls, the bottles on
 	# their shelves, the stools turned up on the bar, the curtain behind the stage.

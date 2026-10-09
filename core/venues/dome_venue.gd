@@ -37,6 +37,17 @@ const MODELS := "res://assets/models/"
 ## keep its instance transforms.
 var kelp_spots: Array[Transform3D] = []
 var shafts: Array[MeshInstance3D] = []
+## The reef: each piece's kind (an object in reef.glb) and where it sits.
+var reef: Array = []
+## The fish: each one's (start in its sweep, out from the path, height, sweep rate), as
+## fish.gdshader reads them.
+var fish_paths: Array[Vector4] = []
+## The path the schools swim: round the nose and down the sides, squared off (`SCHOOL_SQUARE`
+## below 1) to keep clear of the glass, swept `SCHOOL_SWEEP` radians either side of the nose.
+const SCHOOL_CENTRE := Vector3(0.0, 0.0, -1.4)
+const SCHOOL_RADII := Vector2(8.8, 9.8)
+const SCHOOL_SQUARE := 0.3
+const SCHOOL_SWEEP := 2.1
 
 
 func venue_id() -> StringName:
@@ -123,6 +134,8 @@ func _ready() -> void:
 	_run_the_rail()
 	_dock_the_sub()
 	_plant_the_kelp()
+	_seed_the_reef()
+	_school_the_fish()
 	_slant_the_shafts()
 	_raise_bubbles()
 	_dress_zones()
@@ -552,6 +565,135 @@ func _plant_the_kelp() -> void:
 	var node := MultiMeshInstance3D.new()
 	node.name = "Kelp"
 	node.multimesh = forest
+	add_child(node)
+
+
+## Rocks and a little coral in the trench: most of it in the sand in front of the nose, where
+## the desk looks down on it over the deck's edge, a few small pieces along the sides, and some
+## big boulders out among the kelp. All from reef.glb, one MultiMesh a kind.
+func _seed_the_reef() -> void:
+	var r := radius()
+	var half := live_room_half()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 17
+	reef.clear()
+	var place := func(kind: String, at: Vector2, size: float) -> void:
+		reef.append([kind, Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3.ONE * size),
+				Vector3(at.x, -TRENCH, at.y))])
+	# The nose: the half disc of sand between the deck's front edge and the glass.
+	var kinds := ["Rock0", "Rock1", "Rock2", "CoralBranch", "CoralBranch", "CoralBrain", "CoralFan", "CoralFan"]
+	var placed: Array[Vector2] = []
+	var tries := 0
+	while placed.size() < 34 and tries < 3000:
+		tries += 1
+		var a := rng.randf_range(PI * 1.05, PI * 1.95)
+		var d := sqrt(rng.randf()) * (r - 0.7)
+		var p := Vector2(cos(a) * d, NOSE + sin(a) * d)
+		if p.y > NOSE - 0.35:
+			continue
+		if placed.any(func(q: Vector2) -> bool: return q.distance_to(p) < 0.55):
+			continue
+		placed.append(p)
+		var kind: String = kinds[rng.randi() % kinds.size()]
+		place.call(kind, p, rng.randf_range(0.5, 1.0) if kind.begins_with("Rock") else rng.randf_range(0.8, 1.4))
+	# The sides: a narrow strip of sand, so only the small pieces.
+	for side in [-1.0, 1.0]:
+		var z := NOSE + 0.6
+		while z < BACK - 1.0:
+			z += rng.randf_range(0.8, 1.8)
+			var kind: String = ["CoralBrain", "CoralFan", "CoralBranch"][rng.randi() % 3]
+			place.call(kind, Vector2(side * (half + 0.45 + rng.randf_range(-0.08, 0.08)), z), rng.randf_range(0.7, 1.0))
+	# Outside: boulders among the kelp, a few in the clearing ahead.
+	for at in [Vector2(-9.5, -12.0), Vector2(6.5, -15.0), Vector2(11.0, -4.0), Vector2(-12.0, 2.0),
+			Vector2(-3.5, -17.0), Vector2(13.0, 6.0)]:
+		place.call("Rock%d" % (rng.randi() % 3), at, rng.randf_range(2.0, 3.6))
+	var source := (load(MODELS + "reef.glb") as PackedScene).instantiate()
+	var looks := {"rock": _reef_material(Color(0.36, 0.34, 0.3), 0.9),
+			"staghorn": _reef_material(Color(0.95, 0.5, 0.38), 0.6),
+			"brain": _reef_material(Color(0.82, 0.68, 0.34), 0.7),
+			"fan": _reef_material(Color(0.62, 0.22, 0.55), 0.6)}
+	var by_kind := {}
+	for piece: Array in reef:
+		if not by_kind.has(piece[0]):
+			by_kind[piece[0]] = []
+		by_kind[piece[0]].append(piece[1])
+	for kind: String in by_kind:
+		var mesh := (source.find_child(kind, true, false) as MeshInstance3D).mesh.duplicate() as ArrayMesh
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i)
+			if m != null and looks.has(m.resource_name):
+				mesh.surface_set_material(i, looks[m.resource_name])
+		var many := MultiMesh.new()
+		many.transform_format = MultiMesh.TRANSFORM_3D
+		many.mesh = mesh
+		many.instance_count = by_kind[kind].size()
+		for i in by_kind[kind].size():
+			many.set_instance_transform(i, by_kind[kind][i])
+		var node := MultiMeshInstance3D.new()
+		node.name = "Reef" + kind
+		node.multimesh = many
+		add_child(node)
+	source.free()
+
+
+## Where on the schools' path angle `a` is, `out_by` out from it at height `h`: fish.gdshader's
+## path(), for the tests.
+static func school_point(a: float, out_by: float, h: float) -> Vector3:
+	var c := cos(a)
+	var s := sin(a)
+	return SCHOOL_CENTRE + Vector3(signf(c) * pow(absf(c), SCHOOL_SQUARE) * (SCHOOL_RADII.x + out_by),
+			h + sin(a * 3.0) * 0.35, signf(s) * pow(absf(s), SCHOOL_SQUARE) * (SCHOOL_RADII.y + out_by))
+
+
+func _reef_material(colour: Color, rough: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = colour
+	m.roughness = rough
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.normal_enabled = true
+	m.normal_texture = Materials.grain("reef", 0.5, 0.6)
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 2.0
+	return m
+
+
+## Two schools of small fish wheeling round the outside of the vault, one each way round,
+## loosely bunched. They swim in fish.gdshader: nothing here moves them.
+func _school_the_fish() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 23
+	fish_paths.clear()
+	for school in [[0.0, 3.4, 0.05, 36], [PI * 0.6, 4.6, -0.042, 28]]:
+		for i in school[3]:
+			fish_paths.append(Vector4(school[0] + rng.randf_range(-0.05, 0.05), rng.randf_range(-0.4, 0.4),
+					school[1] + rng.randf_range(-0.35, 0.35), school[2] * rng.randf_range(0.99, 1.01)))
+	var source := (load(MODELS + "reef.glb") as PackedScene).instantiate()
+	var mesh := (source.find_child("Fish", true, false) as MeshInstance3D).mesh.duplicate() as ArrayMesh
+	source.free()
+	var skin := ShaderMaterial.new()
+	skin.shader = preload("res://core/venues/shaders/fish.gdshader")
+	skin.set_shader_parameter("centre", SCHOOL_CENTRE)
+	skin.set_shader_parameter("radii", SCHOOL_RADII)
+	skin.set_shader_parameter("square", SCHOOL_SQUARE)
+	skin.set_shader_parameter("sweep", SCHOOL_SWEEP)
+	mesh.surface_set_material(0, skin)
+	var many := MultiMesh.new()
+	many.transform_format = MultiMesh.TRANSFORM_3D
+	many.use_custom_data = true
+	many.mesh = mesh
+	many.instance_count = fish_paths.size()
+	for i in fish_paths.size():
+		var size := rng.randf_range(2.4, 3.2)
+		many.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * size), Vector3.ZERO))
+		var f := fish_paths[i]
+		many.set_instance_custom_data(i, Color(f.x, f.y, f.z, f.w))
+	# Where they are is the shader's business, so the box they might be in is given whole.
+	many.custom_aabb = AABB(SCHOOL_CENTRE - Vector3(SCHOOL_RADII.x + 1.0, 0.0, SCHOOL_RADII.y + 1.0),
+			Vector3(SCHOOL_RADII.x * 2.0 + 2.0, 6.5, SCHOOL_RADII.y * 2.0 + 2.0))
+	var node := MultiMeshInstance3D.new()
+	node.name = "Fish"
+	node.multimesh = many
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
 
 

@@ -190,8 +190,13 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
         the sky redrawn ten times a second rather than every frame. The cells bobbing is the
         lattice activity's to do, not the venue's: parked in loop_backlog.md.)
 - [x] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
-  - [ ] Dome follow-up: a school of small fish wheeling round the vault, rocks and a little coral
+  - [x] Dome follow-up: a school of small fish wheeling round the vault, rocks and a little coral
         in the trench.
+        (reef.glb from Blender: three rocks, staghorn, brain coral, a sea fan, a fish. The reef
+        mostly in the sand in front of the nose, small pieces along the sides, boulders out in
+        the kelp. Two schools sweep round the nose and down the sides in a vertex shader and
+        turn back short of the bulkhead -- a loop would have to pass through it. Wide budget
+        426k -> 688k primitives, frame time unchanged at ~6.1 ms.)
 - [x] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
   - [ ] Club follow-up: an upright piano or a bass on its side on the stage, a coat left on a
     booth bench, glasses left on the tables; slow dust turning in the spot's beam.
