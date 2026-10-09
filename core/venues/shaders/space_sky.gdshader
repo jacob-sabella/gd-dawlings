@@ -4,7 +4,7 @@ shader_type sky;
 // a planet below and in front: its night side turned toward the station, cities lit on the
 // land, a thin crescent of day along one edge and the atmosphere a blue line round the limb.
 // The planet is traced as a sphere from the eye, so the window shows its curve and the glass
-// floor looks straight down onto it. No TIME here: the sky is drawn once, not every frame.
+// floor looks straight down onto it. No TIME here: the sky is redrawn only when `spin` moves.
 
 // The planet, in units where its radius is `radius`: its centre relative to the eye.
 uniform vec3 centre = vec3(0.0, -2900.0, -1700.0);
@@ -19,6 +19,15 @@ uniform vec4 atmosphere : source_color = vec4(0.3, 0.55, 1.0, 1.0);
 uniform vec4 city : source_color = vec4(1.0, 0.68, 0.32, 1.0);
 uniform float day = 1.0;
 uniform float stars = 1.0;
+// The orbit: how far round it the station has come, in radians. The surface below and the
+// stars behind turn by it about the orbit's axis; the station advances it (no TIME, above).
+uniform float spin = 0.0;
+
+vec3 turned(vec3 v, float a) {
+	float c = cos(a);
+	float s = sin(a);
+	return vec3(v.x, c * v.y - s * v.z, s * v.y + c * v.z);
+}
 
 float hash3(vec3 p) {
 	p = fract(p * 0.3183099 + 0.1);
@@ -57,9 +66,10 @@ void sky() {
 	vec3 col = vec3(0.0);
 
 	// The stars: two layers, many faint and a few bright, some warm and some blue.
+	vec3 sd_sky = turned(d, spin);
 	for (int layer = 0; layer < 2; layer++) {
 		float scale = layer == 0 ? 160.0 : 60.0;
-		vec2 uv = vec2(atan(d.x, d.z), asin(clamp(d.y, -1.0, 1.0))) * scale;
+		vec2 uv = vec2(atan(sd_sky.x, sd_sky.z), asin(clamp(sd_sky.y, -1.0, 1.0))) * scale;
 		vec2 cell = floor(uv);
 		float r = hash2(cell + float(layer) * 31.0);
 		float keep = layer == 0 ? 0.94 : 0.985;
@@ -73,7 +83,8 @@ void sky() {
 	// The galaxy: a soft band across the sky, mottled.
 	vec3 band_axis = normalize(vec3(0.3, 0.85, 0.42));
 	float band = exp(-pow(dot(d, band_axis) * 4.0, 2.0));
-	col += vec3(0.03, 0.028, 0.04) * band * (0.4 + fbm(d * 6.0)) * stars;
+	band = exp(-pow(dot(sd_sky, band_axis) * 4.0, 2.0));
+	col += vec3(0.03, 0.028, 0.04) * band * (0.4 + fbm(sd_sky * 6.0)) * stars;
 
 	// The planet: where the ray from the eye meets the sphere, if it does.
 	vec3 oc = -centre;
@@ -86,19 +97,22 @@ void sky() {
 		float t = -b - sqrt(disc);
 		vec3 n = normalize(d * t - centre);
 		float light = dot(n, sd);
+		// The ground passing under: the surface's features from the turned normal, its light
+		// from the real one, so the terminator stays where the sun puts it.
+		vec3 g = turned(n, spin);
 		float lit = smoothstep(-0.05, 0.25, light) * day;
 		// Continents and oceans from noise on the sphere, clouds over them.
-		float h = fbm(n * 7.0);
+		float h = fbm(g * 7.0);
 		float is_land = smoothstep(0.52, 0.56, h);
-		vec3 ground = mix(ocean.rgb, land.rgb * (0.7 + fbm(n * 30.0) * 0.6), is_land);
-		float clouds = smoothstep(0.5, 0.75, fbm(n * 11.0 + vec3(4.0)));
+		vec3 ground = mix(ocean.rgb, land.rgb * (0.7 + fbm(g * 30.0) * 0.6), is_land);
+		float clouds = smoothstep(0.5, 0.75, fbm(g * 11.0 + vec3(4.0)));
 		vec3 surface = mix(ground, cloud.rgb, clouds * 0.85);
 		vec3 dayside = surface * lit * 1.4;
 		// The night side: cities on the land, dimmed under cloud.
 		// Each town a point: a fine grid of cells on the sphere, a few lit, more where the
 		// coarse noise says the land is settled.
-		float settled = smoothstep(0.45, 0.7, fbm(n * 18.0 + vec3(9.0)));
-		float town = step(1.0 - 0.06 * settled, hash3(floor(n * 2200.0))) * is_land * (1.0 - clouds * 0.8);
+		float settled = smoothstep(0.45, 0.7, fbm(g * 18.0 + vec3(9.0)));
+		float town = step(1.0 - 0.06 * settled, hash3(floor(g * 2200.0))) * is_land * (1.0 - clouds * 0.8);
 		vec3 nightside = city.rgb * town * 0.7 * (1.0 - smoothstep(-0.1, 0.05, light));
 		// Looking through more air toward the limb: the surface goes blue.
 		float rim = pow(1.0 - clamp(dot(n, -d), 0.0, 1.0), 3.0);

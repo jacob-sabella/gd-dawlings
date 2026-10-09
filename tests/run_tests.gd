@@ -6419,6 +6419,15 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	studio.set_venue(&"station", false)
 	var station := studio.venue as StationVenue
 	var lattice_box: AABB = station.zones()[&"matrix"]
+	var spin_set: Variant = station._sky_mat.get_shader_parameter("spin")
+	var spin_before := 0.0 if spin_set == null else float(spin_set)
+	station._process(StationVenue.ORBIT_STEP * 2.0)
+	var spin_after := float(station._sky_mat.get_shader_parameter("spin"))
+	station._process(StationVenue.ORBIT_STEP * 0.1)
+	check("station: the ground and the stars turn slowly past as it orbits (%.4f -> %.4f)" % [spin_before, spin_after],
+			spin_after > spin_before and spin_after - spin_before < 0.01)
+	check("and the sky is not redrawn every frame for it",
+			float(station._sky_mat.get_shader_parameter("spin")) == spin_after)
 	var deck_glass := station.glass_floor()
 	var deck_pane := station.find_child("FloorGlass", false, false) as MeshInstance3D
 	var deck_plated := false

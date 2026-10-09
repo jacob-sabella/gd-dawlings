@@ -44,7 +44,15 @@ const SUN_DIR := Vector3(-0.85, 0.15, -0.5)
 
 const MODELS := "res://assets/models/"
 
+## How fast the station comes round its orbit, in radians a second: one turn in about a
+## quarter of an hour, slow enough that the ground below is only seen to move if watched.
+const ORBIT_RATE := 0.007
+## How often the sky is turned: each turn redraws it, so not every frame.
+const ORBIT_STEP := 0.1
+
 var _sky_mat: ShaderMaterial
+var orbit := 0.0
+var _orbit_wait := 0.0
 
 
 func venue_id() -> StringName:
@@ -58,6 +66,9 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	var sky := Sky.new()
 	sky.sky_material = _sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_64
+	# Turned every tenth of a second (_process): its reflections catch up over a few frames
+	# rather than all in one.
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -126,6 +137,14 @@ func ring_point(side: float, degrees: float) -> Vector3:
 	# From the hatch frame's outside face, so there is no gap between the two.
 	var x0 := live_room_half() + WALL * 0.5 + 0.16
 	return Vector3(side * (x0 + RING * sin(a)), RING * (1.0 - cos(a)), DOOR_Z)
+
+
+func _process(delta: float) -> void:
+	orbit = fmod(orbit + delta * ORBIT_RATE, TAU)
+	_orbit_wait -= delta
+	if _orbit_wait <= 0.0 and _sky_mat != null:
+		_orbit_wait = ORBIT_STEP
+		_sky_mat.set_shader_parameter("spin", orbit)
 
 
 func _ready() -> void:

@@ -184,8 +184,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       (Poly Haven `wood_planks_grey` on the deck and the riser, `gravel` ballast on the roof, a
       hipped glass skylight lit faintly from below, six mushroom vents.)
 - [x] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
-  - [ ] Station follow-up: the matrix in true zero-g (its cells bobbing slowly), and a slow
+  - [x] Station follow-up: the matrix in true zero-g (its cells bobbing slowly), and a slow
         turn of the planet and the stars, the station's orbit seen through the viewports.
+        (The planet's surface and the stars turn about the orbit's axis, one turn in ~15 min,
+        the sky redrawn ten times a second rather than every frame. The cells bobbing is the
+        lattice activity's to do, not the venue's: parked in loop_backlog.md.)
 - [x] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
   - [ ] Dome follow-up: a school of small fish wheeling round the vault, rocks and a little coral
         in the trench.

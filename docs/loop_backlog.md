@@ -934,3 +934,10 @@ lamp parts".
   /dev/video0) behind the scene and drops the venue's shell the way `XRBootstrap`'s passthrough does, so
   only the gear, the lattice and the zones float over the room. Fixed camera, not head-tracked; the
   virtual camera is lined up with the webcam once by hand. To build once the environments queue is done.
+
+## Lattice cells bobbing in zero-g on the station
+
+The station follow-up asked for the matrix "in true zero-g (its cells bobbing slowly)". The
+cells belong to the lattice activity, which every venue shares, so a venue cannot move them
+without a hook in the activity (e.g. a per-venue `drift` the lattice reads). Decide whether
+activities should take a look from the venue they stand in before building it.
