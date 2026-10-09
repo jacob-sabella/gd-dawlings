@@ -37,6 +37,10 @@ const SOLID_HEIGHT := 1.25
 
 var camera: Camera3D
 var floor_plan: FloorPlan
+## Where you can walk, as rectangles of floor, when that is more than the floor plan's bounds:
+## the furniture stays in the working footprint, but a person can walk out of it into a venue's
+## live room. Empty means the floor plan's bounds. The walls stand round the union.
+var walkable: Array[Rect2] = []
 ## The frame the floor plan's footprints are measured in. The solids live there, so a footprint
 ## and the box standing on it can never disagree about where the floor is.
 var solids_parent: Node3D
@@ -87,31 +91,95 @@ func _ready() -> void:
 	sync_solids()
 
 
-## The four walls are the floor plan's bounds. Rebuilt on demand, since a venue or a session size
-## can move them; cheap, and nothing calls it every frame.
+## The walls stand round where you can walk (`walkable`, or the floor plan's bounds). Rebuilt
+## on demand, since a venue or a session size can move them; cheap, and nothing calls it every
+## frame.
 func _build_walls() -> void:
 	for child in _solid_body.get_children():
 		if child.has_meta("wall"):
 			child.queue_free()
 	if floor_plan == null:
 		return
-	var b := floor_plan.bounds
 	var thick := 0.4
 	var tall := 4.0
-	var walls := [
-		[Vector3(b.get_center().x, tall * 0.5, b.position.y - thick * 0.5), Vector3(b.size.x + thick * 2.0, tall, thick)],
-		[Vector3(b.get_center().x, tall * 0.5, b.end.y + thick * 0.5), Vector3(b.size.x + thick * 2.0, tall, thick)],
-		[Vector3(b.position.x - thick * 0.5, tall * 0.5, b.get_center().y), Vector3(thick, tall, b.size.y)],
-		[Vector3(b.end.x + thick * 0.5, tall * 0.5, b.get_center().y), Vector3(thick, tall, b.size.y)],
-	]
-	for w in walls:
+	var floor: Array[Rect2] = walkable if not walkable.is_empty() else [floor_plan.bounds]
+	for edge in outline(floor):
+		var a: Vector2 = edge[0]
+		var b: Vector2 = edge[1]
+		var out: Vector2 = edge[2]
+		var mid := (a + b) * 0.5 + out * thick * 0.5
+		var length := a.distance_to(b)
 		var box := BoxShape3D.new()
-		box.size = w[1]
+		box.size = Vector3(length if out.x == 0.0 else thick, tall, length if out.x != 0.0 else thick)
 		var c := CollisionShape3D.new()
 		c.shape = box
-		c.position = w[0]
+		c.position = Vector3(mid.x, tall * 0.5, mid.y)
 		c.set_meta("wall", true)
 		_solid_body.add_child(c)
+
+
+## The edges of a union of rectangles that have floor on one side only, each as [from, to,
+## outward normal]. An edge, or the part of one, with another rectangle just past it is not a
+## wall but a doorway -- the control room's open back into the live room -- and is left out.
+## Rectangles that meet must share the line they meet on, or overlap across it.
+static func outline(rects: Array[Rect2]) -> Array:
+	var out: Array = []
+	var nudge := 0.01
+	for r in rects:
+		var sides := [
+			[Vector2(r.position.x, r.position.y), Vector2(r.end.x, r.position.y), Vector2(0, -1)],
+			[Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.end.y), Vector2(0, 1)],
+			[Vector2(r.position.x, r.position.y), Vector2(r.position.x, r.end.y), Vector2(-1, 0)],
+			[Vector2(r.end.x, r.position.y), Vector2(r.end.x, r.end.y), Vector2(1, 0)],
+		]
+		for side in sides:
+			var a: Vector2 = side[0]
+			var b: Vector2 = side[1]
+			var normal: Vector2 = side[2]
+			var along := (b - a).normalized()
+			# The stretch of this edge, as distances along it, still open to the outside.
+			var open: Array = [[0.0, a.distance_to(b)]]
+			for other in rects:
+				if other == r:
+					continue
+				# Does `other` have floor just past this edge? Then, over the stretch it spans,
+				# this is not a wall.
+				var probe_a := a + normal * nudge
+				var probe_b := b + normal * nudge
+				var lo := Vector2(minf(probe_a.x, probe_b.x), minf(probe_a.y, probe_b.y))
+				var hi := Vector2(maxf(probe_a.x, probe_b.x), maxf(probe_a.y, probe_b.y))
+				if normal.x != 0.0:
+					if lo.x <= other.position.x or lo.x >= other.end.x:
+						continue
+					var from := maxf(lo.y, other.position.y) - a.y
+					var to := minf(hi.y, other.end.y) - a.y
+					open = _cut(open, from, to)
+				else:
+					if lo.y <= other.position.y or lo.y >= other.end.y:
+						continue
+					var from := maxf(lo.x, other.position.x) - a.x
+					var to := minf(hi.x, other.end.x) - a.x
+					open = _cut(open, from, to)
+			for span in open:
+				if span[1] - span[0] > 0.001:
+					out.append([a + along * span[0], a + along * span[1], normal])
+	return out
+
+
+## `spans` with [from, to] taken out of it.
+static func _cut(spans: Array, from: float, to: float) -> Array:
+	if to <= from:
+		return spans
+	var out: Array = []
+	for span in spans:
+		if to <= span[0] or from >= span[1]:
+			out.append(span)
+			continue
+		if from > span[0]:
+			out.append([span[0], from])
+		if to < span[1]:
+			out.append([to, span[1]])
+	return out
 
 
 func rebuild_walls() -> void:

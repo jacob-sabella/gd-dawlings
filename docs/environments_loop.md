@@ -103,10 +103,15 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       with all five zones (empty, but each reads as a place for its activity). Test it.
       (`Venue.zones()`, `ZoneKit`, a live room behind the studio's control room; `light_check`
       grew a `back` view of the zones.)
-- [ ] Walk into the zones. The walker's walls are still `floor_plan.bounds`, which is the
+- [x] Walk into the zones. The walker's walls are still `floor_plan.bounds`, which is the
       footprint, so every zone can be seen but not reached on foot. Give the venue a walkable
       outline (the footprint plus its zones' space; in the studio, the control room plus the live
       room) and build the walker's walls from it. Furniture stays in the footprint.
+      (`Venue.back_of_house()`, `Walker.walkable` / `Walker.outline`.)
+- [ ] Make the zone dressing solid where it should be: you walk through the booth's glass, the
+      table and the keyboard stand, and straight through the riser instead of up onto it. Give a
+      zone's dressing footprints the walker collides with (the booth's walls with its doorway,
+      the table, the stand) and make the riser a step you can walk up onto.
 - [ ] The studio's live room is very dark from the opening (`light_check` back view, mean 0.02,
       against about 0.18 for the open venues). It reads as moody up close, but the corners are
       black. Add one or two practicals (a wall sconce by the booth, a lamp by the keys) rather

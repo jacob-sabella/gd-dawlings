@@ -131,6 +131,16 @@ func zones() -> Dictionary:
 	return out
 
 
+## The floor behind the working footprint that a person can walk on to reach the zones: the
+## footprint's far edge back to the live room's back, wall to wall. Furniture stays out of it;
+## it is for people. In the studio it is the live room; in an open venue, where nothing else
+## would stop you, it is where the floor ends being somewhere.
+func back_of_house() -> Rect2:
+	var front := Studio.ROOM_DEPTH * 0.5 + 0.3
+	var half := live_room_half() - 0.05
+	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK - 0.05 - front)
+
+
 ## Half the live room's width, grown with the desk the way the zones are.
 func live_room_half() -> float:
 	return LIVE_ROOM_HALF + _grow()

@@ -376,8 +376,24 @@ func set_venue(id: StringName, persist := true) -> void:
 	if persist and Session.layout != null and Session.is_authority():
 		Session.layout.venue = id
 		Session.layout.save()
+	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
 	_publish_room()
+
+
+## On foot you can go where the room goes: the working footprint and, behind it, the venue's
+## live room with its zones. The furniture's floor plan is still the footprint alone.
+func _walkable() -> Array[Rect2]:
+	var out: Array[Rect2] = [_room_bounds()]
+	if venue != null:
+		out.append(venue.back_of_house())
+	return out
+
+
+func _walk_where_the_venue_lets() -> void:
+	if walker != null:
+		walker.walkable = _walkable()
+		walker.rebuild_walls()
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1080,8 +1096,7 @@ func _fit_room_to_session() -> void:
 		floor_plan.bounds = _room_bounds()
 		if venue != null:
 			set_venue(venue.venue_id(), false)
-		if walker != null:
-			walker.rebuild_walls()
+		_walk_where_the_venue_lets()
 	# A guest's room is fitted by the host, who says where everything went.
 	if _showing_hosts_room:
 		apply_room(Session.room)
@@ -1603,6 +1618,7 @@ func _build_walker() -> void:
 	walker.name = "Walker"
 	walker.camera = camera
 	walker.floor_plan = floor_plan
+	walker.walkable = _walkable()
 	walker.solids_parent = studio_set
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height

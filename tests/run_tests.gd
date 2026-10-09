@@ -5968,14 +5968,48 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 				walker.global_position.z > front + Walker.RADIUS - 0.05)
 		check("and you did get there", walker.global_position.z < front + Walker.RADIUS + 0.1)
 
-	# The walls hold too.
+	# The walls hold too -- round where you can walk, which is more than where the furniture
+	# goes: out of the control room's open back and into the live room, and no further.
 	var b := studio.floor_plan.bounds
-	walker.global_position = Vector3(0, 0, b.end.y - 0.6)
-	walker.velocity = Vector3.ZERO
-	for i in 240:
-		walker.step(1.0 / 60.0, Vector3(0, 0, Walker.SPRINT_SPEED))
-	check("the back wall stops you inside the room (z %.2f, wall %.2f)" % [
-			walker.global_position.z, b.end.y], walker.global_position.z < b.end.y)
+	var live := studio.venue.back_of_house()
+	var walk_until_still := func(from: Vector3, toward: Vector3) -> Vector3:
+		walker.global_position = from
+		walker.velocity = Vector3.ZERO
+		for i in 300:
+			walker.step(1.0 / 60.0, toward * Walker.SPRINT_SPEED)
+		return walker.global_position
+	var at: Vector3 = walk_until_still.call(Vector3(0, 0, b.end.y - 0.6), Vector3(0, 0, 1))
+	check("you walk out of the back of the control room (z %.2f, its edge %.2f)" % [at.z, b.end.y],
+			at.z > b.end.y + 1.0)
+	check("and the live room's back wall stops you (z %.2f, wall %.2f)" % [at.z, live.end.y],
+			at.z < live.end.y and at.z > live.end.y - Walker.RADIUS - 0.1)
+	# Just in front of the doorway, where nothing of the gear's stands between you and the wall.
+	at = walk_until_still.call(Vector3(0, 0, b.end.y - 0.3), Vector3(-1, 0, 0))
+	check("the control room's side wall still holds (x %.2f, wall %.2f)" % [at.x, b.position.x],
+			at.x > b.position.x and at.x < b.position.x + Walker.RADIUS + 0.1)
+	at = walk_until_still.call(Vector3(b.end.x + 1.0, 0, live.position.y + 1.0), Vector3(0, 0, -1))
+	check("beside the doorway, the live room's front wall holds (z %.2f, wall %.2f)" % [
+			at.z, live.position.y], at.z > live.position.y and at.z < live.position.y + Walker.RADIUS + 0.1)
+	at = walk_until_still.call(Vector3(0, 0, live.get_center().y), Vector3(1, 0, 0))
+	check("and so does its side wall (x %.2f, wall %.2f)" % [at.x, live.end.x],
+			at.x < live.end.x and at.x > live.end.x - Walker.RADIUS - 0.1)
+	var zone_reached := true
+	for box: AABB in studio.venue.zones().values():
+		var room_floor := Rect2(live.position + Vector2(Walker.RADIUS, Walker.RADIUS),
+				live.size - Vector2(Walker.RADIUS, Walker.RADIUS) * 2.0)
+		if not room_floor.has_point(Vector2(box.get_center().x, box.get_center().z)):
+			zone_reached = false
+	check("every zone's centre is somewhere you can stand", zone_reached)
+
+	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
+	var edges := Walker.outline([Rect2(-1, 0, 2, 2), Rect2(-3, 2, 6, 2)])
+	var on_the_seam := func(e: Array) -> bool:
+		return absf((e[0] as Vector2).y - 2.0) < 0.001 and absf((e[1] as Vector2).y - 2.0) < 0.001
+	var across := edges.filter(on_the_seam)
+	var lengths := across.map(func(e): return (e[0] as Vector2).distance_to(e[1]))
+	check("the outline leaves a doorway where two rooms meet (%s)" % [lengths],
+			across.size() == 2 and lengths.all(func(l): return is_equal_approx(l, 2.0)))
+	check("and walls everything else (%d edges)" % edges.size(), edges.size() == 8)
 
 	# Momentum: letting go does not stop you dead, but friction does stop you.
 	walker.global_position = Vector3(0, 0, 1.6)

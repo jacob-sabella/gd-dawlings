@@ -64,6 +64,11 @@ floor tape, box edges, and a zone light with its fitting. Each venue supplies it
 The studio puts its zones in a live room: `LIVE_ROOM_HALF` either side, back to `LIVE_ROOM_BACK`,
 `LIVE_ROOM_HEIGHT` tall.
 
+You can walk to the zones in every venue. `Venue.back_of_house()` is the floor behind the
+footprint, and the walker's walls stand round the footprint and that floor together
+(`Walker.walkable`, `Walker.outline`). Where the two meet there is an open doorway. Furniture
+still stays inside the footprint.
+
 ## Adding one
 
 1. Subclass `Venue` and override `venue_id`, `dress`, and optionally `lamp_colour`,
