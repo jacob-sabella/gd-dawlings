@@ -51,6 +51,8 @@ signal state_changed(state: State)
 signal used(down: bool)
 ## A throw has come to rest.
 signal landed()
+## Put on or taken off a head (`set_worn`).
+signal worn_changed()
 
 ## Which item this is in the room, the same on every machine: "duck".
 var id: StringName
@@ -80,6 +82,17 @@ var _home_after := false
 ## Whether the hand that has it here took it out of somebody else's: a hold to be handed over,
 ## not claimed (Presence.claim_carries).
 var taken := false
+## On a head rather than in a hand: here (the hand that put it on still has it, in its `worn`
+## slot) or on somebody else's (`held_elsewhere` then rides their ghost's head). Only something
+## `wearable`.
+var on_head := false
+## Where on this person's head it sits, worn here: their mirror ghost's (Presence). Unset, it
+## rides the hand, out of sight on its mirror-only layer.
+var worn_at: Callable = Callable()
+## Its home is a place of its own (a hook, a clip) rather than a spot on the shelf: ItemRoom.
+var own_home := false
+## How big it is drawn: 1 in a hand, a ghost's head's size on one (worn poses carry a scale).
+var _size := 1.0
 
 ## What it looks like, under the item: the item's own node only moves.
 var body: Node3D
@@ -163,6 +176,11 @@ func centre_height() -> float:
 ## (`Flight.fly`).
 func flies() -> Dictionary:
 	return {"bounce": 0.35, "roll": 3.0, "drag": 0.08}
+
+
+## Override: whether it goes on a head (`Interactor.wear`).
+func wearable() -> bool:
+	return false
 
 
 func title() -> String:
@@ -268,6 +286,7 @@ func launch(f: Flight, with: Array, stays := true) -> void:
 	_hits_played = 0
 	throws += 1
 	launched_with = with
+	_size = 1.0
 	_home_after = not stays
 	resting = Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest)
 	loose_for = 0.0
@@ -286,8 +305,8 @@ func is_flying() -> bool:
 func follow(pose: Callable) -> void:
 	_leave_hand()
 	held_elsewhere = pose
-	# Still there to grab: reaching for it takes it from them.
-	_shape.disabled = false
+	# Still there to grab: reaching for it takes it from them. Not off their head, though.
+	_shape.disabled = on_head
 	_set_state(State.HELD)
 	poke(-0.35)
 
@@ -317,6 +336,24 @@ func set_rim(colour: Color) -> void:
 				m.next_pass = _rim if on else null
 
 
+## On a head or not (`on`). Out of every hand it is off any head too (`_set_state`). Hidden from
+## the wearer's own eyes while on their head --
+## it is round their camera -- and shown in their mirror; on somebody else's it cannot be
+## snatched off.
+func set_worn(on: bool) -> void:
+	on = on and wearable()
+	if on == on_head:
+		return
+	on_head = on
+	if state == State.HELD:
+		if carried_by != null:
+			_layers(Mirror.SELF_ONLY if on_head else Mirror.NOT_REFLECTED)
+		else:
+			_shape.disabled = on_head
+	set_physics_process(true)
+	worn_changed.emit()
+
+
 ## Out of the hand onto the floor at `spot` (in the parent's frame), turned to `yaw`.
 func lay_down(spot: Vector3, yaw: float) -> void:
 	_leave_hand()
@@ -342,6 +379,7 @@ func snap_home() -> void:
 	_leave_hand()
 	_set_state(State.HOME)
 	transform = home
+	_size = 1.0
 	_velocity = Vector3.ZERO
 	_arc_length = 0.0
 
@@ -349,6 +387,8 @@ func snap_home() -> void:
 func _leave_hand() -> void:
 	if carried_by != null and carried_by.carrying == self:
 		carried_by.carrying = null
+	if carried_by != null and carried_by.worn == self:
+		carried_by.worn = null
 	carried_by = null
 	held_elsewhere = Callable()
 	flight = null
@@ -360,6 +400,8 @@ func _set_state(to: State) -> void:
 	state = to
 	set_physics_process(true)
 	state_changed.emit(to)
+	if to != State.HELD:
+		set_worn(false)
 
 
 ## A squash (negative) or a stretch, rung out on a spring. A squeeze, a landing, a pick-up.
@@ -411,7 +453,12 @@ func _physics_process(delta: float) -> void:
 	position = at
 	var turned := Quaternion(basis.orthonormalized()).slerp(Quaternion(goal.basis.orthonormalized()),
 			1.0 - exp(-delta * (18.0 if state == State.HELD else 7.0)))
-	basis = Basis(turned)
+	# A worn pose carries the size of the head it is on; growing onto it, not jumping.
+	var size_wanted := goal.basis.get_scale().x
+	_size = lerpf(_size, size_wanted, 1.0 - exp(-delta * 14.0))
+	if absf(_size - size_wanted) < 0.002:
+		_size = size_wanted
+	basis = Basis(turned).scaled(Vector3.ONE * _size)
 	var s := clampf(_squash, -0.45, 0.45)
 	var across := 1.0 / sqrt(maxf(0.3, 1.0 + s))
 	body.scale = Vector3(across, 1.0 + s, across)
@@ -421,7 +468,7 @@ func _physics_process(delta: float) -> void:
 		if loose_for > TIDY_SECONDS:
 			go_home()
 			return
-	if state != State.HELD and _at_rest(goal):
+	if state != State.HELD and _at_rest(goal) and _size == size_wanted:
 		position = goal.origin
 		basis = goal.basis
 		body.scale = Vector3.ONE
@@ -480,7 +527,10 @@ func _goal() -> Transform3D:
 			if held_elsewhere.is_valid():
 				hand = held_elsewhere.call()
 			elif carried_by != null and is_instance_valid(carried_by):
-				hand = carried_by.carry_pose() * held_pose()
+				if on_head and worn_at.is_valid():
+					hand = worn_at.call()
+				else:
+					hand = carried_by.carry_pose() * held_pose()
 			else:
 				return transform
 			return parent.global_transform.affine_inverse() * hand if parent != null else hand

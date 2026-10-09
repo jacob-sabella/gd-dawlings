@@ -196,6 +196,43 @@ static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Col
 			block(parent, Vector3(leg, SHELF.y - board, leg), Vector3(cx * (SHELF.x * 0.5 - leg),
 					(SHELF.y - board) * 0.5, cz * (SHELF.z * 0.5 - leg)), frame, "ShelfLeg")
 	_shelf_lamp(parent, frame, lamp)
+	_headphone_hook(parent, frame)
+
+
+## Where the headphones hang: a peg under the front edge of the shelf's top, toward the end away
+## from the lamp, as a desk keeps its cans on a hook under its lip.
+const HEADPHONE_HOOK := Vector3(-0.22, SHELF.y - 0.035 - 0.012, SHELF.z * 0.5)
+const HOOK_REACH := 0.055
+
+
+## The hook: a block screwed up under the top, and a peg out of it with its end turned up, so
+## the band cannot slide off.
+static func _headphone_hook(parent: Node3D, frame: Material) -> void:
+	block(parent, Vector3(0.03, 0.012, 0.04), Vector3(HEADPHONE_HOOK.x, SHELF.y - 0.035 - 0.006,
+			HEADPHONE_HOOK.z - 0.02), frame, "HookPlate")
+	var peg := MeshInstance3D.new()
+	peg.name = "HookPeg"
+	var rod := CylinderMesh.new()
+	rod.top_radius = 0.0045
+	rod.bottom_radius = 0.0045
+	rod.height = HOOK_REACH
+	rod.radial_segments = 12
+	peg.mesh = rod
+	peg.rotation.x = PI * 0.5
+	peg.position = HEADPHONE_HOOK + Vector3(0, 0, HOOK_REACH * 0.5 - 0.004)
+	peg.material_override = frame
+	parent.add_child(peg)
+	var tip := MeshInstance3D.new()
+	tip.name = "HookTip"
+	var up := CylinderMesh.new()
+	up.top_radius = 0.0045
+	up.bottom_radius = 0.0045
+	up.height = 0.02
+	up.radial_segments = 12
+	tip.mesh = up
+	tip.position = HEADPHONE_HOOK + Vector3(0, 0.008, HOOK_REACH - 0.006)
+	tip.material_override = frame
+	parent.add_child(tip)
 
 
 ## Where the shelf's lamp stands on its top: the back corner at +X, out of the row of items.

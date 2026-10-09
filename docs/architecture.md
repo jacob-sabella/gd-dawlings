@@ -1299,6 +1299,25 @@ armed track with monitoring on, asked through `Session.send_intent`. On a guest 
 would record over the guest's take. Whatever it changed it puts back when the mic leaves the
 hand, however it leaves.
 
+The headphones (`HeadphonesItem`) are worn, the first thing that is. Their home is a hook under
+the prop shelf (`Venue.headphones_spot`, `ZoneKit.HEADPHONE_HOOK`), so `Item.own_home` is set and
+they hang with their cups square; anywhere else on a floor they swivel flat. `Item.wearable`
+lets a hand's `wear` move what it carries into its `worn` slot. The item keeps `carried_by`, so
+everything that asks whether it is carried here still holds. `Item.set_worn` puts it on the
+wearer's mirror-only layer (`Mirror.SELF_ONLY`), riding the reflection's `worn_pose`, and turns
+off its grip on somebody else's head. `take_off` (H on a desktop, or a reach to your head in a
+headset, `Interactor.head_reach`) brings it back to the hand, if the hand is free. Presence
+claims both slots, so moving between hand and head never lets go of the hold. The room carries
+`[true]` for something on a head (`wear_item`). Remote ghosts wear the real item on
+`Avatar.worn_pose`, scaled to the dome, with their own hat hidden.
+
+What headphones on a head here change is local (`Ears`, `core/audio/ears.gd`): an
+`AudioEffectAmplify` at the head of each of this machine's buses. The room (`Gear`) drops 14 dB
+and the personal mix plays: `Mix` and `Monitor` at the levels `Ears.listen` is given, which are
+the mix and your keys until the tablet's patches say otherwise (docs/items_loop.md). A host on
+Reaper hears Reaper through the system, which the game cannot quiet (`Ears.reaches_mix`), and is
+told so.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

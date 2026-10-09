@@ -122,6 +122,8 @@ func _ready() -> void:
 	await _test_a_throw_is_caught()
 	_test_a_mic_arms_a_track_and_puts_it_back()
 	await _test_the_mic_lives_in_the_stand_and_is_live_in_a_hand()
+	_test_headphones_shut_the_room_out()
+	await _test_headphones_go_on_your_head()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6070,7 +6072,8 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() \
+			# A spot on the shelf for everything but the headphones, which hang on its hook.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 1 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -6758,6 +6761,121 @@ func _test_the_mic_lives_in_the_stand_and_is_live_in_a_hand() -> void:
 	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame
+
+
+## Headphones on: the room's own sounds drop, and the personal mix plays -- the mix and your
+## keys until the tablet says otherwise.
+func _test_headphones_shut_the_room_out() -> void:
+	AudioPorts.ensure_buses()
+	Ears.listen(true)
+	check("on, the mix and your keys play as they were", is_zero_approx(Ears.gain_db(Ears.MIX))
+			and is_zero_approx(Ears.gain_db(Ears.KEYS)))
+	check("and the room is shut out (%.0f dB)" % Ears.gain_db(Ears.ROOM), Ears.gain_db(Ears.ROOM) == Ears.ROOM_DB)
+	Ears.listen(true, {Ears.MIX: -6.0})
+	check("a personal mix plays what is in it at its level", Ears.gain_db(Ears.MIX) == -6.0)
+	check("and nothing of what is not", Ears.gain_db(Ears.KEYS) == Ears.OFF_DB)
+	Ears.listen(false)
+	check("off, everything is as it was", is_zero_approx(Ears.gain_db(Ears.MIX))
+			and is_zero_approx(Ears.gain_db(Ears.KEYS)) and is_zero_approx(Ears.gain_db(Ears.ROOM)))
+	check("a guest's mix is the game's to change", Ears.reaches_mix(true, false))
+	check("so is a host's on the built-in engine", Ears.reaches_mix(false, false))
+	check("but not a host's on Reaper, which plays through the system", not Ears.reaches_mix(false, true))
+
+
+## The headphones in the studio: they hang on the shelf's hook, go on your head from your hand
+## and back, the room carries that they are on, and a ghost wears them in place of its hat.
+func _test_headphones_go_on_your_head() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var phones := room.items.get(&"headphones") as HeadphonesItem
+	check("there are headphones, at home", phones != null and phones.state == Item.State.HOME)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		if not phones.home.is_equal_approx(studio.venue.headphones_spot()):
+			wrong.append(id)
+	check("in every venue they hang on the shelf's hook (%s)" % [wrong], wrong.is_empty() and phones.own_home)
+	studio.set_venue(&"studio", false)
+	for i in 30:
+		phones._process(0.1)
+	check("hung, their cups are square, not swivelled flat", is_zero_approx(phones._flat))
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var self_only := func() -> bool:
+		return phones.body.find_children("*", "VisualInstance3D", true, false).all(
+				func(v: VisualInstance3D) -> bool: return v.layers == Mirror.SELF_ONLY)
+	hand.pick_up(phones)
+	check("picked up, they are in the hand and not on a head", hand.carrying == phones and not phones.on_head)
+	phones.use(true)
+	check("a click puts them on, and the hand is free", hand.carrying == null and hand.worn == phones
+			and phones.on_head and phones.carried_by == hand and phones.state == Item.State.HELD)
+	check("the room has them on a head", room.state().get(&"headphones") == [true])
+	check("you see them only in your mirror", self_only.call())
+	check("and the room is shut out", Ears.gain_db(Ears.ROOM) == Ears.ROOM_DB)
+	studio._toggle_headphones()
+	check("H takes them off into your hand", hand.carrying == phones and hand.worn == null
+			and not phones.on_head and room.state().get(&"headphones") == [])
+	check("seen again, and the room heard again", not self_only.call() and is_zero_approx(Ears.gain_db(Ears.ROOM)))
+	studio._toggle_headphones()
+	check("H puts them back on", hand.worn == phones and phones.on_head)
+	var duck := room.items[&"duck"] as Item
+	hand.pick_up(duck)
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	studio._toggle_headphones()
+	check("with your hand full they stay on, and you are told why (%s)" % [told], hand.worn == phones
+			and told.size() == 1 and (told[0] as String).contains("hand is full"))
+	Session.notice.disconnect(listen)
+	duck.snap_home()
+	hand.lose_carrying()
+	check("taken off by hand", hand.take_off() and hand.carrying == phones)
+	phones.lay_down(Vector3(0, 0, 1.5), 0.0)
+	for i in 30:
+		phones._process(0.1)
+	check("left lying, they are off every head with their cups flat", not phones.on_head
+			and hand.carrying == null and is_equal_approx(phones._flat, 1.0))
+
+	phones.snap_home()
+	var palm := func() -> Transform3D: return Transform3D(Basis.IDENTITY, Vector3(0, 1.2, 0))
+	phones.follow(palm)
+	room.apply({&"headphones": [true]})
+	check("in somebody else's hand, the room puts them on their head", phones.on_head and phones._shape.disabled)
+	check("and nothing changes in your ears", is_zero_approx(Ears.gain_db(Ears.ROOM)))
+	room.apply({&"headphones": []})
+	check("and takes them off again", not phones.on_head and not phones._shape.disabled)
+	studio._on_room_asked(&"wear_item", [&"headphones", true], 0)
+	check("a host puts them on the head of whoever has them", phones.on_head)
+	phones.snap_home()
+	studio._on_room_asked(&"wear_item", [&"headphones", true], 0)
+	check("but not when nobody has them", not phones.on_head)
+
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost.wear_item(true)
+	var pose := ghost.worn_pose()
+	check("a ghost wearing them takes its hat off", not ghost._hat.visible)
+	check("and wears them at the size of its head", pose.basis.get_scale().x > 1.0)
+	ghost.wear_item(false)
+	check("and puts its hat back when they come off", ghost._hat.visible)
+	ghost.queue_free()
+
+	hand.pick_up(phones)
+	hand.wear()
+	studio.queue_free()
+	await get_tree().process_frame
+	check("leaving the studio with them on gives you the room back", is_zero_approx(Ears.gain_db(Ears.ROOM)))
+	Session.role = saved_role
+	Session.layout = saved_layout
 
 
 func _test_every_control_is_clickable_from_the_seat() -> void:

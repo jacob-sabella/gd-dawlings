@@ -111,6 +111,8 @@ var rack: RackSurface
 var items: ItemRoom
 ## What the mic in a hand here has done to a track, to be undone when it leaves the hand.
 var mic_arm := MicArm.new()
+## Whether the headphones are on a head here, as Ears was last told.
+var _heard_phones := false
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
@@ -357,6 +359,7 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 func _exit_tree() -> void:
 	mic_arm.let_go()
+	Ears.listen(false)
 	if get_tree().node_added.is_connected(_keep_out_of_mirrors):
 		get_tree().node_added.disconnect(_keep_out_of_mirrors)
 
@@ -871,7 +874,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var pending_items := {}
 	for p in _predictions:
 		match p["verb"]:
-			&"put_item", &"home_item", &"throw_item": pending_items[p["args"][0]] = true
+			&"put_item", &"home_item", &"throw_item", &"wear_item": pending_items[p["args"][0]] = true
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -1021,11 +1024,15 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"place_surface":
 			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
 				_place_in_studio(args[0], args[1])
-		&"put_item", &"home_item", &"throw_item":
+		&"put_item", &"home_item", &"throw_item", &"wear_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item == null or not _may_put(item, from):
 				return
 			match verb:
+				&"wear_item":
+					# Only something in their hand goes on their head.
+					if item.state == Item.State.HELD:
+						item.set_worn(args[1])
 				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
 				&"home_item": item.go_home()
 				&"throw_item": items.fly(item, args[1], args[2], args[3])
@@ -1674,14 +1681,20 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 # --- desktop camera -----------------------------------------------------------------------
 
+## The items' homes off the shelf: the headphones on their hook under it, and the mic in the
+## booth's stand, where the venue has one.
+func _item_homes() -> Dictionary:
+	if venue == null:
+		return {}
+	var out := {&"headphones": venue.headphones_spot()}
+	var mic_at: Variant = venue.mic_spot()
+	if mic_at != null:
+		out[&"mic"] = mic_at
+	return out
+
+
 ## The things people pick up (docs/items_loop.md), in the set's frame, the floor plan's. They
 ## lie only where the walker could stand to pick them up again.
-## The items' homes off the shelf: the mic in the booth's stand, where the venue has one.
-func _item_homes() -> Dictionary:
-	var mic_at: Variant = venue.mic_spot() if venue != null else null
-	return {&"mic": mic_at} if mic_at != null else {}
-
-
 func _build_items() -> void:
 	items = ItemRoom.new()
 	items.name = "Items"
@@ -1703,11 +1716,34 @@ func _build_items() -> void:
 				mic_arm.take()
 			else:
 				mic_arm.let_go())
+	var phones := items.items.get(&"headphones") as HeadphonesItem
+	if phones != null:
+		phones.worn_changed.connect(_on_phones_changed)
+		phones.state_changed.connect(func(_s: Item.State) -> void: _on_phones_changed())
 	items.asked.connect(_on_items_asked)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
 	if presence != null:
 		presence.items = items
+
+
+## What the headphones on this person's head let through (Ears), and what this person is told
+## about it when they go on.
+func _on_phones_changed() -> void:
+	var phones := items.items.get(&"headphones") as HeadphonesItem if items != null else null
+	if phones == null:
+		return
+	var now := phones.carried_by != null and phones.on_head
+	if now == _heard_phones:
+		return
+	_heard_phones = now
+	Ears.listen(now)
+	if not now:
+		return
+	if Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
+		Session.notice.emit("Headphones on: the mix and your keys, the room shut out. H takes them off.")
+	else:
+		Session.notice.emit("Headphones on: the room shut out. You hear Reaper itself, through the system.")
 
 
 ## A hand here put an item down, or sent it home: a guest asks the host, having done it already.
@@ -1726,6 +1762,18 @@ func _publish_room_soon() -> void:
 		_room_publish_due = false
 		_publish_room()).call_deferred()
 
+
+
+## Off your head into the mouse's hand, or on from it.
+func _toggle_headphones() -> void:
+	var hand := get_node_or_null("MouseHand") as Interactor
+	if hand == null:
+		return
+	if hand.worn != null:
+		if not hand.take_off():
+			Session.notice.emit("Your hand is full: put down what is in it first (Q).")
+	elif hand.carrying != null and hand.carrying.wearable():
+		hand.wear()
 
 
 ## Put down whatever any hand here is carrying, where it is aiming.
@@ -1833,6 +1881,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# that is on WASD, and the one games drop things with.
 			KEY_Q:
 				put_down_items()
+			# Headphones on, or off into your hand. H: beside the hand's other item keys.
+			KEY_H:
+				_toggle_headphones()
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)

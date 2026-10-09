@@ -17,6 +17,7 @@
 | `ball.glb` | A rubber bouncy ball, 0.09 m across, with a seam-like stripe wound round it, origin on the bottom; materials `ball`, `stripe` | `tools/blender/ball.py`. The throwing toy (`BallItem`). |
 | `plane.glb` | A folded paper dart, 0.24 m long, single faces with inked fold lines, nose toward -Z, origin under the keel; materials `paper`, `ink` | `tools/blender/plane.py`. The gliding toy (`PlaneItem`). |
 | `mic.glb` | A handheld vocal mic, 0.21 m long, lying on its side with the body along Y, origin at the middle of its bounds on the floor; materials `body`, `band`, `grille`, `foam` | `tools/blender/mic.py`. `MicItem`; it sits in `ZoneKit.mic_stand`'s clip. |
+| `headphones.glb` | Closed-back studio headphones, built as worn: X ear to ear, Z up, facing -Z once exported; nodes `Band` (origin between the cups), `CupL`/`CupR` (origin at each swivel, so a quarter turn lays them flat); materials `shell`, `pad`, `metal`, `accent` | `tools/blender/headphones.py`. `HeadphonesItem`; hangs on `ZoneKit`'s headphone hook. |
 | `rocking_chair.glb` | Poly Haven `Rockingchair_01` (CC0), decimated to half | `tools/blender/polyhaven_props.py` |
 | `lantern.glb` | Poly Haven `Lantern_01` (CC0), decimated to 8%; glass material `Lantern_01_glass` | `tools/blender/polyhaven_props.py`. |
 

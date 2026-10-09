@@ -46,7 +46,7 @@ var _my_claims: Dictionary = {}
 ## The room's items (docs/items_loop.md), set by the studio. Carrying one is a hold like a
 ## fader's, but for as long as it is carried rather than while a button is down.
 var items: ItemRoom = null
-## {interactor: key of the item it carries, as claimed}.
+## {interactor: keys of the items it carries and has put on a head, as claimed}.
 var _carry_claims: Dictionary = {}
 ## {item id: peer whose hand it has been put in here}, so the holds are acted on when they
 ## change, not every time they are read.
@@ -114,6 +114,11 @@ func _process(delta: float) -> void:
 		reflection.carry(carried.id if carried != null else &"")
 		if carried != null and carried.carried_by != null:
 			reflection.carry_at = _carry_local(carried)
+		# What is on my head is the real thing, on my mirror ghost's head, seen only in mirrors.
+		var wearing := _my_worn()
+		reflection.wear_item(wearing != null)
+		if wearing != null:
+			wearing.worn_at = reflection.worn_pose
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -140,6 +145,7 @@ func _process(delta: float) -> void:
 			avatar.point_at(null, Vector3.ZERO, false)
 		var theirs := _item_held_by(id)
 		avatar.carry(theirs.id if theirs != null else &"", false)
+		avatar.wear_item(_item_worn_by(id) != null)
 		if _carry_at.has(id):
 			avatar.carry_at = _carry_at[id]
 		avatar.set_caption(_caption(p, held_key if theirs == null else theirs.network_key()))
@@ -192,6 +198,14 @@ func _my_pointing() -> Dictionary:
 
 
 ## What my own hand is carrying, or null: for the ghost the mirrors show, and for everyone else.
+func _my_worn() -> Item:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor != null and is_instance_valid(interactor.worn):
+			return interactor.worn
+	return null
+
+
 func _my_carried() -> Item:
 	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
 		var interactor := hand as Interactor
@@ -209,23 +223,34 @@ func claim_carries() -> void:
 		var interactor := hand as Interactor
 		if interactor == null:
 			continue
-		var now := interactor.carrying.network_key() if is_instance_valid(interactor.carrying) else ""
-		var was: String = _carry_claims.get(interactor, "")
+		# What is in the hand and what it has put on its person's head: both still this hand's.
+		# Moving a thing from one to the other changes nothing the host needs to hear.
+		var now: Array = []
+		if is_instance_valid(interactor.carrying):
+			now.append(interactor.carrying.network_key())
+		if is_instance_valid(interactor.worn):
+			now.append(interactor.worn.network_key())
+		var was: Array = _carry_claims.get(interactor, [])
 		if now == was:
 			continue
-		if not was.is_empty():
-			Session.release_hold(was)
+		for key in was:
+			if not now.has(key):
+				Session.release_hold(key)
+		for key in now:
+			if not was.has(key):
+				if is_instance_valid(interactor.carrying) and interactor.carrying.taken \
+						and interactor.carrying.network_key() == key:
+					Session.take_hold(key)
+				else:
+					Session.claim_hold(key)
 		if now.is_empty():
 			_carry_claims.erase(interactor)
 		else:
 			_carry_claims[interactor] = now
-			if interactor.carrying.taken:
-				Session.take_hold(now)
-			else:
-				Session.claim_hold(now)
 	for interactor in _carry_claims.keys():
 		if not is_instance_valid(interactor):
-			Session.release_hold(_carry_claims[interactor])
+			for key in _carry_claims[interactor]:
+				Session.release_hold(key)
 			_carry_claims.erase(interactor)
 
 
@@ -262,14 +287,23 @@ func _on_hold_refused(key: String, holder: int) -> void:
 			interactor.let_go()
 	# Something picked up that somebody else had already: it leaves this hand for theirs.
 	for interactor in _carry_claims.keys():
-		if _carry_claims[interactor] == key and is_instance_valid(interactor):
-			_carry_claims.erase(interactor)
-			var item := (interactor as Interactor).carrying
-			interactor.lose_carrying()
-			if item != null:
+		if (_carry_claims[interactor] as Array).has(key) and is_instance_valid(interactor):
+			_forget_carry(interactor, key)
+			var hand := interactor as Interactor
+			var item := hand.carrying
+			if item != null and item.network_key() == key:
+				hand.lose_carrying()
 				_item_holders.erase(item.id)
 	_apply_items()
 	Session.notice.emit("%s already has %s." % [Session.name_of(holder), key.to_lower()])
+
+
+## `key` is no longer this hand's to let go of: somebody else has it.
+func _forget_carry(interactor: Object, key: String) -> void:
+	var keys: Array = _carry_claims.get(interactor, [])
+	keys.erase(key)
+	if keys.is_empty():
+		_carry_claims.erase(interactor)
 
 
 # --- in -----------------------------------------------------------------------------------
@@ -338,9 +372,7 @@ func _apply_items() -> void:
 		if not mine and _item_holders.get(id, 0) != holder:
 			if item.carried_by != null:
 				# My hand has it too: the host says theirs was first. Ours opens.
-				for interactor in _carry_claims.keys():
-					if interactor == item.carried_by:
-						_carry_claims.erase(interactor)
+				_forget_carry(item.carried_by, item.network_key())
 				item.carried_by.lose_carrying()
 				Session.notice.emit("%s took the %s." % [Session.name_of(holder), item.item_title().to_lower()])
 			_item_holders[id] = holder
@@ -360,16 +392,28 @@ func _palm_of(peer: int, item: Item) -> Transform3D:
 	var avatar: Avatar = _avatars.get(peer)
 	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
 		return item.global_transform
-	return avatar.carried_pose()
+	return avatar.worn_pose() if item.on_head else avatar.carried_pose()
 
 
-## The item in `peer`'s hand, or null.
+## The item in `peer`'s hand, or null. Not one on their head.
 func _item_held_by(peer: int) -> Item:
 	if items == null:
 		return null
 	for id in _item_holders:
-		if _item_holders[id] == peer:
-			return items.items.get(id)
+		var item: Item = items.items.get(id)
+		if _item_holders[id] == peer and item != null and not item.on_head:
+			return item
+	return null
+
+
+## The item on `peer`'s head, or null.
+func _item_worn_by(peer: int) -> Item:
+	if items == null:
+		return null
+	for id in _item_holders:
+		var item: Item = items.items.get(id)
+		if _item_holders[id] == peer and item != null and item.on_head:
+			return item
 	return null
 
 
@@ -1097,6 +1141,25 @@ void fragment() {
 		var turn := Basis(Vector3.UP, _ghost.global_basis.orthonormalized().get_euler().y)
 		var at := _ghost.global_transform * Vector3(-0.22, -0.3, -0.42)
 		return Transform3D(turn, at + bob + Vector3.UP * PALM_LIFT * _hands[0].size)
+
+	## How big a ghost's head is against a person's: the real headphones, worn, are drawn this
+	## much bigger, so they sit on the dome where the hat of the same name does.
+	const HEAD_FIT := 2.75
+
+	## Where something worn on this ghost's head is, in the world: the middle between its ears,
+	## nodding with its face, at the size of its head.
+	func worn_pose() -> Transform3D:
+		# From what the hat hangs on, not the hat: a top hat tips its node, and headphones do not.
+		var lean := _hat.get_parent_node_3d()
+		var unit := lean.global_basis.get_scale().x
+		var at := lean.global_transform.orthonormalized() * Transform3D(Basis.IDENTITY, _hat.position)
+		# Forward a little, as the hat's headphones are: the dome's widest is in front of its middle.
+		return Transform3D(at.basis.scaled(Vector3.ONE * unit * HEAD_FIT), at * Vector3(0, 0, 0.02 * unit))
+
+	## Something real is on its head: its own hat comes off while it is, so they do not sit one
+	## in the other.
+	func wear_item(on: bool) -> void:
+		_hat.visible = not on
 
 	## The look-alike in a mirror sits where the item is.
 	func _seat_carried() -> void:

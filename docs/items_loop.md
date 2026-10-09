@@ -230,13 +230,43 @@ ergonomics.
       `transform_apply` came out with its origin off to the side and floated beside the glove.
       Also, the stand's clip was an upright cup that no handheld mic sits in; it is now a ring
       along the boom, and the mic's home is worked out from the same numbers.
-- [ ] Headphones: put on, they show on your ghost. Their jack plugs into a point (a channel
-      strip, the patchbay, another player's instrument, the click, the talkback), and your ears
-      get that source. Begin with the sources this process already has. A per-track cue from
-      the host needs routing in Reaper: park that choice in the backlog with the options.
-- [ ] The control tablet: a handheld screen carrying a surface through a mount in the hand. It
-      shows a mixer page, meters and transport, and switches to a plugin's page. Pulled off its
-      shelf, it works the same way on a desktop and in a headset.
+- [x] Headphones: put on, they show on your ghost (its hat comes off) and in your mirror, and
+      while they are on you hear your personal mix (the tablet's, below) with the room muffled.
+      No cord and no socket: worn is enough. Until the tablet patches anything, the personal mix
+      is the mix and your keys. Taken off with H on a desktop, or by reaching to your head in a
+      headset. Home is a hook under the prop shelf.
+      Done: `HeadphonesItem` (Blender model from `tools/blender/headphones.py`, cups that swivel
+      flat on a floor and square on the hook), `Item.wearable`/`set_worn`, the hand's `worn`
+      slot with `wear`/`take_off`, Presence claiming both slots, `wear_item` in the room,
+      `Avatar.worn_pose`, and `Ears` muffling the room by 14 dB. Learned: a first cut had a cord
+      to PHONES sockets on the master. The user's design replaced it with the tablet as a
+      personal mixer, so the sockets became the tablet's wireless send plugs (next). Also,
+      `--walk mirror[,distance]` in `tools/screenshot.gd` stands you in front of the venue's
+      mirror; a hand-picked walk point was black inside a wall twice. The patchbay's
+      `PatchPlug`/`PatchCable` (`hardware/patchbay/`) are there to build the senders from.
+- [ ] The tablet is your personal mixer (the user's design, 2026-10-09). A handheld tablet whose
+      face is a patch panel only you see: a row of receivers, each with a level and a meter, and
+      what they add up to is what your headphones play. Its senders are wireless patch plugs that
+      everyone sees: pull one off the tablet's edge and plug it into a send socket out in the
+      room, and its receiver on your tablet lights with that source. Begin with the send sockets
+      for the master mix (on the master section) and your own keys (on whatever you play). The
+      plugs are room state, so everyone sees who is listening to what; the levels are yours. A
+      later page of the same tablet carries a control surface (a mixer page, meters, transport,
+      a plugin's page), working the same way on a desktop and in a headset.
+- [ ] Single tracks into the personal mix: a send socket on each channel strip. Heard where the
+      track's audio is in this process: the built-in engine's per-track buses. A guest gets the
+      host's whole mix in one stream, and a host on Reaper hears Reaper, so per-track cue there
+      needs routing (Reaper cue sends to an output this game taps, or per-listener stems
+      streamed to a guest): park the choice in the backlog with the options.
+- [ ] Other players' gear into the personal mix: a send socket on someone else's instrument or mic.
+      Needs their notes (played here on the same instrument) or their audio sent across the
+      session. Say what latency it adds.
+- [ ] "Their monitor": patch into what another player hears, captured on their machine (their mix
+      with their own playing, in time as they hear it) and sent on. It cannot keep everyone in
+      time at once, but it can stage a performance: the performer's machine is the reference,
+      and the audience hears the performer in time with the backing track they played to.
+      Design it with the user first: who may be listened to, what it costs the performer's
+      upload, and how it is shown.
 - [ ] Instruments, the first two: a shaker and a tambourine, played by shaking (mouse motion
       while held on a desktop, controller velocity in a headset). They are heard at once on the
       low-latency path and recorded as MIDI hits on the armed track by song position.

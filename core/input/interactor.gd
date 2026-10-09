@@ -30,6 +30,9 @@ var hovered: ControlAffordance = null
 ## button meanwhile USES it -- unless the ray is on a control, which it works as ever, so you
 ## can mix with a duck in your hand.
 var carrying: Item = null
+## What this hand has put on its person's head (`wear`): still this hand's, so still claimed
+## with the host, but the hand is free again.
+var worn: Item = null
 ## Where on `hovered` the ray landed, in world space. For a control that is one thing to the
 ## hand and many to the eye -- a lane of items -- the readout depends on which part is under it.
 var hover_point := Vector3.ZERO
@@ -128,6 +131,63 @@ func pick_up(item: Item) -> void:
 		_glove.poke(-0.3)
 
 
+## Put what this hand carries on its person's head, if it is something worn (Item.wearable). The
+## hand is empty again; `take_off` brings it back. Something already worn goes home first, as a
+## full hand's does on a pick-up.
+func wear() -> void:
+	if carrying == null or not is_instance_valid(carrying) or not carrying.wearable():
+		return
+	_end_use()
+	if worn != null and is_instance_valid(worn):
+		var old_room := ItemRoom.of(worn)
+		if old_room != null:
+			old_room.send_home(worn)
+		else:
+			worn.go_home()
+	var item := carrying
+	carrying = null
+	worn = item
+	var room := ItemRoom.of(item)
+	if room != null:
+		room.wear(item, true)
+	else:
+		item.set_worn(true)
+	if _glove != null:
+		_glove.poke(0.3)
+
+
+## Off the head and back into this hand, if the hand is free. False if it was not.
+func take_off() -> bool:
+	if worn == null or not is_instance_valid(worn):
+		worn = null
+		return false
+	if carrying != null:
+		return false
+	var item := worn
+	worn = null
+	carrying = item
+	var room := ItemRoom.of(item)
+	if room != null:
+		room.wear(item, false)
+	else:
+		item.set_worn(false)
+	item.poke(-0.3)
+	if _glove != null:
+		_glove.poke(-0.3)
+	return true
+
+
+## Override: how near this hand has to come to its person's head to take off what is on it, with
+## the button; 0 for a hand that cannot reach it (a mouse has a key for it instead).
+func head_reach() -> float:
+	return 0.0
+
+
+## Override: where its person's head is, for `head_reach`.
+func head_point() -> Vector3:
+	return Vector3(0, 1e6, 0)
+
+
 ## Put down what this hand carries, where it is aiming: on the floor if it can stay there,
 ## otherwise home to its shelf (ItemRoom.put_down).
 func put_down() -> void:
@@ -199,7 +259,11 @@ func _physics_process(_delta: float) -> void:
 		carrying = null
 	_catch()
 	if pressed and not _was_pressed:
-		if hovered == null and carrying != null:
+		if hovered == null and carrying == null and worn != null and head_reach() > 0.0 \
+				and catch_point().distance_to(head_point()) < head_reach():
+			# An empty hand up at the head: it takes off what is on it.
+			take_off()
+		elif hovered == null and carrying != null:
 			# Nothing under the ray, something in the hand: the button is the item's.
 			_using = true
 			carrying.work(true)

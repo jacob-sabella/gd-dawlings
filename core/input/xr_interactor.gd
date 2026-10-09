@@ -29,6 +29,9 @@ func is_pressing() -> bool:
 ## Slower than this as the grip opens and it is put down, not thrown (m/s).
 ## How near the palm a throw has to pass to be caught (m): a hand's span, open.
 const CATCH_REACH := 0.16
+## How near your eyes a hand has to be to be at your head: a hand at the ear counts, and one
+## held out to a fader is further off than this.
+const HEAD_REACH := 0.22
 const FLICK_SPEED := 1.4
 ## How far back the hand's speed is measured over, so one jittery frame is not a throw.
 const FLICK_WINDOW := 0.08
@@ -55,6 +58,20 @@ func _physics_process(delta: float) -> void:
 
 func catch_reach() -> float:
 	return CATCH_REACH
+
+
+## The trigger, with an empty hand up by your ear, takes off what you have on your head.
+func head_reach() -> float:
+	return HEAD_REACH
+
+
+func head_point() -> Vector3:
+	var origin := controller.get_parent() if controller != null else null
+	if origin != null:
+		for child in origin.get_children():
+			if child is XRCamera3D:
+				return (child as XRCamera3D).global_position
+	return super()
 
 
 ## How fast the hand has been moving, over the last FLICK_WINDOW.

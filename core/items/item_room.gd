@@ -18,7 +18,7 @@ extends Node3D
 ## on something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
 
 ## The items there are, in the order they take the shelf's spots.
-const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic"]
+const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -60,6 +60,8 @@ static func make(kind: StringName) -> Item:
 			return PlaneItem.new()
 		&"mic":
 			return MicItem.new()
+		&"headphones":
+			return HeadphonesItem.new()
 	return null
 
 
@@ -92,6 +94,7 @@ func _ready() -> void:
 		item.used.connect(func(down: bool) -> void: used.emit(item, down))
 		item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
 		item.landed.connect(func() -> void: moved.emit(item))
+		item.worn_changed.connect(func() -> void: moved.emit(item))
 	_rehome()
 
 
@@ -108,6 +111,8 @@ func _rehome() -> void:
 	var shelf := 0
 	for i in KINDS.size():
 		var item: Item = items.get(KINDS[i])
+		if item != null:
+			item.own_home = _homes.has(KINDS[i])
 		if _homes.has(KINDS[i]):
 			if item != null:
 				item.home = _homes[KINDS[i]]
@@ -128,7 +133,8 @@ func _rehome() -> void:
 
 
 ## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
-## the floor, {id: []} for one in a hand. One left out is on the shelf.
+## the floor, {id: []} for one in a hand, {id: [true]} for one on a head. One left out is on the
+## shelf.
 func state() -> Dictionary:
 	var out := {}
 	for id in items:
@@ -143,7 +149,7 @@ func state() -> Dictionary:
 					entry.append_array(item.launched_with)
 				out[id] = entry
 			Item.State.HELD:
-				out[id] = []
+				out[id] = [true] if item.on_head else []
 	return out
 
 
@@ -162,7 +168,13 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 				item.go_home()
 			continue
 		var spot := entry as Array
+		# On somebody's head: that it is worn is the room's; whose it is, the holds'.
+		if spot.size() == 1:
+			item.set_worn(bool(spot[0]))
+			continue
 		if spot.size() < 4:
+			if spot.is_empty() and item.state == Item.State.HELD:
+				item.set_worn(false)
 			continue
 		var at := Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
 		# A throw this copy has not flown: flown here from the same launch, to where the room
@@ -232,6 +244,12 @@ static func _onto(floor: Array, at: Vector3) -> Vector3:
 			best_d = d
 			best = c
 	return Vector3(best.x, at.y, best.y)
+
+
+## Put `item` on a head here or take it off (`on`), and say so.
+func wear(item: Item, on: bool) -> void:
+	item.set_worn(on)
+	asked.emit(&"wear_item", [item.id, on])
 
 
 ## Send `item` home from a hand here, and say so.

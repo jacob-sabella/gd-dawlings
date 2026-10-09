@@ -23,8 +23,9 @@ var _cam: Array = []
 ## x,z,yaw,pitch[,y]: stand the walker somewhere and look, instead of flying the god camera. `y`
 ## is the floor you stand on, when it is not the ground: a gallery, a riser.
 var _walk: Array = []
+var _walk_mirror := 0.0
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
-## `--carry duck:squeeze` holds it squeezed.
+## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
 var _carry := ""
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
@@ -128,7 +129,11 @@ func _ready() -> void:
 						_spectate = [Vector3(float(a[0]), float(a[1]), float(a[2])),
 								Vector3(float(b[0]), float(b[1]), float(b[2]))]
 			"--walk":
-				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
+				# "mirror[,distance]": stood in front of the venue's mirror, facing it.
+				if i + 1 < args.size() and args[i + 1].begins_with("mirror"):
+					var parts := args[i + 1].split(",")
+					_walk_mirror = float(parts[1]) if parts.size() > 1 else 1.4
+				elif i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--quit-tick":
 				if i + 1 < args.size(): _quit_tick = int(args[i + 1])
 			"--cam":
@@ -163,6 +168,13 @@ func _process(_delta: float) -> void:
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
+	if _frames == 8 and _walk_mirror > 0.0:
+		var mirrors := get_tree().current_scene.find_children("*", "Mirror", true, false)
+		if not mirrors.is_empty():
+			var m := (mirrors[0] as Node3D).global_transform
+			var front := Vector3(m.basis.z.x, 0, m.basis.z.z).normalized()
+			var at := m.origin + front * _walk_mirror
+			_walk = [at.x, at.z, atan2(front.x, front.z), -0.05]
 	if _frames == 8 and _walk.size() >= 4:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		if studio and studio.get("walker") != null:
@@ -183,6 +195,8 @@ func _process(_delta: float) -> void:
 			hand.pick_up(item)
 			if what.size() > 1 and what[1] == "squeeze":
 				item.use(true)
+			if what.has("wear"):
+				hand.wear()
 
 	if _frames == 28 and _carry != "" and OS.get_cmdline_user_args().has("--shot-debug"):
 		var studio := get_tree().current_scene.get_node_or_null("Studio")

@@ -853,7 +853,8 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"move_piece": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT],
 		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D],
 		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME],
-		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3]}
+		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
+		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.

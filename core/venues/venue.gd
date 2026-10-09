@@ -218,6 +218,13 @@ func item_spots() -> Array[Transform3D]:
 	return out
 
 
+## Where the headphones hang, in studio space: on the hook under the front of the prop shelf
+## (ZoneKit.HEADPHONE_HOOK), band over the peg, facing out.
+func headphones_spot() -> Transform3D:
+	var hang := ZoneKit.HEADPHONE_HOOK + Vector3(0, -HeadphonesItem.HANG, ZoneKit.HOOK_REACH * 0.55)
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), hang)
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.

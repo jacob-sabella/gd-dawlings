@@ -149,6 +149,17 @@ because a scaffold that reads as a finished project wastes the next person's aft
   themselves. Which one, and whether the game should ever play a voice back, is the user's
   call.
 
+- **Per-track cue for a host on Reaper, and for a guest.** The personal mix (the tablet,
+  docs/items_loop.md) can take single tracks where their audio is in this process: the built-in
+  engine's per-track buses. A host on Reaper hears Reaper, and a guest gets the host's whole mix
+  in one stream. Options: Reaper cue sends to a hardware output the game taps; per-listener
+  stems streamed to a guest (upload cost grows with every listener); or leave per-track cue to
+  the built-in engine. The user's call.
+- **"Their monitor": hearing what another player hears.** Captured on the performer's machine
+  (their mix with their own playing, in time as they hear it) and sent on: a staged performance,
+  not a way to keep everyone in time at once. Who may be listened to, the upload it costs, and
+  how it is shown are the user's to decide first.
+
 ## Not started
 
 - **A guest's microphone, calibrated.** Audio takes from guests work (see "Recording a guest"
