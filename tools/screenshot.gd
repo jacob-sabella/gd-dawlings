@@ -29,7 +29,8 @@ var _walk_mirror := 0.0
 ## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's);
 ## `:home` after them puts it back on its shelf. `--carry keytar:chord` holds a C major chord down
 ## on it (play these into the null sink: it sounds). `--carry chips:t2@0.5` does a fidget's
-## tricks before trick 2 and stops trick 2 half way.
+## tricks before trick 2 and stops trick 2 half way. `--carry rcplane:fly:cut@300` flies the radio
+## plane and cuts its motor on frame 300.
 var _carry := ""
 ## `--pockets duck,ball,keytar`: those items picked up and put in pockets 1, 2 and 3 in turn, from
 ## frame 9, before anything `--carry` puts in the hand.
@@ -267,6 +268,23 @@ func _process(_delta: float) -> void:
 	if _frames == 13 and _carry.split(":").has("chord") and Session.guest_midi != null:
 		for pitch in [60, 64, 67]:
 			Session.guest_midi.note_on(pitch, 90)
+
+	# `--carry rcplane:fly`: its motor run up a few frames after the radio is in the hand, so the
+	# plane takes off; `:cut@N` cuts the motor on frame N. With --shot-debug, where it is.
+	if _carry.begins_with("rcplane:"):
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var room: ItemRoom = studio.get("items") if studio else null
+		var rc := room.items.get(&"rcplane") as RcPlaneItem if room != null else null
+		if rc != null:
+			if _frames == 13 and _carry.split(":").has("fly"):
+				rc.work(true)
+			for word in _carry.split(":"):
+				if word.begins_with("cut@") and _frames == int(word.substr(4)):
+					rc.work(true)
+			if _frames % 20 == 0 and OS.get_cmdline_user_args().has("--shot-debug"):
+				print("RCPLANE f%d mode %d at %s speed %.2f slope %.2f" % [_frames, rc.mode, rc.at, rc.speed, rc.slope])
+				if _frames == 20:
+					print("RCPLANE floor ", room.floor_rects.call(), " fps ", Engine.get_frames_per_second(), " phys ", Engine.physics_ticks_per_second)
 
 	# `--carry cards:t1@0.8`: the tricks before trick 1 done, and trick 1 stopped 0.8 of the way.
 	if _frames == 13 and _carry.contains(":t") and _carry.contains("@"):

@@ -481,6 +481,61 @@ static func yoyo_catch(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A little electric plane's motor and propeller, looping while it runs: the buzz of a small
+## motor and its harmonics, chopped by the blades going round, with air through it. Played faster
+## as the plane goes faster. 0.25s: forty cycles of 160Hz and eight of the 32Hz chop, so the seam
+## is clean.
+static func rc_motor() -> AudioStreamWAV:
+	return _cached("rc_motor", func() -> AudioStreamWAV:
+		var s := _noise(0.25, 0.05, 509)
+		_lowpass(s, 3000.0)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var buzz := 0.0
+			for h in range(1, 7):
+				buzz += sin(TAU * 160.0 * h * t) / float(h)
+			var chop := 0.7 + 0.3 * sin(TAU * 32.0 * t)
+			s[i] = (s[i] + 0.06 * buzz) * chop
+		_highpass(s, 90.0)
+		_seam(s, 0.01)
+		return _wav(s, true))
+
+
+## A foam plane going into something: the crunch and the plastic clatter of the prop and the
+## undercarriage after it.
+static func rc_crash(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("rc_crash_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.28, 0.3, 511 + take * 59)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.05)
+		_lowpass(s, 2600.0)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 513 + take * 61
+		_impulse(s, 0.0, 0.5, 0.03, rng.randf_range(120.0, 150.0), 515 + take)
+		var at := 0.03
+		for i in 4:
+			_impulse(s, at, 0.22 / (i + 1), 0.006, rng.randf_range(1800.0, 2600.0), 517 + take * 7 + i)
+			at += rng.randf_range(0.03, 0.06)
+		return _wav(s, false))
+
+
+## Its little wheels meeting the floor: a light double bump, and the patter of them rolling.
+static func rc_touchdown(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("rc_touchdown_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.35, 0.05, 519 + take * 67)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			s[i] *= clampf(t / 0.02, 0.0, 1.0) * exp(-t / 0.15)
+		_lowpass(s, 900.0)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 521 + take * 71
+		_impulse(s, 0.0, 0.3, 0.012, rng.randf_range(260.0, 320.0), 523 + take)
+		_impulse(s, rng.randf_range(0.05, 0.08), 0.2, 0.012, rng.randf_range(260.0, 320.0), 525 + take)
+		return _wav(s, false))
+
+
 static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

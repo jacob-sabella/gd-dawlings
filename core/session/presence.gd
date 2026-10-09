@@ -63,6 +63,7 @@ func _enter_tree() -> void:
 	Session.hold_refused.connect(_on_hold_refused)
 	Session.role_changed.connect(_on_role_changed)
 	Session.item_carried.connect(_on_item_carried)
+	Session.item_flown.connect(_on_item_flown)
 	Session.item_used.connect(_on_item_used)
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
@@ -70,6 +71,7 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	Session.item_carried.disconnect(_on_item_carried)
+	Session.item_flown.disconnect(_on_item_flown)
 	Session.item_used.disconnect(_on_item_used)
 	Session.item_hit.disconnect(_on_item_hit)
 	Session.note_played.disconnect(_on_note_played)
@@ -184,6 +186,10 @@ func _publish() -> void:
 	var carried := _my_carried()
 	if carried != null and carried.carried_by != null:
 		Session.send_carry(carried.id, _carry_local(carried))
+	# The radio plane, flown from here: in my hand or my pocket, wherever it has got to.
+	var flier := items.items.get(&"rcplane") as RcPlaneItem if items != null else null
+	if flier != null and flier.carried_by != null and flier.away():
+		Session.send_flier(flier.id, _to_session(flier.plane_pose()), flier.mode)
 
 
 ## Where the item in my hand is, relative to my head: what everyone else puts in my ghost's glove.
@@ -470,6 +476,15 @@ func _item_worn_by(peer: int) -> Item:
 
 func _on_item_carried(id: StringName, local: Transform3D, from: int) -> void:
 	_carry_at[from] = local
+
+
+## Somebody's radio plane, where they are flying it: ours, there.
+func _on_item_flown(id: StringName, pose: Transform3D, mode: int, from: int) -> void:
+	if items == null or _item_holders.get(id, 0) != from:
+		return
+	var flier := items.items.get(id) as RcPlaneItem
+	if flier != null:
+		flier.hear(_from_session(pose), mode)
 
 
 ## Somebody else squeezed what is in their hand: ours squeaks, in their glove, where it is.

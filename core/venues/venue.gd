@@ -314,6 +314,12 @@ func toy_spot() -> Transform3D:
 	return hoop_spot() * Transform3D(Basis(Vector3.UP, 0.6), Vector3(0.42, 0, 0.5))
 
 
+## Where the radio plane (RcPlaneItem) waits, in studio space: on the floor further out from the
+## hoop than the toy, its nose toward the middle of the room, so a take-off runs into the open.
+func rcplane_spot() -> Transform3D:
+	return hoop_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.55, 0, 1.25))
+
+
 ## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop
 ## that sounds it as its "node" when the venue has stood one.
 func hoops() -> Array:

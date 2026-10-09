@@ -20,7 +20,7 @@ extends Node3D
 ## The items there are, in the order they take the shelf's spots.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
 		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3",
-		&"cradle", &"yoyo", &"toy"]
+		&"cradle", &"yoyo", &"toy", &"rcplane"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -91,6 +91,8 @@ static func make(kind: StringName) -> Item:
 			return YoyoItem.new()
 		&"toy":
 			return ToyItem.new()
+		&"rcplane":
+			return RcPlaneItem.new()
 		&"cards":
 			return CardsItem.new()
 		&"dart1":
@@ -438,6 +440,30 @@ func _through_gear(from: Vector3, to: Vector3) -> bool:
 			continue
 		for f: Dictionary in prints:
 			if Walker._gap(f, Vector2(p.x, p.z)) <= 0.0:
+				return true
+	return false
+
+
+## How high the floor is at `at` (this node's frame).
+func ground(at: Vector2) -> float:
+	return ground_at.call(at) if ground_at.is_valid() else 0.0
+
+
+## Whether something flying at `p` (this node's frame) has hit something: a wall, which is the
+## edge of the floor, or anything standing on the floor -- the venue's solids, the gear -- below
+## its top. For the radio plane (RcPlaneItem), which flies where it is steered.
+func blocked(p: Vector3) -> bool:
+	var at := Vector2(p.x, p.z)
+	var floor: Array = floor_rects.call() if floor_rects.is_valid() else []
+	if not floor.is_empty() and not Flight._on_floor(floor, at):
+		return true
+	var standing: Array = solids.call() if solids.is_valid() else []
+	for f: Dictionary in standing:
+		if p.y < float(f.get("top", Walker.SOLID_HEIGHT)) and Walker._gap(f, at) <= 0.0:
+			return true
+	if gear.is_valid() and p.y < Walker.SOLID_HEIGHT:
+		for f: Dictionary in gear.call():
+			if Walker._gap(f, at) <= 0.0:
 				return true
 	return false
 

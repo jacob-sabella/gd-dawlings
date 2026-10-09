@@ -1739,7 +1739,8 @@ func _item_homes() -> Dictionary:
 	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
 			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
 			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
-			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot()}
+			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot(),
+			&"rcplane": venue.rcplane_spot()}
 	for n in 3:
 		out[StringName("dart%d" % (n + 1))] = venue.dart_spot(n)
 	var mic_at: Variant = venue.mic_spot()

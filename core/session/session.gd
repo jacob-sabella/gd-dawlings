@@ -75,6 +75,9 @@ signal room_motion(piece: StringName, x: float, z: float, heading: float, from: 
 ## Something in `from`'s hand, where it is this moment: relative to their head, so it lands in
 ## their ghost's glove wherever everyone has the ghost. Unreliable, like a head.
 signal item_carried(item: StringName, local: Transform3D, from: int)
+## Where something somebody is flying is (the radio plane, RcPlaneItem), in the session's frame,
+## and how it is flying (its Mode).
+signal item_flown(item: StringName, pose: Transform3D, mode: int, from: int)
 ## Something in `from`'s hand, used: a duck squeezed (`down`) or let go of. Reliable, because a
 ## squeak is an event, and a lost one is a silence nobody can account for.
 signal item_used(item: StringName, down: bool, from: int)
@@ -957,6 +960,34 @@ func _carry_up(item: StringName, local: Transform3D) -> void:
 @rpc("authority", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
 func _carry(item: StringName, local: Transform3D, from: int) -> void:
 	item_carried.emit(item, local, from)
+
+
+## Where the thing I am flying is, in the session's frame, and how it flies, to everyone else.
+## As often as a head, while it is away from its radio.
+func send_flier(item: StringName, pose: Transform3D, mode: int) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_flier.rpc_id(id, item, pose, mode, local_peer_id)
+	else:
+		_flier_up.rpc_id(1, item, pose, mode)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _flier_up(item: StringName, pose: Transform3D, mode: int) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	item_flown.emit(item, pose, mode, from)
+	for id in _audience():
+		if id != from:
+			_flier.rpc_id(id, item, pose, mode, from)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _flier(item: StringName, pose: Transform3D, mode: int, from: int) -> void:
+	item_flown.emit(item, pose, mode, from)
 
 
 ## The thing in my hand, used, for everyone else to hear and see.

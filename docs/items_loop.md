@@ -494,7 +494,31 @@ ergonomics.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's
       props do), next to walking to the shelf. Park it with the user first if it would make the
       shelves pointless.
-- [ ] The wind-up/radio plane: a little plane you fly round the room from a controller held in
+- [x] The wind-up/radio plane: a little plane you fly round the room from a controller held in
       the other hand. Others see it fly, and it lands or crashes.
+      Done: a radio plane, a little foam high-wing trainer and its transmitter, waiting on the
+      floor past the hoop with its nose toward the room (`RcPlaneItem`, `tools/blender/rcplane.py`).
+      Pick it up and the radio is in your hand, while the plane stays where it lay. Click and the
+      motor runs up, the plane runs along the floor and lifts off at about 2 m/s, then flies where
+      you point: your aim, a little past the plane. Look at it and it flies on away from you;
+      look beside it and it banks round that way. It climbs no steeper than one in two, never
+      above 2.3 m. Another click cuts the motor and it glides down at half a metre a second.
+      Onto its wheels gently, level, it lands and rolls to a stop. Into a wall, the gear,
+      furniture or the floor too steeply, it crashes: a crunch, a short tumble, and it lies
+      nosed in with a wing down until a click sets it back on its wheels. Pocket the radio in
+      flight and the motor cuts, so it glides on unsteered. Put the radio down and the plane is
+      back beside it. The radio's light is green while the plane is up, and the motor buzzes
+      faster the faster it goes. Everyone else sees it fly where the flyer's machine says, 20
+      times a second (`Session.send_flier`), with the motor and the crash sounds.
+      Learnings:
+      - Steering at a point on your aim as far away as the plane is breaks the moment you look
+        at the plane: the point is the plane, and it thrashes. A point past it along the aim
+        steers like pointing.
+      - The live room is not open floor. It has a riser and things standing in it, so a glide
+        has to be lined up down the back of the room, and a low pass into a riser's side is a
+        crash.
+      - Twelve materials cost 60 draws once their shadows were counted. Down to eight, and no
+        shadow on the radio or the spinning prop, it is 20.
+      Not tried in a headset, where the aim is the controller's.
 - [ ] Pass over everything with two instances: a host and a guest, each playing with every
       item for a while. Shoot it, measure the budget, and even out what drifted.

@@ -1437,6 +1437,16 @@ by swapping its body and grip. The venue is the host's, so every machine has the
 flies it the same. It lives on the floor in front of the hoop (`Venue.toy_spot`). A ghost
 carrying it shows this machine's venue's toy (`ToyItem.shown`, read by `ItemRoom.look_of`).
 
+The radio plane (`RcPlaneItem`, kind `rcplane`) is one item in two places. The radio is the
+item's body, so it goes in hands and pockets like anything else. The plane is a child of the
+item, not the body: docked beside the radio (`RcPlaneItem.DOCK`) when the item is out of every
+hand, and `top_level` in the room once a hand has it (`on_picked_up` here, `follow` for somebody
+else's). Only the hand that has the radio flies it, in the room's frame, from its own aim
+(`Interactor.aim`), against `ItemRoom.blocked` (the floor's edges, the venue's solids and the
+gear) and `ItemRoom.ground`. Presence sends the plane's pose and `Mode` from the flying machine
+(`Session.send_flier`, unreliable, on the motion channel); other machines `hear` it and ease the
+plane toward it. A click on another machine's copy changes nothing: its mode is the flyer's.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

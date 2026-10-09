@@ -141,6 +141,7 @@ func _ready() -> void:
 	await _test_the_yoyo_does_its_tricks()
 	await _test_each_venue_has_a_toy_of_its_own()
 	await _test_pockets_carry_more_than_one_thing()
+	await _test_the_radio_plane_flies_where_you_point()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6092,7 +6093,7 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
 			# keytar, the chips, the cards, the darts, the cradle and the yo-yo, which have homes of
 			# their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 13 \
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 14 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11751,3 +11752,160 @@ func _test_darts_stick_in_the_board_and_score() -> void:
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
 	Session.layout = saved_layout
+
+
+func _test_the_radio_plane_flies_where_you_point() -> void:
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var rc := room.items.get(&"rcplane") as RcPlaneItem
+	check("the room has a radio plane", rc != null and rc.item_title() == "RADIO PLANE")
+	if rc == null:
+		studio.queue_free()
+		return
+	var spot := studio.venue.rcplane_spot()
+	check("at home on the floor by the hoop, its plane beside its radio", rc.state == Item.State.HOME
+			and rc.home.is_equal_approx(spot) and rc.mode == RcPlaneItem.Mode.DOCKED and not rc.plane.top_level
+			and rc.plane.transform.is_equal_approx(RcPlaneItem.DOCK) and rc.readout() == "by the hoop")
+	var nose := spot.basis * Vector3.FORWARD
+	var hoop_at := studio.venue.hoop_spot().origin
+	check("nose out into the room, away from the hoop", nose.dot(Vector3(hoop_at.x - spot.origin.x, 0, hoop_at.z - spot.origin.z)) < 0.0)
+	var look := ItemRoom.look_of(&"rcplane")
+	check("what a ghost carries is the radio, not the plane", look.find_child("Radio", true, false) != null
+			and look.find_child("Plane", true, false) == null)
+	look.free()
+	check("its sounds: a motor that loops, a crash and a touchdown",
+			Foley.rc_motor().loop_mode == AudioStreamWAV.LOOP_FORWARD and Foley.rc_crash(0).data.size() > 0
+			and Foley.rc_touchdown(0).data.size() > 0 and Foley.rc_crash(1) == Foley.rc_crash(1))
+
+	# Picked up: the radio is in the hand, the plane stays on the floor.
+	var hand := FakeHand.new()
+	studio.add_child(hand)
+	hand.pockets._slots = [null, null, null]
+	var lay := rc.plane.global_transform
+	hand.pick_up(rc)
+	check("picking it up takes the radio; the plane stays where it lay, landed", rc.carried_by == hand
+			and rc.plane.top_level and rc.plane.global_transform.origin.is_equal_approx(lay.origin)
+			and rc.mode == RcPlaneItem.Mode.LANDED and rc.away())
+	var frame := room.global_transform
+	var run := func(seconds: float) -> void:
+		for i in int(seconds * 60.0):
+			rc._process(1.0 / 60.0)
+	# Pointed along its nose, a little up, from behind it.
+	var ahead := rc._ahead()
+	var behind := rc.at - ahead * 1.0 + Vector3(0, 1.2, 0)
+	hand.pose = frame * Transform3D(Basis.looking_at(ahead + Vector3(0, 0.15, 0), Vector3.UP), behind)
+	rc.work(true)
+	check("a click runs the motor up", rc.mode == RcPlaneItem.Mode.RUNNING and rc._motor_running()
+			and rc.hint().contains("cut the motor"))
+	run.call(0.5)
+	check("and it runs along the floor gathering speed", rc.mode == RcPlaneItem.Mode.RUNNING and rc.speed > 0.8
+			and is_equal_approx(rc.at.y, room.ground(Vector2(rc.at.x, rc.at.z)) + RcPlaneItem.WHEELS))
+	run.call(1.2)
+	check("until it lifts off and climbs", rc.mode == RcPlaneItem.Mode.FLYING and rc.at.y > RcPlaneItem.WHEELS + 0.15)
+	check("and the plane is drawn where it is flown", rc.plane.global_position.is_equal_approx(frame * rc.at))
+
+	# In the open middle of the live room, heading -X; pointed off to its left, it turns left.
+	rc.at = Vector3(0.0, 1.0, 5.0)
+	rc.heading = PI * 0.5
+	rc.slope = 0.0
+	rc.bank = 0.0
+	var left := Vector3(0, 0, 1)
+	hand.pose = frame * Transform3D(Basis.looking_at(left, Vector3.UP), rc.at - left * 0.5)
+	run.call(0.3)
+	check("pointed off to one side, it banks into the turn", rc.bank > 0.15 and rc.plane.global_basis.x.y > 0.1)
+	run.call(0.4)
+	check("and comes round that way", wrapf(rc.heading - PI * 0.5, -PI, PI) > 0.8)
+
+	# Motor cut, nose ahead: it glides down and lands on its wheels, and rolls to a stop.
+	# (Down the back of the live room, clear of its riser and what stands in it: into the side of
+	# either, low, is a crash.)
+	rc.at = Vector3(4.5, 0.7, 6.6)
+	rc.heading = PI * 0.5
+	rc.slope = 0.0
+	rc.speed = RcPlaneItem.SPEED
+	hand.pose = frame * Transform3D(Basis.looking_at(Vector3(-1, -0.05, 0), Vector3.UP), Vector3(6.0, 1.0, 6.6))
+	rc.work(true)
+	check("a click in the air cuts the motor, and it glides", rc.mode == RcPlaneItem.Mode.GLIDING and not rc._motor_running())
+	run.call(0.4)
+	check("coming down", rc.at.y < 0.7 and rc.slope < 0.0)
+	run.call(2.5)
+	check("down gently, it has landed", rc.mode == RcPlaneItem.Mode.LANDED
+			and is_equal_approx(rc.at.y, room.ground(Vector2(rc.at.x, rc.at.z)) + RcPlaneItem.WHEELS))
+	run.call(1.5)
+	check("and rolled to a stop, level", rc.speed == 0.0 and rc.plane.global_basis.y.y > 0.99)
+
+	# Into the floor too steeply: crashed, and it lies nosed in.
+	rc.mode = RcPlaneItem.Mode.FLYING
+	rc.at = Vector3(0.0, 1.2, 5.0)
+	rc.heading = PI * 0.5
+	rc.speed = RcPlaneItem.SPEED
+	rc.slope = -RcPlaneItem.DIVE
+	hand.pose = frame * Transform3D(Basis.looking_at(Vector3(-1, -2, 0), Vector3.UP), Vector3(1.0, 1.6, 5.0))
+	run.call(1.2)
+	check("dived into the floor, it crashes", rc.mode == RcPlaneItem.Mode.CRASHED and rc.at.y < 1.0)
+	run.call(1.5)
+	var lying := rc.plane.global_basis
+	check("and comes to lie on the floor nosed in", not rc.falling and lying.y.y < 0.95
+			and absf(rc.at.y - RcPlaneItem._lift(rc._turned) - room.ground(Vector2(rc.at.x, rc.at.z))) < 0.001
+			and rc.hint().contains("back on its wheels"))
+	rc.work(true)
+	check("a click sets it back on its wheels", rc.mode == RcPlaneItem.Mode.LANDED and rc.plane.global_basis.y.y > 0.99)
+
+	# Into a wall: crashed too.
+	rc.mode = RcPlaneItem.Mode.FLYING
+	rc.at = Vector3(5.7, 1.0, 6.6)
+	rc.heading = -PI * 0.5
+	rc.slope = 0.0
+	rc.speed = RcPlaneItem.SPEED
+	hand.pose = frame * Transform3D(Basis.looking_at(Vector3(1, 0, 0), Vector3.UP), Vector3(4.5, 1.0, 6.6))
+	run.call(0.5)
+	check("flown at a wall, it crashes into it", rc.mode == RcPlaneItem.Mode.CRASHED and rc.at.x < 6.25)
+	run.call(1.5)
+	rc.work(true)
+
+	# Pocketed while it flies: the motor is cut and it glides on, unsteered.
+	rc.mode = RcPlaneItem.Mode.FLYING
+	rc.at = Vector3(0.0, 1.5, 5.0)
+	rc.heading = PI * 0.5
+	hand.swap_pocket(0)
+	check("the radio pocketed in flight cuts the motor; nobody steers it", rc.pocket == 0
+			and rc.mode == RcPlaneItem.Mode.GLIDING and rc._steer_to() == null)
+	hand.swap_pocket(0)
+
+	# Somebody else's, on this machine: flown where they say.
+	var other := ItemRoom.new()
+	add_child(other)
+	await get_tree().process_frame
+	var copy := other.items[&"rcplane"] as RcPlaneItem
+	copy.follow(func() -> Transform3D: return Transform3D(Basis.IDENTITY, Vector3(0, 1.2, 0)))
+	check("in somebody else's hand, the plane stays where it was", copy.mode == RcPlaneItem.Mode.LANDED
+			and copy.plane.top_level)
+	var there := Transform3D(Basis(Vector3.UP, 0.4), Vector3(1.0, 1.4, 2.0))
+	copy.hear(there, RcPlaneItem.Mode.FLYING)
+	check("told it flies, it flies there, motor running", copy.mode == RcPlaneItem.Mode.FLYING
+			and copy.plane.global_position.is_equal_approx(there.origin) and copy._motor_running())
+	copy.hear(there.translated(Vector3(0.5, 0, 0)), RcPlaneItem.Mode.FLYING)
+	for i in 30:
+		copy._process(1.0 / 60.0)
+	check("and follows where it is said to be", copy.plane.global_position.distance_to(there.origin + Vector3(0.5, 0, 0)) < 0.02)
+	copy.use(true)
+	check("their clicks fly it, not this copy's", copy.mode == RcPlaneItem.Mode.FLYING)
+	copy.hear(there, RcPlaneItem.Mode.CRASHED)
+	check("told it crashed, it has", copy.mode == RcPlaneItem.Mode.CRASHED and not copy._motor_running())
+	copy.go_home()
+	check("out of their hand, the plane is back beside its radio", copy.mode == RcPlaneItem.Mode.DOCKED
+			and not copy.plane.top_level)
+	other.queue_free()
+
+	# Put down: the plane comes back to its radio.
+	hand.put_down()
+	await get_tree().physics_frame
+	check("out of the hand, the plane is back beside its radio", rc.state != Item.State.HELD
+			and rc.mode == RcPlaneItem.Mode.DOCKED and rc.plane.transform.is_equal_approx(RcPlaneItem.DOCK))
+	hand.queue_free()
+	studio.queue_free()
+	await get_tree().process_frame

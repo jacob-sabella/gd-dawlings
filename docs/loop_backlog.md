@@ -196,6 +196,15 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- The radio plane: putting the radio down puts the plane back beside it at once, from
+  wherever it was, even mid-flight. A mirror shows your ghost holding the radio but never the
+  plane. Other machines ease their copy toward the last pose they heard, so it trails the
+  flyer's by a tenth of a second or so, and a crash's tumble there is only as smooth as 20
+  poses a second make it. It is flown only from its
+  own steering: no wind, no stall, no loop the loop. A crash always ends in the same nosed-in
+  heap. Throwing the radio throws the docked plane with it. Not tried in a headset, and never
+  flown in front of a second machine outside the tests.
+
 - Pockets: nothing on screen shows what is in them but a notice when they change, and the
   mirror. Anything fits in any pocket, a keytar at the hip included. The ghost's pocketed
   things are real size on a ghost that is not, so a duck at the hip is small. Never tried in a
