@@ -196,6 +196,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- The yo-yo: on a desktop your own string is 15 cm and your ghost's is 70 cm, so what you see
+  of your own trick is not what others see. The string is a straight line, never slack, even
+  over the top of around the world. No "walk the dog" along the floor.
 - The cradle: the balls are swung as one group, not five bodies, so nothing but a clean one,
   two or three out happens (no ball nudged by hand, no messy collisions). Held on a desktop it
   floats just over the glove rather than resting on it.

@@ -439,9 +439,23 @@ ergonomics.
       - Its first spot, the back-left corner, was hidden behind the ball and out of the shelf
         lamp's light. The back middle, behind the low duck and the flat plane, shows it.
       Not tried in a headset, where pulling a ball out by hand is the obvious thing to want.
-- [ ] Toys round the room, the rest: a yo-yo. Each venue gets one toy of its own (a snowball, a
-      beach ball, a slinky...). The desk itself could have a toy (the cradle's twin by the
-      console), if one fits without coming between the seat and the controls.
+- [x] Toys round the room, fourth: a yo-yo.
+      Done: a red yo-yo with silver hub caps, lying on its side at the front of the prop shelf.
+      It is a `FidgetItem` with three tricks in turn: throw it down (it sleeps, whirring, at the
+      end of its string, and is tugged back with a clack), around the world, and loop the loop.
+      The string is a thin cylinder stretched from the finger to the axle each frame. The tricks
+      are laid out against world down and your forward, so it hangs true however the hand is
+      tilted. It is round, so it bounces, rolls and goes through the hoop. Learnings:
+      - On a desktop the glove is at the bottom corner of the view, and a real 70 cm string's
+        tricks happen below and behind the picture: the first shots showed nothing but a line.
+        Your own desktop hand throws a 15 cm string (`DESK_STRING`); everybody else, and a
+        headset, sees the full length.
+      - Lifting the finger above the glove to make room looked like the yo-yo hanging from
+        nothing. The string has to come out of the fingertips.
+      Not tried in a headset, or as a guest watching a host's ghost throw the full string.
+- [ ] Toys round the room, the rest: each venue gets one toy of its own (a snowball, a beach ball,
+      a slinky...). The desk itself could have a toy (the cradle's twin by the console), if one
+      fits without coming between the seat and the controls.
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's

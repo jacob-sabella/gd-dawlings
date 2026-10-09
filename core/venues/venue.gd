@@ -267,6 +267,12 @@ func cradle_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.04, ZoneKit.SHELF.y, -0.135))
 
 
+## Where the yo-yo lies, in studio space: on its side at the front of the prop shelf's top,
+## between the plane and the cards.
+func yoyo_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.2, ZoneKit.SHELF.y, 0.15))
+
+
 ## Where the dartboard's face is, in studio space: its middle, facing out into the room (+Z).
 func dartboard_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DARTBOARD_FACE_Z))

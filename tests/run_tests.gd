@@ -138,6 +138,7 @@ func _ready() -> void:
 	await _test_darts_stick_in_the_board_and_score()
 	await _test_a_ball_goes_through_the_hoop()
 	await _test_the_cradle_swings_and_clacks()
+	await _test_the_yoyo_does_its_tricks()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6087,8 +6088,9 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
 			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
-			# keytar, the chips, the cards, the darts and the cradle, which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 11 \
+			# keytar, the chips, the cards, the darts, the cradle and the yo-yo, which have homes of
+			# their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 12 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11171,6 +11173,77 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+func _test_the_yoyo_does_its_tricks() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var yoyo := studio.items.items.get(&"yoyo") as YoyoItem
+	check("there is a yo-yo at home, lying on its side with its string wound up", yoyo != null
+			and yoyo.state == Item.State.HOME and yoyo.own_home and not yoyo.cord.visible
+			and absf(yoyo.yoyo.global_basis.x.normalized().y) > 0.99)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var on_shelf := studio.venue.prop_shelf_spot().affine_inverse() * yoyo.home.origin
+		if absf(on_shelf.x) + 0.05 > ZoneKit.SHELF.x * 0.5 or absf(on_shelf.z) + 0.05 > ZoneKit.SHELF.z * 0.5 \
+				or absf(on_shelf.y - ZoneKit.SHELF.y) > 0.001:
+			wrong.append(id)
+	check("in every venue it lies on the shelf's top (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"studio", false)
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(yoyo)
+	var finger := func() -> Vector3: return yoyo.global_position
+	var at := func() -> Vector3: return yoyo.yoyo.global_position
+	check("in the hand it is just under the finger, offering a throw", yoyo.hint().contains("throw it down")
+			and (at.call() - finger.call()).normalized().y < -0.99
+			and absf(finger.call().distance_to(at.call()) - YoyoItem.IN_HAND) < 0.001)
+	var full := yoyo.string_length()
+	check("your own hand on a desktop throws a short string, that the tricks play out in the picture",
+			full == YoyoItem.DESK_STRING)
+	yoyo.work(true)
+	yoyo.work(false)
+	yoyo._process(0.7)
+	var hang: Vector3 = at.call() - finger.call()
+	check("thrown down, it sleeps at the end of its string, straight down from the finger (%s)" % [hang],
+			absf(hang.length() - full) < 0.02 and hang.normalized().y < -0.99 and yoyo.cord.visible
+			and absf(yoyo.cord.transform.basis.y.length() - hang.length()) < 0.02)
+	yoyo._process(1.1)
+	check("and comes back up into the hand", yoyo.playing == -1
+			and absf(finger.call().distance_to(at.call()) - YoyoItem.IN_HAND) < 0.001)
+	yoyo.work(true)
+	yoyo.work(false)
+	yoyo._process(0.95)
+	var ahead := yoyo.global_basis * Vector3.FORWARD
+	ahead = Vector3(ahead.x, 0, ahead.z).normalized()
+	var round_at: Vector3 = at.call() - finger.call()
+	check("around the world, half way round it is behind the hand, at its height (%s)" % [round_at],
+			absf(round_at.length() - full) < 0.01 and round_at.normalized().dot(ahead) < -0.99)
+	yoyo.work(true)
+	yoyo.work(false)
+	check("a press mid-trick finishes it and starts the next", yoyo.playing == 2)
+	yoyo._process(0.69)
+	var loop_at: Vector3 = at.call() - finger.call()
+	check("looping, it goes round past the hand, a short string's length away (%s)" % [loop_at],
+			absf(loop_at.length() - minf(full, YoyoItem.STRING * 0.45)) < 0.01)
+	yoyo.snap_home()
+	check("put away mid-loop, it lies on its side again, wound up", yoyo.playing == -1 and not yoyo.cord.visible
+			and absf(yoyo.yoyo.global_basis.x.normalized().y) > 0.99)
+	check("in anybody else's hand, the full string", yoyo.string_length() == YoyoItem.STRING)
+	check("it is round: it goes through a hoop", yoyo.flies().get("radius", 0.0) == YoyoItem.RADIUS)
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
 
 
 func _test_the_cradle_swings_and_clacks() -> void:

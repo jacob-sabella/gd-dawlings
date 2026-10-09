@@ -396,6 +396,39 @@ static func cradle_click(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A yo-yo asleep at the end of its string: the whirr of the axle in the loop, a hum with a
+## rasp of string in it, falling a little as it slows.
+static func yoyo_spin(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("yoyo_spin_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.9, 0.12, 499 + take * 43)
+		_lowpass(s, 2400.0)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 501 + take * 47
+		var hz := rng.randf_range(190.0, 215.0)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * hz * (1.0 - 0.18 * t) / float(RATE)
+			var env := clampf(t / 0.05, 0.0, 1.0) * clampf((0.9 - t) / 0.25, 0.0, 1.0)
+			s[i] = (s[i] * (0.6 + 0.4 * sin(phase * 0.5)) + 0.07 * sin(phase) + 0.03 * sin(phase * 2.0)) * env
+		_highpass(s, 120.0)
+		return _wav(s, false))
+
+
+## A yo-yo back in the hand: the hollow plastic clack of it landing in the palm.
+static func yoyo_catch(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("yoyo_catch_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.1)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 503 + take * 53
+		_impulse(s, 0.0, 0.45, 0.004, rng.randf_range(1500.0, 1800.0), 505 + take)
+		_impulse(s, 0.0, 0.35, 0.02, rng.randf_range(380.0, 440.0), 507 + take)
+		_lowpass(s, 6000.0)
+		return _wav(s, false))
+
+
 static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

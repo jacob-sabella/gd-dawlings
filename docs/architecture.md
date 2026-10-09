@@ -1416,6 +1416,12 @@ The Newton's cradle (`CradleItem`) is a third `FidgetItem`. Its tricks lift one,
 balls; its swing is a function of time alone (`swing`, `strikes` for the clacks). A fidget put
 home by `Item.snap_home`, not only by `go_home`, is put down (`on_put_down`), so it stops.
 
+The yo-yo (`YoyoItem`) is a fourth `FidgetItem`. Its origin is the finger; the yo-yo and its
+string are posed from the trick and its time, against the world's down and the hand's forward
+(`_ways`), so they hang true in a tilted hand. Its string is shorter when it is your own hand on a
+desktop (`string_length`), where the full length plays out of the picture. It is the one item
+whose look depends on who holds it.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.
