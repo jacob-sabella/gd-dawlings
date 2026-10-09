@@ -104,6 +104,8 @@ func _ready() -> void:
 	_test_fitted_lettering_stays_in_its_slot()
 	_test_footprints_separate_by_the_shallowest_way_out()
 	_test_furniture_rolls_where_it_is_pushed()
+	_test_a_stand_taken_at_eye_height_pushes_naturally()
+	_test_you_can_say_how_tall_you_are_in_the_room()
 	_test_furniture_is_solid()
 	_test_the_wheel_turns_furniture_only_while_held()
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
@@ -5412,6 +5414,90 @@ func _test_furniture_rolls_where_it_is_pushed() -> void:
 		var off := Vector2(loom.via.x - want.x, loom.via.z - want.z).length()
 		check("its run across the floor moved with the rack (%.1fmm off, pushed %.0fmm)"
 				% [off * 1000.0, went.length() * 1000.0], off < 0.001 and went.length() > 0.05)
+	_drop_floor_studio(rig)
+
+
+## The timeline's stand is taken by its top bar, which is at about the eye of someone 1.58 m
+## tall. Read off the level plane through the bar, the aim runs along that plane instead of
+## crossing it: the stand flew metres for a twitch of the mouse, or did not move at all. Aimed
+## that flat, a nudge across moves it across, and a nudge up pushes it away -- by about as much
+## as the same nudge would on the floor.
+func _test_a_stand_taken_at_eye_height_pushes_naturally() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var stand := studio.timeline_stand
+	var bar := Vector3(stand.position.x + 0.1, Studio.TIMELINE_STAND_TOP + 0.012, stand.position.z)
+	var eye := bar + Vector3(0, 0.002, 1.8)
+	hand.pose = Transform3D(Basis.IDENTITY, eye).looking_at(bar, Vector3.UP)
+	var from := Vector2(stand.position.x, stand.position.z)
+	stand.grab_begin(hand, bar)
+	hand.pose = Transform3D(Basis(Vector3.UP, deg_to_rad(-2.0)), eye).looking_at(bar, Vector3.UP)
+	hand.pose.basis = Basis(Vector3.UP, deg_to_rad(-2.0)) * hand.pose.basis
+	stand.grab_move(hand, Vector3.ZERO)
+	var across := stand._target - from
+	check("a nudge to the right moves it right, a little (%s)" % across,
+			across.x > 0.03 and across.x < 0.15 and absf(across.y) < 0.02)
+	hand.pose.basis = Basis(Vector3.RIGHT, deg_to_rad(2.0)) * Transform3D(Basis.IDENTITY, eye).looking_at(bar, Vector3.UP).basis
+	stand.grab_move(hand, Vector3.ZERO)
+	var away := stand._target - from
+	check("a nudge up pushes it away from you, not off to the horizon (%s)" % away,
+			away.y < -0.05 and away.y > -0.5 and absf(away.x) < 0.02)
+	stand.grab_end(hand)
+	_roll_until_still(stand)
+	var went := Vector2(stand.position.x, stand.position.z) - from
+	check("and it rolls there (%s)" % went, went.distance_to(away) < 0.01)
+	_drop_floor_studio(rig)
+
+
+## Too tall, or too short, for the room: said in the room, felt at once, kept for next time.
+func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	studio.body_path = "user://test_body.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(studio.body_path))
+	# The gear standing in the room. What rides in front of your face comes down with your eye.
+	var poses := {}
+	for surface in studio.focus.surfaces:
+		if studio.mount.mode_of(surface.surface_id) == Presentation.Mode.STUDIO:
+			poses[surface.surface_id] = surface.global_transform
+	check("you start at the default height", is_equal_approx(studio.ergonomics.height,
+			Ergonomics.DEFAULT_HEIGHT))
+	studio.set_body_height(1.48)
+	check("a shorter you has a lower eye (%.2f)" % studio.walker.eye_height,
+			is_equal_approx(studio.walker.eye_height, 1.48 - Ergonomics.EYE_BELOW_CROWN)
+			and is_equal_approx(studio.walker.standing_eye, studio.walker.eye_height))
+	check("and sees from there", is_equal_approx(studio.camera.global_position.y,
+			studio.walker.global_position.y + studio.walker.eye_height) or studio.god_mode)
+	check("and is remembered", is_equal_approx(Ergonomics.load_height(studio.body_path), 1.48))
+	var moved := []
+	for surface in studio.focus.surfaces:
+		if poses.has(surface.surface_id) \
+				and not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
+			moved.append(surface.surface_id)
+	check("the gear in the room stays where it is (%s of %d)" % [moved, poses.size()],
+			moved.is_empty() and poses.size() >= 3)
+	studio.set_body_height(9.0)
+	check("but not beyond a person", is_equal_approx(studio.ergonomics.height, Ergonomics.HEIGHT_RANGE.y))
+
+	var panel := StageManager.new()
+	panel.studio = studio
+	add_child(panel)
+	studio.set_body_height(1.58)
+	panel.rebuild()
+	var row: Node = null
+	for child in panel._rows.get_children():
+		if child.name == &"HeightRow" and not child.is_queued_for_deletion():
+			row = child
+	check("the stage manager has a height row", row != null)
+	if row != null:
+		check("saying what you are", (row.get_node("Reading") as Label).text == "1.58 m")
+		(row.get_node("Shorter") as Button).pressed.emit()
+		check("and its minus makes you shorter (%.2f)" % studio.ergonomics.height,
+				is_equal_approx(studio.ergonomics.height, 1.53))
+	remove_child(panel)
+	panel.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(studio.body_path))
 	_drop_floor_studio(rig)
 
 

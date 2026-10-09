@@ -51,6 +51,8 @@ enum ColourVision {FULL, DEUTAN, PROTAN, TRITAN, MONO}
 ## rather than in front of you. 1.56 (1.67 tall) still did; 1.47 is someone 1.58 tall, chosen
 ## from pictures of the four candidates side by side.
 var eye_height := DEFAULT_HEIGHT - EYE_BELOW_CROWN
+## How tall the body is, which the eye is worked out from. See set_height.
+var height := DEFAULT_HEIGHT
 ## Seated changes more than the height. A seated person's comfortable reach is shorter, their
 ## usable downward gaze is wider, and they cannot step back from something -- so a surface that
 ## does not fit has to be moved rather than walked away from.
@@ -175,7 +177,8 @@ static func eye_for(height: float, sitting: bool) -> float:
 
 ## Make this the body of someone `height` metres tall. Only the eye moves: reach and the angles
 ## are a matter of proportion, and proportion does not change much with height.
-func set_height(height: float) -> void:
+func set_height(to: float) -> void:
+	height = clampf(to, HEIGHT_RANGE.x, HEIGHT_RANGE.y)
 	eye_height = eye_for(height, seated)
 
 

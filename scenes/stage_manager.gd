@@ -144,6 +144,7 @@ func _venue_row() -> void:
 		button.pressed.connect(_on_venue_chosen.bind(id))
 		row.add_child(button)
 	_variant_row()
+	_height_row()
 	_rows.add_child(HSeparator.new())
 
 
@@ -172,6 +173,46 @@ func _variant_row() -> void:
 		button.disabled = i == studio.venue.variant or not Session.is_authority()
 		button.pressed.connect(_on_variant_chosen.bind(i))
 		row.add_child(button)
+
+
+## How tall you stand, a step at a time. Yours, not the room's: anyone may change it.
+const HEIGHT_STEP := 0.05
+
+
+func _height_row() -> void:
+	var row := HBoxContainer.new()
+	row.name = "HeightRow"
+	row.add_theme_constant_override("separation", 6)
+	_rows.add_child(row)
+	var label := Label.new()
+	label.text = "your height"
+	label.custom_minimum_size = Vector2(110, 0)
+	label.add_theme_font_size_override("font_size", 13)
+	row.add_child(label)
+	var height := studio.ergonomics.height
+	for step in [-1, 1]:
+		var button := Button.new()
+		button.name = "Shorter" if step < 0 else "Taller"
+		button.text = "−" if step < 0 else "+"
+		button.custom_minimum_size = Vector2(36, 0)
+		button.add_theme_font_size_override("font_size", 12)
+		button.disabled = height + step * HEIGHT_STEP < Ergonomics.HEIGHT_RANGE.x - 0.001 \
+				or height + step * HEIGHT_STEP > Ergonomics.HEIGHT_RANGE.y + 0.001
+		button.pressed.connect(_on_height_stepped.bind(step))
+		row.add_child(button)
+		if step < 0:
+			var reading := Label.new()
+			reading.name = "Reading"
+			reading.text = "%.2f m" % height
+			reading.custom_minimum_size = Vector2(64, 0)
+			reading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			reading.add_theme_font_size_override("font_size", 13)
+			row.add_child(reading)
+
+
+func _on_height_stepped(step: int) -> void:
+	studio.set_body_height(snappedf(studio.ergonomics.height + step * HEIGHT_STEP, 0.01))
+	rebuild()
 
 
 func _on_venue_chosen(id: StringName) -> void:

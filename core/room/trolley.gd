@@ -52,6 +52,12 @@ const MAX_SPEED := 2.6
 ## Further than this from the camera, an aim ray crossing the floor plane at a grazing angle is
 ## somewhere on the horizon, and following it would fling the rack into the wall.
 const MAX_REACH := 12.0
+## Aimed flatter than this (the sine of about 12 degrees) at the grip, the level plane through
+## it is crossed far off or never: a stand taken by its top bar from eye height flew metres for
+## a twitch of the mouse, or stuck. Then the push is read off an upright plane facing you
+## instead -- across is across, and up is away -- as if the grip were this far below the eye.
+const GRAZING := 0.2
+const UPRIGHT_DROP := 0.6
 
 var _casters: Array[Caster] = []
 var _target := Vector2.ZERO
@@ -64,6 +70,10 @@ var _offsets: Array[Transform3D] = []
 var _active := false
 var _roll: AudioStreamPlayer3D
 var _bump_cooldown := 0.0
+var _grip := Vector3.ZERO
+var _upright := false
+var _upright_normal := Vector3.ZERO
+var _upright_gain := 1.0
 
 
 func _ready() -> void:
@@ -146,6 +156,19 @@ func _on_grab_begin(at: Vector3) -> void:
 	# Taken hold of here: whatever was rolling it from elsewhere, it is this hand's now.
 	steered = false
 	_grab_height = at.y
+	_grip = at
+	_upright = false
+	var held := held_by as Interactor
+	if held != null:
+		var aim := held.aim()
+		var dir := -aim.basis.z
+		var level := Vector3(dir.x, 0.0, dir.z)
+		if absf(dir.y) < GRAZING and level.length() > 0.001:
+			_upright = true
+			_upright_normal = level.normalized()
+			# How far a level plane UPRIGHT_DROP under the eye would carry the same nod.
+			var reach := Vector2(at.x - aim.origin.x, at.z - aim.origin.z).length()
+			_upright_gain = clampf(reach / UPRIGHT_DROP, 1.0, 4.0)
 	var hand = _hand_on_floor()
 	if hand == null:
 		return
@@ -189,6 +212,14 @@ func _hand_on_floor() -> Variant:
 	if hand == null or get_parent() == null:
 		return null
 	var aim := hand.aim()
+	if _upright:
+		var crossed = Plane(_upright_normal, _upright_normal.dot(_grip)).intersects_ray(aim.origin, -aim.basis.z)
+		if crossed == null or (crossed as Vector3).distance_to(aim.origin) > MAX_REACH:
+			return null
+		var moved: Vector3 = (crossed as Vector3) - _grip
+		var pushed := Vector3(moved.x, 0.0, moved.z) + _upright_normal * moved.y * _upright_gain
+		var along: Vector3 = (get_parent() as Node3D).global_transform.basis.inverse() * pushed
+		return Vector2(along.x, along.z)
 	var plane := Plane(Vector3.UP, _grab_height)
 	var hit = plane.intersects_ray(aim.origin, -aim.basis.z)
 	if hit == null or (hit as Vector3).distance_to(aim.origin) > MAX_REACH:

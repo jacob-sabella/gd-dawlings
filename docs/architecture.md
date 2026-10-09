@@ -1337,7 +1337,7 @@ away from someone who had a use for it. `--step 0.05` turns it on.
 |---|---|
 | `--eyes N` | text scale; buys DISTANCE, not just bigger glyphs |
 | `--seated` | lower eyes, shorter reach, steeper gaze |
-| `--height M` | how tall you are, in metres; remembered in `user://body.cfg`. Only the eye moves -- the room stays its size, so shorter reads as a bigger room |
+| `--height M` | how tall you are, in metres; remembered in `user://body.cfg`. Only the eye moves -- the room stays its size, so shorter reads as a bigger room. Also set in the room: Tab, "your height", 5 cm a step |
 | `--vision deutan\|protan\|tritan\|mono` | signal palette chosen for those eyes |
 | `--dwell N` | look-to-activate, in seconds; replaces the press |
 | `--step N` | notches and tap-to-nudge; replaces the drag |

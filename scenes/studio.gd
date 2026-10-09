@@ -102,6 +102,8 @@ var presence: Presence
 ## This participant's body. Everything placed for a person is placed from it, and it is one
 ## object rather than a scattering of constants precisely so there is somewhere to change it.
 var ergonomics := Ergonomics.new()
+## Where a height chosen in the room is remembered. Tests point it somewhere of their own.
+var body_path := Ergonomics.HEIGHT_PATH
 
 var console: ConsoleSurface
 var rack: RackSurface
@@ -403,6 +405,19 @@ func _walk_where_the_venue_lets() -> void:
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
 ## asking is told so rather than taken somewhere nobody else is.
+## How tall you are, changed in the room: the eye goes there at once and the height is kept
+## for next time. The gear stays where it is -- it is the room's, and you are the one who grew.
+func set_body_height(height: float) -> void:
+	ergonomics.set_height(height)
+	Ergonomics.save_height(ergonomics.height, body_path)
+	if walker != null:
+		walker.standing_eye = ergonomics.eye_height
+		walker.eye_height = ergonomics.eye_height
+		walker._place_camera()
+	if body != null and medium == Presentation.Medium.SCREEN:
+		body.position.y = ergonomics.eye_height
+
+
 func choose_venue(id: StringName, variant := 0) -> bool:
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can change the venue." % Session.name_of(1))
