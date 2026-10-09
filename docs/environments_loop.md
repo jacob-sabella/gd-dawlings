@@ -145,8 +145,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [x] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
       (`LoftVenue`: one walkable room round the desk, columns and a ladder you walk round, a
       gallery with festoon bulbs along the back wall, under-gallery grazers on the brick.)
-- [ ] Loft: the gallery is scenery. Let the walker climb the ladder onto it and look down on
+- [x] Loft: the gallery is scenery. Let the walker climb the ladder onto it and look down on
       the lattice (a second floor level in the walker), or add a "Loft, gallery" arrangement.
+      (The ladder is a stair of solids, each a step high (`LoftVenue.stair_steps`); the deck and
+      its rail are solids too. The walker's walls were 4 m tall and you walked over them off the
+      gallery: they are 20 m now. `--walk x,z,yaw,pitch,y` stands you on a floor above the ground.)
 - [x] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
       (`CabinVenue`. First venue with real models: a stove and firs scripted in Blender, a
       rocking chair and lanterns from Poly Haven, all in `tools/blender/`. `ShellKit` now holds

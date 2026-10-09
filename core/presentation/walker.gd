@@ -111,7 +111,9 @@ func _build_walls() -> void:
 	if floor_plan == null:
 		return
 	var thick := 0.4
-	var tall := 4.0
+	# Far taller than any room: a gallery or a stair puts you metres up, and a wall a step above
+	# your feet is one you would walk over and out of the building.
+	var tall := 20.0
 	var floor: Array[Rect2] = walkable if not walkable.is_empty() else [floor_plan.bounds]
 	for edge in outline(floor):
 		var a: Vector2 = edge[0]

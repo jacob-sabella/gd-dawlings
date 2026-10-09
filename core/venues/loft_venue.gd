@@ -33,6 +33,15 @@ const COLUMN_RADIUS := 0.13
 ## Above every zone's head room (Venue.ZONES), so the lattice stands under it and is seen from it.
 const GALLERY_Y := 3.6
 const GALLERY_DEPTH := 0.95
+## The gallery's deck boards, on its frame: what you stand on up there.
+const DECK_TOP := GALLERY_Y + 0.06
+## The stair up to it: a straight flight in front of the gallery's edge, rising toward the right
+## wall, each step a riser no taller than the walker steps (Walker.STEP_HEIGHT) and a tread
+## deep enough to stand on. It lands at the gallery's right-hand end, where the rail stops short.
+const STAIR_STEPS := 12
+const STAIR_TREAD := 0.3
+const STAIR_WIDTH := 0.62
+const LANDING := 1.0
 ## Steel beams across the room under the roof deck, this far apart.
 const BEAM_SPACING := 2.4
 
@@ -115,18 +124,34 @@ func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
 	for c in _column_spots():
 		out.append({"c": c, "h": Vector2.ONE * COLUMN_RADIUS, "a": 0.0, "top": HEIGHT})
-	# The ship's ladder: you walk round it, not up it.
-	var ladder := _ladder()
-	out.append({"c": Vector2((ladder[0].x + ladder[1].x) * 0.5, ladder[0].z), "h": Vector2(
-			(ladder[1].x - ladder[0].x) * 0.5, 0.3), "a": 0.0, "top": GALLERY_Y})
+	# The stair, a step at a time, and the gallery it climbs to: you walk up one onto the other.
+	out.append_array(stair_steps())
+	var half := live_room_half()
+	var front := LIVE_ROOM_BACK - GALLERY_DEPTH
+	out.append({"c": Vector2(0, LIVE_ROOM_BACK - GALLERY_DEPTH * 0.5), "h": Vector2(half, GALLERY_DEPTH * 0.5),
+			"a": 0.0, "top": DECK_TOP})
+	# And its rail, which keeps you on it except where the stair comes up.
+	var gap := _landing_x()
+	out.append({"c": Vector2((gap - half) * 0.5, front + 0.03), "h": Vector2((gap + half) * 0.5, 0.03),
+			"a": 0.0, "top": DECK_TOP + 1.1})
 	return out
 
 
-## The ship's ladder's foot and top, along the back wall at the right-hand end.
-func _ladder() -> Array[Vector3]:
+## The stair's steps as walker footprints: each a column from the floor to its tread.
+func stair_steps() -> Array:
+	var out := []
 	var half := live_room_half()
-	var z := LIVE_ROOM_BACK - 0.5
-	return [Vector3(half - 2.4, 0, z), Vector3(half - 0.9, GALLERY_Y, z)]
+	var start := half - 0.05 - STAIR_STEPS * STAIR_TREAD
+	var z := LIVE_ROOM_BACK - GALLERY_DEPTH - 0.01 - STAIR_WIDTH * 0.5
+	for i in STAIR_STEPS:
+		out.append({"c": Vector2(start + STAIR_TREAD * (i + 0.5), z), "h": Vector2(STAIR_TREAD, STAIR_WIDTH) * 0.5,
+				"a": 0.0, "top": DECK_TOP * (i + 1) / STAIR_STEPS})
+	return out
+
+
+## Where the gallery's rail stops, so the stair can land: the last LANDING of its length.
+func _landing_x() -> float:
+	return live_room_half() - LANDING
 
 
 func _ready() -> void:
@@ -267,9 +292,9 @@ func _raise_columns() -> void:
 		i += 1
 
 
-## A steel gallery along the back wall: a deck on brackets, a rail, and a ship's ladder up at the
-## right-hand end, between the keys and the wall. Scenery -- you look up at it, and the lattice is
-## made to be looked down on from it -- not somewhere the walker climbs.
+## A steel gallery along the back wall: a deck on brackets, a rail, and a stair up to it at the
+## right-hand end, between the keys and the wall. You can climb it, and stand over the lattice --
+## which is made to be looked down on.
 func _build_gallery(steel: Material) -> void:
 	var half := live_room_half()
 	var wall := LIVE_ROOM_BACK
@@ -289,15 +314,17 @@ func _build_gallery(steel: Material) -> void:
 		var brace := ZoneKit.block(self, Vector3(0.06, 0.06, GALLERY_DEPTH * 1.25),
 				Vector3(x, GALLERY_Y - 0.5, wall - GALLERY_DEPTH * 0.48), steel, "GalleryBrace%d" % i)
 		brace.rotation.x = -0.72
-	# The rail: posts, a top rail and a mid rail.
-	var posts := int(length / 1.2) + 1
+	# The rail: posts, a top rail and a mid rail, stopping where the stair lands.
+	var gap := _landing_x()
+	var railed := gap + half
+	var posts := int(railed / 1.2) + 1
 	for i in posts:
-		var x := lerpf(-half + 0.05, half - 0.05, float(i) / (posts - 1))
+		var x := lerpf(-half + 0.05, gap, float(i) / (posts - 1))
 		ZoneKit.block(self, Vector3(0.04, 1.0, 0.04), Vector3(x, GALLERY_Y + 0.56, front + 0.03), steel,
 				"GalleryPost%d" % i)
 	for y in [GALLERY_Y + 1.07, GALLERY_Y + 0.58]:
-		ZoneKit.block(self, Vector3(length - 0.01, 0.035, 0.03), Vector3(0, y, front + 0.03), steel,
-				"GalleryRail")
+		ZoneKit.block(self, Vector3(railed - 0.06, 0.035, 0.03), Vector3((gap - half) * 0.5 + 0.02, y, front + 0.03),
+				steel, "GalleryRail")
 	# Lamps clamped under the deck's edge beam, grazing the brick behind: the back wall is what
 	# you see from the desk, and grazed brick is what a loft looks like at night.
 	var grazers := 4
@@ -307,19 +334,34 @@ func _build_gallery(steel: Material) -> void:
 				Color(1.0, 0.66, 0.4), 5.5, 38.0, 4.8, steel)
 		lamp.rotation_degrees.x = -78.0
 	_string_festoon(front + 0.03, GALLERY_Y + 1.07, length)
-	# A ship's ladder up from the floor, steep, along the back wall at the right-hand end.
-	var foot := _ladder()[0]
-	var top := _ladder()[1]
+	_build_stair(steel)
+
+
+## The stair: a steel plate at each step's height (stair_steps), two stringers along its sides,
+## and a handrail on the open side, the room's.
+func _build_stair(steel: Material) -> void:
+	var steps := stair_steps()
+	var first: Dictionary = steps[0]
+	var last: Dictionary = steps[-1]
+	var z: float = first["c"].y
+	for i in steps.size():
+		var step: Dictionary = steps[i]
+		ZoneKit.block(self, Vector3(STAIR_TREAD - 0.004, 0.03, STAIR_WIDTH - 0.08),
+				Vector3(step["c"].x, step["top"] - 0.015, z), steel, "StairTread%d" % i)
+	var foot := Vector3(first["c"].x - STAIR_TREAD * 0.5, 0, z)
+	var top := Vector3(last["c"].x + STAIR_TREAD * 0.5, DECK_TOP, z)
 	var rise := top - foot
-	for side in [-0.27, 0.27]:
-		var stringer := ZoneKit.block(self, Vector3(rise.length(), 0.14, 0.04),
-				(foot + top) * 0.5 + Vector3(0, 0, side), steel, "LadderStringer")
+	for side in [-1.0, 1.0]:
+		var stringer := ZoneKit.block(self, Vector3(rise.length(), 0.2, 0.03),
+				(foot + top) * 0.5 + Vector3(0, -0.12, side * (STAIR_WIDTH * 0.5 - 0.022)), steel, "StairStringer")
 		stringer.rotation.z = atan2(rise.y, rise.x)
-	var treads := 12
-	for i in range(1, treads):
-		var t := float(i) / treads
-		ZoneKit.block(self, Vector3(0.16, 0.025, 0.5), foot + rise * t + Vector3(0.02, 0, 0), steel,
-				"LadderTread%d" % i)
+	# The handrail, a metre over the nosings, on two posts.
+	var rail_z := z - STAIR_WIDTH * 0.5 + 0.02
+	for end in [foot + Vector3(STAIR_TREAD * 0.5, first["top"], 0), top - Vector3(STAIR_TREAD * 0.5, 0, 0)]:
+		ZoneKit.block(self, Vector3(0.04, 1.0, 0.04), Vector3(end.x, end.y + 0.5, rail_z), steel, "StairPost")
+	var handrail := ZoneKit.block(self, Vector3(rise.length() - STAIR_TREAD, 0.035, 0.035),
+			(foot + top) * 0.5 + Vector3(0, 0.98, rail_z - z), steel, "StairRail")
+	handrail.rotation.z = atan2(rise.y, rise.x)
 
 
 ## A festoon of bare bulbs hung along the gallery's top rail, each a little drop on its wire:
@@ -345,7 +387,7 @@ func _string_festoon(z: float, rail_y: float, length: float) -> void:
 	var holder := MultiMeshInstance3D.new()
 	holder.name = "Festoon"
 	holder.multimesh = bulbs
-	holder.material_override = ZoneKit.glow(Color(1.0, 0.7, 0.38), 2.2)
+	holder.material_override = ZoneKit.glow(Color(1.0, 0.7, 0.38), 1.5)
 	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(holder)
 

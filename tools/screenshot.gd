@@ -20,7 +20,8 @@ var _shot_frame := 24
 var _quit_after := -1
 var _frames := 0
 var _cam: Array = []
-## x,z,yaw,pitch: stand the walker somewhere and look, instead of flying the god camera.
+## x,z,yaw,pitch[,y]: stand the walker somewhere and look, instead of flying the god camera. `y`
+## is the floor you stand on, when it is not the ground: a gallery, a riser.
 var _walk: Array = []
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
@@ -139,11 +140,11 @@ func _process(_delta: float) -> void:
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
-	if _frames == 8 and _walk.size() == 4:
+	if _frames == 8 and _walk.size() >= 4:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		if studio and studio.get("walker") != null:
 			var w = studio.walker
-			w.global_position = Vector3(_walk[0], 0.0, _walk[1])
+			w.global_position = Vector3(_walk[0], _walk[4] if _walk.size() > 4 else 0.0, _walk[1])
 			w.yaw = _walk[2]
 			w.pitch = _walk[3]
 			w.eye_height = w.standing_eye

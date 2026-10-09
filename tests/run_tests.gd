@@ -6250,11 +6250,31 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("an iron column stops you (z %.2f, column %.2f)" % [at.z, column.y],
 			at.z > column.y + LoftVenue.COLUMN_RADIUS
 			and at.z < column.y + LoftVenue.COLUMN_RADIUS + Walker.RADIUS + 0.1)
-	var ladder: Array[Vector3] = loft._ladder()
-	var ladder_x := (ladder[0].x + ladder[1].x) * 0.5
-	at = walk_until_still.call(Vector3(ladder_x, 0, ladder[0].z - 1.0), Vector3(0, 0, 1))
-	check("and so does the gallery's ladder (z %.2f, ladder %.2f)" % [at.z, ladder[0].z],
-			at.z < ladder[0].z - 0.3 and at.z > ladder[0].z - 0.3 - Walker.RADIUS - 0.1)
+	# Up the stair at a walk, along the gallery, and to its rail over the lattice.
+	var steps := loft.stair_steps()
+	var stair_z: float = steps[0]["c"].y
+	var walk_on := func(toward: Vector3, ticks: int) -> Vector3:
+		for i in ticks:
+			walker.step(1.0 / 60.0, toward * Walker.WALK_SPEED)
+		for i in 30:
+			walker.step(1.0 / 60.0, Vector3.ZERO)
+		return walker.global_position
+	walker.global_position = Vector3(steps[0]["c"].x - 0.8, 0, stair_z)
+	walker.velocity = Vector3.ZERO
+	at = walk_on.call(Vector3(1, 0, 0), 300)
+	check("loft: you walk up the stair (y %.2f, top %.2f)" % [at.y, LoftVenue.DECK_TOP],
+			absf(at.y - LoftVenue.DECK_TOP) < 0.05)
+	at = walk_on.call(Vector3(0, 0, 1), 60)
+	at = walk_on.call(Vector3(-1, 0, 0), 240)
+	check("and along the gallery (x %.2f, y %.2f)" % [at.x, at.y],
+			at.x < 0.0 and absf(at.y - LoftVenue.DECK_TOP) < 0.05)
+	var edge := Venue.LIVE_ROOM_BACK - LoftVenue.GALLERY_DEPTH
+	at = walk_on.call(Vector3(0, 0, -1), 120)
+	check("and its rail keeps you up there (z %.2f, edge %.2f, y %.2f)" % [at.z, edge, at.y],
+			at.z > edge and absf(at.y - LoftVenue.DECK_TOP) < 0.05)
+	var lattice: AABB = loft.zones()[&"matrix"]
+	check("looking down on the lattice from above it (eye %.2f, lattice top %.2f)" % [
+			walker.eye().y, lattice.end.y], walker.eye().y > lattice.end.y + 1.0)
 	var loft_rooms := loft.rooms()
 	var loft_standable := true
 	for box: AABB in loft.zones().values():
