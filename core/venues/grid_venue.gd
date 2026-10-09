@@ -22,6 +22,18 @@ var _traffic: MultiMesh
 var _cars: Array = []  # [x, z, speed, colour]
 var _pyramids: Array[Node3D] = []
 var _smoothed := 0.0
+
+## The second arrangement (Venue.VARIANTS): the same road, but down an avenue between towers
+## instead of out across a desert to the mountains.
+const DOWNTOWN := 1
+## A downtown block: one tower to a cell this size, jittered inside it and never wider than
+## DOWNTOWN_TOWER_MAX, so no two towers ever touch or share a wall's plane.
+const DOWNTOWN_CELL := 9.0
+const DOWNTOWN_TOWER_MAX := 7.0
+## The avenue the road runs down, kerb to kerb, and the block left clear round the room so its
+## zones and the near palms stand in an open plaza rather than against a wall of windows.
+const DOWNTOWN_AVENUE_HALF := 11.0
+const DOWNTOWN_PLAZA := Rect2(-22.0, -12.0, 44.0, 36.0)
 var _clock := 0.0
 
 
@@ -112,16 +124,22 @@ func _ready() -> void:
 	_wire_mat.shader = preload("res://core/venues/shaders/neon_wire.gdshader")
 	_wire_mat.set_shader_parameter("energy", 1.9)
 
-	var range_node := MeshInstance3D.new()
-	range_node.name = "Mountains"
-	range_node.mesh = mountains(23)
-	range_node.material_override = _wire_mat
-	range_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(range_node)
+	if variant != DOWNTOWN:
+		var range_node := MeshInstance3D.new()
+		range_node.name = "Mountains"
+		range_node.mesh = mountains(23)
+		range_node.material_override = _wire_mat
+		range_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(range_node)
 
 	# Two great solids turning slowly in the sky, the way every album cover of the genre has one.
-	for spec in [[Vector3(-34, 24, -70), 7.0, Color(0.1, 0.9, 1.0)],
-			[Vector3(40, 17, -58), 4.5, Color(1.0, 0.3, 0.85)]]:
+	var specs := [[Vector3(-34, 24, -70), 7.0, Color(0.1, 0.9, 1.0)],
+			[Vector3(40, 17, -58), 4.5, Color(1.0, 0.3, 0.85)]]
+	if variant == DOWNTOWN:
+		# Out there they would be inside a tower: up over the avenue instead, above the roofs.
+		specs[0][0] = Vector3(-9, 52, -120)
+		specs[1][0] = Vector3(10, 40, -84)
+	for spec in specs:
 		var solid := MeshInstance3D.new()
 		solid.name = "Solid"
 		solid.mesh = wireframe(_faceted_sphere())
@@ -138,7 +156,10 @@ func _ready() -> void:
 
 	_build_highway()
 	_plant_palms()
-	_raise_city()
+	if variant == DOWNTOWN:
+		_close_in_the_city()
+	else:
+		_raise_city()
 	_hang_pyramids()
 	_dress_zones()
 
@@ -374,11 +395,62 @@ func _raise_city() -> void:
 				add_child(tower)
 
 
+## Downtown: the city all round, near enough to read the windows. Taller toward the avenue, so
+## the road is a canyon and the sun sits at the end of it. One MultiMesh: three hundred towers,
+## one draw.
+func _close_in_the_city() -> void:
+	_tower_mat = ShaderMaterial.new()
+	_tower_mat.shader = preload("res://core/venues/shaders/tower.gdshader")
+	_tower_mat.set_shader_parameter("roof_from_custom", true)
+	# Near windows are big windows: at the highway's strength a block away was a wall of glare.
+	_tower_mat.set_shader_parameter("energy", 1.4)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91
+	var towers: Array[Transform3D] = []
+	var roofs: Array[float] = []
+	var jitter := (DOWNTOWN_CELL - DOWNTOWN_TOWER_MAX) * 0.5
+	for gx in range(-7, 8):
+		for gz in range(-22, 5):
+			var at := Vector2(gx * DOWNTOWN_CELL, gz * DOWNTOWN_CELL)
+			var reach := DOWNTOWN_CELL * 0.5
+			if absf(at.x) - reach < DOWNTOWN_AVENUE_HALF and at.y < 0.0:
+				continue
+			if DOWNTOWN_PLAZA.grow(reach).has_point(at):
+				continue
+			if rng.randf() < 0.15:
+				continue
+			var w := rng.randf_range(4.0, DOWNTOWN_TOWER_MAX)
+			var d := rng.randf_range(4.0, DOWNTOWN_TOWER_MAX)
+			var near := 1.0 - clampf((absf(at.x) - DOWNTOWN_AVENUE_HALF) / 50.0, 0.0, 1.0)
+			var h := rng.randf_range(14.0, 30.0) + near * rng.randf_range(10.0, 45.0)
+			var centre := Vector3(at.x + rng.randf_range(-jitter, jitter), h * 0.5,
+					at.y + rng.randf_range(-jitter, jitter))
+			towers.append(Transform3D(Basis.from_scale(Vector3(w, h, d)), centre))
+			roofs.append(h)
+	var city := MultiMesh.new()
+	city.transform_format = MultiMesh.TRANSFORM_3D
+	city.use_custom_data = true
+	city.mesh = BoxMesh.new()
+	city.instance_count = towers.size()
+	for i in towers.size():
+		city.set_instance_transform(i, towers[i])
+		city.set_instance_custom_data(i, Color(roofs[i], 0, 0, 0))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Downtown"
+	mmi.multimesh = city
+	mmi.material_override = _tower_mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
 func _hang_pyramids() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 13
 	var colours := [Color(1.0, 0.85, 0.2), Color(0.2, 1.0, 0.9), Color(1.0, 0.3, 0.8)]
 	var spots := [Vector3(-16, 7, -22), Vector3(19, 9, -28), Vector3(-4, 14, -48)]
+	if variant == DOWNTOWN:
+		# Strung down the avenue, clear of the towers either side of it.
+		spots = [Vector3(-6, 9, -24), Vector3(6.5, 12, -36), Vector3(-2, 17, -58)]
 	for i in spots.size():
 		var p := MeshInstance3D.new()
 		p.name = "Pyramid"

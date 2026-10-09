@@ -4,6 +4,7 @@
 #
 #   tools/light_check.sh                 every venue in Venue.IDS
 #   tools/light_check.sh grid chalk      just these
+#   tools/light_check.sh grid:1          one venue's second arrangement
 #   OUT=~/somewhere tools/light_check.sh where the pictures go (default ~/.cache/reaper-3d/shots/light_check)
 #
 # The budget is measured, not felt: the mean grey of the picture, and how much of it is all but
@@ -27,6 +28,14 @@ if [ $# -gt 0 ]; then
 else
   mapfile -t VENUES < <(grep -oP 'const IDS: Array\[StringName\] = \[\K[^]]*' core/venues/venue.gd \
     | tr ',' '\n' | sed -E 's/[ &"]//g' | grep -v '^$')
+fi
+# Every arrangement after a venue's first, as `id:n` (Venue.VARIANTS; bootstrap's --venue takes it).
+if [ $# -eq 0 ]; then
+  while IFS= read -r line; do
+    id=$(sed -E 's/^\s*&"([a-z_]+)".*/\1/' <<<"$line")
+    count=$(grep -o '"[^"]*"' <<<"${line#*:}" | wc -l)
+    for ((n = 1; n < count; n++)); do VENUES+=("$id:$n"); done
+  done < <(sed -n '/^const VARIANTS := {/,/^}/p' core/venues/venue.gd | grep -E '^\s*&"')
 fi
 
 shoot() {

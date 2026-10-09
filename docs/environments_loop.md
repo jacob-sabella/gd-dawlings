@@ -125,8 +125,12 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       (Four brass sconces washing up and down the walls, two of them grazing the slats. The back
       view's mean went from 0.018 to 0.026; most of that frame is the unlit ceiling. It reads as
       a room at night now, not a void.)
-- [ ] Venue variants: a variant id on the venue, chosen by the host, carried in `Session.room`,
+- [x] Venue variants: a variant id on the venue, chosen by the host, carried in `Session.room`,
       saved in the host's layout; the stage manager's venue row grows a variant picker.
+      (`Venue.VARIANTS` / `variant` / `variant_titles`, `Studio.choose_variant`, the room's
+      `variant`, `LayoutProfile.venue_variant`, `--venue grid:1`, the stage manager's "arranged"
+      row. The first one with two is the grid: Highway and Downtown, a city drawn as one
+      MultiMesh. `light_check` shoots every arrangement.)
 - [ ] Studio: a live room behind glass beside the control room, holding the drum riser and the
       vocal booth zones. Make it the studio's second variant.
 - [ ] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
@@ -135,5 +139,7 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
 - [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
+- [ ] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
+      wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
 - [ ] Pass over every venue: shoot them side by side and even out anything that drifted (light,
       scale, how distinct they are).

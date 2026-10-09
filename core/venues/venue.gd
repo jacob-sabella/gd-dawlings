@@ -20,6 +20,14 @@ extends Node3D
 ## Registry, in cycling order. The first is the default.
 const IDS: Array[StringName] = [&"studio", &"grid", &"chalk"]
 
+## A venue can come in more than one arrangement -- the same place with its structure moved
+## about: walls or none, a city close in or far off. A variant keeps the venue's footprint and
+## its zones' contract; only what stands round them changes. Variant 0 is the venue as first
+## built. Chosen by whoever's room it is, and carried with the venue (see Session.room).
+const VARIANTS := {
+	&"grid": ["Highway", "Downtown"],
+}
+
 ## What people will do here besides mix, each with room of its own. Built later; every venue
 ## leaves the space for all of them now, so an activity made for one lands in every one.
 const ZONE_IDS: Array[StringName] = [&"bricks", &"matrix", &"drums", &"vocals", &"synth"]
@@ -53,19 +61,37 @@ const LIVE_ROOM_HEIGHT := 4.0
 ## its walls through the rack.
 var room_width := Studio.ROOM_WIDTH
 
+## Which arrangement of this venue to build (VARIANTS). Set by make(), before the venue enters
+## the tree.
+var variant := 0
+
 ## Set by the studio before the venue enters the tree: whether the full desktop renderer is
 ## running. A venue must look right without it -- a headset runs the mobile renderer.
 var rich := false
 
 
-static func make(id: StringName) -> Venue:
+static func make(id: StringName, which := 0) -> Venue:
+	var out: Venue
 	match id:
 		&"grid":
-			return GridVenue.new()
+			out = GridVenue.new()
 		&"chalk":
-			return ChalkVenue.new()
+			out = ChalkVenue.new()
 		_:
-			return StudioVenue.new()
+			out = StudioVenue.new()
+	out.variant = known_variant(id, which)
+	return out
+
+
+## The names of a venue's arrangements, in order, without building it. A venue with one has
+## nothing to choose between, and the stage manager shows no picker for it.
+static func variant_titles(id: StringName) -> PackedStringArray:
+	return PackedStringArray(VARIANTS.get(id, [make_title(id)]))
+
+
+## `which` if the venue has that arrangement, else its first.
+static func known_variant(id: StringName, which: int) -> int:
+	return which if which >= 0 and which < variant_titles(id).size() else 0
 
 
 ## A venue's name without building one: building the chalk zone to read its title would draw
@@ -95,7 +121,9 @@ func venue_id() -> StringName:
 
 ## What a person is told when they arrive.
 func title() -> String:
-	return make_title(venue_id())
+	if variant_titles(venue_id()).size() < 2:
+		return make_title(venue_id())
+	return "%s, %s" % [make_title(venue_id()), variant_titles(venue_id())[variant]]
 
 
 ## Set up the sky, the air, the exposure and the key light. `env` arrives fresh, with the

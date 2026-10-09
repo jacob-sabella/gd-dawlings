@@ -143,9 +143,42 @@ func _venue_row() -> void:
 		button.disabled = id == current or not Session.is_authority()
 		button.pressed.connect(_on_venue_chosen.bind(id))
 		row.add_child(button)
+	_variant_row()
 	_rows.add_child(HSeparator.new())
+
+
+## Under the venues, the ways this one can be arranged -- only when there is more than one.
+func _variant_row() -> void:
+	var id := studio.venue.venue_id()
+	var titles := Venue.variant_titles(id)
+	if titles.size() < 2:
+		return
+	var row := HBoxContainer.new()
+	row.name = "VariantRow"
+	row.add_theme_constant_override("separation", 6)
+	_rows.add_child(row)
+	var label := Label.new()
+	label.text = "  arranged"
+	label.custom_minimum_size = Vector2(110, 0)
+	label.add_theme_font_size_override("font_size", 13)
+	row.add_child(label)
+	for i in titles.size():
+		var button := Button.new()
+		button.text = titles[i].to_upper()
+		button.custom_minimum_size = Vector2(76, 0)
+		button.add_theme_font_size_override("font_size", 12)
+		button.toggle_mode = true
+		button.button_pressed = i == studio.venue.variant
+		button.disabled = i == studio.venue.variant or not Session.is_authority()
+		button.pressed.connect(_on_variant_chosen.bind(i))
+		row.add_child(button)
 
 
 func _on_venue_chosen(id: StringName) -> void:
 	studio.choose_venue(id)
+	rebuild()
+
+
+func _on_variant_chosen(variant: int) -> void:
+	studio.choose_variant(variant)
 	rebuild()

@@ -8,19 +8,31 @@ colour the lamps shine.
 | id | Title | What it is |
 |---|---|---|
 | `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall, washed by brass sconces, holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. |
-| `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. The zones are black glass edged in neon; the lattice is a faint violet cube. |
+| `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. The zones are black glass edged in neon; the lattice is a faint violet cube. Two arrangements: **Highway** runs the road out across the desert to the mountains; **Downtown** runs it down an avenue between towers close enough to read their windows, with the floor as an open plaza among them. |
 | `chalk` | Chalk Zone | A blackboard the size of the world. Neon chalk doodles hang at every distance and there is dust in the air. The working floor is outlined in chalk. Each zone is taped out on the floor in its own colour, with what will stand there sketched in the air. |
 
 ## Changing it
 
 - **V** cycles the venues.
 - **Tab** opens the stage manager; its first row picks a venue.
-- `--venue <id>` on the command line applies for one run only and is not saved.
-- Otherwise the choice is saved in the layout profile (`[profile] venue`) and comes back next session.
+- When a venue has more than one arrangement, the stage manager shows a second row, "arranged", to pick one.
+- `--venue <id>` on the command line applies for one run only and is not saved. `--venue grid:1`
+  asks for an arrangement as well.
+- Otherwise the choice is saved in the layout profile (`[profile] venue` and `venue_variant`) and
+  comes back next session.
+
+### Arrangements
+
+A venue can come in more than one arrangement (`Venue.VARIANTS`): the same place with its structure
+moved about, such as walls or none, or a city near or far. An arrangement keeps the venue's
+footprint, its zones and where you can walk. Only what stands around them changes. Arrangement 0
+is the venue as it was first built. A venue that is not in `VARIANTS` has one arrangement, under
+its own name, and no picker. Changing venue starts the new one at its first arrangement.
 
 On your own the choice is yours. In a session it is the host's: the venue is part of the room
 everyone stands in (`Session.room`), a guest is shown it and cannot change it, and the guest's own
-choice comes back when it is on its own again. In AR there is no venue at all, because the room
+choice comes back when it is on its own again. The arrangement goes the same way: it travels in
+`Session.room` as `variant`, beside the venue. In AR there is no venue at all, because the room
 is the real one.
 
 Iterating on venues has its own brief: `docs/environments_loop.md`. `tools/light_check.sh` is the
@@ -82,6 +94,9 @@ walker steps up onto anything no taller than `Walker.STEP_HEIGHT`, which include
 2. Build the geometry in `_ready`. It must include a floor plane at y = 0 at least as wide as the room.
    It must also dress all five zones (see above) and keep its scenery out of them.
 3. Add the id to `Venue.IDS`, `Venue.make` and `Venue.make_title`.
+4. For more than one arrangement, list their titles under the id in `Venue.VARIANTS` and build
+   by `variant` in `_ready`. The zones test, the z-fight scan and `tools/light_check.sh` all
+   cover every arrangement.
 
 `_test_venues_change_the_world_and_not_the_setup` then covers it automatically:
 

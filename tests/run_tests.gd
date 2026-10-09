@@ -2607,6 +2607,8 @@ func _test_the_room_is_the_hosts() -> void:
 	check("a guest cannot change the venue", not studio.choose_venue(&"grid")
 			and studio.venue.venue_id() == own_venue)
 	check("and is told why", notices.size() == 1 and notices[0].begins_with("Only "))
+	check("nor how it is arranged", not studio.choose_variant(1) and studio.venue.variant == 0
+			and not Session.room_ask_is_valid(&"set_variant", [1]))
 	Session.notice.disconnect(heard)
 	studio.rack.tear_requested.emit(2, order[1], studio.rack.global_position)
 	check("a guest's pull is out at once, under a name of its own (%s)" % [studio.tablets.keys()],
@@ -2631,6 +2633,13 @@ func _test_the_room_is_the_hosts() -> void:
 			not Session.layout.has_transform(&"floor/rack", Presentation.Mode.STUDIO))
 	check("the host's venue is the guest's", studio.venue.venue_id() == &"grid")
 	check("and so are its stands", studio.tablets.has(&"tablet_3"))
+	studio.apply_room({"venue": &"grid", "variant": 1,
+			"tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+	check("the host's arrangement of it is the guest's", studio.venue.venue_id() == &"grid"
+			and studio.venue.variant == 1 and studio.tablets.has(&"tablet_3"))
+	studio.apply_room({"venue": &"grid", "variant": 99,
+			"tablets": {&"tablet_3": [2, order[1], plugin, 0.4, 0.2, 0.25]}})
+	check("an arrangement the guest does not have is the venue's first", studio.venue.variant == 0)
 	stand = studio.tablets[&"tablet_3"][0]
 	check("where the host has them", Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(0.4, 0.2))
 			and is_equal_approx(stand.rotation.y, 0.25))
@@ -5597,12 +5606,13 @@ func _test_no_two_faces_in_the_room_share_a_plane() -> void:
 		surface._process(0.0)
 	# In every venue: the gear is the same, but the floor it stands on is not.
 	for id in Venue.IDS:
-		studio.set_venue(id, false)
-		var hits := ZFightProbe.scan(studio)
-		var named := hits.slice(0, 3).map(func(h): return "%s | %s" % [
-				ZFightProbe.label(h[0]), ZFightProbe.label(h[1])])
-		check("no two faces in the %s share a plane (%d: %s)" % [id, hits.size(),
-				", ".join(named)], hits.is_empty())
+		for v in Venue.variant_titles(id).size():
+			studio.set_venue(id, false, v)
+			var hits := ZFightProbe.scan(studio)
+			var named := hits.slice(0, 3).map(func(h): return "%s | %s" % [
+					ZFightProbe.label(h[0]), ZFightProbe.label(h[1])])
+			check("no two faces in the %s/%d share a plane (%d: %s)" % [id, v, hits.size(),
+					", ".join(named)], hits.is_empty())
 	Session.layout = saved_layout
 	remove_child(studio)
 	studio.free()
@@ -5667,18 +5677,78 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	studio.set_venue(&"chalk", false)
 	check("a venue for one run is not written down", Session.layout.venue == &"grid")
 
+	# Arranged another way: still the same room for the gear, and the arrangement kept.
+	studio.set_venue(&"grid", false)
+	var grid_poses := {}
+	for surface in studio.focus.surfaces:
+		grid_poses[surface.surface_id] = surface.global_transform
+	var grid_zones := studio.venue.zones()
+	var grid_walkable := studio._walkable()
+	check("a venue with arrangements has more than one", Venue.variant_titles(&"grid").size() > 1)
+	check("one without has its own name as its only one", Venue.variant_titles(&"chalk")
+			== PackedStringArray([Venue.make_title(&"chalk")]))
+	check("the host can arrange it another way", studio.choose_variant(1) and studio.venue.variant == 1
+			and studio.venue.venue_id() == &"grid")
+	check("and is told which (%s)" % studio.venue.title(), studio.venue.title().ends_with(
+			Venue.variant_titles(&"grid")[1]))
+	check("the downtown grid has its city close in", studio.venue.find_child("Downtown", false, false) != null
+			and studio.venue.find_child("Mountains", false, false) == null)
+	var shifted := []
+	for surface in studio.focus.surfaces:
+		if not surface.global_transform.is_equal_approx(grid_poses[surface.surface_id]):
+			shifted.append(surface.surface_id)
+	check("arranging it moves no gear (%s)" % [shifted], shifted.is_empty())
+	check("and keeps its zones", studio.venue.zones() == grid_zones)
+	check("and where you can walk", studio._walkable() == grid_walkable)
+	check("the arrangement is remembered", Session.layout.venue == &"grid"
+			and Session.layout.venue_variant == 1)
+	check("and travels in the room", studio.room_state()["variant"] == 1)
+	studio.set_venue(&"grid", true, 7)
+	check("an arrangement a venue lacks is its first", studio.venue.variant == 0
+			and Session.layout.venue_variant == 0)
+	studio.choose_variant(1)
+	studio.choose_venue(&"studio")
+	check("another venue starts at its first arrangement", studio.venue.variant == 0)
+	studio.set_venue(&"grid", true, 1)
+
 	Session.layout.save()
 	var reloaded := LayoutProfile.new()
 	reloaded.save_path = Session.layout.save_path
 	reloaded.load_saved()
 	check("the venue survives a restart", reloaded.venue == &"grid")
+	check("and so does its arrangement", reloaded.venue_variant == 1)
+
+	# The stage manager's venue row: a picker for the arrangements, only where there is a choice.
+	var panel := StageManager.new()
+	panel.studio = studio
+	add_child(panel)
+	var picker := func() -> HBoxContainer:
+		for row in panel._rows.get_children():
+			if row.name == &"VariantRow" and not row.is_queued_for_deletion():
+				return row
+		return null
+	panel.rebuild()
+	var row: HBoxContainer = picker.call()
+	var buttons := row.find_children("*", "Button", false, false) if row != null else []
+	check("the panel offers the grid's arrangements", buttons.size() == Venue.variant_titles(&"grid").size()
+			and (buttons[1] as Button).button_pressed and (buttons[1] as Button).disabled
+			and not (buttons[0] as Button).disabled)
+	(buttons[0] as Button).pressed.emit()
+	check("and picking one arranges it", studio.venue.variant == 0)
+	studio.set_venue(&"chalk", false)
+	panel.rebuild()
+	check("a venue with one arrangement shows no picker", picker.call() == null)
+	studio.set_venue(&"grid", true, 1)
+	remove_child(panel)
+	panel.free()
 	remove_child(studio)
 	studio.free()
 
 	var again := Studio.new()
 	again.medium = Presentation.Medium.SCREEN
 	add_child(again)
-	check("a saved venue is where the next session starts", again.venue.venue_id() == &"grid")
+	check("a saved venue is where the next session starts", again.venue.venue_id() == &"grid"
+			and again.venue.variant == 1)
 	remove_child(again)
 	again.free()
 	Session.layout = saved_layout
@@ -5697,12 +5767,17 @@ func _test_every_venue_leaves_room_for_the_activities() -> void:
 		&"vocals": Vector3(2.0, 2.0, 2.0),
 		&"synth": Vector3(0.6, 1.5, 1.2),
 	}
+	var arrangements := []
+	for id in Venue.IDS:
+		for v in Venue.variant_titles(id).size():
+			arrangements.append([id, v])
 	for width in [Studio.ROOM_WIDTH, Studio.ROOM_WIDTH + 3.2]:
-		for id in Venue.IDS:
-			var venue := Venue.make(id)
+		for arranged: Array in arrangements:
+			var id: StringName = arranged[0]
+			var venue := Venue.make(id, arranged[1])
 			venue.room_width = width
 			add_child(venue)
-			var tag := "%s at %.1f m" % [id, width]
+			var tag := "%s/%d at %.1f m" % [id, arranged[1], width]
 			var zones := venue.zones()
 			check("%s: has every activity's zone" % tag, zones.size() == Venue.ZONE_IDS.size()
 					and Venue.ZONE_IDS.all(func(z): return zones.has(z)))

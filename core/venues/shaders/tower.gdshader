@@ -12,9 +12,13 @@ uniform vec4 lit_c : source_color = vec4(1.0, 0.8, 0.35, 1.0);
 uniform float energy = 2.2;
 uniform float pulse = 0.0;
 instance uniform float roof = 30.0;
+// A whole city drawn as one MultiMesh can't set an instance uniform per tower; it puts each
+// roof's height in the instance's custom data instead.
+uniform bool roof_from_custom = false;
 
 varying vec3 world;
 varying vec3 wnormal;
+varying float roof_y;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -23,6 +27,7 @@ float hash(vec2 p) {
 void vertex() {
 	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnormal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	roof_y = roof_from_custom ? INSTANCE_CUSTOM.x : roof;
 }
 
 void fragment() {
@@ -37,7 +42,7 @@ void fragment() {
 		vec3 tint = h > 0.92 ? lit_c.rgb : (h > 0.82 ? lit_b.rgb : lit_a.rgb);
 		c += tint * window * on * energy * (0.6 + 0.4 * sin(TIME * 0.3 + h * 40.0));
 		// The roofline.
-		float edge = 1.0 - smoothstep(0.0, 0.35, roof - world.y);
+		float edge = 1.0 - smoothstep(0.0, 0.35, roof_y - world.y);
 		c += lit_b.rgb * edge * energy * 1.5 * (1.0 + pulse);
 	}
 	ALBEDO = c;

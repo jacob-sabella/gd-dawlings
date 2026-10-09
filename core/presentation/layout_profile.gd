@@ -35,6 +35,8 @@ var local_transforms: Dictionary = {}
 var medium: int = Presentation.Medium.SCREEN
 ## Which venue this participant stands in. Empty means the default. See core/venues/venue.gd.
 var venue: StringName = &""
+## Which arrangement of it (Venue.VARIANTS). 0, the first, unless chosen.
+var venue_variant := 0
 ## The plugins this participant has torn off the rack onto tablets: {stand id: [track, fx, name]}.
 ## The name is what finds the plugin again: the slot is only where it was when last saved, and
 ## a chain rearranged in Reaper since then has moved it. Where each stand stands is a floor
@@ -79,6 +81,8 @@ func save() -> void:
 	cfg.set_value("profile", "medium", medium)
 	if venue != &"":
 		cfg.set_value("profile", "venue", String(venue))
+	if venue_variant != 0:
+		cfg.set_value("profile", "venue_variant", venue_variant)
 	for id in modes:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
@@ -94,6 +98,7 @@ func load_saved() -> void:
 		return
 	medium = cfg.get_value("profile", "medium", medium)
 	venue = StringName(cfg.get_value("profile", "venue", String(venue)))
+	venue_variant = int(cfg.get_value("profile", "venue_variant", venue_variant))
 	if cfg.has_section("modes"):
 		for key in cfg.get_section_keys("modes"):
 			modes[StringName(key)] = cfg.get_value("modes", key)

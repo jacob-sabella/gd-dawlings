@@ -203,7 +203,10 @@ func _ready() -> void:
 	# virtual floor over a real one is not a smaller version of the VR experience, it is a worse
 	# one: it hides the actual floor and it disagrees with it by however much calibration is off.
 	if medium != Presentation.Medium.AR:
-		set_venue(Session.layout.venue if Session.layout != null else Venue.IDS[0], false)
+		if Session.layout != null:
+			set_venue(Session.layout.venue, false, Session.layout.venue_variant)
+		else:
+			set_venue(Venue.IDS[0], false)
 	_build_anchors()
 	if medium != Presentation.Medium.AR:
 		_build_furniture()
@@ -348,7 +351,7 @@ func _exit_tree() -> void:
 		get_tree().node_added.disconnect(_keep_out_of_mirrors)
 
 
-func set_venue(id: StringName, persist := true) -> void:
+func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	if medium == Presentation.Medium.AR:
 		return
 	if not Venue.is_known(id):
@@ -356,7 +359,7 @@ func set_venue(id: StringName, persist := true) -> void:
 	if venue != null:
 		remove_child(venue)
 		venue.queue_free()
-	venue = Venue.make(id)
+	venue = Venue.make(id, variant)
 	venue.name = "Venue"
 	venue.rich = rich_rendering()
 	venue.room_width = room_width
@@ -375,6 +378,7 @@ func set_venue(id: StringName, persist := true) -> void:
 			_lamps[i].light_energy = venue.lamp_energy(i, PRACTICALS[i][2])
 	if persist and Session.layout != null and Session.is_authority():
 		Session.layout.venue = id
+		Session.layout.venue_variant = venue.variant
 		Session.layout.save()
 	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
@@ -399,12 +403,17 @@ func _walk_where_the_venue_lets() -> void:
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
 ## asking is told so rather than taken somewhere nobody else is.
-func choose_venue(id: StringName) -> bool:
+func choose_venue(id: StringName, variant := 0) -> bool:
 	if not Session.is_authority():
 		Session.notice.emit("Only %s can change the venue." % Session.name_of(1))
 		return false
-	set_venue(id)
+	set_venue(id, true, variant)
 	return true
+
+
+## The same venue, arranged another way. The host's to choose, like the venue.
+func choose_variant(variant: int) -> bool:
+	return choose_venue(venue.venue_id() if venue != null else Venue.IDS[0], variant)
 
 
 func cycle_venue() -> void:
@@ -799,7 +808,8 @@ func room_state() -> Dictionary:
 		for surface_id in mount.mounted_ids():
 			if not mount.seats.has(surface_id):
 				placed[surface_id] = mount.studio_home(surface_id)
-	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0], "tablets": out,
+	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
+			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed}
 
 
@@ -840,8 +850,10 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
 
 	var id_wanted := StringName(state.get("venue", &""))
-	if venue != null and Venue.is_known(id_wanted) and venue.venue_id() != id_wanted:
-		set_venue(id_wanted, false)
+	var variant_wanted := Venue.known_variant(id_wanted, int(state.get("variant", 0)))
+	if venue != null and Venue.is_known(id_wanted) \
+			and (venue.venue_id() != id_wanted or venue.variant != variant_wanted):
+		set_venue(id_wanted, false, variant_wanted)
 
 	var wanted: Dictionary = state.get("tablets", {})
 	for id in tablets.keys():
@@ -1046,8 +1058,10 @@ func _put_back_own_room() -> void:
 		_applying_room = false
 		_fit_room_to_session()
 	var own := Session.layout.venue if Venue.is_known(Session.layout.venue) else Venue.IDS[0]
-	if medium != Presentation.Medium.AR and venue != null and venue.venue_id() != own:
-		set_venue(own, false)
+	var own_variant := Venue.known_variant(own, Session.layout.venue_variant)
+	if medium != Presentation.Medium.AR and venue != null \
+			and (venue.venue_id() != own or venue.variant != own_variant):
+		set_venue(own, false, own_variant)
 	if floor_plan != null:
 		_restore_tablets()
 
@@ -1096,7 +1110,7 @@ func _fit_room_to_session() -> void:
 		room_width = width
 		floor_plan.bounds = _room_bounds()
 		if venue != null:
-			set_venue(venue.venue_id(), false)
+			set_venue(venue.venue_id(), false, venue.variant)
 		_walk_where_the_venue_lets()
 	# A guest's room is fitted by the host, who says where everything went.
 	if _showing_hosts_room:

@@ -119,8 +119,10 @@ func _ready() -> void:
 	add_child(studio)
 
 	if args["venue"] != "":
-		if Venue.is_known(StringName(args["venue"])):
-			studio.set_venue(StringName(args["venue"]), false)
+		# `grid:1` is the grid's second arrangement (Venue.VARIANTS).
+		var asked := (args["venue"] as String).split(":")
+		if Venue.is_known(StringName(asked[0])):
+			studio.set_venue(StringName(asked[0]), false, int(asked[1]) if asked.size() > 1 else 0)
 		else:
 			push_warning("bootstrap: --venue %s is not one of %s" % [args["venue"], Venue.IDS])
 
@@ -246,7 +248,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					out["reaper_resource"] = argv[i]
 					out["reaper"] = true
 			"--venue":
-				# `--venue grid`. For one run: a look asked for on the command line is not a
+				# `--venue grid`, or `--venue grid:1` for its second arrangement. For one run: a look asked for on the command line is not a
 				# change of mind, so it is not written to the layout.
 				i += 1
 				if i < argv.size():
