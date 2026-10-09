@@ -30,10 +30,17 @@ static var _gains: Dictionary = {}
 
 
 ## Headphones `on` a head here, playing the personal mix `levels` ({bus: dB}; a bus left out is
-## not in it), or off, and everything as before.
+## not in it), or off, and everything as before. A bus other than the mix and the keys -- a
+## track's cue -- is for headphones only, and is off whenever they are.
 static func listen(on: bool, levels: Dictionary = PERSONAL) -> void:
 	for bus in [MIX, KEYS]:
 		_gain(bus, levels.get(bus, OFF_DB) if on else 0.0)
+	var cues: Array = levels.keys().filter(func(b: StringName) -> bool: return b not in [MIX, KEYS])
+	for bus in _gains.keys():
+		if bus not in [MIX, KEYS, ROOM] and bus not in cues:
+			_gain(bus, OFF_DB)
+	for bus in cues:
+		_gain(bus, levels[bus] if on else OFF_DB)
 	_gain(ROOM, ROOM_DB if on else 0.0)
 
 

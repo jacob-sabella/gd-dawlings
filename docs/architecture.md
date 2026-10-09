@@ -1329,6 +1329,16 @@ ask. The sockets draw everyone's plugs, stacked in their owners' colours. The le
 (`PersonalMix`, `core/audio/personal_mix.gd`), as is what they add up to: `ears_levels()` sums the
 receivers per bus for `Ears.listen`. With nothing patched, it is the mix and your keys.
 
+Each channel strip has a send socket too (`ChannelStrip.send`, source `track_N`). A track is
+heard by itself where this machine plays the tracks (`PersonalMix.hears_tracks`: the built-in
+engine, not on a guest). While headphones are on, the studio asks `GodotBackend.set_cues` for
+the patched tracks. Each cue is another player of the track's part on a bus of its own
+(`GodotBackend.cue_bus`), sharing the track bus's effect objects: post-effects, pre-fader,
+following mute, and in time because `_sync_players` keeps it to the song clock. It plays to
+Master, never into the mix a host sends its guests. The strips' sockets are one `MeshBank`
+(`MeshBank.meshed`) with shadows off; a lit ring and plugs are made only for a socket with
+plugs in it.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

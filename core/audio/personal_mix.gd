@@ -15,10 +15,13 @@ extends RefCounted
 ## Receivers on a tablet, A to D.
 const RECEIVERS := 4
 const LETTERS := ["A", "B", "C", "D"]
-## The send sockets there are, by name, and the bus each one's sound is on here.
+## The master's send sockets, by name, and the bus each one's sound is on here.
 const SOURCES := {&"mix": Ears.MIX, &"keys": Ears.KEYS}
 ## What each source is called on the tablet and the panel.
 const TITLES := {&"mix": "MIX", &"keys": "MY KEYS"}
+## A channel strip's send socket is named for its track: "track_5". Its sound here is the track's
+## cue (GodotBackend.cue_bus), where this machine plays the tracks itself.
+const TRACK := "track_"
 ## A receiver's level: from off, through unity, to a little gain for a quiet source.
 const FLOOR_DB := -60.0
 const TOP_DB := 6.0
@@ -29,6 +32,13 @@ signal changed()
 var sockets: Array[StringName] = []
 ## Each receiver's level, in dB; FLOOR_DB and under is off.
 var levels_db: Array[float] = []
+## Whether this machine plays the tracks one by one, so a track's socket can be heard here: the
+## built-in engine on a host. A guest has the host's mix in one stream, and Reaper plays itself.
+var hears_tracks := false:
+	set(v):
+		if v != hears_tracks:
+			hears_tracks = v
+			changed.emit()
 
 
 func _init() -> void:
@@ -39,7 +49,30 @@ func _init() -> void:
 
 ## A socket a plug may go into: one there is, or none.
 static func valid_socket(socket: StringName) -> bool:
-	return socket == &"" or SOURCES.has(socket)
+	return socket == &"" or SOURCES.has(socket) or track_of(socket) > 0
+
+
+static func track_socket(index: int) -> StringName:
+	return StringName(TRACK + str(index))
+
+
+## The track a socket is on a strip of, or 0 for the master's.
+static func track_of(socket: StringName) -> int:
+	var s := String(socket)
+	if not s.begins_with(TRACK) or not s.substr(TRACK.length()).is_valid_int():
+		return 0
+	return maxi(int(s.substr(TRACK.length())), 0)
+
+
+## What a socket is called: the master's by TITLES, a strip's by its track's name.
+static func title_of(socket: StringName) -> String:
+	if TITLES.has(socket):
+		return TITLES[socket]
+	var index := track_of(socket)
+	if index <= 0:
+		return ""
+	var t: MixState.TrackState = DAW.state.tracks.get(index)
+	return t.display_name().to_upper() if t != null else "TRACK %d" % index
 
 
 ## The plugs as the room has them, for this person: one socket name per receiver.
@@ -73,9 +106,9 @@ func ears_levels() -> Dictionary:
 		return Ears.PERSONAL
 	var gain := {}
 	for i in RECEIVERS:
-		if sockets[i] == &"" or levels_db[i] <= FLOOR_DB:
+		var bus := bus_of(i)
+		if bus == &"" or levels_db[i] <= FLOOR_DB:
 			continue
-		var bus: StringName = SOURCES[sockets[i]]
 		gain[bus] = float(gain.get(bus, 0.0)) + db_to_linear(levels_db[i])
 	var out := {}
 	for bus in gain:
@@ -83,7 +116,27 @@ func ears_levels() -> Dictionary:
 	return out
 
 
-## The bus whose sound receiver `receiver` carries, or empty.
+## The bus whose sound receiver `receiver` carries, or empty: nothing patched, or a track this
+## machine does not play by itself.
 func bus_of(receiver: int) -> StringName:
 	var s := sockets[receiver]
-	return SOURCES[s] if s != &"" else &""
+	if SOURCES.has(s):
+		return SOURCES[s]
+	var index := track_of(s)
+	return GodotBackend.cue_bus(index) if index > 0 and hears_tracks else &""
+
+
+## Whether receiver `receiver` is in a socket whose sound does not reach this machine by itself.
+func unheard(receiver: int) -> bool:
+	return sockets[receiver] != &"" and bus_of(receiver) == &""
+
+
+## The tracks patched, for their cues to be played: in order, each once.
+func tracks() -> Array[int]:
+	var out: Array[int] = []
+	for s in sockets:
+		var index := track_of(s)
+		if index > 0 and index not in out:
+			out.append(index)
+	out.sort()
+	return out

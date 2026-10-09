@@ -126,6 +126,8 @@ func _ready() -> void:
 	await _test_headphones_go_on_your_head()
 	_test_a_personal_mix_adds_up_its_receivers()
 	await _test_the_tablet_patches_your_headphones()
+	_test_a_track_has_a_cue_for_headphones()
+	await _test_a_strip_send_puts_one_track_in_your_headphones()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6911,6 +6913,19 @@ func _test_a_personal_mix_adds_up_its_receivers() -> void:
 	check("a socket there is not is the tray", not mix.is_patched())
 	check("the sockets there are", PersonalMix.valid_socket(&"mix") and PersonalMix.valid_socket(&"keys")
 			and PersonalMix.valid_socket(&"") and not PersonalMix.valid_socket(&"talkback"))
+	check("and a strip's, by its track", PersonalMix.track_socket(5) == &"track_5"
+			and PersonalMix.track_of(&"track_5") == 5 and PersonalMix.valid_socket(&"track_5")
+			and not PersonalMix.valid_socket(&"track_") and not PersonalMix.valid_socket(&"track_x")
+			and not PersonalMix.valid_socket(&"track_0") and PersonalMix.track_of(&"mix") == 0)
+	mix.set_level(1, 0.0)
+	mix.set_sockets(["track_5", "mix", "track_5", "track_2"])
+	check("where the tracks are not played here, one patched is not heard (%s)" % [mix.ears_levels()],
+			mix.unheard(0) and not mix.unheard(1) and mix.ears_levels() == {Ears.MIX: 0.0})
+	before = changes[0]
+	mix.hears_tracks = true
+	check("where they are, it is the track's cue", changes[0] == before + 1 and not mix.unheard(0)
+			and mix.bus_of(0) == GodotBackend.cue_bus(5) and mix.ears_levels().has(GodotBackend.cue_bus(2)))
+	check("the tracks patched, each once, in order", mix.tracks() == [2, 5])
 
 
 ## The tablet in the studio: it lies on the shelf's lower tier, shows your personal mix on its
@@ -7019,6 +7034,129 @@ func _test_the_tablet_patches_your_headphones() -> void:
 	await get_tree().process_frame
 	Session.role = saved_role
 	Session.layout = saved_layout
+
+
+## The built-in engine plays a cue of a track on request: the same part, in time, through the
+## track's own effects but not its fader, on a bus of its own for headphones.
+func _test_a_track_has_a_cue_for_headphones() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	check("nothing is cued to begin with", backend.cues().is_empty()
+			and AudioServer.get_bus_index(GodotBackend.cue_bus(2)) < 0)
+	backend.set_cues([2, 99, 2])
+	var cue := AudioServer.get_bus_index(GodotBackend.cue_bus(2))
+	var own: int = backend._bus[2]
+	check("a cue of a track there is, once (%s)" % [backend.cues()], backend.cues() == [2] and cue >= 0)
+	var shared := AudioServer.get_bus_effect_count(own) - 1 == AudioServer.get_bus_effect_count(cue) \
+			and AudioServer.get_bus_effect_count(cue) > 0
+	for slot in range(1, AudioServer.get_bus_effect_count(own)):
+		shared = shared and AudioServer.get_bus_effect(own, slot) == AudioServer.get_bus_effect(cue, slot - 1)
+	check("through the track's own effects, the very ones, and not its panner", shared)
+	check("to Master, not into the mix", AudioServer.get_bus_send(cue) == &"Master")
+	var players: Array = backend._players[2].filter(func(p: Node) -> bool: return p.has_meta(&"cue"))
+	check("played by a player of its own", players.size() == 1
+			and (players[0] as AudioStreamPlayer).bus == GodotBackend.cue_bus(2))
+	DAW.state.playing = true
+	DAW.state.position_seconds = 40.0
+	backend._sync_players()
+	var main: AudioStreamPlayer = backend._players[2][0]
+	check("the same part, at the same place in it", players[0].playing and players[0].stream == main.stream
+			and absf(players[0].get_playback_position() - main.get_playback_position()) < 0.01)
+	DAW.state.playing = false
+	backend._sync_players()
+	DAW.set_track_volume(2, 0.1)
+	backend._apply_tracks()
+	check("before the fader: pulling the track down does not pull its cue down",
+			is_zero_approx(AudioServer.get_bus_volume_db(cue)) and is_zero_approx(players[0].volume_db))
+	DAW.set_track_mute(2, true)
+	check("but muting it mutes it", AudioServer.is_bus_mute(cue))
+	DAW.set_track_mute(2, false)
+	var had := AudioServer.get_bus_effect_count(cue)
+	backend.add_effect(2, &"reverb")
+	cue = AudioServer.get_bus_index(GodotBackend.cue_bus(2))
+	check("an effect added to the track is in its cue too", AudioServer.get_bus_effect_count(cue) == had + 1
+			and AudioServer.get_bus_effect(cue, had) == AudioServer.get_bus_effect(own, had + 1))
+	backend.set_cues([])
+	check("let go, the cue's bus and player go", AudioServer.get_bus_index(GodotBackend.cue_bus(2)) < 0
+			and backend._players[2].all(func(p: Node) -> bool: return not p.has_meta(&"cue")))
+	_offline()
+
+
+## A plug on a channel strip's send, with headphones on: that one track in your ears, at the
+## receiver's level, and where it cannot be heard, the tablet and a notice say why.
+func _test_a_strip_send_puts_one_track_in_your_headphones() -> void:
+	# The last engine leaves a frame late, and takes every built-in bus with it as it goes.
+	await get_tree().process_frame
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	AudioPorts.ensure_buses()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var strip: ChannelStrip = studio.console.strips[1]
+	var index := strip.track_index
+	check("every strip has a send socket, for its track", studio.console.strips.all(
+			func(c: ChannelStrip) -> bool: return c.send != null and c.send.source == PersonalMix.track_socket(c.track_index))
+			and strip.send.title().contains(DAW.state.track(index).display_name().to_upper()))
+	var bank := studio.console.find_child("SendSockets", true, false) as MeshBank
+	check("drawn as one bank, not a mesh apiece", bank != null and bank.count() == studio.console.strips.size()
+			and strip.send.find_children("*", "MeshInstance3D", true, false).is_empty())
+	check("this machine plays the tracks, so a strip's is heard here", studio.personal.hears_tracks)
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	studio._on_patch_asked(0, strip.send.source)
+	var me := Session.local_peer_id
+	check("a plug in it is there for all to see", strip.send.plug_count() == 1
+			and studio.patches.get(me) == [String(strip.send.source), "", "", ""])
+	check("and you are told (%s)" % [told], told.size() == 1 and (told[0] as String).contains(
+			"in SEND " + DAW.state.track(index).display_name().to_upper()))
+	check("with headphones off, nothing is cued", backend.cues().is_empty())
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var phones := studio.items.items[&"headphones"] as HeadphonesItem
+	hand.pick_up(phones)
+	hand.wear()
+	var cue := GodotBackend.cue_bus(index)
+	check("on, the track is cued, and in your ears alone (%s)" % [backend.cues()], backend.cues() == [index]
+			and AudioServer.get_bus_index(cue) >= 0 and is_zero_approx(Ears.gain_db(cue))
+			and Ears.gain_db(Ears.MIX) == Ears.OFF_DB and Ears.gain_db(Ears.KEYS) == Ears.OFF_DB)
+	studio.personal.set_level(0, -12.0)
+	check("at its receiver's level", is_equal_approx(Ears.gain_db(cue), -12.0))
+	studio._on_patch_asked(1, &"mix")
+	check("with the mix under it on another", is_zero_approx(Ears.gain_db(Ears.MIX))
+			and is_equal_approx(Ears.gain_db(cue), -12.0))
+	strip.send.grab_begin(hand, strip.send.global_position)
+	strip.send.grab_end(hand)
+	check("clicking the strip's socket brings your plug back, and the cue goes", backend.cues().is_empty()
+			and studio.patches.get(me) == ["", "mix", "", ""] and strip.send.plug_count() == 0)
+	hand.take_off()
+	hand.lose_carrying()
+	phones.snap_home()
+	check("headphones off, every cue is silent", Ears.gain_db(cue) == Ears.OFF_DB or AudioServer.get_bus_index(cue) < 0)
+
+	Session.role = Session.Role.GUEST
+	studio._show_patches()
+	told.clear()
+	studio._on_patch_asked(2, strip.send.source)
+	check("a guest hears the host's mix whole: the track's plug is in, and not heard (%s)" % [told],
+			studio.personal.unheard(2) and not studio.personal.hears_tracks and told.size() == 1
+			and (told[0] as String).contains("a guest hears the host's mix as one stream"))
+	Session.role = Session.Role.SOLO
+	Session.notice.disconnect(listen)
+	studio.queue_free()
+	await get_tree().process_frame
+	check("leaving the studio lets every cue go", backend.cues().is_empty())
+	Session.role = saved_role
+	Session.layout = saved_layout
+	_offline()
 
 
 func _test_every_control_is_clickable_from_the_seat() -> void:

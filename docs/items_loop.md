@@ -265,11 +265,25 @@ ergonomics.
       The glass is matte under an unshaded backlight quad, so the room's lamps neither glare on
       it nor grey it. Lying flat, it is near edge-on from the seat, so its grip box is taller
       than the slate. Still to come: the control-surface page.
-- [ ] Single tracks into the personal mix: a send socket on each channel strip. Heard where the
+- [x] Single tracks into the personal mix: a send socket on each channel strip. Heard where the
       track's audio is in this process: the built-in engine's per-track buses. A guest gets the
       host's whole mix in one stream, and a host on Reaper hears Reaper, so per-track cue there
       needs routing (Reaper cue sends to an output this game taps, or per-listener stems
       streamed to a guest): park the choice in the backlog with the options.
+      Done: `ChannelStrip.send`, a `SendSocket` named `track_N` (`PersonalMix.track_socket`),
+      beside mute and monitor. `GodotBackend.set_cues` plays a cue of each patched track while
+      headphones are on: a third player of the same part, kept in time by `_sync_players`, on a
+      bus of its own (`cue_bus`) that holds the track bus's own effect objects, so it is
+      post-effects and pre-fader and follows mute. `Ears.listen` takes cue buses alongside the
+      mix and keys, and turns them off with the headphones. Where tracks are not played here
+      (`PersonalMix.hears_tracks` false: a guest, Reaper, the silent stand-in), the plug still
+      goes in for all to see, and the row says "not here" and the notice says why. The options
+      are parked in docs/loop_backlog.md. Learned: `tools/budget.sh 90` caught the sockets'
+      bank drawn into every lamp's shadow maps, at +450k primitives for a nut 12mm across, so
+      it casts no shadow now (+22k). A strip's socket seen at an angle hid behind the monitor
+      button's click box, so its own box stands out in front of the panel, where a plug does.
+      A row of bright nickel nuts read as white rings, louder than the lamps, so they are dark
+      satin now.
 - [ ] Other players' gear into the personal mix: a send socket on someone else's instrument or mic.
       Needs their notes (played here on the same instrument) or their audio sent across the
       session. Say what latency it adds.

@@ -129,11 +129,18 @@ func _process(_delta: float) -> void:
 		var bus := mix.bus_of(i)
 		var db := METER_FLOOR
 		var at := AudioServer.get_bus_index(bus) if bus != &"" else -1
+		var gain := Ears.gain_db(bus)
+		var track := PersonalMix.track_of(mix.sockets[i])
+		if at < 0 and bus != &"" and track > 0:
+			# A track's cue plays only while headphones are on; until then, the track's own bus
+			# says what it would carry.
+			at = AudioServer.get_bus_index(GodotBackend.BUS_PREFIX + str(track))
+			gain = 0.0
 		if at >= 0:
 			var peak := maxf(AudioServer.get_bus_peak_volume_left_db(at, 0), AudioServer.get_bus_peak_volume_right_db(at, 0))
 			# The bus's peak is after the headphones' gain on it (Ears); this receiver's share is
 			# the source as it comes, at this receiver's level.
-			db = peak - Ears.gain_db(bus) + mix.levels_db[i]
+			db = peak - gain + mix.levels_db[i]
 		var meter: MeshInstance3D = _rows[i]["meter"]
 		var f := clampf((db - METER_FLOOR) / (METER_TOP - METER_FLOOR), 0.0, 1.0)
 		var length := (TRACK_TO - TRACK_FROM) * f
@@ -155,12 +162,13 @@ func _refresh() -> void:
 			source.text = "plug %s in the tray" % PersonalMix.LETTERS[i]
 			source.modulate = DIM
 		else:
-			source.text = PersonalMix.TITLES[socket]
-			source.modulate = INK
+			source.text = PersonalMix.title_of(socket)
+			source.modulate = DIM if mix.unheard(i) else INK
 		(row["chip"] as MeshInstance3D).material_override = _flat(colour if socket != &"" else colour * 0.35)
 		var db: float = mix.levels_db[i]
-		(row["db"] as Label3D).text = "off" if db <= PersonalMix.FLOOR_DB else "%+.0f dB" % db
-		(row["db"] as Label3D).modulate = INK if socket != &"" else DIM
+		(row["db"] as Label3D).text = "not here" if mix.unheard(i) \
+				else "off" if db <= PersonalMix.FLOOR_DB else "%+.0f dB" % db
+		(row["db"] as Label3D).modulate = INK if socket != &"" and not mix.unheard(i) else DIM
 		(row["slider"] as LevelSlider).show_level(db)
 		_senders[i].show_out(socket != &"")
 
@@ -293,7 +301,9 @@ class Sender extends ControlAffordance:
 
 	func readout() -> String:
 		var socket: StringName = face.mix.sockets[receiver]
-		return "in SEND " + PersonalMix.TITLES[socket] if socket != &"" else "in the tray"
+		if socket == &"":
+			return "in the tray"
+		return "in SEND " + PersonalMix.title_of(socket) + (": not heard on this machine" if face.mix.unheard(receiver) else "")
 
 	func hint() -> String:
 		return "click to bring it back" if _out else "drag onto a SEND socket"

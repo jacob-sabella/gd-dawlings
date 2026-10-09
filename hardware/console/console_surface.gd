@@ -350,6 +350,12 @@ func _rebuild() -> void:
 	var chip_bank := MeshBank.lamps(ChannelStrip.CHIP_SIZE)
 	chip_bank.name = "ColourChips"
 	_panel.add_child(chip_bank)
+	var socket_bank := MeshBank.meshed(SendSocket.face_mesh())
+	socket_bank.name = "SendSockets"
+	# A nut 12mm across, flush on the panel: its shadow is nothing to see, and drawn into every
+	# lamp's shadow maps a desk of them cost more primitives than the rest of the desk.
+	socket_bank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_panel.add_child(socket_bank)
 
 	x += ChannelStrip.WIDTH * 0.5
 	for index in indices:
@@ -366,6 +372,7 @@ func _rebuild() -> void:
 		strip.slot_bank = slot_bank
 		strip.knob_bank = knob_bank
 		strip.cap_bank = cap_bank
+		strip.socket_bank = socket_bank
 		strip.transform = _seat(x, PANEL_MARGIN, 0.0)
 		_panel.add_child(strip)
 		strips.append(strip)
@@ -378,6 +385,7 @@ func _rebuild() -> void:
 	plate_bank.commit()
 	slot_bank.commit()
 	chip_bank.commit()
+	socket_bank.commit()
 	if knob_bank != null:
 		knob_bank.commit()
 	if cap_bank != null:

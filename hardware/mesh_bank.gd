@@ -115,6 +115,19 @@ static func of(path: String, fallback: Material, named: Dictionary = {}) -> Mesh
 	return bank
 
 
+## A bank of a mesh built in code, its surfaces' own materials kept: one draw call per surface
+## however many there are. For a part too small to be worth an asset -- a send socket's nut and
+## bore -- that every strip of a desk carries.
+static func meshed(mesh: Mesh) -> MeshBank:
+	var bank := MeshBank.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	bank.multimesh = mm
+	return bank
+
+
 ## A bank whose instances are DIFFERENT SIZES: the mesh is a unit cube and each instance is
 ## scaled by its own transform.
 ##

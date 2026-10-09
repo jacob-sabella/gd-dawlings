@@ -1,7 +1,7 @@
 class_name ChannelStrip
 extends Node3D
 
-## One channel of the console: name, pan, rec/solo/mute/monitor, fader, meter.
+## One channel of the console: name, pan, rec/solo/mute/monitor, a send socket, fader, meter.
 ##
 ## Built for a track index and bound to it for life. A rebuild of the console replaces strips
 ## wholesale rather than re-pointing them, because a strip that changes which track it means
@@ -42,6 +42,12 @@ var chip_bank: MeshBank
 var slot_bank: MeshBank
 var knob_bank: MeshBank
 var cap_bank: MeshBank
+## And the send socket's nut and bore.
+var socket_bank: MeshBank
+
+## The track's send socket, beside the buttons: a personal mix's plug goes in here to hear this
+## track by itself (PersonalMix). What its plugs and clicks mean is the studio's.
+var send: SendSocket
 
 const PLATE_SIZE := Vector3(WIDTH - 0.002, HEIGHT, 0.008)
 const PLATE_OFFSET := Vector3(0, HEIGHT * 0.5, -0.005)
@@ -142,6 +148,15 @@ func _ready() -> void:
 		return monitor_text(_state().monitor)
 	_monitor.pressed.connect(func(): DAW.set_track_monitor(track_index, next_monitor(_state().monitor)))
 	add_child(_monitor)
+
+	# Beside mute and monitor, in the column the meter rises in below: the one place on the strip
+	# with room for a plug to stand out of.
+	send = SendSocket.new()
+	send.source = PersonalMix.track_socket(track_index)
+	send.hit = SendSocket.STRIP_HIT
+	send.face_bank = socket_bank
+	send.position = Vector3(0.0175, HEIGHT - 0.122, -0.001)
+	add_child(send)
 
 	_fader = Fader.new()
 	_fader.track_index = track_index
@@ -265,6 +280,7 @@ func _on_track_changed(index: int, _field: StringName) -> void:
 func refresh() -> void:
 	var t := _state()
 	_name_label.text = t.display_name().to_upper()
+	send.label = t.display_name().to_upper()
 	var level := t.volume
 	var pan := t.pan
 	var db := t.volume_db

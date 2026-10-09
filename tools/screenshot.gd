@@ -26,7 +26,7 @@ var _walk: Array = []
 var _walk_mirror := 0.0
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
 ## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
-## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets.
+## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's).
 var _carry := ""
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
@@ -201,7 +201,7 @@ func _process(_delta: float) -> void:
 			# `--carry tablet:mix:keys`: its plugs A, B... in those SEND sockets.
 			var receiver := 0
 			for word in what.slice(1):
-				if PersonalMix.SOURCES.has(StringName(word)) and studio.has_method("_on_patch_asked"):
+				if PersonalMix.valid_socket(StringName(word)) and word != "" and studio.has_method("_on_patch_asked"):
 					studio._on_patch_asked(receiver, StringName(word))
 					receiver += 1
 

@@ -366,6 +366,8 @@ func _keep_out_of_mirrors(node: Node) -> void:
 func _exit_tree() -> void:
 	mic_arm.let_go()
 	Ears.listen(false)
+	if DAW.backend is GodotBackend:
+		(DAW.backend as GodotBackend).set_cues([])
 	if get_tree().node_added.is_connected(_keep_out_of_mirrors):
 		get_tree().node_added.disconnect(_keep_out_of_mirrors)
 
@@ -1765,7 +1767,7 @@ func _on_phones_changed() -> void:
 	if now == _heard_phones:
 		return
 	_heard_phones = now
-	Ears.listen(now, personal.ears_levels())
+	_listen()
 	var tablet := items.items.get(&"tablet") as TabletItem
 	if tablet != null:
 		tablet.listening = now
@@ -1782,8 +1784,20 @@ func _on_phones_changed() -> void:
 ## The personal mix changed -- a plug moved, a level -- and the headphones, if they are on,
 ## play it at once.
 func _on_personal_changed() -> void:
-	if _heard_phones:
-		Ears.listen(true, personal.ears_levels())
+	_listen()
+
+
+## What this machine plays, with or without headphones: the cues of the tracks patched while they
+## are on, and the personal mix's levels on the buses.
+func _listen() -> void:
+	if DAW.backend is GodotBackend:
+		(DAW.backend as GodotBackend).set_cues(personal.tracks() if _heard_phones and personal.hears_tracks else [])
+	Ears.listen(_heard_phones, personal.ears_levels())
+
+
+## Whether a strip's socket can be heard here: the tracks are played one by one on this machine.
+func _hears_tracks() -> bool:
+	return DAW.backend is GodotBackend and Session.role != Session.Role.GUEST
 
 
 ## A plug dropped on a socket by a hand here, or brought back to the tray: done here at once,
@@ -1799,10 +1813,21 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 		_predict(&"patch", [receiver, socket])
 	if socket == &"":
 		Session.notice.emit("Plug %s is back in the tray." % letter)
+	elif personal.unheard(receiver):
+		Session.notice.emit("Plug %s in SEND %s. One track by itself is not heard here: %s" % [letter,
+				PersonalMix.title_of(socket), _why_no_tracks()])
 	else:
-		Session.notice.emit("Plug %s in SEND %s: %s, in your headphones%s." % [letter,
-				String(socket).to_upper(), PersonalMix.TITLES[socket].to_lower(),
-				"" if _heard_phones else " when you put them on"])
+		Session.notice.emit("Plug %s in SEND %s: in your headphones%s." % [letter,
+				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on"])
+
+
+## Why a single track is not heard on this machine (`_hears_tracks`).
+func _why_no_tracks() -> String:
+	if Session.role == Session.Role.GUEST:
+		return "a guest hears the host's mix as one stream."
+	if DAW.backend is ReaperBackend:
+		return "Reaper plays the tracks, not the game."
+	return "the stand-in DAW makes no sound."
 
 
 ## Put `peer`'s receiver `receiver`'s plug in `socket`, or back in its tray (empty).
@@ -1824,12 +1849,16 @@ func _set_patch(peer: int, receiver: int, socket: StringName, show := true) -> v
 
 ## Everyone's plugs in the sockets, in their colours, and this person's own in their ears.
 func _show_patches() -> void:
+	personal.hears_tracks = _hears_tracks()
 	personal.set_sockets(patches.get(Session.local_peer_id, []))
 	if console == null or console.master == null:
 		return
 	var peers := patches.keys()
 	peers.sort()
-	for socket in console.master.sends:
+	var sockets: Array[SendSocket] = console.master.sends.duplicate()
+	for strip in console.strips:
+		sockets.append(strip.send)
+	for socket in sockets:
 		if not socket.pressed.is_connected(_on_send_pressed):
 			socket.pressed.connect(_on_send_pressed.bind(socket.source))
 		var colours: Array[Color] = []
@@ -1851,7 +1880,7 @@ func _on_send_pressed(source: StringName) -> void:
 			any = true
 	if not any:
 		Session.notice.emit("Drag a plug onto SEND %s from your tablet: it lies on the prop shelf's lower tier."
-				% String(source).to_upper())
+				% PersonalMix.title_of(source))
 
 
 ## Who is here changed: colours may have, and a guest who left takes their plugs with them.

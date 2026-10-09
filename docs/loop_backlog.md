@@ -150,8 +150,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
   call.
 
 - **Per-track cue for a host on Reaper, and for a guest.** The personal mix (the tablet,
-  docs/items_loop.md) can take single tracks where their audio is in this process: the built-in
-  engine's per-track buses. A host on Reaper hears Reaper, and a guest gets the host's whole mix
+  docs/items_loop.md) takes single tracks where their audio is in this process: the built-in
+  engine's per-track cues (`GodotBackend.set_cues`). Elsewhere the plug goes in and the tablet
+  says "not here". A host on Reaper hears Reaper, and a guest gets the host's whole mix
   in one stream. Options: Reaper cue sends to a hardware output the game taps; per-listener
   stems streamed to a guest (upload cost grows with every listener); or leave per-track cue to
   the built-in engine. The user's call.

@@ -14,6 +14,8 @@ extends OfflineBackend
 ##   - sends as a second player of the same part on a send bus into the destination, so the
 ##     reverb return returns reverb;
 ##   - meters read off the buses' peaks rather than synthesised;
+##   - a cue per track on request (`set_cues`): a third player of the part, through the track's
+##     own effects but not its fader, on a bus that plays to this machine's headphones only;
 ##   - a demo song (DemoSong), one synthesised part per instrument, played through the
 ##     timeline's items: an item is a window in which its track's part sounds.
 ##
@@ -26,6 +28,7 @@ extends OfflineBackend
 
 const BUS_PREFIX := "R3D "
 const MASTER_BUS := "R3D Master"
+const CUE_PREFIX := "R3D Cue "
 ## How far a part's player may drift from the song clock before it is put back. Under a mix
 ## buffer of drift is inaudible; a re-seek is a small click, so this errs towards rare.
 const DRIFT_SECONDS := 0.06
@@ -52,6 +55,8 @@ var _parts := {}
 var _parts_tempo := 0.0
 var _master_bus := -1
 var _capture: AudioEffectCapture
+## The tracks being cued, in order.
+var _cues: Array[int] = []
 ## Recorded take file name -> its sound, or null when the file is not on this machine.
 var _take_streams := {}
 
@@ -127,6 +132,8 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	if _bus.has(track_index):
 		AudioServer.add_bus_effect(_bus[track_index], FXCatalogue.make(kind))
 		_apply_fx(track_index, fx_index)
+		if track_index in _cues:
+			_build_cues()
 	state.fx_changed.emit(track_index, fx_index)
 	return fx_index
 
@@ -166,6 +173,8 @@ func _restack(track_index: int, moved_kind: StringName) -> void:
 		AudioServer.add_bus_effect(b, FXCatalogue.make(kinds[fx_index]))
 	for fx_index in order:
 		_apply_fx(track_index, fx_index)
+	if track_index in _cues:
+		_build_cues()
 
 
 ## Which track's bus each track sends into: its folder's, or the master's.
@@ -240,6 +249,71 @@ func _build_buses() -> void:
 			add_child(p)
 			list.append(p)
 		_players[index] = list
+	if not _cues.is_empty():
+		_build_cues()
+
+
+## The bus a track's cue plays on, by name: whatever its level, it is heard only through a pair
+## of headphones (Ears).
+static func cue_bus(index: int) -> StringName:
+	return StringName(CUE_PREFIX + str(index))
+
+
+## Play a cue of each of `indices` (track indices), and of nothing else: for a personal mix
+## (PersonalMix) that has a channel strip's send patched. A cue is the track as it leaves its
+## effects, before its fader and pan -- the pre-fader cue send a console gives a musician, so the
+## engineer pulling the vocal down in the mix does not pull it out of the singer's ears. It
+## follows the track's mute. It plays in time with the track because it is the same part, kept
+## to the same clock by `_sync_players`, not a copy of the track's sound taken off its bus.
+func set_cues(indices: Array) -> void:
+	var want: Array[int] = []
+	for i in indices:
+		if state.tracks.has(int(i)) and int(i) not in want:
+			want.append(int(i))
+	want.sort()
+	if want == _cues:
+		return
+	_cues = want
+	_build_cues()
+
+
+func cues() -> Array[int]:
+	return _cues.duplicate()
+
+
+## The cue buses and their players, made again from `_cues`. Each bus holds the track bus's own
+## effect objects, so a knob on the rack turns the cue's too; an effect added, removed or moved
+## changes those objects, and comes here again.
+func _build_cues() -> void:
+	for index in _players:
+		var list: Array = _players[index]
+		for p in list.filter(func(p: Node) -> bool: return p.has_meta(&"cue")):
+			list.erase(p)
+			# Stopped now, not when it is freed: for the rest of this frame its bus is gone, and
+			# a player whose bus is gone plays to Master.
+			(p as AudioStreamPlayer).stop()
+			(p as Node).queue_free()
+	for i in range(AudioServer.bus_count - 1, 0, -1):
+		if AudioServer.get_bus_name(i).begins_with(CUE_PREFIX):
+			AudioServer.remove_bus(i)
+	for index in _cues:
+		if not _bus.has(index):
+			continue
+		var b: int = _bus[index]
+		var cb := AudioServer.bus_count
+		AudioServer.add_bus(cb)
+		AudioServer.set_bus_name(cb, cue_bus(index))
+		AudioServer.set_bus_send(cb, &"Master")
+		# Past the panner, which is the track's place in the mix and not its sound.
+		for slot in range(1, AudioServer.get_bus_effect_count(b)):
+			AudioServer.add_bus_effect(cb, AudioServer.get_bus_effect(b, slot))
+			AudioServer.set_bus_effect_enabled(cb, slot - 1, AudioServer.is_bus_effect_enabled(b, slot))
+		var p := AudioStreamPlayer.new()
+		p.bus = cue_bus(index)
+		p.set_meta(&"cue", true)
+		add_child(p)
+		_players[index].append(p)
+	_apply_tracks()
 
 
 func _remove_buses() -> void:
@@ -314,7 +388,9 @@ func _apply_tracks() -> void:
 		AudioServer.set_bus_mute(b, not audible(index))
 		(AudioServer.get_bus_effect(b, 0) as AudioEffectPanner).pan = (t.pan - 0.5) * 2.0
 		for p in _players.get(index, []):
-			if p.has_meta(&"send"):
+			if p.has_meta(&"cue"):
+				AudioServer.set_bus_mute(AudioServer.get_bus_index(p.bus), t.mute)
+			elif p.has_meta(&"send"):
 				var send: MixState.SendState = t.sends.get(p.get_meta(&"send"))
 				# Post-fader, the way a reverb send usually is: the track's own fader is folded
 				# in, so pulling the vocal down pulls its reverb down with it.
@@ -333,6 +409,9 @@ func _apply_fx(track_index: int, fx_index: int) -> void:
 	for pi in params.size():
 		params[pi].set_on(effect, float(f.params.get(pi, 0.5)))
 	AudioServer.set_bus_effect_enabled(_bus[track_index], slot, f.enabled)
+	var cue := AudioServer.get_bus_index(cue_bus(track_index))
+	if cue >= 0 and slot - 1 < AudioServer.get_bus_effect_count(cue):
+		AudioServer.set_bus_effect_enabled(cue, slot - 1, f.enabled)
 
 
 ## The rack asks what a knob reads in the effect's own units. Answered at once: there is no
