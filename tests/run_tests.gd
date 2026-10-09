@@ -6617,8 +6617,8 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("the room is drawn round the floor (%s)" % room_box,
 			absf(room_box.size.x - sketched.live_room_half() * 2.0) < 0.2
 			and absf(room_box.end.z - Venue.LIVE_ROOM_BACK) < 0.2 and absf(room_box.end.y - ChalkVenue.ROOM_HEIGHT) < 0.2)
-	var words := sketched.find_children("BoardWords*", "Label3D", false, false)
-	var written := words.size() >= 7
+	var words := sketched.find_children("BoardWords*", "Label3D", true, false)
+	var written := words.size() >= 3
 	for w: Label3D in words:
 		written = written and w.global_transform.basis.z.z < -0.99 and w.global_position.z < board_box.position.z
 	check("the session is written on the board, facing the room (%d)" % words.size(), written)
@@ -6630,6 +6630,45 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("picture lights along its top wash the slate down its height", board_lit)
 	check("and no doodles are left in the sky", sketched._doodles.is_empty()
 			and sketched.find_child("Rainbow", false, false) == null)
+	# The board says what the session says: its sections from the markers in order, the tempo,
+	# how many tracks, the take on the armed track; and is rubbed out and rewritten when that changes.
+	check("the board is written from the mix in front of it", sketched.board == ChalkVenue.board_from(DAW.state)
+			and sketched.find_child("BoardSession", false, false) != null)
+	var mix := MixState.new()
+	mix.markers = {30.0: "Chorus", 0.0: " intro", 45.0: "", 60.0: "bridge"}
+	mix.tempo = 92.0
+	var armed := mix.track(1)
+	armed.rec_arm = true
+	for k in 3:
+		armed.items.append(MixState.ItemState.new())
+	mix.track(2)
+	var said := ChalkVenue.board_from(mix)
+	check("sections come from the markers in time order, unnamed ones skipped (%s)" % said,
+			said["sections"] == PackedStringArray(["INTRO", "CHORUS", "BRIDGE"]) and said["tempo"] == "92 bpm"
+			and said["tracks"] == "2 tracks" and said["take"] == "take 4")
+	mix.recording = true
+	mix.tempo = 87.5
+	var while_rolling := ChalkVenue.board_from(mix)
+	armed.rec_arm = false
+	check("the take is the one being recorded while it rolls, and there is none with nothing armed",
+			while_rolling["take"] == "take 3" and while_rolling["tempo"] == "87.5 bpm"
+			and ChalkVenue.board_from(mix)["take"] == "")
+	var rewrites_before := sketched._rewrites
+	sketched._session_news()
+	sketched._reread_the_session()
+	check("news that changes nothing on the board leaves the writing alone", sketched._rewrites == rewrites_before)
+	var before_rewrite := sketched.find_child("BoardSession", false, false)
+	sketched.rewrite_board(said)
+	var fresh := sketched.find_child("BoardSession", false, false)
+	var fresh_words := fresh.find_children("BoardWords*", "Label3D", false, false).map(func(l: Label3D): return l.text)
+	check("a change rubs the old writing out and writes the new in its place (%s)" % [fresh_words],
+			fresh != before_rewrite and before_rewrite.name.begins_with("BoardRubbedOut")
+			and fresh_words.has("CHORUS") and fresh_words.has("take 4") and fresh_words.has("92 bpm"))
+	for k in 4:
+		sketched._process(0.5)
+	check("the old writing is gone once rubbed out, the new is all there",
+			before_rewrite.is_queued_for_deletion() and fresh.find_children("*", "Label3D", false, false).all(
+				func(l: Label3D): return l.modulate.a > 0.5))
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

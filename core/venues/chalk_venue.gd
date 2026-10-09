@@ -25,6 +25,12 @@ const SKETCHED_ROOM := 1
 const ROOM_HEIGHT := 4.2
 const BOARD_HEIGHT := 5.2
 const BOARD_Z := LIVE_ROOM_BACK + 0.15
+## The most sections the board has room for across its top.
+const BOARD_SECTIONS := 8
+## Seconds to rub old writing out (the new is drawn on as it goes), and between looks at the
+## session when it has news.
+const RUB_OUT := 0.6
+const REREAD_EVERY := 0.5
 
 var _floor_mat: ShaderMaterial
 var _sky_mat: ShaderMaterial
@@ -38,6 +44,16 @@ var _drawing: Array = []
 var _art: Array[MeshInstance3D] = []
 var _comets: Array = []  # [node, progress, wait]
 var _next_redraw := 5.0
+## What the board says about the session now (board_from), and the node it is written in.
+var board: Dictionary = {}
+var _session: Node3D
+var _board_stale := false
+var _reread_wait := 0.0
+var _rewrites := 0
+## Old writing being rubbed out: [node, 0..1 gone].
+var _rubbing: Array = []
+## Seconds since new writing started going on, or -1 when it is all there.
+var _writing_in := -1.0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -280,27 +296,12 @@ func _stand_the_board() -> void:
 		wash.position = Vector3(-half + half * 2.0 * (i + 0.5) / 4.0, BOARD_HEIGHT + 0.1, BOARD_Z - 0.7)
 		wash.basis = Basis.looking_at(Vector3(0, -1.0, 0.28), Vector3.FORWARD)
 		add_child(wash)
-	# What is written on it: the song's map across the top, a chord chart, the tempo, the take,
-	# and the doodles that collect round the edges of any board.
+	# What is written on it: the session (rewritten when it changes, see _process), and the
+	# doodles that collect round the edges of any board.
 	var face := BOARD_Z - 0.005
-	var lines: Array = []
-	var sections := ["INTRO", "VERSE", "CHORUS", "VERSE", "CHORUS", "BRIDGE", "OUTRO"]
-	var width := half * 2.0 - 1.6
-	var cell := width / sections.size()
-	for i in sections.size():
-		# Read from the room, left to right, which on a board facing -Z runs from +X.
-		var x := width * 0.5 - cell * (i + 0.5)
-		lines.append_array(_board_lines(_rect(cell - 0.12, 0.5, Vector2(-x, 4.55)), face))
-		_write(sections[i], Vector3(x, 4.55, face), 0.62, Chalk.WHITE)
-	lines.append(_board_line(Chalk.arc(Vector3(0, 0, 0), width * 0.5, 0.25, PI, -PI, 40), Vector3(0, 4.15, face)))
-	_write("Am    F    C    G", Vector3(3.6, 3.65, face), 1.0, Chalk.YELLOW)
-	_write("92 bpm", Vector3(-3.4, 3.65, face), 1.0, Chalk.CYAN)
-	_write("take 4", Vector3(-0.2, 3.65, face), 0.8, Chalk.PINK)
-	lines.append(_board_line(Chalk.loop(Vector3.ZERO, 0.42, 30), Vector3(-0.2, 3.65, face), Vector2(1.6, 0.6)))
-	var marks := Chalk.drawing(lines, Chalk.WHITE * 0.55, 0.014, false, 2, SEED * 47)
-	marks.name = "BoardWriting"
-	add_child(marks)
-	_art.append(marks)
+	self.board = board_from(DAW.state)
+	_write_the_session(self.board)
+	_watch_the_session()
 	var doodles := [[Chalk.beamed_notes(), Vector3(-5.4, 3.5, face), 0.35, Chalk.LIME],
 			[Chalk.headphones(), Vector3(5.5, 3.6, face), 0.4, Chalk.VIOLET],
 			[Chalk.star(), Vector3(-1.9, 3.75, face), 0.16, Chalk.YELLOW],
@@ -316,10 +317,159 @@ func _stand_the_board() -> void:
 		_art.append(art)
 
 
+## What the board says about the session: the song's sections from its markers, in order, the
+## tempo, how many tracks, and the take -- what the armed track would be on if it were
+## recording now, or is on while it is. No take when nothing is armed.
+static func board_from(state: MixState) -> Dictionary:
+	var out := {"sections": PackedStringArray(), "tempo": "", "tracks": "", "take": ""}
+	if state == null:
+		return out
+	var times: Array = state.markers.keys()
+	times.sort()
+	for t in times:
+		var said := str(state.markers[t]).strip_edges().to_upper()
+		if said != "" and out["sections"].size() < BOARD_SECTIONS:
+			out["sections"].append(said.left(10))
+	var bpm := state.tempo
+	out["tempo"] = ("%d bpm" % roundi(bpm)) if absf(bpm - roundf(bpm)) < 0.05 else ("%.1f bpm" % bpm)
+	var count := 0
+	var takes := -1
+	for index in state.track_indices():
+		if not state.in_project(index):
+			continue
+		count += 1
+		var track: MixState.TrackState = state.track(index, false)
+		if track != null and track.rec_arm:
+			takes = maxi(takes, track.items.size())
+	out["tracks"] = "%d track%s" % [count, "" if count == 1 else "s"]
+	if takes >= 0:
+		out["take"] = "take %d" % (takes + (0 if state.recording else 1))
+	return out
+
+
+## The session's part of the board, built fresh: a box over each section across the top, a
+## sweep under them, the tempo, the track count and the take ringed. Drawn on from nothing.
+func _write_the_session(said: Dictionary) -> void:
+	var half := live_room_half()
+	var face := BOARD_Z - 0.005
+	_session = Node3D.new()
+	_session.name = "BoardSession"
+	add_child(_session)
+	var lines: Array = []
+	var sections: PackedStringArray = said["sections"]
+	if sections.is_empty():
+		sections = PackedStringArray(["FROM THE TOP"])
+	var width := half * 2.0 - 1.6
+	var cell := width / sections.size()
+	# One hand, one size: as big as the longest name fits its box.
+	var longest := 1
+	for section in sections:
+		longest = maxi(longest, section.length())
+	# (a letter of this hand is about 0.15 m wide at scale 1)
+	var size := minf(1.0, (cell - 0.25) / (longest * 0.17))
+	for i in sections.size():
+		# Read from the room, left to right, which on a board facing -Z runs from +X.
+		var x := width * 0.5 - cell * (i + 0.5)
+		lines.append_array(_board_lines(_rect(cell - 0.12, 0.5, Vector2(-x, 4.55)), face))
+		_write(sections[i], Vector3(x, 4.55, face), size, Chalk.WHITE, _session)
+	var sweep := [_board_line(Chalk.arc(Vector3(0, 0, 0), width * 0.5, 0.25, PI, -PI, 40), Vector3(0, 4.15, face))]
+	_write(said["tracks"], Vector3(3.6, 3.65, face), 1.0, Chalk.YELLOW, _session)
+	_write(said["tempo"], Vector3(-3.4, 3.65, face), 1.0, Chalk.CYAN, _session)
+	var ring: Array = []
+	if said["take"] != "":
+		_write(said["take"], Vector3(-0.2, 3.65, face), 0.8, Chalk.PINK, _session)
+		ring.append(_board_line(Chalk.loop(Vector3.ZERO, 0.42, 30), Vector3(-0.2, 3.65, face), Vector2(1.6, 0.6)))
+	for part in [["BoardWriting", lines], ["BoardSweep", sweep], ["BoardRing", ring]]:
+		if part[1].is_empty():
+			continue
+		var marks := Chalk.drawing(part[1], Chalk.WHITE * 0.55, 0.014, false, 2, SEED * 47 + _rewrites)
+		marks.name = part[0]
+		_session.add_child(marks)
+		_art.append(marks)
+
+
+## Told whenever the mix says anything that might change what the board says; it is looked at
+## on the next beat of _process, not here, so a flood of news is one rewrite and not fifty.
+func _watch_the_session() -> void:
+	for news: Signal in [DAW.timeline_changed, DAW.transport_changed, DAW.connection_changed, DAW.bank_changed]:
+		news.connect(_session_news)
+	DAW.track_added.connect(_session_news.unbind(1))
+	DAW.track_changed.connect(_track_news)
+
+
+func _session_news() -> void:
+	_board_stale = true
+
+
+func _track_news(_index: int, field: StringName) -> void:
+	if field in [&"rec_arm", &"items"]:
+		_board_stale = true
+
+
+## The board as the session now is: if it says something different, the old writing is rubbed
+## out and the new written in its place.
+func _reread_the_session() -> void:
+	_board_stale = false
+	var said := board_from(DAW.state)
+	if said != board:
+		rewrite_board(said)
+
+
+## Rub out what the session part of the board says and write `said` instead. The old writing
+## goes the way chalk goes, wiped off from where it was started, its words fading; then the new
+## one is drawn on.
+func rewrite_board(said: Dictionary) -> void:
+	board = said
+	_rewrites += 1
+	if _session != null:
+		var old := _session
+		old.name = "BoardRubbedOut%d" % _rewrites
+		for art: MeshInstance3D in old.find_children("*", "MeshInstance3D", false, false):
+			_art.erase(art)
+			for entry in _drawing.duplicate():
+				if entry[0] == art:
+					_drawing.erase(entry)
+		_rubbing.append([old, 0.0])
+	_write_the_session(said)
+	for art: MeshInstance3D in _session.find_children("*", "MeshInstance3D", false, false):
+		_draw_on(art, RUB_OUT)
+	for words: Label3D in _session.find_children("*", "Label3D", false, false):
+		words.set_meta(&"full", words.modulate.a)
+		words.modulate.a = 0.0
+	_writing_in = 0.0
+
+
+## The rubbing out and the writing in, a frame at a time.
+func _advance_the_board(delta: float) -> void:
+	var i := 0
+	while i < _rubbing.size():
+		var old: Node3D = _rubbing[i][0]
+		_rubbing[i][1] += delta / RUB_OUT
+		var gone: float = _rubbing[i][1]
+		if gone >= 1.0:
+			old.queue_free()
+			_rubbing.remove_at(i)
+			continue
+		for art: MeshInstance3D in old.find_children("*", "MeshInstance3D", false, false):
+			var length: float = art.mesh.get_meta(&"length", 0.0)
+			art.set_instance_shader_parameter(&"tail", gone * length)
+		for words: Label3D in old.find_children("*", "Label3D", false, false):
+			words.modulate.a = minf(words.modulate.a, 0.8 * (1.0 - gone))
+		i += 1
+	if _writing_in >= 0.0 and _session != null:
+		_writing_in += delta
+		var shown := clampf((_writing_in - RUB_OUT) / 0.8, 0.0, 1.0)
+		for words: Label3D in _session.find_children("*", "Label3D", false, false):
+			words.modulate.a = float(words.get_meta(&"full", 0.8)) * shown
+		if shown >= 1.0:
+			_writing_in = -1.0
+
+
 ## Words written on the board in chalk, facing the room.
-func _write(text: String, at: Vector3, scale: float, colour: Color) -> void:
+func _write(text: String, at: Vector3, scale: float, colour: Color, parent: Node3D = null) -> void:
+	var into: Node3D = parent if parent != null else self
 	var words := Label3D.new()
-	words.name = "BoardWords%d" % get_child_count()
+	words.name = "BoardWords%d" % into.get_child_count()
 	words.text = text
 	words.font_size = 96
 	words.outline_size = 0
@@ -329,7 +479,7 @@ func _write(text: String, at: Vector3, scale: float, colour: Color) -> void:
 	words.double_sided = false
 	words.position = at
 	words.rotation.y = PI
-	add_child(words)
+	into.add_child(words)
 
 
 ## A rectangle `w` by `h` centred on `at` in a wall's own plane (x along it, y up).
@@ -587,6 +737,12 @@ func _process(delta: float) -> void:
 	_clock += delta
 	_advance_drawing(delta)
 	_advance_comets(delta)
+	if variant == SKETCHED_ROOM:
+		_reread_wait -= delta
+		if _board_stale and _reread_wait <= 0.0:
+			_reread_wait = REREAD_EVERY
+			_reread_the_session()
+		_advance_the_board(delta)
 	# Now and then something is wiped and drawn again, so the zone never sets like a painting.
 	_next_redraw -= delta
 	if _next_redraw <= 0.0 and not _art.is_empty():

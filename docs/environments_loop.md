@@ -206,8 +206,14 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
     bench. Dust: 180 billboard motes in a MultiMesh, lit only inside the cone.)
 - [x] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
-  - [ ] Chalk follow-up: the board's writing follows the session (its real sections, tempo and
+  - [x] Chalk follow-up: the board's writing follows the session (its real sections, tempo and
     take from the DAW) and is rubbed out and rewritten when they change.
+    (ChalkVenue.board_from(DAW.state): markers in time order, tempo, track count, and the take
+    on the armed track -- items + 1, or items while recording. The chord chart went: the mix
+    has no chords to give it, so it is the track count instead. Looked at on DAW news at most
+    twice a second; a change wipes the old strokes from their start and fades the words, then
+    draws the new. Also fixed: chalk strokes far along a long drawing lost their grain to float
+    precision and could break up.)
 - [x] Pass over every venue: shoot them side by side and even out anything that drifted (light,
       scale, how distinct they are).
   Done 2026-10-08: all 14 arrangements under the light limits; scale is the same everywhere

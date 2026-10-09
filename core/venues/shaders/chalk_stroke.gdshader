@@ -65,8 +65,11 @@ void fragment() {
 		discard;
 	}
 	float across = abs(along.y);
-	float streak = noise(vec2(along.x * grain_scale * 0.25, along.y * 9.0));
-	float speck = noise(vec2(along.x, along.y * 0.2) * grain_scale);
+	// The grain is looked up a little way along, not tens of metres: a long drawing's far end
+	// fed the hash numbers too big for a float's fraction, and its strokes broke up to nothing.
+	float grain_at = mod(along.x, 20.0);
+	float streak = noise(vec2(grain_at * grain_scale * 0.25, along.y * 9.0));
+	float speck = noise(vec2(grain_at, along.y * 0.2) * grain_scale);
 	float body = streak * 0.55 + speck * 0.45;
 	float edge = smoothstep(0.35, 1.0, across);
 	if (body < 0.22 + edge * 0.55) {
