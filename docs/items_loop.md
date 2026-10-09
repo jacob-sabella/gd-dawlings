@@ -372,8 +372,31 @@ ergonomics.
       `tools/shot.sh` played into the default sink, so a shot of a keytar sounds; shots now go
       to the null sink. A host's MIDI keyboard is still Reaper's, not the keytar's (in the
       backlog), and it is not yet tried in a headset.
-- [ ] Chips and cards: a stack of chips that riffles, splits and flips in your hand (the
+- [x] Chips and cards: a stack of chips that riffles, splits and flips in your hand (the
       PokerStars fidget), and a deck to shuffle and fan. Both pure idle.
+      Done: a `FidgetItem` base runs a trick on each click: the next one in turn, plus a quick
+      click finishes the one playing. The trick count is the whole of its state, so relayed clicks
+      keep everybody's copy the same. The chips are 12 clay chips (`tools/blender/table_games.py`),
+      six red and six blue. Their tricks:
+      - riffle: split side by side, spread, pushed together one from each pile;
+      - flip: the top chip thumbed up 12 cm, two and a half turns;
+      - cut: the top four under the rest.
+      The cards are a deck of two blocks plus eight loose cards that do the moving. Their tricks:
+      - shuffle: halves apart, tipped, cards falling in turn, squared;
+      - fan: seven turned face up and spread from the near end, a hand dealt from the trick count;
+      - square up.
+      New Foley for both: clack, riffle, card riffle and sweep. Both live at the front corners of
+      the shelf's top.
+      Learned:
+      - Anything in front of a toy as seen from the seat steals that toy's clicks: the seat test
+        caught chips in front of the ball and cards in front of the duck. Small things also need a
+        grip at least 7 px from the seat, so they went to the ends.
+      - Noto Sans has no suit signs, so the faces are a drawn atlas.
+      - Pale paper glares under the work light right by the head: the faces and backs are toned
+        down.
+      - A stack held where the glove is is hidden by it: hold it on the fingers above.
+      - Comparing a float32 position with `==` fails; use `is_equal_approx`.
+      Not tried in a headset, where tricks would want a gesture rather than a trigger.
 - [ ] Toys round the room: darts and a board, a mini hoop over a door, a Newton's cradle by the
       desk, a yo-yo. Each venue gets one toy of its own (a snowball, a beach ball, a slinky...).
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),

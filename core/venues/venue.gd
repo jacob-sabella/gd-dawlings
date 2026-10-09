@@ -248,6 +248,18 @@ func shaker_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-0.04, ZoneKit.SHELF_LOWER_TOP, 0.02))
 
 
+## Where the chips and the cards lie, in studio space: along the front edge of the prop shelf's
+## top, at its two ends, as they would be left on a table: the stack at the ball's end, the deck a
+## little askew at the lamp's. Not in front of a toy: from the seat a toy behind one would be a
+## click on the chips.
+func chips_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(-0.4, ZoneKit.SHELF.y, 0.15))
+
+
+func cards_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI - 0.25), Vector3(0.38, ZoneKit.SHELF.y, 0.13))
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.

@@ -264,6 +264,96 @@ static func tambourine_hit(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## Clay chips on clay chips, one landing: a short bright knock, the dense edge of one disc on
+## the face of another, with the faint ring a clay composite chip has and a plastic one does not.
+static func chip_clack(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("chip_clack_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.07)
+		_chip(s, 0.0, 1.0, 301 + take)
+		_highpass(s, 900.0)
+		return _wav(s, false))
+
+
+## A riffle: the two halves of a stack pushed into each other, chip falling on chip from
+## alternate sides, quick at first and quicker toward the end, and the stack settling.
+static func chip_riffle(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("chip_riffle_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.62)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 331 + take * 13
+		var at := 0.12
+		for i in 11:
+			_chip(s, at, rng.randf_range(0.45, 0.75), 341 + take * 29 + i)
+			at += lerpf(0.042, 0.022, float(i) / 10.0) * rng.randf_range(0.85, 1.15)
+		# Squared up: the whole stack tapped down once.
+		_chip(s, at + 0.05, 0.9, 371 + take)
+		_impulse(s, at + 0.05, 0.12, 0.012, 420.0, 377 + take)
+		_highpass(s, 600.0)
+		return _wav(s, false))
+
+
+static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	_impulse(s, at, 0.32 * level, 0.0035, rng.randf_range(2300.0, 2700.0), seed_value)
+	_impulse(s, at, 0.14 * level, 0.006, rng.randf_range(4100.0, 4600.0), seed_value + 1)
+	_impulse(s, at + 0.0004, 0.05 * level, 0.018, rng.randf_range(6900.0, 7400.0), seed_value + 2)
+
+
+## A riffle shuffle: two halves of a deck let go of under the thumbs, card falling on card fast
+## enough to be a purr, and then the bridge -- the deck arched and let fall square.
+static func card_riffle(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("card_riffle_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.85)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 401 + take * 17
+		var at := 0.08
+		for i in 40:
+			_flick(s, at, rng.randf_range(0.5, 1.0) * lerpf(0.7, 1.0, float(i) / 39.0), rng)
+			at += lerpf(0.011, 0.007, float(i) / 39.0) * rng.randf_range(0.7, 1.3)
+		# The bridge: a soft rush of all of them at once, then the deck landing.
+		var start := int((at + 0.06) * RATE)
+		for i in range(start, mini(start + int(0.09 * RATE), s.size())):
+			var t := float(i - start) / float(RATE)
+			s[i] += 0.07 * sin(PI * t / 0.09) * rng.randf_range(-1.0, 1.0)
+		_impulse(s, at + 0.16, 0.16, 0.01, 260.0, 409 + take)
+		_highpass(s, 500.0)
+		_lowpass(s, 9000.0)
+		return _wav(s, false))
+
+
+## Cards fanned or squared: a quick slide of card over card, a soft papery sweep.
+static func card_sweep(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("card_sweep_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.3)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 451 + take * 7
+		var at := 0.01
+		for i in 7:
+			_flick(s, at, rng.randf_range(0.25, 0.45), rng)
+			at += rng.randf_range(0.022, 0.032)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			s[i] += 0.025 * sin(PI * minf(t / 0.22, 1.0)) * rng.randf_range(-1.0, 1.0)
+		_highpass(s, 1200.0)
+		_lowpass(s, 8000.0)
+		return _wav(s, false))
+
+
+## One card's edge flicked off a thumb: a few milliseconds of bright paper.
+static func _flick(s: PackedFloat32Array, at: float, level: float, rng: RandomNumberGenerator) -> void:
+	var start := int(at * RATE)
+	var tone := TAU * rng.randf_range(1800.0, 3200.0) / float(RATE)
+	for i in range(start, mini(start + int(0.006 * RATE), s.size())):
+		var t := float(i - start) / float(RATE)
+		var env := exp(-t / 0.0013)
+		s[i] += level * env * (0.09 * rng.randf_range(-1.0, 1.0) + 0.05 * sin(tone * float(i - start)))
+
+
 static func _jingles(seconds: float, take: int, after: float) -> PackedFloat32Array:
 	var s := _silence(seconds)
 	var rng := RandomNumberGenerator.new()

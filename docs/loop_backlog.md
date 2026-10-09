@@ -196,6 +196,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Chips and cards: their tricks run on the hand's button, so in a headset they are a trigger pull,
+  not a gesture (a thumb flick, two hands for a shuffle). Their state is only the count of tricks
+  since pick-up, so somebody joining mid-fidget sees a fresh stack until the item is put down.
+
 - Keytar: on a host, a MIDI keyboard still goes to Reaper rather than through the keytar
   (GuestMidi opens MIDI only from the guest's panel). It is not yet tried in a headset, where the
   pose by its neck grip is untested. Held on a desktop, it covers most of the desk.

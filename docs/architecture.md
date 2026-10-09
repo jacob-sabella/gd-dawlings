@@ -1375,6 +1375,15 @@ group has the keyboard. `GuestMidi.key` shows each note on its key. Someone else
 they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorSynth` with a
 `speaker`: an AudioStreamPlayer3D on the room's bus.
 
+The chips and the cards (`ChipsItem`, `CardsItem`) are pure idle, and both are a `FidgetItem`.
+Each press of the hand's button starts the next of its tricks in turn. A press while a trick is
+still playing finishes it at once (`finish`), so a quick run of clicks never queues. The presses
+relay like any item's use, so every copy plays the same tricks. Everything a trick leaves behind
+comes from the count of tricks: the chips' order, the cards' order, and the fan's hand (seeded from
+`tricks_done`). Putting the item down resets it. A trick's sounds play at its `cue` points, never in
+a trick cut short. Card faces are a texture atlas drawn by `tools/make_cards.sh`, because the game's
+font has no suit signs. The models come from `tools/blender/table_games.py`.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

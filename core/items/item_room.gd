@@ -19,7 +19,7 @@ extends Node3D
 
 ## The items there are, in the order they take the shelf's spots.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
-		&"tambourine", &"keytar"]
+		&"tambourine", &"keytar", &"chips", &"cards"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -74,6 +74,10 @@ static func make(kind: StringName) -> Item:
 			return TambourineItem.new()
 		&"keytar":
 			return KeytarItem.new()
+		&"chips":
+			return ChipsItem.new()
+		&"cards":
+			return CardsItem.new()
 	return null
 
 

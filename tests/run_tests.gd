@@ -134,6 +134,7 @@ func _ready() -> void:
 	await _test_a_shaker_plays_when_a_stroke_stops()
 	await _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track()
 	await _test_a_keytar_plays_your_keys_and_shows_them()
+	await _test_chips_and_cards_do_their_tricks_in_turn()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6082,9 +6083,9 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones, the tablet, the percussion and
-			# the keytar, which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 5 \
+			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
+			# keytar, the chips and the cards, which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 7 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11027,3 +11028,143 @@ func _test_a_keytar_plays_your_keys_and_shows_them() -> void:
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
 	Session.layout = saved_layout
+
+
+func _test_chips_and_cards_do_their_tricks_in_turn() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var chips := studio.items.items.get(&"chips") as ChipsItem
+	var cards := studio.items.items.get(&"cards") as CardsItem
+	check("there are chips and a deck of cards, at home", chips != null and cards != null
+			and chips.state == Item.State.HOME and cards.state == Item.State.HOME
+			and chips.chips.size() == ChipsItem.COUNT and cards.cards.size() == CardsItem.LOOSE)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var shelf := studio.venue.prop_shelf_spot()
+		for item: Item in [chips, cards]:
+			var local: Transform3D = shelf.affine_inverse() * item.home
+			# On the shelf's top, in front of the toys and inside its edge.
+			if not item.own_home or not is_equal_approx(local.origin.y, ZoneKit.SHELF.y) \
+					or local.origin.z < 0.1 or local.origin.z > ZoneKit.SHELF.z * 0.5 - 0.04 \
+					or absf(local.origin.x) > ZoneKit.SHELF.x * 0.5 - 0.06:
+				wrong.append("%s:%s" % [id, item.id])
+		for spot: Transform3D in studio.venue.item_spots():
+			if spot.origin.distance_to(chips.home.origin) < 0.08 or spot.origin.distance_to(cards.home.origin) < 0.08:
+				wrong.append("%s: crowds a toy" % id)
+	check("in every venue they lie at the front corners of the shelf's top, clear of the toys (%s)" % [wrong],
+			wrong.is_empty())
+	studio.set_venue(&"studio", false)
+
+	# The chips: riffle, flip, cut, in turn; a press mid-trick finishes it.
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(chips)
+	check("in the hand, a click offers the riffle", chips.hint().contains("riffle"))
+	var used: Array = []
+	var on_used := func(item: Item, down: bool): used.append([item.id, down])
+	studio.items.used.connect(on_used)
+	chips.work(true)
+	chips.work(false)
+	check("a click starts the riffle, and is told to the room", chips.playing == 0 and used.size() == 2
+			and used[0] == [&"chips", true])
+	chips.pose(0, 0.3)
+	var lows: Array = []
+	var highs: Array = []
+	for i in ChipsItem.COUNT:
+		(lows if chips.chips[i].position.x < -0.01 else highs).append(i)
+	check("split, the bottom half to the left and the top half to the right (%s %s)" % [lows, highs],
+			lows == [0, 1, 2, 3, 4, 5] and highs == [6, 7, 8, 9, 10, 11])
+	chips.work(true)
+	check("the next click finishes it at once, stack square and the halves riffled, and starts the flip",
+			chips.playing == 1 and chips.order == [0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11] and _stack_square(chips))
+	var top := chips.chips[chips.order[ChipsItem.COUNT - 1]]
+	chips.pose(1, 0.5)
+	check("a flip throws the top chip up off the stack, turning", top.position.y > 0.1 and absf(top.rotation.x) > 1.0)
+	for f in 80:
+		chips._process(0.016)
+	check("and it lands back on top: the trick plays out by itself", chips.playing == -1 and _stack_square(chips)
+			and is_equal_approx(top.position.y, (ChipsItem.COUNT - 1) * ChipsItem.THICK))
+	var was := chips.order.duplicate()
+	chips.work(true)
+	chips.finish()
+	check("a cut puts the top four under the rest", chips.order == was.slice(8) + was.slice(0, 8) and _stack_square(chips))
+	check("and then it is a riffle again", chips.next_trick() == 0)
+	# Somebody else's copy, played the same clicks, ends the same.
+	var twin := ChipsItem.new()
+	add_child(twin)
+	for n in 3:
+		twin.use(true)
+		twin.use(false)
+	twin.finish()
+	check("another copy given the same clicks stacks the same", twin.order == chips.order)
+	twin.queue_free()
+	hand.lose_carrying()
+	chips.go_home()
+	check("put down, it is a plain stack again and starts over", chips.tricks_done == 0 and chips.playing == -1
+			and _stack_square(chips))
+
+	# The cards: shuffle, fan, square up.
+	hand.pick_up(cards)
+	check("in the hand, a click offers a shuffle", cards.hint().contains("shuffle"))
+	cards.work(true)
+	cards.pose(0, 0.3)
+	check("a shuffle splits the deck into halves either side", cards.lower.position.x < -0.03
+			and cards.upper.position.x > 0.03 and cards.upper.position.y < 0.001)
+	cards.work(true)
+	check("finished, the halves are square again and their cards riffled together",
+			cards.order == [0, 4, 1, 5, 2, 6, 3, 7] and cards.lower.position == Vector3.ZERO
+			and cards.upper.position.is_equal_approx(Vector3(0, CardsItem.BLOCK_H, 0)) and cards.playing == 1)
+	var faces := {}
+	for c in cards.dealt:
+		faces[c] = true
+	check("a fan deals seven different cards (%s)" % [cards.dealt.map(CardsItem.card_name)],
+			cards.dealt.size() == CardsItem.FAN and faces.size() == CardsItem.FAN
+			and cards.dealt.all(func(c: int) -> bool: return c >= 0 and c < 52))
+	cards.pose(1, 1.0)
+	var fanned := cards.cards[cards.order[CardsItem.LOOSE - 1]]
+	var first := cards.cards[cards.order[CardsItem.LOOSE - CardsItem.FAN]]
+	check("fanned, face up and spread either way", fanned.basis.y.dot(Vector3.UP) < -0.99
+			and first.basis.y.dot(Vector3.UP) < -0.99 and fanned.basis.z.x * first.basis.z.x < 0.0)
+	check("the names of the cards", CardsItem.card_name(0) == "A♠" and CardsItem.card_name(51) == "K♣"
+			and CardsItem.card_name(22) == "10♥")
+	var dealt := cards.dealt.duplicate()
+	cards.work(true)
+	cards.finish()
+	check("square, every card face down on the deck again", cards.cards.all(func(c: Node3D) -> bool:
+			return c.basis.is_equal_approx(Basis.IDENTITY)) and cards.playing == -1)
+	var deck := CardsItem.new()
+	add_child(deck)
+	deck.use(true)
+	deck.use(true)
+	check("another copy given the same clicks deals the same hand", deck.dealt == dealt)
+	deck.queue_free()
+	cards.work(true)
+	cards.work(true)
+	check("the next fan deals another hand", cards.dealt != dealt)
+	hand.lose_carrying()
+	cards.go_home()
+	check("put down, the fan is folded away", cards.playing == -1 and cards.tricks_done == 0
+			and cards.cards.all(func(c: Node3D) -> bool: return c.basis.is_equal_approx(Basis.IDENTITY)))
+
+	studio.items.used.disconnect(on_used)
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
+
+
+## Every chip on the one below it, in `order`, square.
+func _stack_square(chips: ChipsItem) -> bool:
+	for slot in ChipsItem.COUNT:
+		var chip := chips.chips[chips.order[slot]]
+		if not chip.position.is_equal_approx(Vector3(0, slot * ChipsItem.THICK, 0)) or chip.rotation.x != 0.0 \
+				or chip.rotation.z != 0.0:
+			return false
+	return true

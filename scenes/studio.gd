@@ -1731,7 +1731,7 @@ func _item_homes() -> Dictionary:
 		return {}
 	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
 			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
-			&"keytar": venue.keytar_spot()}
+			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot()}
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
