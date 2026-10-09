@@ -27,6 +27,8 @@ func is_pressing() -> bool:
 ## speed the hand was moving, anything slower puts it down where the hand is pointing.
 @export var grip_action: StringName = &"grip_click"
 ## Slower than this as the grip opens and it is put down, not thrown (m/s).
+## How near the palm a throw has to pass to be caught (m): a hand's span, open.
+const CATCH_REACH := 0.16
 const FLICK_SPEED := 1.4
 ## How far back the hand's speed is measured over, so one jittery frame is not a throw.
 const FLICK_WINDOW := 0.08
@@ -49,6 +51,10 @@ func _physics_process(delta: float) -> void:
 		else:
 			put_down()
 	_gripping = gripping
+
+
+func catch_reach() -> float:
+	return CATCH_REACH
 
 
 ## How fast the hand has been moving, over the last FLICK_WINDOW.

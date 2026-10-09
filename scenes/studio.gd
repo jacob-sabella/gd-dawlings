@@ -1682,6 +1682,9 @@ func _build_items() -> void:
 		items.floor_rects = func() -> Array: return walker.walkable
 		items.solids = func() -> Array: return walker.fixed
 		items.gear = walker.footprints
+	Session.takeable = func(key: String) -> bool:
+		return is_instance_valid(items) and items.items.values().any(
+				func(item: Item) -> bool: return item.network_key() == key)
 	studio_set.add_child(items)
 	items.set_spots(venue.item_spots())
 	items.asked.connect(_on_items_asked)

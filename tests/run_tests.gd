@@ -119,6 +119,7 @@ func _ready() -> void:
 	await _test_the_duck_is_the_rooms()
 	await _test_a_ball_is_thrown_and_flies_the_same_everywhere()
 	await _test_a_paper_plane_glides()
+	await _test_a_throw_is_caught()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6232,11 +6233,32 @@ func _test_the_duck_is_the_rooms() -> void:
 	check("a guest's pick-up puts it in her ghost's glove", duck.is_held_elsewhere()
 			and presence._item_held_by(7) == duck)
 	check("in her colour", rimmed.call())
-	check("out of anyone else's reach", duck.claimed_by != null)
+	check("claimed: hers", duck.claimed_by != null)
+	check("and says so, and that it can be taken (%s; %s)" % [duck.readout(), duck.hint()],
+			duck.readout() == "in Grace's hand" and duck.hint() == "click to take it from them")
+	check("and her ghost's right hand is free: carrying is not pointing", presence._key_held_by(7) == "")
+	# Handed over: the host reaches for it in her hand and takes it.
+	var told: Array = []
+	var heard_notice := func(text: String) -> void: told.append(text)
+	Session.notice.connect(heard_notice)
 	duck.grab_begin(hand, duck.global_position)
 	duck.grab_end(hand)
-	check("so the host's hand is refused it", hand.carrying == null and duck.is_held_elsewhere())
-	check("and her ghost's right hand is free: carrying is not pointing", presence._key_held_by(7) == "")
+	check("but held out, the host's grab takes it from her", hand.carrying == duck and duck.taken
+			and not duck.is_held_elsewhere() and not rimmed.call())
+	presence.claim_carries()
+	check("and the hold is handed over, not refused", Session.holder_of(key) == 1)
+	Session._hand_over(7, key)
+	check("she takes it back: out of the host's hand, into hers", hand.carrying == null
+			and duck.is_held_elsewhere() and presence._item_held_by(7) == duck and rimmed.call())
+	check("and the host is told who took it (%s)" % [told], told.has("Grace took the rubber duck."))
+	presence.claim_carries()
+	check("its claim forgotten, not let go of: it is hers now", presence._carry_claims.is_empty()
+			and Session.holder_of(key) == 7)
+	Session.notice.disconnect(heard_notice)
+	Session._grant(7, "KICK  VOLUME")
+	Session._hand_over(1, "KICK  VOLUME")
+	check("a fader she has cannot be taken from her", Session.holder_of("KICK  VOLUME") == 7)
+	Session._release(7, "KICK  VOLUME")
 	var says := Transform3D(Basis(Vector3.UP, 0.4), Vector3(-0.2, -0.2, -0.45))
 	Session.item_carried.emit(&"duck", says, 7)
 	presence._process(0.016)
@@ -6540,6 +6562,60 @@ func _test_a_paper_plane_glides() -> void:
 	check("and anyone else's copy flies the same glide", theirs.is_flying()
 			and theirs.flight.points == plane.flight.points)
 	other.queue_free()
+	Session.layout = saved_layout
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## Catching (docs/items_loop.md): an empty hand catches what is thrown at it, once it has left the
+## hand that threw it; a full one does not, nor one it misses.
+func _test_a_throw_is_caught() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var ball: Item = room.items[&"ball"]
+	var duck: Item = room.items[&"duck"]
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	# In the air on a throw, `t` seconds in, with its middle at `at`.
+	var flying_at := func(at: Vector3, t: float) -> void:
+		ball.snap_home()
+		room.fly(ball, ball.position, Vector3(0, 3, 0), Vector3.ZERO)
+		ball._flight_t = t
+		ball.global_position = at - Vector3.UP * ball.centre_height()
+	var head := hand.catch_point()
+	check("a screen's hand catches round its head (%.2fm ahead)" % hand.camera.global_position.distance_to(head),
+			hand.catch_reach() > 0.3 and hand.camera.global_position.distance_to(head) < 0.4)
+	flying_at.call(head + Vector3(0.1, 0.05, 0), 0.2)
+	hand._catch()
+	check("not a throw still leaving the hand", hand.carrying == null and ball.is_flying())
+	flying_at.call(head + Vector3(0.1, 0.05, 0), 0.6)
+	hand._catch()
+	check("but one thrown at it, it catches", hand.carrying == ball and not ball.is_flying()
+			and ball.state == Item.State.HELD)
+	check("caught is carried, like anything picked up", ball.carried_by == hand and not ball.taken)
+	hand.put_down()
+	hand.pick_up(duck)
+	flying_at.call(head, 0.6)
+	hand._catch()
+	check("a full hand does not", hand.carrying == duck and ball.is_flying())
+	duck.snap_home()
+	hand.lose_carrying()
+	flying_at.call(head + Vector3(0, 0, 1.0), 0.6)
+	hand._catch()
+	check("nor one that goes by out of reach", hand.carrying == null and ball.is_flying())
+	var lying := head + Vector3(0.1, 0, 0)
+	ball.snap_home()
+	ball.global_position = lying
+	hand._catch()
+	check("and nothing that is not in the air", hand.carrying == null)
+	var xr := XRInteractor.new()
+	check("a headset's hand catches in its palm, a hand's span", xr.catch_reach() > 0.0 and xr.catch_reach() < 0.25)
+	xr.free()
 	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame

@@ -219,7 +219,10 @@ func claim_carries() -> void:
 			_carry_claims.erase(interactor)
 		else:
 			_carry_claims[interactor] = now
-			Session.claim_hold(now)
+			if interactor.carrying.taken:
+				Session.take_hold(now)
+			else:
+				Session.claim_hold(now)
 	for interactor in _carry_claims.keys():
 		if not is_instance_valid(interactor):
 			Session.release_hold(_carry_claims[interactor])
@@ -339,6 +342,7 @@ func _apply_items() -> void:
 					if interactor == item.carried_by:
 						_carry_claims.erase(interactor)
 				item.carried_by.lose_carrying()
+				Session.notice.emit("%s took the %s." % [Session.name_of(holder), item.item_title().to_lower()])
 			_item_holders[id] = holder
 			item.follow(_palm_of.bind(holder, item))
 			var p = Session.participants.get(holder)

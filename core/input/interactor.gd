@@ -84,6 +84,32 @@ func draws_own_hand() -> bool:
 	return false
 
 
+## Override: how near this hand a thrown thing has to pass to be caught (m); 0 never catches.
+func catch_reach() -> float:
+	return 0.0
+
+
+## Override: where in the world this hand catches, in global space.
+func catch_point() -> Vector3:
+	return carry_pose().origin
+
+
+## An empty hand catches what is thrown at it: anything in the air, past the moment it left the
+## hand that threw it, that comes within reach. Caught is picked up -- the same carry, claimed
+## the same way, so the host and everyone else see it land in this hand.
+func _catch() -> void:
+	var reach := catch_reach()
+	if reach <= 0.0 or carrying != null or held != null or not is_inside_tree():
+		return
+	var at := catch_point()
+	for node in get_tree().get_nodes_in_group(Item.ITEMS):
+		var item := node as Item
+		if item != null and item.catchable() and item.middle().distance_to(at) < reach:
+			pick_up(item)
+			Foley.play(item, item._foley_contact(), item.contact_volume_db)
+			return
+
+
 ## Take `item` into this hand. Whatever it was carrying goes home: one thing at a time, until
 ## there are pockets.
 func pick_up(item: Item) -> void:
@@ -171,6 +197,7 @@ func _physics_process(_delta: float) -> void:
 	# Not `carrying != null`: a freed item compares equal to null (see _forget_freed).
 	if not is_instance_valid(carrying):
 		carrying = null
+	_catch()
 	if pressed and not _was_pressed:
 		if hovered == null and carrying != null:
 			# Nothing under the ray, something in the hand: the button is the item's.

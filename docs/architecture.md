@@ -1273,6 +1273,20 @@ So a ball in a corner stays in the corner. A put-down's aim is stopped by the ge
 (`ItemRoom.gear`): aimed past the console at the floor behind it, the item was aimed at the
 console, and goes home.
 
+An empty hand catches what is thrown at it (`Interactor._catch`). An item in the air for longer
+than `Item.CATCH_AFTER`, long enough to have left the hand that threw it, is caught by a hand
+whose `catch_point` it passes within `catch_reach` of. On a screen that is round your head
+(`MouseInteractor.CATCH_REACH`); in a headset, the palm. A catch is an ordinary pick-up, so it is
+claimed like one, and everyone else's copy leaves its flight for the catcher's glove when the
+host's table says so. Whoever's hand it lands in first, by the host's clock, has it.
+
+An item in somebody else's hand stays grabbable (`Item.follow` keeps its grip, `Item.grab_begin`
+looks past the claim). Grabbing it takes it: the hand marks it `taken`, and `claim_carries` asks
+with `Session.take_hold` rather than `claim_hold`. The host moves the hold rather than refusing,
+for keys its `takeable` says are items, so a fader somebody has is still theirs alone. The hand
+it was taken from hears the new table and lets go (`Presence._apply_items`), with a notice of who
+took it. Hovered, it says whose hand it is in and that it can be taken.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

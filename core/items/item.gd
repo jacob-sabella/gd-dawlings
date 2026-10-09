@@ -40,6 +40,11 @@ const REST_SPEED := 0.01
 ## How long a loose item lies untouched before it tidies itself away.
 const TIDY_SECONDS := 180.0
 const STEP := 1.0 / 120.0
+## Every item, wherever it is: for a hand looking for one to catch.
+const ITEMS := &"items"
+## How long a throw is in the air before it can be caught: long enough that it has left the
+## hand that threw it, which would otherwise catch it straight back.
+const CATCH_AFTER := 0.35
 
 signal state_changed(state: State)
 ## A hand here used it (`work`): for the session to tell everyone else.
@@ -72,6 +77,9 @@ var throws := 0
 var launched_with: Array = []
 ## Whether it is to go home when the throw is over, having come down somewhere it cannot stay.
 var _home_after := false
+## Whether the hand that has it here took it out of somebody else's: a hold to be handed over,
+## not claimed (Presence.claim_carries).
+var taken := false
 
 ## What it looks like, under the item: the item's own node only moves.
 var body: Node3D
@@ -164,20 +172,56 @@ func title() -> String:
 func readout() -> String:
 	match state:
 		State.HELD:
-			return "in a hand"
+			# Whose, when it is somebody else's: the participant the holds say has it.
+			var who = claimed_by.get("display_name") if is_held_elsewhere() and claimed_by != null else null
+			return "in %s's hand" % who if who is String and not (who as String).is_empty() else "in a hand"
 		State.LOOSE:
 			return "on the floor"
 	return "on the shelf"
 
 
 func hint() -> String:
-	return "click to pick up"
+	return _hint("click to pick up")
+
+
+## `loose`, said of it on the shelf or the floor; nothing in your hand; and in somebody else's,
+## that it is theirs to be taken from.
+func _hint(loose: String) -> String:
+	if is_held_elsewhere():
+		return "click to take it from them"
+	return loose if state != State.HELD else ""
 
 
 ## Part of the room: a pick-up is claimed with the host like a fader (Presence), and somebody
 ## pointing at it is shown pointing at it.
 func personal() -> bool:
 	return false
+
+
+func _enter_tree() -> void:
+	super()
+	add_to_group(ITEMS)
+
+
+## In somebody else's hand, it is still there to be reached for: a grab takes it from them (as
+## they hold it out to you, or not). Anything else a person holds is theirs alone.
+func grab_begin(by: Node, at: Vector3) -> void:
+	var was := claimed_by
+	if is_held_elsewhere():
+		claimed_by = null
+	super(by, at)
+	if held_by != by:
+		claimed_by = was
+
+
+## In the air and far enough from the hand that threw it to be caught.
+func catchable() -> bool:
+	return flight != null and _flight_t >= CATCH_AFTER
+
+
+## Its middle, in global space: what a catching hand closes on.
+func middle() -> Vector3:
+	return global_transform * (Vector3.UP * centre_height())
 
 
 ## Used by a hand here: done, and said, so everyone else's copy squeaks too. A copy being used
@@ -199,9 +243,12 @@ func _on_grab_begin(_at: Vector3) -> void:
 
 ## Into `hand`. The hand does the bookkeeping (Interactor.pick_up); this is the item's half.
 func take_into(hand: Interactor) -> void:
+	taken = held_elsewhere.is_valid()
 	carried_by = hand
 	held_elsewhere = Callable()
 	flight = null
+	_home_after = false
+	set_rim(Color(0, 0, 0, 0))
 	_set_state(State.HELD)
 	# Not something to aim at while it is in your hand: it would be under every ray you cast.
 	_shape.disabled = true
@@ -239,7 +286,8 @@ func is_flying() -> bool:
 func follow(pose: Callable) -> void:
 	_leave_hand()
 	held_elsewhere = pose
-	_shape.disabled = true
+	# Still there to grab: reaching for it takes it from them.
+	_shape.disabled = false
 	_set_state(State.HELD)
 	poke(-0.35)
 

@@ -21,7 +21,7 @@ func item_title() -> String:
 
 
 func hint() -> String:
-	return "click to pick up; hold R and let go to throw" if state != State.HELD else ""
+	return _hint("click to pick up; hold R and let go to throw")
 
 
 func _build_body() -> Node3D:

@@ -12,6 +12,8 @@ extends Node
 const KEY := "KICK  VOLUME"
 ## The duck, carried by the guest: a hold for as long as it is in the hand.
 const DUCK := "RUBBER DUCK"
+## Held by the host and taken out of its hand by the guest's.
+const PLANE := "PAPER PLANE"
 ## Where the guest says the duck is, relative to its head.
 const DUCK_AT := Transform3D(Basis.IDENTITY, Vector3(-0.2, -0.15, -0.5))
 ## Not the stand-in's tempo nor the rig's, so arriving at it means the write travelled.
@@ -57,6 +59,8 @@ var _carries: Array = []
 var _uses: Array = []
 ## Who the host's table said had the duck when the guest's put-down reached it.
 var _duck_holder_at_put := -1
+## Who has had the plane, in turn, as the host's table said.
+var _plane_holders: Array = []
 
 
 func _ready() -> void:
@@ -142,6 +146,12 @@ func _host(port: int) -> void:
 
 	# Between the guest's wrong knock (0.3) and its right one (1.4), with room either side: two
 	# processes started a moment apart do not share a clock to the millisecond.
+	Session.takeable = func(key: String) -> bool: return key == PLANE
+	Session.holds_changed.connect(func() -> void:
+		if _plane_holders.is_empty() or _plane_holders[-1] != Session.holder_of(PLANE):
+			_plane_holders.append(Session.holder_of(PLANE)))
+	Session.claim_hold(PLANE)
+
 	await _until(0.9)
 	check("a knock with the wrong code is not let in", Session.participants.size() == 1)
 	check("and the host hears about it", _notices.has("Someone tried to join without the right code."))
@@ -194,6 +204,8 @@ func _host(port: int) -> void:
 
 	await _until(6.0)
 	check("the guest's release cleared the table", Session.holds.is_empty())
+	check("the plane went from the host's hand to the guest's, and was let go (%s)" % [_plane_holders],
+			_plane_holders == [1, _other_id(), 0])
 	check("its throw of the duck arrived whole: the launch, as vectors (%s)" % [_room_asks[3] if _room_asks.size() > 3 else null],
 			_room_asks.size() == 5 and _room_asks[3][0] == &"throw_item"
 			and _room_asks[3][1] == [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
@@ -397,13 +409,17 @@ func _guest(port: int) -> void:
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)
 	check("the host's squeeze reached me (%s)" % [_uses], _uses == [[&"duck", false, 1]])
 	Session.release_hold(KEY)
+	check("the host has the plane", Session.holder_of(PLANE) == 1)
+	Session.take_hold(PLANE)
 	# Thrown -- one launch, reliably, as vectors -- then put down and let go: the host hears
 	# where it is before it hears the hand is empty.
 	Session.ask_room(&"throw_item", [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	Session.ask_room(&"put_item", [&"duck", 0.4, 1.9, 0.2])
 	Session.release_hold(DUCK)
 	await _until(5.2)
-	check("my release emptied the table", Session.holds.is_empty())
+	check("my releases left only the plane I took from the host's hand (%s)" % [Session.holds],
+			Session.holds == {PLANE: Session.local_peer_id})
+	Session.release_hold(PLANE)
 	check("and the host answered my throw and put-down", int((Session.room.get("acks", {}) as Dictionary)
 			.get(Session.local_peer_id, 0)) == 6)
 

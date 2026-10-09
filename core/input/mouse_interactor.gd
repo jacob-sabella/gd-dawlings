@@ -71,6 +71,8 @@ const THROW_FASTEST := 8.0
 const LOFT := 0.16
 ## How fast it tumbles end over end, at a full throw (rad/s).
 const TUMBLE := 11.0
+## How near your head a throw has to come to be caught (m): about the reach of two hands put up.
+const CATCH_REACH := 0.45
 
 var _charge_from := -1
 
@@ -103,6 +105,17 @@ func throw_with(wound: float) -> void:
 	var toward := (a.basis * Basis(Vector3.RIGHT, LOFT)) * Vector3.FORWARD
 	var speed := lerpf(THROW_SLOWEST, THROW_FASTEST, wound)
 	throw_item(toward * speed, a.basis.x * -TUMBLE * (0.3 + 0.7 * wound))
+
+
+## A ball thrown at your face is caught, not walked through: a screen has no hand to put up,
+## so the catch is round your head, a little ahead of it.
+func catch_reach() -> float:
+	return CATCH_REACH
+
+
+func catch_point() -> Vector3:
+	var head := camera.global_transform if camera != null else global_transform
+	return head.origin - head.basis.z * 0.25 - head.basis.y * 0.1
 
 
 func draws_own_hand() -> bool:

@@ -92,6 +92,9 @@ var look_path := GhostLook.PATH
 ## {control key: peer_id}. Owned by the host and replicated whole, because it is small and a
 ## guest that missed a release would otherwise see a fader held forever by someone long gone.
 var holds: Dictionary = {}
+## Whether a hold (by key) can be taken from whoever has it (`take_hold`): the room's items.
+## Set by the studio; unset, nothing can.
+var takeable: Callable = Callable()
 ## The address this session was joined at, for the panel to say back.
 var joined_address: String = ""
 var port: int = DEFAULT_PORT
@@ -1168,6 +1171,17 @@ func release_hold(key: String) -> void:
 		_release_remote.rpc_id(1, key)
 
 
+## Called when this participant's hand takes a thing out of somebody else's: handed over, not
+## refused. Only for what the host says can be (`takeable`); anything else is claimed as usual.
+func take_hold(key: String) -> void:
+	if key.is_empty() or not _connected():
+		return
+	if role == Role.HOST:
+		_hand_over(local_peer_id, key)
+	else:
+		_take.rpc_id(1, key)
+
+
 ## Who has their hand on this control, or 0 for nobody.
 func holder_of(key: String) -> int:
 	return holds.get(key, 0)
@@ -1177,6 +1191,12 @@ func holder_of(key: String) -> int:
 func _claim(key: String) -> void:
 	if role == Role.HOST and _is_member(multiplayer.get_remote_sender_id()):
 		_grant(multiplayer.get_remote_sender_id(), key)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _take(key: String) -> void:
+	if role == Role.HOST and _is_member(multiplayer.get_remote_sender_id()):
+		_hand_over(multiplayer.get_remote_sender_id(), key)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -1197,6 +1217,16 @@ func _grant(peer_id: int, key: String) -> void:
 			_refused.rpc_id(peer_id, key, holder)
 		return
 	if holder == peer_id:
+		return
+	holds[key] = peer_id
+	_send_holds()
+
+
+## A thing in one hand taken by another: the hold moves, and the hand it moved from lets go when
+## it hears. Only what `takeable` says -- an item; a fader somebody has is still theirs.
+func _hand_over(peer_id: int, key: String) -> void:
+	if not takeable.is_valid() or not takeable.call(key) or holds.get(key, 0) == peer_id:
+		_grant(peer_id, key)
 		return
 	holds[key] = peer_id
 	_send_holds()

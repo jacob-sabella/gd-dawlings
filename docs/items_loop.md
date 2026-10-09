@@ -201,8 +201,17 @@ ergonomics.
       test for where a thing may lie: thrown items landing near walls kept going home. Items now
       use `Walker.reachable`, and a put-down's aim stops at the gear, which `fits` had been
       catching by accident. `--spectate` in `tools/screenshot.gd` watches a flight from the side.
-- [ ] Catching and handing over: an item thrown at someone is caught if their hand is free and
+- [x] Catching and handing over: an item thrown at someone is caught if their hand is free and
       near, and an item held out to someone is taken from you by their grab.
+      Done: a free hand catches anything in the air past `CATCH_AFTER` that comes within its
+      `catch_reach` (0.45 m round a screen person's head, 0.16 m of a headset palm), as an
+      ordinary claimed pick-up. Anything in another's hand can be grabbed: `Session.take_hold`
+      moves the hold on the host for `takeable` keys (items only), and the old holder's hand
+      lets go with "Grace took the rubber duck." Probe: host 46, guest 44 (the plane goes host →
+      guest → nobody). Learned: the hand-over needed almost nothing new on the losing side.
+      `_apply_items` already made a hand let go when the table said someone else had its item;
+      a take is just the host saying so on purpose. The catch is decided by the catcher's
+      machine and settled by the host's first-come rule, like any other pick-up.
 - [ ] The handheld mic: picking it up asks to arm your input on a track (through
       `Session.send_intent`), you hear yourself at once on the low-latency path, and your take
       is recorded and placed by song position the way guest recording is. Put down, it disarms.
