@@ -13,5 +13,7 @@ channel at a time by `Materials.scanned`).
 - `wood_floor_deck` — the cabin's pine walls and ceiling
 - `weathered_brown_planks` — the cabin's floor and timbers
 - `snow_02` — the snow outside the cabin
+- `wood_planks_grey` — the rooftop's deck
+- `gravel` — the rooftop's ballast (1k)
 
 Fetched with `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/<res>/<id>/<id>_<map>_<res>.jpg`.

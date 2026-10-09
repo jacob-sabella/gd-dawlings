@@ -33,6 +33,11 @@ const STRINGS := [Vector2(-1.4, -1.4), Vector2(1.2, 1.2), Vector2(3.0, 4.6), Vec
 		Vector2(6.6, 6.6)]
 ## The stair house on the roof behind the terrace: x, and how far past the back parapet.
 const STAIR_HOUSE := Vector2(2.4, 2.6)
+## The skylight over the stairwell's landing, on the roof to the left of the terrace (x past
+## the parapet, z), and the mushroom vents dotted about (x past the nearer side parapet, z).
+const SKYLIGHT := Vector2(-3.2, -0.6)
+const VENTS := [Vector2(-1.6, 7.6), Vector2(-6.6, -0.2), Vector2(-2.4, 1.8), Vector2(2.0, 6.4),
+		Vector2(1.4, -1.0), Vector2(7.0, 7.4)]
 ## The tanks, on the roof either side of the terrace: how far out past the side parapet (its
 ## sign is the side), z, and the yaw that turns its ladder toward the terrace.
 const TANKS := [Vector3(-4.6, 4.3, 0.6), Vector3(5.2, 1.4, -0.4)]
@@ -53,10 +58,10 @@ const EVENINGS := [
 			"ambient": [Color(0.5, 0.44, 0.66), 0.16], "fog": Color(0.17, 0.11, 0.13),
 			"key": [Color(1.0, 0.56, 0.42), 0.3, -7.0], "windows": 0.8},
 	# The sun a hand over the towers in front: it lays the railing's shadow down the deck.
-	{"sky": [Color(0.16, 0.24, 0.42), Color(0.36, 0.38, 0.52), Color(0.72, 0.5, 0.4), Color(1.0, 0.62, 0.3),
-			Color(0.3, 0.2, 0.16)], "sun": Vector3(0.27, 0.16, -1.0), "disc": 0.03, "stars": 0.0,
-			"ambient": [Color(0.72, 0.6, 0.52), 0.22], "fog": Color(0.42, 0.3, 0.22),
-			"key": [Color(1.0, 0.7, 0.44), 1.8, -9.0], "windows": 0.35},
+	{"sky": [Color(0.13, 0.19, 0.34), Color(0.29, 0.3, 0.42), Color(0.6, 0.42, 0.33), Color(0.92, 0.56, 0.27),
+			Color(0.26, 0.17, 0.14)], "sun": Vector3(0.27, 0.16, -1.0), "disc": 0.03, "stars": 0.0,
+			"ambient": [Color(0.72, 0.6, 0.52), 0.17], "fog": Color(0.42, 0.3, 0.22),
+			"key": [Color(1.0, 0.7, 0.44), 1.45, -9.0], "windows": 0.35},
 	# The sky gone dark: only a little of the city's light comes back off the haze.
 	{"sky": [Color(0.006, 0.008, 0.022), Color(0.014, 0.018, 0.045), Color(0.04, 0.035, 0.06),
 			Color(0.11, 0.07, 0.07), Color(0.06, 0.04, 0.045)], "sun": Vector3(0.0, -0.4, -1.0), "disc": 0.0,
@@ -161,6 +166,22 @@ func stair_house_spot() -> Vector2:
 	return Vector2(STAIR_HOUSE.x, LIVE_ROOM_BACK + WALL + STAIR_HOUSE.y)
 
 
+func skylight_spot() -> Vector2:
+	return _past_parapet(SKYLIGHT)
+
+
+func vent_spots() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for v: Vector2 in VENTS:
+		out.append(_past_parapet(v))
+	return out
+
+
+## `at`.x measured out from the side parapet's outside face on its sign's side.
+func _past_parapet(at: Vector2) -> Vector2:
+	return Vector2(signf(at.x) * (live_room_half() + WALL) + at.x, at.y)
+
+
 func tank_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	for t: Vector3 in TANKS:
@@ -201,9 +222,10 @@ func _ready() -> void:
 	plane.size = Vector2(half * 2.0 + 0.2, back - FRONT + 0.2)
 	deck.mesh = plane
 	deck.position.z = (back + FRONT) * 0.5
-	# Oiled hardwood decking, dulled grey by the weather, warm again where the strings light it.
-	deck.material_override = Materials.scanned(StandardMaterial3D.new(), "wood_floor_deck", "2k", 2.0,
-			Color(0.42, 0.46, 0.52))
+	# Hardwood decking left to the weather: silver-grey, its grain open, warm only where the
+	# strings light it.
+	deck.material_override = Materials.scanned(StandardMaterial3D.new(), "wood_planks_grey", "2k", 2.0,
+			Color(0.9, 0.88, 0.86))
 	add_child(deck)
 
 	var brick := Materials.cached_scanned("rooftop_brick", "red_brick_03", "2k", 1.2, Color(0.5, 0.4, 0.38))
@@ -213,6 +235,7 @@ func _ready() -> void:
 	_build_stair_house(brick, steel)
 	_raise_tanks(steel)
 	_put_in_plant(steel)
+	_dot_the_roof(steel)
 	_plant_planters()
 	_string_the_lights(steel)
 	_raise_city()
@@ -243,10 +266,8 @@ func _lay_the_roof(brick: Material) -> void:
 	var back := LIVE_ROOM_BACK
 	var wide := (half + ROOF_SIDE) * 2.0
 	var deep := back + ROOF_BACK - FRONT
-	var membrane := StandardMaterial3D.new()
-	# Bitumen felt with a mineral finish: dark grey, matt, a little green.
-	membrane.albedo_color = Color(0.075, 0.08, 0.08)
-	membrane.roughness = 0.95
+	# Ballast: grey gravel spread over the membrane to hold it down.
+	var membrane := Materials.scanned(StandardMaterial3D.new(), "gravel", "1k", 1.6, Color(0.8, 0.8, 0.82))
 	var roof := MeshInstance3D.new()
 	roof.name = "Roof"
 	var plane := PlaneMesh.new()
@@ -399,6 +420,63 @@ func _put_in_plant(steel: Material) -> void:
 		ZoneKit.block(self, Vector3(0.9, 0.02, 0.9), at + Vector3(0, 1.11, 0), steel, "FanGrille")
 	ZoneKit.block(self, Vector3(0.5, 0.5, 6.0), Vector3(half + WALL + 4.8, -DECK_LIFT + 0.25, LIVE_ROOM_BACK + 1.0),
 			casing, "Duct")
+
+
+## A glazed skylight on a brick curb, lit from the landing under it, and mushroom vents.
+func _dot_the_roof(steel: Material) -> void:
+	var sky := skylight_spot()
+	var curb := Vector3(2.2, 0.4, 1.6)
+	var base := -DECK_LIFT
+	ZoneKit.block(self, curb, Vector3(sky.x, base + curb.y * 0.5, sky.y), steel, "SkylightCurb")
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.3, 0.3, 0.32)
+	glass.roughness = 0.15
+	glass.metallic_specular = 0.8
+	glass.emission_enabled = true
+	glass.emission = Color(1.0, 0.78, 0.5)
+	glass.emission_energy_multiplier = 0.16
+	# A hipped roof of glass: a four-sided cone squashed to the curb's plan.
+	var hip := CylinderMesh.new()
+	hip.top_radius = 0.02
+	hip.bottom_radius = 0.7071
+	hip.height = 0.5
+	hip.radial_segments = 4
+	hip.rings = 1
+	var pane := MeshInstance3D.new()
+	pane.name = "Skylight"
+	pane.mesh = hip
+	pane.material_override = glass
+	pane.basis = Basis.from_scale(Vector3(curb.x - 0.08, 1.0, curb.z - 0.08)) * Basis(Vector3.UP, PI * 0.25)
+	pane.position = Vector3(sky.x, base + curb.y + 0.25, sky.y)
+	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(pane)
+	var galvanised := StandardMaterial3D.new()
+	galvanised.albedo_color = Color(0.42, 0.43, 0.44)
+	galvanised.metallic = 0.7
+	galvanised.roughness = 0.45
+	for v in vent_spots():
+		var stem := CylinderMesh.new()
+		stem.top_radius = 0.09
+		stem.bottom_radius = 0.09
+		stem.height = 0.6
+		stem.radial_segments = 12
+		var pipe := MeshInstance3D.new()
+		pipe.name = "Vent"
+		pipe.mesh = stem
+		pipe.material_override = galvanised
+		pipe.position = Vector3(v.x, base + 0.3, v.y)
+		add_child(pipe)
+		var hood := CylinderMesh.new()
+		hood.top_radius = 0.04
+		hood.bottom_radius = 0.2
+		hood.height = 0.14
+		hood.radial_segments = 12
+		var cap := MeshInstance3D.new()
+		cap.name = "VentCap"
+		cap.mesh = hood
+		cap.material_override = galvanised
+		cap.position = Vector3(v.x, base + 0.67, v.y)
+		add_child(cap)
 
 
 ## Planters of cedar along the parapets beside the desk, with low clipped shrubs in them.
@@ -562,7 +640,7 @@ func _raise_city() -> void:
 func _dress_zones() -> void:
 	var z := zones()
 	var steel := _steel()
-	var boards := Materials.cached_scanned("rooftop_riser", "wood_floor_deck", "2k", 0.6, Color(0.52, 0.53, 0.57))
+	var boards := Materials.cached_scanned("rooftop_riser", "wood_planks_grey", "2k", 0.8, Color(0.9, 0.88, 0.86))
 	var skirt := StandardMaterial3D.new()
 	skirt.albedo_color = Color(0.06, 0.055, 0.05)
 	skirt.roughness = 0.85

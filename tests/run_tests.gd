@@ -6372,7 +6372,12 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		# A tank is 3.4 m across its ladder.
 		past = past and not terrace.grow(1.8).has_point(spot)
 	past = past and not terrace.grow(1.6).has_point(roof.stair_house_spot())
-	check("the tanks and the stair house stand on the roof past the parapet", past
+	past = past and not terrace.grow(1.2).has_point(roof.skylight_spot())
+	for vent in roof.vent_spots():
+		past = past and not terrace.grow(0.3).has_point(vent)
+		for spot in roof.tank_spots():
+			past = past and vent.distance_to(spot) > 2.0
+	check("the tanks, the stair house, the skylight and the vents stand on the roof past the parapet", past
 			and roof.find_children("WaterTank*", "", false, false).size() == 2)
 	var seen_on := false
 	var seen_off := false

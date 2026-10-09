@@ -178,9 +178,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       stair house door, a red aircraft light on each water tank.
       (Strings x1.5 at night, wired glass lit in the stair house door, blinking red beacons on
       the tanks' finials. Night back view 0.034 -> 0.046.)
-- [ ] Rooftop: the deck reads red-brown under the strings; a greyer board texture (or a
+- [x] Rooftop: the deck reads red-brown under the strings; a greyer board texture (or a
       Poly Haven decking) would read as weathered hardwood. And the roof beyond the terrace is
       one flat black: gravel ballast, a few vents and a skylight would give it something.
+      (Poly Haven `wood_planks_grey` on the deck and the riser, `gravel` ballast on the roof, a
+      hipped glass skylight lit faintly from below, six mushroom vents.)
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
 - [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
