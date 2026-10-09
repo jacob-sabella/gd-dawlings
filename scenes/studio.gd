@@ -121,6 +121,10 @@ var their_keys: TheirKeys
 var their_monitor: TheirMonitor
 ## The hand percussion played here, taken down onto the armed track while recording.
 var hit_recorder: HitRecorder
+## The computer keyboard as the keytar's keys, while it is in this player's hands (KeytarItem).
+var keytar_keys: KeyCatcher
+## Whether the keytar is in this player's hands, as last seen: for GuestMidi to play it.
+var _keytar_mine := false
 ## Who is ON AIR, by peer id: whose monitor anyone may plug into. The room's, like `patches`.
 var on_air: Array = []
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
@@ -1726,7 +1730,8 @@ func _item_homes() -> Dictionary:
 	if venue == null:
 		return {}
 	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
-			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot()}
+			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
+			&"keytar": venue.keytar_spot()}
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
@@ -1786,6 +1791,20 @@ func _build_items() -> void:
 	hit_recorder.unarmed.connect(func() -> void:
 		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
 	items.played.connect(_on_item_played)
+	keytar_keys = KeyCatcher.new()
+	keytar_keys.name = "KeytarKeys"
+	add_child(keytar_keys)
+	keytar_keys.note_on.connect(func(pitch: int, velocity: int) -> void:
+		if Session.guest_midi != null:
+			Session.guest_midi.note_on(pitch, velocity))
+	keytar_keys.note_off.connect(func(pitch: int) -> void:
+		if Session.guest_midi != null:
+			Session.guest_midi.note_off(pitch))
+	var keytar := items.items.get(&"keytar") as KeytarItem
+	if keytar != null:
+		keytar.wants_keys.connect(func() -> void: _keytar_play(true))
+	if Session.guest_midi != null:
+		Session.guest_midi.key.connect(_on_key_played)
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
 	if presence != null:
 		presence.items = items
@@ -1866,6 +1885,39 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 				late += " Reaper's mix is not the game's to copy, so only their notes are heard."
 		Session.notice.emit("Plug %s in SEND %s: in your headphones%s.%s" % [letter,
 				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on", late])
+
+
+## Whether the keytar is in this player's hands now, and if that has changed, its keys given or
+## taken back: GuestMidi plays it, and on a desktop the computer keyboard is its piano.
+func _follow_keytar() -> void:
+	var keytar := items.items.get(&"keytar") as KeytarItem if items != null else null
+	var mine := keytar != null and keytar.state == Item.State.HELD and keytar.carried_by != null \
+			and not keytar.is_held_elsewhere()
+	if mine == _keytar_mine:
+		return
+	_keytar_mine = mine
+	if Session.guest_midi != null:
+		Session.guest_midi.keytar = mine
+	if keytar != null and not mine:
+		keytar.release_all()
+	_keytar_play(mine and medium == Presentation.Medium.SCREEN)
+
+
+## The computer keyboard as the keytar's piano, on or off, and said so the first time.
+func _keytar_play(on: bool) -> void:
+	if keytar_keys == null or on == keytar_keys.is_active():
+		return
+	keytar_keys.set_active(on)
+	if on:
+		Session.notice.emit("Keytar: A to ' play from %s, Z and X move the octave, the arrows walk. Esc gives the keys back; click the keytar to take them again."
+				% keytar_keys.octave_name())
+
+
+## A key played on this player's keys: shown on the keytar, while it is theirs.
+func _on_key_played(pitch: int, down: bool) -> void:
+	var keytar := items.items.get(&"keytar") as KeytarItem if items != null else null
+	if keytar != null and _keytar_mine:
+		keytar.press(pitch, down)
 
 
 ## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
@@ -2181,6 +2233,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_refresh_looms_if_moved(delta)
+	_follow_keytar()
 	if venue != null and DAW.state != null:
 		venue.pulse(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
 	if camera == null or not god_mode:

@@ -196,6 +196,10 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Keytar: on a host, a MIDI keyboard still goes to Reaper rather than through the keytar
+  (GuestMidi opens MIDI only from the guest's panel). It is not yet tried in a headset, where the
+  pose by its neck grip is untested. Held on a desktop, it covers most of the desk.
+
 - Hand percussion: another player's hits are heard in the room only. No socket carries them into a
   personal mix, and they are not in their ON AIR monitor. On a desktop, sweeping the cursor
   across the room with an instrument in hand can play a hit when the sweep stops. Not yet played

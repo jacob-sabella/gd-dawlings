@@ -41,7 +41,7 @@ var volume_db := -6.0:
 	set(v):
 		volume_db = v
 		if _player != null:
-			_player.volume_db = v
+			_player.set("volume_db", v)
 		if native != null:
 			native.volume(v)
 ## The helper this plays through, while it runs; null when playing through Godot.
@@ -51,8 +51,12 @@ var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
 ## The bus it plays on through Godot: the keys' own (Monitor) unless told otherwise -- another
 ## player's keys played here have a bus of their own (TheirKeys).
 var bus: StringName = &""
+## Where in the room it plays from, when it is an instrument somebody else is holding (a keytar):
+## out of the air at that spot, on the room's bus, rather than in the ears. Set before `start`.
+var speaker: Node3D = null
 
-var _player: AudioStreamPlayer = null
+## An AudioStreamPlayer, or an AudioStreamPlayer3D on `speaker`.
+var _player: Node = null
 var _playback: AudioStreamGeneratorPlayback = null
 var _capacity := 0
 var _thread: Thread = null
@@ -116,7 +120,7 @@ static func available() -> bool:
 func start() -> void:
 	if _running or not available():
 		return
-	if allow_native and not AudioPorts.direct and NativeKeys.available():
+	if allow_native and speaker == null and not AudioPorts.direct and NativeKeys.available():
 		var keys := NativeKeys.new()
 		if keys.start(AudioPorts.target):
 			native = keys
@@ -127,14 +131,23 @@ func start() -> void:
 	var stream := AudioStreamGenerator.new()
 	stream.mix_rate = RATE
 	stream.buffer_length = 4096.0 / RATE
-	_player = AudioStreamPlayer.new()
-	_player.name = "MonitorSynth"
-	_player.bus = bus if bus != &"" else AudioPorts.bus(AudioPorts.MONITOR)
-	_player.stream = stream
-	_player.volume_db = volume_db
-	add_child(_player)
-	_player.play()
-	_playback = _player.get_stream_playback()
+	if speaker != null:
+		var out := Foley.emitter(stream, volume_db)
+		out.name = "MonitorSynth"
+		speaker.add_child(out)
+		out.play()
+		_playback = out.get_stream_playback()
+		_player = out
+	else:
+		var out := AudioStreamPlayer.new()
+		out.name = "MonitorSynth"
+		out.bus = bus if bus != &"" else AudioPorts.bus(AudioPorts.MONITOR)
+		out.stream = stream
+		out.volume_db = volume_db
+		add_child(out)
+		out.play()
+		_playback = out.get_stream_playback()
+		_player = out
 	_capacity = _playback.get_frames_available()
 	_running = true
 	_thread = Thread.new()
@@ -150,7 +163,7 @@ func stop() -> void:
 		_thread.wait_to_finish()
 	_thread = null
 	if _player != null:
-		_player.stop()
+		_player.call("stop")
 		_player.queue_free()
 	_player = null
 	_playback = null

@@ -19,6 +19,8 @@ extends Node
 ## same clock as its notes.
 
 signal changed()
+## A key down or up, wherever it was played from: for the keytar in this player's hands to show.
+signal key(pitch: int, down: bool)
 
 ## Notes from MIDI devices and from the computer keyboard both land here. MIDI comes from the
 ## monitor keys' helper where it runs (NativeKeys: read from the sequencer the moment it
@@ -37,6 +39,21 @@ var record_with_host := true:
 		record_with_host = v
 		changed.emit()
 ## Hear my own keys, locally.
+## A keytar in this player's hands (KeytarItem): their keys are played, sent and taken down
+## whatever this machine is, a host or alone too, and a take with no track chosen goes on the
+## armed one (HitRecorder.armed_track).
+var keytar := false:
+	set(v):
+		if v == keytar:
+			return
+		keytar = v
+		if Session.role != Session.Role.GUEST:
+			if v:
+				synth.start()
+			else:
+				_release_all()
+				synth.stop()
+		changed.emit()
 var monitor := true:
 	set(v):
 		monitor = v
@@ -63,6 +80,8 @@ var takes_sent := 0
 ## updates; less exact than the stream's stamps by however late the host's speakers are.
 var _replicated := SongClock.new()
 var _take: MidiTake = null
+## The track the running take goes on, chosen as it began.
+var _take_track := 0
 ## Where heard() asks, when set: returns {seconds, playing, recording, valid}. For the suite,
 ## which has no stream to listen to.
 var heard_source: Callable = Callable()
@@ -113,6 +132,18 @@ func _route_midi() -> void:
 	changed.emit()
 
 
+## Whether keys played here are this machine's to play: a guest's always, anyone's with a keytar.
+func plays() -> bool:
+	return Session.role == Session.Role.GUEST or keytar
+
+
+## The track a take goes on: the one chosen, or with a keytar and none chosen, the armed one.
+func take_track() -> int:
+	if target_track > 0:
+		return target_track
+	return HitRecorder.armed_track() if keytar else 0
+
+
 func is_recording() -> bool:
 	return _take != null
 
@@ -131,13 +162,15 @@ func _on_role_changed() -> void:
 	_take = null
 	_release_all()
 	synth.stop()
+	if keytar:
+		synth.start()
 	_route_midi()
 	target_track = 0
 
 
 func _input(event: InputEvent) -> void:
 	var midi := event as InputEventMIDI
-	if midi == null or Session.role != Session.Role.GUEST:
+	if midi == null or not plays():
 		return
 	match midi.message:
 		MIDI_MESSAGE_NOTE_ON:
@@ -160,6 +193,7 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 		synth.note_on(pitch, velocity)
 	Session.send_note(Session.Note.ON, pitch, velocity, song(age))
 	held[pitch] = velocity
+	key.emit(pitch, true)
 	if _take != null:
 		_take.note_on(pitch, velocity, channel, stamp(age))
 	changed.emit()
@@ -170,6 +204,7 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 		synth.note_off(pitch)
 	Session.send_note(Session.Note.OFF, pitch, 0, song(age))
 	held.erase(pitch)
+	key.emit(pitch, false)
 	if _take != null:
 		_take.note_off(pitch, channel, stamp(age))
 	changed.emit()
@@ -246,7 +281,9 @@ func _process(_delta: float) -> void:
 	if DAW.state != null:
 		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
 				Time.get_ticks_usec())
-	if Session.role != Session.Role.GUEST:
+	if not plays():
+		if _take != null:
+			_commit()
 		return
 	_take_native_midi()
 	follow(heard())
@@ -256,10 +293,11 @@ func _process(_delta: float) -> void:
 ## heard to start, stretched while it runs, sent when it is heard to stop.
 func follow(h: Dictionary) -> void:
 	var rolling: bool = h["valid"] and h["recording"]
-	if rolling and record_with_host and target_track > 0:
+	if rolling and record_with_host and take_track() > 0:
 		if _take == null:
 			_take = MidiTake.new()
 			_take.begin(h["seconds"])
+			_take_track = take_track()
 			# Keys already down when the take starts are in it from its first moment.
 			for pitch in held:
 				_take.note_on(pitch, held[pitch], 0, h["seconds"])
@@ -277,16 +315,17 @@ func _commit() -> void:
 		return
 	var done := take.finish()
 	var notes: Array = done["notes"]
-	if not notes.is_empty() and target_track > 0:
+	if not notes.is_empty() and _take_track > 0:
 		takes_sent += 1
-		var name := "%s take %d" % [Session.local_name, takes_sent]
-		DAW.insert_midi_take(target_track, done["start"], done["end"], notes, name)
-		last_take = {"notes": notes.size(), "track": target_track, "start": done["start"],
+		var name := "%s %s %d" % [Session.local_name, "keytar" if keytar else "take", takes_sent]
+		DAW.insert_midi_take(_take_track, done["start"], done["end"], notes, name)
+		last_take = {"notes": notes.size(), "track": _take_track, "start": done["start"],
 				"end": done["end"]}
 	changed.emit()
 
 
+## Every key down let go: heard, sent and shown, as if each were.
 func _release_all() -> void:
 	for pitch in held.keys():
-		synth.note_off(pitch)
+		note_off(pitch)
 	held.clear()

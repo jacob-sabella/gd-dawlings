@@ -27,7 +27,8 @@ var _walk_mirror := 0.0
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
 ## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
 ## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's);
-## `:home` after them puts it back on its shelf.
+## `:home` after them puts it back on its shelf. `--carry keytar:chord` holds a C major chord down
+## on it (play these into the null sink: it sounds).
 var _carry := ""
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
 ## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
@@ -235,6 +236,11 @@ func _process(_delta: float) -> void:
 			if what.has("home"):
 				hand.lose_carrying()
 				item.snap_home()
+
+	# `--carry keytar:chord`: C, E and G held down on it, once it has been in the hand a frame or two.
+	if _frames == 13 and _carry.split(":").has("chord") and Session.guest_midi != null:
+		for pitch in [60, 64, 67]:
+			Session.guest_midi.note_on(pitch, 90)
 
 	if _frames == 28 and _carry != "" and OS.get_cmdline_user_args().has("--shot-debug"):
 		var studio := get_tree().current_scene.get_node_or_null("Studio")

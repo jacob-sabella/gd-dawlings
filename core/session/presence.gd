@@ -65,12 +65,14 @@ func _enter_tree() -> void:
 	Session.item_carried.connect(_on_item_carried)
 	Session.item_used.connect(_on_item_used)
 	Session.item_hit.connect(_on_item_hit)
+	Session.note_played.connect(_on_note_played)
 
 
 func _exit_tree() -> void:
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_used.disconnect(_on_item_used)
 	Session.item_hit.disconnect(_on_item_hit)
+	Session.note_played.disconnect(_on_note_played)
 	Session.roster_changed.disconnect(_sync_avatars)
 	Session.holds_changed.disconnect(_apply_holds)
 	Session.hold_refused.disconnect(_on_hold_refused)
@@ -441,6 +443,15 @@ func _on_item_used(id: StringName, down: bool, from: int) -> void:
 	var item: Item = items.items.get(id)
 	if item != null:
 		item.use(down)
+
+
+## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar.
+func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float) -> void:
+	if items == null or _item_holders.get(&"keytar", 0) != from:
+		return
+	var keytar := items.items.get(&"keytar") as KeytarItem
+	if keytar != null:
+		keytar.heard(kind, pitch, velocity)
 
 
 ## Somebody else shook the instrument in their hand: ours plays the hit, in their glove.

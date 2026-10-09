@@ -231,6 +231,13 @@ func tablet_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0.17, ZoneKit.SHELF_LOWER_TOP, 0.03))
 
 
+## Where the keytar stands, in studio space: on its edge on the rack at the back of the prop
+## shelf (ZoneKit.KEYTAR_PEGS), keys out to the room, its body's edge on the low peg.
+func keytar_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.RIGHT, PI * 0.5),
+			Vector3(0, ZoneKit.KEYTAR_REST + KeytarItem.FRONT_EDGE, ZoneKit.KEYTAR_BACK_Z))
+
+
 ## Where the hand percussion lies, in studio space: on the prop shelf's lower tier, at the far end
 ## from the tablet: the tambourine flat, head up, and the shaker beside it, along the shelf's depth.
 func tambourine_spot() -> Transform3D:

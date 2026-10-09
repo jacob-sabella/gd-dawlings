@@ -199,6 +199,7 @@ static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Col
 					(SHELF.y - board) * 0.5, cz * (SHELF.z * 0.5 - leg)), frame, "ShelfLeg")
 	_shelf_lamp(parent, frame, lamp)
 	_headphone_hook(parent, frame)
+	_keytar_rack(parent, frame)
 
 
 ## Where the headphones hang: a peg under the front edge of the shelf's top, toward the end away
@@ -235,6 +236,41 @@ static func _headphone_hook(parent: Node3D, frame: Material) -> void:
 	tip.position = HEADPHONE_HOOK + Vector3(0, 0.008, HOOK_REACH - 0.006)
 	tip.material_override = frame
 	parent.add_child(tip)
+
+
+## The keytar's rack: two posts up off the shelf's back lip, each with a peg out of it, the keytar
+## standing on its edge on the pegs, keys out to the room (Venue.keytar_spot). The peg under its
+## neck is higher, by as much as the neck is narrower than the body. Inside the shelf's own
+## footprint, so it is still one thing to walk round.
+const KEYTAR_POST_TOP := 1.36
+## Where the keytar's back rests, its distance out from the shelf's middle: on the posts' faces.
+const KEYTAR_BACK_Z := -SHELF.z * 0.5 + 0.02
+## The pegs: across the shelf, and the height of each one's top. The low one is under the body's
+## edge, the high one under the neck's grip.
+const KEYTAR_PEGS := [Vector2(0.2, 1.2), Vector2(-0.33, 1.2 + 0.104 - 0.022)]
+## How high the keytar's body edge rests: the low peg's top.
+const KEYTAR_REST := 1.2
+const KEYTAR_PEG_REACH := 0.058
+
+
+static func _keytar_rack(parent: Node3D, frame: Material) -> void:
+	var foot := SHELF.y + 0.05
+	for i in KEYTAR_PEGS.size():
+		var peg: Vector2 = KEYTAR_PEGS[i]
+		var post_h := KEYTAR_POST_TOP - foot
+		block(parent, Vector3(0.024, post_h, 0.02), Vector3(peg.x, foot + post_h * 0.5, KEYTAR_BACK_Z - 0.01),
+				frame, "RackPost%d" % i)
+		# The peg, its top at the rest height, and its end turned up so the keytar cannot walk off.
+		block(parent, Vector3(0.016, 0.012, KEYTAR_PEG_REACH), Vector3(peg.x, peg.y - 0.006,
+				KEYTAR_BACK_Z + KEYTAR_PEG_REACH * 0.5), frame, "RackPeg%d" % i)
+		block(parent, Vector3(0.014, 0.022, 0.008), Vector3(peg.x, peg.y + 0.005,
+				KEYTAR_BACK_Z + KEYTAR_PEG_REACH - 0.005), frame, "RackTip%d" % i)
+	# A rail between the posts near their tops, so they are a rack and not two sticks: thinner than
+	# them, so no face of it lies in one of theirs.
+	var left: float = KEYTAR_PEGS[1].x
+	var right: float = KEYTAR_PEGS[0].x
+	block(parent, Vector3(right - left, 0.014, 0.014), Vector3((left + right) * 0.5, KEYTAR_POST_TOP - 0.02,
+			KEYTAR_BACK_Z - 0.01), frame, "RackRail")
 
 
 ## Where the shelf's lamp stands on its top: the back corner at +X, out of the row of items.

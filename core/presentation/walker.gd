@@ -424,6 +424,13 @@ func _physics_process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_S): wish.z += 1.0
 		if Input.is_key_pressed(KEY_A): wish.x -= 1.0
 		if Input.is_key_pressed(KEY_D): wish.x += 1.0
+	# The arrows too, and they go on walking while a piano has the letters (KeyCatcher): a keytar
+	# is played on the move.
+	if focus_owner == null or focus_owner.is_in_group(&"walks_on_arrows"):
+		if Input.is_physical_key_pressed(KEY_UP): wish.z -= 1.0
+		if Input.is_physical_key_pressed(KEY_DOWN): wish.z += 1.0
+		if Input.is_physical_key_pressed(KEY_LEFT): wish.x -= 1.0
+		if Input.is_physical_key_pressed(KEY_RIGHT): wish.x += 1.0
 	wish = (Basis(Vector3.UP, yaw) * wish).normalized() if wish != Vector3.ZERO else Vector3.ZERO
 	var sprint := Input.is_key_pressed(KEY_SHIFT) and focus_owner == null
 	var speed := SPRINT_SPEED if sprint else WALK_SPEED

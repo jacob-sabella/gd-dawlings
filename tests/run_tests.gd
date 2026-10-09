@@ -133,6 +133,7 @@ func _ready() -> void:
 	await _test_on_air_puts_a_monitor_socket_on_your_pack()
 	await _test_a_shaker_plays_when_a_stroke_stops()
 	await _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track()
+	await _test_a_keytar_plays_your_keys_and_shows_them()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6081,9 +6082,9 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones, the tablet and the percussion,
-			# which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 4 \
+			# A spot on the shelf for everything but the headphones, the tablet, the percussion and
+			# the keytar, which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 5 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -10901,6 +10902,127 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 	Session.item_hit.emit(&"tambourine", 80, 7)
 	check("one from whoever has it is", tambourine._take == sounds_before + 1)
 	studio.presence._item_holders.erase(&"tambourine")
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
+
+
+func _test_a_keytar_plays_your_keys_and_shows_them() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var gm := Session.guest_midi
+	var saved_heard := gm.heard_source
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var keytar := studio.items.items.get(&"keytar") as KeytarItem
+	check("there is a keytar, at home, with its 25 keys", keytar != null and keytar.state == Item.State.HOME
+			and keytar.keys.size() == KeytarItem.KEYS)
+	check("a note is shown on its own key, or the same note an octave in", KeytarItem.key_of(48) == 0
+			and KeytarItem.key_of(72) == 24 and KeytarItem.key_of(36) == 0 and KeytarItem.key_of(85) == 13)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var shelf := studio.venue.prop_shelf_spot()
+		var local: Transform3D = shelf.affine_inverse() * keytar.home
+		# Standing on its edge, keys out: its body's front edge is on the low peg.
+		var edge := local * Vector3(0, 0, KeytarItem.FRONT_EDGE)
+		if not keytar.home.is_equal_approx(studio.venue.keytar_spot()) or not keytar.own_home \
+				or not is_equal_approx(edge.y, ZoneKit.KEYTAR_REST) or local.basis.y.dot(Vector3.BACK) < 0.99 \
+				or absf(edge.z - ZoneKit.KEYTAR_BACK_Z) > 0.001:
+			wrong.append(id)
+	check("in every venue it stands on its rack at the back of the shelf, keys out (%s)" % [wrong], wrong.is_empty())
+	check("the rack is inside the shelf's footprint", ZoneKit.KEYTAR_PEGS.all(func(p: Vector2) -> bool:
+			return absf(p.x) < ZoneKit.SHELF.x * 0.5) and ZoneKit.KEYTAR_BACK_Z + ZoneKit.KEYTAR_PEG_REACH < 0.0)
+	studio.set_venue(&"studio", false)
+
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	hand.pick_up(keytar)
+	studio._process(0.016)
+	check("in your hand, your keys play it, alone too", gm.keytar and gm.plays())
+	check("and on a desktop the computer keyboard is its piano, and you are told how, arrows and all (%s)" % [told],
+			studio.keytar_keys.is_active() and told.size() == 1 and (told[0] as String).contains("arrows walk"))
+	check("its piano lets the arrows walk", studio.keytar_keys.is_in_group(KeyCatcher.WALKS_ON_ARROWS))
+	studio.keytar_keys.handle(KEY_A, true)
+	studio.keytar_keys.handle(KEY_E, true)
+	check("a key down plays the note, and its key on the keytar goes down and lights (%s)" % [gm.held],
+			gm.held.has(60) and gm.held.has(63) and keytar.is_down(60) and keytar.is_down(63)
+			and is_equal_approx(keytar.keys[12].rotation.x, KeytarItem.PRESS) and keytar.keys[12].material_override != null)
+	studio.keytar_keys.handle(KEY_A, false)
+	check("let go, it comes up", not gm.held.has(60) and not keytar.is_down(60)
+			and is_zero_approx(keytar.keys[12].rotation.x) and keytar.keys[12].material_override == null)
+	studio.keytar_keys.set_active(false)
+	keytar.use(true)
+	check("the keys given back, a click with it in hand takes them again", studio.keytar_keys.is_active())
+	var walker := studio.walker
+	walker.active = true
+	walker.velocity = Vector3.ZERO
+	var up := InputEventKey.new()
+	up.physical_keycode = KEY_UP
+	up.pressed = true
+	Input.parse_input_event(up)
+	Input.flush_buffered_events()
+	for i in 10:
+		walker._physics_process(1.0 / 60.0)
+	var moving := Vector2(walker.velocity.x, walker.velocity.z).length()
+	up.pressed = false
+	Input.parse_input_event(up)
+	Input.flush_buffered_events()
+	walker.velocity = Vector3.ZERO
+	check("with the keytar's piano on, the arrows walk you (%.2f m/s)" % moving, moving > 0.5
+			and studio.keytar_keys.is_active())
+
+	# A take, onto the armed track, by the song position heard.
+	for t: MixState.TrackState in DAW.state.tracks.values():
+		t.rec_arm = false
+	DAW.state.track(4).rec_arm = true
+	var heard := {"seconds": 30.0, "playing": true, "recording": true, "valid": true}
+	gm.heard_source = func() -> Dictionary: return heard
+	gm.follow(gm.heard())
+	check("recording, with no track chosen, a take runs for the armed one", gm.is_recording() and gm.take_track() == 4)
+	heard["seconds"] = 30.5
+	studio.keytar_keys.handle(KEY_D, true)
+	heard["seconds"] = 31.0
+	studio.keytar_keys.handle(KEY_D, false)
+	studio.keytar_keys.handle(KEY_E, false)
+	heard["recording"] = false
+	gm.follow(gm.heard())
+	var taken := DAW.state.track(4).items.filter(func(it: MixState.ItemState) -> bool: return it.name.contains("keytar"))
+	check("stopped, the keytar's take lands on the armed track (%s)" % [gm.last_take], taken.size() == 1
+			and gm.last_take.get("track") == 4)
+	if taken.size() == 1:
+		var notes := MidiTake.unpack_relative(taken[0].notes, taken[0].start)
+		check("with its notes where they were heard (%s)" % [notes], notes.any(func(n: Array) -> bool:
+				return n[2] == 64 and is_equal_approx(n[0], 30.5) and is_equal_approx(n[1], 31.0)))
+
+	hand.lose_carrying()
+	keytar.snap_home()
+	studio._process(0.016)
+	check("put down, your keys are a guest's again and the keyboard is the studio's",
+			not gm.keytar and not gm.plays() and not studio.keytar_keys.is_active() and gm.held.is_empty())
+
+	# Somebody else's keytar: their notes play out of it, and show on it.
+	studio.presence._item_holders[&"keytar"] = 7
+	Session.note_played.emit(Session.Note.ON, 62, 90, 9, -1.0)
+	check("notes from someone not holding it do not", not keytar.is_down(62))
+	Session.note_played.emit(Session.Note.ON, 62, 90, 7, -1.0)
+	var room := keytar.get_node_or_null("Room") as MonitorSynth
+	check("notes from whoever has it play out of it, into the room, and press its keys", keytar.is_down(62)
+			and room != null and room.speaker == keytar)
+	Session.note_played.emit(Session.Note.OFF, 62, 0, 7, -1.0)
+	check("and let go", not keytar.is_down(62))
+	studio.presence._item_holders.erase(&"keytar")
+
+	Session.notice.disconnect(listen)
+	gm.heard_source = saved_heard
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)

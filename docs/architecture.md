@@ -1366,6 +1366,15 @@ transport as `GuestMidi.heard()` reports it and records each hit as a drum note,
 position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
 players' hits are only heard in the room, never in a personal mix.
 
+The keytar (`KeytarItem`) has no sound of its own here. In this player's hands it sets
+`GuestMidi.keytar`. Their keys then play on the keys' low-latency synth, go to everyone as notes,
+and are recorded as a take whatever this machine's role (`GuestMidi.plays`). A take with no track
+chosen goes onto the armed one. On a desktop the studio's own `KeyCatcher` (`keytar_keys`) is its
+piano while it is held. `Walker` reads the arrow keys while a control in the `walks_on_arrows`
+group has the keyboard. `GuestMidi.key` shows each note on its key. Someone else's notes, while
+they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorSynth` with a
+`speaker`: an AudioStreamPlayer3D on the room's bus.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

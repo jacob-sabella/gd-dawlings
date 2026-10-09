@@ -352,8 +352,26 @@ ergonomics.
       as a tambourine. Smooth shading on the head's thin disc drew a seam across it. A Vector3
       holds 32-bit floats, so a value clamped to a constant can read a hair over it in a check.
       Not yet tried in a headset.
-- [ ] A keytar into `GuestMidi`: played from its keys (the computer keyboard's piano rows, or a
+- [x] A keytar into `GuestMidi`: played from its keys (the computer keyboard's piano rows, or a
       MIDI device) while you walk round holding it.
+      Done: a 25-key keytar (`tools/blender/keytar.py`, each key a node on its hinge) stands on
+      its edge on a rack of two posts and pegs at the back of the prop shelf, inside the shelf's
+      footprint, in every venue. In your hands, `GuestMidi.keytar` makes your keys play, send and
+      record whatever role you are, and a take with no track chosen goes onto the armed one
+      (named "… keytar N"). On a desktop, picking it up makes the computer keyboard its piano: the
+      studio's own `KeyCatcher`, with a notice saying how. The arrow keys walk while it has the
+      letters (the `walks_on_arrows` group, read by `Walker`), so it is played on the move. Esc
+      gives the keyboard back; a click with the keytar in hand takes it again. Each note pushes
+      its key down and lights it amber. Another player's keytar plays their notes out of itself,
+      on a `MonitorSynth` whose `speaker` makes it a 3D player in the room. Learned: held up face
+      on, the keytar hid the desk, and one held where the glove was left the glove a hand's
+      width off it: hold it by the body's edge and tip the keys to the eye. A real key's 4 mm
+      travel cannot be seen from where it is held, so pressed keys go down further and light.
+      Above the shelf's lamp a dark red is black. Two blocks with one name: Godot renames the
+      second "@MeshInstance3D@…", so name them by index or a test's report is unreadable.
+      `tools/shot.sh` played into the default sink, so a shot of a keytar sounds; shots now go
+      to the null sink. A host's MIDI keyboard is still Reaper's, not the keytar's (in the
+      backlog), and it is not yet tried in a headset.
 - [ ] Chips and cards: a stack of chips that riffles, splits and flips in your hand (the
       PokerStars fidget), and a deck to shuffle and fan. Both pure idle.
 - [ ] Toys round the room: darts and a board, a mini hoop over a door, a Newton's cradle by the

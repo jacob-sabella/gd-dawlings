@@ -13,12 +13,19 @@ extends Control
 ## Laid out by where the keys are, not by what they say, so the shape is the same on any
 ## keyboard: the home row from A is the white keys from C, the row above holds the black keys
 ## between them, and Z and X move the octave.
+##
+## The arrow keys are not the piano's: they walk (Walker, which looks for WALKS_ON_ARROWS), so
+## the keytar can be played on the move. Taken here all the same, or the GUI would move focus on
+## them and the piano would stop.
 
 signal note_on(pitch: int, velocity: int)
 signal note_off(pitch: int)
 ## Turned on or off, by the panel, by Esc, or by focus going elsewhere.
 signal active_changed(active: bool)
 
+## The group a control that has the keyboard and still lets the arrow keys walk is in.
+const WALKS_ON_ARROWS := &"walks_on_arrows"
+const ARROWS := [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]
 const VELOCITY := 100
 ## Semitones above the octave's C, by physical key.
 const LAYOUT := {
@@ -42,6 +49,7 @@ func _init() -> void:
 	custom_minimum_size = Vector2.ZERO
 	size = Vector2.ZERO
 	focus_exited.connect(_on_focus_exited)
+	add_to_group(WALKS_ON_ARROWS)
 
 
 func is_active() -> bool:
@@ -68,6 +76,9 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	# Shortcuts with a modifier stay the studio's: Ctrl+Z is undo whether or not this plays.
 	if key.ctrl_pressed or key.meta_pressed or key.alt_pressed:
+		return
+	if key.physical_keycode in ARROWS:
+		accept_event()
 		return
 	if key.echo:
 		if LAYOUT.has(key.physical_keycode):
