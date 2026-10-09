@@ -142,7 +142,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       (Three corner traps, solid; four panels in rust and slate; lighter warm plaster and
       brighter sconces, because fabric drinks the light. `light_check`'s `side` view, 0.051.
       No cloud: it would have shaded the kit's own spot.)
-- [ ] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
+- [x] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
+      (`LoftVenue`: one walkable room round the desk, columns and a ladder you walk round, a
+      gallery with festoon bulbs along the back wall, under-gallery grazers on the brick.)
+- [ ] Loft: the gallery is scenery. Let the walker climb the ladder onto it and look down on
+      the lattice (a second floor level in the walker), or add a "Loft, gallery" arrangement.
 - [ ] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
 - [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.

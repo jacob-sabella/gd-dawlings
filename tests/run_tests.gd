@@ -6236,6 +6236,32 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		if not side_rooms.any(func(r: Rect2): return r.grow(-Walker.RADIUS).has_point(centre)):
 			all_standable = false
 	check("and every zone's centre is in a room you can walk", all_standable)
+
+	# The loft is one room: the floor beside the desk is walkable to the brick, and its iron
+	# columns and the gallery's ladder stand in your way.
+	studio.set_venue(&"loft", false)
+	var loft := studio.venue as LoftVenue
+	var brick := -loft.live_room_half()
+	at = walk_until_still.call(Vector3(wall_x + 0.4, 0, -1.6), Vector3(-1, 0, 0))
+	check("loft: you walk out past the footprint to the brick (x %.2f, wall %.2f)" % [at.x, brick],
+			at.x < wall_x - 2.0 and at.x > brick and at.x < brick + Walker.RADIUS + 0.1)
+	var column: Vector2 = loft._column_spots()[0]
+	at = walk_until_still.call(Vector3(column.x, 0, column.y + 1.5), Vector3(0, 0, -1))
+	check("an iron column stops you (z %.2f, column %.2f)" % [at.z, column.y],
+			at.z > column.y + LoftVenue.COLUMN_RADIUS
+			and at.z < column.y + LoftVenue.COLUMN_RADIUS + Walker.RADIUS + 0.1)
+	var ladder: Array[Vector3] = loft._ladder()
+	var ladder_x := (ladder[0].x + ladder[1].x) * 0.5
+	at = walk_until_still.call(Vector3(ladder_x, 0, ladder[0].z - 1.0), Vector3(0, 0, 1))
+	check("and so does the gallery's ladder (z %.2f, ladder %.2f)" % [at.z, ladder[0].z],
+			at.z < ladder[0].z - 0.3 and at.z > ladder[0].z - 0.3 - Walker.RADIUS - 0.1)
+	var loft_rooms := loft.rooms()
+	var loft_standable := true
+	for box: AABB in loft.zones().values():
+		var centre := Vector2(box.get_center().x, box.get_center().z)
+		if not loft_rooms.any(func(r: Rect2): return r.grow(-Walker.RADIUS).has_point(centre)):
+			loft_standable = false
+	check("and every zone's centre is somewhere you can stand", loft_standable)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

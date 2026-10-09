@@ -8,5 +8,7 @@ channel at a time by `Materials.scanned`).
 - `black_walnut_veneer_01` — the console's end cheeks
 - `wool_boucle` — the rug
 - `rough_linen` — acoustic panel cloth
+- `red_brick_03` — the loft's walls
+- `concrete_floor_worn_001` — the loft's floor
 
 Fetched with `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/<res>/<id>/<id>_<map>_<res>.jpg`.
