@@ -218,6 +218,25 @@ func item_spots() -> Array[Transform3D]:
 	return out
 
 
+## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
+## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
+## mic takes a place on the shelf instead.
+func mic_spot() -> Variant:
+	var stand := find_child("MicStand", true, false) as Node3D
+	if stand == null:
+		return null
+	var at := stand.transform
+	var up := stand.get_parent()
+	while up != null and up != self:
+		if up is Node3D:
+			at = (up as Node3D).transform * at
+		up = up.get_parent()
+	# Along the boom: out along the stand's -Z and up by its tilt, and the mic's axis (which is
+	# its own centre height above its origin) through the clip.
+	var along := Basis(Vector3.RIGHT, ZoneKit.MIC_TILT)
+	return at * Transform3D(along, ZoneKit.mic_clip() - along * Vector3(0, MicItem.AXIS_HEIGHT, 0))
+
+
 ## Everything the venue puts on the floor that stops a person: the zones' dressing and the prop
 ## shelf. What the walker is given.
 func solids() -> Array:

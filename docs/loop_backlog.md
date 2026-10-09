@@ -138,6 +138,17 @@ because a scaffold that reads as a finished project wastes the next person's aft
   ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the
   colours. Not started: nobody has asked for big rooms yet.
 
+## Waiting on the user
+
+- **A guest hearing their own voice with the mic.** The host hears themself through the DAW's
+  input monitoring, which the mic turns on. A guest's voice is recorded on the guest's machine
+  (GuestAudio) and is not in any mix they hear. Two ways to close it. One is a capture stream
+  in `native/keys.c` (duplex: the mic in, mixed straight to the output at the keys path's
+  latency, with a level and a mute on the guest panel). The other is to leave it to the
+  interface's direct monitoring, which costs nothing and is already how most singers hear
+  themselves. Which one, and whether the game should ever play a voice back, is the user's
+  call.
+
 ## Not started
 
 - **A guest's microphone, calibrated.** Audio takes from guests work (see "Recording a guest"

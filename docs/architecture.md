@@ -1217,7 +1217,7 @@ An item is in one of three places: `HOME` on the venue's prop shelf, `HELD` ridi
 stops ticking. A loose item tidies itself home after `TIDY_SECONDS` on a single timer.
 
 `ItemRoom` (`core/items/item_room.gd`) lives in `studio_set`, which is the walker's frame, and
-owns every item. It knows the floor because the studio gives it `Walker.fits` and `ground_at`, so
+owns every item. It knows the floor because the studio gives it `Walker.reachable` and `ground_at`, so
 it judges a put-down, not the hand. The aim meets the floor within `PUT_REACH`, or the item lands
 at your feet. Somewhere a person could not stand to pick it up again sends it home. When the venue
 changes, `set_spots` moves the items at home to the new shelf, and loose ones the new room has no
@@ -1286,6 +1286,18 @@ with `Session.take_hold` rather than `claim_hold`. The host moves the hold rathe
 for keys its `takeable` says are items, so a fader somebody has is still theirs alone. The hand
 it was taken from hears the new table and lets go (`Presence._apply_items`), with a notice of who
 took it. Hovered, it says whose hand it is in and that it can be taken.
+
+The mic (`MicItem`) has a home of its own. `ItemRoom.set_spots(spots, homes)` takes
+homes by kind, and the studio gives the mic `Venue.mic_spot()`: the clip at the end of the
+booth's mic stand (`ZoneKit.mic_stand`, its clip at `ZoneKit.mic_clip`), along the boom. A venue
+with no stand gives null, and the mic takes a shelf spot. The shelf's spots go to the kinds
+without a home, in `KINDS` order. In any hand the mic's band glows. In a hand here it is `live`,
+and the studio's `MicArm` (`core/session/mic_arm.gd`) puts a voice on a track: the one a guest
+already chose, else the first named for a voice, else the first. On the host that means an
+armed track with monitoring on, asked through `Session.send_intent`. On a guest it means
+`GuestAudio.target_track` and `record_with_host`, and nothing armed on the host, whose input
+would record over the guest's take. Whatever it changed it puts back when the mic leaves the
+hand, however it leaves.
 
 ## Things that are deliberately not done yet
 

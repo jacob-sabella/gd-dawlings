@@ -109,6 +109,8 @@ var console: ConsoleSurface
 var rack: RackSurface
 ## The things people pick up and carry. Null in AR, which has a real room's things in it.
 var items: ItemRoom
+## What the mic in a hand here has done to a track, to be undone when it leaves the hand.
+var mic_arm := MicArm.new()
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
@@ -354,6 +356,7 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	mic_arm.let_go()
 	if get_tree().node_added.is_connected(_keep_out_of_mirrors):
 		get_tree().node_added.disconnect(_keep_out_of_mirrors)
 
@@ -408,7 +411,7 @@ func _walk_where_the_venue_lets() -> void:
 		walker.rebuild_walls()
 		walker.unstick()
 	if items != null and venue != null:
-		items.set_spots(venue.item_spots())
+		items.set_spots(venue.item_spots(), _item_homes())
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1673,6 +1676,12 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 ## The things people pick up (docs/items_loop.md), in the set's frame, the floor plan's. They
 ## lie only where the walker could stand to pick them up again.
+## The items' homes off the shelf: the mic in the booth's stand, where the venue has one.
+func _item_homes() -> Dictionary:
+	var mic_at: Variant = venue.mic_spot() if venue != null else null
+	return {&"mic": mic_at} if mic_at != null else {}
+
+
 func _build_items() -> void:
 	items = ItemRoom.new()
 	items.name = "Items"
@@ -1686,7 +1695,14 @@ func _build_items() -> void:
 		return is_instance_valid(items) and items.items.values().any(
 				func(item: Item) -> bool: return item.network_key() == key)
 	studio_set.add_child(items)
-	items.set_spots(venue.item_spots())
+	items.set_spots(venue.item_spots(), _item_homes())
+	var mic := items.items.get(&"mic") as MicItem
+	if mic != null:
+		mic.live_changed.connect(func(live: bool) -> void:
+			if live:
+				mic_arm.take()
+			else:
+				mic_arm.let_go())
 	items.asked.connect(_on_items_asked)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())

@@ -18,7 +18,7 @@ extends Node3D
 ## on something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
 
 ## The items there are, in the order they take the shelf's spots.
-const KINDS: Array[StringName] = [&"duck", &"ball", &"plane"]
+const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -46,6 +46,8 @@ var solids: Callable = Callable()
 ## the floor behind it.
 var gear: Callable = Callable()
 var _spots: Array[Transform3D] = []
+## Homes of their own, off the shelf, by kind: the mic's stand.
+var _homes: Dictionary = {}
 
 
 static func make(kind: StringName) -> Item:
@@ -56,6 +58,8 @@ static func make(kind: StringName) -> Item:
 			return BallItem.new()
 		&"plane":
 			return PlaneItem.new()
+		&"mic":
+			return MicItem.new()
 	return null
 
 
@@ -93,17 +97,26 @@ func _ready() -> void:
 
 ## The shelf's spots, from the venue: one per item, in KINDS order, in this node's frame. Items
 ## at home go to their new spot; loose ones stay where they lie if they still can.
-func set_spots(spots: Array[Transform3D]) -> void:
+func set_spots(spots: Array[Transform3D], homes: Dictionary = {}) -> void:
 	_spots = spots
+	_homes = homes
 	_rehome()
 
 
 func _rehome() -> void:
+	# The shelf's spots go to the kinds with no home of their own, in KINDS order.
+	var shelf := 0
 	for i in KINDS.size():
 		var item: Item = items.get(KINDS[i])
+		if _homes.has(KINDS[i]):
+			if item != null:
+				item.home = _homes[KINDS[i]]
+		else:
+			if item != null:
+				item.home = _spots[shelf] if shelf < _spots.size() else Transform3D.IDENTITY
+			shelf += 1
 		if item == null:
 			continue
-		item.home = _spots[i] if i < _spots.size() else Transform3D.IDENTITY
 		match item.state:
 			# A shelf that has moved under it: straight there, not floated across the map.
 			Item.State.HOME:

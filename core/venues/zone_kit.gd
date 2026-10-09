@@ -281,6 +281,14 @@ const MIC_YAW := PI * 0.5
 ## (Ergonomics), where a singer actually sings, not overhead.
 const MIC_HEIGHT := 1.38
 const MIC_REACH := 0.68
+## The boom's rise from level, and the clip's ring: a little wider than a mic's body.
+const MIC_TILT := deg_to_rad(15.0)
+const MIC_CLIP_RADIUS := 0.021
+
+
+## Where the middle of the clip is, in the stand's frame: at the end of the boom, sat on top of it.
+static func mic_clip() -> Vector3:
+	return Vector3(0, MIC_HEIGHT, -MIC_REACH) + Vector3(0, cos(MIC_TILT), sin(MIC_TILT)) * (0.009 + MIC_CLIP_RADIUS)
 
 
 ## A mic stand with nothing in its clip: a round base, a pole, a boom reaching out along its own
@@ -301,7 +309,7 @@ static func mic_stand(parent: Node3D, at: Vector3, metal: Material, yaw := 0.0) 
 	base.material_override = metal
 	stand.add_child(base)
 	# Fifteen degrees up from level: the boom rises this much over its reach.
-	var tilt := deg_to_rad(15.0)
+	var tilt := MIC_TILT
 	var arm_length := MIC_REACH / cos(tilt)
 	var join := MIC_HEIGHT - MIC_REACH * tan(tilt)
 	var pole := MeshInstance3D.new()
@@ -326,15 +334,17 @@ static func mic_stand(parent: Node3D, at: Vector3, metal: Material, yaw := 0.0) 
 	boom.position = Vector3(0, join, 0) + Vector3(0, sin(tilt), -cos(tilt)) * arm_length * 0.5
 	boom.material_override = metal
 	stand.add_child(boom)
-	# The empty clip at the end, where a mic goes when one is called up.
+	# The clip at the end, along the boom and just on top of it, where the mic sits (MicItem, at
+	# `Venue.mic_spot`): a short open ring a handheld mic's body pushes into.
 	var clip := MeshInstance3D.new()
 	clip.name = "Clip"
 	var ring := CylinderMesh.new()
-	ring.top_radius = 0.018
-	ring.bottom_radius = 0.014
-	ring.height = 0.05
+	ring.top_radius = MIC_CLIP_RADIUS
+	ring.bottom_radius = MIC_CLIP_RADIUS
+	ring.height = 0.035
 	clip.mesh = ring
-	clip.position = Vector3(0, MIC_HEIGHT + 0.03, -MIC_REACH)
+	clip.rotation = boom.rotation
+	clip.position = mic_clip()
 	clip.material_override = metal
 	stand.add_child(clip)
 

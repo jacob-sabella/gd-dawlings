@@ -120,6 +120,8 @@ func _ready() -> void:
 	await _test_a_ball_is_thrown_and_flies_the_same_everywhere()
 	await _test_a_paper_plane_glides()
 	await _test_a_throw_is_caught()
+	_test_a_mic_arms_a_track_and_puts_it_back()
+	await _test_the_mic_lives_in_the_stand_and_is_live_in_a_hand()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6616,6 +6618,143 @@ func _test_a_throw_is_caught() -> void:
 	var xr := XRInteractor.new()
 	check("a headset's hand catches in its palm, a hand's span", xr.catch_reach() > 0.0 and xr.catch_reach() < 0.25)
 	xr.free()
+	Session.layout = saved_layout
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## The mic (docs/items_loop.md): picked up here it puts your voice on a track -- the host's
+## armed and monitored, a guest's taken with the host's -- and put down, the track is as it was.
+func _test_a_mic_arms_a_track_and_puts_it_back() -> void:
+	_offline()
+	var tracks := DAW.state.tracks
+	var vox := MicArm.track_for(tracks)
+	check("a mic goes to the track named for a voice (%s)" % DAW.state.track(vox).name,
+			DAW.state.track(vox).name == "Lead Vox")
+	check("or the one a guest already chose for their mic", MicArm.track_for(tracks, 3) == 3)
+	check("and a choice that is not a track is not one", MicArm.track_for(tracks, 99) == vox)
+	var plain := {}
+	for i in [4, 2, 9]:
+		var t := MixState.TrackState.new()
+		t.name = "Gtr %d" % i
+		plain[i] = t
+	check("with none for a voice, the first track", MicArm.track_for(plain) == 2)
+	check("and with no tracks, none", MicArm.track_for({}) == 0)
+
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	var t := DAW.state.track(vox)
+	t.rec_arm = false
+	t.monitor = DAW.MONITOR_AUTO
+	var arm := MicArm.new()
+	arm.take()
+	check("taken up here, it arms that track and monitors it", t.rec_arm and t.monitor == DAW.MONITOR_ON)
+	check("and says so (%s)" % [told], told.size() == 1 and (told[0] as String).contains("Lead Vox, armed"))
+	arm.take()
+	check("taken twice is still one take", told.size() == 1)
+	arm.let_go()
+	check("put down, the track is as it was", not t.rec_arm and t.monitor == DAW.MONITOR_AUTO and arm.track == 0)
+	t.rec_arm = true
+	arm.take()
+	arm.let_go()
+	check("one already armed stays armed", t.rec_arm)
+	t.rec_arm = false
+
+	var saved_audio := Session.guest_audio
+	var audio := GuestAudio.new()
+	Session.guest_audio = audio
+	Session.role = Session.Role.GUEST
+	audio.target_track = 0
+	arm.take()
+	check("a guest's mic records their voice onto it with the host", audio.target_track == vox
+			and audio.record_with_host)
+	check("and arms nothing on the host, whose input would record over it", not t.rec_arm)
+	check("and says when it records (%s)" % [told], (told.back() as String).contains("records when the host records"))
+	arm.let_go()
+	check("put down, the guest's recording is as it was", audio.target_track == 0 and not audio.record_with_host)
+	audio.target_track = 5
+	arm.take()
+	check("a guest who chose a track sings into it", audio.target_track == 5 and audio.record_with_host)
+	arm.let_go()
+	check("and keeps it after", audio.target_track == 5 and not audio.record_with_host)
+	audio.free()
+	Session.guest_audio = saved_audio
+	Session.role = saved_role
+	Session.notice.disconnect(listen)
+
+
+## The mic in the studio: it lives in the booth's stand, it is live only in a hand here, and the
+## studio arms on it.
+func _test_the_mic_lives_in_the_stand_and_is_live_in_a_hand() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var mic := room.items.get(&"mic") as MicItem
+	check("there is a mic", mic != null and mic.state == Item.State.HOME)
+	var wrong: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var stand := studio.venue.find_child("MicStand", true, false) as Node3D
+		var spot: Variant = studio.venue.mic_spot()
+		if stand == null:
+			if spot != null:
+				wrong.append("%s: a spot with no stand" % id)
+			continue
+		var clip := stand.get_node("Clip") as Node3D
+		var middle := mic.global_transform * Vector3(0, MicItem.AXIS_HEIGHT, 0)
+		if middle.distance_to(clip.global_position) > 0.03:
+			wrong.append("%s: %.2fm from the clip" % [id, middle.distance_to(clip.global_position)])
+		if (mic.global_basis * Vector3.FORWARD).dot(stand.global_basis * Vector3.FORWARD) < 0.9:
+			wrong.append("%s: not along the boom" % id)
+	check("in every venue with a stand, the mic is in its clip, along the boom (%s)" % [wrong], wrong.is_empty())
+	studio.set_venue(&"chalk", false)
+	var shelf := studio.venue.item_spots()
+	check("with no stand it takes a place on the shelf", studio.venue.mic_spot() != null
+			or shelf.any(func(s: Transform3D) -> bool: return s.origin.is_equal_approx(mic.home.origin)))
+	studio.set_venue(&"studio", false)
+	shelf = studio.venue.item_spots()
+	check("and the shelf's places still go to the others in order",
+			(room.items[&"duck"] as Item).home.origin.is_equal_approx(shelf[0].origin)
+			and (room.items[&"plane"] as Item).home.origin.is_equal_approx(shelf[2].origin))
+
+	var lit := func() -> float: return mic._band.emission_energy_multiplier
+	var vox := MicArm.track_for(DAW.state.tracks)
+	var t := DAW.state.track(vox)
+	t.rec_arm = false
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	check("at home it is dark and live nowhere", not mic.live and lit.call() == 0.0)
+	hand.pick_up(mic)
+	check("picked up here it is live, and its band glows", mic.live and lit.call() > 0.0)
+	check("and the studio arms a track for it", t.rec_arm and studio.mic_arm.track == vox)
+	hand.put_down()
+	check("put down, it is not, and the track is not armed", not mic.live and lit.call() == 0.0
+			and not t.rec_arm)
+	hand.pick_up(mic)
+	hand.throw_with(0.4)
+	check("thrown, it is not live either", not mic.live and not t.rec_arm)
+	mic.snap_home()
+	var palm := func() -> Transform3D: return Transform3D(Basis.IDENTITY, Vector3(0, 1.2, 0))
+	mic.follow(palm)
+	check("in someone else's hand it glows but is not live here", lit.call() > 0.0 and not mic.live
+			and not t.rec_arm)
+	mic.snap_home()
+	hand.pick_up(mic)
+	hand.lose_carrying()
+	mic.follow(palm)
+	check("taken from this hand, it lets the track go", not mic.live and not t.rec_arm)
+	mic.snap_home()
+	Session.role = saved_role
 	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame

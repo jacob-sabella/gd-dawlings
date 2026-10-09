@@ -212,11 +212,24 @@ ergonomics.
       `_apply_items` already made a hand let go when the table said someone else had its item;
       a take is just the host saying so on purpose. The catch is decided by the catcher's
       machine and settled by the host's first-come rule, like any other pick-up.
-- [ ] The handheld mic: picking it up asks to arm your input on a track (through
+- [x] The handheld mic: picking it up asks to arm your input on a track (through
       `Session.send_intent`), you hear yourself at once on the low-latency path, and your take
       is recorded and placed by song position the way guest recording is. Put down, it disarms.
       If the native path cannot yet carry a voice, find out what it takes, and park the
       routing choice if it needs the user.
+      Done: `MicItem` (Blender, `tools/blender/mic.py`) lives in the clip of the booth's mic
+      stand (`Venue.mic_spot`, the shelf in chalk, which has no stand), and its band glows red
+      in anyone's hand. Live in a hand here, it drives `MicArm`. On the host it arms the
+      vocal track (or the first track) with monitoring on, through `send_intent`, so the host
+      hears themself through the DAW. On a guest it points `GuestAudio` at the track and opts
+      in to recording with the host. It arms nothing there, because an armed host track records
+      the host's input over the guest's take. Put down, thrown or taken, the track goes back to
+      how it was. Parked: a guest hearing themself, because `native/keys.c` carries keys, not a
+      voice (docs/loop_backlog.md, "Waiting on the user"). Learned: joining Blender objects
+      keeps the active object's transform, so a model centred by its vertex mean before
+      `transform_apply` came out with its origin off to the side and floated beside the glove.
+      Also, the stand's clip was an upright cup that no handheld mic sits in; it is now a ring
+      along the boom, and the mic's home is worked out from the same numbers.
 - [ ] Headphones: put on, they show on your ghost. Their jack plugs into a point (a channel
       strip, the patchbay, another player's instrument, the click, the talkback), and your ears
       get that source. Begin with the sources this process already has. A per-track cue from
