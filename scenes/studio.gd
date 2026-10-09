@@ -898,7 +898,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var pending_items := {}
 	for p in _predictions:
 		match p["verb"]:
-			&"put_item", &"home_item", &"throw_item", &"wear_item": pending_items[p["args"][0]] = true
+			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item": pending_items[p["args"][0]] = true
 			&"patch", &"on_air": pass
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
@@ -1070,7 +1070,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"place_surface":
 			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
 				_place_in_studio(args[0], args[1])
-		&"put_item", &"home_item", &"throw_item", &"wear_item":
+		&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item == null or not _may_put(item, from):
 				return
@@ -1079,6 +1079,10 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 					# Only something in their hand goes on their head.
 					if item.state == Item.State.HELD:
 						item.set_worn(args[1])
+				&"pocket_item":
+					# Only something they have goes in their pocket, and only one of theirs.
+					if item.state == Item.State.HELD and args[1] >= -1 and args[1] < Pockets.COUNT:
+						item.set_pocket(args[1])
 				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
 				&"home_item": item.go_home()
 				&"throw_item": items.fly(item, args[1], args[2], args[3])
@@ -1901,8 +1905,8 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 ## taken back: GuestMidi plays it, and on a desktop the computer keyboard is its piano.
 func _follow_keytar() -> void:
 	var keytar := items.items.get(&"keytar") as KeytarItem if items != null else null
-	var mine := keytar != null and keytar.state == Item.State.HELD and keytar.carried_by != null \
-			and not keytar.is_held_elsewhere()
+	# In the hand: not one slung across your back in a pocket.
+	var mine := keytar != null and keytar.in_hand()
 	if mine == _keytar_mine:
 		return
 	_keytar_mine = mine
@@ -2105,6 +2109,21 @@ func _toggle_headphones() -> void:
 		hand.wear()
 
 
+## Pocket `slot` and the mouse's hand: swapped.
+func _pocket(slot: int) -> void:
+	var hand := get_node_or_null("MouseHand") as Interactor
+	if hand == null or hand.pockets == null:
+		return
+	if hand.swap_pocket(slot):
+		_say_pockets(hand)
+	else:
+		Session.notice.emit("Your %s pocket is empty." % Pockets.NAMES[slot])
+
+
+func _say_pockets(hand: Interactor) -> void:
+	Session.notice.emit("Pockets: %s" % hand.pockets.summary())
+
+
 ## Put down whatever any hand here is carrying, where it is aiming.
 func put_down_items() -> void:
 	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
@@ -2213,6 +2232,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Headphones on, or off into your hand. H: beside the hand's other item keys.
 			KEY_H:
 				_toggle_headphones()
+			# Your pockets: left hip, right hip, back. What is in the hand goes in, and what was
+			# in comes out.
+			KEY_1, KEY_2, KEY_3:
+				_pocket(event.keycode - KEY_1)
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)
@@ -2228,6 +2251,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_0:
 				_set_text_scale(1.0)
 	elif event is InputEventMouseButton and event.pressed:
+		# The wheel goes through what you carry while you carry anything; ctrl and the wheel
+		# still zooms.
+		var hand := get_node_or_null("MouseHand") as MouseInteractor
+		var notches := 1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 0
+		if notches != 0 and not event.ctrl_pressed and hand != null and hand.pockets != null \
+				and (hand.carrying != null or not hand.pockets.items().is_empty()):
+			if hand.cycle_pockets(notches):
+				_say_pockets(hand)
+			return
 		if not god_mode and walker != null:
 			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 				camera.fov = maxf(30.0, camera.fov - 3.0)

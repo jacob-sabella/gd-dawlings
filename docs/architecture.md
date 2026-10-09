@@ -1422,6 +1422,14 @@ string are posed from the trick and its time, against the world's down and the h
 desktop (`string_length`), where the full length plays out of the picture. It is the one item
 whose look depends on who holds it.
 
+Pockets (`Pockets`) are a person's, shared by every hand on the machine (`Pockets.mine`,
+`Interactor.pockets`). A pocketed item stays HELD and `carried_by` the hand that stowed it, with
+`Item.pocket` saying which; the room publishes it as `["pocket", n]` and a guest asks with
+`pocket_item`. Presence claims what is in pockets with what is in hands, reading every hand
+together. It poses a pocketed item on a ghost with `Avatar.pocket_pose`, and on your own mirror
+ghost through `Item.pocket_at`. `Item.in_hand` is the test for "in this hand, not stowed or
+worn", and `on_stowed` is where an item stops what it was doing.
+
 The venue's toy (`ToyItem`, kind `toy`) is one item whose look and flight are the venue's: a
 table of nine (`ToyItem.TOYS`), from one model file of nine objects (`tools/blender/toys.py`).
 `ItemRoom.set_venue` turns it into the new venue's toy when the venue changes, even in a hand,

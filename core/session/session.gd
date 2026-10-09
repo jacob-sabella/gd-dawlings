@@ -868,7 +868,7 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D],
 		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME],
 		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
-		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"patch": [TYPE_INT, TYPE_STRING_NAME],
+		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"pocket_item": [TYPE_STRING_NAME, TYPE_INT], &"patch": [TYPE_INT, TYPE_STRING_NAME],
 		&"on_air": [TYPE_BOOL]}
 
 

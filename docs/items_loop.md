@@ -472,8 +472,25 @@ ergonomics.
       - Left of the hoop is inside the studio's curtain wall; the test now checks every
         venue's spot is floor you can reach, a toy's width all round.
       Not done: a slinky, and a desk toy by the console. The toys only differ in how they fly.
-- [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
+- [x] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
+      Done: three pockets, the left hip, the right hip and across the back. On a desktop, 1, 2
+      and 3 swap the hand with that pocket (in, out, or one for the other). The wheel goes round
+      them while you carry anything; ctrl and the wheel still zooms. Picking something up with a
+      full hand pockets what was in it, if a pocket is free, instead of sending it home. In a
+      headset, the trigger with a hand at a hip, or reached back over the shoulder, does the
+      same. What is pocketed is still yours, claimed with the host like what is in the hand, and
+      everyone else sees it on your ghost's hips and back. You see it only in a mirror, as you
+      do a hat. A toy pocketed mid-trick stops, and a keytar on your back gives the keys back.
+      Learnings:
+      - Pockets are a person's, not a hand's: a headset's two hands share them, and one hand
+        can take out what the other put in. The claims are read off every hand together, so a
+        thing moving between hands is never let go of on the way.
+      - A swap has to empty the pocket before filling it, or it wipes what it just put there.
+      - A wheel that always starts from the first pocket only ever swaps with that one: it has
+        to remember where it got to.
+      - The ghost's resting hands cover its sides: hip pockets sit a little forward of them.
+      Not tried in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's
       props do), next to walking to the shelf. Park it with the user first if it would make the
       shelves pointless.

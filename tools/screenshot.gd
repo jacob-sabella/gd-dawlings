@@ -31,6 +31,9 @@ var _walk_mirror := 0.0
 ## on it (play these into the null sink: it sounds). `--carry chips:t2@0.5` does a fidget's
 ## tricks before trick 2 and stops trick 2 half way.
 var _carry := ""
+## `--pockets duck,ball,keytar`: those items picked up and put in pockets 1, 2 and 3 in turn, from
+## frame 9, before anything `--carry` puts in the hand.
+var _pockets: PackedStringArray = []
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
 ## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
 var _visitor: Array = []
@@ -129,6 +132,8 @@ func _ready() -> void:
 								int(span[0]), int(span[1])])
 			"--turn":
 				if i + 1 < args.size(): _turn = int(args[i + 1])
+			"--pockets":
+				if i + 1 < args.size(): _pockets = args[i + 1].split(",")
 			"--carry":
 				if i + 1 < args.size(): _carry = args[i + 1]
 			"--on-air":
@@ -225,6 +230,16 @@ func _process(_delta: float) -> void:
 		if on_air_studio != null and on_air_studio.has_method("_set_on_air"):
 			on_air_studio._set_on_air(_on_air, true)
 
+	if _frames == 9 and not _pockets.is_empty():
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var hand := studio.get_node_or_null("MouseHand") as Interactor if studio else null
+		var room: ItemRoom = studio.get("items") if studio else null
+		if hand != null and room != null:
+			for n in mini(_pockets.size(), Pockets.COUNT):
+				var item: Item = room.items.get(StringName(_pockets[n]))
+				if item != null:
+					hand.pick_up(item)
+					hand.stow(n)
 	if _frames == 9 and _carry != "":
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var what := _carry.split(":")

@@ -141,6 +141,10 @@ func on_put_down() -> void:
 	release_all()
 
 
+func on_stowed() -> void:
+	release_all()
+
+
 func _build_body() -> Node3D:
 	var root := Node3D.new()
 	var model := (load(MODEL) as PackedScene).instantiate() as Node3D

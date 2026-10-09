@@ -90,6 +90,12 @@ var on_head := false
 ## Where on this person's head it sits, worn here: their mirror ghost's (Presence). Unset, it
 ## rides the hand, out of sight on its mirror-only layer.
 var worn_at: Callable = Callable()
+## In a pocket rather than a hand (Pockets): which, or -1. Like `on_head`: here the hand that put it
+## there still has it; on somebody else, it rides their ghost (`held_elsewhere`).
+var pocket := -1
+## Where pocket n is on this person, in the world: their mirror ghost's hip or back (Presence).
+## Unset, it is not drawn.
+var pocket_at: Callable = Callable()
 ## Its home is a place of its own (a hook, a clip) rather than a spot on the shelf: ItemRoom.
 var own_home := false
 ## How big it is drawn: 1 in a hand, a ghost's head's size on one (worn poses carry a scale).
@@ -153,6 +159,11 @@ func on_picked_up() -> void:
 
 ## Override: it has just left one, onto the floor or for home.
 func on_put_down() -> void:
+	pass
+
+
+## Override: it has just gone into a pocket: stop whatever it was doing in the hand.
+func on_stowed() -> void:
 	pass
 
 
@@ -313,8 +324,9 @@ func is_flying() -> bool:
 func follow(pose: Callable) -> void:
 	_leave_hand()
 	held_elsewhere = pose
-	# Still there to grab: reaching for it takes it from them. Not off their head, though.
-	_shape.disabled = on_head
+	# Still there to grab: reaching for it takes it from them. Not off their head, though, nor
+	# out of their pocket.
+	_shape.disabled = on_head or pocket >= 0
 	_set_state(State.HELD)
 	poke(-0.35)
 
@@ -360,6 +372,32 @@ func set_worn(on: bool) -> void:
 			_shape.disabled = on_head
 	set_physics_process(true)
 	worn_changed.emit()
+
+
+## Into pocket `slot` or out of it into the hand (-1). Out of every hand it is out of every pocket
+## too (`_set_state`). Here, seen only in a mirror, as a hat is; on somebody else, not to be
+## taken out of their pocket.
+func set_pocket(slot: int) -> void:
+	if slot == pocket:
+		return
+	var was := pocket
+	pocket = slot
+	if state == State.HELD:
+		if carried_by != null:
+			_layers(Mirror.SELF_ONLY if pocket >= 0 else Mirror.NOT_REFLECTED)
+		else:
+			_shape.disabled = pocket >= 0 or on_head
+	if pocket >= 0 and was < 0:
+		on_stowed()
+	body.visible = true
+	set_physics_process(true)
+	worn_changed.emit()
+
+
+## In a hand, rather than a pocket or on a head: this machine's hand.
+func in_hand() -> bool:
+	return state == State.HELD and carried_by != null and is_instance_valid(carried_by) \
+			and not on_head and pocket < 0
 
 
 ## Out of the hand onto the floor at `spot` (in the parent's frame), turned to `yaw`.
@@ -426,6 +464,7 @@ func _set_state(to: State) -> void:
 	state_changed.emit(to)
 	if to != State.HELD:
 		set_worn(false)
+		set_pocket(-1)
 
 
 ## A squash (negative) or a stretch, rung out on a spring. A squeeze, a landing, a pick-up.
@@ -561,7 +600,11 @@ func _goal() -> Transform3D:
 			if held_elsewhere.is_valid():
 				hand = held_elsewhere.call()
 			elif carried_by != null and is_instance_valid(carried_by):
-				if on_head and worn_at.is_valid():
+				if pocket >= 0:
+					# Not drawn until there is a ghost to wear it: in your own view it is gone.
+					body.visible = pocket_at.is_valid()
+					hand = pocket_at.call(pocket) if pocket_at.is_valid() else carried_by.carry_pose()
+				elif on_head and worn_at.is_valid():
 					hand = worn_at.call()
 				else:
 					hand = carried_by.carry_pose() * held_pose()

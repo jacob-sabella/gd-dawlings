@@ -99,6 +99,12 @@ func on_put_down() -> void:
 	rest()
 
 
+## Pocketed mid-trick: the trick is over, and it goes in as it lies at rest.
+func on_stowed() -> void:
+	finish()
+	rest()
+
+
 func _ready() -> void:
 	super()
 	set_process(false)

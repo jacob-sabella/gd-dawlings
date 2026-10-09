@@ -95,7 +95,7 @@ static func velocity_for(speed: float) -> int:
 func _physics_process(delta: float) -> void:
 	super(delta)
 	_since += delta
-	if state == State.HELD and carried_by != null and is_instance_valid(carried_by) and not on_head:
+	if in_hand():
 		feel(carried_by.shake_point(), delta)
 	else:
 		_last = Vector3.INF

@@ -140,6 +140,7 @@ func _ready() -> void:
 	await _test_the_cradle_swings_and_clacks()
 	await _test_the_yoyo_does_its_tricks()
 	await _test_each_venue_has_a_toy_of_its_own()
+	await _test_pockets_carry_more_than_one_thing()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -11174,6 +11175,108 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+## Pockets (docs/items_loop.md): more than one thing carried, the rest on your hips and back.
+func _test_pockets_carry_more_than_one_thing() -> void:
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var duck := room.items[&"duck"] as Item
+	var ball := room.items[&"ball"] as Item
+	var plane := room.items[&"plane"] as Item
+	var cradle := room.items[&"cradle"] as CradleItem
+	var shaker := room.items[&"shaker"] as Item
+	check("a hand has pockets, and they are this machine's person's", hand.pockets != null and hand.pockets == Pockets.mine())
+	hand.pockets._slots = [null, null, null]
+
+	hand.pick_up(duck)
+	check("a number key puts what is in the hand in that pocket", hand.swap_pocket(0)
+			and hand.carrying == null and duck.state == Item.State.HELD and duck.pocket == 0
+			and hand.pockets.at(0) == duck and not duck.in_hand())
+	check("and the room has it in a pocket", room.state().get(&"duck") == ["pocket", 0])
+	duck._physics_process(1.0 / 60.0)
+	check("with no ghost of yours to wear it, it is not drawn in your view", not duck.body.visible)
+	check("an empty pocket's key does nothing", not hand.swap_pocket(2))
+	hand.pick_up(ball)
+	hand.pick_up(plane)
+	check("picking up with a full hand pockets what was in it, in the first free pocket",
+			hand.carrying == plane and ball.pocket == 1 and hand.pockets.at(1) == ball and ball.state == Item.State.HELD)
+	hand.swap_pocket(0)
+	check("a full hand and a full pocket swap", hand.carrying == duck and duck.pocket == -1 and plane.pocket == 0
+			and room.state().get(&"duck") == [] and hand.pockets.summary() == "1 paper plane · 2 bouncy ball · 3 —")
+	hand.cycle_pockets(1)
+	check("the wheel swaps the hand for the next full pocket", hand.carrying == plane and duck.pocket == 0)
+	hand.cycle_pockets(1)
+	check("and round again", hand.carrying == ball and plane.pocket == 1 and duck.pocket == 0)
+	hand.pick_up(shaker)
+	check("all three full", hand.pockets.free_slot() == -1 and hand.pockets.items().size() == 3)
+	hand.pick_up(cradle)
+	check("and then a full hand's goes home, as it always did", shaker.state == Item.State.HOME and hand.carrying == cradle)
+
+	# A toy mid-trick stops when it is pocketed.
+	hand.swap_pocket(2)
+	check("reaching for your own pocketed thing with a full hand swaps them", hand.carrying == ball and cradle.pocket == 2)
+	hand.pick_up(cradle)
+	check("both ways", hand.carrying == cradle and ball.pocket == 2)
+	cradle.work(true)
+	cradle.work(false)
+	check("a cradle in the hand swings", cradle.playing >= 0)
+	hand.swap_pocket(2)
+	check("pocketed, it stops", cradle.playing < 0 and cradle.pocket == 2 and hand.carrying == ball)
+
+	# Sent home by the room, a pocket is empty again.
+	duck.snap_home()
+	check("a thing sent home from a pocket is out of it", hand.pockets.at(0) == null and duck.pocket == -1)
+
+	# Another machine's copy, told by the room.
+	var other := ItemRoom.new()
+	add_child(other)
+	await get_tree().process_frame
+	var copy := other.items[&"plane"] as Item
+	copy.follow(func() -> Transform3D: return Transform3D.IDENTITY)
+	other.apply({&"plane": ["pocket", 1]})
+	check("a copy told it is in somebody's pocket puts it there, and it cannot be taken out of it",
+			copy.pocket == 1 and copy._shape.disabled)
+	other.apply({&"plane": []})
+	check("and back in their hand when they take it out", copy.pocket == -1 and not copy._shape.disabled)
+	other.queue_free()
+
+	# On a ghost: either hip and across the back.
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost.snap(Transform3D(Basis.IDENTITY, Vector3(0, 1.6, 0)))
+	var left := ghost.pocket_pose(0).origin
+	var right := ghost.pocket_pose(1).origin
+	var back := ghost.pocket_pose(2).origin
+	var middle := ghost._lean.global_position
+	check("a ghost's pockets are at its two sides, low (%s %s)" % [left, right],
+			signf(left.x - middle.x) != signf(right.x - middle.x) and left.y < 1.6 - 0.2 and absf(left.y - right.y) < 0.001)
+	check("and one on its back, higher, behind (%s)" % back, back.z > middle.z + 0.1 and back.y > left.y)
+	ghost.queue_free()
+
+	# Claimed with the host while in a pocket, and let go when it leaves it for home.
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	var presence := studio.presence
+	presence.claim_carries()
+	check("what is in a pocket is still claimed", Session.holder_of(plane.network_key()) == 1
+			and Session.holder_of(cradle.network_key()) == 1)
+	plane.snap_home()
+	presence.claim_carries()
+	check("and let go of once it is not", Session.holder_of(plane.network_key()) == 0)
+
+	for item in [duck, ball, plane, cradle, shaker]:
+		item.snap_home()
+	hand.pockets._slots = [null, null, null]
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
 
 
 ## Every venue has a toy of its own (docs/items_loop.md): one item, the room's look and flight.

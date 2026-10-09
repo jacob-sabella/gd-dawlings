@@ -182,7 +182,8 @@ func _rehome() -> void:
 
 ## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
 ## the floor (and "stuck" and the quaternion it is turned by after, for one stuck in a board),
-## {id: []} for one in a hand, {id: [true]} for one on a head. One left out is on the
+## {id: []} for one in a hand, {id: [true]} for one on a head, {id: ["pocket", n]} for one in a
+## pocket. One left out is on the
 ## shelf.
 func state() -> Dictionary:
 	var out := {}
@@ -202,7 +203,10 @@ func state() -> Dictionary:
 					entry.append_array(["stuck", q.x, q.y, q.z, q.w])
 				out[id] = entry
 			Item.State.HELD:
-				out[id] = [true] if item.on_head else []
+				if item.pocket >= 0:
+					out[id] = ["pocket", item.pocket]
+				else:
+					out[id] = [true] if item.on_head else []
 	return out
 
 
@@ -223,11 +227,18 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 		var spot := entry as Array
 		# On somebody's head: that it is worn is the room's; whose it is, the holds'.
 		if spot.size() == 1:
+			item.set_pocket(-1)
 			item.set_worn(bool(spot[0]))
+			continue
+		# In somebody's pocket: which, the room's; whose, the holds'.
+		if spot.size() == 2 and spot[0] is String and spot[0] == "pocket":
+			item.set_worn(false)
+			item.set_pocket(int(spot[1]))
 			continue
 		if spot.size() < 4:
 			if spot.is_empty() and item.state == Item.State.HELD:
 				item.set_worn(false)
+				item.set_pocket(-1)
 			continue
 		var at := Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
 		# A throw this copy has not flown: flown here from the same launch, to where the room
@@ -371,6 +382,12 @@ static func _onto(floor: Array, at: Vector3) -> Vector3:
 func wear(item: Item, on: bool) -> void:
 	item.set_worn(on)
 	asked.emit(&"wear_item", [item.id, on])
+
+
+## Put `item` in pocket `slot` here, or out of it into the hand (-1), and say so.
+func pocket(item: Item, slot: int) -> void:
+	item.set_pocket(slot)
+	asked.emit(&"pocket_item", [item.id, slot])
 
 
 ## Send `item` home from a hand here, and say so.

@@ -33,6 +33,8 @@ var carrying: Item = null
 ## What this hand has put on its person's head (`wear`): still this hand's, so still claimed
 ## with the host, but the hand is free again.
 var worn: Item = null
+## Its person's pockets (Pockets), shared by every hand they have; null, a hand with none.
+var pockets: Pockets = null
 ## Where on `hovered` the ray landed, in world space. For a control that is one thing to the
 ## hand and many to the eye -- a lane of items -- the readout depends on which part is under it.
 var hover_point := Vector3.ZERO
@@ -120,17 +122,27 @@ func _catch() -> void:
 			return
 
 
-## Take `item` into this hand. Whatever it was carrying goes home: one thing at a time, until
-## there are pockets.
+## Take `item` into this hand. Whatever it was carrying goes into a free pocket, or home when
+## there is none.
 func pick_up(item: Item) -> void:
 	if carrying == item:
 		return
+	if item.state == Item.State.HELD and item.pocket >= 0 and item.carried_by != null \
+			and pockets != null and pockets.at(item.pocket) == item:
+		# Out of our own pocket, by reaching for it on the mirror's ghost: as taking it out, and
+		# what was in the hand goes in in its place.
+		swap_pocket(item.pocket)
+		return
 	if carrying != null and is_instance_valid(carrying):
-		var room := ItemRoom.of(carrying)
-		if room != null:
-			room.send_home(carrying)
+		var spare := pockets.free_slot() if pockets != null else -1
+		if spare >= 0:
+			stow(spare)
 		else:
-			carrying.go_home()
+			var room := ItemRoom.of(carrying)
+			if room != null:
+				room.send_home(carrying)
+			else:
+				carrying.go_home()
 	_end_use()
 	carrying = item
 	item.take_into(self)
@@ -161,6 +173,117 @@ func wear() -> void:
 		item.set_worn(true)
 	if _glove != null:
 		_glove.poke(0.3)
+
+
+## Pocket `slot` and this hand: what is in the hand goes into the pocket, and what was in the
+## pocket comes into the hand -- either may be nothing. False if both were.
+func swap_pocket(slot: int) -> bool:
+	if pockets == null or slot < 0 or slot >= Pockets.COUNT:
+		return false
+	var inside := pockets.at(slot)
+	var held := carrying if is_instance_valid(carrying) else null
+	if inside == null and held == null:
+		return false
+	if held != null:
+		stow(slot)
+	if inside != null:
+		_out_of_pocket(inside)
+	return true
+
+
+## What this hand carries into pocket `slot`, which is empty.
+func stow(slot: int) -> void:
+	if pockets == null or not is_instance_valid(carrying):
+		return
+	_end_use()
+	var item := carrying
+	carrying = null
+	pockets.put(slot, item)
+	var room := ItemRoom.of(item)
+	if room != null:
+		room.pocket(item, slot)
+	else:
+		item.set_pocket(slot)
+	if _glove != null:
+		_glove.poke(0.3)
+
+
+## Pocket `slot`'s into this hand, if the hand is free. False if it was not, or the pocket empty.
+func take_from_pocket(slot: int) -> bool:
+	if pockets == null or is_instance_valid(carrying):
+		return false
+	var item := pockets.at(slot)
+	if item == null:
+		return false
+	_out_of_pocket(item)
+	return true
+
+
+func _out_of_pocket(item: Item) -> void:
+	if pockets.at(item.pocket) == item:
+		pockets.put(item.pocket, null)
+	# Put there by the other hand, perhaps: this one has it now.
+	if item.carried_by != self:
+		if item.carried_by != null and is_instance_valid(item.carried_by) and item.carried_by.carrying == item:
+			item.carried_by.carrying = null
+		item.carried_by = self
+	carrying = item
+	var room := ItemRoom.of(item)
+	if room != null:
+		room.pocket(item, -1)
+	else:
+		item.set_pocket(-1)
+	item.poke(-0.3)
+	item.on_picked_up()
+	if _glove != null:
+		_glove.poke(-0.3)
+
+
+## The pocket the wheel last went to: the next turn goes on from there.
+var _wheel_at := -1
+
+
+## The next full pocket's (`way` 1 or -1) into this hand, and what the hand had into that pocket:
+## a wheel through what you carry. False if the pockets are empty.
+func cycle_pockets(way: int) -> bool:
+	if pockets == null:
+		return false
+	var slot := pockets.next_full(_wheel_at if _wheel_at >= 0 else (-1 if way > 0 else Pockets.COUNT), way)
+	if slot < 0:
+		# Nothing to bring out: what is in the hand goes into the first free one.
+		var spare := pockets.free_slot()
+		if spare < 0 or not is_instance_valid(carrying):
+			return false
+		stow(spare)
+		_wheel_at = spare
+		return true
+	_wheel_at = slot
+	return swap_pocket(slot)
+
+
+## Override: how near this hand has to come to a pocket to reach into it with the button; 0 for
+## a hand that cannot (a mouse has keys for them).
+func pocket_reach() -> float:
+	return 0.0
+
+
+## Override: where pocket `slot` is on its person, in the world, for `pocket_reach`.
+func pocket_point(_slot: int) -> Vector3:
+	return Vector3(0, 1e6, 0)
+
+
+## The pocket this hand is at, if it is near enough one to reach in; -1 if it is not.
+func pocket_in_reach() -> int:
+	if pockets == null or pocket_reach() <= 0.0:
+		return -1
+	var best := -1
+	var best_d := pocket_reach()
+	for slot in Pockets.COUNT:
+		var d := catch_point().distance_to(pocket_point(slot))
+		if d < best_d:
+			best_d = d
+			best = slot
+	return best
 
 
 ## Off the head and back into this hand, if the hand is free. False if it was not.
@@ -270,6 +393,10 @@ func _physics_process(_delta: float) -> void:
 				and catch_point().distance_to(head_point()) < head_reach():
 			# An empty hand up at the head: it takes off what is on it.
 			take_off()
+		elif hovered == null and pocket_in_reach() >= 0 \
+				and (carrying != null or pockets.at(pocket_in_reach()) != null):
+			# A hand at a hip or over the shoulder: into the pocket there, or out of it.
+			swap_pocket(pocket_in_reach())
 		elif hovered == null and carrying != null:
 			# Nothing under the ray, something in the hand: the button is the item's.
 			_using = true
@@ -423,6 +550,9 @@ func _exit_tree() -> void:
 
 func _enter_tree() -> void:
 	add_to_group(GROUP)
+	# One person to a machine, so one set of pockets: every hand here reaches the same ones.
+	if pockets == null:
+		pockets = Pockets.mine()
 
 
 ## Open the hand. Also how the session takes a control back from someone who reached for it a

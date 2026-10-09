@@ -123,6 +123,10 @@ func _process(delta: float) -> void:
 		reflection.wear_item(wearing != null)
 		if wearing != null:
 			wearing.worn_at = reflection.worn_pose
+		# And what is in my pockets, on my mirror ghost's hips and back, seen only in mirrors.
+		for item in _my_pocketed():
+			if not item.pocket_at.is_valid():
+				item.pocket_at = func(slot: int) -> Transform3D: return reflection.pocket_pose(slot, item)
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -210,6 +214,17 @@ func _my_worn() -> Item:
 	return null
 
 
+func _my_pocketed() -> Array[Item]:
+	var out: Array[Item] = []
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor != null and interactor.pockets != null:
+			for item in interactor.pockets.items():
+				if not out.has(item):
+					out.append(item)
+	return out
+
+
 func _my_carried() -> Item:
 	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
 		var interactor := hand as Interactor
@@ -223,22 +238,27 @@ func _my_carried() -> Item:
 ## home, taken by the venue changing. Read off the hands rather than told by them, so no way
 ## of emptying a hand can leave a claim behind.
 func claim_carries() -> void:
+	# What every hand here has, all told: a thing moved from one hand to the other (out of a
+	# pocket the other put it in) is let go of by neither.
+	var everyone: Dictionary = {}
+	var hands: Array[Interactor] = []
 	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
 		var interactor := hand as Interactor
 		if interactor == null:
 			continue
-		# What is in the hand and what it has put on its person's head: both still this hand's.
-		# Moving a thing from one to the other changes nothing the host needs to hear.
-		var now: Array = []
-		if is_instance_valid(interactor.carrying):
-			now.append(interactor.carrying.network_key())
-		if is_instance_valid(interactor.worn):
-			now.append(interactor.worn.network_key())
+		hands.append(interactor)
+		for key in _carried_by(interactor):
+			everyone[key] = true
+	for interactor in hands:
+		# What is in the hand, what it has put on its person's head and in their pockets: all
+		# still this hand's. Moving a thing from one to another changes nothing the host needs
+		# to hear.
+		var now := _carried_by(interactor)
 		var was: Array = _carry_claims.get(interactor, [])
 		if now == was:
 			continue
 		for key in was:
-			if not now.has(key):
+			if not now.has(key) and not everyone.has(key):
 				Session.release_hold(key)
 		for key in now:
 			if not was.has(key):
@@ -256,6 +276,20 @@ func claim_carries() -> void:
 			for key in _carry_claims[interactor]:
 				Session.release_hold(key)
 			_carry_claims.erase(interactor)
+
+
+## The network keys of what `interactor` has: in it, on its person's head, in their pockets.
+func _carried_by(interactor: Interactor) -> Array:
+	var now: Array = []
+	if is_instance_valid(interactor.carrying):
+		now.append(interactor.carrying.network_key())
+	if is_instance_valid(interactor.worn):
+		now.append(interactor.worn.network_key())
+	if interactor.pockets != null:
+		for item in interactor.pockets.items():
+			if item.carried_by == interactor:
+				now.append(item.network_key())
+	return now
 
 
 func _hook_interactors() -> void:
@@ -407,6 +441,8 @@ func _palm_of(peer: int, item: Item) -> Transform3D:
 	var avatar: Avatar = _avatars.get(peer)
 	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
 		return item.global_transform
+	if item.pocket >= 0:
+		return avatar.pocket_pose(item.pocket, item)
 	return avatar.worn_pose() if item.on_head else avatar.carried_pose()
 
 
@@ -416,7 +452,7 @@ func _item_held_by(peer: int) -> Item:
 		return null
 	for id in _item_holders:
 		var item: Item = items.items.get(id)
-		if _item_holders[id] == peer and item != null and not item.on_head:
+		if _item_holders[id] == peer and item != null and not item.on_head and item.pocket < 0:
 			return item
 	return null
 
@@ -1201,6 +1237,26 @@ void fragment() {
 		var at := lean.global_transform.orthonormalized() * Transform3D(Basis.IDENTITY, _hat.position)
 		# Forward a little, as the hat's headphones are: the dome's widest is in front of its middle.
 		return Transform3D(at.basis.scaled(Vector3.ONE * unit * HEAD_FIT), at * Vector3(0, 0, 0.02 * unit))
+
+	## Where pocket `slot` (Pockets) is on this ghost, in the world, for `item` to ride there:
+	## at the left hip, the right hip, or slung across the back. Against the body, its face out,
+	## at its own size; swaying with the ghost.
+	const POCKETS := [[-0.58, 0.95, 0.0], [-0.58, -0.95, 0.0], [-0.12, PI, 0.7]]
+
+	func pocket_pose(slot: int, _item: Item = null) -> Transform3D:
+		var spec: Array = POCKETS[clampi(slot, 0, POCKETS.size() - 1)]
+		var y: float = spec[0]
+		var turn: float = spec[1]
+		var out := Vector3(sin(turn), 0, -cos(turn))
+		var unit := _lean.global_basis.get_scale().x
+		var frame := _lean.global_transform.orthonormalized()
+		# Its skin there, and 6 cm out from it in the world.
+		var at := _lean.global_transform * (out * (radius_at(y) + 0.06 / maxf(unit, 0.01)) + Vector3(0, y, 0))
+		# Face out from the body, upright, and a thing across the back tipped along it.
+		var z := frame.basis * -out
+		var x := Vector3.UP.cross(z).normalized()
+		var basis := Basis(x, z.cross(x), z) * Basis(Vector3.BACK, float(spec[2]))
+		return Transform3D(basis, at)
 
 	## The pack their keys send from, low on their belly: a SEND socket anyone can drag a plug
 	## from their tablet into, to hear this player's keys (PersonalMix, TheirKeys). Built in the

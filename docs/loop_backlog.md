@@ -196,6 +196,11 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Pockets: nothing on screen shows what is in them but a notice when they change, and the
+  mirror. Anything fits in any pocket, a keytar at the hip included. The ghost's pocketed
+  things are real size on a ghost that is not, so a duck at the hip is small. Never tried in a
+  headset, where the hips are guessed from the head.
+
 - The venue toys: they are all thrown things, a ball of some kind (or a starfish); none of them
   does anything the others cannot but fly differently. No slinky, nothing to fidget with, and no
   desk toy by the console. The beach ball, held on a desktop, is a big thing over the desk and

@@ -45,7 +45,7 @@ func item_title() -> String:
 
 
 func hint() -> String:
-	if state == State.HELD and carried_by != null and not on_head:
+	if in_hand():
 		return "click to put them on (H)"
 	return _hint("click to pick up")
 
@@ -138,7 +138,7 @@ func flies() -> Dictionary:
 
 ## A click with them in your hand: on they go.
 func use(down: bool) -> void:
-	if down and carried_by != null and not on_head:
+	if down and in_hand():
 		carried_by.wear()
 
 
