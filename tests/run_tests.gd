@@ -5892,10 +5892,10 @@ func _test_every_venue_leaves_room_for_the_activities() -> void:
 					check("%s: %s's dressing stands in its zone" % [tag, zone_id],
 							plan.has_point(Vector2(dressing.position.x, dressing.position.z)))
 				if id == &"studio":
-					check("%s: %s is inside the live room" % [tag, zone_id],
-							absf(box.position.x) <= venue.live_room_half()
-							and absf(box.end.x) <= venue.live_room_half()
-							and box.end.z <= Venue.LIVE_ROOM_BACK and box.end.y <= Venue.LIVE_ROOM_HEIGHT)
+					var floor_rect := Rect2(box.position.x, box.position.z, box.size.x, box.size.z)
+					check("%s: %s is inside one of the live rooms" % [tag, zone_id],
+							venue.rooms().any(func(r: Rect2): return r.grow(0.051).encloses(floor_rect))
+							and box.end.y <= Venue.LIVE_ROOM_HEIGHT)
 			if id == &"studio":
 				# The live room is lit from fittings on its walls, and each throws its light along
 				# the wall it hangs on -- into the room, never into the plaster behind it.
@@ -6218,6 +6218,25 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("the grid's booth, only neon edges, has no walls you cannot see",
 			GridVenue.new().zone_solids().size() == ZoneKit.solids(zones, true).size() - 4)
 	check("and the chalk zone's sketches are walked through", ChalkVenue.new().zone_solids().is_empty())
+
+	# The studio arranged with its live room beside: through the window you only look; the door
+	# lets you in, and every zone is somewhere you can stand.
+	studio.set_venue(&"studio", false, StudioVenue.BESIDE)
+	var wall_x := -studio.room_width * 0.5
+	at = walk_until_still.call(Vector3(wall_x + 0.4, 0, -1.6), Vector3(-1, 0, 0))
+	check("beside: the window stops you (x %.2f, glass %.2f)" % [at.x, wall_x],
+			at.x > wall_x and at.x < wall_x + 0.06 + Walker.RADIUS + 0.1)
+	at = walk_until_still.call(Vector3(wall_x + 0.4, 0, (StudioVenue.WINDOW_TO + StudioVenue.DOOR_TO) * 0.5),
+			Vector3(-1, 0, 0))
+	check("and the door lets you into the side room (x %.2f)" % at.x, at.x < wall_x - 2.0)
+	var side_rooms := studio.venue.rooms()
+	var all_standable := true
+	for box: AABB in studio.venue.zones().values():
+		var centre := Vector2(box.get_center().x, box.get_center().z)
+		if not side_rooms.any(func(r: Rect2): return r.grow(-Walker.RADIUS).has_point(centre)):
+			all_standable = false
+	check("and every zone's centre is in a room you can walk", all_standable)
+	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
 	var edges := Walker.outline([Rect2(-1, 0, 2, 2), Rect2(-3, 2, 6, 2)])

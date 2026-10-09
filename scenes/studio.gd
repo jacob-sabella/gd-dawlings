@@ -392,7 +392,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 func _walkable() -> Array[Rect2]:
 	var out: Array[Rect2] = [_room_bounds()]
 	if venue != null:
-		out.append(venue.back_of_house())
+		out.append_array(venue.rooms())
 	return out
 
 

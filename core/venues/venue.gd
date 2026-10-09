@@ -25,6 +25,7 @@ const IDS: Array[StringName] = [&"studio", &"grid", &"chalk"]
 ## its zones' contract; only what stands round them changes. Variant 0 is the venue as first
 ## built. Chosen by whoever's room it is, and carried with the venue (see Session.room).
 const VARIANTS := {
+	&"studio": ["Live room behind", "Live room beside"],
 	&"grid": ["Highway", "Downtown"],
 }
 
@@ -174,6 +175,13 @@ func back_of_house() -> Rect2:
 	var front := Studio.ROOM_DEPTH * 0.5 + 0.3
 	var half := live_room_half() - 0.05
 	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK - 0.05 - front)
+
+
+## Every room past the working footprint that a person can walk in, in studio space, each
+## meeting the footprint or another along a shared line (see Walker.outline). By default the
+## one back_of_house; an arrangement with a room off to the side has more.
+func rooms() -> Array[Rect2]:
+	return [back_of_house()]
 
 
 ## Half the live room's width, grown with the desk the way the zones are.

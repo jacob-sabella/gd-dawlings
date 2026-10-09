@@ -102,8 +102,11 @@ func _ready() -> void:
 ## on demand, since a venue or a session size can move them; cheap, and nothing calls it every
 ## frame.
 func _build_walls() -> void:
+	# Gone now, not at the end of the frame: a room rearranged mid-frame would otherwise keep
+	# its old walls standing in its new doorways until then.
 	for child in _solid_body.get_children():
 		if child.has_meta("wall"):
+			_solid_body.remove_child(child)
 			child.queue_free()
 	if floor_plan == null:
 		return

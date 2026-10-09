@@ -131,8 +131,14 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       `variant`, `LayoutProfile.venue_variant`, `--venue grid:1`, the stage manager's "arranged"
       row. The first one with two is the grid: Highway and Downtown, a city drawn as one
       MultiMesh. `light_check` shoots every arrangement.)
-- [ ] Studio: a live room behind glass beside the control room, holding the drum riser and the
+- [x] Studio: a live room behind glass beside the control room, holding the drum riser and the
       vocal booth zones. Make it the studio's second variant.
+      ("Live room beside": `StudioVenue.BESIDE`, a 6 m side room through a window and a door,
+      `Venue.rooms()`. The walker now takes its old walls out of the tree at once, or a room
+      rearranged mid-frame kept them standing in its new doorways.)
+- [ ] The studio's side room is lit but its walls are bare plaster in the dark (inside view mean
+      0.04). Give it treatment of its own (bass traps in the corners, a cloud over the kit) so
+      it reads from the door; and `light_check` has no view of it yet -- add one for `studio:1`.
 - [ ] Warehouse loft at night: brick, steel, tall windows on a city, a mezzanine for the matrix.
 - [ ] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
 - [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.

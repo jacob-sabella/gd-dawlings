@@ -7,7 +7,7 @@ colour the lamps shine.
 
 | id | Title | What it is |
 |---|---|---|
-| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall, washed by brass sconces, holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. |
+| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall, washed by brass sconces, holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. Two arrangements: **Live room behind** (all five zones through the open back) and **Live room beside**, where the kit and the booth have a room of their own off the left. Through a walnut-mullioned window over the riser you see the drummer from the desk. A door beside the window leads in, and the lattice, table and keys keep a narrower room behind. |
 | `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. The zones are black glass edged in neon; the lattice is a faint violet cube. Two arrangements: **Highway** runs the road out across the desert to the mountains; **Downtown** runs it down an avenue between towers close enough to read their windows, with the floor as an open plaza among them. |
 | `chalk` | Chalk Zone | A blackboard the size of the world. Neon chalk doodles hang at every distance and there is dust in the air. The working floor is outlined in chalk. Each zone is taped out on the floor in its own colour, with what will stand there sketched in the air. |
 
@@ -25,7 +25,9 @@ colour the lamps shine.
 
 A venue can come in more than one arrangement (`Venue.VARIANTS`): the same place with its structure
 moved about, such as walls or none, or a city near or far. An arrangement keeps the venue's
-footprint, its zones and where you can walk. Only what stands around them changes. Arrangement 0
+footprint and the zones' contract: all five, sized, and clear of the gear and of each other. Where
+the zones stand and which rooms you walk through may change: `Venue.rooms()` lists the walkable
+rooms past the footprint, and `zone_solids()` can close a shared edge again, leaving a door. Arrangement 0
 is the venue as it was first built. A venue that is not in `VARIANTS` has one arrangement, under
 its own name, and no picker. Changing venue starts the new one at its first arrangement.
 
