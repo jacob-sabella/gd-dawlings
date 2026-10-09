@@ -250,7 +250,7 @@ func _stand_the_board() -> void:
 	slate.shader = preload("res://core/venues/shaders/chalkboard.gdshader")
 	slate.set_shader_parameter("upright", true)
 	slate.set_shader_parameter("smudge", 0.3)
-	slate.set_shader_parameter("slate", Color(0.045, 0.06, 0.065))
+	slate.set_shader_parameter("slate", Color(0.075, 0.095, 0.1))
 	var board := MeshInstance3D.new()
 	board.name = "BoardWall"
 	var box := BoxMesh.new()
@@ -268,6 +268,18 @@ func _stand_the_board() -> void:
 		ZoneKit.block(self, Vector3(0.12, BOARD_HEIGHT, 0.1), Vector3(side * (half + 0.06), BOARD_HEIGHT * 0.5, BOARD_Z + 0.03),
 				wood, "BoardFrame")
 	ZoneKit.block(self, Vector3(half * 2.0, 0.04, 0.12), Vector3(0, 0.9, BOARD_Z - 0.06), wood, "ChalkTray")
+	# Picture lights along the top of the frame, washing the slate down its height.
+	for i in 4:
+		var wash := SpotLight3D.new()
+		wash.name = "BoardLight%d" % i
+		wash.light_color = Color(0.8, 0.85, 1.0)
+		wash.light_energy = 2.5
+		wash.spot_range = BOARD_HEIGHT + 1.0
+		wash.spot_angle = 50.0
+		wash.shadow_enabled = false
+		wash.position = Vector3(-half + half * 2.0 * (i + 0.5) / 4.0, BOARD_HEIGHT + 0.1, BOARD_Z - 0.7)
+		wash.basis = Basis.looking_at(Vector3(0, -1.0, 0.28), Vector3.FORWARD)
+		add_child(wash)
 	# What is written on it: the song's map across the top, a chord chart, the tempo, the take,
 	# and the doodles that collect round the edges of any board.
 	var face := BOARD_Z - 0.005

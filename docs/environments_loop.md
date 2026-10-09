@@ -196,5 +196,11 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
   - [ ] Chalk follow-up: the board's writing follows the session (its real sections, tempo and
     take from the DAW) and is rubbed out and rewritten when they change.
-- [ ] Pass over every venue: shoot them side by side and even out anything that drifted (light,
+- [x] Pass over every venue: shoot them side by side and even out anything that drifted (light,
       scale, how distinct they are).
+  Done 2026-10-08: all 14 arrangements under the light limits; scale is the same everywhere
+  (same gear, same floor) and each reads as its own place. Evened out: the studio's live room
+  sconces wash wider and softer (its back view was the darkest); the club's curtain runs the
+  whole back wall and its ambient is up a step; the sketched chalk board has picture lights.
+  The station's white blob over the timeline is gone; the bright disc in the cabin's wide view
+  is the moon through the window, as meant.

@@ -51,7 +51,7 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_color = Color(0.0, 0.0, 0.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.6, 0.42, 0.3)
-	env.ambient_light_energy = 0.3
+	env.ambient_light_energy = 0.4
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.glow_enabled = true
@@ -487,12 +487,12 @@ func _candle(at: Vector3) -> void:
 
 # --- the stage -------------------------------------------------------------------------------
 
-## The velvet behind the stage: the back wall from the left wall to past the riser.
+## The velvet behind the stage, drawn the whole width of the back wall.
 func _hang_the_curtain() -> void:
 	var half := live_room_half()
 	var stage: AABB = zones()[&"drums"]
 	var x0 := -half + 0.05
-	var x1 := stage.end.x + 0.8
+	var x1 := half - 0.05
 	var curtain := MeshInstance3D.new()
 	curtain.name = "Curtain"
 	var plane := PlaneMesh.new()
@@ -508,14 +508,14 @@ func _hang_the_curtain() -> void:
 	curtain.rotation.y = PI
 	add_child(curtain)
 	# Up-lights at its foot, behind the riser: the velvet glowing from below in long folds.
-	for i in 3:
+	for i in 5:
 		var wash := SpotLight3D.new()
 		wash.name = "CurtainWash"
 		wash.light_color = Color(1.0, 0.45, 0.3)
 		wash.light_energy = 2.2
 		wash.spot_range = 4.6
 		wash.spot_angle = 38.0
-		wash.position = Vector3(x0 + (x1 - x0) * (i + 0.5) / 3.0, 0.08, LIVE_ROOM_BACK - 0.75)
+		wash.position = Vector3(x0 + (x1 - x0) * (i + 0.5) / 5.0, 0.08, LIVE_ROOM_BACK - 0.75)
 		wash.basis = Basis.looking_at(Vector3(0, 1.0, 0.18), Vector3.FORWARD)
 		add_child(wash)
 	# The track it hangs from.

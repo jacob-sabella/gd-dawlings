@@ -599,9 +599,9 @@ func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material, energy 
 		wash.rotation = Vector3(dir * (PI * 0.5 + 0.12), 0, 0)
 		wash.light_color = Color(1.0, 0.76, 0.52)
 		wash.light_energy = energy
-		wash.spot_angle = 48.0
+		wash.spot_angle = 62.0
 		wash.spot_range = reach
-		wash.spot_angle_attenuation = 1.4
+		wash.spot_angle_attenuation = 0.9
 		wash.light_specular = 0.05
 		wash.shadow_enabled = false
 		sconce.add_child(wash)

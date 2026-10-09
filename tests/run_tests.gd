@@ -6519,6 +6519,8 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	var curtain := club.find_child("Curtain", false, false) as MeshInstance3D
 	check("the curtain hangs behind the stage, facing the room",
 			curtain.position.z > stage_box.end.z and curtain.global_transform.basis.z.z < -0.99)
+	check("and runs the back wall's whole width, so no bare brick shows behind the zones",
+			(curtain.mesh as PlaneMesh).size.x > club.live_room_half() * 2.0 - 0.2)
 	var flame_before := club.candles[0].light_energy
 	club._process(0.13)
 	check("the candles flicker", club.candles.size() == 3 and club.candles[0].light_energy != flame_before)
@@ -6544,6 +6546,12 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	for w: Label3D in words:
 		written = written and w.global_transform.basis.z.z < -0.99 and w.global_position.z < board_box.position.z
 	check("the session is written on the board, facing the room (%d)" % words.size(), written)
+	var board_lit := true
+	for i in 4:
+		var lamp := sketched.find_child("BoardLight%d" % i, false, false) as SpotLight3D
+		board_lit = board_lit and lamp != null and lamp.position.y > ChalkVenue.BOARD_HEIGHT \
+				and (-lamp.basis.z).y < -0.9 and (-lamp.basis.z).z > 0.0
+	check("picture lights along its top wash the slate down its height", board_lit)
 	check("and no doodles are left in the sky", sketched._doodles.is_empty()
 			and sketched.find_child("Rainbow", false, false) == null)
 	studio.set_venue(&"studio", false)
