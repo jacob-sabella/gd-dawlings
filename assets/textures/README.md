@@ -10,5 +10,8 @@ channel at a time by `Materials.scanned`).
 - `rough_linen` — acoustic panel cloth
 - `red_brick_03` — the loft's walls
 - `concrete_floor_worn_001` — the loft's floor
+- `wood_floor_deck` — the cabin's pine walls and ceiling
+- `weathered_brown_planks` — the cabin's floor and timbers
+- `snow_02` — the snow outside the cabin
 
 Fetched with `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/<res>/<id>/<id>_<map>_<res>.jpg`.

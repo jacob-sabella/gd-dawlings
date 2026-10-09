@@ -194,63 +194,15 @@ func _spread(bays: Array) -> Array:
 	return bays.map(func(x: float) -> float: return x + signf(x) * _grow())
 
 
-## A wall running along `along` (unit x or z) from `from` to `to`, its centre line through `at`,
-## with a window bay centred at each of `bays`.
+## A brick wall with factory windows in its bays (ShellKit).
 func _wall_with_bays(label: String, at: Vector3, along: Vector3, from: float, to: float, bays: Array,
 		brick: Material, steel: Material) -> void:
-	var across := Vector3(along.z, 0, along.x)
-	var place := func(centre: float, y: float) -> Vector3:
-		return at * across.abs() + along * centre + Vector3(0, y, 0)
-	var sized := func(length: float, tall: float, thick: float) -> Vector3:
-		return along.abs() * length + across.abs() * thick + Vector3(0, tall, 0)
-	var length := to - from
-	var mid := (from + to) * 0.5
-	# The bands: under the sills and over the heads, the whole length.
-	ZoneKit.block(self, sized.call(length, SILL, WALL + 0.004), place.call(mid, SILL * 0.5), brick,
-			label + "Sill")
-	ZoneKit.block(self, sized.call(length, HEIGHT - HEAD, WALL + 0.004), place.call(mid, (HEAD + HEIGHT) * 0.5),
-			brick, label + "Head")
-	# The piers between the bays.
-	var edges := [from]
-	for c: float in bays:
-		edges.append(c - BAY * 0.5)
-		edges.append(c + BAY * 0.5)
-	edges.append(to)
-	for i in range(0, edges.size(), 2):
-		var a: float = edges[i]
-		var b: float = edges[i + 1]
-		if b - a > 0.01:
-			ZoneKit.block(self, sized.call(b - a, HEAD - SILL, WALL), place.call((a + b) * 0.5, (SILL + HEAD) * 0.5),
-					brick, label + "Pier%d" % (i / 2))
-	for i in bays.size():
-		_window(label + "Window%d" % i, place.call(bays[i], (SILL + HEAD) * 0.5), along, steel)
-
-
-## A factory window: one pane of glass in the middle of the reveal, and a black steel grid over
-## it -- jambs, head and sill, and glazing bars every few panes. The grid's bars are deeper than
-## the pane and the uprights deeper than the crossbars, so no face is shared.
-func _window(label: String, centre: Vector3, along: Vector3, steel: Material) -> void:
-	var across := Vector3(along.z, 0, along.x).abs()
-	var w := BAY - 0.002
-	var h := HEAD - SILL - 0.002
-	var pane := ZoneKit.block(self, along.abs() * w + across * 0.01 + Vector3(0, h, 0), centre, _glass(),
-			label + "Pane")
-	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# Uprights: the two jambs, set in a millimetre from the reveal, and three between.
-	var uprights := 5
-	for i in uprights:
-		var t := float(i) / (uprights - 1)
-		var offset := lerpf(-w * 0.5 + 0.026, w * 0.5 - 0.026, t)
-		# A hair shorter than the pane, so their ends are not in one plane.
-		ZoneKit.block(self, along.abs() * 0.05 + across * 0.07 + Vector3(0, h - 0.004, 0),
-				centre + along.abs() * offset, steel, label + "Upright%d" % i)
-	# Crossbars every 0.45 m up, the head and sill bars included.
-	var rows := int(round(h / 0.45))
-	for j in rows + 1:
-		var y := lerpf(-h * 0.5 + 0.026, h * 0.5 - 0.026, float(j) / rows)
-		# Its ends inside the jambs, not flush with their outer faces.
-		ZoneKit.block(self, along.abs() * (w - 0.01) + across * 0.05 + Vector3(0, 0.05, 0),
-				centre + Vector3(0, y, 0), steel, label + "Bar%d" % j)
+	var openings := ShellKit.wall_with_bays(self, label, at, along, from, to, bays, BAY, SILL, HEAD,
+			HEIGHT, WALL, brick)
+	for i in openings.size():
+		# A factory window: black steel glazing bars every 0.45 m, five uprights to a bay.
+		ShellKit.glazed(self, label + "Window%d" % i, openings[i], along, Vector2(BAY, HEAD - SILL),
+				steel, _glass())
 
 
 func _glass() -> StandardMaterial3D:

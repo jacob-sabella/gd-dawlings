@@ -147,7 +147,12 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       gallery with festoon bulbs along the back wall, under-gallery grazers on the brick.)
 - [ ] Loft: the gallery is scenery. Let the walker climb the ladder onto it and look down on
       the lattice (a second floor level in the walker), or add a "Loft, gallery" arrangement.
-- [ ] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
+- [x] Cabin in snowy woods: timber, a stove's glow, snow past the windows, the synth by the window.
+      (`CabinVenue`. First venue with real models: a stove and firs scripted in Blender, a
+      rocking chair and lanterns from Poly Haven, all in `tools/blender/`. `ShellKit` now holds
+      the wall-with-windows both the loft and the cabin use. `VENUE=` on `tools/budget.sh`.)
+- [ ] Cabin: the back view is the darkest of any venue (0.034). A second wall lantern pair or
+      a lit shelf of jars along the back wall; and a rug under the rocking chair.
 - [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.

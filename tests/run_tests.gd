@@ -6262,6 +6262,38 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		if not loft_rooms.any(func(r: Rect2): return r.grow(-Walker.RADIUS).has_point(centre)):
 			loft_standable = false
 	check("and every zone's centre is somewhere you can stand", loft_standable)
+
+	# The cabin: the stove in the corner is hot iron you walk round, the floor beside the desk
+	# reaches the log wall, and the snow falls outside it, never in.
+	studio.set_venue(&"cabin", false)
+	var cabin := studio.venue as CabinVenue
+	var stove := cabin.stove_spot()
+	at = walk_until_still.call(Vector3(stove.x + 1.6, 0, stove.y), Vector3(-1, 0, 0))
+	check("cabin: the stove stops you (x %.2f, stove %.2f)" % [at.x, stove.x],
+			at.x > stove.x + CabinVenue.STOVE_SIZE.x * 0.5
+			and at.x < stove.x + CabinVenue.STOVE_SIZE.x * 0.5 + 0.15 + Walker.RADIUS + 0.1)
+	at = walk_until_still.call(Vector3(wall_x + 0.4, 0, 1.5), Vector3(-1, 0, 0))
+	check("and you walk past the footprint to the logs (x %.2f, wall %.2f)" % [at.x, -cabin.live_room_half()],
+			at.x < -cabin.live_room_half() + Walker.RADIUS + 0.1)
+	var indoors := AABB(Vector3(-cabin.live_room_half(), 0, CabinVenue.FRONT),
+			Vector3(cabin.live_room_half() * 2.0, CabinVenue.RIDGE, Venue.LIVE_ROOM_BACK - CabinVenue.FRONT))
+	var dry := true
+	for fall: GPUParticles3D in cabin.find_children("Snow*", "GPUParticles3D", false, false):
+		var box := (fall.process_material as ParticleProcessMaterial).emission_box_extents
+		var falls := AABB(fall.position - box, box * 2.0).grow(0.5)
+		if falls.intersects(indoors):
+			dry = false
+	check("and no snow falls within half a metre of the room", dry
+			and not cabin.find_children("Snow*", "GPUParticles3D", false, false).is_empty())
+	var lows := INF
+	var highs := 0.0
+	for i in 120:
+		cabin._process(1.0 / 30.0)
+		var e := (cabin.find_child("Firelight", false, false) as SpotLight3D).light_energy
+		lows = minf(lows, e)
+		highs = maxf(highs, e)
+	check("the fire flickers and never goes out (%.2f..%.2f)" % [lows, highs],
+			highs - lows > 0.2 and lows > 1.0)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

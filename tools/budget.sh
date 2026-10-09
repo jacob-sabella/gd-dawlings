@@ -3,6 +3,7 @@
 #
 #   tools/budget.sh                # 13, 24, 48, 90
 #   tools/budget.sh 13 90          # just those two
+#   VENUE=cabin tools/budget.sh 13 # in a venue other than the default
 #
 # The target is a standalone passthrough headset: this whole room, twice (once per eye), at
 # 72Hz, on a mobile GPU. The numbers below are from a desktop GPU and are NOT that budget --
@@ -40,6 +41,7 @@ run() {
   local pose="${2:-}"
   local cmd=(godot --path . --resolution 1600x900 -- --budget --tracks "$n" --quit-after 200)
   [ -n "$pose" ] && cmd+=(--cam "$pose")
+  [ -n "${VENUE:-}" ] && cmd+=(--venue "$VENUE")
   if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
     offscreen_run "${cmd[@]}" 2>&1
   else

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild every authored part into assets/hardware/.
+# Rebuild every authored part into assets/hardware/ and assets/models/.
 #
 #   tools/blender/build.sh
 #
@@ -12,5 +12,5 @@ for part in tools/blender/*.py; do
   case "$(basename "$part")" in _*) continue ;; esac
   echo "=== $part"
   blender --background --python "$part" 2>&1 \
-    | grep -E "verts,|slot [0-9]|bounds|wrote|Error|Traceback|RuntimeError" || true
+    | grep -E "verts,|faces|slot [0-9]|bounds|wrote|Error|Traceback|RuntimeError" || true
 done
