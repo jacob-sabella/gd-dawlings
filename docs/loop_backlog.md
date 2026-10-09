@@ -933,11 +933,13 @@ lamp parts".
   webcam?"). Plan: a `--webcam-ar` desktop launch that shows the webcam (`CameraServer`/`CameraFeed`, V4L2,
   /dev/video0) behind the scene and drops the venue's shell the way `XRBootstrap`'s passthrough does, so
   only the gear, the lattice and the zones float over the room. Fixed camera, not head-tracked; the
-  virtual camera is lined up with the webcam once by hand. To build once the environments queue is done.
+  virtual camera is lined up with the webcam once by hand. DROPPED for now (2026-10-09: "drop both of
+  those for now"); not to be built unless asked again.
 
 ## Lattice cells bobbing in zero-g on the station
 
 The station follow-up asked for the matrix "in true zero-g (its cells bobbing slowly)". The
 cells belong to the lattice activity, which every venue shares, so a venue cannot move them
 without a hook in the activity (e.g. a per-venue `drift` the lattice reads). Decide whether
-activities should take a look from the venue they stand in before building it.
+activities should take a look from the venue they stand in before building it. DROPPED for now
+(2026-10-09: "drop both of those for now"); not to be built unless asked again.

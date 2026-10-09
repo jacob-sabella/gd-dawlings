@@ -276,6 +276,7 @@ func _open_player() -> void:
 	stream.buffer_length = QUEUE_FRAMES / RATE
 	_player = AudioStreamPlayer.new()
 	_player.name = "SessionMix"
+	_player.bus = AudioPorts.bus(AudioPorts.MIX)
 	_player.stream = stream
 	_player.volume_db = volume_db
 	add_child(_player)

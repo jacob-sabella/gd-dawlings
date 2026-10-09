@@ -101,6 +101,7 @@ func start() -> void:
 	stream.buffer_length = 4096.0 / RATE
 	_player = AudioStreamPlayer.new()
 	_player.name = "MonitorSynth"
+	_player.bus = AudioPorts.bus(AudioPorts.MONITOR)
 	_player.stream = stream
 	_player.volume_db = volume_db
 	add_child(_player)

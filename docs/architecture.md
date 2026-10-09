@@ -1126,6 +1126,47 @@ strips cost nothing when nobody is touching them, and its slide player is parent
 -- emitted from the strip origin it would sit at the bottom of the throw no matter where the
 hand was, which on a desk three faders wide is audibly the wrong fader.
 
+### Every sound on a stream of its own
+
+Asked for "fully simulated I/O out of this process for ease of routing". On Linux the app's sound
+does not leave as one stream: each kind leaves as a PipeWire node of its own, and what it takes in
+arrives on one, so a patchbay (qpwgraph, Helvum, pavucontrol) can send each anywhere.
+
+| Stream | What | Made by |
+|---|---|---|
+| `reaper-3d · mix` | the built-in engine's master; on a guest, the host's mix it hears | `MixFeed`, `GodotBackend` |
+| `reaper-3d · monitor` | a guest's own keys, played the instant they are pressed | `MonitorSynth` |
+| `reaper-3d · gear` | the room: buttons, detents, faders, plugs, reel motors | `Foley.emitter` |
+| `reaper-3d · mic` (in) | what a guest records | `GuestAudio`, via `MixSource.Piped` |
+| `reaper-3d · mix tap` (in) | what a host passes on to its guests | `MixTap`, via `MixSource.Piped` |
+
+Each starts on the default device, like any app's sound, and the session manager remembers
+wherever it is moved to: each has its own `application.name`, which is what WirePlumber's
+stream-restore keys on, so moving the gear does not move the mix.
+
+**How.** `AudioPorts` (core/audio). Godot opens one output and that is left alone: it is the
+clock. Each kind plays on a bus of its own (`Mix`, `Monitor`, `Gear`); an `AudioEffectCapture`
+on the bus takes the sound, and the bus is sent on into `Ported`, a muted bus, so nothing is
+heard twice. A thread moves what the captures hold into a `pacat` per bus every millisecond,
+raw stereo float at 48kHz, 8ms of buffering asked of the server (`R3D_PORT_LATENCY_MS`).
+Godot's mixer is paced by its own output, which runs on the device's clock, so the pipes neither
+fill nor run dry. Writes are never more than `PIPE_BUF` (512 frames) and non-blocking: a pipe
+takes such a write whole or not at all, so a player that falls behind loses a block and stays in
+step, rather than taking half of one and swapping left and right for every sample after.
+
+Inputs are `parec` streams read the same way, a partial frame kept for the next read.
+
+**What it costs.** `tools/audio_latency.sh` (host's tap in, guest's mix out, sound card to
+sound card), 2026-10-09, two runs each: 45.4 and 46.3 ms with `--direct-audio`, 38.2 and 43.7 ms
+ported, each run steady to about a millisecond. The output's extra hop is paid for by the input:
+`parec` hands the tap over sooner than Godot's own capture does. `R3D_LATENCY_ARGS=--direct-audio`
+measures the old way.
+
+**Where not.** No `pacat` (not Linux, no Pulse tools), the Dummy driver (headless), or
+`--direct-audio`: the buses play to Master and everything comes out of Godot's one stream as it
+did before. A player that dies mid-session (its server restarted) is taken down and its bus goes
+back to Master, so the sound is heard from the app's own output rather than not at all.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

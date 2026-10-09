@@ -151,6 +151,7 @@ static func emitter(stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> Audi
 	player.unit_size = UNIT_SIZE
 	player.max_distance = MAX_DISTANCE
 	player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	player.bus = AudioPorts.bus(AudioPorts.GEAR)
 	return player
 
 

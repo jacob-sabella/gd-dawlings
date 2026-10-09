@@ -38,6 +38,15 @@ func song_offset_ms() -> float:
 	return 0.0
 
 
+## An input to read `device` (a source's name; empty for the default) through: a named stream
+## of its own where this process's sound goes out through AudioPorts, so it can be routed like
+## them, and Godot's one audio input where not.
+static func input(device: String, what: String, port: String) -> MixSource:
+	if AudioPorts.active and AudioPorts.supported("parec"):
+		return Piped.new(device, what, port)
+	return Captured.new(device, what)
+
+
 ## Whatever this machine's audio input is set to: on a host, the tap MixTap built over the
 ## DAW's outputs. Read with AudioServer's direct capture, not an AudioStreamMicrophone, so the
 ## mix is never played back out of the host's own speakers on top of itself.
@@ -81,6 +90,86 @@ class Captured extends MixSource:
 	## output latency already allowed for), the tap hears those frames as the sink does, and
 	## they then wait up to a fragment before this process can read them. Not measured against
 	## a real Reaper yet -- R3D_CAPTURE_OFFSET_MS overrides it for a host that has been.
+	func song_offset_ms() -> float:
+		var told := OS.get_environment("R3D_CAPTURE_OFFSET_MS")
+		return float(told) if told.is_valid_float() else latency_ms()
+
+
+## A capture stream of its own, named "reaper-3d · <port>", read from `parec`'s output: the
+## input side of AudioPorts. It starts on `device` (the default source when empty) and can be
+## moved to any other source, or have anything linked into it, from a patchbay. Raw stereo
+## float at 48kHz; `read` takes whatever the pipe holds without waiting, and keeps a partial
+## frame back for the next call.
+class Piped extends MixSource:
+	## Asked of the server: how much it gathers before handing it over. The same 3ms as
+	## Captured asks of Godot's input.
+	const LATENCY_MS := 3
+	const RATE := 48000
+	var device := ""
+	var label := ""
+	var title := ""
+	## The program, and anything in front of its arguments: a stand-in in the suite.
+	var tool := "parec"
+	var prefix: PackedStringArray = []
+	var _pid := -1
+	var _pipe: FileAccess
+	var _spare := PackedByteArray()
+
+	func _init(input_device: String, what: String, port: String) -> void:
+		device = "" if input_device == "Default" else input_device
+		label = what
+		title = "reaper-3d · " + port
+
+	func arguments() -> PackedStringArray:
+		var args := PackedStringArray(["--record", "--raw", "--format=float32le", "--rate=%d" % RATE,
+				"--channels=2", "--latency-msec=%d" % LATENCY_MS, "--client-name=" + title,
+				"--stream-name=" + title, "--property=node.name=reaper3d_" + title.get_slice("· ", 1).replace(" ", "_"),
+				"--property=node.description=" + title, "--property=application.name=" + title])
+		if not device.is_empty():
+			args.append("--device=" + device)
+		return args
+
+	func start() -> bool:
+		if _pipe != null:
+			return true
+		var piped := OS.execute_with_pipe(tool, prefix + arguments(), false)
+		if piped.is_empty():
+			return false
+		_pid = piped["pid"]
+		_pipe = piped["stdio"]
+		return true
+
+	func stop() -> void:
+		if _pipe != null:
+			_pipe.close()
+			_pipe = null
+		if _pid > 0 and OS.is_process_running(_pid):
+			OS.kill(_pid)
+		_pid = -1
+		_spare.clear()
+
+	func read() -> PackedVector2Array:
+		if _pipe == null:
+			return PackedVector2Array()
+		var bytes := _spare + _pipe.get_buffer(1 << 16)
+		var whole := bytes.size() / 8 * 8
+		_spare = bytes.slice(whole)
+		var samples := bytes.slice(0, whole).to_float32_array()
+		var out := PackedVector2Array()
+		out.resize(samples.size() / 2)
+		for i in out.size():
+			out[i] = Vector2(samples[i * 2], samples[i * 2 + 1])
+		return out
+
+	func rate() -> float:
+		return RATE
+
+	func describe() -> String:
+		return label
+
+	func latency_ms() -> float:
+		return LATENCY_MS + 1.0
+
 	func song_offset_ms() -> float:
 		var told := OS.get_environment("R3D_CAPTURE_OFFSET_MS")
 		return float(told) if told.is_valid_float() else latency_ms()

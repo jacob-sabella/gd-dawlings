@@ -9,6 +9,8 @@
 # reference, then the guest's copy -- and the gap between them is the latency a person would
 # hear, sound card to sound card, with nothing estimated.
 #
+# R3D_LATENCY_ARGS is added to both launches: "--direct-audio" measures without AudioPorts.
+#
 # Both processes run with a headless display and a REAL audio driver, so there are no windows
 # and nothing reaches the speakers: everything plays into the null sink.
 set -uo pipefail
@@ -39,10 +41,10 @@ pw-link r3d_clicks:output_FL "$SINK:playback_FL"
 pw-link r3d_clicks:output_FR "$SINK:playback_FR"
 
 GODOT=(env R3D_AUDIO_STATS=1 godot --display-driver headless --audio-driver PulseAudio --path .)
-"${GODOT[@]}" -- --host --name Ada --mix-from r3d_clicks --session-port "$PORT" \
+"${GODOT[@]}" -- --host --name Ada --mix-from r3d_clicks --session-port "$PORT" ${R3D_LATENCY_ARGS:-} \
   >"$WORK/host.log" 2>&1 &
 sleep 2.5
-"${GODOT[@]}" -- --join 127.0.0.1 --session-port "$PORT" --name Grace --listen --audio-out "$SINK" \
+"${GODOT[@]}" -- --join 127.0.0.1 --session-port "$PORT" --name Grace --listen --audio-out "$SINK" ${R3D_LATENCY_ARGS:-} \
   >"$WORK/guest.log" 2>&1 &
 sleep "${SETTLE:-6}"
 timeout -s INT 6 pw-record --target "$SINK" -P '{ stream.capture.sink=true }' "$WORK/heard.wav" 2>/dev/null

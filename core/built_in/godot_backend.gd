@@ -186,10 +186,13 @@ func parent_of(index: int) -> int:
 
 func _build_buses() -> void:
 	_remove_buses()
+	# Its master plays into the app's Mix bus, which has to be there first: a bus only sends to
+	# one before it.
+	AudioPorts.ensure_buses()
 	_master_bus = AudioServer.bus_count
 	AudioServer.add_bus(_master_bus)
 	AudioServer.set_bus_name(_master_bus, MASTER_BUS)
-	AudioServer.set_bus_send(_master_bus, &"Master")
+	AudioServer.set_bus_send(_master_bus, AudioPorts.bus(AudioPorts.MIX))
 	AudioServer.add_bus_effect(_master_bus, AudioEffectPanner.new())
 	var limiter := AudioEffectHardLimiter.new()
 	limiter.ceiling_db = -0.3

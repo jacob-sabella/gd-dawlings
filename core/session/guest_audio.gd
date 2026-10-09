@@ -72,7 +72,7 @@ var last_take := {}
 var takes_sent := 0
 ## Makes the microphone. The default is this machine's audio input; the probe gives its own.
 var make_source: Callable = func() -> MixSource:
-	return MixSource.Captured.new(input_device, "Your microphone")
+	return MixSource.input(input_device, "Your microphone", "mic")
 ## Where the song position being heard comes from. GuestMidi's account is the one used for
 ## notes, so a voice and a keyboard played together land together.
 var heard: Callable = func() -> Dictionary:

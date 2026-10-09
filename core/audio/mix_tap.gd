@@ -49,7 +49,7 @@ static func open(node_name := "") -> MixSource:
 	if linked == 0:
 		why_not = "Reaper's audio outputs were not found. Is Reaper running and playing to PipeWire?"
 		return MixSource.new()
-	return MixSource.Captured.new(TAP, "Guests hear Reaper's output, tapped from PipeWire.")
+	return MixSource.input(TAP, "Guests hear Reaper's output, tapped from PipeWire.", "mix tap")
 
 
 ## Link the DAW's first two output ports into the tap. Returns how many links now exist.

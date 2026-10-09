@@ -29,6 +29,10 @@ var _hud: Label
 var session_panel: SessionPanel
 
 
+## The app's named audio streams, where they opened.
+var ports: AudioPorts
+
+
 func _ready() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
 
@@ -71,6 +75,7 @@ func _ready() -> void:
 	Session.mix_feed.report = args["audio_stats"]
 	if args["audio_out"] != "":
 		AudioServer.output_device = args["audio_out"]
+	_open_ports(args)
 	if args["join"] != "":
 		# A guest still has a backend: it holds the replicated cache. It just never opens a
 		# link of its own, which is the whole of what "one link per session" means.
@@ -199,7 +204,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
-		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
+		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [],
 	}
@@ -292,6 +297,10 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["audio_out"] = argv[i]
+			"--direct-audio":
+				# Everything out of the app's one output, as before AudioPorts: for a machine
+				# whose sound server takes badly to a process with several streams.
+				out["direct_audio"] = true
 			"--session-panel": out["session_panel"] = true
 			"--play-into":
 				# `--play-into 7` -- a guest's keys go onto track 7 when the host records.
@@ -524,3 +533,19 @@ func _track_count() -> int:
 ## but it is a device in someone's sound settings that they did not add.
 func _exit_tree() -> void:
 	MixTap.close()
+	if ports != null:
+		ports.close()
+
+
+## The app's sound out on streams of its own -- mix, monitor, gear -- each routable on its own.
+## The buses are made either way, so every player has its own to name.
+func _open_ports(args: Dictionary) -> void:
+	AudioPorts.ensure_buses()
+	if args["direct_audio"] or AudioServer.get_driver_name() == "Dummy":
+		return
+	ports = AudioPorts.new()
+	ports.name = "AudioPorts"
+	ports.device = args["audio_out"]
+	add_child(ports)
+	if not ports.open():
+		Session.notice.emit("The app's sound plays through one output. " + AudioPorts.why_not)

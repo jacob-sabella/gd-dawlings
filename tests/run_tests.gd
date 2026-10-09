@@ -135,6 +135,9 @@ func _ready() -> void:
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
+	_test_each_kind_of_sound_has_its_own_bus()
+	await _test_every_sound_leaves_on_its_own_stream()
+	await _test_a_named_input_is_read_whole_frames_at_a_time()
 	_test_a_recorded_take_shows_its_waveform_on_the_timeline()
 	_test_reaper_hears_the_transport_in_its_own_words()
 	_test_a_bank_wider_than_the_project_draws_only_the_project()
@@ -8596,6 +8599,134 @@ func _test_the_built_in_engine_plays_a_recorded_take() -> void:
 	DAW.state.playing = false
 	_offline()
 	take.discard()
+
+
+## The mix, a guest's own keys and the room's clicks each play on a bus of their own, so each
+## can leave the app on a stream of its own.
+func _test_each_kind_of_sound_has_its_own_bus() -> void:
+	AudioPorts.ensure_buses()
+	var spent := AudioServer.get_bus_index(AudioPorts.SPENT)
+	for kind in AudioPorts.KINDS:
+		var b := AudioServer.get_bus_index(kind)
+		check("the %s bus is there, after the one it is sent to when ported" % kind, b > spent and spent > 0)
+		check("and plays to Master until then", AudioServer.get_bus_send(b) == &"Master")
+	check("which, spent, is silent", AudioServer.is_bus_mute(spent))
+	var click := Foley.emitter(AudioStreamWAV.new())
+	check("the gear's sounds play on Gear", click.bus == AudioPorts.GEAR)
+	click.free()
+	var backend := GodotBackend.new()
+	add_child(backend)
+	backend._build_buses()
+	check("the built-in engine's master plays into Mix",
+			AudioServer.get_bus_send(backend._master_bus) == AudioPorts.MIX
+			and backend._master_bus > AudioServer.get_bus_index(AudioPorts.MIX))
+	backend._remove_buses()
+	backend.free()
+	var boot: Node = load("res://scenes/bootstrap.gd").new()
+	check("--direct-audio keeps everything on one output",
+			boot._parse(PackedStringArray(["--direct-audio"]))["direct_audio"]
+			and not boot._parse(PackedStringArray([]))["direct_audio"])
+	boot.free()
+	var none := AudioPorts.new()
+	none.player_tool = "reaper3d-no-such-player"
+	add_child(none)
+	check("with no player, no ports", not none.open() and not AudioPorts.active and none.why_not != "")
+	check("and the buses still play to Master",
+			AudioServer.get_bus_send(AudioServer.get_bus_index(AudioPorts.GEAR)) == &"Master")
+	none.queue_free()
+	AudioPorts.why_not = ""
+
+
+## Each kind's sound goes out to a player of its own, named for a patchbay, in raw stereo float,
+## and not also out of the app's own output. A shell stands in for pacat and keeps what it gets.
+func _test_every_sound_leaves_on_its_own_stream() -> void:
+	var dir := OS.get_cache_dir().path_join("reaper-3d/tmp/ports")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for kind in AudioPorts.KINDS:
+		DirAccess.remove_absolute(dir.path_join("reaper3d_%s.raw" % AudioPorts.NAMES[kind]))
+		DirAccess.remove_absolute(dir.path_join("reaper3d_%s.args" % AudioPorts.NAMES[kind]))
+	var ports := AudioPorts.new()
+	ports.player_tool = "sh"
+	ports.player_prefix = PackedStringArray(["-c", ("for a; do case $a in --property=node.name=*) n=${a##*=};; esac; done; "
+			+ "printf '%%s\\n' \"$@\" > '%s'/$n.args; exec cat > '%s'/$n.raw") % [dir, dir], "player"])
+	add_child(ports)
+	check("the ports open", ports.open() and AudioPorts.active and ports.ports.size() == 3)
+	var gear := AudioServer.get_bus_index(AudioPorts.GEAR)
+	check("a ported bus goes on into the silent one", AudioServer.get_bus_send(gear) == AudioPorts.SPENT)
+	var tone := AudioStreamGenerator.new()
+	tone.mix_rate = AudioPorts.RATE
+	var player := AudioStreamPlayer.new()
+	player.stream = tone
+	player.bus = AudioPorts.GEAR
+	add_child(player)
+	player.play()
+	var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback
+	for i in 30:
+		var frames := PackedVector2Array()
+		frames.resize(playback.get_frames_available())
+		frames.fill(Vector2(0.25, -0.5))
+		playback.push_buffer(frames)
+		await get_tree().create_timer(0.02).timeout
+	var sent: int = ports.ports[AudioPorts.GEAR]["sent"]
+	ports.close()
+	player.queue_free()
+	check("closed, the buses play to Master again", not AudioPorts.active
+			and AudioServer.get_bus_send(gear) == &"Master" and ports.ports.is_empty())
+	await get_tree().create_timer(0.1).timeout
+	var said := FileAccess.get_file_as_string(dir.path_join("reaper3d_gear.args"))
+	check("the gear's stream is named for a patchbay",
+			"--stream-name=reaper-3d · gear" in said and "--property=application.name=reaper-3d · gear" in said)
+	check("and is raw stereo float at the mix rate",
+			"--format=float32le" in said and "--channels=2" in said and "--rate=48000" in said)
+	var raw := FileAccess.get_file_as_bytes(dir.path_join("reaper3d_gear.raw"))
+	check("the gear's sound reached its player (%d frames, %d bytes)" % [sent, raw.size()],
+			sent > 0 and raw.size() == sent * 8)
+	var samples := raw.to_float32_array()
+	var found := false
+	for i in range(0, samples.size() - 1, 2):
+		if is_equal_approx(samples[i], 0.25) and is_equal_approx(samples[i + 1], -0.5):
+			found = true
+			break
+	check("left and right, in that order", found)
+	var mix := FileAccess.get_file_as_bytes(dir.path_join("reaper3d_mix.raw")).to_float32_array()
+	var quiet := true
+	for v in mix:
+		quiet = quiet and is_zero_approx(v)
+	check("and none of it on the mix's stream", quiet)
+	ports.queue_free()
+
+
+## A named input hands over whole stereo frames however its pipe splits them: a part of one is
+## kept for the next read.
+func _test_a_named_input_is_read_whole_frames_at_a_time() -> void:
+	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/in.raw")
+	var bytes := PackedFloat32Array([0.5, -0.5, 0.25, -0.25, 1.0, -1.0]).to_byte_array()
+	var tail := PackedFloat32Array([0.125, -0.125]).to_byte_array()
+	var out := FileAccess.open(file, FileAccess.WRITE)
+	out.store_buffer(bytes + tail.slice(0, 4))
+	out.close()
+	var piped := MixSource.Piped.new("Default", "Your microphone", "mic")
+	check("the default device is left to the session manager", piped.device == ""
+			and not ("--device" in " ".join(piped.arguments())))
+	check("and the stream is named for a patchbay", "--stream-name=reaper-3d · mic" in piped.arguments()
+			and "--property=node.name=reaper3d_mic" in piped.arguments() and "--record" in piped.arguments())
+	piped.tool = "sh"
+	piped.prefix = PackedStringArray(["-c", "cat '%s'" % file, "parec"])
+	check("it starts", piped.start())
+	var got := PackedVector2Array()
+	for i in 20:
+		got.append_array(piped.read())
+		if got.size() >= 3:
+			break
+		await get_tree().create_timer(0.02).timeout
+	check("whole frames come out (%s)" % got, got == PackedVector2Array([Vector2(0.5, -0.5), Vector2(0.25, -0.25), Vector2(1.0, -1.0)]))
+	check("and half of one waits for the rest", piped._spare.size() == 4)
+	piped.stop()
+	var tapped := MixSource.Piped.new("reaper3d_tap", "tap", "mix tap")
+	check("a device named is asked for", "--device=reaper3d_tap" in tapped.arguments()
+			and "--property=node.name=reaper3d_mix_tap" in tapped.arguments())
+	check("an input is Godot's own while the ports are shut",
+			MixSource.input("", "x", "mic") is MixSource.Captured)
 
 
 func _test_a_guest_sets_up_their_microphone_from_the_panel() -> void:
