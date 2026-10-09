@@ -20,10 +20,8 @@ extends Node3D
 ##
 ## A surface is placed in exactly one of them, per viewer, by SurfaceMount.
 
-const FLOOR_SIZE := 9.0
-
-## The walls, which are a room rather than the floor's extent. Floor stays large because its far
-## edge is never in shot from a working position and a small one shows its own border.
+## The walls of the control room: the working footprint. Each venue builds the rest of its
+## world -- and the activity zones behind the mix position -- around this (see Venue.ZONES).
 const ROOM_WIDTH := 6.4
 const ROOM_DEPTH := 5.0
 const WALL_HEIGHT := 2.8

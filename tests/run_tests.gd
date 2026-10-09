@@ -110,6 +110,7 @@ func _ready() -> void:
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
 	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_venues_change_the_world_and_not_the_setup()
+	_test_every_venue_leaves_room_for_the_activities()
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_every_control_is_clickable_from_the_seat()
@@ -5681,6 +5682,68 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	remove_child(again)
 	again.free()
 	Session.layout = saved_layout
+
+
+## The activities coming later -- the brick editor, the matrix, the kit, the booth, the synth --
+## each need a place in every venue, sized for what will stand there and clear of the gear. A
+## venue that forgets one, or puts one through the rack, fails here before anyone builds the
+## activity and finds out.
+func _test_every_venue_leaves_room_for_the_activities() -> void:
+	# The least each needs, along its short side, its long side, and up (docs/environments_loop.md).
+	var needs := {
+		&"bricks": Vector3(1.0, 2.0, 0.9),
+		&"matrix": Vector3(3.0, 3.0, 3.0),
+		&"drums": Vector3(2.5, 2.5, 2.0),
+		&"vocals": Vector3(2.0, 2.0, 2.0),
+		&"synth": Vector3(0.6, 1.5, 1.2),
+	}
+	for width in [Studio.ROOM_WIDTH, Studio.ROOM_WIDTH + 3.2]:
+		for id in Venue.IDS:
+			var venue := Venue.make(id)
+			venue.room_width = width
+			add_child(venue)
+			var tag := "%s at %.1f m" % [id, width]
+			var zones := venue.zones()
+			check("%s: has every activity's zone" % tag, zones.size() == Venue.ZONE_IDS.size()
+					and Venue.ZONE_IDS.all(func(z): return zones.has(z)))
+			var corners := venue.footprint_corners()
+			var footprint := Rect2(corners[0], Vector2.ZERO)
+			for c in corners:
+				footprint = footprint.expand(c)
+			for zone_id: StringName in zones:
+				var box: AABB = zones[zone_id]
+				var plan := Rect2(box.position.x, box.position.z, box.size.x, box.size.z)
+				check("%s: %s clears the gear's footprint" % [tag, zone_id], not plan.intersects(footprint))
+				var need: Vector3 = needs[zone_id]
+				var floor := [minf(box.size.x, box.size.z), maxf(box.size.x, box.size.z)]
+				check("%s: %s is big enough" % [tag, zone_id], floor[0] >= need.x and floor[1] >= need.y
+						and box.size.y >= need.z)
+				for other_id: StringName in zones:
+					if other_id != zone_id:
+						var other: AABB = zones[other_id]
+						check("%s: %s and %s do not overlap" % [tag, zone_id, other_id],
+								not Rect2(other.position.x, other.position.z, other.size.x, other.size.z)
+								.intersects(plan))
+				var dressing := venue.get_node_or_null("Zone_" + String(zone_id)) as Node3D
+				check("%s: %s is dressed" % [tag, zone_id], dressing != null
+						and dressing.get_child_count() > 0)
+				if dressing != null:
+					check("%s: %s's dressing stands in its zone" % [tag, zone_id],
+							plan.has_point(Vector2(dressing.position.x, dressing.position.z)))
+				if id == &"studio":
+					check("%s: %s is inside the live room" % [tag, zone_id],
+							absf(box.position.x) <= venue.live_room_half()
+							and absf(box.end.x) <= venue.live_room_half()
+							and box.end.z <= Venue.LIVE_ROOM_BACK and box.end.y <= Venue.LIVE_ROOM_HEIGHT)
+			if id == &"chalk":
+				var in_the_way := 0
+				for doodle in venue.find_children("Doodle", "Node3D", false, false):
+					for box: AABB in zones.values():
+						if box.has_point((doodle as Node3D).position):
+							in_the_way += 1
+				check("%s: no doodle hangs in an activity's space" % tag, in_the_way == 0)
+			remove_child(venue)
+			venue.free()
 
 
 ## The timeline once stood a metre from its stand, square to the room while the stand was at

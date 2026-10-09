@@ -140,6 +140,65 @@ func _ready() -> void:
 	_plant_palms()
 	_raise_city()
 	_hang_pyramids()
+	_dress_zones()
+
+
+## The activity zones as the grid draws everything: black glass ruled in neon. No walls out here,
+## so each zone is its own outline -- a riser edged in pink, a booth that is only its edges, the
+## lattice's whole volume as a faint violet ghost of itself -- and reads from across the floor.
+func _dress_zones() -> void:
+	var z := zones()
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.015, 0.01, 0.03)
+	glass.metallic = 0.2
+	glass.roughness = 0.12
+	var chrome := StandardMaterial3D.new()
+	chrome.albedo_color = Color(0.5, 0.5, 0.6)
+	chrome.metallic = 1.0
+	chrome.roughness = 0.2
+	var pink := ZoneKit.glow(Color(1.0, 0.2, 0.75), 1.6)
+	var cyan := ZoneKit.glow(Color(0.15, 0.9, 1.0), 1.5)
+
+	var drums := ZoneKit.holder(self, &"drums", z[&"drums"])
+	var deck := Vector2(z[&"drums"].size.x, z[&"drums"].size.z) - Vector2(0.2, 0.2)
+	ZoneKit.riser(drums, deck, 0.3, glass, glass)
+	_neon_edges(drums, Vector3(deck.x, 0.3, deck.y), Vector3(0, 0.15, 0), pink, 0.018)
+
+	var vocals := ZoneKit.holder(self, &"vocals", z[&"vocals"])
+	var booth: AABB = z[&"vocals"]
+	_neon_edges(vocals, booth.size - Vector3(0.1, 0, 0.1), Vector3(0, booth.size.y * 0.5, 0), cyan,
+			0.02)
+	ZoneKit.mic_stand(vocals, Vector3(0, 0, 0.25), chrome)
+
+	# The lattice's volume drawn at a third of the strength of everything else: a promise of the
+	# thing, not the thing, and dim enough not to light the grid round it.
+	var matrix := ZoneKit.holder(self, &"matrix", z[&"matrix"])
+	_neon_edges(matrix, Vector3(3.0, 3.0, 3.0), Vector3(0, 1.5, 0),
+			ZoneKit.glow(Color(0.65, 0.35, 1.0), 0.9), 0.012)
+
+	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
+	ZoneKit.table(bricks, Vector3(1.0, 0.05, 2.0), 0.92, 0.04, glass, chrome)
+	_neon_edges(bricks, Vector3(1.0, 0.05, 2.0), Vector3(0, 0.895, 0), cyan, 0.012)
+
+	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
+	ZoneKit.keyboard_stand(synth, 1.5, chrome, glass)
+	# A tall slab of black glass behind the stand for the modules, edged in pink: the grid's
+	# version of a wall to put a rack on, since it has no walls.
+	var slab := Vector3(0.06, 1.1, 1.6)
+	var at := Vector3(z[&"synth"].size.x * 0.5 - 0.05, 1.55, 0)
+	ZoneKit.block(synth, slab, at, glass, "ModulePanel")
+	_neon_edges(synth, slab, at, pink, 0.012)
+
+
+func _neon_edges(parent: Node3D, size: Vector3, at: Vector3, material: Material,
+		thick: float) -> void:
+	var outline := MeshInstance3D.new()
+	outline.name = "Neon"
+	outline.mesh = ZoneKit.edges(size, thick)
+	outline.position = at
+	outline.material_override = material
+	outline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(outline)
 
 
 func _process(delta: float) -> void:

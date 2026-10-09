@@ -96,9 +96,14 @@ func _enrich(env: Environment) -> void:
 
 func _ready() -> void:
 	var floor_mesh := MeshInstance3D.new()
+	floor_mesh.name = "Floor"
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(Studio.FLOOR_SIZE, Studio.FLOOR_SIZE)
+	# Under both rooms, the control room and the live room behind it, and no further: past the
+	# walls nobody sees it.
+	var half := live_room_half() + 0.1
+	plane.size = Vector2(half * 2.0, LIVE_ROOM_BACK + 2.4)
 	floor_mesh.mesh = plane
+	floor_mesh.position.z = (LIVE_ROOM_BACK - 2.2) * 0.5
 	# Parquet, oiled and dark. A studio floor is the biggest surface in every wide shot, and a
 	# flat grey plane is what announced this as a 3D scene before anything else did.
 	var floor_mat := Materials.scanned(StandardMaterial3D.new(), "herringbone_parquet", "2k",
@@ -134,6 +139,7 @@ func _ready() -> void:
 			[Vector3(room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
 					Vector3(0.1, Studio.WALL_HEIGHT - 0.004, Studio.ROOM_DEPTH)]]:
 		var wall := MeshInstance3D.new()
+		wall.name = "Wall"
 		var wall_mesh := BoxMesh.new()
 		wall_mesh.size = spec[1]
 		wall.mesh = wall_mesh
@@ -142,6 +148,8 @@ func _ready() -> void:
 		add_child(wall)
 
 	_dress_room()
+	_build_live_room(wall_mat)
+	_dress_zones()
 
 
 ## What makes a room a control room rather than a box: a ceiling with light in it, the acoustic
@@ -154,7 +162,9 @@ func _dress_room() -> void:
 	var ceiling := MeshInstance3D.new()
 	ceiling.name = "Ceiling"
 	var lid := BoxMesh.new()
-	lid.size = Vector3(room_width + 0.1, 0.08, Studio.ROOM_DEPTH + 0.1)
+	# Its ends buried in the back wall and in the live room's front wall, short of their far
+	# faces: flush with either, the two would fight along the seam.
+	lid.size = Vector3(room_width + 0.1, 0.08, Studio.ROOM_DEPTH + 0.08)
 	ceiling.mesh = lid
 	ceiling.position = Vector3(0, Studio.WALL_HEIGHT + 0.041, 0.3)
 	var lid_mat := Materials.painted_wall(Color(0.075, 0.076, 0.08))
@@ -245,6 +255,230 @@ func _dress_room() -> void:
 	rug.material_override = Materials.scanned(StandardMaterial3D.new(), "wool_boucle", "1k",
 			0.9, Color(0.20, 0.19, 0.19))
 	add_child(rug)
+
+
+## The live room: through the control room's open back, a bigger, taller room for everything
+## that is played rather than mixed. The control room's ceiling stops where it does and this
+## one goes up to LIVE_ROOM_HEIGHT, so turning round from the desk is stepping out from under a
+## low lid into height -- the one change in the studio's section that says "a different room".
+func _build_live_room(wall_mat: Material) -> void:
+	var half := live_room_half()
+	var front := Studio.ROOM_DEPTH * 0.5 + 0.3
+	var back := LIVE_ROOM_BACK
+	var tall := LIVE_ROOM_HEIGHT
+	var depth := back - front
+	var cr := room_width * 0.5
+	# A warmer, darker plaster than the control room's, so the two rooms are told apart by
+	# colour as well as by height.
+	var live_wall := Materials.painted_wall(Color(0.10, 0.092, 0.085))
+	# The side walls and the front wall a hair shorter than the back wall and each other, top
+	# and bottom, the way the control room's are: level, two tops (or two bottoms) meet in one
+	# plane at every corner.
+	var shy := 0.004
+	for spec in [
+			# The live room's front wall, either side of the control room's opening...
+			[Vector3(-(cr + half) * 0.5, tall * 0.5, front), Vector3(half - cr, tall - shy, 0.1),
+					live_wall],
+			[Vector3((cr + half) * 0.5, tall * 0.5, front), Vector3(half - cr, tall - shy, 0.1),
+					live_wall],
+			# ...and the header over it, from the control room's ceiling up to this one's, between
+			# them and not overlapping them.
+			[Vector3(0, (Studio.WALL_HEIGHT + 0.09 + tall - shy * 3.0) * 0.5, front),
+					Vector3(room_width, tall - shy * 3.0 - Studio.WALL_HEIGHT - 0.09, 0.1), wall_mat],
+			[Vector3(-half, tall * 0.5, front + depth * 0.5), Vector3(0.1, tall - shy * 2.0, depth),
+					live_wall],
+			[Vector3(half, tall * 0.5, front + depth * 0.5), Vector3(0.1, tall - shy * 2.0, depth),
+					live_wall],
+			[Vector3(0, tall * 0.5, back), Vector3(half * 2.0, tall, 0.1), live_wall]]:
+		var wall := MeshInstance3D.new()
+		wall.name = "LiveRoomWall"
+		var box := BoxMesh.new()
+		box.size = spec[1]
+		wall.mesh = box
+		wall.position = spec[0]
+		wall.material_override = spec[2]
+		add_child(wall)
+
+	var lid := MeshInstance3D.new()
+	lid.name = "LiveRoomCeiling"
+	var slab := BoxMesh.new()
+	slab.size = Vector3(half * 2.0 + 0.1, 0.08, depth + 0.1)
+	lid.mesh = slab
+	lid.position = Vector3(0, tall + 0.041, front + depth * 0.5)
+	lid.material_override = Materials.painted_wall(Color(0.06, 0.058, 0.056))
+	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(lid)
+
+	# A slatted walnut diffuser across the back wall: the live room's signature, and what a
+	# wall of plaster that size needs to stop being a blank.
+	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
+			Color(0.55, 0.45, 0.38))
+	var slats := MultiMesh.new()
+	slats.transform_format = MultiMesh.TRANSFORM_3D
+	var slat := BoxMesh.new()
+	slat.size = Vector3(0.045, tall - 0.9, 0.06)
+	slats.mesh = slat
+	# Every 11 cm across the middle of the wall, clear of the corners where the booth and the
+	# keys stand.
+	var span := half * 2.0 - 3.2
+	slats.instance_count = int(span / 0.11)
+	for i in slats.instance_count:
+		var x := -span * 0.5 + i * 0.11
+		slats.set_instance_transform(i, Transform3D(Basis.IDENTITY,
+				Vector3(x, 0.45 + (tall - 0.9) * 0.5, back - 0.09)))
+	var diffuser := MultiMeshInstance3D.new()
+	diffuser.name = "Diffuser"
+	diffuser.multimesh = slats
+	diffuser.material_override = walnut
+	add_child(diffuser)
+
+	# Two pendants hung down from the high ceiling over the walkway, where you come through the
+	# opening: low and warm, so the room is lit from inside it, not from a grid of cans.
+	for x in [-1.9, 2.4]:
+		var cord := MeshInstance3D.new()
+		cord.name = "PendantCord"
+		var wire := CylinderMesh.new()
+		wire.top_radius = 0.004
+		wire.bottom_radius = 0.004
+		wire.height = 1.5
+		cord.mesh = wire
+		# Hung from just under the ceiling's face, not from inside it.
+		cord.position = Vector3(x * (half / LIVE_ROOM_HALF), tall - 0.76, front + 0.75)
+		cord.material_override = Materials.brushed_metal()
+		add_child(cord)
+		var shade := MeshInstance3D.new()
+		shade.name = "PendantShade"
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.05
+		cone.bottom_radius = 0.17
+		cone.height = 0.16
+		shade.mesh = cone
+		shade.position = cord.position + Vector3(0, -0.82, 0)
+		shade.material_override = Materials.brushed_metal()
+		add_child(shade)
+		var bulb := ZoneKit.block(self, Vector3(0.07, 0.03, 0.07), shade.position + Vector3(0, -0.07, 0),
+				ZoneKit.glow(Color(1.0, 0.78, 0.5), 2.2), "Bulb")
+		bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ZoneKit.spot_down(self, shade.position + Vector3(0, -0.09, 0), Color(1.0, 0.8, 0.6), 2.0,
+				60.0, 4.2)
+
+
+## Every activity's place, each lit by its own fitting: a carpeted riser for the kit, a glass
+## booth with a stand in it, brass set into the floor where the lattice will stand, an oak
+## table, and a keyboard stand under a rack of modules waiting for the synth.
+func _dress_zones() -> void:
+	var z := zones()
+	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
+			Color(0.78, 0.68, 0.6))
+	var metal := Materials.brushed_metal()
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.62, 0.47, 0.25)
+	brass.metallic = 1.0
+	brass.roughness = 0.38
+
+	var drums := ZoneKit.holder(self, &"drums", z[&"drums"])
+	var drum_box: AABB = z[&"drums"]
+	var carpet := Materials.cached_scanned("riser_carpet", "wool_boucle", "1k", 0.7,
+			Color(0.20, 0.07, 0.06))
+	ZoneKit.riser(drums, Vector2(drum_box.size.x, drum_box.size.z) - Vector2(0.2, 0.2), 0.3,
+			carpet, walnut)
+	# From the high ceiling, so reaching well past the floor: a spot's light runs out AT its
+	# range, and one that only just reaches the floor leaves no pool on it.
+	ZoneKit.spot_down(drums, Vector3(0, LIVE_ROOM_HEIGHT - 0.05, 0), Color(1.0, 0.82, 0.62), 4.0,
+			40.0, 7.0, metal)
+
+	var vocals := ZoneKit.holder(self, &"vocals", z[&"vocals"])
+	var booth_box: AABB = z[&"vocals"]
+	var glass := StandardMaterial3D.new()
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass.albedo_color = Color(0.55, 0.62, 0.66, 0.12)
+	glass.roughness = 0.04
+	glass.metallic_specular = 0.8
+	# The door faces the room's middle, toward the kit.
+	ZoneKit.booth(vocals, booth_box.size, Vector3(1, 0, 0), walnut, glass)
+	ZoneKit.block(vocals, Vector3(booth_box.size.x - 0.2, 0.01, booth_box.size.z - 0.2),
+			Vector3(0, 0.005, 0), Materials.cached_scanned("booth_felt", "rough_linen", "1k", 0.5,
+			Color(0.10, 0.10, 0.12)), "BoothFloor")
+	# On the felt, not sunk through it.
+	ZoneKit.mic_stand(vocals, Vector3(0, 0.01, 0.25), metal)
+	# One warm can in the booth's lid, over the singer.
+	ZoneKit.spot_down(vocals, Vector3(0, booth_box.size.y - 0.08 - 0.046, 0.1), Color(1.0, 0.68, 0.42),
+			1.4, 60.0, 3.2, metal)
+
+	var matrix := ZoneKit.holder(self, &"matrix", z[&"matrix"])
+	var lattice: AABB = z[&"matrix"]
+	# Where the lattice's 3 m base will stand: a cool LED strip let into the floor inside a brass
+	# border, and a brass cross at its centre. Nothing to walk into, and in a dark room the one
+	# line of light on the floor says "something goes here" from anywhere in it.
+	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3.ZERO, 0.03, brass)
+	ZoneKit.floor_frame(matrix, Vector2(3.0, 3.0), Vector3(0, 0.001, 0), 0.012,
+			ZoneKit.glow(Color(0.55, 0.72, 1.0), 0.9))
+	ZoneKit.block(matrix, Vector3(0.4, 0.004, 0.03), Vector3(0, 0.003, 0), brass, "Cross")
+	ZoneKit.block(matrix, Vector3(0.03, 0.004, 0.4), Vector3(0, 0.004, 0), brass, "Cross")
+	ZoneKit.spot_down(matrix, Vector3(0, LIVE_ROOM_HEIGHT - 0.05, 0), Color(0.72, 0.82, 1.0), 3.2,
+			36.0, LIVE_ROOM_HEIGHT * 1.7, metal)
+
+	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
+	ZoneKit.table(bricks, Vector3(1.0, 0.05, 2.0), 0.92, 0.06, walnut, metal)
+	ZoneKit.spot_down(bricks, Vector3(0, 2.4, 0), Color(1.0, 0.8, 0.6), 2.4, 50.0, 4.0)
+	var pendant := MeshInstance3D.new()
+	var shade := CylinderMesh.new()
+	shade.top_radius = 0.18
+	shade.bottom_radius = 0.18
+	shade.height = 0.03
+	pendant.mesh = shade
+	pendant.position = Vector3(0, 2.42, 0)
+	pendant.material_override = ZoneKit.glow(Color(1.0, 0.8, 0.55), 1.4)
+	pendant.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	bricks.add_child(pendant)
+	var drop := LIVE_ROOM_HEIGHT - 0.01 - 2.435
+	var cord := MeshInstance3D.new()
+	cord.name = "PendantCord"
+	var wire := CylinderMesh.new()
+	wire.top_radius = 0.004
+	wire.bottom_radius = 0.004
+	wire.height = drop
+	cord.mesh = wire
+	cord.position = Vector3(0, 2.435 + drop * 0.5, 0)
+	cord.material_override = metal
+	bricks.add_child(cord)
+
+	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
+	var keys: AABB = z[&"synth"]
+	ZoneKit.keyboard_stand(synth, 1.5, metal, walnut)
+	# The modules' rack on the wall above the stand: a dark case, and rows of jack-sized lights
+	# that are what a rack wall looks like across a dark room.
+	var wall_x := keys.size.x * 0.5 - 0.06
+	ZoneKit.block(synth, Vector3(0.1, 0.62, 1.5), Vector3(wall_x, 1.6, 0), Materials.chassis(),
+			"ModuleCase")
+	var dots := MultiMesh.new()
+	dots.transform_format = MultiMesh.TRANSFORM_3D
+	dots.use_colors = true
+	var dot := BoxMesh.new()
+	dot.size = Vector3(0.01, 0.012, 0.012)
+	dots.mesh = dot
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	dots.instance_count = 3 * 24
+	for i in dots.instance_count:
+		var row := i / 24
+		var col := i % 24
+		dots.set_instance_transform(i, Transform3D(Basis.IDENTITY,
+				Vector3(wall_x - 0.055, 1.42 + row * 0.18, -0.66 + col * 0.0575)))
+		var lit := rng.randf() < 0.45
+		dots.set_instance_color(i, (Color(1.0, 0.35, 0.15) if rng.randf() < 0.5
+				else Color(0.3, 0.9, 1.0)) * (2.0 if lit else 0.08))
+	var leds := MultiMeshInstance3D.new()
+	leds.name = "ModuleLights"
+	leds.multimesh = dots
+	var led_mat := StandardMaterial3D.new()
+	led_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	led_mat.vertex_color_use_as_albedo = true
+	leds.material_override = led_mat
+	leds.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	synth.add_child(leds)
+	ZoneKit.spot_down(synth, Vector3(-0.2, LIVE_ROOM_HEIGHT - 0.05, 0), Color(1.0, 0.82, 0.66), 2.6,
+			40.0, 6.0, metal)
 
 
 ## A tall walnut floor mirror, leant against the left wall the way one is in every live room:

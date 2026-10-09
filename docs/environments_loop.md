@@ -99,8 +99,18 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 
 ## Queue
 
-- [ ] Zones: give `Venue` the activity-zone contract above, and dress all three existing venues
+- [x] Zones: give `Venue` the activity-zone contract above, and dress all three existing venues
       with all five zones (empty, but each reads as a place for its activity). Test it.
+      (`Venue.zones()`, `ZoneKit`, a live room behind the studio's control room; `light_check`
+      grew a `back` view of the zones.)
+- [ ] Walk into the zones. The walker's walls are still `floor_plan.bounds`, which is the
+      footprint, so every zone can be seen but not reached on foot. Give the venue a walkable
+      outline (the footprint plus its zones' space; in the studio, the control room plus the live
+      room) and build the walker's walls from it. Furniture stays in the footprint.
+- [ ] The studio's live room is very dark from the opening (`light_check` back view, mean 0.02,
+      against about 0.18 for the open venues). It reads as moody up close, but the corners are
+      black. Add one or two practicals (a wall sconce by the booth, a lamp by the keys) rather
+      than more ceiling cans.
 - [ ] Venue variants: a variant id on the venue, chosen by the host, carried in `Session.room`,
       saved in the host's layout; the stage manager's venue row grows a variant picker.
 - [ ] Studio: a live room behind glass beside the control room, holding the drum riser and the

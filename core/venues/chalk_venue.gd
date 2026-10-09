@@ -92,6 +92,7 @@ func _ready() -> void:
 	_draw_floor()
 	_scatter_doodles()
 	_paint_rainbow()
+	_draw_zones()
 	_join_constellations()
 	_throw_comets()
 	_add_dust()
@@ -124,8 +125,9 @@ func _draw_floor() -> void:
 	# you see when you look down past the desk.
 	var marks := [[Chalk.star(), Vector3(-4.6, 0, -3.6), 1.1, Chalk.YELLOW],
 			[Chalk.spiral(), Vector3(4.8, 0, -3.2), 1.3, Chalk.CYAN],
-			[Chalk.heart(), Vector3(-4.4, 0, 3.8), 0.9, Chalk.PINK],
-			[Chalk.lightning(), Vector3(4.3, 0, 3.6), 1.2, Chalk.LIME]]
+			# Behind the desk, out past the zones on either side.
+			[Chalk.heart(), Vector3(-7.6, 0, 3.4), 0.9, Chalk.PINK],
+			[Chalk.lightning(), Vector3(7.8, 0, 2.6), 1.2, Chalk.LIME]]
 	for i in marks.size():
 		var flat: Array = []
 		for line: PackedVector3Array in marks[i][0]:
@@ -155,6 +157,10 @@ func _scatter_doodles() -> void:
 		var holder := Node3D.new()
 		holder.name = "Doodle"
 		holder.position = Vector3(sin(angle) * distance, height, -cos(angle) * distance + 0.3)
+		# Never hanging in an activity's space: a star at head height in the drum riser is in
+		# the way of whoever will play there. Pushed straight out until it is past them.
+		while _in_a_zone(holder.position, size * 0.6):
+			holder.position += Vector3(sin(angle), 0, -cos(angle)) * 1.0
 		var art := Chalk.drawing(shape.call(), colour, 0.05, false, 2, SEED * 31 + i)
 		holder.add_child(art)
 		add_child(holder)
@@ -166,6 +172,116 @@ func _scatter_doodles() -> void:
 		_doodles.append(holder)
 		_rest.append(holder.position)
 		_phase.append(rng.randf() * TAU)
+
+
+func _in_a_zone(at: Vector3, margin: float) -> bool:
+	for box: AABB in zones().values():
+		if box.grow(margin).has_point(at):
+			return true
+	return false
+
+
+## The activity zones, drawn: each one's floor taped out in its own colour, and the thing that
+## will stand there sketched standing up in the air the way every doodle here is -- a riser and
+## a kit's two drums, a booth with a mic, the lattice's cube with its cells ruled on the faces,
+## a table, a keyboard on its stand. Drawn on as you arrive with everything else.
+func _draw_zones() -> void:
+	var z := zones()
+	var colour := {&"drums": Chalk.PINK, &"vocals": Chalk.CYAN, &"matrix": Chalk.VIOLET,
+			&"bricks": Chalk.YELLOW, &"synth": Chalk.LIME}
+	for i in ZONE_IDS.size():
+		var id := ZONE_IDS[i]
+		var box: AABB = z[id]
+		var holder := ZoneKit.holder(self, id, box)
+		var half := Vector2(box.size.x, box.size.z) * 0.5
+		var tape := PackedVector3Array()
+		for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1)]:
+			tape.append(Vector3(corner.x * half.x, 0.004, corner.y * half.y))
+		var floor_art := Chalk.drawing([_subdivide(tape, 0.25)], colour[id] * 0.6, 0.025, true, 2,
+				SEED * 7 + i)
+		floor_art.name = "ZoneFloor"
+		holder.add_child(floor_art)
+		_art.append(floor_art)
+		# Faint: these are drawn at arm's length, where full-strength chalk is a bar of light
+		# across the eye, and the lattice -- three metres of it -- fainter still.
+		var faint := 0.22 if id == &"matrix" else 0.4
+		var sketch := Chalk.drawing(_zone_sketch(id, box), colour[id] * faint, 0.012, false, 2,
+				SEED * 13 + i)
+		sketch.name = "ZoneSketch"
+		holder.add_child(sketch)
+		_art.append(sketch)
+
+
+## What stands in zone `id`, as chalk lines in the zone's floor-centred frame.
+func _zone_sketch(id: StringName, box: AABB) -> Array:
+	var lines: Array = []
+	match id:
+		&"drums":
+			lines.append_array(_box_lines(Vector3(box.size.x - 0.3, 0.3, box.size.z - 0.3), Vector3(0, 0.15, 0)))
+			# A kick on its side and a snare: enough of a kit to say "kit".
+			var kick := Chalk.loop(Vector3.ZERO, 0.28, 28)
+			lines.append(_placed(kick, Vector3(0, 0.6, -0.3), 0.0))
+			lines.append(_placed(Chalk.loop(Vector3.ZERO, 0.18, 24), Vector3(0.55, 0.85, 0.1), PI * 0.5,
+					true))
+		&"vocals":
+			lines.append_array(_box_lines(box.size - Vector3(0.2, 0, 0.2), Vector3(0, box.size.y * 0.5, 0)))
+			lines.append(PackedVector3Array([Vector3(0, 0.0, 0.25), Vector3(0, 1.45, 0.25)]))
+			lines.append(_placed(Chalk.loop(Vector3.ZERO, 0.06, 16), Vector3(0, 1.62, 0.05), 0.0))
+		&"matrix":
+			var side := 3.0
+			lines.append_array(_box_lines(Vector3.ONE * side, Vector3(0, side * 0.5, 0)))
+			# Cells ruled on the two faces you see first, thirds of the way across.
+			for k in [1.0, 2.0]:
+				var t: float = -side * 0.5 + side * k / 3.0
+				lines.append(PackedVector3Array([Vector3(t, 0, -side * 0.5), Vector3(t, side, -side * 0.5)]))
+				lines.append(PackedVector3Array([Vector3(-side * 0.5, t + side * 0.5, -side * 0.5),
+						Vector3(side * 0.5, t + side * 0.5, -side * 0.5)]))
+				lines.append(PackedVector3Array([Vector3(-side * 0.5, 0, t), Vector3(-side * 0.5, side, t)]))
+				lines.append(PackedVector3Array([Vector3(-side * 0.5, t + side * 0.5, -side * 0.5),
+						Vector3(-side * 0.5, t + side * 0.5, side * 0.5)]))
+		&"bricks":
+			lines.append_array(_box_lines(Vector3(1.0, 0.05, 2.0), Vector3(0, 0.9, 0)))
+			for cx in [-0.42, 0.42]:
+				for cz in [-0.92, 0.92]:
+					lines.append(PackedVector3Array([Vector3(cx, 0, cz), Vector3(cx, 0.88, cz)]))
+		&"synth":
+			lines.append_array(_box_lines(Vector3(0.36, 0.08, 1.5), Vector3(0, 0.84, 0)))
+			for cz in [-0.6, 0.6]:
+				lines.append(PackedVector3Array([Vector3(0.1, 0, cz), Vector3(-0.1, 0.8, cz)]))
+				lines.append(PackedVector3Array([Vector3(-0.1, 0, cz), Vector3(0.1, 0.8, cz)]))
+			# The keys, as quick ticks along the front edge.
+			for k in 15:
+				var kz := -0.7 + k * 0.1
+				lines.append(PackedVector3Array([Vector3(-0.18, 0.88, kz), Vector3(-0.05, 0.88, kz)]))
+	var out: Array = []
+	for line: PackedVector3Array in lines:
+		out.append(_subdivide(line, 0.2))
+	return out
+
+
+## The twelve edges of a box `size` centred on `at`, as separate lines.
+static func _box_lines(size: Vector3, at: Vector3) -> Array:
+	var h := size * 0.5
+	var c := func(x: float, y: float, w: float) -> Vector3: return at + Vector3(x * h.x, y * h.y, w * h.z)
+	var out: Array = []
+	for a in [-1.0, 1.0]:
+		for b in [-1.0, 1.0]:
+			out.append(PackedVector3Array([c.call(-1.0, a, b), c.call(1.0, a, b)]))
+			out.append(PackedVector3Array([c.call(a, -1.0, b), c.call(a, 1.0, b)]))
+			out.append(PackedVector3Array([c.call(a, b, -1.0), c.call(a, b, 1.0)]))
+	return out
+
+
+## A doodle drawn in the XY plane, stood at `at` and turned `yaw` about the vertical, or laid
+## onto its side (the drum's head facing up) when `lie` is set.
+static func _placed(line: PackedVector3Array, at: Vector3, yaw: float, lie := false) -> PackedVector3Array:
+	var turn := Basis(Vector3.UP, yaw)
+	if lie:
+		turn = turn * Basis(Vector3.RIGHT, PI * 0.5)
+	var out := PackedVector3Array()
+	for p in line:
+		out.append(at + turn * p)
+	return out
 
 
 func _add_dust() -> void:

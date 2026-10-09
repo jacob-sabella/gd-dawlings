@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Photograph every venue from where you stand and from across the room, and say whether each is
-# within the light budget. Exits non-zero if any is over.
+# Photograph every venue from where you stand, from across the room and from the activity zones
+# behind you, and say whether each is within the light budget. Exits non-zero if any is over.
 #
 #   tools/light_check.sh                 every venue in Venue.IDS
 #   tools/light_check.sh grid chalk      just these
@@ -30,10 +30,11 @@ else
 fi
 
 shoot() {
-  local file=$1 cam=$2 args=$3
+  local file=$1 cam=$2 args=$3 frame=${4:-30}
   local env=(SHOT_RES=1280x720 "SHOT_ARGS=$args" PULSE_SINK=reaper3d_null PIPEWIRE_NODE=reaper3d_null)
   [ -n "$cam" ] && env+=("SHOT_CAM=$cam")
-  env "${env[@]}" flock "$HOME/.cache/reaper-3d/shared.lock" tools/shot.sh "$file" 2>&1 \
+  env "${env[@]}" flock "$HOME/.cache/reaper-3d/shared.lock" tools/shot.sh "$file" "$frame" \
+    "$((frame + 6))" 2>&1 \
     | grep -E "SCRIPT ERROR" && return 1
   [ -f "$file" ]
 }
@@ -49,13 +50,19 @@ white() {
 over=0
 printf "%-10s %-6s %8s %8s\n" venue view mean white%
 for v in "${VENUES[@]}"; do
-  for view in seat wide; do
+  for view in seat wide back; do
     file="$OUT/${v}_${view}.png"
     if [ "$view" = seat ]; then
       shoot "$file" "" "--no-hud --venue $v" || { echo "$v $view: no picture"; over=1; continue; }
       limit=$MEAN_MAX
-    else
+    elif [ "$view" = wide ]; then
       shoot "$file" "0.35,-0.25,4.2,0,1.0,-0.3" "--no-hud --venue $v --place timeline=studio" \
+        || { echo "$v $view: no picture"; over=1; continue; }
+      limit=$WIDE_MEAN_MAX
+    else
+      # Turned round from the desk, standing in the opening: the activity zones (Venue.ZONES).
+      # Late, after anything a venue draws on as you arrive has finished drawing.
+      shoot "$file" "3.14,-0.2,2.7,0,1.0,5.6" "--no-hud --venue $v --place timeline=studio" 300 \
         || { echo "$v $view: no picture"; over=1; continue; }
       limit=$WIDE_MEAN_MAX
     fi

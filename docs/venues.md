@@ -7,9 +7,9 @@ colour the lamps shine.
 
 | id | Title | What it is |
 |---|---|---|
-| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. The default. |
-| `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. |
-| `chalk` | Chalk Zone | A blackboard the size of the world. Neon chalk doodles hang at every distance and there is dust in the air. The working floor is outlined in chalk. |
+| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. |
+| `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. The zones are black glass edged in neon; the lattice is a faint violet cube. |
+| `chalk` | Chalk Zone | A blackboard the size of the world. Neon chalk doodles hang at every distance and there is dust in the air. The working floor is outlined in chalk. Each zone is taped out on the floor in its own colour, with what will stand there sketched in the air. |
 
 ## Changing it
 
@@ -49,11 +49,27 @@ Every venue keeps the same working footprint (`Venue.footprint_corners()`), beca
 floor plan is that rectangle. A venue without walls marks the footprint instead: a lit border on
 the grid, a chalk outline in the chalk zone.
 
+### Activity zones
+
+Every venue also leaves room behind the mix position for the activities that are coming: the
+brick MIDI editor, the matrix sequencer, the drum kit, the vocal booth and the synth.
+`Venue.zones()` returns them as `id -> AABB` in studio space. The ids are in `Venue.ZONE_IDS`
+and the layout at the base width is in `Venue.ZONES`. When the desk widens the room, each zone
+steps outward on its own side.
+
+A venue dresses each zone as one node named `Zone_<id>`, standing at the zone's floor centre.
+The dressing shows what will stand there without building it. `ZoneKit`
+(`core/venues/zone_kit.gd`) has the shared shapes: riser, booth, table, keyboard stand, mic stand,
+floor tape, box edges, and a zone light with its fitting. Each venue supplies its own materials.
+The studio puts its zones in a live room: `LIVE_ROOM_HALF` either side, back to `LIVE_ROOM_BACK`,
+`LIVE_ROOM_HEIGHT` tall.
+
 ## Adding one
 
 1. Subclass `Venue` and override `venue_id`, `dress`, and optionally `lamp_colour`,
    `lamp_energy` and `pulse`.
 2. Build the geometry in `_ready`. It must include a floor plane at y = 0 at least as wide as the room.
+   It must also dress all five zones (see above) and keep its scenery out of them.
 3. Add the id to `Venue.IDS`, `Venue.make` and `Venue.make_title`.
 
 `_test_venues_change_the_world_and_not_the_setup` then covers it automatically:
@@ -63,7 +79,9 @@ the grid, a chalk outline in the chalk zone.
 - there is a floor
 - the choice persists
 
-The z-fight scan runs over it too.
+The z-fight scan runs over it too. `_test_every_venue_leaves_room_for_the_activities` checks
+that every zone is there, is big enough, clears the footprint and the other zones, and is
+dressed, at the base width and at a widened one.
 
 ## Chalk
 

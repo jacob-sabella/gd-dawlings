@@ -20,6 +20,34 @@ extends Node3D
 ## Registry, in cycling order. The first is the default.
 const IDS: Array[StringName] = [&"studio", &"grid", &"chalk"]
 
+## What people will do here besides mix, each with room of its own. Built later; every venue
+## leaves the space for all of them now, so an activity made for one lands in every one.
+const ZONE_IDS: Array[StringName] = [&"bricks", &"matrix", &"drums", &"vocals", &"synth"]
+
+## Where they go, at the base room width: back of house, behind the mix position, so the gear's
+## floor plan never moves for them. Turn round from the desk and they are all in front of you,
+## booth and kit to the left, the lattice in the middle, the table and the keys to the right.
+## Each box is the activity's whole space -- clearance to walk round it included -- from the
+## floor up to the height it needs.
+const ZONES := {
+	# A booth 2.2 m square: one singer, a stand, and the door.
+	&"vocals": AABB(Vector3(-6.0, 0.0, 4.9), Vector3(2.2, 2.4, 2.2)),
+	# A riser for a full kit and the drummer's stool, 2.6 m square.
+	&"drums": AABB(Vector3(-3.5, 0.0, 4.5), Vector3(2.6, 2.8, 2.6)),
+	# The lattice, 3.4 m on every side: a 3 m cube of cells and room to reach in from any face.
+	&"matrix": AABB(Vector3(-0.5, 0.0, 3.7), Vector3(3.4, 3.4, 3.4)),
+	# A 1 x 2 m table at waist height, long way back, with walking room all round.
+	&"bricks": AABB(Vector3(3.2, 0.0, 3.4), Vector3(1.9, 1.3, 2.9)),
+	# A keyboard stand 1.5 m wide against the right-hand wall, modules racked above it.
+	&"synth": AABB(Vector3(5.35, 0.0, 4.4), Vector3(0.8, 2.0, 2.0)),
+}
+## The back-of-house space the zones stand in: from the control room's open rear (the
+## footprint's far edge) back to here, and this far either side of centre at the base width.
+const LIVE_ROOM_BACK := 7.3
+const LIVE_ROOM_HALF := 6.3
+## Tall enough for the lattice and a hand raised above it.
+const LIVE_ROOM_HEIGHT := 4.0
+
 ## How wide the working footprint is. Set by the studio before the venue enters the tree; the
 ## room grows with the desk (see SessionLayout), and a venue drawn for the old width would put
 ## its walls through the rack.
@@ -90,6 +118,27 @@ func lamp_energy(_index: int, authored: float) -> float:
 ## How loud the mix is right now, 0..1, every frame. For venues that move to the music.
 func pulse(_level: float) -> void:
 	pass
+
+
+## The activity zones, id -> AABB in studio space. The room widens with the desk, and the zones
+## step out with it on their own side, so they never close in on the footprint or on each other.
+func zones() -> Dictionary:
+	var out := {}
+	for id in ZONE_IDS:
+		var box: AABB = ZONES[id]
+		var shift := _grow() * signf(box.get_center().x)
+		out[id] = AABB(box.position + Vector3(shift, 0, 0), box.size)
+	return out
+
+
+## Half the live room's width, grown with the desk the way the zones are.
+func live_room_half() -> float:
+	return LIVE_ROOM_HALF + _grow()
+
+
+## How much each side of the room has grown past the base width.
+func _grow() -> float:
+	return (room_width - SessionLayout.BASE_WIDTH) * 0.5
 
 
 ## A lit or drawn outline of the working footprint, at floor level, as a set of corners.
