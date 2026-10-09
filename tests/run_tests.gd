@@ -6374,6 +6374,27 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	past = past and not terrace.grow(1.6).has_point(roof.stair_house_spot())
 	check("the tanks and the stair house stand on the roof past the parapet", past
 			and roof.find_children("WaterTank*", "", false, false).size() == 2)
+	# Its three evenings: one per title, the sun brightest at golden hour and the sky darkest at
+	# night, the sun's disc only while it is up.
+	var keys: Array[float] = []
+	var skies: Array[float] = []
+	var discs: Array[float] = []
+	for n in Venue.variant_titles(&"rooftop").size():
+		var evening := Venue.make(&"rooftop", n)
+		var env := Environment.new()
+		var sun := DirectionalLight3D.new()
+		evening.dress(env, sun)
+		keys.append(sun.light_energy)
+		var mat := env.sky.sky_material as ShaderMaterial
+		skies.append((mat.get_shader_parameter("upper") as Color).get_luminance())
+		discs.append(mat.get_shader_parameter("sun_radius"))
+		sun.free()
+		evening.free()
+	check("rooftop: dusk, golden hour and night (keys %s, skies %s)" % [keys, skies],
+			keys.size() == RooftopVenue.EVENINGS.size() and keys.size() == 3
+			and keys[RooftopVenue.GOLDEN] > keys[RooftopVenue.DUSK] and keys[RooftopVenue.DUSK] > keys[RooftopVenue.NIGHT]
+			and skies[RooftopVenue.NIGHT] < skies[RooftopVenue.DUSK] and skies[RooftopVenue.DUSK] < skies[RooftopVenue.GOLDEN]
+			and discs[RooftopVenue.GOLDEN] > 0.0 and discs[RooftopVenue.DUSK] == 0.0 and discs[RooftopVenue.NIGHT] == 0.0)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

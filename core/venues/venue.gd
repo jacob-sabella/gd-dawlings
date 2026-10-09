@@ -27,6 +27,7 @@ const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin",
 const VARIANTS := {
 	&"studio": ["Live room behind", "Live room beside"],
 	&"grid": ["Highway", "Downtown"],
+	&"rooftop": ["Dusk", "Golden hour", "Night"],
 }
 
 ## What people will do here besides mix, each with room of its own. Built later; every venue

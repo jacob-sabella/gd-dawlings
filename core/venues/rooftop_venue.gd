@@ -39,6 +39,31 @@ const TANKS := [Vector3(-4.6, 4.3, 0.6), Vector3(5.2, 1.4, -0.4)]
 
 const MODELS := "res://assets/models/"
 
+## The arrangements (Venue.VARIANTS): the same roof at three times of the evening. The terrace
+## is the same; the sky, the light off it and how many of the city's windows are lit are not.
+const DUSK := 0
+const GOLDEN := 1
+const NIGHT := 2
+## Per time of evening: the sky's bands (zenith, upper, rose, horizon, haze), where the sun is,
+## its disc, the stars; the light from everywhere (colour, energy); the haze over the city; the
+## key (colour, energy, pitch); and how bright the city's windows are.
+const EVENINGS := [
+	{"sky": [Color(0.03, 0.04, 0.12), Color(0.16, 0.12, 0.3), Color(0.55, 0.24, 0.32), Color(1.0, 0.48, 0.2),
+			Color(0.16, 0.09, 0.1)], "sun": Vector3(0.0, -0.06, -1.0), "disc": 0.0, "stars": 1.0,
+			"ambient": [Color(0.5, 0.44, 0.66), 0.16], "fog": Color(0.17, 0.11, 0.13),
+			"key": [Color(1.0, 0.56, 0.42), 0.3, -7.0], "windows": 0.8},
+	# The sun a hand over the towers in front: it lays the railing's shadow down the deck.
+	{"sky": [Color(0.16, 0.24, 0.42), Color(0.36, 0.38, 0.52), Color(0.72, 0.5, 0.4), Color(1.0, 0.62, 0.3),
+			Color(0.3, 0.2, 0.16)], "sun": Vector3(0.27, 0.16, -1.0), "disc": 0.03, "stars": 0.0,
+			"ambient": [Color(0.72, 0.6, 0.52), 0.22], "fog": Color(0.42, 0.3, 0.22),
+			"key": [Color(1.0, 0.7, 0.44), 1.8, -9.0], "windows": 0.35},
+	# The sky gone dark: only a little of the city's light comes back off the haze.
+	{"sky": [Color(0.006, 0.008, 0.022), Color(0.014, 0.018, 0.045), Color(0.04, 0.035, 0.06),
+			Color(0.11, 0.07, 0.07), Color(0.06, 0.04, 0.045)], "sun": Vector3(0.0, -0.4, -1.0), "disc": 0.0,
+			"stars": 2.0, "ambient": [Color(0.35, 0.38, 0.55), 0.08], "fog": Color(0.045, 0.035, 0.05),
+			"key": [Color(0.6, 0.7, 1.0), 0.14, -40.0], "windows": 1.1},
+]
+
 var _sky_mat: ShaderMaterial
 var _city_mat: ShaderMaterial
 
@@ -50,15 +75,21 @@ func venue_id() -> StringName:
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/dusk_sky.gdshader")
+	var evening: Dictionary = EVENINGS[variant]
+	for i in 5:
+		_sky_mat.set_shader_parameter(["zenith", "upper", "rose", "horizon", "haze"][i], evening["sky"][i])
+	_sky_mat.set_shader_parameter("sun_dir", evening["sun"])
+	_sky_mat.set_shader_parameter("sun_radius", evening["disc"])
+	_sky_mat.set_shader_parameter("stars", evening["stars"])
 	var sky := Sky.new()
 	sky.sky_material = _sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_128
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	# What is left of the day comes from everywhere at once, violet; the rest is the strings.
+	# What is left of the day comes from everywhere at once; the rest is the strings.
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.44, 0.66)
-	env.ambient_light_energy = 0.16
+	env.ambient_light_color = evening["ambient"][0]
+	env.ambient_light_energy = evening["ambient"][1]
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.0
@@ -66,10 +97,10 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 1.1
-	# The haze over the city: the far towers go into the evening's dull rose.
+	# The haze over the city: the far towers go into the evening's colour.
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.17, 0.11, 0.13)
+	env.fog_light_color = evening["fog"]
 	env.fog_depth_begin = 40.0
 	env.fog_depth_end = 420.0
 	env.fog_sky_affect = 0.0
@@ -77,10 +108,11 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 		env.ssao_enabled = true
 		env.ssao_intensity = 1.1
 
-	# The afterglow, low in front where the sun went: warm, faint, long shadows off the railing.
-	key.light_color = Color(1.0, 0.56, 0.42)
-	key.light_energy = 0.3
-	key.rotation_degrees = Vector3(-7.0, 195.0, 0.0)
+	# From in front, where the sun is or went: low and warm, long shadows off the railing; at
+	# night the moon, high and faint.
+	key.light_color = evening["key"][0]
+	key.light_energy = evening["key"][1]
+	key.rotation_degrees = Vector3(evening["key"][2], 195.0, 0.0)
 	key.light_specular = 0.15
 
 
@@ -442,7 +474,7 @@ func _raise_city() -> void:
 	_city_mat.set_shader_parameter("lit_a", Color(1.0, 0.7, 0.4))
 	_city_mat.set_shader_parameter("lit_b", Color(0.09, 0.08, 0.1))
 	_city_mat.set_shader_parameter("lit_c", Color(0.42, 0.48, 0.6))
-	_city_mat.set_shader_parameter("energy", 0.8)
+	_city_mat.set_shader_parameter("energy", EVENINGS[variant]["windows"])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 31
 	var towers: Array[Transform3D] = []

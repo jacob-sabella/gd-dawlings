@@ -12,6 +12,11 @@ uniform vec4 haze : source_color = vec4(0.16, 0.09, 0.1, 1.0);
 // Where the sun went down: the glow is strongest toward it and fades round the horizon.
 uniform vec3 sun_dir = vec3(0.0, -0.06, -1.0);
 uniform float energy = 1.0;
+// The sun's disc, when it is still up (golden hour): its angular radius, 0 for none.
+uniform float sun_radius = 0.0;
+uniform vec4 sun_colour : source_color = vec4(1.0, 0.8, 0.5, 1.0);
+// How many stars are out, and how bright: a few at dusk, all of them at night.
+uniform float stars = 1.0;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -42,11 +47,16 @@ void sky() {
 	vec2 uv = vec2(atan(d.x, d.z), asin(clamp(h, -1.0, 1.0))) * 80.0;
 	vec2 cell = floor(uv);
 	float r = hash(cell);
-	if (r > 0.992 && h > 0.25) {
+	if (r > 1.0 - 0.008 * stars && h > 0.25 - 0.15 * step(1.5, stars)) {
 		vec2 at = vec2(hash(cell + 7.1), hash(cell + 3.3));
 		float s = smoothstep(0.07, 0.0, length(fract(uv) - at));
 		float twinkle = 0.7 + 0.3 * sin(TIME * (1.0 + r * 3.0) + r * 40.0);
-		col += vec3(0.9, 0.88, 1.0) * s * twinkle * smoothstep(0.25, 0.6, h) * (1.0 - glow) * 1.4;
+		col += vec3(0.9, 0.88, 1.0) * s * twinkle * smoothstep(0.1, 0.6, h) * (1.0 - glow * 0.7) * 1.4;
+	}
+	// The sun itself, a soft-edged disc, with a halo round it.
+	if (sun_radius > 0.0) {
+		col = mix(col, sun_colour.rgb * 3.0, smoothstep(sun_radius, sun_radius * 0.8, ang));
+		col += sun_colour.rgb * exp(-max(ang - sun_radius, 0.0) * 14.0) * 0.5;
 	}
 	COLOR = col * energy;
 }
