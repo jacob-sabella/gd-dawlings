@@ -260,6 +260,30 @@ func cards_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI - 0.25), Vector3(0.38, ZoneKit.SHELF.y, 0.13))
 
 
+## Where the dartboard's face is, in studio space: its middle, facing out into the room (+Z).
+func dartboard_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DARTBOARD_FACE_Z))
+
+
+## What a dart sticks in, in studio space (Flight.fly's `boards`): the board, and the cork panel
+## round it.
+func dart_boards() -> Array:
+	var panel := prop_shelf_spot() * Transform3D(Basis.IDENTITY, Vector3(0, ZoneKit.DARTBOARD_Y,
+			ZoneKit.DART_PANEL_BACK + ZoneKit.DART_PANEL_THICK))
+	return [{"at": dartboard_spot(), "radius": ZoneKit.DARTBOARD_RADIUS},
+			{"at": panel, "half": ZoneKit.DART_PANEL * 0.5}]
+
+
+## Where dart `n` lives, in studio space: left in the board, along the top of it, point in and
+## its tail a little down, as darts hang in a board between games.
+const DART_HOMES := [Vector2(-0.11, 0.1), Vector2(0.0, 0.135), Vector2(0.11, 0.1)]
+
+
+func dart_spot(n: int) -> Transform3D:
+	var on: Vector2 = DART_HOMES[n % DART_HOMES.size()]
+	return dartboard_spot() * Transform3D(Basis(Vector3.RIGHT, 0.15), Vector3(on.x, on.y, -DartItem.POINT_IN))
+
+
 ## Where the mic lives, in studio space: in the clip at the end of the booth's mic stand's boom,
 ## along it, grille out. Null where there is no stand (the chalk zone only draws one), and the
 ## mic takes a place on the shelf instead.

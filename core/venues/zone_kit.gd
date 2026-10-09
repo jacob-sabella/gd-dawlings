@@ -200,6 +200,7 @@ static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Col
 	_shelf_lamp(parent, frame, lamp)
 	_headphone_hook(parent, frame)
 	_keytar_rack(parent, frame)
+	_dartboard(parent, frame, lamp)
 
 
 ## Where the headphones hang: a peg under the front edge of the shelf's top, toward the end away
@@ -271,6 +272,96 @@ static func _keytar_rack(parent: Node3D, frame: Material) -> void:
 	var right: float = KEYTAR_PEGS[0].x
 	block(parent, Vector3(right - left, 0.014, 0.014), Vector3((left + right) * 0.5, KEYTAR_POST_TOP - 0.02,
 			KEYTAR_BACK_Z - 0.01), frame, "RackRail")
+
+
+## The dartboard over the shelf (DartItem): its middle a little under a regulation 1.73 m, on a
+## square cork panel that catches what misses, the panel on two uprights up off the shelf's back
+## corners and two rails between them. Above the keytar on its rack, inside the shelf's footprint,
+## and under the studio's wall sconce over the shelf, which lights it.
+const DARTBOARD_Y := 1.7
+## The panel, square, and its back's distance out from the shelf's middle: in front of the
+## keytar rack's posts, so no face of it lies in one of theirs.
+const DART_PANEL := 0.54
+const DART_PANEL_THICK := 0.018
+const DART_PANEL_BACK := -SHELF.z * 0.5 + 0.022
+## The board's face, out from the shelf's middle: the panel's front and the board's depth.
+const DARTBOARD_FACE_Z := DART_PANEL_BACK + DART_PANEL_THICK + 0.038
+const DARTBOARD_RADIUS := 0.2255
+const DARTBOARD_MODEL := "res://assets/models/dartboard.glb"
+
+
+static func _dartboard(parent: Node3D, frame: Material, lamp: Color) -> void:
+	var foot := SHELF.y + 0.05
+	var top := DARTBOARD_Y + DART_PANEL * 0.5 + 0.04
+	var post_x := SHELF.x * 0.5 - 0.02
+	for side in [-1.0, 1.0]:
+		block(parent, Vector3(0.03, top - foot, 0.03), Vector3(side * post_x, foot + (top - foot) * 0.5,
+				-SHELF.z * 0.5 + 0.015), frame, "DartPost%d" % (0 if side < 0 else 1))
+	for i in 2:
+		var y := DARTBOARD_Y + (DART_PANEL * 0.5 - 0.06) * (1.0 if i == 0 else -1.0)
+		block(parent, Vector3(post_x * 2.0 - 0.03, 0.03, 0.016), Vector3(0, y, DART_PANEL_BACK - 0.0105),
+				frame, "DartRail%d" % i)
+	var cork := StandardMaterial3D.new()
+	cork.albedo_color = Color(0.36, 0.25, 0.15)
+	cork.roughness = 0.95
+	block(parent, Vector3(DART_PANEL, DART_PANEL, DART_PANEL_THICK), Vector3(0, DARTBOARD_Y,
+			DART_PANEL_BACK + DART_PANEL_THICK * 0.5), cork, "DartPanel")
+	var board := (load(DARTBOARD_MODEL) as PackedScene).instantiate() as Node3D
+	board.name = "Dartboard"
+	board.position = Vector3(0, DARTBOARD_Y, DARTBOARD_FACE_Z)
+	parent.add_child(board)
+	var swap := {
+		"black": _paint(Color(0.045, 0.045, 0.05), 0.95),
+		"cream": _paint(Color(0.78, 0.72, 0.56), 0.95),
+		"red": _paint(Color(0.62, 0.07, 0.06), 0.9),
+		"green": _paint(Color(0.06, 0.36, 0.17), 0.9),
+		"wire": Materials.brushed_metal(),
+		"numbers": _paint(Color(0.85, 0.85, 0.82), 0.4, 0.6),
+		"rim": _paint(Color(0.03, 0.03, 0.035), 0.6),
+	}
+	for mesh: MeshInstance3D in board.find_children("*", "MeshInstance3D", true, false):
+		for s in mesh.mesh.get_surface_count():
+			var m := mesh.mesh.surface_get_material(s)
+			if m != null and swap.has(m.resource_name):
+				mesh.set_surface_override_material(s, swap[m.resource_name])
+	_dart_lamp(parent, frame, lamp)
+
+
+## A board lamp: an arm out from the top of the panel, and a hood on its end with a strip of
+## light under it, aimed back down at the board. A dartboard in the dark is a black disc.
+const DART_LAMP_REACH := 0.2
+
+
+static func _dart_lamp(parent: Node3D, frame: Material, colour: Color) -> void:
+	var top := DARTBOARD_Y + DART_PANEL * 0.5
+	var front := DART_PANEL_BACK + DART_PANEL_THICK
+	block(parent, Vector3(0.016, 0.016, DART_LAMP_REACH), Vector3(0, top - 0.03, front + DART_LAMP_REACH * 0.5),
+			frame, "DartLampArm")
+	var hood_at := Vector3(0, top - 0.015, front + DART_LAMP_REACH + 0.01)
+	block(parent, Vector3(0.2, 0.03, 0.05), hood_at, frame, "DartLampHood")
+	var strip := block(parent, Vector3(0.17, 0.004, 0.03), hood_at + Vector3(0, -0.017, 0), glow(colour, 2.5),
+			"DartLampStrip")
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var light := SpotLight3D.new()
+	light.name = "DartLight"
+	light.light_color = colour
+	light.light_energy = 1.6
+	light.spot_range = 0.9
+	light.spot_angle = 40.0
+	light.spot_attenuation = 0.8
+	light.light_specular = 0.2
+	light.shadow_enabled = false
+	var at := hood_at + Vector3(0, -0.03, 0)
+	light.transform = Transform3D(Basis.looking_at(Vector3(0, DARTBOARD_Y - 0.03, DARTBOARD_FACE_Z) - at, Vector3.UP), at)
+	parent.add_child(light)
+
+
+static func _paint(colour: Color, roughness: float, metallic := 0.0) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = colour
+	m.roughness = roughness
+	m.metallic = metallic
+	return m
 
 
 ## Where the shelf's lamp stands on its top: the back corner at +X, out of the row of items.

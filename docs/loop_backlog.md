@@ -196,6 +196,9 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Darts: no game round them (rounds of three, a running total, 501 down to zero); each throw
+  is scored alone. A dart that misses lies flat on the floor with its flights sunk in it. The
+  aimed throw is desktop only; in a headset a dart flies as the arm throws it, untried.
 - Chips and cards: their tricks run on the hand's button, so in a headset they are a trigger pull,
   not a gesture (a thumb flick, two hands for a shuffle). Their state is only the count of tricks
   since pick-up, so somebody joining mid-fidget sees a fresh stack until the item is put down.

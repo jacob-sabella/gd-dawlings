@@ -138,6 +138,15 @@ func throw_with(wound: float) -> void:
 	var a := aim()
 	var toward := (a.basis * Basis(Vector3.RIGHT, LOFT)) * Vector3.FORWARD
 	var speed := lerpf(THROW_SLOWEST, THROW_FASTEST, wound)
+	var item := carrying as Item
+	var room := ItemRoom.of(item)
+	if item != null and room != null and item.aim_scatter(wound) >= 0.0:
+		# Aimed: lobbed from the hand to land where the cursor is, give or take a wobble.
+		var target := room.aim_point(a)
+		var wobble := item.aim_scatter(wound)
+		target += a.basis.x * randfn(0.0, wobble) + a.basis.y * randfn(0.0, wobble)
+		throw_item(ItemRoom.lob(carry_pose().origin, target, lerpf(4.0, 9.0, wound)), Vector3.ZERO)
+		return
 	throw_item(toward * speed, a.basis.x * -TUMBLE * (0.3 + 0.7 * wound))
 
 

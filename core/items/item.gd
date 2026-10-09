@@ -178,6 +178,12 @@ func flies() -> Dictionary:
 	return {"bounce": 0.35, "roll": 3.0, "drag": 0.08}
 
 
+## Override: thrown at what is aimed at rather than just along the aim (a dart), wobbling about
+## this far (m) at a throw wound up to `wound` (0..1). Negative: not aimed.
+func aim_scatter(_wound: float) -> float:
+	return -1.0
+
+
 ## Override: whether it goes on a head (`Interactor.wear`).
 func wearable() -> bool:
 	return false
@@ -288,7 +294,7 @@ func launch(f: Flight, with: Array, stays := true) -> void:
 	launched_with = with
 	_size = 1.0
 	_home_after = not stays
-	resting = Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest)
+	resting = Transform3D(Basis(f.rest_turn), f.rest) if f.stuck else Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest)
 	loose_for = 0.0
 	_velocity = Vector3.ZERO
 	_arc_length = 0.0
@@ -356,8 +362,20 @@ func set_worn(on: bool) -> void:
 
 ## Out of the hand onto the floor at `spot` (in the parent's frame), turned to `yaw`.
 func lay_down(spot: Vector3, yaw: float) -> void:
+	stick_at(Transform3D(Basis(Vector3.UP, yaw), spot))
+
+
+## Whether, loose, it is stuck in something rather than lying on the floor: lying, it is always
+## upright, only turned.
+func is_stuck() -> bool:
+	return state == State.LOOSE and not resting.basis.y.is_equal_approx(Vector3.UP)
+
+
+## Out of the hand to lie at `pose` (in the parent's frame), however it is turned: on the floor,
+## or stuck in a board.
+func stick_at(pose: Transform3D) -> void:
 	_leave_hand()
-	resting = Transform3D(Basis(Vector3.UP, yaw), spot)
+	resting = pose
 	loose_for = 0.0
 	_set_state(State.LOOSE)
 	on_put_down()

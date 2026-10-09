@@ -313,6 +313,9 @@ func _physics_process(_delta: float) -> void:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
 		if hand != null:
+			# Aimed at the middle of the view, not wherever the window's cursor was left.
+			if hand.pointer_override.x < 0.0 and hand.camera != null:
+				hand.pointer_override = hand.camera.get_viewport().get_visible_rect().size * 0.5
 			hand.throw_with(_throw.x)
 		if studio != null and _spectate.size() == 2:
 			var watcher := Camera3D.new()

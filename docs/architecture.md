@@ -1384,6 +1384,21 @@ comes from the count of tricks: the chips' order, the cards' order, and the fan'
 a trick cut short. Card faces are a texture atlas drawn by `tools/make_cards.sh`, because the game's
 font has no suit signs. The models come from `tools/blender/table_games.py`.
 
+The darts (`DartItem`, three of them) live in a board over the prop shelf (`ZoneKit._dartboard`,
+lit by its own lamp; a chalk drawing of one in the chalk venue). Their homes are in the board,
+points in (`Venue.dart_spot`). A `Flight` given `boards` (the room's `boards`, from
+`Venue.dart_boards`: the board and the cork round it) and a `point` checks each step for going into
+a board's face before anything else; if it does, it is `stuck` there, turned nose-first along the
+way it was going, and `stuck_on` says where on the face. Every machine flies the same launch, so
+every one sees it go in at the same place and `DartItem.score` scores it the same. A loose item
+whose rest is not upright is stuck (`Item.is_stuck`), and the room's state carries the whole turn
+for it (`"stuck"` and a quaternion, applied with `stick_at`). A dart's throw is aimed
+(`aim_scatter`): the hand throws at where the cursor's ray meets a board (`ItemRoom.aim_point`), as
+a lob (`ItemRoom.lob`) at a pace from how wound up the throw is, with a wobble. A flight's wall
+check is skipped over solid footprints (`_over_solid`), because the walkable floor stops short of
+the shelf and a dart thrown at the board hit an invisible wall there. The models come from
+`tools/blender/darts.py`.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

@@ -294,6 +294,44 @@ static func chip_riffle(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A dart going into a sisal board: the steel point's tick, the thud of the barrel's weight
+## stopping in packed fibre, and the shaft's short shiver after.
+static func dart_thunk(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("dart_thunk_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.16)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 401 + take * 17
+		_impulse(s, 0.0, 0.22, 0.0015, rng.randf_range(3800.0, 4400.0), 403 + take)
+		_impulse(s, 0.0008, 0.55, 0.014, rng.randf_range(150.0, 185.0), 405 + take)
+		_impulse(s, 0.0008, 0.25, 0.008, rng.randf_range(420.0, 520.0), 407 + take)
+		# The flight and shaft quivering: a buzz that dies fast.
+		var phase := 0.0
+		var buzz := rng.randf_range(95.0, 120.0)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * buzz / float(RATE)
+			s[i] += 0.05 * exp(-t / 0.03) * signf(sin(phase)) * clampf(t / 0.004, 0.0, 1.0)
+		_lowpass(s, 5200.0)
+		return _wav(s, false))
+
+
+## A dart that missed, landing on something hard: a light metallic tick and a skitter.
+static func dart_clatter(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("dart_clatter_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.12)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 431 + take * 19
+		var at := 0.0
+		for i in 3:
+			_impulse(s, at, 0.3 / (i + 1), 0.004, rng.randf_range(2800.0, 3600.0), 433 + take * 7 + i)
+			_impulse(s, at, 0.12 / (i + 1), 0.01, rng.randf_range(900.0, 1200.0), 437 + take * 7 + i)
+			at += rng.randf_range(0.025, 0.04)
+		_highpass(s, 500.0)
+		return _wav(s, false))
+
+
 static func _chip(s: PackedFloat32Array, at: float, level: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value

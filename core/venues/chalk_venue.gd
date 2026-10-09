@@ -640,6 +640,24 @@ func _draw_zones() -> void:
 	shelf_art.name = "ShelfSketch"
 	shelf.add_child(shelf_art)
 	_art.append(shelf_art)
+	# The dartboard over it, drawn on the air where the others hang theirs: its rings, its
+	# spokes and the square of its panel. The darts stick in it all the same (Venue.dart_boards).
+	var face := Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DARTBOARD_FACE_Z)
+	var board_lines: Array = []
+	for r in [ZoneKit.DARTBOARD_RADIUS, DartItem.DOUBLE_OUT, DartItem.TREBLE_OUT, DartItem.OUTER_BULL]:
+		board_lines.append(Chalk.loop(face, r, 48 if r > 0.05 else 16))
+	for i in 20:
+		var a := deg_to_rad(9.0 + i * 18.0)
+		var way := Vector3(sin(a), cos(a), 0)
+		board_lines.append(PackedVector3Array([face + way * DartItem.OUTER_BULL, face + way * DartItem.DOUBLE_OUT]))
+	var half := ZoneKit.DART_PANEL * 0.5
+	var back := Vector3(0, ZoneKit.DARTBOARD_Y, ZoneKit.DART_PANEL_BACK + ZoneKit.DART_PANEL_THICK)
+	board_lines.append(PackedVector3Array([back + Vector3(-half, -half, 0), back + Vector3(half, -half, 0),
+			back + Vector3(half, half, 0), back + Vector3(-half, half, 0), back + Vector3(-half, -half, 0)]))
+	var board_art := Chalk.drawing(board_lines, Chalk.YELLOW * 0.4, 0.008, false, 2, SEED * 19)
+	board_art.name = "Dartboard"
+	shelf.add_child(board_art)
+	_art.append(board_art)
 
 
 ## What stands in zone `id`, as chalk lines in the zone's floor-centred frame.

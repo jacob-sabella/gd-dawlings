@@ -135,6 +135,7 @@ func _ready() -> void:
 	await _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track()
 	await _test_a_keytar_plays_your_keys_and_shows_them()
 	await _test_chips_and_cards_do_their_tricks_in_turn()
+	await _test_darts_stick_in_the_board_and_score()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6084,8 +6085,8 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
 			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
-			# keytar, the chips and the cards, which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 7 \
+			# keytar, the chips, the cards and the darts, which have homes of their own.
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 10 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11168,3 +11169,132 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+func _test_darts_stick_in_the_board_and_score() -> void:
+	# The score of a dart by where it went in.
+	var cases := [[Vector2.ZERO, 50], [Vector2(0, 0.01), 25], [Vector2(0, 0.103), 60], [Vector2(0, 0.166), 40],
+			[Vector2(0, 0.13), 20], [Vector2(sin(deg_to_rad(18)), cos(deg_to_rad(18))) * 0.13, 1],
+			[Vector2(0.13, 0), 6], [Vector2(0, -0.13), 3], [Vector2(-0.13, 0), 11], [Vector2(0, 0.2), 0],
+			[Vector2(-0.0705, -0.0705), 48]]
+	var wrong: Array = []
+	for c: Array in cases:
+		var s := DartItem.score(c[0])
+		if s["points"] != c[1]:
+			wrong.append([c[0], s])
+	check("a dart scores by its ring and its number: bull, outer bull, trebles, doubles, singles, off the board (%s)"
+			% [wrong], wrong.is_empty() and DartItem.score(Vector2(0, 0.103))["name"] == "T20"
+			and DartItem.score(Vector2(0, -0.166))["name"] == "D3")
+
+	# A flight into a board sticks, point first, where it crosses the face.
+	var board := Transform3D(Basis.IDENTITY, Vector3(0, 1.7, 0))
+	var boards := [{"at": board, "radius": 0.2255}]
+	var from := Vector3(0.05, 1.5, 2.37)
+	var v := ItemRoom.lob(from, Vector3(0, 1.7, 0), 7.0)
+	var f := Flight.fly(from, v, Vector3.ZERO, Quaternion.IDENTITY, [], [], 0.2, 6.0, 0.0, {}, boards, 0.012)
+	var nose := Basis(f.rest_turn) * Vector3.FORWARD
+	check("a dart lobbed at the bull sticks in the bull, point in, nose into the board (%s %s)" % [f.stuck_on, f.rest],
+			f.stuck and f.stuck_board == 0 and f.stuck_on.length() < 0.002 and nose.z < -0.9
+			and f.rest.z < 0.0 and f.rest.z > -0.02)
+	var past := Flight.fly(from, v, Vector3.ZERO, Quaternion.IDENTITY, [], [], 0.2, 6.0, 0.0, {}, [], 0.012)
+	check("with no board it flies on and comes down", not past.stuck and past.rest.y < 0.01)
+	var wide := Flight.fly(from, ItemRoom.lob(from, Vector3(0.5, 1.7, 0), 7.0), Vector3.ZERO, Quaternion.IDENTITY,
+			[], [], 0.2, 6.0, 0.0, {}, boards, 0.012)
+	check("and one aimed wide of the board misses it", not wide.stuck)
+	var ball := Flight.fly(from, v, Vector3.ZERO, Quaternion.IDENTITY, [], [], 0.2, 6.0, 0.0, {}, boards, 0.0)
+	check("only something with a point sticks", not ball.stuck)
+
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var darts: Array[DartItem] = []
+	for n in 3:
+		darts.append(studio.items.items.get(StringName("dart%d" % (n + 1))) as DartItem)
+	check("there are three darts, each its own colour of flight", darts.all(func(d: DartItem) -> bool: return d != null)
+			and darts[0].index == 0 and darts[2].index == 2)
+	var homeless: Array = []
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		var face := studio.venue.dartboard_spot()
+		var shelf := studio.venue.prop_shelf_spot()
+		var on_shelf := shelf.affine_inverse() * face.origin
+		if absf(on_shelf.x) > ZoneKit.SHELF.x * 0.5 or absf(on_shelf.z) > ZoneKit.SHELF.z * 0.5 \
+				or studio.venue.find_child("Dartboard", true, false) == null:
+			homeless.append(id)
+		for d in darts:
+			var in_board := face.affine_inverse() * d.home
+			var tip := Vector2(in_board.origin.x, in_board.origin.y)
+			if not d.own_home or absf(in_board.origin.z + DartItem.POINT_IN) > 0.001 or tip.length() > 0.2 \
+					or in_board.basis.z.z < 0.9:
+				homeless.append("%s:%s" % [id, d.id])
+		if studio.items.boards.size() != 2:
+			homeless.append("%s: boards" % id)
+	check("in every venue there is a board over the shelf, and the darts live in it, points in (%s)" % [homeless],
+			homeless.is_empty())
+	studio.set_venue(&"studio", false)
+
+	# Thrown at the board from the oche: in, scored, and the room says so.
+	var face := studio.items.global_transform * studio.venue.dartboard_spot()
+	var oche := face * Vector3(0.1, -0.15, 2.37)
+	var target := face * Vector3(0, 0.103, 0)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(darts[0])
+	studio.items.throw(darts[0], oche, ItemRoom.lob(oche, target, 7.0), Vector3.ZERO)
+	check("thrown, it is flying", darts[0].is_flying() and darts[0].flight.stuck)
+	for step in 120:
+		darts[0]._physics_process(1.0 / 60.0)
+		if not darts[0].is_flying():
+			break
+	var stuck_at := (studio.items.global_transform * darts[0].resting).origin
+	var on_face := face.affine_inverse() * stuck_at
+	var popup := darts[0].get_node_or_null("Score") as Label3D
+	check("it goes in where it was aimed and stays there: in the treble 20 (%s)" % [on_face],
+			darts[0].state == Item.State.LOOSE and absf(on_face.y - 0.103) < 0.004 and absf(on_face.x) < 0.004
+			and absf(on_face.z + DartItem.POINT_IN) < 0.004)
+	check("and what it scored is shown over it (%s)" % [popup.text if popup else "none"],
+			popup != null and popup.text.begins_with("T20") and popup.text.ends_with("60"))
+	check("it reads as in the board, with its score, not on the floor (%s)" % darts[0].readout(),
+			darts[0].is_stuck() and darts[0].readout() == "in the board: T20")
+	var entry: Array = studio.items.state().get(&"dart1", [])
+	check("the room has it stuck in the board, turned as it went in", entry.size() == 9 and entry[4] == "stuck")
+	var pose := darts[0].resting
+	darts[0].snap_home()
+	studio.items.apply({&"dart1": entry})
+	check("and a room told so puts it there, point in", darts[0].state == Item.State.LOOSE
+			and darts[0].resting.is_equal_approx(pose))
+	check("stuck in the board it is to be pulled out", darts[0].hint().contains("pull it out"))
+	check("a copy told it is in knows only that", darts[0].readout() == "in the board")
+	darts[0].lay_down(Vector3(0, 0, 1), 0.4)
+	check("a dart on the floor is not stuck", not darts[0].is_stuck() and darts[0].readout() == "on the floor"
+			and not darts[0].hint().contains("pull it out"))
+
+	# Aimed, on a desktop: at the board where the cursor's ray meets it.
+	var aim := Transform3D(Basis.looking_at(target - oche, Vector3.UP), oche)
+	check("an aimed throw is aimed where the aim meets the board", studio.items.aim_point(aim).distance_to(target) < 0.001)
+	var away := Transform3D(Basis.looking_at(face.basis.z, Vector3.UP), oche)
+	check("and at nothing, a throw's length along it",
+			is_equal_approx(studio.items.aim_point(away).distance_to(oche), ItemRoom.AIM_LENGTH))
+	var lobbed := ItemRoom.lob(Vector3.ZERO, Vector3(2, 0.5, 0), 6.0)
+	var t := 2.0 / lobbed.x
+	check("a lob gets there", absf(lobbed.y * t - 0.5 * Flight.GRAVITY * t * (t + Flight.STEP) - 0.5) < 0.0001)
+	check("a dart is aimed, and a soft throw wobbles more than a hard one",
+			darts[1].aim_scatter(0.0) > darts[1].aim_scatter(1.0) and darts[1].aim_scatter(1.0) > 0.0
+			and studio.items.items[&"duck"].aim_scatter(0.5) < 0.0)
+	hand.pick_up(darts[1])
+	darts[1].work(true)
+	darts[1].work(false)
+	await get_tree().process_frame
+	check("a click with a dart in hand throws it", darts[1].is_flying() and hand.carrying == null)
+	for d in darts:
+		d.snap_home()
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout

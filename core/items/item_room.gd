@@ -19,11 +19,14 @@ extends Node3D
 
 ## The items there are, in the order they take the shelf's spots.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
-		&"tambourine", &"keytar", &"chips", &"cards"]
+		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
 const AT_FEET := 0.45
+## An aimed throw (`aim_point`) at a board no further than this; at nothing, this far along the aim.
+const AIM_REACH := 8.0
+const AIM_LENGTH := 2.5
 
 ## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already
 ## done here. The studio sends it to the host as an ask.
@@ -48,6 +51,8 @@ var solids: Callable = Callable()
 ## The gear's footprints (the walker's `footprints`), for a put-down aimed through the gear at
 ## the floor behind it.
 var gear: Callable = Callable()
+## What a dart sticks in (Flight.fly's `boards`), in this node's frame: the venue's dartboard.
+var boards: Array = []
 var _spots: Array[Transform3D] = []
 ## Homes of their own, off the shelf's top, by kind: the mic's stand, the headphones' hook, the
 ## tablet's lower tier.
@@ -78,6 +83,12 @@ static func make(kind: StringName) -> Item:
 			return ChipsItem.new()
 		&"cards":
 			return CardsItem.new()
+		&"dart1":
+			return DartItem.new(0)
+		&"dart2":
+			return DartItem.new(1)
+		&"dart3":
+			return DartItem.new(2)
 	return null
 
 
@@ -152,7 +163,8 @@ func _rehome() -> void:
 
 
 ## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
-## the floor, {id: []} for one in a hand, {id: [true]} for one on a head. One left out is on the
+## the floor (and "stuck" and the quaternion it is turned by after, for one stuck in a board),
+## {id: []} for one in a hand, {id: [true]} for one on a head. One left out is on the
 ## shelf.
 func state() -> Dictionary:
 	var out := {}
@@ -166,6 +178,10 @@ func state() -> Dictionary:
 				if item.is_flying() and item.launched_with.size() == 3:
 					entry.append(item.throws)
 					entry.append_array(item.launched_with)
+				elif item.is_stuck():
+					# Not lying flat -- stuck in a board: how it is turned, whole.
+					var q := item.resting.basis.get_rotation_quaternion()
+					entry.append_array(["stuck", q.x, q.y, q.z, q.w])
 				out[id] = entry
 			Item.State.HELD:
 				out[id] = [true] if item.on_head else []
@@ -206,6 +222,10 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 			continue
 		if item.state == Item.State.LOOSE and item.resting.origin.is_equal_approx(at):
 			continue
+		if spot.size() == 9 and spot[4] is String:
+			item.stick_at(Transform3D(Basis(Quaternion(float(spot[5]), float(spot[6]), float(spot[7]),
+					float(spot[8])).normalized()), at))
+			continue
 		item.lay_down(at, float(spot[3]))
 
 
@@ -243,8 +263,38 @@ func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
 	var facing := Quaternion(Basis(Vector3.UP, atan2(-velocity.x, -velocity.z)))
 	var f := Flight.fly(start, velocity, spin, facing, floor,
 			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
-			how.get("drag", 0.08), how.get("wing", {}))
-	item.launch(f, [origin, velocity, spin], _can_lie(Vector2(f.rest.x, f.rest.z)))
+			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0))
+	item.launch(f, [origin, velocity, spin], f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z)))
+
+
+## What `aim` (world space) is aimed at, for a thrown thing that is aimed (Item.aim_scatter):
+## where it meets a board in front of it, or a throw's length along it. World space.
+func aim_point(aim: Transform3D) -> Vector3:
+	var origin := aim.origin
+	var toward := -aim.basis.z.normalized()
+	for b: Dictionary in boards:
+		var frame: Transform3D = global_transform * (b["at"] as Transform3D)
+		var normal := frame.basis.z.normalized()
+		var facing := toward.dot(normal)
+		if facing > -0.05:
+			continue
+		var along := (frame.origin - origin).dot(normal) / facing
+		if along <= 0.0 or along > AIM_REACH:
+			continue
+		var hit := origin + toward * along
+		var local := frame.affine_inverse() * hit
+		if Vector2(local.x, local.y).length() < float(b.get("radius", b.get("half", 0.0))) * 1.6:
+			return hit
+	return origin + toward * AIM_LENGTH
+
+
+## The velocity that takes a thing from `from` to `to` at about `speed`, falling as it goes:
+## the time it takes is the distance over the speed, and it is thrown up by as much as it falls.
+static func lob(from: Vector3, to: Vector3, speed: float) -> Vector3:
+	var gap := to - from
+	var t := maxf(0.05, gap.length() / maxf(0.5, speed))
+	# And half a step of gravity more: a flight falls by its speed at the end of each step.
+	return gap / t + Vector3.UP * 0.5 * Flight.GRAVITY * (t + Flight.STEP)
 
 
 ## `at`, or the nearest point to it on the floor: a hand held out over a wall throws from this

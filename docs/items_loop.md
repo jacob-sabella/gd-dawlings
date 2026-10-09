@@ -397,8 +397,22 @@ ergonomics.
       - A stack held where the glove is is hidden by it: hold it on the fingers above.
       - Comparing a float32 position with `==` fails; use `is_equal_approx`.
       Not tried in a headset, where tricks would want a gesture rather than a trigger.
-- [ ] Toys round the room: darts and a board, a mini hoop over a door, a Newton's cradle by the
-      desk, a yo-yo. Each venue gets one toy of its own (a snowball, a beach ball, a slinky...).
+- [x] Toys round the room, first: darts and a board.
+      Done: a regulation board, on a cork panel with its own lamp, over the prop shelf, and three
+      darts living in it, points in, flights in three colours. A click throws one at the cursor
+      (R wound up throws it harder and flatter, with less wobble). It flies point first and sticks
+      where it goes in: board or cork. What it scored shows over it for a moment ("T20  60"), and
+      its readout says "in the board: T20". Learnings:
+      - The walkable floor stops short of the shelf, so a flight's wall check hit an invisible
+        wall in front of the board. Flights now skip the wall check over solid footprints.
+      - An aimed lob landed low twice: once for want of half a step's gravity in the launch, once
+        for the dart's drag. A dart has no drag now.
+      - The shot window's cursor is wherever it was left, so `--throw` now aims at the middle of
+        the view. Shots are 1600x900: crop from that, not from 1080p guesses.
+      - A copy that is told a dart is stuck must not keep an old score from an earlier throw.
+      Not tried in a headset, where a throw is a real arm's throw and wants no aim assist.
+- [ ] Toys round the room, the rest: a mini hoop over a door, a Newton's cradle by the desk, a
+      yo-yo. Each venue gets one toy of its own (a snowball, a beach ball, a slinky...).
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's

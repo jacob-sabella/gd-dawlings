@@ -50,6 +50,13 @@ var hit_speeds := PackedFloat32Array()
 ## Where it comes to rest, and which way it faces there.
 var rest := Vector3.ZERO
 var rest_yaw := 0.0
+## Whether it stuck in a board (`fly`'s `boards`) rather than coming down: then it rests where it
+## went in, turned `rest_turn`, and `stuck_on` is where on the board's face (its own x and y, m),
+## `stuck_board` which board.
+var stuck := false
+var stuck_on := Vector2.ZERO
+var stuck_board := -1
+var rest_turn := Quaternion.IDENTITY
 
 
 ## How long it flies for.
@@ -78,9 +85,13 @@ func at(t: float) -> Transform3D:
 ## how far it leans of itself (rad, + to the right), "flutter": faster than this, the paper
 ## flutters and slows hard ("flap" how hard), "settle": how long out of the hand before its wing
 ## holds it up}.
+## `point`, for something that flies point first and sticks (a dart): its nose follows its path,
+## and where it crosses one of `boards` -- {"at": the board's Transform3D, facing +Z; "half": how
+## far either way of its middle it can stick, or "radius": how far round it} -- going into the face,
+## it stops there, `point` in.
 static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quaternion,
 		floor: Array, solids: Array, bounce := 0.35, roll := 3.0, drag := 0.08,
-		wing := {}) -> Flight:
+		wing := {}, boards: Array = [], point := 0.0) -> Flight:
 	var f := Flight.new()
 	var p := origin
 	var v := velocity
@@ -107,9 +118,31 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 		var next := p + v * dt
 		var hit := 0.0
 
+		# Into a board's face: stuck there, as far in as the point goes.
+		if point > 0.0 and not grounded:
+			var into := _into_board(boards, p, next)
+			if not into.is_empty():
+				var way := v.normalized()
+				var nose := Basis.looking_at(way, Vector3.UP if absf(way.y) < 0.99 else Vector3.BACK)
+				f.stuck = true
+				f.stuck_board = into["board"]
+				f.stuck_on = into["on"]
+				f.rest_turn = nose.get_rotation_quaternion()
+				f.rest = into["at"] + way * point
+				f.points.append(f.rest)
+				f.turns.append(f.rest_turn)
+				f.hits.append((n + 1) * dt)
+				f.hit_speeds.append(v.length())
+				var forward_now := nose * Vector3.FORWARD
+				f.rest_yaw = atan2(-forward_now.x, -forward_now.z)
+				return f
+
 		# The room's edge is a wall. Each way is tried on its own, so a throw into a corner
 		# comes back off both walls and one along a wall slides along it.
-		if not floor.is_empty() and not _on_floor(floor, Vector2(next.x, next.z)):
+		# Over a solid's footprint is not past a wall: it is over furniture standing in the room
+		# (the walkable floor stops short of it), which it meets as the solid below.
+		if not floor.is_empty() and not _on_floor(floor, Vector2(next.x, next.z)) \
+				and not _over_solid(solids, Vector2(next.x, next.z)):
 			if not _on_floor(floor, Vector2(next.x, p.z)):
 				hit = maxf(hit, absf(v.x))
 				v.x = -v.x * bounce
@@ -185,6 +218,10 @@ static func fly(origin: Vector3, velocity: Vector3, spin: Vector3, turn: Quatern
 		if gliding:
 			if v.length() > 0.01:
 				q = _wings(v.normalized(), bank)
+		elif point > 0.0 and not grounded and hit == 0.0 and v.length() > 0.5:
+			# Point first, as a dart flies, until it hits something and tumbles.
+			var way := v.normalized()
+			q = Basis.looking_at(way, Vector3.UP if absf(way.y) < 0.99 else Vector3.BACK).get_rotation_quaternion()
 		elif w.length() > 0.0001:
 			q = (Quaternion(w.normalized(), w.length() * dt) * q).normalized()
 		p = next
@@ -241,6 +278,36 @@ static func _lift_way(along: Vector3, bank: float) -> Vector3:
 ## Nose along its path, wings level but for `bank`.
 static func _wings(along: Vector3, bank: float) -> Quaternion:
 	return Basis.looking_at(along, _lift_way(along, bank)).get_rotation_quaternion()
+
+
+## Where the step from `p` to `next` goes into the face of one of `boards`, if it does:
+## {"board": its index, "at": the point, "on": where on the face, in the board's x and y}.
+static func _into_board(boards: Array, p: Vector3, next: Vector3) -> Dictionary:
+	for i in boards.size():
+		var b: Dictionary = boards[i]
+		var frame: Transform3D = b["at"]
+		var normal := frame.basis.z.normalized()
+		var d0 := (p - frame.origin).dot(normal)
+		var d1 := (next - frame.origin).dot(normal)
+		if d0 < 0.0 or d1 > 0.0 or d0 == d1:
+			continue
+		var cross := p.lerp(next, d0 / (d0 - d1))
+		var local := frame.affine_inverse() * cross
+		var inside: bool
+		if b.has("radius"):
+			inside = Vector2(local.x, local.y).length() <= float(b["radius"])
+		else:
+			inside = absf(local.x) <= float(b["half"]) and absf(local.y) <= float(b["half"])
+		if inside:
+			return {"board": i, "at": cross, "on": Vector2(local.x, local.y)}
+	return {}
+
+
+static func _over_solid(solids: Array, at: Vector2) -> bool:
+	for s: Dictionary in solids:
+		if Walker._gap(s, at) <= 0.0:
+			return true
+	return false
 
 
 static func _on_floor(floor: Array, at: Vector2) -> bool:
