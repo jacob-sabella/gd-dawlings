@@ -154,8 +154,13 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       (`CabinVenue`. First venue with real models: a stove and firs scripted in Blender, a
       rocking chair and lanterns from Poly Haven, all in `tools/blender/`. `ShellKit` now holds
       the wall-with-windows both the loft and the cabin use. `VENUE=` on `tools/budget.sh`.)
-- [ ] Cabin: the back view is the darkest of any venue (0.034). A second wall lantern pair or
+- [x] Cabin: the back view is the darkest of any venue (0.034). A second wall lantern pair or
       a lit shelf of jars along the back wall; and a rug under the rocking chair.
+      (A shelf of Blender-lathed jars with candles in some, two soft washes under it, and a
+      braided rag rug of five rings. Back view 0.034 -> 0.045.)
+- [ ] Cabin follow-up: the candle jars read as flat white blocks up close; give the candle
+      glass a warm tint with a brighter wick inside, and let the candle washes flicker with the
+      fire.
 - [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.

@@ -142,6 +142,7 @@ func _ready() -> void:
 	_light_the_stove()
 	_furnish()
 	_hang_lanterns()
+	_put_up_the_shelf()
 	_plant_the_woods()
 	_let_it_snow()
 	_dress_zones()
@@ -403,6 +404,7 @@ func _furnish() -> void:
 	var at := stove_spot()
 	var chair := _model("rocking_chair.glb", Vector3(at.x + 1.15, 0.0, at.y + 1.2), deg_to_rad(200.0), {})
 	chair.name = "RockingChair"
+	_lay_rug(Vector2(at.x + 1.15, at.y + 1.2), deg_to_rad(200.0))
 	var bark := Materials.cached_scanned("cabin_logs", "weathered_brown_planks", "2k", 0.5,
 			Color(0.38, 0.28, 0.2))
 	var logs := MultiMesh.new()
@@ -429,6 +431,112 @@ func _furnish() -> void:
 	pile.multimesh = logs
 	pile.material_override = bark
 	add_child(pile)
+
+
+## A long shelf on the back wall between the wall lanterns: a plank on iron brackets, a row of
+## preserving jars (assets/models/jar.glb) in amber and green, and candles burning in a few of
+## them. It is what the back wall is seen by from the desk -- a warm line at shoulder height --
+## and two soft lights under the shelf wash the boards below it.
+const SHELF_Y := 1.5
+const SHELF_DEPTH := 0.24
+
+## Where each jar on the shelf stands, kept here as well as in the MultiMeshes (which a headless
+## run does not hold on to).
+var shelf_jars: Array[Transform3D] = []
+
+func _put_up_the_shelf() -> void:
+	var back := LIVE_ROOM_BACK
+	var from := -2.75 - _grow()
+	var to := 1.35 + _grow() * 0.5
+	var length := to - from
+	var plank := _timber()
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color(0.04, 0.04, 0.04)
+	iron.metallic = 0.6
+	iron.roughness = 0.55
+	ZoneKit.block(self, Vector3(length, 0.045, SHELF_DEPTH), Vector3((from + to) * 0.5, SHELF_Y,
+			back - SHELF_DEPTH * 0.5 - 0.002), plank, "Shelf")
+	for x in [from + 0.25, (from + to) * 0.5, to - 0.25]:
+		ZoneKit.block(self, Vector3(0.03, 0.2, 0.03), Vector3(x, SHELF_Y - 0.125, back - 0.017), iron, "ShelfBracket")
+		var arm := ZoneKit.block(self, Vector3(0.025, 0.025, 0.24), Vector3(x, SHELF_Y - 0.11, back - 0.11), iron,
+				"ShelfStay")
+		arm.rotation.x = -0.7
+	# The jars: one MultiMesh for the preserves, one for the candle jars, each jar scaled a
+	# little differently, the way no two batches are the same.
+	var source := (load(MODELS + "jar.glb") as PackedScene).instantiate()
+	var mesh := ((source.find_children("*", "MeshInstance3D", true, false)[0]) as MeshInstance3D).mesh
+	source.free()
+	var amber := StandardMaterial3D.new()
+	amber.albedo_color = Color(0.55, 0.3, 0.08)
+	amber.roughness = 0.25
+	amber.metallic_specular = 0.8
+	var green := amber.duplicate() as StandardMaterial3D
+	green.albedo_color = Color(0.2, 0.32, 0.12)
+	var tin := StandardMaterial3D.new()
+	tin.albedo_color = Color(0.45, 0.4, 0.3)
+	tin.metallic = 0.8
+	tin.roughness = 0.4
+	# A candle jar is clear glass lit from inside: its glass glows.
+	var candle := ZoneKit.glow(Color(1.0, 0.6, 0.28), 1.3)
+	var looks := [[amber, tin], [green, tin], [candle, tin]]
+	var placed: Array = [[], [], []]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var x := from + 0.12
+	var i := 0
+	while x < to - 0.12:
+		var kind := 2 if i % 5 == 2 else (rng.randi() % 2)
+		var size := rng.randf_range(0.8, 1.25)
+		placed[kind].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(1, size, 1)
+				* rng.randf_range(0.9, 1.1)), Vector3(x, SHELF_Y + 0.0226, back - SHELF_DEPTH * 0.5)))
+		x += rng.randf_range(0.12, 0.2)
+		i += 1
+	for k in placed.size():
+		shelf_jars.append_array(placed[k])
+	for k in looks.size():
+		var jars := mesh.duplicate() as Mesh
+		jars.surface_set_material(0, looks[k][0])
+		jars.surface_set_material(1, looks[k][1])
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = jars
+		mm.instance_count = placed[k].size()
+		for n in placed[k].size():
+			mm.set_instance_transform(n, placed[k][n])
+		var holder := MultiMeshInstance3D.new()
+		holder.name = ["Preserves", "Pickles", "CandleJars"][k]
+		holder.multimesh = mm
+		holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(holder)
+	# The candles light the boards under the shelf, softly, and the wall above it.
+	for t in [0.28, 0.72]:
+		var at := Vector3(lerpf(from, to, t), SHELF_Y + 0.12, back - SHELF_DEPTH - 0.05)
+		var wash := ZoneKit.spot_down(self, at, Color(1.0, 0.62, 0.3), 1.6, 80.0, 2.6)
+		wash.rotation_degrees.x = 20.0
+		wash.rotation_degrees.y = 180.0
+
+
+## A braided rag rug, oval, under the rocking chair: rings of colour, each a hair above the last.
+func _lay_rug(at: Vector2, yaw: float) -> void:
+	var rings := [[1.0, Color(0.36, 0.12, 0.09)], [0.8, Color(0.55, 0.47, 0.33)], [0.62, Color(0.2, 0.25, 0.3)],
+			[0.42, Color(0.42, 0.14, 0.1)], [0.22, Color(0.55, 0.47, 0.33)]]
+	for i in rings.size():
+		var r: float = rings[i][0]
+		var disc := MeshInstance3D.new()
+		disc.name = "Rug%d" % i
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.7 * r
+		cyl.bottom_radius = 0.7 * r
+		cyl.height = 0.006
+		cyl.radial_segments = 32
+		cyl.rings = 1
+		disc.mesh = cyl
+		disc.position = Vector3(at.x, 0.003 + i * 0.0015, at.y)
+		disc.rotation.y = yaw
+		disc.scale = Vector3(1.0, 1.0, 0.7)
+		disc.material_override = Materials.cached_scanned("cabin_rug%d" % i, "wool_boucle", "1k", 0.4, rings[i][1])
+		disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(disc)
 
 
 ## Oil lanterns (assets/models/lantern.glb) hung on chains from the rafters over the walk to the

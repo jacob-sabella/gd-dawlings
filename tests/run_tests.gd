@@ -6314,6 +6314,23 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		highs = maxf(highs, e)
 	check("the fire flickers and never goes out (%.2f..%.2f)" % [lows, highs],
 			highs - lows > 0.2 and lows > 1.0)
+	# The back wall has a shelf of jars, some with candles burning, all of them on the plank.
+	var plank := cabin.find_child("Shelf", false, false) as MeshInstance3D
+	var candles := cabin.find_child("CandleJars", false, false) as MultiMeshInstance3D
+	var on_shelf := plank != null and candles != null and candles.multimesh.instance_count >= 2 \
+			and cabin.shelf_jars.size() >= 12
+	if on_shelf:
+		var top := plank.position.y + (plank.mesh as BoxMesh).size.y * 0.5
+		var half := (plank.mesh as BoxMesh).size.x * 0.5
+		for jar: Transform3D in cabin.shelf_jars:
+			on_shelf = on_shelf and absf(jar.origin.y - top) < 0.01 and absf(jar.origin.z - plank.position.z) < 0.05 \
+					and absf(jar.origin.x - plank.position.x) < half - 0.05
+	check("a shelf of jars on the back wall, candles lit in some", on_shelf
+			and (candles.multimesh.mesh.surface_get_material(0) as StandardMaterial3D).shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
+	var chair := cabin.find_child("RockingChair", false, false) as Node3D
+	var rug := cabin.find_child("Rug0", false, false) as MeshInstance3D
+	check("and the rocking chair stands on a rug", chair != null and rug != null
+			and Vector2(chair.position.x - rug.position.x, chair.position.z - rug.position.z).length() < 0.4)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
