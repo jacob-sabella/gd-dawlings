@@ -536,6 +536,7 @@ func _dress_zones() -> void:
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, block_wood, steel)
+	_dress_prop_shelf(block_wood, steel)
 	ZoneKit.spot_down(bricks, Vector3(0, 2.6, 0), Color(1.0, 0.78, 0.55), 2.2, 50.0, 4.2, steel)
 
 	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])

@@ -78,6 +78,14 @@ func rooms() -> Array[Rect2]:
 					Studio.ROOM_DEPTH - 0.05)]
 
 
+## Beside: the room behind is no wider than the control room on the left, so the shelf stands
+## against that wall instead, in the corner the booth and the riser left for the side room.
+func prop_shelf_spot() -> Transform3D:
+	var spot := super()
+	if variant == BESIDE:
+		spot.origin.x = -room_width * 0.5 + 0.05 + 0.08 + ZoneKit.SHELF.z * 0.5
+	return spot
+
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_mode = Environment.BG_COLOR
@@ -660,6 +668,7 @@ func _dress_zones() -> void:
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, walnut, metal)
+	_dress_prop_shelf(walnut, metal)
 	ZoneKit.spot_down(bricks, Vector3(0, 2.4, 0), Color(1.0, 0.8, 0.6), 2.4, 50.0, 4.0)
 	var pendant := MeshInstance3D.new()
 	var shade := CylinderMesh.new()

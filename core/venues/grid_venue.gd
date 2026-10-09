@@ -124,7 +124,7 @@ func _ready() -> void:
 	_floor_mat = ShaderMaterial.new()
 	_floor_mat.shader = preload("res://core/venues/shaders/grid_floor.gdshader")
 	var c := footprint_corners()
-	_floor_mat.set_shader_parameter("energy", 1.7)
+	_floor_mat.set_shader_parameter("energy", 1.5)
 	_floor_mat.set_shader_parameter("footprint", Vector4(c[0].x, c[0].y, c[2].x, c[2].y))
 	ground.material_override = _floor_mat
 	add_child(ground)
@@ -211,6 +211,9 @@ func _dress_zones() -> void:
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.04, glass, chrome)
 	_neon_edges(bricks, ZoneKit.TABLE_TOP, Vector3(0, ZoneKit.TABLE_HEIGHT - ZoneKit.TABLE_TOP.y * 0.5, 0),
 			cyan, 0.012)
+	var shelf := _dress_prop_shelf(glass, chrome, Color(0.45, 0.85, 1.0))
+	_neon_edges(shelf, Vector3(ZoneKit.SHELF.x, 0.035, ZoneKit.SHELF.z),
+			Vector3(0, ZoneKit.SHELF.y - 0.0175, 0), cyan, 0.012)
 
 	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
 	ZoneKit.keyboard_stand(synth, ZoneKit.STAND_WIDTH, chrome, glass)

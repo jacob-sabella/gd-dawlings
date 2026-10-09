@@ -1203,6 +1203,35 @@ it. The panel shows it beside "Hear my keys".
 The cost: the graph runs at the smallest cycle any node asks for, so while a guest session is
 open everything on that card runs at 128 frames -- more wakeups for every program on it.
 
+## Items: things you pick up
+
+An `Item` (`core/items/item.gd`) is a `ControlAffordance`, so a mouse ray, a controller and a
+pinch all take hold of it through the one grab contract. For an item `grab_begin` means "pick me
+up": it calls `Interactor.pick_up`, and the item stays in the hand after the button is released.
+While something is carried, a press that hovers nothing is the item's `use(down)`. Q, or the
+put-down call, hands the item to its room.
+
+An item is in one of three places: `HOME` on the venue's prop shelf, `HELD` riding the hand's
+`Interactor.carry_pose()`, or `LOOSE` on the floor. Every move is a spring stepped at a fixed
+120 Hz: an overshoot into the hand, a bounce on landing, and a slow arc home. At rest an item
+stops ticking. A loose item tidies itself home after `TIDY_SECONDS` on a single timer.
+
+`ItemRoom` (`core/items/item_room.gd`) lives in `studio_set`, which is the walker's frame, and
+owns every item. It knows the floor because the studio gives it `Walker.fits` and `ground_at`, so
+it judges a put-down, not the hand. The aim meets the floor within `PUT_REACH`, or the item lands
+at your feet. Somewhere a person could not stand to pick it up again sends it home. When the venue
+changes, `set_spots` moves the items at home to the new shelf, and loose ones the new room has no
+floor for go home too.
+
+Where the hand is belongs to the interactor. `MouseInteractor.carry_pose()` is lower left in your
+view, and the interactor draws a left glove under the item (`Glove`, palm up, GRIP while using) on
+`Mirror.NOT_REFLECTED`, so it is only seen in your own view. The item itself goes on that layer
+too while held. A mirror's ghost carries a look-alike instead (`ItemRoom.look_of`,
+`Presence.Avatar.carry`), on its own left palm.
+
+For now the shelf is each person's own (`Item.personal()`). Making the items the room's, with
+claimed pick-ups, streamed poses and predicted room asks, is the next pass.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

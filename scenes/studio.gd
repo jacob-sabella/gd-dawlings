@@ -107,6 +107,8 @@ var body_path := Ergonomics.HEIGHT_PATH
 
 var console: ConsoleSurface
 var rack: RackSurface
+## The things people pick up and carry. Null in AR, which has a real room's things in it.
+var items: ItemRoom
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
@@ -216,6 +218,8 @@ func _ready() -> void:
 	if camera != null:
 		_build_walker()
 		_update_camera()
+	if medium != Presentation.Medium.AR:
+		_build_items()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
 		# four lines up.
@@ -399,9 +403,11 @@ func _walkable() -> Array[Rect2]:
 func _walk_where_the_venue_lets() -> void:
 	if walker != null:
 		walker.walkable = _walkable()
-		walker.fixed = venue.zone_solids() if venue != null else []
+		walker.fixed = venue.solids() if venue != null else []
 		walker.rebuild_walls()
 		walker.unstick()
+	if items != null and venue != null:
+		items.set_spots(venue.item_spots())
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1644,13 +1650,33 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 # --- desktop camera -----------------------------------------------------------------------
 
+## The things people pick up (docs/items_loop.md), in the set's frame, the floor plan's. They
+## lie only where the walker could stand to pick them up again.
+func _build_items() -> void:
+	items = ItemRoom.new()
+	items.name = "Items"
+	if walker != null:
+		items.fits = walker.fits
+		items.ground_at = walker.ground_at
+	studio_set.add_child(items)
+	items.set_spots(venue.item_spots())
+
+
+## Put down whatever any hand here is carrying, where it is aiming.
+func put_down_items() -> void:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor != null and interactor.carrying != null:
+			interactor.put_down()
+
+
 func _build_walker() -> void:
 	walker = Walker.new()
 	walker.name = "Walker"
 	walker.camera = camera
 	walker.floor_plan = floor_plan
 	walker.walkable = _walkable()
-	walker.fixed = venue.zone_solids() if venue != null else []
+	walker.fixed = venue.solids() if venue != null else []
 	walker.solids_parent = studio_set
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height
@@ -1728,6 +1754,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Split the selected items at the playhead. B for blade: S is walking backwards.
 			KEY_B:
 				DAW.split_selected(DAW.state.position_seconds)
+			# Put down what you are carrying, where you are looking. Q: the key under the hand
+			# that is on WASD, and the one games drop things with.
+			KEY_Q:
+				put_down_items()
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)

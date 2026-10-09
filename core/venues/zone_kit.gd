@@ -173,6 +173,92 @@ static func table(parent: Node3D, size: Vector3, height: float, leg: float, top:
 					under * 0.5, cz * (size.z * 0.5 - leg * 1.5)), legs, "Leg")
 
 
+## The prop shelf, where the items live (Venue.prop_shelf_spot): a low two-tier side table,
+## long along X, front toward +Z. Waist height less a little, so what sits on it is under the
+## eye from a step away and in reach without bending.
+const SHELF := Vector3(0.95, 0.78, 0.42)
+## How many items it has room for along its top.
+const SHELF_SPOTS := 4
+
+
+static func prop_shelf(parent: Node3D, top: Material, frame: Material, lamp: Color) -> void:
+	var board := 0.035
+	block(parent, Vector3(SHELF.x, board, SHELF.z), Vector3(0, SHELF.y - board * 0.5, 0), top, "ShelfTop")
+	# The lower tier, inset, for the things that do not fit along the top yet.
+	block(parent, Vector3(SHELF.x - 0.08, board * 0.8, SHELF.z - 0.06), Vector3(0, 0.22, 0), top,
+			"ShelfLower")
+	# A lip along the back, so the row reads as a shelf of things and not a table left bare.
+	block(parent, Vector3(SHELF.x, 0.05, 0.02), Vector3(0, SHELF.y + 0.025, -SHELF.z * 0.5 + 0.01),
+			top, "ShelfLip")
+	var leg := 0.035
+	for cx in [-1.0, 1.0]:
+		for cz in [-1.0, 1.0]:
+			block(parent, Vector3(leg, SHELF.y - board, leg), Vector3(cx * (SHELF.x * 0.5 - leg),
+					(SHELF.y - board) * 0.5, cz * (SHELF.z * 0.5 - leg)), frame, "ShelfLeg")
+	_shelf_lamp(parent, frame, lamp)
+
+
+## Where the shelf's lamp stands on its top: the back corner at +X, out of the row of items.
+const SHELF_LAMP := Vector3(0.38, 0.0, -0.13)
+const SHELF_LAMP_HEIGHT := 0.36
+
+
+## A little lamp at the back of the shelf, its shade over the row of items: the shelf is in a
+## corner of back of house the room's own lights do not reach, and a toy nobody can see is not
+## there. A practical, so the light comes from something: a stem, an arm, and a cone of a shade
+## with a warm bulb in it, aimed down along the shelf.
+static func _shelf_lamp(parent: Node3D, frame: Material, colour: Color) -> void:
+	var base := SHELF_LAMP + Vector3(0, SHELF.y, 0)
+	block(parent, Vector3(0.09, 0.015, 0.09), base + Vector3(0, 0.0075, 0), frame, "LampFoot")
+	# Rising out of the foot, not standing on the shelf beside it: their bottoms would share a plane.
+	block(parent, Vector3(0.015, SHELF_LAMP_HEIGHT - 0.008, 0.015),
+			base + Vector3(0, 0.008 + (SHELF_LAMP_HEIGHT - 0.008) * 0.5, 0), frame, "LampStem")
+	var head := base + Vector3(-0.12, SHELF_LAMP_HEIGHT, 0.06)
+	var arm := MeshInstance3D.new()
+	arm.name = "LampArm"
+	var bar := BoxMesh.new()
+	bar.size = Vector3(0.015, 0.015, 0.14)
+	arm.mesh = bar
+	arm.material_override = frame
+	arm.position = (base + Vector3(0, SHELF_LAMP_HEIGHT, 0) + head) * 0.5
+	arm.look_at_from_position(arm.position, head, Vector3.UP)
+	parent.add_child(arm)
+	var shade := MeshInstance3D.new()
+	shade.name = "LampShade"
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.025
+	cone.bottom_radius = 0.06
+	cone.height = 0.08
+	cone.radial_segments = 16
+	cone.cap_bottom = false
+	shade.mesh = cone
+	shade.material_override = frame
+	shade.position = head
+	shade.rotation = Vector3(0.35, 0, 0.5)
+	parent.add_child(shade)
+	var bulb := MeshInstance3D.new()
+	bulb.name = "LampBulb"
+	var ball := SphereMesh.new()
+	ball.radius = 0.016
+	ball.height = 0.032
+	bulb.mesh = ball
+	bulb.material_override = glow(colour, 2.0)
+	bulb.position = head + Vector3(0, -0.03, 0)
+	parent.add_child(bulb)
+	var light := SpotLight3D.new()
+	light.name = "ShelfLight"
+	light.light_color = colour
+	light.light_energy = 0.9
+	light.spot_range = 1.4
+	light.spot_angle = 58.0
+	light.spot_attenuation = 1.2
+	light.shadow_enabled = false
+	light.position = head + Vector3(0, -0.03, 0)
+	# Down onto the row, toward the shelf's middle and front.
+	light.look_at_from_position(light.position, Vector3(0.0, SHELF.y, 0.08), Vector3.FORWARD)
+	parent.add_child(light)
+
+
 ## A keyboard stand, empty: two uprights and a deck at playing height, `width` long along Z,
 ## with an upper tier for a second board set back toward +X (the wall).
 static func keyboard_stand(parent: Node3D, width: float, metal: Material, deck: Material) -> void:

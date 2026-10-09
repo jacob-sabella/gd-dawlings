@@ -37,6 +37,25 @@ func aim() -> Transform3D:
 	return Transform3D(Basis.looking_at(direction, Vector3.UP), origin)
 
 
+## Low on the left of the view, under half a metre out: the left hand, since the cursor is the
+## right. It rides with the camera, not the cursor, so it stays put while you point at things.
+const CARRY_AT := Vector3(-0.19, -0.15, -0.5)
+## Tipped toward you, the way you hold something up to look at it: level with the view, the palm
+## is edge-on and whatever sits on it seems to float past the fingers.
+const CARRY_TIP := 0.25
+
+
+func carry_pose() -> Transform3D:
+	if camera == null:
+		return global_transform
+	var view := camera.global_transform.orthonormalized()
+	return Transform3D(view.basis * Basis(Vector3.RIGHT, CARRY_TIP), view * CARRY_AT)
+
+
+func draws_own_hand() -> bool:
+	return camera != null
+
+
 func drag_reading() -> float:
 	return pointer().y
 

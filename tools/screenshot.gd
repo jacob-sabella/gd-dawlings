@@ -23,6 +23,9 @@ var _cam: Array = []
 ## x,z,yaw,pitch[,y]: stand the walker somewhere and look, instead of flying the god camera. `y`
 ## is the floor you stand on, when it is not the ground: a gallery, a riser.
 var _walk: Array = []
+## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
+## `--carry duck:squeeze` holds it squeezed.
+var _carry := ""
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
@@ -104,6 +107,8 @@ func _ready() -> void:
 								int(span[0]), int(span[1])])
 			"--turn":
 				if i + 1 < args.size(): _turn = int(args[i + 1])
+			"--carry":
+				if i + 1 < args.size(): _carry = args[i + 1]
 			"--walk":
 				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--quit-tick":
@@ -149,6 +154,25 @@ func _process(_delta: float) -> void:
 			w.pitch = _walk[3]
 			w.eye_height = w.standing_eye
 			w._place_camera()
+
+	if _frames == 9 and _carry != "":
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var what := _carry.split(":")
+		var hand := studio.get_node_or_null("MouseHand") as Interactor if studio else null
+		var room: ItemRoom = studio.get("items") if studio else null
+		if hand != null and room != null and room.items.has(StringName(what[0])):
+			var item: Item = room.items[StringName(what[0])]
+			hand.pick_up(item)
+			if what.size() > 1 and what[1] == "squeeze":
+				item.use(true)
+
+	if _frames == 28 and _carry != "" and OS.get_cmdline_user_args().has("--shot-debug"):
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var hand := studio.get_node_or_null("MouseHand") as Interactor
+		if hand != null and hand.carrying != null:
+			print("CARRY item %s glove %s pose %s state %d proc %s" % [hand.carrying.global_position,
+					hand._glove.global_position if hand._glove else Vector3.ZERO, hand.carry_pose().origin,
+					hand.carrying.state, hand.carrying.is_physics_processing()])
 
 	if _aim != "" and _scripted_hand() != null and _ticks > 2:
 		var at := _screen_of(_aim)

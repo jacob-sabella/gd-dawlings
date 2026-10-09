@@ -115,6 +115,7 @@ func _ready() -> void:
 	_test_every_venue_leaves_room_for_the_activities()
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
+	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -1470,6 +1471,9 @@ func _test_the_gear_makes_a_noise() -> void:
 		"plug": {"stream": Foley.plug_seat(), "loop": false, "seconds": 0.075},
 		"slide": {"stream": Foley.fader_slide(), "loop": true, "seconds": 0.670},
 		"motor": {"stream": Foley.reel_motor(), "loop": true, "seconds": 0.388},
+		"squeak out": {"stream": Foley.squeak(true), "loop": false, "seconds": 0.2},
+		"squeak in": {"stream": Foley.squeak(false), "loop": false, "seconds": 0.26},
+		"rubber tap": {"stream": Foley.rubber_tap(), "loop": false, "seconds": 0.08},
 	}
 
 	for key in sounds:
@@ -6013,6 +6017,155 @@ func _test_a_bank_wider_than_the_project_draws_only_the_project() -> void:
 ## on a 1600x900 monitor to hit without aiming twice. This is the goal's "every control can be
 ## clicked from the seat without a misclick", as a search rather than a tour with a mouse.
 const SEAT_MIN_PIXELS := 7.0
+
+
+func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	check("the studio has its items, a rubber duck among them", room != null and room.items.has(&"duck"))
+	if room == null or not room.items.has(&"duck"):
+		studio.queue_free()
+		return
+	var duck: Item = room.items[&"duck"]
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var walker := studio.walker
+	var step := func(item: Item, seconds: float) -> void:
+		for i in int(seconds * 60.0):
+			item._physics_process(1.0 / 60.0)
+
+	# Every venue has a prop shelf, off the footprint, clear of the zones, on the floor, and
+	# somewhere you can stand in front of; the duck lives on it.
+	for id: StringName in Venue.IDS:
+		for v in Venue.variant_titles(id).size():
+			studio.set_venue(id, false, v)
+			var venue := studio.venue
+			var shelf := venue.prop_shelf_spot()
+			var spots := venue.item_spots()
+			var corners: Array[Vector2] = []
+			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+				var p := shelf * Vector3(c.x * ZoneKit.SHELF.x * 0.5, 0, c.y * ZoneKit.SHELF.z * 0.5)
+				corners.append(Vector2(p.x, p.z))
+			var rect := Rect2(corners[0], Vector2.ZERO)
+			for c in corners:
+				rect = rect.expand(c)
+			var clear_of_zones := true
+			for box: AABB in venue.zones().values():
+				if rect.intersects(Rect2(box.position.x, box.position.z, box.size.x, box.size.z)):
+					clear_of_zones = false
+			var on_floor := corners.all(func(c: Vector2) -> bool:
+				return walker.walkable.any(func(r: Rect2) -> bool: return r.has_point(c)))
+			var clear_of_solids := true
+			for f: Dictionary in venue.zone_solids():
+				for c in corners + [Vector2(shelf.origin.x, shelf.origin.z)]:
+					if Walker._gap(f, c) <= 0.0:
+						clear_of_solids = false
+			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
+			var standable: bool = walker.fits(Vector2(before.x, before.z))
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() \
+					and duck.position.is_equal_approx(spots[0].origin)
+			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
+					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
+					and clear_of_solids and on_floor and standable and home_ok)
+	studio.set_venue(&"studio", false)
+	var shelf_print: Dictionary = studio.venue.solids().back()
+	check("the shelf stops you walking into it", walker.fixed.has(shelf_print)
+			and not walker.fits(shelf_print["c"]))
+	check("and in the chalk zone it is only drawn", ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
+
+	# Picked up through the grab contract, as a mouse, a controller or a pinch would: it is in
+	# the hand, out of the way of the hand's own ray, and stays there when the button comes up.
+	duck.grab_begin(hand, duck.global_position)
+	check("a grab picks the duck up", duck.state == Item.State.HELD and hand.carrying == duck
+			and duck.carried_by == hand and duck._shape.disabled)
+	duck.grab_end(hand)
+	step.call(duck, 1.0)
+	var pose := hand.carry_pose() * duck.held_pose()
+	check("and it rides in the hand when the button comes up (%.3f m off)"
+			% duck.global_position.distance_to(pose.origin), duck.state == Item.State.HELD
+			and duck.global_position.distance_to(pose.origin) < 0.01)
+	hand._show_glove()
+	for i in 60:
+		hand._glove.step(1.0 / 60.0)
+	var palm := hand._glove.global_position.distance_to(duck.global_position)
+	check("a mouse's hand is a glove of its own, palm up under the duck (%.3f m)" % palm,
+			hand._glove.visible and palm < 0.05 and hand._glove.pose == Glove.Pose.OPEN)
+	check("drawn in your own view, never in a mirror", duck.body.find_children("*", "VisualInstance3D",
+			true, false).all(func(n: VisualInstance3D) -> bool: return n.layers == Mirror.NOT_REFLECTED))
+
+	# Squeezed by the hand's button, when the ray is on nothing.
+	duck.use(true)
+	step.call(duck, 0.05)
+	var squashed := duck.body.scale.y
+	duck.use(false)
+	step.call(duck, 1.0)
+	check("a squeeze squashes it (%.2f) and it springs back (%.2f)" % [squashed, duck.body.scale.y],
+			squashed < 0.92 and absf(duck.body.scale.y - 1.0) < 0.02)
+	hand.press_override = 1
+	hand.hovered = null
+	hand._was_pressed = false
+	var squeezed := [false]
+	hand._physics_process(1.0 / 60.0)
+	squeezed[0] = hand._using if hand.hovered == null else true
+	hand.press_override = 0
+	hand._physics_process(1.0 / 60.0)
+	check("the button squeezes what the hand carries when it points at nothing, and lets go with it",
+			squeezed[0] and not hand._using and hand.carrying == duck)
+	hand.press_override = -1
+
+	# Put down: on the floor where you look, if a person could stand there to pick it up.
+	var at := Vector3(-1.0, 0.0, 3.6)
+	var eye := at + Vector3(0.4, 1.6, 0.6)
+	room.put_down(duck, Transform3D(Basis.looking_at(at - eye, Vector3.UP), eye))
+	step.call(duck, 3.0)
+	check("put down, it lies on the floor where you looked (%s)" % duck.position,
+			duck.state == Item.State.LOOSE and hand.carrying == null
+			and Vector2(duck.position.x - at.x, duck.position.z - at.z).length() < 0.01
+			and absf(duck.position.y) < 0.01 and not duck._shape.disabled)
+	check("and at rest it stops ticking", not duck.is_physics_processing())
+	hand.pick_up(duck)
+	# Aimed at the console, where nobody can stand: it goes home instead.
+	var desk := Vector3(0, 0, -0.4)
+	eye = Vector3(0, 1.6, Studio.MIX_POSITION_Z)
+	room.put_down(duck, Transform3D(Basis.looking_at(desk - eye, Vector3.UP), eye))
+	check("put down on the gear, it goes home instead", duck.state == Item.State.HOME)
+	step.call(duck, 6.0)
+	check("and floats back onto its shelf (%.3f m off)" % duck.position.distance_to(duck.home.origin),
+			duck.position.distance_to(duck.home.origin) < 0.01)
+	# Out on the grid's open floor, then the venue changes to one whose walls stop short of it.
+	studio.set_venue(&"grid", false)
+	hand.pick_up(duck)
+	var far := Vector3(-studio.venue.live_room_half() - 1.5, 0, 3.0)
+	eye = far + Vector3(0.5, 1.6, 0)
+	room.put_down(duck, Transform3D(Basis.looking_at(far - eye, Vector3.UP), eye))
+	check("on the grid it lies out past where the studio's walls would be", duck.state == Item.State.LOOSE)
+	studio.set_venue(&"studio", false)
+	check("and a venue without that floor sends it home", duck.state == Item.State.HOME
+			and duck.position.is_equal_approx(duck.home.origin))
+	# Left lying long enough, it tidies itself away.
+	hand.pick_up(duck)
+	room.put_down(duck, Transform3D(Basis.looking_at(at - Vector3(-0.6, 1.6, 4.2), Vector3.UP), Vector3(-0.6, 1.6, 4.2)))
+	duck.loose_for = Item.TIDY_SECONDS + 1.0
+	duck.set_physics_process(true)
+	duck._physics_process(1.0 / 60.0)
+	check("left lying, it goes home in the end", duck.state == Item.State.HOME)
+
+	# A ghost carries a look of it on its left palm: the mirror's, and later everyone else's.
+	var ghost := Presence.Avatar.new()
+	add_child(ghost)
+	ghost.carry(&"duck")
+	var carried := ghost._carried
+	ghost._process(0.1)
+	check("a ghost carries the duck on its left palm", carried != null and carried.is_inside_tree()
+			and carried.global_position.distance_to(ghost._hands[0].global_position) < 0.1
+			and carried.find_children("*", "CollisionShape3D", true, false).is_empty())
+	ghost.carry(&"")
+	check("and puts it away", ghost._carried == null)
+	ghost.queue_free()
+	studio.queue_free()
+	await get_tree().process_frame
 
 
 func _test_every_control_is_clickable_from_the_seat() -> void:

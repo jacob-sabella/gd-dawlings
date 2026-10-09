@@ -149,11 +149,19 @@ ergonomics.
 
 ## Queue
 
-- [ ] The contract, end to end on one toy, alone. `Item`, `Venue.item_spots()` and a prop shelf
+- [x] The contract, end to end on one toy, alone. `Item`, `Venue.item_spots()` and a prop shelf
       dressed in every venue. Pick up, hold in the glove, squeeze (`use`), and put down, on a
       desktop and through the same `Interactor` calls a controller uses. The toy is a rubber duck
       that squeaks. Test: homes clear of the footprint and reachable on foot, the state
       changes, and the duck goes home when put down off the floor.
+      Done: `Item` (HOME/HELD/LOOSE on springs, stops ticking at rest, tidies home after 3 min),
+      `ItemRoom` judging put-downs with the walker's `fits`, `DuckItem` (Blender model from
+      `tools/blender/duck.py`, synthesised squeak and rubber tap), a lit prop shelf in every
+      venue (sketched in chalk), a palm-up left glove under the carried item on desktop, the
+      mirror ghost carrying a look-alike, Q to put down. Learned: a held item in a capture needs
+      `tools/shot.sh OUT 200 210` (physics lags render frames); the shelf lamps need to stay dim
+      (0.9) or the yellow blows out to a halo; test with `is_instance_valid`, not `!= null`, for a
+      carried item that may be freed.
 - [ ] The duck in company: a pick-up claimed with the host, refused to a second hand, seen in the
       holder's ghost's glove in their colour, its held pose streamed, and its put-down a
       predicted, numbered room ask. Two-instance probe checks.

@@ -193,6 +193,61 @@ func zone_solids() -> Array:
 	return []
 
 
+## Where the prop shelf stands, in studio space: its floor centre, turned so its front faces
+## into the room. Against the left wall at the front of the back of house, the side the mirror and
+## the wardrobe are on: turn round from the desk and it is on your right as you come out of the
+## control room, short of the booth and the riser.
+func prop_shelf_spot() -> Transform3D:
+	var x := -live_room_half() + 0.08 + ZoneKit.SHELF.z * 0.5
+	var z := Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.3 + ZoneKit.SHELF.x * 0.5
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0, z))
+
+
+## Where the items live, in studio space, one per item (ItemRoom.KINDS) and a few spare: in a
+## row along the shelf's top, facing out into the room.
+func item_spots() -> Array[Transform3D]:
+	var shelf := prop_shelf_spot()
+	var out: Array[Transform3D] = []
+	# From the middle out, so one item is not left at the end of an empty shelf; the lamp is at
+	# the +X end, so that side fills last.
+	for i in [1, 0, 2, 3].slice(0, ZoneKit.SHELF_SPOTS):
+		var along := (float(i) - (ZoneKit.SHELF_SPOTS - 1) * 0.5) * ZoneKit.SHELF.x / ZoneKit.SHELF_SPOTS
+		var at := shelf * Vector3(along, ZoneKit.SHELF.y, 0.04)
+		# Facing out of the shelf's front, as an item faces -Z.
+		out.append(Transform3D(shelf.basis * Basis(Vector3.UP, PI), at))
+	return out
+
+
+## Everything the venue puts on the floor that stops a person: the zones' dressing and the prop
+## shelf. What the walker is given.
+func solids() -> Array:
+	var out := zone_solids()
+	if prop_shelf_solid():
+		var spot := prop_shelf_spot()
+		out.append({"c": Vector2(spot.origin.x, spot.origin.z),
+				"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
+				"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
+	return out
+
+
+## Whether the shelf is a thing you bump into. A venue that only draws it (the chalk zone) says
+## no, the way its sketched zones are walked through.
+func prop_shelf_solid() -> bool:
+	return true
+
+
+## Build the prop shelf at its spot in the venue's own materials: called by each venue as it
+## dresses its zones, with the bricks table's top and legs so the two read as one set, and a lamp
+## the colour of the venue's own light.
+func _dress_prop_shelf(top: Material, frame: Material, lamp := Color(1.0, 0.76, 0.48)) -> Node3D:
+	var holder := Node3D.new()
+	holder.name = "PropShelf"
+	holder.transform = prop_shelf_spot()
+	add_child(holder)
+	ZoneKit.prop_shelf(holder, top, frame, lamp)
+	return holder
+
+
 ## The floor behind the working footprint that a person can walk on to reach the zones: the
 ## footprint's far edge back to the live room's back, wall to wall. Furniture stays out of it;
 ## it is for people. In the studio it is the live room; in an open venue, where nothing else

@@ -107,6 +107,16 @@ walls are solid, and the booth has a doorway. The grid's riser, table and stand 
 booth is only neon edges, so it has no walls, and the palms' trunks are solid. The chalk zone's sketches are walked through. The
 walker steps up onto anything no taller than `Walker.STEP_HEIGHT`, which includes the riser.
 
+### The prop shelf
+
+Every venue stands a waist-high shelf against the left wall just past the doorway
+(`Venue.prop_shelf_spot()`), dressed with `ZoneKit.prop_shelf` in the venue's own table materials
+and lit by a small desk lamp of its own. It is where the things you can pick up live
+(`docs/items_loop.md`): `Venue.item_spots()` gives one spot on its top per item. It is solid
+(`Venue.solids()` is the zone solids plus the shelf) except in the chalk zone, where it is only a
+sketch (`prop_shelf_solid()`). A venue that moves its back wall moves the shelf with it, as the
+studio's beside-the-desk variant does.
+
 ## Adding one
 
 1. Subclass `Venue` and override `venue_id`, `dress`, and optionally `lamp_colour`,

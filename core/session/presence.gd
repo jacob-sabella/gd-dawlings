@@ -95,6 +95,7 @@ func _process(delta: float) -> void:
 		reflection.snap(head_node.global_transform)
 		var mine := _my_pointing()
 		reflection.point_at(mine["control"], mine["point"], mine["holding"])
+		reflection.carry(_my_carrying())
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -157,6 +158,15 @@ func _my_pointing() -> Dictionary:
 			continue
 		return {"control": control, "point": interactor.hover_point, "holding": interactor.held == control}
 	return {"control": null, "point": Vector3.ZERO, "holding": false}
+
+
+## What my own hand is carrying, by kind, or none: for the ghost the mirrors show.
+func _my_carrying() -> StringName:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor != null and is_instance_valid(interactor.carrying):
+			return interactor.carrying.id
+	return &""
 
 
 func _hook_interactors() -> void:
@@ -386,6 +396,9 @@ void fragment() {
 	var _hands: Array[Glove] = []
 	var _pointing: ControlAffordance = null
 	var _point := Vector3.ZERO
+	## What the left glove carries (docs/items_loop.md): a look of the item, sat on its palm.
+	var _carried: Node3D = null
+	var _carried_kind := &""
 	var _holding := false
 	var _mirror_only := false
 	var _colour := Color.WHITE
@@ -629,8 +642,17 @@ void fragment() {
 	func _aim_hands() -> void:
 		var left: Glove = _hands[0]
 		var right: Glove = _hands[1]
-		left.target = _rest(-1.0)
-		left.pose = Glove.Pose.GRIP if _holding else Glove.Pose.OPEN
+		if _carried != null:
+			# Carrying: the left hand up in front of the chest, palm up under the item, the
+			# way you hold something out to look at it.
+			var turn := Basis(Vector3.UP, _ghost.global_basis.orthonormalized().get_euler().y)
+			var at := _ghost.global_transform * Vector3(-0.22, -0.3, -0.42)
+			at.y += sin(_clock * 2.3 + _phase) * 0.012
+			left.target = Transform3D(_attitude(turn * Vector3(0.3, 0.1, -1.0), Vector3.UP), at)
+			left.pose = Glove.Pose.OPEN
+		else:
+			left.target = _rest(-1.0)
+			left.pose = Glove.Pose.GRIP if _holding else Glove.Pose.OPEN
 		var rest := _rest(1.0)
 		if _pointing == null:
 			right.target = rest
@@ -876,6 +898,43 @@ void fragment() {
 			_propeller.rotation.y += delta * 14.0
 		_place()
 		_aim_hands()
+		_seat_carried()
+
+	## Take `kind` into the left glove, or put down whatever is there (&"").
+	func carry(kind: StringName) -> void:
+		if kind == _carried_kind:
+			return
+		_carried_kind = kind
+		if _carried != null:
+			_carried.queue_free()
+			_carried = null
+			_hands[0].poke(0.3)
+		if kind == &"":
+			return
+		_carried = ItemRoom.look_of(kind)
+		if _carried == null:
+			return
+		_carried.top_level = true
+		add_child(_carried)
+		for node in _carried.find_children("*", "VisualInstance3D", true, false):
+			if _mirror_only:
+				(node as VisualInstance3D).layers = Mirror.SELF_ONLY
+			if _mirror_only and node is GeometryInstance3D:
+				(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_hands[0].poke(-0.4)
+		_seat_carried()
+
+	## The carried item sits upright on the left palm, facing where the fingers point.
+	func _seat_carried() -> void:
+		if _carried == null:
+			return
+		var glove: Glove = _hands[0]
+		var fingers := -glove.global_basis.orthonormalized().z
+		fingers.y = 0.0
+		var yaw := atan2(-fingers.x, -fingers.z) if fingers.length() > 0.01 else 0.0
+		_carried.global_transform = Transform3D(Basis(Vector3.UP, yaw),
+				glove.global_position + Vector3.UP * 0.03 * glove.size)
+		_carried.visible = glove.visible
 
 	## Yaw from the pose; a slight lean for pitch; the eyes take the rest. And a slow bob,
 	## so nobody is ever quite standing still.

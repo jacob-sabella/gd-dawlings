@@ -667,6 +667,7 @@ func _dress_zones() -> void:
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, teak, steel)
+	_dress_prop_shelf(teak, steel)
 
 	var synth := ZoneKit.holder(self, &"synth", z[&"synth"])
 	ZoneKit.keyboard_stand(synth, ZoneKit.STAND_WIDTH, steel, teak)

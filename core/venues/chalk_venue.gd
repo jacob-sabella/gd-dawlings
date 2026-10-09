@@ -178,6 +178,11 @@ func _draw_floor() -> void:
 		_art.append(art)
 
 
+## Drawn, like the zones: walked through.
+func prop_shelf_solid() -> bool:
+	return false
+
+
 ## The board is the whole world, and the floor is wherever you walk on it. Under the open sky it
 ## runs past the room every way, round the zones and in front of the desk; the sketched room is
 ## drawn round the zones' width, so there it is the desk, the floor either side of it out to the
@@ -615,6 +620,26 @@ func _draw_zones() -> void:
 		sketch.name = "ZoneSketch"
 		holder.add_child(sketch)
 		_art.append(sketch)
+	# The prop shelf, sketched where the other venues stand a real one, its items sitting on
+	# its drawn top.
+	var shelf := Node3D.new()
+	shelf.name = "PropShelf"
+	shelf.transform = prop_shelf_spot()
+	add_child(shelf)
+	var s := ZoneKit.SHELF
+	var lines := _box_lines(Vector3(s.x, 0.03, s.z), Vector3(0, s.y - 0.015, 0))
+	lines.append_array(_box_lines(Vector3(s.x - 0.08, 0.02, s.z - 0.06), Vector3(0, 0.22, 0)))
+	for cx in [-1.0, 1.0]:
+		for cz in [-1.0, 1.0]:
+			lines.append(PackedVector3Array([Vector3(cx * (s.x * 0.5 - 0.04), 0, cz * (s.z * 0.5 - 0.04)),
+					Vector3(cx * (s.x * 0.5 - 0.04), s.y - 0.03, cz * (s.z * 0.5 - 0.04))]))
+	var drawn: Array = []
+	for line: PackedVector3Array in lines:
+		drawn.append(_subdivide(line, 0.2))
+	var shelf_art := Chalk.drawing(drawn, Chalk.YELLOW * 0.4, 0.012, false, 2, SEED * 17)
+	shelf_art.name = "ShelfSketch"
+	shelf.add_child(shelf_art)
+	_art.append(shelf_art)
 
 
 ## What stands in zone `id`, as chalk lines in the zone's floor-centred frame.
