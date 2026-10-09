@@ -332,6 +332,8 @@ func _build_live_room(wall_mat: Material) -> void:
 	diffuser.material_override = walnut
 	add_child(diffuser)
 
+	_hang_sconces(half)
+
 	# Two pendants hung down from the high ceiling over the walkway, where you come through the
 	# opening: low and warm, so the room is lit from inside it, not from a grid of cans.
 	for x in [-1.9, 2.4]:
@@ -361,6 +363,52 @@ func _build_live_room(wall_mat: Material) -> void:
 		bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		ZoneKit.spot_down(self, shade.position + Vector3(0, -0.09, 0), Color(1.0, 0.8, 0.6), 2.0,
 				60.0, 4.2)
+
+
+## Wall sconces: a brass box throwing light up and down the wall it is on. The live room's fill
+## comes from these rather than more cans in the ceiling: a wall lit from a fitting on it reads as
+## a room at night, and grazing the walnut slats is what makes them slats from across the room.
+## [x, y, z, facing]: by the booth, by the keys, and two on the back wall over the diffuser.
+func _hang_sconces(half: float) -> void:
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.5, 0.38, 0.2)
+	brass.metallic = 1.0
+	brass.roughness = 0.42
+	var spots := [
+		[Vector3(-half + 0.05, 2.1, 3.7), Vector3(1, 0, 0)],
+		[Vector3(half - 0.05, 2.1, 3.7), Vector3(-1, 0, 0)],
+		# On the slats' faces, which stand 12 cm proud of the back wall.
+		[Vector3(-2.4 * half / LIVE_ROOM_HALF, 2.3, LIVE_ROOM_BACK - 0.121), Vector3(0, 0, -1)],
+		[Vector3(2.4 * half / LIVE_ROOM_HALF, 2.3, LIVE_ROOM_BACK - 0.121), Vector3(0, 0, -1)],
+	]
+	for i in spots.size():
+		var spec: Array = spots[i]
+		var facing: Vector3 = spec[1]
+		var sconce := Node3D.new()
+		sconce.name = "Sconce%d" % i
+		# Its back to the wall, facing into the room.
+		sconce.transform = Transform3D(Basis.looking_at(facing, Vector3.UP, true), spec[0])
+		add_child(sconce)
+		ZoneKit.block(sconce, Vector3(0.12, 0.24, 0.07), Vector3(0, 0, 0.035), brass, "SconceBody")
+		# Light leaks from the top and bottom edges only.
+		for y in [0.121, -0.121]:
+			var slit := ZoneKit.block(sconce, Vector3(0.1, 0.002, 0.05), Vector3(0, y, 0.035),
+					ZoneKit.glow(Color(1.0, 0.75, 0.5), 2.0), "SconceGlow")
+			slit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for dir in [1.0, -1.0]:
+			var wash := SpotLight3D.new()
+			wash.name = "SconceWash"
+			wash.position = Vector3(0, dir * 0.13, 0.05)
+			# Up or down, leaning a little off the wall so the wall catches the light at a graze.
+			wash.rotation = Vector3(dir * (PI * 0.5 + 0.12), 0, 0)
+			wash.light_color = Color(1.0, 0.76, 0.52)
+			wash.light_energy = 2.4
+			wash.spot_angle = 48.0
+			wash.spot_range = 3.8
+			wash.spot_angle_attenuation = 1.4
+			wash.light_specular = 0.05
+			wash.shadow_enabled = false
+			sconce.add_child(wash)
 
 
 ## Every activity's place, each lit by its own fitting: a carpeted riser for the kit, a glass

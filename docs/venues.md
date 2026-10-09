@@ -7,7 +7,7 @@ colour the lamps shine.
 
 | id | Title | What it is |
 |---|---|---|
-| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. |
+| `studio` | Studio | The control room: parquet, treated walls, downlights, a rug. Through its open back, a taller live room with a slatted walnut wall, washed by brass sconces, holds the activity zones: a carpeted riser, a glass booth with a mic stand, an LED-and-brass square for the lattice, an oak table under a pendant, and a keyboard stand under a rack of module lights. The default. |
 | `grid` | Grid | Synthwave. A mirror floor ruled in neon, wireframe mountains, a striped sun at dusk, and two wire solids turning in the sky. The zones are black glass edged in neon; the lattice is a faint violet cube. |
 | `chalk` | Chalk Zone | A blackboard the size of the world. Neon chalk doodles hang at every distance and there is dust in the air. The working floor is outlined in chalk. Each zone is taped out on the floor in its own colour, with what will stand there sketched in the air. |
 

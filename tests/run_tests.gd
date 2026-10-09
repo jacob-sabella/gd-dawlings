@@ -5735,6 +5735,17 @@ func _test_every_venue_leaves_room_for_the_activities() -> void:
 							absf(box.position.x) <= venue.live_room_half()
 							and absf(box.end.x) <= venue.live_room_half()
 							and box.end.z <= Venue.LIVE_ROOM_BACK and box.end.y <= Venue.LIVE_ROOM_HEIGHT)
+			if id == &"studio":
+				# The live room is lit from fittings on its walls, and each throws its light along
+				# the wall it hangs on -- into the room, never into the plaster behind it.
+				var sconces := venue.find_children("Sconce*", "Node3D", false, false)
+				var washing := sconces.all(func(n: Node3D):
+					var spots := n.find_children("*", "SpotLight3D", false, false)
+					return spots.size() == 2 and spots.all(func(l: SpotLight3D):
+						var aim := -l.global_transform.basis.z
+						return absf(aim.y) > 0.9 and aim.dot(n.global_transform.basis.z) > 0.0))
+				check("%s: the live room has sconces washing its walls (%d)" % [tag, sconces.size()],
+						sconces.size() >= 4 and washing)
 			if id == &"chalk":
 				var in_the_way := 0
 				for doodle in venue.find_children("Doodle", "Node3D", false, false):

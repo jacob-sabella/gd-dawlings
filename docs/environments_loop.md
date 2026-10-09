@@ -116,10 +116,13 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [ ] Little things seen from inside the booth: the empty mic stand's boom crosses your eyes when
       you stand in the middle of the booth (stand it nearer the glass, boom toward the room), and
       the stand is not solid.
-- [ ] The studio's live room is very dark from the opening (`light_check` back view, mean 0.02,
+- [x] The studio's live room is very dark from the opening (`light_check` back view, mean 0.02,
       against about 0.18 for the open venues). It reads as moody up close, but the corners are
       black. Add one or two practicals (a wall sconce by the booth, a lamp by the keys) rather
       than more ceiling cans.
+      (Four brass sconces washing up and down the walls, two of them grazing the slats. The back
+      view's mean went from 0.018 to 0.026; most of that frame is the unlit ceiling. It reads as
+      a room at night now, not a void.)
 - [ ] Venue variants: a variant id on the venue, chosen by the host, carried in `Session.room`,
       saved in the host's layout; the stage manager's venue row grows a variant picker.
 - [ ] Studio: a live room behind glass beside the control room, holding the drum riser and the
