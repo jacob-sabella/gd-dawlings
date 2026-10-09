@@ -155,6 +155,10 @@ func _process(delta: float) -> void:
 	_flicker += delta
 	var f := 0.82 + 0.1 * sin(_flicker * 2.3) + 0.06 * sin(_flicker * 5.1 + 1.3) + 0.04 * sin(_flicker * 13.7)
 	_stove_light.light_energy = 2.6 * f
+	for i in candle_lights.size():
+		var t := _flicker + i * 1.7
+		candle_lights[i].light_energy = 1.6 * (0.85 + 0.07 * sin(t * 3.1) + 0.05 * sin(t * 7.9 + 0.4)
+				+ 0.03 * sin(t * 17.3))
 
 
 ## Knotty pine boards, honey-coloured and oiled.
@@ -443,6 +447,8 @@ const SHELF_DEPTH := 0.24
 ## Where each jar on the shelf stands, kept here as well as in the MultiMeshes (which a headless
 ## run does not hold on to).
 var shelf_jars: Array[Transform3D] = []
+## The soft lights the shelf's candles cast, which flicker in _process.
+var candle_lights: Array[SpotLight3D] = []
 
 func _put_up_the_shelf() -> void:
 	var back := LIVE_ROOM_BACK
@@ -468,17 +474,24 @@ func _put_up_the_shelf() -> void:
 	source.free()
 	var amber := StandardMaterial3D.new()
 	amber.albedo_color = Color(0.55, 0.3, 0.08)
-	amber.roughness = 0.25
-	amber.metallic_specular = 0.8
+	amber.roughness = 0.5
+	amber.metallic_specular = 0.35
 	var green := amber.duplicate() as StandardMaterial3D
 	green.albedo_color = Color(0.2, 0.32, 0.12)
 	var tin := StandardMaterial3D.new()
 	tin.albedo_color = Color(0.45, 0.4, 0.3)
 	tin.metallic = 0.8
 	tin.roughness = 0.4
-	# A candle jar is clear glass lit from inside: its glass glows.
-	var candle := ZoneKit.glow(Color(1.0, 0.6, 0.28), 1.3)
-	var looks := [[amber, tin], [green, tin], [candle, tin]]
+	# A candle jar is open, its lid off: smoky glass lit from inside, so it glows a little
+	# itself, a stub of wax in it and a flame on the wick.
+	var candle := StandardMaterial3D.new()
+	candle.albedo_color = Color(0.85, 0.55, 0.3, 0.35)
+	candle.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	candle.emission_enabled = true
+	candle.emission = Color(1.0, 0.5, 0.18)
+	candle.emission_energy_multiplier = 0.9
+	candle.roughness = 0.2
+	var looks := [[amber, tin], [green, tin], [candle, null]]
 	var placed: Array = [[], [], []]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
@@ -494,26 +507,63 @@ func _put_up_the_shelf() -> void:
 	for k in placed.size():
 		shelf_jars.append_array(placed[k])
 	for k in looks.size():
-		var jars := mesh.duplicate() as Mesh
+		var jars := mesh.duplicate() as ArrayMesh
 		jars.surface_set_material(0, looks[k][0])
-		jars.surface_set_material(1, looks[k][1])
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = jars
-		mm.instance_count = placed[k].size()
-		for n in placed[k].size():
-			mm.set_instance_transform(n, placed[k][n])
-		var holder := MultiMeshInstance3D.new()
-		holder.name = ["Preserves", "Pickles", "CandleJars"][k]
-		holder.multimesh = mm
-		holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(holder)
-	# The candles light the boards under the shelf, softly, and the wall above it.
+		if looks[k][1] == null:
+			jars.surface_remove(1)
+		else:
+			jars.surface_set_material(1, looks[k][1])
+		_shelf_row(["Preserves", "Pickles", "CandleJars"][k], jars, placed[k])
+	# Inside each candle jar: the wax, and over it a flame drawn bright and unshaded, a thin
+	# teardrop on the wick. They stand at the jar's foot and are not stretched with its height.
+	var wax := CylinderMesh.new()
+	wax.top_radius = 0.034
+	wax.bottom_radius = 0.034
+	wax.height = 0.05
+	wax.radial_segments = 12
+	wax.rings = 1
+	var tallow := StandardMaterial3D.new()
+	tallow.albedo_color = Color(0.9, 0.82, 0.66)
+	tallow.emission_enabled = true
+	tallow.emission = Color(1.0, 0.6, 0.3)
+	tallow.emission_energy_multiplier = 0.6
+	wax.material = tallow
+	var flame := SphereMesh.new()
+	flame.radius = 0.008
+	flame.height = 0.03
+	flame.radial_segments = 8
+	flame.rings = 4
+	flame.material = ZoneKit.glow(Color(1.0, 0.78, 0.45), 2.2)
+	var stubs: Array = []
+	var tips: Array = []
+	for jar: Transform3D in placed[2]:
+		stubs.append(Transform3D(Basis(), jar.origin + Vector3(0, 0.026, 0)))
+		tips.append(Transform3D(Basis(), jar.origin + Vector3(0, 0.066, 0)))
+	_shelf_row("CandleWax", wax, stubs)
+	_shelf_row("CandleFlames", flame, tips)
+	# The candles light the boards under the shelf, softly, and the wall above it, and they
+	# gutter as candles do -- each to its own beat, quicker than the stove.
 	for t in [0.28, 0.72]:
 		var at := Vector3(lerpf(from, to, t), SHELF_Y + 0.12, back - SHELF_DEPTH - 0.05)
 		var wash := ZoneKit.spot_down(self, at, Color(1.0, 0.62, 0.3), 1.6, 80.0, 2.6)
+		wash.name = "CandleWash"
 		wash.rotation_degrees.x = 20.0
 		wash.rotation_degrees.y = 180.0
+		candle_lights.append(wash)
+
+
+func _shelf_row(label: String, mesh: Mesh, at: Array) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = at.size()
+	for n in at.size():
+		mm.set_instance_transform(n, at[n])
+	var holder := MultiMeshInstance3D.new()
+	holder.name = label
+	holder.multimesh = mm
+	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(holder)
 
 
 ## A braided rag rug, oval, under the rocking chair: rings of colour, each a hair above the last.

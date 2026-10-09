@@ -6325,8 +6325,22 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 		for jar: Transform3D in cabin.shelf_jars:
 			on_shelf = on_shelf and absf(jar.origin.y - top) < 0.01 and absf(jar.origin.z - plank.position.z) < 0.05 \
 					and absf(jar.origin.x - plank.position.x) < half - 0.05
-	check("a shelf of jars on the back wall, candles lit in some", on_shelf
-			and (candles.multimesh.mesh.surface_get_material(0) as StandardMaterial3D).shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED)
+	var glass := candles.multimesh.mesh.surface_get_material(0) as StandardMaterial3D if candles else null
+	var flames := cabin.find_child("CandleFlames", false, false) as MultiMeshInstance3D
+	check("a shelf of jars on the back wall, candles burning in some through tinted glass", on_shelf
+			and glass.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED and glass.emission_enabled
+			and candles.multimesh.mesh.get_surface_count() == 1 and flames != null
+			and flames.multimesh.instance_count == candles.multimesh.instance_count)
+	var beats: Array[float] = []
+	for light: SpotLight3D in cabin.candle_lights:
+		var low := INF
+		var high := 0.0
+		for i in 60:
+			cabin._process(1.0 / 30.0)
+			low = minf(low, light.light_energy)
+			high = maxf(high, light.light_energy)
+		beats.append(high - low)
+	check("and the candles' light gutters", beats.size() == 2 and beats.all(func(b: float) -> bool: return b > 0.1))
 	var chair := cabin.find_child("RockingChair", false, false) as Node3D
 	var rug := cabin.find_child("Rug0", false, false) as MeshInstance3D
 	check("and the rocking chair stands on a rug", chair != null and rug != null
