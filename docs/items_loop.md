@@ -176,9 +176,20 @@ ergonomics.
       jump to the floor. `start_solo` drops the peer, so a test that wants asks sent sets an
       `OfflineMultiplayerPeer`. `tools/session_shot.sh` with `HOST_ARGS="--carry duck"` once
       left the guest hanging before its picture; it did not happen again in two runs. Watch for it.
-- [ ] Throwing: a charged, aimed throw on a desktop and a flick in a headset; a deterministic
+- [x] Throwing: a charged, aimed throw on a desktop and a flick in a headset; a deterministic
       flight from one reliable launch; bounces off the walker's walls and solids; settles; floats
       home when lost or left. The rubber duck and a bouncy ball.
+      Done: hold R and let go (charged, along the aim, lofted) or flick the grip in a headset;
+      `Flight.fly` works the whole flight out up front at 120 Hz (walls at the walkable floor's
+      edges, solids' sides and tops, bounces dying into a roll), so the room knows where it will
+      rest the moment it leaves the hand. One `throw_item` ask carries the launch; the room's
+      entry carries it too while it flies (8 elements, with a throw count) so any copy flies the
+      same throw once. `BallItem` (Blender, `tools/blender/ball.py`) with its own bounce foley.
+      Probe: host 45, guest 43. Learned: the flight's starting turn must come from the launch
+      (facing the velocity), not the hand, which differs per machine. Not colliding with the
+      gear is fine: coming down on a desk is "somewhere it can't stay", and it goes home after
+      landing. A multi-exposure strip (`--throw W@TICK`, one shot a tick, `magick
+      -evaluate-sequence max`) is the way to judge a throw from stills.
 - [ ] The paper plane: a glide model (lift, drag, a bank into a turn, a stall), thrown from the
       hand, so a good throw crosses the room and a bad one noses into the floor.
 - [ ] Catching and handing over: an item thrown at someone is caught if their hand is free and

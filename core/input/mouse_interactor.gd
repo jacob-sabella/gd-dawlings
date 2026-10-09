@@ -49,7 +49,60 @@ func carry_pose() -> Transform3D:
 	if camera == null:
 		return global_transform
 	var view := camera.global_transform.orthonormalized()
-	return Transform3D(view.basis * Basis(Vector3.RIGHT, CARRY_TIP), view * CARRY_AT)
+	# Drawn back over the shoulder as a throw winds up, and tipped back with it.
+	var wound := charge()
+	var at := CARRY_AT + Vector3(0.04, 0.07, 0.16) * wound
+	return Transform3D(view.basis * Basis(Vector3.RIGHT, CARRY_TIP - 0.6 * wound), view * at)
+
+
+# --- throwing ------------------------------------------------------------------------------
+#
+# Hold R to wind up, let go to throw where the cursor is. The longer it is held, the harder the
+# throw, up to CHARGE_SECONDS; a tap is a lob. The hand draws back as it winds up, so you can see
+# how hard it is going to be.
+
+const CHARGE_SECONDS := 0.9
+## A tap's throw, and a full wind-up's (m/s). A lob lands a couple of metres off; a full throw
+## crosses the live room.
+const THROW_SLOWEST := 2.2
+const THROW_FASTEST := 8.0
+## Above the cursor, because a throw aimed straight at something falls short of it: about the
+## lift a person gives a throw without thinking.
+const LOFT := 0.16
+## How fast it tumbles end over end, at a full throw (rad/s).
+const TUMBLE := 11.0
+
+var _charge_from := -1
+
+
+## Start winding up a throw, if this hand is carrying something.
+func begin_throw() -> void:
+	if carrying != null and is_instance_valid(carrying) and _charge_from < 0:
+		_charge_from = Time.get_ticks_msec()
+
+
+## How wound up the throw is, 0 to 1; 0 when there is none.
+func charge() -> float:
+	if _charge_from < 0:
+		return 0.0
+	return clampf((Time.get_ticks_msec() - _charge_from) / (CHARGE_SECONDS * 1000.0), 0.0, 1.0)
+
+
+## Let go: thrown along the cursor's ray, a little above it, as hard as it was wound up.
+func release_throw() -> void:
+	if _charge_from < 0:
+		return
+	var wound := charge()
+	_charge_from = -1
+	throw_with(wound)
+
+
+## A throw wound up to `wound` (0..1), along the cursor's ray.
+func throw_with(wound: float) -> void:
+	var a := aim()
+	var toward := (a.basis * Basis(Vector3.RIGHT, LOFT)) * Vector3.FORWARD
+	var speed := lerpf(THROW_SLOWEST, THROW_FASTEST, wound)
+	throw_item(toward * speed, a.basis.x * -TUMBLE * (0.3 + 0.7 * wound))
 
 
 func draws_own_hand() -> bool:

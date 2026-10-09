@@ -44,6 +44,8 @@ const STEP := 1.0 / 120.0
 signal state_changed(state: State)
 ## A hand here used it (`work`): for the session to tell everyone else.
 signal used(down: bool)
+## A throw has come to rest.
+signal landed()
 
 ## Which item this is in the room, the same on every machine: "duck".
 var id: StringName
@@ -59,6 +61,17 @@ var carried_by: Interactor = null
 var held_elsewhere := Callable()
 ## How long it has lain loose and untouched.
 var loose_for := 0.0
+## The throw it is flying, while it flies (`launch`), and how far into it it is.
+var flight: Flight = null
+var _flight_t := 0.0
+var _hits_played := 0
+## How many times it has been thrown in this room. The room carries it, so a copy that has
+## already flown a throw does not fly it again when the room says it was thrown.
+var throws := 0
+## Where it was thrown from, as the room carries it: [origin, velocity, spin], each a Vector3.
+var launched_with: Array = []
+## Whether it is to go home when the throw is over, having come down somewhere it cannot stay.
+var _home_after := false
 
 ## What it looks like, under the item: the item's own node only moves.
 var body: Node3D
@@ -121,6 +134,23 @@ func on_put_down() -> void:
 	pass
 
 
+## Override: it hit something in flight, at `speed` into it (m/s).
+func on_bounce(_speed: float) -> void:
+	pass
+
+
+## Override: how high its middle is above its bottom (the origin). It tumbles about its middle.
+func centre_height() -> float:
+	return 0.04
+
+
+## Override: how it flies. `bounce` is how much of its speed into a surface it gets back, `roll`
+## how quickly it slows sliding along the floor (m/s²), `drag` the air's, per second. A rubber
+## duck is mostly a thud; a bouncy ball is mostly bounce.
+func flies() -> Dictionary:
+	return {"bounce": 0.35, "roll": 3.0, "drag": 0.08}
+
+
 func title() -> String:
 	return item_title()
 
@@ -165,6 +195,7 @@ func _on_grab_begin(_at: Vector3) -> void:
 func take_into(hand: Interactor) -> void:
 	carried_by = hand
 	held_elsewhere = Callable()
+	flight = null
 	_set_state(State.HELD)
 	# Not something to aim at while it is in your hand: it would be under every ray you cast.
 	_shape.disabled = true
@@ -172,6 +203,28 @@ func take_into(hand: Interactor) -> void:
 	_layers(Mirror.NOT_REFLECTED)
 	poke(-0.35)
 	on_picked_up()
+
+
+## Out of whatever hand had it and into the air, on `f`, thrown with `launch` ([origin, velocity,
+## spin]) for the room to carry. `stays` false: it came down somewhere it cannot lie, and goes
+## home once it has.
+func launch(f: Flight, with: Array, stays := true) -> void:
+	_leave_hand()
+	flight = f
+	_flight_t = 0.0
+	_hits_played = 0
+	throws += 1
+	launched_with = with
+	_home_after = not stays
+	resting = Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest)
+	loose_for = 0.0
+	_velocity = Vector3.ZERO
+	_arc_length = 0.0
+	_set_state(State.LOOSE)
+
+
+func is_flying() -> bool:
+	return flight != null
 
 
 ## Into somebody else's hand, wherever `pose` (a Callable giving a global Transform3D) says it
@@ -243,6 +296,7 @@ func _leave_hand() -> void:
 		carried_by.carrying = null
 	carried_by = null
 	held_elsewhere = Callable()
+	flight = null
 	_shape.disabled = false
 	_layers(1)
 
@@ -271,6 +325,9 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if flight != null:
+		_fly(delta)
+		return
 	var goal := _goal()
 	var left := minf(delta, 0.1)
 	var at := position
@@ -321,6 +378,37 @@ func _physics_process(delta: float) -> void:
 			_tidy_later()
 		else:
 			set_physics_process(false)
+
+
+## Along the throw: exactly where the flight has it, with a bump at each hit, and then down.
+func _fly(delta: float) -> void:
+	_flight_t += delta
+	var pose := flight.at(_flight_t)
+	# Turned about its middle, not its bottom, so it tumbles rather than swinging round a point
+	# on its skin.
+	var middle := Vector3.UP * centre_height()
+	basis = pose.basis
+	position = pose.origin + middle - pose.basis * middle
+	while _hits_played < flight.hits.size() and flight.hits[_hits_played] <= _flight_t:
+		var speed := flight.hit_speeds[_hits_played]
+		_hits_played += 1
+		poke(-clampf(speed * 0.05, 0.0, 0.4))
+		on_bounce(speed)
+	_squash_speed += (-_squash * 300.0 - _squash_speed * 12.0) * delta
+	_squash += _squash_speed * delta
+	var s := clampf(_squash, -0.45, 0.45)
+	var across := 1.0 / sqrt(maxf(0.3, 1.0 + s))
+	body.scale = Vector3(across, 1.0 + s, across)
+	body.position = Vector3.ZERO
+	if _flight_t < flight.seconds():
+		return
+	# Down. From here the landing spring sets it upright where it came to rest.
+	flight = null
+	_velocity = Vector3.ZERO
+	landed.emit()
+	if _home_after:
+		_home_after = false
+		go_home()
 
 
 func _at_rest(goal: Transform3D) -> bool:

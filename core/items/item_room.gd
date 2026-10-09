@@ -18,7 +18,7 @@ extends Node3D
 ## something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
 
 ## The items there are, in the order they take the shelf's spots.
-const KINDS: Array[StringName] = [&"duck"]
+const KINDS: Array[StringName] = [&"duck", &"ball"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -38,6 +38,10 @@ var items: Dictionary = {}
 ## floor is there: the walker's `fits` and `ground_at`. Unset, the whole floor plan is floor.
 var fits: Callable = Callable()
 var ground_at: Callable = Callable()
+## What a throw flies in: the walkable floor (Array of Rect2, walls at its edges) and the venue's
+## solids (Walker.fixed), in this node's frame. The walker's, read when the throw is made.
+var floor_rects: Callable = Callable()
+var solids: Callable = Callable()
 var _spots: Array[Transform3D] = []
 
 
@@ -45,6 +49,8 @@ static func make(kind: StringName) -> Item:
 	match kind:
 		&"duck":
 			return DuckItem.new()
+		&"ball":
+			return BallItem.new()
 	return null
 
 
@@ -76,6 +82,7 @@ func _ready() -> void:
 		add_child(item)
 		item.used.connect(func(down: bool) -> void: used.emit(item, down))
 		item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
+		item.landed.connect(func() -> void: moved.emit(item))
 	_rehome()
 
 
@@ -111,7 +118,12 @@ func state() -> Dictionary:
 		match item.state:
 			Item.State.LOOSE:
 				var at := item.resting.origin
-				out[id] = [at.x, at.y, at.z, item.resting.basis.get_euler().y]
+				var entry := [at.x, at.y, at.z, item.resting.basis.get_euler().y]
+				# In the air: how it was thrown too, for a copy that has not flown it to fly.
+				if item.is_flying() and item.launched_with.size() == 3:
+					entry.append(item.throws)
+					entry.append_array(item.launched_with)
+				out[id] = entry
 			Item.State.HELD:
 				out[id] = []
 	return out
@@ -135,6 +147,14 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 		if spot.size() < 4:
 			continue
 		var at := Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
+		# A throw this copy has not flown: flown here from the same launch, to where the room
+		# says it lands.
+		if spot.size() == 8 and int(spot[4]) > item.throws:
+			item.throws = int(spot[4]) - 1
+			fly(item, spot[5], spot[6], spot[7])
+			if not item.resting.origin.is_equal_approx(at):
+				item.resting = Transform3D(Basis(Vector3.UP, float(spot[3])), at)
+			continue
 		if item.state == Item.State.LOOSE and item.resting.origin.is_equal_approx(at):
 			continue
 		item.lay_down(at, float(spot[3]))
@@ -149,6 +169,51 @@ func lay(item: Item, at: Vector2, yaw: float) -> bool:
 	var y: float = ground_at.call(at) if ground_at.is_valid() else 0.0
 	item.lay_down(Vector3(at.x, y, at.y), yaw)
 	return true
+
+
+## Throw `item` from a hand here: from `origin` at `velocity` (world space), spinning at `spin`
+## (rad/s, world axes). Flown at once, and said, for the host to fly too.
+func throw(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
+	var into := global_transform.affine_inverse()
+	var from := into * origin
+	var v := into.basis * velocity
+	var w := into.basis * spin
+	fly(item, from, v, w)
+	asked.emit(&"throw_item", [item.id, from, v, w])
+
+
+## Fly `item` from `origin` at `velocity`, spinning at `spin` -- all in this node's frame -- the
+## same flight on every machine. Where it comes down, it stays if it can lie there; if not, it
+## goes home when it has.
+func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
+	var floor: Array = floor_rects.call() if floor_rects.is_valid() else []
+	var start := _onto(floor, origin)
+	var how := item.flies()
+	# Facing the way it was thrown, not the way it sat in the hand: the hand is not the same on
+	# every machine, and the throw has to be.
+	var facing := Quaternion(Basis(Vector3.UP, atan2(-velocity.x, -velocity.z)))
+	var f := Flight.fly(start, velocity, spin, facing, floor,
+			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
+			how.get("drag", 0.08))
+	item.launch(f, [origin, velocity, spin], _can_lie(Vector2(f.rest.x, f.rest.z)))
+
+
+## `at`, or the nearest point to it on the floor: a hand held out over a wall throws from this
+## side of it.
+static func _onto(floor: Array, at: Vector3) -> Vector3:
+	if floor.is_empty():
+		return at
+	var flat := Vector2(at.x, at.z)
+	var best := flat
+	var best_d := INF
+	for r: Rect2 in floor:
+		var inner := r.grow(-0.02)
+		var c := Vector2(clampf(flat.x, inner.position.x, inner.end.x), clampf(flat.y, inner.position.y, inner.end.y))
+		var d := c.distance_to(flat)
+		if d < best_d:
+			best_d = d
+			best = c
+	return Vector3(best.x, at.y, best.y)
 
 
 ## Send `item` home from a hand here, and say so.

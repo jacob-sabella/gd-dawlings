@@ -26,6 +26,9 @@ var _walk: Array = []
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
 ## `--carry duck:squeeze` holds it squeezed.
 var _carry := ""
+## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
+## tick. Shoot it in flight with --shot-tick a little later.
+var _throw := Vector2(-1, -1)
 var _shot_res := Vector2i.ZERO
 var _hover := Vector2(-1, -1)
 ## `--drag 400,600:900,640@20-70`: hold the left button at the first point on physics tick 20,
@@ -109,6 +112,10 @@ func _ready() -> void:
 				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--carry":
 				if i + 1 < args.size(): _carry = args[i + 1]
+			"--throw":
+				if i + 1 < args.size():
+					var parts := args[i + 1].split("@")
+					_throw = Vector2(float(parts[0]), int(parts[1]) if parts.size() > 1 else 200)
 			"--walk":
 				if i + 1 < args.size(): _walk = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--quit-tick":
@@ -217,6 +224,11 @@ func _physics_process(_delta: float) -> void:
 	if not _drags.is_empty():
 		_drive_drag()
 	_drive_scripted()
+	if _throw.y > 0 and _ticks == int(_throw.y):
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
+		if hand != null:
+			hand.throw_with(_throw.x)
 	if _shot_tick >= 0 and _ticks == _shot_tick:
 		_shot_frame = _frames + 2
 		if _quit_tick < 0:

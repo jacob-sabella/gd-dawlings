@@ -194,8 +194,11 @@ func _host(port: int) -> void:
 
 	await _until(6.0)
 	check("the guest's release cleared the table", Session.holds.is_empty())
+	check("its throw of the duck arrived whole: the launch, as vectors (%s)" % [_room_asks[3] if _room_asks.size() > 3 else null],
+			_room_asks.size() == 5 and _room_asks[3][0] == &"throw_item"
+			and _room_asks[3][1] == [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	check("its put-down of the duck arrived while it still had it (%d)" % _duck_holder_at_put,
-			_room_asks.size() == 4 and _room_asks[3][0] == &"put_item" and _duck_holder_at_put == _other_id())
+			_room_asks.size() == 5 and _room_asks[4][0] == &"put_item" and _duck_holder_at_put == _other_id())
 	Session.claim_hold(KEY)
 	check("so the host can take it now", Session.holder_of(KEY) == 1)
 	Session.release_hold(KEY)
@@ -394,13 +397,15 @@ func _guest(port: int) -> void:
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)
 	check("the host's squeeze reached me (%s)" % [_uses], _uses == [[&"duck", false, 1]])
 	Session.release_hold(KEY)
-	# Put down, then let go: the host hears where it is before it hears the hand is empty.
+	# Thrown -- one launch, reliably, as vectors -- then put down and let go: the host hears
+	# where it is before it hears the hand is empty.
+	Session.ask_room(&"throw_item", [&"duck", Vector3(0.4, 1.2, 1.5), Vector3(0.0, 2.0, 3.5), Vector3(-6.0, 0.0, 0.0)])
 	Session.ask_room(&"put_item", [&"duck", 0.4, 1.9, 0.2])
 	Session.release_hold(DUCK)
 	await _until(5.2)
 	check("my release emptied the table", Session.holds.is_empty())
-	check("and the host answered my put-down", int((Session.room.get("acks", {}) as Dictionary)
-			.get(Session.local_peer_id, 0)) == 5)
+	check("and the host answered my throw and put-down", int((Session.room.get("acks", {}) as Dictionary)
+			.get(Session.local_peer_id, 0)) == 6)
 
 	await _until(6.8)
 	var heard := Session.mix_feed.stats()

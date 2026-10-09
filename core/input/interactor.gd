@@ -119,6 +119,23 @@ func put_down() -> void:
 		_glove.poke(0.3)
 
 
+## Throw what this hand carries, from where it holds it, at `velocity` (world space), spinning at
+## `spin` (rad/s about world axes). The item flies on its own from there (ItemRoom.throw).
+func throw_item(velocity: Vector3, spin: Vector3) -> void:
+	if carrying == null or not is_instance_valid(carrying):
+		carrying = null
+		return
+	_end_use()
+	var item := carrying
+	var room := ItemRoom.of(item)
+	if room != null:
+		room.throw(item, carry_pose().origin, velocity, spin)
+	else:
+		item.go_home()
+	if _glove != null:
+		_glove.poke(0.5)
+
+
 ## The host gave what this hand picked up to somebody who reached it first: it is theirs, and
 ## the hand is empty. Where it goes now is for whoever has it (Presence).
 func lose_carrying() -> void:

@@ -513,7 +513,7 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",
 		studio.venue.title() if studio.venue != null else "room"]

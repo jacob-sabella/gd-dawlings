@@ -169,6 +169,23 @@ static func rubber_tap() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A small, hard rubber ball hitting the floor: a hollow thump that drops in pitch as the ball
+## leaves the floor, with the sharp pock of the hit on top.
+static func ball_bounce() -> AudioStreamWAV:
+	return _cached("ball_bounce", func() -> AudioStreamWAV:
+		var seconds := 0.12
+		var s := _silence(seconds)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var hz := lerpf(330.0, 190.0, minf(1.0, t / 0.05))
+			phase += TAU * hz / float(RATE)
+			s[i] = 0.42 * exp(-t / 0.028) * sin(phase)
+		_impulse(s, 0.0, 0.3, 0.004, 2300.0, 47)
+		_lowpass(s, 6000.0)
+		return _wav(s, false))
+
+
 static func play(on: Node3D, stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> void:
 	if on == null or stream == null or not on.is_inside_tree():
 		return

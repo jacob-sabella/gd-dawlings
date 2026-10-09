@@ -868,7 +868,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var pending_items := {}
 	for p in _predictions:
 		match p["verb"]:
-			&"put_item", &"home_item": pending_items[p["args"][0]] = true
+			&"put_item", &"home_item", &"throw_item": pending_items[p["args"][0]] = true
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -1018,14 +1018,14 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"place_surface":
 			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
 				_place_in_studio(args[0], args[1])
-		&"put_item", &"home_item":
+		&"put_item", &"home_item", &"throw_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item == null or not _may_put(item, from):
 				return
-			if verb == &"put_item":
-				items.lay(item, Vector2(args[1], args[2]), args[3])
-			else:
-				item.go_home()
+			match verb:
+				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
+				&"home_item": item.go_home()
+				&"throw_item": items.fly(item, args[1], args[2], args[3])
 
 
 ## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
@@ -1679,6 +1679,8 @@ func _build_items() -> void:
 	if walker != null:
 		items.fits = walker.fits
 		items.ground_at = walker.ground_at
+		items.floor_rects = func() -> Array: return walker.walkable
+		items.solids = func() -> Array: return walker.fixed
 	studio_set.add_child(items)
 	items.set_spots(venue.item_spots())
 	items.asked.connect(_on_items_asked)
@@ -1771,6 +1773,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_orbit_yaw -= event.relative.x * 0.005
 		_orbit_pitch = clampf(_orbit_pitch - event.relative.y * 0.005, -1.4, 1.2)
 		_update_camera()
+	elif event is InputEventKey and event.keycode == KEY_R and not event.echo:
+		# Hold to wind up a throw of what you carry, let go to throw it where the cursor is.
+		# R: beside Q, which puts it down, under the same hand.
+		var hand := get_node_or_null("MouseHand") as MouseInteractor
+		if hand != null:
+			if event.pressed:
+				hand.begin_throw()
+			else:
+				hand.release_throw()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			# Walk the gear past you one piece at a time, and off either end to put it back.

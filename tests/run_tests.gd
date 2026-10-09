@@ -117,6 +117,7 @@ func _ready() -> void:
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_the_duck_is_the_rooms()
+	await _test_a_ball_is_thrown_and_flies_the_same_everywhere()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6321,6 +6322,131 @@ func _test_the_duck_is_the_rooms() -> void:
 			and studio._predictions.is_empty())
 
 	Session.start_solo()
+	Session.layout = saved_layout
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## A throw is launched once and flown the same everywhere (docs/items_loop.md): ballistic, off
+## the room's walls and the venue's solids, down onto what it lands on, to rest; and the room
+## carries the launch so every copy flies it.
+func _test_a_ball_is_thrown_and_flies_the_same_everywhere() -> void:
+	var box: Array = [Rect2(-2, -2, 4, 4)]
+	var q := Quaternion.IDENTITY
+	var a := Flight.fly(Vector3(0, 1.2, 0), Vector3(1.5, 2.0, -6.0), Vector3(-8, 0, 0), q, box, [], 0.78, 0.7, 0.05)
+	var b := Flight.fly(Vector3(0, 1.2, 0), Vector3(1.5, 2.0, -6.0), Vector3(-8, 0, 0), q, box, [], 0.78, 0.7, 0.05)
+	check("the same launch flies the same flight, step for step", a.points == b.points and a.rest == b.rest
+			and a.seconds() == b.seconds())
+	check("and comes to rest on the floor, inside the room's walls (%s)" % [a.rest],
+			box[0].has_point(Vector2(a.rest.x, a.rest.z)) and is_zero_approx(a.rest.y))
+	check("having bounced off a wall on the way (%d hits)" % a.hits.size(), a.hits.size() >= 3
+			and a.points.slice(0).to_byte_array().size() > 0
+			and Array(a.points).any(func(p: Vector3) -> bool: return p.z < -1.9))
+	check("before it ran out of time (%.1fs)" % a.seconds(), a.seconds() < Flight.LONGEST - 0.1)
+	var duck := Flight.fly(Vector3(0, 1.2, 0), Vector3(1.5, 2.0, -6.0), Vector3(-8, 0, 0), q, box, [], 0.3, 5.0, 0.12)
+	check("a duck thuds where a ball bounces (%d hits, %d)" % [duck.hits.size(), a.hits.size()],
+			duck.hits.size() < a.hits.size() and duck.seconds() < a.seconds())
+
+	var wall := {"c": Vector2(0, -1.0), "h": Vector2(1.5, 0.05), "a": 0.0, "top": 1.25}
+	var off := Flight.fly(Vector3(0, 0.6, 0), Vector3(0, 0.5, -4.0), Vector3.ZERO, q, box, [wall], 0.6, 2.0, 0.05)
+	check("a solid in the way is bounced off, not flown through (%s)" % [off.rest], off.rest.z > -0.95
+			and not Array(off.points).any(func(p: Vector3) -> bool: return Walker._gap(wall, Vector2(p.x, p.z)) <= 0.0))
+	var riser := {"c": Vector2(0, 0), "h": Vector2(0.8, 0.8), "a": 0.3, "top": 0.2}
+	var onto := Flight.fly(Vector3(0, 1.0, 0), Vector3(0.2, 0, 0.1), Vector3.ZERO, q, box, [riser], 0.3, 4.0, 0.05)
+	check("one that comes down on a riser rests on top of it (%.3f)" % onto.rest.y, is_equal_approx(onto.rest.y, 0.2))
+	var tilted := Flight.fly(Vector3(0, 0.15, 0.9), Vector3(0, 0, -3.0), Vector3.ZERO, q, box, [riser], 0.5, 2.0, 0.05)
+	check("and one thrown low at its side does not end up inside it (%s)" % [tilted.rest],
+			Walker._gap(riser, Vector2(tilted.rest.x, tilted.rest.z)) > 0.0 or is_equal_approx(tilted.rest.y, 0.2))
+
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	check("the shelf has a ball on it too", room.items.has(&"ball")
+			and (room.items[&"ball"] as Item).state == Item.State.HOME)
+	var ball: Item = room.items[&"ball"]
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var asks: Array = []
+	var heard := func(verb: StringName, args: Array) -> void: asks.append([verb, args])
+	room.asked.connect(heard)
+	var landings := [0]
+	ball.landed.connect(func() -> void: landings[0] += 1)
+	var front := studio.venue.prop_shelf_spot() * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.15)
+
+	hand.pick_up(ball)
+	hand.begin_throw()
+	check("winding up draws the hand back", hand.charge() >= 0.0 and hand._charge_from >= 0)
+	hand._charge_from -= int(MouseInteractor.CHARGE_SECONDS * 1000.0)
+	check("all the way after a long hold", is_equal_approx(hand.charge(), 1.0)
+			and hand.carry_pose().origin.distance_to(hand.camera.global_transform * MouseInteractor.CARRY_AT) > 0.1)
+	hand.release_throw()
+	check("letting go throws it: out of the hand, in the air", hand.carrying == null and ball.is_flying()
+			and ball.state == Item.State.LOOSE and hand.charge() == 0.0)
+	check("and says so, with the launch (%s)" % [asks], asks.size() == 1 and asks[0][0] == &"throw_item"
+			and Session.room_ask_is_valid(&"throw_item", asks[0][1]))
+	var entry: Array = room.state()[&"ball"]
+	check("the room carries the launch while it flies (%d)" % entry.size(), entry.size() == 8
+			and int(entry[4]) == ball.throws and ball.throws == 1)
+	var hard: Vector3 = (asks[0][1][2] as Vector3)
+	check("a full wind-up is a hard throw (%.1f m/s)" % hard.length(), is_equal_approx(hard.length(), MouseInteractor.THROW_FASTEST))
+	var flight := ball.flight
+	var rest := flight.rest
+	for i in int(flight.seconds() * 60.0) + 2:
+		ball._physics_process(1.0 / 60.0)
+	var landed_at := ball.position
+	for i in 120:
+		ball._physics_process(1.0 / 60.0)
+	check("it comes down where the flight said, once, and settles there (%s %s %s)" % [landed_at, ball.position, rest],
+			not ball.is_flying() and landings[0] == 1 and landed_at.distance_to(rest) < 0.1
+			and ball.position.distance_to(rest) < 0.01)
+	check("and the room has it lying there, no longer flying", (room.state()[&"ball"] as Array).size() == 4
+			or ball.state == Item.State.HOME)
+
+	# Somebody else's copy, told by the room it was thrown, flies the same throw.
+	var other := ItemRoom.new()
+	other.floor_rects = room.floor_rects
+	other.solids = room.solids
+	other.fits = room.fits
+	other.ground_at = room.ground_at
+	studio.studio_set.add_child(other)
+	var theirs: Item = other.items[&"ball"]
+	other.apply({&"ball": entry})
+	check("a copy that has not flown the throw flies it", theirs.is_flying() and theirs.throws == 1)
+	check("to the same place (%s, %s)" % [theirs.flight.rest, rest], theirs.flight.rest.is_equal_approx(rest)
+			and theirs.flight.points == flight.points)
+	theirs.flight = null
+	theirs.resting = Transform3D(Basis.IDENTITY, Vector3(entry[0], entry[1], entry[2]))
+	other.apply({&"ball": entry})
+	check("and does not fly it twice", not theirs.is_flying())
+	other.queue_free()
+
+	# Thrown somewhere nobody could stand to fetch it: it comes down, and then goes home.
+	ball.snap_home()
+	hand.pick_up(ball)
+	var keep := room.fits
+	room.fits = func(_p: Vector2) -> bool: return false
+	hand.throw_with(0.2)
+	room.fits = keep
+	check("one coming down where it cannot stay flies first", ball.is_flying())
+	for i in int(ball.flight.seconds() * 60.0) + 2:
+		ball._physics_process(1.0 / 60.0)
+	check("and then goes home", ball.state == Item.State.HOME)
+
+	# The host flies a guest's throw; nobody else's.
+	_as_session(Session.Role.HOST, 1)
+	ball.snap_home()
+	Session._grant(7, ball.network_key())
+	studio._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 9)
+	check("the host will not fly a throw from someone without the ball", not ball.is_flying())
+	studio._on_room_asked(&"throw_item", [&"ball", Vector3(front.x, 1.2, front.z), Vector3(0, 2, 1), Vector3.ZERO], 7)
+	check("but flies its holder's", ball.is_flying())
+	Session.start_solo()
+
+	room.asked.disconnect(heard)
 	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame

@@ -1243,6 +1243,21 @@ home (`Session.room["items"]`). The order matters: a hand asks, then lets go, so
 on where the item went arrives before the news that the hand is empty. A hold that ends without
 a word, because its holder left, sends the item home.
 
+A throw is launched, not streamed. Holding R winds up (`MouseInteractor.begin_throw`, the hand
+drawn back over `CHARGE_SECONDS`) and letting go throws along your aim, lofted a little, harder
+the longer you held. In a headset, letting go of the grip while the hand is moving faster than
+`FLICK_SPEED` throws at the hand's speed; slower, it is a put-down. Either way the hand calls
+`ItemRoom.throw`, which works the whole flight out at once (`core/items/flight.gd`): a fixed
+120 Hz step with gravity, air drag, bounces off the walkable floor's edges and the venue's solids
+(`Walker.fixed`, down onto their tops too), floor bounces that die into a roll, and a rest. There
+is no clock and no randomness, and the item faces the way it was thrown, not the way it sat in
+the hand, so the same launch gives the same flight on every machine. The launch goes out once as
+a `throw_item` room ask (from, velocity, spin, as Vector3s in the room's frame). While it flies,
+the room's entry for the item carries the throw count and the launch as well as where it will
+rest, so a copy that has not flown that throw flies it. It does not collide with the gear: one
+that comes down where nobody could stand goes home once it has landed. `Item.flies()` gives each
+kind its bounce, roll and drag (a duck thuds, `BallItem` bounces), and `on_bounce` its sound.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

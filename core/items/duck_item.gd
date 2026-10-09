@@ -71,5 +71,17 @@ func _foley_contact() -> AudioStream:
 	return Foley.rubber_tap()
 
 
+## Thrown, it lands like what it is: hollow rubber, a thud and no bounce to speak of, and a squeak
+## knocked out of it by a hard landing.
+func flies() -> Dictionary:
+	return {"bounce": 0.3, "roll": 5.0, "drag": 0.12}
+
+
+func on_bounce(speed: float) -> void:
+	Foley.play(self, Foley.rubber_tap(), clampf(linear_to_db(speed / 4.0), -18.0, 2.0))
+	if speed > 3.5:
+		Foley.play(self, Foley.squeak(true), -8.0, randf_range(1.0, 1.15))
+
+
 func on_put_down() -> void:
 	Foley.play(self, Foley.rubber_tap(), -4.0)

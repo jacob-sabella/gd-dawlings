@@ -14,6 +14,7 @@
 | `neon.glb` | "after hours" as bent neon tube on a dark mounting rail, 1.88 m wide; objects `Words` (material `tube`) and `Rail` (`rail`) | `tools/blender/neon.py`. Over the club's front wall. |
 | `wood_stove.glb` | A cast-iron box stove, door to Blender -Y (Godot +Z); materials `iron`, `fire` | `tools/blender/wood_stove.py`. The cabin's corner. |
 | `duck.glb` | A rubber bath duck, 0.1 m nose to tail, flat underneath, beak toward Blender -Y (Godot +Z), origin on the bottom; materials `duck`, `beak`, `eye` | `tools/blender/duck.py`. The first item (`DuckItem`). |
+| `ball.glb` | A rubber bouncy ball, 0.09 m across, with a seam-like stripe wound round it, origin on the bottom; materials `ball`, `stripe` | `tools/blender/ball.py`. The throwing toy (`BallItem`). |
 | `rocking_chair.glb` | Poly Haven `Rockingchair_01` (CC0), decimated to half | `tools/blender/polyhaven_props.py` |
 | `lantern.glb` | Poly Haven `Lantern_01` (CC0), decimated to 8%; glass material `Lantern_01_glass` | `tools/blender/polyhaven_props.py`. |
 
