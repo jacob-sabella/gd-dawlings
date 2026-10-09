@@ -30,6 +30,16 @@ const BENCH := 1.3
 const BENCH_GAP := 0.3
 ## The spot: where it hangs, and the stage it is on.
 const SPOT_AT := Vector3(-2.2, HEIGHT - 0.3, 2.9)
+## The upright piano pushed back against the ends of the two booths' back-to-back benches,
+## between their openings, its keys to the room; the double bass laid on the floor beside it.
+## Both in the side strip: the back of house is kept clear for people.
+const PIANO_Z := 0.1
+const PIANO_DEPTH := 0.6
+const PIANO_WIDTH := 1.5
+const BASS_AT := Vector3(-3.5, 0.0, 0.25)
+const BASS_YAW := PI * 0.5 + 0.1
+const BASS_LENGTH := 1.95
+const MOTES := 180
 const MODELS := "res://assets/models/"
 
 var spot: SpotLight3D
@@ -39,6 +49,10 @@ var candles: Array[OmniLight3D] = []
 var bottle_spots: Array[Transform3D] = []
 ## The heights the bottles stand at: the shelves', and the back bar's top.
 var bottle_levels: Array[float] = []
+## Where each glass was left, on the booth tables and the bar.
+var glass_spots: Array[Vector3] = []
+## Where each mote of dust in the spot's beam is put (it wanders a little round it).
+var motes: Array[Vector3] = []
 var _t := 0.0
 
 
@@ -108,7 +122,17 @@ func zone_solids() -> Array:
 		out.append({"c": Vector2(-half + BENCH * 0.5, z), "h": Vector2(0.33, 0.33), "a": 0.0, "top": 0.74})
 	for at in stool_spots():
 		out.append({"c": at, "h": Vector2(0.2, 0.2), "a": 0.0, "top": 0.79})
+	out.append({"c": Vector2(piano_x(), PIANO_Z), "h": Vector2(PIANO_DEPTH * 0.5 + 0.15, PIANO_WIDTH * 0.5), "a": 0.0,
+			"top": 1.25})
+	var bass_dir := Vector2(cos(BASS_YAW), -sin(BASS_YAW))
+	out.append({"c": Vector2(BASS_AT.x, BASS_AT.z) + bass_dir * BASS_LENGTH * 0.5, "h": Vector2(BASS_LENGTH * 0.5, 0.2),
+			"a": -BASS_YAW, "top": 0.72})
 	return out
+
+
+## The middle of the piano's case, its back to the booths' bench ends.
+func piano_x() -> float:
+	return -live_room_half() + BENCH + 0.05 + PIANO_DEPTH * 0.5
 
 
 ## Where each bar stool stands, in front of the counter.
@@ -136,6 +160,8 @@ func _ready() -> void:
 	_hang_the_curtain()
 	_hang_the_spot()
 	_light_the_sign()
+	_leave_the_instruments()
+	_leave_the_glasses()
 	_dress_zones()
 
 
@@ -205,7 +231,53 @@ func _swaps() -> Dictionary:
 	return {"marble": marble, "iron": _black(), "wood": _walnut(), "leather": _leather(), "brass": _brass(),
 			"glass_green": _bottle_glass(Color(0.1, 0.3, 0.12, 0.75)),
 			"glass_amber": _bottle_glass(Color(0.55, 0.28, 0.06, 0.7)),
-			"glass_clear": _bottle_glass(Color(0.75, 0.8, 0.8, 0.35)), "label": paper}
+			"glass_clear": _bottle_glass(Color(0.75, 0.8, 0.8, 0.35)), "label": paper,
+			"lacquer": _lacquer(), "ivory": _plain(Color(0.86, 0.82, 0.72), 0.35), "ebony": _plain(Color(0.025, 0.02, 0.02), 0.3),
+			"varnish": _varnish(), "string": _brass(), "whisky": _bottle_glass(Color(0.62, 0.3, 0.05, 0.8)),
+			"wine": _bottle_glass(Color(0.35, 0.02, 0.05, 0.9)), "wool": _cloth(Color(0.42, 0.33, 0.22)),
+			"felt": _cloth(Color(0.12, 0.11, 0.1)), "ribbon": _plain(Color(0.03, 0.03, 0.03), 0.4)}
+
+
+func _plain(colour: Color, rough: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = colour
+	m.roughness = rough
+	return m
+
+
+## The piano's black lacquer: deep, and glossy enough to carry the spot and the candles.
+func _lacquer() -> StandardMaterial3D:
+	var m := _plain(Color(0.02, 0.018, 0.018), 0.12)
+	m.metallic_specular = 0.8
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.8
+	m.clearcoat_roughness = 0.1
+	return m
+
+
+## The bass's varnish over maple: a warm red-brown with a shine.
+func _varnish() -> StandardMaterial3D:
+	var m := _plain(Color(0.36, 0.13, 0.04), 0.25)
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.6
+	m.normal_enabled = true
+	m.normal_texture = Materials.grain("club_varnish", 0.15, 0.4, 4.0)
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 2.0
+	return m
+
+
+func _cloth(colour: Color) -> StandardMaterial3D:
+	var m := _plain(colour, 0.9)
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.rim_enabled = true
+	m.rim = 0.3
+	m.rim_tint = 0.6
+	m.normal_enabled = true
+	m.normal_texture = Materials.grain("club_wool", 0.25, 0.6)
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 6.0
+	return m
 
 
 # --- the room --------------------------------------------------------------------------------
@@ -574,6 +646,50 @@ func _hang_the_spot() -> void:
 	beam.basis = aim * Basis(Vector3.RIGHT, PI * 0.5) * Basis.from_scale(Vector3(1, length, 1))
 	beam.position = SPOT_AT + (target - SPOT_AT) * 0.5
 	add_child(beam)
+	_raise_the_dust(target, cone.bottom_radius)
+
+
+## Motes in the beam: put at random through the cone, each wandering round its own place in
+## dust.gdshader, lit only while they are in the light.
+func _raise_the_dust(target: Vector3, far_radius: float) -> void:
+	var aim := (target - SPOT_AT).normalized()
+	var reach := SPOT_AT.distance_to(target)
+	var spread := (far_radius - 0.1) / reach
+	var side := aim.cross(Vector3.UP).normalized()
+	var up := side.cross(aim)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.014, 0.014)
+	mm.mesh = quad
+	mm.instance_count = MOTES
+	for i in MOTES:
+		var along := rng.randf_range(0.5, reach - 0.4)
+		var r := (0.1 + along * spread) * 0.8 * sqrt(rng.randf())
+		var a := rng.randf() * TAU
+		var at := SPOT_AT + aim * along + (side * cos(a) + up * sin(a)) * r
+		motes.append(at)
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, at))
+		mm.set_instance_custom_data(i, Color(rng.randf(), 0, 0, 0))
+	var dust := MultiMeshInstance3D.new()
+	dust.name = "Dust"
+	dust.multimesh = mm
+	var shine := ShaderMaterial.new()
+	shine.shader = preload("res://core/venues/shaders/dust.gdshader")
+	shine.set_shader_parameter("lamp", SPOT_AT)
+	shine.set_shader_parameter("aim", aim)
+	shine.set_shader_parameter("spread", spread)
+	shine.set_shader_parameter("reach", reach)
+	dust.material_override = shine
+	dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var bounds := AABB(motes[0], Vector3.ZERO)
+	for at in motes:
+		bounds = bounds.expand(at)
+	dust.custom_aabb = bounds.grow(0.3)
+	add_child(dust)
 
 
 ## "after hours" in pink neon on the front wall, over the view from the desk, and the glow it
@@ -591,6 +707,73 @@ func _light_the_sign() -> void:
 	glow.omni_range = 2.4
 	glow.position = Vector3(0.6, 3.0, FRONT + 0.5)
 	add_child(glow)
+
+
+# --- what was left behind -------------------------------------------------------------------
+
+## The band's gone home: the upright against the booths, the double bass laid down by it,
+## a coat thrown over a booth's bench and a hat left on the other one.
+func _leave_the_instruments() -> void:
+	var club := load(MODELS + "club.glb") as PackedScene
+	var piano := _piece(club, "Piano")
+	piano.name = "Piano"
+	# The model's keys face +Z; turned to face the room (+X).
+	piano.rotation.y = PI * 0.5
+	piano.position = Vector3(piano_x(), 0, PIANO_Z)
+	# A brass lamp on the piano's lid, left on, bent over the keys.
+	var lamp_at := Vector3(piano_x() + 0.12, 1.25, PIANO_Z - 0.45)
+	ZoneKit.block(self, Vector3(0.12, 0.015, 0.12), lamp_at + Vector3(0, 0.008, 0), _brass(), "PianoLampBase")
+	ZoneKit.block(self, Vector3(0.012, 0.3, 0.012), lamp_at + Vector3(0, 0.16, 0), _brass(), "PianoLampStem")
+	var shade := MeshInstance3D.new()
+	shade.name = "PianoLampShade"
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.035
+	cone.bottom_radius = 0.09
+	cone.height = 0.11
+	cone.radial_segments = 18
+	shade.mesh = cone
+	shade.material_override = _brass()
+	shade.position = lamp_at + Vector3(0.08, 0.31, 0)
+	shade.rotation.z = -0.6
+	add_child(shade)
+	var lamp := SpotLight3D.new()
+	lamp.name = "PianoLamp"
+	lamp.light_color = Color(1.0, 0.72, 0.45)
+	lamp.light_energy = 1.6
+	lamp.spot_range = 3.0
+	lamp.spot_angle = 60.0
+	lamp.position = shade.position + Vector3(0.03, -0.04, 0)
+	lamp.basis = Basis.looking_at(Vector3(0.75, -1.0, 0.25), Vector3.UP)
+	add_child(lamp)
+	var bass := _piece(club, "Bass")
+	bass.name = "Bass"
+	# Its scroll is the model's +X end: laid along the piano's front toward the door, belly to the room.
+	bass.rotation.y = BASS_YAW
+	bass.position = BASS_AT
+	var bench := find_child("Bench1a", false, false) as Node3D
+	var coat := _piece(club, "Coat")
+	coat.name = "Coat"
+	coat.transform = bench.transform
+	var hat := _piece(club, "Hat")
+	hat.name = "Hat"
+	hat.transform = bench.transform * Transform3D(Basis(Vector3.UP, 0.7), Vector3(-0.38, 0.34, 0.04))
+
+
+## Glasses no one cleared: two on each booth table, a couple on the bar.
+func _leave_the_glasses() -> void:
+	var club := load(MODELS + "club.glb") as PackedScene
+	var x := -live_room_half() + BENCH * 0.5
+	var cx := BAR_FRONT + COUNTER_DEPTH * 0.5
+	var left := [[0, Vector3(x - 0.12, 0.74, BOOTHS[0] - 0.14)], [1, Vector3(x + 0.16, 0.74, BOOTHS[0] + 0.12)],
+			[2, Vector3(x - 0.08, 0.74, BOOTHS[1] + 0.15)], [0, Vector3(x + 0.1, 0.74, BOOTHS[1] - 0.16)],
+			[0, Vector3(cx - 0.12, BAR_TOP, BAR_FROM + 0.6)], [2, Vector3(cx - 0.15, BAR_TOP, 0.4)]]
+	for spec in left:
+		var glass := _piece(club, "Glass%d" % spec[0])
+		glass.name = "LeftGlass%d" % glass_spots.size()
+		glass.position = spec[1]
+		glass.rotation.y = glass_spots.size() * 1.3
+		glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glass_spots.append(spec[1])
 
 
 # --- the zones -------------------------------------------------------------------------------

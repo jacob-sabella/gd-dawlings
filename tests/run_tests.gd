@@ -6558,6 +6558,48 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	var flame_before := club.candles[0].light_energy
 	club._process(0.13)
 	check("the candles flicker", club.candles.size() == 3 and club.candles[0].light_energy != flame_before)
+	# What the band left: the piano against the wall facing the room, the bass lying on the floor,
+	# a coat over a booth's bench, glasses on the tables and the bar, and dust in the beam.
+	var piano_box := (club.find_child("Piano", false, false) as MeshInstance3D).get_aabb()
+	piano_box = club.find_child("Piano", false, false).transform * piano_box
+	var booth_ends := -club.live_room_half() + ClubVenue.BENCH
+	check("the piano stands against the booths' bench ends, between their openings, keys to the room",
+			piano_box.position.x > booth_ends and piano_box.position.x < booth_ends + 0.1
+			and piano_box.position.z > ClubVenue.BOOTHS[0] + 0.3 and piano_box.end.z < ClubVenue.BOOTHS[1] - 0.3
+			and piano_box.end.x > club.piano_x() + 0.5 and absf(piano_box.position.y) < 0.01
+			and absf(piano_box.end.y - 1.25) < 0.02)
+	var bass_node := club.find_child("Bass", false, false) as MeshInstance3D
+	var bass_box := bass_node.transform * bass_node.get_aabb()
+	check("the bass lies on its side on the floor (%.2f high, %.2f long)" % [bass_box.size.y, maxf(bass_box.size.x, bass_box.size.z)],
+			absf(bass_box.position.y) < 0.01 and bass_box.size.y < 0.75 and maxf(bass_box.size.x, bass_box.size.z) > 1.7
+			and not bass_box.intersects(piano_box) and not club.zones().values().any(
+				func(z: AABB): return z.intersects(bass_box)))
+	var coat_node := club.find_child("Coat", false, false) as MeshInstance3D
+	var coat_box := coat_node.transform * coat_node.get_aabb()
+	var coat_bench := club.find_child("Bench1a", false, false) as MeshInstance3D
+	var coat_bench_box := coat_bench.transform * coat_bench.get_aabb()
+	check("the coat hangs over a booth's bench, off the floor",
+			coat_box.intersects(coat_bench_box) and coat_box.position.y > 0.3 and coat_box.end.y < 1.3)
+	var glasses_ok := club.glass_spots.size() >= 6
+	var table_x := -club.live_room_half() + ClubVenue.BENCH * 0.5
+	for g in club.glass_spots:
+		var on_table := absf(g.y - 0.74) < 0.001 and ClubVenue.BOOTHS.any(
+				func(bz: float): return Vector2(g.x - table_x, g.z - bz).length() < 0.28)
+		var on_bar := absf(g.y - ClubVenue.BAR_TOP) < 0.001 and g.x > ClubVenue.BAR_FRONT \
+				and g.x < ClubVenue.BAR_FRONT + ClubVenue.COUNTER_DEPTH and g.z > ClubVenue.BAR_FROM and g.z < ClubVenue.BAR_TO
+		glasses_ok = glasses_ok and (on_table or on_bar)
+	check("every glass left stands on a booth table or the bar (%d)" % club.glass_spots.size(), glasses_ok)
+	var dust := club.find_child("Dust", false, false) as MultiMeshInstance3D
+	var dust_aim := (club.stage_centre() - ClubVenue.SPOT_AT).normalized()
+	var dust_spread: float = (dust.material_override as ShaderMaterial).get_shader_parameter("spread")
+	var in_beam := club.motes.size() == ClubVenue.MOTES and dust.multimesh.use_custom_data
+	for m in club.motes:
+		var mote_along := (m - ClubVenue.SPOT_AT).dot(dust_aim)
+		var mote_off := ((m - ClubVenue.SPOT_AT) - dust_aim * mote_along).length()
+		in_beam = in_beam and mote_along > 0.4 and mote_off < 0.1 + mote_along * dust_spread
+	check("dust turns in the spot's beam, every mote put inside its cone", in_beam
+			and (dust.material_override as ShaderMaterial).shader.resource_path.ends_with("dust.gdshader")
+			and (dust.material_override as ShaderMaterial).get_shader_parameter("lamp") == ClubVenue.SPOT_AT)
 
 	# The chalk zone's sketched room: the board stands behind every zone and over all of them,
 	# the room is drawn round the floor, and the doodles are gathered in, none left in the sky.

@@ -198,8 +198,12 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
         turn back short of the bulkhead -- a loop would have to pass through it. Wide budget
         426k -> 688k primitives, frame time unchanged at ~6.1 ms.)
 - [x] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
-  - [ ] Club follow-up: an upright piano or a bass on its side on the stage, a coat left on a
+  - [x] Club follow-up: an upright piano or a bass on its side on the stage, a coat left on a
     booth bench, glasses left on the tables; slow dust turning in the spot's beam.
+    (Both piano and bass, but not on the stage: the floor behind the footprint is back of house
+    and kept clear, so they are in the left strip, the piano against the booths' bench ends
+    with a lamp on it, the bass on the floor in front. The coat is a Blender cloth sim over the
+    bench. Dust: 180 billboard motes in a MultiMesh, lit only inside the cone.)
 - [x] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
   - [ ] Chalk follow-up: the board's writing follows the session (its real sections, tempo and
