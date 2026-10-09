@@ -162,9 +162,20 @@ ergonomics.
       `tools/shot.sh OUT 200 210` (physics lags render frames); the shelf lamps need to stay dim
       (0.9) or the yellow blows out to a halo; test with `is_instance_valid`, not `!= null`, for a
       carried item that may be freed.
-- [ ] The duck in company: a pick-up claimed with the host, refused to a second hand, seen in the
+- [x] The duck in company: a pick-up claimed with the host, refused to a second hand, seen in the
       holder's ghost's glove in their colour, its held pose streamed, and its put-down a
       predicted, numbered room ask. Two-instance probe checks.
+      Done: carrying is a hold, claimed and let go of by `Presence.claim_carries` reading the
+      hands each tick (so no way of emptying a hand leaves a claim behind); the real item rides
+      the holder's ghost's left palm (`Item.follow`, `Avatar.carried_pose`), rimmed in their
+      colour (`item_rim.gdshader`), where their `Session.send_carry` says relative to their
+      head; squeezes go out on `Session.send_item_use`; put-downs are `put_item`/`home_item`
+      room asks, predicted, and only the holder's is heard; the room carries `"items"`. Probe:
+      host 44, guest 43. Learned: a put-down must reach the host before the hold is let go of
+      (ask, then release, on one reliable channel), or everyone sees it float home and then
+      jump to the floor. `start_solo` drops the peer, so a test that wants asks sent sets an
+      `OfflineMultiplayerPeer`. `tools/session_shot.sh` with `HOST_ARGS="--carry duck"` once
+      left the guest hanging before its picture; it did not happen again in two runs. Watch for it.
 - [ ] Throwing: a charged, aimed throw on a desktop and a flick in a headset; a deterministic
       flight from one reliable launch; bounces off the walker's walls and solids; settles; floats
       home when lost or left. The rubber duck and a bouncy ball.

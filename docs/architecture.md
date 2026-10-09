@@ -1229,8 +1229,19 @@ view, and the interactor draws a left glove under the item (`Glove`, palm up, GR
 too while held. A mirror's ghost carries a look-alike instead (`ItemRoom.look_of`,
 `Presence.Avatar.carry`), on its own left palm.
 
-For now the shelf is each person's own (`Item.personal()`). Making the items the room's, with
-claimed pick-ups, streamed poses and predicted room asks, is the next pass.
+In a session the items are the room's. Carrying one is a hold in the host's table, like a
+fader's, but it lasts for as long as the item is carried rather than while a button is down.
+`Presence.claim_carries` reads every hand each tick and claims or lets go to match, so no way of
+emptying a hand leaves a claim behind. Whoever else holds it, everyone sees the real item, not a
+copy, ride that person's ghost's left palm (`Item.follow`, `Avatar.carried_pose`). It wears that
+person's colour as a rim (`core/items/item_rim.gdshader`) and sits where their
+`Session.send_carry` says, relative to their head, on the motion channel. A squeeze goes out
+reliably (`Session.send_item_use`) and squeaks on everyone's copy. A put-down is a room ask
+(`put_item`, `home_item`), done at once by a guest and rolled back if the host disagrees. The
+host takes it only from whoever holds the item. The room says where every item is that is not
+home (`Session.room["items"]`). The order matters: a hand asks, then lets go, so the host's word
+on where the item went arrives before the news that the hand is empty. A hold that ends without
+a word, because its holder left, sends the item home.
 
 ## Things that are deliberately not done yet
 

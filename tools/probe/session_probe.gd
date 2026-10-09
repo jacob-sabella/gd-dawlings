@@ -10,6 +10,10 @@ extends Node
 ## step. Prints PASS/FAIL per check and exits non-zero on any failure.
 
 const KEY := "KICK  VOLUME"
+## The duck, carried by the guest: a hold for as long as it is in the hand.
+const DUCK := "RUBBER DUCK"
+## Where the guest says the duck is, relative to its head.
+const DUCK_AT := Transform3D(Basis.IDENTITY, Vector3(-0.2, -0.15, -0.5))
 ## Not the stand-in's tempo nor the rig's, so arriving at it means the write travelled.
 const GUEST_TEMPO := 133.5
 ## A send level neither the stand-in nor the rig starts at.
@@ -48,6 +52,11 @@ var _room_asks: Array = []
 var _motions: Array = []
 ## Guest: how many times the host's room arrived.
 var _rooms_heard := 0
+## Heard from the other side: [item, local or down, from] for carries and uses.
+var _carries: Array = []
+var _uses: Array = []
+## Who the host's table said had the duck when the guest's put-down reached it.
+var _duck_holder_at_put := -1
 
 
 func _ready() -> void:
@@ -116,8 +125,14 @@ func _host(port: int) -> void:
 	Session.publish_room({"venue": &"grid", "tablets": {&"tablet_1": [2, 1, "EQ", 0.4, 0.2, 0.0]}})
 	Session.room_motion.connect(func(piece: StringName, x: float, z: float, h: float, from: int):
 		_motions.append([piece, x, z, h, from]))
+	Session.item_carried.connect(func(item: StringName, local: Transform3D, from: int):
+		_carries.append([item, local, from]))
+	Session.item_used.connect(func(item: StringName, down: bool, from: int):
+		_uses.append([item, down, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
+		if verb == &"put_item":
+			_duck_holder_at_put = Session.holder_of(DUCK)
 		if verb == &"open_tablet":
 			var room: Dictionary = Session.room.duplicate(true)
 			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
@@ -162,6 +177,13 @@ func _host(port: int) -> void:
 	check("and its putting the desk down", _room_asks.size() == 3 and _room_asks[2][0] == &"place_surface"
 			and (_room_asks[2][1][1] as Transform3D).origin.is_equal_approx(Vector3(0.1, 0, 0.2)))
 	check("and the guest is listening to the mix", Session.mix_feed.listener_count() == 1)
+	check("the guest's pick-up of the duck is in the host's table", Session.holder_of(DUCK) == guest_id
+			and guest_id != 0)
+	check("and where it carries it came with it (%s)" % [_carries], not _carries.is_empty()
+			and _carries[-1][0] == &"duck" and (_carries[-1][1] as Transform3D).is_equal_approx(DUCK_AT)
+			and _carries[-1][2] == guest_id)
+	check("and its squeeze (%s)" % [_uses], _uses == [[&"duck", true, guest_id]])
+	Session.send_item_use(&"duck", false)
 
 	# Reach for the fader the guest is holding: the host's own hand is refused too.
 	Session.claim_hold(KEY)
@@ -172,6 +194,8 @@ func _host(port: int) -> void:
 
 	await _until(6.0)
 	check("the guest's release cleared the table", Session.holds.is_empty())
+	check("its put-down of the duck arrived while it still had it (%d)" % _duck_holder_at_put,
+			_room_asks.size() == 4 and _room_asks[3][0] == &"put_item" and _duck_holder_at_put == _other_id())
 	Session.claim_hold(KEY)
 	check("so the host can take it now", Session.holder_of(KEY) == 1)
 	Session.release_hold(KEY)
@@ -304,6 +328,8 @@ func _guest(port: int) -> void:
 	# are already in the room. Asked for here, because the probe is what is listening.
 	Session.listen_choice = 1
 	Session.room_changed.connect(func(): _rooms_heard += 1)
+	Session.item_used.connect(func(item: StringName, down: bool, from: int):
+		_uses.append([item, down, from]))
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
 	await _until(1.4)
@@ -346,6 +372,9 @@ func _guest(port: int) -> void:
 	if not send.is_empty():
 		DAW.set_send_volume(send[0], send[1], GUEST_SEND)
 	Session.claim_hold(KEY)
+	Session.claim_hold(DUCK)
+	Session.send_carry(&"duck", DUCK_AT)
+	Session.send_item_use(&"duck", true)
 	await _until(3.2)
 	check("my grab is in the table", Session.holder_of(KEY) == Session.local_peer_id)
 	check("my fader move came back from the host (%.4f)" % DAW.state.track(2).volume,
@@ -363,9 +392,15 @@ func _guest(port: int) -> void:
 
 	await _until(4.4)
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)
+	check("the host's squeeze reached me (%s)" % [_uses], _uses == [[&"duck", false, 1]])
 	Session.release_hold(KEY)
+	# Put down, then let go: the host hears where it is before it hears the hand is empty.
+	Session.ask_room(&"put_item", [&"duck", 0.4, 1.9, 0.2])
+	Session.release_hold(DUCK)
 	await _until(5.2)
 	check("my release emptied the table", Session.holds.is_empty())
+	check("and the host answered my put-down", int((Session.room.get("acks", {}) as Dictionary)
+			.get(Session.local_peer_id, 0)) == 5)
 
 	await _until(6.8)
 	var heard := Session.mix_feed.stats()

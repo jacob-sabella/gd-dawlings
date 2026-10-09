@@ -113,6 +113,7 @@ var items: ItemRoom
 var tablets: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
 var _applying_room := false
+var _room_publish_due := false
 ## Whether what stands here is the host's room rather than this participant's own.
 var _showing_hosts_room := false
 ## A guest's asks the host has not answered yet: {seq, verb, args, id}. See apply_room.
@@ -832,7 +833,7 @@ func room_state() -> Dictionary:
 				placed[surface_id] = mount.studio_home(surface_id)
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
-			"floor": floor, "placed": placed}
+			"floor": floor, "placed": placed, "items": items.state() if items != null else {}}
 
 
 func _publish_room() -> void:
@@ -864,8 +865,10 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var pending_close := {}
 	var pending_move := {}
 	var pending_place := {}
+	var pending_items := {}
 	for p in _predictions:
 		match p["verb"]:
+			&"put_item", &"home_item": pending_items[p["args"][0]] = true
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -915,6 +918,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		var placed: Dictionary = (state.get("placed", {}) as Dictionary).duplicate()
 		placed.merge(pending_place, true)
 		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
+	if items != null and state.has("items"):
+		items.apply(state["items"], pending_items)
 	_applying_room = false
 	_looms_dirty = true
 
@@ -999,7 +1004,7 @@ func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: 
 
 ## The host, answering someone's ask. The same calls the host's own hands make, so the room is
 ## then published the way any change to it is.
-func _on_room_asked(verb: StringName, args: Array, _from: int) -> void:
+func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 	match verb:
 		&"open_tablet":
 			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
@@ -1013,6 +1018,22 @@ func _on_room_asked(verb: StringName, args: Array, _from: int) -> void:
 		&"place_surface":
 			if mount != null and mount.mounted_ids().has(args[0]) and not mount.seats.has(args[0]):
 				_place_in_studio(args[0], args[1])
+		&"put_item", &"home_item":
+			var item: Item = items.items.get(args[0]) if items != null else null
+			if item == null or not _may_put(item, from):
+				return
+			if verb == &"put_item":
+				items.lay(item, Vector2(args[1], args[2]), args[3])
+			else:
+				item.go_home()
+
+
+## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
+## when nobody does. Not the guest whose pick-up lost a race, still putting down what it thought
+## it had.
+func _may_put(item: Item, from: int) -> bool:
+	var holder := Session.holder_of(item.network_key())
+	return holder == 0 or holder == from
 
 
 func _floor_piece(id: StringName) -> Trolley:
@@ -1660,6 +1681,29 @@ func _build_items() -> void:
 		items.ground_at = walker.ground_at
 	studio_set.add_child(items)
 	items.set_spots(venue.item_spots())
+	items.asked.connect(_on_items_asked)
+	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
+	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
+	if presence != null:
+		presence.items = items
+
+
+## A hand here put an item down, or sent it home: a guest asks the host, having done it already.
+## A host's room is told by the item moving (`_publish_room_soon`).
+func _on_items_asked(verb: StringName, args: Array) -> void:
+	if not Session.is_authority():
+		_predict(verb, args)
+
+
+## The room told once at the end of the frame, however many things in it moved during it.
+func _publish_room_soon() -> void:
+	if Session.role != Session.Role.HOST or _applying_room or _room_publish_due:
+		return
+	_room_publish_due = true
+	(func() -> void:
+		_room_publish_due = false
+		_publish_room()).call_deferred()
+
 
 
 ## Put down whatever any hand here is carrying, where it is aiming.

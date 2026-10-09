@@ -43,6 +43,16 @@ var _claim_clock := 0.0
 ## {interactor: key it has claimed}, so a release names what the grab claimed even if the
 ## control has been renamed in between -- a track renamed mid-drag.
 var _my_claims: Dictionary = {}
+## The room's items (docs/items_loop.md), set by the studio. Carrying one is a hold like a
+## fader's, but for as long as it is carried rather than while a button is down.
+var items: ItemRoom = null
+## {interactor: key of the item it carries, as claimed}.
+var _carry_claims: Dictionary = {}
+## {item id: peer whose hand it has been put in here}, so the holds are acted on when they
+## change, not every time they are read.
+var _item_holders: Dictionary = {}
+## {peer: Transform3D}: where the item in their hand is, relative to their head, as last heard.
+var _carry_at: Dictionary = {}
 
 
 ## Listening only while in the tree. A studio taken out of the scene -- the suite builds dozens --
@@ -52,9 +62,13 @@ func _enter_tree() -> void:
 	Session.holds_changed.connect(_apply_holds)
 	Session.hold_refused.connect(_on_hold_refused)
 	Session.role_changed.connect(_on_role_changed)
+	Session.item_carried.connect(_on_item_carried)
+	Session.item_used.connect(_on_item_used)
 
 
 func _exit_tree() -> void:
+	Session.item_carried.disconnect(_on_item_carried)
+	Session.item_used.disconnect(_on_item_used)
 	Session.roster_changed.disconnect(_sync_avatars)
 	Session.holds_changed.disconnect(_apply_holds)
 	Session.hold_refused.disconnect(_on_hold_refused)
@@ -76,6 +90,7 @@ func _make_reflection() -> void:
 
 func _physics_process(delta: float) -> void:
 	_hook_interactors()
+	claim_carries()
 	_publish_clock += delta
 	if _publish_clock >= 1.0 / PUBLISH_HZ:
 		_publish_clock = 0.0
@@ -95,7 +110,10 @@ func _process(delta: float) -> void:
 		reflection.snap(head_node.global_transform)
 		var mine := _my_pointing()
 		reflection.point_at(mine["control"], mine["point"], mine["holding"])
-		reflection.carry(_my_carrying())
+		var carried := _my_carried()
+		reflection.carry(carried.id if carried != null else &"")
+		if carried != null and carried.carried_by != null:
+			reflection.carry_at = _carry_local(carried)
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
@@ -120,7 +138,11 @@ func _process(delta: float) -> void:
 			avatar.point_at(control, control.global_transform * p.pointing_local, not held_key.is_empty())
 		else:
 			avatar.point_at(null, Vector3.ZERO, false)
-		avatar.set_caption(_caption(p, held_key))
+		var theirs := _item_held_by(id)
+		avatar.carry(theirs.id if theirs != null else &"", false)
+		if _carry_at.has(id):
+			avatar.carry_at = _carry_at[id]
+		avatar.set_caption(_caption(p, held_key if theirs == null else theirs.network_key()))
 
 
 # --- out ----------------------------------------------------------------------------------
@@ -145,6 +167,15 @@ func _publish() -> void:
 				else Vector3.ZERO
 		break
 	Session.publish_presence(_to_session(head_node.global_transform), key, local)
+	var carried := _my_carried()
+	if carried != null and carried.carried_by != null:
+		Session.send_carry(carried.id, _carry_local(carried))
+
+
+## Where the item in my hand is, relative to my head: what everyone else puts in my ghost's glove.
+func _carry_local(item: Item) -> Transform3D:
+	var hand := item.carried_by.carry_pose() * item.held_pose()
+	return head_node.global_transform.affine_inverse() * hand if head_node != null else hand
 
 
 ## What my own hand is on, for the ghost the mirrors show: {control, point, holding}.
@@ -160,13 +191,39 @@ func _my_pointing() -> Dictionary:
 	return {"control": null, "point": Vector3.ZERO, "holding": false}
 
 
-## What my own hand is carrying, by kind, or none: for the ghost the mirrors show.
-func _my_carrying() -> StringName:
+## What my own hand is carrying, or null: for the ghost the mirrors show, and for everyone else.
+func _my_carried() -> Item:
 	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
 		var interactor := hand as Interactor
 		if interactor != null and is_instance_valid(interactor.carrying):
-			return interactor.carrying.id
-	return &""
+			return interactor.carrying
+	return null
+
+
+## Every hand here that has picked something up has it claimed with the host, and every hand
+## that has let it go has let go of the claim -- however it came to be let go: put down, sent
+## home, taken by the venue changing. Read off the hands rather than told by them, so no way
+## of emptying a hand can leave a claim behind.
+func claim_carries() -> void:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor == null:
+			continue
+		var now := interactor.carrying.network_key() if is_instance_valid(interactor.carrying) else ""
+		var was: String = _carry_claims.get(interactor, "")
+		if now == was:
+			continue
+		if not was.is_empty():
+			Session.release_hold(was)
+		if now.is_empty():
+			_carry_claims.erase(interactor)
+		else:
+			_carry_claims[interactor] = now
+			Session.claim_hold(now)
+	for interactor in _carry_claims.keys():
+		if not is_instance_valid(interactor):
+			Session.release_hold(_carry_claims[interactor])
+			_carry_claims.erase(interactor)
 
 
 func _hook_interactors() -> void:
@@ -179,7 +236,8 @@ func _hook_interactors() -> void:
 
 
 func _on_grabbed(control: ControlAffordance, interactor: Interactor) -> void:
-	if control.personal():
+	# An item's grab is a pick-up, over at once; carrying it is the hold (claim_carries).
+	if control.personal() or control is Item:
 		return
 	var key := control.network_key()
 	_my_claims[interactor] = key
@@ -199,6 +257,15 @@ func _on_hold_refused(key: String, holder: int) -> void:
 		if _my_claims[interactor] == key and is_instance_valid(interactor):
 			_my_claims.erase(interactor)
 			interactor.let_go()
+	# Something picked up that somebody else had already: it leaves this hand for theirs.
+	for interactor in _carry_claims.keys():
+		if _carry_claims[interactor] == key and is_instance_valid(interactor):
+			_carry_claims.erase(interactor)
+			var item := (interactor as Interactor).carrying
+			interactor.lose_carrying()
+			if item != null:
+				_item_holders.erase(item.id)
+	_apply_items()
 	Session.notice.emit("%s already has %s." % [Session.name_of(holder), key.to_lower()])
 
 
@@ -227,6 +294,8 @@ func _sync_avatars() -> void:
 
 func _on_role_changed() -> void:
 	_my_claims.clear()
+	_carry_claims.clear()
+	_carry_at.clear()
 	_apply_holds()
 	_sync_avatars()
 
@@ -248,13 +317,86 @@ func _apply_holds() -> void:
 		if is_instance_valid(control) and not control in now_claimed:
 			control.claimed_by = null
 	_claimed = now_claimed
+	_apply_items()
 
 
+## An item somebody else holds is in their ghost's glove, wearing their colour. One they have
+## let go of is where the room says: the host's word on where they put it arrives just before
+## the hold is let go (they ask, then let go), and has put it there already. Only a hold that
+## ends without a word -- they left the session -- leaves it to whoever owns the room: a host
+## sends it home, a guest waits to be told.
+func _apply_items() -> void:
+	if items == null:
+		return
+	for id in items.items:
+		var item: Item = items.items[id]
+		var holder := Session.holder_of(item.network_key())
+		var mine := holder == Session.local_peer_id or holder == 0
+		if not mine and _item_holders.get(id, 0) != holder:
+			if item.carried_by != null:
+				# My hand has it too: the host says theirs was first. Ours opens.
+				for interactor in _carry_claims.keys():
+					if interactor == item.carried_by:
+						_carry_claims.erase(interactor)
+				item.carried_by.lose_carrying()
+			_item_holders[id] = holder
+			item.follow(_palm_of.bind(holder, item))
+			var p = Session.participants.get(holder)
+			item.set_rim(p.colour if p != null else Color.WHITE)
+		elif mine and _item_holders.has(id):
+			_item_holders.erase(id)
+			item.set_rim(Color(0, 0, 0, 0))
+			if item.is_held_elsewhere() and Session.is_authority():
+				item.go_home()
+
+
+## Where the item in `peer`'s hand is: their ghost's palm, or where it is now if they have no
+## ghost here to hold it.
+func _palm_of(peer: int, item: Item) -> Transform3D:
+	var avatar: Avatar = _avatars.get(peer)
+	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
+		return item.global_transform
+	return avatar.carried_pose()
+
+
+## The item in `peer`'s hand, or null.
+func _item_held_by(peer: int) -> Item:
+	if items == null:
+		return null
+	for id in _item_holders:
+		if _item_holders[id] == peer:
+			return items.items.get(id)
+	return null
+
+
+func _on_item_carried(id: StringName, local: Transform3D, from: int) -> void:
+	_carry_at[from] = local
+
+
+## Somebody else squeezed what is in their hand: ours squeaks, in their glove, where it is.
+func _on_item_used(id: StringName, down: bool, from: int) -> void:
+	if items == null or _item_holders.get(id, 0) != from:
+		return
+	var item: Item = items.items.get(id)
+	if item != null:
+		item.use(down)
+
+
+## The control `peer_id` has their hand on -- not an item they carry, which is in the other glove.
 func _key_held_by(peer_id: int) -> String:
 	for key in Session.holds:
-		if Session.holds[key] == peer_id:
+		if Session.holds[key] == peer_id and not _is_item_key(key):
 			return key
 	return ""
+
+
+func _is_item_key(key: String) -> bool:
+	if items == null:
+		return false
+	for id in items.items:
+		if (items.items[id] as Item).network_key() == key:
+			return true
+	return false
 
 
 ## The control on THIS desk that goes by `key`. Cached, and the cache is distrusted on every
@@ -396,9 +538,17 @@ void fragment() {
 	var _hands: Array[Glove] = []
 	var _pointing: ControlAffordance = null
 	var _point := Vector3.ZERO
-	## What the left glove carries (docs/items_loop.md): a look of the item, sat on its palm.
+	## What the left glove carries (docs/items_loop.md): a look of the item, sat on its palm, in
+	## a mirror; nothing of its own for somebody else's ghost, whose glove the real item rides.
 	var _carried: Node3D = null
 	var _carried_kind := &""
+	## Where the carried item is, relative to the eye, as its holder last said; until they have,
+	## held out in front of the chest.
+	var carry_at := Transform3D.IDENTITY:
+		set(v):
+			carry_at = v
+			_carry_heard = true
+	var _carry_heard := false
 	var _holding := false
 	var _mirror_only := false
 	var _colour := Color.WHITE
@@ -642,12 +792,11 @@ void fragment() {
 	func _aim_hands() -> void:
 		var left: Glove = _hands[0]
 		var right: Glove = _hands[1]
-		if _carried != null:
-			# Carrying: the left hand up in front of the chest, palm up under the item, the
-			# way you hold something out to look at it.
+		if _carried_kind != &"":
+			# Carrying: the left hand palm up under the item, the way you hold something out to
+			# look at it.
 			var turn := Basis(Vector3.UP, _ghost.global_basis.orthonormalized().get_euler().y)
-			var at := _ghost.global_transform * Vector3(-0.22, -0.3, -0.42)
-			at.y += sin(_clock * 2.3 + _phase) * 0.012
+			var at := carried_pose().origin - Vector3.UP * PALM_LIFT * left.size
 			left.target = Transform3D(_attitude(turn * Vector3(0.3, 0.1, -1.0), Vector3.UP), at)
 			left.pose = Glove.Pose.OPEN
 		else:
@@ -900,16 +1049,27 @@ void fragment() {
 		_aim_hands()
 		_seat_carried()
 
-	## Take `kind` into the left glove, or put down whatever is there (&"").
-	func carry(kind: StringName) -> void:
+	## How far above the palm a carried thing sits, before the glove's size.
+	const PALM_LIFT := 0.03
+
+	## Take `kind` into the left glove, or put down whatever is there (&""). With `look`, a
+	## look-alike of it sits there; without, the glove only holds itself ready for the real
+	## one, which rides `carried_pose`.
+	func carry(kind: StringName, look := true) -> void:
 		if kind == _carried_kind:
 			return
+		var had := _carried_kind != &""
 		_carried_kind = kind
 		if _carried != null:
 			_carried.queue_free()
 			_carried = null
+		if had:
 			_hands[0].poke(0.3)
 		if kind == &"":
+			_carry_heard = false
+			return
+		_hands[0].poke(-0.4)
+		if not look:
 			return
 		_carried = ItemRoom.look_of(kind)
 		if _carried == null:
@@ -921,20 +1081,25 @@ void fragment() {
 				(node as VisualInstance3D).layers = Mirror.SELF_ONLY
 			if _mirror_only and node is GeometryInstance3D:
 				(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_hands[0].poke(-0.4)
 		_seat_carried()
 
-	## The carried item sits upright on the left palm, facing where the fingers point.
+	## Where the carried item is, in the world: where its holder says, relative to this ghost's
+	## eye, or held out in front of the chest until they have said. The glove goes under it.
+	func carried_pose() -> Transform3D:
+		var bob := Vector3.UP * sin(_clock * 2.3 + _phase) * 0.012
+		if _carry_heard:
+			var pose := _pose.orthonormalized() * carry_at
+			return pose.translated(bob)
+		var turn := Basis(Vector3.UP, _ghost.global_basis.orthonormalized().get_euler().y)
+		var at := _ghost.global_transform * Vector3(-0.22, -0.3, -0.42)
+		return Transform3D(turn, at + bob + Vector3.UP * PALM_LIFT * _hands[0].size)
+
+	## The look-alike in a mirror sits where the item is.
 	func _seat_carried() -> void:
 		if _carried == null:
 			return
-		var glove: Glove = _hands[0]
-		var fingers := -glove.global_basis.orthonormalized().z
-		fingers.y = 0.0
-		var yaw := atan2(-fingers.x, -fingers.z) if fingers.length() > 0.01 else 0.0
-		_carried.global_transform = Transform3D(Basis(Vector3.UP, yaw),
-				glove.global_position + Vector3.UP * 0.03 * glove.size)
-		_carried.visible = glove.visible
+		_carried.global_transform = carried_pose()
+		_carried.visible = _hands[0].visible
 
 	## Yaw from the pose; a slight lean for pitch; the eyes take the rest. And a slow bob,
 	## so nobody is ever quite standing still.

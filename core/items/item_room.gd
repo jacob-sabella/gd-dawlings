@@ -9,6 +9,10 @@ extends Node3D
 ## shelf when the venue changes, and sends anything left lying where the new room has no floor
 ## home too. Items in a hand are left in it.
 ##
+## In a session the room is the host's (`Session.room["items"]`, see `state` and `apply`): a hand
+## here that puts something down does it at once and says so (`asked`), and the host's word
+## then stands, or puts it back.
+##
 ## A put-down is judged here, not by the hand, because only the room knows its floor. An item
 ## lies only where a person could stand to pick it up again (`Walker.fits`): on the floor or on
 ## something you step up onto, never on the gear or in a wall. Anywhere else, it goes home.
@@ -19,6 +23,14 @@ const KINDS: Array[StringName] = [&"duck"]
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
 const AT_FEET := 0.45
+
+## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already
+## done here. The studio sends it to the host as an ask.
+signal asked(verb: StringName, args: Array)
+## A hand here used `item`: for the session to tell everyone.
+signal used(item: Item, down: bool)
+## Something about where an item is changed: for a host to tell the room.
+signal moved(item: Item)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -62,6 +74,8 @@ func _ready() -> void:
 		item.name = "Item_" + String(kind)
 		items[kind] = item
 		add_child(item)
+		item.used.connect(func(down: bool) -> void: used.emit(item, down))
+		item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
 	_rehome()
 
 
@@ -88,6 +102,61 @@ func _rehome() -> void:
 					item.snap_home()
 
 
+## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
+## the floor, {id: []} for one in a hand. One left out is on the shelf.
+func state() -> Dictionary:
+	var out := {}
+	for id in items:
+		var item: Item = items[id]
+		match item.state:
+			Item.State.LOOSE:
+				var at := item.resting.origin
+				out[id] = [at.x, at.y, at.z, item.resting.basis.get_euler().y]
+			Item.State.HELD:
+				out[id] = []
+	return out
+
+
+## Make the items what the host's room says (`state`). Not one a hand here has, nor one this
+## guest has put somewhere and not heard back about (`pending`, by id); nor one the room says is
+## in a hand, which the holds put there (Presence). One the room has on the floor lands there;
+## one it leaves out goes home.
+func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
+	for id in items:
+		var item: Item = items[id]
+		if pending.has(id) or item.carried_by != null:
+			continue
+		var entry: Variant = room_items.get(id)
+		if entry == null:
+			if item.state != Item.State.HOME:
+				item.go_home()
+			continue
+		var spot := entry as Array
+		if spot.size() < 4:
+			continue
+		var at := Vector3(float(spot[0]), float(spot[1]), float(spot[2]))
+		if item.state == Item.State.LOOSE and item.resting.origin.is_equal_approx(at):
+			continue
+		item.lay_down(at, float(spot[3]))
+
+
+## Lay `item` on the floor at `at` (this node's frame), turned to `yaw`, if it can lie there;
+## home if it cannot. True if it lies there. The host's answer to a put-down, and a hand's own.
+func lay(item: Item, at: Vector2, yaw: float) -> bool:
+	if not _can_lie(at):
+		item.go_home()
+		return false
+	var y: float = ground_at.call(at) if ground_at.is_valid() else 0.0
+	item.lay_down(Vector3(at.x, y, at.y), yaw)
+	return true
+
+
+## Send `item` home from a hand here, and say so.
+func send_home(item: Item) -> void:
+	item.go_home()
+	asked.emit(&"home_item", [item.id])
+
+
 ## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at
 ## the aimer's feet when it does not. Home if neither is somewhere it can lie.
 func put_down(item: Item, aim: Transform3D) -> void:
@@ -104,13 +173,12 @@ func put_down(item: Item, aim: Transform3D) -> void:
 		var ahead := Vector2(toward.x, toward.z)
 		ahead = ahead.normalized() if ahead.length() > 0.01 else Vector2(0, -1)
 		spot = Vector2(origin.x, origin.z) + ahead * AT_FEET
-	if not _can_lie(spot):
-		item.go_home()
-		return
-	var y: float = ground_at.call(spot) if ground_at.is_valid() else 0.0
 	# Facing the way you were looking, as if you had set it down in front of you.
 	var yaw := atan2(-toward.x, -toward.z)
-	item.lay_down(Vector3(spot.x, y, spot.y), yaw)
+	if lay(item, spot, yaw):
+		asked.emit(&"put_item", [item.id, spot.x, spot.y, yaw])
+	else:
+		asked.emit(&"home_item", [item.id])
 
 
 func _can_lie(at: Vector2) -> bool:

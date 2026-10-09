@@ -72,6 +72,12 @@ signal room_asked(verb: StringName, args: Array, from: int)
 ## Something in the room being pushed right now, by `from`: where it is this moment. Unconfirmed
 ## and unsaved -- the ask when it is let go is what counts -- and only for drawing it moving.
 signal room_motion(piece: StringName, x: float, z: float, heading: float, from: int)
+## Something in `from`'s hand, where it is this moment: relative to their head, so it lands in
+## their ghost's glove wherever everyone has the ghost. Unreliable, like a head.
+signal item_carried(item: StringName, local: Transform3D, from: int)
+## Something in `from`'s hand, used: a duck squeezed (`down`) or let go of. Reliable, because a
+## squeak is an event, and a lost one is a silence nobody can account for.
+signal item_used(item: StringName, down: bool, from: int)
 
 var role: int = Role.SOLO
 ## {peer_id: Participant}
@@ -138,7 +144,8 @@ var layout: LayoutProfile = null
 
 ## The room everyone is standing in, as the host has it: {"venue": id, "tablets": {stand id:
 ## [track, fx, plugin name, x, z, heading]}, "floor": {piece id: [x, z, heading]}, "placed":
-## {surface id: Transform3D}} -- the venue, the plugins out on stands, where every stand and
+## {surface id: Transform3D}, "items": {item id: [x, y, z, yaw] on the floor, or [] in a hand}}
+## -- the venue, the plugins out on stands, where every stand and
 ## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
 ## for when it is on its own again. Empty until the host has said.
@@ -840,7 +847,8 @@ func _told(text: String) -> void:
 const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOAT, TYPE_FLOAT],
 		&"close_tablet": [TYPE_STRING_NAME], &"move_tablet": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT],
 		&"move_piece": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT],
-		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D]}
+		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D],
+		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.
@@ -901,6 +909,60 @@ func _motion_up(piece: StringName, x: float, z: float, heading: float) -> void:
 @rpc("authority", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
 func _motion(piece: StringName, x: float, z: float, heading: float, from: int) -> void:
 	room_motion.emit(piece, x, z, heading, from)
+
+
+## Where the thing in my hand is now, relative to my head, to everyone else. As often as a head.
+func send_carry(item: StringName, local: Transform3D) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_carry.rpc_id(id, item, local, local_peer_id)
+	else:
+		_carry_up.rpc_id(1, item, local)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _carry_up(item: StringName, local: Transform3D) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	item_carried.emit(item, local, from)
+	for id in _audience():
+		if id != from:
+			_carry.rpc_id(id, item, local, from)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", MOTION_CHANNEL)
+func _carry(item: StringName, local: Transform3D, from: int) -> void:
+	item_carried.emit(item, local, from)
+
+
+## The thing in my hand, used, for everyone else to hear and see.
+func send_item_use(item: StringName, down: bool) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		for id in _audience():
+			_item_use.rpc_id(id, item, down, local_peer_id)
+	else:
+		_item_use_up.rpc_id(1, item, down)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _item_use_up(item: StringName, down: bool) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	item_used.emit(item, down, from)
+	for id in _audience():
+		if id != from:
+			_item_use.rpc_id(id, item, down, from)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _item_use(item: StringName, down: bool, from: int) -> void:
+	item_used.emit(item, down, from)
 
 
 static func room_ask_is_valid(verb: StringName, args: Array) -> bool:

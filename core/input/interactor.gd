@@ -90,7 +90,11 @@ func pick_up(item: Item) -> void:
 	if carrying == item:
 		return
 	if carrying != null and is_instance_valid(carrying):
-		carrying.go_home()
+		var room := ItemRoom.of(carrying)
+		if room != null:
+			room.send_home(carrying)
+		else:
+			carrying.go_home()
 	_end_use()
 	carrying = item
 	item.take_into(self)
@@ -115,9 +119,24 @@ func put_down() -> void:
 		_glove.poke(0.3)
 
 
+## The host gave what this hand picked up to somebody who reached it first: it is theirs, and
+## the hand is empty. Where it goes now is for whoever has it (Presence).
+func lose_carrying() -> void:
+	if carrying == null or not is_instance_valid(carrying):
+		carrying = null
+		return
+	_end_use()
+	var item := carrying
+	carrying = null
+	if item.carried_by == self:
+		item.carried_by = null
+	if _glove != null:
+		_glove.poke(0.3)
+
+
 func _end_use() -> void:
 	if _using and carrying != null and is_instance_valid(carrying):
-		carrying.use(false)
+		carrying.work(false)
 	_using = false
 
 
@@ -139,7 +158,7 @@ func _physics_process(_delta: float) -> void:
 		if hovered == null and carrying != null:
 			# Nothing under the ray, something in the hand: the button is the item's.
 			_using = true
-			carrying.use(true)
+			carrying.work(true)
 		elif hovered != null:
 			hovered.grab_begin(self, hit["point"])
 			# Only if it took the hand. A control someone else is holding says no, and a hand

@@ -42,6 +42,8 @@ const TIDY_SECONDS := 180.0
 const STEP := 1.0 / 120.0
 
 signal state_changed(state: State)
+## A hand here used it (`work`): for the session to tell everyone else.
+signal used(down: bool)
 
 ## Which item this is in the room, the same on every machine: "duck".
 var id: StringName
@@ -52,6 +54,9 @@ var home := Transform3D.IDENTITY
 var resting := Transform3D.IDENTITY
 ## The hand that has it, while HELD here.
 var carried_by: Interactor = null
+## Where it is, while HELD in somebody else's hand: their ghost's palm, asked each frame
+## (`follow`). Returns a global pose.
+var held_elsewhere := Callable()
 ## How long it has lain loose and untouched.
 var loose_for := 0.0
 
@@ -133,10 +138,17 @@ func hint() -> String:
 	return "click to pick up"
 
 
-## Items are not part of the mix, and for now not part of the session either: each person's
-## shelf is their own. (The items loop's second pass makes them the room's.)
+## Part of the room: a pick-up is claimed with the host like a fader (Presence), and somebody
+## pointing at it is shown pointing at it.
 func personal() -> bool:
-	return true
+	return false
+
+
+## Used by a hand here: done, and said, so everyone else's copy squeaks too. A copy being used
+## by somebody else's hand is just `use`d.
+func work(down: bool) -> void:
+	use(down)
+	used.emit(down)
 
 
 ## A grab is a pick-up. The interactor still thinks it is dragging something until the button
@@ -152,6 +164,7 @@ func _on_grab_begin(_at: Vector3) -> void:
 ## Into `hand`. The hand does the bookkeeping (Interactor.pick_up); this is the item's half.
 func take_into(hand: Interactor) -> void:
 	carried_by = hand
+	held_elsewhere = Callable()
 	_set_state(State.HELD)
 	# Not something to aim at while it is in your hand: it would be under every ray you cast.
 	_shape.disabled = true
@@ -159,6 +172,41 @@ func take_into(hand: Interactor) -> void:
 	_layers(Mirror.NOT_REFLECTED)
 	poke(-0.35)
 	on_picked_up()
+
+
+## Into somebody else's hand, wherever `pose` (a Callable giving a global Transform3D) says it
+## is: their ghost's palm. Seen by everyone, mirrors too, and not to be taken out of it.
+func follow(pose: Callable) -> void:
+	_leave_hand()
+	held_elsewhere = pose
+	_shape.disabled = true
+	_set_state(State.HELD)
+	poke(-0.35)
+
+
+## Whether somebody else's hand has it.
+func is_held_elsewhere() -> bool:
+	return state == State.HELD and held_elsewhere.is_valid()
+
+
+const RIM_SHADER := preload("res://core/items/item_rim.gdshader")
+var _rim: ShaderMaterial = null
+
+
+## Their colour round its edge while it is in their hand, the way a fader they hold wears it;
+## `Color(0, 0, 0, 0)` takes it off.
+func set_rim(colour: Color) -> void:
+	var on := colour.a > 0.0
+	if on and _rim == null:
+		_rim = ShaderMaterial.new()
+		_rim.shader = RIM_SHADER
+	if on:
+		_rim.set_shader_parameter("colour", colour)
+	for mesh: MeshInstance3D in body.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh.get_surface_override_material_count():
+			var m := mesh.get_active_material(i) as BaseMaterial3D
+			if m != null:
+				m.next_pass = _rim if on else null
 
 
 ## Out of the hand onto the floor at `spot` (in the parent's frame), turned to `yaw`.
@@ -194,6 +242,7 @@ func _leave_hand() -> void:
 	if carried_by != null and carried_by.carrying == self:
 		carried_by.carrying = null
 	carried_by = null
+	held_elsewhere = Callable()
 	_shape.disabled = false
 	_layers(1)
 
@@ -283,10 +332,14 @@ func _at_rest(goal: Transform3D) -> bool:
 func _goal() -> Transform3D:
 	match state:
 		State.HELD:
-			if carried_by == null or not is_instance_valid(carried_by) or get_parent() == null:
-				return transform
 			var parent := get_parent() as Node3D
-			var hand := carried_by.carry_pose() * held_pose()
+			var hand: Transform3D
+			if held_elsewhere.is_valid():
+				hand = held_elsewhere.call()
+			elif carried_by != null and is_instance_valid(carried_by):
+				hand = carried_by.carry_pose() * held_pose()
+			else:
+				return transform
 			return parent.global_transform.affine_inverse() * hand if parent != null else hand
 		State.LOOSE:
 			return resting

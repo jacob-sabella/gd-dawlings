@@ -116,6 +116,7 @@ func _ready() -> void:
 	_test_gear_never_leaves_its_stand()
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
+	await _test_the_duck_is_the_rooms()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6158,12 +6159,169 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 	ghost.carry(&"duck")
 	var carried := ghost._carried
 	ghost._process(0.1)
+	var left_glove: Glove = ghost._hands[0]
 	check("a ghost carries the duck on its left palm", carried != null and carried.is_inside_tree()
-			and carried.global_position.distance_to(ghost._hands[0].global_position) < 0.1
+			and carried.global_position.is_equal_approx(ghost.carried_pose().origin)
+			and left_glove.target.origin.is_equal_approx(carried.global_position
+				- Vector3.UP * Presence.Avatar.PALM_LIFT * left_glove.size)
 			and carried.find_children("*", "CollisionShape3D", true, false).is_empty())
 	ghost.carry(&"")
 	check("and puts it away", ghost._carried == null)
 	ghost.queue_free()
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## In a session the duck is the room's (docs/items_loop.md): a pick-up is a hold claimed with
+## the host; whoever has it carries it in their ghost's glove, in their colour, where they say
+## it is; a squeeze is heard by everyone; only its holder may put it down, and a guest's
+## put-down is done at once and asked of the host, whose word then stands.
+func _test_the_duck_is_the_rooms() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var duck: Item = room.items[&"duck"]
+	var key := duck.network_key()
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var presence := studio.presence
+	var step := func(seconds: float) -> void:
+		for i in int(seconds * 60.0):
+			duck._physics_process(1.0 / 60.0)
+	var rimmed := func() -> bool:
+		for mesh: MeshInstance3D in duck.body.find_children("*", "MeshInstance3D", true, false):
+			for i in mesh.get_surface_override_material_count():
+				var m := mesh.get_active_material(i) as BaseMaterial3D
+				if m != null and m.next_pass != null:
+					return true
+		return false
+	var front := studio.venue.prop_shelf_spot() * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.15)
+	var spot := Vector2(front.x, front.z)
+	check("the studio's company knows the room's items", presence.items == room)
+	check("and the duck is the room's, not mine alone", not duck.personal() and key == "RUBBER DUCK")
+
+	# The host, with a guest in the room. On a peer that is always connected, to nobody.
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	var grace = Session._register(7, "Grace", 1)
+	grace.heard_msec = Time.get_ticks_msec()
+	grace.head = Transform3D(Basis.IDENTITY, Vector3(-1.0, 1.5, 1.2))
+	presence._sync_avatars()
+	presence._process(0.016)
+	var avatar = presence._avatars[7]
+
+	duck.grab_begin(hand, duck.global_position)
+	duck.grab_end(hand)
+	presence.claim_carries()
+	check("picking it up claims it with the host", hand.carrying == duck and Session.holder_of(key) == 1)
+	check("and the room has it in a hand", studio.room_state()["items"].get(&"duck") == [])
+	room.lay(duck, spot, 0.0)
+	presence.claim_carries()
+	check("putting it down lets the claim go", Session.holder_of(key) == 0 and hand.carrying == null)
+	check("and the room has it on the floor", (studio.room_state()["items"].get(&"duck", []) as Array).size() == 4)
+	duck.snap_home()
+
+	Session._grant(7, key)
+	check("a guest's pick-up puts it in her ghost's glove", duck.is_held_elsewhere()
+			and presence._item_held_by(7) == duck)
+	check("in her colour", rimmed.call())
+	check("out of anyone else's reach", duck.claimed_by != null)
+	duck.grab_begin(hand, duck.global_position)
+	duck.grab_end(hand)
+	check("so the host's hand is refused it", hand.carrying == null and duck.is_held_elsewhere())
+	check("and her ghost's right hand is free: carrying is not pointing", presence._key_held_by(7) == "")
+	var says := Transform3D(Basis(Vector3.UP, 0.4), Vector3(-0.2, -0.2, -0.45))
+	Session.item_carried.emit(&"duck", says, 7)
+	presence._process(0.016)
+	avatar._process(0.0)
+	step.call(2.0)
+	var want: Transform3D = avatar.carried_pose()
+	check("it rides where she says it is, relative to her head (%.3f)" % duck.global_position.distance_to(want.origin),
+			avatar.carry_at.is_equal_approx(says) and duck.global_position.distance_to(want.origin) < 0.02)
+	check("on her ghost's palm", (avatar._hands[0] as Glove).target.origin.distance_to(
+			want.origin - Vector3.UP * Presence.Avatar.PALM_LIFT * avatar._hands[0].size) < 0.001
+			and avatar._hands[0].pose == Glove.Pose.OPEN)
+	check("and her ghost says what it is holding", avatar._caption.text == "HOLDING  RUBBER DUCK")
+	duck._squash_speed = 0.0
+	Session.item_used.emit(&"duck", true, 9)
+	check("a squeeze from someone not holding it is nothing", duck._squash_speed == 0.0)
+	Session.item_used.emit(&"duck", true, 7)
+	check("hers squeezes ours", duck._squash_speed < -1.0)
+	studio._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 9)
+	check("nobody else may put it down", duck.is_held_elsewhere())
+	studio._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 7)
+	check("she may, and it lies where she put it", duck.state == Item.State.LOOSE
+			and Vector2(duck.resting.origin.x, duck.resting.origin.z).is_equal_approx(spot))
+	check("which the room now says", (studio.room_state()["items"].get(&"duck", []) as Array).size() == 4)
+	Session._release(7, key)
+	check("her letting go after leaves it there, without her colour", duck.state == Item.State.LOOSE
+			and not rimmed.call())
+	Session._grant(7, key)
+	Session._on_peer_disconnected(7)
+	check("carried out of the session, it goes home", duck.state == Item.State.HOME
+			and not duck.is_held_elsewhere() and not rimmed.call())
+
+	# A guest, whose pick-up loses a race to the host.
+	_as_session(Session.Role.GUEST, 5)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	presence._item_holders.clear()
+	presence._carry_claims.clear()
+	var ada = Session._register(1, "Ada", 0)
+	ada.heard_msec = Time.get_ticks_msec()
+	ada.head = Transform3D(Basis.IDENTITY, Vector3(1.0, 1.5, 1.2))
+	Session._register(5, "Grace", 1)
+	presence._sync_avatars()
+	presence._process(0.016)
+	duck.snap_home()
+	duck.grab_begin(hand, duck.global_position)
+	duck.grab_end(hand)
+	presence.claim_carries()
+	check("a guest's pick-up is in its hand at once", hand.carrying == duck and presence._carry_claims.size() == 1)
+	var notices: Array[String] = []
+	var heard := func(t: String): notices.append(t)
+	Session.notice.connect(heard)
+	Session._receive_holds({key: 1})
+	Session.hold_refused.emit(key, 1)
+	Session.notice.disconnect(heard)
+	check("refused, it leaves the hand for the ghost of whoever had it", hand.carrying == null
+			and duck.is_held_elsewhere() and presence._item_holders.get(&"duck") == 1)
+	check("the claim is forgotten, not let go of: it was never ours", presence._carry_claims.is_empty())
+	check("and the guest is told whose it is (%s)" % [notices], notices.has("Ada already has rubber duck."))
+	var here := {"venue": studio.venue.venue_id(), "variant": studio.venue.variant}
+	var with_items := func(entries: Dictionary, acks := 0) -> Dictionary:
+		var out := here.duplicate()
+		out["items"] = entries
+		out["acks"] = {5: acks}
+		return out
+	studio.apply_room(with_items.call({&"duck": []}))
+	check("a room that says it is in a hand leaves it there", duck.is_held_elsewhere())
+	studio.apply_room(with_items.call({&"duck": [spot.x, 0.0, spot.y, 0.2]}))
+	check("the host's word on where she put it lays it there", duck.state == Item.State.LOOSE
+			and Vector2(duck.resting.origin.x, duck.resting.origin.z).is_equal_approx(spot))
+	Session._receive_holds({})
+	check("and her letting go after leaves it there", duck.state == Item.State.LOOSE and not rimmed.call())
+
+	Session.room_seq = 0
+	studio._predictions.clear()
+	duck.grab_begin(hand, duck.global_position)
+	duck.grab_end(hand)
+	var over := Vector3(spot.x + 0.3, 1.6, spot.y + 0.9)
+	room.put_down(duck, Transform3D.IDENTITY.translated(over).looking_at(Vector3(spot.x, 0, spot.y)))
+	check("a guest's put-down is done at once", duck.state == Item.State.LOOSE)
+	check("and asked of the host", studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"put_item")
+	studio.apply_room(with_items.call({}))
+	check("a room from before the host heard the ask does not take it back", duck.state == Item.State.LOOSE)
+	studio.apply_room(with_items.call({}, Session.room_seq))
+	check("the host's answer, that it is home, sends it home", duck.state == Item.State.HOME
+			and studio._predictions.is_empty())
+
+	Session.start_solo()
+	Session.layout = saved_layout
 	studio.queue_free()
 	await get_tree().process_frame
 
