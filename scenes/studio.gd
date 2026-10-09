@@ -117,6 +117,10 @@ var _heard_phones := false
 var personal := PersonalMix.new()
 ## Other players' keys, played here for the personal mix's plugs in them.
 var their_keys: TheirKeys
+## Other players' monitors, rebuilt here in time for the personal mix's plugs in them.
+var their_monitor: TheirMonitor
+## Who is ON AIR, by peer id: whose monitor anyone may plug into. The room's, like `patches`.
+var on_air: Array = []
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
 ## The room's, so the host's: everyone sees everyone's plugs. Whoever is at this machine hears
 ## their own row (`personal`).
@@ -850,7 +854,7 @@ func room_state() -> Dictionary:
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
-			"patches": patches.duplicate(true)}
+			"patches": patches.duplicate(true), "on_air": on_air.duplicate()}
 
 
 func _publish_room() -> void:
@@ -886,7 +890,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	for p in _predictions:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item": pending_items[p["args"][0]] = true
-			&"patch": pass
+			&"patch", &"on_air": pass
 			&"open_tablet": pending_open[p["id"]] = true
 			&"close_tablet": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -938,6 +942,11 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
+	if state.has("on_air"):
+		on_air = (state["on_air"] as Array).duplicate()
+		for p in _predictions:
+			if p["verb"] == &"on_air":
+				_set_on_air(Session.local_peer_id, p["args"][0], false)
 	if state.has("patches"):
 		patches = (state["patches"] as Dictionary).duplicate(true)
 		# This guest's plugs it has moved and not heard back about, on top.
@@ -1032,9 +1041,14 @@ func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: 
 func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 	match verb:
 		&"patch":
-			if PersonalMix.valid_socket(args[1]):
+			# A monitor only while its performer is on air: off air, there is no socket to plug into.
+			var into := PersonalMix.monitor_of(args[1])
+			if PersonalMix.valid_socket(args[1]) and (into == 0 or into in on_air):
 				_set_patch(from, args[0], args[1])
 				_publish_room_soon()
+		&"on_air":
+			_set_on_air(from, args[0])
+			_publish_room_soon()
 		&"open_tablet":
 			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
 				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
@@ -1748,11 +1762,16 @@ func _build_items() -> void:
 		tablet.mix = personal
 		tablet.colour = _colour_of(Session.local_peer_id)
 		tablet.patch_asked.connect(_on_patch_asked)
+		tablet.on_air_asked.connect(_on_air_asked)
 	personal.changed.connect(_on_personal_changed)
 	their_keys = TheirKeys.new()
 	their_keys.name = "TheirKeys"
 	add_child(their_keys)
 	Session.note_played.connect(their_keys.play)
+	their_monitor = TheirMonitor.new()
+	their_monitor.name = "TheirMonitor"
+	add_child(their_monitor)
+	Session.note_played.connect(their_monitor.play)
 	console.rebuilt.connect(_show_patches)
 	Session.roster_changed.connect(_on_roster_for_patches)
 	_show_patches()
@@ -1800,6 +1819,8 @@ func _listen() -> void:
 		(DAW.backend as GodotBackend).set_cues(personal.tracks() if _heard_phones and personal.hears_tracks else [])
 	if their_keys != null:
 		their_keys.set_players(personal.players() if _heard_phones else [])
+	if their_monitor != null:
+		their_monitor.set_performers(personal.performers() if _heard_phones else [])
 	Ears.listen(_heard_phones, personal.ears_levels())
 
 
@@ -1830,6 +1851,10 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 		if player > 0 and Session.note_delay_ms(player) >= 0.0:
 			late = " Their notes are played here, about %d ms after they play them." \
 					% roundi(Session.note_delay_ms(player))
+		if PersonalMix.monitor_of(socket) > 0:
+			late = " In time with the backing they hear: your mix waits for their notes."
+			if not Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
+				late += " Reaper's mix is not the game's to copy, so only their notes are heard."
 		Session.notice.emit("Plug %s in SEND %s: in your headphones%s.%s" % [letter,
 				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on", late])
 
@@ -1872,9 +1897,18 @@ func _show_patches() -> void:
 	for strip in console.strips:
 		sockets.append(strip.send)
 	if presence != null:
+		for peer in Session.participants:
+			var avatar := presence.avatar_of(peer)
+			if avatar != null:
+				avatar.set_on_air(peer in on_air, peer)
 		for avatar: Presence.Avatar in presence.avatars():
 			if avatar.send != null:
 				sockets.append(avatar.send)
+			if avatar.monitor_send != null:
+				sockets.append(avatar.monitor_send)
+	var tablet := items.items.get(&"tablet") as TabletItem if items != null else null
+	if tablet != null:
+		tablet.on_air = Session.local_peer_id in on_air
 	for socket in sockets:
 		if not socket.pressed.is_connected(_on_send_pressed):
 			socket.pressed.connect(_on_send_pressed.bind(socket.source))
@@ -1910,6 +1944,10 @@ func _on_roster_for_patches() -> void:
 			if not Session.participants.has(peer):
 				patches.erase(peer)
 				_publish_room_soon()
+		for peer in on_air.duplicate():
+			if not Session.participants.has(peer):
+				_set_on_air(peer, false, false)
+				_publish_room_soon()
 		# And the plugs in the keys of whoever left come back to their trays.
 		for peer in patches.keys():
 			var row: Array = patches[peer]
@@ -1920,6 +1958,37 @@ func _on_roster_for_patches() -> void:
 					_publish_room_soon()
 	# After the ghosts: a new one's pack is made on the same news.
 	_show_patches.call_deferred()
+
+
+## The ON AIR switch on the tablet in a hand here: done here at once, and asked of the host.
+func _on_air_asked(on: bool) -> void:
+	_set_on_air(Session.local_peer_id, on)
+	if Session.is_authority():
+		_publish_room_soon()
+	else:
+		_predict(&"on_air", [on])
+	if on:
+		Session.notice.emit("On air: anyone can plug into the MONITOR on your pack and hear your keys in time with the backing you play to.")
+	else:
+		Session.notice.emit("Off air: the plugs in your monitor went back to their trays.")
+
+
+## `peer` ON AIR or off. Off, the plugs in their monitor come back to their owners' trays: the
+## host's to do, as it keeps the table; a guest predicting its own leaves the others to it.
+func _set_on_air(peer: int, on: bool, show := true) -> void:
+	if on and peer not in on_air:
+		on_air.append(peer)
+		on_air.sort()
+	elif not on:
+		on_air.erase(peer)
+		if Session.is_authority():
+			for listener in patches.keys():
+				var row: Array = patches[listener]
+				for i in row.size():
+					if PersonalMix.monitor_of(StringName(row[i])) == peer:
+						_set_patch(listener, i, &"", false)
+	if show:
+		_show_patches()
 
 
 func _colour_of(peer: int) -> Color:

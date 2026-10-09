@@ -79,9 +79,10 @@ signal item_carried(item: StringName, local: Transform3D, from: int)
 ## squeak is an event, and a lost one is a silence nobody can account for.
 signal item_used(item: StringName, down: bool, from: int)
 ## A key or the pedal on `from`'s keys, as they play it (`send_note`): for anyone patched into
-## their keys to play here (TheirKeys). Reliable and ordered, because a lost note-off is a note
-## that never stops.
-signal note_played(kind: int, pitch: int, velocity: int, from: int)
+## their keys to play here (TheirKeys), or into their monitor (TheirMonitor). `song`: the song
+## position they were hearing as they played it, or -1 with their transport stopped. Reliable
+## and ordered, because a lost note-off is a note that never stops.
+signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float)
 
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
@@ -864,7 +865,8 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"place_surface": [TYPE_STRING_NAME, TYPE_TRANSFORM3D],
 		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME],
 		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
-		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"patch": [TYPE_INT, TYPE_STRING_NAME]}
+		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"patch": [TYPE_INT, TYPE_STRING_NAME],
+		&"on_air": [TYPE_BOOL]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.
@@ -984,30 +986,30 @@ func _item_use(item: StringName, down: bool, from: int) -> void:
 ## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and
 ## come in tens a second at most, so they go to everyone rather than being asked for; whoever is
 ## patched into my keys plays them.
-func send_note(kind: int, pitch: int, velocity: int) -> void:
+func send_note(kind: int, pitch: int, velocity: int, song := -1.0) -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_note.rpc_id(id, kind, pitch, velocity, local_peer_id)
+			_note.rpc_id(id, kind, pitch, velocity, local_peer_id, song)
 	else:
-		_note_up.rpc_id(1, kind, pitch, velocity)
+		_note_up.rpc_id(1, kind, pitch, velocity, song)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _note_up(kind: int, pitch: int, velocity: int) -> void:
+func _note_up(kind: int, pitch: int, velocity: int, song: float) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
-	note_played.emit(kind, pitch, velocity, from)
+	note_played.emit(kind, pitch, velocity, from, song)
 	for id in _audience():
 		if id != from:
-			_note.rpc_id(id, kind, pitch, velocity, from)
+			_note.rpc_id(id, kind, pitch, velocity, from, song)
 
 
 @rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
-func _note(kind: int, pitch: int, velocity: int, from: int) -> void:
-	note_played.emit(kind, pitch, velocity, from)
+func _note(kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
+	note_played.emit(kind, pitch, velocity, from, song)
 
 
 ## The round trip to `peer` in milliseconds, as the connection measures it: a host knows it for

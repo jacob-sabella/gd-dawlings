@@ -129,6 +129,8 @@ func _ready() -> void:
 	_test_a_track_has_a_cue_for_headphones()
 	await _test_a_strip_send_puts_one_track_in_your_headphones()
 	await _test_a_players_keys_pack_puts_their_playing_in_your_headphones()
+	await _test_their_monitor_plays_their_notes_where_they_heard_them()
+	await _test_on_air_puts_a_monitor_socket_on_your_pack()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -7223,10 +7225,10 @@ func _test_a_players_keys_pack_puts_their_playing_in_your_headphones() -> void:
 			and is_zero_approx(Ears.gain_db(bus)) and Ears.gain_db(Ears.MIX) == Ears.OFF_DB)
 	var synth: MonitorSynth = studio.their_keys.synths[7]
 	synth._events.clear()
-	Session.note_played.emit(Session.Note.ON, 60, 100, 7)
-	Session.note_played.emit(Session.Note.ON, 64, 90, 9)
-	Session.note_played.emit(Session.Note.PEDAL_DOWN, 0, 0, 7)
-	Session.note_played.emit(Session.Note.OFF, 60, 0, 7)
+	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0)
+	Session.note_played.emit(Session.Note.ON, 64, 90, 9, -1.0)
+	Session.note_played.emit(Session.Note.PEDAL_DOWN, 0, 0, 7, -1.0)
+	Session.note_played.emit(Session.Note.OFF, 60, 0, 7, -1.0)
 	check("their notes play, and nobody else's (%s)" % [synth._events],
 			synth._events == [[MonitorSynth.ON, 60, 100], [MonitorSynth.SUSTAIN, 1, 0], [MonitorSynth.OFF, 60, 0]])
 	studio.personal.set_level(0, -10.0)
@@ -10584,3 +10586,131 @@ func _test_every_venue_has_a_mirror_you_can_see_yourself_in() -> void:
 			presence.head_node.global_position))
 	remove_child(studio)
 	studio.free()
+
+
+func _test_their_monitor_plays_their_notes_where_they_heard_them() -> void:
+	var monitor := TheirMonitor.new()
+	add_child(monitor)
+	var now := {"seconds": 10.0, "playing": true, "valid": true}
+	monitor.heard_source = func() -> Dictionary: return now
+	monitor.set_performers([7])
+	var line: TheirMonitor.Line = monitor.lines[7]
+	check("a performer listened to has a line on a bus of their own, held back by a first guess",
+			monitor.performers() == [7] and AudioServer.get_bus_index(TheirMonitor.bus_of(7)) >= 0
+			and is_equal_approx(line.delay, TheirMonitor.START_S))
+	# Here the backing is at 10.0 - 0.08 = 9.92 in the line.
+	monitor.play(Session.Note.ON, 60, 100, 7, 9.95)
+	monitor.play(Session.Note.ON, 64, 100, 9, 9.95)
+	check("a note played to 9.95 waits for the delayed backing to get there", line.sounded.is_empty()
+			and line.waiting.size() == 1)
+	now["seconds"] = 10.02
+	monitor._process(0.0)
+	check("not yet at 9.94", line.sounded.is_empty())
+	now["seconds"] = 10.04
+	monitor._process(0.0)
+	check("and played when it is (%s)" % [line.sounded], line.sounded == [[Session.Note.ON, 60]])
+	monitor.play(Session.Note.PEDAL_DOWN, 0, 0, 7, 9.80)
+	check("a note later than the line allows is played at once, and the line grows to hold the next (%.3f, %.3f)"
+			% [line.delay, line.last_late], line.sounded.size() == 2 and is_equal_approx(line.last_late, 0.16)
+			and is_equal_approx(line.delay, TheirMonitor.START_S + 0.16 + TheirMonitor.MARGIN_S))
+	monitor.play(Session.Note.OFF, 60, 0, 7, 9.85)
+	check("so the next is in time again: it waits", line.sounded.size() == 2 and line.waiting.size() == 1)
+	now["seconds"] = 10.12
+	monitor._process(0.0)
+	check("for the backing (%s)" % [line.sounded], line.sounded.size() == 3
+			and line.sounded[2] == [Session.Note.OFF, 60])
+	monitor.play(Session.Note.ON, 62, 90, 7, -1.0)
+	check("one played with their transport stopped is played as it comes", line.sounded.size() == 4)
+	monitor.play(Session.Note.ON, 67, 90, 7, 40.0)
+	check("and one too far ahead to be one performance (a seek) too", line.sounded.size() == 5)
+	monitor.play(Session.Note.ON, 69, 90, 7, 10.0)
+	now["playing"] = false
+	monitor._process(0.0)
+	check("a note waiting when this machine stops is not kept", line.waiting.is_empty() and line.sounded.size() == 6)
+	var grown := line.delay
+	monitor.set_performers([7])
+	check("asked again, the line it has stays as it is", monitor.lines[7] == line and line.delay == grown)
+	monitor.set_performers([])
+	check("nobody listened to, no lines", monitor.lines.is_empty())
+	monitor.queue_free()
+	await get_tree().process_frame
+
+
+func _test_on_air_puts_a_monitor_socket_on_your_pack() -> void:
+	_offline()
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_as_session(Session.Role.HOST, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	for spec in [[1, "Ada", 0], [7, "Lin", 1]]:
+		var p := Session.Participant.new()
+		p.peer_id = spec[0]
+		p.display_name = spec[1]
+		p.colour_index = spec[2]
+		Session.participants[spec[0]] = p
+	Session.roster_changed.emit()
+	await get_tree().process_frame
+	var ghost := studio.presence.avatar_of(7)
+	check("off air, a pack has no monitor socket", ghost.monitor_send == null)
+	studio._on_room_asked(&"patch", [1, &"monitor_7"], 1)
+	check("and nobody can plug into one", not studio.patches.has(1))
+	studio._on_room_asked(&"on_air", [true], 7)
+	check("on air, their pack has a MONITOR socket (%s)" % [studio.on_air], studio.on_air == [7]
+			and ghost.monitor_send != null and ghost.monitor_send.source == &"monitor_7"
+			and ghost.monitor_send.title().contains("LIN'S MONITOR")
+			and studio.room_state()["on_air"] == [7])
+	var told: Array = []
+	var listen := func(text: String): told.append(text)
+	Session.notice.connect(listen)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var tablet := studio.items.items[&"tablet"] as TabletItem
+	hand.pick_up(tablet)
+	var sender: TabletFace.Sender = tablet.face._senders[1]
+	sender.grab_begin(hand, sender.global_position)
+	hand.hovered = ghost.monitor_send
+	sender.grab_end(hand)
+	hand.hovered = null
+	check("plug B dropped on it is in it (%s)" % [studio.patches], studio.patches.get(1) == ["", "monitor_7", "", ""]
+			and ghost.monitor_send.plug_count() == 1)
+	check("and you are told it is in time, not live (%s)" % [told], told.size() == 1
+			and (told[0] as String).contains("LIN'S MONITOR") and (told[0] as String).contains("In time with the backing"))
+	check("its row says whose", (tablet.face._rows[1]["source"] as Label3D).text == "LIN'S MONITOR")
+	# This person's own switch.
+	tablet.face._air._on_grab_begin(Vector3.ZERO)
+	check("the ON AIR key on your own tablet puts you on air, and says so (%s)" % [studio.on_air],
+			studio.on_air == [1, 7] and tablet.face.on_air and (told[-1] as String).begins_with("On air"))
+	tablet.face._air._on_grab_begin(Vector3.ZERO)
+	check("and off", studio.on_air == [7] and not tablet.face.on_air)
+	hand.lose_carrying()
+	tablet.snap_home()
+	var phones := studio.items.items[&"headphones"] as HeadphonesItem
+	hand.pick_up(phones)
+	hand.wear()
+	var bus := TheirMonitor.bus_of(7)
+	check("headphones on, their monitor is rebuilt here, on a bus of its own in your ears",
+			studio.their_monitor.performers() == [7] and AudioServer.get_bus_index(bus) >= 0
+			and is_zero_approx(Ears.gain_db(bus)))
+	var line: TheirMonitor.Line = studio.their_monitor.lines[7]
+	Session.note_played.emit(Session.Note.ON, 60, 100, 7, -1.0)
+	check("their notes reach it", line.sounded == [[Session.Note.ON, 60]])
+	studio._on_room_asked(&"on_air", [false], 7)
+	check("off air, the plug comes back to its tray, the socket goes, and nothing is rebuilt",
+			not studio.patches.has(1) and ghost.monitor_send == null
+			and studio.their_monitor.performers().is_empty())
+	studio._on_room_asked(&"on_air", [true], 7)
+	Session.participants.erase(7)
+	Session.roster_changed.emit()
+	await get_tree().process_frame
+	check("whoever leaves is not on air any more", studio.on_air.is_empty())
+	Session.notice.disconnect(listen)
+	hand.take_off()
+	hand.lose_carrying()
+	phones.snap_home()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout

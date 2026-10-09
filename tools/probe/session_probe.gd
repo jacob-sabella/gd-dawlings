@@ -135,7 +135,7 @@ func _host(port: int) -> void:
 		_carries.append([item, local, from]))
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
-	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int):
+	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int, _song: float):
 		_notes.append([kind, pitch, velocity, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
@@ -357,7 +357,7 @@ func _guest(port: int) -> void:
 	Session.room_changed.connect(func(): _rooms_heard += 1)
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
-	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int):
+	Session.note_played.connect(func(kind: int, pitch: int, velocity: int, from: int, _song: float):
 		_notes.append([kind, pitch, velocity, from]))
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")

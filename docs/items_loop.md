@@ -304,12 +304,33 @@ ergonomics.
       relative to the ghost, not absolutely. `tools/screenshot.gd --visitor x,z,yaw` stands a
       second player in a shot. A player's synth and bus are kept once made rather than freed
       when unpatched, since a bus removed under a playing synth is a script error a frame later.
-- [ ] "Their monitor": patch into what another player hears, captured on their machine (their mix
+- [x] "Their monitor": patch into what another player hears, captured on their machine (their mix
       with their own playing, in time as they hear it) and sent on. It cannot keep everyone in
       time at once, but it can stage a performance: the performer's machine is the reference,
       and the audience hears the performer in time with the backing track they played to.
       Design it with the user first: who may be listened to, what it costs the performer's
       upload, and how it is shown.
+      Asked: rebuild it here rather than stream it, performer opts in (ON AIR), a second socket.
+      Done: an ON AIR key in the tablet's header (`TabletFace.OnAirSwitch`) puts this person in
+      the room's `on_air` list (the `on_air` verb, predicted on a guest). Their ghost's pack
+      grows a block under KEYS with a lit ON AIR sign and a MONITOR socket (`monitor_N`,
+      `Avatar.set_on_air`). Off air, the block goes and the host returns its plugs to their
+      trays, and the host refuses a plug into the monitor of someone not on air. No audio is
+      sent: each note now carries the song position its player heard as they played it
+      (`GuestMidi.song`, the fifth argument of `Session.note_played`). `TheirMonitor` copies the
+      mix this machine plays (an AudioEffectCapture at the head of the Mix bus, ahead of the
+      headphones' gain) into a delay line per performer, an AudioStreamGenerator on "Their
+      monitor N". Each note waits until the delayed backing reaches the position it was played
+      to. The line starts at 80 ms plus the note's one-way trip. A note that comes too late is
+      played at once and the line grows by the miss plus 30 ms, by a gap in the backing. It
+      never shrinks while plugged in, and it is capped at 1.5 s. So you hear them in time, not
+      live. A host on Reaper has no mix in the game to copy, so it hears their notes alone.
+      Learned: with a tone through the line, an 80 ms line came out 84 ms behind the mix while
+      its queue read a sawtooth of 69 and 80 ms. The capture lags by one of Godot's 512-frame
+      mix steps, which is now added to the estimate. A headless run is not real time: a check
+      that counts frames finishes before the sound has played, so cap max_fps and use the clock.
+      A host's own keys go to its DAW and are not relayed, so ON AIR is for players whose keys
+      come through GuestMidi (a guest's).
 - [ ] Instruments, the first two: a shaker and a tambourine, played by shaking (mouse motion
       while held on a desktop, controller velocity in a headset). They are heard at once on the
       low-latency path and recorded as MIDI hits on the armed track by song position.

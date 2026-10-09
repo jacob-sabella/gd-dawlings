@@ -26,11 +26,15 @@ var _walk: Array = []
 var _walk_mirror := 0.0
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
 ## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
-## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's).
+## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's);
+## `:home` after them puts it back on its shelf.
 var _carry := ""
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
 ## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
 var _visitor: Array = []
+## `--on-air 7`: that player ON AIR from frame 8, so their pack has its MONITOR socket
+## (`--carry tablet:monitor_7`); `--on-air 1` is the one at this machine.
+var _on_air := 0
 ## `--throw 0.6@200`: throw what --carry picked up, wound up that far (0..1), on that physics
 ## tick. Shoot it in flight with --shot-tick a little later.
 var _throw := Vector2(-1, -1)
@@ -120,6 +124,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _turn = int(args[i + 1])
 			"--carry":
 				if i + 1 < args.size(): _carry = args[i + 1]
+			"--on-air":
+				if i + 1 < args.size(): _on_air = int(args[i + 1])
 			"--visitor":
 				if i + 1 < args.size(): _visitor = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--throw":
@@ -202,6 +208,11 @@ func _process(_delta: float) -> void:
 	if _frames >= 5 and Session.participants.has(7):
 		(Session.participants[7] as Session.Participant).heard_msec = Time.get_ticks_msec()
 
+	if _frames == 8 and _on_air > 0:
+		var on_air_studio := get_tree().current_scene.get_node_or_null("Studio")
+		if on_air_studio != null and on_air_studio.has_method("_set_on_air"):
+			on_air_studio._set_on_air(_on_air, true)
+
 	if _frames == 9 and _carry != "":
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var what := _carry.split(":")
@@ -220,6 +231,10 @@ func _process(_delta: float) -> void:
 				if PersonalMix.valid_socket(StringName(word)) and word != "" and studio.has_method("_on_patch_asked"):
 					studio._on_patch_asked(receiver, StringName(word))
 					receiver += 1
+			# `--carry tablet:mix:home`: and then back on its shelf, out of the view.
+			if what.has("home"):
+				hand.lose_carrying()
+				item.snap_home()
 
 	if _frames == 28 and _carry != "" and OS.get_cmdline_user_args().has("--shot-debug"):
 		var studio := get_tree().current_scene.get_node_or_null("Studio")

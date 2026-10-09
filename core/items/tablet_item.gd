@@ -25,6 +25,8 @@ const VIEW_AT := Vector3(-0.04, -0.13, -0.5)
 
 ## A plug was dropped on a socket, or brought back (`socket` empty), in a hand here.
 signal patch_asked(receiver: int, socket: StringName)
+## The face's ON AIR switch flipped, in a hand here.
+signal on_air_asked(on: bool)
 
 ## The personal mix the face shows: the studio's.
 var mix: PersonalMix
@@ -36,6 +38,13 @@ var listening := false:
 		listening = v
 		if face != null:
 			face.listening = v
+
+## Whether this person is ON AIR, for the face to show.
+var on_air := false:
+	set(v):
+		on_air = v
+		if face != null:
+			face.on_air = v
 
 var face: TabletFace = null
 var _screen: MeshInstance3D
@@ -147,7 +156,9 @@ func _show_face() -> void:
 	face.mix = mix
 	face.colour = colour
 	face.listening = listening
+	face.on_air = on_air
 	# On the glass: X along it, Y up it toward the tray, Z out of it.
 	face.transform = _screen.transform * Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 0.0004, 0))
 	face.patch_asked.connect(func(receiver: int, socket: StringName) -> void: patch_asked.emit(receiver, socket))
+	face.on_air_asked.connect(func(on: bool) -> void: on_air_asked.emit(on))
 	_screen.get_parent().add_child(face)

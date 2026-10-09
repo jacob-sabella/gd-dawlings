@@ -13,6 +13,8 @@ extends Node3D
 
 ## A plug was dropped on `socket` (or brought back, for none): for the studio to ask the room.
 signal patch_asked(receiver: int, socket: StringName)
+## The ON AIR switch flipped: for the studio to ask the room.
+signal on_air_asked(on: bool)
 
 ## The glass, and the tray above it, in this frame (tools/blender/tablet.py).
 const SCREEN := Vector2(0.238, 0.142)
@@ -45,9 +47,16 @@ var listening := false:
 		listening = v
 		_refresh()
 
+## Whether this person is ON AIR: anyone may plug into their monitor (TheirMonitor).
+var on_air := false:
+	set(v):
+		on_air = v
+		_refresh()
+
 var _rows: Array[Dictionary] = []
 var _senders: Array[Sender] = []
 var _status: Label3D
+var _air: OnAirSwitch
 
 
 func _ready() -> void:
@@ -57,6 +66,10 @@ func _ready() -> void:
 	var header := _text(11, Vector3(-SCREEN.x * 0.5 + 0.01, SCREEN.y * 0.5 - 0.013, 0), HORIZONTAL_ALIGNMENT_LEFT)
 	header.text = "PERSONAL MIX"
 	_status = _text(9, Vector3(SCREEN.x * 0.5 - 0.01, SCREEN.y * 0.5 - 0.013, 0), HORIZONTAL_ALIGNMENT_RIGHT)
+	_air = OnAirSwitch.new()
+	_air.face = self
+	_air.position = Vector3(0.012, SCREEN.y * 0.5 - 0.0125, 0.0004)
+	add_child(_air)
 	# A rule under the header, as a screen draws one.
 	_bar(Vector3(0, SCREEN.y * 0.5 - 0.022, 0), Vector2(SCREEN.x - 0.02, 0.0007), DIM)
 	for i in PersonalMix.RECEIVERS:
@@ -154,6 +167,8 @@ func _refresh() -> void:
 		return
 	_status.text = "HEADPHONES ON" if listening else "HEADPHONES OFF"
 	_status.modulate = Color(0.55, 0.85, 0.6) if listening else INK * 0.75
+	if _air != null:
+		_air.show_on(on_air)
 	for i in _rows.size():
 		var row: Dictionary = _rows[i]
 		var socket := mix.sockets[i]
@@ -202,6 +217,59 @@ static func _flat(tint: Color) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = tint
 	return m
+
+
+## ON AIR: a lit key in the header. On, anyone may plug into this person's monitor and hear
+## their keys in time with the backing they play to; everyone sees the sign on their pack.
+class OnAirSwitch extends ControlAffordance:
+	const SIZE := Vector2(0.042, 0.011)
+	var face: TabletFace
+	var _key: MeshInstance3D
+	var _word: Label3D
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(SIZE.x + 0.004, SIZE.y + 0.004, 0.006)
+		shape.shape = box
+		add_child(shape)
+		_key = MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = SIZE
+		_key.mesh = quad
+		add_child(_key)
+		_word = face._text(9, Vector3(0, 0, 0.0002), HORIZONTAL_ALIGNMENT_CENTER)
+		_word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_word.text = "ON AIR"
+		face.remove_child(_word)
+		add_child(_word)
+		show_on(face.on_air)
+
+	func show_on(on: bool) -> void:
+		if _key == null:
+			return
+		_key.material_override = TabletFace._flat(Color(0.85, 0.12, 0.1) if on else Color(0.09, 0.1, 0.12))
+		_word.modulate = Color(1.0, 0.94, 0.92) if on else DIM
+
+	func personal() -> bool:
+		return true
+
+	func title() -> String:
+		return "ON AIR"
+
+	func readout() -> String:
+		return "on: anyone can plug into your monitor" if face.on_air else "off"
+
+	func hint() -> String:
+		return "click: let the room hear you in time with the backing you play to"
+
+	func _on_grab_begin(_at: Vector3) -> void:
+		face.on_air_asked.emit(not face.on_air)
+
+	func _foley_contact() -> AudioStream:
+		return Foley.plug_seat()
 
 
 ## A receiver's level: drag along the row, or scroll over it.

@@ -25,6 +25,9 @@ const TRACK := "track_"
 ## A player's keys, on the pack their ghost wears: "keys_7", by peer id. Their notes are played
 ## here (TheirKeys), so wherever this machine is, it hears them.
 const PLAYER := "keys_"
+## A player's monitor, on the same pack while they are ON AIR: "monitor_7". Their keys in time
+## with the backing as they heard it, rebuilt here (TheirMonitor).
+const MONITOR := "monitor_"
 ## A receiver's level: from off, through unity, to a little gain for a quiet source.
 const FLOOR_DB := -60.0
 const TOP_DB := 6.0
@@ -52,7 +55,8 @@ func _init() -> void:
 
 ## A socket a plug may go into: one there is, or none.
 static func valid_socket(socket: StringName) -> bool:
-	return socket == &"" or SOURCES.has(socket) or track_of(socket) > 0 or player_of(socket) > 0
+	return socket == &"" or SOURCES.has(socket) or track_of(socket) > 0 or player_of(socket) > 0 \
+			or monitor_of(socket) > 0
 
 
 static func track_socket(index: int) -> StringName:
@@ -73,6 +77,15 @@ static func player_of(socket: StringName) -> int:
 	return _numbered(socket, PLAYER)
 
 
+static func monitor_socket(peer: int) -> StringName:
+	return StringName(MONITOR + str(peer))
+
+
+## The player whose monitor a socket is, or 0.
+static func monitor_of(socket: StringName) -> int:
+	return _numbered(socket, MONITOR)
+
+
 static func _numbered(socket: StringName, prefix: String) -> int:
 	var s := String(socket)
 	if not s.begins_with(prefix) or not s.substr(prefix.length()).is_valid_int():
@@ -87,6 +100,8 @@ static func title_of(socket: StringName) -> String:
 	var peer := player_of(socket)
 	if peer > 0:
 		return "%s'S KEYS" % Session.name_of(peer).to_upper()
+	if monitor_of(socket) > 0:
+		return "%s'S MONITOR" % Session.name_of(monitor_of(socket)).to_upper()
 	var index := track_of(socket)
 	if index <= 0:
 		return ""
@@ -143,6 +158,8 @@ func bus_of(receiver: int) -> StringName:
 		return SOURCES[s]
 	if player_of(s) > 0:
 		return TheirKeys.bus_of(player_of(s))
+	if monitor_of(s) > 0:
+		return TheirMonitor.bus_of(monitor_of(s))
 	var index := track_of(s)
 	return GodotBackend.cue_bus(index) if index > 0 and hears_tracks else &""
 
@@ -168,6 +185,17 @@ func players() -> Array[int]:
 	var out: Array[int] = []
 	for s in sockets:
 		var peer := player_of(s)
+		if peer > 0 and peer not in out:
+			out.append(peer)
+	out.sort()
+	return out
+
+
+## The players whose monitors are patched, each once, in order.
+func performers() -> Array[int]:
+	var out: Array[int] = []
+	for s in sockets:
+		var peer := monitor_of(s)
 		if peer > 0 and peer not in out:
 			out.append(peer)
 	out.sort()

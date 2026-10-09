@@ -602,7 +602,11 @@ void fragment() {
 	var _carried: Node3D = null
 	## The SEND socket on this player's keys pack (`wear_keys_pack`); null on a reflection.
 	var send: SendSocket = null
+	## The MONITOR socket under it, while this player is ON AIR (`set_on_air`); null otherwise.
+	var monitor_send: SendSocket = null
 	var _keys_lamp: MeshInstance3D = null
+	var _pack: Node3D = null
+	var _air: Node3D = null
 	var _carried_kind := &""
 	## Where the carried item is, relative to the eye, as its holder last said; until they have,
 	## held out in front of the chest.
@@ -907,6 +911,8 @@ void fragment() {
 			_keys_lamp.material_override = Materials.led(colour, true)
 		if send != null:
 			send.label = display_name.to_upper() + "'S KEYS"
+		if monitor_send != null:
+			monitor_send.label = display_name.to_upper() + "'S MONITOR"
 
 	## Put on a look (GhostLook): body colour, eyes, hat, gloves. Their session colour still
 	## glows round the edge and tints what they wear, so a look never hides who someone is.
@@ -1185,6 +1191,7 @@ void fragment() {
 		var turn := 0.5
 		var out := Vector3(sin(turn), 0, -cos(turn))
 		var pack := Node3D.new()
+		_pack = pack
 		pack.name = "KeysPack"
 		var z := out
 		var x := Vector3.UP.cross(z).normalized()
@@ -1220,6 +1227,53 @@ void fragment() {
 		send.position = Vector3(0, -0.012, 0.015)
 		send.scale = Vector3.ONE / SIZE
 		pack.add_child(send)
+
+	## ON AIR (TheirMonitor): a block under the keys pack with a lit ON AIR sign, so the room can
+	## see who is performing, and a MONITOR socket to plug into them in time. Gone when they
+	## come off air, plugs and all.
+	func set_on_air(on: bool, peer: int) -> void:
+		if on == (_air != null) or _pack == null:
+			return
+		if not on:
+			_air.queue_free()
+			_air = null
+			monitor_send = null
+			return
+		_air = Node3D.new()
+		_air.name = "OnAir"
+		_air.position = Vector3(0, -0.11, 0)
+		_pack.add_child(_air)
+		var body := BoxMesh.new()
+		body.size = Vector3(0.085, 0.1, 0.03)
+		var case := StandardMaterial3D.new()
+		case.albedo_color = Color(0.08, 0.085, 0.095)
+		case.roughness = 0.6
+		_part(body, case, _air)
+		# The sign: a red lit panel across the top, as the light over a studio door.
+		var sign := BoxMesh.new()
+		sign.size = Vector3(0.072, 0.022, 0.004)
+		_part(sign, Materials.led(Color(0.5, 0.05, 0.04), true), _air).position = Vector3(0, 0.032, 0.016)
+		var word := Label3D.new()
+		word.text = "ON AIR"
+		word.font_size = 34
+		word.pixel_size = 0.0007
+		word.outline_size = 0
+		word.position = Vector3(0, 0.032, 0.0185)
+		word.modulate = Color(1.0, 1.0, 1.0)
+		_air.add_child(word)
+		var under := Label3D.new()
+		under.text = "MONITOR"
+		under.font_size = 30
+		under.pixel_size = 0.0007
+		under.position = Vector3(0, -0.038, 0.0155)
+		under.modulate = Color(0.86, 0.87, 0.89)
+		_air.add_child(under)
+		monitor_send = SendSocket.new()
+		monitor_send.source = PersonalMix.monitor_socket(peer)
+		monitor_send.label = _tag.text.to_upper() + "'S MONITOR" if _tag.text != "" else "MONITOR"
+		monitor_send.position = Vector3(0, -0.006, 0.015)
+		monitor_send.scale = Vector3.ONE / SIZE
+		_air.add_child(monitor_send)
 
 	## Something real is on its head: its own hat comes off while it is, so they do not sit one
 	## in the other.

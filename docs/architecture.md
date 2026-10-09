@@ -1348,6 +1348,14 @@ Notes are played on arrival with no jitter buffer, so they land one network trip
 to guest) plus the synth's queue. The notice gives the figure from ENet's round trip
 (`Session.note_delay_ms`).
 
+A player who switches ON AIR on their tablet (the room's `on_air` list) grows a MONITOR socket
+under their KEYS pack (`monitor_N`). Plugged in, `TheirMonitor` (`core/audio/their_monitor.gd`)
+rebuilds what they hear without anything being streamed. Their notes carry the song position they
+heard (`GuestMidi.song`, `Session.note_played`'s `song`). This machine's mix is captured at the
+head of the Mix bus into a per-performer delay line ("Their monitor N"), and each note is played
+when the delayed backing reaches its stamp. The line grows when a note misses it and never
+shrinks while plugged in.
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

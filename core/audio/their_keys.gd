@@ -54,7 +54,7 @@ func players() -> Array:
 
 
 ## A key or the pedal from `from`, as Session.note_played says it.
-func play(kind: int, pitch: int, velocity: int, from: int) -> void:
+func play(kind: int, pitch: int, velocity: int, from: int, _song := -1.0) -> void:
 	var synth: MonitorSynth = synths.get(from)
 	if synth == null:
 		return

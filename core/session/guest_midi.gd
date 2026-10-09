@@ -11,7 +11,8 @@ extends Node
 ## "Recording a guest".
 ##
 ## Every note also goes to everyone as it is played (Session.send_note), the host's keys and
-## guests' alike, for whoever has a plug in this player's keys (TheirKeys).
+## guests' alike, for whoever has a plug in this player's keys (TheirKeys), stamped with the song
+## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor).
 ##
 ## A take follows the host's transport: it begins when the guest HEARS the host start recording
 ## and ends when it hears the recording stop -- heard, not told, so the take's edges are on the
@@ -157,7 +158,7 @@ func _input(event: InputEvent) -> void:
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.note_on(pitch, velocity)
-	Session.send_note(Session.Note.ON, pitch, velocity)
+	Session.send_note(Session.Note.ON, pitch, velocity, song(age))
 	held[pitch] = velocity
 	if _take != null:
 		_take.note_on(pitch, velocity, channel, stamp(age))
@@ -167,7 +168,7 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.note_off(pitch)
-	Session.send_note(Session.Note.OFF, pitch, 0)
+	Session.send_note(Session.Note.OFF, pitch, 0, song(age))
 	held.erase(pitch)
 	if _take != null:
 		_take.note_off(pitch, channel, stamp(age))
@@ -177,7 +178,7 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
 	if not sounded:
 		synth.sustain(down)
-	Session.send_note(Session.Note.PEDAL_DOWN if down else Session.Note.PEDAL_UP, 0, 0)
+	Session.send_note(Session.Note.PEDAL_DOWN if down else Session.Note.PEDAL_UP, 0, 0, song(age))
 	if _take != null:
 		_take.sustain(down, channel, stamp(age))
 
@@ -232,13 +233,22 @@ func stamp(age := 0.0) -> float:
 	return seconds
 
 
+## The song position a note played now was played to, as `stamp` has it, for the monitor others
+## hear it in (TheirMonitor); -1 when what is heard is not a song playing.
+func song(age := 0.0) -> float:
+	var h := heard()
+	return stamp(age) if h["valid"] and h["playing"] else -1.0
+
+
 func _process(_delta: float) -> void:
-	if Session.role != Session.Role.GUEST:
-		return
-	_take_native_midi()
+	# On a host too: there, what is heard is the host's own playhead, and a monitor (TheirMonitor)
+	# asks it.
 	if DAW.state != null:
 		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
 				Time.get_ticks_usec())
+	if Session.role != Session.Role.GUEST:
+		return
+	_take_native_midi()
 	follow(heard())
 
 
