@@ -6345,6 +6345,35 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	var rug := cabin.find_child("Rug0", false, false) as MeshInstance3D
 	check("and the rocking chair stands on a rug", chair != null and rug != null
 			and Vector2(chair.position.x - rug.position.x, chair.position.z - rug.position.z).length() < 0.4)
+
+	# The rooftop: a festoon pole stops you, the strings hang over every zone's head room and
+	# inside the parapet, and what stands on the rest of the roof is past the parapet.
+	studio.set_venue(&"rooftop", false)
+	var roof := studio.venue as RooftopVenue
+	var pole: Vector2 = roof.pole_spots()[0]
+	at = walk_until_still.call(Vector3(pole.x + 1.2, 0, pole.y), Vector3(-1, 0, 0))
+	check("rooftop: a festoon pole stops you (x %.2f, pole %.2f)" % [at.x, pole.x],
+			at.x > pole.x + 0.06 and at.x < pole.x + 0.06 + Walker.RADIUS + 0.1)
+	var lowest := INF
+	var inside := true
+	for bulb in roof.bulbs():
+		lowest = minf(lowest, bulb.y)
+		inside = inside and absf(bulb.x) < roof.live_room_half() and bulb.z > RooftopVenue.FRONT \
+				and bulb.z < Venue.LIVE_ROOM_BACK
+	var head_room := 0.0
+	for box: AABB in roof.zones().values():
+		head_room = maxf(head_room, box.end.y)
+	check("the strings hang over every zone's head room (lowest bulb %.2f, room %.2f) and inside the parapet"
+			% [lowest, head_room], lowest > head_room + 0.05 and inside and roof.bulbs().size() > 60)
+	var past := true
+	var terrace := Rect2(-roof.live_room_half() - RooftopVenue.WALL, RooftopVenue.FRONT,
+			(roof.live_room_half() + RooftopVenue.WALL) * 2.0, Venue.LIVE_ROOM_BACK + RooftopVenue.WALL - RooftopVenue.FRONT)
+	for spot in roof.tank_spots():
+		# A tank is 3.4 m across its ladder.
+		past = past and not terrace.grow(1.8).has_point(spot)
+	past = past and not terrace.grow(1.6).has_point(roof.stair_house_spot())
+	check("the tanks and the stair house stand on the roof past the parapet", past
+			and roof.find_children("WaterTank*", "", false, false).size() == 2)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

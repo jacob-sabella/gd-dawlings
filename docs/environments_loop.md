@@ -163,7 +163,16 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       fire.
       (Open jars of smoky glass, a stub of wax and a flame in each; the washes gutter, each to
       its own beat. The preserves' glass roughened so it stops flaring white.)
-- [ ] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.
+- [x] Rooftop at dusk: parapet, water tanks, a city skyline, string lights.
+      (`RooftopVenue`, a `dusk_sky` shader, `water_tank.glb` scripted in Blender. The city's
+      tall towers stand back from the building and out of the line to the sunset, so the view
+      over the railing is over lower roofs into the afterglow. seat / wide / back 0.143 / 0.083 /
+      0.061; 302k primitives wide.)
+- [ ] Rooftop: variants. "Golden hour" (the sun still up, low, long shadows of the railing on
+      the deck) and "Night" (the sky gone dark, the city and the strings doing all the work).
+- [ ] Rooftop: the deck reads red-brown under the strings; a greyer board texture (or a
+      Poly Haven decking) would read as weathered hardwood. And the roof beyond the terrace is
+      one flat black: gravel ballast, a few vents and a skylight would give it something.
 - [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
 - [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
