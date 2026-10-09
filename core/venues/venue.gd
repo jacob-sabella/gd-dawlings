@@ -18,7 +18,7 @@ extends Node3D
 ## into is never invisible.
 
 ## Registry, in cycling order. The first is the default.
-const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop"]
+const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop", &"station"]
 
 ## A venue can come in more than one arrangement -- the same place with its structure moved
 ## about: walls or none, a city close in or far off. A variant keeps the venue's footprint and
@@ -85,6 +85,8 @@ static func make(id: StringName, which := 0) -> Venue:
 			out = CabinVenue.new()
 		&"rooftop":
 			out = RooftopVenue.new()
+		&"station":
+			out = StationVenue.new()
 		_:
 			out = StudioVenue.new()
 	out.variant = known_variant(id, which)
@@ -116,6 +118,8 @@ static func make_title(id: StringName) -> String:
 			return "Cabin"
 		&"rooftop":
 			return "Rooftop"
+		&"station":
+			return "Station"
 		_:
 			return "Studio"
 

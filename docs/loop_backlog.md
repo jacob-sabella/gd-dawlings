@@ -929,3 +929,8 @@ lamp parts".
   - Two copies of the same plugin on one track have the same window title; the tablet shows the first.
   - The helper is built on first use with `cc` into user://bin; without a compiler or X11 headers the UI
     button just doesn't appear.
+- Webcam AR (asked 2026-10-08: "could we somehow simulate what this would look like in AR using my
+  webcam?"). Plan: a `--webcam-ar` desktop launch that shows the webcam (`CameraServer`/`CameraFeed`, V4L2,
+  /dev/video0) behind the scene and drops the venue's shell the way `XRBootstrap`'s passthrough does, so
+  only the gear, the lattice and the zones float over the room. Fixed camera, not head-tracked; the
+  virtual camera is lined up with the webcam once by hand. To build once the environments queue is done.

@@ -6413,6 +6413,34 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			and keys[RooftopVenue.GOLDEN] > keys[RooftopVenue.DUSK] and keys[RooftopVenue.DUSK] > keys[RooftopVenue.NIGHT]
 			and skies[RooftopVenue.NIGHT] < skies[RooftopVenue.DUSK] and skies[RooftopVenue.DUSK] < skies[RooftopVenue.GOLDEN]
 			and discs[RooftopVenue.GOLDEN] > 0.0 and discs[RooftopVenue.DUSK] == 0.0 and discs[RooftopVenue.NIGHT] == 0.0)
+
+	# The station: glass in the deck under the lattice and no deck plate over it, a hatch of glass
+	# each side, the corridor beyond rising round the ring, and the dust hanging in the lattice.
+	studio.set_venue(&"station", false)
+	var station := studio.venue as StationVenue
+	var lattice_box: AABB = station.zones()[&"matrix"]
+	var deck_glass := station.glass_floor()
+	var deck_pane := station.find_child("FloorGlass", false, false) as MeshInstance3D
+	var deck_plated := false
+	for piece: Node in station.find_children("Floor*", "MeshInstance3D", false, false):
+		var plate := piece as MeshInstance3D
+		if plate == deck_pane:
+			continue
+		var size := (plate.mesh as PlaneMesh).size
+		var r := Rect2(plate.position.x - size.x * 0.5, plate.position.z - size.y * 0.5, size.x, size.y)
+		deck_plated = deck_plated or r.grow(-0.01).intersects(deck_glass.grow(-0.01))
+	check("station: glass under the lattice (%s) and no plate over it" % deck_glass, deck_pane != null and not deck_plated
+			and Rect2(lattice_box.position.x, lattice_box.position.z, lattice_box.size.x, lattice_box.size.z).encloses(deck_glass)
+			and deck_glass.has_point(Vector2(deck_pane.position.x, deck_pane.position.z)))
+	check("a hatch of glass in each side wall", station.find_children("Hatch*", "", false, false).size() >= 4
+			and station.find_children("HatchGlass*", "", false, false).size() == 2)
+	var hatch_foot := station.ring_point(1.0, 0.0)
+	var round_ring := station.ring_point(1.0, 40.0)
+	check("the corridor leaves level from the hatch and rises round the ring (%.2f, %.2f)" % [hatch_foot.y, round_ring.y],
+			absf(hatch_foot.y) < 0.01 and hatch_foot.x > station.live_room_half() and round_ring.y > 5.0
+			and station.ring_point(-1.0, 40.0).x < -round_ring.x + 0.01)
+	var station_dust := station.find_child("Dust", true, false) as GPUParticles3D
+	check("the dust hangs in the lattice", station_dust != null and lattice_box.has_point(station_dust.global_position))
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.

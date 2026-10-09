@@ -6,6 +6,7 @@
 | `firs.glb` | Three low-poly snowy firs (250-400 faces), one unit tall, origin at the foot; materials `needles`, `snow`, `bark` | `tools/blender/firs.py`. The cabin's woods, as MultiMeshes. |
 | `jar.glb` | A lathed preserving jar with a screw lid, 0.1 m across and 0.16 m tall, origin on the bottom; materials `glass`, `lid` | `tools/blender/jar.py`. The cabin's shelf, as MultiMeshes. |
 | `water_tank.glb` | A city roof's wooden water tank: a cedar barrel bound with steel hoops, a conical cap, six steel legs and a caged ladder on Blender -Y (Godot +Z); 3.4 m across, 6.6 m tall, origin on the roof; materials `staves`, `steel`, `cap` | `tools/blender/water_tank.py`. The rooftop's two tanks. |
+| `hatch.glb` | A pressure hatch's frame: square outside, rounded inside, hazard-striped reveal and a lamp bar over it; 2.0 × 2.7 m outside, a 1.4 × 2.25 m opening, 0.36 m deep, origin on the floor; materials `frame`, `hazard`, `lamp` | `tools/blender/hatch.py`. The station's two hatches. |
 | `wood_stove.glb` | A cast-iron box stove, door to Blender -Y (Godot +Z); materials `iron`, `fire` | `tools/blender/wood_stove.py`. The cabin's corner. |
 | `rocking_chair.glb` | Poly Haven `Rockingchair_01` (CC0), decimated to half | `tools/blender/polyhaven_props.py` |
 | `lantern.glb` | Poly Haven `Lantern_01` (CC0), decimated to 8%; glass material `Lantern_01_glass` | `tools/blender/polyhaven_props.py`. |

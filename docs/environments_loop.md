@@ -183,7 +183,9 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
       one flat black: gravel ballast, a few vents and a skylight would give it something.
       (Poly Haven `wood_planks_grey` on the deck and the riser, `gravel` ballast on the roof, a
       hipped glass skylight lit faintly from below, six mushroom vents.)
-- [ ] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
+- [x] Space station: a ring corridor, a planet through the floor glass, the matrix in zero-g.
+  - [ ] Station follow-up: the matrix in true zero-g (its cells bobbing slowly), and a slow
+        turn of the planet and the stars, the station's orbit seen through the viewports.
 - [ ] Underwater dome: caustics, kelp, light from above, a sub bay as the booth.
 - [ ] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
 - [ ] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
