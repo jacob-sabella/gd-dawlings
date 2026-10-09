@@ -436,6 +436,7 @@ func _walk_where_the_venue_lets() -> void:
 	if items != null and venue != null:
 		items.boards = venue.dart_boards()
 		items.hoops = venue.hoops()
+		items.set_venue(venue.venue_id())
 		items.set_spots(venue.item_spots(), _item_homes())
 
 
@@ -1734,7 +1735,7 @@ func _item_homes() -> Dictionary:
 	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
 			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
 			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
-			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot()}
+			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot()}
 	for n in 3:
 		out[StringName("dart%d" % (n + 1))] = venue.dart_spot(n)
 	var mic_at: Variant = venue.mic_spot()
@@ -1757,9 +1758,11 @@ func _build_items() -> void:
 	Session.takeable = func(key: String) -> bool:
 		return is_instance_valid(items) and items.items.values().any(
 				func(item: Item) -> bool: return item.network_key() == key)
+	ToyItem.shown = venue.venue_id()
 	studio_set.add_child(items)
 	items.boards = venue.dart_boards()
 	items.hoops = venue.hoops()
+	items.set_venue(venue.venue_id())
 	items.set_spots(venue.item_spots(), _item_homes())
 	var mic := items.items.get(&"mic") as MicItem
 	if mic != null:

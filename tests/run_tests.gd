@@ -139,6 +139,7 @@ func _ready() -> void:
 	await _test_a_ball_goes_through_the_hoop()
 	await _test_the_cradle_swings_and_clacks()
 	await _test_the_yoyo_does_its_tricks()
+	await _test_each_venue_has_a_toy_of_its_own()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -6090,7 +6091,7 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
 			# keytar, the chips, the cards, the darts, the cradle and the yo-yo, which have homes of
 			# their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 12 \
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= ItemRoom.KINDS.size() - 13 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -11173,6 +11174,95 @@ func _stack_square(chips: ChipsItem) -> bool:
 				or chip.rotation.z != 0.0:
 			return false
 	return true
+
+
+## Every venue has a toy of its own (docs/items_loop.md): one item, the room's look and flight.
+func _test_each_venue_has_a_toy_of_its_own() -> void:
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var toy := studio.items.items.get(&"toy") as ToyItem
+	check("the room has a toy", toy != null)
+	if toy == null:
+		studio.queue_free()
+		return
+
+	# In every venue: its own, lying on floor you can walk up to, clear of everything.
+	var wrong: Array = []
+	var titles := {}
+	for id in Venue.IDS:
+		studio.set_venue(id, false)
+		titles[toy.item_title()] = true
+		if toy.venue != id or not ToyItem.TOYS.has(id):
+			wrong.append("%s: the toy is %s's" % [id, toy.venue])
+		var meshes := toy.body.find_children("*", "MeshInstance3D", true, false)
+		if meshes.size() != 1 or meshes[0].name != ToyItem.TOYS[id]["model"]:
+			wrong.append("%s: looks wrong" % id)
+		var spot := studio.venue.toy_spot()
+		if not toy.home.origin.is_equal_approx(spot.origin):
+			wrong.append("%s: lives somewhere else" % id)
+		var reach := float(ToyItem.TOYS[id]["size"])
+		for way in [Vector3.ZERO, Vector3(reach, 0, 0), Vector3(-reach, 0, 0), Vector3(0, 0, reach), Vector3(0, 0, -reach)]:
+			var at: Vector3 = spot.origin + way
+			if not studio.walker.reachable.call(Vector2(at.x, at.z)) \
+					or Flight._over_solid(studio.walker.fixed, Vector2(at.x, at.z)):
+				wrong.append("%s: lies where it cannot be reached" % id)
+				break
+	check("every venue has its own toy, lying where it can be picked up (%s)" % [wrong], wrong.is_empty())
+	check("and no two are the same toy", titles.size() == Venue.IDS.size())
+
+	# Changed under a hand: still in it, and now the new room's.
+	studio.set_venue(&"studio", false)
+	check("at home it lies by the hoop", toy.readout() == "by the hoop")
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	hand.pick_up(toy)
+	studio.set_venue(&"cabin", false)
+	check("a toy in a hand when the venue changes stays in it, and is the new venue's",
+			toy.state == Item.State.HELD and hand.carrying == toy and toy.item_title() == "SNOWBALL"
+			and toy.body.find_child("Snowball", true, false) != null and toy.body.get_parent() == toy)
+	var look := ItemRoom.look_of(&"toy")
+	check("and a ghost carrying it carries a snowball too", look != null and look.find_child("Snowball", true, false) != null)
+	if look != null:
+		look.free()
+
+	# Each flies as what it is: a snowball lands and stays, a neon ball bounces; a beach ball is
+	# all air; a starfish is not round, so a hoop is not there for it.
+	var stand := studio.items.global_transform * (studio.venue.toy_spot() * Vector3(0, 1.5, 0.3))
+	var aim := studio.items.global_transform * (studio.venue.toy_spot() * Vector3(0, 0, 3.5))
+	var flights := {}
+	for id in [&"cabin", &"grid", &"rooftop", &"loft"]:
+		studio.set_venue(id, false)
+		hand.pick_up(toy)
+		studio.items.throw(toy, stand, ItemRoom.lob(stand, aim, 6.0), Vector3.ZERO)
+		flights[id] = toy.flight
+		toy.snap_home()
+	var floor_hits := func(f: Flight) -> int:
+		return Array(f.hit_on).count(Flight.FLOOR) if f != null else -1
+	check("a snowball lands and stays where it lands (%d hits)" % floor_hits.call(flights[&"cabin"]),
+			floor_hits.call(flights[&"cabin"]) == 1)
+	check("a neon ball bounces (%d hits)" % floor_hits.call(flights[&"grid"]), floor_hits.call(flights[&"grid"]) >= 3)
+	var first_down := func(f: Flight) -> float:
+		return f.hits[0] if f != null and f.hits.size() > 0 else -1.0
+	var beach_out := (flights[&"rooftop"] as Flight).points[int(first_down.call(flights[&"rooftop"]) / Flight.STEP)]
+	var tennis_out := (flights[&"loft"] as Flight).points[int(first_down.call(flights[&"loft"]) / Flight.STEP)]
+	var from := studio.items.global_transform.affine_inverse() * stand
+	check("a beach ball thrown as hard as a tennis ball comes down far shorter: the air holds it up",
+			Vector2(beach_out.x - from.x, beach_out.z - from.z).length() < 0.8 * Vector2(tennis_out.x - from.x, tennis_out.z - from.z).length())
+	studio.set_venue(&"dome", false)
+	check("a starfish is not round: no hoop for it", not toy.flies().has("radius"))
+	studio.set_venue(&"club", false)
+	check("an eight ball is", toy.flies().has("radius") and toy.body.find_child("Number", true, false) is Label3D)
+
+	# A snowball bursts a little where it lands.
+	studio.set_venue(&"cabin", false)
+	toy.on_bounce(4.0)
+	check("a snowball landing hard throws up a puff of snow", toy.get_node_or_null("Puff") is CPUParticles3D)
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
 
 
 func _test_the_yoyo_does_its_tricks() -> void:

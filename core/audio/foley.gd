@@ -381,6 +381,58 @@ static func board_thud(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## Something soft and full landing: a beanbag, a foam ball. A dull low thump and the rustle of
+## what is inside it settling, no ring and no bounce.
+static func soft_thud(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("soft_thud_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.09, 0.22, 503 + take)
+		_lowpass(s, 1800.0)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.022)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 505 + take * 43
+		_impulse(s, 0.0, 0.5, 0.018, rng.randf_range(95.0, 125.0), 507 + take)
+		_lowpass(s, 2500.0)
+		return _wav(s, false))
+
+
+## A snowball landing: the crunch of packed snow giving way, a burst of grains, and the soft
+## thump under it.
+static func snow_crunch(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("snow_crunch_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.16)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 509 + take * 47
+		for k in 26:
+			var at := 0.07 * pow(rng.randf(), 1.8)
+			_impulse(s, at, rng.randf_range(0.04, 0.12) * (1.0 - at / 0.08), 0.0025,
+					rng.randf_range(1800.0, 4200.0), 511 + take * 31 + k)
+		_impulse(s, 0.0, 0.35, 0.02, rng.randf_range(90.0, 120.0), 513 + take)
+		_lowpass(s, 6000.0)
+		return _wav(s, false))
+
+
+## A beach ball bopping off the floor: the boom of a big thin vinyl drum, low and hollow, and
+## the slap of the skin.
+static func beach_bop(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("beach_bop_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.22)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 517 + take * 53
+		var phase := 0.0
+		var from := rng.randf_range(150.0, 175.0)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * lerpf(from, from * 0.7, minf(1.0, t / 0.12)) / float(RATE)
+			s[i] = 0.45 * exp(-t / 0.06) * sin(phase)
+		_impulse(s, 0.0, 0.2, 0.004, rng.randf_range(900.0, 1100.0), 519 + take)
+		_lowpass(s, 3000.0)
+		return _wav(s, false))
+
+
 ## Two steel balls of a Newton's cradle meeting: a hard, bright tick and the short ring of the
 ## steel after it. The sound the toy is for.
 static func cradle_click(take: int) -> AudioStreamWAV:

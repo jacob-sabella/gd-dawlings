@@ -20,7 +20,7 @@ extends Node3D
 ## The items there are, in the order they take the shelf's spots.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
 		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3",
-		&"cradle", &"yoyo"]
+		&"cradle", &"yoyo", &"toy"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -89,6 +89,8 @@ static func make(kind: StringName) -> Item:
 			return CradleItem.new()
 		&"yoyo":
 			return YoyoItem.new()
+		&"toy":
+			return ToyItem.new()
 		&"cards":
 			return CardsItem.new()
 		&"dart1":
@@ -134,6 +136,14 @@ func _ready() -> void:
 			(item as InstrumentItem).played.connect(func(velocity: int, struck: bool) -> void:
 				played.emit(item, velocity, struck))
 	_rehome()
+
+
+## The venue is `which`: its toy is that venue's (ToyItem.set_venue).
+func set_venue(which: StringName) -> void:
+	ToyItem.shown = which
+	var toy := items.get(&"toy") as ToyItem
+	if toy != null:
+		toy.set_venue(which)
 
 
 ## The shelf's spots, from the venue: one per item, in KINDS order, in this node's frame. Items

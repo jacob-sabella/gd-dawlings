@@ -307,6 +307,13 @@ func hoop_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, z))
 
 
+## Where the venue's own toy (ToyItem) lies, in studio space: on the floor a little in front of
+## the hoop and to its right, where you would leave a ball after shooting -- room enough round it
+## for the rooftop's beach ball, clear of the hoop's base.
+func toy_spot() -> Transform3D:
+	return hoop_spot() * Transform3D(Basis(Vector3.UP, 0.6), Vector3(0.42, 0, 0.5))
+
+
 ## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop
 ## that sounds it as its "node" when the venue has stood one.
 func hoops() -> Array:

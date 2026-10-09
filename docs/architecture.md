@@ -1422,6 +1422,13 @@ string are posed from the trick and its time, against the world's down and the h
 desktop (`string_length`), where the full length plays out of the picture. It is the one item
 whose look depends on who holds it.
 
+The venue's toy (`ToyItem`, kind `toy`) is one item whose look and flight are the venue's: a
+table of nine (`ToyItem.TOYS`), from one model file of nine objects (`tools/blender/toys.py`).
+`ItemRoom.set_venue` turns it into the new venue's toy when the venue changes, even in a hand,
+by swapping its body and grip. The venue is the host's, so every machine has the same toy and
+flies it the same. It lives on the floor in front of the hoop (`Venue.toy_spot`). A ghost
+carrying it shows this machine's venue's toy (`ToyItem.shown`, read by `ItemRoom.look_of`).
+
 ## Things that are deliberately not done yet
 
 See `docs/loop_backlog.md`.

@@ -453,9 +453,25 @@ ergonomics.
       - Lifting the finger above the glove to make room looked like the yo-yo hanging from
         nothing. The string has to come out of the fingertips.
       Not tried in a headset, or as a guest watching a host's ghost throw the full string.
-- [ ] Toys round the room, the rest: each venue gets one toy of its own (a snowball, a beach ball,
+- [x] Toys round the room, the rest: each venue gets one toy of its own (a snowball, a beach ball,
       a slinky...). The desk itself could have a toy (the cradle's twin by the console), if one
       fits without coming between the seat and the controls.
+      Done: one toy per venue, lying on the floor in front of the hoop: a knit hacky sack in the
+      studio, a neon ball on the grid, a ball of paper in the chalk zone, a tennis ball in the
+      loft, a snowball in the cabin, a beach ball on the roof, a foam planet on the station, a
+      rubber starfish in the dome and the eight ball in the club. They are one item, `ToyItem`,
+      whose look, size, flight and sound come from the venue. The snowball lands dead and puffs
+      snow; the neon and tennis balls bounce; the beach ball is all air and comes down short;
+      the paper drifts; the starfish squeaks and is not round, so the hoop ignores it. Changing
+      venue changes the toy, even in your hand. New Foley: a soft thud, a snow crunch and a
+      beach ball's bop. It adds 8 draws and about 1.5k triangles to the wide view. Learnings:
+      - The hand is close to the eye on a desktop: a held pose a few centimetres up moves the
+        toy a long way in the picture. Small things sit in the palm, as the ball does.
+      - A shot of something picked up from across the room must wait for it to arrive:
+        `--shot-frame 200`.
+      - Left of the hoop is inside the studio's curtain wall; the test now checks every
+        venue's spot is floor you can reach, a toy's width all round.
+      Not done: a slinky, and a desk toy by the console. The toys only differ in how they fly.
 - [ ] Pockets: carry more than one thing. A few slots on your ghost (a belt, a back pocket),
       number keys and a wheel on a desktop, a reach over the shoulder in a headset.
 - [ ] A props box: ask for any item from a menu and it appears in your hand (as PokerStars VR's

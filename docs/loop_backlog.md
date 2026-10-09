@@ -196,6 +196,13 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- The venue toys: they are all thrown things, a ball of some kind (or a starfish); none of them
+  does anything the others cannot but fly differently. No slinky, nothing to fidget with, and no
+  desk toy by the console. The beach ball, held on a desktop, is a big thing over the desk and
+  hides some of it. The neon ball reads as a pink ball; its bands do not show as bands.
+  Changing venue mid-throw lets the old flight finish, then shows the new venue's toy where the
+  old one landed.
+
 - The yo-yo: on a desktop your own string is 15 cm and your ghost's is 70 cm, so what you see
   of your own trick is not what others see. The string is a straight line, never slack, even
   over the top of around the world. No "walk the dog" along the floor.
