@@ -7,12 +7,24 @@ extends Venue
 ## quite settled; there is dust in the air, and the working floor is outlined in chalk the way
 ## a stage is taped.
 ##
+## In the second arrangement the doodles are gathered in: the room the studio would have stands
+## round the floor drawn in chalk lines -- its edges, a door, a window with the moon in it, a
+## clock, panels, lamps hanging from a ceiling that is only a line -- and behind the zones the
+## board itself stands up, a wall of slate taller than any of them, the session written on it.
+##
 ## It moves to the music: the chalk itself glows brighter on a loud passage, and the doodles
 ## nearest the desk jump a little on the beat.
 
 const FLOOR_EXTENT := 300.0
 const DOODLE_COUNT := 64
 const SEED := 11
+## The arrangements.
+const OPEN_SKY := 0
+const SKETCHED_ROOM := 1
+## The sketched room: its ceiling line, and the board wall behind the zones.
+const ROOM_HEIGHT := 4.2
+const BOARD_HEIGHT := 5.2
+const BOARD_Z := LIVE_ROOM_BACK + 0.15
 
 var _floor_mat: ShaderMaterial
 var _sky_mat: ShaderMaterial
@@ -90,11 +102,15 @@ func _ready() -> void:
 
 	_rng.seed = SEED + 1
 	_draw_floor()
-	_scatter_doodles()
-	_paint_rainbow()
+	if variant == SKETCHED_ROOM:
+		_sketch_the_room()
+		_stand_the_board()
+	else:
+		_scatter_doodles()
+		_paint_rainbow()
+		_join_constellations()
+		_throw_comets()
 	_draw_zones()
-	_join_constellations()
-	_throw_comets()
 	_add_dust()
 	# Everything drawn on as you arrive, nearest first, the way a person would start with
 	# what is in front of them and work outward.
@@ -121,6 +137,8 @@ func _draw_floor() -> void:
 	floor_art.name = "FloorChalk"
 	add_child(floor_art)
 
+	if variant == SKETCHED_ROOM:
+		return
 	# Out past the footprint, big floor doodles in colour -- arrows, a star, a spiral -- that
 	# you see when you look down past the desk.
 	var marks := [[Chalk.star(), Vector3(-4.6, 0, -3.6), 1.1, Chalk.YELLOW],
@@ -139,6 +157,216 @@ func _draw_floor() -> void:
 		art.name = "FloorDoodle"
 		add_child(art)
 		_art.append(art)
+
+
+## The room, drawn: its outline on the floor, its corners up to a ceiling that is a line, and
+## on its walls what a studio has -- a door, a window with the moon in it, a clock, foam
+## panels, a pair of speakers on stands -- and lamps hanging down from the ceiling line.
+func _sketch_the_room() -> void:
+	var half := live_room_half()
+	var z0 := -Studio.ROOM_DEPTH * 0.5
+	var z1 := LIVE_ROOM_BACK
+	var h := ROOM_HEIGHT
+	var lines: Array = []
+	var corners := [Vector3(-half, 0, z0), Vector3(half, 0, z0), Vector3(half, 0, z1), Vector3(-half, 0, z1)]
+	for i in 4:
+		var a: Vector3 = corners[i]
+		var b: Vector3 = corners[(i + 1) % 4]
+		lines.append(PackedVector3Array([a + Vector3(0, 0.004, 0), b + Vector3(0, 0.004, 0)]))
+		lines.append(PackedVector3Array([a + Vector3(0, h, 0), b + Vector3(0, h, 0)]))
+		lines.append(PackedVector3Array([a, a + Vector3(0, h, 0)]))
+	var walls: Array = []
+	# The left wall: a door, and a window with the moon in it.
+	walls.append_array(_on_wall(_rect(1.0, 2.1, Vector2(0, 1.05)) + [Chalk.loop(Vector3(0.36, 1.0, 0), 0.04, 10)],
+			Vector3(-half, 0, -0.6), PI * 0.5))
+	var window := _rect(2.2, 1.5, Vector2(0, 1.95))
+	window.append(PackedVector3Array([Vector3(0, 1.2, 0), Vector3(0, 2.7, 0)]))
+	window.append(PackedVector3Array([Vector3(-1.1, 1.95, 0), Vector3(1.1, 1.95, 0)]))
+	walls.append_array(_on_wall(window, Vector3(-half, 0, 2.4), PI * 0.5))
+	walls.append_array(_on_wall(_scaled(Chalk.moon(), 0.28, Vector2(0.5, 2.35)), Vector3(-half, 0, 2.4), PI * 0.5))
+	# The right wall: foam panels in a row, each ruled in wedges.
+	for k in 4:
+		var panel := _rect(0.9, 1.2, Vector2(0, 2.2))
+		for w in [-0.3, 0.0, 0.3]:
+			panel.append(PackedVector3Array([Vector3(w, 1.6, 0), Vector3(w, 2.8, 0)]))
+		walls.append_array(_on_wall(panel, Vector3(half, 0, -1.2 + k * 1.3), -PI * 0.5))
+	# The front wall: a clock, high, its hands at a little past ten, and an on-air light.
+	var clock: Array = [Chalk.loop(Vector3.ZERO, 0.38, 32), Chalk.loop(Vector3.ZERO, 0.32, 32),
+			PackedVector3Array([Vector3.ZERO, Vector3(-0.15, 0.1, 0)]),
+			PackedVector3Array([Vector3.ZERO, Vector3(0.07, 0.27, 0)])]
+	for t in 12:
+		var a := TAU * t / 12.0
+		clock.append(PackedVector3Array([Vector3(cos(a), sin(a), 0) * 0.27, Vector3(cos(a), sin(a), 0) * 0.31]))
+	walls.append_array(_on_wall(_scaled(clock, 1.0, Vector2(-2.6, 3.0)), Vector3(0, 0, z0), 0.0))
+	walls.append_array(_on_wall(_rect(1.0, 0.36, Vector2(2.6, 3.0)), Vector3(0, 0, z0), 0.0))
+	# Speakers on stands in the front corners, angled in.
+	for side in [-1.0, 1.0]:
+		var at := Vector3(side * (half - 0.9), 0, z0 + 0.8)
+		var spk := _box_lines(Vector3(0.36, 0.6, 0.32), Vector3(0, 1.45, 0))
+		spk.append(PackedVector3Array([Vector3(0, 0, 0), Vector3(0, 1.15, 0)]))
+		spk.append(PackedVector3Array([Vector3(-0.3, 0, 0), Vector3(0.3, 0, 0)]))
+		spk.append(_placed(Chalk.loop(Vector3.ZERO, 0.12, 18), Vector3(0, 1.38, 0.161), 0.0))
+		spk.append(_placed(Chalk.loop(Vector3.ZERO, 0.05, 12), Vector3(0, 1.62, 0.161), 0.0))
+		var turn := Basis(Vector3.UP, -side * 0.5 + PI)
+		for line: PackedVector3Array in spk:
+			var placed := PackedVector3Array()
+			for p in line:
+				placed.append(at + turn * p)
+			walls.append(placed)
+	# Lamps hanging from the ceiling line, over the desk and over the floor behind it.
+	for at in [Vector3(-1.6, 0, 1.0), Vector3(1.6, 0, 1.0), Vector3(-1.6, 0, 3.4), Vector3(1.6, 0, 3.4)]:
+		var lamp: Array = [PackedVector3Array([Vector3(0, h, 0), Vector3(0, h - 1.1, 0)])]
+		lamp.append(Chalk.loop(Vector3.ZERO, 0.22, 20))
+		for k in lamp[1].size():
+			lamp[1][k] = Vector3(lamp[1][k].x, h - 1.4, lamp[1][k].y)
+		for a in [0.0, PI * 0.5, PI, PI * 1.5]:
+			lamp.append(PackedVector3Array([Vector3(0, h - 1.1, 0), Vector3(cos(a) * 0.22, h - 1.4, sin(a) * 0.22)]))
+		for line: PackedVector3Array in lamp:
+			var placed := PackedVector3Array()
+			for p in line:
+				placed.append(at + p)
+			walls.append(placed)
+	var subdivided: Array = []
+	for line: PackedVector3Array in lines:
+		subdivided.append(_subdivide(line, 0.25))
+	var shell := Chalk.drawing(subdivided, Chalk.WHITE * 0.28, 0.014, false, 2, SEED * 41)
+	shell.name = "RoomSketch"
+	add_child(shell)
+	_art.append(shell)
+	var fittings: Array = []
+	for line: PackedVector3Array in walls:
+		fittings.append(_subdivide(line, 0.2))
+	var things := Chalk.drawing(fittings, Chalk.WHITE * 0.32, 0.012, false, 2, SEED * 43)
+	things.name = "RoomFittings"
+	add_child(things)
+	_art.append(things)
+
+
+## The board stood up as a wall behind the zones: slate in a wooden frame with a chalk tray,
+## taller than anything in front of it, and the session written on it where it shows over them.
+func _stand_the_board() -> void:
+	var half := live_room_half()
+	var slate := ShaderMaterial.new()
+	slate.shader = preload("res://core/venues/shaders/chalkboard.gdshader")
+	slate.set_shader_parameter("upright", true)
+	slate.set_shader_parameter("smudge", 0.3)
+	slate.set_shader_parameter("slate", Color(0.045, 0.06, 0.065))
+	var board := MeshInstance3D.new()
+	board.name = "BoardWall"
+	var box := BoxMesh.new()
+	box.size = Vector3(half * 2.0, BOARD_HEIGHT, 0.08)
+	board.mesh = box
+	board.material_override = slate
+	board.position = Vector3(0, BOARD_HEIGHT * 0.5, BOARD_Z + 0.04)
+	add_child(board)
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.32, 0.22, 0.14)
+	wood.roughness = 0.8
+	ZoneKit.block(self, Vector3(half * 2.0 + 0.24, 0.12, 0.1), Vector3(0, BOARD_HEIGHT + 0.06, BOARD_Z + 0.03), wood,
+			"BoardFrame")
+	for side in [-1.0, 1.0]:
+		ZoneKit.block(self, Vector3(0.12, BOARD_HEIGHT, 0.1), Vector3(side * (half + 0.06), BOARD_HEIGHT * 0.5, BOARD_Z + 0.03),
+				wood, "BoardFrame")
+	ZoneKit.block(self, Vector3(half * 2.0, 0.04, 0.12), Vector3(0, 0.9, BOARD_Z - 0.06), wood, "ChalkTray")
+	# What is written on it: the song's map across the top, a chord chart, the tempo, the take,
+	# and the doodles that collect round the edges of any board.
+	var face := BOARD_Z - 0.005
+	var lines: Array = []
+	var sections := ["INTRO", "VERSE", "CHORUS", "VERSE", "CHORUS", "BRIDGE", "OUTRO"]
+	var width := half * 2.0 - 1.6
+	var cell := width / sections.size()
+	for i in sections.size():
+		# Read from the room, left to right, which on a board facing -Z runs from +X.
+		var x := width * 0.5 - cell * (i + 0.5)
+		lines.append_array(_board_lines(_rect(cell - 0.12, 0.5, Vector2(-x, 4.55)), face))
+		_write(sections[i], Vector3(x, 4.55, face), 0.62, Chalk.WHITE)
+	lines.append(_board_line(Chalk.arc(Vector3(0, 0, 0), width * 0.5, 0.25, PI, -PI, 40), Vector3(0, 4.15, face)))
+	_write("Am    F    C    G", Vector3(3.6, 3.65, face), 1.0, Chalk.YELLOW)
+	_write("92 bpm", Vector3(-3.4, 3.65, face), 1.0, Chalk.CYAN)
+	_write("take 4", Vector3(-0.2, 3.65, face), 0.8, Chalk.PINK)
+	lines.append(_board_line(Chalk.loop(Vector3.ZERO, 0.42, 30), Vector3(-0.2, 3.65, face), Vector2(1.6, 0.6)))
+	var marks := Chalk.drawing(lines, Chalk.WHITE * 0.55, 0.014, false, 2, SEED * 47)
+	marks.name = "BoardWriting"
+	add_child(marks)
+	_art.append(marks)
+	var doodles := [[Chalk.beamed_notes(), Vector3(-5.4, 3.5, face), 0.35, Chalk.LIME],
+			[Chalk.headphones(), Vector3(5.5, 3.6, face), 0.4, Chalk.VIOLET],
+			[Chalk.star(), Vector3(-1.9, 3.75, face), 0.16, Chalk.YELLOW],
+			[Chalk.heart(), Vector3(1.6, 3.62, face), 0.15, Chalk.PINK],
+			[Chalk.cassette(), Vector3(-5.6, 4.0, face), 0.3, Chalk.ORANGE]]
+	for i in doodles.size():
+		var drawn: Array = []
+		for line: PackedVector3Array in doodles[i][0]:
+			drawn.append(_board_line(line, doodles[i][1], Vector2.ONE * doodles[i][2]))
+		var art := Chalk.drawing(drawn, doodles[i][3] * 0.7, 0.014, false, 2, SEED * 53 + i)
+		art.name = "BoardDoodle"
+		add_child(art)
+		_art.append(art)
+
+
+## Words written on the board in chalk, facing the room.
+func _write(text: String, at: Vector3, scale: float, colour: Color) -> void:
+	var words := Label3D.new()
+	words.name = "BoardWords%d" % get_child_count()
+	words.text = text
+	words.font_size = 96
+	words.outline_size = 0
+	words.pixel_size = 0.0028 * scale
+	words.modulate = Color(colour.r, colour.g, colour.b, 0.8) * Color(0.85, 0.85, 0.85, 1.0)
+	words.shaded = false
+	words.double_sided = false
+	words.position = at
+	words.rotation.y = PI
+	add_child(words)
+
+
+## A rectangle `w` by `h` centred on `at` in a wall's own plane (x along it, y up).
+static func _rect(w: float, h: float, at: Vector2) -> Array:
+	var c := [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1)]
+	var line := PackedVector3Array()
+	for k: Vector2 in c:
+		line.append(Vector3(at.x + k.x * w * 0.5, at.y + k.y * h * 0.5, 0))
+	return [line]
+
+
+## Lines drawn in a plane (x, y), scaled and moved within it.
+static func _scaled(lines: Array, s: float, at: Vector2) -> Array:
+	var out: Array = []
+	for line: PackedVector3Array in lines:
+		var moved := PackedVector3Array()
+		for p in line:
+			moved.append(Vector3(at.x + p.x * s, at.y + p.y * s, 0))
+		out.append(moved)
+	return out
+
+
+## Lines drawn in a wall's plane, stood on the wall through `origin` turned `yaw` (0 is the
+## front wall, facing +Z, the room).
+static func _on_wall(lines: Array, origin: Vector3, yaw: float) -> Array:
+	var turn := Basis(Vector3.UP, yaw)
+	var out: Array = []
+	for line: PackedVector3Array in lines:
+		var placed := PackedVector3Array()
+		for p in line:
+			placed.append(origin + turn * p)
+		out.append(placed)
+	return out
+
+
+## Lines on the board wall (which faces -Z), each scaled by `s` about `at`; x is mirrored so a
+## drawing reads the right way round from the room.
+static func _board_line(line: PackedVector3Array, at: Vector3, s := Vector2.ONE) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for p in line:
+		out.append(at + Vector3(-p.x * s.x, p.y * s.y, 0))
+	return out
+
+
+static func _board_lines(lines: Array, face: float) -> Array:
+	var out: Array = []
+	for line: PackedVector3Array in lines:
+		out.append(_board_line(line, Vector3(0, 0, face)))
+	return out
 
 
 func _scatter_doodles() -> void:

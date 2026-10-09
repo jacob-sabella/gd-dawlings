@@ -192,7 +192,9 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 - [x] Jazz club after hours: stage with the drum riser, booths, a bar, one spot.
   - [ ] Club follow-up: an upright piano or a bass on its side on the stage, a coat left on a
     booth bench, glasses left on the tables; slow dust turning in the spot's beam.
-- [ ] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
+- [x] Chalk zone arrangements: chalk has only one. A second, e.g. the board as a ceiling-high
       wall behind the zones, or the doodles gathered into a room-sized sketch of a studio.
+  - [ ] Chalk follow-up: the board's writing follows the session (its real sections, tempo and
+    take from the DAW) and is rubbed out and rewritten when they change.
 - [ ] Pass over every venue: shoot them side by side and even out anything that drifted (light,
       scale, how distinct they are).

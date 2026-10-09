@@ -28,6 +28,7 @@ const VARIANTS := {
 	&"studio": ["Live room behind", "Live room beside"],
 	&"grid": ["Highway", "Downtown"],
 	&"rooftop": ["Dusk", "Golden hour", "Night"],
+	&"chalk": ["Open sky", "Sketched room"],
 }
 
 ## What people will do here besides mix, each with room of its own. Built later; every venue

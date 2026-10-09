@@ -8,6 +8,8 @@ uniform vec4 slate : source_color = vec4(0.020, 0.028, 0.034, 1.0);
 uniform vec4 dust : source_color = vec4(0.30, 0.34, 0.42, 1.0);
 uniform float smudge = 0.16;
 uniform float pulse = 0.0;
+// Stood up as a wall: the smudges run across its face, not along the ground.
+uniform bool upright = false;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -41,7 +43,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 p = world.xz;
+	vec2 p = upright ? world.xy : world.xz;
 	// Wiping strokes: noise smeared along arcs around a few centres, the way an arm swings.
 	float ang = atan(p.y + 7.0, p.x - 3.0);
 	float rad = length(p - vec2(3.0, -7.0));

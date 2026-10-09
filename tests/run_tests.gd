@@ -5771,8 +5771,8 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	var grid_zones := studio.venue.zones()
 	var grid_walkable := studio._walkable()
 	check("a venue with arrangements has more than one", Venue.variant_titles(&"grid").size() > 1)
-	check("one without has its own name as its only one", Venue.variant_titles(&"chalk")
-			== PackedStringArray([Venue.make_title(&"chalk")]))
+	check("one without has its own name as its only one", Venue.variant_titles(&"loft")
+			== PackedStringArray([Venue.make_title(&"loft")]))
 	check("the host can arrange it another way", studio.choose_variant(1) and studio.venue.variant == 1
 			and studio.venue.venue_id() == &"grid")
 	check("and is told which (%s)" % studio.venue.title(), studio.venue.title().ends_with(
@@ -6522,6 +6522,30 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	var flame_before := club.candles[0].light_energy
 	club._process(0.13)
 	check("the candles flicker", club.candles.size() == 3 and club.candles[0].light_energy != flame_before)
+
+	# The chalk zone's sketched room: the board stands behind every zone and over all of them,
+	# the room is drawn round the floor, and the doodles are gathered in, none left in the sky.
+	studio.set_venue(&"chalk", false, ChalkVenue.SKETCHED_ROOM)
+	var sketched := studio.venue as ChalkVenue
+	var board := sketched.find_child("BoardWall", false, false) as MeshInstance3D
+	var board_box := board.global_transform * board.get_aabb()
+	var behind_all := true
+	for zone_box: AABB in sketched.zones().values():
+		behind_all = behind_all and board_box.position.z >= zone_box.end.z and board_box.end.y > zone_box.end.y + 1.0 \
+				and board_box.position.x <= zone_box.position.x and board_box.end.x >= zone_box.end.x
+	check("chalk, sketched: the board stands behind every zone, taller than all of them", behind_all)
+	var room_lines := sketched.find_child("RoomSketch", false, false) as MeshInstance3D
+	var room_box := room_lines.get_aabb()
+	check("the room is drawn round the floor (%s)" % room_box,
+			absf(room_box.size.x - sketched.live_room_half() * 2.0) < 0.2
+			and absf(room_box.end.z - Venue.LIVE_ROOM_BACK) < 0.2 and absf(room_box.end.y - ChalkVenue.ROOM_HEIGHT) < 0.2)
+	var words := sketched.find_children("BoardWords*", "Label3D", false, false)
+	var written := words.size() >= 7
+	for w: Label3D in words:
+		written = written and w.global_transform.basis.z.z < -0.99 and w.global_position.z < board_box.position.z
+	check("the session is written on the board, facing the room (%d)" % words.size(), written)
+	check("and no doodles are left in the sky", sketched._doodles.is_empty()
+			and sketched.find_child("Rainbow", false, false) == null)
 	studio.set_venue(&"studio", false)
 
 	# The outline the walls stand on: two rooms meeting leave a doorway where they meet.
