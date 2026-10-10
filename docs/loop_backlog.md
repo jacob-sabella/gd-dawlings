@@ -393,8 +393,10 @@ can finish music in, saving DAWproject. Steps, in order:
      track's; the bridge's track 0). Probe: a master lane read back from Reaper and its master
      fader following it while it plays.
    - **Not yet:** the master's lanes are not drawn on the timeline (it has no lane there), and
-     the master is not written by touch/latch. The lane is as tall as a track lane (14 mm); a
-     taller automation row under the track would be easier to draw on. dawkit ramps volume in
+     the master is not written by touch/latch. **Done 2026-10-10:** the shown lane has a row of
+     its own under its track, 42 mm tall (2.5 lanes), with its name where the track names are;
+     the lanes below move down while it is open, and a press on the track's own lane is an item
+     press again. Tested (row, spacing, press, closing) and seen in a shot. dawkit ramps volume in
      dB, Reaper along its fader: a ramp's middle differs between them.
 9. Mixdown and stems.
    - **Done 2026-10-10 (9a), the built-in engine's render:** `DAW.render(stems)` (anyone may ask;

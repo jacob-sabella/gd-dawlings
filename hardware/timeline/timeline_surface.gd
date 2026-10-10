@@ -142,6 +142,8 @@ var _lane_y: Array[float] = []
 ## See TimelineTrackStrip's LANE key, and TimelineLanes for editing it.
 var shown_lane := ""
 var _automation: MeshInstance3D
+## The middle of the shown lane's row, or NAN while no lane is shown.
+var _auto_row_y := NAN
 ## Points drawn instead of the lane's own during a drag; empty for none.
 var _lane_preview: Array = []
 const AUTOMATION_LINE := 0.0007
@@ -149,6 +151,9 @@ const AUTOMATION_DOT := 0.0026
 ## How near a point the pointer has to be to take hold of it, metres either way.
 const AUTOMATION_GRIP := 0.003
 const AUTOMATION_COLOUR := Color(1.0, 0.62, 0.22)
+## The row the shown lane is drawn and edited in, under its track's own: two and a half lanes
+## tall, as a lane the height of a track's put -4 and -18 dB a few millimetres apart.
+const AUTOMATION_ROW := 0.042
 
 
 func set_wide(wide: bool) -> void:
@@ -323,7 +328,9 @@ func _rebuild() -> void:
 		return
 
 	var lanes := indices.size()
-	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND
+	var auto_row := shown_lane != "" and indices.has(picked_track)
+	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND \
+			+ ((AUTOMATION_ROW + LANE_GAP) if auto_row else 0.0)
 	_top_y = _height * 0.5
 	_lane_area_x = -width * 0.5 + HEADER_WIDTH
 	_lane_area_width = width - HEADER_WIDTH - 0.006
@@ -364,11 +371,16 @@ func _rebuild() -> void:
 	_adopt(chip_bank)
 
 	_lane_y.clear()
+	_auto_row_y = NAN
 	var y := _top_y - RULER_HEIGHT - LANE_GAP - LANE_HEIGHT * 0.5
 	for index in indices:
 		_lane_y.append(y)
 		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank)
 		y -= LANE_HEIGHT + LANE_GAP
+		if auto_row and index == picked_track:
+			_auto_row_y = y + LANE_HEIGHT * 0.5 - AUTOMATION_ROW * 0.5
+			_build_automation_row(_auto_row_y)
+			y -= AUTOMATION_ROW + LANE_GAP
 	bed_bank.commit()
 	chip_bank.commit()
 
@@ -654,9 +666,13 @@ static func lane_targets(index: int) -> Array:
 
 ## Shows `target` on the picked track ("" for none).
 func show_lane(target: String) -> void:
+	var row_changes := target != shown_lane
 	shown_lane = target
 	_lane_preview = []
 	_draw_automation()
+	# The row opens or closes under the track, and the lanes below it move: a rebuild.
+	if row_changes:
+		mark_dirty()
 
 
 ## The shown lane's points as drawn: the preview while one is being dragged.
@@ -675,7 +691,9 @@ func preview_lane(points: Array) -> void:
 
 ## Whether a press here is on the shown lane.
 func on_shown_lane(global_point: Vector3) -> bool:
-	return shown_lane != "" and picked_track > 0 and track_at_point(global_point) == picked_track
+	if shown_lane == "" or picked_track <= 0 or is_nan(_auto_row_y):
+		return false
+	return absf(to_local(global_point).y - _auto_row_y) <= AUTOMATION_ROW * 0.5
 
 
 ## Where a control is with no lane: what the lane is drawn at until it has a point.
@@ -763,24 +781,24 @@ func _picked_row() -> int:
 	return _shown().find(picked_track)
 
 
-## The lane's drawing height: inside the lane, clear of its edges.
-func _automation_y(row: int, v: float) -> float:
-	return _lane_y[row] + (lane_fraction(shown_lane, v) - 0.5) * (LANE_HEIGHT - 0.003)
+## The lane's drawing height: inside its row, clear of the edges.
+func _automation_y(_row: int, v: float) -> float:
+	return _auto_row_y + (lane_fraction(shown_lane, v) - 0.5) * (AUTOMATION_ROW - 0.004)
 
 
 ## The value at a point's height on the shown lane.
 func value_at_point(global_point: Vector3) -> float:
 	var row := _picked_row()
-	if row < 0 or row >= _lane_y.size():
+	if row < 0 or row >= _lane_y.size() or is_nan(_auto_row_y):
 		return 0.0
-	var f := (to_local(global_point).y - _lane_y[row]) / (LANE_HEIGHT - 0.003) + 0.5
+	var f := (to_local(global_point).y - _auto_row_y) / (AUTOMATION_ROW - 0.004) + 0.5
 	return lane_value(shown_lane, f)
 
 
 ## The shown lane's point under a point in the world, or -1.
 func automation_point_at(global_point: Vector3) -> int:
 	var row := _picked_row()
-	if row < 0 or row >= _lane_y.size():
+	if row < 0 or row >= _lane_y.size() or is_nan(_auto_row_y):
 		return -1
 	var local := to_local(global_point)
 	var points := shown_points()
@@ -801,7 +819,7 @@ func _draw_automation() -> void:
 	var mesh := _automation.mesh as ImmediateMesh
 	mesh.clear_surfaces()
 	var row := _picked_row()
-	if shown_lane == "" or row < 0 or row >= _lane_y.size() or view_span <= 0.0:
+	if shown_lane == "" or row < 0 or row >= _lane_y.size() or view_span <= 0.0 or is_nan(_auto_row_y):
 		return
 	var points := shown_points()
 	var fallback := control_value(picked_track, shown_lane)
@@ -1131,6 +1149,23 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 		flag_label.position = Vector3(_lane_area_x - 0.0085, y, 0.0016)
 		flag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_adopt(flag_label)
+
+
+## The shown lane's row: a bed the width of the lanes, and the lane's name where the track names are.
+func _build_automation_row(y: float) -> void:
+	var bed := MeshInstance3D.new()
+	bed.name = "AutomationRow"
+	var box := BoxMesh.new()
+	box.size = Vector3(_lane_area_width, AUTOMATION_ROW, 0.0010)
+	bed.mesh = box
+	bed.material_override = Materials.recess()
+	bed.position = Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)
+	_adopt(bed)
+	var label := _text(lane_name(shown_lane), 26, AUTOMATION_COLOUR)
+	label.position = Vector3(-width * 0.5 + 0.012, y, 0.0016)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	Lettering.fit(label, NAME_SPAN, 26 * 4, 18 * 4)
+	_adopt(label)
 
 
 ## Everything that depends on WHERE the window is, redone without touching the tree.

@@ -8483,9 +8483,17 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	timeline.pick_track(3)
 	check("LANE is dark while no lane is shown", not tracks.lane.lit)
 	tracks.lane.pressed.emit()
+	timeline._process(0.0)
 	check("LANE shows the track's volume lane, and lights", timeline.shown_lane == "volume" and tracks.lane.lit
 			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 1)
 	var row := s.track_indices().find(3)
+	check("in a row of its own under the track, taller than a lane, the lanes below it moved down by it",
+			not is_nan(timeline._auto_row_y) and timeline._auto_row_y < timeline._lane_y[row]
+			and is_equal_approx(timeline._lane_y[row] - timeline._lane_y[row + 1],
+					TimelineSurface.LANE_HEIGHT + 2.0 * TimelineSurface.LANE_GAP + TimelineSurface.AUTOMATION_ROW)
+			and TimelineSurface.AUTOMATION_ROW > 2.0 * TimelineSurface.LANE_HEIGHT)
+	check("a press on the track's own lane is not on the automation",
+			not timeline.on_shown_lane(timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(5.0)), timeline._lane_y[row], 0.0))))
 	var on_lane := func(bar: float, v: float) -> Vector3:
 		return timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(bar)), timeline._automation_y(row, v), lanes.position.z))
 	var lane_depth := s.undo_depth
@@ -8524,8 +8532,10 @@ func _test_items_are_edited_on_the_timeline() -> void:
 		if timeline.shown_lane == "":
 			break
 		tracks.lane.pressed.emit()
-	check("LANE steps through pan and mute to none", timeline.shown_lane == "" and not tracks.lane.lit
-			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 0)
+	timeline._process(0.0)
+	check("LANE steps through pan and mute to none, and the row closes", timeline.shown_lane == "" and not tracks.lane.lit
+			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 0 and is_nan(timeline._auto_row_y)
+			and is_equal_approx(timeline._lane_y[row] - timeline._lane_y[row + 1], TimelineSurface.LANE_HEIGHT + TimelineSurface.LANE_GAP))
 	timeline.pick_track(0)
 	click.call(at.call(2, 12.0))
 	var render: TimelineRenderStrip = timeline._render_controls
