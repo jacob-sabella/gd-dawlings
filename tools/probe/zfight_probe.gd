@@ -47,7 +47,11 @@ static func faces_of_mesh(mesh: Mesh, xf: Transform3D, who: Variant) -> Array:
 			# Corner order round the rectangle.
 			corners = [corners[0], corners[1], corners[3], corners[2]]
 			var wn: Vector3 = (xf.basis * n).normalized()
-			out.append({"n": wn, "d": wn.dot(corners[0]), "c": corners, "who": who})
+			var box_of := AABB(corners[0], Vector3.ZERO)
+			for c: Vector3 in corners:
+				box_of = box_of.expand(c)
+			out.append({"n": wn, "d": wn.dot(corners[0]), "c": corners, "who": who,
+					"lo": box_of.position, "hi": box_of.end})
 	return out
 
 
@@ -100,6 +104,14 @@ static func scan(root: Node) -> Array:
 				continue
 			var gap: float = absf(a["n"].dot(b["c"][0]) - a["d"])
 			if gap > PLANE_TOLERANCE:
+				continue
+			# Apart in the world's boxes is apart: most faces sharing a plane are nowhere near
+			# each other (the tiles of a floor), and the separating-axis test is the slow part.
+			var alo: Vector3 = a["lo"]
+			var ahi: Vector3 = a["hi"]
+			var blo: Vector3 = b["lo"]
+			var bhi: Vector3 = b["hi"]
+			if ahi.x < blo.x or bhi.x < alo.x or ahi.y < blo.y or bhi.y < alo.y or ahi.z < blo.z or bhi.z < alo.z:
 				continue
 			if _overlap(a["c"], b["c"], a["n"]) > MIN_OVERLAP:
 				hits.append([a["who"], b["who"], gap])

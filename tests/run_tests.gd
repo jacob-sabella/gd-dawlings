@@ -110,6 +110,7 @@ func _ready() -> void:
 	_test_the_wheel_turns_furniture_only_while_held()
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
+	_test_the_zfight_scan_finds_a_planted_fight()
 	_test_no_two_faces_in_the_room_share_a_plane()
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_every_venue_leaves_room_for_the_activities()
@@ -5737,6 +5738,46 @@ func _test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone() -> void:
 ## buffer's rounding picks that frame -- the crawling edges people call z-fighting. It hides in
 ## stills and shows the moment the camera moves, so this searches for it instead of looking.
 ## The first run found 424 such pairs, the worst being the top edge of every console strip.
+## The scan that the room's check rests on: it finds two faces in one plane that overlap, and
+## nothing for faces that only touch, lie apart in the same plane, or face another way.
+func _test_the_zfight_scan_finds_a_planted_fight() -> void:
+	var root := Node3D.new()
+	add_child(root)
+	var box := func(at: Vector3, size: Vector3, turn := 0.0) -> MeshInstance3D:
+		var mi := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		mi.mesh = mesh
+		mi.position = at
+		mi.rotation.y = turn
+		root.add_child(mi)
+		return mi
+	# Two tiles side by side, edge to edge, and a third far along the same plane.
+	box.call(Vector3(0, 0, 0), Vector3(1, 0.1, 1))
+	box.call(Vector3(1, 0, 0), Vector3(1, 0.1, 1))
+	box.call(Vector3(5, 0, 0), Vector3(1, 0.1, 1))
+	check("faces that touch or lie apart in one plane do not fight (%d)" % ZFightProbe.scan(root).size(),
+			ZFightProbe.scan(root).is_empty())
+	# A plate turned 30 degrees lying across the first tile, its top in the tile's top.
+	var plate: MeshInstance3D = box.call(Vector3(0.2, 0.025, 0.1), Vector3(0.6, 0.05, 0.2), deg_to_rad(30))
+	var hits := ZFightProbe.scan(root)
+	check("a turned plate whose top is in a tile's top fights it (%d)" % hits.size(),
+			not hits.is_empty() and hits.all(func(h): return plate in [h[0], h[1]]))
+	plate.position.y = 0.03
+	check("and does not once it stands proud", ZFightProbe.scan(root).is_empty())
+	# One drawn by a bank, its top in the far tile's top.
+	var bank := MeshBank.meshed(BoxMesh.new())
+	(bank.multimesh.mesh as BoxMesh).size = Vector3(0.5, 0.1, 0.5)
+	root.add_child(bank)
+	bank.claim(Transform3D(Basis(), Vector3(5.2, 0, 0)), Color.WHITE)
+	bank.commit()
+	hits = ZFightProbe.scan(root)
+	check("a bank's instance is scanned like a mesh (%d)" % hits.size(), hits.size() >= 1
+			and hits.any(func(h): return h[0] is Array or h[1] is Array))
+	remove_child(root)
+	root.free()
+
+
 func _test_no_two_faces_in_the_room_share_a_plane() -> void:
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
@@ -9968,9 +10009,9 @@ func _test_the_jitter_buffer_follows_a_drifting_clock() -> void:
 		var t := 0.0
 		var pull_ms := 256 * 1000.0 / 48000.0
 		var next_pull := 0.0
-		# Twenty minutes, compressed: long enough that an uncorrected buffer would have drifted
-		# by over a second.
-		while t < 20.0 * 60.0 * 1000.0:
+		# Five minutes, compressed: long enough that an uncorrected buffer would have drifted
+		# by 0.3 s, over thirty times the depth allowed off the target.
+		while t < 5.0 * 60.0 * 1000.0:
 			if t >= seq * packet_ms:
 				jb.push(seq, chunk, t)
 				seq += 1

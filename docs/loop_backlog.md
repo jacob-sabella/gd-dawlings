@@ -457,8 +457,15 @@ can finish music in, saving DAWproject. Steps, in order:
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,
 Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic by stems only.
 
-Also found: the main suite now takes about a minute (verify's limit was 60 s and is now 150 s).
-Nothing in it should take that long: find the slow tests.
+The main suite took about a minute; **done 2026-10-10**, now about 33 s (verify's limit 90 s).
+Timed test by test: half of it (35 s) was "no two faces in the room share a plane", which scans 14
+venue variants. Each scan ran the separating-axis overlap on 284,000 coplanar pairs, almost all
+faces in the same plane nowhere near each other (floor tiles); a world-box separation check in
+front of it is exact and took a scan from 2.4 s to 0.33 s. The scan had no test of its own that it
+finds anything: one now plants a fight (a turned plate in a tile's top, a bank's instance) and
+checks that touching and distant faces in one plane are not one. The jitter buffer's drift test
+simulated 20 minutes twice (7.8 s); 5 minutes still drifts 0.3 s uncorrected against a 400-frame
+limit, and holds within 41 frames. What is left is about a second per test that builds a Studio.
 
 ## Scaffolded — the shape is right, the wiring is not finished
 
