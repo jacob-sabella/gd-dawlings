@@ -96,6 +96,31 @@ offline backend's own mix, with its state, undo and replication, turned into God
 Not there yet: recording, your own audio files, playing MIDI items through a synth, and
 third-party plugins, which Godot cannot host.
 
+### Its file format: DAWproject
+
+The built-in engine saves and opens **DAWproject** (`.dawproject`,
+[github.com/bitwig/dawproject](https://github.com/bitwig/dawproject), MIT): a zip of
+`project.xml`, `metadata.xml` and the audio files, defined by a published XSD. It is the only
+open project format that several major DAWs read and write directly. We do not invent a format of
+our own. Whatever DAWproject cannot hold goes in an extension namespace inside the same
+`project.xml`, and the list of what another DAW loses is kept here.
+
+Who can open what a game session saves (checked 2026-10-09):
+
+| DAW | DAWproject | How |
+|---|---|---|
+| Bitwig Studio 5.0.9+ | native, both ways | File > Open / Export |
+| Studio One 6.5+ (Fender Studio Pro) | native, both ways | |
+| Cubase 14+ / Nuendo 13+, Cubasis, VST Live | native, both ways | |
+| Tracktion Waveform, n-Track | native | |
+| **Reaper** | **not native** | [ProjectConverter](https://github.com/git-moss/ProjectConverter) (Jürgen Moßgraber; .rpp to and from DAWproject, a separate program). [DawVert](https://github.com/SatyrDiamond/DawVert) also converts. |
+| **Ableton Live** | **none** | Ableton has announced nothing, and there is no .als writer we could rely on. A project goes to Live as stems (the mixdown step renders them). |
+| Logic Pro | none | stems, as for Live |
+
+So "transferable" means: native in Bitwig, Studio One and Cubase; Reaper through
+ProjectConverter, which is free and open source; Live and Logic by stems only. A Reaper host can
+already save a project through Reaper itself. The DAWproject path is for the built-in engine.
+
 ## Authority: the backend is the truth, one process holds the pen
 
 The DAW owns the mix. Everything in `MixState` is a cache of what arrived over the wire and

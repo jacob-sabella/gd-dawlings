@@ -232,16 +232,16 @@ func _host(port: int) -> void:
 	await _until(7.0)
 	if not _built_in:
 		DAW.transport_record()
-	await _until(11.8)
+	await _until(12.8)
 	if not _built_in:
 		DAW.transport_stop()
-	await _until(13.0)
+	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
 		_check_audio_take()
 		await _undo_takes()
 
-	await _until(13.4)
+	await _until(14.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -255,7 +255,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(14.4)
+	await _until(15.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -480,7 +480,7 @@ func _guest(port: int) -> void:
 				mine.size() == 1 and mine[0].peaks.size() > 100)
 		ga.record_with_host = false
 
-	await _until(14.0)
+	await _until(15.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
@@ -505,7 +505,7 @@ func _guest_records() -> void:
 	var settled := 0
 	var ref_usec := 0
 	var ref_second := 0.0
-	var timeout_at := _start + int((11.6 + _shift) * 1000.0)
+	var timeout_at := _start + int((12.6 + _shift) * 1000.0)
 	var pending_72 := 0
 	while Time.get_ticks_msec() < timeout_at and clicks_used < 3 or pending_72 > 0:
 		await get_tree().process_frame
@@ -526,6 +526,7 @@ func _guest_records() -> void:
 		seen = clicks.size()
 		if not gm.is_recording() or clicks_used >= 3:
 			continue
+		print("take: click at %.2fs (settled %d, used %d)" % [(Time.get_ticks_msec() - _start) / 1000.0 - _shift, settled, clicks_used])
 		if settled < SETTLE_CLICKS:
 			settled += 1
 			continue
@@ -553,7 +554,7 @@ func _guest_records() -> void:
 	var file := FileAccess.open("/tmp/r3d_probe_take_%d.json" % _port, FileAccess.WRITE)
 	file.store_string(JSON.stringify({"notes": expected, "hanging": 67}))
 	file.close()
-	await _until(12.8)
+	await _until(13.8)
 	check("the take was sent when I heard the recording stop", not gm.is_recording()
 			and gm.last_take.get("notes", 0) == 4)
 	check("the host told me where it went (%s)" % [_notices],

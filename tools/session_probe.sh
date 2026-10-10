@@ -3,13 +3,22 @@
 # Exits non-zero if either half saw a failure. See tools/probe/session_probe.gd.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-#   tools/session_probe.sh --reaper    the host drives the rig's Reaper (tools/reaper_rig.sh up)
+#   tools/session_probe.sh --reaper    the host drives the rig's Reaper, started (and stopped
+#                                      again) here if tools/reaper_rig.sh has not already
 #   tools/session_probe.sh --built-in  the host plays the built-in engine's song to the guest, on
 #                                      a real audio driver into the null sink (headless Godot's
 #                                      dummy driver mixes in 85ms lumps, too coarse to time)
 PORT="${PORT:-7342}"
 H_ARGS=(); G_ARGS=()
+STARTED_RIG=0
 if [ "${1:-}" = "--reaper" ]; then
+  # The rig, up if it is not already: without it the host falls back to the stand-in and the
+  # guest sees its 2 tracks instead of the rig's 40, which reads as a broken session rather
+  # than as a Reaper nobody started. Taken down again only if this run started it.
+  if ! tools/reaper_rig.sh status | grep -q running; then
+    tools/reaper_rig.sh up || { echo "session_probe: the Reaper rig would not start" >&2; exit 3; }
+    STARTED_RIG=1
+  fi
   H_ARGS=(--reaper-resource "${REAPER_RIG:-$HOME/.cache/reaper-3d/rig}" --shift 3)
   G_ARGS=(--expect-tracks "${EXPECT_TRACKS:-40}" --shift 3)
 elif [ "${1:-}" = "--built-in" ]; then
@@ -30,6 +39,8 @@ GUEST=$!
 wait "$HOST"; H=$?
 wait "$GUEST"; G=$?
 echo "== host";  grep -E '^(PASS|FAIL|notices|take)|session checks|SCRIPT ERROR' "$HOST_LOG"
-echo "== guest"; grep -E '^(PASS|FAIL|notices|audio)|session checks|SCRIPT ERROR' "$GUEST_LOG"
+echo "== guest"; grep -E '^(PASS|FAIL|notices|audio|take:)|session checks|SCRIPT ERROR' "$GUEST_LOG"
+[ -n "${KEEP_LOGS:-}" ] && cp "$HOST_LOG" "$KEEP_LOGS.host.log" && cp "$GUEST_LOG" "$KEEP_LOGS.guest.log"
 rm -f "$HOST_LOG" "$GUEST_LOG"
+[ "$STARTED_RIG" -eq 1 ] && tools/reaper_rig.sh down >/dev/null
 [ "$H" -eq 0 ] && [ "$G" -eq 0 ]

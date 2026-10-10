@@ -98,6 +98,26 @@ because a scaffold that reads as a finished project wastes the next person's aft
   snapshot round-trip is asserted field by field in the suite, and `tools/session.sh` brings up
   a real headless host and a real guest that renders what it was sent.
 
+## Built-in DAW
+
+The loop started 2026-10-09: make the built-in engine (`core/built_in/`, `--built-in`) a DAW people
+can finish music in, saving DAWproject. Steps, in order:
+
+0. **Done 2026-10-09.** `tools/session_probe.sh --reaper` was not broken. It had been run with
+   the rig down, so the host fell back to the 2-track stand-in. The probe now starts the rig
+   itself (and stops it if it started it). The guest's take window was one missed click from
+   failing (1 settle + 3 clicks in about 4.6 s). It failed 2 runs in 6 once and then not in 21.
+   The host now records 1 s longer. The cause of the missed click was not found: watch for
+   `take: click` lines in the probe output if it comes back.
+1. Project model the engine owns: next.
+2. DAWproject save/load, with New/Open/Save in the room and on the session panel.
+3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
+6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
+9. Mixdown and stems. 10. Interchange proof against the official examples.
+
+Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,
+Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic by stems only.
+
 ## Scaffolded — the shape is right, the wiring is not finished
 
 - **Calibration gesture.** `RoomAnchor.mark_origin/mark_forward` work and are tested; nothing
