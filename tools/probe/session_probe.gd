@@ -41,7 +41,7 @@ const HOST_KEYS_TRACK := 11
 const HOST_TAKE_TOLERANCE := 0.015
 ## The off-beats' track's fader: held at 0 dB, down to -9 dB over three seconds, then held.
 const HOST_RAMP := [[HOST_TAKE_AT + 2.0, 0.0, DawKitAutomation.LINEAR], [HOST_TAKE_AT + 5.0, -9.0, DawKitAutomation.HOLD]]
-const HOST_RAMP_TOLERANCE_DB := 1.0
+const HOST_RAMP_TOLERANCE_DB := 0.5
 ## Where the render's loop starts, and how far a note in the rendered stem may be from its place.
 const RENDER_FROM := 40.0
 const RENDER_TOLERANCE_MS := 2.0
@@ -493,7 +493,7 @@ func _measure_onsets(what: String, wav: PackedByteArray, start: float, map: DawK
 	check("%s, each of them (%.2fms from the average)" % [what, spread * 1000.0], spread < HOST_TAKE_TOLERANCE)
 
 
-## Each off-beat note's loudest sample in the take, in dB, against the ones before the ramp:
+## Each off-beat note's level in the take, in dB, against the ones before the ramp:
 ## the difference is the lane's value at that note, to within HOST_RAMP_TOLERANCE_DB.
 func _measure_ramp(wav: PackedByteArray, start: float, map: DawKitTempoMap) -> void:
 	var frames := (wav.size() - AudioTake.HEADER_BYTES) / 2
@@ -503,10 +503,15 @@ func _measure_ramp(wav: PackedByteArray, start: float, map: DawKitTempoMap) -> v
 	while b < start + float(frames) / AudioTake.RATE - 0.1:
 		var from := maxi(int((b - start - 0.01) * AudioTake.RATE), 0)
 		var to := mini(int((b - start + 0.08) * AudioTake.RATE), frames)
-		var loudest := 1
+		# The power over the note, not its loudest sample, which is a matter of where the
+		# waveform's peak falls; and the lane in the middle of it, as the ramp goes on falling.
+		var power := 0.0
 		for f in range(from, to):
-			loudest = maxi(loudest, absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)))
-		rows.append([b, 20.0 * log(float(loudest)) / log(10.0), DawKitAutomation.value_in(HOST_RAMP, b)])
+			var v := float(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2))
+			power += v * v
+		power = maxf(power / maxf(to - from, 1), 1.0)
+		var middle := b - 0.01 + 0.5 * float(to - from) / AudioTake.RATE
+		rows.append([b, 10.0 * log(power) / log(10.0), DawKitAutomation.value_in(HOST_RAMP, middle)])
 		nth += 1.0
 		b = map.seconds_at(nth)
 	var flat: Array = rows.filter(func(r): return r[2] > -0.001)
