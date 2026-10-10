@@ -39,6 +39,9 @@ const HOST_KEYS_TRACK := 11
 ## a take from a run to run sits within about 12ms of the beat. Sample-accurate starts need the
 ## engine to mix its own players (step 7 in docs/loop_backlog.md).
 const HOST_TAKE_TOLERANCE := 0.015
+## The off-beats' track's fader: held at 0 dB, down to -9 dB over three seconds, then held.
+const HOST_RAMP := [[HOST_TAKE_AT + 2.0, 0.0, DawKitAutomation.LINEAR], [HOST_TAKE_AT + 5.0, -9.0, DawKitAutomation.HOLD]]
+const HOST_RAMP_TOLERANCE_DB := 1.0
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
 ## docs/architecture.md, "Recording a guest".
@@ -379,6 +382,9 @@ func _host_records_itself() -> void:
 		nb += 1.0
 	DAW.state.track(HOST_MIDI_TRACK).items.clear()
 	DAW.insert_midi_take(HOST_MIDI_TRACK, HOST_TAKE_AT, HOST_TAKE_AT + 6.0, notes, "Off-beats")
+	# And their track's fader automated: held, then down 9 dB in a straight line over three seconds,
+	# then held there. Each note's level in the take is measured against it.
+	DAW.set_automation(HOST_MIDI_TRACK, "volume", HOST_RAMP)
 	var midi: MixState.ItemState = DAW.state.track(HOST_MIDI_TRACK).items[0]
 	(DAW.backend as GodotBackend).midi_stream(midi, true)
 	DAW.seek(HOST_TAKE_AT)
@@ -413,6 +419,8 @@ func _host_records_itself() -> void:
 	var start: float = _audio_placed["start"]
 	_measure_onsets("clicks", wav, start, map, 0.0)
 	_measure_onsets("notes", wav, start, map, 0.5)
+	_measure_ramp(wav, start, map)
+	DAW.set_automation(HOST_MIDI_TRACK, "volume", [])
 	var at_turn := map.seconds_at(turn + 4.0) - start
 	check("and the take runs through the tempo's change (%.2fs in, of %.2fs)" % [at_turn, _audio_placed["seconds"]],
 			at_turn > 1.0 and at_turn < float(_audio_placed["seconds"]) - 0.3)
@@ -476,6 +484,41 @@ func _measure_onsets(what: String, wav: PackedByteArray, start: float, map: DawK
 			peaks.size() >= 5 and offs.size() == peaks.size())
 	check("%s on time, on average (%.2fms)" % [what, mean * 1000.0], absf(mean) < HOST_TAKE_TOLERANCE)
 	check("%s, each of them (%.2fms from the average)" % [what, spread * 1000.0], spread < HOST_TAKE_TOLERANCE)
+
+
+## Each off-beat note's loudest sample in the take, in dB, against the ones before the ramp:
+## the difference is the lane's value at that note, to within HOST_RAMP_TOLERANCE_DB.
+func _measure_ramp(wav: PackedByteArray, start: float, map: DawKitTempoMap) -> void:
+	var frames := (wav.size() - AudioTake.HEADER_BYTES) / 2
+	var rows: Array = []
+	var nth := ceilf(map.beat_at(start + 0.5) - 0.5) + 0.5
+	var b := map.seconds_at(nth)
+	while b < start + float(frames) / AudioTake.RATE - 0.1:
+		var from := maxi(int((b - start - 0.01) * AudioTake.RATE), 0)
+		var to := mini(int((b - start + 0.08) * AudioTake.RATE), frames)
+		var loudest := 1
+		for f in range(from, to):
+			loudest = maxi(loudest, absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)))
+		rows.append([b, 20.0 * log(float(loudest)) / log(10.0), DawKitAutomation.value_in(HOST_RAMP, b)])
+		nth += 1.0
+		b = map.seconds_at(nth)
+	var flat: Array = rows.filter(func(r): return r[2] > -0.001)
+	var reference := 0.0
+	for r in flat:
+		reference += r[1]
+	reference /= maxf(flat.size(), 1)
+	var worst := 0.0
+	var ramped := 0
+	var off: Array = []
+	for r in rows:
+		var d: float = (r[1] - reference) - r[2]
+		off.append([snappedf(r[2], 0.1), snappedf(r[1] - reference, 0.1)])
+		worst = maxf(worst, absf(d))
+		if r[2] < -0.5:
+			ramped += 1
+	print("host take ramp: [lane dB, heard dB] %s worst_db %.2f" % [off, worst])
+	check("the notes follow their fader's automation (%d of %d down the ramp, worst %.2f dB off)" % [ramped, rows.size(), worst],
+			flat.size() >= 2 and ramped >= 3 and rows.any(func(r): return r[2] < -5.0) and worst < HOST_RAMP_TOLERANCE_DB)
 
 
 func _check_audio_take() -> void:

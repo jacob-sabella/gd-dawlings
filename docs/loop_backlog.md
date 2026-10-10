@@ -369,6 +369,11 @@ can finish music in, saving DAWproject. Steps, in order:
      the beat unless fine) and drags it, a drag moves a point, a click toggles hold/ramp, a fine
      click removes it, the wheel over a point nudges it; each is one `set_automation` step. The
      hover card names the lane and reads the point.
+   - **Done 2026-10-10 (8f), measured:** the `--built-in` probe's off-beat notes' track has a
+     volume lane (held, then -9 dB over three seconds); each note's loudest sample in the host's
+     own take, against the notes before the ramp, is the lane's value there to within 0.64 dB
+     (two runs: worst 0.64 and 0.59; a steady 0.3-0.5 dB lower, about what the ramp moves in
+     the 80 ms before a note's peak).
    - **Not yet:** the lane is as tall as a track lane (14 mm); a taller automation row under the
      track would be easier to draw on. Master automation (not in MixState yet). A loopback
      measurement of a volume ramp.
