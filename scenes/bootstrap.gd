@@ -9,6 +9,8 @@ extends Node
 ##
 ##   godot --path .                                      offline stand-in, screen participant
 ##   godot --path . -- --built-in                         the built-in DAW: Godot's own audio
+##                                                        (the default in an exported build;
+##                                                        --stand-in there for the silent mix)
 ##   godot --path . -- --reaper                          host, OSC to a local Reaper
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
 ##   godot --path . -- --reaper --host --code AB12       host, letting in only those told AB12
@@ -201,7 +203,9 @@ func _start_daw(args: Dictionary) -> void:
 
 func _parse(argv: PackedStringArray) -> Dictionary:
 	var out := {
-		"reaper": false, "built_in": false, "reaper_host": "127.0.0.1",
+		# A build sent out (an export template) makes sound from the start: whoever runs it has
+		# no Reaper. Run from the editor, as the tests and probes are, the silent stand-in.
+		"reaper": false, "built_in": OS.has_feature("template"), "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
@@ -345,6 +349,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					out["vision"] = argv[i]
 			"--reaper": out["reaper"] = true
 			"--built-in": out["built_in"] = true
+			"--stand-in": out["built_in"] = false
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
 			"--stage": out["stage"] = true

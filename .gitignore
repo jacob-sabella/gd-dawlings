@@ -1,5 +1,6 @@
 .godot/
 *.tmp
-export_presets.cfg
+# export_presets.cfg is tracked: Godot 4 keeps signing secrets in .godot/export_credentials.cfg.
 override.cfg
 shots/
+/build/
