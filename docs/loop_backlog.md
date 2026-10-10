@@ -188,9 +188,27 @@ can finish music in, saving DAWproject. Steps, in order:
      sample. In `session_probe.sh --built-in`, the host's loopback take of a MIDI item with a
      note on every off-beat finds each note 2.4-4.6 ms after the off-beat on average (about 2 ms
      behind the clicks, which is the tine's attack) and within 0.8 ms of that average.
-   - **Next (5b):** live keys through the armed track's instrument (its bus, fader and effects)
-     in place of the monitor synth; MonitorSynth's voice made DawKitTine's (two copies now);
-     an instrument from another DAW's file kept rather than dropped; the old renders pruned.
+   - **Done 2026-10-10 (5b):**
+     - MonitorSynth's voice is now DawKitTine, one copy, sample for sample.
+     - On the built-in engine the host's keys play through Godot onto the bus of the track they
+       go onto (`DAW.monitor_bus`), so its fader, effects and folder apply. Sends do not: a send
+       is a second player of an item, not a tap.
+     - An instrument from another DAW's file is kept for its track (`OfflineBackend.instruments`)
+       and saved back. Its notes play through the tine meanwhile.
+     - Renders of items no longer there are pruned past 32.
+   - **The engine's clock (from step 7, pulled forward):** the playhead now moves by the sound card
+     (`GodotBackend.audio_time`, a silent looping player), not by the frame. Players start against
+     it and are put back only on a real stall: a player's first reading after it is mixed is its
+     baseline, and only a change of more than one mix step counts. Before, a 60 ms allowance let
+     the playhead and the music part by up to that. After, 0 re-seeks in a take.
+     Measured by the loopback over 5 runs:
+     - clicks average 2-3 ms early, notes within 1.3 ms of the beat, each take within 1.4 ms of
+       its own average;
+     - the host's live key within 1.5-7.3 ms of where its note was stamped, after the monitor
+       latency gained the mix step it waits for (it was 12 ms out).
+     - The limit: Godot starts a player at the next mix step and cannot be told where in it, so
+       sources started in different frames can be up to a step apart (10.7 ms here). The probe's
+       absolute limit is 15 ms for that reason.
    - Seen once: the default probe's guest missed a click in its timing check (frames 33661,
      129615: one gone). It passed the next 4 runs. Like step 0's flaky click, watch for it.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
@@ -243,6 +261,15 @@ Nothing in it should take that long: find the slow tests.
   colours. Not started: nobody has asked for big rooms yet.
 
 ## Waiting on the user
+
+- **Hearing your own keys: through the track, or fast.** On the built-in engine the host's keys now
+  play through their track (fader and effects, as a DAW monitors), which goes through Godot's
+  mixer: about 44 ms from key to sound here. The native helper plays them in about 5 ms, but
+  straight out, past the track. A switch for this is easy; which should be the default?
+- **Sample-accurate playback needs the engine to mix its own players.** Godot cannot start a player
+  at a given sample, so sources can sit up to one mix step (10.7 ms) apart. Fixing that means
+  dawkit mixing every track itself, sample by sample, which in GDScript would be too slow for a
+  real project: it is the GDScript-or-GDExtension question below, now with a concrete reason.
 
 - **dawkit's licence and name.** It is "All rights reserved" for now, which keeps every option
   open, and "dawkit" is a working name (every class is prefixed `DawKit`, so a rename is one

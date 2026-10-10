@@ -8793,6 +8793,30 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	check("a host on the built-in engine plays its own keys", gm.plays() and gm.host_records())
 	var armed := HitRecorder.armed_track()
 	check("onto the armed track when none is chosen", gm.take_track() == armed and armed > 0)
+	var engine := GodotBackend.new()
+	engine.state = DAW.state
+	add_child(engine)
+	engine._build_buses()
+	var stand_in := DAW.backend
+	DAW.backend = engine
+	gm._hear_host_keys()
+	check("heard through that track, as the engine monitors it (%s)" % gm.synth.bus,
+			gm.synth.bus != &"" and gm.synth.bus == engine.monitor_bus(armed) and not gm.synth.allow_native)
+	gm.target_track = armed + 1
+	gm._process(0.016)
+	check("and through another, chosen", gm.synth.bus == engine.monitor_bus(armed + 1))
+	gm.target_track = 0
+	DAW.backend = stand_in
+	var monitor := MonitorSynth.new()
+	monitor.note_on(60, 100)
+	var tine := DawKitTine.new(MonitorSynth.RATE)
+	tine.note_on(60, 100)
+	check("what a player hears of their keys is the engine's own instrument, sample for sample",
+			monitor.render(2400) == tine.render(2400))
+	monitor.free()
+	engine._remove_buses()
+	remove_child(engine)
+	engine.free()
 	DAW.state.track(armed).items.clear()
 	var s := DAW.state
 	s.position_seconds = 30.0
@@ -10112,7 +10136,7 @@ func _test_the_monitor_piano_sounds_decays_and_shares_its_voices() -> void:
 	for f in full:
 		full_peak = maxf(full_peak, absf(f.x))
 		finite = finite and is_finite(f.x)
-	check("twenty-four keys share sixteen voices", synth.sounding() == MonitorSynth.VOICES)
+	check("twenty-four keys share sixteen voices", synth.sounding() == DawKitTine.VOICES)
 	check("and a fistful saturates rather than clips (%.3f)" % full_peak, full_peak < 1.0 and finite)
 	synth.enabled = false
 	synth.note_on(72, 100)
@@ -10475,6 +10499,29 @@ func _test_the_built_in_engine_plays_notes_through_its_instrument() -> void:
 			fresh.state.track(6).plugins().size() == chain)
 	var again := ProjectBridge.capture(fresh)
 	check("so it comes back the same (%s)" % p.first_difference(again), p.same_as(again))
+
+	# Another DAW's instrument on the track: the engine cannot run it, so the notes play through
+	# the tine, and the track is saved with the instrument it came with.
+	var surge := DawKitEffect.new()
+	surge.name = "Surge XT"
+	surge.instrument = true
+	surge.plugin_format = "CLAP"
+	surge.plugin_id = "org.surge-synth-team.surge-xt"
+	surge.state = PackedByteArray([1, 2, 3])
+	t.effects[0] = surge
+	ProjectBridge.load(p, fresh)
+	var kept := ProjectBridge.capture(fresh)
+	var first_fx := kept.track(ProjectBridge.id_of(6)).effects[0]
+	check("another DAW's instrument is kept, not swapped for the tine (%s)" % first_fx.name,
+			first_fx.instrument and first_fx.plugin_id == surge.plugin_id and first_fx.state == surge.state)
+	check("and the desk's chain is still only effects", fresh.state.track(6).plugins().size() == chain)
+
+	var stale := fresh.state.track(6).items[0] as MixState.ItemState
+	fresh.midi_stream(stale, true)
+	var key := GodotBackend.midi_key(stale)
+	stale.notes = PackedFloat32Array([0.1, 0.2, 72, 100, 0])
+	fresh.prune_renders()
+	check("a render of notes no longer on the timeline is let go", not fresh._midi_streams.has(key))
 	_offline()
 
 

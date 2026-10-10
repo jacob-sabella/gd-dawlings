@@ -32,7 +32,13 @@ const TAKE_TOLERANCE := 0.005
 const HOST_TAKE_TRACK := 3
 const HOST_TAKE_AT := 600.0
 const HOST_MIDI_TRACK := 5
-const HOST_TAKE_TOLERANCE := 0.010
+## A track with no effects of its own, for the host's key to be heard through plainly.
+const HOST_KEYS_TRACK := 11
+## Fifteen, not five: Godot starts a player on the next mix step and cannot be told where in it,
+## so players started in different frames can be up to a step apart (10.7ms at this driver), and
+## a take from a run to run sits within about 12ms of the beat. Sample-accurate starts need the
+## engine to mix its own players (step 7 in docs/loop_backlog.md).
+const HOST_TAKE_TOLERANCE := 0.015
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
 ## docs/architecture.md, "Recording a guest".
@@ -368,8 +374,24 @@ func _host_records_itself() -> void:
 	DAW.seek(HOST_TAKE_AT)
 	await _until(7.6)
 	check("my microphone is open (%s)" % ha.input_device, ha.mic_open())
+	var gm := Session.guest_midi
+	gm.target_track = HOST_KEYS_TRACK
+	gm.record_with_host = true
+	DAW.state.track(HOST_KEYS_TRACK).items.clear()
+	var reseeks_before: int = (DAW.backend as GodotBackend).reseeks
 	DAW.transport_record()
+	# A key of my own, heard through its track, a quarter of a beat after a click: between the
+	# click and the off-beat note, so its sound can be found in the take on its own.
+	await _until(9.0)
+	while absf(fposmod(DAW.state.position_seconds, beat) / beat - 0.22) > 0.04:
+		await get_tree().process_frame
+	gm.note_on(96, 127)
+	await get_tree().create_timer(0.1).timeout
+	gm.note_off(96)
 	await _until(11.2)
+	var reseeks: int = (DAW.backend as GodotBackend).reseeks - reseeks_before
+	print("host take reseeks: %d" % reseeks)
+	check("nothing put back on the clock while I recorded (%d)" % reseeks, reseeks == 0)
 	DAW.transport_stop()
 	await _until(11.6)
 	ha.record_with_host = false
@@ -381,6 +403,26 @@ func _host_records_itself() -> void:
 	var start: float = _audio_placed["start"]
 	_measure_onsets("clicks", wav, start, beat, 0.0)
 	_measure_onsets("notes", wav, start, beat, 0.5)
+	# My key: where its sound is in the take against where the keys' take put the note. The same
+	# moment, if what the host hears of its own keys is accounted for.
+	var keys: Array = DAW.state.track(HOST_KEYS_TRACK).items.filter(
+			func(it: MixState.ItemState) -> bool: return not it.notes.is_empty())
+	check("my key was taken down on its track (%d)" % keys.size(), keys.size() == 1)
+	if keys.size() == 1:
+		var stamped: float = keys[0].start + keys[0].notes[0]
+		var centre := int((stamped - start) * AudioTake.RATE)
+		var loudest := 0
+		for f in range(centre - AudioTake.RATE / 25, centre + AudioTake.RATE / 25):
+			loudest = maxi(loudest, absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)))
+		var heard_at := NAN
+		for f in range(centre - AudioTake.RATE / 25, centre + AudioTake.RATE / 25):
+			if absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)) > loudest / 2:
+				heard_at = start + float(f) / AudioTake.RATE
+				break
+		print("host take key: stamped %.4f heard %.4f off_ms %.2f monitor_latency_ms %.1f" % [stamped, heard_at,
+				(heard_at - stamped) * 1000.0, Session.guest_midi.synth.latency_seconds() * 1000.0])
+		check("my key's sound is where its note was put (%.2fms)" % ((heard_at - stamped) * 1000.0),
+				absf(heard_at - stamped) < HOST_TAKE_TOLERANCE)
 
 
 ## Each beat inside the take (or each point `phase` of a beat on), after its first half second:

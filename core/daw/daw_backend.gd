@@ -203,6 +203,11 @@ func set_looping(_on: bool) -> void: pass
 var project_path := ""
 ## Saves the project. `path` empty means where it already is; returns what went wrong or could
 ## not be saved, as sentences, empty when all of it was written.
+## The bus a track's live instrument plays on in this engine, for keys played into it to be heard
+## through the track; empty where the engine has no such bus (Reaper monitors its own inputs).
+func monitor_bus(_track_index: int) -> StringName: return &""
+
+
 func save_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot save from here"])
 ## Opens a project file in place of the open one; returns what went wrong, empty on success.
 func open_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot open files from here"])

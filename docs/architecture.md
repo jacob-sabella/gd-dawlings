@@ -148,6 +148,12 @@ is written, placed and announced exactly as a guest's would be. The host's keys 
 plays for such a host (`host_records`) and times notes by `host_heard`. The engine's metronome
 (dawkit's `DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
 
+The built-in engine's playhead is moved by the sound card: a silent player runs all the time, and
+while the song plays the playhead is where play (or a seek) began plus how far that player has
+been mixed. Every player is started against it, and put back only when it moves by more than a
+mix step from where it started. Keys a host plays into a track are heard through that track's
+bus (`DAW.monitor_bus`).
+
 MIDI items play through the engine's instrument, dawkit's `DawKitTine`. Each item is rendered
 whole on a worker thread, every note on its own sample, and played like a take, locked to the
 item's start. A project marks the track with a built-in instrument device, and opening one keeps

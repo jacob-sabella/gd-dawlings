@@ -50,7 +50,10 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 		out.armed = t.rec_arm
 		out.monitor = clampi(t.monitor, 0, 2) as DawKitTrack.Monitor
 		# A track with notes on it plays them through the engine's instrument, first in its chain.
-		if t.items.any(func(it: MixState.ItemState) -> bool: return not it.notes.is_empty()):
+		# One the project came with and the engine cannot run is kept as it came.
+		if backend.instruments.has(index):
+			out.effects.append(DawKitEffect.from_dict(backend.instruments[index]))
+		elif t.items.any(func(it: MixState.ItemState) -> bool: return not it.notes.is_empty()):
 			var tine := DawKitEffect.new()
 			tine.kind = INSTRUMENT
 			tine.name = "Tine"
@@ -134,6 +137,7 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 		return problems
 	var s := backend.state
 	s.tracks.clear()
+	backend.instruments.clear()
 	s.markers.clear()
 	backend.project_title = p.title
 	backend.beat_unit = p.time_signature.y
@@ -174,6 +178,10 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 		# Instruments are not in the desk's chain: the engine plays every track's notes through its
 		# own (INSTRUMENT), and one it cannot run is left out.
 		var chain := src.effects.filter(func(e: DawKitEffect) -> bool: return not e.instrument)
+		for e in src.effects:
+			if e.instrument and e.kind != INSTRUMENT:
+				backend.instruments[i + 1] = e.to_dict()
+				break
 		for fx_index in chain.size():
 			var e: DawKitEffect = chain[fx_index]
 			var f := s.fx(i + 1, fx_index)

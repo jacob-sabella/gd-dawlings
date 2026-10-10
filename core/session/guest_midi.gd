@@ -304,25 +304,40 @@ func _process(_delta: float) -> void:
 			_commit()
 		if _host_synth:
 			_host_synth = false
+			synth.set_bus(&"")
+			synth.allow_native = OS.get_environment("R3D_GODOT_KEYS") != "1"
 			if not keytar:
 				_release_all()
 				synth.stop()
 		return
+	if _host_synth:
+		# The keys follow the track they go onto, as the armed track or the choice changes.
+		var through := DAW.monitor_bus(take_track())
+		if through != synth.bus:
+			synth.set_bus(through)
 	if midi_open:
 		_hear_host_keys()
 	_take_native_midi()
 	follow(heard())
 
 
-## A host recording its own keys hears them here, at once: the engine has no instrument on a MIDI
-## track to hear them through yet. Started when MIDI is opened or the first key is played, not
-## before, so a host who never plays never has it running.
+## A host recording its own keys hears them through the track they go onto, as a DAW monitors a
+## track's instrument: the instrument on that track's bus (DAW.monitor_bus), so its fader and
+## effects are in what the host hears. Started when MIDI is opened or the first key is played,
+## not before, so a host who never plays never has it running.
 func _hear_host_keys() -> void:
 	if _host_synth or keytar or not host_records():
 		return
 	_host_synth = true
+	# Through the track, so through Godot: the helper's sound would not pass the track's fader.
+	synth.allow_native = false
+	if synth.native != null:
+		synth.stop()
+	synth.set_bus(DAW.monitor_bus(take_track()))
 	if MonitorSynth.available() and not synth.is_running():
 		synth.start()
+	# MIDI came through the helper while it ran; now it comes through Godot.
+	_route_midi()
 
 
 ## The take, following what the guest hears of the host's transport: begun when recording is

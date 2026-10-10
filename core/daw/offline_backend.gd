@@ -83,6 +83,10 @@ var media := {}
 ## Whether to stand in for a DAW that records its own inputs, as Reaper does. Off: the built-in
 ## engine cannot, and the stand-in is its model. The suite turns it on to play a host on Reaper.
 var records_inputs := false
+## Instruments a project file gave a track that the engine cannot run (another DAW's plug-in), by
+## track index, in dawkit's plain form: kept so the track saves with it, and played meanwhile
+## through the engine's own.
+var instruments := {}
 
 
 func set_media(where: Dictionary) -> void:

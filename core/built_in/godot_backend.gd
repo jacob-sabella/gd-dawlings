@@ -30,9 +30,13 @@ extends OfflineBackend
 const BUS_PREFIX := "R3D "
 const MASTER_BUS := "R3D Master"
 const CUE_PREFIX := "R3D Cue "
-## How far a part's player may drift from the song clock before it is put back. Under a mix
-## buffer of drift is inaudible; a re-seek is a small click, so this errs towards rare.
-const DRIFT_SECONDS := 0.06
+## How far a player may move from where it started against the song clock before it is put back
+## (see `_drift`). Every player and the clock are moved by the same mixer, so this is for a player
+## that stalled or was starved, not for steady running; a re-seek is a small click. More than a
+## whole mix step: a reading jitters by up to half of one with where in the step it is taken.
+const DRIFT_SECONDS := 0.025
+## How many MIDI renders are kept before those of items no longer there are let go.
+const KEPT_RENDERS := 32
 
 ## The FX chains the demo opens with: track -> [[kind, {param name: normalised value}]].
 const DEMO_FX := {
@@ -58,6 +62,17 @@ var _master_bus := -1
 var _capture: AudioEffectCapture
 ## The tracks being cued, in order.
 var _cues: Array[int] = []
+## The song clock (`_drive_meters`): a silent loop, how many times it has gone round, where it was
+## last read, the song position at its zero, and the playhead as it last set it.
+const CLOCK_SECONDS := 8.0
+## How many times a playing player has been put back on the clock: each is a small click, so
+## this should stay near nothing. For the probe.
+var reseeks := 0
+var _clock: AudioStreamPlayer
+var _clock_turns := 0
+var _clock_raw := 0.0
+var _clock_origin := 0.0
+var _clock_said := -1.0
 ## Recorded take file name -> its sound, or null when the file is not on this machine.
 var _take_streams := {}
 ## The metronome: one bar of clicks (DawKitMetronome), looping, kept on the bar grid like a part.
@@ -570,16 +585,17 @@ func _sync_players() -> void:
 				continue
 			if player.stream != stream or not player.playing:
 				player.stream = stream
-				player.play(expected)
+				_start(player, expected)
 				continue
-			var off := player.get_playback_position() + since - expected
+			var off := _drift(player, player.get_playback_position() + since - expected)
 			if wraps:
 				var length := stream.get_length()
 				off = wrapf(off, -length * 0.5, length * 0.5)
 			elif loop_length > 0.0:
 				off = wrapf(off, -loop_length * 0.5, loop_length * 0.5)
 			if absf(off) > DRIFT_SECONDS:
-				player.play(expected)
+				reseeks += 1
+				_start(player, expected)
 
 
 ## The click, while the transport runs with the metronome on: into the master, so it is in what
@@ -603,12 +619,76 @@ func _sync_click() -> void:
 	var length := _click.stream.get_length()
 	var expected := fposmod(state.position_seconds, length)
 	if not _click.playing:
-		_click.play(expected)
+		_start(_click, expected)
 		return
-	var off := wrapf(_click.get_playback_position() + AudioServer.get_time_since_last_mix() - expected,
+	var off := wrapf(_drift(_click, _click.get_playback_position() + AudioServer.get_time_since_last_mix() - expected),
 			-length * 0.5, length * 0.5)
 	if absf(off) > DRIFT_SECONDS:
-		_click.play(expected)
+		reseeks += 1
+		_start(_click, expected)
+
+
+func monitor_bus(track_index: int) -> StringName:
+	return AudioServer.get_bus_name(_bus[track_index]) if _bus.has(track_index) else &""
+
+
+## Seconds of sound the card has mixed since the clock started, to the sample, or NAN where
+## nothing is mixed (a headless run).
+func audio_time() -> float:
+	if AudioServer.get_driver_name() == "Dummy":
+		return NAN
+	if _clock == null:
+		var silence := AudioStreamWAV.new()
+		silence.format = AudioStreamWAV.FORMAT_8_BITS
+		silence.mix_rate = int(AudioServer.get_mix_rate())
+		var data := PackedByteArray()
+		data.resize(int(CLOCK_SECONDS * silence.mix_rate))
+		silence.data = data
+		silence.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		silence.loop_end = data.size()
+		_clock = AudioStreamPlayer.new()
+		_clock.name = "Clock"
+		_clock.stream = silence
+		add_child(_clock)
+		_clock.play()
+		_clock_turns = 0
+		_clock_raw = 0.0
+	if not _clock.playing:
+		return NAN
+	var raw := _clock.get_playback_position()
+	if raw < _clock_raw - CLOCK_SECONDS * 0.5:
+		_clock_turns += 1
+	_clock_raw = raw
+	return _clock_turns * CLOCK_SECONDS + raw + AudioServer.get_time_since_last_mix()
+
+
+## Where a player told to start now should start: a player sounds from the next mix, by which
+## time the song has moved on by what is left until it.
+static func start_at(expected: float) -> float:
+	return expected + AudioServer.get_time_to_next_mix()
+
+
+func _start(player: AudioStreamPlayer, expected: float) -> void:
+	var from := start_at(expected)
+	player.play(from)
+	player.set_meta(&"bias", NAN)
+	player.set_meta(&"from", from)
+
+
+## How far a player has moved off the clock since it started. What its position reads against
+## the clock right after a start is not zero -- the playback position a player reports is a mix
+## step out either way, by where in the step the start fell -- but it is the same from then on, as
+## the one mixer moves both; so that first reading is the player's own, and only a change from it
+## is drift.
+func _drift(player: AudioStreamPlayer, off: float) -> float:
+	var bias: float = player.get_meta(&"bias", NAN)
+	if is_nan(bias):
+		# Not until it has been mixed: before that it reads where it was told to start.
+		if is_equal_approx(player.get_playback_position(), float(player.get_meta(&"from", -1.0))):
+			return 0.0
+		player.set_meta(&"bias", off)
+		return 0.0
+	return off - bias
 
 
 ## What a MIDI item sounds like depends on nothing but its notes and its length.
@@ -636,7 +716,21 @@ func midi_stream(it: MixState.ItemState, wait := false) -> AudioStreamWAV:
 	WorkerThreadPool.wait_for_task_completion(running[0])
 	_midi_tasks.erase(key)
 	_midi_streams[key] = running[1][0]
+	if _midi_streams.size() > KEPT_RENDERS:
+		prune_renders()
 	return _midi_streams[key]
+
+
+## Renders of what is no longer on the timeline let go: every edit to a MIDI item is a new one.
+func prune_renders() -> void:
+	var wanted := {}
+	for index in state.track_indices():
+		for it in state.track(index).items:
+			if not it.notes.is_empty():
+				wanted[midi_key(it)] = true
+	for key in _midi_streams.keys():
+		if not wanted.has(key):
+			_midi_streams.erase(key)
 
 
 ## Notes through the instrument, as a stream. Safe off the main thread.
@@ -679,12 +773,30 @@ func looped_stream(source: String, from: float, to: float) -> AudioStreamWAV:
 	return _take_streams[key]
 
 
+## The song clock. The playhead is moved by the sound card, not by the frame: a silent player
+## runs all the time, and while the song plays the playhead is where it was when play (or a
+## seek) began plus how far that player has been mixed since, to the sample. Every other player
+## is started against this clock and kept to it, so the playhead, the click and every part are
+## the same time. Without a sound card to mix (the Dummy driver of a headless run) the frame
+## moves it, as it did.
 func _drive_meters(delta: float) -> void:
 	if state.playing:
-		state.position_seconds += delta
+		var now := audio_time()
+		if is_nan(now):
+			state.position_seconds += delta
+		else:
+			if state.position_seconds != _clock_said:
+				# Play pressed, or the playhead moved by someone: the clock starts from here.
+				_clock_origin = state.position_seconds - now
+			state.position_seconds = _clock_origin + now
 		if state.looping and state.has_loop_range() and state.position_seconds >= state.loop_end:
 			state.position_seconds = state.loop_start + fmod(state.position_seconds - state.loop_end,
 					state.loop_end - state.loop_start)
+			if not is_nan(now):
+				_clock_origin = state.position_seconds - now
+		_clock_said = state.position_seconds
+	else:
+		_clock_said = -1.0
 	state.position_string = state.bar_beat(state.position_seconds)
 	_sync_players()
 	_sync_click()

@@ -265,6 +265,11 @@ func project_title() -> String:
 	return str(title) if title != null else "Untitled"
 
 
+## Where keys played into a track are heard through it: see DAWBackend.monitor_bus.
+func monitor_bus(track_index: int) -> StringName:
+	return backend.monitor_bus(track_index) if backend != null else &""
+
+
 func project_file() -> String: return backend.project_path if Session.is_authority() else ""
 
 
