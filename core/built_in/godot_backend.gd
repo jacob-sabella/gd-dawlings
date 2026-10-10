@@ -203,7 +203,7 @@ func open(options: Dictionary = {}) -> bool:
 	_build_buses()
 	_start_lanes()
 	_connect_state()
-	_render_parts()
+	_render_parts(true)
 	_apply_everything()
 	connection_changed.emit()
 	return true
@@ -275,7 +275,7 @@ func project_loaded(kinds: Dictionary) -> void:
 	_build_buses()
 	_start_lanes()
 	_apply_everything()
-	_render_parts()
+	_render_parts(true)
 
 
 ## Puts an effect at the end of a track's chain. `settings` are by parameter name, normalised.
@@ -757,7 +757,9 @@ func _prune_windows(points: Array, meter_points: Array, loop: int) -> void:
 var _rendering_key := ""
 
 
-func _render_parts() -> void:
+## `at_once` takes what is in the cache now, as opening a project wants its song to be there; a
+## tempo's change leaves even the cache to the workers.
+func _render_parts(at_once := false) -> void:
 	var tempo := state.tempo
 	var sig := parts_signature()
 	var key := "%s/%s" % [tempo, sig]
@@ -777,14 +779,23 @@ func _render_parts() -> void:
 		for index in _players:
 			for p in _players[index]:
 				(p as AudioStreamPlayer).stop()
-		connection_changed.emit(), sig)
+		# NOT connection_changed: that rebuilds every surface in the room, which show nothing of
+		# the parts, and was a dropped frame at every tempo the knob passed through. The players
+		# pick the new parts up as they are driven, and the lanes by their key.
+		# The knob may have gone on turning while this rendered.
+		_on_transport_changed(), sig, at_once)
 
 
 ## A new tempo or signature is a new render. The old parts go on playing until the new ones land,
 ## so a tempo knob turned mid-song changes the music a moment later rather than stopping it.
+## One render at a time: a knob swept across thirty tempos renders the one it stopped on, not
+## all thirty, each finished only to be thrown away.
 func _on_transport_changed() -> void:
-	if "%s/%s" % [state.tempo, parts_signature()] != _rendering_key:
-		_render_parts()
+	if "%s/%s" % [state.tempo, parts_signature()] == _rendering_key:
+		return
+	if _rendering_key != "" and _parts_key != _rendering_key:
+		return
+	_render_parts()
 
 
 ## The item under the playhead on this track, or null. Muted items are not there. Where items

@@ -132,25 +132,73 @@ static func save(role: String, tempo: float, wav: AudioStreamWAV, sig := FOUR_FO
 	wav.save_to_wav(cache_path(role, tempo, sig))
 
 
-## Renders every part not already cached, on the worker pool, and calls `done(role, stream)` on
-## the main thread for each as it is ready. Returns how many renders were started.
-static func render_async(roles: Array, tempo: float, done: Callable, sig := FOUR_FOUR) -> int:
+## Renders kept at most. Every tempo passed through on a knob is a render of every part, and
+## kept forever they came to hundreds of files; the oldest go once there are more than this.
+const CACHE_KEEP := 96
+
+
+static func prune(keep := CACHE_KEEP) -> void:
+	var dir := DirAccess.open(CACHE_DIR)
+	if dir == null:
+		return
+	var files: Array = []
+	for f in dir.get_files():
+		if f.ends_with(".wav"):
+			var path := CACHE_DIR.path_join(f)
+			files.append([FileAccess.get_modified_time(path), path])
+	if files.size() <= keep:
+		return
+	files.sort_custom(func(x, y): return x[0] < y[0])
+	for i in files.size() - keep:
+		DirAccess.remove_absolute(files[i][1])
+
+
+## Every part, from the cache or rendered, on the worker pool, and calls `done(role, stream)` on
+## the main thread for each as it is ready. ALL of it on the workers, the cache's reading too: a
+## part is megabytes, and read, encoded or written on the main thread it was a dropped frame for
+## every part at every step of a tempo knob. `cache_now` takes what is cached at once instead, for
+## a song that should be there as it opens. Returns how many were left to the workers.
+static func render_async(roles: Array, tempo: float, done: Callable, sig := FOUR_FOUR,
+		cache_now := false) -> int:
 	var started := 0
 	for role in roles:
-		var have := cached(role, tempo, sig)
-		if have != null:
-			done.call(role, have)
-			continue
+		if cache_now:
+			var have := cached(role, tempo, sig)
+			if have != null:
+				done.call(role, have)
+				continue
 		started += 1
-		WorkerThreadPool.add_task(func():
-			var samples := render(role, tempo, sig)
-			(func():
-				var wav := to_stream(samples)
+		_keep_task(WorkerThreadPool.add_task(func():
+			var wav := cached(role, tempo, sig)
+			if wav == null:
+				wav = to_stream(render(role, tempo, sig))
 				save(role, tempo, wav, sig)
+				prune()
+			(func():
 				# Whoever asked may have gone while it rendered.
 				if done.is_valid():
-					done.call(role, wav)).call_deferred())
+					done.call(role, wav)).call_deferred()))
 	return started
+
+
+## Renders on the workers, until they are waited for. Every task has to be, and one still
+## rendering as the program ends was a crash in the allocator on the way out.
+static var _tasks: Array[int] = []
+
+
+static func _keep_task(id: int) -> void:
+	for t in _tasks.duplicate():
+		if WorkerThreadPool.is_task_completed(t):
+			WorkerThreadPool.wait_for_task_completion(t)
+			_tasks.erase(t)
+	_tasks.append(id)
+
+
+## Waits for every render still running. On the way out.
+static func finish_renders() -> void:
+	for t in _tasks:
+		WorkerThreadPool.wait_for_task_completion(t)
+	_tasks.clear()
 
 
 static func midi_hz(note: float) -> float:

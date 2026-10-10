@@ -84,6 +84,10 @@ const TEMPO_MIN := 1.0
 const TEMPO_MAX := 960.0
 
 
+func _exit_tree() -> void:
+	DemoSong.finish_renders()
+
+
 func _ready() -> void:
 	set_process(false)
 	# An autoload that opened a socket on startup would make `godot --headless` in CI try to
