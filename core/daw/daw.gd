@@ -69,7 +69,7 @@ const COMMANDS := [
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
+	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
 
@@ -416,6 +416,11 @@ func quantize_item(track_index: int, item_index: int, grid_beats: float, strengt
 const MARKER_NAME_MAX := 64
 func add_marker(seconds: float, marker_name: String) -> void:
 	_do(&"add_marker", [maxf(seconds, 0.0), marker_name.left(MARKER_NAME_MAX)])
+## The marker at `at` renamed, or moved to `to`, or both.
+func edit_marker(at: float, to: float, marker_name: String) -> void:
+	_do(&"edit_marker", [at, maxf(to, 0.0), marker_name.left(MARKER_NAME_MAX)])
+func remove_marker(at: float) -> void:
+	_do(&"remove_marker", [at])
 ## A take of notes onto a track, placed by song position: notes are [on, off, pitch, velocity,
 ## channel] rows in seconds. Cleaned here and cleaned again on the host, since a guest's take
 ## arrives there as peer input. See MidiTake.
@@ -467,6 +472,17 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed add_marker intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0), str(args[1]).left(MARKER_NAME_MAX)]
+	if verb == &"edit_marker":
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT] \
+				or not is_finite(float(args[0])) or not is_finite(float(args[1])):
+			push_warning("DAW: refused a malformed edit_marker intent %s." % [args])
+			return
+		args = [float(args[0]), maxf(float(args[1]), 0.0), str(args[2]).left(MARKER_NAME_MAX)]
+	if verb == &"remove_marker":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
+			push_warning("DAW: refused a malformed remove_marker intent %s." % [args])
+			return
+		args = [float(args[0])]
 	if verb == &"set_track_input":
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
 				or typeof(args[1]) != TYPE_STRING or (args[1] != "" and not state.inputs.any(func(p): return p[0] == args[1])):

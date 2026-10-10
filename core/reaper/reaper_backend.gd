@@ -824,6 +824,20 @@ func add_marker(seconds: float, marker_name: String) -> void:
 	_edit("AddMarker", [seconds, marker_name])
 
 
+func edit_marker(at: float, to: float, marker_name: String) -> void:
+	if _bridge == null or not _bridge.is_open() or is_nan(marker_key(state.markers, at)):
+		return
+	_write_markers(markers_edited(state.markers, at, to, marker_name))
+	_edit("EditMarker", [at, to, marker_name])
+
+
+func remove_marker(at: float) -> void:
+	if _bridge == null or not _bridge.is_open() or is_nan(marker_key(state.markers, at)):
+		return
+	_write_markers(markers_edited(state.markers, at, at, "", true))
+	_edit("RemoveMarker", [at])
+
+
 ## A take, as one bridge call: a MIDI item created at `start` and filled note by note, inside one
 ## undo block. Shown on the cache at once like every other edit; the next timeline poll brings
 ## back Reaper's own copy, notes and all.

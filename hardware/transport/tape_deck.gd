@@ -675,10 +675,15 @@ func _build_locator() -> void:
 		key.scale = Vector3(1.3, 1.3, 1.3)
 		if way == 0:
 			key.pressed.connect(_drop_marker)
+			# The title is the key's name across a session, so it stays put; the value says what a
+			# press does here.
 			key.describe_title = func() -> String: return "TRANSPORT  ADD MARKER"
 			key.describe_value = func(_v: float) -> String:
 				if not DAW.can(DAWBackend.Capability.MARKERS):
 					return "needs the ReaScript bridge"
+				var here := _marker_here()
+				if not is_nan(here):
+					return "rename %s; fine press removes it" % str(DAW.state.markers[here])
 				return "%s at %s" % [next_marker_name(DAW.state.markers),
 						DAW.state.bar_beat(DAW.state.position_seconds)]
 			_mark_key = key
@@ -761,10 +766,59 @@ func _locate(way: int) -> void:
 	DAW.seek(at)
 
 
+## MARK: on a marker (PREV and NEXT land on them), renames it, and a fine press (shift on a
+## monitor) removes it; anywhere else, drops a new one.
 func _drop_marker() -> void:
 	if not DAW.can(DAWBackend.Capability.MARKERS):
 		return
-	DAW.add_marker(DAW.state.position_seconds, next_marker_name(DAW.state.markers))
+	var here := _marker_here()
+	if is_nan(here):
+		DAW.add_marker(DAW.state.position_seconds, next_marker_name(DAW.state.markers))
+		return
+	var by: Node = _mark_key.held_by if _mark_key != null else null
+	if by != null and by.has_method("fine") and by.fine():
+		DAW.remove_marker(here)
+		return
+	ask_marker_name(here)
+
+
+## How near the playhead a marker is to be the one MARK acts on.
+const MARKER_HERE_SECONDS := 0.05
+
+
+## The marker at the playhead, or NAN.
+func _marker_here() -> float:
+	for at in DAW.state.markers:
+		if absf(float(at) - DAW.state.position_seconds) < MARKER_HERE_SECONDS:
+			return float(at)
+	return NAN
+
+
+## Where there is no keyboard (a headset), a name is typed on a keypad in front of the deck.
+var type_on_desk := false
+var _pad: TypingPad
+
+
+## A new name for the marker at `at`: on the monitor, or on a keypad in the room. The asker.
+func ask_marker_name(at: float) -> Node:
+	var title := "Name marker at %s" % DAW.state.bar_beat(at)
+	var current := str(DAW.state.markers.get(at, ""))
+	var asker: Node
+	if not type_on_desk and not get_viewport().use_xr:
+		asker = NamePrompt.ask(self, title, current)
+	else:
+		if is_instance_valid(_pad):
+			_pad.queue_free()
+		# Above the locator and towards whoever is at the deck, tipped up to face them.
+		_pad = TypingPad.ask(self, title, current, Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(0, 0.16, 0.08)))
+		asker = _pad
+	asker.answered.connect(_rename_marker.bind(at))
+	return asker
+
+
+func _rename_marker(text: String, at: float) -> void:
+	if not is_nan(DAWBackend.marker_key(DAW.state.markers, at)):
+		DAW.edit_marker(at, at, text)
 
 
 func _refresh() -> void:

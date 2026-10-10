@@ -786,7 +786,12 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
     (`DAW.set_track_colour`, undoable, a guest's sanitised; the bridge's SetTrackColour; the
     timeline's COLR key steps the picked track through a palette). Read back on the rig through
     the structure poll, within 8 bits a channel. The Reaper host's work ends at 45.0 s of 46.4.
-  - Markers: renaming and deleting them, and regions of any kind.
+  - Markers: renaming, moving and removing done 2026-10-10 (`DAW.edit_marker`, `remove_marker`,
+    undoable, a guest's sanitised; the bridge's EditMarker and RemoveMarker find the marker by
+    position to a millisecond). MARK on a marker (where PREV and NEXT land) renames it, on the
+    monitor or a keypad in a headset; a fine press removes it. Read back on the rig. There is no
+    gesture to move one yet. Regions of any kind: not started. The probe's end moved 3 s later
+    (host 49.4/50.4, guest 48.5/50.0); the Reaper host's work ends at 47.0 s.
   - Time signature: done 2026-10-10 (step 7f), through the bridge.
   - `tools/shot.sh --focus patchbay` frames only the floor.
 

@@ -10556,6 +10556,36 @@ func _test_markers_are_dropped_and_found_from_the_deck() -> void:
 	check("MARK drops a marker at the playhead", s.markers.size() == before + 1
 			and s.markers.get(s.position_seconds) == "MARK 1")
 	check("MARK goes by its name across a session", deck._mark_key.network_key() == "TRANSPORT  ADD MARKER")
+	# On a marker, MARK renames it; a fine press removes it.
+	var mark_at := s.position_seconds
+	deck._mark_key.pressed.emit()
+	var prompt: NamePrompt = get_tree().root.get_children().filter(func(n): return n is NamePrompt).back()
+	check("MARK on a marker asks for its name, not another marker (%d)" % s.markers.size(),
+			prompt != null and prompt._edit.text == "MARK 1" and s.markers.size() == before + 1)
+	prompt._edit.text_submitted.emit("Bridge")
+	check("and the name typed is the marker's", s.markers.get(mark_at) == "Bridge")
+	DAW.undo()
+	check("which is one undo", s.markers.get(mark_at) == "MARK 1")
+	var finger := FakeHand.new()
+	add_child(finger)
+	finger.holding_shift = true
+	deck._mark_key.grab_begin(finger, deck._mark_key.global_position)
+	deck._mark_key.grab_end(finger)
+	finger.queue_free()
+	check("a fine press on it removes it", not s.markers.has(mark_at) and s.markers.size() == before)
+	DAW.undo()
+	DAW.edit_marker(mark_at, mark_at + 2.0, "Moved")
+	check("edit_marker moves and renames one", not s.markers.has(mark_at) and s.markers.get(mark_at + 2.0) == "Moved")
+	DAW.apply_intent(&"edit_marker", [mark_at + 2.0, -5.0, "x".repeat(500)])
+	check("a guest's edit is kept on the timeline and its name to a sane length",
+			s.markers.has(0.0) and str(s.markers[0.0]).length() == DAW.MARKER_NAME_MAX)
+	var sizes := s.markers.size()
+	DAW.apply_intent(&"remove_marker", ["here"])
+	DAW.apply_intent(&"edit_marker", [0.0, INF, "x"])
+	check("and malformed ones are refused", s.markers.size() == sizes and s.markers.has(0.0)
+			and &"edit_marker" in DAW.COMMANDS and &"remove_marker" in DAW.COMMANDS)
+	DAW.remove_marker(123456.0)
+	check("removing where there is none changes nothing", s.markers.size() == sizes)
 	deck.queue_free()
 
 

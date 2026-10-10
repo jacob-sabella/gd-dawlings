@@ -345,8 +345,8 @@ func _host(port: int) -> void:
 	# How much of the time before the end the work took: the end has moved twice as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	print("host work done at %.1fs of 46.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(46.4)
+	print("host work done at %.1fs of 49.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(49.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -360,7 +360,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(47.4)
+	await _until(50.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -1219,7 +1219,26 @@ func _tracks_in_reaper() -> void:
 		close_enough = close_enough and absf(got[i][0] - want[i][0]) < 0.001 \
 				and absf(got[i][1] - want[i][1]) < 0.001 and got[i][2] == want[i][2]
 	check("Reaper took the tempo map and read it back (%s)" % [got], close_enough)
-	for i in 5:
+	# A marker added, moved and renamed, then removed, each read back from Reaper's timeline.
+	var marks := DAW.state.markers
+	DAW.add_marker(50.0, "Probe mark")
+	await get_tree().create_timer(0.4).timeout
+	DAW.edit_marker(50.0, 51.0, "Probe moved")
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	DAW.state.markers = {}
+	await get_tree().create_timer(0.5).timeout
+	var moved: String = str(DAW.state.markers.get(DAWBackend.marker_key(DAW.state.markers, 51.0), "-"))
+	var moved_from := not is_nan(DAWBackend.marker_key(DAW.state.markers, 50.0))
+	DAW.remove_marker(51.0)
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	DAW.state.markers = {51.0: "stale"}
+	await get_tree().create_timer(0.5).timeout
+	check("Reaper moved and renamed a marker, then removed it, read back each time (%s, %s)" % [moved, DAW.state.markers.size()],
+			moved == "Probe moved" and not moved_from and is_nan(DAWBackend.marker_key(DAW.state.markers, 51.0))
+			and DAW.state.markers.size() == marks.size())
+	for i in 8:
 		DAW.undo()
 	await get_tree().create_timer(0.7).timeout
 	check("and undone, it is one tempo again (%s)" % [DAW.state.tempo_points], DAW.state.tempo_points.is_empty())
@@ -1677,11 +1696,11 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	# While the session is still on: once the host leaves, my own project is back.
-	await _until(45.5)
+	await _until(48.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
-	await _until(47.0)
+	await _until(50.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

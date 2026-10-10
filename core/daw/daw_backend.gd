@@ -306,6 +306,28 @@ func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _str
 ## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
+func edit_marker(_at: float, _to: float, _marker_name: String) -> void: pass
+func remove_marker(_at: float) -> void: pass
+
+
+## The key of the marker at `at` in `markers`, to a millisecond, or NAN for none.
+static func marker_key(markers: Dictionary, at: float) -> float:
+	for t in markers:
+		if absf(float(t) - at) < 0.001:
+			return float(t)
+	return NAN
+
+
+## `markers` with the one at `at` renamed and moved to `to`; or taken out, with `remove`.
+static func markers_edited(markers: Dictionary, at: float, to: float, marker_name: String, remove := false) -> Dictionary:
+	var out := markers.duplicate()
+	var key := marker_key(markers, at)
+	if is_nan(key):
+		return out
+	out.erase(key)
+	if not remove:
+		out[to] = marker_name
+	return out
 
 ## A take of notes, placed by song position: a new MIDI item on `track_index` from `start` to
 ## `end` seconds, holding `notes` as [on, off, pitch, velocity, channel] rows in absolute

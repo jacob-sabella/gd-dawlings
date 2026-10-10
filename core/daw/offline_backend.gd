@@ -1024,6 +1024,22 @@ func add_marker(seconds: float, marker_name: String) -> void:
 	_remember("marker", _write_markers.bind(before), _write_markers.bind(after), false)
 
 
+func edit_marker(at: float, to: float, marker_name: String) -> void:
+	_change_markers(markers_edited(state.markers, at, to, marker_name))
+
+
+func remove_marker(at: float) -> void:
+	_change_markers(markers_edited(state.markers, at, at, "", true))
+
+
+func _change_markers(after: Dictionary) -> void:
+	var before: Dictionary = state.markers.duplicate()
+	if after == before:
+		return
+	_write_markers(after)
+	_remember("marker", _write_markers.bind(before), _write_markers.bind(after), false)
+
+
 func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
 		take_name: String) -> void:
 	var before := _lanes_snapshot()

@@ -1378,6 +1378,42 @@ function handlers.AddMarker(args)
   return {ok = index >= 0, index = index}
 end
 
+-- The marker (not region) at `at` seconds, to a millisecond: its enum index's number and colour.
+local function marker_at(at)
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  for m = 0, marker_count + region_count - 1 do
+    local ok, is_region, pos, _, _, number, colour = reaper.EnumProjectMarkers3(0, m)
+    if ok ~= 0 and not is_region and math.abs(pos - (tonumber(at) or -1)) < 0.001 then
+      return number, colour
+    end
+  end
+  return nil
+end
+
+-- args: at, to (seconds), name. Renamed and moved in one undo point; an empty name is cleared.
+function handlers.EditMarker(args)
+  local number, colour = marker_at(args[1])
+  if not number then return {ok = false, error = 'no marker there'} end
+  local name = tostring(args[3] or '')
+  reaper.Undo_BeginBlock()
+  local ok = reaper.SetProjectMarker4(0, number, false, math.max(0, tonumber(args[2]) or 0), 0, name, colour,
+    name == '' and 1 or 0)
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Edit marker', -1)
+  return {ok = ok}
+end
+
+-- args: at (seconds).
+function handlers.RemoveMarker(args)
+  local number = marker_at(args[1])
+  if not number then return {ok = false, error = 'no marker there'} end
+  reaper.Undo_BeginBlock()
+  local ok = reaper.DeleteProjectMarker(0, number, false)
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Remove marker', -1)
+  return {ok = ok}
+end
+
 -- A guest's take, placed by song position. args, flat because the request decoder reads one
 -- flat list: track (1-based, as OSC), start and end in project seconds, take name, note count,
 -- then five numbers per note -- on and off in project seconds, pitch, velocity, channel.
