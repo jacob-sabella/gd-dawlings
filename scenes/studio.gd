@@ -1908,6 +1908,7 @@ func _build_tour_case() -> void:
 	tour_case = TourCase.new()
 	studio_set.add_child(tour_case)
 	tour_case.transform = venue.tour_case_spot()
+	tour_case.local_peer = func() -> int: return Session.local_peer_id
 	if items != null:
 		items.targets = [{"node": tour_case, "radius": TourCase.STRIKE_RADIUS}]
 	tour_case.break_attempted.connect(_on_tour_case_struck)
@@ -1928,6 +1929,10 @@ func _on_tour_case_struck() -> void:
 ## refusing (wrong engine, a run already under way, or simply not the host) -- nothing else
 ## here needs to check first.
 func _on_tour_case_broken_open() -> void:
+	if not Tour.is_available():
+		Session.notice.emit("A tour needs the built-in engine: start dawlings with --built-in.")
+		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+		return
 	Tour.start_run()
 
 

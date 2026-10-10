@@ -14999,9 +14999,24 @@ func _test_only_the_host_can_break_the_case() -> void:
 		case.struck(3.0, 5)
 	check("a guest's hits mixed in with the host's don't speed it up (%d)" % case.hits,
 			case.hits == TourCase.HITS_TO_BREAK - 1 and not case.broken)
+	notices.clear()
 	case.struck(3.0, 1)
 	check("but the host's own fifth, even with a guest's mixed in, really breaks it",
-			case.broken and opened[0] == 1)
+			opened[0] == 1)
+	check("and on an engine a tour cannot run on, says why and chains itself again (%s)" % [notices],
+			notices.size() == 1 and "--built-in" in notices[0] and not case.broken and case.hits == 0)
+
+	# A click on the case is a knock by whoever is at this machine.
+	var knock := case.find_children("*", "ControlAffordance", false, false)[0] as ControlAffordance
+	_as_session(Session.Role.GUEST, 5)
+	knock._on_grab_begin(Vector3.ZERO)
+	check("a guest's knock by hand counts for nothing either", case.hits == 0)
+	_as_session(Session.Role.HOST, 1)
+	knock._on_grab_begin(Vector3.ZERO)
+	knock._on_grab_begin(Vector3.ZERO)
+	check("the host's knocks by hand count toward the break (%d)" % case.hits, case.hits == 2)
+	check("and the case says how many (%s)" % knock._default_readout(),
+			knock._default_readout() == "2 of %d knocks" % TourCase.HITS_TO_BREAK)
 
 	Session.notice.disconnect(hear)
 	remove_child(studio)

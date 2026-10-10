@@ -36,6 +36,9 @@ signal broken_open()
 
 var hits: int = 0
 var broken := false
+## Who is clicking on this machine (`Session.local_peer_id`), set by scenes/studio.gd: a knock
+## by hand counts the way a throw by the same person would.
+var local_peer: Callable = Callable()
 
 var _lid: Node3D
 var _chain: Node3D
@@ -66,6 +69,10 @@ func _init() -> void:
 	_title.text = "TOUR"
 	_tally = _label(9, Vector3(0, BODY_H * 0.30, CASE_DEPTH * 0.5 + 0.004))
 	_lamp()
+	var knock := Knock.new()
+	knock.position = Vector3(0, (BODY_H + LID_H) * 0.5, 0)
+	add_child(knock)
+	knock.knocked.connect(_on_knocked)
 	reset(0, 0)
 
 
@@ -152,6 +159,14 @@ func struck(speed: float, thrown_by: int) -> void:
 		_burst()
 
 
+## Knocked on by hand (a click, or a hand in a headset): a hit from whoever is at this machine.
+func _on_knocked() -> void:
+	struck(3.0, int(local_peer.call()) if local_peer.is_valid() else 1)
+	var tw := create_tween()
+	tw.tween_property(self, "scale", Vector3(1.03, 0.97, 1.03), 0.05)
+	tw.tween_property(self, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 ## The run really started, by the host's own word (`Session.tour` going non-empty) -- open it
 ## to match, the same way a fifth real hit would, for a guest whose own view of the hits never
 ## reached `HITS_TO_BREAK` (someone else's throws, a dropped one, lag): "every guest sees it
@@ -185,3 +200,39 @@ func reset(tally_runs: int, tally_wins: int) -> void:
 		_lid.rotation_degrees.x = 0.0
 	if _tally != null:
 		_tally.text = "RUNS %d   WINS %d" % [tally_runs, tally_wins]
+
+
+## The whole case, to click on: each click a knock on its latch, five from the host to burst
+## it. A throw does the same; this is the way anyone will try first. Personal, like the
+## wardrobe's buttons: one person's knocking is not a control the others see held.
+class Knock extends ControlAffordance:
+	signal knocked()
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(CASE_WIDTH + 0.02, BODY_H + LID_H, CASE_DEPTH + 0.02)
+		shape.shape = box
+		add_child(shape)
+
+	func personal() -> bool:
+		return true
+
+	func _default_title() -> String:
+		return "TOUR  CASE"
+
+	func _default_readout() -> String:
+		var case := get_parent() as TourCase
+		if case == null:
+			return ""
+		if case.broken:
+			return "open: a run is under way"
+		return "%d of %d knocks" % [case.hits, HITS_TO_BREAK]
+
+	func hint() -> String:
+		return "click it %d times to break it open and start a run (the host)" % HITS_TO_BREAK
+
+	func _on_grab_begin(_at: Vector3) -> void:
+		knocked.emit()

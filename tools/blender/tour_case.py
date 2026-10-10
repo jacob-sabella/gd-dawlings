@@ -27,6 +27,9 @@ DEPTH = 0.46
 BODY_H = 0.42
 LID_H = 0.055
 CORNER = 0.045
+# How far the corner protectors and the latch stand proud of the shell: flush, their faces and
+# the shell's share a plane and fight over every pixel of it.
+PROUD = 0.004
 # The hinge: the back top edge, in Godot space. Front is +Z, so back is -Z.
 HINGE = (0.0, BODY_H, -DEPTH * 0.5)
 
@@ -77,23 +80,21 @@ body_parts = []
 body_parts.append(box((WIDTH, BODY_H, DEPTH), (0, BODY_H * 0.5, 0), "shell"))
 for cx in (-1.0, 1.0):
 	for cz in (-1.0, 1.0):
-		at = (cx * (WIDTH * 0.5 - CORNER * 0.5), BODY_H * 0.5, cz * (DEPTH * 0.5 - CORNER * 0.5))
-		body_parts.append(box((CORNER, BODY_H, CORNER), at, "corner"))
-# The recessed panel "TOUR" is stamped over, a hair back from the front face.
-body_parts.append(box((0.46, 0.20, 0.01), (0, BODY_H * 0.55, DEPTH * 0.5 - 0.008), "stencil"))
+		at = (cx * (WIDTH * 0.5 - CORNER * 0.5 + PROUD), BODY_H * 0.5, cz * (DEPTH * 0.5 - CORNER * 0.5 + PROUD))
+		body_parts.append(box((CORNER, BODY_H - 0.004, CORNER), at, "corner"))
 body = join(body_parts, "Body")
 
 # --- the chain and padlock across the latch, its own object so it can be hidden on a burst -----
 chain_parts = []
-chain_parts.append(box((0.05, 0.03, 0.02), (0, BODY_H, DEPTH * 0.5 - 0.01), "latch"))
+chain_parts.append(box((0.05, 0.03, 0.02), (0, BODY_H, DEPTH * 0.5 - 0.01 + PROUD), "latch"))
 bpy.ops.mesh.primitive_torus_add(major_radius=0.018, minor_radius=0.004, major_segments=16,
 		minor_segments=8, location=g(0, BODY_H + 0.025, DEPTH * 0.5 - 0.01),
 		rotation=(math.radians(90), 0, 0))
 chain_parts.append(tag(bpy.context.active_object, "latch"))
 # A run of small flattened links, corner to corner across the front, each turned a quarter from
 # the last so they read as links rather than a row of rings.
-chain_from = Vector((-WIDTH * 0.35, BODY_H * 0.92, DEPTH * 0.5 - 0.004))
-chain_to = Vector((WIDTH * 0.32, BODY_H * 0.18, DEPTH * 0.5 - 0.004))
+chain_from = Vector((-WIDTH * 0.35, BODY_H * 0.92, DEPTH * 0.5 + 0.006))
+chain_to = Vector((WIDTH * 0.32, BODY_H * 0.18, DEPTH * 0.5 + 0.006))
 LINKS = 7
 for k in range(LINKS):
 	f = k / (LINKS - 1)
@@ -111,8 +112,9 @@ lid_parts = []
 lid_parts.append(box((WIDTH, LID_H, DEPTH), (0, LID_H * 0.5, DEPTH * 0.5), "shell"))
 for cx in (-1.0, 1.0):
 	for cz_edge in (CORNER * 0.5, DEPTH - CORNER * 0.5):
-		at = (cx * (WIDTH * 0.5 - CORNER * 0.5), LID_H * 0.5, cz_edge)
-		lid_parts.append(box((CORNER, LID_H, CORNER), at, "corner"))
+		at = (cx * (WIDTH * 0.5 - CORNER * 0.5 + PROUD), LID_H * 0.5,
+				cz_edge + (PROUD if cz_edge > DEPTH * 0.5 else -PROUD))
+		lid_parts.append(box((CORNER, LID_H - 0.004, CORNER), at, "corner"))
 # A handle, toward the front edge so a hand reaching for it falls where a lid is grabbed.
 lid_parts.append(box((0.12, 0.025, 0.05), (0, LID_H + 0.0125, DEPTH - 0.1), "latch"))
 lid = join(lid_parts, "Lid")
