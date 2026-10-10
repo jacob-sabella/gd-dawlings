@@ -160,7 +160,14 @@ can finish music in, saving DAWproject. Steps, in order:
    folder. Files dropped on the window go the same way, one after another from the playhead,
    each one an undo step, and the room is told. `--bring-in <file>` does it at launch. dawkit
    checks each encoding to its last bit, and Ogg/MP3 by measured frequency and level.
-   - **Not yet:** a guest sending a file from their own machine.
+   - **Done 2026-10-10 (3d), a guest's own files:** a guest's panel offers "Send audio to <host>"
+     (and drops on the window or a lane), and `FileSend` (Session.files) sends each file as it
+     is, in 32 KB slices on ENet channel 6, at most 256 MB; the host writes them to
+     user://incoming, and once a batch is in brings it in through `DAW.import_audio_files`
+     (tagged with the guest's name, which the room is told), deletes its copies, and tells the
+     guest of any file that would not come in. Measured: the probe's guest sent a second of WAV
+     and a FLAC onto Strings at 30 s: the host placed them at 30.0 and 31.0 s, a second and
+     0.2268 s long, and the room was told 70 ms after sending began; on Reaper too.
    - **Done 2026-10-10 (3c), FLAC:** dawkit's `DawKitFlac`, written from RFC 9639 (no library):
      constant, verbatim, fixed and LPC subframes, both Rice codings and their escapes, wasted
      bits, left/side, side/right and mid/side, 4-32 bits, any channel count. A file is checked

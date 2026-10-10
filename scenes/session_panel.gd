@@ -84,6 +84,7 @@ var _files: FileDialog
 var _confirm_new: ConfirmationDialog
 var _import_box: VBoxContainer
 var _import_into: OptionButton
+var _import_caption: Label
 var _imports: FileDialog
 
 var _listener: PacketPeerUDP = null
@@ -1030,7 +1031,8 @@ func _build_project(column: VBoxContainer) -> void:
 	_import_box = VBoxContainer.new()
 	_import_box.add_theme_constant_override("separation", 8)
 	column.add_child(_import_box)
-	_import_box.add_child(_caption("BRING IN AUDIO  ·  OR DROP FILES ON THE WINDOW"))
+	_import_caption = _caption("BRING IN AUDIO  ·  OR DROP FILES ON THE WINDOW")
+	_import_box.add_child(_import_caption)
 	var import_row := HBoxContainer.new()
 	import_row.add_theme_constant_override("separation", 8)
 	_import_box.add_child(import_row)
@@ -1074,7 +1076,11 @@ func _refresh_project() -> void:
 		_project_where.tooltip_text = file
 	_project_save.disabled = not DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_project_host_row.visible = Session.is_authority() and DAW.can(DAWBackend.Capability.PROJECT_FILES)
-	_import_box.visible = Session.is_authority() and DAW.can(DAWBackend.Capability.AUDIO_TAKES)
+	# A guest sends files to the host, which brings them in (FileSend).
+	var guest := Session.role == Session.Role.GUEST
+	_import_box.visible = guest or (Session.is_authority() and DAW.can(DAWBackend.Capability.AUDIO_TAKES))
+	_import_caption.text = "SEND AUDIO TO %s  ·  OR DROP FILES ON THE WINDOW" % Session.name_of(1).to_upper() if guest \
+			else "BRING IN AUDIO  ·  OR DROP FILES ON THE WINDOW"
 	if _import_box.visible:
 		_fill_tracks(_import_into, _import_into.get_selected_id() if _import_into.item_count > 0 else 0,
 				"Where the selection is")
@@ -1132,15 +1138,24 @@ func drop_spot() -> Array:
 func bring_in_files(paths: PackedStringArray, track := 0, at := -1.0) -> PackedStringArray:
 	if paths.is_empty():
 		return PackedStringArray()
-	if not Session.is_authority():
-		toast("Only the host can bring in files: the project is on their machine.")
-		return paths
 	if track <= 0 and _import_into.item_count > 0:
 		track = _import_into.get_selected_id()
 	if track <= 0:
 		track = AudioImport.target_track(DAW.state)
 	if at < 0.0:
 		at = DAW.state.position_seconds
+	if Session.role == Session.Role.GUEST:
+		# The project is on the host's machine: the files go there, and the host brings them in.
+		var why := Session.files.send(paths, track, at)
+		if not why.is_empty():
+			toast("Could not send %s: %s." % [", ".join(Array(paths).map(func(p): return p.get_file())), why])
+			return paths
+		toast("Sending %s to %s…" % [paths[0].get_file() if paths.size() == 1 else "%d files" % paths.size(),
+				Session.name_of(1)])
+		return PackedStringArray()
+	if not Session.is_authority():
+		toast("Only the host can bring in files: the project is on their machine.")
+		return paths
 	var refused := DAW.import_audio_files(paths, track, at)
 	if not refused.is_empty():
 		toast("Could not bring in %s: %s." % [", ".join(Array(paths).map(func(p): return p.get_file())), refused])
@@ -1151,11 +1166,13 @@ func bring_in_files(paths: PackedStringArray, track := 0, at := -1.0) -> PackedS
 
 func _on_audio_imported(path: String, result: Dictionary) -> void:
 	if not str(result["error"]).is_empty():
-		toast("Could not bring in %s: %s." % [path.get_file(), result["error"]])
+		toast("Could not bring in %s: %s." % [FileSend._shown_name(path) if path.contains("/incoming/") else path.get_file(),
+				result["error"]])
 
 
-func _on_audio_import_done(brought: PackedStringArray, _failed: PackedStringArray, track: int) -> void:
-	if brought.is_empty():
+func _on_audio_import_done(brought: PackedStringArray, _failed: PackedStringArray, track: int, who: String) -> void:
+	# A guest's files are announced by FileSend, under their name.
+	if brought.is_empty() or not who.is_empty():
 		return
 	var where = DAW.state.track(track)
 	Session.tell_room("%s brought in %s on %s." % [Session.local_name,

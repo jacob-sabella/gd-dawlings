@@ -212,6 +212,8 @@ with the cursor over the timeline's lanes go onto that lane at the beat under th
 the import box's track at the playhead. The panel goes through `DAW.import_audio_files`, which
 reads each file on a worker thread and places it on the main thread when it is in, so a long
 file does not stop the room.
+A guest's files go to the host whole (`FileSend`, on ENet channel 6), and the host brings them
+in the same way, crediting the guest.
 
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.

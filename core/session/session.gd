@@ -137,6 +137,8 @@ var guest_audio: GuestAudio = null
 ## The host's own microphone, on a DAW that does not record its own inputs: the same recorder,
 ## timed against the host's own playhead (`host_heard`) and kept here.
 var host_audio: GuestAudio = null
+## Sound files from a guest's machine into the host's project. See core/session/file_send.gd.
+var files: FileSend = null
 ## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
 ## fader move or a hold behind it.
 const AUDIO_TAKE_CHANNEL := 3
@@ -239,6 +241,9 @@ func _ready() -> void:
 	host_audio.for_host = true
 	host_audio.heard = host_heard
 	add_child(host_audio)
+	files = FileSend.new()
+	files.name = "FileSend"
+	add_child(files)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	local_look = GhostLook.load_from(look_path)

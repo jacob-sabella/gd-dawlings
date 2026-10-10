@@ -47,8 +47,8 @@ signal render_finished(files: PackedStringArray, problems: PackedStringArray)
 ## as `import_audio` answers.
 signal audio_imported(path: String, result: Dictionary)
 ## The last of a batch of `import_audio_files` is done: the files that came in, the ones that did
-## not, and the track they went to.
-signal audio_import_done(brought: PackedStringArray, failed: PackedStringArray, track: int)
+## not, the track they went to, and whose they were ("" for this machine's own).
+signal audio_import_done(brought: PackedStringArray, failed: PackedStringArray, track: int, who: String)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
 		&"fx_changed", &"timeline_changed", &"bank_changed", &"project_named"]
@@ -623,8 +623,8 @@ func import_audio(path: String, track_index: int, start: float) -> Dictionary:
 ## Sound files onto a track one after another from `start`, read and written on a worker thread
 ## so the room keeps moving while a long file is decoded. Each is placed, one undo step, when it
 ## is in (`audio_imported`), and `audio_import_done` follows the last. Batches queue behind each
-## other. Host only. Answers why not, or "".
-func import_audio_files(paths: PackedStringArray, track_index: int, start: float) -> String:
+## other. Host only; `who` names a guest whose files they are (FileSend). Answers why not, or "".
+func import_audio_files(paths: PackedStringArray, track_index: int, start: float, who := "") -> String:
 	if not Session.is_authority():
 		return "only the host brings in files: the project is on their machine"
 	var refusal := audio_take_refusal(track_index, 1.0)
@@ -633,7 +633,7 @@ func import_audio_files(paths: PackedStringArray, track_index: int, start: float
 	if paths.is_empty():
 		return ""
 	_imports.append({"paths": Array(paths), "track": track_index, "at": maxf(start, 0.0),
-			"brought": [], "failed": []})
+			"brought": [], "failed": [], "who": who})
 	set_process(true)
 	return ""
 
@@ -690,7 +690,7 @@ func _process(_delta: float) -> void:
 	audio_imported.emit(path, answer)
 	if (batch["paths"] as Array).is_empty():
 		_imports.pop_front()
-		audio_import_done.emit(PackedStringArray(batch["brought"]), PackedStringArray(batch["failed"]), track)
+		audio_import_done.emit(PackedStringArray(batch["brought"]), PackedStringArray(batch["failed"]), track, batch["who"])
 
 
 ## A name among the takes for a file brought in, apart from any already there or in the project.

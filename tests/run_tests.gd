@@ -9246,7 +9246,8 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 
 	_as_session(Session.Role.GUEST, 5)
 	panel._refresh_project()
-	check("a guest is not offered it", not panel._import_box.visible)
+	check("a guest is offered to send files to the host instead (%s)" % panel._import_caption.text,
+			panel._import_box.visible and panel._import_caption.text.begins_with("SEND AUDIO TO"))
 	check("and a guest's drop is refused", not DAW.import_audio(first, track, 0.0)["error"].is_empty()
 			and not DAW.import_audio_files(PackedStringArray([first]), track, 0.0).is_empty()
 			and panel.bring_in_files(PackedStringArray([first])).size() == 1)

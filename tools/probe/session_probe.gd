@@ -25,6 +25,10 @@ const GUEST_MARK := 1.25
 const TAKE_TRACK := 7
 ## The track the guest's microphone records onto, in the same take as its keys.
 const AUDIO_TRACK := 8
+## Where the guest's files from its own machine go, and from when: a second of tone as a WAV,
+## then a FLAC, one after the other.
+const SENT_TRACK := 12
+const SENT_AT := 30.0
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
@@ -333,6 +337,8 @@ func _host(port: int) -> void:
 		if _reaper_resource != "":
 			# After the takes' undos: these are Reaper undo points of their own.
 			await _count_in_in_reaper()
+		await _until(39.0 if _reaper_resource != "" else 17.5)
+		_check_sent_files()
 
 	# How much of the time before the end the work took: the end has moved twice as it grew.
 	print("host work done at %.1fs of 42.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
@@ -1004,6 +1010,54 @@ func _loudest(path: String) -> float:
 	return peak / 32767.0
 
 
+## Guest: two sound files from this machine, sent to the host to bring in, and the room told.
+func _send_files() -> void:
+	var tone := PackedFloat32Array()
+	for f in 48000:
+		var v := 0.5 * sin(TAU * 440.0 * f / 48000.0)
+		tone.append_array([v, v])
+	var wav := OS.get_temp_dir().path_join("Probe Tone %d.wav" % _port)
+	DawKitAudioFile.write_wav(wav, tone, 2, 48000)
+	var flac := ProjectSettings.globalize_path("res://vendor/dawkit/tests/fixtures/audio/flac/s16_mono_0.flac")
+	var why := Session.files.send(PackedStringArray([wav, flac]), SENT_TRACK, SENT_AT)
+	var began := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - began < 2500 and not _notices.any(func(t): return t.begins_with("Grace brought in")):
+		await get_tree().process_frame
+	var took := Time.get_ticks_msec() - began
+	DirAccess.remove_absolute(wav)
+	# The items come by the mix's own channel, the notice by the room's: a moment apart.
+	began = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - began < 500 and DAW.state.track(SENT_TRACK).items.all(func(it): return absf(it.start - SENT_AT) > 0.001):
+		await get_tree().process_frame
+	var told: Array = _notices.filter(func(t): return t.begins_with("Grace brought in"))
+	print("sent files: %s in %d ms, told %s" % [why, took, told])
+	check("I sent two files from my machine, and the room was told they came in (%s)" % [told],
+			why.is_empty() and told.size() == 1 and told[0].contains("Probe Tone") and told[0].contains("s16_mono_0"))
+	var mine: Array = DAW.state.track(SENT_TRACK).items.filter(func(it): return absf(it.start - SENT_AT) < 0.001)
+	check("and I see the first where I let it go (%d)" % mine.size(), mine.size() == 1)
+
+
+## Host: the guest's files, brought in onto the track it chose, one after the other, and nothing
+## of them left in the incoming folder.
+func _check_sent_files() -> void:
+	# The track's own demo items start later: only the stretch the files went into.
+	var items: Array = DAW.state.track(SENT_TRACK).items.filter(func(it): return it.start >= SENT_AT - 0.001 and it.start < SENT_AT + 1.5)
+	items.sort_custom(func(a, b): return a.start < b.start)
+	var starts: Array = items.map(func(it): return snappedf(it.start, 0.0001))
+	var lengths: Array = items.map(func(it): return snappedf(it.length, 0.0001))
+	print("sent files: items at %s, lengths %s" % [starts, lengths])
+	check("the guest's two files were brought in where it let them go (%s)" % [starts],
+			items.size() == 2 and absf(items[0].start - SENT_AT) < 0.001
+			and absf(items[1].start - (SENT_AT + 1.0)) < 0.001)
+	if items.size() == 2:
+		check("each as long as its sound (%s)" % [lengths], absf(items[0].length - 1.0) < 0.001
+				and absf(items[1].length - 5000.0 / 22050.0) < 0.001)
+		for it in items:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(it.source)))
+	var left := DirAccess.get_files_at(FileSend.INCOMING) if DirAccess.dir_exists_absolute(FileSend.INCOMING) else PackedStringArray()
+	check("and nothing of them is left in the incoming folder (%s)" % [left], left.is_empty())
+
+
 func _check_audio_take() -> void:
 	check("the guest's recording was placed (%s)" % [_audio_placed], not _audio_placed.is_empty())
 	check("and the room was told", _notices.any(func(t): return t.begins_with("Grace recorded")))
@@ -1512,6 +1566,10 @@ func _guest(port: int) -> void:
 		check("and it came back to me with its waveform",
 				mine.size() == 1 and mine[0].peaks.size() > 100)
 		ga.record_with_host = false
+		# After the host has undone the takes (by 14.9 s, or 35.6 s on Reaper): an undo then
+		# would take these off.
+		await _until(36.4 if _reaper_host else 15.2)
+		await _send_files()
 	else:
 		await _until(13.8)
 		check("the host's newly opened project reached me whole (%d tracks, '%s')"
