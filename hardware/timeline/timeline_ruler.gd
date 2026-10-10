@@ -95,10 +95,8 @@ func _on_grab_end() -> void:
 			# A press on the band. With no range yet there is nothing to loop, so a press makes
 			# one -- the bar it landed in -- rather than lighting a loop round nothing.
 			if not DAW.state.has_loop_range():
-				var per_bar := float(maxi(DAW.state.beats_per_bar, 1))
-				var bar := floorf(DAW.state.beat_at(_grab_seconds) / per_bar)
-				DAW.set_loop_range(DAW.state.seconds_at_beat(bar * per_bar),
-						DAW.state.seconds_at_beat((bar + 1.0) * per_bar))
+				var bar := floorf(DAW.state.bar_at(_grab_seconds)) + 1.0
+				DAW.set_loop_range(DAW.state.bar_to_seconds(bar), DAW.state.bar_to_seconds(bar + 1.0))
 			DAW.set_looping(not DAW.state.looping)
 		elif DAW.state.has_loop_range() and not DAW.state.looping:
 			# Dragging out a range is asking to hear it.

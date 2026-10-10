@@ -128,6 +128,16 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 				state.set_bank(int(args[0]), int(args[1]) if args.size() > 1 else -1)
 		"timeline":
 			_apply_timeline(state, p, args)
+		"timesig":
+			if p.size() == 1 and args.size() >= 2:
+				var sig := Vector2i(int(args[0]), int(args[1]))
+				state.beats_per_bar = DawKitMeter._num(sig.x)
+				state.beat_unit = DawKitMeter._den(sig.y)
+				state.transport_changed.emit()
+			elif p.size() > 1 and p[1] == "map":
+				# dawlings's own: the signature's changes, flat [beat, numerator, denominator].
+				state.time_signature_points = unpack_meter_points(args)
+				state.transport_changed.emit()
 		"tempo":
 			if p.size() == 1 and args.size() > 0:
 				# `n/tempo` is normalised across Reaper's tempo range, not BPM. Only the
@@ -372,6 +382,31 @@ static func pack_automation(points: Array) -> Array:
 
 ## At most this many tempo changes cross the wire: more is not a song, it is an attack.
 const TEMPO_POINTS_MAX := 1024
+
+
+static func pack_meter_points(points: Array) -> Array:
+	var out: Array = []
+	for pt in points:
+		out.append_array([float(pt[0]), float(pt[1]), float(pt[2])])
+	return out
+
+
+## Flat triples back into signature changes: each a later beat in a real signature, from beat 0,
+## or nothing.
+static func unpack_meter_points(args: Array) -> Array:
+	var out: Array = []
+	var last := -1.0
+	for i in range(0, mini(args.size(), TEMPO_POINTS_MAX * 3) - 2, 3):
+		if args.slice(i, i + 3).any(func(v): return typeof(v) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(v))):
+			return []
+		var beat := float(args[i])
+		var num := int(args[i + 1])
+		var den := int(args[i + 2])
+		if beat <= last or num < 1 or num > 64 or den < 1 or den > 64 or (out.is_empty() and beat != 0.0):
+			return []
+		out.append([beat, DawKitMeter._num(num), DawKitMeter._den(den)])
+		last = beat
+	return out
 
 
 static func pack_tempo_points(points: Array) -> Array:
@@ -679,6 +714,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/master/automode", [float(state.master.automation_mode)]])
 	out.append(["/tempo/raw", [state.tempo]])
 	out.append(["/tempo/map", pack_tempo_points(state.tempo_points)])
+	out.append(["/timesig", [float(state.beats_per_bar), float(state.beat_unit)]])
+	out.append(["/timesig/map", pack_meter_points(state.time_signature_points)])
 	out.append(["/play", [1.0 if state.playing else 0.0]])
 	out.append(["/record", [1.0 if state.recording else 0.0]])
 	out.append(["/beat/str", [state.position_string]])

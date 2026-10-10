@@ -20,10 +20,9 @@ extends DAWBackend
 ## does the studio COST at session scale, and does the bank paging work -- can be asked without
 ## Reaper running, which is the whole point of having a stand-in at all.
 var track_count: int = 0
-## What the project is called, and the note value of one beat: neither is on the desk yet, but
-## both are in a project file and have to survive being opened and saved again.
+## What the project is called: not on the desk yet, but in a project file, and it has to survive
+## being opened and saved again.
 var project_title := "Demo"
-var beat_unit := 4
 ## Plugin windows for the suite: the stand-in has no plugins to draw, so it says it cannot show
 ## their windows unless this is set, and then shows a plain picture that records what was done
 ## to it (PluginWindow). Never set by anything that ships.
@@ -1266,6 +1265,21 @@ func set_tempo_map(points: Array) -> void:
 	state.transport_changed.emit()
 	record_for_replication("/tempo/map", MixWire.pack_tempo_points(points))
 	record_for_replication("/tempo/raw", [state.tempo])
+
+
+func set_time_signature_map(points: Array) -> void:
+	var was: Array = state.time_signature_points.duplicate(true)
+	if was.is_empty():
+		was = [[0.0, state.beats_per_bar, state.beat_unit]]
+	_remember("/timesig/map", set_time_signature_map.bind(was), set_time_signature_map.bind(points.duplicate(true)), false)
+	if not points.is_empty():
+		state.beats_per_bar = int(points[0][1])
+		state.beat_unit = int(points[0][2])
+	state.time_signature_points = points.duplicate(true) if points.size() > 1 else []
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/timesig", [float(state.beats_per_bar), float(state.beat_unit)])
+	record_for_replication("/timesig/map", MixWire.pack_meter_points(state.time_signature_points))
 
 
 func seek(seconds: float) -> void:

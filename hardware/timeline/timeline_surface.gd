@@ -644,12 +644,16 @@ func track_at_point(global_point: Vector3) -> int:
 	return 0
 
 
-## The ruler counts bars through the tempo, so a new tempo or a new map draws it again.
+## The ruler counts bars through the tempo and the time signature, so a new tempo, a new map or
+## a new signature draws it again.
+## The time signature's changes and the SIG key that makes them.
+const SIGNATURE_COLOUR := Color(0.75, 0.6, 0.95)
 var _drawn_tempo: Array = []
 
 
 func _on_tempo_maybe_changed() -> void:
-	var now: Array = [DAW.state.tempo, DAW.state.tempo_points]
+	var now: Array = [DAW.state.tempo, DAW.state.tempo_points, DAW.state.beats_per_bar, DAW.state.beat_unit,
+			DAW.state.time_signature_points]
 	if now == _drawn_tempo:
 		return
 	_drawn_tempo = now.duplicate(true)
@@ -1078,7 +1082,7 @@ func _build_ruler() -> void:
 
 	# Bars through the tempo's changes; the label spacing goes by the bar at the left edge.
 	var s := DAW.state
-	var at_left := floorf(s.beat_at(view_start) / float(maxi(s.beats_per_bar, 1))) + 1.0
+	var at_left := floorf(s.bar_at(view_start)) + 1.0
 	var bar := s.bar_to_seconds(at_left + 1.0) - s.bar_to_seconds(at_left)
 	var per_bar := bar / maxf(view_span, 0.0001) * _lane_area_width
 	var step: int = LABEL_STEPS[-1]
@@ -1087,7 +1091,7 @@ func _build_ruler() -> void:
 			step = candidate
 			break
 	var first := int(floor((at_left - 1.0) / step)) * step
-	var last := int(ceil(s.beat_at(view_start + view_span) / float(maxi(s.beats_per_bar, 1))))
+	var last := int(ceil(s.bar_at(view_start + view_span)))
 
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
@@ -1127,6 +1131,18 @@ func _build_ruler() -> void:
 		change.position = Vector3(tx - 0.002, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
 		change.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_ruler.add_child(change)
+
+	# Where the time signature changes, and to what, in the colour of the SIG key: by the bar
+	# number, left of the bar line.
+	var sigs: Array = s.time_signature_points
+	for i in range(1, sigs.size()):
+		var sx := _x_for(s.seconds_at_beat(float(sigs[i][0])))
+		if sx < _lane_area_x - 0.0001 or sx > _lane_right():
+			continue
+		var sig := _text("%d/%d" % [int(sigs[i][1]), int(sigs[i][2])], 26, SIGNATURE_COLOUR)
+		sig.position = Vector3(sx - 0.002, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.26, 0.0016)
+		sig.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_ruler.add_child(sig)
 
 	# Section markers sit on the ruler, where the arrangement is actually named.
 	for at in DAW.state.markers:

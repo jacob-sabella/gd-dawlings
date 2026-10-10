@@ -699,7 +699,23 @@ function handlers.GetTimeline()
     end
   end
 
+  -- The time signature and its changes, as {quarter note, numerator, denominator}: the song's own
+  -- first (at the start of the song), then every marker that changes it.
+  local timesig = {}
+  local first_num, first_den = reaper.TimeMap_GetTimeSigAtTime(0, 0)
+  timesig[1] = {0, first_num, first_den}
+  for m = 0, tempo_count - 1 do
+    local ok, timepos, _, _, _, num, den = reaper.GetTempoTimeSigMarker(0, m)
+    if ok and num > 0 then
+      local qn = reaper.TimeMap2_timeToQN(0, timepos)
+      if qn > 0.000001 then
+        timesig[#timesig + 1] = {qn, num, den}
+      end
+    end
+  end
+
   return {
+    timesig = timesig,
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     count_in = count_in_bars(),
@@ -1007,6 +1023,49 @@ function handlers.SetTempoMap(args)
   end
   reaper.UpdateTimeline()
   reaper.Undo_EndBlock('Tempo map', -1)
+  return {ok = true}
+end
+
+-- The time signature's changes, as flat {quarter note, numerator, denominator}, the first at 0.
+-- Reaper keeps a signature on a tempo marker: each marker's is cleared first, and one that only
+-- held a signature (its tempo the one before it, not ramped into) goes; then each change is put
+-- on the marker at its place, or a new one at the tempo there. A new marker inside a ramp breaks
+-- the ramp in two. One undo point.
+function handlers.SetTimeSignatures(args)
+  reaper.Undo_BeginBlock()
+  for m = reaper.CountTempoTimeSigMarkers(0) - 1, 0, -1 do
+    local ok, timepos, _, _, bpm, num, _, linear = reaper.GetTempoTimeSigMarker(0, m)
+    if ok and num > 0 then
+      local before_ramps = false
+      local before_bpm = nil
+      if m > 0 then
+        local _, _, _, _, pbpm, _, _, plinear = reaper.GetTempoTimeSigMarker(0, m - 1)
+        before_ramps, before_bpm = plinear, pbpm
+      end
+      if m > 0 and not before_ramps and not linear and math.abs(before_bpm - bpm) < 0.0001 then
+        reaper.DeleteTempoTimeSigMarker(0, m)
+      else
+        reaper.SetTempoTimeSigMarker(0, m, timepos, -1, -1, bpm, 0, 0, linear)
+      end
+    end
+  end
+  for i = 1, #args - 2, 3 do
+    local time = reaper.TimeMap2_QNToTime(0, args[i])
+    local num, den = math.floor(args[i + 1]), math.floor(args[i + 2])
+    local found = -1
+    for m = 0, reaper.CountTempoTimeSigMarkers(0) - 1 do
+      local _, timepos = reaper.GetTempoTimeSigMarker(0, m)
+      if math.abs(timepos - time) < 0.000001 then found = m end
+    end
+    if found >= 0 then
+      local _, timepos, _, _, bpm, _, _, linear = reaper.GetTempoTimeSigMarker(0, found)
+      reaper.SetTempoTimeSigMarker(0, found, timepos, -1, -1, bpm, num, den, linear)
+    else
+      reaper.SetTempoTimeSigMarker(0, -1, time, -1, -1, reaper.TimeMap_GetDividedBpmAtTime(time), num, den, false)
+    end
+  end
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Time signature', -1)
   return {ok = true}
 end
 

@@ -85,6 +85,10 @@ offline backend's own mix, with its state, undo and replication, turned into God
 - **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
   rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
   a new set and swaps all of it at once, so no part plays at the old tempo against the new.
+- **Bars go through the meter** (`MixState.meter()`, dawkit's `DawKitMeter`): the time
+  signature's changes, saved as DAWproject `TimeSignatureAutomation`. Bar numbers, bar starts,
+  the count-in, the ruler and the click all count through it; in Reaper they are its tempo
+  markers' signatures.
   Each part starts at the song position modulo its loop, only under its track's items. The
   playhead is the sound card's (`audio_time`, a silent looping player), and a player is put back
   only when it drifts more than 25ms from its own first reading.

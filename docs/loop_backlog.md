@@ -382,9 +382,34 @@ can finish music in, saving DAWproject. Steps, in order:
      go), ADD (at the start of the playhead's bar, at the tempo there), RAMP (glide to the next
      change, in beats), DEL. Each is one undo step. The ruler marks each change with its tempo
      (`/` before it when the tempo glides into it), and redraws when the tempo or the map changes.
-   - **Not yet (7b):** The demo song's parts are rendered at the first
-     tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback
-     probe measures the click at one tempo only.
+   - **Done 2026-10-10 (7f), time signature changes:** dawkit's `DawKitMeter` (points [beat,
+     numerator, denominator], a bar of n/d being n counts of 4/d beats; a change starts a new
+     bar, the one before it cut short when it falls inside it, as in Reaper), on
+     `DawKitProject.time_signature_points`, written as DAWproject `TimeSignatureAutomation`
+     (`TimeSignaturePoint`s in beats, valid against the schema, read back without dawkit's
+     extras too), and the click counts it (`DawKitMetronome.span_clicks` takes a meter: a click
+     on every count, the bar's first accented). dawkit fcbae59. In the game: `MixState.meter()`,
+     `beat_unit` and `time_signature_points` (`/timesig`, `/timesig/map`), so bar.count numbers,
+     bar starts, the count-in, the ruler (which marks each change, `6/8`, in the SIG key's colour)
+     and the tempo strip's bars go through it; `DAW.set_time_signature_map`, sanitised on the
+     host, one undo step; SIG on the tempo strip steps the playhead's bar through 4/4, 3/4, 6/8,
+     2/4, 5/4, 7/8, 12/8, a change equal to the one before it going. The built-in engine's click
+     is a window of the song's own clicks whenever the meter is not one x/4. Reaper: the bridge's
+     GetTimeline reads each tempo marker's signature (TimeMap_GetTimeSigAtTime for the first),
+     SetTimeSignatures clears every marker's and puts the new ones on markers at their places
+     (new ones at the tempo there; one inside a ramp breaks the ramp in two), and the backend
+     drops a marker that only holds a signature from the tempo map; a tempo map edit, which
+     rewrites every marker, puts the signatures back after. Measured: `--built-in`, past the
+     song's end, a bar of 4/4 then one of 6/8: 10 clicks, each 3.48 ms after its count (the same
+     constant as the count-in's), the bars' first counts at 0.600 against at most 0.476;
+     `--reaper`, 7/8 from bar 3 set, read back (beat 8.5 is 3.2.00) with the tempo map unchanged,
+     and taken away. Found on the way: a window of clicks made under the audio lock was put
+     ahead by the time it took (a probe's doing; in play it is made while the song moves). The
+     Reaper probe's extra checks now run after the takes' undos (they are Reaper undo points of
+     their own), and the end moved 2 s later again (host 39.4/40.4, guest 38.5/40.0; the Reaper
+     host's work ends at 35.6 s).
+   - **Not yet (7b):** The demo song's parts are rendered at the first tempo (and play in 4/4
+     whatever the signature says). The loopback probe measures the click at one tempo only.
 8. Automation.
    - **Done 2026-10-10 (8a), lanes in dawkit:** `DawKitAutomation` (target "volume" dB, "pan",
      "mute", "send:<track id>" dB, "fx:<i>:<p>" normalised; points [seconds, value, HOLD|LINEAR]),
@@ -655,7 +680,7 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).
   - Tracks: adding, renaming and recolouring them.
   - Markers: renaming and deleting them, and regions of any kind.
-  - Time signature.
+  - Time signature: done 2026-10-10 (step 7f), through the bridge.
   - `tools/shot.sh --focus patchbay` frames only the floor.
 
 ## Known rough edges

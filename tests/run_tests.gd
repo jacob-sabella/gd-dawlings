@@ -159,6 +159,7 @@ func _ready() -> void:
 	_test_a_recording_counts_in()
 	_test_a_recording_punches_in_and_out()
 	_test_a_track_records_from_its_own_input()
+	_test_the_time_signature_changes()
 	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
@@ -9959,6 +9960,96 @@ func _test_a_track_records_from_its_own_input() -> void:
 	strip.refresh()
 	check("and lights once it has", strip.input.lit)
 	timeline.queue_free()
+
+
+func _test_the_time_signature_changes() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	DAW.set_tempo(120.0)
+	check("the song starts in 4/4", s.beats_per_bar == 4 and s.beat_unit == 4 and s.time_signature_points.is_empty())
+	backend._repl_durable.clear()
+	# 4/4 for two bars, then 6/8 from bar 3 (beat 8), then 4/4 from bar 5 (beat 14).
+	DAW.set_time_signature_map([[0.0, 4, 4], [8.0, 6, 8], [14.0, 4, 4]])
+	check("set_time_signature_map keeps the changes", s.time_signature_points.size() == 3)
+	check("and replicates them", backend._repl_durable.get("/timesig/map", []).size() == 9)
+	check("bar 3 is where the change is (%s)" % s.bar_beat(s.seconds_at_beat(8.0)), s.bar_beat(s.seconds_at_beat(8.0)) == "3.1.00")
+	check("6/8 is counted in eighths (%s)" % s.bar_beat(s.seconds_at_beat(9.5)), s.bar_beat(s.seconds_at_beat(9.5)) == "3.4.00")
+	check("and bar 4 starts three beats on (%s)" % s.bar_beat(s.seconds_at_beat(11.0)), s.bar_beat(s.seconds_at_beat(11.0)) == "4.1.00")
+	check("4/4 again from bar 5 (%s)" % s.bar_beat(s.seconds_at_beat(15.0)), s.bar_beat(s.seconds_at_beat(15.0)) == "5.2.00")
+	close_to("bar 5 is at its beat in seconds", s.bar_to_seconds(5.0), s.seconds_at_beat(14.0))
+	close_to("a bar of 6/8 is three beats long", s.bar_to_seconds(4.0) - s.bar_to_seconds(3.0), 1.5)
+	DAW.set_count_in(1)
+	DAW.set_metronome(true)
+	close_to("a count-in of a bar into bar 4 is a bar of 6/8", s.count_in_start(s.bar_to_seconds(4.0)), s.bar_to_seconds(3.0))
+	DAW.set_count_in(0)
+	DAW.set_metronome(false)
+	DAW.undo()
+	check("the change is one undo step", s.time_signature_points.is_empty() and s.bar_beat(s.seconds_at_beat(8.0)) == "3.1.00"
+			and s.bar_beat(s.seconds_at_beat(9.5)) == "3.2.50")
+	DAW.redo()
+	check("and redone", s.time_signature_points.size() == 3)
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest counts the same bars", guest.bar_beat(guest.seconds_at_beat(15.0)) == "5.2.00")
+	check("a verb a guest may use", &"set_time_signature_map" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_time_signature_map", [[0.0, 3.0, 4.0]])
+	check("a guest's intent sets the song's signature", s.beats_per_bar == 3 and s.time_signature_points.is_empty())
+	DAW.apply_intent(&"set_time_signature_map", [[1.0, 3.0, 4.0]])
+	DAW.apply_intent(&"set_time_signature_map", [[0.0, 0.0, 4.0]])
+	DAW.apply_intent(&"set_time_signature_map", [[0.0, 3.0, 4.0, 2.0, 5.0]])
+	DAW.apply_intent(&"set_time_signature_map", [[]])
+	check("and a malformed one is refused", s.beats_per_bar == 3)
+	DAW.set_time_signature_map([[0.0, 6, 8], [6.0, 4, 4]])
+
+	# Saved with the project, through a DAWproject file.
+	var file := OS.get_temp_dir().path_join("dawlings_meter_test.dawproject")
+	var problems := DawKitDawproject.save(ProjectBridge.capture(backend), file)
+	var opened := DawKitDawproject.open(file)
+	DirAccess.remove_absolute(file)
+	DAW.set_time_signature_map([[0.0, 4, 4]])
+	if opened["project"] != null:
+		ProjectBridge.load(opened["project"], backend)
+	check("and opened again, the song changes signature where it did (%s, %s/%d)" % [problems, s.time_signature_points, s.beat_unit],
+			problems.is_empty() and s.time_signature_points == [[0.0, 6, 8], [6.0, 4, 4]] and s.beat_unit == 8)
+	var engine := GodotBackend.new()
+	engine.state = s
+	check("the built-in engine's click counts the meter, not one bar of quarters", engine._click_windowed())
+	engine.free()
+
+	# SIG on the tempo strip, at the playhead's bar.
+	DAW.set_time_signature_map([[0.0, 4, 4]])
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	var strip: TimelineTempoStrip = timeline._tempo_controls
+	DAW.seek(s.bar_to_seconds(3.0) + 0.1)
+	strip.signature.pressed.emit()
+	check("SIG at bar 3 starts a change there, to 3/4 (%s)" % [s.time_signature_points],
+			s.time_signature_points == [[0.0, 4, 4], [8.0, 3, 4]])
+	strip.signature.pressed.emit()
+	check("again, that change goes to 6/8 (%s)" % [s.time_signature_points], s.time_signature_points == [[0.0, 4, 4], [8.0, 6, 8]])
+	for i in TimelineTempoStrip.SIGNATURES.size() - 2:
+		strip.signature.pressed.emit()
+	check("and round to 4/4, which is no change and goes (%s)" % [s.time_signature_points], s.time_signature_points.is_empty())
+	DAW.seek(0.0)
+	strip.signature.pressed.emit()
+	check("at bar 1 it is the song's own signature (%d/%d)" % [s.beats_per_bar, s.beat_unit],
+			s.beats_per_bar == 3 and s.beat_unit == 4 and s.time_signature_points.is_empty())
+	timeline.queue_free()
+	DAW.set_time_signature_map([[0.0, 4, 4]])
+
+	# Reaper: its markers' signatures, and a marker that holds only a signature is no tempo change.
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper._on_timeline({"timesig": [[0.0, 4, 4], [8.0, 7, 8]], "tempo": [[0.0, 120.0, false], [8.0, 120.0, false]]})
+	check("Reaper's signatures are read from its markers (%s)" % [reaper.state.time_signature_points],
+			reaper.state.time_signature_points == [[0.0, 4, 4], [8.0, 7, 8]])
+	check("and its marker for one is not a change of tempo (%s)" % [reaper.state.tempo_points], reaper.state.tempo_points.is_empty())
+	reaper._on_timeline({"timesig": [[0.0, 3, 4]]})
+	check("one signature throughout is no map (%d/%d)" % [reaper.state.beats_per_bar, reaper.state.beat_unit],
+			reaper.state.time_signature_points.is_empty() and reaper.state.beats_per_bar == 3)
+	reaper.free()
 
 
 func _test_input_monitoring_is_set_from_the_strip() -> void:

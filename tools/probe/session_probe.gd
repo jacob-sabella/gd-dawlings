@@ -310,6 +310,7 @@ func _host(port: int) -> void:
 		await _render_and_measure()
 		await _count_in_and_measure()
 		await _punch_and_measure()
+		await _meter_and_measure()
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -317,12 +318,14 @@ func _host(port: int) -> void:
 		await _edit_the_take()
 		if _reaper_resource != "":
 			await _tracks_in_reaper()
-			await _count_in_in_reaper()
 		await _undo_takes()
+		if _reaper_resource != "":
+			# After the takes' undos: these are Reaper undo points of their own.
+			await _count_in_in_reaper()
 
 	# How much of the time before the end the work took: the end has moved twice as it grew.
-	print("host work done at %.1fs of 37.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(37.4)
+	print("host work done at %.1fs of 39.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(39.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -336,7 +339,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(38.4)
+	await _until(40.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -744,6 +747,88 @@ func _count_in_and_measure() -> void:
 	check("which plays from the record point on (%.1f dB)" % song, song > -30.0)
 
 
+## The click through a change of time signature, heard at the master past the song's end, where
+## nothing else plays: a bar of the song's own signature, then 6/8 -- a click on every eighth, the
+## first of each bar the accent.
+func _meter_and_measure() -> void:
+	var engine := DAW.backend as GodotBackend
+	var s := DAW.state
+	DAW.transport_stop()
+	DAW.set_metronome(true)
+	var end := 0.0
+	for index in s.track_indices():
+		for it in s.track(index).items:
+			end = maxf(end, it.start + it.length)
+	var map := s.tempo_map()
+	var meter := s.meter()
+	var bar := ceilf(meter.bar_at(map.beat_at(end + 1.0)))
+	var change := meter.beat_of_bar(bar + 1.0)
+	var sig := Vector2i(s.beats_per_bar, s.beat_unit)
+	DAW.set_time_signature_map([[0.0, sig.x, sig.y], [change, 6, 8]])
+	meter = s.meter()
+	var from := map.seconds_at(meter.beat_of_bar(bar))
+	var to := map.seconds_at(meter.beat_of_bar(bar + 2.0))
+	DAW.seek(from - 0.1)
+	var capture := AudioEffectCapture.new()
+	capture.buffer_length = 6.0
+	AudioServer.add_bus_effect(engine._master_bus, capture)
+	# Long enough for the engine to have made its window of clicks for the new meter while
+	# stopped: made under the lock below, it would be put that much ahead of a song that was not
+	# moving.
+	await get_tree().create_timer(0.15).timeout
+	AudioServer.lock()
+	capture.clear_buffer()
+	DAW.transport_play()
+	var first_frame_at := GodotBackend.start_at(s.position_seconds)
+	engine._drive_meters(0.0)
+	AudioServer.unlock()
+	var began := Time.get_ticks_msec()
+	while s.position_seconds < to + 0.1 and Time.get_ticks_msec() - began < 6000:
+		await get_tree().process_frame
+	DAW.transport_stop()
+	var frames := capture.get_buffer(capture.get_frames_available())
+	for i in range(AudioServer.get_bus_effect_count(engine._master_bus) - 1, -1, -1):
+		if AudioServer.get_bus_effect(engine._master_bus, i) == capture:
+			AudioServer.remove_bus_effect(engine._master_bus, i)
+	DAW.set_time_signature_map([[0.0, sig.x, sig.y]])
+	var rate := AudioServer.get_mix_rate()
+	var offs: Array = []
+	var peaks: Array = []
+	var expected := meter.counts(meter.beat_of_bar(bar), meter.beat_of_bar(bar + 2.0))
+	for c in expected:
+		var centre := int(roundf((map.seconds_at(float(c[0])) - first_frame_at) * rate))
+		var loudest := 0.0
+		for f in range(maxi(centre - int(rate) / 50, 0), mini(centre + int(rate) / 50, frames.size())):
+			loudest = maxf(loudest, absf(frames[f].x))
+		peaks.append(loudest)
+		for f in range(maxi(centre - int(rate) / 50, 0), mini(centre + int(rate) / 50, frames.size())):
+			if loudest > 0.01 and absf(frames[f].x) > loudest * 0.5:
+				offs.append((f - centre) * 1000.0 / rate)
+				break
+	var mean := 0.0
+	for o in offs:
+		mean += o / maxf(offs.size(), 1)
+	var worst := 0.0
+	for o in offs:
+		worst = maxf(worst, absf(o - mean))
+	# The accents are the bar's first counts; each louder than every count that is not one.
+	var quietest_accent := INF
+	var loudest_other := 0.0
+	for i in expected.size():
+		if expected[i][1]:
+			quietest_accent = minf(quietest_accent, peaks[i])
+		else:
+			loudest_other = maxf(loudest_other, peaks[i])
+	print("meter: %d/%d then 6/8 at beat %.1f, %d counts, onsets_ms %s, accents >= %.3f, others <= %.3f" % [sig.x, sig.y,
+			change, expected.size(), offs.map(func(o): return snappedf(o, 0.01)), quietest_accent, loudest_other])
+	check("the click counted a bar of %d/%d then one of 6/8 (%d of %d, %.2fms on average, each within %.2fms)" % [
+			sig.x, sig.y, offs.size(), expected.size(), mean, worst],
+			expected.size() == sig.x + 6 and offs.size() == expected.size()
+			and absf(mean) < COUNT_IN_TOLERANCE_MS and worst < COUNT_IN_SPREAD_MS)
+	check("accented on each bar's first count (%.3f against %.3f)" % [quietest_accent, loudest_other],
+			quietest_accent > loudest_other * 1.2)
+
+
 ## A recording punched in and out: begun before the loop range and stopped after it, my take is
 ## the range and nothing either side.
 func _punch_and_measure() -> void:
@@ -968,6 +1053,22 @@ func _count_in_in_reaper() -> void:
 			s.input_of(3) == "in:1/2")
 	if ReaperBackend.input_code(was) != ReaperBackend.INPUT_UNKNOWN:
 		DAW.set_track_input(3, was)
+	# A change of time signature, onto Reaper's tempo markers and back, the tempo left as it was.
+	var sig := Vector2i(s.beats_per_bar, s.beat_unit)
+	var tempo_before: Array = s.tempo_points.duplicate(true)
+	DAW.set_time_signature_map([[0.0, sig.x, sig.y], [8.0, 7, 8]])
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	s.time_signature_points = []
+	await get_tree().create_timer(0.5).timeout
+	check("Reaper took a change to 7/8 at bar 3 and read it back (%s, %s)" % [s.time_signature_points, s.bar_beat(s.seconds_at_beat(8.5))],
+			s.time_signature_points == [[0.0, sig.x, sig.y], [8.0, 7, 8]] and s.bar_beat(s.seconds_at_beat(8.5)) == "3.2.00")
+	check("with its tempo as it was (%s)" % [s.tempo_points], s.tempo_points == tempo_before)
+	DAW.set_time_signature_map([[0.0, sig.x, sig.y]])
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	await get_tree().create_timer(0.5).timeout
+	check("and taken away again (%s)" % [s.time_signature_points], s.time_signature_points.is_empty() and s.tempo_points == tempo_before)
 	DAW.set_punch(false)
 	await get_tree().create_timer(0.2).timeout
 	if items.call() > before:
@@ -1295,11 +1396,11 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	# While the session is still on: once the host leaves, my own project is back.
-	await _until(36.5)
+	await _until(38.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
-	await _until(38.0)
+	await _until(40.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

@@ -753,6 +753,31 @@ func set_tempo_map(points: Array) -> void:
 	for pt in (timed if not timed.is_empty() else [[0.0, state.tempo, DawKitTempoMap.HOLD]]):
 		flat.append_array([map.seconds_at(float(pt[0])), float(pt[1]), 1.0 if pt[2] != DawKitTempoMap.HOLD else 0.0])
 	_edit("SetTempoMap", flat)
+	# Which takes every marker away, and Reaper's signatures are on its markers.
+	if not state.time_signature_points.is_empty() or state.beats_per_bar != 4 or state.beat_unit != 4:
+		var sigs: Array = state.time_signature_points if not state.time_signature_points.is_empty() \
+				else [[0.0, state.beats_per_bar, state.beat_unit]]
+		_edit("SetTimeSignatures", MixWire.pack_meter_points(sigs))
+
+
+## Tempo points less those that change nothing: a held point at the tempo already held.
+static func _without_held(points: Array) -> Array:
+	var out: Array = []
+	for pt in points:
+		if not out.is_empty() and int(out[-1][2]) == DawKitTempoMap.HOLD and int(pt[2]) == DawKitTempoMap.HOLD \
+				and absf(float(out[-1][1]) - float(pt[1])) < 0.0001:
+			continue
+		out.append(pt)
+	return out
+
+
+## Reaper keeps signatures on its tempo markers (the bridge's SetTimeSignatures).
+func set_time_signature_map(points: Array) -> void:
+	if points.is_empty():
+		return
+	_apply("/timesig", [float(points[0][1]), float(points[0][2])])
+	_apply("/timesig/map", MixWire.pack_meter_points(points if points.size() > 1 else []))
+	_edit("SetTimeSignatures", MixWire.pack_meter_points(points))
 
 
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
@@ -1031,12 +1056,25 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 				# Reaper's gradual change is a straight line in time.
 				flat.append_array([float(pt[0]), float(pt[1]),
 						float(DawKitTempoMap.RAMP_SECONDS if pt[2] else DawKitTempoMap.HOLD)])
-		# A single marker is one tempo, which /tempo/raw already says.
-		var points := MixWire.unpack_tempo_points(flat)
+		# A single marker is one tempo, which /tempo/raw already says. A marker that only holds a
+		# time signature, at the tempo before it, is no change of tempo.
+		var points := _without_held(MixWire.unpack_tempo_points(flat))
 		if points.size() <= 1:
 			points = []
 		if points != state.tempo_points:
 			_apply("/tempo/map", MixWire.pack_tempo_points(points))
+	if result.has("timesig"):
+		var flat: Array = []
+		for pt in _as_array(result["timesig"]):
+			if pt is Array and pt.size() >= 3:
+				flat.append_array([float(pt[0]), float(pt[1]), float(pt[2])])
+		var sigs := MixWire.unpack_meter_points(flat)
+		if not sigs.is_empty():
+			if int(sigs[0][1]) != state.beats_per_bar or int(sigs[0][2]) != state.beat_unit:
+				_apply("/timesig", [float(sigs[0][1]), float(sigs[0][2])])
+			var changes: Array = sigs if sigs.size() > 1 else []
+			if changes != state.time_signature_points:
+				_apply("/timesig/map", MixWire.pack_meter_points(changes))
 	# The only channel that knows how big the project actually is. OSC reports the bank and
 	# nothing else, so without this a 90-track session is indistinguishable from a 64-track one.
 	if result.has("track_count"):

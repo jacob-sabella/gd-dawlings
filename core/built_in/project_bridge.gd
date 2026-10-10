@@ -24,7 +24,8 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 	p.tempo_points = s.tempo_points.map(func(pt): return [float(pt[0]), float(pt[1]), DawKitTempoMap.shape_of(pt[2])])
 	if not p.tempo_points.is_empty():
 		p.tempo_points[0][1] = s.tempo
-	p.time_signature = Vector2i(s.beats_per_bar, backend.beat_unit)
+	p.time_signature = Vector2i(s.beats_per_bar, s.beat_unit)
+	p.time_signature_points = s.time_signature_points.duplicate(true)
 	p.length = s.project_length
 	p.metronome = s.metronome
 	p.loop_on = s.looping
@@ -159,7 +160,8 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 	backend.instruments.clear()
 	s.markers.clear()
 	backend.project_title = p.title
-	backend.beat_unit = p.time_signature.y
+	s.beat_unit = p.time_signature.y
+	s.time_signature_points = p.time_signature_points.duplicate(true)
 	s.tempo = p.tempo
 	s.tempo_points = p.tempo_points.duplicate(true)
 	s.beats_per_bar = p.time_signature.x

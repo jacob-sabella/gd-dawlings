@@ -5,7 +5,9 @@ extends Node3D
 ## playhead is under (the last one at or before it; the first is the song's own tempo): BPM sets
 ## its tempo when let go, ADD puts a new one at the start of the playhead's bar, RAMP makes the
 ## tempo glide from this change to the next rather than jump there, DEL takes it away. Each is one
-## undo step, as `DAW.set_tempo_map` is.
+## undo step, as `DAW.set_tempo_map` is. SIG steps the time signature of the playhead's bar
+## through SIGNATURES: at a change, that change's; elsewhere, a new change from that bar. One the
+## same as the signature before it is no change, and goes (`DAW.set_time_signature_map`).
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -20,16 +22,21 @@ var bpm: Knob
 var add: PanelButton
 var ramp: PanelButton
 var remove: PanelButton
+var signature: PanelButton
+
+## What SIG steps through, the commonest first.
+const SIGNATURES: Array[Vector2i] = [Vector2i(4, 4), Vector2i(3, 4), Vector2i(6, 8), Vector2i(2, 4),
+		Vector2i(5, 4), Vector2i(7, 8), Vector2i(12, 8)]
 
 
 func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(4 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(5 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(1.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(2 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	bpm = Knob.new()
 	bpm.name = "TempoBpm"
@@ -50,6 +57,14 @@ func _ready() -> void:
 				return "glide to the next change" if not ramp.lit else "jump at the next change instead")
 	remove = _key("TempoRemove", "DEL", 3, Color(0.95, 0.38, 0.34), "TEMPO  REMOVE", _remove,
 			func() -> String: return "this change" if current() > 0 else "the song's own tempo stays")
+	signature = _key("TempoSignature", "SIG", 4, TimelineSurface.SIGNATURE_COLOUR, "TIME SIGNATURE", _step_signature,
+			func() -> String:
+				var at := _signature_change()
+				var sig := DAW.state.meter().signature_at(_bar_start())
+				var next := _next_signature(sig)
+				if at >= 0:
+					return "%d/%d from bar %d: %d/%d next" % [sig.x, sig.y, _bar_here(), next.x, next.y]
+				return "%d/%d here: %d/%d from bar %d" % [sig.x, sig.y, next.x, next.y, _bar_here()])
 	DAW.transport_changed.connect(refresh)
 	refresh()
 
@@ -81,6 +96,7 @@ func refresh() -> void:
 	add.lit = true
 	ramp.lit = int(points[i][2]) != DawKitTempoMap.HOLD and i + 1 < points.size()
 	remove.lit = i > 0
+	signature.lit = not DAW.state.time_signature_points.is_empty()
 
 
 func _bpm(v: float) -> float:
@@ -93,7 +109,7 @@ func _which() -> String:
 
 
 func _bar_of(beat: float) -> int:
-	return int(floorf(beat / float(maxi(DAW.state.beats_per_bar, 1)))) + 1
+	return int(floorf(DAW.state.meter().bar_at(beat) + 0.000001)) + 1
 
 
 func _bar_here() -> int:
@@ -109,7 +125,7 @@ func _set_bpm(v: float) -> void:
 func _add() -> void:
 	var points := _points()
 	var i := current()
-	var beat := float(_bar_here() - 1) * float(maxi(DAW.state.beats_per_bar, 1))
+	var beat := DAW.state.meter().beat_of_bar(float(_bar_here() - 1))
 	if is_equal_approx(float(points[i][0]), beat):
 		return
 	var here := DAW.state.tempo_map().bpm_at(beat)
@@ -133,6 +149,56 @@ func _remove() -> void:
 		return
 	points.remove_at(i)
 	_commit(points)
+
+
+## The signature's changes, with the song's own as the first, whatever is stored.
+func _signature_points() -> Array:
+	var s := DAW.state
+	if s.time_signature_points.is_empty():
+		return [[0.0, s.beats_per_bar, s.beat_unit]]
+	return s.time_signature_points.duplicate(true)
+
+
+## The beat the playhead's bar starts on.
+func _bar_start() -> float:
+	return DAW.state.meter().beat_of_bar(float(_bar_here() - 1))
+
+
+## Which change starts the playhead's bar, or -1 when none does.
+func _signature_change() -> int:
+	var points := _signature_points()
+	var start := _bar_start()
+	for i in points.size():
+		if absf(float(points[i][0]) - start) < 0.0001:
+			return i
+	return -1
+
+
+static func _next_signature(sig: Vector2i) -> Vector2i:
+	var at := SIGNATURES.find(sig)
+	return SIGNATURES[(at + 1) % SIGNATURES.size()]
+
+
+func _step_signature() -> void:
+	var points := _signature_points()
+	var at := _signature_change()
+	var start := _bar_start()
+	var next := _next_signature(DAW.state.meter().signature_at(start))
+	if at < 0:
+		var i := 0
+		while i < points.size() and float(points[i][0]) < start:
+			i += 1
+		points.insert(i, [start, next.x, next.y])
+		at = i
+	else:
+		points[at][1] = next.x
+		points[at][2] = next.y
+	# A change to the signature already playing is no change.
+	if at + 1 < points.size() and Vector2i(points[at + 1][1], points[at + 1][2]) == next:
+		points.remove_at(at + 1)
+	if at > 0 and Vector2i(points[at - 1][1], points[at - 1][2]) == next:
+		points.remove_at(at)
+	DAW.set_time_signature_map(points)
 
 
 ## One point left is one tempo, stored as no map at all.

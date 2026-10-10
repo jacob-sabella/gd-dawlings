@@ -315,12 +315,35 @@ func in_punch(seconds: float) -> bool:
 ## song's start, at the first tempo.
 func count_in_start(at: float) -> float:
 	var map := tempo_map()
-	return map.seconds_at(map.beat_at(at) - float(count_in_bars * maxi(beats_per_bar, 1)))
+	var m := meter()
+	return map.seconds_at(m.beat_of_bar(m.bar_at(map.beat_at(at)) - float(count_in_bars)))
 
 
-## Beats in a bar. Reaper's OSC surface does not send the time signature, so this is 4 unless
-## a bridge says otherwise -- and only the bar number of a computed position depends on it.
+## The song's time signature: counts in a bar, and the note value of one. Reaper's OSC surface
+## does not send it; its bridge does. `/timesig`.
 var beats_per_bar: int = 4
+var beat_unit: int = 4
+## The signature's changes, as DawKitMeter's points ([beat, numerator, denominator], the first at
+## beat 0); empty for one signature throughout. `/timesig/map`.
+var time_signature_points: Array = []
+var _meter: DawKitMeter = null
+var _meter_key := ""
+
+
+## Where every bar begins, through the signature's changes (dawkit's DawKitMeter).
+func meter() -> DawKitMeter:
+	var key := "%d/%d/%s" % [beats_per_bar, beat_unit, time_signature_points]
+	if _meter == null or key != _meter_key:
+		_meter = DawKitMeter.from_array(time_signature_points, maxi(beats_per_bar, 1), maxi(beat_unit, 1))
+		if not time_signature_points.is_empty():
+			_meter.set_point(0.0, maxi(beats_per_bar, 1), maxi(beat_unit, 1))
+		_meter_key = key
+	return _meter
+
+
+## Bars from the song's start to `seconds`, 0 at the start, with the fraction of the bar.
+func bar_at(seconds: float) -> float:
+	return meter().bar_at(beat_at(seconds))
 ## Whether the click is on. Reaper's metronome, which is a transport setting there as here.
 var metronome: bool = false
 ## The inputs a track can record from on this DAW, [id, name] each: the built-in engine's are
@@ -411,17 +434,16 @@ func seconds_at_beat(beat: float) -> float:
 	return tempo_map().seconds_at(beat)
 
 
-## `seconds` as bar.beat.hundredths, counted from bar 1, through the tempo's changes.
+## `seconds` as bar.count.hundredths, counted from bar 1, through the tempo's and the time
+## signature's changes: a count is a quarter in x/4, an eighth in x/8.
 func bar_beat(seconds: float) -> String:
-	var beats := tempo_map().beat_at(maxf(seconds, 0.0))
-	var per_bar := float(maxi(beats_per_bar, 1))
-	return "%d.%d.%02d" % [int(beats / per_bar) + 1, int(fmod(beats, per_bar)) + 1,
-			int(fmod(beats, 1.0) * 100.0)]
+	var at: Array = meter().position(tempo_map().beat_at(maxf(seconds, 0.0)))
+	return "%d.%d.%02d" % [at[0], at[1], mini(int(float(at[2]) * 100.0), 99)]
 
 
 ## Seconds at the start of `bar` (1-based).
 func bar_to_seconds(bar: float) -> float:
-	return tempo_map().seconds_at((bar - 1.0) * float(maxi(beats_per_bar, 1)))
+	return tempo_map().seconds_at(meter().beat_of_bar(bar - 1.0))
 
 
 func has_loop_range() -> bool:

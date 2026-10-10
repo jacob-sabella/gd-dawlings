@@ -241,6 +241,9 @@ func set_metronome(_on: bool) -> void: pass
 ## Bars of click before recording starts, 0 for none (MixState.count_in_bars). Not a history
 ## step, as the click is not.
 func set_count_in(_bars: int) -> void: pass
+## The time signature's changes, as MixState.time_signature_points: [beat, numerator,
+## denominator], the first at beat 0 and the song's own; one point is one signature.
+func set_time_signature_map(_points: Array) -> void: pass
 ## Punching in and out to the loop range (MixState.punch). Not a history step.
 func set_punch(_on: bool) -> void: pass
 ## The project tempo, in beats per minute. Constant-tempo projects only: a project with a tempo

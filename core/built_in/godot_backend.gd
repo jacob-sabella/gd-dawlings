@@ -748,11 +748,11 @@ func _sync_click() -> void:
 		if _click.playing:
 			_click.stop()
 		# Made while stopped, so pressing play does not wait for it.
-		if state.metronome and not state.tempo_points.is_empty() and _master_bus >= 0:
+		if state.metronome and _click_windowed() and _master_bus >= 0:
 			_click_window_for(state.position_seconds)
 		return
 	_click.bus = MASTER_BUS
-	if not state.tempo_points.is_empty():
+	if _click_windowed():
 		_sync_click_window()
 		return
 	var wanted := "%s/%d" % [state.tempo, state.beats_per_bar]
@@ -770,6 +770,12 @@ func _sync_click() -> void:
 	if absf(off) > DRIFT_SECONDS:
 		reseeks += 1
 		_start(_click, expected)
+
+
+## Whether the click is a window of the song's own clicks rather than one bar looping: with tempo
+## or signature changes, or a signature not counted in quarters.
+func _click_windowed() -> bool:
+	return not state.tempo_points.is_empty() or not state.time_signature_points.is_empty() or state.beat_unit != 4
 
 
 ## With tempo changes a bar does not repeat, so the click is a window of the song's own clicks
@@ -795,15 +801,16 @@ func _sync_click_window() -> void:
 ## A window of clicks holding `at`, made unless the one there already does: how long making it
 ## took, in seconds, or 0 when it was not made.
 func _click_window_for(at: float) -> float:
-	var key := "%s/%d" % [state.tempo_points, state.beats_per_bar]
+	var key := "%s/%s/%d" % [state.tempo_points, state.time_signature_points, state.beats_per_bar] \
+			+ "/%d/%s" % [state.beat_unit, state.tempo]
 	var into := at - _click_from
 	if key == _click_for and into >= 0.0 and into <= CLICK_WINDOW - CLICK_WINDOW_LEAD:
 		return 0.0
 	var map := state.tempo_map()
-	var per_bar := float(maxi(state.beats_per_bar, 1))
+	var meter := state.meter()
 	var began := Time.get_ticks_usec()
-	_click_from = map.seconds_at(floorf(map.beat_at(at) / per_bar) * per_bar)
-	_click.stream = DawKitMetronome.span(map, state.beats_per_bar, _click_from, CLICK_WINDOW,
+	_click_from = map.seconds_at(meter.beat_of_bar(floorf(meter.bar_at(map.beat_at(at)) + 0.000001)))
+	_click.stream = DawKitMetronome.span(map, meter, _click_from, CLICK_WINDOW,
 			int(AudioServer.get_mix_rate()))
 	_click_for = key
 	return maxf(float(Time.get_ticks_usec() - began) / 1000000.0, 0.000001)

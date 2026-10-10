@@ -60,7 +60,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
-	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
+	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"set_count_in", &"set_punch", &"add_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -370,6 +370,14 @@ func set_automation(track_index: int, target: String, points: Array) -> void:
 		apply_intent(&"set_automation", [track_index, target, flat])
 	else:
 		Session.send_intent(&"set_automation", [track_index, target, flat])
+## `points` as MixState.time_signature_points: [beat, numerator, denominator], the first at beat
+## 0 and the song's own signature. Sent flat, as the tempo map is.
+func set_time_signature_map(points: Array) -> void:
+	var flat := MixWire.pack_meter_points(points)
+	if Session.is_authority():
+		apply_intent(&"set_time_signature_map", [flat])
+	else:
+		Session.send_intent(&"set_time_signature_map", [flat])
 ## `points` as MixState.tempo_points: [beat, bpm, ramps], the first at beat 0. Sent flat so a
 ## guest's intent is checked the same way whatever sent it.
 func set_tempo_map(points: Array) -> void:
@@ -516,6 +524,16 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_tempo_map intent.")
 			return
 		args = [points]
+	if verb == &"set_time_signature_map":
+		# Peer input: flat [beat, numerator, denominator] triples, each a later beat, from beat 0.
+		if args.size() != 1 or not (args[0] is Array):
+			push_warning("DAW: refused a malformed set_time_signature_map intent.")
+			return
+		var meter_points := MixWire.unpack_meter_points(args[0])
+		if meter_points.is_empty():
+			push_warning("DAW: refused a malformed set_time_signature_map intent.")
+			return
+		args = [meter_points]
 	if verb in [&"add_track", &"rename_track"]:
 		# Peer input: a track number and a name.
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
