@@ -661,52 +661,50 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the
   colours. Not started: nobody has asked for big rooms yet.
 
-## Waiting on the user
+## Decided (2026-10-10, the user handed these over: "what makes most sense legally, game fun-wise")
 
-- **Hearing your own keys: through the track, or fast.** On the built-in engine the host's keys now
-  play through their track (fader and effects, as a DAW monitors), which goes through Godot's
-  mixer: about 44 ms from key to sound here. The native helper plays them in about 5 ms, but
-  straight out, past the track. A switch for this is easy; which should be the default?
-- **Sample-accurate playback needs the engine to mix its own players.** Godot cannot start a player
-  at a given sample, so sources can sit up to one mix step (10.7 ms) apart. Fixing that means
-  dawkit mixing every track itself, sample by sample, which in GDScript would be too slow for a
-  real project: it is the GDScript-or-GDExtension question below, now with a concrete reason.
-
-- **dawkit's licence and name.** It is "All rights reserved" for now, which keeps every option
-  open, and "dawkit" is a working name (every class is prefixed `DawKit`, so a rename is one
-  search and replace). Which licence to sell it under (a commercial licence, dual GPL and
-  commercial, Asset Library terms), and under what name, is the user's call. Also: should it
-  stay a GDScript addon (source visible to buyers), or move its engine into a GDExtension
-  (compiled, closed) before it is sold?
-- **dawkit's submodule URL** is the local path `/home/jsabella/Projects/dawkit`. Once dawkit
-  has a private remote, `.gitmodules` should point at it, or a clone of dawlings elsewhere will
-  not find the engine.
-
-- **A guest hearing their own voice with the mic.** The host hears themself through the DAW's
-  input monitoring, which the mic turns on. A guest's voice is recorded on the guest's machine
-  (GuestAudio) and is not in any mix they hear. Two ways to close it. One is a capture stream
-  in `native/keys.c` (duplex: the mic in, mixed straight to the output at the keys path's
-  latency, with a level and a mute on the guest panel). The other is to leave it to the
-  interface's direct monitoring, which costs nothing and is already how most singers hear
-  themselves. Which one, and whether the game should ever play a voice back, is the user's
-  call.
-
-- **Per-track cue for a host on Reaper, and for a guest.** The personal mix (the tablet,
-  docs/items_loop.md) takes single tracks where their audio is in this process: the built-in
-  engine's per-track cues (`GodotBackend.set_cues`). Elsewhere the plug goes in and the tablet
-  says "not here". A host on Reaper hears Reaper, and a guest gets the host's whole mix
-  in one stream. Options: Reaper cue sends to a hardware output the game taps; per-listener
-  stems streamed to a guest (upload cost grows with every listener); or leave per-track cue to
-  the built-in engine. The user's call.
-- **Another player's mic in the personal mix.** Their keys are notes and cost nothing to send
-  (`TheirKeys`), but a mic is audio: it would be captured on their machine, encoded and streamed
-  to every listener who patched it. That costs the singer's upload per listener (or one stream to
-  the host, relayed), adds an encode, a jitter buffer and the network trip (tens of ms), and needs
-  a mic item to plug into first. The user's call, once there is a mic.
-- **"Their monitor": hearing what another player hears.** Captured on the performer's machine
-  (their mix with their own playing, in time as they hear it) and sent on: a staged performance,
-  not a way to keep everyone in time at once. Who may be listened to, the upload it costs, and
-  how it is shown are the user's to decide first.
+- **Hearing your own keys: through the track by default, fast on a switch.** Decided fast at
+  first, for the feel, and then measured: `--built-in` put the host's key straight out (the
+  native helper, 15.5 ms) and its recorded note landed 40 ms after its sound in the loopback.
+  A key is stamped where the song was as heard, and how late the song is heard is only known
+  from Godot, whose report leaves out the sound server's own buffering; through the track the
+  key is exactly as late and the two cancel. So the take wins: "Hear my keys through the track"
+  is on by default (GuestMidi.through_track), and off plays them straight out, the tooltip saying
+  notes can land late. To make fast the default, the game needs the song's real output delay:
+  the native helper could time a quiet click from Godot in the sink's monitor (digital, so a
+  -60 dB click is plain), which is the open item for it.
+- **The engine mixes its own players, in a GDExtension (C++).** Sample-accurate playback needs
+  dawkit to mix every track itself, sample by sample, which GDScript is too slow for in a real
+  project, least of all on a standalone headset, the headline client. C++ through godot-cpp
+  (MIT) builds for desktop and Android arm64 alike, and a compiled engine is also what can be
+  sold without handing over its source. dawkit keeps a GDScript face (the project model, the
+  file formats, the API), and the mixing core moves into the extension.
+- **dawkit's licence: proprietary, sold under a commercial licence; the name stays.** Not dual
+  GPL: a GPL edition would let anyone ship it free in a GPL game, and GPL sits badly with console
+  and store terms. A search found no audio product called DAWKit (not a trademark clearance,
+  which wants a lawyer before money changes hands). The compiled core ships as binaries, the
+  GDScript face as source, under one per-developer licence. Third-party material in dawkit is
+  listed in its THIRD_PARTY_NOTICES (the DAWproject examples and schema, MIT).
+- **dawkit's private remote** needs a push to the user's GitHub, which this loop does not do;
+  `gh repo create dawkit --private --source ~/Projects/dawkit --push` and pointing
+  `.gitmodules` at it is the whole of it, when the user says so.
+- **A guest hearing their own voice: the interface's direct monitoring, plus an opt-in.** Direct
+  monitoring costs nothing and is how most singers hear themselves; the game does not play a
+  voice back by default, since a laptop's mic and speakers feed back. "Hear my mic" on the guest
+  panel, off by default and saying to wear headphones, plays it through the native helper's
+  duplex path at its latency.
+- **Per-track cue stays with the built-in engine.** Per-listener stems cost the host's upload
+  per listener, and Reaper's hardware cue outputs need routing only the user can do. On Reaper
+  and for a guest the tablet keeps saying "not here".
+- **Another player's mic in the personal mix: not built.** It costs the singer's upload per
+  listener and tens of ms; voices reach the room through the host's mix and the takes.
+- **"Their monitor": not built.** A staged performance for its upload cost, not a way to play
+  together.
+- **Third-party plugins through a Carla sidecar: yes, as a separate process, never bundled.**
+  Carla is GPL; run as its own process and spoken to over OSC it is an aggregate, not a derived
+  work, so the game and dawkit stay proprietary. The game uses a Carla the user installed
+  (detected on the PATH) rather than shipping one, which would bring GPL source obligations
+  into the download.
 
 ## Not started
 

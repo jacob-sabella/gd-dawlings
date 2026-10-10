@@ -84,6 +84,22 @@ var _take: MidiTake = null
 var _take_track := 0
 ## Whether the monitor synth was started for a host recording its own keys (`host_records`).
 var _host_synth := false
+## A host's keys heard through the track they go onto (its fader and effects, through Godot's
+## mixer: about 44 ms here), rather than straight out through the native helper (about 15 ms).
+## On by default, for the take's sake: a key is stamped where the song was as it was heard, and
+## how late the song is heard is only known through Godot, whose report leaves out the sound
+## server's own buffering. Through the track the key is as late as the song and the two cancel;
+## straight out, it is not, and on PipeWire here a recorded note landed 40 ms after its sound.
+var through_track := true:
+	set(v):
+		if through_track == v:
+			return
+		through_track = v
+		if _host_synth:
+			# Heard again the new way, from the next key.
+			_host_synth = false
+			_hear_host_keys()
+		changed.emit()
 ## Where heard() asks, when set: returns {seconds, playing, recording, valid}. For the suite,
 ## which has no stream to listen to.
 var heard_source: Callable = Callable()
@@ -327,7 +343,7 @@ func _process(_delta: float) -> void:
 				_release_all()
 				synth.stop()
 		return
-	if _host_synth:
+	if _host_synth and through_track:
 		# The keys follow the track they go onto, as the armed track or the choice changes.
 		var through := DAW.monitor_bus(take_track())
 		if through != synth.bus:
@@ -338,22 +354,28 @@ func _process(_delta: float) -> void:
 	follow(heard())
 
 
-## A host recording its own keys hears them through the track they go onto, as a DAW monitors a
-## track's instrument: the instrument on that track's bus (DAW.monitor_bus), so its fader and
-## effects are in what the host hears. Started when MIDI is opened or the first key is played,
-## not before, so a host who never plays never has it running.
+## A host recording its own keys hears them through the track they go onto (`through_track`), as
+## a DAW monitors a track's instrument: the instrument on that track's bus (DAW.monitor_bus), so
+## its fader and effects are in what the host hears, through Godot's mixer. Without it, straight
+## out through the native helper, sooner, but a take's notes then land late (see through_track).
+## Started when MIDI is opened or the first key is played, not before, so a host who never plays
+## never has it running.
 func _hear_host_keys() -> void:
 	if _host_synth or keytar or not host_records():
 		return
 	_host_synth = true
-	# Through the track, so through Godot: the helper's sound would not pass the track's fader.
-	synth.allow_native = false
-	if synth.native != null:
+	if synth.is_running():
 		synth.stop()
-	synth.set_bus(DAW.monitor_bus(take_track()))
+	if through_track:
+		# Through the track, so through Godot: the helper's sound would not pass the track's fader.
+		synth.allow_native = false
+		synth.set_bus(DAW.monitor_bus(take_track()))
+	else:
+		synth.allow_native = OS.get_environment("R3D_GODOT_KEYS") != "1"
+		synth.set_bus(&"")
 	if MonitorSynth.available() and not synth.is_running():
 		synth.start()
-	# MIDI came through the helper while it ran; now it comes through Godot.
+	# MIDI comes through whichever path plays it.
 	_route_midi()
 
 

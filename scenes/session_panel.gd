@@ -55,6 +55,8 @@ var _midi_button: Button
 var _play_into: OptionButton
 var _monitor: CheckButton
 var _monitor_volume: HSlider
+## A host's: its keys heard through their track, or straight out (GuestMidi.through_track).
+var _through_track: CheckButton
 var _record_with: CheckButton
 var _computer_keys: CheckButton
 var _take_status: Label
@@ -475,6 +477,10 @@ func _build_midi(box: VBoxContainer) -> void:
 		Session.guest_midi.monitor_db = v if v > -29.9 else -80.0)
 	monitor_row.add_child(_monitor_volume)
 
+	_through_track = _toggle("Hear my keys through the track")
+	_through_track.tooltip_text = "With the track's fader and effects, and recorded exactly where you heard them. Off, they play straight out, sooner, but notes you record can land tens of milliseconds late."
+	_through_track.toggled.connect(func(on: bool): Session.guest_midi.through_track = on)
+	box.add_child(_through_track)
 	_record_with = _toggle("Record when the host records")
 	_record_with.toggled.connect(func(on: bool): Session.guest_midi.record_with_host = on)
 	box.add_child(_record_with)
@@ -742,6 +748,10 @@ func _refresh_midi() -> void:
 			+ ("\nPlayed by its own audio node, %.1f ms from key to output, before your sound card's own." % late
 					if gm.synth.native != null else ""))
 	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
+	_through_track.visible = gm.host_records()
+	if _through_track.button_pressed != gm.through_track:
+		_through_track.set_pressed_no_signal(gm.through_track)
+	_through_track.disabled = not gm.monitor
 	_record_with.text = "Record my keys when I record" if gm.host_records() \
 			else "Record my keys when %s records" % Session.name_of(1)
 	if _record_with.button_pressed != gm.record_with_host:

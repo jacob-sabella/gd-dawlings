@@ -9443,11 +9443,15 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	DAW.backend = engine
 	gm._hear_host_keys()
 	check("heard through that track, as the engine monitors it (%s)" % gm.synth.bus,
-			gm.synth.bus != &"" and gm.synth.bus == engine.monitor_bus(armed) and not gm.synth.allow_native)
+			gm.through_track and gm.synth.bus != &"" and gm.synth.bus == engine.monitor_bus(armed) and not gm.synth.allow_native)
 	gm.target_track = armed + 1
 	gm._process(0.016)
 	check("and through another, chosen", gm.synth.bus == engine.monitor_bus(armed + 1))
 	gm.target_track = 0
+	gm.through_track = false
+	check("or, asked, straight out, as soon as they can be (%s)" % gm.synth.bus,
+			gm.synth.bus == &"" and gm.synth.allow_native == (OS.get_environment("R3D_GODOT_KEYS") != "1"))
+	gm.through_track = true
 	DAW.backend = stand_in
 	var monitor := MonitorSynth.new()
 	monitor.note_on(60, 100)
