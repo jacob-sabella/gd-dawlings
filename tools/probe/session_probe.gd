@@ -677,6 +677,9 @@ func _envelopes_in_reaper() -> void:
 	var fx_target := "fx:%d:1" % DAW.state.track(fx_track).plugins()[0]
 	var fx_lane := [[1.0, 0.25, DawKitAutomation.LINEAR], [3.0, 0.75, DawKitAutomation.HOLD]]
 	DAW.set_automation(fx_track, fx_target, fx_lane)
+	var was_master := DAW.state.master.volume
+	var master_lane := [[0.0, -3.0, DawKitAutomation.HOLD]]
+	DAW.set_automation(0, "volume", master_lane)
 	await get_tree().create_timer(0.8).timeout
 	var back := true
 	for target in lanes:
@@ -686,12 +689,14 @@ func _envelopes_in_reaper() -> void:
 			ReaperBackend._same_lane(DAW.state.track(first[0]).automation.get(send_target, []), send_lane))
 	check("and a plugin's (%s on %d: %s)" % [fx_target, fx_track, DAW.state.track(fx_track).automation.get(fx_target)],
 			ReaperBackend._same_lane(DAW.state.track(fx_track).automation.get(fx_target, []), fx_lane))
+	check("and the master's (%s)" % [DAW.state.master.automation],
+			ReaperBackend._same_lane(DAW.state.master.automation.get("volume", []), master_lane))
 	# Reaper reads its envelopes while it plays, into the null sink.
 	DAW.seek(1.0)
 	DAW.transport_play()
 	await get_tree().create_timer(0.5).timeout
-	check("and its faders follow them as it plays (%.2f dB, pan %.2f, mute %s)" % [t.volume_db, t.pan, t.mute],
-			absf(t.volume_db + 6.0) < 0.1 and t.pan < 0.01 and not t.mute)
+	check("and its faders follow them as it plays (%.2f dB, pan %.2f, mute %s, master %.2f dB)" % [t.volume_db, t.pan, t.mute, DAW.state.master.volume_db],
+			absf(t.volume_db + 6.0) < 0.1 and t.pan < 0.01 and not t.mute and absf(DAW.state.master.volume_db + 3.0) < 0.1)
 	DAW.seek(5.0)
 	await get_tree().create_timer(0.5).timeout
 	check("further on, further down, and muted (%.2f dB, %s)" % [t.volume_db, t.mute],
@@ -701,12 +706,15 @@ func _envelopes_in_reaper() -> void:
 	await get_tree().create_timer(0.6).timeout
 	check("Reaper's track is in latch, and says so (%d)" % t.automation_mode, t.automation_mode == DAW.AUTOMATION_LATCH)
 	DAW.set_track_automation_mode(1, DAW.AUTOMATION_READ)
-	for _i in 5:
+	for _i in 6:
 		DAW.undo()
 	DAW.seek(0.0)
 	await get_tree().create_timer(0.8).timeout
 	check("undone, the envelopes are gone (%s)" % [t.automation], t.automation.is_empty() and t.automation_mode == 0
-			and DAW.state.track(first[0]).automation.is_empty() and DAW.state.track(fx_track).automation.is_empty())
+			and DAW.state.track(first[0]).automation.is_empty() and DAW.state.track(fx_track).automation.is_empty()
+			and DAW.state.master.automation.is_empty())
+	if not is_equal_approx(DAW.state.master.volume, was_master):
+		DAW.set_master_volume(was_master)
 	if t.mute != was_mute:
 		DAW.set_track_mute(1, was_mute)
 	if not is_equal_approx(t.pan, was_pan):

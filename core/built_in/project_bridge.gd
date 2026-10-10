@@ -36,6 +36,8 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 		p.markers.append(DawKitMarker.new(float(t), str(s.markers[t])))
 	p.master.volume_db = s.master.volume_db
 	p.master.pan = s.master.pan * 2.0 - 1.0
+	for target in s.master.automation:
+		p.master.automation.append(DawKitAutomation.new(target, (s.master.automation[target] as Array).duplicate(true)))
 
 	var order: Array = s.track_indices()
 	var folders: Array[String] = []
@@ -174,6 +176,10 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 	s.master.volume = backend.db_to_taper(p.master.volume_db)
 	s.master.volume_db = p.master.volume_db
 	s.master.pan = (p.master.pan + 1.0) * 0.5
+	s.master.automation.clear()
+	for lane in p.master.automation:
+		if lane.target in MixWire.MASTER_LANES and not lane.points.is_empty():
+			s.master.automation[lane.target] = lane.points.duplicate(true)
 
 	var index_of := {}
 	for i in p.tracks.size():

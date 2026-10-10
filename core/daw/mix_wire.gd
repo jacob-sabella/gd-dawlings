@@ -146,6 +146,16 @@ static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) 
 ## The mono `/master/vu` is accepted and written to BOTH channels, because a device configured
 ## with MASTER_VU and not the split pair would otherwise leave the meter dead with no hint why.
 static func _apply_master(state: MixState, p: PackedStringArray, args: Array) -> void:
+	# `/master/automation/<volume|pan>`, whole; empty is the lane gone.
+	if p.size() == 3 and p[1] == "automation":
+		if p[2] in MASTER_LANES:
+			var points := unpack_automation(p[2], args)
+			if points.is_empty():
+				state.master.automation.erase(p[2])
+			else:
+				state.master.automation[p[2]] = points
+			state.master_changed.emit(&"automation")
+		return
 	if p.size() < 2 or args.is_empty():
 		return
 	match p[1]:
@@ -284,6 +294,17 @@ static func automation_mode_of(v) -> int:
 		return 0
 	var m := int(roundf(float(v)))
 	return m if m in [0, 2, 4] else 0
+
+
+## What the master can be automated by.
+const MASTER_LANES := ["volume", "pan"]
+
+
+## The wire address of a lane: track 0 is the master.
+static func automation_address(track_index: int, target: String) -> String:
+	if track_index == 0:
+		return "/master/automation/%s" % target
+	return "/track/%d/automation/%s" % [track_index, target]
 
 
 ## At most this many points in one lane of automation cross the wire.
@@ -617,6 +638,8 @@ static func snapshot(state: MixState) -> Array:
 
 	out.append(["/master/volume", [state.master.volume]])
 	out.append(["/master/pan", [state.master.pan]])
+	for target in state.master.automation:
+		out.append(["/master/automation/%s" % target, pack_automation(state.master.automation[target])])
 	out.append(["/tempo/raw", [state.tempo]])
 	out.append(["/tempo/map", pack_tempo_points(state.tempo_points)])
 	out.append(["/play", [1.0 if state.playing else 0.0]])

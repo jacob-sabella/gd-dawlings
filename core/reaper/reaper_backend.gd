@@ -741,7 +741,7 @@ static func midi_take_request(track_index: int, start: float, end: float, notes:
 
 ## Shown at once, then written to Reaper's envelope and read back with the next timeline.
 func set_automation(track_index: int, target: String, points: Array) -> void:
-	_apply("/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
+	_apply(MixWire.automation_address(track_index, target), MixWire.pack_automation(points))
 	_edit("SetEnvelope", [track_index, target] + MixWire.pack_automation(points))
 
 
@@ -875,6 +875,20 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		var mode: int = automodes.get(index, 0)
 		if mode != t.automation_mode:
 			_apply("/track/%d/automode" % index, [float(mode)])
+	var master: Dictionary = {}
+	var reported_master = result.get("master_automation", {})
+	if typeof(reported_master) == TYPE_DICTIONARY:
+		for target in reported_master:
+			if str(target) in MixWire.MASTER_LANES:
+				var points := MixWire.unpack_automation(str(target), _as_array(reported_master[target]))
+				if not points.is_empty():
+					master[str(target)] = points
+	for target in state.master.automation.keys():
+		if not master.has(target):
+			_apply("/master/automation/%s" % target, [])
+	for target in master:
+		if not _same_lane(state.master.automation.get(target, []), master[target]):
+			_apply("/master/automation/%s" % target, MixWire.pack_automation(master[target]))
 
 	var markers: Array = []
 	for m in _as_array(result.get("markers", [])):

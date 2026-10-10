@@ -131,6 +131,8 @@ class MasterState extends RefCounted:
 	var pan: float = 0.5
 	var vu_l: float = 0.0
 	var vu_r: float = 0.0
+	## As TrackState.automation, for "volume" and "pan" only. Track 0 to `DAW.set_automation`.
+	var automation: Dictionary = {}
 
 
 ## One block of audio or MIDI on the timeline.

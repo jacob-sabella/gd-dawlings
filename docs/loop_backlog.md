@@ -374,9 +374,16 @@ can finish music in, saving DAWproject. Steps, in order:
      own take, against the notes before the ramp, is the lane's value there to within 0.64 dB
      (two runs: worst 0.64 and 0.59; a steady 0.3-0.5 dB lower, about what the ramp moves in
      the 80 ms before a note's peak).
-   - **Not yet:** the lane is as tall as a track lane (14 mm); a taller automation row under the
-     track would be easier to draw on. Master automation (not in MixState yet). A loopback
-     measurement of a volume ramp.
+   - **Done 2026-10-10 (8f), the master's lanes:** `MasterState.automation` (volume, pan),
+     wire `/master/automation/<target>`, `DAW.set_automation(0, ...)` (track 0 is the master;
+     a guest's master target other than volume or pan is refused), followed like a track's,
+     the project's master lane both ways, and Reaper's master envelopes (its `<VOLENV2` like any
+     track's; the bridge's track 0). Probe: a master lane read back from Reaper and its master
+     fader following it while it plays.
+   - **Not yet:** the master's lanes are not drawn on the timeline (it has no lane there), and
+     the master is not written by touch/latch. The lane is as tall as a track lane (14 mm); a
+     taller automation row under the track would be easier to draw on. dawkit ramps volume in
+     dB, Reaper along its fader: a ramp's middle differs between them.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

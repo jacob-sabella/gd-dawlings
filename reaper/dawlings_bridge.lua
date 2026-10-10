@@ -434,10 +434,11 @@ local function track_automation(tr)
   return any and lanes or nil
 end
 
--- args: track, target, then flat seconds/value/shape triples: the whole envelope, replaced, as one
+-- args: track (0 the master), target, then flat seconds/value/shape triples: the whole envelope, replaced, as one
 -- undo point. No points empties it.
 function handlers.SetEnvelope(args)
-  local tr = track_from_osc(args[1])
+  -- Track 0 is the master.
+  local tr = args[1] == 0 and reaper.GetMasterTrack(0) or track_from_osc(args[1])
   local target = tostring(args[2] or '')
   if not tr then return {ok = false, error = 'no such track'} end
   reaper.Undo_BeginBlock()
@@ -553,6 +554,7 @@ function handlers.GetTimeline()
 
   return {
     tracks = tracks,
+    master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     markers = markers,
     tempo = tempo,
     length = reaper.GetProjectLength(0),

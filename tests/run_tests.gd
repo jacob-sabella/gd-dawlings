@@ -11113,6 +11113,27 @@ func _test_controls_follow_their_automation() -> void:
 	DAW.set_automation(2, "pan", [])
 	check("an empty lane is no lane", not s.track(2).automation.has("pan"))
 
+	# The master's volume and pan, as track 0.
+	DAW.set_automation(0, "volume", [[0.0, -6.0, DawKitAutomation.HOLD], [4.0, -2.0, DawKitAutomation.HOLD]])
+	s.position_seconds = 5.0
+	backend.follow_automation()
+	close_to("the master's fader follows its lane", s.master.volume_db, -2.0)
+	close_to("its taper too", s.master.volume, backend.db_to_taper(-2.0))
+	var mguest := MixState.new()
+	MixWire.apply_replicated(mguest, MixWire.snapshot(s))
+	check("a joining guest gets the master's lane", mguest.master.automation == s.master.automation)
+	var mp := ProjectBridge.capture(backend)
+	check("it is the project's master lane", mp.master.automation_of("volume") != null)
+	var mback := GodotBackend.new()
+	mback.state = MixState.new()
+	ProjectBridge.load(mp, mback)
+	check("and opened again", mback.state.master.automation == s.master.automation)
+	mback.free()
+	DAW.apply_intent(&"set_automation", [0, "mute", [0.0, 1.0, 0.0]])
+	check("the master has no mute lane to set", not s.master.automation.has("mute"))
+	DAW.undo()
+	check("undone, the master has no lane", s.master.automation.is_empty())
+
 	# Written from the desk. Track 3 in touch: the fader moved from 2 s to 3 s while playing.
 	var t3 := s.track(3)
 	DAW.set_track_volume(3, backend.db_to_taper(0.0))

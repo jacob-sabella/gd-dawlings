@@ -335,6 +335,7 @@ func remove_track(index: int) -> void: _do(&"remove_track", [index])
 func rename_track(index: int, track_name: String) -> void:
 	_do(&"rename_track", [index, track_name.left(TRACK_NAME_MAX)])
 ## `points` as MixState.TrackState.automation's: [seconds, value, shape]. Empty takes the lane away.
+## Track 0 is the master, whose volume and pan can be automated.
 func set_automation(track_index: int, target: String, points: Array) -> void:
 	var flat := MixWire.pack_automation(points)
 	if Session.is_authority():
@@ -449,8 +450,9 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		args = []
 	if verb == &"set_automation":
 		# Peer input: a track, a target that names a control, and flat points.
-		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
-				or typeof(args[1]) not in [TYPE_STRING, TYPE_STRING_NAME] or not (args[2] is Array):
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 0 \
+				or typeof(args[1]) not in [TYPE_STRING, TYPE_STRING_NAME] or not (args[2] is Array) \
+				or (int(args[0]) == 0 and str(args[1]) not in MixWire.MASTER_LANES):
 			push_warning("DAW: refused a malformed set_automation intent.")
 			return
 		var points := MixWire.unpack_automation(str(args[1]), args[2])

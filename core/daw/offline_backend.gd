@@ -1009,14 +1009,18 @@ func set_tempo(bpm: float) -> void:
 
 ## One undo step: the whole lane, drawn or recorded.
 func set_automation(track_index: int, target: String, points: Array) -> void:
-	if not state.tracks.has(track_index):
+	var lanes: Dictionary
+	if track_index == 0:
+		lanes = state.master.automation
+	elif state.tracks.has(track_index):
+		lanes = state.track(track_index).automation
+	else:
 		return
-	var t := state.track(track_index)
-	_remember("/track/%d/automation/%s" % [track_index, target],
-			set_automation.bind(track_index, target, (t.automation.get(target, []) as Array).duplicate(true)),
+	var address := MixWire.automation_address(track_index, target)
+	_remember(address, set_automation.bind(track_index, target, (lanes.get(target, []) as Array).duplicate(true)),
 			set_automation.bind(track_index, target, points.duplicate(true)), false)
-	MixWire.apply(state, "/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
-	record_for_replication("/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
+	MixWire.apply(state, address, MixWire.pack_automation(points))
+	record_for_replication(address, MixWire.pack_automation(points))
 	_followed_at = NAN
 
 
@@ -1033,6 +1037,15 @@ func follow_automation() -> void:
 	if not state.playing and at == _followed_at:
 		return
 	_followed_at = at
+	for target in state.master.automation:
+		var mv := DawKitAutomation.value_in(state.master.automation[target], at)
+		if target == "volume" and not is_equal_approx(state.master.volume_db, mv):
+			state.set_master_field(&"volume", db_to_taper(mv))
+			state.set_master_field(&"volume_db", mv)
+			record_for_replication("/master/volume", [state.master.volume])
+		elif target == "pan" and not is_equal_approx(state.master.pan, (mv + 1.0) * 0.5):
+			state.set_master_field(&"pan", (mv + 1.0) * 0.5)
+			record_for_replication("/master/pan", [state.master.pan])
 	for index in state.tracks:
 		var t: MixState.TrackState = state.tracks[index]
 		for target in t.automation:
