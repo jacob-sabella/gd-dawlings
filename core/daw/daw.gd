@@ -54,7 +54,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
-	&"transpose_item", &"quantize_item",
+	&"transpose_item", &"quantize_item", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"add_marker", &"set_track_monitor",
@@ -318,6 +318,13 @@ func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
+## Longest track name sent anywhere, for the same reason as MARKER_NAME_MAX.
+const TRACK_NAME_MAX := 64
+func add_track(at: int, track_name := "") -> void:
+	_do(&"add_track", [maxi(at, 1), track_name.left(TRACK_NAME_MAX)])
+func remove_track(index: int) -> void: _do(&"remove_track", [index])
+func rename_track(index: int, track_name: String) -> void:
+	_do(&"rename_track", [index, track_name.left(TRACK_NAME_MAX)])
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	_do(&"transpose_item", [track_index, item_index,
 			clampi(semitones, -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)])
@@ -411,6 +418,17 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		args = clean
 	if verb in [&"delete_selected", &"duplicate_selected"]:
 		args = []
+	if verb in [&"add_track", &"rename_track"]:
+		# Peer input: a track number and a name.
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
+			return
+		args = [int(args[0]), str(args[1]).left(TRACK_NAME_MAX)]
+	if verb == &"remove_track":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed remove_track intent %s." % [args])
+			return
+		args = [int(args[0])]
 	if verb in [&"set_send_volume", &"set_send_pan"]:
 		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
 		# level outside the taper is a fader past its end stop.

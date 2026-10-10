@@ -600,6 +600,54 @@ function handlers.SetTrackValue(args)
   return {ok = true}
 end
 
+-- Edit: Undo and Edit: Redo, served in line with the edits; see ReaperBackend.undo.
+function handlers.Undo()
+  reaper.Undo_DoUndo2(0)
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
+function handlers.Redo()
+  reaper.Undo_DoRedo2(0)
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
+-- args: where (from 1), name. A new track there, as Insert new track does: one undo point.
+function handlers.InsertTrack(args)
+  local at = math.max(1, math.min(math.floor(args[1] or 1), reaper.CountTracks(0) + 1))
+  reaper.Undo_BeginBlock()
+  reaper.InsertTrackAtIndex(at - 1, true)
+  local tr = reaper.GetTrack(0, at - 1)
+  if tr and (args[2] or '') ~= '' then
+    reaper.GetSetMediaTrackInfo_String(tr, 'P_NAME', args[2], true)
+  end
+  reaper.TrackList_AdjustWindows(false)
+  reaper.Undo_EndBlock('Insert track', -1)
+  return {ok = true}
+end
+
+-- args: track. Gone, with its items and the sends to it, as Remove tracks does.
+function handlers.DeleteTrack(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  reaper.DeleteTrack(tr)
+  reaper.TrackList_AdjustWindows(false)
+  reaper.Undo_EndBlock('Remove track', -1)
+  return {ok = true}
+end
+
+-- args: track, name.
+function handlers.RenameTrack(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  reaper.GetSetMediaTrackInfo_String(tr, 'P_NAME', args[2] or '', true)
+  reaper.Undo_EndBlock('Rename track', 1)
+  return {ok = true}
+end
+
 -- --- editing ----------------------------------------------------------------------------
 --
 -- Items are addressed as (track, index in lane): the same numbering GetTimeline reports, which

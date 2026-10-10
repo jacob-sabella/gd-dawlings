@@ -174,6 +174,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
+	_test_tracks_are_added_removed_and_renamed()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10660,6 +10661,117 @@ func _test_notes_are_transposed_and_quantised() -> void:
 				pitch = int(c.notes[2])
 	check("and saved to DAWproject transposed (%s %d)" % [saved, pitch], pitch == 60 + DAWBackend.TRANSPOSE_MAX)
 	_offline()
+
+
+func _test_tracks_are_added_removed_and_renamed() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var shape := func() -> Array:
+		var out: Array = []
+		for index in s.track_indices():
+			var t: MixState.TrackState = s.tracks[index]
+			var sends: Array = []
+			for slot in t.sends:
+				sends.append([slot, t.sends[slot].dest_track])
+			out.append([index, t.name, t.folder_depth, sends, t.items.size(), backend.fx_kind(index, 0)])
+		return out
+	var was: Array = shape.call()
+	var count := s.tracks.size()
+	var depth := maxi(s.undo_depth, 0)
+	var replaced := [0]
+	var count_replaced := func(): replaced[0] += 1
+	DAW.project_replaced.connect(count_replaced)
+
+	DAW.add_track(3, "Overdub")
+	check("a track added at 3 is there, empty, and the rest move down (%s)" % [s.track(3).name],
+			s.tracks.size() == count + 1 and s.track(3).name == "Overdub" and s.track(3).items.is_empty()
+			and s.track(4).name == was[2][1] and s.track(3).index == 3 and s.track(4).index == 4)
+	check("the room is sent the whole mix", replaced[0] == 1)
+	var follows := true
+	for row in was:
+		for send in row[3]:
+			var from: int = row[0] + (1 if row[0] >= 3 else 0)
+			var to: int = send[1] + (1 if send[1] >= 3 else 0)
+			follows = follows and s.track(from).sends[send[0]].dest_track == to
+	check("every send still goes to the same track", follows)
+	check("and every effect is still the same kind",
+			was.all(func(row): return backend.fx_kind(row[0] + (1 if row[0] >= 3 else 0), 0) == row[5]))
+	check("saved, the project has it", ProjectBridge.capture(backend).tracks[2].name == "Overdub")
+
+	# The demo's DRUMS folder, track 1, holds the kit.
+	var kit_level := s.folder_level(2)
+	DAW.undo()
+	check("undone, the mix is as it was", shape.call() == was)
+	DAW.remove_track(1)
+	var p := ProjectBridge.capture(backend)
+	check("a folder removed, its children move out a level (%d -> %d)" % [kit_level, s.folder_level(1)],
+			s.tracks.size() == count - 1 and s.track(1).name == was[1][1]
+			and s.folder_level(1) == kit_level - 1 and p.problems().is_empty())
+	check("and the folders after it keep their shape", range(2, count).all(func(i):
+			return s.folder_level(i) == maxi(_level_in(was, i + 1) - (1 if _level_in(was, i + 1) > 0 and i + 1 <= _folder_end(was, 1) else 0), 0)))
+	DAW.undo()
+	check("undone, it is back with its children in it", shape.call() == was)
+
+	var target := -1
+	for row in was:
+		for send in row[3]:
+			if send[1] > 0:
+				target = send[1]
+	if target > 0:
+		var senders := was.filter(func(row): return row[3].any(func(sd): return sd[1] == target))
+		DAW.remove_track(target)
+		var gone := true
+		for index in s.track_indices():
+			for slot in s.tracks[index].sends:
+				var sd: MixState.SendState = s.tracks[index].sends[slot]
+				gone = gone and sd.dest_track > 0 and sd.dest_track < s.tracks.size() + 1 and sd.index == slot
+		var first: int = senders[0][0] - (1 if senders[0][0] > target else 0)
+		check("a return removed takes the sends to it, and the rest are numbered from 1 (%d)" % target,
+				gone and s.track(first).sends.size() == senders[0][3].size() - 1)
+		DAW.undo()
+		check("undone, the sends to it are back", shape.call() == was)
+
+	DAW.rename_track(2, "Kick In")
+	check("renamed", s.track(2).name == "Kick In")
+	DAW.undo()
+	check("and undone", s.track(2).name == was[1][1])
+	check("each edit one step to undo, and all undone (%d)" % (s.undo_depth - depth), s.undo_depth == depth)
+	DAW.redo()
+	check("and redone", s.track(2).name == "Kick In")
+	DAW.undo()
+
+	DAW.apply_intent(&"remove_track", ["x"])
+	DAW.apply_intent(&"remove_track", [0])
+	DAW.apply_intent(&"add_track", [2])
+	check("a guest's malformed track edit is refused", shape.call() == was)
+	DAW.apply_intent(&"rename_track", [2, "x".repeat(500)])
+	check("and a long name cut to %d" % DAW.TRACK_NAME_MAX, s.track(2).name.length() == DAW.TRACK_NAME_MAX)
+	DAW.project_replaced.disconnect(count_replaced)
+	_offline()
+
+
+## The level a track sat at in a `shape` from `_test_tracks_are_added_removed_and_renamed`.
+func _level_in(rows: Array, index: int) -> int:
+	var level := 0
+	for row in rows:
+		if row[0] >= index:
+			break
+		level = maxi(level + row[2], 0)
+	return level
+
+
+## The last track inside the folder `index` opens.
+func _folder_end(rows: Array, index: int) -> int:
+	var level := 0
+	for row in rows:
+		if row[0] < index:
+			continue
+		level += row[2]
+		if row[0] > index and level <= 0:
+			return row[0]
+	return rows.size()
 
 
 ## The mix, a guest's own keys and the room's clicks each play on a bus of their own, so each

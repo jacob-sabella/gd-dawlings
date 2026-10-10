@@ -159,6 +159,10 @@ func fx_kind(track_index: int, fx_index: int) -> StringName:
 
 ## A whole project has been put into the cache: its effects, its buses and its players are made
 ## again from it, and the song's parts rendered at its tempo.
+func _fx_kinds() -> Dictionary:
+	return _kinds.duplicate(true)
+
+
 func project_loaded(kinds: Dictionary) -> void:
 	_kinds = kinds.duplicate(true)
 	_take_streams.clear()

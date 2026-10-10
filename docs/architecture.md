@@ -88,7 +88,8 @@ offline backend's own mix, with its state, undo and replication, turned into God
   playhead is the sound card's (`audio_time`, a silent looping player), and a player is put back
   only when it drifts more than 25ms from its own first reading.
 - **Items carry gain and fades**, played as their player's volume (`item_level`). Delete,
-  duplicate, trim, gain, fades, transpose and quantise are DAW verbs, one undo step each, and Reaper gets them
+  duplicate, trim, gain, fades, transpose, quantise and adding, removing and renaming tracks are
+  DAW verbs, one undo step each, and Reaper gets them
   through the bridge.
 - **Meters are the buses' real peaks**, through the same fader law.
 - **Guests hear the master bus**: an `AudioEffectCapture` on `R3D Master` is the session's
@@ -97,7 +98,7 @@ offline backend's own mix, with its state, undo and replication, turned into God
   the host on a real audio driver into the null sink, because headless Godot's dummy driver mixes
   in 85ms lumps.
 
-Not there yet: adding and removing tracks, automation, mixdown, and
+Not there yet: automation, mixdown, and
 third-party plugins, which Godot cannot host. See "Built-in DAW" in `docs/loop_backlog.md`.
 
 ### dawkit: the engine is its own product

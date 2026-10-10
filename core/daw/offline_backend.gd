@@ -119,6 +119,12 @@ func project_loaded(_kinds: Dictionary) -> void:
 	pass
 
 
+## Which of Godot's effects each slot is, by track: the built-in engine's, which the stand-in
+## does not run.
+func _fx_kinds() -> Dictionary:
+	return {}
+
+
 func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
 	if not stand_in_windows or not state.tracks.has(track_index) \
 			or state.fx(track_index, fx_index, false) == null:
@@ -829,6 +835,90 @@ func quantize_item(track_index: int, item_index: int, grid_beats: float, strengt
 	var before := _lanes_snapshot()
 	if _locally_quantize(track_index, item_index, grid_beats, strength):
 		_remember_edit(before)
+
+
+func add_track(at: int, track_name: String) -> void:
+	var count := state.track_indices().size()
+	at = clampi(at, 1, count + 1)
+	var before := _structure()
+	_renumber(_order_adding(count, at))
+	state.track(at).name = track_name
+	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
+
+
+func remove_track(index: int) -> void:
+	var count := state.track_indices().size()
+	if index < 1 or index > count:
+		return
+	var before := _structure()
+	_renumber(_order_removing(count, index))
+	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
+
+
+func rename_track(index: int, track_name: String) -> void:
+	if not state.tracks.has(index) or state.tracks[index].name == track_name:
+		return
+	_remember("/track/%d/name" % index, rename_track.bind(index, state.tracks[index].name),
+			rename_track.bind(index, track_name), false)
+	state.set_track_field(index, &"name", track_name)
+	record_for_replication("/track/%d/name" % index, [track_name])
+
+
+## The tracks renumbered (see `_locally_renumber`), with what is kept beside the mix by index.
+func _renumber(order: Array) -> void:
+	var kinds := _fx_kinds()
+	var map := _locally_renumber(order)
+	var moved_kinds := {}
+	var moved_instruments := {}
+	for old in map:
+		if kinds.has(old):
+			moved_kinds[map[old]] = kinds[old]
+		if instruments.has(old):
+			moved_instruments[map[old]] = instruments[old]
+	instruments = moved_instruments
+	_structure_changed(moved_kinds)
+
+
+## Which object is which track, and everything a renumbering changes on it: undo puts the same
+## tracks back, as every later step has been undone by then.
+func _structure() -> Dictionary:
+	var rows: Array = []
+	for index in state.track_indices():
+		var t: MixState.TrackState = state.tracks[index]
+		var sends: Array = []
+		for slot in t.sends:
+			sends.append([slot, t.sends[slot], t.sends[slot].dest_track])
+		rows.append([t, index, t.folder_depth, sends])
+	return {"rows": rows, "instruments": instruments.duplicate(true), "kinds": _fx_kinds()}
+
+
+func _restore_structure(saved: Dictionary) -> void:
+	var tracks := {}
+	for row in saved["rows"]:
+		var t: MixState.TrackState = row[0]
+		t.index = row[1]
+		t.folder_depth = row[2]
+		t.sends = {}
+		for send in row[3]:
+			var sd: MixState.SendState = send[1]
+			sd.index = send[0]
+			sd.dest_track = send[2]
+			t.sends[send[0]] = sd
+		tracks[row[1]] = t
+	state.tracks = tracks
+	state.project_track_count = tracks.size()
+	instruments = saved["instruments"].duplicate(true)
+	_structure_changed(saved["kinds"])
+
+
+## Every index may mean another track now: the engine rebuilds, and the room gets the whole mix.
+func _structure_changed(kinds: Dictionary) -> void:
+	state.bank_offset = 0
+	state.bank_size = mini(maxi(state.tracks.size(), 1), 64)
+	project_loaded(kinds)
+	state.bank_changed.emit()
+	state.timeline_changed.emit()
+	state.project_replaced.emit()
 
 
 func split_selected(seconds: float) -> void:

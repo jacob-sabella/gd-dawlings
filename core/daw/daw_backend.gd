@@ -254,6 +254,12 @@ func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) 
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
+## A new, empty track at `at` (from 1), everything from there on moving down one.
+func add_track(_at: int, _track_name: String) -> void: pass
+## A track gone, with its items and effects, and the sends that went to it. A folder's children
+## move out a level.
+func remove_track(_index: int) -> void: pass
+func rename_track(_index: int, _track_name: String) -> void: pass
 ## Every note of a MIDI item moved `semitones` up (or down), each kept within 0-127.
 func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
@@ -475,6 +481,77 @@ func _locally_shape(track_index: int, item_index: int, gain_db: float, fade_in: 
 	if not is_nan(fade_out):
 		it.fade_out = clampf(fade_out, 0.0, it.length - it.fade_in)
 	_write_lane(track_index, lane)
+
+
+## The tracks put in a new order: `order[n]` is the old index of new track n + 1, or 0 for a new,
+## empty one. Sends follow their destinations and go with a removed one; a removed track's folder
+## shape passes to its neighbours, so its children move out a level and the track before a removed
+## last child closes the folder instead. Answers old index -> new index.
+func _locally_renumber(order: Array) -> Dictionary:
+	var olds := state.track_indices()
+	var map := {}
+	for n in order.size():
+		if int(order[n]) > 0:
+			map[int(order[n])] = n + 1
+	var depth := {}
+	for i in olds:
+		depth[i] = state.tracks[i].folder_depth
+	for pos in olds.size():
+		var gone: int = olds[pos]
+		var d: int = depth[gone]
+		if map.has(gone) or d == 0:
+			continue
+		if d < 0:
+			for back in range(pos - 1, -1, -1):
+				if map.has(olds[back]):
+					depth[olds[back]] += d
+					break
+		else:
+			var level := d
+			for later in range(pos + 1, olds.size()):
+				level += depth[olds[later]]
+				if level <= 0:
+					depth[olds[later]] += d
+					break
+	var tracks := {}
+	for n in order.size():
+		var t: MixState.TrackState
+		if int(order[n]) > 0:
+			t = state.tracks[int(order[n])]
+			t.folder_depth = depth[int(order[n])]
+		else:
+			t = MixState.TrackState.new()
+		t.index = n + 1
+		tracks[n + 1] = t
+	for t in tracks.values():
+		var slots: Array = t.sends.keys()
+		slots.sort()
+		var kept := {}
+		for slot in slots:
+			var sd: MixState.SendState = t.sends[slot]
+			if sd.dest_track > 0:
+				if not map.has(sd.dest_track):
+					continue
+				sd.dest_track = map[sd.dest_track]
+			sd.index = kept.size() + 1
+			kept[sd.index] = sd
+		t.sends = kept
+	state.tracks = tracks
+	state.project_track_count = order.size()
+	return map
+
+
+## `order` for a track added at `at`, or removed from `index`, when there are `count`.
+static func _order_adding(count: int, at: int) -> Array:
+	var order := range(1, count + 1)
+	order.insert(clampi(at, 1, count + 1) - 1, 0)
+	return order
+
+
+static func _order_removing(count: int, index: int) -> Array:
+	var order := range(1, count + 1)
+	order.erase(index)
+	return order
 
 
 ## False when the item has no notes to change.

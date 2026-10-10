@@ -232,7 +232,23 @@ can finish music in, saving DAWproject. Steps, in order:
      preview counts the grid at one tempo; Reaper's `QuantizeItem` uses its own tempo map, and the
      next timeline brings that back. The `--reaper` probe transposes and quantises the guest's MIDI
      take and reads Reaper's notes back: each lands within 0.14 ms of the beat (PPQ rounding).
-   - **Not yet:** adding, removing and renaming tracks (6c); keys
+   - **Done 2026-10-10 (6c), tracks:** `add_track(at, name)`, `remove_track(index)`,
+     `rename_track(index, name)` (names capped at 64 characters for guests). A renumbering
+     (`DAWBackend._locally_renumber`) keeps sends going to the same tracks, drops the sends to a
+     removed track, and numbers the rest from 1. A removed folder's children move out a level,
+     and the track before a removed last child closes the folder. The built-in engine's effect
+     kinds and kept instruments follow their tracks, and the buses are rebuilt. One undo step each:
+     undo puts the same track objects back where they were. The room gets the whole mix again
+     (`project_replaced`). On Reaper: bridge `InsertTrack`, `DeleteTrack` and `RenameTrack`, then a
+     surface refresh and a structure poll. The preview is drawn only when the whole project is in
+     the bank.
+   - **Fixed on the way:** Reaper's undo and redo now go through the bridge (`Undo`/`Redo`), in
+     line with the edits. Over OSC, an undo sent straight before a bridge edit was served after
+     it and took the edit back instead (seen in the `--reaper` probe). OSC is the fallback with
+     no bridge.
+   - **Not yet:** things the session keys by track number do not follow a renumbering: a
+     guest's chosen take track, holds, and the layout profile's strips. Renaming a demo-song
+     track changes which part it plays, because parts go by name. Next: keys
      for these on the timeline; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.

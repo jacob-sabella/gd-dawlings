@@ -541,17 +541,26 @@ const REDO_ACTION := 40030
 const SAVE_ACTION := 40026
 
 
+## Through the bridge, in line with the edits: over OSC, an undo pressed straight after an edit
+## could reach Reaper first and take back the step before, and an edit made straight after an
+## undo could be undone in its place. OSC only when the bridge is not there.
 func undo() -> void:
-	if _peer != null:
-		_peer.send("/action", [UNDO_ACTION])
-	# Whatever came back may be an edit, and the timeline is only polled every two seconds.
-	_timeline_due = minf(_timeline_due, 0.15)
+	_undo_or_redo("Undo", UNDO_ACTION)
 
 
 func redo() -> void:
-	if _peer != null:
-		_peer.send("/action", [REDO_ACTION])
+	_undo_or_redo("Redo", REDO_ACTION)
+
+
+func _undo_or_redo(fn: String, action: int) -> void:
+	if _bridge != null and _bridge.is_open():
+		_edit(fn, [])
+	elif _peer != null:
+		_peer.send("/action", [action])
+	# Whatever came back may be an edit, and the timeline is only polled every two seconds; or a
+	# track, and the structure even less often.
 	_timeline_due = minf(_timeline_due, 0.15)
+	_structure_due = minf(_structure_due, 0.15)
 
 
 # --- editing ------------------------------------------------------------------------------
@@ -603,6 +612,51 @@ func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_locally_shape(track_index, item_index, NAN, fade_in, fade_out)
 	_edit("SetItemFades", [track_index, item_index, fade_in, fade_out])
+
+
+## Shown at once when the whole project is in the bank, then restated by Reaper: OSC for what it
+## carries, the structure poll for folders and sends, the timeline for the lanes and the count.
+func add_track(at: int, track_name: String) -> void:
+	var count := state.track_indices().size()
+	at = clampi(at, 1, maxi(state.project_track_count, count) + 1)
+	if _whole_project_in_bank():
+		_locally_renumber(_order_adding(count, at))
+		state.track(at).name = track_name
+		state.bank_changed.emit()
+	_restructure("InsertTrack", [at, track_name])
+
+
+func remove_track(index: int) -> void:
+	if index < 1:
+		return
+	if _whole_project_in_bank() and state.tracks.has(index):
+		_locally_renumber(_order_removing(state.track_indices().size(), index))
+		state.bank_changed.emit()
+	_restructure("DeleteTrack", [index])
+
+
+func rename_track(index: int, track_name: String) -> void:
+	if state.tracks.has(index):
+		state.set_track_field(index, &"name", track_name)
+	_edit("RenameTrack", [index, track_name])
+
+
+func _whole_project_in_bank() -> bool:
+	return state.bank_offset == 0 and state.project_track_count <= state.bank_size \
+			and state.track_indices().size() == state.project_track_count
+
+
+func _restructure(fn: String, args: Array) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_timeline_epoch += 1
+	_edits_in_flight += 1
+	_bridge.call_reaper(fn, args, func(_result) -> void:
+		_structure_due = 0.0
+		if _peer != null:
+			_peer.send("/action", [REFRESH_SURFACES])
+		_edits_in_flight -= 1
+		_timeline_due = 0.0)
 
 
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:

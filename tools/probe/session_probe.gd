@@ -286,9 +286,11 @@ func _host(port: int) -> void:
 		_check_placed_take()
 		_check_audio_take()
 		await _edit_the_take()
+		if _reaper_resource != "":
+			await _tracks_in_reaper()
 		await _undo_takes()
 
-	await _until(15.0)
+	await _until(18.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -302,7 +304,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(16.0)
+	await _until(19.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -555,6 +557,30 @@ func _edit_the_take() -> void:
 		DAW.undo()
 
 
+## A track added at the end, renamed and removed, each read back from Reaper; then all three
+## undone, so the takes' own undo steps are the next ones again.
+func _tracks_in_reaper() -> void:
+	# Straight after the take's five undos, which go through the bridge in line with this edit.
+	var count := DAW.state.project_track_count
+	DAW.add_track(count + 1, "Probe track")
+	await get_tree().create_timer(0.7).timeout
+	var added := DAW.state.track(count + 1, false)
+	DAW.rename_track(count + 1, "Probe renamed")
+	await get_tree().create_timer(0.5).timeout
+	var renamed := DAW.state.track(count + 1, false)
+	var name_read: String = renamed.name if renamed else "-"
+	DAW.remove_track(count + 1)
+	await get_tree().create_timer(0.7).timeout
+	check("Reaper added a track, renamed it and removed it (%d, %s, %d)"
+			% [count, name_read, DAW.state.project_track_count],
+			added != null and name_read == "Probe renamed" and DAW.state.project_track_count == count
+			and DAW.state.track(count + 1, false) == null)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	await get_tree().create_timer(0.5).timeout
+
+
 ## The guest's MIDI take's notes, in song seconds, by pitch then time so the order survives an
 ## edit that moves them.
 func _take_notes() -> Array:
@@ -721,7 +747,7 @@ func _guest(port: int) -> void:
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
-	await _until(15.6)
+	await _until(19.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
