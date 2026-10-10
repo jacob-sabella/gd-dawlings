@@ -8402,6 +8402,32 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	timeline.pick_track(0)
 	click.call(at.call(2, 12.0))
 
+	# The tempo's changes, from the strip under the middle.
+	var tempo: TimelineTempoStrip = timeline._tempo_controls
+	var was_tempo := s.tempo
+	DAW.seek(s.bar_to_seconds(5.0))
+	check("one tempo: no change to remove or ramp", not tempo.remove.lit and not tempo.ramp.lit and tempo.current() == 0)
+	tempo.add.pressed.emit()
+	check("ADD puts a change at the playhead's bar (%s)" % [s.tempo_points], s.tempo_points.size() == 2
+			and is_equal_approx(s.tempo_points[1][0], 16.0) and tempo.current() == 1 and tempo.remove.lit)
+	tempo.bpm.value_committed.emit(0.5)
+	close_to("its BPM knob sets that change's tempo", s.tempo_points[1][1], lerpf(TimelineTempoStrip.BPM_LOW, TimelineTempoStrip.BPM_HIGH, 0.5), 0.05)
+	close_to("and not the song's", s.tempo, was_tempo)
+	DAW.seek(s.bar_to_seconds(2.0))
+	check("before it, the strip is on the song's own tempo", tempo.current() == 0 and tempo.ramp.lit == false)
+	tempo.ramp.pressed.emit()
+	check("RAMP glides from there to the change", s.tempo_points[0][2] == DawKitTempoMap.RAMP_BEATS and tempo.ramp.lit)
+	check("and the ruler says where the tempo changes, and to what",
+			timeline._ruler.get_children().any(func(c): return c is Label3D and c.text == "/%d" % roundi(s.tempo_points[1][1])))
+	DAW.seek(s.bar_to_seconds(6.0))
+	tempo.remove.pressed.emit()
+	check("DEL on the change leaves one tempo again", s.tempo_points.is_empty() and is_equal_approx(s.tempo, was_tempo))
+	for i in 4:
+		DAW.undo()
+	check("four undos, and the tempo is as it was", s.tempo_points.is_empty() and is_equal_approx(s.tempo, was_tempo))
+	DAW.seek(s.bar_to_seconds(5.0))
+	click.call(at.call(2, 12.0))
+
 	# Copy and delete, under the track names, for the selection.
 	check("copy and delete light with a selection", timeline._copy_key.lit and timeline._delete_key.lit)
 	timeline._copy_key.pressed.emit()

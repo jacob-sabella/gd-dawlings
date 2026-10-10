@@ -313,8 +313,12 @@ can finish music in, saving DAWproject. Steps, in order:
      that much further on). Over 4 runs, each take's clicks average -7.9 to +6.8 ms from the beat
      and notes -0.7 to +10.9 ms, each within 1.9 ms of its take's average. That is one Godot
      mix step either way, the start granularity the 15 ms limit is for.
-   - **Not yet (7b):** No surface edits the map yet (the
-     tempo knob sets the first tempo only). The demo song's parts are rendered at the first
+   - **Done 2026-10-10 (7e), the tempo's changes on the desk:** `TimelineTempoStrip` under the
+     middle of the timeline acts on the change the playhead is under: BPM (40-240, set when let
+     go), ADD (at the start of the playhead's bar, at the tempo there), RAMP (glide to the next
+     change, in beats), DEL. Each is one undo step. The ruler marks each change with its tempo
+     (`/` before it when the tempo glides into it), and redraws when the tempo or the map changes.
+   - **Not yet (7b):** The demo song's parts are rendered at the first
      tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback
      probe measures the click at one tempo only. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

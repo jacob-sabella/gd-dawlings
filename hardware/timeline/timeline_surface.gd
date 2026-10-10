@@ -105,6 +105,8 @@ var _delete_caption: Label3D
 var _item_controls: TimelineItemStrip
 ## Add, remove and name tracks, under the right-hand end; see TimelineTrackStrip.
 var _track_controls: TimelineTrackStrip
+## The tempo's changes, under the middle; see TimelineTempoStrip.
+var _tempo_controls: TimelineTempoStrip
 ## The track whose name was last pressed, for the track keys; 0 for none. This desk's own, not
 ## the DAW's selection: which track someone means to rename is not part of the mix.
 var picked_track := 0
@@ -167,6 +169,7 @@ func _ready() -> void:
 	_loop_strip.seconds_at = _seconds_at_local_x
 	add_child(_loop_strip)
 	DAW.transport_changed.connect(_draw_loop)
+	DAW.transport_changed.connect(_on_tempo_maybe_changed)
 
 	# The lanes, as one control: select, move, zoom. Built once, like the strips, because a move
 	# is a held drag and every edit it makes rebuilds the panel under it.
@@ -232,6 +235,11 @@ func _ready() -> void:
 	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_delete_caption)
 	DAW.timeline_changed.connect(_light_selection_keys)
+
+	_tempo_controls = TimelineTempoStrip.new()
+	_tempo_controls.name = "TempoStrip"
+	_tempo_controls.surface = self
+	add_child(_tempo_controls)
 
 	_track_controls = TimelineTrackStrip.new()
 	_track_controls.name = "TrackStrip"
@@ -413,6 +421,8 @@ func _place_strips() -> void:
 	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
 	_track_controls.position = Vector3(width * 0.5 - 0.020 - 2 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
 	_track_controls.refresh()
+	_tempo_controls.position = Vector3(-1.5 * TimelineTempoStrip.PITCH, -_top_y - 0.016, 0.0)
+	_tempo_controls.refresh()
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).
@@ -537,6 +547,19 @@ func track_at_point(global_point: Vector3) -> int:
 		if absf(local.y - _lane_y[i]) <= (LANE_HEIGHT + LANE_GAP) * 0.5:
 			return indices[i]
 	return 0
+
+
+## The ruler counts bars through the tempo, so a new tempo or a new map draws it again.
+var _drawn_tempo: Array = []
+
+
+func _on_tempo_maybe_changed() -> void:
+	var now: Array = [DAW.state.tempo, DAW.state.tempo_points]
+	if now == _drawn_tempo:
+		return
+	_drawn_tempo = now.duplicate(true)
+	if _ruler != null:
+		_relayout_view()
 
 
 func _on_tracks_renumbered(map: Dictionary) -> void:
@@ -748,6 +771,18 @@ func _build_ruler() -> void:
 		label.position = Vector3(x + 0.0025, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.26, 0.0016)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(label)
+
+	# Where the tempo changes, and to what, in the colour of the tempo keys.
+	var points: Array = s.tempo_points
+	for i in range(1, points.size()):
+		var tx := _x_for(s.seconds_at_beat(float(points[i][0])))
+		if tx < _lane_area_x - 0.0001 or tx > _lane_right():
+			continue
+		var ramped: bool = int(points[i - 1][2]) != DawKitTempoMap.HOLD
+		var change := _text(("/%d" if ramped else "%d") % roundi(float(points[i][1])), 26, Color(0.9, 0.8, 0.4))
+		change.position = Vector3(tx - 0.002, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
+		change.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_ruler.add_child(change)
 
 	# Section markers sit on the ruler, where the arrangement is actually named.
 	for at in DAW.state.markers:
