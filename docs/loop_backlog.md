@@ -196,6 +196,13 @@ because a scaffold that reads as a finished project wastes the next person's aft
 
 ## Known rough edges
 
+- Seen from a second machine: the colour round what somebody holds is faint on small things
+  now that it is gentle enough for a keytar. Their glove's cuff and their caption still say
+  whose it is. A keytar in a ghost's hand still shows a hot spot where the desk lamp catches its
+  gloss. A ghost's caption ("HOLDING RADIO PLANE") is drawn over whatever is behind its head.
+  `tools/session_shot.sh` sometimes starts the guest before the host is listening, and that
+  guest never joins.
+
 - The radio plane: putting the radio down puts the plane back beside it at once, from
   wherever it was, even mid-flight. A mirror shows your ghost holding the radio but never the
   plane. Other machines ease their copy toward the last pose they heard, so it trails the

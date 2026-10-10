@@ -520,5 +520,23 @@ ergonomics.
       - Twelve materials cost 60 draws once their shadows were counted. Down to eight, and no
         shadow on the radio or the spinning prop, it is 20.
       Not tried in a headset, where the aim is the controller's.
-- [ ] Pass over everything with two instances: a host and a guest, each playing with every
+- [x] Pass over everything with two instances: a host and a guest, each playing with every
       item for a while. Shoot it, measure the budget, and even out what drifted.
+      Done: two real windows (`tools/session_shot.sh`), the host Ada carrying each of the
+      seventeen items in turn while the guest Grace watched, and then Ada with three things in
+      her pockets, and Ada flying the radio plane round the room. Every item arrives in Ada's
+      ghost's glove on Grace's screen, the headphones on its head and the pockets on its hips
+      and back, with no script errors on either side. Grace's radio plane flies the same path as
+      Ada's, and lies where Ada's crashed, to the millimetre. One thing had drifted: the
+      colour round a held item (`item_rim.gdshader`) turned a keytar held edge-on into a white
+      blaze, because a long flat face seen edge-on is all edge. It is narrower and dimmer now,
+      for every item. Budget, wide at 48 tracks: 4097 draws, 478k triangles, unchanged by the
+      pass. A screenshot option, `--rc-debug`, prints where the plane is on either machine, and
+      `--carry rcplane:fly@N` takes off late enough for a guest to see.
+      Learnings:
+      - A guest that joins after something has happened sees only how it ended. A two-window
+        shot of anything that moves has to start it after the guest is in.
+      - The two windows draw at different rates, so a frame number means a different moment on
+        each. Line the guest's shot up from its own log.
+      - One run in eighteen the guest never joined. Run it again before calling it a fault.
+      Not tried with two headsets.

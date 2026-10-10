@@ -30,7 +30,7 @@ var _walk_mirror := 0.0
 ## `:home` after them puts it back on its shelf. `--carry keytar:chord` holds a C major chord down
 ## on it (play these into the null sink: it sounds). `--carry chips:t2@0.5` does a fidget's
 ## tricks before trick 2 and stops trick 2 half way. `--carry rcplane:fly:cut@300` flies the radio
-## plane and cuts its motor on frame 300.
+## plane and cuts its motor on frame 300; `--carry rcplane:fly@400` takes off on frame 400.
 var _carry := ""
 ## `--pockets duck,ball,keytar`: those items picked up and put in pockets 1, 2 and 3 in turn, from
 ## frame 9, before anything `--carry` puts in the hand.
@@ -269,6 +269,16 @@ func _process(_delta: float) -> void:
 		for pitch in [60, 64, 67]:
 			Session.guest_midi.note_on(pitch, 90)
 
+	# `--rc-debug`: where the radio plane is and how it flies, on this machine, every 30 frames --
+	# for a guest watching a host fly it.
+	if _frames % 30 == 0 and OS.get_cmdline_user_args().has("--rc-debug"):
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		var room: ItemRoom = studio.get("items") if studio else null
+		var rc := room.items.get(&"rcplane") as RcPlaneItem if room != null else null
+		if rc != null:
+			print("RCDEBUG f%d mode %d plane %s held_elsewhere %s" % [_frames, rc.mode,
+					rc.plane.global_position, rc.is_held_elsewhere()])
+
 	# `--carry rcplane:fly`: its motor run up a few frames after the radio is in the hand, so the
 	# plane takes off; `:cut@N` cuts the motor on frame N. With --shot-debug, where it is.
 	if _carry.begins_with("rcplane:"):
@@ -280,6 +290,9 @@ func _process(_delta: float) -> void:
 				rc.work(true)
 			for word in _carry.split(":"):
 				if word.begins_with("cut@") and _frames == int(word.substr(4)):
+					rc.work(true)
+				# `fly@N`: the motor run up on frame N instead, for a guest who joins later to see.
+				if word.begins_with("fly@") and _frames == int(word.substr(4)):
 					rc.work(true)
 			if _frames % 20 == 0 and OS.get_cmdline_user_args().has("--shot-debug"):
 				print("RCPLANE f%d mode %d at %s speed %.2f slope %.2f" % [_frames, rc.mode, rc.at, rc.speed, rc.slope])

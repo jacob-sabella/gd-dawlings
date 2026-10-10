@@ -142,6 +142,7 @@ func _ready() -> void:
 	await _test_each_venue_has_a_toy_of_its_own()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
+	await _test_somebody_elses_radio_plane_flies_where_they_say()
 	await _test_every_control_is_clickable_from_the_seat()
 	_test_the_room_is_laid_out_for_the_size_of_the_session()
 	_test_the_transport_is_driven_from_the_desk()
@@ -11907,5 +11908,30 @@ func _test_the_radio_plane_flies_where_you_point() -> void:
 	check("out of the hand, the plane is back beside its radio", rc.state != Item.State.HELD
 			and rc.mode == RcPlaneItem.Mode.DOCKED and rc.plane.transform.is_equal_approx(RcPlaneItem.DOCK))
 	hand.queue_free()
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+func _test_somebody_elses_radio_plane_flies_where_they_say() -> void:
+	_as_session(Session.Role.SOLO, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var rc := studio.items.items[&"rcplane"] as RcPlaneItem
+	var presence := studio.presence
+	presence._item_holders[&"rcplane"] = 7
+	rc.follow(func() -> Transform3D: return rc.global_transform)
+	var there := Transform3D(Basis(Vector3.UP, 0.7), Vector3(0.5, 1.3, 2.0))
+	Session.item_flown.emit(&"rcplane", there, RcPlaneItem.Mode.FLYING, 9)
+	check("a flight from somebody not holding the radio is not shown", rc.mode == RcPlaneItem.Mode.LANDED)
+	Session.item_flown.emit(&"rcplane", there, RcPlaneItem.Mode.FLYING, 7)
+	var world := presence._from_session(there)
+	check("one from whoever has it flies ours there, in this room's frame", rc.mode == RcPlaneItem.Mode.FLYING
+			and rc.plane.global_position.is_equal_approx(world.origin))
+	Session.item_flown.emit(&"rcplane", there, RcPlaneItem.Mode.DOCKED, 7)
+	check("and when they say it is back by the radio, it is", rc.mode == RcPlaneItem.Mode.DOCKED
+			and not rc.plane.top_level)
+	presence._item_holders.erase(&"rcplane")
 	studio.queue_free()
 	await get_tree().process_frame
