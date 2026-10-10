@@ -1,6 +1,6 @@
 // keys_latency: how long from a MIDI key going down to its sound reaching a sink, measured.
 //
-//   keys_latency --sink reaper3d_null --to CLIENT:PORT [--notes 20]
+//   keys_latency --sink dawlings_null --to CLIENT:PORT [--notes 20]
 //
 // Sends note-ons through the ALSA sequencer to CLIENT:PORT (the keys helper's "keys in"), and
 // records the sink's monitor with a PipeWire capture stream, timing every buffer by the graph's
@@ -74,7 +74,7 @@ static int cmp(const void *a, const void *b) {
 }
 
 int main(int argc, char **argv) {
-	const char *sink = "reaper3d_null", *to = NULL;
+	const char *sink = "dawlings_null", *to = NULL;
 	int notes = 20;
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--sink") && i + 1 < argc)

@@ -15,13 +15,13 @@
 # and nothing reaches the speakers: everything plays into the null sink.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-SINK=reaper3d_null
+SINK=dawlings_null
 PORT="${PORT:-7352}"
 WORK="${KEEP:-$(mktemp -d)}"; mkdir -p "$WORK"
 trap 'kill $(jobs -p) 2>/dev/null; [ -n "${KEEP:-}" ] || rm -rf "$WORK"' EXIT
 
 pactl list short sinks | grep -q "$SINK" || pactl load-module module-null-sink "sink_name=$SINK" \
-  "sink_properties=device.description=reaper-3d-rig" >/dev/null
+  "sink_properties=device.description=dawlings-rig" >/dev/null
 
 python3 - "$WORK/clicks.wav" <<'PY'
 import sys, wave, struct

@@ -60,7 +60,7 @@ The bay stands in its own cabinet on the floor, off to the right of the desk.
 dB differently in every DAW, and baking Reaper's curve into the mesh would make every other
 backend read a lie on the dB caption.
 
-`OfflineBackend` is not a mock. It is the thing that runs when you launch reaper-3d with no DAW
+`OfflineBackend` is not a mock. It is the thing that runs when you launch dawlings with no DAW
 open, it drives real meters, and it is what the test suite and every screenshot in `shots/` are
 built on. Keeping it a peer of `ReaperBackend` rather than a `if not connected` branch is what
 keeps the abstraction honest — a seam with one implementation is just indirection.
@@ -100,7 +100,7 @@ third-party plugins, which Godot cannot host.
 
 The DAW engine is being built as **dawkit**, a separate repository (`~/Projects/dawkit`,
 proprietary, so it can be sold on its own), not as part of this game. It is a Godot addon with
-its own tests (`tools/test.sh` there) and no reference to anything in reaper-3d. This repository
+its own tests (`tools/test.sh` there) and no reference to anything in dawlings. This repository
 holds it as a git submodule at `vendor/dawkit`, with a symlink `addons/dawkit` pointing at the
 addon inside it. `vendor/.gdignore` keeps Godot from scanning dawkit's own project and tests a
 second time.
@@ -256,7 +256,7 @@ the whole trick: a guest has exactly one code path for "state arrived", the host
 the day someone remembers to add it to a serialiser.
 
 The vocabulary is Reaper-shaped — `/track/3/volume` — by inheritance rather than by coincidence,
-and that is fine: it is now *reaper-3d's* vocabulary, and a non-Reaper backend translates into
+and that is fine: it is now *dawlings's* vocabulary, and a non-Reaper backend translates into
 it the same way `ReaperBackend` does. A guest can therefore be fed by a host running any
 backend without knowing which.
 
@@ -431,7 +431,7 @@ Where the 46ms goes:
 | Guest output | ~20 | `audio/driver/output_latency=5`. 3 measured no better. |
 
 **Getting the sound (host).** The DAW plays to the OS, so `MixTap` (core/audio) adds a
-listener. On PipeWire it creates a virtual source, `reaper3d_tap`, and links Reaper's output
+listener. On PipeWire it creates a virtual source, `dawlings_tap`, and links Reaper's output
 ports into it alongside whatever they already feed. Nothing is unlinked, so the engineer's
 monitoring is untouched. It is not the default sink's monitor: that would carry this app's own
 fader clicks and every notification chime to every guest. Linux with PipeWire only; elsewhere
@@ -701,7 +701,7 @@ copy over the top would make every fader stutter backwards once per poll.
 
 All three land on addresses the wire already understands (`/track/N/colour`, `/track/N/folder`,
 `/track/N/send/M/dest`), so they ride the normal replication stream and a guest gets them
-without a second code path. Two of those are reaper-3d's own namespace rather than Reaper's --
+without a second code path. Two of those are dawlings's own namespace rather than Reaper's --
 `mix_wire.gd` had defined `colour` in advance for exactly this.
 
 ### A send points at two things, and they disagree
@@ -1189,11 +1189,11 @@ arrives on one, so a patchbay (qpwgraph, Helvum, pavucontrol) can send each anyw
 
 | Stream | What | Made by |
 |---|---|---|
-| `reaper-3d · mix` | the built-in engine's master; on a guest, the host's mix it hears | `MixFeed`, `GodotBackend` |
-| `reaper-3d · monitor` | a guest's own keys, played the instant they are pressed | `NativeKeys` (`MonitorSynth` where not) |
-| `reaper-3d · gear` | the room: buttons, detents, faders, plugs, reel motors | `Foley.emitter` |
-| `reaper-3d · mic` (in) | what a guest records | `GuestAudio`, via `MixSource.Piped` |
-| `reaper-3d · mix tap` (in) | what a host passes on to its guests | `MixTap`, via `MixSource.Piped` |
+| `dawlings · mix` | the built-in engine's master; on a guest, the host's mix it hears | `MixFeed`, `GodotBackend` |
+| `dawlings · monitor` | a guest's own keys, played the instant they are pressed | `NativeKeys` (`MonitorSynth` where not) |
+| `dawlings · gear` | the room: buttons, detents, faders, plugs, reel motors | `Foley.emitter` |
+| `dawlings · mic` (in) | what a guest records | `GuestAudio`, via `MixSource.Piped` |
+| `dawlings · mix tap` (in) | what a host passes on to its guests | `MixTap`, via `MixSource.Piped` |
 
 Each starts on the default device, like any app's sound, and the session manager remembers
 wherever it is moved to: each has its own `application.name`, which is what WirePlumber's
@@ -1233,9 +1233,9 @@ software.
 Through Godot, a key cost 30-50ms: read once a frame (up to 17ms), queued deep enough to feed
 Godot's 512-frame mix (16ms), then behind an output (10-20ms), with PipeWire's default 1024-frame
 cycle (21ms) under all of it. So the keys left Godot. `native/keys.c` is MonitorSynth in C, a
-PipeWire stream of its own (`reaper-3d · monitor`) rendered in the graph's realtime callback. It
+PipeWire stream of its own (`dawlings · monitor`) rendered in the graph's realtime callback. It
 asks for a 128-frame cycle (2.7ms; `R3D_KEYS_QUANTUM`), and reads MIDI from the ALSA sequencer
-the moment it arrives, on a port of its own ("reaper-3d: keys in", so anything can be routed to
+the moment it arrives, on a port of its own ("dawlings: keys in", so anything can be routed to
 it) linked to every hardware source when MIDI is opened from the panel. Notes from the computer
 keyboard and the panel go to it as commands. It passes every MIDI note back to `GuestMidi`
 stamped with when it arrived, so the take is made in the app as before -- and more exactly

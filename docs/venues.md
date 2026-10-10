@@ -99,7 +99,7 @@ inside something it has put there. `Walker.unstick()` runs after every change an
 the nearest spot where you fit (`Walker.free_spot`, `Walker.fits`), standing on anything there
 you can step onto. At the desk you always fit, so you are left where you are.
 `tools/probe/walk_map.tscn` draws every venue's floor, walls and solids as SVGs in
-`~/.cache/reaper-3d/tmp/walkmap`.
+`~/.cache/dawlings/tmp/walkmap`.
 
 What stands in a zone is solid where it looks it. `Venue.zone_solids()` hands the walker
 footprints with a height (`Walker.fixed`). The studio's riser, table, keyboard stand and booth

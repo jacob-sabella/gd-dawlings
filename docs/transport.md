@@ -8,7 +8,7 @@ the other's job.
 | Carries | values that **move** | structure that does **not** |
 | Latency | sub-millisecond on loopback | ~30ms (one deferred tick) |
 | Transport | UDP, bidirectional | JSON files in a dropbox directory |
-| Reaper side | built in, no script | `reaper/reaper3d_bridge.lua` |
+| Reaper side | built in, no script | `reaper/dawlings_bridge.lua` |
 | Without it | nothing works | console, transport and racks still work |
 
 ## OSC: everything that moves
@@ -23,15 +23,15 @@ packets and the HUD shows the count: it is the only way to tell the two apart fr
 
 ### Setup
 
-Copy `reaper/Reaper3D.ReaperOSC` to Reaper's `OSC/` folder, then
+Copy `reaper/Dawlings.ReaperOSC` to Reaper's `OSC/` folder, then
 *Options → Preferences → Control/OSC/web → Add → OSC*:
 
 ```
 Mode:                Configure device IP + port
-Device port:         9000      reaper-3d listens here; Reaper sends here
+Device port:         9000      dawlings listens here; Reaper sends here
 Device IP:           127.0.0.1, or the host machine on the LAN
-Local listen port:   8000      Reaper listens here; reaper-3d sends here
-Pattern config:      Reaper3D
+Local listen port:   8000      Reaper listens here; dawlings sends here
+Pattern config:      Dawlings
 ```
 
 The pattern file is Reaper's own `Default.ReaperOSC` with the `DEVICE_` counts raised and
@@ -82,7 +82,7 @@ Reaper has no notification for "an item moved" on any channel this project can r
 is the only honest option and the interval is a straight trade between latency on someone else's
 edit and load on a project with a few thousand items.
 
-`GetTimeline` **omits tracks with nothing on them**, and reaper-3d clears every lane before
+`GetTimeline` **omits tracks with nothing on them**, and dawlings clears every lane before
 applying the answer. That is not an optimisation: the Lua encoder cannot tell an empty list from
 an empty object, so an explicit empty `items` arrives as `{}` and would have to be guessed at. A
 track that just lost its last item is therefore reported by its *absence* — and a merge rather
@@ -92,7 +92,7 @@ than a replace would leave deleted blocks on screen with nothing to clear them.
 
 ReaScript's Lua has no socket API. A file dropbox polled on a deferred timer is the pattern
 `~/.config/REAPER/Scripts/mcp_bridge.lua` on this machine already uses daily, so this follows a
-proven one rather than inventing something. reaper-3d writes `request_<id>.json`; the script
+proven one rather than inventing something. dawlings writes `request_<id>.json`; the script
 reads it, deletes it, and writes `response_<id>.json` beside it.
 
 The request is deleted **before** the handler runs. A handler that errors would otherwise leave

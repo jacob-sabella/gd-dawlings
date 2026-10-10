@@ -1,6 +1,6 @@
--- reaper-3d bridge: the structural half of the link.
+-- dawlings bridge: the structural half of the link.
 --
--- WHAT THIS IS FOR. reaper-3d talks to Reaper over OSC for everything that moves -- faders,
+-- WHAT THIS IS FOR. dawlings talks to Reaper over OSC for everything that moves -- faders,
 -- pan, mute, solo, meters, transport, FX parameters. OSC covers none of the things that are
 -- STRUCTURAL: it has no message that says how many tracks exist, what plugin is in slot 2, what
 -- colour a track is, or "create a send from track 6 to track 12". Those only exist in ReaScript.
@@ -12,17 +12,17 @@
 -- fine for structure and useless for meters -- which is exactly why meters go over OSC instead.
 --
 -- INSTALL
---   1. Copy this file to <Reaper resource path>/Scripts/reaper3d_bridge.lua
+--   1. Copy this file to <Reaper resource path>/Scripts/dawlings_bridge.lua
 --      (Options > Show REAPER resource path in explorer/finder)
 --   2. Actions > Show action list > ReaScript: Load... > pick this file
 --   3. Run it once. It stays running and re-arms itself; the console in Reaper says so.
 --      To have it start with Reaper, add a dofile() line to Scripts/__startup.lua.
 --
--- PROTOCOL. reaper-3d writes request_<id>.json into the data directory below; this reads it,
+-- PROTOCOL. dawlings writes request_<id>.json into the data directory below; this reads it,
 -- deletes it, and writes response_<id>.json beside it. One call per file, no ordering guarantee
 -- between ids. See core/reaper/script_bridge.gd for the client half.
 
-local bridge_dir = reaper.GetResourcePath() .. '/Scripts/reaper3d_bridge_data/'
+local bridge_dir = reaper.GetResourcePath() .. '/Scripts/dawlings_bridge_data/'
 
 local function ensure_dir()
   reaper.RecursiveCreateDirectory(bridge_dir, 0)
@@ -130,10 +130,10 @@ end
 
 local handlers = {}
 
---- The whole project shape in one call: what reaper-3d builds its racks and patchbay from.
+--- The whole project shape in one call: what dawlings builds its racks and patchbay from.
 --
 -- args[1] == 1 asks for the LIGHT answer: every plugin's name and bypass, but none of its
--- parameter values. That exists because reaper-3d polls this on a slow clock for the three
+-- parameter values. That exists because dawlings polls this on a slow clock for the three
 -- things OSC genuinely cannot say -- track colour, folder depth, and a send's destination as an
 -- INDEX -- all of which are one cheap property read each. The parameter sweep is the expensive
 -- part of this handler by a wide margin (32 reads per plugin per track), and OSC already
@@ -236,7 +236,7 @@ end
 -- at the rate the other needs would mean either a stale patchbay or a thousand plugin
 -- parameters re-read twice a second.
 --
--- Tracks with nothing on them are omitted entirely, and reaper-3d clears every lane before
+-- Tracks with nothing on them are omitted entirely, and dawlings clears every lane before
 -- applying this. That is not an optimisation: the encoder below cannot tell an empty list from
 -- an empty object, so an explicit empty `items` would arrive as `{}` and have to be guessed at.
 -- A track's items in time order. Reaper keeps its own list in the order items were made or
@@ -333,7 +333,7 @@ function handlers.GetTimeline()
     length = reaper.GetProjectLength(0),
     -- Every track in the project, not just the ones with items on them and not just the ones
     -- in the OSC bank. It rides along here because it changes on roughly the same clock as the
-    -- arrangement, and because nothing else reaper-3d can reach knows the number at all.
+    -- arrangement, and because nothing else dawlings can reach knows the number at all.
     track_count = reaper.CountTracks(0),
   }
 end
@@ -372,7 +372,7 @@ function handlers.CreateSidechain(args)
     reaper.SetTrackSendInfo_Value(src, 0, index, 'I_DSTCHAN', 2)
   end
   reaper.UpdateArrange()
-  reaper.Undo_EndBlock('reaper-3d: sidechain', -1)
+  reaper.Undo_EndBlock('dawlings: sidechain', -1)
   return {ok = index >= 0, send_index = index}
 end
 
@@ -387,7 +387,7 @@ function handlers.MoveFx(args)
   local to = math.min(math.floor(args[4] or 1) - 1, reaper.TrackFX_GetCount(dst))
   reaper.Undo_BeginBlock()
   reaper.TrackFX_CopyToTrack(src, fx, dst, math.max(to, 0), not args[5])
-  reaper.Undo_EndBlock(args[5] and 'reaper-3d: copy FX' or 'reaper-3d: move FX', -1)
+  reaper.Undo_EndBlock(args[5] and 'dawlings: copy FX' or 'dawlings: move FX', -1)
   return {ok = true}
 end
 
@@ -482,7 +482,7 @@ function handlers.AddFx(args)
   if not tr then return {ok = false, error = 'no such track'} end
   reaper.Undo_BeginBlock()
   local fx = reaper.TrackFX_AddByName(tr, tostring(args[2] or ''), false, -1)
-  reaper.Undo_EndBlock('reaper-3d: add FX', -1)
+  reaper.Undo_EndBlock('dawlings: add FX', -1)
   if fx < 0 then return {ok = false, error = 'no such plugin'} end
   return {ok = true, fx = fx + 1, params = reaper.TrackFX_GetNumParams(tr, fx)}
 end
@@ -514,7 +514,7 @@ function handlers.DeleteFx(args)
   if not tr then return {ok = false, error = 'no such track'} end
   reaper.Undo_BeginBlock()
   local ok = reaper.TrackFX_Delete(tr, math.floor(args[2] or 1) - 1)
-  reaper.Undo_EndBlock('reaper-3d: delete FX', -1)
+  reaper.Undo_EndBlock('dawlings: delete FX', -1)
   return {ok = ok}
 end
 
@@ -896,5 +896,5 @@ do
   end
   for _, name in ipairs(stale) do os.remove(bridge_dir .. name) end
 end
-reaper.ShowConsoleMsg('reaper-3d bridge running: ' .. bridge_dir .. '\n')
+reaper.ShowConsoleMsg('dawlings bridge running: ' .. bridge_dir .. '\n')
 tick()

@@ -1,4 +1,4 @@
-; reaper-3d — Reaper as a room full of hardware instead of a window full of panels.
+; dawlings — Reaper as a room full of hardware instead of a window full of panels.
 ;
 ; Reaper is the only source of truth. Nothing here stores a mix; every fader position, meter
 ; level and FX parameter in this scene is a READING of a running Reaper, and every grab a
@@ -13,7 +13,7 @@ config_version=5
 
 [application]
 
-config/name="reaper-3d"
+config/name="dawlings"
 config/description="Reaper DAW rendered as a 3D hardware studio: console, tape deck, FX racks and patchbay, shared between screen and AR participants in the same room."
 run/main_scene="res://scenes/bootstrap.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")

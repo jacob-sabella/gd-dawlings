@@ -215,6 +215,12 @@ class Participant extends RefCounted:
 	var look: Dictionary = GhostLook.default_look()
 
 
+func _init() -> void:
+	# First thing any part of the app does, before anything reads a saved file: this is the
+	# first autoload. See DataHome.
+	DataHome.migrate()
+
+
 func _ready() -> void:
 	mix_feed = MixFeed.new()
 	mix_feed.name = "MixFeed"
@@ -1433,7 +1439,7 @@ func _tick_beacon(delta: float) -> void:
 
 func beacon_payload() -> Dictionary:
 	return {
-		"app": "reaper-3d",
+		"app": "dawlings",
 		"v": 1,
 		"name": local_name,
 		"port": port,

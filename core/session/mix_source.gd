@@ -95,7 +95,7 @@ class Captured extends MixSource:
 		return float(told) if told.is_valid_float() else latency_ms()
 
 
-## A capture stream of its own, named "reaper-3d · <port>", read from `parec`'s output: the
+## A capture stream of its own, named "dawlings · <port>", read from `parec`'s output: the
 ## input side of AudioPorts. It starts on `device` (the default source when empty) and can be
 ## moved to any other source, or have anything linked into it, from a patchbay. Raw stereo
 ## float at 48kHz; `read` takes whatever the pipe holds without waiting, and keeps a partial
@@ -118,12 +118,12 @@ class Piped extends MixSource:
 	func _init(input_device: String, what: String, port: String) -> void:
 		device = "" if input_device == "Default" else input_device
 		label = what
-		title = "reaper-3d · " + port
+		title = "dawlings · " + port
 
 	func arguments() -> PackedStringArray:
 		var args := PackedStringArray(["--record", "--raw", "--format=float32le", "--rate=%d" % RATE,
 				"--channels=2", "--latency-msec=%d" % LATENCY_MS, "--client-name=" + title,
-				"--stream-name=" + title, "--property=node.name=reaper3d_" + title.get_slice("· ", 1).replace(" ", "_"),
+				"--stream-name=" + title, "--property=node.name=dawlings_" + title.get_slice("· ", 1).replace(" ", "_"),
 				"--property=node.description=" + title, "--property=application.name=" + title])
 		if not device.is_empty():
 			args.append("--device=" + device)

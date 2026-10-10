@@ -16,9 +16,9 @@ extends RefCounted
 ## in deferred-script ticks, roughly 30ms, which is fine for structure and far too slow for
 ## meters -- exactly the division of labour above.
 ##
-## See reaper/reaper3d_bridge.lua for the Reaper side and docs/transport.md for the contract.
+## See reaper/dawlings_bridge.lua for the Reaper side and docs/transport.md for the contract.
 
-const DEFAULT_DIR := "~/.config/REAPER/Scripts/reaper3d_bridge_data"
+const DEFAULT_DIR := "~/.config/REAPER/Scripts/dawlings_bridge_data"
 
 var _dir := ""
 var _next_id := 1
@@ -38,7 +38,7 @@ func open(dir: String = DEFAULT_DIR) -> bool:
 	# if it is missing, Reaper is not running the companion script, and silently creating an
 	# empty one would turn that into requests that are never answered.
 	if not DirAccess.dir_exists_absolute(_dir):
-		push_warning("ScriptBridge: %s does not exist -- load reaper/reaper3d_bridge.lua in Reaper. Structural reads and routing writes are unavailable until then." % _dir)
+		push_warning("ScriptBridge: %s does not exist -- load reaper/dawlings_bridge.lua in Reaper. Structural reads and routing writes are unavailable until then." % _dir)
 		_open = false
 		return false
 	_open = true

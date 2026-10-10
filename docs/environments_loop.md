@@ -67,13 +67,13 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
    make_title). Shaders in `core/venues/shaders/`. Match the surrounding code's comments and
    naming; no magic numbers without a line saying why.
 3. Look at it. `tools/light_check.sh <venue>` (pictures land in
-   `~/.cache/reaper-3d/shots/light_check/`), plus any framing that shows what changed
+   `~/.cache/dawlings/shots/light_check/`), plus any framing that shows what changed
    (`SHOT_CAM=yaw,pitch,dist,tx,ty,tz`, `--no-hud`, `--place timeline=studio`). Read the pictures
    and judge them honestly against "what good looks like"; iterate until they are.
 4. Test it. Add a check for each new behaviour in `tests/run_tests.gd` (zones exist and clear the
    footprint, a variant keeps the floor plan, a new venue cycles, and so on). Then
    `tools/verify.sh` (0 failed, no SCRIPT ERROR) and
-   `flock ~/.cache/reaper-3d/shared.lock tools/session_probe.sh` (host and guest 0 failed; the
+   `flock ~/.cache/dawlings/shared.lock tools/session_probe.sh` (host and guest 0 failed; the
    audio-timing checks occasionally flake -- rerun before believing them).
 5. Commit: a small plain-English message saying what was wrong or missing and what is there now.
    No attribution lines. Never push.
@@ -86,12 +86,12 @@ through glass; + vocal booth; + machine room; high ceiling with clerestory light
 
 - Windows offscreen (`tools/shot.sh` / `tools/offscreen.sh` do it). Never move the user's
   workspace. Never kill a godot this loop did not start.
-- Audio: `PULSE_SINK=reaper3d_null PIPEWIRE_NODE=reaper3d_null` on every run, and nothing that
+- Audio: `PULSE_SINK=dawlings_null PIPEWIRE_NODE=dawlings_null` on every run, and nothing that
   plays through the speakers. Never touch the user's volumes or mutes without asking.
 - Never write the real `user://layout_profile.cfg`, `user://ghost_look.cfg` or `user://body.cfg`
   (no `--height` in shots). Tests use a test save path.
 - Never touch `~/.config/REAPER`. Wrap rig use, probes and shots in
-  `flock ~/.cache/reaper-3d/shared.lock`. Outputs under `~/.cache/reaper-3d/`.
+  `flock ~/.cache/dawlings/shared.lock`. Outputs under `~/.cache/dawlings/`.
 - `hardware/` must not reference `Session`, `Presentation.`, `Medium.`, `XRServer`,
   `is_authority` or `multiplayer.` in code lines.
 - The gear and its footprint do not move for a venue; `_test_venues_change_the_world_and_not_the_setup`

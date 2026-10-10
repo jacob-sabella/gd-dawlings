@@ -11,7 +11,7 @@ func _ready() -> void:
 	var options := {}
 	for i in argv.size():
 		if argv[i] == "--reaper-resource" and i + 1 < argv.size():
-			options["bridge_dir"] = argv[i + 1].path_join("Scripts/reaper3d_bridge_data")
+			options["bridge_dir"] = argv[i + 1].path_join("Scripts/dawlings_bridge_data")
 		if argv[i] == "--wait" and i + 1 < argv.size():
 			_wait = float(argv[i + 1])
 	var backend := ReaperBackend.new()

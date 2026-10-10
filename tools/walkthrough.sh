@@ -11,7 +11,7 @@
 # a stretch of the loop ruler -- by their pixel in the seated 1600x900 view.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-RIG="${REAPER_RIG:-$HOME/.cache/reaper-3d/rig}"
+RIG="${REAPER_RIG:-$HOME/.cache/dawlings/rig}"
 OUT=docs/walkthrough
 LIVE="--reaper --reaper-resource $RIG"
 ONLY="${1:-}"

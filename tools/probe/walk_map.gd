@@ -10,7 +10,7 @@ const VIEW := Rect2(-11, -6, 22, 15)
 
 
 func _ready() -> void:
-	var out_dir := OS.get_cache_dir().path_join("reaper-3d/tmp/walkmap")
+	var out_dir := OS.get_cache_dir().path_join("dawlings/tmp/walkmap")
 	var argv := OS.get_cmdline_user_args()
 	for i in argv.size():
 		if argv[i] == "--out" and i + 1 < argv.size():

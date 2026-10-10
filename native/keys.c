@@ -1,7 +1,7 @@
 // keys: a guest's own keys, heard the moment they go down -- the monitor synth, as a PipeWire
 // node of its own, rendered in the graph's realtime callback rather than through Godot's mixer.
 //
-//   keys [--name "reaper-3d · monitor"] [--device SINK] [--quantum 128] [--render FRAMES]
+//   keys [--name "dawlings · monitor"] [--device SINK] [--quantum 128] [--render FRAMES]
 //
 // Why it is not GDScript. A note played through Godot waits for the next frame to be read (up to
 // 17ms), then behind a generator queue deep enough to feed Godot's 512-frame mix (16ms), then
@@ -392,7 +392,7 @@ static int open_seq(struct pw_loop *l) {
 		seq = NULL;
 		return -1;
 	}
-	snd_seq_set_client_name(seq, "reaper-3d");
+	snd_seq_set_client_name(seq, "dawlings");
 	seq_port = snd_seq_create_simple_port(seq, "keys in",
 			SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
 			SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
@@ -480,7 +480,7 @@ static int render_offline(long frames) {
 }
 
 int main(int argc, char **argv) {
-	const char *name = "reaper-3d · monitor", *device = NULL;
+	const char *name = "dawlings · monitor", *device = NULL;
 	long offline = -1;
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--name") && i + 1 < argc)
@@ -506,7 +506,7 @@ int main(int argc, char **argv) {
 	struct pw_loop *l = pw_main_loop_get_loop(loop);
 	char latency[32], node_name[128];
 	snprintf(latency, sizeof(latency), "%u/%d", quantum, RATE);
-	snprintf(node_name, sizeof(node_name), "reaper3d_%s", strstr(name, "· ") ? strstr(name, "· ") + 3 : name);
+	snprintf(node_name, sizeof(node_name), "dawlings_%s", strstr(name, "· ") ? strstr(name, "· ") + 3 : name);
 	for (char *c = node_name; *c; c++)
 		if (*c == ' ')
 			*c = '_';

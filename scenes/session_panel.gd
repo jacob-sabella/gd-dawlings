@@ -810,7 +810,7 @@ func _listen() -> void:
 		var packet := _listener.get_packet()
 		var from := _listener.get_packet_ip()
 		var said = JSON.parse_string(packet.get_string_from_utf8())
-		if typeof(said) != TYPE_DICTIONARY or said.get("app") != "reaper-3d":
+		if typeof(said) != TYPE_DICTIONARY or said.get("app") != "dawlings":
 			continue
 		var port := int(said.get("port", Session.DEFAULT_PORT))
 		# The same host heard on loopback and over the LAN is one session, listed under the

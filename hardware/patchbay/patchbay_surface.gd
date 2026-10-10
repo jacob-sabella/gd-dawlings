@@ -228,7 +228,7 @@ func _lettering() -> void:
 	var words := "DRAG A ROW ACROSS TO PATCH  ·  PULL A PLUG OFF TO UNPLUG  ·  SCROLL A PLUG FOR LEVEL"
 	var tint := Color(0.62, 0.63, 0.66)
 	if not DAW.can(DAWBackend.Capability.ROUTING):
-		words = "READ ONLY: PATCHING NEEDS THE REAPER-3D BRIDGE LOADED IN REAPER"
+		words = "READ ONLY: PATCHING NEEDS THE DAWLINGS BRIDGE LOADED IN REAPER"
 		tint = Color(0.86, 0.66, 0.38)
 	var how := _print(words, Vector3(0, -0.068, 0.001), 34, HORIZONTAL_ALIGNMENT_CENTER, tint)
 	Lettering.fit(how, PANEL_WIDTH - 0.5, 34)

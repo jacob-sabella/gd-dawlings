@@ -1,4 +1,4 @@
-# reaper-3d
+# dawlings
 
 Reaper, rendered as a room full of hardware instead of a window full of panels.
 
@@ -67,14 +67,14 @@ guest never learns which backend the host opened.
 
 Two channels, because one is not enough — see `docs/transport.md` for why.
 
-1. **OSC**, for everything that moves. Copy `reaper/Reaper3D.ReaperOSC` into Reaper's
+1. **OSC**, for everything that moves. Copy `reaper/Dawlings.ReaperOSC` into Reaper's
    `OSC/` folder, then add an OSC device under *Options → Preferences → Control/OSC/web*:
-   device port **9000**, local listen port **8000**, pattern config **Reaper3D**. Set the
+   device port **9000**, local listen port **8000**, pattern config **Dawlings**. Set the
    outgoing max packet size to **16384** and the wait between packets to **1** ms: at Reaper's
    defaults the meters crowd out everything else and a 40-track session takes many seconds to
    name its tracks. `tools/reaper_rig.sh up` runs a private, silent Reaper set up exactly this
    way, with a 40-track test session, for checking the link without touching your own setup.
-2. **ReaScript**, for everything structural. Copy `reaper/reaper3d_bridge.lua` into Reaper's
+2. **ReaScript**, for everything structural. Copy `reaper/dawlings_bridge.lua` into Reaper's
    `Scripts/` folder and run it once from the action list. Without it you get a full console,
    a working transport and live racks; what you lose is the ability to *create* routing from the
    patchbay, because OSC has no message for it.

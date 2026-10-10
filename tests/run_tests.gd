@@ -158,6 +158,7 @@ func _ready() -> void:
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
 	_test_a_project_goes_into_dawkit_and_back()
+	_test_saved_data_follows_the_rename()
 	_test_a_clip_keeps_its_fades_and_gain()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -493,7 +494,7 @@ func _test_snapshot_reconstructs_a_guest() -> void:
 		check("track %d mute" % index, g.mute == h.mute)
 		check("track %d solo" % index, g.solo == h.solo)
 		check("track %d recarm" % index, g.rec_arm == h.rec_arm)
-		# Colour is reaper-3d's own address, not Reaper's. It is the thing that makes a strip
+		# Colour is dawlings's own address, not Reaper's. It is the thing that makes a strip
 		# findable on a wide desk, so a guest losing it is a real regression rather than cosmetic.
 		close_to("track %d colour r" % index, g.colour.r, h.colour.r, 0.002)
 		close_to("track %d colour g" % index, g.colour.g, h.colour.g, 0.002)
@@ -1715,7 +1716,7 @@ func _test_the_project_has_a_shape() -> void:
 
 	# --- the wire ---------------------------------------------------------------------------
 	#
-	# Colour, folder and dest are reaper-3d's own addresses rather than Reaper's, so they have
+	# Colour, folder and dest are dawlings's own addresses rather than Reaper's, so they have
 	# to survive the snapshot/apply round trip or a guest sees a grey, ungrouped, mis-cabled
 	# desk while the host sees the real one.
 	var host := MixState.new()
@@ -8360,6 +8361,34 @@ func _test_a_late_timeline_poll_does_not_undo_an_edit() -> void:
 	link.queue_free()
 
 
+func _test_saved_data_follows_the_rename() -> void:
+	var root := OS.get_temp_dir().path_join("dawlings_rename_%d" % OS.get_process_id())
+	var old := root.path_join("reaper-3d")
+	var new := root.path_join("dawlings")
+	DirAccess.make_dir_recursive_absolute(old.path_join("takes"))
+	DirAccess.make_dir_recursive_absolute(old.path_join("shader_cache"))
+	DirAccess.make_dir_recursive_absolute(new)
+	for f in [["layout_profile.cfg", "old layout"], ["ghost_look.cfg", "old ghost"],
+			["takes/Grace-take1.wav", "RIFF"], ["shader_cache/x", "cache"]]:
+		FileAccess.open(old.path_join(f[0]), FileAccess.WRITE).store_string(f[1])
+	FileAccess.open(new.path_join("ghost_look.cfg"), FileAccess.WRITE).store_string("new ghost")
+	FileAccess.open(old.path_join("run.sh"), FileAccess.WRITE).store_string("#!/bin/sh")
+	FileAccess.set_unix_permissions(old.path_join("run.sh"), 493)  # 0755
+	var copied := DataHome.migrate(new)
+	check("the old app's saved files are copied across (%d)" % copied, copied == 3
+			and FileAccess.get_file_as_string(new.path_join("layout_profile.cfg")) == "old layout"
+			and FileAccess.file_exists(new.path_join("takes/Grace-take1.wav")))
+	check("without overwriting what the new one already has",
+			FileAccess.get_file_as_string(new.path_join("ghost_look.cfg")) == "new ghost")
+	check("or bringing the engine's caches", not FileAccess.file_exists(new.path_join("shader_cache/x")))
+	check("a file keeps its permissions", FileAccess.get_unix_permissions(new.path_join("run.sh")) & 64 != 0)  # owner execute
+	check("and the old folder is left as it was",
+			FileAccess.get_file_as_string(old.path_join("layout_profile.cfg")) == "old layout")
+	FileAccess.open(old.path_join("later.cfg"), FileAccess.WRITE).store_string("x")
+	check("only once", DataHome.migrate(new) == 0 and not FileAccess.file_exists(new.path_join("later.cfg")))
+	OS.execute("rm", ["-rf", root])
+
+
 func _test_a_project_goes_into_dawkit_and_back() -> void:
 	var backend := GodotBackend.new()
 	backend.state = MixState.new()
@@ -10010,7 +10039,7 @@ func _test_each_kind_of_sound_has_its_own_bus() -> void:
 			and not boot._parse(PackedStringArray([]))["direct_audio"])
 	boot.free()
 	var none := AudioPorts.new()
-	none.player_tool = "reaper3d-no-such-player"
+	none.player_tool = "dawlings-no-such-player"
 	add_child(none)
 	check("with no player, no ports", not none.open() and not AudioPorts.active and none.why_not != "")
 	check("and the buses still play to Master",
@@ -10022,11 +10051,11 @@ func _test_each_kind_of_sound_has_its_own_bus() -> void:
 ## Each kind's sound goes out to a player of its own, named for a patchbay, in raw stereo float,
 ## and not also out of the app's own output. A shell stands in for pacat and keeps what it gets.
 func _test_every_sound_leaves_on_its_own_stream() -> void:
-	var dir := OS.get_cache_dir().path_join("reaper-3d/tmp/ports")
+	var dir := OS.get_cache_dir().path_join("dawlings/tmp/ports")
 	DirAccess.make_dir_recursive_absolute(dir)
 	for kind in AudioPorts.KINDS:
-		DirAccess.remove_absolute(dir.path_join("reaper3d_%s.raw" % AudioPorts.NAMES[kind]))
-		DirAccess.remove_absolute(dir.path_join("reaper3d_%s.args" % AudioPorts.NAMES[kind]))
+		DirAccess.remove_absolute(dir.path_join("dawlings_%s.raw" % AudioPorts.NAMES[kind]))
+		DirAccess.remove_absolute(dir.path_join("dawlings_%s.args" % AudioPorts.NAMES[kind]))
 	var ports := AudioPorts.new()
 	ports.player_tool = "sh"
 	ports.player_prefix = PackedStringArray(["-c", ("for a; do case $a in --property=node.name=*) n=${a##*=};; esac; done; "
@@ -10055,12 +10084,12 @@ func _test_every_sound_leaves_on_its_own_stream() -> void:
 	check("closed, the buses play to Master again", not AudioPorts.active
 			and AudioServer.get_bus_send(gear) == &"Master" and ports.ports.is_empty())
 	await get_tree().create_timer(0.1).timeout
-	var said := FileAccess.get_file_as_string(dir.path_join("reaper3d_gear.args"))
+	var said := FileAccess.get_file_as_string(dir.path_join("dawlings_gear.args"))
 	check("the gear's stream is named for a patchbay",
-			"--stream-name=reaper-3d · gear" in said and "--property=application.name=reaper-3d · gear" in said)
+			"--stream-name=dawlings · gear" in said and "--property=application.name=dawlings · gear" in said)
 	check("and is raw stereo float at the mix rate",
 			"--format=float32le" in said and "--channels=2" in said and "--rate=48000" in said)
-	var raw := FileAccess.get_file_as_bytes(dir.path_join("reaper3d_gear.raw"))
+	var raw := FileAccess.get_file_as_bytes(dir.path_join("dawlings_gear.raw"))
 	check("the gear's sound reached its player (%d frames, %d bytes)" % [sent, raw.size()],
 			sent > 0 and raw.size() == sent * 8)
 	var samples := raw.to_float32_array()
@@ -10070,7 +10099,7 @@ func _test_every_sound_leaves_on_its_own_stream() -> void:
 			found = true
 			break
 	check("left and right, in that order", found)
-	var mix := FileAccess.get_file_as_bytes(dir.path_join("reaper3d_mix.raw")).to_float32_array()
+	var mix := FileAccess.get_file_as_bytes(dir.path_join("dawlings_mix.raw")).to_float32_array()
 	var quiet := true
 	for v in mix:
 		quiet = quiet and is_zero_approx(v)
@@ -10081,7 +10110,7 @@ func _test_every_sound_leaves_on_its_own_stream() -> void:
 ## A named input hands over whole stereo frames however its pipe splits them: a part of one is
 ## kept for the next read.
 func _test_a_named_input_is_read_whole_frames_at_a_time() -> void:
-	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/in.raw")
+	var file := OS.get_cache_dir().path_join("dawlings/tmp/ports/in.raw")
 	var bytes := PackedFloat32Array([0.5, -0.5, 0.25, -0.25, 1.0, -1.0]).to_byte_array()
 	var tail := PackedFloat32Array([0.125, -0.125]).to_byte_array()
 	var out := FileAccess.open(file, FileAccess.WRITE)
@@ -10090,8 +10119,8 @@ func _test_a_named_input_is_read_whole_frames_at_a_time() -> void:
 	var piped := MixSource.Piped.new("Default", "Your microphone", "mic")
 	check("the default device is left to the session manager", piped.device == ""
 			and not ("--device" in " ".join(piped.arguments())))
-	check("and the stream is named for a patchbay", "--stream-name=reaper-3d · mic" in piped.arguments()
-			and "--property=node.name=reaper3d_mic" in piped.arguments() and "--record" in piped.arguments())
+	check("and the stream is named for a patchbay", "--stream-name=dawlings · mic" in piped.arguments()
+			and "--property=node.name=dawlings_mic" in piped.arguments() and "--record" in piped.arguments())
 	piped.tool = "sh"
 	piped.prefix = PackedStringArray(["-c", "cat '%s'" % file, "parec"])
 	check("it starts", piped.start())
@@ -10104,9 +10133,9 @@ func _test_a_named_input_is_read_whole_frames_at_a_time() -> void:
 	check("whole frames come out (%s)" % got, got == PackedVector2Array([Vector2(0.5, -0.5), Vector2(0.25, -0.25), Vector2(1.0, -1.0)]))
 	check("and half of one waits for the rest", piped._spare.size() == 4)
 	piped.stop()
-	var tapped := MixSource.Piped.new("reaper3d_tap", "tap", "mix tap")
-	check("a device named is asked for", "--device=reaper3d_tap" in tapped.arguments()
-			and "--property=node.name=reaper3d_mix_tap" in tapped.arguments())
+	var tapped := MixSource.Piped.new("dawlings_tap", "tap", "mix tap")
+	check("a device named is asked for", "--device=dawlings_tap" in tapped.arguments()
+			and "--property=node.name=dawlings_mix_tap" in tapped.arguments())
 	check("an input is Godot's own while the ports are shut",
 			MixSource.input("", "x", "mic") is MixSource.Captured)
 
@@ -10118,7 +10147,7 @@ func _test_the_keys_helper_plays_the_monitor_synth_note_for_note() -> void:
 	check("the keys helper builds here", helper != "")
 	if helper == "":
 		return
-	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/keys.raw")
+	var file := OS.get_cache_dir().path_join("dawlings/tmp/ports/keys.raw")
 	OS.execute("sh", ["-c", "printf 'on 60 100\\non 67 64\\noff 99\\n' | '%s' --render 9600 > '%s'" % [helper, file]])
 	var native := FileAccess.get_file_as_bytes(file).to_float32_array()
 	var synth := MonitorSynth.new()
@@ -10169,7 +10198,7 @@ func _test_the_monitor_synth_holds_notes_under_the_pedal() -> void:
 	var helper := NativeKeys.helper()
 	if helper == "":
 		return
-	var file := OS.get_cache_dir().path_join("reaper-3d/tmp/ports/keys_pedal.raw")
+	var file := OS.get_cache_dir().path_join("dawlings/tmp/ports/keys_pedal.raw")
 	OS.execute("sh", ["-c", "printf 'on 60 100\\nsus 1\\noff 60\\n' | '%s' --render 24000 > '%s'" % [helper, file]])
 	var native := FileAccess.get_file_as_bytes(file).to_float32_array()
 	var end := 0.0
@@ -10200,8 +10229,8 @@ func _test_the_keys_helper_is_understood() -> void:
 			and is_equal_approx(got[2]["age"], 0.0))
 	check("and taken once", keys.take().is_empty())
 	var ports := AudioPorts.new()
-	AudioPorts.target = "reaper3d_null"
-	check("every port plays where the app was told to", "--device=reaper3d_null" in ports.player_args(AudioPorts.GEAR))
+	AudioPorts.target = "dawlings_null"
+	check("every port plays where the app was told to", "--device=dawlings_null" in ports.player_args(AudioPorts.GEAR))
 	ports.device = "elsewhere"
 	check("unless it was told otherwise", "--device=elsewhere" in ports.player_args(AudioPorts.GEAR))
 	AudioPorts.target = ""
@@ -10469,7 +10498,7 @@ func _test_a_look_is_kept_and_cleaned() -> void:
 	check("and forward from the last wraps to none",
 			GhostLook.label(GhostLook.stepped(last, "hat", 1), "hat") == "None")
 	check("every body has a colour", GhostLook.BODIES.size() == GhostLook.BODY_COLOURS.size())
-	var path := OS.get_temp_dir().path_join("reaper3d_test_look_%d.cfg" % OS.get_process_id())
+	var path := OS.get_temp_dir().path_join("dawlings_test_look_%d.cfg" % OS.get_process_id())
 	var mine := {"body": 3, "eyes": 1, "hat": 4, "gloves": 2}
 	GhostLook.save_to(mine, path)
 	check("a look survives being put away", GhostLook.load_from(path) == mine)

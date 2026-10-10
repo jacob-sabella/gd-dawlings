@@ -15,8 +15,8 @@
 # stock Cockos plugins, sends, markers, a loop -- and reopened every run after.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-RIG="${REAPER_RIG:-$HOME/.cache/reaper-3d/rig}"
-SINK=reaper3d_null
+RIG="${REAPER_RIG:-$HOME/.cache/dawlings/rig}"
+SINK=dawlings_null
 . tools/offscreen.sh
 
 running() { pgrep -f -- "-cfgfile $RIG/reaper.ini" >/dev/null; }
@@ -42,14 +42,14 @@ if running; then echo "rig: already running"; exit 0; fi
 
 mkdir -p "$RIG/OSC" "$RIG/Scripts" "$RIG/rig_media" "$RIG/rig_session"
 [ -f "$HOME/.config/REAPER/reaper-license.rk" ] && cp -n "$HOME/.config/REAPER/reaper-license.rk" "$RIG/" || true
-cp reaper/Reaper3D.ReaperOSC "$RIG/OSC/"
-cp reaper/reaper3d_bridge.lua "$RIG/Scripts/"
-printf 'dofile(reaper.GetResourcePath() .. "/Scripts/reaper3d_bridge.lua")\n' > "$RIG/Scripts/__startup.lua"
+cp reaper/Dawlings.ReaperOSC "$RIG/OSC/"
+cp reaper/dawlings_bridge.lua "$RIG/Scripts/"
+printf 'dofile(reaper.GetResourcePath() .. "/Scripts/dawlings_bridge.lua")\n' > "$RIG/Scripts/__startup.lua"
 if [ ! -f "$RIG/reaper.ini" ]; then
   cat > "$RIG/reaper.ini" <<INI
 [REAPER]
 csurf_cnt=1
-csurf_0=OSC "Reaper3D" 7 8000 "127.0.0.1" 9000 16384 1 "Reaper3D"
+csurf_0=OSC "Dawlings" 7 8000 "127.0.0.1" 9000 16384 1 "Dawlings"
 splashscreen=0
 autosavemode=0
 promptendrec=0
@@ -65,7 +65,7 @@ python3 tools/rig/make_media.py "$RIG/rig_media" >/dev/null
 
 if ! pactl list short sinks 2>/dev/null | grep -q "$SINK"; then
   pactl load-module module-null-sink "sink_name=$SINK" \
-      "sink_properties=device.description=reaper-3d-rig" >/dev/null
+      "sink_properties=device.description=dawlings-rig" >/dev/null
 fi
 
 PROJECT="$RIG/rig_session/rig.RPP"
@@ -76,7 +76,7 @@ else
 fi
 # The bridge makes this directory when it starts, and that is what "up" waits for -- so one left
 # by the last run would say up before this Reaper had even launched.
-rm -rf "$RIG/Scripts/reaper3d_bridge_data"
+rm -rf "$RIG/Scripts/dawlings_bridge_data"
 reaper_bin="$(command -v reaper)"
 BEFORE="$(mktemp)"
 python3 tools/rig/route_audio.py snapshot "$BEFORE" 2>/dev/null || echo '[]' >"$BEFORE"
@@ -85,7 +85,7 @@ python3 tools/rig/route_audio.py snapshot "$BEFORE" 2>/dev/null || echo '[]' >"$
 
 # Up means answering: the bridge writes its data directory when it starts.
 for _ in $(seq 1 200); do
-  if [ -d "$RIG/Scripts/reaper3d_bridge_data" ] && { [ -f "$PROJECT" ] || [ "${open[0]}" = "$PROJECT" ]; }; then
+  if [ -d "$RIG/Scripts/dawlings_bridge_data" ] && { [ -f "$PROJECT" ] || [ "${open[0]}" = "$PROJECT" ]; }; then
     # Reaper opens its main window from a later process than the one the compositor launched,
     # so the exec rule does not always catch it; move whatever it opened, by PID, after the fact.
     if [ -n "$OFFSCREEN_WORKSPACE" ] && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then

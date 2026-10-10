@@ -119,7 +119,7 @@ ergonomics.
    second hand is refused, a throw lands where the flight says, a lost item goes home, every
    venue's homes are reachable, and so on. Add a session-probe check where it crosses the wire.
    Then run `tools/verify.sh` (0 failed, no SCRIPT ERROR) and
-   `flock ~/.cache/reaper-3d/shared.lock tools/session_probe.sh` (host and guest 0 failed; the
+   `flock ~/.cache/dawlings/shared.lock tools/session_probe.sh` (host and guest 0 failed; the
    audio-timing checks occasionally flake, so rerun before believing them).
 5. Commit: a small plain-English message saying what was wrong or missing and what is there now.
    No attribution lines. Never push.
@@ -132,16 +132,16 @@ ergonomics.
 
 - Windows go offscreen (`tools/shot.sh` / `tools/offscreen.sh` do it). Never move the user's
   workspace. Never kill a godot this loop did not start (the user's own instances included).
-- Audio: `PULSE_SINK=reaper3d_null PIPEWIRE_NODE=reaper3d_null` on every run, and nothing that
+- Audio: `PULSE_SINK=dawlings_null PIPEWIRE_NODE=dawlings_null` on every run, and nothing that
   plays through the speakers. The null sink stays at 0% except while a script measures it. Never
   touch the user's volumes or mutes without asking.
 - Every change to the mix goes through `Session.send_intent` / `DAW._do`. An item that changes
   routing (headphones, the mic arming a track) asks; it never writes the DAW itself.
 - Never write the real `user://layout_profile.cfg`, `user://ghost_look.cfg` or `user://body.cfg`
   (no `--height` in shots). Tests use a test save path.
-- Never touch `~/.config/REAPER`; the rig is `~/.cache/reaper-3d/rig`. Wrap rig use, probes
-  and shots in `flock ~/.cache/reaper-3d/shared.lock` (except `tools/light_check.sh` and
-  `tools/keys_latency.sh`, which take it themselves). Outputs go under `~/.cache/reaper-3d/`.
+- Never touch `~/.config/REAPER`; the rig is `~/.cache/dawlings/rig`. Wrap rig use, probes
+  and shots in `flock ~/.cache/dawlings/shared.lock` (except `tools/light_check.sh` and
+  `tools/keys_latency.sh`, which take it themselves). Outputs go under `~/.cache/dawlings/`.
 - `hardware/` must not reference `Session`, `Presentation.`, `Medium.`, `XRServer`,
   `is_authority` or `multiplayer.` in code lines.
 - The gear and its footprint do not move for an item, and the walker is never trapped by one.

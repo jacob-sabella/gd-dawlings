@@ -6,19 +6,19 @@
 #
 # The helper plays into the rig's null sink, never a real device. A real card adds its own
 # output latency after the sink (pw-top's figure for it). Builds both programs into
-# ~/.cache/reaper-3d/tmp/keys. Takes the shared rig lock itself; do not wrap it.
+# ~/.cache/dawlings/tmp/keys. Takes the shared rig lock itself; do not wrap it.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-SINK=reaper3d_null
-OUT=~/.cache/reaper-3d/tmp/keys
+SINK=dawlings_null
+OUT=~/.cache/dawlings/tmp/keys
 mkdir -p "$OUT"
 FLAGS=($(pkg-config --cflags --libs libpipewire-0.3 alsa) -lm)
 cc -O2 -o "$OUT/keys" native/keys.c "${FLAGS[@]}" || exit 1
 cc -O2 -o "$OUT/keys_latency" tools/keys_latency.c "${FLAGS[@]}" || exit 1
-exec 9>~/.cache/reaper-3d/shared.lock
+exec 9>~/.cache/dawlings/shared.lock
 flock 9
 pactl list short sinks | grep -q "$SINK" || pactl load-module module-null-sink "sink_name=$SINK" \
-  "sink_properties=device.description=reaper-3d-rig" >/dev/null
+  "sink_properties=device.description=dawlings-rig" >/dev/null
 # The rig's sink is kept at 0%, and its monitor carries nothing at 0%. Nothing is linked from it,
 # so nothing is heard while it is up; it goes back down afterwards whatever happens.
 WAS=$(pactl get-sink-volume "$SINK" | grep -o '[0-9]*%' | head -1)

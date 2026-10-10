@@ -48,7 +48,7 @@ RUNNER=(godot --path . --resolution "$SHOT_RES" --
 
 # A shot runs the real studio, sound and all: a held keytar plays, the transport may be rolling.
 # Into the null sink, not whatever the desktop is playing through (SHOT_SINK= to choose another).
-export PULSE_SINK="${SHOT_SINK:-reaper3d_null}" PIPEWIRE_NODE="${SHOT_SINK:-reaper3d_null}"
+export PULSE_SINK="${SHOT_SINK:-dawlings_null}" PIPEWIRE_NODE="${SHOT_SINK:-dawlings_null}"
 
 LOG="$(mktemp)"
 # shellcheck source=offscreen.sh

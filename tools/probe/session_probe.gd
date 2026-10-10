@@ -105,7 +105,7 @@ func _host(port: int) -> void:
 	var monitor_restore := -1
 	if _reaper_resource != "":
 		check("opens the link to Reaper", DAW.use(ReaperBackend.new(), true, {
-				"bridge_dir": _reaper_resource.path_join("Scripts/reaper3d_bridge_data")}))
+				"bridge_dir": _reaper_resource.path_join("Scripts/dawlings_bridge_data")}))
 		await _until(-0.5)
 		restore = DAW.state.track(2).volume
 		tempo_restore = DAW.state.tempo

@@ -375,7 +375,7 @@ func insert_audio_take(track_index: int, start: float, source: String, length: f
 ## Why a recorded take cannot be placed, in words for the person who played it, or "".
 func audio_take_refusal(track_index: int, length: float) -> String:
 	if backend == null or not backend.can(DAWBackend.Capability.AUDIO_TAKES):
-		return "This DAW cannot take audio yet: in Reaper, load the reaper-3d bridge script."
+		return "This DAW cannot take audio yet: in Reaper, load the dawlings bridge script."
 	if not state.tracks.has(track_index):
 		return "There is no track %d to record onto." % track_index
 	if length <= 0.0:
@@ -389,7 +389,7 @@ func midi_take_refusal(args: Array) -> String:
 	if cleaned.is_empty():
 		return "The take could not be read."
 	if backend == null or not backend.can(DAWBackend.Capability.MIDI_TAKES):
-		return "This DAW cannot take MIDI yet: in Reaper, load the reaper-3d bridge script."
+		return "This DAW cannot take MIDI yet: in Reaper, load the dawlings bridge script."
 	if not state.tracks.has(cleaned[0]):
 		return "There is no track %d to record onto." % cleaned[0]
 	if (cleaned[3] as Array).is_empty():

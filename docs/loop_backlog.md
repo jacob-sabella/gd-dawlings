@@ -175,7 +175,7 @@ Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic 
   stay a GDScript addon (source visible to buyers), or move its engine into a GDExtension
   (compiled, closed) before it is sold?
 - **dawkit's submodule URL** is the local path `/home/jsabella/Projects/dawkit`. Once dawkit
-  has a private remote, `.gitmodules` should point at it, or a clone of reaper-3d elsewhere will
+  has a private remote, `.gitmodules` should point at it, or a clone of dawlings elsewhere will
   not find the engine.
 
 - **A guest hearing their own voice with the mic.** The host hears themself through the DAW's

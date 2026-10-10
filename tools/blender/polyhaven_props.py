@@ -20,7 +20,7 @@ PROPS = [("Rockingchair_01", "rocking_chair", 0.5), ("Lantern_01", "lantern", 0.
 
 
 # The API refuses Python's default User-Agent.
-AGENT = {"User-Agent": "reaper-3d-props/1.0"}
+AGENT = {"User-Agent": "dawlings-props/1.0"}
 
 
 def get(url):

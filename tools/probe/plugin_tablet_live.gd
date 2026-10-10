@@ -21,7 +21,7 @@ func _ready() -> void:
 	var options := {}
 	for i in argv.size():
 		if argv[i] == "--reaper-resource" and i + 1 < argv.size():
-			options["bridge_dir"] = argv[i + 1].path_join("Scripts/reaper3d_bridge_data")
+			options["bridge_dir"] = argv[i + 1].path_join("Scripts/dawlings_bridge_data")
 		elif argv[i] == "--plugin" and i + 1 < argv.size():
 			_plugins.append(argv[i + 1])
 		elif argv[i] == "--keep":

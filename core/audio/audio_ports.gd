@@ -4,11 +4,11 @@ extends Node
 ## arrives on one, so a patchbay can route each of them anywhere -- the mix to the monitors, the
 ## gear's clicks to a headphone feed or nowhere, a guest's own keys to a recorder.
 ##
-##   reaper-3d · mix       the built-in DAW's master, or on a guest the host's mix it hears
-##   reaper-3d · monitor   a guest's own keys, played here the instant they are pressed
-##   reaper-3d · gear      the room: buttons, faders, tape motors, castors
-##   reaper-3d · mic       what a guest records (MixSource.Piped)
-##   reaper-3d · mix tap   what a host passes on to its guests, tapped from the DAW (MixTap)
+##   dawlings · mix       the built-in DAW's master, or on a guest the host's mix it hears
+##   dawlings · monitor   a guest's own keys, played here the instant they are pressed
+##   dawlings · gear      the room: buttons, faders, tape motors, castors
+##   dawlings · mic       what a guest records (MixSource.Piped)
+##   dawlings · mix tap   what a host passes on to its guests, tapped from the DAW (MixTap)
 ##
 ## Each is a PipeWire node of its own, so the session manager puts it on the default device
 ## like any app's sound and remembers wherever it is moved to after that.
@@ -132,12 +132,12 @@ func open() -> bool:
 
 ## The player's arguments for one kind: raw stereo float at the mix rate, named for a patchbay.
 func player_args(kind: StringName) -> PackedStringArray:
-	var title := "reaper-3d · %s" % NAMES[kind]
+	var title := "dawlings · %s" % NAMES[kind]
 	var latency := OS.get_environment("R3D_PORT_LATENCY_MS")
 	var args := PackedStringArray(["--playback", "--raw", "--format=float32le", "--rate=%d" % RATE,
 			"--channels=2", "--latency-msec=%s" % (latency if latency.is_valid_int() else str(LATENCY_MS)),
 			"--client-name=" + title, "--stream-name=" + title,
-			"--property=node.name=reaper3d_" + NAMES[kind], "--property=node.description=" + title,
+			"--property=node.name=dawlings_" + NAMES[kind], "--property=node.description=" + title,
 			"--property=application.name=" + title, "--property=media.role=Music"])
 	var to := device if not device.is_empty() else target
 	if not to.is_empty():

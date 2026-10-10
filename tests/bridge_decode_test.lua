@@ -1,8 +1,8 @@
 -- The bridge's request decoder, run outside Reaper: tools/verify.sh runs this when a Lua is
--- installed. The decoder is lifted out of reaper/reaper3d_bridge.lua by its text, because the
+-- installed. The decoder is lifted out of reaper/dawlings_bridge.lua by its text, because the
 -- bridge itself talks to Reaper the moment it loads.
 local here = arg[0]:match('(.*/)') or './'
-local f = assert(io.open(here .. '../reaper/reaper3d_bridge.lua', 'r'))
+local f = assert(io.open(here .. '../reaper/dawlings_bridge.lua', 'r'))
 local text = f:read('*a')
 f:close()
 local from = text:find('local function decode_args', 1, true)

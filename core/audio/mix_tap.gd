@@ -5,7 +5,7 @@ extends RefCounted
 ##
 ## The DAW plays to the studio's speakers through the OS, not through us, and that stays true:
 ## this only ADDS a listener. On PipeWire that is cheap and exact. A virtual source named
-## `reaper3d_tap` is made once, the DAW's output ports are linked into it alongside whatever
+## `dawlings_tap` is made once, the DAW's output ports are linked into it alongside whatever
 ## they already feed, and Godot captures the tap like a microphone. Nothing the DAW was
 ## connected to is disconnected, so the engineer at the desk hears exactly what they heard
 ## before.
@@ -19,9 +19,9 @@ extends RefCounted
 ## and macOS a virtual device, neither of which Godot can open; there, `open` says so and the
 ## session carries on without sound.
 
-const TAP := "reaper3d_tap"
+const TAP := "dawlings_tap"
 ## The DAW's node, by name. Reaper registers with JACK -- or with PulseAudio when set to it --
-## as REAPER, and a second instance as REAPER-01. This app's own node is "reaper-3d" and must
+## as REAPER, and a second instance as REAPER-01. This app's own node is "dawlings" and must
 ## never match: that would feed the host's fader clicks to the guests.
 const DAW_NODE := "^REAPER(-\\d+)?$"
 
@@ -112,7 +112,7 @@ static func _ensure_tap() -> bool:
 		return true
 	var out := _run("pactl", ["load-module", "module-null-sink", "media.class=Audio/Source/Virtual",
 			"sink_name=" + TAP, "channel_map=front-left,front-right",
-			"sink_properties=device.description=reaper-3d-mix-tap"]).strip_edges()
+			"sink_properties=device.description=dawlings-mix-tap"]).strip_edges()
 	if not out.is_valid_int():
 		return false
 	_module_id = int(out)

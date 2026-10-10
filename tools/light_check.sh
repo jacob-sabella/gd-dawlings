@@ -5,7 +5,7 @@
 #   tools/light_check.sh                 every venue in Venue.IDS
 #   tools/light_check.sh grid chalk      just these
 #   tools/light_check.sh grid:1          one venue's second arrangement
-#   OUT=~/somewhere tools/light_check.sh where the pictures go (default ~/.cache/reaper-3d/shots/light_check)
+#   OUT=~/somewhere tools/light_check.sh where the pictures go (default ~/.cache/dawlings/shots/light_check)
 #
 # The budget is measured, not felt: the mean grey of the picture, and how much of it is all but
 # white. A room that reads as an operating theatre from the seat measured 0.27-0.31 mean; the
@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 MEAN_MAX="${MEAN_MAX:-0.23}"
 WIDE_MEAN_MAX="${WIDE_MEAN_MAX:-0.24}"
 WHITE_MAX="${WHITE_MAX:-0.5}"
-OUT="${OUT:-$HOME/.cache/reaper-3d/shots/light_check}"
+OUT="${OUT:-$HOME/.cache/dawlings/shots/light_check}"
 mkdir -p "$OUT"
 
 if [ $# -gt 0 ]; then
@@ -40,10 +40,10 @@ fi
 
 shoot() {
   local file=$1 cam=$2 args=$3 frame=${4:-30} walk=${5:-}
-  local env=(SHOT_RES=1280x720 "SHOT_ARGS=$args" PULSE_SINK=reaper3d_null PIPEWIRE_NODE=reaper3d_null)
+  local env=(SHOT_RES=1280x720 "SHOT_ARGS=$args" PULSE_SINK=dawlings_null PIPEWIRE_NODE=dawlings_null)
   [ -n "$cam" ] && env+=("SHOT_CAM=$cam")
   [ -n "$walk" ] && env+=("SHOT_WALK=$walk")
-  env "${env[@]}" flock "$HOME/.cache/reaper-3d/shared.lock" tools/shot.sh "$file" "$frame" \
+  env "${env[@]}" flock "$HOME/.cache/dawlings/shared.lock" tools/shot.sh "$file" "$frame" \
     "$((frame + 6))" 2>&1 \
     | grep -E "SCRIPT ERROR" && return 1
   [ -f "$file" ]

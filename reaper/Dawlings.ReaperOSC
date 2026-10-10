@@ -1,12 +1,12 @@
-# Reaper3D.ReaperOSC -- the OSC pattern config reaper-3d expects.
+# Dawlings.ReaperOSC -- the OSC pattern config dawlings expects.
 #
-# Copy this to <Reaper resource path>/OSC/Reaper3D.ReaperOSC, then in Reaper:
+# Copy this to <Reaper resource path>/OSC/Dawlings.ReaperOSC, then in Reaper:
 #   Options > Preferences > Control/OSC/web > Add > OSC (Open Sound Control)
 #     Mode:               Configure device IP+port
-#     Device port:        9000   (where reaper-3d listens; Reaper sends here)
+#     Device port:        9000   (where dawlings listens; Reaper sends here)
 #     Device IP:          127.0.0.1, or the host machine on the LAN
-#     Local listen port:  8000   (where Reaper listens; reaper-3d sends here)
-#     Pattern config:     Reaper3D
+#     Local listen port:  8000   (where Reaper listens; dawlings sends here)
+#     Pattern config:     Dawlings
 #
 # This is Reaper's own Default.ReaperOSC with the DEVICE_ counts raised and NOTHING else changed,
 # so anything documented for the default OSC surface is true here too.

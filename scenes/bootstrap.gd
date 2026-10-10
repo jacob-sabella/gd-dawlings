@@ -188,7 +188,7 @@ func _start_daw(args: Dictionary) -> void:
 			"listen_port": args["listen_port"],
 		}
 		if args["reaper_resource"] != "":
-			options["bridge_dir"] = args["reaper_resource"].path_join("Scripts/reaper3d_bridge_data")
+			options["bridge_dir"] = args["reaper_resource"].path_join("Scripts/dawlings_bridge_data")
 		if DAW.use(ReaperBackend.new(), true, options):
 			return
 		push_warning("bootstrap: could not open the OSC link; falling back to the offline stand-in.")
@@ -513,7 +513,7 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	_hud.text = "reaper-3d  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",
 		studio.venue.title() if studio.venue != null else "room"]

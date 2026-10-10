@@ -19,7 +19,7 @@ if [ "${1:-}" = "--reaper" ]; then
     tools/reaper_rig.sh up || { echo "session_probe: the Reaper rig would not start" >&2; exit 3; }
     STARTED_RIG=1
   fi
-  H_ARGS=(--reaper-resource "${REAPER_RIG:-$HOME/.cache/reaper-3d/rig}" --shift 3)
+  H_ARGS=(--reaper-resource "${REAPER_RIG:-$HOME/.cache/dawlings/rig}" --shift 3)
   G_ARGS=(--expect-tracks "${EXPECT_TRACKS:-40}" --shift 3)
 elif [ "${1:-}" = "--built-in" ]; then
   H_ARGS=(--built-in); G_ARGS=(--built-in)
@@ -27,9 +27,9 @@ fi
 HOST_LOG="$(mktemp)"; GUEST_LOG="$(mktemp)"
 HOST_GODOT=(godot --headless)
 if [ "${1:-}" = "--built-in" ]; then
-  SINK=reaper3d_null
+  SINK=dawlings_null
   pactl list short sinks | grep -q "$SINK" || pactl load-module module-null-sink "sink_name=$SINK" \
-    "sink_properties=device.description=reaper-3d-rig" >/dev/null
+    "sink_properties=device.description=dawlings-rig" >/dev/null
   HOST_GODOT=(env PULSE_SINK="$SINK" godot --display-driver headless --audio-driver PulseAudio)
 fi
 "${HOST_GODOT[@]}" --path . tools/probe/session_probe.tscn -- --as host --port "$PORT" "${H_ARGS[@]}" >"$HOST_LOG" 2>&1 &

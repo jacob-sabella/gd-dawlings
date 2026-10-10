@@ -80,13 +80,13 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 					state.loop_end = float(args[0])
 				state.transport_changed.emit()
 		"undo":
-			# reaper-3d's own: how deep the history is, from the bridge.
+			# dawlings's own: how deep the history is, from the bridge.
 			if args.size() > 1:
 				state.undo_depth = int(args[0])
 				state.redo_depth = int(args[1])
 				state.transport_changed.emit()
 		"project":
-			# reaper-3d's own. OSC says nothing about how big a project is -- only how big the
+			# dawlings's own. OSC says nothing about how big a project is -- only how big the
 			# bank is -- so without this a 90-track session is indistinguishable from a
 			# 64-track one and the bank buttons have nothing to be enabled or greyed by.
 			if p.size() > 1 and p[1] == "tracks" and args.size() > 0:
@@ -99,7 +99,7 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 				if changed:
 					state.bank_changed.emit()
 		"bank":
-			# Where the current bank starts, in tracks. Also reaper-3d's own: Reaper is told a
+			# Where the current bank starts, in tracks. Also dawlings's own: Reaper is told a
 			# bank NUMBER and never says which one it settled on, so the authority states it
 			# here and every guest learns it the same way it learns everything else.
 			if args.size() > 0:
@@ -117,7 +117,7 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 
 
 ## `/timeline/length` and `/timeline/markers`. Neither is a Reaper address: Reaper's OSC
-## surface says nothing about the arrangement, so these are reaper-3d's own, filled by whatever
+## surface says nothing about the arrangement, so these are dawlings's own, filled by whatever
 ## channel a given backend has for structure -- the ReaScript bridge, for Reaper.
 static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) -> void:
 	if p.size() < 2 or args.is_empty():
@@ -214,13 +214,13 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 		"colour":
 			# NOT a Reaper address. Reaper's OSC surface has no message for track colour, and a
 			# colour chip is how you find the kick on a desk of 32 identical strips -- so
-			# reaper-3d defines one in its own namespace, parsed here and emitted by the host
+			# dawlings defines one in its own namespace, parsed here and emitted by the host
 			# into the same replication stream as everything else. When the ReaScript bridge
 			# starts supplying real colours, they reach every guest without another line.
 			if args.size() >= 3:
 				state.set_track_field(idx, &"colour", Color(float(args[0]), float(args[1]), float(args[2])))
 		"folder":
-			# Also reaper-3d's own, for the same reason as colour: Reaper's OSC surface has no
+			# Also dawlings's own, for the same reason as colour: Reaper's OSC surface has no
 			# message for folder structure, and a 32-strip desk with no breaks in it is a wall.
 			# A DELTA, not a level -- see TrackState.folder_depth.
 			if args.size() >= 1:
@@ -328,7 +328,7 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 		"name":
 			f.name = MixState.FXState.bare_name(str(args[0]))
 			state.fx_changed.emit(track_idx, fx_idx)
-		# reaper-3d's own: the plugin's real parameters, listed by the bridge.
+		# dawlings's own: the plugin's real parameters, listed by the bridge.
 		"paramlist":
 			var listed: Array = args.map(func(a): return int(a))
 			if listed != f.param_list:
@@ -342,7 +342,7 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 			# Reaper's `bypass` is sent as ENABLED (1 = running). The name is a trap.
 			f.enabled = _as_bool(args)
 			state.fx_changed.emit(track_idx, fx_idx)
-		# reaper-3d's own, from the bridge: OSC has no word for either.
+		# dawlings's own, from the bridge: OSC has no word for either.
 		"wet":
 			if p.size() == 5 and not is_equal_approx(f.wet, float(args[0])):
 				f.wet = clampf(float(args[0]), 0.0, 1.0)
@@ -379,12 +379,12 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	var before := [s.dest_name, s.dest_track, s.volume, s.pan, s.key]
 	match p[4]:
 		"name": s.dest_name = str(args[0])
-		# reaper-3d's own again, and the one that makes the patchbay exact rather than
+		# dawlings's own again, and the one that makes the patchbay exact rather than
 		# approximate: OSC's `name` cannot tell two tracks called "Verb" apart.
 		"dest": s.dest_track = int(args[0])
 		"volume": s.volume = float(args[0])
 		"pan": s.pan = float(args[0])
-		# Also reaper-3d's own: a send into the destination's key input, not its mix.
+		# Also dawlings's own: a send into the destination's key input, not its mix.
 		"key": s.key = _as_bool(args)
 	# Told, so a control showing a send level follows it. Only on a change: Reaper restates
 	# every slot of every track on a refresh, and most of them are empty.
@@ -532,7 +532,7 @@ static func snapshot(state: MixState) -> Array:
 ## State arriving from the host. Deliberately NOT routed through write() or the echo guard --
 ## this is authority speaking, and a guest has nothing of its own to protect against.
 ##
-## Includes track colour, which is a reaper-3d address rather than a Reaper one -- see the
+## Includes track colour, which is a dawlings address rather than a Reaper one -- see the
 ## "colour" case in _apply_track for why.
 static func apply_replicated(state: MixState, batch: Array) -> void:
 	for entry in batch:
