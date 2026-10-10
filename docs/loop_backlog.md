@@ -250,8 +250,10 @@ can finish music in, saving DAWproject. Steps, in order:
      guest's chosen take track, holds, and the layout profile's strips. Renaming a demo-song
      track changes which part it plays, because parts go by name.
    - **Done 2026-10-10 (6d), keys:** COPY and DEL on the timeline, in the corner under the track
-     names, lit while items are selected. Next: dragging an item's edge to trim it, and keys or a
-     card for gain, fades, transpose, quantise and tracks; fades drawn as curves rather than a flat volume per frame (needs
+     names, lit while items are selected. Dragging an item's edge (the last 4 mm of it, at most a
+     quarter of it) trims that edge, snapped to the beat unless fine. The block is drawn at its new
+     edges while the contents stay put. Next: keys or a card for gain, fades, transpose,
+     quantise and tracks; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

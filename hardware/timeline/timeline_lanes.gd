@@ -4,7 +4,8 @@ extends ControlAffordance
 ## The lanes of the timeline, as something a hand can edit.
 ##
 ## Press an item to select it (fine -- shift on a monitor -- adds it to the selection or takes it
-## out). Drag it to move it along its lane, snapped to the beat unless fine. Press empty lane to
+## out). Drag it to move it along its lane, snapped to the beat unless fine. Drag an edge to trim
+## the item there, snapped the same way, its contents staying where they are in the song. Press empty lane to
 ## drop the selection and put the playhead there. The wheel zooms, round the playhead the way
 ## Reaper zooms round its edit cursor. Splitting is a key, not a gesture: see the surface.
 ##
@@ -30,6 +31,10 @@ var _grab_seconds := 0.0
 var _item_start := 0.0
 var _dragged := false
 var _target_start := 0.0
+## -1 or 1 while an edge is being dragged (see TimelineSurface.item_edge_at_point), 0 for a move.
+var _edge := 0
+var _item_end := 0.0
+var _target_end := 0.0
 
 
 func _ready() -> void:
@@ -65,9 +70,14 @@ func _on_grab_begin(at: Vector3) -> void:
 	_dragged = false
 	_grab_seconds = surface.seconds_at_point(at)
 	_hit = surface.item_at_point(at)
+	_edge = 0
 	if not _hit.is_empty():
-		_item_start = DAW.state.item(_hit[0], _hit[1]).start
+		var item: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
+		_item_start = item.start
+		_item_end = item.end()
 		_target_start = _item_start
+		_target_end = _item_end
+		_edge = surface.item_edge_at_point(at)
 
 
 func _on_grab_move(at: Vector3) -> void:
@@ -76,6 +86,15 @@ func _on_grab_move(at: Vector3) -> void:
 	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP:
 		return
 	_dragged = true
+	var moved: float = surface.seconds_at_point(at) - _grab_seconds
+	if _edge != 0:
+		# The edge being dragged snaps; the other stays put, and the item keeps a real length.
+		if _edge < 0:
+			_target_start = minf(snap(_item_start + moved, _fine()), _item_end - DAWBackend.MIN_ITEM_SECONDS)
+		else:
+			_target_end = maxf(snap(_item_end + moved, _fine()), _item_start + DAWBackend.MIN_ITEM_SECONDS)
+		surface.preview_item(_hit[0], _hit[1], _target_start, _target_end - _target_start)
+		return
 	# The START snaps, not the distance moved: an item that began off the grid lands on it, which
 	# is what a drag in an arranger is nearly always for.
 	_target_start = snap(_item_start + surface.seconds_at_point(at) - _grab_seconds, _fine())
@@ -88,6 +107,7 @@ func _on_grab_end() -> void:
 	# under a pointer resting on an item that had long since landed.
 	_hit = []
 	_dragged = false
+	_edge = 0
 
 
 func _finish_grab() -> void:
@@ -107,6 +127,10 @@ func _finish_grab() -> void:
 	# moved is what you are working on.
 	if not item.selected:
 		DAW.select_item(_hit[0], _hit[1], false)
+	if _edge != 0:
+		if not is_equal_approx(_target_start, item.start) or not is_equal_approx(_target_end, item.end()):
+			DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
+		return
 	if not is_equal_approx(_target_start, item.start):
 		DAW.move_item(_hit[0], _hit[1], _target_start)
 
@@ -143,6 +167,10 @@ func _default_title() -> String:
 func _default_readout() -> String:
 	var s := DAW.state
 	if _dragged and not _hit.is_empty():
+		if _edge < 0:
+			return "trim start to %s" % s.bar_beat(_target_start)
+		if _edge > 0:
+			return "trim end to %s" % s.bar_beat(_target_end)
 		return "move to %s" % s.bar_beat(_target_start)
 	var item := _pointer_item()
 	if item == null:
@@ -153,4 +181,4 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "click to select, shift adds; drag to move; wheel zooms; B or SPLIT cuts at the playhead"
+	return "click to select, shift adds; drag to move, or by an edge to trim; wheel zooms; B or SPLIT cuts at the playhead"

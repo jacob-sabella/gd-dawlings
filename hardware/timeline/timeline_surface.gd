@@ -48,6 +48,8 @@ const LABEL_CLEARANCE := 0.042
 
 ## Hairline between abutting items, in metres.
 const EDGE_GAP := 0.0006
+## How close to an item's edge a press trims it rather than moving it, in metres.
+const EDGE_GRIP := 0.004
 
 const SCRUBBER_BAND := 0.016
 ## Most lanes the panel shows at once. Past this the panel stopped being a timeline and became a
@@ -486,9 +488,29 @@ func item_at_point(global_point: Vector3) -> Array:
 	return []
 
 
-## Draw an item somewhere other than where it is, for the length of a drag. -1 clears.
-func preview_item(track_index: int, item_index: int, start: float) -> void:
-	_preview = [] if track_index < 0 else [track_index, item_index, start]
+## Which edge of the item under a point the point is on: -1 its left, 1 its right, 0 neither.
+## The grip is a few millimetres of the item, and never more than a quarter of it, so a short item
+## can still be picked up by its middle.
+func item_edge_at_point(global_point: Vector3) -> int:
+	var hit := item_at_point(global_point)
+	if hit.is_empty():
+		return 0
+	var item := DAW.state.item(hit[0], hit[1])
+	var x := to_local(global_point).x
+	var left := _x_for(item.start)
+	var right := _x_for(item.end())
+	var grip := minf(EDGE_GRIP, (right - left) * 0.25)
+	if x - left <= grip:
+		return -1
+	if right - x <= grip:
+		return 1
+	return 0
+
+
+## Draw an item somewhere other than where it is, for the length of a drag: moved to `start`, or
+## trimmed to `start` and `length`. -1 clears.
+func preview_item(track_index: int, item_index: int, start: float, length := -1.0) -> void:
+	_preview = [] if track_index < 0 else [track_index, item_index, start, length]
 	_relayout_view()
 
 
@@ -769,13 +791,21 @@ func _relayout_view() -> void:
 			if slot >= _item_blocks.count():
 				break
 			var start: float = item.start
+			var length: float = item.length
+			# A trim draws the block at its new edges while its contents stay where they are in
+			# the song; a move carries both.
+			var content: float = item.start
 			if not _preview.is_empty() and _preview[0] == indices[i] and _preview[1] == item.index:
 				start = _preview[2]
-			if _place_item(item, start, t.colour, _lane_y[i], t.mute, slot):
+				if _preview[3] >= 0.0:
+					length = _preview[3]
+				else:
+					content = start
+			if _place_item(item, start, t.colour, _lane_y[i], t.mute, slot, length):
 				slot += 1
-				note_slot = _place_notes(item, start, t.colour, _lane_y[i], item.muted or t.mute,
+				note_slot = _place_notes(item, content, t.colour, _lane_y[i], item.muted or t.mute,
 						note_slot)
-				wave_slot = _place_wave(item, start, t.colour, _lane_y[i], item.muted or t.mute,
+				wave_slot = _place_wave(item, content, t.colour, _lane_y[i], item.muted or t.mute,
 						wave_slot)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
@@ -790,12 +820,14 @@ func _relayout_view() -> void:
 ## Returns false without writing anything when the item falls outside the window, which is what
 ## lets the caller pack the visible ones into the low slots.
 func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
-		lane_muted: bool, slot: int) -> bool:
+		lane_muted: bool, slot: int, length := -1.0) -> bool:
+	if length < 0.0:
+		length = item.length
 	# Inset, so that two sections that butt up against each other -- which is what an
 	# arrangement mostly is -- read as two blocks rather than one long one. A hairline gap does
 	# what the edge shading of a real arranger does, at a size where shading would be invisible.
 	var left := _x_for(start) + EDGE_GAP
-	var right := _x_for(start + item.length) - EDGE_GAP
+	var right := _x_for(start + length) - EDGE_GAP
 	if right < _lane_area_x or left > _lane_right():
 		return false
 	# Clipped to the lane, not culled. An item that starts before the window and ends inside it

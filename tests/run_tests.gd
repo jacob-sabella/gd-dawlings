@@ -8324,6 +8324,27 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.split_selected(s.position_seconds)
 	check("a split where nothing selected is under the playhead does nothing", s.track(2).items.size() == count)
 
+	# Trim: an edge, dragged, moves only that edge, snapped to the beat.
+	check("an item's middle is not an edge", timeline.item_edge_at_point(at.call(2, 13.0)) == 0)
+	check("its ends are", timeline.item_edge_at_point(at.call(2, 9.02)) == -1
+			and timeline.item_edge_at_point(at.call(2, 24.98)) == 1)
+	lanes.grab_begin(hand, at.call(2, 9.02))
+	lanes.grab_move(hand, at.call(2, 11.1))
+	check("dragging the left edge reads as a trim (%s)" % lanes.readout(), lanes.readout() == "trim start to 11.1.00")
+	close_to("and is drawn trimmed while the project waits", timeline._preview[3], s.bar_to_seconds(25.0) - s.bar_to_seconds(11.0), 0.001)
+	lanes.grab_end(hand)
+	close_to("let go, the item starts on the beat it was dragged to", s.item(2, 0).start, s.bar_to_seconds(11.0), 0.001)
+	close_to("and still ends where it did", s.item(2, 0).end(), s.bar_to_seconds(25.0), 0.001)
+	lanes.grab_begin(hand, at.call(2, 24.98))
+	lanes.grab_move(hand, at.call(2, 23.0))
+	lanes.grab_end(hand)
+	close_to("the right edge, dragged in, ends it there", s.item(2, 0).end(), s.bar_to_seconds(23.0), 0.001)
+	close_to("leaving its start", s.item(2, 0).start, s.bar_to_seconds(11.0), 0.001)
+	DAW.undo()
+	DAW.undo()
+	close_to("two undos put both edges back", s.item(2, 0).start, s.bar_to_seconds(9.0), 0.001)
+	click.call(at.call(2, 12.0))
+
 	# Copy and delete, under the track names, for the selection.
 	check("copy and delete light with a selection", timeline._copy_key.lit and timeline._delete_key.lit)
 	timeline._copy_key.pressed.emit()
