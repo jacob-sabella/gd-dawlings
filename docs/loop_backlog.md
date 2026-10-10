@@ -177,6 +177,22 @@ can finish music in, saving DAWproject. Steps, in order:
      `OfflineBackend.records_inputs` lets the suite play a host on Reaper.
    - **Not yet:** recording more than one input at a time (one microphone and one set of keys
      each now); a count-in; punch in and out; per-track input choice saved in the project. 5. MIDI playback through a built-in instrument.
+   - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
+     instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
+     renders a MIDI item on a worker thread (keyed by its notes and length; silent until it is
+     ready, and waited for when the engine goes away) and plays it locked to the item, through
+     the track's bus, fader, effects and sends. The demo's Rhodes, which is MIDI, now plays its
+     own notes. In a project the track gets a `BuiltinDevice` instrument (`dawkit:tine`,
+     `deviceRole="instrument"`), and on opening, instruments stay out of the desk's chain.
+     Measured: in the suite, a render is silent up to its first note, which starts on its own
+     sample. In `session_probe.sh --built-in`, the host's loopback take of a MIDI item with a
+     note on every off-beat finds each note 2.4-4.6 ms after the off-beat on average (about 2 ms
+     behind the clicks, which is the tine's attack) and within 0.8 ms of that average.
+   - **Next (5b):** live keys through the armed track's instrument (its bus, fader and effects)
+     in place of the monitor synth; MonitorSynth's voice made DawKitTine's (two copies now);
+     an instrument from another DAW's file kept rather than dropped; the old renders pruned.
+   - Seen once: the default probe's guest missed a click in its timing check (frames 33661,
+     129615: one gone). It passed the next 4 runs. Like step 0's flaky click, watch for it.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 

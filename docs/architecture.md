@@ -148,6 +148,11 @@ is written, placed and announced exactly as a guest's would be. The host's keys 
 plays for such a host (`host_records`) and times notes by `host_heard`. The engine's metronome
 (dawkit's `DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
 
+MIDI items play through the engine's instrument, dawkit's `DawKitTine`. Each item is rendered
+whole on a worker thread, every note on its own sample, and played like a take, locked to the
+item's start. A project marks the track with a built-in instrument device, and opening one keeps
+instruments out of the desk's effect chain.
+
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
 the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a
 WAV the engine plays, and it is placed with `insert_audio_take` like a recorded take. So it saves

@@ -17,7 +17,8 @@ extends OfflineBackend
 ##   - a cue per track on request (`set_cues`): a third player of the part, through the track's
 ##     own effects but not its fader, on a bus that plays to this machine's headphones only;
 ##   - a demo song (DemoSong), one synthesised part per instrument, played through the
-##     timeline's items: an item is a window in which its track's part sounds.
+##     timeline's items: an item is a window in which its track's part sounds;
+##   - MIDI items played through the built-in instrument (DawKitTine), rendered per item.
 ##
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
 ## redo, a guest's intent and a local hand all reach the speakers by the one path.
@@ -62,6 +63,10 @@ var _take_streams := {}
 ## The metronome: one bar of clicks (DawKitMetronome), looping, kept on the bar grid like a part.
 var _click: AudioStreamPlayer
 var _click_for := ""
+## A MIDI item's sound, by what is in it (`midi_key`), rendered through the instrument
+## (DawKitTine) on a worker thread; and the renders still running, as [task, [result]].
+var _midi_streams := {}
+var _midi_tasks := {}
 
 
 func summary() -> String:
@@ -91,6 +96,7 @@ func open(options: Dictionary = {}) -> bool:
 
 
 func close() -> void:
+	_finish_renders()
 	super()
 	for list in _players.values():
 		for p in list:
@@ -100,7 +106,21 @@ func close() -> void:
 
 
 func _exit_tree() -> void:
+	_finish_renders()
 	_remove_buses()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		_finish_renders()
+
+
+## Every render still running, waited for: a task left running when the engine goes away runs on
+## into freed memory, and one never waited for aborts the program at exit.
+func _finish_renders() -> void:
+	for key in _midi_tasks:
+		WorkerThreadPool.wait_for_task_completion(_midi_tasks[key][0])
+	_midi_tasks.clear()
 
 
 # --- the mix ------------------------------------------------------------------------------
@@ -530,6 +550,13 @@ func _sync_players() -> void:
 			expected = it.file_time(pos)
 			if stream != null and not it.is_looped() and expected >= stream.get_length():
 				stream = null
+		elif it != null and not it.notes.is_empty():
+			# Silent for the moment it takes to render, then on the item's own clock: its notes are
+			# seconds from its left edge.
+			stream = midi_stream(it)
+			expected = pos - it.start
+			if stream != null and expected >= stream.get_length():
+				stream = null
 		elif it != null:
 			stream = _parts.get(DemoSong.role_of(state.tracks[index].name))
 			if stream != null:
@@ -582,6 +609,50 @@ func _sync_click() -> void:
 			-length * 0.5, length * 0.5)
 	if absf(off) > DRIFT_SECONDS:
 		_click.play(expected)
+
+
+## What a MIDI item sounds like depends on nothing but its notes and its length.
+static func midi_key(it: MixState.ItemState) -> String:
+	return "%d/%s" % [hash(it.notes), it.length]
+
+
+## A MIDI item's sound, or null while it is still being rendered (`wait` waits for it). The render
+## is the item's notes through the instrument, each on its own sample, as a 16-bit stereo stream.
+func midi_stream(it: MixState.ItemState, wait := false) -> AudioStreamWAV:
+	var key := midi_key(it)
+	if _midi_streams.has(key):
+		return _midi_streams[key]
+	if not _midi_tasks.has(key):
+		var result := [null]
+		var notes := PackedFloat64Array(Array(it.notes))
+		var seconds := it.length
+		var rate := int(AudioServer.get_mix_rate())
+		var task := WorkerThreadPool.add_task(func(): result[0] = render_midi(notes, seconds, rate),
+				false, "render a MIDI item")
+		_midi_tasks[key] = [task, result]
+	var running: Array = _midi_tasks[key]
+	if not wait and not WorkerThreadPool.is_task_completed(running[0]):
+		return null
+	WorkerThreadPool.wait_for_task_completion(running[0])
+	_midi_tasks.erase(key)
+	_midi_streams[key] = running[1][0]
+	return _midi_streams[key]
+
+
+## Notes through the instrument, as a stream. Safe off the main thread.
+static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int) -> AudioStreamWAV:
+	var frames := DawKitTine.render_notes(notes, seconds, float(rate))
+	var data := PackedByteArray()
+	data.resize(frames.size() * 4)
+	for i in frames.size():
+		data.encode_s16(i * 4, int(clampf(frames[i].x, -1.0, 1.0) * 32767.0))
+		data.encode_s16(i * 4 + 2, int(clampf(frames[i].y, -1.0, 1.0) * 32767.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.stereo = true
+	wav.mix_rate = rate
+	wav.data = data
+	return wav
 
 
 ## A recorded take's sound, read from the host's takes folder once and kept.

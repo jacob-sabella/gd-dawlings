@@ -31,6 +31,7 @@ const TAKE_TOLERANCE := 0.005
 ## and how far from the beat a click may land.
 const HOST_TAKE_TRACK := 3
 const HOST_TAKE_AT := 600.0
+const HOST_MIDI_TRACK := 5
 const HOST_TAKE_TOLERANCE := 0.010
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
@@ -352,6 +353,18 @@ func _host_records_itself() -> void:
 	ha.record_with_host = true
 	_audio_placed = {}
 	DAW.set_metronome(true)
+	# A MIDI item under the take, a short high note on every off-beat, played by the engine's
+	# instrument: between the clicks, so each can be found on its own.
+	var beat := 60.0 / DAW.state.tempo
+	var notes: Array = []
+	var t := (ceilf(HOST_TAKE_AT / beat) + 0.5) * beat
+	while t < HOST_TAKE_AT + 6.0:
+		notes.append([t, t + 0.08, 84, 120, 0])
+		t += beat
+	DAW.state.track(HOST_MIDI_TRACK).items.clear()
+	DAW.insert_midi_take(HOST_MIDI_TRACK, HOST_TAKE_AT, HOST_TAKE_AT + 6.0, notes, "Off-beats")
+	var midi: MixState.ItemState = DAW.state.track(HOST_MIDI_TRACK).items[0]
+	(DAW.backend as GodotBackend).midi_stream(midi, true)
 	DAW.seek(HOST_TAKE_AT)
 	await _until(7.6)
 	check("my microphone is open (%s)" % ha.input_device, ha.mic_open())
@@ -366,13 +379,18 @@ func _host_records_itself() -> void:
 		return
 	var wav := FileAccess.get_file_as_bytes(_audio_placed["path"])
 	var start: float = _audio_placed["start"]
-	var beat := 60.0 / DAW.state.tempo
-	# Each beat inside the take, after its first half second: the click's onset is the first
-	# sample within 40ms of the beat over half the loudest one there.
+	_measure_onsets("clicks", wav, start, beat, 0.0)
+	_measure_onsets("notes", wav, start, beat, 0.5)
+
+
+## Each beat inside the take (or each point `phase` of a beat on), after its first half second:
+## the onset there is the first sample within 40ms over half the loudest one there. Checked to be
+## on time on average and each within the tolerance of that average.
+func _measure_onsets(what: String, wav: PackedByteArray, start: float, beat: float, phase: float) -> void:
 	var offs: Array[float] = []
 	var peaks: Array[int] = []
 	var frames := (wav.size() - AudioTake.HEADER_BYTES) / 2
-	var b := ceilf((start + 0.5) / beat) * beat
+	var b := (ceilf((start + 0.5) / beat - phase) + phase) * beat
 	while b < start + float(frames) / AudioTake.RATE - 0.1:
 		var centre := int((b - start) * AudioTake.RATE)
 		var from := maxi(centre - AudioTake.RATE / 25, 0)
@@ -394,13 +412,13 @@ func _host_records_itself() -> void:
 	var spread := 0.0
 	for o in offs:
 		spread = maxf(spread, absf(o - mean))
-	print("host take: %d clicks of %d beats (peaks %s), offsets_ms %s mean_ms %.2f spread_ms %.2f out_latency_ms %.1f" % [offs.size(), peaks.size(), peaks,
-			offs.map(func(o): return snappedf(o * 1000.0, 0.01)), mean * 1000.0, spread * 1000.0,
-			AudioServer.get_output_latency() * 1000.0])
-	check("a click on every beat of my take (%d of %d)" % [offs.size(), peaks.size()],
+	print("host take %s: %d of %d (peaks %s), offsets_ms %s mean_ms %.2f spread_ms %.2f out_latency_ms %.1f" % [
+			what, offs.size(), peaks.size(), peaks, offs.map(func(o): return snappedf(o * 1000.0, 0.01)),
+			mean * 1000.0, spread * 1000.0, AudioServer.get_output_latency() * 1000.0])
+	check("%s on every one in my take (%d of %d)" % [what, offs.size(), peaks.size()],
 			peaks.size() >= 5 and offs.size() == peaks.size())
-	check("on the beat, on average (%.2fms)" % (mean * 1000.0), absf(mean) < HOST_TAKE_TOLERANCE)
-	check("each of them (%.2fms from the average)" % (spread * 1000.0), spread < HOST_TAKE_TOLERANCE)
+	check("%s on time, on average (%.2fms)" % [what, mean * 1000.0], absf(mean) < HOST_TAKE_TOLERANCE)
+	check("%s, each of them (%.2fms from the average)" % [what, spread * 1000.0], spread < HOST_TAKE_TOLERANCE)
 
 
 func _check_audio_take() -> void:

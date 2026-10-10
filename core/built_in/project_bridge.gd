@@ -13,6 +13,9 @@ extends RefCounted
 ## engine), and `load` puts one in, replacing what was there.
 
 
+## The engine's instrument, as dawkit names it (DawKitTine).
+const INSTRUMENT := "tine"
+
 static func capture(backend: OfflineBackend) -> DawKitProject:
 	var s := backend.state
 	var p := DawKitProject.new()
@@ -46,6 +49,13 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 		out.solo = t.solo
 		out.armed = t.rec_arm
 		out.monitor = clampi(t.monitor, 0, 2) as DawKitTrack.Monitor
+		# A track with notes on it plays them through the engine's instrument, first in its chain.
+		if t.items.any(func(it: MixState.ItemState) -> bool: return not it.notes.is_empty()):
+			var tine := DawKitEffect.new()
+			tine.kind = INSTRUMENT
+			tine.name = "Tine"
+			tine.instrument = true
+			out.effects.append(tine)
 		for fx_index in t.plugins():
 			out.effects.append(_effect(backend, t, fx_index))
 		var keys: Array = t.sends.keys()
@@ -161,8 +171,11 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 		t.rec_arm = src.armed
 		t.monitor = src.monitor
 		t.folder_depth = _depth_delta(p, i)
-		for fx_index in src.effects.size():
-			var e := src.effects[fx_index]
+		# Instruments are not in the desk's chain: the engine plays every track's notes through its
+		# own (INSTRUMENT), and one it cannot run is left out.
+		var chain := src.effects.filter(func(e: DawKitEffect) -> bool: return not e.instrument)
+		for fx_index in chain.size():
+			var e: DawKitEffect = chain[fx_index]
 			var f := s.fx(i + 1, fx_index)
 			f.name = e.name
 			f.enabled = e.enabled

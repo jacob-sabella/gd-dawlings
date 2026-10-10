@@ -171,6 +171,7 @@ func _ready() -> void:
 	_test_the_host_places_an_audio_take()
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
+	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10426,6 +10427,55 @@ func _test_the_built_in_engine_plays_a_recorded_take() -> void:
 	DAW.state.playing = false
 	_offline()
 	take.discard()
+
+
+func _test_the_built_in_engine_plays_notes_through_its_instrument() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	DAW.state.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 302.0, [[300.25, 300.75, 60, 100, 0], [300.8125, 301.5, 67, 90, 0]], "Ada take 1")
+	var it: MixState.ItemState = DAW.state.track(6).items[0]
+	var stream := backend.midi_stream(it, true)
+	var rate := AudioServer.get_mix_rate()
+	check("a MIDI item is rendered through the instrument", stream != null and stream.stereo
+			and absf(stream.get_length() - (2.0 + DawKitTine.TAIL_SECONDS)) < 0.001)
+	if stream != null:
+		# Measured: the render is silent until the first note, which starts on its sample (a voice
+		# starts on a zero crossing, so the next sample is the first with sound).
+		var first := -1
+		for f in stream.data.size() / 4:
+			if stream.data.decode_s16(f * 4) != 0 or stream.data.decode_s16(f * 4 + 2) != 0:
+				first = f
+				break
+		var want := int(round(it.notes[0] * rate)) + 1
+		check("silent until its first note, which is on its sample (%d, %d)" % [first, want],
+				it.notes[0] == 0.25 and first == want)
+	check("asked again, it is the same sound, not rendered again", backend.midi_stream(it) == stream)
+	DAW.state.position_seconds = 300.5
+	DAW.state.playing = true
+	backend._sync_players()
+	var own: AudioStreamPlayer = backend._players[6][0]
+	check("and plays on its track's bus while the playhead is in it", own.playing and own.stream == stream)
+	DAW.state.position_seconds = 303.0
+	backend._sync_players()
+	check("and stops where the item does", not own.playing)
+	DAW.state.playing = false
+
+	var p := ProjectBridge.capture(backend)
+	var t := p.track(ProjectBridge.id_of(6))
+	check("in the project, the track plays its notes through the tine",
+			not t.effects.is_empty() and t.effects[0].instrument and t.effects[0].kind == ProjectBridge.INSTRUMENT)
+	var chain := backend.state.track(6).plugins().size()
+	var fresh := GodotBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	ProjectBridge.load(p, fresh)
+	check("and opened, the instrument is not an effect on the desk (%d, %d)" % [fresh.state.track(6).plugins().size(), chain],
+			fresh.state.track(6).plugins().size() == chain)
+	var again := ProjectBridge.capture(fresh)
+	check("so it comes back the same (%s)" % p.first_difference(again), p.same_as(again))
+	_offline()
 
 
 ## The mix, a guest's own keys and the room's clicks each play on a bus of their own, so each
