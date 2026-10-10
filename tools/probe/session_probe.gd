@@ -259,10 +259,13 @@ func _host(port: int) -> void:
 	if not _built_in:
 		DAW.transport_stop()
 	else:
-		# A different project opened mid-session reaches the guest whole: six tracks, the first
-		# renamed, where there were thirteen.
+		# A different project opened mid-session reaches the guest whole: seven tracks, the first
+		# renamed, where there were thirteen -- drums and bass, and the reverb return, which the
+		# render's tail is heard through.
 		var other := ProjectBridge.capture(DAW.backend as OfflineBackend)
+		var verb := other.tracks.filter(func(t): return t.name == "Verb Rtn")
 		other.tracks.resize(6)
+		other.tracks.append_array(verb)
 		for t in other.tracks:
 			t.sends = t.sends.filter(func(sd): return other.track(sd.target) != null)
 		other.tracks[0].name = "Opened"
@@ -300,7 +303,9 @@ func _host(port: int) -> void:
 			await _tracks_in_reaper()
 		await _undo_takes()
 
-	await _until(26.4)
+	# How much of the time before the end the work took: the end has moved twice as it grew.
+	print("host work done at %.1fs of 31.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(31.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -314,7 +319,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(27.4)
+	await _until(32.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -545,6 +550,10 @@ func _render_and_measure() -> void:
 	for i in 6:
 		notes.append([at + i * 0.5, at + i * 0.5 + 0.08, 84, 120, 0])
 	DAW.insert_midi_take(track, RENDER_FROM, RENDER_FROM + 3.5, notes, "Render probe")
+	# Sent to the reverb, so its last notes ring on past the range: the render's tail.
+	for index in DAW.state.track_indices():
+		if DAW.state.track(index).name == "Verb Rtn":
+			DAW.create_send(track, index)
 	var part := (DAW.backend as GodotBackend).midi_stream(DAW.state.track(track).items[0], true)
 	# The instrument's own attack: how far into its first note its sound reaches half its peak,
 	# in the item's own rendered sound. That much after the note is on time.
@@ -577,8 +586,29 @@ func _render_and_measure() -> void:
 	var mix := DawKitAudioFile.read(files[0])
 	var rate: int = stem["rate"]
 	var samples: PackedFloat32Array = stem["samples"]
-	check("the stem is the loop's length (%.3fs)" % (int(stem["frames"]) / float(rate)),
-			int(stem["frames"]) == int(roundf(3.5 * rate)) and int(mix["frames"]) == int(stem["frames"]))
+	var range_frames := int(roundf(3.5 * rate))
+	var tail_frames := int(stem["frames"]) - range_frames
+	check("the stem is the loop and a tail (%.3fs and %.3fs)" % [range_frames / float(rate), tail_frames / float(rate)],
+			tail_frames >= 0 and tail_frames <= int(DAWBackend.RENDER_TAIL_SECONDS * rate)
+			and int(mix["frames"]) == int(stem["frames"]))
+	# After the range nothing new begins: the song stopped there, and what is left only rings out.
+	var mix_samples: PackedFloat32Array = mix["samples"]
+	var windows: Array = []
+	for w in range(range_frames + rate / 20, int(mix["frames"]) - rate / 10, rate / 10):
+		var pk := 0.0
+		for f in range(w, w + rate / 10):
+			pk = maxf(pk, absf(mix_samples[f * 2]))
+		windows.append(linear_to_db(maxf(pk, 1e-9)))
+	var rises := 0
+	for i in range(1, windows.size()):
+		# A reverb's ring wavers by a dB or two; a note beginning is far more.
+		if windows[i] > windows[i - 1] + 3.0:
+			rises += 1
+	print("render tail: %.3fs, mix peak per 100 ms %s" % [tail_frames / float(rate), windows.map(func(d): return snappedf(d, 0.1))])
+	check("the reverb rings on after the range, falling away to silence (%.2fs, %d rises, ends at %.1f dB)" % [
+			tail_frames / float(rate), rises, windows[-1] if not windows.is_empty() else 0.0],
+			tail_frames > rate / 2 and windows.size() >= 3 and rises == 0 and windows[-1] < -60.0
+			and windows[-1] < windows[0] - 40.0)
 	var offs: Array = []
 	var levels: Array = []
 	for n in notes:
@@ -844,13 +874,15 @@ func _render_in_reaper() -> void:
 	DAW.set_loop_range(was[1], was[2])
 	DAW.set_looping(was[0])
 	check("Reaper rendered the loop, mix and stems, twice (%s, %s)" % [with_lane, without],
-			with_lane.size() == 3 and without.size() == 3)
-	if with_lane.size() == 3 and without.size() == 3:
+			with_lane.size() == 4 and without.size() == 4)
+	if with_lane.size() == 4 and without.size() == 4:
+		check("its files are the loop and Reaper's tail of %.1fs (%.3fs)" % [DAWBackend.RENDER_TAIL_SECONDS, with_lane[2]],
+				absf(float(with_lane[2]) - (2.0 + DAWBackend.RENDER_TAIL_SECONDS)) < 0.01)
 		var a: float = with_lane[0] - without[0]
 		var b: float = with_lane[1] - without[1]
 		check("and track %d's stem is the lane: %.2f dB, then %.2f dB, against its fader at %.2f dB" % [RENDER_TRACK, a, b, fader],
 				absf(a - (-6.0 - fader)) < 0.2 and absf(b - (-18.0 - fader)) < 0.2)
-		DirAccess.remove_absolute(with_lane[2])
+		DirAccess.remove_absolute(with_lane[3])
 
 
 ## One render of the loop with stems: RENDER_TRACK's stem's level (dB RMS) in each second of it, and
@@ -869,6 +901,7 @@ func _reaper_render_levels() -> Array:
 	var files: PackedStringArray = done[0][0]
 	var want := " - %s.wav" % DAW.state.track(RENDER_TRACK).name
 	var out: Array = []
+	var seconds := NAN
 	for f in files:
 		if f.ends_with(want):
 			var sound := DawKitAudioFile.read(f)
@@ -881,6 +914,8 @@ func _reaper_render_levels() -> Array:
 					sum += samples[i] * samples[i]
 					n += 1
 				out.append(10.0 * log(maxf(sum / maxf(n, 1), 1e-20)) / log(10.0))
+			seconds = int(sound["frames"]) / float(rate)
+	out.append(seconds)
 	for f in files:
 		DirAccess.remove_absolute(f)
 	if not files.is_empty():
@@ -1043,7 +1078,7 @@ func _guest(port: int) -> void:
 		await _until(13.8)
 		check("the host's newly opened project reached me whole (%d tracks, '%s')"
 				% [DAW.state.tracks.size(), DAW.state.track(1).name],
-				DAW.state.tracks.size() == 6 and DAW.state.track(1).name == "Opened")
+				DAW.state.tracks.size() == 7 and DAW.state.track(1).name == "Opened")
 		Session.mix_feed.heard_peak = 0.0
 		# Save, pressed here: the host's file, saved where the host keeps it, and the whole
 		# room told.
@@ -1056,7 +1091,7 @@ func _guest(port: int) -> void:
 		check("and I know its name and file, not where it is (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
-	await _until(27.0)
+	await _until(32.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

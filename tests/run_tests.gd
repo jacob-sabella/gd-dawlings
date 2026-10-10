@@ -11291,9 +11291,19 @@ func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
 	check("the mix and a stem per track (%d files, %s)" % [files.size(), heard[0][1]],
 			files.size() == 1 + s.track_indices().size() and (heard[0][1] as PackedStringArray).is_empty())
 	var mix := DawKitAudioFile.read(files[0])
-	check("the mix is the loop range long, in stereo (%s frames)" % mix.get("frames"),
+	var rate := int(AudioServer.get_mix_rate())
+	var range_frames := int(roundf(0.5 * rate))
+	var frames := int(mix["frames"])
+	check("the mix is the loop range and its tail, in stereo (%.2fs)" % (frames / float(rate)),
 			files[0].ends_with(" - mix.wav") and int(mix["channels"]) == 2
-			and int(mix["frames"]) == int(roundf(0.5 * AudioServer.get_mix_rate())))
+			and frames >= range_frames and frames <= range_frames + int(DAWBackend.RENDER_TAIL_SECONDS * rate))
+	var mix_samples: PackedFloat32Array = mix["samples"]
+	var end_peak := 0.0
+	for f in range(maxi(frames - rate / 20, 0), frames):
+		end_peak = maxf(end_peak, absf(mix_samples[f * 2]))
+	check("which rings out to silence (%.1f dB at its end)" % linear_to_db(maxf(end_peak, 1e-9)),
+			linear_to_db(maxf(end_peak, 1e-9)) < -70.0 and frames < range_frames + int(DAWBackend.RENDER_TAIL_SECONDS * rate))
+	check("and every stem is as long", int(DawKitAudioFile.read(files[2])["frames"]) == frames)
 	check("the stems are named for their tracks", files[2].get_file().ends_with(" - %s.wav" % s.track(2).display_name()))
 	check("the looping comes back, and the captures come off", s.looping and backend.rendering == null
 			and AudioServer.get_bus_effect_count(backend._master_bus) == effects_before)

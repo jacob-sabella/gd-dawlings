@@ -274,9 +274,11 @@ func rename_track(_index: int, _track_name: String) -> void: pass
 ## points take the lane away.
 func set_automation(_track_index: int, _target: String, _points: Array) -> void: pass
 ## Write the song -- its loop range while it loops, else all of it -- to a WAV beside the project:
-## the mix, and with `stems` each track's own. `render_finished` says when and where. A no-op
+## the mix, and with `stems` each track's own, each with a tail after the range of up to
+## RENDER_TAIL_SECONDS for effects to ring out. `render_finished` says when and where. A no-op
 ## without Capability.RENDER.
 func render(_stems: bool) -> void: pass
+const RENDER_TAIL_SECONDS := 4.0
 ## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
 ## empty for one tempo throughout.
 func set_tempo_map(_points: Array) -> void: pass

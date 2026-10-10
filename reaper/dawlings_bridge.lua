@@ -477,17 +477,18 @@ function handlers.SetAutomationMode(args)
   return {ok = true}
 end
 
--- args: start, end (seconds), stems (0/1). Reaper renders that stretch of the project, offline,
+-- args: start, end (seconds), stems (0/1), tail (ms; Reaper renders that much after the end, for
+-- effects to ring out). Reaper renders that stretch of the project, offline,
 -- as 24-bit stereo WAVs in "<project> renders" beside the project file: "<project> - mix.wav",
 -- and with stems "<project> - <track>.wav" for every track, replacing the last render's. Its
 -- render settings are put back after, so the project's own are not changed by dawlings asking.
 -- Answers the files written.
 local RENDER_KEYS = {'RENDER_FILE', 'RENDER_PATTERN', 'RENDER_FORMAT'}
 local RENDER_VALUES = {'RENDER_BOUNDSFLAG', 'RENDER_STARTPOS', 'RENDER_ENDPOS', 'RENDER_SETTINGS',
-  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ'}
+  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ', 'RENDER_TAILFLAG', 'RENDER_TAILMS'}
 
 function handlers.RenderProject(args)
-  local from, to, stems = args[1] or 0, args[2] or 0, (args[3] or 0) > 0.5
+  local from, to, stems, tail = args[1] or 0, args[2] or 0, (args[3] or 0) > 0.5, math.max(args[4] or 0, 0)
   if to - from <= 0.01 then return {ok = false, error = 'nothing to render'} end
   local _, file = reaper.EnumProjects(-1)
   local name = (reaper.GetProjectName(0, '') or ''):gsub('%.[Rr][Pp][Pp]$', '')
@@ -538,6 +539,9 @@ function handlers.RenderProject(args)
   reaper.GetSetProjectInfo(0, 'RENDER_SRATE', 0, true)
   reaper.GetSetProjectInfo(0, 'RENDER_CHANNELS', 2, true)
   reaper.GetSetProjectInfo(0, 'RENDER_ADDTOPROJ', 0, true)
+  -- The tail, for the custom time bounds (bit 1) the render uses.
+  reaper.GetSetProjectInfo(0, 'RENDER_TAILFLAG', tail > 0 and 1 or 0, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_TAILMS', tail, true)
   local began = reaper.time_precise()
   -- File: Render project, using the most recent render settings, auto-close render dialog.
   reaper.Main_OnCommand(42230, 0)

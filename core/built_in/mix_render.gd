@@ -18,10 +18,24 @@ extends Node
 ## next mix (GodotBackend.start_at).
 ## The render starts PREROLL before the range where it can, and the frames before the range are
 ## dropped.
+##
+## And it ends after the range by as long as the mix takes to fall silent -- a reverb's ring, a
+## note's release -- up to TAIL_SECONDS: at the range's end the transport stops, so nothing more
+## of the song plays, and the buses go on putting out what their effects still hold. The files
+## are cut at the last frame any of them is louder than SILENT_DB. The transport stops on the
+## first frame past the range, so up to a frame (17 ms at 60 frames a second) of what follows the
+## range can be in the tail's first moment; sample-exact stopping waits on the engine mixing its
+## own players (see "Waiting on the user").
 
 signal finished(files: PackedStringArray, problems: PackedStringArray)
 
 const PREROLL := 0.25
+## The longest a tail may ring after the range.
+const TAIL_SECONDS := DAWBackend.RENDER_TAIL_SECONDS
+## Below this, a frame is silence for the tail's end.
+const SILENT_DB := -80.0
+## How long the mix must have been silent for the tail to be over.
+const SILENT_HOLD := 0.2
 ## Frames a capture holds between reads: far more than a frame takes, so none is lost on a slow one.
 const CAPTURE_SECONDS := 2.0
 
@@ -41,6 +55,8 @@ var _wanted := 0
 var _rate := 48000
 var _started := false
 var _played_from := 0.0
+## Past the range: the transport stopped, the effects ringing out.
+var _tailing := false
 
 
 ## Starts once the engine's parts are ready. Answers a problem, or "".
@@ -91,8 +107,41 @@ func _process(_delta: float) -> void:
 		_started = true
 		return
 	_drain()
-	if (_taps[0][2] as PackedVector2Array).size() >= _skip + _wanted:
+	var have := (_taps[0][2] as PackedVector2Array).size()
+	if not _tailing:
+		if have >= _skip + _wanted:
+			_tailing = true
+			DAW.transport_stop()
+		return
+	var tail := have - (_skip + _wanted)
+	if tail >= int(TAIL_SECONDS * _rate) or (tail >= int(SILENT_HOLD * _rate) and _quiet_since(have - int(SILENT_HOLD * _rate))):
 		_finish()
+
+
+## Whether every tap has been below SILENT_DB from frame `from` on.
+func _quiet_since(from: int) -> bool:
+	var floor_level := db_to_linear(SILENT_DB)
+	for key in _taps:
+		var frames: PackedVector2Array = _taps[key][2]
+		for i in range(maxi(from, 0), frames.size()):
+			if absf(frames[i].x) > floor_level or absf(frames[i].y) > floor_level:
+				return false
+	return true
+
+
+## The frames to keep after the range's start: the range, and the tail up to its last sound.
+func _kept_frames() -> int:
+	var floor_level := db_to_linear(SILENT_DB)
+	var last := _wanted
+	for key in _taps:
+		var frames: PackedVector2Array = _taps[key][2]
+		var i := mini(frames.size(), _skip + _wanted + int(TAIL_SECONDS * _rate)) - 1
+		while i >= _skip + last:
+			if absf(frames[i].x) > floor_level or absf(frames[i].y) > floor_level:
+				last = i - _skip + 1
+				break
+			i -= 1
+	return last
 
 
 func _drain() -> void:
@@ -124,6 +173,7 @@ func _drain() -> void:
 func _finish() -> void:
 	set_process(false)
 	DAW.transport_stop()
+	var kept := _kept_frames()
 	var files := PackedStringArray()
 	var problems := PackedStringArray()
 	DirAccess.make_dir_recursive_absolute(folder)
@@ -136,7 +186,12 @@ func _finish() -> void:
 			frames = lead + frames
 		else:
 			frames = frames.slice(_skip)
-		frames = frames.slice(0, _wanted)
+		# Every file the same length, the range and the mix's tail; a quiet stem has silence there.
+		frames = frames.slice(0, kept)
+		if frames.size() < kept:
+			var pad := PackedVector2Array()
+			pad.resize(kept - frames.size())
+			frames += pad
 		var samples := PackedFloat32Array()
 		samples.resize(frames.size() * 2)
 		for i in frames.size():

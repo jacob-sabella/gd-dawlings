@@ -437,9 +437,19 @@ can finish music in, saving DAWproject. Steps, in order:
      -18.00 dB down, exactly the lane. (The rig's DRUMS folder renders 0.7 dB short of its lane:
      something in that folder is not under its fader; not looked into.) The probe's end moved
      3 s later again (host 26.4/27.4, guest 27.0).
+   - **Done 2026-10-10 (9e), the tail:** a render rings out after its range, up to
+     `DAWBackend.RENDER_TAIL_SECONDS` (4 s). Built-in: at the range's end the transport stops and
+     the capture goes on until every bus has been below -80 dB for 0.2 s, and the files are cut
+     at their last sound (a dry render ends where it did); up to a frame (~17 ms) of what follows
+     the range can be in the tail's first moment, as the players stop on a frame. Reaper: its
+     own render tail (RENDER_TAILFLAG for the custom bounds, RENDER_TAILMS), fixed at 4 s, the
+     project's settings put back after. Measured: `--built-in`, a reverb return kept in the
+     probe's opened project and the render's notes sent to it, the tail 2.88 s, falling from
+     -24 to -80 dB with no rise over 3 dB (no note begins); `--reaper`, its files 2 s + 4.000 s.
+     The probe's end moved 5 s later (host 31.4/32.4, guest 32.0): the Reaper work now ends at
+     28.8 s, and the host prints when it does.
    - **Not yet (9d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
-     no tail after the range (a reverb is cut at its end); faster than real time waits on the
-     engine mixing itself. A default probe run once lost one of the guest's clicks ("its clicks
+     faster than real time waits on the engine mixing itself. A default probe run once lost one of the guest's clicks ("its clicks
      a second apart"), then passed 3 times running.
 10. **Done 2026-10-10.** Interchange proof against the official examples. The examples are what
    bitwig/dawproject's own tests write (DawProjectTest at ee4dcdd, run with Gradle 9.8.1 on Java

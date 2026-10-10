@@ -3,7 +3,8 @@ extends Node3D
 
 ## Writing the song out, under the timeline: MIX renders the mix to a WAV beside the project,
 ## STEMS the mix and every track's own. The loop range while the song loops, else all of it, in
-## real time: the song plays through once while it is written (see DAW.render). Dark where the
+## real time: the song plays through once while it is written, and its effects ring out after
+## (see DAWBackend.render). Dark where the
 ## DAW cannot render, and while a render runs.
 
 const PITCH := 0.028
@@ -50,7 +51,7 @@ func _what(with_stems: bool) -> String:
 	var looped := s.looping and s.loop_end - s.loop_start > 0.01
 	var span := "the loop, %s to %s" % [s.bar_beat(s.loop_start), s.bar_beat(s.loop_end)] if looped \
 			else "the whole song, %s" % TimelineRuler._clock(s.timeline_length())
-	return "%s%s, played through once" % [span, " and each track's stem" if with_stems else ""]
+	return "%s%s, played through once and rung out" % [span, " and each track's stem" if with_stems else ""]
 
 
 func _render(with_stems: bool) -> void:

@@ -751,7 +751,8 @@ func render(stems: bool) -> void:
 	var looped := state.looping and state.loop_end - state.loop_start > 0.01
 	var from := state.loop_start if looped else 0.0
 	var to := state.loop_end if looped else state.timeline_length()
-	_bridge.call_reaper("RenderProject", [from, to, 1 if stems else 0], _on_rendered, RENDER_TIMEOUT_MSEC)
+	_bridge.call_reaper("RenderProject", [from, to, 1 if stems else 0, int(RENDER_TAIL_SECONDS * 1000.0)],
+			_on_rendered, RENDER_TIMEOUT_MSEC)
 
 
 ## A render runs as fast as Reaper can, which for a long song with heavy plugins is a while.

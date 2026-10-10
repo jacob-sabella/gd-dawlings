@@ -109,6 +109,8 @@ with stems, one per track, beside the project; the MIX and STEMS keys under the 
 it. The built-in engine renders in real time (`MixRender`: captures at the end of each bus, each
 block multiplied by the fader it was mixed with, started inside one hold of the audio lock so the
 file lines up with the song); Reaper renders offline through its own render, via the bridge.
+Both ring out after the range for up to `DAWBackend.RENDER_TAIL_SECONDS`: the built-in engine
+until the mix is silent, Reaper for its fixed render tail.
 
 Not there yet: rendering faster than real time here (that waits on the engine mixing its own
 sound), and third-party plugins, which Godot cannot host. See "Built-in DAW" in `docs/loop_backlog.md`.
