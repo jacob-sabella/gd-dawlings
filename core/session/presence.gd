@@ -877,14 +877,21 @@ void fragment() {
 			_part(glint, shine, pupil).transform = Transform3D(
 					Basis.from_scale(Vector3(0.02, 0.02, 0.008)), Vector3(0.014, 0.018, -0.01))
 
-			# The lid: a cap of ghost over the top of the eye, swung down by _lid.
+			# The lid: a cap of ghost over the top of the eye, swung down by _lid. Swung and
+			# tilted INSIDE the eye's stretch, not after it: as a round cap a hair outside a
+			# round ball it can turn any way and never cut it, and stretched with the ball it
+			# stays outside it. Stretched first and turned after, the lid's long axis swung
+			# round into the eye's short one and the white came through it, worst for Grumpy.
+			var eye_space := Node3D.new()
+			eye_space.scale = size
+			socket.add_child(eye_space)
 			var lid := Node3D.new()
-			socket.add_child(lid)
+			eye_space.add_child(lid)
 			var cap := SphereMesh.new()
 			cap.radius = 0.5
 			cap.height = 0.5
 			cap.is_hemisphere = true
-			_part(cap, _lid_skin, lid).scale = size * 1.04
+			_part(cap, _lid_skin, lid).scale = Vector3.ONE * 1.04
 			_lids.append(lid)
 
 		# A small, contented mouth.
