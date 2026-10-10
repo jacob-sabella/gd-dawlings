@@ -271,7 +271,17 @@ can finish music in, saving DAWproject. Steps, in order:
      says so. Still to come: a way to type in a headset; a gain readout drawn on the item; fade
      handles drawn on the item's corners; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
-7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
+7. Sample-accurate timing, post-effects sends, tempo map.
+   - **Done 2026-10-10 (7a), post-effects sends:** a send's bus now holds the track's pan, then
+     the track bus's own effect objects (one knob turns both; a bypass reaches both), then the
+     send's own pan, which used to be ignored. The player still plays at the send level times
+     the fader: post-effects, post-fader, as Reaper sends by default. A send patched or pulled while
+     the engine runs gets or loses its bus at once (`_built_sends`); before, that waited for the
+     next full rebuild. The cost: each send runs the track's effects again, because Godot routes
+     a bus to one place, so a send cannot tap the track's output. The same input with the same
+     settings gives the same sound, but stateful effects (delay, reverb) keep their own tails per
+     send. Checked by structure (same objects, order, bypass, pans); not measured, because the
+     sound itself is Godot's effect processing. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

@@ -12,7 +12,9 @@ extends OfflineBackend
 ##     own, so a fader, a pan, a mute or a solo is a real gain change;
 ##   - Godot's built-in effects (FXCatalogue) as the FX racks, each knob a real parameter;
 ##   - sends as a second player of the same part on a send bus into the destination, so the
-##     reverb return returns reverb;
+##     reverb return returns reverb. The send bus holds the track's own pan and effect objects
+##     (as a cue does), then the send's pan, and the player plays at the send level times the
+##     fader: post-effects, post-fader, as Reaper sends by default;
 ##   - meters read off the buses' peaks rather than synthesised;
 ##   - a cue per track on request (`set_cues`): a third player of the part, through the track's
 ##     own effects but not its fader, on a bus that plays to this machine's headphones only;
@@ -23,9 +25,10 @@ extends OfflineBackend
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
 ## redo, a guest's intent and a local hand all reach the speakers by the one path.
 ##
-## Not done: third-party plugins, sample-accurate
-## automation. Sends are taken before the track's effects rather than after them, because
-## Godot routes a bus to exactly one place and the send is a second player rather than a tap.
+## Not done: third-party plugins, sample-accurate automation. A send runs the track's effects a
+## second time on its own bus rather than tapping the track's output, because Godot routes a bus
+## to exactly one place: the same input through the same settings, so the same sound, at the cost
+## of the effects' work once per send.
 
 const BUS_PREFIX := "R3D "
 const MASTER_BUS := "R3D Master"
@@ -53,6 +56,9 @@ const DEMO_FX := {
 var _bus := {}
 ## Track index -> [AudioStreamPlayer...]: the track's own player, then one per send.
 var _players := {}
+## Track index -> the [slot, destination, key] of each send its buses were built for, so a send
+## level moving does not rebuild them and a send patched or pulled does.
+var _built_sends := {}
 ## Track index -> fx index -> FX kind.
 var _kinds := {}
 ## Role -> finished part.
@@ -192,6 +198,7 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	if _bus.has(track_index):
 		AudioServer.add_bus_effect(_bus[track_index], FXCatalogue.make(kind))
 		_apply_fx(track_index, fx_index)
+		_build_sends(track_index)
 		if track_index in _cues:
 			_build_cues()
 	state.fx_changed.emit(track_index, fx_index)
@@ -231,6 +238,7 @@ func _restack(track_index: int, moved_kind: StringName) -> void:
 	order.sort()
 	for fx_index in order:
 		AudioServer.add_bus_effect(b, FXCatalogue.make(kinds[fx_index]))
+	_build_sends(track_index)
 	for fx_index in order:
 		_apply_fx(track_index, fx_index)
 	if track_index in _cues:
@@ -292,25 +300,68 @@ func _build_buses() -> void:
 		own.bus = AudioServer.get_bus_name(_bus[index])
 		add_child(own)
 		list.append(own)
-		var t: MixState.TrackState = state.tracks[index]
-		for send_index in t.sends:
-			var dest: int = (t.sends[send_index] as MixState.SendState).resolve(state)
-			# A key goes to a detector, and nothing here listens for one: playing it into the
-			# destination's mix would make a sidechain an ordinary send.
-			if (t.sends[send_index] as MixState.SendState).key or not _bus.has(dest):
-				continue
-			var sb := AudioServer.bus_count
-			AudioServer.add_bus(sb)
-			AudioServer.set_bus_name(sb, "%s%d>%d" % [BUS_PREFIX, index, dest])
-			AudioServer.set_bus_send(sb, AudioServer.get_bus_name(_bus[dest]))
-			var p := AudioStreamPlayer.new()
-			p.bus = AudioServer.get_bus_name(sb)
-			p.set_meta(&"send", send_index)
-			add_child(p)
-			list.append(p)
 		_players[index] = list
+	_built_sends.clear()
+	for index in state.track_indices():
+		_build_sends(index)
 	if not _cues.is_empty():
 		_build_cues()
+
+
+static func send_bus(index: int, dest: int) -> String:
+	return "%s%d>%d" % [BUS_PREFIX, index, dest]
+
+
+func _send_shape(index: int) -> Array:
+	var out: Array = []
+	var t: MixState.TrackState = state.tracks[index]
+	var slots: Array = t.sends.keys()
+	slots.sort()
+	for slot in slots:
+		var sd: MixState.SendState = t.sends[slot]
+		out.append([slot, sd.resolve(state), sd.key])
+	return out
+
+
+## A track's send buses and players, made again: one bus per send into its destination, holding
+## the track's pan, then the track bus's own effect objects (a knob on the rack turns the send's
+## too), then the send's pan.
+func _build_sends(index: int) -> void:
+	if not _bus.has(index):
+		return
+	var list: Array = _players.get(index, [])
+	for p in list.filter(func(p: Node) -> bool: return p.has_meta(&"send")):
+		list.erase(p)
+		(p as AudioStreamPlayer).stop()
+		(p as Node).queue_free()
+	var prefix := "%s%d>" % [BUS_PREFIX, index]
+	for i in range(AudioServer.bus_count - 1, 0, -1):
+		if AudioServer.get_bus_name(i).begins_with(prefix):
+			AudioServer.remove_bus(i)
+	var b: int = _bus[index]
+	_built_sends[index] = _send_shape(index)
+	for row in _built_sends[index]:
+		var dest: int = row[1]
+		# A key goes to a detector, and nothing here listens for one: playing it into the
+		# destination's mix would make a sidechain an ordinary send.
+		if row[2] or not _bus.has(dest):
+			continue
+		var sb := AudioServer.bus_count
+		AudioServer.add_bus(sb)
+		AudioServer.set_bus_name(sb, send_bus(index, dest))
+		AudioServer.set_bus_send(sb, AudioServer.get_bus_name(_bus[dest]))
+		AudioServer.add_bus_effect(sb, AudioEffectPanner.new())
+		for slot in range(1, AudioServer.get_bus_effect_count(b)):
+			AudioServer.add_bus_effect(sb, AudioServer.get_bus_effect(b, slot))
+			AudioServer.set_bus_effect_enabled(sb, slot, AudioServer.is_bus_effect_enabled(b, slot))
+		AudioServer.add_bus_effect(sb, AudioEffectPanner.new())
+		var p := AudioStreamPlayer.new()
+		p.bus = AudioServer.get_bus_name(sb)
+		p.set_meta(&"send", row[0])
+		add_child(p)
+		list.append(p)
+	_players[index] = list
+	_apply_tracks()
 
 
 ## The bus a track's cue plays on, by name: whatever its level, it is heard only through a pair
@@ -393,7 +444,10 @@ func _connect_state() -> void:
 		state.transport_changed.connect(_on_transport_changed)
 
 
-func _on_track_changed(_index: int, _field: StringName) -> void:
+func _on_track_changed(index: int, field: StringName) -> void:
+	if field == &"sends" and _bus.has(index) and _send_shape(index) != _built_sends.get(index, []):
+		_build_sends(index)
+		return
 	_apply_tracks()
 
 
@@ -455,7 +509,13 @@ func _apply_tracks() -> void:
 				# Post-fader, the way a reverb send usually is: the track's own fader is folded
 				# in, so pulling the vocal down pulls its reverb down with it.
 				p.volume_db = taper_to_db(send.volume) + taper_to_db(t.volume) if send != null else -80.0
-				AudioServer.set_bus_mute(AudioServer.get_bus_index(p.bus), not audible(index))
+				var sb := AudioServer.get_bus_index(p.bus)
+				AudioServer.set_bus_mute(sb, not audible(index))
+				# The track's pan first, as the track bus has it, then the send's own.
+				var last := AudioServer.get_bus_effect_count(sb) - 1
+				(AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan = (t.pan - 0.5) * 2.0
+				if send != null and last > 0:
+					(AudioServer.get_bus_effect(sb, last) as AudioEffectPanner).pan = (send.pan - 0.5) * 2.0
 
 
 func _apply_fx(track_index: int, fx_index: int) -> void:
@@ -472,6 +532,10 @@ func _apply_fx(track_index: int, fx_index: int) -> void:
 	var cue := AudioServer.get_bus_index(cue_bus(track_index))
 	if cue >= 0 and slot - 1 < AudioServer.get_bus_effect_count(cue):
 		AudioServer.set_bus_effect_enabled(cue, slot - 1, f.enabled)
+	for row in _built_sends.get(track_index, []):
+		var sb := AudioServer.get_bus_index(send_bus(track_index, row[1]))
+		if sb >= 0 and slot < AudioServer.get_bus_effect_count(sb) - 1:
+			AudioServer.set_bus_effect_enabled(sb, slot, f.enabled)
 
 
 ## The rack asks what a knob reads in the effect's own units. Answered at once: there is no

@@ -9035,6 +9035,32 @@ func _test_the_built_in_engine_is_a_real_mix() -> void:
 	check("a send is a second player into the return", backend._players[3].size() == 2
 			and AudioServer.get_bus_send(AudioServer.get_bus_index(backend._players[3][1].bus))
 				== AudioServer.get_bus_name(bus.call(13)))
+	# Post-effects: the guitar's send carries its drive and delay, the same objects as its rack.
+	DAW.create_send(8, 13)
+	var slot := -1
+	for k in s.track(8).sends:
+		if s.track(8).sends[k].dest_track == 13 and not s.track(8).sends[k].key:
+			slot = k
+	var sb := AudioServer.get_bus_index(GodotBackend.send_bus(8, 13))
+	var tb: int = bus.call(8)
+	check("a send patched while playing gets its own bus at once", slot > 0 and sb >= 0
+			and backend._players[8].any(func(p): return p.has_meta(&"send") and p.bus == GodotBackend.send_bus(8, 13)))
+	check("which runs the track's own effects, after its pan, before the send's (%d)" % AudioServer.get_bus_effect_count(sb),
+			AudioServer.get_bus_effect_count(sb) == AudioServer.get_bus_effect_count(tb) + 1
+			and range(1, AudioServer.get_bus_effect_count(tb)).all(func(i):
+				return AudioServer.get_bus_effect(sb, i) == AudioServer.get_bus_effect(tb, i))
+			and AudioServer.get_bus_effect(sb, 0) is AudioEffectPanner
+			and AudioServer.get_bus_effect(sb, AudioServer.get_bus_effect_count(sb) - 1) is AudioEffectPanner)
+	DAW.set_fx_enabled(8, 0, false)
+	check("a bypass reaches the send's copy", not AudioServer.is_bus_effect_enabled(sb, 1))
+	DAW.set_fx_enabled(8, 0, true)
+	DAW.set_send_pan(8, slot, 0.0)
+	DAW.set_track_pan(8, 0.75)
+	close_to("the send has its own pan", (AudioServer.get_bus_effect(sb, AudioServer.get_bus_effect_count(sb) - 1) as AudioEffectPanner).pan, -1.0)
+	close_to("on top of the track's", (AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan, 0.5)
+	DAW.remove_send(8, slot)
+	check("and pulled, its bus and player go", AudioServer.get_bus_index(GodotBackend.send_bus(8, 13)) < 0
+			and not backend._players[8].any(func(p): return p.has_meta(&"send") and not p.is_queued_for_deletion()))
 	check("there is an item under bar 9 on the kick", backend.item_at(2, s.bar_to_seconds(9.5)) != null)
 	check("and none in the intro", backend.item_at(2, s.bar_to_seconds(2.0)) == null)
 	check("it is a meter on the fader law", backend.meter(0.0) > 0.7 and backend.meter(-200.0) == 0.0)

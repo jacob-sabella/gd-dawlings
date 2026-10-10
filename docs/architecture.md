@@ -79,8 +79,9 @@ offline backend's own mix, with its state, undo and replication, turned into God
 - **The rack is Godot's own effects** (`FXCatalogue`): EQ6, compressor, reverb, delay, chorus,
   low-pass, drive, phaser, limiter. Each knob is a `Param` with a range and unit, and
   `read_fx_param_text` answers in those units, the way Reaper answers with the plugin's text.
-- **A send is a second player** on the same part, routed to the return's bus, at the send
-  level times the fader.
+- **A send is a second player** on the same part, on a bus of its own that holds the track's pan
+  and effect objects and then the send's pan, routed to the return's bus, at the send level
+  times the fader: post-effects and post-fader.
 - **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
   rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
   a new set and swaps all of it at once, so no part plays at the old tempo against the new.
