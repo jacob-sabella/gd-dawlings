@@ -76,6 +76,10 @@ var _baskets_played := 0
 ## How many times it has been thrown in this room. The room carries it, so a copy that has
 ## already flown a throw does not fly it again when the room says it was thrown.
 var throws := 0
+## Whoever threw the flight under way (ItemRoom.fly's `thrown_by`), their peer id, 1 for the
+## host: not this room's business otherwise, but a registered target (the Tour case) reads it
+## off a hit to tell a host's own throw from a guest's.
+var thrown_by: int = 1
 ## Where it was thrown from, as the room carries it: [origin, velocity, spin], each a Vector3.
 var launched_with: Array = []
 ## Whether it is to go home when the throw is over, having come down somewhere it cannot stay.
@@ -559,9 +563,11 @@ func _fly(delta: float) -> void:
 		var on := flight.hit_on[_hits_played] if _hits_played < flight.hit_on.size() else Flight.FLOOR
 		_hits_played += 1
 		poke(-clampf(speed * 0.05, 0.0, 0.4))
-		# A hoop's rim or board makes its own noise; the room has the hoop.
+		# A hoop's rim or board, or a registered target (the Tour case, say), makes its own
+		# noise; the room has whichever it hit.
 		var room := ItemRoom.of(self)
-		if on == Flight.FLOOR or room == null or not room.hoop_struck(on, speed, global_position):
+		if on == Flight.FLOOR or room == null or not (room.hoop_struck(on, speed, global_position)
+				or room.target_struck(speed, global_position, thrown_by)):
 			on_bounce(speed)
 	while _baskets_played < flight.baskets.size() and flight.baskets[_baskets_played]["t"] <= _flight_t:
 		var basket: Dictionary = flight.baskets[_baskets_played]

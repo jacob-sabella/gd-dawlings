@@ -78,6 +78,11 @@ var _aim := ""
 var _look := Vector2.ZERO
 var _clicks: Array = []
 var _pulls: Array = []
+## `--tour intact|broken|brief|draft`: the Tour case and its run put in that state from frame 9,
+## deterministically (Tour.force_state_for_shot) rather than by waiting out a brief's timer.
+## Needs the built-in engine (--built-in): Tour is gated to it, and quietly does nothing on any
+## other backend, same as in play.
+var _tour := ""
 
 
 func _ready() -> void:
@@ -168,6 +173,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _quit_tick = int(args[i + 1])
 			"--cam":
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
+			"--tour":
+				if i + 1 < args.size(): _tour = args[i + 1]
 	if _shot_tick >= 0:
 		_shot_frame = -1
 		_quit_after = -1
@@ -230,6 +237,9 @@ func _process(_delta: float) -> void:
 		var on_air_studio := get_tree().current_scene.get_node_or_null("Studio")
 		if on_air_studio != null and on_air_studio.has_method("_set_on_air"):
 			on_air_studio._set_on_air(_on_air, true)
+
+	if _frames == 9 and _tour != "" and _tour != "intact":
+		Tour.force_state_for_shot(StringName(_tour))
 
 	if _frames == 9 and not _pockets.is_empty():
 		var studio := get_tree().current_scene.get_node_or_null("Studio")

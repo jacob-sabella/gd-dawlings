@@ -45,6 +45,10 @@ var items: Dictionary = {}
 ## again and how high the floor is there: the walker's `reachable` and `ground_at`. Unset, the whole floor plan is floor.
 var fits: Callable = Callable()
 var ground_at: Callable = Callable()
+## Whoever is local to this machine (`Session.local_peer_id`), studio.gd's, asked only when a
+## throw is made -- so a registered target (the Tour case) can tell a host's own throw from a
+## guest's. Unset, as in a test with no studio, a throw counts as the host's.
+var local_peer: Callable = Callable()
 ## What a throw flies in: the walkable floor (Array of Rect2, walls at its edges) and the venue's
 ## solids (Walker.fixed), in this node's frame. The walker's, read when the throw is made.
 var floor_rects: Callable = Callable()
@@ -57,6 +61,11 @@ var boards: Array = []
 ## The baskets in the room (Venue.hoops), in its frame, for a round thing thrown at one: the
 ## shapes Flight.fly takes, and each its "node", the Hoop that swishes and clangs.
 var hoops: Array = []
+## Furniture a thrown item can register a hit against, without the ball-through-hoop or
+## stick-in-board physics: {"node": Node3D, "radius": float}. Generic -- any prop that wants to
+## know "something just hit me" registers here, the way a venue's hoops do; the Tour case is
+## the first of these, but nothing here names it.
+var targets: Array = []
 var _spots: Array[Transform3D] = []
 ## Homes of their own, off the shelf's top, by kind: the mic's stand, the headphones' hook, the
 ## tablet's lower tier.
@@ -278,14 +287,16 @@ func throw(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> voi
 	var from := into * origin
 	var v := into.basis * velocity
 	var w := into.basis * spin
-	fly(item, from, v, w)
+	fly(item, from, v, w, int(local_peer.call()) if local_peer.is_valid() else 1)
 	asked.emit(&"throw_item", [item.id, from, v, w])
 
 
 ## Fly `item` from `origin` at `velocity`, spinning at `spin` -- all in this node's frame -- the
-## same flight on every machine. Where it comes down, it stays if it can lie there; if not, it
-## goes home when it has.
-func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
+## same flight on every machine. `thrown_by` is whoever's throw this is (their peer id, 1 for
+## the host): carried only for a registered target (the Tour case) to tell a host's own throw
+## from a guest's; nothing else here reads it. Where it comes down, it stays if it can lie
+## there; if not, it goes home when it has.
+func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3, thrown_by: int = 1) -> void:
 	var floor: Array = floor_rects.call() if floor_rects.is_valid() else []
 	var start := _onto(floor, origin)
 	var how := item.flies()
@@ -296,6 +307,7 @@ func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3) -> void:
 			solids.call() if solids.is_valid() else [], how.get("bounce", 0.35), how.get("roll", 3.0),
 			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0),
 			hoops if how.has("radius") else [], how.get("radius", 0.0))
+	item.thrown_by = thrown_by
 	item.launch(f, [origin, velocity, spin], f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z)))
 
 
@@ -316,6 +328,27 @@ func basket(item: Item, index: int, clean: bool) -> void:
 	var hoop = hoops[index].get("node")
 	if hoop is Hoop and is_instance_valid(hoop):
 		(hoop as Hoop).sink(clean, item)
+
+
+## Something in flight hit furniture registered in `targets` at `at` (world space), going at
+## `speed`, thrown by `thrown_by` (its peer id, item.gd's `thrown_by`): the nearest one within
+## its own radius takes it (`struck`, the same duck-typed call `hoop_struck` makes on a Hoop).
+## Whether there was one close enough to.
+func target_struck(speed: float, at: Vector3, thrown_by: int) -> bool:
+	var best: Node = null
+	var nearest := INF
+	for t: Dictionary in targets:
+		var node = t.get("node")
+		if not is_instance_valid(node):
+			continue
+		var d := (node as Node3D).global_position.distance_to(at)
+		if d < float(t.get("radius", 0.3)) and d < nearest:
+			nearest = d
+			best = node
+	if best == null:
+		return false
+	best.struck(speed, thrown_by)
+	return true
 
 
 func _nearest_hoop(at: Vector3) -> Hoop:

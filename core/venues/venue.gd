@@ -320,6 +320,18 @@ func rcplane_spot() -> Transform3D:
 	return hoop_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.55, 0, 1.25))
 
 
+## Where the Tour case stands, in studio space: chained in the back of house, against the back
+## wall on the opposite side from the hoop, its stencilled front facing into the room -- clear
+## of the mirror and the wardrobe, a throw from the middle of the floor.
+func tour_case_spot() -> Transform3D:
+	var x := -live_room_half() + 0.65
+	var z := LIVE_ROOM_BACK - 0.5
+	# Turned a half-circle from identity: the case's front (+Z, tools/blender/tour_case.py) then
+	# faces -Z, back toward the control room, the way anyone walking into the back of house
+	# meets it.
+	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
+
+
 ## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop
 ## that sounds it as its "node" when the venue has stood one.
 func hoops() -> Array:
@@ -357,6 +369,7 @@ func solids() -> Array:
 				"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
 				"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
 		out.append_array(Hoop.solids(hoop_spot()))
+		out.append_array(TourCase.solids(tour_case_spot()))
 	return out
 
 

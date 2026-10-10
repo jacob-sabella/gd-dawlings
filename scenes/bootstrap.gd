@@ -146,6 +146,9 @@ func _ready() -> void:
 	add_child(session_panel)
 	if args["session_panel"]:
 		session_panel.open()
+	var tour_hud := TourHud.new()
+	tour_hud.name = "TourHud"
+	add_child(tour_hud)
 	if args["play_into"] > 0:
 		Session.guest_midi.target_track = args["play_into"]
 	if args["mic_into"] > 0:

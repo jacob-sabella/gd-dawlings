@@ -586,6 +586,36 @@ static func card_sweep(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## The Tour case bursting open: a crack of splintering wood, the chain dropping loose and
+## rattling, then a bright three-note stinger -- the moment a run starts, loud enough that
+## everyone at the hit's end of the room hears it happen.
+static func tour_stinger() -> AudioStreamWAV:
+	return _cached("tour_stinger", func() -> AudioStreamWAV:
+		var s := _silence(0.9)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 601
+		for i in int(0.08 * RATE):
+			var t := float(i) / float(RATE)
+			s[i] += 0.5 * exp(-t / 0.03) * rng.randf_range(-1.0, 1.0)
+		_impulse(s, 0.0, 0.4, 0.05, 90.0, 603)
+		for k in 10:
+			var at: float = 0.04 + rng.randf_range(0.0, 0.22)
+			_impulse(s, at, rng.randf_range(0.05, 0.12), 0.01, rng.randf_range(1800.0, 3200.0), 607 + k)
+		# A bright rising stinger: G4, C5, E5, each a hair after the last.
+		for note_i in range(3):
+			var hz: float = [392.0, 523.25, 659.25][note_i]
+			var at: float = 0.12 + note_i * 0.07
+			var start := int(at * RATE)
+			for i in range(start, s.size()):
+				var t := float(i - start) / float(RATE)
+				var env := exp(-t / 0.35)
+				if env < 0.001:
+					break
+				s[i] += 0.1 * env * sin(TAU * hz * t)
+		_lowpass(s, 9000.0)
+		return _wav(s, false))
+
+
 ## One card's edge flicked off a thumb: a few milliseconds of bright paper.
 static func _flick(s: PackedFloat32Array, at: float, level: float, rng: RandomNumberGenerator) -> void:
 	var start := int(at * RATE)

@@ -69,6 +69,11 @@ signal room_changed()
 ## Host: someone asked to change the room. One of ROOM_VERBS, already checked for shape; the
 ## studio decides, and says what the room now is with `publish_room`.
 signal room_asked(verb: StringName, args: Array, from: int)
+## Guest: the host's word on the tour run under way arrived; see `tour`.
+signal tour_changed()
+## Host: someone asked to act on the run under way. One of TOUR_VERBS, already checked for
+## shape; `Tour` decides, and says what the run now is with `publish_tour`.
+signal tour_asked(verb: StringName, args: Array, from: int)
 ## Something in the room being pushed right now, by `from`: where it is this moment. Unconfirmed
 ## and unsaved -- the ask when it is let go is what counts -- and only for drawing it moving.
 signal room_motion(piece: StringName, x: float, z: float, heading: float, from: int)
@@ -182,6 +187,12 @@ var room_seq := 0
 ## Host: the last ask heard from each guest, sent with the room as "acks".
 var _room_acks: Dictionary = {}
 var _room_sent := false
+
+## The tour run under way, as `Tour.start_run()` built it (`TourRun.to_dict()`), or `{}` when
+## no run is under way. Not DAW/project state -- see core/tour/tour.gd -- so it rides its own
+## channel here rather than through `DAW._do`/`apply_intent` or `MixState`. Built identically
+## to `room`: host-authoritative, replicated whole, sent again to a guest admitted mid-run.
+var tour: Dictionary = {}
 
 ## Whether this guest has had its first roster yet. Everyone on the first one is "arriving",
 ## and greeting each of them by name would be noise.
@@ -602,6 +613,8 @@ func admit(peer_id: int) -> void:
 	_send_snapshot_to(peer_id)
 	if not room.is_empty() and _connected():
 		_receive_room.rpc_id(peer_id, _room_with_acks())
+	if not tour.is_empty() and _connected():
+		_receive_tour.rpc_id(peer_id, tour)
 	if mix_feed != null and mix_feed.sending and _connected():
 		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
 
@@ -1256,6 +1269,61 @@ func _room_asked(seq: int, verb: StringName, args: Array) -> void:
 		room_asked.emit(verb, args, from)
 	if not _room_sent:
 		publish_room(room)
+
+
+# --- the tour run --------------------------------------------------------------------------
+
+## What a guest may ask of a run under way. Starting a run (breaking the case) and ending one
+## are host-only and never asked: only the host can break the case, and only the host calls a
+## run off. `draft_pick` is the one thing a guest originates.
+const TOUR_VERBS := {&"draft_pick": [TYPE_INT]}
+
+
+## Host: this is the tour run now, or `{}` for none under way. Sent to everyone in the room.
+func publish_tour(state: Dictionary) -> void:
+	if role != Role.HOST:
+		return
+	tour = state
+	for id in _audience():
+		_receive_tour.rpc_id(id, tour)
+
+
+## Guest: ask the host to act on the run under way. Unlike `ask_room` there is nothing here for
+## the guest to predict -- a draft pick is resolved once, by the host, and announced -- so this
+## returns nothing; `Tour` reads the run back from `tour_changed` once the host has answered.
+func ask_tour(verb: StringName, args: Array) -> void:
+	if not tour_ask_is_valid(verb, args):
+		return
+	if is_authority():
+		tour_asked.emit(verb, args, local_peer_id)
+		return
+	if not _connected():
+		return
+	_tour_asked.rpc_id(1, verb, args)
+
+
+static func tour_ask_is_valid(verb: StringName, args: Array) -> bool:
+	if not TOUR_VERBS.has(verb) or args.size() != TOUR_VERBS[verb].size():
+		return false
+	for i in args.size():
+		if typeof(args[i]) != TOUR_VERBS[verb][i]:
+			return false
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_tour(state: Dictionary) -> void:
+	tour = state
+	tour_changed.emit()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _tour_asked(verb: StringName, args: Array) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	if tour_ask_is_valid(verb, args):
+		tour_asked.emit(verb, args, from)
 
 
 # --- state replication --------------------------------------------------------------------

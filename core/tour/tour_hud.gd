@@ -1,0 +1,202 @@
+class_name TourHud
+extends CanvasLayer
+
+## The run's own HUD: the brief card, a live score and countdown, and the draft (pick 1 of 3)
+## once a brief is cleared. Tour's own presentation, not the studio's -- instantiated by
+## scenes/bootstrap.gd the way SessionPanel is, so scenes/studio.gd never holds UI code.
+##
+## Shown only while a run is under way. Reads `Tour.run` rather than `Session.tour` directly:
+## that is the one place a run's state is correct on BOTH sides -- live on the host, rebuilt
+## from the wire on a guest (core/tour/tour.gd's `_on_tour_changed`) -- and it is refreshed from
+## every signal either side ever sees it change on: `Tour`'s own (host) and
+## `Session.tour_changed` (guest).
+##
+## Desktop-first, mouse-clickable, per the brief: a CanvasLayer of ordinary Controls, exactly
+## the technique `SessionPanel` already ships to every medium, so nothing extra is needed for a
+## headset to see it too.
+
+const INK := Color(0.92, 0.94, 0.97)
+const DIM := Color(0.62, 0.66, 0.74)
+const CARD := Color(0.06, 0.05, 0.035, 0.95)
+const ACCENT := Color(0.95, 0.65, 0.18)
+const CURSE := Color(0.82, 0.33, 0.33)
+const EDGE := Color(1, 1, 1, 0.08)
+const WIDTH := 460.0
+
+var _root: PanelContainer
+var _title: Label
+var _flavour: Label
+var _clock: Label
+var _score: Label
+var _draft_box: HBoxContainer
+var _drawn_draft: Array[StringName] = []
+
+
+func _ready() -> void:
+	layer = 19
+	_build()
+	Tour.run_started.connect(_refresh)
+	Tour.brief_started.connect(_on_brief_started)
+	Tour.brief_ended.connect(_on_brief_ended)
+	Tour.drafting_started.connect(_on_drafting_started)
+	Tour.run_ended.connect(_on_run_ended)
+	Session.tour_changed.connect(_refresh)
+	_refresh()
+
+
+func _on_brief_started(_index: int) -> void:
+	_refresh()
+
+
+func _on_brief_ended(_passed: bool, _score: int, _detail: PackedStringArray) -> void:
+	_refresh()
+
+
+func _on_drafting_started(_cards: Array) -> void:
+	_refresh()
+
+
+func _on_run_ended(_won: bool) -> void:
+	_refresh()
+
+
+func _process(_delta: float) -> void:
+	if _root.visible:
+		_refresh_clock()
+
+
+func _build() -> void:
+	_root = PanelContainer.new()
+	_root.name = "TourHud"
+	_root.add_theme_stylebox_override("panel", _box(CARD, 14, 18))
+	_root.anchor_left = 0.5
+	_root.anchor_right = 0.5
+	_root.offset_left = -WIDTH * 0.5
+	_root.offset_right = WIDTH * 0.5
+	_root.offset_top = 20
+	_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_root)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	_root.add_child(column)
+
+	_title = _label("", 20, INK)
+	column.add_child(_title)
+	_flavour = _label("", 13, DIM)
+	_flavour.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_flavour)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 18)
+	column.add_child(row)
+	_score = _label("", 15, ACCENT)
+	row.add_child(_score)
+	_clock = _label("", 15, INK)
+	row.add_child(_clock)
+
+	_draft_box = HBoxContainer.new()
+	_draft_box.name = "Draft"
+	_draft_box.add_theme_constant_override("separation", 10)
+	_draft_box.visible = false
+	column.add_child(_draft_box)
+
+
+func _refresh() -> void:
+	var run := Tour.run
+	_root.visible = run != null
+	if run == null:
+		_drawn_draft = []
+		return
+	var brief := TourBriefs.brief(run.brief_index)
+	_title.text = ("BOSS: " if brief.is_boss else "") + brief.title
+	_flavour.text = brief.flavour
+	_score.text = "SCORE %d" % run.score
+	_refresh_clock()
+	var drafting := run.state == TourRun.State.DRAFTING
+	_draft_box.visible = drafting
+	if drafting and run.draft != _drawn_draft:
+		_build_draft(run.draft)
+
+
+func _refresh_clock() -> void:
+	var run := Tour.run
+	if run == null or run.state != TourRun.State.BRIEF:
+		_clock.text = ""
+		return
+	_clock.text = "%d s" % int(ceil(run.seconds_left))
+
+
+## Three clickable cards, one per `draft` id: the host applies the pick at once
+## (`Tour.pick_draft`); a guest asks for it (`Session.ask_tour`) and waits for the host's word,
+## which arrives as the next `Session.tour_changed` -- there is nothing here to predict.
+func _build_draft(draft: Array[StringName]) -> void:
+	_drawn_draft = draft.duplicate()
+	for child in _draft_box.get_children():
+		child.queue_free()
+	var all := TourDeck.all_cards()
+	for index in draft.size():
+		var id: StringName = draft[index]
+		var card: TourCard = null
+		for c in all:
+			if c.id == id:
+				card = c
+				break
+		if card == null:
+			continue
+		_draft_box.add_child(_draft_card(card, index))
+
+
+func _draft_card(card: TourCard, index: int) -> Control:
+	var tint := CURSE if card.is_curse else ACCENT
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", _box(Color(tint, 0.14), 10, 14, Color(tint, 0.6)))
+	box.custom_minimum_size = Vector2(130, 0)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 4)
+	box.add_child(column)
+	var kind := _label("CURSE" if card.is_curse else "BOON", 10, tint)
+	column.add_child(kind)
+	column.add_child(_label(card.title, 14, INK))
+	var desc := _label(card.description, 11, DIM)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.custom_minimum_size = Vector2(120, 0)
+	column.add_child(desc)
+	var button := Button.new()
+	button.text = "Pick"
+	button.custom_minimum_size = Vector2(0, 30)
+	button.add_theme_font_size_override("font_size", 13)
+	button.pressed.connect(func() -> void: _pick(index))
+	column.add_child(button)
+	return box
+
+
+func _pick(index: int) -> void:
+	if Session.is_authority():
+		Tour.pick_draft(index)
+	else:
+		Session.ask_tour(&"draft_pick", [index])
+
+
+func _box(colour: Color, radius: int, pad: int, edge := Color(0, 0, 0, 0)) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = colour
+	box.set_corner_radius_all(radius)
+	box.content_margin_left = pad
+	box.content_margin_right = pad
+	box.content_margin_top = pad * 0.6 if pad > 0 else 0
+	box.content_margin_bottom = pad * 0.6 if pad > 0 else 0
+	if edge.a > 0.0:
+		box.set_border_width_all(1)
+		box.border_color = edge
+	box.anti_aliasing = true
+	return box
+
+
+func _label(text: String, size: int, colour: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", colour)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l

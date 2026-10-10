@@ -33,6 +33,8 @@ driver/output_latency=5
 ; Session first: DAW asks it who the authority is while installing its first backend.
 Session="*res://core/session/session.gd"
 DAW="*res://core/daw/daw.gd"
+; The one tour run this process is, or is not, in -- game code, not engine. core/tour/tour.gd.
+Tour="*res://core/tour/tour.gd"
 ; Observes whatever scene is running, so a capture needs no scene cooperation. Inert
 ; unless --shot is passed. See tools/shot.sh.
 Screenshot="*res://tools/screenshot.gd"

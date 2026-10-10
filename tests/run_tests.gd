@@ -251,6 +251,21 @@ func _ready() -> void:
 	_test_a_block_goes_from_one_shelf_onto_another()
 	_test_someone_elses_motion_plays_back_as_it_was_made()
 	_test_the_timeline_is_resized_by_its_corner()
+	_test_tour_briefs_are_defined_and_the_boss_is_last()
+	_test_tour_loudness_judges_in_range()
+	_test_tour_balance_judges_spread()
+	_test_tour_timing_judges_beat_grid()
+	_test_tour_boss_requires_every_measure_to_pass()
+	_test_tour_deck_draws_three_with_no_duplicates()
+	_test_tour_card_apply_uses_daw_verbs_only()
+	_test_tour_project_restores_exactly()
+	_test_tour_unlocks_persist_without_touching_layout()
+	_test_tour_asks_follow_the_verbs_shape()
+	_test_tour_run_round_trips_through_its_dict()
+	_test_tour_case_breaks_after_enough_hits_and_resets()
+	_test_item_room_target_struck_finds_the_nearest_one_in_range()
+	_test_only_the_host_can_break_the_case()
+	_test_tour_venue_solids_include_the_case()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -14695,3 +14710,317 @@ func _test_somebody_elses_radio_plane_flies_where_they_say() -> void:
 	presence._item_holders.erase(&"rcplane")
 	studio.queue_free()
 	await get_tree().process_frame
+
+
+# --- Tour (core/tour) ----------------------------------------------------------------------
+#
+# Work Package A only: the run's data, its judging, its deck, its project swap and its
+# unlocks, and the Session.tour channel's shape -- none of it touching core/items/, scenes/
+# or hardware/, which is Package B's job.
+
+func _test_tour_briefs_are_defined_and_the_boss_is_last() -> void:
+	check("one venue's worth: three briefs and a boss", TourBriefs.count() == 4)
+	check("the boss is last", TourBriefs.brief(3).is_boss)
+	check("and nothing before it is", not TourBriefs.brief(0).is_boss
+			and not TourBriefs.brief(1).is_boss and not TourBriefs.brief(2).is_boss)
+	check("brief() clamps rather than indexing off the end", TourBriefs.brief(99) == TourBriefs.brief(3))
+
+
+func _test_tour_loudness_judges_in_range() -> void:
+	var brief := TourBriefs.brief(0)
+	check("at the bottom edge of the window, with headroom, it passes",
+			bool(brief.judge({"loudness": {"avg_db": -16.0, "peak_db": -1.0}}, 1.0)["passed"]))
+	check("at the top edge it passes too",
+			bool(brief.judge({"loudness": {"avg_db": -10.0, "peak_db": -1.0}}, 1.0)["passed"]))
+	check("a hair under the bottom edge fails",
+			not bool(brief.judge({"loudness": {"avg_db": -16.01, "peak_db": -1.0}}, 1.0)["passed"]))
+	check("a hair over the top edge fails",
+			not bool(brief.judge({"loudness": {"avg_db": -9.99, "peak_db": -1.0}}, 1.0)["passed"]))
+	check("in range but clipping past the ceiling fails",
+			not bool(brief.judge({"loudness": {"avg_db": -13.0, "peak_db": -0.5}}, 1.0)["passed"]))
+	check("dead centre scores at or near the top",
+			int(brief.judge({"loudness": {"avg_db": -13.0, "peak_db": -6.0}}, 1.0)["score"]) == 100)
+
+
+func _test_tour_balance_judges_spread() -> void:
+	var brief := TourBriefs.brief(1)
+	check("exactly at the spread limit passes", bool(brief.judge(
+			{"balance": {"low_db": -20.0, "mid_db": -14.0, "high_db": -12.0}}, 1.0)["passed"]))
+	check("a hair past it fails", not bool(brief.judge(
+			{"balance": {"low_db": -20.01, "mid_db": -14.0, "high_db": -12.0}}, 1.0)["passed"]))
+	check("flat across all three bands passes easily", bool(brief.judge(
+			{"balance": {"low_db": -14.0, "mid_db": -14.0, "high_db": -14.0}}, 1.0)["passed"]))
+
+
+func _test_tour_timing_judges_beat_grid() -> void:
+	var brief := TourBriefs.brief(2)
+	var at_edge := {"timing": {"avg_beats_off": 0.12, "worst_beats_off": 0.30, "notes": 5}}
+	check("right at both edges passes", bool(brief.judge(at_edge, 1.0)["passed"]))
+	var just_over := {"timing": {"avg_beats_off": 0.1201, "worst_beats_off": 0.30, "notes": 5}}
+	check("a hair over the mean edge fails", not bool(brief.judge(just_over, 1.0)["passed"]))
+	var no_notes := {"timing": {"avg_beats_off": 0.0, "worst_beats_off": 0.0, "notes": 0}}
+	check("nothing played is not a pass", not bool(brief.judge(no_notes, 1.0)["passed"]))
+	var widened := {"timing": {"avg_beats_off": 0.20, "worst_beats_off": 0.50, "notes": 5}}
+	check("tight without tolerance fails", not bool(brief.judge(widened, 1.0)["passed"]))
+	check("the same numbers pass once tempo_tolerance_mult widens the window",
+			bool(brief.judge(widened, 2.0)["passed"]))
+
+
+func _test_tour_boss_requires_every_measure_to_pass() -> void:
+	var boss := TourBriefs.brief(3)
+	var all_good := {"loudness": {"avg_db": -13.0, "peak_db": -6.0},
+			"balance": {"low_db": -14.0, "mid_db": -14.0, "high_db": -14.0},
+			"timing": {"avg_beats_off": 0.05, "worst_beats_off": 0.10, "notes": 8}}
+	check("every measure clean is a pass", bool(boss.judge(all_good, 1.0)["passed"]))
+	var one_bad := all_good.duplicate(true)
+	one_bad["timing"] = {"avg_beats_off": 0.20, "worst_beats_off": 0.40, "notes": 8}
+	check("one measure failing fails the whole brief, not an average",
+			not bool(boss.judge(one_bad, 1.0)["passed"]))
+
+
+func _test_tour_deck_draws_three_with_no_duplicates() -> void:
+	for seed in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var hand := TourDeck.draw(rng, [])
+		check("a draft is three cards (seed %d)" % seed, hand.size() == 3)
+		var ids: Array = hand.map(func(c: TourCard) -> StringName: return c.id)
+		var unique := {}
+		for id in ids:
+			unique[id] = true
+		check("none repeated (seed %d, %s)" % [seed, ids], unique.size() == ids.size())
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = 1
+	var excluded: Array[StringName] = [&"extra_track", &"free_effect"]
+	var hand2 := TourDeck.draw(rng2, excluded)
+	for c in hand2:
+		check("a card already held is never offered again (%s)" % c.id, not (c.id in excluded))
+
+
+func _test_tour_card_apply_uses_daw_verbs_only() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new())
+	var run := TourRun.new()
+
+	var before_tracks := DAW.state.track_indices().size()
+	for c in TourDeck.all_cards():
+		if c.id == &"extra_track":
+			c.apply(run)
+	check("extra_track went through DAW.add_track", DAW.state.track_indices().size() == before_tracks + 1)
+
+	var first_track: int = DAW.state.track_indices()[0]
+	var fx_before := DAW.state.track(first_track).plugins().size()
+	for c in TourDeck.all_cards():
+		if c.id == &"free_effect":
+			c.apply(run)
+	check("free_effect went through DAW.add_fx", DAW.state.track(first_track).plugins().size() == fx_before + 1)
+
+	# Not "nothing is muted beforehand": a track mute is exactly the kind of change other,
+	# unrelated tests leave lying around on whichever backend happens to be current when their
+	# own (possibly deferred) signal lands, so this checks the one thing that is actually
+	# `muted_track`'s to answer for -- that applying it mutes at least one track it did not
+	# already find muted -- rather than asserting a clean slate this test does not own.
+	var muted_before := {}
+	for t: MixState.TrackState in DAW.state.tracks.values():
+		if t.mute:
+			muted_before[t.index] = true
+	for c in TourDeck.all_cards():
+		if c.id == &"muted_track":
+			c.apply(run)
+	var newly_muted := 0
+	for t: MixState.TrackState in DAW.state.tracks.values():
+		if t.mute and not muted_before.has(t.index):
+			newly_muted += 1
+	check("muted_track went through DAW.set_track_mute", newly_muted >= 1)
+
+	for c in TourDeck.all_cards():
+		if c.id == &"loose_tempo":
+			c.apply(run)
+	check("loose_tempo touches only run state, not the DAW", is_equal_approx(run.tempo_tolerance_mult, 1.5))
+
+	DAW.use(previous, false)
+
+
+func _test_tour_project_restores_exactly() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	ProjectBridge.load(ProjectFiles.blank("Studio Song", 3), backend)
+	backend.project_path = "user://projects/Studio Song.dawproject"
+	backend.name_project()
+
+	var snapshot := TourProject.capture(backend)
+	var original: DawKitProject = snapshot["project"]
+
+	ProjectBridge.load(TourProject.blank_for(TourBriefs.brief(0)), backend)
+	DAW.add_track(DAW.state.track_indices().size() + 1, "Gear")
+	DAW.rename_track(1, "Renamed While Touring")
+	DAW.set_tempo(140.0)
+
+	TourProject.restore(backend, snapshot)
+	var restored := ProjectBridge.capture(backend)
+	check("the restored project is exactly the one that was captured (%s)" % [original.first_difference(restored)],
+			original.same_as(restored))
+	check("the project's file path comes back too", backend.project_path == snapshot["path"])
+
+	DAW.use(previous, false)
+
+
+func _test_tour_unlocks_persist_without_touching_layout() -> void:
+	var path := "user://tour_unlocks_test.cfg"
+	var u := TourUnlocks.new()
+	u.save_path = path
+	u.record_run(false)
+	u.record_run(true)
+	check("the file is not layout_profile.cfg", u.save_path != "user://layout_profile.cfg")
+	check("nor under the projects folder", not u.save_path.begins_with(ProjectFiles.DEFAULT_DIR))
+
+	var reloaded := TourUnlocks.new()
+	reloaded.save_path = path
+	reloaded.load_saved()
+	check("runs persisted", reloaded.runs == 2)
+	check("and wins among them", reloaded.wins == 1)
+	check("and reputation with the win", reloaded.reputation == 1)
+
+	var fresh := TourUnlocks.new()
+	fresh.save_path = path
+	fresh.save_path = "user://tour_unlocks_test_unread.cfg"
+	fresh.load_saved()
+	check("a never-saved path loads as all zero", fresh.runs == 0 and fresh.wins == 0)
+
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_tour_asks_follow_the_verbs_shape() -> void:
+	check("draft_pick with one int is valid", Session.tour_ask_is_valid(&"draft_pick", [1]))
+	check("two ints is not the shape", not Session.tour_ask_is_valid(&"draft_pick", [1, 2]))
+	check("a string is not an int", not Session.tour_ask_is_valid(&"draft_pick", ["x"]))
+	check("starting a run is never an ask -- it is not in TOUR_VERBS at all",
+			not Session.tour_ask_is_valid(&"start_run", []))
+	check("neither is ending one", not Session.tour_ask_is_valid(&"abandon_run", []))
+
+
+func _test_tour_run_round_trips_through_its_dict() -> void:
+	var run := TourRun.new()
+	run.state = TourRun.State.DRAFTING
+	run.brief_index = 2
+	run.score = 87
+	run.seconds_left = 12.5
+	run.gear = [&"extra_track", &"loose_tempo"]
+	run.curses = [&"tight_tempo"]
+	run.tempo_tolerance_mult = 0.9
+	run.attempt_seed = 4242
+	var back := TourRun.from_dict(run.to_dict())
+	check("state rides the wire", back.state == run.state)
+	check("so does everything else about the run",
+			back.brief_index == run.brief_index and back.score == run.score
+			and is_equal_approx(back.seconds_left, run.seconds_left)
+			and back.gear == run.gear and back.curses == run.curses
+			and is_equal_approx(back.tempo_tolerance_mult, run.tempo_tolerance_mult)
+			and back.attempt_seed == run.attempt_seed)
+
+
+# --- the Tour case (Work Package B) ------------------------------------------------------
+
+func _test_tour_case_breaks_after_enough_hits_and_resets() -> void:
+	var case := TourCase.new()
+	add_child(case)
+	var opened := [0]
+	case.broken_open.connect(func(): opened[0] += 1)
+	for i in TourCase.HITS_TO_BREAK - 1:
+		case.struck(3.0, 1)
+	check("not broken before enough hits", not case.broken and opened[0] == 0)
+	case.struck(3.0, 1)
+	check("the hit that reaches the threshold bursts it open, once", case.broken and opened[0] == 1)
+	check("the chain comes off", case._chain == null or not case._chain.visible)
+	case.struck(3.0, 1)
+	check("a hit once it is open does nothing further", opened[0] == 1 and case.hits == TourCase.HITS_TO_BREAK)
+	case.reset(3, 1)
+	check("reset chains it again", not case.broken and case.hits == 0)
+	check("the chain is back", case._chain == null or case._chain.visible)
+	check("and its tally is brought up to date (%s)" % case._tally.text,
+			case._tally.text.contains("3") and case._tally.text.contains("1"))
+	remove_child(case)
+	case.free()
+
+
+func _test_item_room_target_struck_finds_the_nearest_one_in_range() -> void:
+	var room := ItemRoom.new()
+	add_child(room)
+	var near := TourCase.new()
+	var far := TourCase.new()
+	far.position = Vector3(2.0, 0, 0)
+	room.add_child(near)
+	room.add_child(far)
+	room.targets = [{"node": near, "radius": 0.4}, {"node": far, "radius": 0.4}]
+	check("the nearer one in range is struck, and the farther one is left alone",
+			room.target_struck(3.0, Vector3(0.1, 0, 0), 1) and near.hits == 1 and far.hits == 0)
+	check("a point outside every radius finds nothing", not room.target_struck(3.0, Vector3(5.0, 0, 0), 1))
+	remove_child(room)
+	room.free()
+
+
+## Not just the toast: a guest's hits must not advance the case toward breaking at all, even
+## though the toast and the host's own hits both still work -- the host flies every valid
+## throw, guest's included (see item.gd's test "the host flies a guest's throw"), so the gate
+## has to be on `thrown_by`, not on who is watching.
+func _test_only_the_host_can_break_the_case() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+
+	_as_session(Session.Role.GUEST, 5)
+	studio.tour_case.break_attempted.emit()
+	check("a guest's hit never starts a run", Tour.run == null)
+	check("and is told only the host can break the case (%s)" % [notices],
+			notices.size() == 1 and notices[0].begins_with("Only ")
+			and notices[0].ends_with("can start the tour."))
+
+	notices.clear()
+	_as_session(Session.Role.HOST, 1)
+	studio.tour_case.break_attempted.emit()
+	check("the host's own hit draws no toast", notices.is_empty())
+
+	var case := studio.tour_case
+	var opened := [0]
+	case.broken_open.connect(func(): opened[0] += 1)
+	for i in TourCase.HITS_TO_BREAK + 2:
+		case.struck(3.0, 5)
+	check("a guest's throws never add up to a break, however many",
+			not case.broken and opened[0] == 0 and case.hits == 0)
+	for i in TourCase.HITS_TO_BREAK - 1:
+		case.struck(3.0, 1)
+		case.struck(3.0, 5)
+	check("a guest's hits mixed in with the host's don't speed it up (%d)" % case.hits,
+			case.hits == TourCase.HITS_TO_BREAK - 1 and not case.broken)
+	case.struck(3.0, 1)
+	check("but the host's own fifth, even with a guest's mixed in, really breaks it",
+			case.broken and opened[0] == 1)
+
+	Session.notice.disconnect(hear)
+	remove_child(studio)
+	studio.free()
+	Session.start_solo()
+
+
+func _test_tour_venue_solids_include_the_case() -> void:
+	for id in Venue.IDS:
+		var venue := Venue.make(id)
+		add_child(venue)
+		var at := venue.tour_case_spot()
+		var found := false
+		for f: Dictionary in venue.solids():
+			if (f.get("c") as Vector2).is_equal_approx(Vector2(at.origin.x, at.origin.z)):
+				found = true
+				break
+		# A venue that only draws its furniture (the chalk zone -- see `prop_shelf_solid`) draws
+		# the case the same way, same as the shelf and the hoop: not a walker obstacle there.
+		check("the %s's solids include the Tour case" % id, found == venue.prop_shelf_solid())
+		remove_child(venue)
+		venue.free()

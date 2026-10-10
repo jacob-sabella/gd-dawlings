@@ -121,6 +121,10 @@ var console: ConsoleSurface
 var rack: RackSurface
 ## The things people pick up and carry. Null in AR, which has a real room's things in it.
 var items: ItemRoom
+## The chained case in the back of house that starts a Tour run. Null in AR, for the same
+## reason `items` is: Tour is gated to the built-in engine (core/tour/tour.gd's `is_available`),
+## and AR is a real room with a real case or none at all.
+var tour_case: TourCase
 ## What the mic in a hand here has done to a track, to be undone when it leaves the hand.
 var mic_arm := MicArm.new()
 ## Whether the headphones are on a head here, as Ears was last told.
@@ -255,6 +259,7 @@ func _ready() -> void:
 		_update_camera()
 	if medium != Presentation.Medium.AR:
 		_build_items()
+		_build_tour_case()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
 		# four lines up.
@@ -453,6 +458,8 @@ func _walk_where_the_venue_lets() -> void:
 		items.hoops = venue.hoops()
 		items.set_venue(venue.venue_id())
 		items.set_spots(venue.item_spots(), _item_homes())
+	if tour_case != null and venue != null:
+		tour_case.transform = venue.tour_case_spot()
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1129,7 +1136,7 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 						item.set_pocket(args[1])
 				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
 				&"home_item": item.go_home()
-				&"throw_item": items.fly(item, args[1], args[2], args[3])
+				&"throw_item": items.fly(item, args[1], args[2], args[3], from)
 
 
 ## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
@@ -1828,6 +1835,7 @@ func _build_items() -> void:
 		items.floor_rects = func() -> Array: return walker.walkable
 		items.solids = func() -> Array: return walker.fixed
 		items.gear = walker.footprints
+	items.local_peer = func() -> int: return Session.local_peer_id
 	Session.takeable = func(key: String) -> bool:
 		return is_instance_valid(items) and items.items.values().any(
 				func(item: Item) -> bool: return item.network_key() == key)
@@ -1891,6 +1899,69 @@ func _build_items() -> void:
 	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
 	if presence != null:
 		presence.items = items
+
+
+## The case that starts a Tour run, chained in the back of house. The small hook the studio
+## gives Tour (docs/architecture.md): everything past "it broke" or "the run is over" is
+## core/tour/tour.gd's.
+func _build_tour_case() -> void:
+	tour_case = TourCase.new()
+	studio_set.add_child(tour_case)
+	tour_case.transform = venue.tour_case_spot()
+	if items != null:
+		items.targets = [{"node": tour_case, "radius": TourCase.STRIKE_RADIUS}]
+	tour_case.break_attempted.connect(_on_tour_case_struck)
+	tour_case.broken_open.connect(_on_tour_case_broken_open)
+	Tour.run_started.connect(_on_tour_run_started)
+	Tour.run_ended.connect(_on_tour_run_ended)
+	Session.tour_changed.connect(_on_session_tour_changed)
+
+
+## A thrown item has hit the case, broken or not (TourCase.break_attempted): told so only the
+## host can start the tour, the same pattern `choose_venue` uses for the venue picker.
+func _on_tour_case_struck() -> void:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can start the tour." % Session.name_of(1))
+
+
+## The hit that broke the case: starts the run. `Tour.start_run()` is host-only and quiet about
+## refusing (wrong engine, a run already under way, or simply not the host) -- nothing else
+## here needs to check first.
+func _on_tour_case_broken_open() -> void:
+	Tour.start_run()
+
+
+## A run just started, on the host (`Tour.run_started`, which never fires on a guest -- see
+## core/tour/tour.gd's class note): the case catches up broken, in case it is still chained --
+## true after the normal five hits already burst it, but not after `start_run()` is reached some
+## other way (tools/screenshot.gd's `--tour` flag, say). A no-op once it already is.
+func _on_tour_run_started() -> void:
+	if tour_case != null:
+		tour_case.sync_broken()
+
+
+## The run is over, won or lost: the case is chained again, its tally brought up to date. Fires
+## on the host the moment `Tour._end_run` runs; a guest's own case hears it from the emptied
+## `Session.tour` instead (`_on_session_tour_changed`), since `Tour`'s own signals never fire
+## there (see core/tour/tour.gd's class note).
+func _on_tour_run_ended(_won: bool) -> void:
+	if tour_case != null:
+		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+
+
+## A guest's half of the same reset: the host's word on the run (`Session.tour`) went empty --
+## or just arrived, in which case this guest's own case catches up broken (TourCase.sync_broken),
+## in case this guest's own hits never reached it (someone else's throws, a dropped one, lag):
+## "every guest sees it break" rides the run's synced state, not a local count. The host skips
+## this half -- its own case already broke, from its own authoritative hits, if a run is under
+## way at all.
+func _on_session_tour_changed() -> void:
+	if tour_case == null:
+		return
+	if Session.tour.is_empty():
+		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+	elif not Session.is_authority():
+		tour_case.sync_broken()
 
 
 ## What the headphones on this person's head let through (Ears), and what this person is told
