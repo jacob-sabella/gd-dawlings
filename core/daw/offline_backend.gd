@@ -1028,6 +1028,12 @@ func set_metronome(on: bool) -> void:
 	record_for_replication("/click", [1.0 if on else 0.0])
 
 
+func set_punch(on: bool) -> void:
+	state.punch = on
+	state.transport_changed.emit()
+	record_for_replication("/punch", [1.0 if on else 0.0])
+
+
 func set_count_in(bars: int) -> void:
 	state.count_in_bars = clampi(bars, 0, MixState.COUNT_IN_MAX)
 	state.transport_changed.emit()

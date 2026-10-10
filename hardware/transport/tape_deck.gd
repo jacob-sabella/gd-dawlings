@@ -85,6 +85,7 @@ var _rec_lamp: PanelButton
 var _loop_lamp: PanelButton
 var _click_lamp: PanelButton
 var _count_lamp: PanelButton
+var _punch_lamp: PanelButton
 ## What the COUNT key steps through, in bars.
 const COUNT_IN_STEPS := [0, 1, 2, 4]
 var _mark_key: PanelButton
@@ -154,7 +155,7 @@ func _rebuild() -> void:
 	tap.name = "TapKey"
 	tap.led_colour = Color(0.95, 0.80, 0.42)
 	tap.lamp_scale = Vector2(0.8, 0.5)
-	tap.position = Vector3(-0.130, -0.122, 0.028)
+	tap.position = Vector3(-0.115, -0.122, 0.028)
 	tap.scale = Vector3(1.4, 1.4, 1.4)
 	tap.pressed.connect(_tap)
 	tap.describe_title = func() -> String: return "TRANSPORT  TAP TEMPO"
@@ -165,11 +166,33 @@ func _rebuild() -> void:
 	tap_caption.text = "TAP"
 	tap_caption.font_size = 30
 	tap_caption.pixel_size = 0.00024
-	tap_caption.position = Vector3(-0.130, -0.105, 0.002)
+	tap_caption.position = Vector3(-0.115, -0.105, 0.002)
 	tap_caption.modulate = Color(0.6, 0.62, 0.66)
 	tap_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(tap_caption)
 	_adopt(tap_caption)
+
+	# Beside TAP, as COUNT is beside CLICK: punching in and out to the loop range.
+	var punch := PanelButton.new()
+	punch.name = "PunchKey"
+	punch.led_colour = Color(0.95, 0.38, 0.34)
+	punch.lamp_scale = Vector2(0.45, 0.8)
+	punch.position = Vector3(-0.150, -0.122, 0.028)
+	punch.scale = Vector3(1.4, 1.4, 1.4)
+	punch.pressed.connect(func(): DAW.set_punch(not DAW.state.punch))
+	punch.describe_title = func() -> String: return "TRANSPORT  PUNCH"
+	punch.describe_value = func(_v: float) -> String: return punch_text(DAW.state)
+	_adopt(punch)
+	_punch_lamp = punch
+	var punch_caption := Label3D.new()
+	punch_caption.text = "PUNCH"
+	punch_caption.font_size = 30
+	punch_caption.pixel_size = 0.00024
+	punch_caption.position = Vector3(-0.150, -0.105, 0.002)
+	punch_caption.modulate = Color(0.6, 0.62, 0.66)
+	punch_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(punch_caption)
+	_adopt(punch_caption)
 
 	_build_locator()
 
@@ -751,9 +774,12 @@ func _refresh() -> void:
 	_tempo_label.text = "%.1f BPM" % DAW.state.tempo
 	_tempo_knob.apply_remote(bpm_to_knob(DAW.state.tempo))
 	_play_lamp.lit = DAW.state.playing
-	# Flashing on the beat while counting in, lit once the take has begun.
-	_rec_lamp.lit = DAW.state.taking() or (DAW.state.counting_in()
-			and fposmod(DAW.state.beat_at(DAW.state.position_seconds), 1.0) < 0.5)
+	# Flashing on the beat while recording waits -- counting in, or short of the punch range --
+	# and lit while it takes.
+	var s := DAW.state
+	_rec_lamp.lit = s.taking() or (s.recording and s.playing
+			and fposmod(s.beat_at(s.position_seconds), 1.0) < 0.5)
+	_punch_lamp.lit = s.punch
 	_count_lamp.lit = DAW.state.count_in_bars > 0
 	_loop_lamp.lit = DAW.state.looping
 	_click_lamp.lit = DAW.state.metronome
@@ -795,6 +821,15 @@ static func count_in_text(s: MixState) -> String:
 		return "off: recording starts at once"
 	var bars := "%d bar%s of click before recording" % [s.count_in_bars, "" if s.count_in_bars == 1 else "s"]
 	return bars if s.metronome else bars + ", when the click is on"
+
+
+## What the PUNCH key says of punching in and out.
+static func punch_text(s: MixState) -> String:
+	if not s.punch:
+		return "off: recording takes all it plays"
+	if not s.has_loop_range():
+		return "on, but there is no loop range: recording takes all it plays"
+	return "recording takes only %s to %s" % [s.bar_beat(s.loop_start), s.bar_beat(s.loop_end)]
 
 
 func _step_count_in() -> void:

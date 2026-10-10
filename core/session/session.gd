@@ -952,8 +952,9 @@ func host_heard() -> Dictionary:
 	var s := DAW.state
 	if s == null:
 		return {"seconds": 0.0, "playing": false, "recording": false, "valid": false}
-	return {"seconds": s.position_seconds - AudioServer.get_output_latency(), "playing": s.playing,
-			"recording": s.taking(), "valid": true}
+	var heard := s.position_seconds - AudioServer.get_output_latency()
+	return {"seconds": heard, "playing": s.playing,
+			"recording": s.recording and s.playing and s.takes_at(heard), "valid": true}
 
 
 ## Words from the host for this guest alone.

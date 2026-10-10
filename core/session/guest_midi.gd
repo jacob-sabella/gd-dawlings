@@ -297,7 +297,7 @@ func _process(_delta: float) -> void:
 	# On a host too: there, what is heard is the host's own playhead, and a monitor (TheirMonitor)
 	# asks it.
 	if DAW.state != null:
-		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.taking(),
+		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
 				Time.get_ticks_usec())
 	if not plays():
 		if _take != null:
@@ -343,7 +343,8 @@ func _hear_host_keys() -> void:
 ## The take, following what the guest hears of the host's transport: begun when recording is
 ## heard to start, stretched while it runs, sent when it is heard to stop.
 func follow(h: Dictionary) -> void:
-	var rolling: bool = h["valid"] and h["recording"]
+	# Past any count-in and inside any punch range, as heard here (MixState.takes_at).
+	var rolling: bool = h["valid"] and h["recording"] and DAW.state.takes_at(float(h["seconds"]))
 	if rolling and record_with_host and take_track() > 0:
 		if _take == null:
 			_take = MidiTake.new()

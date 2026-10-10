@@ -506,6 +506,16 @@ function handlers.SetCountIn(args)
   return {ok = true, count_in = count_in_bars()}
 end
 
+-- Punching in and out: Reaper's record mode, time selection auto-punch (40076) or normal (40252),
+-- checked on the rig to be radio toggles of each other. Reaper's preference, not the project's.
+-- args: 1 to punch, 0 not.
+local PUNCH_MODE, NORMAL_MODE = 40076, 40252
+
+function handlers.SetPunch(args)
+  reaper.Main_OnCommand((args[1] or 0) ~= 0 and PUNCH_MODE or NORMAL_MODE, 0)
+  return {ok = true, punch = reaper.GetToggleCommandState(PUNCH_MODE) == 1}
+end
+
 -- args: start, end (seconds), stems (0/1), tail (ms; Reaper renders that much after the end, for
 -- effects to ring out). Reaper renders that stretch of the project, offline,
 -- as 24-bit stereo WAVs in "<project> renders" beside the project file: "<project> - mix.wav",
@@ -676,6 +686,7 @@ function handlers.GetTimeline()
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     count_in = count_in_bars(),
+    punch = reaper.GetToggleCommandState(PUNCH_MODE) == 1,
     master_automode = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetMasterTrack(0), 'I_AUTOMODE')),
     -- The project's name (its file's, without .rpp) and its file's name, not its folder: what a
     -- guest is shown. Both empty for a project never saved.

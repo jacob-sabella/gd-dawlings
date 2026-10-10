@@ -286,12 +286,26 @@ func counts_in() -> bool:
 
 ## Whether the transport is counting in to a recording.
 func counting_in() -> bool:
-	return recording and playing and count_in_to >= 0.0
+	return recording and playing and count_in_to >= 0.0 and position_seconds < count_in_to
 
 
-## Whether what is played now is being recorded: recording, and past any count-in.
+## Whether what is played now is being recorded: recording, past any count-in, and inside the
+## punch range when punching.
 func taking() -> bool:
-	return recording and playing and count_in_to < 0.0
+	return recording and playing and takes_at(position_seconds)
+
+
+## Whether a recording takes what is heard at `seconds` of the song: past any count-in, and
+## inside the punch range when punching. Takes ask this of the moment they hear, which is behind
+## the playhead by the output's latency (and a guest's by the network's too), so their edges are
+## where the song is, not where the playhead was when it got there.
+func takes_at(seconds: float) -> bool:
+	return (count_in_to < 0.0 or seconds >= count_in_to) and in_punch(seconds)
+
+
+## Whether a recording would take at `seconds`: anywhere, unless punching to a range.
+func in_punch(seconds: float) -> bool:
+	return not (punch and has_loop_range()) or (seconds >= loop_start and seconds < loop_end)
 
 
 ## Where a count-in to `at` starts: `count_in_bars` bars of the tempo there earlier. Before the
@@ -309,10 +323,14 @@ var metronome: bool = false
 ## Bars of click before recording starts, 0 for none. As in Reaper, a count-in is the metronome's:
 ## with the click off, recording starts at once.
 var count_in_bars: int = 0
-## While counting in, where the recording begins: the transport runs from `count_in_bars` before
-## it with the click alone, recording but not yet taking. -1 when not counting in. Reaper does
+## Where a counted-in recording begins, kept until the transport stops: the transport runs from
+## `count_in_bars` before it with the click alone, recording but not yet taking. Kept past it, as
+## what is heard reaches it later than the playhead does. -1 for a recording not counted in. Reaper does
 ## the same, its playhead running up to the record point from before it.
 var count_in_to: float = -1.0
+## Punching in and out: a recording takes only inside the loop range (Reaper's time selection
+## auto-punch, the loop range there being the time selection). With no range, all of it.
+var punch: bool = false
 ## Whether playback wraps round the loop range. Reaper calls it repeat.
 var looping: bool = false
 ## The loop range, in seconds. In Reaper this is the time selection when the two are linked,

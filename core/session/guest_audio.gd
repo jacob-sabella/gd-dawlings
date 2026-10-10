@@ -150,7 +150,8 @@ func _process(delta: float) -> void:
 
 ## The take, following what the guest hears of the host's transport.
 func follow(h: Dictionary, got: PackedVector2Array) -> void:
-	var rolling: bool = h["valid"] and h["recording"]
+	# Past any count-in and inside any punch range, as heard here (MixState.takes_at).
+	var rolling: bool = h["valid"] and h["recording"] and DAW.state.takes_at(float(h["seconds"]))
 	if not _take_open:
 		if rolling:
 			# What was read before recording was heard to start is not the take. The take is

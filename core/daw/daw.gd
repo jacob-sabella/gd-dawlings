@@ -63,7 +63,7 @@ const COMMANDS := [
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"set_count_in", &"add_marker", &"set_track_monitor", &"set_track_automation_mode", &"render",
+	&"set_metronome", &"set_count_in", &"set_punch", &"add_marker", &"set_track_monitor", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
 
@@ -255,6 +255,8 @@ func set_looping(on: bool) -> void: _do(&"set_looping", [on])
 func set_metronome(on: bool) -> void: _do(&"set_metronome", [on])
 ## Bars of click before recording starts, 0 for none; counted in only while the click is on.
 func set_count_in(bars: int) -> void: _do(&"set_count_in", [bars])
+## Punching in and out: a recording takes only inside the loop range.
+func set_punch(on: bool) -> void: _do(&"set_punch", [on])
 ## Input monitoring for one track: MONITOR_OFF, MONITOR_ON or MONITOR_AUTO, Reaper's own numbers.
 const MONITOR_OFF := 0
 const MONITOR_ON := 1
@@ -454,6 +456,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_count_in intent %s." % [args])
 			return
 		args = [clampi(int(args[0]), 0, MixState.COUNT_IN_MAX)]
+	if verb == &"set_punch":
+		if args.size() != 1:
+			push_warning("DAW: refused a malformed set_punch intent %s." % [args])
+			return
+		args = [MixWire._as_bool([args[0]])]
 	if verb == &"set_metronome":
 		if args.size() != 1:
 			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])

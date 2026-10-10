@@ -72,6 +72,9 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			# Reaper's METRONOME, which it states as it changes and on a refresh.
 			state.metronome = _as_bool(args)
 			state.transport_changed.emit()
+		"punch":
+			state.punch = _as_bool(args)
+			state.transport_changed.emit()
 		"countin":
 			if p.size() == 1 and args.size() > 0:
 				state.count_in_bars = clampi(int(args[0]), 0, MixState.COUNT_IN_MAX)
@@ -670,6 +673,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/repeat", [1.0 if state.looping else 0.0]])
 	out.append(["/click", [1.0 if state.metronome else 0.0]])
 	out.append(["/countin", [float(state.count_in_bars)]])
+	out.append(["/punch", [1.0 if state.punch else 0.0]])
 	out.append(["/countin/to", [state.count_in_to]])
 	out.append(["/loop/start/time", [state.loop_start]])
 	out.append(["/loop/end/time", [state.loop_end]])

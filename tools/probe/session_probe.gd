@@ -44,6 +44,9 @@ const HOST_RAMP := [[HOST_TAKE_AT + 2.0, 0.0, DawKitAutomation.LINEAR], [HOST_TA
 const HOST_RAMP_TOLERANCE_DB := 0.5
 ## How far from its beat a count-in's click may be heard at the master.
 const COUNT_IN_TOLERANCE_MS := 5.0
+## How long the punch range is, and how near its ends a punched take must start and stop.
+const PUNCH_SECONDS := 1.5
+const PUNCH_TOLERANCE := 0.04
 ## And how far each may be from the others' average.
 const COUNT_IN_SPREAD_MS := 1.0
 ## Where the render's loop starts, and how far a note in the rendered stem may be from its place.
@@ -303,6 +306,7 @@ func _host(port: int) -> void:
 		DirAccess.remove_absolute(file)
 		await _render_and_measure()
 		await _count_in_and_measure()
+		await _punch_and_measure()
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -737,6 +741,45 @@ func _count_in_and_measure() -> void:
 	check("which plays from the record point on (%.1f dB)" % song, song > -30.0)
 
 
+## A recording punched in and out: begun before the loop range and stopped after it, my take is
+## the range and nothing either side.
+func _punch_and_measure() -> void:
+	var s := DAW.state
+	var ha := Session.host_audio
+	var map := s.tempo_map()
+	var a := map.seconds_at(ceilf(map.beat_at(s.position_seconds)) + 4.0)
+	var b := a + PUNCH_SECONDS
+	DAW.set_looping(false)
+	DAW.set_loop_range(a, b)
+	DAW.set_punch(true)
+	ha.target_track = HOST_TAKE_TRACK
+	ha.record_with_host = true
+	_audio_placed = {}
+	DAW.seek(a - 0.8)
+	DAW.transport_record()
+	var took := false
+	while s.position_seconds < b + 0.4:
+		took = took or s.taking()
+		await get_tree().process_frame
+	DAW.transport_stop()
+	var began := Time.get_ticks_msec()
+	while _audio_placed.is_empty() and Time.get_ticks_msec() - began < 1500:
+		await get_tree().process_frame
+	ha.record_with_host = false
+	DAW.set_punch(false)
+	DAW.set_loop_range(0.0, 0.0)
+	var start: float = _audio_placed.get("start", NAN)
+	var seconds: float = _audio_placed.get("seconds", NAN)
+	print("punch: range %.3f-%.3f, take %.4f for %.4fs (in %+.1f ms, out %+.1f ms)" % [a, b, start, seconds,
+			(start - a) * 1000.0, (start + seconds - b) * 1000.0])
+	check("recording punched in at the range's start (%+.1f ms)" % ((start - a) * 1000.0),
+			took and absf(start - a) < PUNCH_TOLERANCE)
+	check("and out at its end (%+.1f ms)" % ((start + seconds - b) * 1000.0),
+			absf(start + seconds - b) < PUNCH_TOLERANCE)
+	if not _audio_placed.is_empty():
+		DirAccess.remove_absolute(_audio_placed["path"])
+
+
 func _check_audio_take() -> void:
 	check("the guest's recording was placed (%s)" % [_audio_placed], not _audio_placed.is_empty())
 	check("and the room was told", _notices.any(func(t): return t.begins_with("Grace recorded")))
@@ -904,7 +947,15 @@ func _count_in_in_reaper() -> void:
 			counted and lowest < at - bar * 0.7 and lowest > at - bar - 0.2)
 	check("and the take began at the record point (%.3fs)" % took_at, absf(took_at - at) < 0.15)
 	DAW.set_count_in(0)
+	# And its record mode: time selection auto-punch, read back.
+	DAW.set_punch(true)
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	s.punch = false
 	await get_tree().create_timer(0.5).timeout
+	check("Reaper took punching in and out and read it back", s.punch)
+	DAW.set_punch(false)
+	await get_tree().create_timer(0.2).timeout
 	if items.call() > before:
 		DAW.undo()
 

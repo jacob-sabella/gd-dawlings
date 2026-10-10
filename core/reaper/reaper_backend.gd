@@ -532,6 +532,12 @@ func set_count_in(bars: int) -> void:
 	_edit("SetCountIn", [clampi(bars, 0, MixState.COUNT_IN_MAX)])
 
 
+## Reaper's record mode, time selection auto-punch or normal (the bridge's SetPunch).
+func set_punch(on: bool) -> void:
+	_apply("/punch", [1.0 if on else 0.0])
+	_edit("SetPunch", [1 if on else 0])
+
+
 func seek(seconds: float) -> void:
 	write("/time", [maxf(seconds, 0.0)])
 	_apply("/time", [maxf(seconds, 0.0)])
@@ -935,6 +941,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		var file := str(result.get("project_file", "")).get_file()
 		if title != state.project_title or file != state.project_file:
 			_apply("/project/name", [title, file])
+	if result.has("punch") and bool(result["punch"]) != state.punch:
+		_apply("/punch", [1.0 if result["punch"] else 0.0])
 	if result.has("count_in") and int(result["count_in"]) != state.count_in_bars:
 		_apply("/countin", [float(result["count_in"])])
 	if result.has("master_automode"):

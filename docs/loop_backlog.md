@@ -201,8 +201,22 @@ can finish music in, saving DAWproject. Steps, in order:
      `--reaper`, Reaper took and read back one bar, ran its playhead from 28.20 s to the record
      point at 30.00 s (a bar is 1.80 s) and took from 30.016 s. The probe's end moved 4 s later
      (host 35.4/36.4, guest 34.5/36.0): the Reaper host's work now ends at 32.5 s.
+   - **Done 2026-10-10, punch in and out (4d):** `DAW.set_punch(on)` (`/punch`; PUNCH beside TAP
+     on the deck, which moved in to mirror CLICK and COUNT): a recording takes only inside the
+     loop range, all of it when there is none. It records throughout and goes on playing past
+     the range; `MixState.takes_at(seconds)` says whether a moment is taken (past any count-in,
+     inside any punch range). Takes ask it of the moment they hear, not the playhead's: the
+     first run punched the host's take in 23 ms early, by the output's latency. `count_in_to`
+     is now kept until the transport stops, for the same reason, and Reaper's own count-in puts
+     the playhead back at once rather than waiting to hear it (the grace is gone). Reaper:
+     the bridge's SetPunch picks its record mode, time selection auto-punch (40076) or normal
+     (40252), radio toggles of each other on the rig; GetTimeline reads it back. That is a
+     Reaper preference, not the project's, and its time selection is the loop range only when
+     the two are linked, as they almost always are. Measured: `--built-in`, my take recorded
+     from 0.8 s before a 1.5 s range to 0.4 s after it began 3.6 ms after the range's start and
+     ended 8.4 ms before its end (a frame is 17 ms); `--reaper`, the mode set and read back.
    - **Not yet:** recording more than one input at a time (one microphone and one set of keys
-     each now); punch in and out; per-track input choice saved in the project; a count-in
+     each now); per-track input choice saved in the project; a count-in
      before playback (Reaper's &8) and pre-roll with the song.
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an

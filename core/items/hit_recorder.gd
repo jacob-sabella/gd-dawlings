@@ -85,7 +85,7 @@ func _process(_delta: float) -> void:
 ## The take, following the transport as heard: begun when recording is heard to start onto an
 ## armed track, sent when it stops.
 func follow(h: Dictionary) -> void:
-	var rolling: bool = h["valid"] and h.get("recording", false)
+	var rolling: bool = h["valid"] and h.get("recording", false) and DAW.state.takes_at(float(h["seconds"]))
 	if not rolling:
 		_warned = false
 	if rolling and armed_track() > 0:
