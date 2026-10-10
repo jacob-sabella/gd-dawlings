@@ -8856,6 +8856,19 @@ func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:
 	check("Open brings the saved one back (%s %s)" % [said, notices],
 			said.is_empty() and notices == ["Ada opened Our Song.dawproject."] and DAW.state.tracks.size() > 4)
 	notices.clear()
+	var fixtures := ProjectSettings.globalize_path("res://vendor/dawkit/tests/fixtures/dawproject/reference")
+	var other := dir.path_join("From Elsewhere.dawproject")
+	var zip := ZIPPacker.new()
+	zip.open(other)
+	zip.start_file("project.xml")
+	zip.write_file(FileAccess.get_file_as_bytes(fixtures.path_join("MIDI-CC1-AutomationOnTrack.xml")))
+	zip.close_file()
+	zip.close()
+	said = panel.open_project(other)
+	check("a file that opens with something left out is opened, and the room hears what (%s)" % [notices],
+			said.size() == 1 and notices.size() == 1 and notices[0].begins_with("Ada opened From Elsewhere.dawproject, but: ")
+			and "MIDI" in notices[0] and DAW.project_file() == other)
+	notices.clear()
 	said = panel.open_project(dir.path_join("missing.dawproject"))
 	var shown: String = panel._toasts.get_child(-1).get_child(0).text
 	check("a file that is not there is refused, to the one who asked and not the room (%s / %s)" % [shown, notices],

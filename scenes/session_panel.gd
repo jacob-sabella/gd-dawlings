@@ -1136,28 +1136,33 @@ func save_project_as(path: String) -> PackedStringArray:
 	if not path.get_extension().to_lower() == "dawproject":
 		path += ".dawproject"
 	var said := DAW.save_project_as(path)
-	_report(said, "saved the project as %s" % path.get_file(), "could not save the project")
+	_report(said, "saved the project as %s" % path.get_file(), "could not save the project",
+			DAW.project_file() == path and FileAccess.file_exists(ProjectSettings.globalize_path(path)))
 	return said
 
 
 func open_project(path: String) -> PackedStringArray:
 	var said := DAW.open_project(path)
-	_report(said, "opened %s" % path.get_file(), "could not open %s" % path.get_file())
+	_report(said, "opened %s" % path.get_file(), "could not open %s" % path.get_file(), DAW.project_file() == path)
 	return said
 
 
 func start_new_project() -> PackedStringArray:
 	var said := DAW.new_project()
-	_report(said, "started an empty project", "could not start a project")
+	_report(said, "started an empty project", "could not start a project", said.is_empty())
 	return said
 
 
-func _report(said: PackedStringArray, done: String, failed: String) -> void:
+## `worked` is whether it was done at all: a file opened from another DAW may open with things
+## left out, which the room hears about along with the opening.
+func _report(said: PackedStringArray, done: String, failed: String, worked: bool) -> void:
 	_refresh_project()
-	if said.is_empty():
+	if not worked:
+		toast("You %s: %s" % [failed, "; ".join(said)])
+	elif said.is_empty():
 		Session.tell_room("%s %s." % [Session.local_name, done])
 	else:
-		toast("You %s: %s" % [failed, "; ".join(said)])
+		Session.tell_room("%s %s, but: %s" % [Session.local_name, done, "; ".join(said)])
 
 
 ## Who is here, at a glance, without opening anything: a dot and a name each, top right.

@@ -228,7 +228,8 @@ func monitor_bus(_track_index: int) -> StringName: return &""
 
 
 func save_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot save from here"])
-## Opens a project file in place of the open one; returns what went wrong, empty on success.
+## Opens a project file in place of the open one; returns what went wrong or was left out of it
+## as sentences. It opened when `project_path` is `path` afterwards, whatever it returns.
 func open_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot open files from here"])
 ## Replaces the open project with an empty one.
 func new_project() -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
