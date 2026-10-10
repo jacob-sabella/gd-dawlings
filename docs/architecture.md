@@ -209,6 +209,15 @@ So "transferable" means: native in Bitwig, Studio One and Cubase; Reaper through
 ProjectConverter, which is free and open source; Live and Logic by stems only. A Reaper host can
 already save a project through Reaper itself. The DAWproject path is for the built-in engine.
 
+Proved against the official examples (the projects bitwig/dawproject's own tests write, kept in
+dawkit as fixtures): each opens through dawkit and through the game with its clips, offsets, fades,
+notes, mix and automation where they sound; what the game saves of each is valid against the
+schema; and saved and opened again it is the same, with or without our extension. What a file
+from elsewhere loses here, always said as it opens (dawkit's warnings: the room hears "opened it,
+but: ..."): MIDI expression lanes (CC, pitch bend, pressure), automation
+inside clips, clip launcher scenes, video, time stretching (a stretched clip plays at its file's
+speed), and a plug-in's state when the file does not carry it.
+
 ## Authority: the backend is the truth, one process holds the pen
 
 The DAW owns the mix. Everything in `MixState` is a cache of what arrived over the wire and

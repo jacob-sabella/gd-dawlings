@@ -370,10 +370,10 @@ can finish music in, saving DAWproject. Steps, in order:
      click removes it, the wheel over a point nudges it; each is one `set_automation` step. The
      hover card names the lane and reads the point.
    - **Done 2026-10-10 (8f), measured:** the `--built-in` probe's off-beat notes' track has a
-     volume lane (held, then -9 dB over three seconds); each note's loudest sample in the host's
-     own take, against the notes before the ramp, is the lane's value there to within 0.64 dB
-     (two runs: worst 0.64 and 0.59; a steady 0.3-0.5 dB lower, about what the ramp moves in
-     the 80 ms before a note's peak).
+     volume lane (held, then -9 dB over three seconds); each note's power over its first 90 ms
+     in the host's own take, against the notes before the ramp, is the lane's value in the
+     middle of that window to within 0.1 dB (4 runs; the limit is 0.5 dB). It used to take the
+     loudest sample against the lane at the note's start, which drifted to 1.06 dB and failed.
    - **Done 2026-10-10 (8f), the master's lanes:** `MasterState.automation` (volume, pan),
      wire `/master/automation/<target>`, `DAW.set_automation(0, ...)` (track 0 is the master;
      a guest's master target other than volume or pan is refused), followed like a track's,
@@ -417,7 +417,37 @@ can finish music in, saving DAWproject. Steps, in order:
      no tail after the range (a reverb is cut at its end); faster than real time waits on the
      engine mixing itself. A default probe run once lost one of the guest's clicks ("its clicks
      a second apart"), then passed 3 times running.
-10. Interchange proof against the official examples.
+10. **Done 2026-10-10.** Interchange proof against the official examples. The examples are what
+   bitwig/dawproject's own tests write (DawProjectTest at ee4dcdd, run with Gradle 9.8.1 on Java
+   26, as 8.11 does not run there): 20 projects, kept in dawkit as fixtures
+   (`tests/fixtures/dawproject/reference`, MIT, with the one WAV they embed).
+   - **Found:** every audio example opened with no clips and no word: dawkit read clips only from
+     a lane per track (Bitwig's own layout), and the examples put `Clips track=` straight under
+     the arrangement. MIDI CC and pitch-bend automation were dropped silently, an alias clip
+     (`reference=`) was empty, a warped clip's start in its file was lost, and a clip playing a
+     file outside the project failed in the game (ProjectFiles joined its absolute path onto
+     the unpacked media).
+   - **Done, in dawkit (8bb6e02):** lanes are read as deep as they nest, each knowing its track
+     and time unit from around it; aliases play their content; a warp at the song's own speed
+     is no change, its start in the file kept. Said, not dropped: automation of MIDI expression,
+     automation inside clips, scenes, video, a stretch (played at the file's speed), plug-in
+     state missing from the file, an external file not on this machine. dawkit's tests open each
+     example (its clips' starts, lengths, offsets, fades, notes, and its one expected warning),
+     save it, check the save against the official schema, and reopen it the same, also with
+     dawkit's extras stripped as another DAW's re-save would. Two projects now count as the same
+     when their numbers differ only in the last bits (beats written and read back as seconds).
+   - **Done, in the game (3dbd09f):** the suite opens each example through `DAW.open_project`
+     on the built-in engine: dawkit's warnings exactly, its clips as the items, every sound a file
+     the engine can play; the game's save of it is valid against the schema and reopens the same.
+     The demo song's save is checked against the schema too.
+     And a file that opened with something left out told the host "You could not open it": the
+     panel took any sentence back as failure. It opened when the project's path is the file's
+     now (DAWBackend.open_project says so); the room hears "opened it, but: ...".
+   - **Not carried, and said when met:** MIDI expression lanes (CC, pitch bend, pressure),
+     automation in clips, clip launcher scenes, video, time stretching, other DAWs' plug-in
+     state when it is not in the file. Not tried: a file from Studio One or Cubase themselves
+     (only Bitwig's README example and the reference implementation's), and no other DAW here
+     to open what the game saves.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,
 Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic by stems only.
@@ -442,13 +472,8 @@ Nothing in it should take that long: find the slow tests.
 
 ## Built-in engine (GodotBackend), next
 
-- Recording into the built-in engine (a track armed takes the mic through `AudioEffectRecord`).
-- The user's own audio files and stems as items, not just the synthesised demo song.
-- MIDI items played through a small built-in synth. A guest's take already lands on the built-in
-  engine (it inherits the stand-in's `insert_midi_take`) but is silent; MonitorSynth is the
-  obvious voice for it.
-- The click and input monitoring are accepted by the built-in engine but make no sound yet.
-- Saving and loading a project, probably as DAWproject (MIT).
+Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Built-in DAW" above.
+
 - The demo mix is heavy below 150Hz; worth a pass by ear.
 - The alternatives if more than Godot's effects is wanted: a headless Ardour over OSC (GPL at
   arm's length, desktop only), or Tracktion Engine (GPLv3 or commercial).
