@@ -35,7 +35,7 @@ const NAME_SPAN := HEADER_WIDTH - 0.036
 ## Two strips rather than one with a modifier key, because a headset has no shift key and a
 ## gesture that changes meaning with a key you cannot see is one people get wrong.
 const LOOP_BAND := 0.008
-const NUMBERS_HEIGHT := 0.022
+const NUMBERS_HEIGHT := 0.024
 const RULER_HEIGHT := LOOP_BAND + NUMBERS_HEIGHT
 const DEPTH := 0.006
 
@@ -140,6 +140,10 @@ var _fade_preview: Array = []
 const FADE_GRIP_HEIGHT := 0.005
 ## An item's gain, written on it when it is not 0 dB: labels kept and reused as the window moves.
 var _gain_labels: Node3D
+## Item names, pooled as the gain labels are.
+var _item_labels: Node3D
+## The bottom edge of the lowest lane (or the automation row under it), where the grid stops.
+var _lanes_bottom := 0.0
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
 var _lane_y: Array[float] = []
 
@@ -359,7 +363,8 @@ func _rebuild() -> void:
 	var total_items := 0
 	for index in indices:
 		total_items += DAW.state.track(index).items.size()
-	_item_blocks = MeshBank.boxes(Materials.cap_plastic(Color.WHITE))
+	# Unlit, as the rest of the screen: see SCREEN_FACE.
+	_item_blocks = MeshBank.strips()
 	_item_blocks.name = "ItemBlocks"
 	_adopt(_item_blocks)
 	_item_strips = MeshBank.strips()
@@ -369,11 +374,10 @@ func _rebuild() -> void:
 	_item_notes.name = "ItemNotes"
 	_adopt(_item_notes)
 
-	var bed_bank := MeshBank.parts(Vector3(_lane_area_width, LANE_HEIGHT, 0.0010),
-			Materials.recess())
+	var bed_bank := MeshBank.strips()
 	bed_bank.name = "LaneBeds"
 	_adopt(bed_bank)
-	var chip_bank := MeshBank.lamps(Vector3(0.0030, LANE_HEIGHT, 0.0014))
+	var chip_bank := MeshBank.lamps(Vector3(0.0045, LANE_HEIGHT, 0.0014))
 	chip_bank.name = "LaneChips"
 	_adopt(chip_bank)
 
@@ -382,7 +386,7 @@ func _rebuild() -> void:
 	var y := _top_y - RULER_HEIGHT - LANE_GAP - LANE_HEIGHT * 0.5
 	for index in indices:
 		_lane_y.append(y)
-		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank)
+		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank, _lane_y.size() % 2 == 0)
 		y -= LANE_HEIGHT + LANE_GAP
 		if auto_row and (index == picked_track or (picked_track == 0 and index == indices[-1])):
 			_auto_row_y = y + LANE_HEIGHT * 0.5 - AUTOMATION_ROW * 0.5
@@ -390,6 +394,7 @@ func _rebuild() -> void:
 			y -= AUTOMATION_ROW + LANE_GAP
 	bed_bank.commit()
 	chip_bank.commit()
+	_lanes_bottom = y + LANE_HEIGHT * 0.5 + LANE_GAP
 
 	# One slot per item, claimed now and positioned by _relayout_view. A claim needs a transform
 	# and the window has not been applied yet, so they start folded flat and are never drawn in
@@ -408,6 +413,9 @@ func _rebuild() -> void:
 	_gain_labels = Node3D.new()
 	_gain_labels.name = "GainLabels"
 	_adopt(_gain_labels)
+	_item_labels = Node3D.new()
+	_item_labels.name = "ItemLabels"
+	_adopt(_item_labels)
 	var total_notes := 0
 	for index in indices:
 		for item in DAW.state.track(index).items:
@@ -1013,7 +1021,7 @@ func _build_loop_bar() -> void:
 	band_mesh.size = Vector3(width, LOOP_BAND, 0.0012)
 	band.mesh = band_mesh
 	band.position = Vector3(0, _top_y - LOOP_BAND * 0.5, 0.0007)
-	band.material_override = Materials.chassis()
+	band.material_override = flat(RULER_FACE.darkened(0.2))
 	_adopt(band)
 	_loop_bar = MeshInstance3D.new()
 	var mesh := BoxMesh.new()
@@ -1075,17 +1083,13 @@ func _build_carcass() -> void:
 	panel.position = Vector3(0, 0, -DEPTH * 0.5)
 	panel.material_override = Materials.chassis()
 	_adopt(panel)
+	# The screen in it, a bezel's width in from the chassis's edge.
+	_adopt(_flat_box(Vector3(width - 0.002, _height - 0.002, 0.0002), Vector3(0, 0, 0.00012), SCREEN_FACE))
 
-	# The track headers are a shade darker than the lanes behind them, which is the only thing
+	# The track headers are a shade apart from the lanes beside them, which is the only thing
 	# separating a name from the block it sits beside once a lane is 17mm tall.
-	var gutter := MeshInstance3D.new()
-	var gutter_mesh := BoxMesh.new()
-	gutter_mesh.size = Vector3(HEADER_WIDTH, _height - RULER_HEIGHT, 0.0012)
-	gutter.mesh = gutter_mesh
-	gutter.position = Vector3(-width * 0.5 + HEADER_WIDTH * 0.5,
-			-(RULER_HEIGHT * 0.5), 0.0007)
-	gutter.material_override = Materials.recess()
-	_adopt(gutter)
+	_adopt(_flat_box(Vector3(HEADER_WIDTH, _height - RULER_HEIGHT, 0.0012),
+			Vector3(-width * 0.5 + HEADER_WIDTH * 0.5, -(RULER_HEIGHT * 0.5), 0.0007), SCREEN_GUTTER))
 
 
 ## Bar lines and numbers, spaced by tempo.
@@ -1116,13 +1120,44 @@ func _build_ruler() -> void:
 	var first := int(floor((at_left - 1.0) / step)) * step
 	var last := int(ceil(s.bar_at(view_start + view_span)))
 
-	var strip := MeshInstance3D.new()
-	var strip_mesh := BoxMesh.new()
-	strip_mesh.size = Vector3(width, NUMBERS_HEIGHT, 0.0012)
-	strip.mesh = strip_mesh
-	strip.position = Vector3(0, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0007)
-	strip.material_override = Materials.recess()
-	_ruler.add_child(strip)
+	_ruler.add_child(_flat_box(Vector3(width, NUMBERS_HEIGHT, 0.0012),
+			Vector3(0, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0007), RULER_FACE))
+
+	# The grid down the lanes, behind the blocks: a line on every bar while bars are far enough
+	# apart to tell from each other, brighter on the numbered ones, and the sections' lines over
+	# them, so where the chorus starts reads straight down the arrangement.
+	var grid_step: int = step
+	for candidate in LABEL_STEPS:
+		if candidate * per_bar >= 0.006:
+			grid_step = mini(candidate, step)
+			break
+	var grid := MeshBank.strips()
+	grid.name = "Grid"
+	_ruler.add_child(grid)
+	var grid_top := _top_y - RULER_HEIGHT
+	var grid_height := grid_top - _lanes_bottom
+	var gfirst := int(floor((at_left - 1.0) / grid_step)) * grid_step
+	var lines: Array = []
+	for n in range(gfirst, last + 1, grid_step):
+		if n < 0 or n % step == 0:
+			continue
+		lines.append([_x_for(s.bar_to_seconds(n + 1.0)), GRID_BEAT, 0.0005])
+	for n in range(first, last + 1, step):
+		if n >= 0:
+			lines.append([_x_for(s.bar_to_seconds(n + 1.0)), GRID_BAR, 0.0006])
+	for at in DAW.state.markers:
+		lines.append([_x_for(float(at)), MARKER_COLOUR.darkened(0.45), 0.0007])
+	# One line per place, the later (a section's over a bar's) taking it.
+	var at_x := {}
+	for line in lines:
+		at_x[roundi(float(line[0]) * 20000.0)] = line
+	for line in at_x.values():
+		var lx: float = line[0]
+		if lx < _lane_area_x - 0.0001 or lx > _lane_right() or grid_height <= 0.0:
+			continue
+		grid.claim(Transform3D(Basis.from_scale(Vector3(line[2], grid_height, 0.0001)),
+				Vector3(lx, (grid_top + _lanes_bottom) * 0.5, 0.00118)), (line[1] as Color).srgb_to_linear())
+	grid.commit()
 
 	for n in range(first, last + 1, step):
 		if n < 0:
@@ -1130,16 +1165,11 @@ func _build_ruler() -> void:
 		var x := _x_for(s.bar_to_seconds(n + 1.0))
 		if x < _lane_area_x - 0.0001 or x > _lane_right():
 			continue
-		var tick := MeshInstance3D.new()
-		var tick_mesh := BoxMesh.new()
-		tick_mesh.size = Vector3(0.0006, NUMBERS_HEIGHT * 0.45, 0.0008)
-		tick.mesh = tick_mesh
-		tick.position = Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.72, 0.0014)
-		tick.material_override = Materials.legend()
-		_ruler.add_child(tick)
+		_ruler.add_child(_flat_box(Vector3(0.0006, NUMBERS_HEIGHT * 0.5, 0.0008),
+				Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.75, 0.0014), RULER_TICK))
 
-		var label := _text(str(n + 1), 34, Color(0.60, 0.64, 0.70))
-		label.position = Vector3(x + 0.0025, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.26, 0.0016)
+		var label := _text(str(n + 1), 40, RULER_TEXT)
+		label.position = Vector3(x + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.28, 0.0016)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(label)
 
@@ -1172,8 +1202,12 @@ func _build_ruler() -> void:
 		var mx := _x_for(float(at))
 		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
 			continue
-		var flag := _text(str(DAW.state.markers[at]).to_upper(), 28, Color(0.88, 0.74, 0.44))
-		flag.position = Vector3(mx + 0.0025, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
+		# Not the bar tick's height: a marker is mostly on a bar line, and two ticks with the same
+		# ends draw their ends in the same plane.
+		_ruler.add_child(_flat_box(Vector3(0.0008, NUMBERS_HEIGHT * 0.58, 0.0008),
+				Vector3(mx, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.69, 0.0015), MARKER_COLOUR))
+		var flag := _text(str(DAW.state.markers[at]).to_upper(), 32, MARKER_COLOUR)
+		flag.position = Vector3(mx + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
 		flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(flag)
 
@@ -1216,20 +1250,23 @@ func _build_bank_notice() -> void:
 
 
 func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
-		chip_bank: MeshBank) -> void:
-	bed_bank.claim(Transform3D(Basis.IDENTITY,
-			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), Color.WHITE)
+		chip_bank: MeshBank, alternate := false) -> void:
+	# Every other lane a shade apart, as in every arranger, so a block can be followed back to
+	# its name across the panel; the picked track's lane lit.
+	var bed := LANE_BED_PICKED if t.index == picked_track else (LANE_BED_ALT if alternate else LANE_BED)
+	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, LANE_HEIGHT, 0.0010)),
+			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), bed.srgb_to_linear())
 	# chip_colour and not lamp_colour, for the reason in Materials: this is the track's identity
 	# and a clipped identity is no identity.
-	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-width * 0.5 + 0.0035, y, 0.0014)),
+	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-width * 0.5 + 0.0042, y, 0.0014)),
 			Materials.chip_colour(t.colour))
 
 	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
 	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
 	# `fit` holds it there without letting it go below the size every name used to be.
 	var name_label := _text(t.display_name(), 38,
-			Color(1.0, 0.86, 0.55) if t.index == picked_track else Color(0.82, 0.84, 0.87))
-	name_label.position = Vector3(-width * 0.5 + 0.009, y, 0.0016)
+			Color(1.0, 0.86, 0.55) if t.index == picked_track else Color(0.93, 0.94, 0.96))
+	name_label.position = Vector3(-width * 0.5 + 0.0095, y, 0.0016)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	Lettering.fit(name_label, NAME_SPAN, 38 * 4, 22 * 4)
 	_adopt(name_label)
@@ -1258,7 +1295,7 @@ func _build_automation_row(y: float) -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(_lane_area_width, AUTOMATION_ROW, 0.0010)
 	bed.mesh = box
-	bed.material_override = Materials.recess()
+	bed.material_override = flat(LANE_BED_ALT)
 	bed.position = Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)
 	_adopt(bed)
 	var label := _text(("MASTER  " if picked_track == 0 else "") + lane_name(shown_lane), 26, AUTOMATION_COLOUR)
@@ -1286,6 +1323,7 @@ func _relayout_view() -> void:
 	var wave_slot := 0
 	var fade_slot := 0
 	var gain_label := 0
+	var name_label := 0
 	for i in indices.size():
 		if i >= _lane_y.size():
 			break
@@ -1313,6 +1351,7 @@ func _relayout_view() -> void:
 				# Fades and gain belong to the block: they move with it and follow a trim.
 				fade_slot = _place_fades(item, start, length, t.colour, _lane_y[i], fade_slot)
 				gain_label = _place_gain(item, start, length, _lane_y[i], gain_label)
+				name_label = _place_name(item, start, length, _lane_y[i], name_label, t.display_name())
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
@@ -1321,6 +1360,8 @@ func _relayout_view() -> void:
 	_item_fades.show_first(fade_slot)
 	for k in range(gain_label, _gain_labels.get_child_count()):
 		(_gain_labels.get_child(k) as Label3D).visible = false
+	for k in range(name_label, _item_labels.get_child_count()):
+		(_item_labels.get_child(k) as Label3D).visible = false
 	_draw_loop()
 	_draw_automation()
 
@@ -1350,16 +1391,11 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 
 	var dim := item.muted or lane_muted
 	var block_height := LANE_HEIGHT - 0.0024
-	# Tinted with the track's colour but well down in value: at twelve lanes the blocks are most
-	# of the panel, and a wall of saturated colour buries the playhead and the markers, which
-	# are the two things actually being read.
-	var body := tint.darkened(0.40).lerp(Color(0.16, 0.17, 0.19), 0.30)
-	if dim:
-		body = body.darkened(0.55)
-	# Selected reads the way it does in every arranger: the block lifts towards white. Lightened
-	# rather than outlined, because an outline at a lane 17mm tall is a hairline nobody sees.
-	if item.selected:
-		body = body.lerp(Color(0.86, 0.88, 0.90), 0.34)
+	# Tinted with the track's colour, held to a middling value: at twelve lanes the blocks are
+	# most of the panel, and a wall of saturated colour buries the playhead and the markers.
+	# Selected lifts towards white rather than being outlined, because an outline at a lane 17mm
+	# tall is a hairline nobody sees.
+	var body := item_body(tint, dim, item.selected).srgb_to_linear()
 	# The bank holds unit cubes, so the size of an item IS its instance scale.
 	_item_blocks.move_slot(slot, Transform3D(
 			Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0014)),
@@ -1483,6 +1519,62 @@ func _place_gain(item: MixState.ItemState, start: float, length: float, y: float
 	return used + 1
 
 
+## An item's name in its top left corner, under the strip, cut to fit the block -- and left off
+## a block too short to hold a few letters of it. Returns the next free label.
+const ITEM_NAME_SIZE := 28
+const MIN_NAMED_WIDTH := 0.014
+
+
+func _place_name(item: MixState.ItemState, start: float, length: float, y: float, used: int,
+		track_name := "") -> int:
+	var shown := shown_item_name(item.name, track_name)
+	if shown.is_empty():
+		return used
+	var left := maxf(_x_for(start) + EDGE_GAP, _lane_area_x)
+	var right := minf(_x_for(start + length) - EDGE_GAP, _lane_right())
+	if absf(item.gain_db) >= 0.05:
+		right -= 0.03
+	var room := right - left - 0.003
+	if room < MIN_NAMED_WIDTH:
+		return used
+	var l: Label3D
+	if used < _item_labels.get_child_count():
+		l = _item_labels.get_child(used)
+	else:
+		l = _text("", ITEM_NAME_SIZE, ITEM_NAME_COLOUR)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		l.outline_size = 10
+		l.outline_modulate = Color(0, 0, 0, 0.55)
+		_item_labels.add_child(l)
+	l.text = fit_text(shown, room / l.pixel_size, l.font_size)
+	l.position = Vector3(left + 0.0016, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0050, 0.0030)
+	l.visible = not l.text.is_empty()
+	return used + 1
+
+
+## An item's name as its block shows it: without its track's name in front, which the lane's
+## header already says -- "Kick Verse 1" on the Kick lane is "Verse 1".
+static func shown_item_name(item_name: String, track_name: String) -> String:
+	if track_name != "" and item_name.length() > track_name.length() \
+			and item_name.to_lower().begins_with(track_name.to_lower() + " "):
+		return item_name.substr(track_name.length() + 1).strip_edges()
+	return item_name
+
+
+## `text` cut with an ellipsis to fit `room` pixels at `size`, or "" when not even a letter does.
+static func fit_text(text: String, room: float, size: int) -> String:
+	var font := ThemeDB.fallback_font
+	if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= room:
+		return text
+	var n := text.length() - 1
+	while n > 0:
+		var cut := text.left(n).strip_edges() + "…"
+		if font.get_string_size(cut, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= room:
+			return cut
+		n -= 1
+	return ""
+
+
 ## A recorded take's loudness, on the item, as an arranger draws a waveform: a column for every
 ## few millimetres of panel, as tall as the loudest moment under it, mirrored about the middle
 ## of the block below its strip. Read from the item's overview (AudioTake.peaks), from where in
@@ -1572,7 +1664,7 @@ func _build_playhead() -> void:
 
 	var line := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.0008, _height - RULER_HEIGHT * 0.4, 0.0010)
+	mesh.size = Vector3(0.0012, _height - RULER_HEIGHT * 0.4, 0.0010)
 	line.mesh = mesh
 	line.position = Vector3(0, -(RULER_HEIGHT * 0.2), 0.0026)
 	line.material_override = Materials.led(Color(0.96, 0.86, 0.45), true)
@@ -1580,9 +1672,9 @@ func _build_playhead() -> void:
 
 	var head := MeshInstance3D.new()
 	var head_mesh := BoxMesh.new()
-	head_mesh.size = Vector3(0.0042, 0.0042, 0.0012)
+	head_mesh.size = Vector3(0.0056, 0.0050, 0.0012)
 	head.mesh = head_mesh
-	head.position = Vector3(0, _top_y - LOOP_BAND - 0.0021, 0.0028)
+	head.position = Vector3(0, _top_y - LOOP_BAND - 0.0025, 0.0028)
 	head.material_override = Materials.led(Color(0.96, 0.86, 0.45), true)
 	_playhead.add_child(head)
 
@@ -1649,6 +1741,57 @@ func _seconds_at_x(x: float) -> float:
 
 func _lane_right() -> float:
 	return _lane_area_x + _lane_area_width
+
+
+## The screen's own colours, sRGB. Drawn UNLIT: this is a display, and a display lit by the room
+## goes the colour of the room -- under the studio's warm key every lane, block and gutter came
+## out the same muddy brown, and the blocks vanished into the lanes they sat in.
+const SCREEN_FACE := Color(0.070, 0.077, 0.092)
+const SCREEN_GUTTER := Color(0.098, 0.106, 0.125)
+const RULER_FACE := Color(0.050, 0.055, 0.066)
+const LANE_BED := Color(0.130, 0.140, 0.163)
+const LANE_BED_ALT := Color(0.112, 0.121, 0.142)
+const LANE_BED_PICKED := Color(0.180, 0.190, 0.225)
+const GRID_BEAT := Color(0.150, 0.160, 0.185)
+const GRID_BAR := Color(0.205, 0.218, 0.250)
+const RULER_TEXT := Color(0.88, 0.90, 0.94)
+const RULER_TICK := Color(0.46, 0.49, 0.55)
+const MARKER_COLOUR := Color(1.0, 0.80, 0.42)
+const ITEM_NAME_COLOUR := Color(0.97, 0.97, 0.98)
+static var _flats := {}
+
+
+## An unlit material in one colour, shared by everything on the screen drawn in it.
+static func flat(colour: Color) -> StandardMaterial3D:
+	if not _flats.has(colour):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = colour
+		_flats[colour] = m
+	return _flats[colour]
+
+
+## A box drawn in one flat colour.
+func _flat_box(size: Vector3, at: Vector3, colour: Color) -> MeshInstance3D:
+	var box := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	box.mesh = mesh
+	box.position = at
+	box.material_override = flat(colour)
+	box.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return box
+
+
+## An item block's body: the track's colour, held to a value white type reads on, darker for a
+## muted item and lifted toward white for a selected one -- the way every arranger draws them.
+static func item_body(tint: Color, dim: bool, selected: bool) -> Color:
+	var body := Color.from_hsv(tint.h, minf(tint.s * 0.85, 0.62), clampf(tint.v * 0.62, 0.30, 0.50))
+	if dim:
+		body = Color.from_hsv(tint.h, tint.s * 0.25, 0.20)
+	if selected:
+		body = body.lerp(Color(0.92, 0.93, 0.95), 0.42)
+	return body
 
 
 func _text(content: String, size: int, tint: Color) -> Label3D:
