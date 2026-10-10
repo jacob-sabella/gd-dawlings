@@ -8373,6 +8373,34 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	check("two selected, they hide", not strip.visible and strip.gain.collision_layer == 0)
 	click.call(at.call(2, 12.0))
 
+	# Tracks: a name pressed picks it; ADD, DEL and NAME act on it.
+	var header: TimelineHeader = timeline._header
+	var tracks: TimelineTrackStrip = timeline._track_controls
+	var names_were: Array = s.track_indices().map(func(i): return s.track(i).name)
+	check("with no track picked, only ADD is lit", tracks.add.lit and not tracks.remove.lit and not tracks.rename.lit)
+	header.grab_begin(hand, at.call(3, 1.0) - timeline.global_basis.x * 0.05)
+	header.grab_end(hand)
+	check("a press on a track's name picks it (%d)" % timeline.picked_track, timeline.picked_track == 3
+			and tracks.remove.lit and tracks.rename.lit)
+	tracks.add.pressed.emit()
+	check("ADD puts a new track after it, and picks that (%d)" % timeline.picked_track,
+			s.tracks.size() == names_were.size() + 1 and s.track(4).items.is_empty() and timeline.picked_track == 4
+			and s.track(5).name == names_were[3])
+	var prompt := timeline.ask_track_name(4)
+	check("NAME asks for a name on the monitor", prompt != null and prompt._edit.text == s.track(4).name)
+	prompt._edit.text_submitted.emit("  Overdub ")
+	check("and the name typed is the track's (%s)" % s.track(4).name, s.track(4).name == "Overdub")
+	tracks.remove.pressed.emit()
+	check("DEL removes the picked track, and nothing is picked after",
+			s.track_indices().map(func(i): return s.track(i).name) == names_were and timeline.picked_track == 0)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("three undos, and the tracks are as they were",
+			s.track_indices().map(func(i): return s.track(i).name) == names_were)
+	timeline.pick_track(0)
+	click.call(at.call(2, 12.0))
+
 	# Copy and delete, under the track names, for the selection.
 	check("copy and delete light with a selection", timeline._copy_key.lit and timeline._delete_key.lit)
 	timeline._copy_key.pressed.emit()

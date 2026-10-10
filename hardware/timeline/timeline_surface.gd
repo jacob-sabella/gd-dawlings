@@ -103,6 +103,11 @@ var _delete_key: PanelButton
 var _delete_caption: Label3D
 ## The selected item's gain, fades and notes, under the panel; see TimelineItemStrip.
 var _item_controls: TimelineItemStrip
+## Add, remove and name tracks, under the right-hand end; see TimelineTrackStrip.
+var _track_controls: TimelineTrackStrip
+## The track whose name was last pressed, for the track keys; 0 for none. This desk's own, not
+## the DAW's selection: which track someone means to rename is not part of the mix.
+var picked_track := 0
 ## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
 var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
@@ -227,6 +232,13 @@ func _ready() -> void:
 	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_delete_caption)
 	DAW.timeline_changed.connect(_light_selection_keys)
+
+	_track_controls = TimelineTrackStrip.new()
+	_track_controls.name = "TrackStrip"
+	_track_controls.surface = self
+	add_child(_track_controls)
+	DAW.tracks_renumbered.connect(func(map: Dictionary) -> void:
+		pick_track(int(map.get(picked_track, 0))))
 
 	_item_controls = TimelineItemStrip.new()
 	_item_controls.name = "ItemStrip"
@@ -399,6 +411,8 @@ func _place_strips() -> void:
 	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
 	_light_selection_keys()
 	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
+	_track_controls.position = Vector3(width * 0.5 - 0.020 - 2 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
+	_track_controls.refresh()
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).
@@ -513,6 +527,42 @@ func item_edge_at_point(global_point: Vector3) -> int:
 	if right - x <= grip:
 		return 1
 	return 0
+
+
+## The track whose lane is under a point in the world, or 0.
+func track_at_point(global_point: Vector3) -> int:
+	var local := to_local(global_point)
+	var indices := _shown()
+	for i in mini(indices.size(), _lane_y.size()):
+		if absf(local.y - _lane_y[i]) <= (LANE_HEIGHT + LANE_GAP) * 0.5:
+			return indices[i]
+	return 0
+
+
+## Pick a track for the track keys (0 for none). Its name is drawn lit.
+func pick_track(index: int) -> void:
+	if index == picked_track:
+		return
+	picked_track = index
+	mark_dirty()
+	if _track_controls != null:
+		_track_controls.refresh()
+
+
+## Whether there is a keyboard and a screen to type on: not in a headset.
+func can_type() -> bool:
+	return not get_viewport().use_xr
+
+
+## A name typed for a track, on the monitor. The prompt, or null where there is nothing to type on.
+func ask_track_name(index: int) -> NamePrompt:
+	if not DAW.state.tracks.has(index) or not can_type():
+		return null
+	var prompt := NamePrompt.ask(self, "Name track %d" % index, DAW.state.track(index).name)
+	prompt.answered.connect(func(text: String) -> void:
+		if text != "" and DAW.state.tracks.has(index):
+			DAW.rename_track(index, text))
+	return prompt
 
 
 ## Draw an item somewhere other than where it is, for the length of a drag: moved to `start`, or
@@ -752,7 +802,8 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
 	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
 	# `fit` holds it there without letting it go below the size every name used to be.
-	var name_label := _text(t.display_name(), 38, Color(0.82, 0.84, 0.87))
+	var name_label := _text(t.display_name(), 38,
+			Color(1.0, 0.86, 0.55) if t.index == picked_track else Color(0.82, 0.84, 0.87))
 	name_label.position = Vector3(-width * 0.5 + 0.009, y, 0.0016)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	Lettering.fit(name_label, NAME_SPAN, 38 * 4, 22 * 4)

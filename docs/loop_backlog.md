@@ -264,8 +264,12 @@ can finish music in, saving DAWproject. Steps, in order:
      panel (`TimelineItemStrip`): GAIN (-24 to +12 dB), fade IN and OUT (squared, up to the
      item's length) on knobs that edit when let go, so a turn is one undo step and one bridge
      call; `-`/`+` transpose a semitone (fine: an octave) and `Q` quantises to the beat (fine:
-     sixteenths), lit for MIDI items. Next: adding, removing and renaming tracks from the
-     header (renaming needs text entry, so it goes through the screen's keyboard or the panel); fades drawn as curves rather than a flat volume per frame (needs
+     sixteenths), lit for MIDI items. Tracks: a press on a name in the header picks it (lit
+     amber; this desk's own, not the DAW's selection), and `TimelineTrackStrip` under the
+     panel's right end has ADD (after the picked track, or at the end), DEL and NAME. NAME opens
+     a `NamePrompt` on the monitor; in a headset there is nothing to type on yet, and the key
+     says so. Still to come: a way to type in a headset; a gain readout drawn on the item; fade
+     handles drawn on the item's corners; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

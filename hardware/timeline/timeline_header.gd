@@ -6,7 +6,7 @@ extends ControlAffordance
 ## The wheel over the names moves the panel through the track list a lane per notch, and a drag
 ## up or down does the same at a lane per lane-height dragged. Over the lanes the wheel zooms
 ## time; over the names it scrolls tracks. Two places, two meanings, each where the thing it
-## moves is drawn.
+## moves is drawn. A press that does not scroll picks the track, for the track keys.
 
 var width := 0.1
 var height := 0.2
@@ -16,6 +16,7 @@ var surface: Node
 var _shape: CollisionShape3D
 var _grab_y := 0.0
 var _scrolled := 0
+var _grab_point := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -35,7 +36,14 @@ func refresh() -> void:
 
 func _on_grab_begin(at: Vector3) -> void:
 	_grab_y = to_local(at).y
+	_grab_point = at
 	_scrolled = 0
+
+
+func _on_grab_end() -> void:
+	if _scrolled == 0:
+		var picked: int = surface.track_at_point(_grab_point)
+		surface.pick_track(0 if picked == surface.picked_track else picked)
 
 
 func _on_grab_move(at: Vector3) -> void:
@@ -64,4 +72,4 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "wheel or drag to scroll the tracks"
+	return "wheel or drag to scroll the tracks; press a name to pick it for ADD, DEL and NAME"
