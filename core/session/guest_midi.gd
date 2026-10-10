@@ -380,3 +380,12 @@ func _release_all() -> void:
 	for pitch in held.keys():
 		note_off(pitch)
 	held.clear()
+
+
+## Tracks were added or removed on the host: the chosen track is still the same track, and none
+## once it is gone.
+func follow_renumber(map: Dictionary) -> void:
+	if target_track > 0:
+		target_track = int(map.get(target_track, 0))
+	if _take_track > 0:
+		_take_track = int(map.get(_take_track, 0))

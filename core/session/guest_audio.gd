@@ -264,3 +264,10 @@ func _source_rate() -> float:
 
 func mic_open() -> bool:
 	return _source != null
+
+
+## Tracks were added or removed on the host: the chosen track is still the same track, and none
+## once it is gone.
+func follow_renumber(map: Dictionary) -> void:
+	if target_track > 0:
+		target_track = int(map.get(target_track, 0))

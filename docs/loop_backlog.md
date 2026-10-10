@@ -246,9 +246,17 @@ can finish music in, saving DAWproject. Steps, in order:
      line with the edits. Over OSC, an undo sent straight before a bridge edit was served after
      it and took the edit back instead (seen in the `--reaper` probe). OSC is the fallback with
      no bridge.
-   - **Not yet:** things the session keys by track number do not follow a renumbering: a
-     guest's chosen take track, holds, and the layout profile's strips. Renaming a demo-song
-     track changes which part it plays, because parts go by name.
+   - **Done 2026-10-10 (6e), what is kept by track number follows a renumbering:** backends emit
+     `tracks_renumbered(old -> new)` (and DAW relays it) for an add, a remove, and the undo or
+     redo of either. The host remaps its own and its guests' chosen take tracks
+     (`GuestAudio`/`GuestMidi.follow_renumber`, sent to guests as `_tracks_renumbered`) and the
+     takes on their way in; a take whose track is gone is refused when it lands. Plugin tablets
+     follow their track by number rather than finding the plugin again by name, since another
+     track may have one of the same name; the profile and the room are updated after. On Reaper
+     the map comes from the edit; an undo of a track edit in Reaper sends none.
+   - **Not yet:** holds are by control and last one gesture, so they are left alone. Renaming a
+     demo-song track changes which part it plays, because parts go by name. Seen once: the default
+     probe's guest did not hear the host's head (2 checks), then passed 3 runs in a row.
    - **Done 2026-10-10 (6d), keys:** COPY and DEL on the timeline, in the corner under the track
      names, lit while items are selected. Dragging an item's edge (the last 4 mm of it, at most a
      quarter of it) trims that edge, snapped to the beat unless fine. The block is drawn at its new

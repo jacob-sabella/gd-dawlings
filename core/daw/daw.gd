@@ -20,6 +20,8 @@ extends Node
 ## the thing behind it.
 
 signal connection_changed()
+## See DAWBackend.tracks_renumbered.
+signal tracks_renumbered(map: Dictionary)
 
 ## The mix's own signals, relayed from whichever MixState is current. Connect to THESE, never to
 ## `DAW.state.<signal>`: the state belongs to the backend and is replaced with it -- joining a
@@ -90,6 +92,7 @@ func use(new_backend: DAWBackend, start: bool = true, options: Dictionary = {}) 
 	add_child(backend)
 	_relay(backend.state, true)
 	backend.connection_changed.connect(func(): connection_changed.emit())
+	backend.tracks_renumbered.connect(func(map: Dictionary): tracks_renumbered.emit(map))
 	backend.is_authority = Session.is_authority()
 	var ok := backend.open(options) if start else true
 	connection_changed.emit()

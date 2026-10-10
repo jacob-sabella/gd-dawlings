@@ -876,6 +876,7 @@ func _renumber(order: Array) -> void:
 		if instruments.has(old):
 			moved_instruments[map[old]] = instruments[old]
 	instruments = moved_instruments
+	tracks_renumbered.emit(map)
 	_structure_changed(moved_kinds)
 
 
@@ -893,6 +894,13 @@ func _structure() -> Dictionary:
 
 
 func _restore_structure(saved: Dictionary) -> void:
+	var now := {}
+	for index in state.tracks:
+		now[state.tracks[index]] = index
+	var map := {}
+	for row in saved["rows"]:
+		if now.has(row[0]):
+			map[now[row[0]]] = row[1]
 	var tracks := {}
 	for row in saved["rows"]:
 		var t: MixState.TrackState = row[0]
@@ -908,6 +916,7 @@ func _restore_structure(saved: Dictionary) -> void:
 	state.tracks = tracks
 	state.project_track_count = tracks.size()
 	instruments = saved["instruments"].duplicate(true)
+	tracks_renumbered.emit(map)
 	_structure_changed(saved["kinds"])
 
 

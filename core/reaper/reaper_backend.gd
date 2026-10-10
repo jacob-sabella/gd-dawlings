@@ -619,19 +619,23 @@ func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out:
 func add_track(at: int, track_name: String) -> void:
 	var count := state.track_indices().size()
 	at = clampi(at, 1, maxi(state.project_track_count, count) + 1)
+	var order := _order_adding(maxi(state.project_track_count, count), at)
 	if _whole_project_in_bank():
-		_locally_renumber(_order_adding(count, at))
+		_locally_renumber(order)
 		state.track(at).name = track_name
 		state.bank_changed.emit()
+	tracks_renumbered.emit(_map_of(order))
 	_restructure("InsertTrack", [at, track_name])
 
 
 func remove_track(index: int) -> void:
 	if index < 1:
 		return
+	var order := _order_removing(maxi(state.project_track_count, state.track_indices().size()), index)
 	if _whole_project_in_bank() and state.tracks.has(index):
-		_locally_renumber(_order_removing(state.track_indices().size(), index))
+		_locally_renumber(order)
 		state.bank_changed.emit()
+	tracks_renumbered.emit(_map_of(order))
 	_restructure("DeleteTrack", [index])
 
 

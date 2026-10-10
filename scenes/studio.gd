@@ -1564,6 +1564,11 @@ func _build_surfaces() -> void:
 		rack.tear_requested.connect(_on_tear_requested)
 		_restore_tablets()
 	Session.room_changed.connect(_on_room_changed)
+	# The tablets follow their tracks themselves; what is remembered and told follows them.
+	DAW.tracks_renumbered.connect(func(_map: Dictionary) -> void:
+		(func() -> void:
+			_remember_tablets()
+			_publish_room_soon()).call_deferred())
 	Session.room_asked.connect(_on_room_asked)
 	Session.role_changed.connect(_on_role_changed)
 	Session.room_motion.connect(_on_room_motion)

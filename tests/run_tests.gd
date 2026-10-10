@@ -2520,6 +2520,11 @@ func _test_a_tablet_follows_its_plugin_along_the_chain() -> void:
 	check("it moves to another track", _names_on(state, 6)[-1] == plugin)
 	check("the tablet goes with it", tablet.track_index == 6 and tablet.fx().name == plugin)
 	check("and is not lost", not tablet.lost and not tablet._lost_label.visible)
+	DAW.remove_track(1)
+	check("a track above it removed, it follows its track up (%d)" % tablet.track_index,
+			tablet.track_index == 5 and tablet.fx().name == plugin)
+	DAW.undo()
+	check("and back down when that is undone", tablet.track_index == 6 and tablet.fx().name == plugin)
 
 	# Gone altogether -- deleted, or renamed in the DAW -- it says so, and its controls write
 	# nothing: the slot it was pointing at now holds something else, or nothing.
@@ -10739,12 +10744,34 @@ func _test_tracks_are_added_removed_and_renamed() -> void:
 	var replaced := [0]
 	var count_replaced := func(): replaced[0] += 1
 	DAW.project_replaced.connect(count_replaced)
+	var maps: Array = []
+	var keep_map := func(map: Dictionary): maps.append(map)
+	DAW.tracks_renumbered.connect(keep_map)
+	Session.guest_audio.target_track = 5
+	Session.guest_midi.target_track = 2
 
 	DAW.add_track(3, "Overdub")
 	check("a track added at 3 is there, empty, and the rest move down (%s)" % [s.track(3).name],
 			s.tracks.size() == count + 1 and s.track(3).name == "Overdub" and s.track(3).items.is_empty()
 			and s.track(4).name == was[2][1] and s.track(3).index == 3 and s.track(4).index == 4)
 	check("the room is sent the whole mix", replaced[0] == 1)
+	check("the renumbering is told, old to new (%s)" % [maps], maps.size() == 1 and maps[0].get(2) == 2
+			and maps[0].get(3) == 4 and maps[0].size() == count)
+	check("and a take's chosen track follows its track (%d, %d)" % [Session.guest_audio.target_track,
+			Session.guest_midi.target_track], Session.guest_audio.target_track == 6 and Session.guest_midi.target_track == 2)
+	DAW.remove_track(6)
+	check("and is none once its track is gone", Session.guest_audio.target_track == 0)
+	DAW.undo()
+	check("undone, the map says where each track went back to (%s)" % [maps[-1]],
+			maps.size() == 3 and maps[-1].get(5) == 5 and maps[-1].get(6) == 7 and maps[-1].size() == count)
+	Session.guest_audio.target_track = 4
+	Session.guest_midi.target_track = 0
+	Session._tracks_renumbered({4: 5, "x": 1, 2: "y"})
+	check("a guest told of a renumbering follows it, and ignores what is not a track number",
+			Session.guest_audio.target_track == 5 and Session.guest_midi.target_track == 0)
+	DAW.tracks_renumbered.disconnect(keep_map)
+	Session.guest_audio.target_track = 0
+	Session.guest_midi.target_track = 0
 	var follows := true
 	for row in was:
 		for send in row[3]:

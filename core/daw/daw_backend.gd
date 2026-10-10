@@ -27,6 +27,9 @@ extends Node
 ## before they reach here -- see core/daw/daw.gd.
 
 signal connection_changed()
+## Tracks were added, removed or put back by an undo: `map` is old index -> new index, and a track
+## that is gone is not in it. For whatever keeps a track by its number outside the mix.
+signal tracks_renumbered(map: Dictionary)
 
 ## Replication tick. 20Hz, deliberately slower than a typical meter stream: the buffers below
 ## are keyed, so a faster-arriving value overwrites the pending one and the tick rate becomes
@@ -538,6 +541,15 @@ func _locally_renumber(order: Array) -> Dictionary:
 		t.sends = kept
 	state.tracks = tracks
 	state.project_track_count = order.size()
+	return map
+
+
+## Old index -> new index for an `order` as `_locally_renumber` takes it.
+static func _map_of(order: Array) -> Dictionary:
+	var map := {}
+	for n in order.size():
+		if int(order[n]) > 0:
+			map[int(order[n])] = n + 1
 	return map
 
 

@@ -250,6 +250,7 @@ func _ready() -> void:
 	# Deferred: DAW is an autoload too, and may not be in the tree yet.
 	(func():
 		DAW.project_replaced.connect(_on_project_replaced)
+		DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 		DAW.project_saved.connect(func(said): _announce_save(local_name, said))).call_deferred()
 
 
@@ -1281,6 +1282,33 @@ func _receive_state_volatile(batch: Array) -> void:
 func _on_project_replaced() -> void:
 	for id in _audience():
 		_send_snapshot_to(id)
+
+
+## The host's tracks were renumbered. Every track chosen for a take, here and on every guest, and
+## every take on its way in, follows its track; one whose track is gone is refused when it lands.
+func _on_tracks_renumbered(map: Dictionary) -> void:
+	if role == Role.GUEST:
+		return
+	_follow_renumber(map)
+	for entry in _incoming_takes.values():
+		entry["track"] = int(map.get(entry["track"], -1))
+	if role == Role.HOST:
+		_tracks_renumbered.rpc(map)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _tracks_renumbered(map: Dictionary) -> void:
+	var clean := {}
+	for old in map:
+		if typeof(old) == TYPE_INT and typeof(map[old]) == TYPE_INT:
+			clean[old] = map[old]
+	_follow_renumber(clean)
+
+
+func _follow_renumber(map: Dictionary) -> void:
+	for recorder in [guest_audio, guest_midi, host_audio]:
+		if recorder != null:
+			recorder.follow_renumber(map)
 
 
 ## A joining guest gets the whole session at once, reliably, before any delta reaches it.

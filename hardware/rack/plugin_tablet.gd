@@ -126,6 +126,7 @@ static func create(track: int, fx: int, plugin_name: String) -> PluginTablet:
 func _ready() -> void:
 	super()
 	DAW.track_changed.connect(_on_track_changed)
+	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 
 
 func _exit_tree() -> void:
@@ -191,6 +192,13 @@ func _check_plugin() -> void:
 		mark_dirty()
 	else:
 		refresh()
+
+
+## Its track moved: followed by number, not found again by name, because another track may well
+## have a plugin of the same name. A track that is gone leaves the name to search everywhere.
+func _on_tracks_renumbered(map: Dictionary) -> void:
+	track_index = int(map.get(track_index, 0))
+	_check_plugin()
 
 
 func _on_track_changed(_index: int, field: StringName) -> void:
