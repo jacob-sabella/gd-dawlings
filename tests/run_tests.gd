@@ -162,6 +162,7 @@ func _ready() -> void:
 	_test_saved_data_follows_the_rename()
 	_test_a_clip_keeps_its_fades_and_gain()
 	_test_the_built_in_engine_saves_and_opens_dawproject()
+	_test_the_official_dawproject_examples_open_in_the_game()
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
 	_test_sound_files_are_brought_in_onto_a_track()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
@@ -8638,6 +8639,18 @@ func _test_the_built_in_engine_saves_and_opens_dawproject() -> void:
 	var said := DAW.save_project_as(path)
 	check("the demo saves as a .dawproject (%s)" % [said], said.is_empty() and FileAccess.file_exists(path))
 	check("and the engine knows where it is now", backend.project_path == path)
+	if OS.execute("sh", ["-c", "command -v xmllint"]) == 0:
+		var r := ZIPReader.new()
+		r.open(path)
+		var out := dir.path_join("demo_project.xml")
+		var copy := FileAccess.open(out, FileAccess.WRITE)
+		copy.store_buffer(r.read_file("project.xml"))
+		copy.close()
+		r.close()
+		var lint_said: Array = []
+		var rc := OS.execute("xmllint", ["--noout", "--schema", ProjectSettings.globalize_path(
+				"res://vendor/dawkit/tests/fixtures/dawproject/Project.xsd"), out], lint_said, true)
+		check("and is valid DAWproject (%s)" % str(lint_said).substr(0, 300), rc == 0)
 
 	var media := dir.path_join("inspect")
 	var inspected: DawKitProject = DawKitDawproject.open(path, media)["project"]
@@ -8702,6 +8715,86 @@ func _test_the_built_in_engine_saves_and_opens_dawproject() -> void:
 	check("a new project is an empty one (%s)" % [blank], blank.is_empty() and DAW.state.tracks.size() == 4
 			and DAW.state.track(1).items.is_empty() and again.project_path == "")
 	check("with nothing to undo", DAW.state.undo_depth == 0)
+	OS.execute("rm", ["-rf", dir])
+
+
+## The official DAWproject examples dawkit keeps as fixtures, opened by the built-in engine as a
+## player would open them, saved by the game, and opened again.
+func _test_the_official_dawproject_examples_open_in_the_game() -> void:
+	var fixtures := ProjectSettings.globalize_path("res://vendor/dawkit/tests/fixtures/dawproject")
+	var dir := OS.get_temp_dir().path_join("dawlings_examples_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir.path_join("target"))
+	DirAccess.make_dir_recursive_absolute(dir.path_join("test-data"))
+	var wav := fixtures.path_join("reference/white-glasses.wav")
+	DirAccess.copy_absolute(wav, dir.path_join("test-data/white-glasses.wav"))
+	var lint := OS.execute("sh", ["-c", "command -v xmllint"]) == 0
+	var names := Array(DirAccess.get_files_at(fixtures.path_join("reference"))).filter(
+			func(f): return f.ends_with(".xml"))
+	check("the examples are there to open (%d)" % names.size(), names.size() >= 20)
+	for f in names:
+		var name: String = f.get_basename()
+		var xml := FileAccess.get_file_as_string(fixtures.path_join("reference").path_join(f)) \
+				.replace("@FIXTURES@", fixtures.path_join("reference"))
+		var path := dir.path_join("target").path_join(name + ".dawproject")
+		var zip := ZIPPacker.new()
+		zip.open(path)
+		zip.start_file("project.xml")
+		zip.write_file(xml.to_utf8_buffer())
+		zip.close_file()
+		if 'path="white-glasses.wav" external="false"' in xml:
+			zip.start_file("white-glasses.wav")
+			zip.write_file(FileAccess.get_file_as_bytes(wav))
+			zip.close_file()
+		zip.close()
+		var read := DawKitDawproject.open(path, dir.path_join("read_" + name))
+		var want: DawKitProject = read["project"]
+		var backend := GodotBackend.new()
+		backend.state = MixState.new()
+		DAW.use(backend)
+		var said := DAW.open_project(path)
+		check("%s opens in the game saying what dawkit says (%s)" % [name, said],
+				want != null and said == read["warnings"])
+		if want == null:
+			continue
+		var items: Array = []
+		for index in DAW.state.track_indices():
+			for it in DAW.state.track(index).items:
+				items.append([snappedf(it.start, 0.0001), snappedf(it.length, 0.0001), it.notes.size() / 5])
+		var clips: Array = []
+		for t in want.tracks:
+			for c in t.clips:
+				clips.append([snappedf(c.start, 0.0001), snappedf(c.length, 0.0001), c.note_count()])
+		check("%s's clips are the game's items (%s vs %s)" % [name, items, clips], items == clips)
+		for index in DAW.state.track_indices():
+			for it in DAW.state.track(index).items:
+				if not it.source.is_empty():
+					check("%s's sound is one the engine can play (%s)" % [name, it.source],
+							FileAccess.file_exists(backend.media_path(it.source)))
+		var first := ProjectBridge.capture(backend)
+		var saved := dir.path_join("saved_" + name + ".dawproject")
+		var wrote := DAW.save_project_as(saved)
+		check("%s saves from the game (%s)" % [name, wrote], wrote.is_empty())
+		if lint:
+			var out := dir.path_join("saved_" + name + "_project.xml")
+			var r := ZIPReader.new()
+			r.open(saved)
+			var copy := FileAccess.open(out, FileAccess.WRITE)
+			copy.store_buffer(r.read_file("project.xml"))
+			copy.close()
+			r.close()
+			var lint_said: Array = []
+			var rc := OS.execute("xmllint", ["--noout", "--schema", fixtures.path_join("Project.xsd"), out], lint_said, true)
+			check("%s as the game saves it is valid DAWproject (%s)" % [name, str(lint_said).substr(0, 300)], rc == 0)
+		var again := GodotBackend.new()
+		again.state = MixState.new()
+		DAW.use(again)
+		DAW.open_project(saved)
+		var second := ProjectBridge.capture(again)
+		check("%s saved by the game and opened again is the same (%s)" % [name, first.first_difference(second)],
+				first.same_as(second))
+		if name == "test-complex":
+			check("test-complex's volume lane and markers reach the game",
+					DAW.state.track(1).automation.has("volume") and DAW.state.markers.size() == 2)
 	OS.execute("rm", ["-rf", dir])
 
 

@@ -92,7 +92,8 @@ static func open(backend: OfflineBackend, path: String) -> PackedStringArray:
 			if c.source.is_empty():
 				continue
 			var name := c.source.get_file()
-			var full := media.path_join(c.source)
+			# A file the project plays from outside itself comes with its own path.
+			var full := c.source if c.source.is_absolute_path() else media.path_join(c.source)
 			var n := 2
 			while where.has(name) and where[name] != full:
 				name = "%s_%d.%s" % [c.source.get_file().get_basename(), n, c.source.get_extension()]
