@@ -320,7 +320,23 @@ can finish music in, saving DAWproject. Steps, in order:
      (`/` before it when the tempo glides into it), and redraws when the tempo or the map changes.
    - **Not yet (7b):** The demo song's parts are rendered at the first
      tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback
-     probe measures the click at one tempo only. 8. Automation.
+     probe measures the click at one tempo only.
+8. Automation.
+   - **Done 2026-10-10 (8a), lanes in dawkit:** `DawKitAutomation` (target "volume" dB, "pan",
+     "mute", "send:<track id>" dB, "fx:<i>:<p>" normalised; points [seconds, value, HOLD|LINEAR]),
+     on `DawKitTrack.automation`. DAWproject `Points` with a `Target parameter=` in the track's
+     lane, values in the parameter's unit; the exact points are kept in dawkit's extras.
+   - **Done 2026-10-10 (8b), lanes in the game:** `TrackState.automation` (a send named by its
+     destination's index), wire `/track/N/automation/<target>` (flat triples, empty = gone, in
+     the snapshot, `AUTOMATION_POINTS_MAX` 8192), `DAW.set_automation` sanitised on the host
+     through `apply_intent`, one undo step per lane. `OfflineBackend.follow_automation` moves
+     each automated control to its lane's value every frame while playing (or when the playhead
+     moves while stopped), not as history, replicated as ordinary control changes. Send lanes
+     follow renumbering, and structure undo puts them back. ProjectBridge maps send indices to
+     track ids and the desk's fx index to the project chain's (which counts the instrument).
+   - **Next (8c-f):** touch/latch recording from the desk; Reaper's envelopes through the bridge;
+     lanes drawn and edited on the timeline; master automation (not in MixState yet); a loopback
+     measurement of a volume ramp.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

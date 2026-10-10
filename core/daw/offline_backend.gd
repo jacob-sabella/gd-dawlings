@@ -34,6 +34,7 @@ var windows_opened: Array[PluginWindow] = []
 
 func _process(delta: float) -> void:
 	_drive_meters(delta)
+	follow_automation()
 	tick_replication(delta)
 
 
@@ -889,7 +890,7 @@ func _structure() -> Dictionary:
 		var sends: Array = []
 		for slot in t.sends:
 			sends.append([slot, t.sends[slot], t.sends[slot].dest_track])
-		rows.append([t, index, t.folder_depth, sends])
+		rows.append([t, index, t.folder_depth, sends, t.automation.duplicate()])
 	return {"rows": rows, "instruments": instruments.duplicate(true), "kinds": _fx_kinds()}
 
 
@@ -906,6 +907,7 @@ func _restore_structure(saved: Dictionary) -> void:
 		var t: MixState.TrackState = row[0]
 		t.index = row[1]
 		t.folder_depth = row[2]
+		t.automation = (row[4] as Dictionary).duplicate()
 		t.sends = {}
 		for send in row[3]:
 			var sd: MixState.SendState = send[1]
@@ -986,6 +988,67 @@ func set_tempo(bpm: float) -> void:
 	state.position_string = state.bar_beat(state.position_seconds)
 	state.transport_changed.emit()
 	record_for_replication("/tempo/raw", [bpm])
+
+
+## One undo step: the whole lane, drawn or recorded.
+func set_automation(track_index: int, target: String, points: Array) -> void:
+	if not state.tracks.has(track_index):
+		return
+	var t := state.track(track_index)
+	_remember("/track/%d/automation/%s" % [track_index, target],
+			set_automation.bind(track_index, target, (t.automation.get(target, []) as Array).duplicate(true)),
+			set_automation.bind(track_index, target, points.duplicate(true)), false)
+	MixWire.apply(state, "/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
+	record_for_replication("/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
+	_followed_at = NAN
+
+
+## Where automation was last followed to; NAN to follow it again at once.
+var _followed_at := NAN
+
+
+## Every automated control to where its lane says at the playhead, as Reaper's read mode does:
+## the control moves on the desk, for everyone, and the mix follows the control. Not history. While
+## stopped only when the playhead has moved, so a control can still be set by hand there.
+func follow_automation() -> void:
+	var at := state.position_seconds
+	if not state.playing and at == _followed_at:
+		return
+	_followed_at = at
+	for index in state.tracks:
+		var t: MixState.TrackState = state.tracks[index]
+		for target in t.automation:
+			var v := DawKitAutomation.value_in(t.automation[target], at)
+			var kind := DawKitAutomation.kind_of(target)
+			match kind:
+				"volume":
+					var taper := db_to_taper(v)
+					if not is_equal_approx(t.volume_db, v):
+						state.set_track_field(index, &"volume", taper)
+						state.set_track_field(index, &"volume_db", v)
+						record_for_replication("/track/%d/volume" % index, [taper])
+				"pan":
+					var pan := (v + 1.0) * 0.5
+					if not is_equal_approx(t.pan, pan):
+						state.set_track_field(index, &"pan", pan)
+						record_for_replication("/track/%d/pan" % index, [pan])
+				"mute":
+					if t.mute != (v >= 0.5):
+						state.set_track_field(index, &"mute", v >= 0.5)
+						record_for_replication("/track/%d/mute" % index, [1.0 if v >= 0.5 else 0.0])
+				"send":
+					var to := int(String(target).substr(5))
+					for slot in t.sends:
+						var sd: MixState.SendState = t.sends[slot]
+						if sd.dest_track == to and not sd.key and not is_equal_approx(taper_to_db(sd.volume), v):
+							_write_send(index, slot, "volume", db_to_taper(v))
+				"fx":
+					var parts := String(target).split(":")
+					var f := state.fx(index, int(parts[1]), false)
+					if f != null and not is_equal_approx(float(f.params.get(int(parts[2]), -1.0)), v):
+						f.params[int(parts[2])] = v
+						state.fx_changed.emit(index, int(parts[1]))
+						record_for_replication("/track/%d/fx/%d/fxparam/%d/value" % [index, int(parts[1]), int(parts[2])], [v])
 
 
 ## One undo step: the whole map, as a tempo knob turned is the whole tempo.

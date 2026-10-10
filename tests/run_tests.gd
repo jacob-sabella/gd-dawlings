@@ -176,6 +176,7 @@ func _ready() -> void:
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
 	_test_the_tempo_changes_through_the_song()
+	_test_controls_follow_their_automation()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10974,6 +10975,86 @@ func _test_the_tempo_changes_through_the_song() -> void:
 	DAW.undo()
 	check("undone, one tempo again", s.tempo_points.is_empty())
 	close_to("and bar 4 is where 120 puts it", s.bar_to_seconds(4.0), 6.0)
+	_offline()
+
+
+func _test_controls_follow_their_automation() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var depth := maxi(s.undo_depth, 0)
+	# The fader from 0 dB down to -12 over the first two seconds, then held.
+	DAW.set_automation(2, "volume", [[0.0, 0.0, DawKitAutomation.LINEAR], [2.0, -12.0, DawKitAutomation.HOLD]])
+	DAW.set_automation(2, "pan", [[0.0, -1.0, DawKitAutomation.HOLD], [1.0, 1.0, DawKitAutomation.HOLD]])
+	DAW.set_automation(2, "mute", [[0.0, 0.0, DawKitAutomation.HOLD], [3.0, 1.0, DawKitAutomation.HOLD]])
+	check("lanes are set, one undo step each", s.track(2).automation.size() == 3 and s.undo_depth - depth == 3)
+	s.position_seconds = 1.0
+	backend.follow_automation()
+	close_to("halfway down the ramp the fader reads -6 dB", s.track(2).volume_db, -6.0)
+	close_to("its taper too", s.track(2).volume, backend.db_to_taper(-6.0))
+	close_to("the pan has jumped right at its point", s.track(2).pan, 1.0)
+	check("and it is not muted yet", not s.track(2).mute)
+	s.position_seconds = 5.0
+	backend.follow_automation()
+	close_to("after the last point the last value holds", s.track(2).volume_db, -12.0)
+	check("and the mute has come on", s.track(2).mute)
+	check("following is not history", s.undo_depth - depth == 3)
+
+	# A send's level and an effect's parameter.
+	var sender := -1
+	var slot := -1
+	for i in s.track_indices():
+		for k in s.track(i).sends:
+			if s.track(i).sends[k].dest_track > 0 and not s.track(i).sends[k].key:
+				sender = i
+				slot = k
+	check("the demo has a send to automate", sender > 0)
+	var dest: int = s.track(sender).sends[slot].dest_track
+	DAW.set_automation(sender, "send:%d" % dest, [[0.0, -20.0, DawKitAutomation.HOLD]])
+	var fx_track := -1
+	for i in s.track_indices():
+		if not s.track(i).plugins().is_empty():
+			fx_track = i
+			break
+	var fx_index: int = s.track(fx_track).plugins()[0]
+	DAW.set_automation(fx_track, "fx:%d:0" % fx_index, [[0.0, 0.25, DawKitAutomation.HOLD]])
+	s.position_seconds = 0.5
+	backend.follow_automation()
+	close_to("the send follows its lane", backend.taper_to_db(s.track(sender).sends[slot].volume), -20.0, 0.01)
+	close_to("so does the effect's parameter", float(s.fx(fx_track, fx_index).params[0]), 0.25)
+
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a joining guest gets the lanes", guest.track(2).automation == s.track(2).automation
+			and guest.track(sender).automation.has("send:%d" % dest))
+
+	var p := ProjectBridge.capture(backend)
+	var lane := p.track(ProjectBridge.id_of(sender)).automation_of("send:" + ProjectBridge.id_of(dest))
+	check("the project names the send by its track's id", lane != null and p.problems().is_empty())
+	var back := MixState.new()
+	var other := GodotBackend.new()
+	other.state = back
+	check("loaded again (%s)" % [ProjectBridge.load(p, other)], back.track(2).automation == s.track(2).automation
+			and back.track(fx_track).automation.has("fx:0:0")
+			and back.track(sender).automation.has("send:%d" % dest))
+	other.free()
+
+	DAW.add_track(1, "")
+	check("a send's lane follows its track when the tracks are renumbered",
+			s.track(sender + 1).automation.has("send:%d" % (dest + 1)))
+	DAW.undo()
+	check("and back", s.track(sender).automation.has("send:%d" % dest))
+
+	DAW.apply_intent(&"set_automation", [2, "gain", [0.0, 1.0, 0.0]])
+	DAW.apply_intent(&"set_automation", [2, "volume", [1.0, 0.0, 0.0, 0.5, 0.0, 0.0]])
+	DAW.apply_intent(&"set_automation", [2, "volume", [0.0, NAN, 0.0]])
+	check("a guest's lane that is not one is refused (%s)" % [s.track(2).automation], not s.track(2).automation.has("gain")
+			and s.track(2).automation["volume"].size() == 2)
+	DAW.apply_intent(&"set_automation", [2, "pan", [0.0, 7.0, 0.0]])
+	close_to("and a value past the control's end clamped", s.track(2).automation["pan"][0][1], 1.0)
+	DAW.set_automation(2, "pan", [])
+	check("an empty lane is no lane", not s.track(2).automation.has("pan"))
 	_offline()
 
 

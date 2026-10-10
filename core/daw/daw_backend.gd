@@ -263,6 +263,9 @@ func add_track(_at: int, _track_name: String) -> void: pass
 ## move out a level.
 func remove_track(_index: int) -> void: pass
 func rename_track(_index: int, _track_name: String) -> void: pass
+## A track's lane of automation for `target` (see MixState.TrackState.automation), whole; empty
+## points take the lane away.
+func set_automation(_track_index: int, _target: String, _points: Array) -> void: pass
 ## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
 ## empty for one tempo throughout.
 func set_tempo_map(_points: Array) -> void: pass
@@ -520,6 +523,17 @@ func _locally_renumber(order: Array) -> Dictionary:
 					depth[olds[later]] += d
 					break
 	var tracks := {}
+	for n in order.size():
+		if int(order[n]) > 0:
+			# A send's automation names its destination by number, which follows it too.
+			var lanes: Dictionary = state.tracks[int(order[n])].automation
+			for target in lanes.keys():
+				if String(target).begins_with("send:"):
+					var to := int(String(target).substr(5))
+					var points: Array = lanes[target]
+					lanes.erase(target)
+					if map.has(to):
+						lanes["send:%d" % map[to]] = points
 	for n in order.size():
 		var t: MixState.TrackState
 		if int(order[n]) > 0:

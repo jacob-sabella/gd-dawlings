@@ -56,7 +56,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
-	&"transpose_item", &"quantize_item", &"set_tempo_map", &"add_track", &"remove_track", &"rename_track",
+	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"add_marker", &"set_track_monitor",
@@ -328,6 +328,13 @@ func add_track(at: int, track_name := "") -> void:
 func remove_track(index: int) -> void: _do(&"remove_track", [index])
 func rename_track(index: int, track_name: String) -> void:
 	_do(&"rename_track", [index, track_name.left(TRACK_NAME_MAX)])
+## `points` as MixState.TrackState.automation's: [seconds, value, shape]. Empty takes the lane away.
+func set_automation(track_index: int, target: String, points: Array) -> void:
+	var flat := MixWire.pack_automation(points)
+	if Session.is_authority():
+		apply_intent(&"set_automation", [track_index, target, flat])
+	else:
+		Session.send_intent(&"set_automation", [track_index, target, flat])
 ## `points` as MixState.tempo_points: [beat, bpm, ramps], the first at beat 0. Sent flat so a
 ## guest's intent is checked the same way whatever sent it.
 func set_tempo_map(points: Array) -> void:
@@ -429,6 +436,17 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		args = clean
 	if verb in [&"delete_selected", &"duplicate_selected"]:
 		args = []
+	if verb == &"set_automation":
+		# Peer input: a track, a target that names a control, and flat points.
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) not in [TYPE_STRING, TYPE_STRING_NAME] or not (args[2] is Array):
+			push_warning("DAW: refused a malformed set_automation intent.")
+			return
+		var points := MixWire.unpack_automation(str(args[1]), args[2])
+		if points.is_empty() and not (args[2] as Array).is_empty():
+			push_warning("DAW: refused a malformed set_automation intent.")
+			return
+		args = [int(args[0]), str(args[1]), points]
 	if verb == &"set_tempo_map":
 		# Peer input: flat [beat, bpm, shape] triples, each a later beat, from beat 0.
 		if args.size() != 1 or not (args[0] is Array):

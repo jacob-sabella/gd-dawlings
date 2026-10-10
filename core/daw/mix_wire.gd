@@ -180,6 +180,18 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 	# BEFORE the empty-args guard. For every other field an empty argument list is a malformed
 	# message, but for a lane it is the message: no arguments means nothing is on this track
 	# any more, and dropping it leaves deleted blocks on screen with nothing to clear them.
+	# A lane of automation, whole: empty is the lane gone. `/track/N/automation/<target>`.
+	if field == "automation":
+		if p.size() == 4:
+			var points := unpack_automation(p[3], args)
+			var t := state.track(idx)
+			if points.is_empty():
+				t.automation.erase(p[3])
+			else:
+				t.automation[p[3]] = points
+			state.track_changed.emit(idx, &"automation")
+		return
+
 	if field == "items":
 		# FLAT, not one address per item field. A forty-item lane would otherwise be a
 		# hundred and sixty messages that must all arrive before the lane is drawable, and
@@ -260,6 +272,38 @@ const ITEM_WIDTH := 5
 
 
 ## [position, name, position, name, ...], in time order.
+## At most this many points in one lane of automation cross the wire.
+const AUTOMATION_POINTS_MAX := 8192
+
+
+## Flat [seconds, value, shape] triples back into points for `target`: in order of seconds, each
+## value clamped to what the control takes. Empty when the target names no control or a point is
+## not three finite numbers.
+static func unpack_automation(target: String, args: Array) -> Array:
+	if DawKitAutomation.kind_of(target).is_empty():
+		return []
+	var out: Array = []
+	var last := -1.0
+	for i in range(0, mini(args.size(), AUTOMATION_POINTS_MAX * 3) - 2, 3):
+		for k in 3:
+			if typeof(args[i + k]) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(args[i + k])):
+				return []
+		var at := float(args[i])
+		if at < 0.0 or at <= last:
+			return []
+		out.append([at, DawKitAutomation.clamp_value(target, float(args[i + 1])),
+				clampi(int(args[i + 2]), DawKitAutomation.HOLD, DawKitAutomation.LINEAR)])
+		last = at
+	return out
+
+
+static func pack_automation(points: Array) -> Array:
+	var out: Array = []
+	for pt in points:
+		out.append_array([float(pt[0]), float(pt[1]), int(pt[2])])
+	return out
+
+
 ## At most this many tempo changes cross the wire: more is not a song, it is an attack.
 const TEMPO_POINTS_MAX := 1024
 
@@ -516,6 +560,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])
 		if not t.items.is_empty():
 			out.append(["/track/%d/items" % index, _pack_items(t.items)])
+		for target in t.automation:
+			out.append(["/track/%d/automation/%s" % [index, target], pack_automation(t.automation[target])])
 
 		var fx_indices: Array = t.fx.keys()
 		fx_indices.sort()

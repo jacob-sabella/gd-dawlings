@@ -81,6 +81,19 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 			out.sends.append(send)
 		for it in t.items:
 			out.clips.append(_clip(it))
+		# The engine's instrument, when there is one, is first in the project's chain.
+		var shift := out.effects.size() - t.plugins().size()
+		var plugins: Array = t.plugins()
+		for target in t.automation:
+			var name: String = target
+			if name.begins_with("send:"):
+				name = "send:" + id_of(int(name.substr(5)))
+			elif name.begins_with("fx:"):
+				var parts := name.split(":")
+				if not plugins.has(int(parts[1])):
+					continue
+				name = "fx:%d:%s" % [plugins.find(int(parts[1])) + shift, parts[2]]
+			out.automation.append(DawKitAutomation.new(name, (t.automation[target] as Array).duplicate(true)))
 		p.tracks.append(out)
 		# Reaper's folder depth: +1 makes this track a folder holding what follows, -n closes n
 		# folders after it.
@@ -209,6 +222,21 @@ static func load(p: DawKitProject, backend: OfflineBackend) -> PackedStringArray
 			sd.volume = backend.db_to_taper(send.volume_db)
 			sd.pan = (send.pan + 1.0) * 0.5
 			sd.key = send.key
+		for lane in src.automation:
+			var target: String = lane.target
+			if target.begins_with("send:"):
+				if not index_of.has(target.substr(5)):
+					continue
+				target = "send:%d" % index_of[target.substr(5)]
+			elif target.begins_with("fx:"):
+				# The project's chain counts the instrument; the desk's does not.
+				var parts := target.split(":")
+				var at := int(parts[1])
+				if at < 0 or at >= src.effects.size() or src.effects[at].instrument:
+					continue
+				target = "fx:%d:%s" % [chain.find(src.effects[at]), parts[2]]
+			if not lane.points.is_empty():
+				t.automation[target] = lane.points.duplicate(true)
 		var items: Array = []
 		for c in src.clips:
 			var item := MixState.ItemState.new()

@@ -217,6 +217,9 @@ class TrackState extends RefCounted:
 	## ItemState, in start order. Empty when the backend cannot report an arrangement at all,
 	## which is not the same as a track with nothing on it -- see DAWBackend.Capability.
 	var items: Array = []
+	## Automated controls: target -> [[seconds, value, shape], ...], as DawKitAutomation's, except
+	## that a send is "send:<destination track index>". Read while the song plays.
+	var automation: Dictionary = {}
 
 	## The plugin slots that hold a plugin, in chain order. Reaper's OSC reports every slot its
 	## device is configured for -- sixteen here -- and the empty ones arrive with empty names.
