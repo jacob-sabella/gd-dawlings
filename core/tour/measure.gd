@@ -116,20 +116,25 @@ class Balance extends RefCounted:
 class Timing extends RefCounted:
 	var _track_index := 0
 	var _from_seconds := 0.0
+	var _grid := 0.125
 
 	## `track_index`: which track's placed notes this brief judges. `from_seconds`: only notes
 	## starting at or after this song position count, so an earlier brief's playing is not
-	## re-judged by this one.
-	func start(track_index: int, from_seconds: float) -> void:
+	## re-judged by this one. `grid_beats`: the grid a note is judged against -- the default,
+	## an eighth, caps the worst possible reading at 0.0625 beats, which is why the pocket
+	## brief's old thresholds were unreachable (docs/loop_backlog.md's "Tour" section); Tour's
+	## dragging-keys flaw asks for a quarter beat instead, so a real drag can fail it.
+	func start(track_index: int, from_seconds: float, grid_beats := 0.125) -> void:
 		_track_index = track_index
 		_from_seconds = from_seconds
+		_grid = grid_beats
 
 	## Timing is read from placed notes at `result()` time, not sampled tick by tick.
 	func sample(_delta: float) -> void:
 		pass
 
 	## {"avg_beats_off", "worst_beats_off", "notes"}: how far each note's on-time lands from the
-	## nearest eighth-beat grid point, against the project's real tempo map.
+	## nearest grid point, against the project's real tempo map.
 	func result() -> Dictionary:
 		var out := {"avg_beats_off": 1.0, "worst_beats_off": 1.0, "notes": 0}
 		if DAW.state == null or not DAW.state.tracks.has(_track_index):
@@ -149,8 +154,8 @@ class Timing extends RefCounted:
 				if on_seconds < _from_seconds:
 					continue
 				var beat := DAW.state.beat_at(on_seconds)
-				var frac := fposmod(beat, 1.0)
-				var off := absf(frac - round(frac * 8.0) / 8.0)
+				var q := roundf(beat / _grid) * _grid
+				var off := absf(beat - q)
 				total += off
 				worst = maxf(worst, off)
 				count += 1

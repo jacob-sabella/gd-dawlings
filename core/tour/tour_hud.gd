@@ -28,6 +28,9 @@ var _title: Label
 var _flavour: Label
 var _clock: Label
 var _score: Label
+var _tag: Label
+var _flaws_box: VBoxContainer
+var _drawn_flaws: Array[StringName] = []
 var _draft_box: HBoxContainer
 var _drawn_draft: Array[StringName] = []
 
@@ -61,8 +64,15 @@ func _on_run_ended(_won: bool) -> void:
 
 
 func _process(_delta: float) -> void:
-	if _root.visible:
-		_refresh_clock()
+	if not _root.visible:
+		return
+	_refresh_clock()
+	# A fix lands mid-brief without a signal of its own (the host ticks `run.fixed` every
+	# physics frame, and only publishes to the network when it changes) -- cheap enough, a
+	# handful of labels, to just read it here every frame rather than add one.
+	var run := Tour.run
+	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
+		_refresh_flaws(run)
 
 
 func _build() -> void:
@@ -95,6 +105,14 @@ func _build() -> void:
 	_clock = _label("", 15, INK)
 	row.add_child(_clock)
 
+	_tag = _label("", 10, DIM)
+	column.add_child(_tag)
+
+	_flaws_box = VBoxContainer.new()
+	_flaws_box.name = "Flaws"
+	_flaws_box.add_theme_constant_override("separation", 2)
+	column.add_child(_flaws_box)
+
 	_draft_box = HBoxContainer.new()
 	_draft_box.name = "Draft"
 	_draft_box.add_theme_constant_override("separation", 10)
@@ -107,12 +125,19 @@ func _refresh() -> void:
 	_root.visible = run != null
 	if run == null:
 		_drawn_draft = []
+		_drawn_flaws = []
 		return
 	var brief := TourBriefs.brief(run.brief_index)
 	_title.text = ("BOSS: " if brief.is_boss else "") + brief.title
 	_flavour.text = brief.flavour
 	_score.text = "SCORE %d" % run.score
 	_refresh_clock()
+	_tag.visible = run.state == TourRun.State.BRIEF
+	_flaws_box.visible = run.state == TourRun.State.BRIEF
+	if run.state == TourRun.State.BRIEF and run.flaws != _drawn_flaws:
+		_build_flaws(run)
+	elif run.state == TourRun.State.BRIEF:
+		_refresh_flaws(run)
 	var drafting := run.state == TourRun.State.DRAFTING
 	_draft_box.visible = drafting
 	if drafting and run.draft != _drawn_draft:
@@ -124,7 +149,52 @@ func _refresh_clock() -> void:
 	if run == null or run.state != TourRun.State.BRIEF:
 		_clock.text = ""
 		return
-	_clock.text = "%d s" % int(ceil(run.seconds_left))
+	_clock.text = "SOUNDCHECK" if run.tuning else "%d s" % int(ceil(run.seconds_left))
+
+
+## One line per flaw, rebuilt only when the set of flaws changes (a new brief): a fixed/not-fixed
+## mark, the strip to go to, and the flaw's own line, in ACCENT once fixed and INK until then.
+## The old labels leave the tree before the new ones arrive: queued alone, a stale "Flaw0" would
+## still be a child when the new "Flaw0" is added, Godot would rename the newcomer, and
+## `_refresh_flaws` would go on writing into a label about to be freed -- the second brief's
+## lines never showing.
+func _build_flaws(run: TourRun) -> void:
+	_drawn_flaws = run.flaws.duplicate()
+	for child in _flaws_box.get_children():
+		_flaws_box.remove_child(child)
+		child.queue_free()
+	for i in run.flaws.size():
+		var flaw := TourFlaws.by_id(run.flaws[i])
+		if flaw == null:
+			continue
+		var l := _label("", 12, INK)
+		l.name = "Flaw%d" % i
+		_flaws_box.add_child(l)
+	_refresh_flaws(run)
+
+
+## Also the "x / y FIXED" tag: the host's `_tick_flaws` publishes to the room without a local
+## signal, so this is the one place the count is kept current on both sides.
+func _refresh_flaws(run: TourRun) -> void:
+	_tag.text = "BAND OF %d   %d / %d FIXED" % [run.band_size, run.fixed.count(true), run.flaws.size()]
+	for i in run.flaws.size():
+		var flaw := TourFlaws.by_id(run.flaws[i])
+		if flaw == null:
+			continue
+		var l := _flaws_box.get_node_or_null("Flaw%d" % i) as Label
+		if l == null:
+			continue
+		var done: bool = i < run.fixed.size() and run.fixed[i]
+		l.text = "%s  %s" % ["OK " if done else "--", flaw_line(flaw, run)]
+		l.add_theme_color_override("font_color", ACCENT if done else INK)
+
+
+## "LEAD VOX: The lead vocal is buried..." -- the strip to walk to, then the line. A flaw with no
+## track of its own (the kicked tempo) points at the deck. So the band can read, in the first
+## seconds, where each of them is going.
+static func flaw_line(flaw: TourFlaw, run: TourRun) -> String:
+	var where := flaw.track.to_upper() if not flaw.track.is_empty() else "DECK"
+	return "%s: %s" % [where, flaw.line_for(run)]
 
 
 ## Three clickable cards, one per `draft` id: the host applies the pick at once

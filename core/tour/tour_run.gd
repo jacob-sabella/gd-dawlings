@@ -31,6 +31,27 @@ var next_brief_seconds_mult: float = 1.0
 ## The seed behind this run's draws, kept so a replicated run can be replayed identically if
 ## ever needed; not currently read back by anything but there to keep draws reproducible.
 var attempt_seed: int = 0
+## `Session.participants.size()` at the moment this brief started: read once, so a friend
+## joining mid-brief never makes it busier until the next one.
+var band_size: int = 1
+## This brief's rescue song's tempo, drawn from `song_rng`.
+var song_tempo: float = 120.0
+## This brief's flaws by TourFlaw.id, and which are fixed right now, index for index. Guests
+## draw the lines and fix gestures from TourFlaws.by_id; only ids and bools ride the wire.
+var flaws: Array[StringName] = []
+var fixed: Array[bool] = []
+## The band is still tuning up: the brief's project is in but its parts are rendering, and the
+## clock does not run until they have (see GodotBackend.parts_ready).
+var tuning: bool = false
+
+
+## This brief's own random stream, seeded off `attempt_seed` and `index` so it never draws the
+## same numbers the draft's (`attempt_seed + brief_index + 1`) does, and replays identically on
+## any machine given the same `attempt_seed`.
+func song_rng(index: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([attempt_seed, "song", index])
+	return rng
 
 
 func to_dict() -> Dictionary:
@@ -45,6 +66,11 @@ func to_dict() -> Dictionary:
 		"tempo_tolerance_mult": tempo_tolerance_mult,
 		"next_brief_seconds_mult": next_brief_seconds_mult,
 		"attempt_seed": attempt_seed,
+		"band_size": band_size,
+		"song_tempo": song_tempo,
+		"flaws": (flaws as Array).map(func(f): return String(f)),
+		"fixed": (fixed as Array).duplicate(),
+		"tuning": tuning,
 	}
 
 
@@ -63,4 +89,14 @@ static func from_dict(d: Dictionary) -> TourRun:
 	run.tempo_tolerance_mult = float(d.get("tempo_tolerance_mult", 1.0))
 	run.next_brief_seconds_mult = float(d.get("next_brief_seconds_mult", 1.0))
 	run.attempt_seed = int(d.get("attempt_seed", 0))
+	run.band_size = int(d.get("band_size", 1))
+	run.song_tempo = float(d.get("song_tempo", 120.0))
+	var flaws_in: Array = d.get("flaws", [])
+	run.flaws.assign(flaws_in.map(func(f): return StringName(f)))
+	var fixed_in: Array = d.get("fixed", [])
+	run.fixed.assign(fixed_in.map(func(b): return bool(b)))
+	while run.fixed.size() < run.flaws.size():
+		run.fixed.append(false)
+	run.fixed.resize(run.flaws.size())
+	run.tuning = bool(d.get("tuning", false))
 	return run

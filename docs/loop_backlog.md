@@ -715,6 +715,54 @@ over the internet.
   in five on 2026-10-10, not reproduced in three runs after; a process ending badly at shutdown
   is the guess. The exports are 181 and 190 MB zipped, most of it the venues' 2K textures.
 
+## Tour
+
+Tour (core/tour/, the chained case in core/items/tour_case.gd) as a roguelike worth coming back
+to, for one person alone or a band of eight online: a run is a gig, a song in trouble and a crowd
+that wants it fixed, winnable solo and busier with every friend who joins. Everyone has a job
+every minute, no two runs are alike, the game plays and sings back, and now and then it all goes
+gloriously wrong and you survive anyway.
+
+- **A song to rescue. Done 2026-10-10.** Every brief hands the band a full role-named loop
+  (TourProject.song_for: a tine stab lane and the ten DemoSong parts, eight bars looped at a
+  tempo drawn from the run's seed) with something wrong in it, and the brief is to fix it before
+  the clock runs out. Six flaws (TourFlaws: a buried vocal, a muddy bass EQ, a dragging keys lane,
+  a muted Rhodes, a hard-panned guitar, a kicked tempo), each judged live off the desk's own
+  numbers or the Timing measure and ticked off on the HUD as it is fixed; one flaw solo, two for
+  2-3 players, three for 4-5, four for 6-8, one more at the boss (Session.participants.size()).
+  Found on the way: a DawKitProject carries no parts, so a project loaded through ProjectBridge
+  had none (a silent band, and a silent stand-in after every run's restore) -- Tour now passes
+  its band's parts to the load and its snapshot carries the real project's back; giving every
+  loaded track a part by name instead sounded the band under the built-in probe's count-in and
+  after its render's range. The Timing measure's eighth grid capped at 0.0625
+  beats so the pocket check could not fail; the master limiter (-0.3 dB) sits above the loudness
+  ceiling (-1 dB) so the levels check could not pass. The master-bus bars are off until measured.
+- **Playing briefs: a part per player.** Briefs where the fix is to play -- a take on the keys,
+  claps on the beat, a sung double -- so nobody stands around while one person mixes.
+- **Instruments as draft cards.** The draft offers instruments and desk tools, not only
+  modifiers: a tambourine for the shaker lane, a second fader hand, a tuner.
+- **Seed randomness.** Every draw from the run's seed (the song's draw is; the draft's
+  muted_track still rolls an unseeded RNG), a seed shown on the case so a run can be replayed.
+- **Chaos events.** Mid-brief trouble: a track drops out, the tempo drifts, a plugin dies, the
+  power flickers -- survivable, loud, and seeded.
+- **The crowd's ear.** Master-bus loudness and balance as real bars again, once the clean band's
+  numbers are measured through a probe flag and the thresholds set from them.
+- **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's
+  lines landing with a hit; a brief that ends on the bar, not the frame.
+- **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
+  second life), a loss that costs something, a win that is announced to the room.
+- **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
+  fork, a boss that plays differently from the first.
+- **Scale testing: solo, 4, 8.** A probe that runs a brief as a host with N synthetic guests and
+  prints what each sees (tools/session_probe.sh's shape), on top of the suite's count checks.
+
+### Waiting on the user
+- The flaw lines' voice: gig-crew terse (as written) or a named character (a stage manager, the
+  promoter) speaking them?
+- Should a brief end the moment the last flaw is fixed (as built, score rises with time left),
+  or play the loop out so the band hears the fixed song once?
+- Eleven strips for a solo player: fine, or a smaller band (drums, bass, keys, vox) under four?
+
 ## Parked
 
 - **Where the host keeps guests' recordings.** Takes are written to `user://takes/` and, on

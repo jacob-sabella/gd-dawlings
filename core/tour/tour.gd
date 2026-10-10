@@ -28,8 +28,9 @@ signal run_ended(won: bool)
 var run: TourRun = null
 var unlocks: TourUnlocks
 
-## The track a run's throwaway project uses for its pocket-check timing brief. Always this one:
-## every throwaway project (`TourProject.blank_for`) is built fresh with known numbering.
+## The track the dragging-keys flaw judges: TourProject.KEYS_TRACK, repeated here as a plain
+## const because every throwaway project (`TourProject.song_for`) is built fresh with known
+## numbering. _test_tour_song_has_a_playing_band asserts the two agree.
 const TIMING_TRACK := 1
 
 ## The host's project, captured the moment the run started, restored exactly when it ends.
@@ -39,6 +40,9 @@ var _balance: TourMeasure.Balance = null
 var _timing: TourMeasure.Timing = null
 ## The cards offered by the draft under way, by index, for `pick_draft` to apply.
 var _draft: Array[TourCard] = []
+## `run.fixed` as it was the last time it was published, so a tick that changes nothing does not
+## cost a publish: a handful of RPCs a brief, not one every physics frame.
+var _published_fixed: Array[bool] = []
 
 
 func _ready() -> void:
@@ -53,7 +57,22 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
 		return
+	if run.tuning:
+		var backend := DAW.backend as GodotBackend
+		if backend != null and backend.parts_ready():
+			run.tuning = false
+			DAW.seek(0.0)
+			DAW.transport_play()
+			_publish()
+		return
 	_on_measure_tick(delta)
+	_tick_flaws()
+	if not run.flaws.is_empty() and not run.fixed.has(false):
+		_finish_brief()
+		return
+	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
+	if run.seconds_left <= 0.0:
+		_finish_brief()
 
 
 ## Whether a run can be started here right now: the built-in engine only (real loudness and
@@ -69,11 +88,6 @@ func start_run() -> void:
 		return
 	var backend := DAW.backend as OfflineBackend
 	_snapshot = TourProject.capture(backend)
-	var problems := ProjectBridge.load(TourProject.blank_for(TourBriefs.brief(0)), backend)
-	if not problems.is_empty():
-		push_warning("Tour: could not load the first brief's project: %s" % [problems])
-		_snapshot = {}
-		return
 	run = TourRun.new()
 	run.attempt_seed = randi()
 	run_started.emit()
@@ -88,14 +102,13 @@ func pick_draft(index: int) -> void:
 	if index < 0 or index >= _draft.size():
 		return
 	var card: TourCard = _draft[index]
-	card.apply(run)
 	if card.is_curse:
 		run.curses.append(card.id)
 	else:
 		run.gear.append(card.id)
 	_draft = []
 	run.draft = []
-	_start_brief(run.brief_index + 1)
+	_start_brief(run.brief_index + 1, card)
 
 
 ## Host only. Calls the run off early, same ending path as a loss.
@@ -105,11 +118,41 @@ func abandon_run() -> void:
 	_end_run(false)
 
 
-func _start_brief(index: int) -> void:
+## Loads brief `index`'s rescue song (drawn from `run.song_rng(index)`: tempo, then flaws, then
+## each flaw's own choices, in that order, so a seed replays identically) and starts the brief
+## tuning up -- the clock does not run until `_physics_process` sees the new tempo's parts are
+## rendered. `card`, when given, is a just-picked draft card, applied once the song is in rather
+## than before: it would otherwise be stamped on the project `_start_brief` is about to replace.
+func _start_brief(index: int, card: TourCard = null) -> void:
 	var brief := TourBriefs.brief(index)
+	var rng := run.song_rng(index)
+	var band_size := Session.participants.size()
+	var song_tempo := TourFlaws.tempo_for(rng)
+	var drawn := TourFlaws.draw(rng, TourFlaws.count_for(band_size, brief.is_boss))
+	var backend := DAW.backend as OfflineBackend
+	var problems := TourProject.load(TourProject.song_for(brief, song_tempo, drawn, rng), backend)
+	if not problems.is_empty():
+		push_warning("Tour: could not load brief %d's song: %s" % [index, problems])
+		if not _snapshot.is_empty():
+			TourProject.restore(backend, _snapshot)
+			_snapshot = {}
+		run = null
+		Session.publish_tour({})
+		return
 	run.brief_index = index
 	run.state = TourRun.State.BRIEF
 	run.score = 0
+	run.band_size = band_size
+	run.song_tempo = song_tempo
+	run.flaws.assign(drawn.map(func(f: TourFlaw) -> StringName: return f.id))
+	run.fixed.clear()
+	for _i in run.flaws.size():
+		run.fixed.append(false)
+	run.tuning = true
+	# Before the clock is set: a "shorter_clock" card writes `next_brief_seconds_mult`, and this
+	# is the brief it means.
+	if card != null:
+		card.apply(run)
 	run.seconds_left = brief.seconds * run.next_brief_seconds_mult
 	run.next_brief_seconds_mult = 1.0
 	_loudness = null
@@ -124,10 +167,13 @@ func _start_brief(index: int) -> void:
 	if &"timing" in brief.measures:
 		_timing = TourMeasure.Timing.new()
 		_timing.start(TIMING_TRACK, DAW.state.position_seconds if DAW.state != null else 0.0)
+	_published_fixed = []
 	brief_started.emit(index)
 	_publish()
 
 
+## Samples whichever of Loudness/Balance/Timing this brief lists in `measures` -- none do today
+## (see briefs.gd), but a future calibrated brief can still ask for one.
 func _on_measure_tick(delta: float) -> void:
 	if _loudness != null:
 		_loudness.sample(delta)
@@ -135,9 +181,17 @@ func _on_measure_tick(delta: float) -> void:
 		_balance.sample(delta)
 	if _timing != null:
 		_timing.sample(delta)
-	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
-	if run.seconds_left <= 0.0:
-		_finish_brief()
+
+
+## Reads every one of this brief's flaws off the live desk and publishes only when the answer
+## actually changed, so the band's HUD ticks a line the moment it is fixed without a run
+## spamming `Session.publish_tour` every physics frame.
+func _tick_flaws() -> void:
+	for i in run.flaws.size():
+		run.fixed[i] = TourFlaws.by_id(run.flaws[i]).fixed(DAW.state, run)
+	if run.fixed != _published_fixed:
+		_published_fixed = run.fixed.duplicate()
+		_publish()
 
 
 func _finish_brief() -> void:
@@ -153,6 +207,9 @@ func _finish_brief() -> void:
 	if _timing != null:
 		samples["timing"] = _timing.result()
 		_timing = null
+	var fixed_n: int = run.fixed.filter(func(f: bool) -> bool: return f).size()
+	samples["flaws"] = {"fixed": fixed_n, "total": run.flaws.size(),
+			"seconds_left_frac": run.seconds_left / brief.seconds}
 	var verdict := brief.judge(samples, run.tempo_tolerance_mult)
 	var passed := bool(verdict["passed"])
 	var score := int(verdict["score"])
@@ -181,8 +238,10 @@ func _end_run(won: bool) -> void:
 	_timing = null
 	_draft = []
 	var backend := DAW.backend
-	if backend is OfflineBackend and not _snapshot.is_empty():
-		TourProject.restore(backend as OfflineBackend, _snapshot)
+	if backend is OfflineBackend:
+		DAW.transport_stop()
+		if not _snapshot.is_empty():
+			TourProject.restore(backend as OfflineBackend, _snapshot)
 	_snapshot = {}
 	unlocks.record_run(won)
 	run = null
@@ -211,7 +270,10 @@ func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:
 ## Test-only, for `tools/screenshot.gd`'s `--tour` flag: reaches a run state deterministically,
 ## without waiting out a brief's timer, so a shot of the case or the HUD is reproducible. Host
 ## only, like every other mutation here; "intact" needs nothing from Tour at all, since the
-## case starts chained and only a run under way changes that.
+## case starts chained and only a run under way changes that. "brief" (and "broken") show the
+## real rescue song mid-tuning or mid-brief -- its flaw lines and, while the new tempo's ten
+## parts are still on the workers, "SOUNDCHECK" (see TourHud); band size and flaw count still
+## come from `Session.participants.size()`, so a solo shot shows one line.
 func force_state_for_shot(stage: StringName) -> void:
 	if not Session.is_authority():
 		return
@@ -222,12 +284,14 @@ func force_state_for_shot(stage: StringName) -> void:
 		&"draft":
 			if run == null:
 				start_run()
-			# Not `_finish_brief()`: a screenshot has no audio to judge, and a judged brief might
-			# simply fail. This skips straight to offering a draft, the way a passed brief would.
+			# Not `_finish_brief()`: a screenshot has no song playing to judge, and a judged
+			# brief might simply fail. This skips straight to offering a draft, the way a passed
+			# brief would.
 			if run != null and run.state == TourRun.State.BRIEF:
 				_loudness = null
 				_balance = null
 				_timing = null
+				run.tuning = false
 				run.state = TourRun.State.DRAFTING
 				var rng := RandomNumberGenerator.new()
 				rng.seed = run.attempt_seed + run.brief_index + 1

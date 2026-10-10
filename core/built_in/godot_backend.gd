@@ -687,6 +687,12 @@ func _waiting_roles() -> Array:
 	return _roles().filter(func(r): return not _parts.has(r) or _parts_key != _rendering_key)
 
 
+## Whether every role the current project uses has a rendered part to play. False while a new
+## tempo's parts are still on the workers -- Tour's "soundcheck" holds the clock on this.
+func parts_ready() -> bool:
+	return _waiting_roles().is_empty()
+
+
 ## Whether the parts play windows rendered through the song's tempo and signature changes rather
 ## than one loop going round: with either kind of change.
 func parts_windowed() -> bool:

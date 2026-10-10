@@ -54,8 +54,11 @@ static func all_cards() -> Array[TourCard]:
 	muted_track.title = "Muted Track"
 	muted_track.description = "A curse: one of your tracks goes quiet."
 	muted_track.is_curse = true
+	# One of the tracks still sounding: muting one already muted is no curse at all, and was
+	# the one roll that made this card do nothing (and its test flake) now and then.
 	muted_track._effect = func(_run: TourRun) -> void:
-		var tracks := DAW.state.track_indices()
+		var tracks := DAW.state.track_indices().filter(
+				func(i: int) -> bool: return not DAW.state.track(i).mute)
 		if tracks.is_empty():
 			return
 		var rng := RandomNumberGenerator.new()

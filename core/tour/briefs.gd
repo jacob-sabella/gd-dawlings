@@ -25,47 +25,49 @@ static func count() -> int:
 	return all().size()
 
 
+## Every brief here judges off its flaws (TourFlaws, baked into TourProject.song_for), not off
+## `measures`/`targets`: the master bus's own two bars are off until they are calibrated. The
+## built-in engine's limiter sits at -0.3 dB, above every loudness ceiling a brief could set, so
+## the levels check could never pass; the balance check's spread has never been measured clean,
+## so there is nothing to set its target against. Both come back once a probe flag measures the
+## clean band through the real bus -- see docs/loop_backlog.md's "Tour" section.
 static func _build() -> Array[TourBrief]:
 	var out: Array[TourBrief] = []
 
 	var levels := TourBrief.new()
 	levels.id = &"levels_check"
 	levels.title = "Levels Check"
-	levels.flavour = "The room's waiting. Keep it hot, but keep it clean."
+	levels.flavour = "Doors in forty-five. The opener left the desk a mess."
 	levels.seconds = 45.0
-	levels.measures = [&"loudness"]
-	levels.targets = {"loudness_min_db": -16.0, "loudness_max_db": -10.0, "loudness_peak_max_db": -1.0}
+	levels.measures = []
+	levels.targets = {}
 	out.append(levels)
 
 	var tone := TourBrief.new()
 	tone.id = &"tone_check"
 	tone.title = "Tone Check"
-	tone.flavour = "Nothing buried, nothing screaming. Keep it even across the board."
+	tone.flavour = "Soundcheck's over. Something's still wrong and the room's filling up."
 	tone.seconds = 45.0
-	tone.measures = [&"balance"]
-	tone.targets = {"balance_spread_max_db": 8.0}
+	tone.measures = []
+	tone.targets = {}
 	out.append(tone)
 
 	var pocket := TourBrief.new()
 	pocket.id = &"pocket_check"
 	pocket.title = "Pocket Check"
-	pocket.flavour = "Right on the grid. Nobody rushing, nobody dragging."
+	pocket.flavour = "The headliner's manager is watching from the wings. Don't embarrass anyone."
 	pocket.seconds = 45.0
-	pocket.measures = [&"timing"]
-	pocket.targets = {"timing_mean_max_beats": 0.12, "timing_worst_max_beats": 0.30}
+	pocket.measures = []
+	pocket.targets = {}
 	out.append(pocket)
 
 	var boss := TourBrief.new()
 	boss.id = &"label_exec"
 	boss.title = "The Label Exec"
-	boss.flavour = "One shot. Hit it clean, or they walk."
+	boss.flavour = "One take. The label's at the back of the room."
 	boss.seconds = 60.0
-	boss.measures = [&"loudness", &"balance", &"timing"]
-	boss.targets = {
-		"loudness_min_db": -14.0, "loudness_max_db": -12.0, "loudness_peak_max_db": -2.0,
-		"balance_spread_max_db": 5.0,
-		"timing_mean_max_beats": 0.08, "timing_worst_max_beats": 0.18,
-	}
+	boss.measures = []
+	boss.targets = {}
 	boss.is_boss = true
 	out.append(boss)
 

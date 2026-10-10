@@ -77,6 +77,18 @@ func judge(samples: Dictionary, tolerance_mult: float = 1.0) -> Dictionary:
 		detail.append("timing: avg %.2f beats off (want %.2f or less), worst %.2f (want %.2f or less), %d note(s)" \
 				% [avg_off, mean_max, worst_off, worst_max, notes])
 
+	if samples.has("flaws"):
+		var r: Dictionary = samples["flaws"]
+		var fixed_n: int = int(r.get("fixed", 0))
+		var total: int = int(r.get("total", 0))
+		var seconds_left_frac: float = float(r.get("seconds_left_frac", 0.0))
+		var all_fixed := total > 0 and fixed_n == total
+		passed = passed and all_fixed
+		score_sum += 60 + roundi(40.0 * seconds_left_frac) if all_fixed \
+				else roundi(60.0 * float(fixed_n) / float(maxi(total, 1)))
+		score_count += 1
+		detail.append("flaws: %d of %d fixed" % [fixed_n, total])
+
 	if score_count == 0:
 		return {"passed": false, "score": 0, "detail": detail}
 	return {"passed": passed, "score": int(round(float(score_sum) / float(score_count))), "detail": detail}
