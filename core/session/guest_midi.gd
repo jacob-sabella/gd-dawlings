@@ -297,7 +297,7 @@ func _process(_delta: float) -> void:
 	# On a host too: there, what is heard is the host's own playhead, and a monitor (TheirMonitor)
 	# asks it.
 	if DAW.state != null:
-		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
+		_replicated.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.taking(),
 				Time.get_ticks_usec())
 	if not plays():
 		if _take != null:

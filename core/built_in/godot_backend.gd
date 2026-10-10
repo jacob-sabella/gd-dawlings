@@ -97,6 +97,14 @@ var _midi_streams := {}
 var _midi_tasks := {}
 
 
+## Players sound from the next mix on, so a count begun on its first click would clip it: begun
+## this much before, it is heard whole (measured: 5 ms late without).
+const COUNT_IN_LEAD := 0.05
+
+
+func _init() -> void:
+	count_in_lead = COUNT_IN_LEAD
+
 func summary() -> String:
 	var waiting := _waiting_roles().size()
 	return "built-in: Godot audio" + (" (rendering %d parts)" % waiting if waiting > 0 else "")
@@ -671,7 +679,8 @@ func _sync_players() -> void:
 	var pos := state.position_seconds
 	var since := AudioServer.get_time_since_last_mix()
 	for index in _players:
-		var it := item_at(index, pos) if state.playing else null
+		# Nothing but the click while counting in to a recording, as in Reaper.
+		var it := item_at(index, pos) if state.playing and not state.counting_in() else null
 		var stream: AudioStreamWAV = null
 		var expected := 0.0
 		var wraps := false

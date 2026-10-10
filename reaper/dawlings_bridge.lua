@@ -477,6 +477,35 @@ function handlers.SetAutomationMode(args)
   return {ok = true}
 end
 
+-- The count-in before recording: the project's metronome setting (projmetroen) &16, "Count-in
+-- before recording", and its length in bars (projmetrocountin). Checked on the rig: with &16 set
+-- and the metronome on (&1), a record runs the playhead from that many bars before the cursor,
+-- reporting recording all the while, and records from the cursor; with the metronome off it
+-- records at once, so a count-in is the click's. args: bars, 0 for none.
+local COUNT_IN_BEFORE_RECORDING = 16
+
+local function count_in_bars()
+  local _, en = reaper.get_config_var_string('projmetroen')
+  local _, bars = reaper.get_config_var_string('projmetrocountin')
+  if (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_RECORDING) == 0 then return 0 end
+  return math.floor((tonumber(bars) or 0) + 0.5)
+end
+
+function handlers.SetCountIn(args)
+  local bars = math.max(0, math.floor(args[1] or 0))
+  local _, en = reaper.get_config_var_string('projmetroen')
+  local flags = math.floor(tonumber(en) or 0)
+  if bars > 0 then
+    flags = flags | COUNT_IN_BEFORE_RECORDING
+    -- The third argument is required, and 0 is what works.
+    reaper.set_config_var_string('projmetrocountin', tostring(bars), 0)
+  else
+    flags = flags & ~COUNT_IN_BEFORE_RECORDING
+  end
+  reaper.set_config_var_string('projmetroen', tostring(flags), 0)
+  return {ok = true, count_in = count_in_bars()}
+end
+
 -- args: start, end (seconds), stems (0/1), tail (ms; Reaper renders that much after the end, for
 -- effects to ring out). Reaper renders that stretch of the project, offline,
 -- as 24-bit stereo WAVs in "<project> renders" beside the project file: "<project> - mix.wav",
@@ -646,6 +675,7 @@ function handlers.GetTimeline()
   return {
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
+    count_in = count_in_bars(),
     master_automode = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetMasterTrack(0), 'I_AUTOMODE')),
     -- The project's name (its file's, without .rpp) and its file's name, not its folder: what a
     -- guest is shown. Both empty for a project never saved.

@@ -84,6 +84,9 @@ var _play_lamp: PanelButton
 var _rec_lamp: PanelButton
 var _loop_lamp: PanelButton
 var _click_lamp: PanelButton
+var _count_lamp: PanelButton
+## What the COUNT key steps through, in bars.
+const COUNT_IN_STEPS := [0, 1, 2, 4]
 var _mark_key: PanelButton
 var _section_label: Label3D
 var _loop_label: Label3D
@@ -175,7 +178,7 @@ func _rebuild() -> void:
 	click.name = "ClickKey"
 	click.led_colour = Color(0.95, 0.80, 0.42)
 	click.lamp_scale = Vector2(0.45, 0.8)
-	click.position = Vector3(0.130, -0.122, 0.028)
+	click.position = Vector3(0.115, -0.122, 0.028)
 	click.scale = Vector3(1.4, 1.4, 1.4)
 	click.pressed.connect(func(): DAW.set_metronome(not DAW.state.metronome))
 	click.describe_title = func() -> String: return "TRANSPORT  CLICK"
@@ -186,11 +189,33 @@ func _rebuild() -> void:
 	click_caption.text = "CLICK"
 	click_caption.font_size = 30
 	click_caption.pixel_size = 0.00024
-	click_caption.position = Vector3(0.130, -0.105, 0.002)
+	click_caption.position = Vector3(0.115, -0.105, 0.002)
 	click_caption.modulate = Color(0.6, 0.62, 0.66)
 	click_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(click_caption)
 	_adopt(click_caption)
+
+	# Beside it, the bars of click before a recording: each press the next of COUNT_IN_STEPS.
+	var count := PanelButton.new()
+	count.name = "CountInKey"
+	count.led_colour = Color(0.95, 0.80, 0.42)
+	count.lamp_scale = Vector2(0.45, 0.8)
+	count.position = Vector3(0.150, -0.122, 0.028)
+	count.scale = Vector3(1.4, 1.4, 1.4)
+	count.pressed.connect(_step_count_in)
+	count.describe_title = func() -> String: return "TRANSPORT  COUNT-IN"
+	count.describe_value = func(_v: float) -> String: return count_in_text(DAW.state)
+	_adopt(count)
+	_count_lamp = count
+	var count_caption := Label3D.new()
+	count_caption.text = "COUNT"
+	count_caption.font_size = 30
+	count_caption.pixel_size = 0.00024
+	count_caption.position = Vector3(0.150, -0.105, 0.002)
+	count_caption.modulate = Color(0.6, 0.62, 0.66)
+	count_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(count_caption)
+	_adopt(count_caption)
 
 	_loop_label = Label3D.new()
 	_loop_label.font_size = 40
@@ -726,7 +751,10 @@ func _refresh() -> void:
 	_tempo_label.text = "%.1f BPM" % DAW.state.tempo
 	_tempo_knob.apply_remote(bpm_to_knob(DAW.state.tempo))
 	_play_lamp.lit = DAW.state.playing
-	_rec_lamp.lit = DAW.state.recording
+	# Flashing on the beat while counting in, lit once the take has begun.
+	_rec_lamp.lit = DAW.state.taking() or (DAW.state.counting_in()
+			and fposmod(DAW.state.beat_at(DAW.state.position_seconds), 1.0) < 0.5)
+	_count_lamp.lit = DAW.state.count_in_bars > 0
 	_loop_lamp.lit = DAW.state.looping
 	_click_lamp.lit = DAW.state.metronome
 	_section_label.text = section_at(DAW.state.markers, DAW.state.position_seconds).to_upper()
@@ -751,6 +779,26 @@ static func knob_to_bpm(v: float) -> float:
 
 static func bpm_to_knob(bpm: float) -> float:
 	return clampf(inverse_lerp(TEMPO_LOW, TEMPO_HIGH, bpm), 0.0, 1.0)
+
+
+## The next count-in after `bars` on the COUNT key, round to none.
+static func next_count_in(bars: int) -> int:
+	for step in COUNT_IN_STEPS:
+		if step > bars:
+			return step
+	return 0
+
+
+## What the COUNT key says of a count-in.
+static func count_in_text(s: MixState) -> String:
+	if s.count_in_bars == 0:
+		return "off: recording starts at once"
+	var bars := "%d bar%s of click before recording" % [s.count_in_bars, "" if s.count_in_bars == 1 else "s"]
+	return bars if s.metronome else bars + ", when the click is on"
+
+
+func _step_count_in() -> void:
+	DAW.set_count_in(next_count_in(DAW.state.count_in_bars))
 
 
 ## The tempo a run of taps means: the average gap across the whole run, not the last one, so

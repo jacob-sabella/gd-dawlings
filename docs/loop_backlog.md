@@ -182,8 +182,28 @@ can finish music in, saving DAWproject. Steps, in order:
      `Session.host_heard` (the clock the microphone's loopback measured), and the monitor synth
      starts when MIDI is opened or the first key is played. The panel shows the host YOUR KEYS.
      `OfflineBackend.records_inputs` lets the suite play a host on Reaper.
+   - **Done 2026-10-10, the count-in (4c):** `DAW.set_count_in(bars)` (`/countin` on the wire,
+     0-8 bars; COUNT on the tape deck steps 1, 2, 4, off). As in Reaper, a count-in is the
+     click's: with the click off, recording starts at once. Recording from a standstill runs the
+     transport from that many bars before the playhead (through the tempo map) with only the
+     click heard, says it records all the while, and takes from the record point on:
+     `MixState.counting_in()` / `taking()`, `count_in_to` (`/countin/to`) where the take begins.
+     Takes (the host's own, a guest's audio and keys) follow `taking()`. Reaper counts in
+     itself: the bridge's SetCountIn sets the project's metronome flag &16 ("Count-in before
+     recording", found on the rig: &8 is before playback) and `projmetrocountin`, GetTimeline
+     reads them back; `DAWBackend.follow_count_in` tells the count from the take by where the
+     transport stood (a playhead not heard to go back within 0.5 s means Reaper did not count).
+     The built-in engine starts the count 50 ms early, as its players sound from the next mix:
+     begun on the first click it came out clipped, 5 ms late. Measured: `--built-in`, at the
+     master, the bar's four clicks each 3.44 ms after their beat (all within 0.01 ms of each
+     other; the same family as the render's unexplained 1.44 ms), nothing between them (-180
+     dB, the song silent under the count), the song at -4.6 dB from the record point;
+     `--reaper`, Reaper took and read back one bar, ran its playhead from 28.20 s to the record
+     point at 30.00 s (a bar is 1.80 s) and took from 30.016 s. The probe's end moved 4 s later
+     (host 35.4/36.4, guest 34.5/36.0): the Reaper host's work now ends at 32.5 s.
    - **Not yet:** recording more than one input at a time (one microphone and one set of keys
-     each now); a count-in; punch in and out; per-track input choice saved in the project.
+     each now); punch in and out; per-track input choice saved in the project; a count-in
+     before playback (Reaper's &8) and pre-roll with the song.
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
      instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
@@ -601,7 +621,7 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
 - **Reaper parity, still missing** (after sends on faders, the click, the locator and input
   monitoring):
   - Send mute: there is no OSC address for it, so it would be a bridge edit.
-  - Pre-roll and count-in.
+  - Pre-roll (count-in before recording is done: see step 4c above).
   - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
     for the selected track.
   - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).

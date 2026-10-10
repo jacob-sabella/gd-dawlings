@@ -34,6 +34,7 @@ var windows_opened: Array[PluginWindow] = []
 
 func _process(delta: float) -> void:
 	_drive_meters(delta)
+	follow_count_in()
 	follow_automation()
 	tick_replication(delta)
 
@@ -88,6 +89,9 @@ var media := {}
 ## Whether to stand in for a DAW that records its own inputs, as Reaper does. Off: the built-in
 ## engine cannot, and the stand-in is its model. The suite turns it on to play a host on Reaper.
 var records_inputs := false
+## How long before a count-in's first click the transport starts (GodotBackend's is a little, so
+## that click is heard whole).
+var count_in_lead := 0.0
 ## Instruments a project file gave a track that the engine cannot run (another DAW's plug-in), by
 ## track index, in dawkit's plain form: kept so the track saves with it, and played meanwhile
 ## through the engine's own.
@@ -1024,6 +1028,12 @@ func set_metronome(on: bool) -> void:
 	record_for_replication("/click", [1.0 if on else 0.0])
 
 
+func set_count_in(bars: int) -> void:
+	state.count_in_bars = clampi(bars, 0, MixState.COUNT_IN_MAX)
+	state.transport_changed.emit()
+	record_for_replication("/countin", [float(state.count_in_bars)])
+
+
 func set_tempo(bpm: float) -> void:
 	_remember("/tempo/raw", set_tempo.bind(state.tempo), set_tempo.bind(bpm))
 	state.tempo = bpm
@@ -1256,6 +1266,11 @@ func transport_play() -> void:
 
 func transport_stop() -> void:
 	_end_passes(true)
+	if state.counting_in():
+		# Stopped before the take began: back where it would have, as if never started.
+		state.position_seconds = state.count_in_to
+		record_for_replication("/time", [state.position_seconds])
+		_set_count_in_to(-1.0)
 	state.playing = false
 	state.recording = false
 	state.transport_changed.emit()
@@ -1265,7 +1280,15 @@ func transport_stop() -> void:
 	record_for_replication("/record", [0.0])
 
 
+## With a count-in due, from a standstill, the transport starts that many bars back with only
+## the click to hear (the engine plays nothing else while counting in), and the take begins
+## where it stood: as Reaper does it, so a playhead reads the same on either.
 func transport_record() -> void:
+	if not state.playing and state.counts_in():
+		var at := state.position_seconds
+		_set_count_in_to(at)
+		state.position_seconds = state.count_in_start(at) - count_in_lead
+		record_for_replication("/time", [state.position_seconds])
 	state.playing = true
 	state.recording = true
 	state.transport_changed.emit()

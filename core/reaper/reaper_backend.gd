@@ -219,6 +219,7 @@ func _process(delta: float) -> void:
 	if _peer:
 		_inbox.append_array(_peer.poll())
 		_apply_inbox()
+	follow_count_in()
 
 	tick_replication(delta)
 
@@ -522,6 +523,13 @@ func set_metronome(on: bool) -> void:
 		_peer.send("/click", [1.0])
 	record_for_replication("/click", value)
 	MixWire.apply(state, "/click", value)
+
+
+## Reaper's own count-in (the bridge's SetCountIn), which runs its playhead up to the record point
+## from before it as the built-in engine does; `follow_count_in` tells the take from the count.
+func set_count_in(bars: int) -> void:
+	_apply("/countin", [float(clampi(bars, 0, MixState.COUNT_IN_MAX))])
+	_edit("SetCountIn", [clampi(bars, 0, MixState.COUNT_IN_MAX)])
 
 
 func seek(seconds: float) -> void:
@@ -927,6 +935,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		var file := str(result.get("project_file", "")).get_file()
 		if title != state.project_title or file != state.project_file:
 			_apply("/project/name", [title, file])
+	if result.has("count_in") and int(result["count_in"]) != state.count_in_bars:
+		_apply("/countin", [float(result["count_in"])])
 	if result.has("master_automode"):
 		var master_mode := MixWire.automation_mode_of(result["master_automode"])
 		if master_mode != state.master.automation_mode:

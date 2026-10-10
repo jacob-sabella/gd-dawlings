@@ -275,11 +275,44 @@ var tempo_points: Array = []:
 		_map = null
 var _map: DawKitTempoMap = null
 var _map_tempo := 0.0
+## The most bars a count-in may be.
+const COUNT_IN_MAX := 8
+
+
+## Whether recording now would count in first.
+func counts_in() -> bool:
+	return count_in_bars > 0 and metronome
+
+
+## Whether the transport is counting in to a recording.
+func counting_in() -> bool:
+	return recording and playing and count_in_to >= 0.0
+
+
+## Whether what is played now is being recorded: recording, and past any count-in.
+func taking() -> bool:
+	return recording and playing and count_in_to < 0.0
+
+
+## Where a count-in to `at` starts: `count_in_bars` bars of the tempo there earlier. Before the
+## song's start, at the first tempo.
+func count_in_start(at: float) -> float:
+	var map := tempo_map()
+	return map.seconds_at(map.beat_at(at) - float(count_in_bars * maxi(beats_per_bar, 1)))
+
+
 ## Beats in a bar. Reaper's OSC surface does not send the time signature, so this is 4 unless
 ## a bridge says otherwise -- and only the bar number of a computed position depends on it.
 var beats_per_bar: int = 4
 ## Whether the click is on. Reaper's metronome, which is a transport setting there as here.
 var metronome: bool = false
+## Bars of click before recording starts, 0 for none. As in Reaper, a count-in is the metronome's:
+## with the click off, recording starts at once.
+var count_in_bars: int = 0
+## While counting in, where the recording begins: the transport runs from `count_in_bars` before
+## it with the click alone, recording but not yet taking. -1 when not counting in. Reaper does
+## the same, its playhead running up to the record point from before it.
+var count_in_to: float = -1.0
 ## Whether playback wraps round the loop range. Reaper calls it repeat.
 var looping: bool = false
 ## The loop range, in seconds. In Reaper this is the time selection when the two are linked,

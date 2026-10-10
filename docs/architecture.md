@@ -167,6 +167,13 @@ is written, placed and announced exactly as a guest's would be. The host's keys 
 plays for such a host (`host_records`) and times notes by `host_heard`. The engine's metronome
 (dawkit's `DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
 
+A count-in (`DAW.set_count_in`, only with the click on, as in Reaper) runs the transport from that
+many bars before the record point with the click alone, recording all the while as Reaper reports
+it; `MixState.taking()` is false until the playhead reaches `count_in_to`, and every take follows
+`taking()`, not `recording`. Reaper counts in itself (its project's metronome flag &16, set by the
+bridge's SetCountIn); `DAWBackend.follow_count_in` finds the record point from where the transport
+stood.
+
 The built-in engine's playhead is moved by the sound card: a silent player runs all the time, and
 while the song plays the playhead is where play (or a seek) began plus how far that player has
 been mixed. Every player is started against it, and put back only when it moves by more than a

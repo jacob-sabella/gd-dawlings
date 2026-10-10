@@ -235,6 +235,9 @@ func open_project(_path: String) -> PackedStringArray: return PackedStringArray(
 func new_project() -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
 ## The click, on or off.
 func set_metronome(_on: bool) -> void: pass
+## Bars of click before recording starts, 0 for none (MixState.count_in_bars). Not a history
+## step, as the click is not.
+func set_count_in(_bars: int) -> void: pass
 ## The project tempo, in beats per minute. Constant-tempo projects only: a project with a tempo
 ## map has its first marker moved, which is what Reaper's own tempo field does.
 func set_tempo(_bpm: float) -> void: pass
@@ -725,6 +728,43 @@ func snapshot() -> Array:
 ## protect against.
 func apply_replicated(_batch: Array) -> void:
 	pass
+
+
+## Where the transport last stood still: where a recording the DAW counts in itself begins.
+var _rest_seconds := 0.0
+var _was_rolling := false
+## When the count-in was taken to start, and whether the playhead has been seen before its end.
+var _count_in_msec := 0
+var _count_in_heard := false
+## How long a DAW may take to say its playhead went back for a count-in.
+const COUNT_IN_GRACE_MSEC := 500
+
+
+## Keeps `state.count_in_to` for a DAW that counts in on its own (Reaper): when recording starts
+## from a standstill with a count-in due, the take begins where the transport stood, and the
+## count-in is over once the playhead reaches it -- or the transport stops. Every frame.
+func follow_count_in() -> void:
+	var rolling := state.recording and state.playing
+	if rolling and not _was_rolling and state.count_in_to < 0.0 and state.counts_in():
+		# Said before the playhead is heard to go back. If it is not heard to within the grace --
+		# the DAW did not count in after all -- it is over then.
+		_set_count_in_to(_rest_seconds)
+		_count_in_msec = Time.get_ticks_msec()
+		_count_in_heard = state.position_seconds < state.count_in_to
+	elif state.count_in_to >= 0.0:
+		_count_in_heard = _count_in_heard or state.position_seconds < state.count_in_to
+		if not rolling or (state.position_seconds >= state.count_in_to and (_count_in_heard
+				or Time.get_ticks_msec() - _count_in_msec > COUNT_IN_GRACE_MSEC)):
+			_set_count_in_to(-1.0)
+	if not state.playing:
+		_rest_seconds = state.position_seconds
+	_was_rolling = rolling
+
+
+func _set_count_in_to(seconds: float) -> void:
+	state.count_in_to = seconds
+	record_for_replication("/countin/to", [seconds])
+	state.transport_changed.emit()
 
 
 ## Called by a subclass for every inbound change, BEFORE it is parsed. Before, not after,

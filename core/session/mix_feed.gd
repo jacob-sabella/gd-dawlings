@@ -104,7 +104,7 @@ func _process(_delta: float) -> void:
 	# The song clock is fed from the main thread, where DAW.state lives, and read from the send
 	# thread. Every frame: repeats are ignored by the clock itself.
 	if sending and DAW.state != null:
-		song_clock.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.recording,
+		song_clock.observe(DAW.state.position_seconds, DAW.state.playing, DAW.state.taking(),
 				Time.get_ticks_usec())
 	_report_stats()
 
