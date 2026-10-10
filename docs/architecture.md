@@ -121,6 +121,17 @@ The direction of dependency is one way. The game adapts to dawkit in
   levels are read from the cache's own decibels, because taper to dB and back is not exact.
   Send levels are rounded to a millionth of a dB.
 
+Saving and opening (`core/built_in/project_files.gd`) is the game's half of dawkit's DAWproject
+support. A take is copied into the file. A demo-song item, which has no file, has its track's
+part rendered to a WAV once, and each item becomes a looped clip of it, starting where the song's
+loop had reached, because the engine plays a part locked to the bar grid and not to the item. So
+another DAW opening the file hears the song. Opening unpacks the media to `user://open_project`,
+and since the game names a clip's file by name alone (a guest never learns the host's paths), the
+engine is given a map from name to file (`OfflineBackend.set_media`). A guest may press save,
+and the host saves where the project already is. Only the host chooses a path, opens or starts a
+project. Reaper saves its own project through its own "Save project" action and does nothing
+else from here.
+
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.
 

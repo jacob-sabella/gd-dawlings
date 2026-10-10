@@ -124,9 +124,18 @@ can finish music in, saving DAWproject. Steps, in order:
      identical. A file without dawkit's extras (as another DAW re-saves it) opens with
      everything the XML holds, and the project.xml from Bitwig's README opens (beats converted
      to seconds, an audio event flattened out of its nested clip, a CLAP plug-in kept).
-   - **Next:** the game's side. New/Open/Save/Save As in the room and on the session panel, the
-     takes folder as the media root, and the demo song's parts rendered to WAV on save, so
-     another DAW hears the song and not empty clips.
+   - **Done 2026-10-09, the game's engine side:** `DAW.save_project()` (any participant, since
+     the host saves where the project already is), and `save_project_as`, `open_project` and
+     `new_project` for the host only. Capabilities: `PROJECT_SAVE` and `PROJECT_FILES`; Reaper
+     has save only, through its own action 40026. `ProjectFiles` copies takes into the file and
+     renders each demo part to a WAV once, so each demo item becomes a looped clip of its part
+     at the point the song's loop had reached. On open, the media are unpacked to
+     `user://open_project` and the engine is told where each file is (`OfflineBackend.media`).
+     Clips (dawkit) and items (the game) gained loops. Verified: the demo is saved, reopened
+     and saved again identically in the suite, and in `session_probe.sh --built-in` a project
+     saved and reopened mid-session reaches the guest, which hears it play from its own files.
+   - **Next:** the controls. Save/Save As/Open/New in the room (the tape deck or a project
+     shelf) and on the session panel, with a file dialog for Save As and Open.
 3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

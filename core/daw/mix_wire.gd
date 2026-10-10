@@ -289,6 +289,10 @@ static func _unpack_items(args: Array) -> Array:
 			item.fade_in = maxf(float(audio.get("fade_in", 0.0)), 0.0)
 			item.fade_out = maxf(float(audio.get("fade_out", 0.0)), 0.0)
 			item.gain_db = float(audio.get("gain_db", 0.0))
+			var loop: Array = audio.get("loop", [])
+			if loop.size() == 2:
+				item.loop_start = maxf(float(loop[0]), 0.0)
+				item.loop_end = maxf(float(loop[1]), item.loop_start)
 			i += 1
 		out.append(item)
 	return out
@@ -315,6 +319,8 @@ static func _pack_items(items: Array) -> Array:
 				extra["fade_in"] = item.fade_in
 				extra["fade_out"] = item.fade_out
 				extra["gain_db"] = item.gain_db
+				if item.is_looped():
+					extra["loop"] = [item.loop_start, item.loop_end]
 			out.append(extra)
 	return out
 

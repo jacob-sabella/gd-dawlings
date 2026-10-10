@@ -75,6 +75,34 @@ func fx_kind(_track_index: int, _fx_index: int) -> StringName:
 	return &""
 
 
+## Where each clip's file is, by the name items carry: a project opened from a file unpacks its
+## media somewhere of its own. A name not in here is a take, in AudioTake.DIR.
+var media := {}
+
+
+func set_media(where: Dictionary) -> void:
+	media = where.duplicate()
+
+
+func media_path(source: String) -> String:
+	var name := source.get_file()
+	if media.has(name):
+		return media[name]
+	return ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+
+
+func save_project(path: String) -> PackedStringArray:
+	return ProjectFiles.save(self, path)
+
+
+func open_project(path: String) -> PackedStringArray:
+	return ProjectFiles.open(self, path)
+
+
+func new_project() -> PackedStringArray:
+	return ProjectFiles.new_project(self)
+
+
 ## Called once a whole project has been put into `state` (ProjectBridge.load). `kinds` is
 ## track index -> fx index -> effect kind. The stand-in has nothing to rebuild; the built-in
 ## engine lays its buses and effects down again.

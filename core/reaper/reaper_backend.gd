@@ -183,9 +183,20 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.PROJECT_FILES:
+		# Reaper's files are on Reaper's machine, opened by Reaper's own dialogs.
+		return false
 	return true
 
 
+## Reaper saves its own project, in its own format, where it already is: "File: Save project".
+func save_project(path: String) -> PackedStringArray:
+	if not path.is_empty():
+		return PackedStringArray(["Reaper saves its project where Reaper keeps it; use Save As in Reaper"])
+	if _peer == null:
+		return PackedStringArray(["Reaper is not connected"])
+	_peer.send("/action", [SAVE_ACTION])
+	return PackedStringArray()
 
 
 func _process(delta: float) -> void:
@@ -523,6 +534,8 @@ func set_loop_range(start: float, end: float) -> void:
 ## was last -- a fader move made on this desk, an edit made with a mouse in Reaper, either.
 const UNDO_ACTION := 40029
 const REDO_ACTION := 40030
+## "File: Save project".
+const SAVE_ACTION := 40026
 
 
 func undo() -> void:

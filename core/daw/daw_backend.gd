@@ -68,6 +68,12 @@ const Capability := {
 	FX_PRESETS = &"fx_presets",
 	## Show a plugin's own window somewhere else and work it from there: see PluginWindow.
 	PLUGIN_WINDOW = &"plugin_window",
+	## Save the open project where it was last saved or opened from. Reaper saves through its
+	## own action; the built-in engine and the stand-in write DAWproject.
+	PROJECT_SAVE = &"project_save",
+	## Open a project file, save to a new one and start an empty one: only an engine that owns
+	## its project files can, because a remote DAW's files are on its own machine.
+	PROJECT_FILES = &"project_files",
 }
 
 var state := MixState.new()
@@ -189,6 +195,15 @@ func transport_stop() -> void: pass
 func transport_record() -> void: pass
 ## Playback wraps round the loop range, or does not.
 func set_looping(_on: bool) -> void: pass
+## Where the open project lives on disk, or empty when it has never been saved.
+var project_path := ""
+## Saves the project. `path` empty means where it already is; returns what went wrong or could
+## not be saved, as sentences, empty when all of it was written.
+func save_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot save from here"])
+## Opens a project file in place of the open one; returns what went wrong, empty on success.
+func open_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot open files from here"])
+## Replaces the open project with an empty one.
+func new_project() -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
 ## The click, on or off.
 func set_metronome(_on: bool) -> void: pass
 ## The project tempo, in beats per minute. Constant-tempo projects only: a project with a tempo
@@ -312,6 +327,8 @@ func _locally_split(seconds: float) -> int:
 				# Each half keeps the end it had: the fade in stays on the left, the fade out goes
 				# with the right, and both keep the clip's gain.
 				right.gain_db = item.gain_db
+				right.loop_start = item.loop_start
+				right.loop_end = item.loop_end
 				right.fade_out = minf(item.fade_out, right.length)
 				_split_notes(item, right, seconds)
 				item.length = seconds - item.start

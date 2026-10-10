@@ -160,6 +160,8 @@ func _ready() -> void:
 	_test_a_project_goes_into_dawkit_and_back()
 	_test_saved_data_follows_the_rename()
 	_test_a_clip_keeps_its_fades_and_gain()
+	_test_the_built_in_engine_saves_and_opens_dawproject()
+	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
 	_test_the_host_places_an_audio_take()
@@ -8436,6 +8438,107 @@ func _test_a_project_goes_into_dawkit_and_back() -> void:
 	broken.tracks[0].parent = "t99"
 	check("a project with a broken folder is refused", not ProjectBridge.load(broken, fresh).is_empty())
 	check("and the open one is left alone", DAW.state.tracks.size() == 4)
+
+
+func _test_the_built_in_engine_saves_and_opens_dawproject() -> void:
+	var dir := OS.get_temp_dir().path_join("dawlings_projects_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir)
+	var path := dir.path_join("demo.dawproject")
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	check("the built-in engine can save and open its own files",
+			DAW.can(DAWBackend.Capability.PROJECT_FILES) and DAW.can(DAWBackend.Capability.PROJECT_SAVE))
+	var said := DAW.save_project_as(path)
+	check("the demo saves as a .dawproject (%s)" % [said], said.is_empty() and FileAccess.file_exists(path))
+	check("and the engine knows where it is now", backend.project_path == path)
+
+	var media := dir.path_join("inspect")
+	var inspected: DawKitProject = DawKitDawproject.open(path, media)["project"]
+	var drums: DawKitTrack = null
+	for t in inspected.tracks:
+		if DemoSong.role_of(t.name) != "" and not t.clips.is_empty() and drums == null:
+			drums = t
+	check("a demo track's items became clips of a rendered part", drums != null
+			and drums.clips[0].source.begins_with("audio/demo_") and drums.clips[0].is_looped())
+	if drums != null:
+		var wav := FileAccess.get_file_as_bytes(media.path_join(drums.clips[0].source))
+		var info := DawKitDawproject.wav_info(wav)
+		close_to("the part in the file is exactly its loop long", float(info.get("seconds", 0.0)),
+				DemoSong.loop_seconds(inspected.tempo), 0.0001)
+		close_to("and the clip loops all of it", drums.clips[0].loop_end, DemoSong.loop_seconds(inspected.tempo), 0.0001)
+		var peak := 0.0
+		var stream := AudioStreamWAV.load_from_file(media.path_join(drums.clips[0].source))
+		var data := stream.data
+		for i in range(0, data.size() - 1, 2):
+			peak = maxf(peak, absf(data.decode_s16(i) / 32768.0))
+		check("and is the music, not silence (peak %.2f)" % peak, peak > 0.1)
+		var bar := DemoSong.loop_seconds(inspected.tempo)
+		var off := drums.clips.filter(func(c):
+			return absf(wrapf(c.source_offset - c.start, -bar * 0.5, bar * 0.5)) >= 0.0001)
+		check("each clip starts where the song's loop had got to (%s)" % [off.map(func(c): return [c.start, c.source_offset])],
+				off.is_empty())
+
+	var fresh := GodotBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	var opened := DAW.open_project(path)
+	check("a fresh engine opens it (%s)" % [opened], opened.is_empty())
+	check("with the demo's tracks", DAW.state.tracks.size() == backend.state.tracks.size())
+	var looped: MixState.ItemState = null
+	for index in DAW.state.track_indices():
+		for it in DAW.state.track(index).items:
+			if it.is_looped() and looped == null:
+				looped = it
+	check("its parts are now files it plays, looped", looped != null and looped.source.begins_with("demo_")
+			and FileAccess.file_exists(fresh.media_path(looped.source)))
+	if looped != null:
+		var stream := fresh.looped_stream(looped.source, looped.loop_start, looped.loop_end)
+		check("as a stream that goes round its loop", stream != null
+				and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD and stream.loop_end > stream.loop_begin)
+	var first := ProjectBridge.capture(fresh)
+	DAW.save_project()
+	var again := GodotBackend.new()
+	again.state = MixState.new()
+	DAW.use(again)
+	DAW.open_project(path)
+	var second := ProjectBridge.capture(again)
+	check("saved again where it was and reopened, it is the same (%s)" % first.first_difference(second),
+			first.same_as(second))
+
+	var elsewhere := dir.path_join("not_here.dawproject")
+	DAW.apply_intent(&"save_project", [elsewhere])
+	check("a guest's save goes where the host's project is, never where the guest says",
+			not FileAccess.file_exists(elsewhere))
+
+	DAW.set_track_volume(1, 0.2)
+	var blank := DAW.new_project()
+	check("a new project is an empty one (%s)" % [blank], blank.is_empty() and DAW.state.tracks.size() == 4
+			and DAW.state.track(1).items.is_empty() and again.project_path == "")
+	check("with nothing to undo", DAW.state.undo_depth == 0)
+	OS.execute("rm", ["-rf", dir])
+
+
+func _test_a_looped_item_survives_the_wire_and_a_split() -> void:
+	var item := MixState.ItemState.new()
+	item.start = 10.0
+	item.length = 8.0
+	item.source = "demo_drums.wav"
+	item.source_offset = 1.0
+	item.loop_start = 0.0
+	item.loop_end = 2.0
+	var back: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
+	check("a loop crosses the wire", back.loop_start == 0.0 and back.loop_end == 2.0)
+	close_to("and plays round it", back.file_time(11.5), 0.5)
+	_offline()
+	DAW.state.set_track_items(3, [item])
+	DAW.select_item(3, 0)
+	DAW.split_selected(13.0)
+	var halves: Array = DAW.state.track(3).items
+	check("both halves of a split loop keep the loop", halves.size() == 2
+			and halves[0].is_looped() and halves[1].is_looped())
+	close_to("and the right half plays on from where the left stopped",
+			halves[1].file_time(13.0), item.file_time(13.0))
 
 
 func _test_a_clip_keeps_its_fades_and_gain() -> void:

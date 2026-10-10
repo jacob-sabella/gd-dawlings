@@ -244,7 +244,23 @@ func _host(port: int) -> void:
 			t.sends = t.sends.filter(func(sd): return other.track(sd.target) != null)
 		other.tracks[0].name = "Opened"
 		var refused := ProjectBridge.load(other, DAW.backend as OfflineBackend)
-		check("I opened another project mid-session (%s)" % [refused], refused.is_empty())
+		# And through a real file: saved as DAWproject and opened again, so what the guest hears
+		# next is the project's own files (the demo parts, rendered into it), not the engine's
+		# synthesised song.
+		var file := OS.get_temp_dir().path_join("dawlings_probe_%d.dawproject" % _port)
+		var saved := DAW.save_project_as(file)
+		var opened := DAW.open_project(file)
+		# From the first item: the six tracks kept are drums and bass, which the intro leaves
+		# out (and the guest moved the tempo, so bar numbers no longer say where they are).
+		var first_item := INF
+		for index in DAW.state.track_indices():
+			for it in DAW.state.track(index).items:
+				first_item = minf(first_item, it.start)
+		DAW.seek(first_item + 0.1)
+		DAW.transport_play()
+		DirAccess.remove_absolute(file)
+		check("I opened another project mid-session, through a file (%s %s %s)" % [refused, saved, opened],
+				refused.is_empty() and saved.is_empty() and opened.is_empty())
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -494,6 +510,10 @@ func _guest(port: int) -> void:
 		check("the host's newly opened project reached me whole (%d tracks, '%s')"
 				% [DAW.state.tracks.size(), DAW.state.track(1).name],
 				DAW.state.tracks.size() == 6 and DAW.state.track(1).name == "Opened")
+		Session.mix_feed.heard_peak = 0.0
+		await _until(14.3)
+		check("and I hear it play from its own files (%.3f)" % Session.mix_feed.heard_peak,
+				Session.mix_feed.heard_peak > 0.15)
 
 	await _until(15.0)
 	print("notices: ", _notices)

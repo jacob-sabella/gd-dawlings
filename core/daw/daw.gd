@@ -49,7 +49,7 @@ const COMMANDS := [
 	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
-	&"set_looping", &"set_tempo", &"seek", &"set_loop_range", &"undo", &"redo",
+	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
@@ -245,6 +245,30 @@ func set_track_monitor(index: int, mode: int) -> void:
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
+## Saves the project where it is. Anyone in a session may press save; nobody but the host
+## chooses where, so a guest's save carries no path (and one that did is not believed).
+func save_project() -> void: _do(&"save_project", [""])
+
+
+## Host only: these name a file on this machine, which no guest may do.
+func save_project_as(path: String) -> PackedStringArray:
+	if not Session.is_authority():
+		return PackedStringArray(["only the host chooses where the project is saved"])
+	return backend.save_project(path)
+
+
+func open_project(path: String) -> PackedStringArray:
+	if not Session.is_authority():
+		return PackedStringArray(["only the host opens a project"])
+	return backend.open_project(path)
+
+
+func new_project() -> PackedStringArray:
+	if not Session.is_authority():
+		return PackedStringArray(["only the host starts a project"])
+	return backend.new_project()
+
+
 func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
 func set_loop_range(start: float, end: float) -> void:
 	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
@@ -303,6 +327,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 	if verb not in COMMANDS:
 		push_warning("DAW: refused an intent for unknown verb '%s'." % verb)
 		return
+	if verb == &"save_project":
+		args = [""]
 	if verb == &"set_tempo" and args.size() == 1:
 		args = [clampf(float(args[0]), TEMPO_MIN, TEMPO_MAX)]
 	if verb == &"add_marker":

@@ -517,10 +517,15 @@ func _sync_players() -> void:
 		var stream: AudioStreamWAV = null
 		var expected := 0.0
 		var wraps := false
+		var loop_length := 0.0
 		if it != null and not it.source.is_empty():
-			stream = take_stream(it.source)
-			expected = pos - it.start + it.source_offset
-			if stream != null and expected >= stream.get_length():
+			if it.is_looped():
+				stream = looped_stream(it.source, it.loop_start, it.loop_end)
+				loop_length = it.loop_end - it.loop_start
+			else:
+				stream = take_stream(it.source)
+			expected = it.file_time(pos)
+			if stream != null and not it.is_looped() and expected >= stream.get_length():
 				stream = null
 		elif it != null:
 			stream = _parts.get(DemoSong.role_of(state.tracks[index].name))
@@ -541,6 +546,8 @@ func _sync_players() -> void:
 			if wraps:
 				var length := stream.get_length()
 				off = wrapf(off, -length * 0.5, length * 0.5)
+			elif loop_length > 0.0:
+				off = wrapf(off, -loop_length * 0.5, loop_length * 0.5)
 			if absf(off) > DRIFT_SECONDS:
 				player.play(expected)
 
@@ -548,9 +555,25 @@ func _sync_players() -> void:
 ## A recorded take's sound, read from the host's takes folder once and kept.
 func take_stream(source: String) -> AudioStreamWAV:
 	if not _take_streams.has(source):
-		var path := AudioTake.DIR.path_join(source.get_file())
+		var path := media_path(source)
 		_take_streams[source] = AudioStreamWAV.load_from_file(path) if FileAccess.file_exists(path) else null
 	return _take_streams[source]
+
+
+## The same sound set to loop between two points in the file, made once per loop asked for:
+## the player then goes round on its own, and the clock only has to check it now and then.
+func looped_stream(source: String, from: float, to: float) -> AudioStreamWAV:
+	var key := "%s@%s-%s" % [source, from, to]
+	if not _take_streams.has(key):
+		var base := take_stream(source)
+		var looped: AudioStreamWAV = null
+		if base != null:
+			looped = base.duplicate() as AudioStreamWAV
+			looped.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			looped.loop_begin = int(from * base.mix_rate)
+			looped.loop_end = mini(int(to * base.mix_rate), int(base.get_length() * base.mix_rate))
+		_take_streams[key] = looped
+	return _take_streams[key]
 
 
 func _drive_meters(delta: float) -> void:

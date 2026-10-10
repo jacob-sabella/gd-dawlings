@@ -165,9 +165,23 @@ class ItemState extends RefCounted:
 	var fade_in: float = 0.0
 	var fade_out: float = 0.0
 	var gain_db: float = 0.0
+	## A looped item plays its file between these two points (seconds into the file) for as
+	## long as it lasts. Not looped when loop_end is not after loop_start.
+	var loop_start: float = 0.0
+	var loop_end: float = 0.0
 
 	func has_clip_shape() -> bool:
-		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0
+		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0 or loop_end > loop_start
+
+	func is_looped() -> bool:
+		return loop_end > loop_start
+
+	## Seconds into the file that sound at song position `seconds`.
+	func file_time(seconds: float) -> float:
+		var at := source_offset + seconds - start
+		if is_looped() and at >= loop_end:
+			at = loop_start + fposmod(at - loop_start, loop_end - loop_start)
+		return at
 
 	func end() -> float:
 		return start + length
