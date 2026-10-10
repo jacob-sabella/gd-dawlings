@@ -161,6 +161,7 @@ func _ready() -> void:
 	_test_saved_data_follows_the_rename()
 	_test_a_clip_keeps_its_fades_and_gain()
 	_test_the_built_in_engine_saves_and_opens_dawproject()
+	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -8516,6 +8517,85 @@ func _test_the_built_in_engine_saves_and_opens_dawproject() -> void:
 	check("a new project is an empty one (%s)" % [blank], blank.is_empty() and DAW.state.tracks.size() == 4
 			and DAW.state.track(1).items.is_empty() and again.project_path == "")
 	check("with nothing to undo", DAW.state.undo_depth == 0)
+	OS.execute("rm", ["-rf", dir])
+
+
+func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:
+	var dir := OS.get_temp_dir().path_join("dawlings_panel_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir)
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("the panel names the project (%s)" % panel._project_name.text, panel._project_name.text == backend.project_title)
+	check("which has not been saved yet", panel._project_where.text == "Not saved yet.")
+	check("and the host may save it elsewhere, open one or start one", panel._project_host_row.visible)
+
+	var path := dir.path_join("Our Song.dawproject")
+	var said := panel.save_project_as(dir.path_join("Our Song"))
+	check("Save As adds the extension and writes the file (%s)" % [said], said.is_empty() and FileAccess.file_exists(path))
+	check("the room hears where it went (%s)" % [notices], notices == ["Ada saved the project as Our Song.dawproject."])
+	check("and the panel shows it", panel._project_where.text == "Our Song.dawproject")
+	notices.clear()
+	var key := InputEventKey.new()
+	key.keycode = KEY_S
+	key.ctrl_pressed = true
+	key.pressed = true
+	panel._unhandled_input(key)
+	check("Ctrl+S saves it where it is, and says so (%s)" % [notices],
+			notices == ["Ada saved the project as Our Song.dawproject."] and FileAccess.file_exists(path))
+	notices.clear()
+	Session.save_project_for("Grace")
+	check("a guest's save is announced in the guest's name (%s)" % [notices],
+			notices == ["Grace saved the project as Our Song.dawproject."])
+	notices.clear()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var save_key := timeline.get_node_or_null(^"SaveKey") as PanelButton
+	check("the timeline has a save key, lit where saving works", save_key != null and save_key.lit)
+	if save_key != null:
+		save_key.pressed.emit()
+		check("which saves the same way (%s)" % [notices], notices == ["Ada saved the project as Our Song.dawproject."])
+	notices.clear()
+	remove_child(timeline)
+	timeline.free()
+
+	DAW.set_track_volume(1, 0.2)
+	said = panel.start_new_project()
+	check("New starts an empty project and tells the room (%s)" % [notices],
+			said.is_empty() and notices == ["Ada started an empty project."] and DAW.state.tracks.size() == 4)
+	check("which the panel shows unsaved", panel._project_where.text == "Not saved yet.")
+	notices.clear()
+	said = panel.open_project(path)
+	check("Open brings the saved one back (%s %s)" % [said, notices],
+			said.is_empty() and notices == ["Ada opened Our Song.dawproject."] and DAW.state.tracks.size() > 4)
+	notices.clear()
+	said = panel.open_project(dir.path_join("missing.dawproject"))
+	var shown: String = panel._toasts.get_child(-1).get_child(0).text
+	check("a file that is not there is refused, to the one who asked and not the room (%s / %s)" % [shown, notices],
+			not said.is_empty() and notices.is_empty() and shown.begins_with("You could not open"))
+	notices.clear()
+
+	_as_session(Session.Role.GUEST, 5)
+	panel._refresh_project()
+	check("a guest sees the host's project, and no file buttons",
+			panel._project_name.text.ends_with("'s project") and not panel._project_host_row.visible)
+	check("but may still press save", not panel._project_save.disabled)
+	check("and the host-only verbs refuse a guest", not DAW.save_project_as(path).is_empty()
+			and not DAW.open_project(path).is_empty() and not DAW.new_project().is_empty())
+	Session.notice.disconnect(hear)
+	remove_child(panel)
+	panel.free()
+	Session.start_solo()
+	_offline()
 	OS.execute("rm", ["-rf", dir])
 
 

@@ -35,6 +35,8 @@ signal fx_changed(track_index: int, fx_index: int)
 signal timeline_changed()
 signal bank_changed()
 signal project_replaced()
+## The host saved the project here, by its own hand; what went wrong, empty when nothing did.
+signal project_saved(said: PackedStringArray)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
 		&"fx_changed", &"timeline_changed", &"bank_changed"]
@@ -247,7 +249,23 @@ func set_track_monitor(index: int, mode: int) -> void:
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
 ## Saves the project where it is. Anyone in a session may press save; nobody but the host
 ## chooses where, so a guest's save carries no path (and one that did is not believed).
-func save_project() -> void: _do(&"save_project", [""])
+func save_project() -> void:
+	if Session.is_authority():
+		project_saved.emit(backend.save_project(""))
+		return
+	Session.send_intent(&"save_project", [""])
+
+
+## The project's name, and the file it was last saved to or opened from (empty for neither,
+## and for a DAW that keeps its own files).
+func project_title() -> String:
+	if not Session.is_authority():
+		return ""
+	var title = backend.get(&"project_title")
+	return str(title) if title != null else "Untitled"
+
+
+func project_file() -> String: return backend.project_path if Session.is_authority() else ""
 
 
 ## Host only: these name a file on this machine, which no guest may do.

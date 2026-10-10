@@ -261,6 +261,12 @@ func _host(port: int) -> void:
 		DirAccess.remove_absolute(file)
 		check("I opened another project mid-session, through a file (%s %s %s)" % [refused, saved, opened],
 				refused.is_empty() and saved.is_empty() and opened.is_empty())
+	if _built_in:
+		await _until(14.3)
+		var file := OS.get_temp_dir().path_join("dawlings_probe_%d.dawproject" % _port)
+		check("the guest's save saved my file, and I was told (%s)" % [_notices],
+				FileAccess.file_exists(file) and _notices.has("Grace saved the project as %s." % file.get_file()))
+		DirAccess.remove_absolute(file)
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -511,9 +517,14 @@ func _guest(port: int) -> void:
 				% [DAW.state.tracks.size(), DAW.state.track(1).name],
 				DAW.state.tracks.size() == 6 and DAW.state.track(1).name == "Opened")
 		Session.mix_feed.heard_peak = 0.0
+		# Save, pressed here: the host's file, saved where the host keeps it, and the whole
+		# room told.
+		DAW.save_project()
 		await _until(14.3)
 		check("and I hear it play from its own files (%.3f)" % Session.mix_feed.heard_peak,
 				Session.mix_feed.heard_peak > 0.15)
+		check("I saved the host's project, and was told (%s)" % [_notices],
+				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
 	await _until(15.0)
 	print("notices: ", _notices)

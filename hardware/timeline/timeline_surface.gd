@@ -91,6 +91,8 @@ var _loop_bar: MeshInstance3D
 var _lanes: TimelineLanes
 var _split_key: PanelButton
 var _split_caption: Label3D
+var _save_key: PanelButton
+var _save_caption: Label3D
 ## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
 var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
@@ -183,6 +185,26 @@ func _ready() -> void:
 	add_child(_split_caption)
 	DAW.transport_changed.connect(_light_split_key)
 	DAW.timeline_changed.connect(_light_split_key)
+
+	# Save, beside it: the arrangement is the project, and every DAW keeps save on its window.
+	# Lit while pressing it does something; anyone in the room may, and the host's DAW decides
+	# where it goes.
+	_save_key = PanelButton.new()
+	_save_key.name = "SaveKey"
+	_save_key.led_colour = Color(0.45, 0.78, 0.95)
+	_save_key.lamp_scale = Vector2(0.8, 0.5)
+	_save_key.scale = Vector3(1.4, 1.4, 1.4)
+	_save_key.pressed.connect(func(): DAW.save_project())
+	_save_key.describe_title = func() -> String: return "PROJECT  SAVE"
+	_save_key.describe_value = func(_v: float) -> String:
+		if not DAW.can(DAWBackend.Capability.PROJECT_SAVE):
+			return "this DAW cannot save from here"
+		var file := DAW.project_file()
+		return file.get_file() if not file.is_empty() else "where the host keeps it"
+	add_child(_save_key)
+	_save_caption = _text("SAVE", 26, Color(0.62, 0.64, 0.68))
+	_save_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_save_caption)
 
 
 func _process(delta: float) -> void:
@@ -316,6 +338,9 @@ func _place_strips() -> void:
 	var ruler_mid := _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5
 	_split_key.position = Vector3(-width * 0.5 + 0.016, ruler_mid, 0.003)
 	_split_caption.position = Vector3(-width * 0.5 + 0.030, ruler_mid, 0.0016)
+	_save_key.position = Vector3(-width * 0.5 + 0.064, ruler_mid, 0.003)
+	_save_caption.position = Vector3(-width * 0.5 + 0.078, ruler_mid, 0.0016)
+	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
 
 

@@ -67,6 +67,12 @@ var _mic_status: Label
 var _keys: KeyCatcher
 var _keys_hint: Label
 var _strip: HBoxContainer
+var _project_name: Label
+var _project_where: Label
+var _project_host_row: HBoxContainer
+var _project_save: Button
+var _files: FileDialog
+var _confirm_new: ConfirmationDialog
 
 var _listener: PacketPeerUDP = null
 var _found: Dictionary = {}
@@ -83,6 +89,8 @@ func _ready() -> void:
 	Session.roster_changed.connect(_refresh)
 	Session.role_changed.connect(_refresh)
 	Session.holds_changed.connect(_refresh)
+	DAW.project_saved.connect(func(_said): _refresh_project())
+	DAW.project_replaced.connect(_refresh_project)
 	_refresh()
 
 
@@ -115,7 +123,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
-	if key.keycode == KEY_M and not key.ctrl_pressed:
+	if key.keycode == KEY_S and key.ctrl_pressed and not key.shift_pressed and not key.alt_pressed:
+		DAW.save_project()
+		get_viewport().set_input_as_handled()
+	elif key.keycode == KEY_M and not key.ctrl_pressed:
 		toggle()
 		get_viewport().set_input_as_handled()
 	elif key.keycode == KEY_ESCAPE and is_open():
@@ -312,6 +323,8 @@ func _build_panel() -> void:
 	leave_button.pressed.connect(func(): Session.leave())
 	_guest_box.add_child(leave_button)
 
+	_build_project(column)
+
 	var foot := _label("M  close   ·   the mix is the host's; your view is your own", 11, DIM)
 	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(foot)
@@ -338,6 +351,7 @@ func _refresh() -> void:
 					Session.name_of(1), Session.joined_address]
 	_refresh_sound()
 	_refresh_midi()
+	_refresh_project()
 	_solo_box.visible = Session.role == Session.Role.SOLO
 	_host_box.visible = Session.role == Session.Role.HOST
 	_guest_box.visible = Session.role == Session.Role.GUEST
@@ -895,6 +909,135 @@ func toast(text: String) -> void:
 	fade.tween_interval(TOAST_SECONDS)
 	fade.tween_property(card, "modulate:a", 0.0, 0.6)
 	fade.tween_callback(card.queue_free)
+
+
+## The project: its name and file, and what may be done with it. Anyone may save it where it
+## is; only the host names a file, and only where the DAW keeps its projects as files here.
+func _build_project(column: VBoxContainer) -> void:
+	column.add_child(_caption("PROJECT"))
+	_project_name = _label("", 14, INK)
+	_project_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_project_name)
+	_project_where = _label("", 12, DIM)
+	_project_where.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_project_where)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	var save := _button("Save", true)
+	save.name = "SaveProject"
+	save.tooltip_text = "Ctrl+S"
+	save.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	save.pressed.connect(func(): DAW.save_project())
+	row.add_child(save)
+	_project_save = save
+	_project_host_row = HBoxContainer.new()
+	_project_host_row.add_theme_constant_override("separation", 8)
+	_project_host_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_project_host_row)
+	for spec in [["Save As…", "SaveProjectAs", _ask_save_as], ["Open…", "OpenProject", _ask_open],
+			["New", "NewProject", _ask_new]]:
+		var b := _button(spec[0], false)
+		b.name = spec[1]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(spec[2])
+		_project_host_row.add_child(b)
+
+	_files = FileDialog.new()
+	_files.name = "ProjectFiles"
+	_files.access = FileDialog.ACCESS_FILESYSTEM
+	_files.filters = PackedStringArray(["*.dawproject ; DAWproject"])
+	_files.use_native_dialog = true
+	_files.file_selected.connect(_on_file_chosen)
+	add_child(_files)
+	_confirm_new = ConfirmationDialog.new()
+	_confirm_new.name = "ConfirmNew"
+	_confirm_new.title = "New project"
+	_confirm_new.dialog_text = "Start an empty project? Anything not saved in this one is lost."
+	_confirm_new.ok_button_text = "Start empty"
+	_confirm_new.confirmed.connect(start_new_project)
+	add_child(_confirm_new)
+
+
+func _refresh_project() -> void:
+	if _project_name == null:
+		return
+	var file := DAW.project_file()
+	_project_name.text = DAW.project_title()
+	if not Session.is_authority():
+		_project_name.text = "%s's project" % Session.name_of(1)
+		_project_where.text = "Saved on their machine; Save saves it there."
+	elif file.is_empty():
+		_project_where.text = "Not saved yet." if DAW.can(DAWBackend.Capability.PROJECT_FILES) else "Saved by the DAW, in its own file."
+	else:
+		_project_where.text = file.get_file()
+		_project_where.tooltip_text = file
+	_project_save.disabled = not DAW.can(DAWBackend.Capability.PROJECT_SAVE)
+	_project_host_row.visible = Session.is_authority() and DAW.can(DAWBackend.Capability.PROJECT_FILES)
+
+
+func _ask_save_as() -> void:
+	_files.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	_files.title = "Save the project as"
+	_files.current_dir = _project_dir()
+	_files.current_file = DAW.project_title().validate_filename() + ".dawproject"
+	_files.popup_centered_ratio(0.6)
+
+
+func _ask_open() -> void:
+	_files.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_files.title = "Open a project"
+	_files.current_dir = _project_dir()
+	_files.current_file = ""
+	_files.popup_centered_ratio(0.6)
+
+
+func _ask_new() -> void:
+	_confirm_new.popup_centered()
+
+
+func _project_dir() -> String:
+	var file := DAW.project_file()
+	if not file.is_empty():
+		return file.get_base_dir()
+	DirAccess.make_dir_recursive_absolute(ProjectFiles.DEFAULT_DIR)
+	return ProjectSettings.globalize_path(ProjectFiles.DEFAULT_DIR)
+
+
+func _on_file_chosen(path: String) -> void:
+	if _files.file_mode == FileDialog.FILE_MODE_SAVE_FILE:
+		save_project_as(path)
+	else:
+		open_project(path)
+
+
+## What the dialogs end in, callable without them. Each tells the room how it went.
+func save_project_as(path: String) -> PackedStringArray:
+	if not path.get_extension().to_lower() == "dawproject":
+		path += ".dawproject"
+	var said := DAW.save_project_as(path)
+	_report(said, "saved the project as %s" % path.get_file(), "could not save the project")
+	return said
+
+
+func open_project(path: String) -> PackedStringArray:
+	var said := DAW.open_project(path)
+	_report(said, "opened %s" % path.get_file(), "could not open %s" % path.get_file())
+	return said
+
+
+func start_new_project() -> PackedStringArray:
+	var said := DAW.new_project()
+	_report(said, "started an empty project", "could not start a project")
+	return said
+
+
+func _report(said: PackedStringArray, done: String, failed: String) -> void:
+	_refresh_project()
+	if said.is_empty():
+		Session.tell_room("%s %s." % [Session.local_name, done])
+	else:
+		toast("You %s: %s" % [failed, "; ".join(said)])
 
 
 ## Who is here, at a glance, without opening anything: a dot and a name each, top right.

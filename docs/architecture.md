@@ -132,6 +132,14 @@ and the host saves where the project already is. Only the host chooses a path, o
 project. Reaper saves its own project through its own "Save project" action and does nothing
 else from here.
 
+The controls: a SAVE key on the timeline beside SPLIT, Ctrl+S, and a PROJECT section on the
+session panel (`scenes/session_panel.gd`), which has Save for everyone and Save As…, Open… and
+New for the host when the DAW owns its files, with a native file dialog. Every save is told to
+the whole room: a guest's save goes to the host as an intent and becomes
+`Session.save_project_for(name)`, and the host's own save comes out of `DAW.project_saved`, so
+hardware never names Session. Opening and starting a project are announced by
+`Session.tell_room`. A refusal is a toast for the person who asked, and nobody else.
+
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.
 

@@ -240,7 +240,9 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	# Deferred: DAW is an autoload too, and may not be in the tree yet.
-	(func(): DAW.project_replaced.connect(_on_project_replaced)).call_deferred()
+	(func():
+		DAW.project_replaced.connect(_on_project_replaced)
+		DAW.project_saved.connect(func(said): _announce_save(local_name, said))).call_deferred()
 
 
 ## Quitting while hosting is ending the session, and says so. Blocking, briefly, because there
@@ -742,7 +744,35 @@ func _receive_intent(verb: StringName, args: Array) -> void:
 	if verb == &"insert_midi_take":
 		_place_take(multiplayer.get_remote_sender_id(), args)
 		return
+	if verb == &"save_project":
+		save_project_for(name_of(multiplayer.get_remote_sender_id()))
+		return
 	DAW.apply_intent(verb, args)
+
+
+## Saves the open project where it is, and tells the whole room how it went: a save is the one
+## thing everyone in a session wants to know happened, whoever pressed it. `who` is the name of
+## whoever asked, which on the host is the host.
+func save_project_for(who: String) -> PackedStringArray:
+	var said: PackedStringArray = DAW.backend.save_project("")
+	_announce_save(who, said)
+	return said
+
+
+func _announce_save(who: String, said: PackedStringArray) -> void:
+	var where: String = DAW.backend.project_path.get_file()
+	var text := "%s saved the project%s." % [who, " as " + where if not where.is_empty() else ""]
+	if not said.is_empty():
+		text = "%s saved the project, but: %s" % [who, "; ".join(said)]
+	tell_room(text)
+
+
+## A notice for this participant and every other one.
+func tell_room(text: String) -> void:
+	notice.emit(text)
+	if is_authority():
+		for id in _audience():
+			_told.rpc_id(id, text)
 
 
 ## A guest's take, placed, and both sides told how it went: the guest because it cannot see a

@@ -134,8 +134,15 @@ can finish music in, saving DAWproject. Steps, in order:
      Clips (dawkit) and items (the game) gained loops. Verified: the demo is saved, reopened
      and saved again identically in the suite, and in `session_probe.sh --built-in` a project
      saved and reopened mid-session reaches the guest, which hears it play from its own files.
-   - **Next:** the controls. Save/Save As/Open/New in the room (the tape deck or a project
-     shelf) and on the session panel, with a file dialog for Save As and Open.
+   - **Done 2026-10-09, the controls:** a SAVE key beside SPLIT on the timeline (the tape deck
+     has no room left that would not crowd its keys), Ctrl+S, and a PROJECT section on the
+     session panel: Save, Save As…, Open… and New, with a native file dialog and a confirmation
+     before New. Every save, open and new is told to the whole room, and a refusal only to
+     the person who asked. Verified in the suite (panel, Ctrl+S, timeline key, guest
+     refusals) and in `session_probe.sh --built-in`, where the guest presses save, the host's
+     file is written and both sides are told.
+   - **Not yet:** a guest's panel shows "<host>'s project" because the project's title and
+     file name are not replicated. They belong in the snapshot.
 3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
