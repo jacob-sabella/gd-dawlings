@@ -5,9 +5,9 @@ you enjoyed.
 
 ## Running it
 
-- **Windows:** unzip, run `dawlings.exe`. Windows may warn about an unknown publisher; choose
+- **Windows:** unzip, and run `dawlings.exe` in the `dawlings` folder. Windows may warn about an unknown publisher; choose
   "More info", then "Run anyway".
-- **Linux:** unzip, then `chmod +x dawlings.x86_64` and run it.
+- **Linux:** unzip, then in the `dawlings` folder run `chmod +x dawlings.x86_64` and start it.
 
 It opens on a demo song you can play, mix and record over, using its own built-in engine. No
 other music software is needed. Headphones are best if you're going to record.
