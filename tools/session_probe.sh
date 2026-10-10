@@ -20,7 +20,7 @@ if [ "${1:-}" = "--reaper" ]; then
     STARTED_RIG=1
   fi
   H_ARGS=(--reaper-resource "${REAPER_RIG:-$HOME/.cache/dawlings/rig}" --shift 3)
-  G_ARGS=(--expect-tracks "${EXPECT_TRACKS:-40}" --shift 3)
+  G_ARGS=(--expect-tracks "${EXPECT_TRACKS:-40}" --shift 3 --reaper-host)
 elif [ "${1:-}" = "--built-in" ]; then
   H_ARGS=(--built-in); G_ARGS=(--built-in)
 fi

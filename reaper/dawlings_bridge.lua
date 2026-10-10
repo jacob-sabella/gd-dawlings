@@ -647,6 +647,10 @@ function handlers.GetTimeline()
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     master_automode = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetMasterTrack(0), 'I_AUTOMODE')),
+    -- The project's name (its file's, without .rpp) and its file's name, not its folder: what a
+    -- guest is shown. Both empty for a project never saved.
+    project_name = (reaper.GetProjectName(0, '') or ''):gsub('%.[Rr][Pp][Pp]$', ''),
+    project_file = (select(2, reaper.EnumProjects(-1)) or ''):match('[^/\\]*$') or '',
     markers = markers,
     tempo = tempo,
     length = reaper.GetProjectLength(0),

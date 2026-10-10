@@ -67,6 +67,8 @@ var _port := 7342
 ## The host plays the built-in engine's song instead of a test tone: what the guest hears is
 ## then a real mix off the host's master bus, and has no clicks to time.
 var _built_in := false
+## The guest's host is Reaper (the rig, whose project is rig.RPP).
+var _reaper_host := false
 ## Host: the guest's recording, as Session placed it.
 var _audio_placed := {}
 ## Host: what guests asked of the room, as [verb, args, from].
@@ -104,6 +106,8 @@ func _ready() -> void:
 			_shift = float(argv[i + 1])
 		if argv[i] == "--built-in":
 			_built_in = true
+		if argv[i] == "--reaper-host":
+			_reaper_host = true
 		if argv[i] == "--expect-tracks" and i + 1 < argv.size():
 			_expect_tracks = int(argv[i + 1])
 	Session.notice.connect(func(t: String): _notices.append(t))
@@ -1091,6 +1095,11 @@ func _guest(port: int) -> void:
 		check("and I know its name and file, not where it is (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
+	# While the session is still on: once the host leaves, my own project is back.
+	await _until(30.5)
+	if _reaper_host:
+		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
+				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
 	await _until(32.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))

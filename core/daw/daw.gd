@@ -289,7 +289,10 @@ func project_title() -> String:
 	if not Session.is_authority():
 		return state.project_title if state != null else ""
 	var title = backend.get(&"project_title")
-	return str(title) if title != null else "Untitled"
+	if title != null:
+		return str(title)
+	# A DAW with its own files says what its project is called (MixState.project_title).
+	return state.project_title if state != null and not state.project_title.is_empty() else "Untitled"
 
 
 ## Where keys played into a track are heard through it: see DAWBackend.monitor_bus.
@@ -302,7 +305,7 @@ func project_file() -> String: return backend.project_path if Session.is_authori
 
 ## The name of the project's file, without its folder: for anyone, the host's file on a guest.
 func project_file_name() -> String:
-	if Session.is_authority():
+	if Session.is_authority() and not backend.project_path.is_empty():
 		return backend.project_path.get_file()
 	return state.project_file if state != null else ""
 

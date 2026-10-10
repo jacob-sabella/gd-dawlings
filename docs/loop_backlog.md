@@ -146,8 +146,10 @@ can finish music in, saving DAWproject. Steps, in order:
      them (`OfflineBackend.name_project`; the file's name only, never the host's folders).
      `DAW.project_title()` and `DAW.project_file_name()` answer the host's on a guest; the
      guest's panel shows "<title>" and "<file>, on <host>'s machine". Probe: the guest knows
-     the file name after its save. Under Reaper a guest still sees "<host>'s project": the
-     bridge knows the .rpp's name (it names renders by it) but does not report it yet.
+     the file name after its save. Under Reaper too, **done 2026-10-10:** GetTimeline
+     reports `project_name` (the .rpp's, without the extension) and `project_file` (its name
+     only), and the ReaperBackend publishes them as `/project/name`; the host's panel names the
+     file ("rig.RPP, saved by the DAW."). Probe (`--reaper`): the guest knows "rig", "rig.RPP".
 3. **Done 2026-10-09.** Audio file import. dawkit's `DawKitAudioFile` reads WAV (8/16/24/32-bit
    integer, 32/64-bit float, plain or extensible), AIFF and AIFF-C, Ogg and MP3, folds more than
    two channels to stereo, and brings a file into the takes folder: copied untouched when the

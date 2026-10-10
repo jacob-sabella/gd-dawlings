@@ -922,6 +922,11 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 	for target in master:
 		if not _same_lane(state.master.automation.get(target, []), master[target]):
 			_apply("/master/automation/%s" % target, MixWire.pack_automation(master[target]))
+	if result.has("project_name"):
+		var title := str(result["project_name"])
+		var file := str(result.get("project_file", "")).get_file()
+		if title != state.project_title or file != state.project_file:
+			_apply("/project/name", [title, file])
 	if result.has("master_automode"):
 		var master_mode := MixWire.automation_mode_of(result["master_automode"])
 		if master_mode != state.master.automation_mode:

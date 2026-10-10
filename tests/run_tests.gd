@@ -1019,6 +1019,15 @@ func _test_bridge_arrangement_is_parsed() -> void:
 	check("a track that lost its items is cleared, not left stale",
 			link.state.track(1).items.is_empty())
 
+	# Reaper's project, by name and file, for the room: only the file's name, never its folder.
+	link._on_timeline({"length": 240.0, "markers": [], "tracks": [], "project_name": "Night Drive",
+			"project_file": "/home/someone/Songs/Night Drive.rpp"})
+	check("Reaper's project name and file land (%s, %s)" % [link.state.project_title, link.state.project_file],
+			link.state.project_title == "Night Drive" and link.state.project_file == "Night Drive.rpp")
+	var told := MixState.new()
+	MixWire.apply_replicated(told, MixWire.snapshot(link.state))
+	check("and reach a joining guest", told.project_title == "Night Drive" and told.project_file == "Night Drive.rpp")
+
 	link.free()
 
 

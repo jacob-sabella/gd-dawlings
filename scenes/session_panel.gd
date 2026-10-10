@@ -1054,7 +1054,9 @@ func _refresh_project() -> void:
 		_project_where.text = ("%s, on %s's machine; Save saves it there." % [where, host]) if not where.is_empty() \
 				else "Not saved yet; Save saves it on %s's machine." % host
 	elif file.is_empty():
-		_project_where.text = "Not saved yet." if DAW.can(DAWBackend.Capability.PROJECT_FILES) else "Saved by the DAW, in its own file."
+		var own := DAW.project_file_name()
+		_project_where.text = "Not saved yet." if DAW.can(DAWBackend.Capability.PROJECT_FILES) \
+				else ("%s, saved by the DAW." % own if not own.is_empty() else "Saved by the DAW, in its own file.")
 	else:
 		_project_where.text = file.get_file()
 		_project_where.tooltip_text = file
