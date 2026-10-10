@@ -60,10 +60,10 @@ func _ready() -> void:
 	lane = _key("TrackLane", "LANE", 4, TimelineSurface.AUTOMATION_COLOUR, "TRACKS  AUTOMATION LANE", _lane,
 			func() -> String:
 				var picked: int = surface.picked_track
-				if picked <= 0 or not DAW.state.tracks.has(picked):
-					return "press a track's name first"
+				# With no track picked, the master's lanes.
+				var whose := "the master's " if picked <= 0 else ""
 				var next := _next_lane()
-				return "show %s" % TimelineSurface.lane_name(next).to_lower() if next != "" else "hide the lane")
+				return "show %s%s" % [whose, TimelineSurface.lane_name(next).to_lower()] if next != "" else "hide the lane")
 	DAW.track_changed.connect(_on_track_changed)
 	refresh()
 
@@ -78,7 +78,7 @@ func _next_lane() -> String:
 
 
 func _lane() -> void:
-	if surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track):
+	if surface.picked_track == 0 or DAW.state.tracks.has(surface.picked_track):
 		surface.show_lane(_next_lane())
 		refresh()
 
@@ -104,7 +104,7 @@ func refresh() -> void:
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
 	rename.lit = picked and surface.can_type()
-	lane.lit = picked and surface.shown_lane != ""
+	lane.lit = surface.shown_lane != ""
 	auto.lit = picked and DAW.state.track(surface.picked_track).automation_mode != DAW.AUTOMATION_READ
 
 

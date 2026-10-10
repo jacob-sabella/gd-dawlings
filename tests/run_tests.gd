@@ -8537,6 +8537,29 @@ func _test_items_are_edited_on_the_timeline() -> void:
 			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 0 and is_nan(timeline._auto_row_y)
 			and is_equal_approx(timeline._lane_y[row] - timeline._lane_y[row + 1], TimelineSurface.LANE_HEIGHT + TimelineSurface.LANE_GAP))
 	timeline.pick_track(0)
+	# With no track picked, LANE is the master's.
+	check("with no track picked, LANE offers the master's lanes (%s)" % tracks.lane.describe_value.call(0.0),
+			tracks.lane.describe_value.call(0.0) == "show the master's volume")
+	tracks.lane.pressed.emit()
+	timeline._process(0.0)
+	var last_row: int = timeline._lane_y.size() - 1
+	check("which opens its row under the last track", timeline.shown_lane == "volume" and tracks.lane.lit
+			and not is_nan(timeline._auto_row_y) and timeline._auto_row_y < timeline._lane_y[last_row])
+	var master_depth := s.undo_depth
+	click.call(timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(9.0)), timeline._automation_y(last_row, -3.0), lanes.position.z)))
+	var master_vol: Array = s.master.automation.get("volume", [])
+	check("a press there puts a point on the master's fader lane, not a track's (%s)" % [master_vol],
+			master_vol.size() == 1 and absf(master_vol[0][1] + 3.0) < 0.05 and s.undo_depth == master_depth + 1
+			and s.track_indices().all(func(i): return not s.track(i).automation.has("volume"))
+			and not s.tracks.has(0))
+	check("and it is drawn (%d, %s)" % [(timeline._automation.mesh as ImmediateMesh).get_surface_count(), timeline.shown_points()], (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 1
+			and timeline.shown_points() == master_vol)
+	DAW.undo()
+	check("undone, the master has no lane", not s.master.automation.has("volume"))
+	timeline.pick_track(3)
+	check("picking a track puts the master's lane away", timeline.shown_lane == "")
+	timeline.pick_track(0)
+	timeline._process(0.0)
 	click.call(at.call(2, 12.0))
 	var render: TimelineRenderStrip = timeline._render_controls
 	check("the stand-in cannot render, and its MIX and STEMS keys say so (%s)" % render.mix.describe_value.call(0.0),

@@ -392,8 +392,13 @@ can finish music in, saving DAWproject. Steps, in order:
      the project's master lane both ways, and Reaper's master envelopes (its `<VOLENV2` like any
      track's; the bridge's track 0). Probe: a master lane read back from Reaper and its master
      fader following it while it plays.
-   - **Not yet:** the master's lanes are not drawn on the timeline (it has no lane there), and
-     the master is not written by touch/latch. **Done 2026-10-10:** the shown lane has a row of
+   - **Done 2026-10-10:** the master's lanes on the timeline: with no track picked, LANE steps
+     through the master's volume and pan, in an automation row under the last track named
+     "MASTER  VOLUME"; points are added, dragged and removed as on a track's
+     (`DAW.set_automation(0, ...)`), and picking a track puts the master's lane away. Found on
+     the way: finishing a point fetched `DAW.state.track(picked)`, which for the master made a
+     phantom track 0 in the mix; it compares with the lane as shown now. **Not yet:** the
+     master is not written by touch/latch (it has no AUTO mode). **Done 2026-10-10:** the shown lane has a row of
      its own under its track, 42 mm tall (2.5 lanes), with its name where the track names are;
      the lanes below move down while it is open, and a press on the track's own lane is an item
      press again. Tested (row, spacing, press, closing) and seen in a shot. dawkit ramps volume in

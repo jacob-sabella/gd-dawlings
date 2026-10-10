@@ -200,7 +200,8 @@ func _finish_point() -> void:
 		elif target != "mute":
 			var p: Array = _auto_points[_auto_index]
 			p[2] = DawKitAutomation.LINEAR if int(p[2]) == DawKitAutomation.HOLD else DawKitAutomation.HOLD
-	if _auto_points != DAW.state.track(track).automation.get(target, []):
+	# The lane as it stands (the preview is gone): a track's, or the master's.
+	if _auto_points != surface.shown_points():
 		DAW.set_automation(track, target, _auto_points)
 	_auto_points = []
 	_auto_index = -1

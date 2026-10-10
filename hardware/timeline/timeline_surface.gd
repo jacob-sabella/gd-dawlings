@@ -276,6 +276,7 @@ func _ready() -> void:
 	# A method, not a lambda: a method's connection goes when the surface does.
 	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 	DAW.track_changed.connect(_on_track_changed)
+	DAW.master_changed.connect(_on_master_changed)
 	_automation = MeshInstance3D.new()
 	_automation.name = "Automation"
 	_automation.mesh = ImmediateMesh.new()
@@ -328,7 +329,8 @@ func _rebuild() -> void:
 		return
 
 	var lanes := indices.size()
-	var auto_row := shown_lane != "" and indices.has(picked_track)
+	# The master's lanes, shown while no track is picked, have their row under the last track.
+	var auto_row := shown_lane != "" and (picked_track == 0 or indices.has(picked_track))
 	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND \
 			+ ((AUTOMATION_ROW + LANE_GAP) if auto_row else 0.0)
 	_top_y = _height * 0.5
@@ -377,7 +379,7 @@ func _rebuild() -> void:
 		_lane_y.append(y)
 		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank)
 		y -= LANE_HEIGHT + LANE_GAP
-		if auto_row and index == picked_track:
+		if auto_row and (index == picked_track or (picked_track == 0 and index == indices[-1])):
 			_auto_row_y = y + LANE_HEIGHT * 0.5 - AUTOMATION_ROW * 0.5
 			_build_automation_row(_auto_row_y)
 			y -= AUTOMATION_ROW + LANE_GAP
@@ -625,8 +627,11 @@ func _on_tracks_renumbered(map: Dictionary) -> void:
 func pick_track(index: int) -> void:
 	if index == picked_track:
 		return
+	var was := picked_track
 	picked_track = index
-	if index <= 0 or not lane_targets(index).has(shown_lane):
+	# Picking a track or putting it down passes between a track's lanes and the master's (shown
+	# while nothing is picked): the lane shown belongs to neither.
+	if (was == 0) != (index == 0) or not lane_targets(index).has(shown_lane):
 		shown_lane = ""
 	_lane_preview = []
 	_draw_automation()
@@ -640,11 +645,19 @@ func _on_track_changed(index: int, field: StringName) -> void:
 		_draw_automation()
 
 
+func _on_master_changed(field: StringName) -> void:
+	if picked_track == 0 and shown_lane != "" and field in [&"automation", &"volume", &"pan"]:
+		_draw_automation()
+
+
 # --- automation ----------------------------------------------------------------------------
 
 ## What a track's LANE key steps through: its fader, pan and mute, each send, and any other lane
-## it already has (a plugin's parameter, written by touch or latch or read from a file).
+## it already has (a plugin's parameter, written by touch or latch or read from a file). Track 0 is
+## the master, whose fader and pan are all it has.
 static func lane_targets(index: int) -> Array:
+	if index == 0:
+		return ["volume", "pan"]
 	if not DAW.state.tracks.has(index):
 		return []
 	var t := DAW.state.track(index)
@@ -679,7 +692,11 @@ func show_lane(target: String) -> void:
 func shown_points() -> Array:
 	if not _lane_preview.is_empty():
 		return _lane_preview
-	if shown_lane == "" or not DAW.state.tracks.has(picked_track):
+	if shown_lane == "":
+		return []
+	if picked_track == 0:
+		return DAW.state.master.automation.get(shown_lane, [])
+	if not DAW.state.tracks.has(picked_track):
 		return []
 	return DAW.state.track(picked_track).automation.get(shown_lane, [])
 
@@ -691,13 +708,16 @@ func preview_lane(points: Array) -> void:
 
 ## Whether a press here is on the shown lane.
 func on_shown_lane(global_point: Vector3) -> bool:
-	if shown_lane == "" or picked_track <= 0 or is_nan(_auto_row_y):
+	if shown_lane == "" or is_nan(_auto_row_y):
 		return false
 	return absf(to_local(global_point).y - _auto_row_y) <= AUTOMATION_ROW * 0.5
 
 
-## Where a control is with no lane: what the lane is drawn at until it has a point.
+## Where a control is with no lane: what the lane is drawn at until it has a point. Track 0 is
+## the master.
 static func control_value(index: int, target: String) -> float:
+	if index == 0:
+		return DAW.state.master.volume_db if target == "volume" else DAW.state.master.pan * 2.0 - 1.0
 	var t := DAW.state.track(index)
 	match DawKitAutomation.kind_of(target):
 		"volume":
@@ -777,7 +797,10 @@ static func lane_name(target: String) -> String:
 	return target.to_upper()
 
 
+## The row the shown lane belongs to: its track's, or the last track's for the master.
 func _picked_row() -> int:
+	if picked_track == 0:
+		return _lane_y.size() - 1
 	return _shown().find(picked_track)
 
 
@@ -1161,7 +1184,7 @@ func _build_automation_row(y: float) -> void:
 	bed.material_override = Materials.recess()
 	bed.position = Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)
 	_adopt(bed)
-	var label := _text(lane_name(shown_lane), 26, AUTOMATION_COLOUR)
+	var label := _text(("MASTER  " if picked_track == 0 else "") + lane_name(shown_lane), 26, AUTOMATION_COLOUR)
 	label.position = Vector3(-width * 0.5 + 0.012, y, 0.0016)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	Lettering.fit(label, NAME_SPAN, 26 * 4, 18 * 4)
