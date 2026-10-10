@@ -790,7 +790,7 @@ func _sync_players() -> void:
 	var since := AudioServer.get_time_since_last_mix()
 	for index in _players:
 		# Nothing but the click while counting in to a recording, as in Reaper.
-		var it := item_at(index, pos) if state.playing and not state.counting_in() else null
+		var it := item_at(index, pos) if state.playing and not state.song_held() else null
 		var stream: AudioStreamWAV = null
 		var expected := 0.0
 		var wraps := false

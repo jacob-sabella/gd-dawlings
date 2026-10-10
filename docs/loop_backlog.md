@@ -280,7 +280,17 @@ can finish music in, saving DAWproject. Steps, in order:
      -180 dB between them, the song at -4.4 dB from the point it stood at, not recording;
      `--reaper`, the flag read back and Reaper's playhead run up from a bar before 30 s, not
      recording.
-   - **Not yet:** two input devices at once (Godot opens one); pre-roll with the song.
+   - **Done 2026-10-10, pre-roll (4h):** `DAW.set_pre_roll(on)` (`/countin/song`, a guest's
+     intent sanitised in apply_intent): the count plays the song under its click, the take still
+     from the record point. A fine press on COUNT steps neither, before playback, before playback
+     with the song, the song. Built-in: the lanes' hold is lifted (`MixState.song_held`). Reaper:
+     the bridge's SetCountIn turns its count-in off and its own pre-roll on ("Pre-roll: Toggle
+     pre-roll on record"/"on play", 41819/41818, each checked by name first; `prerollmeas`), and
+     reads the toggles back. Measured: `--built-in`, the song -15.6 dB between the count's clicks
+     and -7.0 dB from the record point on; `--reaper`, read back, Reaper's playhead from 26.97 s
+     (it pre-rolls from the bar line before) and the take from 30.053 s. The probe's end moved 4 s
+     later (host 46.4/47.4, guest 45.5/47.0; the Reaper host's work ends at 44.0 s, the built-in's
+     at 39.4 s).
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
      instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
@@ -767,7 +777,7 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
 - **Reaper parity, still missing** (after sends on faders, the click, the locator and input
   monitoring):
   - Send mute: there is no OSC address for it, so it would be a bridge edit.
-  - Pre-roll (count-in before recording is done: see step 4c above).
+  - Pre-roll: done (4h above).
   - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
     for the selected track.
   - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).

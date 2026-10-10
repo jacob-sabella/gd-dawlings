@@ -196,7 +196,9 @@ many bars before the record point with the click alone, recording all the while 
 it; `MixState.taking()` is false until the playhead reaches `count_in_to`, and every take follows
 `taking()`, not `recording`. Reaper counts in itself (its project's metronome flag &16, set by the
 bridge's SetCountIn); `DAWBackend.follow_count_in` finds the record point from where the transport
-stood. Punching (`DAW.set_punch`) limits what is taken to the loop range, Reaper's time
+stood. With pre-roll (`DAW.set_pre_roll`, `MixState.pre_roll`, `/countin/song`) the song plays
+under the count (`MixState.song_held()` is false); in Reaper it is Reaper's own pre-roll in place
+of its count-in, which starts on a bar line, the start of the bar before the record point's. Punching (`DAW.set_punch`) limits what is taken to the loop range, Reaper's time
 selection auto-punch there. Every take asks `MixState.takes_at` of the moment it hears, so the
 take's edges are where the song is, not where the playhead was a latency earlier. Each track names
 its input (`DAW.set_track_input`, one of the DAW's `MixState.inputs`), saved with the project; the

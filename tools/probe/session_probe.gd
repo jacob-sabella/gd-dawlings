@@ -324,6 +324,7 @@ func _host(port: int) -> void:
 		await _render_and_measure()
 		await _count_in_and_measure()
 		await _count_in_and_measure(true)
+		await _count_in_and_measure(false, true)
 		await _punch_and_measure()
 		await _meter_and_measure()
 		await _parts_and_measure()
@@ -344,8 +345,8 @@ func _host(port: int) -> void:
 	# How much of the time before the end the work took: the end has moved twice as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	print("host work done at %.1fs of 42.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(42.4)
+	print("host work done at %.1fs of 46.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(46.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -359,7 +360,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(43.4)
+	await _until(47.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -684,8 +685,9 @@ func _render_and_measure() -> void:
 
 ## A recording counted in, heard at the master: a bar of the click alone before the take, on the
 ## beats before the record point, with the song silent under it -- and the song back from there.
-## With `play`, the count before playback: the same, played rather than recorded.
-func _count_in_and_measure(play := false) -> void:
+## With `play`, the count before playback: the same, played rather than recorded. With `song`,
+## pre-roll: the song heard under the count, and the take still from the record point.
+func _count_in_and_measure(play := false, song_too := false) -> void:
 	var engine := DAW.backend as GodotBackend
 	var s := DAW.state
 	Session.guest_midi.record_with_host = false
@@ -693,6 +695,7 @@ func _count_in_and_measure(play := false) -> void:
 	DAW.set_metronome(true)
 	DAW.set_count_in(1)
 	DAW.set_count_in_play(play)
+	DAW.set_pre_roll(song_too)
 	var first_item := INF
 	for index in s.track_indices():
 		for it in s.track(index).items:
@@ -700,6 +703,15 @@ func _count_in_and_measure(play := false) -> void:
 	# Two bars into the song, so the count runs over it: none of it must be heard there.
 	var map := s.tempo_map()
 	var beat := ceilf(map.beat_at(first_item)) + 8.0
+	if song_too:
+		# Pre-roll: inside an item that sounds (a take, an import, notes), a beat and a bar in, so
+		# the whole count runs over it and the song is there to hear under the click.
+		for index in s.track_indices():
+			for it in s.track(index).items:
+				var b0 := ceilf(map.beat_at(it.start)) + 1.0 + s.beats_per_bar
+				if not it.muted and (not it.source.is_empty() or not it.notes.is_empty()) \
+						and map.seconds_at(b0) + 0.6 < it.end():
+					beat = b0
 	var at := map.seconds_at(beat)
 	DAW.seek(at)
 	var capture := AudioEffectCapture.new()
@@ -733,6 +745,7 @@ func _count_in_and_measure(play := false) -> void:
 			AudioServer.remove_bus_effect(engine._master_bus, i)
 	DAW.set_count_in(0)
 	DAW.set_count_in_play(false)
+	DAW.set_pre_roll(false)
 	check("and %s from the point it stood at on (%.3fs)" % ["played" if play else "took", took_at],
 			absf(took_at - at) < 0.05 and (not play or not s.recording))
 	var rate := AudioServer.get_mix_rate()
@@ -765,7 +778,11 @@ func _count_in_and_measure(play := false) -> void:
 	for o in offs:
 		worst = maxf(worst, absf(o - mean))
 	print("count-in%s: click onsets_ms %s, loudest between them %.1f dB, song after %.1f dB" % [
-			" before playback" if play else "", offs.map(func(o): return snappedf(o, 0.01)), quiet, song])
+			" before playback" if play else (" with pre-roll" if song_too else ""), offs.map(func(o): return snappedf(o, 0.01)), quiet, song])
+	if song_too:
+		check("with the song under the count (%.1f dB between its clicks)" % quiet, quiet > -40.0)
+		check("and on from the record point (%.1f dB)" % song, song > -30.0)
+		return
 	check("the count was a click on each of its beats (%d of %d, %.2fms on average, each within %.2fms of it)" % [
 			offs.size(), int(roundf(beat - map.beat_at(from))), mean, worst],
 			offs.size() == int(roundf(beat - map.beat_at(from))) and absf(mean) < COUNT_IN_TOLERANCE_MS
@@ -1256,6 +1273,34 @@ func _count_in_in_reaper() -> void:
 	check("and counted in a bar before playing, not recording (from %.2fs to %.2fs)" % [lowest, at],
 			counted and not recorded and lowest < at - bar * 0.7 and lowest > at - bar - 0.2)
 	DAW.set_count_in_play(false)
+	# Pre-roll: Reaper's own, in place of its count-in, read back, and the song run up to the take.
+	DAW.set_pre_roll(true)
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	s.pre_roll = false
+	s.count_in_bars = 0
+	await get_tree().create_timer(0.5).timeout
+	check("Reaper took a one-bar pre-roll and read it back (%s, %d)" % [s.pre_roll, s.count_in_bars],
+			s.pre_roll and s.count_in_bars == 1)
+	DAW.seek(at)
+	await get_tree().create_timer(0.2).timeout
+	DAW.transport_record()
+	lowest = INF
+	counted = false
+	took_at = NAN
+	began = Time.get_ticks_msec()
+	# Reaper pre-rolls from a bar line: the start of the bar before the one the record point is in.
+	while Time.get_ticks_msec() - began < int((2.0 * bar + 0.6) * 1000.0):
+		lowest = minf(lowest, s.position_seconds)
+		counted = counted or s.counting_in()
+		if is_nan(took_at) and s.taking():
+			took_at = s.position_seconds
+		await get_tree().process_frame
+	DAW.transport_stop()
+	check("Reaper pre-rolled a bar before recording (from %.2fs to %.2fs), and took from the record point (%.3fs)" % [
+			lowest, at, took_at], counted and lowest > at - 2.0 * bar - 0.2 and lowest <= at - bar + 0.2
+			and absf(took_at - at) < 0.15)
+	DAW.set_pre_roll(false)
 	DAW.set_count_in(0)
 	# And its record mode: time selection auto-punch, read back.
 	DAW.set_punch(true)
@@ -1622,11 +1667,11 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	# While the session is still on: once the host leaves, my own project is back.
-	await _until(41.5)
+	await _until(45.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
-	await _until(43.0)
+	await _until(47.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

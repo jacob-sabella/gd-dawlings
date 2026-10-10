@@ -295,9 +295,15 @@ func counts_in_playing() -> bool:
 	return count_in_play and counts_in()
 
 
-## Whether the transport is counting in, to a recording or to playback: the click alone.
+## Whether the transport is counting in, to a recording or to playback: the click, and the song
+## only with pre-roll.
 func counting_in() -> bool:
 	return playing and count_in_to >= 0.0 and position_seconds < count_in_to
+
+
+## Whether the song is silent for now: counting in without pre-roll.
+func song_held() -> bool:
+	return counting_in() and not pre_roll
 
 
 ## Whether what is played now is being recorded: recording, past any count-in, and inside the
@@ -387,6 +393,9 @@ var count_in_to: float = -1.0
 ## The count-in before playback too, as Reaper's "Count-in before playback": playing from a
 ## standstill runs the same bars of click first, and the song starts where the transport stood.
 var count_in_play: bool = false
+## Pre-roll: the count-in plays the song under the click, from that many bars before, as Reaper's
+## "Pre-roll" does, rather than the click alone. Recording still takes from where it stood.
+var pre_roll: bool = false
 ## Punching in and out: a recording takes only inside the loop range (Reaper's time selection
 ## auto-punch, the loop range there being the time selection). With no range, all of it.
 var punch: bool = false

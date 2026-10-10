@@ -1068,6 +1068,12 @@ func set_count_in_play(on: bool) -> void:
 	record_for_replication("/countin/play", [1.0 if on else 0.0])
 
 
+func set_pre_roll(on: bool) -> void:
+	state.pre_roll = on
+	state.transport_changed.emit()
+	record_for_replication("/countin/song", [1.0 if on else 0.0])
+
+
 func set_tempo(bpm: float) -> void:
 	_remember("/tempo/raw", set_tempo.bind(state.tempo), set_tempo.bind(bpm))
 	state.tempo = bpm
@@ -1336,7 +1342,7 @@ func transport_stop() -> void:
 
 
 ## With a count-in due, from a standstill, the transport starts that many bars back with only
-## the click to hear (the engine plays nothing else while counting in), and the take begins
+## the click to hear (the engine plays nothing else while counting in, unless with pre-roll), and the take begins
 ## where it stood: as Reaper does it, so a playhead reads the same on either.
 func transport_record() -> void:
 	if not state.playing and state.counts_in():

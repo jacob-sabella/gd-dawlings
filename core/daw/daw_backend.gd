@@ -243,6 +243,8 @@ func set_metronome(_on: bool) -> void: pass
 func set_count_in(_bars: int) -> void: pass
 ## The count-in before playback as well (MixState.count_in_play). Not a history step either.
 func set_count_in_play(_on: bool) -> void: pass
+## Pre-roll: the song under the count-in (MixState.pre_roll). Not a history step either.
+func set_pre_roll(_on: bool) -> void: pass
 ## The time signature's changes, as MixState.time_signature_points: [beat, numerator,
 ## denominator], the first at beat 0 and the song's own; one point is one signature.
 func set_time_signature_map(_points: Array) -> void: pass

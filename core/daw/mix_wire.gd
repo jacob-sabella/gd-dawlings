@@ -92,6 +92,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "play" and args.size() > 0:
 				state.count_in_play = _as_bool(args)
 				state.transport_changed.emit()
+			elif p.size() > 1 and p[1] == "song" and args.size() > 0:
+				# dawlings's own: pre-roll (MixState.pre_roll).
+				state.pre_roll = _as_bool(args)
+				state.transport_changed.emit()
 		"loop":
 			if p.size() > 2 and p[2] == "time" and args.size() > 0:
 				if p[1] == "start":
@@ -727,6 +731,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/click", [1.0 if state.metronome else 0.0]])
 	out.append(["/countin", [float(state.count_in_bars)]])
 	out.append(["/countin/play", [1.0 if state.count_in_play else 0.0]])
+	out.append(["/countin/song", [1.0 if state.pre_roll else 0.0]])
 	if not state.inputs.is_empty():
 		out.append(["/inputs", pack_inputs(state.inputs)])
 	out.append(["/punch", [1.0 if state.punch else 0.0]])

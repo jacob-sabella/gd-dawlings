@@ -529,13 +529,20 @@ func set_metronome(on: bool) -> void:
 ## from before it as the built-in engine does; `follow_count_in` tells the take from the count.
 func set_count_in(bars: int) -> void:
 	_apply("/countin", [float(clampi(bars, 0, MixState.COUNT_IN_MAX))])
-	_edit("SetCountIn", [clampi(bars, 0, MixState.COUNT_IN_MAX), state.count_in_play])
+	_edit("SetCountIn", [clampi(bars, 0, MixState.COUNT_IN_MAX), state.count_in_play, state.pre_roll])
 
 
 ## Reaper's "Count-in before playback" (projmetroen &8), through the same handler.
 func set_count_in_play(on: bool) -> void:
 	_apply("/countin/play", [1.0 if on else 0.0])
-	_edit("SetCountIn", [state.count_in_bars, on])
+	_edit("SetCountIn", [state.count_in_bars, on, state.pre_roll])
+
+
+## Reaper's own pre-roll ("Pre-roll: Toggle pre-roll on record", and on play with a count before
+## playback), in place of its count-in, through the same handler.
+func set_pre_roll(on: bool) -> void:
+	_apply("/countin/song", [1.0 if on else 0.0])
+	_edit("SetCountIn", [state.count_in_bars, state.count_in_play, on])
 
 
 ## A track's record input, as Reaper's I_RECINPUT (the bridge's SetTrackInput). Only what
@@ -1046,6 +1053,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		_apply("/countin", [float(result["count_in"])])
 	if result.has("count_in_play") and bool(result["count_in_play"]) != state.count_in_play:
 		_apply("/countin/play", [1.0 if result["count_in_play"] else 0.0])
+	if result.has("pre_roll") and bool(result["pre_roll"]) != state.pre_roll:
+		_apply("/countin/song", [1.0 if result["pre_roll"] else 0.0])
 	if result.has("master_automode"):
 		var master_mode := MixWire.automation_mode_of(result["master_automode"])
 		if master_mode != state.master.automation_mode:

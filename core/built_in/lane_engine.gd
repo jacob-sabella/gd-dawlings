@@ -91,8 +91,8 @@ func clear() -> void:
 func drive(delta: float) -> void:
 	var s := backend.state
 	transport.set_loop(s.loop_start, s.loop_end, s.looping and s.has_loop_range())
-	# Nothing but the click before a count-in's end, as in Reaper.
-	transport.set_hold(s.count_in_to if s.count_in_to >= 0.0 and s.playing else -1.0)
+	# Nothing but the click before a count-in's end, as in Reaper; the song too with pre-roll.
+	transport.set_hold(s.count_in_to if s.count_in_to >= 0.0 and s.playing and not s.pre_roll else -1.0)
 	var headless := AudioServer.get_driver_name() == "Dummy"
 	if s.playing:
 		if not transport.is_playing() or s.position_seconds != _said:

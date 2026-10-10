@@ -486,10 +486,38 @@ local COUNT_IN_BEFORE_RECORDING = 16
 -- And &8, "Count-in before playback": the same bars of click before the song plays.
 local COUNT_IN_BEFORE_PLAYBACK = 8
 
+-- Pre-roll, the song under the count rather than the click alone: Reaper's own toggles, "Pre-roll:
+-- Toggle pre-roll on record" and "on play", and its length in measures (prerollmeas). Each action
+-- is checked by name before it is used, so a Reaper that numbers them otherwise is left alone.
+local PREROLL_RECORD = 41819
+local PREROLL_PLAY = 41818
+
+local function preroll_action(id, word)
+  local ok, name = pcall(reaper.kbd_getTextFromCmd, id, nil)
+  name = ok and tostring(name or ''):lower() or ''
+  return name:find('pre%-roll') ~= nil and name:find(word) ~= nil, name
+end
+
+local function preroll_on(id, word)
+  return preroll_action(id, word) and reaper.GetToggleCommandState(id) == 1
+end
+
+local function set_preroll(id, word, on)
+  if preroll_action(id, word) and (reaper.GetToggleCommandState(id) == 1) ~= on then
+    reaper.Main_OnCommand(id, 0)
+  end
+end
+
 local function count_in_bars()
   local _, en = reaper.get_config_var_string('projmetroen')
   local _, bars = reaper.get_config_var_string('projmetrocountin')
-  if (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_RECORDING) == 0 then return 0 end
+  if (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_RECORDING) == 0 then
+    if preroll_on(PREROLL_RECORD, 'record') then
+      local _, meas = reaper.get_config_var_string('prerollmeas')
+      return math.floor((tonumber(meas) or 0) + 0.5)
+    end
+    return 0
+  end
   return math.floor((tonumber(bars) or 0) + 0.5)
 end
 
@@ -503,15 +531,31 @@ end
 
 local function count_in_play()
   local _, en = reaper.get_config_var_string('projmetroen')
-  return (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_PLAYBACK) ~= 0
+  return (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_PLAYBACK) ~= 0 or preroll_on(PREROLL_PLAY, 'play')
 end
 
--- args: bars (0 for none), and whether playback counts in too.
+local function pre_roll()
+  return preroll_on(PREROLL_RECORD, 'record')
+end
+
+-- args: bars (0 for none), whether playback counts in too, and whether the count is pre-roll (the
+-- song under it). Pre-roll is Reaper's pre-roll in place of its count-in, never both.
 function handlers.SetCountIn(args)
   local bars = math.max(0, math.floor(args[1] or 0))
   local play = args[2] == true
+  local song = args[3] == true and bars > 0
   local _, en = reaper.get_config_var_string('projmetroen')
   local flags = math.floor(tonumber(en) or 0)
+  set_preroll(PREROLL_RECORD, 'record', song)
+  set_preroll(PREROLL_PLAY, 'play', song and play)
+  if song then
+    reaper.set_config_var_string('prerollmeas', tostring(bars), 0)
+    reaper.set_config_var_string('projmetroen', tostring(flags & ~COUNT_IN_BEFORE_RECORDING & ~COUNT_IN_BEFORE_PLAYBACK), 0)
+    local _, rec_name = preroll_action(PREROLL_RECORD, 'record')
+    local _, play_name = preroll_action(PREROLL_PLAY, 'play')
+    return {ok = pre_roll(), count_in = count_in_bars(), count_in_play = count_in_play(), pre_roll = pre_roll(),
+      actions = {rec_name, play_name}}
+  end
   if bars > 0 then
     flags = flags | COUNT_IN_BEFORE_RECORDING
     -- The third argument is required, and 0 is what works.
@@ -525,7 +569,7 @@ function handlers.SetCountIn(args)
     flags = flags & ~COUNT_IN_BEFORE_PLAYBACK
   end
   reaper.set_config_var_string('projmetroen', tostring(flags), 0)
-  return {ok = true, count_in = count_in_bars(), count_in_play = count_in_play()}
+  return {ok = true, count_in = count_in_bars(), count_in_play = count_in_play(), pre_roll = pre_roll()}
 end
 
 -- A track's record input: Reaper's I_RECINPUT (-1 none, a hardware input index, |1024 for the
@@ -734,6 +778,7 @@ function handlers.GetTimeline()
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     count_in = count_in_bars(),
     count_in_play = count_in_play(),
+    pre_roll = pre_roll(),
     -- Every track's record input, in order, and how many hardware inputs there are to choose.
     inputs = record_inputs(),
     audio_inputs = reaper.GetNumAudioInputs(),
