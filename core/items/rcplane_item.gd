@@ -79,6 +79,8 @@ var _crashes := 0
 var _prop_angle := 0.0
 ## Heard from the machine flying it.
 var _heard := Transform3D.IDENTITY
+## Where it was heard to be, kept and played back a moment behind: see PoseTrail.
+var _trail := PoseTrail.new()
 var _hearing := false
 var _motor: AudioStreamPlayer3D
 
@@ -312,7 +314,7 @@ func _process(delta: float) -> void:
 			_step(FLY_STEP)
 		_place()
 	elif _hearing:
-		plane.global_transform = plane.global_transform.interpolate_with(_heard, 1.0 - exp(-delta * 14.0))
+		plane.global_transform = _trail.sample(PoseTrail.now())
 	var running := _motor_running()
 	_prop_angle += delta * (95.0 if running else 0.0)
 	prop.rotation.z = _prop_angle
@@ -518,7 +520,9 @@ func hear(pose: Transform3D, as_mode: int) -> void:
 	_heard = pose
 	if not _hearing:
 		_hearing = true
+		_trail.clear()
 		plane.global_transform = pose
+	_trail.push(PoseTrail.now(), pose)
 	var was := mode
 	mode = as_mode as Mode
 	if was != mode:

@@ -249,6 +249,7 @@ func _ready() -> void:
 	_test_the_host_places_a_guest_take_and_says_so()
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
+	_test_someone_elses_motion_plays_back_as_it_was_made()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -2794,12 +2795,19 @@ func _check_a_guest_predicts_and_rolls_back(studio: Studio, order: Array, plugin
 	check("a stand the host would not put out is taken back", not studio.tablets.has(refused))
 
 	# Someone else wheeling the rack: it rolls after them, and its coming to rest is not news.
+	# Their push, as sent: a step every 50ms, played back a moment behind (PoseTrail).
 	var asked := studio._predictions.size()
-	studio._on_room_motion(&"rack", rack_home.x - 0.3, rack_home.y, 0.3, 5)
+	for k in 6:
+		studio._on_room_motion(&"rack", rack_home.x - 0.05 * (k + 1), rack_home.y, 0.05 * (k + 1), 5)
+		PoseTrail.skew_msec += 50.0
+	# Now 300ms after the first: drawn at 200ms, between the fifth and the sixth sent.
+	studio._drive_pushed()
 	studio.rack_trolley._physics_process(1.0 / 60.0)
 	var moved_by := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z).distance_to(rack_home)
-	check("someone else's push rolls the rack rather than putting it there (%.3f)" % moved_by,
-			moved_by > 0.0 and moved_by < 0.3)
+	check("someone else's push plays back as they pushed, a moment behind (%.3f)" % moved_by,
+			absf(moved_by - 0.25) < 0.02)
+	PoseTrail.skew_msec += 400.0
+	studio._drive_pushed()
 	for i in 240:
 		studio.rack_trolley._physics_process(1.0 / 60.0)
 	check("and it gets there", Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
@@ -11643,6 +11651,26 @@ func _test_the_host_places_a_guest_take_and_says_so() -> void:
 	Session.notice.disconnect(listen)
 
 
+func _test_someone_elses_motion_plays_back_as_it_was_made() -> void:
+	var trail := PoseTrail.new()
+	var at := func(x: float) -> Transform3D: return Transform3D(Basis.IDENTITY, Vector3(x, 0, 0))
+	# Moving at 1 m/s, a pose every 50ms -- heard a little unevenly.
+	for k in 5:
+		trail.push(1000.0 + k * 50.0 + (8.0 if k == 2 else 0.0), at.call(k * 0.05))
+	var x := func(now: float) -> float: return trail.sample(now).origin.x
+	check("drawn a moment behind, between the two poses either side (%.3f)" % x.call(1175.0),
+			absf(x.call(1175.0) - 0.075) < 0.004)
+	check("smooth through the late one: no step where it came in (%.3f, %.3f, %.3f)" % [x.call(1195.0), x.call(1200.0), x.call(1205.0)],
+			x.call(1200.0) > x.call(1195.0) and x.call(1205.0) > x.call(1200.0))
+	check("past the newest, carried on as it was going (%.3f)" % x.call(1350.0), x.call(1350.0) > 0.2)
+	check("then back where it was last heard to be, not left beyond it (%.3f)" % x.call(1600.0),
+			is_equal_approx(x.call(1600.0), 0.2) and trail.settled(1600.0))
+	# Stood still a second, then moved on: it waits where it was, not creeping all second.
+	trail.push(2600.0, at.call(0.4))
+	check("a stop is a stop, not a slow creep to where it moved on to (%.3f)" % x.call(2600.0),
+			is_equal_approx(x.call(2600.0), 0.2))
+
+
 func _test_a_block_goes_from_one_shelf_onto_another() -> void:
 	_offline()
 	var tracks: Array = DAW.state.track_indices().filter(func(i): return not DAW.state.track(i).items.is_empty())
@@ -14582,7 +14610,9 @@ func _test_the_radio_plane_flies_where_you_point() -> void:
 	copy.hear(there, RcPlaneItem.Mode.FLYING)
 	check("told it flies, it flies there, motor running", copy.mode == RcPlaneItem.Mode.FLYING
 			and copy.plane.global_position.is_equal_approx(there.origin) and copy._motor_running())
+	PoseTrail.skew_msec += 50.0
 	copy.hear(there.translated(Vector3(0.5, 0, 0)), RcPlaneItem.Mode.FLYING)
+	PoseTrail.skew_msec += 400.0
 	for i in 30:
 		copy._process(1.0 / 60.0)
 	check("and follows where it is said to be", copy.plane.global_position.distance_to(there.origin + Vector3(0.5, 0, 0)) < 0.02)

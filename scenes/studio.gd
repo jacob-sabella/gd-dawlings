@@ -1059,7 +1059,34 @@ func _on_room_motion(id: StringName, x: float, z: float, heading: float, _from: 
 	for p in _predictions:
 		if (p["verb"] == &"move_piece" or p["verb"] == &"move_tablet") and p["args"][0] == id:
 			return
-	t.roll_to(Vector2(x, z), heading)
+	# Kept and played back a moment behind (_drive_pushed), rather than sprung after.
+	var trail: PoseTrail = _pushed_trails.get(id)
+	if trail == null:
+		trail = PoseTrail.new()
+		_pushed_trails[id] = trail
+	trail.push(PoseTrail.now(), Transform3D(Basis(Vector3.UP, heading), Vector3(x, 0, z)))
+
+
+## The stands someone else is pushing, by id: what their push sent, played back.
+var _pushed_trails := {}
+
+
+func _drive_pushed() -> void:
+	var now := PoseTrail.now()
+	for id in _pushed_trails.keys():
+		var trail: PoseTrail = _pushed_trails[id]
+		var t := _floor_piece(id)
+		if t == null or t.held_by != null:
+			_pushed_trails.erase(id)
+			continue
+		var pose := trail.sample(now)
+		var heading := pose.basis.get_euler().y
+		if trail.settled(now):
+			# Let go over there: the spring brings it the last of the way and it settles.
+			_pushed_trails.erase(id)
+			t.roll_to(Vector2(trail.latest().origin.x, trail.latest().origin.z), trail.latest().basis.get_euler().y)
+			continue
+		t.drive_to(Vector2(pose.origin.x, pose.origin.z), heading)
 
 
 ## The host, answering someone's ask. The same calls the host's own hands make, so the room is
@@ -2306,6 +2333,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_drive_pushed()
 	_refresh_looms_if_moved(delta)
 	_follow_keytar()
 	if venue != null and DAW.state != null:

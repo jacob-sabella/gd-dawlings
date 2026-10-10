@@ -244,10 +244,27 @@ func place(at: Vector2, heading: float) -> void:
 	_settle()
 
 
+## Taken along by someone else's push, as it is played back from what they sent (PoseTrail): it
+## goes where it is told each frame rather than springing after it, which would add a second
+## lag to the one already in what they sent. roll_to, or a hand, hands it back to the spring.
+var driven := false
+
+
+func drive_to(at: Vector2, heading: float) -> void:
+	steered = true
+	if not _active:
+		_capture_riders()
+		_wake()
+	driven = true
+	_target = at
+	_heading_target = rotation.y + wrapf(heading - rotation.y, -PI, PI)
+
+
 ## Roll it to `at`, the way a push would: the spring takes it there, so a stand moved by someone
 ## across the room glides after their hand instead of jumping to wherever the last word put it.
 func roll_to(at: Vector2, heading: float) -> void:
 	steered = true
+	driven = false
 	if not _active:
 		_capture_riders()
 		_wake()
@@ -282,12 +299,19 @@ func _physics_process(delta: float) -> void:
 	var at := Vector2(position.x, position.z)
 	# A critically damped spring: gets there as fast as it can without overshooting, which is
 	# what a person walking a heavy cart does. Overshoot would read as the rack bouncing.
-	var pull := (_target - at) * follow * follow - _velocity * 2.0 * follow
-	_velocity += pull * delta
-	if _velocity.length() > MAX_SPEED:
-		_velocity = _velocity.normalized() * MAX_SPEED
-	var heading := lerp_angle(rotation.y, _heading_target, 1.0 - exp(-follow * 0.9 * delta))
-	var want := at + _velocity * delta
+	var heading: float
+	var want: Vector2
+	if driven:
+		want = _target
+		heading = _heading_target
+		_velocity = (want - at) / delta
+	else:
+		var pull := (_target - at) * follow * follow - _velocity * 2.0 * follow
+		_velocity += pull * delta
+		if _velocity.length() > MAX_SPEED:
+			_velocity = _velocity.normalized() * MAX_SPEED
+		heading = lerp_angle(rotation.y, _heading_target, 1.0 - exp(-follow * 0.9 * delta))
+		want = at + _velocity * delta
 
 	var landed := want
 	var bumped := false

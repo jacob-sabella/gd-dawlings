@@ -19,7 +19,13 @@ extends Node3D
 const PUBLISH_HZ := 20.0
 ## How quickly an avatar catches up with the newest pose. Poses arrive at 20Hz and frames at 60
 ## or 90; drawn raw, a head steps three times a second's worth of jitter across a headset.
-const FOLLOW_RATE := 14.0
+## What is left of easing a ghost after the poses heard are played back (PoseTrail): only enough
+## to take the corners off them.
+const FOLLOW_RATE := 40.0
+## Each ghost's poses heard, by peer.
+var _trails := {}
+## When each one's newest pose was heard, to know a new one from the same one seen again.
+var _heard_at := {}
 ## Closer than this to my own eye and an avatar is hidden: two desktop participants both spawn
 ## at the mix position, and the inside of somebody's head is not a view of the desk.
 const PERSONAL_SPACE := 0.6
@@ -130,6 +136,7 @@ func _process(delta: float) -> void:
 			if not item.pocket_at.is_valid():
 				item.pocket_at = func(slot: int) -> Transform3D: return reflection.pocket_pose(slot, item)
 	var weight := 1.0 - exp(-delta * FOLLOW_RATE)
+	var now := PoseTrail.now()
 	for id in _avatars:
 		var avatar: Avatar = _avatars[id]
 		var p = Session.participants.get(id)
@@ -140,7 +147,15 @@ func _process(delta: float) -> void:
 		avatar.visible = p.heard_msec > 0
 		if not avatar.visible:
 			continue
-		var target := _from_session(p.head)
+		# Played back a moment behind, between the poses heard, rather than chased: see PoseTrail.
+		var trail: PoseTrail = _trails.get(id)
+		if trail == null:
+			trail = PoseTrail.new()
+			_trails[id] = trail
+		if _heard_at.get(id, -1) != p.heard_msec:
+			_heard_at[id] = p.heard_msec
+			trail.push(now, p.head)
+		var target := _from_session(trail.sample(now))
 		if not avatar.placed:
 			avatar.snap(target)
 		avatar.follow(target, weight)
