@@ -697,6 +697,11 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   ghost shares one. Opus would make the audio cheap, and a longer palette (or hue variants) the
   colours. Not started: nobody has asked for big rooms yet.
 
+- **Third-party plugins through a Carla sidecar.** Parked by the user 2026-10-10 ("unnecessary
+  at this point"). If it comes back: Carla is GPL, so only as its own process, spoken to over
+  OSC, using a Carla the user installed (on the PATH), never bundled; instruments on MIDI tracks
+  first, effects (audio out and back, latency compensation) after.
+
 ## Decided (2026-10-10, the user handed these over: "what makes most sense legally, game fun-wise")
 
 - **Hearing your own keys: through the track by default, fast on a switch.** Decided fast at
@@ -752,11 +757,6 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   listener and tens of ms; voices reach the room through the host's mix and the takes.
 - **"Their monitor": not built.** A staged performance for its upload cost, not a way to play
   together.
-- **Third-party plugins through a Carla sidecar: yes, as a separate process, never bundled.**
-  Carla is GPL; run as its own process and spoken to over OSC it is an aggregate, not a derived
-  work, so the game and dawkit stay proprietary. The game uses a Carla the user installed
-  (detected on the PATH) rather than shipping one, which would bring GPL source obligations
-  into the download.
 
 ## Not started
 
