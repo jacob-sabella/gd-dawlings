@@ -42,6 +42,8 @@ var venue_variant := 0
 ## a chain rearranged in Reaper since then has moved it. Where each stand stands is a floor
 ## transform like any other piece's, under "floor/<stand id>".
 var tablets: Dictionary = {}
+## Whether this participant reads the timeline as shelves of blocks (TimelineSurface.shelf).
+var timeline_shelves := false
 
 
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
@@ -83,6 +85,8 @@ func save() -> void:
 		cfg.set_value("profile", "venue", String(venue))
 	if venue_variant != 0:
 		cfg.set_value("profile", "venue_variant", venue_variant)
+	if timeline_shelves:
+		cfg.set_value("profile", "timeline_shelves", true)
 	for id in modes:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
@@ -99,6 +103,7 @@ func load_saved() -> void:
 	medium = cfg.get_value("profile", "medium", medium)
 	venue = StringName(cfg.get_value("profile", "venue", String(venue)))
 	venue_variant = int(cfg.get_value("profile", "venue_variant", venue_variant))
+	timeline_shelves = bool(cfg.get_value("profile", "timeline_shelves", timeline_shelves))
 	if cfg.has_section("modes"):
 		for key in cfg.get_section_keys("modes"):
 			modes[StringName(key)] = cfg.get_value("modes", key)

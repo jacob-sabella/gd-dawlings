@@ -66,10 +66,17 @@ func _ready() -> void:
 	refresh()
 
 
+## How deep the box presses land on is, and how much further forward than that it reaches: out
+## to the faces of the blocks in the shelf view.
+const DEPTH := 0.010
+var front := 0.0
+
+
 func refresh() -> void:
 	if _shape == null:
 		return
-	(_shape.shape as BoxShape3D).size = Vector3(width, height, 0.010)
+	(_shape.shape as BoxShape3D).size = Vector3(width, height, DEPTH + front)
+	_shape.position = Vector3(0, 0, front * 0.5)
 
 
 ## Snapped to the beat, unless fine.
@@ -93,7 +100,12 @@ func _fine() -> bool:
 	return held_by != null and held_by.has_method("fine") and held_by.fine()
 
 
+## The lane a dragged item is over, which it goes onto when let go.
+var _target_track := -1
+
+
 func _on_grab_begin(at: Vector3) -> void:
+	_target_track = -1
 	_grab_x = to_local(at).x
 	_grab_y = to_local(at).y
 	_dragged = false
@@ -138,7 +150,7 @@ func _on_grab_move(at: Vector3) -> void:
 		return
 	if _hit.is_empty():
 		return
-	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP:
+	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP and absf(to_local(at).y - _grab_y) < CLICK_SLOP:
 		return
 	_dragged = true
 	var moved: float = surface.seconds_at_point(at) - _grab_seconds
@@ -163,7 +175,11 @@ func _on_grab_move(at: Vector3) -> void:
 	# The START snaps, not the distance moved: an item that began off the grid lands on it, which
 	# is what a drag in an arranger is nearly always for.
 	_target_start = snap(_item_start + surface.seconds_at_point(at) - _grab_seconds, _fine())
-	surface.preview_item(_hit[0], _hit[1], _target_start)
+	# And onto whichever lane it is over now: off one shelf and onto another.
+	_target_track = surface.track_at_point(at)
+	if _target_track <= 0:
+		_target_track = _hit[0]
+	surface.preview_item(_hit[0], _hit[1], _target_start, -1.0, _target_track)
 
 
 func _on_grab_end() -> void:
@@ -207,8 +223,9 @@ func _finish_grab() -> void:
 		if not is_equal_approx(_target_start, item.start) or not is_equal_approx(_target_end, item.end()):
 			DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
 		return
-	if not is_equal_approx(_target_start, item.start):
-		DAW.move_item(_hit[0], _hit[1], _target_start)
+	var onto := _target_track if _target_track > 0 and _target_track != _hit[0] else 0
+	if not is_equal_approx(_target_start, item.start) or onto > 0:
+		DAW.move_item(_hit[0], _hit[1], _target_start, onto)
 
 
 ## A point into the lane being edited, replacing one at the same moment; its index.

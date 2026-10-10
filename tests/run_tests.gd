@@ -248,6 +248,7 @@ func _ready() -> void:
 	_test_a_guest_take_follows_the_host_transport_it_hears()
 	_test_the_host_places_a_guest_take_and_says_so()
 	_test_midi_items_show_their_notes_on_the_timeline()
+	_test_a_block_goes_from_one_shelf_onto_another()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -11640,6 +11641,79 @@ func _test_the_host_places_a_guest_take_and_says_so() -> void:
 	check("a take for a track that is not there is refused out loud (%s)" % [told],
 			told.size() == 2 and (told[1] as String).contains("was not placed"))
 	Session.notice.disconnect(listen)
+
+
+func _test_a_block_goes_from_one_shelf_onto_another() -> void:
+	_offline()
+	var tracks: Array = DAW.state.track_indices().filter(func(i): return not DAW.state.track(i).items.is_empty())
+	check("the stand-in has items on two tracks at least (%d)" % tracks.size(), tracks.size() >= 2)
+	if tracks.size() < 2:
+		return
+	var from: int = tracks[0]
+	var to: int = tracks[1]
+	var had := [DAW.state.track(from).items.size(), DAW.state.track(to).items.size()]
+	var moving: String = DAW.state.track(from).items[0].name
+	DAW.move_item(from, 0, 12.0, to)
+	var landed: Array = DAW.state.track(to).items.filter(func(it): return it.name == moving and is_equal_approx(it.start, 12.0))
+	check("moved onto the other track, where it was let go (%d -> %d)" % [from, to],
+			DAW.state.track(from).items.size() == had[0] - 1 and DAW.state.track(to).items.size() == had[1] + 1
+			and landed.size() == 1)
+	DAW.undo()
+	check("and undone, back on its own", DAW.state.track(from).items.size() == had[0]
+			and DAW.state.track(to).items.size() == had[1] and DAW.state.track(from).items[0].name == moving)
+	DAW.apply_intent(&"move_item", [from, 0, "soon", to])
+	check("a guest's move with a start that is not a number is refused", DAW.state.track(from).items.size() == had[0])
+	DAW.apply_intent(&"move_item", [from, 0, 3.0])
+	check("one without a track, as older guests send, moves it along its own",
+			is_equal_approx(DAW.state.track(from).items[0].start, 3.0) and DAW.state.track(to).items.size() == had[1])
+	DAW.undo()
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline.set_shelf(true)
+	timeline._process(0.0)
+	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
+	var lips := timeline.get_node_or_null("ShelfLips") as MeshBank
+	check("on the shelves: a board under every lane (%d)" % (lips.count() if lips else -1),
+			lips != null and lips.count() == timeline._lane_y.size())
+	check("and the blocks stand out of the panel", blocks != null and blocks.multimesh.visible_instance_count > 0
+			and is_equal_approx(blocks.transform_of(0).basis.get_scale().z, TimelineSurface.BLOCK_DEPTH))
+	var box := blocks.transform_of(0)
+	var face := timeline.to_global(box.origin + Vector3(0, 0, box.basis.get_scale().z * 0.5))
+	var lanes_box := timeline._lanes.global_transform * (timeline._lanes._shape.transform
+			* AABB(-(timeline._lanes._shape.shape as BoxShape3D).size * 0.5, (timeline._lanes._shape.shape as BoxShape3D).size))
+	check("a press on a block's face lands on the lanes, and on that block",
+			lanes_box.grow(0.0002).has_point(face) and not timeline.item_at_point(face).is_empty())
+	var hits := ZFightProbe.scan(timeline)
+	check("no two faces of the shelves share a plane (%d: %s)" % [hits.size(), ", ".join(hits.slice(0, 4).map(
+			func(h): return "%s | %s" % [ZFightProbe.label(h[0]), ZFightProbe.label(h[1])]))], hits.is_empty())
+	# Dragged over another lane, it is drawn there until it is let go.
+	var shown: Array = timeline._shown()
+	var hit: Array = timeline.item_at_point(face)
+	var other: int = shown[0] if shown[0] != hit[0] else shown[1]
+	timeline.preview_item(hit[0], hit[1], DAW.state.item(hit[0], hit[1]).start, -1.0, other)
+	var on_other := false
+	for k in blocks.multimesh.visible_instance_count:
+		on_other = on_other or (is_equal_approx(blocks.transform_of(k).origin.y, timeline._lane_y[shown.find(other)])
+				and blocks.transform_of(k).origin.z > box.origin.z + 0.001)
+	check("dragged over another shelf, it is drawn there, out of it as in the hand", on_other)
+	timeline.preview_item(-1, -1, 0.0)
+	# By hand: taken by its face, carried down onto the other shelf, and let go there.
+	var on_from := DAW.state.track(hit[0]).items.size()
+	var on_to := DAW.state.track(other).items.size()
+	var drop := timeline.to_global(Vector3(box.origin.x, timeline._lane_y[shown.find(other)],
+			box.origin.z + box.basis.get_scale().z * 0.5))
+	timeline._lanes._on_grab_begin(face)
+	timeline._lanes._on_grab_move(drop)
+	timeline._lanes._on_grab_end()
+	check("a block carried onto another shelf and let go is on that shelf (%d -> %d)" % [hit[0], other],
+			DAW.state.track(hit[0]).items.size() == on_from - 1 and DAW.state.track(other).items.size() == on_to + 1)
+	DAW.undo()
+	timeline.set_shelf(false)
+	timeline._process(0.0)
+	check("and flat again, with no boards", timeline.get_node_or_null("ShelfLips") == null)
+	timeline.free()
 
 
 func _test_midi_items_show_their_notes_on_the_timeline() -> void:

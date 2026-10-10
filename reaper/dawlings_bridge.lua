@@ -1256,8 +1256,11 @@ end
 function handlers.MoveItem(args)
   local it = item_at(args)
   if not it then return {ok = false, error = 'no such item'} end
+  -- args[4], when another track: onto that one as well.
+  local to = (args[4] or 0) > 0 and args[4] ~= args[1] and track_from_osc(args[4]) or nil
   reaper.Undo_BeginBlock()
   reaper.SetMediaItemInfo_Value(it, 'D_POSITION', math.max(0, args[3] or 0))
+  if to then reaper.MoveMediaItemToTrack(it, to) end
   return edited('Move media item')
 end
 

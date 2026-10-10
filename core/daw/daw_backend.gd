@@ -264,7 +264,9 @@ func redo() -> void: pass
 ## from the selection instead of replacing it.
 func select_item(_track_index: int, _item_index: int, _additive: bool) -> void: pass
 func clear_item_selection() -> void: pass
-func move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
+## `to_track`, when it is another track, moves the item onto that one as well: off one shelf and
+## onto another. 0 keeps it where it is.
+func move_item(_track_index: int, _item_index: int, _start: float, _to_track := 0) -> void: pass
 ## Cut every selected item that spans `seconds` there. Both halves stay selected.
 func split_selected(_seconds: float) -> void: pass
 ## Every selected item, gone.
@@ -398,12 +400,21 @@ func _locally_clear_selection() -> void:
 			_write_lane(index, lane)
 
 
-func _locally_move(track_index: int, item_index: int, start: float) -> void:
+func _locally_move(track_index: int, item_index: int, start: float, to_track := 0) -> void:
 	if state.item(track_index, item_index) == null:
 		return
 	var lane := _lane_copy(track_index)
-	lane[item_index].start = maxf(start, 0.0)
+	if to_track <= 0 or to_track == track_index or state.track(to_track, false) == null:
+		lane[item_index].start = maxf(start, 0.0)
+		_write_lane(track_index, lane)
+		return
+	var moving: MixState.ItemState = lane[item_index]
+	lane.remove_at(item_index)
+	moving.start = maxf(start, 0.0)
+	var into := _lane_copy(to_track)
+	into.append(moving)
 	_write_lane(track_index, lane)
+	_write_lane(to_track, into)
 
 
 ## Returns how many items were cut.

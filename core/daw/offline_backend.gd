@@ -917,9 +917,9 @@ func clear_item_selection() -> void:
 	_locally_clear_selection()
 
 
-func move_item(track_index: int, item_index: int, start: float) -> void:
+func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
 	var before := _lanes_snapshot()
-	_locally_move(track_index, item_index, start)
+	_locally_move(track_index, item_index, start, to_track)
 	_remember_edit(before)
 
 

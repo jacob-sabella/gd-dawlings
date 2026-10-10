@@ -1206,6 +1206,12 @@ func _fit_stand_to_bay() -> void:
 				(top + floor_top) * 0.5, PATCH_BAY_FRONT - 0.06)
 
 
+func _on_timeline_shelf_chosen(on: bool) -> void:
+	if Session.layout != null:
+		Session.layout.timeline_shelves = on
+		Session.layout.save()
+
+
 func _room_bounds() -> Rect2:
 	return Rect2(-room_width * 0.5 + 0.05, ROOM_FRONT + 0.05, room_width - 0.10, ROOM_DEPTH - 0.05)
 
@@ -1515,6 +1521,9 @@ func _build_surfaces() -> void:
 	timeline = TimelineSurface.new()
 	timeline.name = "Timeline"
 	timeline.position = Vector3(0, TIMELINE_Y, TIMELINE_Z)
+	# Shelves or flat lanes, as this person last chose.
+	timeline.shelf = Session.layout != null and Session.layout.timeline_shelves
+	timeline.shelf_chosen.connect(_on_timeline_shelf_chosen)
 	studio_set.add_child(timeline)
 	mount.register(timeline)
 

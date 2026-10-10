@@ -689,9 +689,9 @@ func clear_item_selection() -> void:
 	_edit("ClearItemSelection", [])
 
 
-func move_item(track_index: int, item_index: int, start: float) -> void:
-	_locally_move(track_index, item_index, start)
-	_edit("MoveItem", [track_index, item_index, start])
+func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
+	_locally_move(track_index, item_index, start, to_track)
+	_edit("MoveItem", [track_index, item_index, start, to_track])
 
 
 func split_selected(seconds: float) -> void:

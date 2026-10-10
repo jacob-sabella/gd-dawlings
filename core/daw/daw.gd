@@ -368,8 +368,9 @@ func redo() -> void: _do(&"redo", [])
 func select_item(track_index: int, item_index: int, additive := false) -> void:
 	_do(&"select_item", [track_index, item_index, additive])
 func clear_item_selection() -> void: _do(&"clear_item_selection", [])
-func move_item(track_index: int, item_index: int, start: float) -> void:
-	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
+## `to_track`: onto another track as well (0, the one it is on).
+func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
+	_do(&"move_item", [track_index, item_index, maxf(start, 0.0), maxi(to_track, 0)])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
 func delete_selected() -> void: _do(&"delete_selected", [])
 func duplicate_selected() -> void: _do(&"duplicate_selected", [])
@@ -492,6 +493,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed edit_marker intent %s." % [args])
 			return
 		args = [float(args[0]), maxf(float(args[1]), 0.0), str(args[2]).left(MARKER_NAME_MAX)]
+	if verb == &"move_item":
+		if args.size() not in [3, 4] or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
+			push_warning("DAW: refused a malformed move_item intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), maxf(float(args[2]), 0.0), maxi(int(args[3]) if args.size() == 4 else 0, 0)]
 	if verb == &"remove_marker":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
 			push_warning("DAW: refused a malformed remove_marker intent %s." % [args])

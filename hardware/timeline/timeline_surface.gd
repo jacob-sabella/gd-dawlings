@@ -112,6 +112,30 @@ var _render_controls: TimelineRenderStrip
 ## The track whose name was last pressed, for the track keys; 0 for none. This desk's own, not
 ## the DAW's selection: which track someone means to rename is not part of the mix.
 var picked_track := 0
+
+## The shelf view: each track a shelf, each item a block standing on it that you can take hold
+## of and slide along, or pick out and put on another shelf. The same arrangement as the flat
+## view and the same edits; only how it is drawn changes, and the blocks are what you grab.
+## Each person's own choice, like where they stand: nothing about it is shared.
+var shelf := false
+## How far a block stands out of the panel, and a selected one further, pulled off its shelf.
+const BLOCK_DEPTH := 0.011
+const PULL := 0.005
+## The shelf board under each lane, out from the panel.
+const SHELF_LIP := 0.017
+## The column at the panel's right edge the view key stands in.
+const VIEW_COLUMN := 0.030
+var _shelf_key: PanelButton
+## The view key was pressed: the studio keeps the choice in this person's layout.
+signal shelf_chosen(on: bool)
+var _shelf_caption: Label3D
+## The shelf boards, one per lane.
+var _shelf_lips: MeshBank
+## The item being dragged, which stands out of its shelf like a selected one: in the hand.
+var _held_item: MixState.ItemState = null
+## On the shelves, two per block: its shadow on the shelf behind it, and its bottom edge in
+## shade. What makes a block read as standing out even seen straight on, as a screen is.
+var _item_shades: MeshBank
 ## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
 var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
@@ -256,6 +280,21 @@ func _ready() -> void:
 	_save_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_save_caption)
 
+	# The view, at the panel's right edge beside the ruler: flat lanes, or shelves of blocks.
+	_shelf_key = PanelButton.new()
+	_shelf_key.name = "ShelfKey"
+	_shelf_key.led_colour = Color(0.98, 0.80, 0.42)
+	_shelf_key.lamp_scale = Vector2(0.8, 0.5)
+	_shelf_key.scale = Vector3(1.4, 1.4, 1.4)
+	_shelf_key.pressed.connect(_on_shelf_key)
+	_shelf_key.describe_title = func() -> String: return "VIEW  SHELVES"
+	_shelf_key.describe_value = func(_v: float) -> String:
+		return "blocks on shelves: drag one along, or onto another shelf" if shelf \
+				else "flat lanes; press for shelves of blocks"
+	add_child(_shelf_key)
+	_shelf_caption = _text("3D", 26, Color(0.62, 0.64, 0.68))
+	add_child(_shelf_caption)
+
 	_copy_key = _selection_key("CopyKey", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
 			func(): DAW.duplicate_selected())
 	_copy_caption = _text("COPY", 26, Color(0.62, 0.64, 0.68))
@@ -344,7 +383,7 @@ func _rebuild() -> void:
 			+ ((AUTOMATION_ROW + LANE_GAP) if auto_row else 0.0)
 	_top_y = _height * 0.5
 	_lane_area_x = -width * 0.5 + HEADER_WIDTH
-	_lane_area_width = width - HEADER_WIDTH - 0.006
+	_lane_area_width = width - HEADER_WIDTH - VIEW_COLUMN
 
 	var project := DAW.state.timeline_length()
 	if view_span <= 0.0 or not _view_owned:
@@ -363,8 +402,9 @@ func _rebuild() -> void:
 	var total_items := 0
 	for index in indices:
 		total_items += DAW.state.track(index).items.size()
-	# Unlit, as the rest of the screen: see SCREEN_FACE.
-	_item_blocks = MeshBank.strips()
+	# Unlit, as the rest of the screen (see SCREEN_FACE) -- except on the shelves, where a block
+	# is a thing in the room and the room's light is what makes it read as one.
+	_item_blocks = MeshBank.boxes(_block_finish()) if shelf else MeshBank.strips()
 	_item_blocks.name = "ItemBlocks"
 	_adopt(_item_blocks)
 	_item_strips = MeshBank.strips()
@@ -394,6 +434,7 @@ func _rebuild() -> void:
 			y -= AUTOMATION_ROW + LANE_GAP
 	bed_bank.commit()
 	chip_bank.commit()
+	_build_shelf_lips()
 	_lanes_bottom = y + LANE_HEIGHT * 0.5 + LANE_GAP
 
 	# One slot per item, claimed now and positioned by _relayout_view. A claim needs a transform
@@ -404,6 +445,13 @@ func _rebuild() -> void:
 		_item_strips.claim(Transform3D(), Color.WHITE)
 	_item_blocks.commit()
 	_item_strips.commit()
+	_item_shades = MeshBank.strips()
+	_item_shades.name = "ItemShades"
+	_adopt(_item_shades)
+	if shelf:
+		for i in total_items * 2:
+			_item_shades.claim(Transform3D(), Color.WHITE)
+	_item_shades.commit()
 	_item_fades = MeshBank.strips()
 	_item_fades.name = "ItemFades"
 	_adopt(_item_fades)
@@ -465,6 +513,8 @@ func _place_strips() -> void:
 	_lanes.height = maxf(lanes_top - lanes_bottom, 0.001)
 	_lanes.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
 			(lanes_top + lanes_bottom) * 0.5, 0.0018)
+	# Out to the blocks' faces on the shelves, so a press on a block is a press on the block.
+	_lanes.front = (0.0007 + BLOCK_DEPTH + PULL) - TimelineLanes.DEPTH * 0.5 - 0.0018 if shelf else 0.0
 	_lanes.refresh()
 
 	_header.width = HEADER_WIDTH - 0.010
@@ -478,6 +528,9 @@ func _place_strips() -> void:
 	_split_caption.position = Vector3(-width * 0.5 + 0.030, ruler_mid, 0.0016)
 	_save_key.position = Vector3(-width * 0.5 + 0.064, ruler_mid, 0.003)
 	_save_caption.position = Vector3(-width * 0.5 + 0.078, ruler_mid, 0.0016)
+	_shelf_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid + 0.002, 0.003)
+	_shelf_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.011, 0.0016)
+	_shelf_key.lit = shelf
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
 	var corner_mid := -_top_y + SCRUBBER_BAND * 0.5
@@ -973,8 +1026,9 @@ func _rename_to(text: String, index: int) -> void:
 
 ## Draw an item somewhere other than where it is, for the length of a drag: moved to `start`, or
 ## trimmed to `start` and `length`. -1 clears.
-func preview_item(track_index: int, item_index: int, start: float, length := -1.0) -> void:
-	_preview = [] if track_index < 0 else [track_index, item_index, start, length]
+func preview_item(track_index: int, item_index: int, start: float, length := -1.0, to_track := -1) -> void:
+	_preview = [] if track_index < 0 else [track_index, item_index, start, length, to_track]
+	_held_item = null if track_index < 0 else DAW.state.item(track_index, item_index)
 	_relayout_view()
 
 
@@ -1336,25 +1390,31 @@ func _relayout_view() -> void:
 			# A trim draws the block at its new edges while its contents stay where they are in
 			# the song; a move carries both.
 			var content: float = item.start
+			var y: float = _lane_y[i]
 			if not _preview.is_empty() and _preview[0] == indices[i] and _preview[1] == item.index:
+				# Drawn on the lane it is being dragged over, until it is let go there.
+				var row := indices.find(_preview[4]) if _preview.size() > 4 else -1
+				if row >= 0 and row < _lane_y.size():
+					y = _lane_y[row]
 				start = _preview[2]
 				if _preview[3] >= 0.0:
 					length = _preview[3]
 				else:
 					content = start
-			if _place_item(item, start, t.colour, _lane_y[i], t.mute, slot, length):
+			if _place_item(item, start, t.colour, y, t.mute, slot, length):
 				slot += 1
-				note_slot = _place_notes(item, content, t.colour, _lane_y[i], item.muted or t.mute,
+				note_slot = _place_notes(item, content, t.colour, y, item.muted or t.mute,
 						note_slot)
-				wave_slot = _place_wave(item, content, t.colour, _lane_y[i], item.muted or t.mute,
+				wave_slot = _place_wave(item, content, t.colour, y, item.muted or t.mute,
 						wave_slot)
 				# Fades and gain belong to the block: they move with it and follow a trim.
-				fade_slot = _place_fades(item, start, length, t.colour, _lane_y[i], fade_slot)
-				gain_label = _place_gain(item, start, length, _lane_y[i], gain_label)
-				name_label = _place_name(item, start, length, _lane_y[i], name_label, t.display_name())
+				fade_slot = _place_fades(item, start, length, t.colour, y, fade_slot)
+				gain_label = _place_gain(item, start, length, y, gain_label)
+				name_label = _place_name(item, start, length, y, name_label, t.display_name())
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
+	_item_shades.show_first(slot * 2 if shelf else 0)
 	_item_notes.show_first(note_slot)
 	_item_waves.show_first(wave_slot)
 	_item_fades.show_first(fade_slot)
@@ -1397,16 +1457,38 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 	# tall is a hairline nobody sees.
 	var body := item_body(tint, dim, item.selected).srgb_to_linear()
 	# The bank holds unit cubes, so the size of an item IS its instance scale.
-	_item_blocks.move_slot(slot, Transform3D(
-			Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0014)),
-			Vector3(left + span * 0.5, y, 0.0014)))
-	_item_blocks.set_colour(slot, body)
+	if shelf:
+		# Standing on its shelf, out of the panel, and pulled further out while selected.
+		var back := 0.0007 + (PULL if _pulled(item) else 0.0)
+		_item_blocks.move_slot(slot, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(span, block_height, BLOCK_DEPTH)),
+				Vector3(left + span * 0.5, y, back + BLOCK_DEPTH * 0.5)))
+		# Lit, and authored in sRGB: see MeshBank.parts.
+		_item_blocks.set_colour(slot, item_body(tint, dim, item.selected))
+		# Its shadow, down and to the right on the shelf behind it, further for one pulled out;
+		# and its bottom edge, a shade under its face.
+		var off := 0.0015 + (0.0012 if _pulled(item) else 0.0)
+		_item_shades.move_slot(slot * 2, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0002)),
+				Vector3(left + span * 0.5 + off, y - off, 0.00125)))
+		_item_shades.set_colour(slot * 2, Color(0.004, 0.004, 0.005))
+		var face := back + BLOCK_DEPTH
+		_item_shades.move_slot(slot * 2 + 1, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(span, 0.0017, 0.0004)),
+				Vector3(left + span * 0.5, y - block_height * 0.5 + 0.00085, face + 0.0002)))
+		_item_shades.set_colour(slot * 2 + 1, item_body(tint, dim, item.selected).darkened(0.5).srgb_to_linear())
+	else:
+		_item_blocks.move_slot(slot, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0014)),
+				Vector3(left + span * 0.5, y, 0.0014)))
+		_item_blocks.set_colour(slot, body)
+	var lift := _lift(item)
 
 	# The take strip along the top edge, which is how a block reads as a block rather than a
 	# bar on a chart.
 	_item_strips.move_slot(slot, Transform3D(
 			Basis.IDENTITY.scaled(Vector3(span, 0.0022, 0.0006)),
-			Vector3(left + span * 0.5, y + block_height * 0.5 - 0.0011, 0.0022)))
+			Vector3(left + span * 0.5, y + block_height * 0.5 - 0.0011, 0.0022 + lift)))
 	_item_strips.set_colour(slot, Materials.chip_colour(tint) if not dim
 			else Materials.lamp_colour(tint, false))
 	return true
@@ -1448,7 +1530,7 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 		var centre_y := bottom + (pitch - low + 0.5) * row
 		_item_notes.move_slot(slot, Transform3D(
 				Basis.IDENTITY.scaled(Vector3(right - left, maxf(row * 0.8, MIN_NOTE_HEIGHT), 0.0004)),
-				Vector3((left + right) * 0.5, centre_y, 0.0022)))
+				Vector3((left + right) * 0.5, centre_y, 0.0022 + _lift(item))))
 		_item_notes.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1490,7 +1572,7 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 		var along := p1 - p0
 		_item_fades.move_slot(slot, Transform3D(
 				Basis(Vector3.BACK, along.angle()) * Basis.from_scale(Vector3(along.length(), 0.0005, 0.0004)),
-				Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, 0.0026)))
+				Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, 0.0026 + _lift(item))))
 		_item_fades.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1514,7 +1596,7 @@ func _place_gain(item: MixState.ItemState, start: float, length: float, y: float
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_gain_labels.add_child(l)
 	l.text = "%+.1f dB" % item.gain_db
-	l.position = Vector3(right - 0.0012, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0046, 0.0028)
+	l.position = Vector3(right - 0.0012, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0046, 0.0028 + _lift(item))
 	l.visible = true
 	return used + 1
 
@@ -1547,7 +1629,7 @@ func _place_name(item: MixState.ItemState, start: float, length: float, y: float
 		l.outline_modulate = Color(0, 0, 0, 0.55)
 		_item_labels.add_child(l)
 	l.text = fit_text(shown, room / l.pixel_size, l.font_size)
-	l.position = Vector3(left + 0.0016, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0050, 0.0030)
+	l.position = Vector3(left + 0.0016, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0050, 0.0030 + _lift(item))
 	l.visible = not l.text.is_empty()
 	return used + 1
 
@@ -1604,7 +1686,7 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 		var height := maxf(sqrt(heard) * (top - bottom), MIN_NOTE_HEIGHT * 0.5)
 		_item_waves.move_slot(slot, Transform3D(
 				Basis.IDENTITY.scaled(Vector3(WAVE_COLUMN * 0.7, height, 0.0004)),
-				Vector3(c[0], middle, 0.0022)))
+				Vector3(c[0], middle, 0.0022 + _lift(item))))
 		_item_waves.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1664,9 +1746,11 @@ func _build_playhead() -> void:
 
 	var line := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
+	# On the shelves, in front of the blocks, which would otherwise stand over it.
+	var front := (0.0007 + BLOCK_DEPTH + PULL + 0.0015) if shelf else 0.0026
 	mesh.size = Vector3(0.0012, _height - RULER_HEIGHT * 0.4, 0.0010)
 	line.mesh = mesh
-	line.position = Vector3(0, -(RULER_HEIGHT * 0.2), 0.0026)
+	line.position = Vector3(0, -(RULER_HEIGHT * 0.2), front)
 	line.material_override = Materials.led(Color(0.96, 0.86, 0.45), true)
 	_playhead.add_child(line)
 
@@ -1741,6 +1825,75 @@ func _seconds_at_x(x: float) -> float:
 
 func _lane_right() -> float:
 	return _lane_area_x + _lane_area_width
+
+
+## The view key: the other view, and word of it to whoever keeps this person's choices.
+func _on_shelf_key() -> void:
+	set_shelf(not shelf)
+	shelf_chosen.emit(shelf)
+
+
+## Flat lanes or shelves of blocks. Each person's own view; rebuilt, since the blocks are a
+## different bank.
+func set_shelf(on: bool) -> void:
+	if on == shelf:
+		return
+	shelf = on
+	if _shelf_key != null:
+		_shelf_key.lit = shelf
+	mark_dirty()
+
+
+## How far in front of the flat view's an item's face is: its block's depth on the shelves, and
+## more while it is selected and pulled out. Whatever is drawn on a block is drawn this far out.
+func _lift(item: MixState.ItemState) -> float:
+	if not shelf:
+		return 0.0
+	return BLOCK_DEPTH + (PULL if _pulled(item) else 0.0) - 0.0014
+
+
+## Out of its shelf: selected, or in the hand.
+func _pulled(item: MixState.ItemState) -> bool:
+	return item.selected or (item == _held_item and _held_item != null)
+
+
+## A block's finish: matte, so the room's lamps model its edges without a highlight washing out
+## its face, and a touch of its own light so its colour holds in a dim venue.
+static func _block_finish() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color.WHITE
+	m.roughness = 0.82
+	m.metallic_specular = 0.25
+	m.emission_enabled = true
+	m.emission = Color(0.10, 0.10, 0.10)
+	return m
+
+
+## The shelf boards: dark, as the screen's face is, so what stands on them is what is seen.
+static func _board_finish() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.16, 0.17, 0.19)
+	m.roughness = 0.6
+	return m
+
+
+## The board under each lane that its blocks stand on. Nothing in the flat view.
+func _build_shelf_lips() -> void:
+	_shelf_lips = null
+	if not shelf or _lane_y.is_empty():
+		return
+	_shelf_lips = MeshBank.boxes(_board_finish())
+	_shelf_lips.name = "ShelfLips"
+	_adopt(_shelf_lips)
+	var tall := LANE_GAP + 0.0012
+	for y in _lane_y:
+		# Its top where the block's bottom is.
+		var top := y - LANE_HEIGHT * 0.5 + 0.0012
+		# A millimetre short of the lane's bed at each end, whose ends would be its ends' plane.
+		_shelf_lips.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width - 0.002, tall, SHELF_LIP)),
+				Vector3(_lane_area_x + _lane_area_width * 0.5, top - tall * 0.5, 0.0006 + SHELF_LIP * 0.5)),
+				Color.WHITE)
+	_shelf_lips.commit()
 
 
 ## The screen's own colours, sRGB. Drawn UNLIT: this is a display, and a display lit by the room
