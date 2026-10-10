@@ -118,7 +118,15 @@ can finish music in, saving DAWproject. Steps, in order:
    game's side is `ProjectBridge`, which captures and loads round-trip exactly in the suite, and
    a project opened mid-session reaches the guest whole (`session_probe.sh --built-in`). Clips
    gained fades and gain, which cross the wire and survive a split.
-2. DAWproject save/load, with New/Open/Save in the room and on the session panel.
+2. DAWproject save/load.
+   - **Done 2026-10-09, in dawkit:** `DawKitDawproject.save/open`. The output is valid against
+     the official XSD (checked with xmllint in dawkit's tests), and dawkit's own files come back
+     identical. A file without dawkit's extras (as another DAW re-saves it) opens with
+     everything the XML holds, and the project.xml from Bitwig's README opens (beats converted
+     to seconds, an audio event flattened out of its nested clip, a CLAP plug-in kept).
+   - **Next:** the game's side. New/Open/Save/Save As in the room and on the session panel, the
+     takes folder as the media root, and the demo song's parts rendered to WAV on save, so
+     another DAW hears the song and not empty clips.
 3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
