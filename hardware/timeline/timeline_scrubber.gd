@@ -49,12 +49,17 @@ func _ready() -> void:
 
 	_track = MeshInstance3D.new()
 	_track.mesh = BoxMesh.new()
-	_track.material_override = Materials.recess()
+	# Unlit, as the rest of the screen is (TimelineSurface.SCREEN_FACE). Lit, the thumb -- the
+	# timeline's full width when the whole song is in view -- caught the floor lamps and read as
+	# a bright slab along the bottom of the panel.
+	_track.material_override = TimelineSurface.flat(TimelineSurface.RULER_FACE)
+	_track.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_track)
 
 	_thumb = MeshInstance3D.new()
 	_thumb.mesh = BoxMesh.new()
-	_thumb.material_override = Materials.cap_plastic(Color(0.24, 0.27, 0.33))
+	_thumb.material_override = TimelineSurface.flat(Color(0.24, 0.27, 0.33))
+	_thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_thumb)
 
 	var shape := CollisionShape3D.new()

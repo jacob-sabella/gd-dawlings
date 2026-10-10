@@ -615,11 +615,13 @@ func _build_furniture() -> void:
 
 	var crossbar := MeshInstance3D.new()
 	var crossbar_mesh := BoxMesh.new()
-	crossbar_mesh.size = Vector3(0.79, 0.028, 0.09)
+	crossbar_mesh.size = Vector3(0.79, 0.028, 0.04)
 	crossbar.mesh = crossbar_mesh
-	# Two millimetres under the timeline's scrub rail, which otherwise sat a fifth of a
-	# millimetre off the bar's top face -- near enough to share its depth.
-	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012, 0)
+	# Behind the panel, all of it: nine centimetres deep and centred on the legs, its front stood
+	# out through the panel's face across the scrub rail, and seen from below it was a bright
+	# slab cut into the bottom of the timeline.
+	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012,
+			(TIMELINE_Z - TimelineSurface.DEPTH - 0.004 - 0.02) - TIMELINE_STAND_Z)
 	crossbar.material_override = Materials.brushed_metal()
 	timeline_stand.add_part(crossbar)
 

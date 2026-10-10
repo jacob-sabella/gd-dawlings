@@ -122,7 +122,7 @@ var shelf := false
 const BLOCK_DEPTH := 0.011
 const PULL := 0.005
 ## The shelf board under each lane, out from the panel.
-const SHELF_LIP := 0.017
+const SHELF_LIP := 0.013
 ## The column at the panel's right edge the view key stands in.
 const VIEW_COLUMN := 0.030
 var _shelf_key: PanelButton
@@ -1747,7 +1747,8 @@ func _build_playhead() -> void:
 	var line := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	# On the shelves, in front of the blocks, which would otherwise stand over it.
-	var front := (0.0007 + BLOCK_DEPTH + PULL + 0.0015) if shelf else 0.0026
+	# Just in front of the blocks at rest: further out it floated off the panel, seen from below.
+	var front := (0.0007 + BLOCK_DEPTH + 0.0012) if shelf else 0.0026
 	mesh.size = Vector3(0.0012, _height - RULER_HEIGHT * 0.4, 0.0010)
 	line.mesh = mesh
 	line.position = Vector3(0, -(RULER_HEIGHT * 0.2), front)
@@ -1869,12 +1870,11 @@ static func _block_finish() -> StandardMaterial3D:
 	return m
 
 
-## The shelf boards: dark, as the screen's face is, so what stands on them is what is seen.
+## The shelf boards: dark and unlit, as the screen's face is, so what stands on them is what is
+## seen. Lit, the lowest board's underside caught the floor lamps from below and read as a bright
+## slab across the bottom of the panel.
 static func _board_finish() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.16, 0.17, 0.19)
-	m.roughness = 0.6
-	return m
+	return flat(Color(0.20, 0.21, 0.24))
 
 
 ## The board under each lane that its blocks stand on. Nothing in the flat view.
