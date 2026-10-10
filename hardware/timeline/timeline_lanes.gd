@@ -57,8 +57,7 @@ static func snap(seconds: float, fine: bool) -> float:
 	var s := maxf(seconds, 0.0)
 	if fine:
 		return s
-	var beat := 60.0 / maxf(DAW.state.tempo, 1.0)
-	return roundf(s / beat) * beat
+	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s)))
 
 
 func _fine() -> bool:

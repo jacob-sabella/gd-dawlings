@@ -243,6 +243,15 @@ var position_string: String = "1.1.00"
 ## desk shows; this is for the readout that wants both.
 var time_string: String = ""
 var tempo: float = 120.0
+## The tempo's changes, as DawKitTempoMap's points ([beat, bpm, ramps], the first at beat 0);
+## empty for a song at one tempo. `tempo` is the first point's tempo, and changing it changes
+## that and nothing after it.
+var tempo_points: Array = []:
+	set(v):
+		tempo_points = v
+		_map = null
+var _map: DawKitTempoMap = null
+var _map_tempo := 0.0
 ## Beats in a bar. Reaper's OSC surface does not send the time signature, so this is 4 unless
 ## a bridge says otherwise -- and only the bar number of a computed position depends on it.
 var beats_per_bar: int = 4
@@ -279,10 +288,29 @@ var bank_size: int = 64
 var project_track_count: int = -1
 
 
-## `seconds` as bar.beat.hundredths at the project tempo, counted from bar 1. Constant tempo:
-## a project with tempo changes gets the DAW's own string when the DAW sends one.
+## Where every beat falls, kept until the tempo or its changes do.
+func tempo_map() -> DawKitTempoMap:
+	if _map == null or _map_tempo != tempo:
+		_map = DawKitTempoMap.new(maxf(tempo, 1.0)) if tempo_points.is_empty() \
+				else DawKitTempoMap.from_array(tempo_points)
+		if not tempo_points.is_empty():
+			_map.set_point(0.0, maxf(tempo, 1.0), bool(tempo_points[0][2]))
+		_map_tempo = tempo
+	return _map
+
+
+## The beat `seconds` into the song falls on, counted from 0, through the tempo's changes.
+func beat_at(seconds: float) -> float:
+	return tempo_map().beat_at(seconds)
+
+
+func seconds_at_beat(beat: float) -> float:
+	return tempo_map().seconds_at(beat)
+
+
+## `seconds` as bar.beat.hundredths, counted from bar 1, through the tempo's changes.
 func bar_beat(seconds: float) -> String:
-	var beats := maxf(seconds, 0.0) * tempo / 60.0
+	var beats := tempo_map().beat_at(maxf(seconds, 0.0))
 	var per_bar := float(maxi(beats_per_bar, 1))
 	return "%d.%d.%02d" % [int(beats / per_bar) + 1, int(fmod(beats, per_bar)) + 1,
 			int(fmod(beats, 1.0) * 100.0)]
@@ -290,7 +318,7 @@ func bar_beat(seconds: float) -> String:
 
 ## Seconds at the start of `bar` (1-based).
 func bar_to_seconds(bar: float) -> float:
-	return (bar - 1.0) * float(maxi(beats_per_bar, 1)) * 60.0 / maxf(tempo, 1.0)
+	return tempo_map().seconds_at((bar - 1.0) * float(maxi(beats_per_bar, 1)))
 
 
 func has_loop_range() -> bool:

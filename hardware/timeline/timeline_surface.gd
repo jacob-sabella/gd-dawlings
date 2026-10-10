@@ -237,8 +237,8 @@ func _ready() -> void:
 	_track_controls.name = "TrackStrip"
 	_track_controls.surface = self
 	add_child(_track_controls)
-	DAW.tracks_renumbered.connect(func(map: Dictionary) -> void:
-		pick_track(int(map.get(picked_track, 0))))
+	# A method, not a lambda: a method's connection goes when the surface does.
+	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 
 	_item_controls = TimelineItemStrip.new()
 	_item_controls.name = "ItemStrip"
@@ -539,6 +539,10 @@ func track_at_point(global_point: Vector3) -> int:
 	return 0
 
 
+func _on_tracks_renumbered(map: Dictionary) -> void:
+	pick_track(int(map.get(picked_track, 0)))
+
+
 ## Pick a track for the track keys (0 for none). Its name is drawn lit.
 func pick_track(index: int) -> void:
 	if index == picked_track:
@@ -705,15 +709,18 @@ func _build_ruler() -> void:
 	for child in _ruler.get_children():
 		child.free()
 
-	var bar := 4.0 * 60.0 / maxf(DAW.state.tempo, 1.0)
+	# Bars through the tempo's changes; the label spacing goes by the bar at the left edge.
+	var s := DAW.state
+	var at_left := floorf(s.beat_at(view_start) / float(maxi(s.beats_per_bar, 1))) + 1.0
+	var bar := s.bar_to_seconds(at_left + 1.0) - s.bar_to_seconds(at_left)
 	var per_bar := bar / maxf(view_span, 0.0001) * _lane_area_width
 	var step: int = LABEL_STEPS[-1]
 	for candidate in LABEL_STEPS:
 		if candidate * per_bar >= LABEL_CLEARANCE:
 			step = candidate
 			break
-	var first := int(floor(view_start / bar / step)) * step
-	var last := int(ceil((view_start + view_span) / bar))
+	var first := int(floor((at_left - 1.0) / step)) * step
+	var last := int(ceil(s.beat_at(view_start + view_span) / float(maxi(s.beats_per_bar, 1))))
 
 	var strip := MeshInstance3D.new()
 	var strip_mesh := BoxMesh.new()
@@ -726,7 +733,7 @@ func _build_ruler() -> void:
 	for n in range(first, last + 1, step):
 		if n < 0:
 			continue
-		var x := _x_for(n * bar)
+		var x := _x_for(s.bar_to_seconds(n + 1.0))
 		if x < _lane_area_x - 0.0001 or x > _lane_right():
 			continue
 		var tick := MeshInstance3D.new()

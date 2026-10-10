@@ -351,7 +351,7 @@ func _drive_meters(delta: float) -> void:
 		if state.looping and state.has_loop_range() and state.position_seconds >= state.loop_end:
 			state.position_seconds = state.loop_start + fmod(state.position_seconds - state.loop_end,
 					state.loop_end - state.loop_start)
-	var beats := state.position_seconds * state.tempo / 60.0
+	var beats := state.beat_at(state.position_seconds)
 	state.position_string = state.bar_beat(state.position_seconds)
 	# Solo is exclusive: while anything is soloed, everything that is not is silent. A meter that
 	# kept moving on a track you cannot hear is a meter that does not read true.
@@ -986,6 +986,19 @@ func set_tempo(bpm: float) -> void:
 	state.position_string = state.bar_beat(state.position_seconds)
 	state.transport_changed.emit()
 	record_for_replication("/tempo/raw", [bpm])
+
+
+## One undo step: the whole map, as a tempo knob turned is the whole tempo.
+func set_tempo_map(points: Array) -> void:
+	_remember("/tempo/map", set_tempo_map.bind(state.tempo_points.duplicate(true)),
+			set_tempo_map.bind(points.duplicate(true)), false)
+	state.tempo_points = points.duplicate(true)
+	if not points.is_empty():
+		state.tempo = float(points[0][1])
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/tempo/map", MixWire.pack_tempo_points(points))
+	record_for_replication("/tempo/raw", [state.tempo])
 
 
 func seek(seconds: float) -> void:

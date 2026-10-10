@@ -281,7 +281,24 @@ can finish music in, saving DAWproject. Steps, in order:
      a bus to one place, so a send cannot tap the track's output. The same input with the same
      settings gives the same sound, but stateful effects (delay, reverb) keep their own tails per
      send. Checked by structure (same objects, order, bypass, pans); not measured, because the
-     sound itself is Godot's effect processing. 8. Automation.
+     sound itself is Godot's effect processing.
+   - **Done 2026-10-10 (7b), a tempo map:** dawkit's `DawKitTempoMap` (points of beat, tempo,
+     held or ramped in a straight line; ramps integrated exactly, with the inverse) is
+     `DawKitProject.tempo_points`, written to and read from DAWproject's `TempoAutomation`, and
+     checked against the schema. Opening a file that counts in beats now puts every time into
+     seconds through the map, measured from where it starts, so a clip across a tempo change is
+     as long as it sounds (tested on Bitwig's example with a held and a ramped change). In the game:
+     `MixState.tempo_points` with `tempo_map()`, `beat_at`, `seconds_at_beat`. `bar_beat`,
+     `bar_to_seconds`, the ruler's bars, the loop band's bar, the snap and quantise all go through
+     it. `DAW.set_tempo_map` is one undo step, replicated (`/tempo/map`) and in the snapshot, and a
+     guest's map is checked (each point a later beat at 1-1000 bpm, from beat 0). With a map the
+     click is a 32 s window of the song's own clicks (`DawKitMetronome.span`), made again near
+     its end or on a seek; one tempo keeps the looping bar.
+   - **Not yet (7b):** Reaper: its tempo map is neither read (GetTimeline could report tempo
+     markers) nor written (`set_tempo_map` is a no-op there). No surface edits the map yet (the
+     tempo knob sets the first tempo only). The demo song's parts are rendered at the first
+     tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback
+     probe measures the click at one tempo only. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

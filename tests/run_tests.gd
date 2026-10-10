@@ -175,6 +175,7 @@ func _ready() -> void:
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
+	_test_the_tempo_changes_through_the_song()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10886,6 +10887,61 @@ func _test_tracks_are_added_removed_and_renamed() -> void:
 	DAW.apply_intent(&"rename_track", [2, "x".repeat(500)])
 	check("and a long name cut to %d" % DAW.TRACK_NAME_MAX, s.track(2).name.length() == DAW.TRACK_NAME_MAX)
 	DAW.project_replaced.disconnect(count_replaced)
+	_offline()
+
+
+func _test_the_tempo_changes_through_the_song() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	DAW.set_tempo(120.0)
+	var depth := maxi(s.undo_depth, 0)
+	# Two bars at 120, then 60 from beat 8 (bar 3).
+	DAW.set_tempo_map([[0.0, 120.0, false], [8.0, 60.0, false]])
+	check("a tempo map is set (%s)" % [s.tempo_points], s.tempo_points.size() == 2 and s.tempo == 120.0)
+	close_to("bar 3 starts where two bars at 120 end", s.bar_to_seconds(3.0), 4.0)
+	close_to("and bar 4 a bar at 60 later", s.bar_to_seconds(4.0), 8.0)
+	check("the counter reads through the change (%s)" % s.bar_beat(6.0), s.bar_beat(6.0) == "3.3.00")
+	check("one undo step", s.undo_depth - depth == 1)
+
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 4.0, 8.0, [[5.1, 5.5, 60, 100, 0]], "Slow")
+	DAW.quantize_item(6, 0, 1.0)
+	var on: float = MidiTake.unpack_relative(s.item(6, 0).notes, s.item(6, 0).start)[0][0]
+	close_to("quantise finds the beat at the new tempo (a second long now)", on, 5.0)
+	close_to("so does the timeline's snap", TimelineLanes.snap(6.4, false), 6.0)
+
+	var wire := MixWire.snapshot(s)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, wire)
+	check("a joining guest gets the map", guest.tempo_points == s.tempo_points
+			and guest.bar_beat(6.0) == "3.3.00")
+	var p := ProjectBridge.capture(backend)
+	check("it is saved in the project (%s)" % [p.tempo_points], p.tempo_points.size() == 2
+			and p.problems().is_empty())
+
+	s.metronome = true
+	s.playing = true
+	s.position_seconds = 9.0
+	backend._sync_click()
+	close_to("the click plays a window of the song's own clicks from the bar it is in",
+			backend._click_from, 8.0)
+	close_to("of %d seconds" % GodotBackend.CLICK_WINDOW, backend._click.stream.get_length(), GodotBackend.CLICK_WINDOW, 0.001)
+	s.playing = false
+	s.metronome = false
+	backend._sync_click()
+
+	DAW.apply_intent(&"set_tempo_map", [[0.0, 120.0, 0.0, 0.0, 90.0, 0.0]])
+	check("a guest's map that goes backwards is refused", s.tempo_points.size() == 2 and s.tempo_points[1][1] == 60.0)
+	DAW.apply_intent(&"set_tempo_map", ["x"])
+	check("and one that is not a list", s.tempo_points.size() == 2)
+	# The quantise, the take, then the map.
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("undone, one tempo again", s.tempo_points.is_empty())
+	close_to("and bar 4 is where 120 puts it", s.bar_to_seconds(4.0), 6.0)
 	_offline()
 
 

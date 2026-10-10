@@ -81,6 +81,11 @@ var _clock_origin := 0.0
 var _clock_said := -1.0
 ## Recorded take file name -> its sound, or null when the file is not on this machine.
 var _take_streams := {}
+## How long a window of clicks is when the tempo changes, and how near its end a new one is made.
+const CLICK_WINDOW := 32.0
+const CLICK_WINDOW_LEAD := 4.0
+## Where the click's window starts in the song, in seconds.
+var _click_from := 0.0
 ## The metronome: one bar of clicks (DawKitMetronome), looping, kept on the bar grid like a part.
 var _click: AudioStreamPlayer
 var _click_for := ""
@@ -693,6 +698,9 @@ func _sync_click() -> void:
 			_click.stop()
 		return
 	_click.bus = MASTER_BUS
+	if not state.tempo_points.is_empty():
+		_sync_click_window()
+		return
 	var wanted := "%s/%d" % [state.tempo, state.beats_per_bar]
 	if wanted != _click_for:
 		_click.stream = DawKitMetronome.bar(state.tempo, state.beats_per_bar, int(AudioServer.get_mix_rate()))
@@ -708,6 +716,30 @@ func _sync_click() -> void:
 	if absf(off) > DRIFT_SECONDS:
 		reseeks += 1
 		_start(_click, expected)
+
+
+## With tempo changes a bar does not repeat, so the click is a window of the song's own clicks
+## (DawKitMetronome.span) from the bar the playhead is in, made again when the playhead nears its
+## end or leaves it, or the map changes.
+func _sync_click_window() -> void:
+	var map := state.tempo_map()
+	var key := "%s/%d" % [state.tempo_points, state.beats_per_bar]
+	var at := state.position_seconds
+	var into := at - _click_from
+	if key != _click_for or into < 0.0 or into > CLICK_WINDOW - CLICK_WINDOW_LEAD:
+		var per_bar := float(maxi(state.beats_per_bar, 1))
+		_click_from = map.seconds_at(floorf(map.beat_at(at) / per_bar) * per_bar)
+		_click.stream = DawKitMetronome.span(map, state.beats_per_bar, _click_from, CLICK_WINDOW,
+				int(AudioServer.get_mix_rate()))
+		_click_for = key
+		_start(_click, at - _click_from)
+		return
+	if not _click.playing:
+		_start(_click, into)
+		return
+	if absf(_drift(_click, _click.get_playback_position() + AudioServer.get_time_since_last_mix() - into)) > DRIFT_SECONDS:
+		reseeks += 1
+		_start(_click, into)
 
 
 func monitor_bus(track_index: int) -> StringName:

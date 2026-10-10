@@ -114,6 +114,10 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			elif p.size() > 1 and p[1] == "raw" and args.size() > 0:
 				state.tempo = float(args[0])
 				state.transport_changed.emit()
+			elif p.size() > 1 and p[1] == "map":
+				# dawlings's own: the tempo's changes, flat [beat, bpm, ramps] triples.
+				state.tempo_points = unpack_tempo_points(args)
+				state.transport_changed.emit()
 
 
 ## `/timeline/length` and `/timeline/markers`. Neither is a Reaper address: Reaper's OSC
@@ -256,6 +260,35 @@ const ITEM_WIDTH := 5
 
 
 ## [position, name, position, name, ...], in time order.
+## At most this many tempo changes cross the wire: more is not a song, it is an attack.
+const TEMPO_POINTS_MAX := 1024
+
+
+static func pack_tempo_points(points: Array) -> Array:
+	var out: Array = []
+	for pt in points:
+		out.append_array([float(pt[0]), float(pt[1]), 1.0 if pt[2] else 0.0])
+	return out
+
+
+## Flat triples back into points: each a later beat at a real tempo, from beat 0, or nothing.
+static func unpack_tempo_points(args: Array) -> Array:
+	var out: Array = []
+	var last := -1.0
+	for i in range(0, mini(args.size(), TEMPO_POINTS_MAX * 3) - 2, 3):
+		if typeof(args[i]) not in [TYPE_FLOAT, TYPE_INT] or typeof(args[i + 1]) not in [TYPE_FLOAT, TYPE_INT]:
+			return []
+		var beat := float(args[i])
+		var bpm := float(args[i + 1])
+		if not is_finite(beat) or not is_finite(bpm) or beat <= last or bpm < 1.0 or bpm > 1000.0:
+			return []
+		out.append([beat, bpm, float(args[i + 2]) > 0.5])
+		last = beat
+	if not out.is_empty() and out[0][0] != 0.0:
+		return []
+	return out
+
+
 static func _pack_markers(markers: Dictionary) -> Array:
 	var order: Array = markers.keys()
 	order.sort()
@@ -521,6 +554,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/master/volume", [state.master.volume]])
 	out.append(["/master/pan", [state.master.pan]])
 	out.append(["/tempo/raw", [state.tempo]])
+	out.append(["/tempo/map", pack_tempo_points(state.tempo_points)])
 	out.append(["/play", [1.0 if state.playing else 0.0]])
 	out.append(["/record", [1.0 if state.recording else 0.0]])
 	out.append(["/beat/str", [state.position_string]])

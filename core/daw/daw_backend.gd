@@ -263,6 +263,9 @@ func add_track(_at: int, _track_name: String) -> void: pass
 ## move out a level.
 func remove_track(_index: int) -> void: pass
 func rename_track(_index: int, _track_name: String) -> void: pass
+## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
+## empty for one tempo throughout.
+func set_tempo_map(_points: Array) -> void: pass
 ## Every note of a MIDI item moved `semitones` up (or down), each kept within 0-127.
 func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
@@ -581,20 +584,21 @@ func _locally_transpose(track_index: int, item_index: int, semitones: int) -> bo
 	return true
 
 
-## Constant tempo: the grid counts from the song's start at `state.tempo`. A note pulled before
+## The grid is in beats from the song's start, through the tempo's changes. A note pulled before
 ## its item's start stops there.
 func _locally_quantize(track_index: int, item_index: int, grid_beats: float, strength: float) -> bool:
 	var item := state.item(track_index, item_index)
 	if item == null or item.notes.is_empty() or strength <= 0.0:
 		return false
-	var grid := clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX) * 60.0 / state.tempo
+	var grid := clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX)
 	strength = clampf(strength, 0.0, 1.0)
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
 	var notes := it.notes.duplicate()
 	for n in range(0, notes.size() - 4, 5):
 		var on := it.start + notes[n]
-		var moved := maxf(on + (roundf(on / grid) * grid - on) * strength, it.start) - on
+		var target := state.seconds_at_beat(roundf(state.beat_at(on) / grid) * grid)
+		var moved := maxf(on + (target - on) * strength, it.start) - on
 		notes[n] += moved
 		notes[n + 1] += moved
 	it.notes = notes

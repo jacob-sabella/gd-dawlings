@@ -54,8 +54,7 @@ func snap(seconds: float, fine: bool) -> float:
 	var s := maxf(seconds, 0.0)
 	if fine:
 		return s
-	var beat := 60.0 / maxf(DAW.state.tempo, 1.0)
-	return roundf(s / beat) * beat
+	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s)))
 
 
 func _seconds(at: Vector3) -> float:
@@ -96,9 +95,10 @@ func _on_grab_end() -> void:
 			# A press on the band. With no range yet there is nothing to loop, so a press makes
 			# one -- the bar it landed in -- rather than lighting a loop round nothing.
 			if not DAW.state.has_loop_range():
-				var bar := 60.0 / maxf(DAW.state.tempo, 1.0) * float(DAW.state.beats_per_bar)
-				var start := floorf(_grab_seconds / bar) * bar
-				DAW.set_loop_range(start, start + bar)
+				var per_bar := float(maxi(DAW.state.beats_per_bar, 1))
+				var bar := floorf(DAW.state.beat_at(_grab_seconds) / per_bar)
+				DAW.set_loop_range(DAW.state.seconds_at_beat(bar * per_bar),
+						DAW.state.seconds_at_beat((bar + 1.0) * per_bar))
 			DAW.set_looping(not DAW.state.looping)
 		elif DAW.state.has_loop_range() and not DAW.state.looping:
 			# Dragging out a range is asking to hear it.
