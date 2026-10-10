@@ -345,7 +345,9 @@ func _hear_host_keys() -> void:
 func follow(h: Dictionary) -> void:
 	# Past any count-in and inside any punch range, as heard here (MixState.takes_at).
 	var rolling: bool = h["valid"] and h["recording"] and DAW.state.takes_at(float(h["seconds"]))
-	if rolling and record_with_host and take_track() > 0:
+	# A host's keys do not go onto a track whose input is a microphone.
+	var takes_keys := not (host_records() and DAW.state.input_of(take_track()).begins_with("audio:"))
+	if rolling and record_with_host and take_track() > 0 and takes_keys:
 		if _take == null:
 			_take = MidiTake.new()
 			_take.begin(h["seconds"])

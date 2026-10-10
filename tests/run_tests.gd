@@ -158,6 +158,7 @@ func _ready() -> void:
 	_test_the_click_is_switched_from_the_deck()
 	_test_a_recording_counts_in()
 	_test_a_recording_punches_in_and_out()
+	_test_a_track_records_from_its_own_input()
 	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
@@ -9842,6 +9843,122 @@ func _test_a_recording_punches_in_and_out() -> void:
 	deck.queue_free()
 	DAW.set_punch(false)
 	DAW.set_loop_range(0.0, 0.0)
+
+
+func _test_a_track_records_from_its_own_input() -> void:
+	var backend := _offline()
+	backend.publish_inputs()
+	var s := DAW.state
+	var ids: Array = s.inputs.map(func(p): return p[0])
+	check("the built-in engine offers the default microphone, each device and the keys (%s)" % [ids],
+			ids[0] == "audio:" and ids[-1] == "midi")
+	check("and no track has chosen one", s.input_of(2) == "")
+	backend._repl_durable.clear()
+	DAW.set_track_input(2, "midi")
+	check("set_track_input chooses one", s.input_of(2) == "midi" and s.input_name(s.input_of(2)) == "the keys")
+	check("and replicates it", backend._repl_durable.get("/track/2/input", []) == ["midi"])
+	DAW.undo()
+	check("it is undoable", s.input_of(2) == "")
+	DAW.redo()
+	check("and redoable", s.input_of(2) == "midi")
+	check("a verb a guest may use", &"set_track_input" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_track_input", [3, "audio:"])
+	check("a guest's intent chooses one", s.input_of(3) == "audio:")
+	DAW.apply_intent(&"set_track_input", [3, "audio:Nothing here"])
+	DAW.apply_intent(&"set_track_input", [0, "midi"])
+	DAW.apply_intent(&"set_track_input", [3])
+	check("and one this DAW does not offer, or for no track, is refused", s.input_of(3) == "audio:")
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told each track's input and the inputs there are",
+			guest.input_of(2) == "midi" and guest.input_of(3) == "audio:" and guest.inputs == s.inputs)
+
+	# Saved with the project, through a DAWproject file.
+	var file := OS.get_temp_dir().path_join("dawlings_inputs_test.dawproject")
+	var problems := DawKitDawproject.save(ProjectBridge.capture(backend), file)
+	var opened := DawKitDawproject.open(file)
+	DirAccess.remove_absolute(file)
+	check("the project saves (%s)" % [problems], problems.is_empty() and opened["project"] != null)
+	if opened["project"] != null:
+		DAW.set_track_input(2, "")
+		DAW.set_track_input(3, "")
+		ProjectBridge.load(opened["project"], backend)
+		check("and opened again, each track records from what it did (%s, %s)" % [s.input_of(2), s.input_of(3)],
+				s.input_of(2) == "midi" and s.input_of(3) == "audio:")
+
+	# The host's own recorders go by it.
+	_as_session(Session.Role.HOST, 1)
+	var ha := Session.host_audio
+	ha.input_device = "Chosen in the panel"
+	ha.record_with_host = true
+	ha.target_track = 2
+	check("the host's microphone does not record onto a track that takes the keys", not ha.armed())
+	ha.target_track = 3
+	check("it records onto one that takes the default microphone", ha.armed() and ha.device() == "")
+	DAW.set_track_input(3, "audio:Interface")
+	check("from the device the track names (%s)" % ha.device(), ha.device() == "Interface")
+	DAW.set_track_input(3, "")
+	check("and with none named, from the panel's", ha.device() == "Chosen in the panel")
+	ha.record_with_host = false
+	ha.target_track = 0
+	ha.input_device = ""
+	var gm := Session.guest_midi
+	gm.target_track = 3
+	gm.record_with_host = true
+	DAW.set_track_input(3, "audio:")
+	gm.follow({"seconds": 4.0, "playing": true, "recording": true, "valid": true})
+	check("the host's keys do not go onto a track that takes a microphone", not gm.is_recording())
+	DAW.set_track_input(3, "midi")
+	gm.follow({"seconds": 4.0, "playing": true, "recording": true, "valid": true})
+	check("but onto one that takes the keys", gm.is_recording())
+	gm.follow({"seconds": 4.5, "playing": true, "recording": false, "valid": true})
+	gm.record_with_host = false
+	gm.target_track = 0
+	Session.start_solo()
+
+	# Reaper's I_RECINPUT, both ways.
+	check("Reaper's input codes are named (%s)" % [[ReaperBackend.input_id(-1), ReaperBackend.input_id(0),
+			ReaperBackend.input_id(1024 | 2), ReaperBackend.input_id(ReaperBackend.INPUT_ALL_MIDI), ReaperBackend.input_id(512)]],
+			ReaperBackend.input_id(-1) == "none" and ReaperBackend.input_id(0) == "in:1"
+			and ReaperBackend.input_id(1024 | 2) == "in:3/4" and ReaperBackend.input_id(ReaperBackend.INPUT_ALL_MIDI) == "midi"
+			and ReaperBackend.input_id(512) == "reaper:512")
+	var round_trips := true
+	for code in [-1, 0, 7, 1024, 1024 | 5, ReaperBackend.INPUT_ALL_MIDI, 4096 | (1 << 5) | 3, 512]:
+		round_trips = round_trips and ReaperBackend.input_code(ReaperBackend.input_id(code)) == code
+	check("and every one comes back as itself", round_trips)
+	check("and nonsense is not one", ReaperBackend.input_code("in:3/7") == ReaperBackend.INPUT_UNKNOWN
+			and ReaperBackend.input_code("") == ReaperBackend.INPUT_UNKNOWN)
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	reaper.state.track(1)
+	reaper.state.track(2)
+	reaper._on_timeline({"inputs": [1024, ReaperBackend.INPUT_ALL_MIDI], "audio_inputs": 2})
+	check("Reaper's tracks' inputs are read from it", reaper.state.input_of(1) == "in:1/2"
+			and reaper.state.input_of(2) == "midi")
+	check("and what there is to choose (%s)" % [reaper.state.inputs], reaper.state.inputs.map(func(p): return p[0])
+			== ["none", "in:1", "in:2", "in:1/2", "midi"])
+	reaper.free()
+
+	_offline()
+	DAW.backend.publish_inputs()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	var strip: TimelineTrackStrip = timeline._track_controls
+	timeline.pick_track(2)
+	strip.refresh()
+	check("IN is dark for a track that has not chosen", not strip.input.lit)
+	var seen: Array = []
+	for i in DAW.state.inputs.size() + 1:
+		strip.input.pressed.emit()
+		seen.append(DAW.state.input_of(2))
+	check("IN steps the picked track through every input and back to none (%s)" % [seen],
+			seen.slice(0, -1) == DAW.state.inputs.map(func(p): return p[0]) and seen[-1] == "")
+	strip.input.pressed.emit()
+	strip.refresh()
+	check("and lights once it has", strip.input.lit)
+	timeline.queue_free()
 
 
 func _test_input_monitoring_is_set_from_the_strip() -> void:

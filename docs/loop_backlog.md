@@ -215,8 +215,22 @@ can finish music in, saving DAWproject. Steps, in order:
      the two are linked, as they almost always are. Measured: `--built-in`, my take recorded
      from 0.8 s before a 1.5 s range to 0.4 s after it began 3.6 ms after the range's start and
      ended 8.4 ms before its end (a frame is 17 ms); `--reaper`, the mode set and read back.
+   - **Done 2026-10-10, each track's input (4e):** `DAW.set_track_input(track, id)`
+     (`/track/N/input`, undoable; IN on the timeline's track keys steps the picked track through
+     them and back to none chosen), from the DAW's own list (`MixState.inputs`, `/inputs`): the
+     built-in engine's are the default microphone, each input device ("audio:<device>") and the
+     keys ("midi"). Saved with the project: dawkit's `DawKitTrack.input`, in the DAWproject
+     extras (DAWproject has no word for it; dawkit a578d6f). The host's own recorders go by it:
+     the microphone records from the device the take's track names (else the panel's) and not
+     onto a track that takes the keys; the keys not onto one that takes a microphone. Reaper:
+     I_RECINPUT through the bridge (SetTrackInput, GetTimeline's `inputs` and `audio_inputs`),
+     named "none", "in:N", "in:N/N+1", "midi" (every device, every channel), anything else kept
+     as "reaper:<code>"; Reaper saves it in its own project. Measured: `--built-in`, a track's
+     input survives the probe's save and reopen mid-session, and the guest is told its name;
+     `--reaper`, track 3 set to inputs 1 and 2 and read back. The probe's end moved 2 s later
+     again (host 37.4/38.4, guest 36.5/38.0): the Reaper host's work ends at 33.9 s.
    - **Not yet:** recording more than one input at a time (one microphone and one set of keys
-     each now); per-track input choice saved in the project; a count-in
+     each now; a track's input does not yet start a recorder of its own); a count-in
      before playback (Reaper's &8) and pre-roll with the song.
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an

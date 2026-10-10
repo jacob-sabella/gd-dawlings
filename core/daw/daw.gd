@@ -63,7 +63,7 @@ const COMMANDS := [
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"set_count_in", &"set_punch", &"add_marker", &"set_track_monitor", &"set_track_automation_mode", &"render",
+	&"set_metronome", &"set_count_in", &"set_punch", &"add_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
 
@@ -261,6 +261,8 @@ func set_punch(on: bool) -> void: _do(&"set_punch", [on])
 const MONITOR_OFF := 0
 const MONITOR_ON := 1
 const MONITOR_AUTO := 2
+## What a track records from: one of `state.inputs` by id, or "" for whatever the recorder is set to.
+func set_track_input(index: int, input: String) -> void: _do(&"set_track_input", [index, input])
 func set_track_monitor(index: int, mode: int) -> void:
 	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
 ## How a track's controls meet their automation (MixState.TrackState.automation_mode). Track 0
@@ -439,6 +441,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed add_marker intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0), str(args[1]).left(MARKER_NAME_MAX)]
+	if verb == &"set_track_input":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) != TYPE_STRING or (args[1] != "" and not state.inputs.any(func(p): return p[0] == args[1])):
+			push_warning("DAW: refused a malformed set_track_input intent %s." % [args])
+			return
+		args = [int(args[0]), str(args[1])]
 	if verb == &"set_track_monitor":
 		if args.size() != 2 or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])

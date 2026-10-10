@@ -174,7 +174,9 @@ it; `MixState.taking()` is false until the playhead reaches `count_in_to`, and e
 bridge's SetCountIn); `DAWBackend.follow_count_in` finds the record point from where the transport
 stood. Punching (`DAW.set_punch`) limits what is taken to the loop range, Reaper's time
 selection auto-punch there. Every take asks `MixState.takes_at` of the moment it hears, so the
-take's edges are where the song is, not where the playhead was a latency earlier.
+take's edges are where the song is, not where the playhead was a latency earlier. Each track names
+its input (`DAW.set_track_input`, one of the DAW's `MixState.inputs`), saved with the project; the
+host's own microphone records from the device its take's track names.
 
 The built-in engine's playhead is moved by the sound card: a silent player runs all the time, and
 while the song plays the playhead is where play (or a seek) began plus how far that player has

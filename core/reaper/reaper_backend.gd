@@ -532,6 +532,64 @@ func set_count_in(bars: int) -> void:
 	_edit("SetCountIn", [clampi(bars, 0, MixState.COUNT_IN_MAX)])
 
 
+## A track's record input, as Reaper's I_RECINPUT (the bridge's SetTrackInput). Only what
+## `input_code` can say is sent; anything else Reaper keeps as it is.
+func set_track_input(index: int, input: String) -> void:
+	var code := input_code(input)
+	if code == INPUT_UNKNOWN:
+		return
+	_apply("/track/%d/input" % index, [input])
+	_edit("SetTrackInput", [index, code])
+
+
+## Not an input code Reaper uses.
+const INPUT_UNKNOWN := -2
+## Reaper's code for MIDI from every device on every channel.
+const INPUT_ALL_MIDI := 4096 | (63 << 5)
+
+
+## The input id for Reaper's I_RECINPUT: "none", "in:N" a mono hardware input (1-based),
+## "in:N/M" the stereo pair from N, "midi" all MIDI, and "reaper:<code>" anything else, kept.
+static func input_id(code: int) -> String:
+	if code < 0:
+		return "none"
+	if code == INPUT_ALL_MIDI:
+		return "midi"
+	if code & 4096 or code & 2048 or (code & 1023) >= 512:
+		return "reaper:%d" % code
+	var first := (code & 511) + 1
+	return "in:%d/%d" % [first, first + 1] if code & 1024 else "in:%d" % first
+
+
+## The other way; INPUT_UNKNOWN for "" (none chosen, which Reaper has no word for) or nonsense.
+static func input_code(id: String) -> int:
+	if id == "none":
+		return -1
+	if id == "midi":
+		return INPUT_ALL_MIDI
+	if id.begins_with("reaper:") and id.trim_prefix("reaper:").is_valid_int():
+		return int(id.trim_prefix("reaper:"))
+	if id.begins_with("in:"):
+		var parts := id.trim_prefix("in:").split("/")
+		if parts[0].is_valid_int() and int(parts[0]) >= 1 and int(parts[0]) <= 512:
+			if parts.size() == 1:
+				return int(parts[0]) - 1
+			if parts.size() == 2 and parts[1] == str(int(parts[0]) + 1):
+				return (int(parts[0]) - 1) | 1024
+	return INPUT_UNKNOWN
+
+
+## What a track can record from in Reaper: none, each hardware input and stereo pair, all MIDI.
+static func reaper_inputs(audio_inputs: int) -> Array:
+	var out: Array = [["none", "no input"]]
+	for n in range(1, audio_inputs + 1):
+		out.append(["in:%d" % n, "input %d" % n])
+	for n in range(1, audio_inputs, 2):
+		out.append(["in:%d/%d" % [n, n + 1], "inputs %d and %d" % [n, n + 1]])
+	out.append(["midi", "all MIDI"])
+	return out
+
+
 ## Reaper's record mode, time selection auto-punch or normal (the bridge's SetPunch).
 func set_punch(on: bool) -> void:
 	_apply("/punch", [1.0 if on else 0.0])
@@ -941,6 +999,16 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		var file := str(result.get("project_file", "")).get_file()
 		if title != state.project_title or file != state.project_file:
 			_apply("/project/name", [title, file])
+	if result.has("audio_inputs"):
+		var listed := MixWire.pack_inputs(reaper_inputs(int(result["audio_inputs"])))
+		if listed != MixWire.pack_inputs(state.inputs):
+			_apply("/inputs", listed)
+	var codes := _as_array(result.get("inputs", []))
+	for i in codes.size():
+		var id := input_id(int(codes[i]))
+		var t := state.track(i + 1, false)
+		if t != null and t.input != id:
+			_apply("/track/%d/input" % (i + 1), [id])
 	if result.has("punch") and bool(result["punch"]) != state.punch:
 		_apply("/punch", [1.0 if result["punch"] else 0.0])
 	if result.has("count_in") and int(result["count_in"]) != state.count_in_bars:

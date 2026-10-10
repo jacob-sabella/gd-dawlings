@@ -491,6 +491,14 @@ local function count_in_bars()
   return math.floor((tonumber(bars) or 0) + 0.5)
 end
 
+local function record_inputs()
+  local out = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    out[#out + 1] = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetTrack(0, i), 'I_RECINPUT'))
+  end
+  return out
+end
+
 function handlers.SetCountIn(args)
   local bars = math.max(0, math.floor(args[1] or 0))
   local _, en = reaper.get_config_var_string('projmetroen')
@@ -504,6 +512,15 @@ function handlers.SetCountIn(args)
   end
   reaper.set_config_var_string('projmetroen', tostring(flags), 0)
   return {ok = true, count_in = count_in_bars()}
+end
+
+-- A track's record input: Reaper's I_RECINPUT (-1 none, a hardware input index, |1024 for the
+-- stereo pair from there, 4096 and up MIDI). args: track (1-based, as OSC), code.
+function handlers.SetTrackInput(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.SetMediaTrackInfo_Value(tr, 'I_RECINPUT', math.floor(args[2] or 0))
+  return {ok = true}
 end
 
 -- Punching in and out: Reaper's record mode, time selection auto-punch (40076) or normal (40252),
@@ -686,6 +703,9 @@ function handlers.GetTimeline()
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     count_in = count_in_bars(),
+    -- Every track's record input, in order, and how many hardware inputs there are to choose.
+    inputs = record_inputs(),
+    audio_inputs = reaper.GetNumAudioInputs(),
     punch = reaper.GetToggleCommandState(PUNCH_MODE) == 1,
     master_automode = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetMasterTrack(0), 'I_AUTOMODE')),
     -- The project's name (its file's, without .rpp) and its file's name, not its folder: what a

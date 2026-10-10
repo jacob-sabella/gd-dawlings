@@ -72,7 +72,7 @@ var last_take := {}
 var takes_sent := 0
 ## Makes the microphone. The default is this machine's audio input; the probe gives its own.
 var make_source: Callable = func() -> MixSource:
-	return MixSource.input(input_device, "Your microphone", "mic")
+	return MixSource.input(device(), "Your microphone", "mic")
 ## Where the song position being heard comes from. GuestMidi's account is the one used for
 ## notes, so a voice and a keyboard played together land together.
 var heard: Callable = func() -> Dictionary:
@@ -84,6 +84,8 @@ var sink: Object = null
 var for_host := false
 
 var _source: MixSource = null
+## The input it was opened on.
+var _opened_device := ""
 var _resampler := Resampler.new()
 var _take_open := false
 ## The track the take in progress was begun on.
@@ -106,8 +108,19 @@ var _drift := 0.0
 func armed() -> bool:
 	if for_host:
 		return Session.is_authority() and take_track() > 0 and record_with_host \
-				and DAW.backend != null and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
+				and DAW.backend != null and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS) \
+				and not DAW.state.input_of(take_track()).begins_with("midi")
 	return Session.role == Session.Role.GUEST and target_track > 0 and record_with_host
+
+
+## The input to record: on the host, the device the take's track names for its input
+## ("audio:<device>", "audio:" the default), else the one chosen here.
+func device() -> String:
+	if for_host:
+		var input := DAW.state.input_of(take_track()) if DAW.state != null else ""
+		if input.begins_with("audio:"):
+			return input.trim_prefix("audio:")
+	return input_device
 
 
 ## The track a take goes onto: the one chosen; on the host with none chosen, the armed one.
@@ -138,6 +151,9 @@ func _process(delta: float) -> void:
 		if _source != null:
 			_close_mic()
 		return
+	if _source != null and not _take_open and _opened_device != device():
+		# The track to record onto now names another input.
+		_close_mic()
 	if _source == null and not _open_mic():
 		return
 	var got := _read()
@@ -234,6 +250,7 @@ func _settled_start() -> float:
 
 
 func _open_mic() -> bool:
+	_opened_device = device()
 	_source = make_source.call()
 	if _source == null or not _source.start():
 		_source = null

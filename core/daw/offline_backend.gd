@@ -41,6 +41,7 @@ func _process(delta: float) -> void:
 
 func open(_options: Dictionary = {}) -> bool:
 	_populate()
+	publish_inputs()
 	name_project()
 	set_process(true)
 	connection_changed.emit()
@@ -488,6 +489,24 @@ func set_track_monitor(index: int, mode: int) -> void:
 			set_track_monitor.bind(index, mode), false)
 	state.set_track_field(index, &"monitor", mode)
 	record_for_replication("/track/%d/monitor" % index, [float(mode)])
+
+
+func set_track_input(index: int, input: String) -> void:
+	_remember("/track/%d/input" % index, set_track_input.bind(index, state.track(index).input),
+			set_track_input.bind(index, input), false)
+	state.set_track_field(index, &"input", input)
+	record_for_replication("/track/%d/input" % index, [input])
+
+
+## What a track can record from here: the machine's input devices and its keys.
+func publish_inputs() -> void:
+	var inputs: Array = [["audio:", "the default microphone"]]
+	for d in AudioServer.get_input_device_list():
+		if d != "Default":
+			inputs.append(["audio:" + d, d])
+	inputs.append(["midi", "the keys"])
+	state.inputs = inputs
+	record_for_replication("/inputs", MixWire.pack_inputs(inputs))
 
 
 func set_master_volume(taper: float) -> void:

@@ -273,6 +273,8 @@ func _host(port: int) -> void:
 		# A different project opened mid-session reaches the guest whole: seven tracks, the first
 		# renamed, where there were thirteen -- drums and bass, and the reverb return, which the
 		# render's tail is heard through.
+		# The second track records from the default microphone: kept through the file.
+		DAW.set_track_input(2, "audio:")
 		var other := ProjectBridge.capture(DAW.backend as OfflineBackend)
 		var verb := other.tracks.filter(func(t): return t.name == "Verb Rtn")
 		other.tracks.resize(6)
@@ -298,6 +300,7 @@ func _host(port: int) -> void:
 		DirAccess.remove_absolute(file)
 		check("I opened another project mid-session, through a file (%s %s %s)" % [refused, saved, opened],
 				refused.is_empty() and saved.is_empty() and opened.is_empty())
+		check("with its second track's input kept (%s)" % DAW.state.input_of(2), DAW.state.input_of(2) == "audio:")
 	if _built_in:
 		await _until(14.3)
 		var file := OS.get_temp_dir().path_join("dawlings_probe_%d.dawproject" % _port)
@@ -318,8 +321,8 @@ func _host(port: int) -> void:
 		await _undo_takes()
 
 	# How much of the time before the end the work took: the end has moved twice as it grew.
-	print("host work done at %.1fs of 35.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(35.4)
+	print("host work done at %.1fs of 37.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(37.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -333,7 +336,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(36.4)
+	await _until(38.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -954,6 +957,17 @@ func _count_in_in_reaper() -> void:
 	s.punch = false
 	await get_tree().create_timer(0.5).timeout
 	check("Reaper took punching in and out and read it back", s.punch)
+	# A track's record input: the stereo pair from input 1, read back, and put back.
+	var was := s.input_of(3)
+	DAW.set_track_input(3, "in:1/2")
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	s.track(3).input = ""
+	await get_tree().create_timer(0.5).timeout
+	check("Reaper took a track's input and read it back (%s, of %d)" % [s.input_of(3), s.inputs.size()],
+			s.input_of(3) == "in:1/2")
+	if ReaperBackend.input_code(was) != ReaperBackend.INPUT_UNKNOWN:
+		DAW.set_track_input(3, was)
 	DAW.set_punch(false)
 	await get_tree().create_timer(0.2).timeout
 	if items.call() > before:
@@ -1271,6 +1285,8 @@ func _guest(port: int) -> void:
 		# room told.
 		DAW.save_project()
 		await _until(14.3)
+		check("and I know what its second track records from (%s)" % DAW.state.input_name(DAW.state.input_of(2)),
+				DAW.state.input_of(2) == "audio:" and DAW.state.input_name("audio:") == "the default microphone")
 		check("and I hear it play from its own files (%.3f)" % Session.mix_feed.heard_peak,
 				Session.mix_feed.heard_peak > 0.15)
 		check("I saved the host's project, and was told (%s)" % [_notices],
@@ -1279,11 +1295,11 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	# While the session is still on: once the host leaves, my own project is back.
-	await _until(34.5)
+	await _until(36.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
-	await _until(36.0)
+	await _until(38.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

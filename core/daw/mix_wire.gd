@@ -72,6 +72,13 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			# Reaper's METRONOME, which it states as it changes and on a refresh.
 			state.metronome = _as_bool(args)
 			state.transport_changed.emit()
+		"inputs":
+			# [id, name, id, name, ...]: what a track can record from on this DAW.
+			var pairs: Array = []
+			for i in range(0, args.size() - 1, 2):
+				pairs.append([str(args[i]), str(args[i + 1])])
+			state.inputs = pairs
+			state.transport_changed.emit()
 		"punch":
 			state.punch = _as_bool(args)
 			state.transport_changed.emit()
@@ -250,6 +257,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			state.set_track_field(idx, &"solo", _as_bool(args))
 		"recarm":
 			state.set_track_field(idx, &"rec_arm", _as_bool(args))
+		"input":
+			# NOT a Reaper OSC address: the bridge reads and writes I_RECINPUT.
+			if not args.is_empty():
+				state.set_track_field(idx, &"input", str(args[0]))
 		"monitor":
 			# One number, 0 off / 1 on / 2 auto. Reaper's config lists a b/ and an i/ pattern on
 			# this address, but what it sends -- checked on the rig -- is the one float.
@@ -612,6 +623,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
 		out.append(["/track/%d/monitor" % index, [float(t.monitor)]])
+		if t.input != "":
+			out.append(["/track/%d/input" % index, [t.input]])
 		if t.automation_mode != 0:
 			out.append(["/track/%d/automode" % index, [float(t.automation_mode)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
@@ -673,6 +686,8 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/repeat", [1.0 if state.looping else 0.0]])
 	out.append(["/click", [1.0 if state.metronome else 0.0]])
 	out.append(["/countin", [float(state.count_in_bars)]])
+	if not state.inputs.is_empty():
+		out.append(["/inputs", pack_inputs(state.inputs)])
 	out.append(["/punch", [1.0 if state.punch else 0.0]])
 	out.append(["/countin/to", [state.count_in_to]])
 	out.append(["/loop/start/time", [state.loop_start]])
@@ -692,3 +707,10 @@ static func apply_replicated(state: MixState, batch: Array) -> void:
 	for entry in batch:
 		if entry is Array and entry.size() == 2:
 			apply(state, entry[0], entry[1])
+
+
+static func pack_inputs(inputs: Array) -> Array:
+	var out: Array = []
+	for pair in inputs:
+		out.append_array([str(pair[0]), str(pair[1])])
+	return out

@@ -7,7 +7,8 @@ extends Node3D
 ## track through read, touch and latch: in touch a control moved while the song plays writes its
 ## lane until it is let go, in latch until the transport stops. LANE shows the picked track's
 ## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
-## then none.
+## then none. IN steps the picked track through what it records from (`MixState.inputs`, then
+## none chosen); saved with the project.
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -20,6 +21,7 @@ var remove: PanelButton
 var rename: PanelButton
 var auto: PanelButton
 var lane: PanelButton
+var input: PanelButton
 
 const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
@@ -28,10 +30,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(5 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(6 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(2 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(2.5 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
@@ -64,6 +66,13 @@ func _ready() -> void:
 				var whose := "the master's " if picked <= 0 else ""
 				var next := _next_lane()
 				return "show %s%s" % [whose, TimelineSurface.lane_name(next).to_lower()] if next != "" else "hide the lane")
+	input = _key("TrackInput", "IN", 5, Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
+			func() -> String:
+				var picked: int = surface.picked_track
+				if picked <= 0 or not DAW.state.tracks.has(picked):
+					return "press a track's name first"
+				return "%s records from %s: %s next" % [_name_of(picked),
+						DAW.state.input_name(DAW.state.input_of(picked)), DAW.state.input_name(_next_input())])
 	DAW.track_changed.connect(_on_track_changed)
 	DAW.master_changed.connect(_on_master_changed)
 	refresh()
@@ -90,7 +99,7 @@ func _on_master_changed(field: StringName) -> void:
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
-	if field == &"automation_mode" and index == surface.picked_track:
+	if field in [&"automation_mode", &"input"] and index == surface.picked_track:
 		refresh()
 
 
@@ -119,6 +128,21 @@ func refresh() -> void:
 	rename.lit = picked and surface.can_type()
 	lane.lit = surface.shown_lane != ""
 	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
+	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
+
+
+## The input after the picked track's, round through none chosen.
+func _next_input() -> String:
+	var ids: Array = DAW.state.inputs.map(func(p): return p[0])
+	ids.append("")
+	var at := ids.find(DAW.state.input_of(surface.picked_track))
+	return ids[(at + 1) % ids.size()]
+
+
+func _step_input() -> void:
+	var picked: int = surface.picked_track
+	if picked > 0 and DAW.state.tracks.has(picked):
+		DAW.set_track_input(picked, _next_input())
 
 
 func _add() -> void:

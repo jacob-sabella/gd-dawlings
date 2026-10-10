@@ -219,6 +219,9 @@ class TrackState extends RefCounted:
 	var rec_arm: bool = false
 	## Input monitoring: 0 off, 1 on, 2 auto. Reaper's I_RECMON, and what `/track/N/monitor` says.
 	var monitor: int = 0
+	## What it records from: one of the DAW's `MixState.inputs` by id, or "" for whatever the
+	## recorder is set to. Saved with the project. `/track/N/input`.
+	var input: String = ""
 	## How the track's controls and their automation meet, Reaper's I_AUTOMODE numbers: 0 read
 	## (the lanes move the controls), 2 touch (a control moved while playing writes its lane until
 	## it is let go), 4 latch (until the transport stops). `/track/N/automode`.
@@ -320,6 +323,28 @@ func count_in_start(at: float) -> float:
 var beats_per_bar: int = 4
 ## Whether the click is on. Reaper's metronome, which is a transport setting there as here.
 var metronome: bool = false
+## The inputs a track can record from on this DAW, [id, name] each: the built-in engine's are
+## the machine's input devices and its keys, Reaper's its input channels and MIDI. "" is none
+## chosen. `/inputs`.
+var inputs: Array = []
+
+
+## The input a track records from, or "" for none chosen or no such track.
+func input_of(index: int) -> String:
+	var t := track(index, false) if index > 0 else null
+	return t.input if t != null else ""
+
+
+## A track input's name, or the id itself for one this DAW does not list.
+func input_name(id: String) -> String:
+	if id == "":
+		return "as the recorder is set"
+	for pair in inputs:
+		if pair[0] == id:
+			return pair[1]
+	return id
+
+
 ## Bars of click before recording starts, 0 for none. As in Reaper, a count-in is the metronome's:
 ## with the click off, recording starts at once.
 var count_in_bars: int = 0
