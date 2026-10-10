@@ -88,6 +88,8 @@ signal venue_changed(id: StringName)
 ## The world the studio stands in. See core/venues/venue.gd.
 var venue: Venue
 var world_env: WorldEnvironment
+## How much brighter than each venue's own exposure the room is shown.
+const EXPOSURE_LIFT := 1.2
 var key_light: DirectionalLight3D
 
 var camera: Camera3D
@@ -399,6 +401,9 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	var env := _house_environment()
 	_house_key(key_light)
 	venue.dress(env, key_light)
+	# Every venue a touch brighter than it dressed itself: the mid-tones read dark on an ordinary
+	# monitor, AgX's above all. Exposure rather than brightness, so blacks stay black.
+	env.tonemap_exposure *= EXPOSURE_LIFT
 	world_env.environment = env
 	add_child(venue)
 	var mirror := venue.make_mirror(env)
