@@ -330,9 +330,29 @@ function handlers.GetTimeline()
     end
   end
 
+  -- The tempo's changes, as {quarter note, bpm, ramps} from the start of the song; empty for one
+  -- tempo throughout. A marker's gradual flag ramps from it to the next, as dawlings's map does.
+  -- Before Reaper's first marker the project's own tempo holds.
+  local tempo = {}
+  local tempo_count = reaper.CountTempoTimeSigMarkers(0)
+  if tempo_count > 0 then
+    for m = 0, tempo_count - 1 do
+      local ok, timepos, _, _, bpm, _, _, linear = reaper.GetTempoTimeSigMarker(0, m)
+      if ok then
+        local qn = reaper.TimeMap2_timeToQN(0, timepos)
+        if #tempo == 0 and qn > 0.000001 then
+          local _, base = reaper.GetProjectTimeSignature2(0)
+          tempo[1] = {0, base, false}
+        end
+        tempo[#tempo + 1] = {qn, bpm, linear}
+      end
+    end
+  end
+
   return {
     tracks = tracks,
     markers = markers,
+    tempo = tempo,
     length = reaper.GetProjectLength(0),
     -- Every track in the project, not just the ones with items on them and not just the ones
     -- in the OSC bank. It rides along here because it changes on roughly the same clock as the
@@ -610,6 +630,22 @@ end
 function handlers.Redo()
   reaper.Undo_DoRedo2(0)
   reaper.UpdateArrange()
+  return {ok = true}
+end
+
+-- args: seconds, bpm, ramps (0 or 1), repeated: the whole tempo map, every marker of Reaper's
+-- replaced, as one undo point. Positions come in seconds, worked out on dawlings's side along the
+-- same map, because Reaper's own conversion would move with each marker as it is added.
+function handlers.SetTempoMap(args)
+  reaper.Undo_BeginBlock()
+  for m = reaper.CountTempoTimeSigMarkers(0) - 1, 0, -1 do
+    reaper.DeleteTempoTimeSigMarker(0, m)
+  end
+  for i = 1, #args - 2, 3 do
+    reaper.SetTempoTimeSigMarker(0, -1, args[i], -1, -1, args[i + 1], 0, 0, (args[i + 2] or 0) > 0.5)
+  end
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Tempo map', -1)
   return {ok = true}
 end
 

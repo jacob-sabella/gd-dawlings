@@ -115,7 +115,7 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 				state.tempo = float(args[0])
 				state.transport_changed.emit()
 			elif p.size() > 1 and p[1] == "map":
-				# dawlings's own: the tempo's changes, flat [beat, bpm, ramps] triples.
+				# dawlings's own: the tempo's changes, flat [beat, bpm, shape] triples.
 				state.tempo_points = unpack_tempo_points(args)
 				state.transport_changed.emit()
 
@@ -267,7 +267,7 @@ const TEMPO_POINTS_MAX := 1024
 static func pack_tempo_points(points: Array) -> Array:
 	var out: Array = []
 	for pt in points:
-		out.append_array([float(pt[0]), float(pt[1]), 1.0 if pt[2] else 0.0])
+		out.append_array([float(pt[0]), float(pt[1]), float(DawKitTempoMap.shape_of(pt[2]))])
 	return out
 
 
@@ -282,7 +282,9 @@ static func unpack_tempo_points(args: Array) -> Array:
 		var bpm := float(args[i + 1])
 		if not is_finite(beat) or not is_finite(bpm) or beat <= last or bpm < 1.0 or bpm > 1000.0:
 			return []
-		out.append([beat, bpm, float(args[i + 2]) > 0.5])
+		if typeof(args[i + 2]) not in [TYPE_FLOAT, TYPE_INT, TYPE_BOOL]:
+			return []
+		out.append([beat, bpm, DawKitTempoMap.shape_of(int(roundf(float(args[i + 2]))))])
 		last = beat
 	if not out.is_empty() and out[0][0] != 0.0:
 		return []

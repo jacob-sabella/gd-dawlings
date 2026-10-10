@@ -243,7 +243,7 @@ var position_string: String = "1.1.00"
 ## desk shows; this is for the readout that wants both.
 var time_string: String = ""
 var tempo: float = 120.0
-## The tempo's changes, as DawKitTempoMap's points ([beat, bpm, ramps], the first at beat 0);
+## The tempo's changes, as DawKitTempoMap's points ([beat, bpm, shape], the first at beat 0);
 ## empty for a song at one tempo. `tempo` is the first point's tempo, and changing it changes
 ## that and nothing after it.
 var tempo_points: Array = []:
@@ -294,7 +294,7 @@ func tempo_map() -> DawKitTempoMap:
 		_map = DawKitTempoMap.new(maxf(tempo, 1.0)) if tempo_points.is_empty() \
 				else DawKitTempoMap.from_array(tempo_points)
 		if not tempo_points.is_empty():
-			_map.set_point(0.0, maxf(tempo, 1.0), bool(tempo_points[0][2]))
+			_map.set_point(0.0, maxf(tempo, 1.0), tempo_points[0][2])
 		_map_tempo = tempo
 	return _map
 

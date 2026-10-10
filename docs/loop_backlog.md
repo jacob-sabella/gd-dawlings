@@ -294,8 +294,17 @@ can finish music in, saving DAWproject. Steps, in order:
      guest's map is checked (each point a later beat at 1-1000 bpm, from beat 0). With a map the
      click is a 32 s window of the song's own clicks (`DawKitMetronome.span`), made again near
      its end or on a seek; one tempo keeps the looping bar.
-   - **Not yet (7b):** Reaper: its tempo map is neither read (GetTimeline could report tempo
-     markers) nor written (`set_tempo_map` is a no-op there). No surface edits the map yet (the
+   - **Done 2026-10-10 (7c), Reaper's tempo map, and two kinds of ramp:** GetTimeline reports
+     Reaper's tempo markers in quarter notes, and `SetTempoMap` replaces them as one undo point.
+     The `--reaper` probe found Reaper's gradual change is a straight line in time, not in beats:
+     a marker sent at the seconds dawlings' beat-ramp gave landed at quarter note 16.32, not 16.
+     So `DawKitTempoMap` has three shapes: HOLD; RAMP_BEATS, DAWproject's `linear` and dawlings'
+     default; and RAMP_SECONDS, Reaper's. Both ramps are exact with exact inverses. The file
+     writes `linear` for either and keeps which one in dawkit's extras. Reaper's ramps are read
+     as RAMP_SECONDS, and a map sent to Reaper has its ramps made RAMP_SECONDS and its markers
+     placed by that map, so Reaper's markers land on the beats sent, exactly (probe:
+     [[0, T, hold], [8, T/2, time ramp], [16, T, hold]] back as sent; undo restores one tempo).
+   - **Not yet (7b):** No surface edits the map yet (the
      tempo knob sets the first tempo only). The demo song's parts are rendered at the first
      tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback
      probe measures the click at one tempo only. 8. Automation.

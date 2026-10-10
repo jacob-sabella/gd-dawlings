@@ -430,7 +430,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 	if verb in [&"delete_selected", &"duplicate_selected"]:
 		args = []
 	if verb == &"set_tempo_map":
-		# Peer input: flat [beat, bpm, ramps] triples, each a later beat, from beat 0.
+		# Peer input: flat [beat, bpm, shape] triples, each a later beat, from beat 0.
 		if args.size() != 1 or not (args[0] is Array):
 			push_warning("DAW: refused a malformed set_tempo_map intent.")
 			return

@@ -663,6 +663,23 @@ func _restructure(fn: String, args: Array) -> void:
 		_timeline_due = 0.0)
 
 
+## Shown at once, then Reaper's markers replaced and read back with the next timeline. Reaper
+## ramps only in a straight line in time, so every ramp becomes one, and each marker goes where
+## that map puts its beat -- which is where Reaper's own map will put it.
+func set_tempo_map(points: Array) -> void:
+	var timed: Array = points.map(func(pt): return [float(pt[0]), float(pt[1]),
+			DawKitTempoMap.HOLD if DawKitTempoMap.shape_of(pt[2]) == DawKitTempoMap.HOLD else DawKitTempoMap.RAMP_SECONDS])
+	state.tempo_points = timed
+	if not timed.is_empty():
+		state.tempo = float(timed[0][1])
+	state.transport_changed.emit()
+	var map := state.tempo_map()
+	var flat: Array = []
+	for pt in (timed if not timed.is_empty() else [[0.0, state.tempo, DawKitTempoMap.HOLD]]):
+		flat.append_array([map.seconds_at(float(pt[0])), float(pt[1]), 1.0 if pt[2] != DawKitTempoMap.HOLD else 0.0])
+	_edit("SetTempoMap", flat)
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	if _locally_transpose(track_index, item_index, semitones):
 		_edit("TransposeItem", [track_index, item_index, semitones])
@@ -818,6 +835,19 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			markers.append_array([float(m.get("position", 0.0)), str(m.get("name", ""))])
 	_apply("/timeline/markers", markers)
 	_apply("/timeline/length", [float(result.get("length", 0.0))])
+	if result.has("tempo"):
+		var flat: Array = []
+		for pt in _as_array(result["tempo"]):
+			if pt is Array and pt.size() >= 3:
+				# Reaper's gradual change is a straight line in time.
+				flat.append_array([float(pt[0]), float(pt[1]),
+						float(DawKitTempoMap.RAMP_SECONDS if pt[2] else DawKitTempoMap.HOLD)])
+		# A single marker is one tempo, which /tempo/raw already says.
+		var points := MixWire.unpack_tempo_points(flat)
+		if points.size() <= 1:
+			points = []
+		if points != state.tempo_points:
+			_apply("/tempo/map", MixWire.pack_tempo_points(points))
 	# The only channel that knows how big the project actually is. OSC reports the bank and
 	# nothing else, so without this a 90-track session is indistinguishable from a 64-track one.
 	if result.has("track_count"):

@@ -290,7 +290,7 @@ func _host(port: int) -> void:
 			await _tracks_in_reaper()
 		await _undo_takes()
 
-	await _until(18.4)
+	await _until(19.9)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -304,7 +304,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(19.4)
+	await _until(20.9)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -575,10 +575,25 @@ func _tracks_in_reaper() -> void:
 			% [count, name_read, DAW.state.project_track_count],
 			added != null and name_read == "Probe renamed" and DAW.state.project_track_count == count
 			and DAW.state.track(count + 1, false) == null)
+	# The tempo's changes: halved from bar 3, ramping back up from bar 5, read back from Reaper's
+	# own markers.
+	var tempo := DAW.state.tempo
+	var want := [[0.0, tempo, DawKitTempoMap.HOLD], [8.0, tempo * 0.5, DawKitTempoMap.RAMP_SECONDS],
+			[16.0, tempo, DawKitTempoMap.HOLD]]
+	DAW.set_tempo_map(want)
+	await get_tree().create_timer(0.7).timeout
+	var got := DAW.state.tempo_points
+	var close_enough := got.size() == 3
+	for i in mini(got.size(), 3):
+		close_enough = close_enough and absf(got[i][0] - want[i][0]) < 0.001 \
+				and absf(got[i][1] - want[i][1]) < 0.001 and got[i][2] == want[i][2]
+	check("Reaper took the tempo map and read it back (%s)" % [got], close_enough)
 	DAW.undo()
 	DAW.undo()
 	DAW.undo()
-	await get_tree().create_timer(0.5).timeout
+	DAW.undo()
+	await get_tree().create_timer(0.7).timeout
+	check("and undone, it is one tempo again (%s)" % [DAW.state.tempo_points], DAW.state.tempo_points.is_empty())
 
 
 ## The guest's MIDI take's notes, in song seconds, by pitch then time so the order survives an
@@ -747,7 +762,7 @@ func _guest(port: int) -> void:
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
-	await _until(19.0)
+	await _until(20.5)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

@@ -10714,6 +10714,12 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 	check("Reaper's fades and item volume reach the desk (%s)" % [[a.fade_in, a.gain_db] if a else null],
 			a != null and is_equal_approx(a.fade_in, 0.25) and absf(a.gain_db - linear_to_db(0.5)) < 0.001)
 	check("and its default anti-click fade is no fade", b != null and b.fade_in == 0.0 and b.gain_db == 0.0)
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [],
+			"tempo": [[0.0, 120.0, false], [8.0, 90.0, true], [16.0, 60.0, false]]})
+	check("Reaper's tempo markers are the map, its gradual change a ramp in time (%s)" % [link.state.tempo_points],
+			link.state.tempo_points == [[0.0, 120.0, 0], [8.0, 90.0, 2], [16.0, 60.0, 0]])
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [], "tempo": [[0.0, 120.0, false]]})
+	check("and one marker is one tempo", link.state.tempo_points.is_empty())
 	link.free()
 	_offline()
 
@@ -10898,7 +10904,7 @@ func _test_the_tempo_changes_through_the_song() -> void:
 	DAW.set_tempo(120.0)
 	var depth := maxi(s.undo_depth, 0)
 	# Two bars at 120, then 60 from beat 8 (bar 3).
-	DAW.set_tempo_map([[0.0, 120.0, false], [8.0, 60.0, false]])
+	DAW.set_tempo_map([[0.0, 120.0, DawKitTempoMap.HOLD], [8.0, 60.0, DawKitTempoMap.HOLD]])
 	check("a tempo map is set (%s)" % [s.tempo_points], s.tempo_points.size() == 2 and s.tempo == 120.0)
 	close_to("bar 3 starts where two bars at 120 end", s.bar_to_seconds(3.0), 4.0)
 	close_to("and bar 4 a bar at 60 later", s.bar_to_seconds(4.0), 8.0)

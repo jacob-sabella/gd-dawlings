@@ -21,7 +21,7 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 	var p := DawKitProject.new()
 	p.title = backend.project_title
 	p.tempo = s.tempo
-	p.tempo_points = s.tempo_points.map(func(pt): return [float(pt[0]), float(pt[1]), bool(pt[2])])
+	p.tempo_points = s.tempo_points.map(func(pt): return [float(pt[0]), float(pt[1]), DawKitTempoMap.shape_of(pt[2])])
 	if not p.tempo_points.is_empty():
 		p.tempo_points[0][1] = s.tempo
 	p.time_signature = Vector2i(s.beats_per_bar, backend.beat_unit)
