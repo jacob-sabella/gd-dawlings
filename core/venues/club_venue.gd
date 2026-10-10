@@ -13,7 +13,7 @@ extends Venue
 const HEIGHT := 4.2
 const WALL := 0.3
 ## The front wall, in front of the desk: the footprint's front edge.
-const FRONT := -Studio.ROOM_DEPTH * 0.5 + 0.3
+const FRONT := Studio.ROOM_FRONT
 ## The wainscot's height, and how proud of the brick it stands.
 const WAINSCOT := 1.1
 ## The bar: its counter's front face (x), its ends (z), its height.
@@ -111,7 +111,7 @@ func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
 	var half := live_room_half()
 	# The bar's counter, and the back bar behind it.
-	out.append({"c": Vector2(BAR_FRONT + COUNTER_DEPTH * 0.5, (BAR_FROM + BAR_TO) * 0.5),
+	out.append({"c": Vector2(bar_front() + COUNTER_DEPTH * 0.5, (BAR_FROM + BAR_TO) * 0.5),
 			"h": Vector2(COUNTER_DEPTH * 0.5, (BAR_TO - BAR_FROM) * 0.5), "a": 0.0, "top": BAR_TOP})
 	out.append({"c": Vector2(half - 0.25, (BAR_FROM + BAR_TO) * 0.5),
 			"h": Vector2(0.25, (BAR_TO - BAR_FROM) * 0.5), "a": 0.0, "top": 0.95})
@@ -125,12 +125,22 @@ func zone_solids() -> Array:
 	out.append({"c": Vector2(piano_x(), PIANO_Z), "h": Vector2(PIANO_DEPTH * 0.5 + 0.15, PIANO_WIDTH * 0.5), "a": 0.0,
 			"top": 1.25})
 	var bass_dir := Vector2(cos(BASS_YAW), -sin(BASS_YAW))
-	out.append({"c": Vector2(BASS_AT.x, BASS_AT.z) + bass_dir * BASS_LENGTH * 0.5, "h": Vector2(BASS_LENGTH * 0.5, 0.2),
+	out.append({"c": Vector2(bass_at().x, bass_at().z) + bass_dir * BASS_LENGTH * 0.5, "h": Vector2(BASS_LENGTH * 0.5, 0.2),
 			"a": -BASS_YAW, "top": 0.72})
 	return out
 
 
 ## The middle of the piano's case, its back to the booths' bench ends.
+## The bar and the bass stand where they were drawn against a room DRAWN_WIDTH wide, moved out
+## with its walls as it widens: left where they were, a wider room put them inside it.
+func bar_front() -> float:
+	return BAR_FRONT + _grow()
+
+
+func bass_at() -> Vector3:
+	return BASS_AT - Vector3(_grow(), 0, 0)
+
+
 func piano_x() -> float:
 	return -live_room_half() + BENCH + 0.05 + PIANO_DEPTH * 0.5
 
@@ -140,7 +150,7 @@ func stool_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	var z := BAR_FROM + 0.45
 	while z < BAR_TO - 0.3:
-		out.append(Vector2(BAR_FRONT - 0.36, z))
+		out.append(Vector2(bar_front() - 0.36, z))
 		z += 0.75
 	return out
 
@@ -390,7 +400,7 @@ func _build_the_bar() -> void:
 	var walnut := _walnut()
 	var length := BAR_TO - BAR_FROM
 	var mid := (BAR_FROM + BAR_TO) * 0.5
-	var cx := BAR_FRONT + COUNTER_DEPTH * 0.5
+	var cx := bar_front() + COUNTER_DEPTH * 0.5
 	ZoneKit.block(self, Vector3(COUNTER_DEPTH, BAR_TOP - 0.06, length), Vector3(cx, (BAR_TOP - 0.06) * 0.5, mid), walnut,
 			"Counter")
 	ZoneKit.block(self, Vector3(COUNTER_DEPTH + 0.12, 0.06, length + 0.12), Vector3(cx - 0.04, BAR_TOP - 0.03, mid),
@@ -405,10 +415,10 @@ func _build_the_bar() -> void:
 	rail.mesh = tube
 	rail.material_override = _brass()
 	rail.rotation.x = PI * 0.5
-	rail.position = Vector3(BAR_FRONT - 0.14, 0.2, mid)
+	rail.position = Vector3(bar_front() - 0.14, 0.2, mid)
 	add_child(rail)
 	for z in [BAR_FROM + 0.2, mid, BAR_TO - 0.2]:
-		ZoneKit.block(self, Vector3(0.14, 0.03, 0.03), Vector3(BAR_FRONT - 0.07, 0.2, z), _brass(), "RailBracket")
+		ZoneKit.block(self, Vector3(0.14, 0.03, 0.03), Vector3(bar_front() - 0.07, 0.2, z), _brass(), "RailBracket")
 
 	# The back bar: a low cabinet, three shelves over it, a mirror behind.
 	ZoneKit.block(self, Vector3(0.44, 0.95, length), Vector3(half - 0.26, 0.475, mid), walnut, "BackBar")
@@ -749,7 +759,7 @@ func _leave_the_instruments() -> void:
 	bass.name = "Bass"
 	# Its scroll is the model's +X end: laid along the piano's front toward the door, belly to the room.
 	bass.rotation.y = BASS_YAW
-	bass.position = BASS_AT
+	bass.position = bass_at()
 	var bench := find_child("Bench1a", false, false) as Node3D
 	var coat := _piece(club, "Coat")
 	coat.name = "Coat"
@@ -763,7 +773,7 @@ func _leave_the_instruments() -> void:
 func _leave_the_glasses() -> void:
 	var club := load(MODELS + "club.glb") as PackedScene
 	var x := -live_room_half() + BENCH * 0.5
-	var cx := BAR_FRONT + COUNTER_DEPTH * 0.5
+	var cx := bar_front() + COUNTER_DEPTH * 0.5
 	var left := [[0, Vector3(x - 0.12, 0.74, BOOTHS[0] - 0.14)], [1, Vector3(x + 0.16, 0.74, BOOTHS[0] + 0.12)],
 			[2, Vector3(x - 0.08, 0.74, BOOTHS[1] + 0.15)], [0, Vector3(x + 0.1, 0.74, BOOTHS[1] - 0.16)],
 			[0, Vector3(cx - 0.12, BAR_TOP, BAR_FROM + 0.6)], [2, Vector3(cx - 0.15, BAR_TOP, 0.4)]]

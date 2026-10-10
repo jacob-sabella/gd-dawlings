@@ -17,7 +17,7 @@ const RIDGE := 5.7
 ## Log walls, thick.
 const WALL := 0.24
 ## Where the front wall stands, in front of the desk: the footprint's front edge.
-const FRONT := -Studio.ROOM_DEPTH * 0.5 + 0.3
+const FRONT := Studio.ROOM_FRONT
 ## Cabin windows: small panes, a deep sill, the head well under the eaves.
 const SILL := 0.9
 const HEAD := 2.4

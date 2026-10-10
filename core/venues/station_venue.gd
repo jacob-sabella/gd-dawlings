@@ -20,7 +20,7 @@ const CEILING := 4.2
 const CHAMFER := 0.9
 const WALL := 0.2
 ## Where the viewport wall stands, in front of the desk: the footprint's front edge.
-const FRONT := -Studio.ROOM_DEPTH * 0.5 + 0.3
+const FRONT := Studio.ROOM_FRONT
 ## The viewport: three wide bays across the front.
 const SILL := 0.7
 const HEAD := 2.7

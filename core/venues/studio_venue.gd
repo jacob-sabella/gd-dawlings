@@ -74,7 +74,7 @@ func rooms() -> Array[Rect2]:
 	var behind := back_of_house()
 	var left := -cr + 0.05
 	return [Rect2(left, behind.position.y, behind.end.x - left, behind.size.y),
-			Rect2(-cr - SIDE_ROOM_WIDTH + 0.05, -Studio.ROOM_DEPTH * 0.5 + 0.35, SIDE_ROOM_WIDTH,
+			Rect2(-cr - SIDE_ROOM_WIDTH + 0.05, Studio.ROOM_FRONT + 0.05, SIDE_ROOM_WIDTH,
 					Studio.ROOM_DEPTH - 0.05)]
 
 
@@ -156,9 +156,9 @@ func _ready() -> void:
 	# walls nobody sees it.
 	var right := live_room_half() + 0.1
 	var left := -room_width * 0.5 - SIDE_ROOM_WIDTH - 0.1 if variant == BESIDE else -right
-	plane.size = Vector2(right - left, LIVE_ROOM_BACK + 2.4)
+	plane.size = Vector2(right - left, LIVE_ROOM_BACK - Studio.ROOM_FRONT + 0.2)
 	floor_mesh.mesh = plane
-	floor_mesh.position = Vector3((left + right) * 0.5, 0, (LIVE_ROOM_BACK - 2.2) * 0.5)
+	floor_mesh.position = Vector3((left + right) * 0.5, 0, (LIVE_ROOM_BACK + Studio.ROOM_FRONT) * 0.5)
 	# Parquet, oiled and dark. A studio floor is the biggest surface in every wide shot, and a
 	# flat grey plane is what announced this as a 3D scene before anything else did.
 	var floor_mat := Materials.scanned(StandardMaterial3D.new(), "herringbone_parquet", "2k",
@@ -186,14 +186,14 @@ func _ready() -> void:
 	# Narrower than the floor. A control room is a room, not a hangar, and the walls have to be
 	# close enough to read as walls from the working position -- at nine metres apart they are
 	# two more grey rectangles in the distance.
-	var walls := [[Vector3(0, Studio.WALL_HEIGHT * 0.5, -2.2), Vector3(room_width, Studio.WALL_HEIGHT, 0.1)],
+	var walls := [[Vector3(0, Studio.WALL_HEIGHT * 0.5, Studio.ROOM_FRONT), Vector3(room_width, Studio.WALL_HEIGHT, 0.1)],
 			# A hair lower than the back wall, whose ends they overlap: level, the two tops met in
 			# one plane at each corner.
-			[Vector3(room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
+			[Vector3(room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, Studio.ROOM_MID),
 					Vector3(0.1, Studio.WALL_HEIGHT - 0.004, Studio.ROOM_DEPTH)]]
 	# Beside, the left wall is the window into the side room, built with it.
 	if variant != BESIDE:
-		walls.append([Vector3(-room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, 0.3),
+		walls.append([Vector3(-room_width * 0.5, Studio.WALL_HEIGHT * 0.5 - 0.001, Studio.ROOM_MID),
 				Vector3(0.1, Studio.WALL_HEIGHT - 0.004, Studio.ROOM_DEPTH)])
 	for spec in walls:
 		var wall := MeshInstance3D.new()
@@ -226,7 +226,7 @@ func _dress_room() -> void:
 	# faces: flush with either, the two would fight along the seam.
 	lid.size = Vector3(room_width + 0.1, 0.08, Studio.ROOM_DEPTH + 0.08)
 	ceiling.mesh = lid
-	ceiling.position = Vector3(0, Studio.WALL_HEIGHT + 0.041, 0.3)
+	ceiling.position = Vector3(0, Studio.WALL_HEIGHT + 0.041, Studio.ROOM_MID)
 	var lid_mat := Materials.painted_wall(Color(0.075, 0.076, 0.08))
 	ceiling.material_override = lid_mat
 	# Off the shadow map, so the key still comes through as a skylight would; still in the GI,
@@ -270,8 +270,10 @@ func _dress_room() -> void:
 		spot.position = Vector3(0, -0.012, 0)
 		spot.rotation_degrees = Vector3(-90, 0, 0)
 		spot.light_color = Color(1.0, 0.9, 0.78)
-		spot.light_energy = spec[1]
-		spot.spot_range = 4.2
+		# Drawn under a 2.8 m ceiling: higher up, as far again past the floor and as bright on it.
+		var up := Studio.WALL_HEIGHT / 2.8
+		spot.light_energy = spec[1] * up * up
+		spot.spot_range = 4.2 * up
 		spot.spot_angle = 38.0
 		spot.spot_angle_attenuation = 0.8
 		spot.shadow_enabled = rich
@@ -322,7 +324,7 @@ func _dress_room() -> void:
 ## Beside, the kit and the booth have a room of their own, and this one starts at the control
 ## room's left wall.
 func _build_live_room(wall_mat: Material) -> void:
-	var front := Studio.ROOM_DEPTH * 0.5 + 0.3
+	var front := Studio.ROOM_BACK
 	var back := LIVE_ROOM_BACK
 	var tall := LIVE_ROOM_HEIGHT
 	var depth := back - front
@@ -455,8 +457,8 @@ func _build_side_room(wall_mat: Material) -> void:
 	var far := -cr - SIDE_ROOM_WIDTH
 	# The dividing wall's far face: it is 12 cm thick, thicker than any wall it meets.
 	var near := -cr - 0.06
-	var z0 := -Studio.ROOM_DEPTH * 0.5 + 0.3
-	var z1 := Studio.ROOM_DEPTH * 0.5 + 0.3
+	var z0 := Studio.ROOM_FRONT
+	var z1 := Studio.ROOM_BACK
 	var mid_z := (z0 + z1) * 0.5
 	# Lighter than the live room behind, which is lit from more fittings: this one's walls are
 	# what its three sconces have to show, and at the back room's near-black they showed nothing.
@@ -737,8 +739,8 @@ func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
 	if variant == BESIDE:
 		var x := -room_width * 0.5
-		var z0 := -Studio.ROOM_DEPTH * 0.5 + 0.3
-		var z1 := Studio.ROOM_DEPTH * 0.5 + 0.3
+		var z0 := Studio.ROOM_FRONT
+		var z1 := Studio.ROOM_BACK
 		var shut := WINDOW_TO + JAMB
 		var open := DOOR_TO - JAMB
 		out.append({"c": Vector2(x, (z0 + shut) * 0.5), "h": Vector2(0.06, (shut - z0) * 0.5), "a": 0.0,

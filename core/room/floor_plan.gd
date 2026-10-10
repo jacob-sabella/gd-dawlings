@@ -19,7 +19,7 @@ extends Node
 signal piece_moved(piece: Node3D, by_participant: int)
 
 ## The inside faces of the walls, on the floor, in the set's frame: x and z.
-var bounds := Rect2(-3.15, -2.15, 6.30, 4.95)
+var bounds := Rect2(-3.95, -3.15, 7.90, 5.95)
 var pieces: Array[Node3D] = []
 ## Things that do not move but must not be moved through, each a Callable returning an
 ## Array of footprints (see `footprint`). A callable rather than a box because the console

@@ -22,9 +22,17 @@ extends Node3D
 
 ## The walls of the control room: the working footprint. Each venue builds the rest of its
 ## world -- and the activity zones behind the mix position -- around this (see Venue.ZONES).
-const ROOM_WIDTH := 6.4
-const ROOM_DEPTH := 5.0
-const WALL_HEIGHT := 2.8
+## Sized to feel like a room you can move about in, not a booth: at 6.4 x 5 m under a 2.8 m
+## ceiling every venue read as cramped round the gear.
+const ROOM_WIDTH := 8.0
+const ROOM_DEPTH := 6.0
+const WALL_HEIGHT := 3.3
+## The footprint's open rear and front wall, along z, and its middle. The rear stays where the
+## zones, the prop shelf and the toys on it were laid out from; a deeper room is more of it in
+## front of the desk, which is where it was cramped.
+const ROOM_BACK := 2.8
+const ROOM_FRONT := ROOM_BACK - ROOM_DEPTH
+const ROOM_MID := (ROOM_FRONT + ROOM_BACK) * 0.5
 ## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
 ## is why it is a constant rather than a number in two places: move the timeline and this has
 ## to follow or the panel floats again, one centimetre higher.
@@ -39,12 +47,14 @@ const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 ## which is the lighting version of the patchbay wired to nothing: a room lit by sources you
 ## cannot see. The third is new, and it is there because the measurement said so -- the rack's
 ## faceplate read 13.8 against the console's 22.1, and the floor at its foot 9.1 against 29.5.
+## Spread 0.8 m further out each side than first placed, with the room: left where they were
+## in a wider room they bunched round the desk and stood between the seat and the wardrobe.
 const PRACTICALS: Array = [
-	[Vector3(-2.05, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
+	[Vector3(-2.85, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
 	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
 	# Forward on the right since the patch stand took that side of the room: anywhere behind it
 	# the stand was in the way from the seat.
-	[Vector3(2.30, 1.70, 0.95), Color(0.6, 0.78, 1.0), 5.5],
+	[Vector3(3.10, 1.70, 0.95), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -55,7 +65,7 @@ const PRACTICALS: Array = [
 	# From here, against the body's own work light, inverse-square irradiance at the two ends
 	# comes out within a couple of percent. Summoned gear is lit by the work light; the room's
 	# lamps light the ROOM. `_test_the_desk_is_lit_evenly_end_to_end` holds the balance.
-	[Vector3(-1.50, 1.72, 0.95), Color(1.0, 0.82, 0.60), 4.5],
+	[Vector3(-2.30, 1.72, 0.95), Color(1.0, 0.82, 0.60), 4.5],
 ]
 ## How far a practical reaches. Short on purpose: at 6.5m each lamp lit all three walls, and
 ## three of them made the empty half of the room as bright as the gear (37.0 against 38.7 on
@@ -1197,7 +1207,7 @@ func _fit_stand_to_bay() -> void:
 
 
 func _room_bounds() -> Rect2:
-	return Rect2(-room_width * 0.5 + 0.05, -2.15, room_width - 0.10, ROOM_DEPTH - 0.05)
+	return Rect2(-room_width * 0.5 + 0.05, ROOM_FRONT + 0.05, room_width - 0.10, ROOM_DEPTH - 0.05)
 
 
 ## Move the room round the desk. See SessionLayout for the rule.

@@ -17,7 +17,7 @@ const DECK_LIFT := 0.18
 const PARAPET := 1.05
 const WALL := 0.3
 ## Where the front railing stands: the footprint's front edge, which is the building's edge too.
-const FRONT := -Studio.ROOM_DEPTH * 0.5 + 0.3
+const FRONT := Studio.ROOM_FRONT
 ## How far the rest of the roof reaches past the terrace's sides and its back.
 const ROOF_SIDE := 9.0
 const ROOF_BACK := 9.0

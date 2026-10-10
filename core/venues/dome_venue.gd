@@ -16,7 +16,7 @@ const CLEARANCE := 0.9
 ## The sand's depth below the deck, in the trench and outside.
 const TRENCH := 0.6
 ## Where the vault meets its rounded nose: the footprint's front edge.
-const NOSE := -Studio.ROOM_DEPTH * 0.5
+const NOSE := (Studio.ROOM_FRONT - 0.3)
 ## The bulkhead's inside face.
 const BACK := LIVE_ROOM_BACK + 0.05
 const ARCH_SPACING := 2.4
@@ -44,8 +44,8 @@ var reef: Array = []
 var fish_paths: Array[Vector4] = []
 ## The path the schools swim: round the nose and down the sides, squared off (`SCHOOL_SQUARE`
 ## below 1) to keep clear of the glass, swept `SCHOOL_SWEEP` radians either side of the nose.
-const SCHOOL_CENTRE := Vector3(0.0, 0.0, -1.4)
-const SCHOOL_RADII := Vector2(8.8, 9.8)
+const SCHOOL_CENTRE := Vector3(0.0, 0.0, -2.3)
+const SCHOOL_RADII := Vector2(9.6, 10.8)
 const SCHOOL_SQUARE := 0.3
 const SCHOOL_SWEEP := 2.1
 

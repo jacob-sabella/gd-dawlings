@@ -7990,7 +7990,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	var shelved := club.bottle_spots.size() > 40
 	for spot in club.bottle_spots:
 		shelved = shelved and club.bottle_levels.any(func(y): return absf(spot.origin.y - y) < 0.001) \
-				and spot.origin.x > ClubVenue.BAR_FRONT + ClubVenue.COUNTER_DEPTH
+				and spot.origin.x > club.bar_front() + ClubVenue.COUNTER_DEPTH
 	check("every bottle stands on a shelf behind the counter (%d)" % club.bottle_spots.size(), shelved)
 	var upturned := 0
 	for stool in club.find_children("Stool*", "", false, false):
@@ -8033,8 +8033,8 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	for g in club.glass_spots:
 		var on_table := absf(g.y - 0.74) < 0.001 and ClubVenue.BOOTHS.any(
 				func(bz: float): return Vector2(g.x - table_x, g.z - bz).length() < 0.28)
-		var on_bar := absf(g.y - ClubVenue.BAR_TOP) < 0.001 and g.x > ClubVenue.BAR_FRONT \
-				and g.x < ClubVenue.BAR_FRONT + ClubVenue.COUNTER_DEPTH and g.z > ClubVenue.BAR_FROM and g.z < ClubVenue.BAR_TO
+		var on_bar := absf(g.y - ClubVenue.BAR_TOP) < 0.001 and g.x > club.bar_front() \
+				and g.x < club.bar_front() + ClubVenue.COUNTER_DEPTH and g.z > ClubVenue.BAR_FROM and g.z < ClubVenue.BAR_TO
 		glasses_ok = glasses_ok and (on_table or on_bar)
 	check("every glass left stands on a booth table or the bar (%d)" % club.glass_spots.size(), glasses_ok)
 	var dust := club.find_child("Dust", false, false) as MultiMeshInstance3D
@@ -8131,7 +8131,7 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	for open: Array in [[&"grid", 0, GridVenue.OPEN_FLOOR], [&"chalk", ChalkVenue.OPEN_SKY, ChalkVenue.OPEN_FLOOR]]:
 		studio.set_venue(open[0], false, open[1])
 		var half: float = studio.venue.live_room_half()
-		var front := -Studio.ROOM_DEPTH * 0.5 + 0.35
+		var front := Studio.ROOM_FRONT + 0.05
 		var round_the_room := [Vector2(-half - open[2] + 0.5, 3.0), Vector2(half + open[2] - 0.5, 3.0),
 				Vector2(-half, Venue.LIVE_ROOM_BACK + open[2] - 0.5), Vector2(0, front - open[2] + 0.5),
 				Vector2(-studio.room_width * 0.5 - 1.0, 0.0)]
@@ -13174,7 +13174,7 @@ func _test_every_venue_has_a_mirror_you_can_see_yourself_in() -> void:
 		var at := mirror.global_transform
 		var half := studio.room_width * 0.5
 		check("inside the %s's footprint, on the floor plan's edge (%s)" % [id, at.origin],
-				absf(at.origin.x) < half and at.origin.z < Studio.ROOM_DEPTH * 0.5 + 0.3
+				absf(at.origin.x) < half and at.origin.z < Studio.ROOM_BACK
 				and absf(at.origin.x) > half - 0.4)
 		check("facing into the room", at.basis.z.dot(Vector3(0, 0, Studio.MIX_POSITION_Z) - at.origin) > 0.0)
 		check("framed in the %s's own style (%d parts)" % [id, mirror.get_child_count()],
@@ -14474,15 +14474,16 @@ func _test_the_radio_plane_flies_where_you_point() -> void:
 	rc.work(true)
 	check("a click sets it back on its wheels", rc.mode == RcPlaneItem.Mode.LANDED and rc.plane.global_basis.y.y > 0.99)
 
-	# Into a wall: crashed too.
+	# Into a wall: crashed too. The live room's right-hand wall, in a room of the base width.
+	var wall_x := Venue.LIVE_ROOM_HALF + (Studio.ROOM_WIDTH - Venue.DRAWN_WIDTH) * 0.5
 	rc.mode = RcPlaneItem.Mode.FLYING
-	rc.at = Vector3(5.7, 1.0, 6.6)
+	rc.at = Vector3(wall_x - 0.6, 1.0, 6.6)
 	rc.heading = -PI * 0.5
 	rc.slope = 0.0
 	rc.speed = RcPlaneItem.SPEED
-	hand.pose = frame * Transform3D(Basis.looking_at(Vector3(1, 0, 0), Vector3.UP), Vector3(4.5, 1.0, 6.6))
+	hand.pose = frame * Transform3D(Basis.looking_at(Vector3(1, 0, 0), Vector3.UP), Vector3(wall_x - 1.8, 1.0, 6.6))
 	run.call(0.5)
-	check("flown at a wall, it crashes into it", rc.mode == RcPlaneItem.Mode.CRASHED and rc.at.x < 6.25)
+	check("flown at a wall, it crashes into it", rc.mode == RcPlaneItem.Mode.CRASHED and rc.at.x < wall_x - 0.05)
 	run.call(1.5)
 	rc.work(true)
 

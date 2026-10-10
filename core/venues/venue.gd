@@ -199,7 +199,7 @@ func zone_solids() -> Array:
 ## control room, short of the booth and the riser.
 func prop_shelf_spot() -> Transform3D:
 	var x := -live_room_half() + 0.08 + ZoneKit.SHELF.z * 0.5
-	var z := Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.3 + ZoneKit.SHELF.x * 0.5
+	var z := Studio.ROOM_BACK + 0.3 + ZoneKit.SHELF.x * 0.5
 	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0, z))
 
 
@@ -303,7 +303,7 @@ func dart_spot(n: int) -> Transform3D:
 ## room from the shelf.
 func hoop_spot() -> Transform3D:
 	var x := live_room_half() - 0.12 + Hoop.POLE_Z
-	var z := Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.32
+	var z := Studio.ROOM_BACK + 0.32
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, z))
 
 
@@ -387,7 +387,7 @@ func _dress_prop_shelf(top: Material, frame: Material, lamp := Color(1.0, 0.76, 
 ## it is for people. In the studio it is the live room; in an open venue, where nothing else
 ## would stop you, it is where the floor ends being somewhere.
 func back_of_house() -> Rect2:
-	var front := Studio.ROOM_DEPTH * 0.5 + 0.3
+	var front := Studio.ROOM_BACK
 	var half := live_room_half() - 0.05
 	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK - 0.05 - front)
 
@@ -406,7 +406,7 @@ func rooms() -> Array[Rect2]:
 func beside_the_desk() -> Array[Rect2]:
 	var half := live_room_half()
 	var cr := room_width * 0.5
-	var z := -Studio.ROOM_DEPTH * 0.5 + 0.35
+	var z := Studio.ROOM_FRONT + 0.05
 	var depth := Studio.ROOM_DEPTH - 0.05
 	return [Rect2(-half + 0.05, z, half - cr, depth), Rect2(cr - 0.05, z, half - cr, depth)]
 
@@ -417,7 +417,7 @@ func beside_the_desk() -> Array[Rect2]:
 ## meeting it, which Walker.outline takes as floor on both sides.
 func open_floor(margin: float) -> Rect2:
 	var half := live_room_half() + margin
-	var front := -Studio.ROOM_DEPTH * 0.5 + 0.35 - margin
+	var front := Studio.ROOM_FRONT + 0.05 - margin
 	return Rect2(-half, front, half * 2.0, LIVE_ROOM_BACK + margin - front)
 
 
@@ -426,16 +426,20 @@ func live_room_half() -> float:
 	return LIVE_ROOM_HALF + _grow()
 
 
-## How much each side of the room has grown past the base width.
+## How much each side of the room has grown past the width every venue was drawn round, so the
+## back of house and the strips beside the control room keep their room as it widens.
+const DRAWN_WIDTH := 6.4
+
+
 func _grow() -> float:
-	return (room_width - SessionLayout.BASE_WIDTH) * 0.5
+	return (room_width - DRAWN_WIDTH) * 0.5
 
 
 ## A lit or drawn outline of the working footprint, at floor level, as a set of corners.
 func footprint_corners() -> PackedVector2Array:
 	var hw := room_width * 0.5 - 0.05
-	var front := Studio.ROOM_DEPTH * 0.5 + 0.3 - 0.05
-	var back := -Studio.ROOM_DEPTH * 0.5 + 0.3 + 0.05
+	var front := Studio.ROOM_BACK - 0.05
+	var back := Studio.ROOM_FRONT + 0.05
 	return PackedVector2Array([Vector2(-hw, back), Vector2(hw, back), Vector2(hw, front),
 			Vector2(-hw, front)])
 

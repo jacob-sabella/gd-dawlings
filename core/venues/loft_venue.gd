@@ -17,7 +17,7 @@ const HEIGHT := 5.6
 ## Brick, 32 cm: an outside wall of a building this age, and thick enough for a deep reveal.
 const WALL := 0.32
 ## Where the room's front wall stands, in front of the desk. The footprint's front edge.
-const FRONT := -Studio.ROOM_DEPTH * 0.5 + 0.3
+const FRONT := Studio.ROOM_FRONT
 ## The windows' sill and head, and how wide one bay of glass is.
 const SILL := 0.95
 const HEAD := 4.6

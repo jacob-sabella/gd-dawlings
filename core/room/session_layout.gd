@@ -16,7 +16,7 @@ extends RefCounted
 ## and makes it the same answer for every participant without anything having to be sent.
 
 ## The room as it was authored, and the smallest it gets.
-const BASE_WIDTH := 6.4
+const BASE_WIDTH := Studio.ROOM_WIDTH
 ## Rooms grow in whole steps, so one more track does not move every wall by a centimetre and
 ## rebuild the venue on each.
 const WIDTH_STEP := 0.8

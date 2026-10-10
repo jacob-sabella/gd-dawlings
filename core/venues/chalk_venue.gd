@@ -200,7 +200,7 @@ func rooms() -> Array[Rect2]:
 ## panels, a pair of speakers on stands -- and lamps hanging down from the ceiling line.
 func _sketch_the_room() -> void:
 	var half := live_room_half()
-	var z0 := -Studio.ROOM_DEPTH * 0.5
+	var z0 := (Studio.ROOM_FRONT - 0.3)
 	var z1 := LIVE_ROOM_BACK
 	var h := ROOM_HEIGHT
 	var lines: Array = []

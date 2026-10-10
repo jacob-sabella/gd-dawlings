@@ -328,6 +328,9 @@ can finish music in, saving DAWproject. Steps, in order:
      129615: one gone). It passed the next 4 runs. Like step 0's flaky click, watch for it.
      Seen again 2026-10-10 (34296, 130254: one gone at the same place), the next 2 runs clean:
      twice now, on the guest's headless dummy driver, which mixes in 85 ms lumps.
+     Again 2026-10-10 with the bigger room, 3 of 14 runs (0 of 7 without it, within chance),
+     always the click at ~82000 and every packet delivered: the host's song clock stood still a
+     second, not the feed. A probe with a frame-timing _process added never failed in 8 runs.
 6. Editing.
    - **Done 2026-10-10 (6a), items:** DAW verbs `delete_selected`, `duplicate_selected` (the
      copy goes right after the original and takes the selection; a looped item carries on where
