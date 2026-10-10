@@ -38,7 +38,8 @@ jobs:
       - name: Compilers
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q cmake g++ mingw-w64
+          # The keys helper (native/keys.c), which the suite builds and plays, is PipeWire and ALSA.
+          sudo apt-get install -y -q cmake g++ mingw-w64 pkg-config libpipewire-0.3-dev libasound2-dev
           # The posix thread model, which the local builds (Arch's MinGW) are made with.
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
