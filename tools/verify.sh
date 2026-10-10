@@ -60,4 +60,15 @@ if [ -n "$lua_bin" ]; then
   "$lua_bin" tests/bridge_decode_test.lua || status=1
 fi
 
+# The engine's own checks, in its own project (vendor/dawkit, a separate repository). The game
+# runs them too because it is the engine's first host: a change here that breaks dawkit, or a
+# dawkit update that breaks its own checks, stops this build either way.
+if [ -x vendor/dawkit/tools/test.sh ]; then
+  printf '[dawkit] '
+  vendor/dawkit/tools/test.sh || status=1
+else
+  echo "verify: vendor/dawkit is missing -- run: git submodule update --init"
+  status=1
+fi
+
 exit "$status"

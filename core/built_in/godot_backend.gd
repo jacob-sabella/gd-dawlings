@@ -115,6 +115,24 @@ func _dress_fx() -> void:
 			add_effect(index, spec[0], spec[1])
 
 
+func fx_kind(track_index: int, fx_index: int) -> StringName:
+	return _kinds.get(track_index, {}).get(fx_index, &"")
+
+
+## A whole project has been put into the cache: its effects, its buses and its players are made
+## again from it, and the song's parts rendered at its tempo.
+func project_loaded(kinds: Dictionary) -> void:
+	_kinds = kinds.duplicate(true)
+	_take_streams.clear()
+	for list in _players.values():
+		for p in list:
+			(p as Node).queue_free()
+	_players.clear()
+	_build_buses()
+	_apply_everything()
+	_render_parts()
+
+
 ## Puts an effect at the end of a track's chain. `settings` are by parameter name, normalised.
 func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	var t := state.track(track_index)

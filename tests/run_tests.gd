@@ -157,6 +157,8 @@ func _ready() -> void:
 	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
+	_test_a_project_goes_into_dawkit_and_back()
+	_test_a_clip_keeps_its_fades_and_gain()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
 	_test_the_host_places_an_audio_take()
@@ -8356,6 +8358,78 @@ func _test_a_late_timeline_poll_does_not_undo_an_edit() -> void:
 			link._timeline_epoch)
 	check("one sent after it is", link.state.item(1, 0).selected)
 	link.queue_free()
+
+
+func _test_a_project_goes_into_dawkit_and_back() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	DAW.set_track_volume(6, 0.5)
+	DAW.set_loop_range(8.0, 16.0)
+	DAW.set_looping(true)
+	var first := ProjectBridge.capture(backend)
+	check("the demo is a project of its own tracks (%d)" % first.tracks.size(),
+			first.tracks.size() == s.tracks.size() and first.problems().is_empty())
+	check("the kick is in the DRUMS folder, as a parent", first.track("t2").parent == "t1"
+			and first.track("t6").parent == "")
+	check("an effect of the engine's own keeps its kind",
+			first.tracks.any(func(t): return t.effects.any(func(e): return not e.kind.is_empty())))
+	check("the Rhodes part keeps its notes",
+			first.tracks.any(func(t): return t.clips.any(func(c): return c.is_midi())))
+
+	var replaced := [0]
+	DAW.project_replaced.connect(func(): replaced[0] += 1)
+	var fresh := GodotBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	DAW.set_track_volume(3, 0.1)
+	check("a fresh engine has history to lose", DAW.state.undo_depth > 0)
+	var refused := ProjectBridge.load(first, fresh)
+	check("the project loads (%s)" % [refused], refused.is_empty())
+	check("and says it replaced the project, once", replaced[0] == 1)
+	check("with nothing left to undo", DAW.state.undo_depth == 0)
+	var again := ProjectBridge.capture(fresh)
+	check("captured again it is the same project (%s)" % first.first_difference(again), first.same_as(again))
+	var bus := func(index: int) -> int: return AudioServer.get_bus_index("%s%d" % [GodotBackend.BUS_PREFIX, index])
+	check("the loaded kick still plays through the DRUMS bus",
+			AudioServer.get_bus_send(bus.call(2)) == AudioServer.get_bus_name(bus.call(1)))
+	close_to("and the loaded bass fader is the bus's gain", AudioServer.get_bus_volume_db(bus.call(6)),
+			fresh.taper_to_db(0.5), 0.01)
+
+	var smaller := first.duplicate()
+	smaller.tracks.resize(4)
+	for t in smaller.tracks:
+		t.sends = t.sends.filter(func(sd): return smaller.track(sd.target) != null)
+	check("a smaller project loads over a bigger one", ProjectBridge.load(smaller, fresh).is_empty())
+	check("and the desk has only its tracks (%d)" % DAW.state.tracks.size(), DAW.state.tracks.size() == 4)
+	var broken := first.duplicate()
+	broken.tracks[0].parent = "t99"
+	check("a project with a broken folder is refused", not ProjectBridge.load(broken, fresh).is_empty())
+	check("and the open one is left alone", DAW.state.tracks.size() == 4)
+
+
+func _test_a_clip_keeps_its_fades_and_gain() -> void:
+	var item := MixState.ItemState.new()
+	item.start = 4.0
+	item.length = 2.0
+	item.fade_in = 0.05
+	item.fade_out = 0.5
+	item.gain_db = -3.0
+	var back: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
+	check("fades and gain cross the wire", back.fade_in == 0.05 and back.fade_out == 0.5 and back.gain_db == -3.0)
+	var plain := MixState.ItemState.new()
+	plain.length = 1.0
+	check("an item without them costs what it did", MixWire._pack_items([plain]).size() == 5)
+	_offline()
+	DAW.state.set_track_items(2, [item])
+	DAW.select_item(2, 0)
+	DAW.split_selected(5.0)
+	var halves: Array = DAW.state.track(2).items
+	check("a split keeps the fade in on the left and the fade out on the right",
+			halves.size() == 2 and halves[0].fade_in == 0.05 and halves[0].fade_out == 0.0
+			and halves[1].fade_in == 0.0 and halves[1].fade_out == 0.5)
+	check("and both halves keep the gain", halves[0].gain_db == -3.0 and halves[1].gain_db == -3.0)
 
 
 func _test_the_built_in_engine_is_a_real_mix() -> void:

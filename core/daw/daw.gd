@@ -34,8 +34,9 @@ signal master_changed(field: StringName)
 signal fx_changed(track_index: int, fx_index: int)
 signal timeline_changed()
 signal bank_changed()
+signal project_replaced()
 
-const RELAYED := [&"track_added", &"track_changed", &"transport_changed", &"master_changed",
+const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
 		&"fx_changed", &"timeline_changed", &"bank_changed"]
 
 ## Every verb a surface may use, as data. The same list as the methods on DAWBackend -- it is

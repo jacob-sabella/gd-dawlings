@@ -109,7 +109,15 @@ can finish music in, saving DAWproject. Steps, in order:
    failing (1 settle + 3 clicks in about 4.6 s). It failed 2 runs in 6 once and then not in 21.
    The host now records 1 s longer. The cause of the missed click was not found: watch for
    `take: click` lines in the probe output if it comes back.
-1. Project model the engine owns: next.
+1. **Done 2026-10-09.** The engine is a separate product, **dawkit**, at the user's request
+   ("build this daw project layer separate from the game. I may sell it on its own later"). Its
+   own repository at `~/Projects/dawkit` is proprietary ("All rights reserved"), and this game
+   holds it as a submodule (`vendor/dawkit`, symlinked to `addons/dawkit`). It has a project
+   model: `DawKitProject`/`Track`/`Clip`/`Effect`/`Send`/`Marker`, with a plain form that comes
+   back identical, and `problems()` for broken references. dawkit has 23 checks of its own. The
+   game's side is `ProjectBridge`, which captures and loads round-trip exactly in the suite, and
+   a project opened mid-session reaches the guest whole (`session_probe.sh --built-in`). Clips
+   gained fades and gain, which cross the wire and survive a split.
 2. DAWproject save/load, with New/Open/Save in the room and on the session panel.
 3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
@@ -159,6 +167,16 @@ Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic 
   colours. Not started: nobody has asked for big rooms yet.
 
 ## Waiting on the user
+
+- **dawkit's licence and name.** It is "All rights reserved" for now, which keeps every option
+  open, and "dawkit" is a working name (every class is prefixed `DawKit`, so a rename is one
+  search and replace). Which licence to sell it under (a commercial licence, dual GPL and
+  commercial, Asset Library terms), and under what name, is the user's call. Also: should it
+  stay a GDScript addon (source visible to buyers), or move its engine into a GDExtension
+  (compiled, closed) before it is sold?
+- **dawkit's submodule URL** is the local path `/home/jsabella/Projects/dawkit`. Once dawkit
+  has a private remote, `.gitmodules` should point at it, or a clone of reaper-3d elsewhere will
+  not find the engine.
 
 - **A guest hearing their own voice with the mic.** The host hears themself through the DAW's
   input monitoring, which the mic turns on. A guest's voice is recorded on the guest's machine

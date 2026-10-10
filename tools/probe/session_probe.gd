@@ -235,6 +235,16 @@ func _host(port: int) -> void:
 	await _until(12.8)
 	if not _built_in:
 		DAW.transport_stop()
+	else:
+		# A different project opened mid-session reaches the guest whole: six tracks, the first
+		# renamed, where there were thirteen.
+		var other := ProjectBridge.capture(DAW.backend as OfflineBackend)
+		other.tracks.resize(6)
+		for t in other.tracks:
+			t.sends = t.sends.filter(func(sd): return other.track(sd.target) != null)
+		other.tracks[0].name = "Opened"
+		var refused := ProjectBridge.load(other, DAW.backend as OfflineBackend)
+		check("I opened another project mid-session (%s)" % [refused], refused.is_empty())
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -479,6 +489,11 @@ func _guest(port: int) -> void:
 		check("and it came back to me with its waveform",
 				mine.size() == 1 and mine[0].peaks.size() > 100)
 		ga.record_with_host = false
+	else:
+		await _until(13.8)
+		check("the host's newly opened project reached me whole (%d tracks, '%s')"
+				% [DAW.state.tracks.size(), DAW.state.track(1).name],
+				DAW.state.tracks.size() == 6 and DAW.state.track(1).name == "Opened")
 
 	await _until(15.0)
 	print("notices: ", _notices)

@@ -286,6 +286,9 @@ static func _unpack_items(args: Array) -> Array:
 			item.source_offset = maxf(float(audio.get("offset", 0.0)), 0.0)
 			var peaks = audio.get("peaks", PackedByteArray())
 			item.peaks = peaks if peaks is PackedByteArray else PackedByteArray()
+			item.fade_in = maxf(float(audio.get("fade_in", 0.0)), 0.0)
+			item.fade_out = maxf(float(audio.get("fade_out", 0.0)), 0.0)
+			item.gain_db = float(audio.get("gain_db", 0.0))
 			i += 1
 		out.append(item)
 	return out
@@ -302,8 +305,17 @@ static func _pack_items(items: Array) -> Array:
 				1.0 if item.selected else 0.0])
 		if not item.notes.is_empty():
 			out.append(item.notes)
-		if not item.source.is_empty():
-			out.append({"source": item.source, "offset": item.source_offset, "peaks": item.peaks})
+		# One optional Dictionary for whatever is not a MIDI payload: a recorded file, and the
+		# clip's fades and gain. Absent when there is neither, so an item costs what it did.
+		if not item.source.is_empty() or item.has_clip_shape():
+			var extra := {}
+			if not item.source.is_empty():
+				extra = {"source": item.source, "offset": item.source_offset, "peaks": item.peaks}
+			if item.has_clip_shape():
+				extra["fade_in"] = item.fade_in
+				extra["fade_out"] = item.fade_out
+				extra["gain_db"] = item.gain_db
+			out.append(extra)
 	return out
 
 

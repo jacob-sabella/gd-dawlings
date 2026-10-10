@@ -96,6 +96,34 @@ offline backend's own mix, with its state, undo and replication, turned into God
 Not there yet: recording, your own audio files, playing MIDI items through a synth, and
 third-party plugins, which Godot cannot host.
 
+### dawkit: the engine is its own product
+
+The DAW engine is being built as **dawkit**, a separate repository (`~/Projects/dawkit`,
+proprietary, so it can be sold on its own), not as part of this game. It is a Godot addon with
+its own tests (`tools/test.sh` there) and no reference to anything in reaper-3d. This repository
+holds it as a git submodule at `vendor/dawkit`, with a symlink `addons/dawkit` pointing at the
+addon inside it. `vendor/.gdignore` keeps Godot from scanning dawkit's own project and tests a
+second time.
+
+The direction of dependency is one way. The game adapts to dawkit in
+`core/built_in/project_bridge.gd` (`ProjectBridge`), and dawkit never adapts to the game:
+
+- `ProjectBridge.capture(backend)` turns the stand-in's or the built-in engine's mix into a
+  `DawKitProject`: tapers to dB, pan 0..1 to -1..1, Reaper's folder depth deltas to parents,
+  bank indices to track ids ("t1"...), the engine's effect kinds, and clips with fades, gain,
+  files and notes.
+- `ProjectBridge.load(project, backend)` does the reverse. It replaces the whole project,
+  refuses one whose references are broken (`DawKitProject.problems()`), drops undo history,
+  lets the backend rebuild (`OfflineBackend.project_loaded`; the built-in engine lays its buses,
+  effects and players down again), and emits `project_replaced`. Session answers that by
+  sending every guest the new project whole, as it does for a guest that has just joined.
+- Captured, loaded and captured again, a project is `same_as` the first. Track and master
+  levels are read from the cache's own decibels, because taper to dB and back is not exact.
+  Send levels are rounded to a millionth of a dB.
+
+What moves into dawkit next, step by step: the file format, then the mixer and transport
+(today `GodotBackend` here), then everything after.
+
 ### Its file format: DAWproject
 
 The built-in engine saves and opens **DAWproject** (`.dawproject`,

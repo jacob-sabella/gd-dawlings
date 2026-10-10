@@ -20,6 +20,10 @@ extends DAWBackend
 ## does the studio COST at session scale, and does the bank paging work -- can be asked without
 ## Reaper running, which is the whole point of having a stand-in at all.
 var track_count: int = 0
+## What the project is called, and the note value of one beat: neither is on the desk yet, but
+## both are in a project file and have to survive being opened and saved again.
+var project_title := "Demo"
+var beat_unit := 4
 ## Plugin windows for the suite: the stand-in has no plugins to draw, so it says it cannot show
 ## their windows unless this is set, and then shows a plain picture that records what was done
 ## to it (PluginWindow). Never set by anything that ships.
@@ -63,6 +67,19 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.PLUGIN_WINDOW:
 		return stand_in_windows
 	return true
+
+
+## Which of the engine's own effects a slot is, or empty when it is only a name. The stand-in's
+## FX are names standing for Reaper plugins; the built-in engine's are real.
+func fx_kind(_track_index: int, _fx_index: int) -> StringName:
+	return &""
+
+
+## Called once a whole project has been put into `state` (ProjectBridge.load). `kinds` is
+## track index -> fx index -> effect kind. The stand-in has nothing to rebuild; the built-in
+## engine lays its buses and effects down again.
+func project_loaded(_kinds: Dictionary) -> void:
+	pass
 
 
 func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
@@ -700,6 +717,13 @@ func redo() -> void:
 	# Re-opening a gesture by redoing it would be wrong: the next drag is a new step.
 	step["t"] = 0
 	_undo.append(step)
+	_say_depth()
+
+
+## A different project has been opened: what could be undone belonged to the old one.
+func forget_history() -> void:
+	_undo.clear()
+	_redo.clear()
 	_say_depth()
 
 

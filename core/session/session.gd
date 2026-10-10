@@ -233,6 +233,8 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	# Deferred: DAW is an autoload too, and may not be in the tree yet.
+	(func(): DAW.project_replaced.connect(_on_project_replaced)).call_deferred()
 
 
 ## Quitting while hosting is ending the session, and says so. Blocking, briefly, because there
@@ -1188,6 +1190,13 @@ func _receive_state_durable(batch: Array) -> void:
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _receive_state_volatile(batch: Array) -> void:
 	DAW.backend.apply_replicated(batch)
+
+
+## The host opened a different project: every guest gets it whole, the same way a guest that
+## has just joined does. Deltas would only describe what changed, and everything did.
+func _on_project_replaced() -> void:
+	for id in _audience():
+		_send_snapshot_to(id)
 
 
 ## A joining guest gets the whole session at once, reliably, before any delta reaches it.

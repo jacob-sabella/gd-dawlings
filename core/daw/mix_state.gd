@@ -28,6 +28,9 @@ signal fx_changed(track_index: int, fx_index: int)
 signal timeline_changed()
 ## Which slice of the project the track indices currently mean.
 signal bank_changed()
+## A whole different project was opened in place of this one. Everything is new: a desk
+## rebuilds, and a session host sends its guests the lot again.
+signal project_replaced()
 
 
 class SendState extends RefCounted:
@@ -158,6 +161,13 @@ class ItemState extends RefCounted:
 	var source_offset: float = 0.0
 	## The file's overview, AudioTake.PEAKS_PER_SECOND bytes a second, for drawing.
 	var peaks := PackedByteArray()
+	## Linear fade lengths at each end, in seconds, and the clip's own gain.
+	var fade_in: float = 0.0
+	var fade_out: float = 0.0
+	var gain_db: float = 0.0
+
+	func has_clip_shape() -> bool:
+		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0
 
 	func end() -> float:
 		return start + length

@@ -309,8 +309,14 @@ func _locally_split(seconds: float) -> int:
 				right.source = item.source
 				right.peaks = item.peaks
 				right.source_offset = item.source_offset + (seconds - item.start)
+				# Each half keeps the end it had: the fade in stays on the left, the fade out goes
+				# with the right, and both keep the clip's gain.
+				right.gain_db = item.gain_db
+				right.fade_out = minf(item.fade_out, right.length)
 				_split_notes(item, right, seconds)
 				item.length = seconds - item.start
+				item.fade_out = 0.0
+				item.fade_in = minf(item.fade_in, item.length)
 				added.append(right)
 				cut += 1
 		lane.append_array(added)
