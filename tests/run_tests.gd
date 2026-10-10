@@ -170,7 +170,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_saves_and_opens_dawproject()
 	_test_the_official_dawproject_examples_open_in_the_game()
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
-	_test_sound_files_are_brought_in_onto_a_track()
+	await _test_sound_files_are_brought_in_onto_a_track()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
 	_test_a_looped_item_survives_the_wire_and_a_split()
@@ -9092,8 +9092,14 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	DAW.seek(4.0)
 	var depth := maxi(DAW.state.undo_depth, 0)
 	var failed := panel.bring_in_files(PackedStringArray([first, second]))
+	check("nothing is placed until a file is in, off the main thread (%d)" % DAW.state.track(track).items.size(),
+			failed.is_empty() and DAW.importing() and DAW.state.track(track).items.is_empty())
+	var done: Array = await DAW.audio_import_done
+	# The panel hears the same signal; in whichever order, it has by the next frame.
+	await get_tree().process_frame
 	var items: Array = DAW.state.track(track).items
-	check("both files land on the chosen track (%s, %d items)" % [failed, items.size()], failed.is_empty() and items.size() == 2)
+	check("both files land on the chosen track (%s, %d items)" % [done, items.size()],
+			(done[1] as PackedStringArray).is_empty() and items.size() == 2 and done[2] == track and not DAW.importing())
 	if items.size() == 2:
 		close_to("the first at the playhead", items[0].start, 4.0, 0.001)
 		close_to("a second long", items[0].length, 1.0, 0.0001)
@@ -9128,6 +9134,8 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	check("off the lanes, no spot", lanes.drop_spot(above, false).is_empty())
 	var before: int = DAW.state.track(other).items.size()
 	failed = panel.bring_in_files(PackedStringArray([second]), spot[0], spot[1])
+	done = await DAW.audio_import_done
+	await get_tree().process_frame
 	var landed: Array = DAW.state.track(other).items.filter(func(it): return it.source.begins_with("tone two"))
 	check("dropped there, the file lands there (%s)" % [failed], failed.is_empty()
 			and DAW.state.track(other).items.size() == before + 1 and landed.size() == 1
@@ -9144,9 +9152,38 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	f.store_string("not a sound")
 	f.close()
 	failed = panel.bring_in_files(PackedStringArray([bad]))
+	done = await DAW.audio_import_done
+	await get_tree().process_frame
 	var shown: String = panel._toasts.get_child(-1).get_child(0).text
 	check("a file that is not sound is turned away, to the host alone (%s)" % shown,
-			failed.size() == 1 and notices.is_empty() and shown.contains("not a sound file"))
+			failed.is_empty() and (done[1] as PackedStringArray).size() == 1 and notices.is_empty()
+			and shown.contains("not a sound file"))
+
+	# A long file: the call comes straight back while it is read, and the frames keep coming.
+	var long_wav := AudioStreamWAV.new()
+	long_wav.format = AudioStreamWAV.FORMAT_16_BITS
+	long_wav.stereo = true
+	long_wav.mix_rate = 44100
+	var long_pcm := PackedByteArray()
+	for n in 120:
+		long_pcm.append_array(pcm)
+	long_wav.data = long_pcm
+	var long_path := dir.path_join("long one.wav")
+	long_wav.save_to_wav(long_path)
+	var asked := Time.get_ticks_usec()
+	failed = panel.bring_in_files(PackedStringArray([long_path]), track, 30.0)
+	var returned_ms := (Time.get_ticks_usec() - asked) / 1000.0
+	var frames := 0
+	while DAW.importing():
+		await get_tree().process_frame
+		frames += 1
+	var whole_ms := (Time.get_ticks_usec() - asked) / 1000.0
+	var long_item = DAW.state.track(track).items.filter(func(it): return it.source.begins_with("long one"))
+	check("a minute of sound comes back at once (%.1f ms of %.0f ms, %d frames meanwhile)" % [returned_ms, whole_ms, frames],
+			failed.is_empty() and returned_ms < 20.0 and frames >= 2 and long_item.size() == 1
+			and absf(long_item[0].length - 60.0) < 0.001)
+	DAW.undo()
+	notices.clear()
 
 	var saved := dir.path_join("with_audio.dawproject")
 	check("a project with brought-in audio saves", DAW.save_project_as(saved).is_empty())
@@ -9172,13 +9209,14 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	panel._refresh_project()
 	check("a guest is not offered it", not panel._import_box.visible)
 	check("and a guest's drop is refused", not DAW.import_audio(first, track, 0.0)["error"].is_empty()
+			and not DAW.import_audio_files(PackedStringArray([first]), track, 0.0).is_empty()
 			and panel.bring_in_files(PackedStringArray([first])).size() == 1)
 	Session.notice.disconnect(hear)
 	remove_child(panel)
 	panel.free()
 	Session.start_solo()
 	_offline()
-	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav", "tone two 2.wav"]:
+	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav", "tone two 2.wav", "long one.wav"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	OS.execute("rm", ["-rf", dir])
 

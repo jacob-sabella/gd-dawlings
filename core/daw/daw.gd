@@ -43,6 +43,12 @@ signal project_named()
 signal project_saved(said: PackedStringArray)
 ## See DAWBackend.render_finished.
 signal render_finished(files: PackedStringArray, problems: PackedStringArray)
+## A file `import_audio_files` was given is in, or could not be: {"error", "seconds", "name"},
+## as `import_audio` answers.
+signal audio_imported(path: String, result: Dictionary)
+## The last of a batch of `import_audio_files` is done: the files that came in, the ones that did
+## not, and the track they went to.
+signal audio_import_done(brought: PackedStringArray, failed: PackedStringArray, track: int)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
 		&"fx_changed", &"timeline_changed", &"bank_changed", &"project_named"]
@@ -79,6 +85,7 @@ const TEMPO_MAX := 960.0
 
 
 func _ready() -> void:
+	set_process(false)
 	# An autoload that opened a socket on startup would make `godot --headless` in CI try to
 	# talk to a DAW. Nothing happens until a scene asks for one.
 	use(OfflineBackend.new(), false)
@@ -605,14 +612,93 @@ func import_audio(path: String, track_index: int, start: float) -> Dictionary:
 	var refusal := audio_take_refusal(track_index, 1.0)
 	if not refusal.is_empty():
 		return {"error": refusal}
-	var media = backend.get(&"media")
-	var name := AudioImport.file_name_for(path, func(n: String) -> bool:
-		return FileAccess.file_exists(AudioTake.DIR.path_join(n)) or (media is Dictionary and media.has(n)))
+	var name := _import_name(path)
 	var done := DawKitAudioFile.bring_in(path, ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	if not str(done.get("error", "")).is_empty():
 		return {"error": done["error"]}
 	insert_audio_take(track_index, start, name, done["seconds"], done["peaks"], path.get_file().get_basename())
 	return {"error": "", "seconds": done["seconds"], "name": name}
+
+
+## Sound files onto a track one after another from `start`, read and written on a worker thread
+## so the room keeps moving while a long file is decoded. Each is placed, one undo step, when it
+## is in (`audio_imported`), and `audio_import_done` follows the last. Batches queue behind each
+## other. Host only. Answers why not, or "".
+func import_audio_files(paths: PackedStringArray, track_index: int, start: float) -> String:
+	if not Session.is_authority():
+		return "only the host brings in files: the project is on their machine"
+	var refusal := audio_take_refusal(track_index, 1.0)
+	if not refusal.is_empty():
+		return refusal
+	if paths.is_empty():
+		return ""
+	_imports.append({"paths": Array(paths), "track": track_index, "at": maxf(start, 0.0),
+			"brought": [], "failed": []})
+	set_process(true)
+	return ""
+
+
+## Whether files are still being brought in.
+func importing() -> bool:
+	return not _imports.is_empty()
+
+
+## Batches waiting or under way, the first the one being read.
+var _imports: Array = []
+## The worker reading the first batch's first file: [task id, its result (filled by the worker),
+## the name it is written under], or [] between files.
+var _import_job: Array = []
+
+
+func _process(_delta: float) -> void:
+	if _imports.is_empty():
+		set_process(false)
+		return
+	var batch: Dictionary = _imports[0]
+	if _import_job.is_empty():
+		var path: String = batch["paths"][0]
+		var name := _import_name(path)
+		var result := {}
+		var dest := ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+		var task := WorkerThreadPool.add_task(func(): result.merge(DawKitAudioFile.bring_in(path, dest)),
+				false, "bring in %s" % path.get_file())
+		_import_job = [task, result, name]
+		return
+	if not WorkerThreadPool.is_task_completed(_import_job[0]):
+		return
+	WorkerThreadPool.wait_for_task_completion(_import_job[0])
+	var done: Dictionary = _import_job[1]
+	var name: String = _import_job[2]
+	_import_job = []
+	var path: String = batch["paths"].pop_front()
+	var track: int = batch["track"]
+	var why := str(done.get("error", ""))
+	if why.is_empty():
+		why = audio_take_refusal(track, float(done["seconds"]))
+		if not why.is_empty():
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
+	var answer := {"error": why}
+	if why.is_empty() and Session.is_authority():
+		insert_audio_take(track, batch["at"], name, done["seconds"], done["peaks"], path.get_file().get_basename())
+		batch["at"] += float(done["seconds"])
+		answer = {"error": "", "seconds": done["seconds"], "name": name}
+		(batch["brought"] as Array).append(path)
+	else:
+		if why.is_empty():
+			answer["error"] = "only the host brings in files: the project is on their machine"
+		(batch["failed"] as Array).append(path)
+	audio_imported.emit(path, answer)
+	if (batch["paths"] as Array).is_empty():
+		_imports.pop_front()
+		audio_import_done.emit(PackedStringArray(batch["brought"]), PackedStringArray(batch["failed"]), track)
+
+
+## A name among the takes for a file brought in, apart from any already there or in the project.
+func _import_name(path: String) -> String:
+	var media = backend.get(&"media")
+	return AudioImport.file_name_for(path, func(n: String) -> bool:
+		return FileAccess.file_exists(AudioTake.DIR.path_join(n)) or (media is Dictionary and media.has(n)) \
+				or (not _import_job.is_empty() and _import_job[2] == n))
 
 
 ## Why a recorded take cannot be placed, in words for the person who played it, or "".

@@ -104,6 +104,8 @@ func _ready() -> void:
 	DAW.project_named.connect(_refresh_project)
 	DAW.timeline_changed.connect(_refresh_project)
 	get_window().files_dropped.connect(_on_files_dropped)
+	DAW.audio_imported.connect(_on_audio_imported)
+	DAW.audio_import_done.connect(_on_audio_import_done)
 	_refresh()
 
 
@@ -1114,11 +1116,12 @@ func drop_spot() -> Array:
 
 
 ## Sound files onto `track` (0: the import box's choice, else where the selection is) from `at`
-## (below 0: the playhead), one after another.
+## (below 0: the playhead), one after another. They are read in the background (see
+## DAW.import_audio_files): each that fails says why when it does, and the room hears what came
+## in once the last is done. Answers the files turned away at once.
 func bring_in_files(paths: PackedStringArray, track := 0, at := -1.0) -> PackedStringArray:
-	var failed := PackedStringArray()
 	if paths.is_empty():
-		return failed
+		return PackedStringArray()
 	if not Session.is_authority():
 		toast("Only the host can bring in files: the project is on their machine.")
 		return paths
@@ -1128,20 +1131,26 @@ func bring_in_files(paths: PackedStringArray, track := 0, at := -1.0) -> PackedS
 		track = AudioImport.target_track(DAW.state)
 	if at < 0.0:
 		at = DAW.state.position_seconds
-	var brought := PackedStringArray()
-	for path in paths:
-		var done := DAW.import_audio(path, track, at)
-		if not str(done["error"]).is_empty():
-			failed.append(path)
-			toast("Could not bring in %s: %s." % [path.get_file(), done["error"]])
-			continue
-		at += float(done["seconds"])
-		brought.append(path.get_file())
-	if not brought.is_empty():
-		var where = DAW.state.track(track)
-		Session.tell_room("%s brought in %s on %s." % [Session.local_name, ", ".join(brought),
-				where.display_name() if where != null else "track %d" % track])
-	return failed
+	var refused := DAW.import_audio_files(paths, track, at)
+	if not refused.is_empty():
+		toast("Could not bring in %s: %s." % [", ".join(Array(paths).map(func(p): return p.get_file())), refused])
+		return paths
+	toast("Bringing in %s…" % (paths[0].get_file() if paths.size() == 1 else "%d files" % paths.size()))
+	return PackedStringArray()
+
+
+func _on_audio_imported(path: String, result: Dictionary) -> void:
+	if not str(result["error"]).is_empty():
+		toast("Could not bring in %s: %s." % [path.get_file(), result["error"]])
+
+
+func _on_audio_import_done(brought: PackedStringArray, _failed: PackedStringArray, track: int) -> void:
+	if brought.is_empty():
+		return
+	var where = DAW.state.track(track)
+	Session.tell_room("%s brought in %s on %s." % [Session.local_name,
+			", ".join(Array(brought).map(func(p): return p.get_file())),
+			where.display_name() if where != null else "track %d" % track])
 
 
 func _ask_new() -> void:

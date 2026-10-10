@@ -161,8 +161,15 @@ can finish music in, saving DAWproject. Steps, in order:
    each one an undo step, and the room is told. `--bring-in <file>` does it at launch. dawkit
    checks each encoding to its last bit, and Ogg/MP3 by measured frequency and level.
    - **Not yet:** FLAC (needs a decoder in dawkit, since Godot has none); a guest sending a file
-     from their own machine; importing off the main thread (a 3-minute 24-bit file takes
-     1.9 s).
+     from their own machine.
+   - **Done 2026-10-10 (3b), importing off the main thread:** `DAW.import_audio_files` reads and
+     writes each file on a WorkerThreadPool task and places it on the main thread when it is in,
+     one undo step each, one file after another (so each starts where the last ended), batches
+     queued behind each other; `audio_imported` per file, `audio_import_done` per batch. The
+     panel says "Bringing in…" at once, a failure when it happens, and tells the room at the end.
+     A track removed meanwhile turns the file away and deletes what was written. Measured in the
+     suite: a minute of 16-bit stereo comes back from the call in 0.3 ms, read in 250 ms with 38
+     frames drawn meanwhile. `import_audio` (synchronous) stays for scripts.
    - **Done 2026-10-10 (3a), dropping onto a lane:** files let go with the cursor over the
      timeline's lanes go onto that lane's track from the beat under the cursor (the time itself
      with shift), one after another; anywhere else they go as before. `MouseInteractor.under_cursor`
@@ -273,6 +280,8 @@ can finish music in, saving DAWproject. Steps, in order:
        absolute limit is 15 ms for that reason.
    - Seen once: the default probe's guest missed a click in its timing check (frames 33661,
      129615: one gone). It passed the next 4 runs. Like step 0's flaky click, watch for it.
+     Seen again 2026-10-10 (34296, 130254: one gone at the same place), the next 2 runs clean:
+     twice now, on the guest's headless dummy driver, which mixes in 85 ms lumps.
 6. Editing.
    - **Done 2026-10-10 (6a), items:** DAW verbs `delete_selected`, `duplicate_selected` (the
      copy goes right after the original and takes the selection; a looped item carries on where
