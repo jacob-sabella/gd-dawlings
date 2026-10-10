@@ -252,8 +252,12 @@ can finish music in, saving DAWproject. Steps, in order:
    - **Done 2026-10-10 (6d), keys:** COPY and DEL on the timeline, in the corner under the track
      names, lit while items are selected. Dragging an item's edge (the last 4 mm of it, at most a
      quarter of it) trims that edge, snapped to the beat unless fine. The block is drawn at its new
-     edges while the contents stay put. Next: keys or a card for gain, fades, transpose,
-     quantise and tracks; fades drawn as curves rather than a flat volume per frame (needs
+     edges while the contents stay put. With exactly one item selected, a strip hangs under the
+     panel (`TimelineItemStrip`): GAIN (-24 to +12 dB), fade IN and OUT (squared, up to the
+     item's length) on knobs that edit when let go, so a turn is one undo step and one bridge
+     call; `-`/`+` transpose a semitone (fine: an octave) and `Q` quantises to the beat (fine:
+     sixteenths), lit for MIDI items. Next: adding, removing and renaming tracks from the
+     header (renaming needs text entry, so it goes through the screen's keyboard or the panel); fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

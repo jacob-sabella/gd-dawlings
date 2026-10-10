@@ -8345,6 +8345,29 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	close_to("two undos put both edges back", s.item(2, 0).start, s.bar_to_seconds(9.0), 0.001)
 	click.call(at.call(2, 12.0))
 
+	# The item's own controls, under the panel, while exactly one item is selected.
+	var strip: TimelineItemStrip = timeline._item_controls
+	check("one item selected, its controls show", strip.visible and strip.gain.collision_layer == 2)
+	strip.gain.value = 0.5
+	strip.gain.value_committed.emit(0.5)
+	close_to("its gain knob, let go, sets its gain", s.item(2, 0).gain_db, lerpf(TimelineItemStrip.GAIN_LOW, TimelineItemStrip.GAIN_HIGH, 0.5), 0.001)
+	strip.fade_in.value_committed.emit(0.5)
+	close_to("a fade in at half the knob is a quarter of the item", s.item(2, 0).fade_in, s.item(2, 0).length * 0.25, 0.001)
+	strip.fade_out.value_committed.emit(0.2)
+	check("and the fade out leaves it", is_equal_approx(s.item(2, 0).fade_in, s.item(2, 0).length * 0.25)
+			and is_equal_approx(s.item(2, 0).fade_out, s.item(2, 0).length * 0.04))
+	close_to("the knob follows the item", strip.fade_in.value, 0.5, 0.001)
+	check("an audio-less stand-in item has no notes, so the note keys stay dark", not strip.up.lit)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("each knob is one undo step", is_equal_approx(s.item(2, 0).gain_db, 0.0) and s.item(2, 0).fade_in == 0.0)
+	hand.holding_shift = true
+	click.call(at.call(3, 12.0))
+	hand.holding_shift = false
+	check("two selected, they hide", not strip.visible and strip.gain.collision_layer == 0)
+	click.call(at.call(2, 12.0))
+
 	# Copy and delete, under the track names, for the selection.
 	check("copy and delete light with a selection", timeline._copy_key.lit and timeline._delete_key.lit)
 	timeline._copy_key.pressed.emit()

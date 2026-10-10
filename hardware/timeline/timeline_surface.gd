@@ -101,6 +101,8 @@ var _copy_key: PanelButton
 var _copy_caption: Label3D
 var _delete_key: PanelButton
 var _delete_caption: Label3D
+## The selected item's gain, fades and notes, under the panel; see TimelineItemStrip.
+var _item_controls: TimelineItemStrip
 ## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
 var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
@@ -225,6 +227,11 @@ func _ready() -> void:
 	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_delete_caption)
 	DAW.timeline_changed.connect(_light_selection_keys)
+
+	_item_controls = TimelineItemStrip.new()
+	_item_controls.name = "ItemStrip"
+	_item_controls.surface = self
+	add_child(_item_controls)
 
 
 ## A key that acts on the selected items, lit while there are any.
@@ -391,6 +398,7 @@ func _place_strips() -> void:
 	_delete_key.position = Vector3(-width * 0.5 + 0.064, corner_mid, 0.003)
 	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
 	_light_selection_keys()
+	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).
