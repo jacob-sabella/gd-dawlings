@@ -8324,6 +8324,18 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.split_selected(s.position_seconds)
 	check("a split where nothing selected is under the playhead does nothing", s.track(2).items.size() == count)
 
+	# Copy and delete, under the track names, for the selection.
+	check("copy and delete light with a selection", timeline._copy_key.lit and timeline._delete_key.lit)
+	timeline._copy_key.pressed.emit()
+	check("copy puts a copy after the item (%d)" % s.track(2).items.size(), s.track(2).items.size() == count + 1)
+	timeline._delete_key.pressed.emit()
+	check("delete takes the selection, which is the copy", s.track(2).items.size() == count)
+	DAW.undo()
+	DAW.undo()
+	DAW.clear_item_selection()
+	check("with nothing selected they go dark", not timeline._copy_key.lit and not timeline._delete_key.lit)
+	click.call(at.call(2, 12.0))
+
 	# Bare lane: drop the selection, put the playhead there.
 	click.call(at.call(13, 21.0))
 	check("a click on empty lane drops the selection", s.selected_items().is_empty())

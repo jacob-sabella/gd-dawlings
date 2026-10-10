@@ -93,6 +93,12 @@ var _split_key: PanelButton
 var _split_caption: Label3D
 var _save_key: PanelButton
 var _save_caption: Label3D
+## Copy and delete, in the corner under the track names: what is done to a selection once it is
+## made, so beside where it is made.
+var _copy_key: PanelButton
+var _copy_caption: Label3D
+var _delete_key: PanelButton
+var _delete_caption: Label3D
 ## [track, item, start] of an item being dragged, drawn there until it is let go; or empty.
 var _preview: Array = []
 var _drawn_loop := Vector3(-1, -1, -1)
@@ -205,6 +211,41 @@ func _ready() -> void:
 	_save_caption = _text("SAVE", 26, Color(0.62, 0.64, 0.68))
 	_save_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_save_caption)
+
+	_copy_key = _selection_key("CopyKey", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
+			func(): DAW.duplicate_selected())
+	_copy_caption = _text("COPY", 26, Color(0.62, 0.64, 0.68))
+	_copy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_copy_caption)
+	_delete_key = _selection_key("DeleteKey", Color(0.95, 0.38, 0.34), "EDIT  DELETE",
+			func(): DAW.delete_selected())
+	_delete_caption = _text("DEL", 26, Color(0.62, 0.64, 0.68))
+	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_delete_caption)
+	DAW.timeline_changed.connect(_light_selection_keys)
+
+
+## A key that acts on the selected items, lit while there are any.
+func _selection_key(key_name: String, colour: Color, title: String, act: Callable) -> PanelButton:
+	var key := PanelButton.new()
+	key.name = key_name
+	key.led_colour = colour
+	key.lamp_scale = Vector2(0.8, 0.5)
+	key.scale = Vector3(1.4, 1.4, 1.4)
+	key.pressed.connect(act)
+	key.describe_title = func() -> String: return title
+	key.describe_value = func(_v: float) -> String:
+		var n := DAW.state.selected_items().size()
+		return "%d selected item(s)" % n if n > 0 else "select an item first"
+	add_child(key)
+	return key
+
+
+func _light_selection_keys() -> void:
+	var any := not DAW.state.selected_items().is_empty()
+	for key in [_copy_key, _delete_key]:
+		if key != null:
+			key.lit = any
 
 
 func _process(delta: float) -> void:
@@ -342,6 +383,12 @@ func _place_strips() -> void:
 	_save_caption.position = Vector3(-width * 0.5 + 0.078, ruler_mid, 0.0016)
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
+	var corner_mid := -_top_y + SCRUBBER_BAND * 0.5
+	_copy_key.position = Vector3(-width * 0.5 + 0.016, corner_mid, 0.003)
+	_copy_caption.position = Vector3(-width * 0.5 + 0.030, corner_mid, 0.0016)
+	_delete_key.position = Vector3(-width * 0.5 + 0.064, corner_mid, 0.003)
+	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
+	_light_selection_keys()
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).

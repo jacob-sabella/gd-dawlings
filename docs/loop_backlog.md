@@ -248,8 +248,10 @@ can finish music in, saving DAWproject. Steps, in order:
      no bridge.
    - **Not yet:** things the session keys by track number do not follow a renumbering: a
      guest's chosen take track, holds, and the layout profile's strips. Renaming a demo-song
-     track changes which part it plays, because parts go by name. Next: keys
-     for these on the timeline; fades drawn as curves rather than a flat volume per frame (needs
+     track changes which part it plays, because parts go by name.
+   - **Done 2026-10-10 (6d), keys:** COPY and DEL on the timeline, in the corner under the track
+     names, lit while items are selected. Next: dragging an item's edge to trim it, and keys or a
+     card for gain, fades, transpose, quantise and tracks; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
