@@ -9,6 +9,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# The engine's native core (vendor/dawkit/native, a GDExtension) before anything loads it: the
+# game's addon names its library, and an unbuilt one is a missing class rather than a failed
+# check. Incremental, so a build with nothing changed takes a second.
+if [ -x vendor/dawkit/tools/build_native.sh ]; then
+  vendor/dawkit/tools/build_native.sh || { echo "verify: dawkit's native core did not build"; exit 1; }
+fi
+
 # A brand-new class_name is invisible to a --headless run until the project has been scanned,
 # and the failure is nasty: the test script fails to PARSE, the scene comes up with no script,
 # and the run hangs forever with nothing to quit it rather than reporting an error. Godot writes

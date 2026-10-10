@@ -698,6 +698,15 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   (MIT) builds for desktop and Android arm64 alike, and a compiled engine is also what can be
   sold without handing over its source. dawkit keeps a GDScript face (the project model, the
   file formats, the API), and the mixing core moves into the extension.
+  - **Stage 1 done 2026-10-10 (dawkit 5acf743):** `native/` builds with CMake and godot-cpp
+    (master, against `godot --dump-extension-api` of this 4.7.2) into addons/dawkit/bin;
+    `DawKitTransport` (the song anchored to a block clock the lanes count between them) and
+    `DawKitLane` (a track's clips: interpolated at their own rate, offset, gain, linear and
+    equal-power fades, looped stretches; sounds kept by id). dawkit's tests mix lanes a block at
+    a time in alternating order and one that joined late, and find a clip's first sample on the
+    same frame in each. verify.sh builds it first; the game loads it. Next: stage 2, GodotBackend
+    playing items through lanes (takes, imports, the demo parts' windows, MIDI renders, the
+    click), then the render cut on the sample, and an Android arm64 build for the headset.
 - **dawkit's licence: proprietary, sold under a commercial licence; the name stays.** Not dual
   GPL: a GPL edition would let anyone ship it free in a GPL game, and GPL sits badly with console
   and store terms. A search found no audio product called DAWKit (not a trademark clearance,
