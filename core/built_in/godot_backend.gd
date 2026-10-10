@@ -696,6 +696,9 @@ func _sync_click() -> void:
 	if not (state.playing and state.metronome) or _master_bus < 0:
 		if _click.playing:
 			_click.stop()
+		# Made while stopped, so pressing play does not wait for it.
+		if state.metronome and not state.tempo_points.is_empty() and _master_bus >= 0:
+			_click_window_for(state.position_seconds)
 		return
 	_click.bus = MASTER_BUS
 	if not state.tempo_points.is_empty():
@@ -722,17 +725,13 @@ func _sync_click() -> void:
 ## (DawKitMetronome.span) from the bar the playhead is in, made again when the playhead nears its
 ## end or leaves it, or the map changes.
 func _sync_click_window() -> void:
-	var map := state.tempo_map()
-	var key := "%s/%d" % [state.tempo_points, state.beats_per_bar]
 	var at := state.position_seconds
+	var made := _click_window_for(at)
 	var into := at - _click_from
-	if key != _click_for or into < 0.0 or into > CLICK_WINDOW - CLICK_WINDOW_LEAD:
-		var per_bar := float(maxi(state.beats_per_bar, 1))
-		_click_from = map.seconds_at(floorf(map.beat_at(at) / per_bar) * per_bar)
-		_click.stream = DawKitMetronome.span(map, state.beats_per_bar, _click_from, CLICK_WINDOW,
-				int(AudioServer.get_mix_rate()))
-		_click_for = key
-		_start(_click, at - _click_from)
+	if made > 0.0:
+		# The song went on while the window was made: started where the playhead was before it,
+		# the click would be that much behind, and stay there (measured: 4-17 ms late).
+		_start(_click, into + made)
 		return
 	if not _click.playing:
 		_start(_click, into)
@@ -740,6 +739,23 @@ func _sync_click_window() -> void:
 	if absf(_drift(_click, _click.get_playback_position() + AudioServer.get_time_since_last_mix() - into)) > DRIFT_SECONDS:
 		reseeks += 1
 		_start(_click, into)
+
+
+## A window of clicks holding `at`, made unless the one there already does: how long making it
+## took, in seconds, or 0 when it was not made.
+func _click_window_for(at: float) -> float:
+	var key := "%s/%d" % [state.tempo_points, state.beats_per_bar]
+	var into := at - _click_from
+	if key == _click_for and into >= 0.0 and into <= CLICK_WINDOW - CLICK_WINDOW_LEAD:
+		return 0.0
+	var map := state.tempo_map()
+	var per_bar := float(maxi(state.beats_per_bar, 1))
+	var began := Time.get_ticks_usec()
+	_click_from = map.seconds_at(floorf(map.beat_at(at) / per_bar) * per_bar)
+	_click.stream = DawKitMetronome.span(map, state.beats_per_bar, _click_from, CLICK_WINDOW,
+			int(AudioServer.get_mix_rate()))
+	_click_for = key
+	return maxf(float(Time.get_ticks_usec() - began) / 1000000.0, 0.000001)
 
 
 func monitor_bus(track_index: int) -> StringName:

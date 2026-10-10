@@ -304,6 +304,15 @@ can finish music in, saving DAWproject. Steps, in order:
      as RAMP_SECONDS, and a map sent to Reaper has its ramps made RAMP_SECONDS and its markers
      placed by that map, so Reaper's markers land on the beats sent, exactly (probe:
      [[0, T, hold], [8, T/2, time ramp], [16, T, hold]] back as sent; undo restores one tempo).
+   - **Done 2026-10-10 (7d), the click measured across a tempo change:** the `--built-in`
+     probe's own take now runs through a tempo map: held, then ramped (in beats) to three
+     quarters over four beats, mid-take. Its clicks and off-beat notes are placed and measured
+     through the map. The first run found the click 4-17 ms late: its 32 s window was made in the
+     frame that started it, so it began behind the song by the time that took, and the drift
+     check took that as its baseline. Now the window is made while stopped (or, mid-play, started
+     that much further on). Over 4 runs, each take's clicks average -7.9 to +6.8 ms from the beat
+     and notes -0.7 to +10.9 ms, each within 1.9 ms of its take's average. That is one Godot
+     mix step either way, the start granularity the 15 ms limit is for.
    - **Not yet (7b):** No surface edits the map yet (the
      tempo knob sets the first tempo only). The demo song's parts are rendered at the first
      tempo. Time signature changes (`TimeSignatureAutomation`) are not modelled. The loopback

@@ -362,14 +362,21 @@ func _host_records_itself() -> void:
 	ha.record_with_host = true
 	_audio_placed = {}
 	DAW.set_metronome(true)
+	# The tempo changes in the middle of the take: held, then ramped down to three quarters over
+	# four beats. The clicks and the notes below follow it, and are measured against it.
+	var tempo := DAW.state.tempo
+	var turn := ceilf((HOST_TAKE_AT + 0.6) * tempo / 60.0)
+	DAW.set_tempo_map([[0.0, tempo, DawKitTempoMap.HOLD], [turn, tempo, DawKitTempoMap.RAMP_BEATS],
+			[turn + 4.0, tempo * 0.75, DawKitTempoMap.HOLD]])
+	var map := DAW.state.tempo_map()
 	# A MIDI item under the take, a short high note on every off-beat, played by the engine's
 	# instrument: between the clicks, so each can be found on its own.
-	var beat := 60.0 / DAW.state.tempo
 	var notes: Array = []
-	var t := (ceilf(HOST_TAKE_AT / beat) + 0.5) * beat
-	while t < HOST_TAKE_AT + 6.0:
+	var nb := ceilf(map.beat_at(HOST_TAKE_AT)) + 0.5
+	while map.seconds_at(nb) < HOST_TAKE_AT + 6.0:
+		var t := map.seconds_at(nb)
 		notes.append([t, t + 0.08, 84, 120, 0])
-		t += beat
+		nb += 1.0
 	DAW.state.track(HOST_MIDI_TRACK).items.clear()
 	DAW.insert_midi_take(HOST_MIDI_TRACK, HOST_TAKE_AT, HOST_TAKE_AT + 6.0, notes, "Off-beats")
 	var midi: MixState.ItemState = DAW.state.track(HOST_MIDI_TRACK).items[0]
@@ -386,7 +393,7 @@ func _host_records_itself() -> void:
 	# A key of my own, heard through its track, a quarter of a beat after a click: between the
 	# click and the off-beat note, so its sound can be found in the take on its own.
 	await _until(9.0)
-	while absf(fposmod(DAW.state.position_seconds, beat) / beat - 0.22) > 0.04:
+	while absf(fposmod(map.beat_at(DAW.state.position_seconds), 1.0) - 0.22) > 0.04:
 		await get_tree().process_frame
 	gm.note_on(96, 127)
 	await get_tree().create_timer(0.1).timeout
@@ -404,8 +411,11 @@ func _host_records_itself() -> void:
 		return
 	var wav := FileAccess.get_file_as_bytes(_audio_placed["path"])
 	var start: float = _audio_placed["start"]
-	_measure_onsets("clicks", wav, start, beat, 0.0)
-	_measure_onsets("notes", wav, start, beat, 0.5)
+	_measure_onsets("clicks", wav, start, map, 0.0)
+	_measure_onsets("notes", wav, start, map, 0.5)
+	var at_turn := map.seconds_at(turn + 4.0) - start
+	check("and the take runs through the tempo's change (%.2fs in, of %.2fs)" % [at_turn, _audio_placed["seconds"]],
+			at_turn > 1.0 and at_turn < float(_audio_placed["seconds"]) - 0.3)
 	# My key: where its sound is in the take against where the keys' take put the note. The same
 	# moment, if what the host hears of its own keys is accounted for.
 	var keys: Array = DAW.state.track(HOST_KEYS_TRACK).items.filter(
@@ -428,14 +438,15 @@ func _host_records_itself() -> void:
 				absf(heard_at - stamped) < HOST_TAKE_TOLERANCE)
 
 
-## Each beat inside the take (or each point `phase` of a beat on), after its first half second:
-## the onset there is the first sample within 40ms over half the loudest one there. Checked to be
-## on time on average and each within the tolerance of that average.
-func _measure_onsets(what: String, wav: PackedByteArray, start: float, beat: float, phase: float) -> void:
+## Each beat inside the take (or each point `phase` of a beat on), through the tempo map, after
+## its first half second: the onset there is the first sample within 40ms over half the loudest
+## one there. Checked to be on time on average and each within the tolerance of that average.
+func _measure_onsets(what: String, wav: PackedByteArray, start: float, map: DawKitTempoMap, phase: float) -> void:
 	var offs: Array[float] = []
 	var peaks: Array[int] = []
 	var frames := (wav.size() - AudioTake.HEADER_BYTES) / 2
-	var b := (ceilf((start + 0.5) / beat - phase) + phase) * beat
+	var nth := ceilf(map.beat_at(start + 0.5) - phase) + phase
+	var b := map.seconds_at(nth)
 	while b < start + float(frames) / AudioTake.RATE - 0.1:
 		var centre := int((b - start) * AudioTake.RATE)
 		var from := maxi(centre - AudioTake.RATE / 25, 0)
@@ -449,7 +460,8 @@ func _measure_onsets(what: String, wav: PackedByteArray, start: float, beat: flo
 				if absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)) > loudest / 2:
 					offs.append(start + float(f) / AudioTake.RATE - b)
 					break
-		b += beat
+		nth += 1.0
+		b = map.seconds_at(nth)
 	var mean := 0.0
 	for o in offs:
 		mean += o
