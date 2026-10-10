@@ -170,9 +170,13 @@ can finish music in, saving DAWproject. Steps, in order:
      Over 8 runs, each take was within 0.9 ms of its own average, and the averages were
      between -6 and +5 ms of the beat (the limit is 10 ms). The run-to-run part is the engine's
      frame-driven clock and the click's 60 ms re-seek allowance, which step 7 replaces.
-   - **Next (4b):** the host's keys on the built-in engine (GuestMidi plays for a host whose
-     DAW does not record its own inputs, as it already does with a keytar), and recording
-     more than one input at a time. 5. MIDI playback through a built-in instrument.
+   - **Done 2026-10-09, the keys (4b):** GuestMidi plays for a host whose DAW does not record its
+     own inputs (`host_records`). Takes go onto the chosen track or the armed one, timed by
+     `Session.host_heard` (the clock the microphone's loopback measured), and the monitor synth
+     starts when MIDI is opened or the first key is played. The panel shows the host YOUR KEYS.
+     `OfflineBackend.records_inputs` lets the suite play a host on Reaper.
+   - **Not yet:** recording more than one input at a time (one microphone and one set of keys
+     each now); a count-in; punch in and out; per-track input choice saved in the project. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 

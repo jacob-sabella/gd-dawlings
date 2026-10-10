@@ -67,7 +67,7 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.PLUGIN_WINDOW:
 		return stand_in_windows
 	if capability == Capability.RECORDS_OWN_INPUTS:
-		return false
+		return records_inputs
 	return true
 
 
@@ -80,6 +80,9 @@ func fx_kind(_track_index: int, _fx_index: int) -> StringName:
 ## Where each clip's file is, by the name items carry: a project opened from a file unpacks its
 ## media somewhere of its own. A name not in here is a take, in AudioTake.DIR.
 var media := {}
+## Whether to stand in for a DAW that records its own inputs, as Reaper does. Off: the built-in
+## engine cannot, and the stand-in is its model. The suite turns it on to play a host on Reaper.
+var records_inputs := false
 
 
 func set_media(where: Dictionary) -> void:

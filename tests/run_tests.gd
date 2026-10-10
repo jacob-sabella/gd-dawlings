@@ -164,6 +164,7 @@ func _ready() -> void:
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
 	_test_sound_files_are_brought_in_onto_a_track()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
+	_test_the_host_records_its_own_keys_on_the_built_in_engine()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -8781,6 +8782,54 @@ func _test_the_host_records_its_own_microphone_on_the_built_in_engine() -> void:
 		reaper.queue_free()
 
 
+func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
+	_offline()
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var gm := Session.guest_midi
+	gm.target_track = 0
+	gm.record_with_host = true
+	check("a host on the built-in engine plays its own keys", gm.plays() and gm.host_records())
+	var armed := HitRecorder.armed_track()
+	check("onto the armed track when none is chosen", gm.take_track() == armed and armed > 0)
+	DAW.state.track(armed).items.clear()
+	var s := DAW.state
+	s.position_seconds = 30.0
+	s.playing = true
+	s.recording = true
+	gm._process(0.016)
+	check("a take begins when the host records", gm.is_recording())
+	var late := AudioServer.get_output_latency() - (gm.synth.latency_seconds() if gm.monitor and gm.synth.is_running() else 0.0)
+	s.position_seconds = 31.0
+	gm.note_on(60, 100)
+	gm._process(0.016)
+	s.position_seconds = 31.5
+	gm.note_off(60)
+	gm._process(0.016)
+	s.recording = false
+	s.playing = false
+	gm._process(0.016)
+	var items: Array = s.track(armed).items
+	check("stopped, the take is on the armed track (%d)" % items.size(), items.size() == 1 and not gm.is_recording())
+	if items.size() == 1:
+		var it: MixState.ItemState = items[0]
+		check("with its note (%d)" % (it.notes.size() / 5), it.notes.size() == 5)
+		if it.notes.size() == 5:
+			close_to("on the song second the host heard, less the output's lateness",
+					it.start + it.notes[0], 31.0 - late, 0.0001)
+			close_to("and let go half a second later", it.notes[1] - it.notes[0], 0.5, 0.0001)
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	DAW.use(reaper)
+	check("where the DAW records its own inputs, the host's keys are its business", not gm.host_records()
+			and not gm.plays())
+	gm._process(0.016)
+	Session.start_solo()
+	_offline()
+	if is_instance_valid(reaper):
+		reaper.queue_free()
+
+
 func _test_a_looped_item_survives_the_wire_and_a_split() -> void:
 	var item := MixState.ItemState.new()
 	item.start = 10.0
@@ -10103,6 +10152,8 @@ func _test_the_computer_keys_are_a_piano_by_position() -> void:
 ## and each note carries the song position the guest was hearing when it was played.
 func _test_a_guest_take_follows_the_host_transport_it_hears() -> void:
 	var backend := _offline()
+	# A host on Reaper, which records its own keys: these are the guest's alone.
+	backend.records_inputs = true
 	var gm := GuestMidi.new()
 	add_child(gm)
 	var now := {"seconds": 40.0, "playing": true, "recording": true, "valid": true}
@@ -11387,7 +11438,8 @@ func _test_percussion_is_heard_by_the_room_and_recorded_onto_the_armed_track() -
 
 
 func _test_a_keytar_plays_your_keys_and_shows_them() -> void:
-	_offline()
+	# A host on Reaper, which records its own keys: here only a keytar makes them the game's.
+	_offline().records_inputs = true
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
 	Session.layout.save_path = "user://test_layout_profile.cfg"

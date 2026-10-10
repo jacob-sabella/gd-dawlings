@@ -82,6 +82,8 @@ var _replicated := SongClock.new()
 var _take: MidiTake = null
 ## The track the running take goes on, chosen as it began.
 var _take_track := 0
+## Whether the monitor synth was started for a host recording its own keys (`host_records`).
+var _host_synth := false
 ## Where heard() asks, when set: returns {seconds, playing, recording, valid}. For the suite,
 ## which has no stream to listen to.
 var heard_source: Callable = Callable()
@@ -132,16 +134,25 @@ func _route_midi() -> void:
 	changed.emit()
 
 
-## Whether keys played here are this machine's to play: a guest's always, anyone's with a keytar.
+## Whether keys played here are this machine's to play: a guest's always, anyone's with a keytar,
+## and a host's whose DAW does not record its own inputs (`host_records`).
 func plays() -> bool:
-	return Session.role == Session.Role.GUEST or keytar
+	return Session.role == Session.Role.GUEST or keytar or host_records()
 
 
-## The track a take goes on: the one chosen, or with a keytar and none chosen, the armed one.
+## A host (or someone alone) on a DAW that cannot record its own inputs, the built-in engine:
+## their keys are played, heard and taken down here, as a guest's are.
+func host_records() -> bool:
+	return Session.is_authority() and DAW.backend != null \
+			and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
+
+
+## The track a take goes on: the one chosen, or with a keytar or as such a host and none chosen,
+## the armed one.
 func take_track() -> int:
 	if target_track > 0:
 		return target_track
-	return HitRecorder.armed_track() if keytar else 0
+	return HitRecorder.armed_track() if keytar or host_records() else 0
 
 
 func is_recording() -> bool:
@@ -189,6 +200,7 @@ func _input(event: InputEvent) -> void:
 ## A key down. `age`: how long ago it went down, for a note that was heard before it got here
 ## (the helper's); `sounded`: whether it has been heard already, so it is not played twice.
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
+	_hear_host_keys()
 	if not sounded:
 		synth.note_on(pitch, velocity)
 	Session.send_note(Session.Note.ON, pitch, velocity, song(age))
@@ -242,6 +254,12 @@ func heard() -> Dictionary:
 		var given: Dictionary = heard_source.call()
 		given["source"] = "given"
 		return given
+	if host_records():
+		# The host's own engine, heard through its own output: the playhead less what the output
+		# still holds, as the host's microphone is timed.
+		var own := Session.host_heard()
+		own["source"] = "host"
+		return own
 	var feed := Session.mix_feed
 	if feed != null and feed.listening:
 		var h := feed.heard_position()
@@ -284,9 +302,27 @@ func _process(_delta: float) -> void:
 	if not plays():
 		if _take != null:
 			_commit()
+		if _host_synth:
+			_host_synth = false
+			if not keytar:
+				_release_all()
+				synth.stop()
 		return
+	if midi_open:
+		_hear_host_keys()
 	_take_native_midi()
 	follow(heard())
+
+
+## A host recording its own keys hears them here, at once: the engine has no instrument on a MIDI
+## track to hear them through yet. Started when MIDI is opened or the first key is played, not
+## before, so a host who never plays never has it running.
+func _hear_host_keys() -> void:
+	if _host_synth or keytar or not host_records():
+		return
+	_host_synth = true
+	if MonitorSynth.available() and not synth.is_running():
+		synth.start()
 
 
 ## The take, following what the guest hears of the host's transport: begun when recording is

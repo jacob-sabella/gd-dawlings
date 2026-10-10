@@ -144,8 +144,9 @@ Recording on the built-in engine: the DAW cannot record its own inputs (`RECORDS
 false), so the host's microphone goes through the same recorder as a guest's (`GuestAudio` with
 `for_host`, which is `Session.host_audio`). Its take is timed against `Session.host_heard`, the
 playhead less the output's latency, and kept by Session's take path from the host's own id, so it
-is written, placed and announced exactly as a guest's would be. The engine's metronome (dawkit's
-`DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
+is written, placed and announced exactly as a guest's would be. The host's keys are the same: GuestMidi
+plays for such a host (`host_records`) and times notes by `host_heard`. The engine's metronome
+(dawkit's `DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
 
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
 the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a

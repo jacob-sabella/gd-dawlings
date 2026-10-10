@@ -67,6 +67,8 @@ var _mic_status: Label
 ## The microphone's controls: a guest's (in the guest's section) or, on a DAW that does not record
 ## its own inputs, the host's (above the project). See `_recorder`.
 var _mic_box: VBoxContainer
+## The keys' controls, placed the same way as the microphone's.
+var _keys_box: VBoxContainer
 var _column: VBoxContainer
 var _keys: KeyCatcher
 var _keys_hint: Label
@@ -327,7 +329,11 @@ func _build_panel() -> void:
 	_hearing = _label("", 13, DIM)
 	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guest_box.add_child(_hearing)
-	_build_midi(_guest_box)
+	_keys_box = VBoxContainer.new()
+	_keys_box.name = "Keys"
+	_keys_box.add_theme_constant_override("separation", 8)
+	_build_midi(_keys_box)
+	_guest_box.add_child(_keys_box)
 	_mic_box = VBoxContainer.new()
 	_mic_box.name = "Mic"
 	_mic_box.add_theme_constant_override("separation", 8)
@@ -365,8 +371,8 @@ func _refresh() -> void:
 			_status.text = "In %s's session at %s. Their Reaper, your view." % [
 					Session.name_of(1), Session.joined_address]
 	_refresh_sound()
-	_refresh_midi()
 	_place_mic()
+	_refresh_midi()
 	_refresh_mic()
 	_refresh_project()
 	_solo_box.visible = Session.role == Session.Role.SOLO
@@ -629,6 +635,10 @@ func _place_mic() -> void:
 		else:
 			home.move_child(_mic_box, home.get_children().find(_project_caption))
 	_mic_box.visible = guest or host_records
+	if _keys_box.get_parent() != home:
+		_keys_box.reparent(home, false)
+	home.move_child(_keys_box, home.get_children().find(_mic_box))
+	_keys_box.visible = guest or host_records
 
 
 ## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
@@ -687,7 +697,7 @@ func _build_keys() -> void:
 	add_child(_keys_hint)
 	_keys.active_changed.connect(func(_on: bool): _refresh_keys())
 	Session.role_changed.connect(func():
-		if Session.role != Session.Role.GUEST:
+		if Session.role != Session.Role.GUEST and not Session.guest_midi.host_records():
 			_keys.set_active(false))
 
 
@@ -706,7 +716,7 @@ func _refresh_keys() -> void:
 
 func _refresh_midi() -> void:
 	var gm := Session.guest_midi
-	if gm == null or _midi_status == null or Session.role != Session.Role.GUEST:
+	if gm == null or _midi_status == null or not _keys_box.visible:
 		return
 	if not gm.midi_open:
 		_midi_status.text = "No MIDI keyboard open."
@@ -717,7 +727,7 @@ func _refresh_midi() -> void:
 	else:
 		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
 		_midi_button.text = "Rescan"
-	_fill_tracks(_play_into, gm.target_track)
+	_fill_tracks(_play_into, gm.target_track, "The armed track" if gm.host_records() else "Nowhere")
 	if _monitor.button_pressed != gm.monitor:
 		_monitor.set_pressed_no_signal(gm.monitor)
 	_monitor.disabled = not MonitorSynth.available()
@@ -729,7 +739,8 @@ func _refresh_midi() -> void:
 			+ ("\nPlayed by its own audio node, %.1f ms from key to output, before your sound card's own." % late
 					if gm.synth.native != null else ""))
 	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
-	_record_with.text = "Record my keys when %s records" % Session.name_of(1)
+	_record_with.text = "Record my keys when I record" if gm.host_records() \
+			else "Record my keys when %s records" % Session.name_of(1)
 	if _record_with.button_pressed != gm.record_with_host:
 		_record_with.set_pressed_no_signal(gm.record_with_host)
 	_refresh_keys()
@@ -745,13 +756,15 @@ func _refresh_take() -> void:
 		return
 	if gm.is_recording():
 		var notes := gm.take_note_count()
-		_take_status.text = "●  Recording onto %s  ·  %d %s" % [_track_name(gm.target_track), notes,
+		_take_status.text = "●  Recording onto %s  ·  %d %s" % [_track_name(gm.take_track()), notes,
 				"note" if notes == 1 else "notes"]
 		_take_status.add_theme_color_override("font_color", Color(0.95, 0.42, 0.38))
 		return
 	_take_status.add_theme_color_override("font_color", DIM)
-	if gm.target_track <= 0:
-		_take_status.text = "Choose a track and your keys are recorded when %s records." % Session.name_of(1)
+	var when := "you record" if gm.host_records() else Session.name_of(1) + " records"
+	if gm.take_track() <= 0:
+		_take_status.text = ("Arm a track, or choose one, and your keys are recorded when you record."
+				if gm.host_records() else "Choose a track and your keys are recorded when %s records." % Session.name_of(1))
 	elif not gm.record_with_host:
 		_take_status.text = "Playing for yourself. Nothing is recorded."
 	elif not gm.last_take.is_empty():
@@ -759,8 +772,7 @@ func _refresh_take() -> void:
 		_take_status.text = "Last take: %d notes onto %s at %s." % [t["notes"],
 				_track_name(t["track"]), DAW.state.bar_beat(t["start"]) if DAW.state != null else ""]
 	else:
-		_take_status.text = "Ready. Your keys go onto %s when %s records." % [
-				_track_name(gm.target_track), Session.name_of(1)]
+		_take_status.text = "Ready. Your keys go onto %s when %s." % [_track_name(gm.take_track()), when]
 
 
 static func _track_name(index: int) -> String:
