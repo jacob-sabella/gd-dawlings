@@ -344,7 +344,24 @@ can finish music in, saving DAWproject. Steps, in order:
      `RETURN_SECONDS` after) as one `set_automation` step. Touch ends after `GESTURE_MS` still
      (the wire has no "let go"; a hand's grab/release would be better); latch at the stop.
      Guests' moves arrive as intents and are written the same way.
-   - **Next (8d-f):** Reaper's envelopes and I_AUTOMODE through the bridge;
+   - **Done 2026-10-10 (8d), Reaper's envelopes:** the bridge's GetTimeline reports each
+     track's active envelopes with points (volume, pan, mute, each send's volume, plugin
+     parameters by asking each envelope whose it is) and I_AUTOMODE; SetEnvelope replaces one
+     whole (one undo point), SetAutomationMode sets the mode. Found on the rig: a track's own
+     envelopes exist from the start, inactive, and must be made ACTIVE (GetSetEnvelopeInfo_String)
+     before their points or Reaper does not play them; a new envelope starts with a point at 0
+     that DeleteEnvelopePointRange leaves, so points go one by one; the pan envelope is inverted
+     (+1 left) and the mute envelope is "playing" (1 heard); a send's envelope is
+     `P_ENV:<VOLENV`. In Trim/Read (0, Reaper's default) envelopes play under faders that stay
+     put, so a lane written to a track in 0 moves it to Read (1), and the desk's read is
+     Reaper's Read. Probe: three lanes on track 1 read back, Reaper's own faders measured
+     following them while it plays (-6 dB, hard left, -18 dB and muted further on), a send's and
+     a plugin's lane read back, latch read back, five undos and every envelope gone. The probe's
+     end moved 3.5 s later for it.
+   - **Interpolation:** dawkit ramps volume in dB; Reaper ramps in its fader scaling. Held
+     points agree exactly; a ramp's middle differs. Write a ramp as dense points on the way to
+     Reaper if it matters.
+   - **Next (8e-f):**
      lanes drawn and edited on the timeline; master automation (not in MixState yet); a loopback
      measurement of a volume ramp.
 9. Mixdown and stems. 10. Interchange proof against the official examples.

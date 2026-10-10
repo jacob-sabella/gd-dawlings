@@ -277,6 +277,205 @@ local function item_notes(it, take)
   return out
 end
 
+-- --- automation --------------------------------------------------------------------------
+--
+-- A track's envelopes as dawlings names them: "volume" and "send:<destination track, from 1>" in
+-- dB, "pan" -1 left to 1 right, "mute" 0/1, "fx:<fx>:<param>" (both from 1, as OSC numbers them)
+-- normalised 0-1. Points cross as flat seconds, value, shape (0 hold, 1 linear) triples.
+
+local ENVELOPE_CHUNKS = {volume = '<VOLENV2', pan = '<PANENV2', mute = '<MUTEENV'}
+-- Track: Toggle track volume / pan / mute envelope visible, for the one track selected: how an
+-- envelope Reaper does not have yet is made, as a person would make it.
+local ENVELOPE_SHOW = {volume = 40406, pan = 40407, mute = 40867}
+
+local function send_to(tr, dest)
+  for s = 0, reaper.GetTrackNumSends(tr, 0) - 1 do
+    local d = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_DESTTRACK')
+    if d and reaper.ValidatePtr(d, 'MediaTrack*') and reaper.GetMediaTrackInfo_Value(d, 'IP_TRACKNUMBER') == dest then
+      return s
+    end
+  end
+  return nil
+end
+
+-- The envelope for a target, made when `create` and Reaper has none; and the fx and parameter
+-- (from 0) for an fx target.
+local function envelope_of(tr, target, create)
+  local chunk = ENVELOPE_CHUNKS[target]
+  if chunk then
+    local env = reaper.GetTrackEnvelopeByChunkName(tr, chunk)
+    if not env and create then
+      local selected = {}
+      for i = 0, reaper.CountSelectedTracks(0) - 1 do selected[#selected + 1] = reaper.GetSelectedTrack(0, i) end
+      reaper.SetOnlyTrackSelected(tr)
+      reaper.Main_OnCommand(ENVELOPE_SHOW[target], 0)
+      reaper.SetTrackSelected(tr, false)
+      for _, t in ipairs(selected) do reaper.SetTrackSelected(t, true) end
+      env = reaper.GetTrackEnvelopeByChunkName(tr, chunk)
+    end
+    return env
+  end
+  local dest = target:match('^send:(%d+)$')
+  if dest then
+    local s = send_to(tr, tonumber(dest))
+    if not s then return nil end
+    -- '<VOLENV' is the envelope's chunk name, and Reaper hands back its (inactive) envelope
+    -- whether anyone has drawn on it or not.
+    local env = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_ENV:<VOLENV')
+    return env and reaper.ValidatePtr(env, 'TrackEnvelope*') and env or nil
+  end
+  local fx, param = target:match('^fx:(%d+):(%d+)$')
+  if fx then
+    fx, param = tonumber(fx) - 1, tonumber(param) - 1
+    if fx < 0 or fx >= reaper.TrackFX_GetCount(tr) or param < 0 or param >= reaper.TrackFX_GetNumParams(tr, fx) then
+      return nil
+    end
+    return reaper.GetFXEnvelope(tr, fx, param, create), fx, param
+  end
+  return nil
+end
+
+local function to_amplitude(env, raw)
+  local mode = reaper.GetEnvelopeScalingMode(env)
+  return mode ~= 0 and reaper.ScaleFromEnvelopeMode(mode, raw) or raw
+end
+
+local function from_amplitude(env, amp)
+  local mode = reaper.GetEnvelopeScalingMode(env)
+  return mode ~= 0 and reaper.ScaleToEnvelopeMode(mode, amp) or amp
+end
+
+-- An envelope's value in dawlings's unit, and back.
+local function env_read(env, tr, target, raw, fx, param)
+  if target == 'volume' or target:match('^send:') then
+    local amp = to_amplitude(env, raw)
+    return amp > 0 and 20 * math.log(amp, 10) or -150
+  elseif target == 'pan' then
+    return -raw
+  elseif target == 'mute' then
+    -- Reaper's mute envelope is "playing": 1 at the top is heard, 0 is muted.
+    return raw < 0.5 and 1 or 0
+  end
+  local _, lo, hi = reaper.TrackFX_GetParamEx(tr, fx, param)
+  return hi > lo and (raw - lo) / (hi - lo) or raw
+end
+
+local function env_write(env, tr, target, v, fx, param)
+  if target == 'volume' or target:match('^send:') then
+    return from_amplitude(env, v <= -150 and 0 or 10 ^ (v / 20))
+  elseif target == 'pan' then
+    return -v
+  elseif target == 'mute' then
+    return v >= 0.5 and 0 or 1
+  end
+  local _, lo, hi = reaper.TrackFX_GetParamEx(tr, fx, param)
+  return lo + v * (hi - lo)
+end
+
+-- Whether an envelope plays: a track's own are there from the start, inactive and hidden, until
+-- someone draws on them.
+local function is_active(env)
+  local _, active = reaper.GetSetEnvelopeInfo_String(env, 'ACTIVE', '', false)
+  return active == '1'
+end
+
+local function set_active(env, on)
+  local flag = on and '1' or '0'
+  reaper.GetSetEnvelopeInfo_String(env, 'ACTIVE', flag, true)
+  reaper.GetSetEnvelopeInfo_String(env, 'VISIBLE', flag, true)
+end
+
+local function env_points(env, tr, target, fx, param)
+  local out = {}
+  for p = 0, reaper.CountEnvelopePoints(env) - 1 do
+    local ok, time, raw, shape = reaper.GetEnvelopePoint(env, p)
+    if ok then
+      out[#out + 1] = time
+      out[#out + 1] = env_read(env, tr, target, raw, fx, param)
+      -- Reaper's square is a hold; every other shape is drawn as a straight line.
+      out[#out + 1] = shape == 1 and 0 or 1
+    end
+  end
+  return out
+end
+
+-- Every envelope with points on a track, by target.
+local function track_automation(tr)
+  local lanes = {}
+  local any = false
+  for target, _ in pairs(ENVELOPE_CHUNKS) do
+    local env = envelope_of(tr, target, false)
+    if env and reaper.CountEnvelopePoints(env) > 0 and is_active(env) then
+      lanes[target] = env_points(env, tr, target)
+      any = true
+    end
+  end
+  for s = 0, reaper.GetTrackNumSends(tr, 0) - 1 do
+    local env = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_ENV:<VOLENV')
+    local d = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_DESTTRACK')
+    if env and reaper.ValidatePtr(env, 'TrackEnvelope*') and reaper.CountEnvelopePoints(env) > 0
+        and is_active(env) and d and reaper.ValidatePtr(d, 'MediaTrack*') then
+      local target = 'send:' .. math.floor(reaper.GetMediaTrackInfo_Value(d, 'IP_TRACKNUMBER'))
+      lanes[target] = env_points(env, tr, target)
+      any = true
+    end
+  end
+  -- A plugin's envelopes by asking each envelope whose it is, not each of a plugin's parameters
+  -- whether it has one: some plugins have thousands.
+  for e = 0, reaper.CountTrackEnvelopes(tr) - 1 do
+    local env = reaper.GetTrackEnvelope(tr, e)
+    local _, fx, param = reaper.Envelope_GetParentTrack(env)
+    if fx and fx >= 0 and param and param >= 0 and reaper.CountEnvelopePoints(env) > 0 and is_active(env) then
+      local target = ('fx:%d:%d'):format(fx + 1, param + 1)
+      lanes[target] = env_points(env, tr, target, fx, param)
+      any = true
+    end
+  end
+  return any and lanes or nil
+end
+
+-- args: track, target, then flat seconds/value/shape triples: the whole envelope, replaced, as one
+-- undo point. No points empties it.
+function handlers.SetEnvelope(args)
+  local tr = track_from_osc(args[1])
+  local target = tostring(args[2] or '')
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.Undo_BeginBlock()
+  local env, fx, param = envelope_of(tr, target, #args > 2)
+  if env then
+    -- Active while it has points; without, the control is the fader's again.
+    -- Made active first: Reaper does not play an envelope switched on after its points are in.
+    set_active(env, #args > 2)
+    -- Then emptied one by one: a range leaves the point a new envelope starts with, at 0.
+    for p = reaper.CountEnvelopePoints(env) - 1, 0, -1 do
+      reaper.DeleteEnvelopePointEx(env, -1, p)
+    end
+    for i = 3, #args - 2, 3 do
+      reaper.InsertEnvelopePoint(env, args[i], env_write(env, tr, target, args[i + 1], fx, param),
+          (args[i + 2] or 1) < 0.5 and 1 or 0, 0, false, true)
+    end
+    reaper.Envelope_SortPoints(env)
+    -- Trim/Read plays envelopes under faders that stay where they are; Read moves the faders,
+    -- which is what the desk shows.
+    if #args > 2 and reaper.GetMediaTrackInfo_Value(tr, 'I_AUTOMODE') == 0 then
+      reaper.SetMediaTrackInfo_Value(tr, 'I_AUTOMODE', 1)
+    end
+  end
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+  reaper.Undo_EndBlock('Automation', -1)
+  return {ok = env ~= nil}
+end
+
+-- args: track, mode (Reaper's I_AUTOMODE; dawlings's read is Reaper's Read, 1, so its faders move).
+function handlers.SetAutomationMode(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local mode = math.floor(args[2] or 0)
+  reaper.SetMediaTrackInfo_Value(tr, 'I_AUTOMODE', mode == 0 and 1 or mode)
+  return {ok = true}
+end
+
 function handlers.GetTimeline()
   local tracks = {}
   for i = 0, reaper.CountTracks(0) - 1 do
@@ -314,8 +513,11 @@ function handlers.GetTimeline()
         gain = reaper.GetMediaItemInfo_Value(it, 'D_VOL'),
       }
     end
-    if #items > 0 then
-      tracks[#tracks + 1] = {index = i + 1, items = items}
+    -- Envelopes and the automation mode ride along, so a track with only those is reported too.
+    local automation = track_automation(tr)
+    local mode = math.floor(reaper.GetMediaTrackInfo_Value(tr, 'I_AUTOMODE'))
+    if #items > 0 or automation or mode ~= 0 then
+      tracks[#tracks + 1] = {index = i + 1, items = items, automation = automation or {}, automode = mode}
     end
   end
 

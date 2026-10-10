@@ -739,6 +739,28 @@ static func midi_take_request(track_index: int, start: float, end: float, notes:
 	return out
 
 
+## Shown at once, then written to Reaper's envelope and read back with the next timeline.
+func set_automation(track_index: int, target: String, points: Array) -> void:
+	_apply("/track/%d/automation/%s" % [track_index, target], MixWire.pack_automation(points))
+	_edit("SetEnvelope", [track_index, target] + MixWire.pack_automation(points))
+
+
+func set_track_automation_mode(index: int, mode: int) -> void:
+	_apply("/track/%d/automode" % index, [float(mode)])
+	_edit("SetAutomationMode", [index, mode])
+
+
+## Reaper's envelope values come back through its own scaling: equal to within that.
+static func _same_lane(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if absf(float(a[i][0]) - float(b[i][0])) > 0.0001 or absf(float(a[i][1]) - float(b[i][1])) > 0.001 \
+				or int(a[i][2]) != int(b[i][2]):
+			return false
+	return true
+
+
 ## Send one edit, and keep the timeline poll from undoing it on screen.
 ##
 ## A GetTimeline already on its way when the edit is made can come back with the lanes as they
@@ -784,6 +806,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 	# them -- see the Lua -- so a track whose last item was just deleted is reported by its
 	# ABSENCE, and a merge would leave that item on screen forever.
 	var lanes: Dictionary = {}
+	var envelopes: Dictionary = {}
+	var automodes: Dictionary = {}
 	for entry in _as_array(result.get("tracks", [])):
 		if typeof(entry) != TYPE_DICTIONARY:
 			continue
@@ -822,12 +846,35 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			if not extra.is_empty():
 				packed.append(extra)
 		lanes[idx] = packed
+		automodes[idx] = MixWire.automation_mode_of(entry.get("automode", 0))
+		var reported: Dictionary = {}
+		var auto = entry.get("automation", {})
+		if typeof(auto) == TYPE_DICTIONARY:
+			for target in auto:
+				var points := MixWire.unpack_automation(str(target), _as_array(auto[target]))
+				if not points.is_empty():
+					reported[str(target)] = points
+		envelopes[idx] = reported
 
 	for index in state.track_indices():
 		var packed: Array = lanes.get(index, [])
 		if packed.is_empty() and state.track(index).items.is_empty():
 			continue
 		_apply("/track/%d/items" % index, packed)
+
+	# Envelopes, like lanes, are reported by presence: a target not reported has none any more.
+	for index in state.track_indices():
+		var t := state.track(index)
+		var reported: Dictionary = envelopes.get(index, {})
+		for target in t.automation.keys():
+			if not reported.has(target):
+				_apply("/track/%d/automation/%s" % [index, target], [])
+		for target in reported:
+			if not _same_lane(t.automation.get(target, []), reported[target]):
+				_apply("/track/%d/automation/%s" % [index, target], MixWire.pack_automation(reported[target]))
+		var mode: int = automodes.get(index, 0)
+		if mode != t.automation_mode:
+			_apply("/track/%d/automode" % index, [float(mode)])
 
 	var markers: Array = []
 	for m in _as_array(result.get("markers", [])):

@@ -277,7 +277,8 @@ const ITEM_WIDTH := 5
 
 ## [position, name, position, name, ...], in time order.
 ## An automation mode from anyone: read (0), touch (2) or latch (4), read for anything else --
-## Reaper's own read (1) and write (3) included, which this desk does not offer.
+## Reaper's trim/read (0) and read (1) are both read here, and its write (3), which this desk does
+## not offer, is read too.
 static func automation_mode_of(v) -> int:
 	if typeof(v) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(v)):
 		return 0

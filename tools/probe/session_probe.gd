@@ -290,7 +290,7 @@ func _host(port: int) -> void:
 			await _tracks_in_reaper()
 		await _undo_takes()
 
-	await _until(19.9)
+	await _until(23.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -304,7 +304,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(20.9)
+	await _until(24.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -606,6 +606,68 @@ func _tracks_in_reaper() -> void:
 	DAW.undo()
 	await get_tree().create_timer(0.7).timeout
 	check("and undone, it is one tempo again (%s)" % [DAW.state.tempo_points], DAW.state.tempo_points.is_empty())
+	await _envelopes_in_reaper()
+
+
+## Lanes written to Reaper's envelopes, read back, and Reaper's own faders moving by them.
+func _envelopes_in_reaper() -> void:
+	var t := DAW.state.track(1)
+	var was_pan := t.pan
+	var was_mute := t.mute
+	var lanes := {
+		"volume": [[0.0, -6.0, DawKitAutomation.HOLD], [4.0, -18.0, DawKitAutomation.HOLD]],
+		"pan": [[0.0, -1.0, DawKitAutomation.HOLD]],
+		"mute": [[0.0, 0.0, DawKitAutomation.HOLD], [3.0, 1.0, DawKitAutomation.HOLD]],
+	}
+	for target in lanes:
+		DAW.set_automation(1, target, lanes[target])
+	# A send's level and a plugin's parameter, on whichever tracks have them.
+	var first := _first_send(DAW.state)
+	var send_lane := [[0.5, -10.0, DawKitAutomation.LINEAR], [2.0, -3.0, DawKitAutomation.HOLD]]
+	var send_target := "send:%d" % DAW.state.track(first[0]).sends[first[1]].resolve(DAW.state)
+	DAW.set_automation(first[0], send_target, send_lane)
+	var fx_track := -1
+	for i in DAW.state.track_indices():
+		if not DAW.state.track(i).plugins().is_empty():
+			fx_track = i
+			break
+	var fx_target := "fx:%d:1" % DAW.state.track(fx_track).plugins()[0]
+	var fx_lane := [[1.0, 0.25, DawKitAutomation.LINEAR], [3.0, 0.75, DawKitAutomation.HOLD]]
+	DAW.set_automation(fx_track, fx_target, fx_lane)
+	await get_tree().create_timer(0.8).timeout
+	var back := true
+	for target in lanes:
+		back = back and ReaperBackend._same_lane(t.automation.get(target, []), lanes[target])
+	check("Reaper took the lanes as envelopes and read them back (%s)" % [t.automation], back)
+	check("a send's (%s on %d: %s)" % [send_target, first[0], DAW.state.track(first[0]).automation.get(send_target)],
+			ReaperBackend._same_lane(DAW.state.track(first[0]).automation.get(send_target, []), send_lane))
+	check("and a plugin's (%s on %d: %s)" % [fx_target, fx_track, DAW.state.track(fx_track).automation.get(fx_target)],
+			ReaperBackend._same_lane(DAW.state.track(fx_track).automation.get(fx_target, []), fx_lane))
+	# Reaper reads its envelopes while it plays, into the null sink.
+	DAW.seek(1.0)
+	DAW.transport_play()
+	await get_tree().create_timer(0.5).timeout
+	check("and its faders follow them as it plays (%.2f dB, pan %.2f, mute %s)" % [t.volume_db, t.pan, t.mute],
+			absf(t.volume_db + 6.0) < 0.1 and t.pan < 0.01 and not t.mute)
+	DAW.seek(5.0)
+	await get_tree().create_timer(0.5).timeout
+	check("further on, further down, and muted (%.2f dB, %s)" % [t.volume_db, t.mute],
+			absf(t.volume_db + 18.0) < 0.1 and t.mute)
+	DAW.transport_stop()
+	DAW.set_track_automation_mode(1, DAW.AUTOMATION_LATCH)
+	await get_tree().create_timer(0.6).timeout
+	check("Reaper's track is in latch, and says so (%d)" % t.automation_mode, t.automation_mode == DAW.AUTOMATION_LATCH)
+	DAW.set_track_automation_mode(1, DAW.AUTOMATION_READ)
+	for _i in 5:
+		DAW.undo()
+	DAW.seek(0.0)
+	await get_tree().create_timer(0.8).timeout
+	check("undone, the envelopes are gone (%s)" % [t.automation], t.automation.is_empty() and t.automation_mode == 0
+			and DAW.state.track(first[0]).automation.is_empty() and DAW.state.track(fx_track).automation.is_empty())
+	if t.mute != was_mute:
+		DAW.set_track_mute(1, was_mute)
+	if not is_equal_approx(t.pan, was_pan):
+		DAW.set_track_pan(1, was_pan)
 
 
 ## The guest's MIDI take's notes, in song seconds, by pitch then time so the order survives an
@@ -774,7 +836,7 @@ func _guest(port: int) -> void:
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
-	await _until(20.5)
+	await _until(24.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
