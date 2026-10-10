@@ -107,6 +107,8 @@ var _item_controls: TimelineItemStrip
 var _track_controls: TimelineTrackStrip
 ## The tempo's changes, under the middle; see TimelineTempoStrip.
 var _tempo_controls: TimelineTempoStrip
+## The song written out, between the tempo's keys and the tracks'; see TimelineRenderStrip.
+var _render_controls: TimelineRenderStrip
 ## The track whose name was last pressed, for the track keys; 0 for none. This desk's own, not
 ## the DAW's selection: which track someone means to rename is not part of the mix.
 var picked_track := 0
@@ -252,6 +254,11 @@ func _ready() -> void:
 	_tempo_controls.name = "TempoStrip"
 	_tempo_controls.surface = self
 	add_child(_tempo_controls)
+
+	_render_controls = TimelineRenderStrip.new()
+	_render_controls.name = "RenderStrip"
+	_render_controls.surface = self
+	add_child(_render_controls)
 
 	_track_controls = TimelineTrackStrip.new()
 	_track_controls.name = "TrackStrip"
@@ -444,6 +451,8 @@ func _place_strips() -> void:
 	_track_controls.refresh()
 	_tempo_controls.position = Vector3(-1.5 * TimelineTempoStrip.PITCH, -_top_y - 0.016, 0.0)
 	_tempo_controls.refresh()
+	_render_controls.position = Vector3(width * 0.25 - 0.5 * TimelineRenderStrip.PITCH, -_top_y - 0.016, 0.0)
+	_render_controls.refresh()
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).

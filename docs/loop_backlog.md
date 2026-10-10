@@ -398,9 +398,13 @@ can finish music in, saving DAWproject. Steps, in order:
      Measured (`--built-in` probe, 3 runs): a track of notes rendered as a stem, each onset
      1.44 ms after its place in the song, the same in every run and every note (after the
      instrument's own 1.04 ms attack); a 12 dB automated drop measured as -12.00 dB.
-   - **Not yet (9b-d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
+   - **Done 2026-10-10 (9b), on the desk:** MIX and STEMS keys under the timeline, between the
+     tempo's keys and the tracks' (TimelineRenderStrip); the hover card says what will be written
+     (the loop, or the whole song and its length); dark where the DAW cannot render and while a
+     render runs.
+   - **Not yet (9c-d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
      no tail after the range (a reverb is cut at its end); faster than real time waits on the
-     engine mixing itself; a desk control for it; Reaper's render through the bridge.
+     engine mixing itself; Reaper's render through the bridge.
 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

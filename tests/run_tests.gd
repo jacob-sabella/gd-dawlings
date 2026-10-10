@@ -8460,6 +8460,9 @@ func _test_items_are_edited_on_the_timeline() -> void:
 			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 0)
 	timeline.pick_track(0)
 	click.call(at.call(2, 12.0))
+	var render: TimelineRenderStrip = timeline._render_controls
+	check("the stand-in cannot render, and its MIX and STEMS keys say so (%s)" % render.mix.describe_value.call(0.0),
+			not render.mix.lit and not render.stems.lit and render.mix.describe_value.call(0.0).contains("cannot render"))
 
 	# The tempo's changes, from the strip under the middle.
 	var tempo: TimelineTempoStrip = timeline._tempo_controls
