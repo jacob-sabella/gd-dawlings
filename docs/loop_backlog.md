@@ -276,8 +276,10 @@ can finish music in, saving DAWproject. Steps, in order:
      panel's right end has ADD (after the picked track, or at the end), DEL and NAME. NAME opens
      a `NamePrompt` on the monitor; in a headset there is nothing to type on yet, and the key
      says so. Still to come: a way to type in a headset; fades played as curves rather than a flat volume per frame (needs
-     the engine's own mixing, see "Waiting on the user"); dragging a fade's corner on the item
-     (the knobs set them now).
+     the engine's own mixing, see "Waiting on the user"). **Done 2026-10-10:** a fade is dragged by its
+     handle on the item, where its line meets the block's top (the top corner for no fade, the
+     top 5 mm of the block; the rest of the edge still trims), snapped to the beat unless fine,
+     drawn as it goes and set in one undo step when let go; the hover card reads "fade in 0.50 s".
    - **Done 2026-10-10 (6e), drawn on the item:** each fade is a line from silence in the
      block's bottom corner to full level where the fade ends; the gain, when not 0 dB, is
      written under the strip between the fades; a take's waveform is drawn as heard, through

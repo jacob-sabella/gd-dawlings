@@ -133,6 +133,11 @@ var _item_notes: MeshBank
 var _item_waves: MeshBank
 ## A line across each faded corner of an item, two slots an item. See _place_fades.
 var _item_fades: MeshBank
+## [track, item, fade in, fade out] drawn instead of the item's own while a fade is dragged.
+var _fade_preview: Array = []
+## How far down from a block's top its fade handles reach: the top of the block, where a fade's
+## line ends, is the fade; the rest of the block's edge trims.
+const FADE_GRIP_HEIGHT := 0.005
 ## An item's gain, written on it when it is not 0 dB: labels kept and reused as the window moves.
 var _gain_labels: Node3D
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
@@ -575,6 +580,39 @@ func item_at_point(global_point: Vector3) -> Array:
 				return [indices[i], item.index]
 		return []
 	return []
+
+
+## Which fade's handle a point is on: -1 the fade in's, 1 the fade out's, 0 neither. A handle is
+## where its line ends at the block's top -- the block's top corner for a fade of nothing -- a
+## few millimetres either side, as an edge's grip is.
+func fade_handle_at_point(global_point: Vector3) -> int:
+	var hit := item_at_point(global_point)
+	if hit.is_empty():
+		return 0
+	var row := _shown().find(hit[0])
+	if row < 0 or row >= _lane_y.size():
+		return 0
+	var local := to_local(global_point)
+	var top := _lane_y[row] + (LANE_HEIGHT - 0.0024) * 0.5
+	if local.y < top - FADE_GRIP_HEIGHT:
+		return 0
+	var item := DAW.state.item(hit[0], hit[1])
+	var in_at := _x_for(item.start + minf(item.fade_in, item.length)) + (EDGE_GAP if item.fade_in <= 0.0 else 0.0)
+	var out_at := _x_for(item.end() - minf(item.fade_out, item.length)) - (EDGE_GAP if item.fade_out <= 0.0 else 0.0)
+	var grip := minf(EDGE_GRIP, (_x_for(item.end()) - _x_for(item.start)) * 0.25)
+	var to_in := absf(local.x - in_at)
+	var to_out := absf(local.x - out_at)
+	if to_in <= grip and to_in <= to_out:
+		return -1
+	if to_out <= grip:
+		return 1
+	return 0
+
+
+## The fades an item is drawn with while they are dragged; (-1, -1) for none.
+func preview_fades(track_index: int, item_index: int, fade_in := 0.0, fade_out := 0.0) -> void:
+	_fade_preview = [] if track_index < 0 else [track_index, item_index, fade_in, fade_out]
+	_relayout_view()
 
 
 ## Which edge of the item under a point the point is on: -1 its left, 1 its right, 0 neither.
@@ -1353,6 +1391,9 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 	var right := _x_for(start + length) - EDGE_GAP
 	var fade_in := minf(item.fade_in, length)
 	var fade_out := minf(item.fade_out, length)
+	if not _fade_preview.is_empty() and _fade_preview[1] == item.index and DAW.state.item(_fade_preview[0], _fade_preview[1]) == item:
+		fade_in = minf(float(_fade_preview[2]), length)
+		fade_out = minf(float(_fade_preview[3]), length)
 	var lines: Array = []
 	if fade_in > 0.0:
 		lines.append([Vector2(left, low), Vector2(minf(_x_for(start + fade_in), right), high)])

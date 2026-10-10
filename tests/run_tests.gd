@@ -8402,6 +8402,37 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.undo()
 	DAW.undo()
 	close_to("two undos put both edges back", s.item(2, 0).start, s.bar_to_seconds(9.0), 0.001)
+
+	# Fades: a block's top corners. Item (2, 0) runs bar 9 to 25.
+	var top := func(bar: float) -> Vector3:
+		return at.call(2, bar) + timeline.global_basis.y * ((TimelineSurface.LANE_HEIGHT - 0.0024) * 0.5 - 0.001)
+	check("a block's top corners are its fades, the rest of its edges trims",
+			timeline.fade_handle_at_point(top.call(9.02)) == -1 and timeline.fade_handle_at_point(top.call(24.98)) == 1
+			and timeline.fade_handle_at_point(at.call(2, 9.02)) == 0 and timeline.fade_handle_at_point(top.call(13.0)) == 0)
+	var fade_depth := s.undo_depth
+	lanes.grab_begin(hand, top.call(9.02))
+	lanes.grab_move(hand, top.call(11.1))
+	check("dragging the top left corner reads as a fade in (%s)" % lanes.readout(),
+			lanes.readout() == "fade in %.2f s" % (s.bar_to_seconds(11.0) - s.bar_to_seconds(9.0)))
+	check("drawn while the project waits", timeline._fade_preview.size() == 4 and s.item(2, 0).fade_in == 0.0)
+	lanes.grab_end(hand)
+	close_to("let go, the fade in ends on the beat it was dragged to", s.item(2, 0).fade_in, s.bar_to_seconds(11.0) - s.bar_to_seconds(9.0), 0.001)
+	check("in one undo step, the item where it was", s.undo_depth == fade_depth + 1 and timeline._fade_preview.is_empty()
+			and is_equal_approx(s.item(2, 0).start, s.bar_to_seconds(9.0)))
+	check("its handle is now where its line ends", timeline.fade_handle_at_point(top.call(11.0)) == -1)
+	lanes.grab_begin(hand, top.call(24.98))
+	lanes.grab_move(hand, top.call(23.0))
+	lanes.grab_end(hand)
+	close_to("the top right corner sets the fade out", s.item(2, 0).fade_out, s.bar_to_seconds(25.0) - s.bar_to_seconds(23.0), 0.001)
+	close_to("leaving the fade in", s.item(2, 0).fade_in, s.bar_to_seconds(11.0) - s.bar_to_seconds(9.0), 0.001)
+	lanes.grab_begin(hand, top.call(11.0))
+	lanes.grab_move(hand, top.call(5.0))
+	lanes.grab_end(hand)
+	check("dragged off the item's start, the fade in is none", s.item(2, 0).fade_in == 0.0)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("three undos, no fades", s.item(2, 0).fade_in == 0.0 and s.item(2, 0).fade_out == 0.0 and s.undo_depth == fade_depth)
 	click.call(at.call(2, 12.0))
 
 	# The item's own controls, under the panel, while exactly one item is selected.

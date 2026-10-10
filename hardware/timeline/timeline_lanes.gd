@@ -5,7 +5,9 @@ extends ControlAffordance
 ##
 ## Press an item to select it (fine -- shift on a monitor -- adds it to the selection or takes it
 ## out). Drag it to move it along its lane, snapped to the beat unless fine. Drag an edge to trim
-## the item there, snapped the same way, its contents staying where they are in the song. Press empty lane to
+## the item there, snapped the same way, its contents staying where they are in the song. Drag a
+## top corner -- or the top of a fade's line -- to set that fade, snapped the same way, one undo
+## step when let go. Press empty lane to
 ## drop the selection and put the playhead there. The wheel zooms, round the playhead the way
 ## Reaper zooms round its edit cursor. Splitting is a key, not a gesture: see the surface.
 ##
@@ -41,6 +43,11 @@ var _target_start := 0.0
 var _edge := 0
 var _item_end := 0.0
 var _target_end := 0.0
+## -1 or 1 while a fade's handle is being dragged (TimelineSurface.fade_handle_at_point), and the
+## fades as dragged.
+var _fade := 0
+var _fade_in := 0.0
+var _fade_out := 0.0
 ## Editing the shown lane of automation: its points as edited, the one held, and whether the
 ## press made it.
 var _auto_on := false
@@ -103,7 +110,11 @@ func _on_grab_begin(at: Vector3) -> void:
 		_item_end = item.end()
 		_target_start = _item_start
 		_target_end = _item_end
-		_edge = surface.item_edge_at_point(at)
+		_fade_in = item.fade_in
+		_fade_out = item.fade_out
+		# A block's top corners are its fades; the rest of its edges trim.
+		_fade = surface.fade_handle_at_point(at)
+		_edge = 0 if _fade != 0 else surface.item_edge_at_point(at)
 
 
 func _on_grab_move(at: Vector3) -> void:
@@ -122,6 +133,16 @@ func _on_grab_move(at: Vector3) -> void:
 		return
 	_dragged = true
 	var moved: float = surface.seconds_at_point(at) - _grab_seconds
+	if _fade != 0:
+		# The fade's end snaps to the beat, unless fine; a fade is never longer than the item.
+		var length := _item_end - _item_start
+		var here: float = surface.seconds_at_point(at)
+		if _fade < 0:
+			_fade_in = clampf(snap(here, _fine()) - _item_start, 0.0, length)
+		else:
+			_fade_out = clampf(_item_end - snap(here, _fine()), 0.0, length)
+		surface.preview_fades(_hit[0], _hit[1], _fade_in, _fade_out)
+		return
 	if _edge != 0:
 		# The edge being dragged snaps; the other stays put, and the item keeps a real length.
 		if _edge < 0:
@@ -148,6 +169,7 @@ func _on_grab_end() -> void:
 	_hit = []
 	_dragged = false
 	_edge = 0
+	_fade = 0
 
 
 func _finish_grab() -> void:
@@ -167,6 +189,11 @@ func _finish_grab() -> void:
 	# moved is what you are working on.
 	if not item.selected:
 		DAW.select_item(_hit[0], _hit[1], false)
+	if _fade != 0:
+		surface.preview_fades(-1, -1)
+		if not is_equal_approx(_fade_in, item.fade_in) or not is_equal_approx(_fade_out, item.fade_out):
+			DAW.set_item_fades(_hit[0], _hit[1], _fade_in, _fade_out)
+		return
 	if _edge != 0:
 		if not is_equal_approx(_target_start, item.start) or not is_equal_approx(_target_end, item.end()):
 			DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
@@ -286,6 +313,10 @@ func _default_readout() -> String:
 		return lane
 	var s := DAW.state
 	if _dragged and not _hit.is_empty():
+		if _fade < 0:
+			return "fade in %.2f s" % _fade_in
+		if _fade > 0:
+			return "fade out %.2f s" % _fade_out
 		if _edge < 0:
 			return "trim start to %s" % s.bar_beat(_target_start)
 		if _edge > 0:
@@ -300,4 +331,4 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "click to select, shift adds; drag to move, or by an edge to trim; wheel zooms; B or SPLIT cuts at the playhead"
+	return "click to select, shift adds; drag to move, by an edge to trim, by a top corner to fade; wheel zooms; B or SPLIT cuts at the playhead"
