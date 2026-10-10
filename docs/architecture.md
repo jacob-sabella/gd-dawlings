@@ -84,8 +84,12 @@ offline backend's own mix, with its state, undo and replication, turned into God
 - **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
   rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
   a new set and swaps all of it at once, so no part plays at the old tempo against the new.
-  Each part starts at the song position modulo its loop, only under its track's items, and is
-  nudged back if it drifts more than 60ms from the transport.
+  Each part starts at the song position modulo its loop, only under its track's items. The
+  playhead is the sound card's (`audio_time`, a silent looping player), and a player is put back
+  only when it drifts more than 25ms from its own first reading.
+- **Items carry gain and fades**, played as their player's volume (`item_level`). Delete,
+  duplicate, trim, gain and fades are DAW verbs, one undo step each, and Reaper gets them
+  through the bridge.
 - **Meters are the buses' real peaks**, through the same fader law.
 - **Guests hear the master bus**: an `AudioEffectCapture` on `R3D Master` is the session's
   `MixSource` (`BusSource`), resampled to the wire's 48kHz if a sound card insists on another
@@ -93,8 +97,8 @@ offline backend's own mix, with its state, undo and replication, turned into God
   the host on a real audio driver into the null sink, because headless Godot's dummy driver mixes
   in 85ms lumps.
 
-Not there yet: recording, your own audio files, playing MIDI items through a synth, and
-third-party plugins, which Godot cannot host.
+Not there yet: quantise and transpose, adding and removing tracks, automation, mixdown, and
+third-party plugins, which Godot cannot host. See "Built-in DAW" in `docs/loop_backlog.md`.
 
 ### dawkit: the engine is its own product
 

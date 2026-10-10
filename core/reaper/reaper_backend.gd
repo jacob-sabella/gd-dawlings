@@ -74,6 +74,9 @@ var _inbox_at := 0
 const APPLY_BUDGET_USEC := 6000
 
 
+## Shorter than this, a fade Reaper reports is its own default anti-click fade, not one anyone made.
+const FADE_FLOOR := 0.011
+
 func _ready() -> void:
 	# An autoload that opens a socket on startup would make `godot --headless` in CI try to talk
 	# to a DAW. Nothing happens until a scene asks for it.
@@ -577,6 +580,31 @@ func split_selected(seconds: float) -> void:
 	_edit("SplitSelected", [seconds])
 
 
+func delete_selected() -> void:
+	_locally_delete_selected()
+	_edit("DeleteSelected", [])
+
+
+func duplicate_selected() -> void:
+	_locally_duplicate_selected()
+	_edit("DuplicateSelected", [])
+
+
+func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
+	_locally_trim(track_index, item_index, start, end)
+	_edit("TrimItem", [track_index, item_index, start, end])
+
+
+func set_item_gain(track_index: int, item_index: int, db: float) -> void:
+	_locally_shape(track_index, item_index, db, NAN, NAN)
+	_edit("SetItemGain", [track_index, item_index, db])
+
+
+func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
+	_locally_shape(track_index, item_index, NAN, fade_in, fade_out)
+	_edit("SetItemFades", [track_index, item_index, fade_in, fade_out])
+
+
 ## Shown on the cache at once, like an item edit, and confirmed by the timeline poll the edit
 ## brings forward.
 func add_marker(seconds: float, marker_name: String) -> void:
@@ -692,9 +720,19 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			# One of the takes recorded through this desk: its file and its overview, so it
 			# is drawn as the sound it is wherever Reaper has put it since.
 			var source := str(item.get("source", "")).get_file()
+			var extra := {}
 			if take_peaks.has(source):
-				packed.append({"source": source, "offset": float(item.get("offset", 0.0)),
-						"peaks": take_peaks[source]})
+				extra = {"source": source, "offset": float(item.get("offset", 0.0)),
+						"peaks": take_peaks[source]}
+			# The item's fades and its own volume, which the desk can change too.
+			var gain := float(item.get("gain", 1.0))
+			var shape := {"fade_in": float(item.get("fade_in", 0.0)), "fade_out": float(item.get("fade_out", 0.0)),
+					"gain_db": linear_to_db(gain) if gain > 0.0 else DAWBackend.ITEM_GAIN_MIN}
+			# Reaper's default fade is a few milliseconds on every item; under that is no fade.
+			if shape["fade_in"] > FADE_FLOOR or shape["fade_out"] > FADE_FLOOR or absf(shape["gain_db"]) > 0.001:
+				extra.merge(shape)
+			if not extra.is_empty():
+				packed.append(extra)
 		lanes[idx] = packed
 
 	for index in state.track_indices():

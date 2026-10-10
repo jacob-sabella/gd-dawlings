@@ -309,6 +309,9 @@ function handlers.GetTimeline()
         notes = item_notes(it, take),
         source = source,
         offset = offset,
+        fade_in = reaper.GetMediaItemInfo_Value(it, 'D_FADEINLEN'),
+        fade_out = reaper.GetMediaItemInfo_Value(it, 'D_FADEOUTLEN'),
+        gain = reaper.GetMediaItemInfo_Value(it, 'D_VOL'),
       }
     end
     if #items > 0 then
@@ -670,6 +673,71 @@ function handlers.SplitSelected(args)
   local result = edited('Split items')
   result.split = #targets
   return result
+end
+
+-- Every selected item deleted, one undo point, as Reaper's own Remove items.
+function handlers.DeleteSelected()
+  local count = reaper.CountSelectedMediaItems(0)
+  if count == 0 then return {ok = true, deleted = 0} end
+  reaper.Undo_BeginBlock()
+  for n = count - 1, 0, -1 do
+    local it = reaper.GetSelectedMediaItem(0, n)
+    reaper.DeleteTrackMediaItem(reaper.GetMediaItem_Track(it), it)
+  end
+  local result = edited('Remove items')
+  result.deleted = count
+  return result
+end
+
+-- Reaper's own Item: Duplicate items (41295): a copy straight after each selected item, the
+-- copies selected. Its own undo point.
+function handlers.DuplicateSelected()
+  if reaper.CountSelectedMediaItems(0) == 0 then return {ok = true} end
+  reaper.Main_OnCommand(41295, 0)
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
+-- args: track, index, start, end. The item's edges moved with its contents left where they are
+-- in the song: the take's start offset moves with the left edge, at the take's own rate.
+function handlers.TrimItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local start = math.max(0, args[3] or 0)
+  local finish = args[4] or start
+  if finish - start < 0.01 then return {ok = false, error = 'too short'} end
+  reaper.Undo_BeginBlock()
+  local moved = start - reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take then
+      local rate = reaper.GetMediaItemTakeInfo_Value(take, 'D_PLAYRATE')
+      local offset = reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS')
+      reaper.SetMediaItemTakeInfo_Value(take, 'D_STARTOFFS', offset + moved * rate)
+    end
+  end
+  reaper.SetMediaItemInfo_Value(it, 'D_POSITION', start)
+  reaper.SetMediaItemInfo_Value(it, 'D_LENGTH', finish - start)
+  return edited('Trim item')
+end
+
+-- args: track, index, dB. The item's own volume, which Reaper keeps as a linear gain.
+function handlers.SetItemGain(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  reaper.SetMediaItemInfo_Value(it, 'D_VOL', 10 ^ ((args[3] or 0) / 20))
+  return edited('Item volume')
+end
+
+-- args: track, index, fade in, fade out, in seconds.
+function handlers.SetItemFades(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  reaper.SetMediaItemInfo_Value(it, 'D_FADEINLEN', math.max(0, args[3] or 0))
+  reaper.SetMediaItemInfo_Value(it, 'D_FADEOUTLEN', math.max(0, args[4] or 0))
+  return edited('Item fades')
 end
 
 -- args: seconds, name. A marker, one undo point, as Insert marker does from Reaper's own menu --

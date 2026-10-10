@@ -80,6 +80,12 @@ const Capability := {
 	RECORDS_OWN_INPUTS = &"records_own_inputs",
 }
 
+
+## The shortest an item can be trimmed to, and the range of an item's own gain.
+const MIN_ITEM_SECONDS := 0.01
+const ITEM_GAIN_MIN := -60.0
+const ITEM_GAIN_MAX := 24.0
+
 var state := MixState.new()
 ## The overview of every take placed through this backend, by file name: a DAW that reports
 ## its items back (Reaper) reports the file, never the overview.
@@ -232,6 +238,18 @@ func clear_item_selection() -> void: pass
 func move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
 ## Cut every selected item that spans `seconds` there. Both halves stay selected.
 func split_selected(_seconds: float) -> void: pass
+## Every selected item, gone.
+func delete_selected() -> void: pass
+## A copy of every selected item, straight after it; the copies are then the selection, as Reaper's
+## own Duplicate leaves it.
+func duplicate_selected() -> void: pass
+## An item's edges moved to `start` and `end` seconds, its contents staying where they are in the
+## song: trimming, not moving.
+func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) -> void: pass
+## An item's own level, in dB on top of its track's.
+func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
+## An item's fade in and fade out, in seconds.
+func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
 ## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
@@ -365,6 +383,89 @@ func _split_notes(left: MixState.ItemState, right: MixState.ItemState, seconds: 
 			moved.append(n)
 	left.notes = MidiTake.pack_relative(keep, left.start)
 	right.notes = MidiTake.pack_relative(moved, seconds)
+
+
+## Returns how many were deleted.
+func _locally_delete_selected() -> int:
+	var gone := 0
+	for index in state.track_indices():
+		if not state.track(index).items.any(func(it): return it.selected):
+			continue
+		var lane := _lane_copy(index)
+		var kept := lane.filter(func(it): return not it.selected)
+		gone += lane.size() - kept.size()
+		_write_lane(index, kept)
+	return gone
+
+
+## Returns how many were copied.
+func _locally_duplicate_selected() -> int:
+	var made := 0
+	for index in state.track_indices():
+		if not state.track(index).items.any(func(it): return it.selected):
+			continue
+		var lane := _lane_copy(index)
+		var copies: Array = []
+		for item in lane:
+			if not item.selected:
+				continue
+			var copy: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
+			copy.start = item.end()
+			# A looped part goes on round; a file goes on from where the copy's start is in it
+			# only when it loops, so a plain take repeats rather than running on past its end.
+			if item.is_looped():
+				copy.source_offset = item.source_offset + item.length
+			item.selected = false
+			copies.append(copy)
+		lane.append_array(copies)
+		made += copies.size()
+		_write_lane(index, lane)
+	return made
+
+
+## The edges an item can have: no further left than its file starts (or the song does), and a
+## real length.
+func _locally_trim(track_index: int, item_index: int, start: float, end: float) -> void:
+	var item := state.item(track_index, item_index)
+	if item == null:
+		return
+	var earliest := 0.0
+	if not item.source.is_empty() and not item.is_looped():
+		earliest = maxf(item.start - item.source_offset, 0.0)
+	start = maxf(start, earliest)
+	if end - start < MIN_ITEM_SECONDS:
+		return
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var moved := start - it.start
+	if not it.notes.is_empty():
+		var kept: Array = []
+		for n in MidiTake.unpack_relative(it.notes, it.start):
+			if n[0] >= start and n[0] < end:
+				n[1] = minf(n[1], end)
+				kept.append(n)
+		it.notes = MidiTake.pack_relative(kept, start)
+	it.source_offset += moved
+	it.start = start
+	it.length = end - start
+	it.fade_in = minf(it.fade_in, it.length)
+	it.fade_out = minf(it.fade_out, it.length - it.fade_in)
+	_write_lane(track_index, lane)
+
+
+## NAN leaves that part of the item as it is.
+func _locally_shape(track_index: int, item_index: int, gain_db: float, fade_in: float, fade_out: float) -> void:
+	if state.item(track_index, item_index) == null:
+		return
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	if not is_nan(gain_db):
+		it.gain_db = clampf(gain_db, ITEM_GAIN_MIN, ITEM_GAIN_MAX)
+	if not is_nan(fade_in):
+		it.fade_in = clampf(fade_in, 0.0, it.length)
+	if not is_nan(fade_out):
+		it.fade_out = clampf(fade_out, 0.0, it.length - it.fade_in)
+	_write_lane(track_index, lane)
 
 
 ## A take's item, drawn at once: the offline project's whole edit, and a live DAW's preview of

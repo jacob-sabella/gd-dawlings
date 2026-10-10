@@ -285,9 +285,10 @@ func _host(port: int) -> void:
 	if not _built_in:
 		_check_placed_take()
 		_check_audio_take()
+		await _edit_the_take()
 		await _undo_takes()
 
-	await _until(14.4)
+	await _until(15.0)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -301,7 +302,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(15.4)
+	await _until(16.0)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -503,6 +504,45 @@ func _check_audio_take() -> void:
 
 
 ## Both takes off again: the host's undo, once for each, latest first.
+## The guest's audio take trimmed, turned down and faded through the DAW verbs. On a real Reaper
+## the lanes are read back from Reaper after the edits land, so what is checked is what the bridge
+## did, not the host's own guess.
+func _edit_the_take() -> void:
+	var taken: String = _audio_placed.get("name", "-")
+	var index := func() -> int:
+		var items: Array = DAW.state.track(AUDIO_TRACK).items
+		for i in items.size():
+			if items[i].name == taken:
+				return i
+		return -1
+	if index.call() < 0:
+		check("the take is there to edit", false)
+		return
+	var it: MixState.ItemState = DAW.state.track(AUDIO_TRACK).items[index.call()]
+	var start := it.start + 0.1
+	var end := it.end() - 0.1
+	var offset := it.source_offset
+	DAW.trim_item(AUDIO_TRACK, index.call(), start, end)
+	DAW.set_item_gain(AUDIO_TRACK, index.call(), -6.0)
+	DAW.set_item_fades(AUDIO_TRACK, index.call(), 0.05, 0.1)
+	var reads := [0]
+	var count := func(): reads[0] += 1
+	DAW.timeline_changed.connect(count)
+	await get_tree().create_timer(0.6).timeout
+	DAW.timeline_changed.disconnect(count)
+	it = DAW.state.track(AUDIO_TRACK).items[index.call()] if index.call() >= 0 else null
+	check("I trimmed, turned down and faded the take, and the DAW kept it (%s)"
+			% [[it.start, it.end(), it.source_offset - offset, it.gain_db, it.fade_in, it.fade_out] if it else null],
+			it != null and absf(it.start - start) < 0.001 and absf(it.end() - end) < 0.001
+			and absf(it.source_offset - offset - 0.1) < 0.001 and absf(it.gain_db + 6.0) < 0.01
+			and absf(it.fade_in - 0.05) < 0.001 and absf(it.fade_out - 0.1) < 0.001)
+	if _reaper_resource != "":
+		check("as Reaper read it back after the edits (%d reads)" % reads[0], reads[0] > 0)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+
+
 func _undo_takes() -> void:
 	DAW.undo()
 	DAW.undo()
@@ -658,7 +698,7 @@ func _guest(port: int) -> void:
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
-	await _until(15.0)
+	await _until(15.6)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

@@ -789,6 +789,36 @@ func move_item(track_index: int, item_index: int, start: float) -> void:
 	_remember_edit(before)
 
 
+func delete_selected() -> void:
+	var before := _lanes_snapshot()
+	if _locally_delete_selected() > 0:
+		_remember_edit(before)
+
+
+func duplicate_selected() -> void:
+	var before := _lanes_snapshot()
+	if _locally_duplicate_selected() > 0:
+		_remember_edit(before)
+
+
+func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
+	var before := _lanes_snapshot()
+	_locally_trim(track_index, item_index, start, end)
+	_remember_edit(before)
+
+
+func set_item_gain(track_index: int, item_index: int, db: float) -> void:
+	var before := _lanes_snapshot()
+	_locally_shape(track_index, item_index, db, NAN, NAN)
+	_remember_edit(before)
+
+
+func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
+	var before := _lanes_snapshot()
+	_locally_shape(track_index, item_index, NAN, fade_in, fade_out)
+	_remember_edit(before)
+
+
 func split_selected(seconds: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_split(seconds) > 0:

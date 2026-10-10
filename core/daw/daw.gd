@@ -53,11 +53,15 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
+	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"add_marker", &"set_track_monitor",
 	&"insert_midi_take",
 ]
+
+## Item edits that name an item, and how many arguments each takes.
+const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4}
 
 var backend: DAWBackend
 
@@ -303,6 +307,15 @@ func clear_item_selection() -> void: _do(&"clear_item_selection", [])
 func move_item(track_index: int, item_index: int, start: float) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0)])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
+func delete_selected() -> void: _do(&"delete_selected", [])
+func duplicate_selected() -> void: _do(&"duplicate_selected", [])
+func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
+	_do(&"trim_item", [track_index, item_index, maxf(minf(start, end), 0.0), maxf(start, end)])
+func set_item_gain(track_index: int, item_index: int, db: float) -> void:
+	_do(&"set_item_gain", [track_index, item_index,
+			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
+func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
+	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
 ## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
 ## guest's intent should not be able to hand the host a megabyte of name.
 const MARKER_NAME_MAX := 64
@@ -369,6 +382,21 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])
 			return
 		args = [MixWire._as_bool([args[0]])]
+	if verb in ITEM_EDITS:
+		# Peer input: a track, an item, then finite numbers, or nothing at all.
+		var want: int = ITEM_EDITS[verb]
+		if args.size() != want or int(args[0]) < 1 or int(args[1]) < 0 \
+				or args.slice(2).any(func(v): return not is_finite(float(v))):
+			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
+			return
+		var clean: Array = [int(args[0]), int(args[1])]
+		for v in args.slice(2):
+			clean.append(float(v))
+		if verb == &"set_item_gain":
+			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
+		args = clean
+	if verb in [&"delete_selected", &"duplicate_selected"]:
+		args = []
 	if verb in [&"set_send_volume", &"set_send_pan"]:
 		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
 		# level outside the taper is a fader past its end stop.

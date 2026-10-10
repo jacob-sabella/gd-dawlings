@@ -176,7 +176,8 @@ can finish music in, saving DAWproject. Steps, in order:
      starts when MIDI is opened or the first key is played. The panel shows the host YOUR KEYS.
      `OfflineBackend.records_inputs` lets the suite play a host on Reaper.
    - **Not yet:** recording more than one input at a time (one microphone and one set of keys
-     each now); a count-in; punch in and out; per-track input choice saved in the project. 5. MIDI playback through a built-in instrument.
+     each now); a count-in; punch in and out; per-track input choice saved in the project.
+5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
      instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
      renders a MIDI item on a worker thread (keyed by its notes and length; silent until it is
@@ -211,7 +212,22 @@ can finish music in, saving DAWproject. Steps, in order:
        absolute limit is 15 ms for that reason.
    - Seen once: the default probe's guest missed a click in its timing check (frames 33661,
      129615: one gone). It passed the next 4 runs. Like step 0's flaky click, watch for it.
-6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
+6. Editing.
+   - **Done 2026-10-10 (6a), items:** DAW verbs `delete_selected`, `duplicate_selected` (the
+     copy goes right after the original and takes the selection; a looped item carries on where
+     it left off), `trim_item(track, item, start, end)` (an audio item cannot start before its
+     file; notes keep their place in time), `set_item_gain` (-60 to +24 dB) and `set_item_fades`.
+     All go through `DAW._do` and are sanitised there, so guests can ask for them. Each is one
+     undo step on the built-in engine. On Reaper each is a bridge call (`DeleteSelected`,
+     `DuplicateSelected`, `TrimItem`, `SetItemGain`, `SetItemFades`), and GetTimeline now reports
+     fades and gain. Fades of 11 ms or less are taken to be Reaper's anti-click default, not a
+     fade. The built-in engine plays an item's gain and fades as its player's volume, and they
+     already went into DAWproject. `session_probe.sh --reaper` trims, turns down and fades the
+     guest's take, and checks that Reaper reads the edits back.
+   - **Not yet:** quantise and transpose (6b); adding, removing and renaming tracks (6c); keys
+     for these on the timeline; fades drawn as curves rather than a flat volume per frame (needs
+     the engine's own mixing, see "Waiting on the user").
+7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

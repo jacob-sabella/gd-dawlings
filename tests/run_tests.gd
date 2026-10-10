@@ -172,6 +172,7 @@ func _ready() -> void:
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
+	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10522,6 +10523,80 @@ func _test_the_built_in_engine_plays_notes_through_its_instrument() -> void:
 	stale.notes = PackedFloat32Array([0.1, 0.2, 72, 100, 0])
 	fresh.prune_renders()
 	check("a render of notes no longer on the timeline is let go", not fresh._midi_streams.has(key))
+	_offline()
+
+
+func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	DAW.insert_midi_take(lane, 10.0, 14.0, [[10.5, 11.0, 60, 100, 0], [12.5, 13.5, 64, 90, 0]], "Keys")
+	DAW.insert_audio_take(lane, 20.0, "suite-edit.wav", 4.0, PackedByteArray(), "Vox")
+	var depth := maxi(s.undo_depth, 0)
+
+	DAW.select_item(lane, 0)
+	DAW.duplicate_selected()
+	var items: Array = s.track(lane).items
+	check("duplicated, a copy follows the item (%d)" % items.size(), items.size() == 3)
+	if items.size() == 3:
+		# The lane is kept in order of start, as Reaper numbers it.
+		var copy: MixState.ItemState = items[1]
+		check("straight after it, with its notes", is_equal_approx(copy.start, 14.0)
+				and copy.notes == items[0].notes)
+		check("and the copy is the selection now", copy.selected and not items[0].selected)
+	DAW.delete_selected()
+	check("deleted, the copy is gone", s.track(lane).items.size() == 2)
+	DAW.undo()
+	check("undone, it is back", s.track(lane).items.size() == 3)
+	DAW.undo()
+	check("and undone again, there was never a copy", s.track(lane).items.size() == 2)
+
+	DAW.trim_item(lane, 0, 12.0, 13.0)
+	var keys: MixState.ItemState = s.item(lane, 0)
+	check("trimmed from both ends (%.2f, %.2f)" % [keys.start, keys.length],
+			is_equal_approx(keys.start, 12.0) and is_equal_approx(keys.length, 1.0))
+	var notes := MidiTake.unpack_relative(keys.notes, keys.start)
+	check("its notes stay where they were in the song, and only those inside it (%s)" % [notes],
+			notes.size() == 1 and is_equal_approx(notes[0][0], 12.5) and is_equal_approx(notes[0][1], 13.0))
+	DAW.trim_item(lane, 1, 21.5, 24.0)
+	var vox: MixState.ItemState = s.item(lane, 1)
+	check("an audio item trimmed on the left starts later in its file (%.2f)" % vox.source_offset,
+			is_equal_approx(vox.start, 21.5) and is_equal_approx(vox.source_offset, 1.5))
+	DAW.trim_item(lane, 1, 15.0, 24.0)
+	check("and cannot be pulled out before its file begins (%.2f)" % s.item(lane, 1).start,
+			is_equal_approx(s.item(lane, 1).start, 20.0) and is_equal_approx(s.item(lane, 1).source_offset, 0.0))
+
+	DAW.set_item_gain(lane, 1, -6.0)
+	DAW.set_item_fades(lane, 1, 0.5, 9.0)
+	vox = s.item(lane, 1)
+	check("an item's own gain", is_equal_approx(vox.gain_db, -6.0))
+	check("and its fades, never longer than it is (%.2f, %.2f)" % [vox.fade_in, vox.fade_out],
+			is_equal_approx(vox.fade_in, 0.5) and is_equal_approx(vox.fade_out, vox.length - 0.5))
+	close_to("heard half way through its fade in at half level", GodotBackend.item_level(vox, vox.start + 0.25),
+			-6.0 + linear_to_db(0.5), 0.001)
+	check("each edit one step to undo (%d)" % (s.undo_depth - depth), s.undo_depth - depth == 5)
+
+	DAW.apply_intent(&"set_item_gain", [lane, 1, NAN])
+	DAW.apply_intent(&"trim_item", [lane, 1, 20.0])
+	check("a guest's malformed edit is refused", is_equal_approx(s.item(lane, 1).gain_db, -6.0)
+			and is_equal_approx(s.item(lane, 1).start, 20.0))
+	DAW.apply_intent(&"set_item_gain", [lane, 1, 999.0])
+	check("and its gain kept on the scale", is_equal_approx(s.item(lane, 1).gain_db, DAWBackend.ITEM_GAIN_MAX))
+
+	var link := _fresh_link()
+	link.state.track(4)
+	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 4, "items": [
+			{"start": 1.0, "length": 2.0, "muted": false, "name": "A", "selected": false,
+			"fade_in": 0.25, "fade_out": 0.01, "gain": 0.5},
+			{"start": 4.0, "length": 2.0, "muted": false, "name": "B", "selected": false,
+			"fade_in": 0.01, "fade_out": 0.01, "gain": 1.0}]}]})
+	var a := link.state.item(4, 0)
+	var b := link.state.item(4, 1)
+	check("Reaper's fades and item volume reach the desk (%s)" % [[a.fade_in, a.gain_db] if a else null],
+			a != null and is_equal_approx(a.fade_in, 0.25) and absf(a.gain_db - linear_to_db(0.5)) < 0.001)
+	check("and its default anti-click fade is no fade", b != null and b.fade_in == 0.0 and b.gain_db == 0.0)
+	link.free()
 	_offline()
 
 
