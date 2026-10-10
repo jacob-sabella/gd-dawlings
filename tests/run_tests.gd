@@ -161,6 +161,7 @@ func _ready() -> void:
 	_test_a_track_records_from_its_own_input()
 	_test_the_time_signature_changes()
 	_test_the_demo_song_follows_the_tempo_map()
+	_test_the_demo_song_follows_the_meter()
 	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
@@ -10351,6 +10352,35 @@ func _test_the_demo_song_follows_the_tempo_map() -> void:
 			hits.size() >= 15 and misses.is_empty())
 	close_to("and the window ends where the map puts its last beat", float(window.size()) / DemoSong.RATE,
 			map.seconds_at(48.0) - map.seconds_at(12.0), 0.001)
+
+
+func _test_the_demo_song_follows_the_meter() -> void:
+	check("a bar of 4/4 is felt on each count", DemoSong.pulses(Vector2i(4, 4)) == [0.0, 1.0, 2.0, 3.0])
+	check("one of 3/4 on its three", DemoSong.pulses(Vector2i(3, 4)) == [0.0, 1.0, 2.0])
+	check("6/8 in two dotted beats", DemoSong.pulses(Vector2i(6, 8)) == [0.0, 1.5])
+	check("7/8 as 2+2+3", DemoSong.pulses(Vector2i(7, 8)) == [0.0, 1.0, 2.0])
+	var steps := func(wav: PackedFloat32Array, origin: float, beats: Array) -> Array:
+		# The kicks whose click is not a step of its own on its beat's sample, at 120 (half a second
+		# a beat).
+		var off: Array = []
+		for b in beats:
+			var at := int((b * 0.5 - origin) * DemoSong.RATE)
+			if absf(wav[at] - wav[at - 1]) < 0.05 or absf(wav[at - 1] - wav[at - 2]) > 0.05:
+				off.append(b)
+		return off
+	var waltz := DemoSong.render("kick", 120.0, Vector2i(3, 4))
+	check("a loop in 3/4 is four bars of three", waltz.size() == 6 * DemoSong.RATE)
+	var off: Array = steps.call(waltz, 0.0, [3.0, 6.0, 9.0, 11.0])
+	check("its kicks on each bar's first beat, and a pickup on the last bar's third (off at %s)" % [off],
+			off.is_empty())
+	# 4/4 for a loop, then 6/8: a window of the second loop has the end of the first in its lead.
+	var meter := [[0.0, 4, 4], [16.0, 6, 8]]
+	var made := DemoSong.render_window("kick", [[0.0, 120.0, 0]], 1, meter)
+	close_to("a window after a change of signature starts its lead before the change", made[1], 6.0)
+	close_to("and holds eight bars of 6/8 after it", float((made[0] as PackedFloat32Array).size()) / DemoSong.RATE,
+			(16.0 + 24.0) * 0.5 - 6.0, 0.001)
+	off = steps.call(made[0], made[1], [14.5, 15.5, 16.0, 19.0, 22.0, 25.0, 27.5, 28.0, 31.0, 34.0, 37.0, 39.5])
+	check("the 4/4 bar before it plays as 4/4, and each 6/8 bar as 6/8 (off at %s)" % [off], off.is_empty())
 
 
 func _test_input_monitoring_is_set_from_the_strip() -> void:

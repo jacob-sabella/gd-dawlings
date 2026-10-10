@@ -479,7 +479,14 @@ can finish music in, saving DAWproject. Steps, in order:
      first try crashed the host at exit (double free): window tasks were left running and a
      static Mutex cached levels; both gone. The probe's end moved 3 s later (host 42.4/43.4,
      guest 41.5/43.0; the built-in host's work ends at 37.4 s).
-   - **Not yet (7b):** the demo parts play in 4/4 whatever the signature says. A tempo edit
+   - **Done 2026-10-10 (7b), the demo parts in the song's signature:** each bar is played in its
+     own signature (`DemoSong.pulses`: every count in x/4, dotted beats in 6/8, 9/8 and 12/8, twos
+     with a three at the end in 7/8 and 5/8), kick on the bar's top and its middle pulse, snare on
+     the backbeats (2 and 3 of a waltz), the bass walking the pulses, the tune stretched to fill
+     its bar; 4/4 is as written. One signature loops (cached per signature); with changes the
+     parts play windows of BARS bars through the meter as through the tempo map. The suite finds
+     a 3/4 loop's kicks and a 4/4-then-6/8 window's on their beats' samples.
+   - **Not yet (7b):** a tempo edit
      leaves the parts silent until their windows are rendered (under a second here). The
      loopback probe measures the click at one tempo only.
 8. Automation.

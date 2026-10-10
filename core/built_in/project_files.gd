@@ -48,7 +48,7 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 				c.source = "audio/" + name
 			elif c.notes.is_empty() and not role.is_empty():
 				if not rendered.has(role):
-					rendered[role] = _render_part(role, project.tempo, staging)
+					rendered[role] = _render_part(role, project.tempo, backend.parts_signature(), staging)
 				var part: Dictionary = rendered[role]
 				if part.is_empty():
 					continue
@@ -69,15 +69,15 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 	return warnings
 
 
-static func _render_part(role: String, tempo: float, staging: String) -> Dictionary:
-	var wav := DemoSong.cached(role, tempo)
+static func _render_part(role: String, tempo: float, sig: Vector2i, staging: String) -> Dictionary:
+	var wav := DemoSong.cached(role, tempo, sig)
 	if wav == null:
-		wav = DemoSong.to_stream(DemoSong.render(role, tempo))
+		wav = DemoSong.to_stream(DemoSong.render(role, tempo, sig))
 	if wav == null:
 		return {}
 	var source := "audio/demo_%s.wav" % role
 	wav.save_to_wav(staging.path_join(source))
-	return {"source": source, "seconds": DemoSong.loop_seconds(tempo)}
+	return {"source": source, "seconds": DemoSong.loop_seconds(tempo, sig)}
 
 
 static func open(backend: OfflineBackend, path: String) -> PackedStringArray:

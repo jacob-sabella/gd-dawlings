@@ -85,9 +85,10 @@ offline backend's own mix, with its state, undo and replication, turned into God
 - **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
   rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
   a new set and swaps all of it at once, so no part plays at the old tempo against the new.
-  With a tempo map a part plays windows of itself rendered through the map instead
-  (`DemoSong.render_window`, `GodotBackend._part_window`), two loops at a time, the next asked
-  for halfway through a loop.
+  Each bar is played in its own time signature (`DemoSong.pulses`), so a waltz is a waltz.
+  With tempo or signature changes a part plays windows of itself rendered through the map and
+  the meter instead (`DemoSong.render_window`, `GodotBackend._part_window`), two loops of
+  `BARS` bars at a time, the next asked for halfway through a loop.
 - **Bars go through the meter** (`MixState.meter()`, dawkit's `DawKitMeter`): the time
   signature's changes, saved as DAWproject `TimeSignatureAutomation`. Bar numbers, bar starts,
   the count-in, the ruler and the click all count through it; in Reaper they are its tempo
@@ -99,7 +100,8 @@ offline backend's own mix, with its state, undo and replication, turned into God
   when they changed: takes, imports, MIDI renders, the demo parts on the bar grid (or their tempo
   map windows), each cut where a newer item lies over it (`LaneEngine.visible`); the click has a
   lane of its own on the master, which a count-in's hold does not silence. The playhead is the
-  transport's. `first_frame_at` says where the first frame after play is in the song, for
+  transport's, eased toward its reading and never back (`LaneEngine._follow`), so a punch's edge
+  is crossed once. `first_frame_at` says where the first frame after play is in the song, for
   `MixRender` and the probe. Headless (the Dummy driver) and without the core, the old way runs:
   each part starts at the song position modulo its loop, only under its track's items, the
   playhead is the sound card's (`audio_time`, a silent looping player), and a player is put back

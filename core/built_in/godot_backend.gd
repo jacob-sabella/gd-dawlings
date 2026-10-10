@@ -65,9 +65,10 @@ var _built_sends := {}
 var _kinds := {}
 ## Role -> finished part.
 var _parts := {}
-var _parts_tempo := 0.0
-## With tempo changes a part does not loop: it plays windows of itself through the map
-## (DemoSong.render_window), "<role>|<map>|<loop>" -> [stream, seconds of its first sample], and
+## The tempo and signature `_parts` were rendered at, "<tempo>/<sig>".
+var _parts_key := ""
+## With tempo or signature changes a part does not loop: it plays windows of itself through the
+## map and meter (DemoSong.render_window), `window_key` -> [stream, seconds of its first sample], and
 ## the tasks of those still rendering, by key.
 var _windows := {}
 var _windows_pending := {}
@@ -663,9 +664,20 @@ func _roles() -> Array:
 
 
 func _waiting_roles() -> Array:
-	if not state.tempo_points.is_empty():
+	if parts_windowed():
 		return _roles().filter(func(r): return _part_window(r, state.position_seconds).is_empty())
-	return _roles().filter(func(r): return not _parts.has(r) or _parts_tempo != _rendering_tempo)
+	return _roles().filter(func(r): return not _parts.has(r) or _parts_key != _rendering_key)
+
+
+## Whether the parts play windows rendered through the song's tempo and signature changes rather
+## than one loop going round: with either kind of change.
+func parts_windowed() -> bool:
+	return not state.tempo_points.is_empty() or not state.time_signature_points.is_empty()
+
+
+## The signature a looped part is rendered in.
+func parts_signature() -> Vector2i:
+	return Vector2i(maxi(state.beats_per_bar, 1), maxi(state.beat_unit, 1))
 
 
 ## The window of `role` that plays at `seconds`, [stream, its first sample's seconds], or empty
@@ -673,24 +685,31 @@ func _waiting_roles() -> Array:
 ## next one too, so it is there when it is wanted.
 func _part_window(role: String, seconds: float) -> Array:
 	var map := state.tempo_map()
-	var loop_beats := float(DemoSong.BARS * 4)
-	var beat := map.beat_at(seconds)
-	var loop := floori(beat / loop_beats)
+	var meter := state.meter()
+	var bar := meter.bar_at(map.beat_at(seconds))
+	var loop := floori(bar / DemoSong.BARS)
 	var points := map.to_array()
-	var key := "%s|%s|%d" % [role, points, loop]
-	_ask_window(role, points, loop, key)
-	if fposmod(beat, loop_beats) > loop_beats * 0.5:
-		_ask_window(role, points, loop + 1, "%s|%s|%d" % [role, points, loop + 1])
+	var meter_points := meter.to_array()
+	var key := window_key(role, loop)
+	_ask_window(role, points, meter_points, loop, key)
+	if fposmod(bar, DemoSong.BARS) > DemoSong.BARS * 0.5:
+		_ask_window(role, points, meter_points, loop + 1, window_key(role, loop + 1))
 	return _windows.get(key, [])
 
 
-func _ask_window(role: String, points: Array, loop: int, key: String) -> void:
+## "<role>|<tempo map><meter>|<loop>": a window of a part, for the song's tempo and signature as
+## they are now.
+func window_key(role: String, loop: int) -> String:
+	return "%s|%s%s|%d" % [role, state.tempo_map().to_array(), state.meter().to_array(), loop]
+
+
+func _ask_window(role: String, points: Array, meter_points: Array, loop: int, key: String) -> void:
 	if _windows.has(key):
 		return
 	if not _windows_pending.has(key):
 		var result := [null]
 		var task := WorkerThreadPool.add_task(func():
-			var made := DemoSong.render_window(role, points, loop)
+			var made := DemoSong.render_window(role, points, loop, meter_points)
 			result[0] = [DemoSong.encode(made[0]), made[1]], false, "render a window of the demo song")
 		_windows_pending[key] = [task, result]
 		return
@@ -705,46 +724,48 @@ func _ask_window(role: String, points: Array, loop: int, key: String) -> void:
 	var wav := DemoSong.stream_of(made[0])
 	wav.loop_mode = AudioStreamWAV.LOOP_DISABLED
 	_windows[key] = [wav, made[1]]
-	_prune_windows(points, loop)
+	_prune_windows(points, meter_points, loop)
 
 
-## Only the windows of the map playing, near where the playhead is.
-func _prune_windows(points: Array, loop: int) -> void:
-	var prefix := "|%s|" % [points]
+## Only the windows of the map and meter playing, near where the playhead is.
+func _prune_windows(points: Array, meter_points: Array, loop: int) -> void:
+	var prefix := "|%s%s|" % [points, meter_points]
 	for key in _windows.keys():
 		var at := int(String(key).get_slice("|", 2))
 		if not String(key).contains(prefix) or at < loop - 1 or at > loop + 2:
 			_windows.erase(key)
 
 
-var _rendering_tempo := 0.0
+var _rendering_key := ""
 
 
 func _render_parts() -> void:
 	var tempo := state.tempo
-	_rendering_tempo = tempo
+	var sig := parts_signature()
+	var key := "%s/%s" % [tempo, sig]
+	_rendering_key = key
 	var roles := _roles()
 	var fresh := {}
 	# All of a tempo's parts change over together. Swapped in one at a time, the drums would
 	# be at the new tempo while the bass was still at the old one.
 	DemoSong.render_async(roles, tempo, func(role: String, wav: AudioStreamWAV):
-		if not is_instance_valid(self) or _rendering_tempo != tempo:
+		if not is_instance_valid(self) or _rendering_key != key:
 			return
 		fresh[role] = wav
 		if fresh.size() < roles.size():
 			return
 		_parts = fresh
-		_parts_tempo = tempo
+		_parts_key = key
 		for index in _players:
 			for p in _players[index]:
 				(p as AudioStreamPlayer).stop()
-		connection_changed.emit())
+		connection_changed.emit(), sig)
 
 
-## A new tempo is a new render. The old parts go on playing until the new ones land, so a
-## tempo knob turned mid-song changes the music a moment later rather than stopping it.
+## A new tempo or signature is a new render. The old parts go on playing until the new ones land,
+## so a tempo knob turned mid-song changes the music a moment later rather than stopping it.
 func _on_transport_changed() -> void:
-	if state.tempo != _rendering_tempo:
+	if "%s/%s" % [state.tempo, parts_signature()] != _rendering_key:
 		_render_parts()
 
 
@@ -790,7 +811,7 @@ func _sync_players() -> void:
 			expected = pos - it.start
 			if stream != null and expected >= stream.get_length():
 				stream = null
-		elif it != null and not state.tempo_points.is_empty() and state.tracks[index].part != "":
+		elif it != null and parts_windowed() and state.tracks[index].part != "":
 			# Through the tempo's changes: the window holding the playhead, played from its start.
 			var window := _part_window(state.tracks[index].part, pos)
 			if not window.is_empty():

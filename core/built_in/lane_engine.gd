@@ -102,8 +102,8 @@ func drive(delta: float) -> void:
 			# The dummy driver mixes in lumps too coarse to read a playhead from.
 			s.position_seconds += delta
 		else:
-			s.position_seconds = transport.song_seconds() + minf(AudioServer.get_time_since_last_mix(),
-					AudioServer.get_output_latency())
+			s.position_seconds = _follow(transport.song_seconds() + minf(AudioServer.get_time_since_last_mix(),
+					AudioServer.get_output_latency()), delta)
 			if s.looping and s.has_loop_range() and s.position_seconds >= s.loop_end:
 				s.position_seconds = s.loop_start + fmod(s.position_seconds - s.loop_end, s.loop_end - s.loop_start)
 		_said = s.position_seconds
@@ -117,6 +117,22 @@ func drive(delta: float) -> void:
 		_give(_lanes[index], index, clips_for(index))
 	_keep_playing(_click[1], _click[0])
 	_give(_click[0], 0, click_clips())
+
+
+## The playhead from the transport's reading: on by the frame's time and eased toward the reading,
+## never back. The reading moves in blocks and is read between them, so it wobbles by a fraction
+## of a block either way; a playhead that went back with it would take a punch's edge twice.
+## A real jump (the loop going round, a seek) is followed at once.
+const SNAP_SECONDS := 0.05
+const EASE := 0.1
+
+
+func _follow(reading: float, delta: float) -> float:
+	var next := _said + delta
+	var off := reading - next
+	if absf(off) > SNAP_SECONDS:
+		return reading
+	return maxf(next + off * EASE, _said)
 
 
 func _give(lane: Object, key: int, clips: Array) -> void:
@@ -200,31 +216,32 @@ func _item_clips(t: MixState.TrackState, it: MixState.ItemState, a: float, b: fl
 	if t.part == "":
 		return []
 	var s := backend.state
-	if s.tempo_points.is_empty():
+	if not backend.parts_windowed():
 		# On the song's bar grid, not the item's start: a split or a move keeps the music on the beat.
+		# One signature throughout, so the loop is BARS of its bars.
 		var part: AudioStreamWAV = backend._parts.get(t.part)
 		if part == null:
 			return []
 		var length := part.get_length()
-		var c := _clip(base, "part:%s@%s" % [t.part, backend._parts_tempo], part, a, b, fposmod(a, length))
+		var c := _clip(base, "part:%s@%s" % [t.part, backend._parts_key], part, a, b, fposmod(a, length))
 		c["loop_start"] = 0.0
 		c["loop_end"] = length
 		return [c]
-	# Through the tempo's changes, a window of the part at a time: the one the playhead is in and
-	# the next, as they are rendered.
+	# Through the tempo's and signature's changes, a window of the part at a time: the one the
+	# playhead is in and the next, as they are rendered.
 	var map := s.tempo_map()
-	var loop_beats := float(DemoSong.BARS * 4)
-	var here := floori(map.beat_at(clampf(s.position_seconds, a, b)) / loop_beats)
+	var meter := s.meter()
+	var here := floori(meter.bar_at(map.beat_at(clampf(s.position_seconds, a, b))) / DemoSong.BARS)
 	var out: Array = []
 	for loop in [here, here + 1]:
-		var from := maxf(a, map.seconds_at(loop * loop_beats))
-		var to := minf(b, map.seconds_at((loop + 1) * loop_beats))
+		var from := maxf(a, map.seconds_at(meter.beat_of_bar(loop * DemoSong.BARS)))
+		var to := minf(b, map.seconds_at(meter.beat_of_bar((loop + 1) * DemoSong.BARS)))
 		if to <= from:
 			continue
 		var window := backend._part_window(t.part, from)
 		if window.is_empty():
 			continue
-		out.append(_clip(base, "win:%s|%s|%d" % [t.part, map.to_array(), loop], window[0], from, to,
+		out.append(_clip(base, "win:" + backend.window_key(t.part, loop), window[0], from, to,
 				from - float(window[1])))
 	return out
 
