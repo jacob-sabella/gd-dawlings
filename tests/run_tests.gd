@@ -9145,6 +9145,11 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	timeline.queue_free()
 	notices.clear()
 
+	var flac := DAW.import_audio(ProjectSettings.globalize_path("res://vendor/dawkit/tests/fixtures/audio/flac/s16_stereo_8.flac"), track, 20.0)
+	check("a FLAC file comes in too, as a WAV the engine plays (%s)" % flac["error"], flac["error"] == ""
+			and flac["name"] == "s16_stereo_8.wav" and absf(float(flac["seconds"]) - 9000.0 / 44100.0) < 0.0001
+			and backend.take_stream("s16_stereo_8.wav") != null)
+	DAW.undo()
 	var again := DAW.import_audio(first, track, 10.0)
 	check("the same file again gets a name of its own (%s)" % again.get("name"), again.get("name") == "Tone One 2.wav")
 	var bad := dir.path_join("notes.txt")
@@ -9216,7 +9221,7 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	panel.free()
 	Session.start_solo()
 	_offline()
-	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav", "tone two 2.wav", "long one.wav"]:
+	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav", "tone two 2.wav", "long one.wav", "s16_stereo_8.wav"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	OS.execute("rm", ["-rf", dir])
 

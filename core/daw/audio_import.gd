@@ -7,7 +7,7 @@ extends RefCounted
 ## file carries it like one.
 
 ## What the file dialog offers. Anything else dropped is still tried, and says why it failed.
-const EXTENSIONS := ["wav", "wave", "aif", "aiff", "aifc", "ogg", "mp3"]
+const EXTENSIONS := ["wav", "wave", "aif", "aiff", "aifc", "flac", "ogg", "mp3"]
 
 
 ## A name for the file among the takes: its own, as a WAV (which is what it becomes), with a

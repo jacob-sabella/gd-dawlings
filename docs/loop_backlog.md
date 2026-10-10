@@ -160,8 +160,17 @@ can finish music in, saving DAWproject. Steps, in order:
    folder. Files dropped on the window go the same way, one after another from the playhead,
    each one an undo step, and the room is told. `--bring-in <file>` does it at launch. dawkit
    checks each encoding to its last bit, and Ogg/MP3 by measured frequency and level.
-   - **Not yet:** FLAC (needs a decoder in dawkit, since Godot has none); a guest sending a file
-     from their own machine.
+   - **Not yet:** a guest sending a file from their own machine.
+   - **Done 2026-10-10 (3c), FLAC:** dawkit's `DawKitFlac`, written from RFC 9639 (no library):
+     constant, verbatim, fixed and LPC subframes, both Rice codings and their escapes, wasted
+     bits, left/side, side/right and mid/side, 4-32 bits, any channel count. A file is checked
+     against its own STREAMINFO MD5, so one that decodes decoded exactly; a flipped bit and a cut
+     file are refused, the cut one saying it ends short. 11 fixtures from the reference `flac`
+     1.5 (-0, -5, -8, -8 -e -p -m -l 32 --lax, 192-sample blocks, 8/16/24/32-bit, wasted bits,
+     six channels) decode equal to their source WAVs to the last bit, and an ffmpeg-encoded
+     3-minute file passes its MD5. Speed: 3 minutes of 24-bit stereo in 8.7 s, on the import
+     worker (3b), the LPC sum per sample being most of it; native code would be the cure, which
+     is the GDScript-vs-GDExtension question waiting on the user. The import dialog offers .flac.
    - **Done 2026-10-10 (3b), importing off the main thread:** `DAW.import_audio_files` reads and
      writes each file on a WorkerThreadPool task and places it on the main thread when it is in,
      one undo step each, one file after another (so each starts where the last ended), batches

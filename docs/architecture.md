@@ -197,7 +197,8 @@ item's start. A project marks the track with a built-in instrument device, and o
 instruments out of the desk's effect chain.
 
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
-the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a
+the track). dawkit's `DawKitAudioFile.bring_in` reads the file (WAV, AIFF, FLAC through
+`DawKitFlac`, Ogg, MP3) and puts it in the takes folder as a
 WAV the engine plays, and it is placed with `insert_audio_take` like a recorded take. So it saves
 into a DAWproject like one, and plays on Reaper through the bridge. Files dropped on the window
 with the cursor over the timeline's lanes go onto that lane at the beat under the cursor
