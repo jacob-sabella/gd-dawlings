@@ -171,6 +171,7 @@ func _ready() -> void:
 	_test_the_official_dawproject_examples_open_in_the_game()
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
 	await _test_sound_files_are_brought_in_onto_a_track()
+	_test_one_recording_goes_onto_every_armed_track_of_its_input()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
 	_test_a_looped_item_survives_the_wire_and_a_split()
@@ -9300,6 +9301,97 @@ func _test_the_host_records_its_own_microphone_on_the_built_in_engine() -> void:
 		reaper.queue_free()
 
 
+func _test_one_recording_goes_onto_every_armed_track_of_its_input() -> void:
+	var backend := _offline()
+	backend.publish_inputs()
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var s := DAW.state
+	var ids: Array = s.inputs.map(func(p): return p[0])
+	check("each device is offered both sides and each alone (%s)" % [ids.slice(0, 3)],
+			ids.slice(0, 3) == ["audio:", "audio:#1", "audio:#2"])
+	check("a track input names its device and side", GuestAudio.device_of("audio:Box#2") == "Box"
+			and GuestAudio.channel_of("audio:Box#2") == 2 and GuestAudio.channel_of("audio:Box") == 0
+			and GuestAudio.device_of("audio:") == "" and GuestAudio.device_of("audio:#1") == "")
+	var order: Array = s.track_indices().filter(func(i): return s.track(i).folder_depth <= 0)
+	for i in s.track_indices():
+		s.track(i).rec_arm = false
+	var guitar: int = order[0]
+	var voice: int = order[1]
+	var room: int = order[2]
+	var elsewhere: int = order[3]
+	var keys: int = order[4]
+	var more_keys: int = order[5]
+	for pair in [[guitar, "audio:#1"], [voice, "audio:#2"], [room, "audio:"], [elsewhere, "audio:Other#1"],
+			[keys, "midi"], [more_keys, "midi"]]:
+		s.track(pair[0]).rec_arm = true
+		s.track(pair[0]).items.clear()
+		DAW.set_track_input(pair[0], pair[1])
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	var ha := Session.host_audio
+	ha.target_track = 0
+	ha.record_with_host = true
+	var mic := _FakeMic.new()
+	mic.sides = Vector2(0.9, 0.3)
+	ha._source = mic
+	check("the microphone's take leads on the first armed track (%d)" % ha.take_track(), ha.take_track() == guitar and ha.armed())
+	for tick in 200:
+		var got := ha._read()
+		ha.follow({"seconds": 10.0 + float(mic.made) / 48000.0, "playing": true, "recording": tick < 199, "valid": true}, got)
+	var loudest := func(index: int) -> float:
+		var items: Array = s.track(index).items
+		if items.size() != 1:
+			return -1.0
+		var read := DawKitAudioFile.read(ProjectSettings.globalize_path(AudioTake.DIR.path_join(items[0].source)))
+		var peak := 0.0
+		for v in (read["samples"] as PackedFloat32Array):
+			peak = maxf(peak, absf(v))
+		return peak
+	var peaks := [loudest.call(guitar), loudest.call(voice), loudest.call(room)]
+	check("one recording lands on every armed track of the device (%s)" % [peaks], peaks.min() > 0.0)
+	close_to("input 1 alone on the first", peaks[0], 0.9, 0.001)
+	close_to("input 2 alone on the second", peaks[1], 0.3, 0.001)
+	close_to("both, averaged, on the one that takes the device whole", peaks[2], 0.6, 0.001)
+	if peaks.min() > 0.0:
+		close_to("all from the same moment", s.track(voice).items[0].start, s.track(guitar).items[0].start, 0.00001)
+		check("each its own file", s.track(voice).items[0].source != s.track(guitar).items[0].source)
+	check("not the track on another device, nor the keys' (%d, %d)" % [s.track(elsewhere).items.size(), s.track(keys).items.size()],
+			s.track(elsewhere).items.is_empty() and s.track(keys).items.is_empty())
+	var said := notices.filter(func(t): return t.begins_with("Not recorded on"))
+	check("and the host is told why the other device's track was left out (%s)" % [said],
+			said.size() == 1 and said[0].contains(s.track(elsewhere).display_name()) and said[0].contains("one input device"))
+	for index in [guitar, voice, room]:
+		for item in s.track(index).items:
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(item.source)))
+		s.track(index).items.clear()
+	ha.record_with_host = false
+	ha._source = null
+
+	# The keys onto every armed track that takes them.
+	var gm := Session.guest_midi
+	gm.target_track = 0
+	gm.record_with_host = true
+	check("the keys lead on the first armed track that does not take a microphone (%d)" % gm.take_track(), gm.take_track() == keys)
+	gm.follow({"seconds": 20.0, "playing": true, "recording": true, "valid": true})
+	gm.note_on(60, 100)
+	gm.follow({"seconds": 20.5, "playing": true, "recording": true, "valid": true})
+	gm.note_off(60)
+	gm.follow({"seconds": 21.0, "playing": true, "recording": false, "valid": true})
+	check("and one take of them lands on each (%d, %d, %s)" % [s.track(keys).items.size(), s.track(more_keys).items.size(), gm.last_take.get("tracks")],
+			s.track(keys).items.size() == 1 and s.track(more_keys).items.size() == 1
+			and s.track(guitar).items.is_empty())
+	gm.record_with_host = false
+	# As GuestMidi._process does once the keys no longer play: the next test starts them afresh.
+	gm._host_synth = false
+	gm.synth.set_bus(&"")
+	gm.synth.stop()
+	Session.notice.disconnect(hear)
+	Session.start_solo()
+	_offline()
+
+
 func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	_offline()
 	_as_session(Session.Role.HOST, 1)
@@ -11346,13 +11438,15 @@ func _test_the_host_places_an_audio_take() -> void:
 class _FakeMic extends MixSource:
 	var made := 0
 	var latency := 0.01
+	## What a click is on each side.
+	var sides := Vector2(0.9, 0.9)
 
 	func read() -> PackedVector2Array:
 		var out := PackedVector2Array()
 		out.resize(480)
 		for i in 480:
 			if (made + i) % 48000 < 24:
-				out[i] = Vector2(0.9, 0.9)
+				out[i] = sides
 		made += 480
 		return out
 

@@ -499,10 +499,13 @@ func set_track_input(index: int, input: String) -> void:
 
 ## What a track can record from here: the machine's input devices and its keys.
 func publish_inputs() -> void:
-	var inputs: Array = [["audio:", "the default microphone"]]
+	# Each device both sides together, and each side alone: an interface's inputs 1 and 2.
+	var inputs: Array = [["audio:", "the default microphone"], ["audio:#1", "the default microphone, input 1"],
+			["audio:#2", "the default microphone, input 2"]]
 	for d in AudioServer.get_input_device_list():
 		if d != "Default":
-			inputs.append(["audio:" + d, d])
+			inputs.append_array([["audio:" + d, d], ["audio:%s#1" % d, "%s, input 1" % d],
+					["audio:%s#2" % d, "%s, input 2" % d]])
 	inputs.append(["midi", "the keys"])
 	state.inputs = inputs
 	record_for_replication("/inputs", MixWire.pack_inputs(inputs))

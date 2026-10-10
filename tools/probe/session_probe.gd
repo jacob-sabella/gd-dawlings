@@ -32,6 +32,9 @@ const TAKE_TOLERANCE := 0.005
 const HOST_TAKE_TRACK := 3
 const HOST_TAKE_AT := 600.0
 const HOST_MIDI_TRACK := 5
+## The punched take's second track: the take's track records input 1, this one input 2, of the
+## same recording.
+const HOST_SIDE_TRACK := 4
 ## A track with no effects of its own, for the host's key to be heard through plainly.
 const HOST_KEYS_TRACK := 11
 ## Fifteen, not five: Godot starts a player on the next mix step and cannot be told where in it,
@@ -81,6 +84,8 @@ var _built_in := false
 var _reaper_host := false
 ## Host: the guest's recording, as Session placed it.
 var _audio_placed := {}
+## Every take placed, in order.
+var _placed_all: Array = []
 ## Host: what guests asked of the room, as [verb, args, from].
 var _room_asks: Array = []
 ## Host: where the guest said something was while pushing it.
@@ -132,7 +137,9 @@ func _ready() -> void:
 
 
 func _host(port: int) -> void:
-	Session.audio_take_placed.connect(func(info: Dictionary): _audio_placed = info)
+	Session.audio_take_placed.connect(func(info: Dictionary):
+		_audio_placed = info
+		_placed_all.append(info))
 	Session.local_name = "Ada"
 	var restore := NAN
 	var tempo_restore := NAN
@@ -931,9 +938,18 @@ func _punch_and_measure() -> void:
 	DAW.set_looping(false)
 	DAW.set_loop_range(a, b)
 	DAW.set_punch(true)
-	ha.target_track = HOST_TAKE_TRACK
+	# Two armed tracks, each recording one side of the same input: one recording, both placed.
+	var was_armed: Array = s.track_indices().filter(func(i): return s.track(i).rec_arm)
+	for i in was_armed:
+		DAW.set_track_rec_arm(i, false)
+	DAW.set_track_input(HOST_TAKE_TRACK, "audio:#1")
+	DAW.set_track_input(HOST_SIDE_TRACK, "audio:#2")
+	DAW.set_track_rec_arm(HOST_TAKE_TRACK, true)
+	DAW.set_track_rec_arm(HOST_SIDE_TRACK, true)
+	ha.target_track = 0
 	ha.record_with_host = true
 	_audio_placed = {}
+	_placed_all.clear()
 	DAW.seek(a - 0.8)
 	DAW.transport_record()
 	var took := false
@@ -942,11 +958,29 @@ func _punch_and_measure() -> void:
 		await get_tree().process_frame
 	DAW.transport_stop()
 	var began := Time.get_ticks_msec()
-	while _audio_placed.is_empty() and Time.get_ticks_msec() - began < 1500:
+	while _placed_all.size() < 2 and Time.get_ticks_msec() - began < 1500:
 		await get_tree().process_frame
 	ha.record_with_host = false
 	DAW.set_punch(false)
 	DAW.set_loop_range(0.0, 0.0)
+	DAW.set_track_rec_arm(HOST_TAKE_TRACK, false)
+	DAW.set_track_rec_arm(HOST_SIDE_TRACK, false)
+	DAW.set_track_input(HOST_TAKE_TRACK, "")
+	DAW.set_track_input(HOST_SIDE_TRACK, "")
+	for i in was_armed:
+		DAW.set_track_rec_arm(i, true)
+	var onto: Array = _placed_all.map(func(info): return int(info["track"]))
+	var levels: Array = _placed_all.map(func(info): return _loudest(info["path"]))
+	print("two inputs: onto %s, starts %s, peaks %s" % [onto, _placed_all.map(func(info): return snappedf(info["start"], 0.00001)),
+			levels.map(func(v): return snappedf(v, 0.001))])
+	check("one recording went onto both armed tracks, each its own side (%s)" % [onto],
+			_placed_all.size() == 2 and onto.has(HOST_TAKE_TRACK) and onto.has(HOST_SIDE_TRACK))
+	if _placed_all.size() == 2:
+		check("from the same moment", absf(float(_placed_all[0]["start"]) - float(_placed_all[1]["start"])) < 0.000001)
+		# The null sink's monitor carries the click on both sides alike.
+		check("each side as loud as the other, as the sink sends them (%.3f, %.3f)" % [levels[0], levels[1]],
+				levels.min() > 0.05 and absf(linear_to_db(levels[0]) - linear_to_db(levels[1])) < 0.5)
+		_audio_placed = _placed_all[0] if int(_placed_all[0]["track"]) == HOST_TAKE_TRACK else _placed_all[1]
 	var start: float = _audio_placed.get("start", NAN)
 	var seconds: float = _audio_placed.get("seconds", NAN)
 	print("punch: range %.3f-%.3f, take %.4f for %.4fs (in %+.1f ms, out %+.1f ms)" % [a, b, start, seconds,
@@ -955,8 +989,17 @@ func _punch_and_measure() -> void:
 			took and absf(start - a) < PUNCH_TOLERANCE)
 	check("and out at its end (%+.1f ms)" % ((start + seconds - b) * 1000.0),
 			absf(start + seconds - b) < PUNCH_TOLERANCE)
-	if not _audio_placed.is_empty():
-		DirAccess.remove_absolute(_audio_placed["path"])
+	for info in _placed_all:
+		DirAccess.remove_absolute(info["path"])
+
+
+## The loudest sample of a take's file.
+func _loudest(path: String) -> float:
+	var wav := FileAccess.get_file_as_bytes(path)
+	var peak := 0
+	for i in range(AudioTake.HEADER_BYTES, wav.size() - 1, 2):
+		peak = maxi(peak, absi(wav.decode_s16(i)))
+	return peak / 32767.0
 
 
 func _check_audio_take() -> void:

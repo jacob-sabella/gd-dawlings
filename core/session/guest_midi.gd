@@ -148,11 +148,28 @@ func host_records() -> bool:
 
 
 ## The track a take goes on: the one chosen, or with a keytar or as such a host and none chosen,
-## the armed one.
+## the first armed one that does not take a microphone.
 func take_track() -> int:
 	if target_track > 0:
 		return target_track
-	return HitRecorder.armed_track() if keytar or host_records() else 0
+	if not (keytar or host_records()) or DAW.state == null:
+		return 0
+	for index in GuestAudio._armed():
+		if not DAW.state.input_of(index).begins_with("audio:"):
+			return index
+	return 0
+
+
+## Every track a take goes onto: its own, and as such a host with none chosen, every other armed
+## track whose input is the keys.
+func take_tracks() -> Array:
+	var out: Array = [_take_track] if _take_track > 0 else []
+	if target_track > 0 or not host_records() or out.is_empty():
+		return out
+	for index in GuestAudio._armed():
+		if index != _take_track and DAW.state.input_of(index) == "midi":
+			out.append(index)
+	return out
 
 
 func is_recording() -> bool:
@@ -372,9 +389,11 @@ func _commit() -> void:
 	if not notes.is_empty() and _take_track > 0:
 		takes_sent += 1
 		var name := "%s %s %d" % [Session.local_name, "keytar" if keytar else "take", takes_sent]
-		DAW.insert_midi_take(_take_track, done["start"], done["end"], notes, name)
+		var onto := take_tracks()
+		for index in onto:
+			DAW.insert_midi_take(index, done["start"], done["end"], notes, name)
 		last_take = {"notes": notes.size(), "track": _take_track, "start": done["start"],
-				"end": done["end"]}
+				"end": done["end"], "tracks": onto}
 	changed.emit()
 
 

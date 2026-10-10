@@ -75,6 +75,18 @@ static func encode(stereo: PackedVector2Array) -> PackedByteArray:
 	return out
 
 
+## As `encode`, one side alone: 1 the left (an interface's input 1), 2 the right; 0 both, averaged.
+static func encode_channel(stereo: PackedVector2Array, channel: int) -> PackedByteArray:
+	if channel == 0:
+		return encode(stereo)
+	var out := PackedByteArray()
+	out.resize(stereo.size() * 2)
+	for i in stereo.size():
+		var v := clampf(stereo[i].x if channel == 1 else stereo[i].y, -1.0, 1.0)
+		out.encode_s16(i * 2, int(round(v * 32767.0)))
+	return out
+
+
 ## The file name a take is kept under: who played it, which of theirs it is, and when, in
 ## characters every file system takes.
 static func file_name_for(who: String, number: int) -> String:

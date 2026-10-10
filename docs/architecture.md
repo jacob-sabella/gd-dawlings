@@ -174,6 +174,12 @@ is written, placed and announced exactly as a guest's would be. The host's keys 
 plays for such a host (`host_records`) and times notes by `host_heard`. The engine's metronome
 (dawkit's `DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
 
+With no track chosen, every armed track records, by its input: one microphone recording goes onto
+each armed track of the same device, as that side or both (`GuestAudio.take_plan`, "audio:<device>#1"
+and "#2"), each its own file from the same moment, kept by Session as parts of one take; one take
+of the keys onto each armed track that takes them. Godot opens one input device at a time, so a
+track naming another is left out, and the host told why.
+
 A count-in (`DAW.set_count_in`, only with the click on, as in Reaper) runs the transport from that
 many bars before the record point with the click alone, recording all the while as Reaper reports
 it; `MixState.taking()` is false until the playhead reaches `count_in_to`, and every take follows

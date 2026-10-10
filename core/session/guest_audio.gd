@@ -82,6 +82,8 @@ var sink: Object = null
 ## The host's own recorder rather than a guest's (Session.host_audio): armed on a host or alone,
 ## and only while the DAW does not record its own inputs.
 var for_host := false
+## Armed tracks the last take could not go onto: they name another input device.
+var skipped: Array = []
 
 var _source: MixSource = null
 ## The input it was opened on.
@@ -90,6 +92,8 @@ var _resampler := Resampler.new()
 var _take_open := false
 ## The track the take in progress was begun on.
 var _take_into := 0
+## [track, channel] for each track the take in progress goes onto (take_plan).
+var _plan: Array = []
 var _take_id := 0
 ## The start estimates so far, while settling; and the settled start once sent.
 var _estimates: Array[float] = []
@@ -113,21 +117,78 @@ func armed() -> bool:
 	return Session.role == Session.Role.GUEST and target_track > 0 and record_with_host
 
 
+## The device a track input names: "audio:<device>" or "audio:<device>#<channel>", "" the
+## default.
+static func device_of(input: String) -> String:
+	var rest := input.trim_prefix("audio:")
+	var mark := rest.rfind("#")
+	return rest.substr(0, mark) if mark >= 0 and rest.substr(mark + 1).is_valid_int() else rest
+
+
+## The channel a track input names: 1 or 2 for that side of the device alone, 0 for both.
+static func channel_of(input: String) -> int:
+	if not input.begins_with("audio:"):
+		return 0
+	var mark := input.rfind("#")
+	if mark < 0 or not input.substr(mark + 1).is_valid_int():
+		return 0
+	return clampi(input.substr(mark + 1).to_int(), 0, 2)
+
+
 ## The input to record: on the host, the device the take's track names for its input
 ## ("audio:<device>", "audio:" the default), else the one chosen here.
 func device() -> String:
 	if for_host:
 		var input := DAW.state.input_of(take_track()) if DAW.state != null else ""
 		if input.begins_with("audio:"):
-			return input.trim_prefix("audio:")
+			return device_of(input)
 	return input_device
 
 
-## The track a take goes onto: the one chosen; on the host with none chosen, the armed one.
+## The track a take goes onto: the one chosen; on the host with none chosen, the first armed one
+## that does not take the keys.
 func take_track() -> int:
 	if target_track > 0 or not for_host:
 		return target_track
-	return HitRecorder.armed_track()
+	if DAW.state == null:
+		return 0
+	for index in _armed():
+		if not DAW.state.input_of(index).begins_with("midi"):
+			return index
+	return 0
+
+
+static func _armed() -> Array:
+	var out: Array = []
+	for index in DAW.state.track_indices():
+		var t: MixState.TrackState = DAW.state.track(index, false)
+		if t != null and t.rec_arm:
+			out.append(index)
+	out.sort()
+	return out
+
+
+## Every track the take goes onto, [track, channel]: the take's own track, and on the host with
+## none chosen, every other armed track whose input is a channel or both of the same device --
+## the one input device Godot can record at a time. The channel is 0 for both sides, averaged,
+## or 1 or 2 for that side alone. Armed tracks naming another device are in `skipped`.
+func take_plan() -> Array:
+	var lead := take_track()
+	if lead <= 0:
+		return []
+	var plan: Array = [[lead, channel_of(DAW.state.input_of(lead)) if for_host else 0]]
+	skipped.clear()
+	if not for_host or target_track > 0:
+		return plan
+	for index in _armed():
+		var input := DAW.state.input_of(index)
+		if index == lead or not input.begins_with("audio:"):
+			continue
+		if device_of(input) == device():
+			plan.append([index, channel_of(input)])
+		else:
+			skipped.append(index)
+	return plan
 
 
 func is_recording() -> bool:
@@ -210,11 +271,26 @@ func _flush() -> void:
 		_sent_start = _start + float(before) / RATE
 		takes_sent += 1
 		var take_name := "%s audio %d" % [Session.local_name, takes_sent]
-		_take_into = take_track()
-		_sink().send_audio_begin(_take_id, _take_into, _sent_start, take_name)
+		_plan = take_plan()
+		_take_into = _plan[0][0] if not _plan.is_empty() else take_track()
+		if _plan.size() > 1 or (not _plan.is_empty() and _plan[0][1] != 0):
+			_sink().send_audio_begin(_take_id, _take_into, _sent_start, take_name, _plan)
+		else:
+			_sink().send_audio_begin(_take_id, _take_into, _sent_start, take_name)
+		if not skipped.is_empty() and Session.is_authority():
+			Session.notice.emit("Not recorded on %s: Godot records one input device at a time, and %s takes %s." % [
+					", ".join(skipped.map(func(i): return DAW.state.track(i).display_name())),
+					DAW.state.track(_take_into).display_name(), DAW.state.input_name(DAW.state.input_of(_take_into))])
 		_begun = true
 	if not _unsent.is_empty():
-		_sink().send_audio_chunk(_take_id, AudioTake.encode(_unsent))
+		if _plan.size() > 1 or (not _plan.is_empty() and _plan[0][1] != 0):
+			var by_channel := {}
+			for step in _plan:
+				if not by_channel.has(step[1]):
+					by_channel[step[1]] = AudioTake.encode_channel(_unsent, step[1])
+			_sink().send_audio_channels(_take_id, by_channel)
+		else:
+			_sink().send_audio_chunk(_take_id, AudioTake.encode(_unsent))
 		_unsent = PackedVector2Array()
 
 
@@ -222,7 +298,8 @@ func _end() -> void:
 	if _frames > 0:
 		_flush()
 		_sink().send_audio_end(_take_id)
-		last_take = {"seconds": take_seconds(), "track": _take_into, "start": _sent_start}
+		last_take = {"seconds": take_seconds(), "track": _take_into, "start": _sent_start,
+				"tracks": _plan.map(func(step): return step[0])}
 	_take_open = false
 	changed.emit()
 

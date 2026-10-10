@@ -830,11 +830,13 @@ func _place_take(from: int, args: Array) -> void:
 # The host's own recording, on a DAW that does not record its own inputs (the built-in engine),
 # comes through the same three calls and is kept the same way, from the host's own id.
 
-func send_audio_begin(take_id: int, track: int, start: float, take_name: String) -> void:
+## `plan`, the host's own only: [track, channel] for each track the take goes onto, the channel 0
+## for both, 1 or 2 for that input channel alone (GuestAudio.take_plan). Empty is `track`, both.
+func send_audio_begin(take_id: int, track: int, start: float, take_name: String, plan: Array = []) -> void:
 	if role == Role.GUEST and _connected():
 		_audio_begin.rpc_id(1, take_id, track, start, take_name)
 	elif is_authority():
-		_take_begin(local_peer_id, take_id, track, start, take_name)
+		_take_begin(local_peer_id, take_id, track, start, take_name, plan)
 
 
 func send_audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
@@ -842,6 +844,12 @@ func send_audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
 		_audio_chunk.rpc_id(1, take_id, pcm)
 	elif is_authority():
 		_take_chunk(local_peer_id, take_id, pcm)
+
+
+## The host's own take, as each input channel its tracks want: {channel: pcm} (see _take_chunk).
+func send_audio_channels(take_id: int, by_channel: Dictionary) -> void:
+	if is_authority():
+		_take_chunk(local_peer_id, take_id, by_channel)
 
 
 func send_audio_end(take_id: int) -> void:
@@ -869,34 +877,44 @@ func _audio_end(take_id: int) -> void:
 	_take_end(multiplayer.get_remote_sender_id(), take_id)
 
 
-func _take_begin(from: int, take_id: int, track: int, start: float, take_name: String) -> void:
+func _take_begin(from: int, take_id: int, track: int, start: float, take_name: String, plan: Array = []) -> void:
 	# One take at a time from each guest: a begin while one is open ends that one first.
 	_finish_take(from)
-	var entry := {"id": take_id, "take": null, "track": track, "start": maxf(start, 0.0),
-			"name": MidiTake.clean_name(take_name), "refused": false}
+	if plan.is_empty():
+		plan = [[track, 0]]
+	var entry := {"id": take_id, "start": maxf(start, 0.0), "name": MidiTake.clean_name(take_name),
+			"parts": []}
 	_incoming_takes[from] = entry
-	var refusal := DAW.audio_take_refusal(track, 1.0)
-	if refusal.is_empty():
-		_takes_made += 1
-		entry["take"] = AudioTake.create(AudioTake.file_name_for(_who(from), _takes_made))
-		if entry["take"] == null:
-			refusal = "The host could not write the recording to its disk."
-	if not refusal.is_empty():
-		entry["refused"] = true
-		if from == local_peer_id:
-			notice.emit("Your recording is not being kept. " + refusal)
-		else:
-			notice.emit("%s's recording was not kept. %s" % [_who(from), refusal])
-			_told.rpc_id(from, "Your recording is not being kept. " + refusal)
+	for step in plan:
+		var refusal := DAW.audio_take_refusal(int(step[0]), 1.0)
+		var take: AudioTake = null
+		if refusal.is_empty():
+			_takes_made += 1
+			take = AudioTake.create(AudioTake.file_name_for(_who(from), _takes_made))
+			if take == null:
+				refusal = "The host could not write the recording to its disk."
+		if not refusal.is_empty():
+			if from == local_peer_id:
+				notice.emit("Your recording is not being kept. " + refusal)
+			else:
+				notice.emit("%s's recording was not kept. %s" % [_who(from), refusal])
+				_told.rpc_id(from, "Your recording is not being kept. " + refusal)
+			continue
+		(entry["parts"] as Array).append({"take": take, "track": int(step[0]), "channel": int(step[1])})
 
 
-func _take_chunk(from: int, take_id: int, pcm: PackedByteArray) -> void:
+## `pcm` for every part of the take, or, from the host's own recorder, a Dictionary of it by
+## channel (0 both sides, 1 and 2 each alone; see send_audio_channels).
+func _take_chunk(from: int, take_id: int, pcm: Variant) -> void:
 	var entry: Dictionary = _incoming_takes.get(from, {})
-	if entry.is_empty() or entry["id"] != take_id or entry["take"] == null:
+	if entry.is_empty() or entry["id"] != take_id:
 		return
-	if not (entry["take"] as AudioTake).append(pcm):
-		# At its limit: placed as it stands, and the rest of it ignored.
-		_finish_take(from)
+	for part in entry["parts"]:
+		var bytes: PackedByteArray = pcm.get(part["channel"], PackedByteArray()) if pcm is Dictionary else pcm
+		if not (part["take"] as AudioTake).append(bytes):
+			# At its limit: placed as it stands, and the rest of it ignored.
+			_finish_take(from)
+			return
 
 
 func _take_end(from: int, take_id: int) -> void:
@@ -907,19 +925,24 @@ func _take_end(from: int, take_id: int) -> void:
 
 ## A guest's take closed and placed, and both sides told: the guest because a recording that
 ## vanished would be a disaster they could not see, the host because a new item appearing on its
-## timeline unannounced is a surprise in the middle of a session.
+## timeline unannounced is a surprise in the middle of a session. A take that went onto several
+## tracks is placed on each.
 func _finish_take(from: int) -> void:
 	var entry: Dictionary = _incoming_takes.get(from, {})
 	_incoming_takes.erase(from)
-	var take: AudioTake = entry.get("take")
-	if take == null:
-		return
+	for part in entry.get("parts", []):
+		_place_part(from, entry, part)
+
+
+func _place_part(from: int, entry: Dictionary, part: Dictionary) -> void:
+	var take: AudioTake = part["take"]
+	var track: int = part["track"]
 	take.finish()
 	if take.frames == 0:
 		take.discard()
 		return
 	var who := _who(from)
-	var refusal := DAW.audio_take_refusal(entry["track"], take.seconds())
+	var refusal := DAW.audio_take_refusal(track, take.seconds())
 	var still_here := from != local_peer_id and _connected() and multiplayer.get_peers().has(from)
 	if not refusal.is_empty():
 		notice.emit("%s's recording was not placed. %s It is kept at %s." % [who, refusal,
@@ -927,15 +950,15 @@ func _finish_take(from: int) -> void:
 		if still_here:
 			_told.rpc_id(from, "Your recording was not placed. " + refusal)
 		return
-	DAW.insert_audio_take(entry["track"], entry["start"], take.file_name(), take.seconds(),
+	DAW.insert_audio_take(track, entry["start"], take.file_name(), take.seconds(),
 			take.peaks(), entry["name"])
-	var track: String = DAW.state.track(entry["track"]).display_name()
+	var track_name: String = DAW.state.track(track).display_name()
 	var at := DAW.state.bar_beat(entry["start"])
 	var length := "%.1fs" % take.seconds()
-	notice.emit("%s recorded %s onto %s at %s." % [who, length, track, at])
+	notice.emit("%s recorded %s onto %s at %s." % [who, length, track_name, at])
 	if still_here:
-		_told.rpc_id(from, "Your recording is on %s: %s from %s." % [track, length, at])
-	audio_take_placed.emit({"peer": from, "track": entry["track"], "start": entry["start"],
+		_told.rpc_id(from, "Your recording is on %s: %s from %s." % [track_name, length, at])
+	audio_take_placed.emit({"peer": from, "track": track, "start": entry["start"],
 			"seconds": take.seconds(), "path": take.path, "name": entry["name"]})
 
 
@@ -1305,7 +1328,8 @@ func _on_tracks_renumbered(map: Dictionary) -> void:
 		return
 	_follow_renumber(map)
 	for entry in _incoming_takes.values():
-		entry["track"] = int(map.get(entry["track"], -1))
+		for part in entry["parts"]:
+			part["track"] = int(map.get(part["track"], -1))
 	if role == Role.HOST:
 		_tracks_renumbered.rpc(map)
 

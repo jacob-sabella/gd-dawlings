@@ -251,9 +251,19 @@ can finish music in, saving DAWproject. Steps, in order:
      input survives the probe's save and reopen mid-session, and the guest is told its name;
      `--reaper`, track 3 set to inputs 1 and 2 and read back. The probe's end moved 2 s later
      again (host 37.4/38.4, guest 36.5/38.0): the Reaper host's work ends at 33.9 s.
-   - **Not yet:** recording more than one input at a time (one microphone and one set of keys
-     each now; a track's input does not yet start a recorder of its own); a count-in
-     before playback (Reaper's &8) and pre-roll with the song.
+   - **Done 2026-10-10, more than one input at a time (4f):** with no track chosen in the panel,
+     every armed track records, as in Reaper. Each device is offered whole and each side alone
+     ("audio:<device>#1", "#2": an interface's inputs 1 and 2). The host's microphone take leads
+     on the first armed track that does not take the keys, and goes onto every armed track whose
+     input is the same device: one recording, one file per track, each its side (or both,
+     averaged), all from the same moment (`GuestAudio.take_plan`; Session keeps a take as parts,
+     fed per channel by `send_audio_channels`). Godot opens one input device at a time, so an
+     armed track naming another device is left out and the host is told why. The keys go onto
+     every armed track whose input is the keys (`GuestMidi.take_tracks`). Measured: `--built-in`,
+     the punched take recorded input 1 onto track 3 and input 2 onto track 4, both from
+     27.41002 s, each side's click peak 0.841 (the null sink sends both alike).
+   - **Not yet:** two input devices at once (Godot opens one); a count-in before playback
+     (Reaper's &8) and pre-roll with the song.
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
      instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
