@@ -31,6 +31,9 @@ var _score: Label
 var _tag: Label
 var _flaws_box: VBoxContainer
 var _drawn_flaws: Array[StringName] = []
+var _parts_edge: ColorRect
+var _parts_box: VBoxContainer
+var _drawn_parts: Array[StringName] = []
 var _draft_box: HBoxContainer
 var _drawn_draft: Array[StringName] = []
 
@@ -73,6 +76,7 @@ func _process(_delta: float) -> void:
 	var run := Tour.run
 	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
 		_refresh_flaws(run)
+		_refresh_parts(run)
 
 
 func _build() -> void:
@@ -113,6 +117,16 @@ func _build() -> void:
 	_flaws_box.add_theme_constant_override("separation", 2)
 	column.add_child(_flaws_box)
 
+	_parts_edge = ColorRect.new()
+	_parts_edge.color = EDGE
+	_parts_edge.custom_minimum_size = Vector2(0, 1)
+	_parts_edge.visible = false
+	column.add_child(_parts_edge)
+	_parts_box = VBoxContainer.new()
+	_parts_box.name = "Parts"
+	_parts_box.add_theme_constant_override("separation", 2)
+	column.add_child(_parts_box)
+
 	_draft_box = HBoxContainer.new()
 	_draft_box.name = "Draft"
 	_draft_box.add_theme_constant_override("separation", 10)
@@ -126,6 +140,7 @@ func _refresh() -> void:
 	if run == null:
 		_drawn_draft = []
 		_drawn_flaws = []
+		_drawn_parts = []
 		return
 	var brief := TourBriefs.brief(run.brief_index)
 	_title.text = ("BOSS: " if brief.is_boss else "") + brief.title
@@ -138,6 +153,13 @@ func _refresh() -> void:
 		_build_flaws(run)
 	elif run.state == TourRun.State.BRIEF:
 		_refresh_flaws(run)
+	var showing_parts := run.state == TourRun.State.BRIEF and not run.parts.is_empty()
+	_parts_box.visible = showing_parts
+	_parts_edge.visible = showing_parts
+	if run.state == TourRun.State.BRIEF and run.parts != _drawn_parts:
+		_build_parts(run)
+	elif run.state == TourRun.State.BRIEF:
+		_refresh_parts(run)
 	var drafting := run.state == TourRun.State.DRAFTING
 	_draft_box.visible = drafting
 	if drafting and run.draft != _drawn_draft:
@@ -163,20 +185,25 @@ func _build_flaws(run: TourRun) -> void:
 	for child in _flaws_box.get_children():
 		_flaws_box.remove_child(child)
 		child.queue_free()
+	var size := _line_font_size(run)
 	for i in run.flaws.size():
 		var flaw := TourFlaws.by_id(run.flaws[i])
 		if flaw == null:
 			continue
-		var l := _label("", 12, INK)
+		var l := _label("", size, INK)
 		l.name = "Flaw%d" % i
 		_flaws_box.add_child(l)
 	_refresh_flaws(run)
 
 
-## Also the "x / y FIXED" tag: the host's `_tick_flaws` publishes to the room without a local
-## signal, so this is the one place the count is kept current on both sides.
+## Also the "x / y FIXED" tag (and, once there are parts to hold, "x / y PARTS" beside it): the
+## host's `_tick_flaws`/`_tick_parts` publish to the room without a local signal of their own, so
+## this is the one place both counts are kept current on both sides.
 func _refresh_flaws(run: TourRun) -> void:
-	_tag.text = "BAND OF %d   %d / %d FIXED" % [run.band_size, run.fixed.count(true), run.flaws.size()]
+	var tag := "BAND OF %d   %d / %d FIXED" % [run.band_size, run.fixed.count(true), run.flaws.size()]
+	if not run.parts.is_empty():
+		tag += "   %d / %d PARTS" % [run.played.count(true), run.parts.size()]
+	_tag.text = tag
 	for i in run.flaws.size():
 		var flaw := TourFlaws.by_id(run.flaws[i])
 		if flaw == null:
@@ -195,6 +222,53 @@ func _refresh_flaws(run: TourRun) -> void:
 static func flaw_line(flaw: TourFlaw, run: TourRun) -> String:
 	var where := flaw.track.to_upper() if not flaw.track.is_empty() else "DECK"
 	return "%s: %s" % [where, flaw.line_for(run)]
+
+
+## Rebuilt only when the set of parts changes (a new brief), same reasoning and the same
+## stale-label care as `_build_flaws`.
+func _build_parts(run: TourRun) -> void:
+	_drawn_parts = run.parts.duplicate()
+	for child in _parts_box.get_children():
+		_parts_box.remove_child(child)
+		child.queue_free()
+	var size := _line_font_size(run)
+	for i in run.parts.size():
+		var part := TourParts.by_id(run.parts[i])
+		if part == null:
+			continue
+		var l := _label("", size, DIM)
+		l.name = "Part%d" % i
+		_parts_box.add_child(l)
+	_refresh_parts(run)
+
+
+## "ADA  TAMBOURINE: strike it on 2 and 4 .. 3/8" -- who holds it (or "OPEN", nobody has),
+## what the band is told, then the on-grid count against what is needed. This player's own line
+## says "YOU" in INK, so a job is found at a glance on a card of eight lines; everyone else's is
+## DIM while held and not yet played. CURSE while open (a job the band is not doing), ACCENT once
+## it has cleared.
+func _refresh_parts(run: TourRun) -> void:
+	for i in run.parts.size():
+		var part := TourParts.by_id(run.parts[i])
+		if part == null:
+			continue
+		var l := _parts_box.get_node_or_null("Part%d" % i) as Label
+		if l == null:
+			continue
+		var holder: int = run.holders[i] if i < run.holders.size() else 0
+		var done: bool = i < run.played.size() and run.played[i]
+		var hits: int = run.hits[i] if i < run.hits.size() else 0
+		var mine := holder > 0 and holder == Session.local_peer_id
+		var who := "OPEN" if holder <= 0 else ("YOU" if mine else Session.name_of(holder).to_upper())
+		l.text = "%s  %s  %s" % [who, part.line, part.progress_line(hits)]
+		var colour := ACCENT if done else (CURSE if holder <= 0 else (INK if mine else DIM))
+		l.add_theme_color_override("font_color", colour)
+
+
+## 12 while there is room, 11 once flaws and parts together would crowd the card (the max today,
+## 5 flaws + 3 parts, already needs it).
+static func _line_font_size(run: TourRun) -> int:
+	return 11 if run.flaws.size() + run.parts.size() > 6 else 12
 
 
 ## Three clickable cards, one per `draft` id: the host applies the pick at once

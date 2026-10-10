@@ -17,6 +17,11 @@ const CHANNEL := 9
 ## Where the song is, here: {seconds, playing, recording, valid}. GuestMidi.heard by default; the
 ## suite gives its own.
 var heard_source: Callable = Callable()
+## Seconds of song after which a running take is sent and a fresh one begun, and a take is also
+## sent when the song wraps round its loop (the same "has it moved on, or stepped sharply back"
+## check catches both); 0.0 (default) sends only when recording stops, as before. Set by Tour
+## during a brief that needs parts ticked live (Tour.take_roll_seconds), unset otherwise.
+var roll_every := 0.0
 ## What the last take did, for the suite and the notice: {notes, track, start, end} or empty.
 var last_take := {}
 var takes_sent := 0
@@ -83,11 +88,15 @@ func _process(_delta: float) -> void:
 
 
 ## The take, following the transport as heard: begun when recording is heard to start onto an
-## armed track, sent when it stops.
+## armed track, sent when it stops -- and, with `roll_every` set, sent and begun afresh as the
+## song moves on, so a part ticks live rather than waiting for the whole brief to finish.
 func follow(h: Dictionary) -> void:
 	var rolling: bool = h["valid"] and h.get("recording", false) and DAW.state.takes_at(float(h["seconds"]))
 	if not rolling:
 		_warned = false
+	var s: float = float(h["seconds"])
+	if _take != null and roll_every > 0.0 and (s >= _take.start + roll_every or s < _take.start - 0.5):
+		_commit()
 	if rolling and armed_track() > 0:
 		if _take == null:
 			_take = MidiTake.new()

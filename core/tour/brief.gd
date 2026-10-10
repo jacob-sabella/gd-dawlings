@@ -89,6 +89,21 @@ func judge(samples: Dictionary, tolerance_mult: float = 1.0) -> Dictionary:
 		score_count += 1
 		detail.append("flaws: %d of %d fixed" % [fixed_n, total])
 
+	# A part nobody has taken (or taken but not yet cleared) blocks the pass exactly as an
+	# unfixed flaw does -- scored the same way, off the same clock, so a band that mixes well
+	# but leaves a job untaken still does not clear the brief.
+	if samples.has("parts"):
+		var r: Dictionary = samples["parts"]
+		var played_n: int = int(r.get("played", 0))
+		var total: int = int(r.get("total", 0))
+		var seconds_left_frac: float = float(samples.get("flaws", {}).get("seconds_left_frac", 0.0))
+		var all_played := total > 0 and played_n == total
+		passed = passed and all_played
+		score_sum += 60 + roundi(40.0 * seconds_left_frac) if all_played \
+				else roundi(60.0 * float(played_n) / float(maxi(total, 1)))
+		score_count += 1
+		detail.append("parts: %d of %d played" % [played_n, total])
+
 	if score_count == 0:
 		return {"passed": false, "score": 0, "detail": detail}
 	return {"passed": passed, "score": int(round(float(score_sum) / float(score_count))), "detail": detail}

@@ -162,3 +162,82 @@ class Timing extends RefCounted:
 		if count == 0:
 			return out
 		return {"avg_beats_off": total / float(count), "worst_beats_off": worst, "notes": count}
+
+
+## Whether notes already placed on a track play a TourPart (core/tour/tour_part.gd): the hand
+## percussion's channel (9) and pitch tell one part's notes from another's, since who played
+## them is not on the lane (see tour_part.gd's class note). Like Timing, read from placed notes
+## at `result()` time, not sampled tick by tick; unlike Timing, every note matching the part's
+## channel/pitch is sorted into "on" or "off" the grid rather than averaged, since a part fails
+## by being mostly off grid (flailing), not by its average miss.
+class Rhythm extends RefCounted:
+	var _track_index := 0
+	var _from_seconds := 0.0
+	var _part: TourPart = null
+
+	## `track_index`: the lane a part's notes land on (Tour.STAGE_TRACK -- every part shares the
+	## one lane, since both recorders land on the first armed track regardless of who is
+	## playing). `from_seconds`: notes before this do not count; 0.0 in practice, since the
+	## Stage lane starts empty every brief. `part`: whose grid judges them.
+	func start(track_index: int, from_seconds: float, part: TourPart) -> void:
+		_track_index = track_index
+		_from_seconds = from_seconds
+		_part = part
+
+	func sample(_delta: float) -> void:
+		pass
+
+	## {"on": notes landing within the part's window, "off": the rest that still matched its
+	## instrument, "notes": on + off}.
+	func result() -> Dictionary:
+		var out := {"on": 0, "off": 0, "notes": 0}
+		if _part == null or DAW.state == null or not DAW.state.tracks.has(_track_index):
+			return out
+		var track: MixState.TrackState = DAW.state.track(_track_index, false)
+		if track == null:
+			return out
+		var on := 0
+		var off := 0
+		var bpb := float(maxi(DAW.state.beats_per_bar, 1))
+		for it: MixState.ItemState in track.items:
+			var notes := it.notes
+			var i := 0
+			while i + MidiTake.NOTE_WIDTH - 1 < notes.size():
+				var on_seconds := it.start + notes[i]
+				var pitch := int(notes[i + 2])
+				var channel := int(notes[i + 4])
+				i += MidiTake.NOTE_WIDTH
+				if on_seconds < _from_seconds or not _matches(channel, pitch):
+					continue
+				var pos := fposmod(DAW.state.beat_at(on_seconds), bpb)
+				if _on_grid(pos, bpb):
+					on += 1
+				else:
+					off += 1
+		return {"on": on, "off": off, "notes": on + off}
+
+	## -1 on a part's own `channel` means any channel but 9, the hand percussion's -- a keytar's
+	## stabs, wherever they come from, never land on that channel. Everything else (shaker,
+	## tambourine) asks for an exact channel and, when given, an exact pitch.
+	func _matches(channel: int, pitch: int) -> bool:
+		var chan_ok := channel == _part.channel if _part.channel >= 0 else channel != 9
+		if not chan_ok:
+			return false
+		return _part.pitches.is_empty() or pitch in _part.pitches
+
+	func _on_grid(pos: float, bpb: float) -> bool:
+		if not _part.beats.is_empty():
+			var best := INF
+			for target in _part.beats:
+				best = minf(best, _circular(pos, target, bpb))
+			return best <= _part.window
+		if _part.grid > 0.0:
+			var q := fposmod(roundf(pos / _part.grid) * _part.grid, bpb)
+			return _circular(pos, q, bpb) <= _part.window
+		return false
+
+	## The shorter way round a bar between two beat positions: a target at 3.95 is close to a
+	## note at 0.05 (the NEXT bar's "on"), not far from it.
+	static func _circular(pos: float, target: float, bpb: float) -> float:
+		var d := absf(pos - target)
+		return minf(d, bpb - d)

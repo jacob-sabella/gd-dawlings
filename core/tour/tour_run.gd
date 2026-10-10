@@ -44,6 +44,18 @@ var fixed: Array[bool] = []
 ## clock does not run until they have (see GodotBackend.parts_ready).
 var tuning: bool = false
 
+## This brief's parts (TourPart.id, core/tour/tour_part.gd), one per player up to
+## TourParts.count_for(band_size). Guests read lines/instruments back from TourParts.by_id --
+## only ids, ints and bools ride the wire. Index for index with `holders` (a peer id, 0 for
+## open -- nobody is holding it, or whoever was has left), `hits` (on-grid notes heard so far),
+## `played` (TourPart.played, once it has cleared) and `open_since` (the clock, `seconds_left`,
+## a part went open at, for the grace before TourParts.reassign hands it to someone else).
+var parts: Array[StringName] = []
+var holders: Array[int] = []
+var hits: Array[int] = []
+var played: Array[bool] = []
+var open_since: Array[float] = []
+
 
 ## This brief's own random stream, seeded off `attempt_seed` and `index` so it never draws the
 ## same numbers the draft's (`attempt_seed + brief_index + 1`) does, and replays identically on
@@ -71,6 +83,11 @@ func to_dict() -> Dictionary:
 		"flaws": (flaws as Array).map(func(f): return String(f)),
 		"fixed": (fixed as Array).duplicate(),
 		"tuning": tuning,
+		"parts": (parts as Array).map(func(p): return String(p)),
+		"holders": (holders as Array).duplicate(),
+		"hits": (hits as Array).duplicate(),
+		"played": (played as Array).duplicate(),
+		"open_since": (open_since as Array).duplicate(),
 	}
 
 
@@ -99,4 +116,26 @@ static func from_dict(d: Dictionary) -> TourRun:
 		run.fixed.append(false)
 	run.fixed.resize(run.flaws.size())
 	run.tuning = bool(d.get("tuning", false))
+	var parts_in: Array = d.get("parts", [])
+	run.parts.assign(parts_in.map(func(p): return StringName(p)))
+	var holders_in: Array = d.get("holders", [])
+	run.holders.assign(holders_in.map(func(h): return int(h)))
+	while run.holders.size() < run.parts.size():
+		run.holders.append(0)
+	run.holders.resize(run.parts.size())
+	var hits_in: Array = d.get("hits", [])
+	run.hits.assign(hits_in.map(func(h): return int(h)))
+	while run.hits.size() < run.parts.size():
+		run.hits.append(0)
+	run.hits.resize(run.parts.size())
+	var played_in: Array = d.get("played", [])
+	run.played.assign(played_in.map(func(p): return bool(p)))
+	while run.played.size() < run.parts.size():
+		run.played.append(false)
+	run.played.resize(run.parts.size())
+	var open_since_in: Array = d.get("open_since", [])
+	run.open_since.assign(open_since_in.map(func(o): return float(o)))
+	while run.open_since.size() < run.parts.size():
+		run.open_since.append(0.0)
+	run.open_since.resize(run.parts.size())
 	return run

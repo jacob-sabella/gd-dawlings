@@ -83,6 +83,11 @@ var _pulls: Array = []
 ## Needs the built-in engine (--built-in): Tour is gated to it, and quietly does nothing on any
 ## other backend, same as in play.
 var _tour := ""
+## `--tour-band 8`: fake guests 2..N registered on `Session.participants` at frame 8, before
+## `--tour` forces the run's state at frame 9, so a brief's flaw/part count is drawn for that
+## band size instead of a solo one -- for a shot of how a crowded card holds up, not for any
+## real multiplayer behaviour.
+var _tour_band := 0
 
 
 func _ready() -> void:
@@ -175,6 +180,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--tour":
 				if i + 1 < args.size(): _tour = args[i + 1]
+			"--tour-band":
+				if i + 1 < args.size(): _tour_band = int(args[i + 1])
 	if _shot_tick >= 0:
 		_shot_frame = -1
 		_quit_after = -1
@@ -237,6 +244,15 @@ func _process(_delta: float) -> void:
 		var on_air_studio := get_tree().current_scene.get_node_or_null("Studio")
 		if on_air_studio != null and on_air_studio.has_method("_set_on_air"):
 			on_air_studio._set_on_air(_on_air, true)
+
+	if _frames == 8 and _tour_band > 1:
+		for n in range(2, _tour_band + 1):
+			var mate := Session.Participant.new()
+			mate.peer_id = n
+			mate.display_name = "Mate%d" % n
+			mate.colour_index = n % Session.PALETTE.size()
+			Session.participants[n] = mate
+		Session.roster_changed.emit()
 
 	if _frames == 9 and _tour != "" and _tour != "intact":
 		Tour.force_state_for_shot(StringName(_tour))

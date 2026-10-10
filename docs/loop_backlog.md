@@ -737,8 +737,63 @@ gloriously wrong and you survive anyway.
   after its render's range. The Timing measure's eighth grid capped at 0.0625
   beats so the pocket check could not fail; the master limiter (-0.3 dB) sits above the loudness
   ceiling (-1 dB) so the levels check could not pass. The master-bus bars are off until measured.
-- **Playing briefs: a part per player.** Briefs where the fix is to play -- a take on the keys,
-  claps on the beat, a sung double -- so nobody stands around while one person mixes.
+- **Playing briefs: a part per player. Done 2026-10-10.** A job per player on top of the flaws:
+  a backbeat, a wall of eighths, a stab on the one -- played, not mixed, so nobody stands around
+  while one person works the desk. New lane, Stage (TourProject.STAGE_TRACK == 1; Keys moved to
+  track 2), armed and MIDI, where every part's notes land -- both HitRecorder and GuestMidi land
+  a take on the first armed track regardless of who is playing, so one shared lane is the only
+  one that can ever take one; who holds a part is HUD/run state, not anything on the lane, so a
+  part is told apart from another by its instrument's channel and pitch (TourPart, TourParts,
+  the catalogue in core/tour/tour_parts.gd: tamb_backbeat/tamb_four/tamb_last, shaker_eighths/
+  shaker_offbeats, keys_one/keys_one_three). Judged by a new TourMeasure.Rhythm, on-grid vs. off
+  against each part's own beats/grid and window, counted rather than averaged so flailing fails a
+  `clean` ratio rather than passing by volume. One instrument of each kind exists in the room
+  (shaker, tambourine, keytar), so INSTRUMENTS=3 caps a brief at three note-making parts no
+  matter the band; solo and a duo hold one at a time so a run alone stays winnable
+  (TourParts.count_for). A part nobody takes blocks the pass exactly as an unfixed flaw does
+  (TourBrief.judge's new "parts" block); someone leaving opens their part for anyone else to pick
+  up, and TourParts.reassign hands it to whoever holds fewest after PART_GRACE (8s) unplayed.
+  Found on the way: a take only ever lands while the transport *records* (HitRecorder/GuestMidi's
+  `follow`, gated on `DAW.state.takes_at`), so a brief now starts with `DAW.transport_record()`
+  instead of `transport_play()`, with the count-in forced to 0 for the run's length and restored
+  after (a brief needs none, and a run is not the place to leave somebody's own setting changed).
+  And a take only commits when recording *stops*, so nothing a part does shows on the HUD until
+  the brief ends, unless the recorder rolls one take into the next on its own -- the one opt-in
+  change to either recorder's default behaviour, `roll_every` (0.0 keeps the old behaviour
+  exactly; Tour sets it to a bar's worth, `Tour.take_roll_seconds`, for the brief's duration via
+  scenes/studio.gd). `_place_take` tells the room a notice per take, which during a part-heavy
+  brief is one every bar per player -- noisy; see below. Reviewed the same day: the path was
+  traced end to end on both sides (a hit -> HitRecorder.hit -> insert_midi_take on the first
+  armed lane, Stage, through DAW._do on the host and Session._place_take for a guest -> Rhythm
+  -> `played`), and a suite test now runs the real brief tick over it; the HUD says YOU, in ink,
+  on this player's own line; and an open part is handed on only once ITS grace is out, not the
+  moment any other open part's is. Not built, by the room's own limit: eight parts on eight
+  lanes. One shaker, one tambourine and one keytar is three note-making jobs, so a band of eight
+  gets its eight things to do as five flaws and three parts, not eight parts.
+- **A guest's chosen track swallows their part.** GuestMidi.take_track honours a guest's own
+  `target_track` first, so a guest who picked a lane in their keys panel before the run plays
+  their keytar part onto that lane, not Stage, and it never ticks. Tour could say so on the HUD
+  when a holder's keys are going elsewhere, or the panel could clear the choice for a run.
+- **A stale count-in point.** `MixState.count_in_to` is reset only when the transport stops
+  while still counting in; a counted-in recording that ran past its point and then stopped
+  leaves it set. `transport_record` without a count-in (what a brief does) does not touch it,
+  so a host who recorded with a count-in before breaking the case open starts a brief whose
+  `takes_at` is false, and whose lane engine holds, until the song reaches that old point --
+  past the end of an eight-bar loop, a brief whose parts can never land. Read from the code,
+  not reproduced; engine-side (core/daw), so not changed for Tour.
+- **Quiet take notices during a brief. Done 2026-10-10.** `Session._place_take`'s "X played N
+  notes onto Stage at B.B.00" is right for an ordinary take, but with `roll_every` ticking a part
+  every bar it was a notice a bar per player playing one; held back while `Session.tour` is
+  non-empty, the HUD's part lines being the word on it.
+- **The keys part without a keytar.** `keys_one`/`keys_one_three` are judged on channel, not on
+  who is holding what, so they will take notes from a host's computer keyboard too, but nothing
+  turns those keys into the keytar's input unless the item is actually in hand (KeyCatcher wires
+  the keytar's own keys). Worth a path that lets the host (or anyone without a keytar to hand)
+  take a keys part from the computer keyboard directly.
+- **A sing part.** The mic's take is audio, not notes -- no judge for it headless, and opening a
+  mic in the test suite is off-limits -- so a vocal double stays mixed only, never played. A part
+  judged on an audio take's presence/level on Vox Dbl is the natural next one, once that is safe
+  to measure without a real microphone.
 - **Instruments as draft cards.** The draft offers instruments and desk tools, not only
   modifiers: a tambourine for the shaker lane, a second fader hand, a tuner.
 - **Seed randomness.** Every draw from the run's seed (the song's draw is; the draft's
@@ -761,7 +816,16 @@ gloriously wrong and you survive anyway.
   promoter) speaking them?
 - Should a brief end the moment the last flaw is fixed (as built, score rises with time left),
   or play the loop out so the band hears the fixed song once?
-- Eleven strips for a solo player: fine, or a smaller band (drums, bass, keys, vox) under four?
+- Twelve strips for a solo player: fine, or a smaller band (drums, bass, keys, vox) under four?
+- Should a part be judged per holder (needs per-player lanes, or takes named and trusted) or per
+  instrument, as built (one shared Stage lane, told apart by channel/pitch -- what both
+  recorders' "lands on the first armed track" forces today)?
+- Should the drum pitches on the Stage lane sound as drums rather than tine pings -- it is a
+  MIDI lane like the keys stab lane, played through the engine's own tine, not a drum kit.
+- The shaker parts' windows (0.1 beat on eighths, 0.12 on the offbeats: about 50 ms either way
+  at 124 BPM) are the tightest in the catalogue, sized so flailing fails a half-beat grid; with
+  a mouse-flicked shaker they may be the one part a solo player cannot clear. Play-test before
+  loosening them, or draw a solo player's one part from the tambourine and keytar only.
 
 ## Parked
 

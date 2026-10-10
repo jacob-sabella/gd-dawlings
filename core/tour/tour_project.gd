@@ -7,19 +7,24 @@ extends RefCounted
 ## job: `ProjectBridge.capture`/`ProjectBridge.load` are exactly what `ProjectFiles.save`/
 ## `ProjectFiles.open` call, used here purely in memory, with no disk I/O at all.
 
-## The band's tracks, in desk order. Track 1 is the keys stab lane the pocket flaw rides on
-## (Tour.TIMING_TRACK): a MIDI lane played through the engine's own tine, its name chosen NOT to
-## match a DemoSong role so its notes are all it plays. 2..11 are role-named so the built-in
-## engine plays DemoSong's part on each (DemoSong.role_of).
-const BAND := ["Keys", "Kick", "Snare", "Hat", "OH", "Bass DI", "Rhodes", "Gtr Amp", "Lead Vox",
-		"Vox Dbl", "Strings"]
-const KEYS_TRACK := 1 ## == Tour.TIMING_TRACK; _test_tour_song_has_a_playing_band asserts they agree.
+## The band's tracks, in desk order. Track 1 is Stage, the one lane every played part lands on
+## (Tour.STAGE_TRACK): armed, MIDI input, no clip of its own, its name chosen NOT to match a
+## DemoSong role -- both HitRecorder and GuestMidi land a take on the first armed track, so this
+## is the only lane that can ever take one (see docs/loop_backlog.md's "Tour" section on why).
+## Track 2 is the keys stab lane the pocket flaw rides on (Tour.TIMING_TRACK), same reasoning.
+## 3..12 are role-named so the built-in engine plays DemoSong's part on each (DemoSong.role_of).
+const BAND := ["Stage", "Keys", "Kick", "Snare", "Hat", "OH", "Bass DI", "Rhodes", "Gtr Amp",
+		"Lead Vox", "Vox Dbl", "Strings"]
+const STAGE_TRACK := 1 ## == Tour.STAGE_TRACK; _test_tour_song_has_a_stage_lane asserts they agree.
+const KEYS_TRACK := 2 ## == Tour.TIMING_TRACK; _test_tour_song_has_a_playing_band asserts they agree.
 const BARS := 2 * DemoSong.BARS ## 8 bars: two turns of the 4-bar loop, looped for the brief.
 
 ## One colour per role, by `BAND` name -- the same values OfflineBackend._populate paints the
 ## stand-in's own demo tracks with, so a rescue song's desk reads as the same band rather than
-## twelve strips of the DawKitTrack default grey (a brief's whole timeline the one colour).
+## twelve strips of the DawKitTrack default grey (a brief's whole timeline the one colour). Stage
+## gets a hot amber of its own: the one lane every played part shares, not a role at all.
 const TRACK_COLOUR := {
+	"Stage": Color(0.95, 0.55, 0.08),
 	"Keys": Color(0.82, 0.62, 0.28), "Kick": Color(0.86, 0.33, 0.28),
 	"Snare": Color(0.88, 0.52, 0.24), "Hat": Color(0.84, 0.74, 0.3),
 	"OH": Color(0.55, 0.72, 0.35), "Bass DI": Color(0.33, 0.66, 0.6),
@@ -46,6 +51,11 @@ static func song_for(brief: TourBrief, song_tempo: float, flaws: Array[TourFlaw]
 		var name: String = BAND[i]
 		var t := p.add_track(name)
 		t.colour = TRACK_COLOUR.get(name, t.colour)
+		if i == STAGE_TRACK - 1:
+			# No clip: it starts empty, and every played part lands its own notes on it.
+			t.armed = true
+			t.input = "midi"
+			continue
 		var clip := DawKitClip.new()
 		clip.start = 0.0
 		clip.length = p.length

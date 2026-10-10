@@ -1915,7 +1915,9 @@ func _build_tour_case() -> void:
 	tour_case.broken_open.connect(_on_tour_case_broken_open)
 	Tour.run_started.connect(_on_tour_run_started)
 	Tour.run_ended.connect(_on_tour_run_ended)
+	Tour.brief_started.connect(_on_tour_brief_started)
 	Session.tour_changed.connect(_on_session_tour_changed)
+	_sync_tour_roll()
 
 
 ## A thrown item has hit the case, broken or not (TourCase.break_attempted): told so only the
@@ -1952,6 +1954,13 @@ func _on_tour_run_started() -> void:
 func _on_tour_run_ended(_won: bool) -> void:
 	if tour_case != null:
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+	_sync_tour_roll()
+
+
+## Host only (see core/tour/tour.gd's class note): a new brief is in, which may have a different
+## tempo (and so a different bar length) than the last -- `_sync_tour_roll` re-reads it.
+func _on_tour_brief_started(_index: int) -> void:
+	_sync_tour_roll()
 
 
 ## A guest's half of the same reset: the host's word on the run (`Session.tour`) went empty --
@@ -1961,12 +1970,25 @@ func _on_tour_run_ended(_won: bool) -> void:
 ## this half -- its own case already broke, from its own authoritative hits, if a run is under
 ## way at all.
 func _on_session_tour_changed() -> void:
+	_sync_tour_roll()
 	if tour_case == null:
 		return
 	if Session.tour.is_empty():
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
 	elif not Session.is_authority():
 		tour_case.sync_broken()
+
+
+## A running take is sent (and a fresh one begun) about every bar while a brief needs its parts
+## ticked live, rather than only when recording stops (Tour.take_roll_seconds). Read from
+## `Tour.run`, correct on both sides (live on the host, rebuilt from `Session.tour` on a guest),
+## so this one sync point covers Tour's own signals and `Session.tour_changed` alike.
+func _sync_tour_roll() -> void:
+	var seconds := Tour.take_roll_seconds()
+	if hit_recorder != null:
+		hit_recorder.roll_every = seconds
+	if Session.guest_midi != null:
+		Session.guest_midi.roll_every = seconds
 
 
 ## What the headphones on this person's head let through (Ears), and what this person is told

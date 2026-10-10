@@ -31,10 +31,16 @@ var unlocks: TourUnlocks
 ## The track the dragging-keys flaw judges: TourProject.KEYS_TRACK, repeated here as a plain
 ## const because every throwaway project (`TourProject.song_for`) is built fresh with known
 ## numbering. _test_tour_song_has_a_playing_band asserts the two agree.
-const TIMING_TRACK := 1
+const TIMING_TRACK := 2
+## The one lane every played part's notes land on: TourProject.STAGE_TRACK, same reasoning.
+## _test_tour_song_has_a_stage_lane asserts the two agree.
+const STAGE_TRACK := 1
 
 ## The host's project, captured the moment the run started, restored exactly when it ends.
 var _snapshot: Dictionary = {}
+## The count-in this process had going into the run, restored when it ends: a brief needs none
+## (see `start_run`/`_end_run`), and a run is not the place to leave somebody's own setting changed.
+var _saved_count_in_bars := 0
 var _loudness: TourMeasure.Loudness = null
 var _balance: TourMeasure.Balance = null
 var _timing: TourMeasure.Timing = null
@@ -43,6 +49,8 @@ var _draft: Array[TourCard] = []
 ## `run.fixed` as it was the last time it was published, so a tick that changes nothing does not
 ## cost a publish: a handful of RPCs a brief, not one every physics frame.
 var _published_fixed: Array[bool] = []
+## [hits, played, holders] as last published, the same reasoning for `_tick_parts`.
+var _published_parts_state: Array = []
 
 
 func _ready() -> void:
@@ -51,7 +59,8 @@ func _ready() -> void:
 	# Deferred: Session is also an autoload, and may not be in the tree yet.
 	(func():
 		Session.tour_changed.connect(_on_tour_changed)
-		Session.tour_asked.connect(_on_tour_asked)).call_deferred()
+		Session.tour_asked.connect(_on_tour_asked)
+		Session.participant_left.connect(_on_participant_left)).call_deferred()
 
 
 func _physics_process(delta: float) -> void:
@@ -62,12 +71,15 @@ func _physics_process(delta: float) -> void:
 		if backend != null and backend.parts_ready():
 			run.tuning = false
 			DAW.seek(0.0)
-			DAW.transport_play()
+			# Not transport_play(): a part is played onto the Stage lane, and a take only ever
+			# lands while the transport records (HitRecorder/GuestMidi's `follow`).
+			DAW.transport_record()
 			_publish()
 		return
 	_on_measure_tick(delta)
 	_tick_flaws()
-	if not run.flaws.is_empty() and not run.fixed.has(false):
+	_tick_parts()
+	if not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false):
 		_finish_brief()
 		return
 	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
@@ -81,6 +93,19 @@ func is_available() -> bool:
 	return DAW.backend is GodotBackend and Session.is_authority()
 
 
+## One bar at this run's song tempo, in seconds, while a brief needs its parts ticked live; 0.0
+## the rest of the time. scenes/studio.gd sets this onto HitRecorder.roll_every and
+## GuestMidi.roll_every so a running take is sent (and a fresh one begun) about every bar rather
+## than only when recording stops -- the one opt-in change to either recorder's default
+## behaviour (see their own doc comments). Reads the same on a guest as on the host: `run` here
+## is rebuilt from `Session.tour` either way.
+func take_roll_seconds() -> float:
+	if run == null or run.state != TourRun.State.BRIEF:
+		return 0.0
+	var bpb := float(DAW.state.beats_per_bar) if DAW.state != null else 4.0
+	return bpb * 60.0 / maxf(run.song_tempo, 1.0)
+
+
 ## Host only. Captures the real project, swaps in the first brief's throwaway one, and starts
 ## it. Refuses quietly when a run is already under way or the engine cannot support one.
 func start_run() -> void:
@@ -88,6 +113,8 @@ func start_run() -> void:
 		return
 	var backend := DAW.backend as OfflineBackend
 	_snapshot = TourProject.capture(backend)
+	_saved_count_in_bars = DAW.state.count_in_bars if DAW.state != null else 0
+	DAW.set_count_in(0)
 	run = TourRun.new()
 	run.attempt_seed = randi()
 	run_started.emit()
@@ -148,6 +175,20 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	run.fixed.clear()
 	for _i in run.flaws.size():
 		run.fixed.append(false)
+	# The same `rng` stream, continuing right where the flaws' own draws left it, so a seed
+	# replays identically all the way through: tempo, flaws, then parts and who holds them.
+	var parts_drawn := TourParts.draw(rng, TourParts.count_for(band_size, brief.is_boss))
+	var roster: Array[int] = []
+	roster.assign(Session.participants.keys())
+	run.parts.assign(parts_drawn.map(func(p: TourPart) -> StringName: return p.id))
+	run.holders.assign(TourParts.assign(rng, parts_drawn, roster))
+	run.hits.clear()
+	run.played.clear()
+	run.open_since.clear()
+	for _i in run.parts.size():
+		run.hits.append(0)
+		run.played.append(false)
+		run.open_since.append(0.0)
 	run.tuning = true
 	# Before the clock is set: a "shorter_clock" card writes `next_brief_seconds_mult`, and this
 	# is the brief it means.
@@ -168,6 +209,7 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 		_timing = TourMeasure.Timing.new()
 		_timing.start(TIMING_TRACK, DAW.state.position_seconds if DAW.state != null else 0.0)
 	_published_fixed = []
+	_published_parts_state = []
 	brief_started.emit(index)
 	_publish()
 
@@ -194,6 +236,37 @@ func _tick_flaws() -> void:
 		_publish()
 
 
+## Reads each part's notes off the Stage lane (TourMeasure.Rhythm), ticks `run.hits`/`run.played`,
+## and hands an open part on once its grace has run out (TourParts.PART_GRACE) -- an open part
+## still judges in the meantime, since anyone can pick the instrument up. Publishes only when
+## hits, played or holders actually changed, the same reasoning as `_tick_flaws`.
+func _tick_parts() -> void:
+	for i in run.parts.size():
+		var part := TourParts.by_id(run.parts[i])
+		if part == null:
+			continue
+		var rhythm := TourMeasure.Rhythm.new()
+		rhythm.start(STAGE_TRACK, 0.0, part)
+		var r := rhythm.result()
+		run.hits[i] = int(r.get("on", 0))
+		run.played[i] = part.played(r)
+	var ready: Array[bool] = []
+	var any_ready := false
+	for i in run.holders.size():
+		var past_grace: bool = run.holders[i] == 0 and i < run.open_since.size() \
+				and run.open_since[i] - run.seconds_left >= TourParts.PART_GRACE
+		ready.append(past_grace)
+		any_ready = any_ready or past_grace
+	if any_ready:
+		var roster: Array[int] = []
+		roster.assign(Session.participants.keys())
+		TourParts.reassign(run, roster, ready)
+	var state := [run.hits.duplicate(), run.played.duplicate(), run.holders.duplicate()]
+	if state != _published_parts_state:
+		_published_parts_state = state
+		_publish()
+
+
 func _finish_brief() -> void:
 	var brief := TourBriefs.brief(run.brief_index)
 	var samples := {}
@@ -210,6 +283,8 @@ func _finish_brief() -> void:
 	var fixed_n: int = run.fixed.filter(func(f: bool) -> bool: return f).size()
 	samples["flaws"] = {"fixed": fixed_n, "total": run.flaws.size(),
 			"seconds_left_frac": run.seconds_left / brief.seconds}
+	var played_n: int = run.played.filter(func(p: bool) -> bool: return p).size()
+	samples["parts"] = {"played": played_n, "total": run.played.size()}
 	var verdict := brief.judge(samples, run.tempo_tolerance_mult)
 	var passed := bool(verdict["passed"])
 	var score := int(verdict["score"])
@@ -240,6 +315,7 @@ func _end_run(won: bool) -> void:
 	var backend := DAW.backend
 	if backend is OfflineBackend:
 		DAW.transport_stop()
+		DAW.set_count_in(_saved_count_in_bars)
 		if not _snapshot.is_empty():
 			TourProject.restore(backend as OfflineBackend, _snapshot)
 	_snapshot = {}
@@ -265,6 +341,15 @@ func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:
 		return
 	if verb == &"draft_pick" and args.size() == 1:
 		pick_draft(int(args[0]))
+
+
+## `peer_id` left the room mid-brief: every part they held goes open, for `_tick_parts` to hand
+## on once the grace has run out. Host only, like every other mutation of `run`.
+func _on_participant_left(peer_id: int) -> void:
+	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
+		return
+	TourParts.open(run, peer_id)
+	_publish()
 
 
 ## Test-only, for `tools/screenshot.gd`'s `--tour` flag: reaches a run state deterministically,

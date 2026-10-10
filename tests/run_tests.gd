@@ -177,6 +177,7 @@ func _ready() -> void:
 	_test_one_recording_goes_onto_every_armed_track_of_its_input()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
+	_test_hit_recorder_rolls_takes_every_bar()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -267,6 +268,14 @@ func _ready() -> void:
 	_test_tour_flaws_bake_and_are_fixed_through_daw_verbs()
 	_test_tour_flaws_scale_with_the_band_and_the_seed()
 	_test_tour_brief_judges_its_flaws()
+	_test_tour_parts_scale_with_the_band_and_the_seed()
+	_test_tour_song_has_a_stage_lane()
+	_test_tour_part_is_played_by_notes_on_its_lane()
+	_test_tour_untaken_part_blocks_the_pass()
+	_test_tour_open_part_is_reassigned_after_the_grace()
+	_test_tour_run_round_trips_parts_with_eight_peers()
+	_test_tour_brief_ticks_a_part_off_the_stage_lane_and_gates_the_pass()
+	_test_tour_hud_names_who_holds_each_part()
 	_test_a_shorter_clock_card_shortens_the_very_next_brief()
 	_test_tour_hud_rebuilds_its_flaw_lines_for_the_next_brief()
 	_test_tour_case_breaks_after_enough_hits_and_resets()
@@ -9662,6 +9671,70 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 		reaper.queue_free()
 
 
+## `roll_every`, Tour's one opt-in change to either recorder (core/items/hit_recorder.gd,
+## core/session/guest_midi.gd): 0.0, the default, behaves exactly as before -- a take runs the
+## whole time recording does, and is sent only when it stops. Set past 0.0, the running take is
+## sent and a fresh one begun once the song has moved on that far, and also when it steps
+## sharply backward -- the loop's wrap -- so a part can be judged while the brief is still going,
+## not only once it ends.
+func _test_hit_recorder_rolls_takes_every_bar() -> void:
+	var backend := _offline()
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	DAW.state.track(1).rec_arm = true
+	DAW.state.track(1).items.clear()
+	var rec := HitRecorder.new()
+	var heard := {"seconds": 20.0, "playing": true, "recording": true, "valid": true}
+	rec.heard_source = func() -> Dictionary: return heard
+
+	# roll_every == 0.0, the default: the running take is left alone until recording stops.
+	rec.follow(heard)
+	rec._take.note_on(60, 100, HitRecorder.CHANNEL, 20.0)
+	rec._take.note_off(60, HitRecorder.CHANNEL, 20.05)
+	heard["seconds"] = 25.0
+	rec.follow(heard)
+	check("roll_every 0 never rolls mid-recording", rec.takes_sent == 0 and rec.is_recording())
+	heard["recording"] = false
+	rec.follow(heard)
+	check("recording stopping sends the one take (%d)" % rec.takes_sent, rec.takes_sent == 1)
+	DAW.state.track(1).items.clear()
+
+	# roll_every == 2.0 (a bar, say): the running take is sent and a fresh one begun once the
+	# song has moved on that far, and again when it steps sharply backward (the loop's wrap).
+	rec.takes_sent = 0
+	rec.roll_every = 2.0
+	heard["recording"] = true
+	heard["seconds"] = 20.0
+	rec.follow(heard)
+	rec._take.note_on(60, 100, HitRecorder.CHANNEL, 20.0)
+	rec._take.note_off(60, HitRecorder.CHANNEL, 20.05)
+	var first_take := rec._take
+	heard["seconds"] = 22.1
+	rec.follow(heard)
+	check("past roll_every, the running take is sent and a fresh one begins (%d)" % rec.takes_sent,
+			rec.takes_sent == 1 and rec.is_recording() and rec._take != first_take)
+	var second_take := rec._take
+	rec._take.note_on(62, 100, HitRecorder.CHANNEL, 22.1)
+	rec._take.note_off(62, HitRecorder.CHANNEL, 22.15)
+	heard["seconds"] = 23.0
+	rec.follow(heard)
+	check("not yet two seconds into the new one, it still runs",
+			rec.takes_sent == 1 and rec._take == second_take)
+	heard["seconds"] = 0.2 # the song wrapped its loop
+	rec.follow(heard)
+	check("stepping back past the loop's wrap rolls the take too (%d)" % rec.takes_sent,
+			rec.takes_sent == 2 and rec.is_recording() and rec._take != second_take)
+	rec._take.note_on(64, 100, HitRecorder.CHANNEL, 0.2)
+	rec._take.note_off(64, HitRecorder.CHANNEL, 0.25)
+	heard["recording"] = false
+	rec.follow(heard)
+	check("and stopping sends the last one (%d)" % rec.takes_sent, rec.takes_sent == 3)
+
+	DAW.state.track(1).items.clear()
+	Session.start_solo()
+	_offline()
+
+
 func _test_a_looped_item_survives_the_wire_and_a_split() -> void:
 	var item := MixState.ItemState.new()
 	item.start = 10.0
@@ -14966,14 +15039,20 @@ func _test_tour_song_has_a_playing_band() -> void:
 	rng.seed = 11
 	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], rng), backend)
 
-	check("eleven tracks", DAW.state.track_indices().size() == TourProject.BAND.size())
+	check("twelve tracks", DAW.state.track_indices().size() == TourProject.BAND.size())
 	for i in TourProject.BAND.size():
 		check("desk %d is %s" % [i + 1, TourProject.BAND[i]],
 				DAW.state.track(i + 1).name == TourProject.BAND[i])
 	check("TourProject.KEYS_TRACK and Tour.TIMING_TRACK agree", TourProject.KEYS_TRACK == Tour.TIMING_TRACK)
+	check("TourProject.STAGE_TRACK and Tour.STAGE_TRACK agree", TourProject.STAGE_TRACK == Tour.STAGE_TRACK)
+
+	var stage := DAW.state.track(TourProject.STAGE_TRACK)
+	check("the Stage lane is armed for midi, no role, no clip",
+			stage.name == "Stage" and stage.rec_arm and stage.input == "midi" and stage.part == ""
+			and stage.items.is_empty())
 
 	var roles := {}
-	for i in range(2, TourProject.BAND.size() + 1):
+	for i in range(TourProject.KEYS_TRACK + 1, TourProject.BAND.size() + 1):
 		var t := DAW.state.track(i)
 		var role := DemoSong.role_of(t.name)
 		check("track %d (%s) plays its DemoSong role" % [i, t.name], role != "" and t.part == role)
@@ -14992,7 +15071,7 @@ func _test_tour_song_has_a_playing_band() -> void:
 	var engine := GodotBackend.new()
 	engine.state = DAW.state
 	check("the engine sees ten roles to render (%s)" % [engine._roles()], engine._roles().size() == 10)
-	for i in range(2, TourProject.BAND.size() + 1):
+	for i in range(TourProject.KEYS_TRACK + 1, TourProject.BAND.size() + 1):
 		var it := engine.item_at(i, 0.0)
 		check("track %d's item at the top is a part window" % i,
 				it != null and it.source.is_empty() and it.notes.is_empty())
@@ -15080,33 +15159,33 @@ func _test_tour_flaws_bake_and_are_fixed_through_daw_verbs() -> void:
 	for f in five:
 		check("%s starts broken" % f.id, not f.fixed(DAW.state, run))
 
-	DAW.set_track_volume(9, DAW.db_to_taper(0.0))
+	DAW.set_track_volume(10, DAW.db_to_taper(0.0))
 	check("quiet_vox is fixed by its fader", quiet_vox.fixed(DAW.state, run))
 	check("nothing else moved with it", not muddy_bass.fixed(DAW.state, run)
 			and not muted_rhodes.fixed(DAW.state, run) and not hard_pan.fixed(DAW.state, run)
 			and not wrong_tempo.fixed(DAW.state, run))
 
-	DAW.set_fx_param(6, 0, 0, 0.5)
-	DAW.set_fx_param(6, 0, 1, 0.5)
+	DAW.set_fx_param(7, 0, 0, 0.5)
+	DAW.set_fx_param(7, 0, 1, 0.5)
 	check("muddy_bass is fixed by pulling both bands back under +3 dB", muddy_bass.fixed(DAW.state, run))
 	check("still nothing else moved", not muted_rhodes.fixed(DAW.state, run)
 			and not hard_pan.fixed(DAW.state, run) and not wrong_tempo.fixed(DAW.state, run))
-	DAW.add_fx(6, "ReaComp", -1)
-	DAW.set_fx_param(6, 1, 0, 0.62)
-	check("a compressor added to the bass, threshold high, is not mud (%s)" % [DAW.state.fx(6, 1).name],
-			DAW.state.track(6).fx.size() == 2 and muddy_bass.fixed(DAW.state, run))
-	DAW.set_fx_param(6, 0, 1, 0.9)
+	DAW.add_fx(7, "ReaComp", -1)
+	DAW.set_fx_param(7, 1, 0, 0.62)
+	check("a compressor added to the bass, threshold high, is not mud (%s)" % [DAW.state.fx(7, 1).name],
+			DAW.state.track(7).fx.size() == 2 and muddy_bass.fixed(DAW.state, run))
+	DAW.set_fx_param(7, 0, 1, 0.9)
 	check("but the EQ's 100 Hz band shoved back up is", not muddy_bass.fixed(DAW.state, run))
-	DAW.set_fx_enabled(6, 0, false)
+	DAW.set_fx_enabled(7, 0, false)
 	check("and switching that EQ off fixes it again", muddy_bass.fixed(DAW.state, run))
-	DAW.set_fx_enabled(6, 0, true)
-	DAW.set_fx_param(6, 0, 1, 0.5)
+	DAW.set_fx_enabled(7, 0, true)
+	DAW.set_fx_param(7, 0, 1, 0.5)
 
-	DAW.set_track_mute(7, false)
+	DAW.set_track_mute(8, false)
 	check("muted_rhodes is fixed by its MUTE", muted_rhodes.fixed(DAW.state, run))
 	check("still nothing else moved", not hard_pan.fixed(DAW.state, run) and not wrong_tempo.fixed(DAW.state, run))
 
-	DAW.set_track_pan(8, 0.5)
+	DAW.set_track_pan(9, 0.5)
 	check("hard_pan is fixed by its pan knob", hard_pan.fixed(DAW.state, run))
 	check("wrong_tempo is still broken", not wrong_tempo.fixed(DAW.state, run))
 
@@ -15121,7 +15200,7 @@ func _test_tour_flaws_bake_and_are_fixed_through_daw_verbs() -> void:
 	rm_rng.seed = 5
 	TourProject.load(TourProject.song_for(brief, 100.0, [muddy_bass], rm_rng), backend)
 	check("muddy_bass starts broken again on a fresh project", not muddy_bass.fixed(DAW.state, run))
-	DAW.remove_fx(6, 0)
+	DAW.remove_fx(7, 0)
 	check("removing the EQ outright also fixes muddy_bass", muddy_bass.fixed(DAW.state, run))
 
 	# dragging_keys is judged through the Timing measure (grid_beats 1.0), not the desk.
@@ -15137,7 +15216,7 @@ func _test_tour_flaws_bake_and_are_fixed_through_daw_verbs() -> void:
 	var drag_run := TourRun.new()
 	drag_run.song_tempo = 100.0
 	check("dragging_keys is not fixed yet", not dragging_keys.fixed(DAW.state, drag_run))
-	DAW.quantize_item(1, 0, 1.0)
+	DAW.quantize_item(TourProject.KEYS_TRACK, 0, 1.0)
 	check("quantizing the item fixes dragging_keys", dragging_keys.fixed(DAW.state, drag_run))
 	drag_run.tempo_tolerance_mult = 0.6
 	check("a tight_tempo card's narrower window still passes a quantised lane",
@@ -15247,6 +15326,310 @@ func _test_tour_brief_judges_its_flaws() -> void:
 	check("2 of 3 fixed fails with score 40",
 			not bool(partial["passed"]) and int(partial["score"]) == 40)
 	check("no samples at all is still not a pass", not bool(brief.judge({})["passed"]))
+
+
+func _test_tour_untaken_part_blocks_the_pass() -> void:
+	var brief := TourBrief.new()
+	var blocked := brief.judge({"flaws": {"fixed": 2, "total": 2, "seconds_left_frac": 0.5},
+			"parts": {"played": 0, "total": 1}})
+	check("a part nobody took blocks the pass even with every flaw fixed", not bool(blocked["passed"]))
+	var cleared := brief.judge({"flaws": {"fixed": 2, "total": 2, "seconds_left_frac": 0.5},
+			"parts": {"played": 1, "total": 1}})
+	check("and clearing it passes", bool(cleared["passed"]))
+	check("the score reflects both, flaws and parts averaged (%d vs %d)" % [blocked["score"], cleared["score"]],
+			int(cleared["score"]) > int(blocked["score"]))
+
+
+func _test_tour_parts_scale_with_the_band_and_the_seed() -> void:
+	check("count_for(1, false) == 1 -- solo holds one job at a time", TourParts.count_for(1, false) == 1)
+	check("count_for(2, false) == 2", TourParts.count_for(2, false) == 2)
+	check("count_for(3, false) == 3 -- one per instrument the room has", TourParts.count_for(3, false) == 3)
+	check("count_for(4, false) == 3", TourParts.count_for(4, false) == 3)
+	check("count_for(8, false) == 3", TourParts.count_for(8, false) == 3)
+	check("the boss adds nothing -- nothing more in the room to hold a fourth",
+			TourParts.count_for(8, true) == 3)
+
+	for seed in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var drawn := TourParts.draw(rng, TourParts.count_for(8, false))
+		var instruments := {}
+		for p: TourPart in drawn:
+			check("seed %d never draws two parts for the same instrument" % seed,
+					not instruments.has(p.instrument))
+			instruments[p.instrument] = true
+
+	var a := TourRun.new()
+	a.attempt_seed = 777
+	var b := TourRun.new()
+	b.attempt_seed = 777
+	var rng_a := a.song_rng(1)
+	var drawn_a := TourParts.draw(rng_a, 3)
+	var holders_a := TourParts.assign(rng_a, drawn_a, [1, 2, 3, 4, 5, 6, 7, 8])
+	var rng_b := b.song_rng(1)
+	var drawn_b := TourParts.draw(rng_b, 3)
+	var holders_b := TourParts.assign(rng_b, drawn_b, [1, 2, 3, 4, 5, 6, 7, 8])
+	check("the same attempt_seed draws the same parts",
+			drawn_a.map(func(p: TourPart) -> StringName: return p.id)
+			== drawn_b.map(func(p: TourPart) -> StringName: return p.id))
+	check("and hands them to the same holders", holders_a == holders_b)
+
+	var unique := {}
+	for h in holders_a:
+		unique[h] = true
+	check("three parts to eight peers go to three distinct people (%s)" % [holders_a], unique.size() == 3)
+
+	var solo_parts := TourParts.draw(RandomNumberGenerator.new(), 1)
+	var solo_holders := TourParts.assign(RandomNumberGenerator.new(), solo_parts, [1])
+	check("solo holds its own one part", solo_holders == [1])
+
+	var first_ids := {}
+	for seed in range(20):
+		var run := TourRun.new()
+		run.attempt_seed = seed
+		var drawn: Array[TourPart] = TourParts.draw(run.song_rng(0), 1)
+		if not drawn.is_empty():
+			first_ids[drawn[0].id] = true
+	check("at least 3 distinct first parts over 20 seeds (%d)" % first_ids.size(), first_ids.size() >= 3)
+
+
+func _test_tour_song_has_a_stage_lane() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], rng), backend)
+
+	check("STAGE_TRACK and KEYS_TRACK agree with Tour's own",
+			TourProject.STAGE_TRACK == Tour.STAGE_TRACK and TourProject.KEYS_TRACK == Tour.TIMING_TRACK
+			and Tour.TIMING_TRACK == 2)
+	var stage := DAW.state.track(TourProject.STAGE_TRACK)
+	check("track 1 is Stage", stage.name == "Stage")
+	check("armed, for midi, no clip, no DemoSong role of its own",
+			stage.rec_arm and stage.input == "midi" and stage.items.is_empty() and stage.part == "")
+	check("so it is the one HitRecorder picks up, being the first armed track",
+			HitRecorder.armed_track() == TourProject.STAGE_TRACK)
+
+	DAW.use(previous, false)
+
+
+func _test_tour_part_is_played_by_notes_on_its_lane() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], RandomNumberGenerator.new()), backend)
+	var beat := 60.0 / 100.0
+	var rhythm := TourMeasure.Rhythm.new()
+
+	# Eight tambourine hits, dead on 2 and 4 of four bars: clears the backbeat part, but not the
+	# shaker's (wrong pitch) nor the keytar's (wrong channel).
+	var on_grid: Array = []
+	for k in 4:
+		for b in [1.0, 3.0]:
+			var on: float = (k * 4.0 + b) * beat
+			on_grid.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, on_grid[0][0], on_grid.back()[1] + 1.0, on_grid, "tambourine")
+
+	var tamb_backbeat := TourParts.by_id(&"tamb_backbeat")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, tamb_backbeat)
+	var r := rhythm.result()
+	check("eight hits on 2 and 4 clear tamb_backbeat (%s)" % [r], tamb_backbeat.played(r))
+
+	var shaker_eighths := TourParts.by_id(&"shaker_eighths")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, shaker_eighths)
+	check("but not shaker_eighths -- wrong pitch", not shaker_eighths.played(rhythm.result()))
+
+	var keys_one := TourParts.by_id(&"keys_one")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
+	check("nor keys_one -- wrong channel", not keys_one.played(rhythm.result()))
+
+	DAW.state.track(TourProject.STAGE_TRACK).items.clear()
+
+	# Eight off-grid tambourine hits (on the one and the three, a full beat from either target):
+	# flailing, not playing.
+	var off_grid: Array = []
+	for k in 4:
+		for b in [0.0, 2.0]:
+			var on: float = (k * 4.0 + b) * beat
+			off_grid.append([on, on + 0.05, 54, 100, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, off_grid[0][0], off_grid.back()[1] + 1.0, off_grid, "flail")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, tamb_backbeat)
+	check("eight off-grid hits do not clear it", not tamb_backbeat.played(rhythm.result()))
+	DAW.state.track(TourProject.STAGE_TRACK).items.clear()
+
+	# Four channel-0 notes on the one: the keytar's part, whatever pitch the chord was.
+	var keys_notes: Array = []
+	for k in 4:
+		var on: float = (k * 4.0) * beat
+		keys_notes.append([on, on + 0.1, 60, 100, 0])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, keys_notes[0][0], keys_notes.back()[1] + 1.0, keys_notes, "keys")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, keys_one)
+	check("four stabs on the one clear keys_one", keys_one.played(rhythm.result()))
+
+	DAW.use(previous, false)
+
+
+func _test_tour_open_part_is_reassigned_after_the_grace() -> void:
+	var run := TourRun.new()
+	run.parts = [&"tamb_backbeat", &"shaker_eighths"]
+	run.holders = [7, 3]
+	run.hits = [0, 0]
+	run.played = [false, false]
+	run.open_since = [0.0, 0.0]
+	run.seconds_left = 40.0
+
+	TourParts.open(run, 7)
+	check("the departed peer's part goes open, timestamped by the clock",
+			run.holders == [0, 3] and is_equal_approx(run.open_since[0], 40.0))
+
+	run.seconds_left = 40.0 - (TourParts.PART_GRACE - 1.0)
+	var too_soon: Array[bool] = [run.open_since[0] - run.seconds_left >= TourParts.PART_GRACE, false]
+	check("before the grace, nothing changes",
+			TourParts.reassign(run, [1, 3], too_soon) == 0 and run.holders == [0, 3])
+
+	# A second part opens later: past the first's grace, only the first is handed on.
+	run.seconds_left = 40.0 - TourParts.PART_GRACE
+	TourParts.open(run, 3)
+	var ready: Array[bool] = [run.open_since[0] - run.seconds_left >= TourParts.PART_GRACE,
+			run.open_since[1] - run.seconds_left >= TourParts.PART_GRACE]
+	var winner := TourParts.reassign(run, [1, 3], ready)
+	check("past the grace, the fewest-parts peer (1, who holds none yet) takes it over (%d)" % winner,
+			winner == 1 and run.holders[0] == 1)
+	check("while a part still inside its own grace stays open (%s)" % [run.holders], run.holders == [1, 0])
+
+	run.seconds_left -= TourParts.PART_GRACE
+	ready = [false, run.open_since[1] - run.seconds_left >= TourParts.PART_GRACE]
+	winner = TourParts.reassign(run, [1, 3], ready)
+	check("and once its own grace is out it goes to whoever holds fewest, 3 (%d)" % winner,
+			winner == 3 and run.holders == [1, 3])
+
+
+func _test_tour_run_round_trips_parts_with_eight_peers() -> void:
+	var run := TourRun.new()
+	run.parts = [&"tamb_backbeat", &"shaker_eighths", &"keys_one"]
+	run.holders = [8, 0, 3]
+	run.hits = [4, 0, 2]
+	run.played = [true, false, false]
+	run.open_since = [0.0, 12.5, 0.0]
+	var back := TourRun.from_dict(run.to_dict())
+	check("parts ride the wire", back.parts == run.parts)
+	check("holders, peer ids up to eight and 0 for open", back.holders == run.holders)
+	check("hits", back.hits == run.hits)
+	check("played", back.played == run.played)
+	check("and open_since", back.open_since == run.open_since)
+
+
+## The whole host-side loop a part goes through, with the real brief tick: notes land on the
+## Stage lane by the same DAW verb both recorders use (insert_midi_take), `_tick_parts` reads
+## them back as hits, and `_physics_process` will not pass the brief -- every flaw fixed -- until
+## the part is played too. No notes, no pass; eight on the backbeat, and it is into the draft.
+func _test_tour_brief_ticks_a_part_off_the_stage_lane_and_gates_the_pass() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+	# Nothing baked, and the vocal's fader put where quiet_vox reads as fixed: the gate under
+	# test is the part's alone.
+	DAW.set_track_volume(TourProject.BAND.find("Lead Vox") + 1, DAW.db_to_taper(0.0))
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.brief_index = 0
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [false]
+	run.parts = [&"tamb_backbeat"]
+	run.holders = [1]
+	run.hits = [0]
+	run.played = [false]
+	run.open_since = [0.0]
+	run.seconds_left = brief.seconds
+	Tour.run = run
+
+	Tour._physics_process(0.1)
+	check("the one flaw reads fixed off the desk", run.fixed == [true])
+	check("but with the part unplayed the brief runs on, clock ticking (%s, %.1f s)" % [run.played, run.seconds_left],
+			run.state == TourRun.State.BRIEF and run.played == [false] and run.seconds_left < brief.seconds)
+
+	var beat := 60.0 / 100.0
+	var hits: Array = []
+	for k in 4:
+		for b in [1.0, 3.0]:
+			var on: float = (k * 4.0 + b) * beat
+			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
+	Tour._physics_process(0.1)
+	check("eight hits on 2 and 4 tick the part off the Stage lane (%d/8)" % run.hits[0],
+			run.hits[0] == 8 and run.played == [true])
+	check("and the brief passes into the draft, scored (%d)" % run.score,
+			run.state == TourRun.State.DRAFTING and run.score > 0)
+
+	Tour.run = saved_run
+	DAW.use(previous, false)
+
+
+## The HUD's part lines: who holds each one, by name -- "YOU" for this player's own, so a job is
+## found at a glance -- "OPEN" once its holder has left, the count against what is needed, and
+## the tag's PARTS count beside FIXED.
+func _test_tour_hud_names_who_holds_each_part() -> void:
+	var saved_run := Tour.run
+	_as_session(Session.Role.HOST, 1)
+	Session._register(1, "Ada", 0)
+	Session._register(2, "Grace", 1)
+	var hud := TourHud.new()
+	add_child(hud)
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.band_size = 2
+	run.song_tempo = 100.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [false]
+	run.parts = [&"tamb_backbeat", &"keys_one"]
+	run.holders = [1, 2]
+	run.hits = [3, 0]
+	run.played = [false, false]
+	run.open_since = [0.0, 0.0]
+	Tour.run = run
+	hud._refresh()
+	var mine := hud._parts_box.get_node_or_null("Part0") as Label
+	var theirs := hud._parts_box.get_node_or_null("Part1") as Label
+	check("two part lines (%d)" % hud._parts_box.get_child_count(), hud._parts_box.get_child_count() == 2)
+	check("this player's own line says YOU, the instrument, the job and the count (%s)" % (mine.text if mine else "none"),
+			mine != null and mine.text == "YOU  " + TourParts.by_id(&"tamb_backbeat").line + "  3/8"
+			and mine.get_theme_color("font_color") == TourHud.INK)
+	check("the other's names them (%s)" % (theirs.text if theirs else "none"),
+			theirs != null and theirs.text.begins_with("GRACE  KEYTAR: ")
+			and theirs.get_theme_color("font_color") == TourHud.DIM)
+	check("the tag counts parts beside fixes (%s)" % hud._tag.text, hud._tag.text == "BAND OF 2   0 / 1 FIXED   0 / 2 PARTS")
+
+	TourParts.open(run, 2)
+	run.played[0] = true
+	run.hits[0] = 8
+	# Both, as `_process` does each frame: the tag is `_refresh_flaws`'s.
+	hud._refresh_flaws(run)
+	hud._refresh_parts(run)
+	check("a leaver's part reads OPEN in the curse colour (%s)" % theirs.text,
+			theirs.text.begins_with("OPEN  ") and theirs.get_theme_color("font_color") == TourHud.CURSE)
+	check("a played one lights up (%s)" % mine.text,
+			mine.text.ends_with("  8/8") and mine.get_theme_color("font_color") == TourHud.ACCENT)
+	check("and the tag ticks it (%s)" % hud._tag.text, hud._tag.text.ends_with("1 / 2 PARTS"))
+
+	Tour.run = saved_run
+	remove_child(hud)
+	hud.free()
+	Session.start_solo()
 
 
 ## A card is applied once the next brief's song is in, so its DAW side lands on that song --

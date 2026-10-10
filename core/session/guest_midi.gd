@@ -103,6 +103,10 @@ var through_track := true:
 ## Where heard() asks, when set: returns {seconds, playing, recording, valid}. For the suite,
 ## which has no stream to listen to.
 var heard_source: Callable = Callable()
+## Seconds of song after which a running take is sent and a fresh one begun, and a take is also
+## sent when the song wraps round its loop; 0.0 (default) sends only when recording stops, as
+## before. Set by Tour during a brief that needs parts ticked live (Tour.take_roll_seconds).
+var roll_every := 0.0
 ## Pitches down right now, for the panel's keys and for closing them if the guest leaves.
 var held := {}
 
@@ -386,6 +390,9 @@ func follow(h: Dictionary) -> void:
 	var rolling: bool = h["valid"] and h["recording"] and DAW.state.takes_at(float(h["seconds"]))
 	# A host's keys do not go onto a track whose input is a microphone.
 	var takes_keys := not (host_records() and DAW.state.input_of(take_track()).begins_with("audio:"))
+	var s: float = float(h["seconds"])
+	if _take != null and roll_every > 0.0 and (s >= _take.start + roll_every or s < _take.start - 0.5):
+		_commit()
 	if rolling and record_with_host and take_track() > 0 and takes_keys:
 		if _take == null:
 			_take = MidiTake.new()

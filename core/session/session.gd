@@ -832,7 +832,10 @@ func _place_take(from: int, args: Array) -> void:
 	var at := DAW.state.bar_beat(cleaned[1])
 	var count := (cleaned[3] as Array).size()
 	var notes := "%d %s" % [count, "note" if count == 1 else "notes"]
-	notice.emit("%s played %s onto %s at %s." % [who, notes, track, at])
+	# Not during a Tour run: a part's take is rolled every bar, and a notice a bar per player
+	# playing one buries the room; the run's HUD ticks the part instead.
+	if tour.is_empty():
+		notice.emit("%s played %s onto %s at %s." % [who, notes, track, at])
 	if _connected():
 		_told.rpc_id(from, "Your take is on %s: %s from %s." % [track, notes, at])
 
