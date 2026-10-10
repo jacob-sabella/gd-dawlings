@@ -98,6 +98,11 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 				state.trim_to_project()
 				if changed:
 					state.bank_changed.emit()
+			elif p.size() > 1 and p[1] == "name" and args.size() > 0:
+				# dawlings's own: [title, file name].
+				state.project_title = str(args[0])
+				state.project_file = str(args[1]).get_file() if args.size() > 1 else ""
+				state.project_named.emit()
 		"bank":
 			# Where the current bank starts, in tracks. Also dawlings's own: Reaper is told a
 			# bank NUMBER and never says which one it settled on, so the authority states it
@@ -580,6 +585,8 @@ static func snapshot(state: MixState) -> Array:
 		["/bank", [state.bank_offset, state.bank_size]],
 		["/project/tracks", [state.project_track_count]],
 	]
+	if not state.project_title.is_empty() or not state.project_file.is_empty():
+		out.append(["/project/name", [state.project_title, state.project_file]])
 	for index in state.track_indices():
 		var t: MixState.TrackState = state.tracks[index]
 		out.append(["/track/%d/name" % index, [t.name]])

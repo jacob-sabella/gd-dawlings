@@ -141,8 +141,13 @@ can finish music in, saving DAWproject. Steps, in order:
      the person who asked. Verified in the suite (panel, Ctrl+S, timeline key, guest
      refusals) and in `session_probe.sh --built-in`, where the guest presses save, the host's
      file is written and both sides are told.
-   - **Not yet:** a guest's panel shows "<host>'s project" because the project's title and
-     file name are not replicated. They belong in the snapshot.
+   - **Done 2026-10-10:** the project's title and file name reach guests: `/project/name`
+     [title, file name] in the snapshot and as a change whenever a save, open or new changes
+     them (`OfflineBackend.name_project`; the file's name only, never the host's folders).
+     `DAW.project_title()` and `DAW.project_file_name()` answer the host's on a guest; the
+     guest's panel shows "<title>" and "<file>, on <host>'s machine". Probe: the guest knows
+     the file name after its save. Under Reaper a guest still sees "<host>'s project": the
+     bridge knows the .rpp's name (it names renders by it) but does not report it yet.
 3. **Done 2026-10-09.** Audio file import. dawkit's `DawKitAudioFile` reads WAV (8/16/24/32-bit
    integer, 32/64-bit float, plain or extensible), AIFF and AIFF-C, Ogg and MP3, folds more than
    two channels to stereo, and brings a file into the takes folder: copied untouched when the

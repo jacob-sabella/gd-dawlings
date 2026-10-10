@@ -8877,8 +8877,16 @@ func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:
 
 	_as_session(Session.Role.GUEST, 5)
 	panel._refresh_project()
-	check("a guest sees the host's project, and no file buttons",
-			panel._project_name.text.ends_with("'s project") and not panel._project_host_row.visible)
+	var host_title := backend.project_title if not backend.project_title.is_empty() else "%s's project" % Session.name_of(1)
+	check("a guest sees the host's project by its name and file, and no file buttons (%s / %s)" % [
+			panel._project_name.text, panel._project_where.text],
+			panel._project_name.text == host_title and panel._project_where.text.begins_with("From Elsewhere.dawproject, on ")
+			and not panel._project_host_row.visible)
+	var told := MixState.new()
+	MixWire.apply_replicated(told, MixWire.snapshot(DAW.state))
+	check("the name and file reach a guest in the snapshot, without the host's folders (%s, %s)" % [
+			told.project_title, told.project_file],
+			told.project_title == backend.project_title and told.project_file == "From Elsewhere.dawproject")
 	check("but may still press save", not panel._project_save.disabled)
 	check("and the host-only verbs refuse a guest", not DAW.save_project_as(path).is_empty()
 			and not DAW.open_project(path).is_empty() and not DAW.new_project().is_empty())

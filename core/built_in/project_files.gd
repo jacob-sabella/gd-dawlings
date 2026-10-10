@@ -63,6 +63,7 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 	DirAccess.make_dir_recursive_absolute(abs_path.get_base_dir())
 	warnings.append_array(DawKitDawproject.save(project, abs_path, staging))
 	backend.project_path = path
+	backend.name_project()
 	return warnings
 
 
@@ -105,6 +106,7 @@ static func open(backend: OfflineBackend, path: String) -> PackedStringArray:
 	if not refused.is_empty():
 		return refused
 	backend.project_path = path
+	backend.name_project()
 	return result["warnings"]
 
 
@@ -124,6 +126,7 @@ static func new_project(backend: OfflineBackend) -> PackedStringArray:
 	var refused := ProjectBridge.load(blank(), backend)
 	if refused.is_empty():
 		backend.project_path = ""
+		backend.name_project()
 	return refused
 
 

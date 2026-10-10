@@ -101,6 +101,7 @@ func _ready() -> void:
 	Session.holds_changed.connect(_refresh)
 	DAW.project_saved.connect(func(_said): _refresh_project())
 	DAW.project_replaced.connect(_refresh_project)
+	DAW.project_named.connect(_refresh_project)
 	DAW.timeline_changed.connect(_refresh_project)
 	get_window().files_dropped.connect(func(paths: PackedStringArray): bring_in_files(paths))
 	_refresh()
@@ -1046,8 +1047,12 @@ func _refresh_project() -> void:
 	var file := DAW.project_file()
 	_project_name.text = DAW.project_title()
 	if not Session.is_authority():
-		_project_name.text = "%s's project" % Session.name_of(1)
-		_project_where.text = "Saved on their machine; Save saves it there."
+		var host := Session.name_of(1)
+		var title := DAW.project_title()
+		_project_name.text = title if not title.is_empty() else "%s's project" % host
+		var where := DAW.project_file_name()
+		_project_where.text = ("%s, on %s's machine; Save saves it there." % [where, host]) if not where.is_empty() \
+				else "Not saved yet; Save saves it on %s's machine." % host
 	elif file.is_empty():
 		_project_where.text = "Not saved yet." if DAW.can(DAWBackend.Capability.PROJECT_FILES) else "Saved by the DAW, in its own file."
 	else:

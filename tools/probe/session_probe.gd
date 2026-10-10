@@ -1041,6 +1041,8 @@ func _guest(port: int) -> void:
 				Session.mix_feed.heard_peak > 0.15)
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
+		check("and I know its name and file, not where it is (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
+				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	await _until(27.0)
 	print("notices: ", _notices)

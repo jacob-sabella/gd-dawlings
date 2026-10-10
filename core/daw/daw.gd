@@ -37,13 +37,15 @@ signal fx_changed(track_index: int, fx_index: int)
 signal timeline_changed()
 signal bank_changed()
 signal project_replaced()
+## See MixState.project_named.
+signal project_named()
 ## The host saved the project here, by its own hand; what went wrong, empty when nothing did.
 signal project_saved(said: PackedStringArray)
 ## See DAWBackend.render_finished.
 signal render_finished(files: PackedStringArray, problems: PackedStringArray)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
-		&"fx_changed", &"timeline_changed", &"bank_changed"]
+		&"fx_changed", &"timeline_changed", &"bank_changed", &"project_named"]
 
 ## Every verb a surface may use, as data. The same list as the methods on DAWBackend -- it is
 ## here as well because a guest's intent names its verb, and a verb missing from this list is a
@@ -281,9 +283,10 @@ func save_project() -> void:
 
 ## The project's name, and the file it was last saved to or opened from (empty for neither,
 ## and for a DAW that keeps its own files).
+## What the project is called. A guest has it from the host, "" until the host says.
 func project_title() -> String:
 	if not Session.is_authority():
-		return ""
+		return state.project_title if state != null else ""
 	var title = backend.get(&"project_title")
 	return str(title) if title != null else "Untitled"
 
@@ -294,6 +297,13 @@ func monitor_bus(track_index: int) -> StringName:
 
 
 func project_file() -> String: return backend.project_path if Session.is_authority() else ""
+
+
+## The name of the project's file, without its folder: for anyone, the host's file on a guest.
+func project_file_name() -> String:
+	if Session.is_authority():
+		return backend.project_path.get_file()
+	return state.project_file if state != null else ""
 
 
 ## Host only: these name a file on this machine, which no guest may do.

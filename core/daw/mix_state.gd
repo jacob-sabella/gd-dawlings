@@ -31,6 +31,8 @@ signal bank_changed()
 ## A whole different project was opened in place of this one. Everything is new: a desk
 ## rebuilds, and a session host sends its guests the lot again.
 signal project_replaced()
+## The project's title or file name changed: it was saved somewhere, opened or started.
+signal project_named()
 
 
 class SendState extends RefCounted:
@@ -295,6 +297,10 @@ var bank_size: int = 64
 ## Tracks in the whole project, or -1 when nothing has said. -1 is not zero: "I have not been
 ## told how big this project is" and "this project has no tracks" want opposite things drawn.
 var project_track_count: int = -1
+## What the host's project is called, and the name of its file (only the name: a guest learns
+## nothing of the host's disk), empty when it was never saved. Both empty where the DAW does not say.
+var project_title: String = ""
+var project_file: String = ""
 
 
 ## Where every beat falls, kept until the tempo or its changes do.

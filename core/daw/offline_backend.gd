@@ -40,6 +40,7 @@ func _process(delta: float) -> void:
 
 func open(_options: Dictionary = {}) -> bool:
 	_populate()
+	name_project()
 	set_process(true)
 	connection_changed.emit()
 	return true
@@ -102,6 +103,17 @@ func media_path(source: String) -> String:
 	if media.has(name):
 		return media[name]
 	return ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+
+
+## Puts the project's title and file name where the room can read them (MixState.project_title),
+## after anything that changes either.
+func name_project() -> void:
+	if state.project_title == project_title and state.project_file == project_path.get_file():
+		return
+	state.project_title = project_title
+	state.project_file = project_path.get_file()
+	record_for_replication("/project/name", [state.project_title, state.project_file])
+	state.project_named.emit()
 
 
 func save_project(path: String) -> PackedStringArray:
