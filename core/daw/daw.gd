@@ -259,7 +259,8 @@ const MONITOR_ON := 1
 const MONITOR_AUTO := 2
 func set_track_monitor(index: int, mode: int) -> void:
 	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
-## How a track's controls meet their automation (MixState.TrackState.automation_mode).
+## How a track's controls meet their automation (MixState.TrackState.automation_mode). Track 0
+## is the master's fader and pan.
 const AUTOMATION_READ := 0
 const AUTOMATION_TOUCH := 2
 const AUTOMATION_LATCH := 4
@@ -439,7 +440,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 	if verb == &"render":
 		args = [MixWire._as_bool(args) if not args.is_empty() else false]
 	if verb == &"set_track_automation_mode":
-		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 0:
 			push_warning("DAW: refused a malformed set_track_automation_mode intent %s." % [args])
 			return
 		args = [int(args[0]), MixWire.automation_mode_of(args[1])]

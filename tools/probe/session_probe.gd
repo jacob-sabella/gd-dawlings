@@ -797,6 +797,18 @@ func _envelopes_in_reaper() -> void:
 	await get_tree().create_timer(0.6).timeout
 	check("Reaper's track is in latch, and says so (%d)" % t.automation_mode, t.automation_mode == DAW.AUTOMATION_LATCH)
 	DAW.set_track_automation_mode(1, DAW.AUTOMATION_READ)
+	# The master's mode, told to Reaper and read back from it: forgotten here, the next report
+	# of the arrangement puts it back.
+	DAW.set_track_automation_mode(0, DAW.AUTOMATION_LATCH)
+	await get_tree().create_timer(0.6).timeout
+	DAW.state.master.automation_mode = DAW.AUTOMATION_READ
+	DAW.backend.set(&"_timeline_due", 0.0)
+	await get_tree().create_timer(1.0).timeout
+	check("Reaper's master is in latch, and says so (%d)" % DAW.state.master.automation_mode,
+			DAW.state.master.automation_mode == DAW.AUTOMATION_LATCH)
+	DAW.set_track_automation_mode(0, DAW.AUTOMATION_READ)
+	await get_tree().create_timer(0.6).timeout
+	check("and back in read", DAW.state.master.automation_mode == DAW.AUTOMATION_READ)
 	for _i in 6:
 		DAW.undo()
 	DAW.seek(0.0)

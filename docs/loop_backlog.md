@@ -397,8 +397,13 @@ can finish music in, saving DAWproject. Steps, in order:
      "MASTER  VOLUME"; points are added, dragged and removed as on a track's
      (`DAW.set_automation(0, ...)`), and picking a track puts the master's lane away. Found on
      the way: finishing a point fetched `DAW.state.track(picked)`, which for the master made a
-     phantom track 0 in the mix; it compares with the lane as shown now. **Not yet:** the
-     master is not written by touch/latch (it has no AUTO mode). **Done 2026-10-10:** the shown lane has a row of
+     phantom track 0 in the mix; it compares with the lane as shown now. **Done 2026-10-10,
+     touch/latch for the master:** `MasterState.automation_mode`, `/master/automode`,
+     `DAW.set_track_automation_mode(0, ...)` (a guest's intent for track 0 is now accepted); the
+     master's fader and pan write passes as a track's do, onto the master's lanes; the AUTO key
+     with no track picked steps the master's mode. Reaper: the bridge's SetAutomationMode takes
+     track 0 as the master and GetTimeline reports `master_automode`. Probe (`--reaper`): the
+     master set to latch, forgotten here, comes back from Reaper's next report as latch. **Done 2026-10-10:** the shown lane has a row of
      its own under its track, 42 mm tall (2.5 lanes), with its name where the track names are;
      the lanes below move down while it is open, and a press on the track's own lane is an item
      press again. Tested (row, spacing, press, closing) and seen in a shot. dawkit ramps volume in

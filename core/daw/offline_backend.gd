@@ -461,6 +461,15 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 
 
 func set_track_automation_mode(index: int, mode: int) -> void:
+	if index == 0:
+		_remember("/master/automode", set_track_automation_mode.bind(0, state.master.automation_mode),
+				set_track_automation_mode.bind(0, mode), false)
+		state.master.automation_mode = mode
+		state.master_changed.emit(&"automation_mode")
+		record_for_replication("/master/automode", [float(mode)])
+		if mode == DAW.AUTOMATION_READ:
+			_end_passes(true, 0)
+		return
 	_remember("/track/%d/automode" % index,
 			set_track_automation_mode.bind(index, state.track(index).automation_mode),
 			set_track_automation_mode.bind(index, mode), false)
@@ -478,15 +487,17 @@ func set_track_monitor(index: int, mode: int) -> void:
 
 
 func set_master_volume(taper: float) -> void:
-	_remember("/master/volume", set_master_volume.bind(state.master.volume),
-			set_master_volume.bind(taper))
+	if not _writes_lane(0, "volume", taper_to_db(clampf(taper, 0.0, 1.0)), state.master.volume_db):
+		_remember("/master/volume", set_master_volume.bind(state.master.volume),
+				set_master_volume.bind(taper))
 	state.set_master_field(&"volume", clampf(taper, 0.0, 1.0))
 	state.set_master_field(&"volume_db", taper_to_db(state.master.volume))
 	record_for_replication("/master/volume", [state.master.volume])
 
 
 func set_master_pan(pan: float) -> void:
-	_remember("/master/pan", set_master_pan.bind(state.master.pan), set_master_pan.bind(pan))
+	if not _writes_lane(0, "pan", clampf(pan, 0.0, 1.0) * 2.0 - 1.0, state.master.pan * 2.0 - 1.0):
+		_remember("/master/pan", set_master_pan.bind(state.master.pan), set_master_pan.bind(pan))
 	state.set_master_field(&"pan", clampf(pan, 0.0, 1.0))
 	record_for_replication("/master/pan", [state.master.pan])
 
@@ -1053,6 +1064,8 @@ func follow_automation() -> void:
 		return
 	_followed_at = at
 	for target in state.master.automation:
+		if _passes.has([0, target]):
+			continue
 		var mv := DawKitAutomation.value_in(state.master.automation[target], at)
 		if target == "volume" and not is_equal_approx(state.master.volume_db, mv):
 			state.set_master_field(&"volume", db_to_taper(mv))
@@ -1117,11 +1130,12 @@ var _passes := {}
 
 
 ## Whether a write of `value` to `target` on `track_index` is part of a pass (and so not an
-## undo step of its own): the song is playing, and the track is in touch or latch.
+## undo step of its own): the song is playing, and the track is in touch or latch. Track 0 is
+## the master.
 func _writes_lane(track_index: int, target: String, value: float, was: float) -> bool:
-	if _replaying or not state.playing or not state.tracks.has(track_index):
+	if _replaying or not state.playing or (track_index != 0 and not state.tracks.has(track_index)):
 		return false
-	var mode := state.track(track_index).automation_mode
+	var mode := state.master.automation_mode if track_index == 0 else state.track(track_index).automation_mode
 	if mode != DAW.AUTOMATION_TOUCH and mode != DAW.AUTOMATION_LATCH:
 		return false
 	var at := state.position_seconds
@@ -1174,9 +1188,10 @@ func _end_pass(key: Array) -> void:
 	_passes.erase(key)
 	var index: int = key[0]
 	var target: String = key[1]
-	if not state.tracks.has(index) or (run["points"] as Array).is_empty():
+	if (index != 0 and not state.tracks.has(index)) or (run["points"] as Array).is_empty():
 		return
-	var old: Array = state.track(index).automation.get(target, [])
+	var lanes: Dictionary = state.master.automation if index == 0 else state.track(index).automation
+	var old: Array = lanes.get(target, [])
 	var before: float = run["before"]
 	var start: float = run["start"]
 	var recorded: Array = run["points"]

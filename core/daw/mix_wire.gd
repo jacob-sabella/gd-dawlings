@@ -161,6 +161,11 @@ static func _apply_master(state: MixState, p: PackedStringArray, args: Array) ->
 				state.master.automation[p[2]] = points
 			state.master_changed.emit(&"automation")
 		return
+	if p.size() == 2 and p[1] == "automode" and not args.is_empty():
+		# dawlings's own, as a track's: the bridge reads and writes the master's I_AUTOMODE.
+		state.master.automation_mode = automation_mode_of(args[0])
+		state.master_changed.emit(&"automation_mode")
+		return
 	if p.size() < 2 or args.is_empty():
 		return
 	match p[1]:
@@ -647,6 +652,8 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/master/pan", [state.master.pan]])
 	for target in state.master.automation:
 		out.append(["/master/automation/%s" % target, pack_automation(state.master.automation[target])])
+	if state.master.automation_mode != 0:
+		out.append(["/master/automode", [float(state.master.automation_mode)]])
 	out.append(["/tempo/raw", [state.tempo]])
 	out.append(["/tempo/map", pack_tempo_points(state.tempo_points)])
 	out.append(["/play", [1.0 if state.playing else 0.0]])

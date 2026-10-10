@@ -470,7 +470,7 @@ end
 
 -- args: track, mode (Reaper's I_AUTOMODE; dawlings's read is Reaper's Read, 1, so its faders move).
 function handlers.SetAutomationMode(args)
-  local tr = track_from_osc(args[1])
+  local tr = args[1] == 0 and reaper.GetMasterTrack(0) or track_from_osc(args[1])
   if not tr then return {ok = false, error = 'no such track'} end
   local mode = math.floor(args[2] or 0)
   reaper.SetMediaTrackInfo_Value(tr, 'I_AUTOMODE', mode == 0 and 1 or mode)
@@ -642,6 +642,7 @@ function handlers.GetTimeline()
   return {
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
+    master_automode = math.floor(reaper.GetMediaTrackInfo_Value(reaper.GetMasterTrack(0), 'I_AUTOMODE')),
     markers = markers,
     tempo = tempo,
     length = reaper.GetProjectLength(0),

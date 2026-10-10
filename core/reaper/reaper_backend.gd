@@ -778,7 +778,7 @@ func set_automation(track_index: int, target: String, points: Array) -> void:
 
 
 func set_track_automation_mode(index: int, mode: int) -> void:
-	_apply("/track/%d/automode" % index, [float(mode)])
+	_apply("/master/automode" if index == 0 else "/track/%d/automode" % index, [float(mode)])
 	_edit("SetAutomationMode", [index, mode])
 
 
@@ -921,6 +921,10 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 	for target in master:
 		if not _same_lane(state.master.automation.get(target, []), master[target]):
 			_apply("/master/automation/%s" % target, MixWire.pack_automation(master[target]))
+	if result.has("master_automode"):
+		var master_mode := MixWire.automation_mode_of(result["master_automode"])
+		if master_mode != state.master.automation_mode:
+			_apply("/master/automode", [float(master_mode)])
 
 	var markers: Array = []
 	for m in _as_array(result.get("markers", [])):

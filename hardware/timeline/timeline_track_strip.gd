@@ -52,11 +52,11 @@ func _ready() -> void:
 	auto = _key("TrackAuto", "AUTO", 3, Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
 			func() -> String:
 				var picked: int = surface.picked_track
-				if picked <= 0 or not DAW.state.tracks.has(picked):
-					return "press a track's name first"
-				var mode: int = DAW.state.track(picked).automation_mode
-				return "%s reads its lanes: %s next" % [_name_of(picked), MODE_NAMES[_next(mode)]] if mode == 0 \
-						else "%s writes in %s: %s next" % [_name_of(picked), MODE_NAMES[mode], MODE_NAMES[_next(mode)]])
+				# With no track picked, the master's fader and pan.
+				var who := _name_of(picked) if picked > 0 else "the master"
+				var mode := _mode_of(picked)
+				return "%s reads its lanes: %s next" % [who, MODE_NAMES[_next(mode)]] if mode == 0 \
+						else "%s writes in %s: %s next" % [who, MODE_NAMES[mode], MODE_NAMES[_next(mode)]])
 	lane = _key("TrackLane", "LANE", 4, TimelineSurface.AUTOMATION_COLOUR, "TRACKS  AUTOMATION LANE", _lane,
 			func() -> String:
 				var picked: int = surface.picked_track
@@ -65,6 +65,7 @@ func _ready() -> void:
 				var next := _next_lane()
 				return "show %s%s" % [whose, TimelineSurface.lane_name(next).to_lower()] if next != "" else "hide the lane")
 	DAW.track_changed.connect(_on_track_changed)
+	DAW.master_changed.connect(_on_master_changed)
 	refresh()
 
 
@@ -83,6 +84,11 @@ func _lane() -> void:
 		refresh()
 
 
+func _on_master_changed(field: StringName) -> void:
+	if field == &"automation_mode" and surface.picked_track == 0:
+		refresh()
+
+
 func _on_track_changed(index: int, field: StringName) -> void:
 	if field == &"automation_mode" and index == surface.picked_track:
 		refresh()
@@ -93,10 +99,17 @@ func _next(mode: int) -> int:
 			else DAW.AUTOMATION_LATCH if mode == DAW.AUTOMATION_TOUCH else DAW.AUTOMATION_READ
 
 
+## The automation mode of a track, or of the master for 0.
+func _mode_of(index: int) -> int:
+	if index <= 0:
+		return DAW.state.master.automation_mode
+	return DAW.state.track(index).automation_mode if DAW.state.tracks.has(index) else 0
+
+
 func _auto() -> void:
 	var picked: int = surface.picked_track
-	if picked > 0 and DAW.state.tracks.has(picked):
-		DAW.set_track_automation_mode(picked, _next(DAW.state.track(picked).automation_mode))
+	if picked == 0 or DAW.state.tracks.has(picked):
+		DAW.set_track_automation_mode(picked, _next(_mode_of(picked)))
 
 
 func refresh() -> void:
@@ -105,7 +118,7 @@ func refresh() -> void:
 	remove.lit = picked
 	rename.lit = picked and surface.can_type()
 	lane.lit = surface.shown_lane != ""
-	auto.lit = picked and DAW.state.track(surface.picked_track).automation_mode != DAW.AUTOMATION_READ
+	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
 
 
 func _add() -> void:

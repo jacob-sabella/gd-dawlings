@@ -8556,6 +8556,12 @@ func _test_items_are_edited_on_the_timeline() -> void:
 			and timeline.shown_points() == master_vol)
 	DAW.undo()
 	check("undone, the master has no lane", not s.master.automation.has("volume"))
+	check("AUTO, with no track picked, is the master's (%s)" % tracks.auto.describe_value.call(0.0),
+			tracks.auto.describe_value.call(0.0) == "the master reads its lanes: TOUCH next" and not tracks.auto.lit)
+	tracks.auto.pressed.emit()
+	check("and puts the master in touch, lit", s.master.automation_mode == DAW.AUTOMATION_TOUCH and tracks.auto.lit)
+	DAW.undo()
+	check("one undo step", s.master.automation_mode == DAW.AUTOMATION_READ and not tracks.auto.lit)
 	timeline.pick_track(3)
 	check("picking a track puts the master's lane away", timeline.shown_lane == "")
 	timeline.pick_track(0)
@@ -11444,6 +11450,41 @@ func _test_controls_follow_their_automation() -> void:
 	s.playing = false
 	DAW.apply_intent(&"set_track_automation_mode", [3, 3])
 	check("a mode the desk does not offer is read", t3.automation_mode == DAW.AUTOMATION_READ)
+
+	# The master, track 0, in touch: its fader moved from 2 s to 3 s while playing.
+	DAW.set_master_volume(backend.db_to_taper(0.0))
+	DAW.set_track_automation_mode(0, DAW.AUTOMATION_TOUCH)
+	check("the master has a mode of its own", s.master.automation_mode == DAW.AUTOMATION_TOUCH
+			and s.track_indices().all(func(i): return s.track(i).automation_mode == DAW.AUTOMATION_READ)
+			and not s.tracks.has(0))
+	var mtold := MixState.new()
+	MixWire.apply_replicated(mtold, MixWire.snapshot(s))
+	check("which a joining guest is told", mtold.master.automation_mode == DAW.AUTOMATION_TOUCH)
+	depth = s.undo_depth
+	s.playing = true
+	for step in 11:
+		s.position_seconds = 2.0 + step * 0.1
+		DAW.set_master_volume(backend.db_to_taper(-6.0 - step))
+		backend.follow_automation()
+	close_to("touched, the master fader is where the hand puts it", s.master.volume_db, -16.0, 0.05)
+	check("and none of it an undo step yet", s.undo_depth == depth)
+	backend._passes[[0, "volume"]]["ms"] = 0
+	s.position_seconds = 3.1
+	backend.follow_automation()
+	var master_written: Array = s.master.automation.get("volume", [])
+	check("let go, the master's pass is one undo step, on the master's lane", s.undo_depth == depth + 1
+			and not s.tracks.has(0))
+	close_to("with what the hand did", DawKitAutomation.value_in(master_written, 2.5), -11.0, 0.05)
+	close_to("and back to where it was after", DawKitAutomation.value_in(master_written, 3.0 + backend.RETURN_SECONDS + 0.1), 0.0)
+	DAW.undo()
+	DAW.set_track_automation_mode(0, DAW.AUTOMATION_LATCH)
+	s.position_seconds = 1.0
+	DAW.set_master_pan(0.25)
+	s.position_seconds = 4.0
+	backend.follow_automation()
+	DAW.transport_stop()
+	close_to("latched, the master's pan holds to the stop", DawKitAutomation.value_in(s.master.automation.get("pan", []), 3.9), -0.5)
+	DAW.set_track_automation_mode(0, DAW.AUTOMATION_READ)
 	_offline()
 
 
