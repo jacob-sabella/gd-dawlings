@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
-	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour",
+	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -206,6 +206,16 @@ func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
 ## chain, because on a guest there is no answer to wait for.
 func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy := false) -> void:
 	_do(&"move_fx", [from_track, fx_index, to_track, maxi(to_fx, 0), copy])
+
+
+## A plugin from `state.fx_choices` (by id) into a track's chain, before slot `at`, or at the end
+## for -1.
+func add_fx(track_index: int, plugin: String, at := -1) -> void:
+	_do(&"add_fx", [track_index, plugin, at])
+
+
+func remove_fx(track_index: int, fx_index: int) -> void:
+	_do(&"remove_fx", [track_index, fx_index])
 
 
 func create_sidechain(from_track: int, to_track: int) -> bool:
@@ -579,6 +589,20 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
 			return
 		args = [int(args[0]), str(args[1]).left(TRACK_NAME_MAX)]
+	if verb == &"add_fx":
+		# Peer input: a track, one of the plugins this DAW offers, and a slot.
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) != TYPE_STRING or not state.fx_choices.any(func(p): return p[0] == args[1]) \
+				or typeof(args[2]) not in [TYPE_INT, TYPE_FLOAT]:
+			push_warning("DAW: refused a malformed add_fx intent %s." % [args])
+			return
+		args = [int(args[0]), str(args[1]), maxi(int(args[2]), -1)]
+	if verb == &"remove_fx":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT]:
+			push_warning("DAW: refused a malformed remove_fx intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1])]
 	if verb == &"set_track_colour":
 		# Peer input: a track number and a colour.
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \

@@ -780,8 +780,13 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   - Pre-roll: done (4h above).
   - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
     for the selected track.
-  - FX: adding and removing them. (Presets, `step_fx_preset`, and wet/dry, `set_fx_wet`, were
-    already there.)
+  - FX: adding and removing done 2026-10-10 (`DAW.add_fx`/`remove_fx`, undoable; what can be
+    added is the DAW's own, `MixState.fx_choices`, `/fxchoices`, so a guest may add only that:
+    Godot's effects built-in, Reaper's stock plugins there, the bridge's AddFx refusing any other
+    name). The rack's window over its track window adds; a fine press on a unit's POWER removes.
+    Built-in, a chain laid down (moved, added, removed or undone) re-stacks the bus's effects:
+    undoing a move left the bus as it was before. Read back on the rig. The Reaper host's work
+    ends at 48.2 s of 49.4. (Presets and wet/dry were already there.)
   - Tracks: done. Adding, removing and renaming were already there; colour done 2026-10-10
     (`DAW.set_track_colour`, undoable, a guest's sanitised; the bridge's SetTrackColour; the
     timeline's COLR key steps the picked track through a palette). Read back on the rig through

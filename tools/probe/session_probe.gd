@@ -1196,6 +1196,17 @@ func _tracks_in_reaper() -> void:
 		renamed.colour = Color.BLACK
 	(DAW.backend as ReaperBackend)._structure_due = 0.0
 	await get_tree().create_timer(0.6).timeout
+	# A stock plugin added to it and removed again, each read back from Reaper's chain.
+	DAW.add_fx(count + 1, "ReaComp")
+	await get_tree().create_timer(0.6).timeout
+	var fx_added: Array = DAW.state.track(count + 1).plugins().map(func(f): return DAW.state.fx(count + 1, f).name) \
+			if DAW.state.tracks.has(count + 1) else []
+	if not fx_added.is_empty():
+		DAW.remove_fx(count + 1, DAW.state.track(count + 1).plugins()[0])
+	await get_tree().create_timer(0.6).timeout
+	var fx_left: int = DAW.state.track(count + 1).plugins().size() if DAW.state.tracks.has(count + 1) else -1
+	check("Reaper added a stock plugin to a track and removed it, read back each time (%s, %d)" % [fx_added, fx_left],
+			fx_added.size() == 1 and str(fx_added[0]).contains("ReaComp") and fx_left == 0)
 	var colour_read: Color = DAW.state.track(count + 1).colour if DAW.state.tracks.has(count + 1) else Color.BLACK
 	check("Reaper took the track's colour and read it back (%s)" % colour_read,
 			absf(colour_read.r - want_colour.r) < 0.004 and absf(colour_read.g - want_colour.g) < 0.004
@@ -1238,7 +1249,7 @@ func _tracks_in_reaper() -> void:
 	check("Reaper moved and renamed a marker, then removed it, read back each time (%s, %s)" % [moved, DAW.state.markers.size()],
 			moved == "Probe moved" and not moved_from and is_nan(DAWBackend.marker_key(DAW.state.markers, 51.0))
 			and DAW.state.markers.size() == marks.size())
-	for i in 8:
+	for i in 10:
 		DAW.undo()
 	await get_tree().create_timer(0.7).timeout
 	check("and undone, it is one tempo again (%s)" % [DAW.state.tempo_points], DAW.state.tempo_points.is_empty())

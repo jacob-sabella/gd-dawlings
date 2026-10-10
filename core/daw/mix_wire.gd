@@ -72,6 +72,13 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			# Reaper's METRONOME, which it states as it changes and on a refresh.
 			state.metronome = _as_bool(args)
 			state.transport_changed.emit()
+		"fxchoices":
+			# [id, name, id, name, ...]: the plugins a chain can be given on this DAW.
+			var choices: Array = []
+			for i in range(0, args.size() - 1, 2):
+				choices.append([str(args[i]), str(args[i + 1])])
+			state.fx_choices = choices
+			state.transport_changed.emit()
 		"inputs":
 			# [id, name, id, name, ...]: what a track can record from on this DAW.
 			var pairs: Array = []
@@ -734,6 +741,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/countin/song", [1.0 if state.pre_roll else 0.0]])
 	if not state.inputs.is_empty():
 		out.append(["/inputs", pack_inputs(state.inputs)])
+		out.append(["/fxchoices", pack_inputs(state.fx_choices)])
 	out.append(["/punch", [1.0 if state.punch else 0.0]])
 	out.append(["/countin/to", [state.count_in_to]])
 	out.append(["/loop/start/time", [state.loop_start]])

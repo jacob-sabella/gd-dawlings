@@ -41,6 +41,7 @@ func _process(delta: float) -> void:
 func open(_options: Dictionary = {}) -> bool:
 	_populate()
 	publish_inputs()
+	publish_fx_choices()
 	name_project()
 	set_process(true)
 	connection_changed.emit()
@@ -512,6 +513,20 @@ func publish_inputs() -> void:
 	record_for_replication("/inputs", MixWire.pack_inputs(inputs))
 
 
+## Stands for Reaper, so it offers Reaper's stock plugins, by the names Reaper adds them by.
+const STOCK_FX := [["ReaEQ", "ReaEQ"], ["ReaComp", "ReaComp"], ["ReaXcomp", "ReaXcomp"], ["ReaGate", "ReaGate"],
+		["ReaLimit", "ReaLimit"], ["ReaDelay", "ReaDelay"], ["ReaVerbate", "ReaVerbate"], ["ReaPitch", "ReaPitch"]]
+
+
+func fx_choices() -> Array:
+	return STOCK_FX.duplicate(true)
+
+
+func publish_fx_choices() -> void:
+	state.fx_choices = fx_choices()
+	record_for_replication("/fxchoices", MixWire.pack_inputs(state.fx_choices))
+
+
 func set_master_volume(taper: float) -> void:
 	if not _writes_lane(0, "volume", taper_to_db(clampf(taper, 0.0, 1.0)), state.master.volume_db):
 		_remember("/master/volume", set_master_volume.bind(state.master.volume),
@@ -618,6 +633,49 @@ func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bo
 			_set_fx_chains.bind(from_track, before_from, to_track, before_to),
 			_set_fx_chains.bind(from_track, after_from, to_track, after_to), false)
 	_set_fx_chains(from_track, after_from, to_track, after_to)
+
+
+func add_fx(track_index: int, plugin: String, at: int) -> void:
+	var row := _new_fx_row(plugin)
+	if not state.tracks.has(track_index) or row.is_empty():
+		return
+	var chain := _fx_chain_of(track_index)
+	var order := state.track(track_index).plugins()
+	var slot := order.find(at)
+	_change_fx_chain(track_index, chain, _inserted(chain, row, slot if slot >= 0 else chain.size()))
+
+
+func remove_fx(track_index: int, fx_index: int) -> void:
+	if not state.tracks.has(track_index):
+		return
+	var at := state.track(track_index).plugins().find(fx_index)
+	if at < 0:
+		return
+	var chain := _fx_chain_of(track_index)
+	var after := chain.duplicate(true)
+	after.remove_at(at)
+	_change_fx_chain(track_index, chain, after)
+
+
+static func _inserted(chain: Array, row: Dictionary, at: int) -> Array:
+	var out := chain.duplicate(true)
+	out.insert(mini(at, out.size()), row)
+	return out
+
+
+func _change_fx_chain(track_index: int, before: Array, after: Array) -> void:
+	_remember("/track/%d/fxs" % track_index, _set_fx_chain.bind(track_index, before),
+			_set_fx_chain.bind(track_index, after), false)
+	_set_fx_chain(track_index, after)
+
+
+## A new plugin's slot as `_fx_row` has it, for a choice from `fx_choices`; {} for none. The
+## stand-in's are names standing for Reaper plugins, with no parameters to show.
+func _new_fx_row(plugin: String) -> Dictionary:
+	for c in fx_choices():
+		if c[0] == plugin:
+			return {"name": c[1], "enabled": true, "wet": 1.0, "preset": "", "params": {}, "param_names": {}}
+	return {}
 
 
 func _set_fx_chains(a: int, chain_a: Array, b: int, chain_b: Array) -> void:

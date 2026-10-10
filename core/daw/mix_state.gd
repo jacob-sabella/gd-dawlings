@@ -364,6 +364,9 @@ var metronome: bool = false
 ## the machine's input devices and its keys, Reaper's its input channels and MIDI. "" is none
 ## chosen. `/inputs`.
 var inputs: Array = []
+## The plugins a track's chain can be given on this DAW, [id, name] each: the built-in engine's
+## Godot effects, Reaper's own stock plugins. `/fxchoices`.
+var fx_choices: Array = []
 
 
 ## The input a track records from, or "" for none chosen or no such track.

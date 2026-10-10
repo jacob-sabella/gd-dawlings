@@ -302,23 +302,41 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	return fx_index
 
 
-## The chain is rearranged in the cache by the stand-in; the effects on the buses follow it, by
-## the name each slot now holds -- a copy is a new effect of the same kind, not the same one.
-func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bool) -> void:
-	var kind: StringName = _kinds.get(from_track, {}).get(fx_index, &"")
-	super(from_track, fx_index, to_track, to_fx, copy)
-	if kind == &"":
-		return
-	for index in [from_track, to_track]:
-		_restack(index, kind)
+## Godot's own effects, by their catalogue kind.
+func fx_choices() -> Array:
+	var out: Array = []
+	for k in FXCatalogue.kinds():
+		out.append([String(k), FXCatalogue.kinds()[k]["name"]])
+	return out
+
+
+func _new_fx_row(plugin: String) -> Dictionary:
+	var kind := StringName(plugin)
+	if not FXCatalogue.kinds().has(kind):
+		return {}
+	var params := FXCatalogue.params(kind)
+	var defaults := FXCatalogue.defaults(kind)
+	var row := {"name": FXCatalogue.kinds()[kind]["name"], "enabled": true, "wet": 1.0, "preset": "",
+			"params": {}, "param_names": {}}
+	for pi in params.size():
+		row["params"][pi] = float(defaults[pi])
+		row["param_names"][pi] = params[pi].name
+	return row
+
+
+## Whenever a chain is laid down -- a plugin moved, added or removed, or any of those undone --
+## the effects on the bus follow it, by the name each slot now holds: a copy is a new effect of
+## the same kind, not the same one.
+func _set_fx_chain(track_index: int, rows: Array) -> void:
+	super(track_index, rows)
+	_restack(track_index)
 
 
 ## Lay a track's bus effects down again in the order its chain now says.
-func _restack(track_index: int, moved_kind: StringName) -> void:
+func _restack(track_index: int) -> void:
 	var by_name := {}
 	for k in FXCatalogue.kinds():
 		by_name[FXCatalogue.kinds()[k]["name"]] = k
-	by_name[FXCatalogue.kinds()[moved_kind]["name"]] = moved_kind
 	var kinds := {}
 	for fx_index in state.track(track_index).plugins():
 		var name: String = state.fx(track_index, fx_index).name

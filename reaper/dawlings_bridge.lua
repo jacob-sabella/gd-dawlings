@@ -851,6 +851,39 @@ function handlers.MoveFx(args)
   return {ok = true}
 end
 
+-- The plugins the desk may add: Reaper's own stock ones, as ReaperBackend.fx_choices offers them.
+local STOCK_FX = {ReaEQ = true, ReaComp = true, ReaXcomp = true, ReaGate = true, ReaLimit = true,
+  ReaDelay = true, ReaVerbate = true, ReaPitch = true}
+
+-- args: track, plugin (a STOCK_FX name), slot to put it before (1-based, as OSC), or -1 for the
+-- end. Answers with the slot it landed in.
+function handlers.AddFx(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local name = tostring(args[2] or '')
+  if not STOCK_FX[name] then return {ok = false, error = 'not a plugin the desk adds'} end
+  local at = math.floor(tonumber(args[3]) or -1)
+  local count = reaper.TrackFX_GetCount(tr)
+  -- -1000 - n puts it at slot n; -1 always adds one at the end.
+  local where = (at >= 1 and at <= count) and (-1000 - (at - 1)) or -1
+  reaper.Undo_BeginBlock()
+  local index = reaper.TrackFX_AddByName(tr, name, false, where)
+  reaper.Undo_EndBlock('dawlings: add FX', -1)
+  return {ok = index >= 0, fx = index + 1}
+end
+
+-- args: track, fx (1-based).
+function handlers.RemoveFx(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local fx = math.floor(args[2] or 1) - 1
+  if fx < 0 or fx >= reaper.TrackFX_GetCount(tr) then return {ok = false, error = 'no such fx'} end
+  reaper.Undo_BeginBlock()
+  local ok = reaper.TrackFX_Delete(tr, fx)
+  reaper.Undo_EndBlock('dawlings: remove FX', -1)
+  return {ok = ok}
+end
+
 -- args: track, fx (1-based), wet 0..1. The plugin's own wet/dry, which every plugin in Reaper
 -- has whether or not it has a mix knob of its own.
 function handlers.SetFxWet(args)

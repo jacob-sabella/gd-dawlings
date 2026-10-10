@@ -198,6 +198,7 @@ func _rebuild() -> void:
 		if bank != null:
 			bank.commit()
 	_build_picker(per_bay * unit_height)
+	_build_adder(per_bay * unit_height)
 	if slots.is_empty():
 		_empty_label = Label3D.new()
 		_empty_label.name = "Empty"
@@ -244,6 +245,35 @@ func _build_picker(bay_height: float) -> void:
 	_picker.chosen.connect(show_track)
 	_adopt(_picker)
 	_picker.lit = _following()
+
+
+## The window over the track's that adds a plugin to the racked chain: scroll through what the
+## DAW offers (MixState.fx_choices), click to put it at the end. Over the rack rather than under
+## it, where the desk is in the way from the seat.
+func _build_adder(bay_height: float) -> void:
+	if DAW.state.fx_choices.is_empty():
+		return
+	var adder := TabletSelector.new()
+	adder.name = "PluginAdder"
+	adder.size = PICKER_SIZE
+	adder.scale = Vector3.ONE * PICKER_SCALE
+	adder.position = Vector3(0, bay_height + PICKER_RISE + PICKER_SIZE.y * PICKER_SCALE * 1.4, 0.002)
+	adder.options = func() -> Array:
+		var out: Array = []
+		for i in DAW.state.fx_choices.size():
+			out.append([i, "ADD  ·  %s" % str(DAW.state.fx_choices[i][1]).to_upper()])
+		return out
+	adder.choice = 0
+	adder.hint_text = "scroll to choose a plugin  ·  click to add it to this track"
+	adder.describe_title = func() -> String: return "RACK  ADD PLUGIN"
+	adder.describe_value = func(_v: float) -> String: return adder.words()
+	adder.pressed.connect(_add_plugin)
+	_adopt(adder)
+
+
+func _add_plugin(choice: int) -> void:
+	if DAW.state.tracks.has(track_index) and choice >= 0 and choice < DAW.state.fx_choices.size():
+		DAW.add_fx(track_index, str(DAW.state.fx_choices[choice][0]))
 
 
 ## Blanking panels for the rows this bay did not fill.

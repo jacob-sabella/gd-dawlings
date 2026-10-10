@@ -104,6 +104,7 @@ func open(options: Dictionary = {}) -> bool:
 	# its bridge drop there too.
 	_bridge.open(options.get("bridge_dir", ScriptBridge.DEFAULT_DIR))
 	set_process(true)
+	_apply("/fxchoices", MixWire.pack_inputs(fx_choices()))
 
 	# Tell Reaper how wide this surface is, then ask for a full resend. Without the resend a
 	# client that connects after Reaper has started sees nothing until something moves, which
@@ -440,6 +441,27 @@ func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bo
 	if _bridge == null or not _bridge.is_open():
 		return
 	_bridge.call_reaper("MoveFx", [from_track, fx_index, to_track, to_fx, copy],
+			func(_result) -> void: _structure_due = 0.0)
+
+
+## Reaper's stock plugins, by the names TrackFX_AddByName finds them by (OfflineBackend's list).
+func fx_choices() -> Array:
+	return OfflineBackend.STOCK_FX.duplicate(true)
+
+
+## Into Reaper's chain through the bridge, then read back by the structure poll and OSC. `at` is
+## a slot as Reaper's OSC numbers them, from 1.
+func add_fx(track_index: int, plugin: String, at: int) -> void:
+	if _bridge == null or not _bridge.is_open() or not fx_choices().any(func(c): return c[0] == plugin):
+		return
+	_bridge.call_reaper("AddFx", [track_index, plugin, at],
+			func(_result) -> void: _structure_due = 0.0)
+
+
+func remove_fx(track_index: int, fx_index: int) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_bridge.call_reaper("RemoveFx", [track_index, fx_index],
 			func(_result) -> void: _structure_due = 0.0)
 
 

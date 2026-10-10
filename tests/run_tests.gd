@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_scrolling_the_timeline_does_not_rebuild_it()
 	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
+	_test_plugins_are_added_and_removed_from_the_rack()
 	_test_one_jack_takes_one_plug()
 	_test_the_bay_reads_left_to_right()
 	_test_dragging_across_the_bay_patches_and_unpatches()
@@ -3491,6 +3492,89 @@ func _test_every_grab_tab_is_clipped_to_its_own_gear() -> void:
 				absf(handle.position.y - bounds.get_center().y) < 0.020)
 
 	studio.queue_free()
+
+
+func _test_plugins_are_added_and_removed_from_the_rack() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var bus: int = backend._bus[6]
+	var effects := func() -> Array:
+		var out: Array = []
+		for i in range(1, AudioServer.get_bus_effect_count(bus)):
+			out.append(AudioServer.get_bus_effect(bus, i).get_class())
+		return out
+	check("the built-in engine offers its own effects (%d)" % s.fx_choices.size(),
+			s.fx_choices.any(func(c): return c[0] == "reverb" and c[1] == "Reverb"))
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("and a guest is told what they are", guest.fx_choices == s.fx_choices)
+	check("the bass has a compressor (%s)" % [effects.call()], effects.call() == ["AudioEffectCompressor"])
+	DAW.add_fx(6, "reverb")
+	check("add_fx puts a reverb after it, on the bus too (%s)" % [effects.call()],
+			s.track(6).plugins().size() == 2 and s.fx(6, 1).name == "Reverb"
+			and effects.call() == ["AudioEffectCompressor", "AudioEffectReverb"]
+			and s.fx(6, 1).param_names.get(0, "") == "Size")
+	DAW.add_fx(6, "eq", 0)
+	check("and an EQ before both (%s)" % [effects.call()],
+			effects.call() == ["AudioEffectEQ6", "AudioEffectCompressor", "AudioEffectReverb"])
+	DAW.remove_fx(6, 1)
+	check("remove_fx takes the compressor out of the chain and off the bus (%s)" % [effects.call()],
+			s.track(6).plugins().size() == 2 and effects.call() == ["AudioEffectEQ6", "AudioEffectReverb"])
+	DAW.undo()
+	check("undone, the bus has it back where it was (%s)" % [effects.call()],
+			effects.call() == ["AudioEffectEQ6", "AudioEffectCompressor", "AudioEffectReverb"])
+	DAW.undo()
+	DAW.undo()
+	check("and two more undos leave the chain as it began (%s)" % [effects.call()],
+			effects.call() == ["AudioEffectCompressor"] and s.track(6).plugins().size() == 1)
+	DAW.apply_intent(&"add_fx", [6, "ReaPlugin Of Doom", -1])
+	DAW.apply_intent(&"remove_fx", [6])
+	check("a guest may only add what the DAW offers, and a malformed removal is refused",
+			s.track(6).plugins().size() == 1 and &"add_fx" in DAW.COMMANDS and &"remove_fx" in DAW.COMMANDS)
+
+	# On the rack: the window on the bottom rail adds, a fine press on POWER removes.
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack.show_track(6)
+	rack._process(0.0)
+	var adder: TabletSelector = rack.find_child("PluginAdder", true, false)
+	var eq_choice := -1
+	for i in s.fx_choices.size():
+		if s.fx_choices[i][0] == "eq":
+			eq_choice = i
+	check("the rack has a window to add a plugin with", adder != null and adder.words().begins_with("ADD"))
+	adder.choice = eq_choice
+	adder.pressed.emit(eq_choice)
+	check("clicking it adds the plugin in it to the racked track", s.track(6).plugins().size() == 2
+			and s.fx(6, 1).name == "EQ6")
+	rack._rebuild()
+	var units: Array = rack.find_children("*", "RackUnit", true, false)
+	var eq_unit: RackUnit = units.filter(func(u): return u.fx_index == 1).front() if not units.is_empty() else null
+	var finger := FakeHand.new()
+	add_child(finger)
+	finger.holding_shift = true
+	eq_unit._bypass.grab_begin(finger, eq_unit._bypass.global_position)
+	eq_unit._bypass.grab_end(finger)
+	check("a fine press on its POWER removes it", s.track(6).plugins().size() == 1)
+	finger.holding_shift = false
+	var comp_unit: RackUnit = units.filter(func(u): return u.fx_index == 0).front()
+	comp_unit._bypass.grab_begin(finger, comp_unit._bypass.global_position)
+	comp_unit._bypass.grab_end(finger)
+	check("and a plain press still bypasses", not s.fx(6, 0).enabled and s.track(6).plugins().size() == 1)
+	finger.queue_free()
+	rack.queue_free()
+
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	check("Reaper offers its own stock plugins", reaper.fx_choices().any(func(c): return c[0] == "ReaComp"))
+	reaper.add_fx(1, "ReaComp", -1)
+	check("and without the bridge adds nothing", reaper.state.tracks.is_empty() or reaper.state.track(1).plugins().is_empty())
+	reaper.free()
+	_offline()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:

@@ -201,10 +201,9 @@ func _ready() -> void:
 	_bypass.led_colour = Color(0.4, 0.95, 0.5)
 	_bypass.position = Vector3(RACK_WIDTH * 0.5 - 0.035, h * 0.5 - 0.016, 0.004)
 	_bypass.describe_title = func() -> String: return "%s  POWER" % _unit_caption()
-	_bypass.describe_value = func(_v: float) -> String: return "ACTIVE" if _bypass.lit else "BYPASSED"
-	_bypass.pressed.connect(func():
-		var f := DAW.state.fx(track_index, fx_index)
-		DAW.set_fx_enabled(track_index, fx_index, not f.enabled))
+	_bypass.describe_value = func(_v: float) -> String:
+		return ("ACTIVE" if _bypass.lit else "BYPASSED") + "  ·  fine press removes it"
+	_bypass.pressed.connect(_power)
 	add_child(_bypass)
 
 	# Right of the name, left of the bypass: the readout is about the knobs, so it sits with
@@ -247,6 +246,16 @@ func _ready() -> void:
 
 
 ## Only ever running to land a deferred page change; see `_pending_page`.
+## POWER bypasses the plugin; a fine press (shift on a monitor) takes it out of the chain.
+func _power() -> void:
+	var by: Node = _bypass.held_by
+	if by != null and by.has_method("fine") and by.fine():
+		DAW.remove_fx(track_index, fx_index)
+		return
+	var f := DAW.state.fx(track_index, fx_index)
+	DAW.set_fx_enabled(track_index, fx_index, not f.enabled)
+
+
 func _process(_delta: float) -> void:
 	if _pending_page < 0 or _anything_held():
 		return
