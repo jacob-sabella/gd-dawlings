@@ -1164,6 +1164,17 @@ function handlers.RenameTrack(args)
   return {ok = true}
 end
 
+-- args: track, red, green, blue (0-1). Reaper's custom colour, its flag set so it shows.
+function handlers.SetTrackColour(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local function byte(v) return math.max(0, math.min(255, math.floor((tonumber(v) or 0) * 255 + 0.5))) end
+  reaper.Undo_BeginBlock()
+  reaper.SetTrackColor(tr, reaper.ColorToNative(byte(args[2]), byte(args[3]), byte(args[4])))
+  reaper.Undo_EndBlock('Set track color', 1)
+  return {ok = true}
+end
+
 -- --- editing ----------------------------------------------------------------------------
 --
 -- Items are addressed as (track, index in lane): the same numbering GetTimeline reports, which

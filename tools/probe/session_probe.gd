@@ -1176,7 +1176,7 @@ func _edit_the_take() -> void:
 		DAW.undo()
 
 
-## A track added at the end, renamed and removed, each read back from Reaper; then all three
+## A track added at the end, renamed, coloured and removed, each read back from Reaper; then all
 ## undone, so the takes' own undo steps are the next ones again.
 func _tracks_in_reaper() -> void:
 	# Straight after the take's five undos, which go through the bridge in line with this edit.
@@ -1188,6 +1188,18 @@ func _tracks_in_reaper() -> void:
 	await get_tree().create_timer(0.5).timeout
 	var renamed := DAW.state.track(count + 1, false)
 	var name_read: String = renamed.name if renamed else "-"
+	# Its colour, read back by the structure poll from Reaper's own (8 bits a channel).
+	var want_colour := Color(0.30, 0.68, 0.86)
+	DAW.set_track_colour(count + 1, want_colour)
+	await get_tree().create_timer(0.4).timeout
+	if renamed:
+		renamed.colour = Color.BLACK
+	(DAW.backend as ReaperBackend)._structure_due = 0.0
+	await get_tree().create_timer(0.6).timeout
+	var colour_read: Color = DAW.state.track(count + 1).colour if DAW.state.tracks.has(count + 1) else Color.BLACK
+	check("Reaper took the track's colour and read it back (%s)" % colour_read,
+			absf(colour_read.r - want_colour.r) < 0.004 and absf(colour_read.g - want_colour.g) < 0.004
+			and absf(colour_read.b - want_colour.b) < 0.004)
 	DAW.remove_track(count + 1)
 	await get_tree().create_timer(0.7).timeout
 	check("Reaper added a track, renamed it and removed it (%d, %s, %d)"
@@ -1207,10 +1219,8 @@ func _tracks_in_reaper() -> void:
 		close_enough = close_enough and absf(got[i][0] - want[i][0]) < 0.001 \
 				and absf(got[i][1] - want[i][1]) < 0.001 and got[i][2] == want[i][2]
 	check("Reaper took the tempo map and read it back (%s)" % [got], close_enough)
-	DAW.undo()
-	DAW.undo()
-	DAW.undo()
-	DAW.undo()
+	for i in 5:
+		DAW.undo()
 	await get_tree().create_timer(0.7).timeout
 	check("and undone, it is one tempo again (%s)" % [DAW.state.tempo_points], DAW.state.tempo_points.is_empty())
 	await _envelopes_in_reaper()

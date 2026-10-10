@@ -733,6 +733,13 @@ func rename_track(index: int, track_name: String) -> void:
 	_edit("RenameTrack", [index, track_name])
 
 
+## Shown at once, and restated by the structure poll, which reads Reaper's own colour back.
+func set_track_colour(index: int, colour: Color) -> void:
+	if state.tracks.has(index):
+		state.set_track_field(index, &"colour", colour)
+	_edit("SetTrackColour", [index, colour.r, colour.g, colour.b])
+
+
 func _whole_project_in_bank() -> bool:
 	return state.bank_offset == 0 and state.project_track_count <= state.bank_size \
 			and state.track_indices().size() == state.project_track_count

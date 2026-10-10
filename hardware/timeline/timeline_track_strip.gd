@@ -8,7 +8,8 @@ extends Node3D
 ## lane until it is let go, in latch until the transport stops. LANE shows the picked track's
 ## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
 ## then none. IN steps the picked track through what it records from (`MixState.inputs`, then
-## none chosen); saved with the project.
+## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its lamp
+## the track's colour.
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -22,6 +23,14 @@ var rename: PanelButton
 var auto: PanelButton
 var lane: PanelButton
 var input: PanelButton
+var colour: PanelButton
+
+## Twelve colours a track can be, round the wheel and readable on the dark desk.
+const PALETTE := [
+	Color(0.86, 0.32, 0.30), Color(0.92, 0.52, 0.25), Color(0.93, 0.76, 0.28), Color(0.70, 0.82, 0.30),
+	Color(0.38, 0.75, 0.40), Color(0.28, 0.72, 0.62), Color(0.30, 0.68, 0.86), Color(0.36, 0.50, 0.90),
+	Color(0.58, 0.44, 0.88), Color(0.80, 0.42, 0.80), Color(0.90, 0.42, 0.60), Color(0.62, 0.64, 0.66),
+]
 
 const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
@@ -30,10 +39,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(6 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(7 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(2.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(3.0 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
@@ -74,6 +83,12 @@ func _ready() -> void:
 					return "press a track's name first"
 				return "%s records from %s: %s next" % [_name_of(picked),
 						DAW.state.input_name(DAW.state.input_of(picked)), DAW.state.input_name(_next_input())])
+	colour = _key("TrackColour", "COLR", 6, PALETTE[0], "TRACKS  COLOUR", _step_colour,
+			func() -> String:
+				var picked: int = surface.picked_track
+				if picked <= 0 or not DAW.state.tracks.has(picked):
+					return "press a track's name first"
+				return "a new colour for %s" % _name_of(picked))
 	DAW.track_changed.connect(_on_track_changed)
 	DAW.master_changed.connect(_on_master_changed)
 	refresh()
@@ -100,7 +115,7 @@ func _on_master_changed(field: StringName) -> void:
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
-	if field in [&"automation_mode", &"input"] and index == surface.picked_track:
+	if field in [&"automation_mode", &"input", &"colour"] and index == surface.picked_track:
 		refresh()
 
 
@@ -130,6 +145,29 @@ func refresh() -> void:
 	lane.lit = surface.shown_lane != ""
 	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
+	if picked:
+		colour.led_colour = DAW.state.track(surface.picked_track).colour
+	# After the colour: setting lit repaints the lamp.
+	colour.lit = picked
+
+
+## The palette's colour after the nearest one to `c`.
+static func next_colour(c: Color) -> Color:
+	var nearest := 0
+	var best := INF
+	for i in PALETTE.size():
+		var p: Color = PALETTE[i]
+		var d := Vector3(p.r - c.r, p.g - c.g, p.b - c.b).length_squared()
+		if d < best:
+			best = d
+			nearest = i
+	return PALETTE[(nearest + 1) % PALETTE.size()]
+
+
+func _step_colour() -> void:
+	var picked: int = surface.picked_track
+	if picked > 0 and DAW.state.tracks.has(picked):
+		DAW.set_track_colour(picked, next_colour(DAW.state.track(picked).colour))
 
 
 ## The input after the picked track's, round through none chosen.

@@ -8510,6 +8510,21 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.undo()
 	DAW.undo()
 	DAW.undo()
+	var colour_was := s.track(3).colour
+	tracks.colour.pressed.emit()
+	check("COLOUR gives it the palette's next colour, its lamp that colour (%s)" % s.track(3).colour,
+			s.track(3).colour == TimelineTrackStrip.next_colour(colour_was) and tracks.colour.lit
+			and tracks.colour.led_colour == s.track(3).colour)
+	var colour_repl: Array = DAW.backend._repl_durable.get("/track/3/colour", [])
+	check("and replicates it", colour_repl.size() == 3 and is_equal_approx(colour_repl[0], s.track(3).colour.r))
+	DAW.undo()
+	check("which is one undo", s.track(3).colour == colour_was)
+	DAW.apply_intent(&"set_track_colour", [3, Color(2.0, -1.0, 0.5, 0.2)])
+	check("a guest's colour is kept within 0-1 and opaque (%s)" % s.track(3).colour,
+			s.track(3).colour == Color(1.0, 0.0, 0.5, 1.0) and &"set_track_colour" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_track_colour", [3, "red"])
+	check("and one that is not a colour is refused", s.track(3).colour == Color(1.0, 0.0, 0.5, 1.0))
+	DAW.undo()
 	tracks.add.pressed.emit()
 	check("ADD puts a new track after it, and picks that (%d)" % timeline.picked_track,
 			s.tracks.size() == names_were.size() + 1 and s.track(4).items.is_empty() and timeline.picked_track == 4

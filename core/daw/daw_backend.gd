@@ -285,6 +285,7 @@ func add_track(_at: int, _track_name: String) -> void: pass
 ## move out a level.
 func remove_track(_index: int) -> void: pass
 func rename_track(_index: int, _track_name: String) -> void: pass
+func set_track_colour(_index: int, _colour: Color) -> void: pass
 ## A track's lane of automation for `target` (see MixState.TrackState.automation), whole; empty
 ## points take the lane away.
 func set_automation(_track_index: int, _target: String, _points: Array) -> void: pass

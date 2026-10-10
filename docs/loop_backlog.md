@@ -780,8 +780,12 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   - Pre-roll: done (4h above).
   - Automation modes. `t/track/@/autoread` and its siblings exist, but Reaper reports them only
     for the selected track.
-  - FX: adding, removing, presets (`fx/@/preset+-`) and wet/dry (`n/track/@/fx/@/wetdry`).
-  - Tracks: adding, renaming and recolouring them.
+  - FX: adding and removing them. (Presets, `step_fx_preset`, and wet/dry, `set_fx_wet`, were
+    already there.)
+  - Tracks: done. Adding, removing and renaming were already there; colour done 2026-10-10
+    (`DAW.set_track_colour`, undoable, a guest's sanitised; the bridge's SetTrackColour; the
+    timeline's COLR key steps the picked track through a palette). Read back on the rig through
+    the structure poll, within 8 bits a channel. The Reaper host's work ends at 45.0 s of 46.4.
   - Markers: renaming and deleting them, and regions of any kind.
   - Time signature: done 2026-10-10 (step 7f), through the bridge.
   - `tools/shot.sh --focus patchbay` frames only the floor.

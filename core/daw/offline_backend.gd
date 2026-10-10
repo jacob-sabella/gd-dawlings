@@ -934,6 +934,15 @@ func rename_track(index: int, track_name: String) -> void:
 	record_for_replication("/track/%d/name" % index, [track_name])
 
 
+func set_track_colour(index: int, colour: Color) -> void:
+	if not state.tracks.has(index) or state.tracks[index].colour.is_equal_approx(colour):
+		return
+	_remember("/track/%d/colour" % index, set_track_colour.bind(index, state.tracks[index].colour),
+			set_track_colour.bind(index, colour), false)
+	state.set_track_field(index, &"colour", colour)
+	record_for_replication("/track/%d/colour" % index, [colour.r, colour.g, colour.b])
+
+
 ## The tracks renumbered (see `_locally_renumber`), with what is kept beside the mix by index.
 func _renumber(order: Array) -> void:
 	var kinds := _fx_kinds()
