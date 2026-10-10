@@ -180,6 +180,16 @@ class ItemState extends RefCounted:
 	func is_looped() -> bool:
 		return loop_end > loop_start
 
+	## The item's own level at song position `seconds`, in dB: its gain, and its fades, each a
+	## straight line in amplitude from silence to full.
+	func level_db(seconds: float) -> float:
+		var through := 1.0
+		if fade_in > 0.0:
+			through = minf(through, (seconds - start) / fade_in)
+		if fade_out > 0.0:
+			through = minf(through, (end() - seconds) / fade_out)
+		return gain_db + linear_to_db(clampf(through, 0.0001, 1.0))
+
 	## Seconds into the file that sound at song position `seconds`.
 	func file_time(seconds: float) -> float:
 		var at := source_offset + seconds - start

@@ -87,7 +87,11 @@ static func scan(root: Node) -> Array:
 		var bank := node as MeshBank
 		if bank == null or not bank.is_visible_in_tree() or bank.multimesh == null:
 			continue
-		for i in bank._transforms.size():
+		# Only what is drawn: a bank drawn down to its first few keeps the rest where they were.
+		var drawn := bank._transforms.size()
+		if bank.multimesh.visible_instance_count >= 0:
+			drawn = mini(drawn, bank.multimesh.visible_instance_count)
+		for i in drawn:
 			faces.append_array(faces_of_mesh(bank.multimesh.mesh,
 					bank.global_transform * bank._transforms[i], [bank, i]))
 	faces.sort_custom(func(a, b): return a["d"] < b["d"])

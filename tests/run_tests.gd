@@ -8407,6 +8407,32 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	check("and the fade out leaves it", is_equal_approx(s.item(2, 0).fade_in, s.item(2, 0).length * 0.25)
 			and is_equal_approx(s.item(2, 0).fade_out, s.item(2, 0).length * 0.04))
 	close_to("the knob follows the item", strip.fade_in.value, 0.5, 0.001)
+	timeline._process(0.0)
+	var faded := s.item(2, 0)
+	var fades := timeline._item_fades
+	check("both fades are drawn on it (%d)" % fades.multimesh.visible_instance_count,
+			fades.multimesh.visible_instance_count == 2)
+	var fade_line := fades.transform_of(0)
+	close_to("the fade in's line runs from its start to where the fade ends",
+			fade_line.origin.x, (timeline._x_for(faded.start) + TimelineSurface.EDGE_GAP
+			+ timeline._x_for(faded.start + faded.fade_in)) * 0.5, 0.0005)
+	check("rising, from silence to full", fade_line.basis.x.y > 0.0 and fades.transform_of(1).basis.x.y < 0.0)
+	# A flat overview, as a take at a steady level would have, so what is drawn is its level.
+	var flat := PackedByteArray()
+	flat.resize(int(s.item(2, 0).length * AudioTake.PEAKS_PER_SECOND) + 8)
+	flat.fill(160)
+	s.item(2, 0).peaks = flat
+	timeline.mark_dirty()
+	timeline._process(0.0)
+	var waves := timeline._item_waves
+	var shown := waves.multimesh.visible_instance_count
+	var first_column := waves.transform_of(0).basis.y.length()
+	var middle_column := waves.transform_of(shown / 2).basis.y.length()
+	check("its take is drawn as heard: quiet at the start of the fade in, full in the middle (%.4f, %.4f)"
+			% [first_column, middle_column], shown > 10 and first_column < middle_column * 0.4)
+	var gains := timeline._gain_labels.get_children().filter(func(l): return l.visible)
+	check("and its gain is written on it (%s)" % [gains.map(func(l): return l.text)],
+			gains.size() == 1 and gains[0].text == "-6.0 dB")
 	check("an audio-less stand-in item has no notes, so the note keys stay dark", not strip.up.lit)
 	DAW.undo()
 	DAW.undo()

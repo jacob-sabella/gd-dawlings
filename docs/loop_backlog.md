@@ -273,9 +273,16 @@ can finish music in, saving DAWproject. Steps, in order:
      amber; this desk's own, not the DAW's selection), and `TimelineTrackStrip` under the
      panel's right end has ADD (after the picked track, or at the end), DEL and NAME. NAME opens
      a `NamePrompt` on the monitor; in a headset there is nothing to type on yet, and the key
-     says so. Still to come: a way to type in a headset; a gain readout drawn on the item; fade
-     handles drawn on the item's corners; fades drawn as curves rather than a flat volume per frame (needs
-     the engine's own mixing, see "Waiting on the user").
+     says so. Still to come: a way to type in a headset; fades played as curves rather than a flat volume per frame (needs
+     the engine's own mixing, see "Waiting on the user"); dragging a fade's corner on the item
+     (the knobs set them now).
+   - **Done 2026-10-10 (6e), drawn on the item:** each fade is a line from silence in the
+     block's bottom corner to full level where the fade ends; the gain, when not 0 dB, is
+     written under the strip between the fades; a take's waveform is drawn as heard, through
+     its gain and fades (`MixState.ItemState.level_db`, which the built-in engine plays by too).
+     They follow a trim and a move. Tested (line ends and slope, readout, a flat take's columns
+     low at the fade's start) and seen in a shot. The z-fight scan now looks only at a bank's
+     drawn instances, as the unused fade slots lie folded at the origin.
 7. Sample-accurate timing, post-effects sends, tempo map.
    - **Done 2026-10-10 (7a), post-effects sends:** a send's bus now holds the track's pan, then
      the track bus's own effect objects (one knob turns both; a bypass reaches both), then the

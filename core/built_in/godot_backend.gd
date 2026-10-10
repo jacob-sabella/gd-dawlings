@@ -720,16 +720,11 @@ func _sync_players() -> void:
 				_start(player, expected)
 
 
-## An item's own level at `seconds`, in dB: its gain, and its fades. Applied a frame at a time,
-## which is smooth for a fade of more than a few frames; a shorter one wants the engine mixing its
-## own players (see docs/loop_backlog.md, step 7).
+## An item's own level at `seconds`, in dB (MixState.ItemState.level_db). Applied a frame at a
+## time, which is smooth for a fade of more than a few frames; a shorter one wants the engine
+## mixing its own players (see docs/loop_backlog.md, step 7).
 static func item_level(it: MixState.ItemState, seconds: float) -> float:
-	var through := 1.0
-	if it.fade_in > 0.0:
-		through = minf(through, (seconds - it.start) / it.fade_in)
-	if it.fade_out > 0.0:
-		through = minf(through, (it.end() - seconds) / it.fade_out)
-	return it.gain_db + linear_to_db(clampf(through, 0.0001, 1.0))
+	return it.level_db(seconds)
 
 
 ## The click, while the transport runs with the metronome on: into the master, so it is in what

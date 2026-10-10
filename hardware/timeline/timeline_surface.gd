@@ -131,6 +131,10 @@ var _item_strips: MeshBank
 var _item_notes: MeshBank
 ## The loudness of recorded takes, drawn on their items. See _place_wave.
 var _item_waves: MeshBank
+## A line across each faded corner of an item, two slots an item. See _place_fades.
+var _item_fades: MeshBank
+## An item's gain, written on it when it is not 0 dB: labels kept and reused as the window moves.
+var _gain_labels: Node3D
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
 var _lane_y: Array[float] = []
 
@@ -376,6 +380,15 @@ func _rebuild() -> void:
 		_item_strips.claim(Transform3D(), Color.WHITE)
 	_item_blocks.commit()
 	_item_strips.commit()
+	_item_fades = MeshBank.strips()
+	_item_fades.name = "ItemFades"
+	_adopt(_item_fades)
+	for i in total_items * 2:
+		_item_fades.claim(Transform3D(), Color.WHITE)
+	_item_fades.commit()
+	_gain_labels = Node3D.new()
+	_gain_labels.name = "GainLabels"
+	_adopt(_gain_labels)
 	var total_notes := 0
 	for index in indices:
 		for item in DAW.state.track(index).items:
@@ -1136,6 +1149,8 @@ func _relayout_view() -> void:
 	var slot := 0
 	var note_slot := 0
 	var wave_slot := 0
+	var fade_slot := 0
+	var gain_label := 0
 	for i in indices.size():
 		if i >= _lane_y.size():
 			break
@@ -1160,11 +1175,17 @@ func _relayout_view() -> void:
 						note_slot)
 				wave_slot = _place_wave(item, content, t.colour, _lane_y[i], item.muted or t.mute,
 						wave_slot)
+				# Fades and gain belong to the block: they move with it and follow a trim.
+				fade_slot = _place_fades(item, start, length, t.colour, _lane_y[i], fade_slot)
+				gain_label = _place_gain(item, start, length, _lane_y[i], gain_label)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
 	_item_notes.show_first(note_slot)
 	_item_waves.show_first(wave_slot)
+	_item_fades.show_first(fade_slot)
+	for k in range(gain_label, _gain_labels.get_child_count()):
+		(_gain_labels.get_child(k) as Label3D).visible = false
 	_draw_loop()
 	_draw_automation()
 
@@ -1262,6 +1283,68 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 	return slot
 
 
+## An item's fades, drawn as an arranger draws them: a line from silence in the block's bottom
+## corner to full level at the top, where the fade ends, over each faded end. Clipped to the
+## window. Returns the next free slot.
+func _place_fades(item: MixState.ItemState, start: float, length: float, tint: Color, y: float,
+		slot: int) -> int:
+	var block_height := LANE_HEIGHT - 0.0024
+	var low := y - block_height * 0.5 + 0.0006
+	var high := y + block_height * 0.5 - 0.0022
+	var left := _x_for(start) + EDGE_GAP
+	var right := _x_for(start + length) - EDGE_GAP
+	var fade_in := minf(item.fade_in, length)
+	var fade_out := minf(item.fade_out, length)
+	var lines: Array = []
+	if fade_in > 0.0:
+		lines.append([Vector2(left, low), Vector2(minf(_x_for(start + fade_in), right), high)])
+	if fade_out > 0.0:
+		lines.append([Vector2(maxf(_x_for(start + length - fade_out), left), high), Vector2(right, low)])
+	var colour := Materials.chip_colour(tint).lightened(0.3)
+	for line in lines:
+		if slot >= _item_fades.count():
+			break
+		var a: Vector2 = line[0]
+		var b: Vector2 = line[1]
+		# Clipped to the lane area, along the line.
+		var x0 := maxf(a.x, _lane_area_x)
+		var x1 := minf(b.x, _lane_right())
+		if x1 - x0 <= 0.0002 or b.x - a.x <= 0.0:
+			continue
+		var p0 := a.lerp(b, (x0 - a.x) / (b.x - a.x))
+		var p1 := a.lerp(b, (x1 - a.x) / (b.x - a.x))
+		var along := p1 - p0
+		_item_fades.move_slot(slot, Transform3D(
+				Basis(Vector3.BACK, along.angle()) * Basis.from_scale(Vector3(along.length(), 0.0005, 0.0004)),
+				Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, 0.0026)))
+		_item_fades.set_colour(slot, colour)
+		slot += 1
+	return slot
+
+
+## An item's gain written in its top right corner, under the strip and clear of its fades, when
+## it is not 0 dB and there is room between them. Returns the next free label.
+func _place_gain(item: MixState.ItemState, start: float, length: float, y: float, used: int) -> int:
+	if absf(item.gain_db) < 0.05:
+		return used
+	# Clear of the fade out's line, which comes down to the same corner.
+	var right := minf(_x_for(start + length - minf(item.fade_out, length)) - EDGE_GAP, _lane_right())
+	var left := maxf(_x_for(start + minf(item.fade_in, length)) + EDGE_GAP, _lane_area_x)
+	if right - left < 0.03:
+		return used
+	var l: Label3D
+	if used < _gain_labels.get_child_count():
+		l = _gain_labels.get_child(used)
+	else:
+		l = _text("", 20, Color(0.92, 0.93, 0.95))
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_gain_labels.add_child(l)
+	l.text = "%+.1f dB" % item.gain_db
+	l.position = Vector3(right - 0.0012, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0046, 0.0028)
+	l.visible = true
+	return used + 1
+
+
 ## A recorded take's loudness, on the item, as an arranger draws a waveform: a column for every
 ## few millimetres of panel, as tall as the loudest moment under it, mirrored about the middle
 ## of the block below its strip. Read from the item's overview (AudioTake.peaks), from where in
@@ -1284,9 +1367,11 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 	for c in columns:
 		if slot >= _item_waves.count():
 			break
+		# As it is heard: through the item's gain and fades, so a fade is seen in the take.
+		var heard: float = minf(c[1] * db_to_linear(item.level_db(item.start + _seconds_at_x(c[0]) - start)), 1.0)
 		# On a square-root scale: a voice peaking at -12dB fills half the block, not a quarter,
 		# so a take recorded at a sensible level is a shape and not a hairline.
-		var height := maxf(sqrt(c[1]) * (top - bottom), MIN_NOTE_HEIGHT * 0.5)
+		var height := maxf(sqrt(heard) * (top - bottom), MIN_NOTE_HEIGHT * 0.5)
 		_item_waves.move_slot(slot, Transform3D(
 				Basis.IDENTITY.scaled(Vector3(WAVE_COLUMN * 0.7, height, 0.0004)),
 				Vector3(c[0], middle, 0.0022)))
@@ -1417,6 +1502,11 @@ func _follow(at: float) -> bool:
 ## real content at both ends of every scroll. Callers clip instead.
 func _x_for(seconds: float) -> float:
 	return _lane_area_x + (seconds - view_start) / maxf(view_span, 0.0001) * _lane_area_width
+
+
+## The song's seconds at a panel x, the inverse of _x_for.
+func _seconds_at_x(x: float) -> float:
+	return view_start + (x - _lane_area_x) / maxf(_lane_area_width, 0.0001) * view_span
 
 
 func _lane_right() -> float:
