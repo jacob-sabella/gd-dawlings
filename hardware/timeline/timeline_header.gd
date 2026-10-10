@@ -48,7 +48,7 @@ func _on_grab_end() -> void:
 
 func _on_grab_move(at: Vector3) -> void:
 	# Dragging the names up brings later tracks up into view, the way a page is pushed.
-	var lanes := int((to_local(at).y - _grab_y) / (TimelineSurface.LANE_HEIGHT + TimelineSurface.LANE_GAP))
+	var lanes := int((to_local(at).y - _grab_y) / (float(surface.lane_height) + TimelineSurface.LANE_GAP))
 	if lanes != _scrolled:
 		surface.scroll_lanes(lanes - _scrolled)
 		_scrolled = lanes

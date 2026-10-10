@@ -250,6 +250,7 @@ func _ready() -> void:
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
 	_test_someone_elses_motion_plays_back_as_it_was_made()
+	_test_the_timeline_is_resized_by_its_corner()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -11669,6 +11670,42 @@ func _test_someone_elses_motion_plays_back_as_it_was_made() -> void:
 	trail.push(2600.0, at.call(0.4))
 	check("a stop is a stop, not a slow creep to where it moved on to (%.3f)" % x.call(2600.0),
 			is_equal_approx(x.call(2600.0), 0.2))
+
+
+func _test_the_timeline_is_resized_by_its_corner() -> void:
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var grip: TimelineResizeGrip = timeline._grip
+	var wide := timeline.width
+	var tall := timeline._height
+	var lanes := timeline._lane_y.size()
+	var chosen: Array = []
+	timeline.size_chosen.connect(func(w: float, l: float): chosen.append([w, l]))
+	var corner := grip.global_position
+	grip._on_grab_begin(corner)
+	grip._on_grab_move(corner + timeline.global_basis.x * 0.05 - timeline.global_basis.y * 0.03)
+	grip._on_grab_end()
+	timeline._process(0.0)
+	check("dragged out, the panel is wider by twice the hand's travel (%.3f -> %.3f)" % [wide, timeline.width],
+			absf(timeline.width - (wide + 0.1)) < 0.001)
+	check("and down, the lanes taller, the panel by twice the travel (%.4f -> %.4f)" % [tall, timeline._height],
+			absf(timeline.lane_height - (TimelineSurface.LANE_HEIGHT + 0.06 / lanes)) < 0.0001
+			and absf(timeline._height - (tall + 0.06)) < 0.001)
+	check("the corner is where the hand let go", grip.global_position.distance_to(
+			corner + timeline.global_basis.x * 0.05 - timeline.global_basis.y * 0.03) < 0.003)
+	check("and the size is said, to be kept (%s)" % [chosen], chosen.size() == 1
+			and is_equal_approx(chosen[0][1], timeline.lane_height))
+	grip._on_grab_begin(grip.global_position)
+	grip._on_grab_end()
+	timeline._process(0.0)
+	check("a click on the corner puts the usual size back", is_equal_approx(timeline.width, wide)
+			and is_equal_approx(timeline.lane_height, TimelineSurface.LANE_HEIGHT))
+	timeline.set_size(10.0, 1.0)
+	check("and no bigger than it stays readable and fits", is_equal_approx(timeline.width_scale, TimelineSurface.WIDTH_SCALE_MAX)
+			and is_equal_approx(timeline.lane_height, TimelineSurface.LANE_HEIGHT_MAX))
+	timeline.free()
 
 
 func _test_a_block_goes_from_one_shelf_onto_another() -> void:

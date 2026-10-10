@@ -45,6 +45,9 @@ var tablets: Dictionary = {}
 ## Whether this participant reads the timeline as shelves of blocks (TimelineSurface.shelf), as
 ## it is first shown, or as flat lanes.
 var timeline_shelves := true
+## The timeline's size, as resized with its grip (TimelineSurface.set_size).
+var timeline_width_scale := 1.0
+var timeline_lane_height := TimelineSurface.LANE_HEIGHT
 
 
 func mode_for(surface_id: StringName, surface_kind: StringName) -> int:
@@ -87,6 +90,8 @@ func save() -> void:
 	if venue_variant != 0:
 		cfg.set_value("profile", "venue_variant", venue_variant)
 	cfg.set_value("profile", "timeline_shelves", timeline_shelves)
+	cfg.set_value("profile", "timeline_width_scale", timeline_width_scale)
+	cfg.set_value("profile", "timeline_lane_height", timeline_lane_height)
 	for id in modes:
 		cfg.set_value("modes", String(id), modes[id])
 	for id in local_transforms:
@@ -104,6 +109,8 @@ func load_saved() -> void:
 	venue = StringName(cfg.get_value("profile", "venue", String(venue)))
 	venue_variant = int(cfg.get_value("profile", "venue_variant", venue_variant))
 	timeline_shelves = bool(cfg.get_value("profile", "timeline_shelves", timeline_shelves))
+	timeline_width_scale = float(cfg.get_value("profile", "timeline_width_scale", timeline_width_scale))
+	timeline_lane_height = float(cfg.get_value("profile", "timeline_lane_height", timeline_lane_height))
 	if cfg.has_section("modes"):
 		for key in cfg.get_section_keys("modes"):
 			modes[StringName(key)] = cfg.get_value("modes", key)

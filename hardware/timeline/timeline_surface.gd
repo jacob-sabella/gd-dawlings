@@ -25,6 +25,18 @@ const WIDTH := 0.86
 const SCREEN_WIDTH := 1.30
 var width := WIDTH
 const LANE_HEIGHT := 0.0168
+## How tall each lane is, and how wide the panel is against its own width for where it is shown:
+## both the person's to choose, with the grip at the panel's bottom right corner.
+var lane_height := LANE_HEIGHT
+var width_scale := 1.0
+const LANE_HEIGHT_MIN := 0.011
+const LANE_HEIGHT_MAX := 0.032
+const WIDTH_SCALE_MIN := 0.6
+const WIDTH_SCALE_MAX := 1.6
+## The panel was resized with the grip: the studio keeps the size in this person's layout.
+signal size_chosen(width_scale: float, lane_height: float)
+var _wide := false
+var _grip: TimelineResizeGrip
 const LANE_GAP := 0.0022
 const HEADER_WIDTH := 0.108
 ## What a track name may use of the header: the header less the chip at its left and room for
@@ -190,10 +202,30 @@ const AUTOMATION_ROW := 0.042
 
 
 func set_wide(wide: bool) -> void:
-	var wanted := SCREEN_WIDTH if wide else WIDTH
+	_wide = wide
+	var wanted := (SCREEN_WIDTH if wide else WIDTH) * width_scale
 	if not is_equal_approx(wanted, width):
 		width = wanted
 		mark_dirty()
+
+
+## The panel's size: its width against the width it has where it is shown, and each lane's
+## height. Kept within what stays readable and fits.
+func set_size(scale: float, lane: float) -> void:
+	scale = clampf(scale, WIDTH_SCALE_MIN, WIDTH_SCALE_MAX)
+	lane = clampf(lane, LANE_HEIGHT_MIN, LANE_HEIGHT_MAX)
+	if is_equal_approx(scale, width_scale) and is_equal_approx(lane, lane_height):
+		return
+	width_scale = scale
+	lane_height = lane
+	width = (SCREEN_WIDTH if _wide else WIDTH) * width_scale
+	mark_dirty()
+
+
+## The grip let go of: the size, as this person's choice.
+func choose_size(scale: float, lane: float) -> void:
+	set_size(scale, lane)
+	size_chosen.emit(width_scale, lane_height)
 
 
 func _ready() -> void:
@@ -295,6 +327,12 @@ func _ready() -> void:
 	_shelf_caption = _text("3D", 26, Color(0.62, 0.64, 0.68))
 	add_child(_shelf_caption)
 
+	# The resize grip, in the panel's bottom right corner, under the view key.
+	_grip = TimelineResizeGrip.new()
+	_grip.name = "ResizeGrip"
+	_grip.surface = self
+	add_child(_grip)
+
 	_copy_key = _selection_key("CopyKey", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
 			func(): DAW.duplicate_selected())
 	_copy_caption = _text("COPY", 26, Color(0.62, 0.64, 0.68))
@@ -379,7 +417,7 @@ func _rebuild() -> void:
 	var lanes := indices.size()
 	# The master's lanes, shown while no track is picked, have their row under the last track.
 	var auto_row := shown_lane != "" and (picked_track == 0 or indices.has(picked_track))
-	_height = RULER_HEIGHT + lanes * (LANE_HEIGHT + LANE_GAP) + LANE_GAP + SCRUBBER_BAND \
+	_height = RULER_HEIGHT + lanes * (lane_height + LANE_GAP) + LANE_GAP + SCRUBBER_BAND \
 			+ ((AUTOMATION_ROW + LANE_GAP) if auto_row else 0.0)
 	_top_y = _height * 0.5
 	_lane_area_x = -width * 0.5 + HEADER_WIDTH
@@ -417,25 +455,25 @@ func _rebuild() -> void:
 	var bed_bank := MeshBank.strips()
 	bed_bank.name = "LaneBeds"
 	_adopt(bed_bank)
-	var chip_bank := MeshBank.lamps(Vector3(0.0045, LANE_HEIGHT, 0.0014))
+	var chip_bank := MeshBank.lamps(Vector3(0.0045, lane_height, 0.0014))
 	chip_bank.name = "LaneChips"
 	_adopt(chip_bank)
 
 	_lane_y.clear()
 	_auto_row_y = NAN
-	var y := _top_y - RULER_HEIGHT - LANE_GAP - LANE_HEIGHT * 0.5
+	var y := _top_y - RULER_HEIGHT - LANE_GAP - lane_height * 0.5
 	for index in indices:
 		_lane_y.append(y)
 		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank, _lane_y.size() % 2 == 0)
-		y -= LANE_HEIGHT + LANE_GAP
+		y -= lane_height + LANE_GAP
 		if auto_row and (index == picked_track or (picked_track == 0 and index == indices[-1])):
-			_auto_row_y = y + LANE_HEIGHT * 0.5 - AUTOMATION_ROW * 0.5
+			_auto_row_y = y + lane_height * 0.5 - AUTOMATION_ROW * 0.5
 			_build_automation_row(_auto_row_y)
 			y -= AUTOMATION_ROW + LANE_GAP
 	bed_bank.commit()
 	chip_bank.commit()
 	_build_shelf_lips()
-	_lanes_bottom = y + LANE_HEIGHT * 0.5 + LANE_GAP
+	_lanes_bottom = y + lane_height * 0.5 + LANE_GAP
 
 	# One slot per item, claimed now and positioned by _relayout_view. A claim needs a transform
 	# and the window has not been applied yet, so they start folded flat and are never drawn in
@@ -530,6 +568,7 @@ func _place_strips() -> void:
 	_save_caption.position = Vector3(-width * 0.5 + 0.078, ruler_mid, 0.0016)
 	_shelf_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid + 0.002, 0.003)
 	_shelf_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.011, 0.0016)
+	_grip.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, -_top_y + SCRUBBER_BAND * 0.5 + 0.001, 0.0016)
 	_shelf_key.lit = shelf
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
@@ -631,7 +670,7 @@ func seconds_at_point(global_point: Vector3) -> float:
 func item_at_point(global_point: Vector3) -> Array:
 	var local := to_local(global_point)
 	var indices := _shown()
-	var pitch := LANE_HEIGHT + LANE_GAP
+	var pitch := lane_height + LANE_GAP
 	for i in mini(indices.size(), _lane_y.size()):
 		if absf(local.y - _lane_y[i]) > pitch * 0.5:
 			continue
@@ -654,7 +693,7 @@ func fade_handle_at_point(global_point: Vector3) -> int:
 	if row < 0 or row >= _lane_y.size():
 		return 0
 	var local := to_local(global_point)
-	var top := _lane_y[row] + (LANE_HEIGHT - 0.0024) * 0.5
+	var top := _lane_y[row] + (lane_height - 0.0024) * 0.5
 	if local.y < top - FADE_GRIP_HEIGHT:
 		return 0
 	var item := DAW.state.item(hit[0], hit[1])
@@ -700,7 +739,7 @@ func track_at_point(global_point: Vector3) -> int:
 	var local := to_local(global_point)
 	var indices := _shown()
 	for i in mini(indices.size(), _lane_y.size()):
-		if absf(local.y - _lane_y[i]) <= (LANE_HEIGHT + LANE_GAP) * 0.5:
+		if absf(local.y - _lane_y[i]) <= (lane_height + LANE_GAP) * 0.5:
 			return indices[i]
 	return 0
 
@@ -1308,7 +1347,7 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	# Every other lane a shade apart, as in every arranger, so a block can be followed back to
 	# its name across the panel; the picked track's lane lit.
 	var bed := LANE_BED_PICKED if t.index == picked_track else (LANE_BED_ALT if alternate else LANE_BED)
-	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, LANE_HEIGHT, 0.0010)),
+	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, lane_height, 0.0010)),
 			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), bed.srgb_to_linear())
 	# chip_colour and not lamp_colour, for the reason in Materials: this is the track's identity
 	# and a clipped identity is no identity.
@@ -1450,7 +1489,7 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 		return false
 
 	var dim := item.muted or lane_muted
-	var block_height := LANE_HEIGHT - 0.0024
+	var block_height := lane_height - 0.0024
 	# Tinted with the track's colour, held to a middling value: at twelve lanes the blocks are
 	# most of the panel, and a wall of saturated colour buries the playhead and the markers.
 	# Selected lifts towards white rather than being outlined, because an outline at a lane 17mm
@@ -1505,7 +1544,7 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 	var layout := note_layout(item.notes)
 	var low: int = layout["low"]
 	var rows: int = layout["rows"]
-	var block_height := LANE_HEIGHT - 0.0024
+	var block_height := lane_height - 0.0024
 	# Below the take strip and clear of the block's bottom edge.
 	var top := y + block_height * 0.5 - 0.0026
 	var bottom := y - block_height * 0.5 + 0.0007
@@ -1541,7 +1580,7 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 ## window. Returns the next free slot.
 func _place_fades(item: MixState.ItemState, start: float, length: float, tint: Color, y: float,
 		slot: int) -> int:
-	var block_height := LANE_HEIGHT - 0.0024
+	var block_height := lane_height - 0.0024
 	var low := y - block_height * 0.5 + 0.0006
 	var high := y + block_height * 0.5 - 0.0022
 	var left := _x_for(start) + EDGE_GAP
@@ -1596,7 +1635,7 @@ func _place_gain(item: MixState.ItemState, start: float, length: float, y: float
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_gain_labels.add_child(l)
 	l.text = "%+.1f dB" % item.gain_db
-	l.position = Vector3(right - 0.0012, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0046, 0.0028 + _lift(item))
+	l.position = Vector3(right - 0.0012, y + (lane_height - 0.0024) * 0.5 - 0.0046, 0.0028 + _lift(item))
 	l.visible = true
 	return used + 1
 
@@ -1629,7 +1668,7 @@ func _place_name(item: MixState.ItemState, start: float, length: float, y: float
 		l.outline_modulate = Color(0, 0, 0, 0.55)
 		_item_labels.add_child(l)
 	l.text = fit_text(shown, room / l.pixel_size, l.font_size)
-	l.position = Vector3(left + 0.0016, y + (LANE_HEIGHT - 0.0024) * 0.5 - 0.0050, 0.0030 + _lift(item))
+	l.position = Vector3(left + 0.0016, y + (lane_height - 0.0024) * 0.5 - 0.0050, 0.0030 + _lift(item))
 	l.visible = not l.text.is_empty()
 	return used + 1
 
@@ -1669,7 +1708,7 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 	var columns := wave_columns(item.peaks, item.source_offset, start, item.length,
 			_x_for(start) + EDGE_GAP, _x_for(start + item.length) - EDGE_GAP,
 			_lane_area_x, _lane_right(), WAVE_COLUMN)
-	var block_height := LANE_HEIGHT - 0.0024
+	var block_height := lane_height - 0.0024
 	var top := y + block_height * 0.5 - 0.0026
 	var bottom := y - block_height * 0.5 + 0.0007
 	var middle := (top + bottom) * 0.5
@@ -1888,7 +1927,7 @@ func _build_shelf_lips() -> void:
 	var tall := LANE_GAP + 0.0012
 	for y in _lane_y:
 		# Its top where the block's bottom is.
-		var top := y - LANE_HEIGHT * 0.5 + 0.0012
+		var top := y - lane_height * 0.5 + 0.0012
 		# A millimetre short of the lane's bed at each end, whose ends would be its ends' plane.
 		_shelf_lips.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width - 0.002, tall, SHELF_LIP)),
 				Vector3(_lane_area_x + _lane_area_width * 0.5, top - tall * 0.5, 0.0006 + SHELF_LIP * 0.5)),

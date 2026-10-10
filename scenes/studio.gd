@@ -1235,6 +1235,13 @@ func _fit_stand_to_bay() -> void:
 				(top + floor_top) * 0.5, PATCH_BAY_FRONT - 0.06)
 
 
+func _on_timeline_size_chosen(width_scale: float, lane_height: float) -> void:
+	if Session.layout != null:
+		Session.layout.timeline_width_scale = width_scale
+		Session.layout.timeline_lane_height = lane_height
+		Session.layout.save()
+
+
 func _on_timeline_shelf_chosen(on: bool) -> void:
 	if Session.layout != null:
 		Session.layout.timeline_shelves = on
@@ -1553,6 +1560,9 @@ func _build_surfaces() -> void:
 	# Shelves or flat lanes, as this person last chose.
 	timeline.shelf = Session.layout != null and Session.layout.timeline_shelves
 	timeline.shelf_chosen.connect(_on_timeline_shelf_chosen)
+	if Session.layout != null:
+		timeline.set_size(Session.layout.timeline_width_scale, Session.layout.timeline_lane_height)
+	timeline.size_chosen.connect(_on_timeline_size_chosen)
 	studio_set.add_child(timeline)
 	mount.register(timeline)
 
