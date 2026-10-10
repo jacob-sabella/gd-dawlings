@@ -9988,6 +9988,58 @@ func _test_a_recording_counts_in() -> void:
 	check("and lights while there is one", deck._count_lamp.lit)
 	check("it says what it does (%s)" % TapeDeck.count_in_text(DAW.state),
 			TapeDeck.count_in_text(DAW.state).begins_with("1 bar of click"))
+
+	# Before playback too: Reaper's "Count-in before playback".
+	var finger := FakeHand.new()
+	add_child(finger)
+	finger.holding_shift = true
+	deck._count_lamp.grab_begin(finger, deck._count_lamp.global_position)
+	deck._count_lamp.grab_end(finger)
+	finger.holding_shift = false
+	check("a fine press on COUNT counts in before playback too (%s)" % TapeDeck.count_in_text(DAW.state),
+			DAW.state.count_in_play and DAW.state.count_in_bars == 1
+			and TapeDeck.count_in_text(DAW.state).contains("and playback"))
+	check("and replicates it", backend._repl_durable.get("/countin/play", []) == [1.0])
+	var bar_now := 4.0 * 60.0 / s.tempo
+	DAW.seek(20.0)
+	DAW.transport_play()
+	check("playing from a standstill then counts in, not recording", s.counting_in() and not s.recording)
+	close_to("from a bar before where it stood", s.position_seconds, 20.0 - bar_now)
+	backend._process(bar_now + 0.01)
+	check("and the song plays from where it stood", not s.counting_in() and s.position_seconds >= 20.0)
+	DAW.transport_stop()
+	DAW.seek(20.0)
+	DAW.transport_play()
+	DAW.transport_stop()
+	close_to("stopped while counting, back where it stood", s.position_seconds, 20.0)
+	var heard := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(heard, pair[0], pair[1])
+	check("a guest is told", heard.count_in_play)
+	check("a verb a guest may use", &"set_count_in_play" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_count_in_play", [false])
+	check("which turns it off", not s.count_in_play)
+	DAW.set_count_in(0)
+	DAW.set_count_in_play(true)
+	DAW.seek(20.0)
+	DAW.transport_play()
+	check("with no bars to count, playing starts at once", not s.counting_in())
+	DAW.transport_stop()
+	DAW.set_count_in_play(false)
+	finger.queue_free()
+	var reaper_play := ReaperBackend.new()
+	reaper_play.state = MixState.new()
+	add_child(reaper_play)
+	var rp := reaper_play.state
+	reaper_play._apply("/click", [1.0])
+	reaper_play._on_timeline({"count_in": 1, "count_in_play": true})
+	check("Reaper's count before playback is read from its project", rp.count_in_play)
+	reaper_play._apply("/time", [10.0])
+	reaper_play.follow_count_in()
+	reaper_play._apply("/play", [1.0])
+	reaper_play.follow_count_in()
+	check("and playing from a standstill there counts in too", rp.counting_in() and not rp.recording)
+	reaper_play.free()
 	deck.queue_free()
 	DAW.set_count_in(0)
 	DAW.set_metronome(false)

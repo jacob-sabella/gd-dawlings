@@ -483,6 +483,8 @@ end
 -- reporting recording all the while, and records from the cursor; with the metronome off it
 -- records at once, so a count-in is the click's. args: bars, 0 for none.
 local COUNT_IN_BEFORE_RECORDING = 16
+-- And &8, "Count-in before playback": the same bars of click before the song plays.
+local COUNT_IN_BEFORE_PLAYBACK = 8
 
 local function count_in_bars()
   local _, en = reaper.get_config_var_string('projmetroen')
@@ -499,8 +501,15 @@ local function record_inputs()
   return out
 end
 
+local function count_in_play()
+  local _, en = reaper.get_config_var_string('projmetroen')
+  return (math.floor(tonumber(en) or 0) & COUNT_IN_BEFORE_PLAYBACK) ~= 0
+end
+
+-- args: bars (0 for none), and whether playback counts in too.
 function handlers.SetCountIn(args)
   local bars = math.max(0, math.floor(args[1] or 0))
+  local play = args[2] == true
   local _, en = reaper.get_config_var_string('projmetroen')
   local flags = math.floor(tonumber(en) or 0)
   if bars > 0 then
@@ -510,8 +519,13 @@ function handlers.SetCountIn(args)
   else
     flags = flags & ~COUNT_IN_BEFORE_RECORDING
   end
+  if bars > 0 and play then
+    flags = flags | COUNT_IN_BEFORE_PLAYBACK
+  else
+    flags = flags & ~COUNT_IN_BEFORE_PLAYBACK
+  end
   reaper.set_config_var_string('projmetroen', tostring(flags), 0)
-  return {ok = true, count_in = count_in_bars()}
+  return {ok = true, count_in = count_in_bars(), count_in_play = count_in_play()}
 end
 
 -- A track's record input: Reaper's I_RECINPUT (-1 none, a hardware input index, |1024 for the
@@ -719,6 +733,7 @@ function handlers.GetTimeline()
     tracks = tracks,
     master_automation = track_automation(reaper.GetMasterTrack(0)) or {},
     count_in = count_in_bars(),
+    count_in_play = count_in_play(),
     -- Every track's record input, in order, and how many hardware inputs there are to choose.
     inputs = record_inputs(),
     audio_inputs = reaper.GetNumAudioInputs(),

@@ -323,6 +323,7 @@ func _host(port: int) -> void:
 		DirAccess.remove_absolute(file)
 		await _render_and_measure()
 		await _count_in_and_measure()
+		await _count_in_and_measure(true)
 		await _punch_and_measure()
 		await _meter_and_measure()
 		await _parts_and_measure()
@@ -681,13 +682,15 @@ func _render_and_measure() -> void:
 
 ## A recording counted in, heard at the master: a bar of the click alone before the take, on the
 ## beats before the record point, with the song silent under it -- and the song back from there.
-func _count_in_and_measure() -> void:
+## With `play`, the count before playback: the same, played rather than recorded.
+func _count_in_and_measure(play := false) -> void:
 	var engine := DAW.backend as GodotBackend
 	var s := DAW.state
 	Session.guest_midi.record_with_host = false
 	DAW.transport_stop()
 	DAW.set_metronome(true)
 	DAW.set_count_in(1)
+	DAW.set_count_in_play(play)
 	var first_item := INF
 	for index in s.track_indices():
 		for it in s.track(index).items:
@@ -705,17 +708,20 @@ func _count_in_and_measure() -> void:
 	# so the first frame captured is the first played, from where the count was told to start.
 	AudioServer.lock()
 	capture.clear_buffer()
-	DAW.transport_record()
+	if play:
+		DAW.transport_play()
+	else:
+		DAW.transport_record()
 	var first_frame_at := GodotBackend.start_at(s.position_seconds)
 	engine._drive_meters(0.0)
 	AudioServer.unlock()
 	var from := s.count_in_start(at)
-	check("recording counted in from a bar before (%.3fs to %.3fs)" % [s.position_seconds, at],
+	check("%s counted in from a bar before (%.3fs to %.3fs)" % ["playing" if play else "recording", s.position_seconds, at],
 			s.counting_in() and absf(s.position_seconds - (from - engine.count_in_lead)) < 0.001 and absf(s.count_in_to - at) < 0.001)
 	var took_at := NAN
 	var began := Time.get_ticks_msec()
 	while s.position_seconds < at + 0.6 and Time.get_ticks_msec() - began < 5000:
-		if is_nan(took_at) and s.taking():
+		if is_nan(took_at) and (s.taking() if not play else not s.counting_in()):
 			took_at = s.position_seconds
 		await get_tree().process_frame
 	DAW.transport_stop()
@@ -724,7 +730,9 @@ func _count_in_and_measure() -> void:
 		if AudioServer.get_bus_effect(engine._master_bus, i) == capture:
 			AudioServer.remove_bus_effect(engine._master_bus, i)
 	DAW.set_count_in(0)
-	check("and took from the record point on (%.3fs)" % took_at, absf(took_at - at) < 0.05)
+	DAW.set_count_in_play(false)
+	check("and %s from the point it stood at on (%.3fs)" % ["played" if play else "took", took_at],
+			absf(took_at - at) < 0.05 and (not play or not s.recording))
 	var rate := AudioServer.get_mix_rate()
 	var frame_of := func(t: float) -> int: return int(roundf((t - first_frame_at) * rate))
 	var offs: Array = []
@@ -754,8 +762,8 @@ func _count_in_and_measure() -> void:
 	var worst := 0.0
 	for o in offs:
 		worst = maxf(worst, absf(o - mean))
-	print("count-in: click onsets_ms %s, loudest between them %.1f dB, song after %.1f dB" % [
-			offs.map(func(o): return snappedf(o, 0.01)), quiet, song])
+	print("count-in%s: click onsets_ms %s, loudest between them %.1f dB, song after %.1f dB" % [
+			" before playback" if play else "", offs.map(func(o): return snappedf(o, 0.01)), quiet, song])
 	check("the count was a click on each of its beats (%d of %d, %.2fms on average, each within %.2fms of it)" % [
 			offs.size(), int(roundf(beat - map.beat_at(from))), mean, worst],
 			offs.size() == int(roundf(beat - map.beat_at(from))) and absf(mean) < COUNT_IN_TOLERANCE_MS
@@ -1224,6 +1232,28 @@ func _count_in_in_reaper() -> void:
 	check("Reaper counted in a bar before recording (from %.2fs to %.2fs, a bar %.2fs)" % [lowest, at, bar],
 			counted and lowest < at - bar * 0.7 and lowest > at - bar - 0.2)
 	check("and the take began at the record point (%.3fs)" % took_at, absf(took_at - at) < 0.15)
+	# Before playback too: projmetroen &8, read back, and Reaper counting in when it plays.
+	DAW.set_count_in_play(true)
+	await get_tree().create_timer(0.3).timeout
+	(DAW.backend as ReaperBackend)._timeline_due = 0.0
+	s.count_in_play = false
+	await get_tree().create_timer(0.5).timeout
+	check("Reaper took a count before playback and read it back", s.count_in_play)
+	DAW.seek(at)
+	await get_tree().create_timer(0.2).timeout
+	DAW.transport_play()
+	lowest = INF
+	counted = false
+	began = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - began < int((bar + 0.4) * 1000.0):
+		lowest = minf(lowest, s.position_seconds)
+		counted = counted or s.counting_in()
+		await get_tree().process_frame
+	var recorded := s.recording
+	DAW.transport_stop()
+	check("and counted in a bar before playing, not recording (from %.2fs to %.2fs)" % [lowest, at],
+			counted and not recorded and lowest < at - bar * 0.7 and lowest > at - bar - 0.2)
+	DAW.set_count_in_play(false)
 	DAW.set_count_in(0)
 	# And its record mode: time selection auto-punch, read back.
 	DAW.set_punch(true)

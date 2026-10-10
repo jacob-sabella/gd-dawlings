@@ -1062,6 +1062,12 @@ func set_count_in(bars: int) -> void:
 	record_for_replication("/countin", [float(state.count_in_bars)])
 
 
+func set_count_in_play(on: bool) -> void:
+	state.count_in_play = on
+	state.transport_changed.emit()
+	record_for_replication("/countin/play", [1.0 if on else 0.0])
+
+
 func set_tempo(bpm: float) -> void:
 	_remember("/tempo/raw", set_tempo.bind(state.tempo), set_tempo.bind(bpm))
 	state.tempo = bpm
@@ -1301,7 +1307,13 @@ func set_loop_range(start: float, end: float) -> void:
 	record_for_replication("/loop/end/time", [end])
 
 
+## With a count-in due before playback too, from a standstill: as transport_record counts in.
 func transport_play() -> void:
+	if not state.playing and state.counts_in_playing():
+		var at := state.position_seconds
+		_set_count_in_to(at)
+		state.position_seconds = state.count_in_start(at) - count_in_lead
+		record_for_replication("/time", [state.position_seconds])
 	state.playing = true
 	state.transport_changed.emit()
 	record_for_replication("/play", [1.0])
@@ -1310,7 +1322,7 @@ func transport_play() -> void:
 func transport_stop() -> void:
 	_end_passes(true)
 	if state.counting_in():
-		# Stopped before the take began: back where it would have, as if never started.
+		# Stopped before the take or the song began: back where it would have, as if never started.
 		state.position_seconds = state.count_in_to
 		record_for_replication("/time", [state.position_seconds])
 		_set_count_in_to(-1.0)

@@ -241,6 +241,8 @@ func set_metronome(_on: bool) -> void: pass
 ## Bars of click before recording starts, 0 for none (MixState.count_in_bars). Not a history
 ## step, as the click is not.
 func set_count_in(_bars: int) -> void: pass
+## The count-in before playback as well (MixState.count_in_play). Not a history step either.
+func set_count_in_play(_on: bool) -> void: pass
 ## The time signature's changes, as MixState.time_signature_points: [beat, numerator,
 ## denominator], the first at beat 0 and the song's own; one point is one signature.
 func set_time_signature_map(_points: Array) -> void: pass
@@ -749,8 +751,10 @@ var _was_rolling := false
 ## takes in the moment before it does; if it did not count in after all, the next playhead it
 ## reports is past the record point, and the take begins there. Every frame.
 func follow_count_in() -> void:
-	var rolling := state.recording and state.playing
-	if rolling and not _was_rolling and state.count_in_to < 0.0 and state.counts_in():
+	var rolling := state.playing
+	# Recording counts in with a count-in set; playing, only with it set for playback too.
+	var counts := state.counts_in() if state.recording else state.counts_in_playing()
+	if rolling and not _was_rolling and state.count_in_to < 0.0 and counts:
 		_set_count_in_to(_rest_seconds)
 		state.position_seconds = state.count_in_start(_rest_seconds)
 		record_for_replication("/time", [state.position_seconds])

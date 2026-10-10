@@ -819,7 +819,8 @@ static func next_count_in(bars: int) -> int:
 static func count_in_text(s: MixState) -> String:
 	if s.count_in_bars == 0:
 		return "off: recording starts at once"
-	var bars := "%d bar%s of click before recording" % [s.count_in_bars, "" if s.count_in_bars == 1 else "s"]
+	var bars := "%d bar%s of click before recording%s" % [s.count_in_bars, "" if s.count_in_bars == 1 else "s",
+			" and playback" if s.count_in_play else ""]
 	return bars if s.metronome else bars + ", when the click is on"
 
 
@@ -832,7 +833,15 @@ static func punch_text(s: MixState) -> String:
 	return "recording takes only %s to %s" % [s.bar_beat(s.loop_start), s.bar_beat(s.loop_end)]
 
 
+## A press steps the bars; a fine press (shift on a monitor) turns the count before playback on or
+## off, which needs bars to count.
 func _step_count_in() -> void:
+	var by: Node = _count_lamp.held_by if _count_lamp != null else null
+	if by != null and by.has_method("fine") and by.fine():
+		DAW.set_count_in_play(not DAW.state.count_in_play)
+		if DAW.state.count_in_bars == 0:
+			DAW.set_count_in(1)
+		return
 	DAW.set_count_in(next_count_in(DAW.state.count_in_bars))
 
 

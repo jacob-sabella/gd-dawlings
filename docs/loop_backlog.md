@@ -269,8 +269,18 @@ can finish music in, saving DAWproject. Steps, in order:
      every armed track whose input is the keys (`GuestMidi.take_tracks`). Measured: `--built-in`,
      the punched take recorded input 1 onto track 3 and input 2 onto track 4, both from
      27.41002 s, each side's click peak 0.841 (the null sink sends both alike).
-   - **Not yet:** two input devices at once (Godot opens one); a count-in before playback
-     (Reaper's &8) and pre-roll with the song.
+   - **Done 2026-10-10, the count-in before playback (4g):** `DAW.set_count_in_play(on)`
+     (`/countin/play`; a fine press on COUNT, shift on a monitor): playing from a standstill
+     runs the same bars of click first and the song starts where the transport stood, stopping
+     during the count puts it back. `MixState.counting_in()` no longer needs recording, and
+     `follow_count_in` watches the transport starting rather than recording starting, so
+     Reaper's own count before playback is followed too (and a record pressed while already
+     playing no longer looks like a count). Reaper: the bridge's SetCountIn sets &8 with &16,
+     GetTimeline reads it back. Measured: `--built-in`, four clicks 3.46 ms after their beats,
+     -180 dB between them, the song at -4.4 dB from the point it stood at, not recording;
+     `--reaper`, the flag read back and Reaper's playhead run up from a bar before 30 s, not
+     recording.
+   - **Not yet:** two input devices at once (Godot opens one); pre-roll with the song.
 5. MIDI playback through a built-in instrument.
    - **Done 2026-10-10 (5a):** dawkit's `DawKitTine`, the tine voice of the monitor synth as an
      instrument, renders a clip with every note on its own sample. `GodotBackend.midi_stream`
