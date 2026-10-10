@@ -173,6 +173,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_plays_a_recorded_take()
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
+	_test_notes_are_transposed_and_quantised()
 	_test_a_guest_sets_up_their_microphone_from_the_panel()
 	_test_each_kind_of_sound_has_its_own_bus()
 	await _test_every_sound_leaves_on_its_own_stream()
@@ -10597,6 +10598,67 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 			a != null and is_equal_approx(a.fade_in, 0.25) and absf(a.gain_db - linear_to_db(0.5)) < 0.001)
 	check("and its default anti-click fade is no fade", b != null and b.fade_in == 0.0 and b.gain_db == 0.0)
 	link.free()
+	_offline()
+
+
+func _test_notes_are_transposed_and_quantised() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	# A beat late, a little early, a little late; and one at the very top of the range.
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, [[4.0 * beat + 0.02, 5.0 * beat, 60, 100, 0],
+			[6.0 * beat - 0.03, 6.5 * beat, 64, 90, 0], [7.0 * beat + 0.04, 7.5 * beat, 126, 80, 0]], "Keys")
+	var depth := maxi(s.undo_depth, 0)
+	var key := GodotBackend.midi_key(s.item(lane, 0))
+
+	DAW.transpose_item(lane, 0, 3)
+	var notes := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("transposed, every note is three semitones up, and none past 127 (%s)" % [notes.map(func(n): return n[2])],
+			notes.map(func(n): return int(n[2])) == [63, 67, 127])
+	check("and the engine renders it again", GodotBackend.midi_key(s.item(lane, 0)) != key)
+
+	DAW.quantize_item(lane, 0, 1.0, 0.5)
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("quantised at half strength, each note half way to its beat (%s)" % [notes.map(func(n): return n[0])],
+			absf(notes[0][0] - (4.0 * beat + 0.01)) < 1e-4 and absf(notes[1][0] - (6.0 * beat - 0.015)) < 1e-4
+			and absf(notes[2][0] - (7.0 * beat + 0.02)) < 1e-4)
+	DAW.quantize_item(lane, 0, 1.0)
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("and at full strength, on it, keeping each note's length (%s)" % [notes.map(func(n): return n[0])],
+			absf(notes[0][0] - 4.0 * beat) < 1e-4 and absf(notes[1][0] - 6.0 * beat) < 1e-4
+			and absf(notes[1][1] - (6.5 * beat + 0.03)) < 1e-4)
+	DAW.quantize_item(lane, 0, 4.0)
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("a note pulled before its item stops at the item's start (%s)" % [notes.map(func(n): return n[0])],
+			absf(notes[0][0] - 4.0 * beat) < 1e-4 and absf(notes[2][0] - 8.0 * beat) < 1e-4)
+	check("each edit one step to undo (%d)" % (s.undo_depth - depth), s.undo_depth - depth == 4)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("and undone, the notes are as played", int(notes[0][2]) == 60
+			and absf(notes[0][0] - (4.0 * beat + 0.02)) < 1e-4)
+
+	DAW.apply_intent(&"transpose_item", [lane, 0, 999])
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("a guest's transpose is kept within %d semitones" % DAWBackend.TRANSPOSE_MAX,
+			int(notes[0][2]) == 60 + DAWBackend.TRANSPOSE_MAX)
+	DAW.apply_intent(&"quantize_item", [lane, 0, INF, 1.0])
+	check("and a malformed quantise refused", s.undo_depth - depth == 1)
+
+	var project := ProjectBridge.capture(DAW.backend as OfflineBackend)
+	var file := OS.get_temp_dir().path_join("suite_transpose.dawproject")
+	var saved := DawKitDawproject.save(project, file)
+	DirAccess.remove_absolute(file)
+	var pitch := -1
+	for t in project.tracks:
+		for c in t.clips:
+			if c.name == "Keys" and not c.notes.is_empty():
+				pitch = int(c.notes[2])
+	check("and saved to DAWproject transposed (%s %d)" % [saved, pitch], pitch == 60 + DAWBackend.TRANSPOSE_MAX)
 	_offline()
 
 

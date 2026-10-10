@@ -740,6 +740,57 @@ function handlers.SetItemFades(args)
   return edited('Item fades')
 end
 
+-- Every note of every MIDI take of an item, through `change(take, ppq_on, ppq_off, pitch)`,
+-- which answers the note's new on, off and pitch. Notes are rewritten unsorted, then sorted.
+local function each_note(it, change)
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local _, count = reaper.MIDI_CountEvts(take)
+      for n = 0, count - 1 do
+        local ok, sel, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
+        if ok then
+          local on, off, p = change(take, ppq_on, ppq_off, pitch)
+          reaper.MIDI_SetNote(take, n, sel, muted, on, off, chan, p, vel, true)
+        end
+      end
+      reaper.MIDI_Sort(take)
+    end
+  end
+end
+
+-- args: track, index, semitones.
+function handlers.TransposeItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local by = math.floor(args[3] or 0)
+  reaper.Undo_BeginBlock()
+  each_note(it, function(_, on, off, pitch)
+    return on, off, math.max(0, math.min(127, pitch + by))
+  end)
+  return edited('Transpose notes')
+end
+
+-- args: track, index, grid in beats (quarter notes), strength 0-1. Against Reaper's own tempo
+-- map; a note pulled before the item's start stops there, and keeps its length.
+function handlers.QuantizeItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local grid = math.max(1 / 32, args[3] or 1)
+  local strength = math.max(0, math.min(1, args[4] or 1))
+  local item_start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  reaper.Undo_BeginBlock()
+  each_note(it, function(take, ppq_on, ppq_off, pitch)
+    local on = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_on)
+    local qn = reaper.TimeMap_timeToQN(on)
+    local target = reaper.TimeMap_QNToTime(math.floor(qn / grid + 0.5) * grid)
+    local moved = math.max(on + (target - on) * strength, item_start)
+    local new_on = reaper.MIDI_GetPPQPosFromProjTime(take, moved)
+    return new_on, ppq_off + (new_on - ppq_on), pitch
+  end)
+  return edited('Quantize notes')
+end
+
 -- args: seconds, name. A marker, one undo point, as Insert marker does from Reaper's own menu --
 -- but at the time given rather than at the edit cursor, which on a desk someone else is
 -- driving is not where the person pressing MARK was listening.

@@ -224,7 +224,15 @@ can finish music in, saving DAWproject. Steps, in order:
      fade. The built-in engine plays an item's gain and fades as its player's volume, and they
      already went into DAWproject. `session_probe.sh --reaper` trims, turns down and fades the
      guest's take, and checks that Reaper reads the edits back.
-   - **Not yet:** quantise and transpose (6b); adding, removing and renaming tracks (6c); keys
+   - **Done 2026-10-10 (6b), notes:** `transpose_item(track, item, semitones)` (each note kept
+     within 0-127, at most 48 semitones a time) and `quantize_item(track, item, grid_beats,
+     strength)` (a grid from a 128th note to four bars; a note keeps its length and stops at its
+     item's start). They are undoable, guests can ask for them, and they are saved as the item's
+     notes. The built-in engine renders the item again because its notes key the render. The
+     preview counts the grid at one tempo; Reaper's `QuantizeItem` uses its own tempo map, and the
+     next timeline brings that back. The `--reaper` probe transposes and quantises the guest's MIDI
+     take and reads Reaper's notes back: each lands within 0.14 ms of the beat (PPQ rounding).
+   - **Not yet:** adding, removing and renaming tracks (6c); keys
      for these on the timeline; fades drawn as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user").
 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.

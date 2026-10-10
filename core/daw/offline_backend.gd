@@ -819,6 +819,18 @@ func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out:
 	_remember_edit(before)
 
 
+func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_transpose(track_index, item_index, semitones):
+		_remember_edit(before)
+
+
+func quantize_item(track_index: int, item_index: int, grid_beats: float, strength: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_quantize(track_index, item_index, grid_beats, strength):
+		_remember_edit(before)
+
+
 func split_selected(seconds: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_split(seconds) > 0:

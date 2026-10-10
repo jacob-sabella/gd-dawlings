@@ -84,6 +84,10 @@ const Capability := {
 ## The shortest an item can be trimmed to, and the range of an item's own gain.
 const MIN_ITEM_SECONDS := 0.01
 const ITEM_GAIN_MIN := -60.0
+## A quantise grid, in beats: no finer than a 128th note, no coarser than a bar of 4/4 four times.
+const QUANTIZE_GRID_MIN := 1.0 / 32.0
+const QUANTIZE_GRID_MAX := 16.0
+const TRANSPOSE_MAX := 48
 const ITEM_GAIN_MAX := 24.0
 
 var state := MixState.new()
@@ -250,6 +254,11 @@ func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) 
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
+## Every note of a MIDI item moved `semitones` up (or down), each kept within 0-127.
+func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> void: pass
+## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
+## of the song's beat grid, keeping its length.
+func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float) -> void: pass
 ## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
@@ -466,6 +475,42 @@ func _locally_shape(track_index: int, item_index: int, gain_db: float, fade_in: 
 	if not is_nan(fade_out):
 		it.fade_out = clampf(fade_out, 0.0, it.length - it.fade_in)
 	_write_lane(track_index, lane)
+
+
+## False when the item has no notes to change.
+func _locally_transpose(track_index: int, item_index: int, semitones: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty() or semitones == 0:
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	for n in range(0, notes.size() - 4, 5):
+		notes[n + 2] = clampi(int(notes[n + 2]) + semitones, 0, 127)
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## Constant tempo: the grid counts from the song's start at `state.tempo`. A note pulled before
+## its item's start stops there.
+func _locally_quantize(track_index: int, item_index: int, grid_beats: float, strength: float) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty() or strength <= 0.0:
+		return false
+	var grid := clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX) * 60.0 / state.tempo
+	strength = clampf(strength, 0.0, 1.0)
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	for n in range(0, notes.size() - 4, 5):
+		var on := it.start + notes[n]
+		var moved := maxf(on + (roundf(on / grid) * grid - on) * strength, it.start) - on
+		notes[n] += moved
+		notes[n + 1] += moved
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
 
 
 ## A take's item, drawn at once: the offline project's whole edit, and a live DAW's preview of

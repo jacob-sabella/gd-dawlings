@@ -525,6 +525,12 @@ func _edit_the_take() -> void:
 	DAW.trim_item(AUDIO_TRACK, index.call(), start, end)
 	DAW.set_item_gain(AUDIO_TRACK, index.call(), -6.0)
 	DAW.set_item_fades(AUDIO_TRACK, index.call(), 0.05, 0.1)
+	# And the guest's MIDI take, two semitones up and onto the beat.
+	var played := _take_notes()
+	var midi_index: int = DAW.state.track(TAKE_TRACK).items.find_custom(func(m): return m.name == "Grace take 1")
+	if midi_index >= 0:
+		DAW.transpose_item(TAKE_TRACK, midi_index, 2)
+		DAW.quantize_item(TAKE_TRACK, midi_index, 1.0)
 	var reads := [0]
 	var count := func(): reads[0] += 1
 	DAW.timeline_changed.connect(count)
@@ -536,11 +542,28 @@ func _edit_the_take() -> void:
 			it != null and absf(it.start - start) < 0.001 and absf(it.end() - end) < 0.001
 			and absf(it.source_offset - offset - 0.1) < 0.001 and absf(it.gain_db + 6.0) < 0.01
 			and absf(it.fade_in - 0.05) < 0.001 and absf(it.fade_out - 0.1) < 0.001)
+	var moved := _take_notes()
+	var beat := 60.0 / DAW.state.tempo
+	var off_beat := moved.map(func(n): return absf(n[0] / beat - roundf(n[0] / beat)) * beat)
+	check("and its MIDI take two semitones up and on the beat (%s, %s)" % [moved.map(func(n): return int(n[2])), off_beat],
+			midi_index >= 0 and moved.size() == played.size() and not moved.is_empty()
+			and range(moved.size()).all(func(i): return int(moved[i][2]) == int(played[i][2]) + 2)
+			and off_beat.all(func(d): return d < 0.002))
 	if _reaper_resource != "":
 		check("as Reaper read it back after the edits (%d reads)" % reads[0], reads[0] > 0)
-	DAW.undo()
-	DAW.undo()
-	DAW.undo()
+	for i in 5:
+		DAW.undo()
+
+
+## The guest's MIDI take's notes, in song seconds, by pitch then time so the order survives an
+## edit that moves them.
+func _take_notes() -> Array:
+	for it in DAW.state.track(TAKE_TRACK).items:
+		if it.name == "Grace take 1":
+			var notes := MidiTake.unpack_relative(it.notes, it.start)
+			notes.sort_custom(func(a, b): return a[0] < b[0] if a[2] == b[2] else a[2] < b[2])
+			return notes
+	return []
 
 
 func _undo_takes() -> void:

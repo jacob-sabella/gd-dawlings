@@ -54,6 +54,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
+	&"transpose_item", &"quantize_item",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
 	&"set_metronome", &"add_marker", &"set_track_monitor",
@@ -61,7 +62,8 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4}
+const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4,
+		&"transpose_item": 3, &"quantize_item": 4}
 
 var backend: DAWBackend
 
@@ -316,6 +318,13 @@ func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
+func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
+	_do(&"transpose_item", [track_index, item_index,
+			clampi(semitones, -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)])
+func quantize_item(track_index: int, item_index: int, grid_beats: float, strength := 1.0) -> void:
+	_do(&"quantize_item", [track_index, item_index,
+			clampf(grid_beats, DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX),
+			clampf(strength, 0.0, 1.0)])
 ## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
 ## guest's intent should not be able to hand the host a megabyte of name.
 const MARKER_NAME_MAX := 64
@@ -394,6 +403,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean.append(float(v))
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
+		if verb == &"transpose_item":
+			clean[2] = clampi(int(clean[2]), -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)
+		if verb == &"quantize_item":
+			clean[2] = clampf(clean[2], DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX)
+			clean[3] = clampf(clean[3], 0.0, 1.0)
 		args = clean
 	if verb in [&"delete_selected", &"duplicate_selected"]:
 		args = []
