@@ -9652,6 +9652,18 @@ func _test_the_built_in_engine_is_a_real_mix() -> void:
 func _test_the_demo_song_loops_on_the_bar() -> void:
 	check("tracks find their parts by name", DemoSong.role_of("Lead Vox") == "voice"
 			and DemoSong.role_of("Kick 2") == "kick" and DemoSong.role_of("Verb Rtn") == "")
+	var stand_in := _offline()
+	var sk := stand_in.state
+	var kick_track := sk.track_indices().filter(func(i): return sk.track(i).name == "Kick")[0] as int
+	check("the stand-in's tracks are given their parts as it is made", sk.track(kick_track).part == "kick"
+			and sk.track(1).part == "")
+	DAW.rename_track(kick_track, "Boom")
+	DAW.add_track(1, "New")
+	check("and keep them renamed and moved (%s)" % sk.track(kick_track + 1).part,
+			sk.track(kick_track + 1).name == "Boom" and sk.track(kick_track + 1).part == "kick"
+			and sk.track(1).part == "")
+	DAW.undo()
+	DAW.undo()
 	var kick := DemoSong.render("kick", 120.0)
 	check("a part is exactly four bars (%d)" % kick.size(), kick.size() == 8 * DemoSong.RATE)
 	var top := 0.0

@@ -343,8 +343,10 @@ can finish music in, saving DAWproject. Steps, in order:
      follow their track by number rather than finding the plugin again by name, since another
      track may have one of the same name; the profile and the room are updated after. On Reaper
      the map comes from the edit; an undo of a track edit in Reaper sends none.
-   - **Not yet:** holds are by control and last one gesture, so they are left alone. Renaming a
-     demo-song track changes which part it plays, because parts go by name. Seen once: the default
+   - **Not yet:** holds are by control and last one gesture, so they are left alone. A demo-song
+     track's part was its name's, so renaming one changed what it played: **done 2026-10-10,**
+     the part is the track's (`TrackState.part`, set as the stand-in's song is made), kept
+     renamed and moved, and a new track named "Kick 2" no longer plays the kick. Seen once: the default
      probe's guest did not hear the host's head (2 checks), then passed 3 runs in a row.
    - **Done 2026-10-10 (6d), keys:** COPY and DEL on the timeline, in the corner under the track
      names, lit while items are selected. Dragging an item's edge (the last 4 mm of it, at most a

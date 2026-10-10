@@ -34,7 +34,9 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 	var warnings := PackedStringArray()
 	var rendered := {}
 	for t in project.tracks:
-		var role := DemoSong.role_of(t.name)
+		# The part the track plays live, by the track, not its name: it may have been renamed.
+		var live = backend.state.track(ProjectBridge.index_of(t.id), false)
+		var role: String = live.part if live != null else ""
 		for c in t.clips:
 			if not c.source.is_empty():
 				var from := backend.media_path(c.source)

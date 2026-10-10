@@ -114,6 +114,11 @@ static func id_of(index: int) -> String:
 	return "t%d" % index
 
 
+## The track index an id from `id_of` names, or 0.
+static func index_of(id: String) -> int:
+	return id.trim_prefix("t").to_int() if id.begins_with("t") and id.trim_prefix("t").is_valid_int() else 0
+
+
 static func _effect(backend: OfflineBackend, t: MixState.TrackState, fx_index: int) -> DawKitEffect:
 	var f: MixState.FXState = t.fx[fx_index]
 	var e := DawKitEffect.new()

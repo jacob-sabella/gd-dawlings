@@ -222,6 +222,9 @@ class TrackState extends RefCounted:
 	## What it records from: one of the DAW's `MixState.inputs` by id, or "" for whatever the
 	## recorder is set to. Saved with the project. `/track/N/input`.
 	var input: String = ""
+	## The demo song's part this track plays (DemoSong.ROLES), set when the stand-in's song is
+	## made and kept whatever the track is renamed; "" for any other track.
+	var part: String = ""
 	## How the track's controls and their automation meet, Reaper's I_AUTOMODE numbers: 0 read
 	## (the lanes move the controls), 2 touch (a control moved while playing writes its lane until
 	## it is let go), 4 latch (until the transport stops). `/track/N/automode`.

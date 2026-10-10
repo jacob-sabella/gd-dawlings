@@ -211,6 +211,7 @@ func _populate() -> void:
 		t.pan = d["p"]
 		t.colour = d["c"]
 		t.folder_depth = int(d.get("f", 0))
+		t.part = DemoSong.role_of(t.name)
 		t.vu_l = 0.0
 		t.vu_r = 0.0
 	# A master sitting a little under unity, which is what a mix that has been balanced looks

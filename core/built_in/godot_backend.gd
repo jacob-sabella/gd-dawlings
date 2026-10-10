@@ -626,7 +626,7 @@ func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 func _roles() -> Array:
 	var out: Array = []
 	for index in state.track_indices():
-		var role := DemoSong.role_of(state.tracks[index].name)
+		var role: String = state.tracks[index].part
 		if role != "" and role not in out:
 			out.append(role)
 	return out
@@ -760,16 +760,16 @@ func _sync_players() -> void:
 			expected = pos - it.start
 			if stream != null and expected >= stream.get_length():
 				stream = null
-		elif it != null and not state.tempo_points.is_empty() and DemoSong.role_of(state.tracks[index].name) != "":
+		elif it != null and not state.tempo_points.is_empty() and state.tracks[index].part != "":
 			# Through the tempo's changes: the window holding the playhead, played from its start.
-			var window := _part_window(DemoSong.role_of(state.tracks[index].name), pos)
+			var window := _part_window(state.tracks[index].part, pos)
 			if not window.is_empty():
 				stream = window[0]
 				expected = pos - float(window[1])
 				if expected < 0.0 or expected >= stream.get_length():
 					stream = null
 		elif it != null:
-			stream = _parts.get(DemoSong.role_of(state.tracks[index].name))
+			stream = _parts.get(state.tracks[index].part)
 			if stream != null:
 				expected = fposmod(pos, stream.get_length())
 				wraps = true

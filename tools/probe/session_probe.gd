@@ -856,6 +856,8 @@ func _parts_and_measure() -> void:
 			end = maxf(end, it.start + it.length)
 	var track := s.track_indices().size() + 1
 	DAW.add_track(track, "Kick probe")
+	# A track plays a demo part by being given it, not by its name.
+	s.track(track).part = "kick"
 	var tempo := s.tempo
 	var loop := float(DemoSong.BARS * 4)
 	var b0 := ceilf(s.tempo_map().beat_at(end + 2.0) / loop) * loop
