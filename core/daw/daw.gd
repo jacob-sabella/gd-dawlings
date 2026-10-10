@@ -59,7 +59,7 @@ const COMMANDS := [
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"add_marker", &"set_track_monitor",
+	&"set_metronome", &"add_marker", &"set_track_monitor", &"set_track_automation_mode",
 	&"insert_midi_take",
 ]
 
@@ -253,6 +253,12 @@ const MONITOR_ON := 1
 const MONITOR_AUTO := 2
 func set_track_monitor(index: int, mode: int) -> void:
 	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
+## How a track's controls meet their automation (MixState.TrackState.automation_mode).
+const AUTOMATION_READ := 0
+const AUTOMATION_TOUCH := 2
+const AUTOMATION_LATCH := 4
+func set_track_automation_mode(index: int, mode: int) -> void:
+	_do(&"set_track_automation_mode", [index, MixWire.automation_mode_of(mode)])
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
@@ -411,6 +417,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])
 			return
 		args = [int(args[0]), clampi(int(args[1]), MONITOR_OFF, MONITOR_AUTO)]
+	if verb == &"set_track_automation_mode":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_automation_mode intent %s." % [args])
+			return
+		args = [int(args[0]), MixWire.automation_mode_of(args[1])]
 	if verb == &"set_metronome":
 		if args.size() != 1:
 			push_warning("DAW: refused a malformed set_metronome intent %s." % [args])

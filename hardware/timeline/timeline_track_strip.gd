@@ -3,7 +3,9 @@ extends Node3D
 
 ## Tracks added, removed and named, under the timeline's right-hand end: ADD puts a new track
 ## after the picked one (or at the end), DEL removes the picked one, NAME renames it. A track is
-## picked by pressing its name. Removing is one undo away, like every edit.
+## picked by pressing its name. Removing is one undo away, like every edit. AUTO steps the picked
+## track through read, touch and latch: in touch a control moved while the song plays writes its
+## lane until it is let go, in latch until the transport stops.
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -14,16 +16,19 @@ var surface: Node
 var add: PanelButton
 var remove: PanelButton
 var rename: PanelButton
+var auto: PanelButton
+
+const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
 
 func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(3 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(4 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(PITCH, -0.004, -0.002)
+	plate.position = Vector3(1.5 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
@@ -41,7 +46,32 @@ func _ready() -> void:
 				if picked <= 0:
 					return "press a track's name first"
 				return "type a name for %s" % _name_of(picked) if surface.can_type() else "rename it on the screen")
+	auto = _key("TrackAuto", "AUTO", 3, Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
+			func() -> String:
+				var picked: int = surface.picked_track
+				if picked <= 0 or not DAW.state.tracks.has(picked):
+					return "press a track's name first"
+				var mode: int = DAW.state.track(picked).automation_mode
+				return "%s reads its lanes: %s next" % [_name_of(picked), MODE_NAMES[_next(mode)]] if mode == 0 \
+						else "%s writes in %s: %s next" % [_name_of(picked), MODE_NAMES[mode], MODE_NAMES[_next(mode)]])
+	DAW.track_changed.connect(_on_track_changed)
 	refresh()
+
+
+func _on_track_changed(index: int, field: StringName) -> void:
+	if field == &"automation_mode" and index == surface.picked_track:
+		refresh()
+
+
+func _next(mode: int) -> int:
+	return DAW.AUTOMATION_TOUCH if mode == DAW.AUTOMATION_READ \
+			else DAW.AUTOMATION_LATCH if mode == DAW.AUTOMATION_TOUCH else DAW.AUTOMATION_READ
+
+
+func _auto() -> void:
+	var picked: int = surface.picked_track
+	if picked > 0 and DAW.state.tracks.has(picked):
+		DAW.set_track_automation_mode(picked, _next(DAW.state.track(picked).automation_mode))
 
 
 func refresh() -> void:
@@ -49,6 +79,7 @@ func refresh() -> void:
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
 	rename.lit = picked and surface.can_type()
+	auto.lit = picked and DAW.state.track(surface.picked_track).automation_mode != DAW.AUTOMATION_READ
 
 
 func _add() -> void:

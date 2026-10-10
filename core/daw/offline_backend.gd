@@ -407,7 +407,8 @@ func _drive_meters(delta: float) -> void:
 
 func set_track_volume(index: int, taper: float) -> void:
 	var t := state.track(index)
-	_remember("/track/%d/volume" % index, set_track_volume.bind(index, t.volume),
+	if not _writes_lane(index, "volume", taper_to_db(clampf(taper, 0.0, 1.0)), t.volume_db):
+		_remember("/track/%d/volume" % index, set_track_volume.bind(index, t.volume),
 			set_track_volume.bind(index, taper))
 	state.set_track_field(index, &"volume", clampf(taper, 0.0, 1.0))
 	state.set_track_field(index, &"volume_db", taper_to_db(t.volume))
@@ -415,15 +416,17 @@ func set_track_volume(index: int, taper: float) -> void:
 
 
 func set_track_pan(index: int, pan: float) -> void:
-	_remember("/track/%d/pan" % index, set_track_pan.bind(index, state.track(index).pan),
-			set_track_pan.bind(index, pan))
+	if not _writes_lane(index, "pan", clampf(pan, 0.0, 1.0) * 2.0 - 1.0, state.track(index).pan * 2.0 - 1.0):
+		_remember("/track/%d/pan" % index, set_track_pan.bind(index, state.track(index).pan),
+				set_track_pan.bind(index, pan))
 	state.set_track_field(index, &"pan", clampf(pan, 0.0, 1.0))
 	record_for_replication("/track/%d/pan" % index, [state.track(index).pan])
 
 
 func set_track_mute(index: int, muted: bool) -> void:
-	_remember("/track/%d/mute" % index, set_track_mute.bind(index, state.track(index).mute),
-			set_track_mute.bind(index, muted), false)
+	if not _writes_lane(index, "mute", 1.0 if muted else 0.0, 1.0 if state.track(index).mute else 0.0):
+		_remember("/track/%d/mute" % index, set_track_mute.bind(index, state.track(index).mute),
+				set_track_mute.bind(index, muted), false)
 	state.set_track_field(index, &"mute", muted)
 	record_for_replication("/track/%d/mute" % index, [1.0 if muted else 0.0])
 
@@ -440,6 +443,16 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 			set_track_rec_arm.bind(index, armed), false)
 	state.set_track_field(index, &"rec_arm", armed)
 	record_for_replication("/track/%d/recarm" % index, [1.0 if armed else 0.0])
+
+
+func set_track_automation_mode(index: int, mode: int) -> void:
+	_remember("/track/%d/automode" % index,
+			set_track_automation_mode.bind(index, state.track(index).automation_mode),
+			set_track_automation_mode.bind(index, mode), false)
+	state.set_track_field(index, &"automation_mode", mode)
+	record_for_replication("/track/%d/automode" % index, [float(mode)])
+	if mode == DAW.AUTOMATION_READ:
+		_end_passes(true, index)
 
 
 func set_track_monitor(index: int, mode: int) -> void:
@@ -465,9 +478,11 @@ func set_master_pan(pan: float) -> void:
 
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
 	var f := state.fx(track_index, fx_index)
-	_remember("/track/%d/fx/%d/fxparam/%d" % [track_index, fx_index, param],
-			set_fx_param.bind(track_index, fx_index, param, float(f.params.get(param, 0.0))),
-			set_fx_param.bind(track_index, fx_index, param, value))
+	if not _writes_lane(track_index, "fx:%d:%d" % [fx_index, param], clampf(value, 0.0, 1.0),
+			float(f.params.get(param, 0.0))):
+		_remember("/track/%d/fx/%d/fxparam/%d" % [track_index, fx_index, param],
+				set_fx_param.bind(track_index, fx_index, param, float(f.params.get(param, 0.0))),
+				set_fx_param.bind(track_index, fx_index, param, value))
 	f.params[param] = clampf(value, 0.0, 1.0)
 	state.fx_changed.emit(track_index, fx_index)
 	record_for_replication("/track/%d/fx/%d/fxparam/%d/value" % [track_index, fx_index, param], [f.params[param]])
@@ -615,9 +630,11 @@ func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
 	var sd := state.send(track_index, send_index, false)
 	if sd == null:
 		return
-	_remember("/track/%d/send/%d/volume" % [track_index, send_index],
-			set_send_volume.bind(track_index, send_index, sd.volume),
-			set_send_volume.bind(track_index, send_index, taper))
+	if sd.key or sd.dest_track <= 0 or not _writes_lane(track_index, "send:%d" % sd.dest_track,
+			taper_to_db(clampf(taper, 0.0, 1.0)), taper_to_db(sd.volume)):
+		_remember("/track/%d/send/%d/volume" % [track_index, send_index],
+				set_send_volume.bind(track_index, send_index, sd.volume),
+				set_send_volume.bind(track_index, send_index, taper))
 	_write_send(track_index, send_index, "volume", clampf(taper, 0.0, 1.0))
 
 
@@ -1012,12 +1029,15 @@ var _followed_at := NAN
 ## stopped only when the playhead has moved, so a control can still be set by hand there.
 func follow_automation() -> void:
 	var at := state.position_seconds
+	_tick_passes(at)
 	if not state.playing and at == _followed_at:
 		return
 	_followed_at = at
 	for index in state.tracks:
 		var t: MixState.TrackState = state.tracks[index]
 		for target in t.automation:
+			if _passes.has([index, target]):
+				continue
 			var v := DawKitAutomation.value_in(t.automation[target], at)
 			var kind := DawKitAutomation.kind_of(target)
 			match kind:
@@ -1049,6 +1069,112 @@ func follow_automation() -> void:
 						f.params[int(parts[2])] = v
 						state.fx_changed.emit(index, int(parts[1]))
 						record_for_replication("/track/%d/fx/%d/fxparam/%d/value" % [index, int(parts[1]), int(parts[2])], [v])
+
+
+# --- writing automation ----------------------------------------------------------------------
+#
+# A control moved while the song plays, on a track in touch or latch, is written to its lane
+# rather than set: a "pass" collects where it went, the lane stops moving it meanwhile, and when
+# the pass ends it replaces that stretch of the lane, as one undo step. Touch ends a pass when
+# the control has been still for `GESTURE_MS` (there is no "let go" on the wire), and the lane
+# then glides back to what it was over `RETURN_SECONDS`; latch holds the last value until the
+# transport stops.
+
+## How long a touched control takes to go back to its lane once let go.
+const RETURN_SECONDS := 0.25
+
+## [track, target] -> {start, last (seconds), ms (when last written), before (the value when
+## the pass began), points, latch}
+var _passes := {}
+
+
+## Whether a write of `value` to `target` on `track_index` is part of a pass (and so not an
+## undo step of its own): the song is playing, and the track is in touch or latch.
+func _writes_lane(track_index: int, target: String, value: float, was: float) -> bool:
+	if _replaying or not state.playing or not state.tracks.has(track_index):
+		return false
+	var mode := state.track(track_index).automation_mode
+	if mode != DAW.AUTOMATION_TOUCH and mode != DAW.AUTOMATION_LATCH:
+		return false
+	var at := state.position_seconds
+	var key := [track_index, target]
+	if not _passes.has(key):
+		_passes[key] = {"start": at, "last": at, "ms": 0, "before": was, "points": [],
+				"latch": mode == DAW.AUTOMATION_LATCH}
+	var run: Dictionary = _passes[key]
+	var points: Array = run["points"]
+	var shape := DawKitAutomation.HOLD if target == "mute" else DawKitAutomation.LINEAR
+	# One point per moment: a second write in the same frame replaces the first.
+	if not points.is_empty() and at <= float(points[-1][0]) + 0.0005:
+		points[-1][1] = value
+	else:
+		points.append([at, value, shape])
+	run["last"] = at
+	run["ms"] = Time.get_ticks_msec()
+	return true
+
+
+## Touch passes let go, latch passes kept up with the playhead, and every pass ended when the
+## transport has stopped some way other than `transport_stop`.
+func _tick_passes(at: float) -> void:
+	if _passes.is_empty():
+		return
+	if not state.playing:
+		_end_passes(true)
+		return
+	var now := Time.get_ticks_msec()
+	for key in _passes.keys():
+		var run: Dictionary = _passes[key]
+		if run["latch"]:
+			run["last"] = maxf(float(run["last"]), at)
+		elif now - int(run["ms"]) > GESTURE_MS:
+			_end_pass(key)
+
+
+## Ends every pass (or every pass on `track_index`). `all` includes latch passes.
+func _end_passes(all: bool, track_index := -1) -> void:
+	for key in _passes.keys():
+		if _passes[key]["latch"] and state.playing:
+			_passes[key]["last"] = maxf(float(_passes[key]["last"]), state.position_seconds)
+		if (track_index < 0 or key[0] == track_index) and (all or not _passes[key]["latch"]):
+			_end_pass(key)
+
+
+## The pass's points over that stretch of the lane, and back to the lane after it.
+func _end_pass(key: Array) -> void:
+	var run: Dictionary = _passes[key]
+	_passes.erase(key)
+	var index: int = key[0]
+	var target: String = key[1]
+	if not state.tracks.has(index) or (run["points"] as Array).is_empty():
+		return
+	var old: Array = state.track(index).automation.get(target, [])
+	var before: float = run["before"]
+	var start: float = run["start"]
+	var recorded: Array = run["points"]
+	var end := maxf(float(run["last"]), float(recorded[-1][0]))
+	var shape := DawKitAutomation.HOLD if target == "mute" else DawKitAutomation.LINEAR
+	if run["latch"] and end > float(recorded[-1][0]) + 0.0005:
+		recorded.append([end, recorded[-1][1], shape])
+	var back := end + RETURN_SECONDS
+	var out: Array = []
+	for pt in old:
+		if float(pt[0]) < start - 0.0005 or float(pt[0]) > back + 0.0005:
+			out.append(pt.duplicate())
+	# Where the lane was just before the pass, so what came before it does not change.
+	if start > 0.001:
+		out.append([start - 0.001, DawKitAutomation.value_in(old, start - 0.001, before), shape])
+	for pt in recorded:
+		out.append([float(pt[0]), DawKitAutomation.clamp_value(target, float(pt[1])), int(pt[2])])
+	out.append([back, DawKitAutomation.value_in(old, back, before), shape])
+	out.sort_custom(func(a, b): return a[0] < b[0])
+	var lane: Array = []
+	for pt in out:
+		if lane.is_empty() or float(pt[0]) > float(lane[-1][0]) + 0.000001:
+			lane.append(pt)
+		else:
+			lane[-1] = pt
+	set_automation(index, target, lane)
 
 
 ## One undo step: the whole map, as a tempo knob turned is the whole tempo.
@@ -1086,6 +1212,7 @@ func transport_play() -> void:
 
 
 func transport_stop() -> void:
+	_end_passes(true)
 	state.playing = false
 	state.recording = false
 	state.transport_changed.emit()

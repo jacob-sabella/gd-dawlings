@@ -419,7 +419,7 @@ func _place_strips() -> void:
 	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
 	_light_selection_keys()
 	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
-	_track_controls.position = Vector3(width * 0.5 - 0.020 - 2 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
+	_track_controls.position = Vector3(width * 0.5 - 0.020 - 3 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
 	_track_controls.refresh()
 	_tempo_controls.position = Vector3(-1.5 * TimelineTempoStrip.PITCH, -_top_y - 0.016, 0.0)
 	_tempo_controls.refresh()

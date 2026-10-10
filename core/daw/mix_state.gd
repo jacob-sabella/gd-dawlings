@@ -203,6 +203,10 @@ class TrackState extends RefCounted:
 	var rec_arm: bool = false
 	## Input monitoring: 0 off, 1 on, 2 auto. Reaper's I_RECMON, and what `/track/N/monitor` says.
 	var monitor: int = 0
+	## How the track's controls and their automation meet, Reaper's I_AUTOMODE numbers: 0 read
+	## (the lanes move the controls), 2 touch (a control moved while playing writes its lane until
+	## it is let go), 4 latch (until the transport stops). `/track/N/automode`.
+	var automation_mode: int = 0
 	var selected: bool = false
 	var colour: Color = Color(0.55, 0.57, 0.6)
 	## Reaper's I_FOLDERDEPTH on this track: 1 opens a folder, 0 stays at the current level, and

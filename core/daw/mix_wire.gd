@@ -225,6 +225,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# this address, but what it sends -- checked on the rig -- is the one float.
 			if not args.is_empty():
 				state.set_track_field(idx, &"monitor", clampi(int(roundf(float(args[0]))), 0, 2))
+		"automode":
+			# NOT a Reaper OSC address: the bridge reads and writes I_AUTOMODE.
+			if not args.is_empty():
+				state.set_track_field(idx, &"automation_mode", automation_mode_of(args[0]))
 		"select":
 			state.set_track_field(idx, &"selected", _as_bool(args))
 		"colour":
@@ -272,6 +276,15 @@ const ITEM_WIDTH := 5
 
 
 ## [position, name, position, name, ...], in time order.
+## An automation mode from anyone: read (0), touch (2) or latch (4), read for anything else --
+## Reaper's own read (1) and write (3) included, which this desk does not offer.
+static func automation_mode_of(v) -> int:
+	if typeof(v) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(v)):
+		return 0
+	var m := int(roundf(float(v)))
+	return m if m in [0, 2, 4] else 0
+
+
 ## At most this many points in one lane of automation cross the wire.
 const AUTOMATION_POINTS_MAX := 8192
 
@@ -555,6 +568,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
 		out.append(["/track/%d/monitor" % index, [float(t.monitor)]])
+		if t.automation_mode != 0:
+			out.append(["/track/%d/automode" % index, [float(t.automation_mode)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])

@@ -8384,6 +8384,15 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	header.grab_end(hand)
 	check("a press on a track's name picks it (%d)" % timeline.picked_track, timeline.picked_track == 3
 			and tracks.remove.lit and tracks.rename.lit)
+	check("its AUTO key is dark while it reads its lanes", not tracks.auto.lit)
+	tracks.auto.pressed.emit()
+	check("AUTO puts it in touch, and lights", s.track(3).automation_mode == DAW.AUTOMATION_TOUCH and tracks.auto.lit)
+	tracks.auto.pressed.emit()
+	tracks.auto.pressed.emit()
+	check("then latch, then back to read", s.track(3).automation_mode == DAW.AUTOMATION_READ and not tracks.auto.lit)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
 	tracks.add.pressed.emit()
 	check("ADD puts a new track after it, and picks that (%d)" % timeline.picked_track,
 			s.tracks.size() == names_were.size() + 1 and s.track(4).items.is_empty() and timeline.picked_track == 4
@@ -11055,6 +11064,54 @@ func _test_controls_follow_their_automation() -> void:
 	close_to("and a value past the control's end clamped", s.track(2).automation["pan"][0][1], 1.0)
 	DAW.set_automation(2, "pan", [])
 	check("an empty lane is no lane", not s.track(2).automation.has("pan"))
+
+	# Written from the desk. Track 3 in touch: the fader moved from 2 s to 3 s while playing.
+	var t3 := s.track(3)
+	DAW.set_track_volume(3, backend.db_to_taper(0.0))
+	DAW.set_automation(3, "volume", [[0.0, -3.0, DawKitAutomation.HOLD]])
+	DAW.set_track_automation_mode(3, DAW.AUTOMATION_TOUCH)
+	depth = s.undo_depth
+	s.playing = true
+	for step in 11:
+		s.position_seconds = 2.0 + step * 0.1
+		DAW.set_track_volume(3, backend.db_to_taper(-6.0 - step))
+		backend.follow_automation()
+	close_to("while touched, the fader is where the hand puts it, not the written", t3.volume_db, -16.0, 0.05)
+	check("and none of it is an undo step yet", s.undo_depth == depth)
+	backend._passes[[3, "volume"]]["ms"] = 0
+	s.position_seconds = 3.1
+	backend.follow_automation()
+	var written: Array = t3.automation["volume"]
+	check("let go, the pass is one undo step", s.undo_depth == depth + 1)
+	close_to("the written has what the hand did", DawKitAutomation.value_in(written, 2.5), -11.0, 0.05)
+	close_to("what came before is as it was", DawKitAutomation.value_in(written, 1.0), -3.0)
+	close_to("and after, it goes back to the written", DawKitAutomation.value_in(written, 3.0 + backend.RETURN_SECONDS + 0.1), -3.0)
+	s.position_seconds = 5.0
+	backend.follow_automation()
+	close_to("which the fader then follows", t3.volume_db, -3.0)
+	DAW.undo()
+	check("undone, the written is as it was", t3.automation["volume"] == [[0.0, -3.0, DawKitAutomation.HOLD]])
+
+	# Latch: the pan, moved once at 1 s, holds there until the transport stops at 4 s.
+	DAW.set_track_automation_mode(3, DAW.AUTOMATION_LATCH)
+	s.position_seconds = 1.0
+	var pan_was := t3.pan * 2.0 - 1.0
+	DAW.set_track_pan(3, 0.75)
+	backend._passes[[3, "pan"]]["ms"] = 0
+	s.position_seconds = 4.0
+	backend.follow_automation()
+	check("latch is not let go by a still hand", backend._passes.has([3, "pan"]))
+	DAW.transport_stop()
+	written = t3.automation.get("pan", [])
+	close_to("stopped, the written holds the pan from the touch to the stop", DawKitAutomation.value_in(written, 3.9), 0.5)
+	close_to("and where it was before it", DawKitAutomation.value_in(written, 0.5), pan_was)
+	DAW.set_track_automation_mode(3, DAW.AUTOMATION_READ)
+	s.playing = true
+	DAW.set_track_volume(3, backend.db_to_taper(-1.0))
+	check("in read, a fader moved while playing is a plain change", not backend._passes.has([3, "volume"]))
+	s.playing = false
+	DAW.apply_intent(&"set_track_automation_mode", [3, 3])
+	check("a mode the desk does not offer is read", t3.automation_mode == DAW.AUTOMATION_READ)
 	_offline()
 
 

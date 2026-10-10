@@ -334,7 +334,17 @@ can finish music in, saving DAWproject. Steps, in order:
      moves while stopped), not as history, replicated as ordinary control changes. Send lanes
      follow renumbering, and structure undo puts them back. ProjectBridge maps send indices to
      track ids and the desk's fx index to the project chain's (which counts the instrument).
-   - **Next (8c-f):** touch/latch recording from the desk; Reaper's envelopes through the bridge;
+   - **Done 2026-10-10 (8c), written from the desk:** `TrackState.automation_mode` (Reaper's
+     I_AUTOMODE numbers: 0 read, 2 touch, 4 latch; anything else is read), wire
+     `/track/N/automode`, `DAW.set_track_automation_mode`, and an AUTO key on the timeline's track
+     strip that steps the picked track through them. On the host, a fader, pan, mute, send level
+     or effect parameter moved while playing on a touch/latch track opens a pass instead of an
+     undo step: the lane stops moving that control, the moves are collected, and when the pass
+     ends they replace that stretch of the lane (holding what came before, gliding back over
+     `RETURN_SECONDS` after) as one `set_automation` step. Touch ends after `GESTURE_MS` still
+     (the wire has no "let go"; a hand's grab/release would be better); latch at the stop.
+     Guests' moves arrive as intents and are written the same way.
+   - **Next (8d-f):** Reaper's envelopes and I_AUTOMODE through the bridge;
      lanes drawn and edited on the timeline; master automation (not in MixState yet); a loopback
      measurement of a volume ramp.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
