@@ -402,9 +402,21 @@ can finish music in, saving DAWproject. Steps, in order:
      tempo's keys and the tracks' (TimelineRenderStrip); the hover card says what will be written
      (the loop, or the whole song and its length); dark where the DAW cannot render and while a
      render runs.
-   - **Not yet (9c-d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
+   - **Done 2026-10-10 (9c), Reaper's render:** the bridge's RenderProject renders the same range
+     offline through Reaper's own render (action 42230) as 24-bit WAVs in "<project> renders"
+     beside the .rpp: the master as "- mix.wav", and with stems every track (all selected for
+     it, the selection put back). The project's render settings are saved and put back, and a
+     render replaces the last one's files. Its files are found by name (EnumerateFiles answers
+     from a listing half a second old). ScriptBridge calls take their own timeout now; a render's
+     is ten minutes. The rig: mix and 40 stems of two seconds in 0.65 s. Probe: two renders of
+     the same two seconds, with a volume lane on Kick Out and without; its stem is -6.00 and
+     -18.00 dB down, exactly the lane. (The rig's DRUMS folder renders 0.7 dB short of its lane:
+     something in that folder is not under its fader; not looked into.) The probe's end moved
+     3 s later again (host 26.4/27.4, guest 27.0).
+   - **Not yet (9d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
      no tail after the range (a reverb is cut at its end); faster than real time waits on the
-     engine mixing itself; Reaper's render through the bridge.
+     engine mixing itself. A default probe run once lost one of the guest's clicks ("its clicks
+     a second apart"), then passed 3 times running.
 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,

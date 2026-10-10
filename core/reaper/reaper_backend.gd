@@ -169,6 +169,9 @@ func can(capability: StringName) -> bool:
 		# ReaScript bridge can say that -- a page-forward button that cannot tell you whether
 		# there is anything to page to is worse than no button.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.RENDER:
+		# Reaper's own render, which only the bridge can start.
+		return _bridge != null and _bridge.is_open()
 	if capability == Capability.MARKERS:
 		# OSC can go to a marker but not make one; the bridge does that.
 		return _bridge != null and _bridge.is_open()
@@ -737,6 +740,35 @@ static func midi_take_request(track_index: int, start: float, end: float, notes:
 	for n in notes:
 		out.append_array([float(n[0]), float(n[1]), int(n[2]), int(n[3]), int(n[4])])
 	return out
+
+
+## Reaper renders, offline, through the bridge: see the bridge's RenderProject. The files are on
+## Reaper's machine, which is this one.
+func render(stems: bool) -> void:
+	if _bridge == null or not _bridge.is_open():
+		render_finished.emit(PackedStringArray(), PackedStringArray(["rendering needs the ReaScript bridge"]))
+		return
+	var looped := state.looping and state.loop_end - state.loop_start > 0.01
+	var from := state.loop_start if looped else 0.0
+	var to := state.loop_end if looped else state.timeline_length()
+	_bridge.call_reaper("RenderProject", [from, to, 1 if stems else 0], _on_rendered, RENDER_TIMEOUT_MSEC)
+
+
+## A render runs as fast as Reaper can, which for a long song with heavy plugins is a while.
+const RENDER_TIMEOUT_MSEC := 600000
+
+
+func _on_rendered(result) -> void:
+	if typeof(result) != TYPE_DICTIONARY:
+		render_finished.emit(PackedStringArray(), PackedStringArray(["Reaper did not answer the render"]))
+		return
+	var files := PackedStringArray()
+	for f in _as_array(result.get("files", [])):
+		files.append(str(f))
+	var problems := PackedStringArray()
+	if not result.get("ok", false):
+		problems.append(str(result.get("error", "Reaper rendered nothing")))
+	render_finished.emit(files, problems)
 
 
 ## Shown at once, then written to Reaper's envelope and read back with the next timeline.

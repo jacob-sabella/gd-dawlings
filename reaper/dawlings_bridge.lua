@@ -477,6 +477,93 @@ function handlers.SetAutomationMode(args)
   return {ok = true}
 end
 
+-- args: start, end (seconds), stems (0/1). Reaper renders that stretch of the project, offline,
+-- as 24-bit stereo WAVs in "<project> renders" beside the project file: "<project> - mix.wav",
+-- and with stems "<project> - <track>.wav" for every track, replacing the last render's. Its
+-- render settings are put back after, so the project's own are not changed by dawlings asking.
+-- Answers the files written.
+local RENDER_KEYS = {'RENDER_FILE', 'RENDER_PATTERN', 'RENDER_FORMAT'}
+local RENDER_VALUES = {'RENDER_BOUNDSFLAG', 'RENDER_STARTPOS', 'RENDER_ENDPOS', 'RENDER_SETTINGS',
+  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ'}
+
+function handlers.RenderProject(args)
+  local from, to, stems = args[1] or 0, args[2] or 0, (args[3] or 0) > 0.5
+  if to - from <= 0.01 then return {ok = false, error = 'nothing to render'} end
+  local _, file = reaper.EnumProjects(-1)
+  local name = (reaper.GetProjectName(0, '') or ''):gsub('%.[Rr][Pp][Pp]$', '')
+  if name == '' then name = 'Untitled' end
+  local base = (file and file ~= '') and file:match('^(.*)[/\\]') or reaper.GetProjectPath('')
+  local dir = base .. '/' .. name .. ' renders'
+  reaper.RecursiveCreateDirectory(dir, 0)
+  -- What a render writes there, by name: the mix, and a stem per track. EnumerateFiles would
+  -- answer from a listing Reaper keeps for half a second, from before the render.
+  local function exists(path)
+    local f = io.open(path, 'rb')
+    if f then f:close() end
+    return f ~= nil
+  end
+  local expected = {dir .. '/' .. name .. ' - Master.wav'}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local _, tname = reaper.GetTrackName(reaper.GetTrack(0, i))
+    expected[#expected + 1] = dir .. '/' .. name .. ' - ' .. tname .. '.wav'
+  end
+  local mix = dir .. '/' .. name .. ' - mix.wav'
+  -- A render replaces the last one written there, so what is there after is this render's.
+  os.remove(mix)
+  for _, f in ipairs(expected) do os.remove(f) end
+
+  local saved_s, saved_v = {}, {}
+  for _, k in ipairs(RENDER_KEYS) do
+    local _, v = reaper.GetSetProjectInfo_String(0, k, '', false)
+    saved_s[k] = v
+  end
+  for _, k in ipairs(RENDER_VALUES) do saved_v[k] = reaper.GetSetProjectInfo(0, k, 0, false) end
+  local selected = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, i)
+    selected[#selected + 1] = {tr, reaper.IsTrackSelected(tr)}
+    reaper.SetTrackSelected(tr, stems)
+  end
+
+  reaper.GetSetProjectInfo_String(0, 'RENDER_FILE', dir, true)
+  -- $track is the track's name for a stem, and "Master" for the mix, renamed below.
+  reaper.GetSetProjectInfo_String(0, 'RENDER_PATTERN', name .. ' - $track', true)
+  -- WAV, 24-bit.
+  reaper.GetSetProjectInfo_String(0, 'RENDER_FORMAT', 'ZXZhdxgAAQ==', true)
+  reaper.GetSetProjectInfo(0, 'RENDER_BOUNDSFLAG', 0, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_STARTPOS', from, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_ENDPOS', to, true)
+  -- The master mix, and with stems the selected tracks too.
+  reaper.GetSetProjectInfo(0, 'RENDER_SETTINGS', stems and 1 or 0, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_SRATE', 0, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_CHANNELS', 2, true)
+  reaper.GetSetProjectInfo(0, 'RENDER_ADDTOPROJ', 0, true)
+  local began = reaper.time_precise()
+  -- File: Render project, using the most recent render settings, auto-close render dialog.
+  reaper.Main_OnCommand(42230, 0)
+
+  for k, v in pairs(saved_s) do reaper.GetSetProjectInfo_String(0, k, v, true) end
+  for k, v in pairs(saved_v) do reaper.GetSetProjectInfo(0, k, v, true) end
+  for _, row in ipairs(selected) do reaper.SetTrackSelected(row[1], row[2]) end
+
+  -- What it wrote. The mix is named for itself.
+  local files = {}
+  for k, path in ipairs(expected) do
+    if exists(path) then
+      if k == 1 then
+        os.rename(path, mix)
+        path = mix
+      end
+      files[#files + 1] = path
+    end
+  end
+  -- The mix first, then the stems in order of name.
+  local first = files[1] == mix and table.remove(files, 1) or nil
+  table.sort(files)
+  if first then table.insert(files, 1, first) end
+  return {ok = #files > 0, files = files, seconds = reaper.time_precise() - began}
+end
+
 function handlers.GetTimeline()
   local tracks = {}
   for i = 0, reaper.CountTracks(0) - 1 do

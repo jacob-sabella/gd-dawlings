@@ -23,7 +23,7 @@ const DEFAULT_DIR := "~/.config/REAPER/Scripts/dawlings_bridge_data"
 var _dir := ""
 var _next_id := 1
 var _open := false
-## {id: {"fn": String, "t": int, "cb": Callable}}
+## {id: {"fn": String, "t": int, "cb": Callable, "timeout": int}}
 var _pending: Dictionary = {}
 
 const TIMEOUT_MSEC := 4000
@@ -54,8 +54,9 @@ func is_open() -> bool:
 	return _open
 
 
-## Queue a ReaScript call. `cb` receives the decoded result, or null on timeout.
-func call_reaper(fn: String, args: Array = [], cb: Callable = Callable()) -> bool:
+## Queue a ReaScript call. `cb` receives the decoded result, or null on timeout -- after
+## `timeout_msec`, for a call that takes Reaper as long as a render does.
+func call_reaper(fn: String, args: Array = [], cb: Callable = Callable(), timeout_msec := TIMEOUT_MSEC) -> bool:
 	if not _open:
 		return false
 	var id := _next_id
@@ -70,7 +71,7 @@ func call_reaper(fn: String, args: Array = [], cb: Callable = Callable()) -> boo
 	f.store_string(payload)
 	f.close()
 	DirAccess.rename_absolute(final + ".tmp", final)
-	_pending[id] = {"fn": fn, "t": Time.get_ticks_msec(), "cb": cb}
+	_pending[id] = {"fn": fn, "t": Time.get_ticks_msec(), "cb": cb, "timeout": timeout_msec}
 	return true
 
 
@@ -86,16 +87,16 @@ func poll() -> void:
 			var parsed = JSON.parse_string(text)
 			# An older bridge script writes in place; a response caught half-written is left to
 			# finish and read again next poll, up to the timeout, rather than handed on as null.
-			if parsed == null and now - int(_pending[id]["t"]) <= TIMEOUT_MSEC:
+			if parsed == null and now - int(_pending[id]["t"]) <= int(_pending[id].get("timeout", TIMEOUT_MSEC)):
 				continue
 			DirAccess.remove_absolute(path)
 			var entry: Dictionary = _pending[id]
 			_pending.erase(id)
 			if entry["cb"].is_valid():
 				entry["cb"].call(parsed)
-		elif now - int(_pending[id]["t"]) > TIMEOUT_MSEC:
+		elif now - int(_pending[id]["t"]) > int(_pending[id].get("timeout", TIMEOUT_MSEC)):
 			var entry: Dictionary = _pending[id]
 			_pending.erase(id)
-			push_warning("ScriptBridge: %s timed out after %dms" % [entry["fn"], TIMEOUT_MSEC])
+			push_warning("ScriptBridge: %s timed out after %dms" % [entry["fn"], int(entry.get("timeout", TIMEOUT_MSEC))])
 			if entry["cb"].is_valid():
 				entry["cb"].call(null)

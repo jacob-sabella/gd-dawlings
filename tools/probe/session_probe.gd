@@ -45,6 +45,9 @@ const HOST_RAMP_TOLERANCE_DB := 1.0
 ## Where the render's loop starts, and how far a note in the rendered stem may be from its place.
 const RENDER_FROM := 40.0
 const RENDER_TOLERANCE_MS := 2.0
+## The rig's Kick Out: a track of its own, not a folder, with a steady sound in it. (Its DRUMS
+## folder renders 0.7 dB short of its lane: something in the folder is not under its fader.)
+const RENDER_TRACK := 3
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
 ## docs/architecture.md, "Recording a guest".
@@ -297,7 +300,7 @@ func _host(port: int) -> void:
 			await _tracks_in_reaper()
 		await _undo_takes()
 
-	await _until(23.4)
+	await _until(26.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -311,7 +314,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(24.4)
+	await _until(27.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -798,10 +801,74 @@ func _envelopes_in_reaper() -> void:
 			and DAW.state.master.automation.is_empty())
 	if not is_equal_approx(DAW.state.master.volume, was_master):
 		DAW.set_master_volume(was_master)
+	await _render_in_reaper()
 	if t.mute != was_mute:
 		DAW.set_track_mute(1, was_mute)
 	if not is_equal_approx(t.pan, was_pan):
 		DAW.set_track_pan(1, was_pan)
+
+
+## Reaper's own render through the bridge, twice over the same two seconds: with a volume lane on
+## RENDER_TRACK (-6 dB, then -18 dB from halfway) and without. Its stem's level in each half, one
+## render against the other, is the lane.
+func _render_in_reaper() -> void:
+	var s := DAW.state
+	var was := [s.looping, s.loop_start, s.loop_end]
+	DAW.set_automation(RENDER_TRACK, "volume", [[0.0, -6.0, DawKitAutomation.HOLD], [2.0, -18.0, DawKitAutomation.HOLD]])
+	DAW.set_loop_range(1.0, 3.0)
+	DAW.set_looping(true)
+	await get_tree().create_timer(0.6).timeout
+	var with_lane := await _reaper_render_levels()
+	DAW.undo()
+	await get_tree().create_timer(0.6).timeout
+	var without := await _reaper_render_levels()
+	# Without a lane the fader is the level, and it need not be at 0 dB.
+	var fader := s.track(RENDER_TRACK).volume_db
+	DAW.set_loop_range(was[1], was[2])
+	DAW.set_looping(was[0])
+	check("Reaper rendered the loop, mix and stems, twice (%s, %s)" % [with_lane, without],
+			with_lane.size() == 3 and without.size() == 3)
+	if with_lane.size() == 3 and without.size() == 3:
+		var a: float = with_lane[0] - without[0]
+		var b: float = with_lane[1] - without[1]
+		check("and track %d's stem is the lane: %.2f dB, then %.2f dB, against its fader at %.2f dB" % [RENDER_TRACK, a, b, fader],
+				absf(a - (-6.0 - fader)) < 0.2 and absf(b - (-18.0 - fader)) < 0.2)
+		DirAccess.remove_absolute(with_lane[2])
+
+
+## One render of the loop with stems: RENDER_TRACK's stem's level (dB RMS) in each second of it, and
+## the folder the render went to (emptied).
+func _reaper_render_levels() -> Array:
+	var done: Array = []
+	var on_done := func(files, problems): done.append([files, problems])
+	DAW.render_finished.connect(on_done, CONNECT_ONE_SHOT)
+	DAW.render(true)
+	var began := Time.get_ticks_msec()
+	while done.is_empty() and Time.get_ticks_msec() - began < 8000:
+		await get_tree().process_frame
+	if done.is_empty():
+		DAW.render_finished.disconnect(on_done)
+		return []
+	var files: PackedStringArray = done[0][0]
+	var want := " - %s.wav" % DAW.state.track(RENDER_TRACK).name
+	var out: Array = []
+	for f in files:
+		if f.ends_with(want):
+			var sound := DawKitAudioFile.read(f)
+			var rate: int = sound["rate"]
+			var samples: PackedFloat32Array = sound["samples"]
+			for second in 2:
+				var sum := 0.0
+				var n := 0
+				for i in range(int((second + 0.1) * rate) * 2, int((second + 0.9) * rate) * 2):
+					sum += samples[i] * samples[i]
+					n += 1
+				out.append(10.0 * log(maxf(sum / maxf(n, 1), 1e-20)) / log(10.0))
+	for f in files:
+		DirAccess.remove_absolute(f)
+	if not files.is_empty():
+		out.append(files[0].get_base_dir())
+	return out
 
 
 ## The guest's MIDI take's notes, in song seconds, by pitch then time so the order survives an
@@ -970,7 +1037,7 @@ func _guest(port: int) -> void:
 		check("I saved the host's project, and was told (%s)" % [_notices],
 				_notices.has("Grace saved the project as dawlings_probe_%d.dawproject." % _port))
 
-	await _until(24.0)
+	await _until(27.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
