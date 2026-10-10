@@ -5,7 +5,9 @@ extends Node3D
 ## after the picked one (or at the end), DEL removes the picked one, NAME renames it. A track is
 ## picked by pressing its name. Removing is one undo away, like every edit. AUTO steps the picked
 ## track through read, touch and latch: in touch a control moved while the song plays writes its
-## lane until it is let go, in latch until the transport stops.
+## lane until it is let go, in latch until the transport stops. LANE shows the picked track's
+## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
+## then none.
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -17,6 +19,7 @@ var add: PanelButton
 var remove: PanelButton
 var rename: PanelButton
 var auto: PanelButton
+var lane: PanelButton
 
 const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
@@ -25,10 +28,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(4 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(5 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(1.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(2 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
@@ -54,8 +57,30 @@ func _ready() -> void:
 				var mode: int = DAW.state.track(picked).automation_mode
 				return "%s reads its lanes: %s next" % [_name_of(picked), MODE_NAMES[_next(mode)]] if mode == 0 \
 						else "%s writes in %s: %s next" % [_name_of(picked), MODE_NAMES[mode], MODE_NAMES[_next(mode)]])
+	lane = _key("TrackLane", "LANE", 4, TimelineSurface.AUTOMATION_COLOUR, "TRACKS  AUTOMATION LANE", _lane,
+			func() -> String:
+				var picked: int = surface.picked_track
+				if picked <= 0 or not DAW.state.tracks.has(picked):
+					return "press a track's name first"
+				var next := _next_lane()
+				return "show %s" % TimelineSurface.lane_name(next).to_lower() if next != "" else "hide the lane")
 	DAW.track_changed.connect(_on_track_changed)
 	refresh()
+
+
+## The target after the one shown, or "" after the last.
+func _next_lane() -> String:
+	var targets := TimelineSurface.lane_targets(surface.picked_track)
+	var at := targets.find(surface.shown_lane)
+	if surface.shown_lane == "":
+		return targets[0] if not targets.is_empty() else ""
+	return targets[at + 1] if at >= 0 and at + 1 < targets.size() else ""
+
+
+func _lane() -> void:
+	if surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track):
+		surface.show_lane(_next_lane())
+		refresh()
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
@@ -79,6 +104,7 @@ func refresh() -> void:
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
 	rename.lit = picked and surface.can_type()
+	lane.lit = picked and surface.shown_lane != ""
 	auto.lit = picked and DAW.state.track(surface.picked_track).automation_mode != DAW.AUTOMATION_READ
 
 

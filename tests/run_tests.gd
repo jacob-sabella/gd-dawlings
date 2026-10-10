@@ -8409,6 +8409,54 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.undo()
 	check("three undos, and the tracks are as they were",
 			s.track_indices().map(func(i): return s.track(i).name) == names_were)
+
+	# A lane of automation over the picked track's lane, drawn and edited there.
+	timeline.pick_track(3)
+	check("LANE is dark while no lane is shown", not tracks.lane.lit)
+	tracks.lane.pressed.emit()
+	check("LANE shows the track's volume lane, and lights", timeline.shown_lane == "volume" and tracks.lane.lit
+			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 1)
+	var row := s.track_indices().find(3)
+	var on_lane := func(bar: float, v: float) -> Vector3:
+		return timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(bar)), timeline._automation_y(row, v), lanes.position.z))
+	var lane_depth := s.undo_depth
+	var selected_were := s.selected_items()
+	click.call(on_lane.call(5.0, -6.0))
+	var vol: Array = s.track(3).automation.get("volume", [])
+	check("a press on bare lane adds a point there (%s)" % [vol], vol.size() == 1
+			and is_equal_approx(vol[0][0], s.bar_to_seconds(5.0)) and absf(vol[0][1] + 6.0) < 0.05)
+	check("one undo step, and no item touched", s.undo_depth == lane_depth + 1 and s.selected_items() == selected_were)
+	lanes.grab_begin(hand, on_lane.call(5.0, -6.0))
+	lanes.grab_move(hand, on_lane.call(7.0, -12.0))
+	check("dragged, it is drawn where it is going", timeline._lane_preview.size() == 1)
+	lanes.grab_end(hand)
+	vol = s.track(3).automation.get("volume", [])
+	check("and lands there (%s)" % [vol], vol.size() == 1 and is_equal_approx(vol[0][0], s.bar_to_seconds(7.0))
+			and absf(vol[0][1] + 12.0) < 0.05 and timeline._lane_preview.is_empty())
+	click.call(on_lane.call(7.0, vol[0][1]))
+	check("a click on a point makes it hold", s.track(3).automation["volume"][0][2] == DawKitAutomation.HOLD)
+	hand.hover_point = on_lane.call(7.0, s.track(3).automation["volume"][0][1])
+	lanes.hover_enter(hand)
+	check("hovered, the card names the lane and reads the point (%s, %s)" % [lanes.title(), lanes.readout()],
+			lanes.title() == "AUTOMATION  VOLUME" and lanes.readout().contains("dB at 7.1.00, held"))
+	var before := float(s.track(3).automation["volume"][0][1])
+	lanes._on_nudge(2, false)
+	close_to("the wheel over it nudges its value", s.track(3).automation["volume"][0][1], before + 2 * TimelineLanes.nudge_step("volume"))
+	lanes.hover_exit(hand)
+	hand.holding_shift = true
+	click.call(on_lane.call(7.0, s.track(3).automation["volume"][0][1]))
+	hand.holding_shift = false
+	check("a fine click takes it away, and with it the lane", not s.track(3).automation.has("volume"))
+	check("each edit one undo step", s.undo_depth == lane_depth + 5)
+	for _i in 5:
+		DAW.undo()
+	check("all undone", not s.track(3).automation.has("volume") and s.undo_depth == lane_depth)
+	for _i in 12:
+		if timeline.shown_lane == "":
+			break
+		tracks.lane.pressed.emit()
+	check("LANE steps through pan and mute to none", timeline.shown_lane == "" and not tracks.lane.lit
+			and (timeline._automation.mesh as ImmediateMesh).get_surface_count() == 0)
 	timeline.pick_track(0)
 	click.call(at.call(2, 12.0))
 

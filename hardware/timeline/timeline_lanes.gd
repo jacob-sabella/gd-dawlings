@@ -9,6 +9,12 @@ extends ControlAffordance
 ## drop the selection and put the playhead there. The wheel zooms, round the playhead the way
 ## Reaper zooms round its edit cursor. Splitting is a key, not a gesture: see the surface.
 ##
+## While the picked track shows a lane of automation (TimelineTrackStrip's LANE key), presses on
+## that track's lane edit the lane instead: press bare lane to add a point there (snapped to the
+## beat unless fine) and drag it into place, drag a point to move it, click a point to make it
+## hold or ramp to the next, fine-click it to remove it, and the wheel over a point nudges its
+## value. Each change to the lane is one undo step.
+##
 ## One control over every lane rather than one per item. Items come and go with every edit and
 ## every poll, and a control rebuilt under a held drag drops the drag; this one is built once.
 ## The surface answers "what is under this point", so the lanes need no picture of their own.
@@ -35,6 +41,13 @@ var _target_start := 0.0
 var _edge := 0
 var _item_end := 0.0
 var _target_end := 0.0
+## Editing the shown lane of automation: its points as edited, the one held, and whether the
+## press made it.
+var _auto_on := false
+var _auto_points: Array = []
+var _auto_index := -1
+var _auto_added := false
+var _grab_y := 0.0
 
 
 func _ready() -> void:
@@ -66,7 +79,21 @@ func _fine() -> bool:
 
 func _on_grab_begin(at: Vector3) -> void:
 	_grab_x = to_local(at).x
+	_grab_y = to_local(at).y
 	_dragged = false
+	_auto_on = surface.on_shown_lane(at)
+	if _auto_on:
+		_hit = []
+		_auto_points = surface.shown_points().duplicate(true)
+		_auto_index = surface.automation_point_at(at)
+		_auto_added = _auto_index < 0
+		if _auto_added:
+			var target: String = surface.shown_lane
+			var shape := DawKitAutomation.HOLD if target == "mute" else DawKitAutomation.LINEAR
+			_auto_index = _place_point(snap(surface.seconds_at_point(at), _fine()),
+					surface.value_at_point(at), shape)
+			surface.preview_lane(_auto_points)
+		return
 	_grab_seconds = surface.seconds_at_point(at)
 	_hit = surface.item_at_point(at)
 	_edge = 0
@@ -80,6 +107,15 @@ func _on_grab_begin(at: Vector3) -> void:
 
 
 func _on_grab_move(at: Vector3) -> void:
+	if _auto_on:
+		if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP and absf(to_local(at).y - _grab_y) < CLICK_SLOP:
+			return
+		_dragged = true
+		var shape := int(_auto_points[_auto_index][2])
+		_auto_points.remove_at(_auto_index)
+		_auto_index = _place_point(snap(surface.seconds_at_point(at), _fine()), surface.value_at_point(at), shape)
+		surface.preview_lane(_auto_points)
+		return
 	if _hit.is_empty():
 		return
 	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP:
@@ -101,6 +137,11 @@ func _on_grab_move(at: Vector3) -> void:
 
 
 func _on_grab_end() -> void:
+	if _auto_on:
+		_finish_point()
+		_auto_on = false
+		_dragged = false
+		return
 	_finish_grab()
 	# Forgotten once the hand lets go. Kept, the hover card went on reading "move to 27.1.00"
 	# under a pointer resting on an item that had long since landed.
@@ -134,7 +175,64 @@ func _finish_grab() -> void:
 		DAW.move_item(_hit[0], _hit[1], _target_start)
 
 
+## A point into the lane being edited, replacing one at the same moment; its index.
+func _place_point(seconds: float, value: float, shape: int) -> int:
+	var target: String = surface.shown_lane
+	var point := [maxf(seconds, 0.0), DawKitAutomation.clamp_value(target, value), shape]
+	for i in _auto_points.size():
+		if absf(float(_auto_points[i][0]) - point[0]) < 0.0005:
+			_auto_points[i] = point
+			return i
+	var at := 0
+	while at < _auto_points.size() and float(_auto_points[at][0]) < point[0]:
+		at += 1
+	_auto_points.insert(at, point)
+	return at
+
+
+func _finish_point() -> void:
+	var target: String = surface.shown_lane
+	var track: int = surface.picked_track
+	surface.preview_lane([])
+	if not _dragged and not _auto_added and _auto_index >= 0 and _auto_index < _auto_points.size():
+		if _fine():
+			_auto_points.remove_at(_auto_index)
+		elif target != "mute":
+			var p: Array = _auto_points[_auto_index]
+			p[2] = DawKitAutomation.LINEAR if int(p[2]) == DawKitAutomation.HOLD else DawKitAutomation.HOLD
+	if _auto_points != DAW.state.track(track).automation.get(target, []):
+		DAW.set_automation(track, target, _auto_points)
+	_auto_points = []
+	_auto_index = -1
+
+
+## How far one wheel notch moves a point's value; fine moves it a tenth as far.
+static func nudge_step(target: String) -> float:
+	match DawKitAutomation.kind_of(target):
+		"volume", "send":
+			return 0.5
+		"pan":
+			return 0.02
+		"mute":
+			return 1.0
+	return 0.01
+
+
 func _on_nudge(notches: int, fine: bool) -> bool:
+	var by: Node = held_by if held_by != null else (_hovered_by[0] if not _hovered_by.is_empty() else null)
+	if by != null and "hover_point" in by and surface.on_shown_lane(by.hover_point):
+		var i: int = surface.automation_point_at(by.hover_point)
+		if i >= 0:
+			var target: String = surface.shown_lane
+			var points: Array = surface.shown_points().duplicate(true)
+			var v := float(points[i][1])
+			if target == "mute":
+				v = 1.0 - v if notches % 2 != 0 else v
+			else:
+				v += notches * nudge_step(target) * (0.1 if fine else 1.0)
+			points[i][1] = DawKitAutomation.clamp_value(target, v)
+			DAW.set_automation(surface.picked_track, target, points)
+			return true
 	var factor := pow(ZOOM_STEP if not fine else 0.96, notches)
 	surface.zoom_view(factor)
 	return true
@@ -157,13 +255,34 @@ func network_key() -> String:
 
 
 func _default_title() -> String:
+	if _lane_readout() != "":
+		return "AUTOMATION  %s" % TimelineSurface.lane_name(surface.shown_lane)
 	var item := _pointer_item()
 	if item == null:
 		return "TIMELINE"
 	return "ITEM  %s%s" % [item.name if item.name != "" else "(unnamed)", "  SELECTED" if item.selected else ""]
 
 
+## The shown lane under the pointer: the point there, or the lane's value where the pointer is.
+func _lane_readout() -> String:
+	var by: Node = held_by if held_by != null else (_hovered_by[0] if not _hovered_by.is_empty() else null)
+	if by == null or not ("hover_point" in by) or not surface.on_shown_lane(by.hover_point):
+		return ""
+	var target: String = surface.shown_lane
+	var points: Array = surface.shown_points()
+	var i: int = _auto_index if _auto_on and _auto_index >= 0 else surface.automation_point_at(by.hover_point)
+	if i >= 0 and i < points.size():
+		return "%s at %s%s" % [TimelineSurface.lane_text(target, points[i][1]),
+				DAW.state.bar_beat(points[i][0]), ", held" if int(points[i][2]) == DawKitAutomation.HOLD else ""]
+	var at: float = surface.seconds_at_point(by.hover_point)
+	return "press to add a point: %s at %s" % [TimelineSurface.lane_text(target, surface.value_at_point(by.hover_point)),
+			DAW.state.bar_beat(snap(at, false))]
+
+
 func _default_readout() -> String:
+	var lane := _lane_readout()
+	if lane != "":
+		return lane
 	var s := DAW.state
 	if _dragged and not _hit.is_empty():
 		if _edge < 0:

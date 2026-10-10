@@ -132,6 +132,18 @@ var _item_waves: MeshBank
 ## Where each lane sits, in build order, so items can be placed without walking the tree.
 var _lane_y: Array[float] = []
 
+## The picked track's lane of automation, drawn over its own lane: the target shown, "" for none.
+## See TimelineTrackStrip's LANE key, and TimelineLanes for editing it.
+var shown_lane := ""
+var _automation: MeshInstance3D
+## Points drawn instead of the lane's own during a drag; empty for none.
+var _lane_preview: Array = []
+const AUTOMATION_LINE := 0.0007
+const AUTOMATION_DOT := 0.0026
+## How near a point the pointer has to be to take hold of it, metres either way.
+const AUTOMATION_GRIP := 0.003
+const AUTOMATION_COLOUR := Color(1.0, 0.62, 0.22)
+
 
 func set_wide(wide: bool) -> void:
 	var wanted := SCREEN_WIDTH if wide else WIDTH
@@ -247,6 +259,15 @@ func _ready() -> void:
 	add_child(_track_controls)
 	# A method, not a lambda: a method's connection goes when the surface does.
 	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
+	DAW.track_changed.connect(_on_track_changed)
+	_automation = MeshInstance3D.new()
+	_automation.name = "Automation"
+	_automation.mesh = ImmediateMesh.new()
+	var line := Materials.led(AUTOMATION_COLOUR, true).duplicate() as StandardMaterial3D
+	line.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_automation.material_override = line
+	_automation.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_automation)
 
 	_item_controls = TimelineItemStrip.new()
 	_item_controls.name = "ItemStrip"
@@ -419,7 +440,7 @@ func _place_strips() -> void:
 	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
 	_light_selection_keys()
 	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
-	_track_controls.position = Vector3(width * 0.5 - 0.020 - 3 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
+	_track_controls.position = Vector3(width * 0.5 - 0.020 - 4 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
 	_track_controls.refresh()
 	_tempo_controls.position = Vector3(-1.5 * TimelineTempoStrip.PITCH, -_top_y - 0.016, 0.0)
 	_tempo_controls.refresh()
@@ -571,9 +592,231 @@ func pick_track(index: int) -> void:
 	if index == picked_track:
 		return
 	picked_track = index
+	if index <= 0 or not lane_targets(index).has(shown_lane):
+		shown_lane = ""
+	_lane_preview = []
+	_draw_automation()
 	mark_dirty()
 	if _track_controls != null:
 		_track_controls.refresh()
+
+
+func _on_track_changed(index: int, field: StringName) -> void:
+	if index == picked_track and shown_lane != "" and field in [&"automation", &"volume", &"pan", &"mute", &"sends", &"send"]:
+		_draw_automation()
+
+
+# --- automation ----------------------------------------------------------------------------
+
+## What a track's LANE key steps through: its fader, pan and mute, each send, and any other lane
+## it already has (a plugin's parameter, written by touch or latch or read from a file).
+static func lane_targets(index: int) -> Array:
+	if not DAW.state.tracks.has(index):
+		return []
+	var t := DAW.state.track(index)
+	var out: Array = ["volume", "pan", "mute"]
+	var slots: Array = t.sends.keys()
+	slots.sort()
+	for slot in slots:
+		var sd: MixState.SendState = t.sends[slot]
+		var dest := sd.resolve(DAW.state)
+		if dest > 0 and not sd.key and not out.has("send:%d" % dest):
+			out.append("send:%d" % dest)
+	var others: Array = t.automation.keys()
+	others.sort()
+	for target in others:
+		if not out.has(target):
+			out.append(target)
+	return out
+
+
+## Shows `target` on the picked track ("" for none).
+func show_lane(target: String) -> void:
+	shown_lane = target
+	_lane_preview = []
+	_draw_automation()
+
+
+## The shown lane's points as drawn: the preview while one is being dragged.
+func shown_points() -> Array:
+	if not _lane_preview.is_empty():
+		return _lane_preview
+	if shown_lane == "" or not DAW.state.tracks.has(picked_track):
+		return []
+	return DAW.state.track(picked_track).automation.get(shown_lane, [])
+
+
+func preview_lane(points: Array) -> void:
+	_lane_preview = points
+	_draw_automation()
+
+
+## Whether a press here is on the shown lane.
+func on_shown_lane(global_point: Vector3) -> bool:
+	return shown_lane != "" and picked_track > 0 and track_at_point(global_point) == picked_track
+
+
+## Where a control is with no lane: what the lane is drawn at until it has a point.
+static func control_value(index: int, target: String) -> float:
+	var t := DAW.state.track(index)
+	match DawKitAutomation.kind_of(target):
+		"volume":
+			return t.volume_db
+		"pan":
+			return t.pan * 2.0 - 1.0
+		"mute":
+			return 1.0 if t.mute else 0.0
+		"send":
+			for slot in t.sends:
+				var sd: MixState.SendState = t.sends[slot]
+				if sd.resolve(DAW.state) == int(target.substr(5)):
+					return DAW.taper_to_db(sd.volume)
+		"fx":
+			var parts := target.split(":")
+			var f := DAW.state.fx(index, int(parts[1]), false)
+			if f != null:
+				return float(f.params.get(int(parts[2]), 0.0))
+	return 0.0
+
+
+## The decibels a level's lane spans, bottom to top. Straight in dB rather than along the fader's
+## travel: on a lane a centimetre and a half tall the fader's taper puts -4 and -18 dB a millimetre
+## apart. The bottom is silence.
+const LANE_DB_LOW := -48.0
+const LANE_DB_HIGH := 12.0
+
+
+## How far up its lane a value is drawn, 0 to 1: a level in dB, pan with left at the top and a
+## mute with heard at the top, as Reaper draws them.
+static func lane_fraction(target: String, v: float) -> float:
+	match DawKitAutomation.kind_of(target):
+		"volume", "send":
+			return clampf((v - LANE_DB_LOW) / (LANE_DB_HIGH - LANE_DB_LOW), 0.0, 1.0)
+		"pan":
+			return (1.0 - v) * 0.5
+		"mute":
+			return 1.0 - v
+	return clampf(v, 0.0, 1.0)
+
+
+static func lane_value(target: String, f: float) -> float:
+	f = clampf(f, 0.0, 1.0)
+	match DawKitAutomation.kind_of(target):
+		"volume", "send":
+			return -150.0 if f <= 0.001 else lerpf(LANE_DB_LOW, LANE_DB_HIGH, f)
+		"pan":
+			return 1.0 - f * 2.0
+		"mute":
+			return 1.0 if f < 0.5 else 0.0
+	return f
+
+
+static func lane_text(target: String, v: float) -> String:
+	match DawKitAutomation.kind_of(target):
+		"volume", "send":
+			return "-inf dB" if v <= -149.0 else "%+.1f dB" % v
+		"pan":
+			if absf(v) < 0.005:
+				return "centre"
+			return "%d%% %s" % [roundi(absf(v) * 100.0), "left" if v < 0.0 else "right"]
+		"mute":
+			return "muted" if v >= 0.5 else "heard"
+	return "%.3f" % v
+
+
+static func lane_name(target: String) -> String:
+	match DawKitAutomation.kind_of(target):
+		"volume", "pan", "mute":
+			return target.to_upper()
+		"send":
+			var to := int(target.substr(5))
+			return "SEND TO %s" % (DAW.state.track(to).display_name().to_upper() if DAW.state.tracks.has(to) else str(to))
+		"fx":
+			var parts := target.split(":")
+			return "FX %d  PARAM %d" % [int(parts[1]), int(parts[2])]
+	return target.to_upper()
+
+
+func _picked_row() -> int:
+	return _shown().find(picked_track)
+
+
+## The lane's drawing height: inside the lane, clear of its edges.
+func _automation_y(row: int, v: float) -> float:
+	return _lane_y[row] + (lane_fraction(shown_lane, v) - 0.5) * (LANE_HEIGHT - 0.003)
+
+
+## The value at a point's height on the shown lane.
+func value_at_point(global_point: Vector3) -> float:
+	var row := _picked_row()
+	if row < 0 or row >= _lane_y.size():
+		return 0.0
+	var f := (to_local(global_point).y - _lane_y[row]) / (LANE_HEIGHT - 0.003) + 0.5
+	return lane_value(shown_lane, f)
+
+
+## The shown lane's point under a point in the world, or -1.
+func automation_point_at(global_point: Vector3) -> int:
+	var row := _picked_row()
+	if row < 0 or row >= _lane_y.size():
+		return -1
+	var local := to_local(global_point)
+	var points := shown_points()
+	var best := -1
+	var nearest := AUTOMATION_GRIP
+	for i in points.size():
+		var d := absf(_x_for(float(points[i][0])) - local.x)
+		if d <= nearest and absf(_automation_y(row, float(points[i][1])) - local.y) <= AUTOMATION_GRIP * 2.0:
+			nearest = d
+			best = i
+	return best
+
+
+## The shown lane through the window: a line, stepped where a point holds, and a dot per point.
+func _draw_automation() -> void:
+	if _automation == null:
+		return
+	var mesh := _automation.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var row := _picked_row()
+	if shown_lane == "" or row < 0 or row >= _lane_y.size() or view_span <= 0.0:
+		return
+	var points := shown_points()
+	var fallback := control_value(picked_track, shown_lane)
+	var from := view_start
+	var to := view_start + view_span
+	var path: Array[Vector2] = []
+	path.append(Vector2(_x_for(from), _automation_y(row, DawKitAutomation.value_in(points, from, fallback))))
+	for pt in points:
+		var at := float(pt[0])
+		if at <= from or at >= to:
+			continue
+		path.append(Vector2(_x_for(at), _automation_y(row, DawKitAutomation.value_in(points, at - 0.000001, fallback))))
+		path.append(Vector2(_x_for(at), _automation_y(row, float(pt[1]))))
+	path.append(Vector2(_x_for(to), _automation_y(row, DawKitAutomation.value_in(points, to, fallback))))
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var z := 0.0030
+	for i in path.size() - 1:
+		var a := path[i]
+		var b := path[i + 1]
+		if a.distance_to(b) < 0.00001:
+			continue
+		var n := (b - a).normalized().orthogonal() * AUTOMATION_LINE * 0.5
+		_quad(mesh, a - n, a + n, b + n, b - n, z)
+	for pt in points:
+		var at := float(pt[0])
+		if at < from or at > to:
+			continue
+		var c := Vector2(_x_for(at), _automation_y(row, float(pt[1])))
+		var h := AUTOMATION_DOT * 0.5
+		_quad(mesh, c + Vector2(-h, -h), c + Vector2(-h, h), c + Vector2(h, h), c + Vector2(h, -h), z + 0.0002)
+	mesh.surface_end()
+
+
+static func _quad(mesh: ImmediateMesh, a: Vector2, b: Vector2, c: Vector2, d: Vector2, z: float) -> void:
+	for v in [a, b, c, a, c, d]:
+		mesh.surface_set_normal(Vector3(0, 0, 1))
+		mesh.surface_add_vertex(Vector3(v.x, v.y, z))
 
 
 ## Whether there is a keyboard and a screen to type on: not in a headset.
@@ -914,6 +1157,7 @@ func _relayout_view() -> void:
 	_item_notes.show_first(note_slot)
 	_item_waves.show_first(wave_slot)
 	_draw_loop()
+	_draw_automation()
 
 
 ## Put one item in the banks at `slot`, or report that it is not on screen.

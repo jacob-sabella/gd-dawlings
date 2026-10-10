@@ -361,8 +361,16 @@ can finish music in, saving DAWproject. Steps, in order:
    - **Interpolation:** dawkit ramps volume in dB; Reaper ramps in its fader scaling. Held
      points agree exactly; a ramp's middle differs. Write a ramp as dense points on the way to
      Reaper if it matters.
-   - **Next (8e-f):**
-     lanes drawn and edited on the timeline; master automation (not in MixState yet); a loopback
+   - **Done 2026-10-10 (8e), lanes on the timeline:** a LANE key on the track strip steps the
+     picked track through its volume, pan, mute, each send and any other lane it has, then
+     none; the shown lane is drawn over the track's own lane (one ImmediateMesh, stepped where a
+     point holds, a dot per point; levels straight in dB from -48 to +12, because the fader's
+     taper put -4 and -18 dB a millimetre apart). On that lane a press adds a point (snapped to
+     the beat unless fine) and drags it, a drag moves a point, a click toggles hold/ramp, a fine
+     click removes it, the wheel over a point nudges it; each is one `set_automation` step. The
+     hover card names the lane and reads the point.
+   - **Not yet:** the lane is as tall as a track lane (14 mm); a taller automation row under the
+     track would be easier to draw on. Master automation (not in MixState yet). A loopback
      measurement of a volume ramp.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
