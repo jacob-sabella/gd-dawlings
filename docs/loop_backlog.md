@@ -384,7 +384,24 @@ can finish music in, saving DAWproject. Steps, in order:
      the master is not written by touch/latch. The lane is as tall as a track lane (14 mm); a
      taller automation row under the track would be easier to draw on. dawkit ramps volume in
      dB, Reaper along its fader: a ramp's middle differs between them.
-9. Mixdown and stems. 10. Interchange proof against the official examples.
+9. Mixdown and stems.
+   - **Done 2026-10-10 (9a), the built-in engine's render:** `DAW.render(stems)` (anyone may ask;
+     the host renders; Capability.RENDER, false for the stand-in) writes the loop range while it
+     loops, else the whole song, as 32-bit float stereo WAVs in "<title> renders" beside the
+     project (user://renders when it was never saved): "<title> - mix.wav" and, with stems,
+     "<title> - <track>.wav" each. `render_finished` says what was written; the room is told.
+     In real time (MixRender), as Godot mixes no faster than the card takes it: captures at the
+     end of the master and each track bus, which hear the bus before its fader (Godot applies a
+     bus's volume as it sends), so each block is multiplied by the fader it was mixed with, and a
+     muted track is silence. Lined up by emptying the captures, starting the transport and the
+     engine's players inside one hold of the audio lock. Looping is off for the render.
+     Measured (`--built-in` probe, 3 runs): a track of notes rendered as a stem, each onset
+     1.44 ms after its place in the song, the same in every run and every note (after the
+     instrument's own 1.04 ms attack); a 12 dB automated drop measured as -12.00 dB.
+   - **Not yet (9b-d):** the 1.44 ms is unexplained (a resampler's delay?) and could be taken off;
+     no tail after the range (a reverb is cut at its end); faster than real time waits on the
+     engine mixing itself; a desk control for it; Reaper's render through the bridge.
+10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,
 Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic by stems only.

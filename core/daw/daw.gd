@@ -39,6 +39,8 @@ signal bank_changed()
 signal project_replaced()
 ## The host saved the project here, by its own hand; what went wrong, empty when nothing did.
 signal project_saved(said: PackedStringArray)
+## See DAWBackend.render_finished.
+signal render_finished(files: PackedStringArray, problems: PackedStringArray)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
 		&"fx_changed", &"timeline_changed", &"bank_changed"]
@@ -59,7 +61,7 @@ const COMMANDS := [
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_automation", &"add_track", &"remove_track", &"rename_track",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
-	&"set_metronome", &"add_marker", &"set_track_monitor", &"set_track_automation_mode",
+	&"set_metronome", &"add_marker", &"set_track_monitor", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
 
@@ -93,6 +95,8 @@ func use(new_backend: DAWBackend, start: bool = true, options: Dictionary = {}) 
 	_relay(backend.state, true)
 	backend.connection_changed.connect(func(): connection_changed.emit())
 	backend.tracks_renumbered.connect(func(map: Dictionary): tracks_renumbered.emit(map))
+	backend.render_finished.connect(func(files: PackedStringArray, problems: PackedStringArray):
+		render_finished.emit(files, problems))
 	backend.is_authority = Session.is_authority()
 	var ok := backend.open(options) if start else true
 	connection_changed.emit()
@@ -262,6 +266,10 @@ func set_track_automation_mode(index: int, mode: int) -> void:
 ## Clamped to what Reaper itself accepts. A guest's intent is clamped again on the host, by
 ## the same function, because it arrives here rather than at the backend.
 func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TEMPO_MAX)])
+## Writes the song to WAVs beside the project, as the host's DAW renders: see DAWBackend.render.
+## Anyone in a session may ask; the files are the host's.
+func render(stems: bool) -> void:
+	_do(&"render", [stems])
 ## Saves the project where it is. Anyone in a session may press save; nobody but the host
 ## chooses where, so a guest's save carries no path (and one that did is not believed).
 func save_project() -> void:
@@ -418,6 +426,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])
 			return
 		args = [int(args[0]), clampi(int(args[1]), MONITOR_OFF, MONITOR_AUTO)]
+	if verb == &"render":
+		args = [MixWire._as_bool(args) if not args.is_empty() else false]
 	if verb == &"set_track_automation_mode":
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed set_track_automation_mode intent %s." % [args])

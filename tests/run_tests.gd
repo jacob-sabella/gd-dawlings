@@ -114,6 +114,7 @@ func _ready() -> void:
 	_test_venues_change_the_world_and_not_the_setup()
 	_test_every_venue_leaves_room_for_the_activities()
 	_test_gear_never_leaves_its_stand()
+	await _test_the_mix_and_its_stems_are_rendered_to_files()
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_the_duck_is_the_rooms()
@@ -11032,6 +11033,51 @@ func _test_the_tempo_changes_through_the_song() -> void:
 	DAW.undo()
 	check("undone, one tempo again", s.tempo_points.is_empty())
 	close_to("and bar 4 is where 120 puts it", s.bar_to_seconds(4.0), 6.0)
+	_offline()
+
+
+func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	check("the built-in engine renders", DAW.can(DAWBackend.Capability.RENDER))
+	var effects_before := AudioServer.get_bus_effect_count(backend._master_bus)
+	s.looping = true
+	s.loop_start = 2.0
+	s.loop_end = 2.5
+	var heard: Array = []
+	var on_done := func(files: PackedStringArray, problems: PackedStringArray) -> void:
+		heard.append([files, problems])
+	DAW.render_finished.connect(on_done)
+	DAW.render(true)
+	check("a render is under way, not looping", backend.rendering != null and not s.looping)
+	DAW.render(false)
+	check("and a second is refused while it runs", heard.size() == 1 and not (heard[0][1] as PackedStringArray).is_empty())
+	heard.clear()
+	var waited := 0.0
+	while heard.is_empty() and waited < 10.0:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	DAW.render_finished.disconnect(on_done)
+	check("it finishes (%.1fs)" % waited, not heard.is_empty())
+	if heard.is_empty():
+		_offline()
+		return
+	var files: PackedStringArray = heard[0][0]
+	check("the mix and a stem per track (%d files, %s)" % [files.size(), heard[0][1]],
+			files.size() == 1 + s.track_indices().size() and (heard[0][1] as PackedStringArray).is_empty())
+	var mix := DawKitAudioFile.read(files[0])
+	check("the mix is the loop range long, in stereo (%s frames)" % mix.get("frames"),
+			files[0].ends_with(" - mix.wav") and int(mix["channels"]) == 2
+			and int(mix["frames"]) == int(roundf(0.5 * AudioServer.get_mix_rate())))
+	check("the stems are named for their tracks", files[2].get_file().ends_with(" - %s.wav" % s.track(2).display_name()))
+	check("the looping comes back, and the captures come off", s.looping and backend.rendering == null
+			and AudioServer.get_bus_effect_count(backend._master_bus) == effects_before)
+	for f in files:
+		DirAccess.remove_absolute(f)
+	DirAccess.remove_absolute(files[0].get_base_dir())
+	s.looping = false
 	_offline()
 
 

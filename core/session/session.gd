@@ -251,7 +251,8 @@ func _ready() -> void:
 	(func():
 		DAW.project_replaced.connect(_on_project_replaced)
 		DAW.tracks_renumbered.connect(_on_tracks_renumbered)
-		DAW.project_saved.connect(func(said): _announce_save(local_name, said))).call_deferred()
+		DAW.project_saved.connect(func(said): _announce_save(local_name, said))
+		DAW.render_finished.connect(_announce_render)).call_deferred()
 
 
 ## Quitting while hosting is ending the session, and says so. Blocking, briefly, because there
@@ -773,6 +774,18 @@ func _announce_save(who: String, said: PackedStringArray) -> void:
 	var text := "%s saved the project%s." % [who, " as " + where if not where.is_empty() else ""]
 	if not said.is_empty():
 		text = "%s saved the project, but: %s" % [who, "; ".join(said)]
+	tell_room(text)
+
+
+## Said to the room by whoever's DAW rendered: the host.
+func _announce_render(files: PackedStringArray, problems: PackedStringArray) -> void:
+	if not is_authority():
+		return
+	var text := "Rendered %s." % ", ".join(Array(files).map(func(f): return str(f).get_file()))
+	if files.is_empty():
+		text = "Nothing was rendered."
+	if not problems.is_empty():
+		text = "%s But: %s" % [text, "; ".join(problems)]
 	tell_room(text)
 
 

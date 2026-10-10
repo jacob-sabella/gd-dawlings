@@ -42,6 +42,9 @@ const HOST_TAKE_TOLERANCE := 0.015
 ## The off-beats' track's fader: held at 0 dB, down to -9 dB over three seconds, then held.
 const HOST_RAMP := [[HOST_TAKE_AT + 2.0, 0.0, DawKitAutomation.LINEAR], [HOST_TAKE_AT + 5.0, -9.0, DawKitAutomation.HOLD]]
 const HOST_RAMP_TOLERANCE_DB := 1.0
+## Where the render's loop starts, and how far a note in the rendered stem may be from its place.
+const RENDER_FROM := 40.0
+const RENDER_TOLERANCE_MS := 2.0
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
 ## docs/architecture.md, "Recording a guest".
@@ -284,6 +287,7 @@ func _host(port: int) -> void:
 		check("the guest's save saved my file, and I was told (%s)" % [_notices],
 				FileAccess.file_exists(file) and _notices.has("Grace saved the project as %s." % file.get_file()))
 		DirAccess.remove_absolute(file)
+		await _render_and_measure()
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -519,6 +523,85 @@ func _measure_ramp(wav: PackedByteArray, start: float, map: DawKitTempoMap) -> v
 	print("host take ramp: [lane dB, heard dB] %s worst_db %.2f" % [off, worst])
 	check("the notes follow their fader's automation (%d of %d down the ramp, worst %.2f dB off)" % [ramped, rows.size(), worst],
 			flat.size() >= 2 and ramped >= 3 and rows.any(func(r): return r[2] < -5.0) and worst < HOST_RAMP_TOLERANCE_DB)
+
+
+## A passage rendered with its stems, and the stem measured: a track of its own with a note on
+## every half second, its fader dropped 12 dB halfway by its automation. Each note's onset in
+## the file against where it is in the song, and each note's level against the lane.
+func _render_and_measure() -> void:
+	var count := DAW.state.track_indices().size()
+	DAW.add_track(count + 1, "Render probe")
+	var track := count + 1
+	var at := RENDER_FROM + 0.5
+	var notes: Array = []
+	for i in 6:
+		notes.append([at + i * 0.5, at + i * 0.5 + 0.08, 84, 120, 0])
+	DAW.insert_midi_take(track, RENDER_FROM, RENDER_FROM + 3.5, notes, "Render probe")
+	var part := (DAW.backend as GodotBackend).midi_stream(DAW.state.track(track).items[0], true)
+	# The instrument's own attack: how far into its first note its sound reaches half its peak,
+	# in the item's own rendered sound. That much after the note is on time.
+	var first := int((at - RENDER_FROM) * part.mix_rate)
+	var part_peak := 0
+	for f in range(first, first + part.mix_rate / 10):
+		part_peak = maxi(part_peak, absi(part.data.decode_s16(f * 4)))
+	var attack_ms := NAN
+	for f in range(first, first + part.mix_rate / 10):
+		if absi(part.data.decode_s16(f * 4)) > part_peak / 2:
+			attack_ms = (f - first) * 1000.0 / part.mix_rate
+			break
+	var drop := at + 1.25
+	DAW.set_automation(track, "volume", [[0.0, 0.0, DawKitAutomation.HOLD], [drop, -12.0, DawKitAutomation.HOLD]])
+	DAW.set_loop_range(RENDER_FROM, RENDER_FROM + 3.5)
+	DAW.set_looping(true)
+	var done: Array = []
+	DAW.render_finished.connect(func(files, problems): done.append([files, problems]), CONNECT_ONE_SHOT)
+	var began := Time.get_ticks_msec()
+	DAW.render(true)
+	while done.is_empty() and Time.get_ticks_msec() - began < 8000:
+		await get_tree().process_frame
+	var seconds := (Time.get_ticks_msec() - began) / 1000.0
+	check("I rendered the loop with its stems (%.2fs, %s)" % [seconds, done], not done.is_empty()
+			and (done[0][1] as PackedStringArray).is_empty() and (done[0][0] as PackedStringArray).size() == count + 2)
+	if done.is_empty():
+		return
+	var files: PackedStringArray = done[0][0]
+	var stem := DawKitAudioFile.read(files[files.size() - 1])
+	var mix := DawKitAudioFile.read(files[0])
+	var rate: int = stem["rate"]
+	var samples: PackedFloat32Array = stem["samples"]
+	check("the stem is the loop's length (%.3fs)" % (int(stem["frames"]) / float(rate)),
+			int(stem["frames"]) == int(roundf(3.5 * rate)) and int(mix["frames"]) == int(stem["frames"]))
+	var offs: Array = []
+	var levels: Array = []
+	for n in notes:
+		var centre := int((float(n[0]) - RENDER_FROM) * rate)
+		var loudest := 0.0
+		for f in range(maxi(centre - rate / 25, 0), centre + rate / 10):
+			loudest = maxf(loudest, absf(samples[f * 2]))
+		levels.append(20.0 * log(maxf(loudest, 0.000001)) / log(10.0))
+		for f in range(maxi(centre - rate / 25, 0), centre + rate / 25):
+			if absf(samples[f * 2]) > loudest * 0.5:
+				offs.append((f - centre) * 1000.0 / rate - attack_ms)
+				break
+	var spread := 0.0
+	for o in offs:
+		spread = maxf(spread, absf(o))
+	var step: float = (levels[3] + levels[4] + levels[5]) / 3.0 - (levels[0] + levels[1] + levels[2]) / 3.0
+	print("render: onsets_ms %s (less an attack of %.2fms) levels_db %s step_db %.2f render_seconds %.2f" % [
+			offs.map(func(o): return snappedf(o, 0.01)), attack_ms, levels.map(func(l): return snappedf(l, 0.01)), step, seconds])
+	check("each note is where it is in the song (%d of %d, worst %.2fms)" % [offs.size(), notes.size(), spread],
+			offs.size() == notes.size() and spread < RENDER_TOLERANCE_MS)
+	check("and the fader's drop is in the stem (%.2f dB)" % step, absf(step + 12.0) < 0.5)
+	var mix_peak := 0.0
+	for v in (mix["samples"] as PackedFloat32Array):
+		mix_peak = maxf(mix_peak, absf(v))
+	check("the mix has the song in it (peak %.3f)" % mix_peak, mix_peak > 0.05)
+	await get_tree().create_timer(0.2).timeout
+	check("and the room was told", _notices.any(func(t): return t.begins_with("Rendered ")))
+	for f in files:
+		DirAccess.remove_absolute(f)
+	DirAccess.remove_absolute(files[0].get_base_dir())
+	DAW.set_looping(false)
 
 
 func _check_audio_take() -> void:

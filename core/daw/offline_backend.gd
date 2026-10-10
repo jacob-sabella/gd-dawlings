@@ -69,6 +69,9 @@ func can(capability: StringName) -> bool:
 		return stand_in_windows
 	if capability == Capability.RECORDS_OWN_INPUTS:
 		return records_inputs
+	if capability == Capability.RENDER:
+		# The stand-in makes no sound to write.
+		return false
 	return true
 
 

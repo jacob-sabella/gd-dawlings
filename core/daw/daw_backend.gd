@@ -30,6 +30,9 @@ signal connection_changed()
 ## Tracks were added, removed or put back by an undo: `map` is old index -> new index, and a track
 ## that is gone is not in it. For whatever keeps a track by its number outside the mix.
 signal tracks_renumbered(map: Dictionary)
+## A render is done: the files written, and anything that went wrong (both empty when there was
+## nothing to render). See `render`.
+signal render_finished(files: PackedStringArray, problems: PackedStringArray)
 
 ## Replication tick. 20Hz, deliberately slower than a typical meter stream: the buffers below
 ## are keyed, so a faster-arriving value overwrites the pending one and the tick rate becomes
@@ -81,6 +84,8 @@ const Capability := {
 	## inputs. A DAW that cannot is given the host's microphone and keys by the game, the way a
 	## guest's are (GuestAudio and GuestMidi, as the host).
 	RECORDS_OWN_INPUTS = &"records_own_inputs",
+	## Write the mix, and each track's stem, to sound files: see `render`.
+	RENDER = &"render",
 }
 
 
@@ -267,6 +272,10 @@ func rename_track(_index: int, _track_name: String) -> void: pass
 ## A track's lane of automation for `target` (see MixState.TrackState.automation), whole; empty
 ## points take the lane away.
 func set_automation(_track_index: int, _target: String, _points: Array) -> void: pass
+## Write the song -- its loop range while it loops, else all of it -- to a WAV beside the project:
+## the mix, and with `stems` each track's own. `render_finished` says when and where. A no-op
+## without Capability.RENDER.
+func render(_stems: bool) -> void: pass
 ## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
 ## empty for one tempo throughout.
 func set_tempo_map(_points: Array) -> void: pass

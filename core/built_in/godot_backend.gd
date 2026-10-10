@@ -40,6 +40,8 @@ const CUE_PREFIX := "R3D Cue "
 const DRIFT_SECONDS := 0.025
 ## How many MIDI renders are kept before those of items no longer there are let go.
 const KEPT_RENDERS := 32
+## Where a render of a project never saved goes.
+const RENDER_DIR := "user://renders"
 
 ## The FX chains the demo opens with: track -> [[kind, {param name: normalised value}]].
 const DEMO_FX := {
@@ -101,7 +103,52 @@ func summary() -> String:
 
 
 func can(capability: StringName) -> bool:
+	if capability == Capability.RENDER:
+		return true
 	return super(capability)
+
+
+## The render under way, if one is.
+var rendering: MixRender
+var _looping_before_render := false
+
+
+## In real time (MixRender): the song plays the range once. A second render while one runs is
+## refused, as is one with no project length to it.
+func render(stems: bool) -> void:
+	if rendering != null:
+		render_finished.emit(PackedStringArray(), PackedStringArray(["a render is already running"]))
+		return
+	var r := MixRender.new()
+	r.name = "Render"
+	r.backend = self
+	var looped := state.looping and state.loop_end - state.loop_start > 0.01
+	r.from = state.loop_start if looped else 0.0
+	r.to = state.loop_end if looped else state.timeline_length()
+	var title := project_title.strip_edges().validate_filename()
+	r.name_stem = title if not title.is_empty() else "Untitled"
+	var base := project_path.get_base_dir() if not project_path.is_empty() else ProjectSettings.globalize_path(RENDER_DIR)
+	r.folder = base.path_join("%s renders" % r.name_stem)
+	if stems:
+		r.stems = state.track_indices()
+	# Played once through, not round the loop.
+	_looping_before_render = state.looping
+	state.looping = false
+	var problem := r.begin()
+	if not problem.is_empty():
+		state.looping = _looping_before_render
+		render_finished.emit(PackedStringArray(), PackedStringArray([problem]))
+		return
+	rendering = r
+	r.finished.connect(_on_rendered)
+	add_child(r)
+
+
+func _on_rendered(files: PackedStringArray, problems: PackedStringArray) -> void:
+	rendering = null
+	state.looping = _looping_before_render
+	state.transport_changed.emit()
+	render_finished.emit(files, problems)
 
 
 func open(options: Dictionary = {}) -> bool:
