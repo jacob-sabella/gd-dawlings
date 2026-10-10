@@ -1,0 +1,101 @@
+# The test builds: dawkit's native core for Linux and Windows, the suite, and both exports, as
+# artifacts on every push. A tag starting with v also makes a release with the two zips.
+#
+# dawkit is a private repository of its own. It is checked out with a read-only deploy key on
+# it, whose private half is this repository's DAWKIT_DEPLOY_KEY secret.
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which dawkit
+        id: dawkit
+        run: echo "sha=$(git ls-tree HEAD vendor/dawkit | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: jacob-sabella/gd-dawkit
+          ref: ${{ steps.dawkit.outputs.sha }}
+          path: vendor/dawkit
+          ssh-key: ${{ secrets.DAWKIT_DEPLOY_KEY }}
+          submodules: true
+
+      - name: Compilers
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q cmake g++ mingw-w64
+          # The posix thread model, which the local builds (Arch's MinGW) are made with.
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+
+      - name: Godot and its export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -sSLo godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          curl -sSLo templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q templates.tpz
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          mv templates/* "$dest/"
+          rm -rf godot.zip templates.tpz templates
+
+      - name: dawkit's native core
+        run: |
+          vendor/dawkit/tools/build_native.sh linux all
+          vendor/dawkit/tools/build_native.sh windows release
+
+      - name: Import
+        run: godot --headless --path . --import || true
+
+      - name: Tests
+        run: |
+          timeout 600 godot --headless --path . tests/tests.tscn 2>&1 | tee tests.log | grep -E "checks,|  FAIL" || true
+          grep -q "checks, 0 failed" tests.log
+
+      - name: Export
+        run: |
+          mkdir -p build/linux build/windows
+          godot --headless --path . --export-release "Linux" build/linux/dawlings.x86_64
+          godot --headless --path . --export-release "Windows" build/windows/dawlings.exe
+          cp docs/playtest.md build/linux/README.md
+          cp docs/playtest.md build/windows/README.md
+          test -s build/linux/dawlings.x86_64 && test -s build/windows/dawlings.exe
+          ls build/linux/libdawkit.* build/windows/libdawkit.*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dawlings-linux
+          path: build/linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dawlings-windows
+          path: build/windows
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd build
+          mv linux dawlings && zip -qr "dawlings-${GITHUB_REF_NAME}-linux.zip" dawlings && mv dawlings linux
+          mv windows dawlings && zip -qr "dawlings-${GITHUB_REF_NAME}-windows.zip" dawlings && mv dawlings windows
+          gh release create "$GITHUB_REF_NAME" --title "dawlings $GITHUB_REF_NAME" --notes-file ../docs/playtest.md \
+              "dawlings-${GITHUB_REF_NAME}-linux.zip" "dawlings-${GITHUB_REF_NAME}-windows.zip"
