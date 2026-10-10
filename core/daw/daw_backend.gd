@@ -74,6 +74,10 @@ const Capability := {
 	## Open a project file, save to a new one and start an empty one: only an engine that owns
 	## its project files can, because a remote DAW's files are on its own machine.
 	PROJECT_FILES = &"project_files",
+	## Records the host's own inputs itself, when its transport records: Reaper, from its own
+	## inputs. A DAW that cannot is given the host's microphone and keys by the game, the way a
+	## guest's are (GuestAudio and GuestMidi, as the host).
+	RECORDS_OWN_INPUTS = &"records_own_inputs",
 }
 
 var state := MixState.new()

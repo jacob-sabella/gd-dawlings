@@ -140,6 +140,13 @@ the whole room: a guest's save goes to the host as an intent and becomes
 hardware never names Session. Opening and starting a project are announced by
 `Session.tell_room`. A refusal is a toast for the person who asked, and nobody else.
 
+Recording on the built-in engine: the DAW cannot record its own inputs (`RECORDS_OWN_INPUTS` is
+false), so the host's microphone goes through the same recorder as a guest's (`GuestAudio` with
+`for_host`, which is `Session.host_audio`). Its take is timed against `Session.host_heard`, the
+playhead less the output's latency, and kept by Session's take path from the host's own id, so it
+is written, placed and announced exactly as a guest's would be. The engine's metronome (dawkit's
+`DawKitMetronome`) plays into the master, which is what the host and its guests both play to.
+
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
 the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a
 WAV the engine plays, and it is placed with `insert_audio_take` like a recorded take. So it saves

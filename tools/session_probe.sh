@@ -30,7 +30,7 @@ if [ "${1:-}" = "--built-in" ]; then
   SINK=dawlings_null
   pactl list short sinks | grep -q "$SINK" || pactl load-module module-null-sink "sink_name=$SINK" \
     "sink_properties=device.description=dawlings-rig" >/dev/null
-  HOST_GODOT=(env PULSE_SINK="$SINK" godot --display-driver headless --audio-driver PulseAudio)
+  HOST_GODOT=(env PULSE_SINK="$SINK" PULSE_SOURCE="$SINK.monitor" godot --display-driver headless --audio-driver PulseAudio)
 fi
 "${HOST_GODOT[@]}" --path . tools/probe/session_probe.tscn -- --as host --port "$PORT" "${H_ARGS[@]}" >"$HOST_LOG" 2>&1 &
 HOST=$!

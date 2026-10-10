@@ -79,10 +79,15 @@ var heard: Callable = func() -> Dictionary:
 	return Session.guest_midi.heard()
 ## Where the take goes: Session, which sends it to the host. The suite gives its own.
 var sink: Object = null
+## The host's own recorder rather than a guest's (Session.host_audio): armed on a host or alone,
+## and only while the DAW does not record its own inputs.
+var for_host := false
 
 var _source: MixSource = null
 var _resampler := Resampler.new()
 var _take_open := false
+## The track the take in progress was begun on.
+var _take_into := 0
 var _take_id := 0
 ## The start estimates so far, while settling; and the settled start once sent.
 var _estimates: Array[float] = []
@@ -99,7 +104,17 @@ var _drift := 0.0
 
 
 func armed() -> bool:
+	if for_host:
+		return Session.is_authority() and take_track() > 0 and record_with_host \
+				and DAW.backend != null and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
 	return Session.role == Session.Role.GUEST and target_track > 0 and record_with_host
+
+
+## The track a take goes onto: the one chosen; on the host with none chosen, the armed one.
+func take_track() -> int:
+	if target_track > 0 or not for_host:
+		return target_track
+	return HitRecorder.armed_track()
 
 
 func is_recording() -> bool:
@@ -178,7 +193,8 @@ func _flush() -> void:
 		_sent_start = _start + float(before) / RATE
 		takes_sent += 1
 		var take_name := "%s audio %d" % [Session.local_name, takes_sent]
-		_sink().send_audio_begin(_take_id, target_track, _sent_start, take_name)
+		_take_into = take_track()
+		_sink().send_audio_begin(_take_id, _take_into, _sent_start, take_name)
 		_begun = true
 	if not _unsent.is_empty():
 		_sink().send_audio_chunk(_take_id, AudioTake.encode(_unsent))
@@ -189,7 +205,7 @@ func _end() -> void:
 	if _frames > 0:
 		_flush()
 		_sink().send_audio_end(_take_id)
-		last_take = {"seconds": take_seconds(), "track": target_track, "start": _sent_start}
+		last_take = {"seconds": take_seconds(), "track": _take_into, "start": _sent_start}
 	_take_open = false
 	changed.emit()
 

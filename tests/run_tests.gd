@@ -163,6 +163,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_saves_and_opens_dawproject()
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
 	_test_sound_files_are_brought_in_onto_a_track()
+	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -8704,6 +8705,80 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	OS.execute("rm", ["-rf", dir])
+
+
+func _test_the_host_records_its_own_microphone_on_the_built_in_engine() -> void:
+	var backend := _offline()
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	var ha := Session.host_audio
+	var mic := _FakeMic.new()
+	ha.record_with_host = false
+	ha.target_track = 0
+	check("the host's microphone is off until asked", not ha.armed())
+	ha.record_with_host = true
+	var armed := HitRecorder.armed_track()
+	check("asked, it goes on the armed track with none chosen (%d)" % armed, armed > 0 and ha.take_track() == armed)
+	check("and is armed, as the stand-in does not record its own inputs", ha.armed())
+	DAW.state.track(armed).items.clear()
+	ha._source = mic
+	# The host hears its song from 20s, its output 15ms late; the microphone is 10ms late.
+	var song := func(wall: float) -> float: return 20.0 + wall
+	var ticks := 400
+	for tick in ticks:
+		var got := ha._read()
+		var read_at := float(mic.made - 1) / 48000.0 + mic.latency
+		ha.follow({"seconds": song.call(read_at), "playing": true, "recording": tick < ticks - 1,
+				"valid": true}, got)
+	var items: Array = DAW.state.track(armed).items
+	check("the take is placed on the host's own timeline (%d)" % items.size(), items.size() == 1)
+	if items.size() == 1:
+		# The first read is from before recording was heard to start, so the take is from the
+		# second: 480 frames on.
+		close_to("where the song was when its first sound was made", items[0].start, 20.0 + 480.0 / 48000.0, 0.0001)
+		close_to("as long as it ran", items[0].length, 4.0, 0.02)
+		check("its file is a take, named for the host (%s)" % items[0].source, items[0].source.begins_with("Ada"))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(items[0].source)))
+	check("and the host is told, once (%s)" % [notices], notices.size() == 1 and notices[0].begins_with("Ada recorded 4.0s onto"))
+
+	var h := Session.host_heard()
+	DAW.state.position_seconds = 12.0
+	DAW.state.playing = true
+	DAW.state.recording = true
+	h = Session.host_heard()
+	close_to("what the host hears is its playhead less the output's latency", h["seconds"],
+			12.0 - AudioServer.get_output_latency(), 0.0001)
+	check("recording while it rolls", h["recording"])
+	DAW.state.playing = false
+	DAW.state.recording = false
+
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("the host has the microphone's controls on the built-in engine",
+			panel._mic_box.visible and panel._mic_box.get_parent() == panel._column)
+	check("saying it records with them", panel._mic_record.text == "Record my mic when I record")
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	DAW.use(reaper)
+	panel._refresh()
+	check("but not where the DAW records its own inputs", not ha.armed() and not panel._mic_box.visible)
+	_as_session(Session.Role.GUEST, 5)
+	panel._refresh()
+	check("a guest's microphone is in the guest's section", panel._mic_box.visible
+			and panel._mic_box.get_parent() == panel._guest_box)
+	remove_child(panel)
+	panel.free()
+	ha.record_with_host = false
+	ha._source = null
+	Session.notice.disconnect(hear)
+	Session.start_solo()
+	_offline()
+	if is_instance_valid(reaper):
+		reaper.queue_free()
 
 
 func _test_a_looped_item_survives_the_wire_and_a_split() -> void:

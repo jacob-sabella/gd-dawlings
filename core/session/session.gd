@@ -134,6 +134,9 @@ var mix_feed: MixFeed = null
 var guest_midi: GuestMidi = null
 ## This guest's microphone, recorded into the host's project. See core/session/guest_audio.gd.
 var guest_audio: GuestAudio = null
+## The host's own microphone, on a DAW that does not record its own inputs: the same recorder,
+## timed against the host's own playhead (`host_heard`) and kept here.
+var host_audio: GuestAudio = null
 ## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
 ## fader move or a hold behind it.
 const AUDIO_TAKE_CHANNEL := 3
@@ -231,6 +234,11 @@ func _ready() -> void:
 	guest_audio = GuestAudio.new()
 	guest_audio.name = "GuestAudio"
 	add_child(guest_audio)
+	host_audio = GuestAudio.new()
+	host_audio.name = "HostAudio"
+	host_audio.for_host = true
+	host_audio.heard = host_heard
+	add_child(host_audio)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	local_look = GhostLook.load_from(look_path)
@@ -804,19 +812,29 @@ func _place_take(from: int, args: Array) -> void:
 # (AudioTake), and when it ends the host places the file with its own DAW.insert_audio_take. A
 # guest never names a file; the host does.
 
+#
+# The host's own recording, on a DAW that does not record its own inputs (the built-in engine),
+# comes through the same three calls and is kept the same way, from the host's own id.
+
 func send_audio_begin(take_id: int, track: int, start: float, take_name: String) -> void:
 	if role == Role.GUEST and _connected():
 		_audio_begin.rpc_id(1, take_id, track, start, take_name)
+	elif is_authority():
+		_take_begin(local_peer_id, take_id, track, start, take_name)
 
 
 func send_audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
 	if role == Role.GUEST and _connected():
 		_audio_chunk.rpc_id(1, take_id, pcm)
+	elif is_authority():
+		_take_chunk(local_peer_id, take_id, pcm)
 
 
 func send_audio_end(take_id: int) -> void:
 	if role == Role.GUEST and _connected():
 		_audio_end.rpc_id(1, take_id)
+	elif is_authority():
+		_take_end(local_peer_id, take_id)
 
 
 @rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
@@ -824,6 +842,20 @@ func _audio_begin(take_id: int, track: int, start: float, take_name: String) -> 
 	var from := multiplayer.get_remote_sender_id()
 	if not is_authority() or not _is_member(from):
 		return
+	_take_begin(from, take_id, track, start, take_name)
+
+
+@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
+func _audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
+	_take_chunk(multiplayer.get_remote_sender_id(), take_id, pcm)
+
+
+@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
+func _audio_end(take_id: int) -> void:
+	_take_end(multiplayer.get_remote_sender_id(), take_id)
+
+
+func _take_begin(from: int, take_id: int, track: int, start: float, take_name: String) -> void:
 	# One take at a time from each guest: a begin while one is open ends that one first.
 	_finish_take(from)
 	var entry := {"id": take_id, "take": null, "track": track, "start": maxf(start, 0.0),
@@ -832,18 +864,19 @@ func _audio_begin(take_id: int, track: int, start: float, take_name: String) -> 
 	var refusal := DAW.audio_take_refusal(track, 1.0)
 	if refusal.is_empty():
 		_takes_made += 1
-		entry["take"] = AudioTake.create(AudioTake.file_name_for(name_of(from), _takes_made))
+		entry["take"] = AudioTake.create(AudioTake.file_name_for(_who(from), _takes_made))
 		if entry["take"] == null:
 			refusal = "The host could not write the recording to its disk."
 	if not refusal.is_empty():
 		entry["refused"] = true
-		notice.emit("%s's recording was not kept. %s" % [name_of(from), refusal])
-		_told.rpc_id(from, "Your recording is not being kept. " + refusal)
+		if from == local_peer_id:
+			notice.emit("Your recording is not being kept. " + refusal)
+		else:
+			notice.emit("%s's recording was not kept. %s" % [_who(from), refusal])
+			_told.rpc_id(from, "Your recording is not being kept. " + refusal)
 
 
-@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
-func _audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
-	var from := multiplayer.get_remote_sender_id()
+func _take_chunk(from: int, take_id: int, pcm: PackedByteArray) -> void:
 	var entry: Dictionary = _incoming_takes.get(from, {})
 	if entry.is_empty() or entry["id"] != take_id or entry["take"] == null:
 		return
@@ -852,9 +885,7 @@ func _audio_chunk(take_id: int, pcm: PackedByteArray) -> void:
 		_finish_take(from)
 
 
-@rpc("any_peer", "call_remote", "reliable", AUDIO_TAKE_CHANNEL)
-func _audio_end(take_id: int) -> void:
-	var from := multiplayer.get_remote_sender_id()
+func _take_end(from: int, take_id: int) -> void:
 	var entry: Dictionary = _incoming_takes.get(from, {})
 	if not entry.is_empty() and entry["id"] == take_id:
 		_finish_take(from)
@@ -873,9 +904,9 @@ func _finish_take(from: int) -> void:
 	if take.frames == 0:
 		take.discard()
 		return
-	var who := name_of(from)
+	var who := _who(from)
 	var refusal := DAW.audio_take_refusal(entry["track"], take.seconds())
-	var still_here := _connected() and multiplayer.get_peers().has(from)
+	var still_here := from != local_peer_id and _connected() and multiplayer.get_peers().has(from)
 	if not refusal.is_empty():
 		notice.emit("%s's recording was not placed. %s It is kept at %s." % [who, refusal,
 				ProjectSettings.globalize_path(take.path)])
@@ -892,6 +923,23 @@ func _finish_take(from: int) -> void:
 		_told.rpc_id(from, "Your recording is on %s: %s from %s." % [track, length, at])
 	audio_take_placed.emit({"peer": from, "track": entry["track"], "start": entry["start"],
 			"seconds": take.seconds(), "path": take.path, "name": entry["name"]})
+
+
+## A name for whoever a take is from: this machine's own name for its own, which a host alone
+## (with no roster) still has.
+func _who(peer_id: int) -> String:
+	return local_name if peer_id == local_peer_id else name_of(peer_id)
+
+
+## Where the host's own song is in the host's ears: the playhead, less what the output still
+## holds. What the host's recording is timed against (`host_audio`), as a guest's is against
+## the stream it hears. {seconds, playing, recording, valid}.
+func host_heard() -> Dictionary:
+	var s := DAW.state
+	if s == null:
+		return {"seconds": 0.0, "playing": false, "recording": false, "valid": false}
+	return {"seconds": s.position_seconds - AudioServer.get_output_latency(), "playing": s.playing,
+			"recording": s.recording and s.playing, "valid": true}
 
 
 ## Words from the host for this guest alone.

@@ -156,7 +156,23 @@ can finish music in, saving DAWproject. Steps, in order:
    - **Not yet:** FLAC (needs a decoder in dawkit, since Godot has none); a guest sending a file
      from their own machine; importing off the main thread (a 3-minute 24-bit file takes
      1.9 s); dropping onto a lane of the timeline to pick the track and time by where it lands.
-4. Host recording. 5. MIDI playback through a built-in instrument.
+4. Host recording.
+   - **Done 2026-10-09, the microphone and the click:** the built-in engine plays a metronome
+     (dawkit's `DawKitMetronome`: one bar of clicks, kept on the bar grid, into the master, so
+     guests hear it too). On a DAW that does not record its own inputs (the new capability
+     `RECORDS_OWN_INPUTS`: true for Reaper, false for the built-in engine), the host's
+     microphone is recorded by the guest's recorder in host mode (`Session.host_audio`). It is
+     timed against `Session.host_heard`, which is the playhead less the output latency, and
+     placed onto the chosen track or the armed one, through the same take path as a guest's,
+     from the host's own id. The panel shows the host YOUR MIC on the built-in engine.
+     Measured: `session_probe.sh --built-in` records the null sink's monitor (PULSE_SOURCE,
+     never the machine's own microphone) while the click plays, and finds every beat's click.
+     Over 8 runs, each take was within 0.9 ms of its own average, and the averages were
+     between -6 and +5 ms of the beat (the limit is 10 ms). The run-to-run part is the engine's
+     frame-driven clock and the click's 60 ms re-seek allowance, which step 7 replaces.
+   - **Next (4b):** the host's keys on the built-in engine (GuestMidi plays for a host whose
+     DAW does not record its own inputs, as it already does with a keytar), and recording
+     more than one input at a time. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 

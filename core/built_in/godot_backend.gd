@@ -22,7 +22,7 @@ extends OfflineBackend
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
 ## redo, a guest's intent and a local hand all reach the speakers by the one path.
 ##
-## Not done: recording, third-party plugins, the user's own audio files, sample-accurate
+## Not done: third-party plugins, sample-accurate
 ## automation. Sends are taken before the track's effects rather than after them, because
 ## Godot routes a bus to exactly one place and the send is a second player rather than a tap.
 
@@ -59,6 +59,9 @@ var _capture: AudioEffectCapture
 var _cues: Array[int] = []
 ## Recorded take file name -> its sound, or null when the file is not on this machine.
 var _take_streams := {}
+## The metronome: one bar of clicks (DawKitMetronome), looping, kept on the bar grid like a part.
+var _click: AudioStreamPlayer
+var _click_for := ""
 
 
 func summary() -> String:
@@ -552,6 +555,35 @@ func _sync_players() -> void:
 				player.play(expected)
 
 
+## The click, while the transport runs with the metronome on: into the master, so it is in what
+## the host hears and what guests are sent (they play to it, and time against it), and on the
+## bar grid, a click on every beat.
+func _sync_click() -> void:
+	if _click == null:
+		_click = AudioStreamPlayer.new()
+		_click.name = "Click"
+		add_child(_click)
+	if not (state.playing and state.metronome) or _master_bus < 0:
+		if _click.playing:
+			_click.stop()
+		return
+	_click.bus = MASTER_BUS
+	var wanted := "%s/%d" % [state.tempo, state.beats_per_bar]
+	if wanted != _click_for:
+		_click.stream = DawKitMetronome.bar(state.tempo, state.beats_per_bar, int(AudioServer.get_mix_rate()))
+		_click_for = wanted
+		_click.stop()
+	var length := _click.stream.get_length()
+	var expected := fposmod(state.position_seconds, length)
+	if not _click.playing:
+		_click.play(expected)
+		return
+	var off := wrapf(_click.get_playback_position() + AudioServer.get_time_since_last_mix() - expected,
+			-length * 0.5, length * 0.5)
+	if absf(off) > DRIFT_SECONDS:
+		_click.play(expected)
+
+
 ## A recorded take's sound, read from the host's takes folder once and kept.
 func take_stream(source: String) -> AudioStreamWAV:
 	if not _take_streams.has(source):
@@ -584,6 +616,7 @@ func _drive_meters(delta: float) -> void:
 					state.loop_end - state.loop_start)
 	state.position_string = state.bar_beat(state.position_seconds)
 	_sync_players()
+	_sync_click()
 
 	for index in _bus:
 		var t: MixState.TrackState = state.tracks[index]

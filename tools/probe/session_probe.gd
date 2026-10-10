@@ -27,6 +27,11 @@ const TAKE_TRACK := 7
 const AUDIO_TRACK := 8
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
+## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
+## and how far from the beat a click may land.
+const HOST_TAKE_TRACK := 3
+const HOST_TAKE_AT := 600.0
+const HOST_TAKE_TOLERANCE := 0.010
 ## Clicks let go by before playing. The host's song clock is only as good as the reports it
 ## has had, and in the first moments of a take Reaper has sent only a few; see SongClock and
 ## docs/architecture.md, "Recording a guest".
@@ -227,11 +232,13 @@ func _host(port: int) -> void:
 	check("so the host can take it now", Session.holder_of(KEY) == 1)
 	Session.release_hold(KEY)
 
-	# The guest records a take against what it hears: see _guest_records. Not on the built-in
-	# engine's song, which has no clicks to time the notes against.
+	# The guest records a take against what it hears: see _guest_records. On the built-in engine
+	# the host records itself instead: see _host_records_itself.
 	await _until(7.0)
 	if not _built_in:
 		DAW.transport_record()
+	else:
+		await _host_records_itself()
 	await _until(12.8)
 	if not _built_in:
 		DAW.transport_stop()
@@ -331,6 +338,71 @@ func _check_placed_take() -> void:
 
 ## The guest's recording, as the host placed it: every clap the guest's microphone heard, where
 ## in the song the guest heard the click it clapped on. The tone clicks on whole song seconds.
+## The host records its own output: the click, out of the null sink, back in through its
+## monitor as the host's microphone (PULSE_SOURCE), where the song has nothing else playing. Each
+## click in the take should be on a beat. What is measured is the whole chain: the engine's
+## clock, the click player kept to it, the output's latency taken off what the host hears, and
+## the input's taken off what the microphone gives.
+func _host_records_itself() -> void:
+	var ha := Session.host_audio
+	# The default input, which the script points at the null sink's monitor (PULSE_SOURCE): never
+	# this machine's own microphone.
+	ha.input_device = ""
+	ha.target_track = HOST_TAKE_TRACK
+	ha.record_with_host = true
+	_audio_placed = {}
+	DAW.set_metronome(true)
+	DAW.seek(HOST_TAKE_AT)
+	await _until(7.6)
+	check("my microphone is open (%s)" % ha.input_device, ha.mic_open())
+	DAW.transport_record()
+	await _until(11.2)
+	DAW.transport_stop()
+	await _until(11.6)
+	ha.record_with_host = false
+	check("my own recording was placed (%s)" % [_audio_placed], not _audio_placed.is_empty()
+			and int(_audio_placed.get("track", 0)) == HOST_TAKE_TRACK)
+	if _audio_placed.is_empty():
+		return
+	var wav := FileAccess.get_file_as_bytes(_audio_placed["path"])
+	var start: float = _audio_placed["start"]
+	var beat := 60.0 / DAW.state.tempo
+	# Each beat inside the take, after its first half second: the click's onset is the first
+	# sample within 40ms of the beat over half the loudest one there.
+	var offs: Array[float] = []
+	var peaks: Array[int] = []
+	var frames := (wav.size() - AudioTake.HEADER_BYTES) / 2
+	var b := ceilf((start + 0.5) / beat) * beat
+	while b < start + float(frames) / AudioTake.RATE - 0.1:
+		var centre := int((b - start) * AudioTake.RATE)
+		var from := maxi(centre - AudioTake.RATE / 25, 0)
+		var to := mini(centre + AudioTake.RATE / 25, frames)
+		var loudest := 0
+		for f in range(from, to):
+			loudest = maxi(loudest, absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)))
+		peaks.append(loudest)
+		if loudest > 1500:
+			for f in range(from, to):
+				if absi(wav.decode_s16(AudioTake.HEADER_BYTES + f * 2)) > loudest / 2:
+					offs.append(start + float(f) / AudioTake.RATE - b)
+					break
+		b += beat
+	var mean := 0.0
+	for o in offs:
+		mean += o
+	mean /= maxf(offs.size(), 1)
+	var spread := 0.0
+	for o in offs:
+		spread = maxf(spread, absf(o - mean))
+	print("host take: %d clicks of %d beats (peaks %s), offsets_ms %s mean_ms %.2f spread_ms %.2f out_latency_ms %.1f" % [offs.size(), peaks.size(), peaks,
+			offs.map(func(o): return snappedf(o * 1000.0, 0.01)), mean * 1000.0, spread * 1000.0,
+			AudioServer.get_output_latency() * 1000.0])
+	check("a click on every beat of my take (%d of %d)" % [offs.size(), peaks.size()],
+			peaks.size() >= 5 and offs.size() == peaks.size())
+	check("on the beat, on average (%.2fms)" % (mean * 1000.0), absf(mean) < HOST_TAKE_TOLERANCE)
+	check("each of them (%.2fms from the average)" % (spread * 1000.0), spread < HOST_TAKE_TOLERANCE)
+
+
 func _check_audio_take() -> void:
 	check("the guest's recording was placed (%s)" % [_audio_placed], not _audio_placed.is_empty())
 	check("and the room was told", _notices.any(func(t): return t.begins_with("Grace recorded")))

@@ -66,6 +66,8 @@ func can(capability: StringName) -> bool:
 		return state != null and state.project_track_count > state.bank_size
 	if capability == Capability.PLUGIN_WINDOW:
 		return stand_in_windows
+	if capability == Capability.RECORDS_OWN_INPUTS:
+		return false
 	return true
 
 

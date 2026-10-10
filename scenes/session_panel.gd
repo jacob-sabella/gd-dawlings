@@ -64,10 +64,15 @@ var _mic_inputs: PackedStringArray = []
 var _mic_meter: ProgressBar
 var _mic_record: CheckButton
 var _mic_status: Label
+## The microphone's controls: a guest's (in the guest's section) or, on a DAW that does not record
+## its own inputs, the host's (above the project). See `_recorder`.
+var _mic_box: VBoxContainer
+var _column: VBoxContainer
 var _keys: KeyCatcher
 var _keys_hint: Label
 var _strip: HBoxContainer
 var _project_name: Label
+var _project_caption: Label
 var _project_where: Label
 var _project_host_row: HBoxContainer
 var _project_save: Button
@@ -323,11 +328,16 @@ func _build_panel() -> void:
 	_hearing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_guest_box.add_child(_hearing)
 	_build_midi(_guest_box)
-	_build_mic(_guest_box)
+	_mic_box = VBoxContainer.new()
+	_mic_box.name = "Mic"
+	_mic_box.add_theme_constant_override("separation", 8)
+	_build_mic(_mic_box)
+	_guest_box.add_child(_mic_box)
 	var leave_button := _button("Leave session", false)
 	leave_button.pressed.connect(func(): Session.leave())
 	_guest_box.add_child(leave_button)
 
+	_column = column
 	_build_project(column)
 
 	var foot := _label("M  close   ·   the mix is the host's; your view is your own", 11, DIM)
@@ -356,6 +366,8 @@ func _refresh() -> void:
 					Session.name_of(1), Session.joined_address]
 	_refresh_sound()
 	_refresh_midi()
+	_place_mic()
+	_refresh_mic()
 	_refresh_project()
 	_solo_box.visible = Session.role == Session.Role.SOLO
 	_host_box.visible = Session.role == Session.Role.HOST
@@ -497,7 +509,7 @@ func _build_mic(box: VBoxContainer) -> void:
 	_mic_input = _choice()
 	_mic_input.tooltip_text = "Which of this computer's inputs to record."
 	_mic_input.item_selected.connect(func(i: int):
-		Session.guest_audio.input_device = "" if i == 0 else _mic_inputs[i])
+		_recorder().input_device = "" if i == 0 else _mic_inputs[i])
 	input_row.add_child(_mic_input)
 
 	var into_row := HBoxContainer.new()
@@ -506,7 +518,7 @@ func _build_mic(box: VBoxContainer) -> void:
 	into_row.add_child(_label("Record into", 14, INK))
 	_mic_into = _choice()
 	_mic_into.item_selected.connect(func(i: int):
-		Session.guest_audio.target_track = int(_mic_into.get_item_id(i)))
+		_recorder().target_track = int(_mic_into.get_item_id(i)))
 	into_row.add_child(_mic_into)
 
 	var level_row := HBoxContainer.new()
@@ -527,7 +539,7 @@ func _build_mic(box: VBoxContainer) -> void:
 
 	_mic_record = _toggle("Record when the host records")
 	_mic_record.tooltip_text = "Your microphone opens now, so you can see your level, and records whenever the host does."
-	_mic_record.toggled.connect(func(on: bool): Session.guest_audio.record_with_host = on)
+	_mic_record.toggled.connect(func(on: bool): _recorder().record_with_host = on)
 	box.add_child(_mic_record)
 
 	_mic_status = _label("", 13, DIM)
@@ -535,11 +547,13 @@ func _build_mic(box: VBoxContainer) -> void:
 	box.add_child(_mic_status)
 	if Session.guest_audio != null:
 		Session.guest_audio.changed.connect(_refresh_mic)
+	if Session.host_audio != null:
+		Session.host_audio.changed.connect(_refresh_mic)
 
 
 func _refresh_mic() -> void:
-	var ga := Session.guest_audio
-	if ga == null or _mic_status == null or Session.role != Session.Role.GUEST:
+	var ga := _recorder()
+	if ga == null or _mic_status == null or not _mic_box.visible:
 		return
 	var inputs := PackedStringArray(["Default"])
 	for d in AudioServer.get_input_device_list():
@@ -553,21 +567,23 @@ func _refresh_mic() -> void:
 	var chosen := maxi(_mic_inputs.find(ga.input_device), 0)
 	if _mic_input.selected != chosen:
 		_mic_input.select(chosen)
-	_fill_tracks(_mic_into, ga.target_track)
-	_mic_record.text = "Record my mic when %s records" % Session.name_of(1)
+	_fill_tracks(_mic_into, ga.target_track, "The armed track" if ga.for_host else "Nowhere")
+	_mic_record.text = "Record my mic when I record" if ga.for_host \
+			else "Record my mic when %s records" % Session.name_of(1)
 	if _mic_record.button_pressed != ga.record_with_host:
 		_mic_record.set_pressed_no_signal(ga.record_with_host)
 
 	if ga.is_recording():
-		_mic_status.text = "●  Recording onto %s  ·  %.1fs" % [_track_name(ga.target_track), ga.take_seconds()]
+		_mic_status.text = "●  Recording onto %s  ·  %.1fs" % [_track_name(ga.take_track()), ga.take_seconds()]
 		var ppm := ga.drift_ppm()
 		if absf(ppm) >= 1.0:
 			_mic_status.text += "  ·  clock %+d ppm" % roundi(ppm)
 		_mic_status.add_theme_color_override("font_color", Color(0.95, 0.42, 0.38))
 		return
 	_mic_status.add_theme_color_override("font_color", DIM)
-	if ga.target_track <= 0:
-		_mic_status.text = "Choose a track to record your microphone onto."
+	if ga.take_track() <= 0:
+		_mic_status.text = "Arm a track, or choose one, to record your microphone onto." if ga.for_host \
+				else "Choose a track to record your microphone onto."
 	elif not ga.record_with_host:
 		_mic_status.text = "Your microphone is off."
 	elif not ga.mic_open():
@@ -577,14 +593,14 @@ func _refresh_mic() -> void:
 		_mic_status.text = "Last take: %.1fs onto %s at %s." % [t["seconds"], _track_name(t["track"]),
 				DAW.state.bar_beat(t["start"]) if DAW.state != null else ""]
 	else:
-		_mic_status.text = "Ready. Your microphone goes onto %s when %s records." % [
-				_track_name(ga.target_track), Session.name_of(1)]
+		_mic_status.text = "Ready. Your microphone goes onto %s when %s." % [
+				_track_name(ga.take_track()), "you record" if ga.for_host else Session.name_of(1) + " records"]
 
 
 ## The meter and the running take length, which move faster than anything else here.
 func _refresh_mic_level() -> void:
-	var ga := Session.guest_audio
-	if ga == null or _mic_meter == null or Session.role != Session.Role.GUEST:
+	var ga := _recorder()
+	if ga == null or _mic_meter == null or not _mic_box.visible:
 		return
 	_mic_meter.value = sqrt(ga.level)
 	var hot := ga.level > 0.9
@@ -592,6 +608,27 @@ func _refresh_mic_level() -> void:
 			Color(0.95, 0.42, 0.38) if hot else Color(0.38, 0.82, 0.55), 4, 0))
 	if ga.is_recording():
 		_refresh_mic()
+
+
+## Whose microphone the panel is showing: this guest's, or this host's own.
+func _recorder() -> GuestAudio:
+	return Session.guest_audio if Session.role == Session.Role.GUEST else Session.host_audio
+
+
+## A guest's microphone sits in the guest's section; the host's, where the DAW does not record
+## its own inputs, above the project. Nowhere when neither.
+func _place_mic() -> void:
+	var guest := Session.role == Session.Role.GUEST
+	var host_records := not guest and DAW.backend != null \
+			and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
+	var home: Control = _guest_box if guest else _column
+	if _mic_box.get_parent() != home:
+		_mic_box.reparent(home, false)
+		if guest:
+			home.move_child(_mic_box, home.get_child_count() - 2)
+		else:
+			home.move_child(_mic_box, home.get_children().find(_project_caption))
+	_mic_box.visible = guest or host_records
 
 
 ## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
@@ -919,7 +956,8 @@ func toast(text: String) -> void:
 ## The project: its name and file, and what may be done with it. Anyone may save it where it
 ## is; only the host names a file, and only where the DAW keeps its projects as files here.
 func _build_project(column: VBoxContainer) -> void:
-	column.add_child(_caption("PROJECT"))
+	_project_caption = _caption("PROJECT")
+	column.add_child(_project_caption)
 	_project_name = _label("", 14, INK)
 	_project_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_project_name)
