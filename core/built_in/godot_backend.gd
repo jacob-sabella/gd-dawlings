@@ -110,6 +110,32 @@ const COUNT_IN_LEAD := 0.05
 func _init() -> void:
 	count_in_lead = COUNT_IN_LEAD
 
+
+## The song through dawkit's native lanes (LaneEngine), sample-accurate, where the core is built
+## and a sound card mixes; null for players started and steered a frame at a time, as before.
+var lanes: LaneEngine = null
+## Off for the suite's checks of the players themselves.
+var lanes_wanted := true
+
+
+func _start_lanes() -> void:
+	if lanes != null:
+		lanes.build()
+		return
+	if not lanes_wanted or not LaneEngine.available() or AudioServer.get_driver_name() == "Dummy":
+		return
+	lanes = LaneEngine.new()
+	lanes.name = "Lanes"
+	lanes.backend = self
+	add_child(lanes)
+	lanes.build()
+
+
+## Where the first frame mixed after play is pressed now is in the song: with lanes, where the
+## playhead stood; with players, wherever the song has got to by the next mix (start_at).
+func first_frame_at(expected: float) -> float:
+	return expected if lanes != null else start_at(expected)
+
 func summary() -> String:
 	var waiting := _waiting_roles().size()
 	return "built-in: Godot audio" + (" (rendering %d parts)" % waiting if waiting > 0 else "")
@@ -174,6 +200,7 @@ func open(options: Dictionary = {}) -> bool:
 	state.position_string = state.bar_beat(0.0)
 	_dress_fx()
 	_build_buses()
+	_start_lanes()
 	_connect_state()
 	_render_parts()
 	_apply_everything()
@@ -245,6 +272,7 @@ func project_loaded(kinds: Dictionary) -> void:
 			(p as Node).queue_free()
 	_players.clear()
 	_build_buses()
+	_start_lanes()
 	_apply_everything()
 	_render_parts()
 
@@ -496,6 +524,8 @@ func _build_cues() -> void:
 
 
 func _remove_buses() -> void:
+	if lanes != null:
+		lanes.clear()
 	for i in range(AudioServer.bus_count - 1, 0, -1):
 		if AudioServer.get_bus_name(i).begins_with(BUS_PREFIX):
 			AudioServer.remove_bus(i)
@@ -867,7 +897,27 @@ func _sync_click_window() -> void:
 
 ## A window of clicks holding `at`, made unless the one there already does: how long making it
 ## took, in seconds, or 0 when it was not made.
+## One bar of click, looping, for the lanes (LaneEngine.click_clips), made once per tempo and
+## signature.
+var _lane_click := {}
+
+
+func lane_click_bar(key: String, rate: int) -> AudioStreamWAV:
+	if not _lane_click.has(key):
+		_lane_click.clear()
+		_lane_click[key] = DawKitMetronome.bar(state.tempo, state.beats_per_bar, rate)
+	return _lane_click[key]
+
+
+func _ensure_click() -> void:
+	if _click == null:
+		_click = AudioStreamPlayer.new()
+		_click.name = "Click"
+		add_child(_click)
+
+
 func _click_window_for(at: float) -> float:
+	_ensure_click()
 	var key := "%s/%s/%d" % [state.tempo_points, state.time_signature_points, state.beats_per_bar] \
 			+ "/%d/%s" % [state.beat_unit, state.tempo]
 	var into := at - _click_from
@@ -1035,6 +1085,11 @@ func looped_stream(source: String, from: float, to: float) -> AudioStreamWAV:
 ## the same time. Without a sound card to mix (the Dummy driver of a headless run) the frame
 ## moves it, as it did.
 func _drive_meters(delta: float) -> void:
+	if lanes != null:
+		lanes.drive(delta)
+		state.position_string = state.bar_beat(state.position_seconds)
+		_drive_levels()
+		return
 	if state.playing:
 		var now := audio_time()
 		if is_nan(now):
@@ -1055,7 +1110,11 @@ func _drive_meters(delta: float) -> void:
 	state.position_string = state.bar_beat(state.position_seconds)
 	_sync_players()
 	_sync_click()
+	_drive_levels()
 
+
+## The meters, and the playhead, to the room.
+func _drive_levels() -> void:
 	for index in _bus:
 		var t: MixState.TrackState = state.tracks[index]
 		t.vu_l = meter(AudioServer.get_bus_peak_volume_left_db(_bus[index], 0))

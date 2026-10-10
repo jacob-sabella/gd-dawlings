@@ -92,7 +92,16 @@ offline backend's own mix, with its state, undo and replication, turned into God
   signature's changes, saved as DAWproject `TimeSignatureAutomation`. Bar numbers, bar starts,
   the count-in, the ruler and the click all count through it; in Reaper they are its tempo
   markers' signatures.
-  Each part starts at the song position modulo its loop, only under its track's items. The
+- **The song plays through dawkit's native lanes** (`LaneEngine`, `core/built_in/lane_engine.gd`)
+  where the core is built and a sound card mixes: one `DawKitLane` per track, played by every
+  player the track has (its own, each send's, each cue's) against one `DawKitTransport`, so
+  every item, send and cue starts on the same sample. Each frame the lanes are given their clips
+  when they changed: takes, imports, MIDI renders, the demo parts on the bar grid (or their tempo
+  map windows), each cut where a newer item lies over it (`LaneEngine.visible`); the click has a
+  lane of its own on the master, which a count-in's hold does not silence. The playhead is the
+  transport's. `first_frame_at` says where the first frame after play is in the song, for
+  `MixRender` and the probe. Headless (the Dummy driver) and without the core, the old way runs:
+  each part starts at the song position modulo its loop, only under its track's items, the
   playhead is the sound card's (`audio_time`, a silent looping player), and a player is put back
   only when it drifts more than 25ms from its own first reading.
 - **Items carry gain and fades**, played as their player's volume (`item_level`). Delete,
@@ -1493,7 +1502,8 @@ heard by itself where this machine plays the tracks (`PersonalMix.hears_tracks`:
 engine, not on a guest). While headphones are on, the studio asks `GodotBackend.set_cues` for
 the patched tracks. Each cue is another player of the track's part on a bus of its own
 (`GodotBackend.cue_bus`), sharing the track bus's effect objects: post-effects, pre-fader,
-following mute, and in time because `_sync_players` keeps it to the song clock. It plays to
+following mute, and in time because it plays the track's lane (or, without lanes, because
+`_sync_players` keeps it to the song clock). It plays to
 Master, never into the mix a host sends its guests. The strips' sockets are one `MeshBank`
 (`MeshBank.meshed`) with shadows off; a lit ring and plugs are made only for a socket with
 plugs in it.

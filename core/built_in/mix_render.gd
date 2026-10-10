@@ -97,7 +97,7 @@ func _process(_delta: float) -> void:
 		AudioServer.lock()
 		for key in _taps:
 			(_taps[key][1] as AudioEffectCapture).clear_buffer()
-		var first_frame_at := GodotBackend.start_at(_played_from)
+		var first_frame_at := backend.first_frame_at(_played_from)
 		DAW.transport_play()
 		# The engine starts its players on its next frame, by which time mixes have gone by;
 		# started here, in the same hold of the lock, the first frame mixed is theirs.

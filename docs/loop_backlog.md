@@ -707,6 +707,13 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
     same frame in each. verify.sh builds it first; the game loads it. Next: stage 2, GodotBackend
     playing items through lanes (takes, imports, the demo parts' windows, MIDI renders, the
     click), then the render cut on the sample, and an Android arm64 build for the headset.
+  - **Stage 2 done 2026-10-10:** GodotBackend plays through `LaneEngine` (takes, imports, MIDI
+    renders, demo parts and their tempo-map windows, the click on its own unheld lane), the
+    newest item heard where items overlap, sends and cues as more playbacks of the track's lane.
+    The probe prints "engine: native lanes". Measured on --built-in: a render's notes 1.33 ms
+    after their place, the same in every note (1.04 ms of it the instrument's attack); the
+    count-in's clicks within 0.00 ms of each other. Headless runs keep the players. Next: the
+    render cut on the sample, an Android arm64 build.
 - **dawkit's licence: proprietary, sold under a commercial licence; the name stays.** Not dual
   GPL: a GPL edition would let anyone ship it free in a GPL game, and GPL sits badly with console
   and store terms. A search found no audio product called DAWKit (not a trademark clearance,

@@ -180,6 +180,7 @@ func _ready() -> void:
 	_test_the_host_places_an_audio_take()
 	_test_a_guest_microphone_stays_on_the_song()
 	_test_the_built_in_engine_plays_a_recorded_take()
+	_test_the_lanes_hear_the_newest_item_where_items_overlap()
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
@@ -11636,6 +11637,37 @@ func _test_the_built_in_engine_plays_a_recorded_take() -> void:
 	backend._sync_players()
 	check("and stops where the take does", not own.playing)
 	DAW.state.playing = false
+	_offline()
+	take.discard()
+
+
+func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
+	check("a span with nothing over it is whole", LaneEngine.visible(0.0, 4.0, []) == [[0.0, 4.0]])
+	check("one over its middle leaves either side",
+			LaneEngine.visible(0.0, 4.0, [[1.0, 2.0]]) == [[0.0, 1.0], [2.0, 4.0]])
+	check("one over all of it leaves nothing", LaneEngine.visible(1.0, 2.0, [[0.0, 4.0]]).is_empty())
+	check("and two over its ends leave what is between",
+			LaneEngine.visible(0.0, 4.0, [[3.0, 5.0], [-1.0, 0.5]]) == [[0.5, 3.0]])
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var take := AudioTake.create("suite-lanes-take.wav")
+	var tone := PackedVector2Array()
+	tone.resize(AudioTake.RATE * 4)
+	take.append(AudioTake.encode(tone))
+	take.finish()
+	DAW.insert_audio_take(6, 300.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 1")
+	DAW.insert_audio_take(6, 301.0, take.file_name(), 1.0, take.peaks(), "Grace audio 2")
+	var lanes := LaneEngine.new()
+	lanes.backend = backend
+	# The track's demo part is on it too, before the takes.
+	var clips := lanes.clips_for(6).filter(func(c): return c["start"] >= 300.0)
+	clips.sort_custom(func(a, b): return a["start"] < b["start"])
+	check("the lane plays the older take round the newer, and the newer in its place",
+			clips.size() == 3 and is_equal_approx(clips[0]["start"], 300.0) and is_equal_approx(clips[0]["length"], 1.0)
+			and is_equal_approx(clips[1]["start"], 301.0) and is_equal_approx(clips[1]["offset"], 0.0)
+			and is_equal_approx(clips[2]["start"], 302.0) and is_equal_approx(clips[2]["offset"], 2.0))
+	lanes.free()
 	_offline()
 	take.discard()
 

@@ -342,6 +342,8 @@ func _host(port: int) -> void:
 		_check_sent_files()
 
 	# How much of the time before the end the work took: the end has moved twice as it grew.
+	if DAW.backend is GodotBackend:
+		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
 	print("host work done at %.1fs of 42.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
 	await _until(42.4)
 	Session.leave()
@@ -712,7 +714,7 @@ func _count_in_and_measure(play := false) -> void:
 		DAW.transport_play()
 	else:
 		DAW.transport_record()
-	var first_frame_at := GodotBackend.start_at(s.position_seconds)
+	var first_frame_at := (DAW.backend as GodotBackend).first_frame_at(s.position_seconds)
 	engine._drive_meters(0.0)
 	AudioServer.unlock()
 	var from := s.count_in_start(at)
@@ -804,7 +806,7 @@ func _meter_and_measure() -> void:
 	AudioServer.lock()
 	capture.clear_buffer()
 	DAW.transport_play()
-	var first_frame_at := GodotBackend.start_at(s.position_seconds)
+	var first_frame_at := (DAW.backend as GodotBackend).first_frame_at(s.position_seconds)
 	engine._drive_meters(0.0)
 	AudioServer.unlock()
 	var began := Time.get_ticks_msec()
@@ -901,7 +903,7 @@ func _parts_and_measure() -> void:
 	AudioServer.lock()
 	capture.clear_buffer()
 	DAW.transport_play()
-	var first_frame_at := GodotBackend.start_at(s.position_seconds)
+	var first_frame_at := (DAW.backend as GodotBackend).first_frame_at(s.position_seconds)
 	engine._drive_meters(0.0)
 	AudioServer.unlock()
 	began = Time.get_ticks_msec()
