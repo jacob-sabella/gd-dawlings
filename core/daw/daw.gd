@@ -416,6 +416,24 @@ func insert_audio_take(track_index: int, start: float, source: String, length: f
 			MidiTake.clean_name(take_name))
 
 
+## A sound file on this machine onto a track at `start`, as an item. Host only: the file and
+## the project are both here. {"error": why not, or "", "seconds", "name": the take's file}.
+func import_audio(path: String, track_index: int, start: float) -> Dictionary:
+	if not Session.is_authority():
+		return {"error": "only the host brings in files: the project is on their machine"}
+	var refusal := audio_take_refusal(track_index, 1.0)
+	if not refusal.is_empty():
+		return {"error": refusal}
+	var media = backend.get(&"media")
+	var name := AudioImport.file_name_for(path, func(n: String) -> bool:
+		return FileAccess.file_exists(AudioTake.DIR.path_join(n)) or (media is Dictionary and media.has(n)))
+	var done := DawKitAudioFile.bring_in(path, ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
+	if not str(done.get("error", "")).is_empty():
+		return {"error": done["error"]}
+	insert_audio_take(track_index, start, name, done["seconds"], done["peaks"], path.get_file().get_basename())
+	return {"error": "", "seconds": done["seconds"], "name": name}
+
+
 ## Why a recorded take cannot be placed, in words for the person who played it, or "".
 func audio_take_refusal(track_index: int, length: float) -> String:
 	if backend == null or not backend.can(DAWBackend.Capability.AUDIO_TAKES):

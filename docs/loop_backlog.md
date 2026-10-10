@@ -143,12 +143,28 @@ can finish music in, saving DAWproject. Steps, in order:
      file is written and both sides are told.
    - **Not yet:** a guest's panel shows "<host>'s project" because the project's title and
      file name are not replicated. They belong in the snapshot.
-3. Audio file import. 4. Host recording. 5. MIDI playback through a built-in instrument.
+3. **Done 2026-10-09.** Audio file import. dawkit's `DawKitAudioFile` reads WAV (8/16/24/32-bit
+   integer, 32/64-bit float, plain or extensible), AIFF and AIFF-C, Ogg and MP3, folds more than
+   two channels to stereo, and brings a file into the takes folder: copied untouched when the
+   engine plays it as it is, otherwise written as a 32-bit float WAV (lossless from 24-bit).
+   `DAW.import_audio` (host only) places it like a recorded take, so Reaper with the bridge takes
+   it too. The panel has "Import audio…" (several files at once) and a track chooser, which
+   defaults to the selection's track, then an armed one, then the first track that is not a
+   folder. Files dropped on the window go the same way, one after another from the playhead,
+   each one an undo step, and the room is told. `--bring-in <file>` does it at launch. dawkit
+   checks each encoding to its last bit, and Ogg/MP3 by measured frequency and level.
+   - **Not yet:** FLAC (needs a decoder in dawkit, since Godot has none); a guest sending a file
+     from their own machine; importing off the main thread (a 3-minute 24-bit file takes
+     1.9 s); dropping onto a lane of the timeline to pick the track and time by where it lands.
+4. Host recording. 5. MIDI playback through a built-in instrument.
 6. Editing. 7. Sample-accurate timing, post-effects sends, tempo map. 8. Automation.
 9. Mixdown and stems. 10. Interchange proof against the official examples.
 
 Which DAWs open the result is in `docs/architecture.md` ("Its file format: DAWproject"): Bitwig,
 Studio One and Cubase natively, Reaper through ProjectConverter, Live and Logic by stems only.
+
+Also found: the main suite now takes about a minute (verify's limit was 60 s and is now 150 s).
+Nothing in it should take that long: find the slow tests.
 
 ## Scaffolded — the shape is right, the wiring is not finished
 

@@ -145,6 +145,8 @@ func _ready() -> void:
 		Session.guest_audio.record_with_host = true
 	if args["computer_keys"]:
 		session_panel.play_with_computer_keys.call_deferred(true)
+	if not args["bring_in"].is_empty():
+		session_panel.bring_in_files.call_deferred(args["bring_in"])
 
 	_apply_cli_placement(args["place"])
 	for wanted in args["tablets"]:
@@ -204,7 +206,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"host": false, "join": "", "xr": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
-		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false,
+		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [],
 	}
@@ -302,6 +304,12 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				# whose sound server takes badly to a process with several streams.
 				out["direct_audio"] = true
 			"--session-panel": out["session_panel"] = true
+			"--bring-in":
+				# `--bring-in ~/loop.wav` -- a sound file onto a track at the start, as the panel's
+				# Import audio would. Repeatable.
+				i += 1
+				if i < argv.size():
+					out["bring_in"].append(argv[i])
 			"--play-into":
 				# `--play-into 7` -- a guest's keys go onto track 7 when the host records.
 				i += 1

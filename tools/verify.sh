@@ -26,15 +26,16 @@ trap 'rm -f "$log"' EXIT
 # TIMED OUT, because the hang described above is real and happens often enough to have cost an
 # afternoon twice. A parse error in run_tests.gd itself leaves the scene with no script, so
 # nothing ever calls quit() and the run sits there forever looking like a slow suite. The whole
-# suite takes under a second; sixty is an enormous allowance and still bounded.
-timeout 60 godot --headless --path . tests/tests.tscn 2>&1 \
+# suite takes about a minute now (it was under a second once); 150 leaves room and is still
+# bounded.
+timeout 150 godot --headless --path . tests/tests.tscn 2>&1 \
   | grep -vE "OpenXR|RuntimeManifest|RuntimeInterface|xrEnumerate|Failed querying|HMD was not|Check logged|normal mode|^\s*$" \
   | tee "$log"
 status="${PIPESTATUS[0]}"
 
 if [ "$status" -eq 124 ]; then
   echo
-  echo "verify: the suite did not finish in 60s. That is almost never a slow suite -- it is"
+  echo "verify: the suite did not finish in 150s. That is almost never a slow suite -- it is"
   echo "verify: tests/run_tests.gd failing to parse, which leaves the scene with no script and"
   echo "verify: nothing to call quit(). Check the top of the output for a Parse Error."
 fi

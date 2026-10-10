@@ -73,6 +73,9 @@ var _project_host_row: HBoxContainer
 var _project_save: Button
 var _files: FileDialog
 var _confirm_new: ConfirmationDialog
+var _import_box: VBoxContainer
+var _import_into: OptionButton
+var _imports: FileDialog
 
 var _listener: PacketPeerUDP = null
 var _found: Dictionary = {}
@@ -91,6 +94,8 @@ func _ready() -> void:
 	Session.holds_changed.connect(_refresh)
 	DAW.project_saved.connect(func(_said): _refresh_project())
 	DAW.project_replaced.connect(_refresh_project)
+	DAW.timeline_changed.connect(_refresh_project)
+	get_window().files_dropped.connect(func(paths: PackedStringArray): bring_in_files(paths))
 	_refresh()
 
 
@@ -591,7 +596,7 @@ func _refresh_mic_level() -> void:
 
 ## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
 ## if it is open.
-func _fill_tracks(choice: OptionButton, selected: int) -> void:
+func _fill_tracks(choice: OptionButton, selected: int, none := "Nowhere") -> void:
 	var tracks: Array = []
 	if DAW.state != null:
 		for i in DAW.state.track_indices():
@@ -600,7 +605,7 @@ func _fill_tracks(choice: OptionButton, selected: int) -> void:
 	if choice.item_count == 0 or tracks != choice.get_meta(&"tracks", []):
 		choice.set_meta(&"tracks", tracks)
 		choice.clear()
-		choice.add_item("Nowhere", 0)
+		choice.add_item(none, 0)
 		for t in tracks:
 			choice.add_item("%d  %s" % [t[0], t[1]], t[0])
 	var at := maxi(choice.get_item_index(selected), 0)
@@ -958,6 +963,32 @@ func _build_project(column: VBoxContainer) -> void:
 	_confirm_new.confirmed.connect(start_new_project)
 	add_child(_confirm_new)
 
+	# Sound files, onto a track at the playhead: from a dialog, or dropped on the window.
+	_import_box = VBoxContainer.new()
+	_import_box.add_theme_constant_override("separation", 8)
+	column.add_child(_import_box)
+	_import_box.add_child(_caption("BRING IN AUDIO  ·  OR DROP FILES ON THE WINDOW"))
+	var import_row := HBoxContainer.new()
+	import_row.add_theme_constant_override("separation", 8)
+	_import_box.add_child(import_row)
+	_import_into = _choice()
+	_import_into.name = "ImportInto"
+	_import_into.tooltip_text = "The track the files go onto, at the playhead"
+	import_row.add_child(_import_into)
+	var import_button := _button("Import audio…", false)
+	import_button.name = "ImportAudio"
+	import_button.pressed.connect(_ask_import)
+	import_row.add_child(import_button)
+	_imports = FileDialog.new()
+	_imports.name = "ImportFiles"
+	_imports.access = FileDialog.ACCESS_FILESYSTEM
+	_imports.file_mode = FileDialog.FILE_MODE_OPEN_FILES
+	_imports.title = "Bring in audio"
+	_imports.filters = PackedStringArray(["%s ; Sound files" % ", ".join(AudioImport.EXTENSIONS.map(func(e): return "*." + e))])
+	_imports.use_native_dialog = true
+	_imports.files_selected.connect(func(paths: PackedStringArray): bring_in_files(paths))
+	add_child(_imports)
+
 
 func _refresh_project() -> void:
 	if _project_name == null:
@@ -974,6 +1005,10 @@ func _refresh_project() -> void:
 		_project_where.tooltip_text = file
 	_project_save.disabled = not DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_project_host_row.visible = Session.is_authority() and DAW.can(DAWBackend.Capability.PROJECT_FILES)
+	_import_box.visible = Session.is_authority() and DAW.can(DAWBackend.Capability.AUDIO_TAKES)
+	if _import_box.visible:
+		_fill_tracks(_import_into, _import_into.get_selected_id() if _import_into.item_count > 0 else 0,
+				"Where the selection is")
 
 
 func _ask_save_as() -> void:
@@ -990,6 +1025,41 @@ func _ask_open() -> void:
 	_files.current_dir = _project_dir()
 	_files.current_file = ""
 	_files.popup_centered_ratio(0.6)
+
+
+func _ask_import() -> void:
+	_imports.current_dir = _imports.current_dir if not _imports.current_dir.is_empty() \
+			else OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)
+	_imports.popup_centered_ratio(0.6)
+
+
+## Each file onto the chosen track (or the selection's), one after another from the playhead.
+## The room hears what came in; a file that cannot come in is told to the host alone.
+func bring_in_files(paths: PackedStringArray) -> PackedStringArray:
+	var failed := PackedStringArray()
+	if paths.is_empty():
+		return failed
+	if not Session.is_authority():
+		toast("Only the host can bring in files: the project is on their machine.")
+		return paths
+	var track := _import_into.get_selected_id() if _import_into.item_count > 0 else 0
+	if track <= 0:
+		track = AudioImport.target_track(DAW.state)
+	var at := DAW.state.position_seconds
+	var brought := PackedStringArray()
+	for path in paths:
+		var done := DAW.import_audio(path, track, at)
+		if not str(done["error"]).is_empty():
+			failed.append(path)
+			toast("Could not bring in %s: %s." % [path.get_file(), done["error"]])
+			continue
+		at += float(done["seconds"])
+		brought.append(path.get_file())
+	if not brought.is_empty():
+		var where = DAW.state.track(track)
+		Session.tell_room("%s brought in %s on %s." % [Session.local_name, ", ".join(brought),
+				where.display_name() if where != null else "track %d" % track])
+	return failed
 
 
 func _ask_new() -> void:

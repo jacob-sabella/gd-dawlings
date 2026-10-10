@@ -162,6 +162,7 @@ func _ready() -> void:
 	_test_a_clip_keeps_its_fades_and_gain()
 	_test_the_built_in_engine_saves_and_opens_dawproject()
 	_test_the_project_is_saved_from_the_room_and_the_room_is_told()
+	_test_sound_files_are_brought_in_onto_a_track()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
 	_test_a_recorded_take_is_a_wav_with_an_overview()
@@ -8596,6 +8597,112 @@ func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:
 	panel.free()
 	Session.start_solo()
 	_offline()
+	OS.execute("rm", ["-rf", dir])
+
+
+func _test_sound_files_are_brought_in_onto_a_track() -> void:
+	var dir := OS.get_temp_dir().path_join("dawlings_import_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir)
+	# Two files: a second of a 441 Hz tone at half scale, as 32-bit float, and as 16-bit.
+	var tone := PackedFloat32Array()
+	for f in 44100:
+		var v := 0.5 * sin(TAU * 441.0 * f / 44100.0)
+		tone.append_array([v, v])
+	var first := dir.path_join("Tone One.wav")
+	DawKitAudioFile.write_wav(first, tone, 2, 44100)
+	var second := dir.path_join("tone two.wav")
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.stereo = true
+	wav.mix_rate = 44100
+	var pcm := PackedByteArray()
+	pcm.resize(22050 * 4)
+	for f in 22050:
+		var q := int(0.25 * 32767.0 * sin(TAU * 441.0 * f / 44100.0))
+		pcm.encode_s16(f * 4, q)
+		pcm.encode_s16(f * 4 + 2, q)
+	wav.data = pcm
+	wav.save_to_wav(second)
+
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("the host is offered to bring in audio", panel._import_box.visible)
+
+	var track: int = DAW.state.track_indices()[2]
+	DAW.state.track(track).items.clear()
+	panel._import_into.select(panel._import_into.get_item_index(track))
+	DAW.seek(4.0)
+	var depth := maxi(DAW.state.undo_depth, 0)
+	var failed := panel.bring_in_files(PackedStringArray([first, second]))
+	var items: Array = DAW.state.track(track).items
+	check("both files land on the chosen track (%s, %d items)" % [failed, items.size()], failed.is_empty() and items.size() == 2)
+	if items.size() == 2:
+		close_to("the first at the playhead", items[0].start, 4.0, 0.001)
+		close_to("a second long", items[0].length, 1.0, 0.0001)
+		close_to("the second straight after it", items[1].start, 5.0, 0.001)
+		close_to("half a second long", items[1].length, 0.5, 0.0001)
+		check("named after their files", items[0].name == "Tone One" and items[1].source == "tone two.wav")
+		check("each drawn from its own overview (%d)" % items[0].peaks.size(),
+				items[0].peaks.size() == 50 and absi(items[0].peaks[10] - 127) <= 1 and absi(items[1].peaks[10] - 63) <= 1)
+		var stream := backend.take_stream(items[0].source)
+		check("and the engine plays it", stream != null and absf(stream.get_length() - 1.0) < 0.001)
+	check("the room hears what came in (%s)" % [notices],
+			notices.size() == 1 and notices[0].begins_with("Ada brought in Tone One.wav, tone two.wav on "))
+	check("each file is a step to undo (%d -> %d)" % [depth, DAW.state.undo_depth], DAW.state.undo_depth == depth + 2)
+	notices.clear()
+
+	var again := DAW.import_audio(first, track, 10.0)
+	check("the same file again gets a name of its own (%s)" % again.get("name"), again.get("name") == "Tone One 2.wav")
+	var bad := dir.path_join("notes.txt")
+	var f := FileAccess.open(bad, FileAccess.WRITE)
+	f.store_string("not a sound")
+	f.close()
+	failed = panel.bring_in_files(PackedStringArray([bad]))
+	var shown: String = panel._toasts.get_child(-1).get_child(0).text
+	check("a file that is not sound is turned away, to the host alone (%s)" % shown,
+			failed.size() == 1 and notices.is_empty() and shown.contains("not a sound file"))
+
+	var saved := dir.path_join("with_audio.dawproject")
+	check("a project with brought-in audio saves", DAW.save_project_as(saved).is_empty())
+	var inspected: DawKitProject = DawKitDawproject.open(saved, dir.path_join("inspect"))["project"]
+	var clip_sources: Array = []
+	for t in inspected.tracks:
+		for c in t.clips:
+			if c.source.contains("Tone One"):
+				clip_sources.append(c.source)
+	check("and carries the files inside it (%s)" % [clip_sources], clip_sources.has("audio/Tone One.wav"))
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("undone, the files are gone from the track", DAW.state.track(track).items.is_empty())
+
+	DAW.select_item(DAW.state.track_indices()[4], 0)
+	if not DAW.state.track(DAW.state.track_indices()[4]).items.is_empty():
+		check("with no track chosen, files go where the selection is",
+				AudioImport.target_track(DAW.state) == DAW.state.track_indices()[4])
+	check("names are made safe and kept apart", AudioImport.file_name_for("/x/a:b.mp3", func(n): return n == "a_b.wav") == "a_b 2.wav")
+
+	_as_session(Session.Role.GUEST, 5)
+	panel._refresh_project()
+	check("a guest is not offered it", not panel._import_box.visible)
+	check("and a guest's drop is refused", not DAW.import_audio(first, track, 0.0)["error"].is_empty()
+			and panel.bring_in_files(PackedStringArray([first])).size() == 1)
+	Session.notice.disconnect(hear)
+	remove_child(panel)
+	panel.free()
+	Session.start_solo()
+	_offline()
+	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	OS.execute("rm", ["-rf", dir])
 
 

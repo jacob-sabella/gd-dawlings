@@ -140,6 +140,11 @@ the whole room: a guest's save goes to the host as an intent and becomes
 hardware never names Session. Opening and starting a project are announced by
 `Session.tell_room`. A refusal is a toast for the person who asked, and nobody else.
 
+Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
+the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a
+WAV the engine plays, and it is placed with `insert_audio_take` like a recorded take. So it saves
+into a DAWproject like one, and plays on Reaper through the bridge.
+
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.
 
