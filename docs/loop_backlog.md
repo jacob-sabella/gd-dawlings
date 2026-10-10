@@ -681,9 +681,36 @@ limit, and holds within 41 frames. What is left is about a second per test that 
 
 Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Built-in DAW" above.
 
-- The demo mix is heavy below 150Hz; worth a pass by ear.
+- **The demo mix, measured 2026-10-10:** not heavy below 150 Hz (8-13% of its energy at the
+  master, chorus and verse); mid-heavy (83-87%), dull (3-7% above 2 kHz), and 6-7 dB over full
+  scale before the master's limiter, which flattened the whole song. DemoSong trims each part
+  (`TRIM_DB`: vocal -6, double -4, snare +4, hat +5, overheads +4) and all of them
+  (`LEVEL_DB` -9): the song now peaks at 0.9-1.1 before the limiter, so it shaves under a
+  decibel off the loudest moments only. The band shares barely moved (the mids are the bass's
+  harmonics, the driven guitar, the Rhodes and the reverb return); a listen by ear is still due.
 - The alternatives if more than Godot's effects is wanted: a headless Ardour over OSC (GPL at
   arm's length, desktop only), or Tracktion Engine (GPLv3 or commercial).
+
+## 1.0 for friends (2026-10-10)
+
+The user's scope: the backlog, and what a 1.0 to send some friends needs, on Windows and Linux,
+over the internet.
+
+- **Done:** Linux and Windows exports (export_presets.cfg, tracked); dawkit's native core
+  cross-built for Windows with MinGW (needs only Windows' own DLLs) and as release builds; an
+  exported build opens on the built-in engine (`--stand-in` for the silent one); a note for the
+  testers (docs/playtest.md, packed as the zips' README: hosting over Tailscale or forwarding UDP
+  7332 and 7334); a welcome card on a sent-out build's first launch, and on F1 (WelcomeCard), and
+  a short header there; the demo mix's gain staging (above). Checked: the Linux export renders
+  and is silent until play; the Windows export starts clean under Wine. Not yet run on a real
+  Windows machine.
+- **Fast keys by default: not for 1.0.** The native helper is built on the player's machine from
+  native/keys.c, which is not in an export, and needs a C compiler and PipeWire headers; on
+  Windows it never existed. So a friend's keys always go through Godot, as late as the song,
+  and their takes land where they were played. It stays a developer's option.
+- **Known:** the built-in session probe has exited 1 with every check passing, about one run
+  in five on 2026-10-10, not reproduced in three runs after; a process ending badly at shutdown
+  is the guess. The exports are 181 and 190 MB zipped, most of it the venues' 2K textures.
 
 ## Parked
 

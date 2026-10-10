@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_scrolling_the_timeline_does_not_rebuild_it()
 	_test_a_surface_showing_a_bank_says_it_is_showing_a_bank()
 	_test_an_unfilled_rack_bay_is_blanked_off()
+	_test_the_welcome_card_opens_on_f1_and_is_seen_once()
 	_test_plugins_are_added_and_removed_from_the_rack()
 	_test_one_jack_takes_one_plug()
 	_test_the_bay_reads_left_to_right()
@@ -3575,6 +3576,32 @@ func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 	check("and without the bridge adds nothing", reaper.state.tracks.is_empty() or reaper.state.track(1).plugins().is_empty())
 	reaper.free()
 	_offline()
+
+
+func _test_the_welcome_card_opens_on_f1_and_is_seen_once() -> void:
+	var card := WelcomeCard.new()
+	card.seen_path = "user://test_welcome_seen"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(card.seen_path))
+	add_child(card)
+	check("the welcome card starts hidden", not card.visible)
+	var f1 := InputEventKey.new()
+	f1.keycode = KEY_F1
+	f1.pressed = true
+	card._input(f1)
+	check("F1 opens it", card.visible)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	card._input(esc)
+	check("Esc puts it away, and it is marked seen", not card.visible and FileAccess.file_exists(card.seen_path))
+	card._input(f1)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	card._input(click)
+	check("a click puts it away too", not card.visible)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(card.seen_path))
+	card.queue_free()
 
 
 func _test_an_unfilled_rack_bay_is_blanked_off() -> void:
@@ -9771,11 +9798,12 @@ func _test_the_demo_song_loops_on_the_bar() -> void:
 	var top := 0.0
 	for v in kick:
 		top = maxf(top, absf(v))
-	close_to("and normalised", top, 0.8, 0.001)
+	# Brought to 0.8, then to its place in the mix (DemoSong.LEVEL_DB and TRIM_DB).
+	close_to("and normalised, then trimmed", top, 0.8 * DemoSong._trim("kick"), 0.001)
 	var first := 0.0
 	for i in 200:
 		first = maxf(first, absf(kick[i]))
-	check("the kick lands on the one", first > 0.3)
+	check("the kick lands on the one", first > 0.3 * DemoSong._trim("kick"))
 	var wav := DemoSong.to_stream(kick)
 	close_to("and loops as a stream of that length", wav.get_length(), 8.0, 0.001)
 	check("forever", wav.loop_mode == AudioStreamWAV.LOOP_FORWARD)

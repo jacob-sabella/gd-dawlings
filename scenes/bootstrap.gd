@@ -78,6 +78,12 @@ func _ready() -> void:
 	if args["audio_out"] != "":
 		AudioServer.output_device = args["audio_out"]
 	_open_ports(args)
+	# What to do first, on a sent-out build's first launch, and on F1 from then on.
+	var welcome := WelcomeCard.new()
+	welcome.name = "Welcome"
+	add_child(welcome)
+	if args["welcome"] or (OS.has_feature("template") and WelcomeCard.first_time()):
+		welcome.open()
 	if args["join"] != "":
 		# A guest still has a backend: it holds the replicated cache. It just never opens a
 		# link of its own, which is the whole of what "one link per session" means.
@@ -212,7 +218,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
-		"ghost": {}, "tablets": [],
+		"ghost": {}, "tablets": [], "welcome": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -326,6 +332,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					out["mic_into"] = int(argv[i])
 			"--computer-keys": out["computer_keys"] = true
 			"--fresh-layout": out["fresh_layout"] = true
+			"--welcome": out["welcome"] = true
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
 			"--no-motion": out["no_motion"] = true
@@ -526,6 +533,11 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
+	if OS.has_feature("template"):
+		# A sent-out build: what it is, and where the rest is said (WelcomeCard).
+		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back" % [
+			role_name, DAW.summary(), _track_count()]
+		return
 	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",

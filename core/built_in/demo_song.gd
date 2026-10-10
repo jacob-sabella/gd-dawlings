@@ -22,7 +22,7 @@ const RATE := 32000
 const BARS := 4
 ## Bump to throw away every cached render. Change it whenever a part's sound changes, or the
 ## cache will go on playing the old one.
-const VERSION := 4
+const VERSION := 7
 const CACHE_DIR := "user://built_in"
 
 ## A minor: Am | F | C | G. MIDI note numbers.
@@ -36,6 +36,21 @@ const MELODY := [
 	[12.0, 3.0, 62], [15.0, 1.0, 59],
 ]
 const SCALE := [57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79]
+
+## Each part's level against the others, in dB, after it is brought to its peak. Measured at the
+## master through the stand-in's faders (docs/loop_backlog.md, "the demo mix"): untrimmed, the
+## lead vocal sat 20 dB over the snare, and above 2 kHz was 3-5% of the mix. Trimmed, the vocal
+## still leads, and the backbeat and cymbals are heard.
+const TRIM_DB := {"voice": -6.0, "double": -4.0, "snare": 4.0, "hat": 5.0, "overheads": 4.0}
+## And every part, so the song through the stand-in's faders peaks under full scale before the
+## master's limiter: without it the sum reached 2.3 there, and the limiter took 7 dB off the
+## whole song. At -9 dB the song peaks at 0.9-1.1 there (the tracks' compressors make some of it
+## back), so the limiter shaves under a decibel off the loudest moments only.
+const LEVEL_DB := -9.0
+
+
+static func _trim(role: String) -> float:
+	return db_to_linear(LEVEL_DB + float(TRIM_DB.get(role, 0.0)))
 
 ## Which part a track plays, from its name. Extra tracks in a padded session are named
 ## "Kick 2" and so on, so a prefix match gives them their role's part too.
@@ -155,6 +170,7 @@ static func render(role: String, tempo: float, sig := FOUR_FOUR) -> PackedFloat3
 		bars.append([k * length, length, sig, k])
 	_play(role, out, bars, func(b: float) -> float: return b * beat, -INF, INF)
 	_normalise(out, 0.8)
+	_scale(out, _trim(role))
 	return out
 
 
@@ -202,7 +218,7 @@ static func _level_of(role: String, tempo: float, sig := FOUR_FOUR) -> float:
 	var top := 0.0
 	for v in out:
 		top = maxf(top, absf(v))
-	return 0.8 / top if top > 0.0 else 1.0
+	return (0.8 / top if top > 0.0 else 1.0) * _trim(role)
 
 
 static func _scale(out: PackedFloat32Array, by: float) -> void:
