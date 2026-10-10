@@ -44,6 +44,9 @@ const HOST_RAMP := [[HOST_TAKE_AT + 2.0, 0.0, DawKitAutomation.LINEAR], [HOST_TA
 const HOST_RAMP_TOLERANCE_DB := 0.5
 ## How far from its beat a count-in's click may be heard at the master.
 const COUNT_IN_TOLERANCE_MS := 5.0
+## How far the demo kick's onsets may be from their beats on average, and from each other.
+const PARTS_TOLERANCE_MS := 6.0
+const PARTS_SPREAD_MS := 1.5
 ## How long the punch range is, and how near its ends a punched take must start and stop.
 const PUNCH_SECONDS := 1.5
 const PUNCH_TOLERANCE := 0.04
@@ -311,6 +314,7 @@ func _host(port: int) -> void:
 		await _count_in_and_measure()
 		await _punch_and_measure()
 		await _meter_and_measure()
+		await _parts_and_measure()
 	await _until(14.0)
 	if not _built_in:
 		_check_placed_take()
@@ -324,8 +328,8 @@ func _host(port: int) -> void:
 			await _count_in_in_reaper()
 
 	# How much of the time before the end the work took: the end has moved twice as it grew.
-	print("host work done at %.1fs of 39.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(39.4)
+	print("host work done at %.1fs of 42.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(42.4)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -339,7 +343,7 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(40.4)
+	await _until(43.4)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -827,6 +831,93 @@ func _meter_and_measure() -> void:
 			and absf(mean) < COUNT_IN_TOLERANCE_MS and worst < COUNT_IN_SPREAD_MS)
 	check("accented on each bar's first count (%.3f against %.3f)" % [quietest_accent, loudest_other],
 			quietest_accent > loudest_other * 1.2)
+
+
+## The demo song's kick through a tempo ramp, heard at the master: a track named for the kick
+## with an empty item past the song's end (so it plays the engine's own part), soloed, the click
+## off, and the tempo gliding down by a quarter over four bars. Each kick where the map puts its
+## beat, across the window the part changes over to at a loop's end.
+func _parts_and_measure() -> void:
+	var engine := DAW.backend as GodotBackend
+	var s := DAW.state
+	DAW.transport_stop()
+	DAW.set_metronome(false)
+	var was: Array = s.tempo_points.duplicate(true)
+	var end := 0.0
+	for index in s.track_indices():
+		for it in s.track(index).items:
+			end = maxf(end, it.start + it.length)
+	var track := s.track_indices().size() + 1
+	DAW.add_track(track, "Kick probe")
+	var tempo := s.tempo
+	var loop := float(DemoSong.BARS * 4)
+	var b0 := ceilf(s.tempo_map().beat_at(end + 2.0) / loop) * loop
+	var points := [[0.0, tempo, DawKitTempoMap.HOLD], [b0 + 8.0, tempo, DawKitTempoMap.RAMP_BEATS],
+			[b0 + 24.0, tempo * 0.75, DawKitTempoMap.HOLD]]
+	DAW.set_tempo_map(points)
+	var map := s.tempo_map()
+	var it := MixState.ItemState.new()
+	it.start = map.seconds_at(b0)
+	it.length = map.seconds_at(b0 + 32.0) - it.start
+	it.name = "Kick probe"
+	s.track(track).items.append(it)
+	DAW.set_track_solo(track, true)
+	var from := map.seconds_at(b0 + 14.0)
+	var to := map.seconds_at(b0 + 22.0)
+	DAW.seek(from)
+	var began := Time.get_ticks_msec()
+	while not engine._waiting_roles().is_empty() or engine._part_window("kick", from).is_empty():
+		if Time.get_ticks_msec() - began > 4000:
+			break
+		await get_tree().process_frame
+	var ready_ms := Time.get_ticks_msec() - began
+	var capture := AudioEffectCapture.new()
+	capture.buffer_length = 8.0
+	AudioServer.add_bus_effect(engine._master_bus, capture)
+	await get_tree().create_timer(0.1).timeout
+	AudioServer.lock()
+	capture.clear_buffer()
+	DAW.transport_play()
+	var first_frame_at := GodotBackend.start_at(s.position_seconds)
+	engine._drive_meters(0.0)
+	AudioServer.unlock()
+	began = Time.get_ticks_msec()
+	while s.position_seconds < to and Time.get_ticks_msec() - began < 8000:
+		await get_tree().process_frame
+	DAW.transport_stop()
+	var frames := capture.get_buffer(capture.get_frames_available())
+	for i in range(AudioServer.get_bus_effect_count(engine._master_bus) - 1, -1, -1):
+		if AudioServer.get_bus_effect(engine._master_bus, i) == capture:
+			AudioServer.remove_bus_effect(engine._master_bus, i)
+	DAW.set_track_solo(track, false)
+	DAW.remove_track(track)
+	DAW.set_tempo_map(was)
+	var rate := AudioServer.get_mix_rate()
+	var offs: Array = []
+	var expected: Array = []
+	for b in [14.5, 15.5, 16.0, 18.5, 20.0]:
+		expected.append(b0 + b)
+		var centre := int(roundf((map.seconds_at(b0 + b) - first_frame_at) * rate))
+		var loudest := 0.0
+		for f in range(maxi(centre - int(rate) / 50, 0), mini(centre + int(rate) / 50, frames.size())):
+			loudest = maxf(loudest, absf(frames[f].x))
+		for f in range(maxi(centre - int(rate) / 50, 0), mini(centre + int(rate) / 50, frames.size())):
+			if loudest > 0.02 and absf(frames[f].x) > loudest * 0.5:
+				offs.append((f - centre) * 1000.0 / rate)
+				break
+	var mean := 0.0
+	for o in offs:
+		mean += o / maxf(offs.size(), 1)
+	var worst := 0.0
+	for o in offs:
+		worst = maxf(worst, absf(o - mean))
+	# Where the kicks would be at the first tempo, for the size of what following the map is worth.
+	var flat := (map.seconds_at(b0 + 20.0) - map.seconds_at(b0 + 14.5)) - (20.0 - 14.5) * 60.0 / tempo
+	print("parts: kick through a ramp from beat %.0f, windows ready in %d ms, onsets_ms %s (at one tempo the last would be %.0f ms out)" % [
+			b0, ready_ms, offs.map(func(o): return snappedf(o, 0.01)), flat * 1000.0])
+	check("the demo kick follows the tempo's ramp (%d of %d, %.2fms on average, each within %.2fms)" % [
+			offs.size(), expected.size(), mean, worst],
+			offs.size() == expected.size() and absf(mean) < PARTS_TOLERANCE_MS and worst < PARTS_SPREAD_MS)
 
 
 ## A recording punched in and out: begun before the loop range and stopped after it, my take is
@@ -1396,11 +1487,11 @@ func _guest(port: int) -> void:
 				not DAW.project_title().is_empty() and DAW.project_file_name() == "dawlings_probe_%d.dawproject" % _port)
 
 	# While the session is still on: once the host leaves, my own project is back.
-	await _until(38.5)
+	await _until(41.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
-	await _until(40.0)
+	await _until(43.0)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)

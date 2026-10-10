@@ -72,10 +72,20 @@ static func cached(role: String, tempo: float) -> AudioStreamWAV:
 
 
 static func to_stream(samples: PackedFloat32Array) -> AudioStreamWAV:
+	return stream_of(encode(samples))
+
+
+## Samples as the 16-bit data a stream holds: the slow part, for a worker thread.
+static func encode(samples: PackedFloat32Array) -> PackedByteArray:
 	var data := PackedByteArray()
 	data.resize(samples.size() * 2)
 	for i in samples.size():
 		data.encode_s16(i * 2, int(clampf(samples[i], -1.0, 1.0) * 32767.0))
+	return data
+
+
+## A looping part's stream around its data.
+static func stream_of(data: PackedByteArray) -> AudioStreamWAV:
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = RATE
@@ -124,60 +134,125 @@ static func midi_hz(note: float) -> float:
 ## or a reverb-ish decay at the loop point not click.
 static func render(role: String, tempo: float) -> PackedFloat32Array:
 	var beat := 60.0 / tempo
-	var total := int(round(loop_seconds(tempo) * RATE))
 	var out := PackedFloat32Array()
-	out.resize(total)
+	out.resize(int(round(loop_seconds(tempo) * RATE)))
+	_play(role, out, func(b: float) -> float: return b * beat, -INF, INF)
+	_normalise(out, 0.8)
+	return out
+
+
+## Beats a window of a part holds, and how many of them before its first loop are only there for
+## what still rings into it.
+const WINDOW_BEATS := 2 * BARS * 4
+const WINDOW_LEAD_BEATS := 4.0
+
+
+## A stretch of a part through a tempo map (DawKitTempoMap's points), from loop `loop` of the
+## song: WINDOW_LEAD_BEATS before that loop's first beat to WINDOW_BEATS after it. Every note is
+## where the map puts its beat and as long as the map makes its beats, so a ramp is a ramp.
+## Nothing wraps: a window is played once, from its start, and the next takes over. Returns
+## [samples, seconds into the song of its first sample]. Its level is the looped part's, so a
+## window and a loop at one tempo sound the same.
+static func render_window(role: String, map_points: Array, loop: int) -> Array:
+	var map := DawKitTempoMap.from_array(map_points)
+	var loop_beats := float(BARS * 4)
+	var from_beat := loop * loop_beats - WINDOW_LEAD_BEATS
+	var to_beat := loop * loop_beats + WINDOW_BEATS
+	var from_s := map.seconds_at(from_beat)
+	var out := PackedFloat32Array()
+	out.resize(int(round((map.seconds_at(to_beat) - from_s) * RATE)))
+	var first := floori(from_beat / loop_beats)
+	for l in range(first, ceili(to_beat / loop_beats)):
+		var origin := l * loop_beats
+		_play(role, out, func(b: float) -> float: return map.seconds_at(origin + b) - from_s,
+				from_beat - origin, to_beat - origin)
+	_scale(out, _level_of(role, map.points[0][1]))
+	return [out, from_s]
+
+
+## What `render` scales a part by to bring it to its level: the same number for the same part at
+## a tempo, so a window can be brought to the loop's.
+static func _level_of(role: String, tempo: float) -> float:
+	var beat := 60.0 / tempo
+	var out := PackedFloat32Array()
+	out.resize(int(round(loop_seconds(tempo) * RATE)))
+	_play(role, out, func(b: float) -> float: return b * beat, -INF, INF)
+	var top := 0.0
+	for v in out:
+		top = maxf(top, absf(v))
+	return 0.8 / top if top > 0.0 else 1.0
+
+
+static func _scale(out: PackedFloat32Array, by: float) -> void:
+	for i in out.size():
+		out[i] *= by
+
+
+## A part's notes into `out`, each where `at` puts its beat in the loop (0 to BARS * 4), and as
+## long as `at` makes its beats; only notes from beat `from` up to `to` of the loop.
+static func _play(role: String, out: PackedFloat32Array, at: Callable, from: float, to: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(role)
+	# Every note draws its noise from the one generator in the same order, wherever the window is.
+	var span := func(b: float, beats: float) -> float: return float(at.call(b + beats)) - float(at.call(b))
+	var on := func(b: float) -> bool: return b >= from and b < to
 	match role:
 		"kick":
 			for bar in BARS:
 				var hits := [0.0, 2.5] if bar < BARS - 1 else [0.0, 2.5, 3.5]
 				for b in hits:
-					_kick(out, (bar * 4 + b) * beat, 1.0 if b == 0.0 else 0.8)
+					if on.call(bar * 4 + b):
+						_kick(out, at.call(bar * 4 + b), 1.0 if b == 0.0 else 0.8)
 		"snare":
 			for bar in BARS:
 				for b in [1.0, 3.0]:
-					_snare(out, (bar * 4 + b) * beat, rng, 0.9)
+					_snare(out, at.call(bar * 4 + b), rng, 0.9, on.call(bar * 4 + b))
 				if bar == BARS - 1:
-					_snare(out, (bar * 4 + 3.75) * beat, rng, 0.35)
+					_snare(out, at.call(bar * 4 + 3.75), rng, 0.35, on.call(bar * 4 + 3.75))
 		"hat":
 			for step in BARS * 8:
-				_hat(out, step * 0.5 * beat, rng, 0.55 if step % 2 == 1 else 0.3, 0.035)
+				_hat(out, at.call(step * 0.5), rng, 0.55 if step % 2 == 1 else 0.3, 0.035, on.call(step * 0.5))
 		"overheads":
-			_hat(out, 0.0, rng, 0.5, 1.4)
+			_hat(out, at.call(0.0), rng, 0.5, 1.4, on.call(0.0))
 			for b in BARS * 4:
-				_hat(out, b * beat, rng, 0.12, 0.09)
+				_hat(out, at.call(float(b)), rng, 0.12, 0.09, on.call(float(b)))
 		"bass":
 			for bar in BARS:
 				var root: int = ROOTS[bar]
 				for spec in [[0.0, 1.4, 0], [1.5, 0.45, 0], [2.0, 0.9, 12], [3.0, 0.9, 7]]:
-					_bass(out, (bar * 4 + spec[0]) * beat, spec[1] * beat, midi_hz(root + spec[2]))
+					var b: float = bar * 4 + spec[0]
+					if on.call(b):
+						_bass(out, at.call(b), span.call(b, spec[1]), midi_hz(root + spec[2]))
 		"rhodes":
 			for bar in BARS:
-				for b in [[0.0, 2.4], [2.5, 1.5]]:
-					for note in CHORDS[bar]:
-						_rhodes(out, (bar * 4 + b[0]) * beat, b[1] * beat, midi_hz(note), 0.22)
+				for spec in [[0.0, 2.4], [2.5, 1.5]]:
+					var b: float = bar * 4 + spec[0]
+					if on.call(b):
+						for note in CHORDS[bar]:
+							_rhodes(out, at.call(b), span.call(b, spec[1]), midi_hz(note), 0.22)
 		"guitar":
 			for bar in BARS:
 				var root: int = ROOTS[bar] + 12
 				for step in 8:
-					var accent := 1.0 if step % 4 == 0 else 0.55
-					_guitar(out, (bar * 4 + step * 0.5) * beat, 0.42 * beat,
-							[midi_hz(root), midi_hz(root + 7), midi_hz(root + 12)], accent)
+					var b: float = bar * 4 + step * 0.5
+					if on.call(b):
+						var accent := 1.0 if step % 4 == 0 else 0.55
+						_guitar(out, at.call(b), span.call(b, 0.42),
+								[midi_hz(root), midi_hz(root + 7), midi_hz(root + 12)], accent)
 		"voice", "double":
 			for n in MELODY:
+				if not on.call(float(n[0])):
+					continue
 				var note: float = n[2]
 				if role == "double":
 					note = _third_above(int(n[2])) + 0.08
-				_voice(out, n[0] * beat, n[1] * beat, midi_hz(note),
+				_voice(out, at.call(float(n[0])), span.call(float(n[0]), float(n[1])), midi_hz(note),
 						0.5 if role == "voice" else 0.32)
 		"strings":
 			for bar in BARS:
-				for note in CHORDS[bar]:
-					_pad(out, bar * 4 * beat, 4 * beat, midi_hz(note + 12), 0.1)
-	_normalise(out, 0.8)
-	return out
+				if on.call(float(bar * 4)):
+					for note in CHORDS[bar]:
+						_pad(out, at.call(float(bar * 4)), span.call(float(bar * 4), 4.0), midi_hz(note + 12), 0.1)
 
 
 static func _third_above(note: int) -> int:
@@ -185,10 +260,11 @@ static func _third_above(note: int) -> int:
 	return SCALE[i + 2] if i >= 0 and i + 2 < SCALE.size() else note + 4
 
 
-## Adds `value` at sample `i`, wrapping round the loop.
+## Adds `value` at sample `i`, wrapping round the loop. A window's tail past its end lands in its
+## lead, which is never played.
 static func _add(out: PackedFloat32Array, i: int, value: float) -> void:
 	var n := out.size()
-	out[i % n] += value
+	out[posmod(i, n)] += value
 
 
 static func _kick(out: PackedFloat32Array, at: float, gain: float) -> void:
@@ -201,7 +277,7 @@ static func _kick(out: PackedFloat32Array, at: float, gain: float) -> void:
 		_add(out, start + i, gain * (sin(phase) * exp(-t * 6.5) + click))
 
 
-static func _snare(out: PackedFloat32Array, at: float, rng: RandomNumberGenerator, gain: float) -> void:
+static func _snare(out: PackedFloat32Array, at: float, rng: RandomNumberGenerator, gain: float, sound := true) -> void:
 	var start := int(at * RATE)
 	var prev := 0.0
 	for i in int(0.3 * RATE):
@@ -210,10 +286,11 @@ static func _snare(out: PackedFloat32Array, at: float, rng: RandomNumberGenerato
 		var bright := noise - prev * 0.6
 		prev = noise
 		var body := sin(TAU * 185.0 * t) * exp(-t * 30.0) * 0.6
-		_add(out, start + i, gain * (bright * exp(-t * 16.0) * 0.55 + body))
+		if sound:
+			_add(out, start + i, gain * (bright * exp(-t * 16.0) * 0.55 + body))
 
 
-static func _hat(out: PackedFloat32Array, at: float, rng: RandomNumberGenerator, gain: float, decay: float) -> void:
+static func _hat(out: PackedFloat32Array, at: float, rng: RandomNumberGenerator, gain: float, decay: float, sound := true) -> void:
 	var start := int(at * RATE)
 	var a := 0.0
 	var b := 0.0
@@ -224,7 +301,8 @@ static func _hat(out: PackedFloat32Array, at: float, rng: RandomNumberGenerator,
 		var hp := noise - 2.0 * a + b
 		b = a
 		a = noise
-		_add(out, start + i, gain * hp * 0.25 * exp(-t / decay))
+		if sound:
+			_add(out, start + i, gain * hp * 0.25 * exp(-t / decay))
 
 
 static func _bass(out: PackedFloat32Array, at: float, length: float, hz: float) -> void:

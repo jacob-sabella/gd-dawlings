@@ -85,6 +85,9 @@ offline backend's own mix, with its state, undo and replication, turned into God
 - **The song is synthesised, not shipped** (`DemoSong`): ten parts, each four bars at 32kHz,
   rendered on worker threads and cached in `user://built_in` per tempo. A tempo change renders
   a new set and swaps all of it at once, so no part plays at the old tempo against the new.
+  With a tempo map a part plays windows of itself rendered through the map instead
+  (`DemoSong.render_window`, `GodotBackend._part_window`), two loops at a time, the next asked
+  for halfway through a loop.
 - **Bars go through the meter** (`MixState.meter()`, dawkit's `DawKitMeter`): the time
   signature's changes, saved as DAWproject `TimeSignatureAutomation`. Bar numbers, bar starts,
   the count-in, the ruler and the click all count through it; in Reaper they are its tempo

@@ -408,8 +408,22 @@ can finish music in, saving DAWproject. Steps, in order:
      Reaper probe's extra checks now run after the takes' undos (they are Reaper undo points of
      their own), and the end moved 2 s later again (host 39.4/40.4, guest 38.5/40.0; the Reaper
      host's work ends at 35.6 s).
-   - **Not yet (7b):** The demo song's parts are rendered at the first tempo (and play in 4/4
-     whatever the signature says). The loopback probe measures the click at one tempo only.
+   - **Done 2026-10-10 (7g), the demo song through the tempo map:** with tempo changes a part no
+     longer loops: it plays windows of itself (`DemoSong.render_window`: from 4 beats before a
+     loop to two loops on, every note where the map puts its beat and as long as the map makes
+     its beats, at the looped part's level), rendered and encoded on worker threads and
+     collected on the main thread (every task waited for, as MIDI renders are), the next one
+     asked for halfway through a loop, so one is there when the playhead crosses into it. At
+     one tempo a window is the loop sample for sample. Measured: `--built-in`, a track named for
+     the kick, soloed, with an empty item past the song's end, through a ramp down by a quarter
+     over four bars: 5 kicks across a window change, each 3.75-4.29 ms after its beat (the last
+     would be 420 ms out at the first tempo); windows ready 0.7-0.9 s after the map is set. The
+     first try crashed the host at exit (double free): window tasks were left running and a
+     static Mutex cached levels; both gone. The probe's end moved 3 s later (host 42.4/43.4,
+     guest 41.5/43.0; the built-in host's work ends at 37.4 s).
+   - **Not yet (7b):** the demo parts play in 4/4 whatever the signature says. A tempo edit
+     leaves the parts silent until their windows are rendered (under a second here). The
+     loopback probe measures the click at one tempo only.
 8. Automation.
    - **Done 2026-10-10 (8a), lanes in dawkit:** `DawKitAutomation` (target "volume" dB, "pan",
      "mute", "send:<track id>" dB, "fx:<i>:<p>" normalised; points [seconds, value, HOLD|LINEAR]),

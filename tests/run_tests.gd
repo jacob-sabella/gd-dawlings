@@ -160,6 +160,7 @@ func _ready() -> void:
 	_test_a_recording_punches_in_and_out()
 	_test_a_track_records_from_its_own_input()
 	_test_the_time_signature_changes()
+	_test_the_demo_song_follows_the_tempo_map()
 	_test_markers_are_dropped_and_found_from_the_deck()
 	_test_input_monitoring_is_set_from_the_strip()
 	_test_the_built_in_engine_is_a_real_mix()
@@ -10050,6 +10051,40 @@ func _test_the_time_signature_changes() -> void:
 	check("one signature throughout is no map (%d/%d)" % [reaper.state.beats_per_bar, reaper.state.beat_unit],
 			reaper.state.time_signature_points.is_empty() and reaper.state.beats_per_bar == 3)
 	reaper.free()
+
+
+func _test_the_demo_song_follows_the_tempo_map() -> void:
+	# At one tempo, a window of a part is the part as it loops.
+	var loop := DemoSong.render("kick", 120.0)
+	var made := DemoSong.render_window("kick", [[0.0, 120.0, 0]], 1)
+	var window: PackedFloat32Array = made[0]
+	var lead := int(roundf(DemoSong.WINDOW_LEAD_BEATS * 0.5 * DemoSong.RATE))
+	var worst := 0.0
+	for i in loop.size():
+		worst = maxf(worst, absf(window[lead + i] - loop[i]))
+	close_to("a window starts its lead before its loop", made[1], 16.0 * 0.5 - DemoSong.WINDOW_LEAD_BEATS * 0.5)
+	check("at one tempo, a window is the loop, sample for sample (%.6f)" % worst, worst < 0.0001)
+	# Through a ramp, every kick is where the map puts its beat.
+	var points := [[0.0, 120.0, DawKitTempoMap.RAMP_BEATS], [32.0, 60.0, DawKitTempoMap.HOLD]]
+	var map := DawKitTempoMap.from_array(points)
+	made = DemoSong.render_window("kick", points, 1)
+	window = made[0]
+	var hits: Array = []
+	var misses: Array = []
+	for bar in range(4, 12):
+		for b in ([0.0, 2.5] if bar % 4 != 3 else [0.0, 2.5, 3.5]):
+			var at := int((map.seconds_at(bar * 4.0 + b) - float(made[1])) * DemoSong.RATE)
+			if at <= 1 or at >= window.size():
+				continue
+			hits.append(at)
+			# The kick's click is a step of its own: on this sample and not the one before, over
+			# whatever the last kick still rings.
+			if absf(window[at] - window[at - 1]) < 0.05 or absf(window[at - 1] - window[at - 2]) > 0.05:
+				misses.append(bar * 4.0 + b)
+	check("through a ramp, each kick starts on its beat's sample (%d hits, off at %s)" % [hits.size(), misses],
+			hits.size() >= 15 and misses.is_empty())
+	close_to("and the window ends where the map puts its last beat", float(window.size()) / DemoSong.RATE,
+			map.seconds_at(48.0) - map.seconds_at(12.0), 0.001)
 
 
 func _test_input_monitoring_is_set_from_the_strip() -> void:

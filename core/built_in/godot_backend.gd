@@ -66,6 +66,11 @@ var _kinds := {}
 ## Role -> finished part.
 var _parts := {}
 var _parts_tempo := 0.0
+## With tempo changes a part does not loop: it plays windows of itself through the map
+## (DemoSong.render_window), "<role>|<map>|<loop>" -> [stream, seconds of its first sample], and
+## the tasks of those still rendering, by key.
+var _windows := {}
+var _windows_pending := {}
 var _master_bus := -1
 var _capture: AudioEffectCapture
 ## The tracks being cued, in order.
@@ -202,6 +207,9 @@ func _finish_renders() -> void:
 	for key in _midi_tasks:
 		WorkerThreadPool.wait_for_task_completion(_midi_tasks[key][0])
 	_midi_tasks.clear()
+	for key in _windows_pending:
+		WorkerThreadPool.wait_for_task_completion(_windows_pending[key][0])
+	_windows_pending.clear()
 
 
 # --- the mix ------------------------------------------------------------------------------
@@ -625,7 +633,58 @@ func _roles() -> Array:
 
 
 func _waiting_roles() -> Array:
+	if not state.tempo_points.is_empty():
+		return _roles().filter(func(r): return _part_window(r, state.position_seconds).is_empty())
 	return _roles().filter(func(r): return not _parts.has(r) or _parts_tempo != _rendering_tempo)
+
+
+## The window of `role` that plays at `seconds`, [stream, its first sample's seconds], or empty
+## while it renders. Asks for it, and once the playhead is halfway through its first loop, for the
+## next one too, so it is there when it is wanted.
+func _part_window(role: String, seconds: float) -> Array:
+	var map := state.tempo_map()
+	var loop_beats := float(DemoSong.BARS * 4)
+	var beat := map.beat_at(seconds)
+	var loop := floori(beat / loop_beats)
+	var points := map.to_array()
+	var key := "%s|%s|%d" % [role, points, loop]
+	_ask_window(role, points, loop, key)
+	if fposmod(beat, loop_beats) > loop_beats * 0.5:
+		_ask_window(role, points, loop + 1, "%s|%s|%d" % [role, points, loop + 1])
+	return _windows.get(key, [])
+
+
+func _ask_window(role: String, points: Array, loop: int, key: String) -> void:
+	if _windows.has(key):
+		return
+	if not _windows_pending.has(key):
+		var result := [null]
+		var task := WorkerThreadPool.add_task(func():
+			var made := DemoSong.render_window(role, points, loop)
+			result[0] = [DemoSong.encode(made[0]), made[1]], false, "render a window of the demo song")
+		_windows_pending[key] = [task, result]
+		return
+	# Collected here, on the main thread, as MIDI renders are (`midi_stream`): every task is
+	# waited for, and none outlives the engine.
+	var running: Array = _windows_pending[key]
+	if not WorkerThreadPool.is_task_completed(running[0]):
+		return
+	WorkerThreadPool.wait_for_task_completion(running[0])
+	_windows_pending.erase(key)
+	var made: Array = running[1][0]
+	var wav := DemoSong.stream_of(made[0])
+	wav.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	_windows[key] = [wav, made[1]]
+	_prune_windows(points, loop)
+
+
+## Only the windows of the map playing, near where the playhead is.
+func _prune_windows(points: Array, loop: int) -> void:
+	var prefix := "|%s|" % [points]
+	for key in _windows.keys():
+		var at := int(String(key).get_slice("|", 2))
+		if not String(key).contains(prefix) or at < loop - 1 or at > loop + 2:
+			_windows.erase(key)
 
 
 var _rendering_tempo := 0.0
@@ -701,6 +760,14 @@ func _sync_players() -> void:
 			expected = pos - it.start
 			if stream != null and expected >= stream.get_length():
 				stream = null
+		elif it != null and not state.tempo_points.is_empty() and DemoSong.role_of(state.tracks[index].name) != "":
+			# Through the tempo's changes: the window holding the playhead, played from its start.
+			var window := _part_window(DemoSong.role_of(state.tracks[index].name), pos)
+			if not window.is_empty():
+				stream = window[0]
+				expected = pos - float(window[1])
+				if expected < 0.0 or expected >= stream.get_length():
+					stream = null
 		elif it != null:
 			stream = _parts.get(DemoSong.role_of(state.tracks[index].name))
 			if stream != null:
