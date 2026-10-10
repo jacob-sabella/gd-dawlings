@@ -99,8 +99,12 @@ offline backend's own mix, with its state, undo and replication, turned into God
   the host on a real audio driver into the null sink, because headless Godot's dummy driver mixes
   in 85ms lumps.
 
-Not there yet: automation, mixdown, and
-third-party plugins, which Godot cannot host. See "Built-in DAW" in `docs/loop_backlog.md`.
+Automation: each track's (and the master's) volume, pan, mute, send levels and plugin parameters
+as lanes of points, moved by the engine as the song plays, written from the desk in touch or latch,
+drawn and edited on the timeline, and kept in the project as DAWproject `Points`. Under Reaper they
+are its envelopes, through the bridge.
+
+Not there yet: mixdown, and third-party plugins, which Godot cannot host. See "Built-in DAW" in `docs/loop_backlog.md`.
 
 ### dawkit: the engine is its own product
 
