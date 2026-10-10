@@ -199,7 +199,10 @@ instruments out of the desk's effect chain.
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
 the track). dawkit's `DawKitAudioFile.bring_in` reads the file and puts it in the takes folder as a
 WAV the engine plays, and it is placed with `insert_audio_take` like a recorded take. So it saves
-into a DAWproject like one, and plays on Reaper through the bridge.
+into a DAWproject like one, and plays on Reaper through the bridge. Files dropped on the window
+with the cursor over the timeline's lanes go onto that lane at the beat under the cursor
+(`SessionPanel.drop_spot`, a fresh cast through `MouseInteractor.under_cursor`); elsewhere, onto
+the import box's track at the playhead.
 
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.

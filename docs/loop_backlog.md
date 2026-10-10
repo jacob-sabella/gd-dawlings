@@ -162,7 +162,13 @@ can finish music in, saving DAWproject. Steps, in order:
    checks each encoding to its last bit, and Ogg/MP3 by measured frequency and level.
    - **Not yet:** FLAC (needs a decoder in dawkit, since Godot has none); a guest sending a file
      from their own machine; importing off the main thread (a 3-minute 24-bit file takes
-     1.9 s); dropping onto a lane of the timeline to pick the track and time by where it lands.
+     1.9 s).
+   - **Done 2026-10-10 (3a), dropping onto a lane:** files let go with the cursor over the
+     timeline's lanes go onto that lane's track from the beat under the cursor (the time itself
+     with shift), one after another; anywhere else they go as before. `MouseInteractor.under_cursor`
+     casts at the moment of the drop, since a drag in from the desktop moves no cursor the game
+     has seen; `TimelineLanes.drop_spot` answers [track, seconds]. Tested (the spot, fine, off
+     the lanes, the file landing there and not on the import box's track) and photographed.
 4. Host recording.
    - **Done 2026-10-09, the microphone and the click:** the built-in engine plays a metronome
      (dawkit's `DawKitMetronome`: one bar of clicks, kept on the bar grid, into the master, so

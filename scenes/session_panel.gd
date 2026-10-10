@@ -103,7 +103,7 @@ func _ready() -> void:
 	DAW.project_replaced.connect(_refresh_project)
 	DAW.project_named.connect(_refresh_project)
 	DAW.timeline_changed.connect(_refresh_project)
-	get_window().files_dropped.connect(func(paths: PackedStringArray): bring_in_files(paths))
+	get_window().files_dropped.connect(_on_files_dropped)
 	_refresh()
 
 
@@ -1092,17 +1092,42 @@ func _ask_import() -> void:
 
 ## Each file onto the chosen track (or the selection's), one after another from the playhead.
 ## The room hears what came in; a file that cannot come in is told to the host alone.
-func bring_in_files(paths: PackedStringArray) -> PackedStringArray:
+## Files let go over the window: onto the lane under the cursor, at the time under it (snapped
+## to the beat unless shift is held), if the cursor is over the timeline's lanes; else as the
+## import box would bring them in.
+func _on_files_dropped(paths: PackedStringArray) -> void:
+	var spot := drop_spot()
+	if spot.is_empty():
+		bring_in_files(paths)
+	else:
+		bring_in_files(paths, spot[0], spot[1])
+
+
+## [track, seconds] for a drop where the mouse is now, or [] when it is not over a lane.
+func drop_spot() -> Array:
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		if hand is MouseInteractor and (hand as MouseInteractor).camera != null:
+			var under: Dictionary = (hand as MouseInteractor).under_cursor()
+			if under["control"] is TimelineLanes:
+				return (under["control"] as TimelineLanes).drop_spot(under["point"], Input.is_key_pressed(KEY_SHIFT))
+	return []
+
+
+## Sound files onto `track` (0: the import box's choice, else where the selection is) from `at`
+## (below 0: the playhead), one after another.
+func bring_in_files(paths: PackedStringArray, track := 0, at := -1.0) -> PackedStringArray:
 	var failed := PackedStringArray()
 	if paths.is_empty():
 		return failed
 	if not Session.is_authority():
 		toast("Only the host can bring in files: the project is on their machine.")
 		return paths
-	var track := _import_into.get_selected_id() if _import_into.item_count > 0 else 0
+	if track <= 0 and _import_into.item_count > 0:
+		track = _import_into.get_selected_id()
 	if track <= 0:
 		track = AudioImport.target_track(DAW.state)
-	var at := DAW.state.position_seconds
+	if at < 0.0:
+		at = DAW.state.position_seconds
 	var brought := PackedStringArray()
 	for path in paths:
 		var done := DAW.import_audio(path, track, at)

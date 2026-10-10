@@ -37,6 +37,13 @@ func aim() -> Transform3D:
 	return Transform3D(Basis.looking_at(direction, Vector3.UP), origin)
 
 
+## What is under the cursor this moment, not as of the last physics tick: {"control", "point"}.
+## A file dragged in from the desktop moves no cursor the game sees until it is let go.
+func under_cursor() -> Dictionary:
+	var at := aim()
+	return _cast(at.origin, -at.basis.z)
+
+
 ## Low on the left of the view, under half a metre out: the left hand, since the cursor is the
 ## right. It rides with the camera, not the cursor, so it stays put while you point at things.
 const CARRY_AT := Vector3(-0.19, -0.15, -0.5)

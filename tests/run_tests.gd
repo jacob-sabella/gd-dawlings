@@ -9109,6 +9109,34 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	check("each file is a step to undo (%d -> %d)" % [depth, DAW.state.undo_depth], DAW.state.undo_depth == depth + 2)
 	notices.clear()
 
+	# Let go over a lane of the timeline: that lane's track, at the beat under the cursor.
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline.set_view(0.0, DAW.state.bar_to_seconds(41.0))
+	var lanes: TimelineLanes = timeline._lanes
+	var other: int = DAW.state.track_indices()[3]
+	var row := DAW.state.track_indices().find(other)
+	var over := timeline.to_global(Vector3(timeline._x_for(DAW.state.bar_to_seconds(6.3)), timeline._lane_y[row], lanes.position.z))
+	var spot := lanes.drop_spot(over, false)
+	var beat := DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(DAW.state.bar_to_seconds(6.3))))
+	check("a drop on a lane picks its track (%s)" % [spot], spot.size() == 2 and spot[0] == other)
+	if spot.size() == 2:
+		close_to("and the beat under it", spot[1], beat, 0.001)
+		close_to("or, fine, the time itself", lanes.drop_spot(over, true)[1], DAW.state.bar_to_seconds(6.3), 0.01)
+	var above := timeline.to_global(Vector3(timeline._x_for(4.0), timeline._lane_y[0] + 0.05, lanes.position.z))
+	check("off the lanes, no spot", lanes.drop_spot(above, false).is_empty())
+	var before: int = DAW.state.track(other).items.size()
+	failed = panel.bring_in_files(PackedStringArray([second]), spot[0], spot[1])
+	var landed: Array = DAW.state.track(other).items.filter(func(it): return it.source.begins_with("tone two"))
+	check("dropped there, the file lands there (%s)" % [failed], failed.is_empty()
+			and DAW.state.track(other).items.size() == before + 1 and landed.size() == 1
+			and absf(landed[0].start - beat) < 0.001)
+	check("and the import box's track is not used", DAW.state.track(track).items.size() == 2)
+	DAW.undo()
+	timeline.queue_free()
+	notices.clear()
+
 	var again := DAW.import_audio(first, track, 10.0)
 	check("the same file again gets a name of its own (%s)" % again.get("name"), again.get("name") == "Tone One 2.wav")
 	var bad := dir.path_join("notes.txt")
@@ -9150,7 +9178,7 @@ func _test_sound_files_are_brought_in_onto_a_track() -> void:
 	panel.free()
 	Session.start_solo()
 	_offline()
-	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav"]:
+	for name in ["Tone One.wav", "Tone One 2.wav", "tone two.wav", "tone two 2.wav"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(name)))
 	OS.execute("rm", ["-rf", dir])
 

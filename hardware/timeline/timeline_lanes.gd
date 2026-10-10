@@ -80,6 +80,15 @@ static func snap(seconds: float, fine: bool) -> float:
 	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s)))
 
 
+## Where a sound file let go over `point` would go: [track, seconds], the lane under it and its
+## time snapped to the beat unless `fine`; [] off the lanes.
+func drop_spot(point: Vector3, fine: bool) -> Array:
+	var track: int = surface.track_at_point(point)
+	if track <= 0:
+		return []
+	return [track, snap(surface.seconds_at_point(point), fine)]
+
+
 func _fine() -> bool:
 	return held_by != null and held_by.has_method("fine") and held_by.fine()
 
