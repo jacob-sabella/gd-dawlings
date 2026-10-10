@@ -722,6 +722,9 @@ button, exactly like a MIDI take.
 
 - **XR calibration across participants is untested.** There is no headset runtime on this
   machine, so this rests on the arithmetic only.
+- **Typing in a headset** is a `TypingPad`: keys in the room, pressed by hand, that answer as a
+  `NamePrompt` does (`answered`). The timeline's NAME opens one in front of the panel where the
+  viewport is XR (or `type_on_desk` is set); tested with a hand, untried in a headset.
 - **No delta compression.** The full volatile frame goes out every tick.
 - **A door, not a lock.** With a session code, only those told it get in. Nothing is encrypted,
   so the code is for a studio LAN with a neighbour on the wifi, not for the open internet.

@@ -50,7 +50,8 @@ func _ready() -> void:
 				var picked: int = surface.picked_track
 				if picked <= 0:
 					return "press a track's name first"
-				return "type a name for %s" % _name_of(picked) if surface.can_type() else "rename it on the screen")
+				return "type a name for %s" % _name_of(picked) if surface.types_on_screen() \
+						else "type a name for %s on the keypad" % _name_of(picked))
 	auto = _key("TrackAuto", "AUTO", 3, Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
 			func() -> String:
 				var picked: int = surface.picked_track
@@ -125,7 +126,7 @@ func refresh() -> void:
 	add.lit = true
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
-	rename.lit = picked and surface.can_type()
+	rename.lit = picked
 	lane.lit = surface.shown_lane != ""
 	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
@@ -160,7 +161,7 @@ func _remove() -> void:
 
 
 func _rename() -> void:
-	if surface.picked_track > 0 and surface.can_type():
+	if surface.picked_track > 0:
 		surface.ask_track_name(surface.picked_track)
 
 

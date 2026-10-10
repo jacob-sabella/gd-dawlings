@@ -925,19 +925,42 @@ static func _quad(mesh: ImmediateMesh, a: Vector2, b: Vector2, c: Vector2, d: Ve
 
 
 ## Whether there is a keyboard and a screen to type on: not in a headset.
-func can_type() -> bool:
-	return not get_viewport().use_xr
+## Type on the keypad in the room rather than the monitor's keyboard. Always so in a headset.
+var type_on_desk := false
+## The keypad open now, if any: one at a time.
+var _pad: TypingPad = null
 
 
-## A name typed for a track, on the monitor. The prompt, or null where there is nothing to type on.
-func ask_track_name(index: int) -> NamePrompt:
-	if not DAW.state.tracks.has(index) or not can_type():
+## Whether a name is typed on the monitor's keyboard; otherwise on a TypingPad in front of the
+## panel.
+func types_on_screen() -> bool:
+	return not type_on_desk and not get_viewport().use_xr
+
+
+## A name typed for a track: on the monitor, or in a headset on a keypad in front of the panel.
+## The NamePrompt or TypingPad, or null for no such track.
+func ask_track_name(index: int) -> Node:
+	if not DAW.state.tracks.has(index):
 		return null
-	var prompt := NamePrompt.ask(self, "Name track %d" % index, DAW.state.track(index).name)
-	prompt.answered.connect(func(text: String) -> void:
-		if text != "" and DAW.state.tracks.has(index):
-			DAW.rename_track(index, text))
-	return prompt
+	var title := "Name track %d" % index
+	var asker: Node
+	if types_on_screen():
+		asker = NamePrompt.ask(self, title, DAW.state.track(index).name)
+	else:
+		if is_instance_valid(_pad):
+			_pad.queue_free()
+		# Below the panel's middle and towards whoever is at it, tipped up to face them.
+		var where := Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(_lane_area_x + _lane_area_width * 0.5,
+				_top_y - _height - 0.13, 0.09))
+		_pad = TypingPad.ask(self, title, DAW.state.track(index).name, where)
+		asker = _pad
+	asker.answered.connect(_rename_to.bind(index))
+	return asker
+
+
+func _rename_to(text: String, index: int) -> void:
+	if text != "" and DAW.state.tracks.has(index):
+		DAW.rename_track(index, text)
 
 
 ## Draw an item somewhere other than where it is, for the length of a drag: moved to `start`, or

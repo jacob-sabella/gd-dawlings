@@ -356,8 +356,13 @@ can finish music in, saving DAWproject. Steps, in order:
      sixteenths), lit for MIDI items. Tracks: a press on a name in the header picks it (lit
      amber; this desk's own, not the DAW's selection), and `TimelineTrackStrip` under the
      panel's right end has ADD (after the picked track, or at the end), DEL and NAME. NAME opens
-     a `NamePrompt` on the monitor; in a headset there is nothing to type on yet, and the key
-     says so. Still to come: a way to type in a headset; fades played as curves rather than a flat volume per frame (needs
+     a `NamePrompt` on the monitor. **Done 2026-10-10 (6b):** in a headset, NAME opens a
+     `TypingPad` in front of the panel instead: digits, letters and a few marks on the desk's
+     own keys, SHIFT (on for the first letter), SPACE, DEL, LEAVE and OK, pressed by hand like
+     any key; the first key types over the old name, DEL first clears it, OK on nothing names
+     nothing, one pad at a time. `TimelineSurface.type_on_desk` opens it on a monitor too.
+     Tested by a hand pressing its keys, and photographed; not yet tried in a real headset,
+     like the rest of the XR path. Still to come: fades played as curves rather than a flat volume per frame (needs
      the engine's own mixing, see "Waiting on the user"). **Done 2026-10-10:** a fade is dragged by its
      handle on the item, where its line meets the block's top (the top corner for no fade, the
      top 5 mm of the block; the rest of the edge still trims), snapped to the beat unless fine,

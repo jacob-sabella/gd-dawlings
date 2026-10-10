@@ -8512,10 +8512,43 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	check("ADD puts a new track after it, and picks that (%d)" % timeline.picked_track,
 			s.tracks.size() == names_were.size() + 1 and s.track(4).items.is_empty() and timeline.picked_track == 4
 			and s.track(5).name == names_were[3])
-	var prompt := timeline.ask_track_name(4)
+	var prompt: NamePrompt = timeline.ask_track_name(4)
 	check("NAME asks for a name on the monitor", prompt != null and prompt._edit.text == s.track(4).name)
 	prompt._edit.text_submitted.emit("  Overdub ")
 	check("and the name typed is the track's (%s)" % s.track(4).name, s.track(4).name == "Overdub")
+
+	# Where there is no keyboard -- a headset -- on a keypad in front of the panel, by hand.
+	timeline.type_on_desk = true
+	var pad: TypingPad = timeline.ask_track_name(4)
+	check("in a headset NAME opens a keypad in the room", pad != null and pad.get_parent() == timeline
+			and pad.text == "Overdub" and tracks.rename.lit)
+	var finger := FakeHand.new()
+	add_child(finger)
+	var press := func(what: String) -> void:
+		var key: PanelButton = pad.keys[what]
+		key.grab_begin(finger, key.global_position)
+		key.grab_end(finger)
+	for ch in ["B", "A", "S", "S", " ", "SHIFT", "D", "I"]:
+		press.call(ch)
+	check("its keys type, the first over the old name, small unless shifted (%s)" % pad.text, pad.text == "Bass Di")
+	press.call("DEL")
+	press.call("SHIFT")
+	press.call("I")
+	press.call("OK")
+	check("OK names the track (%s)" % s.track(4).name, s.track(4).name == "Bass DI" and pad.is_queued_for_deletion())
+	pad = timeline.ask_track_name(4)
+	(pad.keys["DEL"] as PanelButton).pressed.emit()
+	(pad.keys["OK"] as PanelButton).pressed.emit()
+	check("DEL first clears it, and OK on nothing names nothing", s.track(4).name == "Bass DI")
+	pad = timeline.ask_track_name(4)
+	var second: TypingPad = timeline.ask_track_name(4)
+	check("one keypad at a time", pad.is_queued_for_deletion() and not second.is_queued_for_deletion())
+	(second.keys["Q"] as PanelButton).pressed.emit()
+	(second.keys["LEAVE"] as PanelButton).pressed.emit()
+	check("and LEAVE leaves the name be", s.track(4).name == "Bass DI" and second.is_queued_for_deletion())
+	finger.queue_free()
+	timeline.type_on_desk = false
+	DAW.undo()
 	tracks.remove.pressed.emit()
 	check("DEL removes the picked track, and nothing is picked after",
 			s.track_indices().map(func(i): return s.track(i).name) == names_were and timeline.picked_track == 0)
