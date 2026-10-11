@@ -208,6 +208,7 @@ func _ready() -> void:
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
+	_test_rack_plugin_search_finds_and_adds_one()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
 	_test_a_monitor_draws_no_presentation_brackets()
@@ -5382,6 +5383,51 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 
 	remove_child(studio)
 	studio.free()
+	DAW.use(OfflineBackend.new())
+
+
+## The rack's FIND button, beside the ADD wheel: opens a searchable list for when the DAW
+## offers more plugins than anyone could scroll to one at a time.
+func _test_rack_plugin_search_finds_and_adds_one() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	while not DAW.state.track_indices().is_empty():
+		DAW.remove_track(DAW.state.track_indices()[0])
+	DAW.add_track(1, "Track 1")
+
+	var rack := RackSurface.new()
+	add_child(rack)
+	rack.show_track(1)
+	rack._process(0.0)
+
+	var find_button: PanelButton = rack.find_child("FindPlugin", true, false)
+	check("the rack offers a FIND button beside the ADD wheel", find_button != null)
+	find_button.pressed.emit()
+
+	var picker: PluginPicker = null
+	for n in get_tree().root.get_children():
+		if n is PluginPicker:
+			picker = n
+	check("pressing FIND opens a search picker", picker != null)
+	check("it starts showing every plugin the DAW offers",
+			picker._filtered.size() == DAW.state.fx_choices.size())
+
+	var edit: LineEdit = picker.find_child("Search", true, false)
+	edit.text_changed.emit("rev")
+	check("typing narrows the list to matches (%s)" % [picker._filtered],
+			picker._filtered.size() == 1 and str(picker._filtered[0][1]) == "Reverb")
+
+	var chosen_ids: Array[String] = []
+	picker.chosen.connect(func(id: String): chosen_ids.append(id))
+	edit.text_submitted.emit("rev")
+	check("Enter on the one match adds it, and leaves the picker",
+			DAW.state.track(1).fx.size() == 1 and chosen_ids.size() == 1
+			and picker.is_queued_for_deletion())
+	var added: MixState.FXState = DAW.state.track(1).fx.values()[0]
+	check("and it is the plugin that was searched for (%s)" % added.name, added.name == "Reverb")
+
+	rack.queue_free()
 	DAW.use(OfflineBackend.new())
 
 

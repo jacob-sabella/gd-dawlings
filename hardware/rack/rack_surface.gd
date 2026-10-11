@@ -199,6 +199,7 @@ func _rebuild() -> void:
 			bank.commit()
 	_build_picker(per_bay * unit_height)
 	_build_adder(per_bay * unit_height)
+	_build_find(per_bay * unit_height)
 	if slots.is_empty():
 		_empty_label = Label3D.new()
 		_empty_label.name = "Empty"
@@ -274,6 +275,52 @@ func _build_adder(bay_height: float) -> void:
 func _add_plugin(choice: int) -> void:
 	if DAW.state.tracks.has(track_index) and choice >= 0 and choice < DAW.state.fx_choices.size():
 		DAW.add_fx(track_index, str(DAW.state.fx_choices[choice][0]))
+
+
+## A searchable alternative to the wheel above, beside it: scrolling one at a time is fine for
+## the built-in engine's own handful of kinds, and stops being fine once a live Reaper
+## connection has turned that handful into however many VSTs happen to be installed
+## (2026-10-11: "i have so many plugins there needs to be a more elegant way to choose a
+## plugin"). PluginPicker is a 2D overlay (CanvasLayer), the same as NamePrompt, so it is
+## desktop-only -- built only outside XR, where the wheel is left as the only way in, same as
+## NamePrompt gives way to TypingPad there.
+func _build_find(bay_height: float) -> void:
+	if DAW.state.fx_choices.size() <= 1 or (is_inside_tree() and get_viewport().use_xr):
+		return
+	var find_button := PanelButton.new()
+	find_button.name = "FindPlugin"
+	find_button.led_colour = Color(0.4, 0.75, 0.95)
+	find_button.scale = Vector3(1.5, 1.5, 1.5)
+	find_button.position = Vector3(PICKER_SIZE.x * 0.5 * PICKER_SCALE + 0.03,
+			bay_height + PICKER_RISE + PICKER_SIZE.y * PICKER_SCALE * 1.4, 0.004)
+	find_button.lit = true
+	find_button.pressed.connect(_open_plugin_search)
+	find_button.describe_title = func() -> String: return "RACK  FIND A PLUGIN"
+	find_button.describe_value = func(_v: float) -> String: return "search by name"
+	_adopt(find_button)
+	var caption := Label3D.new()
+	caption.name = "FindPluginCaption"
+	caption.text = "FIND"
+	caption.font_size = 18 * 4
+	caption.pixel_size = 0.000055
+	caption.modulate = Color(0.78, 0.80, 0.84)
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.position = find_button.position + Vector3(0, -0.014, 0.0012)
+	Lettering.range_to_legibility(caption)
+	_adopt(caption)
+
+
+func _open_plugin_search() -> void:
+	if not DAW.state.tracks.has(track_index):
+		return
+	var picker := PluginPicker.ask(self, "Add a plugin to %s" % DAW.state.track(track_index).name,
+			DAW.state.fx_choices)
+	picker.chosen.connect(_add_plugin_by_id)
+
+
+func _add_plugin_by_id(id: String) -> void:
+	if DAW.state.tracks.has(track_index):
+		DAW.add_fx(track_index, id)
 
 
 ## Blanking panels for the rows this bay did not fill.
