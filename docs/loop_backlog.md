@@ -1133,10 +1133,11 @@ gloriously wrong and you survive anyway.
   recent) change.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
   fork, a boss that plays differently from the first.
-- **Riff Randomizer gear, off the run's own seed.** (The user, 2026-10-11, from a Riff Randomizer
+- **Rig Roulette: gear off the run's own seed.** (The user, 2026-10-11, from a Riff Randomizer
   YouTube episode they watched -- two musicians spin wheels for tuning, key, tempo, and several
   rolls each of guitar amp sim, bass amp sim, drum kit, and synth, then have to write a real song
-  using whatever the wheels gave them, no re-rolling.) A brief's seed already rolls tempo, key,
+  using whatever the wheels gave them, no re-rolling. Renamed so it's its own thing rather than
+  the show's own name.) A brief's seed already rolls tempo, key,
   and flaw (see "Seed randomness" above); this extends the same idea to the signal chain itself --
   spin which of the host's own installed FX load onto which track for this brief, the way the
   show spins real plugins the players own rather than a fixed, curated set. No fake wheel UI
@@ -1186,7 +1187,7 @@ gloriously wrong and you survive anyway.
   rather than go back in the case when the run ends, the way the rest of the gear resets?
 - Is a curse spill really a curse for a big band -- it is more to do, which on a crowded card is
   what they came for. Maybe it only reads as a curse solo or in a duo.
-- Riff Randomizer gear (above): which FX categories are fair game to spin, whether a spin may
+- Rig Roulette (above): which FX categories are fair game to spin, whether a spin may
   land on a plugin the host does not have installed, and whether this sits alongside the flaw
   system or starts to replace it.
 - What reputation should actually buy (venues, cosmetics on the ghost, hats and case stickers,
