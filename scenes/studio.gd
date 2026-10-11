@@ -2841,6 +2841,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_god_mode(not god_mode)
 			KEY_ESCAPE:
 				focus.release()
+				_release_stray_screens()
 				_sit_down()
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
 			# by changing it while looking at the thing.
@@ -2974,6 +2975,19 @@ func _follow_viewport_shape() -> void:
 	if focus != null:
 		for surface in focus.surfaces:
 			surface.mark_dirty()
+
+
+## A surface someone's hand caught in SCREEN mode by accident -- the handle that does it is a
+## small bar beside whichever control they actually meant to reach, and once its surface fills
+## the view the handle is off at the edge of a much bigger picture, nowhere near where they
+## would think to look for it (2026-10-11: "escape was not working" trying to get a
+## full-screened rack back). Leaves a surface that is in SCREEN mode on purpose -- the timeline
+## defaults there -- exactly alone.
+func _release_stray_screens() -> void:
+	for id in mount.mounted_ids():
+		if mount.mode_of(id) == Presentation.Mode.SCREEN \
+				and mount.mode_of(id) != mount.default_mode_of(id, medium):
+			mount.set_mode(id, mount.default_mode_of(id, medium))
 
 
 func _sit_down() -> void:

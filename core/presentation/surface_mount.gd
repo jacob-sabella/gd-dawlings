@@ -321,6 +321,18 @@ func mode_of(surface_id: StringName) -> int:
 	return Session.layout.mode_for(surface_id, surface.surface_kind)
 
 
+## Where this surface would be if nobody had ever tapped its handle: what KEY_ESCAPE in
+## scenes/studio.gd puts a surface back to when it finds it filling the screen without that
+## being the default -- the handle is a 6x3.4cm bar in a corner, easy to catch by accident
+## reaching for something beside it, and once its surface fills the view the handle is off at
+## the new edge of a much bigger picture, which is a hard thing to go find to undo the mistake.
+func default_mode_of(surface_id: StringName, medium: int) -> int:
+	if not _mounted.has(surface_id):
+		return Presentation.Mode.STUDIO
+	var surface: Surface = _mounted[surface_id]
+	return Presentation.default_mode(surface.surface_kind, medium)
+
+
 ## Put a surface back where the studio put it, in the mode it is currently in. The escape hatch
 ## for a placement dragged somewhere unreachable, which in a headset is a real way to lose a
 ## console entirely.

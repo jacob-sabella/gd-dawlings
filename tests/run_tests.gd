@@ -209,6 +209,7 @@ func _ready() -> void:
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
 	_test_rack_plugin_search_finds_and_adds_one()
+	_test_escape_releases_a_surface_fullscreened_by_mistake()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
 	_test_a_monitor_draws_no_presentation_brackets()
@@ -5429,6 +5430,36 @@ func _test_rack_plugin_search_finds_and_adds_one() -> void:
 
 	rack.queue_free()
 	DAW.use(OfflineBackend.new())
+
+
+## A surface pushed into SCREEN mode by a stray tap on its handle -- easy to do reaching for a
+## control beside it -- and Escape putting it back, without touching a surface that is in SCREEN
+## mode on purpose.
+func _test_escape_releases_a_surface_fullscreened_by_mistake() -> void:
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+
+	check("the rack starts in its own default mode, not fullscreen",
+			studio.mount.mode_of(&"rack") == Presentation.Mode.STUDIO)
+	check("the timeline defaults to fullscreen on screen, on purpose",
+			studio.mount.mode_of(&"timeline") == Presentation.Mode.SCREEN)
+
+	studio.mount.set_mode(&"rack", Presentation.Mode.SCREEN)
+	check("the rack can still be put in SCREEN mode by hand, same as the handle does",
+			studio.mount.mode_of(&"rack") == Presentation.Mode.SCREEN)
+
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	studio._unhandled_input(esc)
+	check("Escape puts a stray fullscreen rack back (2026-10-11: \"escape was not working\")",
+			studio.mount.mode_of(&"rack") == Presentation.Mode.STUDIO)
+	check("and leaves the timeline's own, on-purpose fullscreen alone",
+			studio.mount.mode_of(&"timeline") == Presentation.Mode.SCREEN)
+
+	remove_child(studio)
+	studio.free()
 
 
 ## Two hands, or a hand and a cursor, on one button. The first to leave must not turn the
