@@ -26,6 +26,7 @@ var _rec: PanelButton
 var _monitor: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
+var _name_tab: NameTab
 
 ## Where this strip's repeated geometry gets drawn, if the console gave it somewhere. See
 ## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise. All seven
@@ -89,6 +90,15 @@ func _ready() -> void:
 
 	_name_label = _make_label(NAME_SIZE / 4, Vector3(0, HEIGHT - 0.011, 0.001))
 	add_child(_name_label)
+
+	# Over the name, not beside it: the strip has no spare millimetre, and the name is the one
+	# thing already on it that says "this track" -- so that is where adding a plugin starts.
+	_name_tab = NameTab.new()
+	_name_tab.position = Vector3(0, HEIGHT - 0.016, 0.003)
+	_name_tab.describe_title = func() -> String: return _caption_for("FIND A PLUGIN")
+	_name_tab.describe_value = func(_v: float) -> String: return "search by name"
+	_name_tab.pressed.connect(_open_plugin_search)
+	add_child(_name_tab)
 
 	# A colour chip carrying Reaper's own track colour. It is how you find the kick on a desk of
 	# 32 identical strips, and it is the one piece of the DAW's visual language worth keeping.
@@ -268,6 +278,25 @@ func _on_pan_turned(v: float) -> void:
 	var slot := send_slot()
 	if slot > 0:
 		DAW.set_send_pan(track_index, slot, v)
+
+
+## Opens the same searchable picker the rack's own FIND button does (hardware/rack/rack_surface.
+## gd), for this strip's track directly -- so finding a plugin never requires finding the rack
+## first. Desktop-only, same as the rack's: PluginPicker is a 2D overlay, and XR still has the
+## rack's wheel.
+func _open_plugin_search() -> void:
+	if (is_inside_tree() and get_viewport().use_xr) or not DAW.state.tracks.has(track_index):
+		return
+	if DAW.state.fx_choices.size() <= 1:
+		return
+	var picker := PluginPicker.ask(self, "Add a plugin to %s" % _state().display_name(),
+			DAW.state.fx_choices)
+	picker.chosen.connect(_add_plugin_by_id)
+
+
+func _add_plugin_by_id(id: String) -> void:
+	if DAW.state.tracks.has(track_index):
+		DAW.add_fx(track_index, id)
 
 
 func _on_track_changed(index: int, _field: StringName) -> void:

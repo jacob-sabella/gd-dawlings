@@ -209,6 +209,7 @@ func _ready() -> void:
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
 	_test_rack_plugin_search_finds_and_adds_one()
+	_test_channel_strip_name_opens_plugin_search()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
@@ -5429,6 +5430,44 @@ func _test_rack_plugin_search_finds_and_adds_one() -> void:
 	check("and it is the plugin that was searched for (%s)" % added.name, added.name == "Reverb")
 
 	rack.queue_free()
+	DAW.use(OfflineBackend.new())
+
+
+## The same search, reached from the console directly: a click on the strip's own name, with no
+## need to find the rack first (2026-10-11: "i genuinely cant tell how to do it... adding a
+## plugin").
+func _test_channel_strip_name_opens_plugin_search() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	while not DAW.state.track_indices().is_empty():
+		DAW.remove_track(DAW.state.track_indices()[0])
+	DAW.add_track(1, "Track 1")
+
+	var strip := ChannelStrip.create(1)
+	add_child(strip)
+
+	check("the strip carries a hit target over its own name", strip._name_tab != null)
+	strip._name_tab.pressed.emit()
+
+	var picker: PluginPicker = null
+	for n in get_tree().root.get_children():
+		if n is PluginPicker:
+			picker = n
+	check("clicking the name opens the same search picker the rack's FIND button does",
+			picker != null)
+
+	var chosen_ids: Array[String] = []
+	picker.chosen.connect(func(id: String): chosen_ids.append(id))
+	var edit: LineEdit = picker.find_child("Search", true, false)
+	edit.text_changed.emit("rev")
+	edit.text_submitted.emit("rev")
+	check("Enter on the one match adds it to THIS strip's track",
+			DAW.state.track(1).fx.size() == 1 and chosen_ids.size() == 1)
+	var added: MixState.FXState = DAW.state.track(1).fx.values()[0]
+	check("and it is the plugin that was searched for (%s)" % added.name, added.name == "Reverb")
+
+	strip.queue_free()
 	DAW.use(OfflineBackend.new())
 
 
