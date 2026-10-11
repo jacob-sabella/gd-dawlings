@@ -1414,6 +1414,17 @@ gloriously wrong and you survive anyway.
   a second life mid-run) and, if a second life exists, what it costs and whether it is bought
   before a run starts or spent in the moment a brief is about to go wrong -- wins/losses move the
   number (above), but spending it is a shop or a run-time choice either way, not a one-line fix.
+- The rest of the original Tour goal, parked here as a block rather than a taste question: the
+  user capped the loop's scope at "Rig Roulette + more instruments" on 2026-10-11 (both now done,
+  see "Rig Roulette" and "Way more instruments" above), so nothing below gets built without the
+  user lifting that cap first. Not a list of what is missing from the codebase -- some of it
+  already exists (chaos events: `core/tour/tour_chaos.gd`; several stingers/fanfares: `Foley.
+  tour_stinger`/`win_fanfare`/`loss_sting`/`chaos_warning`/`chaos_strike`/`case_toss`; reputation
+  that rises and falls: `TourUnlocks`) -- just the parts that are still genuinely unstarted:
+  hat/case-sticker cosmetic unlocks, per-player tallies, a live countdown built specifically for
+  a watching guest, the band voting on drafts with the host breaking ties, a second boss, and a
+  run map with paths to vote on. Each is a real taste/design call (how reputation should be
+  spent is its own entry just above), not a mechanical follow-on from what is already built.
 
 ## Parked
 
