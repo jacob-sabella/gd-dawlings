@@ -261,6 +261,7 @@ func _ready() -> void:
 	_test_tour_card_apply_uses_daw_verbs_only()
 	_test_tour_project_restores_exactly()
 	_test_tour_unlocks_persist_without_touching_layout()
+	_test_tour_unlocks_a_loss_costs_a_point_of_reputation()
 	_test_tour_asks_follow_the_verbs_shape()
 	_test_tour_run_round_trips_through_its_dict()
 	_test_tour_song_has_a_playing_band()
@@ -15034,6 +15035,31 @@ func _test_tour_unlocks_persist_without_touching_layout() -> void:
 
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## A loss costs a point of reputation, floored at 0 -- a losing streak never goes negative, only
+## back to where a band that has never played already starts.
+func _test_tour_unlocks_a_loss_costs_a_point_of_reputation() -> void:
+	var u := TourUnlocks.new()
+	u.save_path = "user://tour_unlocks_test_cost.cfg"
+
+	u.record_run(false)
+	check("a loss at 0 reputation stays at 0, not negative (%d)" % u.reputation, u.reputation == 0)
+
+	u.record_run(true)
+	u.record_run(true)
+	check("two wins: reputation 2 (%d)" % u.reputation, u.reputation == 2)
+
+	u.record_run(false)
+	check("a loss costs one (%d)" % u.reputation, u.reputation == 1)
+
+	u.record_run(false)
+	u.record_run(false)
+	check("losing it all the way down still floors at 0, not negative (%d)" % u.reputation,
+			u.reputation == 0)
+
+	if FileAccess.file_exists(u.save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(u.save_path))
 
 
 func _test_tour_asks_follow_the_verbs_shape() -> void:

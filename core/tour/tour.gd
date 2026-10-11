@@ -849,3 +849,11 @@ func force_state_for_shot(stage: StringName) -> void:
 			# boss brief calls, so `run_ended`'s own listeners (the case's reset, the room's
 			# announcement) fire for real.
 			_end_run(true)
+		&"loss":
+			if run == null:
+				start_run()
+			if run == null:
+				return
+			# Same reasoning as `&"win"`, but the other ending a band actually sees: a brief run
+			# out of time or a flaw never fixed.
+			_end_run(false)

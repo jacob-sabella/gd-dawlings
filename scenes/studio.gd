@@ -2036,7 +2036,7 @@ func _on_tour_run_ended(won: bool) -> void:
 		Foley.play(tour_case, Foley.win_fanfare() if won else Foley.loss_sting())
 	var line := "The gig's a hit. Reputation %d." % Tour.unlocks.reputation
 	if not won:
-		line = "That one got away. Reputation %d." % Tour.unlocks.reputation
+		line = "That one got away. Lost a point -- Reputation %d." % Tour.unlocks.reputation
 	Session.tell_room(line)
 	# Back in the case: every instrument the run spilled stops existing here, the host's own
 	# half of the reset (a guest's copies go with it too, off the emptied `Session.tour` --

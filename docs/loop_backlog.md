@@ -1083,8 +1083,8 @@ gloriously wrong and you survive anyway.
   camera in this framing, so the rattle is what the test carries, the notice is what the shot
   carries.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
-  second life), a loss that costs something. One piece done -- **a win that is announced to the
-  room. Done 2026-10-11.** `reputation` has existed on `TourUnlocks` since the run-saving work
+  second life). Two pieces done -- a win that is announced to the room, a loss that costs a
+  point. **A win that is announced to the room. Done 2026-10-11.** `reputation` has existed on `TourUnlocks` since the run-saving work
   that gave it `runs`/`wins` -- bumped a run a win, saved, never once shown to anyone. A run's
   own end used to say nothing to the room either: `scenes/studio.gd`'s `_on_tour_run_ended`
   dropped its own `won` parameter on the floor (`_won`, unread) -- the case re-chained and its
@@ -1113,8 +1113,45 @@ gloriously wrong and you survive anyway.
   stashing this iteration's own diff and re-running. Not player-count-dependent, not this (or the
   last) change: a real timing issue in the probe's own real-time multi-process harness, worth its
   own iteration rather than a guess bolted onto this one.
+  **A loss that costs a point. Done 2026-10-11.** `TourUnlocks.record_run` only ever added
+  reputation on a win; a losing band kept exactly what it had, same as never having played. Now
+  a loss costs one point, floored at `maxi(reputation - 1, 0)` so a losing streak never goes
+  negative -- a band on a bad run is never worse off than a band that hasn't played yet, only no
+  better off. The room's own loss line now says so: `"That one got away. Lost a point --
+  Reputation %d."`, the win line's `Foley.win_fanfare`/`loss_sting` pairing unchanged.
+  One test (`_test_tour_unlocks_a_loss_costs_a_point_of_reputation`): a loss at 0 stays at 0, two
+  wins bring it to 2, a loss brings it to 1, two more losses floor it back at 0 rather than
+  -1. `tools/verify.sh` ends clean (7067 checks, 0 failed, 0 SCRIPT ERROR); `tools/session_probe.sh`
+  default and `--built-in` both green ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged).
+  A new `--tour loss` shot state mirrors `&"win"`, calling the real `_end_run(false)`;
+  `shots/tour_loss.png` is the record -- the restored project, no regression, though the room's
+  toast itself sits behind the desk's own arrange panel at this camera's default framing in both
+  the win and loss shots, so the line is read off the test's own capture of `Session.notice`
+  rather than off the pixels. `tools/tour_probe.sh 1` green; `tools/tour_probe.sh 4`'s known flake
+  ("the part count matches the catalogue") checked again by stashing this iteration's diff and
+  re-running on bare master -- same failure, same shape, confirmed once more not this (or any
+  recent) change.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
   fork, a boss that plays differently from the first.
+- **Riff Randomizer gear, off the run's own seed.** (The user, 2026-10-11, from a Riff Randomizer
+  YouTube episode they watched -- two musicians spin wheels for tuning, key, tempo, and several
+  rolls each of guitar amp sim, bass amp sim, drum kit, and synth, then have to write a real song
+  using whatever the wheels gave them, no re-rolling.) A brief's seed already rolls tempo, key,
+  and flaw (see "Seed randomness" above); this extends the same idea to the signal chain itself --
+  spin which of the host's own installed FX load onto which track for this brief, the way the
+  show spins real plugins the players own rather than a fixed, curated set. No fake wheel UI
+  needed, same as the user's note: just the host's real `DAW.list_track_fx`/`track_fx_add_by_name`-
+  reachable plugin list, one or more picks seeded off `[attempt_seed, brief_index, "gear", track]`
+  the same idiom every other draw already uses, landing as real FX on the real project the way a
+  flaw already does. Bigger bands would roll more slots (a guitar amp sim, a bass amp sim, a
+  synth patch, same shape as the video's "three guitar sims, two bass sims, three synths" for two
+  players) so eight hands get a believably weird, cluttered rig rather than one trick repeated.
+  Needs design judgment the loop should not invent alone before building: which FX categories
+  count as "gear" worth spinning (amp sim / synth plainly do; EQ or a limiter probably should not,
+  they are not a "constraint" a band plays around), whether a spin can draw a plugin the host does
+  not have installed (skip it, or only spin from what `DAW` reports present), and whether this
+  replaces or sits alongside the existing flaw system -- parked under "Waiting on the user" below
+  rather than guessed at here.
 - **Scale testing: solo, 4, 8. Done 2026-10-10.** `tools/tour_probe.sh N` (N 1..8) runs a brief
   as a host with N-1 real guest processes -- every flaw fixed and every part played from the seat
   that holds it, a draft pick carried over the wire, the roster checked by name so eight is
@@ -1149,6 +1186,13 @@ gloriously wrong and you survive anyway.
   rather than go back in the case when the run ends, the way the rest of the gear resets?
 - Is a curse spill really a curse for a big band -- it is more to do, which on a crowded card is
   what they came for. Maybe it only reads as a curse solo or in a duo.
+- Riff Randomizer gear (above): which FX categories are fair game to spin, whether a spin may
+  land on a plugin the host does not have installed, and whether this sits alongside the flaw
+  system or starts to replace it.
+- What reputation should actually buy (venues, cosmetics on the ghost, hats and case stickers,
+  a second life mid-run) and, if a second life exists, what it costs and whether it is bought
+  before a run starts or spent in the moment a brief is about to go wrong -- wins/losses move the
+  number (above), but spending it is a shop or a run-time choice either way, not a one-line fix.
 
 ## Parked
 
