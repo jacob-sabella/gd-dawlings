@@ -138,7 +138,15 @@ func _skin(what: String) -> Material:
 		m.albedo_color = NEON
 		m.emission_enabled = true
 		m.emission = NEON
-		m.emission_energy_multiplier = 3.0
+		# Was 3.0 -- the highest multiplier anywhere in the project (hardware/materials.gd's own
+		# LED tops out at 2.4, and that is a few millimetres, not a third of a 7cm ball). Bloom
+		# at that strength bled past the band edges onto the dark shell between them, so the
+		# whole ball read as a uniform pink glow rather than three bands on a dark ball
+		# (docs/loop_backlog.md, "Known rough edges": "reads as a pink ball; its bands do not
+		# show as bands"). 1.4 matches the keytar's own lit glow, the project's established
+		# number for something sizeable enough that its own shape has to stay readable through
+		# the glow rather than disappearing into it.
+		m.emission_energy_multiplier = 1.4
 		return m
 	var skin: Array = SKINS.get(what, [Color(0.6, 0.6, 0.6), 0.6])
 	m.albedo_color = skin[0]

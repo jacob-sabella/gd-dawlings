@@ -147,6 +147,7 @@ func _ready() -> void:
 	await _test_the_cradle_swings_and_clacks()
 	await _test_the_yoyo_does_its_tricks()
 	await _test_each_venue_has_a_toy_of_its_own()
+	_test_the_neon_ball_glows_without_blooming_into_one_colour()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
 	await _test_somebody_elses_radio_plane_flies_where_they_say()
@@ -14522,6 +14523,25 @@ func _test_each_venue_has_a_toy_of_its_own() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	_as_session(Session.Role.SOLO, 1)
+
+
+## THE WASHOUT THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "The neon ball reads
+## as a pink ball; its bands do not show as bands"). At 3.0 -- the highest emission multiplier
+## anywhere in the project, against the LED's own 2.4 for something a few millimetres across --
+## bloom bled the bright bands straight across the dark shell between them. Checked as a number
+## against the project's own established range rather than a render, so it fails the moment
+## someone turns the glow back up without fixing the actual washout.
+func _test_the_neon_ball_glows_without_blooming_into_one_colour() -> void:
+	var toy := ToyItem.new()
+	add_child(toy)
+	var glow := toy._skin("glow") as StandardMaterial3D
+	check("the bands still glow", glow.emission_enabled and glow.emission == ToyItem.NEON)
+	check("but no brighter than the project's own established range for something this size (%.1f)" %
+			glow.emission_energy_multiplier, glow.emission_energy_multiplier <= 2.4)
+	var shell := toy._skin("shell") as StandardMaterial3D
+	check("and the shell between the bands carries no glow of its own to bloom with",
+			not shell.emission_enabled)
+	toy.queue_free()
 
 
 func _test_the_yoyo_does_its_tricks() -> void:

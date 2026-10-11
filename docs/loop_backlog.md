@@ -1567,9 +1567,8 @@ gloriously wrong and you survive anyway.
 - The venue toys: they are all thrown things, a ball of some kind (or a starfish); none of them
   does anything the others cannot but fly differently. No slinky, nothing to fidget with, and no
   desk toy by the console. The beach ball, held on a desktop, is a big thing over the desk and
-  hides some of it. The neon ball reads as a pink ball; its bands do not show as bands.
-  Changing venue mid-throw lets the old flight finish, then shows the new venue's toy where the
-  old one landed.
+  hides some of it. Changing venue mid-throw lets the old flight finish, then shows the new
+  venue's toy where the old one landed.
 
 - The yo-yo: on a desktop your own string is 15 cm and your ghost's is 70 cm, so what you see
   of your own trick is not what others see. The string is a straight line, never slack, even
@@ -2440,3 +2439,35 @@ stays fast and keeps failing if the span ever regresses.
 Open follow-ups, not built:
 - The same "never fitted" gap might exist elsewhere nobody has stress-tested with a long name;
   this tick only looked at the rack, because that was the reported one.
+
+## Tick U -- the neon ball's own glow was blooming it into one colour (2026-10-11)
+
+"The neon ball reads as a pink ball; its bands do not show as bands," from this list. Measured
+rather than trusted: pulled the real `toy` item out of `ItemRoom`, forced it to the grid venue,
+pinned it in front of the camera at both an exaggerated scale (to see the geometry clearly) and
+at its real size from a realistic holding distance, and screenshotted both.
+
+`ToyItem._skin()`'s `"glow"` material (the three bands `tools/blender/toys.py` cuts into the
+ball, against a `"shell"` material for the dark ball between them) was built with
+`emission_energy_multiplier = 3.0` -- a grep across every `emission_energy_multiplier` in the
+project (`hardware/materials.gd`, every held item) turned up nothing else above 2.4, and that
+2.4 is the LED helper, for a few millimetres of panel, not a third of a 7cm ball's surface. At
+3.0, bloom bled the bands' own glow across the dark shell between them widely enough that the
+geometric band-vs-shell split barely read at the ball's real, small on-screen size -- confirmed
+by the real-scale screenshot, where lowering the number alone visibly tightened the glow back
+onto the bands and let the shell's own dark colour show between them.
+
+Fixed by lowering it to 1.4, matching the keytar's own `_lit.emission_energy_multiplier` --
+already the project's number for something sizeable enough that its shape has to stay readable
+through its own glow rather than disappearing into it, rather than inventing a new one.
+Checked by `_test_the_neon_ball_glows_without_blooming_into_one_colour`, which pins the number
+against the project's own established range (`<= 2.4`) and confirms the shell carries no glow
+of its own -- a measurement, so it keeps failing if the glow goes back up without the washout
+actually being re-examined, rather than a screenshot nobody re-takes.
+
+Open follow-ups, not built:
+- The grid venue's own ambient light (`GridVenue.dress`, `Color(0.36, 0.20, 0.55)` at 0.42
+  energy) tints the ball's dark shell pink too, on top of its own bloom -- deliberate venue
+  atmosphere, shared by everything else in that room, and not this ball's own bug to fix alone.
+  The band-vs-shell contrast is real and visibly improved by this fix; the whole room reading
+  pink in the grid venue is the room working as designed.
