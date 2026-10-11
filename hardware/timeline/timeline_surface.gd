@@ -24,7 +24,10 @@ const WIDTH := 0.86
 ## width is more time per lane, which is the one thing a timeline cannot have too much of.
 const SCREEN_WIDTH := 1.30
 var width := WIDTH
-const LANE_HEIGHT := 0.0168
+## Was 0.0168 -- measured illegible at normal play distance (2026-10-11: "everything is too
+## damn hard to read... especially the timeline"). Raised toward LANE_HEIGHT_MAX; the grip still
+## lets a person go bigger or smaller from here.
+const LANE_HEIGHT := 0.0232
 ## How tall each lane is, and how wide the panel is against its own width for where it is shown:
 ## both the person's to choose, with the grip at the panel's bottom right corner.
 var lane_height := LANE_HEIGHT
@@ -197,8 +200,10 @@ const AUTOMATION_DOT := 0.0026
 const AUTOMATION_GRIP := 0.003
 const AUTOMATION_COLOUR := Color(1.0, 0.62, 0.22)
 ## The row the shown lane is drawn and edited in, under its track's own: two and a half lanes
-## tall, as a lane the height of a track's put -4 and -18 dB a few millimetres apart.
-const AUTOMATION_ROW := 0.042
+## tall, as a lane the height of a track's put -4 and -18 dB a few millimetres apart. Derived
+## from LANE_HEIGHT rather than a second constant, so the two cannot drift out of proportion
+## again the way they did when LANE_HEIGHT alone was raised for legibility (2026-10-11).
+const AUTOMATION_ROW := LANE_HEIGHT * 2.5
 
 
 func set_wide(wide: bool) -> void:
@@ -1990,7 +1995,8 @@ func _text(content: String, size: int, tint: Color) -> Label3D:
 	var l := Label3D.new()
 	l.text = content
 	l.font_size = size * 4
-	l.pixel_size = 0.000055
+	# Was 0.000055, scaled up with LANE_HEIGHT's own increase (2026-10-11: too small to read).
+	l.pixel_size = 0.000078
 	l.modulate = tint
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)

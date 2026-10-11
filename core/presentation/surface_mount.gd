@@ -17,7 +17,12 @@ extends Node3D
 
 ## Framing margin. The surface does not fill the viewport edge to edge, because a console whose
 ## outermost fader is against the frame reads as cropped even when it is not.
-const SCREEN_MARGIN := 1.18
+##
+## Was 1.18 -- every SCREEN-mode surface (console, rack, patchbay, timeline) read smaller than
+## it needed to (2026-10-11: "everything...is too damn hard to read... all so small"). Lowered
+## toward 1.0 rather than all the way to it, so there is still a sliver of edge left for the
+## grab handle and the surface does not read as cropped.
+const SCREEN_MARGIN := 1.08
 
 ## Room left beside the content for the grab handle, in metres.
 ##
