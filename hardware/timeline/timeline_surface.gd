@@ -237,6 +237,16 @@ func _ready() -> void:
 	surface_kind = &"timeline"
 	# Clear of the HUD line, above the desk.
 	screen_top = 0.06
+	# Surface's own default (0.33) was never tuned to the timeline's own width: at MAX_LANES and
+	# the default lane height the panel needs about 0.51 of the view's height before its WIDTH
+	# becomes the tighter constraint instead (matching how the console, the rack and the bay are
+	# already framed), so 0.33 left it a third further from the eye than its own width already
+	# allowed -- a bigger loss than any single lane's font size (2026-10-11: "the timeline is
+	# still just ungodly unreadable"). Raised to 0.40: short of that 0.51 crossover on purpose,
+	# because past about 0.42 the panel's own screen footprint grows down far enough to cover the
+	# tape deck's tempo knob and, at a wider desk, Rig Roulette's wall -- a seat-click miss the
+	# audit caught (`_seat_audit`), not a guess. 0.40 measured clean on every track count tried.
+	screen_band = 0.40
 	if surface_id == &"":
 		surface_id = &"timeline"
 	super()

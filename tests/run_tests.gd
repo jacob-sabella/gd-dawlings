@@ -48,6 +48,7 @@ func _ready() -> void:
 	_test_arrangement_is_durable_not_volatile()
 	_test_timeline_window_scroll_and_zoom()
 	_test_timeline_follows_the_playhead_only_while_rolling()
+	_test_timeline_screen_band_was_widened_but_not_past_the_seat_audit()
 	_test_bank_redefines_what_an_index_means()
 	_test_bank_is_stated_before_the_tracks_it_renumbers()
 	_test_bank_waits_for_the_hand_to_let_go()
@@ -1226,6 +1227,23 @@ func _test_timeline_follows_the_playhead_only_while_rolling() -> void:
 	DAW.state.playing = false
 	timeline.queue_free()
 	DAW.use(previous, false)
+
+
+## 0.33, Surface's own default, left the timeline a third further from the eye on a monitor than
+## its own width already allowed to (2026-10-11: "the timeline is still just ungodly
+## unreadable"). Raised, but not as far as the panel's width would allow outright: the seat-click
+## audit (`_test_every_control_is_clickable_from_the_seat`) is what actually bounds this, by
+## catching the tape deck's tempo knob and Rig Roulette's wall going dark behind an oversized
+## panel -- this just pins the number that audit measured clean, so a future "make it bigger"
+## does not have to rediscover the ceiling the slow way.
+func _test_timeline_screen_band_was_widened_but_not_past_the_seat_audit() -> void:
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	check("the timeline's screen band is wider than Surface's own unturned default",
+			timeline.screen_band > 0.33)
+	check("and not past what the seat-click audit measured clean",
+			is_equal_approx(timeline.screen_band, 0.40))
+	timeline.queue_free()
 
 
 # --- track banking ------------------------------------------------------------------------
