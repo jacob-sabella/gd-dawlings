@@ -27,6 +27,14 @@ signal run_ended(won: bool)
 ## -- the host never hears its own `Session.tour_changed` (`publish_tour` only RPCs out), which
 ## is why this exists rather than everything riding that one signal.
 signal instrument_spilled(id: StringName, kind: StringName, curse: StringName, bound_to: int)
+## A chaos event's telegraph or strike, from THIS peer's own clock -- the one pair of signals
+## here that is not host-only: every peer (host included) runs `_tick_chaos_shown()` off its own
+## `brief_elapsed()`, so the room reacts (a flicker, a rattle, a sound) at the same moment on
+## every machine, rather than only on the host and then again, late, wherever `Session.tour`'s
+## publish happens to land. The strike's actual EFFECT (a mute, a fader on the floor) still rides
+## ordinary desk replication; these are the presentation alone.
+signal chaos_telegraphed(index: int)
+signal chaos_struck(index: int)
 
 ## `null` when `Tour.run.state == IDLE` -- i.e. always `null` between runs. On the host this is
 ## the live run; on a guest it is a read-only copy rebuilt from `Session.tour` on every change.
@@ -59,6 +67,24 @@ var _draft: Array[TourCard] = []
 var _published_fixed: Array[bool] = []
 ## [hits, played, holders] as last published, the same reasoning for `_tick_parts`.
 var _published_parts_state: Array = []
+## `run.event_state` as last published, the same reasoning for `_tick_chaos`.
+var _published_chaos: Array[int] = []
+## Per chaos event index, the furthest TourChaos.State this PEER has already shown (the
+## telegraph's sound and rattle, the strike's own sound) -- `_tick_chaos_shown`'s, read by both
+## host and guest off their own `brief_elapsed()`, so each plays once however the clock and
+## `Session.tour`'s publishes interleave.
+var _shown_chaos: Array[int] = []
+## Which brief `_shown_chaos` belongs to (`attempt_seed:brief_index` -- see `_chaos_key`), not
+## merely which events it drew: two briefs can honestly draw the very same single event, and a
+## second brief must still get its own surprise, not inherit the first one's already-shown
+## state just because the ids happened to match.
+var _shown_for_key := ""
+## A guest's anchor for `brief_elapsed()`: the host's last published (seconds_total - seconds_left)
+## pair, re-anchored to this machine's own wall clock on every `Session.tour_changed` -- several
+## a brief -- so a late joiner reads right from their first publish and nobody drifts between
+## them.
+var _anchor_elapsed := 0.0
+var _anchor_usec := 0
 ## True while `_start_brief` is laying a brief out, so a `spill` it makes on the way (the first
 ## brief's seeding, a card's) waits for the one publish at its end.
 var _laying_out := false
@@ -75,6 +101,11 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Both host and guest: the telegraph and the strike's presentation play from THIS peer's own
+	# clock, before the host-only half below even asks whose authority this is -- see
+	# `chaos_telegraphed`/`chaos_struck`'s own doc.
+	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
+		_tick_chaos_shown()
 	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
 		return
 	if run.tuning:
@@ -90,7 +121,9 @@ func _physics_process(delta: float) -> void:
 	_on_measure_tick(delta)
 	_tick_flaws()
 	_tick_parts()
-	if not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false):
+	_tick_chaos()
+	if not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false) \
+			and not run.event_state.has(TourChaos.State.STRUCK):
 		_finish_brief()
 		return
 	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
@@ -266,6 +299,8 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	run.tuning = true
 	run.seconds_left = brief.seconds * run.next_brief_seconds_mult
 	run.next_brief_seconds_mult = 1.0
+	run.seconds_total = run.seconds_left
+	_lay_out_chaos(index, brief, band_size, drawn)
 	_loudness = null
 	_balance = null
 	_timing = null
@@ -282,6 +317,48 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	_published_parts_state = []
 	brief_started.emit(index)
 	_publish()
+
+
+## This brief's chaos events, drawn and timed from the run's own `chaos_rng` -- a stream of its
+## own, never brief 0's, so a replay strikes the same things at the same moments regardless of
+## how many flaws or parts that seed also drew. Order of draws inside the stream: how many, then
+## which, then each one's own track (or `tempo_lurch`'s sign), then the schedule -- see
+## TourChaos's own doc.
+func _lay_out_chaos(index: int, brief: TourBrief, band_size: int, flaws: Array[TourFlaw]) -> void:
+	var crng := run.chaos_rng(index)
+	var n := TourChaos.count_for(band_size, index, brief.is_boss, crng)
+	var drawn_events := TourChaos.draw(crng, n, run.flaws)
+	var flaw_tracks: Array[String] = []
+	flaw_tracks.assign(flaws.map(func(f: TourFlaw) -> String: return f.track))
+	run.events.clear()
+	run.event_track.clear()
+	run.event_state.clear()
+	for e in drawn_events:
+		run.events.append(e.id)
+		var slot := 0
+		if e.wants_track:
+			var excl := flaw_tracks.duplicate()
+			excl.append_array(e.extra_track_excludes)
+			slot = TourChaos.pick_track(crng, DAW.state, excl)
+		elif e.id == &"tempo_lurch":
+			slot = TourChaos.pick_sign(crng)
+		run.event_track.append(slot)
+		run.event_state.append(TourChaos.State.PENDING)
+	run.event_at.assign(TourChaos.schedule(crng, run.events.size(), run.seconds_total))
+	# The schedule may honestly come back with fewer than asked (a short clock, too little room
+	# between FIRST_SECONDS and LAST_SECONDS) -- every array stays index-for-index with it.
+	run.events.resize(run.event_at.size())
+	run.event_track.resize(run.event_at.size())
+	run.event_state.resize(run.event_at.size())
+	_published_chaos = []
+	_shown_chaos = []
+	_shown_for_key = _chaos_key(run)
+
+
+## `attempt_seed:brief_index` -- a brief's own identity, for `_shown_chaos` to key off instead of
+## the events it drew (two briefs can honestly draw the very same one event).
+func _chaos_key(r: TourRun) -> String:
+	return "%d:%d" % [r.attempt_seed, r.brief_index]
 
 
 ## Samples whichever of Loudness/Balance/Timing this brief lists in `measures` -- none do today
@@ -337,6 +414,99 @@ func _tick_parts() -> void:
 		_publish()
 
 
+## Seconds of this brief's clock gone by: the one number every peer agrees on to within a
+## publish's lateness, so "telegraph 2 s before the strike" lands at the same moment on every
+## machine. On the host it is exact (`seconds_total - seconds_left`, both live); on a guest it is
+## the host's last published pair, re-anchored to this machine's own wall clock on every
+## `Session.tour_changed` (`_anchor_elapsed`/`_anchor_usec`, set in `_on_tour_changed`) -- a late
+## joiner is right from their first publish, and nobody drifts between publishes. 0.0 outside a
+## brief, or while still tuning (the clock has not started).
+func brief_elapsed() -> float:
+	if run == null or run.state != TourRun.State.BRIEF or run.tuning:
+		return 0.0
+	if Session.is_authority():
+		return run.seconds_total - run.seconds_left
+	return _anchor_elapsed + float(Time.get_ticks_usec() - _anchor_usec) / 1_000_000.0
+
+
+## Host only: the live state machine. PENDING -> TELEGRAPHED at `event_at[i] -
+## TourChaos.TELEGRAPH_SECONDS`, -> STRUCK at `event_at[i]` (the one place a strike's own DAW
+## verbs run) -- then re-judged every tick exactly as a flaw is, RECOVERED once the event's own
+## test passes and back to STRUCK if the band breaks it again. Publishes only on a change, the
+## same reasoning as `_tick_flaws`/`_tick_parts`.
+func _tick_chaos() -> void:
+	if run.events.is_empty():
+		return
+	var elapsed := brief_elapsed()
+	for i in run.events.size():
+		var event := TourChaos.by_id(run.events[i])
+		if event == null:
+			continue
+		var at: float = run.event_at[i] if i < run.event_at.size() else INF
+		var track: int = run.event_track[i] if i < run.event_track.size() else 0
+		match run.event_state[i]:
+			TourChaos.State.PENDING:
+				if elapsed >= at - TourChaos.TELEGRAPH_SECONDS:
+					run.event_state[i] = TourChaos.State.TELEGRAPHED
+			TourChaos.State.TELEGRAPHED:
+				if elapsed >= at:
+					event.strike(run, track)
+					run.event_state[i] = TourChaos.State.STRUCK
+			TourChaos.State.STRUCK:
+				if event.recovered(DAW.state, run, track):
+					run.event_state[i] = TourChaos.State.RECOVERED
+			TourChaos.State.RECOVERED:
+				if not event.recovered(DAW.state, run, track):
+					run.event_state[i] = TourChaos.State.STRUCK
+	if run.event_state != _published_chaos:
+		_published_chaos = run.event_state.duplicate()
+		_publish()
+
+
+## Both host and guest, off THIS peer's own `brief_elapsed()`: plays the telegraph's and the
+## strike's presentation (the lights, the rattle, the sounds -- wired in scenes/studio.gd) the
+## moment this peer's own clock crosses each threshold, whichever of the clock or the wire
+## (`run.event_state`, for a joiner or a long hitch) is further along. Each plays once, however
+## the clock and the host's publishes interleave.
+func _tick_chaos_shown() -> void:
+	if run.events.is_empty():
+		return
+	var key := _chaos_key(run)
+	if key != _shown_for_key:
+		_shown_for_key = key
+		_shown_chaos = []
+	while _shown_chaos.size() < run.events.size():
+		_shown_chaos.append(TourChaos.State.PENDING)
+	var elapsed := brief_elapsed()
+	for i in run.events.size():
+		var at: float = run.event_at[i] if i < run.event_at.size() else INF
+		var clock_state := TourChaos.State.PENDING
+		if elapsed >= at:
+			clock_state = TourChaos.State.STRUCK
+		elif elapsed >= at - TourChaos.TELEGRAPH_SECONDS:
+			clock_state = TourChaos.State.TELEGRAPHED
+		var wire: int = run.event_state[i] if i < run.event_state.size() else TourChaos.State.PENDING
+		var target: int = maxi(clock_state, wire)
+		var shown: int = _shown_chaos[i]
+		if target <= shown:
+			continue
+		if shown < TourChaos.State.TELEGRAPHED and target >= TourChaos.State.TELEGRAPHED:
+			chaos_telegraphed.emit(i)
+		if shown < TourChaos.State.STRUCK and target >= TourChaos.State.STRUCK:
+			chaos_struck.emit(i)
+		_shown_chaos[i] = target
+
+
+## For TourHud: the furthest state this peer has shown event `index` -- the clock-local
+## `_shown_chaos`, or the wire's own `run.event_state`, whichever is further along.
+func chaos_shown(index: int) -> int:
+	if run == null or index < 0 or index >= run.events.size():
+		return TourChaos.State.PENDING
+	var wire: int = run.event_state[index] if index < run.event_state.size() else TourChaos.State.PENDING
+	var shown: int = _shown_chaos[index] if index < _shown_chaos.size() else TourChaos.State.PENDING
+	return maxi(shown, wire)
+
+
 func _finish_brief() -> void:
 	var brief := TourBriefs.brief(run.brief_index)
 	var samples := {}
@@ -355,6 +525,11 @@ func _finish_brief() -> void:
 			"seconds_left_frac": run.seconds_left / brief.seconds}
 	var played_n: int = run.played.filter(func(p: bool) -> bool: return p).size()
 	samples["parts"] = {"played": played_n, "total": run.played.size()}
+	# Only when this brief actually drew a chaos event: a brief that never had one (brief 0,
+	# always; any other, by the odds) is scored exactly as it was before this feature existed.
+	if not run.events.is_empty():
+		var open_n: int = run.event_state.filter(func(s: int) -> bool: return s == TourChaos.State.STRUCK).size()
+		samples["chaos"] = {"open": open_n, "total": run.events.size()}
 	var verdict := brief.judge(samples, run.tempo_tolerance_mult)
 	var passed := bool(verdict["passed"])
 	var score := int(verdict["score"])
@@ -404,6 +579,16 @@ func _on_tour_changed() -> void:
 	if Session.is_authority():
 		return
 	run = TourRun.from_dict(Session.tour) if not Session.tour.is_empty() else null
+	# Re-anchored every time, not just on a new brief: several publishes happen a brief (a flaw
+	# fixed, a part landed), and each is a fresher, more accurate "where the host's clock really
+	# is right now" than the last.
+	if run != null:
+		_anchor_elapsed = run.seconds_total - run.seconds_left
+		_anchor_usec = Time.get_ticks_usec()
+	var key := _chaos_key(run) if run != null else ""
+	if key != _shown_for_key:
+		_shown_for_key = key
+		_shown_chaos = []
 
 
 func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:
@@ -461,3 +646,33 @@ func force_state_for_shot(stage: StringName) -> void:
 				run.draft.assign(_draft.map(func(c: TourCard) -> StringName: return c.id))
 				drafting_started.emit(_draft)
 				_publish()
+		&"chaos":
+			if run == null:
+				start_run()
+			if run != null and run.brief_index == 0:
+				# Never on brief 0 in real play, so the shot is honest about what a band actually sees.
+				_start_brief(1)
+			if run == null:
+				return
+			var brief := TourBriefs.brief(run.brief_index)
+			run.tuning = false
+			run.seconds_total = brief.seconds
+			run.seconds_left = run.seconds_total - 20.0
+			run.events = [&"power_flicker", &"crowd_throws"]
+			run.event_track = [TourChaos.pick_track(run.chaos_rng(run.brief_index), DAW.state, []),
+					TourProject.BAND.find("Strings") + 1]
+			run.event_at = [19.0, 21.5]
+			run.event_state = [TourChaos.State.PENDING, TourChaos.State.PENDING]
+			# Twice, as two physics frames would: the state machine advances one step a tick
+			# (PENDING -> TELEGRAPHED -> STRUCK), so the first call telegraphs both (20 s is
+			# already past each one's TELEGRAPH_SECONDS) and the second strikes event 0 (20 >=
+			# its own 19) while event 1 (at 21.5) is still only telegraphed. One line ends up XX,
+			# the other !!.
+			_tick_chaos()
+			_tick_chaos()
+			# TourHud only rebuilds its chaos lines off this signal (the host never hears its own
+			# `Session.tour_changed`, and `_process`'s per-frame refresh updates existing labels,
+			# it does not add or remove them) -- without it the card would still be showing
+			# whatever `_start_brief(1)` actually drew, not the two forced here.
+			brief_started.emit(run.brief_index)
+			_publish()

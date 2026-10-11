@@ -34,6 +34,9 @@ var _drawn_flaws: Array[StringName] = []
 var _parts_edge: ColorRect
 var _parts_box: VBoxContainer
 var _drawn_parts: Array[StringName] = []
+var _chaos_edge: ColorRect
+var _chaos_box: VBoxContainer
+var _drawn_chaos: Array[StringName] = []
 var _draft_box: HBoxContainer
 var _drawn_draft: Array[StringName] = []
 
@@ -79,6 +82,7 @@ func _process(_delta: float) -> void:
 	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
 		_refresh_flaws(run)
 		_refresh_parts(run)
+		_refresh_chaos(run)
 
 
 func _build() -> void:
@@ -129,6 +133,16 @@ func _build() -> void:
 	_parts_box.add_theme_constant_override("separation", 2)
 	column.add_child(_parts_box)
 
+	_chaos_edge = ColorRect.new()
+	_chaos_edge.color = EDGE
+	_chaos_edge.custom_minimum_size = Vector2(0, 1)
+	_chaos_edge.visible = false
+	column.add_child(_chaos_edge)
+	_chaos_box = VBoxContainer.new()
+	_chaos_box.name = "Chaos"
+	_chaos_box.add_theme_constant_override("separation", 2)
+	column.add_child(_chaos_box)
+
 	_draft_box = HBoxContainer.new()
 	_draft_box.name = "Draft"
 	_draft_box.add_theme_constant_override("separation", 10)
@@ -143,6 +157,7 @@ func _refresh() -> void:
 		_drawn_draft = []
 		_drawn_flaws = []
 		_drawn_parts = []
+		_drawn_chaos = []
 		return
 	var brief := TourBriefs.brief(run.brief_index)
 	_title.text = ("BOSS: " if brief.is_boss else "") + brief.title
@@ -162,6 +177,13 @@ func _refresh() -> void:
 		_build_parts(run)
 	elif run.state == TourRun.State.BRIEF:
 		_refresh_parts(run)
+	var showing_chaos := run.state == TourRun.State.BRIEF and not run.events.is_empty()
+	_chaos_box.visible = showing_chaos
+	_chaos_edge.visible = showing_chaos
+	if run.state == TourRun.State.BRIEF and run.events != _drawn_chaos:
+		_build_chaos(run)
+	elif run.state == TourRun.State.BRIEF:
+		_refresh_chaos(run)
 	var drafting := run.state == TourRun.State.DRAFTING
 	_draft_box.visible = drafting
 	if drafting and run.draft != _drawn_draft:
@@ -173,7 +195,7 @@ func _refresh_clock() -> void:
 	if run == null or run.state != TourRun.State.BRIEF:
 		_clock.text = ""
 		return
-	_clock.text = "SOUNDCHECK" if run.tuning else "%d s" % int(ceil(run.seconds_left))
+	_clock.text = "SOUNDCHECK" if run.tuning else "%d s" % int(ceil(run.seconds_total - Tour.brief_elapsed()))
 
 
 ## One line per flaw, rebuilt only when the set of flaws changes (a new brief): a fixed/not-fixed
@@ -205,6 +227,9 @@ func _refresh_flaws(run: TourRun) -> void:
 	var tag := "BAND OF %d   %d / %d FIXED" % [run.band_size, run.fixed.count(true), run.flaws.size()]
 	if not run.parts.is_empty():
 		tag += "   %d / %d PARTS" % [run.played.count(true), run.parts.size()]
+	var loose := run.event_state.count(TourChaos.State.STRUCK)
+	if loose > 0:
+		tag += "   %d LOOSE" % loose
 	_tag.text = tag
 	for i in run.flaws.size():
 		var flaw := TourFlaws.by_id(run.flaws[i])
@@ -267,10 +292,60 @@ func _refresh_parts(run: TourRun) -> void:
 		l.add_theme_color_override("font_color", colour)
 
 
-## 12 while there is room, 11 once flaws and parts together would crowd the card (the max today,
-## 5 flaws + 3 parts, already needs it).
+## Rebuilt only when the set of events changes (a new brief), same stale-label care as
+## `_build_flaws`. One label per event from the start, PENDING ones hidden by `_refresh_chaos`
+## until their own telegraph -- a surprise is a surprise, not a line sitting there blank.
+func _build_chaos(run: TourRun) -> void:
+	_drawn_chaos = run.events.duplicate()
+	for child in _chaos_box.get_children():
+		_chaos_box.remove_child(child)
+		child.queue_free()
+	var size := _line_font_size(run)
+	for i in run.events.size():
+		var l := _label("", size, CURSE)
+		l.name = "Chaos%d" % i
+		l.visible = false
+		_chaos_box.add_child(l)
+	_refresh_chaos(run)
+
+
+## "!!  DECK: The power's browning out..." once telegraphed, "XX  Rhodes is dead. MUTE off."
+## once struck, "OK  ..." in ACCENT once the band has put it right -- PENDING stays hidden, since
+## the whole point is that nobody saw it coming. Reads `Tour.chaos_shown`, not `run.event_state`
+## directly, so each peer's own clock decides when THEY find out, not just the wire.
+func _refresh_chaos(run: TourRun) -> void:
+	for i in run.events.size():
+		var event := TourChaos.by_id(run.events[i])
+		if event == null:
+			continue
+		var l := _chaos_box.get_node_or_null("Chaos%d" % i) as Label
+		if l == null:
+			continue
+		var shown := Tour.chaos_shown(i)
+		var track: int = run.event_track[i] if i < run.event_track.size() else 0
+		l.visible = shown != TourChaos.State.PENDING
+		match shown:
+			TourChaos.State.TELEGRAPHED:
+				l.text = "!!  " + event.telegraph_for(run, track)
+				l.add_theme_color_override("font_color", CURSE)
+			TourChaos.State.STRUCK:
+				l.text = "XX  " + event.line_for(run, track)
+				l.add_theme_color_override("font_color", CURSE)
+			TourChaos.State.RECOVERED:
+				l.text = "OK  " + event.line_for(run, track)
+				l.add_theme_color_override("font_color", ACCENT)
+
+
+## 12 while there is room, 11 once flaws, parts and any chaos line already shown together would
+## crowd the card (the max today, 5 flaws + 3 parts, already needs it). A PENDING chaos line
+## does not count -- it is hidden, and sizing round a surprise that has not happened yet would
+## make the card jump the moment it does.
 static func _line_font_size(run: TourRun) -> int:
-	return 11 if run.flaws.size() + run.parts.size() > 6 else 12
+	var shown_chaos := 0
+	for i in run.events.size():
+		if Tour.chaos_shown(i) != TourChaos.State.PENDING:
+			shown_chaos += 1
+	return 11 if run.flaws.size() + run.parts.size() + shown_chaos > 6 else 12
 
 
 ## Three clickable cards, one per `draft` id: the host applies the pick at once

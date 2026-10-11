@@ -869,8 +869,54 @@ gloriously wrong and you survive anyway.
   present can use. Several iterations' worth; start with the gestures each medium already has.
 - **Seed randomness.** Every draw from the run's seed (the song's draw is; the draft's
   muted_track still rolls an unseeded RNG), a seed shown on the case so a run can be replayed.
-- **Chaos events.** Mid-brief trouble: a track drops out, the tempo drifts, a plugin dies, the
-  power flickers -- survivable, loud, and seeded.
+- **Chaos events. Done 2026-10-11.** Mid-brief trouble on top of a brief's flaws and parts: never
+  on the first brief (that one is for learning the band's own flaws), telegraphed 2 s ahead so
+  getting hit is never a surprise from nowhere, struck once on the host's own clock, and judged
+  live exactly as a flaw is -- a struck event blocks the pass until it is actually put right
+  (`TourBrief.judge`'s new "chaos" block), and can be broken again after recovering if the band
+  lets it. Six (core/tour/tour_chaos.gd's catalogue, core/tour/tour_chaos_event.gd's shape,
+  mirroring TourFlaw/TourFlaws down to the file split): the power flickers and a strip mutes
+  (MUTE off recovers it); someone leans on SOLO and the rest of the band drops out (SOLO off);
+  the stage box works loose and Stage stops taking the part lane (REC arm it again); the crowd
+  throws things and a strip's fader lands on the floor at -30 dB (back between -12 and +3); a
+  plugin goes haywire on a strip (bypass, flatten or pull it, judged by a `TourFlaws.eq_clean`
+  pulled out of muddy_bass's own judge so the two share one definition of "clean"); the deck's
+  belt slips and the tempo lurches +-14 BPM off the setlist (grab it back within 3 BPM) --
+  `wrong_tempo`/`dragging_keys` briefs never draw it, so a brief is never judged on the same knob
+  twice. 1-2 players see one about six tries in ten; 3-5 always one, often two; 6-8 two, often
+  three; the boss adds one more, each in its own `run.chaos_rng(index)` stream (never song_rng's,
+  so no existing seed-replay test shifted a single number), scheduled 10 s into a brief's clock to
+  8 s before its end, two strikes never closer than 8 s apart, honestly short rather than
+  crowded if a `shorter_clock` card leaves no room. Sync rode the schedule, not a verb-by-verb
+  wire: once a brief starts, every peer knows the whole schedule (`run.events`/`event_at`/
+  `event_track`), so each one's own `Tour.chaos_telegraphed`/`chaos_struck` (the one signal pair
+  here that is not host-only) fires off that peer's own `brief_elapsed()` -- the host's exactly,
+  a guest's anchored to the host's last publish and re-anchored every one after -- reconciled
+  against the actual wire state (`Tour.chaos_shown`) so a late joiner or a long hitch still lands
+  on the right line rather than a stale one. The room says so before it happens: the practicals
+  flicker and the case rattles on every peer at the telegraph (`scenes/studio.gd`'s
+  `_flicker_lights`/`TourCase.rattle`, `Foley.chaos_warning`), `power_flicker`'s strike kills the
+  practicals and the venue's own house lights for a bar (`Venue.blackout`, new and a no-op by
+  default -- only the studio has fittings of its own to kill) and `crowd_throws` lobs up to three
+  of the room's own loose props in from the back of house on the host (`ItemRoom.fly`, seeded, so
+  a replay throws the same things at the same spots; a guest sees it through ordinary room
+  state, nothing new on the wire for it). `tools/verify.sh` ends clean (7012 checks, 0 failed);
+  `shots/tour_chaos.png` (band of one, a struck HAT mute and a telegraphed crowd-throw both on
+  the card at once, via a new `--tour chaos` shot state) is the record. Reviewed the same day,
+  against the schedule window, recoverability, and sync by hand rather than a second pass (the
+  pass itself ran out of session before it could run): the math behind `_tick_chaos`'s "which
+  elapsed crosses which threshold" was traced through `TourChaos.schedule`'s own bounds, every
+  event's `_recovered` was confirmed to read nothing but `MixState`/`run` (DAW verbs or their own
+  schedule, never a surface or a signal), and `_lights_out`/`_flicker_lights` share one tween
+  (`_lights_tween`, killed before the other starts one) so a second strike mid-blackout can never
+  fight the first over a lamp, with `_relight` on a run ending mid-dark so the room is never left
+  that way once there is no brief left to light it back up for. Not chased: `power_flicker` and
+  `solo_leaned` can both land on the same strip in one brief (nothing excludes the pairing), which
+  reads as one strip in real trouble twice rather than two separate events -- harmless, maybe even
+  good, but not an intended pairing; and a venue beyond the studio has no fittings for
+  `Venue.blackout` to turn off, so `power_flicker` there is only ever the practicals, never a true
+  blackout -- fine today (the studio is Tour's only venue) but worth remembering once a second
+  one exists.
 - **The crowd's ear.** Master-bus loudness and balance as real bars again, once the clean band's
   numbers are measured through a probe flag and the thresholds set from them.
 - **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's

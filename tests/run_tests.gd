@@ -288,6 +288,13 @@ func _ready() -> void:
 	_test_tour_marked_instrument_refuses_another_hand()
 	_test_tour_parts_count_the_instruments_in_the_room()
 	_test_tour_deck_offers_instruments_to_a_big_band()
+	_test_tour_chaos_schedule_is_seeded_and_scaled()
+	_test_tour_chaos_strikes_and_recovers_through_daw_verbs()
+	_test_tour_chaos_blocks_the_pass_until_recovered()
+	_test_tour_chaos_telegraphs_and_strikes_on_the_brief_clock()
+	_test_tour_chaos_guest_plays_the_telegraph_from_the_run()
+	_test_tour_chaos_leaves_the_real_project_untouched()
+	_test_tour_chaos_round_trips_and_never_draws_a_conflict()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -16146,3 +16153,476 @@ func _test_tour_deck_offers_instruments_to_a_big_band() -> void:
 			if c.id == &"spill_cowbell":
 				still_offered = true
 	check("but excluding a repeatable card never hides it", still_offered)
+
+
+## `TourChaos.count_for` scales with the band (never on brief 0, whatever the band; 0-1 for a
+## duo, 1-2 for a mid band, 2-3 for a big one; the boss adds exactly one more, capped at the
+## catalogue's own size), and its schedule respects the gap and the first/last windows -- both
+## off the run's own `chaos_rng`, which replays identically for the same `attempt_seed`.
+func _test_tour_chaos_schedule_is_seeded_and_scaled() -> void:
+	for band in [1, 2, 3, 5, 6, 8]:
+		for seed in range(30):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed
+			check("band %d, seed %d: count_for(.., 0, false) is always 0 -- never on brief 0" % [band, seed],
+					TourChaos.count_for(band, 0, false, rng) == 0)
+
+	for band in [1, 2]:
+		for seed in range(30):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed
+			var n := TourChaos.count_for(band, 1, false, rng)
+			check("band %d, seed %d: a duo sees 0 or 1 (%d)" % [band, seed, n], n == 0 or n == 1)
+	for band in [3, 5]:
+		for seed in range(30):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed
+			var n := TourChaos.count_for(band, 1, false, rng)
+			check("band %d, seed %d: a mid band sees 1 or 2 (%d)" % [band, seed, n], n == 1 or n == 2)
+	for band in [6, 8]:
+		for seed in range(30):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = seed
+			var n := TourChaos.count_for(band, 1, false, rng)
+			check("band %d, seed %d: a big band sees 2 or 3 (%d)" % [band, seed, n], n == 2 or n == 3)
+
+	for seed in range(30):
+		var rng_a := RandomNumberGenerator.new()
+		rng_a.seed = seed
+		var rng_b := RandomNumberGenerator.new()
+		rng_b.seed = seed
+		var plain := TourChaos.count_for(8, 1, false, rng_a)
+		var boss := TourChaos.count_for(8, 1, true, rng_b)
+		check("the boss adds exactly one more, capped at the catalogue (plain %d, boss %d)" % [plain, boss],
+				boss == mini(plain + 1, TourChaos.all().size()))
+
+	var sched := TourChaos.schedule(RandomNumberGenerator.new(), 3, 45.0)
+	var sorted := sched.duplicate()
+	sorted.sort()
+	check("schedule(.., 3, 45.0) comes back sorted ascending (%s)" % [sched], sched == sorted)
+	for t in sched:
+		check("every strike time sits in [10, 37] (%s)" % [sched], t >= 10.0 and t <= 37.0)
+	for i in sched.size():
+		for j in range(i + 1, sched.size()):
+			check("no two strikes land closer than 8 s apart (%s)" % [sched],
+					absf(sched[i] - sched[j]) >= 8.0)
+
+	var a := TourRun.new()
+	a.attempt_seed = 4242
+	var b := TourRun.new()
+	b.attempt_seed = 4242
+	var crng_a := a.chaos_rng(2)
+	var crng_b := b.chaos_rng(2)
+	var n_a := TourChaos.count_for(8, 2, false, crng_a)
+	var n_b := TourChaos.count_for(8, 2, false, crng_b)
+	check("the same attempt_seed draws the same count for brief 2", n_a == n_b)
+	var drawn_a := TourChaos.draw(crng_a, n_a, [])
+	var drawn_b := TourChaos.draw(crng_b, n_b, [])
+	var ids_a: Array = drawn_a.map(func(e: TourChaosEvent) -> StringName: return e.id)
+	var ids_b: Array = drawn_b.map(func(e: TourChaosEvent) -> StringName: return e.id)
+	check("and the same events, in the same order", ids_a == ids_b)
+	var sched_a := TourChaos.schedule(crng_a, drawn_a.size(), 45.0)
+	var sched_b := TourChaos.schedule(crng_b, drawn_b.size(), 45.0)
+	check("and the same schedule", sched_a == sched_b)
+
+	var c := TourRun.new()
+	c.attempt_seed = 777
+	var crng_c := c.chaos_rng(2)
+	var n_c := TourChaos.count_for(8, 2, false, crng_c)
+	var drawn_c := TourChaos.draw(crng_c, n_c, [])
+	var ids_c: Array = drawn_c.map(func(e: TourChaosEvent) -> StringName: return e.id)
+	check("a different seed differs somewhere", n_a != n_c or ids_a != ids_c)
+
+
+## Each of the six, struck and recovered through nothing but DAW verbs (OfflineBackend has no
+## `eq` plugin by that catalogue kind to add, which `plugin_haywire` needs -- see
+## TourChaosEvent's own doc -- so this uses GodotBackend, the one backend an actual run ever
+## plays on anyway): `recovered()` true before, false the instant it strikes, true again once
+## the room's own control undoes it, and nothing else's judge moves in between.
+func _test_tour_chaos_strikes_and_recovers_through_daw_verbs() -> void:
+	var previous := DAW.backend
+	var backend := GodotBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+
+	var run := TourRun.new()
+	run.song_tempo = 100.0
+
+	var rhodes := TourProject.BAND.find("Rhodes") + 1
+	var gtr := TourProject.BAND.find("Gtr Amp") + 1
+	var oh := TourProject.BAND.find("OH") + 1
+	var snare := TourProject.BAND.find("Snare") + 1
+
+	var targets := {&"power_flicker": rhodes, &"solo_leaned": gtr, &"stage_unplugged": 0,
+			&"crowd_throws": oh, &"plugin_haywire": snare, &"tempo_lurch": 1}
+	var others_recovered := func(except_id: StringName) -> bool:
+		for id in targets:
+			if id != except_id and not TourChaos.by_id(id).recovered(DAW.state, run, targets[id]):
+				return false
+		return true
+
+	check("every event starts recovered, nothing struck yet", others_recovered.call(&""))
+
+	var power := TourChaos.by_id(&"power_flicker")
+	power.strike(run, rhodes)
+	check("power_flicker mutes the struck strip", DAW.state.track(rhodes).mute)
+	check("and reads unrecovered", not power.recovered(DAW.state, run, rhodes))
+	check("nothing else moved", others_recovered.call(&"power_flicker"))
+	DAW.set_track_mute(rhodes, false)
+	check("the strip's own MUTE recovers it", power.recovered(DAW.state, run, rhodes))
+
+	var solo := TourChaos.by_id(&"solo_leaned")
+	solo.strike(run, gtr)
+	check("solo_leaned solos the struck strip", DAW.state.track(gtr).solo)
+	check("and reads unrecovered", not solo.recovered(DAW.state, run, gtr))
+	check("nothing else moved", others_recovered.call(&"solo_leaned"))
+	DAW.set_track_solo(gtr, false)
+	check("the strip's own SOLO recovers it", solo.recovered(DAW.state, run, gtr))
+
+	var stage := TourChaos.by_id(&"stage_unplugged")
+	check("Stage starts armed", DAW.state.track(Tour.STAGE_TRACK).rec_arm)
+	stage.strike(run, 0)
+	check("stage_unplugged disarms Stage", not DAW.state.track(Tour.STAGE_TRACK).rec_arm)
+	check("and reads unrecovered", not stage.recovered(DAW.state, run, 0))
+	check("a part really stops landing: armed_track() is 0 (the master)", HitRecorder.armed_track() == 0)
+	check("and a take is refused", DAW.midi_take_refusal([0, 0.0, 1.0, [[0.0, 0.1, 60, 100, 0]]]) != "")
+	check("nothing else moved", others_recovered.call(&"stage_unplugged"))
+	DAW.set_track_rec_arm(Tour.STAGE_TRACK, true)
+	check("REC arm recovers it", stage.recovered(DAW.state, run, 0))
+
+	var crowd := TourChaos.by_id(&"crowd_throws")
+	crowd.strike(run, oh)
+	check("crowd_throws drops the fader to -30 dB", is_equal_approx(DAW.state.track(oh).volume_db, -30.0))
+	check("and reads unrecovered", not crowd.recovered(DAW.state, run, oh))
+	check("nothing else moved", others_recovered.call(&"crowd_throws"))
+	DAW.set_track_volume(oh, DAW.db_to_taper(0.0))
+	check("pushing the fader back up recovers it", crowd.recovered(DAW.state, run, oh))
+
+	var haywire := TourChaos.by_id(&"plugin_haywire")
+	haywire.strike(run, snare)
+	check("plugin_haywire adds the built-in EQ to the struck strip (%s)" % [DAW.state.fx(snare, 0).name],
+			DAW.state.track(snare).fx.size() == 1 and DAW.state.fx(snare, 0).name == TourFlaws.EQ_NAME)
+	check("and reads unrecovered", not haywire.recovered(DAW.state, run, snare))
+	check("nothing else moved", others_recovered.call(&"plugin_haywire"))
+	DAW.set_fx_enabled(snare, 0, false)
+	check("bypassing it recovers it", haywire.recovered(DAW.state, run, snare))
+	DAW.set_fx_enabled(snare, 0, true)
+	check("re-enabled, it is unrecovered again", not haywire.recovered(DAW.state, run, snare))
+	DAW.remove_fx(snare, 0)
+	check("removing it outright also recovers it", haywire.recovered(DAW.state, run, snare))
+
+	var lurch := TourChaos.by_id(&"tempo_lurch")
+	lurch.strike(run, 1)
+	check("tempo_lurch kicks the tempo by 14 BPM (%.1f)" % DAW.state.tempo, is_equal_approx(DAW.state.tempo, 114.0))
+	check("and reads unrecovered", not lurch.recovered(DAW.state, run, 1))
+	check("nothing else moved", others_recovered.call(&"tempo_lurch"))
+	DAW.set_tempo(100.0)
+	check("the tempo knob recovers it", lurch.recovered(DAW.state, run, 1))
+
+	check("every event is recovered again at the end", others_recovered.call(&""))
+
+	DAW.use(previous, false)
+
+
+## A struck chaos event blocks the pass exactly as an unfixed flaw or an untaken part does, live
+## in `Tour._physics_process`, and `TourBrief.judge` refuses one directly the same way.
+func _test_tour_chaos_blocks_the_pass_until_recovered() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+	DAW.set_track_volume(TourProject.BAND.find("Lead Vox") + 1, DAW.db_to_taper(0.0))
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.attempt_seed = 301
+	run.brief_index = 0
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [true]
+	run.parts = [&"tamb_backbeat"]
+	run.holders = [1]
+	run.hits = [0]
+	run.played = [false]
+	run.open_since = [0.0]
+	run.seconds_left = brief.seconds
+	run.seconds_total = brief.seconds
+	run.events = [&"solo_leaned"]
+	run.event_at = [brief.seconds - 5.0]
+	run.event_track = [3]
+	run.event_state = [TourChaos.State.STRUCK]
+	Tour.run = run
+
+	var beat := 60.0 / 100.0
+	var hits: Array = []
+	for k in 4:
+		for b in [1.0, 3.0]:
+			var on: float = (k * 4.0 + b) * beat
+			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
+
+	DAW.set_track_solo(3, true)
+	Tour._physics_process(0.1)
+	check("the flaw fixes and the part lands, but a struck event keeps the brief going (%s, %s)" \
+			% [run.state, run.event_state], run.state == TourRun.State.BRIEF
+			and run.event_state == [TourChaos.State.STRUCK] and run.fixed == [true] and run.played == [true])
+
+	DAW.set_track_solo(3, false)
+	Tour._physics_process(0.1)
+	check("recovering it lets the brief pass (%s, %s)" % [run.event_state, run.state],
+			run.event_state == [TourChaos.State.RECOVERED] and run.state == TourRun.State.DRAFTING)
+
+	var verdict := TourBrief.new().judge({"chaos": {"open": 1, "total": 1}})
+	check("judge refuses a pass while a chaos event is open, and says so (%s)" % [verdict["detail"]],
+			not bool(verdict["passed"]) and String(verdict["detail"][0]).contains("loose"))
+
+	Tour.run = saved_run
+	DAW.use(previous, false)
+
+
+## The host's state machine, PENDING -> TELEGRAPHED -> STRUCK, each exactly once, off the brief's
+## own clock -- the strike's DAW verb (a mute) lands only at the one moment, never before.
+func _test_tour_chaos_telegraphs_and_strikes_on_the_brief_clock() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.attempt_seed = 401
+	run.song_tempo = 100.0
+	run.seconds_total = 45.0
+	run.events = [&"power_flicker"]
+	run.event_at = [12.0]
+	run.event_track = [3]
+	run.event_state = [TourChaos.State.PENDING]
+	Tour.run = run
+
+	# Arrays, not a plain int: a lambda captures a local by value in GDScript, so `+= 1` inside
+	# one would only ever change the lambda's own copy. `.append()` on a captured Array mutates
+	# the one the outer scope sees too.
+	var telegraphed: Array = []
+	var struck: Array = []
+	var on_telegraph := func(i: int) -> void: telegraphed.append(i)
+	var on_struck := func(i: int) -> void: struck.append(i)
+	Tour.chaos_telegraphed.connect(on_telegraph)
+	Tour.chaos_struck.connect(on_struck)
+
+	run.seconds_left = 35.5
+	Tour._physics_process(0.1)
+	check("elapsed 9.5 s: still PENDING, nothing fired (%d/%d)" % [telegraphed.size(), struck.size()],
+			run.event_state == [TourChaos.State.PENDING] and telegraphed.is_empty() and struck.is_empty())
+
+	run.seconds_left = 34.5
+	Tour._physics_process(0.1)
+	check("elapsed 10.5 s: telegraphed once, the desk untouched (%d/%d, mute=%s)" \
+			% [telegraphed.size(), struck.size(), DAW.state.track(3).mute],
+			run.event_state == [TourChaos.State.TELEGRAPHED] and telegraphed.size() == 1 and struck.is_empty()
+			and not DAW.state.track(3).mute)
+
+	run.seconds_left = 32.9
+	Tour._physics_process(0.1)
+	check("elapsed 12.1 s: struck once, the desk mutes (%d/%d)" % [telegraphed.size(), struck.size()],
+			run.event_state == [TourChaos.State.STRUCK] and telegraphed.size() == 1 and struck.size() == 1
+			and DAW.state.track(3).mute)
+
+	Tour._physics_process(0.1)
+	Tour._physics_process(0.1)
+	check("settled: two more ticks fire nothing more (%d/%d)" % [telegraphed.size(), struck.size()],
+			telegraphed.size() == 1 and struck.size() == 1)
+
+	Tour.chaos_telegraphed.disconnect(on_telegraph)
+	Tour.chaos_struck.disconnect(on_struck)
+	Tour.run = saved_run
+	DAW.use(previous, false)
+
+
+## A guest plays the telegraph, the strike and the recovery from its OWN clock and `Session.tour`
+## alone -- `Tour.run` here is never the live one `_tick_chaos` host-ticks, only the read-only
+## copy `_on_tour_changed` rebuilds -- and the HUD's line follows `Tour.chaos_shown`.
+func _test_tour_chaos_guest_plays_the_telegraph_from_the_run() -> void:
+	_as_session(Session.Role.GUEST, 5)
+	var saved_run := Tour.run
+	var hud := TourHud.new()
+	add_child(hud)
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.attempt_seed = 501
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.seconds_total = 45.0
+	run.seconds_left = 34.0
+	run.events = [&"power_flicker"]
+	run.event_at = [12.0]
+	run.event_track = [0]
+	run.event_state = [TourChaos.State.PENDING]
+	Session.tour = run.to_dict()
+
+	var telegraphed: Array = []
+	var on_telegraph := func(i: int) -> void: telegraphed.append(i)
+	Tour.chaos_telegraphed.connect(on_telegraph)
+	Session.tour_changed.emit()
+	Tour._physics_process(0.0)
+	Tour.chaos_telegraphed.disconnect(on_telegraph)
+	check("a guest's own clock telegraphs it (brief_elapsed %.1f)" % Tour.brief_elapsed(),
+			telegraphed.size() == 1)
+
+	hud._refresh()
+	var line := hud._chaos_box.get_node_or_null("Chaos0") as Label
+	check("Chaos0 reads the telegraph, in CURSE (%s)" % (line.text if line else "none"),
+			line != null and line.visible and line.text.begins_with("!!  ")
+			and line.get_theme_color("font_color") == TourHud.CURSE)
+
+	run.event_state = [TourChaos.State.STRUCK]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	hud._refresh_chaos(Tour.run)
+	check("struck reads XX, still CURSE (%s)" % line.text,
+			line.text.begins_with("XX  ") and line.get_theme_color("font_color") == TourHud.CURSE)
+
+	run.event_state = [TourChaos.State.RECOVERED]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	hud._refresh_chaos(Tour.run)
+	check("recovered reads OK, in ACCENT (%s)" % line.text,
+			line.text.begins_with("OK  ") and line.get_theme_color("font_color") == TourHud.ACCENT)
+
+	Session.tour = {}
+	Session.tour_changed.emit()
+	hud._refresh()
+	check("the run ending hides the hud", not hud._root.visible)
+
+	Tour.run = saved_run
+	remove_child(hud)
+	hud.free()
+	_as_session(Session.Role.SOLO, 1)
+
+
+## Striking all six, including the haywire EQ and the kicked tempo, leaves nothing behind once
+## the run ends: `TourProject.restore` brings back exactly the project that was captured, same
+## shape `_test_tour_project_restores_exactly` already proves for the flaws and the parts.
+func _test_tour_chaos_leaves_the_real_project_untouched() -> void:
+	var previous := DAW.backend
+	var backend := GodotBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	ProjectBridge.load(ProjectFiles.blank("Studio Song", 3), backend)
+	backend.project_path = "user://projects/Studio Song.dawproject"
+	backend.name_project()
+
+	var snapshot := TourProject.capture(backend)
+	var original: DawKitProject = snapshot["project"]
+
+	var song_rng := RandomNumberGenerator.new()
+	song_rng.seed = 7
+	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 120.0, [], song_rng), backend)
+
+	var run := TourRun.new()
+	run.song_tempo = 120.0
+	var rhodes := TourProject.BAND.find("Rhodes") + 1
+	var gtr := TourProject.BAND.find("Gtr Amp") + 1
+	var oh := TourProject.BAND.find("OH") + 1
+	var snare := TourProject.BAND.find("Snare") + 1
+
+	TourChaos.by_id(&"power_flicker").strike(run, rhodes)
+	TourChaos.by_id(&"solo_leaned").strike(run, gtr)
+	TourChaos.by_id(&"stage_unplugged").strike(run, 0)
+	TourChaos.by_id(&"crowd_throws").strike(run, oh)
+	TourChaos.by_id(&"plugin_haywire").strike(run, snare)
+	TourChaos.by_id(&"tempo_lurch").strike(run, 1)
+
+	check("the rescue desk really changed under all six strikes",
+			DAW.state.track(rhodes).mute and DAW.state.track(gtr).solo
+			and not DAW.state.track(Tour.STAGE_TRACK).rec_arm and DAW.state.track(oh).volume_db < -20.0
+			and DAW.state.track(snare).fx.size() == 1 and not is_equal_approx(DAW.state.tempo, 120.0))
+
+	TourProject.restore(backend, snapshot)
+	var restored := ProjectBridge.capture(backend)
+	check("the restored project is exactly the one that was captured (%s)" % [original.first_difference(restored)],
+			original.same_as(restored))
+	check("the project's file path comes back too", backend.project_path == snapshot["path"])
+	check("the live desk's tempo is the real project's again, not the chaos-kicked rescue one's",
+			is_equal_approx(DAW.state.tempo, original.tempo))
+	var names: Array[String] = []
+	for i in DAW.state.track_indices():
+		names.append(DAW.state.tracks[i].name)
+	check("and the chaos-marked Stage lane is gone with the rest of the rescue song's tracks (%s)" % [names],
+			DAW.state.track_indices().size() == 3 and not ("Stage" in names))
+
+	DAW.use(previous, false)
+
+
+## `to_dict`/`from_dict` carries every chaos field index for index and pads a short one;
+## `draw` never pairs `tempo_lurch` with the flaw it excludes; `pick_track` never hands out
+## Stage, Keys, a name it was told to skip, or a muted strip.
+func _test_tour_chaos_round_trips_and_never_draws_a_conflict() -> void:
+	var run := TourRun.new()
+	run.seconds_total = 45.0
+	run.events = [&"power_flicker", &"crowd_throws"]
+	run.event_at = [12.0, 30.0]
+	run.event_track = [3, 7]
+	run.event_state = [TourChaos.State.TELEGRAPHED, TourChaos.State.STRUCK]
+	var back := TourRun.from_dict(run.to_dict())
+	check("seconds_total rides the wire", is_equal_approx(back.seconds_total, run.seconds_total))
+	check("events ride the wire, in order", back.events == run.events)
+	check("event_at, index for index", back.event_at == run.event_at)
+	check("event_track, index for index", back.event_track == run.event_track)
+	check("event_state, index for index", back.event_state == run.event_state)
+
+	var short := {"events": ["power_flicker", "crowd_throws"], "event_at": [12.0],
+			"event_track": [], "event_state": [int(TourChaos.State.TELEGRAPHED)]}
+	var padded := TourRun.from_dict(short)
+	check("a short event_at is padded with INF (%s)" % [padded.event_at],
+			padded.event_at.size() == 2 and is_inf(padded.event_at[1]))
+	check("a short event_track is padded with 0 (%s)" % [padded.event_track], padded.event_track == [0, 0])
+	check("a short event_state is padded PENDING (%s)" % [padded.event_state],
+			padded.event_state == [TourChaos.State.TELEGRAPHED, TourChaos.State.PENDING])
+
+	for seed in range(50):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var drawn := TourChaos.draw(rng, 6, [&"wrong_tempo"])
+		var ids: Array = drawn.map(func(e: TourChaosEvent) -> StringName: return e.id)
+		check("seed %d never draws tempo_lurch alongside wrong_tempo" % seed, not (&"tempo_lurch" in ids))
+
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	var song_rng := RandomNumberGenerator.new()
+	song_rng.seed = 2
+	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], song_rng), backend)
+	DAW.set_track_mute(TourProject.BAND.find("Kick") + 1, true)
+	for seed in range(50):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var picked := TourChaos.pick_track(rng, DAW.state, ["Rhodes"])
+		var t := DAW.state.track(picked, false)
+		check("seed %d pick_track never returns Stage, Keys, Rhodes or a muted track (%d, %s)" \
+				% [seed, picked, t.name if t != null else "none"],
+				picked != Tour.STAGE_TRACK and picked != Tour.TIMING_TRACK and t != null
+				and t.name != "Rhodes" and not t.mute)
+	DAW.use(previous, false)

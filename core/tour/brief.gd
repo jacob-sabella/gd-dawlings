@@ -104,6 +104,18 @@ func judge(samples: Dictionary, tolerance_mult: float = 1.0) -> Dictionary:
 		score_count += 1
 		detail.append("parts: %d of %d played" % [played_n, total])
 
+	# A struck, unrecovered chaos event blocks the pass exactly as an unfixed flaw or an untaken
+	# part does: the band has to actually put it right, not just outlast it.
+	if samples.has("chaos"):
+		var r: Dictionary = samples["chaos"]
+		var open_n: int = int(r.get("open", 0))
+		var total: int = int(r.get("total", 0))
+		var all_clear := open_n == 0
+		passed = passed and all_clear
+		score_sum += 100 if all_clear else clampi(60 - 40 * open_n, 0, 60)
+		score_count += 1
+		detail.append("chaos: %d of %d still loose" % [open_n, total])
+
 	if score_count == 0:
 		return {"passed": false, "score": 0, "detail": detail}
 	return {"passed": passed, "score": int(round(float(score_sum) / float(score_count))), "detail": detail}

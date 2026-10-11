@@ -88,6 +88,24 @@ static func _track_named(state: MixState, track_name: String) -> MixState.TrackS
 	return null
 
 
+## Whether `track_name`'s EQ (EQ_NAME, in whichever slot) is clean -- no band past +3 dB on one
+## that is in the chain and switched on. `muddy_bass`'s own judge, and `plugin_haywire`'s (a
+## chaos event, core/tour/tour_chaos.gd): one plugin, one test, read in both places rather than
+## kept honest twice by eye. A track with none, or that no longer exists, is clean.
+static func eq_clean(state: MixState, track_name: String) -> bool:
+	var t := TourFlaws._track_named(state, track_name)
+	if t == null:
+		return true
+	for fx_index in t.fx:
+		var f: MixState.FXState = t.fx[fx_index]
+		if not f.enabled or f.name != EQ_NAME:
+			continue
+		for v in f.params.values():
+			if float(v) > 0.6:
+				return false
+	return true
+
+
 static func _build() -> Array[TourFlaw]:
 	var out: Array[TourFlaw] = []
 
@@ -124,17 +142,7 @@ static func _build() -> Array[TourFlaw]:
 	# chain and switched on. Not every plugin's every knob: a compressor the band drops on the
 	# bass has a threshold that sits above 0.6 by default, and must not read as mud.
 	muddy_bass._fixed = func(state: MixState, _run: TourRun) -> bool:
-		var t := TourFlaws._track_named(state, "Bass DI")
-		if t == null:
-			return true
-		for fx_index in t.fx:
-			var f: MixState.FXState = t.fx[fx_index]
-			if not f.enabled or f.name != EQ_NAME:
-				continue
-			for v in f.params.values():
-				if float(v) > 0.6:
-					return false
-		return true
+		return TourFlaws.eq_clean(state, "Bass DI")
 	out.append(muddy_bass)
 
 	var dragging_keys := TourFlaw.new()

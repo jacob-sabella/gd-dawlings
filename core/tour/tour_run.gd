@@ -63,6 +63,19 @@ var instruments: Array[StringName] = []
 var instrument_curses: Array[StringName] = []
 var instrument_bound: Array[int] = []
 
+## The clock this brief started with, in seconds, after `shorter_clock`'s multiplier: what
+## `Tour.brief_elapsed()`/`TourChaos.schedule` measure against, since `seconds_left` only ever
+## counts down and a short brief needs the real total to know where "the last 8 seconds" are.
+var seconds_total: float = 0.0
+## This brief's chaos events by TourChaosEvent.id, and their schedule and live state, index for
+## index: `event_at` (seconds of brief clock elapsed at the strike), `event_track` (the struck
+## strip, 0 for none; `tempo_lurch`'s own slot holds its sign instead, see TourChaosEvent's doc),
+## `event_state` (TourChaos.State).
+var events: Array[StringName] = []
+var event_at: Array[float] = []
+var event_track: Array[int] = []
+var event_state: Array[int] = []
+
 
 ## This brief's own random stream, seeded off `attempt_seed` and `index` so it never draws the
 ## same numbers the draft's (`attempt_seed + brief_index + 1`) does, and replays identically on
@@ -70,6 +83,15 @@ var instrument_bound: Array[int] = []
 func song_rng(index: int) -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([attempt_seed, "song", index])
+	return rng
+
+
+## This brief's chaos stream -- its own, not a continuation of `song_rng`'s: every existing
+## seed-replay test keeps its numbers (TourFlaws/TourParts drawing exactly as before), and a
+## count change on either side can never shift the chaos draw.
+func chaos_rng(index: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([attempt_seed, "chaos", index])
 	return rng
 
 
@@ -98,6 +120,11 @@ func to_dict() -> Dictionary:
 		"instruments": (instruments as Array).map(func(i): return String(i)),
 		"instrument_curses": (instrument_curses as Array).map(func(c): return String(c)),
 		"instrument_bound": (instrument_bound as Array).duplicate(),
+		"seconds_total": seconds_total,
+		"events": (events as Array).map(func(e): return String(e)),
+		"event_at": (event_at as Array).duplicate(),
+		"event_track": (event_track as Array).duplicate(),
+		"event_state": (event_state as Array).duplicate(),
 	}
 
 
@@ -160,4 +187,22 @@ static func from_dict(d: Dictionary) -> TourRun:
 	while run.instrument_bound.size() < run.instruments.size():
 		run.instrument_bound.append(0)
 	run.instrument_bound.resize(run.instruments.size())
+	run.seconds_total = float(d.get("seconds_total", 0.0))
+	var events_in: Array = d.get("events", [])
+	run.events.assign(events_in.map(func(e): return StringName(e)))
+	var event_at_in: Array = d.get("event_at", [])
+	run.event_at.assign(event_at_in.map(func(a): return float(a)))
+	while run.event_at.size() < run.events.size():
+		run.event_at.append(INF)
+	run.event_at.resize(run.events.size())
+	var event_track_in: Array = d.get("event_track", [])
+	run.event_track.assign(event_track_in.map(func(t): return int(t)))
+	while run.event_track.size() < run.events.size():
+		run.event_track.append(0)
+	run.event_track.resize(run.events.size())
+	var event_state_in: Array = d.get("event_state", [])
+	run.event_state.assign(event_state_in.map(func(s): return int(s)))
+	while run.event_state.size() < run.events.size():
+		run.event_state.append(TourChaos.State.PENDING)
+	run.event_state.resize(run.events.size())
 	return run

@@ -197,6 +197,9 @@ var patch_stand: Trolley
 ## Surface id -> [the trolley it stands on, where on that trolley].
 var _seated_on := {}
 var _lamps: Array[OmniLight3D] = []
+## The one tween either `_flicker_lights` or `_lights_out` ever runs, killed before the other
+## starts a new one, so a second chaos event mid-blackout can never fight the first over a lamp.
+var _lights_tween: Tween
 ## {piece_id: Transform3D} -- where the authored layout stood each piece, for the things that
 ## were written against it: the floor points the looms run through.
 var _authored_floor: Dictionary = {}
@@ -425,10 +428,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	venue.add_child(mirror)
 	mirror.wardrobe.look = Session.local_look
 	mirror.wardrobe.look_changed.connect(Session.set_look)
-	for i in _lamps.size():
-		if i < PRACTICALS.size():
-			_lamps[i].light_color = venue.lamp_colour(i, PRACTICALS[i][1])
-			_lamps[i].light_energy = venue.lamp_energy(i, PRACTICALS[i][2])
+	_relight()
 	if persist and Session.layout != null and Session.is_authority():
 		Session.layout.venue = id
 		Session.layout.venue_variant = venue.variant
@@ -436,6 +436,57 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
 	_publish_room()
+
+
+## The practicals back to the venue's own colour and energy, and the venue's own house lights
+## back on (`Venue.blackout(false)`) -- `set_venue`'s own tail, factored out so a chaos event's
+## blackout (`_lights_out`) has somewhere to put the room back, however it found it: a run
+## ending mid-dark, or a second strike landing before the first one's `_relight` fired.
+func _relight() -> void:
+	for i in _lamps.size():
+		if i < PRACTICALS.size():
+			_lamps[i].light_color = venue.lamp_colour(i, PRACTICALS[i][1])
+			_lamps[i].light_energy = venue.lamp_energy(i, PRACTICALS[i][2])
+	if venue != null:
+		venue.blackout(false)
+
+
+## `power_flicker`'s telegraph: the practicals dip to a sixth and back, twice, fast -- a flicker
+## you feel coming, not a cut you only notice after. `_lights_tween` is the one tween either this
+## or `_lights_out` ever runs, killed first so the two can never fight over the same lamps.
+func _flicker_lights() -> void:
+	if _lamps.is_empty():
+		return
+	if _lights_tween != null:
+		_lights_tween.kill()
+	var base: Array[float] = []
+	for lamp in _lamps:
+		base.append(lamp.light_energy)
+	_lights_tween = create_tween()
+	for _k in 2:
+		_lights_tween.set_parallel(true)
+		for i in _lamps.size():
+			_lights_tween.tween_property(_lamps[i], "light_energy", base[i] / 6.0, 0.08)
+		_lights_tween.chain().set_parallel(true)
+		for i in _lamps.size():
+			_lights_tween.tween_property(_lamps[i], "light_energy", base[i], 0.08)
+		_lights_tween.chain()
+
+
+## `power_flicker`'s strike: the practicals die, the venue's own house lights with them
+## (`Venue.blackout(true)`), for one bar -- then `_relight` brings both back however the run has
+## left them (a leaver, a second strike), rather than assuming anything about where this one
+## found them.
+func _lights_out(seconds: float) -> void:
+	if _lights_tween != null:
+		_lights_tween.kill()
+	_lights_tween = create_tween()
+	_lights_tween.set_parallel(true)
+	for lamp in _lamps:
+		_lights_tween.tween_property(lamp, "light_energy", 0.0, 0.12)
+	if venue != null:
+		venue.blackout(true)
+	_lights_tween.chain().tween_callback(_relight).set_delay(seconds)
 
 
 ## On foot you can go where the room goes: the working footprint and, behind it, the venue's
@@ -1933,6 +1984,8 @@ func _build_tour_case() -> void:
 	Tour.run_ended.connect(_on_tour_run_ended)
 	Tour.brief_started.connect(_on_tour_brief_started)
 	Tour.instrument_spilled.connect(_on_tour_instrument_spilled)
+	Tour.chaos_telegraphed.connect(_on_tour_chaos_telegraphed)
+	Tour.chaos_struck.connect(_on_tour_chaos_struck)
 	Session.tour_changed.connect(_on_session_tour_changed)
 	Session.participant_left.connect(_on_tour_participant_left)
 	_sync_tour_roll()
@@ -1980,6 +2033,9 @@ func _on_tour_run_ended(_won: bool) -> void:
 			items.despawn(id)
 		_publish_room_soon()
 	_sync_tour_roll()
+	# A run can end mid-`power_flicker`'s blackout (the boss brief lost with the lights still
+	# out): never leave the room dark once there is no run left to light it back up for.
+	_relight()
 
 
 ## Host only (see core/tour/tour.gd's class note): a new brief is in, which may have a different
@@ -2001,6 +2057,7 @@ func _on_session_tour_changed() -> void:
 		return
 	if Session.tour.is_empty():
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+		_relight()
 	elif not Session.is_authority():
 		tour_case.sync_broken()
 
@@ -2141,6 +2198,98 @@ func _sync_tour_roll() -> void:
 		hit_recorder.roll_every = seconds
 	if Session.guest_midi != null:
 		Session.guest_midi.roll_every = seconds
+
+
+## A chaos event's telegraph, on EVERY peer, from their own clock (Tour.chaos_telegraphed is the
+## one signal pair here that is not host-only -- see Tour's own class note): the room says so
+## before it happens, so getting hit by one is never a surprise from nowhere. `crowd_throws`
+## warns with a rumble from the back of house, where the crowd actually is; everything else
+## warns from the case itself, the run's own corner of the room.
+func _on_tour_chaos_telegraphed(index: int) -> void:
+	var run := Tour.run
+	if run == null or index < 0 or index >= run.events.size():
+		return
+	var event := TourChaos.by_id(run.events[index])
+	if event == null or tour_case == null:
+		return
+	_flicker_lights()
+	tour_case.rattle()
+	if event.id == &"crowd_throws":
+		_play_at(_crowd_house_point(), Foley.crowd_rumble(0))
+	else:
+		Foley.play(tour_case, Foley.chaos_warning())
+	var track: int = run.event_track[index] if index < run.event_track.size() else 0
+	Session.notice.emit(event.telegraph_for(run, track))
+
+
+## The strike itself, on every peer: the sound everywhere, and whichever of the events here has
+## a presentation of its own on top of the desk's own verb landing through ordinary replication
+## (every other event's strike is nothing but a DAW verb, already shown by the strip it moved).
+func _on_tour_chaos_struck(index: int) -> void:
+	var run := Tour.run
+	if run == null or index < 0 or index >= run.events.size():
+		return
+	var id: StringName = run.events[index]
+	if tour_case != null:
+		Foley.play(tour_case, Foley.chaos_strike())
+	match id:
+		&"power_flicker":
+			_lights_out(Tour.take_roll_seconds() * TourChaos.LIGHTS_OUT_BARS)
+		&"crowd_throws":
+			if Session.is_authority():
+				_throw_crowd_things(index)
+
+
+## Where the crowd is, in the frame the gear's floor plan is measured in: the back of house's
+## centre, a little short of its far wall -- `crowd_throws`'s rumble comes from here, and so does
+## the throw itself.
+func _crowd_house_point() -> Vector3:
+	if venue == null:
+		return Vector3.ZERO
+	var rect := venue.back_of_house()
+	return Vector3(rect.position.x + rect.size.x * 0.5, 1.5, rect.end.y - 0.4)
+
+
+## A one-shot emitter at an arbitrary point, for a sound that is not coming from any gear already
+## standing there -- `crowd_rumble`, from the house rather than the case. Freed shortly after:
+## long enough for the clip to finish, short enough not to litter the set over a busy run.
+func _play_at(point: Vector3, stream: AudioStream, volume_db := 0.0) -> void:
+	if studio_set == null:
+		return
+	var marker := Node3D.new()
+	marker.position = point
+	studio_set.add_child(marker)
+	Foley.play(marker, stream, volume_db)
+	get_tree().create_timer(1.5).timeout.connect(marker.queue_free)
+
+
+## Up to three of the room's loose, unheld things, thrown in from the back of house at the desk:
+## the room's own flight (ItemRoom.fly), so a guest sees exactly the same throw through the room
+## state -- nothing new rides the wire. Seeded off the run, so a replay throws the same things at
+## the same spots. Host only: the room is the host's.
+const CROWD_PROPS: Array[StringName] = [&"duck", &"ball", &"toy", &"plane"]
+
+func _throw_crowd_things(event_index: int) -> void:
+	if items == null or Tour.run == null:
+		return
+	var from := _crowd_house_point()
+	var thrown := 0
+	for kind in CROWD_PROPS:
+		if thrown >= 3:
+			break
+		var item: Item = items.items.get(kind)
+		if item == null or item.carried_by != null or Session.holds.has(kind):
+			continue
+		if item.state != Item.State.HOME and item.state != Item.State.LOOSE:
+			continue
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([Tour.run.attempt_seed, event_index, thrown])
+		var to := Vector3(rng.randf_range(-1.0, 1.0), 1.0, TIMELINE_Z + 0.5)
+		var spin := Vector3(rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0))
+		items.fly(item, from, ItemRoom.lob(from, to, 6.0), spin, 1)
+		thrown += 1
+	if thrown > 0:
+		_publish_room_soon()
 
 
 ## What the headphones on this person's head let through (Ears), and what this person is told

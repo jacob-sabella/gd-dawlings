@@ -55,6 +55,14 @@ func venue_id() -> StringName:
 	return &"studio"
 
 
+## The ceiling's own downlights, dark or back at what they were built with (the meta `_dress_room`
+## stamps on each as it sets `light_energy`) -- the studio's half of `power_flicker`'s strike,
+## on top of the practicals every venue dims (scenes/studio.gd's `_lights_out`).
+func blackout(on: bool) -> void:
+	for spot in find_children("DownlightBeam", "SpotLight3D", true, false):
+		spot.light_energy = 0.0 if on else float(spot.get_meta("authored_energy", spot.light_energy))
+
+
 func zones() -> Dictionary:
 	var out := super()
 	if variant == BESIDE:
@@ -273,6 +281,9 @@ func _dress_room() -> void:
 		# Drawn under a 2.8 m ceiling: higher up, as far again past the floor and as bright on it.
 		var up := Studio.WALL_HEIGHT / 2.8
 		spot.light_energy = spec[1] * up * up
+		# Stamped at the energy it was actually built with, for `blackout` to restore to --
+		# never a literal, since a venue grows and dims lamps with its ceiling height (`up`).
+		spot.set_meta("authored_energy", spot.light_energy)
 		spot.spot_range = 4.2 * up
 		spot.spot_angle = 38.0
 		spot.spot_angle_attenuation = 0.8

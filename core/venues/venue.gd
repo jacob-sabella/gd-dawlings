@@ -170,6 +170,14 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored
 
 
+## The house lights go, for a venue with fittings of its own to kill -- `power_flicker`'s strike,
+## the one bar a chaos event takes the room dark. Nothing by default: a venue with no fittings
+## of its own (anything but the studio today) has nothing here to turn off; its own practicals
+## (scenes/studio.gd's `_lamps`) still dip and die, which is the whole room going dark anywhere.
+func blackout(_on: bool) -> void:
+	pass
+
+
 ## How loud the mix is right now, 0..1, every frame. For venues that move to the music.
 func pulse(_level: float) -> void:
 	pass

@@ -689,6 +689,58 @@ static func case_toss() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A chaos event's telegraph (core/tour/tour_chaos.gd): the mains browning out, a couple of
+## seconds of warning. A 50 Hz/100 Hz hum swelling under its own fade envelope, with three bright
+## crackles of noise riding on top of it -- something in the room about to go wrong, not yet
+## having gone wrong.
+static func chaos_warning() -> AudioStreamWAV:
+	return _cached("chaos_warning", func() -> AudioStreamWAV:
+		var s := _silence(0.7)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var env := clampf(t / 0.5, 0.0, 1.0) * exp(-maxf(t - 0.5, 0.0) / 0.15)
+			s[i] += env * (0.1 * sin(TAU * 50.0 * t) + 0.07 * sin(TAU * 100.0 * t))
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 911
+		for k in 3:
+			var at: float = 0.15 + float(k) * 0.18
+			_impulse(s, at, 0.08, 0.02, rng.randf_range(2000.0, 3000.0), 913 + k)
+		_lowpass(s, 6000.0)
+		return _wav(s, false))
+
+
+## A chaos event's strike: the breaker going, and a short clatter of whatever that just knocked
+## loose. Loud and sudden on purpose -- the telegraph was the warning, this is the thing itself.
+static func chaos_strike() -> AudioStreamWAV:
+	return _cached("chaos_strike", func() -> AudioStreamWAV:
+		var s := _silence(0.45)
+		_impulse(s, 0.0, 0.5, 0.06, 80.0, 929)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 937
+		for k in 5:
+			var at: float = 0.02 + rng.randf_range(0.0, 0.18)
+			_impulse(s, at, rng.randf_range(0.08, 0.16), 0.015, rng.randf_range(1500.0, 3000.0), 941 + k)
+		return _wav(s, false))
+
+
+## `crowd_throws`'s telegraph, from the house rather than the desk: a low rumble of bodies
+## shifting, wobbling in volume the way a crowd actually does, with a couple of dull thuds
+## riding under it -- things already landing on the floor before the fader does.
+static func crowd_rumble(take: int) -> AudioStreamWAV:
+	return _cached("crowd_rumble_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.9, 0.22, 967 + take * 7)
+		_highpass(s, 250.0)
+		_lowpass(s, 1400.0)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			s[i] *= 0.6 + 0.4 * sin(TAU * 6.0 * t)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 971 + take * 5
+		_impulse(s, 0.25 + rng.randf_range(0.0, 0.15), 0.3, 0.05, 180.0, 977 + take)
+		_impulse(s, 0.55 + rng.randf_range(0.0, 0.15), 0.26, 0.05, 180.0, 983 + take)
+		return _wav(s, false))
+
+
 ## One card's edge flicked off a thumb: a few milliseconds of bright paper.
 static func _flick(s: PackedFloat32Array, at: float, level: float, rng: RandomNumberGenerator) -> void:
 	var start := int(at * RATE)

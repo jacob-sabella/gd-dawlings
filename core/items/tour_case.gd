@@ -189,6 +189,23 @@ func _burst() -> void:
 	broken_open.emit()
 
 
+## The lid rattles when the room is about to go wrong -- a chaos event's telegraph, on every
+## peer at the same moment (core/tour/tour.gd's `chaos_telegraphed`, wired in scenes/studio.gd).
+## Knows nothing of why: a jitter about however open the lid already is (always
+## `LID_OPEN_DEGREES` by the time a brief is under way to rattle at all) and a settle back to it.
+func rattle(seconds := 1.6) -> void:
+	if _lid == null:
+		return
+	var tw := _lid.create_tween()
+	var step := seconds / 6.0
+	for k in 6:
+		var jitter: float = 4.0 if k % 2 == 0 else -4.0
+		tw.tween_property(_lid, "rotation_degrees:x", LID_OPEN_DEGREES + jitter, step * 0.5)
+		if k == 1 or k == 4:
+			tw.tween_callback(func() -> void: Foley.play(self, Foley.gear_bump(), -14.0))
+	tw.tween_property(_lid, "rotation_degrees:x", LID_OPEN_DEGREES, step * 0.5)
+
+
 ## Chained again, hits and lid reset, the tally on its side brought up to date: a run's ending
 ## (won or lost) and nothing else calls this.
 func reset(tally_runs: int, tally_wins: int) -> void:
