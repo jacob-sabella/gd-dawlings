@@ -210,7 +210,7 @@ func centre_height() -> float:
 func held_pose() -> Transform3D:
 	if carried_by is MouseInteractor:
 		var turn := Basis(Vector3.UP, -0.42) * Basis(Vector3.FORWARD, -0.12) * Basis(Vector3.RIGHT, 0.75)
-		return Transform3D(turn, Vector3(0.03, -0.02, 0.0) - turn * CRADLE)
+		return Transform3D(turn, Vector3(0.03, -0.02, -0.35) - turn * CRADLE)
 	var hang := Basis(Vector3.UP, -0.3) * Basis(Vector3.RIGHT, 0.5)
 	return Transform3D(hang, -(hang * GRIP))
 

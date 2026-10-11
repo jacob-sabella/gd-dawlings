@@ -149,6 +149,7 @@ func _ready() -> void:
 	await _test_each_venue_has_a_toy_of_its_own()
 	_test_the_neon_ball_glows_without_blooming_into_one_colour()
 	_test_the_beach_ball_does_not_crowd_the_view()
+	_test_a_held_keytar_clears_the_console_instead_of_covering_it()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
 	await _test_somebody_elses_radio_plane_flies_where_they_say()
@@ -14564,6 +14565,26 @@ func _test_the_beach_ball_does_not_crowd_the_view() -> void:
 			ToyItem.TOYS[&"studio"]["size"] < 0.1)
 	toy.queue_free()
 	ToyItem.shown = &"studio"
+
+
+## THE CROWDING THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Keytar: ... Held on
+## a desktop, it covers most of the desk"). The desktop pose's base offset had a zero z -- the
+## instrument's own 0.9m length ran forward from right in front of the glove, straight across the
+## console's whole fader row (confirmed off a screenshot, frame 90 so the carry spring-damper had
+## settled: every one of the 13 strips hidden). Pinning the exact -0.35 pushed into the base
+## offset, and that it reads as further from the eye along local -Z (the glove's own frame is
+## camera-aligned; `MouseInteractor.carry_pose()` offsets a held item by a negative z to put it
+## in front of the camera, so a more negative z is further from the eye, not closer).
+func _test_a_held_keytar_clears_the_console_instead_of_covering_it() -> void:
+	var hand := MouseInteractor.new()
+	var keytar := KeytarItem.new()
+	add_child(keytar)
+	keytar.carried_by = hand
+	var turn := Basis(Vector3.UP, -0.42) * Basis(Vector3.FORWARD, -0.12) * Basis(Vector3.RIGHT, 0.75)
+	var base := keytar.held_pose().origin + turn * KeytarItem.CRADLE
+	check("the base offset carries the -0.35m pushed out to clear the console (%.2f)" % base.z,
+			is_equal_approx(base.z, -0.35))
+	keytar.queue_free()
 
 
 func _test_the_yoyo_does_its_tricks() -> void:

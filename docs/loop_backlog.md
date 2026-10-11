@@ -1588,7 +1588,7 @@ gloriously wrong and you survive anyway.
 
 - Keytar: on a host, a MIDI keyboard still goes to Reaper rather than through the keytar
   (GuestMidi opens MIDI only from the guest's panel). It is not yet tried in a headset, where the
-  pose by its neck grip is untested. Held on a desktop, it covers most of the desk.
+  pose by its neck grip is untested.
 
 - Hand percussion: another player's hits are heard in the room only. No socket carries them into a
   personal mix, and they are not in their ON AIR monitor. On a desktop, sweeping the cursor
@@ -2502,3 +2502,25 @@ Open follow-ups, not built:
   a second of physics time to reach a `held_pose` far from its home spot) is itself worth a
   look if a future tick is ever about how a THROW or a CATCH feels on a long carry -- not
   touched here, since this tick's bug was about the end state, not the time to reach it.
+
+
+## Tick W -- a held keytar's own length ran it across the whole desk (2026-10-11)
+
+"Keytar: ... Held on a desktop, it covers most of the desk," from this list. Used the frame-90
+capture technique from Tick V straight away this time (`SHOT_ARGS="--carry keytar" tools/shot.sh
+out.png 90 96`) rather than rediscovering the settle-time gotcha: the keytar was there at frame
+90, 0.9m of body and neck spanning the full screen width, hiding every one of the console's 13
+fader strips underneath it.
+
+`KeytarItem.held_pose()`'s desktop (`MouseInteractor`) branch put the base offset's z at `0.0` --
+right at the glove's own depth, with only `CRADLE`'s own 0.1m and the instrument's length to carry
+it anywhere, none of it pushed back from the eye. Traced `MouseInteractor.carry_pose()`: the
+glove's basis is the camera's own, so local -Z in a held item's offset is away from the eye (the
+same frame `CARRY_AT`'s own -0.5 z already relies on) -- the fix is a more negative z, not a less
+negative one.
+
+Fixed by moving the base offset's z from `0.0` to `-0.35`: re-shot the same repro and the console's
+whole fader row reads clearly under the keytar now, with the keybed still tipped up toward the eye
+and legible to play by -- matching the file header's own stated intent for the pose. Pinned by
+`_test_a_held_keytar_clears_the_console_instead_of_covering_it`, which checks the exact -0.35
+rather than re-rendering a frame.
