@@ -35,6 +35,12 @@ signal instrument_spilled(id: StringName, kind: StringName, curse: StringName, b
 ## ordinary desk replication; these are the presentation alone.
 signal chaos_telegraphed(index: int)
 signal chaos_struck(index: int)
+## A flaw just turned fixed, from THIS peer's own read of `run.fixed` (the wire's own state,
+## already true/false, needing no clock of its own): the other half of `chaos_telegraphed`/
+## `chaos_struck`'s "not host-only" pair -- every peer sees its own band fix things land the
+## moment its own copy of `run.fixed` says so, host and guest alike, rather than waiting on a
+## signal the host alone would ever get to emit.
+signal flaw_fixed(index: int)
 
 ## `null` when `Tour.run.state == IDLE` -- i.e. always `null` between runs. On the host this is
 ## the live run; on a guest it is a read-only copy rebuilt from `Session.tour` on every change.
@@ -89,6 +95,13 @@ var _published_chaos: Array[int] = []
 ## host and guest off their own `brief_elapsed()`, so each plays once however the clock and
 ## `Session.tour`'s publishes interleave.
 var _shown_chaos: Array[int] = []
+## Per flaw index, whether THIS peer has already fired `flaw_fixed` for it -- the same
+## one-signal-per-change care as `_shown_chaos`, but over a plain bool rather than a state
+## machine, since `run.fixed` has no telegraph of its own. Reset alongside `_shown_chaos` at
+## both of its own reset points (`_lay_out_chaos` on the host, `_on_tour_changed`'s key check on
+## a guest) rather than keyed separately, since a flaw's fixed-ness is only ever about the brief
+## `_shown_chaos` is already keyed to.
+var _shown_fixed: Array[bool] = []
 ## Which brief `_shown_chaos` belongs to (`attempt_seed:brief_index` -- see `_chaos_key`), not
 ## merely which events it drew: two briefs can honestly draw the very same single event, and a
 ## second brief must still get its own surprise, not inherit the first one's already-shown
@@ -121,6 +134,7 @@ func _physics_process(delta: float) -> void:
 	# `chaos_telegraphed`/`chaos_struck`'s own doc.
 	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
 		_tick_chaos_shown()
+		_tick_fixed_shown()
 	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
 		return
 	if run.tuning:
@@ -392,6 +406,7 @@ func _lay_out_chaos(index: int, brief: TourBrief, band_size: int, flaws: Array[T
 	run.event_state.resize(run.event_at.size())
 	_published_chaos = []
 	_shown_chaos = []
+	_shown_fixed = []
 	_shown_for_key = _chaos_key(run)
 
 
@@ -574,6 +589,21 @@ func chaos_shown(index: int) -> int:
 	return maxi(shown, wire)
 
 
+## Both host and guest, off THIS peer's own copy of `run.fixed` (the wire's own state -- a flaw
+## needs no clock of its own the way a chaos event does, so there is no telegraph half to this
+## one): the moment a flaw this peer has not yet shown fixed turns true, fires once and marks it
+## shown, exactly the care `_tick_chaos_shown` already takes over its own state machine.
+func _tick_fixed_shown() -> void:
+	if run.flaws.is_empty():
+		return
+	while _shown_fixed.size() < run.fixed.size():
+		_shown_fixed.append(false)
+	for i in run.fixed.size():
+		if run.fixed[i] and not _shown_fixed[i]:
+			_shown_fixed[i] = true
+			flaw_fixed.emit(i)
+
+
 func _finish_brief() -> void:
 	# Never left pending past the brief it was set for -- a test (or a late-arriving signal) that
 	# hands `Tour.run` a fresh run without going through `_start_brief` must not inherit a stale
@@ -670,6 +700,7 @@ func _on_tour_changed() -> void:
 	if key != _shown_for_key:
 		_shown_for_key = key
 		_shown_chaos = []
+		_shown_fixed = []
 
 
 func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:

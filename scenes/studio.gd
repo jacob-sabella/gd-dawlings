@@ -1986,6 +1986,7 @@ func _build_tour_case() -> void:
 	Tour.instrument_spilled.connect(_on_tour_instrument_spilled)
 	Tour.chaos_telegraphed.connect(_on_tour_chaos_telegraphed)
 	Tour.chaos_struck.connect(_on_tour_chaos_struck)
+	Tour.flaw_fixed.connect(_on_tour_flaw_fixed)
 	Session.tour_changed.connect(_on_session_tour_changed)
 	Session.participant_left.connect(_on_tour_participant_left)
 	_sync_tour_roll()
@@ -2246,6 +2247,14 @@ func _on_tour_chaos_struck(index: int) -> void:
 				_throw_crowd_things(index)
 
 
+## A flaw just turned fixed, on every peer from their own copy of `run.fixed` (Tour.flaw_fixed is
+## not host-only -- see Tour's own class note by `chaos_telegraphed`): the crowd cheers from the
+## back of house, the band's own job landing somewhere the room can hear it, on top of the HUD's
+## line already flipping to ACCENT the same tick.
+func _on_tour_flaw_fixed(index: int) -> void:
+	_play_at(_crowd_house_point(), Foley.crowd_cheer(index % 3))
+
+
 ## Where the crowd is, in the frame the gear's floor plan is measured in: the back of house's
 ## centre, a little short of its far wall -- `crowd_throws`'s rumble comes from here, and so does
 ## the throw itself.
@@ -2259,8 +2268,14 @@ func _crowd_house_point() -> Vector3:
 ## A one-shot emitter at an arbitrary point, for a sound that is not coming from any gear already
 ## standing there -- `crowd_rumble`, from the house rather than the case. Freed shortly after:
 ## long enough for the clip to finish, short enough not to litter the set over a busy run.
+##
+## `not is_inside_tree()`: several tests `remove_child` a studio without freeing it once they are
+## done, leaving its signal connections (`Tour.flaw_fixed` among them, which now fires on every
+## flaw a test's own brief happens to clear) live on a node with no `SceneTree` of its own --
+## `get_tree()` would be null on exactly that node, same reasoning `_walk_to_seat` already needed
+## this guard for.
 func _play_at(point: Vector3, stream: AudioStream, volume_db := 0.0) -> void:
-	if studio_set == null:
+	if studio_set == null or not is_inside_tree():
 		return
 	var marker := Node3D.new()
 	marker.position = point

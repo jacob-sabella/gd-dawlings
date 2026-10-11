@@ -741,6 +741,33 @@ static func crowd_rumble(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## The crowd approving: a flaw the room could hear just got put right. Brighter and shorter than
+## `crowd_rumble`'s low mutter of trouble -- filtered noise (a lot of voices at once) swelling
+## over the first fifth of a second and falling away by the end, with three short upward whoops
+## riding the swell (noise swept up in pitch, the shape an excited shout keeps even blurred into
+## a crowd).
+static func crowd_cheer(take: int) -> AudioStreamWAV:
+	return _cached("crowd_cheer_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.55, 0.5, 1013 + take * 11)
+		_highpass(s, 500.0)
+		_lowpass(s, 3200.0)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			s[i] *= sin(PI * minf(t / 0.5, 1.0)) * (0.7 + 0.3 * sin(TAU * 9.0 * t))
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1019 + take * 7
+		for k in 3:
+			var at: float = 0.03 + float(k) * 0.14 + rng.randf_range(0.0, 0.04)
+			var start := int(at * RATE)
+			var dur := 0.1
+			for i in range(start, mini(start + int(dur * RATE), s.size())):
+				var lt := float(i - start) / dur
+				var hz := lerpf(500.0, 1400.0, lt)
+				var env := sin(PI * lt)
+				s[i] += 0.22 * env * sin(TAU * hz * float(i - start) / float(RATE))
+		return _wav(s, false))
+
+
 ## One card's edge flicked off a thumb: a few milliseconds of bright paper.
 static func _flick(s: PackedFloat32Array, at: float, level: float, rng: RandomNumberGenerator) -> void:
 	var start := int(at * RATE)

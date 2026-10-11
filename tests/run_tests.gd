@@ -294,6 +294,7 @@ func _ready() -> void:
 	_test_tour_chaos_blocks_the_pass_until_recovered()
 	_test_tour_chaos_telegraphs_and_strikes_on_the_brief_clock()
 	_test_tour_chaos_guest_plays_the_telegraph_from_the_run()
+	_test_tour_flaw_fixed_fires_once_per_flaw_from_the_wire()
 	_test_tour_chaos_leaves_the_real_project_untouched()
 	_test_tour_chaos_round_trips_and_never_draws_a_conflict()
 	_test_tour_ear_reads_inert_off_the_stand_in()
@@ -16566,6 +16567,67 @@ func _test_tour_chaos_guest_plays_the_telegraph_from_the_run() -> void:
 	Tour.run = saved_run
 	remove_child(hud)
 	hud.free()
+	_as_session(Session.Role.SOLO, 1)
+
+
+## `Tour.flaw_fixed` fires once a flaw, off a guest's own copy of `run.fixed` -- the same
+## not-host-only reasoning as `chaos_telegraphed`, but over a plain bool with no clock of its own.
+## A fresh brief (even one that reuses a flaw id, or starts already fixed) must not inherit the
+## last brief's shown state: the same singleton-leak care `_finish_at` needed.
+func _test_tour_flaw_fixed_fires_once_per_flaw_from_the_wire() -> void:
+	_as_session(Session.Role.GUEST, 6)
+	var saved_run := Tour.run
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.attempt_seed = 601
+	run.brief_index = 0
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.seconds_total = 45.0
+	run.seconds_left = 45.0
+	run.flaws = [&"quiet_vox", &"muddy_bass"]
+	run.fixed = [false, false]
+	Session.tour = run.to_dict()
+
+	var fired: Array = []
+	var on_fixed := func(i: int) -> void: fired.append(i)
+	Tour.flaw_fixed.connect(on_fixed)
+
+	Session.tour_changed.emit()
+	Tour._physics_process(0.0)
+	check("nothing fixed yet: no signal (%s)" % [fired], fired.is_empty())
+
+	run.fixed = [true, false]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	Tour._physics_process(0.0)
+	check("flaw 0 just fixed: fires once (%s)" % [fired], fired == [0])
+
+	Tour._physics_process(0.0)
+	Tour._physics_process(0.0)
+	check("settled: ticking again fires nothing more (%s)" % [fired], fired == [0])
+
+	run.fixed = [true, true]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	Tour._physics_process(0.0)
+	check("flaw 1 fixed too: fires for it, not again for 0 (%s)" % [fired], fired == [0, 1])
+
+	# A new brief (a fresh attempt_seed:brief_index key) must not inherit the shown state above --
+	# flaw 0, already fixed on arrival, fires fresh rather than being swallowed as "already shown".
+	run.brief_index = 1
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [true]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	Tour._physics_process(0.0)
+	check("a new brief's already-fixed flaw fires fresh, not swallowed by the old one's shown state (%s)" \
+			% [fired], fired == [0, 1, 0])
+
+	Tour.flaw_fixed.disconnect(on_fixed)
+	Tour.run = saved_run
 	_as_session(Session.Role.SOLO, 1)
 
 

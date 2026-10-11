@@ -994,7 +994,7 @@ gloriously wrong and you survive anyway.
   rather than after -- no action taken here, just noted for the next one that measures something
   off real audio.
 - **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's
-  lines landing with a hit. One piece done -- **a brief ends on the bar, not the frame. Done
+  lines landing with a hit. Two pieces done. **A brief ends on the bar, not the frame. Done
   2026-10-11.** Whatever qualifies a brief to end -- every flaw fixed and part played, a struck
   chaos event put right, the crowd happy, or simply the clock running out -- used to call
   `_finish_brief()` the instant it happened, wherever in the bar that fell; it now holds until
@@ -1018,6 +1018,42 @@ gloriously wrong and you survive anyway.
   (7057 checks, 0 failed). No new screenshot: this is a timing change, not a visual one --
   `shots/tour_bar_end.png` (the ordinary draft screen) is a sanity check that nothing else moved,
   not a demonstration of the fix itself, which the tests carry.
+  **The crowd reacts to each fix. Done 2026-10-11.** A fix landing used to say so only on the
+  HUD (the line's already-built flip from INK to ACCENT, `TourHud._refresh_flaws`) -- now the
+  room says so too, on every peer, the instant its own copy of `run.fixed` turns a flaw true:
+  `Foley.crowd_cheer` (new, a swell of filtered noise with three short upward whoops riding it,
+  the bright counterpart to `crowd_rumble`'s low mutter of trouble), played from the back of
+  house where the rest of the crowd's sounds already come from. Wired the same not-host-only way
+  `chaos_telegraphed`/`chaos_struck` already are (`Tour.flaw_fixed`, new): every peer, host and
+  guest alike, watches its own copy of `run.fixed` -- which needs no clock of its own the way a
+  chaos event does, since it is already a plain true/false the host publishes -- rather than
+  waiting on a signal only the host could ever emit. `Tour._tick_fixed_shown` (new, beside
+  `_tick_chaos_shown` in `_physics_process`'s both-host-and-guest block) keeps a per-peer
+  `_shown_fixed` so each flaw cheers exactly once, reset at both of `_shown_chaos`'s own reset
+  points (`_lay_out_chaos` on the host, `_on_tour_changed`'s key check on a guest) rather than a
+  third place of its own, since a flaw's fixed-ness only ever means something for the brief
+  `_shown_chaos` is already keyed to.
+  Caught on the way: wiring `flaw_fixed` into `scenes/studio.gd` (the same `_play_at` helper
+  `crowd_throws`'s rumble already uses) surfaced a latent bug in that helper, not a new one --
+  several existing tests `remove_child` a `Studio` once they are done with it but never free it,
+  leaving its signal connections live on a node with no `SceneTree` of its own; `flaw_fixed`
+  fires often enough (every flaw a test's own brief happens to clear, not just the rare
+  `crowd_throws`) that this stale-studio hazard finally got hit. Fixed with the same
+  `not is_inside_tree()` guard `_walk_to_seat` already needed for the same reason, in `_play_at`
+  itself, so `crowd_throws`'s own rumble is covered by the same fix. One test
+  (`_test_tour_flaw_fixed_fires_once_per_flaw_from_the_wire`, mirroring the chaos telegraph
+  tests' shape): fires once a flaw off a guest's own wire state, settles on repeat ticks, and a
+  fresh brief's already-fixed flaw (even one that reuses a flaw id) fires fresh rather than being
+  swallowed as "already shown" -- the same singleton-leak care `_finish_at` needed. `tools/verify.sh`
+  ends clean (7059 checks, 0 failed); `tools/session_probe.sh` default and `--built-in` both green
+  ([host] 53/0 and 79/0, [guest] 47/0 and 42/0). `shots/tour_cheer.png` (a brief mid-flight, one
+  flaw still open) is a sanity check that nothing else moved -- the cheer itself is a sound, which
+  the test carries, not a visual the HUD didn't already have.
+  Not chased: `tools/tour_probe.sh 8` (and `4`) turned up a real but pre-existing flake --
+  confirmed unrelated to this change by running the same probe against master before it (same
+  failure shape, "every part played and every flaw fixed ends the brief early" cascading into an
+  unscored brief and a skipped draft, roughly every other run at 4 and 8 players) -- real
+  multi-process timing, not something this change touched. Worth its own iteration.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
   second life), a loss that costs something, a win that is announced to the room.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
