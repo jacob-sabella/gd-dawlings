@@ -994,7 +994,30 @@ gloriously wrong and you survive anyway.
   rather than after -- no action taken here, just noted for the next one that measures something
   off real audio.
 - **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's
-  lines landing with a hit; a brief that ends on the bar, not the frame.
+  lines landing with a hit. One piece done -- **a brief ends on the bar, not the frame. Done
+  2026-10-11.** Whatever qualifies a brief to end -- every flaw fixed and part played, a struck
+  chaos event put right, the crowd happy, or simply the clock running out -- used to call
+  `_finish_brief()` the instant it happened, wherever in the bar that fell; it now holds until
+  the song's own next bar (`MixState.next_bar_start`, new, the same two maps `count_in_start`
+  already reads -- a tempo map and a meter -- run the other way round: the next bar at or after a
+  position, through whatever tempo or time-signature changes lie between, rather than the bar a
+  count-in starts before). `run.seconds_left` freezes the instant it qualifies rather than
+  ticking further while the song finishes its bar, so the score a player actually earned is
+  exactly what it would have been without the hold -- nobody is charged for the wait. A stalled
+  transport (nothing playing, no `DAW.state`) is never left hanging: `_BAR_WAIT_CAP_SECONDS` (4 s,
+  comfortably past the longest bar any of today's tempos draw) finishes anyway past that. Caught
+  on the way: the pending wait (`Tour._finish_at`) is a field on the autoload singleton, so a test
+  that hands `Tour.run` a fresh run directly (most of the suite's briefs do, rather than going
+  through `start_run()`) would have inherited whichever bar the *previous* test's brief was
+  waiting on -- it now clears in `_finish_brief()` and `_end_run()` both, not only where a brief
+  normally starts, so nothing a test (or a future caller) does can leave it stuck. Three tests:
+  `MixState.next_bar_start`'s own arithmetic through a time-signature change (next to
+  `count_in_start`'s own test, same fixture), and `_test_tour_brief_finishes_on_the_bar_not_the_frame`
+  driving `Tour._physics_process` end to end -- qualifying mid-bar holds, a tick still short of the
+  bar still holds, the tick that reaches it finishes into the draft. `tools/verify.sh` ends clean
+  (7057 checks, 0 failed). No new screenshot: this is a timing change, not a visual one --
+  `shots/tour_bar_end.png` (the ordinary draft screen) is a sanity check that nothing else moved,
+  not a demonstration of the fix itself, which the tests carry.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
   second life), a loss that costs something, a win that is announced to the room.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each

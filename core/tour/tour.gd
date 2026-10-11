@@ -66,6 +66,15 @@ var _timing: TourMeasure.Timing = null
 var _ear: TourMeasure.Ear = null
 ## `[run.crowd_happy, run.crowd_over]` as last published, the same reasoning as `_published_fixed`.
 var _published_crowd: Array = []
+## Set the physics tick a brief first qualifies to end (every flaw/part/chaos/crowd bar clear, or
+## the clock run out): `_finish_brief()` itself waits for `DAW.state.position_seconds` to reach
+## this, `MixState.next_bar_start`'s answer at the moment it qualified, rather than cutting the
+## song off mid-bar. -1.0 while nothing is pending. `_BAR_WAIT_CAP_SECONDS` is how long it will
+## wait past that before giving up and finishing anyway -- a stalled transport (nothing playing,
+## `DAW.state` gone stale) must never hang a brief open forever.
+var _finish_at := -1.0
+const _BAR_WAIT_CAP_SECONDS := 4.0
+var _finish_pending_since := 0.0
 ## The cards offered by the draft under way, by index, for `pick_draft` to apply.
 var _draft: Array[TourCard] = []
 ## `run.fixed` as it was the last time it was published, so a tick that changes nothing does not
@@ -129,13 +138,27 @@ func _physics_process(delta: float) -> void:
 	_tick_parts()
 	_tick_chaos()
 	_tick_crowd()
-	if not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false) \
-			and not run.event_state.has(TourChaos.State.STRUCK) and not run.crowd_happy.has(false):
-		_finish_brief()
-		return
-	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
-	if run.seconds_left <= 0.0:
-		_finish_brief()
+	if _finish_at < 0.0:
+		var qualified := not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false) \
+				and not run.event_state.has(TourChaos.State.STRUCK) and not run.crowd_happy.has(false)
+		if not qualified:
+			run.seconds_left = maxf(run.seconds_left - delta, 0.0)
+			qualified = run.seconds_left <= 0.0
+		if qualified:
+			# Hold for the bar it qualified on, not the frame -- a song does not want to stop
+			# mid-bar any more than it wants to start there (DAW.transport_record's own count-in
+			# makes the same point the other way round). Checked below in the same tick: a
+			# position already sitting on that bar (nothing playing, or it just landed there)
+			# finishes at once, same as before this existed.
+			var pos := DAW.state.position_seconds if DAW.state != null else 0.0
+			_finish_at = DAW.state.next_bar_start(pos) if DAW.state != null else pos
+			_finish_pending_since = 0.0
+	if _finish_at >= 0.0:
+		var pos := DAW.state.position_seconds if DAW.state != null else _finish_at
+		if pos >= _finish_at or _finish_pending_since >= _BAR_WAIT_CAP_SECONDS:
+			_finish_brief()
+		else:
+			_finish_pending_since += delta
 
 
 ## Whether a run can be started here right now: the built-in engine only (real loudness and
@@ -309,6 +332,7 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	run.seconds_left = brief.seconds * run.next_brief_seconds_mult
 	run.next_brief_seconds_mult = 1.0
 	run.seconds_total = run.seconds_left
+	_finish_at = -1.0
 	_lay_out_chaos(index, brief, band_size, drawn)
 	_loudness = null
 	_balance = null
@@ -551,6 +575,10 @@ func chaos_shown(index: int) -> int:
 
 
 func _finish_brief() -> void:
+	# Never left pending past the brief it was set for -- a test (or a late-arriving signal) that
+	# hands `Tour.run` a fresh run without going through `_start_brief` must not inherit a stale
+	# wait from whichever brief finished last.
+	_finish_at = -1.0
 	var brief := TourBriefs.brief(run.brief_index)
 	var samples := {}
 	if _loudness != null:
@@ -600,6 +628,7 @@ func _finish_brief() -> void:
 
 
 func _end_run(won: bool) -> void:
+	_finish_at = -1.0
 	if _balance != null:
 		_balance.stop()
 	if _ear != null:

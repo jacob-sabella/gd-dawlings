@@ -333,6 +333,15 @@ func count_in_start(at: float) -> float:
 	return map.seconds_at(m.beat_of_bar(m.bar_at(map.beat_at(at)) - float(count_in_bars)))
 
 
+## Where the next bar begins at or after `at`: `at` itself if it already sits on one, through
+## whatever tempo and time signature changes lie between -- the same two maps `count_in_start`
+## reads, run the other way round.
+func next_bar_start(at: float) -> float:
+	var map := tempo_map()
+	var m := meter()
+	return map.seconds_at(m.beat_of_bar(ceil(m.bar_at(map.beat_at(at)))))
+
+
 ## The song's time signature: counts in a bar, and the note value of one. Reaper's OSC surface
 ## does not send it; its bridge does. `/timesig`.
 var beats_per_bar: int = 4

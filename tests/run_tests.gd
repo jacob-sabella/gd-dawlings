@@ -300,6 +300,7 @@ func _ready() -> void:
 	_test_tour_ear_judges_from_its_table()
 	_test_tour_brief_judges_the_crowd()
 	_test_tour_brief_waits_for_the_crowd()
+	_test_tour_brief_finishes_on_the_bar_not_the_frame()
 	_test_tour_run_round_trips_the_crowd()
 	_test_tour_hud_shows_the_crowd_lines()
 
@@ -10525,6 +10526,12 @@ func _test_the_time_signature_changes() -> void:
 	check("4/4 again from bar 5 (%s)" % s.bar_beat(s.seconds_at_beat(15.0)), s.bar_beat(s.seconds_at_beat(15.0)) == "5.2.00")
 	close_to("bar 5 is at its beat in seconds", s.bar_to_seconds(5.0), s.seconds_at_beat(14.0))
 	close_to("a bar of 6/8 is three beats long", s.bar_to_seconds(4.0) - s.bar_to_seconds(3.0), 1.5)
+	# next_bar_start reads the same two maps count_in_start does, the other way round: a touch
+	# into 6/8's bar 4 rounds up to bar 5, still through the signature change.
+	close_to("a touch into bar 4 asks for bar 5", s.next_bar_start(s.bar_to_seconds(4.0) + 0.1), s.bar_to_seconds(5.0))
+	check("already sat on a bar's own first instant asks for nothing more (%.4f vs %.4f)" \
+			% [s.next_bar_start(s.bar_to_seconds(3.0)), s.bar_to_seconds(3.0)],
+			is_equal_approx(s.next_bar_start(s.bar_to_seconds(3.0)), s.bar_to_seconds(3.0)))
 	DAW.set_count_in(1)
 	DAW.set_metronome(true)
 	close_to("a count-in of a bar into bar 4 is a bar of 6/8", s.count_in_start(s.bar_to_seconds(4.0)), s.bar_to_seconds(3.0))
@@ -16840,6 +16847,69 @@ func _test_tour_brief_waits_for_the_crowd() -> void:
 
 	Tour.run = saved_run
 	Tour._ear = saved_ear
+	DAW.use(previous, false)
+
+
+## A brief that qualifies to end -- every flaw fixed, nothing else outstanding -- does not cut
+## the song off wherever the qualifying tick happens to land: it holds until the song's own next
+## bar (`MixState.next_bar_start`, off the live `DAW.state.position_seconds`), same as a take
+## roll already waits for one (`take_roll_seconds`), just the other end of a brief instead.
+func _test_tour_brief_finishes_on_the_bar_not_the_frame() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	TourProject.load(TourProject.song_for(brief, 120.0, [], rng), backend)
+	DAW.set_track_volume(TourProject.BAND.find("Lead Vox") + 1, DAW.db_to_taper(0.0))
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.brief_index = 0
+	run.band_size = 1
+	run.song_tempo = 120.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [false]
+	run.parts = [&"tamb_backbeat"]
+	run.holders = [1]
+	run.hits = [0]
+	run.played = [false]
+	run.open_since = [0.0]
+	run.seconds_left = brief.seconds
+	Tour.run = run
+
+	var beat := 60.0 / 120.0
+	var hits: Array = []
+	for k in 4:
+		for b in [1.0, 3.0]:
+			var on: float = (k * 4.0 + b) * beat
+			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
+
+	# 120 BPM, 4/4: a bar is 2.0 s. Qualifying a touch past bar 5 (10.0 s) must not finish the
+	# brief until the song reaches bar 6 (12.0 s).
+	DAW.state.position_seconds = 10.3
+	Tour._physics_process(0.1)
+	check("the flaw reads fixed and the part played off the desk at once",
+			run.fixed == [true] and run.played == [true])
+	check("but qualifying mid-bar does not finish the brief yet (%s)" % [run.state],
+			run.state == TourRun.State.BRIEF)
+
+	DAW.state.position_seconds = 11.5
+	Tour._physics_process(0.1)
+	check("still short of the bar, still waiting", run.state == TourRun.State.BRIEF)
+
+	DAW.state.position_seconds = 12.0
+	Tour._physics_process(0.1)
+	check("the song reaches the bar it qualified on: the brief ends there, into the draft",
+			run.state == TourRun.State.DRAFTING)
+
+	Tour.run = saved_run
 	DAW.use(previous, false)
 
 
