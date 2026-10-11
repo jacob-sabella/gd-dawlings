@@ -26,11 +26,13 @@ static func count() -> int:
 
 
 ## Every brief here judges off its flaws (TourFlaws, baked into TourProject.song_for), not off
-## `measures`/`targets`: the master bus's own two bars are off until they are calibrated. The
-## built-in engine's limiter sits at -0.3 dB, above every loudness ceiling a brief could set, so
-## the levels check could never pass; the balance check's spread has never been measured clean,
-## so there is nothing to set its target against. Both come back once a probe flag measures the
-## clean band through the real bus -- see docs/loop_backlog.md's "Tour" section.
+## `measures`/`targets`: the old per-brief loudness/balance checks stay dead -- the built-in
+## engine's limiter sits at -0.3 dB, above any loudness ceiling a brief could set, so a `peak_db`
+## check could never pass, and nothing here ever measured the clean band's spread to set a
+## target against. The master bus's own two bars are judged a different way now: every brief's
+## `crowd` defaults to true, and `Tour` runs `TourMeasure.Ear` live alongside the flaws, judged by
+## `TourEar.THRESHOLDS` -- numbers measured by tools/tour_ear.sh, not a target set here. See
+## docs/loop_backlog.md's "Tour" section, "The crowd's ear".
 static func _build() -> Array[TourBrief]:
 	var out: Array[TourBrief] = []
 

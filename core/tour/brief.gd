@@ -6,7 +6,9 @@ extends RefCounted
 ## Every target here is against something the game can already measure (TourMeasure) -- loudness
 ## off the real master bus, frequency balance off a spectrum analyzer dropped onto it for the
 ## brief's duration, and timing off notes already placed against the project's own tempo map.
-## Nothing here invents a new kind of analysis for Tour's sake.
+## Nothing here invents a new kind of analysis for Tour's sake. The crowd's own two bars
+## (TourEar, off TourMeasure.Ear) are judged separately, live, by `Tour._tick_crowd`; `judge`
+## only reads what that tick already decided off `samples["crowd"]`.
 
 var id: StringName
 var title: String = ""
@@ -18,6 +20,12 @@ var measures: Array[StringName] = []
 ## Measure-specific numbers; see TourBriefs._build for what each measure reads out of it.
 var targets: Dictionary = {}
 var is_boss: bool = false
+## Whether this brief's crowd listens at all (TourEar, off TourMeasure.Ear): true for every
+## brief today. A brief with nothing playing for the crowd to hear -- the stand-in, a shot --
+## never ticks `run.crowd_happy`, and `judge`'s "crowd" block below is a pass on an empty total
+## either way, so this exists for a future brief that genuinely has no crowd rather than for
+## anything built so far.
+var crowd: bool = true
 
 
 ## `samples`: {"loudness": {"avg_db", "peak_db"}, "balance": {"low_db", "mid_db", "high_db"},
@@ -115,6 +123,24 @@ func judge(samples: Dictionary, tolerance_mult: float = 1.0) -> Dictionary:
 		score_sum += 100 if all_clear else clampi(60 - 40 * open_n, 0, 60)
 		score_count += 1
 		detail.append("chaos: %d of %d still loose" % [open_n, total])
+
+	# The crowd's own two bars (TourEar.BARS): happy/total, index for index with run.crowd_happy.
+	# `total == 0` -- the ear never heard a full window (OfflineBackend, a shot, or a brief that
+	# ended before two seconds of song played) -- contributes nothing at all, to `passed` or to
+	# the score, so the stand-in and the suite's OfflineBackend briefs pass exactly as before
+	# this existed; it still gets a detail line.
+	if samples.has("crowd"):
+		var r: Dictionary = samples["crowd"]
+		var happy_n: int = int(r.get("happy", 0))
+		var total: int = int(r.get("total", 0))
+		var seconds_left_frac: float = float(r.get("seconds_left_frac", 0.0))
+		if total > 0:
+			var all_happy := happy_n == total
+			passed = passed and all_happy
+			score_sum += 60 + roundi(40.0 * seconds_left_frac) if all_happy \
+					else roundi(60.0 * float(happy_n) / float(total))
+			score_count += 1
+		detail.append("crowd: %d of %d happy" % [happy_n, total])
 
 	if score_count == 0:
 		return {"passed": false, "score": 0, "detail": detail}

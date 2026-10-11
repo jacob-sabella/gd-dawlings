@@ -78,7 +78,7 @@ var _aim := ""
 var _look := Vector2.ZERO
 var _clicks: Array = []
 var _pulls: Array = []
-## `--tour intact|broken|brief|draft|chaos`: the Tour case and its run put in that state from frame 9,
+## `--tour intact|broken|brief|draft|chaos|crowd`: the Tour case and its run put in that state from frame 9,
 ## deterministically (Tour.force_state_for_shot) rather than by waiting out a brief's timer.
 ## Needs the built-in engine (--built-in): Tour is gated to it, and quietly does nothing on any
 ## other backend, same as in play.

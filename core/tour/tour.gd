@@ -60,6 +60,12 @@ var _saved_count_in_bars := 0
 var _loudness: TourMeasure.Loudness = null
 var _balance: TourMeasure.Balance = null
 var _timing: TourMeasure.Timing = null
+## The crowd's live hearing for the brief under way, started in `_start_brief` whenever
+## `brief.crowd` is true and stopped in `_finish_brief`/`_end_run`/`force_state_for_shot` --
+## never left running past the brief it was started for, the same care `_balance` already needs.
+var _ear: TourMeasure.Ear = null
+## `[run.crowd_happy, run.crowd_over]` as last published, the same reasoning as `_published_fixed`.
+var _published_crowd: Array = []
 ## The cards offered by the draft under way, by index, for `pick_draft` to apply.
 var _draft: Array[TourCard] = []
 ## `run.fixed` as it was the last time it was published, so a tick that changes nothing does not
@@ -122,8 +128,9 @@ func _physics_process(delta: float) -> void:
 	_tick_flaws()
 	_tick_parts()
 	_tick_chaos()
+	_tick_crowd()
 	if not run.flaws.is_empty() and not run.fixed.has(false) and not run.played.has(false) \
-			and not run.event_state.has(TourChaos.State.STRUCK):
+			and not run.event_state.has(TourChaos.State.STRUCK) and not run.crowd_happy.has(false):
 		_finish_brief()
 		return
 	run.seconds_left = maxf(run.seconds_left - delta, 0.0)
@@ -270,6 +277,8 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	run.fixed.clear()
 	for _i in run.flaws.size():
 		run.fixed.append(false)
+	run.crowd_happy.clear()
+	run.crowd_over.clear()
 	# The same `rng` stream, continuing right where the flaws' own draws left it, so a seed
 	# replays identically all the way through: tempo, flaws, first spill, then parts and who
 	# holds them.
@@ -313,8 +322,15 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	if &"timing" in brief.measures:
 		_timing = TourMeasure.Timing.new()
 		_timing.start(TIMING_TRACK, DAW.state.position_seconds if DAW.state != null else 0.0)
+	if _ear != null:
+		_ear.stop()
+	_ear = null
+	if brief.crowd:
+		_ear = TourMeasure.Ear.new()
+		_ear.start()
 	_published_fixed = []
 	_published_parts_state = []
+	_published_crowd = []
 	brief_started.emit(index)
 	_publish()
 
@@ -362,7 +378,8 @@ func _chaos_key(r: TourRun) -> String:
 
 
 ## Samples whichever of Loudness/Balance/Timing this brief lists in `measures` -- none do today
-## (see briefs.gd), but a future calibrated brief can still ask for one.
+## (see briefs.gd), but a future calibrated brief can still ask for one -- plus the crowd's own
+## live `_ear`, which every brief with `crowd` true runs regardless of `measures`.
 func _on_measure_tick(delta: float) -> void:
 	if _loudness != null:
 		_loudness.sample(delta)
@@ -370,6 +387,8 @@ func _on_measure_tick(delta: float) -> void:
 		_balance.sample(delta)
 	if _timing != null:
 		_timing.sample(delta)
+	if _ear != null:
+		_ear.sample(delta)
 
 
 ## Reads every one of this brief's flaws off the live desk and publishes only when the answer
@@ -411,6 +430,30 @@ func _tick_parts() -> void:
 	var state := [run.hits.duplicate(), run.played.duplicate(), run.holders.duplicate()]
 	if state != _published_parts_state:
 		_published_parts_state = state
+		_publish()
+
+
+## Reads the crowd's live hearing (`_ear`, sampled every tick in `_on_measure_tick`) and judges
+## both of TourEar.BARS off it. `run.crowd_happy`/`crowd_over` stay empty until the ear has
+## heard a full window -- `TourMeasure.Ear.ready()` -- so a guest and the HUD can tell
+## "listening..." apart from "unhappy" rather than defaulting to one or the other. Hysteresis
+## reads off the bar's own last `crowd_happy` entry, the same `was_happy` TourEar.judge_level/
+## judge_balance ask for. Publishes only when the pair actually changed, the same reasoning as
+## `_tick_flaws`/`_tick_parts`.
+func _tick_crowd() -> void:
+	var r := _ear.result() if _ear != null else {"heard": false}
+	if not bool(r.get("heard", false)):
+		return
+	var brief := TourBriefs.brief(run.brief_index)
+	var was_level_happy := run.crowd_happy.size() > 0 and run.crowd_happy[0]
+	var was_balance_happy := run.crowd_happy.size() > 1 and run.crowd_happy[1]
+	var level := TourEar.judge_level(float(r["avg_db"]), brief.is_boss, was_level_happy)
+	var balance := TourEar.judge_balance(float(r["spread_db"]), float(r["tilt_db"]), brief.is_boss, was_balance_happy)
+	run.crowd_happy = [level == 0, balance == 0]
+	run.crowd_over = [level > 0, balance > 0]
+	var state2 := [run.crowd_happy.duplicate(), run.crowd_over.duplicate()]
+	if state2 != _published_crowd:
+		_published_crowd = state2
 		_publish()
 
 
@@ -530,6 +573,12 @@ func _finish_brief() -> void:
 	if not run.events.is_empty():
 		var open_n: int = run.event_state.filter(func(s: int) -> bool: return s == TourChaos.State.STRUCK).size()
 		samples["chaos"] = {"open": open_n, "total": run.events.size()}
+	if not run.crowd_happy.is_empty():
+		samples["crowd"] = {"happy": run.crowd_happy.count(true), "total": run.crowd_happy.size(),
+				"seconds_left_frac": run.seconds_left / brief.seconds}
+	if _ear != null:
+		_ear.stop()
+	_ear = null
 	var verdict := brief.judge(samples, run.tempo_tolerance_mult)
 	var passed := bool(verdict["passed"])
 	var score := int(verdict["score"])
@@ -553,9 +602,12 @@ func _finish_brief() -> void:
 func _end_run(won: bool) -> void:
 	if _balance != null:
 		_balance.stop()
+	if _ear != null:
+		_ear.stop()
 	_loudness = null
 	_balance = null
 	_timing = null
+	_ear = null
 	_draft = []
 	var backend := DAW.backend
 	if backend is OfflineBackend:
@@ -638,6 +690,9 @@ func force_state_for_shot(stage: StringName) -> void:
 				_loudness = null
 				_balance = null
 				_timing = null
+				if _ear != null:
+					_ear.stop()
+				_ear = null
 				run.tuning = false
 				run.state = TourRun.State.DRAFTING
 				var rng := RandomNumberGenerator.new()
@@ -675,4 +730,15 @@ func force_state_for_shot(stage: StringName) -> void:
 			# it does not add or remove them) -- without it the card would still be showing
 			# whatever `_start_brief(1)` actually drew, not the two forced here.
 			brief_started.emit(run.brief_index)
+			_publish()
+		&"crowd":
+			if run == null:
+				start_run()
+			if run == null:
+				return
+			# Set directly rather than waited for: the real `_ear` needs a 2 s window of real
+			# audio before it has a reading at all (TourMeasure.Ear.ready()), far longer than a
+			# shot's few frames. One bar happy, one not, so both of TourEar's colours show.
+			run.crowd_happy = [true, false]
+			run.crowd_over = [false, true]
 			_publish()

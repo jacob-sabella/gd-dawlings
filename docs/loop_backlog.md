@@ -917,8 +917,59 @@ gloriously wrong and you survive anyway.
   `Venue.blackout` to turn off, so `power_flicker` there is only ever the practicals, never a true
   blackout -- fine today (the studio is Tour's only venue) but worth remembering once a second
   one exists.
-- **The crowd's ear.** Master-bus loudness and balance as real bars again, once the clean band's
-  numbers are measured through a probe flag and the thresholds set from them.
+- **The crowd's ear. Done 2026-10-11.** Master-bus loudness and balance as two live bars every
+  brief with `crowd: true` (every one today) runs on top of its own measures, judged continuously
+  rather than sampled once at the end: `TourMeasure.Ear` (new, nested under `TourMeasure` beside
+  the per-brief samplers) drops an `AudioEffectSpectrumAnalyzer` onto the master bus for a
+  brief's duration and keeps a rolling 2 s average of peak (fader-compensated through
+  `DAW.taper_to_db`, same as everything else that reads a strip's level) and three spectrum
+  bands; `TourEar` (new, `core/tour/tour_ear.gd`) is pure arithmetic over that reading -- no
+  `AudioServer` touched -- judging LEVEL (too quiet / happy / too loud) and BALANCE (thin / clear
+  / mud, the sign off `tilt_db`) with hysteresis so a reading on the line does not chatter, and a
+  stricter window for the boss brief. `Tour._tick_crowd` reads `_ear.result()` every physics tick
+  once `_ear.ready()` (host-only -- real loudness and spectrum measurement needs real audio,
+  `is_available()`'s existing rule), publishing `run.crowd_happy`/`crowd_over` only on change; a
+  struck bar blocks the brief's pass exactly as an unfixed flaw or an open chaos event does
+  (`TourBrief.judge`'s new "crowd" block), but only once the ear has actually heard a full
+  window -- `total == 0` gates nothing, so the stand-in backend and every existing OfflineBackend
+  test pass exactly as before this existed. The HUD gained two always-present lines (`TourHud`'s
+  `_crowd_box`, `_refresh_crowd`) reading "listening..." in dim until heard, then the words in
+  INK or ACCENT, and the tag line's `CROWD OK/--` suffix.
+  The thresholds were not guessed twice. The first pass at `TourEar.THRESHOLDS` was written
+  before the probe that was supposed to measure it ever ran, and failed the probe's own
+  self-check 6 of 18 the first time it was actually run: every clean row read "thin" by tens of
+  dB, because the built-in engine's own mix sits far brighter in low/mid than top on every clean
+  row (DemoSong's own parts, nothing any Tour flaw touches) -- HIGH reads 40-50 dB under LOW/MID
+  even with nothing wrong, so the clean band's real spread is ~25 dB, not the single digits the
+  placeholder assumed. Re-measured for real (`flock ~/.cache/dawlings/shared.lock
+  tools/tour_ear.sh --flaws all --diag --repeat 1`, tempo 84/100/124, clean and every flaw) and
+  the thresholds rebuilt off the actual rows: `quiet_db` sits 6 dB under the quietest happy
+  average measured (quiet_vox@84), `loud_db` 2 dB over the loudest happy average (hard_pan@124),
+  `spread_max_db` 3 dB over the widest happy spread (hard_pan@84) -- each with room to spare
+  before the nearest case meant to read trouble (muddy_bass, band_+6, a faded master). The boss
+  window halves every margin and is still cleared by every happy row. `tools/tour_ear.sh` (new,
+  `tools/probe/tour_ear.gd`) is the tool that measurement came from and the one that re-checks it
+  on every future run -- real master-bus audio into the null sink, never a real speaker or mic,
+  its own command rather than part of `tools/verify.sh` since it renders real audio to measure.
+  Six tests (`_test_tour_ear_reads_inert_off_the_stand_in`, `_test_tour_ear_judges_from_its_table`
+  pinning the hysteresis and boss-window arithmetic to the measured table itself so an edited
+  threshold fails here before it ever reaches the probe, `_test_tour_brief_judges_the_crowd`,
+  `_test_tour_brief_waits_for_the_crowd` end to end through `Tour._physics_process` with a
+  `_FakeEar` stand-in, `_test_tour_run_round_trips_the_crowd`, `_test_tour_hud_shows_the_crowd_lines`).
+  `tools/verify.sh` ends clean (7048 checks, 0 failed, same harmless pre-existing "already has a
+  parent" noise from `DAW.use()`'s swap-and-free pattern that every other `DAW.use` test also
+  prints, nothing new); `shots/tour_crowd.png` (a new `--tour crowd` shot state, one bar happy in
+  ACCENT, one unhappy in INK, both drawn at once) is the record. Reviewed by hand: the tick is
+  host-only and the two bars ride `_publish()` like every other per-run field rather than each
+  peer measuring its own local audio, so a guest's HUD reads the host's room, not its own
+  speakers; the `total == 0` gate was checked against every existing OfflineBackend-only test
+  (chaos, flaws, parts, timing) to confirm none of them now blocks on a crowd that was never
+  there to hear anything; `_ear` is let go (`stop()`, nulled) on every exit from BRIEF state
+  (`_finish_brief`, `_end_run`, the force-state shot cases, a participant leaving mid-run) so a
+  run that ends mid-window never leaves an analyzer on the bus. Not chased: the probe's placeholder
+  bug (above) is the kind of thing worth a second probe-shaped feature catching before it ships
+  rather than after -- no action taken here, just noted for the next one that measures something
+  off real audio.
 - **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's
   lines landing with a hit; a brief that ends on the bar, not the frame.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a

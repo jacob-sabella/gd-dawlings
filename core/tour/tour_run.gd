@@ -76,6 +76,14 @@ var event_at: Array[float] = []
 var event_track: Array[int] = []
 var event_state: Array[int] = []
 
+## The crowd's two bars (TourEar.BARS: level, balance) right now, index for index. Both stay
+## empty until `TourMeasure.Ear` has heard a full window -- which is also how a guest and the
+## HUD tell "listening..." apart from "unhappy": an empty array is neither. `crowd_over` only
+## means anything where the matching `crowd_happy` is false, and says which direction (loud/mud
+## vs. quiet/thin) the HUD's line picks.
+var crowd_happy: Array[bool] = []
+var crowd_over: Array[bool] = []
+
 
 ## This brief's own random stream, seeded off `attempt_seed` and `index` so it never draws the
 ## same numbers the draft's (`attempt_seed + brief_index + 1`) does, and replays identically on
@@ -125,6 +133,8 @@ func to_dict() -> Dictionary:
 		"event_at": (event_at as Array).duplicate(),
 		"event_track": (event_track as Array).duplicate(),
 		"event_state": (event_state as Array).duplicate(),
+		"crowd_happy": (crowd_happy as Array).duplicate(),
+		"crowd_over": (crowd_over as Array).duplicate(),
 	}
 
 
@@ -205,4 +215,13 @@ static func from_dict(d: Dictionary) -> TourRun:
 	while run.event_state.size() < run.events.size():
 		run.event_state.append(TourChaos.State.PENDING)
 	run.event_state.resize(run.events.size())
+	var crowd_happy_in: Array = d.get("crowd_happy", [])
+	run.crowd_happy.assign(crowd_happy_in.map(func(b): return bool(b)))
+	var crowd_over_in: Array = d.get("crowd_over", [])
+	run.crowd_over.assign(crowd_over_in.map(func(b): return bool(b)))
+	var crowd_n := maxi(run.crowd_happy.size(), run.crowd_over.size())
+	while run.crowd_happy.size() < crowd_n:
+		run.crowd_happy.append(false)
+	while run.crowd_over.size() < crowd_n:
+		run.crowd_over.append(false)
 	return run

@@ -37,6 +37,8 @@ var _drawn_parts: Array[StringName] = []
 var _chaos_edge: ColorRect
 var _chaos_box: VBoxContainer
 var _drawn_chaos: Array[StringName] = []
+var _crowd_edge: ColorRect
+var _crowd_box: VBoxContainer
 var _draft_box: HBoxContainer
 var _drawn_draft: Array[StringName] = []
 
@@ -83,6 +85,7 @@ func _process(_delta: float) -> void:
 		_refresh_flaws(run)
 		_refresh_parts(run)
 		_refresh_chaos(run)
+		_refresh_crowd(run)
 
 
 func _build() -> void:
@@ -122,6 +125,23 @@ func _build() -> void:
 	_flaws_box.name = "Flaws"
 	_flaws_box.add_theme_constant_override("separation", 2)
 	column.add_child(_flaws_box)
+
+	# The crowd's own two bars: a constant two lines, built once here rather than rebuilt per
+	# brief like `_flaws_box`/`_parts_box` -- their count never changes (TourEar.BARS), only
+	# their text and colour.
+	_crowd_edge = ColorRect.new()
+	_crowd_edge.color = EDGE
+	_crowd_edge.custom_minimum_size = Vector2(0, 1)
+	_crowd_edge.visible = false
+	column.add_child(_crowd_edge)
+	_crowd_box = VBoxContainer.new()
+	_crowd_box.name = "Crowd"
+	_crowd_box.add_theme_constant_override("separation", 2)
+	column.add_child(_crowd_box)
+	for i in TourEar.BARS.size():
+		var crowd_line := _label("", 11, DIM)
+		crowd_line.name = "Crowd%d" % i
+		_crowd_box.add_child(crowd_line)
 
 	_parts_edge = ColorRect.new()
 	_parts_edge.color = EDGE
@@ -170,6 +190,7 @@ func _refresh() -> void:
 		_build_flaws(run)
 	elif run.state == TourRun.State.BRIEF:
 		_refresh_flaws(run)
+	_refresh_crowd(run)
 	var showing_parts := run.state == TourRun.State.BRIEF and not run.parts.is_empty()
 	_parts_box.visible = showing_parts
 	_parts_edge.visible = showing_parts
@@ -230,6 +251,8 @@ func _refresh_flaws(run: TourRun) -> void:
 	var loose := run.event_state.count(TourChaos.State.STRUCK)
 	if loose > 0:
 		tag += "   %d LOOSE" % loose
+	if not run.crowd_happy.is_empty():
+		tag += "  CROWD %s" % ("OK" if not run.crowd_happy.has(false) else "--")
 	_tag.text = tag
 	for i in run.flaws.size():
 		var flaw := TourFlaws.by_id(run.flaws[i])
@@ -249,6 +272,29 @@ func _refresh_flaws(run: TourRun) -> void:
 static func flaw_line(flaw: TourFlaw, run: TourRun) -> String:
 	var where := flaw.track.to_upper() if not flaw.track.is_empty() else "DECK"
 	return "%s: %s" % [where, flaw.line_for(run)]
+
+
+## The crowd's own two lines ("CROWD: the room is too quiet" etc.), always the same two labels
+## (`_build` makes them once) -- only their visibility, text and colour change. Hidden outside
+## a brief whose own `crowd` is true; while `run.crowd_happy` is still empty (the ear has not
+## heard a full window yet) both read DIM "listening...", the same as a part nobody has struck.
+func _refresh_crowd(run: TourRun) -> void:
+	var brief := TourBriefs.brief(run.brief_index)
+	var showing := run.state == TourRun.State.BRIEF and brief.crowd
+	_crowd_box.visible = showing
+	_crowd_edge.visible = showing
+	if not showing:
+		return
+	var heard := not run.crowd_happy.is_empty()
+	for i in TourEar.BARS.size():
+		var l := _crowd_box.get_node_or_null("Crowd%d" % i) as Label
+		if l == null:
+			continue
+		var bar: StringName = TourEar.BARS[i]
+		var happy: bool = heard and i < run.crowd_happy.size() and run.crowd_happy[i]
+		var over: bool = heard and i < run.crowd_over.size() and run.crowd_over[i]
+		l.text = "%s  %s" % ["OK " if happy else "--", TourEar.line(bar, happy, over, heard)]
+		l.add_theme_color_override("font_color", DIM if not heard else (ACCENT if happy else INK))
 
 
 ## Rebuilt only when the set of parts changes (a new brief), same reasoning and the same
@@ -336,16 +382,16 @@ func _refresh_chaos(run: TourRun) -> void:
 				l.add_theme_color_override("font_color", ACCENT)
 
 
-## 12 while there is room, 11 once flaws, parts and any chaos line already shown together would
-## crowd the card (the max today, 5 flaws + 3 parts, already needs it). A PENDING chaos line
-## does not count -- it is hidden, and sizing round a surprise that has not happened yet would
-## make the card jump the moment it does.
+## 12 while there is room, 11 once flaws, parts, the crowd's own two lines and any chaos line
+## already shown together would crowd the card (the max today, 5 flaws + 3 parts + 2 crowd
+## lines, already needs it). A PENDING chaos line does not count -- it is hidden, and sizing
+## round a surprise that has not happened yet would make the card jump the moment it does.
 static func _line_font_size(run: TourRun) -> int:
 	var shown_chaos := 0
 	for i in run.events.size():
 		if Tour.chaos_shown(i) != TourChaos.State.PENDING:
 			shown_chaos += 1
-	return 11 if run.flaws.size() + run.parts.size() + shown_chaos > 6 else 12
+	return 11 if run.flaws.size() + run.parts.size() + shown_chaos + 2 > 6 else 12
 
 
 ## Three clickable cards, one per `draft` id: the host applies the pick at once

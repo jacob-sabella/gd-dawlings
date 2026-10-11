@@ -295,6 +295,12 @@ func _ready() -> void:
 	_test_tour_chaos_guest_plays_the_telegraph_from_the_run()
 	_test_tour_chaos_leaves_the_real_project_untouched()
 	_test_tour_chaos_round_trips_and_never_draws_a_conflict()
+	_test_tour_ear_reads_inert_off_the_stand_in()
+	_test_tour_ear_judges_from_its_table()
+	_test_tour_brief_judges_the_crowd()
+	_test_tour_brief_waits_for_the_crowd()
+	_test_tour_run_round_trips_the_crowd()
+	_test_tour_hud_shows_the_crowd_lines()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -16626,3 +16632,246 @@ func _test_tour_chaos_round_trips_and_never_draws_a_conflict() -> void:
 				picked != Tour.STAGE_TRACK and picked != Tour.TIMING_TRACK and t != null
 				and t.name != "Rhodes" and not t.mute)
 	DAW.use(previous, false)
+
+
+class _FakeEar extends TourMeasure.Ear:
+	var avg_db := -100.0
+	var spread_db := 0.0
+	var tilt_db := 0.0
+
+	func ready() -> bool:
+		return true
+
+	func result() -> Dictionary:
+		return {"heard": true, "avg_db": avg_db, "low_db": 0.0, "mid_db": 0.0, "high_db": 0.0,
+				"spread_db": spread_db, "tilt_db": tilt_db}
+
+
+## Off `GodotBackend` (the suite's stand-in), `Ear` has nothing to read: it adds no analyzer,
+## never fills its window, and `stop()` -- even called twice -- touches no bus.
+func _test_tour_ear_reads_inert_off_the_stand_in() -> void:
+	var previous := DAW.backend
+	DAW.use(OfflineBackend.new(), false)
+	var before: Array[int] = []
+	for b in AudioServer.bus_count:
+		before.append(AudioServer.get_bus_effect_count(b))
+
+	var ear := TourMeasure.Ear.new()
+	ear.start()
+	for _i in 30:
+		ear.sample(0.1)
+	check("never fills a window off the stand-in", not ear.ready())
+	var r := ear.result()
+	check("not heard", r["heard"] == false)
+	check("every value reads -100 while not heard (%s)" % [r],
+			r["avg_db"] == -100.0 and r["low_db"] == -100.0 and r["mid_db"] == -100.0
+			and r["high_db"] == -100.0 and r["spread_db"] == -100.0 and r["tilt_db"] == -100.0)
+	ear.stop()
+	ear.stop()
+
+	var after: Array[int] = []
+	for b in AudioServer.bus_count:
+		after.append(AudioServer.get_bus_effect_count(b))
+	check("no bus gained or lost an effect (%s -> %s)" % [before, after], before == after)
+	DAW.use(previous, false)
+
+
+## Pins `TourEar`'s arithmetic to the table it was measured against: a hair under `quiet_db`
+## reads under, right at it reads happy, hysteresis holds an unhappy reading unhappy until it
+## clears the margin, the balance bar's one-sided spread check picks its message off `tilt_db`,
+## the boss window is strictly tighter than the regular one, and every clean row this file's
+## `THRESHOLDS` comment quotes still reads happy on both -- so a table edited without rerunning
+## the tool fails here first.
+func _test_tour_ear_judges_from_its_table() -> void:
+	var w := TourEar.window(false)
+	var hyst: float = TourEar.THRESHOLDS["hyst_db"]
+	check("a hair under quiet_db reads under",
+			TourEar.judge_level(float(w["quiet_db"]) - 0.01, false, true) == -1)
+	check("right at quiet_db reads happy",
+			TourEar.judge_level(float(w["quiet_db"]), false, true) == 0)
+	check("already unhappy, a bit over quiet_db still reads under (hysteresis)",
+			TourEar.judge_level(float(w["quiet_db"]) + 0.5, false, false) == -1)
+	check("past the hysteresis margin it reads happy again",
+			TourEar.judge_level(float(w["quiet_db"]) + hyst, false, false) == 0)
+	check("over spread_max with a non-negative tilt reads mud",
+			TourEar.judge_balance(float(w["spread_max_db"]) + 0.01, 1.0, false, true) == 1)
+	check("over spread_max with a negative tilt reads thin",
+			TourEar.judge_balance(float(w["spread_max_db"]) + 0.01, -1.0, false, true) == -1)
+	check("right at spread_max is still happy",
+			TourEar.judge_balance(float(w["spread_max_db"]), 1.0, false, true) == 0)
+
+	var boss := TourEar.window(true)
+	check("the boss window sits strictly inside the regular one (%s vs %s)" % [boss, w],
+			float(boss["quiet_db"]) > float(w["quiet_db"]) and float(boss["loud_db"]) < float(w["loud_db"])
+			and float(boss["spread_max_db"]) < float(w["spread_max_db"]))
+
+	for row in TourEar.MEASURED_CLEAN:
+		var level := TourEar.judge_level(float(row["avg_db"]), false, true)
+		var bal := TourEar.judge_balance(float(row["spread_db"]), float(row["tilt_db"]), false, true)
+		check("clean @ %.0f still reads happy,clear under the regular window" % float(row["tempo"]),
+				level == 0 and bal == 0)
+		var boss_level := TourEar.judge_level(float(row["avg_db"]), true, true)
+		var boss_bal := TourEar.judge_balance(float(row["spread_db"]), float(row["tilt_db"]), true, true)
+		check("and under the boss window too (@ %.0f)" % float(row["tempo"]),
+				boss_level == 0 and boss_bal == 0)
+
+	var muddy := TourEar.MEASURED_MUDDY_BASS
+	check("muddy_bass still reads mud on balance",
+			TourEar.judge_balance(float(muddy["spread_db"]), float(muddy["tilt_db"]), false, true) > 0)
+
+
+## The crowd's own block in `TourBrief.judge`: both bars happy is a pass, one of two unhappy
+## fails it, and a crowd that never heard a full window (`total == 0`) gates nothing at all.
+func _test_tour_brief_judges_the_crowd() -> void:
+	var brief := TourBrief.new()
+	var base := {"flaws": {"fixed": 1, "total": 1, "seconds_left_frac": 0.5},
+			"parts": {"played": 1, "total": 1}}
+
+	var partial := base.duplicate(true)
+	partial["crowd"] = {"happy": 1, "total": 2, "seconds_left_frac": 0.5}
+	check("one of two crowd bars unhappy fails the brief", not bool(brief.judge(partial)["passed"]))
+
+	var full := base.duplicate(true)
+	full["crowd"] = {"happy": 2, "total": 2, "seconds_left_frac": 0.5}
+	check("both happy passes", bool(brief.judge(full)["passed"]))
+
+	var never_heard := base.duplicate(true)
+	never_heard["crowd"] = {"happy": 0, "total": 0, "seconds_left_frac": 0.5}
+	check("the crowd never heard is no gate -- still a pass",
+			bool(brief.judge(never_heard)["passed"]))
+
+
+## `Tour._tick_crowd` end to end: the brief-tick test's own setup (OfflineBackend, a solo
+## session, the rescue song loaded, the vocal fixed, a tambourine take already placed so flaws
+## and parts are both done from the first tick), but with `Tour._ear` a deterministic
+## `_FakeEar` standing in for the real master bus. Unhappy on the level bar alone holds the
+## brief in BRIEF with the clock still running; once the crowd is happy on both, the same tick
+## that would otherwise finish the brief does, straight into the draft, and `_ear` is let go.
+func _test_tour_brief_waits_for_the_crowd() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var saved_ear := Tour._ear
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+	DAW.set_track_volume(TourProject.BAND.find("Lead Vox") + 1, DAW.db_to_taper(0.0))
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.brief_index = 0
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [false]
+	run.parts = [&"tamb_backbeat"]
+	run.holders = [1]
+	run.hits = [0]
+	run.played = [false]
+	run.open_since = [0.0]
+	run.seconds_left = brief.seconds
+	Tour.run = run
+
+	var beat := 60.0 / 100.0
+	var hits: Array = []
+	for k in 4:
+		for b in [1.0, 3.0]:
+			var on: float = (k * 4.0 + b) * beat
+			hits.append([on, on + 0.05, 54, 104, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(Tour.STAGE_TRACK, hits[0][0], hits.back()[1] + 1.0, hits, "Ada percussion 1")
+
+	var fake := _FakeEar.new()
+	fake.avg_db = float(TourEar.window(false)["quiet_db"]) - 5.0
+	fake.spread_db = 1.0
+	fake.tilt_db = 0.0
+	Tour._ear = fake
+
+	Tour._physics_process(0.1)
+	check("the flaw and part read fixed/played off the desk regardless of the crowd",
+			run.fixed == [true] and run.played == [true])
+	check("but the crowd is unhappy with the level, so the brief runs on (%s, %s)" % [run.crowd_happy, run.crowd_over],
+			run.crowd_happy == [false, true] and run.crowd_over == [false, false]
+			and run.state == TourRun.State.BRIEF and run.seconds_left < brief.seconds)
+
+	fake.avg_db = (float(TourEar.window(false)["quiet_db"]) + float(TourEar.window(false)["loud_db"])) * 0.5
+	Tour._physics_process(0.1)
+	check("once the crowd is happy on both bars the brief passes into the draft, and the ear is let go",
+			run.state == TourRun.State.DRAFTING and Tour._ear == null)
+
+	Tour.run = saved_run
+	Tour._ear = saved_ear
+	DAW.use(previous, false)
+
+
+## `crowd_happy`/`crowd_over` ride `TourRun.to_dict`/`from_dict` like every other per-bar array,
+## and a guest handed mismatched lengths (a stale write caught mid-flight) pads both to the
+## longer of the two rather than throwing or silently dropping an entry.
+func _test_tour_run_round_trips_the_crowd() -> void:
+	var run := TourRun.new()
+	run.crowd_happy = [true, false]
+	run.crowd_over = [false, true]
+	var back := TourRun.from_dict(run.to_dict())
+	check("crowd_happy rides the wire", back.crowd_happy == run.crowd_happy)
+	check("and crowd_over", back.crowd_over == run.crowd_over)
+
+	var mismatched := {"crowd_happy": [true], "crowd_over": [false, true]}
+	var back2 := TourRun.from_dict(mismatched)
+	check("a shorter crowd_happy is padded to match (%s)" % [back2.crowd_happy],
+			back2.crowd_happy.size() == 2 and back2.crowd_happy[0] == true and back2.crowd_happy[1] == false)
+	check("and crowd_over is unaffected", back2.crowd_over == [false, true])
+
+
+## The HUD's two crowd lines: DIM "listening..." while `run.crowd_happy` is still empty (the ear
+## has not heard a full window), then INK/ACCENT with the right words once it has, and the
+## one-line tag carries a CROWD OK/-- once heard too.
+func _test_tour_hud_shows_the_crowd_lines() -> void:
+	var saved_run := Tour.run
+	_as_session(Session.Role.HOST, 1)
+	var hud := TourHud.new()
+	add_child(hud)
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.band_size = 1
+	run.song_tempo = 100.0
+	run.flaws = [&"quiet_vox"]
+	run.fixed = [false]
+	Tour.run = run
+	hud._refresh()
+
+	var level_l := hud._crowd_box.get_node_or_null("Crowd0") as Label
+	var bal_l := hud._crowd_box.get_node_or_null("Crowd1") as Label
+	check("two crowd lines", hud._crowd_box.get_child_count() == 2)
+	check("empty crowd_happy reads listening on both, DIM (%s / %s)" %
+			[level_l.text if level_l else "none", bal_l.text if bal_l else "none"],
+			level_l != null and level_l.text.ends_with("listening...")
+			and level_l.get_theme_color("font_color") == TourHud.DIM
+			and bal_l != null and bal_l.text.ends_with("listening...")
+			and bal_l.get_theme_color("font_color") == TourHud.DIM)
+
+	run.crowd_happy = [false, true]
+	run.crowd_over = [false, false]
+	hud._refresh_flaws(run)
+	hud._refresh_crowd(run)
+	check("level unhappy reads too quiet, in INK (%s)" % level_l.text,
+			level_l.text.contains("too quiet") and level_l.get_theme_color("font_color") == TourHud.INK)
+	check("balance happy reads clear, in ACCENT (%s)" % bal_l.text,
+			bal_l.text.contains("clear") and bal_l.get_theme_color("font_color") == TourHud.ACCENT)
+	check("the tag ends CROWD -- (%s)" % hud._tag.text, hud._tag.text.ends_with("CROWD --"))
+
+	run.crowd_happy = [true, false]
+	run.crowd_over = [false, true]
+	hud._refresh_flaws(run)
+	hud._refresh_crowd(run)
+	check("balance unhappy and over reads mudslide (%s)" % bal_l.text, bal_l.text.contains("mudslide"))
+	check("and now the tag ends CROWD -- too, since one bar still isn't happy (%s)" % hud._tag.text,
+			hud._tag.text.ends_with("CROWD --"))
+
+	Tour.run = saved_run
+	remove_child(hud)
+	hud.free()
+	Session.start_solo()

@@ -8,9 +8,9 @@ extends RefCounted
 ## `fx[].params`/`enabled`, `tempo`), which every DAW verb already writes and which are exact
 ## headless. `dragging_keys` reuses the existing Timing measure with a quarter-beat grid instead:
 ## a quantised lane reads 0.0 beats off, where the eighth-grid default could never fail at all
-## (see measure.gd). Nothing here reads the master bus (Loudness/Balance): the limiter sits
-## above the loudness ceiling and the clean band's spread has never been measured, so neither
-## could honestly gate a brief yet -- see docs/loop_backlog.md's "Tour" section.
+## (see measure.gd). None of the six reads the master bus -- that is the crowd's job now
+## (TourEar, off TourMeasure.Ear, judged live by `Tour` alongside these), not a per-strip flaw's;
+## see docs/loop_backlog.md's "Tour" section, "The crowd's ear", for how it was calibrated.
 
 const TEMPOS := [84.0, 92.0, 100.0, 108.0, 116.0, 124.0]
 const LATE_BEATS := 0.22
