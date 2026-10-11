@@ -24,6 +24,7 @@ func _ready() -> void:
 	_test_link_parses_track_fields()
 	_test_no_hud_is_a_launch_switch()
 	_test_link_parses_fx_and_sends()
+	_test_link_offers_reapers_stock_fx_until_the_bridge_answers()
 	_test_link_ignores_its_own_echo()
 	_test_taper_roundtrip()
 	_test_volatile_classification()
@@ -479,6 +480,32 @@ func _test_link_parses_fx_and_sends() -> void:
 	var s = link.state.send(2, 0)
 	check("send destination parsed", s.dest_name == "Verb Rtn")
 	close_to("send volume parsed", s.volume, 0.33)
+	link.free()
+
+
+## `fx_choices` offers Reaper's own stock plugins until `_on_installed_fx` answers -- never
+## leaving the desk with nothing to offer before the bridge round-trip completes, or if it never
+## completes at all -- then the host's own real installed plugins once it has, by `id` (what a
+## later `add_fx` is given back), not display name. A malformed or empty answer changes nothing,
+## rather than blanking an already-good list.
+func _test_link_offers_reapers_stock_fx_until_the_bridge_answers() -> void:
+	var link := _fresh_link()
+	check("stock FX until the bridge answers", link.fx_choices().any(func(c): return c[0] == "ReaEQ"))
+	link._on_installed_fx(null)
+	check("a null answer changes nothing", link.fx_choices().any(func(c): return c[0] == "ReaEQ"))
+	link._on_installed_fx({"ok": false, "fx": [["VST3:x", "x"]]})
+	check("an answer saying ok=false is ignored", link.fx_choices().any(func(c): return c[0] == "ReaEQ"))
+	link._on_installed_fx({"ok": true, "fx": [{"id": "VST3:1234:Serum.vst3", "label": "Serum"},
+			{"id": "", "label": "no id, skipped"}, {"id": "VST:5678:Massive", "label": ""},
+			{"id": "VST:9999:Vital", "label": "Vital"}]})
+	var choices := link.fx_choices()
+	check("the host's own real plugins now, not the stock set (%s)" % [choices],
+			choices.size() == 2 and choices[0] == ["VST3:1234:Serum.vst3", "Serum"]
+			and choices[1] == ["VST:9999:Vital", "Vital"])
+	check("entries missing an id or a label are skipped, not placeholders",
+			not choices.any(func(c): return c[1] == "no id, skipped" or c[0] == "VST:5678:Massive"))
+	link._on_installed_fx({"ok": true, "fx": []})
+	check("an empty answer never overwrites an already-good list", link.fx_choices().size() == 2)
 	link.free()
 
 

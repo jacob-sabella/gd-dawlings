@@ -60,6 +60,11 @@ var _wet_written := {}
 var _param_written := {}
 const WET_SETTLE_MSEC := 2000
 var _structure_in_flight := false
+## The host's own installed plugins, fetched once per connection (see `open`/`_on_installed_fx`)
+## rather than polled -- what is installed does not change while Reaper is running, unlike the
+## structure and timeline above. Empty until the first answer lands, during which `fx_choices`
+## falls back to Reaper's own always-present stock set so the desk is never left offering nothing.
+var _installed_fx: Array = []
 ## Seconds after `open` at which to ask Reaper for its whole state again. See `open`.
 var _refresh_after: Array = []
 var _refresh_clock := 0.0
@@ -105,6 +110,7 @@ func open(options: Dictionary = {}) -> bool:
 	_bridge.open(options.get("bridge_dir", ScriptBridge.DEFAULT_DIR))
 	set_process(true)
 	_apply("/fxchoices", MixWire.pack_inputs(fx_choices()))
+	_bridge.call_reaper("ListInstalledFx", [], _on_installed_fx)
 
 	# Tell Reaper how wide this surface is, then ask for a full resend. Without the resend a
 	# client that connects after Reaper has started sees nothing until something moves, which
@@ -142,6 +148,7 @@ func close() -> void:
 	if _bridge:
 		_bridge.close()
 		_bridge = null
+	_installed_fx = []
 	set_process(false)
 	connection_changed.emit()
 
@@ -444,8 +451,13 @@ func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bo
 			func(_result) -> void: _structure_due = 0.0)
 
 
-## Reaper's stock plugins, by the names TrackFX_AddByName finds them by (OfflineBackend's list).
+## Whatever `_on_installed_fx` found on the host's own machine -- real VST/VST3/AU/JS plugins,
+## not a curated list -- once the bridge has answered; Reaper's own always-present stock plugins
+## (OfflineBackend's list) until then, or if the bridge never answers at all, so the desk is
+## never left with nothing to offer.
 func fx_choices() -> Array:
+	if not _installed_fx.is_empty():
+		return _installed_fx.duplicate(true)
 	return OfflineBackend.STOCK_FX.duplicate(true)
 
 
@@ -1139,6 +1151,32 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 	# nothing else, so without this a 90-track session is indistinguishable from a 64-track one.
 	if result.has("track_count"):
 		_apply("/project/tracks", [int(result["track_count"])])
+
+
+# --- the host's own plugins ----------------------------------------------------------------
+
+## `ListInstalledFx`'s answer: `{ok, fx: [{id, label}, ...]}`, `id` being the identifier string
+## `TrackFX_AddByName` matches on (not the display name -- a VST2 and a VST3 build of the same
+## plugin share a name but not an identifier), `label` what a picker shows. One-shot, not polled
+## like the structure/timeline above: fired once from `open`, and re-asked only by a fresh
+## connection (`close` clears `_installed_fx`, `open` asks again). Malformed or missing entries
+## are skipped rather than failing the whole list, so one odd plugin cannot blank the desk.
+func _on_installed_fx(result) -> void:
+	if result == null or typeof(result) != TYPE_DICTIONARY or not result.get("ok", false):
+		return
+	var found: Array = []
+	for entry in _as_array(result.get("fx", [])):
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var id: String = str(entry.get("id", ""))
+		var label: String = str(entry.get("label", ""))
+		if id.is_empty() or label.is_empty():
+			continue
+		found.append([id, label])
+	if found.is_empty():
+		return
+	_installed_fx = found
+	_apply("/fxchoices", MixWire.pack_inputs(fx_choices()))
 
 
 # --- the project's shape ------------------------------------------------------------------

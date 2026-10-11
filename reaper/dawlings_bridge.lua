@@ -851,6 +851,26 @@ function handlers.MoveFx(args)
   return {ok = true}
 end
 
+-- No args. Every plugin format REAPER's own FX browser can see on this machine -- VST, VST3, AU,
+-- JS, CLAP, whatever is actually installed here, not a curated list: `EnumInstalledFX` walked
+-- from 0 until it stops answering. `ident`, not `name`, is what a later AddFx should be given
+-- back, since it is what tells a VST2 build of a plugin apart from its VST3 build when both
+-- share the same display name. Capped well past any real plugin count as a safety net: a
+-- ReaScript loop that never terminates hangs Reaper's own UI thread, not just this one request.
+function handlers.ListInstalledFx()
+  local out = {}
+  local i = 0
+  while i < 100000 do
+    local ok, name, ident = reaper.EnumInstalledFX(i)
+    if not ok then break end
+    if name ~= '' and ident ~= '' then
+      out[#out + 1] = {id = ident, label = name}
+    end
+    i = i + 1
+  end
+  return {ok = true, fx = out}
+end
+
 -- The plugins the desk may add: Reaper's own stock ones, as ReaperBackend.fx_choices offers them.
 local STOCK_FX = {ReaEQ = true, ReaComp = true, ReaXcomp = true, ReaGate = true, ReaLimit = true,
   ReaDelay = true, ReaVerbate = true, ReaPitch = true}
