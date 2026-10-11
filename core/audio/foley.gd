@@ -289,6 +289,34 @@ static func cowbell(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A triangle struck with its beater: several high, closely-spaced inharmonic partials ringing
+## long and beating against each other -- the shimmer a bent steel rod's two corners give it,
+## not one clean pitch -- over a bright, brief click where the beater lands. The muted voice
+## (`CowbellItem`-style second voice, here the choked/mute triangle) gets no separate shape of
+## its own, same as every other spilled instrument's second voice: `InstrumentItem.VOICE_PITCH`
+## already pitches it down and `pitch()` already records it under its own GM note.
+static func triangle(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("triangle_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(1.6)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 773 + take * 17
+		for mode in [[3800.0, 1.1, 0.18], [4650.0, 0.95, 0.15], [5920.0, 0.7, 0.1], [7400.0, 0.5, 0.07]]:
+			var hz: float = mode[0] * rng.randf_range(0.985, 1.015)
+			var decay: float = mode[1]
+			var level: float = mode[2]
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.001:
+					break
+				s[i] += level * env * sin(step * float(i))
+		_impulse(s, 0.0, 0.3, 0.002, 6000.0, 761 + take)
+		_highpass(s, 1800.0)
+		return _wav(s, false))
+
+
 ## A woodblock knocked, struck or shaken to a stop: one dry resonance and the duller body under
 ## it, no ring at all -- a solid block, not a shell.
 static func woodblock(take: int) -> AudioStreamWAV:

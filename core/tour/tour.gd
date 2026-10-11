@@ -857,3 +857,13 @@ func force_state_for_shot(stage: StringName) -> void:
 			# Same reasoning as `&"win"`, but the other ending a band actually sees: a brief run
 			# out of time or a flaw never fixed.
 			_end_run(false)
+		&"spill":
+			if run == null:
+				start_run()
+			if run == null:
+				return
+			# The real path, not a mock of it: `spill` is exactly what a drafted instrument card
+			# calls, so `instrument_spilled`'s own listener (the studio's spawn-and-toss) fires
+			# for real and the case actually throws something.
+			spill(&"triangle")
+			spill(&"cowbell")

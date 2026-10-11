@@ -85,6 +85,8 @@ static func all_cards() -> Array[TourCard]:
 			"A woodblock falls out of the case. Dry, loud, and now somebody's job.", &"woodblock"))
 	out.append(_spill_card(&"spill_pad", "Drum Pad",
 			"A drum pad falls out of the case. Toms for whoever gets there first.", &"pad"))
+	out.append(_spill_card(&"spill_triangle", "Triangle",
+			"A triangle falls out of the case, ringing. Somebody's got the ding now.", &"triangle"))
 
 	var sour_spill := TourCard.new()
 	sour_spill.id = &"sour_spill"
@@ -165,9 +167,14 @@ static func draw(rng: RandomNumberGenerator, exclude: Array[StringName], band_si
 	else:
 		var kept: Array[TourCard] = []
 		for c in boons:
-			# One roll per card, in pool order, so the same seed always spends the same number
-			# of rolls here regardless of how many instrument boons happen to be in the pool.
-			if _is_spill_boon(c.id) and rng.randf() >= 0.3:
+			# A solo (or otherwise unwanting) band's odds of seeing any spill boon at all,
+			# calibrated once at the three-kind catalogue (cowbell/woodblock/pad: 1 - 0.7^3 is
+			# about 0.66) and held there as kinds are added -- each kind still gets its own
+			# independent roll, in pool order, so the same seed always spends the same number of
+			# rolls regardless of how many instrument boons happen to be in the pool, but the
+			# per-card keep chance below shrinks as the catalogue grows so a bigger catalogue
+			# does not quietly make a solo player see an instrument more often than before.
+			if _is_spill_boon(c.id) and rng.randf() >= 1.0 - pow(0.7, 3.0 / float(TourParts.SPILL_KINDS.size())):
 				continue
 			kept.append(c)
 		boons = kept

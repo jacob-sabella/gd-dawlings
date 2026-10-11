@@ -855,9 +855,12 @@ gloriously wrong and you survive anyway.
 - **Per-instance pitch table lives twice.** A spilled instrument's GM pitch is declared once in
   the real item (`CowbellItem.PITCHES` etc.) and once in the part catalogue
   (`TourParts._build`'s literal pitches) -- kept honest today only by
-  `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. Fold into one
-  place (the item could be the single source, with `TourParts` asking it) if a fourth kind ever
-  joins the case.
+  `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. The fourth kind
+  (the triangle, see "Way more instruments" above) joined the case without doing this fold --
+  a deliberate scope call, to keep that iteration to one new instrument rather than a new
+  instrument plus an architecture change -- so the duplication is now live across four kinds, not
+  three, and worth doing properly before a fifth joins and makes it four places to keep honest by
+  hand instead of one.
 - **Way more instruments, each medium its own.** (The user, 2026-10-10.) A wide instrument
   catalogue -- hand percussion, mallets, a drum kit, blown things, strings, noise-makers --
   limited only by what each medium can actually play: a desktop mouse (clicks and shakes, one
@@ -867,6 +870,57 @@ gloriously wrong and you survive anyway.
   media can play it and how (InstrumentItem's stroke/click model, one per medium), parts are
   drawn only from instruments the holder's medium can play, and the draft offers what the band
   present can use. Several iterations' worth; start with the gestures each medium already has.
+  First one in: **a triangle. Done 2026-10-11.** A fourth hand-percussion kind, same stroke/click
+  gesture as the other three (InstrumentItem.feel already reads any medium's `shake_point`
+  uniformly -- mouse, controller or tracked hand -- so this needed no new per-medium code, only
+  a new instrument within the gesture the room already supports; the wider "mallets, blown
+  things, strings" catalogue the user actually asked for still needs its own gesture work and
+  stays open). Modeled procedurally in the user's live Blender via the Blender MCP (a subagent,
+  at the user's own request, iterating visually with `look` rather than built blind from math --
+  three rod segments and two rounded corner joints, a small open gap at the apex the way a real
+  triangle is left open so it rings rather than being damped by its own suspension point;
+  material named "rod", origin at the shape's own vertical middle, the same convention
+  cowbell/woodblock/pad already use), then folded into `tools/blender/spill_percussion.py`'s
+  headless build as a fourth section and re-verified to reproduce the interactive result exactly
+  (`blender --background --python tools/blender/spill_percussion.py`, 426 faces, same bounds).
+  Recorded as the General MIDI open triangle (81) or, its low voice, the muted triangle (80) --
+  `Foley.triangle`, four high inharmonic partials ringing and beating against each other for 1.6s
+  (the shimmer a bent rod's bend points give it, not one clean pitch), with a bright click at the
+  beater's landing. Two rhythm patterns each voice (`triangle_turnaround`/`triangle_shimmer`,
+  `mute_triangle_backbeat`/`mute_triangle_eighths`), a `spill_triangle` draft card, and
+  `TourParts.SPILL_KINDS` grown to four -- which in turn grew `first_spill`'s big-band seeding
+  (band 7 now starts with all four kinds already out, not three) and meant a solo player's odds
+  of seeing *any* spill boon at all in a draft needed a second look: each kind still rolls its
+  own independent keep-chance in `TourDeck.draw`'s weighting (the comment already explained why:
+  deterministic RNG consumption regardless of pool size), but a flat per-card chance means more
+  kinds mechanically floods a solo band with more chances to see one at all -- a real regression
+  the existing `_test_tour_deck_offers_instruments_to_a_big_band` test caught outright (23 of 40
+  seeds, over the test's own "fewer than half" bar). Fixed by deriving the per-card keep chance
+  from the catalogue size (`1 - 0.7^(3/SPILL_KINDS.size())`), calibrated to reproduce the
+  original three-kind odds exactly and automatically re-balancing as more kinds join later,
+  rather than just loosening the test's number to match a design regression. Also updated
+  `first_spill`'s own doc comment (now stale at "6 and up gets all three") and extended the
+  pitch-agreement test (`_test_tour_new_parts_are_judged_by_their_instruments_pitch`) with the
+  triangle's own pair -- the "Per-instance pitch table lives twice" duplication below is now
+  live across four kinds rather than fixed, a deliberate scope call (see that entry).
+  `tools/verify.sh` ends clean (7074 checks, 0 failed, 0 SCRIPT ERROR; needed `godot --headless
+  --path . --editor --quit` first, for the new `TriangleItem` class_name); `tools/session_probe.sh`
+  default and `--built-in` both green ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged).
+  `tools/tour_probe.sh` at 1, 4, 7 and 8 players all show the triangle spilling, holding, playing
+  and judging correctly end to end (e.g. "YOU TRIANGLE: a ring on the one and the three 8/8"); the
+  pre-existing "part count matches the catalogue" flake (documented and re-confirmed four times
+  now across four separate iterations) turned up again at 7 and 8 players, reconfirmed once more
+  by stash/re-run against bare master at 7 -- same failure, same shape, still not this. A new
+  `--tour spill` shot state (mirrors `&"win"`/`&"loss"`: calls the real `Tour.spill`, not a mock)
+  is now permanent infrastructure for the next instrument this backlog item adds.
+  Caught mid-build: `tools/shot.sh` without `--built-in` runs on the offline synthetic-mix
+  stand-in, where `Tour.is_available()` is false and every `--tour` state silently does nothing
+  (the case stays chained) -- `tools/screenshot.gd`'s own doc comment already says so, but it is
+  easy to miss; every future `--tour` shot needs `SHOT_ARGS="--built-in --tour <stage>"`, not
+  just `--tour <stage>`. `shots/tour_triangle.png` (the case mid-run, "A triangle fell out of the
+  case." and "A cowbell fell out of the case." live on the HUD, SEED shown) is the record of the
+  real spill firing; the Blender subagent's own render of the model itself, sent to the user
+  separately during the build, is the closer look at the instrument.
 - **Seed randomness. Done 2026-10-11.** The one draw left rolling its own unseeded
   `RandomNumberGenerator` instead of the run's own stream -- `muted_track`'s pick of which
   sounding track to curse (deck.gd) -- now seeds off `hash([run.attempt_seed, "muted_track",

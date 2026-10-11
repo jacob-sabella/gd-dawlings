@@ -1,14 +1,18 @@
 # Builds the instruments that spill out of the Tour case, and writes assets/models/cowbell.glb,
-# woodblock.glb and pad.glb.
+# woodblock.glb, pad.glb and triangle.glb.
 #
 #     blender --background --python tools/blender/spill_percussion.py
 #
 # The cowbell is a tapered, flattened box with a small handle loop at its narrow (top) end, mouth
 # down. The woodblock is a solid block with a shallow slot across one face, where a real one's
 # resonating cut is. The drum pad is a low disc on a wider base, a stage monitor's practice pad,
-# with a status LED on the rim. All three built origin at the bottom, facing -Z once exported
-# (Blender's Z-up becomes Godot's Y-up on export, so "bottom" here is "bottom" there too).
-# Materials: cowbell "bell"/"handle", woodblock "wood"/"slot", pad "pad"/"rim"/"led".
+# with a status LED on the rim. The triangle is three bent steel rods closed at two corners and
+# left a small gap at the third, the way a real one is left open so it rings rather than being
+# damped by its own suspension point. All four built origin at the bottom, facing -Z once
+# exported (Blender's Z-up becomes Godot's Y-up on export, so "bottom" here is "bottom" there
+# too) -- the triangle's own "bottom" is its vertical middle, the same convention the others use.
+# Materials: cowbell "bell"/"handle", woodblock "wood"/"slot", pad "pad"/"rim"/"led", triangle
+# "rod".
 
 import math
 import os
@@ -147,3 +151,51 @@ bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
 part(led, "led", pad)
 join(pad, "Pad")
 report_and_write("assets/models/pad.glb")
+
+
+# --- the triangle --------------------------------------------------------------------------------
+reset()
+
+
+def rod(p1, p2, radius, into):
+	p1, p2 = Vector(p1), Vector(p2)
+	d = p2 - p1
+	bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=radius, depth=d.length,
+			location=tuple((p1 + p2) * 0.5))
+	ob = bpy.context.active_object
+	ob.rotation_mode = "QUATERNION"
+	ob.rotation_quaternion = d.to_track_quat("Z", "Y")
+	bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+	return part(ob, "rod", into)
+
+
+def corner(p, radius, into):
+	bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=radius, location=tuple(p))
+	ob = bpy.context.active_object
+	bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+	return part(ob, "rod", into)
+
+
+triangle = []
+ROD_RADIUS = 0.0035
+WIDTH = 0.13
+HEIGHT = 0.16
+HALF = HEIGHT * 0.5
+GAP = 0.014
+LEFT = Vector((-WIDTH * 0.5, 0, -HALF))
+RIGHT = Vector((WIDTH * 0.5, 0, -HALF))
+APEX = Vector((0, 0, HALF))
+# The base and its two closed corners.
+rod(LEFT, RIGHT, ROD_RADIUS, triangle)
+corner(LEFT, ROD_RADIUS, triangle)
+corner(RIGHT, ROD_RADIUS, triangle)
+# The two sides, each stopping short of the apex -- the gap a real triangle is left open at, so
+# it rings rather than being damped by its own suspension point.
+left_end = LEFT + (APEX - LEFT).normalized() * ((APEX - LEFT).length - GAP * 0.5)
+right_end = RIGHT + (APEX - RIGHT).normalized() * ((APEX - RIGHT).length - GAP * 0.5)
+rod(LEFT, left_end, ROD_RADIUS, triangle)
+rod(RIGHT, right_end, ROD_RADIUS, triangle)
+corner(left_end, ROD_RADIUS, triangle)
+corner(right_end, ROD_RADIUS, triangle)
+join(triangle, "Triangle")
+report_and_write("assets/models/triangle.glb")

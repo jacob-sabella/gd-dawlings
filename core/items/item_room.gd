@@ -118,6 +118,8 @@ static func make(kind: StringName) -> Item:
 			return WoodblockItem.new()
 		&"pad":
 			return PadItem.new()
+		&"triangle":
+			return TriangleItem.new()
 	return null
 
 
