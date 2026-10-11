@@ -1,5 +1,5 @@
 # Builds the instruments that spill out of the Tour case, and writes assets/models/cowbell.glb,
-# woodblock.glb, pad.glb, triangle.glb and claves.glb.
+# woodblock.glb, pad.glb, triangle.glb, claves.glb and hihat.glb.
 #
 #     blender --background --python tools/blender/spill_percussion.py
 #
@@ -10,12 +10,13 @@
 # left a small gap at the third, the way a real one is left open so it rings rather than being
 # damped by its own suspension point. The claves are a pair of short tapered wooden sticks, laid
 # side by side at a slight angle and offset along their length, with a visible gap between them so
-# they read as two distinct sticks rather than one long rod. All five built origin at the bottom,
-# facing -Z once exported (Blender's Z-up becomes Godot's Y-up on export, so "bottom" here is
-# "bottom" there too) -- the triangle's and claves' own "bottom" is their vertical middle, the same
-# convention the others use.
+# they read as two distinct sticks rather than one long rod. The hi-hat is a pair of thin bevelled
+# discs stacked a small gap apart, a closed pair carried as one item rather than the stand they'd
+# sit on. All six built origin at the bottom, facing -Z once exported (Blender's Z-up becomes
+# Godot's Y-up on export, so "bottom" here is "bottom" there too) -- the triangle's, claves' and
+# hi-hat's own "bottom" is their vertical middle, the same convention the others use.
 # Materials: cowbell "bell"/"handle", woodblock "wood"/"slot", pad "pad"/"rim"/"led", triangle
-# "rod", claves "wood".
+# "rod", claves "wood", hi-hat "cymbal".
 
 import math
 import os
@@ -240,3 +241,21 @@ for ob in claves:
 	bevel(ob, 0.004, segments=3)
 join(claves, "Claves")
 report_and_write("assets/models/claves.glb")
+
+
+# --- the hi-hat ----------------------------------------------------------------------------------
+reset()
+
+hihat = []
+RADIUS = 0.1
+DISC_DEPTH = 0.006
+HAT_GAP = 0.014
+top_z = HAT_GAP * 0.5 + DISC_DEPTH * 0.5
+bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=RADIUS, depth=DISC_DEPTH, location=(0, 0, top_z))
+top_disc = part(bpy.context.active_object, "cymbal", hihat)
+bevel(top_disc, 0.003)
+bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=RADIUS, depth=DISC_DEPTH, location=(0, 0, -top_z))
+bottom_disc = part(bpy.context.active_object, "cymbal", hihat)
+bevel(bottom_disc, 0.003)
+join(hihat, "Hihat")
+report_and_write("assets/models/hihat.glb")

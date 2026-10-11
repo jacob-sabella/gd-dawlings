@@ -353,6 +353,32 @@ static func claves(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A hi-hat pair struck and choked shut: a short metallic sizzle (noise, not a tone -- a cymbal's
+## stack of overtones is dense enough it reads as hiss) under a few very high, fast-decaying
+## inharmonic partials for the sizzle's own glint. The open voice gets no separate shape of its
+## own, same as every other spilled instrument's second voice (`InstrumentItem.VOICE_PITCH`
+## already pitches it down).
+static func hihat(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("hihat_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.09, 0.3, 821 + take * 19)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 829 + take * 7
+		for mode in [[7200.0, 0.025, 0.1], [9100.0, 0.02, 0.08], [11300.0, 0.015, 0.06]]:
+			var hz: float = mode[0] * rng.randf_range(0.97, 1.03)
+			var decay: float = mode[1]
+			var level: float = mode[2]
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.001:
+					break
+				s[i] += level * env * sin(step * float(i))
+		_highpass(s, 6000.0)
+		return _wav(s, false))
+
+
 ## A drum pad hit: `tambourine_hit`'s swept sine, lower and longer -- a tom's skin dropping in
 ## pitch as it is struck -- with the beater's click on top.
 static func pad(take: int) -> AudioStreamWAV:

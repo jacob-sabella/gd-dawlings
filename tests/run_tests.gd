@@ -16173,7 +16173,8 @@ func _test_tour_new_parts_are_judged_by_their_instruments_pitch() -> void:
 			[&"block_offbeats", WoodblockItem.new(), 0], [&"lowblock_one_three", WoodblockItem.new(), 1],
 			[&"pad_four", PadItem.new(), 0], [&"lowpad_one", PadItem.new(), 1],
 			[&"triangle_turnaround", TriangleItem.new(), 0], [&"mute_triangle_backbeat", TriangleItem.new(), 1],
-			[&"claves_one", ClavesItem.new(), 0], [&"lowclaves_backbeat", ClavesItem.new(), 1]]
+			[&"claves_one", ClavesItem.new(), 0], [&"lowclaves_backbeat", ClavesItem.new(), 1],
+			[&"hihat_eighths", HihatItem.new(), 0], [&"openhat_backbeat", HihatItem.new(), 1]]
 	for pair in pairs:
 		var part: TourPart = TourParts.by_id(pair[0])
 		var item: InstrumentItem = pair[1]
@@ -16304,13 +16305,19 @@ func _test_tour_deck_offers_instruments_to_a_big_band() -> void:
 			always = false
 	check("a band of 8 with nothing spilled yet is always offered an instrument", always)
 
+	# A sample big enough that the per-kind roll's sampling noise (small at 40 seeds, and the
+	# actual cause of this check's own repeated near-misses as SPILL_KINDS grew -- a seed sample
+	# that close to its own bar is not a tight pass, it is luck) cannot swing the count across a
+	# bar set well inside the ~45% the roll in deck.gd's `draw` targets regardless of catalogue
+	# size, rather than tightening the bar itself every time a kind is added.
 	var seen := 0
-	for seed in range(40):
+	var samples := 2000
+	for seed in range(samples):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed
 		if has_spill_boon.call(TourDeck.draw(rng, [], 1, [])):
 			seen += 1
-	check("a solo player sees one in fewer than half of 40 seeds (%d)" % seen, seen < 20)
+	check("a solo player sees one well under half of %d seeds (%d)" % [samples, seen], seen < samples / 2)
 
 	var rng2 := RandomNumberGenerator.new()
 	rng2.seed = 3

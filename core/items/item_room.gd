@@ -122,6 +122,8 @@ static func make(kind: StringName) -> Item:
 			return TriangleItem.new()
 		&"claves":
 			return ClavesItem.new()
+		&"hihat":
+			return HihatItem.new()
 	return null
 
 

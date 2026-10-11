@@ -856,11 +856,11 @@ gloriously wrong and you survive anyway.
   the real item (`CowbellItem.PITCHES` etc.) and once in the part catalogue
   (`TourParts._build`'s literal pitches) -- kept honest today only by
   `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. The fourth kind
-  (the triangle, see "Way more instruments" above) and the fifth (claves) both joined the case
-  without doing this fold -- a deliberate scope call each time, to keep those iterations to one
-  new instrument rather than a new instrument plus an architecture change -- so the duplication
-  is now live across five kinds, not three, and worth doing properly before a sixth joins and
-  makes it six places to keep honest by hand instead of one.
+  (the triangle, see "Way more instruments" above), the fifth (claves) and the sixth (hi-hat) all
+  joined the case without doing this fold -- a deliberate scope call each time, to keep those
+  iterations to one new instrument rather than a new instrument plus an architecture change -- so
+  the duplication is now live across six kinds, not three, and worth doing properly before a
+  seventh joins and makes it seven places to keep honest by hand instead of one.
 - **Way more instruments, each medium its own.** (The user, 2026-10-10.) A wide instrument
   catalogue -- hand percussion, mallets, a drum kit, blown things, strings, noise-makers --
   limited only by what each medium can actually play: a desktop mouse (clicks and shakes, one
@@ -966,6 +966,54 @@ gloriously wrong and you survive anyway.
   shape, same bounds and face count, byte-different -- some non-determinism in its own rod
   placement math on a second run) and was reverted rather than carried into this commit, since it
   changes nothing about what ships.
+  Sixth one in: **a hi-hat. Done 2026-10-11.** A pair of thin bevelled discs, built procedurally
+  and headlessly straight into `tools/blender/spill_percussion.py` (two cylinders, no live
+  Blender session needed this time -- the shape is as simple as the drum pad's own disc-on-base,
+  and every other instrument's own primitive-built body, so there was nothing here a live visual
+  pass over triangle or claves needed that this one did not already have precedent for).
+  `Foley.hihat` is the first spilled-kit sound built from noise rather than a struck tone --
+  closer to the shaker's own hiss than to the cowbell's ring, since a cymbal's own overtone stack
+  is dense enough it reads as noise, with a few fast, very-high inharmonic partials riding it for
+  the metallic glint a cymbal's attack actually has. Closed hi-hat (GM 42) is the main voice,
+  open hi-hat (GM 46) the low one -- the first kind since the triangle where the second voice is
+  the SAME physical pair played a different way, not a different instrument wearing the kind's
+  name, so "OPEN HI-HAT" needed no awkward branding the way "LOW CLAVES" or "LOW COWBELL" did.
+  Two new rhythm-pattern pairs (`hihat_eighths`/`hihat_offbeats`, `openhat_backbeat`/
+  `openhat_one`), a `spill_hihat` draft card, and `SPILL_KINDS` grown to six -- `first_spill`'s
+  own doc comment now says band 8 (the biggest band there is) seeds five kinds out of six, never
+  all of them, since an 8-person first brief can never draw more than `band_size - ROOM.size()`
+  and that number tops out at 5 regardless of how large the catalogue itself grows.
+  The deck's solo-odds formula (`core/tour/deck.gd`, fixed to be catalogue-size-independent in
+  the claves iteration) needed no retuning -- it is derived from `SPILL_KINDS.size()` at read
+  time, exactly the point of that fix -- but
+  `_test_tour_deck_offers_instruments_to_a_big_band`'s OWN 40-seed sample failed anyway, landing
+  on the exact same "20 of 40" boundary it hit at five kinds. Tracing it down: the formula's true
+  target (an "at least one of N independent per-kind rolls lands" probability) really is a flat
+  ~45% by construction, regardless of N -- the test's repeated near-misses were never the formula
+  drifting, they were a 40-sample binomial test with a standard deviation (about 3.15) nearly as
+  large as its own 2-seed margin against the `< 20` bar, so an honest 45% roll lands on the wrong
+  side of that bar close to a quarter of the time on pure luck, and adding a kind reshuffles which
+  seeds land where (the shuffle these cards go through consumes RNG draws too, so a bigger pool
+  changes the stream's own state before each kind's roll, not just how many rolls there are). The
+  real fix, finally: not retuning the odds again, but fixing the test's own statistics -- 2000
+  seeds instead of 40, bar still "under half", now carrying about 4.5 standard deviations of
+  margin, so no future kind added to the catalogue can coincidentally land this check on the
+  wrong side of its own bar the way three separate iterations in a row just did. Confirmed:
+  `tools/verify.sh` 2000-seed version still finishes in the same ~50s ballpark as the 40-seed one
+  (pure logic, no engine cost) and now reliably passes regardless of catalogue size.
+  `tools/verify.sh` ends clean (7089 checks, 0 failed, 0 SCRIPT ERROR; needed `godot --headless
+  --path . --editor --quit` first, for the new `HihatItem` class_name). `tools/session_probe.sh`
+  default and `--built-in` both green ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged).
+  `tools/tour_probe.sh` at 1, 4 and 8 players all show the hi-hat spilling, holding, playing and
+  judging correctly end to end (`hihat_offbeats` shows up played in the failing runs' own part
+  lists below, proof it is scoring, not absent); the pre-existing "part count matches the
+  catalogue" flake (now reconfirmed a sixth time, across six separate iterations) turned up again
+  at both 4 and 8 players, reconfirmed once more via stash/re-run against bare master at 4
+  players three times in a row -- identical signature, same five checks failing on master itself
+  with none of this iteration's changes applied, still not this. `shots/tour_hihat.png` is the
+  record, all six "X fell out of the case" lines live on the HUD at once, a hi-hat among them.
+  Per-instance pitch table lives across six kinds now, not five -- see that note elsewhere in
+  this section.
 - **Seed randomness. Done 2026-10-11.** The one draw left rolling its own unseeded
   `RandomNumberGenerator` instead of the run's own stream -- `muted_track`'s pick of which
   sounding track to curse (deck.gd) -- now seeds off `hash([run.attempt_seed, "muted_track",
