@@ -293,6 +293,7 @@ func _ready() -> void:
 	_test_tour_chaos_strikes_and_recovers_through_daw_verbs()
 	_test_tour_chaos_blocks_the_pass_until_recovered()
 	_test_tour_chaos_telegraphs_and_strikes_on_the_brief_clock()
+	_test_tour_clock_low_fires_once_near_the_end_of_the_brief()
 	_test_tour_chaos_guest_plays_the_telegraph_from_the_run()
 	_test_tour_flaw_fixed_fires_once_per_flaw_from_the_wire()
 	_test_tour_chaos_leaves_the_real_project_untouched()
@@ -16503,6 +16504,50 @@ func _test_tour_chaos_telegraphs_and_strikes_on_the_brief_clock() -> void:
 
 	Tour.chaos_telegraphed.disconnect(on_telegraph)
 	Tour.chaos_struck.disconnect(on_struck)
+	Tour.run = saved_run
+	DAW.use(previous, false)
+
+
+## `Tour.clock_low` fires once, at CLOCK_LOW_SECONDS left on the host's own clock -- win or lose
+## still undecided, the same "presentation only" reasoning as the chaos telegraph.
+func _test_tour_clock_low_fires_once_near_the_end_of_the_brief() -> void:
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	Session.start_solo()
+	var saved_run := Tour.run
+	var brief := TourBriefs.brief(0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	TourProject.load(TourProject.song_for(brief, 100.0, [], rng), backend)
+
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.tuning = false
+	run.attempt_seed = 701
+	run.song_tempo = 100.0
+	run.seconds_total = 45.0
+	Tour.run = run
+
+	var fired: Array = []
+	var on_low := func() -> void: fired.append(true)
+	Tour.clock_low.connect(on_low)
+
+	run.seconds_left = 15.5
+	Tour._physics_process(0.1)
+	check("15.5 s left: not yet (%d)" % fired.size(), fired.is_empty())
+
+	run.seconds_left = 9.9
+	Tour._physics_process(0.1)
+	check("9.9 s left: clock_low fires once (%d)" % fired.size(), fired.size() == 1)
+
+	run.seconds_left = 3.0
+	Tour._physics_process(0.1)
+	Tour._physics_process(0.1)
+	check("settled: running further down fires nothing more (%d)" % fired.size(), fired.size() == 1)
+
+	Tour.clock_low.disconnect(on_low)
 	Tour.run = saved_run
 	DAW.use(previous, false)
 

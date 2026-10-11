@@ -42,6 +42,12 @@ var local_peer: Callable = Callable()
 
 var _lid: Node3D
 var _chain: Node3D
+## The lid's own tween, killed before `rattle` starts another: `Tour.clock_low`'s long rattle and
+## a chaos telegraph's short one can land within seconds of each other near a brief's end (both
+## are scheduled off the same last-ten-seconds window), and two tweens fighting over the same
+## `rotation_degrees:x` would leave the lid stuttering between them rather than settling on
+## either. Same reasoning scenes/studio.gd's own `_lights_tween` already needed.
+var _lid_tween: Tween
 var _title: Label3D
 var _tally: Label3D
 
@@ -190,13 +196,21 @@ func _burst() -> void:
 
 
 ## The lid rattles when the room is about to go wrong -- a chaos event's telegraph, on every
-## peer at the same moment (core/tour/tour.gd's `chaos_telegraphed`, wired in scenes/studio.gd).
-## Knows nothing of why: a jitter about however open the lid already is (always
-## `LID_OPEN_DEGREES` by the time a brief is under way to rattle at all) and a settle back to it.
+## peer at the same moment (core/tour/tour.gd's `chaos_telegraphed`, wired in scenes/studio.gd) --
+## or when the clock is about to run out (`Tour.clock_low`, a longer rattle over the brief's last
+## stretch rather than a telegraph's quick jitter). Knows nothing of why: a jitter about however
+## open the lid already is (always `LID_OPEN_DEGREES` by the time a brief is under way to rattle
+## at all) and a settle back to it. Replaces whichever rattle was already running (`_lid_tween`)
+## rather than layering a second one over it: the two calls above can land seconds apart near a
+## brief's own end, and nothing here needs both at once -- the newer one is always the one that
+## matters more.
 func rattle(seconds := 1.6) -> void:
 	if _lid == null:
 		return
-	var tw := _lid.create_tween()
+	if _lid_tween != null:
+		_lid_tween.kill()
+	_lid_tween = _lid.create_tween()
+	var tw := _lid_tween
 	var step := seconds / 6.0
 	for k in 6:
 		var jitter: float = 4.0 if k % 2 == 0 else -4.0

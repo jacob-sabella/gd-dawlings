@@ -41,6 +41,12 @@ signal chaos_struck(index: int)
 ## moment its own copy of `run.fixed` says so, host and guest alike, rather than waiting on a
 ## signal the host alone would ever get to emit.
 signal flaw_fixed(index: int)
+## The clock running out, from THIS peer's own `brief_elapsed()` -- the third of the not-host-only
+## presentation signals, fired once a brief the moment `CLOCK_LOW_SECONDS` remain, win or lose
+## still undecided. The room says so the same way it says a chaos event is coming: the lid
+## rattles (`TourCase.rattle`, a long one rather than a telegraph's short jitter) and the band
+## hears about it.
+signal clock_low()
 
 ## `null` when `Tour.run.state == IDLE` -- i.e. always `null` between runs. On the host this is
 ## the live run; on a guest it is a read-only copy rebuilt from `Session.tour` on every change.
@@ -57,6 +63,10 @@ const TIMING_TRACK := 2
 ## The one lane every played part's notes land on: TourProject.STAGE_TRACK, same reasoning.
 ## _test_tour_song_has_a_stage_lane asserts the two agree.
 const STAGE_TRACK := 1
+## How long before the end of a brief's own clock `clock_low` fires -- the same idiom as
+## TourChaos.FIRST_SECONDS, long enough to read as "the end is near" against a 45-60 s brief
+## without eating into the brief's early minute of actually getting oriented.
+const CLOCK_LOW_SECONDS := 10.0
 
 ## The host's project, captured the moment the run started, restored exactly when it ends.
 var _snapshot: Dictionary = {}
@@ -102,6 +112,10 @@ var _shown_chaos: Array[int] = []
 ## a guest) rather than keyed separately, since a flaw's fixed-ness is only ever about the brief
 ## `_shown_chaos` is already keyed to.
 var _shown_fixed: Array[bool] = []
+## Whether THIS peer has already fired `clock_low` for the brief under way -- a plain bool rather
+## than an array, since there is only ever one clock to run out. Reset at the same two points as
+## `_shown_chaos`/`_shown_fixed`.
+var _shown_clock_low := false
 ## Which brief `_shown_chaos` belongs to (`attempt_seed:brief_index` -- see `_chaos_key`), not
 ## merely which events it drew: two briefs can honestly draw the very same single event, and a
 ## second brief must still get its own surprise, not inherit the first one's already-shown
@@ -135,6 +149,7 @@ func _physics_process(delta: float) -> void:
 	if run != null and run.state == TourRun.State.BRIEF and not run.tuning:
 		_tick_chaos_shown()
 		_tick_fixed_shown()
+		_tick_clock_low_shown()
 	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
 		return
 	if run.tuning:
@@ -407,6 +422,7 @@ func _lay_out_chaos(index: int, brief: TourBrief, band_size: int, flaws: Array[T
 	_published_chaos = []
 	_shown_chaos = []
 	_shown_fixed = []
+	_shown_clock_low = false
 	_shown_for_key = _chaos_key(run)
 
 
@@ -604,6 +620,18 @@ func _tick_fixed_shown() -> void:
 			flaw_fixed.emit(i)
 
 
+## Both host and guest, off THIS peer's own `brief_elapsed()` -- the same clock `_tick_chaos_shown`
+## already reads, so a joiner or a long hitch lands on the right side of it exactly the way a
+## chaos telegraph does. Fires once a brief, whether the band goes on to pass it, fail it, or run
+## it out entirely.
+func _tick_clock_low_shown() -> void:
+	if _shown_clock_low:
+		return
+	if run.seconds_total - brief_elapsed() <= CLOCK_LOW_SECONDS:
+		_shown_clock_low = true
+		clock_low.emit()
+
+
 func _finish_brief() -> void:
 	# Never left pending past the brief it was set for -- a test (or a late-arriving signal) that
 	# hands `Tour.run` a fresh run without going through `_start_brief` must not inherit a stale
@@ -701,6 +729,7 @@ func _on_tour_changed() -> void:
 		_shown_for_key = key
 		_shown_chaos = []
 		_shown_fixed = []
+		_shown_clock_low = false
 
 
 func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:
@@ -801,4 +830,13 @@ func force_state_for_shot(stage: StringName) -> void:
 			# shot's few frames. One bar happy, one not, so both of TourEar's colours show.
 			run.crowd_happy = [true, false]
 			run.crowd_over = [false, true]
+			_publish()
+		&"clock_low":
+			if run == null:
+				start_run()
+			if run == null:
+				return
+			run.tuning = false
+			run.seconds_left = CLOCK_LOW_SECONDS - 0.5
+			_tick_clock_low_shown()
 			_publish()

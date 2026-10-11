@@ -994,7 +994,7 @@ gloriously wrong and you survive anyway.
   rather than after -- no action taken here, just noted for the next one that measures something
   off real audio.
 - **Juice.** The crowd reacts to each fix, the case's stinger, a cheer at the drop, the HUD's
-  lines landing with a hit. Two pieces done. **A brief ends on the bar, not the frame. Done
+  lines landing with a hit. Three pieces done. **A brief ends on the bar, not the frame. Done
   2026-10-11.** Whatever qualifies a brief to end -- every flaw fixed and part played, a struck
   chaos event put right, the crowd happy, or simply the clock running out -- used to call
   `_finish_brief()` the instant it happened, wherever in the bar that fell; it now holds until
@@ -1054,6 +1054,34 @@ gloriously wrong and you survive anyway.
   failure shape, "every part played and every flaw fixed ends the brief early" cascading into an
   unscored brief and a skipped draft, roughly every other run at 4 and 8 players) -- real
   multi-process timing, not something this change touched. Worth its own iteration.
+  **The lid rattling as the clock runs out. Done 2026-10-11.** Named outright in the goal, and
+  still open: a brief's last stretch used to say nothing until it actually ended. `Tour.clock_low`
+  (new, third of the not-host-only presentation signals beside `chaos_telegraphed`/
+  `chaos_struck`/`flaw_fixed`) fires once a brief, on every peer off its own `brief_elapsed()`,
+  the moment `CLOCK_LOW_SECONDS` (10 s, the same idiom as `TourChaos.FIRST_SECONDS`) remain --
+  win or lose still undecided, same as a chaos telegraph not knowing which way a struck event
+  will go. `TourCase.rattle` (already built for the telegraph's own quick jitter) takes the whole
+  ten seconds this time rather than its default 1.6 s -- the room living through the final
+  stretch with the band rather than just warning it is coming -- plus a `Session.notice`
+  ("Ten seconds. Finish it.") for anyone not looking at the case.
+  Caught on the way: the ten-second rattle and a chaos telegraph's short one can land within
+  seconds of each other near a brief's end -- both are scheduled off the same last-ten-seconds
+  window (`TourChaos.LAST_SECONDS`/`TELEGRAPH_SECONDS` put a strike's telegraph as late as
+  `total - 10`, the exact moment `clock_low` fires) -- and two tweens fighting over the lid's own
+  `rotation_degrees:x` would have left it stuttering between them. `TourCase._lid_tween` (new)
+  kills whichever rattle was already running before `rattle()` starts another, the same
+  `_lights_tween` kill-before-start `scenes/studio.gd` already needed for the exact same reason.
+  One test (`_test_tour_clock_low_fires_once_near_the_end_of_the_brief`, the host-clock half of
+  the chaos telegraph test's own shape): not yet at 15.5 s left, fires once crossing 10 s, settles
+  on further ticks. A new `--tour clock_low` shot state (`Tour.force_state_for_shot`, alongside
+  `chaos`/`crowd`) forces a brief to 9.5 s left and calls the real tick once, so the screenshot is
+  the actual signal path, not a mock of it. `tools/verify.sh` ends clean (7062 checks, 0 failed);
+  `tools/session_probe.sh` default and `--built-in` both green ([host] 53/0 and 79/0, [guest]
+  47/0 and 42/0 -- unchanged from the last iteration's counts, since neither probe runs a brief
+  through a real Studio). `shots/tour_clock_low.png` (the HUD's own card reading "10 s" with "Ten
+  seconds. Finish it." on the notice line beneath it) is the record -- the case itself is off
+  camera in this framing, so the rattle is what the test carries, the notice is what the shot
+  carries.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
   second life), a loss that costs something, a win that is announced to the room.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each

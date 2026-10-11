@@ -1987,6 +1987,7 @@ func _build_tour_case() -> void:
 	Tour.chaos_telegraphed.connect(_on_tour_chaos_telegraphed)
 	Tour.chaos_struck.connect(_on_tour_chaos_struck)
 	Tour.flaw_fixed.connect(_on_tour_flaw_fixed)
+	Tour.clock_low.connect(_on_tour_clock_low)
 	Session.tour_changed.connect(_on_session_tour_changed)
 	Session.participant_left.connect(_on_tour_participant_left)
 	_sync_tour_roll()
@@ -2253,6 +2254,16 @@ func _on_tour_chaos_struck(index: int) -> void:
 ## line already flipping to ACCENT the same tick.
 func _on_tour_flaw_fixed(index: int) -> void:
 	_play_at(_crowd_house_point(), Foley.crowd_cheer(index % 3))
+
+
+## The clock running out, on every peer from their own `brief_elapsed()` (Tour.clock_low is not
+## host-only, the same reasoning as the chaos telegraph): the lid rattles for the whole of the
+## brief's last `Tour.CLOCK_LOW_SECONDS` rather than a telegraph's short jitter -- the room living
+## through the final stretch with the band, not just warning them it is coming.
+func _on_tour_clock_low() -> void:
+	if tour_case != null:
+		tour_case.rattle(Tour.CLOCK_LOW_SECONDS)
+	Session.notice.emit("Ten seconds. Finish it.")
 
 
 ## Where the crowd is, in the frame the gear's floor plan is measured in: the back of house's
