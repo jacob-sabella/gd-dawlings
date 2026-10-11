@@ -279,6 +279,7 @@ func _ready() -> void:
 	_test_a_shorter_clock_card_shortens_the_very_next_brief()
 	_test_tour_hud_rebuilds_its_flaw_lines_for_the_next_brief()
 	_test_tour_case_breaks_after_enough_hits_and_resets()
+	_test_tour_deck_muted_track_draws_off_the_runs_own_seed()
 	_test_item_room_target_struck_finds_the_nearest_one_in_range()
 	_test_only_the_host_can_break_the_case()
 	_test_tour_venue_solids_include_the_case()
@@ -15760,8 +15761,42 @@ func _test_tour_case_breaks_after_enough_hits_and_resets() -> void:
 	check("the chain is back", case._chain == null or case._chain.visible)
 	check("and its tally is brought up to date (%s)" % case._tally.text,
 			case._tally.text.contains("3") and case._tally.text.contains("1"))
+	case.show_seed(123456)
+	check("show_seed swaps the tally for the run's own number (%s)" % case._tally.text,
+			case._tally.text.contains("123456"))
+	case.reset(4, 2)
+	check("and reset puts the RUNS/WINS tally back (%s)" % case._tally.text,
+			case._tally.text.contains("4") and case._tally.text.contains("2")
+			and not case._tally.text.contains("123456"))
 	remove_child(case)
 	case.free()
+
+
+## `muted_track`'s pick rides the run's own seed (TourDeck.all_cards, deck.gd) like every other
+## draw: the same `attempt_seed`/`brief_index` mutes the same track given the same starting mix,
+## a different `brief_index` can (not must -- it is still one roll of a die) land on another.
+func _test_tour_deck_muted_track_draws_off_the_runs_own_seed() -> void:
+	var previous := DAW.backend
+
+	var mute_with := func(seed: int, brief_index: int) -> int:
+		DAW.use(OfflineBackend.new())
+		var run := TourRun.new()
+		run.attempt_seed = seed
+		run.brief_index = brief_index
+		for c in TourDeck.all_cards():
+			if c.id == &"muted_track":
+				c.apply(run)
+		var muted := -1
+		for t: MixState.TrackState in DAW.state.tracks.values():
+			if t.mute:
+				muted = t.index
+				break
+		return muted
+
+	var a: int = mute_with.call(42, 0)
+	var b: int = mute_with.call(42, 0)
+	check("the same seed and brief mute the same track both times (%d, %d)" % [a, b], a == b and a != -1)
+	DAW.use(previous, false)
 
 
 func _test_item_room_target_struck_finds_the_nearest_one_in_range() -> void:

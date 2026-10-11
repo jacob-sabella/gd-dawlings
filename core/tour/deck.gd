@@ -56,12 +56,16 @@ static func all_cards() -> Array[TourCard]:
 	muted_track.is_curse = true
 	# One of the tracks still sounding: muting one already muted is no curse at all, and was
 	# the one roll that made this card do nothing (and its test flake) now and then.
-	muted_track._effect = func(_run: TourRun) -> void:
+	muted_track._effect = func(run: TourRun) -> void:
 		var tracks := DAW.state.track_indices().filter(
 				func(i: int) -> bool: return not DAW.state.track(i).mute)
 		if tracks.is_empty():
 			return
+		# Off the run's own seed, like every other draw a card or a brief makes -- so two plays
+		# of the same seed mute the same track, not whichever one an unseeded roll happened to
+		# land on.
 		var rng := RandomNumberGenerator.new()
+		rng.seed = hash([run.attempt_seed, "muted_track", run.brief_index])
 		DAW.set_track_mute(tracks[rng.randi() % tracks.size()], true)
 	out.append(muted_track)
 

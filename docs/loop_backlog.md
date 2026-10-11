@@ -867,8 +867,31 @@ gloriously wrong and you survive anyway.
   media can play it and how (InstrumentItem's stroke/click model, one per medium), parts are
   drawn only from instruments the holder's medium can play, and the draft offers what the band
   present can use. Several iterations' worth; start with the gestures each medium already has.
-- **Seed randomness.** Every draw from the run's seed (the song's draw is; the draft's
-  muted_track still rolls an unseeded RNG), a seed shown on the case so a run can be replayed.
+- **Seed randomness. Done 2026-10-11.** The one draw left rolling its own unseeded
+  `RandomNumberGenerator` instead of the run's own stream -- `muted_track`'s pick of which
+  sounding track to curse (deck.gd) -- now seeds off `hash([run.attempt_seed, "muted_track",
+  run.brief_index])`, the same idiom `spill_cursed` and the draft draw themselves already use;
+  the same seed and brief index now mute the same track every time
+  (`_test_tour_deck_muted_track_draws_off_the_runs_own_seed`). Checked the rest of the run's own
+  draws while in there (deck.gd's card shuffle, tour_chaos.gd's schedule/draw/pick_track/
+  pick_sign, tour_parts.gd's draw/assign, tour_flaws.gd's draw/tempo_for/hard_pan/wrong_tempo,
+  tour.gd's spill_cursed and crowd-throw rng) -- every one already took its stream as a parameter
+  or seeded off `attempt_seed`; `muted_track` was the only one still rolling its own. The case
+  now shows the run's own seed on its front panel once broken (`TourCase.show_seed`, swapping
+  the RUNS/WINS tally for "SEED <n>" for as long as the run lasts, `reset` putting the tally back
+  once it ends) -- every draw a brief or a card makes already comes off `attempt_seed`, so reading
+  the number off the case is what "a run can be replayed" means: a number someone can read off and
+  hand back. Wired on both sides of the table: the host sets it the moment `start_run()` fires
+  (`attempt_seed` is already on `run` by then, same call stack as `run_started.emit()`), a guest
+  catching up reads it off `Session.tour` directly rather than `Tour.run` -- `Tour`'s own
+  `Session.tour_changed` connection is made with `call_deferred` (core/tour/tour.gd's `_ready`),
+  so `Tour.run` is not guaranteed to have caught up yet when a guest's own handler for the same
+  signal runs; reading the dict straight avoids depending on which of two plain connections to
+  the same signal happens to fire first. `tools/verify.sh` ends clean (7051 checks, 0 failed);
+  `shots/tour_seed.png` (the case's own gallery light picking "TOUR / SEED 4203061862" off its
+  stencilled panel, the lamp the case was already built with) is the record -- finding a frame
+  that actually caught that lamp's narrow 45 degree cone, in a back-of-house nook the key light
+  never reaches at all, took more tries than the two-line fix it is a record of.
 - **Chaos events. Done 2026-10-11.** Mid-brief trouble on top of a brief's flaws and parts: never
   on the first brief (that one is for learning the band's own flaws), telegraphed 2 s ahead so
   getting hit is never a surprise from nowhere, struck once on the host's own clock, and judged

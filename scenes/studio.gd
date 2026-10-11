@@ -2016,6 +2016,8 @@ func _on_tour_case_broken_open() -> void:
 func _on_tour_run_started() -> void:
 	if tour_case != null:
 		tour_case.sync_broken()
+		if Tour.run != null:
+			tour_case.show_seed(Tour.run.attempt_seed)
 
 
 ## The run is over, won or lost: the case is chained again, its tally brought up to date. Fires
@@ -2060,6 +2062,10 @@ func _on_session_tour_changed() -> void:
 		_relight()
 	elif not Session.is_authority():
 		tour_case.sync_broken()
+		# Off `Session.tour` directly, not `Tour.run`: `Tour`'s own `Session.tour_changed`
+		# connection is made with `call_deferred` (core/tour/tour.gd's `_ready`), so `Tour.run`
+		# is not guaranteed to have caught up to this signal yet when this handler runs.
+		tour_case.show_seed(int(Session.tour.get("attempt_seed", 0)))
 
 
 ## The host's own word on an instrument hitting the floor (`Tour.instrument_spilled`, which

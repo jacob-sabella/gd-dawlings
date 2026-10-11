@@ -219,6 +219,15 @@ func reset(tally_runs: int, tally_wins: int) -> void:
 		_tally.text = "RUNS %d   WINS %d" % [tally_runs, tally_wins]
 
 
+## The tally swapped for the run's own seed (`TourRun.attempt_seed`) for as long as one is under
+## way: every draw a brief or a card makes already comes off this one number (`TourRun.song_rng`,
+## `chaos_rng`, `TourDeck`'s own cards), so reading it off the case is enough for the same run to
+## be asked for again. `reset` puts the RUNS/WINS tally back once the run ends.
+func show_seed(seed: int) -> void:
+	if _tally != null:
+		_tally.text = "SEED %d" % seed
+
+
 ## The whole case, to click on: each click a knock on its latch, five from the host to burst
 ## it. A throw does the same; this is the way anyone will try first. Personal, like the
 ## wardrobe's buttons: one person's knocking is not a control the others see held.
