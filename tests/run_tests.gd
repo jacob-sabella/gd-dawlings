@@ -16172,7 +16172,8 @@ func _test_tour_new_parts_are_judged_by_their_instruments_pitch() -> void:
 	var pairs := [[&"cowbell_one", CowbellItem.new(), 0], [&"lowbell_backbeat", CowbellItem.new(), 1],
 			[&"block_offbeats", WoodblockItem.new(), 0], [&"lowblock_one_three", WoodblockItem.new(), 1],
 			[&"pad_four", PadItem.new(), 0], [&"lowpad_one", PadItem.new(), 1],
-			[&"triangle_turnaround", TriangleItem.new(), 0], [&"mute_triangle_backbeat", TriangleItem.new(), 1]]
+			[&"triangle_turnaround", TriangleItem.new(), 0], [&"mute_triangle_backbeat", TriangleItem.new(), 1],
+			[&"claves_one", ClavesItem.new(), 0], [&"lowclaves_backbeat", ClavesItem.new(), 1]]
 	for pair in pairs:
 		var part: TourPart = TourParts.by_id(pair[0])
 		var item: InstrumentItem = pair[1]
@@ -16251,7 +16252,7 @@ func _test_tour_parts_count_the_instruments_in_the_room() -> void:
 	var empty_rng := RandomNumberGenerator.new()
 	empty_rng.seed = 11
 	check("a band of 3 or fewer spills nothing at the start", TourParts.first_spill(empty_rng, 3).is_empty())
-	for pair in [[4, 1], [5, 2], [6, 3], [8, 4]]:
+	for pair in [[4, 1], [5, 2], [6, 3], [7, 4], [8, 5]]:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 11
 		check("band %d seeds %d kind(s) already out of the case" % [pair[0], pair[1]],

@@ -865,9 +865,10 @@ func force_state_for_shot(stage: StringName) -> void:
 				return
 			# The real path, not a mock of it: `spill` is exactly what a drafted instrument card
 			# calls, so `instrument_spilled`'s own listener (the studio's spawn-and-toss) fires
-			# for real and the case actually throws something.
-			spill(&"triangle")
-			spill(&"cowbell")
+			# for real and the case actually throws something. Every kind, not a hardcoded pair,
+			# so this stays a useful shot of the whole case as more join `TourParts.SPILL_KINDS`.
+			for kind in TourParts.SPILL_KINDS:
+				spill(kind)
 		&"rig":
 			if run == null:
 				start_run()

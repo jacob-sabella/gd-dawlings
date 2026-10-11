@@ -120,6 +120,8 @@ static func make(kind: StringName) -> Item:
 			return PadItem.new()
 		&"triangle":
 			return TriangleItem.new()
+		&"claves":
+			return ClavesItem.new()
 	return null
 
 

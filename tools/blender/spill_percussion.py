@@ -1,5 +1,5 @@
 # Builds the instruments that spill out of the Tour case, and writes assets/models/cowbell.glb,
-# woodblock.glb, pad.glb and triangle.glb.
+# woodblock.glb, pad.glb, triangle.glb and claves.glb.
 #
 #     blender --background --python tools/blender/spill_percussion.py
 #
@@ -8,11 +8,14 @@
 # resonating cut is. The drum pad is a low disc on a wider base, a stage monitor's practice pad,
 # with a status LED on the rim. The triangle is three bent steel rods closed at two corners and
 # left a small gap at the third, the way a real one is left open so it rings rather than being
-# damped by its own suspension point. All four built origin at the bottom, facing -Z once
-# exported (Blender's Z-up becomes Godot's Y-up on export, so "bottom" here is "bottom" there
-# too) -- the triangle's own "bottom" is its vertical middle, the same convention the others use.
+# damped by its own suspension point. The claves are a pair of short tapered wooden sticks, laid
+# side by side at a slight angle and offset along their length, with a visible gap between them so
+# they read as two distinct sticks rather than one long rod. All five built origin at the bottom,
+# facing -Z once exported (Blender's Z-up becomes Godot's Y-up on export, so "bottom" here is
+# "bottom" there too) -- the triangle's and claves' own "bottom" is their vertical middle, the same
+# convention the others use.
 # Materials: cowbell "bell"/"handle", woodblock "wood"/"slot", pad "pad"/"rim"/"led", triangle
-# "rod".
+# "rod", claves "wood".
 
 import math
 import os
@@ -199,3 +202,41 @@ corner(left_end, ROD_RADIUS, triangle)
 corner(right_end, ROD_RADIUS, triangle)
 join(triangle, "Triangle")
 report_and_write("assets/models/triangle.glb")
+
+
+# --- the claves ----------------------------------------------------------------------------------
+reset()
+
+
+def stick(p1, p2, r1, r2, into):
+	p1, p2 = Vector(p1), Vector(p2)
+	d = p2 - p1
+	bpy.ops.mesh.primitive_cone_add(vertices=16, radius1=r1, radius2=r2, depth=d.length,
+			location=tuple((p1 + p2) * 0.5))
+	ob = bpy.context.active_object
+	ob.rotation_mode = "QUATERNION"
+	ob.rotation_quaternion = d.to_track_quat("Z", "Y")
+	bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+	return part(ob, "wood", into)
+
+
+claves = []
+STICK_LEN = 0.22
+R1 = 0.0145
+R2 = 0.0115
+LATERAL = 0.023
+LEN_OFFSET = 0.045
+ANGLE = math.radians(6)
+HALF = STICK_LEN * 0.5
+DIR = Vector((math.cos(ANGLE), math.sin(ANGLE), 0))
+# Two sticks laid parallel (same direction, so their centrelines never cross) but offset sideways
+# and along their own length -- the "resting together, not touching end-to-end" pose, with a clear
+# gap between them.
+A = Vector((0, -LATERAL, 0))
+stick(A - DIR * HALF, A + DIR * HALF, R1, R2, claves)
+B = Vector((LEN_OFFSET, LATERAL, 0))
+stick(B - DIR * HALF, B + DIR * HALF, R1, R2, claves)
+for ob in claves:
+	bevel(ob, 0.004, segments=3)
+join(claves, "Claves")
+report_and_write("assets/models/claves.glb")

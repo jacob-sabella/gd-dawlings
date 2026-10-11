@@ -856,11 +856,11 @@ gloriously wrong and you survive anyway.
   the real item (`CowbellItem.PITCHES` etc.) and once in the part catalogue
   (`TourParts._build`'s literal pitches) -- kept honest today only by
   `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. The fourth kind
-  (the triangle, see "Way more instruments" above) joined the case without doing this fold --
-  a deliberate scope call, to keep that iteration to one new instrument rather than a new
-  instrument plus an architecture change -- so the duplication is now live across four kinds, not
-  three, and worth doing properly before a fifth joins and makes it four places to keep honest by
-  hand instead of one.
+  (the triangle, see "Way more instruments" above) and the fifth (claves) both joined the case
+  without doing this fold -- a deliberate scope call each time, to keep those iterations to one
+  new instrument rather than a new instrument plus an architecture change -- so the duplication
+  is now live across five kinds, not three, and worth doing properly before a sixth joins and
+  makes it six places to keep honest by hand instead of one.
 - **Way more instruments, each medium its own.** (The user, 2026-10-10.) A wide instrument
   catalogue -- hand percussion, mallets, a drum kit, blown things, strings, noise-makers --
   limited only by what each medium can actually play: a desktop mouse (clicks and shakes, one
@@ -896,9 +896,9 @@ gloriously wrong and you survive anyway.
   kinds mechanically floods a solo band with more chances to see one at all -- a real regression
   the existing `_test_tour_deck_offers_instruments_to_a_big_band` test caught outright (23 of 40
   seeds, over the test's own "fewer than half" bar). Fixed by deriving the per-card keep chance
-  from the catalogue size (`1 - 0.7^(3/SPILL_KINDS.size())`), calibrated to reproduce the
-  original three-kind odds exactly and automatically re-balancing as more kinds join later,
-  rather than just loosening the test's number to match a design regression. Also updated
+  from the catalogue size, originally calibrated to reproduce the exact three-kind odds (see the
+  "claves" entry below for why that formula was tightened again at five kinds -- no margin for
+  sampling noise -- to a flat ~45%-or-less target regardless of catalogue size instead). Also updated
   `first_spill`'s own doc comment (now stale at "6 and up gets all three") and extended the
   pitch-agreement test (`_test_tour_new_parts_are_judged_by_their_instruments_pitch`) with the
   triangle's own pair -- the "Per-instance pitch table lives twice" duplication below is now
@@ -921,6 +921,51 @@ gloriously wrong and you survive anyway.
   case." and "A cowbell fell out of the case." live on the HUD, SEED shown) is the record of the
   real spill firing; the Blender subagent's own render of the model itself, sent to the user
   separately during the build, is the closer look at the instrument.
+  Fifth one in: **claves. Done 2026-10-11.** Same shape as the triangle in every respect: modeled
+  procedurally in the live Blender via the MCP (a subagent, iterating visually with `look`, fixing
+  the one new gotcha the triangle build hadn't hit yet -- see "Use Blender for models" in this
+  session's own memory, a full `read_factory_settings` reset kills the live MCP server's own
+  connection, so a live-session build clears only the default Cube/Camera/Light by name instead),
+  folded into `tools/blender/spill_percussion.py`'s headless build as a fifth section and
+  re-verified to reproduce the interactive result exactly, including the other four still
+  rebuilding correctly alongside it. Two parallel offset sticks (`stick()`, the triangle's own
+  `rod()` renamed and flattened), material "wood", warm hardwood colour close to the woodblock
+  item's own `WOOD` constant. Recorded as the General MIDI claves (75) or, its low voice, the
+  vibraslap (58) branded "LOW CLAVES" the same non-literal way the cowbell's own low voice is a
+  different instrument (low agogo) wearing the kind's name -- `Foley.claves`, a sharp bright
+  impulse with a short near-pitched ring, dry and short next to the woodblock's duller knock.
+  Two rhythm patterns each voice (`claves_one`/`claves_backbeat`, `lowclaves_backbeat`/
+  `lowclaves_eighths`), a `spill_claves` draft card, and `TourParts.SPILL_KINDS` grown to five --
+  `first_spill`'s doc comment updated again (band 7 now gets four kinds out, not all four at six;
+  8 gets all five).
+  The solo-odds fix from the triangle's own iteration held the wrong kind of steady: it
+  calibrated the per-card keep chance to reproduce the *exact* three-kind rate at any catalogue
+  size, which is itself only an approximation of the real post-shuffle-and-backfill odds a seed
+  sample actually shows -- fine with headroom, razor-thin without it. Five kinds pushed the same
+  `_test_tour_deck_offers_instruments_to_a_big_band` check to exactly 20 of 40, failing its own
+  strict "fewer than half" bar by landing precisely on the line. Rather than loosen the test
+  (the same mistake the triangle's own entry above talks itself out of) or chase a tighter
+  closed-form match to one specific 40-seed sample, the formula now targets a flat ~45% ceiling
+  regardless of catalogue size -- deliberately short of 50%, so normal sampling noise around the
+  target has somewhere to land instead of tipping the test over every time a kind is added. A
+  design improvement on top of the fix, not just a patch: a solo player has no real use for an
+  instrument no matter which kind exists, so there was never a reason the odds should sit as high
+  as the original three-kind number did.
+  `tools/verify.sh` ends clean (7090 checks, 0 failed, 0 SCRIPT ERROR; needed the editor's
+  `--import` pass again, for the new `ClavesItem` class_name). `tools/session_probe.sh` default
+  and `--built-in` both green ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged).
+  `tools/tour_probe.sh` at 1, 4 and 8 players all show claves spilling, holding, playing and
+  judging correctly end to end; the pre-existing "part count matches the catalogue" flake
+  (reconfirmed a fifth time now, across five separate iterations) turned up again, reconfirmed
+  once more at 8 by stash/re-run against bare master -- identical shape, worse that run on master
+  itself than with this change applied, still not this. The `--tour spill` shot state (added for
+  the triangle) now spills every kind in `TourParts.SPILL_KINDS` rather than a hardcoded pair, so
+  it keeps showing the whole case as a sixth kind eventually joins rather than needing an edit
+  each time; `shots/tour_claves.png` is the record, all five "X fell out of the case" lines live
+  on the HUD at once. The headless rebuild incidentally re-exported `triangle.glb` too (same
+  shape, same bounds and face count, byte-different -- some non-determinism in its own rod
+  placement math on a second run) and was reverted rather than carried into this commit, since it
+  changes nothing about what ships.
 - **Seed randomness. Done 2026-10-11.** The one draw left rolling its own unseeded
   `RandomNumberGenerator` instead of the run's own stream -- `muted_track`'s pick of which
   sounding track to curse (deck.gd) -- now seeds off `hash([run.attempt_seed, "muted_track",

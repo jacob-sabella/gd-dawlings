@@ -331,6 +331,28 @@ static func woodblock(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## Two claves struck together: sharper and shorter than the woodblock's own knock, with a
+## higher, almost-pitched ring riding the impulse for a beat before it dies -- what a dense
+## hardwood stick gives back that a hollow block does not.
+static func claves(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("claves_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.12)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 787 + take * 13
+		_impulse(s, 0.0, 0.5, 0.004, 2700.0 * rng.randf_range(0.97, 1.03), 751 + take)
+		var hz := 2450.0 * rng.randf_range(0.98, 1.02)
+		var step := TAU * hz / float(RATE)
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var env := exp(-t / 0.045)
+			if env < 0.001:
+				break
+			s[i] += 0.14 * env * sin(step * float(i))
+		_highpass(s, 1200.0)
+		return _wav(s, false))
+
+
 ## A drum pad hit: `tambourine_hit`'s swept sine, lower and longer -- a tom's skin dropping in
 ## pitch as it is struck -- with the beater's click on top.
 static func pad(take: int) -> AudioStreamWAV:

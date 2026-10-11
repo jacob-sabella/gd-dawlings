@@ -87,6 +87,8 @@ static func all_cards() -> Array[TourCard]:
 			"A drum pad falls out of the case. Toms for whoever gets there first.", &"pad"))
 	out.append(_spill_card(&"spill_triangle", "Triangle",
 			"A triangle falls out of the case, ringing. Somebody's got the ding now.", &"triangle"))
+	out.append(_spill_card(&"spill_claves", "Claves",
+			"A pair of claves falls out of the case, clacking. Keep it sharp.", &"claves"))
 
 	var sour_spill := TourCard.new()
 	sour_spill.id = &"sour_spill"
@@ -168,13 +170,16 @@ static func draw(rng: RandomNumberGenerator, exclude: Array[StringName], band_si
 		var kept: Array[TourCard] = []
 		for c in boons:
 			# A solo (or otherwise unwanting) band's odds of seeing any spill boon at all,
-			# calibrated once at the three-kind catalogue (cowbell/woodblock/pad: 1 - 0.7^3 is
-			# about 0.66) and held there as kinds are added -- each kind still gets its own
-			# independent roll, in pool order, so the same seed always spends the same number of
-			# rolls regardless of how many instrument boons happen to be in the pool, but the
-			# per-card keep chance below shrinks as the catalogue grows so a bigger catalogue
-			# does not quietly make a solo player see an instrument more often than before.
-			if _is_spill_boon(c.id) and rng.randf() >= 1.0 - pow(0.7, 3.0 / float(TourParts.SPILL_KINDS.size())):
+			# held to about 45% regardless of how big the instrument catalogue grows -- a solo
+			# player has no use for an instrument whichever kind it is, so the target itself
+			# does not grow with the kind count, only the per-card roll does, derived from it
+			# so an at-least-one-survives roll across every kind in the pool comes out to that
+			# same ~45% (1 - (1 - 0.45)^(1 / SPILL_KINDS.size()) per kind) -- headroom on
+			# purpose, not the tightest number that happens to pass today's seed sample. Each
+			# kind still gets its own independent roll, in pool order, so the same seed always
+			# spends the same number of rolls here regardless of how many instrument boons
+			# happen to be in the pool.
+			if _is_spill_boon(c.id) and rng.randf() >= 1.0 - pow(0.55, 1.0 / float(TourParts.SPILL_KINDS.size())):
 				continue
 			kept.append(c)
 		boons = kept
