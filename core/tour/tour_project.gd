@@ -34,12 +34,28 @@ const TRACK_COLOUR := {
 }
 
 
+## Character FX Rig Roulette can land: not utility FX (EQ, compressor, limiter are a mix move,
+## not a "constraint" a band plays around) -- the ones with a voice of their own.
+const RIG_FX: Array[StringName] = [&"distortion", &"chorus", &"reverb", &"delay", &"phaser"]
+
+
+## How many tracks a brief's own rig roulette touches: none at all for a duo or less (so the
+## smallest bands stay simple), growing with the band the same shape `TourFlaws.count_for` grows
+## flaws with, just a beat behind it -- this is variety on top of the brief, not something fixed
+## or judged, so it asks for less of a crowded card than a flaw does.
+static func rig_count_for(band_size: int) -> int:
+	return 0 if band_size <= 2 else 1 if band_size <= 4 else 2 if band_size <= 6 else 3
+
+
 ## A brief's rescue song: the full band, eight bars looped at `song_tempo`, with `flaws` baked
 ## in before it is loaded. Every track but the keys lane carries one demo item (no file, no
 ## notes), the same shape the stand-in's own song builds its tracks with (OfflineBackend.
-## _populate); loaded with `band_parts()` (see `load`), the whole band plays.
+## _populate); loaded with `band_parts()` (see `load`), the whole band plays. `band_size` and
+## `brief_index` (1 by default, "not the first brief" -- the same default a bare `0` would break,
+## so every existing call that never heard of rig roulette keeps landing none) drive whether a
+## seeded pedal or two rides along -- see `rig_count_for`.
 static func song_for(brief: TourBrief, song_tempo: float, flaws: Array[TourFlaw],
-		rng: RandomNumberGenerator) -> DawKitProject:
+		rng: RandomNumberGenerator, band_size: int = 1, brief_index: int = 1) -> DawKitProject:
 	var p := DawKitProject.new()
 	p.title = "Tour: %s" % brief.title
 	p.tempo = song_tempo
@@ -65,6 +81,33 @@ static func song_for(brief: TourBrief, song_tempo: float, flaws: Array[TourFlaw]
 		t.clips.append(clip)
 	for f in flaws:
 		f.bake(p, rng, song_tempo)
+	if brief_index > 0:
+		var claimed := {}
+		for f in flaws:
+			if f.track != "":
+				claimed[f.track] = true
+		var eligible: Array[String] = []
+		for i in BAND.size():
+			if i == STAGE_TRACK - 1 or claimed.has(BAND[i]):
+				continue
+			eligible.append(BAND[i])
+		for i in range(eligible.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var tmp := eligible[i]
+			eligible[i] = eligible[j]
+			eligible[j] = tmp
+		for i in mini(rig_count_for(band_size), eligible.size()):
+			var t := TourFlaws._dk_track_named(p, eligible[i])
+			if t == null:
+				continue
+			var kind: StringName = RIG_FX[rng.randi() % RIG_FX.size()]
+			var fx := DawKitEffect.new()
+			fx.kind = String(kind)
+			fx.name = FXCatalogue.kinds()[kind]["name"]
+			fx.enabled = true
+			fx.wet = 1.0
+			fx.values.assign(Array(FXCatalogue.defaults(kind)))
+			t.effects.append(fx)
 	return p
 
 

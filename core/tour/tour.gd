@@ -311,7 +311,8 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	var song_tempo := TourFlaws.tempo_for(rng)
 	var drawn := TourFlaws.draw(rng, TourFlaws.count_for(band_size, brief.is_boss))
 	var backend := DAW.backend as OfflineBackend
-	var problems := TourProject.load(TourProject.song_for(brief, song_tempo, drawn, rng), backend)
+	var problems := TourProject.load(
+			TourProject.song_for(brief, song_tempo, drawn, rng, band_size, index), backend)
 	if not problems.is_empty():
 		push_warning("Tour: could not load brief %d's song: %s" % [index, problems])
 		if not _snapshot.is_empty():
@@ -867,3 +868,13 @@ func force_state_for_shot(stage: StringName) -> void:
 			# for real and the case actually throws something.
 			spill(&"triangle")
 			spill(&"cowbell")
+		&"rig":
+			if run == null:
+				start_run()
+			if run != null and run.brief_index == 0:
+				# Rig roulette never lands on the first brief -- same reasoning as chaos events,
+				# see `&"chaos"` above -- so a shot of it needs the second brief, same as that one.
+				_start_brief(1)
+			if run == null:
+				return
+			brief_started.emit(run.brief_index)

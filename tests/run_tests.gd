@@ -267,6 +267,7 @@ func _ready() -> void:
 	_test_tour_song_has_a_playing_band()
 	_test_a_loaded_project_keeps_its_demo_parts()
 	_test_tour_flaws_bake_and_are_fixed_through_daw_verbs()
+	_test_tour_rig_roulette_lands_character_fx_on_a_big_enough_band()
 	_test_tour_flaws_scale_with_the_band_and_the_seed()
 	_test_tour_brief_judges_its_flaws()
 	_test_tour_parts_scale_with_the_band_and_the_seed()
@@ -15297,6 +15298,68 @@ func _test_tour_flaws_bake_and_are_fixed_through_daw_verbs() -> void:
 	check("wrong_tempo excludes dragging_keys", &"dragging_keys" in wrong_tempo.excludes)
 
 	DAW.use(previous, false)
+
+
+## Rig roulette: a brief's own seed can land a character FX (never a utility one, never on
+## Stage, never on a track a flaw already claimed) on a big enough band, nothing on a duo or on
+## the first brief, and the same seed lands the same gear twice.
+func _test_tour_rig_roulette_lands_character_fx_on_a_big_enough_band() -> void:
+	check("none at all for a duo", TourProject.rig_count_for(2) == 0)
+	check("one for a band of 4", TourProject.rig_count_for(4) == 1)
+	check("two for a band of 6", TourProject.rig_count_for(6) == 2)
+	check("three for a band of 8", TourProject.rig_count_for(8) == 3)
+
+	var brief := TourBriefs.brief(1)
+	var utility := [&"eq", &"compressor", &"limiter"]
+
+	var solo_rng := RandomNumberGenerator.new()
+	solo_rng.seed = 7
+	var solo := TourProject.song_for(brief, 100.0, [], solo_rng, 1, 1)
+	var solo_fx := 0
+	for t in solo.tracks:
+		solo_fx += t.effects.size()
+	check("a solo band gets no rig roulette at all (%d)" % solo_fx, solo_fx == 0)
+
+	var first_rng := RandomNumberGenerator.new()
+	first_rng.seed = 7
+	var first := TourProject.song_for(brief, 100.0, [], first_rng, 8, 0)
+	var first_fx := 0
+	for t in first.tracks:
+		first_fx += t.effects.size()
+	check("never on the first brief, even for a full band (%d)" % first_fx, first_fx == 0)
+
+	var a_rng := RandomNumberGenerator.new()
+	a_rng.seed = 11
+	var a := TourProject.song_for(brief, 100.0, [], a_rng, 8, 2)
+	var landed := 0
+	var on_stage := false
+	for t in a.tracks:
+		for fx in t.effects:
+			landed += 1
+			if t.name == "Stage":
+				on_stage = true
+			check("%s's rig fx (%s) is a character FX, not a utility one" % [t.name, fx.kind],
+					not (StringName(fx.kind) in utility))
+	check("a full band's seed lands rig_count_for(8) == 3 pedals (%d)" % landed, landed == 3)
+	check("never on the Stage lane", not on_stage)
+
+	var b_rng := RandomNumberGenerator.new()
+	b_rng.seed = 11
+	var b := TourProject.song_for(brief, 100.0, [], b_rng, 8, 2)
+	var a_kinds: Array = a.tracks.map(func(t: DawKitTrack) -> Array: return t.effects.map(
+			func(fx: DawKitEffect) -> String: return "%s:%s" % [t.name, fx.kind]))
+	var b_kinds: Array = b.tracks.map(func(t: DawKitTrack) -> Array: return t.effects.map(
+			func(fx: DawKitEffect) -> String: return "%s:%s" % [t.name, fx.kind]))
+	check("the same seed lands the same gear twice", a_kinds == b_kinds)
+
+	var quiet_vox := TourFlaws.by_id(&"quiet_vox")
+	var c_rng := RandomNumberGenerator.new()
+	c_rng.seed = 11
+	var c := TourProject.song_for(brief, 100.0, [quiet_vox], c_rng, 8, 2)
+	for t in c.tracks:
+		if t.name == "Lead Vox":
+			check("a track a flaw already claimed is never also given a rig pedal (%d fx)"
+					% t.effects.size(), t.effects.size() == 0)
 
 
 func _test_tour_flaws_scale_with_the_band_and_the_seed() -> void:

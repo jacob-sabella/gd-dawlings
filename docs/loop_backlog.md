@@ -1187,26 +1187,65 @@ gloriously wrong and you survive anyway.
   recent) change.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
   fork, a boss that plays differently from the first.
-- **Rig Roulette: gear off the run's own seed.** (The user, 2026-10-11, from a Riff Randomizer
-  YouTube episode they watched -- two musicians spin wheels for tuning, key, tempo, and several
-  rolls each of guitar amp sim, bass amp sim, drum kit, and synth, then have to write a real song
-  using whatever the wheels gave them, no re-rolling. Renamed so it's its own thing rather than
-  the show's own name.) A brief's seed already rolls tempo, key,
-  and flaw (see "Seed randomness" above); this extends the same idea to the signal chain itself --
-  spin which of the host's own installed FX load onto which track for this brief, the way the
-  show spins real plugins the players own rather than a fixed, curated set. No fake wheel UI
-  needed, same as the user's note: just the host's real `DAW.list_track_fx`/`track_fx_add_by_name`-
-  reachable plugin list, one or more picks seeded off `[attempt_seed, brief_index, "gear", track]`
-  the same idiom every other draw already uses, landing as real FX on the real project the way a
-  flaw already does. Bigger bands would roll more slots (a guitar amp sim, a bass amp sim, a
-  synth patch, same shape as the video's "three guitar sims, two bass sims, three synths" for two
-  players) so eight hands get a believably weird, cluttered rig rather than one trick repeated.
-  Needs design judgment the loop should not invent alone before building: which FX categories
-  count as "gear" worth spinning (amp sim / synth plainly do; EQ or a limiter probably should not,
-  they are not a "constraint" a band plays around), whether a spin can draw a plugin the host does
-  not have installed (skip it, or only spin from what `DAW` reports present), and whether this
-  replaces or sits alongside the existing flaw system -- parked under "Waiting on the user" below
-  rather than guessed at here.
+- **Rig Roulette: gear off the run's own seed. Done 2026-10-11.** (The user, 2026-10-11, from a
+  Riff Randomizer YouTube episode they watched -- two musicians spin wheels for tuning, key,
+  tempo, and several rolls each of guitar amp sim, bass amp sim, drum kit, and synth, then have
+  to write a real song using whatever the wheels gave them, no re-rolling. Renamed so it's its
+  own thing rather than the show's own name.) A brief's seed already rolls tempo, key, and flaw
+  (see "Seed randomness" above); this extends the same idea to the signal chain. Decided by the
+  user: any instrument/character FX are fair game (not just amp sims and synths -- distortion,
+  modulation, reverb character too; utility FX like EQ/compressors/limiters stay out, not a
+  "constraint" a band plays around), the pool is built only from what is actually present rather
+  than a blind roll that skips a miss, and this runs alongside the flaw system rather than
+  replacing it.
+  Found on the way, before writing a line of it: Tour only ever runs on the built-in engine
+  (`Tour.is_available()` requires `GodotBackend`), and the built-in engine has no amp sims or
+  synth patches to spin at all -- its real plugin catalogue (`core/built_in/fx_catalogue.gd`,
+  reached through `DAW.state.fx_choices`/`DAW.add_fx`, already used by the existing "Free Effect"
+  draft card) is Godot's own generic bus effects: EQ, compressor, limiter, reverb, delay, chorus,
+  filter, distortion, phaser. "The host's own install" the user asked for, in a world where Tour
+  never runs against a real external Reaper's VSTs (a third-party plugin host was explicitly
+  parked by the user 2026-10-10, see "Parked" below), means the built-in engine's own real list --
+  so this is built as the honest version of that idea against what is actually there: five of
+  the nine kinds read as "character" (`distortion`, `chorus`, `reverb`, `delay`, `phaser`) and are
+  the only ones a spin can land; the other four (`eq`, `compressor`, `limiter`, and the implicit
+  "nothing") stay out, matching the user's own category call almost exactly without having to
+  reopen it.
+  Baked the same way a flaw is -- not a card, not judged, not shown on the HUD -- because a
+  flaw's own `bake(project, rng, tempo)` writing straight into the `DawKitProject` before it is
+  loaded was already exactly the right shape for "real, seeded, audible, replayable, reset for
+  free when the run's snapshot restores." `TourProject.song_for` grew two new optional,
+  defaulted params (`band_size := 1, brief_index := 1`, both defaulting to values that land zero
+  pedals, so every one of the ~20 existing call sites across the suite needed no change at all)
+  and, after the flaws loop, rolls `TourProject.rig_count_for(band_size)` pedals (0 for a duo or
+  fewer, 1 for four, 2 for six, 3 for eight -- a beat gentler than `TourFlaws.count_for`'s own
+  climb, since this is varnish, not difficulty) onto that many distinct, shuffled, non-Stage
+  tracks a flaw has not already claimed (so a band never has two different things to listen for
+  on the same strip), using the run's own song-seed stream continuing right where the flaws left
+  off, never on the first brief (same reasoning as chaos events: the first brief is for learning
+  the band's own flaws, not the room's). Each pedal gets the catalogue's own safe defaults
+  (`FXCatalogue.defaults(kind)`), not random knob positions -- tasteful variety, not an extra way
+  to sound actively bad on top of the flaw the band is already fixing.
+  One dedicated test (`_test_tour_rig_roulette_lands_character_fx_on_a_big_enough_band`):
+  `rig_count_for`'s own curve; a solo band gets none; a full band gets none on the first brief
+  even though it would otherwise qualify; a full band's second brief lands exactly three character
+  (never utility) pedals, never on Stage; the same seed lands the same gear twice; a track a flaw
+  already claimed never also gets a pedal. `tools/verify.sh` ends clean (7087 checks, 0 failed, 0
+  SCRIPT ERROR -- no new `class_name`, so no `--import` needed this time).
+  `tools/session_probe.sh` default and `--built-in` both green ([host] 53/0 and 79/0, [guest]
+  47/0 and 42/0 -- one unrelated real-time timing flake on the first default run, a one-off,
+  confirmed clean on a re-run and unrelated to anything touched here). `tools/tour_probe.sh` at
+  1, 4, 5 and 8 players all ran a full real brief correctly with rig roulette live, project
+  structure unaffected (still "12 tracks" on arrival); the pre-existing "part count matches the
+  catalogue" flake (now reconfirmed five times, across five separate iterations) turned up again
+  at 4, 5 and 8, reconfirmed once more at 5 by stash/re-run against bare master -- identical
+  failure, still not this. A new `--tour rig` shot state (mirrors `&"chaos"`: starts a run, advances past
+  the un-rollable first brief if still on it, emits `brief_started` so the HUD actually rebuilds)
+  plus `--tour-band` is now permanent infrastructure. `shots/tour_rig.png` is a real 8-player
+  "Tone Check" brief firing end to end -- four flaws, seven parts, four spilled instruments, the
+  live HUD -- caught before the physical FX rack that would show the rolled pedals' names could
+  be framed in the same shot; the test above is what actually proves the pedals themselves landed
+  right, the same honest trade the loss/win shots already made about the room's own toast.
 - **Scale testing: solo, 4, 8. Done 2026-10-10.** `tools/tour_probe.sh N` (N 1..8) runs a brief
   as a host with N-1 real guest processes -- every flaw fixed and every part played from the seat
   that holds it, a draft pick carried over the wire, the roster checked by name so eight is
@@ -1241,9 +1280,6 @@ gloriously wrong and you survive anyway.
   rather than go back in the case when the run ends, the way the rest of the gear resets?
 - Is a curse spill really a curse for a big band -- it is more to do, which on a crowded card is
   what they came for. Maybe it only reads as a curse solo or in a duo.
-- Rig Roulette (above): which FX categories are fair game to spin, whether a spin may
-  land on a plugin the host does not have installed, and whether this sits alongside the flaw
-  system or starts to replace it.
 - What reputation should actually buy (venues, cosmetics on the ghost, hats and case stickers,
   a second life mid-run) and, if a second life exists, what it costs and whether it is bought
   before a run starts or spent in the moment a brief is about to go wrong -- wins/losses move the
