@@ -91,6 +91,8 @@ static func all_cards() -> Array[TourCard]:
 			"A pair of claves falls out of the case, clacking. Keep it sharp.", &"claves"))
 	out.append(_spill_card(&"spill_hihat", "Hi-Hat",
 			"A hi-hat falls out of the case, sizzling. Keep it closed and keep it tight.", &"hihat"))
+	out.append(_spill_card(&"spill_bongo", "Bongos",
+			"A pair of bongos falls out of the case, joined at the hip. Somebody's got hands now.", &"bongo"))
 
 	var sour_spill := TourCard.new()
 	sour_spill.id = &"sour_spill"

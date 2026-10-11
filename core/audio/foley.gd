@@ -379,6 +379,25 @@ static func hihat(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A bongo struck by hand: `pad`'s own swept-sine-and-click shape, higher and shorter -- a small
+## tensioned membrane's quick slap and drop, not a tom's longer boom. The low voice (the low
+## bongo) gets no separate shape of its own, same as every other spilled instrument's second
+## voice: `InstrumentItem.VOICE_PITCH` already pitches it down.
+static func bongo(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("bongo_%d" % take, func() -> AudioStreamWAV:
+		var seconds := 0.16
+		var s := _silence(seconds)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * lerpf(340.0, 220.0, minf(1.0, t / 0.025)) / float(RATE)
+			s[i] += 0.4 * exp(-t / 0.055) * sin(phase)
+		_impulse(s, 0.0, 0.14, 0.0025, 2100.0, 791 + take)
+		_lowpass(s, 6500.0)
+		return _wav(s, false))
+
+
 ## A drum pad hit: `tambourine_hit`'s swept sine, lower and longer -- a tom's skin dropping in
 ## pitch as it is struck -- with the beater's click on top.
 static func pad(take: int) -> AudioStreamWAV:

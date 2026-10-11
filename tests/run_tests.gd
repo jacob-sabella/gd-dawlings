@@ -16174,7 +16174,8 @@ func _test_tour_new_parts_are_judged_by_their_instruments_pitch() -> void:
 			[&"pad_four", PadItem.new(), 0], [&"lowpad_one", PadItem.new(), 1],
 			[&"triangle_turnaround", TriangleItem.new(), 0], [&"mute_triangle_backbeat", TriangleItem.new(), 1],
 			[&"claves_one", ClavesItem.new(), 0], [&"lowclaves_backbeat", ClavesItem.new(), 1],
-			[&"hihat_eighths", HihatItem.new(), 0], [&"openhat_backbeat", HihatItem.new(), 1]]
+			[&"hihat_eighths", HihatItem.new(), 0], [&"openhat_backbeat", HihatItem.new(), 1],
+			[&"bongo_eighths", BongoItem.new(), 0], [&"lowbongo_backbeat", BongoItem.new(), 1]]
 	for pair in pairs:
 		var part: TourPart = TourParts.by_id(pair[0])
 		var item: InstrumentItem = pair[1]

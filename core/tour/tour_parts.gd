@@ -24,7 +24,7 @@ const ROOM: Array[StringName] = [&"shaker", &"tambourine", &"keytar"]
 ## docs/loop_backlog.md's "Tour" section for why two: the judge tells parts apart by
 ## (channel, pitch), so a second copy of a kind needs its own pitch to be a job rather than a
 ## decoy, and a second voice ("the low one") is where that pitch comes from.
-const SPILL_KINDS: Array[StringName] = [&"cowbell", &"woodblock", &"pad", &"triangle", &"claves", &"hihat"]
+const SPILL_KINDS: Array[StringName] = [&"cowbell", &"woodblock", &"pad", &"triangle", &"claves", &"hihat", &"bongo"]
 const COPIES := 2
 
 static var _cached: Array[TourPart] = []
@@ -54,9 +54,9 @@ static func copies_of(kind: StringName, spilled: Array[StringName]) -> int:
 ## What a big band's first brief already has out of the case, so it starts with enough to do
 ## rather than spending its whole first brief on flaws alone: `clampi(band_size - ROOM.size(),
 ## 0, SPILL_KINDS.size())` kinds, drawn from `SPILL_KINDS` shuffled with `rng` -- band 4 gets
-## one, 5 gets two, 6 gets three, 7 gets four, 8 (the biggest band there is) gets five of the six
-## -- never all of them, now that the catalogue has outgrown what an 8-person first brief can
-## draw; 3 and under, none (the room's own three already cover them).
+## one, 5 gets two, 6 gets three, 7 gets four, 8 (the biggest band there is) gets five of the
+## seven -- never all of them, now that the catalogue has outgrown what an 8-person first brief
+## can draw; 3 and under, none (the room's own three already cover them).
 static func first_spill(rng: RandomNumberGenerator, band_size: int) -> Array[StringName]:
 	var n := clampi(band_size - ROOM.size(), 0, SPILL_KINDS.size())
 	var pool := SPILL_KINDS.duplicate()
@@ -298,6 +298,14 @@ static func _build() -> Array[TourPart]:
 			PackedInt32Array([46]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.2, 8, 0.7))
 	out.append(_part(&"openhat_one", &"hihat2", "OPEN HI-HAT: one open splash on the one",
 			PackedInt32Array([46]), PackedFloat64Array([0.0]), 0.0, 0.2, 4, 0.6))
+	out.append(_part(&"bongo_eighths", &"bongo", "BONGO: every eighth, hands moving",
+			PackedInt32Array([60]), PackedFloat64Array(), 0.5, 0.12, 24, 0.7))
+	out.append(_part(&"bongo_one_three", &"bongo", "BONGO: slaps on 1 and 3",
+			PackedInt32Array([60]), PackedFloat64Array([0.0, 2.0]), 0.0, 0.2, 8, 0.7))
+	out.append(_part(&"lowbongo_backbeat", &"bongo2", "LOW BONGO: 2 and 4, under the tambourine",
+			PackedInt32Array([61]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.15, 8, 0.7))
+	out.append(_part(&"lowbongo_four", &"bongo2", "LOW BONGO: a low slap on every beat",
+			PackedInt32Array([61]), PackedFloat64Array(), 1.0, 0.2, 12, 0.7))
 
 	return out
 

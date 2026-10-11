@@ -856,11 +856,12 @@ gloriously wrong and you survive anyway.
   the real item (`CowbellItem.PITCHES` etc.) and once in the part catalogue
   (`TourParts._build`'s literal pitches) -- kept honest today only by
   `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. The fourth kind
-  (the triangle, see "Way more instruments" above), the fifth (claves) and the sixth (hi-hat) all
-  joined the case without doing this fold -- a deliberate scope call each time, to keep those
-  iterations to one new instrument rather than a new instrument plus an architecture change -- so
-  the duplication is now live across six kinds, not three, and worth doing properly before a
-  seventh joins and makes it seven places to keep honest by hand instead of one.
+  (the triangle, see "Way more instruments" above), the fifth (claves), the sixth (hi-hat) and the
+  seventh (bongos) all joined the case without doing this fold -- a deliberate scope call each
+  time, to keep those iterations to one new instrument rather than a new instrument plus an
+  architecture change -- so the duplication is now live across seven kinds, not three, and worth
+  doing properly before an eighth joins and makes it eight places to keep honest by hand instead
+  of one.
 - **Way more instruments, each medium its own.** (The user, 2026-10-10.) A wide instrument
   catalogue -- hand percussion, mallets, a drum kit, blown things, strings, noise-makers --
   limited only by what each medium can actually play: a desktop mouse (clicks and shakes, one
@@ -1014,6 +1015,42 @@ gloriously wrong and you survive anyway.
   record, all six "X fell out of the case" lines live on the HUD at once, a hi-hat among them.
   Per-instance pitch table lives across six kinds now, not five -- see that note elsewhere in
   this section.
+  Seventh one in, and the last for now: **bongos. Done 2026-10-11.** (The user capped the
+  catalogue here, mid-build -- "stop after this one" -- so this is the last new instrument
+  without a further ask.) A joined pair of drum shells, a smaller one and a larger one, bridged
+  by a short wood block the way a real pair's rims are bolted together -- built headlessly
+  straight into `tools/blender/spill_percussion.py` again, same call as the hi-hat's: nothing
+  about two stacked cylinders with a connecting box needed a live visual pass either.
+  `Foley.bongo` is `pad`'s own swept-sine-and-click shape, pitched up and shortened -- a small
+  tensioned membrane's quick slap, not a tom's longer boom. Hi bongo (GM 60) is the main voice,
+  low bongo (GM 61) the low one, named the same "" / "LOW " way as cowbell, woodblock, pad and
+  claves (not the hi-hat's own distinct naming, since GM's own "hi"/"low" pair here maps onto
+  that branding cleanly, where "hi-hat"/"low hi-hat" would have read oddly). Two new
+  rhythm-pattern pairs (`bongo_eighths`/`bongo_one_three`, `lowbongo_backbeat`/`lowbongo_four`),
+  a `spill_bongo` draft card, and `SPILL_KINDS` grown to seven -- `first_spill`'s own doc comment
+  now says band 8 seeds five kinds out of seven (unchanged from six, since `band_size -
+  ROOM.size()` still tops out at 5 for the biggest band there is; the catalogue has already
+  outgrown what any legal band's first brief can draw in full, and will keep outgrowing it from
+  here, which is fine -- the point was always "something to do already", not "everything").
+  `tools/verify.sh` ends clean (7091 checks, 0 failed, 0 SCRIPT ERROR; needed `godot --headless
+  --path . --editor --quit` first, for the new `BongoItem` class_name) -- including the
+  2000-seed solo-odds check from the hi-hat iteration, now proven to actually hold at a seventh
+  catalogue size rather than merely asserted to. `tools/session_probe.sh` default and
+  `--built-in` both green ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged).
+  `tools/tour_probe.sh` at 1, 4 and 8 players: 1 came back fully clean this time (the pre-existing
+  "part count matches the catalogue" flake did not fire), 4 and 8 showed it again
+  (`bongo_one_three` and `hihat_offbeats` both show up played in the 8-player run's own part
+  list, proof the bongo is scoring, not absent) -- the same pre-existing issue reconfirmed a
+  seventh time now, across seven separate iterations, still not chased. `shots/tour_bongo.png` is
+  the record; only five "X fell out of the case" lines show on the HUD at once (a fixed-size
+  notice queue, not a spill bug -- cowbell and woodblock scrolled off before the shot was taken,
+  since the case now spills seven kinds in a row for this `--tour spill` state and the HUD was
+  never built to hold more than a handful of lines at once; worth a backlog line of its own if a
+  future shot of the full case ever needs to show all seven at once). Per-instance pitch table
+  lives across seven kinds now, not six -- see that note elsewhere in this section. With the
+  catalogue capped here, **this closes the "way more instruments" item for now** -- it stays open
+  as a bullet for whenever the user wants another kind, rather than marked fully done, since it
+  was never a fixed list to finish.
 - **Seed randomness. Done 2026-10-11.** The one draw left rolling its own unseeded
   `RandomNumberGenerator` instead of the run's own stream -- `muted_track`'s pick of which
   sounding track to curse (deck.gd) -- now seeds off `hash([run.attempt_seed, "muted_track",

@@ -124,6 +124,8 @@ static func make(kind: StringName) -> Item:
 			return ClavesItem.new()
 		&"hihat":
 			return HihatItem.new()
+		&"bongo":
+			return BongoItem.new()
 	return null
 
 

@@ -1,5 +1,5 @@
 # Builds the instruments that spill out of the Tour case, and writes assets/models/cowbell.glb,
-# woodblock.glb, pad.glb, triangle.glb, claves.glb and hihat.glb.
+# woodblock.glb, pad.glb, triangle.glb, claves.glb, hihat.glb and bongos.glb.
 #
 #     blender --background --python tools/blender/spill_percussion.py
 #
@@ -12,11 +12,13 @@
 # side by side at a slight angle and offset along their length, with a visible gap between them so
 # they read as two distinct sticks rather than one long rod. The hi-hat is a pair of thin bevelled
 # discs stacked a small gap apart, a closed pair carried as one item rather than the stand they'd
-# sit on. All six built origin at the bottom, facing -Z once exported (Blender's Z-up becomes
-# Godot's Y-up on export, so "bottom" here is "bottom" there too) -- the triangle's, claves' and
-# hi-hat's own "bottom" is their vertical middle, the same convention the others use.
+# sit on. The bongos are a joined pair of drum shells, a smaller one and a larger one side by
+# side, bridged by a short wood block where a real pair's rims are bolted together. All seven
+# built origin at the bottom, facing -Z once exported (Blender's Z-up becomes Godot's Y-up on
+# export, so "bottom" here is "bottom" there too) -- the triangle's, claves', hi-hat's and bongos'
+# own "bottom" is their vertical middle, the same convention the others use.
 # Materials: cowbell "bell"/"handle", woodblock "wood"/"slot", pad "pad"/"rim"/"led", triangle
-# "rod", claves "wood", hi-hat "cymbal".
+# "rod", claves "wood", hi-hat "cymbal", bongos "shell".
 
 import math
 import os
@@ -259,3 +261,30 @@ bottom_disc = part(bpy.context.active_object, "cymbal", hihat)
 bevel(bottom_disc, 0.003)
 join(hihat, "Hihat")
 report_and_write("assets/models/hihat.glb")
+
+
+# --- the bongos ----------------------------------------------------------------------------------
+reset()
+
+bongos = []
+HI_RADIUS = 0.05
+HI_DEPTH = 0.085
+LO_RADIUS = 0.065
+LO_DEPTH = 0.095
+BONGO_GAP = 0.006
+hi_x = -(BONGO_GAP * 0.5 + HI_RADIUS)
+lo_x = BONGO_GAP * 0.5 + LO_RADIUS
+bpy.ops.mesh.primitive_cylinder_add(vertices=20, radius=HI_RADIUS, depth=HI_DEPTH, location=(hi_x, 0, 0))
+hi_shell = part(bpy.context.active_object, "shell", bongos)
+bevel(hi_shell, 0.004)
+bpy.ops.mesh.primitive_cylinder_add(vertices=20, radius=LO_RADIUS, depth=LO_DEPTH, location=(lo_x, 0, 0))
+lo_shell = part(bpy.context.active_object, "shell", bongos)
+bevel(lo_shell, 0.004)
+# The wood bridge joining the shells, where a real pair's rims are bolted together.
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
+bridge = bpy.context.active_object
+bridge.scale = (BONGO_GAP + 0.02, 0.025, 0.02)
+bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+part(bridge, "shell", bongos)
+join(bongos, "Bongos")
+report_and_write("assets/models/bongos.glb")
