@@ -340,6 +340,24 @@ func tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
 
 
+## Where the Rig Roulette station hangs, in studio space: on the control room's own back wall,
+## within reach of the console rather than tucked away in the back of house like the Tour case --
+## this is a thing the whole band gathers around between takes, not a run's own opening move.
+## Mounted at console-knob height, facing into the room.
+##
+## The back wall, not a side wall: both side walls sit behind furniture that grows with every
+## track's own FX -- the mixing rack (`Studio.rack`, leant out at 38 degrees off the left wall)
+## and the patchbay (leant off the right) both lengthen as tracks are added, and a long enough
+## one stands squarely between the seat and anything mounted on the wall behind it
+## (`tests/run_tests.gd`'s own seat-click audit, run at 40 tracks, catches exactly this). The
+## back wall carries nothing of the kind -- only the fixed first-reflection panels this clears
+## by mounting past their x -1.95..1.95 spread, toward the corner.
+func rig_roulette_spot() -> Transform3D:
+	var x := -room_width * 0.5 + 1.0
+	var z := Studio.ROOM_FRONT + 0.03
+	return Transform3D(Basis.IDENTITY, Vector3(x, 1.05, z))
+
+
 ## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop
 ## that sounds it as its "node" when the venue has stood one.
 func hoops() -> Array:

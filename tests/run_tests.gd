@@ -207,6 +207,7 @@ func _ready() -> void:
 	_test_the_desk_is_lit_evenly_end_to_end()
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
+	_test_rig_roulette_rolls_outside_tour()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
 	_test_a_monitor_draws_no_presentation_brackets()
@@ -5304,6 +5305,84 @@ func _test_every_control_says_what_it_is() -> void:
 		pan.value = 0.2
 		check("hard-ish left reads L 60 (%s)" % pan.readout(), pan.readout() == "L 60")
 	studio.queue_free()
+
+
+## RigRouletteStation.roll_requested, outside Tour entirely: host-only (a guest's roll is
+## refused, with a notice, and mutates nothing); eligible tracks are the station's own
+## OPEN_TRACKS/ANY_TRACK wheel (an already-FX'd track is skipped only under OPEN_TRACKS); the
+## CHARACTER pool draws only from RigRouletteStation.CHARACTER_KINDS against the built-in engine;
+## and LOCK KEY, lit, leaves every MIDI item's pitch untouched, while an unlocked roll moves
+## every one of them by the SAME nonzero semitone amount -- a shared new key, not a different one
+## per track.
+func _test_rig_roulette_rolls_outside_tour() -> void:
+	_as_session(Session.Role.HOST, 1)
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	# Clean of the stand-in's own authored demo tracks, so the three below are the whole roll
+	# pool and the test's own track-index assumptions hold.
+	while not DAW.state.track_indices().is_empty():
+		DAW.remove_track(DAW.state.track_indices()[0])
+	for i in 3:
+		DAW.add_track(i + 1, "Track %d" % (i + 1))
+	DAW.add_fx(1, "eq", -1)
+	DAW.insert_midi_take(1, 0.0, 1.0, [[0.0, 0.5, 60, 100, 0]], "")
+	DAW.insert_midi_take(2, 0.0, 1.0, [[0.0, 0.5, 64, 100, 0]], "")
+	DAW.insert_midi_take(3, 0.0, 1.0, [[0.0, 0.5, 67, 100, 0]], "")
+
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	check("the station is built", studio.rig_roulette_station != null)
+	var station := studio.rig_roulette_station
+	station.count = 2
+	station.pool = RigRouletteStation.Pool.CHARACTER
+	station.eligibility = RigRouletteStation.Eligibility.OPEN_TRACKS
+
+	Session.role = Session.Role.GUEST
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	station.roll_requested.emit()
+	check("a guest's roll is refused, and told why", DAW.state.track(1).fx.size() == 1
+			and DAW.state.track(2).fx.is_empty() and DAW.state.track(3).fx.is_empty()
+			and notices.size() == 1 and notices[0].begins_with("Only "))
+	Session.notice.disconnect(hear)
+	Session.role = Session.Role.HOST
+
+	station.roll_requested.emit()
+	var sizes := [DAW.state.track(1).fx.size(), DAW.state.track(2).fx.size(), DAW.state.track(3).fx.size()]
+	check("the host's roll landed exactly 2 pedals, never on the already-FX'd track (%s)" % [sizes],
+			sizes[0] == 1 and sizes[1] + sizes[2] == 2)
+	var character_names := {}
+	for k in RigRouletteStation.CHARACTER_KINDS:
+		character_names[FXCatalogue.kinds()[k]["name"]] = true
+	var landed_names: Array = []
+	for i in [2, 3]:
+		for fx: MixState.FXState in DAW.state.track(i).fx.values():
+			landed_names.append(fx.name)
+	check("the CHARACTER pool only ever lands a character kind (%s)" % [landed_names],
+			landed_names.all(func(n): return character_names.has(n)))
+
+	var pitch_of := func(i: int) -> float: return DAW.state.track(i).items[0].notes[2]
+	var before := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
+	station.key_locked = true
+	station.roll_requested.emit()
+	var after_locked := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
+	check("LOCK KEY lit leaves every pitch alone (%s -> %s)" % [before, after_locked], before == after_locked)
+
+	station.key_locked = false
+	station.roll_requested.emit()
+	var after_unlocked := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
+	var deltas: Array = []
+	for i in 3:
+		deltas.append(after_unlocked[i] - before[i])
+	check("unlocked, every item moves by the SAME nonzero semitone shift (%s)" % [deltas],
+			deltas[0] != 0.0 and deltas[0] == deltas[1] and deltas[1] == deltas[2])
+
+	remove_child(studio)
+	studio.free()
+	DAW.use(OfflineBackend.new())
 
 
 ## Two hands, or a hand and a cursor, on one button. The first to leave must not turn the

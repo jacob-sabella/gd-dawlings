@@ -2372,3 +2372,47 @@ cells belong to the lattice activity, which every venue shares, so a venue canno
 without a hook in the activity (e.g. a per-venue `drift` the lattice reads). Decide whether
 activities should take a look from the venue they stand in before building it. DROPPED for now
 (2026-10-09: "drop both of those for now"); not to be built unless asked again.
+
+## Rig Roulette outside Tour: a standalone station (2026-10-11)
+
+Rig Roulette (the Tour case's spillable-pedal rig minigame) asked for outside Tour too
+(2026-10-11: "I want to be able to do rig roulette (with modifiable parameters) outside of tour.
+just in general like i get some bois together and we just roll some shit"). Built as
+`RigRouletteStation` (`hardware/rig_roulette/rig_roulette_station.gd`), a wall panel in the
+control room, independent of any Tour run and of the built-in engine: works against whichever
+`DAW.backend` is open.
+
+- Host-only roll (`Studio._on_rig_roulette_roll_requested` gates on `Session.is_authority()`,
+  same pattern as `choose_venue`/`_on_tour_case_struck`); guests can nudge the wheels on their
+  own view but nothing reaches anyone until the host's own ROLL press.
+- Fresh, unseeded random every roll — not the run's own seed, since this has nothing to do with
+  a Tour run's own replay.
+- Modifiable: pedal count (1-3), FX pool (CHARACTER/EVERYTHING against the built-in engine;
+  against a live Reaper connection both wheel positions read "WHATEVER'S THERE", honestly, since
+  a live plugin list carries no kind metadata to filter CHARACTER by), and track eligibility
+  (open tracks only / any track).
+- Key roll: unless LOCK KEY is lit, every roll also moves the whole song to a new key (a
+  nonzero semitone shift, via the existing `DAW.transpose_item`, applied to every MIDI item on
+  every track). Tempo was asked for alongside it (2026-10-11: "Key, bpm, like the video I
+  sent") but the only tempo roll buildable now is cosmetic (items are stored in absolute
+  seconds, not beats, so changing tempo doesn't retime anything that already exists) and was
+  explicitly skipped (2026-10-11: "Skip tempo for now (Recommended)"). A real tempo-retime is a
+  separate, larger piece of work — not to be built unless asked again.
+- Mounted on the control room's BACK wall (`Venue.rig_roulette_spot`), not a side wall: both
+  side walls sit behind furniture that lengthens with every track's own FX (the mixing rack off
+  the left wall, the patchbay off the right), and a long enough one stands between the seat and
+  anything mounted on the wall behind it -- `tests/run_tests.gd`'s own seat-click audit, run at
+  40 tracks, catches exactly this. It also carries its own lamp (`RigRouletteStation._lamp`,
+  the same fix `TourCase._lamp` already makes for its own dark corner), since the wall it ended
+  up on sits past the ceiling downlights' own reach.
+
+Open follow-ups, not built:
+- A real tempo-retime (see above) — would need item times converted to a beat-relative
+  representation, or a second absolute-time pass applied on every tempo change. Large; wait for
+  it to be asked for again.
+- The VST pool it draws from, when hooked to a live Reaper host, is the host's own installed
+  plugin list (`ReaperBackend.fx_choices`, fed by `reaper/dawlings_bridge.lua`'s
+  `ListInstalledFx` handler over `reaper.EnumInstalledFX`) — shipped as part of this same ask
+  (2026-10-11: "Solve teh VST issue... just make sure we stay within our licensing requirements"),
+  stays within licensing by construction: real plugin binaries only ever load on the host's own
+  machine, same as every other FX action already works; guests only ever see id/label strings.

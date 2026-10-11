@@ -125,6 +125,9 @@ var items: ItemRoom
 ## reason `items` is: Tour is gated to the built-in engine (core/tour/tour.gd's `is_available`),
 ## and AR is a real room with a real case or none at all.
 var tour_case: TourCase
+## The "roll some gear" panel on the control room wall. Unlike `tour_case`, not AR-gated or
+## backend-gated: it works against whichever DAW backend is open, built-in or Reaper alike.
+var rig_roulette_station: RigRouletteStation
 ## What the mic in a hand here has done to a track, to be undone when it leaves the hand.
 var mic_arm := MicArm.new()
 ## Whether the headphones are on a head here, as Ears was last told.
@@ -263,6 +266,7 @@ func _ready() -> void:
 	if medium != Presentation.Medium.AR:
 		_build_items()
 		_build_tour_case()
+		_build_rig_roulette_station()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
 		# four lines up.
@@ -1991,6 +1995,93 @@ func _build_tour_case() -> void:
 	Session.tour_changed.connect(_on_session_tour_changed)
 	Session.participant_left.connect(_on_tour_participant_left)
 	_sync_tour_roll()
+
+
+## The panel on the control room wall: works against whichever DAW backend is open, not gated to
+## the built-in engine the way Tour is, so it is built unconditionally alongside the case.
+func _build_rig_roulette_station() -> void:
+	rig_roulette_station = RigRouletteStation.new()
+	studio_set.add_child(rig_roulette_station)
+	rig_roulette_station.transform = venue.rig_roulette_spot()
+	rig_roulette_station.roll_requested.connect(_on_rig_roulette_roll_requested)
+
+
+## RigRouletteStation.roll_requested: told so only the host can roll, the same pattern
+## `choose_venue` and `_on_tour_case_struck` both use.
+func _on_rig_roulette_roll_requested() -> void:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can roll the rig." % Session.name_of(1))
+		return
+	_roll_rig()
+
+
+## The roll itself: eligible tracks (the station's own OPEN_TRACKS/ANY_TRACK wheel) shuffled by a
+## fresh, unseeded roll -- not the run's own seed, since this has nothing to do with a Tour run's
+## own replay -- `station.count` of them get a plugin from `_rig_pool`, and unless LOCK KEY is
+## lit the whole song moves to a new key: the same nonzero semitone shift (never zero, a "new
+## key" roll that changed nothing would be a dud) applied to every MIDI item across every track,
+## via the same `DAW.transpose_item` the manual timeline UI already uses. Host-only by the time
+## this runs (`_on_rig_roulette_roll_requested`'s own gate), so every `DAW.add_fx`/
+## `DAW.transpose_item` call here is this peer's own, same as any other host action.
+func _roll_rig() -> void:
+	var station := rig_roulette_station
+	if station == null:
+		return
+	var eligible: Array[int] = []
+	for i in DAW.state.track_indices():
+		var t := DAW.state.track(i, false)
+		if t == null:
+			continue
+		if station.eligibility == RigRouletteStation.Eligibility.OPEN_TRACKS and not t.fx.is_empty():
+			continue
+		eligible.append(i)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in range(eligible.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: int = eligible[i]
+		eligible[i] = eligible[j]
+		eligible[j] = tmp
+
+	var pool := _rig_roulette_pool()
+	var landed := 0
+	for i in mini(station.count, eligible.size()):
+		if pool.is_empty():
+			break
+		var plugin: String = str(pool[rng.randi() % pool.size()][0])
+		DAW.add_fx(eligible[i], plugin, -1)
+		landed += 1
+
+	var semitones := 0
+	if not station.key_locked:
+		const NONZERO := [-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6]
+		semitones = NONZERO[rng.randi() % NONZERO.size()]
+		for i in DAW.state.track_indices():
+			var t := DAW.state.track(i, false)
+			if t == null:
+				continue
+			for item: MixState.ItemState in t.items:
+				if not item.notes.is_empty():
+					DAW.transpose_item(i, item.index, semitones)
+
+	station.show_result(landed, semitones)
+	var msg := "%s rolled %d pedal%s" % [Session.name_of(Session.local_peer_id), landed, "" if landed == 1 else "s"]
+	if semitones != 0:
+		msg += " and moved the key %+d" % semitones
+	Session.tell_room(msg + ".")
+
+
+## `RigRouletteStation.Pool.CHARACTER` on the built-in engine draws only `CHARACTER_KINDS` out of
+## `DAW.state.fx_choices`; EVERYTHING, or any pool against a live Reaper list (no kind metadata
+## to filter by), is the whole thing.
+func _rig_roulette_pool() -> Array:
+	var choices: Array = DAW.state.fx_choices
+	if DAW.backend is ReaperBackend or rig_roulette_station.pool == RigRouletteStation.Pool.EVERYTHING:
+		return choices
+	var kinds := {}
+	for k in RigRouletteStation.CHARACTER_KINDS:
+		kinds[String(k)] = true
+	return choices.filter(func(c): return kinds.has(String(c[0])))
 
 
 ## A thrown item has hit the case, broken or not (TourCase.break_attempted): told so only the
