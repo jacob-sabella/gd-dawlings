@@ -284,6 +284,7 @@ func _ready() -> void:
 	_test_only_the_host_can_break_the_case()
 	_test_tour_venue_solids_include_the_case()
 	_test_tour_spill_puts_a_real_item_in_the_room()
+	_test_tour_run_ended_announces_the_result_to_the_room()
 	_test_tour_guest_spawns_spilled_instruments_from_the_run()
 	_test_tour_new_parts_are_judged_by_their_instruments_pitch()
 	_test_tour_marked_instrument_refuses_another_hand()
@@ -15950,6 +15951,39 @@ func _test_tour_spill_puts_a_real_item_in_the_room() -> void:
 	check("and out of the published room", not (studio.room_state()["items"] as Dictionary).has(&"cowbell"))
 
 	Tour.run = null
+	remove_child(studio)
+	studio.free()
+	_as_session(Session.Role.SOLO, 1)
+
+
+## The run's own result, told to the room -- a different line for a win than a loss, the fresh
+## `Tour.unlocks.reputation` (already bumped by `Tour._end_run`'s own `unlocks.record_run` before
+## this ever runs) read straight into it rather than a stale copy.
+func _test_tour_run_ended_announces_the_result_to_the_room() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	_as_session(Session.Role.HOST, 1)
+
+	var heard: Array[String] = []
+	var hear := func(t: String) -> void: heard.append(t)
+	Session.notice.connect(hear)
+
+	Tour.unlocks.reputation = 4
+	studio._on_tour_run_ended(true)
+	check("a win announces the result with the fresh reputation (%s)" % [heard],
+			not heard.is_empty() and heard.back().contains("4")
+			and heard.back().to_lower().contains("hit"))
+
+	heard.clear()
+	Tour.unlocks.reputation = 4
+	studio._on_tour_run_ended(false)
+	check("a loss announces too, a different line (%s)" % [heard],
+			not heard.is_empty() and heard.back().contains("4")
+			and not heard.back().to_lower().contains("hit"))
+
+	Session.notice.disconnect(hear)
 	remove_child(studio)
 	studio.free()
 	_as_session(Session.Role.SOLO, 1)

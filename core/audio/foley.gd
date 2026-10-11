@@ -672,6 +672,54 @@ static func tour_stinger() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A run's own end, won: bigger than `tour_stinger`'s three notes -- a four-note rising run
+## (C5 E5 G5 C6), each voiced with a fifth stacked on top of it so it reads as a room cheering
+## back rather than one horn, the last note held rather than struck and gone.
+static func win_fanfare() -> AudioStreamWAV:
+	return _cached("win_fanfare", func() -> AudioStreamWAV:
+		var s := _silence(1.3)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 821
+		var notes: Array[float] = [523.25, 659.25, 783.99, 1046.5]
+		for note_i in notes.size():
+			var hz: float = notes[note_i]
+			var at: float = 0.05 + note_i * 0.09
+			var start := int(at * RATE)
+			var sustain := note_i == notes.size() - 1
+			for i in range(start, s.size()):
+				var t := float(i - start) / float(RATE)
+				var decay := 0.9 if sustain else 0.22
+				var env := exp(-t / decay)
+				if env < 0.001:
+					break
+				s[i] += 0.09 * env * (sin(TAU * hz * t) + 0.6 * sin(TAU * hz * 1.5 * t))
+		for k in 8:
+			var at: float = 0.02 + rng.randf_range(0.0, 0.1)
+			_impulse(s, at, rng.randf_range(0.05, 0.1), 0.02, rng.randf_range(2000.0, 3600.0), 827 + k)
+		_lowpass(s, 10000.0)
+		return _wav(s, false))
+
+
+## The other half of the same moment, lost: two notes falling (G4, D4) instead of four rising,
+## over almost as soon as they start -- the air coming out of the room instead of a cheer.
+static func loss_sting() -> AudioStreamWAV:
+	return _cached("loss_sting", func() -> AudioStreamWAV:
+		var s := _silence(0.6)
+		var notes: Array[float] = [392.0, 293.66]
+		for note_i in notes.size():
+			var hz: float = notes[note_i]
+			var at: float = 0.03 + note_i * 0.12
+			var start := int(at * RATE)
+			for i in range(start, s.size()):
+				var t := float(i - start) / float(RATE)
+				var env := exp(-t / 0.18)
+				if env < 0.001:
+					break
+				s[i] += 0.11 * env * sin(TAU * hz * t)
+		_lowpass(s, 4000.0)
+		return _wav(s, false))
+
+
 ## An instrument falling out of the case, tossed onto the floor: the lid's own low thump and a
 ## rattle of whatever else is in there, with none of `tour_stinger`'s three-note flourish --
 ## that moment already has its own sound, the burst itself; this one is smaller and happens

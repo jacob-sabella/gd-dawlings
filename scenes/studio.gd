@@ -2022,13 +2022,22 @@ func _on_tour_run_started() -> void:
 			tour_case.show_seed(Tour.run.attempt_seed)
 
 
-## The run is over, won or lost: the case is chained again, its tally brought up to date. Fires
-## on the host the moment `Tour._end_run` runs; a guest's own case hears it from the emptied
-## `Session.tour` instead (`_on_session_tour_changed`), since `Tour`'s own signals never fire
-## there (see core/tour/tour.gd's class note).
-func _on_tour_run_ended(_won: bool) -> void:
+## The run is over, won or lost: the case is chained again, its tally brought up to date, and the
+## result told to the whole room (`Session.tell_room`, not `Session.notice.emit` -- this is
+## host-only, unlike a chaos telegraph's every-peer-computes-it-itself pattern, so it has to
+## reach a guest the same way a take's own placement notice does). Fires on the host the moment
+## `Tour._end_run` runs -- never on a guest (see core/tour/tour.gd's class note) -- which is
+## exactly why `tell_room` rather than `notice.emit` alone: a guest's own case still catches up
+## from the emptied `Session.tour` (`_on_session_tour_changed`) below, but the result itself has
+## no wire state of its own to read once the run is gone, only this one broadcast.
+func _on_tour_run_ended(won: bool) -> void:
 	if tour_case != null:
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+		Foley.play(tour_case, Foley.win_fanfare() if won else Foley.loss_sting())
+	var line := "The gig's a hit. Reputation %d." % Tour.unlocks.reputation
+	if not won:
+		line = "That one got away. Reputation %d." % Tour.unlocks.reputation
+	Session.tell_room(line)
 	# Back in the case: every instrument the run spilled stops existing here, the host's own
 	# half of the reset (a guest's copies go with it too, off the emptied `Session.tour` --
 	# `_sync_spilled`, through `_on_session_tour_changed` below).

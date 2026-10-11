@@ -1083,7 +1083,36 @@ gloriously wrong and you survive anyway.
   camera in this framing, so the rattle is what the test carries, the notice is what the shot
   carries.
 - **Stakes and rewards.** Reputation that buys something (venues, cosmetics on the ghost, a
-  second life), a loss that costs something, a win that is announced to the room.
+  second life), a loss that costs something. One piece done -- **a win that is announced to the
+  room. Done 2026-10-11.** `reputation` has existed on `TourUnlocks` since the run-saving work
+  that gave it `runs`/`wins` -- bumped a run a win, saved, never once shown to anyone. A run's
+  own end used to say nothing to the room either: `scenes/studio.gd`'s `_on_tour_run_ended`
+  dropped its own `won` parameter on the floor (`_won`, unread) -- the case re-chained and its
+  tally brought up to date, nothing more. Now it reads: `Session.tell_room` (the same host-only
+  broadcast a take's own placement or a file brought in already uses, not
+  `Session.notice.emit` alone -- this is host-only, unlike a chaos telegraph's every-peer-
+  computes-it-itself pattern, and a guest has no wire state left to read the result off once the
+  run is gone, only this one broadcast) tells the whole room "The gig's a hit. Reputation %d." or
+  "That one got away. Reputation %d.", the fresh number read straight off `Tour.unlocks`
+  (`_end_run`'s own `unlocks.record_run` already ran by the time this fires). Paired with the
+  other half of this same moment, which is really juice: `Foley.win_fanfare` (new, a four-note
+  rising run voiced in parallel fifths -- bigger than `tour_stinger`'s own three notes, a room
+  cheering back rather than a case bursting open) for a win, `Foley.loss_sting` (new, two notes
+  falling instead, over almost as soon as they start) for a loss, played from the case the same
+  way its burst already is.
+  One test (`_test_tour_run_ended_announces_the_result_to_the_room`): a win's line contains the
+  fresh reputation and reads as a win, a loss's line contains it too and does not. `tools/verify.sh`
+  ends clean (7067 checks, 0 failed); `tools/session_probe.sh` default and `--built-in` both green
+  ([host] 53/0 and 79/0, [guest] 47/0 and 42/0, unchanged -- neither probe runs a Tour run through
+  a real Studio). A new `--tour win` shot state calls the real `_end_run(true)`, not a mock of it,
+  so `run_ended`'s own listeners (the case, the room) fire for real; `shots/tour_win.png` ("The
+  gig's a hit. Reputation 1.") is the record.
+  Not chased, but checked harder this time: `tools/tour_probe.sh`'s flake (noted two iterations
+  back as an 8/4-player thing) turned up at 1 player too, 2 of 3 solo runs -- and reproduces at
+  the same rate on master before this change (also 2 of 3, same failure shape), confirmed by
+  stashing this iteration's own diff and re-running. Not player-count-dependent, not this (or the
+  last) change: a real timing issue in the probe's own real-time multi-process harness, worth its
+  own iteration rather than a guess bolted onto this one.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
   fork, a boss that plays differently from the first.
 - **Scale testing: solo, 4, 8. Done 2026-10-10.** `tools/tour_probe.sh N` (N 1..8) runs a brief

@@ -840,3 +840,12 @@ func force_state_for_shot(stage: StringName) -> void:
 			run.seconds_left = CLOCK_LOW_SECONDS - 0.5
 			_tick_clock_low_shown()
 			_publish()
+		&"win":
+			if run == null:
+				start_run()
+			if run == null:
+				return
+			# The real ending path, not a mock of it: `_end_run(true)` is exactly what a passed
+			# boss brief calls, so `run_ended`'s own listeners (the case's reset, the room's
+			# announcement) fire for real.
+			_end_run(true)
