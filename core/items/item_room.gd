@@ -38,6 +38,8 @@ signal used(item: Item, down: bool)
 signal moved(item: Item)
 ## An instrument played by a hand here (InstrumentItem.played): for the session and the take.
 signal played(item: InstrumentItem, velocity: int, struck: bool)
+## A hand here was refused an item (Item.may_hold, a Tour "marked" spill): for the studio's toast.
+signal refused(item: Item, why: String)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -110,13 +112,31 @@ static func make(kind: StringName) -> Item:
 			return DartItem.new(1)
 		&"dart3":
 			return DartItem.new(2)
+		&"cowbell":
+			return CowbellItem.new()
+		&"woodblock":
+			return WoodblockItem.new()
+		&"pad":
+			return PadItem.new()
 	return null
 
 
+## The kind a spilled instance's own id names, its voice number stripped off: "cowbell2" ->
+## "cowbell", "cowbell" -> "cowbell". An id the shelf itself holds is its own kind, digits and
+## all -- the darts are "dart1".."dart3", and `make` answers to exactly those -- so KINDS is
+## checked first rather than trusting that no shelf id ends in a number.
+static func kind_of(id: StringName) -> StringName:
+	if id in KINDS:
+		return id
+	return StringName(String(id).rstrip("0123456789"))
+
+
 ## What an item of `kind` looks like, and nothing else: no grip, no springs. For a ghost to
-## carry, so a mirror or another person sees what is in your hand.
+## carry, so a mirror or another person sees what is in your hand. `kind` here is an item's own
+## id, which for a spilled instrument's second voice ("cowbell2") is not one `make` answers to
+## directly -- `kind_of` is what makes the carried look-alike right.
 static func look_of(kind: StringName) -> Node3D:
-	var item := make(kind)
+	var item := make(kind_of(kind))
 	if item == null:
 		return null
 	var look := item.body
@@ -139,14 +159,79 @@ func _ready() -> void:
 		item.name = "Item_" + String(kind)
 		items[kind] = item
 		add_child(item)
-		item.used.connect(func(down: bool) -> void: used.emit(item, down))
-		item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
-		item.landed.connect(func() -> void: moved.emit(item))
-		item.worn_changed.connect(func() -> void: moved.emit(item))
-		if item is InstrumentItem:
-			(item as InstrumentItem).played.connect(func(velocity: int, struck: bool) -> void:
-				played.emit(item, velocity, struck))
+		_adopt(item)
 	_rehome()
+
+
+## The signal wiring every item here gets, whether it was here from `_ready` or fell out of the
+## case later (`spawn`): lifted out so both call one thing.
+func _adopt(item: Item) -> void:
+	item.used.connect(func(down: bool) -> void: used.emit(item, down))
+	item.state_changed.connect(func(_s: Item.State) -> void: moved.emit(item))
+	item.landed.connect(func() -> void: moved.emit(item))
+	item.worn_changed.connect(func() -> void: moved.emit(item))
+	if item is InstrumentItem:
+		(item as InstrumentItem).played.connect(func(velocity: int, struck: bool) -> void:
+			played.emit(item, velocity, struck))
+
+
+## A copy of `kind` that is not one of KINDS -- a Tour spill, cowbell or cowbell2 -- given `id`
+## (unique per copy) and a home of its own at `home` (where it lies when lost, not a shelf
+## spot). Idempotent: asking for an id already here just returns it, so a guest that hears of
+## the same spill twice (a republish) does not make a second one.
+func spawn(kind: StringName, id: StringName, home: Transform3D) -> Item:
+	if items.has(id):
+		return items[id]
+	var item := make(kind)
+	if item == null:
+		return null
+	item.id = id
+	item.home = home
+	item.own_home = true
+	item.name = "Item_" + String(id)
+	items[id] = item
+	add_child(item)
+	_adopt(item)
+	item.snap_home()
+	return item
+
+
+## `id` is gone from the room entirely -- a run ending, the case swallowing its spills again.
+## Whoever's hand has it opens first: an item that stops existing is not something to still be
+## holding.
+func despawn(id: StringName) -> void:
+	var item: Item = items.get(id)
+	if item == null:
+		return
+	if item.carried_by != null:
+		item.carried_by.lose_carrying()
+	items.erase(id)
+	remove_child(item)
+	item.queue_free()
+
+
+## Every spawned item's id, not one of KINDS, in the order it fell out of the case: a Dictionary
+## keeps insertion order, and KINDS is always populated first (`_ready`).
+func spawned_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in items:
+		if not (id in KINDS):
+			out.append(id)
+	return out
+
+
+## Tossed out of the case, on the host: lobbed at `to` with a little sideways scatter and a
+## tumble drawn from `seed`, so the same run spills the same way. A guest never calls this --
+## it flies its own copy from the launch `state` carries (`launched_with`, replayed in `apply`),
+## the way any thrown item reaches it.
+func spill(item: Item, from: Vector3, to: Vector3, seed: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var v := lob(from, to, 3.0)
+	var side := Vector3(-v.z, 0.0, v.x).normalized() if Vector2(v.x, v.z).length() > 0.001 else Vector3.RIGHT
+	v += side * rng.randf_range(-0.3, 0.3)
+	var spin := Vector3(rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0), rng.randf_range(-6.0, 6.0))
+	fly(item, from, v, spin, 1)
 
 
 ## The venue is `which`: its toy is that venue's (ToyItem.set_venue).

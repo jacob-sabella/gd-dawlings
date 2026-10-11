@@ -114,6 +114,12 @@ var holds: Dictionary = {}
 ## Whether a hold (by key) can be taken from whoever has it (`take_hold`): the room's items.
 ## Set by the studio; unset, nothing can.
 var takeable: Callable = Callable()
+## Who a hold (by key) is kept for, if anyone: `(key, peer_id) -> int`, 0 when `peer_id` may
+## have it, else the peer it is kept for, whom a refusal names (`_grant`). The host's word on
+## an item marked for one person (Item.bound_to), asked on every claim and take so a hand that
+## was not told -- or did not listen -- is refused all the same. Set by the studio; unset,
+## anything free is anyone's.
+var holdable: Callable = Callable()
 ## The address this session was joined at, for the panel to say back.
 var joined_address: String = ""
 var port: int = DEFAULT_PORT
@@ -1571,9 +1577,14 @@ func _release_remote(key: String) -> void:
 
 ## The arbitration, in full: whoever the host heard from first. Not the lower peer id, not the
 ## later grab -- a rule nobody in the room can see is a rule that feels like the desk is broken.
-## "Sam already had it" is a rule everyone can see, because Sam's hand is on it.
+## "Sam already had it" is a rule everyone can see, because Sam's hand is on it. The one other
+## refusal is `holdable`'s: a thing kept for somebody else is refused the same way, naming them.
 func _grant(peer_id: int, key: String) -> void:
 	var holder: int = holds.get(key, 0)
+	if holder == 0 and holdable.is_valid():
+		var kept_for := int(holdable.call(key, peer_id))
+		if kept_for != 0 and kept_for != peer_id:
+			holder = kept_for
 	if holder != 0 and holder != peer_id:
 		if peer_id == local_peer_id:
 			hold_refused.emit(key, holder)
@@ -1592,6 +1603,11 @@ func _hand_over(peer_id: int, key: String) -> void:
 	if not takeable.is_valid() or not takeable.call(key) or holds.get(key, 0) == peer_id:
 		_grant(peer_id, key)
 		return
+	if holdable.is_valid():
+		var kept_for := int(holdable.call(key, peer_id))
+		if kept_for != 0 and kept_for != peer_id:
+			_grant(peer_id, key)
+			return
 	holds[key] = peer_id
 	_send_holds()
 

@@ -794,8 +794,79 @@ gloriously wrong and you survive anyway.
   mic in the test suite is off-limits -- so a vocal double stays mixed only, never played. A part
   judged on an audio take's presence/level on Vox Dbl is the natural next one, once that is safe
   to measure without a real microphone.
-- **Instruments as draft cards.** The draft offers instruments and desk tools, not only
-  modifiers: a tambourine for the shaker lane, a second fader hand, a tuner.
+- **Instruments as draft cards. Done 2026-10-10.** Three new kinds -- cowbell, woodblock, drum
+  pad (core/items/cowbell_item.gd, woodblock_item.gd, pad_item.gd, ~80 lines each off
+  InstrumentItem, models from tools/blender/spill_percussion.py, sounds from
+  Foley.cowbell/woodblock/pad) -- spill out of the case as draft boons (`spill_cowbell` etc.,
+  repeatable cards) and seed a big band's first brief (TourParts.first_spill: band 4 gets one,
+  5 two, 6-8 all three). Two findings shaped it: (1) the judge tells parts apart only by
+  (channel, pitch) on the shared Stage lane, so a second copy of a kind is a decoy unless it
+  records a different pitch -- every kind got a second voice ("the low one", its own GM pitch:
+  cowbell 56/68, woodblock 76/77, pad 47/45, `InstrumentItem.voice`/`pitch_scale`), giving 3
+  room + 3 kinds x 2 voices = 9 instruments, enough for 8 parts. (2) the host never hears its
+  own `Session.tour_changed` (`publish_tour` only RPCs out), so the host spawns a spilled
+  instrument off a new `Tour.instrument_spilled` signal while a guest spawns off
+  `Session.tour`'s `instruments` array (`TourRun.instruments`/`instrument_curses`/
+  `instrument_bound`, `scenes/studio.gd`'s `_spill_instrument`/`_sync_spilled`) -- the same
+  split `_on_tour_run_ended`/`_on_session_tour_changed` already used for the case itself. Cursed
+  spills ride along: sour/low detune the sound only (`curse_pitch`, the recorded pitch stays
+  true so the part is still winnable); a marked spill binds one peer (`Item.bound_to`/
+  `may_hold`, refused in `Interactor.pick_up` and, on the host, by `Session._grant` itself
+  through a new opt-in `Session.holdable` callable the studio sets -- unset, holds behave as
+  before -- so a hand that was not told is refused all the same; the mark cleared when that
+  peer leaves, in any run state). Twelve new catalogue parts (core/tour/tour_parts.gd), six
+  new cards (core/tour/deck.gd), `TourDeck.draw` now takes `band_size`/`spilled` so a band
+  bigger than the room's own three is always offered an instrument while it still wants one.
+  Cut: a kazoo-ish second keys voice -- `GuestMidi` lands all keys on one channel and the
+  keytar part is "channel -1 = any but 9", so a second keys instrument cannot be told from the
+  keytar without touching the recorders, which is engine-ish, not opt-in; parked below. Found
+  on the way: two Tour tests that built a Studio and `await`ed a frame before their own session
+  setup, run back to back, interleaved badly enough (GDScript resumes a suspended coroutine only
+  when its awaited signal fires, so a test dispatched in between can run its whole body while an
+  earlier one is still paused) to leave a stray `Session.role` visible to a synchronous test
+  sandwiched between them, and once to a freed `DAW.backend` outliving the `DAW.use()` that
+  should have replaced it -- both tests now free their Studio immediately (`remove_child` +
+  `free()`) instead of `queue_free` + `await`, matching `_test_only_the_host_can_break_the_case`'s
+  existing pattern, and a part-judging test now sets its own session role explicitly rather than
+  trusting whatever a neighbour left. `tools/verify.sh` ends clean; `shots/tour_spill.png`
+  (band 8, the open case with a cowbell and a woodblock landed around it), `shots/tour_draft.png`
+  (a Drum Pad boon offered) and `shots/tour_instrument.png` (a cowbell close up) are the
+  record; `shots/tour_brief_band8.png` shows the six-part, four-flaw card at 11pt. The review
+  pass then found and fixed: `ItemRoom.kind_of` stripped the digit off the darts' own ids
+  ("dart1" -> "dart"), so a ghost carrying a dart would have carried nothing (KINDS ids are now
+  left alone); the host enforced a mark only by a `go_home` in `Presence._apply_items` that the
+  same pass's `follow` undid a line later (gone, replaced by the `_grant` refusal above);
+  `Tour._on_participant_left` returned early outside a brief, so a leaver during the draft kept
+  their mark on the run while the host's own item lost it; guests got neither the case's toss
+  nor the toast on a spill (both now ride `_sync_spilled` as a guest spawns its copy); and a
+  spill during `_start_brief` published a half-laid-out run (new flaws over the old brief's
+  parts) a frame before the brief's own publish (held back by `_laying_out` now). Not chased:
+  a brief whose song fails to load mid-run nulls the run without `run_ended`, which would leave
+  the host's spilled items in the room until the next run ends -- the pre-existing failure path,
+  one `_end_run` would also count as a loss.
+- **A second tambourine/shaker from the case.** The room's own three instruments get no second
+  voice today -- only the three spill kinds do. A cowbell-shaped curse spill could instead hand
+  out "the room's SECOND shaker", voiced the same way, once the band is big enough to want one.
+- **Chaos: a marked instrument's holder leaves mid-bar.** `Tour._on_participant_left` clears
+  `run.instrument_bound` and `scenes/studio.gd`'s own handler clears the real item's `bound_to`,
+  but nothing currently re-offers it as a part if it was already assigned and dropped -- it
+  becomes an ordinary unmarked instrument sitting wherever it fell, exactly like any other open
+  part. Worth a pass to confirm that reads as "freed up", not "lost", on the HUD.
+- **Per-instance pitch table lives twice.** A spilled instrument's GM pitch is declared once in
+  the real item (`CowbellItem.PITCHES` etc.) and once in the part catalogue
+  (`TourParts._build`'s literal pitches) -- kept honest today only by
+  `_test_tour_new_parts_are_judged_by_their_instruments_pitch`'s agreement check. Fold into one
+  place (the item could be the single source, with `TourParts` asking it) if a fourth kind ever
+  joins the case.
+- **Way more instruments, each medium its own.** (The user, 2026-10-10.) A wide instrument
+  catalogue -- hand percussion, mallets, a drum kit, blown things, strings, noise-makers --
+  limited only by what each medium can actually play: a desktop mouse (clicks and shakes, one
+  hand), a headset with controllers (two hands, real strokes and velocity), a headset with
+  tracked hands in passthrough (pinches and taps, no buttons), and a browser build if one is
+  ever exported (no WebXR today; the exports are Linux and Windows). Each instrument says which
+  media can play it and how (InstrumentItem's stroke/click model, one per medium), parts are
+  drawn only from instruments the holder's medium can play, and the draft offers what the band
+  present can use. Several iterations' worth; start with the gestures each medium already has.
 - **Seed randomness.** Every draw from the run's seed (the song's draw is; the draft's
   muted_track still rolls an unseeded RNG), a seed shown on the case so a run can be replayed.
 - **Chaos events.** Mid-brief trouble: a track drops out, the tempo drifts, a plugin dies, the
@@ -826,6 +897,12 @@ gloriously wrong and you survive anyway.
   at 124 BPM) are the tightest in the catalogue, sized so flailing fails a half-beat grid; with
   a mouse-flicked shaker they may be the one part a solo player cannot clear. Play-test before
   loosening them, or draw a solo player's one part from the tambourine and keytar only.
+- Keep both sound curses on a spilled instrument (sour at -1.5 semitones is subtle on a cowbell;
+  low at an octave is the obvious joke) or just the one?
+- Should a spilled instrument persist across runs as an unlock (stays in the room from then on)
+  rather than go back in the case when the run ends, the way the rest of the gear resets?
+- Is a curse spill really a curse for a big band -- it is more to do, which on a crowded card is
+  what they came for. Maybe it only reads as a curse solo or in a duo.
 
 ## Parked
 

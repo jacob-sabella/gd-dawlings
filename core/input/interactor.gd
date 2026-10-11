@@ -127,6 +127,11 @@ func _catch() -> void:
 func pick_up(item: Item) -> void:
 	if carrying == item:
 		return
+	if not item.may_hold():
+		var room := ItemRoom.of(item)
+		if room != null:
+			room.refused.emit(item, item.bound_name)
+		return
 	if item.state == Item.State.HELD and item.pocket >= 0 and item.carried_by != null \
 			and pockets != null and pockets.at(item.pocket) == item:
 		# Out of our own pocket, by reaching for it on the mirror's ghost: as taking it out, and

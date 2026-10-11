@@ -18,7 +18,49 @@ const INSTRUMENTS := 3
 ## to whoever on the roster holds the fewest parts right now.
 const PART_GRACE := 8.0
 
+## The room's own three, always there: INSTRUMENTS == ROOM.size().
+const ROOM: Array[StringName] = [&"shaker", &"tambourine", &"keytar"]
+## Kinds a draft card can still spill out of the case, each with two voices (`COPIES`) -- see
+## docs/loop_backlog.md's "Tour" section for why two: the judge tells parts apart by
+## (channel, pitch), so a second copy of a kind needs its own pitch to be a job rather than a
+## decoy, and a second voice ("the low one") is where that pitch comes from.
+const SPILL_KINDS: Array[StringName] = [&"cowbell", &"woodblock", &"pad"]
+const COPIES := 2
+
 static var _cached: Array[TourPart] = []
+
+
+## The id of the `n`th copy of `kind` out of the case: 0 is the kind's own id, 1 is "the low
+## one", named by appending its one-based voice number.
+static func instance_id(kind: StringName, n: int) -> StringName:
+	return kind if n == 0 else StringName(String(kind) + str(n + 1))
+
+
+## The kind a spilled instance's own id names, its voice number stripped off.
+static func kind_of(id: StringName) -> StringName:
+	return StringName(String(id).rstrip("0123456789"))
+
+
+## How many copies of `kind` have already been spilled, by its instance ids in `spilled`
+## (`TourRun.instruments`).
+static func copies_of(kind: StringName, spilled: Array[StringName]) -> int:
+	var n := 0
+	for id in spilled:
+		if kind_of(id) == kind:
+			n += 1
+	return n
+
+
+## What a big band's first brief already has out of the case, so it starts with enough to do
+## rather than spending its whole first brief on flaws alone: `clampi(band_size - ROOM.size(),
+## 0, SPILL_KINDS.size())` kinds, drawn from `SPILL_KINDS` shuffled with `rng` -- band 4 gets
+## one, 5 gets two, 6 and up gets all three; 3 and under, none (the room's own three already
+## cover them).
+static func first_spill(rng: RandomNumberGenerator, band_size: int) -> Array[StringName]:
+	var n := clampi(band_size - ROOM.size(), 0, SPILL_KINDS.size())
+	var pool := SPILL_KINDS.duplicate()
+	_shuffle(pool, rng)
+	return pool.slice(0, n)
 
 
 static func all() -> Array[TourPart]:
@@ -35,16 +77,20 @@ static func by_id(id: StringName) -> TourPart:
 
 
 ## Solo and a duo get one part each to hold, one job at a time, so a run alone or with a friend
-## stays winnable; three and up, one part per instrument the room has. `is_boss` changes nothing
-## -- see INSTRUMENTS -- but is kept so this reads the same as TourFlaws.count_for at the call site.
-static func count_for(band_size: int, _is_boss: bool) -> int:
-	return mini(maxi(band_size, 1), INSTRUMENTS)
+## stays winnable; three and up, one part per instrument there is to hold -- the room's own
+## three by default, or more once `available` (TourRun.instruments, added to ROOM at the call
+## site) says the case has spilled some. `is_boss` changes nothing -- there being nothing more
+## to hand a fourth, ninth... job to beyond what is actually in the room -- but is kept so this
+## reads the same as TourFlaws.count_for at the call site.
+static func count_for(band_size: int, _is_boss: bool, available: int = INSTRUMENTS) -> int:
+	return mini(maxi(band_size, 1), available)
 
 
-## `count` parts, never two on the same instrument (there being only one of each to hold):
-## `all()` shuffled with `rng`, walked in order, each one skipped once its instrument is taken.
-static func draw(rng: RandomNumberGenerator, count: int) -> Array[TourPart]:
-	var pool := all().duplicate()
+## `count` parts, never two on the same instance (there being only one of each to hold):
+## `all()` filtered to instruments in `available`, shuffled with `rng`, walked in order, each
+## one skipped once its instrument is taken.
+static func draw(rng: RandomNumberGenerator, count: int, available: Array[StringName] = ROOM) -> Array[TourPart]:
+	var pool := all().filter(func(p: TourPart) -> bool: return p.instrument in available)
 	_shuffle(pool, rng)
 	var picked: Array[TourPart] = []
 	var taken := {}
@@ -203,7 +249,51 @@ static func _build() -> Array[TourPart]:
 	keys_one_three.clean = 0.6
 	out.append(keys_one_three)
 
+	out.append(_part(&"cowbell_one", &"cowbell", "COWBELL: one clank on the one, every bar",
+			PackedInt32Array([56]), PackedFloat64Array([0.0]), 0.0, 0.2, 4, 0.6))
+	out.append(_part(&"cowbell_four", &"cowbell", "COWBELL: every beat, more cowbell",
+			PackedInt32Array([56]), PackedFloat64Array(), 1.0, 0.2, 12, 0.7))
+	out.append(_part(&"lowbell_backbeat", &"cowbell2", "LOW COWBELL: 2 and 4, under the tambourine",
+			PackedInt32Array([68]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.2, 8, 0.7))
+	out.append(_part(&"lowbell_ands", &"cowbell2", "LOW COWBELL: the \"and\" of 2 and the \"and\" of 4",
+			PackedInt32Array([68]), PackedFloat64Array([1.5, 3.5]), 0.0, 0.15, 8, 0.7))
+	out.append(_part(&"block_offbeats", &"woodblock", "WOODBLOCK: the \"and\" of every beat",
+			PackedInt32Array([76]), PackedFloat64Array([0.5, 1.5, 2.5, 3.5]), 0.0, 0.15, 12, 0.7))
+	out.append(_part(&"block_three", &"woodblock", "WOODBLOCK: one knock on the three",
+			PackedInt32Array([76]), PackedFloat64Array([2.0]), 0.0, 0.2, 4, 0.6))
+	out.append(_part(&"lowblock_one_three", &"woodblock2", "LOW WOODBLOCK: knocks on 1 and 3",
+			PackedInt32Array([77]), PackedFloat64Array([0.0, 2.0]), 0.0, 0.2, 8, 0.7))
+	out.append(_part(&"lowblock_eighths", &"woodblock2", "LOW WOODBLOCK: every eighth, a ticking clock",
+			PackedInt32Array([77]), PackedFloat64Array(), 0.5, 0.12, 24, 0.7))
+	out.append(_part(&"pad_four", &"pad", "DRUM PAD: a tom on every beat",
+			PackedInt32Array([47]), PackedFloat64Array(), 1.0, 0.2, 12, 0.7))
+	out.append(_part(&"pad_backbeat", &"pad", "DRUM PAD: hit 2 and 4 with the snare",
+			PackedInt32Array([47]), PackedFloat64Array([1.0, 3.0]), 0.0, 0.2, 8, 0.7))
+	out.append(_part(&"lowpad_one", &"pad2", "LOW PAD: one boom on the one",
+			PackedInt32Array([45]), PackedFloat64Array([0.0]), 0.0, 0.2, 4, 0.6))
+	out.append(_part(&"lowpad_one_three", &"pad2", "LOW PAD: booms on 1 and 3",
+			PackedInt32Array([45]), PackedFloat64Array([0.0, 2.0]), 0.0, 0.2, 8, 0.7))
+
 	return out
+
+
+## One part on channel 9 (the hand percussion's), the shared shape of the twelve spilled-kit
+## parts above -- a one-line builder so the table in docs/loop_backlog.md's "Tour" section is
+## the catalogue, not twelve repeats of the same eight assignments.
+static func _part(id: StringName, instrument: StringName, line: String, pitches: PackedInt32Array,
+		beats: PackedFloat64Array, grid: float, window: float, need: int, clean: float) -> TourPart:
+	var p := TourPart.new()
+	p.id = id
+	p.instrument = instrument
+	p.line = line
+	p.channel = 9
+	p.pitches = pitches
+	p.beats = beats
+	p.grid = grid
+	p.window = window
+	p.need = need
+	p.clean = clean
+	return p
 
 
 static func _shuffle(arr: Array, rng: RandomNumberGenerator) -> void:

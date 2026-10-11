@@ -12,6 +12,10 @@ var id: StringName
 var title: String = ""
 var description: String = ""
 var is_curse: bool = false
+## An instrument card: a run can draft the same one again (a band bigger than the room's
+## instruments wants more than one), where every other card is a one-time pick a run never
+## offers twice (`TourDeck.draw`'s `exclude`).
+var repeatable: bool = false
 ## Called with the run so `apply` can read/write `TourRun` fields; the DAW side, if any, is
 ## bound into this at construction (see TourDeck.all_cards).
 var _effect: Callable = Callable()

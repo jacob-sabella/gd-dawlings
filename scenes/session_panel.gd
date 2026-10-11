@@ -153,6 +153,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	# Below a Tour run's card, not on it: the card sits where the notices do, and three
+	# instruments falling out of the case at once covered the brief they were for. Every
+	# frame, since the card is laid out a frame after it is shown and grows with its lines.
+	_toasts.offset_top = maxf(72.0, Tour.hud_bottom + 12.0)
 	if not is_open():
 		return
 	_fit_height()

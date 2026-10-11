@@ -282,6 +282,12 @@ func _ready() -> void:
 	_test_item_room_target_struck_finds_the_nearest_one_in_range()
 	_test_only_the_host_can_break_the_case()
 	_test_tour_venue_solids_include_the_case()
+	_test_tour_spill_puts_a_real_item_in_the_room()
+	_test_tour_guest_spawns_spilled_instruments_from_the_run()
+	_test_tour_new_parts_are_judged_by_their_instruments_pitch()
+	_test_tour_marked_instrument_refuses_another_hand()
+	_test_tour_parts_count_the_instruments_in_the_room()
+	_test_tour_deck_offers_instruments_to_a_big_band()
 
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
@@ -14933,6 +14939,22 @@ func _test_tour_card_apply_uses_daw_verbs_only() -> void:
 			c.apply(run)
 	check("loose_tempo touches only run state, not the DAW", is_equal_approx(run.tempo_tolerance_mult, 1.5))
 
+	# A spill card's effect runs through `Tour.spill` against the global `Tour.run` (the same
+	# object `run` is, once a brief's own `card.apply(run)` is the one calling it) rather than
+	# the DAW: no new track, no fx, nothing muted -- only the run's own `instruments` moves.
+	var tracks_before_spill := DAW.state.track_indices().size()
+	var fx_before_spill := DAW.state.track(first_track).plugins().size()
+	_as_session(Session.Role.HOST, 1)
+	Tour.run = run
+	for c in TourDeck.all_cards():
+		if c.id == &"spill_cowbell":
+			c.apply(run)
+	Tour.run = null
+	_as_session(Session.Role.SOLO, 1)
+	check("spill_cowbell only touches run state (%s)" % [run.instruments], run.instruments == [&"cowbell"])
+	check("and never the DAW", DAW.state.track_indices().size() == tracks_before_spill
+			and DAW.state.track(first_track).plugins().size() == fx_before_spill)
+
 	DAW.use(previous, false)
 
 
@@ -15822,3 +15844,305 @@ func _test_tour_venue_solids_include_the_case() -> void:
 		check("the %s's solids include the Tour case" % id, found == venue.prop_shelf_solid())
 		remove_child(venue)
 		venue.free()
+
+
+## Instruments spilling out of the case: `Tour.spill` puts a real item in the host's own room
+## (`Tour.instrument_spilled`, wired in `_build_tour_case`), the second copy out is the low
+## voice, a third finds nothing left to give, the run remembers all of it through a round trip,
+## and the run ending takes every spilled copy back out of the room.
+func _test_tour_spill_puts_a_real_item_in_the_room() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	_as_session(Session.Role.HOST, 1)
+	Tour.run = TourRun.new()
+	Tour.run.state = TourRun.State.BRIEF
+
+	check("the first cowbell out of the case is the plain one", Tour.spill(&"cowbell") == &"cowbell")
+	check("the run remembers it", Tour.run.instruments == [&"cowbell"])
+	var item: Item = studio.items.items.get(&"cowbell")
+	check("a real item in the room, tossed out flying", item is CowbellItem and item.is_flying())
+	var room_items: Dictionary = studio.room_state()["items"]
+	check("and an 8-wide entry rides the room (%s)" % [room_items.get(&"cowbell")],
+			room_items.has(&"cowbell") and (room_items[&"cowbell"] as Array).size() == 8)
+
+	check("the second is the low voice", Tour.spill(&"cowbell") == &"cowbell2")
+	var low: CowbellItem = studio.items.items.get(&"cowbell2")
+	check("voice 1, pitched the low agogo (%d)" % low.pitch(), low.voice == 1 and low.pitch() == 68)
+
+	check("a third finds no copies left", Tour.spill(&"cowbell") == &"")
+
+	# A peer leaving unmarks what was theirs in any run state, not only mid-brief: a leaver
+	# during the draft must not leave a brick behind.
+	Tour.run.instrument_bound[1] = 7
+	Tour.run.state = TourRun.State.DRAFTING
+	Tour._on_participant_left(7)
+	check("a leaver's mark is cleared even while drafting", Tour.run.instrument_bound == [0, 0])
+	Tour.run.state = TourRun.State.BRIEF
+
+	var back := TourRun.from_dict(Tour.run.to_dict())
+	check("instruments round-trip through the dict", back.instruments == Tour.run.instruments)
+	check("so do their curses and who they are bound to",
+			back.instrument_curses == Tour.run.instrument_curses
+			and back.instrument_bound == Tour.run.instrument_bound)
+
+	studio._on_tour_run_ended(false)
+	check("the run ending clears both out of the room",
+			not studio.items.items.has(&"cowbell") and not studio.items.items.has(&"cowbell2"))
+	check("and out of the published room", not (studio.room_state()["items"] as Dictionary).has(&"cowbell"))
+
+	Tour.run = null
+	remove_child(studio)
+	studio.free()
+	_as_session(Session.Role.SOLO, 1)
+
+
+## A guest never hears `Tour.instrument_spilled` (host-only, see Tour's own class note) -- it
+## learns the same thing off `Session.tour`'s `instruments`, through `_sync_spilled`.
+func _test_tour_guest_spawns_spilled_instruments_from_the_run() -> void:
+	DAW.use(OfflineBackend.new())
+	_as_session(Session.Role.GUEST, 5)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+
+	var notices: Array[String] = []
+	var hear := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(hear)
+	var run := TourRun.new()
+	run.state = TourRun.State.BRIEF
+	run.instruments = [&"woodblock", &"pad"]
+	run.instrument_curses = [&"", &"bound"]
+	run.instrument_bound = [0, 3]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+
+	var block: Item = studio.items.items.get(&"woodblock")
+	var pad: Item = studio.items.items.get(&"pad")
+	check("a guest spawns both spilled instruments off the run", block is WoodblockItem and pad is PadItem)
+	check("the marked one is bound to its peer, by name",
+			pad.bound_to == 3 and pad.bound_name == Session.name_of(3))
+	# Counted by text rather than in total: a Studio an earlier synchronous test queue_freed is
+	# still wired to `Session.tour_changed` until the frame ends, and says the same things.
+	var block_told := func() -> int:
+		return notices.filter(func(t: String) -> bool: return t == "A woodblock fell out of the case.").size()
+	var pad_told := func() -> int:
+		return notices.filter(func(t: String) -> bool:
+			return t.begins_with("A drum pad fell out of the case, marked for")).size()
+	check("and is told of each, like the host is (%s)" % [notices],
+			block_told.call() >= 1 and pad_told.call() == block_told.call())
+	var told_before: Array = [block_told.call(), pad_told.call()]
+
+	# The mark leaves with its peer (Tour._on_participant_left, published): a guest told again
+	# unbinds its own copy.
+	run.instrument_bound = [0, 0]
+	Session.tour = run.to_dict()
+	Session.tour_changed.emit()
+	check("a mark cleared in the run is cleared on the item", pad.bound_to == 0 and pad.bound_name == "")
+	check("without telling of the spill twice", [block_told.call(), pad_told.call()] == told_before)
+
+	Session.tour = {}
+	Session.tour_changed.emit()
+	check("the run ending takes them with it",
+			not studio.items.items.has(&"woodblock") and not studio.items.items.has(&"pad"))
+	Session.notice.disconnect(hear)
+
+	remove_child(studio)
+	studio.free()
+	_as_session(Session.Role.SOLO, 1)
+
+
+## The twelve new parts are judged exactly like the original seven (TourMeasure.Rhythm, by
+## channel and pitch, not by who played them), and every spilled kind's cataloged pitch agrees
+## with the real item's own `pitch()` -- the one fact the judge and the room must never disagree
+## on, kept honest here rather than only by eye (see docs/loop_backlog.md's "Tour" section).
+func _test_tour_new_parts_are_judged_by_their_instruments_pitch() -> void:
+	# `insert_midi_take` goes nowhere without authority, so this is explicit rather than
+	# trusting whatever role an earlier test left behind.
+	_as_session(Session.Role.SOLO, 1)
+	var previous := DAW.backend
+	var backend := OfflineBackend.new()
+	DAW.use(backend, false)
+	backend.open({})
+	TourProject.load(TourProject.song_for(TourBriefs.brief(0), 100.0, [], RandomNumberGenerator.new()), backend)
+	var beat := 60.0 / 100.0
+	var rhythm := TourMeasure.Rhythm.new()
+
+	var on_grid: Array = []
+	for k in 4:
+		var on: float = (k * 4.0) * beat
+		on_grid.append([on, on + 0.05, 56, 100, HitRecorder.CHANNEL])
+	DAW.insert_midi_take(TourProject.STAGE_TRACK, on_grid[0][0], on_grid.back()[1] + 1.0, on_grid, "cowbell")
+
+	var cowbell_one := TourParts.by_id(&"cowbell_one")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, cowbell_one)
+	var r := rhythm.result()
+	check("four clanks on the one clear cowbell_one (%s)" % [r], cowbell_one.played(r))
+	var cowbell_four := TourParts.by_id(&"cowbell_four")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, cowbell_four)
+	check("but not cowbell_four -- not enough of them", not cowbell_four.played(rhythm.result()))
+	var lowbell_backbeat := TourParts.by_id(&"lowbell_backbeat")
+	rhythm.start(TourProject.STAGE_TRACK, 0.0, lowbell_backbeat)
+	check("nor lowbell_backbeat -- wrong pitch", not lowbell_backbeat.played(rhythm.result()))
+
+	DAW.state.track(TourProject.STAGE_TRACK).items.clear()
+	DAW.use(previous, false)
+
+	var pairs := [[&"cowbell_one", CowbellItem.new(), 0], [&"lowbell_backbeat", CowbellItem.new(), 1],
+			[&"block_offbeats", WoodblockItem.new(), 0], [&"lowblock_one_three", WoodblockItem.new(), 1],
+			[&"pad_four", PadItem.new(), 0], [&"lowpad_one", PadItem.new(), 1]]
+	for pair in pairs:
+		var part: TourPart = TourParts.by_id(pair[0])
+		var item: InstrumentItem = pair[1]
+		item.voice = pair[2]
+		check("%s's catalogued pitch (%s) agrees with the real item's (%d)" % [pair[0], part.pitches, item.pitch()],
+				part.pitches.size() == 1 and part.pitches[0] == item.pitch())
+		item.free()
+
+
+## `Interactor.pick_up` refuses an item marked for somebody else (`Item.may_hold`), and the room
+## says so (`ItemRoom.refused`) -- the hand it is marked for takes it exactly as any other item.
+func _test_tour_marked_instrument_refuses_another_hand() -> void:
+	var room := ItemRoom.new()
+	add_child(room)
+	room.local_peer = func() -> int: return 5
+	var item := room.spawn(&"cowbell", &"cowbell", Transform3D.IDENTITY)
+	item.bound_to = 2
+	item.bound_name = "Grace"
+
+	var refused: Array = []
+	room.refused.connect(func(it: Item, why: String) -> void: refused.append([it.id, why]))
+	var hand := Interactor.new()
+	hand.pick_up(item)
+	check("a hand that is not who it is marked for is refused, and the room says whose it is",
+			item.carried_by == null and refused == [[&"cowbell", "Grace"]])
+
+	room.local_peer = func() -> int: return 2
+	hand.pick_up(item)
+	check("but the hand it is marked for takes it", item.carried_by == hand)
+
+	# The host's own arbitration, not only the hand's: a claim from the wrong peer is refused
+	# (`Session.holdable`, set by the studio to the item's `bound_to`), naming whose it is.
+	_as_session(Session.Role.HOST, 1)
+	var refusals: Array = []
+	var hear := func(key: String, holder: int) -> void: refusals.append([key, holder])
+	Session.hold_refused.connect(hear)
+	Session.holdable = func(key: String, _peer: int) -> int:
+		return item.bound_to if key == item.network_key() else 0
+	Session._grant(5, item.network_key())
+	check("the host refuses a claim on a marked item from any other peer",
+			not Session.holds.has(item.network_key()))
+	Session._grant(1, item.network_key())
+	check("its own hand too, and is told whose it is (%s)" % [refusals],
+			not Session.holds.has(item.network_key()) and refusals == [[item.network_key(), 2]])
+	Session._grant(2, item.network_key())
+	check("but the peer it is marked for is granted it", Session.holds.get(item.network_key(), 0) == 2)
+	item.bound_to = 0
+	Session.holds.clear()
+	Session._grant(5, item.network_key())
+	check("unmarked, anyone's", Session.holds.get(item.network_key(), 0) == 5)
+	Session.hold_refused.disconnect(hear)
+	Session.holdable = Callable()
+	_as_session(Session.Role.SOLO, 1)
+
+	# A guest's own copy of the shelf: the darts are KINDS ids that end in a digit, and the
+	# ghost's look-alike of one must still be a dart, not the nothing `make(&"dart")` gives.
+	check("kind_of leaves a shelf id alone", ItemRoom.kind_of(&"dart2") == &"dart2")
+	check("so a ghost carrying a dart still shows one", ItemRoom.look_of(&"dart2") != null)
+	check("while a spilled id gives its kind", ItemRoom.kind_of(&"cowbell2") == &"cowbell")
+
+	hand.queue_free()
+	remove_child(room)
+	room.free()
+
+
+## `TourParts.count_for` scales with how many instruments are actually in the room, not the
+## fixed three; `first_spill` seeds a big band's first brief with something to do already; and
+## `draw`/`assign` can fill eight parts on eight distinct instruments when the case has spilled
+## enough of them, while an ordinary room (the default `available`) still caps at three.
+func _test_tour_parts_count_the_instruments_in_the_room() -> void:
+	check("count_for(8, false, 3) == 3 -- the room alone", TourParts.count_for(8, false, 3) == 3)
+	check("count_for(8, false, 9) == 8 -- a full case", TourParts.count_for(8, false, 9) == 8)
+	check("count_for(1, false, 9) == 1 -- solo still holds one job at a time",
+			TourParts.count_for(1, false, 9) == 1)
+
+	var empty_rng := RandomNumberGenerator.new()
+	empty_rng.seed = 11
+	check("a band of 3 or fewer spills nothing at the start", TourParts.first_spill(empty_rng, 3).is_empty())
+	for pair in [[4, 1], [5, 2], [8, 3]]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 11
+		check("band %d seeds %d kind(s) already out of the case" % [pair[0], pair[1]],
+				TourParts.first_spill(rng, pair[0]).size() == pair[1])
+	var a := RandomNumberGenerator.new()
+	a.seed = 42
+	var b := RandomNumberGenerator.new()
+	b.seed = 42
+	check("the same seed spills the same kinds", TourParts.first_spill(a, 8) == TourParts.first_spill(b, 8))
+
+	var six: Array[StringName] = [&"cowbell", &"cowbell2", &"woodblock", &"woodblock2", &"pad", &"pad2"]
+	var available: Array[StringName] = TourParts.ROOM + six
+	var rng8 := RandomNumberGenerator.new()
+	rng8.seed = 5
+	var drawn := TourParts.draw(rng8, 8, available)
+	check("a full case draws all 8 parts", drawn.size() == 8)
+	var instruments := {}
+	for p: TourPart in drawn:
+		instruments[p.instrument] = true
+	check("on 8 distinct instruments (%s)" % [instruments.keys()], instruments.size() == 8)
+	var roster: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8]
+	var holders := TourParts.assign(rng8, drawn, roster)
+	var unique := {}
+	for h in holders:
+		unique[h] = true
+	check("handed to 8 distinct peers", unique.size() == 8)
+
+	var rng_room := RandomNumberGenerator.new()
+	rng_room.seed = 5
+	check("without a case full of extras, draw(rng, 8) still gives 3 -- the room's own",
+			TourParts.draw(rng_room, 8).size() == 3)
+
+
+## A band bigger than the room's own three instruments is always offered one to spill while it
+## still wants more; a solo player, who never needs one, sees one far less often; a kind already
+## fully spilled drops out of the draft; and a repeatable card is never hidden by `exclude`.
+func _test_tour_deck_offers_instruments_to_a_big_band() -> void:
+	var has_spill_boon := func(hand: Array[TourCard]) -> bool:
+		for c in hand:
+			if String(c.id).begins_with("spill_"):
+				return true
+		return false
+
+	var always := true
+	for seed in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		if not has_spill_boon.call(TourDeck.draw(rng, [], 8, [])):
+			always = false
+	check("a band of 8 with nothing spilled yet is always offered an instrument", always)
+
+	var seen := 0
+	for seed in range(40):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		if has_spill_boon.call(TourDeck.draw(rng, [], 1, [])):
+			seen += 1
+	check("a solo player sees one in fewer than half of 40 seeds (%d)" % seen, seen < 20)
+
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = 3
+	var spilled: Array[StringName] = [&"cowbell", &"cowbell2"]
+	var has_cowbell_boon: bool = has_spill_boon.call(TourDeck.draw(rng2, [], 8, spilled).filter(
+			func(c: TourCard) -> bool: return c.id == &"spill_cowbell"))
+	check("a cowbell already fully spilled is never offered again", not has_cowbell_boon)
+
+	var excluded: Array[StringName] = [&"spill_cowbell"]
+	var still_offered := false
+	for seed in range(20):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		for c in TourDeck.draw(rng, excluded, 8, []):
+			if c.id == &"spill_cowbell":
+				still_offered = true
+	check("but excluding a repeatable card never hides it", still_offered)

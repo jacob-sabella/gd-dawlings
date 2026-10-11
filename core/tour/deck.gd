@@ -74,21 +74,99 @@ static func all_cards() -> Array[TourCard]:
 		run.next_brief_seconds_mult *= 0.75
 	out.append(shorter_clock)
 
+	out.append(_spill_card(&"spill_cowbell", "Cowbell",
+			"A cowbell falls out of the case. Somebody grab it: the next brief has a part for it.",
+			&"cowbell"))
+	out.append(_spill_card(&"spill_woodblock", "Woodblock",
+			"A woodblock falls out of the case. Dry, loud, and now somebody's job.", &"woodblock"))
+	out.append(_spill_card(&"spill_pad", "Drum Pad",
+			"A drum pad falls out of the case. Toms for whoever gets there first.", &"pad"))
+
+	var sour_spill := TourCard.new()
+	sour_spill.id = &"sour_spill"
+	sour_spill.title = "Sour Spill"
+	sour_spill.description = "Something falls out of the case tuned sour. It still has to keep time."
+	sour_spill.is_curse = true
+	sour_spill.repeatable = true
+	sour_spill._effect = func(_run: TourRun) -> void:
+		Tour.spill_cursed(&"sour")
+	out.append(sour_spill)
+
+	var low_spill := TourCard.new()
+	low_spill.id = &"low_spill"
+	low_spill.title = "Low Spill"
+	low_spill.description = "Something falls out of the case an octave low, like it is under water."
+	low_spill.is_curse = true
+	low_spill.repeatable = true
+	low_spill._effect = func(_run: TourRun) -> void:
+		Tour.spill_cursed(&"low")
+	out.append(low_spill)
+
+	var marked_spill := TourCard.new()
+	marked_spill.id = &"marked_spill"
+	marked_spill.title = "Marked Spill"
+	marked_spill.description = "Something falls out of the case with one name on it. Nobody else may hold it."
+	marked_spill.is_curse = true
+	marked_spill.repeatable = true
+	marked_spill._effect = func(_run: TourRun) -> void:
+		Tour.spill_cursed(&"bound")
+	out.append(marked_spill)
+
 	return out
 
 
+## A boon that spills `kind` out of the case: its effect only ever touches `Tour.run` through
+## `Tour.spill`, never the DAW, since an instrument is a room item, not a mix move.
+static func _spill_card(id: StringName, title: String, description: String, kind: StringName) -> TourCard:
+	var card := TourCard.new()
+	card.id = id
+	card.title = title
+	card.description = description
+	card.is_curse = false
+	card.repeatable = true
+	card._effect = func(_run: TourRun) -> void:
+		Tour.spill(kind)
+	return card
+
+
 ## Three cards for the draft: never one `exclude` already names (a run never offers a card it
-## already holds), weighted toward gear, with a chance one of the three rides in as a curse --
-## matching "curses can ride along".
-static func draw(rng: RandomNumberGenerator, exclude: Array[StringName]) -> Array[TourCard]:
+## already holds -- except a repeatable instrument card, which `exclude` never hides), weighted
+## toward gear, with a chance one of the three rides in as a curse -- matching "curses can ride
+## along". `band_size`/`spilled` (TourRun.band_size/instruments) say how much of the room's
+## instruments the band has filled: a spill boon drops once its kind is full (`TourParts.COPIES`
+## copies out), a spill curse drops once every kind is, and a band bigger than the room's own
+## three is always offered one while it still wants more (`want`).
+static func draw(rng: RandomNumberGenerator, exclude: Array[StringName], band_size := 1,
+		spilled: Array[StringName] = []) -> Array[TourCard]:
 	var pool: Array[TourCard] = []
 	for c in all_cards():
-		if not (c.id in exclude):
+		if (c.repeatable or not (c.id in exclude)) and _spill_available(c.id, spilled):
 			pool.append(c)
 	var boons: Array[TourCard] = pool.filter(func(c: TourCard) -> bool: return not c.is_curse)
 	var curses: Array[TourCard] = pool.filter(func(c: TourCard) -> bool: return c.is_curse)
 	_shuffle(boons, rng)
 	_shuffle(curses, rng)
+
+	var want := band_size - (TourParts.ROOM.size() + spilled.size())
+	if want > 0:
+		var idx := -1
+		for i in boons.size():
+			if _is_spill_boon(boons[i].id):
+				idx = i
+				break
+		if idx > 0:
+			var promoted := boons[idx]
+			boons.remove_at(idx)
+			boons.insert(0, promoted)
+	else:
+		var kept: Array[TourCard] = []
+		for c in boons:
+			# One roll per card, in pool order, so the same seed always spends the same number
+			# of rolls here regardless of how many instrument boons happen to be in the pool.
+			if _is_spill_boon(c.id) and rng.randf() >= 0.3:
+				continue
+			kept.append(c)
+		boons = kept
 
 	var curse_slot := not curses.is_empty() and rng.randf() < 0.4
 	var boon_slots := 3 - (1 if curse_slot else 0)
@@ -109,6 +187,25 @@ static func draw(rng: RandomNumberGenerator, exclude: Array[StringName]) -> Arra
 				picked.append(c)
 	_shuffle(picked, rng)
 	return picked
+
+
+static func _is_spill_boon(id: StringName) -> bool:
+	return String(id).begins_with("spill_")
+
+
+## Whether `id` still has something to offer, given what the case has already spilled
+## (`spilled`, TourRun.instruments): a boon for a kind that is full is a card with nothing to
+## do; the three curse spills are only out once every kind is.
+static func _spill_available(id: StringName, spilled: Array[StringName]) -> bool:
+	if _is_spill_boon(id):
+		var kind := StringName(String(id).substr(6))
+		return TourParts.copies_of(kind, spilled) < TourParts.COPIES
+	if id == &"sour_spill" or id == &"low_spill" or id == &"marked_spill":
+		for kind in TourParts.SPILL_KINDS:
+			if TourParts.copies_of(kind, spilled) < TourParts.COPIES:
+				return true
+		return false
+	return true
 
 
 static func _shuffle(arr: Array, rng: RandomNumberGenerator) -> void:

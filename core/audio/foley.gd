@@ -264,6 +264,62 @@ static func tambourine_hit(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## A cowbell struck, or swung onto its beater: two inharmonic partials rung by hand (the same
+## mode-loop shape as `_jingles`, not a struck impulse -- a cast bell's walls ring at a few
+## unrelated pitches, not one), with the beater's own click on top.
+static func cowbell(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("cowbell_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.28)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 711 + take * 13
+		for mode in [[562.0, 0.14, 0.28], [845.0, 0.09, 0.2]]:
+			var hz: float = mode[0] * rng.randf_range(0.98, 1.02)
+			var decay: float = mode[1]
+			var level: float = mode[2]
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.001:
+					break
+				s[i] += level * env * sin(step * float(i))
+		_impulse(s, 0.0, 0.25, 0.003, 2600.0, 701 + take)
+		_lowpass(s, 7000.0)
+		return _wav(s, false))
+
+
+## A woodblock knocked, struck or shaken to a stop: one dry resonance and the duller body under
+## it, no ring at all -- a solid block, not a shell.
+static func woodblock(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("woodblock_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.09)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 719 + take * 11
+		_impulse(s, 0.0, 0.55, 0.011, 1750.0 * rng.randf_range(0.97, 1.03), 721 + take)
+		_impulse(s, 0.0, 0.2, 0.02, 920.0, 731 + take)
+		_highpass(s, 300.0)
+		return _wav(s, false))
+
+
+## A drum pad hit: `tambourine_hit`'s swept sine, lower and longer -- a tom's skin dropping in
+## pitch as it is struck -- with the beater's click on top.
+static func pad(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("pad_%d" % take, func() -> AudioStreamWAV:
+		var seconds := 0.32
+		var s := _silence(seconds)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * lerpf(190.0, 105.0, minf(1.0, t / 0.05)) / float(RATE)
+			s[i] += 0.42 * exp(-t / 0.13) * sin(phase)
+		_impulse(s, 0.0, 0.12, 0.003, 1400.0, 741 + take)
+		_lowpass(s, 4500.0)
+		return _wav(s, false))
+
+
 ## Clay chips on clay chips, one landing: a short bright knock, the dense edge of one disc on
 ## the face of another, with the faint ring a clay composite chip has and a plastic one does not.
 static func chip_clack(take: int) -> AudioStreamWAV:
@@ -613,6 +669,23 @@ static func tour_stinger() -> AudioStreamWAV:
 					break
 				s[i] += 0.1 * env * sin(TAU * hz * t)
 		_lowpass(s, 9000.0)
+		return _wav(s, false))
+
+
+## An instrument falling out of the case, tossed onto the floor: the lid's own low thump and a
+## rattle of whatever else is in there, with none of `tour_stinger`'s three-note flourish --
+## that moment already has its own sound, the burst itself; this one is smaller and happens
+## several times a run.
+static func case_toss() -> AudioStreamWAV:
+	return _cached("case_toss", func() -> AudioStreamWAV:
+		var s := _silence(0.35)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 751
+		_impulse(s, 0.0, 0.35, 0.04, 120.0, 751)
+		for k in 6:
+			var at: float = 0.02 + rng.randf_range(0.0, 0.18)
+			_impulse(s, at, rng.randf_range(0.05, 0.12), 0.01, rng.randf_range(1500.0, 2800.0), 753 + k)
+		_lowpass(s, 8000.0)
 		return _wav(s, false))
 
 

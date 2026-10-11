@@ -460,6 +460,12 @@ func _walk_where_the_venue_lets() -> void:
 		items.set_spots(venue.item_spots(), _item_homes())
 	if tour_case != null and venue != null:
 		tour_case.transform = venue.tour_case_spot()
+		if items != null:
+			var spilled := items.spawned_ids()
+			for n in spilled.size():
+				var item: Item = items.items.get(spilled[n])
+				if item != null:
+					item.home = _spill_home(n)
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1839,6 +1845,15 @@ func _build_items() -> void:
 	Session.takeable = func(key: String) -> bool:
 		return is_instance_valid(items) and items.items.values().any(
 				func(item: Item) -> bool: return item.network_key() == key)
+	# A marked instrument (Item.bound_to, Tour's "marked" spill) is refused every other hand by
+	# the host's own arbitration, not only by the hand's own `may_hold` check.
+	Session.holdable = func(key: String, _peer: int) -> int:
+		if not is_instance_valid(items):
+			return 0
+		for item: Item in items.items.values():
+			if item.network_key() == key:
+				return item.bound_to
+		return 0
 	ToyItem.shown = venue.venue_id()
 	studio_set.add_child(items)
 	items.boards = venue.dart_boards()
@@ -1875,6 +1890,7 @@ func _build_items() -> void:
 	Session.roster_changed.connect(_on_roster_for_patches)
 	_show_patches()
 	items.asked.connect(_on_items_asked)
+	items.refused.connect(_on_item_refused)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
 	hit_recorder = HitRecorder.new()
 	hit_recorder.name = "HitRecorder"
@@ -1916,7 +1932,9 @@ func _build_tour_case() -> void:
 	Tour.run_started.connect(_on_tour_run_started)
 	Tour.run_ended.connect(_on_tour_run_ended)
 	Tour.brief_started.connect(_on_tour_brief_started)
+	Tour.instrument_spilled.connect(_on_tour_instrument_spilled)
 	Session.tour_changed.connect(_on_session_tour_changed)
+	Session.participant_left.connect(_on_tour_participant_left)
 	_sync_tour_roll()
 
 
@@ -1954,6 +1972,13 @@ func _on_tour_run_started() -> void:
 func _on_tour_run_ended(_won: bool) -> void:
 	if tour_case != null:
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
+	# Back in the case: every instrument the run spilled stops existing here, the host's own
+	# half of the reset (a guest's copies go with it too, off the emptied `Session.tour` --
+	# `_sync_spilled`, through `_on_session_tour_changed` below).
+	if items != null:
+		for id in items.spawned_ids():
+			items.despawn(id)
+		_publish_room_soon()
 	_sync_tour_roll()
 
 
@@ -1971,12 +1996,139 @@ func _on_tour_brief_started(_index: int) -> void:
 ## way at all.
 func _on_session_tour_changed() -> void:
 	_sync_tour_roll()
+	_sync_spilled()
 	if tour_case == null:
 		return
 	if Session.tour.is_empty():
 		tour_case.reset(Tour.unlocks.runs, Tour.unlocks.wins)
 	elif not Session.is_authority():
 		tour_case.sync_broken()
+
+
+## The host's own word on an instrument hitting the floor (`Tour.instrument_spilled`, which
+## never reaches this guest's `Session.tour_changed` -- see Tour's own class note): the real
+## item, thrown the same way everyone else sees it land.
+func _on_tour_instrument_spilled(id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
+	_spill_instrument(id, kind, curse, bound_to)
+
+
+## Makes `id` (a copy of `kind`) a real item in the room, cursed and marked as the card said,
+## and tosses it out of the case's open lid; everyone else sees the same flight off the room
+## (`ItemRoom.state` carries the launch) -- the host's own half of a spill; a guest's is
+## `_sync_spilled`, off the same facts riding `Session.tour`.
+func _spill_instrument(id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
+	if items == null or tour_case == null:
+		return
+	var n := items.spawned_ids().size()
+	var home := _spill_home(n)
+	var item := items.spawn(kind, id, home)
+	if item == null:
+		return
+	_dress_spilled(item, id, kind, curse, bound_to)
+	var mouth := tour_case.transform * Vector3(0, TourCase.BODY_H + 0.15, TourCase.CASE_DEPTH * 0.5 + 0.06)
+	var seed := Tour.run.attempt_seed if Tour.run != null else 0
+	items.spill(item, mouth, home.origin, hash([String(id), seed]))
+	_announce_spill(item, curse)
+	_publish_room_soon()
+
+
+## The case's thump and the toast, on every machine an instrument falls out on: the host's as
+## it throws (`_spill_instrument`), a guest's as it learns of it (`_sync_spilled`) -- a reward
+## nobody is told about is one nobody goes looking for.
+func _announce_spill(item: Item, curse: StringName) -> void:
+	Foley.play(tour_case, Foley.case_toss())
+	var low := item.item_title().to_lower()
+	match curse:
+		&"sour":
+			Session.notice.emit("A %s fell out of the case, tuned sour." % low)
+		&"low":
+			Session.notice.emit("A %s fell out of the case, an octave low." % low)
+		&"bound":
+			Session.notice.emit("A %s fell out of the case, marked for %s: only they can hold it." % [low, item.bound_name])
+		_:
+			Session.notice.emit("A %s fell out of the case." % low)
+
+
+## `item`'s voice, curse and mark, whichever of a fresh spill (`_spill_instrument`) or one a
+## guest is only now catching up with (`_sync_spilled`) is asking.
+func _dress_spilled(item: Item, id: StringName, kind: StringName, curse: StringName, bound_to: int) -> void:
+	if item is InstrumentItem:
+		var instrument := item as InstrumentItem
+		instrument.voice = 1 if id != kind else 0
+		match curse:
+			&"sour":
+				instrument.curse_pitch = 0.917
+			&"low":
+				instrument.curse_pitch = 0.5
+	item.bound_to = bound_to
+	item.bound_name = Session.name_of(bound_to) if bound_to != 0 else ""
+
+
+## A half-ring 0.85m in front of the case, one spot per copy the case can ever spill
+## (TourParts.SPILL_KINDS.size() * TourParts.COPIES, six today), so no two land on the same spot.
+func _spill_home(n: int) -> Transform3D:
+	var spots := TourParts.SPILL_KINDS.size() * TourParts.COPIES
+	var a := lerpf(-1.2, 1.2, float(n) / float(maxi(spots - 1, 1)))
+	return tour_case.transform * Transform3D(Basis(Vector3.UP, PI + a), Vector3(sin(a) * 0.85, 0, cos(a) * 0.85))
+
+
+## This guest's half of `Session.tour`'s `instruments`: spawn whatever is missing, despawn
+## whatever is no longer wanted (the run ended), and bring every spill's mark up to date (a
+## leaver's unbinding lands here too). Idempotent on the host as well, though the host's own
+## spawns already happened off `Tour.instrument_spilled` -- this only ever finds them already
+## there.
+func _sync_spilled() -> void:
+	if items == null:
+		return
+	var run := TourRun.from_dict(Session.tour) if not Session.tour.is_empty() else null
+	var want: Array[StringName] = []
+	if run != null:
+		want = run.instruments
+	for id in items.spawned_ids():
+		if not (id in want):
+			items.despawn(id)
+	if run == null:
+		return
+	var spawned_any := false
+	for i in run.instruments.size():
+		var id: StringName = run.instruments[i]
+		var item: Item = items.items.get(id)
+		if item == null:
+			var kind := TourParts.kind_of(id)
+			item = items.spawn(kind, id, _spill_home(items.spawned_ids().size()))
+			if item == null:
+				continue
+			_dress_spilled(item, id, kind, run.instrument_curses[i], run.instrument_bound[i])
+			# The host already said so as it threw; this is a guest hearing it land.
+			if not Session.is_authority() and tour_case != null:
+				_announce_spill(item, run.instrument_curses[i])
+			spawned_any = true
+		else:
+			var bound: int = run.instrument_bound[i]
+			item.bound_to = bound
+			item.bound_name = Session.name_of(bound) if bound != 0 else ""
+	if spawned_any:
+		apply_room(Session.room, false)
+
+
+## A hand here was refused an item it is not marked for (ItemRoom.refused, Item.may_hold): the
+## same toast a claimed fader gives a second hand.
+func _on_item_refused(item: Item, _why: String) -> void:
+	Session.notice.emit("Only %s can hold the %s." % [item.bound_name, item.item_title().to_lower()])
+
+
+## A peer left the session: any instrument marked for them is nobody's to be marked for any
+## more. `Tour._on_participant_left` clears the run's own record (`run.instrument_bound`); this
+## clears the real item's here on the host, so a hand can take it up at once rather than it
+## staying a brick until the next spill or sync happens to touch it.
+func _on_tour_participant_left(peer_id: int) -> void:
+	if items == null or not Session.is_authority():
+		return
+	for id in items.spawned_ids():
+		var item: Item = items.items.get(id)
+		if item != null and item.bound_to == peer_id:
+			item.bound_to = 0
+			item.bound_name = ""
 
 
 ## A running take is sent (and a fresh one begun) about every bar while a brief needs its parts

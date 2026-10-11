@@ -22,10 +22,18 @@ signal brief_started(index: int)
 signal brief_ended(passed: bool, score: int, detail: PackedStringArray)
 signal drafting_started(cards: Array[TourCard])
 signal run_ended(won: bool)
+## An instrument just fell out of the case (host only, like every signal here): for the studio
+## to put the real item in the room. A guest learns the same from `Session.tour`'s `instruments`
+## -- the host never hears its own `Session.tour_changed` (`publish_tour` only RPCs out), which
+## is why this exists rather than everything riding that one signal.
+signal instrument_spilled(id: StringName, kind: StringName, curse: StringName, bound_to: int)
 
 ## `null` when `Tour.run.state == IDLE` -- i.e. always `null` between runs. On the host this is
 ## the live run; on a guest it is a read-only copy rebuilt from `Session.tour` on every change.
 var run: TourRun = null
+## Where the run's HUD card ends, in pixels down the screen, while it is shown (TourHud keeps it
+## current); 0.0 with no card up. The session panel's notices start below it rather than on it.
+var hud_bottom := 0.0
 var unlocks: TourUnlocks
 
 ## The track the dragging-keys flaw judges: TourProject.KEYS_TRACK, repeated here as a plain
@@ -51,6 +59,9 @@ var _draft: Array[TourCard] = []
 var _published_fixed: Array[bool] = []
 ## [hits, played, holders] as last published, the same reasoning for `_tick_parts`.
 var _published_parts_state: Array = []
+## True while `_start_brief` is laying a brief out, so a `spill` it makes on the way (the first
+## brief's seeding, a card's) waits for the one publish at its end.
+var _laying_out := false
 
 
 func _ready() -> void:
@@ -145,6 +156,57 @@ func abandon_run() -> void:
 	_end_run(false)
 
 
+## Host only. The next copy of `kind` falls out of the case -- its own id ("cowbell", then
+## "cowbell2"), cursed on its sound only (`curse`, &"sour"/&"low") or marked for one peer alone
+## (`curse` &"bound", `bound_to`). Appended to the run and said at once (`instrument_spilled`,
+## for the studio; `_publish` for everyone else), so a card picked mid-brief spills right away
+## rather than waiting on the next brief's own tick. Returns the id spilled, or &"" once `kind`
+## is already out of copies (TourParts.COPIES) -- a card offering one it cannot deliver is a
+## bug in `TourDeck`'s own gating, not something this is asked to paper over.
+func spill(kind: StringName, curse := &"", bound_to := 0) -> StringName:
+	if run == null or not Session.is_authority():
+		return &""
+	var n := TourParts.copies_of(kind, run.instruments)
+	if n >= TourParts.COPIES:
+		return &""
+	var id := TourParts.instance_id(kind, n)
+	run.instruments.append(id)
+	run.instrument_curses.append(curse)
+	run.instrument_bound.append(bound_to)
+	instrument_spilled.emit(id, kind, curse, bound_to)
+	# Not while a brief is still being laid out (`_start_brief` spills before it draws the parts,
+	# and publishes once at its end): a guest told halfway would see the new flaws over the old
+	# brief's parts for a frame.
+	if not _laying_out:
+		_publish()
+	return id
+
+
+## Host only. A curse spill (`sour_spill`/`low_spill`/`marked_spill`) picks its own kind --
+## whichever still has copies left, drawn from this run's own seed so a replay spills the same
+## thing -- rather than the card naming one, since the card does not know what the case still
+## has to give. `curse` &"bound" also draws who it is marked for, the same way, from the
+## roster sorted so the draw is not at the mercy of a Dictionary's order.
+func spill_cursed(curse: StringName) -> StringName:
+	if run == null or not Session.is_authority():
+		return &""
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([run.attempt_seed, "spill", run.brief_index])
+	var pool: Array[StringName] = TourParts.SPILL_KINDS.filter(
+			func(k: StringName) -> bool: return TourParts.copies_of(k, run.instruments) < TourParts.COPIES)
+	if pool.is_empty():
+		return &""
+	var kind: StringName = pool[rng.randi() % pool.size()]
+	var bound_to := 0
+	if curse == &"bound":
+		var roster: Array[int] = []
+		roster.assign(Session.participants.keys())
+		roster.sort()
+		if not roster.is_empty():
+			bound_to = roster[rng.randi() % roster.size()]
+	return spill(kind, curse, bound_to)
+
+
 ## Loads brief `index`'s rescue song (drawn from `run.song_rng(index)`: tempo, then flaws, then
 ## each flaw's own choices, in that order, so a seed replays identically) and starts the brief
 ## tuning up -- the clock does not run until `_physics_process` sees the new tempo's parts are
@@ -176,8 +238,20 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 	for _i in run.flaws.size():
 		run.fixed.append(false)
 	# The same `rng` stream, continuing right where the flaws' own draws left it, so a seed
-	# replays identically all the way through: tempo, flaws, then parts and who holds them.
-	var parts_drawn := TourParts.draw(rng, TourParts.count_for(band_size, brief.is_boss))
+	# replays identically all the way through: tempo, flaws, first spill, then parts and who
+	# holds them.
+	_laying_out = true
+	if index == 0:
+		for kind in TourParts.first_spill(rng, band_size):
+			spill(kind)
+	# Before the parts draw, so a card just picked (an instrument among them) counts for this
+	# brief's parts; before the clock too -- a "shorter_clock" card writes
+	# `next_brief_seconds_mult`, and this is the brief it means.
+	if card != null:
+		card.apply(run)
+	_laying_out = false
+	var available: Array[StringName] = TourParts.ROOM + run.instruments
+	var parts_drawn := TourParts.draw(rng, TourParts.count_for(band_size, brief.is_boss, available.size()), available)
 	var roster: Array[int] = []
 	roster.assign(Session.participants.keys())
 	run.parts.assign(parts_drawn.map(func(p: TourPart) -> StringName: return p.id))
@@ -190,10 +264,6 @@ func _start_brief(index: int, card: TourCard = null) -> void:
 		run.played.append(false)
 		run.open_since.append(0.0)
 	run.tuning = true
-	# Before the clock is set: a "shorter_clock" card writes `next_brief_seconds_mult`, and this
-	# is the brief it means.
-	if card != null:
-		card.apply(run)
 	run.seconds_left = brief.seconds * run.next_brief_seconds_mult
 	run.next_brief_seconds_mult = 1.0
 	_loudness = null
@@ -299,7 +369,7 @@ func _finish_brief() -> void:
 	run.state = TourRun.State.DRAFTING
 	var rng := RandomNumberGenerator.new()
 	rng.seed = run.attempt_seed + run.brief_index + 1
-	_draft = TourDeck.draw(rng, run.gear + run.curses)
+	_draft = TourDeck.draw(rng, run.gear + run.curses, run.band_size, run.instruments)
 	run.draft.assign(_draft.map(func(c: TourCard) -> StringName: return c.id))
 	drafting_started.emit(_draft)
 	_publish()
@@ -343,12 +413,19 @@ func _on_tour_asked(verb: StringName, args: Array, _from: int) -> void:
 		pick_draft(int(args[0]))
 
 
-## `peer_id` left the room mid-brief: every part they held goes open, for `_tick_parts` to hand
-## on once the grace has run out. Host only, like every other mutation of `run`.
+## `peer_id` left the room: mid-brief, every part they held goes open, for `_tick_parts` to
+## hand on once the grace has run out; and whatever state the run is in, an instrument marked
+## for them is unmarked -- a marked instrument nobody can hold is a brick, not a job, and a
+## leaver during the draft would otherwise leave one behind. Host only, like every other
+## mutation of `run`.
 func _on_participant_left(peer_id: int) -> void:
-	if run == null or not Session.is_authority() or run.state != TourRun.State.BRIEF:
+	if run == null or not Session.is_authority():
 		return
-	TourParts.open(run, peer_id)
+	if run.state == TourRun.State.BRIEF:
+		TourParts.open(run, peer_id)
+	for i in run.instrument_bound.size():
+		if run.instrument_bound[i] == peer_id:
+			run.instrument_bound[i] = 0
 	_publish()
 
 
@@ -380,7 +457,7 @@ func force_state_for_shot(stage: StringName) -> void:
 				run.state = TourRun.State.DRAFTING
 				var rng := RandomNumberGenerator.new()
 				rng.seed = run.attempt_seed + run.brief_index + 1
-				_draft = TourDeck.draw(rng, run.gear + run.curses)
+				_draft = TourDeck.draw(rng, run.gear + run.curses, run.band_size, run.instruments)
 				run.draft.assign(_draft.map(func(c: TourCard) -> StringName: return c.id))
 				drafting_started.emit(_draft)
 				_publish()

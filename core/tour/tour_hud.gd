@@ -68,7 +68,9 @@ func _on_run_ended(_won: bool) -> void:
 
 func _process(_delta: float) -> void:
 	if not _root.visible:
+		Tour.hud_bottom = 0.0
 		return
+	Tour.hud_bottom = _root.offset_top + _root.size.y
 	_refresh_clock()
 	# A fix lands mid-brief without a signal of its own (the host ticks `run.fixed` every
 	# physics frame, and only publishes to the network when it changes) -- cheap enough, a

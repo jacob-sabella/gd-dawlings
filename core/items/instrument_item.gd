@@ -38,6 +38,20 @@ var _peak_way := Vector3.ZERO
 var _since := 1.0
 var _take := 0
 
+## Which of the kind's voices this copy is: 0 the first out of the case, 1 the low one. A
+## second copy of a kind is a different job, not a decoy, only because it sounds (and is
+## recorded) a fifth lower -- see `pitch_scale`, and each subclass's own `pitch()`.
+var voice := 0
+## A curse on its sound only (Tour's "sour"/"low" spill): 1.0 untouched. The judge reads
+## `pitch()`, not this, so a cursed instrument still plays its part -- it just sounds wrong.
+var curse_pitch := 1.0
+const VOICE_PITCH := [1.0, 0.8]
+
+
+## How far off its own true pitch this copy's sound is played, voice and curse together.
+func pitch_scale() -> float:
+	return VOICE_PITCH[mini(voice, 1)] * curse_pitch
+
 
 ## The General MIDI percussion note a hit is recorded as.
 func pitch() -> int:
@@ -67,6 +81,7 @@ func play(velocity: int, struck := false) -> void:
 		var player := AudioStreamPlayer.new()
 		player.stream = sound(struck, _take)
 		player.volume_db = level_db(velocity)
+		player.pitch_scale = pitch_scale()
 		player.bus = AudioPorts.bus(AudioPorts.MONITOR)
 		add_child(player)
 		player.finished.connect(player.queue_free)
@@ -78,7 +93,7 @@ func play(velocity: int, struck := false) -> void:
 func heard(velocity: int, struck := false) -> void:
 	_take += 1
 	_jiggle(velocity)
-	Foley.play(self, sound(struck, _take), level_db(velocity) + 2.0, randf_range(0.97, 1.03))
+	Foley.play(self, sound(struck, _take), level_db(velocity) + 2.0, pitch_scale() * randf_range(0.97, 1.03))
 
 
 static func level_db(velocity: int) -> float:

@@ -56,6 +56,13 @@ var hits: Array[int] = []
 var played: Array[bool] = []
 var open_since: Array[float] = []
 
+## Instruments spilled from the case so far: the Item.id of each copy (cowbell, cowbell2...),
+## its curse (&"" none, &"sour", &"low", &"bound") and, bound, whose it is (a peer id, else 0).
+## Grows across the whole run, not per brief -- a spilled instrument stays out of the case.
+var instruments: Array[StringName] = []
+var instrument_curses: Array[StringName] = []
+var instrument_bound: Array[int] = []
+
 
 ## This brief's own random stream, seeded off `attempt_seed` and `index` so it never draws the
 ## same numbers the draft's (`attempt_seed + brief_index + 1`) does, and replays identically on
@@ -88,6 +95,9 @@ func to_dict() -> Dictionary:
 		"hits": (hits as Array).duplicate(),
 		"played": (played as Array).duplicate(),
 		"open_since": (open_since as Array).duplicate(),
+		"instruments": (instruments as Array).map(func(i): return String(i)),
+		"instrument_curses": (instrument_curses as Array).map(func(c): return String(c)),
+		"instrument_bound": (instrument_bound as Array).duplicate(),
 	}
 
 
@@ -138,4 +148,16 @@ static func from_dict(d: Dictionary) -> TourRun:
 	while run.open_since.size() < run.parts.size():
 		run.open_since.append(0.0)
 	run.open_since.resize(run.parts.size())
+	var instruments_in: Array = d.get("instruments", [])
+	run.instruments.assign(instruments_in.map(func(i): return StringName(i)))
+	var instrument_curses_in: Array = d.get("instrument_curses", [])
+	run.instrument_curses.assign(instrument_curses_in.map(func(c): return StringName(c)))
+	while run.instrument_curses.size() < run.instruments.size():
+		run.instrument_curses.append(&"")
+	run.instrument_curses.resize(run.instruments.size())
+	var instrument_bound_in: Array = d.get("instrument_bound", [])
+	run.instrument_bound.assign(instrument_bound_in.map(func(b): return int(b)))
+	while run.instrument_bound.size() < run.instruments.size():
+		run.instrument_bound.append(0)
+	run.instrument_bound.resize(run.instruments.size())
 	return run

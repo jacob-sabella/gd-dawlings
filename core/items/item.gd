@@ -87,6 +87,10 @@ var _home_after := false
 ## Whether the hand that has it here took it out of somebody else's: a hold to be handed over,
 ## not claimed (Presence.claim_carries).
 var taken := false
+## Only this peer may hold it (a Tour "marked" spill), with their name for the card's and the
+## hint's sake; 0 means anyone. `may_hold` is what actually enforces it.
+var bound_to := 0
+var bound_name := ""
 ## On a head rather than in a hand: here (the hand that put it on still has it, in its `worn`
 ## slot) or on somebody else's (`held_elsewhere` then rides their ghost's head). Only something
 ## `wearable`.
@@ -210,6 +214,8 @@ func title() -> String:
 
 
 func readout() -> String:
+	if bound_to != 0 and state != State.HELD:
+		return "marked for %s" % bound_name
 	match state:
 		State.HELD:
 			# Whose, when it is somebody else's: the participant the holds say has it.
@@ -225,11 +231,28 @@ func hint() -> String:
 
 
 ## `loose`, said of it on the shelf or the floor; nothing in your hand; and in somebody else's,
-## that it is theirs to be taken from.
+## that it is theirs to be taken from. A marked item (`bound_to`) says whose it is instead, to
+## every hand but theirs.
 func _hint(loose: String) -> String:
 	if is_held_elsewhere():
 		return "click to take it from them"
+	if bound_to != 0 and not may_hold():
+		return "only %s can hold it" % bound_name
 	return loose if state != State.HELD else ""
+
+
+## Whether a hand on this machine may take it: a bound item (Tour's "marked" spill) refuses
+## every hand but the one it is marked for. Asked of the room's own notion of "this machine"
+## (`ItemRoom.local_peer`), the same abstraction a throw's own hand is told through, rather than
+## naming Session here -- see ItemRoom's class note. Unbound, or out of any room at all
+## (nothing to ask), it may always be held.
+func may_hold() -> bool:
+	if bound_to == 0:
+		return true
+	var room := ItemRoom.of(self)
+	if room == null or not room.local_peer.is_valid():
+		return true
+	return int(room.local_peer.call()) == bound_to
 
 
 ## Part of the room: a pick-up is claimed with the host like a fader (Presence), and somebody
