@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run the two-process session probe: a headless host and a headless guest on one timeline.
 # Exits non-zero if either half saw a failure. See tools/probe/session_probe.gd.
+# Sibling: tools/tour_probe.sh runs a Tour run itself, with N players.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 #   tools/session_probe.sh --reaper    the host drives the rig's Reaper, started (and stopped

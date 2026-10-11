@@ -879,8 +879,18 @@ gloriously wrong and you survive anyway.
   second life), a loss that costs something, a win that is announced to the room.
 - **A second boss and a run map.** Two venues, a branching map of briefs with a choice at each
   fork, a boss that plays differently from the first.
-- **Scale testing: solo, 4, 8.** A probe that runs a brief as a host with N synthetic guests and
-  prints what each sees (tools/session_probe.sh's shape), on top of the suite's count checks.
+- **Scale testing: solo, 4, 8. Done 2026-10-10.** `tools/tour_probe.sh N` (N 1..8) runs a brief
+  as a host with N-1 real guest processes -- every flaw fixed and every part played from the seat
+  that holds it, a draft pick carried over the wire, the roster checked by name so eight is
+  eight, the host's project back exactly as it was -- and prints what each seat sees
+  (tools/session_probe.sh's shape), on top of the suite's count checks. Slow (about 35 s a run),
+  so it is its own command, not part of tools/verify.sh.
+- **A held key rolls over to channel 0.** `GuestMidi.follow`'s per-bar take roll replays the
+  keys still held into the fresh take with channel 0 (`held` keeps only the velocity), so a note
+  straddling a roll lands on channel 0, stretched to the take's end, where a channel-9 part's
+  judge no longer counts it. Unreachable by hand (a percussion hit is over in milliseconds and
+  the keytar's parts accept any channel but 9), found by the probe; the fix is `held` keeping
+  the channel beside the velocity.
 
 ### Waiting on the user
 - The flaw lines' voice: gig-crew terse (as written) or a named character (a stage manager, the
