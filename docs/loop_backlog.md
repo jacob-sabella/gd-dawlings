@@ -1597,7 +1597,6 @@ gloriously wrong and you survive anyway.
   across the room with an instrument in hand can play a hit when the sweep stops. Not yet played
   in a headset.
 
-- Rack unit labels can overlap their first knob caption on long plugin names.
 - `PatchCable` rebuilds its whole mesh on every patchbay rebuild rather than moving endpoints.
 - The timeline rebuilds every lane while the overview bar is being dragged -- one rebuild per
   frame, which is fine at twelve tracks and will not be at ninety. Items want to be moved
@@ -2416,3 +2415,28 @@ Open follow-ups, not built:
   (2026-10-11: "Solve teh VST issue... just make sure we stay within our licensing requirements"),
   stays within licensing by construction: real plugin binaries only ever load on the host's own
   machine, same as every other FX action already works; guests only ever see id/label strings.
+
+## Tick T -- the rack unit's own name ran into its own buttons (2026-10-11)
+
+"Rack unit labels can overlap their first knob caption on long plugin names," from this list.
+Measured rather than trusted: built a unit with a long track name and a long plugin name
+(`RHYTHM GUITAR DOUBLE` / `UAD Precision Buss Compressor`), screenshotted it, and cropped in.
+The actual collision is not with a knob caption a full row down -- `RULE_Y` leaves 48mm between
+the header and the knob row, nowhere near enough for any font to bridge -- it is with the bypass
+button and, on a plugin past `MAX_KNOBS`, the page readout beside it, both in the SAME row as
+the name. `RackUnit._name_label` was built with `font_size = 64` and no `width`, no
+`autowrap_mode`, and critically no `Lettering.fit` call -- the one label on this panel nobody had
+ever put through it, where the console's equivalent (`ChannelStrip._name_label`) already was.
+
+Fixed by giving the name a stated span (`RackUnit.NAME_SPAN := 0.24`, the TearTab's own width --
+the grip over the name already claimed this ground, so the label's fit now claims the same
+ground rather than a separately-guessed one) and calling `Lettering.fit` on it in `refresh()`,
+the way `ChannelStrip.refresh()` already does for its own name. Floor is 32 (`NAME_SIZE_MIN`),
+proportioned off the console's own 80:40 ratio for its 64px default. Re-screenshotted the same
+repro clean; added `_test_rack_unit_name_stays_off_the_header_icons`, which measures the fitted
+label's actual rendered width against its font rather than re-rendering a frame, so the check
+stays fast and keeps failing if the span ever regresses.
+
+Open follow-ups, not built:
+- The same "never fitted" gap might exist elsewhere nobody has stress-tested with a long name;
+  this tick only looked at the rack, because that was the reported one.

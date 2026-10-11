@@ -58,6 +58,16 @@ const CAPTION_LEADING := -12
 ## The silkscreened rule under the title. Every processor that has a title bar has one, and
 ## without it the header and the controls are two things floating on the same slab.
 const RULE_Y := U * UNITS_TALL * 0.5 - 0.027
+## The name's own territory, left to right: the TearTab's width, since the grip IS the name and
+## the two should cover the same ground. Unconstrained before this, the label ran straight
+## through the bypass button and, on a plugin past MAX_KNOBS, the page readout too -- the rack's
+## only label nothing ever called `Lettering.fit` on (2026-10-11: "Rack unit labels can overlap
+## their first knob caption on long plugin names" -- the actual collision, measured off a
+## screenshot, lands on the header icons rather than a caption a full row below, but the cause
+## and the fix are the same one a name-sizing miss always is here).
+const NAME_SPAN := 0.24
+const NAME_SIZE := 64
+const NAME_SIZE_MIN := 32
 
 var track_index: int = 0
 ## How often a hovered knob may ask Reaper for its reading, and when it last did.
@@ -174,7 +184,7 @@ func _ready() -> void:
 	add_child(rule)
 
 	_name_label = Label3D.new()
-	_name_label.font_size = 64
+	_name_label.font_size = NAME_SIZE
 	_name_label.pixel_size = 0.00019
 	_name_label.position = Vector3(-RACK_WIDTH * 0.5 + 0.03, h * 0.5 - 0.016, 0.002)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -185,7 +195,7 @@ func _ready() -> void:
 	# Over the name, from the left ear to the page readout: the name is what you take hold of.
 	var tab := TearTab.new()
 	tab.name = "TearTab"
-	tab.size = Vector2(0.24, 0.02)
+	tab.size = Vector2(NAME_SPAN, 0.02)
 	tab.position = Vector3(-RACK_WIDTH * 0.5 + 0.018, h * 0.5 - 0.016, 0.001)
 	tab.ghost_colour = DAW.state.track(track_index).colour
 	tab.describe_title = func() -> String: return "%s  ON A TABLET" % _unit_caption()
@@ -353,6 +363,10 @@ func refresh() -> void:
 		return
 	var track := DAW.state.track(track_index)
 	_name_label.text = "%s   %s" % [track.display_name().to_upper(), f.name]
+	# Measured from the tab's own left edge, matching where the grip starts rather than the
+	# label's -- the label sits 12mm further in to clear the tab's own icon, and that 12mm has
+	# to come off the span or a name just inside this fit would still touch the page readout.
+	Lettering.fit(_name_label, NAME_SPAN - 0.012, NAME_SIZE, NAME_SIZE_MIN)
 	_bypass.lit = f.enabled
 
 	var params: Array = f.params.keys()

@@ -102,6 +102,7 @@ func _ready() -> void:
 	_test_you_can_tell_which_surface_has_your_attention()
 	_test_a_surface_cannot_ask_what_it_is_looking_through()
 	_test_a_rack_unit_reaches_every_parameter()
+	_test_rack_unit_name_stays_off_the_header_icons()
 	_test_a_wide_desk_bends_round_you_instead_of_past_you()
 	_test_the_desk_knows_how_small_its_own_lettering_is()
 	_test_every_label_is_set_in_the_distance_field_face()
@@ -3925,6 +3926,35 @@ func _test_a_rack_unit_reaches_every_parameter() -> void:
 	hand.queue_free()
 	unit.queue_free()
 	tidy.queue_free()
+
+
+## THE OVERLAP THIS EXISTS FOR (2026-10-11: "Rack unit labels can overlap their first knob
+## caption on long plugin names"). `_name_label` was the one label on this panel nothing ever
+## called `Lettering.fit` on, so a long track name beside a long plugin name ran straight through
+## the bypass button and, past MAX_KNOBS, the page readout beside it too -- confirmed off an
+## actual screenshot (a track and plugin name long enough to overflow), not guessed from the
+## source. Checked here as a measurement against the label's own font, not a screenshot, so it
+## stays checked without a render.
+func _test_rack_unit_name_stays_off_the_header_icons() -> void:
+	DAW.use(OfflineBackend.new())
+
+	DAW.state.track(2).name = "Rhythm Guitar Double"
+	var fx := DAW.state.fx(2, 0)
+	fx.name = "UAD Precision Buss Compressor"
+	check("the stand-in still has a plugin that overflows a faceplate, so the page readout is on",
+			fx.params.size() > RackUnit.MAX_KNOBS)
+
+	var unit := RackUnit.create(2, 0)
+	add_child(unit)
+	var f := unit._name_label.font if unit._name_label.font != null else Lettering.face()
+	var rendered := f.get_string_size(unit._name_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			unit._name_label.font_size).x * unit._name_label.pixel_size
+	check("a long track-and-plugin name is shrunk to fit the tab's own width (%.3fm of %.3fm)" %
+			[rendered, RackUnit.NAME_SPAN - 0.012], rendered <= RackUnit.NAME_SPAN - 0.012 + 0.0005)
+	check("it did not shrink past the floor size", unit._name_label.font_size >= RackUnit.NAME_SIZE_MIN)
+
+	unit.queue_free()
+	DAW.use(OfflineBackend.new())
 
 
 func _test_lettering_stops_when_nobody_can_read_it() -> void:
