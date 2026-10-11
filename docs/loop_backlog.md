@@ -1566,9 +1566,8 @@ gloriously wrong and you survive anyway.
 
 - The venue toys: they are all thrown things, a ball of some kind (or a starfish); none of them
   does anything the others cannot but fly differently. No slinky, nothing to fidget with, and no
-  desk toy by the console. The beach ball, held on a desktop, is a big thing over the desk and
-  hides some of it. Changing venue mid-throw lets the old flight finish, then shows the new
-  venue's toy where the old one landed.
+  desk toy by the console. Changing venue mid-throw lets the old flight finish, then shows the
+  new venue's toy where the old one landed.
 
 - The yo-yo: on a desktop your own string is 15 cm and your ghost's is 70 cm, so what you see
   of your own trick is not what others see. The string is a straight line, never slack, even
@@ -2471,3 +2470,35 @@ Open follow-ups, not built:
   atmosphere, shared by everything else in that room, and not this ball's own bug to fix alone.
   The band-vs-shell contrast is real and visibly improved by this fix; the whole room reading
   pink in the grid venue is the room working as designed.
+
+## Tick V -- the beach ball's own radius cancelled out of its own held distance (2026-10-11)
+
+"The beach ball, held on a desktop, is a big thing over the desk and hides some of it," from
+this list. Measured rather than trusted: tried `--carry toy` on a fresh venue first and got a
+screenshot of an empty-looking glove -- the carried item's own spring-damper
+(`Item._physics_process`, easing toward `held_pose()` rather than snapping to it) hadn't caught
+up by the shot's default capture frame, 21 frames after pickup. Recaptured 90 frames in instead
+(`tools/shot.sh out.png 90 96`) and the ball was there, floating in front of the console and
+covering its whole BPM/ADD/RAMP/DEL/SIG row.
+
+`ToyItem.held_pose()`'s `-size - 0.3` puts the ball's CENTRE a radius-plus-30cm from the hand --
+and since the ball's own radius IS `size`, that radius cancels out of where the NEAR surface
+ends up: always a flat 30cm from the eye, for a toy 3cm across or 20cm across alike. Every other
+toy is under the 0.1 branch that skips this entirely (held flat in the palm), so this formula
+has in practice only ever been tuned against the one toy big enough to notice, and 30cm of
+clearance for its 20cm radius is most of a desktop view.
+
+Fixed by doubling the radius term before the flat clearance (`-size * 2.0 - 0.3`): the near
+surface moves from a flat 30cm to `size + 0.3`, so the beach ball gets 50cm instead of 30 while
+every toy under the 0.1 branch is untouched (this line never runs for them) and the formula's
+own limit as size -> 0 is unchanged. Re-screenshotted the same repro (same frame-90 technique) --
+the BPM row is clear now, though the ball still covers part of the timeline above it, which
+reads as proportionate for something 20cm across held up to look at rather than as the bug.
+Pinned by `_test_the_beach_ball_does_not_crowd_the_view`, which checks the computed near-surface
+distance against the old flat number rather than re-rendering a frame.
+
+Open follow-ups, not built:
+- The spring-damper settle time this tick ran into by accident (a carried item takes well over
+  a second of physics time to reach a `held_pose` far from its home spot) is itself worth a
+  look if a future tick is ever about how a THROW or a CATCH feels on a long carry -- not
+  touched here, since this tick's bug was about the end state, not the time to reach it.

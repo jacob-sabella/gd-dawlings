@@ -169,12 +169,23 @@ func centre_height() -> float:
 
 
 ## In the palm, as the bouncy ball is; the beach ball, too big to be held there, out in front of
-## the hand and a little below it, both hands round it as it were, where it does not fill the view.
+## the hand and a little below it, both hands round it as it were, where it does not fill the
+## view.
+##
+## Was `-size - 0.3`: pushed the CENTRE out by the ball's own radius plus a flat 30cm, which
+## puts the NEAR surface at that flat 30cm regardless of how big the ball is, since the radius
+## cancels out of its own placement. Fine for a toy a few centimetres across; for the beach ball
+## (0.2m, the only thing past the 0.1 branch above) a surface 30cm from the eye is still most of
+## the desktop view (2026-10-11 loop_backlog.md, "Known rough edges": "held on a desktop, is a
+## big thing over the desk and hides some of it" -- confirmed by a screenshot, where it covered
+## the console's whole BPM row). Doubling the radius term before the flat clearance keeps a small
+## toy exactly where it was (the two formulas agree as size -> 0) and gives the beach ball a
+## near surface at 0.5m instead of 0.3m, measured clear of the console in the same screenshot.
 func held_pose() -> Transform3D:
 	var size := float(_toy()["size"])
 	if size < 0.1:
 		return Transform3D.IDENTITY
-	return Transform3D(Basis.IDENTITY, Vector3(0.06, -0.12, -size - 0.3))
+	return Transform3D(Basis.IDENTITY, Vector3(0.06, -0.12, -size * 2.0 - 0.3))
 
 
 func flies() -> Dictionary:

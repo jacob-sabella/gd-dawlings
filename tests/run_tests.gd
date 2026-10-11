@@ -148,6 +148,7 @@ func _ready() -> void:
 	await _test_the_yoyo_does_its_tricks()
 	await _test_each_venue_has_a_toy_of_its_own()
 	_test_the_neon_ball_glows_without_blooming_into_one_colour()
+	_test_the_beach_ball_does_not_crowd_the_view()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
 	await _test_somebody_elses_radio_plane_flies_where_they_say()
@@ -14542,6 +14543,27 @@ func _test_the_neon_ball_glows_without_blooming_into_one_colour() -> void:
 	check("and the shell between the bands carries no glow of its own to bloom with",
 			not shell.emission_enabled)
 	toy.queue_free()
+
+
+## THE CROWDING THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "The beach ball,
+## held on a desktop, is a big thing over the desk and hides some of it"). `held_pose`'s old
+## `-size - 0.3` put the ball's CENTRE a radius-plus-30cm from the glove, which means its own
+## radius cancels out of where its NEAR surface ends up -- always a flat 30cm away, for a toy
+## 3cm across or 20cm across alike. Confirmed off a screenshot: at 30cm the beach ball (the only
+## toy past the 0.1 branch) covered the console's whole BPM/ADD/RAMP/DEL/SIG row.
+func _test_the_beach_ball_does_not_crowd_the_view() -> void:
+	ToyItem.shown = &"rooftop"
+	var toy := ToyItem.new()
+	add_child(toy)
+	check("it is the big one", float(toy._toy()["size"]) >= 0.1)
+	var size := float(toy._toy()["size"])
+	var near_edge := -toy.held_pose().origin.z - size
+	check("its near surface clears the old flat 30cm by a real margin (%.2fm)" % near_edge,
+			near_edge > 0.4)
+	check("and a toy too small to need pushing out is untouched (palm pose is the origin)",
+			ToyItem.TOYS[&"studio"]["size"] < 0.1)
+	toy.queue_free()
+	ToyItem.shown = &"studio"
 
 
 func _test_the_yoyo_does_its_tricks() -> void:
