@@ -1573,8 +1573,7 @@ gloriously wrong and you survive anyway.
   of your own trick is not what others see. The string is a straight line, never slack, even
   over the top of around the world. No "walk the dog" along the floor.
 - The cradle: the balls are swung as one group, not five bodies, so nothing but a clean one,
-  two or three out happens (no ball nudged by hand, no messy collisions). Held on a desktop it
-  floats just over the glove rather than resting on it.
+  two or three out happens (no ball nudged by hand, no messy collisions).
 - The hoop: a desktop throw of the ball goes along the view with a loft, not at a target, so a
   basket from the desk takes practice; there is no aim assist and no shot count or streak. The
   base solid stops the walker but the ball rolls under the lamp arm's height freely. The chalk
@@ -2524,3 +2523,27 @@ whole fader row reads clearly under the keytar now, with the keybed still tipped
 and legible to play by -- matching the file header's own stated intent for the pose. Pinned by
 `_test_a_held_keytar_clears_the_console_instead_of_covering_it`, which checks the exact -0.35
 rather than re-rendering a frame.
+
+
+## Tick X -- a held cradle floated clear of the hand it was in (2026-10-11)
+
+"The cradle: ... Held on a desktop it floats just over the glove rather than resting on it," from
+this list. Didn't trust a render on its own: added a one-frame `--shot-debug` print (reusing the
+existing frame-28 hook, moved to frame 90 for the settle time Tick V already found) of the carried
+item's and the mouse's own `CarryGlove`'s `global_position`. At frame 90 the cradle's base sat at
+world y 1.109 against the glove's own origin at 1.130 -- and the glove's palm mesh sits centred on
+its origin, roughly 0.021m thick along the direction its target transform turns into world "up"
+(`Glove._palm`'s sphere, scaled and sized in `core/session/glove.gd`), putting the palm's own top
+surface near y 1.151. A good 4cm of daylight between the two, which a screenshot confirmed reads
+exactly as "floating over" rather than "resting on".
+
+`CradleItem.held_pose()` had one pose, shared by a tracked headset hand and the desktop mouse
+alike, with a flat `-0.03` in y. A tracked hand has no `Glove` drawn under it at all (only a mouse
+gets one -- `core/input/interactor.gd`'s own comment on `_show_glove`), so the pose was never
+wrong for a headset; it was only ever wrong for the one case with a visible hand mesh to float
+over. Branched the desktop (`MouseInteractor`) case out, same as the keytar's own branch, and
+raised its y from `-0.03` to `0.0` -- close enough, re-shot the same repro (`SHOT_ARGS="--carry
+cradle" tools/shot.sh`), that the base now reads as sitting on the fingers rather than hovering
+clear of them. The headset branch keeps the old pose untouched. Pinned by
+`_test_a_held_cradle_rests_on_the_mouses_glove_instead_of_floating_over_it`, which checks both
+branches' exact y.

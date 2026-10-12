@@ -150,6 +150,7 @@ func _ready() -> void:
 	_test_the_neon_ball_glows_without_blooming_into_one_colour()
 	_test_the_beach_ball_does_not_crowd_the_view()
 	_test_a_held_keytar_clears_the_console_instead_of_covering_it()
+	_test_a_held_cradle_rests_on_the_mouses_glove_instead_of_floating_over_it()
 	await _test_pockets_carry_more_than_one_thing()
 	await _test_the_radio_plane_flies_where_you_point()
 	await _test_somebody_elses_radio_plane_flies_where_they_say()
@@ -14585,6 +14586,28 @@ func _test_a_held_keytar_clears_the_console_instead_of_covering_it() -> void:
 	check("the base offset carries the -0.35m pushed out to clear the console (%.2f)" % base.z,
 			is_equal_approx(base.z, -0.35))
 	keytar.queue_free()
+
+
+## THE FLOATING THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Held on a desktop
+## it floats just over the glove rather than resting on it"). Measured rather than eyeballed: a
+## --shot-debug print of the settled item's and the mouse's own CarryGlove's global_position (90
+## frames in, past the carry spring-damper) put the cradle's base a good 4cm below the palm's own
+## top surface -- `held_pose`'s old flat `-0.03` in y, shared with the headset pose, never
+## accounted for the glove only a mouse draws under it. Raising the desktop branch's y to `0.0`
+## closed it in a re-shot of the same repro: the base now sits on the fingers rather than
+## hovering clear of them. The headset branch (no Glove drawn; a tracked hand holds it exactly
+## where it is) is untouched.
+func _test_a_held_cradle_rests_on_the_mouses_glove_instead_of_floating_over_it() -> void:
+	var hand := MouseInteractor.new()
+	var cradle := CradleItem.new()
+	add_child(cradle)
+	cradle.carried_by = hand
+	check("on a desktop its base sits right at the carry pose, not the old flat -0.03 below it",
+			is_equal_approx(cradle.held_pose().origin.y, 0.0))
+	cradle.carried_by = null
+	check("a tracked hand (no carried_by, or anything but a mouse) keeps the untouched pose",
+			is_equal_approx(cradle.held_pose().origin.y, -0.03))
+	cradle.queue_free()
 
 
 func _test_the_yoyo_does_its_tricks() -> void:

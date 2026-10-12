@@ -156,7 +156,10 @@ func centre_height() -> float:
 ## Held up just over the hand, turned a little toward you so the row is seen at three-quarters:
 ## along its swing, and the balls out either end both in view.
 func held_pose() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, 0.3) * Basis(Vector3.RIGHT, 0.25), Vector3(0.05, -0.03, -0.08))
+	var turn := Basis(Vector3.UP, 0.3) * Basis(Vector3.RIGHT, 0.25)
+	if carried_by is MouseInteractor:
+		return Transform3D(turn, Vector3(0.05, 0.0, -0.08))
+	return Transform3D(turn, Vector3(0.05, -0.03, -0.08))
 
 
 func flies() -> Dictionary:
