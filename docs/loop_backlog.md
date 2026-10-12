@@ -1546,9 +1546,8 @@ gloriously wrong and you survive anyway.
 - Seen from a second machine: the colour round what somebody holds is faint on small things
   now that it is gentle enough for a keytar. Their glove's cuff and their caption still say
   whose it is. A keytar in a ghost's hand still shows a hot spot where the desk lamp catches its
-  gloss. A ghost's caption ("HOLDING RADIO PLANE") is drawn over whatever is behind its head.
-  `tools/session_shot.sh` sometimes starts the guest before the host is listening, and that
-  guest never joins.
+  gloss. `tools/session_shot.sh` sometimes starts the guest before the host is listening, and
+  that guest never joins.
 
 - The radio plane: putting the radio down puts the plane back beside it at once, from
   wherever it was, even mid-flight. A mirror shows your ghost holding the radio but never the
@@ -2547,3 +2546,30 @@ cradle" tools/shot.sh`), that the base now reads as sitting on the fingers rathe
 clear of them. The headset branch keeps the old pose untouched. Pinned by
 `_test_a_held_cradle_rests_on_the_mouses_glove_instead_of_floating_over_it`, which checks both
 branches' exact y.
+
+
+## Tick Y -- a ghost's own name floated through whatever stood in front of it (2026-10-11)
+
+"A ghost's caption ('HOLDING RADIO PLANE') is drawn over whatever is behind its head," from this
+list. Built a real repro rather than guessing at the geometry: `--visitor` to stand a second
+player (Lin) behind the timeline's SCREEN-mode surface from the seat's own camera, holding the
+keytar so her caption had text, framed with `--cam` so her head and the label above it both
+landed in frame. The screenshot showed "Lin" and "HOLDING KEYTAR" floating in the middle of the
+timeline -- the screen is a few centimetres from the camera and should have hidden her and
+anything drawn where she is completely.
+
+`Presence.Avatar`'s `_tag` and `_caption` -- the name and the "HOLDING ..." line, both Label3D
+nodes built in `_init` -- had `no_depth_test = true`. That skips the depth comparison outright, so
+the label draws regardless of what opaque geometry already occupies that pixel, nearer the camera
+or not; it was never "drawn over whatever is BEHIND its head" so much as drawn over everything,
+head included, whatever stood between the two. Removed the line (Godot's own default for a
+GeometryInstance3D is the ordinary depth test) and re-shot the same repro: the label is cut by the
+screen's edge exactly where its mesh is, the same as the head it floats above already was. A
+second repro with nothing between Lin and the camera confirmed the ordinary case is untouched --
+the label still draws, just honestly now.
+
+The dot that marks who is speaking (`presence.gd`'s `_dot`) keeps its own `no_depth_test = true`:
+a different thing (an always-on indicator, not a label meant to read as part of a specific,
+occludable person), and out of scope for this tick. Pinned by
+`_test_a_ghosts_name_and_caption_respect_what_is_in_front_of_them`, which checks the property
+directly on a fresh `Presence.Avatar` rather than re-rendering a frame.

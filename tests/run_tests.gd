@@ -237,6 +237,7 @@ func _ready() -> void:
 	_test_the_host_keeps_one_hand_per_control()
 	_test_presence_marks_what_others_hold()
 	_test_a_ghost_is_the_size_of_a_large_person()
+	_test_a_ghosts_name_and_caption_respect_what_is_in_front_of_them()
 	_test_a_glove_flies_with_a_bounce()
 	_test_a_ghosts_hand_goes_to_what_they_touch()
 	_test_a_look_is_kept_and_cleaned()
@@ -13431,6 +13432,23 @@ func _test_a_ghost_is_the_size_of_a_large_person() -> void:
 	var hits := ZFightProbe.scan(ghost)
 	check("and no two of its faces share a plane (%d)" % hits.size(), hits.is_empty())
 	remove_child(ghost)
+	ghost.free()
+
+
+## THE BLEED-THROUGH THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "A ghost's
+## caption ... is drawn over whatever is behind its head"). Confirmed with a screenshot before
+## touching anything: a visitor placed behind the timeline's SCREEN-mode surface, close enough to
+## the seat to be fully hidden by it, still showed "Lin" and "HOLDING KEYTAR" floating in the
+## middle of the timeline -- `no_depth_test` skips the depth comparison outright, so the label
+## drew over the nearer, opaque screen rather than being hidden by it the way the ghost's own
+## head already was. Removed it (the engine default is the ordinary depth test); re-shot the
+## same repro and the label is cut by the screen's edge exactly where the screen's mesh is, same
+## as the head it floats above.
+func _test_a_ghosts_name_and_caption_respect_what_is_in_front_of_them() -> void:
+	var ghost := Presence.Avatar.new()
+	for label in [ghost._tag, ghost._caption]:
+		check("no_depth_test off, so the ordinary depth test hides it behind what is nearer",
+				not label.no_depth_test)
 	ghost.free()
 
 

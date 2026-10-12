@@ -739,7 +739,13 @@ void fragment() {
 
 		for label in [_tag, _caption]:
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			label.no_depth_test = true
+			# Was no_depth_test: floated the name and the "HOLDING ..." caption in front of
+			# anything nearer the camera too, not just whatever was actually behind the ghost's
+			# head -- a screenshot through the timeline screen (SCREEN mode, right in front of the
+			# seat) showed "Lin" and "HOLDING KEYTAR" drawn straight over it. The ordinary depth
+			# test is what a billboard a few centimetres above a head wants: nothing stands
+			# between an unobstructed view and the label it would not also stand between for the
+			# head itself.
 			label.render_priority = 5
 			label.outline_render_priority = 4
 			label.outline_modulate = Color(0, 0, 0, 0.85)
