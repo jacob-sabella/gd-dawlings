@@ -184,6 +184,7 @@ func _ready() -> void:
 	_test_one_recording_goes_onto_every_armed_track_of_its_input()
 	_test_the_host_records_its_own_microphone_on_the_built_in_engine()
 	_test_the_host_records_its_own_keys_on_the_built_in_engine()
+	_test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi()
 	_test_hit_recorder_rolls_takes_every_bar()
 	_test_a_looped_item_survives_the_wire_and_a_split()
 	_test_the_demo_song_loops_on_the_bar()
@@ -9966,6 +9967,43 @@ func _test_the_host_records_its_own_keys_on_the_built_in_engine() -> void:
 	check("where the DAW records its own inputs, the host's keys are its business", not gm.host_records()
 			and not gm.plays())
 	gm._process(0.016)
+	Session.start_solo()
+	_offline()
+	if is_instance_valid(reaper):
+		reaper.queue_free()
+
+
+## THE GAP THIS EXISTS FOR (docs/loop_backlog.md, "Known rough edges": "Keytar: on a host, a
+## MIDI keyboard still goes to Reaper rather than through the keytar (GuestMidi opens MIDI only
+## from the guest's panel)"). A keytar in hand plays through GuestMidi regardless of whether the
+## DAW records its own MIDI input -- `plays()` says "anyone's with a keytar" -- but the panel
+## that lets a player choose where its notes land (`_place_mic`'s `_keys_box`) was hidden whenever
+## `host_records()` was false, the same test that correctly hides it for ordinary ambient MIDI
+## input on a host whose Reaper already takes that itself. The keytar is not that ambient input:
+## it is this panel's own `target_track`, and had no way back to it.
+func _test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi() -> void:
+	_offline()
+	_as_session(Session.Role.HOST, 1)
+	Session.local_name = "Ada"
+	var gm := Session.guest_midi
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	DAW.use(reaper)
+	var panel := SessionPanel.new()
+	add_child(panel)
+	panel.open()
+	check("hidden for an ordinary host on Reaper, same as before", not panel._keys_box.visible)
+	gm.keytar = true
+	check("but back once a keytar is in hand, in the host's own section",
+			panel._keys_box.visible and panel._keys_box.get_parent() == panel._column)
+	gm.target_track = 0
+	panel._refresh_midi()
+	check("unset still reads as the armed track, not nowhere, matching take_track()'s own fallback",
+			panel._play_into.get_item_text(panel._play_into.get_item_index(0)) == "The armed track")
+	gm.keytar = false
+	check("and hidden again once it is put down", not panel._keys_box.visible)
+	remove_child(panel)
+	panel.free()
 	Session.start_solo()
 	_offline()
 	if is_instance_valid(reaper):

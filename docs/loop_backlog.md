@@ -1584,9 +1584,7 @@ gloriously wrong and you survive anyway.
   not a gesture (a thumb flick, two hands for a shuffle). Their state is only the count of tricks
   since pick-up, so somebody joining mid-fidget sees a fresh stack until the item is put down.
 
-- Keytar: on a host, a MIDI keyboard still goes to Reaper rather than through the keytar
-  (GuestMidi opens MIDI only from the guest's panel). It is not yet tried in a headset, where the
-  pose by its neck grip is untested.
+- Keytar: it is not yet tried in a headset, where the pose by its neck grip is untested.
 
 - Hand percussion: another player's hits are heard in the room only. No socket carries them into a
   personal mix, and they are not in their ON AIR monitor. On a desktop, sweeping the cursor
@@ -2573,3 +2571,34 @@ a different thing (an always-on indicator, not a label meant to read as part of 
 occludable person), and out of scope for this tick. Pinned by
 `_test_a_ghosts_name_and_caption_respect_what_is_in_front_of_them`, which checks the property
 directly on a fresh `Presence.Avatar` rather than re-rendering a frame.
+
+
+## Tick Z -- a keytar in hand had no way to say where its notes went, on a host's own Reaper (2026-10-11)
+
+Asked directly rather than pulled from the list: wanting the keytar hooked up to "any synth
+plugin I have" turned out, once narrowed down, to mean choosing which track a keytar's notes are
+recorded onto -- already exactly what `GuestMidi.target_track` and the session panel's own "Play
+into" dropdown do, confirmed in `core/session/guest_midi.gd`'s own docstring ("whatever this
+machine is, a host or alone too"). The dropdown was just unreachable in the one case that matters
+for it: `SessionPanel._place_mic()` hides `_keys_box` whenever `host_records()` is false, which is
+right for ordinary MIDI keyboard input on a host whose Reaper already takes that itself -- but
+`GuestMidi.plays()` says a keytar plays through here regardless ("anyone's with a keytar"), so the
+one control that lets a player steer where it lands was gone in exactly the case that needed it.
+
+Fixed by widening `_keys_box`'s (and the signal that refreshes it) visibility to include
+`Session.guest_midi.keytar`, so the panel comes back for as long as the keytar is actually in
+hand, host-on-Reaper included, and goes again once it is put down. Along the way, the dropdown's
+own "nothing chosen" label (`"The armed track" if gm.host_records() else "Nowhere"`) was caught
+making the same host_records()-only assumption `take_track()` itself does not: unset, a keytar
+already falls through to the armed track, never nowhere, so the label was corrected to match.
+Verified with a test rather than a screenshot -- this is panel visibility and dropdown text, not
+rendered geometry. Pinned by
+`_test_a_keytar_reaches_its_track_choice_even_where_reaper_records_its_own_midi`, which puts a
+host on a `ReaperBackend`, confirms the panel is hidden without a keytar, shown (in the host's own
+section, not a guest's) with one in hand, reads the "armed track" label correctly, and hides again
+once it is put down.
+
+Open follow-ups, not built:
+- Ambient (non-keytar) MIDI input on a Reaper host still goes straight to Reaper with no panel of
+  its own here, by design -- Reaper already has its own input choice for that case. Only the
+  keytar's own always-captured input was missing its way back to this panel.

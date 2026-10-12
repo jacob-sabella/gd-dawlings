@@ -499,6 +499,13 @@ func _build_midi(box: VBoxContainer) -> void:
 	box.add_child(_take_status)
 	if Session.guest_midi != null:
 		Session.guest_midi.changed.connect(_refresh_take)
+		# A keytar picked up makes this machine's keys play (GuestMidi.plays) even on a host
+		# whose Reaper records its own MIDI input, where the panel is otherwise hidden on the
+		# assumption that Reaper's own input needs no "Play into" choice from here. The keytar is
+		# not that MIDI input: it is this panel's own `target_track`, same as a guest's, so a
+		# host (or someone alone) holding one needs the panel back for exactly as long as they
+		# hold it.
+		Session.guest_midi.changed.connect(_place_mic)
 
 
 func _choice() -> OptionButton:
@@ -652,7 +659,11 @@ func _place_mic() -> void:
 	if _keys_box.get_parent() != home:
 		_keys_box.reparent(home, false)
 	home.move_child(_keys_box, home.get_children().find(_mic_box))
-	_keys_box.visible = guest or host_records
+	# A keytar in hand plays through GuestMidi regardless of whether Reaper records its own MIDI
+	# input (GuestMidi.plays): "anyone's with a keytar". Without this, a host or solo player on
+	# Reaper had no way back into "Play into" to choose where their keytar's notes land, and fell
+	# through to take_track()'s own guess (the first armed, non-microphone track).
+	_keys_box.visible = guest or host_records or Session.guest_midi.keytar
 
 
 ## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
@@ -741,7 +752,9 @@ func _refresh_midi() -> void:
 	else:
 		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
 		_midi_button.text = "Rescan"
-	_fill_tracks(_play_into, gm.target_track, "The armed track" if gm.host_records() else "Nowhere")
+	# Matches take_track()'s own fallback: unset, a keytar (or a host whose DAW does not record
+	# its own input) still lands on the first armed track, never nowhere.
+	_fill_tracks(_play_into, gm.target_track, "The armed track" if gm.host_records() or gm.keytar else "Nowhere")
 	if _monitor.button_pressed != gm.monitor:
 		_monitor.set_pressed_no_signal(gm.monitor)
 	_monitor.disabled = not MonitorSynth.available()
