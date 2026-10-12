@@ -1578,8 +1578,8 @@ gloriously wrong and you survive anyway.
   base solid stops the walker but the ball rolls under the lamp arm's height freely. The chalk
   hoop is drawn but has no net of its own to swing.
 - Darts: no game round them (rounds of three, a running total, 501 down to zero); each throw
-  is scored alone. A dart that misses lies flat on the floor with its flights sunk in it. The
-  aimed throw is desktop only; in a headset a dart flies as the arm throws it, untried.
+  is scored alone. The aimed throw is desktop only; in a headset a dart flies as the arm throws
+  it, untried.
 - Chips and cards: their tricks run on the hand's button, so in a headset they are a trigger pull,
   not a gesture (a thumb flick, two hands for a shuffle). Their state is only the count of tricks
   since pick-up, so somebody joining mid-fidget sees a fresh stack until the item is put down.
@@ -2602,3 +2602,50 @@ Open follow-ups, not built:
 - Ambient (non-keytar) MIDI input on a Reaper host still goes straight to Reaper with no panel of
   its own here, by design -- Reaper already has its own input choice for that case. Only the
   keytar's own always-captured input was missing its way back to this panel.
+
+## Tick AA -- a dart that missed lay on the floor with its own flights sunk into it (2026-10-11)
+
+"A dart that misses lies flat on the floor with its flights sunk in it," from Known rough edges.
+Chased down a hypothesis about the keytar's own glossy body first ("a hot spot where the desk
+lamp catches its gloss," the line above that one) and dropped it: a close screenshot of a held
+keytar did show a blown-out white patch, but zeroing out its clearcoat entirely and re-rendering
+left the exact same pixels (`magick ... -crop ... txt:`, bit for bit) -- which meant the patch was
+never the keytar's material at all, just the DAW screen's own lit SIG button sitting behind it in
+frame. No real repro in hand, and no second finding to replace it with cheaply (it wants a second
+machine's camera on a ghost's hand, which several tries at framing didn't land), so left alone for
+whoever picks it up with a better way to frame that shot, and moved to the dart instead.
+
+Measured rather than trusted there too: a `--shot-debug` hook (temporary, removed after) printed
+a thrown dart's own position every 20 frames once it missed and came to rest loose on the floor --
+exactly `(x, 0.0, z)`, not a hair off. A standalone headless script
+(`godot --headless --script`) loading `dart.glb` and walking every mesh's AABB through its own
+transform (the same technique `HeadphonesItem._lie_flat` already uses) gave the model's real
+cross-section: `0.011102` either side of its own centreline, the whole way down its 0.15 m length.
+
+`DartItem.centre_height()` returns 0 -- right when it is stuck in the board, point-first, since
+the point IS the origin and exactly where it goes in. But a miss does not stick: it lies loose on
+its SIDE instead, and `Item.launch()`'s non-stuck branch sets `resting` straight from the flight's
+own raw floor contact, `Transform3D(Basis(UP, yaw), f.rest)`, with no lift at all --
+`centre_height()` only ever shapes the TUMBLE (`Item._fly()`'s `middle - pose.basis * middle`),
+which nets to exactly zero once the item settles level, regardless of what `centre_height()`
+returns. So the dart's own point-first convention, right for the one state it was written for,
+left its OTHER rest state -- lying on a cross-section no other thrown item in the room has reason
+to think about, since each of theirs already rests on its own base -- sitting exactly on the
+floor's own centreline, flights and all, half of it below the boards.
+
+Fixed narrowly, not by touching `centre_height()` (the tumble still wants 0 there) but by giving
+`Item` a second, independently overridable hook, `loose_rest_lift()`, defaulting to 0 (so every
+other item is untouched), called from both `launch()`'s non-stuck branch and `lay_down()` (a put
+rather than a throw hits the exact same floor-centreline problem). `DartItem` overrides it with
+the measured `0.0111`. Checked by re-running the same `--shot-debug` repro: the dart's own rest Y
+now converges to `0.0111` precisely, not `0.0`, and pinned in `tests/run_tests.gd`
+(`_test_darts_stick_in_the_board_and_score`, which already laid a dart down loose) against
+`DartItem.LOOSE_LIFT` rather than a screenshot. The same test's earlier assertion that a dart
+STUCK in the board lands exactly on its aimed point, unmoved, stands untouched -- confirming the
+stuck path was never touched by this fix.
+
+Open follow-ups, not built:
+- The keytar's own "hot spot ... where the desk lamp catches its gloss" line, above, is still
+  unconfirmed and still on the list: the DAW-screen false lead is now written down so nobody
+  repeats it, but the real repro (a second machine's camera on a ghost holding one, somewhere
+  near that lamp) was not found this tick.

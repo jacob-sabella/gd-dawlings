@@ -190,6 +190,14 @@ func centre_height() -> float:
 	return 0.04
 
 
+## Override: how far above the floor the origin sits once a throw settles loose, not stuck. The
+## origin is normally already the item's own ground contact point (`centre_height`'s "bottom"),
+## so 0; override only for one whose origin is its bottom in some other rest (a dart's is its
+## point, right stuck on end, not lying on its side).
+func loose_rest_lift() -> float:
+	return 0.0
+
+
 ## Override: how it flies. `bounce` is how much of its speed into a surface it gets back, `roll`
 ## how quickly it slows sliding along the floor (m/s²), `drag` the air's, per second. A rubber
 ## duck is mostly a thud; a bouncy ball is mostly bounce. `wing`, for something that glides
@@ -345,7 +353,8 @@ func launch(f: Flight, with: Array, stays := true) -> void:
 	launched_with = with
 	_size = 1.0
 	_home_after = not stays
-	resting = Transform3D(Basis(f.rest_turn), f.rest) if f.stuck else Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest)
+	resting = Transform3D(Basis(f.rest_turn), f.rest) if f.stuck \
+			else Transform3D(Basis(Vector3.UP, f.rest_yaw), f.rest + Vector3.UP * loose_rest_lift())
 	loose_for = 0.0
 	_velocity = Vector3.ZERO
 	_arc_length = 0.0
@@ -440,7 +449,7 @@ func in_hand() -> bool:
 
 ## Out of the hand onto the floor at `spot` (in the parent's frame), turned to `yaw`.
 func lay_down(spot: Vector3, yaw: float) -> void:
-	stick_at(Transform3D(Basis(Vector3.UP, yaw), spot))
+	stick_at(Transform3D(Basis(Vector3.UP, yaw), spot + Vector3.UP * loose_rest_lift()))
 
 
 ## Whether, loose, it is stuck in something rather than lying on the floor: lying, it is always

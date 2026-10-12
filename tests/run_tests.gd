@@ -15089,6 +15089,8 @@ func _test_darts_stick_in_the_board_and_score() -> void:
 	darts[0].lay_down(Vector3(0, 0, 1), 0.4)
 	check("a dart on the floor is not stuck", not darts[0].is_stuck() and darts[0].readout() == "on the floor"
 			and not darts[0].hint().contains("pull it out"))
+	check("lying on its side its flights clear the floor rather than sinking into it (%s)"
+			% [darts[0].resting.origin.y], is_equal_approx(darts[0].resting.origin.y, DartItem.LOOSE_LIFT))
 
 	# Aimed, on a desktop: at the board where the cursor's ray meets it.
 	var aim := Transform3D(Basis.looking_at(target - oche, Vector3.UP), oche)

@@ -18,6 +18,10 @@ const MODEL := "res://assets/models/dart.glb"
 const LENGTH := 0.15
 ## How far the point goes in.
 const POINT_IN := 0.012
+## Half the barrel and flights' own width (measured off `tools/blender/darts.py`'s model): stuck
+## in the board the point is the origin and right where it is, but lying loose it is on its
+## side, and without this its flights are drawn half into the floor they are lying on.
+const LOOSE_LIFT := 0.0111
 ## The board's rings, from its middle (m), and its numbers clockwise from the top.
 const BULL := 0.00635
 const OUTER_BULL := 0.0159
@@ -191,6 +195,11 @@ func _grip_shape() -> Shape3D:
 ## It turns about its point: the point is where it goes in, and where it is.
 func centre_height() -> float:
 	return 0.0
+
+
+## Only when it is not stuck: lying on its side, not standing on its point.
+func loose_rest_lift() -> float:
+	return LOOSE_LIFT
 
 
 ## Held like a pencil, between finger and thumb, point out ahead and a little up.
