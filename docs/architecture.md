@@ -1459,6 +1459,19 @@ for keys its `takeable` says are items, so a fader somebody has is still theirs 
 it was taken from hears the new table and lets go (`Presence._apply_items`), with a notice of who
 took it. Hovered, it says whose hand it is in and that it can be taken.
 
+Four kinds are not shared: the mic, the headphones, the tablet and the keytar
+(`ItemRoom.PERSONAL_KINDS`) are each one player's own, so the shelf's instance of one is a
+dispenser, never itself held. `Item._on_grab_begin` hands a grab of one of these to
+`ItemRoom.take_personal(kind, peer)` instead of `Interactor.pick_up`, which spawns (or finds) a
+copy under its own id, `"<kind><peer id>"`, built on the same `spawn`/`bound_to`/`may_hold` that
+Tour's spilled instruments already use to bind a spawned item to one peer's hand. The host hears
+it as a room ask (`take_personal`), idempotent like `spawn` itself, so a prediction that beat the
+ask there is a no-op. The copy has no home of its own: a put-down (`ItemRoom.retire`) despawns it
+rather than sending it back to a shelf spot, though pocketing one still works, since a pocket was
+already a hand's own. A guest's `apply()` spawns a peer's copy the moment it appears in the
+room's state, not only once it is already known locally, which is what lets a brand-new id reach
+a guest at all; every other kind still relies on already knowing its id.
+
 The mic (`MicItem`) has a home of its own. `ItemRoom.set_spots(spots, homes)` takes
 homes by kind, and the studio gives the mic `Venue.mic_spot()`: the clip at the end of the
 booth's mic stand (`ZoneKit.mic_stand`, its clip at `ZoneKit.mic_clip`), along the boom. A venue

@@ -296,10 +296,21 @@ func work(down: bool) -> void:
 
 ## A grab is a pick-up. The interactor still thinks it is dragging something until the button
 ## comes up, which is harmless: nothing happens on a move.
+##
+## The shelf's own copy of a personal kind (`ItemRoom.PERSONAL_KINDS`) is never actually held: it
+## is a dispenser, and a hand reaching for it is given a copy of its own instead
+## (`ItemRoom.take_for`). The grab it was given here is let go of at once, so the dispenser stays
+## there for the next hand.
 func _on_grab_begin(_at: Vector3) -> void:
 	var hand := held_by as Interactor
-	if hand != null:
-		hand.pick_up(self)
+	if hand == null:
+		return
+	var room := ItemRoom.of(self)
+	if room != null and id in ItemRoom.PERSONAL_KINDS:
+		grab_end(hand)
+		room.take_for(hand, id)
+		return
+	hand.pick_up(self)
 
 
 # --- where it is -------------------------------------------------------------------------------
@@ -556,7 +567,11 @@ func _physics_process(delta: float) -> void:
 	if state == State.LOOSE:
 		loose_for += delta
 		if loose_for > TIDY_SECONDS:
-			go_home()
+			var room := ItemRoom.of(self)
+			if room != null:
+				room.retire(self)
+			else:
+				go_home()
 			return
 	if state != State.HELD and _at_rest(goal) and _size == size_wanted:
 		position = goal.origin
@@ -612,7 +627,11 @@ func _fly(delta: float) -> void:
 	landed.emit()
 	if _home_after:
 		_home_after = false
-		go_home()
+		var room := ItemRoom.of(self)
+		if room != null:
+			room.retire(self)
+		else:
+			go_home()
 
 
 func _at_rest(goal: Transform3D) -> bool:

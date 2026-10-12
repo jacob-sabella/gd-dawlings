@@ -64,7 +64,7 @@ func item_title() -> String:
 func hint() -> String:
 	if state == State.HELD and not is_held_elsewhere():
 		return "A–' play  ·  Z X octave  ·  arrows walk  ·  click for the keys again"
-	return _hint("click to pick up and play it")
+	return _hint("click to take your own and play it")
 
 
 ## The key a pitch is shown on: itself if it is on the keytar, else the same note an octave or

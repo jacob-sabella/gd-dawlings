@@ -29,6 +29,13 @@ const AT_FEET := 0.45
 const AIM_REACH := 8.0
 const AIM_LENGTH := 2.5
 
+## The kinds nobody shares: the shelf keeps one of each (`KINDS`, unchanged) as a dispenser that
+## is never itself held, and a hand reaching for it is given a copy of its own instead
+## (`take_personal`), bound to them (`Item.bound_to`, the same mechanism Tour marks a spill
+## with) so nobody else's hand can take it. Put down, that copy is gone rather than sent to a
+## shelf spot that would mean nothing shared between two people's copies (`retire`).
+const PERSONAL_KINDS: Array[StringName] = [&"mic", &"headphones", &"tablet", &"keytar"]
+
 ## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already
 ## done here. The studio sends it to the host as an ask.
 signal asked(verb: StringName, args: Array)
@@ -40,6 +47,10 @@ signal moved(item: Item)
 signal played(item: InstrumentItem, velocity: int, struck: bool)
 ## A hand here was refused an item (Item.may_hold, a Tour "marked" spill): for the studio's toast.
 signal refused(item: Item, why: String)
+## `item` is a fresh personal copy, just spawned and bound (`take_personal`): for the studio to
+## say whose it is (`Item.bound_name`), which needs `Session.name_of` and so stays out of this
+## file, the same as `local_peer` above is asked through a callable rather than named here.
+signal personal_taken(item: Item)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -139,6 +150,13 @@ static func kind_of(id: StringName) -> StringName:
 	return StringName(String(id).rstrip("0123456789"))
 
 
+## The peer a personal copy's own id names ("tablet7" -> 7), `take_personal`'s id read backward.
+## Good enough to stand in for syncing `Item.bound_to` across the wire: a personal copy's id
+## always names exactly who it is for, so there is nothing else to carry.
+static func peer_of(id: StringName) -> int:
+	return int(String(id).trim_prefix(String(kind_of(id))))
+
+
 ## What an item of `kind` looks like, and nothing else: no grip, no springs. For a ghost to
 ## carry, so a mirror or another person sees what is in your hand. `kind` here is an item's own
 ## id, which for a spilled instrument's second voice ("cowbell2") is not one `make` answers to
@@ -226,6 +244,52 @@ func spawned_ids() -> Array[StringName]:
 		if not (id in KINDS):
 			out.append(id)
 	return out
+
+
+## `id`'s kind, said in the same breath: not `kind_of(id)`, which is also true of the dispenser
+## itself (`kind_of("tablet") == "tablet"`) -- this is false for the dispenser, true only for a
+## copy actually spawned for somebody (`kind_of(id) in PERSONAL_KINDS and id != kind_of(id)`).
+func is_personal_copy(id: StringName) -> bool:
+	var kind := kind_of(id)
+	return kind in PERSONAL_KINDS and id != kind
+
+
+## `peer`'s own copy of a personal kind: the one already spawned for them if they have one
+## (idempotent, same as `spawn`), or a fresh one at the dispenser's own spot. Modelled directly on
+## `scenes/studio.gd`'s `_spill_instrument`/`_dress_spilled` (spawn, then bind) -- the same shape,
+## triggered by a pick-up instead of a card falling out of the case.
+func take_personal(kind: StringName, peer: int) -> Item:
+	if not (kind in PERSONAL_KINDS) or peer <= 0:
+		return null
+	var id := StringName("%s%d" % [kind, peer])
+	var home: Transform3D = items[kind].home if items.has(kind) else Transform3D.IDENTITY
+	var item := spawn(kind, id, home)
+	if item == null:
+		return null
+	item.bound_to = peer
+	personal_taken.emit(item)
+	return item
+
+
+## A hand here reached for the shelf's own dispenser of a personal kind (`Item._on_grab_begin`'s
+## redirect): their own copy, given to the hand at once, and the ask that tells the host so.
+func take_for(hand: Interactor, kind: StringName) -> void:
+	var peer := int(local_peer.call()) if local_peer.is_valid() else 1
+	var item := take_personal(kind, peer)
+	if item == null:
+		return
+	hand.pick_up(item)
+	asked.emit(&"take_personal", [kind])
+
+
+## `item` out of a hand or off the floor: the shelf, for most kinds (`Item.go_home`); gone for
+## good, for a personal copy (`is_personal_copy`), since there is no shelf spot that would mean
+## anything once two people can each have one of their own.
+func retire(item: Item) -> void:
+	if is_personal_copy(item.id):
+		despawn(item.id)
+	else:
+		item.go_home()
 
 
 ## Tossed out of the case, on the host: lobbed at `to` with a little sideways scatter and a
@@ -317,15 +381,29 @@ func state() -> Dictionary:
 ## Make the items what the host's room says (`state`). Not one a hand here has, nor one this
 ## guest has put somewhere and not heard back about (`pending`, by id); nor one the room says is
 ## in a hand, which the holds put there (Presence). One the room has on the floor lands there;
-## one it leaves out goes home.
+## one it leaves out goes home -- unless it is a personal copy nobody here has met yet (spawned
+## by another peer's pick-up, or already out there when this one joined), which is made real
+## here too, the same way a Tour spill reaches a guest that was not there when it fell; or one
+## nobody holds any more, which is retired rather than sent home.
 func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
+	for id in room_items:
+		if items.has(id) or not is_personal_copy(id):
+			continue
+		var kind := kind_of(id)
+		var item := spawn(kind, id, items[kind].home if items.has(kind) else Transform3D.IDENTITY)
+		if item != null:
+			item.bound_to = peer_of(id)
+			personal_taken.emit(item)
+	var gone: Array[StringName] = []
 	for id in items:
 		var item: Item = items[id]
 		if pending.has(id) or item.carried_by != null:
 			continue
 		var entry: Variant = room_items.get(id)
 		if entry == null:
-			if item.state != Item.State.HOME:
+			if is_personal_copy(id):
+				gone.append(id)
+			elif item.state != Item.State.HOME:
 				item.go_home()
 			continue
 		var spot := entry as Array
@@ -360,13 +438,20 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 					float(spot[8])).normalized()), at))
 			continue
 		item.lay_down(at, float(spot[3]))
+	for id in gone:
+		despawn(id)
 
 
 ## Lay `item` on the floor at `at` (this node's frame), turned to `yaw`, if it can lie there;
 ## home if it cannot. True if it lies there. The host's answer to a put-down, and a hand's own.
+## A personal copy never lies anywhere: putting it down retires it (`retire`), same as sending it
+## home, since there is no floor spot that would mean anything once two people can each have one.
 func lay(item: Item, at: Vector2, yaw: float) -> bool:
+	if is_personal_copy(item.id):
+		retire(item)
+		return false
 	if not _can_lie(at):
-		item.go_home()
+		retire(item)
 		return false
 	var y: float = ground_at.call(at) if ground_at.is_valid() else 0.0
 	item.lay_down(Vector3(at.x, y, at.y), yaw)
@@ -401,7 +486,11 @@ func fly(item: Item, origin: Vector3, velocity: Vector3, spin: Vector3, thrown_b
 			how.get("drag", 0.08), how.get("wing", {}), boards, how.get("point", 0.0),
 			hoops if how.has("radius") else [], how.get("radius", 0.0))
 	item.thrown_by = thrown_by
-	item.launch(f, [origin, velocity, spin], f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z)))
+	# A personal copy never stays where a throw lands, same as a put-down (`lay`): there is no
+	# floor spot that would mean anything once two people can each have their own, so it always
+	# goes home after -- which `retire` turns into "gone" rather than "back on the shelf".
+	var stays := (f.stuck or _can_lie(Vector2(f.rest.x, f.rest.z))) and not is_personal_copy(item.id)
+	item.launch(f, [origin, velocity, spin], stays)
 
 
 ## Something in flight hit a hoop's rim or board (Flight.RIM, Flight.BOARD) at `at` (world
@@ -518,10 +607,12 @@ func pocket(item: Item, slot: int) -> void:
 	asked.emit(&"pocket_item", [item.id, slot])
 
 
-## Send `item` home from a hand here, and say so.
+## Send `item` home from a hand here, and say so. "Home" for a personal copy is nowhere at all
+## (`retire`): it is gone, not sent to a shelf spot two people's copies would have to share.
 func send_home(item: Item) -> void:
-	item.go_home()
-	asked.emit(&"home_item", [item.id])
+	var id := item.id
+	retire(item)
+	asked.emit(&"home_item", [id])
 
 
 ## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at

@@ -540,3 +540,23 @@ ergonomics.
         each. Line the guest's shot up from its own log.
       - One run in eighteen the guest never joined. Run it again before calling it a fault.
       Not tried with two headsets.
+- [x] Work items are personal, not shared (the user's design, 2026-10-11). A mic, headphones, a
+      tablet and a keytar are each one player's own gear, not a thing passed round: everyone
+      reaching for the shelf's mic gets a mic of their own, at once, not a turn waiting for the
+      first hand to let go.
+      Done: the shelf still holds one of each (`ItemRoom.PERSONAL_KINDS`: mic, headphones,
+      tablet, keytar) but it is a dispenser now, never itself held. `Item._on_grab_begin` on one
+      of the four hands the grab to `ItemRoom.take_personal(kind, peer)` instead, which spawns
+      (or finds) `"<kind><peer id>"` — `tablet1`, `keytar7` — bound to that peer with the existing
+      spill-instrument machinery (`bound_to`/`may_hold`), told to the host with a new ask
+      (`take_personal`), modelled on `_spill_instrument`. A personal copy has no shelf rest of its
+      own: putting one down (`ItemRoom.retire`) despawns it rather than sending it home, and a
+      guest's `apply()` now spawns a peer's copy on sight, not only ids it already knew about.
+      Pocketing still works, since that was already per-player. A toy is untouched: still one
+      shared instance, still refused to a second hand without being destroyed.
+      Learned: `ItemRoom.apply()` only ever walked the ids it already had locally, which is fine
+      for an already-known item's state but never discovers a brand-new one — Tour's spilled
+      instruments get around this with their own side channel (`Session.tour`); a personal copy's
+      peer is recoverable from its id alone, so `apply()` grew one discovery loop instead of a
+      second channel. `queue_free()` is deferred, so a test right after `despawn()` has to check
+      `get_parent() == null`, not `is_instance_valid()`.

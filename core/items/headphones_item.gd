@@ -47,7 +47,7 @@ func item_title() -> String:
 func hint() -> String:
 	if in_hand():
 		return "click to put them on (H)"
-	return _hint("click to pick up")
+	return _hint("click to take your own")
 
 
 func wearable() -> bool:

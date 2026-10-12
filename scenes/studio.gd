@@ -1196,8 +1196,11 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 					if item.state == Item.State.HELD and args[1] >= -1 and args[1] < Pockets.COUNT:
 						item.set_pocket(args[1])
 				&"put_item": items.lay(item, Vector2(args[1], args[2]), args[3])
-				&"home_item": item.go_home()
+				&"home_item": items.retire(item)
 				&"throw_item": items.fly(item, args[1], args[2], args[3], from)
+		&"take_personal":
+			if items != null:
+				items.take_personal(args[0], from)
 
 
 ## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
@@ -1947,6 +1950,7 @@ func _build_items() -> void:
 	items.asked.connect(_on_items_asked)
 	items.refused.connect(_on_item_refused)
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
+	items.personal_taken.connect(_on_item_personal_taken)
 	hit_recorder = HitRecorder.new()
 	hit_recorder.name = "HitRecorder"
 	add_child(hit_recorder)
@@ -2282,16 +2286,29 @@ func _on_item_refused(item: Item, _why: String) -> void:
 	Session.notice.emit("Only %s can hold the %s." % [item.bound_name, item.item_title().to_lower()])
 
 
+## A personal copy was just spawned and bound (ItemRoom.personal_taken): whose it is, which
+## stays out of item_room.gd the way `local_peer` does, for the same reason
+## (`core/items/item_room.gd`'s own `PERSONAL_KINDS` note).
+func _on_item_personal_taken(item: Item) -> void:
+	item.bound_name = Session.name_of(item.bound_to) if item.bound_to != 0 else ""
+
+
 ## A peer left the session: any instrument marked for them is nobody's to be marked for any
 ## more. `Tour._on_participant_left` clears the run's own record (`run.instrument_bound`); this
 ## clears the real item's here on the host, so a hand can take it up at once rather than it
-## staying a brick until the next spill or sync happens to touch it.
+## staying a brick until the next spill or sync happens to touch it. A personal copy is not
+## something anyone else could take up anyway (its id names only the one peer it was ever for),
+## so it is retired instead of left bound to someone no longer in the room.
 func _on_tour_participant_left(peer_id: int) -> void:
 	if items == null or not Session.is_authority():
 		return
 	for id in items.spawned_ids():
 		var item: Item = items.items.get(id)
-		if item != null and item.bound_to == peer_id:
+		if item == null or item.bound_to != peer_id:
+			continue
+		if items.is_personal_copy(id):
+			items.despawn(id)
+		else:
 			item.bound_to = 0
 			item.bound_name = ""
 

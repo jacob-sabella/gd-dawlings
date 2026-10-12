@@ -25,7 +25,9 @@ var _cam: Array = []
 var _walk: Array = []
 var _walk_mirror := 0.0
 ## `--carry duck`: that item in the mouse's hand from frame 9, as if it had been picked up.
-## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on.
+## `--carry duck:squeeze` holds it squeezed. `--carry headphones:wear` puts them on. For a
+## personal kind (`ItemRoom.PERSONAL_KINDS`) this takes a copy of your own, as a real grab would,
+## rather than holding the shelf's dispenser.
 ## `--carry tablet:mix:keys` puts its plugs A and B in those SEND sockets (`track_5`: a strip's);
 ## `:home` after them puts it back on its shelf. `--carry keytar:chord` holds a C major chord down
 ## on it (play these into the null sink: it sounds). `--carry chips:t2@0.5` does a fidget's
@@ -272,8 +274,9 @@ func _process(_delta: float) -> void:
 		var what := _carry.split(":")
 		var hand := studio.get_node_or_null("MouseHand") as Interactor if studio else null
 		var room: ItemRoom = studio.get("items") if studio else null
-		if hand != null and room != null and room.items.has(StringName(what[0])):
-			var item: Item = room.items[StringName(what[0])]
+		var kind := StringName(what[0])
+		if hand != null and room != null and room.items.has(kind):
+			var item: Item = room.take_personal(kind, Session.local_peer_id) if kind in ItemRoom.PERSONAL_KINDS else room.items[kind]
 			hand.pick_up(item)
 			if what.size() > 1 and what[1] == "squeeze":
 				item.use(true)

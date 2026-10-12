@@ -124,6 +124,7 @@ func _ready() -> void:
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_the_duck_is_the_rooms()
+	await _test_personal_items_give_each_player_a_copy_of_their_own()
 	await _test_a_ball_is_thrown_and_flies_the_same_everywhere()
 	await _test_a_paper_plane_glides()
 	await _test_a_throw_is_caught()
@@ -6903,6 +6904,70 @@ func _test_the_duck_is_the_rooms() -> void:
 	studio.apply_room(with_items.call({}, Session.room_seq))
 	check("the host's answer, that it is home, sends it home", duck.state == Item.State.HOME
 			and studio._predictions.is_empty())
+
+	Session.start_solo()
+	Session.layout = saved_layout
+	studio.queue_free()
+	await get_tree().process_frame
+
+
+## THE SHARING THIS EXISTS FOR: the tablet, headphones, mic and keytar are each one shared Item
+## today, claimed in turn (`_test_the_duck_is_the_rooms`, above, proves a toy stays that way, on
+## purpose). Picking one of the four up from the shelf now gives the hand a copy of its own
+## (`ItemRoom.take_personal`, triggered by `Item._on_grab_begin`'s redirect, the same spawn-and-
+## bind `scenes/studio.gd`'s Tour spills already use) instead of a claim on the one shelf copy;
+## putting it down retires that copy for good (`ItemRoom.retire`) rather than sending it to a
+## shelf spot two people's copies would have to share.
+func _test_personal_items_give_each_player_a_copy_of_their_own() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var room := studio.items
+	var dispenser: Item = room.items[&"tablet"]
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+
+	check("a toy is not personal, a tablet is", not (&"duck" in ItemRoom.PERSONAL_KINDS)
+			and &"tablet" in ItemRoom.PERSONAL_KINDS)
+
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+
+	dispenser.grab_begin(hand, dispenser.global_position)
+	check("the shelf's own tablet is never actually held: the grab was given a copy instead",
+			dispenser.state == Item.State.HOME and dispenser.held_by == null
+			and hand.carrying != null and hand.carrying != dispenser)
+	var mine: Item = hand.carrying
+	check("the copy is id'd and bound to whoever took it (%s)" % mine.id,
+			mine.id == &"tablet1" and mine.bound_to == 1 and mine.bound_name == "Ada")
+	check("the shelf keeps its one dispenser, not a second one for the copy", room.items[&"tablet"] == dispenser
+			and ItemRoom.KINDS.has(&"tablet") and room.spawned_ids() == [mine.id])
+
+	var other := room.take_personal(&"tablet", 2)
+	check("a second peer gets a second, distinct copy of their own", other != null and other != mine
+			and other.id == &"tablet2" and other.bound_to == 2)
+	check("the host's own hand may hold its own copy, not the other peer's",
+			mine.may_hold() and not other.may_hold())
+	var real_local_peer := room.local_peer
+	room.local_peer = func() -> int: return 2
+	check("peer 2's hand may not take peer 1's copy", not mine.may_hold() and other.may_hold())
+	room.local_peer = real_local_peer
+
+	room.pocket(mine, 0)
+	check("pocketing a copy keeps it real", room.items.has(&"tablet1") and mine.pocket == 0)
+	room.pocket(mine, -1)
+
+	room.send_home(mine)
+	check("putting it down retires it instead of sending it to a shelf spot",
+			not room.items.has(&"tablet1") and mine.get_parent() == null)
+
+	dispenser.grab_begin(hand, dispenser.global_position)
+	check("the next pick-up makes a fresh copy, not the retired one",
+			hand.carrying != null and hand.carrying.id == &"tablet1" and hand.carrying != mine)
 
 	Session.start_solo()
 	Session.layout = saved_layout

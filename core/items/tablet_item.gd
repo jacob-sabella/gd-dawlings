@@ -62,7 +62,7 @@ func item_title() -> String:
 
 
 func hint() -> String:
-	return _hint("click to pick up: your personal mix, for your headphones")
+	return _hint("click to take your own: your personal mix, for your headphones")
 
 
 func _build_body() -> Node3D:
