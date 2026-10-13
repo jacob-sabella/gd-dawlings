@@ -200,3 +200,9 @@ that changes code cuts a beta release with both zips, and a stable release is cu
 2. `docs/transport.md` — the Reaper link, what each channel can and cannot carry
 3. `docs/colocation.md` — how several headsets agree where the console is
 4. `docs/loop_backlog.md` — what is scaffolded versus what is finished, Tour included
+
+## Vibe Coded
+
+This entire project was vibe coded with [Claude Code](https://claude.ai/code). The game, the
+hardware, the venues, the session and networking layers, the timeline, the tooling and the tests,
+and its engine, dawkit — all of it. No hand-written code.
