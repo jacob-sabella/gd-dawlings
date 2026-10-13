@@ -38,9 +38,10 @@ const Medium := {SCREEN = 0, AR = 1, VR = 2}
 static func default_mode(surface_kind: StringName, medium: int) -> int:
 	match medium:
 		Medium.AR:
-			# In AR, hardware belongs in the room and TIME belongs on a screen: a timeline is
-			# too long to stand next to and is far more readable flat.
-			return Mode.SCREEN if surface_kind == &"timeline" else Mode.ROOM
+			# In AR everything belongs in the room, the timeline included: it used to start
+			# pinned to the face as a screen, which in a headset is a flat sheet that follows
+			# you about and hides the room (2026-10-13). The SCREEN key still puts it there.
+			return Mode.ROOM
 		Medium.VR:
 			return Mode.STUDIO
 		_:

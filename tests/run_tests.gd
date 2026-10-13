@@ -726,7 +726,7 @@ func _test_layout_defaults() -> void:
 
 	profile.medium = Presentation.Medium.AR
 	check("in AR, hardware stands in the room", profile.mode_for(&"console", &"console") == Presentation.Mode.ROOM)
-	check("in AR, the timeline stays on a screen", profile.mode_for(&"timeline", &"timeline") == Presentation.Mode.SCREEN)
+	check("in AR, the timeline stands in the room too, not pinned to the face", profile.mode_for(&"timeline", &"timeline") == Presentation.Mode.ROOM)
 
 	profile.medium = Presentation.Medium.VR
 	check("in VR, hardware is in the virtual set", profile.mode_for(&"console", &"console") == Presentation.Mode.STUDIO)
