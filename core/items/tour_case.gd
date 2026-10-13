@@ -110,21 +110,17 @@ func _lamp() -> void:
 ## The model's materials, tools/blender/tour_case.py's five names ("shell", "corner",
 ## "stencil", "chain", "latch") swapped for real paint and steel -- the same pass Hoop's
 ## `_init` makes over its own model.
+##
+## The shell and its hardware are the gear's own shared finishes (`Materials.furniture`,
+## `Materials.brushed_metal`), so the case is built from whatever the venue's `GearStyle` makes
+## the rest of the gear from, and changes with it.
 func _dress(model: Node3D) -> void:
-	var shell := StandardMaterial3D.new()
-	shell.albedo_color = Color(0.09, 0.095, 0.105)
-	shell.roughness = 0.8
-	var corner := StandardMaterial3D.new()
-	corner.albedo_color = Color(0.7, 0.71, 0.74)
-	corner.metallic = 0.75
-	corner.roughness = 0.4
+	var shell := Materials.furniture()
+	var corner := Materials.brushed_metal()
 	var stencil := StandardMaterial3D.new()
 	stencil.albedo_color = Color(0.2, 0.18, 0.15)
 	stencil.roughness = 0.9
-	var metal := StandardMaterial3D.new()
-	metal.albedo_color = Color(0.75, 0.75, 0.78)
-	metal.metallic = 0.85
-	metal.roughness = 0.3
+	var metal := Materials.brushed_metal()
 	var swap := {"shell": shell, "corner": corner, "stencil": stencil, "chain": metal, "latch": metal}
 	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		for s in mesh.mesh.get_surface_count():

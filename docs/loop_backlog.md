@@ -2810,3 +2810,23 @@ station. The Rig Roulette panel stands on a trimmed post and foot in the four op
 (renamed from `roll_board_free_standing`) says so for both it and the board.
 Still to style, next ticks: the Tour case, the hoop, the mirror and wardrobe frame, and the
 faceplate tint in the venues that leave `chassis` at the studio default.
+
+## The rest of the persistent pieces join the venue's style (2026-10-13)
+Inventory of everything that stays in a venue, and where its look now comes from:
+- Console, rack, patchbay, timeline stand, deck trolley, lamps, tablet stands, roll board,
+  roulette panel: `GearStyle` finishes (earlier entries).
+- Tour case: its shell and hardware are now `Materials.furniture` / `brushed_metal` (were fixed
+  black and steel), so it is a timber crate in the cabin, a road case in the club, white on the
+  station, and follows a venue switch.
+- Gear looms: the heat-shrink band is a new styled finish, `Materials.loom_band` (STYLED key
+  `loom_band`); the jacket stays cable-black everywhere, like the patch cables.
+- Faceplates: club, loft and rooftop now tint `chassis` too (every venue but the studio, whose
+  default it is).
+- Wardrobe board: the six venues that left it plain (cabin, club, dome, loft, rooftop, station)
+  now dress it, board, ink and arrows.
+- Already the venue's own before this: every mirror frame (all nine `_frame_mirror`), the prop
+  shelf and the hoop (built from the shelf's frame material, chalk's drawn).
+Deliberately not styled: knob and fader caps, LEDs, patch cables and screen faces -- colour
+there is information (mute red, solo yellow, a cable's send), not finish.
+Tests: every venue's loom band and wardrobe board are distinct; the Tour case's shell is the
+furniture finish.

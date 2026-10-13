@@ -57,7 +57,16 @@ func gear_style() -> GearStyle:
 			.with("brushed", GearStyle.metal(Color(0.16, 0.15, 0.14), 0.6)) \
 			.with("trim", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
 			.with("end_cheek", GearStyle.scan("weathered_brown_planks", 0.6, Color(0.7, 0.55, 0.42))) \
-			.with("lamp_shade", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7))
+			.with("lamp_shade", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
+			.with("loom_band", GearStyle.paint(Color(0.55, 0.12, 0.08), 0.8, 0.0))
+
+
+## A plank board with the lettering painted on in cream and the arrows in lamp orange.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.scan("weathered_brown_planks", 0.6, Color(0.42, 0.32, 0.25))
+	board.ink = Color(0.95, 0.9, 0.78)
+	board.accent = Color(1.0, 0.62, 0.3)
+	board.board_ink_fade = Color(0.55, 0.45, 0.36)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

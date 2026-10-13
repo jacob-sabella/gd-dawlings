@@ -68,10 +68,20 @@ func gear_style() -> GearStyle:
 	tolex.normal_scale = 0.9
 	return GearStyle.new() \
 			.with("furniture", tolex) \
+			.with("chassis", GearStyle.paint(Color(0.08, 0.07, 0.068), 0.7, 0.25)) \
 			.with("brushed", GearStyle.metal(Color(0.78, 0.78, 0.8), 0.18)) \
 			.with("trim", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.6)) \
 			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.6, Color(0.36, 0.26, 0.2))) \
-			.with("lamp_shade", GearStyle.metal(Color(0.75, 0.55, 0.25), 0.35))
+			.with("lamp_shade", GearStyle.metal(Color(0.75, 0.55, 0.25), 0.35)) \
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.2))
+
+
+## Black tolex like the road cases, cream lettering, amber arrows.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.paint(Color(0.05, 0.05, 0.055), 0.85, 0.0)
+	board.ink = Color(0.95, 0.9, 0.8)
+	board.accent = Color(1.0, 0.55, 0.2)
+	board.board_ink_fade = Color(0.4, 0.38, 0.36)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

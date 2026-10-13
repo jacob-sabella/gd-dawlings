@@ -56,10 +56,20 @@ func venue_id() -> StringName:
 func gear_style() -> GearStyle:
 	return GearStyle.new() \
 			.with("furniture", GearStyle.scan("blue_metal_plate", 1.6, Color(0.85, 0.8, 0.76))) \
+			.with("chassis", GearStyle.paint(Color(0.075, 0.085, 0.095), 0.5, 0.5)) \
 			.with("brushed", GearStyle.metal(Color(0.3, 0.29, 0.28), 0.5)) \
 			.with("trim", GearStyle.metal(Color(0.2, 0.19, 0.18), 0.55)) \
 			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.8, Color(0.55, 0.42, 0.32))) \
-			.with("lamp_shade", GearStyle.paint(Color(0.12, 0.25, 0.18), 0.35, 0.2))
+			.with("lamp_shade", GearStyle.paint(Color(0.12, 0.25, 0.18), 0.35, 0.2)) \
+			.with("loom_band", GearStyle.paint(Color(0.75, 0.3, 0.15), 0.7, 0.0))
+
+
+## Dark steel plate, chalky white lettering, brick-orange arrows.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.scan("blue_metal_plate", 0.6, Color(0.3, 0.3, 0.3))
+	board.ink = Color(0.92, 0.9, 0.86)
+	board.accent = Color(0.95, 0.5, 0.3)
+	board.board_ink_fade = Color(0.45, 0.44, 0.43)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

@@ -68,7 +68,16 @@ func gear_style() -> GearStyle:
 			.with("brushed", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42)) \
 			.with("trim", GearStyle.glow(Color(0.3, 1.0, 0.88), 1.0)) \
 			.with("end_cheek", GearStyle.metal(Color(0.36, 0.55, 0.46), 0.75)) \
-			.with("lamp_shade", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42))
+			.with("lamp_shade", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42)) \
+			.with("loom_band", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42))
+
+
+## Teal plate gone dark under the water, pale aqua lettering, brass arrows.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.scan("blue_metal_plate", 0.6, Color(0.18, 0.32, 0.3))
+	board.ink = Color(0.8, 1.0, 0.95)
+	board.accent = Color(0.85, 0.68, 0.38)
+	board.board_ink_fade = Color(0.35, 0.5, 0.48)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

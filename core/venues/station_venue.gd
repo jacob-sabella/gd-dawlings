@@ -67,7 +67,16 @@ func gear_style() -> GearStyle:
 			.with("brushed", GearStyle.metal(Color(0.78, 0.8, 0.84), 0.25)) \
 			.with("trim", GearStyle.glow(Color(0.3, 0.62, 1.0), 2.0)) \
 			.with("end_cheek", GearStyle.paint(Color(0.55, 0.57, 0.62), 0.5, 0.1)) \
-			.with("lamp_shade", GearStyle.paint(Color(0.8, 0.82, 0.86), 0.4, 0.1))
+			.with("lamp_shade", GearStyle.paint(Color(0.8, 0.82, 0.86), 0.4, 0.1)) \
+			.with("loom_band", GearStyle.glow(Color(0.3, 0.62, 1.0), 1.5))
+
+
+## A white hull panel with navy lettering and blue status arrows.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.paint(Color(0.72, 0.74, 0.78), 0.42, 0.1)
+	board.ink = Color(0.06, 0.1, 0.2)
+	board.accent = Color(0.2, 0.5, 1.0)
+	board.board_ink_fade = Color(0.4, 0.44, 0.52)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

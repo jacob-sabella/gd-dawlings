@@ -5512,6 +5512,30 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 		Materials.apply_style(Venue.make(id, 0).gear_style())
 		shades[str([Materials.lamp_shade().albedo_color, Materials.lamp_shade().emission_enabled])] = id
 	check("every venue's lamp shades are its own (%d distinct)" % shades.size(), shades.size() == Venue.IDS.size())
+	var bands := {}
+	var boards := {}
+	for id in Venue.IDS:
+		var v := Venue.make(id, 0)
+		Materials.apply_style(v.gear_style())
+		bands[str([Materials.loom_band().albedo_color, Materials.loom_band().emission_enabled])] = id
+		var robe := Wardrobe.new()
+		v._dress_wardrobe(robe)
+		boards[str([robe.board_material.get("albedo_color") if robe.board_material != null else null,
+				robe.board_material.get("albedo_texture") if robe.board_material != null else null,
+				robe.ink, robe.accent])] = id
+		robe.free()
+		v.free()
+	check("every venue bands its looms in its own colour (%d distinct)" % bands.size(), bands.size() == Venue.IDS.size())
+	check("every venue dresses the wardrobe board its own way (%d distinct)" % boards.size(), boards.size() == Venue.IDS.size())
+	var case := TourCase.new()
+	add_child(case)
+	var shells := 0
+	for mesh: MeshInstance3D in case.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh.get_surface_override_material_count():
+			if mesh.get_surface_override_material(i) == Materials.furniture():
+				shells += 1
+	check("the Tour case's shell is the gear's own furniture finish (%d surfaces)" % shells, shells > 0)
+	case.free()
 	Materials.apply_style(null)
 
 

@@ -127,7 +127,7 @@ static func trim() -> StandardMaterial3D:
 
 
 ## Finishes a venue may restyle.
-const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim", "lamp_shade"]
+const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim", "lamp_shade", "loom_band"]
 
 
 ## What a styled finish is when the venue says nothing.
@@ -139,6 +139,8 @@ static func _default(key: String) -> StandardMaterial3D:
 			return _default_end_cheek()
 		"lamp_shade":
 			return _default_lamp_shade()
+		"loom_band":
+			return _default_loom_band()
 	return _default_chassis()
 
 
@@ -146,6 +148,20 @@ static func _default(key: String) -> StandardMaterial3D:
 ## made of elsewhere.
 static func lamp_shade() -> StandardMaterial3D:
 	return _cached("lamp_shade", _default_lamp_shade)
+
+
+## The heat-shrink at each end of a gear loom (GearLoom): amber in the studio, the venue's own
+## accent elsewhere.
+static func loom_band() -> StandardMaterial3D:
+	return _cached("loom_band", _default_loom_band)
+
+
+static func _default_loom_band() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.70, 0.56, 0.22)
+	m.roughness = 0.72
+	m.metallic = 0.05
+	return m
 
 
 static func _default_lamp_shade() -> StandardMaterial3D:

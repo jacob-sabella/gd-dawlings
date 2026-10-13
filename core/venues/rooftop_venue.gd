@@ -96,10 +96,20 @@ func back_wall_gear_stands() -> bool:
 func gear_style() -> GearStyle:
 	return GearStyle.new() \
 			.with("furniture", GearStyle.scan("wood_planks_grey", 0.8, Color(0.62, 0.6, 0.58))) \
+			.with("chassis", GearStyle.paint(Color(0.1, 0.095, 0.09), 0.75, 0.2)) \
 			.with("brushed", GearStyle.metal(Color(0.66, 0.67, 0.68), 0.3)) \
 			.with("trim", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.2)) \
 			.with("end_cheek", GearStyle.scan("wood_planks_grey", 0.6, Color(0.5, 0.48, 0.46))) \
-			.with("lamp_shade", GearStyle.metal(Color(0.55, 0.35, 0.22), 0.6))
+			.with("lamp_shade", GearStyle.metal(Color(0.55, 0.35, 0.22), 0.6)) \
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.0))
+
+
+## Sun-greyed ply, white stencil lettering, sodium-orange arrows.
+func _dress_wardrobe(board: Wardrobe) -> void:
+	board.board_material = GearStyle.scan("wood_planks_grey", 0.6, Color(0.32, 0.31, 0.3))
+	board.ink = Color(0.95, 0.94, 0.9)
+	board.accent = Color(1.0, 0.58, 0.2)
+	board.board_ink_fade = Color(0.5, 0.48, 0.46)
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

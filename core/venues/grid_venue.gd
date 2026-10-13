@@ -65,7 +65,8 @@ func gear_style() -> GearStyle:
 			.with("brushed", GearStyle.metal(Color(0.62, 0.45, 0.72), 0.2)) \
 			.with("trim", GearStyle.glow(Color(0.2, 1.0, 1.0), 3.0)) \
 			.with("end_cheek", GearStyle.glow(Color(1.0, 0.2, 0.75), 0.45)) \
-			.with("lamp_shade", GearStyle.glow(Color(1.0, 0.2, 0.75), 1.2))
+			.with("lamp_shade", GearStyle.glow(Color(1.0, 0.2, 0.75), 1.2)) \
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.2, 0.75), 1.5))
 
 
 

@@ -78,7 +78,8 @@ func gear_style() -> GearStyle:
 			.with("brushed", GearStyle.paint(Color(0.62, 0.64, 0.66), 0.95, 0.0)) \
 			.with("trim", GearStyle.glow(Color(0.92, 0.94, 1.0), 0.9)) \
 			.with("end_cheek", slate) \
-			.with("lamp_shade", GearStyle.paint(Color(0.85, 0.87, 0.9), 0.95, 0.0))
+			.with("lamp_shade", GearStyle.paint(Color(0.85, 0.87, 0.9), 0.95, 0.0)) \
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.25, 0.75), 0.8))
 
 
 func roll_board_chalky() -> bool:

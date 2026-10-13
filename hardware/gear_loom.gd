@@ -72,7 +72,9 @@ var floor_y := 0.0
 var jacket_colour: Color = Color(0.148, 0.152, 0.165)
 ## The heat-shrink at each gland, which is how a real machine room tells two identical black
 ## trunks apart. It is also the only part of a loom that catches any light at this distance.
-var band_colour: Color = Color(0.70, 0.56, 0.22)
+var band_colour: Color = DEFAULT_BAND
+## Left at this, the band takes the venue's own (`Materials.loom_band`, a GearStyle finish).
+const DEFAULT_BAND := Color(0.70, 0.56, 0.22)
 var variation_seed := 0
 
 var _spines: Array[PackedVector3Array] = []
@@ -218,7 +220,7 @@ func _build_gland(at: Vector3, axis: Vector3, label: String) -> void:
 	band.mesh = band_mesh
 	band.transform = Transform3D(gland.transform.basis,
 			at + axis * (GLAND_LENGTH + 0.016))
-	band.material_override = Materials.cap_plastic(band_colour)
+	band.material_override = Materials.loom_band() if band_colour == DEFAULT_BAND else Materials.cap_plastic(band_colour)
 	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(band)
 
