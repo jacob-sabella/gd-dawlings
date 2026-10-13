@@ -2733,3 +2733,16 @@ Tape deck (2026-10-13): keys drawn at `KEY_SCALE` 1.65 (transport three `BIG_KEY
 a side piece of furniture (trolley at 0.80, -0.22), so the seated default frames the timeline and
 console and it is reached by looking right (`--look 50,-25`, `shots/tl/d3_50.png`); that is by design,
 not a cut-off bug. Off-lamp contrast left as is.
+
+## Public repos, lazygradle-style build system, README media (2026-10-13)
+gd-dawlings and gd-dawkit are public (history scanned first: no keys, no home paths; assets are
+own-made or CC0; dawkit keeps its all-rights-reserved LICENSE, so it is source-visible, not open).
+The old single `build.yml` is replaced by `ci.yml` (suite), `release-check.yml` (suite + Linux and
+Windows export, the PR gate and the reusable release gate), `release-beta.yml` (every code push to
+master -> `vX.Y.Z-beta.N` pre-release with both zips), `release-stable.yml` (manual, bumps `VERSION`
+by PR), Dependabot (actions and the dawkit submodule) and CODEOWNERS; see `RELEASING.md`. dawkit
+needs no deploy key now. First beta (`v0.0.3-beta.1`) went through end to end. dawkit gained its own
+CI/Dependabot/CODEOWNERS. README has screenshots of every venue, the tape deck and the road view, and
+two clips (`tools/movie.sh`, new; `--roll` in `tools/screenshot.gd` starts the transport).
+Open: the `DAWKIT_DEPLOY_KEY` secret and deploy key on gd-dawkit are now unused and can be deleted;
+no branch protection / required reviews set yet.
