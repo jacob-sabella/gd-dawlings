@@ -70,7 +70,8 @@ func gear_style() -> GearStyle:
 			.with("furniture", tolex) \
 			.with("brushed", GearStyle.metal(Color(0.78, 0.78, 0.8), 0.18)) \
 			.with("trim", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.6)) \
-			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.6, Color(0.36, 0.26, 0.2)))
+			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.6, Color(0.36, 0.26, 0.2))) \
+			.with("lamp_shade", GearStyle.metal(Color(0.75, 0.55, 0.25), 0.35))
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

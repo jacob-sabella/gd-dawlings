@@ -2799,3 +2799,14 @@ Record: shots/venue_gear_styles.png.
 Open follow-ups, not built: the Rig Roulette panel itself still hangs in the air in those four
 open venues (pre-existing); shapes per venue (a real road-case rack, a log-built desk) rather
 than finishes; the tape deck body and rack units' faceplates are unstyled.
+
+## Lamps, tablet stands and the roulette panel join the venue's gear style (2026-10-13)
+(Goal set by the user: "style all persistent elements for all venues".) Lamp stand bases and
+plugin tablet feet now use `Materials.furniture()`; lamp shades get their own styled finish
+(`Materials.lamp_shade`, new STYLED key): iron in the cabin, brass in the club and dome, chalk
+white, magenta neon on the grid, green enamel in the loft, copper on the rooftop, white on the
+station. The Rig Roulette panel stands on a trimmed post and foot in the four open venues
+(`RigRouletteStation.set_free_standing`, redone on a venue change); `Venue.back_wall_gear_stands`
+(renamed from `roll_board_free_standing`) says so for both it and the board.
+Still to style, next ticks: the Tour case, the hoop, the mirror and wardrobe frame, and the
+faceplate tint in the venues that leave `chassis` at the studio default.

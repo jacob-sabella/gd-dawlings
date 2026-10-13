@@ -86,8 +86,8 @@ func venue_id() -> StringName:
 	return &"rooftop"
 
 
-## Nothing to hang the roll board on: it stands.
-func roll_board_free_standing() -> bool:
+## Nothing to hang the roll board or the roulette panel on: they stand.
+func back_wall_gear_stands() -> bool:
 	return true
 
 
@@ -98,7 +98,8 @@ func gear_style() -> GearStyle:
 			.with("furniture", GearStyle.scan("wood_planks_grey", 0.8, Color(0.62, 0.6, 0.58))) \
 			.with("brushed", GearStyle.metal(Color(0.66, 0.67, 0.68), 0.3)) \
 			.with("trim", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.2)) \
-			.with("end_cheek", GearStyle.scan("wood_planks_grey", 0.6, Color(0.5, 0.48, 0.46)))
+			.with("end_cheek", GearStyle.scan("wood_planks_grey", 0.6, Color(0.5, 0.48, 0.46))) \
+			.with("lamp_shade", GearStyle.metal(Color(0.55, 0.35, 0.22), 0.6))
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

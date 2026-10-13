@@ -811,7 +811,7 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	disc.radial_segments = 40
 	foot.mesh = disc
 	foot.position.y = 0.0125
-	foot.material_override = Materials.chassis()
+	foot.material_override = Materials.furniture()
 	stand.add_part(foot)
 	var pole := MeshInstance3D.new()
 	pole.name = "Pole"
@@ -1750,7 +1750,7 @@ func _build_lamp_stands() -> void:
 		base_mesh.radial_segments = 16
 		base.mesh = base_mesh
 		base.position = Vector3(0, 0.016, 0)
-		base.material_override = Materials.chassis()
+		base.material_override = Materials.furniture()
 		stand.add_part(base)
 
 		# Up to the middle of the shade, so the pole is hidden by the head rather than stopping
@@ -1778,7 +1778,7 @@ func _build_lamp_stands() -> void:
 		shade_mesh.cap_bottom = false
 		shade.mesh = shade_mesh
 		shade.position = Vector3(0, at.y, 0)
-		shade.material_override = Materials.cap_plastic(Color(0.17, 0.165, 0.155))
+		shade.material_override = Materials.lamp_shade()
 		stand.add_part(shade)
 
 		# The glowing bit. Above the shade's lower rim so the cone shields it from straight on,
@@ -2027,7 +2027,8 @@ func _build_roll_board() -> void:
 		roll_board.queue_free()
 	roll_board = RollBoard.new()
 	roll_board.chalky = venue.roll_board_chalky()
-	roll_board.free_standing = venue.roll_board_free_standing()
+	roll_board.free_standing = venue.back_wall_gear_stands()
+	rig_roulette_station.set_free_standing(venue.back_wall_gear_stands())
 	roll_board.transform = venue.roll_board_spot()
 	studio_set.add_child(roll_board)
 	_on_session_roll_changed()

@@ -56,7 +56,8 @@ func gear_style() -> GearStyle:
 			.with("chassis", GearStyle.paint(Color(0.1, 0.078, 0.062), 0.7, 0.15)) \
 			.with("brushed", GearStyle.metal(Color(0.16, 0.15, 0.14), 0.6)) \
 			.with("trim", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
-			.with("end_cheek", GearStyle.scan("weathered_brown_planks", 0.6, Color(0.7, 0.55, 0.42)))
+			.with("end_cheek", GearStyle.scan("weathered_brown_planks", 0.6, Color(0.7, 0.55, 0.42))) \
+			.with("lamp_shade", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7))
 
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:

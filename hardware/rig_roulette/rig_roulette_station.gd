@@ -121,6 +121,35 @@ func show_result(tracks: int, fx_count: int, key: String) -> void:
 	_last_label.text = line
 
 
+## On a post of its own and a foot, for a venue with no wall where it hangs
+## (`Venue.back_wall_gear_stands`), or back on the wall. Again on a change of venue.
+func set_free_standing(on: bool) -> void:
+	var old := get_node_or_null("Post")
+	if old != null:
+		remove_child(old)
+		old.queue_free()
+	if not on:
+		return
+	var post := Node3D.new()
+	post.name = "Post"
+	add_child(post)
+	var upright := MeshInstance3D.new()
+	var upright_mesh := BoxMesh.new()
+	upright_mesh.size = Vector3(0.05, position.y + HEIGHT * 0.5, 0.05)
+	upright.mesh = upright_mesh
+	upright.position = Vector3(0, (HEIGHT * 0.5 - position.y) * 0.5, -0.04)
+	upright.material_override = Materials.furniture()
+	GearTrim.edges(upright)
+	post.add_child(upright)
+	var foot := MeshInstance3D.new()
+	var foot_mesh := BoxMesh.new()
+	foot_mesh.size = Vector3(0.28, 0.03, 0.28)
+	foot.mesh = foot_mesh
+	foot.position = Vector3(0, 0.015 - position.y, -0.04)
+	foot.material_override = Materials.furniture()
+	post.add_child(foot)
+
+
 ## A small light of its own, the same fix `TourCase._lamp` makes for the back of house: this
 ## panel hangs on whichever stretch of wall the venue finds for it (`rig_roulette_spot`), which
 ## for the control room is past the ceiling downlights' own reach -- a dark panel on a dark wall

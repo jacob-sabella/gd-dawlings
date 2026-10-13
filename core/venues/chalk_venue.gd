@@ -64,8 +64,8 @@ func venue_id() -> StringName:
 	return &"chalk"
 
 
-## Nothing to hang the roll board on: it stands.
-func roll_board_free_standing() -> bool:
+## Nothing to hang the roll board or the roulette panel on: they stand.
+func back_wall_gear_stands() -> bool:
 	return true
 
 
@@ -77,7 +77,8 @@ func gear_style() -> GearStyle:
 			.with("chassis", GearStyle.paint(Color(0.07, 0.085, 0.08), 0.9, 0.05)) \
 			.with("brushed", GearStyle.paint(Color(0.62, 0.64, 0.66), 0.95, 0.0)) \
 			.with("trim", GearStyle.glow(Color(0.92, 0.94, 1.0), 0.9)) \
-			.with("end_cheek", slate)
+			.with("end_cheek", slate) \
+			.with("lamp_shade", GearStyle.paint(Color(0.85, 0.87, 0.9), 0.95, 0.0))
 
 
 func roll_board_chalky() -> bool:

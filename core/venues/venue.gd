@@ -374,8 +374,9 @@ func gear_style() -> GearStyle:
 	return GearStyle.new()
 
 
-## Whether the board stands on posts of its own, for a venue with nothing to hang it on.
-func roll_board_free_standing() -> bool:
+## Whether what hangs on the control room's back wall elsewhere (the roll board, the Rig Roulette
+## panel) stands on posts of its own here, for a venue with no wall to hang it on.
+func back_wall_gear_stands() -> bool:
 	return false
 
 

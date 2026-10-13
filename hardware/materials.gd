@@ -127,7 +127,7 @@ static func trim() -> StandardMaterial3D:
 
 
 ## Finishes a venue may restyle.
-const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim"]
+const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim", "lamp_shade"]
 
 
 ## What a styled finish is when the venue says nothing.
@@ -137,7 +137,23 @@ static func _default(key: String) -> StandardMaterial3D:
 			return _default_brushed()
 		"end_cheek":
 			return _default_end_cheek()
+		"lamp_shade":
+			return _default_lamp_shade()
 	return _default_chassis()
+
+
+## The cone over each practical: matte plastic in the studio, whatever the venue's lamps are
+## made of elsewhere.
+static func lamp_shade() -> StandardMaterial3D:
+	return _cached("lamp_shade", _default_lamp_shade)
+
+
+static func _default_lamp_shade() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.17, 0.165, 0.155)
+	m.roughness = 0.72
+	m.metallic = 0.05
+	return m
 
 
 ## Puts a venue's finishes on the gear: every cached material in STYLED takes on the style's

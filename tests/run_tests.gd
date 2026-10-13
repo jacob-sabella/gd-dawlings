@@ -5471,7 +5471,8 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 		var f := Materials.furniture()
 		looks[id] = [f.albedo_color, f.albedo_texture, Materials.trim().emission_enabled,
 				Materials.trim().emission if Materials.trim().emission_enabled else Color.BLACK,
-				Materials.end_cheek().albedo_texture, Materials.end_cheek().albedo_color]
+				Materials.end_cheek().albedo_texture, Materials.end_cheek().albedo_color,
+				Materials.lamp_shade().albedo_color]
 	var distinct := {}
 	for id in looks:
 		distinct[str(looks[id])] = id
@@ -5487,9 +5488,9 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 			and Materials.trim().metallic == Materials.brushed_metal().metallic)
 	for id in [&"chalk", &"dome", &"grid", &"rooftop"]:
 		check("%s has nothing to hang the roll board on, so it stands" % id,
-				Venue.make(id, 0).roll_board_free_standing())
+				Venue.make(id, 0).back_wall_gear_stands())
 	for id in [&"studio", &"cabin", &"club", &"loft", &"station"]:
-		check("%s hangs the roll board on its wall" % id, not Venue.make(id, 0).roll_board_free_standing())
+		check("%s hangs the roll board on its wall" % id, not Venue.make(id, 0).back_wall_gear_stands())
 	var board := RollBoard.new()
 	board.free_standing = true
 	board.position = Vector3(0, 2.14, 0)
@@ -5498,6 +5499,20 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 	check("a free-standing board has two posts reaching the floor (%d)" % posts.size(), posts.size() == 2
 			and is_equal_approx(((posts[0] as MeshInstance3D).mesh as BoxMesh).size.y, 2.14))
 	board.free()
+	var station := RigRouletteStation.new()
+	station.position = Vector3(0, 1.05, 0)
+	add_child(station)
+	station.set_free_standing(true)
+	check("a free-standing roulette panel has a post", station.get_node_or_null("Post") != null)
+	station.set_free_standing(false)
+	check("and loses it back on a wall", station.get_node_or_null("Post") == null)
+	station.free()
+	var shades := {}
+	for id in Venue.IDS:
+		Materials.apply_style(Venue.make(id, 0).gear_style())
+		shades[str([Materials.lamp_shade().albedo_color, Materials.lamp_shade().emission_enabled])] = id
+	check("every venue's lamp shades are its own (%d distinct)" % shades.size(), shades.size() == Venue.IDS.size())
+	Materials.apply_style(null)
 
 
 ## The rack's FIND button, beside the ADD wheel: opens a searchable list for when the DAW
