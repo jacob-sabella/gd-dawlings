@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    reviewers:
+      - jacob-sabella
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # vendor/dawkit, the engine, is a submodule: a bump of its pointer arrives as a PR that the
+  # suite then runs against.
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    reviewers:
+      - jacob-sabella

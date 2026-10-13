@@ -1,0 +1,100 @@
+name: Stable Release
+
+# Deliberate promotion of the current master to a final release. Run it from the Actions tab when
+# the accumulated beta line is ready to ship:
+#
+#   VERSION base 0.0.3  ->  GitHub release v0.0.3 (final) with the Linux and Windows zips
+#
+# After tagging, it opens a PR bumping VERSION to the next development base (patch by default) so
+# the next merge to master starts a fresh beta line.
+
+on:
+  workflow_dispatch:
+    inputs:
+      next:
+        description: 'Next development base to set after this release'
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release-stable
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/release-check.yml
+
+  publish-stable:
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute versions
+        id: ver
+        run: |
+          VERSION="$(scripts/set-version.sh --base)"
+          NEXT="$(scripts/set-version.sh --bump ${{ inputs.next }})"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}"    >> "$GITHUB_OUTPUT"
+          echo "next=${NEXT}"       >> "$GITHUB_OUTPUT"
+
+      - name: Guard against re-releasing an existing version
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.ver.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::Tag ${{ steps.ver.outputs.tag }} already exists. Bump VERSION before releasing."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: build
+
+      - name: Zip the builds
+        run: |
+          cd build
+          for os in linux windows; do
+            mv "dawlings-$os" dawlings
+            zip -qr "dawlings-${{ steps.ver.outputs.tag }}-$os.zip" dawlings
+            rm -rf dawlings
+          done
+
+      - name: Tag and publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" build/*.zip \
+            --target "${{ github.sha }}" \
+            --title "dawlings ${{ steps.ver.outputs.version }}" \
+            --notes-file docs/playtest.md --generate-notes
+
+      - name: Open next-development-version bump PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NEXT="${{ steps.ver.outputs.next }}"
+          BRANCH="chore/next-after-${{ steps.ver.outputs.version }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          scripts/set-version.sh "$NEXT"
+          git add VERSION
+          git commit -m "chore(release): start ${NEXT} development"
+          git push -u origin "$BRANCH"
+
+          gh pr create --base master --head "$BRANCH" \
+            --title "chore(release): start ${NEXT} development" \
+            --body "Post-release housekeeping for \`${{ steps.ver.outputs.tag }}\`. Bumps the development base to \`${NEXT}\`; the next merge to master cuts \`v${NEXT}-beta.<run>\` on the beta channel."

@@ -155,6 +155,13 @@ just puts your console slightly in the wrong place. None of them announce themse
 
 It covers nothing about how any of it looks. That is what `shot.sh` is for.
 
+## Building and releasing
+
+Clone with `git clone --recurse-submodules` (dawkit is a submodule). CI runs the headless suite on
+every branch and a full Linux and Windows export on every pull request; every push to `master`
+that changes code cuts a beta release with both zips, and a stable release is cut by hand. See
+`RELEASING.md`.
+
 ## Reading order
 
 1. `docs/architecture.md` — the three-way split, the DAW-as-backend seam, and the dawkit split

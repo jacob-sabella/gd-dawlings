@@ -1,0 +1,84 @@
+name: CI
+
+# The headless suite, fast: the native core is cached (keyed on dawkit's own commit, so an
+# unchanged dawkit is a cache hit and the compile step is the "a second" its own script promises).
+# Runs on pushes to every branch but master, and is reused as the test gate by release-check.yml
+# (which is what runs on a pull request and on master), so nothing is tested twice for one change.
+#
+# dawkit is a public repository of its own and a submodule here, so a plain recursive checkout
+# gets it.
+
+on:
+  push:
+    branches-ignore: [master]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Which dawkit
+        id: dawkit
+        run: echo "sha=$(git ls-tree HEAD vendor/dawkit | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+
+      - name: Compilers
+        run: |
+          sudo apt-get update -q
+          # The keys helper (native/keys.c), which the suite builds and plays, is PipeWire and ALSA.
+          # Linux only here: the suite runs on this machine, never Windows.
+          sudo apt-get install -y -q cmake g++ pkg-config libpipewire-0.3-dev libasound2-dev
+
+      - name: Cache Godot and its export templates
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Godot
+        run: |
+          if [ ! -x ~/godot-bin/godot ]; then
+            base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+            curl -sSLo godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+            unzip -q godot.zip
+            mkdir -p ~/godot-bin
+            mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" ~/godot-bin/godot
+            rm -f godot.zip
+          fi
+          sudo ln -sf ~/godot-bin/godot /usr/local/bin/godot
+
+      # Debug only: the editor and the suite load template_debug, never template_release.
+      - name: Cache dawkit's native core (linux, debug)
+        uses: actions/cache@v6
+        with:
+          path: |
+            vendor/dawkit/native/build
+            vendor/dawkit/native/extension_api.json
+          key: dawkit-native-linux-debug-${{ steps.dawkit.outputs.sha }}
+          restore-keys: dawkit-native-linux-debug-
+
+      - name: dawkit's native core
+        run: vendor/dawkit/tools/build_native.sh linux debug
+
+      - name: Import
+        run: godot --headless --path . --import || true
+
+      - name: Tests
+        run: |
+          timeout 600 godot --headless --path . tests/tests.tscn 2>&1 | tee tests.log | grep -E "checks,|  FAIL" || true
+          grep -q "checks, 0 failed" tests.log

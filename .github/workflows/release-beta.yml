@@ -1,0 +1,70 @@
+name: Beta Release
+
+# Continuous pre-release channel. Every push to master that changes the game or its engine pin is
+# validated (release-check.yml: the suite, then a full Linux and Windows export) and cut as a
+# beta derived from the VERSION base:
+#
+#   base 0.0.3  +  run_number 412   ->   v0.0.3-beta.412
+#
+# The beta is tagged and published as a GitHub pre-release carrying the two zips. Final releases
+# are cut deliberately via release-stable.yml.
+
+on:
+  push:
+    branches: [master]
+    # Docs, screenshots and workflow edits don't warrant a build.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'shots/**'
+      - 'LICENSE'
+      - '.github/**'
+
+concurrency:
+  # Serialize beta releases; never cancel one mid-publish.
+  group: release-beta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/release-check.yml
+
+  publish-beta:
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute beta version
+        id: ver
+        run: |
+          VERSION="$(scripts/set-version.sh --base)-beta.${{ github.run_number }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}"    >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: build
+
+      - name: Zip the builds
+        run: |
+          cd build
+          for os in linux windows; do
+            mv "dawlings-$os" dawlings
+            zip -qr "dawlings-${{ steps.ver.outputs.tag }}-$os.zip" dawlings
+            rm -rf dawlings
+          done
+
+      - name: Tag and publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" build/*.zip \
+            --target "${{ github.sha }}" \
+            --title "Beta ${{ steps.ver.outputs.version }}" \
+            --generate-notes --prerelease

@@ -1,0 +1,4 @@
+# Code ownership. With branch protection's "Require review from Code Owners" rule, every PR into
+# master needs the owner's explicit approval before it can merge.
+
+* @jacob-sabella
