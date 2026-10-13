@@ -2709,3 +2709,12 @@ Open follow-ups, not built:
   carry the motion; a distance fade on the far end would help and needs per-instance custom data
   the banks do not carry.
 - The ROAD choice is not saved in the layout the way 3D is.
+
+### Tick AB addendum -- controls were tiny (2026-10-12)
+"All the buttons and dials and knobs are sooooo tiny." Timeline keys now draw at `KEY_SCALE` 1.7 with
+larger captions, and the four control strips lay out left to right at up to `STRIP_SCALE_MAX` 1.5 (the
+panel's `content_aabb()` ignores them so the framed panel does not shrink). Console channel strips draw
+their R/S/M/I buttons and pan knob at 1.45x with a letter legend in the left margin. Tests pin the
+scales; seat-click audit still passes.
+Open follow-ups, not built: the tape deck is still cut off at the right edge of the seated frame and
+its keys are small; off-lamp contrast (`Materials.LAMP_DARK`) is unchanged.

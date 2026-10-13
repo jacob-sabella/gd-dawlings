@@ -263,6 +263,7 @@ func _ready() -> void:
 	_test_a_guest_take_follows_the_host_transport_it_hears()
 	_test_the_host_places_a_guest_take_and_says_so()
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
+	_test_the_timelines_keys_are_big_enough_to_aim_at()
 	_test_the_timeline_can_be_watched_as_a_road()
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
@@ -4192,6 +4193,12 @@ func _test_many_little_boxes_are_one_object() -> void:
 	# its slot. A -1 here would mean every track's colour silently went to the same place.
 	check("a banked chip carries the track's colour, not a lamp's clipped version",
 			chips.colour_of(0) == Materials.chip_colour(DAW.state.track(0).colour))
+
+	check("a strip's buttons and pan knob are drawn %.2fx, not at the parts' own size" % ChannelStrip.BUTTON_SCALE,
+			ChannelStrip.BUTTON_SCALE >= 1.4 and is_equal_approx(banked_strip._rec.scale.x, ChannelStrip.BUTTON_SCALE)
+			and is_equal_approx(banked_strip._pan.scale.x, ChannelStrip.KNOB_SCALE))
+	var widest := PanelButton.SIZE.x * ChannelStrip.BUTTON_SCALE
+	check("an enlarged button still fits inside the strip's width", widest < ChannelStrip.WIDTH)
 
 	var alone := ChannelStrip.create(0)
 	add_child(alone)
@@ -12311,6 +12318,41 @@ func _test_the_timeline_clips_are_the_brightest_thing_on_their_lane() -> void:
 	check("every clip has a shadow and a bottom edge under it, flat as well as on the shelves",
 			shades != null and blocks != null and shades.count() == blocks.count() * 2
 			and shades.multimesh.visible_instance_count == blocks.multimesh.visible_instance_count * 2)
+	timeline.free()
+
+
+func _test_the_timelines_keys_are_big_enough_to_aim_at() -> void:
+	# 2026-10-12: "all the buttons and dials and knobs are sooooo tiny". The keys under the
+	# timeline were 22 mm with 7 px captions, and the strips ran past the panel's own edge.
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline.set_wide(true)
+	timeline._process(0.0)
+	check("the panel's own keys are drawn at %.1fx, up from 1.4x" % TimelineSurface.KEY_SCALE,
+			is_equal_approx(timeline._split_key.scale.x, TimelineSurface.KEY_SCALE) and TimelineSurface.KEY_SCALE >= 1.7)
+	var strips: Array = [timeline._item_controls, timeline._tempo_controls, timeline._render_controls, timeline._track_controls]
+	var pitches: Array = [TimelineItemStrip.PITCH, TimelineTempoStrip.PITCH, TimelineRenderStrip.PITCH, TimelineTrackStrip.PITCH]
+	var keys: Array = [6, 5, 2, 7]
+	var scale_ok := true
+	var clear := true
+	var right_edge := -INF
+	for i in strips.size():
+		var strip: Node3D = strips[i]
+		scale_ok = scale_ok and strip.scale.x >= 1.15
+		var left: float = strip.position.x - 0.5 * pitches[i] * strip.scale.x
+		var right: float = strip.position.x + (keys[i] - 0.5) * pitches[i] * strip.scale.x
+		clear = clear and left > right_edge
+		right_edge = maxf(right_edge, right)
+	check("the strips of keys under it are drawn at least 1.15x, in order, and clear of one another",
+			scale_ok and clear)
+	check("and none runs past the panel's right edge (%.3f of %.3f)" % [right_edge, timeline.width * 0.5],
+			right_edge <= timeline.width * 0.5)
+	# What the camera frames is the panel; the keys hang below it.
+	var framed := timeline.content_aabb()
+	var panel_bottom := -timeline._top_y
+	check("the framing leaves the strips out, so a bigger key does not shrink the arrangement (%.3f)" % framed.position.y,
+			framed.position.y >= panel_bottom - 0.01)
 	timeline.free()
 
 

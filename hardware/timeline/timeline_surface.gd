@@ -41,7 +41,7 @@ signal size_chosen(width_scale: float, lane_height: float)
 var _wide := false
 var _grip: TimelineResizeGrip
 const LANE_GAP := 0.0022
-const HEADER_WIDTH := 0.108
+const HEADER_WIDTH := 0.16
 ## What a track name may use of the header: the header less the chip at its left and room for
 ## three state flags at its right.
 const NAME_SPAN := HEADER_WIDTH - 0.036
@@ -133,13 +133,17 @@ var picked_track := 0
 ## view and the same edits; only how it is drawn changes, and the blocks are what you grab.
 ## Each person's own choice, like where they stand: nothing about it is shared.
 var shelf := false
+## How big the panel's own keys are drawn, and the strips of keys under it. Were 1.4 and 1.0:
+## 22mm keys with 7px captions on a panel framed a metre away, found "sooooo tiny" (2026-10-12).
+const KEY_SCALE := 1.7
+const STRIP_SCALE_MAX := 1.5
 ## How far a block stands out of the panel, and a selected one further, pulled off its shelf.
 const BLOCK_DEPTH := 0.011
 const PULL := 0.005
 ## The shelf board under each lane, out from the panel.
 const SHELF_LIP := 0.013
 ## The column at the panel's right edge the view key stands in.
-const VIEW_COLUMN := 0.030
+const VIEW_COLUMN := 0.040
 ## The road view, instead of the lanes: see TimelineHighway. Each person's own, not shared.
 var highway := false
 var _highway: TimelineHighway
@@ -298,7 +302,7 @@ func _ready() -> void:
 	_split_key.name = "SplitKey"
 	_split_key.led_colour = Color(0.95, 0.62, 0.32)
 	_split_key.lamp_scale = Vector2(0.8, 0.5)
-	_split_key.scale = Vector3(1.4, 1.4, 1.4)
+	_split_key.scale = Vector3.ONE * KEY_SCALE
 	_split_key.pressed.connect(func(): DAW.split_selected(DAW.state.position_seconds))
 	_split_key.describe_title = func() -> String: return "EDIT  SPLIT AT PLAYHEAD"
 	_split_key.describe_value = func(_v: float) -> String:
@@ -306,7 +310,7 @@ func _ready() -> void:
 		return "%d selected item(s) at %s" % [n, DAW.state.bar_beat(DAW.state.position_seconds)] \
 				if n > 0 else "select an item under the playhead"
 	add_child(_split_key)
-	_split_caption = _text("SPLIT", 26, Color(0.62, 0.64, 0.68))
+	_split_caption = _text("SPLIT", 30, Color(0.62, 0.64, 0.68))
 	_split_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_split_caption)
 	DAW.transport_changed.connect(_light_split_key)
@@ -319,7 +323,7 @@ func _ready() -> void:
 	_save_key.name = "SaveKey"
 	_save_key.led_colour = Color(0.45, 0.78, 0.95)
 	_save_key.lamp_scale = Vector2(0.8, 0.5)
-	_save_key.scale = Vector3(1.4, 1.4, 1.4)
+	_save_key.scale = Vector3.ONE * KEY_SCALE
 	_save_key.pressed.connect(func(): DAW.save_project())
 	_save_key.describe_title = func() -> String: return "PROJECT  SAVE"
 	_save_key.describe_value = func(_v: float) -> String:
@@ -328,7 +332,7 @@ func _ready() -> void:
 		var file := DAW.project_file()
 		return file.get_file() if not file.is_empty() else "where the host keeps it"
 	add_child(_save_key)
-	_save_caption = _text("SAVE", 26, Color(0.62, 0.64, 0.68))
+	_save_caption = _text("SAVE", 30, Color(0.62, 0.64, 0.68))
 	_save_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_save_caption)
 
@@ -337,14 +341,14 @@ func _ready() -> void:
 	_shelf_key.name = "ShelfKey"
 	_shelf_key.led_colour = Color(0.98, 0.80, 0.42)
 	_shelf_key.lamp_scale = Vector2(0.8, 0.5)
-	_shelf_key.scale = Vector3(1.4, 1.4, 1.4)
+	_shelf_key.scale = Vector3.ONE * KEY_SCALE
 	_shelf_key.pressed.connect(_on_shelf_key)
 	_shelf_key.describe_title = func() -> String: return "VIEW  SHELVES"
 	_shelf_key.describe_value = func(_v: float) -> String:
 		return "blocks on shelves: drag one along, or onto another shelf" if shelf \
 				else "flat lanes; press for shelves of blocks"
 	add_child(_shelf_key)
-	_shelf_caption = _text("3D", 26, Color(0.62, 0.64, 0.68))
+	_shelf_caption = _text("3D", 30, Color(0.62, 0.64, 0.68))
 	add_child(_shelf_caption)
 
 	# The road, under it: the same arrangement as a highway into the playhead.
@@ -352,14 +356,14 @@ func _ready() -> void:
 	_road_key.name = "RoadKey"
 	_road_key.led_colour = Color(0.98, 0.80, 0.42)
 	_road_key.lamp_scale = Vector2(0.8, 0.5)
-	_road_key.scale = Vector3(1.4, 1.4, 1.4)
+	_road_key.scale = Vector3.ONE * KEY_SCALE
 	_road_key.pressed.connect(func(): set_highway(not highway))
 	_road_key.describe_title = func() -> String: return "VIEW  ROAD"
 	_road_key.describe_value = func(_v: float) -> String:
 		return "the song coming down a road into the playhead: press for the lanes again" if highway \
 				else "lanes; press to watch the song come down a road"
 	add_child(_road_key)
-	_road_caption = _text("ROAD", 26, Color(0.62, 0.64, 0.68))
+	_road_caption = _text("ROAD", 30, Color(0.62, 0.64, 0.68))
 	add_child(_road_caption)
 	_highway = TimelineHighway.new()
 	_highway.name = "Highway"
@@ -374,12 +378,12 @@ func _ready() -> void:
 
 	_copy_key = _selection_key("CopyKey", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
 			func(): DAW.duplicate_selected())
-	_copy_caption = _text("COPY", 26, Color(0.62, 0.64, 0.68))
+	_copy_caption = _text("COPY", 30, Color(0.62, 0.64, 0.68))
 	_copy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_copy_caption)
 	_delete_key = _selection_key("DeleteKey", Color(0.95, 0.38, 0.34), "EDIT  DELETE",
 			func(): DAW.delete_selected())
-	_delete_caption = _text("DEL", 26, Color(0.62, 0.64, 0.68))
+	_delete_caption = _text("DEL", 30, Color(0.62, 0.64, 0.68))
 	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_delete_caption)
 	DAW.timeline_changed.connect(_light_selection_keys)
@@ -423,7 +427,7 @@ func _selection_key(key_name: String, colour: Color, title: String, act: Callabl
 	key.name = key_name
 	key.led_colour = colour
 	key.lamp_scale = Vector2(0.8, 0.5)
-	key.scale = Vector3(1.4, 1.4, 1.4)
+	key.scale = Vector3.ONE * KEY_SCALE
 	key.pressed.connect(act)
 	key.describe_title = func() -> String: return title
 	key.describe_value = func(_v: float) -> String:
@@ -601,31 +605,70 @@ func _place_strips() -> void:
 	_place_lane_ladder(lanes_top, lanes_bottom)
 
 	var ruler_mid := _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5
-	_split_key.position = Vector3(-width * 0.5 + 0.016, ruler_mid, 0.003)
-	_split_caption.position = Vector3(-width * 0.5 + 0.030, ruler_mid, 0.0016)
-	_save_key.position = Vector3(-width * 0.5 + 0.064, ruler_mid, 0.003)
-	_save_caption.position = Vector3(-width * 0.5 + 0.078, ruler_mid, 0.0016)
-	_shelf_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid + 0.002, 0.003)
-	_shelf_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.011, 0.0016)
-	_road_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.036, 0.003)
-	_road_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.049, 0.0016)
+	_split_key.position = Vector3(-width * 0.5 + 0.017, ruler_mid, 0.003)
+	_split_caption.position = Vector3(-width * 0.5 + 0.035, ruler_mid, 0.0016)
+	_save_key.position = Vector3(-width * 0.5 + 0.088, ruler_mid, 0.003)
+	_save_caption.position = Vector3(-width * 0.5 + 0.106, ruler_mid, 0.0016)
+	_shelf_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid + 0.003, 0.003)
+	_shelf_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.013, 0.0016)
+	_road_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.042, 0.003)
+	_road_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.058, 0.0016)
 	_road_key.lit = highway
 	_grip.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, -_top_y + SCRUBBER_BAND * 0.5 + 0.001, 0.0016)
 	_shelf_key.lit = shelf
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
 	var corner_mid := -_top_y + SCRUBBER_BAND * 0.5
-	_copy_key.position = Vector3(-width * 0.5 + 0.016, corner_mid, 0.003)
-	_copy_caption.position = Vector3(-width * 0.5 + 0.030, corner_mid, 0.0016)
-	_delete_key.position = Vector3(-width * 0.5 + 0.064, corner_mid, 0.003)
-	_delete_caption.position = Vector3(-width * 0.5 + 0.078, corner_mid, 0.0016)
+	_copy_key.position = Vector3(-width * 0.5 + 0.017, corner_mid, 0.003)
+	_copy_caption.position = Vector3(-width * 0.5 + 0.035, corner_mid, 0.0016)
+	_delete_key.position = Vector3(-width * 0.5 + 0.088, corner_mid, 0.003)
+	_delete_caption.position = Vector3(-width * 0.5 + 0.106, corner_mid, 0.0016)
 	_light_selection_keys()
-	_item_controls.position = Vector3(-width * 0.5 + 0.016, -_top_y - 0.016, 0.0)
-	_track_controls.position = Vector3(width * 0.5 - 0.020 - 4 * TimelineTrackStrip.PITCH, -_top_y - 0.016, 0.0)
+	_place_control_strips()
+
+
+## What the camera frames is the panel, not the keys hung under it: the strips are drawn big
+## enough to read and press, and framing them too shrank the arrangement they are for by a
+## sixteenth. They sit below the frame, in the empty wall under the monitor.
+func content_aabb() -> AABB:
+	var strips: Array = [_item_controls, _tempo_controls, _render_controls, _track_controls]
+	var was: Array = []
+	for strip in strips:
+		was.append(strip.visible if strip != null else false)
+		if strip != null:
+			strip.visible = false
+	var box := super()
+	for i in strips.size():
+		if strips[i] != null:
+			strips[i].visible = was[i]
+	return box
+
+
+## The strips of keys under the panel, drawn bigger and set out left to right: items, tempo,
+## render, track. Left to right and not the last one against the right edge: the right edge of a
+## wide panel is over the tape deck's tempo knob, and a key there took the click meant for it.
+## The scale follows the panel's width, so a narrow panel keeps its strips clear of each other.
+func _place_control_strips() -> void:
+	var k := clampf(width / WIDTH * 1.0, 1.15, STRIP_SCALE_MAX)
+	var y := -_top_y - 0.006 - 0.014 * k
+	var gap := 0.026
+	# A strip's origin is its first key's centre; its plate runs half a pitch and a bit before it.
+	var item_left := -width * 0.5 + 0.004
+	_item_controls.scale = Vector3.ONE * k
+	_item_controls.position = Vector3(item_left + (0.5 * TimelineItemStrip.PITCH + 0.004) * k, y, 0.0)
+	var item_right := item_left + 6.0 * TimelineItemStrip.PITCH * k
+	var tempo_left := item_right + gap
+	_tempo_controls.scale = Vector3.ONE * k
+	_tempo_controls.position = Vector3(tempo_left + (0.5 * TimelineTempoStrip.PITCH + 0.004) * k, y, 0.0)
+	var tempo_right := tempo_left + 5.0 * TimelineTempoStrip.PITCH * k
+	_render_controls.scale = Vector3.ONE * k
+	_render_controls.position = Vector3(tempo_right + gap + (0.5 * TimelineRenderStrip.PITCH + 0.004) * k, y, 0.0)
+	var render_right := tempo_right + gap + 2.0 * TimelineRenderStrip.PITCH * k
+	var track_left := render_right + gap
+	_track_controls.scale = Vector3.ONE * k
+	_track_controls.position = Vector3(track_left + (0.5 * TimelineTrackStrip.PITCH + 0.004) * k, y, 0.0)
 	_track_controls.refresh()
-	_tempo_controls.position = Vector3(-1.5 * TimelineTempoStrip.PITCH, -_top_y - 0.016, 0.0)
 	_tempo_controls.refresh()
-	_render_controls.position = Vector3(width * 0.25 - 0.5 * TimelineRenderStrip.PITCH, -_top_y - 0.016, 0.0)
 	_render_controls.refresh()
 
 

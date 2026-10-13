@@ -235,6 +235,7 @@ func _process(_delta: float) -> void:
 			DAW.seek(_tl_road)
 			(tl[0] as TimelineSurface).set_highway(true)
 
+
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
 	if _frames == 8 and _walk_mirror > 0.0:
 		var mirrors := get_tree().current_scene.find_children("*", "Mirror", true, false)

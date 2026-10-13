@@ -72,6 +72,16 @@ const ABSENT_INK := Color(0.42, 0.43, 0.46)
 const AUTO_BLINK_HZ := 1.2
 const CHIP_SIZE := Vector3(WIDTH - 0.008, 0.004, 0.001)
 const CHIP_OFFSET := Vector3(0, HEIGHT - 0.022, 0.0005)
+## How much bigger the strip's buttons and pan knob are drawn than the parts' own size, across and
+## up and down but not out of the panel. A 16 by 10 millimetre button and a 22 millimetre knob
+## were 12px at the desk's seated framing (2026-10-12: "sooooo tiny"); a strip is 55 millimetres
+## wide, and there was room.
+const BUTTON_SCALE := 1.45
+const KNOB_SCALE := 1.45
+## The letters beside the buttons, left of them, in the strip's margin: what each button is,
+## said in a letter as well as in the shape of its lamp.
+const LEGEND_SIZE := 54
+const LEGEND_X := -0.0205
 
 ## Slot in `chip_bank`, or -1 when the chip is a mesh of its own. The plate needs no slot kept:
 ## nothing ever changes it after it is placed.
@@ -108,6 +118,7 @@ func _ready() -> void:
 	_pan = Knob.new()
 	_pan.body_bank = knob_bank
 	_pan.position = Vector3(0, HEIGHT - 0.048, 0.004)
+	_pan.scale = Vector3.ONE * KNOB_SCALE
 	_pan.turned.connect(_on_pan_turned)
 	_pan.describe_title = func() -> String:
 		return _caption_for("PAN") if send_dest <= 0 else _caption_for("SEND PAN TO " + _dest_name())
@@ -120,6 +131,7 @@ func _ready() -> void:
 	_rec.led_colour = Ergonomics.current.signal_colour(&"record")
 	_rec.lamp_scale = Vector2(1.0, 1.0)
 	_rec.position = Vector3(0, HEIGHT - 0.077, 0.004)
+	_rec.scale = Vector3(BUTTON_SCALE, BUTTON_SCALE, 1.0)
 	_rec.describe_title = func() -> String: return _caption_for("RECORD ARM")
 	_rec.pressed.connect(func(): DAW.set_track_rec_arm(track_index, not _state().rec_arm))
 	add_child(_rec)
@@ -130,6 +142,7 @@ func _ready() -> void:
 	_solo.led_colour = Ergonomics.current.signal_colour(&"solo")
 	_solo.lamp_scale = Vector2(0.38, 1.0)
 	_solo.position = Vector3(0, HEIGHT - 0.095, 0.004)
+	_solo.scale = Vector3(BUTTON_SCALE, BUTTON_SCALE, 1.0)
 	_solo.describe_title = func() -> String: return _caption_for("SOLO")
 	_solo.pressed.connect(func(): DAW.set_track_solo(track_index, not _state().solo))
 	add_child(_solo)
@@ -140,6 +153,7 @@ func _ready() -> void:
 	_mute.led_colour = Ergonomics.current.signal_colour(&"mute")
 	_mute.lamp_scale = Vector2(1.0, 0.40)
 	_mute.position = Vector3(0, HEIGHT - 0.113, 0.004)
+	_mute.scale = Vector3(BUTTON_SCALE, BUTTON_SCALE, 1.0)
 	_mute.describe_title = func() -> String: return _caption_for("MUTE")
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
 	add_child(_mute)
@@ -153,11 +167,17 @@ func _ready() -> void:
 	_monitor.led_colour = Ergonomics.current.signal_colour(&"ok")
 	_monitor.lamp_scale = Vector2(0.38, 0.40)
 	_monitor.position = Vector3(0, HEIGHT - 0.131, 0.004)
+	_monitor.scale = Vector3(BUTTON_SCALE, BUTTON_SCALE, 1.0)
 	_monitor.describe_title = func() -> String: return _caption_for("INPUT MONITOR")
 	_monitor.describe_value = func(_v: float) -> String:
 		return monitor_text(_state().monitor)
 	_monitor.pressed.connect(func(): DAW.set_track_monitor(track_index, next_monitor(_state().monitor)))
 	add_child(_monitor)
+	for legend in [["R", 0.077], ["S", 0.095], ["M", 0.113], ["I", 0.131]]:
+		var letter := _make_label(LEGEND_SIZE / 4, Vector3(LEGEND_X, HEIGHT - float(legend[1]), 0.004))
+		letter.text = legend[0]
+		letter.modulate = Color(0.70, 0.72, 0.76)
+		add_child(letter)
 
 	# Beside mute and monitor, in the column the meter rises in below: the one place on the strip
 	# with room for a plug to stand out of.

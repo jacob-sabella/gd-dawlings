@@ -238,7 +238,7 @@ func update_now() -> void:
 		var beats := int(s.beats_per_bar)
 		for beat in beats:
 			var when := at + (s.bar_to_seconds(bar_n + 2.0) - at) * float(beat) / float(beats)
-			if when < now or when > end or line >= _lines.count():
+			if when < now or when > end - window * 0.015 or line >= _lines.count():
 				continue
 			var z := -(when - now) * per_second
 			var is_bar := beat == 0
