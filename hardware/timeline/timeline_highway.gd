@@ -84,7 +84,7 @@ func configure(area_x: float, width: float, bottom: float, top: float, tracks: A
 	for i in lanes:
 		var x := -width * 0.5 + (i + 0.5) * lane_w
 		var track := DAW.state.track(_tracks[i]) if i < _tracks.size() else null
-		var colour := track.colour if track != null else Color(0.5, 0.5, 0.55)
+		var colour := track.shown_colour() if track != null else Color(0.5, 0.5, 0.55)
 		_lane_colours.append(colour)
 		if i % 2 == 0:
 			_road.add_child(_flat(Vector3(lane_w, 0.0006, _length), Vector3(x, 0.0, -_length * 0.5),
@@ -210,7 +210,7 @@ func update_now() -> void:
 			# makes what is next stand out of what is later.
 			_blocks.move_slot(slot, Transform3D(Basis.IDENTITY.scaled(Vector3(lane_w - LANE_MARGIN * 2.0, height, length)),
 					Vector3(x, height * 0.5 + 0.0003, (z_near + z_far) * 0.5 - GAP * 0.5)))
-			_blocks.set_colour(slot, TimelineSurface.item_body(t.colour, dim, item.selected).srgb_to_linear())
+			_blocks.set_colour(slot, TimelineSurface.item_body(t.shown_colour(), dim, item.selected).srgb_to_linear())
 			slot += 1
 			# Its name, lying on it at its near end, while it is near enough to read.
 			if names_used < _names.size() and not dim and absf(z_near) < _length * 0.55 and length > 0.02:

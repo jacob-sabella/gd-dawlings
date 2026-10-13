@@ -875,3 +875,13 @@ func _model(file: String, at: Vector3, yaw: float, swap: Dictionary) -> Node3D:
 
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.05, 0.035, 0.012, _walnut())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## After hours: oxblood, amber and neon, saturated and a little dark, warm leaning.
+func track_palette() -> Array:
+	return [
+		Color(0.88, 0.16, 0.23), Color(0.94, 0.44, 0.16), Color(0.96, 0.72, 0.18), Color(0.72, 0.84, 0.23),
+		Color(0.25, 0.81, 0.42), Color(0.14, 0.76, 0.66), Color(0.18, 0.71, 0.94), Color(0.29, 0.42, 1.00),
+		Color(0.61, 0.30, 1.00), Color(0.88, 0.23, 0.84), Color(1.00, 0.31, 0.58), Color(0.66, 0.60, 0.57),
+	]

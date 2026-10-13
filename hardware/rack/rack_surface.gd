@@ -123,6 +123,8 @@ func _on_track_changed(index: int, field: StringName) -> void:
 		return
 	if field == &"selected" and DAW.state.tracks.has(index) and DAW.state.track(index).selected:
 		show_track(index)
+	elif field == &"colour" and index == track_index:
+		mark_dirty()
 	elif field in [&"name", &"selected"]:
 		_once_this_frame(_refresh_picker)
 
@@ -272,6 +274,20 @@ func _build_picker(bay_height: float) -> void:
 	_picker.chosen.connect(show_track)
 	_adopt(_picker)
 	_picker.lit = _following()
+	_adopt(_colour_chip(Vector3(PICKER_SIZE.x * 0.5 * PICKER_SCALE + 0.014, bay_height + PICKER_RISE, 0.003)))
+
+
+## A square of the racked track's colour at the end of its window or name strip.
+func _colour_chip(at: Vector3) -> MeshInstance3D:
+	var chip := MeshInstance3D.new()
+	chip.name = "TrackChip"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.016, PICKER_SIZE.y * PICKER_SCALE)
+	chip.mesh = quad
+	chip.position = at
+	chip.material_override = Materials.track_stripe(DAW.state.track(track_index).shown_colour())
+	chip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return chip
 
 
 ## The grip at the left end of the track window: pull it and the whole track's chain comes out
@@ -301,11 +317,13 @@ func _build_name_strip(bay_height: float) -> void:
 			"%d PLUGIN%s" % [count, "" if count == 1 else "S"] if count > 0 else "NO PLUGINS"]
 	strip.font_size = 44
 	strip.pixel_size = 0.0002 * PICKER_SCALE
-	strip.modulate = Color(0.95, 0.78, 0.42)
+	# In the track's own colour: this rack is that track.
+	strip.modulate = t.shown_colour().lightened(0.15)
 	strip.position = Vector3(0, bay_height + PICKER_RISE, 0.004)
 	Lettering.range_to_legibility(strip)
 	_adopt(strip)
 	Lettering.fit(strip, PICKER_SIZE.x * PICKER_SCALE, 44)
+	_adopt(_colour_chip(Vector3(PICKER_SIZE.x * 0.5 * PICKER_SCALE + 0.014, bay_height + PICKER_RISE, 0.003)))
 
 	var fold := PanelButton.new()
 	fold.name = "FoldButton"

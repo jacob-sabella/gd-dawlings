@@ -574,3 +574,13 @@ func _dress_zones() -> void:
 ## edge -- open floor here, not a wall -- framed in the loft's black steel.
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.05, 0.035, 0.012, _steel())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Brick and iron: muted industrial colours, copper and patina, enamel paint gone dull.
+func track_palette() -> Array:
+	return [
+		Color(0.69, 0.29, 0.24), Color(0.75, 0.47, 0.28), Color(0.78, 0.64, 0.31), Color(0.56, 0.60, 0.29),
+		Color(0.35, 0.52, 0.35), Color(0.29, 0.54, 0.52), Color(0.35, 0.53, 0.66), Color(0.29, 0.37, 0.54),
+		Color(0.43, 0.34, 0.52), Color(0.56, 0.35, 0.47), Color(0.72, 0.48, 0.53), Color(0.60, 0.61, 0.62),
+	]

@@ -372,6 +372,17 @@ static func indicator_bar(colour: Color) -> StandardMaterial3D:
 		return m)
 
 
+## A track's colour printed as a stripe or band on a piece of gear: unshaded, so the colour that
+## says which track this is reads the same in a dim venue as under the lamp, and not lit so far
+## that it blooms like an LED.
+static func track_stripe(colour: Color) -> StandardMaterial3D:
+	return _cached("stripe_%s" % colour.to_html(false), func():
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = colour * 0.85
+		return m)
+
+
 static func led(colour: Color, on: bool) -> StandardMaterial3D:
 	var key := "led_%s_%s" % [colour.to_html(false), on]
 	return _cached(key, func():

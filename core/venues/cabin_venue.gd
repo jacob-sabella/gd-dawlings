@@ -840,3 +840,13 @@ func _model(file: String, at: Vector3, yaw: float, swap: Dictionary) -> Node3D:
 
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.06, 0.04, 0.014, _timber())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Wood stove and firs: earth pigments, brick and ochre, moss and pine, a faded denim.
+func track_palette() -> Array:
+	return [
+		Color(0.71, 0.27, 0.18), Color(0.78, 0.45, 0.23), Color(0.82, 0.65, 0.29), Color(0.60, 0.65, 0.28),
+		Color(0.37, 0.56, 0.31), Color(0.31, 0.54, 0.49), Color(0.37, 0.56, 0.68), Color(0.31, 0.39, 0.57),
+		Color(0.48, 0.35, 0.55), Color(0.60, 0.35, 0.48), Color(0.76, 0.48, 0.48), Color(0.65, 0.60, 0.53),
+	]

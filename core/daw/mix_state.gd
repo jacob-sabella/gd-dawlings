@@ -261,6 +261,10 @@ class TrackState extends RefCounted:
 	func display_name() -> String:
 		return name if name != "" else "Track %d" % index
 
+	## The colour this track is drawn in: its own, read in the venue's palette. See TrackColours.
+	func shown_colour() -> Color:
+		return TrackColours.shown(colour, index)
+
 
 var tracks: Dictionary = {}
 var master := MasterState.new()

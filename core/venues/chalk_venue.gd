@@ -1040,3 +1040,13 @@ func _frame_mirror(mirror: Mirror) -> void:
 		twinkle.scale = Vector3.ONE * 0.05
 		twinkle.position = Vector3(side * (w + 0.16), h * 0.55, z)
 		mirror.add_child(twinkle)
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Chalk on slate: pastel sticks, light and soft, never a full saturation.
+func track_palette() -> Array:
+	return [
+		Color(1.00, 0.56, 0.56), Color(1.00, 0.70, 0.48), Color(1.00, 0.89, 0.54), Color(0.84, 0.94, 0.54),
+		Color(0.62, 0.94, 0.66), Color(0.56, 0.94, 0.86), Color(0.56, 0.85, 1.00), Color(0.62, 0.69, 1.00),
+		Color(0.78, 0.65, 1.00), Color(0.94, 0.65, 0.94), Color(1.00, 0.65, 0.78), Color(0.86, 0.86, 0.86),
+	]

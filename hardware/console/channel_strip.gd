@@ -371,11 +371,11 @@ func refresh() -> void:
 		# Banked chips are unshaded, so the emission `led()` would have carried has to be
 		# expressed as a colour above 1 instead -- gently, because a chip is an identifier and
 		# a clipped identifier is no identifier. See Materials.chip_colour.
-		chip_bank.set_colour(_chip_slot, Materials.chip_colour(t.colour))
+		chip_bank.set_colour(_chip_slot, Materials.chip_colour(t.shown_colour()))
 	else:
 		var chip := get_node_or_null("ColourChip")
 		if chip:
-			chip.material_override = Materials.led(t.colour, true)
+			chip.material_override = Materials.led(t.shown_colour(), true)
 
 
 ## Put one box either into a bank or into the strip, depending on whether there is a bank.

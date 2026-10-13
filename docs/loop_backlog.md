@@ -2901,3 +2901,24 @@ track (pulling the same track again wheels that one over). The room's: room_stat
 `close_track_rack` predicted on a guest like the tablets, saved in the LayoutProfile's
 `track_racks` with floor transforms "floor/<id>". The host folds a rack whose track is deleted.
 `tools/screenshot.gd --pull-track`. shots/track_rack_pulled.png.
+
+## Tracks shown in the venue's colours, and more of the gear colour-coded (2026-10-13)
+"can we get more color coding across tracks and the hardware. color palletes should match theme
+of venue"
+`TrackColours` (hardware/track_colours.gd): a track's stored colour (Reaper's, or the COLR key's
+step through STANDARD, the twelve the timeline strip used to define) is never rewritten. It is
+SHOWN in the venue's `track_palette()`: twelve colours per venue in STANDARD's hue order, a
+track drawn as the counterpart of the STANDARD colour nearest its own. Uncoloured tracks (the
+TrackState default grey) get a colour by number, round the wheel in big steps. The studio
+palette is STANDARD and shows a coloured track exactly. Every display read goes through
+`TrackState.shown_colour()` (console chips, timeline lanes/items/notes/waves/fades/bed, highway,
+patchbay rows, plugin tablet chip, rack ghost, COLR lamp). `Studio.set_venue` calls
+`TrackColours.use` and `_recolour_tracks` (marks every mounted surface, tablet and pulled rack
+dirty).
+More of the gear coded: each rack unit's rule under its name is a track-coloured stripe
+(`Materials.track_stripe`), the rack's track window has a colour chip at its end, a pulled-out
+rack's name strip is in its track's colour with a chip, and its plinth has a band of the colour
+on the front.
+Palettes: club oxblood/amber neon, cabin earth pigments, chalk pastel sticks, dome coral/sea
+glass, grid full neon, loft muted enamel and patina, rooftop sunset to dusk, station status
+lights. shots/track_palettes_timeline.png, shots/track_palettes_room.png.

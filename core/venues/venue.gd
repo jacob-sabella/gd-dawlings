@@ -370,6 +370,13 @@ func roll_board_spot() -> Transform3D:
 
 ## What the gear is made of here (see GearStyle). The studio's own: no change from the
 ## defaults but a steel edge.
+## The twelve colours tracks are shown in here, in TrackColours.STANDARD's order (red, orange,
+## yellow, lime, green, teal, sky, blue, violet, magenta, pink, neutral); empty for STANDARD's
+## own, which is the studio's.
+func track_palette() -> Array:
+	return []
+
+
 func gear_style() -> GearStyle:
 	return GearStyle.new()
 

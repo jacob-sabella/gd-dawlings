@@ -640,3 +640,13 @@ func _frame_mirror(mirror: Mirror) -> void:
 		leg.material_override = lacquer
 		leg.transform = Transform3D(Basis.looking_at(reach - from, Vector3.UP), from + (reach - from) * 0.5)
 		mirror.add_child(leg)
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Synthwave: neon at full tilt, every one a light.
+func track_palette() -> Array:
+	return [
+		Color(1.00, 0.16, 0.33), Color(1.00, 0.48, 0.10), Color(1.00, 0.88, 0.10), Color(0.71, 1.00, 0.10),
+		Color(0.16, 1.00, 0.48), Color(0.10, 1.00, 0.84), Color(0.10, 0.84, 1.00), Color(0.23, 0.42, 1.00),
+		Color(0.63, 0.23, 1.00), Color(1.00, 0.16, 0.88), Color(1.00, 0.35, 0.71), Color(0.78, 0.71, 1.00),
+	]

@@ -163,7 +163,7 @@ func _rebuild() -> void:
 		var t := DAW.state.track(index)
 		for kind in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
 			var row := PatchPoint.create(index, kind, t.display_name())
-			row.colour = t.colour
+			row.colour = t.shown_colour()
 			row.size = Vector2(COLUMN_WIDTH, _pitch)
 			row.banded = r % 2 == 1
 			row.socket_bank = socket_bank
@@ -273,7 +273,7 @@ func _shape_key() -> String:
 	var parts := PackedStringArray()
 	for index in DAW.state.track_indices():
 		var t := DAW.state.track(index)
-		parts.append("%d:%s:%s" % [index, t.display_name(), t.colour.to_html(false)])
+		parts.append("%d:%s:%s" % [index, t.display_name(), t.shown_colour().to_html(false)])
 	for route in _sends():
 		parts.append("%d.%d>%d" % [route["src"], route["send"], route["dst"]])
 	return "|".join(parts)

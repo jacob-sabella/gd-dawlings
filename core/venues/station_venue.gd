@@ -535,3 +535,13 @@ func _model(file: String, at: Vector3, yaw: float, swap: Dictionary) -> Node3D:
 ## The mirror stands on the open deck at the footprint's left edge, framed like the viewport.
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.05, 0.035, 0.012, _ribs())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Orbital station: warning and status lights on white panels, cold and clean.
+func track_palette() -> Array:
+	return [
+		Color(1.00, 0.23, 0.19), Color(1.00, 0.58, 0.00), Color(1.00, 0.80, 0.00), Color(0.66, 0.88, 0.19),
+		Color(0.20, 0.78, 0.35), Color(0.19, 0.78, 0.75), Color(0.35, 0.78, 0.98), Color(0.23, 0.51, 1.00),
+		Color(0.54, 0.36, 1.00), Color(0.88, 0.35, 0.85), Color(1.00, 0.35, 0.54), Color(0.82, 0.84, 0.87),
+	]

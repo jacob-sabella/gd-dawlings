@@ -177,10 +177,14 @@ func _ready() -> void:
 
 	var rule := MeshInstance3D.new()
 	var rule_mesh := BoxMesh.new()
-	rule_mesh.size = Vector3(RACK_WIDTH - 0.056, 0.0009, 0.001)
+	# In the track's colour: which track's chain a unit is in, read off the unit itself, on a
+	# pulled tablet's stand or across the room.
+	rule_mesh.size = Vector3(RACK_WIDTH - 0.056, 0.0016, 0.001)
 	rule.mesh = rule_mesh
+	rule.name = "TrackRule"
 	rule.position = Vector3(0, RULE_Y, 0.0015)
-	rule.material_override = Materials.cap_plastic(Color(0.34, 0.35, 0.37))
+	rule.material_override = Materials.track_stripe(DAW.state.track(track_index).shown_colour()) \
+			if DAW.state.tracks.has(track_index) else Materials.cap_plastic(Color(0.34, 0.35, 0.37))
 	add_child(rule)
 
 	_name_label = Label3D.new()
@@ -197,7 +201,7 @@ func _ready() -> void:
 	tab.name = "TearTab"
 	tab.size = Vector2(NAME_SPAN, 0.02)
 	tab.position = Vector3(-RACK_WIDTH * 0.5 + 0.018, h * 0.5 - 0.016, 0.001)
-	tab.ghost_colour = DAW.state.track(track_index).colour
+	tab.ghost_colour = DAW.state.track(track_index).shown_colour()
 	tab.describe_title = func() -> String: return "%s  ON A TABLET" % _unit_caption()
 	tab.describe_value = func(_v: float) -> String: return "pull to take it off the rack"
 	tab.torn.connect(func(at: Vector3): tear_requested.emit(track_index, fx_index, at))

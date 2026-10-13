@@ -514,7 +514,7 @@ func refresh() -> void:
 	Lettering.fit(_title, WIDTH - (0.15 if windows else 0.12), 72)
 	_subtitle.text = "%s   ·   %s" % [track.display_name().to_upper() if track else "?", _chain_words()]
 	Lettering.fit(_subtitle, WIDTH - 0.12, 40)
-	_chip_material.albedo_color = Materials.chip_colour(track.colour if track else Color.GRAY)
+	_chip_material.albedo_color = Materials.chip_colour(track.shown_colour() if track else Color.GRAY)
 	_lost_label.visible = lost
 	_window_button.visible = windows and here
 	_window_word.visible = _window_button.visible

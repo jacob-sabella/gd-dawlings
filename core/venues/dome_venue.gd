@@ -849,3 +849,13 @@ func _model(file: String, at: Vector3, yaw: float, swap: Dictionary) -> Node3D:
 
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.05, 0.035, 0.012, _dark())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## Under the sea: coral and sand, kelp and sea glass, the blues of deep water.
+func track_palette() -> Array:
+	return [
+		Color(1.00, 0.44, 0.38), Color(1.00, 0.62, 0.37), Color(0.91, 0.82, 0.48), Color(0.66, 0.83, 0.42),
+		Color(0.31, 0.75, 0.54), Color(0.18, 0.78, 0.72), Color(0.25, 0.72, 0.88), Color(0.23, 0.50, 0.85),
+		Color(0.42, 0.42, 0.88), Color(0.69, 0.42, 0.82), Color(1.00, 0.50, 0.66), Color(0.78, 0.83, 0.82),
+	]

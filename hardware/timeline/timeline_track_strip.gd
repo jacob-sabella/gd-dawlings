@@ -25,12 +25,9 @@ var lane: PanelButton
 var input: PanelButton
 var colour: PanelButton
 
-## Twelve colours a track can be, round the wheel and readable on the dark desk.
-const PALETTE := [
-	Color(0.86, 0.32, 0.30), Color(0.92, 0.52, 0.25), Color(0.93, 0.76, 0.28), Color(0.70, 0.82, 0.30),
-	Color(0.38, 0.75, 0.40), Color(0.28, 0.72, 0.62), Color(0.30, 0.68, 0.86), Color(0.36, 0.50, 0.90),
-	Color(0.58, 0.44, 0.88), Color(0.80, 0.42, 0.80), Color(0.90, 0.42, 0.60), Color(0.62, 0.64, 0.66),
-]
+## Twelve colours a track can be, round the wheel and readable on the dark desk. Shown in the
+## venue's own twelve (TrackColours), stored as these.
+const PALETTE := TrackColours.STANDARD
 
 const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
@@ -146,7 +143,7 @@ func refresh() -> void:
 	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	if picked:
-		colour.led_colour = DAW.state.track(surface.picked_track).colour
+		colour.led_colour = DAW.state.track(surface.picked_track).shown_colour()
 	# After the colour: setting lit repaints the lamp.
 	colour.lit = picked
 

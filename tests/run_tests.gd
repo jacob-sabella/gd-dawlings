@@ -218,6 +218,7 @@ func _ready() -> void:
 	_test_rig_roulette_rolls_outside_tour()
 	_test_the_big_board_shows_any_surface()
 	_test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own()
+	_test_tracks_are_shown_in_the_venues_colours()
 	_test_each_venue_dresses_the_gear_in_its_own_finishes()
 	_test_each_venue_fits_its_own_shapes_to_the_gear()
 	_test_rack_plugin_search_finds_and_adds_one()
@@ -4198,7 +4199,7 @@ func _test_many_little_boxes_are_one_object() -> void:
 	# The chip is the one banked box whose colour changes after the fact, so it has to have kept
 	# its slot. A -1 here would mean every track's colour silently went to the same place.
 	check("a banked chip carries the track's colour, not a lamp's clipped version",
-			chips.colour_of(0) == Materials.chip_colour(DAW.state.track(0).colour))
+			chips.colour_of(0) == Materials.chip_colour(DAW.state.track(0).shown_colour()))
 
 	check("a strip's buttons and pan knob are drawn %.2fx, not at the parts' own size" % ChannelStrip.BUTTON_SCALE,
 			ChannelStrip.BUTTON_SCALE >= 1.4 and is_equal_approx(banked_strip._rec.scale.x, ChannelStrip.BUTTON_SCALE)
@@ -5630,6 +5631,55 @@ func _test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own() -> void:
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())
+
+
+## TrackColours: a track's own colour is project data and never rewritten, but it is SHOWN in the
+## venue's palette -- each venue's twelve in the COLR palette's order, a track shown as the
+## counterpart of the nearest -- and a track nobody coloured is given one by its number instead
+## of left grey. The studio shows a coloured track exactly as it is.
+func _test_tracks_are_shown_in_the_venues_colours() -> void:
+	var palettes := {}
+	for id in Venue.IDS:
+		var p := Venue.make(id, 0).track_palette()
+		check("%s has twelve track colours, or the standard's" % id, p.is_empty() or p.size() == 12)
+		palettes[id] = p
+	var distinct := {}
+	for id in palettes:
+		distinct[str(palettes[id])] = true
+	check("every venue colours its tracks its own way (%d of %d)" % [distinct.size(), palettes.size()],
+			distinct.size() == palettes.size())
+	var all_apart := true
+	for id in palettes:
+		var p: Array = palettes[id] if not (palettes[id] as Array).is_empty() else TrackColours.STANDARD
+		for i in p.size():
+			for j in range(i + 1, p.size()):
+				var a: Color = p[i]
+				var b: Color = p[j]
+				all_apart = all_apart and Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length() > 0.08
+	check("within each venue, no two of its colours are mistakable for each other", all_apart)
+
+	TrackColours.use([])
+	var red := TrackColours.STANDARD[0]
+	check("the studio shows a coloured track as it is", TrackColours.shown(red, 3) == red
+			and TrackColours.shown(Color(0.1, 0.2, 0.9), 3) == Color(0.1, 0.2, 0.9))
+	var uncoloured := {}
+	for i in range(1, 7):
+		uncoloured[TrackColours.shown(TrackColours.UNSET, i)] = true
+	check("six uncoloured tracks are given six different colours, none of them grey (%d)" % uncoloured.size(),
+			uncoloured.size() == 6 and not uncoloured.has(TrackColours.UNSET))
+
+	var grid: Array = palettes[&"grid"]
+	TrackColours.use(grid)
+	check("in the grid the red track is the grid's red", TrackColours.shown(red, 3) == grid[0])
+	check("and a red nearly the standard's is the same red", TrackColours.shown(Color(0.84, 0.30, 0.33), 5) == grid[0])
+	check("a blue one the grid's blue", TrackColours.shown(TrackColours.STANDARD[7], 1) == grid[7])
+	check("an uncoloured track takes the grid's colour for its number",
+			TrackColours.shown(TrackColours.UNSET, 1) == grid[TrackColours.FOR_UNCOLOURED[0]])
+	var t := MixState.TrackState.new()
+	t.colour = red
+	check("a track says how it is shown, and its own colour is left alone",
+			t.shown_colour() == grid[0] and t.colour == red)
+	TrackColours.use([])
 
 
 ## Venue.gear_style, through Materials.apply_style: every venue puts its own finish on the

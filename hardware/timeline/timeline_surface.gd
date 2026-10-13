@@ -1433,13 +1433,13 @@ func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
 	# Every other lane a shade apart, as in every arranger, so a block can be followed back to
 	# its name across the panel; the picked track's lane lit.
 	var bed := LANE_BED_PICKED if t.index == picked_track else (LANE_BED_ALT if alternate else LANE_BED)
-	bed = bed.lerp(t.colour, 0.10 if t.index != picked_track else 0.16)
+	bed = bed.lerp(t.shown_colour(), 0.10 if t.index != picked_track else 0.16)
 	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, lane_height, 0.0010)),
 			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), bed.srgb_to_linear())
 	# chip_colour and not lamp_colour, for the reason in Materials: this is the track's identity
 	# and a clipped identity is no identity.
 	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-width * 0.5 + 0.0045, y, 0.0014)),
-			Materials.chip_colour(t.colour))
+			Materials.chip_colour(t.shown_colour()))
 
 	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
 	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
@@ -1527,14 +1527,14 @@ func _relayout_view() -> void:
 					length = _preview[3]
 				else:
 					content = start
-			if _place_item(item, start, t.colour, y, t.mute, slot, length):
+			if _place_item(item, start, t.shown_colour(), y, t.mute, slot, length):
 				slot += 1
-				note_slot = _place_notes(item, content, t.colour, y, item.muted or t.mute,
+				note_slot = _place_notes(item, content, t.shown_colour(), y, item.muted or t.mute,
 						note_slot)
-				wave_slot = _place_wave(item, content, t.colour, y, item.muted or t.mute,
+				wave_slot = _place_wave(item, content, t.shown_colour(), y, item.muted or t.mute,
 						wave_slot)
 				# Fades and gain belong to the block: they move with it and follow a trim.
-				fade_slot = _place_fades(item, start, length, t.colour, y, fade_slot)
+				fade_slot = _place_fades(item, start, length, t.shown_colour(), y, fade_slot)
 				gain_label = _place_gain(item, start, length, y, gain_label)
 				name_label = _place_name(item, start, length, y, name_label, t.display_name(), item.muted or t.mute)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.

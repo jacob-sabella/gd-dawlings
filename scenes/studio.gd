@@ -432,6 +432,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	venue.dress(env, key_light)
 	Materials.apply_style(venue.gear_style())
 	GearShape.use(id, venue.roll_board_chalky(), get_tree() if is_inside_tree() else null)
+	TrackColours.use(venue.track_palette())
+	_recolour_tracks()
 	# Every venue a touch brighter than it dressed itself: the mid-tones read dark on an ordinary
 	# monitor, AgX's above all. Exposure rather than brightness, so blacks stay black.
 	env.tonemap_exposure *= EXPOSURE_LIFT
@@ -995,6 +997,16 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	plinth.material_override = Materials.furniture()
 	GearTrim.edges(plinth)
 	stand.add_part(plinth)
+	# A band of the track's colour round the plinth's front: which track this rack is, from the
+	# far side of the room.
+	var band := MeshInstance3D.new()
+	band.name = "TrackBand"
+	var band_mesh := BoxMesh.new()
+	band_mesh.size = Vector3(0.56, 0.035, 0.004)
+	band.mesh = band_mesh
+	band.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, 0.024)
+	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stand.add_part(band, false)
 	stand.add_corner_casters(0.05)
 
 	var pulled := RackSurface.new()
@@ -1006,10 +1018,36 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	stand.add_child(pulled)
 	pulled.tear_requested.connect(func(t: int, f: int, at: Vector3) -> void: _on_tear_requested(t, f, at, pulled))
 	pulled.fold_requested.connect(_fold_track_rack.bind(id))
+	# The rack rebuilds when its track's colour changes; the band goes with it.
+	pulled.rebuilt.connect(func() -> void:
+		if track_racks.has(id):
+			_paint_track_band(id))
 	if focus != null:
 		focus.surfaces.append(pulled)
 		pulled.rebuilt.connect(focus._on_surface_rebuilt.bind(pulled))
 	track_racks[id] = [stand, pulled]
+	_paint_track_band(id)
+
+
+## The band on a pulled-out rack's plinth, in its track's colour as this venue shows it.
+func _paint_track_band(id: StringName) -> void:
+	var band := (track_racks[id][0] as Node).find_child("TrackBand", true, false) as MeshInstance3D
+	var track := (track_racks[id][1] as RackSurface).track_index
+	if band != null and DAW.state.tracks.has(track):
+		band.material_override = Materials.track_stripe(DAW.state.track(track).shown_colour())
+
+
+## The venue's palette changed what every track is shown in: everything that shows a track's
+## colour is built again in it.
+func _recolour_tracks() -> void:
+	if mount != null:
+		for surface_id in mount.mounted_ids():
+			mount.surface(surface_id).mark_dirty()
+	for id in tablets:
+		(tablets[id][1] as Surface).mark_dirty()
+	for id in track_racks:
+		(track_racks[id][1] as Surface).mark_dirty()
+		_paint_track_band(id)
 
 
 func close_track_rack(id: StringName) -> void:

@@ -716,3 +716,13 @@ func _model(file: String, at: Vector3, yaw: float, swap: Dictionary) -> Node3D:
 ## The mirror stands on the open deck at the footprint's left edge, framed in the railing's iron.
 func _frame_mirror(mirror: Mirror) -> void:
 	Venue.frame_bars(mirror, 0.05, 0.035, 0.012, _steel())
+
+
+## The tracks' colours here (TrackColours), in its STANDARD order.
+## City sunset: scarlet to gold down the sky, then the dusk blues and violets.
+func track_palette() -> Array:
+	return [
+		Color(0.94, 0.29, 0.23), Color(1.00, 0.54, 0.23), Color(1.00, 0.78, 0.29), Color(0.78, 0.83, 0.35),
+		Color(0.42, 0.78, 0.54), Color(0.23, 0.72, 0.69), Color(0.29, 0.63, 0.88), Color(0.35, 0.42, 0.85),
+		Color(0.54, 0.35, 0.85), Color(0.78, 0.35, 0.78), Color(1.00, 0.42, 0.60), Color(0.66, 0.63, 0.72),
+	]
