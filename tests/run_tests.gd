@@ -262,6 +262,8 @@ func _ready() -> void:
 	_test_the_computer_keys_are_a_piano_by_position()
 	_test_a_guest_take_follows_the_host_transport_it_hears()
 	_test_the_host_places_a_guest_take_and_says_so()
+	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
+	_test_the_timeline_can_be_watched_as_a_road()
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
 	_test_someone_elses_motion_plays_back_as_it_was_made()
@@ -12283,6 +12285,108 @@ func _test_a_block_goes_from_one_shelf_onto_another() -> void:
 	timeline.set_shelf(false)
 	timeline._process(0.0)
 	check("and flat again, with no boards", timeline.get_node_or_null("ShelfLips") == null)
+	timeline.free()
+
+
+func _test_the_timeline_clips_are_the_brightest_thing_on_their_lane() -> void:
+	# 2026-10-12: "hard to see... can't tell tracks, clips or the playhead apart at a glance". A
+	# clip is read against its lane bed, so the figure that matters is how far apart they are.
+	var kick := Color(1.0, 0.48, 0.36)
+	var body := TimelineSurface.item_body(kick, false, false)
+	check("a clip is far brighter than the lane it lies on (%.2f vs %.2f)" % [body.v, TimelineSurface.LANE_BED.v],
+			body.v >= 0.58 and body.v - TimelineSurface.LANE_BED.v >= 0.40)
+	check("and a muted one is not, though it is still there", TimelineSurface.item_body(kick, true, false).v < 0.35
+			and TimelineSurface.item_body(kick, true, false).v > TimelineSurface.LANE_BED.v)
+	check("and a selected one is lifted toward white", TimelineSurface.item_body(kick, false, true).s < body.s - 0.2)
+	# Ink on a lit clip, light on a muted one: names were white on pastel, a smudge at a distance.
+	var ink := TimelineSurface.ITEM_NAME_INK
+	check("a lit clip's name is dark and a muted one's is light",
+			ink.v < 0.2 and TimelineSurface.ITEM_NAME_LIGHT.v > 0.8)
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var shades := timeline.get_node_or_null("ItemShades") as MeshBank
+	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
+	check("every clip has a shadow and a bottom edge under it, flat as well as on the shelves",
+			shades != null and blocks != null and shades.count() == blocks.count() * 2
+			and shades.multimesh.visible_instance_count == blocks.multimesh.visible_instance_count * 2)
+	timeline.free()
+
+
+func _test_the_timeline_can_be_watched_as_a_road() -> void:
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var road := timeline.get_node_or_null("Highway") as TimelineHighway
+	check("the road is built with the timeline, and not shown until asked for", road != null and not road.visible and not timeline.highway)
+	check("while it is not, the lanes take presses", timeline._lanes.collision_layer == 2 and timeline._header.collision_layer == 2)
+	timeline.set_highway(true)
+	check("asked for, it is shown and has a lane for each track on the panel",
+			road.visible and road.lane_count() == timeline._shown().size() and road.lane_count() > 0)
+	check("and then the lanes let presses through: nothing hidden takes one",
+			timeline._lanes.collision_layer == 0 and timeline._header.collision_layer == 0
+			and timeline._seek_strip.collision_layer == 0 and timeline._loop_strip.collision_layer == 0)
+	var drawn_flat := false
+	for child in timeline.get_children():
+		if child.get_meta("built", false) and child is Node3D and (child as Node3D).visible:
+			drawn_flat = true
+	check("and none of the flat lanes is drawn under it", not drawn_flat)
+
+	# Parked in the middle of verse 1 -- bar 9 begins at 20.8s at 92.6bpm -- the kick, snare and
+	# vocal lanes have a take under the gate, and the hat's is muted.
+	DAW.seek(30.0)
+	road.update_now()
+	var bank := road.find_child("Blocks", true, false) as MeshBank
+	check("blocks are on the road", bank != null and bank.multimesh.visible_instance_count > 0)
+	var under := 0
+	var lit := 0
+	var shown: Array = timeline._shown()
+	for i in shown.size():
+		var track := DAW.state.track(shown[i])
+		var has := false
+		for item in track.items:
+			if item.start <= 30.0 and item.end() > 30.0 and not item.muted and not track.mute:
+				has = true
+		under += 1 if has else 0
+		lit += 1 if road._pad_lit[i] else 0
+	check("a lane's receptor is lit exactly while its lane has a take under the gate (%d of %d lit)" % [lit, under],
+			under > 0 and lit == under)
+	# The nearest face of the nearest block is at the gate, give or take the gap between blocks:
+	# a take that is playing starts at the gate, not somewhere down the road.
+	var nearest := -INF
+	for k in bank.multimesh.visible_instance_count:
+		var box := bank.transform_of(k)
+		nearest = maxf(nearest, box.origin.z + box.basis.get_scale().z * 0.5)
+	check("a take that is playing starts at the gate (%.4f)" % nearest, absf(nearest + TimelineHighway.GAP) < 0.0005)
+	# And nothing starts before it does: the road is what is coming, in order.
+	DAW.seek(10.0)
+	road.update_now()
+	var from_ten := 0.0
+	for k in bank.multimesh.visible_instance_count:
+		var box := bank.transform_of(k)
+		from_ten = minf(from_ten, box.origin.z - box.basis.get_scale().z * 0.5)
+	check("the far end of the road is the same length of song whenever it is looked at (%.3f)" % from_ten,
+			from_ten >= -road._length - 0.0005 and from_ten < -road._length * 0.5)
+	# Ten seconds in only the intro is playing; the verse is still down the road, in its lanes.
+	var intro_lit := 0
+	for flag in road._pad_lit:
+		intro_lit += 1 if flag else 0
+	var furthest_start := INF
+	var started_late := 0
+	for k in bank.multimesh.visible_instance_count:
+		var box := bank.transform_of(k)
+		var near := box.origin.z + box.basis.get_scale().z * 0.5
+		if near < -road._length * 0.2:
+			started_late += 1
+		furthest_start = minf(furthest_start, near)
+	check("at 10s only the intro is under the gate (%d lit) and the verse is still on its way (%d takes)" % [intro_lit, started_late],
+			intro_lit > 0 and intro_lit < lit and started_late > 0)
+
+	timeline.set_highway(false)
+	check("put back, the lanes are drawn and take presses again",
+			not road.visible and timeline._lanes.collision_layer == 2 and timeline._header.collision_layer == 2)
 	timeline.free()
 
 

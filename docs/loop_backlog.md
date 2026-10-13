@@ -81,7 +81,8 @@ because a scaffold that reads as a finished project wastes the next person's aft
   its body and zooms by either end; the view pages forward on its own while the transport
   rolls and leaves the window alone while it is stopped. Defaults to SCREEN in every medium,
   including AR. The window arithmetic, the clipping, the follow rule and the item wire format
-  are tested.
+  are tested. A ROAD key beside 3D swaps the lanes for the same arrangement as a highway into
+  the playhead (`TimelineHighway`): a view for watching a song arrive, not for editing it.
 - **Track banking.** `MixState` knows which slice of the project its indices mean, moving the
   bank drops the cache rather than leaving the previous bank's names on this bank's faders,
   and the desk grows a BANK module saying "65-90 OF 90" when there is more project than bank.
@@ -2649,3 +2650,62 @@ Open follow-ups, not built:
   unconfirmed and still on the list: the DAW-screen false lead is now written down so nobody
   repeats it, but the real repro (a second machine's camera on a ghost holding one, somewhere
   near that lamp) was not found this tick.
+
+
+## Tick AB -- the timeline was hard to read, boring, and flat (2026-10-12)
+
+Asked for a complete redesign of the timeline ("ugly, hard to see, boring, doesn't take advantage
+of 3D"). Looked first, at 1280x720 on the real panel (`shots/tl/before-default.png`): pastel
+blocks at value 0.30-0.50 against lane beds at 0.13, 7px item names in white on pale, a hairline
+playhead, and a "3D" shelf view that is **invisible** -- `shots/tl/before-shelf.png` is the flat
+view to the pixel, because 11 mm of extrusion on a 1.3 m panel framed square to the eye is
+nothing. Depth that does not move or show an edge does not read at the distance this is read from.
+
+**Three spatial concepts were mocked up** (`tools/mock/timeline_concepts.gd`, shots in
+`shots/tl/mock-{a,b,c}.png`): a highway (time away from you), curved tiers (an amphitheatre) and
+glass strata. Curved tiers was picked first and half built -- a cylinder bend in a vertex shader
+with the exact inverse for hit-testing -- and abandoned before it landed. A search for prior art
+turned up almost none for a 3D *arrangement* view (KORG Gadget VR rings the sequencer round you;
+RipX on Vision Pro is announced; the rhythm-game note highway is the one proven use of depth, and
+it is for playing, not editing), plus a commentary that a project in a big virtual space is no
+help for editing. So: **keep a flat, precise editing surface and make it legible; put the depth
+where it has precedent, in a separate playback view.**
+
+*The flat editor* (`TimelineSurface`): clips were value 0.30-0.50 on a lane bed at 0.13; now
+`item_body` is 0.58-0.80 on 0.105, so a clip is the brightest thing on its lane, with a drop
+shadow and a darker bottom edge under it (the `ItemShades` bank, until now the shelf view's alone)
+and a thicker take strip. Names are 38 not 28, in ink on a lit clip and light on a muted one
+(white on pastel was the smudge). Lane beds take 10% of the track's colour (16% picked), so a lane
+reads back to its name across the panel, and the identity chip is 7 mm not 4.5. The playhead is
+2.2 mm with a glow band round it and a bigger head. The screen face and ruler are darker so the
+bar lines (brighter) and section names (40 not 32; numbers 48 not 40) stand out of them.
+
+*The road* (`TimelineHighway`, the ROAD key, `TimelineSurface.set_highway`): tracks are lanes,
+time runs away from you down a road laid back 58 degrees from the panel, six bars of song on it.
+The gate at the near end is the playhead; a lane's receptor under it is lit while that lane has
+an unmuted take under the gate; names lie on the apron in front of it. Blocks are one banked draw
+call with a shader that shades top, near end and sides apart, so a slab reads as a slab without
+the room's lamps. It takes no presses -- the lanes, header and ruler strips have their collision
+layer zeroed while it is shown, and the flat playhead and loop band are held hidden by
+`_move_playhead`/`_draw_loop` so nothing flat shows through. The screen face is hidden too:
+kept, it is an opaque wall the receding road disappears behind (found by leaving it on).
+
+Pinned in `tests/run_tests.gd`: `_test_the_timeline_clips_are_the_brightest_thing_on_their_lane`
+(clip value >= 0.58 and >= 0.40 over the bed; muted dimmer but above it; ink/light names; a
+shadow and edge per clip) and `_test_the_timeline_can_be_watched_as_a_road` (built hidden; shown
+with a lane per track; presses refused while shown and restored after; none of the flat lanes
+visible; at 30 s a take that is playing starts at the gate, lamps lit exactly for the lanes with
+one under it; at 10 s only the intro is lit and the verse is still down the road). Screenshots
+(1280x720 and 1920x1080, flat and road; seated, standing, visitor -- the panel is framed to the
+camera in SCREEN mode, which is every medium's default, so those read the same):
+`shots/tl/after-*.png`. `tools/screenshot.gd` gained `--tl-shelf on|off` and `--tl-road SECONDS`.
+
+Open follow-ups, not built:
+- The road is a view, not an editor: no press on a block, no seek by pressing the road. It would
+  want the same drag-plane treatment the lanes have.
+- The road is a key, not a mode that follows the transport. Whether it should open itself while
+  rolling is a product call, not a correctness one.
+- With a few long clips (this demo's are 16 bars) the road is mostly full-length slabs. Bar lines
+  carry the motion; a distance fade on the far end would help and needs per-instance custom data
+  the banks do not carry.
+- The ROAD choice is not saved in the layout the way 3D is.

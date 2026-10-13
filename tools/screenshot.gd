@@ -90,6 +90,10 @@ var _tour := ""
 ## band size instead of a solo one -- for a shot of how a crowded card holds up, not for any
 ## real multiplayer behaviour.
 var _tour_band := 0
+## `--tl-shelf on|off`: the timeline in its 3D view (or flat), whatever the layout says, from frame 6.
+var _tl_shelf := ""
+## `--tl-road 30`: the timeline as the road, with the playhead parked at that many seconds, from frame 6.
+var _tl_road := -1.0
 
 
 func _ready() -> void:
@@ -182,6 +186,10 @@ func _ready() -> void:
 				if i + 1 < args.size(): _cam = Array(args[i + 1].split(",")).map(func(s): return float(s))
 			"--tour":
 				if i + 1 < args.size(): _tour = args[i + 1]
+			"--tl-shelf":
+				if i + 1 < args.size(): _tl_shelf = args[i + 1]
+			"--tl-road":
+				if i + 1 < args.size(): _tl_road = float(args[i + 1])
 			"--tour-band":
 				if i + 1 < args.size(): _tour_band = int(args[i + 1])
 	if _shot_tick >= 0:
@@ -212,6 +220,20 @@ func _process(_delta: float) -> void:
 			if studio.has_method("set_god_mode"):
 				studio.set_god_mode(true)
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
+
+	if _frames == 6 and _tl_shelf != "":
+		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
+		if not tl.is_empty():
+			(tl[0] as TimelineSurface).set_shelf(_tl_shelf == "on")
+			print("SHOT_TL shelf=", (tl[0] as TimelineSurface).shelf)
+		else:
+			print("SHOT_TL none found")
+
+	if _frames == 6 and _tl_road >= 0.0:
+		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
+		if not tl.is_empty():
+			DAW.seek(_tl_road)
+			(tl[0] as TimelineSurface).set_highway(true)
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.
 	if _frames == 8 and _walk_mirror > 0.0:
