@@ -5662,19 +5662,18 @@ func _test_tracks_are_shown_in_the_venues_colours() -> void:
 	var red := TrackColours.STANDARD[0]
 	check("the studio shows a coloured track as it is", TrackColours.shown(red, 3) == red
 			and TrackColours.shown(Color(0.1, 0.2, 0.9), 3) == Color(0.1, 0.2, 0.9))
-	var uncoloured := {}
-	for i in range(1, 7):
-		uncoloured[TrackColours.shown(TrackColours.UNSET, i)] = true
-	check("six uncoloured tracks are given six different colours, none of them grey (%d)" % uncoloured.size(),
-			uncoloured.size() == 6 and not uncoloured.has(TrackColours.UNSET))
+	var schemed := {}
+	for i in 6:
+		schemed[TrackColours.scheme_colour(i)] = true
+	check("the scheme gives six tracks six different colours, none of them grey (%d)" % schemed.size(),
+			schemed.size() == 6 and not schemed.has(TrackColours.UNSET))
 
 	var grid: Array = palettes[&"grid"]
 	TrackColours.use(grid)
 	check("in the grid the red track is the grid's red", TrackColours.shown(red, 3) == grid[0])
 	check("and a red nearly the standard's is the same red", TrackColours.shown(Color(0.84, 0.30, 0.33), 5) == grid[0])
 	check("a blue one the grid's blue", TrackColours.shown(TrackColours.STANDARD[7], 1) == grid[7])
-	check("an uncoloured track takes the grid's colour for its number",
-			TrackColours.shown(TrackColours.UNSET, 1) == grid[TrackColours.FOR_UNCOLOURED[0]])
+	check("an uncoloured track stays grey, in any venue", TrackColours.shown(TrackColours.UNSET, 1) == TrackColours.UNSET)
 	var t := MixState.TrackState.new()
 	t.colour = red
 	check("a track says how it is shown, and its own colour is left alone",
@@ -9437,6 +9436,20 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	DAW.apply_intent(&"set_track_colour", [3, "red"])
 	check("and one that is not a colour is refused", s.track(3).colour == Color(1.0, 0.0, 0.5, 1.0))
 	DAW.undo()
+	var colours_were: Array = s.track_indices().map(func(i): return s.track(i).colour)
+	s.track(2).colour = TrackColours.UNSET
+	s.track(4).colour = TrackColours.UNSET
+	var kept: Color = s.track(3).colour
+	tracks.refresh()
+	check("SCHM is lit while some track has no colour", tracks.scheme.lit)
+	tracks.scheme.pressed.emit()
+	check("SCHM colours the tracks with none, each differently, and leaves the coloured alone",
+			not TrackColours.is_unset(s.track(2).colour) and not TrackColours.is_unset(s.track(4).colour)
+			and s.track(2).colour != s.track(4).colour and s.track(3).colour == kept)
+	check("and then has nothing left to do, and goes dark", not tracks.scheme.lit)
+	var order := s.track_indices()
+	for k in order.size():
+		s.track(order[k]).colour = colours_were[k]
 	tracks.add.pressed.emit()
 	check("ADD puts a new track after it, and picks that (%d)" % timeline.picked_track,
 			s.tracks.size() == names_were.size() + 1 and s.track(4).items.is_empty() and timeline.picked_track == 4

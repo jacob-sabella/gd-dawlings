@@ -2922,3 +2922,14 @@ on the front.
 Palettes: club oxblood/amber neon, cabin earth pigments, chalk pastel sticks, dome coral/sea
 glass, grid full neon, loft muted enamel and patina, rooftop sunset to dusk, station status
 lights. shots/track_palettes_timeline.png, shots/track_palettes_room.png.
+
+## SCHM colours the uncoloured tracks; they are no longer coloured on sight (2026-10-13)
+"make a button to apply a color scheme if one isn't set I guess ... then it uses that as a base
+or something. tbh I don't care too much. the colors can be arbitrary as well"
+Reverses the previous entry's "uncoloured tracks get a colour by number": `TrackColours.shown`
+leaves an unset track grey in every venue. The timeline's track strip has an eighth key, SCHM:
+it writes a colour into every track that has none (`TrackColours.scheme_colour`, by the track's
+place in the project, round the wheel in big steps so neighbours differ), through
+`DAW.set_track_colour`, so it is stored, replicated and undoable like COLR. Coloured tracks are
+left alone. Lit while there is an uncoloured track. The venue palette then reads those colours
+like any other.

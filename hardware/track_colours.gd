@@ -9,8 +9,9 @@ extends RefCounted
 ## lime, green, teal, sky, blue, violet, magenta, pink, neutral), and a track is shown in the
 ## venue's counterpart of the STANDARD colour nearest its own. So the kick that is red stays the
 ## red one everywhere -- the cabin's brick, the grid's laser red, the dome's coral -- and two
-## tracks that differ keep differing. A track nobody has coloured is not left grey: it is given
-## a colour by its number, so every track is told apart at a glance on every piece of gear.
+## tracks that differ keep differing. A track nobody has coloured stays grey; the timeline's
+## SCHM key gives every such track a colour of its own (`scheme_colour`), stored in the project
+## like any other, and from then on the venue reads it as it reads the rest.
 ##
 ## The studio's palette is STANDARD itself, and there a coloured track is shown exactly as it is.
 
@@ -20,8 +21,8 @@ const STANDARD: Array[Color] = [
 	Color(0.38, 0.75, 0.40), Color(0.28, 0.72, 0.62), Color(0.30, 0.68, 0.86), Color(0.36, 0.50, 0.90),
 	Color(0.58, 0.44, 0.88), Color(0.80, 0.42, 0.80), Color(0.90, 0.42, 0.60), Color(0.62, 0.64, 0.66),
 ]
-## The order uncoloured tracks are given colours in: round the wheel in big steps, so neighbours
-## differ, and never the neutral.
+## The order the SCHM key colours tracks in: round the wheel in big steps, so neighbours differ,
+## and never the neutral.
 const FOR_UNCOLOURED: Array[int] = [0, 6, 2, 8, 4, 10, 1, 7, 3, 9, 5]
 ## What a track is before anyone colours it (MixState.TrackState.colour's default).
 const UNSET := Color(0.55, 0.57, 0.6)
@@ -41,12 +42,20 @@ static func palette() -> Array:
 
 
 ## How a track whose colour is `colour` and whose number is `index` is shown.
-static func shown(colour: Color, index: int) -> Color:
-	if colour.is_equal_approx(UNSET):
-		return palette()[FOR_UNCOLOURED[posmod(index - 1, FOR_UNCOLOURED.size())]]
-	if _palette.is_empty():
+static func shown(colour: Color, _index: int) -> Color:
+	if _palette.is_empty() or is_unset(colour):
 		return colour
 	return _palette[nearest(colour)]
+
+
+## Whether nobody has given a track this colour: the default every track starts with.
+static func is_unset(colour: Color) -> bool:
+	return colour.is_equal_approx(UNSET)
+
+
+## The colour the SCHM key gives the track at `position` in the project's order (0 first).
+static func scheme_colour(position: int) -> Color:
+	return STANDARD[FOR_UNCOLOURED[posmod(position, FOR_UNCOLOURED.size())]]
 
 
 ## Which of STANDARD `colour` is nearest.

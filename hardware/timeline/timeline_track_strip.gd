@@ -9,7 +9,8 @@ extends Node3D
 ## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
 ## then none. IN steps the picked track through what it records from (`MixState.inputs`, then
 ## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its lamp
-## the track's colour.
+## the track's colour. SCHM gives every track that has no colour yet one of its own, round the
+## wheel (TrackColours.scheme_colour), lit while there is a track it would colour.
 
 const PITCH := 0.028
 const CAPTION := Color(0.62, 0.64, 0.68)
@@ -24,6 +25,7 @@ var auto: PanelButton
 var lane: PanelButton
 var input: PanelButton
 var colour: PanelButton
+var scheme: PanelButton
 
 ## Twelve colours a track can be, round the wheel and readable on the dark desk. Shown in the
 ## venue's own twelve (TrackColours), stored as these.
@@ -36,10 +38,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(7 * PITCH + 0.008, 0.036, 0.004)
+	box.size = Vector3(8 * PITCH + 0.008, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(3.0 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(3.5 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
@@ -86,6 +88,11 @@ func _ready() -> void:
 				if picked <= 0 or not DAW.state.tracks.has(picked):
 					return "press a track's name first"
 				return "a new colour for %s" % _name_of(picked))
+	scheme = _key("TrackScheme", "SCHM", 7, TrackColours.STANDARD[6], "TRACKS  COLOUR SCHEME", _apply_scheme,
+			func() -> String:
+				var n := _uncoloured().size()
+				return "every track already has a colour" if n == 0 \
+						else "colour the %d track%s with none" % [n, "" if n == 1 else "s"])
 	DAW.track_changed.connect(_on_track_changed)
 	DAW.master_changed.connect(_on_master_changed)
 	refresh()
@@ -114,6 +121,8 @@ func _on_master_changed(field: StringName) -> void:
 func _on_track_changed(index: int, field: StringName) -> void:
 	if field in [&"automation_mode", &"input", &"colour"] and index == surface.picked_track:
 		refresh()
+	elif field == &"colour":
+		scheme.lit = not _uncoloured().is_empty()
 
 
 func _next(mode: int) -> int:
@@ -146,6 +155,20 @@ func refresh() -> void:
 		colour.led_colour = DAW.state.track(surface.picked_track).shown_colour()
 	# After the colour: setting lit repaints the lamp.
 	colour.lit = picked
+	scheme.lit = not _uncoloured().is_empty()
+
+
+## The tracks nobody has coloured, by number.
+func _uncoloured() -> Array:
+	return DAW.state.track_indices().filter(func(i): return TrackColours.is_unset(DAW.state.track(i).colour))
+
+
+## SCHM: a colour for every track that has none, by its place in the project, so neighbours
+## differ. Tracks already coloured are left as they are.
+func _apply_scheme() -> void:
+	var order: Array = DAW.state.track_indices()
+	for i in _uncoloured():
+		DAW.set_track_colour(i, TrackColours.scheme_colour(order.find(i)))
 
 
 ## The palette's colour after the nearest one to `c`.
