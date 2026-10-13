@@ -34,8 +34,10 @@ else
   xvfb-run -a --server-args="-screen 0 ${RES}x24" "${RUNNER[@]}"
 fi
 [ -s "$RAW" ] || { echo "NO MOVIE PRODUCED" >&2; exit 1; }
-# The top 44 pixels at 1080p are the debug key-help line, not part of the studio.
-ffmpeg -loglevel error -y -i "$RAW" -vf "crop=in_w:in_h-in_h*44/1080:0:in_h*44/1080" -c:v libx264 -crf 24 -preset slow -pix_fmt yuv420p -movflags +faststart -an "$ABS"
+# Without --no-hud the top 44 pixels at 1080p are the debug key-help line; MOVIE_VF replaces the
+# default crop (a --no-hud shot may still show the hover prompt along the bottom).
+VF="${MOVIE_VF:-crop=in_w:in_h-in_h*44/1080:0:in_h*44/1080}"
+ffmpeg -loglevel error -y -i "$RAW" -vf "$VF" -c:v libx264 -crf 24 -preset slow -pix_fmt yuv420p -movflags +faststart -an "$ABS"
 if [ -n "${MOVIE_GIF:-}" ]; then
   ffmpeg -loglevel error -y -i "$ABS" -vf "fps=12,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse" "${ABS%.mp4}.gif"
 fi

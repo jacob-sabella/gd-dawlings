@@ -37,15 +37,14 @@ see the same result.
 
 ## See it
 
-<p align="center"><img src="docs/media/venue-studio.jpg" alt="The studio: a console, a tape deck, a rack and the arrange timeline, seen from the seat" width="100%"></p>
+<p align="center"><img src="docs/media/venue-studio.jpg" alt="The studio: a rack, the arrange timeline on its stand, a console, a tape deck and a patch stand" width="100%"></p>
 
-The arrange timeline, the tape deck and the console as the person at the desk sees them. The
-timeline can also be watched as a road: ROAD turns it into lanes that run away from you, with each
-take approaching a gate that lights as it plays.
+A rack, the arrange timeline on its stand, a console, a tape deck and a patch stand: the room as a
+person standing in it sees it.
 
-<video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/timeline-road.mp4" controls muted loop playsinline width="100%"></video>
+<video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/studio-playing.mp4" controls muted loop playsinline width="100%"></video>
 
-[timeline-road.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/timeline-road.mp4): the road view while the transport rolls.
+[studio-playing.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/studio-playing.mp4): the transport rolling, the reels turning and the meters moving.
 
 ### Venues
 
@@ -60,9 +59,9 @@ Only the world changes; the gear and the layout stay the same. **V** cycles them
 
 <video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4" controls muted loop playsinline width="100%"></video>
 
-[grid-playing.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4): the grid venue with the transport rolling, the reels turning and the meters moving.
+[grid-playing.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4): the same room in the grid venue.
 
-![The tape deck, looking right from the seat](docs/media/tape-deck.jpg)
+![The console and tape deck up close](docs/media/tape-deck.jpg)
 
 The screenshots and clips are made by the project's own tools: `tools/shot.sh` for a still,
 `tools/movie.sh` for a clip (Godot's movie writer, so the frame rate holds however slowly the
