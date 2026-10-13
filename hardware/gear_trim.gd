@@ -36,6 +36,9 @@ static func edges(box: MeshInstance3D) -> void:
 		_strip(box, Vector3(size.x + along_x, along_x, along_x), Vector3(0, h.y, sz * h.z))
 	for sx in [-1.0, 1.0]:
 		_strip(box, Vector3(along_z, along_z, size.z + along_z * 0.9), Vector3(sx * h.x, h.y, 0))
+	# The venue's fittings go on the same boxes, and come off and on again with them.
+	box.add_to_group(&"gear_box")
+	GearShape.dress(box)
 
 
 static func _strip(box: MeshInstance3D, size: Vector3, at: Vector3) -> void:

@@ -217,6 +217,7 @@ func _ready() -> void:
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
 	_test_each_venue_dresses_the_gear_in_its_own_finishes()
+	_test_each_venue_fits_its_own_shapes_to_the_gear()
 	_test_rack_plugin_search_finds_and_adds_one()
 	_test_channel_strip_name_opens_plugin_search()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
@@ -5543,6 +5544,74 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 	check("the Tour case's shell is the gear's own furniture finish (%d surfaces)" % shells, shells > 0)
 	case.free()
 	Materials.apply_style(null)
+
+
+## GearShape: every venue but the studio has its own kit of fittings, fitted to any furniture box
+## at its real size -- corners at the corners, uprights stretched to the box's height -- swapped
+## whole on a venue change, never fitted to a box too small for it, and wearing the venue's
+## shared finishes. The chalk zone draws its boxes instead.
+func _test_each_venue_fits_its_own_shapes_to_the_gear() -> void:
+	var box := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.2, 0.62, 0.34)
+	box.mesh = mesh
+	add_child(box)
+	var kits := {}
+	for id in Venue.IDS:
+		var parts := GearShape.parts_of(id)
+		kits[id] = parts.keys()
+		if id != &"studio" and id != &"chalk":
+			check("%s has a kit of its own (%s)" % [id, parts.keys()], not parts.is_empty())
+	check("the studio's gear is the gear as designed: no kit", (kits[&"studio"] as Array).is_empty())
+	var shapes := {}
+	for id in kits:
+		shapes[str(kits[id])] = true
+	check("the kits are not all one shape (%d distinct)" % shapes.size(), shapes.size() >= 6)
+
+	var fitted := func(slot: String) -> Array:
+		return box.get_children().filter(func(n): return String(n.name).rstrip("0123456789") == "Kit_" + slot)
+	GearShape.use(&"club", false, null)
+	GearShape.dress(box)
+	check("a club box has a road case corner at all eight corners", fitted.call("corner").size() == 8)
+	check("a handle on each side and two latches front and back",
+			fitted.call("handle").size() == 2 and fitted.call("latch").size() == 4)
+	var corner: MeshInstance3D = fitted.call("corner")[0]
+	check("the corner sits on a corner of the box at its real size (%s)" % corner.position,
+			corner.position.abs().is_equal_approx(Vector3(0.6, 0.31, 0.17)))
+	var surfaces_brushed := true
+	for i in corner.mesh.get_surface_count():
+		surfaces_brushed = surfaces_brushed and corner.get_surface_override_material(i) == Materials.brushed_metal()
+	check("the club's corners wear the venue's shared metal", surfaces_brushed)
+
+	GearShape.use(&"cabin", false, null)
+	GearShape.dress(box)
+	var log: Array = fitted.call("edge")
+	check("the cabin swaps the club's kit out whole: no corners left, four log uprights",
+			fitted.call("corner").is_empty() and fitted.call("handle").is_empty() and log.size() == 4)
+	check("an upright is stretched to the box's height", is_equal_approx(absf((log[0] as Node3D).scale.y), 0.62))
+
+	GearShape.use(&"chalk", false, null)
+	GearShape.use(&"chalk", true, null)
+	GearShape.dress(box)
+	check("the chalk zone draws the box instead of fitting it", fitted.call("chalk").size() == 1
+			and fitted.call("edge").is_empty())
+
+	var thin := MeshInstance3D.new()
+	var thin_mesh := BoxMesh.new()
+	thin_mesh.size = Vector3(0.56, 0.04, 0.42)
+	thin.mesh = thin_mesh
+	add_child(thin)
+	GearShape.use(&"club", false, null)
+	GearShape.dress(thin)
+	check("a shelf four centimetres thick is too thin for corners or handles",
+			thin.get_children().filter(func(n): return n.name.begins_with("Kit_")).is_empty())
+
+	GearShape.use(&"studio", false, null)
+	GearShape.dress(box)
+	check("back in the studio the box is bare again",
+			box.get_children().filter(func(n): return n.name.begins_with("Kit_")).is_empty())
+	thin.free()
+	box.free()
 
 
 ## The rack's FIND button, beside the ADD wheel: opens a searchable list for when the DAW

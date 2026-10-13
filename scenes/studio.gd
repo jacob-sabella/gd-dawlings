@@ -425,6 +425,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_house_key(key_light)
 	venue.dress(env, key_light)
 	Materials.apply_style(venue.gear_style())
+	GearShape.use(id, venue.roll_board_chalky(), get_tree() if is_inside_tree() else null)
 	# Every venue a touch brighter than it dressed itself: the mid-tones read dark on an ordinary
 	# monitor, AgX's above all. Exposure rather than brightness, so blacks stay black.
 	env.tonemap_exposure *= EXPOSURE_LIFT

@@ -2844,3 +2844,26 @@ faceplates were never unstyled -- both are `Materials.chassis()`, which every ve
 studio (whose default it is) now tints.
 Not styled, by decision: LEDs, patch cables, screen faces and the coloured caps (information,
 not finish); shapes per venue (a separate modelling job, not a finish).
+
+## Each venue fits its own shapes to the gear (2026-10-13)
+The shape half of dressing the gear, taken up after all ("Do per-venue shapes too"). Every box
+`GearTrim.edges` outlines (console body, rack plinth, patch cabinet, deck trolley shelf...) joins
+group `gear_box` and is handed to `GearShape.dress`, which fits the current venue's kit to it at
+its real size: corners at the corners, uprights stretched to its height, handles on the sides,
+latches front and back, a face piece centred on each face. A kit is one model per venue,
+assets/models/gear_kit_<venue>.glb, built headless by tools/blender/gear_kits.py, its parts named
+for their slot and its materials named for the shared finish they wear, so the fittings follow
+the venue's GearStyle in place. `studio.set_venue` calls `GearShape.use`, which swaps the kit
+whole on every box in the tree.
+- club: road case ball corners, recessed spring handles, butterfly latches
+- rooftop: flat riveted corners, rope loop handles through iron eyes
+- cabin: hewn log uprights, forged iron straps round the top corners
+- loft: black iron pipe uprights on bolted flanges
+- dome: riveted brass top corners, a porthole on each face
+- grid: lit pyramid finials, a neon chevron on each face
+- station: bumpered corners, a vent grille on each face
+- chalk: no kit; each box is drawn round in chalk instead
+- studio: no kit; the gear as designed
+Fittings are gated by size (no corners on a box under 20 cm, nothing on a 4 cm shelf). First
+pass had the club corners (5.5 cm) and loft pipe (r 1.7 cm, half inside the box) lost under the
+trim at standing distance; enlarged to 8.5 cm and r 2.8 cm. shots/venue_gear_shapes.png.
