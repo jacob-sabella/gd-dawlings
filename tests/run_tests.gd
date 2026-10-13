@@ -264,6 +264,7 @@ func _ready() -> void:
 	_test_the_host_places_a_guest_take_and_says_so()
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
+	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_the_timeline_can_be_watched_as_a_road()
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
@@ -17845,3 +17846,16 @@ func _test_tour_hud_shows_the_crowd_lines() -> void:
 	remove_child(hud)
 	hud.free()
 	Session.start_solo()
+
+
+func _test_the_tape_decks_keys_are_big_enough_to_aim_at() -> void:
+	# 2026-10-13: the deck's keys were 1.4x/1.6x of a 16 mm part, small at the seat.
+	_offline()
+	var deck := TapeDeck.new()
+	add_child(deck)
+	deck._process(0.0)
+	var tap: PanelButton = deck.find_child("TapKey", true, false)
+	check("the deck's tap key is drawn at %.2fx" % TapeDeck.KEY_SCALE,
+			tap != null and is_equal_approx(tap.scale.x, TapeDeck.KEY_SCALE) and TapeDeck.KEY_SCALE >= 1.6)
+	check("the transport keys are the bigger set", TapeDeck.BIG_KEY_SCALE > TapeDeck.KEY_SCALE)
+	deck.queue_free()

@@ -2727,3 +2727,9 @@ the flat editor at several positions (`SHOT_ARGS="--tl-shelf off"`): seated `sho
 height 1.65 m `shots/tl/vr-height.png`, across the room `shots/tl/across.png`, plus the earlier
 standing/visitor/road set `shots/tl/after-*.png`. Note: with an explicit `--cam` the 3D shelf is on by
 default and clips read as dim edge lines head-on -- the 3D key still toggles it; flat is the legible one.
+
+Tape deck (2026-10-13): keys drawn at `KEY_SCALE` 1.65 (transport three `BIG_KEY_SCALE` 1.95, up from
+1.4/1.6) and captions at 38, pinned by `_test_the_tape_decks_keys_are_big_enough_to_aim_at`. The deck is
+a side piece of furniture (trolley at 0.80, -0.22), so the seated default frames the timeline and
+console and it is reached by looking right (`--look 50,-25`, `shots/tl/d3_50.png`); that is by design,
+not a cut-off bug. Off-lamp contrast left as is.

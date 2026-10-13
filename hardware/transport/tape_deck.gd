@@ -15,6 +15,10 @@ extends Surface
 ## What this does NOT do is pretend to be tape: there is no wind, no spooling time, no latency
 ## added anywhere. Reaper's position is the truth and the reels follow it.
 
+## Drawn size of the deck's keys, against the parts' own 16 by 10 mm (2026-10-13: still tiny at the
+## seat). The transport three are the bigger set. Pitches between keys leave room for these.
+const KEY_SCALE := 1.65
+const BIG_KEY_SCALE := 1.95
 const REEL_RADIUS := 0.085
 const REEL_SPACING := 0.26
 const MESH_PATH := "res://assets/hardware/reel.glb"
@@ -156,7 +160,7 @@ func _rebuild() -> void:
 	tap.led_colour = Color(0.95, 0.80, 0.42)
 	tap.lamp_scale = Vector2(0.8, 0.5)
 	tap.position = Vector3(-0.115, -0.122, 0.028)
-	tap.scale = Vector3(1.4, 1.4, 1.4)
+	tap.scale = Vector3.ONE * KEY_SCALE
 	tap.pressed.connect(_tap)
 	tap.describe_title = func() -> String: return "TRANSPORT  TAP TEMPO"
 	tap.describe_value = func(_v: float) -> String:
@@ -164,7 +168,7 @@ func _rebuild() -> void:
 	_adopt(tap)
 	var tap_caption := Label3D.new()
 	tap_caption.text = "TAP"
-	tap_caption.font_size = 30
+	tap_caption.font_size = 38
 	tap_caption.pixel_size = 0.00024
 	tap_caption.position = Vector3(-0.115, -0.105, 0.002)
 	tap_caption.modulate = Color(0.6, 0.62, 0.66)
@@ -178,7 +182,7 @@ func _rebuild() -> void:
 	punch.led_colour = Color(0.95, 0.38, 0.34)
 	punch.lamp_scale = Vector2(0.45, 0.8)
 	punch.position = Vector3(-0.150, -0.122, 0.028)
-	punch.scale = Vector3(1.4, 1.4, 1.4)
+	punch.scale = Vector3.ONE * KEY_SCALE
 	punch.pressed.connect(func(): DAW.set_punch(not DAW.state.punch))
 	punch.describe_title = func() -> String: return "TRANSPORT  PUNCH"
 	punch.describe_value = func(_v: float) -> String: return punch_text(DAW.state)
@@ -186,7 +190,7 @@ func _rebuild() -> void:
 	_punch_lamp = punch
 	var punch_caption := Label3D.new()
 	punch_caption.text = "PUNCH"
-	punch_caption.font_size = 30
+	punch_caption.font_size = 38
 	punch_caption.pixel_size = 0.00024
 	punch_caption.position = Vector3(-0.150, -0.105, 0.002)
 	punch_caption.modulate = Color(0.6, 0.62, 0.66)
@@ -202,7 +206,7 @@ func _rebuild() -> void:
 	click.led_colour = Color(0.95, 0.80, 0.42)
 	click.lamp_scale = Vector2(0.45, 0.8)
 	click.position = Vector3(0.115, -0.122, 0.028)
-	click.scale = Vector3(1.4, 1.4, 1.4)
+	click.scale = Vector3.ONE * KEY_SCALE
 	click.pressed.connect(func(): DAW.set_metronome(not DAW.state.metronome))
 	click.describe_title = func() -> String: return "TRANSPORT  CLICK"
 	click.describe_value = func(_v: float) -> String: return "on" if DAW.state.metronome else "off"
@@ -210,7 +214,7 @@ func _rebuild() -> void:
 	_click_lamp = click
 	var click_caption := Label3D.new()
 	click_caption.text = "CLICK"
-	click_caption.font_size = 30
+	click_caption.font_size = 38
 	click_caption.pixel_size = 0.00024
 	click_caption.position = Vector3(0.115, -0.105, 0.002)
 	click_caption.modulate = Color(0.6, 0.62, 0.66)
@@ -224,7 +228,7 @@ func _rebuild() -> void:
 	count.led_colour = Color(0.95, 0.80, 0.42)
 	count.lamp_scale = Vector2(0.45, 0.8)
 	count.position = Vector3(0.150, -0.122, 0.028)
-	count.scale = Vector3(1.4, 1.4, 1.4)
+	count.scale = Vector3.ONE * KEY_SCALE
 	count.pressed.connect(_step_count_in)
 	count.describe_title = func() -> String: return "TRANSPORT  COUNT-IN"
 	count.describe_value = func(_v: float) -> String: return count_in_text(DAW.state)
@@ -232,7 +236,7 @@ func _rebuild() -> void:
 	_count_lamp = count
 	var count_caption := Label3D.new()
 	count_caption.text = "COUNT"
-	count_caption.font_size = 30
+	count_caption.font_size = 38
 	count_caption.pixel_size = 0.00024
 	count_caption.position = Vector3(0.150, -0.105, 0.002)
 	count_caption.modulate = Color(0.6, 0.62, 0.66)
@@ -255,7 +259,7 @@ func _rebuild() -> void:
 	home.led_colour = Color(0.75, 0.78, 0.82)
 	home.lamp_scale = Vector2(0.9, 0.42)
 	home.position = Vector3(-0.070, -0.096, 0.028)
-	home.scale = Vector3(1.6, 1.6, 1.6)
+	home.scale = Vector3.ONE * BIG_KEY_SCALE
 	home.pressed.connect(func(): DAW.seek(DAW.state.loop_start
 			if DAW.state.looping and DAW.state.has_loop_range() else 0.0))
 	home.describe_title = func() -> String: return "TRANSPORT  RETURN TO START"
@@ -268,7 +272,7 @@ func _rebuild() -> void:
 	loop.led_colour = Color(0.36, 0.62, 0.98)
 	loop.lamp_scale = Vector2(1.0, 0.6)
 	loop.position = Vector3(0.070, -0.096, 0.028)
-	loop.scale = Vector3(1.6, 1.6, 1.6)
+	loop.scale = Vector3.ONE * BIG_KEY_SCALE
 	loop.pressed.connect(func():
 		# Nothing to loop yet: the four bars from the playhead, the commonest thing to want.
 		if not DAW.state.has_loop_range():
@@ -303,7 +307,7 @@ func _rebuild() -> void:
 		key.led_colour = Color(0.92, 0.72, 0.38)
 		key.lamp_scale = Vector2(0.8, 0.5)
 		key.position = Vector3(spec[0] * 0.185, -0.122, 0.028)
-		key.scale = Vector3(1.4, 1.4, 1.4)
+		key.scale = Vector3.ONE * KEY_SCALE
 		var is_undo: bool = spec[0] < 0.0
 		key.pressed.connect(func(): DAW.undo() if is_undo else DAW.redo())
 		key.describe_title = func() -> String: return "EDIT  " + ("UNDO" if is_undo else "REDO")
@@ -314,7 +318,7 @@ func _rebuild() -> void:
 		_history_keys.append(key)
 		var caption := Label3D.new()
 		caption.text = spec[1]
-		caption.font_size = 30
+		caption.font_size = 38
 		caption.pixel_size = 0.00024
 		caption.position = Vector3(spec[0] * 0.185, -0.105, 0.002)
 		caption.modulate = Color(0.6, 0.62, 0.66)
@@ -326,7 +330,7 @@ func _rebuild() -> void:
 	play.led_colour = Ergonomics.current.signal_colour(&"ok")
 	play.lamp_scale = Vector2(1.0, 1.0)
 	play.position = Vector3(-0.035, -0.096, 0.028)
-	play.scale = Vector3(1.6, 1.6, 1.6)
+	play.scale = Vector3.ONE * BIG_KEY_SCALE
 	play.pressed.connect(func(): DAW.transport_play())
 	play.describe_title = func() -> String: return "TRANSPORT  PLAY"
 	_adopt(play)
@@ -336,7 +340,7 @@ func _rebuild() -> void:
 	stop.led_colour = Ergonomics.current.signal_colour(&"mute")
 	stop.lamp_scale = Vector2(0.45, 1.0)
 	stop.position = Vector3(0.0, -0.096, 0.028)
-	stop.scale = Vector3(1.6, 1.6, 1.6)
+	stop.scale = Vector3.ONE * BIG_KEY_SCALE
 	stop.pressed.connect(func(): DAW.transport_stop())
 	stop.describe_title = func() -> String: return "TRANSPORT  STOP"
 	stop.describe_value = func(_v: float) -> String: return ""
@@ -346,7 +350,7 @@ func _rebuild() -> void:
 	rec.led_colour = Ergonomics.current.signal_colour(&"record")
 	rec.lamp_scale = Vector2(1.0, 0.42)
 	rec.position = Vector3(0.035, -0.096, 0.028)
-	rec.scale = Vector3(1.6, 1.6, 1.6)
+	rec.scale = Vector3.ONE * BIG_KEY_SCALE
 	rec.pressed.connect(func(): DAW.transport_record())
 	rec.describe_title = func() -> String: return "TRANSPORT  RECORD"
 	_adopt(rec)
@@ -672,7 +676,7 @@ func _build_locator() -> void:
 		key.led_colour = Color(0.88, 0.74, 0.44)
 		key.lamp_scale = Vector2(0.8, 0.45) if way == 0 else Vector2(0.45, 0.45)
 		key.position = Vector3(float(way) * LOCATOR_PITCH, 0.044, 0.006)
-		key.scale = Vector3(1.3, 1.3, 1.3)
+		key.scale = Vector3.ONE * KEY_SCALE * 0.93
 		if way == 0:
 			key.pressed.connect(_drop_marker)
 			# The title is the key's name across a session, so it stays put; the value says what a
