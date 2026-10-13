@@ -94,6 +94,7 @@ var _tour_band := 0
 var _tl_shelf := ""
 ## `--tl-road 30`: the timeline as the road, with the playhead parked at that many seconds, from frame 6.
 var _tl_road := -1.0
+var _roll := false
 
 
 func _ready() -> void:
@@ -188,6 +189,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tour = args[i + 1]
 			"--tl-shelf":
 				if i + 1 < args.size(): _tl_shelf = args[i + 1]
+			"--roll":
+				_roll = true
 			"--tl-road":
 				if i + 1 < args.size(): _tl_road = float(args[i + 1])
 			"--tour-band":
@@ -234,6 +237,8 @@ func _process(_delta: float) -> void:
 		if not tl.is_empty():
 			DAW.seek(_tl_road)
 			(tl[0] as TimelineSurface).set_highway(true)
+	if _frames == 7 and _roll:
+		DAW.transport_play()
 
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.

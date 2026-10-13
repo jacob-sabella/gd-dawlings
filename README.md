@@ -35,6 +35,39 @@ see the same result.
               └───────┘  └───────┘  └───────┘
 ```
 
+## See it
+
+<p align="center"><img src="docs/media/venue-studio.jpg" alt="The studio: a console, a tape deck, a rack and the arrange timeline, seen from the seat" width="100%"></p>
+
+The arrange timeline, the tape deck and the console as the person at the desk sees them. The
+timeline can also be watched as a road: ROAD turns it into lanes that run away from you, with each
+take approaching a gate that lights as it plays.
+
+<video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/timeline-road.mp4" controls muted loop playsinline width="100%"></video>
+
+[timeline-road.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/timeline-road.mp4): the road view while the transport rolls.
+
+### Venues
+
+Only the world changes; the gear and the layout stay the same. **V** cycles them.
+
+| | |
+|---|---|
+| ![Grid](docs/media/venue-grid.jpg) **Grid**: synthwave | ![Chalk](docs/media/venue-chalk.jpg) **Chalk** |
+| ![Cabin](docs/media/venue-cabin.jpg) **Cabin**: a wood stove and firs | ![Dome](docs/media/venue-dome.jpg) **Dome**: under the sea |
+| ![Club](docs/media/venue-club.jpg) **Club**: after hours | ![Loft](docs/media/venue-loft.jpg) **Loft** |
+| ![Rooftop](docs/media/venue-rooftop.jpg) **Rooftop**: a city's water tanks | ![Station](docs/media/venue-station.jpg) **Station**: pressure hatches |
+
+<video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4" controls muted loop playsinline width="100%"></video>
+
+[grid-playing.mp4](https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4): the grid venue with the transport rolling, the reels turning and the meters moving.
+
+![The tape deck, looking right from the seat](docs/media/tape-deck.jpg)
+
+The screenshots and clips are made by the project's own tools: `tools/shot.sh` for a still,
+`tools/movie.sh` for a clip (Godot's movie writer, so the frame rate holds however slowly the
+machine draws).
+
 ## Running it
 
 ```bash
