@@ -80,6 +80,7 @@ var _aim := ""
 var _look := Vector2.ZERO
 var _clicks: Array = []
 var _pulls: Array = []
+## `--rig-roll`: presses the Rig Roulette ROLL from frame 9.
 ## `--tour intact|broken|brief|draft|chaos|crowd|clock_low|win|loss|spill|rig`: the Tour case and its run put in that state from frame 9,
 ## deterministically (Tour.force_state_for_shot) rather than by waiting out a brief's timer.
 ## Needs the built-in engine (--built-in): Tour is gated to it, and quietly does nothing on any
@@ -95,6 +96,7 @@ var _tl_shelf := ""
 ## `--tl-road 30`: the timeline as the road, with the playhead parked at that many seconds, from frame 6.
 var _tl_road := -1.0
 var _roll := false
+var _rig_roll := false
 
 
 func _ready() -> void:
@@ -191,6 +193,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_shelf = args[i + 1]
 			"--roll":
 				_roll = true
+			"--rig-roll":
+				_rig_roll = true
 			"--tl-road":
 				if i + 1 < args.size(): _tl_road = float(args[i + 1])
 			"--tour-band":
@@ -239,6 +243,10 @@ func _process(_delta: float) -> void:
 			(tl[0] as TimelineSurface).set_highway(true)
 	if _frames == 7 and _roll:
 		DAW.transport_play()
+	if _frames == 9 and _rig_roll:
+		var rolled := get_tree().current_scene.get_node_or_null("Studio")
+		if rolled != null:
+			rolled._roll_rig()
 
 
 	# Later than the camera, so a visit the studio makes on its own at startup has landed first.

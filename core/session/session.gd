@@ -74,6 +74,8 @@ signal tour_changed()
 ## Host: someone asked to act on the run under way. One of TOUR_VERBS, already checked for
 ## shape; `Tour` decides, and says what the run now is with `publish_tour`.
 signal tour_asked(verb: StringName, args: Array, from: int)
+## Guest: the host's word on the last Rig Roulette roll arrived; see `roll`.
+signal roll_changed()
 ## Something in the room being pushed right now, by `from`: where it is this moment. Unconfirmed
 ## and unsaved -- the ask when it is let go is what counts -- and only for drawing it moving.
 signal room_motion(piece: StringName, x: float, z: float, heading: float, from: int)
@@ -199,6 +201,11 @@ var _room_sent := false
 ## channel here rather than through `DAW._do`/`apply_intent` or `MixState`. Built identically
 ## to `room`: host-authoritative, replicated whole, sent again to a guest admitted mid-run.
 var tour: Dictionary = {}
+
+## The last Rig Roulette roll, as `Studio._roll_rig` wrote it up, or `{}` before any. What the
+## wall board reads. Built like `tour`: host-authoritative, replicated whole, sent again to a
+## guest admitted afterwards.
+var roll: Dictionary = {}
 
 ## Whether this guest has had its first roster yet. Everyone on the first one is "arriving",
 ## and greeting each of them by name would be noise.
@@ -621,6 +628,8 @@ func admit(peer_id: int) -> void:
 		_receive_room.rpc_id(peer_id, _room_with_acks())
 	if not tour.is_empty() and _connected():
 		_receive_tour.rpc_id(peer_id, tour)
+	if not roll.is_empty() and _connected():
+		_receive_roll.rpc_id(peer_id, roll)
 	if mix_feed != null and mix_feed.sending and _connected():
 		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
 
@@ -1333,6 +1342,24 @@ func _tour_asked(verb: StringName, args: Array) -> void:
 		return
 	if tour_ask_is_valid(verb, args):
 		tour_asked.emit(verb, args, from)
+
+
+# --- the rig roulette roll -----------------------------------------------------------------
+
+## Host: this is the roll now. Sent to everyone in the room, and heard here too.
+func publish_roll(state: Dictionary) -> void:
+	if not is_authority():
+		return
+	roll = state
+	roll_changed.emit()
+	for id in _audience():
+		_receive_roll.rpc_id(id, roll)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_roll(state: Dictionary) -> void:
+	roll = state
+	roll_changed.emit()
 
 
 # --- state replication --------------------------------------------------------------------

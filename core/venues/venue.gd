@@ -354,8 +354,23 @@ func tour_case_spot() -> Transform3D:
 ## by mounting past their x -1.95..1.95 spread, toward the corner.
 func rig_roulette_spot() -> Transform3D:
 	var x := -room_width * 0.5 + 1.0
-	var z := Studio.ROOM_FRONT + 0.03
+	# The wall is a box 0.1 thick centred on ROOM_FRONT, its face 5cm out; the plate stands 1cm
+	# deep behind the origin, so a spot any nearer than this buries the panel in the plaster.
+	var z := Studio.ROOM_FRONT + 0.07
 	return Transform3D(Basis.IDENTITY, Vector3(x, 1.05, z))
+
+
+## Where the board that writes up a Rig Roulette roll hangs, in studio space (its origin the
+## middle of its bottom edge): the same back wall as the station, as wide as the wall allows,
+## its lower edge just above the acoustic panels (which stand to 2.1m) and its top just under
+## the ceiling, so the whole room can read it from anywhere.
+func roll_board_spot() -> Transform3D:
+	return Transform3D(Basis.IDENTITY, Vector3(0.0, 2.14, Studio.ROOM_FRONT + 0.11))
+
+
+## Whether the board is drawn as chalk on a slate rather than as a lit screen.
+func roll_board_chalky() -> bool:
+	return false
 
 
 ## The baskets a ball meets in flight, in studio space (Flight.fly's `hoops`), each with the Hoop

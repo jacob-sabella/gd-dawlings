@@ -2761,3 +2761,17 @@ is gone since every track of a new project is open.
 Open follow-ups, not built: the Reaper backend cannot report unsaved changes (answers false) and
 cannot start a project, so ROLL there says it cannot; rolling tempo; the visible spin and the
 no-re-roll constraints board.
+
+## Rig Roulette board on the wall (2026-10-13)
+(The user: "Rolling should populate a huge screen on a wall ... that explains the roll and what
+was done".) `RollBoard` (hardware/rig_roulette/roll_board.gd), 3.6m x 1.14m on the control room's
+back wall above the acoustic panels, writes up `Session.roll`: track count, key, each pedal and
+the track it landed on, who rolled. `Session.publish_roll` replicates it (host-authoritative,
+sent to late joiners, like `tour`), so guests read the same board. A slate with chalk colours
+where `Venue.roll_board_chalky` (the chalk zone); every other venue gets the lit screen.
+Found on the way: `rig_roulette_spot` stood 2cm inside the wall (the wall's face is 5cm out of
+ROOM_FRONT), so the panel's plate and lettering were buried and only its buttons showed. Moved
+out to +0.07. New shot arg `--rig-roll`.
+Open follow-ups, not built: the board only exists in the built-in venues' control room back wall
+(AR builds neither); chalk lettering drawn as strokes rather than a slate with text.
+Queued by the user next: every venue's stationary gear (console, timeline, cabinets) themed to match it.

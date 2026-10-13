@@ -1,0 +1,106 @@
+class_name RollBoard
+extends Node3D
+
+## The big board on the control room's back wall that writes up the last Rig Roulette roll for the
+## whole room: what it did to the project, and what the band now has to work with. A lit screen
+## in most venues, a slate with chalk lettering where the venue says so (`Venue.roll_board_chalky`).
+##
+## A DUMB BOARD: it draws the dictionary `Session.roll` carries (`Studio._roll_rig` writes it) and
+## nothing else, so the host's board and every guest's read the same thing off the same state.
+##
+## The dictionary: `by` (who rolled), `n` (which roll this session), `tracks` (how many the new
+## project has), `key` (a name, or "" when LOCK KEY kept it), `pedals` (an array of
+## {"track", "fx"}, one per pedal that landed).
+
+const WIDTH := 3.6
+const HEIGHT := 1.14
+
+const SCREEN_PLATE := Color(0.035, 0.04, 0.05)
+const SCREEN_TEXT := Color(0.62, 1.0, 0.8)
+const SCREEN_ACCENT := Color(1.0, 0.82, 0.35)
+const SLATE_PLATE := Color(0.09, 0.12, 0.11)
+const SLATE_TEXT := Color(0.94, 0.96, 0.98)
+const SLATE_ACCENT := Color(1.0, 0.92, 0.3)
+
+var chalky := false
+
+var _text: Node3D
+
+
+func _ready() -> void:
+	var plate := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(WIDTH, HEIGHT, 0.04)
+	plate.mesh = mesh
+	plate.position = Vector3(0, HEIGHT * 0.5, -0.02)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = SLATE_PLATE if chalky else SCREEN_PLATE
+	m.roughness = 0.9 if chalky else 0.25
+	if not chalky:
+		# A lit screen, not a painted board: it glows a little against the wall it hangs on.
+		m.emission_enabled = true
+		m.emission = Color(0.05, 0.09, 0.08)
+	plate.material_override = m
+	add_child(plate)
+	var frame := MeshInstance3D.new()
+	var frame_mesh := BoxMesh.new()
+	frame_mesh.size = Vector3(WIDTH + 0.08, HEIGHT + 0.08, 0.03)
+	frame.mesh = frame_mesh
+	frame.position = Vector3(0, HEIGHT * 0.5, -0.037)
+	frame.material_override = Materials.master_plate()
+	add_child(frame)
+	show_roll({})
+
+
+## Writes the board out again from `roll` (empty before any roll has been made).
+func show_roll(roll: Dictionary) -> void:
+	if _text != null:
+		# Out of the tree now, not at the end of the frame: two writings in a row would overlap.
+		remove_child(_text)
+		_text.queue_free()
+	_text = Node3D.new()
+	_text.name = "Writing"
+	add_child(_text)
+	var ink := SLATE_TEXT if chalky else SCREEN_TEXT
+	var accent := SLATE_ACCENT if chalky else SCREEN_ACCENT
+
+	_write("RIG ROULETTE", 84, Vector3(0, HEIGHT - 0.10, 0), accent)
+	if roll.is_empty():
+		_write("Press ROLL on the panel.", 130, Vector3(0, HEIGHT * 0.56, 0), ink)
+		_write("A roll starts a NEW project: a random number of tracks, a few pedals dropped on\n"
+				+ "random tracks, and a key. Write a song from only that. Save the open project first.", 52,
+				Vector3(0, HEIGHT * 0.20, 0), ink)
+		return
+
+	var tracks: int = roll.get("tracks", 0)
+	var key: String = roll.get("key", "")
+	var left := -WIDTH * 0.25
+	_write("%d TRACKS" % tracks, 190, Vector3(left, HEIGHT * 0.53, 0), ink)
+	_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
+			Vector3(left, HEIGHT * 0.25, 0), ink)
+
+	var pedals: Array = roll.get("pedals", [])
+	var right := WIDTH * 0.22
+	if pedals.is_empty():
+		_write("no pedals landed", 84, Vector3(right, HEIGHT * 0.5, 0), ink)
+	else:
+		var y := HEIGHT * 0.66
+		for p: Dictionary in pedals:
+			_write("%s  on  %s" % [str(p.get("fx", "")).to_upper(), str(p.get("track", "")).to_upper()], 76,
+					Vector3(right, y, 0), ink)
+			y -= 0.20
+	_write("A new project, started by %s (roll %d).  No re-rolls: write the song with this." % [
+			roll.get("by", "someone"), roll.get("n", 1)], 42, Vector3(0, 0.06, 0), accent)
+
+
+func _write(text: String, size: int, at: Vector3, colour: Color) -> void:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = size
+	l.pixel_size = 0.0011
+	l.position = at + Vector3(0, 0, 0.003)
+	l.modulate = colour
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.double_sided = false
+	Lettering.range_to_legibility(l)
+	_text.add_child(l)

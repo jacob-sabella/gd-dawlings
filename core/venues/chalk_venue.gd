@@ -64,6 +64,10 @@ func venue_id() -> StringName:
 	return &"chalk"
 
 
+func roll_board_chalky() -> bool:
+	return true
+
+
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()

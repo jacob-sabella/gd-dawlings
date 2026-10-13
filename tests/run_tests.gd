@@ -5384,6 +5384,7 @@ func _test_every_control_says_what_it_is() -> void:
 ## rolled again untouched.
 func _test_rig_roulette_rolls_outside_tour() -> void:
 	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
 	var backend := GodotBackend.new()
 	backend.state = MixState.new()
 	DAW.use(backend)
@@ -5436,7 +5437,21 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 		check("roll %d: %d tracks inside the range, exactly 2 character pedals (%d)" % [n, tracks, fx],
 				tracks >= Studio.ROLL_TRACKS_MIN and tracks <= Studio.ROLL_TRACKS_MAX and fx == 2 and only_character)
 		check("roll %d leaves the rolled project saved, so it can be rolled again" % n, not DAW.has_unsaved_changes())
+		var said: Dictionary = Session.roll
+		var writing := studio.roll_board.find_child("Writing", false, false)
+		var board_text := ""
+		for l in writing.get_children():
+			board_text += (l as Label3D).text + "\n"
+		check("roll %d is written up for the room: %d tracks, 2 pedals, on the board" % [n, tracks],
+				said["tracks"] == tracks and said["n"] == n + 1 and (said["pedals"] as Array).size() == 2
+				and board_text.contains("%d TRACKS" % tracks)
+				and board_text.contains(str(said["pedals"][0]["fx"]).to_upper()))
 	check("the track count really varies from roll to roll (%s)" % [counts.keys()], counts.size() > 1)
+	var spot := studio.venue.rig_roulette_spot()
+	var board := studio.venue.roll_board_spot()
+	check("the panel and the board stand clear of the wall they hang on (%.2f, %.2f)" % [spot.origin.z, board.origin.z],
+			spot.origin.z >= Studio.ROOM_FRONT + 0.06 and board.origin.z >= Studio.ROOM_FRONT + 0.1)
+	Session.roll = {}
 
 	remove_child(studio)
 	studio.free()

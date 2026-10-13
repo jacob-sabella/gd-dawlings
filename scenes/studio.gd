@@ -128,6 +128,7 @@ var tour_case: TourCase
 ## The "roll some gear" panel on the control room wall. Unlike `tour_case`, not AR-gated or
 ## backend-gated: it works against whichever DAW backend is open, built-in or Reaper alike.
 var rig_roulette_station: RigRouletteStation
+var roll_board: RollBoard
 ## What the mic in a hand here has done to a track, to be undone when it leaves the hand.
 var mic_arm := MicArm.new()
 ## Whether the headphones are on a head here, as Ears was last told.
@@ -2009,6 +2010,20 @@ func _build_rig_roulette_station() -> void:
 	studio_set.add_child(rig_roulette_station)
 	rig_roulette_station.transform = venue.rig_roulette_spot()
 	rig_roulette_station.roll_requested.connect(_on_rig_roulette_roll_requested)
+	roll_board = RollBoard.new()
+	roll_board.chalky = venue.roll_board_chalky()
+	studio_set.add_child(roll_board)
+	roll_board.transform = venue.roll_board_spot()
+	Session.roll_changed.connect(_on_session_roll_changed)
+	_on_session_roll_changed()
+
+
+## `Session.roll` changed (the host's own roll, or word of it reaching a guest): the board and
+## the panel's own line say what it was.
+func _on_session_roll_changed() -> void:
+	roll_board.show_roll(Session.roll)
+	if not Session.roll.is_empty():
+		rig_roulette_station.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
 
 
 ## RigRouletteStation.roll_requested: told so only the host can roll, the same pattern
@@ -2059,19 +2074,23 @@ func _roll_rig() -> void:
 
 	var pool := _rig_roulette_pool()
 	var landed := 0
+	var pedals: Array = []
 	for i in mini(station.count, eligible.size()):
 		if pool.is_empty():
 			break
 		var plugin: String = str(pool[rng.randi() % pool.size()][0])
 		DAW.add_fx(eligible[i], plugin, -1)
 		landed += 1
+		var added: MixState.FXState = DAW.state.track(eligible[i]).fx.values()[-1]
+		pedals.append({"track": DAW.state.track(eligible[i]).display_name(), "fx": added.name})
 
 	var key := ""
 	if not station.key_locked:
 		key = "%s %s" % [ROLL_KEY_NAMES[rng.randi() % ROLL_KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]
 	DAW.mark_clean()
 
-	station.show_result(tracks, landed, key)
+	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1,
+			"tracks": tracks, "key": key, "pedals": pedals})
 	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
 			landed, "" if landed == 1 else "s"]
 	if not key.is_empty():
