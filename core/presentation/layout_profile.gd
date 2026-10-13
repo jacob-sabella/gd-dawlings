@@ -42,6 +42,9 @@ var venue_variant := 0
 ## a chain rearranged in Reaper since then has moved it. Where each stand stands is a floor
 ## transform like any other piece's, under "floor/<stand id>".
 var tablets: Dictionary = {}
+## The tracks this participant has pulled out of the rack onto racks of their own:
+## {stand id: track index}. Where each stands is a floor transform, "floor/<stand id>".
+var track_racks: Dictionary = {}
 ## Whether this participant reads the timeline as shelves of blocks (TimelineSurface.shelf), as
 ## it is first shown, or as flat lanes.
 var timeline_shelves := true
@@ -98,6 +101,8 @@ func save() -> void:
 		cfg.set_value("transforms", String(id), local_transforms[id])
 	for id in tablets:
 		cfg.set_value("tablets", String(id), tablets[id])
+	for id in track_racks:
+		cfg.set_value("track_racks", String(id), track_racks[id])
 	cfg.save(save_path)
 
 
@@ -122,3 +127,6 @@ func load_saved() -> void:
 			var entry: Variant = cfg.get_value("tablets", key)
 			if entry is Array and entry.size() == 3:
 				tablets[StringName(key)] = [int(entry[0]), int(entry[1]), str(entry[2])]
+	if cfg.has_section("track_racks"):
+		for key in cfg.get_section_keys("track_racks"):
+			track_racks[StringName(key)] = int(cfg.get_value("track_racks", key))

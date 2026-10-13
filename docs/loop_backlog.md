@@ -2885,3 +2885,19 @@ gear came out black. Highlights roll off as on the mirror's glass. `Studio._keep
 now swaps layer bits rather than comparing the whole mask, so it leaves ON_BOARD alone.
 Not covered by the session probe: the "board" field rides the room state like every other field.
 The rack is tall and thin, so it shows small on a wide board. `tools/screenshot.gd --board <id>`.
+
+## A track pulls out of the rack on a rack of its own (2026-10-13)
+"drag on the fx rack on the entire track level (similar to the independency plugin pull out) and
+pull out a brand new fx rack that is only that track. it should have a button to fold it back in
+but not the abiliy to switch tracks like the "master" one"
+The main rack's track window has a grip (`TrackGrip`, a TearTab with a rack-sized ghost) at its
+left end. Drag or click it and the racked track comes out as a `RackSurface` with `pinned` set,
+up on a plinth on its own casters (`Studio._build_track_rack`), landing in front of the rack.
+Pinned: no TrackPicker, no grip, ignores the DAW's selection, follows its track through
+renumbering; its track's name is an amber strip where the window was, with a FOLD button beside
+the ADD window. Its units still tear off onto tablets, landing in front of that rack. One per
+track (pulling the same track again wheels that one over). The room's: room_state
+"track_racks" {id: [track, x, z, heading]} (kept out of "floor"), asks `open_track_rack` /
+`close_track_rack` predicted on a guest like the tablets, saved in the LayoutProfile's
+`track_racks` with floor transforms "floor/<id>". The host folds a rack whose track is deleted.
+`tools/screenshot.gd --pull-track`. shots/track_rack_pulled.png.

@@ -23,6 +23,11 @@ extends Surface
 
 ## A unit's name strip was pulled: whoever placed this rack decides where the tablet stands.
 signal tear_requested(track: int, fx: int, at: Vector3)
+## The grip on the track window was pulled: the whole track's chain wants a rack of its own,
+## standing where it was let go. Whoever placed this rack decides what stands there.
+signal track_tear_requested(track: int, at: Vector3)
+## A pulled-out rack's FOLD button: put it back into the rack it came out of.
+signal fold_requested()
 
 const BAY_HEIGHT := 1.1
 const BAY_SPACING := 0.56
@@ -37,6 +42,10 @@ const MIN_ROWS := 4
 
 ## The track whose plugins are racked, or -1 before one has been chosen.
 var track_index := -1
+## A rack pulled out of the main one for one track: it racks that track and only that track for
+## as long as it stands, so it has no window to scroll to another and does not follow Reaper's
+## selection, and it has a FOLD button to go back in instead. Set before it enters the tree.
+var pinned := false
 
 var _picker: TabletSelector
 var _empty_label: Label3D
@@ -51,6 +60,8 @@ func _ready() -> void:
 		surface_id = &"rack"
 	super()
 	DAW.track_changed.connect(_on_track_changed)
+	if pinned:
+		DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 
 
 ## Rack this track's plugins.
@@ -65,7 +76,7 @@ func show_track(index: int) -> void:
 ## track, else the first with plugins, else the first.
 func _settle_track() -> void:
 	var tracks: Array = DAW.state.track_indices()
-	if DAW.state.tracks.has(track_index) or tracks.is_empty():
+	if pinned or DAW.state.tracks.has(track_index) or tracks.is_empty():
 		return
 	for i in tracks:
 		if DAW.state.track(i).selected:
@@ -106,6 +117,10 @@ func _check_chain() -> void:
 
 ## Following Reaper's selection: the track selected there is the one racked here.
 func _on_track_changed(index: int, field: StringName) -> void:
+	if pinned:
+		if index == track_index and field in [&"name", &"colour"]:
+			mark_dirty()
+		return
 	if field == &"selected" and DAW.state.tracks.has(index) and DAW.state.track(index).selected:
 		show_track(index)
 	elif field in [&"name", &"selected"]:
@@ -116,6 +131,13 @@ func _refresh_picker() -> void:
 	if _picker != null:
 		_picker.refresh()
 		_picker.lit = _following()
+
+
+## A pulled-out rack's track moved: followed by number, as a tablet follows its plugin's. -1
+## when it is gone, and the rack stands empty until whoever placed it folds it.
+func _on_tracks_renumbered(map: Dictionary) -> void:
+	track_index = int(map.get(track_index, -1))
+	mark_dirty()
 
 
 ## Whether the rack is showing the track Reaper has selected.
@@ -197,7 +219,11 @@ func _rebuild() -> void:
 	for bank in banks:
 		if bank != null:
 			bank.commit()
-	_build_picker(per_bay * unit_height)
+	if pinned:
+		_build_name_strip(per_bay * unit_height)
+	else:
+		_build_picker(per_bay * unit_height)
+		_build_track_grip(per_bay * unit_height)
 	_build_adder(per_bay * unit_height)
 	_build_find(per_bay * unit_height)
 	if slots.is_empty():
@@ -246,6 +272,62 @@ func _build_picker(bay_height: float) -> void:
 	_picker.chosen.connect(show_track)
 	_adopt(_picker)
 	_picker.lit = _following()
+
+
+## The grip at the left end of the track window: pull it and the whole track's chain comes out
+## on a rack of its own (`track_tear_requested`), the way a unit's grip pulls one plugin out onto
+## a tablet. Click as well as drag, for the same reason as the unit's.
+func _build_track_grip(bay_height: float) -> void:
+	var grip := TearTab.new()
+	grip.name = "TrackGrip"
+	grip.size = Vector2(0.05, PICKER_SIZE.y * PICKER_SCALE)
+	grip.ghost_size = Vector2(RackUnit.RACK_WIDTH + 0.044, BAY_HEIGHT * 0.6)
+	grip.ghost_colour = Color(0.95, 0.75, 0.35)
+	grip.hint_text = "drag it off, or click, to pull this whole track out on a rack of its own"
+	grip.describe_title = func() -> String: return "RACK  PULL OUT TRACK"
+	grip.position = Vector3(-PICKER_SIZE.x * 0.5 * PICKER_SCALE - 0.05 - 0.004, bay_height + PICKER_RISE, 0.002)
+	grip.torn.connect(func(at: Vector3) -> void: track_tear_requested.emit(track_index, at))
+	_adopt(grip)
+
+
+## A pulled-out rack's label where the main rack's track window is: the track's name, which
+## does not scroll, and the FOLD button beside it.
+func _build_name_strip(bay_height: float) -> void:
+	var strip := Label3D.new()
+	strip.name = "TrackName"
+	var t := DAW.state.track(track_index)
+	var count := t.plugins().size()
+	strip.text = "%s   ·   %s" % [t.display_name().to_upper(),
+			"%d PLUGIN%s" % [count, "" if count == 1 else "S"] if count > 0 else "NO PLUGINS"]
+	strip.font_size = 44
+	strip.pixel_size = 0.0002 * PICKER_SCALE
+	strip.modulate = Color(0.95, 0.78, 0.42)
+	strip.position = Vector3(0, bay_height + PICKER_RISE, 0.004)
+	Lettering.range_to_legibility(strip)
+	_adopt(strip)
+	Lettering.fit(strip, PICKER_SIZE.x * PICKER_SCALE, 44)
+
+	var fold := PanelButton.new()
+	fold.name = "FoldButton"
+	fold.led_colour = Color(0.95, 0.75, 0.35)
+	fold.scale = Vector3(1.5, 1.5, 1.5)
+	fold.position = Vector3(-PICKER_SIZE.x * 0.5 * PICKER_SCALE - 0.03,
+			bay_height + PICKER_RISE + PICKER_SIZE.y * PICKER_SCALE * 1.4, 0.004)
+	fold.lit = true
+	fold.pressed.connect(func() -> void: fold_requested.emit())
+	fold.describe_title = func() -> String: return "RACK  FOLD BACK IN"
+	fold.describe_value = func(_v: float) -> String: return "put this track back in the main rack"
+	_adopt(fold)
+	var caption := Label3D.new()
+	caption.name = "FoldCaption"
+	caption.text = "FOLD"
+	caption.font_size = 18 * 4
+	caption.pixel_size = 0.000055
+	caption.modulate = Color(0.78, 0.80, 0.84)
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.position = fold.position + Vector3(0, -0.014, 0.0012)
+	Lettering.range_to_legibility(caption)
+	_adopt(caption)
 
 
 ## The window over the track's that adds a plugin to the racked chain: scroll through what the

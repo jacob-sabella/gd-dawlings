@@ -217,6 +217,7 @@ func _ready() -> void:
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
 	_test_the_big_board_shows_any_surface()
+	_test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own()
 	_test_each_venue_dresses_the_gear_in_its_own_finishes()
 	_test_each_venue_fits_its_own_shapes_to_the_gear()
 	_test_rack_plugin_search_finds_and_adds_one()
@@ -5546,6 +5547,86 @@ func _test_the_big_board_shows_any_surface() -> void:
 	check("a roll puts the write-up back on the board", studio.board_source == &"" and board.source() == null
 			and (board.find_child("Writing", false, false) as Node3D).visible)
 	Session.roll = {}
+	remove_child(studio)
+	studio.free()
+	DAW.use(OfflineBackend.new())
+
+
+## The rack's track window has a grip: pulled, the whole track comes out on a rack of its own,
+## on its own trolley -- pinned to that track (no window to scroll to another, no following the
+## DAW's selection) with a FOLD button that puts it back. One per track, the room's (room_state
+## "track_racks", the open/close_track_rack asks), and folded away when its track is deleted.
+func _test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own() -> void:
+	_as_session(Session.Role.HOST, 1)
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	while not DAW.state.track_indices().is_empty():
+		DAW.remove_track(DAW.state.track_indices()[0])
+	for i in 3:
+		DAW.add_track(i + 1, "Track %d" % (i + 1))
+	DAW.add_fx(1, "reverb")
+	DAW.add_fx(1, "delay")
+	DAW.add_fx(2, "chorus")
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	var rack := studio.rack
+	rack.show_track(1)
+	rack._rebuild()
+	check("the rack's track window has a grip to pull the track out by",
+			rack.find_child("TrackGrip", true, false) is TearTab and rack.find_child("TrackPicker", true, false) != null)
+
+	(rack.find_child("TrackGrip", true, false) as TearTab).torn.emit(rack.global_position + Vector3(0, 1.4, 0))
+	check("pulling it stands that track's chain on a rack of its own", studio.track_racks.size() == 1)
+	var id: StringName = studio.track_racks.keys()[0]
+	var stand: Trolley = studio.track_racks[id][0]
+	var pulled: RackSurface = studio.track_racks[id][1]
+	pulled._rebuild()
+	check("a rack pinned to track 1, on its own trolley", pulled.pinned and pulled.track_index == 1
+			and pulled.get_parent() == stand and studio.floor_plan.pieces.has(stand))
+	var units := pulled.find_children("*", "RackUnit", true, false)
+	check("holding that track's two plugins (%d units)" % units.size(), units.size() == 2)
+	check("with no window to switch tracks and no grip of its own",
+			pulled.find_child("TrackPicker", true, false) == null and pulled.find_child("TrackGrip", true, false) == null)
+	var name_strip := pulled.find_child("TrackName", true, false) as Label3D
+	check("but the track's name where the window was, and a FOLD button",
+			name_strip != null and name_strip.text.begins_with("TRACK 1") and pulled.find_child("FoldButton", true, false) is PanelButton)
+	var away := Vector2(stand.position.x, stand.position.z).distance_to(Vector2(rack.global_position.x, rack.global_position.z))
+	check("standing out in front of the rack, not inside it (%.2f m)" % away, away > 0.5)
+	check("the room has it", (studio.room_state()["track_racks"] as Dictionary).has(id)
+			and not (studio.room_state()["floor"] as Dictionary).has(id))
+
+	DAW.state.track(2).selected = true
+	pulled._on_track_changed(2, &"selected")
+	check("selecting another track does not move it off its own", pulled.track_index == 1)
+	rack.track_tear_requested.emit(1, rack.global_position)
+	check("pulling the same track again brings the same rack, not a second",
+			studio.track_racks.size() == 1 and studio.track_racks.has(id))
+	rack.track_tear_requested.emit(2, rack.global_position)
+	check("another track comes out on another", studio.track_racks.size() == 2)
+
+	(pulled.find_child("FoldButton", true, false) as PanelButton).pressed.emit()
+	check("FOLD puts it back", not studio.track_racks.has(id) and studio.track_racks.size() == 1
+			and not (studio.room_state()["track_racks"] as Dictionary).has(id))
+	check("a guest may ask for both", Session.room_ask_is_valid(&"open_track_rack", [1, 0.5, 0.5])
+			and Session.room_ask_is_valid(&"close_track_rack", [&"track_rack_1"]))
+
+	var state := studio.room_state()
+	(state["track_racks"] as Dictionary)[&"track_rack_9"] = [3, 0.4, 0.6, 0.0]
+	Session.role = Session.Role.GUEST
+	studio.apply_room(state)
+	check("a guest's room puts up what the host's has out",
+			studio.track_racks.has(&"track_rack_9") and (studio.track_racks[&"track_rack_9"][1] as RackSurface).track_index == 3)
+	(state["track_racks"] as Dictionary).erase(&"track_rack_9")
+	studio.apply_room(state)
+	check("and takes down what it has folded", not studio.track_racks.has(&"track_rack_9"))
+	Session.role = Session.Role.HOST
+
+	var other: StringName = studio.track_racks.keys()[0]
+	DAW.remove_track(2)
+	studio._fold_orphaned_track_racks()
+	check("a track deleted folds its rack away", not studio.track_racks.has(other))
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())

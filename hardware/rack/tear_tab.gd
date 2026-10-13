@@ -21,6 +21,11 @@ const TEAR_DISTANCE := 0.06
 const GHOST_SCALE := 0.6
 
 var ghost_colour := Color(0.6, 0.8, 1.0)
+## The size of what comes away, at full scale: a tablet unless the tab is for something else (a
+## whole track's rack).
+var ghost_size := Vector2(PluginTablet.WIDTH, PluginTablet.HEIGHT)
+## What the hover card says pulling it does.
+var hint_text := "drag it off the rack, or click, to get this plugin on a tablet"
 
 var _from := Vector3.ZERO
 var _at := Vector3.ZERO
@@ -81,7 +86,7 @@ func _make_ghost() -> MeshInstance3D:
 	g.name = "Ghost"
 	g.top_level = true
 	var quad := QuadMesh.new()
-	quad.size = Vector2(PluginTablet.WIDTH, PluginTablet.HEIGHT) * GHOST_SCALE
+	quad.size = ghost_size * GHOST_SCALE
 	g.mesh = quad
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -98,4 +103,4 @@ func _foley_contact() -> AudioStream:
 
 
 func hint() -> String:
-	return "drag it off the rack, or click, to get this plugin on a tablet"
+	return hint_text

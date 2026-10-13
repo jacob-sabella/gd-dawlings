@@ -1032,7 +1032,8 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"put_item": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT, TYPE_FLOAT], &"home_item": [TYPE_STRING_NAME],
 		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
 		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"pocket_item": [TYPE_STRING_NAME, TYPE_INT], &"patch": [TYPE_INT, TYPE_STRING_NAME],
-		&"on_air": [TYPE_BOOL], &"take_personal": [TYPE_STRING_NAME], &"board_source": [TYPE_STRING_NAME]}
+		&"on_air": [TYPE_BOOL], &"take_personal": [TYPE_STRING_NAME], &"board_source": [TYPE_STRING_NAME],
+		&"open_track_rack": [TYPE_INT, TYPE_FLOAT, TYPE_FLOAT], &"close_track_rack": [TYPE_STRING_NAME]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.

@@ -153,6 +153,9 @@ var on_air: Array = []
 var patches: Dictionary = {}
 ## Plugins torn off the rack, each on its own stand: {stand id: [Trolley, PluginTablet]}.
 var tablets: Dictionary = {}
+## Whole tracks pulled out of the rack, each on a rack of its own on its own trolley:
+## {stand id: [Trolley, RackSurface]}. The room's, like the tablets.
+var track_racks: Dictionary = {}
 ## While the host's room is being put up here: a stand set down by it is not news to send back.
 var _applying_room := false
 var _room_publish_due := false
@@ -163,6 +166,7 @@ var _predictions: Array = []
 var _motion_sent_msec := 0
 ## Guest: how many stands it has put out on its own say-so, for naming them until the host does.
 var _predicted_tablets := 0
+var _predicted_track_racks := 0
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
@@ -751,13 +755,13 @@ const TABLET_FOOT := 0.19
 const TABLET_PULL := 0.6
 
 
-func _on_tear_requested(track: int, fx: int, at: Vector3) -> void:
+func _on_tear_requested(track: int, fx: int, at: Vector3, from: Node3D = null) -> void:
 	var f := DAW.state.fx(track, fx, false)
 	if f == null or f.name == "":
 		return
 	# Out from the rack along its facing, so a tablet pulled straight off lands in front of it
 	# rather than inside it.
-	var out := rack.global_basis.z.normalized()
+	var out := (from if from != null else rack).global_basis.z.normalized()
 	var landing := at + Vector3(out.x, 0, out.z).normalized() * TABLET_PULL
 	var id: StringName
 	if Session.is_authority():
@@ -927,6 +931,167 @@ func _restore_tablets() -> void:
 		_build_tablet(id, int(entry[0]), int(entry[1]), str(entry[2]))
 
 
+# --- pulled-out track racks -----------------------------------------------------------------
+#
+# The rack's track window has a grip like a unit's name strip. Pulled, the whole track's chain
+# comes out on a rack of its own: the same RackSurface, pinned to that track (no window to scroll
+# to another, a FOLD button instead), up on a short plinth on casters like the main rack's, so it
+# can be wheeled over beside whoever is working on that track. FOLD puts it back in.
+
+## How far in front of the rack's face a pulled-out track's rack lands, when it was not pulled
+## anywhere in particular. Further than a tablet: it is a rack, half a metre deep.
+const TRACK_RACK_PULL := 0.9
+const TRACK_RACK_PLINTH := 0.30
+
+
+func _on_track_tear_requested(track: int, at: Vector3, from: Node3D) -> void:
+	if not DAW.state.tracks.has(track):
+		return
+	var out := from.global_basis.z.normalized()
+	var landing := at + Vector3(out.x, 0, out.z).normalized() * TRACK_RACK_PULL
+	var where := Vector2(landing.x, landing.z)
+	var id: StringName
+	if Session.is_authority():
+		id = open_track_rack(track, where)
+	else:
+		id = _predicted_track_rack(track, where)
+		if id == StringName():
+			return
+	if focus != null and focus.visits:
+		focus.focus(id)
+		_sit_down()
+
+
+## Pull track `track` out on its own rack at `where` on the floor, facing the mix position. One
+## per track: asking again for one already out wheels that one over instead.
+func open_track_rack(track: int, where: Vector2) -> StringName:
+	for id in track_racks:
+		if (track_racks[id][1] as RackSurface).track_index == track:
+			(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
+			return id
+	var n := 1
+	while track_racks.has(StringName("track_rack_%d" % n)) or (Session.layout != null \
+			and Session.layout.track_racks.has(StringName("track_rack_%d" % n))):
+		n += 1
+	var id := StringName("track_rack_%d" % n)
+	_build_track_rack(id, track)
+	(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
+	_remember_track_racks()
+	_publish_room()
+	return id
+
+
+func _build_track_rack(id: StringName, track: int) -> void:
+	var stand := _trolley("TrackRackTrolley_%s" % id, id, Vector3(0, 0, 0.6), 0.0)
+	stand.footprint_centre = Vector2(0, -0.15)
+	stand.footprint_half = Vector2(0.30, 0.17)
+	stand.follow = 9.0
+	var plinth := MeshInstance3D.new()
+	plinth.name = "Plinth"
+	var plinth_mesh := BoxMesh.new()
+	plinth_mesh.size = Vector3(0.60, TRACK_RACK_PLINTH - Caster.HEIGHT, 0.34)
+	plinth.mesh = plinth_mesh
+	plinth.position = Vector3(0, (TRACK_RACK_PLINTH + Caster.HEIGHT) * 0.5, -0.15)
+	plinth.material_override = Materials.furniture()
+	GearTrim.edges(plinth)
+	stand.add_part(plinth)
+	stand.add_corner_casters(0.05)
+
+	var pulled := RackSurface.new()
+	pulled.name = "TrackRack"
+	pulled.surface_id = id
+	pulled.pinned = true
+	pulled.track_index = track
+	pulled.position = Vector3(0, TRACK_RACK_PLINTH, 0)
+	stand.add_child(pulled)
+	pulled.tear_requested.connect(func(t: int, f: int, at: Vector3) -> void: _on_tear_requested(t, f, at, pulled))
+	pulled.fold_requested.connect(_fold_track_rack.bind(id))
+	if focus != null:
+		focus.surfaces.append(pulled)
+		pulled.rebuilt.connect(focus._on_surface_rebuilt.bind(pulled))
+	track_racks[id] = [stand, pulled]
+
+
+func close_track_rack(id: StringName) -> void:
+	if not track_racks.has(id):
+		return
+	_take_down_track_rack(id)
+	if Session.layout != null and Session.is_authority():
+		Session.layout.clear_transform(StringName("floor/%s" % id), Presentation.Mode.STUDIO)
+	_remember_track_racks()
+	_publish_room()
+
+
+func _take_down_track_rack(id: StringName) -> void:
+	var stand: Trolley = track_racks[id][0]
+	var pulled: RackSurface = track_racks[id][1]
+	if focus != null:
+		if focus.focused_id == id:
+			focus.release()
+			_sit_down()
+		focus.surfaces.erase(pulled)
+	track_racks.erase(id)
+	floor_plan.pieces.erase(stand)
+	stand.queue_free()
+
+
+## FOLD: back into the main rack. Here if the room is ours; if it is the host's, here at once
+## and asked.
+func _fold_track_rack(id: StringName) -> void:
+	if Session.is_authority():
+		close_track_rack(id)
+	elif track_racks.has(id) and _predict(&"close_track_rack", [id]) > 0:
+		_take_down_track_rack(id)
+
+
+func _predicted_track_rack(track: int, where: Vector2) -> StringName:
+	for id in track_racks:
+		if (track_racks[id][1] as RackSurface).track_index == track:
+			(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
+			return id
+	_predicted_track_racks += 1
+	var id := StringName("mine_rack_%d" % _predicted_track_racks)
+	if _predict(&"open_track_rack", [track, where.x, where.y], id) == 0:
+		return StringName()
+	_build_track_rack(id, track)
+	_applying_room = true
+	(track_racks[id][0] as Trolley).place(where, _facing_mix(where))
+	_applying_room = false
+	return id
+
+
+## Tracks renumbered: each pulled-out rack follows its own track, and one whose track is gone
+## is folded away, since there is nothing left on it to rack.
+func _fold_orphaned_track_racks() -> void:
+	if not Session.is_authority():
+		return
+	for id in track_racks.keys():
+		if not DAW.state.tracks.has((track_racks[id][1] as RackSurface).track_index):
+			close_track_rack(id)
+	_remember_track_racks()
+
+
+## Saved like the tablets: what is out, by track. Where each stands is its floor transform.
+func _remember_track_racks() -> void:
+	if Session.layout == null or not Session.is_authority():
+		return
+	var out := {}
+	for id in track_racks:
+		out[id] = (track_racks[id][1] as RackSurface).track_index
+	if out == Session.layout.track_racks:
+		return
+	Session.layout.track_racks = out
+	Session.layout.save()
+
+
+func _restore_track_racks() -> void:
+	if Session.layout == null or not Session.is_authority():
+		return
+	for id in Session.layout.track_racks:
+		if not track_racks.has(id):
+			_build_track_rack(id, int(Session.layout.track_racks[id]))
+
+
 # --- the shared room -----------------------------------------------------------------------
 #
 # The venue and the plugins out on stands are facts about the room, like where the desk is, so
@@ -945,8 +1110,14 @@ func room_state() -> Dictionary:
 	if floor_plan != null:
 		for piece in floor_plan.pieces:
 			var t := piece as Trolley
-			if t != null and is_instance_valid(t) and not tablets.has(t.piece_id):
+			if t != null and is_instance_valid(t) and not tablets.has(t.piece_id) \
+					and not track_racks.has(t.piece_id):
 				floor[t.piece_id] = [t.position.x, t.position.z, t.rotation.y]
+	var pulled := {}
+	for id in track_racks:
+		var stand: Trolley = track_racks[id][0]
+		pulled[id] = [(track_racks[id][1] as RackSurface).track_index, stand.position.x, stand.position.z,
+				stand.rotation.y]
 	var placed := {}
 	if mount != null:
 		for surface_id in mount.mounted_ids():
@@ -955,7 +1126,8 @@ func room_state() -> Dictionary:
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
-			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source}
+			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
+			"track_racks": pulled}
 
 
 func _publish_room() -> void:
@@ -992,8 +1164,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item": pending_items[p["args"][0]] = true
 			&"patch", &"on_air": pass
-			&"open_tablet": pending_open[p["id"]] = true
-			&"close_tablet": pending_close[p["args"][0]] = true
+			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
+			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
 			&"place_surface": pending_place[p["args"][0]] = p["args"][1]
 
@@ -1036,6 +1208,30 @@ func apply_room(state: Dictionary, glide := false) -> void:
 				continue
 			var spot: Array = floor[t.piece_id]
 			_follow_room(t, float(spot[0]), float(spot[1]), float(spot[2]), glide)
+
+	if floor_plan != null and state.has("track_racks"):
+		var racks_wanted: Dictionary = state["track_racks"]
+		for id in track_racks.keys():
+			var entry: Variant = racks_wanted.get(id)
+			var mine: RackSurface = track_racks[id][1]
+			if (entry != null and int(entry[0]) == mine.track_index) or pending_open.has(id):
+				continue
+			_take_down_track_rack(id)
+		for id in racks_wanted:
+			if pending_close.has(id):
+				continue
+			var entry: Array = racks_wanted[id]
+			if not track_racks.has(id):
+				# The host's answer to this guest's own pull: its predicted one goes, the host's
+				# takes its place.
+				for mine_id in track_racks.keys():
+					if (track_racks[mine_id][1] as RackSurface).track_index == int(entry[0]) \
+							and not racks_wanted.has(mine_id):
+						_take_down_track_rack(mine_id)
+				_build_track_rack(id, int(entry[0]))
+				(track_racks[id][0] as Trolley).place(Vector2(float(entry[1]), float(entry[2])), float(entry[3]))
+			elif not pending_move.has(id):
+				_follow_room(track_racks[id][0], float(entry[1]), float(entry[2]), float(entry[3]), glide)
 
 	if mount != null:
 		var placed: Dictionary = (state.get("placed", {}) as Dictionary).duplicate()
@@ -1210,6 +1406,11 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"take_personal":
 			if items != null:
 				items.take_personal(args[0], from)
+		&"open_track_rack":
+			if floor_plan != null and DAW.state.tracks.has(args[0]):
+				open_track_rack(args[0], Vector2(args[1], args[2]))
+		&"close_track_rack":
+			close_track_rack(args[0])
 		&"board_source":
 			if board_sources().has(args[0]):
 				_show_board(args[0])
@@ -1275,6 +1476,8 @@ func _put_back_own_room() -> void:
 		return
 	for id in tablets.keys():
 		_take_down_tablet(id)
+	for id in track_racks.keys():
+		_take_down_track_rack(id)
 	if mount != null:
 		mount.share_studio({})
 	if floor_plan != null:
@@ -1295,6 +1498,7 @@ func _put_back_own_room() -> void:
 		set_venue(own, false, own_variant)
 	if floor_plan != null:
 		_restore_tablets()
+		_restore_track_racks()
 
 
 ## The carcass fills from the plinth up to the bay's lower edge and the cheeks run past its top,
@@ -1711,12 +1915,15 @@ func _build_surfaces() -> void:
 
 	if floor_plan != null:
 		rack.tear_requested.connect(_on_tear_requested)
+		rack.track_tear_requested.connect(func(t: int, at: Vector3) -> void: _on_track_tear_requested(t, at, rack))
 		_restore_tablets()
+		_restore_track_racks()
 	Session.room_changed.connect(_on_room_changed)
 	# The tablets follow their tracks themselves; what is remembered and told follows them.
 	DAW.tracks_renumbered.connect(func(_map: Dictionary) -> void:
 		(func() -> void:
 			_remember_tablets()
+			_fold_orphaned_track_racks()
 			_publish_room_soon()).call_deferred())
 	Session.room_asked.connect(_on_room_asked)
 	Session.role_changed.connect(_on_role_changed)
