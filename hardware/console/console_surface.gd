@@ -607,7 +607,7 @@ func _build_shell(width: float) -> void:
 	# and you can see the room underneath it, which is the difference between a console and a
 	# control panel someone has bolted to nothing.
 	var skirt := MeshBank.parts(
-			Vector3(ChannelStrip.WIDTH * 1.18, SKIRT_HEIGHT, 0.17), Materials.chassis())
+			Vector3(ChannelStrip.WIDTH * 1.18, SKIRT_HEIGHT, 0.17), Materials.furniture())
 	skirt.name = "Carcass"
 	# Set back behind the armrest rather than flush with it, so the desk has a toe recess and
 	# the near edge keeps an overhang to cast a line along itself. Flush, it read as one slab
@@ -703,7 +703,8 @@ func _build_slabs(width: float) -> void:
 	body_mesh.size = Vector3(width, 0.62, 0.34)
 	body.mesh = body_mesh
 	body.position = Vector3(0, -0.31, -0.10)
-	body.material_override = Materials.chassis()
+	body.material_override = Materials.furniture()
+	GearTrim.edges(body)
 	_adopt(body)
 
 	# Armrest along the near edge. Real desks have one, and more usefully it gives a hand in AR

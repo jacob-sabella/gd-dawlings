@@ -92,20 +92,77 @@ static func grain(key: String, frequency: float, bump: float, stretch := 1.0) ->
 ## The console shell: dark, slightly rough, not quite black. Pure black reads as a hole in the
 ## scene because it takes no shading at all.
 static func chassis() -> StandardMaterial3D:
-	return _cached("chassis", func():
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.085, 0.09, 0.098)
-		m.roughness = 0.62
-		m.metallic = 0.35
-		m.metallic_specular = 0.4
-		# Powder coat: a finish with a tooth to it, which is what keeps a large dark panel from
-		# reading as a flat polygon -- the highlight breaks up instead of sliding across it.
-		m.normal_enabled = true
-		m.normal_texture = grain("powder", 0.35, 1.2)
-		m.normal_scale = 0.35
-		m.uv1_triplanar = true
-		m.uv1_scale = Vector3.ONE * 9.0
-		return m)
+	return _cached("chassis", _default_chassis)
+
+
+static func _default_chassis() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.085, 0.09, 0.098)
+	m.roughness = 0.62
+	m.metallic = 0.35
+	m.metallic_specular = 0.4
+	# Powder coat: a finish with a tooth to it, which is what keeps a large dark panel from
+	# reading as a flat polygon -- the highlight breaks up instead of sliding across it.
+	m.normal_enabled = true
+	m.normal_texture = grain("powder", 0.35, 1.2)
+	m.normal_scale = 0.35
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 9.0
+	return m
+
+
+## What the gear STANDS in or on, as against the faceplates its controls are mounted on: the
+## console's body, the rack's frame and plinth, the patchbay's cabinet, the timeline's stand,
+## the deck's trolley. Split from `chassis` so a venue's `GearStyle` can make these timber, road
+## case or white panel without touching the plate every legend is printed on, which has to stay
+## dark for the lettering to read. In the studio it is the chassis's own powder coat.
+static func furniture() -> StandardMaterial3D:
+	return _cached("furniture", _default_chassis)
+
+
+## The strips along a piece of furniture's edges (`GearTrim.edges`): plain steel in the studio,
+## and where a venue says so (`GearStyle`), a lit edge in its own colour.
+static func trim() -> StandardMaterial3D:
+	return _cached("trim", _default_brushed)
+
+
+## Finishes a venue may restyle.
+const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim"]
+
+
+## What a styled finish is when the venue says nothing.
+static func _default(key: String) -> StandardMaterial3D:
+	match key:
+		"brushed", "trim":
+			return _default_brushed()
+		"end_cheek":
+			return _default_end_cheek()
+	return _default_chassis()
+
+
+## Puts a venue's finishes on the gear: every cached material in STYLED takes on the style's
+## version of it, or its own default where the style has none. In place, because these are
+## shared by hundreds of meshes, most of them in MeshBank multimeshes that cannot be re-pointed
+## at a new material one by one -- changing the shared one changes them all at once, and a venue
+## switch reaches gear that is already built.
+static func apply_style(style: GearStyle) -> void:
+	for key in STYLED:
+		var from: StandardMaterial3D = style.finishes.get(key) if style != null else null
+		if from == null:
+			from = _default(key)
+		_take_on(_cached(key, _default.bind(key)), from)
+
+
+## Every stored property of `from` copied onto `to`: a material becomes another without being
+## replaced.
+static func _take_on(to: StandardMaterial3D, from: StandardMaterial3D) -> void:
+	for prop in from.get_property_list():
+		if not (prop["usage"] & PROPERTY_USAGE_STORAGE):
+			continue
+		var name: String = prop["name"]
+		if name.begins_with("resource_") or name == "script":
+			continue
+		to.set(name, from.get(name))
 
 
 ## The wooden end cheeks on a console, and nothing else in the room.
@@ -123,30 +180,36 @@ static func chassis() -> StandardMaterial3D:
 ## back as a pair of traffic cones, brighter than any control on the desk and the first thing
 ## the eye went to. Timber in this room has to be the quietest thing in it.
 static func end_cheek() -> StandardMaterial3D:
-	return _cached("end_cheek", func():
-		var m := scanned(StandardMaterial3D.new(), "black_walnut_veneer_01", "2k", 0.6,
-				Color(0.62, 0.55, 0.5))
-		m.metallic_specular = 0.3
-		return m)
+	return _cached("end_cheek", _default_end_cheek)
+
+
+static func _default_end_cheek() -> StandardMaterial3D:
+	var m := scanned(StandardMaterial3D.new(), "black_walnut_veneer_01", "2k", 0.6,
+			Color(0.62, 0.55, 0.5))
+	m.metallic_specular = 0.3
+	return m
 
 
 ## Brushed aluminium for rack ears, faceplates, reel hubs.
 static func brushed_metal() -> StandardMaterial3D:
-	return _cached("brushed", func():
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.56, 0.58, 0.61)
-		m.roughness = 0.34
-		m.metallic = 0.85
-		# Brushed, not merely grey: the grain runs one way and so does the highlight, which is
-		# the whole difference between aluminium and grey plastic under a lamp.
-		m.anisotropy_enabled = true
-		m.anisotropy = 0.6
-		m.normal_enabled = true
-		m.normal_texture = grain("brushed", 0.9, 0.6, 24.0)
-		m.normal_scale = 0.25
-		m.uv1_triplanar = true
-		m.uv1_scale = Vector3.ONE * 6.0
-		return m)
+	return _cached("brushed", _default_brushed)
+
+
+static func _default_brushed() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.56, 0.58, 0.61)
+	m.roughness = 0.34
+	m.metallic = 0.85
+	# Brushed, not merely grey: the grain runs one way and so does the highlight, which is
+	# the whole difference between aluminium and grey plastic under a lamp.
+	m.anisotropy_enabled = true
+	m.anisotropy = 0.6
+	m.normal_enabled = true
+	m.normal_texture = grain("brushed", 0.9, 0.6, 24.0)
+	m.normal_scale = 0.25
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * 6.0
+	return m
 
 
 ## A reel flange, which is aluminium but deliberately not a mirror.

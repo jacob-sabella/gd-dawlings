@@ -216,6 +216,7 @@ func _ready() -> void:
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
+	_test_each_venue_dresses_the_gear_in_its_own_finishes()
 	_test_rack_plugin_search_finds_and_adds_one()
 	_test_channel_strip_name_opens_plugin_search()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
@@ -5456,6 +5457,47 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())
+
+
+## Venue.gear_style, through Materials.apply_style: every venue puts its own finish on the
+## furniture the gear stands in, the shared materials change in place so gear already built
+## changes with them, the lit-edge venues light their trim, and going back to the studio puts
+## every default back. The roll board stands on posts where the venue has no wall for it.
+func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
+	var looks := {}
+	for id in Venue.IDS:
+		var style := Venue.make(id, 0).gear_style()
+		Materials.apply_style(style)
+		var f := Materials.furniture()
+		looks[id] = [f.albedo_color, f.albedo_texture, Materials.trim().emission_enabled,
+				Materials.trim().emission if Materials.trim().emission_enabled else Color.BLACK,
+				Materials.end_cheek().albedo_texture, Materials.end_cheek().albedo_color]
+	var distinct := {}
+	for id in looks:
+		distinct[str(looks[id])] = id
+	check("all %d venues dress the gear differently (%d distinct)" % [looks.size(), distinct.size()],
+			distinct.size() == looks.size())
+	Materials.apply_style(Venue.make(&"grid", 0).gear_style())
+	check("the grid's trim is a lit cyan edge", Materials.trim().emission_enabled
+			and Materials.trim().emission.is_equal_approx(Color(0.2, 1.0, 1.0)))
+	Materials.apply_style(Venue.make(&"studio", 0).gear_style())
+	check("back in the studio the furniture is the chassis's powder coat again, trim unlit steel",
+			Materials.furniture().albedo_color.is_equal_approx(Materials.chassis().albedo_color)
+			and not Materials.trim().emission_enabled
+			and Materials.trim().metallic == Materials.brushed_metal().metallic)
+	for id in [&"chalk", &"dome", &"grid", &"rooftop"]:
+		check("%s has nothing to hang the roll board on, so it stands" % id,
+				Venue.make(id, 0).roll_board_free_standing())
+	for id in [&"studio", &"cabin", &"club", &"loft", &"station"]:
+		check("%s hangs the roll board on its wall" % id, not Venue.make(id, 0).roll_board_free_standing())
+	var board := RollBoard.new()
+	board.free_standing = true
+	board.position = Vector3(0, 2.14, 0)
+	add_child(board)
+	var posts := board.find_children("Post*", "MeshInstance3D", false, false)
+	check("a free-standing board has two posts reaching the floor (%d)" % posts.size(), posts.size() == 2
+			and is_equal_approx(((posts[0] as MeshInstance3D).mesh as BoxMesh).size.y, 2.14))
+	board.free()
 
 
 ## The rack's FIND button, beside the ADD wheel: opens a searchable list for when the DAW

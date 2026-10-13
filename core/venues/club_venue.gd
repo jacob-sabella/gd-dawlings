@@ -60,6 +60,19 @@ func venue_id() -> StringName:
 	return &"club"
 
 
+## Road cases: black tolex over ply, chrome corners and an amber stage light along every edge,
+## the way a band's own gear stands on a club's stage.
+func gear_style() -> GearStyle:
+	var tolex := GearStyle.paint(Color(0.05, 0.05, 0.055), 0.85, 0.0)
+	tolex.normal_texture = Materials.grain("tolex", 1.6, 2.4)
+	tolex.normal_scale = 0.9
+	return GearStyle.new() \
+			.with("furniture", tolex) \
+			.with("brushed", GearStyle.metal(Color(0.78, 0.78, 0.8), 0.18)) \
+			.with("trim", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.6)) \
+			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.6, Color(0.36, 0.26, 0.2)))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.0, 0.0, 0.0)

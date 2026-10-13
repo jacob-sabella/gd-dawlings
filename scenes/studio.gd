@@ -424,6 +424,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	var env := _house_environment()
 	_house_key(key_light)
 	venue.dress(env, key_light)
+	Materials.apply_style(venue.gear_style())
 	# Every venue a touch brighter than it dressed itself: the mid-tones read dark on an ordinary
 	# monitor, AgX's above all. Exposure rather than brightness, so blacks stay black.
 	env.tonemap_exposure *= EXPOSURE_LIFT
@@ -609,14 +610,15 @@ func _build_furniture() -> void:
 	base_mesh.size = Vector3(0.56, 0.025, 0.42)
 	base.mesh = base_mesh
 	base.position = Vector3(0, Caster.HEIGHT + 0.0125, 0)
-	base.material_override = Materials.chassis()
+	base.material_override = Materials.furniture()
 	deck_trolley.add_part(base)
 	var shelf := MeshInstance3D.new()
 	var shelf_mesh := BoxMesh.new()
 	shelf_mesh.size = Vector3(0.56, 0.04, 0.42)
 	shelf.mesh = shelf_mesh
 	shelf.position = Vector3(0, 0.86, 0)
-	shelf.material_override = Materials.chassis()
+	shelf.material_override = Materials.furniture()
+	GearTrim.edges(shelf)
 	deck_trolley.add_part(shelf)
 	var post_bottom := Caster.HEIGHT + 0.025
 	for dx in [-0.22, 0.22]:
@@ -643,7 +645,8 @@ func _build_furniture() -> void:
 	plinth_mesh.size = Vector3(0.60, 0.30 - Caster.HEIGHT, 0.34)
 	plinth.mesh = plinth_mesh
 	plinth.position = Vector3(0, (0.30 + Caster.HEIGHT) * 0.5, -0.15)
-	plinth.material_override = Materials.chassis()
+	plinth.material_override = Materials.furniture()
+	GearTrim.edges(plinth)
 	rack_trolley.add_part(plinth)
 	rack_trolley.add_corner_casters(0.05)
 
@@ -668,7 +671,7 @@ func _build_furniture() -> void:
 		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP - foot_top, 0.05)
 		leg.mesh = leg_mesh
 		leg.position = Vector3(side * 0.36, (TIMELINE_STAND_TOP + foot_top) * 0.5, 0)
-		leg.material_override = Materials.chassis()
+		leg.material_override = Materials.furniture()
 		timeline_stand.add_part(leg)
 
 		# A foot, because a 35mm post standing on a floor is a post that fell over a moment ago.
@@ -677,7 +680,7 @@ func _build_furniture() -> void:
 		foot_mesh.size = Vector3(0.10, 0.022, 0.22)
 		foot.mesh = foot_mesh
 		foot.position = Vector3(side * 0.36, Caster.HEIGHT + 0.011, 0)
-		foot.material_override = Materials.chassis()
+		foot.material_override = Materials.furniture()
 		timeline_stand.add_part(foot)
 		for end in [-0.075, 0.075]:
 			timeline_stand.add_caster(Vector2(side * 0.36, end))
@@ -710,12 +713,12 @@ func _build_patch_stand() -> void:
 	plinth_mesh.size = Vector3(1.20, 0.03, 0.28)
 	plinth.mesh = plinth_mesh
 	plinth.position = Vector3(0, Caster.HEIGHT + 0.015, -0.03)
-	plinth.material_override = Materials.chassis()
+	plinth.material_override = Materials.furniture()
 	patch_stand.add_part(plinth)
 	_patch_cabinet = MeshInstance3D.new()
 	_patch_cabinet.name = "Cabinet"
 	_patch_cabinet.mesh = BoxMesh.new()
-	_patch_cabinet.material_override = Materials.chassis()
+	_patch_cabinet.material_override = Materials.furniture()
 	patch_stand.add_part(_patch_cabinet)
 	for side in [-1.0, 1.0]:
 		var cheek := MeshInstance3D.new()
@@ -1299,6 +1302,7 @@ func _fit_stand_to_bay() -> void:
 			under - floor_top, PATCH_CABINET_DEPTH)
 	_patch_cabinet.position = Vector3(0, (under + floor_top) * 0.5,
 			PATCH_BAY_FRONT - PatchbaySurface.PANEL_DEPTH - PATCH_CABINET_DEPTH * 0.5 + 0.01)
+	GearTrim.edges(_patch_cabinet)
 	var top := PATCH_BAY_TOP + 0.03
 	for i in _patch_cheeks.size():
 		var side := -1.0 if i == 0 else 1.0
@@ -2010,11 +2014,22 @@ func _build_rig_roulette_station() -> void:
 	studio_set.add_child(rig_roulette_station)
 	rig_roulette_station.transform = venue.rig_roulette_spot()
 	rig_roulette_station.roll_requested.connect(_on_rig_roulette_roll_requested)
+	_build_roll_board()
+	Session.roll_changed.connect(_on_session_roll_changed)
+	venue_changed.connect(func(_id): _build_roll_board())
+
+
+## The board the roll is written up on, built again for each venue: how it is drawn and whether
+## it stands on its own posts are the venue's to say.
+func _build_roll_board() -> void:
+	if roll_board != null:
+		studio_set.remove_child(roll_board)
+		roll_board.queue_free()
 	roll_board = RollBoard.new()
 	roll_board.chalky = venue.roll_board_chalky()
-	studio_set.add_child(roll_board)
+	roll_board.free_standing = venue.roll_board_free_standing()
 	roll_board.transform = venue.roll_board_spot()
-	Session.roll_changed.connect(_on_session_roll_changed)
+	studio_set.add_child(roll_board)
 	_on_session_roll_changed()
 
 

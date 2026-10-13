@@ -59,6 +59,16 @@ func venue_id() -> StringName:
 	return &"station"
 
 
+## White hull panels and blue status strips: the station's own fitted equipment.
+func gear_style() -> GearStyle:
+	return GearStyle.new() \
+			.with("furniture", GearStyle.paint(Color(0.7, 0.72, 0.76), 0.42, 0.1)) \
+			.with("chassis", GearStyle.paint(Color(0.07, 0.08, 0.1), 0.5, 0.3)) \
+			.with("brushed", GearStyle.metal(Color(0.78, 0.8, 0.84), 0.25)) \
+			.with("trim", GearStyle.glow(Color(0.3, 0.62, 1.0), 2.0)) \
+			.with("end_cheek", GearStyle.paint(Color(0.55, 0.57, 0.62), 0.5, 0.1))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/space_sky.gdshader")

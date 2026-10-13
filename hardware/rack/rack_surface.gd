@@ -371,7 +371,7 @@ func _build_frame(parent: Node3D, inner_height: float) -> void:
 		post.mesh = post_mesh
 		post.position = Vector3(side * (RackUnit.RACK_WIDTH * 0.5 + 0.011), inner_height * 0.5,
 				-RAIL_DEPTH * 0.5 - FRAME_SETBACK)
-		post.material_override = Materials.chassis()
+		post.material_override = Materials.furniture()
 		parent.add_child(post)
 
 	for y in [0.0, inner_height + 0.025]:
@@ -380,5 +380,5 @@ func _build_frame(parent: Node3D, inner_height: float) -> void:
 		cross_mesh.size = Vector3(RackUnit.RACK_WIDTH + 0.040, 0.022, RAIL_DEPTH - 0.004)
 		cross.mesh = cross_mesh
 		cross.position = Vector3(0, y, -RAIL_DEPTH * 0.5 - FRAME_SETBACK)
-		cross.material_override = Materials.chassis()
+		cross.material_override = Materials.furniture()
 		parent.add_child(cross)

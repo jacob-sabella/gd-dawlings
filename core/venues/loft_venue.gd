@@ -52,6 +52,15 @@ func venue_id() -> StringName:
 	return &"loft"
 
 
+## Industrial: raw steel plate, black iron and reclaimed walnut, the warehouse's own vocabulary.
+func gear_style() -> GearStyle:
+	return GearStyle.new() \
+			.with("furniture", GearStyle.scan("blue_metal_plate", 1.6, Color(0.85, 0.8, 0.76))) \
+			.with("brushed", GearStyle.metal(Color(0.3, 0.29, 0.28), 0.5)) \
+			.with("trim", GearStyle.metal(Color(0.2, 0.19, 0.18), 0.55)) \
+			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.8, Color(0.55, 0.42, 0.32)))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_mode = Environment.BG_COLOR
 	# The night past the glass: not black, a city sky has light in it from below.

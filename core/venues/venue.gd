@@ -368,6 +368,17 @@ func roll_board_spot() -> Transform3D:
 	return Transform3D(Basis.IDENTITY, Vector3(0.0, 2.14, Studio.ROOM_FRONT + 0.11))
 
 
+## What the gear is made of here (see GearStyle). The studio's own: no change from the
+## defaults but a steel edge.
+func gear_style() -> GearStyle:
+	return GearStyle.new()
+
+
+## Whether the board stands on posts of its own, for a venue with nothing to hang it on.
+func roll_board_free_standing() -> bool:
+	return false
+
+
 ## Whether the board is drawn as chalk on a slate rather than as a lit screen.
 func roll_board_chalky() -> bool:
 	return false

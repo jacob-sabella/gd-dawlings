@@ -23,6 +23,8 @@ const SLATE_TEXT := Color(0.94, 0.96, 0.98)
 const SLATE_ACCENT := Color(1.0, 0.92, 0.3)
 
 var chalky := false
+## Stood on two posts of its own, for a venue with no wall where it hangs.
+var free_standing := false
 
 var _text: Node3D
 
@@ -47,8 +49,27 @@ func _ready() -> void:
 	frame_mesh.size = Vector3(WIDTH + 0.08, HEIGHT + 0.08, 0.03)
 	frame.mesh = frame_mesh
 	frame.position = Vector3(0, HEIGHT * 0.5, -0.037)
-	frame.material_override = Materials.master_plate()
+	frame.material_override = Materials.furniture()
+	GearTrim.edges(frame)
 	add_child(frame)
+	if free_standing:
+		for side in [-1.0, 1.0]:
+			var post := MeshInstance3D.new()
+			post.name = "PostLeft" if side < 0.0 else "PostRight"
+			var post_mesh := BoxMesh.new()
+			post_mesh.size = Vector3(0.07, position.y, 0.07)
+			post.mesh = post_mesh
+			post.position = Vector3(side * (WIDTH * 0.5 - 0.3), -position.y * 0.5, -0.08)
+			post.material_override = Materials.furniture()
+			GearTrim.edges(post)
+			add_child(post)
+			var foot := MeshInstance3D.new()
+			var foot_mesh := BoxMesh.new()
+			foot_mesh.size = Vector3(0.16, 0.03, 0.5)
+			foot.mesh = foot_mesh
+			foot.position = Vector3(side * (WIDTH * 0.5 - 0.3), 0.015 - position.y, -0.08)
+			foot.material_override = Materials.furniture()
+			add_child(foot)
 	show_roll({})
 
 

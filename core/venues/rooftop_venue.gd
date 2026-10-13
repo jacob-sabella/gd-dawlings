@@ -86,6 +86,21 @@ func venue_id() -> StringName:
 	return &"rooftop"
 
 
+## Nothing to hang the roll board on: it stands.
+func roll_board_free_standing() -> bool:
+	return true
+
+
+## Weathered flight cases: sun-greyed ply, aluminium extrusion and a sodium-orange edge from the
+## street lights below.
+func gear_style() -> GearStyle:
+	return GearStyle.new() \
+			.with("furniture", GearStyle.scan("wood_planks_grey", 0.8, Color(0.62, 0.6, 0.58))) \
+			.with("brushed", GearStyle.metal(Color(0.66, 0.67, 0.68), 0.3)) \
+			.with("trim", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.2)) \
+			.with("end_cheek", GearStyle.scan("wood_planks_grey", 0.6, Color(0.5, 0.48, 0.46)))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/dusk_sky.gdshader")

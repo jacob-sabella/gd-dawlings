@@ -50,6 +50,23 @@ func venue_id() -> StringName:
 	return &"grid"
 
 
+## Nothing to hang the roll board on: it stands.
+func roll_board_free_standing() -> bool:
+	return true
+
+
+## Gloss black and neon: every edge a cyan line, like everything else in this world.
+func gear_style() -> GearStyle:
+	var gloss := GearStyle.paint(Color(0.025, 0.015, 0.04), 0.22, 0.5)
+	gloss.normal_enabled = false
+	return GearStyle.new() \
+			.with("furniture", gloss) \
+			.with("chassis", GearStyle.paint(Color(0.05, 0.03, 0.075), 0.4, 0.4)) \
+			.with("brushed", GearStyle.metal(Color(0.62, 0.45, 0.72), 0.2)) \
+			.with("trim", GearStyle.glow(Color(0.2, 1.0, 1.0), 3.0)) \
+			.with("end_cheek", GearStyle.glow(Color(1.0, 0.2, 0.75), 0.45))
+
+
 
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()

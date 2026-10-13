@@ -64,6 +64,22 @@ func venue_id() -> StringName:
 	return &"chalk"
 
 
+## Nothing to hang the roll board on: it stands.
+func roll_board_free_standing() -> bool:
+	return true
+
+
+## Slate, with a chalk line drawn round every edge: the gear is part of the drawing.
+func gear_style() -> GearStyle:
+	var slate := GearStyle.paint(Color(0.1, 0.12, 0.115), 0.95, 0.0)
+	return GearStyle.new() \
+			.with("furniture", slate) \
+			.with("chassis", GearStyle.paint(Color(0.07, 0.085, 0.08), 0.9, 0.05)) \
+			.with("brushed", GearStyle.paint(Color(0.62, 0.64, 0.66), 0.95, 0.0)) \
+			.with("trim", GearStyle.glow(Color(0.92, 0.94, 1.0), 0.9)) \
+			.with("end_cheek", slate)
+
+
 func roll_board_chalky() -> bool:
 	return true
 

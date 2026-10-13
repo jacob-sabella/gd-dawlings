@@ -2775,3 +2775,27 @@ out to +0.07. New shot arg `--rig-roll`.
 Open follow-ups, not built: the board only exists in the built-in venues' control room back wall
 (AR builds neither); chalk lettering drawn as strokes rather than a slate with text.
 Queued by the user next: every venue's stationary gear (console, timeline, cabinets) themed to match it.
+
+## Gear dressed to its venue (2026-10-13)
+(The user: "every environment to have more on theme stationary elements like the mixing console,
+timeline view, cabinets, etc. their vibe needs to match the venue". Chose all nine at once.)
+Found: the gear was the same black powder coat in all nine venues; only the surroundings changed.
+Every piece of gear draws from a few shared cached materials, and a venue switch does not rebuild
+the gear, so `Venue.gear_style()` returns a `GearStyle` (hardware/gear_style.gd) and
+`Materials.apply_style` copies its finishes onto the shared materials in place (STYLED: chassis,
+furniture, brushed, end_cheek, trim) -- gear already built changes with them, MeshBank
+multimeshes included. New `Materials.furniture()` split from `chassis()` for what the gear
+stands in (console body and skirt, rack frame and plinth, patch cabinet, timeline stand legs,
+deck trolley), so faceplates under the legends stay dark. New `GearTrim.edges` puts eight edge
+strips in `Materials.trim()` round those boxes: steel in the studio, a lit line in club (amber),
+chalk (white), dome (aqua), grid (cyan), rooftop (sodium), station (blue). Strip thicknesses are
+staggered and uprights stop short of the top and bottom so the coplanar-face audit stays clean.
+Styles: studio defaults; cabin deck timber, iron, plank cheeks; club tolex road cases with chrome;
+chalk slate; dome teal plate and brass; grid gloss black, magenta cheeks; loft steel plate and
+walnut; rooftop grey ply flight cases; station white panels.
+The roll board now stands on two posts in the venues with no wall behind it (chalk, dome, grid,
+rooftop), framed and trimmed in the venue's furniture, and is rebuilt on a venue change.
+Record: shots/venue_gear_styles.png.
+Open follow-ups, not built: the Rig Roulette panel itself still hangs in the air in those four
+open venues (pre-existing); shapes per venue (a real road-case rack, a log-built desk) rather
+than finishes; the tape deck body and rack units' faceplates are unstyled.

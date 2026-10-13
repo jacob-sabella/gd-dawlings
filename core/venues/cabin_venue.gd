@@ -48,6 +48,17 @@ func venue_id() -> StringName:
 	return &"cabin"
 
 
+## Rough timber carcasses, black iron fittings and pine cheeks: furniture a person built here
+## out of what was cut on the hill, with the faceplates a warm near-black.
+func gear_style() -> GearStyle:
+	return GearStyle.new() \
+			.with("furniture", GearStyle.scan("wood_floor_deck", 1.4, Color(0.62, 0.46, 0.34))) \
+			.with("chassis", GearStyle.paint(Color(0.1, 0.078, 0.062), 0.7, 0.15)) \
+			.with("brushed", GearStyle.metal(Color(0.16, 0.15, 0.14), 0.6)) \
+			.with("trim", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
+			.with("end_cheek", GearStyle.scan("weathered_brown_planks", 0.6, Color(0.7, 0.55, 0.42)))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_mode = Environment.BG_COLOR
 	# A clear night over snow: deep blue, not black, because the snow gives some of it back.

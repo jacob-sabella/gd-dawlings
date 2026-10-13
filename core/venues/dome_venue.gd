@@ -54,6 +54,22 @@ func venue_id() -> StringName:
 	return &"dome"
 
 
+## Nothing to hang the roll board on: it stands.
+func roll_board_free_standing() -> bool:
+	return true
+
+
+## Teal-painted plate, verdigris-brushed brass and a soft aqua edge: kit that has lived under
+## the water a while.
+func gear_style() -> GearStyle:
+	return GearStyle.new() \
+			.with("furniture", GearStyle.scan("blue_metal_plate", 1.2, Color(0.42, 0.7, 0.66))) \
+			.with("chassis", GearStyle.paint(Color(0.05, 0.085, 0.09), 0.6, 0.35)) \
+			.with("brushed", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42)) \
+			.with("trim", GearStyle.glow(Color(0.3, 1.0, 0.88), 1.0)) \
+			.with("end_cheek", GearStyle.metal(Color(0.36, 0.55, 0.46), 0.75))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = preload("res://core/venues/shaders/undersea_sky.gdshader")
