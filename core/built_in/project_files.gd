@@ -66,6 +66,7 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 	warnings.append_array(DawKitDawproject.save(project, abs_path, staging))
 	backend.project_path = path
 	backend.name_project()
+	backend.mark_clean()
 	return warnings
 
 
@@ -123,9 +124,9 @@ static func blank(title := "Untitled", tracks := 4) -> DawKitProject:
 	return p
 
 
-static func new_project(backend: OfflineBackend) -> PackedStringArray:
+static func new_project(backend: OfflineBackend, tracks := 4) -> PackedStringArray:
 	backend.set_media({})
-	var refused := ProjectBridge.load(blank(), backend)
+	var refused := ProjectBridge.load(blank("Untitled", tracks), backend)
 	if refused.is_empty():
 		backend.project_path = ""
 		backend.name_project()

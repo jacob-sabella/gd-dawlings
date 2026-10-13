@@ -5377,27 +5377,21 @@ func _test_every_control_says_what_it_is() -> void:
 
 
 ## RigRouletteStation.roll_requested, outside Tour entirely: host-only (a guest's roll is
-## refused, with a notice, and mutates nothing); eligible tracks are the station's own
-## OPEN_TRACKS/ANY_TRACK wheel (an already-FX'd track is skipped only under OPEN_TRACKS); the
-## CHARACTER pool draws only from RigRouletteStation.CHARACTER_KINDS against the built-in engine;
-## and LOCK KEY, lit, leaves every MIDI item's pitch untouched, while an unlocked roll moves
-## every one of them by the SAME nonzero semitone amount -- a shared new key, not a different one
-## per track.
+## refused, with a notice, and mutates nothing); refused while the open project has unsaved
+## changes; otherwise it starts a NEW project with a random number of tracks, lands exactly
+## `count` pedals on them, the CHARACTER pool only ever drawing from
+## RigRouletteStation.CHARACTER_KINDS, and leaves the rolled project counted as saved so it can be
+## rolled again untouched.
 func _test_rig_roulette_rolls_outside_tour() -> void:
 	_as_session(Session.Role.HOST, 1)
 	var backend := GodotBackend.new()
 	backend.state = MixState.new()
 	DAW.use(backend)
-	# Clean of the stand-in's own authored demo tracks, so the three below are the whole roll
-	# pool and the test's own track-index assumptions hold.
 	while not DAW.state.track_indices().is_empty():
 		DAW.remove_track(DAW.state.track_indices()[0])
 	for i in 3:
 		DAW.add_track(i + 1, "Track %d" % (i + 1))
-	DAW.add_fx(1, "eq", -1)
-	DAW.insert_midi_take(1, 0.0, 1.0, [[0.0, 0.5, 60, 100, 0]], "")
-	DAW.insert_midi_take(2, 0.0, 1.0, [[0.0, 0.5, 64, 100, 0]], "")
-	DAW.insert_midi_take(3, 0.0, 1.0, [[0.0, 0.5, 67, 100, 0]], "")
+	backend.mark_clean()
 
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
@@ -5406,48 +5400,43 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	var station := studio.rig_roulette_station
 	station.count = 2
 	station.pool = RigRouletteStation.Pool.CHARACTER
-	station.eligibility = RigRouletteStation.Eligibility.OPEN_TRACKS
 
 	Session.role = Session.Role.GUEST
 	var notices: Array[String] = []
 	var hear := func(t: String): notices.append(t)
 	Session.notice.connect(hear)
 	station.roll_requested.emit()
-	check("a guest's roll is refused, and told why", DAW.state.track(1).fx.size() == 1
-			and DAW.state.track(2).fx.is_empty() and DAW.state.track(3).fx.is_empty()
+	check("a guest's roll is refused, and told why", DAW.state.track_indices().size() == 3
 			and notices.size() == 1 and notices[0].begins_with("Only "))
-	Session.notice.disconnect(hear)
 	Session.role = Session.Role.HOST
 
+	notices.clear()
+	DAW.set_tempo(97.0)
+	check("an edit leaves the project with unsaved changes", DAW.has_unsaved_changes())
 	station.roll_requested.emit()
-	var sizes := [DAW.state.track(1).fx.size(), DAW.state.track(2).fx.size(), DAW.state.track(3).fx.size()]
-	check("the host's roll landed exactly 2 pedals, never on the already-FX'd track (%s)" % [sizes],
-			sizes[0] == 1 and sizes[1] + sizes[2] == 2)
-	var character_names := {}
-	for k in RigRouletteStation.CHARACTER_KINDS:
-		character_names[FXCatalogue.kinds()[k]["name"]] = true
-	var landed_names: Array = []
-	for i in [2, 3]:
-		for fx: MixState.FXState in DAW.state.track(i).fx.values():
-			landed_names.append(fx.name)
-	check("the CHARACTER pool only ever lands a character kind (%s)" % [landed_names],
-			landed_names.all(func(n): return character_names.has(n)))
+	check("a roll with unsaved changes is refused, and told why", DAW.state.track_indices().size() == 3
+			and DAW.state.tempo == 97.0 and notices.size() == 1 and notices[0].begins_with("Save the project"))
+	Session.notice.disconnect(hear)
 
-	var pitch_of := func(i: int) -> float: return DAW.state.track(i).items[0].notes[2]
-	var before := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
-	station.key_locked = true
-	station.roll_requested.emit()
-	var after_locked := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
-	check("LOCK KEY lit leaves every pitch alone (%s -> %s)" % [before, after_locked], before == after_locked)
-
-	station.key_locked = false
-	station.roll_requested.emit()
-	var after_unlocked := [pitch_of.call(1), pitch_of.call(2), pitch_of.call(3)]
-	var deltas: Array = []
-	for i in 3:
-		deltas.append(after_unlocked[i] - before[i])
-	check("unlocked, every item moves by the SAME nonzero semitone shift (%s)" % [deltas],
-			deltas[0] != 0.0 and deltas[0] == deltas[1] and deltas[1] == deltas[2])
+	backend.mark_clean()
+	var counts := {}
+	for n in 12:
+		station.roll_requested.emit()
+		var tracks: int = DAW.state.track_indices().size()
+		counts[tracks] = true
+		var fx := 0
+		var character_names := {}
+		for k in RigRouletteStation.CHARACTER_KINDS:
+			character_names[FXCatalogue.kinds()[k]["name"]] = true
+		var only_character := true
+		for i in DAW.state.track_indices():
+			for f: MixState.FXState in DAW.state.track(i).fx.values():
+				fx += 1
+				only_character = only_character and character_names.has(f.name)
+		check("roll %d: %d tracks inside the range, exactly 2 character pedals (%d)" % [n, tracks, fx],
+				tracks >= Studio.ROLL_TRACKS_MIN and tracks <= Studio.ROLL_TRACKS_MAX and fx == 2 and only_character)
+		check("roll %d leaves the rolled project saved, so it can be rolled again" % n, not DAW.has_unsaved_changes())
+	check("the track count really varies from roll to roll (%s)" % [counts.keys()], counts.size() > 1)
 
 	remove_child(studio)
 	studio.free()

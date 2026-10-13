@@ -129,8 +129,8 @@ func open_project(path: String) -> PackedStringArray:
 	return ProjectFiles.open(self, path)
 
 
-func new_project() -> PackedStringArray:
-	return ProjectFiles.new_project(self)
+func new_project(tracks := 4) -> PackedStringArray:
+	return ProjectFiles.new_project(self, tracks)
 
 
 ## Called once a whole project has been put into `state` (ProjectBridge.load). `kinds` is
@@ -850,11 +850,25 @@ const GESTURE_MS := 700
 var _undo: Array = []
 var _redo: Array = []
 var _replaying := false
+## Counts every edit, undone or redone included, and what it read when the project was last
+## saved, opened or started: the two differ exactly when there is something a save would keep.
+## Undoing back to the saved point still counts as changed, which errs toward asking for a save.
+var _edits := 0
+var _clean_at := 0
+
+
+func has_unsaved_changes() -> bool:
+	return _edits != _clean_at
+
+
+func mark_clean() -> void:
+	_clean_at = _edits
 
 
 func _remember(key: String, back: Callable, again: Callable, folds := true) -> void:
 	if _replaying:
 		return
+	_edits += 1
 	var now := Time.get_ticks_msec()
 	if folds and not _undo.is_empty():
 		var last: Dictionary = _undo[-1]
@@ -874,6 +888,7 @@ func undo() -> void:
 	_replaying = true
 	(step["back"] as Callable).call()
 	_replaying = false
+	_edits += 1
 	_redo.append(step)
 	_say_depth()
 
@@ -885,6 +900,7 @@ func redo() -> void:
 	_replaying = true
 	(step["again"] as Callable).call()
 	_replaying = false
+	_edits += 1
 	# Re-opening a gesture by redoing it would be wrong: the next drag is a new step.
 	step["t"] = 0
 	_undo.append(step)
@@ -895,6 +911,7 @@ func redo() -> void:
 func forget_history() -> void:
 	_undo.clear()
 	_redo.clear()
+	mark_clean()
 	_say_depth()
 
 

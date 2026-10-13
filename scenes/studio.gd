@@ -2020,28 +2020,37 @@ func _on_rig_roulette_roll_requested() -> void:
 	_roll_rig()
 
 
-## The roll itself: eligible tracks (the station's own OPEN_TRACKS/ANY_TRACK wheel) shuffled by a
-## fresh, unseeded roll -- not the run's own seed, since this has nothing to do with a Tour run's
-## own replay -- `station.count` of them get a plugin from `_rig_pool`, and unless LOCK KEY is
-## lit the whole song moves to a new key: the same nonzero semitone shift (never zero, a "new
-## key" roll that changed nothing would be a dud) applied to every MIDI item across every track,
-## via the same `DAW.transpose_item` the manual timeline UI already uses. Host-only by the time
-## this runs (`_on_rig_roulette_roll_requested`'s own gate), so every `DAW.add_fx`/
-## `DAW.transpose_item` call here is this peer's own, same as any other host action.
+## How many tracks a roll starts the new project with.
+const ROLL_TRACKS_MIN := 2
+const ROLL_TRACKS_MAX := 8
+const ROLL_KEY_NAMES := ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+
+## The roll itself, host-only by the time this runs (`_on_rig_roulette_roll_requested`'s own
+## gate): refused while the open project has changes no save has kept, since it starts a NEW
+## project. That one has a random number of tracks (`ROLL_TRACKS_MIN`..`ROLL_TRACKS_MAX`),
+## `station.count` of them (shuffled, from a fresh unseeded roll -- nothing to do with a Tour
+## run's own seed) get a plugin from `_rig_pool`, and unless LOCK KEY is lit a key is rolled too.
+## The key is only named, never applied: the project is empty, so there is no note to move.
+## The rolled project is the starting point, not an edit, so it counts as saved and can be
+## rolled again untouched.
 func _roll_rig() -> void:
 	var station := rig_roulette_station
 	if station == null:
 		return
-	var eligible: Array[int] = []
-	for i in DAW.state.track_indices():
-		var t := DAW.state.track(i, false)
-		if t == null:
-			continue
-		if station.eligibility == RigRouletteStation.Eligibility.OPEN_TRACKS and not t.fx.is_empty():
-			continue
-		eligible.append(i)
+	if DAW.has_unsaved_changes():
+		Session.notice.emit("Save the project first: a roll starts a new one.")
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
+	var tracks := rng.randi_range(ROLL_TRACKS_MIN, ROLL_TRACKS_MAX)
+	var refused := DAW.new_project(tracks)
+	if not refused.is_empty():
+		Session.notice.emit("Could not start the new project: %s" % "; ".join(refused))
+		return
+
+	var eligible: Array[int] = []
+	for i in DAW.state.track_indices():
+		eligible.append(i)
 	for i in range(eligible.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
 		var tmp: int = eligible[i]
@@ -2057,22 +2066,16 @@ func _roll_rig() -> void:
 		DAW.add_fx(eligible[i], plugin, -1)
 		landed += 1
 
-	var semitones := 0
+	var key := ""
 	if not station.key_locked:
-		const NONZERO := [-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6]
-		semitones = NONZERO[rng.randi() % NONZERO.size()]
-		for i in DAW.state.track_indices():
-			var t := DAW.state.track(i, false)
-			if t == null:
-				continue
-			for item: MixState.ItemState in t.items:
-				if not item.notes.is_empty():
-					DAW.transpose_item(i, item.index, semitones)
+		key = "%s %s" % [ROLL_KEY_NAMES[rng.randi() % ROLL_KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]
+	DAW.mark_clean()
 
-	station.show_result(landed, semitones)
-	var msg := "%s rolled %d pedal%s" % [Session.name_of(Session.local_peer_id), landed, "" if landed == 1 else "s"]
-	if semitones != 0:
-		msg += " and moved the key %+d" % semitones
+	station.show_result(tracks, landed, key)
+	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
+			landed, "" if landed == 1 else "s"]
+	if not key.is_empty():
+		msg += ", key of %s" % key
 	Session.tell_room(msg + ".")
 
 

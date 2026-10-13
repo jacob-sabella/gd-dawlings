@@ -1,8 +1,8 @@
 class_name RigRouletteStation
 extends Node3D
 
-## A small panel on the control room wall: roll a few FX onto open tracks and, unless locked,
-## move the whole song to a new key -- a fresh random roll every press, off nothing seeded,
+## A small panel on the control room wall: start a new project with a random number of tracks, roll
+## a few FX onto them and, unless locked, a key -- a fresh random roll every press, off nothing seeded,
 ## since this has nothing to do with a Tour run's own replay.
 ##
 ## A DUMB PANEL, NOT A DAW VERB
@@ -25,7 +25,6 @@ const WIDTH := 0.2
 const HEIGHT := 0.32
 
 enum Pool { CHARACTER, EVERYTHING }
-enum Eligibility { OPEN_TRACKS, ANY_TRACK }
 
 ## Character-only FX, the same curated set Rig Roulette's own Tour-mode version draws from
 ## (`TourProject.RIG_FX`) -- meaningful only against the built-in engine's FXCatalogue kinds.
@@ -35,7 +34,6 @@ const CHARACTER_KINDS: Array[StringName] = [&"distortion", &"chorus", &"reverb",
 
 var count := 2
 var pool := Pool.CHARACTER
-var eligibility := Eligibility.OPEN_TRACKS
 var key_locked := false
 
 var _last_label: Label3D
@@ -77,18 +75,6 @@ func _ready() -> void:
 	pool_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL POOL"
 	add_child(pool_wheel)
 
-	var elig_wheel := TabletSelector.new()
-	elig_wheel.name = "EligibilityWheel"
-	elig_wheel.size = Vector2(0.15, 0.034)
-	elig_wheel.hint_text = "scroll: which tracks are fair game"
-	elig_wheel.options = func() -> Array:
-		return [[Eligibility.OPEN_TRACKS, "OPEN TRACKS"], [Eligibility.ANY_TRACK, "ANY TRACK"]]
-	elig_wheel.choice = eligibility
-	elig_wheel.position = Vector3(0, HEIGHT - 0.178, 0.004)
-	elig_wheel.chosen.connect(_on_eligibility_chosen)
-	elig_wheel.describe_title = func() -> String: return "RIG ROULETTE  TRACK ELIGIBILITY"
-	add_child(elig_wheel)
-
 	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.218, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
@@ -126,14 +112,13 @@ func _ready() -> void:
 	_lamp()
 
 
-## Reported after a roll actually lands (from `Studio.roll_rig`, host side and every guest's own
-## replicated view alike), so the panel reads back what happened rather than only what is set up
-## to happen next.
-func show_result(fx_count: int, semitones: int) -> void:
-	if semitones == 0:
-		_last_label.text = "last roll: %d pedal%s" % [fx_count, "" if fx_count == 1 else "s"]
-	else:
-		_last_label.text = "last roll: %d pedal%s, key %+d" % [fx_count, "" if fx_count == 1 else "s", semitones]
+## Reported after a roll actually lands (from `Studio._roll_rig`), so the panel reads back what
+## happened rather than only what is set up to happen next. `key` is empty when it was locked.
+func show_result(tracks: int, fx_count: int, key: String) -> void:
+	var line := "last roll: %d tracks, %d pedal%s" % [tracks, fx_count, "" if fx_count == 1 else "s"]
+	if not key.is_empty():
+		line += ", %s" % key
+	_last_label.text = line
 
 
 ## A small light of its own, the same fix `TourCase._lamp` makes for the back of house: this
@@ -172,10 +157,6 @@ func _on_count_chosen(c: int) -> void:
 
 func _on_pool_chosen(p: int) -> void:
 	pool = p
-
-
-func _on_eligibility_chosen(e: int) -> void:
-	eligibility = e
 
 
 func _on_lock_key_pressed() -> void:

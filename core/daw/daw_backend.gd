@@ -235,7 +235,12 @@ func save_project(_path: String) -> PackedStringArray: return PackedStringArray(
 ## as sentences. It opened when `project_path` is `path` afterwards, whatever it returns.
 func open_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot open files from here"])
 ## Replaces the open project with an empty one.
-func new_project() -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
+func new_project(_tracks := 4) -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
+## Whether anything changed since the project was saved, opened or started. A DAW that cannot
+## say answers false.
+func has_unsaved_changes() -> bool: return false
+## Takes the project as it is now for the saved one.
+func mark_clean() -> void: pass
 ## The click, on or off.
 func set_metronome(_on: bool) -> void: pass
 ## Bars of click before recording starts, 0 for none (MixState.count_in_bars). Not a history

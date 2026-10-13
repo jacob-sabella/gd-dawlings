@@ -2746,3 +2746,18 @@ CI/Dependabot/CODEOWNERS. README has screenshots of every venue, the tape deck a
 two clips (`tools/movie.sh`, new; `--roll` in `tools/screenshot.gd` starts the transport).
 Open: the `DAWKIT_DEPLOY_KEY` secret and deploy key on gd-dawkit are now unused and can be deleted;
 no branch protection / required reviews set yet.
+
+## Rig Roulette starts a new project (2026-10-13)
+(The user: "the number of tracks should get clobbered to something random (roll). it should start
+a new project (only allowed if there are no pending changes to current project)".)
+ROLL now refuses with "Save the project first" while the open project has unsaved changes, and
+otherwise starts a new project with 2-8 random tracks, lands `count` character pedals on them,
+and rolls a named key unless LOCK KEY is lit. There was no unsaved-changes notion anywhere, so
+`OfflineBackend` counts edits (`_remember`, undo, redo) against the count at the last
+save/open/new (`has_unsaved_changes`, `mark_clean`, reached through `DAW`); undoing back to the
+saved point still reads as changed. The rolled project is marked clean so it can be re-rolled.
+The key is only named (the project is empty, nothing to transpose), and the ANY/OPEN TRACKS wheel
+is gone since every track of a new project is open.
+Open follow-ups, not built: the Reaper backend cannot report unsaved changes (answers false) and
+cannot start a project, so ROLL there says it cannot; rolling tempo; the visible spin and the
+no-re-roll constraints board.

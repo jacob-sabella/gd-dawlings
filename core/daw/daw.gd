@@ -354,10 +354,22 @@ func open_project(path: String) -> PackedStringArray:
 	return backend.open_project(path)
 
 
-func new_project() -> PackedStringArray:
+func new_project(tracks := 4) -> PackedStringArray:
 	if not Session.is_authority():
 		return PackedStringArray(["only the host starts a project"])
-	return backend.new_project()
+	return backend.new_project(tracks)
+
+
+## Host only: whether the open project has changes no save has kept.
+func has_unsaved_changes() -> bool:
+	return Session.is_authority() and backend.has_unsaved_changes()
+
+
+## Host only: the project as it stands counts as saved, for a change that is the starting
+## point of the project rather than an edit to it.
+func mark_clean() -> void:
+	if Session.is_authority():
+		backend.mark_clean()
 
 
 func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
