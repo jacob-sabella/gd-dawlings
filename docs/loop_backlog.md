@@ -2718,3 +2718,12 @@ their R/S/M/I buttons and pan knob at 1.45x with a letter legend in the left mar
 scales; seat-click audit still passes.
 Open follow-ups, not built: the tape deck is still cut off at the right edge of the seated frame and
 its keys are small; off-lamp contrast (`Materials.LAMP_DARK`) is unchanged.
+
+Verification, end of Tick AB (2026-10-12): `tools/verify.sh` 7174 / 0 failed (bridge 7, dawkit 359);
+`session_probe` offline 53+47, `--built-in` 79+42, all 0 failed; `--reaper` guest 48/0 and host 86 with
+one failure ("Reaper added a stock plugin to a track and removed it"), which fails identically on the
+commit before the timeline work, so it is the local Reaper install, not this change. Camera evidence for
+the flat editor at several positions (`SHOT_ARGS="--tl-shelf off"`): seated `shots/tl/c1.png`, VR eye
+height 1.65 m `shots/tl/vr-height.png`, across the room `shots/tl/across.png`, plus the earlier
+standing/visitor/road set `shots/tl/after-*.png`. Note: with an explicit `--cam` the 3D shelf is on by
+default and clips read as dim edge lines head-on -- the 3D key still toggles it; flat is the legible one.
