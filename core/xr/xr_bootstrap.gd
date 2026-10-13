@@ -17,6 +17,8 @@ var passthrough_active := false
 ## No headset at all: the rig is built as for a headset and driven from the mouse and keyboard by
 ## the vendored XR Simulator (addons/xr-simulator), for looking at the VR and AR layouts on a desktop.
 var simulated := false
+## What a simulated passthrough headset sees behind the gear (CC0, Poly Haven; see assets/sim).
+const SIM_ROOM := "res://assets/sim/hotel_room_2k.hdr"
 
 
 ## Returns the medium that was actually achieved, which may not be the one asked for.
@@ -88,6 +90,15 @@ func apply_passthrough() -> bool:
 			return false
 		sim_env.background_mode = Environment.BG_COLOR
 		sim_env.background_color = Color(0.09, 0.09, 0.10)
+		if ResourceLoader.exists(SIM_ROOM):
+			# A photographed room, as far away as the sky: it has no floor under the gear and
+			# does not shift as you lean, but it reads as somebody's real room.
+			var sky_material := PanoramaSkyMaterial.new()
+			sky_material.panorama = load(SIM_ROOM)
+			var sky := Sky.new()
+			sky.sky_material = sky_material
+			sim_env.sky = sky
+			sim_env.background_mode = Environment.BG_SKY
 		passthrough_active = true
 		return true
 	if xr_interface == null:
