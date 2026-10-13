@@ -217,7 +217,7 @@ func _rebuild() -> void:
 ## own, as it did before there were banks.
 func _make_banks() -> Array:
 	var panels := MeshBank.of(RackUnit.MESH_PATH, Materials.chassis(), {"screw": Materials.brushed_metal()})
-	var knobs := MeshBank.of(Knob.MESH_PATH, Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+	var knobs := MeshBank.of(Knob.MESH_PATH, Materials.knob_cap(),
 			{"indicator": Materials.legend()})
 	var bodies := MeshBank.parts(PanelButton.BODY_SIZE, PanelButton.body_material())
 	var lamps := MeshBank.lamps(PanelButton.LAMP_SIZE)

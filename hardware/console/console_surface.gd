@@ -331,7 +331,7 @@ func _rebuild() -> void:
 	# the patchbay's jacks.
 	var knob_bank := MeshBank.of(
 		Knob.MESH_PATH,
-		Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+		Materials.knob_cap(),
 		{"indicator": Materials.legend()},
 	)
 	if knob_bank != null:
@@ -339,7 +339,7 @@ func _rebuild() -> void:
 		_panel.add_child(knob_bank)
 	var cap_bank := MeshBank.of(
 		Fader.MESH_PATH,
-		Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+		Materials.fader_cap(),
 		{"indicator": Materials.legend()},
 	)
 	if cap_bank != null:

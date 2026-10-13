@@ -58,7 +58,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
 			.with("end_cheek", GearStyle.scan("weathered_brown_planks", 0.6, Color(0.7, 0.55, 0.42))) \
 			.with("lamp_shade", GearStyle.metal(Color(0.12, 0.11, 0.1), 0.7)) \
-			.with("loom_band", GearStyle.paint(Color(0.55, 0.12, 0.08), 0.8, 0.0))
+			.with("loom_band", GearStyle.paint(Color(0.55, 0.12, 0.08), 0.8, 0.0)) \
+			.with("knob_cap", GearStyle.paint(Color(0.2, 0.12, 0.07), 0.55, 0.0))
 
 
 ## A plank board with the lettering painted on in cream and the arrows in lamp orange.

@@ -61,7 +61,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.metal(Color(0.2, 0.19, 0.18), 0.55)) \
 			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.8, Color(0.55, 0.42, 0.32))) \
 			.with("lamp_shade", GearStyle.paint(Color(0.12, 0.25, 0.18), 0.35, 0.2)) \
-			.with("loom_band", GearStyle.paint(Color(0.75, 0.3, 0.15), 0.7, 0.0))
+			.with("loom_band", GearStyle.paint(Color(0.75, 0.3, 0.15), 0.7, 0.0)) \
+			.with("knob_cap", GearStyle.paint(Color(0.06, 0.06, 0.06), 0.3, 0.0))
 
 
 ## Dark steel plate, chalky white lettering, brick-orange arrows.

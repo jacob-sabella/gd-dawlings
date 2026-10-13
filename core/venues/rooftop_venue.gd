@@ -101,7 +101,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.2)) \
 			.with("end_cheek", GearStyle.scan("wood_planks_grey", 0.6, Color(0.5, 0.48, 0.46))) \
 			.with("lamp_shade", GearStyle.metal(Color(0.55, 0.35, 0.22), 0.6)) \
-			.with("loom_band", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.0))
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.55, 0.18), 1.0)) \
+			.with("knob_cap", GearStyle.paint(Color(0.3, 0.16, 0.08), 0.45, 0.4))
 
 
 ## Sun-greyed ply, white stencil lettering, sodium-orange arrows.

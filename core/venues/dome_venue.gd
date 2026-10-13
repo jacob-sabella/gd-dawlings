@@ -69,7 +69,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.glow(Color(0.3, 1.0, 0.88), 1.0)) \
 			.with("end_cheek", GearStyle.metal(Color(0.36, 0.55, 0.46), 0.75)) \
 			.with("lamp_shade", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42)) \
-			.with("loom_band", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42))
+			.with("loom_band", GearStyle.metal(Color(0.72, 0.58, 0.32), 0.42)) \
+			.with("knob_cap", GearStyle.metal(Color(0.42, 0.32, 0.16), 0.45))
 
 
 ## Teal plate gone dark under the water, pale aqua lettering, brass arrows.

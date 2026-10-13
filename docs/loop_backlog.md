@@ -2830,3 +2830,17 @@ Deliberately not styled: knob and fader caps, LEDs, patch cables and screen face
 there is information (mute red, solo yellow, a cable's send), not finish.
 Tests: every venue's loom band and wardrobe board are distinct; the Tour case's shell is the
 furniture finish.
+
+## Knob and fader caps take the venue's style (2026-10-13)
+The neutral knob bodies (console pan knobs, rack knobs) and fader caps now come from two new
+STYLED finishes, `Materials.knob_cap` / `fader_cap` (a style that names only `knob_cap` gets it
+on its faders too, `STYLED_FALLBACK`): brown bakelite in the cabin, oxblood in the club, slate in
+chalk, brass in the dome, gloss magenta-black on the grid, black bakelite in the loft, anodised
+copper on the rooftop, blue-grey on the station. Kept mid-to-dark in every venue so the
+legend-light pointer line on each still reads. Coloured caps stay `cap_plastic(tint)`: their
+colour is information.
+Correction to the "Gear dressed to its venue" entry above: the tape deck body and rack unit
+faceplates were never unstyled -- both are `Materials.chassis()`, which every venue but the
+studio (whose default it is) now tints.
+Not styled, by decision: LEDs, patch cables, screen faces and the coloured caps (information,
+not finish); shapes per venue (a separate modelling job, not a finish).

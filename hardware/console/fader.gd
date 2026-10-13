@@ -81,7 +81,7 @@ func _ready() -> void:
 	else:
 		_cap = Part.build(
 			MESH_PATH,
-			Materials.cap_plastic(Color(0.17, 0.18, 0.2)),
+			Materials.fader_cap(),
 			{"indicator": Materials.legend()},
 		)
 		if _cap == null:
@@ -107,7 +107,7 @@ func _stand_in() -> Node3D:
 	var cap_mesh := BoxMesh.new()
 	cap_mesh.size = Vector3(WIDTH, CAP_HEIGHT, 0.016)
 	holder.mesh = cap_mesh
-	holder.material_override = Materials.cap_plastic(Color(0.17, 0.18, 0.2))
+	holder.material_override = Materials.fader_cap()
 
 	var line := MeshInstance3D.new()
 	var line_mesh := BoxMesh.new()

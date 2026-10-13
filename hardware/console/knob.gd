@@ -77,7 +77,7 @@ func _ready() -> void:
 	else:
 		var moulded := Part.build(
 			MESH_PATH,
-			Materials.cap_plastic(Color(0.14, 0.15, 0.17)),
+			Materials.knob_cap(),
 			{"indicator": Materials.legend()},
 		)
 		if moulded != null:
@@ -111,7 +111,7 @@ func _stand_in() -> Node3D:
 	body_mesh.radial_segments = 20
 	body.mesh = body_mesh
 	body.rotation_degrees = Vector3(90, 0, 0)
-	body.material_override = Materials.cap_plastic(Color(0.14, 0.15, 0.17))
+	body.material_override = Materials.knob_cap()
 	holder.add_child(body)
 
 	var indicator := MeshInstance3D.new()

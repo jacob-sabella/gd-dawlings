@@ -73,7 +73,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.6)) \
 			.with("end_cheek", GearStyle.scan("black_walnut_veneer_01", 0.6, Color(0.36, 0.26, 0.2))) \
 			.with("lamp_shade", GearStyle.metal(Color(0.75, 0.55, 0.25), 0.35)) \
-			.with("loom_band", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.2))
+			.with("loom_band", GearStyle.glow(Color(1.0, 0.45, 0.12), 1.2)) \
+			.with("knob_cap", GearStyle.paint(Color(0.22, 0.05, 0.04), 0.35, 0.0))
 
 
 ## Black tolex like the road cases, cream lettering, amber arrows.

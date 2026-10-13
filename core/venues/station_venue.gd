@@ -68,7 +68,8 @@ func gear_style() -> GearStyle:
 			.with("trim", GearStyle.glow(Color(0.3, 0.62, 1.0), 2.0)) \
 			.with("end_cheek", GearStyle.paint(Color(0.55, 0.57, 0.62), 0.5, 0.1)) \
 			.with("lamp_shade", GearStyle.paint(Color(0.8, 0.82, 0.86), 0.4, 0.1)) \
-			.with("loom_band", GearStyle.glow(Color(0.3, 0.62, 1.0), 1.5))
+			.with("loom_band", GearStyle.glow(Color(0.3, 0.62, 1.0), 1.5)) \
+			.with("knob_cap", GearStyle.paint(Color(0.12, 0.16, 0.22), 0.45, 0.2))
 
 
 ## A white hull panel with navy lettering and blue status arrows.

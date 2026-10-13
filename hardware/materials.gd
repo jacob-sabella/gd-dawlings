@@ -127,7 +127,10 @@ static func trim() -> StandardMaterial3D:
 
 
 ## Finishes a venue may restyle.
-const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim", "lamp_shade", "loom_band"]
+const STYLED: Array[String] = ["chassis", "furniture", "brushed", "end_cheek", "trim", "lamp_shade", "loom_band", "knob_cap", "fader_cap"]
+## A finish a style may leave out and have take on another's: a venue that styles its knobs and
+## says nothing of its faders gets the same caps on both.
+const STYLED_FALLBACK := {"fader_cap": "knob_cap"}
 
 
 ## What a styled finish is when the venue says nothing.
@@ -141,6 +144,10 @@ static func _default(key: String) -> StandardMaterial3D:
 			return _default_lamp_shade()
 		"loom_band":
 			return _default_loom_band()
+		"knob_cap":
+			return _default_cap(Color(0.14, 0.15, 0.17))
+		"fader_cap":
+			return _default_cap(Color(0.17, 0.18, 0.2))
 	return _default_chassis()
 
 
@@ -154,6 +161,25 @@ static func lamp_shade() -> StandardMaterial3D:
 ## accent elsewhere.
 static func loom_band() -> StandardMaterial3D:
 	return _cached("loom_band", _default_loom_band)
+
+
+## The neutral knob body and fader cap: grey plastic in the studio, the venue's own elsewhere.
+## Only the neutral ones -- a coloured cap's colour is information, and stays cap_plastic(tint).
+## Kept mid-to-dark in every style, because the pointer line printed on each is legend-light.
+static func knob_cap() -> StandardMaterial3D:
+	return _cached("knob_cap", _default.bind("knob_cap"))
+
+
+static func fader_cap() -> StandardMaterial3D:
+	return _cached("fader_cap", _default.bind("fader_cap"))
+
+
+static func _default_cap(tint: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = tint
+	m.roughness = 0.72
+	m.metallic = 0.05
+	return m
 
 
 static func _default_loom_band() -> StandardMaterial3D:
@@ -180,6 +206,8 @@ static func _default_lamp_shade() -> StandardMaterial3D:
 static func apply_style(style: GearStyle) -> void:
 	for key in STYLED:
 		var from: StandardMaterial3D = style.finishes.get(key) if style != null else null
+		if from == null and style != null and STYLED_FALLBACK.has(key):
+			from = style.finishes.get(STYLED_FALLBACK[key])
 		if from == null:
 			from = _default(key)
 		_take_on(_cached(key, _default.bind(key)), from)

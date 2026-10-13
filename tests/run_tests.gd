@@ -5514,10 +5514,15 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 	check("every venue's lamp shades are its own (%d distinct)" % shades.size(), shades.size() == Venue.IDS.size())
 	var bands := {}
 	var boards := {}
+	var caps := {}
 	for id in Venue.IDS:
 		var v := Venue.make(id, 0)
 		Materials.apply_style(v.gear_style())
 		bands[str([Materials.loom_band().albedo_color, Materials.loom_band().emission_enabled])] = id
+		caps[str(Materials.knob_cap().albedo_color)] = id
+		if id != &"studio":
+			check("%s's faders wear its knob caps" % id,
+					Materials.fader_cap().albedo_color == Materials.knob_cap().albedo_color)
 		var robe := Wardrobe.new()
 		v._dress_wardrobe(robe)
 		boards[str([robe.board_material.get("albedo_color") if robe.board_material != null else null,
@@ -5525,6 +5530,7 @@ func _test_each_venue_dresses_the_gear_in_its_own_finishes() -> void:
 				robe.ink, robe.accent])] = id
 		robe.free()
 		v.free()
+	check("every venue caps its knobs its own way (%d distinct)" % caps.size(), caps.size() == Venue.IDS.size())
 	check("every venue bands its looms in its own colour (%d distinct)" % bands.size(), bands.size() == Venue.IDS.size())
 	check("every venue dresses the wardrobe board its own way (%d distinct)" % boards.size(), boards.size() == Venue.IDS.size())
 	var case := TourCase.new()
