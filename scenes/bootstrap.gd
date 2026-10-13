@@ -15,6 +15,7 @@ extends Node
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
 ##   godot --path . -- --reaper --host --code AB12       host, letting in only those told AB12
 ##   godot --path . -- --join 192.168.1.40 --xr --ar     join someone else's session, in passthrough
+##   godot --path . -- --xr-sim [--ar]                   a simulated headset on the desktop (no hardware)
 ##   godot --path . -- --place console=screen --stage    console as a panel, with the mover open
 ##
 ## Ports default to Reaper's own OSC defaults: send to 8000, listen on 9000. They are the numbers
@@ -39,7 +40,7 @@ func _ready() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
 
 	add_child(xr)
-	var medium := xr.start(args["xr"], args["ar"])
+	var medium := xr.start(args["xr"], args["ar"], args["xr_sim"])
 	# A capture or a demo starts from the authored room and keeps whatever it moves to itself.
 	# Without this, a screenshot that pushed a rack would move the rack in the real layout.
 	if args["fresh_layout"]:
@@ -216,7 +217,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		# no Reaper. Run from the editor, as the tests and probes are, the silent stand-in.
 		"reaper": false, "built_in": OS.has_feature("template"), "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
-		"host": false, "join": "", "xr": false, "ar": false,
+		"host": false, "join": "", "xr": false, "xr_sim": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
@@ -362,6 +363,10 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--stand-in": out["built_in"] = false
 			"--host": out["host"] = true
 			"--xr": out["xr"] = true
+			"--xr-sim":
+				# A headset simulated from the mouse and keyboard; --ar with it simulates passthrough.
+				out["xr"] = true
+				out["xr_sim"] = true
 			"--stage": out["stage"] = true
 			"--view":
 				# `--view 32:64` -- start and span in seconds, for photographing the timeline

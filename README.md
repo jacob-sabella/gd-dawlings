@@ -78,6 +78,7 @@ godot --path . -- --join 192.168.1.40 --ar   # join someone else's session, in p
 godot --path . -- --xr                       # host or join in VR, not passthrough
 godot --path . -- --view 20:52               # open the timeline on seconds 20-52 (start:span)
 godot --path . -- --venue grid               # stand in a given venue (studio / grid / chalk / …)
+godot --path . -- --xr-sim --built-in        # a headset simulated on the desktop (add --ar for passthrough)
 ```
 
 With no Reaper it comes up on a synthetic ten-track mix with the meters moving — silent by

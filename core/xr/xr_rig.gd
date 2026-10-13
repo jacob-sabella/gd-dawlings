@@ -32,6 +32,13 @@ const TIP_OFFSET := Vector3(0, -0.015, -0.075)
 const CALIBRATE_ACTION := &"by_button"
 const PRESS_ACTION := &"trigger_click"
 
+## Set by the studio before the rig enters the tree when there is no headset (--xr-sim): the
+## rig then starts where a standing person's head and hands would, since no runtime is there
+## to report them and the simulator only moves them from wherever they begin.
+var simulated := false
+const SIM_EYE_HEIGHT := 1.6
+const SIM_HAND := Vector3(0.22, 1.25, -0.35)
+
 var head: XRCamera3D
 var left: XRController3D
 var right: XRController3D
@@ -49,6 +56,8 @@ func _ready() -> void:
 	head.near = 0.02
 	# Everything but your own ghost, which only mirrors draw. See core/venues/mirror.gd.
 	head.cull_mask = Mirror.MAIN_VIEW_MASK
+	if simulated:
+		head.position.y = SIM_EYE_HEIGHT
 	add_child(head)
 
 	left = _build_hand(&"left_hand", "LeftHand")
@@ -59,6 +68,8 @@ func _build_hand(tracker: StringName, node_name: String) -> XRController3D:
 	var controller := XRController3D.new()
 	controller.name = node_name
 	controller.tracker = tracker
+	if simulated:
+		controller.position = SIM_HAND * Vector3(1.0 if tracker == &"right_hand" else -1.0, 1.0, 1.0)
 	add_child(controller)
 
 	# A short stub rather than a model: this project does not ship controller meshes, and an

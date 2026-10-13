@@ -14,12 +14,24 @@ signal medium_decided(medium: int)
 var medium: int = Presentation.Medium.SCREEN
 var xr_interface: XRInterface = null
 var passthrough_active := false
+## No headset at all: the rig is built as for a headset and driven from the mouse and keyboard by
+## the vendored XR Simulator (addons/xr-simulator), for looking at the VR and AR layouts on a desktop.
+var simulated := false
 
 
 ## Returns the medium that was actually achieved, which may not be the one asked for.
-func start(want_xr: bool, want_passthrough: bool) -> int:
+func start(want_xr: bool, want_passthrough: bool, simulate := false) -> int:
 	medium = Presentation.Medium.SCREEN
 	if not want_xr:
+		medium_decided.emit(medium)
+		return medium
+
+	if simulate:
+		# Skips OpenXR altogether: the window renders as a desktop one does, and the simulator
+		# moves the XRCamera3D and the two controllers the rig builds.
+		simulated = true
+		add_child((load("res://addons/xr-simulator/XRSimulator.tscn") as PackedScene).instantiate())
+		medium = Presentation.Medium.AR if want_passthrough else Presentation.Medium.VR
 		medium_decided.emit(medium)
 		return medium
 
@@ -68,6 +80,16 @@ func _supports_passthrough() -> bool:
 ## to clear until the studio has built one. Doing both in start() is the ordering bug this
 ## used to have: the environment was always null that early, so passthrough never engaged.
 func apply_passthrough() -> bool:
+	if simulated:
+		# No camera to see through: a plain dark room stands in for the real one, so what is on
+		# screen is what a passthrough participant sees -- the gear and nothing built around it.
+		var sim_env := get_viewport().world_3d.environment
+		if sim_env == null:
+			return false
+		sim_env.background_mode = Environment.BG_COLOR
+		sim_env.background_color = Color(0.09, 0.09, 0.10)
+		passthrough_active = true
+		return true
 	if xr_interface == null:
 		return false
 	var env := get_viewport().world_3d.environment

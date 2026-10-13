@@ -265,6 +265,7 @@ func _ready() -> void:
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
+	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
 	_test_midi_items_show_their_notes_on_the_timeline()
 	_test_a_block_goes_from_one_shelf_onto_another()
@@ -17859,3 +17860,23 @@ func _test_the_tape_decks_keys_are_big_enough_to_aim_at() -> void:
 			tap != null and is_equal_approx(tap.scale.x, TapeDeck.KEY_SCALE) and TapeDeck.KEY_SCALE >= 1.6)
 	check("the transport keys are the bigger set", TapeDeck.BIG_KEY_SCALE > TapeDeck.KEY_SCALE)
 	deck.queue_free()
+
+
+func _test_a_simulated_headset_builds_the_vr_and_ar_rigs() -> void:
+	# --xr-sim: no runtime and no headset, the rig and the medium are still the headset's.
+	var vr := XRBootstrap.new()
+	add_child(vr)
+	check("--xr-sim without --ar is a VR participant", vr.start(true, false, true) == Presentation.Medium.VR and vr.simulated)
+	var ar := XRBootstrap.new()
+	add_child(ar)
+	check("--xr-sim with --ar is a passthrough participant", ar.start(true, true, true) == Presentation.Medium.AR)
+	var screen := XRBootstrap.new()
+	add_child(screen)
+	check("--xr-sim without --xr is still a screen participant", screen.start(false, false, true) == Presentation.Medium.SCREEN and not screen.simulated)
+	var rig := XRRig.new()
+	rig.simulated = true
+	add_child(rig)
+	check("a simulated rig starts at a standing person's head and hands",
+			is_equal_approx(rig.head.position.y, XRRig.SIM_EYE_HEIGHT) and rig.left.position.x < 0.0 and rig.right.position.x > 0.0)
+	for n in [vr, ar, screen, rig]:
+		n.queue_free()

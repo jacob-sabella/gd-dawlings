@@ -1499,6 +1499,7 @@ func _build_anchors() -> void:
 	else:
 		rig = XRRig.new()
 		rig.name = "XRRig"
+		rig.simulated = xr_bootstrap != null and xr_bootstrap.simulated
 		add_child(rig)
 		head = rig.head
 
