@@ -2867,3 +2867,21 @@ whole on every box in the tree.
 Fittings are gated by size (no corners on a box under 20 cm, nothing on a 4 cm shelf). First
 pass had the club corners (5.5 cm) and loft pipe (r 1.7 cm, half inside the box) lost under the
 trim at standing distance; enlarged to 8.5 cm and r 2.8 cm. shots/venue_gear_shapes.png.
+
+## The big board shows any surface (2026-10-13)
+"I wanna be able to put any other surface on the big screen as well or toggle through them."
+The Rig Roulette board can show any mounted surface live (console, timeline, FX rack, patchbay,
+tape deck) instead of the roll's write-up. A BIG SCREEN wheel on the Rig Roulette panel picks
+it: scroll to choose, click to step to the next. The choice is the room's: `room_state` carries
+"board", guests ask with the `board_source` room verb (predicted locally), and a roll puts the
+write-up back.
+`BoardFeed` (hardware/rig_roulette/board_feed.gd) is a second camera like the mirror's:
+orthographic, square to the surface's working face (pitched by `screen_pitch_degrees`, the same
+face the mount turns to a monitor), sized to `content_aabb`, rendering only while the board is in
+view. It draws one layer, `ON_BOARD` (1 << 17), which it puts on the shown surface's parts (not
+its presentation chrome) and takes off again, so nothing beside or in front of the gear is in
+the picture. A camera's cull mask culls lights too, so every Light3D also gets ON_BOARD, or the
+gear came out black. Highlights roll off as on the mirror's glass. `Studio._keep_out_of_mirrors`
+now swaps layer bits rather than comparing the whole mask, so it leaves ON_BOARD alone.
+Not covered by the session probe: the "board" field rides the room state like every other field.
+The rack is tall and thin, so it shows small on a wide board. `tools/screenshot.gd --board <id>`.

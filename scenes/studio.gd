@@ -392,11 +392,13 @@ func _keep_out_of_mirrors(node: Node) -> void:
 	if drawn == null or screen_stage == null or not is_instance_valid(screen_stage):
 		return
 	if screen_stage.is_ancestor_of(drawn):
-		if drawn.layers == 1:
-			drawn.layers = Mirror.NOT_REFLECTED
+		# Bit by bit rather than the whole mask: the big board's feed marks what it shows with a
+		# layer of its own (BoardFeed.ON_BOARD), which this must leave alone.
+		if drawn.layers & 1:
+			drawn.layers = (drawn.layers & ~1) | Mirror.NOT_REFLECTED
 			drawn.set_meta(&"kept_out_of_mirrors", true)
 	elif drawn.has_meta(&"kept_out_of_mirrors"):
-		drawn.layers = 1
+		drawn.layers = (drawn.layers & ~Mirror.NOT_REFLECTED) | 1
 		drawn.remove_meta(&"kept_out_of_mirrors")
 
 
@@ -953,7 +955,7 @@ func room_state() -> Dictionary:
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
-			"patches": patches.duplicate(true), "on_air": on_air.duplicate()}
+			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source}
 
 
 func _publish_room() -> void:
@@ -1053,6 +1055,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == &"patch":
 				_set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
 		_show_patches()
+	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
+		_show_board(StringName(state["board"]))
 	_applying_room = false
 	_looms_dirty = true
 
@@ -1206,6 +1210,10 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"take_personal":
 			if items != null:
 				items.take_personal(args[0], from)
+		&"board_source":
+			if board_sources().has(args[0]):
+				_show_board(args[0])
+				_publish_room()
 
 
 ## Only whoever has an item may put it down: the hand the host's table says has it, or anyone
@@ -2015,6 +2023,16 @@ func _build_rig_roulette_station() -> void:
 	studio_set.add_child(rig_roulette_station)
 	rig_roulette_station.transform = venue.rig_roulette_spot()
 	rig_roulette_station.roll_requested.connect(_on_rig_roulette_roll_requested)
+	rig_roulette_station.screen_sources = func() -> Array:
+		var out := []
+		var sources := board_sources()
+		for i in sources.size():
+			out.append([i, "SCREEN: " + board_title(sources[i])])
+		return out
+	rig_roulette_station.screen_chosen.connect(func(i: int) -> void:
+		var sources := board_sources()
+		if i >= 0 and i < sources.size():
+			choose_board_source(sources[i]))
 	_build_roll_board()
 	Session.roll_changed.connect(_on_session_roll_changed)
 	venue_changed.connect(func(_id): _build_roll_board())
@@ -2031,8 +2049,57 @@ func _build_roll_board() -> void:
 	roll_board.free_standing = venue.back_wall_gear_stands()
 	rig_roulette_station.set_free_standing(venue.back_wall_gear_stands())
 	roll_board.transform = venue.roll_board_spot()
+	roll_board.rich = rich_rendering()
+	roll_board.environment_from = world_env.environment if world_env != null else null
 	studio_set.add_child(roll_board)
 	_on_session_roll_changed()
+	_show_board(board_source)
+
+
+## What the big board shows: &"" for the roll's write-up, or a mounted surface's id. The room's
+## choice, the same for everyone in it (`room_state`'s "board").
+var board_source: StringName = &""
+
+
+## Everything the big board can show, the write-up first.
+func board_sources() -> Array[StringName]:
+	var out: Array[StringName] = [&""]
+	if mount != null:
+		for id in mount.mounted_ids():
+			out.append(id)
+	return out
+
+
+static func board_title(source: StringName) -> String:
+	match source:
+		&"": return "ROLL"
+		&"rack": return "FX RACK"
+		&"tape_deck": return "TAPE DECK"
+	return String(source).replace("_", " ").to_upper()
+
+
+## Someone here chose what the big board shows: done at once, and the room asked (or told, by
+## the host) so every screen in it shows the same.
+func choose_board_source(source: StringName) -> void:
+	if source == board_source or not board_sources().has(source):
+		return
+	if Session.is_authority():
+		_show_board(source)
+		_publish_room()
+	else:
+		_predict(&"board_source", [source])
+		_show_board(source)
+
+
+func _show_board(source: StringName) -> void:
+	if not board_sources().has(source):
+		source = &""
+	board_source = source
+	if roll_board != null:
+		roll_board.show_source(mount.surface(source) if source != &"" else null, board_title(source))
+	if rig_roulette_station != null and rig_roulette_station.screen_wheel != null:
+		rig_roulette_station.screen_wheel.choice = board_sources().find(source)
+		rig_roulette_station.screen_wheel.refresh()
 
 
 ## `Session.roll` changed (the host's own roll, or word of it reaching a guest): the board and
@@ -2105,6 +2172,9 @@ func _roll_rig() -> void:
 	if not station.key_locked:
 		key = "%s %s" % [ROLL_KEY_NAMES[rng.randi() % ROLL_KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]
 	DAW.mark_clean()
+	# The board is for the write-up now, whatever it was showing.
+	_show_board(&"")
+	_publish_room()
 
 	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1,
 			"tracks": tracks, "key": key, "pedals": pedals})

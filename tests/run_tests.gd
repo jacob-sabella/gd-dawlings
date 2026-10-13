@@ -216,6 +216,7 @@ func _ready() -> void:
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
+	_test_the_big_board_shows_any_surface()
 	_test_each_venue_dresses_the_gear_in_its_own_finishes()
 	_test_each_venue_fits_its_own_shapes_to_the_gear()
 	_test_rack_plugin_search_finds_and_adds_one()
@@ -5455,6 +5456,96 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 			spot.origin.z >= Studio.ROOM_FRONT + 0.06 and board.origin.z >= Studio.ROOM_FRONT + 0.1)
 	Session.roll = {}
 
+	remove_child(studio)
+	studio.free()
+	DAW.use(OfflineBackend.new())
+
+
+## The big board shows any surface live, not only the roll's write-up: the Rig Roulette panel's
+## BIG SCREEN wheel steps through the write-up and every mounted surface (scroll or click), the
+## choice is the room's (room_state "board", the board_source ask), the feed's camera sees only
+## the surface shown and the room's lights, and a roll puts the write-up back.
+func _test_the_big_board_shows_any_surface() -> void:
+	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	while not DAW.state.track_indices().is_empty():
+		DAW.remove_track(DAW.state.track_indices()[0])
+	for i in 3:
+		DAW.add_track(i + 1, "Track %d" % (i + 1))
+	backend.mark_clean()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	var station := studio.rig_roulette_station
+	var board := studio.roll_board
+	var sources := studio.board_sources()
+	check("the board can show the write-up and every piece of gear (%s)" % [sources],
+			sources[0] == &"" and sources.has(&"console") and sources.has(&"timeline")
+			and sources.has(&"rack") and sources.has(&"patchbay") and sources.has(&"tape_deck"))
+	check("it starts on the write-up, and the panel's wheel says so",
+			board.source() == null and station.screen_wheel.words() == "SCREEN: ROLL")
+
+	var console := studio.mount.surface(&"console")
+	# Built now, not at its first frame: the feed marks the parts that exist when it is chosen.
+	console._rebuild()
+	studio.choose_board_source(&"console")
+	var writing := board.find_child("Writing", false, false) as Node3D
+	var caption := board.find_child("FeedCaption", false, false) as Label3D
+	check("chosen, the board shows the console live, captioned, in place of the write-up",
+			board.source() == console and not writing.visible and caption.visible and caption.text == "CONSOLE")
+	check("the choice is the room's", studio.room_state()["board"] == &"console")
+	check("and the panel's wheel reads it back", station.screen_wheel.words() == "SCREEN: CONSOLE")
+	var parts := console.find_children("*", "VisualInstance3D", true, false)
+	var marked := parts.filter(func(n): return (n as VisualInstance3D).layers & BoardFeed.ON_BOARD)
+	var chrome := parts.filter(func(n): return n.is_in_group(&"presentation_chrome"))
+	check("every part of the console is on the feed's layer, but not its grab handle (%d of %d, %d chrome)" % [
+			marked.size(), parts.size(), chrome.size()],
+			marked.size() == parts.size() - chrome.size() and chrome.all(func(n): return not marked.has(n)))
+	var feed := board.find_child("Feed", false, false) as BoardFeed
+	feed._light_the_board()
+	var lights := studio.find_children("*", "Light3D", true, false)
+	check("the room's lights are on the feed's layer too, or it draws the gear black",
+			not lights.is_empty() and lights.all(func(l): return (l as Light3D).layers & BoardFeed.ON_BOARD))
+
+	var shot := BoardFeed.framing(console, 3.0)
+	var cam: Transform3D = shot["transform"]
+	var centre := console.global_transform * console.content_aabb().get_center()
+	check("the feed's camera looks straight at the console's middle",
+			(centre - cam.origin).normalized().dot(-cam.basis.z) > 0.999)
+	# The face that pitching by screen_pitch_degrees turns to +Z: +Z pitched the other way.
+	var face := console.global_basis * Basis(Vector3.RIGHT, deg_to_rad(console.screen_pitch_degrees)).inverse() \
+			* Vector3.BACK
+	check("square to its working face, pitched as the desk's panel is", face.normalized().dot(cam.basis.z) > 0.999)
+	check("and its near and far planes hug the console's own box",
+			shot["near"] > 0.0 and shot["far"] > shot["near"] and shot["far"] - shot["near"] < 2.0)
+
+	station.screen_wheel._on_nudge(1, false)
+	var next := sources[(sources.find(&"console") + 1) % sources.size()]
+	check("scrolling the wheel puts the next thing on the board (%s)" % next, studio.board_source == next)
+	station.screen_wheel._on_grab_begin(Vector3.ZERO)
+	var after := sources[(sources.find(next) + 1) % sources.size()]
+	check("and clicking it steps on again (%s)" % after, studio.board_source == after)
+	studio.choose_board_source(&"timeline")
+	check("the console comes off the feed's layer when something else is shown",
+			not parts.any(func(n): return is_instance_valid(n) and (n as VisualInstance3D).layers & BoardFeed.ON_BOARD))
+	studio.choose_board_source(&"a_mixer_that_is_not_here")
+	check("something not in the room is not shown", studio.board_source == &"timeline")
+	check("a guest may ask for it", Session.room_ask_is_valid(&"board_source", [&"rack"]))
+
+	var state := studio.room_state()
+	state["board"] = &"patchbay"
+	Session.role = Session.Role.GUEST
+	studio.apply_room(state)
+	check("a guest's board shows what the room's says", board.source() == studio.mount.surface(&"patchbay"))
+	Session.role = Session.Role.HOST
+
+	station.roll_requested.emit()
+	check("a roll puts the write-up back on the board", studio.board_source == &"" and board.source() == null
+			and (board.find_child("Writing", false, false) as Node3D).visible)
+	Session.roll = {}
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())

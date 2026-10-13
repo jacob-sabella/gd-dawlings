@@ -17,6 +17,9 @@ extends Node3D
 ## happens until the host's own press on ROLL, and that is the one place this matters.
 
 signal roll_requested()
+## The BIG SCREEN wheel moved, or was clicked on to step it: show what is at `choice` of
+## `screen_sources` on the board. Asked of the room by whoever owns the panel, never done here.
+signal screen_chosen(choice: int)
 
 ## Sized for a wall the band reads from across the room, not a console the seat is already close
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
@@ -35,6 +38,11 @@ const CHARACTER_KINDS: Array[StringName] = [&"distortion", &"chorus", &"reverb",
 var count := 2
 var pool := Pool.CHARACTER
 var key_locked := false
+
+## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
+## whoever owns the panel, since only the room knows what gear it has.
+var screen_sources: Callable = Callable()
+var screen_wheel: TabletSelector
 
 var _last_label: Label3D
 var _lock_key_button: PanelButton
@@ -74,6 +82,19 @@ func _ready() -> void:
 	pool_wheel.chosen.connect(_on_pool_chosen)
 	pool_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL POOL"
 	add_child(pool_wheel)
+
+	screen_wheel = TabletSelector.new()
+	screen_wheel.name = "ScreenWheel"
+	screen_wheel.size = Vector2(0.15, 0.030)
+	screen_wheel.hint_text = "scroll: what the big screen shows  ·  click: the next"
+	screen_wheel.options = func() -> Array:
+		return screen_sources.call() if screen_sources.is_valid() else [[0, "ROLL"]]
+	screen_wheel.choice = 0
+	screen_wheel.position = Vector3(0, HEIGHT - 0.172, 0.004)
+	screen_wheel.chosen.connect(func(c: int) -> void: screen_chosen.emit(c))
+	screen_wheel.pressed.connect(_on_screen_stepped)
+	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
+	add_child(screen_wheel)
 
 	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.218, 0.001))
 	lock_label.text = "LOCK KEY"
@@ -186,6 +207,12 @@ func _on_count_chosen(c: int) -> void:
 
 func _on_pool_chosen(p: int) -> void:
 	pool = p
+
+
+## A click on the BIG SCREEN wheel: the next thing on the list, so it can be stepped through
+## without a scroll wheel.
+func _on_screen_stepped(_choice: int) -> void:
+	screen_wheel._on_nudge(1, false)
 
 
 func _on_lock_key_pressed() -> void:

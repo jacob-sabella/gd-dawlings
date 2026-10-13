@@ -308,6 +308,11 @@ func _refresh_handle(surface_id: StringName) -> void:
 		handle.refresh()
 
 
+## The surface mounted as `surface_id`, or null.
+func surface(surface_id: StringName) -> Surface:
+	return _mounted.get(surface_id)
+
+
 func mounted_ids() -> Array:
 	var ids := _mounted.keys()
 	ids.sort()
