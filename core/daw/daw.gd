@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 3, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
@@ -475,9 +475,10 @@ func normalise_item(track_index: int, item_index: int) -> void:
 		set_item_gain(track_index, item_index, -linear_to_db(peak))
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
-## How an item's fades run (see DAWBackend.set_item_fade_shape).
-func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
-	_do(&"set_item_fade_shape", [track_index, item_index, shape])
+## How an item's fade in and fade out run (see DAWBackend.set_item_fade_shape).
+func set_item_fade_shape(track_index: int, item_index: int, in_shape: int, out_shape: int) -> void:
+	_do(&"set_item_fade_shape", [track_index, item_index, DawKitClip.clean_shape(in_shape),
+			DawKitClip.clean_shape(out_shape)])
 ## Two items of one track that overlap, faded into each other over the overlap: the earlier one
 ## out, the later one in, both equal-power so the sound holds its loudness through the middle --
 ## one edit (DAWBackend.crossfade_items). False when they are not two items of one track, do not
@@ -753,7 +754,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		if verb in [&"set_item_muted", &"set_item_locked", &"set_item_reversed"]:
 			clean[2] = 1.0 if clean[2] > 0.5 else 0.0
 		if verb == &"set_item_fade_shape":
-			clean[2] = DawKitClip.FADE_EQUAL_POWER if int(clean[2]) == DawKitClip.FADE_EQUAL_POWER else DawKitClip.FADE_LINEAR
+			clean[2] = DawKitClip.clean_shape(clean[2])
+			clean[3] = DawKitClip.clean_shape(clean[3])
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
 		if verb == &"shift_velocity":

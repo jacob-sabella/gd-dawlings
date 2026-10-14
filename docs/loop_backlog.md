@@ -3407,3 +3407,20 @@ an item range of a track into a take; that is the next part. Reaper: GlueSelecte
 locked items and runs Item: Glue items (40362), which glues anything; not yet run against a live
 Reaper.
 Suite: 10309 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 30: a fade shape per end, and slow, fast and S-curve (2026-10-14)
+dawkit daf3027: `DawKitClip.fade_out_shape` beside `fade_shape` (now the fade in's), and shapes
+FADE_SLOW (a square), FADE_FAST (an upturned one) and FADE_S_CURVE (half a cosine) after straight
+and equal power, with `DawKitClip.fade_gain(t, shape)` the one curve everything draws and hears
+by and `clean_shape` for files and peers. A clip saved with one shape has it at both ends. The
+native lane plays each end in its own shape (rebuilt for linux, windows and android). In the
+game `ItemState.fade_out_shape` goes over the wire only when it differs from the fade in's,
+through the lane engine, the project, a split's right half, glue (the last part's) and
+`level_db`. `set_item_fade_shape` takes both shapes (a guest's ask needs both; odd ones are
+straight). CROSSFADE now shapes only the two ends that cross. The ITEM page's one FADE SHAPE
+token is two, one after each fade rail, each marked with its curve (rising or falling;
+`TimelineGlyph.fade_glyph`), a press the next shape round, the card naming this one and the
+next. Reaper: the bridge maps the desk's 0-4 to Reaper's 0, 1, 2, 3, 5 each way, per end, and
+CrossfadeItems sets only the crossing ends -- not yet run against a live Reaper.
+`tools/screenshot.gd --tl-fade T:I:S:in/out` shapes the two ends apart.
+Suite: 10322 checks, 0 failed; dawkit 374; probe host 53, guest 47, 0 failed.

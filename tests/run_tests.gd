@@ -13750,14 +13750,16 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	check("two overlapping items crossfade", DAW.crossfade_items(lane, 0, x_second))
 	check("the earlier fades out and the later in over the overlap (%.2f, %.2f)" % [s.item(lane, 0).fade_out, s.item(lane, x_second).fade_in],
 			absf(s.item(lane, 0).fade_out - x_overlap) < 0.001 and absf(s.item(lane, x_second).fade_in - x_overlap) < 0.001)
-	check("both equal-power, so the middle holds its loudness",
-			s.item(lane, 0).fade_shape == DawKitClip.FADE_EQUAL_POWER and s.item(lane, x_second).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("both equal-power where they cross, so the middle holds its loudness",
+			s.item(lane, 0).fade_out_shape == DawKitClip.FADE_EQUAL_POWER and s.item(lane, x_second).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("and only there: each one's other end keeps its shape",
+			s.item(lane, 0).fade_shape == DawKitClip.FADE_LINEAR and s.item(lane, x_second).fade_out_shape == DawKitClip.FADE_LINEAR)
 	check("in one step to undo", s.undo_depth - x_steps == 1)
 	close_to("halfway across, the two together carry the power of one",
 			pow(db_to_linear(s.item(lane, 0).level_db(s.item(lane, x_second).start + x_overlap * 0.5)), 2.0)
 			+ pow(db_to_linear(s.item(lane, x_second).level_db(s.item(lane, x_second).start + x_overlap * 0.5)), 2.0), 1.0)
 	DAW.undo()
-	check("undone, both as they were", s.item(lane, 0).fade_out == 0.0 and s.item(lane, 0).fade_shape == DawKitClip.FADE_LINEAR)
+	check("undone, both as they were", s.item(lane, 0).fade_out == 0.0 and s.item(lane, 0).fade_out_shape == DawKitClip.FADE_LINEAR)
 	DAW.apply_intent(&"crossfade_items", [lane, 0, x_second])
 	check("a guest may ask for one", absf(s.item(lane, x_second).fade_in - x_overlap) < 0.001)
 	DAW.undo()
@@ -19516,9 +19518,21 @@ func _test_an_item_fades_with_equal_power() -> void:
 	it.fade_shape = DawKitClip.FADE_EQUAL_POWER
 	close_to("halfway through an equal-power one, half the power", it.level_db(11.0), linear_to_db(sin(PI * 0.25)))
 	close_to("and full once it is through", it.level_db(13.0), 0.0)
+	it.fade_shape = DawKitClip.FADE_SLOW
+	close_to("a slow one is a quarter of the way up halfway", it.level_db(11.0), linear_to_db(0.25))
+	it.fade_shape = DawKitClip.FADE_FAST
+	close_to("a fast one three quarters", it.level_db(11.0), linear_to_db(0.75))
+	it.fade_shape = DawKitClip.FADE_S_CURVE
+	close_to("an S-curve a quarter of the way in", it.level_db(10.5), linear_to_db(0.5 - 0.5 * cos(PI * 0.25)))
+	it.fade_in = 0.0
+	it.fade_out = 2.0
+	it.fade_out_shape = DawKitClip.FADE_SLOW
+	close_to("the fade out has its own, the same curve run backwards", it.level_db(13.0), linear_to_db(0.25))
 	var pts := TimelineSurface.fade_points(0.0, 1.0, 0.0, 1.0, DawKitClip.FADE_EQUAL_POWER)
 	check("drawn as a curve, above the straight line in its middle", pts.size() == TimelineSurface.FADE_SEGMENTS + 1
 			and pts[2].y > pts[2].x and pts[0] == Vector2.ZERO and pts[-1].is_equal_approx(Vector2.ONE))
+	var slow := TimelineSurface.fade_points(0.0, 1.0, 0.0, 1.0, DawKitClip.FADE_SLOW)
+	check("a slow one below it", slow.size() == TimelineSurface.FADE_SEGMENTS + 1 and slow[2].y < slow[2].x)
 	check("a straight one as a line", TimelineSurface.fade_points(0.0, 1.0, 0.0, 1.0, DawKitClip.FADE_LINEAR).size() == 2)
 
 	var backend := GodotBackend.new()
@@ -19529,44 +19543,56 @@ func _test_an_item_fades_with_equal_power() -> void:
 	DAW.set_item_fades(lane, 1, 0.5, 0.5)
 	var depth := maxi(s.undo_depth, 0)
 	backend._repl_durable.clear()
-	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
-	check("set equal-power", s.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER, DawKitClip.FADE_S_CURVE)
+	check("set, each end its own", s.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and s.item(lane, 1).fade_out_shape == DawKitClip.FADE_S_CURVE)
 	check("one step to undo", s.undo_depth - depth == 1)
 	check("and replicated with the lane", backend._repl_durable.has("/track/%d/items" % lane))
 	var guest := MixState.new()
 	MixWire.apply_replicated(guest, MixWire.snapshot(s))
-	check("a guest reads it", guest.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("a guest reads both", guest.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and guest.item(lane, 1).fade_out_shape == DawKitClip.FADE_S_CURVE)
 	var lanes := LaneEngine.new()
 	lanes.backend = backend
-	var shaped := lanes.clips_for(lane).filter(func(c): return c["fade_shape"] == DawKitClip.FADE_EQUAL_POWER)
-	check("the engine plays it with the shape (%d clips)" % shaped.size(), not shaped.is_empty())
+	var both := func(c): return c["fade_shape"] == DawKitClip.FADE_EQUAL_POWER and c["fade_out_shape"] == DawKitClip.FADE_S_CURVE
+	var shaped := lanes.clips_for(lane).filter(both)
+	check("the engine plays it with both (%d clips)" % shaped.size(), not shaped.is_empty())
 	lanes.free()
 	var flat := s.undo_depth
-	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER, DawKitClip.FADE_S_CURVE)
 	check("set again, no step", s.undo_depth == flat)
 	var p := ProjectBridge.capture(backend)
 	var fresh := OfflineBackend.new()
 	fresh.state = MixState.new()
 	add_child(fresh)
 	ProjectBridge.load(p, fresh)
-	check("saved with the project", fresh.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("saved with the project", fresh.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and fresh.state.item(lane, 1).fade_out_shape == DawKitClip.FADE_S_CURVE)
 	fresh.free()
 	DAW.select_item(lane, 1, false)
 	DAW.split_selected(s.item(lane, 1).start + s.item(lane, 1).length * 0.5)
-	check("both halves of a cut keep it", s.track(lane).items.filter(func(x): return x.fade_shape == DawKitClip.FADE_EQUAL_POWER).size() == 2)
+	var kept := func(x): return x.fade_shape == DawKitClip.FADE_EQUAL_POWER and x.fade_out_shape == DawKitClip.FADE_S_CURVE
+	check("both halves of a cut keep them", s.track(lane).items.filter(kept).size() == 2)
 	DAW.undo()
 	DAW.clear_item_selection()
 	DAW.undo()
-	check("undone, straight again", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
-	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 7.0])
-	check("a guest's odd shape is a straight one", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	check("undone, straight again", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR
+			and s.item(lane, 1).fade_out_shape == DawKitClip.FADE_LINEAR)
+	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 7.0, -2.0])
+	check("a guest's odd shapes are straight ones", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR
+			and s.item(lane, 1).fade_out_shape == DawKitClip.FADE_LINEAR)
 	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 1.0])
-	check("a guest may set it", s.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("one shape alone is refused", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 2.0, 3.0])
+	check("a guest may set them", s.item(lane, 1).fade_shape == DawKitClip.FADE_SLOW
+			and s.item(lane, 1).fade_out_shape == DawKitClip.FADE_FAST)
 	DAW.undo()
 	DAW.set_item_locked(lane, 1, true)
-	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER, DawKitClip.FADE_EQUAL_POWER)
 	check("a locked item refuses it", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
 	DAW.set_item_locked(lane, 1, false)
+	var old := DawKitClip.from_dict({"fade_shape": 1})
+	check("a clip saved with one shape has it at both ends", old.fade_out_shape == DawKitClip.FADE_EQUAL_POWER)
 
 	_offline()
 	DAW.set_item_fades(lane, 1, 0.5, 0.5)
@@ -19576,18 +19602,31 @@ func _test_an_item_fades_with_equal_power() -> void:
 	var page: TimelineItemPage = timeline.item_page
 	DAW.select_item(lane, 1, false)
 	page.refresh()
-	check("the ITEM page has a fade shape token, straight", page.fade_shape.glyph == &"fade_linear"
-			and not page.fade_shape.lit and page.fade_shape.available)
-	page.fade_shape.pressed.emit()
-	check("pressed, equal power, its mark the curve", DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
-			and page.fade_shape.glyph == &"fade_power" and page.fade_shape.lit)
+	check("the ITEM page has a shape token for each end, straight", page.fade_in_shape.glyph == &"fade_linear"
+			and page.fade_out_shape.glyph == &"fade_out_linear" and not page.fade_in_shape.lit
+			and page.fade_in_shape.available and page.fade_out_shape.available)
+	page.fade_in_shape.pressed.emit()
+	check("the fade in's pressed, equal power, its mark the curve; the fade out as it was",
+			DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and DAW.state.item(lane, 1).fade_out_shape == DawKitClip.FADE_LINEAR
+			and page.fade_in_shape.glyph == &"fade_power" and page.fade_in_shape.lit and not page.fade_out_shape.lit)
+	check("its card names this shape and the next (%s)" % _shape_card(page.fade_in_shape),
+			_shape_card(page.fade_in_shape) == "equal power; press for slow, then quick")
+	for k in 4:
+		page.fade_out_shape.pressed.emit()
+	check("the fade out's round to an S-curve", DAW.state.item(lane, 1).fade_out_shape == DawKitClip.FADE_S_CURVE
+			and page.fade_out_shape.glyph == &"fade_out_s" and page.fade_out_shape.lit)
 	timeline._process(0.0)
 	check("and the fades drawn as curves", timeline._item_fades.count() >= DAW.state.track(lane).items.size() * 2 * TimelineSurface.FADE_SEGMENTS)
-	page.fade_shape.pressed.emit()
-	check("again, straight", DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	page.fade_out_shape.pressed.emit()
+	check("and round again to straight", DAW.state.item(lane, 1).fade_out_shape == DawKitClip.FADE_LINEAR)
 	DAW.clear_item_selection()
 	timeline.free()
 	_offline()
+
+
+func _shape_card(key: GlyphKey) -> String:
+	return String(key.describe_value.call(0.0)) if key.describe_value.is_valid() else ""
 
 
 func _test_history_can_be_jumped_through() -> void:

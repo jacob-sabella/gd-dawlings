@@ -1138,9 +1138,9 @@ func crossfade_items(track_index: int, first: int, second: int) -> void:
 		_remember_edit(before)
 
 
-func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
+func set_item_fade_shape(track_index: int, item_index: int, in_shape: int, out_shape: int) -> void:
 	var before := _lanes_snapshot()
-	if _locally_fade_shape(track_index, item_index, shape):
+	if _locally_fade_shape(track_index, item_index, in_shape, out_shape):
 		_remember_edit(before)
 
 

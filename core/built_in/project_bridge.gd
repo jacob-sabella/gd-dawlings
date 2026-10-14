@@ -153,6 +153,7 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 	c.fade_in = item.fade_in
 	c.fade_out = item.fade_out
 	c.fade_shape = item.fade_shape
+	c.fade_out_shape = item.fade_out_shape
 	c.gain_db = item.gain_db
 	c.loop_start = item.loop_start
 	c.loop_end = item.loop_end
@@ -293,6 +294,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 			item.fade_in = c.fade_in
 			item.fade_out = c.fade_out
 			item.fade_shape = c.fade_shape
+			item.fade_out_shape = c.fade_out_shape
 			item.gain_db = c.gain_db
 			item.loop_start = c.loop_start
 			item.loop_end = c.loop_end

@@ -38,9 +38,31 @@ func set_light(colour: Color, glow: float) -> void:
 	_material.albedo_color.a = 0.45 if glow < 0.2 else 1.0
 
 
+## A fade's shape (DawKitClip.FADE_*) as a mark: the curve itself, rising for a fade in and
+## falling for a fade out.
+const FADE_IN_GLYPHS := [&"fade_linear", &"fade_power", &"fade_slow", &"fade_fast", &"fade_s"]
+const FADE_OUT_GLYPHS := [&"fade_out_linear", &"fade_out_power", &"fade_out_slow", &"fade_out_fast", &"fade_out_s"]
+
+
+static func fade_glyph(shape: int, out: bool) -> StringName:
+	var glyphs: Array = FADE_OUT_GLYPHS if out else FADE_IN_GLYPHS
+	return glyphs[clampi(shape, 0, glyphs.size() - 1)]
+
+
 func _build() -> void:
 	var s := size
 	scale = Vector3(s, s, s)
+	var shape := maxi(FADE_IN_GLYPHS.find(_kind), FADE_OUT_GLYPHS.find(_kind))
+	if shape >= 0:
+		var m := -1.0 if _kind in FADE_OUT_GLYPHS else 1.0
+		var last := Vector2(-0.95 * m, -0.75)
+		for k in range(1, 7):
+			var t := k / 6.0
+			var p := Vector2((-0.95 + 1.9 * t) * m, -0.75 + 1.6 * DawKitClip.fade_gain(t, shape))
+			_rod(last, p, 0.12, 0.4)
+			last = p
+		_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
+		return
 	match _kind:
 		&"undo", &"redo":
 			var m := -1.0 if _kind == &"redo" else 1.0
@@ -264,19 +286,6 @@ func _build() -> void:
 			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
 		&"fade_out":
 			_rod(Vector2(-0.95, 0.8), Vector2(0.95, -0.8), 0.13, 0.4)
-			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
-		&"fade_linear":
-			# The shape of a fade, which way the line runs: straight...
-			_rod(Vector2(-0.95, -0.75), Vector2(0.95, 0.85), 0.12, 0.4)
-			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
-		&"fade_power":
-			# ...or a quarter sine, up fast and easing into full.
-			var last := Vector2(-0.95, -0.75)
-			for k in range(1, 6):
-				var t := k / 5.0
-				var p := Vector2(-0.95 + 1.9 * t, -0.75 + 1.6 * sin(t * PI * 0.5))
-				_rod(last, p, 0.12, 0.4)
-				last = p
 			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
 		&"depth_16", &"depth_24":
 			# A sine sampled in steps: fewer for fewer bits.

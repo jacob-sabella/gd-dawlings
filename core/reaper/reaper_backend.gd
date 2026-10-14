@@ -813,9 +813,9 @@ func crossfade_items(track_index: int, first: int, second: int) -> void:
 		_edit("CrossfadeItems", [track_index, x[0], x[1], x[2]])
 
 
-func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
-	if _locally_fade_shape(track_index, item_index, shape):
-		_edit("SetItemFadeShape", [track_index, item_index, shape])
+func set_item_fade_shape(track_index: int, item_index: int, in_shape: int, out_shape: int) -> void:
+	if _locally_fade_shape(track_index, item_index, in_shape, out_shape):
+		_edit("SetItemFadeShape", [track_index, item_index, in_shape, out_shape])
 
 
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
@@ -1178,8 +1178,13 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			# Reaper's default fade is a few milliseconds on every item; under that is no fade.
 			if shape["fade_in"] > FADE_FLOOR or shape["fade_out"] > FADE_FLOOR or absf(shape["gain_db"]) > 0.001:
 				extra.merge(shape)
-			if int(item.get("fade_shape", 0)) == DawKitClip.FADE_EQUAL_POWER:
-				extra["fade_shape"] = DawKitClip.FADE_EQUAL_POWER
+			# The bridge says each end's shape in the desk's numbering (see its item_shape).
+			var in_shape := DawKitClip.clean_shape(item.get("fade_shape", 0))
+			var out_shape := DawKitClip.clean_shape(item.get("fade_out_shape", in_shape))
+			if in_shape != DawKitClip.FADE_LINEAR:
+				extra["fade_shape"] = in_shape
+			if out_shape != in_shape:
+				extra["fade_out_shape"] = out_shape
 			if item.get("locked", false):
 				extra["locked"] = true
 			if not extra.is_empty():

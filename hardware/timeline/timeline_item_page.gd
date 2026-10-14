@@ -26,8 +26,10 @@ const STOP_INK := Color(0.95, 0.45, 0.40)
 var gain: GlyphRail
 var fade_in: GlyphRail
 var fade_out: GlyphRail
-## Straight or equal-power fades (DawKitClip.FADE_*): its mark the shape the item's fades have.
-var fade_shape: GlyphKey
+## How the fade in runs, and the fade out (DawKitClip.FADE_*), each its own token, its mark the
+## curve; a press is the next shape.
+var fade_in_shape: GlyphKey
+var fade_out_shape: GlyphKey
 var mute: GlyphKey
 var lock: GlyphKey
 var reverse: GlyphKey
@@ -66,16 +68,13 @@ func _ready() -> void:
 	fade_in = _slider("ItemIn", &"fade_in", ITEM_INK, func() -> String: return "ITEM  FADE IN",
 			func(v: float) -> String: return "%.2f s" % _fade_seconds(v))
 	fade_in.value_committed.connect(func(v: float): _set_fades(_fade_seconds(v), NAN))
+	fade_in_shape = _key("ItemFadeInShape", &"fade_linear", ITEM_INK, "ITEM  FADE IN SHAPE",
+			func(): _next_shape(false), func() -> String: return _shape_text(false))
 	fade_out = _slider("ItemOut", &"fade_out", ITEM_INK, func() -> String: return "ITEM  FADE OUT",
 			func(v: float) -> String: return "%.2f s" % _fade_seconds(v))
 	fade_out.value_committed.connect(func(v: float): _set_fades(NAN, _fade_seconds(v)))
-	fade_shape = _key("ItemFadeShape", &"fade_linear", ITEM_INK, "ITEM  FADE SHAPE", _toggle_fade_shape,
-			func() -> String:
-				var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
-				if item == null:
-					return "select an item"
-				return "equal power: loud through a crossfade's middle; press for straight" \
-						if item.fade_shape == DawKitClip.FADE_EQUAL_POWER else "straight: press for equal power")
+	fade_out_shape = _key("ItemFadeOutShape", &"fade_out_linear", ITEM_INK, "ITEM  FADE OUT SHAPE",
+			func(): _next_shape(true), func() -> String: return _shape_text(true))
 	_group()
 	mute = _key("ItemMute", &"mute", STOP_INK, "ITEM  MUTE", _toggle_mute,
 			func() -> String: return "muted: press to play it again" if mute.lit else "silence it", true)
@@ -129,7 +128,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, fade_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -146,7 +145,7 @@ func refresh() -> void:
 	glue.lit = glues
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
-		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, fade_shape]:
+		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, fade_in_shape, fade_out_shape]:
 			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
@@ -155,11 +154,12 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = not item.locked
-	var power := item.fade_shape == DawKitClip.FADE_EQUAL_POWER
-	fade_shape.glyph = &"fade_power" if power else &"fade_linear"
-	fade_shape.lit = power
+	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
+	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
+	fade_out_shape.glyph = TimelineGlyph.fade_glyph(item.fade_out_shape, true)
+	fade_out_shape.lit = item.fade_out_shape != DawKitClip.FADE_LINEAR
 	normalise.lit = item.sound_peak() > 0.0
 	reverse.lit = item.reversed
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
@@ -267,11 +267,30 @@ func _overlaps(pair: Array) -> bool:
 	return a != null and b != null and minf(a.end(), b.end()) - maxf(a.start, b.start) >= DAWBackend.MIN_ITEM_SECONDS
 
 
-func _toggle_fade_shape() -> void:
+## What each of DawKitClip's fade shapes is called on a card, in its order.
+const SHAPE_NAMES := ["straight", "equal power", "slow, then quick", "quick, then slow", "S-curve"]
+
+
+## The fade in's shape, or the fade out's, the next one round; the other end left as it is.
+func _next_shape(out: bool) -> void:
 	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
-	if item != null:
-		DAW.set_item_fade_shape(_target[0], _target[1], DawKitClip.FADE_LINEAR
-				if item.fade_shape == DawKitClip.FADE_EQUAL_POWER else DawKitClip.FADE_EQUAL_POWER)
+	if item == null:
+		return
+	var in_shape := item.fade_shape
+	var out_shape := item.fade_out_shape
+	if out:
+		out_shape = (out_shape + 1) % DawKitClip.FADE_SHAPES
+	else:
+		in_shape = (in_shape + 1) % DawKitClip.FADE_SHAPES
+	DAW.set_item_fade_shape(_target[0], _target[1], in_shape, out_shape)
+
+
+func _shape_text(out: bool) -> String:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null:
+		return "select an item"
+	var shape := item.fade_out_shape if out else item.fade_shape
+	return "%s; press for %s" % [SHAPE_NAMES[shape], SHAPE_NAMES[(shape + 1) % DawKitClip.FADE_SHAPES]]
 
 
 func _glue_text() -> String:

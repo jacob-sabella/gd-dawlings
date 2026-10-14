@@ -330,7 +330,9 @@ func _process(_delta: float) -> void:
 		if f.size() >= 3:
 			DAW.set_item_fades(int(f[0]), int(f[1]), float(f[2]), float(f[2]))
 		if f.size() == 4:
-			DAW.set_item_fade_shape(int(f[0]), int(f[1]), int(f[3]))
+			# A shape for both ends, or "in/out".
+			var shapes := f[3].split("/")
+			DAW.set_item_fade_shape(int(f[0]), int(f[1]), int(shapes[0]), int(shapes[-1]))
 	if _frames == 7 and _tl_region != "":
 		for spec in _tl_region.split(",", false):
 			var r := spec.split(":")

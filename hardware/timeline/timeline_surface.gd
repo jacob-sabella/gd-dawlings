@@ -1851,12 +1851,12 @@ const FADE_SEGMENTS := 5
 ## fade, FADE_SEGMENTS + 1 along a quarter sine for an equal-power one. `low` and `high` are
 ## silence and full; a fade out is the same read right to left.
 static func fade_points(x0: float, x1: float, low: float, high: float, shape: int) -> Array:
-	if shape != DawKitClip.FADE_EQUAL_POWER:
+	if shape == DawKitClip.FADE_LINEAR:
 		return [Vector2(x0, low), Vector2(x1, high)]
 	var out: Array = []
 	for k in FADE_SEGMENTS + 1:
 		var t := float(k) / FADE_SEGMENTS
-		out.append(Vector2(lerpf(x0, x1, t), lerpf(low, high, sin(t * PI * 0.5))))
+		out.append(Vector2(lerpf(x0, x1, t), lerpf(low, high, DawKitClip.fade_gain(t, shape))))
 	return out
 func _place_fades(item: MixState.ItemState, start: float, length: float, tint: Color, y: float,
 		slot: int) -> int:
@@ -1877,7 +1877,7 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 			lines.append([pts[k], pts[k + 1]])
 	if fade_out > 0.0:
 		# Drawn from the item's right edge back, then each piece turned to run left to right.
-		var pts := fade_points(right, maxf(_x_for(start + length - fade_out), left), low, high, item.fade_shape)
+		var pts := fade_points(right, maxf(_x_for(start + length - fade_out), left), low, high, item.fade_out_shape)
 		for k in pts.size() - 1:
 			lines.append([pts[k + 1], pts[k]])
 	var colour := Color(1.6, 1.6, 1.7)

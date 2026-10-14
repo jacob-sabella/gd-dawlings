@@ -323,9 +323,9 @@ func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_
 ## the later in, both equal-power. One undo step; nothing when they do not overlap or either is
 ## locked.
 func crossfade_items(_track_index: int, _first: int, _second: int) -> void: pass
-## How an item's fades run: DawKitClip.FADE_LINEAR or FADE_EQUAL_POWER. One undo step; none when it
-## already is.
-func set_item_fade_shape(_track_index: int, _item_index: int, _shape: int) -> void: pass
+## How an item's fade in and fade out run, each one of DawKitClip's FADE_ shapes. One undo step;
+## none when it already is.
+func set_item_fade_shape(_track_index: int, _item_index: int, _in_shape: int, _out_shape: int) -> void: pass
 ## Silence an item without removing it: it keeps its place and its edits, and plays again unmuted.
 func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: pass
 func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void: pass
@@ -538,6 +538,7 @@ func _locally_split(seconds: float) -> int:
 				right.loop_end = item.loop_end
 				right.fade_out = minf(item.fade_out, right.length)
 				right.fade_shape = item.fade_shape
+				right.fade_out_shape = item.fade_out_shape
 				_split_notes(item, right, seconds)
 				item.length = seconds - item.start
 				item.fade_out = 0.0
@@ -629,6 +630,7 @@ func _locally_glue_selected() -> int:
 			glued.notes = MidiTake.pack_relative(notes, glued.start)
 		glued.length = end - glued.start
 		glued.fade_out = last.fade_out
+		glued.fade_out_shape = last.fade_out_shape
 		glued.muted = parts.all(func(it): return it.muted)
 		var kept := lane.filter(func(it): return it == glued or not (it.selected and not it.locked))
 		_write_lane(index, kept)
@@ -888,19 +890,21 @@ func _locally_crossfade(track_index: int, first: int, second: int) -> bool:
 	a.fade_out = minf(x[2], a.length - a.fade_in)
 	b.fade_in = x[2]
 	b.fade_out = minf(b.fade_out, b.length - b.fade_in)
-	a.fade_shape = DawKitClip.FADE_EQUAL_POWER
+	# Only the two ends that cross: each item's other end keeps its own shape.
+	a.fade_out_shape = DawKitClip.FADE_EQUAL_POWER
 	b.fade_shape = DawKitClip.FADE_EQUAL_POWER
 	_write_lane(track_index, lane)
 	return true
 
 
 ## False when there is no such item or it already is as asked.
-func _locally_fade_shape(track_index: int, item_index: int, shape: int) -> bool:
+func _locally_fade_shape(track_index: int, item_index: int, in_shape: int, out_shape: int) -> bool:
 	var it := state.item(track_index, item_index)
-	if it == null or it.fade_shape == shape:
+	if it == null or (it.fade_shape == in_shape and it.fade_out_shape == out_shape):
 		return false
 	var lane := _lane_copy(track_index)
-	lane[item_index].fade_shape = shape
+	lane[item_index].fade_shape = in_shape
+	lane[item_index].fade_out_shape = out_shape
 	_write_lane(track_index, lane)
 	return true
 
