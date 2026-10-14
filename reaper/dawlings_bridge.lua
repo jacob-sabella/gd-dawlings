@@ -736,14 +736,16 @@ function handlers.GetTimeline()
     end
   end
 
-  -- Markers only, not regions. A region is a span and the ruler draws points; a region drawn as
-  -- its start marker would silently lose the half of it that matters.
-  local markers = {}
+  -- Markers, and regions apart: a region is a span, and drawn as its start marker it would lose
+  -- the half of it that matters.
+  local markers, regions = {}, {}
   local _, marker_count, region_count = reaper.CountProjectMarkers(0)
   for m = 0, marker_count + region_count - 1 do
-    local ok, is_region, pos, _, name = reaper.EnumProjectMarkers(m)
+    local ok, is_region, pos, rgn_end, name = reaper.EnumProjectMarkers(m)
     if ok ~= 0 and not is_region then
       markers[#markers + 1] = {position = pos, name = name}
+    elseif ok ~= 0 then
+      regions[#regions + 1] = {start = pos, ['end'] = rgn_end, name = name}
     end
   end
 
@@ -798,6 +800,7 @@ function handlers.GetTimeline()
     project_name = (reaper.GetProjectName(0, '') or ''):gsub('%.[Rr][Pp][Pp]$', ''),
     project_file = (select(2, reaper.EnumProjects(-1)) or ''):match('[^/\\]*$') or '',
     markers = markers,
+    regions = regions,
     tempo = tempo,
     length = reaper.GetProjectLength(0),
     -- Every track in the project, not just the ones with items on them and not just the ones
@@ -1602,6 +1605,42 @@ function handlers.EditMarker(args)
   reaper.UpdateTimeline()
   reaper.Undo_EndBlock('Edit marker', -1)
   return {ok = ok}
+end
+
+-- args: start, end (seconds), name. One undo point. A region already starting there is replaced,
+-- as the desk's own regions are.
+function handlers.AddRegion(args)
+  local from, to = math.max(0, tonumber(args[1]) or 0), tonumber(args[2]) or 0
+  if to <= from then return {ok = false, error = 'an empty region'} end
+  reaper.Undo_BeginBlock()
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  for m = marker_count + region_count - 1, 0, -1 do
+    local ok, is_region, pos, _, _, number = reaper.EnumProjectMarkers2(0, m)
+    if ok ~= 0 and is_region and math.abs(pos - from) < 0.001 then
+      reaper.DeleteProjectMarker(0, number, true)
+    end
+  end
+  local index = reaper.AddProjectMarker2(0, true, from, to, tostring(args[3] or ''), -1, 0)
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Insert region', -1)
+  return {ok = index >= 0}
+end
+
+-- args: start (seconds) of the region to remove.
+function handlers.RemoveRegion(args)
+  local at = tonumber(args[1]) or -1
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  for m = 0, marker_count + region_count - 1 do
+    local ok, is_region, pos, _, _, number = reaper.EnumProjectMarkers2(0, m)
+    if ok ~= 0 and is_region and math.abs(pos - at) < 0.001 then
+      reaper.Undo_BeginBlock()
+      local done = reaper.DeleteProjectMarker(0, number, true)
+      reaper.UpdateTimeline()
+      reaper.Undo_EndBlock('Remove region', -1)
+      return {ok = done}
+    end
+  end
+  return {ok = false, error = 'no region there'}
 end
 
 -- args: at (seconds).

@@ -103,6 +103,8 @@ var _tl_road := -1.0
 ## `--tl-select 3:0,3:1`: those items (track:item) selected from frame 7, so the timeline's item
 ## page shows. `--tl-pick 3`: that track picked from frame 7, for the track page.
 var _tl_select := ""
+## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
+var _tl_region := ""
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -215,6 +217,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _board = args[i + 1]
 			"--tl-select":
 				if i + 1 < args.size(): _tl_select = args[i + 1]
+			"--tl-region":
+				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-pick":
 				if i + 1 < args.size(): _tl_pick = int(args[i + 1])
 			"--tl-road":
@@ -274,6 +278,11 @@ func _process(_delta: float) -> void:
 				DAW.select_item(int(ti[0]), int(ti[1]), not first)
 				first = false
 		print("SHOT_TL selected=", DAW.state.selected_items(), " picked=", _tl_pick)
+	if _frames == 7 and _tl_region != "":
+		for spec in _tl_region.split(",", false):
+			var r := spec.split(":")
+			if r.size() == 3:
+				DAW.add_region(DAW.state.bar_to_seconds(float(r[0])), DAW.state.bar_to_seconds(float(r[1])), r[2])
 	if _frames == 7 and _roll:
 		DAW.transport_play()
 	if _frames == 12 and _pull_track:

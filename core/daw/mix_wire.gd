@@ -175,6 +175,9 @@ static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) 
 	match p[1]:
 		"length":
 			state.set_project_length(float(args[0]))
+		"regions":
+			state.regions = unpack_regions(args)
+			state.timeline_changed.emit()
 		"markers":
 			# Flat [position, name, position, name, ...], for the same reason items are flat.
 			var out: Dictionary = {}
@@ -447,6 +450,32 @@ static func unpack_tempo_points(args: Array) -> Array:
 		last = beat
 	if not out.is_empty() and out[0][0] != 0.0:
 		return []
+	return out
+
+
+## [count, start, end, name, ...]: the count first, so that no regions at all is still a message
+## (an empty argument list is not one).
+static func pack_regions(regions: Array) -> Array:
+	var out: Array = [float(regions.size())]
+	for r in regions:
+		out.append_array([float(r[0]), float(r[1]), str(r[2])])
+	return out
+
+
+static func unpack_regions(args: Array) -> Array:
+	var out: Array = []
+	if args.is_empty():
+		return out
+	var n := int(args[0])
+	for i in n:
+		var at := 1 + i * 3
+		if at + 2 >= args.size():
+			break
+		var a := float(args[at])
+		var b := float(args[at + 1])
+		if is_finite(a) and is_finite(b) and b > a:
+			out.append([a, b, str(args[at + 2])])
+	out.sort_custom(func(x, y): return x[0] < y[0])
 	return out
 
 
@@ -755,6 +784,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/timeline/length", [state.project_length]])
 	if not state.markers.is_empty():
 		out.append(["/timeline/markers", _pack_markers(state.markers)])
+	out.append(["/timeline/regions", pack_regions(state.regions)])
 	return out
 
 

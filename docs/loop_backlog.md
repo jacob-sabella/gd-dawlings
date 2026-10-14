@@ -3200,3 +3200,17 @@ RENDER page, a token after MIX and STEMS steps the depth; its mark is a wave dra
 (16), fine steps (24) or smooth (32 float), and the cards say which. Each person's own, not saved.
 Other file types and sample rates split out as missing. The dither loop is GDScript, a few
 seconds' work per minute of stereo after the render plays; fine for now.
+
+## DAW parity, iteration 16: regions, first part (2026-10-14)
+`MixState.regions` ([start, end, name], in order of starts) and `region_at`; `DAW.add_region` and
+`DAW.remove_region`, each one undo step, a guest's ask refused when empty, endless or malformed.
+On the wire as `/timeline/regions`, led by a count, so removing the last region still says so
+(an empty `/timeline/markers` is dropped by `_apply_timeline`: removing the last marker may not
+reach a guest live -- the snapshot then omits markers too. Not chased yet; worth a look.) Saved
+through dawkit's new `DawKitRegion` (72713ac, submodule bumped), in the plain form and in a
+dawproject's extras, since DAWproject has no regions. Reaper: the bridge's GetTimeline now lists
+regions apart from markers, and `AddRegion`/`RemoveRegion` make and delete them -- not yet run
+against a live Reaper. A REGION page on the deck: ADD makes the loop range a region, named for
+the marker at its start or "Region N"; LOOP loops the region the playhead is in; REMOVE takes it
+away. Regions are drawn as slabs in the ruler's loop band, behind the loop bar, names at left.
+Split out as missing: rename, move and resize, render a region, the region list.

@@ -450,6 +450,18 @@ var redo_depth: int = -1
 var project_length: float = 0.0
 ## {position_seconds: String name}, in no particular order.
 var markers: Dictionary = {}
+## Named spans: [start, end, name] in seconds, in order of their starts.
+var regions: Array = []
+
+
+## The region the playhead (or `seconds`) is in, as its index in `regions`, or -1: the latest to
+## start at or before it, of those that have not ended.
+func region_at(seconds: float) -> int:
+	var found := -1
+	for i in regions.size():
+		if float(regions[i][0]) <= seconds + 0.0005 and seconds < float(regions[i][1]) - 0.0005:
+			found = i
+	return found
 
 ## How many of the project's tracks come BEFORE the one this cache calls index 1.
 ##

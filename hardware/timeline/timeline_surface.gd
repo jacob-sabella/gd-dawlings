@@ -121,6 +121,7 @@ var item_page: TimelineItemPage
 var track_page: TimelineTrackPage
 var tempo_page: TimelineTempoPage
 var render_page: TimelineRenderPage
+var region_page: TimelineRegionPage
 var _undo_key: GlyphKey
 var _redo_key: GlyphKey
 var _split_key: GlyphKey
@@ -397,10 +398,12 @@ func _build_deck() -> void:
 	tempo_page.name = "TempoPage"
 	render_page = TimelineRenderPage.new()
 	render_page.name = "RenderPage"
-	for page in [item_page, track_page, tempo_page, render_page]:
+	region_page = TimelineRegionPage.new()
+	region_page.name = "RegionPage"
+	for page in [item_page, track_page, tempo_page, region_page, render_page]:
 		page.surface = self
-		page.tab_name = {item_page: "ITEM", track_page: "TRACK", tempo_page: "TEMPO", render_page: "RENDER"}[page]
-		page.tab_glyph = {item_page: &"item", track_page: &"track", tempo_page: &"tempo", render_page: &"render"}[page]
+		page.tab_name = {item_page: "ITEM", track_page: "TRACK", tempo_page: "TEMPO", region_page: "REGION", render_page: "RENDER"}[page]
+		page.tab_glyph = {item_page: &"item", track_page: &"track", tempo_page: &"tempo", region_page: &"region", render_page: &"render"}[page]
 		deck.add_page(page)
 	deck.show_page(item_page)
 	DAW.transport_changed.connect(_light_split_key)
@@ -1438,6 +1441,22 @@ func _build_ruler() -> void:
 		flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_ruler.add_child(flag)
 
+	# The regions, in the loop band under the loop's own bar: a slab of colour each, end to end,
+	# its name at its left. Behind the loop bar, which is the one being dragged.
+	for r in DAW.state.regions:
+		var rx0 := maxf(_x_for(float(r[0])), _lane_area_x)
+		var rx1 := minf(_x_for(float(r[1])), _lane_right())
+		if rx1 - rx0 < 0.001:
+			continue
+		var slab := _flat_box(Vector3(rx1 - rx0 - 0.0008, LOOP_BAND * 0.62, 0.0008),
+				Vector3((rx0 + rx1) * 0.5, _top_y - LOOP_BAND * 0.5, 0.0012), REGION_COLOUR.darkened(0.35))
+		slab.name = "Region"
+		_ruler.add_child(slab)
+		var called := _text(str(r[2]).to_upper(), 26, REGION_COLOUR.lightened(0.5))
+		called.position = Vector3(rx0 + 0.002, _top_y - LOOP_BAND * 0.5, 0.0019)
+		called.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_ruler.add_child(called)
+
 
 ## Says so, in the lane area, when the backend cannot see the arrangement.
 ##
@@ -2151,6 +2170,7 @@ const GRID_BAR := Color(0.30, 0.34, 0.42)
 const RULER_TEXT := Color(0.90, 0.92, 0.96)
 const RULER_TICK := Color(0.55, 0.60, 0.70)
 const MARKER_COLOUR := Color(1.0, 0.80, 0.42)
+const REGION_COLOUR := Color(0.62, 0.85, 0.72)
 const PLAYHEAD_COLOUR := Color(1.0, 0.92, 0.62)
 ## How far either side of the playhead a clip it is cutting through is lit by it.
 const BEAM_REACH := 0.010

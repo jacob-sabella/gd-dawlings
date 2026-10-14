@@ -333,6 +333,23 @@ func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _str
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
 func edit_marker(_at: float, _to: float, _marker_name: String) -> void: pass
 func remove_marker(_at: float) -> void: pass
+## A named span; and the one starting at `at` (to a millisecond) gone. As markers: no-ops on a
+## backend that answers false to Capability.MARKERS.
+func add_region(_start: float, _end: float, _region_name: String) -> void: pass
+func remove_region(_at: float) -> void: pass
+
+
+## `regions` with one more, kept in order of starts. A second region at the same start replaces
+## the first: two spans from one place is a mistake, not an arrangement.
+static func regions_added(regions: Array, start: float, end: float, region_name: String) -> Array:
+	var out: Array = regions.filter(func(r): return absf(float(r[0]) - start) >= 0.001)
+	out.append([start, end, region_name])
+	out.sort_custom(func(x, y): return x[0] < y[0])
+	return out
+
+
+static func regions_removed(regions: Array, at: float) -> Array:
+	return regions.filter(func(r): return absf(float(r[0]) - at) >= 0.001)
 
 
 ## The key of the marker at `at` in `markers`, to a millisecond, or NAN for none.
@@ -858,6 +875,12 @@ func _lanes_snapshot() -> Dictionary:
 
 
 ## Every marker, through the address the timeline delivers them on, so it replicates.
+func _write_regions(regions: Array) -> void:
+	var packed := MixWire.pack_regions(regions)
+	record_for_replication("/timeline/regions", packed)
+	MixWire.apply(state, "/timeline/regions", packed)
+
+
 func _write_markers(markers: Dictionary) -> void:
 	var packed := MixWire._pack_markers(markers)
 	record_for_replication("/timeline/markers", packed)

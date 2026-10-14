@@ -35,6 +35,8 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 	at.sort()
 	for t in at:
 		p.markers.append(DawKitMarker.new(float(t), str(s.markers[t])))
+	for r in s.regions:
+		p.regions.append(DawKitRegion.new(float(r[0]), float(r[1]), str(r[2])))
 	p.master.volume_db = s.master.volume_db
 	p.master.pan = s.master.pan * 2.0 - 1.0
 	for target in s.master.automation:
@@ -173,6 +175,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	s.tracks.clear()
 	backend.instruments.clear()
 	s.markers.clear()
+	s.regions = p.regions.map(func(r: DawKitRegion) -> Array: return [r.start, r.end, r.name])
 	backend.project_title = p.title
 	s.beat_unit = p.time_signature.y
 	s.time_signature_points = p.time_signature_points.duplicate(true)

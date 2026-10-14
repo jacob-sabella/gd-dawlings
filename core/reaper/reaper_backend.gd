@@ -907,6 +907,20 @@ func edit_marker(at: float, to: float, marker_name: String) -> void:
 	_edit("EditMarker", [at, to, marker_name])
 
 
+func add_region(start: float, end: float, region_name: String) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_write_regions(regions_added(state.regions, start, end, region_name))
+	_edit("AddRegion", [start, end, region_name])
+
+
+func remove_region(at: float) -> void:
+	if _bridge == null or not _bridge.is_open() or regions_removed(state.regions, at).size() == state.regions.size():
+		return
+	_write_regions(regions_removed(state.regions, at))
+	_edit("RemoveRegion", [at])
+
+
 func remove_marker(at: float) -> void:
 	if _bridge == null or not _bridge.is_open() or is_nan(marker_key(state.markers, at)):
 		return
@@ -1164,6 +1178,12 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 		if typeof(m) == TYPE_DICTIONARY:
 			markers.append_array([float(m.get("position", 0.0)), str(m.get("name", ""))])
 	_apply("/timeline/markers", markers)
+	if result.has("regions"):
+		var regions: Array = []
+		for r in _as_array(result["regions"]):
+			if typeof(r) == TYPE_DICTIONARY:
+				regions.append([float(r.get("start", 0.0)), float(r.get("end", 0.0)), str(r.get("name", ""))])
+		_apply("/timeline/regions", MixWire.pack_regions(regions))
 	_apply("/timeline/length", [float(result.get("length", 0.0))])
 	if result.has("tempo"):
 		var flat: Array = []

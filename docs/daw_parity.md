@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 15
+Iterations done: 16
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -64,7 +64,8 @@ Iterations done: 15
 
 ## Markers and regions
 - [x] markers add/edit/remove
-- [ ] regions (missing)
+- [x] regions: add from the loop, loop one, remove (2026-10-14; drawn in the ruler's loop band; saved; Reaper's regions through the bridge, not yet run against a live Reaper)
+- [ ] regions: rename, move and resize, render a region, the region list (missing)
 
 ## Export
 - [x] mix and stems render

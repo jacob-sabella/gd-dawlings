@@ -294,6 +294,7 @@ func _arrange() -> void:
 		state.set_track_items(index, items)
 
 	state.markers.clear()
+	state.regions.clear()
 	for section in sections:
 		state.markers[(sections[section][0] - 1) * bar] = section
 	state.set_project_length(96 * bar)
@@ -1150,6 +1151,22 @@ func edit_marker(at: float, to: float, marker_name: String) -> void:
 
 func remove_marker(at: float) -> void:
 	_change_markers(markers_edited(state.markers, at, at, "", true))
+
+
+func add_region(start: float, end: float, region_name: String) -> void:
+	_change_regions(regions_added(state.regions, start, end, region_name))
+
+
+func remove_region(at: float) -> void:
+	_change_regions(regions_removed(state.regions, at))
+
+
+func _change_regions(after: Array) -> void:
+	var before: Array = state.regions.duplicate(true)
+	if after == before:
+		return
+	_write_regions(after)
+	_remember("region", _write_regions.bind(before), _write_regions.bind(after), false)
 
 
 func _change_markers(after: Dictionary) -> void:

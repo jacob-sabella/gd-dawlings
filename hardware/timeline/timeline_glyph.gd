@@ -133,6 +133,15 @@ func _build() -> void:
 			_box(Vector2(-0.4, 0), Vector2(0.95, 0.85), 0.55)
 			_rod(Vector2(0.6, -1.0), Vector2(0.6, 0.85), 0.08, 0.4)
 			_ball(Vector2(0.6, 0.95), 0.2, 0.0)
+		&"region", &"region_add":
+			# A span between two posts, its name's slab along the top.
+			_box(Vector2(-0.85, 0.0), Vector2(0.16, 1.6), 0.4)
+			_box(Vector2(0.85, 0.0), Vector2(0.16, 1.6), 0.4)
+			_box(Vector2(0.0, 0.5), Vector2(1.55, 0.42), 0.5)
+			_rod(Vector2(-0.75, -0.25), Vector2(0.75, -0.25), 0.06, 0.25)
+			if _kind == &"region_add":
+				_box(Vector2(0.0, -0.45), Vector2(0.7, 0.18), 0.55)
+				_box(Vector2(0.0, -0.45), Vector2(0.18, 0.7), 0.55)
 		&"loop":
 			_ring(Vector2.ZERO, 0.66, 0.15)
 			_cone(Vector2(0.66, 0.0), Vector2(0, -1), 0.3, 0.45)

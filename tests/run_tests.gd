@@ -290,6 +290,7 @@ func _ready() -> void:
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
+	_test_the_song_has_regions()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -19075,3 +19076,93 @@ class RenderSpy extends OfflineBackend:
 
 	func render(stems: bool, bits := 24) -> void:
 		asked.append([stems, bits])
+
+
+func _test_the_song_has_regions() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	check("the demo starts with no regions", s.regions.is_empty())
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	DAW.add_region(10.0, 20.0, "Verse")
+	DAW.add_region(2.0, 6.0, "Intro")
+	check("added, in order of their starts (%s)" % [s.regions],
+			s.regions.size() == 2 and s.regions[0][2] == "Intro" and s.regions[1][2] == "Verse")
+	check("each one undo step", s.undo_depth - depth == 2)
+	check("and replicated whole", backend._repl_durable.has("/timeline/regions"))
+	check("the region the playhead is in", s.region_at(12.0) == 1 and s.region_at(2.0) == 0
+			and s.region_at(8.0) == -1 and s.region_at(20.0) == -1)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest joining reads them", guest.regions == s.regions)
+	DAW.add_region(10.0, 24.0, "Verse 1")
+	check("a second at the same start replaces the first", s.regions.size() == 2 and s.regions[1][2] == "Verse 1"
+			and is_equal_approx(s.regions[1][1], 24.0))
+	DAW.undo()
+	DAW.remove_region(10.0)
+	DAW.remove_region(2.0)
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("the last one removed is gone on a guest too", s.regions.is_empty() and guest.regions.is_empty())
+	DAW.undo()
+	DAW.undo()
+	check("undone, both are back", s.regions.size() == 2)
+	check("both verbs a guest may use", &"add_region" in DAW.COMMANDS and &"remove_region" in DAW.COMMANDS)
+	DAW.apply_intent(&"add_region", [30.0, 29.0, "Backwards"])
+	DAW.apply_intent(&"add_region", [30.0, INF, "Forever"])
+	DAW.apply_intent(&"add_region", [30.0])
+	check("an empty, endless or malformed region is refused", s.regions.size() == 2)
+	DAW.apply_intent(&"add_region", [30.0, 40.0, "Bridge"])
+	check("a guest's is made", s.regions.size() == 3 and s.regions[2][2] == "Bridge")
+
+	# Saved.
+	var p := ProjectBridge.capture(backend)
+	check("the project keeps them", p.regions.size() == 3 and p.regions[2].name == "Bridge"
+			and p.regions[2].end == 40.0)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	ProjectBridge.load(p, fresh)
+	check("and loaded, so are they", DAW.state.regions.size() == 3 and DAW.state.regions[0][2] == "Intro")
+
+	# Reaper reports its regions apart from its markers.
+	var link := _fresh_link()
+	link._on_timeline({"markers": [{"position": 1.0, "name": "A"}],
+			"regions": [{"start": 4.0, "end": 8.0, "name": "Chorus"}], "length": 60.0})
+	check("Reaper's regions are read as regions (%s)" % [link.state.regions], link.state.regions == [[4.0, 8.0, "Chorus"]]
+			and link.state.markers.size() == 1)
+	link.free()
+
+	# The REGION page.
+	_offline()
+	s = DAW.state
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRegionPage = timeline.region_page
+	check("a REGION page with its tab", page != null and timeline.deck.page_named("REGION") == page
+			and page.add.glyph == &"region_add")
+	var verse: float = s.markers.keys().filter(func(t): return s.markers[t] == "Verse 1")[0]
+	DAW.set_loop_range(verse, verse + 8.0)
+	page.refresh()
+	check("with a loop range, ADD is lit, named for the marker there (%s)" % page.next_name(),
+			page.add.lit and page.next_name() == "Verse 1")
+	page.add.pressed.emit()
+	check("pressed, the loop is a region", s.regions.size() == 1 and is_equal_approx(s.regions[0][0], verse)
+			and is_equal_approx(s.regions[0][1], verse + 8.0))
+	timeline._process(0.0)
+	timeline._relayout_view()
+	var drawn := timeline._ruler.find_children("Region*", "", true, false)
+	check("and drawn in the ruler's loop band", drawn.size() >= 1)
+	DAW.set_loop_range(0.0, 1.0)
+	DAW.seek(verse + 2.0)
+	page.refresh()
+	check("in it, LOOP and REMOVE are lit", page.loop_it.lit and page.remove.lit)
+	page.loop_it.pressed.emit()
+	check("LOOP loops it", s.looping and is_equal_approx(s.loop_start, verse) and is_equal_approx(s.loop_end, verse + 8.0))
+	page.remove.pressed.emit()
+	check("REMOVE takes it away", s.regions.is_empty())
+	DAW.seek(0.0)
+	page.refresh()
+	check("outside any region, they are dark", not page.loop_it.lit and not page.remove.lit)
+	DAW.set_looping(false)
+	timeline.free()
