@@ -3070,3 +3070,11 @@ one undo step, same Reaper path. Nothing for an item with no overview (MIDI, or 
 which report no peaks). N key on the item strip, lit only for an item there is sound to measure.
 Overview bytes are 1/255 of full scale, so the result is within a step of it, not exact.
 Suite 9993 checks, 0 failed; probe 0 failed. Not seen in a screenshot.
+
+## DAW parity, iteration 4: note velocity up and down (2026-10-14)
+`DAW.shift_velocity(track, item, by)` adds `by` to every note's velocity of a MIDI item, kept
+between 1 and 127 (a guest's amount clamped to +-126, malformed refused), one undo step; Reaper
+`ShiftVelocity` through `MIDI_SetNote` (`each_note` now passes the velocity through; untested against
+a live Reaper). V- / V+ keys on the item strip: 8 a press, 32 held fine. Only the whole item: a
+per-note velocity edit wants the piano roll to select notes, which is the next size up.
+Suite 9997 checks, 0 failed; probe 0 failed. Not seen in a screenshot.

@@ -30,6 +30,8 @@ var quant: PanelButton
 var mute: PanelButton
 var copy_here: PanelButton
 var normalise: PanelButton
+var softer: PanelButton
+var harder: PanelButton
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 
@@ -40,10 +42,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(9 * PITCH, 0.036, 0.004)
+	box.size = Vector3(11 * PITCH, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(4.0 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(5.0 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	gain = _knob("GAIN", 0, func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -68,6 +70,10 @@ func _ready() -> void:
 			func(): _normalise(), "gain so its loudest moment is full scale")
 	normalise.describe_value = func(_v: float) -> String:
 		return "gain so its loudest moment is full scale" if normalise.lit else "for a recorded item"
+	softer = _key("ItemSofter", "V-", 9, Color(0.55, 0.7, 0.95), "ITEM  NOTES SOFTER",
+			func(): _velocity(-1), "every note a little softer; fine: much softer")
+	harder = _key("ItemHarder", "V+", 10, Color(0.55, 0.7, 0.95), "ITEM  NOTES HARDER",
+			func(): _velocity(1), "every note a little harder; fine: much harder")
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -81,7 +87,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	visible = item != null
-	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here, normalise]:
+	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here, normalise, softer, harder]:
 		c.collision_layer = 2 if item != null else 0
 	if item == null:
 		return
@@ -93,7 +99,7 @@ func refresh() -> void:
 	normalise.lit = item.sound_peak() > 0.0
 	copy_here.lit = true
 	var midi := not item.notes.is_empty()
-	for key in [down, up, quant]:
+	for key in [down, up, quant, softer, harder]:
 		key.lit = midi
 
 
@@ -137,6 +143,11 @@ func _toggle_mute() -> void:
 	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
 	if item != null:
 		DAW.set_item_muted(_target[0], _target[1], not item.muted)
+
+
+func _velocity(direction: int) -> void:
+	if not _target.is_empty():
+		DAW.shift_velocity(_target[0], _target[1], direction * (32 if _fine(harder) or _fine(softer) else 8))
 
 
 func _quantise() -> void:

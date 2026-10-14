@@ -844,6 +844,11 @@ func set_time_signature_map(points: Array) -> void:
 	_edit("SetTimeSignatures", MixWire.pack_meter_points(points))
 
 
+func shift_velocity(track_index: int, item_index: int, by: int) -> void:
+	if _locally_shift_velocity(track_index, item_index, by):
+		_edit("ShiftVelocity", [track_index, item_index, by])
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	if _locally_transpose(track_index, item_index, semitones):
 		_edit("TransposeItem", [track_index, item_index, semitones])

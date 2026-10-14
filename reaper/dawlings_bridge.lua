@@ -1419,13 +1419,25 @@ local function each_note(it, change)
       for n = 0, count - 1 do
         local ok, sel, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
         if ok then
-          local on, off, p = change(take, ppq_on, ppq_off, pitch)
-          reaper.MIDI_SetNote(take, n, sel, muted, on, off, chan, p, vel, true)
+          local on, off, p, v = change(take, ppq_on, ppq_off, pitch, vel)
+          reaper.MIDI_SetNote(take, n, sel, muted, on, off, chan, p, v or vel, true)
         end
       end
       reaper.MIDI_Sort(take)
     end
   end
+end
+
+-- args: track, index, amount: added to every note's velocity, kept between 1 and 127.
+function handlers.ShiftVelocity(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local by = math.floor(args[3] or 0)
+  reaper.Undo_BeginBlock()
+  each_note(it, function(_, on, off, pitch, vel)
+    return on, off, pitch, math.max(1, math.min(127, vel + by))
+  end)
+  return edited('Note velocity')
 end
 
 -- args: track, index, semitones.

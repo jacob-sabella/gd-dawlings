@@ -13637,6 +13637,19 @@ func _test_notes_are_transposed_and_quantised() -> void:
 			int(notes[0][2]) == 60 + DAWBackend.TRANSPOSE_MAX)
 	DAW.apply_intent(&"quantize_item", [lane, 0, INF, 1.0])
 	check("and a malformed quantise refused", s.undo_depth - depth == 1)
+	var vel_before: float = s.item(lane, 0).notes[3]
+	var vel_depth := s.undo_depth
+	DAW.shift_velocity(lane, 0, 16)
+	check("every note of an item harder (%d to %d)" % [vel_before, s.item(lane, 0).notes[3]],
+			int(s.item(lane, 0).notes[3]) == mini(int(vel_before) + 16, 127) and s.undo_depth - vel_depth == 1)
+	DAW.apply_intent(&"shift_velocity", [lane, 0, -9999])
+	check("a guest's shift is kept on the scale, never below 1", int(s.item(lane, 0).notes[3]) >= 1)
+	DAW.apply_intent(&"shift_velocity", [lane, 0, NAN])
+	DAW.shift_velocity(lane, 1, 8)
+	check("and a malformed one, or one on an item with no notes, is refused", s.undo_depth - vel_depth == 2)
+	DAW.undo()
+	DAW.undo()
+	check("undone, the notes are as played", is_equal_approx(s.item(lane, 0).notes[3], vel_before))
 
 	var project := ProjectBridge.capture(DAW.backend as OfflineBackend)
 	var file := OS.get_temp_dir().path_join("suite_transpose.dawproject")

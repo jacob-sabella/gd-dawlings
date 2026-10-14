@@ -982,6 +982,12 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 		_remember_edit(before)
 
 
+func shift_velocity(track_index: int, item_index: int, by: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_shift_velocity(track_index, item_index, by):
+		_remember_edit(before)
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_transpose(track_index, item_index, semitones):

@@ -96,6 +96,7 @@ const ITEM_GAIN_MIN := -60.0
 const QUANTIZE_GRID_MIN := 1.0 / 32.0
 const QUANTIZE_GRID_MAX := 16.0
 const TRANSPOSE_MAX := 48
+const VELOCITY_SHIFT_MAX := 126
 const ITEM_GAIN_MAX := 24.0
 
 var state := MixState.new()
@@ -314,6 +315,8 @@ const RENDER_TAIL_SECONDS := 4.0
 func set_tempo_map(_points: Array) -> void: pass
 ## Every note of a MIDI item moved `semitones` up (or down), each kept within 0-127.
 func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> void: pass
+## Every note of a MIDI item harder (positive) or softer, kept between 1 and 127.
+func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
 ## of the song's beat grid, keeping its length.
 func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float) -> void: pass
@@ -705,6 +708,20 @@ func _locally_transpose(track_index: int, item_index: int, semitones: int) -> bo
 	var notes := it.notes.duplicate()
 	for n in range(0, notes.size() - 4, 5):
 		notes[n + 2] = clampi(int(notes[n + 2]) + semitones, 0, 127)
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+func _locally_shift_velocity(track_index: int, item_index: int, by: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty() or by == 0:
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	for n in range(0, notes.size() - 4, 5):
+		notes[n + 3] = clampi(int(notes[n + 3]) + by, 1, 127)
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true

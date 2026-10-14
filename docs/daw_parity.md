@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 3
+Iterations done: 4
 
 ## Transport and tempo
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
@@ -30,7 +30,8 @@ Iterations done: 3
 
 ## Piano roll
 - [x] transpose, quantise with strength, note insert through takes
-- [ ] velocity editing, CC / pitch-bend lanes, legato, humanise (missing)
+- [x] velocity: whole-item harder/softer (2026-10-14)
+- [ ] per-note velocity, CC / pitch-bend lanes, legato, humanise (missing)
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track
