@@ -294,6 +294,7 @@ func _ready() -> void:
 	_test_notes_are_made_legato()
 	_test_notes_are_made_staccato()
 	_test_velocities_are_evened()
+	_test_a_tracks_items_are_selected_together()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
@@ -20207,6 +20208,32 @@ func _test_the_last_marker_removed_is_gone_everywhere() -> void:
 	link._on_timeline({"markers": [], "length": 60.0})
 	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
 	link.free()
+
+
+func _test_a_tracks_items_are_selected_together() -> void:
+	_offline()
+	var s := DAW.state
+	var a := 6
+	var b := 7
+	s.track(a).items.clear()
+	s.track(b).items.clear()
+	var beat := 60.0 / s.tempo
+	DAW.insert_midi_take(a, 0.0, 2.0 * beat, [[0.0, beat, 60, 100, 0]], "A1")
+	DAW.insert_midi_take(a, 4.0 * beat, 6.0 * beat, [[4.0 * beat, 5.0 * beat, 62, 100, 0]], "A2")
+	DAW.insert_midi_take(b, 0.0, 2.0 * beat, [[0.0, beat, 64, 100, 0]], "B1")
+	DAW.select_item(b, 0)
+	DAW.select_track_items(a)
+	check("every item on the track is selected", s.track(a).items.size() == 2 and s.track(a).items.all(func(it): return it.selected))
+	check("another track's selection is cleared", not s.item(b, 0).selected)
+	DAW.select_track_items(b)
+	check("choosing another moves the selection", s.item(b, 0).selected and not s.item(a, 0).selected and not s.item(a, 1).selected)
+	DAW.select_track_items(999)
+	check("a track that is not there changes nothing", s.item(b, 0).selected)
+	check("the verb is in the vocabulary", &"select_track_items" in DAW.COMMANDS)
+	DAW.apply_intent(&"select_track_items", [a, 3])
+	check("a malformed intent is refused", s.item(b, 0).selected)
+	DAW.apply_intent(&"select_track_items", [a])
+	check("a sound one from a guest is applied", s.item(a, 1).selected and not s.item(b, 0).selected)
 
 
 func _test_velocities_are_evened() -> void:

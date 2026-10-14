@@ -1367,6 +1367,20 @@ function handlers.SelectAllItems()
   return {ok = true}
 end
 
+-- args: track: that track's items selected, every other item not.
+function handlers.SelectTrackItems(args)
+  local want = reaper.GetTrack(0, (args[1] or 0) - 1)
+  if not want then return {ok = false, error = 'no such track'} end
+  for t = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, t)
+    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      reaper.SetMediaItemSelected(reaper.GetTrackMediaItem(tr, n), tr == want)
+    end
+  end
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
 function handlers.ClearItemSelection()
   unselect_all()
   reaper.UpdateArrange()

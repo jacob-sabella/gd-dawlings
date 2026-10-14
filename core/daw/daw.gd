@@ -64,7 +64,7 @@ const COMMANDS := [
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
-	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
+	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
@@ -470,6 +470,8 @@ func select_item(track_index: int, item_index: int, additive := false) -> void:
 	_do(&"select_item", [track_index, item_index, additive])
 func clear_item_selection() -> void: _do(&"clear_item_selection", [])
 func select_all_items() -> void: _do(&"select_all_items", [])
+## Every item on one track selected, and nothing else.
+func select_track_items(track_index: int) -> void: _do(&"select_track_items", [track_index])
 ## `to_track`: onto another track as well (0, the one it is on).
 func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0), maxi(to_track, 0)])
@@ -742,6 +744,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed edit_marker intent %s." % [args])
 			return
 		args = [float(args[0]), maxf(float(args[1]), 0.0), str(args[2]).left(MARKER_NAME_MAX)]
+	if verb == &"select_track_items":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
+			push_warning("DAW: refused a malformed select_track_items intent %s." % [args])
+			return
+		args = [int(args[0])]
 	if verb == &"move_item":
 		if args.size() not in [3, 4] or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
 			push_warning("DAW: refused a malformed move_item intent %s." % [args])

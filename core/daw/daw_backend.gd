@@ -284,6 +284,7 @@ func select_item(_track_index: int, _item_index: int, _additive: bool) -> void: 
 func clear_item_selection() -> void: pass
 ## Every item on every track, selected.
 func select_all_items() -> void: pass
+func select_track_items(_track_index: int) -> void: pass
 ## `to_track`, when it is another track, moves the item onto that one as well: off one shelf and
 ## onto another. 0 keeps it where it is.
 func move_item(_track_index: int, _item_index: int, _start: float, _to_track := 0) -> void: pass
@@ -492,6 +493,20 @@ func _locally_select_all() -> void:
 		var lane := _lane_copy(index)
 		for item in lane:
 			item.selected = true
+		_write_lane(index, lane)
+
+
+## One track's items all selected and every other track's cleared.
+func _locally_select_track(track_index: int) -> void:
+	if not state.tracks.has(track_index):
+		return
+	for index in state.track_indices():
+		var want: bool = index == track_index
+		if state.track(index).items.all(func(it): return it.selected == want):
+			continue
+		var lane := _lane_copy(index)
+		for item in lane:
+			item.selected = want
 		_write_lane(index, lane)
 
 

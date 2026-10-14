@@ -3551,5 +3551,13 @@ An EVEN key on the ITEM page (level bars under a line) gives every note of a MID
 average of their velocities. `DAW.even_velocity` is an ITEM_EDITS intent, undoable, refused on
 locked items, a no-op when the notes already agree; Reaper's `EvenVelocity` handler is
 syntax-checked, not run live. Probe not run (same intent shape as legato). Seen while shooting:
-`CabinVenue` calls a missing `_remember_tablets` (a script error in the shot run only, not in the
-suite); not from this change, left for later. Suite: 10425 checks, 0 failed.
+the known teardown SCRIPT ERROR from `scenes/studio.gd`'s `_remember_tablets` appeared in the shot
+run (see iteration 11's note); not from this change. Suite: 10425 checks, 0 failed.
+
+## 2026-10-14 -- iteration 41: select a track's items
+
+A SELECT ITEMS key on the TRACK page (a gem beside two lit blocks) selects every item on the picked
+track and clears every other track's selection (Reaper's select-all-in-track). `DAW.select_track_items`
+is a plain intent (index sanitised in `apply_intent`, unknown track ignored); Reaper's
+`SelectTrackItems` handler is syntax-checked, not run live. Probe: host 53, guest 47, 0 failed.
+Suite: 10432 checks, 0 failed.

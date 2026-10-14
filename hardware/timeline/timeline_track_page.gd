@@ -17,6 +17,8 @@ extends TimelinePage
 
 var add: GlyphKey
 var duplicate: GlyphKey
+## Every item on the picked track selected.
+var items: GlyphKey
 var remove: GlyphKey
 var rename: GlyphKey
 var auto: GlyphKey
@@ -48,6 +50,10 @@ func _ready() -> void:
 				var picked: int = surface.picked_track
 				return "a copy of %s after it: its effects, sends, items and lanes" % _name_of(picked) \
 						if picked > 0 else "press a track's name first")
+	items = _key("TrackItems", &"track_items", Color(0.55, 0.7, 0.95), "TRACKS  SELECT ITEMS", _select_items,
+			func() -> String:
+				var picked: int = surface.picked_track
+				return "every item on %s, and nothing else" % _name_of(picked) if picked > 0 else "press a track's name first")
 	remove = _key("TrackRemove", &"remove", Color(0.95, 0.38, 0.34), "TRACKS  REMOVE",
 			_remove,
 			func() -> String:
@@ -152,6 +158,7 @@ func refresh() -> void:
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
 	duplicate.lit = picked
+	items.lit = picked
 	rename.lit = picked
 	lane.lit = surface.shown_lane != ""
 	lane.caption = TimelineSurface.lane_name(surface.shown_lane) if surface.shown_lane != "" else ""
@@ -161,7 +168,7 @@ func refresh() -> void:
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
 			if input.lit else ""
-	for key in [remove, duplicate, rename, input, colour, group]:
+	for key in [remove, duplicate, items, rename, input, colour, group]:
 		key.available = picked
 	var in_group: int = DAW.state.track(surface.picked_track).group if picked else 0
 	group.led_colour = GROUP_COLOURS[in_group - 1] if in_group > 0 else Color(0.62, 0.86, 1.0)
@@ -245,6 +252,12 @@ func _add() -> void:
 	var at: int = picked + 1 if picked > 0 else DAW.state.track_indices().size() + 1
 	DAW.add_track(at, "")
 	surface.pick_track(at)
+
+
+func _select_items() -> void:
+	var picked: int = surface.picked_track
+	if picked > 0 and DAW.state.tracks.has(picked):
+		DAW.select_track_items(picked)
 
 
 func _duplicate() -> void:

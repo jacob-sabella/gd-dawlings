@@ -152,6 +152,11 @@ func _build() -> void:
 				_box(Vector2(-0.75 + k * 0.3, -0.1), Vector2(0.16, hs[k]), 0.35, 0.4)
 		&"track":
 			_gem(Vector2.ZERO, 0.95)
+		&"track_items":
+			# The track's gem over a row of blocks, all lit.
+			_gem(Vector2(-0.62, 0.0), 0.5)
+			_box(Vector2(0.0, 0.0), Vector2(0.4, 0.6), 0.9)
+			_box(Vector2(0.55, 0.0), Vector2(0.4, 0.6), 0.9)
 		&"track_duplicate":
 			# The track's gem, and its copy beside it.
 			_gem(Vector2(-0.34, 0.26), 0.62)

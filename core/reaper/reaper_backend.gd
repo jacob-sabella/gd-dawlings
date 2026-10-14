@@ -717,6 +717,12 @@ func select_all_items() -> void:
 	_edit("SelectAllItems", [])
 
 
+func select_track_items(track_index: int) -> void:
+	if state.tracks.has(track_index):
+		_locally_select_track(track_index)
+		_edit("SelectTrackItems", [track_index])
+
+
 func select_item(track_index: int, item_index: int, additive: bool) -> void:
 	_locally_select(track_index, item_index, additive)
 	_edit("SelectItem", [track_index, item_index, additive])

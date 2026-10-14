@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 40
+Iterations done: 41
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -19,7 +19,7 @@ Iterations done: 40
 - [ ] groove templates: quantise to the feel of another item, swing on playback (missing)
 
 ## Audio and MIDI editing
-- [x] select all items (2026-10-14), select, move (across tracks), split, delete, duplicate, trim with source offset
+- [x] select all items (2026-10-14), select all items on one track (2026-10-14, TRACK page), select, move (across tracks), split, delete, duplicate, trim with source offset
 - [x] item gain, fade in/out (linear), loop points on an item
 - [x] item mute (2026-10-14)
 - [x] crossfade between two overlapping items on a track (2026-10-14; equal-power since iteration 27, one edit)
