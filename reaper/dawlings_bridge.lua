@@ -1806,6 +1806,35 @@ function handlers.AddRegion(args)
   return {ok = index >= 0}
 end
 
+-- args: at (the start of the region, seconds), its new start and end, its name. One undo point.
+-- Another region already starting at the new start is replaced, as the desk's are.
+function handlers.EditRegion(args)
+  local at = tonumber(args[1]) or -1
+  local from, to = math.max(0, tonumber(args[2]) or 0), tonumber(args[3]) or 0
+  if to <= from then return {ok = false, error = 'an empty region'} end
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  local mine, others = nil, {}
+  for m = 0, marker_count + region_count - 1 do
+    local ok, is_region, pos, _, _, number = reaper.EnumProjectMarkers2(0, m)
+    if ok ~= 0 and is_region then
+      if not mine and math.abs(pos - at) < 0.001 then
+        mine = number
+      elseif math.abs(pos - from) < 0.001 then
+        others[#others + 1] = number
+      end
+    end
+  end
+  if not mine then return {ok = false, error = 'no region there'} end
+  reaper.Undo_BeginBlock()
+  for _, number in ipairs(others) do
+    reaper.DeleteProjectMarker(0, number, true)
+  end
+  local done = reaper.SetProjectMarker(mine, true, from, to, tostring(args[4] or ''))
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Edit region', -1)
+  return {ok = done}
+end
+
 -- args: start (seconds) of the region to remove.
 function handlers.RemoveRegion(args)
   local at = tonumber(args[1]) or -1

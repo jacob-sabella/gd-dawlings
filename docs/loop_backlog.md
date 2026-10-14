@@ -3424,3 +3424,17 @@ next. Reaper: the bridge maps the desk's 0-4 to Reaper's 0, 1, 2, 3, 5 each way,
 CrossfadeItems sets only the crossing ends -- not yet run against a live Reaper.
 `tools/screenshot.gd --tl-fade T:I:S:in/out` shapes the two ends apart.
 Suite: 10322 checks, 0 failed; dawkit 374; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 31: regions renamed, moved and resized, and listed (2026-10-14)
+`DAW.edit_region(at, start, end, name)`: the region starting at `at` made a new span and name in
+one undo step, nothing when there is none there, onto another's start replacing it as ADD does
+(`DAWBackend.regions_edited`); a guest's ask refused when empty, endless or malformed. The
+REGION page gains NAME (the region the playhead is in, named on the monitor or, in a headset, on
+the keypad: `TimelineSurface.ask_region_name`, sharing `_ask_name` with the track's), FIT (that
+region moved and resized to the loop range; dark once it is), and GO TO, a rail with a place
+for each region in order, its card naming one ("Chorus, 17.1.00 - 25.1.00, 3 of 3"), letting
+go there seeking to its start. The bead follows the playhead from region to region as the song
+plays. Reaper: EditRegion finds the region by its start, removes any other starting where it
+goes, and SetProjectMarker moves and renames it, one undo point -- not yet run against a live
+Reaper. Reaper keeps a name unchanged when given an empty one; the desk never sends one.
+Suite: 10343 checks, 0 failed; probe host 53, guest 47, 0 failed.

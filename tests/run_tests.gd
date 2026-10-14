@@ -300,6 +300,7 @@ func _ready() -> void:
 	_test_an_item_fades_with_equal_power()
 	_test_history_can_be_jumped_through()
 	_test_items_glue_into_one()
+	_test_regions_are_renamed_moved_and_listed()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19777,6 +19778,86 @@ func _test_items_glue_into_one() -> void:
 	DAW.clear_item_selection()
 	timeline.free()
 	_offline()
+
+
+func _test_regions_are_renamed_moved_and_listed() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	DAW.add_region(2.0, 6.0, "Intro")
+	DAW.add_region(10.0, 20.0, "Verse")
+	DAW.add_region(30.0, 40.0, "Chorus")
+	var depth := s.undo_depth
+	backend._repl_durable.clear()
+	DAW.edit_region(10.0, 10.0, 20.0, "Verse 1")
+	check("renamed in place", s.regions[1] == [10.0, 20.0, "Verse 1"] and s.undo_depth == depth + 1
+			and backend._repl_durable.has("/timeline/regions"))
+	DAW.edit_region(10.0, 8.0, 24.0, "Verse 1")
+	check("moved and resized (%s)" % [s.regions], s.regions[1] == [8.0, 24.0, "Verse 1"] and s.regions.size() == 3)
+	DAW.edit_region(8.0, 42.0, 50.0, "Verse 1")
+	check("moved past another, kept in order", s.regions.size() == 3 and s.regions[2][2] == "Verse 1"
+			and s.regions[1][2] == "Chorus")
+	DAW.edit_region(42.0, 30.0, 36.0, "Verse 1")
+	check("onto another's start, it takes that one's place", s.regions.size() == 2 and s.regions[1] == [30.0, 36.0, "Verse 1"])
+	var steps := s.undo_depth
+	DAW.edit_region(99.0, 1.0, 2.0, "Nowhere")
+	check("none there, nothing changes", s.regions.size() == 2 and s.undo_depth == steps)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("undone, as it was", s.regions[1] == [10.0, 20.0, "Verse"] and s.regions.size() == 3)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest sees the same", guest.regions == s.regions)
+	check("a guest may ask", &"edit_region" in DAW.COMMANDS)
+	DAW.apply_intent(&"edit_region", [10.0, 12.0, 11.0, "Backwards"])
+	DAW.apply_intent(&"edit_region", [10.0, 12.0, INF, "Forever"])
+	DAW.apply_intent(&"edit_region", [10.0, 12.0])
+	check("not for an empty, endless or malformed one", s.regions[1] == [10.0, 20.0, "Verse"])
+	DAW.apply_intent(&"edit_region", [10.0, 12.0, 22.0, "Bridge"])
+	check("a guest's is made", s.regions[1] == [12.0, 22.0, "Bridge"])
+	DAW.undo()
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRegionPage = timeline.region_page
+	DAW.seek(12.0)
+	DAW.set_loop_range(9.0, 21.0)
+	page.refresh()
+	check("in a region, NAME and FIT are lit", page.rename.lit and page.rename.glyph == &"rename"
+			and page.fit.lit and page.fit.glyph == &"region_fit")
+	page.fit.pressed.emit()
+	check("FIT makes it the loop range", s.regions[1] == [9.0, 21.0, "Verse"])
+	page.refresh()
+	check("and then it is dark, fitted", not page.fit.lit)
+	var prompt: NamePrompt = timeline.ask_region_name(9.0)
+	check("NAME asks for its name", prompt != null and prompt._edit.text == "Verse")
+	prompt._edit.text_submitted.emit("Verse A")
+	check("and the region has the name typed", s.regions[1][2] == "Verse A")
+	timeline.type_on_desk = true
+	page.refresh()
+	page.rename.pressed.emit()
+	var pad: TypingPad = timeline._pad
+	check("in a headset, on the keypad", pad != null and pad.text == "Verse A")
+	(pad.keys["LEAVE"] as PanelButton).pressed.emit()
+	timeline.type_on_desk = false
+	check("the list is a rail, at the region the playhead is in", page.list.glyph == &"region_list"
+			and page.list.available and is_equal_approx(page.list.value, 0.5))
+	check("its card names one (%s)" % page.list.describe_value.call(1.0),
+			String(page.list.describe_value.call(1.0)).begins_with("Chorus, ") and String(page.list.describe_value.call(1.0)).ends_with("3 of 3"))
+	page.list.value_committed.emit(0.0)
+	check("let go on one, the playhead goes to its start", is_equal_approx(s.position_seconds, 2.0))
+	s.position_seconds = 31.0
+	page._process(0.0)
+	check("and it follows the playhead into another as the song plays", is_equal_approx(page.list.value, 1.0))
+	timeline.free()
+	_offline()
+	timeline = TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	check("with none, the list is out of reach", not timeline.region_page.list.available)
+	timeline.free()
 
 
 class RenderSpy extends OfflineBackend:

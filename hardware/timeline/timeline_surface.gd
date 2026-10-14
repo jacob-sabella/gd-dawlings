@@ -1241,20 +1241,40 @@ func types_on_screen() -> bool:
 func ask_track_name(index: int) -> Node:
 	if not DAW.state.tracks.has(index):
 		return null
-	var title := "Name track %d" % index
-	var asker: Node
-	if types_on_screen():
-		asker = NamePrompt.ask(self, title, DAW.state.track(index).name)
-	else:
-		if is_instance_valid(_pad):
-			_pad.queue_free()
-		# Below the panel's middle and towards whoever is at it, tipped up to face them.
-		var where := Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(_lane_area_x + _lane_area_width * 0.5,
-				_top_y - _height - 0.13, 0.09))
-		_pad = TypingPad.ask(self, title, DAW.state.track(index).name, where)
-		asker = _pad
+	var asker := _ask_name("Name track %d" % index, DAW.state.track(index).name)
 	asker.answered.connect(_rename_to.bind(index))
 	return asker
+
+
+## A new name for the region starting at `at`: on the monitor, or on a keypad in the room.
+func ask_region_name(at: float) -> Node:
+	var i := DAW.state.regions.find_custom(func(r): return absf(float(r[0]) - at) < 0.001)
+	if i < 0:
+		return null
+	var asker := _ask_name("Name region at %s" % DAW.state.bar_beat(at), str(DAW.state.regions[i][2]))
+	asker.answered.connect(_rename_region.bind(at))
+	return asker
+
+
+## A name asked for on the monitor, or with no keyboard (a headset) on a keypad in the room. The
+## asker, whose `answered` gives the text.
+func _ask_name(title: String, current: String) -> Node:
+	if types_on_screen():
+		return NamePrompt.ask(self, title, current)
+	if is_instance_valid(_pad):
+		_pad.queue_free()
+	# Below the panel's middle and towards whoever is at it, tipped up to face them.
+	var where := Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(_lane_area_x + _lane_area_width * 0.5,
+			_top_y - _height - 0.13, 0.09))
+	_pad = TypingPad.ask(self, title, current, where)
+	return _pad
+
+
+func _rename_region(text: String, at: float) -> void:
+	var i := DAW.state.regions.find_custom(func(r): return absf(float(r[0]) - at) < 0.001)
+	if text != "" and i >= 0:
+		var r: Array = DAW.state.regions[i]
+		DAW.edit_region(at, float(r[0]), float(r[1]), text)
 
 
 func _rename_to(text: String, index: int) -> void:

@@ -69,7 +69,7 @@ const COMMANDS := [
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
-	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
+	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
 
@@ -595,6 +595,9 @@ func add_region(start: float, end: float, region_name: String) -> void:
 ## The region that starts at `at`, to a millisecond.
 func remove_region(at: float) -> void:
 	_do(&"remove_region", [at])
+## The region that starts at `at` moved, resized or renamed. One undo step.
+func edit_region(at: float, start: float, end: float, region_name: String) -> void:
+	_do(&"edit_region", [at, maxf(start, 0.0), maxf(end, 0.0), region_name.left(MARKER_NAME_MAX)])
 ## A take of notes onto a track, placed by song position: notes are [on, off, pitch, velocity,
 ## channel] rows in seconds. Cleaned here and cleaned again on the host, since a guest's take
 ## arrives there as peer input. See MidiTake.
@@ -676,6 +679,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed add_region intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0), float(args[1]), str(args[2]).left(MARKER_NAME_MAX)]
+	if verb == &"edit_region":
+		if args.size() != 4 or args.slice(0, 3).any(func(v): return typeof(v) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(v))) \
+				or float(args[2]) - maxf(float(args[1]), 0.0) < DAWBackend.MIN_ITEM_SECONDS:
+			push_warning("DAW: refused a malformed edit_region intent %s." % [args])
+			return
+		args = [float(args[0]), maxf(float(args[1]), 0.0), float(args[2]), str(args[3]).left(MARKER_NAME_MAX)]
 	if verb == &"remove_region":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
 			push_warning("DAW: refused a malformed remove_region intent %s." % [args])

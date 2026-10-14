@@ -184,6 +184,19 @@ func _build() -> void:
 			_box(Vector2(-0.4, 0), Vector2(0.95, 0.85), 0.55)
 			_rod(Vector2(0.6, -1.0), Vector2(0.6, 0.85), 0.08, 0.4)
 			_ball(Vector2(0.6, 0.95), 0.2, 0.0)
+		&"region_fit":
+			# A region's posts pushed out to new places, an arrow at each.
+			_box(Vector2(-0.55, 0.1), Vector2(0.14, 1.4), 0.4)
+			_box(Vector2(0.55, 0.1), Vector2(0.14, 1.4), 0.4)
+			_box(Vector2(0.0, 0.62), Vector2(1.0, 0.34), 0.5)
+			_cone(Vector2(-0.75, -0.4), Vector2(-1, 0), 0.22, 0.4)
+			_cone(Vector2(0.75, -0.4), Vector2(1, 0), 0.22, 0.4)
+		&"region_list":
+			# Spans one after another along a line, the one you are at raised.
+			_box(Vector2(-0.68, -0.1), Vector2(0.5, 0.42), 0.4)
+			_box(Vector2(0.0, 0.25), Vector2(0.5, 0.42), 0.55)
+			_box(Vector2(0.68, -0.1), Vector2(0.5, 0.42), 0.4)
+			_box(Vector2(0.0, -0.6), Vector2(1.9, 0.1), 0.2)
 		&"region", &"region_add":
 			# A span between two posts, its name's slab along the top.
 			_box(Vector2(-0.85, 0.0), Vector2(0.16, 1.6), 0.4)

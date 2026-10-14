@@ -1333,6 +1333,10 @@ func remove_region(at: float) -> void:
 	_change_regions(regions_removed(state.regions, at))
 
 
+func edit_region(at: float, start: float, end: float, region_name: String) -> void:
+	_change_regions(regions_edited(state.regions, at, start, end, region_name))
+
+
 func _change_regions(after: Array) -> void:
 	var before: Array = state.regions.duplicate(true)
 	if after == before:

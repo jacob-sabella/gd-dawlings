@@ -379,6 +379,9 @@ func remove_marker(_at: float) -> void: pass
 ## backend that answers false to Capability.MARKERS.
 func add_region(_start: float, _end: float, _region_name: String) -> void: pass
 func remove_region(_at: float) -> void: pass
+## The region starting at `at` (to a millisecond) moved, resized or renamed: from `start` to `end`,
+## called `region_name`. One undo step; nothing when there is none there.
+func edit_region(_at: float, _start: float, _end: float, _region_name: String) -> void: pass
 
 
 ## `regions` with one more, kept in order of starts. A second region at the same start replaces
@@ -392,6 +395,14 @@ static func regions_added(regions: Array, start: float, end: float, region_name:
 
 static func regions_removed(regions: Array, at: float) -> Array:
 	return regions.filter(func(r): return absf(float(r[0]) - at) >= 0.001)
+
+
+## `regions` with the one at `at` made [start, end, region_name]; as they were with none there.
+## Moved onto another's start, it replaces that one, as a new region there would.
+static func regions_edited(regions: Array, at: float, start: float, end: float, region_name: String) -> Array:
+	if regions_removed(regions, at).size() == regions.size():
+		return regions
+	return regions_added(regions_removed(regions, at), start, end, region_name)
 
 
 ## The key of the marker at `at` in `markers`, to a millisecond, or NAN for none.

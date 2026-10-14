@@ -997,6 +997,14 @@ func remove_region(at: float) -> void:
 	_edit("RemoveRegion", [at])
 
 
+func edit_region(at: float, start: float, end: float, region_name: String) -> void:
+	var after := regions_edited(state.regions, at, start, end, region_name)
+	if _bridge == null or not _bridge.is_open() or after == state.regions:
+		return
+	_write_regions(after)
+	_edit("EditRegion", [at, start, end, region_name])
+
+
 func remove_marker(at: float) -> void:
 	if _bridge == null or not _bridge.is_open() or is_nan(marker_key(state.markers, at)):
 		return
