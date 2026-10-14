@@ -14,7 +14,54 @@ extends Interactor
 
 
 func aim() -> Transform3D:
+	if _steadied:
+		return _steady
 	return controller.global_transform if controller else global_transform
+
+
+## A bare hand's pinch ray, steadied. A hand held out in the air trembles, and a three metre ray
+## turns a millimetre of it into centimetres on the gear; a controller is braced in the fist and
+## does not need it. Adaptive: still, it is smoothed hard (an aim you can rest on a single
+## button); moving, hardly at all, so a sweep across the room does not lag behind the hand.
+const STEADY_SLOW := 6.0
+const STEADY_FAST := 40.0
+## How fast (m/s at the hand, or rad/s of the ray) counts as moving on purpose.
+const MOVING_SPEED := 0.35
+const TURNING_SPEED := 1.2
+
+var _steady := Transform3D.IDENTITY
+var _steadied := false
+
+
+func bare_hand() -> bool:
+	if controller == null:
+		return false
+	var tracker := XRServer.get_tracker(controller.tracker) as XRPositionalTracker
+	return tracker != null and String(tracker.profile).contains("hand_interaction")
+
+
+func _steady_aim(delta: float) -> void:
+	if not bare_hand() or controller == null or not controller.is_inside_tree():
+		_steadied = false
+		return
+	var raw := controller.global_transform
+	if not _steadied:
+		_steady = raw
+		_steadied = true
+		return
+	_steady = steadied(_steady, raw, delta)
+
+
+## One step of the steadying from `was` toward `raw` over `delta`.
+static func steadied(was: Transform3D, raw: Transform3D, delta: float) -> Transform3D:
+	if delta <= 0.0:
+		return was
+	var moving := was.origin.distance_to(raw.origin) / delta / MOVING_SPEED
+	var turning := (-was.basis.z).angle_to(-raw.basis.z) / delta / TURNING_SPEED
+	var rate := lerpf(STEADY_SLOW, STEADY_FAST, clampf(maxf(moving, turning), 0.0, 1.0))
+	var t := 1.0 - exp(-rate * delta)
+	var q := was.basis.get_rotation_quaternion().slerp(raw.basis.get_rotation_quaternion(), t)
+	return Transform3D(Basis(q), was.origin.lerp(raw.origin, t))
 
 
 func is_pressing() -> bool:
@@ -43,6 +90,7 @@ var _trail: Array = []
 
 
 func _physics_process(delta: float) -> void:
+	_steady_aim(delta)
 	super(delta)
 	var now := Time.get_ticks_msec() / 1000.0
 	_trail.append([now, aim().origin])

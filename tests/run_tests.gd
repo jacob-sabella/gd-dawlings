@@ -38,6 +38,9 @@ func _ready() -> void:
 	_test_master_is_not_a_track()
 	_test_rig_calibration_gesture()
 	_test_rig_tip_is_ahead_of_the_grip()
+	await _test_a_fingertip_touches_the_gear()
+	_test_a_bare_hands_ray_is_steadied()
+	_test_a_headset_screen_panel_sits_in_the_middle_of_the_view()
 	_test_ar_studio_draws_no_room()
 	_test_handle_is_chrome_not_gear()
 	_test_handle_cycle_skips_missing_anchors()
@@ -773,6 +776,149 @@ func _test_rig_calibration_gesture() -> void:
 
 	rig.free()
 	anchor.free()
+
+
+## A bare hand, faked: an index finger pointing along -Z with its tip at `tip`, every other
+## joint parked at the wrist, as the headset's joint tracker would report it.
+func _fake_hand(tracker_name: StringName, tip: Vector3) -> XRHandTracker:
+	var hand: XRHandTracker = XRServer.get_tracker(tracker_name)
+	if hand == null:
+		hand = XRHandTracker.new()
+		hand.name = tracker_name
+		hand.hand = XRPositionalTracker.TRACKER_HAND_RIGHT
+		XRServer.add_tracker(hand)
+	var all := XRHandTracker.HAND_JOINT_FLAG_POSITION_VALID | XRHandTracker.HAND_JOINT_FLAG_ORIENTATION_VALID
+	for j in XRHandTracker.HAND_JOINT_MAX:
+		hand.set_hand_joint_flags(j, all)
+		hand.set_hand_joint_radius(j, 0.008)
+		hand.set_hand_joint_transform(j, Transform3D(Basis.IDENTITY, tip + Vector3(0, -0.04, 0.12)))
+	hand.set_hand_joint_transform(PokeInteractor.DISTAL, Transform3D(Basis.IDENTITY, tip + Vector3(0, 0, 0.025)))
+	hand.set_hand_joint_transform(PokeInteractor.TIP, Transform3D(Basis.IDENTITY, tip))
+	hand.has_tracking_data = true
+	return hand
+
+
+## "i need hand control and pretty fine as well. down to finger tracking": a fingertip presses a
+## control by touching it, drags it exactly where the finger goes, lets go when the finger comes
+## back off it, and does nothing at all while the hand is not tracked.
+func _test_a_fingertip_touches_the_gear() -> void:
+	var tracker_name := &"/user/hand_tracker/test_poke"
+	var control := ControlAffordance.new()
+	control.collision_layer = 1 << (Interactor.CONTROL_LAYER - 1)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.1, 0.1, 0.01)
+	shape.shape = box
+	control.add_child(shape)
+	add_child(control)
+	control.global_position = Vector3(5, 1, 0)
+	var poke := PokeInteractor.new()
+	poke.tracker_name = tracker_name
+	add_child(poke)
+	await get_tree().physics_frame
+
+	poke._physics_process(1.0 / 60.0)
+	check("no tracker, no fingertip: nothing hovered or pressed", not poke.tracked() and poke.held == null)
+	var hand := _fake_hand(tracker_name, Vector3(5, 1, 0.02))
+	poke._physics_process(1.0 / 60.0)
+	check("a fingertip 1.5cm off the face hovers it but does not press",
+			poke.tracked() and poke.hovered == control and poke.held == null)
+	_fake_hand(tracker_name, Vector3(5, 1, 0.007))
+	poke._physics_process(1.0 / 60.0)
+	check("touching the face presses it", poke.held == control and control.held_by == poke)
+	_fake_hand(tracker_name, Vector3(5.03, 1.02, 0.004))
+	poke._physics_process(1.0 / 60.0)
+	var moved := poke._plane_point(poke.aim().origin, -poke.aim().basis.z, control)
+	check("held, the control is driven to the fingertip itself (%s)" % moved,
+			moved.distance_to(Vector3(5.03, 1.02, 0.0)) < 0.002)
+	_fake_hand(tracker_name, Vector3(5.03, 1.02, -0.01))
+	poke._physics_process(1.0 / 60.0)
+	check("pushing on through does not let go", poke.held == control)
+	_fake_hand(tracker_name, Vector3(5.03, 1.02, 0.018))
+	poke._physics_process(1.0 / 60.0)
+	check("resting a centimetre off it does not let go either", poke.held == control)
+	_fake_hand(tracker_name, Vector3(5.03, 1.02, 0.04))
+	poke._physics_process(1.0 / 60.0)
+	check("lifting the finger away lets go", poke.held == null and control.held_by == null)
+	_fake_hand(tracker_name, Vector3(5, 1, 0.005))
+	poke._physics_process(1.0 / 60.0)
+	hand.has_tracking_data = false
+	poke._physics_process(1.0 / 60.0)
+	check("losing the hand lets go of what it was touching", poke.held == null and control.held_by == null)
+
+	var skeleton := HandSkeleton.new()
+	add_child(skeleton)
+	skeleton.show_hand(hand)
+	check("an untracked hand is not drawn", not skeleton.visible)
+	hand.has_tracking_data = true
+	skeleton.show_hand(hand)
+	check("a tracked one is, a bead on every joint", skeleton.visible
+			and skeleton._beads.multimesh.instance_count == XRHandTracker.HAND_JOINT_MAX
+			and skeleton._bone_pairs.size() == 24)
+	var rod := HandSkeleton.bone(Vector3(0, 0, 0), Vector3(0, 0, -0.05))
+	check("a bone runs from one joint to the next",
+			(rod * Vector3(0, 0.5, 0)).distance_to(Vector3(0, 0, -0.05)) < 0.0001
+			and (rod * Vector3(0, -0.5, 0)).distance_to(Vector3.ZERO) < 0.0001)
+	XRServer.remove_tracker(hand)
+	for n in [poke, control, skeleton]:
+		n.free()
+
+
+## A bare hand's pinch ray, steadied: a hand trembling by a millimetre aims a good deal steadier
+## than that, and one swept on purpose is followed almost at once.
+func _test_a_bare_hands_ray_is_steadied() -> void:
+	var still := Transform3D.IDENTITY
+	# Half a millimetre and a tenth of a degree in a frame: a hand held out, trying to be still.
+	var shaky := Transform3D(Basis(Vector3.UP, 0.002), Vector3(0.0005, 0, 0))
+	var after := XRInteractor.steadied(still, shaky, 1.0 / 72.0)
+	check("a tremor moves the ray a fraction of the way (%.0f%%)" % [
+			(-after.basis.z).angle_to(-still.basis.z) / 0.002 * 100.0],
+			(-after.basis.z).angle_to(-still.basis.z) < 0.002 * 0.15)
+	var swept := Transform3D(Basis(Vector3.UP, 0.08), Vector3(0.02, 0, 0))
+	var follows := XRInteractor.steadied(still, swept, 1.0 / 72.0)
+	check("a sweep is followed most of the way in a frame",
+			(-follows.basis.z).angle_to(-still.basis.z) > 0.08 * 0.35)
+
+
+## A panel put on the face in a headset is framed into the middle of the view, not to its edges,
+## so it and its handle are where you can see and reach them; and the menu button sends it back.
+func _test_a_headset_screen_panel_sits_in_the_middle_of_the_view() -> void:
+	# Moving a panel SAVES its mode: a throwaway layout, not the real one of whoever runs this.
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.VR
+	studio.xr_bootstrap = XRBootstrap.new()
+	studio.xr_bootstrap.simulated = true
+	add_child(studio)
+	var id: StringName = studio.mount.mounted_ids()[0]
+	for each in studio.mount.mounted_ids():
+		if String(each).contains("timeline"):
+			id = each
+	studio.mount.set_mode(id, Presentation.Mode.SCREEN)
+	var surface := studio.mount.surface(id)
+	surface._rebuild()
+	studio.mount.apply(id)
+	var eye := studio.rig.head.global_transform
+	var bounds := surface.content_aabb()
+	var widest := 0.0
+	var tallest := 0.0
+	for i in 8:
+		var corner := eye.affine_inverse() * (surface.global_transform * bounds.get_endpoint(i))
+		widest = maxf(widest, rad_to_deg(atan2(absf(corner.x), -corner.z)))
+		tallest = maxf(tallest, rad_to_deg(atan2(absf(corner.y), -corner.z)))
+	check("a face panel stays inside the middle of a headset's view (%.0f deg across, %.0f up)" % [
+			widest * 2.0, tallest * 2.0],
+			widest * 2.0 <= SurfaceMount.XR_SCREEN_WIDE + 1.0 and tallest * 2.0 <= SurfaceMount.XR_SCREEN_TALL + 1.0)
+	var near := (eye.affine_inverse() * surface.global_transform * bounds.get_center()).length()
+	check("at arm's length, where a fingertip reaches it (%.2fm)" % near, near < 0.6)
+	studio.rig.escape_requested.emit()
+	check("the headset's escape sends it back where it belongs",
+			studio.mount.mode_of(id) == studio.mount.default_mode_of(id, studio.medium))
+	remove_child(studio)
+	studio.free()
+	Session.layout = saved_layout
 
 
 ## The tip offset is the difference between calibrating against a floor mark and calibrating

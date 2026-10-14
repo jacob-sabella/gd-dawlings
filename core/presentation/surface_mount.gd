@@ -31,6 +31,10 @@ const SCREEN_MARGIN := 1.08
 ## moves the handle. Its size is a constant, so the space it needs can be one too.
 const CHROME_ALLOWANCE := 0.055
 
+## In a headset, how much of the view (degrees across and up) a panel on the face fills.
+const XR_SCREEN_WIDE := 56.0
+const XR_SCREEN_TALL := 36.0
+
 ## How far from the eye a panel on the monitor actually sits, in metres. See _framed_transform.
 const SCREEN_NEAR := 0.42
 
@@ -173,6 +177,13 @@ func _framed_transform(surface: Surface) -> Transform3D:
 	var pitched := Transform3D(basis, Vector3.ZERO) * bounds
 	var half_v := tan(deg_to_rad(camera.fov) * 0.5)
 	var aspect := float(camera.get_viewport().get_visible_rect().size.aspect())
+	if camera is XRCamera3D:
+		# A headset's camera reports the desktop window's shape and a nominal fov, neither of
+		# them the eye's; and the eye's own edges are the last place to put a panel anyway, out
+		# where it blurs and the handle that sends it away cannot be found. Framed into the
+		# middle of the view instead, at arm's length, where a fingertip reaches its handle.
+		half_v = tan(deg_to_rad(XR_SCREEN_TALL) * 0.5)
+		aspect = tan(deg_to_rad(XR_SCREEN_WIDE) * 0.5) / half_v
 	var by_width := (pitched.size.x * 0.5 + CHROME_ALLOWANCE) / (half_v * aspect) * SCREEN_MARGIN
 	var distance := maxf(pitched.size.y * 0.5 / half_v * SCREEN_MARGIN, by_width)
 	var lift := 0.0

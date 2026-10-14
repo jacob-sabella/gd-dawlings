@@ -2963,3 +2963,23 @@ solid for it then pushed you out, your aim moved with you, the stand followed, e
 `FloorPlan.bodies` (the walker's `body_footprint`) is now something a HELD piece stops against,
 and goes round, without being stood up as a wall for the walker itself. Pieces placed by a layout
 or played back from the room ignore it. Test: `_test_a_stand_pulled_into_you_stops_at_you`.
+
+## Bare hands, down to the fingertip (2026-10-13)
+"i need hand control and pretty fine as well. down to finger tracking"
+Godot ships the OpenXR hand extensions off, so a Quest tracking bare hands reported nothing:
+`xr/openxr/extensions/hand_tracking` and `hand_interaction_profile` are on now, which also brings
+the action map's pinch (trigger) and grasp (grip) bindings to life. On each hand:
+- `PokeInteractor`: the index fingertip touches the gear directly. Within 4mm of a face it
+  presses; held, the control is driven to the tip itself (one to one, the fine way); it lets go
+  only when the finger comes 2cm back off, never by pushing on through. Idle while a controller
+  is held (no joint data).
+- `HandSkeleton`: beads and bones on the tracked joints, translucent for passthrough, tip lit
+  while touching. The pinch ray hides while the fingertip is on something.
+- `XRInteractor.steadied`: a bare hand's pinch ray is smoothed adaptively, hard when still and
+  barely when swept.
+
+"moving things to "screen" ... puts the edges outside of the FOV and i have no idea how to get
+rid of it": in a headset a face panel is framed into the middle 56x36 degrees of the view (the
+XR camera reports the desktop window's shape, not the eye's), at arm's length so its handle can
+be touched. The menu button, or two fists held half a second, is Escape (`XRRig.escape_requested`
+-> `Studio._on_escape`): face panels go back where they belong.

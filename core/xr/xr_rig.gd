@@ -23,6 +23,11 @@ extends XROrigin3D
 ## to do it again, not wanting to find a menu.
 
 signal calibration_step(step: int, total: int)
+## The way out of whatever has been put in front of your face: the menu button on a controller,
+## or both bare hands made into fists and held there for ESCAPE_HOLD. What Escape is on a
+## keyboard (studio.gd), because a panel pinned to the face whose handle you cannot find is a
+## panel you cannot otherwise get rid of.
+signal escape_requested
 
 ## The tip of the controller, not its tracked centre. A controller's pose is reported somewhere
 ## around the user's fist; the point they will actually press against a floor mark is ahead of
@@ -31,6 +36,11 @@ const TIP_OFFSET := Vector3(0, -0.015, -0.075)
 
 const CALIBRATE_ACTION := &"by_button"
 const PRESS_ACTION := &"trigger_click"
+const MENU_ACTION := &"menu_button"
+const FIST_ACTION := &"grip_click"
+const ESCAPE_HOLD := 0.5
+## Where each bare hand's joints are reported.
+const HAND_TRACKERS := {&"left_hand": &"/user/hand_tracker/left", &"right_hand": &"/user/hand_tracker/right"}
 
 ## Set by the studio before the rig enters the tree when there is no headset (--xr-sim): the
 ## rig then starts where a standing person's head and hands would, since no runtime is there
@@ -46,6 +56,11 @@ var room_anchor: RoomAnchor
 
 var _marks_taken := 0
 var _calibrate_was_down := false
+var _menu_was_down := false
+var _fists_for := 0.0
+## Per hand (the controller node): its fingertip and its drawn joints.
+var pokes: Dictionary = {}
+var skeletons: Dictionary = {}
 
 
 func _ready() -> void:
@@ -115,6 +130,23 @@ func _build_hand(tracker: StringName, node_name: String) -> XRController3D:
 	hand.controller = controller
 	hand.press_action = PRESS_ACTION
 	controller.add_child(hand)
+	controller.set_meta(&"ray", ray)
+	controller.set_meta(&"ray_tip", tip)
+
+	# A bare hand, as well: its fingertip touches the gear directly (PokeInteractor), and its
+	# joints are drawn so you can see it is being tracked. Both sit idle while a controller is
+	# held, when the joint tracker has no data.
+	var poke := PokeInteractor.new()
+	poke.name = node_name + "Fingertip"
+	poke.tracker_name = HAND_TRACKERS[tracker]
+	poke.origin = self
+	add_child(poke)
+	pokes[controller] = poke
+	var skeleton := HandSkeleton.new()
+	skeleton.name = node_name + "Joints"
+	skeleton.tracker_name = HAND_TRACKERS[tracker]
+	add_child(skeleton)
+	skeletons[controller] = skeleton
 
 	return controller
 
@@ -124,7 +156,9 @@ func tip_of(controller: XRController3D) -> Vector3:
 	return controller.global_transform * TIP_OFFSET
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_show_hands()
+	_watch_escape(delta)
 	if left == null or room_anchor == null:
 		return
 	var down := left.is_button_pressed(CALIBRATE_ACTION)
@@ -150,3 +184,36 @@ func _take_mark() -> void:
 			room_anchor.mark_origin(tip_of(left))
 			_marks_taken = 1
 	calibration_step.emit(_marks_taken, 2)
+
+
+## A fingertip on something lights its tip, and the pinch ray of that hand goes away while it is:
+## a ray sticking out past the fader you are touching says you are pointing at what is behind it.
+## The ray's ball, the controller's tip, is not drawn on a bare hand, which has no tip there.
+func _show_hands() -> void:
+	for controller in pokes:
+		var poke: PokeInteractor = pokes[controller]
+		var touching := poke.tracked() and (poke.held != null or poke.hovered != null)
+		(skeletons[controller] as HandSkeleton).touching = poke.held != null
+		var ray := controller.get_meta(&"ray") as Node3D
+		ray.visible = not touching
+		(controller.get_meta(&"ray_tip") as Node3D).visible = not poke.tracked()
+
+
+func _watch_escape(delta: float) -> void:
+	var menu := false
+	var fists := 0
+	for controller in [left, right]:
+		if controller == null:
+			continue
+		menu = menu or controller.is_button_pressed(MENU_ACTION)
+		if (pokes[controller] as PokeInteractor).tracked() and controller.is_button_pressed(FIST_ACTION):
+			fists += 1
+	if menu and not _menu_was_down:
+		escape_requested.emit()
+	_menu_was_down = menu
+	if fists == 2:
+		_fists_for += delta
+		if _fists_for >= ESCAPE_HOLD and _fists_for - delta < ESCAPE_HOLD:
+			escape_requested.emit()
+	else:
+		_fists_for = 0.0

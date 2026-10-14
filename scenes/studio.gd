@@ -1767,6 +1767,7 @@ func _build_anchors() -> void:
 		rig.simulated = xr_bootstrap != null and xr_bootstrap.simulated
 		add_child(rig)
 		head = rig.head
+		rig.escape_requested.connect(_on_escape)
 
 	screen_stage = Node3D.new()
 	screen_stage.name = "ScreenStage"
@@ -3223,9 +3224,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_N:
 				set_god_mode(not god_mode)
 			KEY_ESCAPE:
-				focus.release()
-				_release_stray_screens()
-				_sit_down()
+				_on_escape()
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
 			# by changing it while looking at the thing.
 			KEY_EQUAL, KEY_KP_ADD:
@@ -3366,6 +3365,15 @@ func _follow_viewport_shape() -> void:
 ## would think to look for it (2026-10-11: "escape was not working" trying to get a
 ## full-screened rack back). Leaves a surface that is in SCREEN mode on purpose -- the timeline
 ## defaults there -- exactly alone.
+## Escape on a keyboard, the menu button or two fists in a headset: let go of what has focus, send
+## anything pinned to the face back where it belongs, and sit back down at the desk.
+func _on_escape() -> void:
+	if focus != null:
+		focus.release()
+	_release_stray_screens()
+	_sit_down()
+
+
 func _release_stray_screens() -> void:
 	for id in mount.mounted_ids():
 		if mount.mode_of(id) == Presentation.Mode.SCREEN \

@@ -87,6 +87,12 @@ openxr/startup_alert=false
 ; Godot upgrade that adds controller profiles.
 openxr/default_action_map="res://openxr_action_map.tres"
 
+; Bare hands. Off by default in Godot: without these a headset tracking your hands reports
+; nothing at all -- no joints for the fingertip (PokeInteractor) and no pinch for the ray, whose
+; bindings in the action map are on the hand interaction profile.
+openxr/extensions/hand_tracking=true
+openxr/extensions/hand_interaction_profile=true
+
 [physics]
 
 ; Surfaces are grabbed with ray and hand interactors, so the controls need pickable bodies; none
