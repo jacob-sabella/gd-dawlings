@@ -53,6 +53,9 @@ window/vsync/vsync_mode=1
 
 [rendering]
 
+; ETC2/ASTC as well as the desktop formats: what a standalone headset's GPU reads (the Quest preset).
+textures/vram_compression/import_etc2_astc=true
+
 textures/default_filters/anisotropic_filtering_level=4
 
 ; forward_plus for the desktop and tethered-PC-VR case: real-time lights and shadows are most of
@@ -92,6 +95,13 @@ openxr/default_action_map="res://openxr_action_map.tres"
 ; bindings in the action map are on the hand interaction profile.
 openxr/extensions/hand_tracking=true
 openxr/extensions/hand_interaction_profile=true
+
+; A Quest's own (addons/godotopenxrvendors, tools/fetch_openxr_vendors.sh): its passthrough, its
+; scan of the room, and anchors to keep the gear where it was put in it. Asked for only where
+; the runtime has them; over WiVRn or on a desktop they are simply not there.
+openxr/extensions/meta/passthrough=true
+openxr/extensions/meta/scene_api=true
+openxr/extensions/meta/anchor_api=true
 
 [physics]
 

@@ -2998,3 +2998,7 @@ dawkit builds for android arm64 (`tools/build_native.sh android all`). `tools/fe
 installs GodotVR's vendors plugin 5.1.0 (Meta passthrough, scene, anchors, depth) into the
 gitignored addons/godotopenxrvendors. Project folders are cleared through DirAccess, not `rm -rf`,
 which neither Windows nor a headset can run. Next: Android export templates, a Quest preset.
+First standalone APK built (2026-10-13): `tools/build_quest.sh [--install]`, preset "Quest" (arm64,
+Quest 3, gradle build with the Meta vendor plugin; hand tracking and passthrough optional, no
+eye/face/body). The project imports ETC2/ASTC; Meta passthrough, scene and anchor extensions are
+on (asked for only where the runtime has them). Not yet run on the headset. No project icon yet.
