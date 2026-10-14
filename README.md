@@ -48,7 +48,9 @@ person standing in it sees it.
 
 ### Venues
 
-Only the world changes; the gear and the layout stay the same. **V** cycles them.
+Only the world changes; the gear and the layout stay the same. **V** cycles them, and every
+venue comes in three arrangements (a time of day, the weather, what stands round it), picked in
+the stage manager.
 
 | | |
 |---|---|
@@ -56,6 +58,9 @@ Only the world changes; the gear and the layout stay the same. **V** cycles them
 | ![Cabin](docs/media/venue-cabin.jpg) **Cabin**: a wood stove and firs | ![Dome](docs/media/venue-dome.jpg) **Dome**: under the sea |
 | ![Club](docs/media/venue-club.jpg) **Club**: after hours | ![Loft](docs/media/venue-loft.jpg) **Loft** |
 | ![Rooftop](docs/media/venue-rooftop.jpg) **Rooftop**: a city's water tanks | ![Station](docs/media/venue-station.jpg) **Station**: pressure hatches |
+| ![Crystal cave](docs/media/venue-cave.jpg) **Crystal cave**: lit from within | ![Glasshouse](docs/media/venue-greenhouse.jpg) **Glasshouse**: a Victorian palm house |
+| ![Festival stage](docs/media/venue-stage.jpg) **Festival stage**: a crowd past the barricade | ![Temple garden](docs/media/venue-garden.jpg) **Temple garden**: a pavilion in blossom |
+| ![Desert](docs/media/venue-desert.jpg) **Desert**: a tent in a slot canyon | |
 
 <video src="https://github.com/jacob-sabella/gd-dawlings/raw/master/docs/media/grid-playing.mp4" controls muted loop playsinline width="100%"></video>
 

@@ -61,7 +61,7 @@ const SHADERS := "res://core/venues/shaders/"
 const HOURS := [
 	{"sky": [Color(0.004, 0.006, 0.018), Color(0.01, 0.014, 0.035), Color(0.035, 0.038, 0.07)],
 			"glow": [Color(0.3, 0.32, 0.5), 0.15], "sun": Vector3(0.2, -0.5, 1.0), "disc": 0.0,
-			"moon": [Vector3(0.55, 0.42, 0.72), 0.022, 0.6], "stars": 1.0, "milky_way": 1.0, "energy": 1.0,
+			"moon": [Vector3(-0.25, 0.75, -0.6), 0.03, 0.6], "stars": 1.0, "milky_way": 1.0, "energy": 1.0,
 			"ambient": [Color(0.42, 0.48, 0.7), 0.09], "fog": [Color(0.025, 0.03, 0.06), 60.0, 700.0],
 			"key": [Color(0.74, 0.8, 1.0), 0.36, -52.0, 210.0],
 			"sand": [Color(0.66, 0.44, 0.3), Color(0.55, 0.34, 0.24)], "lanterns": 1.0},
@@ -154,6 +154,12 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat.set_shader_parameter("moon_phase", hour["moon"][2])
 	_sky_mat.set_shader_parameter("stars", hour["stars"])
 	_sky_mat.set_shader_parameter("milky_way", hour["milky_way"])
+	if variant == CANYON:
+		# Down the slot: the only sky a canyon floor has is the strip between the rims, so the
+		# galaxy runs along it, its bright core over the canyon's mouth, and the moon rides high
+		# in the same strip.
+		_sky_mat.set_shader_parameter("galaxy_pole", Vector3(1.0, 0.1, 0.1))
+		_sky_mat.set_shader_parameter("galaxy_core", Vector3(0.0, 0.62, -0.78))
 	_sky_mat.set_shader_parameter("energy", hour["energy"])
 	var sky := Sky.new()
 	sky.sky_material = _sky_mat

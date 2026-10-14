@@ -49,15 +49,15 @@ def ledges(h, beds, hard=0.7):
     back further, so the face steps."""
     u = h * beds
     f = u - math.floor(u)
-    # Hard at the top of each bed, soft below it, a sharp lip between.
-    return 1.0 - hard * (f ** 3)
+    # Hard at the top of each bed, soft below it; the lip between worn round.
+    return 1.0 - hard * (0.5 - 0.5 * math.cos(math.tau * f ** 0.7)) ** 1.4
 
 
 # --- boulders -----------------------------------------------------------------------------------
 for name, seed, size, cut in (("boulder_a", 1, (1.0, 0.8, 0.65), (0.4, 0.2)), ("boulder_b", 2, (1.4, 1.0, 0.7), (-0.3, 0.3)),
                               ("boulder_c", 3, (0.7, 0.65, 0.9), (0.1, -0.5))):
     ob, bm = new_object(name)
-    bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)
+    bmesh.ops.create_icosphere(bm, subdivisions=4, radius=1.0)
     plane = Vector((cut[0], cut[1], 0.4)).normalized()
     for v in bm.verts:
         n = noise.fractal(v.co * 1.3 + Vector((seed * 5.0, 0, 0)), 0.5, 2.0, 3)
@@ -71,11 +71,11 @@ for name, seed, size, cut in (("boulder_a", 1, (1.0, 0.8, 0.65), (0.4, 0.2)), ("
         if co.z < -size[2] * 0.5:
             co.z = -size[2] * 0.5 + (co.z + size[2] * 0.5) * 0.2
         v.co = co + Vector((0, 0, size[2] * 0.42))
-    finish(ob, bm, seed * 4.0)
+    finish(ob, bm, seed * 4.0, smooth=True)
 
 # --- butte --------------------------------------------------------------------------------------
 ob, bm = new_object("butte")
-SEG, ROWS = 40, 30
+SEG, ROWS = 64, 72
 rings = []
 for j in range(ROWS + 1):
     h = j / ROWS
@@ -96,12 +96,27 @@ for a, b in zip(rings, rings[1:]):
 cap = bm.verts.new((0, 0, 1.01))
 for k in range(SEG):
     bm.faces.new((rings[-1][k], rings[-1][(k + 1) % SEG], cap))
-finish(ob, bm, 14.0)
+finish(ob, bm, 14.0, smooth=True)
 
 # --- canyon wall --------------------------------------------------------------------------------
+# Eroded, not stacked: the ledges are where hard beds stand out over soft ones, but the wind and
+# the water have rounded every lip, the beds thicken and thin and wander up and down along the
+# wall, and the whole face is worn by noise at three scales -- the bays and buttresses, the
+# rounded bulges between them, the pitting. Fine enough (and smooth-shaded) that no facet shows.
 ob, bm = new_object("canyon_wall")
 LONG, TALL, BACK = 30.0, 46.0, 14.0
-NU, NV = 60, 56
+NU, NV = 96, 150
+
+
+def soft_ledges(u, hard):
+    """How far the face has weathered back at bed-coordinate u: a rounded lip at the top of each
+    bed, a smooth hollow under it (the soft bed), easing back out to the next lip."""
+    f = u - math.floor(u)
+    # Rounded hollow: a raised cosine, skewed so the overhang is under the lip.
+    g = f ** 0.7
+    return hard * (0.5 - 0.5 * math.cos(math.tau * g)) ** 1.4
+
+
 face = []
 for i in range(NU + 1):
     x = -LONG * 0.5 + LONG * i / NU
@@ -109,15 +124,29 @@ for i in range(NU + 1):
     for j in range(NV + 1):
         h = j / NV
         z = TALL * h
-        # Stepped: ledges where hard beds stand out over soft ones; the face leans back as it rises.
-        step = 1.6 * (1.0 - ledges(h, 9, 0.8))
+        # The beds wander up and down along the wall and thicken and thin.
+        u = h * 9.0 + 0.45 * noise.noise(Vector((x * 0.045, 3.1, 0.0))) + 0.25 * math.sin(x * 0.11 + h * 4.0)
+        # Ledges stand out more in some beds than others.
+        hard = 0.9 + 0.7 * noise.noise(Vector((math.floor(u) * 1.7, 0.4, 2.0)))
+        step = 1.3 * soft_ledges(u, hard)
         lean = 2.5 * h
-        # Scallops along the wall, and erosion noise everywhere.
+        # Bays and buttresses along the wall, then rounded bulges, then the pitting.
         scallop = 1.8 * math.sin(x * 0.42 + 1.3 * math.sin(x * 0.13)) * (0.6 + 0.4 * h)
-        n = noise.fractal(Vector((x * 0.09, h * 2.5, 0.0)), 0.55, 2.1, 4) * 1.4
-        # Alcoves undercut near the foot, where seeps have eaten in.
+        p = Vector((x * 0.09, z * 0.06, 0.0))
+        n = noise.fractal(p, 0.55, 2.1, 4) * 1.4
+        bulge = noise.fractal(Vector((x * 0.3, z * 0.25, 5.0)), 0.5, 2.0, 3) * 0.45
+        pit = noise.noise(Vector((x * 1.4, z * 1.1, 9.0))) * 0.08
+        # Alcoves undercut near the foot, where seeps have eaten in: rounded hollows.
         alcove = 2.4 * max(0.0, math.sin(x * 0.31 + 0.6)) ** 3 * math.exp(-((h - 0.12) / 0.07) ** 2)
-        y = step + lean + scallop + n + alcove
+        y = step + lean + scallop + n + bulge + pit + alcove
+        # Toward either end the face eases onto one shared profile, so walls laid end to end meet
+        # without a seam: the same ledges at the same depths, whatever each did in between.
+        seam_u = h * 9.0
+        seam = 1.3 * soft_ledges(seam_u, 1.2) + lean + 0.6
+        edge = min(x + LONG * 0.5, LONG * 0.5 - x)
+        w = max(0.0, 1.0 - edge / 4.0)
+        w = w * w * (3.0 - 2.0 * w)
+        y = y + (seam - y) * w
         # The foot runs a couple of metres into the sand.
         col.append(bm.verts.new((x, y, z - 2.0)))
     face.append(col)
@@ -144,7 +173,7 @@ f = mid.link_faces[0]
 if f.normal.y > 0:
     for f in bm.faces:
         f.normal_flip()
-finish(ob, bm, 30.0)
+finish(ob, bm, 30.0, smooth=True)
 
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.export_scene.gltf(filepath=os.path.join(ROOT, "assets/models/desert_rocks.glb"), export_format="GLB",

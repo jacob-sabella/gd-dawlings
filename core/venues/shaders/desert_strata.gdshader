@@ -34,7 +34,8 @@ float hash3(vec3 p) {
 float noise3(vec3 x) {
 	vec3 i = floor(x);
 	vec3 f = fract(x);
-	f = f * f * (3.0 - 2.0 * f);
+	// Quintic easing: no creases at the lattice, so no grid of squares shows in the stone.
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 	return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x),
 			mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
 			mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x),
@@ -44,9 +45,11 @@ float noise3(vec3 x) {
 float fbm(vec3 p) {
 	float v = 0.0;
 	float a = 0.5;
+	// Each octave turned against the last, so their lattices never line up into steps.
+	mat3 turn = mat3(vec3(0.0, 0.8, 0.6), vec3(-0.8, 0.36, -0.48), vec3(-0.6, -0.48, 0.64));
 	for (int i = 0; i < 4; i++) {
 		v += a * noise3(p);
-		p *= 2.1;
+		p = turn * p * 2.1;
 		a *= 0.5;
 	}
 	return v;
@@ -57,19 +60,28 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
+vec3 bed_colour(float which) {
+	float pick = hash3(vec3(which, 3.0, 7.0));
+	return pick < 0.3 ? red_bed.rgb : (pick < 0.6 ? rust_bed.rgb : (pick < 0.82 ? pale_bed.rgb : shale_bed.rgb));
+}
+
 void fragment() {
-	// The beds: which one this height is in, the boundaries wavering over tens of metres.
-	float y = world.y + bed_offset + (fbm(world * 0.03) - 0.5) * 3.0;
+	// The beds: which one this height is in, the boundaries wavering over tens of metres and
+	// rippling over a few, and each bed fading into the next over a hand's breadth or two.
+	float y = world.y + bed_offset + (fbm(world * 0.03) - 0.5) * 3.0
+			+ (fbm(world * 0.22 + 11.0) - 0.5) * 0.9;
 	float k = y / bed;
 	float which = floor(k);
-	float pick = hash3(vec3(which, 3.0, 7.0));
-	vec3 c = pick < 0.3 ? red_bed.rgb : (pick < 0.6 ? rust_bed.rgb : (pick < 0.82 ? pale_bed.rgb : shale_bed.rgb));
+	float f = fract(k);
+	vec3 c = bed_colour(which);
+	c = mix(c, bed_colour(which - 1.0), smoothstep(0.14, 0.0, f) * 0.5);
+	c = mix(c, bed_colour(which + 1.0), smoothstep(0.86, 1.0, f) * 0.5);
 	// Within a bed, fine laminations and cross-bedding.
 	float lam = sin((y + fbm(world * 0.4) * 1.5) * 9.0) * 0.5 + 0.5;
 	c *= 0.86 + 0.14 * lam;
 	// Grain and blotch.
 	float grain = fbm(world * 2.3);
-	c *= 0.8 + 0.4 * grain;
+	c *= 0.88 + 0.24 * grain;
 	// Varnish: dark streaks hanging down the faces from the rims of ledges.
 	float steep = 1.0 - abs(world_normal.y);
 	float streak = smoothstep(0.55, 0.85, fbm(vec3(world.x * 0.35, world.y * 0.025, world.z * 0.35)));

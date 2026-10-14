@@ -108,7 +108,7 @@ vec3 above(vec3 d) {
 		// Star clouds: clumpy brightness along the band.
 		float clouds = fbm(d * 7.0 + 3.0);
 		float core = exp(-pow(acos(clamp(dot(d, normalize(galaxy_core)), -1.0, 1.0)) / 0.45, 2.0));
-		float light = in_band * (0.35 + 1.1 * clouds * clouds) + core * 1.1 * in_band;
+		float light = in_band * (0.12 + 1.3 * clouds * clouds * clouds) + core * 0.6 * in_band;
 		// The dark rift down the middle: dust, ragged, a little to one side.
 		float rift = exp(-pow((lane - 0.025) / 0.04, 2.0)) * smoothstep(0.35, 0.65, fbm(d * 11.0 + 7.0));
 		light *= 1.0 - 0.85 * rift;

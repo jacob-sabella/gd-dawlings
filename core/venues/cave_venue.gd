@@ -148,7 +148,7 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 		LAKE:
 			# The glowworms' blue-green is the only light from everywhere, and there is little of it.
 			env.ambient_light_color = Color(0.25, 0.6, 0.58)
-			env.ambient_light_energy = 0.12
+			env.ambient_light_energy = 0.15
 			env.glow_intensity = 0.75
 			env.glow_bloom = 0.03
 			env.fog_light_color = Color(0.004, 0.012, 0.014)
@@ -1268,7 +1268,7 @@ func _lantern(at: Vector3, reflected: bool, _yaw := 0.0) -> void:
 	ring.rotation.x = PI * 0.5
 	ring.position = Vector3(0, 0.33, 0)
 	holder.add_child(ring)
-	_light(at + Vector3(0, 0.11, 0), LANTERN, 2.1, 7.0, &"flame")
+	_light(at + Vector3(0, 0.11, 0), LANTERN, 2.9, 8.0, &"flame")
 	if reflected:
 		var twin := holder.duplicate() as Node3D
 		twin.name = "LanternMirrored"

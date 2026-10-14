@@ -3022,3 +3022,24 @@ port+AUDIO_PORT_OFFSET here and says the public address; opt in only (the sessio
 "Open to internet", or `--host --public`), closed when the session ends and on quit. When the
 router will not, the panel says which ports to forward by hand. On this desk the router did not
 answer UPnP discovery, and ufw is active, which drops the router's reply and joining guests alike.
+
+## Five more venues, and three arrangements for every venue (2026-10-14)
+
+"add 5 new fully featured venues and make sure every venue has AT LEAST 2 alternates". New:
+the crystal cave (Crystal grotto, Glowworm lake, Lava tube), the glasshouse (Morning, Rain,
+Night bloom), the festival stage (Headline night, Soundcheck, Arena), the temple garden (Spring,
+Autumn, Winter) and the desert (Starlit canyon, Dawn dunes, Oasis), each with its own props
+modelled in Blender, gear finishes, gear kit (`tools/blender/gear_kits.py`), track palette,
+wardrobe board, mirror frame and toy (a geode, a lemon, a glow stick, a temari ball, a
+tumbleweed; `ToyItem.TOYS` gained "rest" for a toy whose middle is not its size off the floor).
+Every existing venue now has three arrangements too (docs/venues.md, "Arrangements"), and the
+test holds every venue to at least three. `DAWLINGS_TESTS=_test_a,_test_b` runs only those tests.
+- Built in parallel, one agent a venue, each with only its own files; the shared registry,
+  toys, kits and docs were done first and last by one hand. Half-written files broke every
+  other agent's compile (every venue loads through `venue.gd`); some worked in private copies.
+- A subset run fails the duck's put-down checks: they depend on what earlier tests leave behind.
+  The full suite passes.
+- Known rough edges: studio, grid and chalk were already over the seat light budget before this
+  (0.232, 0.265, 0.318 against 0.23), and so is studio's new arrangement (0.231); the station's
+  day-side sky is a heavy shader not yet measured on a headset; the festival crowd is blocky up
+  close.
