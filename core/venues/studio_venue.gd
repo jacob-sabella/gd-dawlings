@@ -50,6 +50,25 @@ const SIDE_ZONES := {
 	&"vocals": AABB(Vector3(-9.0, 0.0, -2.0), Vector3(2.2, 2.4, 2.2)),
 }
 
+## The third arrangement: the classic tracking studio. The control room's back is closed by a
+## thick wall with a big double-glazed window in it and a heavy door beside it, and the live room
+## behind -- all five zones where the first arrangement has them -- is a room of its own, seen
+## through the glass.
+const THROUGH_GLASS := 2
+## The wall's control-room face (2 mm into the footprint, so it never lies in the plane of the
+## live room's front wall either side) and its live-room face: 40 cm of stud, mass and air gap.
+const GLASS_WALL_FRONT := Studio.ROOM_BACK - 0.052
+const GLASS_WALL_BACK := Studio.ROOM_BACK + 0.35
+## The window's sill and head, the door's head, and how far each pane of the inner glass leans.
+const GLASS_SILL := 0.85
+const GLASS_HEAD := 2.35
+const GLASS_DOOR_HEAD := 2.12
+const GLASS_TILT := deg_to_rad(7.0)
+## The door, its clear width inside its jambs, in from the right-hand wall; the window runs from
+## a metre in from the left wall to a pier short of the door.
+const GLASS_DOOR_WIDTH := 0.95
+const GLASS_DOOR_JAMB := 0.035
+
 
 func venue_id() -> StringName:
 	return &"studio"
@@ -217,6 +236,8 @@ func _ready() -> void:
 	_build_live_room(wall_mat)
 	if variant == BESIDE:
 		_build_side_room(wall_mat)
+	elif variant == THROUGH_GLASS:
+		_build_glass_wall(wall_mat)
 	_dress_zones()
 
 
@@ -368,6 +389,9 @@ func _build_live_room(wall_mat: Material) -> void:
 			[Vector3(right, tall * 0.5, front + depth * 0.5), Vector3(0.1, tall - shy * 2.0, depth),
 					live_wall],
 			[Vector3(mid, tall * 0.5, back), Vector3(right - left, tall, 0.1), live_wall]]
+	# Through the glass, the wall between the rooms runs floor to this ceiling: no header.
+	if variant == THROUGH_GLASS:
+		specs.remove_at(1)
 	if -cr - left > 0.01:
 		specs.append([Vector3((left - cr) * 0.5, tall * 0.5, front), Vector3(-cr - left, tall - shy, 0.1),
 				live_wall])
@@ -539,6 +563,193 @@ func _build_side_room(wall_mat: Material) -> void:
 			4.0, 4.6)
 	# Over the way from the door to both, as the live room behind has over its own.
 	_hang_pendant(Vector3((far + near) * 0.5, 0, (kit.end.z + z1) * 0.5))
+
+
+## Through the glass: where the wall's openings are across the room, as [window's left edge,
+## window's right edge, door opening's left edge, door opening's right edge]. The door a little in
+## from the right-hand wall, so it opens onto the walk in front of the lattice, clear of the table
+## and the hoop; the window from a metre in from the left wall to a pier short of the door, so
+## from the desk the riser, the lattice and the booth's corner are all behind glass.
+func glass_openings() -> PackedFloat32Array:
+	var cr := room_width * 0.5
+	var dx1 := cr - 0.6
+	var dx0 := dx1 - GLASS_DOOR_WIDTH
+	return PackedFloat32Array([-cr + 1.0, dx0 - 0.55, dx0, dx1])
+
+
+## Through the glass: the wall that closes the control room's back. Two skins -- the control
+## room's grey plaster on its face, the live room's warmer one behind -- with a walnut-cased
+## window in it, double glazed, the inner pane leaning back off true so neither room's light
+## bounces straight back at it, and a heavy walnut door, standing open into the live room.
+func _build_glass_wall(wall_mat: Material) -> void:
+	var cr := room_width * 0.5
+	var tall := LIVE_ROOM_HEIGHT
+	var at := glass_openings()
+	var wx0 := at[0]
+	var wx1 := at[1]
+	var dx0 := at[2]
+	var dx1 := at[3]
+	var live_wall := Materials.painted_wall(Color(0.10, 0.092, 0.085))
+	var walnut := Materials.cached_scanned("mirror_walnut", "black_walnut_veneer_01", "2k", 0.6,
+			Color(0.55, 0.45, 0.38))
+	var z0 := GLASS_WALL_FRONT
+	var z1 := GLASS_WALL_BACK
+	# Piers run full height; the pieces over and under the openings are 2 mm shy of them on every
+	# face they share a direction with, so no two faces lie in one plane. Each piece is two skins
+	# meeting back to back (the split itself a hair apart between piers and the rest).
+	var piece := func(x0: float, x1: float, y0: float, y1: float, shy: float, label: String) -> void:
+		var split := (z0 + z1) * 0.5 + shy
+		ZoneKit.block(self, Vector3(x1 - x0, y1 - y0, split - (z0 + shy)),
+				Vector3((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + shy + split) * 0.5), wall_mat, label)
+		ZoneKit.block(self, Vector3(x1 - x0, y1 - y0, (z1 - shy) - split),
+				Vector3((x0 + x1) * 0.5, (y0 + y1) * 0.5, (split + z1 - shy) * 0.5), live_wall, label)
+	var top := tall - 0.012
+	piece.call(-cr - 0.04, wx0, 0.003, top, 0.0, "GlassWallPier")
+	piece.call(wx1, dx0, 0.003, top, 0.0, "GlassWallPier")
+	piece.call(dx1, cr + 0.04, 0.003, top, 0.0, "GlassWallPier")
+	piece.call(wx0, wx1, 0.005, GLASS_SILL, 0.002, "GlassWallSill")
+	piece.call(wx0, wx1, GLASS_HEAD, top - 0.003, 0.002, "GlassWallHead")
+	piece.call(dx0, dx1, GLASS_DOOR_HEAD, top - 0.003, 0.002, "GlassWallHead")
+
+	# The window's walnut casing: a deep sill board and a head board through the wall's whole
+	# depth and two centimetres proud of both faces, cheeks between them, and posts dividing it
+	# into bays no wider than a pane of that size is made.
+	var depth := z1 - z0
+	var mid_z := (z0 + z1) * 0.5
+	var width := wx1 - wx0
+	# Their ends run 15 mm into the piers, past the cheeks' backs, so no end lies in a pier's face.
+	ZoneKit.block(self, Vector3(width + 0.03, 0.04, depth + 0.04), Vector3((wx0 + wx1) * 0.5, GLASS_SILL + 0.01, mid_z),
+			walnut, "WindowSill")
+	ZoneKit.block(self, Vector3(width + 0.03, 0.04, depth + 0.04), Vector3((wx0 + wx1) * 0.5, GLASS_HEAD - 0.01, mid_z),
+			walnut, "WindowHead")
+	var clear_lo := GLASS_SILL + 0.03
+	var clear_hi := GLASS_HEAD - 0.03
+	var clear_h := clear_hi - clear_lo
+	for x in [wx0 + 0.01, wx1 - 0.01]:
+		ZoneKit.block(self, Vector3(0.04, clear_h - 0.002, depth + 0.036), Vector3(x, (clear_lo + clear_hi) * 0.5, mid_z),
+				walnut, "WindowCheek")
+	var bays := maxi(2, ceili((width - 0.06) / 2.6))
+	var bay := (width - 0.06) / bays
+	var post := 0.07
+	for i in range(1, bays):
+		ZoneKit.block(self, Vector3(post, clear_h - 0.004, depth + 0.03),
+				Vector3(wx0 + 0.03 + bay * i, (clear_lo + clear_hi) * 0.5, mid_z), walnut, "WindowPost")
+	var glass := _glass()
+	for i in bays:
+		var left := wx0 + 0.03 + bay * i + (post * 0.5 if i > 0 else 0.0)
+		var right := wx0 + 0.03 + bay * (i + 1) - (post * 0.5 if i < bays - 1 else 0.0)
+		var pane_w := right - left - 0.004
+		var cx := (left + right) * 0.5
+		# The live room's pane, upright, near its face...
+		var outer := ZoneKit.block(self, Vector3(pane_w, clear_h - 0.004, 0.012),
+				Vector3(cx, (clear_lo + clear_hi) * 0.5, z1 - 0.07), glass, "WindowPane")
+		outer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# ...and the control room's, its head leaning toward the desk: the gap between them wide
+		# at the sill and narrow at the head, as real control-room glass is set.
+		var inner := ZoneKit.block(self, Vector3(pane_w, (clear_h - 0.006) / cos(GLASS_TILT), 0.012),
+				Vector3(cx, (clear_lo + clear_hi) * 0.5, z0 + 0.15), glass, "WindowPaneInner")
+		inner.rotation.x = -GLASS_TILT
+		inner.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	# The door's casing: jambs and a head through the wall's depth, proud of both faces.
+	for x in [dx0 + GLASS_DOOR_JAMB * 0.5 - 0.005, dx1 - GLASS_DOOR_JAMB * 0.5 + 0.005]:
+		ZoneKit.block(self, Vector3(GLASS_DOOR_JAMB + 0.01, GLASS_DOOR_HEAD - 0.002, depth + 0.04),
+				Vector3(x, (GLASS_DOOR_HEAD - 0.002) * 0.5 + 0.001, mid_z), walnut, "DoorJamb")
+	ZoneKit.block(self, Vector3(dx1 - dx0 - GLASS_DOOR_JAMB * 2.0 + 0.02, 0.04, depth + 0.036),
+			Vector3((dx0 + dx1) * 0.5, GLASS_DOOR_HEAD - 0.01, mid_z), walnut, "DoorHead")
+	_hang_studio_door(dx1 - GLASS_DOOR_JAMB, z1, walnut)
+	# A sconce on the live room's face of it, on the pier past the window, so the wall the players
+	# look at is a wall and not a black edge round the glass.
+	_hang_sconce(4, Vector3((-cr + wx0) * 0.5, 2.1, z1), Vector3(0, 0, 1), _sconce_brass())
+
+	# The on-air light over the door, on both faces: red, unlit until a take -- here always lit,
+	# because the room is always ready.
+	for side in [-1.0, 1.0]:
+		# Its back a millimetre off the plaster.
+		var face_z := z0 - 0.031 if side < 0.0 else z1 + 0.031
+		var sign_node := Node3D.new()
+		sign_node.name = "OnAir"
+		sign_node.position = Vector3((dx0 + dx1) * 0.5, GLASS_DOOR_HEAD + 0.27, face_z)
+		sign_node.rotation.y = PI if side < 0.0 else 0.0
+		add_child(sign_node)
+		ZoneKit.block(sign_node, Vector3(0.46, 0.15, 0.05), Vector3(0, 0, -0.005), Materials.chassis(), "OnAirBox")
+		var lens := ZoneKit.block(sign_node, Vector3(0.40, 0.10, 0.004), Vector3(0, 0, 0.022),
+				ZoneKit.glow(Color(1.0, 0.12, 0.08), 1.6), "OnAirLens")
+		lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var words := Label3D.new()
+		words.name = "OnAirWords"
+		words.text = "ON AIR"
+		words.font_size = 48
+		words.pixel_size = 0.0013
+		words.outline_size = 0
+		words.modulate = Color(1.0, 0.92, 0.85)
+		words.position = Vector3(0, 0, 0.0255)
+		words.shaded = false
+		sign_node.add_child(words)
+
+	# Treatment on the control room's face of it: a panel on the pier left of the window, clear of
+	# the mirror, and a slatted walnut fascia over the glass, as the live room's back wall has.
+	var pier_mid := (-cr + wx0) * 0.5 + 0.1
+	ZoneKit.block(self, Vector3(0.6, 1.3, 0.09), Vector3(pier_mid, 1.55, z0 - 0.045), _cloth("rust"),
+			"GlassWallPanel")
+	ZoneKit.block(self, Vector3(0.45, 1.3, 0.09), Vector3((wx1 + dx0) * 0.5, 1.55, z0 - 0.046), _cloth("slate"),
+			"GlassWallPanel")
+	var slats := MultiMesh.new()
+	slats.transform_format = MultiMesh.TRANSFORM_3D
+	var slat := BoxMesh.new()
+	var fascia := Studio.WALL_HEIGHT - 0.06 - (GLASS_HEAD + 0.08)
+	slat.size = Vector3(0.045, fascia, 0.05)
+	slats.mesh = slat
+	slats.instance_count = int((width - 0.1) / 0.11)
+	for i in slats.instance_count:
+		slats.set_instance_transform(i, Transform3D(Basis.IDENTITY,
+				Vector3(wx0 + 0.05 + i * 0.11 + 0.0225, GLASS_HEAD + 0.08 + fascia * 0.5, z0 - 0.04)))
+	var fascia_node := MultiMeshInstance3D.new()
+	fascia_node.name = "GlassFascia"
+	fascia_node.multimesh = slats
+	fascia_node.material_override = walnut
+	add_child(fascia_node)
+	# A strip of warm light under the fascia, grazing down the glass's casing.
+	var strip := ZoneKit.block(self, Vector3(width - 0.1, 0.012, 0.02),
+			Vector3((wx0 + wx1) * 0.5, GLASS_HEAD + 0.073, z0 - 0.05), ZoneKit.glow(Color(1.0, 0.72, 0.45), 1.2),
+			"FasciaGlow")
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## A heavy studio door, walnut over mass, with a small double-glazed vision panel and a steel pull,
+## hinged at `hinge_x` on the live room's face of the wall and swung open flat into that room.
+func _hang_studio_door(hinge_x: float, face_z: float, walnut: Material) -> void:
+	var door := Node3D.new()
+	door.name = "StudioDoor"
+	var leaf := GLASS_DOOR_WIDTH - GLASS_DOOR_JAMB * 2.0 - 0.01
+	var thick := 0.07
+	var tall := GLASS_DOOR_HEAD - 0.025
+	# Open 90 degrees: its face along the room's depth, its hinge edge at the jamb.
+	door.transform = Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(hinge_x - thick * 0.5 - 0.004, 0.012, face_z + 0.012))
+	add_child(door)
+	# In the door's frame the leaf runs from x 0 (hinge) to -leaf (open edge), as it stood shut.
+	var win_lo := 1.3
+	var win_hi := 1.75
+	var win_x0 := -leaf * 0.5 - 0.14
+	var win_x1 := -leaf * 0.5 + 0.14
+	ZoneKit.block(door, Vector3(leaf, win_lo, thick), Vector3(-leaf * 0.5, win_lo * 0.5, 0), walnut, "DoorLeaf")
+	ZoneKit.block(door, Vector3(leaf, tall - win_hi, thick), Vector3(-leaf * 0.5, (win_hi + tall) * 0.5, 0),
+			walnut, "DoorLeaf")
+	ZoneKit.block(door, Vector3(win_x0 + leaf, win_hi - win_lo, thick), Vector3((-leaf + win_x0) * 0.5, (win_lo + win_hi) * 0.5, 0),
+			walnut, "DoorLeaf")
+	ZoneKit.block(door, Vector3(-win_x1, win_hi - win_lo, thick), Vector3(win_x1 * 0.5, (win_lo + win_hi) * 0.5, 0),
+			walnut, "DoorLeaf")
+	for z in [-0.018, 0.018]:
+		var pane := ZoneKit.block(door, Vector3(win_x1 - win_x0 - 0.004, win_hi - win_lo - 0.004, 0.008),
+				Vector3(-leaf * 0.5, (win_lo + win_hi) * 0.5, z), _glass(), "DoorPane")
+		pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# A steel pull on each face, near the open edge.
+	for side in [-1.0, 1.0]:
+		ZoneKit.block(door, Vector3(0.025, 0.42, 0.025), Vector3(-leaf + 0.09, 1.02, side * (thick * 0.5 + 0.045)),
+				Materials.brushed_metal(), "DoorPull")
+		for y in [0.84, 1.2]:
+			ZoneKit.block(door, Vector3(0.016, 0.016, 0.045), Vector3(-leaf + 0.09, y, side * (thick * 0.5 + 0.0225)),
+					Materials.brushed_metal(), "DoorPullPost")
 
 
 ## The treatment's fabric, in the room's three colours.
@@ -761,6 +972,22 @@ func zone_solids() -> Array:
 		# The bass traps up the side room's free corners (_treat_side_room).
 		for corner in [Vector2(x - SIDE_ROOM_WIDTH, z1), Vector2(x - 0.06, z1), Vector2(x - 0.06, z0)]:
 			out.append({"c": corner, "h": Vector2(0.25, 0.25), "a": PI * 0.25, "top": 2.4})
+	elif variant == THROUGH_GLASS:
+		# The wall between the rooms, either side of the door's clear opening, and the door stood
+		# open against the live room's side of it.
+		var at := glass_openings()
+		var cr := room_width * 0.5
+		var z := (GLASS_WALL_FRONT + GLASS_WALL_BACK) * 0.5
+		var half := (GLASS_WALL_BACK - GLASS_WALL_FRONT) * 0.5
+		var shut := at[2] + GLASS_DOOR_JAMB
+		var open := at[3] - GLASS_DOOR_JAMB
+		out.append({"c": Vector2((-cr - 0.05 + shut) * 0.5, z), "h": Vector2((shut + cr + 0.05) * 0.5, half),
+				"a": 0.0, "top": LIVE_ROOM_HEIGHT})
+		out.append({"c": Vector2((open + cr + 0.05) * 0.5, z), "h": Vector2((cr + 0.05 - open) * 0.5, half),
+				"a": 0.0, "top": LIVE_ROOM_HEIGHT})
+		var leaf := GLASS_DOOR_WIDTH - GLASS_DOOR_JAMB * 2.0 - 0.01
+		out.append({"c": Vector2(open - 0.039, GLASS_WALL_BACK + 0.012 + leaf * 0.5), "h": Vector2(0.035, leaf * 0.5),
+				"a": 0.0, "top": GLASS_DOOR_HEAD})
 	return out
 
 

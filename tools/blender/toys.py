@@ -13,6 +13,11 @@
 #   "Planet"    the station's foam planet: sea, land and ice.
 #   "Starfish"  the dome's rubber starfish, lying flat, dotted.
 #   "Eight"     the club's eight ball, its white spot facing +Z (the 8 is drawn on in Godot).
+#   "Geode"     the crystal cave's geode: a lumpy grey stone split open on a face of amethyst.
+#   "Lemon"     the glasshouse's lemon, off the tree in the corner: pointed ends, dimpled rind.
+#   "Stick"     the festival stage's glow stick, lying along Godot's x, its caps dark.
+#   "Temari"    the temple garden's temari ball: silk thread wound in bands over a red ball.
+#   "Tumble"    the desert's tumbleweed: a light ball of dry twigs, open to the light.
 # Materials are named by what they are; ToyItem swaps in its own.
 #
 # Sizes in Godot's terms, which ToyItem repeats.
@@ -27,7 +32,10 @@ from mathutils import Vector, noise
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 SIZES = {"Sack": 0.03, "Glow": 0.035, "Paper": 0.035, "Tennis": 0.033, "Snowball": 0.04,
-		"Beach": 0.2, "Planet": 0.04, "Starfish": 0.075, "Eight": 0.028}
+		"Beach": 0.2, "Planet": 0.04, "Starfish": 0.075, "Eight": 0.028, "Geode": 0.04,
+		"Lemon": 0.036, "Stick": 0.08, "Temari": 0.04, "Tumble": 0.12}
+# The glow stick's radius: it lies on the floor this far up.
+STICK_RADIUS = 0.0065
 STAR_THICK = 0.018
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -223,6 +231,95 @@ finish(bm, "Starfish", ["star", "dots"], dots)
 r = SIZES["Eight"]
 bm = sphere(r, 36, 18)
 finish(bm, "Eight", ["black", "spot"], lambda c, d: 1 if d.z > 0.88 else 0)
+
+# The geode: a rough stone, and where a plane cut it in half, a hollow face of crystal. The cut
+# faces +Z, so it lies showing its purple when it comes to rest on its back.
+r = SIZES["Geode"]
+bm = ico(r, 3)
+lumpy(bm, r, 0.12, 2.6, 9.0)
+for v in bm.verts:
+	gv = godot(v.co)
+	if gv.z > r * 0.35:
+		# Pressed back to the cut, and a little hollow in its middle, so the crystal is a dish.
+		inside = 1.0 - min(1.0, math.hypot(gv.x, gv.y) / (r * 0.95))
+		v.co = g((gv.x, gv.y, r * 0.35 - inside * r * 0.25))
+finish(bm, "Geode", ["rock", "amethyst"], lambda c, d: 1 if c.z > SIZES["Geode"] * 0.1 else 0,
+		smooth=False)
+
+# The lemon: an ellipsoid along Godot's x, drawn to a point at both ends, its rind dimpled.
+r = SIZES["Lemon"]
+bm = sphere(1.0, 32, 16)
+for v in bm.verts:
+	gv = godot(v.co)
+	x = gv.x
+	# Long way along x, a nipple at each end.
+	reach = 1.0 + 0.22 * pow(abs(x), 6.0)
+	waist = 0.78
+	gv = Vector((x * reach * r, gv.y * waist * r, gv.z * waist * r))
+	d = gv.normalized()
+	gv *= 1.0 + 0.012 * noise.noise(d * 28.0)
+	v.co = g(gv)
+finish(bm, "Lemon", ["lemon"], lambda c, d: 0)
+
+# The glow stick: a capsule along x, the tube lit, a dark cap at each end.
+L = SIZES["Stick"]
+bm = bmesh.new()
+bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=STICK_RADIUS, radius2=STICK_RADIUS,
+		depth=L * 2.0)
+for v in bm.verts:
+	v.co = Vector((v.co.z, v.co.y, v.co.x))
+finish(bm, "Stick", ["lightstick", "stick_cap"],
+		lambda c, d: 1 if abs(c.x) > L * 0.86 else 0)
+
+# The temari ball: a red ball, thread wound over it in two crossing bands of gold and a white
+# equator, each band a strip of faces chosen by where it lies.
+r = SIZES["Temari"]
+bm = sphere(r, 48, 24)
+
+
+def temari(c, d):
+	if abs(d.y) < 0.07:
+		return 2
+	for axis in (Vector((1, 0, 0)), Vector((0, 0, 1)), Vector((0.7071, 0, 0.7071)), Vector((-0.7071, 0, 0.7071))):
+		if abs(d.dot(axis)) < 0.05:
+			return 1
+	return 0
+
+
+finish(bm, "Temari", ["temari", "thread_a", "thread_b"], temari)
+
+# The tumbleweed: a hundred and ninety dry twigs, each a short bent stick lying across the ball's
+# surface, enough of them that it reads as a ball and few enough to see through.
+r = SIZES["Tumble"]
+random.seed(31)
+bm = bmesh.new()
+for k in range(190):
+	a = Vector((random.gauss(0, 1), random.gauss(0, 1), random.gauss(0, 1))).normalized()
+	t = a.cross(Vector((0.3, 0.9, 0.2))).normalized()
+	t.rotate(__import__("mathutils").Quaternion(a, random.uniform(0, math.tau)))
+	length = random.uniform(0.6, 1.1) * r
+	steps = 4
+	# Most near the surface, some through the middle, so it is a tangle and not a cage.
+	depth = random.uniform(0.82, 1.0) if random.random() < 0.7 else random.uniform(0.35, 0.8)
+	ring = []
+	for i in range(steps + 1):
+		u = (i / steps - 0.5) * length
+		bend = a * math.sin(i / steps * math.pi) * r * random.uniform(-0.08, 0.12)
+		p = (a * r * depth + t * u + bend)
+		p = p.normalized() * min(p.length, r)
+		ring.append(p)
+	# Each twig a thin square tube.
+	w = 0.0016
+	for i in range(steps):
+		p, q = ring[i], ring[i + 1]
+		along = (q - p).normalized()
+		side = along.cross(a).normalized() * w
+		up = along.cross(side).normalized() * w
+		quad = [bm.verts.new(g(p + side)), bm.verts.new(g(p + up)), bm.verts.new(g(p - side)), bm.verts.new(g(p - up))]
+		quad2 = [bm.verts.new(g(q + side)), bm.verts.new(g(q + up)), bm.verts.new(g(q - side)), bm.verts.new(g(q - up))]
+		for j in range(4):
+			bm.faces.new((quad[j], quad[(j + 1) % 4], quad2[(j + 1) % 4], quad2[j]))
+finish(bm, "Tumble", ["twig"], lambda c, d: 0, smooth=False)
 
 for ob in bpy.data.objects:
 	lo = [ob.matrix_world @ Vector(c) for c in ob.bound_box]

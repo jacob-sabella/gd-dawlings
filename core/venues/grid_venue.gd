@@ -45,6 +45,20 @@ const DOWNTOWN_AVENUE_HALF := 11.0
 const DOWNTOWN_PLAZA := Rect2(-22.0, -12.0, 44.0, 36.0)
 var _clock := 0.0
 
+## The third arrangement: no road and no desert, but a sea. The floor is a pier standing over it,
+## the sun goes down into it, and wire islands rise out of it.
+const NEON_SEA := 2
+## Where the water stands, under the pier's deck.
+const SEA_LEVEL := -1.6
+## How far the pier's deck runs past the walkable floor, so its rail stands on it.
+const PIER_LIP := 0.25
+## The palms on the pier, at the base width; they step out with the room on their own side.
+const PIER_PALMS: Array[Vector3] = [Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-8.4, 0, 6.0),
+		Vector3(8.4, 0, 8.6)]
+## The sun lower than over the desert: its foot already in the sea.
+const SEA_SUN_DIR := Vector3(0.0, 0.06, -1.0)
+var _sea_mat: ShaderMaterial
+
 
 func venue_id() -> StringName:
 	return &"grid"
@@ -74,7 +88,7 @@ func gear_style() -> GearStyle:
 func dress(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/synthwave_sky.gdshader")
-	_sky_mat.set_shader_parameter("sun_dir", SUN_DIR)
+	_sky_mat.set_shader_parameter("sun_dir", SEA_SUN_DIR if variant == NEON_SEA else SUN_DIR)
 	_sky_mat.set_shader_parameter("sun_energy", 1.1)
 	_sky_mat.set_shader_parameter("horizon", Color(0.72, 0.12, 0.45))
 	var sky := Sky.new()
@@ -119,6 +133,16 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	key.light_color = Color(1.0, 0.45, 0.62)
 	key.light_energy = 0.9
 	key.rotation_degrees = Vector3(-9.0, 180.0, 0.0)
+	if variant == NEON_SEA:
+		# Setting: lower, and the islands far enough out that the haze must reach further. The sun
+		# is straight ahead of the desk here, the open sea all round it, and both are more of the
+		# picture than over the desert: a little less of each, so the room is still for working in.
+		key.rotation_degrees = Vector3(-3.5, 180.0, 0.0)
+		env.fog_depth_end = 210.0
+		_sky_mat.set_shader_parameter("sun_energy", 0.85)
+		_sky_mat.set_shader_parameter("horizon", Color(0.58, 0.09, 0.36))
+		_sky_mat.set_shader_parameter("upper", Color(0.12, 0.015, 0.26))
+		env.tonemap_exposure = 0.74
 	# A sun nine degrees up glints off a glossy floor in a streak that runs straight at you and
 	# blooms into a white pillar in front of the gear. The sky already draws the sun; the floor
 	# can reflect that through SSR without the light painting its own highlight on top.
@@ -141,10 +165,17 @@ func _ready() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(FLOOR_EXTENT, FLOOR_EXTENT)
 	ground.mesh = plane
+	if variant == NEON_SEA:
+		# Only the pier's deck: past it is water.
+		var deck := _pier_rect()
+		plane.size = deck.size
+		ground.position = Vector3(deck.get_center().x, 0, deck.get_center().y)
 	_floor_mat = ShaderMaterial.new()
 	_floor_mat.shader = preload("res://core/venues/shaders/grid_floor.gdshader")
 	var c := footprint_corners()
-	_floor_mat.set_shader_parameter("energy", 1.5)
+	# The pier's deck dimmer than the plain: the sea round it is ruled too, and both at full
+	# strength filled the picture with lines.
+	_floor_mat.set_shader_parameter("energy", 0.9 if variant == NEON_SEA else 1.5)
 	_floor_mat.set_shader_parameter("footprint", Vector4(c[0].x, c[0].y, c[2].x, c[2].y))
 	ground.material_override = _floor_mat
 	add_child(ground)
@@ -153,7 +184,7 @@ func _ready() -> void:
 	_wire_mat.shader = preload("res://core/venues/shaders/neon_wire.gdshader")
 	_wire_mat.set_shader_parameter("energy", 1.9)
 
-	if variant != DOWNTOWN:
+	if variant != DOWNTOWN and variant != NEON_SEA:
 		var range_node := MeshInstance3D.new()
 		range_node.name = "Mountains"
 		range_node.mesh = mountains(23)
@@ -183,11 +214,16 @@ func _ready() -> void:
 		add_child(solid)
 		_solids.append(solid)
 
-	_build_highway()
+	if variant == NEON_SEA:
+		_flood()
+		_build_pier()
+		_raise_islands()
+	else:
+		_build_highway()
 	_plant_palms()
 	if variant == DOWNTOWN:
 		_close_in_the_city()
-	else:
+	elif variant != NEON_SEA:
 		_raise_city()
 	_hang_pyramids()
 	_dress_zones()
@@ -256,7 +292,7 @@ func rooms() -> Array[Rect2]:
 ## stand on the floor and are walked round.
 func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), false)
-	for palm in NEAR_PALMS:
+	for palm in _near_palms():
 		out.append({"c": Vector2(palm.x, palm.z), "h": Vector2.ONE * TRUNK, "a": 0.0, "top": 3.0})
 	return out
 
@@ -277,7 +313,7 @@ func _process(delta: float) -> void:
 	for i in _solids.size():
 		_solids[i].rotate_y(delta * (0.12 + 0.05 * i))
 		_solids[i].rotate_x(delta * 0.05)
-	if _floor_mat != null:
+	if _floor_mat != null and variant != NEON_SEA:
 		# The floor runs toward you, slowly: you are always arriving at the horizon.
 		_floor_mat.set_shader_parameter("travel", fmod(_clock * 0.12, 1000.0))
 	if _road_mat != null:
@@ -293,7 +329,7 @@ func pulse(level: float) -> void:
 	# Fast up, slow down, like a meter's ballistics: a beat flashes, a gap does not blink.
 	var k := 0.5 if level > _smoothed else 0.06
 	_smoothed = lerpf(_smoothed, clampf(level, 0.0, 1.0), k)
-	for m in [_floor_mat, _sky_mat, _wire_mat, _road_mat, _tower_mat, _palm_mat]:
+	for m in [_floor_mat, _sky_mat, _wire_mat, _road_mat, _tower_mat, _palm_mat, _sea_mat]:
 		if m != null:
 			m.set_shader_parameter("pulse", _smoothed)
 
@@ -388,11 +424,17 @@ func _plant_palms() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 41
 	var spots: Array[Vector3] = []
-	for i in 12:
-		var z := ROAD_START - 8.0 - i * 15.0
-		spots.append(Vector3(-ROAD_HALF - 2.5, 0, z))
-		spots.append(Vector3(ROAD_HALF + 2.5, 0, z - 7.5))
-	spots.append_array(NEAR_PALMS)
+	if variant == NEON_SEA:
+		# No boulevard: the pier's own, and a clump on the low island off to the left.
+		spots.append_array(_near_palms())
+		for at in [Vector3(-27.0, 0, -33.0), Vector3(-24.5, 0, -35.5), Vector3(-29.5, 0, -36.0)]:
+			spots.append(at + Vector3(0, SEA_LEVEL + 1.9, 0))
+	else:
+		for i in 12:
+			var z := ROAD_START - 8.0 - i * 15.0
+			spots.append(Vector3(-ROAD_HALF - 2.5, 0, z))
+			spots.append(Vector3(ROAD_HALF + 2.5, 0, z - 7.5))
+		spots.append_array(NEAR_PALMS)
 	for i in spots.size():
 		var palm := MeshInstance3D.new()
 		palm.name = "Palm"
@@ -650,3 +692,308 @@ func track_palette() -> Array:
 		Color(0.16, 1.00, 0.48), Color(0.10, 1.00, 0.84), Color(0.10, 0.84, 1.00), Color(0.23, 0.42, 1.00),
 		Color(0.63, 0.23, 1.00), Color(1.00, 0.16, 0.88), Color(1.00, 0.35, 0.71), Color(0.78, 0.71, 1.00),
 	]
+
+
+## The palms near the room that stop you: the boulevard's four out on the plain, or the pier's,
+## stepped out with the room so they stay on its deck.
+func _near_palms() -> Array[Vector3]:
+	if variant != NEON_SEA:
+		return NEAR_PALMS
+	var out: Array[Vector3] = []
+	for at in PIER_PALMS:
+		out.append(at + Vector3(signf(at.x) * _grow(), 0, 0))
+	return out
+
+
+## The pier's deck, on the floor plan: the walkable floor and its lip, where the rail stands.
+func _pier_rect() -> Rect2:
+	return open_floor(OPEN_FLOOR).grow(PIER_LIP)
+
+
+## Neon sea: the water, from under the pier out to the horizon. One mesh, its rows close together
+## by the pier and opening out with distance, so the swell has vertices where it is seen and the
+## horizon costs nothing.
+func _flood() -> void:
+	var sea := MeshInstance3D.new()
+	sea.name = "Sea"
+	sea.mesh = sea_mesh(90, 1500.0)
+	sea.position = Vector3(0, SEA_LEVEL, 0)
+	_sea_mat = ShaderMaterial.new()
+	_sea_mat.shader = preload("res://core/venues/shaders/grid_sea.gdshader")
+	_sea_mat.set_shader_parameter("sun_dir", SEA_SUN_DIR)
+	sea.material_override = _sea_mat
+	sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The swell lifts it off its flat plan; the plan's box would cull it at the wrong moment.
+	sea.custom_aabb = AABB(Vector3(-1500, -2, -1500), Vector3(3000, 4, 3000))
+	add_child(sea)
+
+
+## A square of water `half` metres each way, `rings` rows out from the middle on each side: the
+## rows a metre or so apart by the pier and a hundred apart at the horizon. Indexed triangles,
+## flat (the shader raises the swell).
+static func sea_mesh(rings: int, half: float) -> ArrayMesh:
+	var coords := PackedFloat32Array()
+	for i in range(-rings, rings + 1):
+		var t := float(i) / rings
+		coords.append(signf(t) * (60.0 * absf(t) + (half - 60.0) * pow(absf(t), 3.0)))
+	var n := coords.size()
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	for z in n:
+		for x in n:
+			verts.append(Vector3(coords[x], 0, coords[z]))
+			normals.append(Vector3.UP)
+	var index := PackedInt32Array()
+	for z in n - 1:
+		for x in n - 1:
+			var a := z * n + x
+			index.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = index
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## The pier: the floor's black glass laid on a deck standing on piles over the water, a neon lip
+## round its edge, a rail on posts round all of it, and a ladder down to the water off the right.
+func _build_pier() -> void:
+	var deck := _pier_rect()
+	var mid := Vector3(deck.get_center().x, 0, deck.get_center().y)
+	var glass := StandardMaterial3D.new()
+	glass.albedo_color = Color(0.015, 0.01, 0.03)
+	glass.metallic = 0.2
+	glass.roughness = 0.12
+	var chrome := StandardMaterial3D.new()
+	chrome.albedo_color = Color(0.5, 0.5, 0.6)
+	chrome.metallic = 1.0
+	chrome.roughness = 0.2
+	var pink := ZoneKit.glow(Color(1.0, 0.2, 0.75), 2.2)
+	var cyan := ZoneKit.glow(Color(0.15, 0.9, 1.0), 1.8)
+
+	# The deck's slab, its top just under the floor so the two never share a plane.
+	var slab_h := 0.32
+	ZoneKit.block(self, Vector3(deck.size.x, slab_h, deck.size.y), mid + Vector3(0, -0.003 - slab_h * 0.5, 0),
+			glass, "PierDeck")
+	# The lip: a pink tube round the slab's edge, a hair out from it. The ends along x run past the
+	# corners; those along z stop inside them and stand a millimetre less tall, so no two faces meet.
+	var tube := 0.035
+	for side in [-1.0, 1.0]:
+		var lip := ZoneKit.block(self, Vector3(deck.size.x + tube * 2.0 + 0.02, tube, tube),
+				mid + Vector3(0, -0.07, side * (deck.size.y * 0.5 + 0.01 + tube * 0.5)), pink, "PierLip")
+		lip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var end := ZoneKit.block(self, Vector3(tube, tube - 0.002, deck.size.y),
+				mid + Vector3(side * (deck.size.x * 0.5 + 0.01 + tube * 0.5), -0.07, 0), pink, "PierLip")
+		end.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	# Piles down into the water, every few metres under the edge and in rows beneath, braced
+	# across under the deck. One MultiMesh each.
+	var pile_at: Array[Vector3] = []
+	var cols := int(ceil(deck.size.x / 3.2))
+	var rows := int(ceil(deck.size.y / 3.2))
+	for i in cols + 1:
+		for j in rows + 1:
+			var inset := Vector2(0.35, 0.35)
+			var x := lerpf(deck.position.x + inset.x, deck.end.x - inset.x, float(i) / cols)
+			var z := lerpf(deck.position.y + inset.y, deck.end.y - inset.y, float(j) / rows)
+			pile_at.append(Vector3(x, 0, z))
+	var deep := 6.0
+	var pile := CylinderMesh.new()
+	pile.top_radius = 0.14
+	pile.bottom_radius = 0.16
+	pile.height = deep
+	pile.radial_segments = 12
+	var piles := MultiMesh.new()
+	piles.transform_format = MultiMesh.TRANSFORM_3D
+	piles.mesh = pile
+	piles.instance_count = pile_at.size()
+	# A neon collar on each, a hand above the highest the swell reaches.
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.15
+	ring.outer_radius = 0.19
+	ring.rings = 16
+	ring.ring_segments = 6
+	var collars := MultiMesh.new()
+	collars.transform_format = MultiMesh.TRANSFORM_3D
+	collars.mesh = ring
+	collars.instance_count = pile_at.size()
+	for k in pile_at.size():
+		var at := pile_at[k]
+		piles.set_instance_transform(k, Transform3D(Basis.IDENTITY, at + Vector3(0, -slab_h - deep * 0.5, 0)))
+		collars.set_instance_transform(k, Transform3D(Basis.IDENTITY, at + Vector3(0, SEA_LEVEL + 0.75, 0)))
+	_bank("Piles", piles, glass)
+	_bank("PileCollars", collars, cyan)
+
+	# Cross-bracing between the edge piles, an X in each bay along the four sides.
+	var brace := BoxMesh.new()
+	brace.size = Vector3(0.07, 0.07, 1.0)
+	var braces := MultiMesh.new()
+	braces.transform_format = MultiMesh.TRANSFORM_3D
+	braces.mesh = brace
+	var xs: Array[Transform3D] = []
+	var top := -slab_h - 0.1
+	var low := SEA_LEVEL + 0.55
+	for edge in [[0, 0, 1, 0], [0, rows, 1, 0], [0, 0, 0, 1], [cols, 0, 0, 1]]:
+		var count: int = cols if edge[2] == 1 else rows
+		for b in count:
+			var a := pile_at[(edge[0] + b * edge[2]) * (rows + 1) + edge[1] + b * edge[3]]
+			var c := pile_at[(edge[0] + (b + 1) * edge[2]) * (rows + 1) + edge[1] + (b + 1) * edge[3]]
+			for diag in [[top, low], [low, top]]:
+				var from := Vector3(a.x, diag[0], a.z)
+				var to := Vector3(c.x, diag[1], c.z)
+				var along := to - from
+				var basis := Basis.looking_at(along, Vector3.UP).scaled_local(Vector3(1, 1, along.length()))
+				xs.append(Transform3D(basis, (from + to) * 0.5))
+	braces.instance_count = xs.size()
+	for k in xs.size():
+		braces.set_instance_transform(k, xs[k])
+	_bank("Braces", braces, chrome)
+
+	# The rail, round the whole deck: chrome posts, and a cyan tube along their tops.
+	var rail_h := 0.95
+	var post := BoxMesh.new()
+	post.size = Vector3(0.04, rail_h, 0.04)
+	var posts := MultiMesh.new()
+	posts.transform_format = MultiMesh.TRANSFORM_3D
+	posts.mesh = post
+	var post_at: Array[Vector3] = []
+	var edge_in := PIER_LIP * 0.5
+	var r := deck.grow(-edge_in)
+	var along_x := int(ceil(r.size.x / 1.8))
+	var along_z := int(ceil(r.size.y / 1.8))
+	for i in along_x + 1:
+		var x := lerpf(r.position.x, r.end.x, float(i) / along_x)
+		post_at.append(Vector3(x, 0, r.position.y))
+		post_at.append(Vector3(x, 0, r.end.y))
+	for j in range(1, along_z):
+		var z := lerpf(r.position.y, r.end.y, float(j) / along_z)
+		post_at.append(Vector3(r.position.x, 0, z))
+		post_at.append(Vector3(r.end.x, 0, z))
+	posts.instance_count = post_at.size()
+	for k in post_at.size():
+		posts.set_instance_transform(k, Transform3D(Basis.IDENTITY, post_at[k] + Vector3(0, rail_h * 0.5, 0)))
+	_bank("RailPosts", posts, chrome)
+	var bar := 0.03
+	for side in [-1.0, 1.0]:
+		var along := ZoneKit.block(self, Vector3(r.size.x + bar * 2.0, bar, bar),
+				Vector3(r.get_center().x, rail_h + bar * 0.5, r.get_center().y + side * r.size.y * 0.5), cyan, "Rail")
+		along.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var across := ZoneKit.block(self, Vector3(bar, bar - 0.002, r.size.y - bar),
+				Vector3(r.get_center().x + side * r.size.x * 0.5, rail_h + bar * 0.5, r.get_center().y), cyan, "Rail")
+		across.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# A ladder down to the water off the right-hand side, beside the hoop's end of the deck.
+	var ladder := Node3D.new()
+	ladder.name = "Ladder"
+	ladder.position = Vector3(deck.end.x + 0.06, 0, deck.get_center().y - 1.0)
+	add_child(ladder)
+	var reach := 0.0 - (SEA_LEVEL - 0.8)
+	for s in [-0.24, 0.24]:
+		ZoneKit.block(ladder, Vector3(0.04, reach + 0.9, 0.04), Vector3(0, (0.9 - reach) * 0.5 + 0.0, s), chrome,
+				"LadderRail")
+	for k in int(reach / 0.3):
+		ZoneKit.block(ladder, Vector3(0.03, 0.03, 0.44), Vector3(0, -0.15 - k * 0.3, 0), chrome, "Rung")
+
+
+func _bank(called: String, multimesh: MultiMesh, material: Material) -> void:
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = called
+	mmi.multimesh = multimesh
+	mmi.material_override = material
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
+## Wire islands out in the sea, none on the sun's bearing, each with its reflection hung under the
+## waterline where the see-through sea shows it, dimmer and drawn at the same bearings.
+const ISLANDS := [
+	# [centre on the plan, radius, height, seed, flat top]
+	[Vector2(-27.0, -34.0), 7.0, 1.9, 3, true],
+	[Vector2(-62.0, -88.0), 24.0, 17.0, 11, false],
+	[Vector2(-38.0, -120.0), 16.0, 9.0, 12, false],
+	[Vector2(48.0, -72.0), 15.0, 12.0, 17, false],
+	[Vector2(96.0, -140.0), 30.0, 22.0, 19, false],
+	[Vector2(-110.0, 20.0), 26.0, 14.0, 23, false],
+	[Vector2(90.0, 40.0), 20.0, 10.0, 29, false],
+]
+
+
+func _raise_islands() -> void:
+	var colours := [[Color(1.0, 0.2, 0.75), Color(0.15, 1.0, 0.9)], [Color(0.15, 0.9, 1.0), Color(1.0, 0.3, 0.85)]]
+	for i in ISLANDS.size():
+		var spec: Array = ISLANDS[i]
+		var plan: Vector2 = spec[0]
+		var pair: Array = colours[i % 2]
+		var m := _wire_mat.duplicate() as ShaderMaterial
+		m.set_shader_parameter("line_colour", pair[0])
+		m.set_shader_parameter("top_colour", pair[1])
+		m.set_shader_parameter("top", SEA_LEVEL + float(spec[2]))
+		var shown := MeshInstance3D.new()
+		shown.name = "Island"
+		shown.mesh = island(spec[3], spec[1], spec[2], spec[4], true)
+		shown.material_override = m
+		shown.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		shown.position = Vector3(plan.x, SEA_LEVEL, plan.y)
+		add_child(shown)
+		# Upside down under the water, without the skirt that only keeps the shore under the swell.
+		var below := MeshInstance3D.new()
+		below.name = "IslandReflection"
+		below.mesh = island(spec[3], spec[1], spec[2], spec[4], false)
+		var dim := m.duplicate() as ShaderMaterial
+		# Its heights run down from the water, which the wire's height gradient does not read:
+		# one colour, the summit's.
+		dim.set_shader_parameter("energy", 4.0)
+		dim.set_shader_parameter("line_colour", pair[1])
+		dim.set_shader_parameter("top_colour", pair[1])
+		below.material_override = dim
+		below.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		below.position = Vector3(plan.x, SEA_LEVEL - 0.05, plan.y)
+		below.scale = Vector3(1, -1, 1)
+		add_child(below)
+
+
+## A jagged wire island, `radius` across its shore and `height` at its peak: rings climbing in to
+## a crooked summit, or, `flat`, a low one with a level top for palms. `skirt` carries the shore
+## down under the swell's troughs.
+static func island(seed: int, radius: float, height: float, flat: bool, skirt: bool) -> ArrayMesh:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var segments := 18
+	var levels := [[1.0, 0.0], [0.72, 0.35], [0.45, 0.72], [0.2, 0.95]] if not flat \
+			else [[1.0, 0.0], [0.82, 0.7], [0.55, 1.0]]
+	var peak := Vector3(rng.randf_range(-0.15, 0.15) * radius, height, rng.randf_range(-0.15, 0.15) * radius)
+	if flat:
+		peak = Vector3(0, height, 0)
+	var rings := []
+	if skirt:
+		var base := []
+		for i in segments:
+			var a := TAU * i / segments
+			base.append(Vector3(sin(a), 0, cos(a)) * radius * 1.08 + Vector3(0, -0.8, 0))
+		rings.append(base)
+	var jitter := []
+	for i in segments:
+		jitter.append(rng.randf_range(0.75, 1.2))
+	for level in levels:
+		var ring := []
+		for i in segments:
+			var a := TAU * (i + rng.randf_range(-0.2, 0.2)) / segments
+			var rr: float = radius * level[0] * (jitter[i] if level[0] > 0.3 else 1.0) * rng.randf_range(0.9, 1.1)
+			var y: float = height * level[1] * (rng.randf_range(0.75, 1.15) if not flat else 1.0)
+			# Each ring leans toward the summit's side.
+			ring.append(Vector3(sin(a) * rr, y, cos(a) * rr) + Vector3(peak.x, 0, peak.z) * (1.0 - level[0]))
+		rings.append(ring)
+	var tris := PackedVector3Array()
+	for j in rings.size() - 1:
+		for i in segments:
+			var a: Vector3 = rings[j][i]
+			var b: Vector3 = rings[j][(i + 1) % segments]
+			var c: Vector3 = rings[j + 1][(i + 1) % segments]
+			var d: Vector3 = rings[j + 1][i]
+			tris.append_array([a, b, c, a, c, d])
+	var last: Array = rings[rings.size() - 1]
+	for i in segments:
+		tris.append_array([last[i], last[(i + 1) % segments], peak])
+	return _barycentric(tris)

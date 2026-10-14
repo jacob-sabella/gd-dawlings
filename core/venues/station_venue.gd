@@ -11,6 +11,15 @@ extends Venue
 ## Lit like a ship on its night cycle: cool LED coves along the chamfers, a row of downlights,
 ## the zones' own fittings, and the sun, low beyond the planet's limb, laying the viewport's
 ## frames across the deck.
+##
+## Three arrangements, three places in the orbit. NIGHT_SIDE, as first built. DAY_SIDE: over the
+## lit side of the planet, the sun high to the left pouring through the viewports and laying
+## their panes across the deck, the downlights turned down for the day, the planet's own blue
+## coming up through the glass in the deck, and a cargo ship docked alongside, a tunnel run out
+## to it from under the right-hand viewport. SUNRISE: the sun on the planet's limb ahead, the air
+## round the limb a burning band of colour, the light coming in flat and long down the module to
+## the zones, the lights still on for the night just ending, and the station's power truss
+## standing across the view, black against the dawn.
 
 ## Floor to the top of the side walls, and to the ceiling between the chamfers. Above every
 ## zone's head room (Venue.ZONES): the lattice's 3.4 m stands under the ceiling.
@@ -44,6 +53,28 @@ const SUN_DIR := Vector3(-0.85, 0.15, -0.5)
 
 const MODELS := "res://assets/models/"
 
+## The arrangements (Venue.VARIANTS).
+const NIGHT_SIDE := 0
+const DAY_SIDE := 1
+const SUNRISE := 2
+## The day's sun: high, to the left and ahead, so it comes in through the viewports at a slant
+## and their panes fall across the deck toward the right.
+const DAY_SUN := Vector3(-0.42, 0.55, -0.72)
+## The dawn's: this far round to the left of straight ahead, a hair over the planet's limb
+## (sun_dir() finds the limb), and the planet a little higher in the window than at night, so
+## the limb -- and the light off it -- stand high enough to come in over the sill and down the
+## deck rather than straight at the back wall.
+const DAWN_AZIMUTH := 17.0
+const DAWN_CENTRE := Vector3(0.0, -2800.0, -2000.0)
+const PLANET_RADIUS := 3000.0
+## The docked ship (station_ship.glb): its berthing port's face, and its heading.
+const SHIP_AT := Vector3(9.0, -1.0, -22.0)
+const SHIP_YAW := -0.3
+const TUNNEL_R := 0.75
+## The power truss (station_array.glb): its root, out of sight to the left, and the line it runs
+## along in front of the module, its wings' faces toward the viewports.
+const TRUSS_AT := Vector3(-80.0, 6.0, -64.0)
+
 ## How fast the station comes round its orbit, in radians a second: one turn in about a
 ## quarter of an hour, slow enough that the ground below is only seen to move if watched.
 const ORBIT_RATE := 0.007
@@ -53,6 +84,10 @@ const ORBIT_STEP := 0.1
 var _sky_mat: ShaderMaterial
 var orbit := 0.0
 var _orbit_wait := 0.0
+## What blinks outside: the ship's running lights by day, the truss's beacon at dawn.
+var _blinkers: Array[StandardMaterial3D] = []
+var _blink_colours: Array[Color] = []
+var _blink_time := 0.0
 
 
 func venue_id() -> StringName:
@@ -80,7 +115,99 @@ func _dress_wardrobe(board: Wardrobe) -> void:
 	board.board_ink_fade = Color(0.4, 0.44, 0.52)
 
 
+## Where the sun is, this arrangement.
+func sun_dir() -> Vector3:
+	match variant:
+		DAY_SIDE:
+			return DAY_SUN.normalized()
+		SUNRISE:
+			return _on_the_limb(deg_to_rad(DAWN_AZIMUTH), DAWN_CENTRE, PLANET_RADIUS)
+	return SUN_DIR.normalized()
+
+
+## The direction `azimuth` to the left of straight ahead in which the planet's limb is, nudged
+## up by the sun's own radius so the disc's top is just clear of it.
+static func _on_the_limb(azimuth: float, centre: Vector3, r: float) -> Vector3:
+	var lo := -0.3
+	var hi := 0.5
+	var at := func(e: float) -> Vector3:
+		return Vector3(-sin(azimuth) * cos(e), sin(e), -cos(azimuth) * cos(e))
+	# Bisect for the elevation where the ray just grazes the sphere.
+	for i in 40:
+		var mid := (lo + hi) * 0.5
+		var d: Vector3 = at.call(mid)
+		var b := (-centre).dot(d)
+		var hits := b * b - ((-centre).length_squared() - r * r) > 0.0 and b < 0.0
+		if hits:
+			lo = mid
+		else:
+			hi = mid
+	return at.call(hi + deg_to_rad(0.3))
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
+	if variant == NIGHT_SIDE:
+		_dress_night(env, key)
+		return
+	_sky_mat = ShaderMaterial.new()
+	_sky_mat.shader = preload("res://core/venues/shaders/station_orbit_sky.gdshader")
+	_sky_mat.set_shader_parameter("sun_dir", sun_dir())
+	var sky := Sky.new()
+	sky.sky_material = _sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.0
+	env.glow_enabled = true
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.04
+	env.glow_hdr_threshold = 1.1
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_light_color = Color(0.03, 0.04, 0.06)
+	env.fog_depth_begin = 15.0
+	env.fog_depth_end = 120.0
+	env.fog_sky_affect = 0.0
+	if rich:
+		env.ssao_enabled = true
+		env.ssao_intensity = 1.3
+	var light := sun_dir()
+	if variant == SUNRISE:
+		# The light a few degrees steeper than the bead on the limb: dead level, it would only
+		# ever reach the back wall; this way the panes fall long down the deck to the zones.
+		var flat := Vector3(light.x, 0.0, light.z).normalized()
+		light = (flat * cos(deg_to_rad(9.0)) + Vector3.UP * sin(deg_to_rad(9.0))).normalized()
+	key.basis = Basis.looking_at(-light, Vector3.UP)
+	# The panes' shadows reach the back of the module: further than the house's nine metres.
+	key.directional_shadow_max_distance = 16.0
+	if variant == DAY_SIDE:
+		_sky_mat.set_shader_parameter("dawn", 0.0)
+		_sky_mat.set_shader_parameter("stars", 0.15)
+		# The lit planet fills three viewports: a step down, or from the seat it is the room.
+		_sky_mat.set_shader_parameter("energy", 0.85)
+		# The planet below fills the room with its blue.
+		env.ambient_light_color = Color(0.42, 0.56, 0.78)
+		env.ambient_light_energy = 0.24
+		key.light_color = Color(1.0, 0.98, 0.94)
+		key.light_energy = 1.25
+		key.light_specular = 0.35
+	else:
+		_sky_mat.set_shader_parameter("dawn", 1.0)
+		_sky_mat.set_shader_parameter("centre", DAWN_CENTRE)
+		_sky_mat.set_shader_parameter("stars", 0.8)
+		env.ambient_light_color = Color(0.34, 0.4, 0.6)
+		env.ambient_light_energy = 0.1
+		# Through the whole thickness of the air: the first light is gold, going on red.
+		key.light_color = Color(1.0, 0.62, 0.32)
+		key.light_energy = 1.3
+		key.light_specular = 0.5
+
+
+func _dress_night(env: Environment, key: DirectionalLight3D) -> void:
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = preload("res://core/venues/shaders/space_sky.gdshader")
 	_sky_mat.set_shader_parameter("sun_dir", SUN_DIR)
@@ -162,6 +289,12 @@ func _process(delta: float) -> void:
 	if _orbit_wait <= 0.0 and _sky_mat != null:
 		_orbit_wait = ORBIT_STEP
 		_sky_mat.set_shader_parameter("spin", orbit)
+	if not _blinkers.is_empty():
+		# A short flash every second and a half, each light a beat after the last.
+		_blink_time += delta
+		for i in _blinkers.size():
+			var on := fmod(_blink_time + i * 0.35, 1.5) < 0.12
+			_blinkers[i].albedo_color = _blink_colours[i] * (6.0 if on else 0.6)
 
 
 func _ready() -> void:
@@ -173,6 +306,12 @@ func _ready() -> void:
 	_build_corridors(dark)
 	_light_the_module()
 	_dress_zones()
+	match variant:
+		DAY_SIDE:
+			_dock_the_ship()
+			_shine_up_through_the_deck()
+		SUNRISE:
+			_run_the_truss()
 
 
 ## The station's grey skin (station_panel.gdshader).
@@ -426,10 +565,124 @@ func _light_the_module() -> void:
 				(FRONT + LIVE_ROOM_BACK) * 0.5), cove, "Cove")
 		strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var can := _ribs()
+	# By day the sun does the work, and the ship's day cycle has the downlights turned down.
+	var down := 0.9 if variant == DAY_SIDE else 2.0
 	for x in [-2.6, 2.6]:
 		for z in [-0.8, 1.6, 4.0, 6.4]:
-			var light := ZoneKit.spot_down(self, Vector3(x, CEILING - 0.03, z), Color(0.86, 0.92, 1.0), 2.0, 55.0, 6.0, can)
+			var light := ZoneKit.spot_down(self, Vector3(x, CEILING - 0.03, z), Color(0.86, 0.92, 1.0), down, 55.0, 6.0, can)
 			light.name = "Downlight"
+
+
+# --- outside --------------------------------------------------------------------------------
+
+## The cargo ship docked alongside by day, and the tunnel from the module to its berthing port:
+## out from the front wall under the right-hand viewport's sill, ribbed, its far end a flange.
+func _dock_the_ship() -> void:
+	var white := _panels(Color(0.82, 0.83, 0.85), Vector2(1.0, 0.5), 0.0, 0.1, 0.5)
+	var foil := StandardMaterial3D.new()
+	foil.albedo_color = Color(0.85, 0.6, 0.2)
+	foil.metallic = 1.0
+	foil.roughness = 0.32
+	foil.normal_enabled = true
+	foil.normal_texture = Materials.grain("station_foil", 1.6, 2.5)
+	foil.normal_scale = 0.6
+	foil.uv1_triplanar = true
+	foil.uv1_scale = Vector3.ONE * 0.8
+	var dark := _ribs()
+	var frame := StandardMaterial3D.new()
+	frame.albedo_color = Color(0.5, 0.5, 0.52)
+	frame.metallic = 0.7
+	frame.roughness = 0.35
+	var windows := ZoneKit.glow(Color(1.0, 0.82, 0.55), 1.3)
+	var lamps := {}
+	for spec in [["red", Color(1.0, 0.1, 0.06)], ["green", Color(0.1, 1.0, 0.25)], ["white", Color(1.0, 1.0, 1.0)]]:
+		var m := ZoneKit.glow(spec[1], 1.0)
+		lamps[spec[0]] = m
+		_blinkers.append(m)
+		_blink_colours.append(spec[1])
+	var ship := _model("station_ship.glb", SHIP_AT, SHIP_YAW, {"hull": white, "foil": foil, "dark": dark,
+			"cell": _cells(Vector2(12, 8), Vector2(2, 1)), "frame": frame, "window": windows,
+			"red": lamps["red"], "green": lamps["green"], "white": lamps["white"]})
+	ship.name = "Ship"
+	# The tunnel: straight back from the port along its facing to the module's front wall.
+	var facing := Basis(Vector3.UP, SHIP_YAW) * Vector3.BACK
+	var wall := FRONT - WALL - 0.002
+	var reach := (wall - SHIP_AT.z) / facing.z
+	var tunnel := MeshInstance3D.new()
+	tunnel.name = "Tunnel"
+	var tube := CylinderMesh.new()
+	tube.top_radius = TUNNEL_R
+	tube.bottom_radius = TUNNEL_R
+	tube.height = reach
+	tube.radial_segments = 28
+	tunnel.mesh = tube
+	tunnel.material_override = white
+	var along := Basis(Vector3.UP, SHIP_YAW) * Basis(Vector3.RIGHT, PI * 0.5)
+	tunnel.transform = Transform3D(along, SHIP_AT + facing * reach * 0.5)
+	add_child(tunnel)
+	# Its ribs, and the collar where it meets the wall.
+	var k := 0.6
+	while k < reach - 0.3:
+		var rib := MeshInstance3D.new()
+		rib.name = "TunnelRib"
+		var ring := CylinderMesh.new()
+		ring.top_radius = TUNNEL_R + 0.05
+		ring.bottom_radius = TUNNEL_R + 0.05
+		ring.height = 0.12
+		ring.radial_segments = 28
+		rib.mesh = ring
+		rib.material_override = dark
+		rib.transform = Transform3D(along, SHIP_AT + facing * k)
+		add_child(rib)
+		k += 1.4
+
+
+## The planet's light up through the glass in the deck by day: a wide blue wash from below,
+## lighting the lattice's air and the underside of whatever is built in it.
+func _shine_up_through_the_deck() -> void:
+	var hole := glass_floor()
+	var up := SpotLight3D.new()
+	up.name = "Planetshine"
+	up.light_color = Color(0.45, 0.65, 1.0)
+	up.light_energy = 1.4
+	up.spot_range = 7.0
+	up.spot_angle = 60.0
+	up.shadow_enabled = false
+	up.light_specular = 0.1
+	up.position = Vector3(hole.get_center().x, -1.2, hole.get_center().y)
+	up.rotation_degrees = Vector3(90, 0, 0)
+	add_child(up)
+
+
+## The power truss across the view at dawn (station_array.glb): its girder level with the limb,
+## running from out of sight on the left past the module, its wings' cells toward the viewports
+## and black against the burning air, a red beacon on its end.
+func _run_the_truss() -> void:
+	var truss := StandardMaterial3D.new()
+	truss.albedo_color = Color(0.62, 0.63, 0.66)
+	truss.metallic = 0.6
+	truss.roughness = 0.4
+	var frame := StandardMaterial3D.new()
+	frame.albedo_color = Color(0.24, 0.25, 0.27)
+	frame.metallic = 0.6
+	frame.roughness = 0.45
+	var radiator := StandardMaterial3D.new()
+	radiator.albedo_color = Color(0.8, 0.8, 0.82)
+	radiator.roughness = 0.55
+	var beacon := ZoneKit.glow(Color(1.0, 0.12, 0.08), 1.0)
+	_blinkers.append(beacon)
+	_blink_colours.append(Color(1.0, 0.12, 0.08))
+	var array := _model("station_array.glb", TRUSS_AT, 0.0, {"truss": truss, "frame": frame, "radiator": radiator,
+			"cell": _cells(Vector2(14, 44), Vector2(2, 8)), "red": beacon})
+	array.name = "Truss"
+
+
+func _cells(cells: Vector2, bays: Vector2) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://core/venues/shaders/station_cells.gdshader")
+	m.set_shader_parameter("cells", cells)
+	m.set_shader_parameter("bays", bays)
+	return m
 
 
 # --- the zones ------------------------------------------------------------------------------

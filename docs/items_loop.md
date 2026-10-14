@@ -459,10 +459,14 @@ ergonomics.
       Done: one toy per venue, lying on the floor in front of the hoop: a knit hacky sack in the
       studio, a neon ball on the grid, a ball of paper in the chalk zone, a tennis ball in the
       loft, a snowball in the cabin, a beach ball on the roof, a foam planet on the station, a
-      rubber starfish in the dome and the eight ball in the club. They are one item, `ToyItem`,
+      rubber starfish in the dome and the eight ball in the club; later a geode in the crystal
+      cave, a lemon in the glasshouse, a green glow stick on the festival stage, a silk temari
+      ball in the temple garden and a tumbleweed in the desert. They are one item, `ToyItem`,
       whose look, size, flight and sound come from the venue. The snowball lands dead and puffs
       snow; the neon and tennis balls bounce; the beach ball is all air and comes down short;
-      the paper drifts; the starfish squeaks and is not round, so the hoop ignores it. Changing
+      the paper drifts; the starfish squeaks and is not round, so the hoop ignores it, and nor is
+      the glow stick, which lies a stick's radius off the floor (`TOYS[...]["rest"]`); the
+      tumbleweed is the size of a beach ball and lighter, and all drag. Changing
       venue changes the toy, even in your hand. New Foley: a soft thud, a snow crunch and a
       beach ball's bop. It adds 8 draws and about 1.5k triangles to the wide view. Learnings:
       - The hand is close to the eye on a desktop: a held pose a few centimetres up moves the

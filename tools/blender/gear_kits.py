@@ -244,7 +244,124 @@ def station():
     export_kit("station", [bump, face])
 
 
-for build in (club, rooftop, cabin, dome, grid, loft, station):
+def hex_crystal(name, radius, length, base, tilt_x, tilt_z, material):
+    """A quartz point: a six-sided prism with a pyramid tip, standing from `base` up Godot y, leant
+    by `tilt_x` and `tilt_z` radians."""
+    prism = rod(name + "_prism", radius, length, (0.0, length * 0.5, 0.0), "y", material, 6)
+    tip = pyramid(name + "_tip", radius * 1.05, radius * 2.2, (0.0, length, 0.0), material)
+    piece = combine(name, [prism, tip])
+    piece.data.transform(Matrix.Rotation(tilt_z, 4, "X") @ Matrix.Rotation(-tilt_x, 4, "Y"))
+    piece.data.transform(Matrix.Translation(g(*base)))
+    return piece
+
+
+def cave():
+    """A cluster of quartz points on every top corner, and a geode's cut face in each front."""
+    points = [hex_crystal("c%d" % i, r, h, (x, -0.02, z), tx, tz, "glass")
+            for i, (r, h, x, z, tx, tz) in enumerate([(0.012, 0.07, 0.0, 0.0, 0.0, 0.0),
+                    (0.009, 0.05, 0.012, -0.006, 0.45, 0.1), (0.008, 0.045, -0.008, 0.012, -0.2, -0.45),
+                    (0.006, 0.03, 0.014, 0.012, 0.5, -0.5)])]
+    finial = combine("finial", points)
+    rim = ring("rim", 0.075, 0.012, (0.0, 0.0, PROUD + 0.002), "z", "brushed")
+    rim.scale = (1.0, 0.72, 1.0)
+    bpy.context.view_layer.objects.active = rim
+    rim.select_set(True)
+    bpy.ops.object.transform_apply(scale=True)
+    inside = rod("inside", 0.066, 0.006, (0.0, 0.0, PROUD - 0.002), "z", "glass", 24)
+    inside.scale = (1.0, 0.72, 1.0)
+    bpy.context.view_layer.objects.active = inside
+    bpy.ops.object.transform_apply(scale=True)
+    face = combine("face", [rim, inside])
+    export_kit("cave", [finial, face])
+
+
+def greenhouse():
+    """A fluted cast-iron column at every upright edge, and an acorn finial on each top corner."""
+    shaft = rod("shaft", 0.022, 1.0, (0.0, 0.0, 0.0), "y", "trim", 16)
+    flutes = [rod("flute", 0.005, 1.0, (math.cos(a) * 0.022, 0.0, math.sin(a) * 0.022), "y", "trim", 6)
+            for a in [i * math.tau / 8 for i in range(8)]]
+    edge = combine("edge", [shaft] + flutes)
+    neck = rod("neck", 0.008, 0.03, (0.0, 0.012, 0.0), "y", "trim", 12)
+    collar = rod("collar", 0.016, 0.006, (0.0, 0.03, 0.0), "y", "trim", 16)
+    acorn = ball("acorn", 0.017, (0.0, 0.05, 0.0), "trim", 16)
+    tip = pyramid("tip", 0.008, 0.02, (0.0, 0.064, 0.0), "trim")
+    finial = combine("finial", [neck, collar, acorn, tip])
+    export_kit("greenhouse", [edge, finial])
+
+
+def stage():
+    """Triangular aluminium truss up every upright edge, a black truss block on each top corner."""
+    chords = [(PROUD + 0.014, -0.035), (-0.035, PROUD + 0.014), (PROUD + 0.03, PROUD + 0.03)]
+    parts = [rod("chord", 0.008, 1.0, (x, 0.0, z), "y", "brushed", 10) for x, z in chords]
+    steps = 10
+    for i in range(steps):
+        a = chords[i % 3]
+        b = chords[(i + 1) % 3]
+        y0 = -0.5 + i / steps
+        y1 = y0 + 1.0 / steps
+        p = Vector((a[0], y0, a[1]))
+        q = Vector((b[0], y1, b[1]))
+        mid = (p + q) * 0.5
+        lace = rod("lace", 0.004, (q - p).length, (mid.x, mid.y, mid.z), "y", "brushed", 6)
+        d = (q - p).normalized()
+        # Turn the lacing from straight up onto its diagonal, about its own middle.
+        up = Vector((0.0, 1.0, 0.0))
+        axis = up.cross(d)
+        if axis.length > 1e-6:
+            angle = math.acos(max(-1.0, min(1.0, up.dot(d))))
+            gm = g(mid.x, mid.y, mid.z)
+            ga = g(axis.x, axis.y, axis.z).normalized()
+            lace.data.transform(Matrix.Translation(gm) @ Matrix.Rotation(angle, 4, ga) @ Matrix.Translation(-gm))
+        parts.append(lace)
+    edge = combine("edge", parts)
+    cube = block("cube", (0.07, 0.07, 0.07), (PROUD - 0.022, PROUD - 0.022, PROUD - 0.022), "chassis")
+    bolts = [ball("bolt", 0.006, at, "brushed", 8) for at in
+            [(PROUD + 0.014, -0.012, -0.012), (-0.012, PROUD + 0.014, -0.012), (-0.012, -0.012, PROUD + 0.014)]]
+    corner = combine("corner_top", [cube] + bolts)
+    export_kit("stage", [edge, corner])
+
+
+def garden():
+    """Bronze corner fittings with round studs on the top corners, as on a temple's beams, and a
+    crest in a ring on each face."""
+    t = 0.004
+    c = 0.11
+    plate_x = block("px", (t, 0.05, c), (PROUD - t * 0.5, -0.025 + PROUD, -c * 0.5 + PROUD), "trim")
+    plate_z = block("pz", (c, 0.05, t), (-c * 0.5 + PROUD, -0.025 + PROUD, PROUD - t * 0.5), "trim")
+    plate_y = block("py", (c, t, c), (-c * 0.5 + PROUD, PROUD - t * 0.5, -c * 0.5 + PROUD), "trim")
+    studs = [ball("stud", 0.008, (PROUD, -0.025, -z), "trim", 10) for z in (0.035, 0.08)] + \
+            [ball("stud", 0.008, (-x, -0.025, PROUD), "trim", 10) for x in (0.035, 0.08)]
+    corner = combine("corner_top", [plate_x, plate_z, plate_y] + studs)
+    outer = ring("outer", 0.07, 0.008, (0.0, 0.0, PROUD + 0.002), "z", "trim")
+    boss = ball("boss", 0.016, (0.0, 0.0, PROUD - 0.004), "trim", 14)
+    petals = [ball("petal", 0.014, (math.cos(a) * 0.038, math.sin(a) * 0.038, PROUD - 0.006), "trim", 12)
+            for a in [math.pi / 2 + i * math.tau / 3 for i in range(3)]]
+    face = combine("face", [outer, boss] + petals)
+    export_kit("garden", [corner, face])
+
+
+def desert():
+    """Hammered brass corner plates with a domed stud in each, and a leather strap and buckle down
+    the front and back like a camel trunk's."""
+    c = 0.09
+    t = 0.004
+    plates = [
+        block("dx", (t, c, c), (PROUD - t * 0.5, -c * 0.5 + PROUD, -c * 0.5 + PROUD), "trim"),
+        block("dy", (c, t, c), (-c * 0.5 + PROUD, PROUD - t * 0.5, -c * 0.5 + PROUD), "trim"),
+        block("dz", (c, c, t), (-c * 0.5 + PROUD, -c * 0.5 + PROUD, PROUD - t * 0.5), "trim"),
+    ]
+    domes = [ball("dome", 0.011, at, "trim", 12) for at in
+            [(PROUD, -0.04, -0.04), (-0.04, PROUD, -0.04), (-0.04, -0.04, PROUD)]]
+    corner = combine("corner", plates + domes)
+    strap = block("strap", (0.04, 0.12, 0.005), (0.0, -0.03, PROUD - 0.0025), "end_cheek")
+    frame = [block("bf", (0.05, 0.006, 0.006), (0.0, y, PROUD + 0.003), "trim") for y in (-0.02, 0.012)] + \
+            [block("bs", (0.006, 0.032, 0.006), (x, -0.004, PROUD + 0.003), "trim") for x in (-0.022, 0.022)]
+    tongue = block("tongue", (0.004, 0.03, 0.004), (0.0, -0.004, PROUD + 0.006), "trim")
+    latch = combine("latch", [strap] + frame + [tongue])
+    export_kit("desert", [corner, latch])
+
+
+for build in (club, rooftop, cabin, dome, grid, loft, station, cave, greenhouse, stage, garden, desert):
     _parts.clear_scene()
     for m in list(bpy.data.materials):
         bpy.data.materials.remove(m)

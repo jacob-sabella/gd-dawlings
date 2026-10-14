@@ -5,19 +5,22 @@ extends Item
 ## in, lying on the floor by the hoop. A hacky sack in the studio, a neon ball on the grid, a ball
 ## of paper in the chalk zone, a tennis ball in the loft, a snowball in the cabin, a beach ball on
 ## the roof, a foam planet on the station, a rubber starfish under the sea, the eight ball in the
-## club.
+## club, a geode in the crystal cave, a lemon in the glasshouse, a glow stick on the festival
+## stage, a temari ball in the temple garden, a tumbleweed in the desert.
 ##
 ## One item, whose look and whose flight are the venue's (`TOYS`): the room changes it when the
 ## venue changes (`set_venue`), and since the venue is the host's, every machine has the same toy
 ## and flies it the same. A click squeezes it, as it does the ball, and each says so its own way.
 
 const MODEL := "res://assets/models/toys.glb"
-## tools/blender/toys.py's starfish thickness.
+## tools/blender/toys.py's starfish thickness, and its glow stick's radius.
 const STAR_THICK := 0.018
+const STICK_RADIUS := 0.0065
 
 ## By venue: the model's object, what it is called, how big it is (its radius, or a starfish's
 ## reach), how it flies, and what it sounds like landing (`_landing`). Round ones go through a
-## hoop.
+## hoop. "rest" is how high its middle lies off the floor when that is not its size: something
+## flat, or long and thin.
 const TOYS := {
 	&"studio": {"model": "Sack", "title": "HACKY SACK", "size": 0.03, "sound": &"thud",
 			"flies": {"bounce": 0.05, "roll": 9.0, "drag": 0.08}},
@@ -34,9 +37,20 @@ const TOYS := {
 	&"station": {"model": "Planet", "title": "FOAM PLANET", "size": 0.04, "sound": &"foam",
 			"flies": {"bounce": 0.45, "roll": 2.0, "drag": 0.12, "round": true}},
 	&"dome": {"model": "Starfish", "title": "RUBBER STARFISH", "size": 0.075, "sound": &"squeak",
+			"rest": STAR_THICK * 0.5,
 			"flies": {"bounce": 0.3, "roll": 6.0, "drag": 0.25}},
 	&"club": {"model": "Eight", "title": "EIGHT BALL", "size": 0.028, "sound": &"clack",
 			"flies": {"bounce": 0.3, "roll": 1.2, "drag": 0.02, "round": true}},
+	&"cave": {"model": "Geode", "title": "GEODE", "size": 0.04, "sound": &"stone",
+			"flies": {"bounce": 0.12, "roll": 4.0, "drag": 0.02, "round": true}},
+	&"greenhouse": {"model": "Lemon", "title": "LEMON", "size": 0.036, "sound": &"thud",
+			"flies": {"bounce": 0.3, "roll": 2.5, "drag": 0.05, "round": true}},
+	&"stage": {"model": "Stick", "title": "GLOW STICK", "size": 0.08, "sound": &"stick",
+			"rest": STICK_RADIUS, "flies": {"bounce": 0.35, "roll": 5.0, "drag": 0.1}},
+	&"garden": {"model": "Temari", "title": "TEMARI BALL", "size": 0.04, "sound": &"thud",
+			"flies": {"bounce": 0.35, "roll": 2.0, "drag": 0.06, "round": true}},
+	&"desert": {"model": "Tumble", "title": "TUMBLEWEED", "size": 0.12, "sound": &"twigs",
+			"flies": {"bounce": 0.55, "roll": 0.4, "drag": 1.4, "round": true}},
 }
 ## What each toy is made of, by the model's material names.
 const SKINS := {
@@ -51,7 +65,15 @@ const SKINS := {
 	"ice": [Color(0.92, 0.95, 0.98), 0.7],
 	"star": [Color(0.95, 0.42, 0.2), 0.55], "dots": [Color(0.98, 0.84, 0.6), 0.6],
 	"black": [Color(0.02, 0.02, 0.025), 0.12], "spot": [Color(0.95, 0.94, 0.9), 0.15],
+	"rock": [Color(0.42, 0.4, 0.38), 0.9], "amethyst": [Color(0.55, 0.25, 0.75), 0.15],
+	"lemon": [Color(0.96, 0.82, 0.12), 0.45],
+	"stick_cap": [Color(0.05, 0.05, 0.06), 0.4],
+	"temari": [Color(0.72, 0.08, 0.1), 0.8], "thread_a": [Color(0.95, 0.72, 0.2), 0.5],
+	"thread_b": [Color(0.95, 0.94, 0.9), 0.6],
+	"twig": [Color(0.62, 0.5, 0.34), 0.95],
 }
+## The glow stick's light: festival green.
+const LIGHTSTICK := Color(0.35, 1.0, 0.3)
 ## The neon ball's bands: the grid's own magenta.
 const NEON := Color(1.0, 0.25, 0.85)
 
@@ -134,10 +156,11 @@ func _build_body() -> Node3D:
 
 func _skin(what: String) -> Material:
 	var m := StandardMaterial3D.new()
-	if what == "glow":
-		m.albedo_color = NEON
+	if what == "glow" or what == "lightstick":
+		var lit := NEON if what == "glow" else LIGHTSTICK
+		m.albedo_color = lit
 		m.emission_enabled = true
-		m.emission = NEON
+		m.emission = lit
 		# Was 3.0 -- the highest multiplier anywhere in the project (hardware/materials.gd's own
 		# LED tops out at 2.4, and that is a few millimetres, not a third of a 7cm ball). Bloom
 		# at that strength bled past the band edges onto the dark shell between them, so the
@@ -155,6 +178,10 @@ func _skin(what: String) -> Material:
 		"black", "spot", "gore_a", "gore_b", "gore_c", "cap":
 			m.clearcoat_enabled = true
 			m.clearcoat = 0.5
+		"amethyst":
+			m.clearcoat_enabled = true
+			m.clearcoat = 0.5
+			m.metallic_specular = 0.9
 	return m
 
 
@@ -165,7 +192,7 @@ func _grip_shape() -> Shape3D:
 
 
 func centre_height() -> float:
-	return STAR_THICK * 0.5 if venue == &"dome" else float(_toy()["size"])
+	return float(_toy().get("rest", _toy()["size"]))
 
 
 ## In the palm, as the bouncy ball is; the beach ball, too big to be held there, out in front of
@@ -235,6 +262,12 @@ func _landing(speed: float, level: float) -> void:
 			Foley.play(self, Foley.squeak(true), level - 4.0, randf_range(0.9, 1.15))
 		&"clack":
 			Foley.play(self, Foley.board_thud(take), level, 1.8)
+		&"stone":
+			Foley.play(self, Foley.board_thud(take), level, 1.25)
+		&"stick":
+			Foley.play(self, Foley.paper_tap(), level, randf_range(1.6, 1.9))
+		&"twigs":
+			Foley.play(self, Foley.paper_tap(), level - 3.0, randf_range(0.55, 0.7))
 		_:
 			Foley.play(self, Foley.ball_bounce(), level, randf_range(0.95, 1.06) * (0.85 if venue == &"loft" else 1.1))
 

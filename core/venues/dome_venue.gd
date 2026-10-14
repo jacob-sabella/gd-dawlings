@@ -9,6 +9,15 @@ extends Venue
 ## and in caustics, a moving web of light on the deck and the sand, and in shafts slanting down
 ## through the water outside. The vocal booth is the sub bay: framed in the yellow of the small
 ## submersible docked against the glass beside it, its collar run through to the booth's back.
+##
+## Three arrangements, three sea floors. TWENTY_METRES, as first built. DEEP: the same dome far
+## down in the abyss, where no sunlight reaches: black water full of falling marine snow and
+## glowing plankton, jellyfish drifting up past the glass lit by their own light, a black smoker
+## venting on the floor ahead with tube worms round its feet, and the dome's own floodlights,
+## out on its plinth, throwing beams across the sand. WRECK: back up in the light, beside a
+## sunken brig lying over in the sand ahead, coral grown over her, fish schooling round her
+## standing mast, her debris strewn round her, and the sun's shafts falling through the water
+## onto her deck.
 
 ## The vault's radius past the live room's half width: the glass stands this far out from the
 ## deck's edge, and the trench of sand is between.
@@ -33,6 +42,26 @@ const SUB_FLANGE := 1.09
 const HATCH := Vector2(2.0, 2.7)
 const MODELS := "res://assets/models/"
 
+## The arrangements (Venue.VARIANTS).
+const TWENTY_METRES := 0
+const DEEP := 1
+const WRECK := 2
+## The wreck's sun: lower and from ahead and to the left, so its shafts lean across the view and
+## down onto the wreck.
+const WRECK_SUN := Vector3(-0.4, 1.0, -0.55)
+## The wreck (dome_wreck.glb): where she lies in the clearing ahead of the nose, and how she is
+## turned -- across the view, her bow off to the right and a little away, her deck heeled toward
+## the glass.
+const WRECK_AT := Vector3(1.5, -TRENCH, -21.5)
+const WRECK_YAW := PI - 0.3
+## The vent field in the deep (dome_vent.glb): ahead and to the left, where the desk sees it past
+## the timeline.
+const VENT_AT := Vector3(-8.5, -TRENCH, -17.0)
+## The floodlights on the vault's plinth in the deep: each (round the vault from the right-hand
+## foot, 0..PI; along the side, as a z), throwing its beam out and down onto the sand.
+const FLOODS := [[0.0, -1.0], [0.0, 4.0], [PI, -1.0], [PI, 4.0]]
+const NOSE_FLOODS := [0.55, 1.57, 2.6]
+
 ## Where each kelp stalk stands (studio space), kept for the tests: a headless MultiMesh does not
 ## keep its instance transforms.
 var kelp_spots: Array[Transform3D] = []
@@ -42,6 +71,9 @@ var reef: Array = []
 ## The fish: each one's (start in its sweep, out from the path, height, sweep rate), as
 ## fish.gdshader reads them.
 var fish_paths: Array[Vector4] = []
+## The wreck's transform (studio space), and where on her the coral grows, in hers.
+var wreck_at := Transform3D.IDENTITY
+var wreck_spots: Array[Transform3D] = []
 ## The path the schools swim: round the nose and down the sides, squared off (`SCHOOL_SQUARE`
 ## below 1) to keep clear of the glass, swept `SCHOOL_SWEEP` radians either side of the nose.
 const SCHOOL_CENTRE := Vector3(0.0, 0.0, -2.3)
@@ -81,10 +113,29 @@ func _dress_wardrobe(board: Wardrobe) -> void:
 	board.board_ink_fade = Color(0.35, 0.5, 0.48)
 
 
+## Where the sun is, this arrangement. In the deep there is none; what little reaches down is
+## from straight overhead.
+func sun_dir() -> Vector3:
+	match variant:
+		DEEP:
+			return Vector3(0.05, 1.0, -0.1)
+		WRECK:
+			return WRECK_SUN
+	return SUN_DIR
+
+
+## How hard the caustics play on the deck and the sand: none where the sun does not reach.
+func _caustics() -> float:
+	return 0.0 if variant == DEEP else 1.0
+
+
 func dress(env: Environment, key: DirectionalLight3D) -> void:
+	if variant == DEEP:
+		_dress_deep(env, key)
+		return
 	var sky_mat := ShaderMaterial.new()
 	sky_mat.shader = preload("res://core/venues/shaders/undersea_sky.gdshader")
-	sky_mat.set_shader_parameter("sun_dir", SUN_DIR)
+	sky_mat.set_shader_parameter("sun_dir", sun_dir())
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_64
@@ -115,8 +166,61 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	# The sun through twenty metres of water: green-blue, soft, from nearly overhead.
 	key.light_color = Color(0.7, 0.95, 0.95)
 	key.light_energy = 1.1
-	key.basis = Basis.looking_at(-SUN_DIR.normalized(), Vector3.FORWARD)
+	key.basis = Basis.looking_at(-sun_dir().normalized(), Vector3.FORWARD)
 	key.light_specular = 0.4
+	if variant == WRECK:
+		# Clearer water over the wreck, a little greener, and further to see: she is twenty
+		# metres off.
+		sky_mat.set_shader_parameter("horizon", Color(0.02, 0.1, 0.1))
+		sky_mat.set_shader_parameter("high", Color(0.07, 0.27, 0.26))
+		env.fog_light_color = Color(0.02, 0.095, 0.1)
+		env.fog_depth_begin = 6.0
+		env.fog_depth_end = 64.0
+		key.light_color = Color(0.78, 0.98, 0.9)
+		key.light_energy = 1.05
+
+
+## The abyss: no sun, no surface overhead, black water going to blacker. A trace of blue from
+## above that is less light than the idea of it; everything else is the dome's own lights and
+## what glows out there by itself.
+func _dress_deep(env: Environment, key: DirectionalLight3D) -> void:
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = preload("res://core/venues/shaders/undersea_sky.gdshader")
+	sky_mat.set_shader_parameter("sun_dir", sun_dir())
+	sky_mat.set_shader_parameter("deep", Color(0.0, 0.002, 0.005))
+	sky_mat.set_shader_parameter("horizon", Color(0.002, 0.009, 0.017))
+	sky_mat.set_shader_parameter("high", Color(0.003, 0.012, 0.022))
+	# No window to the surface: it is the same black as the rest.
+	sky_mat.set_shader_parameter("window", Color(0.003, 0.011, 0.02))
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.18, 0.32, 0.5)
+	env.ambient_light_energy = 0.12
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.glow_enabled = true
+	# What glows out there blooms: the jellies, the plankton, the vent's throat.
+	env.glow_intensity = 0.7
+	env.glow_bloom = 0.03
+	env.glow_hdr_threshold = 0.9
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_light_color = Color(0.003, 0.012, 0.022)
+	env.fog_depth_begin = 3.0
+	env.fog_depth_end = 34.0
+	env.fog_depth_curve = 0.9
+	env.fog_sky_affect = 0.0
+	if rich:
+		env.ssao_enabled = true
+		env.ssao_intensity = 1.2
+	key.light_color = Color(0.3, 0.5, 0.9)
+	key.light_energy = 0.05
+	key.basis = Basis.looking_at(-sun_dir().normalized(), Vector3.FORWARD)
+	key.light_specular = 0.1
 
 
 func lamp_colour(_index: int, authored: Color) -> Color:
@@ -160,11 +264,28 @@ func _ready() -> void:
 	_build_bulkhead()
 	_run_the_rail()
 	_dock_the_sub()
-	_plant_the_kelp()
-	_seed_the_reef()
-	_school_the_fish()
-	_slant_the_shafts()
-	_raise_bubbles()
+	match variant:
+		DEEP:
+			_seed_the_reef()
+			_raise_the_vent()
+			_set_the_jellies_adrift()
+			_let_the_snow_fall()
+			_light_the_floods()
+			_raise_bubbles()
+		WRECK:
+			_sink_the_wreck()
+			_plant_the_kelp()
+			_seed_the_reef()
+			_school_the_fish()
+			_school_round_the_wreck()
+			_slant_the_shafts()
+			_raise_bubbles()
+		_:
+			_plant_the_kelp()
+			_seed_the_reef()
+			_school_the_fish()
+			_slant_the_shafts()
+			_raise_bubbles()
 	_dress_zones()
 
 
@@ -227,7 +348,7 @@ func _lay_the_deck() -> void:
 	plane.size = Vector2(half * 2.0, BACK - NOSE)
 	floor_mesh.mesh = plane
 	floor_mesh.position = Vector3(0, 0, (NOSE + BACK) * 0.5)
-	floor_mesh.material_override = _ground("wood_floor_deck", "2k", 2.2, Color(0.66, 0.66, 0.64), 2.2, 1.6)
+	floor_mesh.material_override = _ground("wood_floor_deck", "2k", 2.2, Color(0.66, 0.66, 0.64), 2.2, 1.6 * _caustics())
 	add_child(floor_mesh)
 	var steel := _steel()
 	var skirt := TRENCH - 0.004
@@ -246,7 +367,9 @@ func _lay_the_sand() -> void:
 	plane.size = Vector2(140, 140)
 	sand.mesh = plane
 	sand.position = Vector3(0, -TRENCH, 0)
-	sand.material_override = _ground("coast_sand_01", "1k", 3.0, Color(0.72, 0.8, 0.76), 2.6, 1.3)
+	# In the deep the sand is the grey ooze of the abyss.
+	var tint := Color(0.3, 0.33, 0.34) if variant == DEEP else Color(0.72, 0.8, 0.76)
+	sand.material_override = _ground("coast_sand_01", "1k", 3.0, tint, 2.6, 1.3 * _caustics())
 	add_child(sand)
 
 
@@ -580,6 +703,9 @@ func _plant_the_kelp() -> void:
 		# Sparser close in, so the glass is not walled in by it.
 		if out < 4.0 and rng.randf() < 0.5:
 			continue
+		# None over the wreck, and a margin of open sand round her.
+		if variant == WRECK and _near_the_wreck(p, 4.5):
+			continue
 		var s := rng.randf_range(0.8, 1.6)
 		var basis := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.25), s))
 		kelp_spots.append(Transform3D(basis, Vector3(p.x, -TRENCH, p.y)))
@@ -609,6 +735,9 @@ func _seed_the_reef() -> void:
 				Vector3(at.x, -TRENCH, at.y))])
 	# The nose: the half disc of sand between the deck's front edge and the glass.
 	var kinds := ["Rock0", "Rock1", "Rock2", "CoralBranch", "CoralBranch", "CoralBrain", "CoralFan", "CoralFan"]
+	if variant == DEEP:
+		# Nothing grows in the dark but the odd pale sea fan: the rest is rock.
+		kinds = ["Rock0", "Rock1", "Rock2", "Rock0", "Rock1", "Rock2", "CoralFan", "CoralFan"]
 	var placed: Array[Vector2] = []
 	var tries := 0
 	while placed.size() < 34 and tries < 3000:
@@ -629,16 +758,36 @@ func _seed_the_reef() -> void:
 		while z < BACK - 1.0:
 			z += rng.randf_range(0.8, 1.8)
 			var kind: String = ["CoralBrain", "CoralFan", "CoralBranch"][rng.randi() % 3]
+			if variant == DEEP:
+				kind = ["Rock0", "CoralFan", "Rock2"][rng.randi() % 3]
 			place.call(kind, Vector2(side * (half + 0.45 + rng.randf_range(-0.08, 0.08)), z), rng.randf_range(0.7, 1.0))
 	# Outside: boulders among the kelp, a few in the clearing ahead.
 	for at in [Vector2(-9.5, -12.0), Vector2(6.5, -15.0), Vector2(11.0, -4.0), Vector2(-12.0, 2.0),
 			Vector2(-3.5, -17.0), Vector2(13.0, 6.0)]:
-		place.call("Rock%d" % (rng.randi() % 3), at, rng.randf_range(2.0, 3.6))
+		var kind := "Rock%d" % (rng.randi() % 3)
+		var size := rng.randf_range(2.0, 3.6)
+		# Not on the wreck, nor on the vent's mound.
+		if (variant == WRECK and _near_the_wreck(at, 2.0)) \
+				or (variant == DEEP and at.distance_to(Vector2(VENT_AT.x, VENT_AT.z)) < 6.5):
+			continue
+		place.call(kind, at, size)
+	# The coral grown over the wreck, at the spots on her that face up (dome_wreck.glb).
+	if variant == WRECK:
+		var coral := ["CoralBranch", "CoralBrain", "CoralFan", "CoralBranch", "CoralFan"]
+		for spot in wreck_spots:
+			var turn := Basis(Vector3.UP, rng.randf() * TAU)
+			var on := wreck_at * spot
+			reef.append([coral[rng.randi() % coral.size()],
+					Transform3D(on.basis * turn * Basis.from_scale(Vector3.ONE * rng.randf_range(1.3, 2.6)), on.origin)])
 	var source := (load(MODELS + "reef.glb") as PackedScene).instantiate()
 	var looks := {"rock": _reef_material(Color(0.36, 0.34, 0.3), 0.9),
 			"staghorn": _reef_material(Color(0.95, 0.5, 0.38), 0.6),
 			"brain": _reef_material(Color(0.82, 0.68, 0.34), 0.7),
 			"fan": _reef_material(Color(0.62, 0.22, 0.55), 0.6)}
+	if variant == DEEP:
+		# Basalt, and the deep's fans gone pale, almost white, where the floods find them.
+		looks["rock"] = _reef_material(Color(0.13, 0.13, 0.14), 0.85)
+		looks["fan"] = _reef_material(Color(0.85, 0.72, 0.62), 0.6)
 	var by_kind := {}
 	for piece: Array in reef:
 		if not by_kind.has(piece[0]):
@@ -733,19 +882,29 @@ func _slant_the_shafts() -> void:
 	quad.size = Vector2.ONE
 	shafts.clear()
 	var tries := 0
-	while shafts.size() < 24 and tries < 200:
+	# Over the wreck: more of them, brighter, and a few falling on her. (Two quads a shaft.)
+	var count := 40 if variant == WRECK else 24
+	var bright := 1.5 if variant == WRECK else 1.0
+	var on_her: Array[Vector2] = []
+	if variant == WRECK:
+		for along in [-5.0, -1.0, 3.5, 7.0]:
+			var at := wreck_at * Vector3(along, 0, 0.5)
+			on_her.append(Vector2(at.x, at.z))
+	while shafts.size() < count and tries < (300 if variant == WRECK else 200):
 		tries += 1
 		var p := Vector2(rng.randf_range(-24, 24), rng.randf_range(-28, 18))
+		if not on_her.is_empty():
+			p = on_her.pop_back()
 		var out := absf(p.x) - r if p.y > NOSE else Vector2(p.x, p.y - NOSE).length() - r
 		if out < 3.0:
 			continue
 		var m := ShaderMaterial.new()
 		m.shader = preload("res://core/venues/shaders/light_shaft.gdshader")
 		m.set_shader_parameter("seed", rng.randf())
-		m.set_shader_parameter("strength", rng.randf_range(0.06, 0.13))
+		m.set_shader_parameter("strength", rng.randf_range(0.06, 0.13) * bright)
 		var height := rng.randf_range(22.0, 30.0)
 		var width := rng.randf_range(1.5, 3.5)
-		var up := SUN_DIR.normalized()
+		var up := sun_dir().normalized()
 		var across := up.cross(Vector3.FORWARD).normalized()
 		var through := across.cross(up).normalized()
 		for turn in [0, 1]:
@@ -793,12 +952,427 @@ func _raise_bubbles() -> void:
 		var shine := StandardMaterial3D.new()
 		shine.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		shine.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		shine.albedo_color = Color(0.6, 0.85, 0.9, 0.3)
+		# In the deep a bubble is only seen where a light catches it: fainter.
+		shine.albedo_color = Color(0.6, 0.85, 0.9, 0.1 if variant == DEEP else 0.3)
 		ball.material = shine
 		stream.draw_pass_1 = ball
 		stream.position = at
 		stream.visibility_aabb = AABB(Vector3(-3, -1, -3), Vector3(6, 40, 6))
 		add_child(stream)
+
+
+# --- the wreck ---------------------------------------------------------------------------------
+
+## Whether `p` (studio x, z) is on the wreck or within `margin` of her and her debris.
+func _near_the_wreck(p: Vector2, margin: float) -> bool:
+	var local := wreck_at.affine_inverse() * Vector3(p.x, -TRENCH, p.y)
+	# Her stern's rudder to her bowsprit along x; her fallen mainmast behind her (-z), her deck
+	# heeled toward the glass (+z).
+	return local.x > -12.5 - margin and local.x < 14.5 + margin and local.z > -11.0 - margin \
+			and local.z < 3.2 + margin
+
+
+## The brig (dome_wreck.glb), lying over in the sand ahead: her planks the weathered boards,
+## green with growth; her frames and spars darker and waterlogged; her iron rust. Where the
+## coral grows on her is kept for _seed_the_reef.
+func _sink_the_wreck() -> void:
+	wreck_at = Transform3D(Basis(Vector3.UP, WRECK_YAW), WRECK_AT)
+	var planks := Materials.scanned(StandardMaterial3D.new(), "weathered_brown_planks", "2k", 3.0,
+			Color(0.78, 0.84, 0.7))
+	# Laid along her strakes by the model's own UVs, one plank of the texture to a strake.
+	planks.uv1_triplanar = false
+	planks.uv1_scale = Vector3.ONE
+	planks.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var timber := Materials.scanned(StandardMaterial3D.new(), "weathered_brown_planks", "2k", 1.2,
+			Color(0.42, 0.45, 0.36))
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color(0.24, 0.15, 0.1)
+	iron.roughness = 0.9
+	iron.normal_enabled = true
+	iron.normal_texture = Materials.grain("dome_rust", 1.2, 3.0)
+	iron.uv1_triplanar = true
+	iron.uv1_scale = Vector3.ONE * 2.0
+	var rope := StandardMaterial3D.new()
+	rope.albedo_color = Color(0.34, 0.33, 0.24)
+	rope.roughness = 0.95
+	var ship := _model("dome_wreck.glb", WRECK_AT, WRECK_YAW, {"planks": planks, "frame": timber, "iron": iron,
+			"rope": rope})
+	ship.name = "Wreck"
+	wreck_spots.clear()
+	for spot: Node3D in ship.find_children("CoralSpot*", "Node3D", true, false):
+		wreck_spots.append(_in_model(ship, spot))
+
+
+## A node's transform in the model it was loaded with, from the model's root.
+func _in_model(root: Node3D, node: Node3D) -> Transform3D:
+	var at := node.transform
+	var up := node.get_parent()
+	while up != null and up != root:
+		at = (up as Node3D).transform * at
+		up = up.get_parent()
+	return at
+
+
+## Two schools round the wreck: a big one wheeling round her standing mast, half way up, and a
+## smaller one round the stump of her mainmast. The dome's own fish shader, with the path drawn
+## round each mast instead of round the vault.
+func _school_round_the_wreck() -> void:
+	var ship := get_node("Wreck") as Node3D
+	var mast := wreck_at * _in_model(ship, ship.find_child("Mast", true, false) as Node3D)
+	var stump := wreck_at * _in_model(ship, ship.find_child("Stump", true, false) as Node3D)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31
+	var source := (load(MODELS + "reef.glb") as PackedScene).instantiate()
+	var fish_mesh := (source.find_child("Fish", true, false) as MeshInstance3D).mesh
+	source.free()
+	# (centre, radii, how many, spread of heights, sweep rate, colour, back)
+	for school in [[mast.origin + mast.basis.y * 7.5, Vector2(2.6, 2.3), 64, 2.2, 0.11,
+				Color(0.98, 0.82, 0.3), Color(0.4, 0.34, 0.12)],
+			[stump.origin + Vector3(0, 0.9, 0), Vector2(1.7, 1.5), 22, 0.8, -0.14,
+				Color(0.85, 0.9, 0.95), Color(0.2, 0.3, 0.42)]]:
+		var centre: Vector3 = school[0]
+		var radii: Vector2 = school[1]
+		var mesh := fish_mesh.duplicate() as ArrayMesh
+		var skin := ShaderMaterial.new()
+		skin.shader = preload("res://core/venues/shaders/fish.gdshader")
+		skin.set_shader_parameter("centre", centre)
+		skin.set_shader_parameter("radii", radii)
+		# Round, not squared off: there is no glass to keep clear of out here, and all the way
+		# round and back.
+		skin.set_shader_parameter("square", 1.0)
+		skin.set_shader_parameter("sweep", PI)
+		skin.set_shader_parameter("colour", school[5])
+		skin.set_shader_parameter("back", school[6])
+		mesh.surface_set_material(0, skin)
+		var many := MultiMesh.new()
+		many.transform_format = MultiMesh.TRANSFORM_3D
+		many.use_custom_data = true
+		many.mesh = mesh
+		many.instance_count = school[2]
+		for i in many.instance_count:
+			# Bigger than the dome's: seen from twenty metres they must still read as fish.
+			many.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * rng.randf_range(3.4, 4.4)),
+					Vector3.ZERO))
+			var spread: float = school[3]
+			many.set_instance_custom_data(i, Color(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.5, 0.5),
+					rng.randf_range(-spread, spread), float(school[4]) * rng.randf_range(0.97, 1.03)))
+		var reach := Vector3(radii.x + 1.5, 0.0, radii.y + 1.5)
+		many.custom_aabb = AABB(centre - reach - Vector3(0, school[3] + 1.0, 0),
+				reach * 2.0 + Vector3(0, school[3] * 2.0 + 2.0, 0))
+		var node := MultiMeshInstance3D.new()
+		node.name = "WreckFish"
+		node.multimesh = many
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(node)
+
+
+# --- the deep ----------------------------------------------------------------------------------
+
+## The black smoker (dome_vent.glb) on the floor ahead: its chimneys near black, their throats
+## glowing, the tube worms round their feet, its own dull red light on the mound, and smoke
+## pouring up out of every chimney into the dark.
+func _raise_the_vent() -> void:
+	var rock := StandardMaterial3D.new()
+	rock.albedo_color = Color(0.07, 0.065, 0.065)
+	rock.roughness = 0.8
+	rock.normal_enabled = true
+	rock.normal_texture = Materials.grain("dome_sulphide", 1.0, 4.0)
+	rock.uv1_triplanar = true
+	rock.uv1_scale = Vector3.ONE * 1.5
+	var worm := StandardMaterial3D.new()
+	worm.albedo_color = Color(0.86, 0.84, 0.78)
+	worm.roughness = 0.45
+	var plume := StandardMaterial3D.new()
+	plume.albedo_color = Color(0.8, 0.07, 0.06)
+	plume.roughness = 0.5
+	plume.emission_enabled = true
+	plume.emission = Color(0.6, 0.04, 0.03)
+	plume.emission_energy_multiplier = 0.15
+	var vent := _model("dome_vent.glb", VENT_AT, 0.4, {"rock": rock, "glow": ZoneKit.glow(Color(1.0, 0.36, 0.08), 2.6),
+			"worm": worm, "plume": plume})
+	vent.name = "Vent"
+	var heat := OmniLight3D.new()
+	heat.name = "VentGlow"
+	heat.light_color = Color(1.0, 0.42, 0.15)
+	heat.light_energy = 1.6
+	heat.omni_range = 7.0
+	heat.position = VENT_AT + Vector3(0, 2.2, 0)
+	add_child(heat)
+	var puff := _soft_spot()
+	for mouth: Node3D in vent.find_children("Smoke*", "Node3D", true, false):
+		var at := vent.transform * _in_model(vent, mouth).origin
+		var smoke := GPUParticles3D.new()
+		smoke.name = "Smoke"
+		smoke.amount = 48
+		smoke.lifetime = 16.0
+		smoke.preprocess = 16.0
+		var motion := ParticleProcessMaterial.new()
+		motion.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		motion.emission_sphere_radius = 0.12
+		motion.direction = Vector3(0, 1, 0)
+		motion.spread = 6.0
+		motion.initial_velocity_min = 0.5
+		motion.initial_velocity_max = 0.8
+		motion.gravity = Vector3(0.03, 0.0, 0.02)
+		motion.damping_min = 0.02
+		motion.damping_max = 0.04
+		motion.turbulence_enabled = true
+		motion.turbulence_noise_strength = 0.5
+		motion.turbulence_noise_scale = 3.0
+		motion.turbulence_influence_min = 0.03
+		motion.turbulence_influence_max = 0.08
+		var grow := Curve.new()
+		grow.add_point(Vector2(0.0, 0.3))
+		grow.add_point(Vector2(1.0, 3.0))
+		var grow_tex := CurveTexture.new()
+		grow_tex.curve = grow
+		motion.scale_curve = grow_tex
+		var tone := Gradient.new()
+		# Hot and lit from below as it leaves the throat, then grey, then gone into the dark.
+		tone.set_color(0, Color(0.5, 0.26, 0.12, 0.0))
+		tone.set_color(1, Color(0.03, 0.03, 0.035, 0.0))
+		tone.add_point(0.05, Color(0.42, 0.22, 0.12, 0.35))
+		tone.add_point(0.25, Color(0.1, 0.095, 0.095, 0.4))
+		tone.add_point(0.7, Color(0.06, 0.06, 0.065, 0.25))
+		var ramp := GradientTexture1D.new()
+		ramp.gradient = tone
+		motion.color_ramp = ramp
+		smoke.process_material = motion
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.9, 0.9)
+		var look := StandardMaterial3D.new()
+		look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		look.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		look.vertex_color_use_as_albedo = true
+		look.albedo_texture = puff
+		quad.material = look
+		smoke.draw_pass_1 = quad
+		smoke.position = at
+		smoke.visibility_aabb = AABB(Vector3(-6, -1, -6), Vector3(12, 16, 12))
+		add_child(smoke)
+
+
+## A soft round spot, white in the middle and gone at the edge: for smoke, plankton and snow.
+func _soft_spot() -> GradientTexture2D:
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 1))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	var spot := GradientTexture2D.new()
+	spot.gradient = fade
+	spot.fill = GradientTexture2D.FILL_RADIAL
+	spot.fill_from = Vector2(0.5, 0.5)
+	spot.fill_to = Vector2(1.0, 0.5)
+	spot.width = 32
+	spot.height = 32
+	return spot
+
+
+## `count` points in the water outside the glass, `out` metres past it at most, between heights
+## `low` and `high`, as a texture GPUParticles3D can be told to spawn from: so nothing drifts
+## inside the dome.
+func _outside(count: int, out: float, low: float, high: float, rng: RandomNumberGenerator) -> ImageTexture:
+	var r := radius()
+	var image := Image.create(count, 1, false, Image.FORMAT_RGBF)
+	var made := 0
+	while made < count:
+		var p := Vector3(rng.randf_range(-r - out, r + out), rng.randf_range(low, high),
+				rng.randf_range(NOSE - r - out, BACK + 4.0))
+		# Outside the vault: its half cylinder, its nose, and behind the bulkhead.
+		var from_axis := Vector2(p.x, maxf(p.y, 0.0)).length() if p.z > NOSE \
+				else Vector3(p.x, maxf(p.y, 0.0), p.z - NOSE).length()
+		if from_axis < r + 0.5 and p.z < BACK + 0.6:
+			continue
+		image.set_pixel(made, 0, Color(p.x, p.y, p.z))
+		made += 1
+	return ImageTexture.create_from_image(image)
+
+
+## The jellyfish (dome_jelly.glb), drifting up through the dark round the vault in one MultiMesh,
+## lit by their own light (dome_jelly.gdshader): a few close enough to the glass to look into,
+## most out in the murk. None in the sub's way.
+func _set_the_jellies_adrift() -> void:
+	var source := (load(MODELS + "dome_jelly.glb") as PackedScene).instantiate()
+	var mesh := ((source.find_children("*", "MeshInstance3D", true, false)[0]) as MeshInstance3D).mesh
+	source.free()
+	var glow := ShaderMaterial.new()
+	glow.shader = preload("res://core/venues/shaders/dome_jelly.gdshader")
+	glow.set_shader_parameter("strength", 1.6)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var r := radius()
+	var sub := sub_spot()
+	var spots: Array[Transform3D] = []
+	var shades: Array[Color] = []
+	var tries := 0
+	while spots.size() < 46 and tries < 2000:
+		tries += 1
+		var near := spots.size() < 10
+		var a := rng.randf_range(-PI, PI)
+		var away := rng.randf_range(1.0, 3.0) if near else rng.randf_range(3.0, 20.0)
+		# Round the vault's axis, or round its nose in front of it.
+		var p := Vector2(cos(a) * (r + away), sin(a) * (r + away) * 1.6 - 4.0)
+		if p.y > BACK:
+			continue
+		var out := absf(p.x) - r if p.y > NOSE else Vector2(p.x, p.y - NOSE).length() - r
+		if out < 1.0 or Vector2(p.x - sub.x, p.y - sub.z).length() < 3.5:
+			continue
+		var s := rng.randf_range(0.8, 1.7) if near else rng.randf_range(0.9, 2.2)
+		var tilt := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.25, 0.25))
+		spots.append(Transform3D(tilt.scaled(Vector3.ONE * s), Vector3(p.x, 4.0, p.y)))
+		shades.append(Color(rng.randf(), rng.randf_range(0.06, 0.14), rng.randf_range(11.0, 15.0),
+				rng.randf() * (0.35 if rng.randf() < 0.7 else 1.0)))
+	var many := MultiMesh.new()
+	many.transform_format = MultiMesh.TRANSFORM_3D
+	many.use_custom_data = true
+	many.mesh = mesh
+	many.instance_count = spots.size()
+	for i in spots.size():
+		many.set_instance_transform(i, spots[i])
+		many.set_instance_custom_data(i, shades[i])
+	# Where each is is the shader's business: the whole volume they rise through.
+	many.custom_aabb = AABB(Vector3(-40, -12, -45), Vector3(80, 32, 80))
+	var node := MultiMeshInstance3D.new()
+	node.name = "Jellies"
+	node.multimesh = many
+	node.material_override = glow
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+
+
+## Marine snow, falling slowly through the water all round the vault, seen where the lights
+## catch it; and plankton, sparking blue-green in the dark and going out again.
+func _let_the_snow_fall() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 53
+	var spot := _soft_spot()
+	for spec in [["Snow", 1600, 26.0, 0.03, 9.0, false], ["Plankton", 700, 4.0, 0.035, 16.0, true]]:
+		var count: int = spec[1]
+		var drift := GPUParticles3D.new()
+		drift.name = spec[0]
+		drift.amount = count
+		drift.lifetime = spec[2]
+		drift.preprocess = spec[2]
+		var motion := ParticleProcessMaterial.new()
+		motion.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_POINTS
+		motion.emission_point_texture = _outside(count, spec[4], -0.4, 10.0, rng)
+		motion.emission_point_count = count
+		motion.direction = Vector3(0, -1, 0)
+		motion.spread = 40.0
+		motion.initial_velocity_min = 0.01
+		motion.initial_velocity_max = 0.04
+		motion.gravity = Vector3(0, 0.0 if spec[5] else -0.05, 0)
+		motion.turbulence_enabled = true
+		motion.turbulence_noise_strength = 0.3
+		motion.turbulence_influence_min = 0.01
+		motion.turbulence_influence_max = 0.03
+		var quad := QuadMesh.new()
+		quad.size = Vector2.ONE * float(spec[3])
+		var look := StandardMaterial3D.new()
+		look.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		look.albedo_texture = spot
+		if spec[5]:
+			# Plankton: its own light, blinking on and off over its short life.
+			var blink := Gradient.new()
+			blink.set_color(0, Color(0.3, 1.0, 0.85, 0.0))
+			blink.set_color(1, Color(0.2, 0.7, 1.0, 0.0))
+			blink.add_point(0.2, Color(0.3, 1.0, 0.85, 1.0))
+			blink.add_point(0.45, Color(0.25, 0.9, 1.0, 0.25))
+			blink.add_point(0.6, Color(0.25, 0.85, 1.0, 0.9))
+			var ramp := GradientTexture1D.new()
+			ramp.gradient = blink
+			motion.color_ramp = ramp
+			look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			look.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			look.vertex_color_use_as_albedo = true
+			look.albedo_color = Color(2.2, 2.2, 2.2)
+		else:
+			# Snow: grey flecks, lit by whatever light finds them and otherwise all but unseen.
+			look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			look.albedo_color = Color(0.75, 0.78, 0.8, 0.8)
+			look.emission_enabled = true
+			look.emission = Color(0.6, 0.7, 0.8)
+			look.emission_energy_multiplier = 0.025
+		look.disable_receive_shadows = true
+		quad.material = look
+		drift.process_material = motion
+		drift.draw_pass_1 = quad
+		drift.visibility_aabb = AABB(Vector3(-40, -4, -45), Vector3(80, 20, 80))
+		drift.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(drift)
+
+
+## The dome's floodlights, out on its plinth past the glass: two down each side and three round
+## the nose, each a lamp in a dark housing throwing a warm beam out and down across the sand, the
+## beam itself hanging in the water. The middle one of the nose's reaches out to the vent.
+func _light_the_floods() -> void:
+	# Just past the plinth's outer edge, clear of the glass, each on a post from the sand.
+	var r := radius() + 0.26
+	var housing := _dark()
+	var lens := ZoneKit.glow(Color(1.0, 0.92, 0.78), 2.2)
+	var warm := Color(1.0, 0.9, 0.76)
+	var aims: Array = []
+	for spec: Array in FLOODS:
+		var side := cos(float(spec[0]))
+		var at := Vector3(side * r, 0.2, float(spec[1]))
+		aims.append([at, Vector3(side, -0.32, 0.12).normalized(), 30.0, 14.0, 5.0])
+	for a: float in NOSE_FLOODS:
+		var at := Vector3(cos(a) * r, 0.2, NOSE - sin(a) * r)
+		var aim := Vector3(cos(a), -0.3, -sin(a)).normalized()
+		if absf(a - PI * 0.5) < 0.01:
+			# The one on the vent: long and narrow.
+			aim = (VENT_AT + Vector3(0, 2.5, 0) - at).normalized()
+			aims.append([at, aim, 13.0, 26.0, 7.0])
+		else:
+			aims.append([at, aim, 30.0, 14.0, 5.0])
+	for spec: Array in aims:
+		var at: Vector3 = spec[0]
+		var aim: Vector3 = spec[1]
+		var turn := Basis.looking_at(aim, Vector3.UP)
+		var lamp := ZoneKit.block(self, Vector3(0.34, 0.24, 0.3), at, housing, "FloodHousing")
+		lamp.basis = turn
+		var face := ZoneKit.block(lamp, Vector3(0.26, 0.17, 0.01), Vector3(0, 0, -0.156), lens, "FloodLens")
+		face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var post := at.y - 0.1 + TRENCH
+		ZoneKit.block(self, Vector3(0.07, post, 0.07), Vector3(at.x, -TRENCH + post * 0.5, at.z), housing, "FloodPost")
+		var beam := SpotLight3D.new()
+		beam.name = "Flood"
+		beam.light_color = warm
+		beam.light_energy = spec[4]
+		beam.spot_angle = spec[2]
+		beam.spot_range = spec[3]
+		beam.spot_angle_attenuation = 1.4
+		beam.shadow_enabled = false
+		beam.light_specular = 0.2
+		beam.transform = Transform3D(turn, at + aim * 0.2)
+		add_child(beam)
+		# The beam in the water: two crossed quads down its axis, brightest at the lamp.
+		var length: float = spec[3] * 0.8
+		var width := 2.0 * tan(deg_to_rad(spec[2])) * length * 0.5
+		var m := ShaderMaterial.new()
+		m.shader = preload("res://core/venues/shaders/light_shaft.gdshader")
+		m.set_shader_parameter("colour", Color(0.9, 0.8, 0.62))
+		m.set_shader_parameter("strength", 0.14)
+		m.set_shader_parameter("seed", at.x * 0.37 + at.z * 0.11)
+		var quad := QuadMesh.new()
+		var across := aim.cross(Vector3.UP).normalized()
+		var other := aim.cross(across).normalized()
+		for side_axis: Vector3 in [across, other]:
+			var glow := MeshInstance3D.new()
+			glow.name = "FloodBeam"
+			glow.mesh = quad
+			glow.material_override = m
+			glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var normal := side_axis.cross(-aim).normalized()
+			glow.transform = Transform3D(Basis(side_axis * width, -aim * length, normal), at + aim * (length * 0.5 + 0.2))
+			add_child(glow)
+	# A line of blue light along the plinth's top inside the glass, each side: the deck's edge
+	# from outside, and its own small light inside.
+	var strip := ZoneKit.glow(Color(0.3, 0.75, 1.0), 1.4)
+	for side in [-1.0, 1.0]:
+		var line := ZoneKit.block(self, Vector3(0.03, 0.02, BACK - NOSE - 0.2), Vector3(side * (radius() - 0.17), 0.135,
+				(NOSE + BACK) * 0.5), strip, "PlinthLight")
+		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 # --- the zones -------------------------------------------------------------------------------
@@ -809,7 +1383,7 @@ func _dress_zones() -> void:
 	var z := zones()
 	var steel := _steel()
 	var dark := _dark()
-	var teak := _ground("wood_floor_deck", "2k", 2.2, Color(0.66, 0.66, 0.64), 2.2, 1.6)
+	var teak := _ground("wood_floor_deck", "2k", 2.2, Color(0.66, 0.66, 0.64), 2.2, 1.6 * _caustics())
 
 	var drums := ZoneKit.holder(self, &"drums", z[&"drums"])
 	var drum_box: AABB = z[&"drums"]
