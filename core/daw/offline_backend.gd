@@ -1052,6 +1052,12 @@ func ripple_delete_selected() -> void:
 		_remember_edit(before)
 
 
+func nudge_selected(amount: float, unit: int) -> void:
+	var before := _lanes_snapshot()
+	if not _locally_nudge(amount, unit).is_empty():
+		_remember_edit(before)
+
+
 func copy_selected_to(seconds: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_copy_selected_to(seconds) > 0:

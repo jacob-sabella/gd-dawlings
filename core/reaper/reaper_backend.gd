@@ -736,6 +736,17 @@ func ripple_delete_selected() -> void:
 		_edit("RippleDeleteSelected", [])
 
 
+## Worked out here, along this map, and each item's new start sent: Reaper finds each by its
+## track and where it was.
+func nudge_selected(amount: float, unit: int) -> void:
+	var moved := _locally_nudge(amount, unit)
+	if not moved.is_empty():
+		var flat: Array = []
+		for m in moved:
+			flat.append_array(m)
+		_edit("NudgeItems", flat)
+
+
 func copy_selected_to(seconds: float) -> void:
 	if _locally_copy_selected_to(seconds) > 0:
 		_edit("CopySelectedTo", [seconds])

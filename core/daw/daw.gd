@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -442,6 +442,8 @@ func select_all_items() -> void: _do(&"select_all_items", [])
 func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0), maxi(to_track, 0)])
 func copy_selected_to(seconds: float) -> void: _do(&"copy_selected_to", [maxf(seconds, 0.0)])
+## The selection moved by `amount` of `unit` (see DAWBackend.nudge_selected).
+func nudge_selected(amount: float, unit: int) -> void: _do(&"nudge_selected", [amount, unit])
 func split_selected(seconds: float) -> void: _do(&"split_selected", [maxf(seconds, 0.0)])
 func delete_selected() -> void: _do(&"delete_selected", [])
 ## Delete the selection and close the gap it leaves on each track: what comes after moves back
@@ -738,6 +740,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean[3] = clampf(clean[3], 0.0, 1.0)
 			clean[4] = clampf(clean[4], 0.0, DAWBackend.SWING_MAX)
 		args = clean
+	if verb == &"nudge_selected":
+		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))) \
+				or int(args[1]) not in [DAWBackend.NUDGE_SECONDS, DAWBackend.NUDGE_BEATS, DAWBackend.NUDGE_BARS]:
+			push_warning("DAW: refused a malformed nudge_selected intent %s." % [args])
+			return
+		args = [float(args[0]), int(args[1])]
 	if verb == &"copy_selected_to":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
 			push_warning("DAW: refused a malformed copy_selected_to intent %s." % [args])

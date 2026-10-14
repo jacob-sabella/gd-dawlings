@@ -68,6 +68,11 @@ func _build() -> void:
 				_box(Vector2(-0.68 + k * 0.68, 0.32), Vector2(0.52, 0.62), 0.5)
 			_rod(Vector2(-0.95, -0.55), Vector2(0.5, -0.55), 0.1, 0.4)
 			_cone(Vector2(0.68, -0.55), Vector2(1, 0), 0.3, 0.45)
+		&"nudge_earlier", &"nudge_later":
+			# A block, a short step beside it the way it goes.
+			var m := -1.0 if _kind == &"nudge_earlier" else 1.0
+			_box(Vector2(-0.3 * m, 0.0), Vector2(0.95, 1.0), 0.5)
+			_cone(Vector2(0.62 * m, 0.0), Vector2(m, 0), 0.32, 0.45)
 		&"select_all":
 			for gx in [-0.68, 0.0, 0.68]:
 				for gy in [0.34, -0.34]:

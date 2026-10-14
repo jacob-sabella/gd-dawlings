@@ -287,6 +287,13 @@ func split_selected(_seconds: float) -> void: pass
 ## Every selected item, gone.
 func delete_selected() -> void: pass
 func ripple_delete_selected() -> void: pass
+## Every selected, unlocked item moved by `amount` of `unit` (NUDGE_SECONDS, NUDGE_BEATS or
+## NUDGE_BARS; less than nothing is earlier), along the tempo map from where each one starts, none
+## before the song's start. One undo step; a nudge that moves nothing is none.
+func nudge_selected(_amount: float, _unit: int) -> void: pass
+const NUDGE_SECONDS := 0
+const NUDGE_BEATS := 1
+const NUDGE_BARS := 2
 ## A copy of every selected item, straight after it; the copies are then the selection, as Reaper's
 ## own Duplicate leaves it.
 func duplicate_selected() -> void: pass
@@ -629,6 +636,37 @@ func _locally_ripple_trim(track_index: int, item_index: int, start: float, end: 
 		return false
 	_ripple_shift(track_index, later, now.end() - was_end)
 	return true
+
+
+## Where an item starting at `start` lands nudged by `amount` of `unit`.
+func nudged(start: float, amount: float, unit: int) -> float:
+	match unit:
+		NUDGE_BEATS:
+			return maxf(state.seconds_at_beat(state.beat_at(start) + amount), 0.0)
+		NUDGE_BARS:
+			return maxf(state.bar_to_seconds(state.bar_at(start) + 1.0 + amount), 0.0)
+	return maxf(start + amount, 0.0)
+
+
+## [track, start before, start after] for every item a nudge moves.
+func _locally_nudge(amount: float, unit: int) -> Array:
+	var moved: Array = []
+	for index in state.track_indices():
+		if not state.track(index).items.any(func(it): return it.selected and not it.locked):
+			continue
+		var lane := _lane_copy(index)
+		var any := false
+		for it in lane:
+			if not it.selected or it.locked:
+				continue
+			var to := nudged(it.start, amount, unit)
+			if absf(to - it.start) > 0.000001:
+				moved.append([index, it.start, to])
+				it.start = to
+				any = true
+		if any:
+			_write_lane(index, lane)
+	return moved
 
 
 ## Returns how many were copied.

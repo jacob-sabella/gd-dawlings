@@ -33,6 +33,9 @@ var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
 var crossfade: GlyphKey
+## The selection a step of the grid earlier or later (TimelineLanes.grid; fine: ten milliseconds).
+var nudge_earlier: GlyphKey
+var nudge_later: GlyphKey
 var down: GlyphKey
 var up: GlyphKey
 var quant: GlyphKey
@@ -79,6 +82,10 @@ func _ready() -> void:
 	crossfade = _key("ItemCrossfade", &"crossfade", EDIT_INK, "ITEM  CROSSFADE", _crossfade,
 			func() -> String: return "fade the earlier out and the later in, over the overlap" if crossfade.lit \
 					else "select two overlapping items on one track")
+	nudge_earlier = _key("ItemNudgeEarlier", &"nudge_earlier", GO_INK, "ITEM  NUDGE EARLIER", func(): _nudge(-1),
+			func() -> String: return _nudge_text("earlier"))
+	nudge_later = _key("ItemNudgeLater", &"nudge_later", GO_INK, "ITEM  NUDGE LATER", func(): _nudge(1),
+			func() -> String: return _nudge_text("later"))
 	_group()
 	down = _key("ItemDown", &"pitch_down", NOTE_INK, "ITEM  TRANSPOSE DOWN", func(): _transpose(-1),
 			func() -> String: return "a semitone down; fine: an octave" if down.lit else "for a MIDI item")
@@ -112,6 +119,10 @@ func refresh() -> void:
 	var one := item != null
 	for c in [gain, fade_in, fade_out, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = one
+	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
+	for key in [nudge_earlier, nudge_later]:
+		key.available = movable
+		key.lit = movable
 	copy_here.available = not picked.is_empty()
 	loop_to.available = not picked.is_empty()
 	copy_here.lit = not picked.is_empty()
@@ -164,6 +175,32 @@ func _set_fades(fin: float, fout: float) -> void:
 		return
 	DAW.set_item_fades(_target[0], _target[1], item.fade_in if is_nan(fin) else fin,
 			item.fade_out if is_nan(fout) else fout)
+
+
+## A step of the person's grid, as [amount, unit]: a bar, a beat or part of one, or with no grid
+## (or fine) ten milliseconds.
+static func nudge_step(fine: bool) -> Array:
+	var g := TimelineLanes.grid
+	if fine or g == TimelineLanes.OFF:
+		return [NUDGE_FREE, DAWBackend.NUDGE_SECONDS]
+	if g == TimelineLanes.BAR:
+		return [1.0, DAWBackend.NUDGE_BARS]
+	return [g, DAWBackend.NUDGE_BEATS]
+const NUDGE_FREE := 0.01
+
+
+func _nudge(direction: int) -> void:
+	var step := nudge_step(_fine(nudge_earlier) or _fine(nudge_later))
+	DAW.nudge_selected(direction * float(step[0]), int(step[1]))
+
+
+func _nudge_text(way: String) -> String:
+	if not nudge_earlier.available:
+		return "select an item that is not locked"
+	var g := TimelineLanes.grid
+	var what := "ten milliseconds" if g == TimelineLanes.OFF else "a bar" if g == TimelineLanes.BAR \
+			else "a beat" if g == 1.0 else "half a beat" if g == 0.5 else "a quarter beat"
+	return "the selection %s %s; fine: ten milliseconds" % [what, way]
 
 
 func _transpose(direction: int) -> void:

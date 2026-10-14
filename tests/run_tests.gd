@@ -296,6 +296,7 @@ func _ready() -> void:
 	_test_a_render_is_written_at_a_chosen_depth()
 	_test_a_render_can_be_normalised()
 	_test_a_track_is_duplicated()
+	_test_the_selection_is_nudged_by_the_grid()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19405,6 +19406,75 @@ func _test_a_track_is_duplicated() -> void:
 	page.duplicate.pressed.emit()
 	check("pressed, the picked track is copied and the copy picked", DAW.state.track_indices().size() == before + 1
 			and DAW.state.track(3).name == DAW.state.track(2).name and timeline.picked_track == 3)
+	timeline.free()
+	_offline()
+
+
+func _test_the_selection_is_nudged_by_the_grid() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 2
+	var starts: Array = s.track(lane).items.map(func(it): return it.start)
+	var beat := 60.0 / s.tempo
+	var depth := maxi(s.undo_depth, 0)
+	DAW.select_item(lane, 1, false)
+	DAW.nudge_selected(1.0, DAWBackend.NUDGE_BEATS)
+	close_to("a beat later", s.track(lane).items[1].start, float(starts[1]) + beat)
+	check("the others stay", is_equal_approx(s.track(lane).items[0].start, float(starts[0]))
+			and is_equal_approx(s.track(lane).items[2].start, float(starts[2])))
+	check("one step to undo", s.undo_depth - depth == 1)
+	DAW.nudge_selected(-1.0, DAWBackend.NUDGE_BARS)
+	close_to("a bar earlier", s.track(lane).items[1].start, float(starts[1]) + beat - 4.0 * beat)
+	DAW.nudge_selected(0.01, DAWBackend.NUDGE_SECONDS)
+	close_to("ten milliseconds later", s.track(lane).items[1].start, float(starts[1]) - 3.0 * beat + 0.01)
+	DAW.undo()
+	DAW.undo()
+	DAW.undo()
+	check("undone, where it was", is_equal_approx(s.track(lane).items[1].start, float(starts[1])))
+	# Several at once, a locked one staying put, none before the song's start.
+	DAW.select_item(lane, 0, false)
+	DAW.select_item(lane, 2, true)
+	DAW.set_item_locked(lane, 2, true)
+	DAW.nudge_selected(-1000.0, DAWBackend.NUDGE_BEATS)
+	check("nothing goes before the start, and a locked one stays",
+			s.track(lane).items[0].start == 0.0 and is_equal_approx(s.track(lane).items[2].start, float(starts[2])))
+	DAW.undo()
+	DAW.set_item_locked(lane, 2, false)
+	DAW.clear_item_selection()
+	var flat := s.undo_depth
+	DAW.nudge_selected(1.0, DAWBackend.NUDGE_BEATS)
+	check("nothing selected, nothing moved, no step", s.undo_depth == flat
+			and s.track(lane).items.map(func(it): return it.start) == starts)
+	DAW.select_item(lane, 1, false)
+	DAW.apply_intent(&"nudge_selected", [2.0, 1.0])
+	close_to("a guest may ask for one", s.track(lane).items[1].start, float(starts[1]) + 2.0 * beat)
+	DAW.undo()
+	DAW.apply_intent(&"nudge_selected", [1.0, 7.0])
+	DAW.apply_intent(&"nudge_selected", [INF, 1.0])
+	check("a malformed one is refused", is_equal_approx(s.track(lane).items[1].start, float(starts[1])))
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	page.refresh()
+	check("the ITEM page has the two nudge tokens, lit with a selection", page.nudge_earlier.glyph == &"nudge_earlier"
+			and page.nudge_later.glyph == &"nudge_later" and page.nudge_later.lit and page.nudge_later.available)
+	var was_grid := TimelineLanes.grid
+	TimelineLanes.grid = 0.5
+	page.nudge_later.pressed.emit()
+	close_to("pressed, half a beat later on a half-beat grid", s.track(lane).items[1].start, float(starts[1]) + 0.5 * beat)
+	check("its card says so (%s)" % page.nudge_later.describe_value.call(0.0),
+			page.nudge_later.describe_value.call(0.0).begins_with("the selection half a beat later"))
+	TimelineLanes.grid = TimelineLanes.BAR
+	page.nudge_earlier.pressed.emit()
+	close_to("on the bar grid, a bar earlier", s.track(lane).items[1].start, float(starts[1]) + 0.5 * beat - 4.0 * beat)
+	TimelineLanes.grid = TimelineLanes.OFF
+	check("with no grid, ten milliseconds", TimelineItemPage.nudge_step(false) == [0.01, DAWBackend.NUDGE_SECONDS])
+	TimelineLanes.grid = was_grid
+	DAW.clear_item_selection()
+	page.refresh()
+	check("dark with nothing selected", not page.nudge_later.lit and not page.nudge_later.available)
 	timeline.free()
 	_offline()
 

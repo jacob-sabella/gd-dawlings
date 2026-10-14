@@ -1235,6 +1235,27 @@ function handlers.InsertTrack(args)
   return {ok = true}
 end
 
+-- args: track, start before, start after, repeated: each selected, unlocked item on that track
+-- that starts there moved, the desk's nudge (worked out on the desk, along its tempo map). One
+-- undo point.
+function handlers.NudgeItems(args)
+  reaper.Undo_BeginBlock()
+  for k = 1, #args - 2, 3 do
+    local tr = track_from_osc(args[k])
+    if tr then
+      for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+        local it = reaper.GetTrackMediaItem(tr, n)
+        if reaper.IsMediaItemSelected(it) and (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 0
+            and math.abs(reaper.GetMediaItemInfo_Value(it, 'D_POSITION') - args[k + 1]) < 0.0001 then
+          reaper.SetMediaItemInfo_Value(it, 'D_POSITION', math.max(0, args[k + 2]))
+          break
+        end
+      end
+    end
+  end
+  return edited('Nudge items')
+end
+
 -- args: track. A copy right after it, as Track: Duplicate tracks (40062) makes one -- its
 -- settings, effects, sends, items and envelopes -- with the selection put back after.
 function handlers.DuplicateTrack(args)

@@ -3337,3 +3337,16 @@ track alone and puts the selection back, not yet run against a live Reaper.
 Checklist extended with three more editing items found missing: fade shapes and equal-power
 crossfades, nudging by the grid, and glue.
 Suite: 10233 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 25: nudge the selection by the grid (2026-10-14)
+`DAW.nudge_selected(amount, unit)`: every selected, unlocked item moved by seconds, beats or bars
+(`DAWBackend.NUDGE_SECONDS/BEATS/BARS`), along the tempo map from where each one starts, so a
+beat is a beat wherever the tempo changes; none before the song's start; one undo step, none
+when nothing moves. A guest asks for it with the amount and the unit, checked by the host.
+NUDGE EARLIER and NUDGE LATER on the ITEM page (a block with a step the way it goes) step by the
+person's grid (`TimelineItemPage.nudge_step`: a bar, a beat, half or a quarter of one), ten
+milliseconds with no grid or held fine; lit while anything unlocked is selected. Reaper: the desk
+works out each item's new start and `NudgeItems` in the bridge moves each selected item by its
+track and old start -- not yet run against a live Reaper.
+The screenshot caught the two marks pointing the wrong way round; fixed before the commit.
+Suite: 10249 checks, 0 failed; probe host 53, guest 47, 0 failed.
