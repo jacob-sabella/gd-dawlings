@@ -24,7 +24,9 @@ static func default_path(title: String) -> String:
 	return DEFAULT_DIR.path_join("%s.%s" % [safe if not safe.is_empty() else "Untitled", EXTENSION])
 
 
-static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
+## `copy`: an autosave's -- written there, but the project is still where it was and still has
+## its unsaved changes.
+static func save(backend: OfflineBackend, path: String, copy := false) -> PackedStringArray:
 	if path.is_empty():
 		path = backend.project_path if not backend.project_path.is_empty() else default_path(backend.project_title)
 	var project := ProjectBridge.capture(backend)
@@ -64,6 +66,8 @@ static func save(backend: OfflineBackend, path: String) -> PackedStringArray:
 	var abs_path := ProjectSettings.globalize_path(path)
 	DirAccess.make_dir_recursive_absolute(abs_path.get_base_dir())
 	warnings.append_array(DawKitDawproject.save(project, abs_path, staging))
+	if copy:
+		return warnings
 	backend.project_path = path
 	backend.name_project()
 	backend.mark_clean()

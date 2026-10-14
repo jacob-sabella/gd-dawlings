@@ -23,6 +23,16 @@ var track_count: int = 0
 ## What the project is called: not on the desk yet, but in a project file, and it has to survive
 ## being opened and saved again.
 var project_title := "Demo"
+## Autosave: once there are changes no save has kept, this many seconds later the host keeps a
+## copy of the project in AUTOSAVE_DIR -- never over its own file, which only a save writes. Held
+## while the transport runs, so a save's pause never lands in a take or a performance. 0 for
+## never (the suite's setting, so a long run does not write one halfway through).
+static var autosave_every := 300.0
+const AUTOSAVE_DIR := "user://autosave"
+## When the last copy was kept (Time.get_ticks_msec), or -1 for not yet.
+var autosaved_at_msec := -1
+var _autosaved_edits := -1
+var _autosave_due_msec := -1
 ## Plugin windows for the suite: the stand-in has no plugins to draw, so it says it cannot show
 ## their windows unless this is set, and then shows a plain picture that records what was done
 ## to it (PluginWindow). Never set by anything that ships.
@@ -36,6 +46,41 @@ func _process(delta: float) -> void:
 	follow_count_in()
 	follow_automation()
 	tick_replication(delta)
+	_tick_autosave()
+
+
+## Where this project's copy is kept: by its file's name, or its title before it has one.
+func autosave_path() -> String:
+	var base := project_path.get_file().get_basename() if not project_path.is_empty() \
+			else project_title.strip_edges().validate_filename()
+	return AUTOSAVE_DIR.path_join("%s.%s" % [base if not base.is_empty() else "Untitled", ProjectFiles.EXTENSION])
+
+
+## True when there are changes that neither a save nor the last copy has kept.
+func needs_autosave() -> bool:
+	return has_unsaved_changes() and _edits != _autosaved_edits
+
+
+func autosave() -> PackedStringArray:
+	var said := ProjectFiles.save(self, autosave_path(), true)
+	_autosaved_edits = _edits
+	autosaved_at_msec = Time.get_ticks_msec()
+	_autosave_due_msec = -1
+	return said
+
+
+func _tick_autosave() -> void:
+	if autosave_every <= 0.0 or not Session.is_authority() or not needs_autosave():
+		_autosave_due_msec = -1
+		return
+	var now := Time.get_ticks_msec()
+	if _autosave_due_msec < 0:
+		_autosave_due_msec = now + int(autosave_every * 1000.0)
+		return
+	if now >= _autosave_due_msec and not state.playing and not state.recording:
+		var said := autosave()
+		if not said.is_empty():
+			push_warning("Autosave: %s" % "; ".join(said))
 
 
 func open(_options: Dictionary = {}) -> bool:

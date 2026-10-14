@@ -352,6 +352,13 @@ func monitor_bus(track_index: int) -> StringName:
 func project_file() -> String: return backend.project_path if Session.is_authority() else ""
 
 
+## When the host's autosave last kept a copy (Time.get_ticks_msec), -1 for never, and for a guest
+## or a DAW that keeps its own.
+func autosaved_at_msec() -> int:
+	var at = backend.get(&"autosaved_at_msec") if Session.is_authority() and backend != null else null
+	return int(at) if at != null else -1
+
+
 ## The name of the project's file, without its folder: for anyone, the host's file on a guest.
 func project_file_name() -> String:
 	if Session.is_authority() and not backend.project_path.is_empty():

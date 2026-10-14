@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 20
+Iterations done: 21
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -76,7 +76,8 @@ Iterations done: 20
 ## Undo and project files
 - [x] undo/redo with one step per edit, save/open/new (DAWproject)
 - [x] a reopened project's audio is drawn (2026-10-14; it opened as blank blocks before)
-- [ ] autosave and crash recovery (missing)
+- [x] autosave (2026-10-14; the host keeps a copy in user://autosave five minutes after the first unsaved change, never while the transport runs, never over the project's own file; the save token's card says when)
+- [ ] crash recovery: offer the autosave copy when the game starts after one was left newer than the project (missing)
 - [ ] undo history list: jump to any step (missing)
 - [ ] project templates: a new project from a saved layout of tracks, routing and plugins (missing)
 

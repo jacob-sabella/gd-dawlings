@@ -3276,3 +3276,18 @@ in the bridge, not yet run against a live Reaper.
 Still to do: the drag preview shows only the item moving, not what follows; ripple across all
 tracks (Reaper's other mode) is not offered.
 Suite: 10180 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 21: autosave (2026-10-14)
+The host's engine (OfflineBackend, so the built-in engine and the stand-in) keeps a copy of the
+project once there is work no save has kept: `autosave_every` seconds (300) after the first
+unsaved change it writes `user://autosave/<project>.dawproject` through `ProjectFiles.save` with
+the new `copy` flag, which leaves the project's own file, path and unsaved state alone -- only a
+save writes the file you chose. It waits while the transport runs, so a save's pause never lands
+in a take; nothing new since the last copy, nothing written. Host only, nothing on the wire: a
+guest's work is in the host's project. The SAVE token's card says "copy kept N min ago". The
+suite sets `autosave_every` to 0 so a ten-minute run writes none; `tools/screenshot.gd
+--autosave` stops the song, edits and keeps one at once. Reaper keeps its own (its autosave
+preferences), so the bridge does nothing.
+Split out, still missing: crash recovery, offering the copy at start when it is newer than the
+project; and more than one copy kept (Reaper's timestamped backups).
+Suite: 10192 checks, 0 failed. Host only and nothing on the wire, so no probe.

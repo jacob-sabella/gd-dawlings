@@ -398,7 +398,7 @@ func _build_deck() -> void:
 				if not DAW.can(DAWBackend.Capability.PROJECT_SAVE):
 					return "this DAW cannot save from here"
 				var file := DAW.project_file()
-				return file.get_file() if not file.is_empty() else "where the host keeps it", true)
+				return (file.get_file() if not file.is_empty() else "where the host keeps it") + _autosave_text(), true)
 	item_page = TimelineItemPage.new()
 	item_page.name = "ItemPage"
 	track_page = TimelineTrackPage.new()
@@ -422,6 +422,15 @@ func _build_deck() -> void:
 
 
 const TOOL_INK := Color(0.70, 0.74, 0.82)
+
+
+## The host's: when a copy of the work was last kept by the autosave (OfflineBackend.autosave).
+func _autosave_text() -> String:
+	var at := DAW.autosaved_at_msec()
+	if at < 0:
+		return ""
+	var minutes := int((Time.get_ticks_msec() - at) / 60000)
+	return "  ·  copy kept %s" % ("just now" if minutes < 1 else "%d min ago" % minutes)
 
 
 func set_ripple_edit(on: bool) -> void:

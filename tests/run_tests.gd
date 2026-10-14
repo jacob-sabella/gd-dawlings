@@ -17,6 +17,7 @@ var _checks := 0
 
 
 func _ready() -> void:
+	OfflineBackend.autosave_every = 0.0
 	# DAWLINGS_TESTS=_test_a,_test_b runs only those, for working on one corner of the game
 	# without the whole suite's minutes. The full run is still the one that counts.
 	var only := OS.get_environment("DAWLINGS_TESTS")
@@ -288,6 +289,7 @@ func _ready() -> void:
 	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_a_ripple_delete_closes_the_gap()
 	_test_ripple_editing_carries_what_follows()
+	_test_the_host_keeps_an_autosave()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
@@ -19001,6 +19003,59 @@ func _test_ripple_editing_carries_what_follows() -> void:
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()
+
+
+func _test_the_host_keeps_an_autosave() -> void:
+	var backend := _offline()
+	backend.project_path = ""
+	backend.project_title = "Suite Autosave"
+	var copy := ProjectSettings.globalize_path(backend.autosave_path())
+	DirAccess.remove_absolute(copy)
+	check("the copy is kept by the project's name, apart from its own file (%s)" % backend.autosave_path(),
+			backend.autosave_path().begins_with(OfflineBackend.AUTOSAVE_DIR) and backend.autosave_path().ends_with("Suite Autosave.dawproject"))
+	backend._tick_autosave()
+	check("nothing unsaved, nothing kept", not FileAccess.file_exists(copy) and backend.autosaved_at_msec < 0)
+	OfflineBackend.autosave_every = 0.001
+	DAW.set_track_volume(3, 0.3)
+	check("an edit leaves work unsaved", DAW.has_unsaved_changes() and backend.needs_autosave())
+	backend._tick_autosave()
+	check("the clock starts at the first unsaved change, and nothing is written yet", not FileAccess.file_exists(copy))
+	OS.delay_msec(5)
+	DAW.transport_play()
+	backend._tick_autosave()
+	check("held while the transport runs", not FileAccess.file_exists(copy))
+	DAW.transport_stop()
+	backend._tick_autosave()
+	check("kept once it rests", FileAccess.file_exists(copy) and backend.autosaved_at_msec >= 0)
+	check("and the project is still where it was, with its changes still unsaved",
+			backend.project_path == "" and DAW.has_unsaved_changes() and not backend.needs_autosave())
+	DirAccess.remove_absolute(copy)
+	OS.delay_msec(5)
+	backend._tick_autosave()
+	backend._tick_autosave()
+	check("nothing new since, nothing written again", not FileAccess.file_exists(copy))
+	DAW.set_track_volume(3, 0.5)
+	backend._tick_autosave()
+	OS.delay_msec(5)
+	backend._tick_autosave()
+	check("a further change is kept in its turn", FileAccess.file_exists(copy))
+	var reopened := OfflineBackend.new()
+	reopened.state = MixState.new()
+	add_child(reopened)
+	var refused := ProjectFiles.open(reopened, backend.autosave_path())
+	check("the copy opens, with the work in it (%s)" % [refused], refused.is_empty()
+			and reopened.state.track(3) != null and is_equal_approx(reopened.state.track(3).volume, 0.5))
+	reopened.free()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	check("the save token's card says when (%s)" % timeline._save_key.describe_value.call(0.0),
+			timeline._save_key.describe_value.call(0.0).contains("copy kept just now"))
+	timeline.free()
+	DAW.save_project_as("user://suite_autosave/own.dawproject")
+	backend._tick_autosave()
+	check("a real save leaves nothing for it to do", not DAW.has_unsaved_changes() and not backend.needs_autosave())
+	OfflineBackend.autosave_every = 0.0
+	DirAccess.remove_absolute(copy)
 
 
 func _test_a_send_can_be_taken_before_the_fader() -> void:

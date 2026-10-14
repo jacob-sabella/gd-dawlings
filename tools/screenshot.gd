@@ -107,6 +107,9 @@ var _tl_select := ""
 var _tl_region := ""
 ## `--reopen`: the project saved and opened again at frame 5, to see what a reopened project draws.
 var _reopen := false
+## `--autosave`: the transport stopped and an edit at frame 5, and the autosave kept straight
+## after, to see what says so.
+var _autosave := false
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -221,6 +224,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_select = args[i + 1]
 			"--reopen":
 				_reopen = true
+			"--autosave":
+				_autosave = true
 			"--tl-region":
 				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-pick":
@@ -282,6 +287,11 @@ func _process(_delta: float) -> void:
 				DAW.select_item(int(ti[0]), int(ti[1]), not first)
 				first = false
 		print("SHOT_TL selected=", DAW.state.selected_items(), " picked=", _tl_pick)
+	if _frames == 5 and _autosave:
+		OfflineBackend.autosave_every = 0.001
+		DAW.set_track_volume(3, 0.3)
+		# Held while the song plays: stopped, so it is kept at once.
+		DAW.transport_stop()
 	if _frames == 5 and _reopen:
 		var path := ProjectSettings.globalize_path("user://shot_reopen.dawproject")
 		print("SHOT_REOPEN ", DAW.save_project_as(path), DAW.open_project(path))
