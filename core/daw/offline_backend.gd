@@ -946,6 +946,12 @@ func delete_selected() -> void:
 		_remember_edit(before)
 
 
+func copy_selected_to(seconds: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_copy_selected_to(seconds) > 0:
+		_remember_edit(before)
+
+
 func duplicate_selected() -> void:
 	var before := _lanes_snapshot()
 	if _locally_duplicate_selected() > 0:

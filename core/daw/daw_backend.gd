@@ -279,6 +279,9 @@ func delete_selected() -> void: pass
 ## A copy of every selected item, straight after it; the copies are then the selection, as Reaper's
 ## own Duplicate leaves it.
 func duplicate_selected() -> void: pass
+## Copies of the selected items with the earliest one's start put at `seconds`, each on its own
+## track and keeping its distance from the others. The originals stay selected.
+func copy_selected_to(_seconds: float) -> void: pass
 ## An item's edges moved to `start` and `end` seconds, its contents staying where they are in the
 ## song: trimming, not moving.
 func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) -> void: pass
@@ -511,6 +514,33 @@ func _locally_duplicate_selected() -> int:
 			if item.is_looped():
 				copy.source_offset = item.source_offset + item.length
 			item.selected = false
+			copies.append(copy)
+		lane.append_array(copies)
+		made += copies.size()
+		_write_lane(index, lane)
+	return made
+
+
+func _locally_copy_selected_to(seconds: float) -> int:
+	var earliest := INF
+	for index in state.track_indices():
+		for it in state.track(index).items:
+			if it.selected:
+				earliest = minf(earliest, it.start)
+	if earliest == INF:
+		return 0
+	var made := 0
+	for index in state.track_indices():
+		if not state.track(index).items.any(func(it): return it.selected):
+			continue
+		var lane := _lane_copy(index)
+		var copies: Array = []
+		for item in lane:
+			if not item.selected:
+				continue
+			var copy: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
+			copy.start = maxf(seconds, 0.0) + item.start - earliest
+			copy.selected = false
 			copies.append(copy)
 		lane.append_array(copies)
 		made += copies.size()

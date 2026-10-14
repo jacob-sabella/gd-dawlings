@@ -3052,3 +3052,12 @@ step, a guest's value is any nonzero number, a repeat is no step), `SetItemMuted
 bridge (`B_MUTE`), and an M key on the item strip under the timeline, lit while the item is muted.
 Full suite 9986 checks, 0 failed; session probe host 53 and guest 47, 0 failed. Not looked at in a
 screenshot: the strip's new key needs a selected item, which `tools/shot.sh` does not set up yet.
+
+## DAW parity, iteration 2: copy items to the playhead (2026-10-14)
+`DAW.copy_selected_to(seconds)`: copies of the selected items, the earliest one's start put at
+`seconds`, each on its own track and keeping its distance from the others; the originals stay.
+One undo step, a guest's malformed value refused. P key on the item strip. No clipboard: a
+clipboard held by one peer is not state the session can agree on, so copy and paste are one act.
+Reaper: `CopySelectedTo` clones through the item state chunk with the GUIDs stripped; written
+but not run against a live Reaper. Tap tempo, listed missing in the first audit, was already on
+the tape deck; corrected. Suite 9991 checks, 0 failed; probe 0 failed.

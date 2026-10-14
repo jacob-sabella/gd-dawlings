@@ -8,10 +8,12 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
+Iterations done: 2
+
 ## Transport and tempo
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
 - [x] tempo, tempo map, time-signature map
-- [ ] tap tempo (missing)
+- [x] tap tempo (the tape deck, `tapped_bpm`; the first audit listed it missing in error)
 - [ ] swing / groove templates (missing; `swing` appears only in the toy/venue code)
 
 ## Audio and MIDI editing
@@ -19,7 +21,7 @@ Not yet verified by use: anything marked partial from reading alone.
 - [x] item gain, fade in/out (linear), loop points on an item
 - [x] item mute (2026-10-14)
 - [ ] crossfades between overlapping items (missing)
-- [ ] copy / paste of items (missing; duplicate only)
+- [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [ ] item reverse, normalise (missing)
 - [ ] time-stretch, warp, item pitch shift (missing)
 - [ ] ripple edit, snap/grid settings for moves (partial: quantise only for notes)

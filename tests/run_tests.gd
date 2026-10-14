@@ -13530,6 +13530,25 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 	check("and a malformed or missing one is refused", s.item(lane, 1).muted)
 	DAW.set_item_muted(lane, 1, false)
 
+	var n_before: int = s.track(lane).items.size()
+	DAW.select_item(lane, 1, false)
+	var from_start: float = s.item(lane, 1).start
+	var copy_depth := s.undo_depth
+	DAW.copy_selected_to(100.0)
+	var items_now: Array = s.track(lane).items
+	check("a copy lands where asked, the original stays (%d items)" % items_now.size(),
+			items_now.size() == n_before + 1 and is_equal_approx(s.item(lane, 1).start, from_start)
+			and items_now.any(func(it): return is_equal_approx(it.start, 100.0) and not it.selected))
+	check("a copy is one step to undo", s.undo_depth - copy_depth == 1)
+	DAW.undo()
+	check("and undo takes it away again", s.track(lane).items.size() == n_before)
+	DAW.apply_intent(&"copy_selected_to", [NAN])
+	DAW.apply_intent(&"copy_selected_to", [])
+	check("a malformed copy is refused", s.track(lane).items.size() == n_before)
+	DAW.clear_item_selection()
+	DAW.copy_selected_to(5.0)
+	check("with nothing selected nothing is copied", s.track(lane).items.size() == n_before)
+
 	var link := _fresh_link()
 	link.state.track(4)
 	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 4, "items": [

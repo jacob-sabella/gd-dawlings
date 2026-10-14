@@ -716,6 +716,11 @@ func delete_selected() -> void:
 	_edit("DeleteSelected", [])
 
 
+func copy_selected_to(seconds: float) -> void:
+	if _locally_copy_selected_to(seconds) > 0:
+		_edit("CopySelectedTo", [seconds])
+
+
 func duplicate_selected() -> void:
 	_locally_duplicate_selected()
 	_edit("DuplicateSelected", [])

@@ -1329,6 +1329,35 @@ function handlers.DuplicateSelected()
   return {ok = true}
 end
 
+-- args: seconds. Copies of the selected items, the earliest one's start put there, each on its own
+-- track. Cloned through the item's state chunk with the GUIDs taken out, so Reaper numbers the
+-- copies itself rather than holding two items that claim to be the same one.
+function handlers.CopySelectedTo(args)
+  local count = reaper.CountSelectedMediaItems(0)
+  if count == 0 then return {ok = true} end
+  local earliest = math.huge
+  local picked = {}
+  for n = 0, count - 1 do
+    local it = reaper.GetSelectedMediaItem(0, n)
+    picked[#picked + 1] = it
+    earliest = math.min(earliest, reaper.GetMediaItemInfo_Value(it, 'D_POSITION'))
+  end
+  reaper.Undo_BeginBlock()
+  for _, it in ipairs(picked) do
+    local ok, chunk = reaper.GetItemStateChunk(it, '', false)
+    if ok then
+      chunk = chunk:gsub('\n%s*I?GUID %b{}', ''):gsub('\n%s*GUID %b{}', '')
+      local tr = reaper.GetMediaItem_Track(it)
+      local copy = reaper.AddMediaItemToTrack(tr)
+      reaper.SetItemStateChunk(copy, chunk, false)
+      reaper.SetMediaItemInfo_Value(copy, 'D_POSITION',
+        math.max(0, args[1] or 0) + reaper.GetMediaItemInfo_Value(it, 'D_POSITION') - earliest)
+      reaper.SetMediaItemSelected(copy, false)
+    end
+  end
+  return edited('Copy items')
+end
+
 -- args: track, index, start, end. The item's edges moved with its contents left where they are
 -- in the song: the take's start offset moves with the left edge, at the take's own rate.
 function handlers.TrimItem(args)
