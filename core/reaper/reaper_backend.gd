@@ -996,6 +996,19 @@ func set_note_velocity(track_index: int, item_index: int, note_index: int, veloc
 		_edit("SetNoteVelocity", [track_index, item_index, on, pitch, clampi(velocity, 1, 127)])
 
 
+func move_note(track_index: int, item_index: int, note_index: int, by: float) -> void:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + 4 >= item.notes.size():
+		return
+	var on: float = item.notes[at]
+	var pitch: int = int(item.notes[at + 2])
+	var before: float = on
+	if _locally_move_note(track_index, item_index, note_index, by):
+		# The amount it really moved, after being held inside the item.
+		_edit("MoveNote", [track_index, item_index, on, pitch, float(state.item(track_index, item_index).notes[at]) - before])
+
+
 func set_note_end(track_index: int, item_index: int, note_index: int, off: float) -> void:
 	var item := state.item(track_index, item_index)
 	var at := note_index * MidiTake.NOTE_WIDTH

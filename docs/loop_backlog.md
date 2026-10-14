@@ -3629,3 +3629,14 @@ so it cuts; the verb itself also lengthens (a later hand or rail could use it). 
 finds the note by start and pitch (syntax-checked, not run live). The ITEM page's NOTE row now
 wraps onto a second line. Still no move-a-note-in-time. Probe: host 53, guest 47, 0 failed.
 Suite: 10479 checks, 0 failed.
+
+## 2026-10-14 -- iteration 49: move a note in time
+
+NOTE EARLIER and NOTE LATER on the ITEM page (a brick with an arrow along it) move the note
+sounding at the playhead by a sixteenth of a beat, or a beat with fine, its length kept and held
+inside the item. `DAW.move_note` is an ITEM_EDITS intent `[track, item, note, by]` (index and
+distance clamped in `apply_intent`, undoable, refused on locked items, a move that cannot happen is
+no edit). Reaper's `MoveNote` is told the distance really moved, after the hold (syntax-checked, not
+run live). The piano roll now has per-note insert, delete, pitch, length, time and velocity from the
+ITEM page; still missing are CC and pitch-bend lanes. Probe: host 53, guest 47, 0 failed.
+Suite: 10486 checks, 0 failed.

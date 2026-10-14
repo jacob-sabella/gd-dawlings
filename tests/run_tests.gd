@@ -298,6 +298,7 @@ func _ready() -> void:
 	_test_an_item_is_renamed()
 	_test_a_note_is_deleted()
 	_test_a_note_is_inserted()
+	_test_a_note_is_moved_in_time()
 	_test_a_note_is_cut_at_the_playhead()
 	_test_a_note_is_moved_in_pitch()
 	_test_notes_are_played_backwards()
@@ -20355,6 +20356,39 @@ func _test_a_note_is_cut_at_the_playhead() -> void:
 	DAW.set_note_end(lane, 0, 0, beat)
 	check("a locked item is left alone", s.undo_depth == locked)
 	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"set_note_end") and &"set_note_end" in DAW.LOCKED_REFUSES)
+
+
+func _test_a_note_is_moved_in_time() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, [[5.0 * beat, 6.0 * beat, 60, 100, 0], [7.0 * beat, 8.0 * beat, 67, 90, 0]], "Move")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.move_note(lane, 0, 0, 0.25 * beat)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("a sixteenth later, its length kept", is_equal_approx(n[0][0], 5.25 * beat) and is_equal_approx(n[0][1] - n[0][0], beat)
+			and int(n[1][2]) == 67 and s.undo_depth - depth == 1)
+	DAW.move_note(lane, 0, 0, 99.0)
+	n = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("held at the item's end, whole (%.2f)" % ((n[1][1] - 4.0 * beat) / beat), is_equal_approx(n[1][1], 8.0 * beat) or is_equal_approx(n[0][1], 8.0 * beat))
+	DAW.move_note(lane, 0, 7, beat)
+	check("no such note is no edit", s.undo_depth - depth == 2)
+	DAW.move_note(lane, 0, 1, -99.0)
+	var m := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("and held at the start", m.any(func(x): return is_equal_approx(x[0], 4.0 * beat) and int(x[2]) == 67 or is_equal_approx(x[0], 4.0 * beat) and int(x[2]) == 60))
+	DAW.apply_intent(&"move_note", [lane, 0, 0, NAN])
+	var depth2 := s.undo_depth
+	DAW.apply_intent(&"move_note", [lane, 0, 0, 1.0e9])
+	check("a wild intent is clamped, not refused to a crash", s.undo_depth >= depth2)
+	DAW.set_item_locked(lane, 0, true)
+	var locked := s.undo_depth
+	DAW.move_note(lane, 0, 0, beat)
+	check("a locked item is left alone", s.undo_depth == locked)
+	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"move_note") and &"move_note" in DAW.LOCKED_REFUSES)
 
 
 func _test_a_note_is_inserted() -> void:

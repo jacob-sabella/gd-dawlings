@@ -1823,6 +1823,27 @@ function handlers.LegatoItem(args)
   return edited('Legato')
 end
 
+-- args: track, index, on, pitch, by: the note of that pitch starting `on` seconds into the item
+-- moved `by` seconds, its length kept.
+function handlers.MoveNote(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local want = (args[3] or 0) + reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local by = args[5] or 0
+  local done = false
+  reaper.Undo_BeginBlock()
+  each_note(it, function(take, on, off, pitch, v)
+    if not done and pitch == math.floor(args[4] or -1)
+        and math.abs(reaper.MIDI_GetProjTimeFromPPQPos(take, on) - want) < 0.005 then
+      done = true
+      local shifted = reaper.MIDI_GetPPQPosFromProjTime(take, reaper.MIDI_GetProjTimeFromPPQPos(take, on) + by)
+      return shifted, shifted + (off - on), pitch, v
+    end
+    return on, off, pitch, v
+  end)
+  return edited('Move note')
+end
+
 -- args: track, index, on, pitch, off: the note of that pitch starting `on` seconds into the item
 -- made to end `off` seconds into it, at the item's end at the latest.
 function handlers.SetNoteEnd(args)

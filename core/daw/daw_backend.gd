@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func move_note(_track_index: int, _item_index: int, _note_index: int, _by: float) -> void: pass
 func set_note_end(_track_index: int, _item_index: int, _note_index: int, _off: float) -> void: pass
 func insert_note(_track_index: int, _item_index: int, _on: float, _off: float, _pitch: int) -> void: pass
 func transpose_note(_track_index: int, _item_index: int, _note_index: int, _semitones: int) -> void: pass
@@ -1232,6 +1233,31 @@ func _locally_even_velocity(track_index: int, item_index: int) -> bool:
 		return false
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## The furthest one edit moves a note, in seconds.
+const NOTE_MOVE_MAX := 60.0
+
+## One note moved `by` seconds, its length kept, held inside its item (so one pressed against an
+## end stops there). False when there is no such note or it does not move.
+func _locally_move_note(track_index: int, item_index: int, note_index: int, by: float) -> bool:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + MidiTake.NOTE_WIDTH > item.notes.size():
+		return false
+	var on: float = item.notes[at]
+	var length: float = float(item.notes[at + 1]) - on
+	var to := clampf(on + clampf(by, -NOTE_MOVE_MAX, NOTE_MOVE_MAX), 0.0, maxf(item.length - length, 0.0))
+	if is_equal_approx(to, on):
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	notes[at] = to
+	notes[at + 1] = to + length
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true

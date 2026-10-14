@@ -232,6 +232,13 @@ func _build() -> void:
 			var d := 1.0 if _kind == &"pitch_up" else -1.0
 			_cone(Vector2(0, 0.15 * d), Vector2(0, d), 0.6, 0.85)
 			_box(Vector2(0, -0.7 * d), Vector2(1.3, 0.2), 0.3)
+		&"note_earlier", &"note_later":
+			# One brick with an arrow along it.
+			var nl := 1.0 if _kind == &"note_later" else -1.0
+			_box(Vector2(0, 0.45), Vector2(0.9, 0.45), 0.9)
+			_rod(Vector2(-0.8 * nl, -0.45), Vector2(0.8 * nl, -0.45), 0.11, 0.95)
+			_rod(Vector2(0.8 * nl, -0.45), Vector2(0.45 * nl, -0.2), 0.11, 0.95)
+			_rod(Vector2(0.8 * nl, -0.45), Vector2(0.45 * nl, -0.7), 0.11, 0.95)
 		&"note_end":
 			# A brick cut short at a line.
 			_box(Vector2(-0.3, 0.0), Vector2(1.3, 0.45), 0.9)

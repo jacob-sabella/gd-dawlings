@@ -1236,6 +1236,12 @@ func retrograde_item(track_index: int, item_index: int) -> void:
 		_remember_edit(before)
 
 
+func move_note(track_index: int, item_index: int, note_index: int, by: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_move_note(track_index, item_index, note_index, by):
+		_remember_edit(before)
+
+
 func set_note_end(track_index: int, item_index: int, note_index: int, off: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_set_note_end(track_index, item_index, note_index, off):
