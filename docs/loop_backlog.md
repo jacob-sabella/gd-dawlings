@@ -2347,6 +2347,10 @@ lamp parts".
   root; `--in-place` turns the reparenting off. Open:
   - Checked live on ReaEQ only (rig); the Wine/yabridge Neural DSP plugins are not tried with the holder.
   - One probe run in three did not find the window ((0,0)); not yet explained.
+  - 2026-10-14: the window flashed on the desktop between Reaper opening it and the helper's first frame
+    request (seen on workspace 2 with Gojira; and for good if the user moved it by then). The helper now
+    watches every 4 ms between commands and takes the window the moment it maps. The tablet also grows
+    to 2.4x and walks the viewer up to it when the UI face is turned on.
   - Left button, drag and wheel only: no right-click menus, no keyboard (a plugin's text fields can't
     be typed into), and its popup menus open as separate windows that the tablet doesn't show.
   - Two copies of the same plugin on one track have the same window title; the tablet shows the first.

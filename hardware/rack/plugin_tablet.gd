@@ -36,6 +36,8 @@ extends Surface
 
 ## Asked for by the DOCK button. The studio takes the tablet and its stand away.
 signal dock_requested()
+## The UI face was turned on or off: a viewer on a monitor is brought up to it.
+signal window_shown(on: bool)
 
 const WIDTH := 0.32
 const HEIGHT := 0.30
@@ -79,6 +81,8 @@ var lost := false
 var showing_window := false
 ## 0 at rest, 1 grown to WINDOW_SCALE. It grows from its bottom edge, so the stand keeps holding it.
 var _grown := 0.0
+## Off where the viewer walks up to the tablet instead (a monitor); see studio._build_tablet.
+var grows_with_window := true
 var _resting := Transform3D.IDENTITY
 
 var _knobs: Array[Knob] = []
@@ -472,6 +476,7 @@ func show_window(on: bool) -> void:
 	else:
 		_close_window()
 	showing_window = on
+	window_shown.emit(on)
 	mark_dirty()
 
 
@@ -496,7 +501,7 @@ func _close_window() -> void:
 
 ## Grow the tablet while it shows a window, and shrink it back when it shows the knobs.
 func _grow(delta: float) -> void:
-	var target := 1.0 if showing_window else 0.0
+	var target := 1.0 if showing_window and grows_with_window else 0.0
 	if is_equal_approx(_grown, target):
 		return
 	if _grown == 0.0:

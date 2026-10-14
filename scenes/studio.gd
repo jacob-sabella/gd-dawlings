@@ -861,6 +861,11 @@ func _build_tablet(id: StringName, track: int, fx: int, plugin_name: String) -> 
 	stand.add_part(lip, false)
 	stand.add_child(tablet)
 	tablet.dock_requested.connect(_dock_tablet.bind(id))
+	tablet.grows_with_window = true
+	tablet.window_shown.connect(func(on: bool) -> void:
+		if on and focus != null and focus.visits:
+			focus.focus(id)
+			_sit_down())
 	# Gear like the rest: F walks to it, and it comes up close to be worked.
 	if focus != null:
 		focus.surfaces.append(tablet)

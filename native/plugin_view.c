@@ -23,6 +23,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <ctype.h>
+#include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -259,6 +260,17 @@ static void send_motion(int x, int y) {
 	XFlush(dpy);
 }
 
+// Between commands: take the window the moment it shows up, and again if the DAW puts it back
+// on the desktop. Without this the window is on screen from when Reaper opens it until the
+// first frame is asked for, and it is on screen for good if the user moves it before then.
+static void watch(void) {
+	if (!keep) return;
+	XWindowAttributes a;
+	if (!top || !XGetWindowAttributes(dpy, top, &a) || a.map_state != IsViewable)
+		top = find(DefaultRootWindow(dpy), 0);
+	if (top) adopt(top);
+}
+
 int main(int argc, char **argv) {
 	if (argc < 2 || !argv[1][0]) { fprintf(stderr, "usage: plugin_view <title>\n"); return 2; }
 	wanted = argv[1];
@@ -267,7 +279,12 @@ int main(int argc, char **argv) {
 	if (!dpy) { fprintf(stderr, "plugin_view: no X display\n"); return 1; }
 	XSetErrorHandler(ignore_errors);
 	char line[256];
-	while (fgets(line, sizeof line, stdin)) {
+	setvbuf(stdin, NULL, _IONBF, 0);
+	for (;;) {
+		struct pollfd waiting = { 0, POLLIN, 0 };
+		int ready = poll(&waiting, 1, 4);
+		if (ready == 0) { watch(); continue; }
+		if (ready < 0 || !fgets(line, sizeof line, stdin)) break;
 		int x = 0, y = 0, b = 1;
 		switch (line[0]) {
 		case 'f': frame(); break;
