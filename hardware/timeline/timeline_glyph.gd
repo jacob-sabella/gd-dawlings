@@ -279,6 +279,13 @@ func _build() -> void:
 			_box(Vector2(0.0, -0.1), Vector2(1.7, 1.0), 0.45)
 			_rod(Vector2(-0.55, 0.0), Vector2(0.55, 0.0), 0.12, 0.95)
 			_rod(Vector2(-0.55, -0.3), Vector2(0.2, -0.3), 0.1, 0.8)
+		&"note_delete":
+			# One brick among low ones, struck through.
+			_box(Vector2(-0.62, -0.1), Vector2(0.42, 0.5), 0.4)
+			_box(Vector2(0.62, -0.1), Vector2(0.42, 0.5), 0.4)
+			_box(Vector2(0.0, -0.1), Vector2(0.42, 0.5), 0.9)
+			_rod(Vector2(-0.45, -0.75), Vector2(0.45, 0.55), 0.13, 0.95)
+			_rod(Vector2(-0.45, 0.55), Vector2(0.45, -0.75), 0.13, 0.95)
 		&"retrograde":
 			# Bricks stepping down to the right, and an arrow back along them.
 			_box(Vector2(-0.62, 0.35), Vector2(0.5, 0.36), 0.55)

@@ -3589,3 +3589,12 @@ velocity, kept inside the item. `DAW.retrograde_item` is an ITEM_EDITS intent (u
 locked items); pressed twice it is as played. Reaper's `RetrogradeItem` mirrors the PPQ about the
 item's ends (syntax-checked, not run live). Probe not run (the same intent shape as legato).
 Suite: 10453 checks, 0 failed.
+
+## 2026-10-14 -- iteration 45: delete a note
+
+A red crossed-brick key on the ITEM page takes out the note sounding at the playhead (lit only
+while one does; a locked item keeps its notes). `DAW.delete_note` is an ITEM_EDITS intent (the note
+index clamped in `apply_intent`, undoable, refused on locked items, a missing note no edit). Reaper's
+`DeleteNote` finds it by start and pitch like the velocity edit (syntax-checked, not run live). The
+piano roll is still read-only on the wire beyond this: no insert-a-note or move-a-note verb yet
+(notes come in through takes). Probe: host 53, guest 47, 0 failed. Suite: 10459 checks, 0 failed.

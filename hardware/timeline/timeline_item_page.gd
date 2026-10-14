@@ -59,6 +59,8 @@ var staccato: GlyphKey
 var even: GlyphKey
 ## The notes played backwards (DAW.retrograde_item).
 var retrograde: GlyphKey
+## The note sounding at the playhead taken out (DAW.delete_note).
+var note_delete: GlyphKey
 ## Name the item, on the keypad (DAW.rename_item).
 var item_name: GlyphKey
 ## The velocity of the note sounding at the playhead (else the next to start): a rail, set when let go.
@@ -130,6 +132,8 @@ func _ready() -> void:
 				var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
 				return "rename \"%s\", on the keypad" % item.name if item != null else "select one item")
 	retrograde = _key("ItemRetrograde", &"retrograde", NOTE_INK, "ITEM  NOTES BACKWARDS", func(): _retrograde(), _retrograde_text)
+	note_delete = _key("ItemNoteDelete", &"note_delete", Color(0.95, 0.38, 0.34), "ITEM  DELETE NOTE", func(): _delete_note(),
+			func() -> String: return "the note sounding at the playhead" if note_delete.lit else "put the playhead on a note")
 	even = _key("ItemEven", &"even", NOTE_INK, "ITEM  EVEN VELOCITY", func(): _even(), _even_text)
 	note_velocity = _slider("ItemNoteVelocity", &"note_velocity", NOTE_INK, func() -> String: return "ITEM  NOTE VELOCITY",
 			func(v: float) -> String: return "the note at the playhead: velocity %d" % _velocity_of(v))
@@ -155,7 +159,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -195,6 +199,8 @@ func refresh() -> void:
 		key.lit = midi
 	swing.available = midi and not item.locked
 	note_velocity.available = midi and not item.locked
+	note_delete.available = midi and not item.locked
+	note_delete.lit = midi and _sounding_note() >= 0
 	var n := _note_index()
 	if n >= 0:
 		note_velocity.snap_to((float(item.notes[n * MidiTake.NOTE_WIDTH + 3]) - 1.0) / 126.0)
@@ -202,6 +208,23 @@ func refresh() -> void:
 
 static func _velocity_of(v: float) -> int:
 	return clampi(1 + roundi(v * 126.0), 1, 127)
+
+
+## The note sounding at the playhead, else -1.
+func _sounding_note() -> int:
+	var n := _note_index()
+	var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
+	if n < 0 or item == null:
+		return -1
+	var t := DAW.state.position_seconds - item.start
+	var at := n * MidiTake.NOTE_WIDTH
+	return n if item.notes[at] <= t and t < item.notes[at + 1] else -1
+
+
+func _delete_note() -> void:
+	var n := _sounding_note()
+	if n >= 0:
+		DAW.delete_note(_target[0], _target[1], n)
 
 
 ## Which note of the target the velocity rail means: the one at the playhead. -1 for none.

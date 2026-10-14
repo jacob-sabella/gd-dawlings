@@ -1236,6 +1236,12 @@ func retrograde_item(track_index: int, item_index: int) -> void:
 		_remember_edit(before)
 
 
+func delete_note(track_index: int, item_index: int, note_index: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_delete_note(track_index, item_index, note_index):
+		_remember_edit(before)
+
+
 func even_velocity(track_index: int, item_index: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_even_velocity(track_index, item_index):

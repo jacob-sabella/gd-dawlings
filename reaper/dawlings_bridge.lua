@@ -1823,6 +1823,33 @@ function handlers.LegatoItem(args)
   return edited('Legato')
 end
 
+-- args: track, index, seconds, pitch: the note of that pitch starting that many seconds into the
+-- item is deleted.
+function handlers.DeleteNote(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local want = (args[3] or 0) + reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local pitch = math.floor(args[4] or -1)
+  local done = false
+  reaper.Undo_BeginBlock()
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) and not done then
+      local _, count = reaper.MIDI_CountEvts(take)
+      for n = 0, count - 1 do
+        local ok, _, _, ppq_on, _, _, p = reaper.MIDI_GetNote(take, n)
+        if ok and p == pitch and math.abs(reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_on) - want) < 0.005 then
+          reaper.MIDI_DeleteNote(take, n)
+          reaper.MIDI_Sort(take)
+          done = true
+          break
+        end
+      end
+    end
+  end
+  return edited('Delete note')
+end
+
 -- args: track, index, seconds, pitch, velocity: the note of that pitch starting that many seconds
 -- into the item gets that velocity.
 function handlers.SetNoteVelocity(args)

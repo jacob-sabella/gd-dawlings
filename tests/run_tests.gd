@@ -296,6 +296,7 @@ func _ready() -> void:
 	_test_velocities_are_evened()
 	_test_a_tracks_items_are_selected_together()
 	_test_an_item_is_renamed()
+	_test_a_note_is_deleted()
 	_test_notes_are_played_backwards()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
@@ -20281,6 +20282,34 @@ func _test_notes_are_played_backwards() -> void:
 	DAW.retrograde_item(lane, 0)
 	check("a locked item is left alone", s.undo_depth == locked)
 	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"retrograde_item") and &"retrograde_item" in DAW.COMMANDS)
+
+
+func _test_a_note_is_deleted() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	var played: Array = [[4.0 * beat, 5.0 * beat, 60, 100, 0], [5.0 * beat, 6.0 * beat, 64, 90, 0], [6.0 * beat, 7.0 * beat, 67, 80, 0]]
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, played, "Del")
+	var depth := maxi(s.undo_depth, 0)
+	var first := DAWBackend.note_near(s.item(lane, 0).notes, 1.5 * beat)
+	DAW.delete_note(lane, 0, first)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("the note is gone and the others stay (%d left)" % n.size(), n.size() == 2 and int(n[0][2]) == 60 and int(n[1][2]) == 67 and s.undo_depth - depth == 1)
+	DAW.delete_note(lane, 0, 9)
+	DAW.delete_note(lane, 0, -1)
+	check("no such note is no edit", s.undo_depth - depth == 1 and s.item(lane, 0).notes.size() == 10)
+	DAW.undo()
+	check("undo puts it back", s.item(lane, 0).notes.size() == 15)
+	DAW.apply_intent(&"delete_note", [lane, 0, 99999])
+	DAW.apply_intent(&"delete_note", [lane, 0, NAN])
+	check("a wild intent changes nothing", s.item(lane, 0).notes.size() == 15)
+	DAW.set_item_locked(lane, 0, true)
+	DAW.delete_note(lane, 0, 0)
+	check("a locked item is left alone", s.item(lane, 0).notes.size() == 15)
+	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"delete_note") and &"delete_note" in DAW.LOCKED_REFUSES)
 
 
 func _test_an_item_is_renamed() -> void:
