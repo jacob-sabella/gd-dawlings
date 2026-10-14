@@ -5145,19 +5145,15 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 	var berthed := 0
 	for surface in studio.focus.surfaces:
 		var berth := studio.studio_set.get_node_or_null("Berth_%s" % surface.surface_id)
-		if surface.surface_id == &"timeline":
-			check("a surface that was never standing in the room gets no berth", berth == null)
-			check("and nothing is drawn on the camera for it",
-					studio.camera.find_children("Berth_*", "", true, false).is_empty())
-		else:
-			check("%s leaves a berth behind" % surface.surface_id, berth != null)
-			if berth != null:
-				berthed += 1
-				check("%s's berth is where it was standing" % surface.surface_id,
-						berth.global_position.distance_to(
-						(studio.studio_set.global_transform * (studio.focus._home[
-						surface.surface_id][1] as Transform3D)).origin) < 0.001)
-	check("every room surface left one (%d)" % berthed, berthed == 4)
+		check("%s leaves a berth behind" % surface.surface_id, berth != null)
+		if berth != null:
+			berthed += 1
+			check("%s's berth is where it was standing" % surface.surface_id,
+					berth.global_position.distance_to(
+					(studio.studio_set.global_transform * (studio.focus._home[
+					surface.surface_id][1] as Transform3D)).origin) < 0.001)
+	check("nothing is drawn on the camera for a berth", studio.camera.find_children("Berth_*", "", true, false).is_empty())
+	check("every room surface left one (%d)" % berthed, berthed == 5)
 
 	studio.focus.release()
 	for surface in studio.focus.surfaces:
@@ -6191,8 +6187,9 @@ func _test_escape_releases_a_surface_fullscreened_by_mistake() -> void:
 
 	check("the rack starts in its own default mode, not fullscreen",
 			studio.mount.mode_of(&"rack") == Presentation.Mode.STUDIO)
-	check("the timeline defaults to fullscreen on screen, on purpose",
-			studio.mount.mode_of(&"timeline") == Presentation.Mode.SCREEN)
+	check("the timeline is mounted in the room by default, not pinned to the camera",
+			studio.mount.mode_of(&"timeline") == Presentation.Mode.STUDIO)
+	studio.mount.set_mode(&"timeline", Presentation.Mode.SCREEN)
 
 	studio.mount.set_mode(&"rack", Presentation.Mode.SCREEN)
 	check("the rack can still be put in SCREEN mode by hand, same as the handle does",
@@ -6204,8 +6201,8 @@ func _test_escape_releases_a_surface_fullscreened_by_mistake() -> void:
 	studio._unhandled_input(esc)
 	check("Escape puts a stray fullscreen rack back (2026-10-11: \"escape was not working\")",
 			studio.mount.mode_of(&"rack") == Presentation.Mode.STUDIO)
-	check("and leaves the timeline's own, on-purpose fullscreen alone",
-			studio.mount.mode_of(&"timeline") == Presentation.Mode.SCREEN)
+	check("and the timeline, no longer fullscreen by default, goes back to its stand too",
+			studio.mount.mode_of(&"timeline") == Presentation.Mode.STUDIO)
 
 	remove_child(studio)
 	studio.free()

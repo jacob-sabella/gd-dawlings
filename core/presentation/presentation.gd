@@ -45,4 +45,7 @@ static func default_mode(surface_kind: StringName, medium: int) -> int:
 		Medium.VR:
 			return Mode.STUDIO
 		_:
-			return Mode.SCREEN if surface_kind == &"timeline" else Mode.STUDIO
+			# On a monitor too the timeline is mounted in the room, on its stand, where the
+			# rest of the gear is: pinned to the camera it covered the room it was meant to be
+			# part of (2026-10-14). The SCREEN key still puts it on the glass, for whoever wants it.
+			return Mode.STUDIO

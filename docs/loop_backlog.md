@@ -3510,3 +3510,10 @@ the machine's graph only where it is visible, five times slower while there is n
 a headless run. Other arrangements and venues have no wall yet. Part 3 is still to do: patching
 by hand (drag from jack to jack, tap a cable to cut it). `--no-timeline` hides the timeline for a shot.
 Suite: 10393 checks, 0 failed.
+
+2026-10-14, after: the timeline is no longer pinned to the camera by default on a monitor
+(`Presentation.default_mode` is STUDIO for every surface in every medium): it stands in the room
+on its stand with the rest of the gear, and the SCREEN handle still puts it on the glass. Escape
+now puts a screened timeline back on its stand too, as it does the rack. A focused surface leaves
+a berth for all five room surfaces. The side room's back corner bass traps and back-wall panels
+are gone, for the patch wall. Suite: 10394 checks, 0 failed.

@@ -783,7 +783,8 @@ func _cloth(colour: String) -> Material:
 func _treat_side_room(far: float, near: float, z0: float, z1: float) -> void:
 	# A square column turned 45 degrees and stood on the corner: what shows is a triangle of
 	# fabric filling it, floor to just under the sconces.
-	for corner in [Vector2(far, z1), Vector2(near, z1), Vector2(near, z0)]:
+	# (None at the back corners: the patch wall fills that wall.)
+	for corner in [Vector2(near, z0)]:
 		# Its foot 6 mm up, clear of the walls' feet (2 mm) it runs into.
 		var trap := ZoneKit.block(self, Vector3(0.5, 2.4, 0.5), Vector3(corner.x, 1.206, corner.y),
 				_cloth("charcoal"), "BassTrap")
