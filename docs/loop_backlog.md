@@ -3579,4 +3579,4 @@ that is not one of `RENDER_RATES` as 48 kHz, like a bad depth. The built-in rend
 engine's rate and `MixRender` resamples each file with `Resampler` (linear: fine for the rates here,
 but no anti-alias filter on the way down to 44.1 -- a sinc resampler would be the next step, an
 engine limit worth noting). Reaper sets RENDER_SRATE through the bridge (syntax-checked, not run
-live). Also `--tl-render` for tools/screenshot.gd. Probe: host 53, guest 47, 0 failed (one click-timing check missed by 20 ms on a first run, unrelated, clean on the rerun). Suite: 10448 checks, 0 failed.
+live). Also `--tl-render` for tools/screenshot.gd. Probe: host 53, guest 47, 0 failed (one click-timing check failed on a first run, unrelated, clean on the rerun). Suite: 10448 checks, 0 failed.
