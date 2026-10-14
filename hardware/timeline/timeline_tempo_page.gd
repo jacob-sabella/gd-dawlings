@@ -1,63 +1,50 @@
-class_name TimelineTempoStrip
-extends Node3D
+class_name TimelineTempoPage
+extends TimelinePage
 
-## The tempo's changes, under the middle of the timeline. Everything here acts on the change the
-## playhead is under (the last one at or before it; the first is the song's own tempo): BPM sets
-## its tempo when let go, ADD puts a new one at the start of the playhead's bar, RAMP makes the
-## tempo glide from this change to the next rather than jump there, DEL takes it away. Each is one
-## undo step, as `DAW.set_tempo_map` is. SIG steps the time signature of the playhead's bar
-## through SIGNATURES: at a change, that change's; elsewhere, a new change from that bar. One the
-## same as the signature before it is no change, and goes (`DAW.set_time_signature_map`).
+## The tempo's changes, on the deck's TEMPO page. Everything here acts on the change the playhead
+## is under (the last one at or before it; the first is the song's own tempo): BPM sets its tempo
+## when let go, ADD CHANGE puts a new one at the start of the playhead's bar, RAMP makes the tempo
+## glide from this change to the next rather than jump there, REMOVE takes it away. Each is one
+## undo step, as `DAW.set_tempo_map` is. The signature key steps the time signature of the
+## playhead's bar through SIGNATURES: at a change, that change's; elsewhere, a new change from that
+## bar. One the same as the signature before it is no change, and goes
+## (`DAW.set_time_signature_map`).
 
-const PITCH := 0.028
-const CAPTION := Color(0.62, 0.64, 0.68)
-## The BPM knob's sweep.
+## The BPM rail's ends.
 const BPM_LOW := 40.0
 const BPM_HIGH := 240.0
+const INK := Color(0.9, 0.8, 0.4)
 
-## The TimelineSurface. Typed loosely so the files load in any order.
-var surface: Node
+var bpm: GlyphRail
+var add: GlyphKey
+var ramp: GlyphKey
+var remove: GlyphKey
+var signature: GlyphKey
 
-var bpm: Knob
-var add: PanelButton
-var ramp: PanelButton
-var remove: PanelButton
-var signature: PanelButton
-
-## What SIG steps through, the commonest first.
+## What the signature key steps through, the commonest first.
 const SIGNATURES: Array[Vector2i] = [Vector2i(4, 4), Vector2i(3, 4), Vector2i(6, 8), Vector2i(2, 4),
 		Vector2i(5, 4), Vector2i(7, 8), Vector2i(12, 8)]
 
 
 func _ready() -> void:
-	var plate := MeshInstance3D.new()
-	plate.name = "Plate"
-	var box := BoxMesh.new()
-	box.size = Vector3(5 * PITCH + 0.008, 0.036, 0.004)
-	plate.mesh = box
-	plate.material_override = Materials.chassis()
-	plate.position = Vector3(2 * PITCH, -0.004, -0.002)
-	add_child(plate)
-	bpm = Knob.new()
-	bpm.name = "TempoBpm"
-	bpm.position = Vector3(0, 0, 0.004)
-	bpm.scale = Vector3(0.75, 0.75, 0.75)
-	bpm.describe_title = func() -> String: return "TEMPO  " + _which()
-	bpm.describe_value = func(v: float) -> String: return "%.1f bpm" % _bpm(v)
+	tab_name = "TEMPO"
+	tab_glyph = &"tempo"
+	bpm = _slider("TempoBpm", &"bpm", INK, func() -> String: return "TEMPO  " + _which(),
+			func(v: float) -> String: return "%.1f" % _bpm(v))
 	bpm.value_committed.connect(_set_bpm)
-	add_child(bpm)
-	_caption("BPM", 0)
-	add = _key("TempoAdd", "ADD", 1, Color(0.55, 0.85, 0.55), "TEMPO  ADD", _add,
+	_group()
+	add = _key("TempoAdd", &"add", Color(0.55, 0.85, 0.55), "TEMPO  ADD", _add,
 			func() -> String: return "a tempo change at bar %d" % _bar_here())
-	ramp = _key("TempoRamp", "RAMP", 2, Color(0.9, 0.8, 0.4), "TEMPO  RAMP", _ramp,
+	ramp = _key("TempoRamp", &"ramp", INK, "TEMPO  RAMP", _ramp,
 			func() -> String:
 				var i := current()
 				if i + 1 >= _points().size():
 					return "add a change after this one to ramp to"
-				return "glide to the next change" if not ramp.lit else "jump at the next change instead")
-	remove = _key("TempoRemove", "DEL", 3, Color(0.95, 0.38, 0.34), "TEMPO  REMOVE", _remove,
+				return "glide to the next change" if not ramp.lit else "jump at the next change instead", true)
+	remove = _key("TempoRemove", &"remove", Color(0.95, 0.38, 0.34), "TEMPO  REMOVE", _remove,
 			func() -> String: return "this change" if current() > 0 else "the song's own tempo stays")
-	signature = _key("TempoSignature", "SIG", 4, TimelineSurface.SIGNATURE_COLOUR, "TIME SIGNATURE", _step_signature,
+	_group()
+	signature = _key("TempoSignature", &"", TimelineSurface.SIGNATURE_COLOUR, "TIME SIGNATURE", _step_signature,
 			func() -> String:
 				var at := _signature_change()
 				var sig := DAW.state.meter().signature_at(_bar_start())
@@ -95,8 +82,12 @@ func refresh() -> void:
 	bpm.snap_to(clampf((float(points[i][1]) - BPM_LOW) / (BPM_HIGH - BPM_LOW), 0.0, 1.0))
 	add.lit = true
 	ramp.lit = int(points[i][2]) != DawKitTempoMap.HOLD and i + 1 < points.size()
+	ramp.available = i + 1 < points.size()
 	remove.lit = i > 0
-	signature.lit = not DAW.state.time_signature_points.is_empty()
+	var sig := DAW.state.meter().signature_at(_bar_start())
+	signature.face = "%d/%d" % [sig.x, sig.y]
+	signature.lit = true
+	notice = "the change at bar %d" % _bar_of(points[i][0]) if i > 0 else "the song's own tempo"
 
 
 func _bpm(v: float) -> float:
@@ -210,25 +201,3 @@ func _commit(points: Array) -> void:
 			DAW.set_tempo(float(points[0][1]))
 		return
 	DAW.set_tempo_map(points)
-
-
-func _key(key_name: String, caption: String, slot: int, colour: Color, title: String,
-		act: Callable, what: Callable) -> PanelButton:
-	var key := PanelButton.new()
-	key.name = key_name
-	key.led_colour = colour
-	key.lamp_scale = Vector2(0.8, 0.5)
-	key.scale = Vector3(1.4, 1.4, 1.4)
-	key.position = Vector3(slot * PITCH, 0.0, 0.003)
-	key.pressed.connect(act)
-	key.describe_title = func() -> String: return title
-	key.describe_value = func(_v: float) -> String: return what.call()
-	add_child(key)
-	_caption(caption, slot)
-	return key
-
-
-func _caption(text: String, slot: int) -> void:
-	var l: Label3D = surface._text(text, 22, CAPTION)
-	l.position = Vector3(slot * PITCH, -0.015, 0.0016)
-	add_child(l)

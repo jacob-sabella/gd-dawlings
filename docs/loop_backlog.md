@@ -3111,3 +3111,22 @@ end and switches looping on (`set_loop_range` and `set_looping`, so nothing new 
 LP key on the item strip, which shows for one item or a same-track pair, so a wider selection
 cannot be looped from the strip yet. Not seen in a screenshot. Suite 10011 checks, 0 failed;
 probe 0 failed.
+
+## DAW parity, iteration 9: the timeline redesigned as a thing in the room (2026-10-14)
+The user: "remove the timeline screen entirely ... we're in a 3d environment stop with the expected
+shit", then "it still needs to be bars horizontally but ... do better with ideas and looks". So
+time still runs left to right and the tracks still stack, but there is no panel, no bezel, no
+screen face and no words on keys. Each track is a channel of smoked glass with a thread of its
+colour along its foot and a cut gem where its name is (dark when muted, ringed gold when soloed,
+red when armed). Each clip is a self-lit glass ingot with a drawn bevel and a shadow on its
+channel, pulled out of its row while selected; its sound stands out of its face as a relief (as
+far as it is loud) and its notes as bricks (as far as they were played hard). The loop is a rod
+of light along the top and a wall of blue light behind the channels; the playhead is a blade of
+light through the whole depth, a bead riding the ruler, and lights the clips it cuts through
+(`TimelineFinish.light_beam`). The tools are glass tokens on lit ledges, each with a sculpted
+mark (`TimelineGlyph`: a curled arrow for undo, a block cut by a blade for split...) and the
+words moved to the hover card; settings are rods of light with a bead (`GlyphRail`), their value
+floating over the bead only while a hand is on it. The deck starts where the lanes do, not under
+the names: under them its first token covered the rack's handle from the seat. Every behaviour
+and edit is unchanged; tests that read the old strips read the pages now. Seen from the seat,
+head-on in the room and from the side.

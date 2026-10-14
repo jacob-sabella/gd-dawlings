@@ -1,21 +1,24 @@
 class_name TimelineSurface
 extends Surface
 
-## The arrangement: a lane per track, the blocks on it, and the playhead crossing them.
+## The arrangement: a lane per track, the clips on it, and the playhead crossing them.
 ##
-## THE ONE SURFACE THAT IS NOT HARDWARE, and that is a decision rather than an oversight. Every
-## other surface in this project is modelled as a thing you could buy: the console is a desk,
-## the rack is nineteen inches wide, the bay has quarter-inch jacks. A timeline has no hardware
-## ancestor -- a tape machine's equivalent is a reel you cannot see into -- and inventing one
-## would mean a made-up object pretending to be remembered.
+## THE ONE SURFACE THAT IS NOT HARDWARE, and not a screen either. Every other surface in this
+## project is a thing you could buy; a timeline has no hardware ancestor, and drawn as a monitor
+## it was a screen bolted into a room ("I hate the bars and the text and the whole screen concept
+## ... we're in a 3d environment", 2026-10-14). So it is light and glass in the air, with no panel
+## behind it (see TimelineFinish):
 ##
-## So it is drawn as what it is: a flat panel, defaulting to SCREEN mode, which
-## `Presentation.default_mode` already routes `&"timeline"` to in every medium including AR. A
-## forty-minute song is absurd as furniture and perfectly readable flat, and an engineer in a
-## headset wants it on a surface they can glance at rather than a wall they have to turn toward.
+##   * each track a channel of smoked glass, a thread of its colour along its foot, and a cut gem
+##     of that colour where its name is: dark when muted, ringed gold when soloed, red when armed;
+##   * each clip a lit glass ingot standing out of its channel, its sound standing out of its face
+##     as a relief -- louder stands further out -- and its notes as a skyline of bricks;
+##   * the loop a wall of blue light behind the channels between its two ends;
+##   * the playhead a blade of light through the whole depth of it, a bead riding along the top;
+##   * the tools tokens on ledges under it, each its mark sculpted, not a word (TimelineDeck).
 ##
-## It still builds in metres like everything else, because it can be put in the room if someone
-## wants it there, and a surface that measured itself in pixels could not be.
+## Time still runs left to right and the tracks still stack, because that is how a song is read.
+## It still defaults to SCREEN presentation on a monitor, and builds in metres like everything else.
 
 ## Panel geometry, in metres. Sized for a monitor at SCREEN_MARGIN and comfortable in the room.
 const WIDTH := 0.86
@@ -105,27 +108,35 @@ var _seek_strip: TimelineRuler
 var _loop_strip: TimelineRuler
 ## The loop range drawn on the loop band: a bar between the two ends, lit while looping.
 var _loop_bar: MeshInstance3D
+## And the wall of its light behind the channels.
+var _loop_veil: MeshInstance3D
+static var _veil_looping: StandardMaterial3D
+static var _veil_idle: StandardMaterial3D
+const LOOP_COLOUR := Color(0.36, 0.62, 0.98)
 var _lanes: TimelineLanes
-var _split_key: PanelButton
-var _split_caption: Label3D
-var _save_key: PanelButton
-var _save_caption: Label3D
-## Copy and delete, in the corner under the track names: what is done to a selection once it is
-## made, so beside where it is made.
-var _copy_key: PanelButton
-var _copy_caption: Label3D
-var _delete_key: PanelButton
-var _delete_caption: Label3D
-var _all_key: PanelButton
-var _all_caption: Label3D
-## The selected item's gain, fades and notes, under the panel; see TimelineItemStrip.
-var _item_controls: TimelineItemStrip
-## Add, remove and name tracks, under the right-hand end; see TimelineTrackStrip.
-var _track_controls: TimelineTrackStrip
-## The tempo's changes, under the middle; see TimelineTempoStrip.
-var _tempo_controls: TimelineTempoStrip
-## The song written out, between the tempo's keys and the tracks'; see TimelineRenderStrip.
-var _render_controls: TimelineRenderStrip
+## The controls under the arrangement: the tools and the pages (see TimelineDeck). The keys are
+## kept by name too, since the surface lights them.
+var deck: TimelineDeck
+var item_page: TimelineItemPage
+var track_page: TimelineTrackPage
+var tempo_page: TimelineTempoPage
+var render_page: TimelineRenderPage
+var _undo_key: GlyphKey
+var _redo_key: GlyphKey
+var _split_key: GlyphKey
+var _copy_key: GlyphKey
+var _delete_key: GlyphKey
+var _all_key: GlyphKey
+var _zoom_out_key: GlyphKey
+var _zoom_in_key: GlyphKey
+var _fit_key: GlyphKey
+var _lanes_key: GlyphKey
+var _shelf_key: GlyphKey
+var _road_key: GlyphKey
+var _save_key: GlyphKey
+## Where the song is, in bars, in the corner over the track names: the arrangement's own clock.
+var _clock: Label3D
+var _clock_said := ""
 ## The track whose name was last pressed, for the track keys; 0 for none. This desk's own, not
 ## the DAW's selection: which track someone means to rename is not part of the mix.
 var picked_track := 0
@@ -135,26 +146,18 @@ var picked_track := 0
 ## view and the same edits; only how it is drawn changes, and the blocks are what you grab.
 ## Each person's own choice, like where they stand: nothing about it is shared.
 var shelf := false
-## How big the panel's own keys are drawn, and the strips of keys under it. Were 1.4 and 1.0:
-## 22mm keys with 7px captions on a panel framed a metre away, found "sooooo tiny" (2026-10-12).
-const KEY_SCALE := 1.7
-const STRIP_SCALE_MAX := 1.5
 ## How far a block stands out of the panel, and a selected one further, pulled off its shelf.
 const BLOCK_DEPTH := 0.011
 const PULL := 0.005
 ## The shelf board under each lane, out from the panel.
 const SHELF_LIP := 0.013
-## The column at the panel's right edge the view key stands in.
-const VIEW_COLUMN := 0.040
+## Between the lanes' right end and the panel's edge: the view keys that stood there went to the deck.
+const RIGHT_MARGIN := 0.006
 ## The road view, instead of the lanes: see TimelineHighway. Each person's own, not shared.
 var highway := false
 var _highway: TimelineHighway
-var _road_key: PanelButton
-var _road_caption: Label3D
-var _shelf_key: PanelButton
 ## The view key was pressed: the studio keeps the choice in this person's layout.
 signal shelf_chosen(on: bool)
-var _shelf_caption: Label3D
 ## The shelf boards, one per lane.
 var _shelf_lips: MeshBank
 ## The item being dragged, which stands out of its shelf like a selected one: in the hand.
@@ -297,120 +300,17 @@ func _ready() -> void:
 	_header.surface = self
 	add_child(_header)
 
-	# Split, in the corner over the track names where the ruler has no numbers to show. Built
-	# once for the same reason: pressing it changes the timeline, and a rebuild that freed the
-	# key under the press would drop the release on the floor.
-	_split_key = PanelButton.new()
-	_split_key.name = "SplitKey"
-	_split_key.led_colour = Color(0.95, 0.62, 0.32)
-	_split_key.lamp_scale = Vector2(0.8, 0.5)
-	_split_key.scale = Vector3.ONE * KEY_SCALE
-	_split_key.pressed.connect(func(): DAW.split_selected(DAW.state.position_seconds))
-	_split_key.describe_title = func() -> String: return "EDIT  SPLIT AT PLAYHEAD"
-	_split_key.describe_value = func(_v: float) -> String:
-		var n := _splittable()
-		return "%d selected item(s) at %s" % [n, DAW.state.bar_beat(DAW.state.position_seconds)] \
-				if n > 0 else "select an item under the playhead"
-	add_child(_split_key)
-	_split_caption = _text("SPLIT", 30, Color(0.62, 0.64, 0.68))
-	_split_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_split_caption)
-	DAW.transport_changed.connect(_light_split_key)
-	DAW.timeline_changed.connect(_light_split_key)
-
-	# Save, beside it: the arrangement is the project, and every DAW keeps save on its window.
-	# Lit while pressing it does something; anyone in the room may, and the host's DAW decides
-	# where it goes.
-	_save_key = PanelButton.new()
-	_save_key.name = "SaveKey"
-	_save_key.led_colour = Color(0.45, 0.78, 0.95)
-	_save_key.lamp_scale = Vector2(0.8, 0.5)
-	_save_key.scale = Vector3.ONE * KEY_SCALE
-	_save_key.pressed.connect(func(): DAW.save_project())
-	_save_key.describe_title = func() -> String: return "PROJECT  SAVE"
-	_save_key.describe_value = func(_v: float) -> String:
-		if not DAW.can(DAWBackend.Capability.PROJECT_SAVE):
-			return "this DAW cannot save from here"
-		var file := DAW.project_file()
-		return file.get_file() if not file.is_empty() else "where the host keeps it"
-	add_child(_save_key)
-	_save_caption = _text("SAVE", 30, Color(0.62, 0.64, 0.68))
-	_save_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_save_caption)
-
-	# The view, at the panel's right edge beside the ruler: flat lanes, or shelves of blocks.
-	_shelf_key = PanelButton.new()
-	_shelf_key.name = "ShelfKey"
-	_shelf_key.led_colour = Color(0.98, 0.80, 0.42)
-	_shelf_key.lamp_scale = Vector2(0.8, 0.5)
-	_shelf_key.scale = Vector3.ONE * KEY_SCALE
-	_shelf_key.pressed.connect(_on_shelf_key)
-	_shelf_key.describe_title = func() -> String: return "VIEW  SHELVES"
-	_shelf_key.describe_value = func(_v: float) -> String:
-		return "blocks on shelves: drag one along, or onto another shelf" if shelf \
-				else "flat lanes; press for shelves of blocks"
-	add_child(_shelf_key)
-	_shelf_caption = _text("3D", 30, Color(0.62, 0.64, 0.68))
-	add_child(_shelf_caption)
-
-	# The road, under it: the same arrangement as a highway into the playhead.
-	_road_key = PanelButton.new()
-	_road_key.name = "RoadKey"
-	_road_key.led_colour = Color(0.98, 0.80, 0.42)
-	_road_key.lamp_scale = Vector2(0.8, 0.5)
-	_road_key.scale = Vector3.ONE * KEY_SCALE
-	_road_key.pressed.connect(func(): set_highway(not highway))
-	_road_key.describe_title = func() -> String: return "VIEW  ROAD"
-	_road_key.describe_value = func(_v: float) -> String:
-		return "the song coming down a road into the playhead: press for the lanes again" if highway \
-				else "lanes; press to watch the song come down a road"
-	add_child(_road_key)
-	_road_caption = _text("ROAD", 30, Color(0.62, 0.64, 0.68))
-	add_child(_road_caption)
-	_highway = TimelineHighway.new()
-	_highway.name = "Highway"
-	_highway.visible = false
-	add_child(_highway)
-
-	# The resize grip, in the panel's bottom right corner, under the view key.
+	# The resize grip, at the right-hand end of the scrubber's band: the panel's bottom right corner.
 	_grip = TimelineResizeGrip.new()
 	_grip.name = "ResizeGrip"
 	_grip.surface = self
 	add_child(_grip)
 
-	_copy_key = _selection_key("CopyKey", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
-			func(): DAW.duplicate_selected())
-	_copy_caption = _text("COPY", 30, Color(0.62, 0.64, 0.68))
-	_copy_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_copy_caption)
-	_delete_key = _selection_key("DeleteKey", Color(0.95, 0.38, 0.34), "EDIT  DELETE",
-			func(): DAW.delete_selected())
-	_delete_caption = _text("DEL", 30, Color(0.62, 0.64, 0.68))
-	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_delete_caption)
-	_all_key = _selection_key("SelectAllKey", Color(0.55, 0.7, 0.95), "EDIT  SELECT ALL",
-			func(): DAW.select_all_items())
-	_all_key.describe_value = func(_v: float) -> String: return "every item on every track"
-	_all_caption = _text("ALL", 22, Color(0.62, 0.64, 0.68))
-	_all_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_child(_all_caption)
-	DAW.timeline_changed.connect(_light_selection_keys)
+	_highway = TimelineHighway.new()
+	_highway.name = "Highway"
+	_highway.visible = false
+	add_child(_highway)
 
-	_tempo_controls = TimelineTempoStrip.new()
-	_tempo_controls.name = "TempoStrip"
-	_tempo_controls.surface = self
-	add_child(_tempo_controls)
-
-	_render_controls = TimelineRenderStrip.new()
-	_render_controls.name = "RenderStrip"
-	_render_controls.surface = self
-	add_child(_render_controls)
-
-	_track_controls = TimelineTrackStrip.new()
-	_track_controls.name = "TrackStrip"
-	_track_controls.surface = self
-	add_child(_track_controls)
-	# A method, not a lambda: a method's connection goes when the surface does.
 	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 	DAW.track_changed.connect(_on_track_changed)
 	DAW.master_changed.connect(_on_master_changed)
@@ -423,26 +323,100 @@ func _ready() -> void:
 	_automation.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_automation)
 
-	_item_controls = TimelineItemStrip.new()
-	_item_controls.name = "ItemStrip"
-	_item_controls.surface = self
-	add_child(_item_controls)
+	_clock = _text("1.1.00", 40, RULER_TEXT)
+	_clock.name = "Clock"
+	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_clock)
+
+	# Built once, every key in it, for the reason the strips are: a press rebuilds the panel, and a
+	# rebuild that freed the key under the press would drop the release on the floor.
+	_build_deck()
 
 
-## A key that acts on the selected items, lit while there are any.
-func _selection_key(key_name: String, colour: Color, title: String, act: Callable) -> PanelButton:
-	var key := PanelButton.new()
+## The deck under the arrangement: its tools, then its pages. See TimelineDeck.
+func _build_deck() -> void:
+	deck = TimelineDeck.new()
+	deck.name = "Deck"
+	deck.surface = self
+	add_child(deck)
+	_undo_key = _tool("UndoKey", &"undo", TOOL_INK, "EDIT  UNDO", func(): DAW.undo(),
+			func() -> String: return "the last edit", true)
+	_redo_key = _tool("RedoKey", &"redo", TOOL_INK, "EDIT  REDO", func(): DAW.redo(),
+			func() -> String: return "the edit undone last")
+	_split_key = _tool("SplitKey", &"split", Color(0.95, 0.62, 0.32), "EDIT  SPLIT AT PLAYHEAD",
+			func(): DAW.split_selected(DAW.state.position_seconds),
+			func() -> String:
+				var n := _splittable()
+				return "%d selected item(s) at %s" % [n, DAW.state.bar_beat(DAW.state.position_seconds)] \
+						if n > 0 else "select an item under the playhead", true)
+	_copy_key = _tool("CopyKey", &"duplicate", Color(0.55, 0.85, 0.55), "EDIT  DUPLICATE",
+			func(): DAW.duplicate_selected(), _selection_text)
+	_delete_key = _tool("DeleteKey", &"delete", Color(0.95, 0.38, 0.34), "EDIT  DELETE",
+			func(): DAW.delete_selected(), _selection_text)
+	_all_key = _tool("SelectAllKey", &"select_all", Color(0.55, 0.7, 0.95), "EDIT  SELECT ALL",
+			func(): DAW.select_all_items(), func() -> String: return "every item on every track")
+	_zoom_out_key = _tool("ZoomOutKey", &"zoom_out", TOOL_INK, "VIEW  ZOOM OUT", func(): zoom_view(1.5),
+			func() -> String: return "more of the song across the lanes", true)
+	_zoom_in_key = _tool("ZoomInKey", &"zoom_in", TOOL_INK, "VIEW  ZOOM IN", func(): zoom_view(1.0 / 1.5),
+			func() -> String: return "less of the song, bigger, round the playhead")
+	_fit_key = _tool("FitKey", &"fit", TOOL_INK, "VIEW  FIT", fit_view,
+			func() -> String: return "the whole song across the lanes")
+	_lanes_key = _tool("LanesKey", &"lanes", VIEW_INK, "VIEW  LANES", func(): _choose_view(false, false),
+			func() -> String: return "flat lanes of blocks", true)
+	_lanes_key.toggle = true
+	_shelf_key = _tool("ShelfKey", &"shelves", VIEW_INK, "VIEW  SHELVES", func(): _choose_view(true, false),
+			func() -> String: return "blocks on shelves: drag one along, or onto another shelf")
+	_shelf_key.toggle = true
+	_road_key = _tool("RoadKey", &"road", VIEW_INK, "VIEW  ROAD", func(): _choose_view(shelf, true),
+			func() -> String: return "the song coming down a road into the playhead")
+	_road_key.toggle = true
+	_save_key = _tool("SaveKey", &"save", Color(0.45, 0.78, 0.95), "PROJECT  SAVE", func(): DAW.save_project(),
+			func() -> String:
+				if not DAW.can(DAWBackend.Capability.PROJECT_SAVE):
+					return "this DAW cannot save from here"
+				var file := DAW.project_file()
+				return file.get_file() if not file.is_empty() else "where the host keeps it", true)
+	item_page = TimelineItemPage.new()
+	item_page.name = "ItemPage"
+	track_page = TimelineTrackPage.new()
+	track_page.name = "TrackPage"
+	tempo_page = TimelineTempoPage.new()
+	tempo_page.name = "TempoPage"
+	render_page = TimelineRenderPage.new()
+	render_page.name = "RenderPage"
+	for page in [item_page, track_page, tempo_page, render_page]:
+		page.surface = self
+		page.tab_name = {item_page: "ITEM", track_page: "TRACK", tempo_page: "TEMPO", render_page: "RENDER"}[page]
+		page.tab_glyph = {item_page: &"item", track_page: &"track", tempo_page: &"tempo", render_page: &"render"}[page]
+		deck.add_page(page)
+	deck.show_page(item_page)
+	DAW.transport_changed.connect(_light_split_key)
+	DAW.timeline_changed.connect(_light_split_key)
+	DAW.timeline_changed.connect(_light_selection_keys)
+	_light_view_keys()
+
+
+const TOOL_INK := Color(0.70, 0.74, 0.82)
+const VIEW_INK := Color(0.98, 0.80, 0.42)
+
+
+func _tool(key_name: String, mark: StringName, colour: Color, title: String, act: Callable,
+		what: Callable, group := false) -> GlyphKey:
+	var key := GlyphKey.new()
 	key.name = key_name
+	key.glyph = mark
+	key.label = title
 	key.led_colour = colour
-	key.lamp_scale = Vector2(0.8, 0.5)
-	key.scale = Vector3.ONE * KEY_SCALE
 	key.pressed.connect(act)
 	key.describe_title = func() -> String: return title
-	key.describe_value = func(_v: float) -> String:
-		var n := DAW.state.selected_items().size()
-		return "%d selected item(s)" % n if n > 0 else "select an item first"
-	add_child(key)
+	key.describe_value = func(_v: float) -> String: return what.call()
+	deck.add_tool(key, group)
 	return key
+
+
+func _selection_text() -> String:
+	var n := DAW.state.selected_items().size()
+	return "%d selected item(s)" % n if n > 0 else "select an item first"
 
 
 func _light_selection_keys() -> void:
@@ -452,6 +426,28 @@ func _light_selection_keys() -> void:
 			key.lit = any
 	if _all_key != null:
 		_all_key.lit = DAW.state.track_indices().any(func(i): return not DAW.state.track(i).items.is_empty())
+
+
+## The three views as one choice: lanes, shelves, or the road over either.
+func _choose_view(shelves: bool, road: bool) -> void:
+	set_highway(road)
+	if shelves != shelf:
+		set_shelf(shelves)
+		shelf_chosen.emit(shelf)
+	_light_view_keys()
+
+
+func _light_view_keys() -> void:
+	if _lanes_key == null:
+		return
+	_lanes_key.lit = not shelf and not highway
+	_shelf_key.lit = shelf and not highway
+	_road_key.lit = highway
+
+
+## The whole song across the lanes, as the panel shows it before anyone zooms.
+func fit_view() -> void:
+	set_view(0.0, DAW.state.timeline_length())
 
 
 func _process(delta: float) -> void:
@@ -474,7 +470,7 @@ func _rebuild() -> void:
 			+ ((AUTOMATION_ROW + LANE_GAP) if auto_row else 0.0)
 	_top_y = _height * 0.5
 	_lane_area_x = -width * 0.5 + HEADER_WIDTH
-	_lane_area_width = width - HEADER_WIDTH - VIEW_COLUMN
+	_lane_area_width = width - HEADER_WIDTH - RIGHT_MARGIN
 
 	var project := DAW.state.timeline_length()
 	if view_span <= 0.0 or not _view_owned:
@@ -493,22 +489,26 @@ func _rebuild() -> void:
 	var total_items := 0
 	for index in indices:
 		total_items += DAW.state.track(index).items.size()
-	# Unlit, as the rest of the screen (see SCREEN_FACE) -- except on the shelves, where a block
-	# is a thing in the room and the room's light is what makes it read as one.
-	_item_blocks = MeshBank.boxes(_block_finish()) if shelf else MeshBank.strips()
+	# Self-lit glass ingots (see TimelineFinish), the same on the shelves and off them.
+	_item_blocks = TimelineFinish.ingots(0.0011)
 	_item_blocks.name = "ItemBlocks"
 	_adopt(_item_blocks)
 	_item_strips = MeshBank.strips()
 	_item_strips.name = "ItemStrips"
 	_adopt(_item_strips)
-	_item_notes = MeshBank.strips()
+	_item_notes = TimelineFinish.ingots(0.00035, 1.15)
 	_item_notes.name = "ItemNotes"
 	_adopt(_item_notes)
 
-	var bed_bank := MeshBank.strips()
+	var bed_bank := TimelineFinish.glass_bank()
 	bed_bank.name = "LaneBeds"
 	_adopt(bed_bank)
-	var chip_bank := MeshBank.lamps(Vector3(0.0070, lane_height, 0.0014))
+	var thread_bank := MeshBank.strips()
+	thread_bank.name = "LaneThreads"
+	_adopt(thread_bank)
+	var chip_bank := MeshBank.meshed(_gem_mesh())
+	chip_bank.material_override = TimelineFinish.gem()
+	chip_bank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	chip_bank.name = "LaneChips"
 	_adopt(chip_bank)
 
@@ -517,7 +517,7 @@ func _rebuild() -> void:
 	var y := _top_y - RULER_HEIGHT - LANE_GAP - lane_height * 0.5
 	for index in indices:
 		_lane_y.append(y)
-		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank, _lane_y.size() % 2 == 0)
+		_build_lane(DAW.state.track(index), y, bed_bank, chip_bank, thread_bank)
 		y -= lane_height + LANE_GAP
 		if auto_row and (index == picked_track or (picked_track == 0 and index == indices[-1])):
 			_auto_row_y = y + lane_height * 0.5 - AUTOMATION_ROW * 0.5
@@ -525,6 +525,7 @@ func _rebuild() -> void:
 			y -= AUTOMATION_ROW + LANE_GAP
 	bed_bank.commit()
 	chip_bank.commit()
+	thread_bank.commit()
 	_build_shelf_lips()
 	_lanes_bottom = y + lane_height * 0.5 + LANE_GAP
 
@@ -536,7 +537,7 @@ func _rebuild() -> void:
 		_item_strips.claim(Transform3D(), Color.WHITE)
 	_item_blocks.commit()
 	_item_strips.commit()
-	_item_shades = MeshBank.strips()
+	_item_shades = TimelineFinish.glass_bank()
 	_item_shades.name = "ItemShades"
 	_adopt(_item_shades)
 	for i in total_items * 2:
@@ -561,7 +562,7 @@ func _rebuild() -> void:
 	for i in mini(total_notes, MAX_DRAWN_NOTES):
 		_item_notes.claim(Transform3D(), Color.WHITE)
 	_item_notes.commit()
-	_item_waves = MeshBank.strips()
+	_item_waves = TimelineFinish.ingots(0.0002, 1.2)
 	_item_waves.name = "ItemWaves"
 	_adopt(_item_waves)
 	var any_wave := false
@@ -614,74 +615,43 @@ func _place_strips() -> void:
 	_header.refresh()
 	_place_lane_ladder(lanes_top, lanes_bottom)
 
-	var ruler_mid := _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5
-	_split_key.position = Vector3(-width * 0.5 + 0.017, ruler_mid, 0.003)
-	_split_caption.position = Vector3(-width * 0.5 + 0.035, ruler_mid, 0.0016)
-	_save_key.position = Vector3(-width * 0.5 + 0.088, ruler_mid, 0.003)
-	_save_caption.position = Vector3(-width * 0.5 + 0.106, ruler_mid, 0.0016)
-	_shelf_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid + 0.003, 0.003)
-	_shelf_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.013, 0.0016)
-	_road_key.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.042, 0.003)
-	_road_caption.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, ruler_mid - 0.058, 0.0016)
-	_road_key.lit = highway
-	_grip.position = Vector3(width * 0.5 - VIEW_COLUMN * 0.5, -_top_y + SCRUBBER_BAND * 0.5 + 0.001, 0.0016)
-	_shelf_key.lit = shelf
+	_grip.position = Vector3(width * 0.5 - RIGHT_MARGIN - TimelineResizeGrip.SIZE.x * 0.5,
+			-_top_y + SCRUBBER_BAND * 0.5 + 0.001, 0.0016)
+	_clock.position = Vector3(-width * 0.5 + 0.010, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0016)
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 	_light_split_key()
-	var corner_mid := -_top_y + SCRUBBER_BAND * 0.5
-	_copy_key.position = Vector3(-width * 0.5 + 0.017, corner_mid, 0.003)
-	_copy_caption.position = Vector3(-width * 0.5 + 0.035, corner_mid, 0.0016)
-	_delete_key.position = Vector3(-width * 0.5 + 0.076, corner_mid, 0.003)
-	_delete_caption.position = Vector3(-width * 0.5 + 0.094, corner_mid, 0.0016)
-	_all_key.position = Vector3(-width * 0.5 + 0.129, corner_mid, 0.003)
-	_all_caption.position = Vector3(-width * 0.5 + 0.145, corner_mid, 0.0016)
 	_light_selection_keys()
-	_place_control_strips()
+	_light_view_keys()
+	_place_deck()
 
 
-## What the camera frames is the panel, not the keys hung under it: the strips are drawn big
-## enough to read and press, and framing them too shrank the arrangement they are for by a
-## sixteenth. They sit below the frame, in the empty wall under the monitor.
+## What the camera frames is the arrangement, not the deck under it: the deck is drawn as big
+## as its keys need, and framing it too would shrink the lanes it is there to work on. It sits
+## below the frame, in the empty wall under the arrangement.
 func content_aabb() -> AABB:
-	var strips: Array = [_item_controls, _tempo_controls, _render_controls, _track_controls]
-	var was: Array = []
-	for strip in strips:
-		was.append(strip.visible if strip != null else false)
-		if strip != null:
-			strip.visible = false
+	var was := deck.visible if deck != null else false
+	if deck != null:
+		deck.visible = false
 	var box := super()
-	for i in strips.size():
-		if strips[i] != null:
-			strips[i].visible = was[i]
+	if deck != null:
+		deck.visible = was
 	return box
 
 
-## The strips of keys under the panel, drawn bigger and set out left to right: items, tempo,
-## render, track. Left to right and not the last one against the right edge: the right edge of a
-## wide panel is over the tape deck's tempo knob, and a key there took the click meant for it.
-## The scale follows the panel's width, so a narrow panel keeps its strips clear of each other.
-func _place_control_strips() -> void:
-	var k := clampf(width / WIDTH * 1.0, 1.15, STRIP_SCALE_MAX)
-	var y := -_top_y - 0.006 - 0.014 * k
-	var gap := 0.026
-	# A strip's origin is its first key's centre; its plate runs half a pitch and a bit before it.
-	var item_left := -width * 0.5 + 0.004
-	_item_controls.scale = Vector3.ONE * k
-	_item_controls.position = Vector3(item_left + (0.5 * TimelineItemStrip.PITCH + 0.004) * k, y, 0.0)
-	var item_right := item_left + 6.0 * TimelineItemStrip.PITCH * k
-	var tempo_left := item_right + gap
-	_tempo_controls.scale = Vector3.ONE * k
-	_tempo_controls.position = Vector3(tempo_left + (0.5 * TimelineTempoStrip.PITCH + 0.004) * k, y, 0.0)
-	var tempo_right := tempo_left + 5.0 * TimelineTempoStrip.PITCH * k
-	_render_controls.scale = Vector3.ONE * k
-	_render_controls.position = Vector3(tempo_right + gap + (0.5 * TimelineRenderStrip.PITCH + 0.004) * k, y, 0.0)
-	var render_right := tempo_right + gap + 2.0 * TimelineRenderStrip.PITCH * k
-	var track_left := render_right + gap
-	_track_controls.scale = Vector3.ONE * k
-	_track_controls.position = Vector3(track_left + (0.5 * TimelineTrackStrip.PITCH + 0.004) * k, y, 0.0)
-	_track_controls.refresh()
-	_tempo_controls.refresh()
-	_render_controls.refresh()
+## The deck under the panel, from its left edge, as wide as it may be.
+func _place_deck() -> void:
+	if deck == null:
+		return
+	# From where the lanes start, not the panel's left edge: under the names, the deck's first
+	# tokens sat over the rack's handle as seen from the seat.
+	deck.width = width * TimelineDeck.SHARE - HEADER_WIDTH * 0.6
+	deck.layout()
+	deck.position = Vector3(-width * 0.5 + HEADER_WIDTH * 0.6, -_top_y - DECK_DROP, 0.0)
+
+
+## Between the arrangement's bottom edge and the deck's top: the two read as one display, a seam
+## apart, rather than as a screen with a box hung under it.
+const DECK_DROP := 0.004
 
 
 ## Seconds under a point given in a strip's own x (centred on the lane area).
@@ -875,8 +845,10 @@ func pick_track(index: int) -> void:
 	_lane_preview = []
 	_draw_automation()
 	mark_dirty()
-	if _track_controls != null:
-		_track_controls.refresh()
+	if track_page != null:
+		track_page.refresh()
+		if index > 0 and deck != null:
+			deck.show_page(track_page)
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
@@ -1180,7 +1152,9 @@ func zoom_view(factor: float) -> void:
 	set_view(at - (at - view_start) * span / maxf(view_span, 0.0001), span)
 
 
-## The loop range on the loop band. Moved, not rebuilt, and only when it changed.
+## The loop range: a rod of light along the loop band between its ends, and a wall of the same
+## light behind the channels, so the loop is seen through the whole arrangement and not only along
+## its top edge. Moved, not rebuilt, and only when it changed.
 func _draw_loop() -> void:
 	if _loop_bar == null or not is_instance_valid(_loop_bar):
 		return
@@ -1191,44 +1165,55 @@ func _draw_loop() -> void:
 	_drawn_loop = key
 	if not s.has_loop_range():
 		_loop_bar.visible = false
+		_loop_veil.visible = false
 		return
 	var left := maxf(_x_for(s.loop_start), _lane_area_x)
 	var right := minf(_x_for(s.loop_end), _lane_right())
 	_loop_bar.visible = right > left and not highway
+	_loop_veil.visible = _loop_bar.visible
 	if right <= left:
 		return
 	_loop_bar.scale = Vector3(right - left, 1, 1)
-	_loop_bar.position = Vector3((left + right) * 0.5, _top_y - LOOP_BAND * 0.5, 0.0014)
-	# The bar-graph material, not an LED: a lit LED this long blooms into a smear that hides
-	# the bar numbers under it.
-	_loop_bar.material_override = Materials.indicator_bar(Color(0.36, 0.62, 0.98) if s.looping
-			else Color(0.30, 0.36, 0.46))
+	_loop_bar.position = Vector3((left + right) * 0.5, _top_y - LOOP_BAND * 0.5, 0.004)
+	_loop_bar.material_override = Materials.led(LOOP_COLOUR if s.looping else Color(0.34, 0.40, 0.52), s.looping)
+	var top := _top_y - RULER_HEIGHT
+	_loop_veil.scale = Vector3(right - left, maxf(top - _lanes_bottom, 0.001), 1)
+	_loop_veil.position = Vector3((left + right) * 0.5, (top + _lanes_bottom) * 0.5, VEIL_Z)
+	_loop_veil.material_override = _veil_looping if s.looping else _veil_idle
 
 
 func _build_loop_bar() -> void:
-	var band := MeshInstance3D.new()
-	var band_mesh := BoxMesh.new()
-	band_mesh.size = Vector3(width, LOOP_BAND, 0.0012)
-	band.mesh = band_mesh
-	band.position = Vector3(0, _top_y - LOOP_BAND * 0.5, 0.0007)
-	band.material_override = flat(RULER_FACE.darkened(0.2))
-	_adopt(band)
 	_loop_bar = MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	# Unit width, scaled to the range, so moving the range is a transform and not a mesh.
-	mesh.size = Vector3(1.0, LOOP_BAND * 0.62, 0.0010)
-	_loop_bar.mesh = mesh
+	var rod := BoxMesh.new()
+	# Unit length, scaled to the range, so moving the range is a transform and not a mesh.
+	rod.size = Vector3(1.0, LOOP_BAND * 0.4, LOOP_BAND * 0.4)
+	_loop_bar.mesh = rod
+	_loop_bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_adopt(_loop_bar)
+	_loop_veil = MeshInstance3D.new()
+	_loop_veil.name = "LoopVeil"
+	var wall := BoxMesh.new()
+	wall.size = Vector3(1, 1, 0.0002)
+	_loop_veil.mesh = wall
+	_loop_veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if _veil_looping == null:
+		_veil_looping = TimelineFinish.glow(Color(LOOP_COLOUR.r, LOOP_COLOUR.g, LOOP_COLOUR.b, 0.30))
+		_veil_idle = TimelineFinish.glow(Color(0.5, 0.55, 0.65, 0.07))
+	_loop_veil.material_override = _veil_idle
+	_loop_veil.visible = false
+	_adopt(_loop_veil)
 	_drawn_loop = Vector3(-1, -1, -1)
 	_draw_loop()
 
 
 func _place_scrubber(project: float) -> void:
-	_scrubber.width = _lane_area_width
+	# Short of the lanes' right end by the resize grip, which has that corner.
+	var room := _lane_area_width - TimelineResizeGrip.SIZE.x - 0.004
+	_scrubber.width = room
 	_scrubber.project_length = project
 	_scrubber.view_start = view_start
 	_scrubber.view_span = view_span
-	_scrubber.position = Vector3(_lane_area_x + _lane_area_width * 0.5,
+	_scrubber.position = Vector3(_lane_area_x + room * 0.5,
 			-_top_y + SCRUBBER_BAND * 0.52, 0.0016)
 	_scrubber.refresh()
 	_place_strips()
@@ -1265,22 +1250,34 @@ func _clamp_view(project: float) -> void:
 	view_start = clampf(view_start, 0.0, maxf(project - view_span, 0.0))
 
 
+## Nothing: there is no panel (see the top of this file). The header's gutter, the screen's
+## face and the chassis behind them went with it.
 func _build_carcass() -> void:
-	var panel := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(width, _height, DEPTH)
-	panel.mesh = mesh
-	panel.position = Vector3(0, 0, -DEPTH * 0.5)
-	panel.material_override = Materials.chassis()
-	_adopt(panel)
-	# The screen in it, a bezel's width in from the chassis's edge.
-	var screen := _flat_box(Vector3(width - 0.002, _height - 0.002, 0.0002), Vector3(0, 0, 0.00012), SCREEN_FACE)
-	_adopt(screen)
+	pass
 
-	# The track headers are a shade apart from the lanes beside them, which is the only thing
-	# separating a name from the block it sits beside once a lane is 17mm tall.
-	_adopt(_flat_box(Vector3(HEADER_WIDTH, _height - RULER_HEIGHT, 0.0012),
-			Vector3(-width * 0.5 + HEADER_WIDTH * 0.5, -(RULER_HEIGHT * 0.5), 0.0007), SCREEN_GUTTER))
+
+## The cut stone each track's gem is: an octahedron, points up and down, flat facets for the
+## light to catch. One mesh, every lane's gem an instance of it.
+static var _gem: Mesh
+
+
+static func _gem_mesh() -> Mesh:
+	if _gem == null:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var top := Vector3(0, 0.5, 0)
+		var bottom := Vector3(0, -0.5, 0)
+		var ring := [Vector3(0.5, 0, 0), Vector3(0, 0, 0.5), Vector3(-0.5, 0, 0), Vector3(0, 0, -0.5)]
+		for k in 4:
+			var a: Vector3 = ring[k]
+			var b: Vector3 = ring[(k + 1) % 4]
+			for tri in [[top, b, a], [bottom, a, b]]:
+				var n: Vector3 = (tri[1] - tri[0]).cross(tri[2] - tri[0]).normalized()
+				for v in tri:
+					st.set_normal(n)
+					st.add_vertex(v)
+		_gem = st.commit()
+	return _gem
 
 
 ## Bar lines and numbers, spaced by tempo.
@@ -1310,9 +1307,6 @@ func _build_ruler() -> void:
 			break
 	var first := int(floor((at_left - 1.0) / step)) * step
 	var last := int(ceil(s.bar_at(view_start + view_span)))
-
-	_ruler.add_child(_flat_box(Vector3(width, NUMBERS_HEIGHT, 0.0012),
-			Vector3(0, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0007), RULER_FACE))
 
 	# The grid down the lanes, behind the blocks: a line on every bar while bars are far enough
 	# apart to tell from each other, brighter on the numbered ones, and the sections' lines over
@@ -1347,20 +1341,30 @@ func _build_ruler() -> void:
 		if lx < _lane_area_x - 0.0001 or lx > _lane_right() or grid_height <= 0.0:
 			continue
 		grid.claim(Transform3D(Basis.from_scale(Vector3(line[2], grid_height, 0.0001)),
-				Vector3(lx, (grid_top + _lanes_bottom) * 0.5, 0.00118)), (line[1] as Color).srgb_to_linear())
+				Vector3(lx, (grid_top + _lanes_bottom) * 0.5, GRID_Z)), (line[1] as Color).srgb_to_linear())
 	grid.commit()
 
+	# Where the section names are written: no bar number under one.
+	var named: Array = []
+	for at in DAW.state.markers:
+		var nx := _x_for(float(at))
+		named.append(Vector2(nx - 0.003, nx + 0.006 + str(DAW.state.markers[at]).length() * 0.0072))
 	for n in range(first, last + 1, step):
 		if n < 0:
 			continue
 		var x := _x_for(s.bar_to_seconds(n + 1.0))
 		if x < _lane_area_x - 0.0001 or x > _lane_right():
 			continue
+		var under := false
+		for span in named:
+			under = under or (x > span.x and x < span.y)
 		# Stopping just short of the strip's lower edge, not on it: a tick's bottom face in the
 		# strip's bottom face's plane flickers, once the timeline is scaled up to stand in a room.
 		_ruler.add_child(_flat_box(Vector3(0.0006, NUMBERS_HEIGHT * 0.5 - 0.0006, 0.0008),
 				Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.75 + 0.0003, 0.0014), RULER_TICK))
 
+		if under:
+			continue
 		var label := _text(str(n + 1), 48, RULER_TEXT)
 		label.position = Vector3(x + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.28, 0.0016)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -1443,43 +1447,59 @@ func _build_bank_notice() -> void:
 
 
 func _build_lane(t: MixState.TrackState, y: float, bed_bank: MeshBank,
-		chip_bank: MeshBank, alternate := false) -> void:
-	# Every other lane a shade apart, as in every arranger, so a block can be followed back to
-	# its name across the panel; the picked track's lane lit.
-	var bed := LANE_BED_PICKED if t.index == picked_track else (LANE_BED_ALT if alternate else LANE_BED)
-	bed = bed.lerp(t.shown_colour(), 0.10 if t.index != picked_track else 0.16)
-	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, lane_height, 0.0010)),
-			Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)), bed.srgb_to_linear())
-	# chip_colour and not lamp_colour, for the reason in Materials: this is the track's identity
-	# and a clipped identity is no identity.
-	chip_bank.claim(Transform3D(Basis.IDENTITY, Vector3(-width * 0.5 + 0.0045, y, 0.0014)),
-			Materials.chip_colour(t.shown_colour()))
+		chip_bank: MeshBank, thread_bank: MeshBank) -> void:
+	var tint := t.shown_colour()
+	var picked := t.index == picked_track
+	# The channel: smoked glass a breath of the track's colour, clearer and lighter when picked.
+	var bed := CHANNEL.lerp(tint, 0.30 if picked else 0.14)
+	# Dark enough that a lamp in the room behind does not bloom through it.
+	bed.a = 0.92 if picked else 0.86
+	bed_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, lane_height, CHANNEL_DEPTH)),
+			Vector3(_lane_area_x + _lane_area_width * 0.5, y, CHANNEL_Z)),
+			Color(bed.r * bed.r, bed.g * bed.g, bed.b * bed.b, bed.a))
+	# The thread of its colour along its foot, which carries the track's colour the length of the
+	# song, so a clip far from its name is still followed back to it. Dark while muted.
+	var thread := Materials.chip_colour(tint) * (1.0 if picked else 0.62)
+	if t.mute:
+		thread = Materials.lamp_colour(tint, false)
+	thread_bank.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width, THREAD, THREAD)),
+			Vector3(_lane_area_x + _lane_area_width * 0.5, y - lane_height * 0.5 + THREAD * 0.5, THREAD_Z)),
+			Color(thread.r, thread.g, thread.b, 1.0))
+	# The gem, where the name starts: chip_colour and not lamp_colour, for the reason in
+	# Materials -- this is the track's identity, and a clipped identity is no identity.
+	var gem := lane_height * (0.62 if picked else 0.5)
+	var gem_x := -width * 0.5 + 0.007
+	chip_bank.claim(Transform3D(Basis.from_scale(Vector3(gem * 0.78, gem, gem * 0.78)),
+			Vector3(gem_x, y, 0.004)),
+			Materials.chip_colour(tint) * (0.22 if t.mute else 1.0))
+	# Soloed, armed: a ring round the gem, gold or red -- marks, not letters.
+	var rings: Array = []
+	if t.solo:
+		rings.append(Color(1.0, 0.82, 0.35))
+	if t.rec_arm:
+		rings.append(Color(1.0, 0.25, 0.22))
+	for k in rings.size():
+		var ring := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		var r := lane_height * (0.40 + k * 0.10)
+		torus.inner_radius = r - 0.0007
+		torus.outer_radius = r
+		torus.rings = 28
+		torus.ring_segments = 6
+		ring.mesh = torus
+		ring.rotation = Vector3(PI * 0.5, 0, 0)
+		ring.position = Vector3(gem_x, y, 0.004 + k * 0.0003)
+		ring.material_override = Materials.led(rings[k], true)
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_adopt(ring)
 
-	# Half the lane's height, up from under a third: measured at 7px with the timeline focused
-	# at 1600x900. The lane had the room; the header's width is what limits a long name, and
-	# `fit` holds it there without letting it go below the size every name used to be.
+	# The name, light in the air beside its gem, outlined so it holds against whatever is behind.
 	var name_label := _text(t.display_name(), 44,
-			Color(1.0, 0.86, 0.55) if t.index == picked_track else Color(0.93, 0.94, 0.96))
-	name_label.position = Vector3(-width * 0.5 + 0.0095, y, 0.0016)
+			Color(1.0, 0.88, 0.60) if picked else (Color(0.60, 0.62, 0.68) if t.mute else Color(0.95, 0.96, 0.98)))
+	name_label.position = Vector3(-width * 0.5 + 0.0145, y, 0.0042)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	Lettering.fit(name_label, NAME_SPAN, 44 * 4, 24 * 4)
 	_adopt(name_label)
-
-	# The three states that change what you are looking at, as one glyph rather than three
-	# buttons: a lane is too short to put controls on, and the controls are on the console.
-	var flags := ""
-	if t.rec_arm:
-		flags += "●"
-	if t.mute:
-		flags += "M"
-	if t.solo:
-		flags += "S"
-	if flags != "":
-		var flag_label := _text(flags, 32,
-				Color(0.90, 0.38, 0.33) if t.rec_arm else Color(0.72, 0.74, 0.78))
-		flag_label.position = Vector3(_lane_area_x - 0.0085, y, 0.0016)
-		flag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		_adopt(flag_label)
 
 
 ## The shown lane's row: a bed the width of the lanes, and the lane's name where the track names are.
@@ -1487,10 +1507,11 @@ func _build_automation_row(y: float) -> void:
 	var bed := MeshInstance3D.new()
 	bed.name = "AutomationRow"
 	var box := BoxMesh.new()
-	box.size = Vector3(_lane_area_width, AUTOMATION_ROW, 0.0010)
+	box.size = Vector3(_lane_area_width, AUTOMATION_ROW, CHANNEL_DEPTH)
 	bed.mesh = box
-	bed.material_override = flat(LANE_BED_ALT)
-	bed.position = Vector3(_lane_area_x + _lane_area_width * 0.5, y, 0.0006)
+	var glass := CHANNEL.lerp(AUTOMATION_COLOUR, 0.10)
+	bed.material_override = _smoke(Color(glass.r, glass.g, glass.b, 0.7))
+	bed.position = Vector3(_lane_area_x + _lane_area_width * 0.5, y, CHANNEL_Z)
 	_adopt(bed)
 	var label := _text(("MASTER  " if picked_track == 0 else "") + lane_name(shown_lane), 26, AUTOMATION_COLOUR)
 	label.position = Vector3(-width * 0.5 + 0.012, y, 0.0016)
@@ -1591,55 +1612,36 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 
 	var dim := item.muted or lane_muted
 	var block_height := lane_height - 0.0024
-	# Tinted with the track's colour, held to a middling value: at twelve lanes the blocks are
-	# most of the panel, and a wall of saturated colour buries the playhead and the markers.
-	# Selected lifts towards white rather than being outlined, because an outline at a lane 17mm
-	# tall is a hairline nobody sees.
+	# Tinted with the track's colour, held to a middling value so what stands out of its face
+	# (its sound, its notes) is the bright thing on it; lifted toward white when selected.
 	var body := item_body(tint, dim, item.selected).srgb_to_linear()
+	var back := _back(item)
+	var depth := _depth()
+	var face := back + depth
+	var mid := left + span * 0.5
 	# The bank holds unit cubes, so the size of an item IS its instance scale.
-	if shelf:
-		# Standing on its shelf, out of the panel, and pulled further out while selected.
-		var back := 0.0007 + (PULL if _pulled(item) else 0.0)
-		_item_blocks.move_slot(slot, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span, block_height, BLOCK_DEPTH)),
-				Vector3(left + span * 0.5, y, back + BLOCK_DEPTH * 0.5)))
-		# Lit, and authored in sRGB: see MeshBank.parts.
-		_item_blocks.set_colour(slot, item_body(tint, dim, item.selected))
-		# Its shadow, down and to the right on the shelf behind it, further for one pulled out;
-		# and its bottom edge, a shade under its face.
-		var off := 0.0015 + (0.0012 if _pulled(item) else 0.0)
-		_item_shades.move_slot(slot * 2, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0002)),
-				Vector3(left + span * 0.5 + off, y - off, 0.00125)))
-		_item_shades.set_colour(slot * 2, Color(0.004, 0.004, 0.005))
-		var face := back + BLOCK_DEPTH
-		_item_shades.move_slot(slot * 2 + 1, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span, 0.0017, 0.0004)),
-				Vector3(left + span * 0.5, y - block_height * 0.5 + 0.00085, face + 0.0002)))
-		_item_shades.set_colour(slot * 2 + 1, item_body(tint, dim, item.selected).darkened(0.5).srgb_to_linear())
-	else:
-		_item_blocks.move_slot(slot, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0014)),
-				Vector3(left + span * 0.5, y, 0.0014)))
-		_item_blocks.set_colour(slot, body)
-		# A drop shadow under the block, on the lane it lies in, and its bottom edge a shade
-		# darker than its face: what lifts a clip off its lane when there is no depth to do it.
-		_item_shades.move_slot(slot * 2, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span + 0.0010, 0.0034, 0.0002)),
-				Vector3(left + span * 0.5, y - block_height * 0.5 - 0.0004, 0.00095)))
-		_item_shades.set_colour(slot * 2, Color(0.002, 0.002, 0.003))
-		_item_shades.move_slot(slot * 2 + 1, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(span, 0.0018, 0.0003)),
-				Vector3(left + span * 0.5, y - block_height * 0.5 + 0.0009, 0.00225)))
-		_item_shades.set_colour(slot * 2 + 1, body.darkened(0.45))
-	var lift := _lift(item)
+	_item_blocks.move_slot(slot, Transform3D(
+			Basis.IDENTITY.scaled(Vector3(span, block_height, depth)),
+			Vector3(mid, y, back + depth * 0.5)))
+	_item_blocks.set_colour(slot, body)
+	# Its shadow on the channel behind it, down and to the right, further for one pulled out;
+	# and a line of light along its top edge, where glass catches it.
+	var off := 0.0012 + (0.0012 if _pulled(item) else 0.0)
+	_item_shades.move_slot(slot * 2, Transform3D(
+			Basis.IDENTITY.scaled(Vector3(span, block_height, 0.0001)),
+			Vector3(mid + off, y - off, HALO_Z)))
+	_item_shades.set_colour(slot * 2, Color(0, 0, 0, 0.6))
+	_item_shades.move_slot(slot * 2 + 1, Transform3D(
+			Basis.IDENTITY.scaled(Vector3(maxf(span - 0.0016, 0.0002), 0.0003, depth * 0.6)),
+			Vector3(mid, y + block_height * 0.5 + 0.0004, back + depth * 0.5)))
+	_item_shades.set_colour(slot * 2 + 1, Color(1, 1, 1, 0.12 if dim else 0.45))
 
-	# The take strip along the top edge, which is how a block reads as a block rather than a
-	# bar on a chart.
+	# A thread of its track's colour along its foot, out on its face: which track it is on, read
+	# at the clip and not only at the name.
 	_item_strips.move_slot(slot, Transform3D(
-			Basis.IDENTITY.scaled(Vector3(span, 0.0030, 0.0006)),
-			Vector3(left + span * 0.5, y + block_height * 0.5 - 0.0015, 0.0022 + lift)))
-	_item_strips.set_colour(slot, Materials.chip_colour(tint) if not dim
+			Basis.IDENTITY.scaled(Vector3(maxf(span - 0.0012, 0.0002), 0.0009, 0.0005)),
+			Vector3(mid, y - block_height * 0.5 + 0.0011, face + 0.00035)))
+	_item_strips.set_colour(slot, Materials.chip_colour(tint) * 1.2 if not dim
 			else Materials.lamp_colour(tint, false))
 	return true
 
@@ -1659,16 +1661,17 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 	# Below the take strip (3mm down from the block's top) and clear of the block's bottom edge.
 	# Wholly below it, not reaching into it: a top note clamped to the block's left or right edge
 	# had its end in the strip's end's plane, which flickers once the timeline is scaled up.
-	var top := y + block_height * 0.5 - 0.0034
-	var bottom := y - block_height * 0.5 + 0.0007
+	var top := y + block_height * 0.5 - 0.0018
+	var bottom := y - block_height * 0.5 + 0.0020
 	var row := (top - bottom) / rows
-	var left_edge := maxf(_x_for(start) + EDGE_GAP, _lane_area_x)
-	var right_edge := minf(_x_for(start + item.length) - EDGE_GAP, _lane_right())
-	# Ink on the block rather than light on it: the blocks are already the light thing on this
-	# panel, and pale notes on a pale block read as a texture, not as notes.
-	var colour := tint.darkened(0.62)
+	var left_edge := maxf(_x_for(start) + EDGE_GAP, _lane_area_x) + INSET
+	var right_edge := minf(_x_for(start + item.length) - EDGE_GAP, _lane_right()) - INSET
+	# Light standing out of the clip, as a skyline of bricks: each note sunk into the face and
+	# standing out of it as far as it was played hard.
+	var colour := Materials.chip_colour(tint.lightened(0.55)).srgb_to_linear()
 	if dim:
-		colour = colour.darkened(0.6)
+		colour = tint.darkened(0.5).srgb_to_linear()
+	var face := _back(item) + _depth()
 	var n := 0
 	while n + MidiTake.NOTE_WIDTH <= item.notes.size() and slot < _item_notes.count():
 		var on := start + item.notes[n]
@@ -1680,9 +1683,11 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 		if right - left <= 0.0:
 			continue
 		var centre_y := bottom + (pitch - low + 0.5) * row
+		var hard := clampf(item.notes[n - MidiTake.NOTE_WIDTH + 3] / 127.0, 0.0, 1.0)
+		var out := NOTE_RISE * (0.35 + 0.65 * hard)
 		_item_notes.move_slot(slot, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(right - left, maxf(row * 0.8, MIN_NOTE_HEIGHT), 0.0004)),
-				Vector3((left + right) * 0.5, centre_y, 0.0022 + _lift(item))))
+				Basis.IDENTITY.scaled(Vector3(right - left, maxf(row * 0.8, MIN_NOTE_HEIGHT), out + SUNK)),
+				Vector3((left + right) * 0.5, centre_y, face + (out - SUNK) * 0.5)))
 		_item_notes.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1695,7 +1700,7 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 		slot: int) -> int:
 	var block_height := lane_height - 0.0024
 	var low := y - block_height * 0.5 + 0.0006
-	var high := y + block_height * 0.5 - 0.0022
+	var high := y + block_height * 0.5 - 0.0006
 	var left := _x_for(start) + EDGE_GAP
 	var right := _x_for(start + length) - EDGE_GAP
 	var fade_in := minf(item.fade_in, length)
@@ -1708,7 +1713,8 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 		lines.append([Vector2(left, low), Vector2(minf(_x_for(start + fade_in), right), high)])
 	if fade_out > 0.0:
 		lines.append([Vector2(maxf(_x_for(start + length - fade_out), left), high), Vector2(right, low)])
-	var colour := Materials.chip_colour(tint).lightened(0.3)
+	var colour := Color(1.6, 1.6, 1.7)
+	var z := _back(item) + _depth() + NOTE_RISE + 0.0006
 	for line in lines:
 		if slot >= _item_fades.count():
 			break
@@ -1723,8 +1729,8 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 		var p1 := a.lerp(b, (x1 - a.x) / (b.x - a.x))
 		var along := p1 - p0
 		_item_fades.move_slot(slot, Transform3D(
-				Basis(Vector3.BACK, along.angle()) * Basis.from_scale(Vector3(along.length(), 0.0005, 0.0004)),
-				Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, 0.0026 + _lift(item))))
+				Basis(Vector3.BACK, along.angle()) * Basis.from_scale(Vector3(along.length(), 0.0007, 0.0005)),
+				Vector3((p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5, z)))
 		_item_fades.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1748,7 +1754,7 @@ func _place_gain(item: MixState.ItemState, start: float, length: float, y: float
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_gain_labels.add_child(l)
 	l.text = "%+.1f dB" % item.gain_db
-	l.position = Vector3(right - 0.0012, y + (lane_height - 0.0024) * 0.5 - 0.0046, 0.0028 + _lift(item))
+	l.position = Vector3(right - 0.0012, y + (lane_height - 0.0024) * 0.5 - 0.0046, _label_z(item))
 	l.visible = true
 	return used + 1
 
@@ -1778,13 +1784,13 @@ func _place_name(item: MixState.ItemState, start: float, length: float, y: float
 		l = _text("", ITEM_NAME_SIZE, ITEM_NAME_COLOUR)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_item_labels.add_child(l)
-	# Ink on a lit clip, light on a muted one: the clips are the bright thing on the panel, and
-	# white on them was a smudge at the distance it is read from.
-	l.modulate = ITEM_NAME_LIGHT if dim else ITEM_NAME_INK
-	l.outline_size = 12 if dim else 6
-	l.outline_modulate = Color(0, 0, 0, 0.8) if dim else Color(1, 1, 1, 0.22)
+	# Light in front of the clip, outlined dark: it floats over the relief standing out of the
+	# clip's face, and has to read over the bright parts of it and the dark alike.
+	l.modulate = Color(0.75, 0.76, 0.80) if dim else ITEM_NAME_LIGHT
+	l.outline_size = 14
+	l.outline_modulate = Color(0, 0, 0, 0.85)
 	l.text = fit_text(shown, room / l.pixel_size, l.font_size)
-	l.position = Vector3(left + 0.0016, y + (lane_height - 0.0024) * 0.5 - 0.0050, 0.0030 + _lift(item))
+	l.position = Vector3(left + 0.0016, y + (lane_height - 0.0024) * 0.5 - 0.0050, _label_z(item))
 	l.visible = not l.text.is_empty()
 	return used + 1
 
@@ -1822,15 +1828,18 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 	if item.peaks.is_empty():
 		return slot
 	var columns := wave_columns(item.peaks, item.source_offset, start, item.length,
-			_x_for(start) + EDGE_GAP, _x_for(start + item.length) - EDGE_GAP,
-			_lane_area_x, _lane_right(), WAVE_COLUMN)
+			_x_for(start) + EDGE_GAP + INSET, _x_for(start + item.length) - EDGE_GAP - INSET,
+			_lane_area_x + INSET, _lane_right() - INSET, WAVE_COLUMN)
 	var block_height := lane_height - 0.0024
-	var top := y + block_height * 0.5 - 0.0026
-	var bottom := y - block_height * 0.5 + 0.0007
+	var top := y + block_height * 0.5 - 0.0012
+	var bottom := y - block_height * 0.5 + 0.0020
 	var middle := (top + bottom) * 0.5
-	var colour := tint.darkened(0.72)
+	# Light standing out of the clip as a relief: as tall as it is loud, and standing out of the
+	# face as far, so a loud passage is a ridge and a quiet one barely breaks the glass.
+	var colour := Materials.chip_colour(tint.lightened(0.5)).srgb_to_linear()
 	if dim:
-		colour = colour.darkened(0.6)
+		colour = tint.darkened(0.5).srgb_to_linear()
+	var face := _back(item) + _depth()
 	for c in columns:
 		if slot >= _item_waves.count():
 			break
@@ -1839,9 +1848,10 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 		# On a square-root scale: a voice peaking at -12dB fills half the block, not a quarter,
 		# so a take recorded at a sensible level is a shape and not a hairline.
 		var height := maxf(sqrt(heard) * (top - bottom), MIN_NOTE_HEIGHT * 0.5)
+		var out := NOTE_RISE * (0.15 + 0.85 * sqrt(heard))
 		_item_waves.move_slot(slot, Transform3D(
-				Basis.IDENTITY.scaled(Vector3(WAVE_COLUMN * 0.7, height, 0.0004)),
-				Vector3(c[0], middle, 0.0022 + _lift(item))))
+				Basis.IDENTITY.scaled(Vector3(WAVE_COLUMN * 0.7, height, out + SUNK)),
+				Vector3(c[0], middle, face + (out - SUNK) * 0.5)))
 		_item_waves.set_colour(slot, colour)
 		slot += 1
 	return slot
@@ -1898,35 +1908,43 @@ static func note_layout(notes: PackedFloat32Array) -> Dictionary:
 ## down and re-creating several hundred meshes thirty times a second.
 func _build_playhead() -> void:
 	_playhead = Node3D.new()
+	var tall := _height - RULER_HEIGHT * 0.4
+	var mid := -(RULER_HEIGHT * 0.2)
+	var deep := _back(null) + BLOCK_DEPTH + PULL + NOTE_RISE + 0.004
 
+	# The blade: a sheet of light through the whole depth of the arrangement, edge on to the
+	# song, so it cuts through every clip it crosses -- a line seen straight on, a plane of light
+	# seen from a seat off to the side.
 	var line := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	# On the shelves, in front of the blocks, which would otherwise stand over it.
-	# Just in front of the blocks at rest: further out it floated off the panel, seen from below.
-	var front := (0.0007 + BLOCK_DEPTH + 0.0012) if shelf else 0.0026
-	mesh.size = Vector3(0.0022, _height - RULER_HEIGHT * 0.4, 0.0010)
+	mesh.size = Vector3(0.0016, tall, deep)
 	line.mesh = mesh
-	line.position = Vector3(0, -(RULER_HEIGHT * 0.2), front)
-	line.material_override = Materials.led(Color(1.0, 0.92, 0.55), true)
+	line.position = Vector3(0, mid, deep * 0.5)
+	line.material_override = Materials.led(PLAYHEAD_COLOUR, true)
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_playhead.add_child(line)
 
-	# The glow round it: a wider, faint band of the same light, so the playhead is found across a
-	# room as a lit seam and not looked for as a hairline.
+	# Its glow either side, in front of everything, so it is found across a room as a lit seam.
 	var halo := MeshInstance3D.new()
 	var halo_mesh := BoxMesh.new()
-	halo_mesh.size = Vector3(0.0095, _height - RULER_HEIGHT * 0.4, 0.0001)
+	halo_mesh.size = Vector3(0.012, tall, 0.0001)
 	halo.mesh = halo_mesh
-	halo.position = Vector3(0, -(RULER_HEIGHT * 0.2), front - 0.0006)
+	halo.position = Vector3(0, mid, deep + 0.0004)
 	halo.material_override = _halo_finish()
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_playhead.add_child(halo)
 
+	# The bead it hangs from, riding the ruler.
 	var head := MeshInstance3D.new()
-	var head_mesh := BoxMesh.new()
-	head_mesh.size = Vector3(0.0100, 0.0075, 0.0012)
-	head.mesh = head_mesh
-	head.position = Vector3(0, _top_y - LOOP_BAND - 0.0038, 0.0028)
-	head.material_override = Materials.led(Color(1.0, 0.92, 0.55), true)
+	var bead := SphereMesh.new()
+	bead.radius = 0.0045
+	bead.height = 0.009
+	bead.radial_segments = 18
+	bead.rings = 9
+	head.mesh = bead
+	head.position = Vector3(0, _top_y - LOOP_BAND - 0.0040, 0.006)
+	head.material_override = Materials.led(PLAYHEAD_COLOUR, true)
+	head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_playhead.add_child(head)
 
 	_adopt(_playhead)
@@ -1946,6 +1964,11 @@ func _move_playhead() -> void:
 	# scrubber below already says which part of the project is on screen.
 	_playhead.visible = x >= _lane_area_x and x <= _lane_right() and not highway
 	_playhead.position.x = x
+	# What the blade is passing through is lit by it (see TimelineFinish.ingot).
+	if is_inside_tree():
+		var axis := global_basis.x
+		TimelineFinish.light_beam(to_global(Vector3(x, 0, 0)) if _playhead.visible else Vector3(0, -1000, 0),
+				axis.normalized(), BEAM_REACH * axis.length())
 
 
 ## Pages the window forward when the playhead runs off the right edge during playback.
@@ -1994,20 +2017,13 @@ func _lane_right() -> float:
 	return _lane_area_x + _lane_area_width
 
 
-## The view key: the other view, and word of it to whoever keeps this person's choices.
-func _on_shelf_key() -> void:
-	set_shelf(not shelf)
-	shelf_chosen.emit(shelf)
-
-
 ## The lanes, or the road. Nothing is rebuilt: the lanes keep their shape under it, and the road is
 ## laid over the same area.
 func set_highway(on: bool) -> void:
 	if on == highway:
 		return
 	highway = on
-	if _road_key != null:
-		_road_key.lit = highway
+	_light_view_keys()
 	_sync_highway()
 
 
@@ -2026,6 +2042,10 @@ func _sync_highway() -> void:
 		if control != null:
 			(control as ControlAffordance).collision_layer = 0 if highway else 2
 	_highway.visible = highway
+	# Shown above with everything built, the loop's rod and wall included: they show only what
+	# the loop range says, whatever was shown with them.
+	_drawn_loop = Vector3(-1, -1, -1)
+	_draw_loop()
 	if highway and not _lane_y.is_empty():
 		_highway.configure(_lane_area_x, _lane_area_width, -_top_y + SCRUBBER_BAND + 0.002,
 				_top_y - 0.002, _shown())
@@ -2037,17 +2057,24 @@ func set_shelf(on: bool) -> void:
 	if on == shelf:
 		return
 	shelf = on
-	if _shelf_key != null:
-		_shelf_key.lit = shelf
+	_light_view_keys()
 	mark_dirty()
 
 
-## How far in front of the flat view's an item's face is: its block's depth on the shelves, and
-## more while it is selected and pulled out. Whatever is drawn on a block is drawn this far out.
-func _lift(item: MixState.ItemState) -> float:
-	if not shelf:
-		return 0.0
-	return BLOCK_DEPTH + (PULL if _pulled(item) else 0.0) - 0.0014
+## Where a clip's back is: just in front of its channel, and pulled further out while it is
+## selected or in the hand -- taken out of its row, as a thing is that has been picked up.
+func _back(item: MixState.ItemState) -> float:
+	return ITEM_Z + (PULL if item != null and _pulled(item) else 0.0)
+
+
+## How deep a clip's ingot is: deeper on the shelves, where it is a block to take hold of.
+func _depth() -> float:
+	return BLOCK_DEPTH if shelf else ITEM_DEPTH
+
+
+## In front of everything standing out of a clip's face: where words about it float.
+func _label_z(item: MixState.ItemState) -> float:
+	return _back(item) + _depth() + NOTE_RISE + 0.0012
 
 
 ## Out of its shelf: selected, or in the hand.
@@ -2055,32 +2082,13 @@ func _pulled(item: MixState.ItemState) -> bool:
 	return item.selected or (item == _held_item and _held_item != null)
 
 
-## A block's finish: matte, so the room's lamps model its edges without a highlight washing out
-## its face, and a touch of its own light so its colour holds in a dim venue.
-static func _block_finish() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color.WHITE
-	m.roughness = 0.82
-	m.metallic_specular = 0.25
-	m.emission_enabled = true
-	m.emission = Color(0.10, 0.10, 0.10)
-	return m
-
-
-## The shelf boards: dark and unlit, as the screen's face is, so what stands on them is what is
-## seen. Lit, the lowest board's underside caught the floor lamps from below and read as a bright
-## slab across the bottom of the panel.
 static func _halo_finish() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.albedo_color = Color(1.0, 0.85, 0.45, 0.16)
-	return m
+	return TimelineFinish.glow(Color(1.0, 0.85, 0.45, 0.16))
 
 
+## The shelf boards: smoked glass, lit along their front edge as the deck's ledges are.
 static func _board_finish() -> StandardMaterial3D:
-	return flat(Color(0.20, 0.21, 0.24))
+	return GlyphKey.puck_finish()
 
 
 ## The board under each lane that its blocks stand on. Nothing in the flat view.
@@ -2095,30 +2103,44 @@ func _build_shelf_lips() -> void:
 	for y in _lane_y:
 		# Its top where the block's bottom is.
 		var top := y - lane_height * 0.5 + 0.0012
-		# A millimetre short of the lane's bed at each end, whose ends would be its ends' plane.
+		# A millimetre short of the lane's channel at each end, whose ends would be its ends' plane.
 		_shelf_lips.claim(Transform3D(Basis.from_scale(Vector3(_lane_area_width - 0.002, tall, SHELF_LIP)),
-				Vector3(_lane_area_x + _lane_area_width * 0.5, top - tall * 0.5, 0.0006 + SHELF_LIP * 0.5)),
+				Vector3(_lane_area_x + _lane_area_width * 0.5, top - tall * 0.5, ITEM_Z - 0.0003 + SHELF_LIP * 0.5)),
 				Color.WHITE)
 	_shelf_lips.commit()
 
 
-## The screen's own colours, sRGB. Drawn UNLIT: this is a display, and a display lit by the room
-## goes the colour of the room -- under the studio's warm key every lane, block and gutter came
-## out the same muddy brown, and the blocks vanished into the lanes they sat in.
-const SCREEN_FACE := Color(0.040, 0.045, 0.058)
-const SCREEN_GUTTER := Color(0.075, 0.082, 0.100)
-const RULER_FACE := Color(0.026, 0.030, 0.040)
+## Its colours, sRGB. Self-lit, as TimelineFinish says why.
+## The channels' smoked glass, before a track's colour is breathed into it.
+const CHANNEL := Color(0.030, 0.034, 0.046)
+## Kept for what tests compare clips against: the darkest a channel reads.
 const LANE_BED := Color(0.105, 0.113, 0.136)
-const LANE_BED_ALT := Color(0.072, 0.079, 0.097)
-const LANE_BED_PICKED := Color(0.190, 0.200, 0.240)
-const GRID_BEAT := Color(0.165, 0.178, 0.208)
-const GRID_BAR := Color(0.285, 0.305, 0.350)
-const RULER_TEXT := Color(0.88, 0.90, 0.94)
-const RULER_TICK := Color(0.46, 0.49, 0.55)
+const GRID_BEAT := Color(0.13, 0.15, 0.19)
+const GRID_BAR := Color(0.30, 0.34, 0.42)
+const RULER_TEXT := Color(0.90, 0.92, 0.96)
+const RULER_TICK := Color(0.55, 0.60, 0.70)
 const MARKER_COLOUR := Color(1.0, 0.80, 0.42)
+const PLAYHEAD_COLOUR := Color(1.0, 0.92, 0.62)
+## How far either side of the playhead a clip it is cutting through is lit by it.
+const BEAM_REACH := 0.010
 const ITEM_NAME_COLOUR := Color(0.97, 0.97, 0.98)
-const ITEM_NAME_INK := Color(0.045, 0.050, 0.065)
-const ITEM_NAME_LIGHT := Color(0.92, 0.93, 0.96)
+const ITEM_NAME_LIGHT := Color(0.96, 0.97, 0.99)
+## How deep the layers stand, front to back, in metres out of the timeline's plane.
+const VEIL_Z := 0.0002
+const CHANNEL_Z := 0.0008
+const CHANNEL_DEPTH := 0.0008
+const GRID_Z := 0.00135
+const THREAD := 0.0009
+const THREAD_Z := 0.0017
+const HALO_Z := 0.00225
+const ITEM_Z := 0.0026
+const ITEM_DEPTH := 0.006
+## How far out of a clip's face its loudest sound and hardest note stand, and how far into it
+## they are sunk so they grow out of it rather than sit on it.
+const NOTE_RISE := 0.0048
+const SUNK := 0.0004
+## Between a clip's ends and what is drawn on its face.
+const INSET := 0.0004
 static var _flats := {}
 
 
@@ -2162,6 +2184,23 @@ func _text(content: String, size: int, tint: Color) -> Label3D:
 	# Was 0.000055, scaled up with LANE_HEIGHT's own increase (2026-10-11: too small to read).
 	l.pixel_size = 0.000078
 	l.modulate = tint
+	# Outlined dark: there is no panel behind it, only the room.
+	l.outline_size = maxi(8, size / 3)
+	l.outline_modulate = Color(0, 0, 0, 0.85)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	Lettering.range_to_legibility(l)
 	return l
+
+
+static var _smokes := {}
+
+
+## Smoked glass in one colour, for a loose piece (the automation row's channel).
+static func _smoke(colour: Color) -> StandardMaterial3D:
+	if not _smokes.has(colour):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color = colour
+		_smokes[colour] = m
+	return _smokes[colour]

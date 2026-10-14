@@ -100,6 +100,10 @@ var _tour_band := 0
 var _tl_shelf := ""
 ## `--tl-road 30`: the timeline as the road, with the playhead parked at that many seconds, from frame 6.
 var _tl_road := -1.0
+## `--tl-select 3:0,3:1`: those items (track:item) selected from frame 7, so the timeline's item
+## page shows. `--tl-pick 3`: that track picked from frame 7, for the track page.
+var _tl_select := ""
+var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
 var _board := ""
@@ -209,6 +213,10 @@ func _ready() -> void:
 				if i + 1 < args.size(): _pull_tracks = int(args[i + 1])
 			"--board":
 				if i + 1 < args.size(): _board = args[i + 1]
+			"--tl-select":
+				if i + 1 < args.size(): _tl_select = args[i + 1]
+			"--tl-pick":
+				if i + 1 < args.size(): _tl_pick = int(args[i + 1])
 			"--tl-road":
 				if i + 1 < args.size(): _tl_road = float(args[i + 1])
 			"--tour-band":
@@ -255,6 +263,17 @@ func _process(_delta: float) -> void:
 		if not tl.is_empty():
 			DAW.seek(_tl_road)
 			(tl[0] as TimelineSurface).set_highway(true)
+	if _frames == 7 and (_tl_select != "" or _tl_pick >= 0):
+		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
+		if _tl_pick >= 0 and not tl.is_empty():
+			(tl[0] as TimelineSurface).pick_track(_tl_pick)
+		var first := true
+		for pair in _tl_select.split(",", false):
+			var ti := pair.split(":")
+			if ti.size() == 2:
+				DAW.select_item(int(ti[0]), int(ti[1]), not first)
+				first = false
+		print("SHOT_TL selected=", DAW.state.selected_items(), " picked=", _tl_pick)
 	if _frames == 7 and _roll:
 		DAW.transport_play()
 	if _frames == 12 and _pull_track:

@@ -1,31 +1,26 @@
-class_name TimelineTrackStrip
-extends Node3D
+class_name TimelineTrackPage
+extends TimelinePage
 
-## Tracks added, removed and named, under the timeline's right-hand end: ADD puts a new track
-## after the picked one (or at the end), DEL removes the picked one, NAME renames it. A track is
-## picked by pressing its name. Removing is one undo away, like every edit. AUTO steps the picked
-## track through read, touch and latch: in touch a control moved while the song plays writes its
-## lane until it is let go, in latch until the transport stops. LANE shows the picked track's
+## Tracks added, removed and named, on the deck's TRACK page: ADD puts a new track after the
+## picked one (or at the end), REMOVE removes the picked one, RENAME renames it. A track is picked
+## by pressing its name. Removing is one undo away, like every edit. AUTO steps the picked track
+## through read, touch and latch: in touch a control moved while the song plays writes its lane
+## until it is let go, in latch until the transport stops. LANE shows the picked track's
 ## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
-## then none. IN steps the picked track through what it records from (`MixState.inputs`, then
-## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its lamp
-## the track's colour. SCHM gives every track that has no colour yet one of its own, round the
-## wheel (TrackColours.scheme_colour), lit while there is a track it would colour.
+## then none. INPUT steps the picked track through what it records from (`MixState.inputs`, then
+## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its mark the
+## track's colour. SCHEME gives every track that has no colour yet one of its own, round the wheel
+## (TrackColours.scheme_colour), lit while there is a track it would colour. With no track picked,
+## AUTO and LANE are the master's.
 
-const PITCH := 0.028
-const CAPTION := Color(0.62, 0.64, 0.68)
-
-## The TimelineSurface. Typed loosely so the files load in any order.
-var surface: Node
-
-var add: PanelButton
-var remove: PanelButton
-var rename: PanelButton
-var auto: PanelButton
-var lane: PanelButton
-var input: PanelButton
-var colour: PanelButton
-var scheme: PanelButton
+var add: GlyphKey
+var remove: GlyphKey
+var rename: GlyphKey
+var auto: GlyphKey
+var lane: GlyphKey
+var input: GlyphKey
+var colour: GlyphKey
+var scheme: GlyphKey
 
 ## Twelve colours a track can be, round the wheel and readable on the dark desk. Shown in the
 ## venue's own twelve (TrackColours), stored as these.
@@ -35,24 +30,18 @@ const MODE_NAMES := {0: "READ", 2: "TOUCH", 4: "LATCH"}
 
 
 func _ready() -> void:
-	var plate := MeshInstance3D.new()
-	plate.name = "Plate"
-	var box := BoxMesh.new()
-	box.size = Vector3(8 * PITCH + 0.008, 0.036, 0.004)
-	plate.mesh = box
-	plate.material_override = Materials.chassis()
-	plate.position = Vector3(3.5 * PITCH, -0.004, -0.002)
-	add_child(plate)
-	add = _key("TrackAdd", "ADD", 0, Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
+	tab_name = "TRACK"
+	tab_glyph = &"track"
+	add = _key("TrackAdd", &"add", Color(0.55, 0.85, 0.55), "TRACKS  ADD", _add,
 			func() -> String:
 				var picked: int = surface.picked_track
 				return "a new track after %s" % _name_of(picked) if picked > 0 else "a new track at the end")
-	remove = _key("TrackRemove", "DEL", 1, Color(0.95, 0.38, 0.34), "TRACKS  REMOVE",
+	remove = _key("TrackRemove", &"remove", Color(0.95, 0.38, 0.34), "TRACKS  REMOVE",
 			_remove,
 			func() -> String:
 				var picked: int = surface.picked_track
 				return "%s, its items and the sends to it" % _name_of(picked) if picked > 0 else "press a track's name first")
-	rename = _key("TrackName", "NAME", 2, Color(0.45, 0.78, 0.95), "TRACKS  NAME",
+	rename = _key("TrackName", &"rename", Color(0.45, 0.78, 0.95), "TRACKS  NAME",
 			_rename,
 			func() -> String:
 				var picked: int = surface.picked_track
@@ -60,39 +49,41 @@ func _ready() -> void:
 					return "press a track's name first"
 				return "type a name for %s" % _name_of(picked) if surface.types_on_screen() \
 						else "type a name for %s on the keypad" % _name_of(picked))
-	auto = _key("TrackAuto", "AUTO", 3, Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
+	colour = _key("TrackColour", &"colour", PALETTE[0], "TRACKS  COLOUR", _step_colour,
 			func() -> String:
 				var picked: int = surface.picked_track
-				# With no track picked, the master's fader and pan.
-				var who := _name_of(picked) if picked > 0 else "the master"
-				var mode := _mode_of(picked)
-				return "%s reads its lanes: %s next" % [who, MODE_NAMES[_next(mode)]] if mode == 0 \
-						else "%s writes in %s: %s next" % [who, MODE_NAMES[mode], MODE_NAMES[_next(mode)]])
-	lane = _key("TrackLane", "LANE", 4, TimelineSurface.AUTOMATION_COLOUR, "TRACKS  AUTOMATION LANE", _lane,
+				if picked <= 0 or not DAW.state.tracks.has(picked):
+					return "press a track's name first"
+				return "a new colour for %s" % _name_of(picked))
+	scheme = _key("TrackScheme", &"scheme", TrackColours.STANDARD[6], "TRACKS  COLOUR SCHEME", _apply_scheme,
 			func() -> String:
-				var picked: int = surface.picked_track
-				# With no track picked, the master's lanes.
-				var whose := "the master's " if picked <= 0 else ""
-				var next := _next_lane()
-				return "show %s%s" % [whose, TimelineSurface.lane_name(next).to_lower()] if next != "" else "hide the lane")
-	input = _key("TrackInput", "IN", 5, Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
+				var n := _uncoloured().size()
+				return "every track already has a colour" if n == 0 \
+						else "colour the %d track%s with none" % [n, "" if n == 1 else "s"])
+	_group()
+	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
 			func() -> String:
 				var picked: int = surface.picked_track
 				if picked <= 0 or not DAW.state.tracks.has(picked):
 					return "press a track's name first"
 				return "%s records from %s: %s next" % [_name_of(picked),
 						DAW.state.input_name(DAW.state.input_of(picked)), DAW.state.input_name(_next_input())])
-	colour = _key("TrackColour", "COLR", 6, PALETTE[0], "TRACKS  COLOUR", _step_colour,
+	_group()
+	auto = _key("TrackAuto", &"auto", Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
 			func() -> String:
 				var picked: int = surface.picked_track
-				if picked <= 0 or not DAW.state.tracks.has(picked):
-					return "press a track's name first"
-				return "a new colour for %s" % _name_of(picked))
-	scheme = _key("TrackScheme", "SCHM", 7, TrackColours.STANDARD[6], "TRACKS  COLOUR SCHEME", _apply_scheme,
+				# With no track picked, the master's fader and pan.
+				var who := _name_of(picked) if picked > 0 else "the master"
+				var mode := _mode_of(picked)
+				return "%s reads its lanes: %s next" % [who, MODE_NAMES[_next(mode)]] if mode == 0 \
+						else "%s writes in %s: %s next" % [who, MODE_NAMES[mode], MODE_NAMES[_next(mode)]], true)
+	lane = _key("TrackLane", &"lane", TimelineSurface.AUTOMATION_COLOUR, "TRACKS  AUTOMATION LANE", _lane,
 			func() -> String:
-				var n := _uncoloured().size()
-				return "every track already has a colour" if n == 0 \
-						else "colour the %d track%s with none" % [n, "" if n == 1 else "s"])
+				var picked: int = surface.picked_track
+				# With no track picked, the master's lanes.
+				var whose := "the master's " if picked <= 0 else ""
+				var next := _next_lane()
+				return "show %s%s" % [whose, TimelineSurface.lane_name(next).to_lower()] if next != "" else "hide the lane", true)
 	DAW.track_changed.connect(_on_track_changed)
 	DAW.master_changed.connect(_on_master_changed)
 	refresh()
@@ -149,13 +140,21 @@ func refresh() -> void:
 	remove.lit = picked
 	rename.lit = picked
 	lane.lit = surface.shown_lane != ""
-	auto.lit = _mode_of(surface.picked_track) != DAW.AUTOMATION_READ
+	lane.caption = TimelineSurface.lane_name(surface.shown_lane) if surface.shown_lane != "" else ""
+	var mode := _mode_of(surface.picked_track)
+	auto.lit = mode != DAW.AUTOMATION_READ
+	auto.caption = MODE_NAMES.get(mode, "READ") if mode != DAW.AUTOMATION_READ else ""
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
+	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
+			if input.lit else ""
+	for key in [remove, rename, input, colour]:
+		key.available = picked
 	if picked:
 		colour.led_colour = DAW.state.track(surface.picked_track).shown_colour()
-	# After the colour: setting lit repaints the lamp.
+	# After the colour: setting lit repaints the key.
 	colour.lit = picked
 	scheme.lit = not _uncoloured().is_empty()
+	notice = "%s" % _name_of(surface.picked_track).to_upper() if picked else "press a track's name to pick it  ·  AUTO and LANE: the master"
 
 
 ## The tracks nobody has coloured, by number.
@@ -225,21 +224,3 @@ func _rename() -> void:
 
 func _name_of(index: int) -> String:
 	return DAW.state.track(index).display_name() if DAW.state.tracks.has(index) else "track %d" % index
-
-
-func _key(key_name: String, caption: String, slot: int, colour: Color, title: String,
-		act: Callable, what: Callable) -> PanelButton:
-	var key := PanelButton.new()
-	key.name = key_name
-	key.led_colour = colour
-	key.lamp_scale = Vector2(0.8, 0.5)
-	key.scale = Vector3(1.4, 1.4, 1.4)
-	key.position = Vector3(slot * PITCH, 0.0, 0.003)
-	key.pressed.connect(act)
-	key.describe_title = func() -> String: return title
-	key.describe_value = func(_v: float) -> String: return what.call()
-	add_child(key)
-	var l: Label3D = surface._text(caption, 22, CAPTION)
-	l.position = Vector3(slot * PITCH, -0.015, 0.0016)
-	add_child(l)
-	return key

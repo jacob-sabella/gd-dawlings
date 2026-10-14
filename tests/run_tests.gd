@@ -9668,11 +9668,12 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	click.call(at.call(2, 12.0))
 
 	# The item's own controls, under the panel, while exactly one item is selected.
-	var strip: TimelineItemStrip = timeline._item_controls
-	check("one item selected, its controls show", strip.visible and strip.gain.collision_layer == 2)
+	var strip: TimelineItemPage = timeline.item_page
+	check("one item selected, its page comes up and its rails take a press",
+			timeline.deck.shown_page == strip and strip.visible and strip.gain.collision_layer == 2)
 	strip.gain.value = 0.5
 	strip.gain.value_committed.emit(0.5)
-	close_to("its gain knob, let go, sets its gain", s.item(2, 0).gain_db, lerpf(TimelineItemStrip.GAIN_LOW, TimelineItemStrip.GAIN_HIGH, 0.5), 0.001)
+	close_to("its gain knob, let go, sets its gain", s.item(2, 0).gain_db, lerpf(TimelineItemPage.GAIN_LOW, TimelineItemPage.GAIN_HIGH, 0.5), 0.001)
 	strip.fade_in.value_committed.emit(0.5)
 	close_to("a fade in at half the knob is a quarter of the item", s.item(2, 0).fade_in, s.item(2, 0).length * 0.25, 0.001)
 	strip.fade_out.value_committed.emit(0.2)
@@ -9713,12 +9714,12 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	hand.holding_shift = true
 	click.call(at.call(3, 12.0))
 	hand.holding_shift = false
-	check("two selected, they hide", not strip.visible and strip.gain.collision_layer == 0)
+	check("two selected, the one-item rails are out of reach", not strip.gain.available and strip.gain.collision_layer == 0)
 	click.call(at.call(2, 12.0))
 
 	# Tracks: a name pressed picks it; ADD, DEL and NAME act on it.
 	var header: TimelineHeader = timeline._header
-	var tracks: TimelineTrackStrip = timeline._track_controls
+	var tracks: TimelineTrackPage = timeline.track_page
 	var names_were: Array = s.track_indices().map(func(i): return s.track(i).name)
 	check("with no track picked, only ADD is lit", tracks.add.lit and not tracks.remove.lit and not tracks.rename.lit)
 	header.grab_begin(hand, at.call(3, 1.0) - timeline.global_basis.x * 0.05)
@@ -9737,7 +9738,7 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	var colour_was := s.track(3).colour
 	tracks.colour.pressed.emit()
 	check("COLOUR gives it the palette's next colour, its lamp that colour (%s)" % s.track(3).colour,
-			s.track(3).colour == TimelineTrackStrip.next_colour(colour_was) and tracks.colour.lit
+			s.track(3).colour == TimelineTrackPage.next_colour(colour_was) and tracks.colour.lit
 			and tracks.colour.led_colour == s.track(3).colour)
 	var colour_repl: Array = DAW.backend._repl_durable.get("/track/3/colour", [])
 	check("and replicates it", colour_repl.size() == 3 and is_equal_approx(colour_repl[0], s.track(3).colour.r))
@@ -9901,12 +9902,12 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	timeline.pick_track(0)
 	timeline._process(0.0)
 	click.call(at.call(2, 12.0))
-	var render: TimelineRenderStrip = timeline._render_controls
+	var render: TimelineRenderPage = timeline.render_page
 	check("the stand-in cannot render, and its MIX and STEMS keys say so (%s)" % render.mix.describe_value.call(0.0),
 			not render.mix.lit and not render.stems.lit and render.mix.describe_value.call(0.0).contains("cannot render"))
 
 	# The tempo's changes, from the strip under the middle.
-	var tempo: TimelineTempoStrip = timeline._tempo_controls
+	var tempo: TimelineTempoPage = timeline.tempo_page
 	var was_tempo := s.tempo
 	DAW.seek(s.bar_to_seconds(5.0))
 	check("one tempo: no change to remove or ramp", not tempo.remove.lit and not tempo.ramp.lit and tempo.current() == 0)
@@ -9914,7 +9915,7 @@ func _test_items_are_edited_on_the_timeline() -> void:
 	check("ADD puts a change at the playhead's bar (%s)" % [s.tempo_points], s.tempo_points.size() == 2
 			and is_equal_approx(s.tempo_points[1][0], 16.0) and tempo.current() == 1 and tempo.remove.lit)
 	tempo.bpm.value_committed.emit(0.5)
-	close_to("its BPM knob sets that change's tempo", s.tempo_points[1][1], lerpf(TimelineTempoStrip.BPM_LOW, TimelineTempoStrip.BPM_HIGH, 0.5), 0.05)
+	close_to("its BPM knob sets that change's tempo", s.tempo_points[1][1], lerpf(TimelineTempoPage.BPM_LOW, TimelineTempoPage.BPM_HIGH, 0.5), 0.05)
 	close_to("and not the song's", s.tempo, was_tempo)
 	DAW.seek(s.bar_to_seconds(2.0))
 	check("before it, the strip is on the song's own tempo", tempo.current() == 0 and tempo.ramp.lit == false)
@@ -10277,7 +10278,7 @@ func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:
 	var timeline := TimelineSurface.new()
 	add_child(timeline)
 	timeline._process(0.0)
-	var save_key := timeline.get_node_or_null(^"SaveKey") as PanelButton
+	var save_key := timeline._save_key
 	check("the timeline has a save key, lit where saving works", save_key != null and save_key.lit)
 	if save_key != null:
 		save_key.pressed.emit()
@@ -11596,7 +11597,7 @@ func _test_a_track_records_from_its_own_input() -> void:
 	DAW.backend.publish_inputs()
 	var timeline := TimelineSurface.new()
 	add_child(timeline)
-	var strip: TimelineTrackStrip = timeline._track_controls
+	var strip: TimelineTrackPage = timeline.track_page
 	timeline.pick_track(2)
 	strip.refresh()
 	check("IN is dark for a track that has not chosen", not strip.input.lit)
@@ -11677,14 +11678,14 @@ func _test_the_time_signature_changes() -> void:
 	DAW.set_time_signature_map([[0.0, 4, 4]])
 	var timeline := TimelineSurface.new()
 	add_child(timeline)
-	var strip: TimelineTempoStrip = timeline._tempo_controls
+	var strip: TimelineTempoPage = timeline.tempo_page
 	DAW.seek(s.bar_to_seconds(3.0) + 0.1)
 	strip.signature.pressed.emit()
 	check("SIG at bar 3 starts a change there, to 3/4 (%s)" % [s.time_signature_points],
 			s.time_signature_points == [[0.0, 4, 4], [8.0, 3, 4]])
 	strip.signature.pressed.emit()
 	check("again, that change goes to 6/8 (%s)" % [s.time_signature_points], s.time_signature_points == [[0.0, 4, 4], [8.0, 6, 8]])
-	for i in TimelineTempoStrip.SIGNATURES.size() - 2:
+	for i in TimelineTempoPage.SIGNATURES.size() - 2:
 		strip.signature.pressed.emit()
 	check("and round to 4/4, which is no change and goes (%s)" % [s.time_signature_points], s.time_signature_points.is_empty())
 	DAW.seek(0.0)
@@ -13015,17 +13016,16 @@ func _test_the_timeline_clips_are_the_brightest_thing_on_their_lane() -> void:
 	check("and a muted one is not, though it is still there", TimelineSurface.item_body(kick, true, false).v < 0.35
 			and TimelineSurface.item_body(kick, true, false).v > TimelineSurface.LANE_BED.v)
 	check("and a selected one is lifted toward white", TimelineSurface.item_body(kick, false, true).s < body.s - 0.2)
-	# Ink on a lit clip, light on a muted one: names were white on pastel, a smudge at a distance.
-	var ink := TimelineSurface.ITEM_NAME_INK
-	check("a lit clip's name is dark and a muted one's is light",
-			ink.v < 0.2 and TimelineSurface.ITEM_NAME_LIGHT.v > 0.8)
+	# Light, outlined dark, floating in front of the clip: it reads over the bright relief standing
+	# out of the clip's face and the dark glass round it alike.
+	check("a clip's name is light", TimelineSurface.ITEM_NAME_LIGHT.v > 0.8)
 	_offline()
 	var timeline := TimelineSurface.new()
 	add_child(timeline)
 	timeline._process(0.0)
 	var shades := timeline.get_node_or_null("ItemShades") as MeshBank
 	var blocks := timeline.get_node_or_null("ItemBlocks") as MeshBank
-	check("every clip has a shadow and a bottom edge under it, flat as well as on the shelves",
+	check("every clip has a shadow and a lit top edge, flat as well as on the shelves",
 			shades != null and blocks != null and shades.count() == blocks.count() * 2
 			and shades.multimesh.visible_instance_count == blocks.multimesh.visible_instance_count * 2)
 	timeline.free()
@@ -13033,35 +13033,40 @@ func _test_the_timeline_clips_are_the_brightest_thing_on_their_lane() -> void:
 
 func _test_the_timelines_keys_are_big_enough_to_aim_at() -> void:
 	# 2026-10-12: "all the buttons and dials and knobs are sooooo tiny". The keys under the
-	# timeline were 22 mm with 7 px captions, and the strips ran past the panel's own edge.
+	# timeline were 22 mm with 7 px captions; then words on screen buttons, which were a screen
+	# (2026-10-14). Now tokens in the air, each a mark rather than a word, on ledges under it.
 	_offline()
 	var timeline := TimelineSurface.new()
 	add_child(timeline)
 	timeline.set_wide(true)
 	timeline._process(0.0)
-	check("the panel's own keys are drawn at %.1fx, up from 1.4x" % TimelineSurface.KEY_SCALE,
-			is_equal_approx(timeline._split_key.scale.x, TimelineSurface.KEY_SCALE) and TimelineSurface.KEY_SCALE >= 1.7)
-	var strips: Array = [timeline._item_controls, timeline._tempo_controls, timeline._render_controls, timeline._track_controls]
-	var pitches: Array = [TimelineItemStrip.PITCH, TimelineTempoStrip.PITCH, TimelineRenderStrip.PITCH, TimelineTrackStrip.PITCH]
-	var keys: Array = [6, 5, 2, 7]
-	var scale_ok := true
-	var clear := true
+	var deck: TimelineDeck = timeline.deck
+	check("every tool is a token at least 30 mm across, with a mark on it",
+			GlyphKey.SIZE >= 0.030 and deck.tools.all(func(k): return k is GlyphKey and (k as GlyphKey).glyph != &""))
+	check("no word printed on any of them", deck.tools.all(func(k): return (k as GlyphKey).caption == ""))
+	check("and each says what it is when hovered", deck.tools.all(func(k): return (k as GlyphKey).title().length() > 3))
 	var right_edge := -INF
-	for i in strips.size():
-		var strip: Node3D = strips[i]
-		scale_ok = scale_ok and strip.scale.x >= 1.15
-		var left: float = strip.position.x - 0.5 * pitches[i] * strip.scale.x
-		var right: float = strip.position.x + (keys[i] - 0.5) * pitches[i] * strip.scale.x
-		clear = clear and left > right_edge
-		right_edge = maxf(right_edge, right)
-	check("the strips of keys under it are drawn at least 1.15x, in order, and clear of one another",
-			scale_ok and clear)
-	check("and none runs past the panel's right edge (%.3f of %.3f)" % [right_edge, timeline.width * 0.5],
-			right_edge <= timeline.width * 0.5)
-	# What the camera frames is the panel; the keys hang below it.
+	var clear := true
+	for page in deck.pages:
+		deck.show_page(page)
+		var laid: Array = deck.tools + deck.tabs + page.controls()
+		for a in laid.size():
+			var na: Node3D = laid[a]
+			var wa: float = na.call("width")
+			right_edge = maxf(right_edge, na.position.x + wa * 0.5)
+			for b in range(a + 1, laid.size()):
+				var nb: Node3D = laid[b]
+				var wb: float = nb.call("width")
+				if absf(na.position.y - nb.position.y) < GlyphKey.SIZE * 0.9 \
+						and absf(na.position.x - nb.position.x) < (wa + wb) * 0.5:
+					clear = false
+	check("on every page, no two controls overlap", clear)
+	check("and none runs past the deck's share of the width (%.3f of %.3f)" % [right_edge, deck.width],
+			right_edge <= deck.width + 0.0001)
+	# What the camera frames is the arrangement; the tools hang below it.
 	var framed := timeline.content_aabb()
 	var panel_bottom := -timeline._top_y
-	check("the framing leaves the strips out, so a bigger key does not shrink the arrangement (%.3f)" % framed.position.y,
+	check("the framing leaves the tools out, so a bigger token does not shrink the arrangement (%.3f)" % framed.position.y,
 			framed.position.y >= panel_bottom - 0.01)
 	timeline.free()
 
