@@ -13,6 +13,10 @@ var stems: GlyphKey
 ## The files' depth, stepped round DAW.RENDER_BITS: each person's own, sent with their render.
 var depth: GlyphKey
 var bits := DAW.RENDER_BITS_DEFAULT
+## Normalised to a peak (DAWBackend.RENDER_NORMALISE_DB), the stems by the mix's gain: each
+## person's own, sent with their render.
+var normalise_key: GlyphKey
+var normalise := false
 ## Between asking for a render and hearing it is done.
 var busy := false
 
@@ -28,6 +32,11 @@ func _ready() -> void:
 	depth = _key("RenderDepth", depth_glyph(bits), INK, "RENDER  BIT DEPTH", step_depth,
 			func() -> String: return "%s: %s next" % [depth_name(bits), depth_name(_next_depth(bits))])
 	depth.lit = true
+	normalise_key = _key("RenderNormalise", &"normalise", INK, "RENDER  NORMALISE",
+			func(): set_normalise(not normalise),
+			func() -> String: return ("on: the mix peaks at %d dB, each stem moved by the mix's gain"
+					% int(DAWBackend.RENDER_NORMALISE_DB)) if normalise else "off: as loud as it plays")
+	normalise_key.toggle = true
 	DAW.render_finished.connect(_on_rendered)
 	DAW.connection_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
@@ -60,7 +69,13 @@ func _what(with_stems: bool) -> String:
 	if busy:
 		return "rendering, as the song plays"
 	return "%s%s, played through once and rung out, %s" % [_span(),
-			" and each track's stem" if with_stems else "", depth_name(bits)]
+			" and each track's stem" if with_stems else "", depth_name(bits)] \
+			+ (", normalised to %d dB" % int(DAWBackend.RENDER_NORMALISE_DB) if normalise else "")
+
+
+func set_normalise(on: bool) -> void:
+	normalise = on
+	normalise_key.lit = on
 
 
 func step_depth() -> void:
@@ -90,7 +105,7 @@ func _render(with_stems: bool) -> void:
 		return
 	busy = true
 	refresh()
-	DAW.render(with_stems, bits)
+	DAW.render(with_stems, bits, normalise)
 
 
 func _on_rendered(_files: PackedStringArray, _problems: PackedStringArray) -> void:

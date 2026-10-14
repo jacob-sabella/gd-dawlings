@@ -3305,3 +3305,19 @@ a copy to offer; its card says when the copy was kept. Relit when a project is o
 A copy left by a run that ended without saving on purpose is offered too, as Reaper's would be:
 it is an offer, and it changes nothing until pressed.
 Suite: 10205 checks, 0 failed. Host only, nothing on the wire.
+
+## DAW parity, iteration 23: normalise on render (2026-10-14)
+`DAW.render(stems, bits, normalise)`: normalised, the mix is brought to a peak of
+`DAWBackend.RENDER_NORMALISE_DB` (-1 dBFS, room for a lossy encoder's overshoot), up when quiet
+and down when over full scale, and every stem moves by the mix's gain, so the stems still add up
+to the mix (Reaper's "normalize stems to master"). The built-in engine already holds every frame
+before it writes (MixRender), so the gain is worked out there (`MixRender.normalise_gain`); a
+real render in the suite comes out at -1.00 dB. The guest's ask carries a third word; an ask
+without it is a plain render. A RENDER NORMALISE toggle on the RENDER page (the existing
+normalise mark), each person's own like the depth, sent with their render; MIX's card says so.
+Reaper: RenderProject takes args 6 and 7 and sets RENDER_NORMALIZE to peak mode with stems by the
+master (1 + 4 + 32) and RENDER_NORMALIZE_TARGET, putting both back after -- not yet run against a
+live Reaper.
+Re-marked from the code: rendering a region is there already (LOOP on the REGION page sets the
+loop range, which a render follows), so it moved off the regions item.
+Suite: 10214 checks, 0 failed; probe host 53, guest 47, 0 failed.

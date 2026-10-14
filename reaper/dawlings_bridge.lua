@@ -601,7 +601,8 @@ end
 -- Answers the files written.
 local RENDER_KEYS = {'RENDER_FILE', 'RENDER_PATTERN', 'RENDER_FORMAT'}
 local RENDER_VALUES = {'RENDER_BOUNDSFLAG', 'RENDER_STARTPOS', 'RENDER_ENDPOS', 'RENDER_SETTINGS',
-  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ', 'RENDER_TAILFLAG', 'RENDER_TAILMS', 'RENDER_DITHER'}
+  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ', 'RENDER_TAILFLAG', 'RENDER_TAILMS', 'RENDER_DITHER',
+  'RENDER_NORMALIZE', 'RENDER_NORMALIZE_TARGET'}
 -- Reaper's WAV sink config, base64 of 'evaw', the depth, 0, 1: 16-bit, 24-bit, 32-bit float.
 local WAV_FORMATS = {[16] = 'ZXZhdxAAAQ==', [24] = 'ZXZhdxgAAQ==', [32] = 'ZXZhdyAAAQ=='}
 
@@ -653,6 +654,11 @@ function handlers.RenderProject(args)
   if not WAV_FORMATS[bits] then bits = 24 end
   reaper.GetSetProjectInfo_String(0, 'RENDER_FORMAT', WAV_FORMATS[bits], true)
   reaper.GetSetProjectInfo(0, 'RENDER_DITHER', bits < 32 and 5 or 0, true)
+  -- args[6]: normalised, args[7] the peak as an amplitude -- peak mode (4), on (1), the stems by
+  -- the master's gain (32); else off.
+  local normalise = (args[6] or 0) > 0.5
+  reaper.GetSetProjectInfo(0, 'RENDER_NORMALIZE', normalise and (1 + 4 + 32) or 0, true)
+  if normalise then reaper.GetSetProjectInfo(0, 'RENDER_NORMALIZE_TARGET', args[7] or 0.891, true) end
   reaper.GetSetProjectInfo(0, 'RENDER_BOUNDSFLAG', 0, true)
   reaper.GetSetProjectInfo(0, 'RENDER_STARTPOS', from, true)
   reaper.GetSetProjectInfo(0, 'RENDER_ENDPOS', to, true)

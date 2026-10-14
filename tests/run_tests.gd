@@ -294,6 +294,7 @@ func _ready() -> void:
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
+	_test_a_render_can_be_normalised()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -14002,6 +14003,27 @@ func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
 			and AudioServer.get_bus_effect_count(backend._master_bus) == effects_before)
 	for f in files:
 		DirAccess.remove_absolute(f)
+	# Again, normalised, as float so the peak is read as written.
+	var plain_peak := 0.0
+	for v in mix_samples:
+		plain_peak = maxf(plain_peak, absf(v))
+	heard.clear()
+	DAW.render_finished.connect(on_done)
+	DAW.render(false, 32, true)
+	waited = 0.0
+	while heard.is_empty() and waited < 10.0:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	DAW.render_finished.disconnect(on_done)
+	var loud_peak := 0.0
+	if not heard.is_empty() and not (heard[0][0] as PackedStringArray).is_empty():
+		for v in DawKitAudioFile.read(heard[0][0][0])["samples"]:
+			loud_peak = maxf(loud_peak, absf(v))
+		for f in heard[0][0]:
+			DirAccess.remove_absolute(f)
+	check("normalised, the mix peaks a decibel under full scale (%.2f dB, %.2f dB as it played)"
+			% [linear_to_db(maxf(loud_peak, 1e-9)), linear_to_db(maxf(plain_peak, 1e-9))],
+			plain_peak > 0.0001 and absf(linear_to_db(maxf(loud_peak, 1e-9)) - DAWBackend.RENDER_NORMALISE_DB) < 0.05)
 	DirAccess.remove_absolute(files[0].get_base_dir())
 	s.looping = false
 	_offline()
@@ -19264,14 +19286,54 @@ func _test_a_render_is_written_at_a_chosen_depth() -> void:
 	_offline()
 
 
+func _test_a_render_can_be_normalised() -> void:
+	var quiet := PackedVector2Array([Vector2(0.1, -0.25), Vector2(0.05, 0.2)])
+	close_to("a quiet mix is brought up to a peak a decibel under full scale",
+			MixRender.normalise_gain(quiet) * 0.25, db_to_linear(-1.0))
+	var hot := PackedVector2Array([Vector2(1.6, 0.0)])
+	check("one over full scale comes down", MixRender.normalise_gain(hot) < 1.0)
+	check("silence is left alone", MixRender.normalise_gain(PackedVector2Array([Vector2.ZERO])) == 1.0)
+
+	_offline()
+	var spy := RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	DAW.apply_intent(&"render", [1.0, 24.0, 1.0])
+	DAW.apply_intent(&"render", [0.0, 16.0, 0.0])
+	DAW.apply_intent(&"render", [0.0, 16.0])
+	check("the host renders a guest's normalised ask, and one without the word plain (%s)" % [spy.asked],
+			spy.asked == [[true, 24, true], [false, 16], [false, 16]])
+
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRenderPage = timeline.render_page
+	var key := page.normalise_key
+	check("the render page has a normalise token, off", key != null and key.glyph == &"normalise"
+			and not page.normalise and not key.lit)
+	key.pressed.emit()
+	check("pressed, on and lit", page.normalise and key.lit)
+	check("MIX's card says so (%s)" % page._what(false), page._what(false).contains("normalised to -1 dB")
+			or page._what(false).contains("cannot render"))
+	spy = RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	page.busy = false
+	page._render(false)
+	check("and a render from the page carries it (%s)" % [spy.asked], spy.asked == [[false, 24, true]])
+	timeline.free()
+	_offline()
+
+
 class RenderSpy extends OfflineBackend:
 	var asked: Array = []
 
 	func can(capability: StringName) -> bool:
 		return capability == DAWBackend.Capability.RENDER or super.can(capability)
 
-	func render(stems: bool, bits := 24) -> void:
-		asked.append([stems, bits])
+	func render(stems: bool, bits := 24, normalise := false) -> void:
+		asked.append([stems, bits] if not normalise else [stems, bits, true])
 
 
 func _test_the_song_has_regions() -> void:

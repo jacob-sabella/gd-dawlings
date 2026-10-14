@@ -155,7 +155,7 @@ var _looping_before_render := false
 
 ## In real time (MixRender): the song plays the range once. A second render while one runs is
 ## refused, as is one with no project length to it.
-func render(stems: bool, bits := 24) -> void:
+func render(stems: bool, bits := 24, normalise := false) -> void:
 	if rendering != null:
 		render_finished.emit(PackedStringArray(), PackedStringArray(["a render is already running"]))
 		return
@@ -168,6 +168,7 @@ func render(stems: bool, bits := 24) -> void:
 	var title := project_title.strip_edges().validate_filename()
 	r.name_stem = title if not title.is_empty() else "Untitled"
 	r.bits = bits
+	r.normalise = normalise
 	var base := project_path.get_base_dir() if not project_path.is_empty() else ProjectSettings.globalize_path(RENDER_DIR)
 	r.folder = base.path_join("%s renders" % r.name_stem)
 	if stems:

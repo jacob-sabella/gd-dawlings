@@ -323,9 +323,14 @@ func set_automation(_track_index: int, _target: String, _points: Array) -> void:
 ## Write the song -- its loop range while it loops, else all of it -- to a WAV beside the project:
 ## the mix, and with `stems` each track's own, each with a tail after the range of up to
 ## RENDER_TAIL_SECONDS for effects to ring out. `render_finished` says when and where. A no-op
-## without Capability.RENDER.
-func render(_stems: bool, _bits := 24) -> void: pass
+## without Capability.RENDER. `normalise`: the mix brought to a peak of RENDER_NORMALISE_DB, and
+## every stem by the same gain, so the stems still add up to the mix (Reaper's "normalize stems to
+## master").
+func render(_stems: bool, _bits := 24, _normalise := false) -> void: pass
 const RENDER_TAIL_SECONDS := 4.0
+## A normalised render's peak, in dBFS: a decibel under full scale, room for a lossy encoder's
+## overshoot.
+const RENDER_NORMALISE_DB := -1.0
 ## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
 ## empty for one tempo throughout.
 func set_tempo_map(_points: Array) -> void: pass

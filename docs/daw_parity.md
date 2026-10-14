@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 22
+Iterations done: 23
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -66,12 +66,14 @@ Iterations done: 22
 ## Markers and regions
 - [x] markers add/edit/remove (2026-10-14: removing the last one now reaches guests and clears a Reaper cache)
 - [x] regions: add from the loop, loop one, remove (2026-10-14; drawn in the ruler's loop band; saved; Reaper's regions through the bridge, not yet run against a live Reaper)
-- [ ] regions: rename, move and resize, render a region, the region list (missing)
+- [ ] regions: rename, move and resize, the region list (missing)
 
 ## Export
 - [x] mix and stems render
 - [x] render bit depth, with dither (2026-10-14; 16 or 24-bit dithered, 32-bit float; a token on the RENDER page; Reaper's RENDER_FORMAT and RENDER_DITHER, not yet run against a live Reaper)
-- [ ] render file types other than WAV (FLAC, MP3), sample-rate choice, normalise on render (missing)
+- [x] normalise on render (2026-10-14; the mix to a -1 dBFS peak, each stem by the mix's gain; a token on the RENDER page; Reaper's RENDER_NORMALIZE through the bridge, not yet run against a live Reaper)
+- [ ] render file types other than WAV (FLAC, MP3), sample-rate choice (missing)
+- [x] render a region: LOOP on the REGION page, then a render, renders just that region (render follows the loop range)
 
 ## Undo and project files
 - [x] undo/redo with one step per edit, save/open/new (DAWproject)

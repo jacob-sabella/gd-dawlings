@@ -47,6 +47,8 @@ var folder := ""
 var name_stem := ""
 ## The files' depth: 16 or 24 (dithered integer) or 32 (float). See DawKitAudioFile.write_wav.
 var bits := 24
+## The mix brought to a peak of DAWBackend.RENDER_NORMALISE_DB, the stems by the mix's gain.
+var normalise := false
 ## Track indices to write stems of; the mix is always written.
 var stems: Array = []
 
@@ -179,6 +181,7 @@ func _finish() -> void:
 	var files := PackedStringArray()
 	var problems := PackedStringArray()
 	DirAccess.make_dir_recursive_absolute(folder)
+	var cut := {}
 	for key in _taps:
 		var tap: Array = _taps[key]
 		var frames: PackedVector2Array = tap[2]
@@ -194,11 +197,15 @@ func _finish() -> void:
 			var pad := PackedVector2Array()
 			pad.resize(kept - frames.size())
 			frames += pad
+		cut[key] = frames
+	var gain := normalise_gain(cut[0]) if normalise else 1.0
+	for key in _taps:
+		var frames: PackedVector2Array = cut[key]
 		var samples := PackedFloat32Array()
 		samples.resize(frames.size() * 2)
 		for i in frames.size():
-			samples[i * 2] = frames[i].x
-			samples[i * 2 + 1] = frames[i].y
+			samples[i * 2] = frames[i].x * gain
+			samples[i * 2 + 1] = frames[i].y * gain
 		var label := "mix" if key == 0 else DAW.state.track(key).display_name()
 		var path := folder.path_join("%s - %s.wav" % [name_stem, label.validate_filename()])
 		var err := DawKitAudioFile.write_wav(path, samples, 2, _rate, bits)
@@ -209,6 +216,15 @@ func _finish() -> void:
 	_untap()
 	finished.emit(files, problems)
 	queue_free()
+
+
+## What brings `frames`' loudest sample to DAWBackend.RENDER_NORMALISE_DB: up for a quiet mix,
+## down for one over full scale. 1 for silence, which no gain makes louder.
+static func normalise_gain(frames: PackedVector2Array) -> float:
+	var peak := 0.0
+	for f in frames:
+		peak = maxf(peak, maxf(absf(f.x), absf(f.y)))
+	return db_to_linear(DAWBackend.RENDER_NORMALISE_DB) / peak if peak > 0.000001 else 1.0
 
 
 ## Takes the captures off again, wherever on their buses they now are.
