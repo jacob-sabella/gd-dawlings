@@ -2933,3 +2933,16 @@ place in the project, round the wheel in big steps so neighbours differ), throug
 `DAW.set_track_colour`, so it is stored, replicated and undoable like COLR. Coloured tracks are
 left alone. Lit while there is an uncoloured track. The venue palette then reads those colours
 like any other.
+
+## The timeline stands in the room at 1.7x (2026-10-13)
+"the timeline is just so damn tiny you really need to scale that up"
+In the room/studio placement the timeline node is scaled whole (`Studio.TIMELINE_SCALE` 1.7):
+lanes, names, keys and lettering together, so 0.86m of 2.3cm lanes becomes about 1.5m of 4cm
+lanes. Its top stays where it was (centre lowered to 1.50), so it hides no more of the big board;
+the stand is shorter (`TIMELINE_STAND_TOP` derived from the scale) and its legs, feet, casters,
+crossbar and footprint widen with it (`TIMELINE_LEG_X`). SCREEN mode sets its own transform from
+the framing and is unaffected. Scaling made three old near-coplanar overlaps big enough for the
+audit's MIN_OVERLAP: ruler ticks ended on the ruler strip's bottom edge, the top MIDI notes
+reached into a clip's take strip at the clip's ends, and the scrubber thumb was sunk into the
+track. Each moved clear. shots/timeline_scaled_up.png (before | after),
+shots/timeline_scaled_from_seat.png.

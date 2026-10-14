@@ -1344,8 +1344,10 @@ func _build_ruler() -> void:
 		var x := _x_for(s.bar_to_seconds(n + 1.0))
 		if x < _lane_area_x - 0.0001 or x > _lane_right():
 			continue
-		_ruler.add_child(_flat_box(Vector3(0.0006, NUMBERS_HEIGHT * 0.5, 0.0008),
-				Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.75, 0.0014), RULER_TICK))
+		# Stopping just short of the strip's lower edge, not on it: a tick's bottom face in the
+		# strip's bottom face's plane flickers, once the timeline is scaled up to stand in a room.
+		_ruler.add_child(_flat_box(Vector3(0.0006, NUMBERS_HEIGHT * 0.5 - 0.0006, 0.0008),
+				Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.75 + 0.0003, 0.0014), RULER_TICK))
 
 		var label := _text(str(n + 1), 48, RULER_TEXT)
 		label.position = Vector3(x + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.28, 0.0016)
@@ -1642,8 +1644,10 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 	var low: int = layout["low"]
 	var rows: int = layout["rows"]
 	var block_height := lane_height - 0.0024
-	# Below the take strip and clear of the block's bottom edge.
-	var top := y + block_height * 0.5 - 0.0026
+	# Below the take strip (3mm down from the block's top) and clear of the block's bottom edge.
+	# Wholly below it, not reaching into it: a top note clamped to the block's left or right edge
+	# had its end in the strip's end's plane, which flickers once the timeline is scaled up.
+	var top := y + block_height * 0.5 - 0.0034
 	var bottom := y - block_height * 0.5 + 0.0007
 	var row := (top - bottom) / rows
 	var left_edge := maxf(_x_for(start) + EDGE_GAP, _lane_area_x)

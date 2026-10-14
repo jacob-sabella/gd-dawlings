@@ -36,10 +36,19 @@ const ROOM_MID := (ROOM_FRONT + ROOM_BACK) * 0.5
 ## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
 ## is why it is a constant rather than a number in two places: move the timeline and this has
 ## to follow or the panel floats again, one centimetre higher.
-const TIMELINE_Y := 1.62
+##
+## Scaled up as a whole when it stands in the room, lettering, keys and lanes together: at its own
+## size it is an 86cm panel of 2.3cm lanes a metre and a half from the seat, which read as a
+## postage stamp (2026-10-13: "the timeline is just so damn tiny you really need to scale that
+## up"). Its top stays where it was, so it hides no more of the big board behind it; it grows
+## down toward the desk, and its stand is shorter and wider for it.
+const TIMELINE_SCALE := 1.7
+const TIMELINE_Y := 1.50
 const TIMELINE_Z := -1.02
-const TIMELINE_STAND_TOP := 1.46
+const TIMELINE_STAND_TOP := TIMELINE_Y - 0.16 * TIMELINE_SCALE
 const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
+## Where the stand's legs stand, either side of the scaled panel.
+const TIMELINE_LEG_X := 0.36 * TIMELINE_SCALE
 ## The lamps in the room: where the light comes from, what colour, and how hard.
 ##
 ## One table, read twice -- once by the environment to make the lights and once by the furniture
@@ -672,14 +681,14 @@ func _build_furniture() -> void:
 	# furnished out of six looks like a kit. The feet are on casters, like a whiteboard's.
 	timeline_stand = _trolley("TimelineStand", &"timeline_stand",
 			Vector3(0, 0, TIMELINE_STAND_Z), 0.0)
-	timeline_stand.footprint_half = Vector2(0.41, 0.11)
+	timeline_stand.footprint_half = Vector2(TIMELINE_LEG_X + 0.05, 0.11)
 	var foot_top := Caster.HEIGHT + 0.022
 	for side in [-1.0, 1.0]:
 		var leg := MeshInstance3D.new()
 		var leg_mesh := BoxMesh.new()
 		leg_mesh.size = Vector3(0.035, TIMELINE_STAND_TOP - foot_top, 0.05)
 		leg.mesh = leg_mesh
-		leg.position = Vector3(side * 0.36, (TIMELINE_STAND_TOP + foot_top) * 0.5, 0)
+		leg.position = Vector3(side * TIMELINE_LEG_X, (TIMELINE_STAND_TOP + foot_top) * 0.5, 0)
 		leg.material_override = Materials.furniture()
 		timeline_stand.add_part(leg)
 
@@ -688,21 +697,21 @@ func _build_furniture() -> void:
 		var foot_mesh := BoxMesh.new()
 		foot_mesh.size = Vector3(0.10, 0.022, 0.22)
 		foot.mesh = foot_mesh
-		foot.position = Vector3(side * 0.36, Caster.HEIGHT + 0.011, 0)
+		foot.position = Vector3(side * TIMELINE_LEG_X, Caster.HEIGHT + 0.011, 0)
 		foot.material_override = Materials.furniture()
 		timeline_stand.add_part(foot)
 		for end in [-0.075, 0.075]:
-			timeline_stand.add_caster(Vector2(side * 0.36, end))
+			timeline_stand.add_caster(Vector2(side * TIMELINE_LEG_X, end))
 
 	var crossbar := MeshInstance3D.new()
 	var crossbar_mesh := BoxMesh.new()
-	crossbar_mesh.size = Vector3(0.79, 0.028, 0.04)
+	crossbar_mesh.size = Vector3(TIMELINE_LEG_X * 2.0 + 0.07, 0.028, 0.04)
 	crossbar.mesh = crossbar_mesh
 	# Behind the panel, all of it: nine centimetres deep and centred on the legs, its front stood
 	# out through the panel's face across the scrub rail, and seen from below it was a bright
 	# slab cut into the bottom of the timeline.
 	crossbar.position = Vector3(0, TIMELINE_STAND_TOP + 0.012,
-			(TIMELINE_Z - TimelineSurface.DEPTH - 0.004 - 0.02) - TIMELINE_STAND_Z)
+			(TIMELINE_Z - TimelineSurface.DEPTH * TIMELINE_SCALE - 0.004 - 0.02) - TIMELINE_STAND_Z)
 	crossbar.material_override = Materials.brushed_metal()
 	timeline_stand.add_part(crossbar)
 
@@ -1885,6 +1894,7 @@ func _build_surfaces() -> void:
 	timeline = TimelineSurface.new()
 	timeline.name = "Timeline"
 	timeline.position = Vector3(0, TIMELINE_Y, TIMELINE_Z)
+	timeline.scale = Vector3.ONE * TIMELINE_SCALE
 	# Shelves or flat lanes, as this person last chose.
 	timeline.shelf = Session.layout != null and Session.layout.timeline_shelves
 	timeline.shelf_chosen.connect(_on_timeline_shelf_chosen)

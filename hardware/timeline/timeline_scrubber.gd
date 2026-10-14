@@ -89,7 +89,10 @@ func refresh() -> void:
 	var thumb_width := maxf(size * width, MIN_THUMB)
 	var thumb_mesh := _thumb.mesh as BoxMesh
 	thumb_mesh.size = Vector3(thumb_width, HEIGHT - 0.0016, 0.0014)
-	_thumb.position = Vector3(-width * 0.5 + left * width + thumb_width * 0.5, 0, 0.0014)
+	# Standing just proud of the track rather than sunk into it: a window over the whole song
+	# has its ends in the track's ends' planes, and sunk in, those overlapped enough to flicker
+	# once the timeline is scaled up to stand in a room.
+	_thumb.position = Vector3(-width * 0.5 + left * width + thumb_width * 0.5, 0, 0.0018)
 
 
 func _on_grab_begin(at: Vector3) -> void:
