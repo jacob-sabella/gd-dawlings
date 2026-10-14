@@ -288,6 +288,7 @@ func _ready() -> void:
 	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_a_ripple_delete_closes_the_gap()
 	_test_a_send_can_be_taken_before_the_fader()
+	_test_quantise_can_swing()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -13688,7 +13689,7 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
 	check("a guest's transpose is kept within %d semitones" % DAWBackend.TRANSPOSE_MAX,
 			int(notes[0][2]) == 60 + DAWBackend.TRANSPOSE_MAX)
-	DAW.apply_intent(&"quantize_item", [lane, 0, INF, 1.0])
+	DAW.apply_intent(&"quantize_item", [lane, 0, INF, 1.0, 0.0])
 	check("and a malformed quantise refused", s.undo_depth - depth == 1)
 	DAW.clear_item_selection()
 	DAW.select_all_items()
@@ -18963,3 +18964,61 @@ func _test_a_send_can_be_taken_before_the_fader() -> void:
 	check("and loaded, it still is (%s)" % [refused], refused.is_empty() and DAW.state.send(3, 1, false) != null
 			and DAW.state.send(3, 1).pre_fader)
 	_offline()
+
+
+func _test_quantise_can_swing() -> void:
+	close_to("straight, an off-beat eighth stays put", DAWBackend.swung_grid_beat(0.5, 0.5, 0.0), 0.5)
+	close_to("fully swung, it is a triplet's third", DAWBackend.swung_grid_beat(0.52, 0.5, 1.0), 2.0 / 3.0)
+	close_to("half swung, between", DAWBackend.swung_grid_beat(0.6, 0.5, 0.5), 0.5 + 0.5 / 6.0)
+	close_to("an on-beat never moves", DAWBackend.swung_grid_beat(1.03, 0.5, 1.0), 1.0)
+	close_to("a late swung note is still its own off-beat, not the next beat",
+			DAWBackend.swung_grid_beat(0.8, 0.5, 1.0), 2.0 / 3.0)
+
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	# Straight eighths, played a hair off.
+	DAW.insert_midi_take(lane, 4.0 * beat, 6.0 * beat, [[4.0 * beat + 0.01, 4.4 * beat, 60, 100, 0],
+			[4.5 * beat + 0.01, 4.9 * beat, 62, 100, 0], [5.0 * beat - 0.01, 5.4 * beat, 64, 100, 0],
+			[5.5 * beat, 5.9 * beat, 65, 100, 0]], "Keys")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.quantize_item(lane, 0, 0.5, 1.0, 1.0)
+	var notes := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	var ons: Array = notes.map(func(n): return n[0] / beat)
+	check("swung, the off-beats land a third late and the beats on the beat (%s)" % [ons],
+			absf(ons[0] - 4.0) < 1e-3 and absf(ons[1] - (4.5 + 1.0 / 6.0)) < 1e-3
+			and absf(ons[2] - 5.0) < 1e-3 and absf(ons[3] - (5.5 + 1.0 / 6.0)) < 1e-3)
+	check("one undo step", s.undo_depth - depth == 1)
+	DAW.undo()
+	DAW.apply_intent(&"quantize_item", [lane, 0, 0.5, 1.0, 9.0])
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("a guest's swing is held to full (%.4f)" % (notes[1][0] / beat), absf(notes[1][0] / beat - (4.5 + 1.0 / 6.0)) < 1e-3)
+	DAW.undo()
+	DAW.apply_intent(&"quantize_item", [lane, 0, 0.5, 1.0])
+	check("and the old four-word ask is refused", s.undo_depth - depth == 0)
+
+	# On the timeline: a rail on the ITEM page beside QUANTISE, for a MIDI item.
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	check("the item page has a swing rail with its mark", page.swing != null and page.swing.glyph == &"swing"
+			and page.controls().find(page.swing) == page.controls().find(page.quant) + 1)
+	check("out of reach with nothing selected", not page.swing.available)
+	DAW.select_item(lane, 0, false)
+	page.refresh()
+	check("in reach for a MIDI item", page.swing.available)
+	page.swing.value = 1.0
+	check("QUANTISE's card says it swings (%s)" % page._quant_text(), page._quant_text().ends_with("swung 100%"))
+	page.quant.pressed.emit()
+	notes = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("pressed, the beat grid is swung: the note on the off-beat a third of a beat late (%.3f)" % (notes[2][0] / beat),
+			absf(notes[2][0] / beat - (5.0 + 1.0 / 3.0)) < 1e-3 and absf(notes[0][0] / beat - 4.0) < 1e-3)
+	DAW.undo()
+	DAW.select_item(2, 0, false)
+	page.refresh()
+	check("and out of reach for an audio item", not page.swing.available)
+	DAW.clear_item_selection()
+	timeline.free()

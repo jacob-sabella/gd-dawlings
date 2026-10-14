@@ -75,7 +75,7 @@ const COMMANDS := [
 
 ## Item edits that name an item, and how many arguments each takes.
 const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3,
-		&"transpose_item": 3, &"shift_velocity": 3, &"quantize_item": 4}
+		&"transpose_item": 3, &"shift_velocity": 3, &"quantize_item": 5}
 
 var backend: DAWBackend
 
@@ -523,10 +523,12 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	_do(&"transpose_item", [track_index, item_index,
 			clampi(semitones, -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)])
-func quantize_item(track_index: int, item_index: int, grid_beats: float, strength := 1.0) -> void:
+## `swing` from 0, straight, to 1, every off-beat a third of a step late (DAWBackend.swung_grid_beat).
+func quantize_item(track_index: int, item_index: int, grid_beats: float, strength := 1.0,
+		swing := 0.0) -> void:
 	_do(&"quantize_item", [track_index, item_index,
 			clampf(grid_beats, DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX),
-			clampf(strength, 0.0, 1.0)])
+			clampf(strength, 0.0, 1.0), clampf(swing, 0.0, DAWBackend.SWING_MAX)])
 ## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
 ## guest's intent should not be able to hand the host a megabyte of name.
 const MARKER_NAME_MAX := 64
@@ -665,6 +667,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		if verb == &"quantize_item":
 			clean[2] = clampf(clean[2], DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX)
 			clean[3] = clampf(clean[3], 0.0, 1.0)
+			clean[4] = clampf(clean[4], 0.0, DAWBackend.SWING_MAX)
 		args = clean
 	if verb == &"copy_selected_to":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):

@@ -149,6 +149,11 @@ func _build() -> void:
 			_box(Vector2(-0.7, 0.45), Vector2(0.4, 0.3), 0.55)
 			_box(Vector2(0.0, -0.2), Vector2(0.4, 0.3), 0.55)
 			_box(Vector2(0.7, 0.2), Vector2(0.4, 0.3), 0.55)
+		&"swing":
+			# A swung pair: long, then short, on a line.
+			_box(Vector2(-0.42, 0.15), Vector2(0.95, 0.55), 0.5)
+			_box(Vector2(0.68, 0.15), Vector2(0.42, 0.55), 0.5)
+			_rod(Vector2(-0.95, -0.55), Vector2(0.95, -0.55), 0.07, 0.25)
 		&"softer", &"harder":
 			var hs := [1.6, 0.9, 0.45] if _kind == &"softer" else [0.45, 0.9, 1.6]
 			for k in 3:

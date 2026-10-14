@@ -881,10 +881,12 @@ func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 
 ## Reaper quantises against its own tempo map, so a song with tempo changes comes back right from
 ## the next timeline even where the preview, at one tempo, was not.
-func quantize_item(track_index: int, item_index: int, grid_beats: float, strength: float) -> void:
-	if _locally_quantize(track_index, item_index, grid_beats, strength):
+func quantize_item(track_index: int, item_index: int, grid_beats: float, strength: float,
+		swing := 0.0) -> void:
+	if _locally_quantize(track_index, item_index, grid_beats, strength, swing):
 		_edit("QuantizeItem", [track_index, item_index,
-				clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX), clampf(strength, 0.0, 1.0)])
+				clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX), clampf(strength, 0.0, 1.0),
+				clampf(swing, 0.0, SWING_MAX)])
 
 
 ## Shown on the cache at once, like an item edit, and confirmed by the timeline poll the edit

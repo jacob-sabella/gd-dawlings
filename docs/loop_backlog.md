@@ -3175,3 +3175,14 @@ while SENDS ON FADERS shows a return, each strip that sends to it grows a small 
 right of R and S; lit is pre. Its lamp's lit and dark are close in the room's light (a lone mesh,
 not the banked lamps); worth a brighter lit colour later. The audit had send automation as missing;
 it has been there all along. Suite 10073 checks, 0 failed; probe 0 failed. Seen in a screenshot.
+
+## DAW parity, iteration 14: swing quantise (2026-10-14)
+`DAW.quantize_item` takes a fifth word, swing 0..1 (`DAWBackend.SWING_MAX`): every odd grid point,
+the off-beat of each pair, is that many thirds of a step late, so at 1 a pair of eighths is the
+long-short of a triplet (`DAWBackend.swung_grid_beat`, nearest swung point, so a note already
+played swung stays on its own off-beat). The guest's ask is now five words; a four-word one is
+refused as malformed. Reaper's `QuantizeItem` in the bridge does the same arithmetic in quarter
+notes against Reaper's tempo map -- not yet run against a live Reaper. On the ITEM page, a rail
+with a long-short mark right of QUANTISE, in reach for an unlocked MIDI item: what the next press
+swings by, each person's own, not saved. Groove templates (another item's feel) split out as
+missing.

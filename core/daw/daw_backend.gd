@@ -95,6 +95,8 @@ const ITEM_GAIN_MIN := -60.0
 ## A quantise grid, in beats: no finer than a 128th note, no coarser than a bar of 4/4 four times.
 const QUANTIZE_GRID_MIN := 1.0 / 32.0
 const QUANTIZE_GRID_MAX := 16.0
+## Swing at 1 puts every off-beat grid point a third of a step late: the triplet feel. 0 is straight.
+const SWING_MAX := 1.0
 const TRANSPOSE_MAX := 48
 const VELOCITY_SHIFT_MAX := 126
 const ITEM_GAIN_MAX := 24.0
@@ -325,7 +327,7 @@ func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> voi
 func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
 ## of the song's beat grid, keeping its length.
-func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float) -> void: pass
+func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float, _swing := 0.0) -> void: pass
 ## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
@@ -782,7 +784,23 @@ func _locally_shift_velocity(track_index: int, item_index: int, by: int) -> bool
 
 ## The grid is in beats from the song's start, through the tempo's changes. A note pulled before
 ## its item's start stops there.
-func _locally_quantize(track_index: int, item_index: int, grid_beats: float, strength: float) -> bool:
+## The grid point nearest `beat`, in beats, on a grid of `grid` beats swung by `swing`: every odd
+## point (the off-beat of each pair) is `swing` thirds of a step late, so at 1 a pair of eighths
+## plays as the long-short of a triplet.
+static func swung_grid_beat(beat: float, grid: float, swing: float) -> float:
+	var at := func(k: int) -> float:
+		return k * grid + (swing * grid / 3.0 if posmod(k, 2) == 1 else 0.0)
+	var k := floori(beat / grid)
+	var best: float = at.call(k)
+	for c in [k - 1, k + 1]:
+		var b: float = at.call(c)
+		if absf(b - beat) < absf(best - beat):
+			best = b
+	return best
+
+
+func _locally_quantize(track_index: int, item_index: int, grid_beats: float, strength: float,
+		swing := 0.0) -> bool:
 	var item := state.item(track_index, item_index)
 	if item == null or item.notes.is_empty() or strength <= 0.0:
 		return false
@@ -793,7 +811,8 @@ func _locally_quantize(track_index: int, item_index: int, grid_beats: float, str
 	var notes := it.notes.duplicate()
 	for n in range(0, notes.size() - 4, 5):
 		var on := it.start + notes[n]
-		var target := state.seconds_at_beat(roundf(state.beat_at(on) / grid) * grid)
+		var target := state.seconds_at_beat(swung_grid_beat(state.beat_at(on), grid,
+				clampf(swing, 0.0, SWING_MAX)))
 		var moved := maxf(on + (target - on) * strength, it.start) - on
 		notes[n] += moved
 		notes[n + 1] += moved

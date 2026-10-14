@@ -35,6 +35,9 @@ var crossfade: GlyphKey
 var down: GlyphKey
 var up: GlyphKey
 var quant: GlyphKey
+## How swung QUANTISE is, from straight to triplet: a setting of the next press, this person's
+## own, not an edit of anything.
+var swing: GlyphRail
 var softer: GlyphKey
 var harder: GlyphKey
 ## [track, item] being edited, or empty while there is not exactly one selected.
@@ -78,8 +81,10 @@ func _ready() -> void:
 			func() -> String: return "a semitone down; fine: an octave" if down.lit else "for a MIDI item")
 	up = _key("ItemUp", &"pitch_up", NOTE_INK, "ITEM  TRANSPOSE UP", func(): _transpose(1),
 			func() -> String: return "a semitone up; fine: an octave" if up.lit else "for a MIDI item")
-	quant = _key("ItemQuant", &"quantise", NOTE_INK, "ITEM  QUANTISE", _quantise,
-			func() -> String: return "notes onto the beat; fine: onto sixteenths" if quant.lit else "for a MIDI item")
+	quant = _key("ItemQuant", &"quantise", NOTE_INK, "ITEM  QUANTISE", _quantise, _quant_text)
+	swing = _slider("ItemSwing", &"swing", NOTE_INK, func() -> String: return "ITEM  QUANTISE SWING",
+			func(v: float) -> String: return "straight" if v <= 0.0 else "%d%% (100%%: triplet)" % roundi(v * 100.0))
+	swing.fixed_width = GlyphRail.WIDTH * 0.8
 	softer = _key("ItemSofter", &"softer", NOTE_INK, "ITEM  NOTES SOFTER", func(): _velocity(-1),
 			func() -> String: return "every note a little softer; fine: much softer" if softer.lit else "for a MIDI item")
 	harder = _key("ItemHarder", &"harder", NOTE_INK, "ITEM  NOTES HARDER", func(): _velocity(1),
@@ -101,7 +106,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, mute, lock, normalise, down, up, quant, softer, harder]:
+	for c in [gain, fade_in, fade_out, mute, lock, normalise, down, up, quant, swing, softer, harder]:
 		c.available = one
 	copy_here.available = not picked.is_empty()
 	loop_to.available = not picked.is_empty()
@@ -120,12 +125,13 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, normalise, down, up, quant, softer, harder]:
+	for c in [gain, fade_in, fade_out, normalise, down, up, quant, swing, softer, harder]:
 		c.available = not item.locked
 	normalise.lit = item.sound_peak() > 0.0
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant, softer, harder]:
 		key.lit = midi
+	swing.available = midi and not item.locked
 
 
 func _gain_db(v: float) -> float:
@@ -164,9 +170,17 @@ func _velocity(direction: int) -> void:
 		DAW.shift_velocity(_target[0], _target[1], direction * (32 if _fine(harder) or _fine(softer) else 8))
 
 
+func _quant_text() -> String:
+	if not quant.lit:
+		return "for a MIDI item"
+	var swung := "" if swing.value <= 0.0 else ", swung %d%%" % roundi(swing.value * 100.0)
+	return "notes onto the beat; fine: onto sixteenths" + swung
+
+
 func _quantise() -> void:
 	if not _target.is_empty():
-		DAW.quantize_item(_target[0], _target[1], QUANT_FINE_GRID if _fine(quant) else QUANT_GRID)
+		DAW.quantize_item(_target[0], _target[1], QUANT_FINE_GRID if _fine(quant) else QUANT_GRID, 1.0,
+				swing.value)
 
 
 func _overlaps(pair: Array) -> bool:

@@ -1531,19 +1531,29 @@ function handlers.TransposeItem(args)
   return edited('Transpose notes')
 end
 
--- args: track, index, grid in beats (quarter notes), strength 0-1. Against Reaper's own tempo
--- map; a note pulled before the item's start stops there, and keeps its length.
+-- args: track, index, grid in beats (quarter notes), strength 0-1, swing 0-1 (every odd grid point
+-- that many thirds of a step late). Against Reaper's own tempo map; a note pulled before the
+-- item's start stops there, and keeps its length.
 function handlers.QuantizeItem(args)
   local it = item_at(args)
   if not it then return {ok = false, error = 'no such item'} end
   local grid = math.max(1 / 32, args[3] or 1)
   local strength = math.max(0, math.min(1, args[4] or 1))
+  local swing = math.max(0, math.min(1, args[5] or 0))
+  local function at(k)
+    return k * grid + ((k % 2 == 1) and swing * grid / 3 or 0)
+  end
   local item_start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
   reaper.Undo_BeginBlock()
   each_note(it, function(take, ppq_on, ppq_off, pitch)
     local on = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_on)
     local qn = reaper.TimeMap_timeToQN(on)
-    local target = reaper.TimeMap_QNToTime(math.floor(qn / grid + 0.5) * grid)
+    local k = math.floor(qn / grid)
+    local best = at(k)
+    for _, c in ipairs({k - 1, k + 1}) do
+      if math.abs(at(c) - qn) < math.abs(best - qn) then best = at(c) end
+    end
+    local target = reaper.TimeMap_QNToTime(best)
     local moved = math.max(on + (target - on) * strength, item_start)
     local new_on = reaper.MIDI_GetPPQPosFromProjTime(take, moved)
     return new_on, ppq_off + (new_on - ppq_on), pitch

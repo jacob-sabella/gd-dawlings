@@ -1020,9 +1020,10 @@ func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 		_remember_edit(before)
 
 
-func quantize_item(track_index: int, item_index: int, grid_beats: float, strength: float) -> void:
+func quantize_item(track_index: int, item_index: int, grid_beats: float, strength: float,
+		swing := 0.0) -> void:
 	var before := _lanes_snapshot()
-	if _locally_quantize(track_index, item_index, grid_beats, strength):
+	if _locally_quantize(track_index, item_index, grid_beats, strength, swing):
 		_remember_edit(before)
 
 

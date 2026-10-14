@@ -8,14 +8,15 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 13
+Iterations done: 14
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
 - [x] tempo, tempo map, time-signature map
 - [x] tap tempo (the tape deck, `tapped_bpm`; the first audit listed it missing in error)
-- [ ] swing / groove templates (missing; `swing` appears only in the toy/venue code)
+- [x] swing quantise (2026-10-14; off-beats up to a triplet's third late, a rail beside QUANTISE on the ITEM page; Reaper path not run against a live Reaper)
+- [ ] groove templates: quantise to the feel of another item, swing on playback (missing)
 
 ## Audio and MIDI editing
 - [x] select all items (2026-10-14), select, move (across tracks), split, delete, duplicate, trim with source offset
