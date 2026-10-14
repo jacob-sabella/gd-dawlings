@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 2
+Iterations done: 3
 
 ## Transport and tempo
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
@@ -22,7 +22,8 @@ Iterations done: 2
 - [x] item mute (2026-10-14)
 - [ ] crossfades between overlapping items (missing)
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
-- [ ] item reverse, normalise (missing)
+- [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)
+- [ ] item reverse (missing)
 - [ ] time-stretch, warp, item pitch shift (missing)
 - [ ] ripple edit, snap/grid settings for moves (partial: quantise only for notes)
 - [ ] item locking (missing)

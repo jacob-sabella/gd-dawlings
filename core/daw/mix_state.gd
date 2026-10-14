@@ -179,6 +179,20 @@ class ItemState extends RefCounted:
 	func has_clip_shape() -> bool:
 		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0 or loop_end > loop_start
 
+	## The loudest the item's sound gets before its own gain, 0-1 of full scale, from the file's
+	## overview; 0 for an item with none (MIDI, or a file nobody drew). The part of the file it
+	## plays: the loop's range when looped, else from its offset for its length.
+	func sound_peak() -> float:
+		if peaks.is_empty():
+			return 0.0
+		var from := loop_start if is_looped() else source_offset
+		var to := loop_end if is_looped() else source_offset + length
+		var rate := float(AudioTake.PEAKS_PER_SECOND)
+		var loudest := 0
+		for n in range(maxi(int(floor(from * rate)), 0), mini(int(ceil(to * rate)), peaks.size())):
+			loudest = maxi(loudest, peaks[n])
+		return float(loudest) / 255.0
+
 	func is_looped() -> bool:
 		return loop_end > loop_start
 

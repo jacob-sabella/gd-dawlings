@@ -29,6 +29,7 @@ var up: PanelButton
 var quant: PanelButton
 var mute: PanelButton
 var copy_here: PanelButton
+var normalise: PanelButton
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 
@@ -39,10 +40,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(8 * PITCH, 0.036, 0.004)
+	box.size = Vector3(9 * PITCH, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(3.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(4.0 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	gain = _knob("GAIN", 0, func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -63,6 +64,10 @@ func _ready() -> void:
 	copy_here = _key("ItemCopyHere", "P", 7, Color(0.55, 0.85, 0.55), "ITEM  COPY TO PLAYHEAD",
 			func(): DAW.copy_selected_to(DAW.state.position_seconds), "a copy where the song is now")
 	copy_here.describe_value = func(_v: float) -> String: return "a copy where the song is now"
+	normalise = _key("ItemNormalise", "N", 8, Color(0.9, 0.8, 0.4), "ITEM  NORMALISE",
+			func(): _normalise(), "gain so its loudest moment is full scale")
+	normalise.describe_value = func(_v: float) -> String:
+		return "gain so its loudest moment is full scale" if normalise.lit else "for a recorded item"
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -76,7 +81,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	visible = item != null
-	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here]:
+	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here, normalise]:
 		c.collision_layer = 2 if item != null else 0
 	if item == null:
 		return
@@ -85,6 +90,8 @@ func refresh() -> void:
 	fade_out.snap_to(_fade_value(item.fade_out))
 	mute.lit = item.muted
 	mute.describe_value = func(_v: float) -> String: return "muted: press to play it again" if item.muted else "silence it"
+	normalise.lit = item.sound_peak() > 0.0
+	copy_here.lit = true
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant]:
 		key.lit = midi
@@ -119,6 +126,11 @@ func _set_fades(fin: float, fout: float) -> void:
 func _transpose(direction: int) -> void:
 	if not _target.is_empty():
 		DAW.transpose_item(_target[0], _target[1], direction * (12 if _fine(up) or _fine(down) else 1))
+
+
+func _normalise() -> void:
+	if not _target.is_empty():
+		DAW.normalise_item(_target[0], _target[1])
 
 
 func _toggle_mute() -> void:

@@ -13530,6 +13530,25 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 	check("and a malformed or missing one is refused", s.item(lane, 1).muted)
 	DAW.set_item_muted(lane, 1, false)
 
+	var shaped: MixState.ItemState = s.item(lane, 1)
+	var had_peaks := shaped.peaks
+	var overview := PackedByteArray()
+	overview.resize(int(ceil((shaped.source_offset + shaped.length) * AudioTake.PEAKS_PER_SECOND)) + 1)
+	overview.fill(64)
+	overview[int(shaped.source_offset * AudioTake.PEAKS_PER_SECOND) + 2] = 128
+	shaped.peaks = overview
+	DAW.set_item_gain(lane, 1, 0.0)
+	DAW.normalise_item(lane, 1)
+	close_to("normalising brings its loudest moment to full scale", s.item(lane, 1).gain_db,
+			-linear_to_db(128.0 / 255.0), 0.001)
+	s.item(lane, 1).peaks = PackedByteArray()
+	DAW.set_item_gain(lane, 1, -3.0)
+	DAW.normalise_item(lane, 1)
+	check("an item with nothing to measure is left alone", is_equal_approx(s.item(lane, 1).gain_db, -3.0))
+	DAW.normalise_item(lane, 99)
+	DAW.set_item_gain(lane, 1, -6.0)
+	s.item(lane, 1).peaks = had_peaks
+
 	var n_before: int = s.track(lane).items.size()
 	DAW.select_item(lane, 1, false)
 	var from_start: float = s.item(lane, 1).start

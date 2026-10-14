@@ -392,6 +392,13 @@ func trim_item(track_index: int, item_index: int, start: float, end: float) -> v
 func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 	_do(&"set_item_gain", [track_index, item_index,
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
+## Gain so the item's loudest moment is at full scale, through `set_item_gain`: the same edit, the
+## same step to undo, the same intent from a guest. Nothing for an item with no sound to measure.
+func normalise_item(track_index: int, item_index: int) -> void:
+	var item := state.item(track_index, item_index)
+	var peak := item.sound_peak() if item != null else 0.0
+	if peak > 0.0:
+		set_item_gain(track_index, item_index, -linear_to_db(peak))
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
 func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:

@@ -3061,3 +3061,12 @@ clipboard held by one peer is not state the session can agree on, so copy and pa
 Reaper: `CopySelectedTo` clones through the item state chunk with the GUIDs stripped; written
 but not run against a live Reaper. Tap tempo, listed missing in the first audit, was already on
 the tape deck; corrected. Suite 9991 checks, 0 failed; probe 0 failed.
+
+## DAW parity, iteration 3: normalise an item (2026-10-14)
+`DAW.normalise_item(track, item)` sets the item's gain so the loudest moment of the part of the
+file it plays reaches full scale (`ItemState.sound_peak()`, from the 50-a-second overview that is
+already replicated, so a guest can do it too and it needs no new wire verb). It is a `set_item_gain`:
+one undo step, same Reaper path. Nothing for an item with no overview (MIDI, or Reaper's items,
+which report no peaks). N key on the item strip, lit only for an item there is sound to measure.
+Overview bytes are 1/255 of full scale, so the result is within a step of it, not exact.
+Suite 9993 checks, 0 failed; probe 0 failed. Not seen in a screenshot.
