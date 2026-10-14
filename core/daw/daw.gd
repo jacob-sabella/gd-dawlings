@@ -183,6 +183,16 @@ func set_track_volume(index: int, taper: float) -> void: _do(&"set_track_volume"
 func set_track_pan(index: int, pan: float) -> void: _do(&"set_track_pan", [index, pan])
 func set_track_mute(index: int, muted: bool) -> void: _do(&"set_track_mute", [index, muted])
 func set_track_solo(index: int, soloed: bool) -> void: _do(&"set_track_solo", [index, soloed])
+## Every soloed (or muted) track let go, each through its own `set_track_solo` / `set_track_mute`,
+## so a guest's press is the same intents a guest's taps would be and each is its own undo step.
+func clear_solos() -> void:
+	for index in state.track_indices():
+		if state.track(index).solo:
+			set_track_solo(index, false)
+func clear_mutes() -> void:
+	for index in state.track_indices():
+		if state.track(index).mute:
+			set_track_mute(index, false)
 func set_track_rec_arm(index: int, armed: bool) -> void: _do(&"set_track_rec_arm", [index, armed])
 
 func set_track_bank(offset: int) -> void: _do(&"set_track_bank", [offset])

@@ -13649,6 +13649,16 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	DAW.clear_item_selection()
 	check("and clearing lets go of them", s.selected_items().is_empty())
 
+	DAW.set_track_solo(lane, true)
+	DAW.set_track_mute(lane, true)
+	DAW.clear_solos()
+	check("one press lets go of every solo", not s.track(lane).solo and s.track(lane).mute)
+	DAW.clear_mutes()
+	check("and another of every mute", not s.track(lane).mute)
+	DAW.clear_solos()
+	DAW.clear_mutes()
+	check("with none set, nothing happens", not s.track(lane).solo and not s.track(lane).mute)
+
 	var vel_before: float = s.item(lane, 0).notes[3]
 	var vel_depth := s.undo_depth
 	DAW.shift_velocity(lane, 0, 16)

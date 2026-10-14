@@ -3086,3 +3086,12 @@ once there is anything to select; COPY and DEL moved closer to make room, and AL
 smaller because the track area clips anything past it. Looked at in a screenshot of the studio's
 timeline: all three captions read. The item strip (single selection only) was not shown, since
 `tools/shot.sh` cannot select an item. Suite 9999 checks, 0 failed; probe 0 failed.
+
+## DAW parity, iteration 6: clear all solos, clear all mutes (2026-10-14)
+`DAW.clear_solos()` and `DAW.clear_mutes()` let go of every soloed or muted track, each through
+the ordinary per-track verb, so nothing new crosses the wire and a guest's press is the same intents
+a guest's taps would be. SOLO and MUTE keys either side of the balance knob on the master section,
+each lit only while there is something to clear (the master section now follows `track_changed`).
+Looked at in a screenshot of the studio's console: both keys and captions read. Lettering under 10
+trips the legibility tests (the smallest cap), so the captions are 10. Suite 10002 checks, 0 failed;
+probe 0 failed. SHOT_CAM is an orbit (yaw, pitch, distance, target), not a position.

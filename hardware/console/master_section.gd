@@ -33,6 +33,8 @@ var _pan: Knob
 var _db_label: Label3D
 var _sends_key: PanelButton
 var _sends_label: Label3D
+var _unsolo_key: PanelButton
+var _unmute_key: PanelButton
 ## The SEND sockets, MIX then KEYS: for the studio to show and take plugs.
 var sends: Array[SendSocket] = []
 ## What the sends key says it is showing, for its hover card: "" when the faders are levels.
@@ -70,6 +72,13 @@ func _ready() -> void:
 	_pan.describe_title = func() -> String: return "MASTER  BALANCE"
 	_pan.describe_value = Knob.pan_text
 	add_child(_pan)
+
+	# Let go of every solo, and every mute: the one key that finds them all, where finding the
+	# soloed strip means walking the desk and, past the bank's edge, paging to it.
+	_unsolo_key = _clear_key("UnsoloKey", 0.027, Color(0.95, 0.8, 0.3), "SOLO", "MASTER  CLEAR SOLOS",
+			func(): DAW.clear_solos())
+	_unmute_key = _clear_key("UnmuteKey", -0.027, Color(0.95, 0.38, 0.34), "MUTE", "MASTER  CLEAR MUTES",
+			func(): DAW.clear_mutes())
 
 	var pan_caption := _label(15, Vector3(0, height - 0.068, 0.001))
 	pan_caption.text = "BAL"
@@ -136,7 +145,26 @@ func _ready() -> void:
 	add_child(_db_label)
 
 	DAW.master_changed.connect(func(_field: StringName): refresh())
+	DAW.track_changed.connect(func(_i: int, _field: StringName): refresh())
+	DAW.project_replaced.connect(refresh)
 	refresh()
+
+
+func _clear_key(key_name: String, x: float, colour: Color, word: String, title: String, act: Callable) -> PanelButton:
+	var height := ChannelStrip.HEIGHT
+	var key := PanelButton.new()
+	key.name = key_name
+	key.led_colour = colour
+	key.lamp_scale = Vector2(0.8, 0.5)
+	key.position = Vector3(x, height - 0.044, 0.004)
+	key.pressed.connect(act)
+	key.describe_title = func() -> String: return title
+	key.describe_value = func(_v: float) -> String: return "let go of them" if key.lit else "none to clear"
+	add_child(key)
+	var cap := _label(10, Vector3(x, height - 0.056, 0.001))
+	cap.text = word
+	add_child(cap)
+	return key
 
 
 func _label(font_size: int, pos: Vector3) -> Label3D:
@@ -163,3 +191,6 @@ func refresh() -> void:
 	_db_label.text = "%+.1f" % m.volume_db if m.volume_db > -150.0 else "-inf"
 	_fader.apply_remote(m.volume)
 	_pan.apply_remote(m.pan)
+	var tracks := DAW.state.track_indices()
+	_unsolo_key.lit = tracks.any(func(i): return DAW.state.track(i).solo)
+	_unmute_key.lit = tracks.any(func(i): return DAW.state.track(i).mute)

@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 5
+Iterations done: 6
 
 ## Transport and tempo
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
@@ -35,6 +35,7 @@ Iterations done: 5
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track
+- [x] clear all solos / clear all mutes (2026-10-14)
 - [x] folders (depth is kept through renumbering)
 - [ ] VCA / group faders, track groups (missing)
 - [ ] track delay compensation (missing)
