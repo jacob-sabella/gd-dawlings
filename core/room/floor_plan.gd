@@ -25,6 +25,13 @@ var pieces: Array[Node3D] = []
 ## Array of footprints (see `footprint`). A callable rather than a box because the console
 ## changes width with the project.
 var fixtures: Array[Callable] = []
+## People: footprints a piece being pushed stops against, each a Callable returning an Array of
+## footprints, but which are NOT stood up as walls for the walker (a body is not an obstacle to
+## itself). Without them a stand pulled toward you was moved into your own body, the walls threw
+## you out of it, your aim went with you, and the stand followed it into you again: a loop that
+## pushed you across the room as fast as the frames came. Only for a piece in a hand: a layout
+## fitted, or a move played back from the room, puts it where it was put, whoever stands there.
+var bodies: Array[Callable] = []
 
 
 func add_piece(piece: Node3D) -> void:
@@ -61,6 +68,9 @@ func resolve(piece: Node3D, at: Vector2, heading: float) -> Dictionary:
 	for fixture in fixtures:
 		if fixture.is_valid():
 			others.append_array(fixture.call())
+	for body in bodies:
+		if body.is_valid() and piece.get(&"held_by") != null:
+			others.append_array(body.call())
 
 	for _pass in 4:
 		var mine: Dictionary = piece.footprint_at(at, heading)

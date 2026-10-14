@@ -356,6 +356,15 @@ func footprints() -> Array:
 	return out
 
 
+## Where you stand, as a footprint in the floor plan's frame: what a stand being pushed stops
+## against (FloorPlan.bodies). Empty while god mode has the camera, when there is nobody there.
+func body_footprint() -> Array:
+	if not active or not is_inside_tree():
+		return []
+	var at := _plan_frame().affine_inverse() * global_position
+	return [FloorPlan.footprint(Vector2(at.x, at.z), Vector2(RADIUS, RADIUS), 0.0)]
+
+
 func eye() -> Vector3:
 	return global_position + Vector3(0, eye_height, 0)
 

@@ -3125,6 +3125,7 @@ func _build_walker() -> void:
 	walker.standing_eye = ergonomics.eye_height
 	walker.eye_height = ergonomics.eye_height
 	add_child(walker)
+	floor_plan.bodies.append(walker.body_footprint)
 	# At the mix position, looking down at the desk. Aimed at a POINT on it rather than set to
 	# an angle, because the desk does not move when the eye does: -0.5 rad was right from a
 	# standing 1.62 m and, from a seated 1.21 m, put the faders' tops up under the timeline.

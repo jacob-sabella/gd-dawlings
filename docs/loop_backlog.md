@@ -2954,3 +2954,12 @@ shots/timeline_scaled_from_seat.png.
 and on the main rack, whose frame follows whichever track it is racking. Plain furniture with no
 track. Rebuilt with the rack, so it follows a track recolour and a venue change.
 shots/track_racks_glow.png.
+
+## A stand pulled into you stops at you (2026-10-13)
+"there is a bug where you can push yourself at infinite speeds with moving a thing."
+A held stand follows the hand's aim, and the aim comes from your eye. Pulled toward you, the stand
+was resolved only against other pieces and fixtures, so it moved into your body; the walker's
+solid for it then pushed you out, your aim moved with you, the stand followed, every frame.
+`FloorPlan.bodies` (the walker's `body_footprint`) is now something a HELD piece stops against,
+and goes round, without being stood up as a wall for the walker itself. Pieces placed by a layout
+or played back from the room ignore it. Test: `_test_a_stand_pulled_into_you_stops_at_you`.

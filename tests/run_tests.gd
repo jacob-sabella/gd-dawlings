@@ -109,6 +109,7 @@ func _ready() -> void:
 	_test_fitted_lettering_stays_in_its_slot()
 	_test_footprints_separate_by_the_shallowest_way_out()
 	_test_furniture_rolls_where_it_is_pushed()
+	_test_a_stand_pulled_into_you_stops_at_you()
 	_test_a_stand_taken_at_eye_height_pushes_naturally()
 	_test_you_can_say_how_tall_you_are_in_the_room()
 	_test_furniture_is_solid()
@@ -6262,6 +6263,47 @@ func _push(piece: Trolley, hand: FakeHand, delta: Vector2, frames := 40) -> void
 		piece.grab_move(hand, Vector3.ZERO)
 		piece._physics_process(1.0 / 60.0)
 	piece.grab_end(hand)
+
+
+## Pulling a stand toward yourself used to fling you: it was moved into your body, the walls the
+## walker stands up from the floor plan threw you out of it, your aim went with you, and the
+## stand followed into you again, every frame.
+func _test_a_stand_pulled_into_you_stops_at_you() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var piece := studio.rack_trolley
+	var walker := studio.walker
+	check("the floor plan knows where you stand", studio.floor_plan.bodies.size() == 1
+			and walker.body_footprint().size() == 1)
+	var from := Vector2(piece.position.x, piece.position.z)
+	# Somewhere clear, a metre and a half on from the rack, and drag the rack right through it.
+	var stand_at := from + Vector2(0, 1.5)
+	var level := (walker._plan_frame().affine_inverse() * walker.global_position).y
+	walker.global_position = walker._plan_frame() * Vector3(stand_at.x, level, stand_at.y)
+	var body: Dictionary = walker.body_footprint()[0]
+	# The hand drags it straight through where you stand; frame by frame it must never be in you.
+	var into := 0
+	_hand_over(hand, from)
+	piece.grab_begin(hand, Vector3(from.x, 0.2, from.y))
+	for i in 90:
+		_hand_over(hand, from + Vector2(0, 3.0) * float(i + 1) / 90.0)
+		piece.grab_move(hand, Vector3.ZERO)
+		piece._physics_process(1.0 / 60.0)
+		var mine: Dictionary = piece.footprint_at(Vector2(piece.position.x, piece.position.z),
+				piece.rotation.y)
+		if FloorPlan.separation(mine, body) != Vector2.ZERO:
+			into += 1
+	piece.grab_end(hand)
+	check("a stand dragged through you goes round you, never into you (%d frames in you)" % into,
+			into == 0)
+	check("you are not a wall to yourself", not walker.footprints().has(body))
+	# Not held: put there outright, by a layout or the room, it goes where it was put.
+	var there := Vector2(stand_at.x, stand_at.y)
+	var put: Dictionary = studio.floor_plan.resolve(piece, there, piece.rotation.y)
+	check("a stand put down where you stand is not moved for you",
+			(put["at"] as Vector2).distance_to(there) < 0.001)
+	_drop_floor_studio(rig)
 
 
 func _test_furniture_rolls_where_it_is_pushed() -> void:
