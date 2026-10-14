@@ -2339,14 +2339,14 @@ lamp parts".
   - 140-210 controls is 15-30 pages; a section jump (scroll the page label through section names) would help.
   - The plugin's own presets step blind: the plugin doesn't tell Reaper the preset's name.
   - The first Wine plugin load can outlast the bridge's 4 s reply timeout (it still loads).
-- The tablet's UI face (the plugin's own window, read off X and clicked through XSendEvent) is PARKED:
-  built and tested but switched off (`PluginTablet.window_face = false`; `--tablet T:F:ui` turns it on for
-  a run) until the window can be kept off the desktop. Best idea so far: the helper moves the plugin's
-  window to a Hyprland special workspace (`hyprctl dispatch movetoworkspacesilent special:...`, matched by
-  title) — Reaper doesn't save workspaces, so the project's window positions are untouched. Open questions:
-  - With the user's own Reaper, the floating window also opens on the desktop wherever Reaper puts it
-    (in the rig it is on workspace 10). Hide it — move it to a Hyprland special workspace, or offscreen
-    and back on close — or leave it? Moving it risks Reaper saving an offscreen position into the project.
+- The tablet's UI face (the plugin's own window, read off X and clicked through XSendEvent) is ON
+  (2026-10-14; `PluginTablet.window_face = true`). The helper (native/plugin_view.c) does what Reaper does
+  to dock a window: it reparents the plugin's top-level window into a holder window of its own, override-
+  redirect and mapped at x=-30000, so it never shows on the desktop (verified live: `hyprctl clients` never
+  listed the ReaEQ window). XAddToSaveSet restores the window if the helper dies; `q` puts it back on the
+  root; `--in-place` turns the reparenting off. Open:
+  - Checked live on ReaEQ only (rig); the Wine/yabridge Neural DSP plugins are not tried with the holder.
+  - One probe run in three did not find the window ((0,0)); not yet explained.
   - Left button, drag and wheel only: no right-click menus, no keyboard (a plugin's text fields can't
     be typed into), and its popup menus open as separate windows that the tablet doesn't show.
   - Two copies of the same plugin on one track have the same window title; the tablet shows the first.

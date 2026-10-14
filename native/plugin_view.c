@@ -1,6 +1,6 @@
 // plugin_view: show a plugin's own window somewhere else, and pass clicks back into it.
 //
-//   plugin_view "<the window's title, or part of it>"
+//   plugin_view "<the window's title, or part of it>" [--in-place]
 //
 // Reads commands on stdin, one per line, and answers frames on stdout:
 //   f            a frame: "PV02", width, height, same (u32 little-endian each), then -- unless
@@ -95,6 +95,47 @@ static Window content(Window top) {
 
 static int ignore_errors(Display *d, XErrorEvent *e) { (void)d; (void)e; return 0; }
 
+// Where the plugin's window is kept while it is shown: a window of ours, far off every screen,
+// that it is reparented into -- what Reaper itself does to dock a plugin in its FX chain. The
+// compositor then has no top-level window to put on the desktop, and the plugin neither knows nor
+// minds: it is still mapped, so it still draws, and XGetImage still reads it.
+static Window holder;
+// Whether to keep the window in `holder`; "--in-place" leaves it where the DAW put it.
+static int keep = 1;
+
+static void adopt(Window w) {
+	XWindowAttributes a;
+	if (!w || !XGetWindowAttributes(dpy, w, &a)) return;
+	Window root, parent, *kids = NULL; unsigned int n = 0;
+	if (XQueryTree(dpy, w, &root, &parent, &kids, &n)) {
+		if (kids) XFree(kids);
+		if (holder && parent == holder) return;
+	}
+	XSetWindowAttributes at; memset(&at, 0, sizeof at);
+	at.override_redirect = True;
+	if (holder) XDestroyWindow(dpy, holder);
+	holder = XCreateWindow(dpy, DefaultRootWindow(dpy), -30000, 0, a.width > 0 ? a.width : 1, a.height > 0 ? a.height : 1,
+			0, CopyFromParent, InputOutput, CopyFromParent, CWOverrideRedirect, &at);
+	XMapWindow(dpy, holder);
+	// If this process ever goes without saying so, the window goes back to the desktop rather
+	// than being destroyed with its holder.
+	XAddToSaveSet(dpy, w);
+	XReparentWindow(dpy, w, holder, 0, 0);
+	XMapWindow(dpy, w);
+	XSync(dpy, False);
+}
+
+// Gives the window back to the desktop, so closing the tablet's view leaves it as it was.
+static void release(Window w) {
+	if (w && holder) {
+		XReparentWindow(dpy, w, DefaultRootWindow(dpy), 0, 0);
+		XRemoveFromSaveSet(dpy, w);
+		XDestroyWindow(dpy, holder);
+		XSync(dpy, False);
+		holder = 0;
+	}
+}
+
 static void put_u32(uint32_t v) { fwrite(&v, 4, 1, stdout); }
 
 static void header(uint32_t w, uint32_t h, uint32_t same) {
@@ -103,8 +144,10 @@ static void header(uint32_t w, uint32_t h, uint32_t same) {
 
 static void frame(void) {
 	XWindowAttributes a;
-	if (!top || !XGetWindowAttributes(dpy, top, &a) || a.map_state != IsViewable)
+	if (!top || !XGetWindowAttributes(dpy, top, &a) || a.map_state != IsViewable) {
 		top = find(DefaultRootWindow(dpy), 0);
+		if (top && keep) adopt(top);
+	}
 	// Asked again every frame: a plugin's own window is embedded a moment after Reaper's opens,
 	// and until it is, the biggest thing in Reaper's is Reaper's.
 	target = top ? content(top) : 0;
@@ -174,6 +217,7 @@ static Window under(int x, int y, int *cx, int *cy) {
 
 static unsigned int held = 0;
 
+
 static void send_button(int x, int y, int button, int down) {
 	int cx, cy, rx, ry;
 	Window dummy;
@@ -218,6 +262,7 @@ static void send_motion(int x, int y) {
 int main(int argc, char **argv) {
 	if (argc < 2 || !argv[1][0]) { fprintf(stderr, "usage: plugin_view <title>\n"); return 2; }
 	wanted = argv[1];
+	if (argc > 2 && strcmp(argv[2], "--in-place") == 0) keep = 0;
 	dpy = XOpenDisplay(NULL);
 	if (!dpy) { fprintf(stderr, "plugin_view: no X display\n"); return 1; }
 	XSetErrorHandler(ignore_errors);
@@ -233,7 +278,7 @@ int main(int argc, char **argv) {
 			int button = b > 0 ? 4 : 5;
 			for (int i = 0; i < abs(b); i++) { send_button(x, y, button, 1); send_button(x, y, button, 0); }
 		} break;
-		case 'q': return 0;
+		case 'q': release(top); return 0;
 		}
 	}
 	return 0;

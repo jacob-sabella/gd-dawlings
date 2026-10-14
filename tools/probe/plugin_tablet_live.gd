@@ -346,7 +346,6 @@ func _tablet_checks(track: int, plugin: String, spare: int) -> void:
 
 ## UI: the plugin's own window on the tablet, read off the display, and a click passed into it.
 func _window_checks(tablet: PluginTablet, plugin: String) -> void:
-	# Parked on tablets for now (PluginTablet.window_face); the probe keeps it working.
 	PluginTablet.window_face = true
 	check("the plugin's own window can be shown here", DAW.shows_plugin_windows())
 	if not DAW.shows_plugin_windows():
@@ -364,6 +363,8 @@ func _window_checks(tablet: PluginTablet, plugin: String) -> void:
 	# The frame as it came off the display: headless, a texture cannot be read back.
 	var picture: Image = (window as ReaperPluginWindow)._frame.duplicate()
 	picture.clear_mipmaps()
+	if OS.get_environment("DAWLINGS_SAVE_FRAME") != "":
+		picture.save_png(OS.get_environment("DAWLINGS_SAVE_FRAME"))
 	var colours := {}
 	for y in range(0, picture.get_height(), picture.get_height() / 8):
 		for x in range(0, picture.get_width(), picture.get_width() / 8):

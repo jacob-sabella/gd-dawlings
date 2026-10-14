@@ -249,7 +249,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
 				# `--tablet 2:1:5` opens it on its fifth page, and `--tablet 2:1:ui` on the
 				# plugin's own window, where the DAW can show it -- the one way to turn that
-				# face on while it is parked (PluginTablet.window_face).
+				# face on where it would otherwise be off (PluginTablet.window_face).
 				i += 1
 				if i < argv.size():
 					var parts := argv[i].split(":")

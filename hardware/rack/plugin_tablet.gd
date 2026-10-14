@@ -21,9 +21,9 @@ extends Surface
 ## KEY IN, CHAIN and MOVE TO are the host's, and no plugin's window has them. Only on the host,
 ## where the window is (DAW.shows_plugin_windows).
 ##
-## PARKED: the UI face is off (`window_face`) until the plugin's window can be kept off the
-## desktop while the tablet shows it; see docs/loop_backlog.md. Everything behind it stays built
-## and tested, and `--tablet T:F:ui` still turns it on for a run.
+## The UI face is on (`window_face`) wherever the DAW's plugin windows can be read: the helper
+## (native/plugin_view.c) reparents the plugin's window into one of its own far off every screen,
+## as Reaper docks a window into its FX chain, so it never lands on the desktop while shown.
 ##
 ## THE TABLET FOLLOWS ITS PLUGIN, not a slot. Moving a plugin renumbers its chain, and on Reaper
 ## the new numbering arrives later than the move. So the tablet keeps the plugin's name and the
@@ -62,8 +62,8 @@ const PAGE_READ_MSEC := 700
 const PRESET_NEXT := "Preset Next"
 const PRESET_PREVIOUS := "Preset Previous"
 
-## Whether tablets offer the UI face at all. Off for now: see the note at the top.
-static var window_face := false
+## Whether tablets offer the UI face at all.
+static var window_face := true
 
 var track_index := 1
 var fx_index := 0
