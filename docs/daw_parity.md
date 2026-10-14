@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 28
+Iterations done: 29
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -45,7 +45,7 @@ Iterations done: 28
 - [x] equal-power fades (2026-10-14; per item, both ends, linear or a quarter sine, played by dawkit's lane, drawn as a curve, saved; a token on the ITEM page; Reaper's C_FADEINSHAPE 1 through the bridge, not yet run against a live Reaper)
 - [ ] more fade shapes (slow, fast, S-curve), a shape per end (missing)
 - [x] nudge the selection by the grid (2026-10-14; a bar, a beat or part of one along the tempo map, ten milliseconds with no grid or fine; two tokens on the ITEM page; Reaper path not run against a live Reaper)
-- [ ] glue items into one (missing)
+- [~] glue items into one (partial, 2026-10-14: MIDI items, and the pieces of one cut recording that follow on, made one; a GLUE token on the ITEM page; other audio needs a bounce to a new file, which the built-in engine does not do; Reaper glues anything through its own 40362, not yet run against a live Reaper)
 - [x] clear all solos / clear all mutes (2026-10-14)
 - [x] folders (depth is kept through renumbering)
 - [ ] VCA / group faders, track groups (missing)

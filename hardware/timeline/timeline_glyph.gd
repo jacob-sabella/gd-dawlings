@@ -174,6 +174,12 @@ func _build() -> void:
 		&"loop":
 			_ring(Vector2.ZERO, 0.66, 0.15)
 			_cone(Vector2(0.66, 0.0), Vector2(0, -1), 0.3, 0.45)
+		&"glue":
+			# Two blocks pushed together, an arrow at each.
+			_box(Vector2(-0.42, -0.3), Vector2(0.8, 0.75), 0.45)
+			_box(Vector2(0.42, -0.3), Vector2(0.8, 0.75), 0.45, 0.1)
+			_cone(Vector2(-0.95, 0.62), Vector2(1, 0), 0.22, 0.45)
+			_cone(Vector2(0.95, 0.62), Vector2(-1, 0), 0.22, 0.45)
 		&"crossfade":
 			_rod(Vector2(-0.95, -0.7), Vector2(0.95, 0.7), 0.13, 0.4)
 			_rod(Vector2(-0.95, 0.7), Vector2(0.95, -0.7), 0.13, 0.4)

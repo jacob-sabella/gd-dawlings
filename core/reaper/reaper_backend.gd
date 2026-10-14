@@ -747,6 +747,15 @@ func ripple_delete_selected() -> void:
 		_edit("RippleDeleteSelected", [])
 
 
+## Reaper glues what the desk would and more (any audio, through a new file), so the ask goes
+## whenever a track has two selected items; the desk shows what it can until Reaper answers.
+func glue_selected() -> void:
+	_locally_glue_selected()
+	if state.track_indices().any(func(i): return state.track(i).items.filter(
+			func(it): return it.selected and not it.locked).size() >= 2):
+		_edit("GlueSelected", [])
+
+
 ## Worked out here, along this map, and each item's new start sent: Reaper finds each by its
 ## track and where it was.
 func nudge_selected(amount: float, unit: int) -> void:

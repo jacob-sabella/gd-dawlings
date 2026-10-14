@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -451,6 +451,9 @@ func delete_selected() -> void: _do(&"delete_selected", [])
 ## Delete the selection and close the gap it leaves on each track: what comes after moves back
 ## by what was taken out before it (Reaper's ripple per track). One undo step.
 func ripple_delete_selected() -> void: _do(&"ripple_delete_selected", [])
+## On each track, the selected items made one (DAWBackend.glue_picks: MIDI, or cuts of one file
+## that follow on). One undo step.
+func glue_selected() -> void: _do(&"glue_selected", [])
 func duplicate_selected() -> void: _do(&"duplicate_selected", [])
 func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
 	_do(&"trim_item", [track_index, item_index, maxf(minf(start, end), 0.0), maxf(start, end)])
@@ -776,7 +779,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed copy_selected_to intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0)]
-	if verb in [&"delete_selected", &"duplicate_selected", &"select_all_items"]:
+	if verb in [&"delete_selected", &"duplicate_selected", &"select_all_items", &"glue_selected"]:
 		args = []
 	if verb == &"set_automation":
 		# Peer input: a track, a target that names a control, and flat points.

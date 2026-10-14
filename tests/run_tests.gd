@@ -299,6 +299,7 @@ func _ready() -> void:
 	_test_the_selection_is_nudged_by_the_grid()
 	_test_an_item_fades_with_equal_power()
 	_test_history_can_be_jumped_through()
+	_test_items_glue_into_one()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19644,6 +19645,97 @@ func _test_history_can_be_jumped_through() -> void:
 	check("let go there, the history goes there", s.undo_depth == 2)
 	timeline._process(0.0)
 	check("and the bead with it", is_equal_approx(rail.value, 0.5))
+	timeline.free()
+	_offline()
+
+
+func _test_items_glue_into_one() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var lane := 7
+	var at := func(start: float) -> int:
+		for k in s.track(lane).items.size():
+			if is_equal_approx(s.item(lane, k).start, start):
+				return k
+		return -1
+	DAW.insert_midi_take(lane, 300.0, 302.0, [[300.25, 300.75, 60, 100, 0], [301.5, 302.0, 64, 90, 0]], "A")
+	DAW.insert_midi_take(lane, 303.0, 304.0, [[303.25, 303.5, 67, 80, 0]], "B")
+	var count := s.track(lane).items.size()
+	DAW.clear_item_selection()
+	DAW.select_item(lane, at.call(300.0), false)
+	DAW.select_item(lane, at.call(303.0), true)
+	check("two MIDI items on a track glue", DAWBackend.glue_picks(s).has(lane))
+	var depth := s.undo_depth
+	DAW.glue_selected()
+	var glued := s.item(lane, at.call(300.0))
+	check("into one, from the first's start to the last's end",
+			s.track(lane).items.size() == count - 1 and glued != null and is_equal_approx(glued.length, 4.0)
+			and at.call(303.0) == -1 and glued.selected)
+	var notes := MidiTake.unpack_relative(glued.notes, glued.start)
+	check("with every note where it played (%s)" % [notes], notes.size() == 3
+			and is_equal_approx(notes[2][0], 303.25) and notes[2][2] == 67 and is_equal_approx(notes[1][1], 302.0))
+	check("one step", s.undo_depth == depth + 1)
+	DAW.undo()
+	check("undone, two again", s.track(lane).items.size() == count and at.call(303.0) != -1)
+
+	DAW.insert_audio_take(lane, 310.0, "suite-glue.wav", 2.0, PackedByteArray())
+	DAW.clear_item_selection()
+	DAW.select_item(lane, at.call(310.0), false)
+	DAW.split_selected(310.75)
+	check("a split recording's two halves glue", DAWBackend.glue_picks(s).has(lane)
+			and s.selected_items().size() == 2)
+	DAW.glue_selected()
+	var whole := s.item(lane, at.call(310.0))
+	check("back into the one piece of the file", whole != null and is_equal_approx(whole.length, 2.0)
+			and is_zero_approx(whole.source_offset) and whole.source == "suite-glue.wav" and at.call(310.75) == -1)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest sees it whole", guest.item(lane, at.call(310.0)) != null
+			and is_equal_approx(guest.item(lane, at.call(310.0)).length, 2.0))
+
+	DAW.clear_item_selection()
+	DAW.select_item(lane, at.call(300.0), false)
+	DAW.select_item(lane, at.call(310.0), true)
+	depth = s.undo_depth
+	DAW.glue_selected()
+	check("MIDI and a recording do not glue", not DAWBackend.glue_picks(s).has(lane)
+			and s.undo_depth == depth and at.call(310.0) != -1)
+	DAW.select_item(lane, at.call(310.0), false)
+	DAW.split_selected(311.0)
+	DAW.set_item_gain(lane, at.call(311.0), -6.0)
+	DAW.select_item(lane, at.call(310.0), false)
+	DAW.select_item(lane, at.call(311.0), true)
+	check("nor two pieces at different gains", not DAWBackend.glue_picks(s).has(lane))
+	DAW.set_item_gain(lane, at.call(311.0), 0.0)
+	DAW.set_item_locked(lane, at.call(311.0), true)
+	DAW.select_item(lane, at.call(310.0), false)
+	DAW.select_item(lane, at.call(311.0), true)
+	check("nor with one locked", not DAWBackend.glue_picks(s).has(lane))
+	DAW.set_item_locked(lane, at.call(311.0), false)
+	check("a guest may ask, with nothing to say", &"glue_selected" in DAW.COMMANDS)
+	DAW.select_item(lane, at.call(310.0), false)
+	DAW.select_item(lane, at.call(311.0), true)
+	DAW.apply_intent(&"glue_selected", ["anything"])
+	check("and it glues", at.call(311.0) == -1)
+	check("named in the history", s.undo_names.back() == "glue selected")
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.clear_item_selection()
+	DAW.select_item(lane, at.call(300.0), false)
+	page.refresh()
+	check("a GLUE token on the item page, out of reach for one item", page.glue != null
+			and page.glue.glyph == &"glue" and not page.glue.available)
+	DAW.insert_midi_take(lane, 305.0, 306.0, [[305.0, 305.5, 62, 100, 0]], "C")
+	DAW.select_item(lane, at.call(300.0), false)
+	DAW.select_item(lane, at.call(305.0), true)
+	page.refresh()
+	check("lit for two that glue (%s)" % page.glue.title(), page.glue.available and page.glue.lit)
+	page.glue.pressed.emit()
+	check("pressed, they are one", at.call(305.0) == -1 and is_equal_approx(s.item(lane, at.call(300.0)).length, 6.0))
+	DAW.clear_item_selection()
 	timeline.free()
 	_offline()
 

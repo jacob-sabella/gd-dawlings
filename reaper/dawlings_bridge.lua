@@ -1445,6 +1445,20 @@ function handlers.DeleteSelected()
   return result
 end
 
+-- The selected, unlocked items of each track glued into one (Item: Glue items), one undo point.
+-- A locked item is left out of the selection first, as the desk leaves it.
+function handlers.GlueSelected()
+  reaper.Undo_BeginBlock()
+  for n = reaper.CountSelectedMediaItems(0) - 1, 0, -1 do
+    local it = reaper.GetSelectedMediaItem(0, n)
+    if (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) ~= 0 then
+      reaper.SetMediaItemSelected(it, false)
+    end
+  end
+  reaper.Main_OnCommand(40362, 0)
+  return edited('Glue items')
+end
+
 -- Every selected, unlocked item deleted, and each later item on its track moved back by the length
 -- of every deleted item that started before it: the desk's ripple delete, one undo point.
 function handlers.RippleDeleteSelected()

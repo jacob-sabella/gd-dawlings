@@ -3392,3 +3392,18 @@ the names after the two depths, so a guest's card reads the same. Dim with no hi
 `undo_to` repeats Undo/Redo from the bridge's depth, and Reaper's own step names are not read, so
 the card there says "step N" -- not yet run against a live Reaper.
 Suite: 10295 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 29: glue items (2026-10-14)
+GLUE on the ITEM page makes the selected items of each track one item (`DAW.glue_selected`, one
+undo step, a guest's ask taken with no arguments). `DAWBackend.glue_picks` decides what glues
+without a new file: two or more unlocked items that are all MIDI -- notes kept where each part
+played them, a note cut at a part's end staying cut, gaps silent -- or all cuts of one recording
+that follow on from each other on the track and in the file, as a split leaves them (rejoining a
+split). None looped or reversed, all at one gain. The glued item starts where the first did and
+takes the last one's fade-out. The token is in reach with two selected and lit when they glue;
+its card says why when they do not. Left: gluing audio that is not one file played straight
+through needs a bounce to a new file -- the built-in engine renders the mix and stems but not
+an item range of a track into a take; that is the next part. Reaper: GlueSelected deselects
+locked items and runs Item: Glue items (40362), which glues anything; not yet run against a live
+Reaper.
+Suite: 10309 checks, 0 failed; probe host 53, guest 47, 0 failed.

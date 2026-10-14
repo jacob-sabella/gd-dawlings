@@ -35,6 +35,8 @@ var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
 var crossfade: GlyphKey
+## The selection on each track made one item (DAW.glue_selected).
+var glue: GlyphKey
 ## The selection a step of the grid earlier or later (TimelineLanes.grid; fine: ten milliseconds).
 var nudge_earlier: GlyphKey
 var nudge_later: GlyphKey
@@ -91,6 +93,7 @@ func _ready() -> void:
 	crossfade = _key("ItemCrossfade", &"crossfade", EDIT_INK, "ITEM  CROSSFADE", _crossfade,
 			func() -> String: return "fade the earlier out and the later in, equal power, over the overlap" if crossfade.lit \
 					else "select two overlapping items on one track")
+	glue = _key("ItemGlue", &"glue", EDIT_INK, "ITEM  GLUE", func(): DAW.glue_selected(), _glue_text)
 	nudge_earlier = _key("ItemNudgeEarlier", &"nudge_earlier", GO_INK, "ITEM  NUDGE EARLIER", func(): _nudge(-1),
 			func() -> String: return _nudge_text("earlier"))
 	nudge_later = _key("ItemNudgeLater", &"nudge_later", GO_INK, "ITEM  NUDGE LATER", func(): _nudge(1),
@@ -138,6 +141,9 @@ func refresh() -> void:
 	loop_to.lit = not picked.is_empty()
 	crossfade.available = not _pair.is_empty()
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
+	var glues := not DAWBackend.glue_picks(DAW.state).is_empty()
+	glue.available = picked.size() >= 2
+	glue.lit = glues
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
 		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, fade_shape]:
@@ -266,6 +272,18 @@ func _toggle_fade_shape() -> void:
 	if item != null:
 		DAW.set_item_fade_shape(_target[0], _target[1], DawKitClip.FADE_LINEAR
 				if item.fade_shape == DawKitClip.FADE_EQUAL_POWER else DawKitClip.FADE_EQUAL_POWER)
+
+
+func _glue_text() -> String:
+	var picks := DAWBackend.glue_picks(DAW.state)
+	if not picks.is_empty():
+		var parts := 0
+		for index in picks:
+			parts += (picks[index] as Array).size()
+		return "%d items made one, on %d track(s)" % [parts, picks.size()]
+	if DAW.state.selected_items().size() >= 2:
+		return "MIDI items, or the pieces of one cut recording, side by side"
+	return "select two or more items on a track"
 
 
 func _crossfade() -> void:

@@ -292,6 +292,8 @@ func split_selected(_seconds: float) -> void: pass
 ## Every selected item, gone.
 func delete_selected() -> void: pass
 func ripple_delete_selected() -> void: pass
+## On each track, the selected items glued into one (glue_picks says which). One undo step.
+func glue_selected() -> void: pass
 ## Every selected, unlocked item moved by `amount` of `unit` (NUDGE_SECONDS, NUDGE_BEATS or
 ## NUDGE_BARS; less than nothing is earlier), along the tempo map from where each one starts, none
 ## before the song's start. One undo step; a nudge that moves nothing is none.
@@ -562,6 +564,75 @@ func _split_notes(left: MixState.ItemState, right: MixState.ItemState, seconds: 
 			moved.append(n)
 	left.notes = MidiTake.pack_relative(keep, left.start)
 	right.notes = MidiTake.pack_relative(moved, seconds)
+
+
+## The selected, unlocked items of each track that glue into one, by track: two or more that
+## are all MIDI, or all cuts of one file that follow on from each other in it and on the track,
+## as a split leaves them; none looped or reversed, all at one gain. Gluing audio that is not one
+## file played straight through would need a bounce to a new file, which the built-in engine
+## does not do.
+static func glue_picks(s: MixState) -> Dictionary:
+	var out := {}
+	for index in s.track_indices():
+		var picked: Array = s.track(index).items.filter(func(it): return it.selected and not it.locked)
+		if picked.size() < 2:
+			continue
+		picked.sort_custom(func(a, b): return a.start < b.start)
+		if gluable(picked):
+			out[index] = picked
+	return out
+
+
+## `items`, sorted by start, can be one item. See glue_picks.
+static func gluable(items: Array) -> bool:
+	var first: MixState.ItemState = items[0]
+	var midi := first.source.is_empty()
+	for k in items.size():
+		var it: MixState.ItemState = items[k]
+		if it.is_looped() or it.reversed or not is_equal_approx(it.gain_db, first.gain_db) \
+				or it.source.is_empty() != midi:
+			return false
+		if midi or k == 0:
+			continue
+		var before: MixState.ItemState = items[k - 1]
+		if it.source != first.source or absf(it.start - before.end()) > 0.0005 \
+				or absf(it.source_offset - (before.source_offset + before.length)) > 0.0005:
+			return false
+	return true
+
+
+## Returns how many tracks had items glued. The glued item is the first one, run to where the
+## last ends, its fade-out the last one's, selected. A MIDI item keeps the notes each part
+## played -- a note cut short at a part's end stays cut there -- and the gaps between parts stay
+## silent.
+func _locally_glue_selected() -> int:
+	var picks := glue_picks(state)
+	for index in picks:
+		var lane := _lane_copy(index)
+		var parts: Array = lane.filter(func(it): return it.selected and not it.locked)
+		parts.sort_custom(func(a, b): return a.start < b.start)
+		var glued: MixState.ItemState = parts[0]
+		var end := 0.0
+		var last: MixState.ItemState = parts[0]
+		for it in parts:
+			if it.end() >= end:
+				end = it.end()
+				last = it
+		if glued.source.is_empty():
+			var notes: Array = []
+			for it in parts:
+				for n in MidiTake.unpack_relative(it.notes, it.start):
+					if n[0] >= it.start - 0.000001 and n[0] < it.end():
+						n[1] = minf(n[1], it.end())
+						notes.append(n)
+			notes.sort_custom(func(a, b): return a[0] < b[0])
+			glued.notes = MidiTake.pack_relative(notes, glued.start)
+		glued.length = end - glued.start
+		glued.fade_out = last.fade_out
+		glued.muted = parts.all(func(it): return it.muted)
+		var kept := lane.filter(func(it): return it == glued or not (it.selected and not it.locked))
+		_write_lane(index, kept)
+	return picks.size()
 
 
 ## Returns how many were deleted.
