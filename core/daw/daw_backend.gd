@@ -272,6 +272,11 @@ func seek(_seconds: float) -> void: pass
 func set_loop_range(_start: float, _end: float) -> void: pass
 func undo() -> void: pass
 func redo() -> void: pass
+## Undone or redone to `depth` steps of history, in one go: the history list's jump.
+func undo_to(_depth: int) -> void: pass
+## What the edit under way is called, for the history list: set by DAW around each call, "" when
+## nobody said.
+var acting := ""
 
 ## Item editing. Items are (track, index in lane, left to right). `additive` adds to or takes
 ## from the selection instead of replacing it.

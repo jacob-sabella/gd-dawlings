@@ -3380,3 +3380,15 @@ CrossfadeItems in the bridge sets both lengths and shape 1 at both ends of both 
 -- not yet run against a live Reaper. `tools/screenshot.gd --tl-xfade T:I` copies an item to
 halfway along itself and crossfades the two; the shot shows two bowed lines crossing.
 Suite: 10278 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 28: jump through the undo history (2026-10-14)
+A HISTORY rail (clock glyph) sits after REDO on the timeline tools. Its bead is where the history
+is now, from the start to the last step there is to redo; letting go somewhere else jumps there in
+one go (`DAW.undo_to(depth)`, undos or redos repeated on the host, a guest's ask sanitised by
+`apply_intent`). Its card names the step a place goes back or forward to, "Kick: move item",
+"add marker": `DAW._call` sets `backend.acting` from `DAW.step_name(verb, args)` around each edit,
+and the offline backend keeps that name on the step (falling back to its key). "/undo" now carries
+the names after the two depths, so a guest's card reads the same. Dim with no history. Reaper:
+`undo_to` repeats Undo/Redo from the bridge's depth, and Reaper's own step names are not read, so
+the card there says "step N" -- not yet run against a live Reaper.
+Suite: 10295 checks, 0 failed; probe host 53, guest 47, 0 failed.

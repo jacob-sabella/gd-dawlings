@@ -124,6 +124,9 @@ var render_page: TimelineRenderPage
 var region_page: TimelineRegionPage
 var _undo_key: GlyphKey
 var _redo_key: GlyphKey
+## The history list as a rail: a bead for every step, set where the history is; dragged and let go,
+## the history is undone or redone to there in one go (DAW.undo_to). Its card names the step.
+var _history: GlyphRail
 var _split_key: GlyphKey
 var _copy_key: GlyphKey
 var _delete_key: GlyphKey
@@ -354,6 +357,16 @@ func _build_deck() -> void:
 			func() -> String: return "the last edit", true)
 	_redo_key = _tool("RedoKey", &"redo", TOOL_INK, "EDIT  REDO", func(): DAW.redo(),
 			func() -> String: return "the edit undone last")
+	_history = GlyphRail.new()
+	_history.name = "HistoryRail"
+	_history.glyph = &"history"
+	_history.led_colour = TOOL_INK
+	_history.describe_title = func() -> String: return "EDIT  HISTORY"
+	_history.describe_value = func(v: float) -> String: return history_text(history_step(v))
+	_history.value_committed.connect(func(v: float): DAW.undo_to(history_step(v)))
+	deck.add_tool(_history)
+	DAW.transport_changed.connect(_light_history)
+	_light_history()
 	_split_key = _tool("SplitKey", &"split", Color(0.95, 0.62, 0.32), "EDIT  SPLIT AT PLAYHEAD",
 			func(): DAW.split_selected(DAW.state.position_seconds),
 			func() -> String:
@@ -455,6 +468,39 @@ func _light_recover_key() -> void:
 	var offered := not DAW.recoverable_copy().is_empty()
 	_recover_key.available = offered
 	_recover_key.lit = offered
+
+
+## How many steps of history there are, done and to redo.
+func _history_size() -> int:
+	return maxi(DAW.state.undo_depth, 0) + maxi(DAW.state.redo_depth, 0)
+
+
+## The step a place along the history rail stands for: 0 is before the first edit.
+func history_step(v: float) -> int:
+	return roundi(clampf(v, 0.0, 1.0) * _history_size())
+
+
+## What going to `step` would do, for the rail's card.
+func history_text(step: int) -> String:
+	var total := _history_size()
+	var now := maxi(DAW.state.undo_depth, 0)
+	var names: Array = DAW.state.undo_names
+	if total == 0:
+		return "nothing done yet"
+	if step == now:
+		return "where it is now, %d of %d%s" % [now, total, ": after %s" % names[now - 1] if now > 0 and now <= names.size() else ""]
+	if step == 0:
+		return "back to the start, before %s" % (names[0] if not names.is_empty() else "the first edit")
+	var called: String = names[step - 1] if step <= names.size() else "step %d" % step
+	return "%s to after %s, %d of %d" % ["back" if step < now else "forward", called, step, total]
+
+
+func _light_history() -> void:
+	if _history == null:
+		return
+	var total := _history_size()
+	_history.available = total > 0
+	_history.snap_to(float(maxi(DAW.state.undo_depth, 0)) / total if total > 0 else 0.0)
 
 
 func set_ripple_edit(on: bool) -> void:

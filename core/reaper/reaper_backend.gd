@@ -684,6 +684,17 @@ func redo() -> void:
 	_undo_or_redo("Redo", REDO_ACTION)
 
 
+## Reaper's steps one at a time, as far as the depth it last reported says there are.
+func undo_to(depth: int) -> void:
+	var now := state.undo_depth
+	if now < 0:
+		return
+	for _i in maxi(now - depth, 0):
+		undo()
+	for _i in clampi(depth - now, 0, maxi(state.redo_depth, 0)):
+		redo()
+
+
 func _undo_or_redo(fn: String, action: int) -> void:
 	if _bridge != null and _bridge.is_open():
 		_edit(fn, [])

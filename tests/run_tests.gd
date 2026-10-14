@@ -298,6 +298,7 @@ func _ready() -> void:
 	_test_a_track_is_duplicated()
 	_test_the_selection_is_nudged_by_the_grid()
 	_test_an_item_fades_with_equal_power()
+	_test_history_can_be_jumped_through()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -13062,6 +13063,12 @@ func _test_the_timeline_clips_are_the_brightest_thing_on_their_lane() -> void:
 	timeline.free()
 
 
+func _is_marked_tool(k: Node) -> bool:
+	if k is GlyphKey:
+		return (k as GlyphKey).glyph != &""
+	return k is GlyphRail and (k as GlyphRail).glyph != &"" and (k as GlyphRail).label == ""
+
+
 func _test_the_timelines_keys_are_big_enough_to_aim_at() -> void:
 	# 2026-10-12: "all the buttons and dials and knobs are sooooo tiny". The keys under the
 	# timeline were 22 mm with 7 px captions; then words on screen buttons, which were a screen
@@ -13072,10 +13079,11 @@ func _test_the_timelines_keys_are_big_enough_to_aim_at() -> void:
 	timeline.set_wide(true)
 	timeline._process(0.0)
 	var deck: TimelineDeck = timeline.deck
-	check("every tool is a token at least 30 mm across, with a mark on it",
-			GlyphKey.SIZE >= 0.030 and deck.tools.all(func(k): return k is GlyphKey and (k as GlyphKey).glyph != &""))
-	check("no word printed on any of them", deck.tools.all(func(k): return (k as GlyphKey).caption == ""))
-	check("and each says what it is when hovered", deck.tools.all(func(k): return (k as GlyphKey).title().length() > 3))
+	# The history is a rail among them, marked like the rest.
+	check("every tool is a token at least 30 mm across, or a rail, with a mark on it",
+			GlyphKey.SIZE >= 0.030 and deck.tools.all(_is_marked_tool))
+	check("no word printed on any of them", deck.tools.all(func(k): return k is GlyphRail or (k as GlyphKey).caption == ""))
+	check("and each says what it is when hovered", deck.tools.all(func(k): return String(k.call("title")).length() > 3))
 	var right_edge := -INF
 	var clear := true
 	for page in deck.pages:
@@ -19577,6 +19585,65 @@ func _test_an_item_fades_with_equal_power() -> void:
 	page.fade_shape.pressed.emit()
 	check("again, straight", DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
 	DAW.clear_item_selection()
+	timeline.free()
+	_offline()
+
+
+func _test_history_can_be_jumped_through() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	backend.forget_history()
+	var base := s.undo_depth
+	check("a fresh history has nothing in it", base == 0 and s.undo_names.is_empty())
+	var kick := s.track(2).display_name()
+	DAW.set_track_volume(2, 0.3)
+	DAW.move_item(2, 1, s.item(2, 1).start + 1.0)
+	DAW.add_marker(12.0, "Here")
+	DAW.duplicate_track(3)
+	check("four steps, each named for what it did and where (%s)" % [s.undo_names], s.undo_names.size() == 4
+			and s.undo_names[0] == "%s: volume" % kick and s.undo_names[1] == "%s: move item" % kick
+			and s.undo_names[2] == "add marker" and String(s.undo_names[3]).ends_with(": duplicate track"))
+	var start1 := s.item(2, 1).start
+	DAW.undo_to(1)
+	check("jumped back to after the first, in one go", s.undo_depth == 1 and s.redo_depth == 3
+			and not s.markers.has(12.0) and not is_equal_approx(s.item(2, 1).start, start1))
+	check("the names stay, the ones to redo after (%s)" % [s.undo_names], s.undo_names.size() == 4
+			and s.undo_names[3].ends_with(": duplicate track"))
+	DAW.undo_to(3)
+	check("and forward again to after the third", s.undo_depth == 3 and s.markers.has(12.0))
+	DAW.undo_to(99)
+	check("past the end is the end", s.undo_depth == 4 and s.redo_depth == 0)
+	DAW.undo_to(0)
+	check("and 0 is the start", s.undo_depth == 0 and s.redo_depth == 4)
+	DAW.undo_to(4)
+	backend._repl_durable.clear()
+	DAW.undo()
+	check("the names go to guests with the depth", backend._repl_durable.has("/undo")
+			and (backend._repl_durable["/undo"] as Array).size() == 6)
+	var guest := MixState.new()
+	MixWire.apply(guest, "/undo", backend._repl_durable["/undo"])
+	check("and a guest reads them", guest.undo_depth == 3 and guest.undo_names == s.undo_names)
+	DAW.apply_intent(&"undo_to", [1.0])
+	check("a guest may jump", s.undo_depth == 1)
+	DAW.apply_intent(&"undo_to", ["x"])
+	check("not with nonsense", s.undo_depth == 1)
+	DAW.undo_to(4)
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var rail := timeline._history
+	check("the history rail is on the tools, its bead at the end", rail != null and rail in timeline.deck.tools
+			and rail.glyph == &"history" and rail.available and is_equal_approx(rail.value, 1.0))
+	check("its card names where it is (%s)" % rail.describe_value.call(1.0),
+			rail.describe_value.call(1.0).begins_with("where it is now, 4 of 4"))
+	check("and where a place along it goes (%s)" % rail.describe_value.call(0.5),
+			rail.describe_value.call(0.5) == "back to after %s: move item, 2 of 4" % kick)
+	check("and its start (%s)" % rail.describe_value.call(0.0), rail.describe_value.call(0.0).begins_with("back to the start, before"))
+	rail.value_committed.emit(0.5)
+	check("let go there, the history goes there", s.undo_depth == 2)
+	timeline._process(0.0)
+	check("and the bead with it", is_equal_approx(rail.value, 0.5))
 	timeline.free()
 	_offline()
 

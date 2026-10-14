@@ -115,6 +115,8 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			if args.size() > 1:
 				state.undo_depth = int(args[0])
 				state.redo_depth = int(args[1])
+				# And what each step is called, after the two counts, when the host says.
+				state.undo_names = args.slice(2).map(func(n): return str(n))
 				state.transport_changed.emit()
 		"project":
 			# dawlings's own. OSC says nothing about how big a project is -- only how big the

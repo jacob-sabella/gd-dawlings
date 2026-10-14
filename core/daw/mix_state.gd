@@ -455,6 +455,9 @@ var loop_end: float = 0.0
 ## How many steps there are to undo and redo, when the backend knows. -1: it does not say.
 var undo_depth: int = -1
 var redo_depth: int = -1
+## What each step of history is called, oldest first: the `undo_depth` done ones, then the ones
+## to redo, the next first. Empty when the backend does not say.
+var undo_names: Array = []
 ## Seconds. How far the ruler has to run, which is NOT derivable from the items: a project can
 ## be longer than its last item, and a timeline that ends at the last block cannot be scrolled
 ## into the empty bars you are about to record into.

@@ -73,6 +73,12 @@ func _build() -> void:
 			var m := -1.0 if _kind == &"nudge_earlier" else 1.0
 			_box(Vector2(-0.3 * m, 0.0), Vector2(0.95, 1.0), 0.5)
 			_cone(Vector2(0.62 * m, 0.0), Vector2(m, 0), 0.32, 0.45)
+		&"history":
+			# A clock face, its hands turned back.
+			_ring(Vector2.ZERO, 0.78, 0.14)
+			_rod(Vector2.ZERO, Vector2(0.0, 0.52), 0.11, 0.4)
+			_rod(Vector2.ZERO, Vector2(-0.4, -0.18), 0.11, 0.4)
+			_cone(Vector2(-0.82, 0.55), Vector2(-0.6, -0.8), 0.24, 0.4)
 		&"select_all":
 			for gx in [-0.68, 0.0, 0.68]:
 				for gy in [0.34, -0.34]:

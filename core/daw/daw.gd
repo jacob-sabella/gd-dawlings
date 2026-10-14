@@ -63,7 +63,7 @@ const COMMANDS := [
 	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
-	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
+	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
@@ -434,6 +434,8 @@ func loop_selected_items() -> bool:
 	return true
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
+## Back or forward through history to `depth` steps done: the history list's jump.
+func undo_to(depth: int) -> void: _do(&"undo_to", [maxi(depth, 0)])
 func select_item(track_index: int, item_index: int, additive := false) -> void:
 	_do(&"select_item", [track_index, item_index, additive])
 func clear_item_selection() -> void: _do(&"clear_item_selection", [])
@@ -621,9 +623,30 @@ func _do(verb: StringName, args: Array) -> void:
 	if Session.is_authority():
 		if locked_against(verb, args):
 			return
-		backend.callv(verb, args)
+		_call(verb, args)
 		return
 	Session.send_intent(verb, args)
+
+
+## The backend does it, knowing what to call it in the history list.
+func _call(verb: StringName, args: Array) -> void:
+	backend.acting = step_name(verb, args)
+	backend.callv(verb, args)
+	backend.acting = ""
+
+
+## What an edit is called in the history list: the verb in words, and the track it is on when it
+## names one ("Kick: move item").
+const NAMED_BY_TRACK := [&"move_item", &"add_fx", &"remove_fx", &"move_fx", &"create_send", &"remove_send",
+		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track"]
+func step_name(verb: StringName, args: Array) -> String:
+	var words := String(verb).trim_prefix("set_").replace("_", " ")
+	var by_track := verb in ITEM_EDITS or verb in NAMED_BY_TRACK or String(verb).begins_with("set_track") \
+			or String(verb).begins_with("set_fx") or String(verb).begins_with("set_send")
+	if by_track and not args.is_empty() and typeof(args[0]) in [TYPE_INT, TYPE_FLOAT] \
+			and state != null and state.tracks.has(int(args[0])):
+		return "%s: %s" % [state.track(int(args[0])).display_name(), words.trim_prefix("track ")]
+	return words
 
 
 ## An intent that arrived from a guest. Checked against the vocabulary rather than called
@@ -854,9 +877,14 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		if not midi_take_refusal(args).is_empty():
 			return
 		args = MidiTake.clean_args(args)
+	if verb == &"undo_to":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
+			push_warning("DAW: refused a malformed undo_to intent %s." % [args])
+			return
+		args = [maxi(int(args[0]), 0)]
 	if locked_against(verb, args):
 		return
-	backend.callv(verb, args)
+	_call(verb, args)
 
 
 ## A recorded file onto a track, by song position. The host's own verb and not an intent: a

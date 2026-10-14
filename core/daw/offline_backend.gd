@@ -972,7 +972,7 @@ func _remember(key: String, back: Callable, again: Callable, folds := true) -> v
 			last["again"] = again
 			last["t"] = now
 			return
-	_undo.append({"key": key, "back": back, "again": again, "t": now})
+	_undo.append({"key": key, "back": back, "again": again, "t": now, "name": acting if acting != "" else _name_of_key(key)})
 	_redo.clear()
 	_say_depth()
 
@@ -1003,6 +1003,22 @@ func redo() -> void:
 	_say_depth()
 
 
+## A step's name from what it changed, when the edit came without one: "Kick: volume" for
+## /track/2/volume, "tracks" for a change of structure.
+func _name_of_key(key: String) -> String:
+	var p := key.trim_prefix("/").split("/")
+	if p.size() >= 3 and p[0] == "track" and p[1].is_valid_int() and state.tracks.has(int(p[1])):
+		return "%s: %s" % [state.track(int(p[1])).display_name(), " ".join(p.slice(2))]
+	return {"structure": "tracks", "marker": "markers"}.get(key, key.trim_prefix("/").replace("/", " "))
+
+
+func undo_to(depth: int) -> void:
+	while _undo.size() > maxi(depth, 0):
+		undo()
+	while _undo.size() < depth and not _redo.is_empty():
+		redo()
+
+
 ## A different project has been opened: what could be undone belonged to the old one.
 func forget_history() -> void:
 	_undo.clear()
@@ -1014,8 +1030,12 @@ func forget_history() -> void:
 func _say_depth() -> void:
 	state.undo_depth = _undo.size()
 	state.redo_depth = _redo.size()
+	var names: Array = _undo.map(func(step): return str(step.get("name", step["key"])))
+	for k in range(_redo.size() - 1, -1, -1):
+		names.append(str(_redo[k].get("name", _redo[k]["key"])))
+	state.undo_names = names
 	state.transport_changed.emit()
-	record_for_replication("/undo", [_undo.size(), _redo.size()])
+	record_for_replication("/undo", [_undo.size(), _redo.size()] + names)
 
 
 # --- editing ------------------------------------------------------------------------------

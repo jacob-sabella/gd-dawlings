@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 27
+Iterations done: 28
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -86,7 +86,7 @@ Iterations done: 27
 - [x] autosave (2026-10-14; the host keeps a copy in user://autosave five minutes after the first unsaved change, never while the transport runs, never over the project's own file; the save token's card says when)
 - [x] crash recovery (2026-10-14; a RECOVER token by SAVE lights when an earlier run left an autosave copy newer than the project, and opens it in its place, unsaved; host only)
 - [ ] more than one autosave copy kept, Reaper's timestamped backups (missing)
-- [ ] undo history list: jump to any step (missing)
+- [x] undo history list: jump to any step (HISTORY rail on the timeline tools, each step named; on Reaper the card says "step N")
 - [ ] project templates: a new project from a saved layout of tracks, routing and plugins (missing)
 
 ## Performance and latency
