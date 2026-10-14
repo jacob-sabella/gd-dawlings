@@ -295,6 +295,7 @@ func _ready() -> void:
 	_test_notes_are_made_staccato()
 	_test_velocities_are_evened()
 	_test_a_tracks_items_are_selected_together()
+	_test_an_item_is_renamed()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
@@ -20208,6 +20209,34 @@ func _test_the_last_marker_removed_is_gone_everywhere() -> void:
 	link._on_timeline({"markers": [], "length": 60.0})
 	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
 	link.free()
+
+
+func _test_an_item_is_renamed() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	DAW.insert_midi_take(lane, 0.0, 2.0 * beat, [[0.0, beat, 60, 100, 0]], "Take 1")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.rename_item(lane, 0, "Verse riff")
+	check("the item has the new name", s.item(lane, 0).name == "Verse riff" and s.undo_depth - depth == 1)
+	DAW.rename_item(lane, 0, "Verse riff")
+	DAW.rename_item(lane, 0, "")
+	check("the same name, or none, is no edit", s.undo_depth - depth == 1 and s.item(lane, 0).name == "Verse riff")
+	DAW.undo()
+	check("undo gives the old name back", s.item(lane, 0).name == "Take 1")
+	DAW.rename_item(lane, 0, "x".repeat(300))
+	check("a long name is cut", s.item(lane, 0).name.length() == DAW.MARKER_NAME_MAX)
+	DAW.set_item_locked(lane, 0, true)
+	DAW.rename_item(lane, 0, "Locked but named")
+	check("a locked item may be named", s.item(lane, 0).name == "Locked but named")
+	DAW.apply_intent(&"rename_item", [lane, 0, 7])
+	DAW.apply_intent(&"rename_item", [lane, NAN, "bad"])
+	check("malformed intents are refused", s.item(lane, 0).name == "Locked but named")
+	DAW.apply_intent(&"rename_item", [lane, 0, "From a guest"])
+	check("a sound one from a guest is applied", s.item(lane, 0).name == "From a guest")
+	check("the verb is in the vocabulary", &"rename_item" in DAW.COMMANDS and not &"rename_item" in DAW.LOCKED_REFUSES)
 
 
 func _test_a_tracks_items_are_selected_together() -> void:

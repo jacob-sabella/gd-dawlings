@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -606,6 +606,11 @@ func legato_item(track_index: int, item_index: int) -> void:
 	_do(&"legato_item", [track_index, item_index])
 
 
+## An item given a name (its take's name in Reaper). One undo step; a locked item may be named.
+func rename_item(track_index: int, item_index: int, item_name: String) -> void:
+	_do(&"rename_item", [track_index, item_index, item_name.left(MARKER_NAME_MAX)])
+
+
 ## Every note of a MIDI item given the item's average velocity.
 func even_velocity(track_index: int, item_index: int) -> void:
 	_do(&"even_velocity", [track_index, item_index])
@@ -744,6 +749,13 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed edit_marker intent %s." % [args])
 			return
 		args = [float(args[0]), maxf(float(args[1]), 0.0), str(args[2]).left(MARKER_NAME_MAX)]
+	if verb == &"rename_item":
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT] \
+				or not is_finite(float(args[0])) or not is_finite(float(args[1])) \
+				or typeof(args[2]) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			push_warning("DAW: refused a malformed rename_item intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1]), str(args[2]).left(MARKER_NAME_MAX)]
 	if verb == &"select_track_items":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
 			push_warning("DAW: refused a malformed select_track_items intent %s." % [args])

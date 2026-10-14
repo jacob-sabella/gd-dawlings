@@ -57,6 +57,8 @@ var legato: GlyphKey
 var staccato: GlyphKey
 ## Every note given the same velocity (DAW.even_velocity).
 var even: GlyphKey
+## Name the item, on the keypad (DAW.rename_item).
+var item_name: GlyphKey
 ## The velocity of the note sounding at the playhead (else the next to start): a rail, set when let go.
 var note_velocity: GlyphRail
 ## [track, item] being edited, or empty while there is not exactly one selected.
@@ -121,6 +123,10 @@ func _ready() -> void:
 	humanise = _key("ItemHumanise", &"humanise", NOTE_INK, "ITEM  HUMANISE", _humanise, _humanise_text)
 	legato = _key("ItemLegato", &"legato", NOTE_INK, "ITEM  LEGATO", func(): _legato(), _legato_text)
 	staccato = _key("ItemStaccato", &"staccato", NOTE_INK, "ITEM  STACCATO", func(): _staccato(), _staccato_text)
+	item_name = _key("ItemName", &"item_name", Color(0.45, 0.78, 0.95), "ITEM  NAME", func(): _rename(),
+			func() -> String:
+				var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
+				return "rename \"%s\", on the keypad" % item.name if item != null else "select one item")
 	even = _key("ItemEven", &"even", NOTE_INK, "ITEM  EVEN VELOCITY", func(): _even(), _even_text)
 	note_velocity = _slider("ItemNoteVelocity", &"note_velocity", NOTE_INK, func() -> String: return "ITEM  NOTE VELOCITY",
 			func(v: float) -> String: return "the note at the playhead: velocity %d" % _velocity_of(v))
@@ -145,7 +151,8 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, note_velocity]:
+	item_name.lit = one
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, note_velocity, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -273,6 +280,11 @@ func _legato_text() -> String:
 func _legato() -> void:
 	if not _target.is_empty():
 		DAW.legato_item(_target[0], _target[1])
+
+
+func _rename() -> void:
+	if not _target.is_empty() and surface != null:
+		surface.ask_item_name(_target[0], _target[1])
 
 
 func _even_text() -> String:

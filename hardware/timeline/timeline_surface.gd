@@ -1256,6 +1256,21 @@ func ask_region_name(at: float) -> Node:
 	return asker
 
 
+## A new name for an item: on the monitor, or on a keypad in the room. Null for no such item.
+func ask_item_name(track_index: int, item_index: int) -> Node:
+	var item := DAW.state.item(track_index, item_index)
+	if item == null:
+		return null
+	var asker := _ask_name("Name item", item.name)
+	asker.answered.connect(_rename_item_to.bind(track_index, item_index))
+	return asker
+
+
+func _rename_item_to(text: String, track_index: int, item_index: int) -> void:
+	if text != "":
+		DAW.rename_item(track_index, item_index, text)
+
+
 ## A name asked for on the monitor, or with no keyboard (a headset) on a keypad in the room. The
 ## asker, whose `answered` gives the text.
 func _ask_name(title: String, current: String) -> Node:

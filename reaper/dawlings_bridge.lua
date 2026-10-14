@@ -1703,6 +1703,17 @@ function handlers.ShiftVelocity(args)
   return edited('Note velocity')
 end
 
+-- args: track, index, name: the item's active take given that name.
+function handlers.RenameItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local take = reaper.GetActiveTake(it)
+  if not take then return {ok = false, error = 'no take'} end
+  reaper.Undo_BeginBlock()
+  reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', tostring(args[3] or ''), true)
+  return edited('Rename item')
+end
+
 -- args: track, index: every note given the rounded average velocity of the item's notes.
 function handlers.EvenVelocity(args)
   local it = item_at(args)

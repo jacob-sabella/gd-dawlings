@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func rename_item(_track_index: int, _item_index: int, _item_name: String) -> void: pass
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
 func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> void: pass
@@ -937,6 +938,17 @@ func _locally_fade_shape(track_index: int, item_index: int, in_shape: int, out_s
 	var lane := _lane_copy(track_index)
 	lane[item_index].fade_shape = in_shape
 	lane[item_index].fade_out_shape = out_shape
+	_write_lane(track_index, lane)
+	return true
+
+
+## False when there is no such item, the name is empty, or it already has it.
+func _locally_rename_item(track_index: int, item_index: int, item_name: String) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or item_name == "" or it.name == item_name:
+		return false
+	var lane := _lane_copy(track_index)
+	lane[item_index].name = item_name
 	_write_lane(track_index, lane)
 	return true
 

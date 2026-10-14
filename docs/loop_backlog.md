@@ -3561,3 +3561,12 @@ track and clears every other track's selection (Reaper's select-all-in-track). `
 is a plain intent (index sanitised in `apply_intent`, unknown track ignored); Reaper's
 `SelectTrackItems` handler is syntax-checked, not run live. Probe: host 53, guest 47, 0 failed.
 Suite: 10432 checks, 0 failed.
+
+## 2026-10-14 -- iteration 42: rename an item
+
+A NAME key on the ITEM page (a block with a label strip) opens the keypad (or the monitor's name
+prompt) for the one selected item. `DAW.rename_item` is an intent with a string, sanitised in
+`apply_intent` (index, type, 64-character cut), one undo step; a locked item may still be named. The
+name rides the existing item wire and is saved as the dawkit clip's name. Reaper's `RenameItem`
+sets the active take's P_NAME (syntax-checked, not run live). The key is not drawn lit/active for
+several items: it renames one. Probe: host 53, guest 47, 0 failed. Suite: 10440 checks, 0 failed.

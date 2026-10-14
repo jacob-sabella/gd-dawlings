@@ -964,6 +964,11 @@ func legato_item(track_index: int, item_index: int) -> void:
 		_edit("LegatoItem", [track_index, item_index])
 
 
+func rename_item(track_index: int, item_index: int, item_name: String) -> void:
+	if _locally_rename_item(track_index, item_index, item_name):
+		_edit("RenameItem", [track_index, item_index, item_name])
+
+
 func even_velocity(track_index: int, item_index: int) -> void:
 	if _locally_even_velocity(track_index, item_index):
 		_edit("EvenVelocity", [track_index, item_index])

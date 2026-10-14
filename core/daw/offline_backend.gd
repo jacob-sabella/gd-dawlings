@@ -1224,6 +1224,12 @@ func staccato_item(track_index: int, item_index: int) -> void:
 		_remember_edit(before)
 
 
+func rename_item(track_index: int, item_index: int, item_name: String) -> void:
+	var before := _lanes_snapshot()
+	if _locally_rename_item(track_index, item_index, item_name):
+		_remember_edit(before)
+
+
 func even_velocity(track_index: int, item_index: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_even_velocity(track_index, item_index):

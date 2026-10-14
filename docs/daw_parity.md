@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 41
+Iterations done: 42
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -22,6 +22,7 @@ Iterations done: 41
 - [x] select all items (2026-10-14), select all items on one track (2026-10-14, TRACK page), select, move (across tracks), split, delete, duplicate, trim with source offset
 - [x] item gain, fade in/out (linear), loop points on an item
 - [x] item mute (2026-10-14)
+- [x] rename an item (2026-10-14; NAME on the ITEM page, on the keypad or monitor; saved as the clip name; Reaper take name through the bridge, not run against a live Reaper)
 - [x] crossfade between two overlapping items on a track (2026-10-14; equal-power since iteration 27, one edit)
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)

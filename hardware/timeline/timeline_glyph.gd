@@ -274,6 +274,11 @@ func _build() -> void:
 			var nh := [0.5, 1.7, 0.7]
 			for k in 3:
 				_box(Vector2(-0.62 + k * 0.62, -0.9 + nh[k] * 0.5), Vector2(0.42, nh[k]), 0.4 if k != 1 else 0.9)
+		&"item_name":
+			# A block with a label strip across it.
+			_box(Vector2(0.0, -0.1), Vector2(1.7, 1.0), 0.45)
+			_rod(Vector2(-0.55, 0.0), Vector2(0.55, 0.0), 0.12, 0.95)
+			_rod(Vector2(-0.55, -0.3), Vector2(0.2, -0.3), 0.1, 0.8)
 		&"even":
 			# Bricks all one height, a level line over them.
 			for k in 3:
