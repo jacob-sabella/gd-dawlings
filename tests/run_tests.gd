@@ -293,6 +293,7 @@ func _ready() -> void:
 	_test_earlier_autosaves_are_kept()
 	_test_notes_are_made_legato()
 	_test_notes_are_made_staccato()
+	_test_velocities_are_evened()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
@@ -20206,6 +20207,29 @@ func _test_the_last_marker_removed_is_gone_everywhere() -> void:
 	link._on_timeline({"markers": [], "length": 60.0})
 	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
 	link.free()
+
+
+func _test_velocities_are_evened() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	var played: Array = [[4.0 * beat, 5.0 * beat, 60, 40, 0], [5.0 * beat, 6.0 * beat, 64, 100, 0], [6.0 * beat, 7.0 * beat, 67, 100, 0]]
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, played, "Even")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.even_velocity(lane, 0)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("every note is at the average (%d, %d, %d)" % [n[0][3], n[1][3], n[2][3]], int(n[0][3]) == 80 and int(n[1][3]) == 80 and int(n[2][3]) == 80)
+	check("times and pitches are as played", is_equal_approx(n[1][0], 5.0 * beat) and int(n[2][2]) == 67 and s.undo_depth - depth == 1)
+	DAW.even_velocity(lane, 0)
+	check("done again, it is no edit", s.undo_depth - depth == 1)
+	DAW.set_item_locked(lane, 0, true)
+	var locked := s.undo_depth
+	DAW.even_velocity(lane, 0)
+	check("a locked item is left alone", s.undo_depth == locked)
+	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"even_velocity") and &"even_velocity" in DAW.COMMANDS)
 
 
 func _test_notes_are_made_staccato() -> void:

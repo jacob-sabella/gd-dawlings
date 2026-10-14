@@ -958,6 +958,11 @@ func legato_item(track_index: int, item_index: int) -> void:
 		_edit("LegatoItem", [track_index, item_index])
 
 
+func even_velocity(track_index: int, item_index: int) -> void:
+	if _locally_even_velocity(track_index, item_index):
+		_edit("EvenVelocity", [track_index, item_index])
+
+
 func staccato_item(track_index: int, item_index: int) -> void:
 	if _locally_staccato(track_index, item_index):
 		_edit("StaccatoItem", [track_index, item_index])

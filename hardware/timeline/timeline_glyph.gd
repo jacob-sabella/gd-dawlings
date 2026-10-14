@@ -269,6 +269,11 @@ func _build() -> void:
 			var nh := [0.5, 1.7, 0.7]
 			for k in 3:
 				_box(Vector2(-0.62 + k * 0.62, -0.9 + nh[k] * 0.5), Vector2(0.42, nh[k]), 0.4 if k != 1 else 0.9)
+		&"even":
+			# Bricks all one height, a level line over them.
+			for k in 3:
+				_box(Vector2(-0.62 + k * 0.62, -0.35), Vector2(0.42, 1.1), 0.4)
+			_rod(Vector2(-0.95, 0.5), Vector2(0.95, 0.5), 0.07, 0.9)
 		&"softer", &"harder":
 			var hs := [1.6, 0.9, 0.45] if _kind == &"softer" else [0.45, 0.9, 1.6]
 			for k in 3:

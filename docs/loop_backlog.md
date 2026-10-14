@@ -3544,3 +3544,12 @@ MIDI item to half its length (never below `MidiTake.MIN_NOTE`). `DAW.staccato_it
 ITEM_EDITS intent, undoable and refused on locked items; Reaper's bridge has a `StaccatoItem`
 handler (syntax-checked, not run against a live Reaper). Session probe not run: it is the same
 intent shape as legato. Suite: 10420 checks, 0 failed.
+
+## 2026-10-14 -- iteration 40: even velocity
+
+An EVEN key on the ITEM page (level bars under a line) gives every note of a MIDI item the rounded
+average of their velocities. `DAW.even_velocity` is an ITEM_EDITS intent, undoable, refused on
+locked items, a no-op when the notes already agree; Reaper's `EvenVelocity` handler is
+syntax-checked, not run live. Probe not run (same intent shape as legato). Seen while shooting:
+`CabinVenue` calls a missing `_remember_tablets` (a script error in the shot run only, not in the
+suite); not from this change, left for later. Suite: 10425 checks, 0 failed.

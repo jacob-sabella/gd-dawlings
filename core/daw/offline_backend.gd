@@ -1220,6 +1220,12 @@ func staccato_item(track_index: int, item_index: int) -> void:
 		_remember_edit(before)
 
 
+func even_velocity(track_index: int, item_index: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_even_velocity(track_index, item_index):
+		_remember_edit(before)
+
+
 func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_humanise(track_index, item_index, seconds, velocity):

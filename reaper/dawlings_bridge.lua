@@ -1689,6 +1689,33 @@ function handlers.ShiftVelocity(args)
   return edited('Note velocity')
 end
 
+-- args: track, index: every note given the rounded average velocity of the item's notes.
+function handlers.EvenVelocity(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local _, count = reaper.MIDI_CountEvts(take)
+      local total, seen = 0, 0
+      for n = 0, count - 1 do
+        local ok, _, _, _, _, _, _, vel = reaper.MIDI_GetNote(take, n)
+        if ok then total = total + vel; seen = seen + 1 end
+      end
+      if seen > 0 then
+        local mean = math.max(1, math.min(127, math.floor(total / seen + 0.5)))
+        for n = 0, count - 1 do
+          local ok, sel, muted, ppq_on, ppq_off, chan, pitch = reaper.MIDI_GetNote(take, n)
+          if ok then reaper.MIDI_SetNote(take, n, sel, muted, ppq_on, ppq_off, chan, pitch, mean, true) end
+        end
+        reaper.MIDI_Sort(take)
+      end
+    end
+  end
+  return edited('Even velocity')
+end
+
 -- args: track, index: every note cut to half its length (a tick at least).
 function handlers.StaccatoItem(args)
   local it = item_at(args)
