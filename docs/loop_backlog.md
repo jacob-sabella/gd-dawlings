@@ -3186,3 +3186,17 @@ notes against Reaper's tempo map -- not yet run against a live Reaper. On the IT
 with a long-short mark right of QUANTISE, in reach for an unlocked MIDI item: what the next press
 swings by, each person's own, not saved. Groove templates (another item's feel) split out as
 missing.
+
+## DAW parity, iteration 15: render bit depth and dither (2026-10-14)
+`DAW.render(stems, bits)`, bits one of `DAW.RENDER_BITS` (16, 24, 32), 24 the usual. dawkit
+(5bcff1d, submodule bumped) writes 16- and 24-bit integer WAVs with triangular dither of one step,
+seeded so the same sound writes the same file, as well as 32-bit float (`DawKitAudioFile.write_wav`'s
+new `bits`); the built-in render passes the depth through `MixRender.bits`. The built-in render
+used to be 32-bit float only. A guest's ask carries its depth; one outside the three, or missing,
+renders at 24 rather than being refused. Reaper: `RenderProject` takes the depth as a fifth word,
+sets the WAV sink to it, and turns dither on for master and stems below float (RENDER_DITHER 5,
+saved and put back with the other render settings) -- not yet run against a live Reaper. On the
+RENDER page, a token after MIX and STEMS steps the depth; its mark is a wave drawn in coarse steps
+(16), fine steps (24) or smooth (32 float), and the cards say which. Each person's own, not saved.
+Other file types and sample rates split out as missing. The dither loop is GDScript, a few
+seconds' work per minute of stereo after the render plays; fine for now.

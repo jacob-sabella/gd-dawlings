@@ -289,6 +289,7 @@ func _ready() -> void:
 	_test_a_ripple_delete_closes_the_gap()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
+	_test_a_render_is_written_at_a_chosen_depth()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -13950,8 +13951,9 @@ func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
 	var on_done := func(files: PackedStringArray, problems: PackedStringArray) -> void:
 		heard.append([files, problems])
 	DAW.render_finished.connect(on_done)
-	DAW.render(true)
-	check("a render is under way, not looping", backend.rendering != null and not s.looping)
+	DAW.render(true, 16)
+	check("a render is under way, not looping, at the depth asked for", backend.rendering != null and not s.looping
+			and backend.rendering.bits == 16)
 	DAW.render(false)
 	check("and a second is refused while it runs", heard.size() == 1 and not (heard[0][1] as PackedStringArray).is_empty())
 	heard.clear()
@@ -13968,6 +13970,8 @@ func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
 	check("the mix and a stem per track (%d files, %s)" % [files.size(), heard[0][1]],
 			files.size() == 1 + s.track_indices().size() and (heard[0][1] as PackedStringArray).is_empty())
 	var mix := DawKitAudioFile.read(files[0])
+	var head := FileAccess.get_file_as_bytes(files[0])
+	check("written as 16-bit integer WAV", head.decode_u16(20) == 1 and head.decode_u16(34) == 16)
 	var rate := int(AudioServer.get_mix_rate())
 	var range_frames := int(roundf(0.5 * rate))
 	var frames := int(mix["frames"])
@@ -19022,3 +19026,52 @@ func _test_quantise_can_swing() -> void:
 	check("and out of reach for an audio item", not page.swing.available)
 	DAW.clear_item_selection()
 	timeline.free()
+
+
+func _test_a_render_is_written_at_a_chosen_depth() -> void:
+	_offline()
+	check("three depths, 24-bit the usual", DAW.RENDER_BITS == [16, 24, 32] and DAW.RENDER_BITS_DEFAULT == 24)
+	# A guest's ask, as the host takes it: the depth kept when it is one of the three, the usual
+	# one when it is not, and an ask from before depths (one word) still a render.
+	var spy := RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	DAW.apply_intent(&"render", [1.0, 16.0])
+	DAW.apply_intent(&"render", [0.0, 12.0])
+	DAW.apply_intent(&"render", [1.0])
+	DAW.apply_intent(&"render", [1.0, NAN])
+	check("the host renders a guest's depth, or 24 (%s)" % [spy.asked],
+			spy.asked == [[true, 16], [false, 24], [true, 24], [true, 24]])
+
+	# The RENDER page: a token stepping round the depths, its mark the depth, sent with the render.
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRenderPage = timeline.render_page
+	check("the render page has a depth token at 24-bit", page.depth != null and page.bits == 24
+			and page.depth.glyph == &"depth_24" and page.depth.lit)
+	page.depth.pressed.emit()
+	check("pressed, 32-bit float, and its mark a smooth wave", page.bits == 32 and page.depth.glyph == &"depth_32")
+	page.depth.pressed.emit()
+	check("again, 16-bit, in coarse steps", page.bits == 16 and page.depth.glyph == &"depth_16")
+	check("MIX's card says the depth (%s)" % page._what(false), page._what(false).contains("16-bit WAV, dithered")
+			or page._what(false).contains("cannot render"))
+	spy = RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	page.busy = false
+	page._render(true)
+	check("and a render from the page carries it (%s)" % [spy.asked], spy.asked == [[true, 16]])
+	timeline.free()
+	_offline()
+
+
+class RenderSpy extends OfflineBackend:
+	var asked: Array = []
+
+	func can(capability: StringName) -> bool:
+		return capability == DAWBackend.Capability.RENDER or super.can(capability)
+
+	func render(stems: bool, bits := 24) -> void:
+		asked.append([stems, bits])

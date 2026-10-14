@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 14
+Iterations done: 15
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -68,7 +68,8 @@ Iterations done: 14
 
 ## Export
 - [x] mix and stems render
-- [ ] render formats and dither choice (missing)
+- [x] render bit depth, with dither (2026-10-14; 16 or 24-bit dithered, 32-bit float; a token on the RENDER page; Reaper's RENDER_FORMAT and RENDER_DITHER, not yet run against a live Reaper)
+- [ ] render file types other than WAV (FLAC, MP3), sample-rate choice, normalise on render (missing)
 
 ## Undo and project files
 - [x] undo/redo with one step per edit, save/open/new (DAWproject)

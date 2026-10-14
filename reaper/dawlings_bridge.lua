@@ -601,7 +601,9 @@ end
 -- Answers the files written.
 local RENDER_KEYS = {'RENDER_FILE', 'RENDER_PATTERN', 'RENDER_FORMAT'}
 local RENDER_VALUES = {'RENDER_BOUNDSFLAG', 'RENDER_STARTPOS', 'RENDER_ENDPOS', 'RENDER_SETTINGS',
-  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ', 'RENDER_TAILFLAG', 'RENDER_TAILMS'}
+  'RENDER_SRATE', 'RENDER_CHANNELS', 'RENDER_ADDTOPROJ', 'RENDER_TAILFLAG', 'RENDER_TAILMS', 'RENDER_DITHER'}
+-- Reaper's WAV sink config, base64 of 'evaw', the depth, 0, 1: 16-bit, 24-bit, 32-bit float.
+local WAV_FORMATS = {[16] = 'ZXZhdxAAAQ==', [24] = 'ZXZhdxgAAQ==', [32] = 'ZXZhdyAAAQ=='}
 
 function handlers.RenderProject(args)
   local from, to, stems, tail = args[1] or 0, args[2] or 0, (args[3] or 0) > 0.5, math.max(args[4] or 0, 0)
@@ -645,8 +647,12 @@ function handlers.RenderProject(args)
   reaper.GetSetProjectInfo_String(0, 'RENDER_FILE', dir, true)
   -- $track is the track's name for a stem, and "Master" for the mix, renamed below.
   reaper.GetSetProjectInfo_String(0, 'RENDER_PATTERN', name .. ' - $track', true)
-  -- WAV, 24-bit.
-  reaper.GetSetProjectInfo_String(0, 'RENDER_FORMAT', 'ZXZhdxgAAQ==', true)
+  -- WAV, at the depth asked for (args[5]), 24-bit when it is not one of the three; dithered
+  -- (master and stems, bits 1 and 4) below float.
+  local bits = math.floor(args[5] or 24)
+  if not WAV_FORMATS[bits] then bits = 24 end
+  reaper.GetSetProjectInfo_String(0, 'RENDER_FORMAT', WAV_FORMATS[bits], true)
+  reaper.GetSetProjectInfo(0, 'RENDER_DITHER', bits < 32 and 5 or 0, true)
   reaper.GetSetProjectInfo(0, 'RENDER_BOUNDSFLAG', 0, true)
   reaper.GetSetProjectInfo(0, 'RENDER_STARTPOS', from, true)
   reaper.GetSetProjectInfo(0, 'RENDER_ENDPOS', to, true)

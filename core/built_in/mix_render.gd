@@ -45,6 +45,8 @@ var to := 0.0
 ## Where the files go, and what they are called: "<name> - mix.wav", "<name> - <track>.wav".
 var folder := ""
 var name_stem := ""
+## The files' depth: 16 or 24 (dithered integer) or 32 (float). See DawKitAudioFile.write_wav.
+var bits := 24
 ## Track indices to write stems of; the mix is always written.
 var stems: Array = []
 
@@ -199,7 +201,7 @@ func _finish() -> void:
 			samples[i * 2 + 1] = frames[i].y
 		var label := "mix" if key == 0 else DAW.state.track(key).display_name()
 		var path := folder.path_join("%s - %s.wav" % [name_stem, label.validate_filename()])
-		var err := DawKitAudioFile.write_wav(path, samples, 2, _rate)
+		var err := DawKitAudioFile.write_wav(path, samples, 2, _rate, bits)
 		if err == OK:
 			files.append(path)
 		else:

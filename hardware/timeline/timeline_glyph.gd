@@ -206,6 +206,17 @@ func _build() -> void:
 		&"fade_out":
 			_rod(Vector2(-0.95, 0.8), Vector2(0.95, -0.8), 0.13, 0.4)
 			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
+		&"depth_16", &"depth_24":
+			# A sine sampled in steps: fewer for fewer bits.
+			var n := 5 if _kind == &"depth_16" else 9
+			var w := 1.9 / n
+			for k in n:
+				var x := -0.95 + w * (k + 0.5)
+				var y := roundf(sin(x * PI / 0.95) * (2.0 if n == 5 else 4.0)) / (2.0 if n == 5 else 4.0) * 0.75
+				_box(Vector2(x, y), Vector2(w * 0.92, 0.22), 0.35)
+		&"depth_32":
+			_arc(Vector2(-0.475, 0.0), 0.475, 180.0, 0.0, 0.1)
+			_arc(Vector2(0.475, 0.0), 0.475, 180.0, 360.0, 0.1)
 		&"grid_bar", &"grid_4", &"grid_8", &"grid_16", &"grid_off":
 			_box(Vector2.ZERO, Vector2(1.9, 0.9), 0.3)
 			var cells: int = {&"grid_4": 4, &"grid_8": 8, &"grid_16": 16}.get(_kind, 1)

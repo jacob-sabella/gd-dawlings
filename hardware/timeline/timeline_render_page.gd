@@ -10,6 +10,9 @@ const INK := Color(0.95, 0.75, 0.35)
 
 var mix: GlyphKey
 var stems: GlyphKey
+## The files' depth, stepped round DAW.RENDER_BITS: each person's own, sent with their render.
+var depth: GlyphKey
+var bits := DAW.RENDER_BITS_DEFAULT
 ## Between asking for a render and hearing it is done.
 var busy := false
 
@@ -21,6 +24,10 @@ func _ready() -> void:
 			func() -> String: return _what(false))
 	stems = _key("RenderStems", &"render_stems", INK, "RENDER  STEMS", _render.bind(true),
 			func() -> String: return _what(true))
+	_group()
+	depth = _key("RenderDepth", depth_glyph(bits), INK, "RENDER  BIT DEPTH", step_depth,
+			func() -> String: return "%s: %s next" % [depth_name(bits), depth_name(_next_depth(bits))])
+	depth.lit = true
 	DAW.render_finished.connect(_on_rendered)
 	DAW.connection_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
@@ -52,7 +59,30 @@ func _what(with_stems: bool) -> String:
 		return "this DAW cannot render from here"
 	if busy:
 		return "rendering, as the song plays"
-	return "%s%s, played through once and rung out" % [_span(), " and each track's stem" if with_stems else ""]
+	return "%s%s, played through once and rung out, %s" % [_span(),
+			" and each track's stem" if with_stems else "", depth_name(bits)]
+
+
+func step_depth() -> void:
+	bits = _next_depth(bits)
+	depth.glyph = depth_glyph(bits)
+
+
+static func _next_depth(b: int) -> int:
+	var at := DAW.RENDER_BITS.find(b)
+	return DAW.RENDER_BITS[(at + 1) % DAW.RENDER_BITS.size()]
+
+
+static func depth_name(b: int) -> String:
+	return "32-bit float WAV" if b == 32 else "%d-bit WAV, dithered" % b
+
+
+## A wave drawn in steps: coarse for 16, fine for 24, smooth for 32-bit float.
+static func depth_glyph(b: int) -> StringName:
+	match b:
+		16: return &"depth_16"
+		32: return &"depth_32"
+	return &"depth_24"
 
 
 func _render(with_stems: bool) -> void:
@@ -60,7 +90,7 @@ func _render(with_stems: bool) -> void:
 		return
 	busy = true
 	refresh()
-	DAW.render(with_stems)
+	DAW.render(with_stems, bits)
 
 
 func _on_rendered(_files: PackedStringArray, _problems: PackedStringArray) -> void:

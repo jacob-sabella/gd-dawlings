@@ -316,7 +316,7 @@ func set_automation(_track_index: int, _target: String, _points: Array) -> void:
 ## the mix, and with `stems` each track's own, each with a tail after the range of up to
 ## RENDER_TAIL_SECONDS for effects to ring out. `render_finished` says when and where. A no-op
 ## without Capability.RENDER.
-func render(_stems: bool) -> void: pass
+func render(_stems: bool, _bits := 24) -> void: pass
 const RENDER_TAIL_SECONDS := 4.0
 ## The tempo's changes (see MixState.tempo_points), the first at beat 0 and setting the tempo;
 ## empty for one tempo throughout.
