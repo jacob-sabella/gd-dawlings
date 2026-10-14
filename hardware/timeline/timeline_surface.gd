@@ -126,6 +126,8 @@ var _redo_key: GlyphKey
 var _split_key: GlyphKey
 var _copy_key: GlyphKey
 var _delete_key: GlyphKey
+## Delete and close the gap (DAW.ripple_delete_selected).
+var _ripple_key: GlyphKey
 var _all_key: GlyphKey
 var _zoom_out_key: GlyphKey
 var _zoom_in_key: GlyphKey
@@ -355,6 +357,11 @@ func _build_deck() -> void:
 			func(): DAW.duplicate_selected(), _selection_text)
 	_delete_key = _tool("DeleteKey", &"delete", Color(0.95, 0.38, 0.34), "EDIT  DELETE",
 			func(): DAW.delete_selected(), _selection_text)
+	_ripple_key = _tool("RippleKey", &"ripple_delete", Color(0.98, 0.55, 0.36), "EDIT  DELETE, CLOSE THE GAP",
+			func(): DAW.ripple_delete_selected(),
+			func() -> String:
+				var n := DAW.state.selected_items().size()
+				return "%d selected item(s), and what follows moves up" % n if n > 0 else "select an item first")
 	_all_key = _tool("SelectAllKey", &"select_all", Color(0.55, 0.7, 0.95), "EDIT  SELECT ALL",
 			func(): DAW.select_all_items(), func() -> String: return "every item on every track")
 	_zoom_out_key = _tool("ZoomOutKey", &"zoom_out", TOOL_INK, "VIEW  ZOOM OUT", func(): zoom_view(1.5),
@@ -427,7 +434,7 @@ func _selection_text() -> String:
 
 func _light_selection_keys() -> void:
 	var any := not DAW.state.selected_items().is_empty()
-	for key in [_copy_key, _delete_key]:
+	for key in [_copy_key, _delete_key, _ripple_key]:
 		if key != null:
 			key.lit = any
 	if _all_key != null:

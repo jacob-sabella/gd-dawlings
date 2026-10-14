@@ -279,6 +279,7 @@ func move_item(_track_index: int, _item_index: int, _start: float, _to_track := 
 func split_selected(_seconds: float) -> void: pass
 ## Every selected item, gone.
 func delete_selected() -> void: pass
+func ripple_delete_selected() -> void: pass
 ## A copy of every selected item, straight after it; the copies are then the selection, as Reaper's
 ## own Duplicate leaves it.
 func duplicate_selected() -> void: pass
@@ -510,6 +511,30 @@ func _locally_delete_selected() -> int:
 		# A locked item stays, selected or not.
 		var kept := lane.filter(func(it): return not it.selected or it.locked)
 		gone += lane.size() - kept.size()
+		_write_lane(index, kept)
+	return gone
+
+
+## Returns how many were deleted. Each later item on a track moves back by the length of every
+## deleted item that started before it, so a gap closes and nothing after it changes its order. A
+## locked item is neither deleted nor moved.
+func _locally_ripple_delete_selected() -> int:
+	var gone := 0
+	for index in state.track_indices():
+		if not state.track(index).items.any(func(it): return it.selected and not it.locked):
+			continue
+		var lane := _lane_copy(index)
+		var cut := lane.filter(func(it): return it.selected and not it.locked)
+		var kept := lane.filter(func(it): return not it.selected or it.locked)
+		for item in kept:
+			if item.locked:
+				continue
+			var back := 0.0
+			for c in cut:
+				if c.start < item.start:
+					back += minf(c.length, item.start - c.start)
+			item.start = maxf(item.start - back, 0.0)
+		gone += cut.size()
 		_write_lane(index, kept)
 	return gone
 

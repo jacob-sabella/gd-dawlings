@@ -3154,3 +3154,12 @@ items there too) -- not yet run against a live Reaper. A padlock token on the IT
 locked the shape's rails and keys are out of reach, the clip's thread is drawn white, and a drag
 on it is only a click. Item rails narrowed to keep the page on one row. Suite 10036 checks, 0
 failed; probe 0 failed; dawkit 359 checks, 0 failed. Seen in a screenshot from the seat.
+
+## DAW parity, iteration 12: ripple delete (2026-10-14)
+`DAW.ripple_delete_selected`: the selection goes, and every later unlocked item on its track moves
+back by the part of each deleted item that started before it, so the gap closes without the order
+changing. Other tracks are left alone (Reaper's "ripple per track"). A locked item is neither
+deleted nor moved, and a ripple that deletes nothing is not a history step. One undo step; a guest
+asks for it as a command. A token beside DELETE on the timeline's tools, lit with a selection.
+Reaper path is `RippleDeleteSelected` in the bridge, not yet run against a live Reaper. Ripple move
+and ripple trim are split out, still missing.

@@ -721,6 +721,11 @@ func delete_selected() -> void:
 	_edit("DeleteSelected", [])
 
 
+func ripple_delete_selected() -> void:
+	if _locally_ripple_delete_selected() > 0:
+		_edit("RippleDeleteSelected", [])
+
+
 func copy_selected_to(seconds: float) -> void:
 	if _locally_copy_selected_to(seconds) > 0:
 		_edit("CopySelectedTo", [seconds])

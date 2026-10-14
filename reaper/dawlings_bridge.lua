@@ -1338,6 +1338,41 @@ function handlers.DeleteSelected()
   return result
 end
 
+-- Every selected, unlocked item deleted, and each later item on its track moved back by the length
+-- of every deleted item that started before it: the desk's ripple delete, one undo point.
+function handlers.RippleDeleteSelected()
+  local cut = {}
+  for n = 0, reaper.CountSelectedMediaItems(0) - 1 do
+    local it = reaper.GetSelectedMediaItem(0, n)
+    if (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 0 then cut[#cut + 1] = it end
+  end
+  if #cut == 0 then return {ok = true, deleted = 0} end
+  reaper.Undo_BeginBlock()
+  local spans = {}
+  for _, it in ipairs(cut) do
+    local tr = reaper.GetMediaItem_Track(it)
+    spans[tr] = spans[tr] or {}
+    table.insert(spans[tr], {reaper.GetMediaItemInfo_Value(it, 'D_POSITION'), reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')})
+    reaper.DeleteTrackMediaItem(tr, it)
+  end
+  for tr, list in pairs(spans) do
+    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      local it = reaper.GetTrackMediaItem(tr, n)
+      if (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 0 then
+        local start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+        local back = 0
+        for _, s in ipairs(list) do
+          if s[1] < start then back = back + math.min(s[2], start - s[1]) end
+        end
+        if back > 0 then reaper.SetMediaItemInfo_Value(it, 'D_POSITION', math.max(start - back, 0)) end
+      end
+    end
+  end
+  local result = edited('Remove items (ripple)')
+  result.deleted = #cut
+  return result
+end
+
 -- Reaper's own Item: Duplicate items (41295): a copy straight after each selected item, the
 -- copies selected. Its own undo point.
 function handlers.DuplicateSelected()

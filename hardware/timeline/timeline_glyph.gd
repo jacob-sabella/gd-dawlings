@@ -56,6 +56,12 @@ func _build() -> void:
 		&"delete":
 			_box(Vector2.ZERO, Vector2(2.0, 0.34), 0.4, 0.0, 45.0)
 			_box(Vector2.ZERO, Vector2(2.0, 0.34), 0.4, 0.0, -45.0)
+		&"ripple_delete":
+			_box(Vector2(-0.45, 0.45), Vector2(1.0, 0.18), 0.3, 0.0, 45.0)
+			_box(Vector2(-0.45, 0.45), Vector2(1.0, 0.18), 0.3, 0.0, -45.0)
+			_box(Vector2(0.55, -0.45), Vector2(0.8, 0.5), 0.45)
+			_cone(Vector2(-0.3, -0.45), Vector2(-1, 0), 0.28, 0.45)
+			_rod(Vector2(-0.15, -0.45), Vector2(0.1, -0.45), 0.09, 0.3)
 		&"select_all":
 			for gx in [-0.68, 0.0, 0.68]:
 				for gy in [0.34, -0.34]:

@@ -286,6 +286,7 @@ func _ready() -> void:
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
 	_test_the_timeline_grid_is_chosen_with_a_token()
 	_test_a_locked_item_stays_put_on_the_timeline()
+	_test_a_ripple_delete_closes_the_gap()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -18824,3 +18825,65 @@ func _test_a_locked_item_stays_put_on_the_timeline() -> void:
 	DAW.clear_item_selection()
 	timeline.free()
 	hand.free()
+
+
+func _test_a_ripple_delete_closes_the_gap() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 2
+	var items: Array = s.track(lane).items
+	check("Kick has at least three items to ripple", items.size() >= 3)
+	if items.size() < 3:
+		return
+	var starts: Array = items.map(func(it): return it.start)
+	var gone: MixState.ItemState = items[0]
+	var gone_length := gone.length
+	var other_lane := 3
+	var other_starts: Array = s.track(other_lane).items.map(func(it): return it.start)
+	var depth := maxi(s.undo_depth, 0)
+	DAW.select_item(lane, 0, false)
+	DAW.ripple_delete_selected()
+	var now: Array = s.track(lane).items
+	check("the selected item is gone (%d -> %d)" % [starts.size(), now.size()], now.size() == starts.size() - 1)
+	var moved_back := true
+	for k in now.size():
+		moved_back = moved_back and is_equal_approx(now[k].start, maxf(float(starts[k + 1]) - gone_length, 0.0))
+	check("and everything after it on its track moved back by its length", moved_back)
+	check("other tracks are untouched", s.track(other_lane).items.map(func(it): return it.start) == other_starts)
+	check("one step to undo", s.undo_depth - depth == 1)
+	DAW.undo()
+	check("undo puts it back where it was", s.track(lane).items.map(func(it): return it.start) == starts)
+	# A locked item after the gap stays where it is; a locked selected item is not deleted.
+	DAW.set_item_locked(lane, 2, true)
+	DAW.select_item(lane, 0, false)
+	DAW.ripple_delete_selected()
+	var pinned := s.track(lane).items.filter(func(it): return it.locked)
+	check("a locked item later on its track does not move", pinned.size() == 1
+			and is_equal_approx(pinned[0].start, float(starts[2])))
+	DAW.undo()
+	DAW.select_item(lane, 2, false)
+	DAW.ripple_delete_selected()
+	check("and a locked one selected is not deleted, nor is it history",
+			s.track(lane).items.size() == starts.size() and s.track(lane).items[2].locked)
+	DAW.set_item_locked(lane, 2, false)
+	DAW.clear_item_selection()
+	DAW.select_item(lane, 1, false)
+	DAW.apply_intent(&"ripple_delete_selected", [])
+	check("a guest may ask for one", &"ripple_delete_selected" in DAW.COMMANDS
+			and s.track(lane).items.size() == starts.size() - 1)
+	DAW.undo()
+	DAW.clear_item_selection()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var key: GlyphKey = timeline._ripple_key
+	check("its token is on the tools, dark with nothing selected", key != null and key in timeline.deck.tools
+			and key.glyph == &"ripple_delete" and not key.lit)
+	DAW.select_item(lane, 0, false)
+	check("and lit with a selection", key.lit)
+	key.pressed.emit()
+	check("pressed, it ripples (%d of %d, %d selected)" % [s.track(lane).items.size(), starts.size(),
+			s.selected_items().size()], s.track(lane).items.size() == starts.size() - 1)
+	DAW.undo()
+	DAW.clear_item_selection()
+	timeline.free()
