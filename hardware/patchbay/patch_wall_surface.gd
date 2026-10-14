@@ -8,22 +8,22 @@ extends Surface
 ##
 ## Read only so far: it shows the patching, it does not yet make or break one.
 
-const WIDTH := 3.4
-const BOX_WIDTH := 1.0
-const ROW := 0.075
-const HEAD := 0.10
-const GAP := 0.07
+const WIDTH := 5.2
+const BOX_WIDTH := 1.7
+const ROW := 0.13
+const HEAD := 0.17
+const GAP := 0.11
 ## The most port rows in a column; the rest are counted at its foot rather than drawn off the wall.
-const MAX_ROWS := 16
+const MAX_ROWS := 12
 const REFRESH_SECONDS := 2.0
 const CABLE_LIMIT := 150
-const RIBBON := 0.011
+const RIBBON := 0.022
 const RIBBON_STEPS := 28
 
 const INK := Color(0.92, 0.94, 0.98)
 const DIM := Color(0.55, 0.58, 0.64)
 ## How wide the frame round the screen is.
-const FRAME := 0.07
+const FRAME := 0.10
 
 ## The graph on the wall. Set it to show one; otherwise the machine's own is fetched.
 var graph: PipeGraph
@@ -61,10 +61,11 @@ func _process(delta: float) -> void:
 		_thread = null
 	if _dressed != _dress_key():
 		mark_dirty()
-	if follow and _thread == null:
+	if follow and _thread == null and is_visible_in_tree():
 		_next_ask -= delta
 		if _next_ask <= 0.0:
-			_next_ask = REFRESH_SECONDS
+			# Slower when there is no graph to read (no PipeWire): nothing is going to change.
+			_next_ask = REFRESH_SECONDS if graph == null or graph.error.is_empty() else REFRESH_SECONDS * 5.0
 			_thread = Thread.new()
 			_thread.start(PipeGraph.fetch.bind(tool))
 
@@ -95,14 +96,14 @@ func _rebuild() -> void:
 		linked[link[0]] = true
 		linked[link[1]] = true
 	var jacks := {}
-	var top := 0.22
+	var top := 0.45
 	var left := _column(true, -WIDTH * 0.5, top, jacks, linked)
 	var right := _column(false, WIDTH * 0.5 - BOX_WIDTH, top, jacks, linked)
-	height = maxf(left, right) + 0.16
+	height = maxf(left, right) + 0.3
 	_quad(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, -0.006), _panel(), 0.0)
 	_frame(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
-	_note("AUDIO DEVICES", -0.02, 56, _brass())
-	_note("%d nodes · %d links" % [graph.nodes.size(), graph.links.size()], -height + 0.06, 34)
+	_note("AUDIO DEVICES", -0.05, 56, _brass())
+	_note("%d nodes · %d links" % [graph.nodes.size(), graph.links.size()], -height + 0.1, 34)
 	var ribbons := ImmediateMesh.new()
 	for link in graph.links:
 		if cables >= CABLE_LIMIT:
@@ -161,7 +162,7 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 		_quad(Vector2(BOX_WIDTH + 0.012, tall + 0.012), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.003), tint.darkened(0.45), 0.0)
 		_quad(Vector2(BOX_WIDTH, tall), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.001), _panel().lightened(0.10), 0.0)
 		_quad(Vector2(BOX_WIDTH, HEAD), Vector3(x + BOX_WIDTH * 0.5, y - HEAD * 0.5, 0.0), tint.darkened(0.15), 0.0)
-		var title := _text(PipeGraph.short_name(node, 22), Vector3(x + 0.05, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 40)
+		var title := _text(PipeGraph.short_name(node, 24), Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 40)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for i in ports.size():
 			var port: String = ports[i]
@@ -170,23 +171,23 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 			var side := x + BOX_WIDTH if outputs else x
 			var jack := MeshInstance3D.new()
 			var disc := CylinderMesh.new()
-			disc.top_radius = 0.021
-			disc.bottom_radius = 0.021
-			disc.height = 0.008
+			disc.top_radius = 0.04
+			disc.bottom_radius = 0.04
+			disc.height = 0.012
 			jack.mesh = disc
 			jack.rotation_degrees = Vector3(90, 0, 0)
 			jack.position = Vector3(side, py, 0.003)
 			jack.material_override = _paint(tint if used else tint.darkened(0.6))
 			_adopt(jack)
-			jacks[port] = Vector3(side, py, 0.008)
-			var label := _text(PipeGraph.label_of(port), Vector3(x + BOX_WIDTH - 0.06 if outputs else x + 0.06, py, 0.003),
+			jacks[port] = Vector3(side, py, 0.014)
+			var label := _text(PipeGraph.short_name(PipeGraph.label_of(port), 30), Vector3(x + BOX_WIDTH - 0.1 if outputs else x + 0.1, py, 0.003),
 					INK if used else DIM, 34)
 			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if outputs else HORIZONTAL_ALIGNMENT_LEFT
 		rows += ports.size()
 		y -= tall + GAP
 	_hidden[key] = skipped
 	if skipped > 0:
-		var more := _text("+%d more ports" % skipped, Vector3(x + 0.05, y - 0.04, 0.003), DIM, 34)
+		var more := _text("+%d more ports" % skipped, Vector3(x + 0.1, y - 0.06, 0.003), DIM, 34)
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		y -= 0.1
 	return -y
@@ -205,7 +206,7 @@ func _quad(size: Vector2, at: Vector3, colour: Color, glow: float) -> void:
 func _text(text: String, at: Vector3, tint: Color, size := 36) -> Label3D:
 	var label := Label3D.new()
 	label.text = text
-	label.pixel_size = 0.0009
+	label.pixel_size = 0.0017
 	label.font_size = size
 	label.modulate = tint
 	label.position = at

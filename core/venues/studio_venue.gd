@@ -548,6 +548,7 @@ func _build_side_room(wall_mat: Material) -> void:
 	add_child(lid)
 
 	_treat_side_room(far, near, z0, z1)
+	_hang_patch_wall(Vector3((far + near) * 0.5, 3.75, z1 - 0.1))
 
 	# Fill from two sconces: on the far wall past the walkway, and on the walkway's wall between
 	# the door and the booth.
@@ -555,7 +556,7 @@ func _build_side_room(wall_mat: Material) -> void:
 	# Brighter than the back room's, and further: these walls are all treatment, and fabric
 	# drinks light that plaster would throw back.
 	_hang_sconce(4, Vector3(far + 0.05, 2.1, 1.6), Vector3(1, 0, 0), brass, 4.0, 4.6)
-	_hang_sconce(5, Vector3((far + near) * 0.5 + 0.4, 2.1, z1 - 0.06), Vector3(0, 0, -1), brass, 4.0, 4.6)
+	_hang_sconce(5, Vector3(far + 1.6, 2.1, z0 + 0.06), Vector3(0, 0, 1), brass, 4.0, 4.6)
 	# And one on the back wall in the gap between the booth and the riser, washing both.
 	var booth: AABB = zones()[&"vocals"]
 	var kit: AABB = zones()[&"drums"]
@@ -563,6 +564,19 @@ func _build_side_room(wall_mat: Material) -> void:
 			4.0, 4.6)
 	# Over the way from the door to both, as the live room behind has over its own.
 	_hang_pendant(Vector3((far + near) * 0.5, 0, (kit.end.z + z1) * 0.5))
+
+
+## The audio devices' patch wall, hung on the side room's back wall facing into the room, its top
+## at `top`: the Carla picture of the machine's own sound cards and streams, big enough to read
+## from the door. The room's one screen; the side room is where the sound gear's wiring lives.
+func _hang_patch_wall(top: Vector3) -> void:
+	var wall := PatchWallSurface.new()
+	wall.name = "PatchWall"
+	wall.position = top
+	wall.rotation.y = PI
+	# A suite or a render has no sound cards to ask about, and a thread per frame is no help there.
+	wall.follow = DisplayServer.get_name() != "headless"
+	add_child(wall)
 
 
 ## Through the glass: where the wall's openings are across the room, as [window's left edge,
@@ -776,14 +790,11 @@ func _treat_side_room(far: float, near: float, z0: float, z1: float) -> void:
 		trap.rotation.y = PI * 0.25
 	var kit: AABB = zones()[&"drums"]
 	var face_back := z0 + 0.06
-	var face_front := z1 - 0.06
 	var panels := [
 		# Behind the kit, high: the riser's cymbals are what the back wall hears first.
 		[Vector3(kit.get_center().x - 0.62, 2.0, face_back + 0.045), Vector3(1.1, 1.0, 0.09), "rust"],
 		[Vector3(kit.get_center().x + 0.62, 2.0, face_back + 0.045), Vector3(1.1, 1.0, 0.09), "slate"],
-		# Along the walkway, either side of its sconce.
-		[Vector3(far + 1.6, 1.45, face_front - 0.045), Vector3(1.2, 1.2, 0.09), "slate"],
-		[Vector3(near - 1.3, 1.45, face_front - 0.045), Vector3(1.2, 1.2, 0.09), "rust"],
+		# (The back wall's own is the patch wall's.)
 	]
 	for i in panels.size():
 		var spec: Array = panels[i]

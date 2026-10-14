@@ -3499,3 +3499,14 @@ Split in three; this is the first.
 Not multiplayer state: a PipeWire graph is the machine's own. Each player's wall shows their own
 devices, and nothing is sent. Linux only (needs `pw-link`); elsewhere it says there is no graph.
 Suite: 10391 checks, 0 failed.
+
+## 2026-10-14 -- iteration 36: the patch wall in the side room (part 2)
+
+`StudioVenue._hang_patch_wall`: a `PatchWallSurface` on the back wall of the BESIDE arrangement's
+side room, facing in, top at 3.75 m (the room is 4 m), 5.2 m wide in a 5.9 m room. The wall
+took the place of the two acoustic panels on that back wall, and the walkway sconce moved to the
+front wall. Made larger after "text is tiny": 12 port rows a column, 5-6 cm lettering. Polls
+the machine's graph only where it is visible, five times slower while there is none, and never in
+a headless run. Other arrangements and venues have no wall yet. Part 3 is still to do: patching
+by hand (drag from jack to jack, tap a cable to cut it). `--no-timeline` hides the timeline for a shot.
+Suite: 10393 checks, 0 failed.

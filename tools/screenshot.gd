@@ -105,6 +105,8 @@ var _tl_road := -1.0
 var _tl_select := ""
 ## `--patch-wall`: the audio-device patch wall, hung in the middle of the room, showing this machine's graph.
 var _patch_wall := false
+## `--no-timeline`: the timeline hidden, for a shot of something it would cover.
+var _no_timeline := false
 ## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
 var _tl_region := ""
 ## `--tl-group 2:1,3:1`: those tracks put in those groups (track:group), at frame 7.
@@ -232,6 +234,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _pull_tracks = int(args[i + 1])
 			"--board":
 				if i + 1 < args.size(): _board = args[i + 1]
+			"--no-timeline":
+				_no_timeline = true
 			"--patch-wall":
 				_patch_wall = true
 			"--tl-select":
@@ -285,9 +289,13 @@ func _process(_delta: float) -> void:
 				studio.set_god_mode(true)
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
 
+	if _frames == 5 and _no_timeline:
+		for hidden in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
+			hidden.visible = false
+
 	if _frames == 3 and _patch_wall:
 		var wall := PatchWallSurface.new()
-		wall.position = Vector3(0, 2.4, 1.2)
+		wall.position = Vector3(0, 2.2, 1.0)
 		get_tree().current_scene.add_child(wall)
 		for hidden in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
 			hidden.visible = false

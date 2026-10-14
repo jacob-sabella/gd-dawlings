@@ -8815,6 +8815,15 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	at = walk_until_still.call(Vector3(wall_x + 0.4, 0, (StudioVenue.WINDOW_TO + StudioVenue.DOOR_TO) * 0.5),
 			Vector3(-1, 0, 0))
 	check("and the door lets you into the side room (x %.2f)" % at.x, at.x < wall_x - 2.0)
+	var patch_wall := studio.venue.get_node_or_null("PatchWall") as PatchWallSurface
+	check("beside: the side room has the audio patch wall, on its back wall facing in", patch_wall != null
+			and not patch_wall.follow and is_equal_approx(absf(patch_wall.rotation.y), PI)
+			and patch_wall.position.z > Studio.ROOM_BACK - 0.3 and patch_wall.position.x < -studio.room_width * 0.5)
+	check("and the other arrangements have none", (func() -> bool:
+			studio.set_venue(&"studio", false, StudioVenue.BESIDE + 1)
+			var none := studio.venue.get_node_or_null("PatchWall") == null
+			studio.set_venue(&"studio", false, StudioVenue.BESIDE)
+			return none).call())
 	var side_rooms := studio.venue.rooms()
 	var all_standable := true
 	for box: AABB in studio.venue.zones().values():
