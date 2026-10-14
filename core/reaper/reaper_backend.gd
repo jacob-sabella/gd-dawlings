@@ -751,6 +751,16 @@ func trim_item(track_index: int, item_index: int, start: float, end: float) -> v
 	_edit("TrimItem", [track_index, item_index, start, end])
 
 
+func ripple_move_item(track_index: int, item_index: int, start: float) -> void:
+	if _locally_ripple_move(track_index, item_index, start):
+		_edit("MoveItem", [track_index, item_index, start, 0, 1])
+
+
+func ripple_trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
+	if _locally_ripple_trim(track_index, item_index, start, end):
+		_edit("TrimItem", [track_index, item_index, start, end, 1])
+
+
 func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 	_locally_shape(track_index, item_index, db, NAN, NAN)
 	_edit("SetItemGain", [track_index, item_index, db])

@@ -129,6 +129,10 @@ var _copy_key: GlyphKey
 var _delete_key: GlyphKey
 ## Delete and close the gap (DAW.ripple_delete_selected).
 var _ripple_key: GlyphKey
+## Ripple editing, this player's own: while on, an item dragged along or trimmed carries every
+## later item on its track with it (DAW.ripple_move_item / ripple_trim_item).
+var ripple_edit := false
+var _ripple_mode_key: GlyphKey
 var _all_key: GlyphKey
 var _zoom_out_key: GlyphKey
 var _zoom_in_key: GlyphKey
@@ -375,6 +379,11 @@ func _build_deck() -> void:
 			func() -> String: return "drags snap to %s: %s next" % [TimelineLanes.grid_name(TimelineLanes.grid),
 					TimelineLanes.grid_name(TimelineLanes.next_grid(TimelineLanes.grid))])
 	_grid_key.lit = true
+	_ripple_mode_key = _tool("RippleModeKey", &"ripple", Color(0.98, 0.55, 0.36), "EDIT  RIPPLE",
+			func(): set_ripple_edit(not ripple_edit),
+			func() -> String: return "on: a moved or trimmed item takes what follows on its track along" \
+					if ripple_edit else "off: a moved or trimmed item moves alone")
+	_ripple_mode_key.toggle = true
 	_lanes_key = _tool("LanesKey", &"lanes", VIEW_INK, "VIEW  LANES", func(): _choose_view(false, false),
 			func() -> String: return "flat lanes of blocks", true)
 	_lanes_key.toggle = true
@@ -413,6 +422,14 @@ func _build_deck() -> void:
 
 
 const TOOL_INK := Color(0.70, 0.74, 0.82)
+
+
+func set_ripple_edit(on: bool) -> void:
+	ripple_edit = on
+	if _ripple_mode_key != null:
+		_ripple_mode_key.lit = on
+
+
 const VIEW_INK := Color(0.98, 0.80, 0.42)
 
 

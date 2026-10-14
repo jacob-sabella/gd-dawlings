@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
@@ -428,6 +428,12 @@ func ripple_delete_selected() -> void: _do(&"ripple_delete_selected", [])
 func duplicate_selected() -> void: _do(&"duplicate_selected", [])
 func trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
 	_do(&"trim_item", [track_index, item_index, maxf(minf(start, end), 0.0), maxf(start, end)])
+## Ripple editing: the item moved or trimmed, and every later unlocked item on its track carried
+## along by as much (see DAWBackend.ripple_move_item). One undo step each.
+func ripple_move_item(track_index: int, item_index: int, start: float) -> void:
+	_do(&"ripple_move_item", [track_index, item_index, maxf(start, 0.0)])
+func ripple_trim_item(track_index: int, item_index: int, start: float, end: float) -> void:
+	_do(&"ripple_trim_item", [track_index, item_index, maxf(minf(start, end), 0.0), maxf(start, end)])
 func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 	_do(&"set_item_gain", [track_index, item_index,
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
@@ -478,7 +484,7 @@ func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 ## What a locked item refuses: anything that names it and would change where it is or what it
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
-const LOCKED_REFUSES := [&"move_item", &"trim_item", &"set_item_gain", &"set_item_fades",
+const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades",
 		&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_item_reversed"]
 
 

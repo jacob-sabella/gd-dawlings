@@ -254,10 +254,16 @@ func _finish_grab() -> void:
 		return
 	if _edge != 0:
 		if not is_equal_approx(_target_start, item.start) or not is_equal_approx(_target_end, item.end()):
-			DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
+			if surface.ripple_edit:
+				DAW.ripple_trim_item(_hit[0], _hit[1], _target_start, _target_end)
+			else:
+				DAW.trim_item(_hit[0], _hit[1], _target_start, _target_end)
 		return
 	var onto := _target_track if _target_track > 0 and _target_track != _hit[0] else 0
-	if not is_equal_approx(_target_start, item.start) or onto > 0:
+	# Ripple carries along its own track only: an item taken to another track goes alone.
+	if surface.ripple_edit and onto == 0 and not is_equal_approx(_target_start, item.start):
+		DAW.ripple_move_item(_hit[0], _hit[1], _target_start)
+	elif not is_equal_approx(_target_start, item.start) or onto > 0:
 		DAW.move_item(_hit[0], _hit[1], _target_start, onto)
 
 

@@ -3261,3 +3261,18 @@ not just its first pass. And the stand-in host (OfflineBackend) can save: `Proje
 asked it for `parts_signature`, which only GodotBackend had, so it moved down to OfflineBackend.
 `tools/screenshot.gd --reopen` saves and reopens the project at frame 5, to look at it.
 Suite: 10164 checks, 0 failed.
+
+## DAW parity, iteration 20: ripple move and ripple trim (2026-10-14)
+`DAW.ripple_move_item` and `DAW.ripple_trim_item`: the item moved or trimmed, and every unlocked
+item on its track from where it was (a move) or from its old end (a trim) carried along by as
+much -- Reaper's ripple per track, Pro Tools' shuffle. A trim of the left edge leaves its end, so
+nothing follows. Locked items stay where they are, a locked item refuses the edit, and a ripple
+that changes nothing is not history; one undo step each. Item edits, so a guest asks for them
+the same way and the host checks them. A RIPPLE toggle on the timeline's tools (a train of blocks
+over an arrow, lit while on) is each player's own, not saved and not on the wire, like the grid:
+while it is on, a drag along the lane or an edge trim lands as a ripple edit; a drag onto another
+track still moves the item alone. Reaper: `MoveItem` and `TrimItem` take a fifth ripple argument
+in the bridge, not yet run against a live Reaper.
+Still to do: the drag preview shows only the item moving, not what follows; ripple across all
+tracks (Reaper's other mode) is not offered.
+Suite: 10180 checks, 0 failed; probe host 53, guest 47, 0 failed.

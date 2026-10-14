@@ -287,6 +287,7 @@ func _ready() -> void:
 	_test_the_timeline_grid_is_chosen_with_a_token()
 	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_a_ripple_delete_closes_the_gap()
+	_test_ripple_editing_carries_what_follows()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
@@ -18912,6 +18913,91 @@ func _test_a_ripple_delete_closes_the_gap() -> void:
 	key.pressed.emit()
 	check("pressed, it ripples (%d of %d, %d selected)" % [s.track(lane).items.size(), starts.size(),
 			s.selected_items().size()], s.track(lane).items.size() == starts.size() - 1)
+	DAW.undo()
+	DAW.clear_item_selection()
+	timeline.free()
+
+
+func _test_ripple_editing_carries_what_follows() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 2
+	var items: Array = s.track(lane).items
+	check("Kick has at least three items to ripple", items.size() >= 3)
+	if items.size() < 3:
+		return
+	var starts: Array = items.map(func(it): return it.start)
+	var other_starts: Array = s.track(3).items.map(func(it): return it.start)
+	var depth := maxi(s.undo_depth, 0)
+	# The second item along by two seconds: it, and everything from where it was on, by two.
+	DAW.ripple_move_item(lane, 1, float(starts[1]) + 2.0)
+	var moved := true
+	for k in starts.size():
+		var want := float(starts[k]) + (2.0 if float(starts[k]) >= float(starts[1]) else 0.0)
+		moved = moved and is_equal_approx(s.track(lane).items[k].start, want)
+	check("a ripple move takes the item and what follows by as much, and nothing before it", moved)
+	check("other tracks are untouched", s.track(3).items.map(func(it): return it.start) == other_starts)
+	check("one step to undo", s.undo_depth - depth == 1)
+	DAW.undo()
+	check("undo puts them all back", s.track(lane).items.map(func(it): return it.start) == starts)
+	# A locked item later on the track stays; a locked item itself does not move at all.
+	DAW.set_item_locked(lane, 2, true)
+	DAW.ripple_move_item(lane, 1, float(starts[1]) + 1.0)
+	check("a locked item later on the track stays", is_equal_approx(s.track(lane).items[2].start, float(starts[2]))
+			and is_equal_approx(s.track(lane).items[1].start, float(starts[1]) + 1.0))
+	DAW.undo()
+	var before_depth := s.undo_depth
+	DAW.ripple_move_item(lane, 2, float(starts[2]) + 1.0)
+	check("and a locked item refuses to ripple", is_equal_approx(s.track(lane).items[2].start, float(starts[2]))
+			and s.undo_depth == before_depth)
+	DAW.set_item_locked(lane, 2, false)
+	# Trimmed a second shorter at its end: what follows comes a second earlier.
+	var first: MixState.ItemState = s.track(lane).items[0]
+	var end := first.end()
+	DAW.ripple_trim_item(lane, 0, first.start, end - 1.0)
+	var trimmed := true
+	for k in range(1, starts.size()):
+		var want := float(starts[k]) - (1.0 if float(starts[k]) >= end - 0.000001 else 0.0)
+		trimmed = trimmed and is_equal_approx(s.track(lane).items[k].start, maxf(want, 0.0))
+	check("a ripple trim moves what follows by as far as the end moved", trimmed
+			and is_equal_approx(s.track(lane).items[0].end(), end - 1.0))
+	DAW.undo()
+	check("undone in one", s.track(lane).items.map(func(it): return it.start) == starts)
+	var flat := s.undo_depth
+	DAW.ripple_move_item(lane, 1, float(starts[1]))
+	check("a ripple that moves nothing is not history", s.undo_depth == flat)
+	DAW.apply_intent(&"ripple_move_item", [lane, 1, float(starts[1]) + 0.5])
+	check("a guest may ask for one", is_equal_approx(s.track(lane).items[1].start, float(starts[1]) + 0.5))
+	DAW.undo()
+	DAW.apply_intent(&"ripple_trim_item", [lane, 1, "x"])
+	check("a malformed one is refused", s.track(lane).items.map(func(it): return it.start) == starts)
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var key: GlyphKey = timeline._ripple_mode_key
+	check("its token is on the tools, off to begin with", key != null and key in timeline.deck.tools
+			and key.glyph == &"ripple" and not timeline.ripple_edit and not key.lit)
+	key.pressed.emit()
+	check("pressed, ripple editing is on and the token lit", timeline.ripple_edit and key.lit)
+	# A drag along the lane, as the hand lets go of it.
+	var lanes: TimelineLanes = timeline._lanes
+	lanes._hit = [lane, 1]
+	lanes._dragged = true
+	lanes._target_start = float(starts[1]) + 2.0
+	lanes._target_track = -1
+	lanes._finish_grab()
+	check("a dragged item ripples while it is on", is_equal_approx(s.track(lane).items[2].start, float(starts[2]) + 2.0))
+	DAW.undo()
+	key.pressed.emit()
+	lanes._hit = [lane, 1]
+	lanes._dragged = true
+	lanes._target_start = float(starts[1]) + 2.0
+	lanes._target_track = -1
+	lanes._finish_grab()
+	check("and moves alone with it off", not timeline.ripple_edit
+			and is_equal_approx(s.track(lane).items[2].start, float(starts[2]))
+			and is_equal_approx(s.track(lane).items[1].start, float(starts[1]) + 2.0))
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()

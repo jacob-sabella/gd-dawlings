@@ -1317,12 +1317,40 @@ function handlers.ClearItemSelection()
 end
 
 -- args: track, index, new start in seconds.
+-- The unlocked items on an item's track, other than it, that start at or after `from`: what a
+-- ripple edit carries along.
+local function ripple_followers(it, from)
+  local tr = reaper.GetMediaItem_Track(it)
+  local out = {}
+  for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+    local other = reaper.GetTrackMediaItem(tr, n)
+    if other ~= it and (math.floor(reaper.GetMediaItemInfo_Value(other, 'C_LOCK')) & 1) == 0
+        and reaper.GetMediaItemInfo_Value(other, 'D_POSITION') >= from - 0.000001 then
+      out[#out + 1] = other
+    end
+  end
+  return out
+end
+
+local function ripple_shift(items, delta)
+  for _, other in ipairs(items) do
+    local at = reaper.GetMediaItemInfo_Value(other, 'D_POSITION')
+    reaper.SetMediaItemInfo_Value(other, 'D_POSITION', math.max(0, at + delta))
+  end
+end
+
+-- args: track, index, seconds, [to track], [ripple]. With args[5] set (and no other track), every
+-- later unlocked item on the track moves by as much: the desk's ripple move.
 function handlers.MoveItem(args)
   local it = item_at(args)
   if not it then return {ok = false, error = 'no such item'} end
   -- args[4], when another track: onto that one as well.
   local to = (args[4] or 0) > 0 and args[4] ~= args[1] and track_from_osc(args[4]) or nil
   reaper.Undo_BeginBlock()
+  if (args[5] or 0) > 0 and not to then
+    local was = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+    ripple_shift(ripple_followers(it, was), math.max(0, args[3] or 0) - was)
+  end
   reaper.SetMediaItemInfo_Value(it, 'D_POSITION', math.max(0, args[3] or 0))
   if to then reaper.MoveMediaItemToTrack(it, to) end
   return edited('Move media item')
@@ -1452,6 +1480,11 @@ function handlers.TrimItem(args)
   local finish = args[4] or start
   if finish - start < 0.01 then return {ok = false, error = 'too short'} end
   reaper.Undo_BeginBlock()
+  -- args[5]: ripple, every later item moved by as far as the end did.
+  if (args[5] or 0) > 0 then
+    local was_end = reaper.GetMediaItemInfo_Value(it, 'D_POSITION') + reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+    ripple_shift(ripple_followers(it, was_end), finish - was_end)
+  end
   local moved = start - reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
   for t = 0, reaper.CountTakes(it) - 1 do
     local take = reaper.GetTake(it, t)

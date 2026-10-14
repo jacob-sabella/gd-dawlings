@@ -296,6 +296,11 @@ func copy_selected_to(_seconds: float) -> void: pass
 ## An item's edges moved to `start` and `end` seconds, its contents staying where they are in the
 ## song: trimming, not moving.
 func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) -> void: pass
+## Ripple editing (Reaper's ripple per track, Pro Tools' shuffle): an item moved, and every later
+## unlocked item on its track moved by as much; an item trimmed, and every item after its old end
+## moved by as far as the end did.
+func ripple_move_item(_track_index: int, _item_index: int, _start: float) -> void: pass
+func ripple_trim_item(_track_index: int, _item_index: int, _start: float, _end: float) -> void: pass
 ## An item's own level, in dB on top of its track's.
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
@@ -566,6 +571,55 @@ func _locally_ripple_delete_selected() -> int:
 		gone += cut.size()
 		_write_lane(index, kept)
 	return gone
+
+
+## The items on a track that a ripple from `from` seconds carries: unlocked, not the one edited,
+## starting at or after it.
+func _ripple_followers(track_index: int, item_index: int, from: float) -> Array:
+	var out: Array = []
+	var items: Array = state.track(track_index).items
+	for j in items.size():
+		if j != item_index and not items[j].locked and items[j].start >= from - 0.000001:
+			out.append(j)
+	return out
+
+
+## Every one of `indices` on the track moved by `delta` seconds, none before the song's start.
+func _ripple_shift(track_index: int, indices: Array, delta: float) -> void:
+	if indices.is_empty() or is_zero_approx(delta):
+		return
+	var lane := _lane_copy(track_index)
+	for j in indices:
+		lane[j].start = maxf(lane[j].start + delta, 0.0)
+	_write_lane(track_index, lane)
+
+
+## False when there is no such item or it does not move.
+func _locally_ripple_move(track_index: int, item_index: int, start: float) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or is_equal_approx(maxf(start, 0.0), it.start):
+		return false
+	var delta := maxf(start, 0.0) - it.start
+	var later := _ripple_followers(track_index, item_index, it.start)
+	_locally_move(track_index, item_index, start)
+	_ripple_shift(track_index, later, delta)
+	return true
+
+
+## False when there is no such item or the trim is refused or changes nothing.
+func _locally_ripple_trim(track_index: int, item_index: int, start: float, end: float) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null:
+		return false
+	var was_start := it.start
+	var was_end := it.end()
+	var later := _ripple_followers(track_index, item_index, was_end)
+	_locally_trim(track_index, item_index, start, end)
+	var now := state.item(track_index, item_index)
+	if is_equal_approx(now.start, was_start) and is_equal_approx(now.end(), was_end):
+		return false
+	_ripple_shift(track_index, later, now.end() - was_end)
+	return true
 
 
 ## Returns how many were copied.

@@ -62,6 +62,12 @@ func _build() -> void:
 			_box(Vector2(0.55, -0.45), Vector2(0.8, 0.5), 0.45)
 			_cone(Vector2(-0.3, -0.45), Vector2(-1, 0), 0.28, 0.45)
 			_rod(Vector2(-0.15, -0.45), Vector2(0.1, -0.45), 0.09, 0.3)
+		&"ripple":
+			# A train of blocks with an arrow under it: what follows comes along.
+			for k in 3:
+				_box(Vector2(-0.68 + k * 0.68, 0.32), Vector2(0.52, 0.62), 0.5)
+			_rod(Vector2(-0.95, -0.55), Vector2(0.5, -0.55), 0.1, 0.4)
+			_cone(Vector2(0.68, -0.55), Vector2(1, 0), 0.3, 0.45)
 		&"select_all":
 			for gx in [-0.68, 0.0, 0.68]:
 				for gy in [0.34, -0.34]:
