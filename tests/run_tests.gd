@@ -301,6 +301,7 @@ func _ready() -> void:
 	_test_history_can_be_jumped_through()
 	_test_items_glue_into_one()
 	_test_regions_are_renamed_moved_and_listed()
+	_test_grouped_tracks_move_together()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19858,6 +19859,81 @@ func _test_regions_are_renamed_moved_and_listed() -> void:
 	timeline._process(0.0)
 	check("with none, the list is out of reach", not timeline.region_page.list.available)
 	timeline.free()
+
+
+func _test_grouped_tracks_move_together() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var kick := 2
+	var snare := 3
+	var hat := 4
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	DAW.set_track_group(kick, 1)
+	DAW.set_track_group(snare, 1)
+	check("two tracks in group 1, each one step", s.track(kick).group == 1 and s.track(snare).group == 1
+			and s.undo_depth - depth == 2 and backend._repl_durable.has("/track/%d/group" % snare))
+	check("each the other's mate", DAW.group_mates(kick) == [snare] and DAW.group_mates(hat).is_empty())
+	var snare_db := DAW.taper_to_db(s.track(snare).volume)
+	var hat_was := s.track(hat).volume
+	var kick_db := DAW.taper_to_db(s.track(kick).volume)
+	DAW.set_track_volume(kick, DAW.db_to_taper(kick_db - 6.0))
+	close_to("a grouped fader takes its mate down by the same decibels",
+			DAW.taper_to_db(s.track(snare).volume), snare_db - 6.0, 0.05)
+	check("and nobody else", is_equal_approx(s.track(hat).volume, hat_was))
+	var hat_muted := s.track(hat).mute
+	DAW.set_track_mute(snare, true)
+	check("a mute is the group's", s.track(kick).mute and s.track(snare).mute and s.track(hat).mute == hat_muted)
+	DAW.set_track_solo(kick, true)
+	check("and a solo", s.track(kick).solo and s.track(snare).solo and not s.track(hat).solo)
+	DAW.clear_solos()
+	DAW.set_track_mute(snare, false)
+	DAW.set_track_volume(kick, 0.0)
+	check("pulled right down, the group goes with it", s.track(snare).volume == 0.0)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest knows the groups", guest.track(kick).group == 1 and guest.track(snare).group == 1 and guest.track(hat).group == 0)
+	DAW.set_track_group(snare, 0)
+	MixWire.apply(guest, "/track/%d/group" % snare, backend._repl_durable["/track/%d/group" % snare])
+	check("out of it again, on a guest too", s.track(snare).group == 0 and guest.track(snare).group == 0)
+	DAW.undo()
+	check("undone, back in", s.track(snare).group == 1)
+	var p := ProjectBridge.capture(backend)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	add_child(fresh)
+	ProjectBridge.load(p, fresh)
+	check("saved with the project", fresh.state.track(snare).group == 1 and fresh.state.track(hat).group == 0)
+	fresh.free()
+	DAW.duplicate_track(snare)
+	check("a duplicate is in its original's group", s.track(snare + 1).group == 1)
+	DAW.undo()
+	check("a guest may ask", &"set_track_group" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_track_group", [hat, 9.0])
+	check("for a group past the last, the last", s.track(hat).group == DAW.GROUPS)
+	DAW.apply_intent(&"set_track_group", [hat, "x"])
+	DAW.apply_intent(&"set_track_group", [0, 1.0])
+	check("not with nonsense, nor for the master", s.track(hat).group == DAW.GROUPS)
+	check("named in the history", s.undo_names.back().ends_with(": group"))
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var tracks: TimelineTrackPage = timeline.track_page
+	timeline.pick_track(hat)
+	tracks.refresh()
+	check("a GROUP token on the TRACK page, lit in the group's colour", tracks.group.glyph == &"group"
+			and tracks.group.lit and tracks.group.led_colour == TimelineTrackPage.GROUP_COLOURS[DAW.GROUPS - 1])
+	tracks.group.pressed.emit()
+	check("pressed after the last, out of any, and dark", s.track(hat).group == 0 and not tracks.group.lit)
+	tracks.group.pressed.emit()
+	check("again, in group 1 (%s)" % tracks.group.describe_value.call(0.0), s.track(hat).group == 1
+			and String(tracks.group.describe_value.call(0.0)).contains("in group 1, with "))
+	timeline.pick_track(0)
+	tracks.refresh()
+	check("with no track picked, out of reach", not tracks.group.available)
+	timeline.free()
+	_offline()
 
 
 class RenderSpy extends OfflineBackend:

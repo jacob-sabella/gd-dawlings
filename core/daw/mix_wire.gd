@@ -300,6 +300,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# NOT a Reaper OSC address: the bridge reads and writes I_AUTOMODE.
 			if not args.is_empty():
 				state.set_track_field(idx, &"automation_mode", automation_mode_of(args[0]))
+		"group":
+			# dawlings's own: Reaper's OSC surface says nothing of track groups.
+			if not args.is_empty():
+				state.set_track_field(idx, &"group", clampi(int(float(args[0])), 0, 64))
 		"select":
 			state.set_track_field(idx, &"selected", _as_bool(args))
 		"colour":
@@ -725,6 +729,8 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/automode" % index, [float(t.automation_mode)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])
 		out.append(["/track/%d/colour" % index, [t.colour.r, t.colour.g, t.colour.b]])
+		# Always, none too: a renumbering resends the mix onto tracks a guest already has.
+		out.append(["/track/%d/group" % index, [float(t.group)]])
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])
 		if not t.items.is_empty():
 			out.append(["/track/%d/items" % index, _pack_items(t.items)])

@@ -3438,3 +3438,22 @@ plays. Reaper: EditRegion finds the region by its start, removes any other start
 goes, and SetProjectMarker moves and renames it, one undo point -- not yet run against a live
 Reaper. Reaper keeps a name unchanged when given an empty one; the desk never sends one.
 Suite: 10343 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 32: track groups (2026-10-14)
+dawkit 248df69: `DawKitTrack.group` (0 none, 1 and up), kept in its own file and a dawproject's
+extras. In the game `TrackState.group`, `/track/N/group` (always in a snapshot, none too, as a
+renumbering resends the mix onto tracks a guest already has), saved, carried by a duplicate.
+`DAW.set_track_group` is one undo step; a guest's ask clamped to DAW.GROUPS (4). The linking is
+the desk's, in `DAW`: `set_track_volume` on a grouped track moves each of `group_mates` by the
+same decibels, worked out from the faders' positions (which every peer has; a guest's cache has
+no `volume_db` from the built-in engine), each as its own move, so a guest's drag is the intents
+the host's would be; all the way down takes the group down. `set_track_mute` / `set_track_solo`
+set the whole group. Everything that moves a fader through `DAW` -- the desk's strips, the
+tablet -- links; automation playback does not (each track's lane is its own). GROUP on the
+TRACK page steps the picked track through the groups and out, lit in the group's colour, its
+card naming its mates. The page now refreshes when the picked track's group changes. Reaper:
+the desk does the linking, so it works there too, but the groups are kept by the desk, not in
+Reaper's project (Reaper's own groups are per-parameter flag bits the bridge does not read).
+Split off: VCA faders, and overriding a group for one move. `tools/screenshot.gd --tl-group
+T:G,...` groups tracks for a shot.
+Suite: 10360 checks, 0 failed; dawkit 375; probe host 53, guest 47, 0 failed.

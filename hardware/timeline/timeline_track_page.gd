@@ -11,8 +11,9 @@ extends TimelinePage
 ## then none. INPUT steps the picked track through what it records from (`MixState.inputs`, then
 ## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its mark the
 ## track's colour. SCHEME gives every track that has no colour yet one of its own, round the wheel
-## (TrackColours.scheme_colour), lit while there is a track it would colour. With no track picked,
-## AUTO and LANE are the master's.
+## (TrackColours.scheme_colour), lit while there is a track it would colour. GROUP steps the picked
+## track through the groups and out (DAW.GROUPS): grouped tracks' faders, mutes and solos move
+## together; its light is the group's colour. With no track picked, AUTO and LANE are the master's.
 
 var add: GlyphKey
 var duplicate: GlyphKey
@@ -23,6 +24,10 @@ var lane: GlyphKey
 var input: GlyphKey
 var colour: GlyphKey
 var scheme: GlyphKey
+var group: GlyphKey
+
+## Each group's colour, for its light: group 1 is the first.
+const GROUP_COLOURS := [Color(0.95, 0.62, 0.32), Color(0.45, 0.85, 0.75), Color(0.75, 0.55, 0.95), Color(0.95, 0.85, 0.4)]
 
 ## Twelve colours a track can be, round the wheel and readable on the dark desk. Shown in the
 ## venue's own twelve (TrackColours), stored as these.
@@ -67,6 +72,7 @@ func _ready() -> void:
 				var n := _uncoloured().size()
 				return "every track already has a colour" if n == 0 \
 						else "colour the %d track%s with none" % [n, "" if n == 1 else "s"])
+	group = _key("TrackGroup", &"group", Color(0.62, 0.86, 1.0), "TRACKS  GROUP", _step_group, _group_text)
 	_group()
 	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
 			func() -> String:
@@ -117,7 +123,7 @@ func _on_master_changed(field: StringName) -> void:
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
-	if field in [&"automation_mode", &"input", &"colour"] and index == surface.picked_track:
+	if field in [&"automation_mode", &"input", &"colour", &"group"] and index == surface.picked_track:
 		refresh()
 	elif field == &"colour":
 		scheme.lit = not _uncoloured().is_empty()
@@ -155,14 +161,37 @@ func refresh() -> void:
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
 			if input.lit else ""
-	for key in [remove, duplicate, rename, input, colour]:
+	for key in [remove, duplicate, rename, input, colour, group]:
 		key.available = picked
+	var in_group: int = DAW.state.track(surface.picked_track).group if picked else 0
+	group.led_colour = GROUP_COLOURS[in_group - 1] if in_group > 0 else Color(0.62, 0.86, 1.0)
+	group.lit = in_group > 0
 	if picked:
 		colour.led_colour = DAW.state.track(surface.picked_track).shown_colour()
 	# After the colour: setting lit repaints the key.
 	colour.lit = picked
 	scheme.lit = not _uncoloured().is_empty()
 	notice = "%s" % _name_of(surface.picked_track).to_upper() if picked else "press a track's name to pick it  ·  AUTO and LANE: the master"
+
+
+func _step_group() -> void:
+	var picked: int = surface.picked_track
+	if DAW.state.tracks.has(picked):
+		DAW.set_track_group(picked, (DAW.state.track(picked).group + 1) % (DAW.GROUPS + 1))
+
+
+func _group_text() -> String:
+	var picked: int = surface.picked_track
+	if not DAW.state.tracks.has(picked):
+		return "press a track's name first"
+	var now := DAW.state.track(picked).group
+	var next := (now + 1) % (DAW.GROUPS + 1)
+	var then := "group %d" % next if next > 0 else "no group"
+	if now == 0:
+		return "%s is in no group; press for %s" % [_name_of(picked), then]
+	var mates: Array = DAW.group_mates(picked).map(func(j): return _name_of(j))
+	var with := ", with " + ", ".join(mates) if not mates.is_empty() else ", alone so far"
+	return "%s is in group %d%s; press for %s" % [_name_of(picked), now, with, then]
 
 
 ## The tracks nobody has coloured, by number.

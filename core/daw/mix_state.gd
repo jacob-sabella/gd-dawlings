@@ -260,6 +260,10 @@ class TrackState extends RefCounted:
 	var automation_mode: int = 0
 	var selected: bool = false
 	var colour: Color = Color(0.55, 0.57, 0.6)
+	## The track group it is in, 1 to DAW.GROUPS, or 0 for none: the tracks of a group move
+	## together, faders by the same decibels and mutes and solos as one (DAW.group_mates).
+	## Saved with the project. `/track/N/group`.
+	var group: int = 0
 	## Reaper's I_FOLDERDEPTH on this track: 1 opens a folder, 0 stays at the current level, and
 	## a negative number closes that many. It is a DELTA, not a level -- the level is the running
 	## sum over the tracks before it, which is what `MixState.folder_level` works out.

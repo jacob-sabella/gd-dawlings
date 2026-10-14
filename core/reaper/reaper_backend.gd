@@ -871,6 +871,15 @@ func rename_track(index: int, track_name: String) -> void:
 	_edit("RenameTrack", [index, track_name])
 
 
+## The desk's own, not Reaper's track groups (which link by flag bits per parameter, and which
+## the bridge does not read): the desk moves each grouped track itself, so this is kept here and
+## sent round the room, but not in Reaper's project.
+func set_track_group(index: int, group: int) -> void:
+	if state.tracks.has(index) and state.tracks[index].group != group:
+		state.set_track_field(index, &"group", group)
+		record_for_replication("/track/%d/group" % index, [float(group)])
+
+
 ## Shown at once, and restated by the structure poll, which reads Reaper's own colour back.
 func set_track_colour(index: int, colour: Color) -> void:
 	if state.tracks.has(index):

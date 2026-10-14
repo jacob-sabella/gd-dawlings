@@ -105,6 +105,8 @@ var _tl_road := -1.0
 var _tl_select := ""
 ## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
 var _tl_region := ""
+## `--tl-group 2:1,3:1`: those tracks put in those groups (track:group), at frame 7.
+var _tl_group := ""
 ## `--reopen`: the project saved and opened again at frame 5, to see what a reopened project draws.
 var _reopen := false
 ## `--autosave`: the transport stopped and an edit at frame 5, and the autosave kept straight
@@ -242,6 +244,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_fade = args[i + 1]
 			"--tl-region":
 				if i + 1 < args.size(): _tl_region = args[i + 1]
+			"--tl-group":
+				if i + 1 < args.size(): _tl_group = args[i + 1]
 			"--tl-pick":
 				if i + 1 < args.size(): _tl_pick = int(args[i + 1])
 			"--tl-road":
@@ -333,6 +337,11 @@ func _process(_delta: float) -> void:
 			# A shape for both ends, or "in/out".
 			var shapes := f[3].split("/")
 			DAW.set_item_fade_shape(int(f[0]), int(f[1]), int(shapes[0]), int(shapes[-1]))
+	if _frames == 7 and _tl_group != "":
+		for spec in _tl_group.split(",", false):
+			var g := spec.split(":")
+			if g.size() == 2:
+				DAW.set_track_group(int(g[0]), int(g[1]))
 	if _frames == 7 and _tl_region != "":
 		for spec in _tl_region.split(",", false):
 			var r := spec.split(":")

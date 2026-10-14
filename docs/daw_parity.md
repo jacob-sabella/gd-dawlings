@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 31
+Iterations done: 32
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -48,7 +48,9 @@ Iterations done: 31
 - [~] glue items into one (partial, 2026-10-14: MIDI items, and the pieces of one cut recording that follow on, made one; a GLUE token on the ITEM page; other audio needs a bounce to a new file, which the built-in engine does not do; Reaper glues anything through its own 40362, not yet run against a live Reaper)
 - [x] clear all solos / clear all mutes (2026-10-14)
 - [x] folders (depth is kept through renumbering)
-- [ ] VCA / group faders, track groups (missing)
+- [x] track groups (2026-10-14; four, a GROUP token on the TRACK page; faders by the same decibels, mutes and solos as one; saved; desk-side on Reaper, not in its project)
+- [ ] VCA faders: a fader that moves its group without passing audio (missing)
+- [ ] a group overridden for one move (Reaper's modifier on a grouped fader) (missing)
 - [ ] track delay compensation (missing)
 
 ## Routing and sends

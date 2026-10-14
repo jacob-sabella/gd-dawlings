@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -179,10 +179,40 @@ func db_to_taper(db: float) -> float:
 # One line each, and the uniformity is the feature: a guest's write and a host's write differ
 # in exactly one place, here, rather than in fourteen controls.
 
-func set_track_volume(index: int, taper: float) -> void: _do(&"set_track_volume", [index, taper])
+## A grouped track's fader takes the rest of its group with it, each by the same decibels (as
+## Reaper's groups and a desk's linked channels do): worked out here, from the cache, and sent as
+## each track's own move, so a guest's drag is the same intents the host's would be. A track
+## pulled all the way down pulls its group down with it.
+func set_track_volume(index: int, taper: float) -> void:
+	var mates := group_mates(index)
+	if mates.is_empty():
+		_do(&"set_track_volume", [index, taper])
+		return
+	# From the faders' positions, which every peer has, not their decibels, which a guest may not.
+	var by := taper_to_db(taper) - taper_to_db(state.track(index).volume)
+	_do(&"set_track_volume", [index, taper])
+	for j in mates:
+		var db: float = taper_to_db(state.track(j).volume) + by
+		_do(&"set_track_volume", [j, clampf(db_to_taper(db), 0.0, 1.0) if is_finite(db) and taper > 0.0 else 0.0])
 func set_track_pan(index: int, pan: float) -> void: _do(&"set_track_pan", [index, pan])
-func set_track_mute(index: int, muted: bool) -> void: _do(&"set_track_mute", [index, muted])
-func set_track_solo(index: int, soloed: bool) -> void: _do(&"set_track_solo", [index, soloed])
+## A grouped track's mute and solo are its group's.
+func set_track_mute(index: int, muted: bool) -> void:
+	for j in [index] + group_mates(index):
+		_do(&"set_track_mute", [j, muted])
+func set_track_solo(index: int, soloed: bool) -> void:
+	for j in [index] + group_mates(index):
+		_do(&"set_track_solo", [j, soloed])
+## How many track groups there are to put a track in.
+const GROUPS := 4
+## The other tracks in `index`'s group, in order; none for a track in no group.
+func group_mates(index: int) -> Array:
+	if state == null or not state.tracks.has(index) or state.track(index).group == 0:
+		return []
+	var group := state.track(index).group
+	return state.track_indices().filter(func(j): return j != index and state.track(j).group == group)
+## A track into a group, 1 to GROUPS, or out of any with 0. One undo step.
+func set_track_group(index: int, group: int) -> void:
+	_do(&"set_track_group", [index, clampi(group, 0, GROUPS)])
 ## Every soloed (or muted) track let go, each through its own `set_track_solo` / `set_track_mute`,
 ## so a guest's press is the same intents a guest's taps would be and each is its own undo step.
 func clear_solos() -> void:
@@ -645,7 +675,7 @@ func _call(verb: StringName, args: Array) -> void:
 ## What an edit is called in the history list: the verb in words, and the track it is on when it
 ## names one ("Kick: move item").
 const NAMED_BY_TRACK := [&"move_item", &"add_fx", &"remove_fx", &"move_fx", &"create_send", &"remove_send",
-		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track"]
+		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track", &"set_track_group"]
 func step_name(verb: StringName, args: Array) -> String:
 	var words := String(verb).trim_prefix("set_").replace("_", " ")
 	var by_track := verb in ITEM_EDITS or verb in NAMED_BY_TRACK or String(verb).begins_with("set_track") \
@@ -851,6 +881,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_track_colour intent %s." % [args])
 			return
 		args = [int(args[0]), _opaque(args[1])]
+	if verb == &"set_track_group":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[1])):
+			push_warning("DAW: refused a malformed set_track_group intent %s." % [args])
+			return
+		args = [int(args[0]), clampi(int(args[1]), 0, GROUPS)]
 	if verb in [&"remove_track", &"duplicate_track"]:
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])

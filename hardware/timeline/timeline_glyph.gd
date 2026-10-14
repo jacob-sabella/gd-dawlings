@@ -184,6 +184,11 @@ func _build() -> void:
 			_box(Vector2(-0.4, 0), Vector2(0.95, 0.85), 0.55)
 			_rod(Vector2(0.6, -1.0), Vector2(0.6, 0.85), 0.08, 0.4)
 			_ball(Vector2(0.6, 0.95), 0.2, 0.0)
+		&"group":
+			# Three links of a chain: tracks held together.
+			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)
+			_ring(Vector2(0.0, 0.0), 0.36, 0.11)
+			_ring(Vector2(0.62, 0.0), 0.36, 0.11)
 		&"region_fit":
 			# A region's posts pushed out to new places, an arrow at each.
 			_box(Vector2(-0.55, 0.1), Vector2(0.14, 1.4), 0.4)

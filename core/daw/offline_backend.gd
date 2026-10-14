@@ -1224,6 +1224,15 @@ func rename_track(index: int, track_name: String) -> void:
 	record_for_replication("/track/%d/name" % index, [track_name])
 
 
+func set_track_group(index: int, group: int) -> void:
+	if not state.tracks.has(index) or state.tracks[index].group == group:
+		return
+	_remember("/track/%d/group" % index, set_track_group.bind(index, state.tracks[index].group),
+			set_track_group.bind(index, group), false)
+	state.set_track_field(index, &"group", group)
+	record_for_replication("/track/%d/group" % index, [float(group)])
+
+
 func set_track_colour(index: int, colour: Color) -> void:
 	if not state.tracks.has(index) or state.tracks[index].colour.is_equal_approx(colour):
 		return
