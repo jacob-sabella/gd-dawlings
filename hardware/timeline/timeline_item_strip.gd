@@ -32,6 +32,9 @@ var copy_here: PanelButton
 var normalise: PanelButton
 var softer: PanelButton
 var harder: PanelButton
+var crossfade: PanelButton
+## [track, first, second] while exactly two items of one track are selected, else empty.
+var _pair: Array = []
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 
@@ -42,10 +45,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(11 * PITCH, 0.036, 0.004)
+	box.size = Vector3(12 * PITCH, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(5.0 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(5.5 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	gain = _knob("GAIN", 0, func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -74,6 +77,11 @@ func _ready() -> void:
 			func(): _velocity(-1), "every note a little softer; fine: much softer")
 	harder = _key("ItemHarder", "V+", 10, Color(0.55, 0.7, 0.95), "ITEM  NOTES HARDER",
 			func(): _velocity(1), "every note a little harder; fine: much harder")
+	crossfade = _key("ItemCrossfade", "X", 11, Color(0.9, 0.8, 0.4), "ITEM  CROSSFADE",
+			func(): _crossfade(), "two overlapping items faded into each other")
+	crossfade.describe_value = func(_v: float) -> String:
+		return "fade the earlier out and the later in, over the overlap" if crossfade.lit \
+				else "select two overlapping items on one track"
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -83,13 +91,20 @@ func _ready() -> void:
 func refresh() -> void:
 	var picked: Array = DAW.state.selected_items()
 	_target = picked[0] if picked.size() == 1 else []
+	_pair = []
+	if picked.size() == 2 and picked[0][0] == picked[1][0]:
+		_pair = [picked[0][0], picked[0][1], picked[1][1]]
 	var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
 	if item == null:
 		_target = []
-	visible = item != null
+	visible = item != null or not _pair.is_empty()
 	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here, normalise, softer, harder]:
 		c.collision_layer = 2 if item != null else 0
+	crossfade.collision_layer = 2 if visible else 0
+	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	if item == null:
+		for c in [mute, copy_here, normalise, down, up, quant, softer, harder]:
+			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
 	fade_in.snap_to(_fade_value(item.fade_in))
@@ -137,6 +152,17 @@ func _transpose(direction: int) -> void:
 func _normalise() -> void:
 	if not _target.is_empty():
 		DAW.normalise_item(_target[0], _target[1])
+
+
+func _overlaps(pair: Array) -> bool:
+	var a := DAW.state.item(pair[0], pair[1])
+	var b := DAW.state.item(pair[0], pair[2])
+	return a != null and b != null and minf(a.end(), b.end()) - maxf(a.start, b.start) >= DAWBackend.MIN_ITEM_SECONDS
+
+
+func _crossfade() -> void:
+	if not _pair.is_empty():
+		DAW.crossfade_items(_pair[0], _pair[1], _pair[2])
 
 
 func _toggle_mute() -> void:

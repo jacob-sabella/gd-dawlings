@@ -412,6 +412,27 @@ func normalise_item(track_index: int, item_index: int) -> void:
 		set_item_gain(track_index, item_index, -linear_to_db(peak))
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
+## Two items of one track that overlap, faded into each other over the overlap: the earlier one
+## out, the later one in, through `set_item_fades`, so it is two ordinary edits and nothing new on
+## the wire. Straight lines in amplitude, as every fade here is. False when they are not two items
+## of one track, or do not overlap.
+func crossfade_items(track_index: int, first: int, second: int) -> bool:
+	var a := state.item(track_index, first)
+	var b := state.item(track_index, second)
+	if a == null or b == null or first == second:
+		return false
+	if b.start < a.start:
+		var swap := a
+		a = b
+		b = swap
+	var overlap := minf(a.end(), b.end()) - b.start
+	if overlap < DAWBackend.MIN_ITEM_SECONDS:
+		return false
+	var a_in := a.fade_in
+	var b_out := b.fade_out
+	set_item_fades(track_index, a.index, a_in, overlap)
+	set_item_fades(track_index, b.index, overlap, b_out)
+	return true
 func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 	_do(&"set_item_muted", [track_index, item_index, 1.0 if muted else 0.0])
 ## Longest track name sent anywhere, for the same reason as MARKER_NAME_MAX.

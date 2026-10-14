@@ -13659,6 +13659,24 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	DAW.clear_mutes()
 	check("with none set, nothing happens", not s.track(lane).solo and not s.track(lane).mute)
 
+	var x_depth := s.undo_depth
+	var x_a: MixState.ItemState = s.item(lane, 0)
+	DAW.select_item(lane, 0, false)
+	DAW.copy_selected_to(x_a.start + x_a.length * 0.5)
+	var x_second := s.track(lane).items.size() - 1
+	var x_overlap: float = x_a.end() - s.item(lane, x_second).start
+	check("a copy half way along overlaps its original (%.2f)" % x_overlap, x_overlap > 0.1)
+	check("two overlapping items crossfade", DAW.crossfade_items(lane, 0, x_second))
+	check("the earlier fades out and the later in over the overlap (%.2f, %.2f)" % [s.item(lane, 0).fade_out, s.item(lane, x_second).fade_in],
+			absf(s.item(lane, 0).fade_out - x_overlap) < 0.001 and absf(s.item(lane, x_second).fade_in - x_overlap) < 0.001)
+	check("either way round", DAW.crossfade_items(lane, x_second, 0))
+	check("an item is not crossfaded with itself", not DAW.crossfade_items(lane, 0, 0))
+	check("nor with one that is not there", not DAW.crossfade_items(lane, 0, 999))
+	while s.undo_depth > x_depth:
+		DAW.undo()
+	DAW.clear_item_selection()
+	check("undone, it is as it was", s.item(lane, 0).fade_out != x_overlap or x_overlap == 0.0)
+
 	var vel_before: float = s.item(lane, 0).notes[3]
 	var vel_depth := s.undo_depth
 	DAW.shift_velocity(lane, 0, 16)

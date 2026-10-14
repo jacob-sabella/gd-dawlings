@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 6
+Iterations done: 7
 
 ## Transport and tempo
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
@@ -20,12 +20,13 @@ Iterations done: 6
 - [x] select all items (2026-10-14), select, move (across tracks), split, delete, duplicate, trim with source offset
 - [x] item gain, fade in/out (linear), loop points on an item
 - [x] item mute (2026-10-14)
-- [ ] crossfades between overlapping items (missing)
+- [x] crossfade between two overlapping items on a track (2026-10-14; linear fades, not equal-power)
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)
 - [ ] item reverse (missing)
 - [ ] time-stretch, warp, item pitch shift (missing)
-- [ ] ripple edit, snap/grid settings for moves (partial: quantise only for notes)
+- [x] drags snap to the beat unless fine (`TimelineLanes.snap`; the first audit missed it)
+- [ ] ripple edit, a choosable grid size (missing)
 - [ ] item locking (missing)
 
 ## Piano roll

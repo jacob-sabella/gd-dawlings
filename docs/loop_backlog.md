@@ -3095,3 +3095,12 @@ each lit only while there is something to clear (the master section now follows 
 Looked at in a screenshot of the studio's console: both keys and captions read. Lettering under 10
 trips the legibility tests (the smallest cap), so the captions are 10. Suite 10002 checks, 0 failed;
 probe 0 failed. SHOT_CAM is an orbit (yaw, pitch, distance, target), not a position.
+
+## DAW parity, iteration 7: crossfade (2026-10-14)
+`DAW.crossfade_items(track, first, second)`: two overlapping items of one track, the earlier one
+faded out and the later in over the overlap, as two `set_item_fades` edits (so nothing new on the
+wire, two undo steps). Linear in amplitude like every fade here, so the middle dips 3 dB where
+a pro DAW's equal-power curve would not; a curve choice is the next step. X key on the item strip,
+which now also shows while exactly two items of one track are selected (lit only if they overlap;
+the other keys stay dark then). Drag snapping, listed missing in the first audit, was there already.
+Not seen in a screenshot (shot.sh cannot select items). Suite 10009 checks, 0 failed; probe 0 failed.
