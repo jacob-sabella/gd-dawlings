@@ -383,6 +383,19 @@ static func track_stripe(colour: Color) -> StandardMaterial3D:
 		return m)
 
 
+## A frame lit in a track's colour: the whole of a rack's frame glowing with the track it holds,
+## so which track a rack is reads from across the room. Brighter than a stripe, short of an LED.
+static func track_glow(colour: Color) -> StandardMaterial3D:
+	return _cached("track_glow_%s" % colour.to_html(false), func():
+		var m := StandardMaterial3D.new()
+		m.albedo_color = colour * 0.35
+		m.roughness = 0.45
+		m.emission_enabled = true
+		m.emission = colour
+		m.emission_energy_multiplier = 1.3
+		return m)
+
+
 static func led(colour: Color, on: bool) -> StandardMaterial3D:
 	var key := "led_%s_%s" % [colour.to_html(false), on]
 	return _cached(key, func():

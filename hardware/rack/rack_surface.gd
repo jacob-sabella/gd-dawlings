@@ -463,6 +463,14 @@ func _blank_from(bay_node: Node3D, filled: int, per_bay: int, unit_height: float
 const FRAME_SETBACK := 0.001
 
 
+## The frame glows in the racked track's colour, as the venue shows it: the whole bracket says
+## which track this is, from anywhere in the room. Plain furniture with no track to rack.
+func _frame_material() -> Material:
+	if DAW.state.tracks.has(track_index):
+		return Materials.track_glow(DAW.state.track(track_index).shown_colour())
+	return Materials.furniture()
+
+
 func _build_frame(parent: Node3D, inner_height: float) -> void:
 	for side in [-1.0, 1.0]:
 		var post := MeshInstance3D.new()
@@ -471,7 +479,7 @@ func _build_frame(parent: Node3D, inner_height: float) -> void:
 		post.mesh = post_mesh
 		post.position = Vector3(side * (RackUnit.RACK_WIDTH * 0.5 + 0.011), inner_height * 0.5,
 				-RAIL_DEPTH * 0.5 - FRAME_SETBACK)
-		post.material_override = Materials.furniture()
+		post.material_override = _frame_material()
 		parent.add_child(post)
 
 	for y in [0.0, inner_height + 0.025]:
@@ -480,5 +488,5 @@ func _build_frame(parent: Node3D, inner_height: float) -> void:
 		cross_mesh.size = Vector3(RackUnit.RACK_WIDTH + 0.040, 0.022, RAIL_DEPTH - 0.004)
 		cross.mesh = cross_mesh
 		cross.position = Vector3(0, y, -RAIL_DEPTH * 0.5 - FRAME_SETBACK)
-		cross.material_override = Materials.furniture()
+		cross.material_override = _frame_material()
 		parent.add_child(cross)

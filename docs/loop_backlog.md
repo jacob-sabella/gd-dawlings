@@ -2946,3 +2946,11 @@ audit's MIN_OVERLAP: ruler ticks ended on the ruler strip's bottom edge, the top
 reached into a clip's take strip at the clip's ends, and the scrubber thumb was sunk into the
 track. Each moved clear. shots/timeline_scaled_up.png (before | after),
 shots/timeline_scaled_from_seat.png.
+
+## A rack's whole frame glows in its track's colour (2026-10-13)
+"I want the whole bracket to glow with the color but I like where it's going"
+`RackSurface._frame_material`: both posts and both rails of every bay are
+`Materials.track_glow(shown colour)` (emissive, 1.3) instead of furniture, on the pulled-out racks
+and on the main rack, whose frame follows whichever track it is racking. Plain furniture with no
+track. Rebuilt with the rack, so it follows a track recolour and a venue change.
+shots/track_racks_glow.png.
