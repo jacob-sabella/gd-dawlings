@@ -35,6 +35,8 @@ var _swatch: Panel
 var _roster: VBoxContainer
 var _solo_box: VBoxContainer
 var _host_box: VBoxContainer
+var _internet_button: Button
+var _internet: Label
 var _guest_box: VBoxContainer
 var _address_edit: LineEdit
 var _nearby: VBoxContainer
@@ -302,6 +304,18 @@ func _build_panel() -> void:
 	_host_box.add_child(_caption("OTHERS JOIN AT"))
 	_addresses = _label("", 14, INK)
 	_host_box.add_child(_addresses)
+	# Beyond the room: the router asked to let people in from the internet (InternetDoor).
+	_internet_button = _button("Open to internet", false)
+	_internet_button.pressed.connect(func():
+		if Session.internet.state in [InternetDoor.State.OPEN, InternetDoor.State.OPENING]:
+			Session.close_to_internet()
+		else:
+			Session.open_to_internet())
+	_host_box.add_child(_internet_button)
+	_internet = _label("", 13, DIM)
+	_internet.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_host_box.add_child(_internet)
+	Session.internet.changed.connect(_refresh_internet)
 	var end_button := _button("End session", false)
 	end_button.pressed.connect(func(): Session.leave())
 	_host_box.add_child(end_button)
@@ -395,6 +409,7 @@ func _refresh() -> void:
 	_code_shown.text = " ".join(spaced)
 	_addresses.text = "\n".join(_lan_addresses().map(
 			func(a): return "%s : %d" % [a, Session.port]))
+	_refresh_internet()
 
 	for child in _roster.get_children():
 		child.queue_free()
@@ -874,6 +889,33 @@ func _join(address: String, port: int) -> void:
 	_rename(_name_edit.text)
 	if Session.join(address, port, _code_edit.text):
 		toast("Joining %s…" % address)
+
+
+## Whether the session can be reached from the internet, and at what: the router's public address
+## once it has forwarded the ports, or what to do by hand when it would not.
+func _refresh_internet() -> void:
+	if _internet == null:
+		return
+	var door := Session.internet
+	var lan: Array = _lan_addresses()
+	match door.state:
+		InternetDoor.State.CLOSED:
+			_internet_button.text = "Open to internet"
+			_internet.text = "Only people on this network can join. Open to internet asks your router (UPnP) to let people in from outside."
+		InternetDoor.State.OPENING:
+			_internet_button.text = "Cancel"
+			_internet.text = "Asking the router…"
+		InternetDoor.State.OPEN:
+			_internet_button.text = "Close to internet"
+			_internet.text = "From anywhere:  %s : %d" % [door.public_address, Session.port] \
+					if door.public_address != "" else "Open, but the router did not say its public address."
+			_internet.add_theme_color_override("font_color", INK)
+			return
+		InternetDoor.State.FAILED:
+			_internet_button.text = "Try again"
+			_internet.text = "%s Forward UDP %d and %d to %s in the router yourself, then give people your public address." % [
+					door.why_not, Session.port, Session.port + Session.AUDIO_PORT_OFFSET, lan[0]]
+	_internet.add_theme_color_override("font_color", DIM)
 
 
 ## This machine's addresses a person across the room could type. Loopback is useless to them,

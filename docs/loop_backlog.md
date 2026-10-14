@@ -3013,3 +3013,12 @@ roughness: on the rooftop two string-light bulbs sat on the write-up as glossy d
 Also: the rack's track window offers every track, so an empty one can be racked and given its
 first plugin (it listed only tracks that already had plugins, and the built-in engine has no
 Reaper selection to rack one by).
+
+## A hosted session opens to the internet (2026-10-13)
+"i need to be able to bind my public ip address": a home machine has only its LAN address; the
+public one is the router's, and the host already listens on every address it has (ENet binds
+"*"). `InternetDoor` asks the router over UPnP (on a thread) to forward UDP port and
+port+AUDIO_PORT_OFFSET here and says the public address; opt in only (the session panel's
+"Open to internet", or `--host --public`), closed when the session ends and on quit. When the
+router will not, the panel says which ports to forward by hand. On this desk the router did not
+answer UPnP discovery, and ufw is active, which drops the router's reply and joining guests alike.

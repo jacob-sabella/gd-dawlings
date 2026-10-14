@@ -14,6 +14,9 @@ extends Node
 ##   godot --path . -- --reaper                          host, OSC to a local Reaper
 ##   godot --path . -- --reaper --host                   host, and open the session to peers
 ##   godot --path . -- --reaper --host --code AB12       host, letting in only those told AB12
+##   godot --path . -- --host --public --code AB12       and open it to the internet: the router
+##                                                        forwards the ports (UPnP), the session
+##                                                        panel shows the public address
 ##   godot --path . -- --join 192.168.1.40 --xr --ar     join someone else's session, in passthrough
 ##   godot --path . -- --xr-sim [--ar]                   a simulated headset on the desktop (no hardware)
 ##   godot --path . -- --place console=screen --stage    console as a panel, with the mover open
@@ -91,7 +94,8 @@ func _ready() -> void:
 		Session.join(args["join"], args["session_port"], args["code"])
 	elif args["host"]:
 		Session.code = args["code"]
-		Session.host(args["session_port"])
+		if Session.host(args["session_port"]) and args["public"]:
+			Session.open_to_internet()
 		_start_daw(args)
 	else:
 		Session.start_solo()
@@ -217,7 +221,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		# no Reaper. Run from the editor, as the tests and probes are, the silent stand-in.
 		"reaper": false, "built_in": OS.has_feature("template"), "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
-		"host": false, "join": "", "xr": false, "xr_sim": false, "ar": false,
+		"host": false, "public": false, "join": "", "xr": false, "xr_sim": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
@@ -362,6 +366,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--built-in": out["built_in"] = true
 			"--stand-in": out["built_in"] = false
 			"--host": out["host"] = true
+			"--public": out["public"] = true
 			"--xr": out["xr"] = true
 			"--xr-sim":
 				# A headset simulated from the mouse and keyboard; --ar with it simulates passthrough.

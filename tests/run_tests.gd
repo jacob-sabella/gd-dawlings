@@ -221,6 +221,7 @@ func _ready() -> void:
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
+	_test_a_hosted_session_opens_to_the_internet_only_when_asked()
 	_test_the_big_board_hangs_clear_in_every_venue()
 	_test_the_big_board_shows_any_surface()
 	_test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own()
@@ -5636,6 +5637,41 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())
+
+
+## "i need to be able to bind my public ip address": the public address is the router's, so the
+## host asks the router (UPnP) to forward the session's ports. Driven here by the router's
+## answers, not a router: a test run must never open a port on whoever runs it's network.
+func _test_a_hosted_session_opens_to_the_internet_only_when_asked() -> void:
+	var door := InternetDoor.new()
+	var said: Array = []
+	door.changed.connect(func(): said.append(door.state))
+	check("a door starts closed", door.state == InternetDoor.State.CLOSED and door.public_address == "")
+	door.state = InternetDoor.State.OPENING
+	door._report(null, "", "No router answered over UPnP.")
+	check("a router that does not answer is a failure, with the reason",
+			door.state == InternetDoor.State.FAILED and door.why_not.contains("UPnP"))
+	door.state = InternetDoor.State.OPENING
+	door.ports = [7332, 7334] as Array[int]
+	door._report(UPNP.new(), "203.0.113.5", "")
+	check("a router that forwards says its public address", door.state == InternetDoor.State.OPEN
+			and door.public_address == "203.0.113.5")
+	door.close()
+	door.finish()
+	check("closing it forgets the address", door.state == InternetDoor.State.CLOSED and door.public_address == "")
+	check("and every change was told", said.size() == 3)
+	door.state = InternetDoor.State.CLOSED
+	door._report(UPNP.new(), "203.0.113.5", "")
+	check("an answer after closing is not taken up", door.state == InternetDoor.State.CLOSED)
+
+	_as_session(Session.Role.SOLO, 1)
+	Session.open_to_internet()
+	check("on your own there is nothing to open", Session.internet.state == InternetDoor.State.CLOSED)
+	var boot: Node = load("res://scenes/bootstrap.gd").new()
+	check("--public asks for it at launch, and an ordinary host does not",
+			boot._parse(PackedStringArray(["--host", "--public"]))["public"]
+			and not boot._parse(PackedStringArray(["--host"]))["public"])
+	boot.free()
 
 
 ## The big board hangs clear in every venue: nothing that stands up to its height (a light pole,

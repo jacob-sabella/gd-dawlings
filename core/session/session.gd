@@ -125,6 +125,9 @@ var holdable: Callable = Callable()
 ## The address this session was joined at, for the panel to say back.
 var joined_address: String = ""
 var port: int = DEFAULT_PORT
+## The hosted session opened to the internet through the router (`open_to_internet`): what the
+## host tells someone who is not in the room.
+var internet := InternetDoor.new()
 ## The code a guest must give to be let in, or "" for an open session. Host side only.
 var code: String = ""
 ## The code this guest will offer. Kept apart from `code` so that joining with one does not
@@ -288,6 +291,11 @@ func _ready() -> void:
 ## is no next frame to finish the goodbye in: the packet is serviced out by hand until it has
 ## had time to land, and only then does the socket close behind it.
 func _exit_tree() -> void:
+	# The router's forwarding comes down with the session, and is waited for: a quit is the
+	# last chance, and a port left open on someone's router is not ours to leave.
+	if internet.state != InternetDoor.State.CLOSED:
+		internet.close()
+	internet.finish()
 	if role != Role.HOST or not _connected():
 		return
 	var peer := multiplayer.multiplayer_peer
@@ -396,6 +404,19 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	role_changed.emit()
 	roster_changed.emit()
 	return true
+
+
+## Ask the router to forward this session's ports here (UDP: the session's own, and the mix's
+## audio beside it), so people outside the room can join at the router's public address. The
+## host only, and only when asked: it changes the host's network. `internet.changed` reports.
+func open_to_internet() -> void:
+	if role != Role.HOST:
+		return
+	internet.open([port, port + AUDIO_PORT_OFFSET] as Array[int])
+
+
+func close_to_internet() -> void:
+	internet.close()
 
 
 ## Back to being on your own. A host says goodbye first; a guest gets its own mix back.
@@ -508,6 +529,8 @@ func _free_colour() -> int:
 
 func _close_peer() -> void:
 	_close_beacon()
+	if internet.state != InternetDoor.State.CLOSED:
+		internet.close()
 	if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
