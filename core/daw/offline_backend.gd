@@ -29,6 +29,10 @@ var project_title := "Demo"
 ## never (the suite's setting, so a long run does not write one halfway through).
 static var autosave_every := 300.0
 const AUTOSAVE_DIR := "user://autosave"
+## How many earlier copies are kept behind the newest ("Name.1.dawproject" the one before it, up
+## to this many), each autosave pushing the others back one: a bad edit that was autosaved is not
+## the only thing left.
+const AUTOSAVE_KEEP := 4
 ## When the last copy was kept (Time.get_ticks_msec), or -1 for not yet.
 var autosaved_at_msec := -1
 var _autosaved_edits := -1
@@ -63,8 +67,40 @@ func needs_autosave() -> bool:
 	return has_unsaved_changes() and _edits != _autosaved_edits
 
 
+## The path of the copy `generation` autosaves back: 0 the newest, 1 the one before it.
+func autosave_generation_path(generation: int) -> String:
+	if generation <= 0:
+		return autosave_path()
+	var newest := autosave_path()
+	return newest.get_basename() + ".%d.%s" % [generation, newest.get_extension()]
+
+
+## The copies kept, newest first, each a path that exists.
+func autosave_history() -> PackedStringArray:
+	var found := PackedStringArray()
+	for g in AUTOSAVE_KEEP + 1:
+		var path := autosave_generation_path(g)
+		if FileAccess.file_exists(path):
+			found.append(path)
+	return found
+
+
+## Pushes each kept copy one place back, the oldest falling off, to make room for a new newest.
+func _age_autosaves() -> void:
+	if not FileAccess.file_exists(autosave_path()):
+		return
+	for g in range(AUTOSAVE_KEEP, 0, -1):
+		var from := ProjectSettings.globalize_path(autosave_generation_path(g - 1))
+		var to := ProjectSettings.globalize_path(autosave_generation_path(g))
+		if FileAccess.file_exists(from):
+			if FileAccess.file_exists(to):
+				DirAccess.remove_absolute(to)
+			DirAccess.rename_absolute(from, to)
+
+
 func autosave() -> PackedStringArray:
 	_settled_copy = autosave_path()
+	_age_autosaves()
 	var said := ProjectFiles.save(self, autosave_path(), true)
 	_autosaved_edits = _edits
 	autosaved_at_msec = Time.get_ticks_msec()
@@ -88,10 +124,14 @@ func recoverable() -> String:
 ## The recoverable copy opened in the project's place. It is still the same project, saved where
 ## it was (a save writes its own file, not the copy), and unsaved: what came back is in no file
 ## of its own yet.
-func recover() -> PackedStringArray:
+func recover(generation := 0) -> PackedStringArray:
 	var copy := recoverable()
 	if copy.is_empty():
 		return PackedStringArray(["no newer copy is kept"])
+	if generation > 0:
+		copy = autosave_generation_path(clampi(generation, 0, AUTOSAVE_KEEP))
+		if not FileAccess.file_exists(copy):
+			return PackedStringArray(["no copy that far back is kept"])
 	var own := project_path
 	_settled_copy = copy
 	var said := ProjectFiles.open(self, copy)

@@ -391,10 +391,10 @@ func recoverable_copy() -> String:
 
 
 ## Opens that copy in the project's place, unsaved. Host only: it replaces the project.
-func recover_autosave() -> PackedStringArray:
+func recover_autosave(generation := 0) -> PackedStringArray:
 	if recoverable_copy().is_empty():
 		return PackedStringArray(["no newer copy is kept"])
-	return backend.call(&"recover")
+	return backend.call(&"recover", generation)
 
 
 ## When the host's autosave last kept a copy (Time.get_ticks_msec), -1 for never, and for a guest

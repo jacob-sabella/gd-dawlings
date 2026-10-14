@@ -3470,3 +3470,13 @@ as the playhead moves. Reaper: `SetNoteVelocity` in the bridge finds the note by
 pitch (Reaper's own indices skip muted notes); not run against a live Reaper.
 Split off: CC / pitch-bend lanes, legato; picking a note by touching it in the item.
 Suite: 10371 checks, 0 failed; dawkit 375; probe host 53, guest 47, 0 failed.
+
+## 2026-10-14 -- iteration 34: earlier autosave copies
+
+Each autosave now pushes the earlier copies back one place first (`Name.1.dawproject` ...
+`Name.4.dawproject`, `OfflineBackend.AUTOSAVE_KEEP`) before writing the newest, the oldest falling
+off; Reaper's timestamped backups, by count. `autosave_history()` lists them newest first;
+`recover(generation)` / `DAW.recover_autosave(generation)` open an older one. Host-only and
+local, nothing on the wire. The RECOVER token still offers the newest only: a way to choose an
+older copy from the deck is the next piece, not done.
+Suite: 10376 checks, 0 failed; dawkit 375.

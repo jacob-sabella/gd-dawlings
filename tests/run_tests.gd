@@ -290,6 +290,7 @@ func _ready() -> void:
 	_test_a_ripple_delete_closes_the_gap()
 	_test_ripple_editing_carries_what_follows()
 	_test_the_host_keeps_an_autosave()
+	_test_earlier_autosaves_are_kept()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
@@ -19138,6 +19139,29 @@ func _test_the_host_keeps_an_autosave() -> void:
 	check("a real save leaves nothing for it to do", not DAW.has_unsaved_changes() and not backend.needs_autosave())
 	OfflineBackend.autosave_every = 0.0
 	DirAccess.remove_absolute(copy)
+
+
+func _test_earlier_autosaves_are_kept() -> void:
+	var b := _offline()
+	b.project_title = "Suite Generations"
+	for g in OfflineBackend.AUTOSAVE_KEEP + 2:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(b.autosave_generation_path(g)))
+	check("a generation's path sits beside the newest", b.autosave_generation_path(0) == b.autosave_path()
+			and b.autosave_generation_path(2).ends_with("Suite Generations.2.dawproject"))
+	for step in OfflineBackend.AUTOSAVE_KEEP + 3:
+		DAW.set_track_volume(3, 0.1 + 0.1 * step)
+		b.autosave()
+	var kept := b.autosave_history()
+	check("each autosave keeps the ones before it, up to the limit (%d)" % kept.size(), kept.size() == OfflineBackend.AUTOSAVE_KEEP + 1)
+	check("newest first", kept[0] == b.autosave_path() and kept[1] == b.autosave_generation_path(1))
+	check("none past the limit", not FileAccess.file_exists(b.autosave_generation_path(OfflineBackend.AUTOSAVE_KEEP + 1)))
+	var older := _offline()
+	older.project_title = "Suite Generations"
+	var opened := ProjectFiles.open(older, b.autosave_generation_path(2))
+	check("an older copy opens with the level it had (%s)" % [opened],
+			opened.is_empty() and is_equal_approx(DAW.state.track(3).volume, 0.1 + 0.1 * (OfflineBackend.AUTOSAVE_KEEP + 3 - 1 - 2)))
+	for g in OfflineBackend.AUTOSAVE_KEEP + 2:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(b.autosave_generation_path(g)))
 
 
 func _test_a_crashed_session_is_recovered() -> void:
