@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 16
+Iterations done: 17
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -36,7 +36,8 @@ Iterations done: 16
 ## Piano roll
 - [x] transpose, quantise with strength, note insert through takes
 - [x] velocity: whole-item harder/softer (2026-10-14)
-- [ ] per-note velocity, CC / pitch-bend lanes, legato, humanise (missing)
+- [x] humanise (2026-10-14; time and velocity, seeded from the notes; a token on the ITEM page; Reaper path not run against a live Reaper)
+- [ ] per-note velocity, CC / pitch-bend lanes, legato (missing)
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track
@@ -63,7 +64,7 @@ Iterations done: 16
 - [ ] track freeze (missing)
 
 ## Markers and regions
-- [x] markers add/edit/remove
+- [x] markers add/edit/remove (2026-10-14: removing the last one now reaches guests and clears a Reaper cache)
 - [x] regions: add from the loop, loop one, remove (2026-10-14; drawn in the ruler's loop band; saved; Reaper's regions through the bridge, not yet run against a live Reaper)
 - [ ] regions: rename, move and resize, render a region, the region list (missing)
 

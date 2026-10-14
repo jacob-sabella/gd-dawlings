@@ -874,6 +874,13 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 		_edit("ShiftVelocity", [track_index, item_index, by])
 
 
+## Reaper rolls its own dice: the preview here is a likeness, and the next timeline is the truth.
+func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
+	if _locally_humanise(track_index, item_index, seconds, velocity):
+		_edit("HumaniseItem", [track_index, item_index, clampf(seconds, 0.0, HUMANISE_SECONDS_MAX),
+				clampi(velocity, 0, HUMANISE_VELOCITY_MAX)])
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	if _locally_transpose(track_index, item_index, semitones):
 		_edit("TransposeItem", [track_index, item_index, semitones])

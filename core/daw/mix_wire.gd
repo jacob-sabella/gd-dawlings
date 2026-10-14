@@ -170,7 +170,8 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 ## surface says nothing about the arrangement, so these are dawlings's own, filled by whatever
 ## channel a given backend has for structure -- the ReaScript bridge, for Reaper.
 static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) -> void:
-	if p.size() < 2 or args.is_empty():
+	# An empty list of markers is no markers, and has to be heard: it is how the last one goes.
+	if p.size() < 2 or (args.is_empty() and p[1] != "markers"):
 		return
 	match p[1]:
 		"length":
@@ -782,8 +783,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/loop/start/time", [state.loop_start]])
 	out.append(["/loop/end/time", [state.loop_end]])
 	out.append(["/timeline/length", [state.project_length]])
-	if not state.markers.is_empty():
-		out.append(["/timeline/markers", _pack_markers(state.markers)])
+	out.append(["/timeline/markers", _pack_markers(state.markers)])
 	out.append(["/timeline/regions", pack_regions(state.regions)])
 	return out
 

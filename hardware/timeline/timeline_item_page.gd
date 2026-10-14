@@ -40,6 +40,7 @@ var quant: GlyphKey
 var swing: GlyphRail
 var softer: GlyphKey
 var harder: GlyphKey
+var humanise: GlyphKey
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 ## [track, first, second] while exactly two items of one track are selected, else empty.
@@ -89,6 +90,7 @@ func _ready() -> void:
 			func() -> String: return "every note a little softer; fine: much softer" if softer.lit else "for a MIDI item")
 	harder = _key("ItemHarder", &"harder", NOTE_INK, "ITEM  NOTES HARDER", func(): _velocity(1),
 			func() -> String: return "every note a little harder; fine: much harder" if harder.lit else "for a MIDI item")
+	humanise = _key("ItemHumanise", &"humanise", NOTE_INK, "ITEM  HUMANISE", _humanise, _humanise_text)
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -106,7 +108,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, mute, lock, normalise, down, up, quant, swing, softer, harder]:
+	for c in [gain, fade_in, fade_out, mute, lock, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = one
 	copy_here.available = not picked.is_empty()
 	loop_to.available = not picked.is_empty()
@@ -116,7 +118,7 @@ func refresh() -> void:
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
-		for c in [mute, lock, normalise, down, up, quant, softer, harder]:
+		for c in [mute, lock, normalise, down, up, quant, softer, harder, humanise]:
 			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
@@ -125,11 +127,11 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, normalise, down, up, quant, swing, softer, harder]:
+	for c in [gain, fade_in, fade_out, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = not item.locked
 	normalise.lit = item.sound_peak() > 0.0
 	var midi := not item.notes.is_empty()
-	for key in [down, up, quant, softer, harder]:
+	for key in [down, up, quant, softer, harder, humanise]:
 		key.lit = midi
 	swing.available = midi and not item.locked
 
@@ -168,6 +170,23 @@ func _transpose(direction: int) -> void:
 func _velocity(direction: int) -> void:
 	if not _target.is_empty():
 		DAW.shift_velocity(_target[0], _target[1], direction * (32 if _fine(harder) or _fine(softer) else 8))
+
+
+## 15 ms and 8 velocity a press; 35 ms and 20 when fine.
+const HUMANISE := [0.015, 8]
+const HUMANISE_FINE := [0.035, 20]
+
+
+func _humanise_text() -> String:
+	if not humanise.lit:
+		return "for a MIDI item"
+	return "nudge every note's time and velocity a little, at random; fine: more"
+
+
+func _humanise() -> void:
+	if not _target.is_empty():
+		var by: Array = HUMANISE_FINE if _fine(humanise) else HUMANISE
+		DAW.humanise_item(_target[0], _target[1], by[0], by[1])
 
 
 func _quant_text() -> String:

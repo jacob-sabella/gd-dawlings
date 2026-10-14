@@ -1015,6 +1015,12 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 		_remember_edit(before)
 
 
+func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_humanise(track_index, item_index, seconds, velocity):
+		_remember_edit(before)
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_transpose(track_index, item_index, semitones):

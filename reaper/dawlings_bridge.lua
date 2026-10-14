@@ -1528,6 +1528,25 @@ function handlers.ShiftVelocity(args)
   return edited('Note velocity')
 end
 
+-- args: track, index, seconds, velocity: each note moved up to that far either way (never before
+-- the item's start) and its velocity changed up to that much, triangular, keeping its length.
+function handlers.HumaniseItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local secs = math.max(0, math.min(0.1, args[3] or 0))
+  local vel_by = math.max(0, math.min(40, math.floor(args[4] or 0)))
+  local item_start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  reaper.Undo_BeginBlock()
+  each_note(it, function(take, ppq_on, ppq_off, pitch, vel)
+    local on = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq_on)
+    local moved = math.max(on + (math.random() - math.random()) * secs, item_start)
+    local new_on = reaper.MIDI_GetPPQPosFromProjTime(take, moved)
+    local v = math.floor(vel + (math.random() - math.random()) * vel_by + 0.5)
+    return new_on, ppq_off + (new_on - ppq_on), pitch, math.max(1, math.min(127, v))
+  end)
+  return edited('Humanise notes')
+end
+
 -- args: track, index, semitones.
 function handlers.TransposeItem(args)
   local it = item_at(args)

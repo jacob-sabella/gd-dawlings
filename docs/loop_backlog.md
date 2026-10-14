@@ -3205,8 +3205,7 @@ seconds' work per minute of stereo after the render plays; fine for now.
 `MixState.regions` ([start, end, name], in order of starts) and `region_at`; `DAW.add_region` and
 `DAW.remove_region`, each one undo step, a guest's ask refused when empty, endless or malformed.
 On the wire as `/timeline/regions`, led by a count, so removing the last region still says so
-(an empty `/timeline/markers` is dropped by `_apply_timeline`: removing the last marker may not
-reach a guest live -- the snapshot then omits markers too. Not chased yet; worth a look.) Saved
+(an empty `/timeline/markers` was dropped by `_apply_timeline`: fixed in iteration 17.) Saved
 through dawkit's new `DawKitRegion` (72713ac, submodule bumped), in the plain form and in a
 dawproject's extras, since DAWproject has no regions. Reaper: the bridge's GetTimeline now lists
 regions apart from markers, and `AddRegion`/`RemoveRegion` make and delete them -- not yet run
@@ -3214,3 +3213,17 @@ against a live Reaper. A REGION page on the deck: ADD makes the loop range a reg
 the marker at its start or "Region N"; LOOP loops the region the playhead is in; REMOVE takes it
 away. Regions are drawn as slabs in the ruler's loop band, behind the loop bar, names at left.
 Split out as missing: rename, move and resize, render a region, the region list.
+
+## DAW parity, iteration 17: humanise; the last marker (2026-10-14)
+`DAW.humanise_item(track, item, seconds, velocity)`: every note of a MIDI item moved up to
+`seconds` either way (not before the item's start, keeping its length) and its velocity changed
+up to `velocity`, triangular, held to `HUMANISE_SECONDS_MAX`/`HUMANISE_VELOCITY_MAX` (0.1 s, 40).
+Seeded from the notes, so the host's edit is one answer and a second press is a different one.
+Refused for a locked item. Reaper's `HumaniseItem` in the bridge rolls its own dice; the preview
+is a likeness until the next timeline -- not yet run against a live Reaper. A HUMANISE token
+(notes on a grid, each off its line) after HARDER on the ITEM page: 15 ms and 8 a press, 35 ms
+and 20 fine. Suite 10132 checks, 0 failed; probe 0 failed.
+
+Also: an empty `/timeline/markers` was ignored, so removing the last marker never reached a guest,
+a snapshot left markers out when there were none, and Reaper reporting none left the cache's old
+ones in place. Now an empty list is no markers, and the snapshot always carries them.

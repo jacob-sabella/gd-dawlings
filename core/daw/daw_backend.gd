@@ -99,6 +99,9 @@ const QUANTIZE_GRID_MAX := 16.0
 const SWING_MAX := 1.0
 const TRANSPOSE_MAX := 48
 const VELOCITY_SHIFT_MAX := 126
+## The most a humanise may move a note (seconds) and change its velocity, either way.
+const HUMANISE_SECONDS_MAX := 0.1
+const HUMANISE_VELOCITY_MAX := 40
 const ITEM_GAIN_MAX := 24.0
 
 var state := MixState.new()
@@ -325,6 +328,8 @@ func set_tempo_map(_points: Array) -> void: pass
 func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> void: pass
 ## Every note of a MIDI item harder (positive) or softer, kept between 1 and 127.
 func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
+## Every note of a MIDI item nudged at random, up to `seconds` and `velocity`: see _locally_humanise.
+func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
 ## of the song's beat grid, keeping its length.
 func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float, _swing := 0.0) -> void: pass
@@ -794,6 +799,32 @@ func _locally_shift_velocity(track_index: int, item_index: int, by: int) -> bool
 	var notes := it.notes.duplicate()
 	for n in range(0, notes.size() - 4, 5):
 		notes[n + 3] = clampi(int(notes[n + 3]) + by, 1, 127)
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## Every note of a MIDI item moved up to `seconds` early or late and made up to `velocity` softer
+## or harder, at random -- but the same random for the same notes: seeded from them, so the host's
+## edit is one answer, and a second press (on notes the first has moved) is a different one. A
+## note keeps its length, and none is moved before its item's start. Each amount is triangular,
+## small nudges commoner than large ones, as a player's are.
+func _locally_humanise(track_index: int, item_index: int, seconds: float, velocity: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty() or (seconds <= 0.0 and velocity <= 0):
+		return false
+	seconds = clampf(seconds, 0.0, HUMANISE_SECONDS_MAX)
+	velocity = clampi(velocity, 0, HUMANISE_VELOCITY_MAX)
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash(Array(notes))
+	for n in range(0, notes.size() - 4, 5):
+		var moved := maxf(notes[n] + (dice.randf() - dice.randf()) * seconds, 0.0) - notes[n]
+		notes[n] += moved
+		notes[n + 1] += moved
+		notes[n + 3] = clampi(int(notes[n + 3]) + roundi((dice.randf() - dice.randf()) * velocity), 1, 127)
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true

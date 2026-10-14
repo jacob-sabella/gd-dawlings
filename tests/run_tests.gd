@@ -291,6 +291,8 @@ func _ready() -> void:
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
 	_test_the_song_has_regions()
+	_test_the_last_marker_removed_is_gone_everywhere()
+	_test_notes_are_humanised()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -19165,4 +19167,90 @@ func _test_the_song_has_regions() -> void:
 	page.refresh()
 	check("outside any region, they are dark", not page.loop_it.lit and not page.remove.lit)
 	DAW.set_looping(false)
+	timeline.free()
+
+
+func _test_the_last_marker_removed_is_gone_everywhere() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest has the demo's markers", not guest.markers.is_empty())
+	for at in s.markers.keys():
+		DAW.remove_marker(float(at))
+	check("every marker removed", s.markers.is_empty())
+	var live: Array = backend._repl_durable.get("/timeline/markers", [null])
+	MixWire.apply(guest, "/timeline/markers", live)
+	check("the live write of none empties a guest's", guest.markers.is_empty())
+	var late := MixState.new()
+	late.markers = {1.0: "Stale"}
+	MixWire.apply_replicated(late, MixWire.snapshot(s))
+	check("and a snapshot says there are none", late.markers.is_empty())
+	var link := _fresh_link()
+	link.state.markers = {3.0: "Gone in Reaper"}
+	link._on_timeline({"markers": [], "length": 60.0})
+	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
+	link.free()
+
+
+func _test_notes_are_humanised() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	var played: Array = []
+	for k in 16:
+		played.append([(4.0 + k * 0.5) * beat, (4.4 + k * 0.5) * beat, 60, 100, 0])
+	DAW.insert_midi_take(lane, 4.0 * beat, 12.0 * beat, played, "Keys")
+	var before := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	var depth := maxi(s.undo_depth, 0)
+	DAW.humanise_item(lane, 0, 0.02, 10)
+	var after := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	var moved := 0
+	var louder_or_softer := 0
+	var within := true
+	var lengths := true
+	for k in after.size():
+		var d: float = after[k][0] - before[k][0]
+		moved += 1 if absf(d) > 1e-6 else 0
+		louder_or_softer += 1 if int(after[k][3]) != 100 else 0
+		within = within and absf(d) <= 0.02 + 1e-6 and absi(int(after[k][3]) - 100) <= 10
+		lengths = lengths and absf((after[k][1] - after[k][0]) - (before[k][1] - before[k][0])) < 1e-6
+	check("humanised, most notes moved and changed (%d moved, %d velocities)" % [moved, louder_or_softer],
+			moved >= 12 and louder_or_softer >= 8)
+	check("none further than asked, each keeping its length", within and lengths)
+	check("none before its item's start", after.all(func(n): return n[0] >= s.item(lane, 0).start - 1e-6))
+	check("one undo step", s.undo_depth - depth == 1)
+	var first: PackedFloat32Array = s.item(lane, 0).notes
+	DAW.undo()
+	DAW.humanise_item(lane, 0, 0.02, 10)
+	check("the same notes humanise the same way: the host's edit is one answer", s.item(lane, 0).notes == first)
+	DAW.humanise_item(lane, 0, 0.02, 10)
+	check("and pressed again, differently", s.item(lane, 0).notes != first)
+	DAW.undo()
+	DAW.undo()
+	check("a guest may ask", &"humanise_item" in DAW.COMMANDS)
+	DAW.apply_intent(&"humanise_item", [lane, 0, 5.0, 999])
+	after = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("a guest's amounts are held to the most (%.3f)" % absf(after[3][0] - before[3][0]),
+			after.all(func(n): return absi(int(n[3]) - 100) <= DAWBackend.HUMANISE_VELOCITY_MAX))
+	DAW.undo()
+	DAW.set_item_locked(lane, 0, true)
+	DAW.humanise_item(lane, 0, 0.02, 10)
+	check("a locked item is not humanised", MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start) == before)
+	DAW.set_item_locked(lane, 0, false)
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.select_item(lane, 0, false)
+	page.refresh()
+	check("a HUMANISE token on the item page, lit for a MIDI item", page.humanise != null
+			and page.humanise.glyph == &"humanise" and page.humanise.lit)
+	page.humanise.pressed.emit()
+	check("pressed, the notes move", MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start) != before)
+	DAW.undo()
+	DAW.clear_item_selection()
 	timeline.free()
