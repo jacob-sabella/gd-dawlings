@@ -3480,3 +3480,22 @@ off; Reaper's timestamped backups, by count. `autosave_history()` lists them new
 local, nothing on the wire. The RECOVER token still offers the newest only: a way to choose an
 older copy from the deck is the next piece, not done.
 Suite: 10376 checks, 0 failed; dawkit 375.
+
+## 2026-10-14 -- iteration 35: the audio-device patchbay wall, part 1
+
+Asked for: a Carla-style patchbay for the audio devices, on a huge screen in a side room.
+Split in three; this is the first.
+1. DONE -- `PipeGraph` (core/audio/pipe_graph.gd) reads the machine's PipeWire graph from
+   `pw-link -o/-i/-l` (nodes, ports, links), and can `link`/`unlink` ports. `PatchWallSurface`
+   (hardware/patchbay) draws it: a box per node with a header in the venue's palette
+   (`TrackColours.palette()`), ports down the left (outputs) and right (inputs), a bright curved
+   ribbon per link, a frame of the venue's trim; ports in use lit, the rest dimmed. Re-asked
+   every 2 s on a thread; redrawn only when the graph or the venue's dress changes. Capped at
+   16 port rows a column, the rest counted. `tools/screenshot.gd --patch-wall` hangs one for a shot.
+2. NEXT -- mount it: a big screen on the studio's side room wall (`StudioVenue` BESIDE variant),
+   registered with the SurfaceMount / focus rig, a stand-in room for the other variants.
+3. NEXT -- make and break links: drag a cable from an output jack to an input jack, tap a cable
+   to cut it (`PipeGraph.link/unlink`); pick a node to see more than 16 rows.
+Not multiplayer state: a PipeWire graph is the machine's own. Each player's wall shows their own
+devices, and nothing is sent. Linux only (needs `pw-link`); elsewhere it says there is no graph.
+Suite: 10391 checks, 0 failed.

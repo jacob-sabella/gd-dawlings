@@ -291,6 +291,7 @@ func _ready() -> void:
 	_test_ripple_editing_carries_what_follows()
 	_test_the_host_keeps_an_autosave()
 	_test_earlier_autosaves_are_kept()
+	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
@@ -19139,6 +19140,62 @@ func _test_the_host_keeps_an_autosave() -> void:
 	check("a real save leaves nothing for it to do", not DAW.has_unsaved_changes() and not backend.needs_autosave())
 	OfflineBackend.autosave_every = 0.0
 	DirAccess.remove_absolute(copy)
+
+
+const GRAPH_OUT := "dawlings · mix:output_FL\ndawlings · mix:output_FR\nMic:capture_1\nMidi-Bridge:Midi Through: Port-0 (capture)\n"
+const GRAPH_IN := "alsa_output.usb-Scarlett.pro-output-0:playback_AUX0\nalsa_output.usb-Scarlett.pro-output-0:playback_AUX1\nRecorder:input_1\n"
+const GRAPH_LINKS := "dawlings · mix:output_FL\n  |-> alsa_output.usb-Scarlett.pro-output-0:playback_AUX0\ndawlings · mix:output_FR\n  |-> alsa_output.usb-Scarlett.pro-output-0:playback_AUX1\nalsa_output.usb-Scarlett.pro-output-0:playback_AUX0\n  |<- dawlings · mix:output_FL\nMic:capture_1\n  |-> Recorder:input_1\n"
+
+
+func _test_the_audio_graph_is_read_and_drawn() -> void:
+	var g := PipeGraph.parse(GRAPH_OUT, GRAPH_IN, GRAPH_LINKS)
+	check("every node with a port is read (%d)" % g.nodes.size(), g.nodes.size() == 5)
+	check("a node's output ports and input ports are kept apart", g.nodes["dawlings · mix"]["outputs"].size() == 2
+			and g.nodes["dawlings · mix"]["inputs"].is_empty() and g.nodes["Recorder"]["inputs"].size() == 1)
+	check("a port name with spaces and colons stays whole", g.nodes["Midi-Bridge"]["outputs"][0] == "Midi-Bridge:Midi Through: Port-0 (capture)")
+	check("each link once, though both ends list it (%d)" % g.links.size(), g.links.size() == 3
+			and g.is_linked("dawlings · mix:output_FL", "alsa_output.usb-Scarlett.pro-output-0:playback_AUX0")
+			and not g.is_linked("Mic:capture_1", "alsa_output.usb-Scarlett.pro-output-0:playback_AUX0"))
+	check("a node and its port's label come off the name", PipeGraph.node_of("Mic:capture_1") == "Mic" and PipeGraph.label_of("Mic:capture_1") == "capture_1")
+	check("a device's name is made short", PipeGraph.short_name("alsa_output.usb-Scarlett.pro-output-0") == "usb-Scarlett.pro-output-0"
+			and PipeGraph.short_name("x".repeat(60)).length() == 26)
+	check("nodes in use come first", g.nodes_by_use()[g.nodes_by_use().size() - 1] in ["Midi-Bridge"]
+			and PipeGraph.parse(GRAPH_OUT, GRAPH_IN, GRAPH_LINKS).signature() == g.signature())
+
+	var dir := OS.get_temp_dir().path_join("suite_pwlink")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var tool := dir.path_join("pw-link")
+	var log := dir.path_join("calls.txt")
+	var f := FileAccess.open(tool, FileAccess.WRITE)
+	f.store_string("#!/bin/sh\ncase \"$1\" in\n-o) printf '%s' '" + GRAPH_OUT + "';;\n-i) printf '%s' '" + GRAPH_IN + "';;\n-l) printf '%s' '" + GRAPH_LINKS + "';;\n*) echo \"$@\" >> " + log + ";;\nesac\n")
+	f.close()
+	OS.execute("chmod", ["+x", tool])
+	var fetched := PipeGraph.fetch(tool)
+	check("the machine's graph is asked for and read", fetched.nodes.size() == 5 and fetched.links.size() == 3 and fetched.error == "")
+	check("a tool that is not there leaves an error, not a crash", not PipeGraph.fetch(dir.path_join("nothing")).error.is_empty())
+	check("a patch is made and taken out by the tool", PipeGraph.link("a:out", "b:in", tool) and PipeGraph.unlink("a:out", "b:in", tool))
+	check("as `pw-link out in` and `pw-link -d out in`", FileAccess.get_file_as_string(log) == "a:out b:in\n-d a:out b:in\n")
+
+	var wall := PatchWallSurface.new()
+	wall.follow = false
+	add_child(wall)
+	wall.show_graph(fetched)
+	wall._process(0.0)
+	check("the wall is a box for each side of each node: 3 sources, 3 sinks, here (%d cables)" % wall.cables,
+			wall.cables == 3 and wall.height > 0.3)
+	check("it names itself for the layout", wall.surface_id == &"patch_wall" and wall.surface_kind == &"patchwall")
+	var before := wall.get_child_count()
+	wall.show_graph(PipeGraph.parse(GRAPH_OUT, GRAPH_IN, GRAPH_LINKS))
+	wall._process(0.0)
+	check("the same graph is not drawn again", wall.get_child_count() == before)
+	var broken := PipeGraph.new()
+	broken.error = "no audio graph"
+	wall.show_graph(broken)
+	wall._process(0.0)
+	check("without a graph it says so and draws no cables", wall.cables == 0)
+	wall.free()
+	DirAccess.remove_absolute(log)
+	DirAccess.remove_absolute(tool)
 
 
 func _test_earlier_autosaves_are_kept() -> void:

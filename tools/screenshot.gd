@@ -103,6 +103,8 @@ var _tl_road := -1.0
 ## `--tl-select 3:0,3:1`: those items (track:item) selected from frame 7, so the timeline's item
 ## page shows. `--tl-pick 3`: that track picked from frame 7, for the track page.
 var _tl_select := ""
+## `--patch-wall`: the audio-device patch wall, hung in the middle of the room, showing this machine's graph.
+var _patch_wall := false
 ## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
 var _tl_region := ""
 ## `--tl-group 2:1,3:1`: those tracks put in those groups (track:group), at frame 7.
@@ -230,6 +232,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _pull_tracks = int(args[i + 1])
 			"--board":
 				if i + 1 < args.size(): _board = args[i + 1]
+			"--patch-wall":
+				_patch_wall = true
 			"--tl-select":
 				if i + 1 < args.size(): _tl_select = args[i + 1]
 			"--reopen":
@@ -280,6 +284,13 @@ func _process(_delta: float) -> void:
 			if studio.has_method("set_god_mode"):
 				studio.set_god_mode(true)
 			studio.frame(Vector3(_cam[3], _cam[4], _cam[5]), _cam[2], _cam[0], _cam[1])
+
+	if _frames == 3 and _patch_wall:
+		var wall := PatchWallSurface.new()
+		wall.position = Vector3(0, 2.4, 1.2)
+		get_tree().current_scene.add_child(wall)
+		for hidden in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
+			hidden.visible = false
 
 	if _frames == 6 and _tl_shelf != "":
 		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
