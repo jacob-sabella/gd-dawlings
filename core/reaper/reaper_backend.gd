@@ -691,6 +691,11 @@ func _undo_or_redo(fn: String, action: int) -> void:
 # cache at once (see DAWBackend) and Reaper's own answer arrives with the next timeline poll,
 # which an edit brings forward.
 
+func select_all_items() -> void:
+	_locally_select_all()
+	_edit("SelectAllItems", [])
+
+
 func select_item(track_index: int, item_index: int, additive: bool) -> void:
 	_locally_select(track_index, item_index, additive)
 	_edit("SelectItem", [track_index, item_index, additive])

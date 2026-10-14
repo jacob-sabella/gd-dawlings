@@ -116,6 +116,8 @@ var _copy_key: PanelButton
 var _copy_caption: Label3D
 var _delete_key: PanelButton
 var _delete_caption: Label3D
+var _all_key: PanelButton
+var _all_caption: Label3D
 ## The selected item's gain, fades and notes, under the panel; see TimelineItemStrip.
 var _item_controls: TimelineItemStrip
 ## Add, remove and name tracks, under the right-hand end; see TimelineTrackStrip.
@@ -386,6 +388,12 @@ func _ready() -> void:
 	_delete_caption = _text("DEL", 30, Color(0.62, 0.64, 0.68))
 	_delete_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_child(_delete_caption)
+	_all_key = _selection_key("SelectAllKey", Color(0.55, 0.7, 0.95), "EDIT  SELECT ALL",
+			func(): DAW.select_all_items())
+	_all_key.describe_value = func(_v: float) -> String: return "every item on every track"
+	_all_caption = _text("ALL", 22, Color(0.62, 0.64, 0.68))
+	_all_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_child(_all_caption)
 	DAW.timeline_changed.connect(_light_selection_keys)
 
 	_tempo_controls = TimelineTempoStrip.new()
@@ -442,6 +450,8 @@ func _light_selection_keys() -> void:
 	for key in [_copy_key, _delete_key]:
 		if key != null:
 			key.lit = any
+	if _all_key != null:
+		_all_key.lit = DAW.state.track_indices().any(func(i): return not DAW.state.track(i).items.is_empty())
 
 
 func _process(delta: float) -> void:
@@ -621,8 +631,10 @@ func _place_strips() -> void:
 	var corner_mid := -_top_y + SCRUBBER_BAND * 0.5
 	_copy_key.position = Vector3(-width * 0.5 + 0.017, corner_mid, 0.003)
 	_copy_caption.position = Vector3(-width * 0.5 + 0.035, corner_mid, 0.0016)
-	_delete_key.position = Vector3(-width * 0.5 + 0.088, corner_mid, 0.003)
-	_delete_caption.position = Vector3(-width * 0.5 + 0.106, corner_mid, 0.0016)
+	_delete_key.position = Vector3(-width * 0.5 + 0.076, corner_mid, 0.003)
+	_delete_caption.position = Vector3(-width * 0.5 + 0.094, corner_mid, 0.0016)
+	_all_key.position = Vector3(-width * 0.5 + 0.129, corner_mid, 0.003)
+	_all_caption.position = Vector3(-width * 0.5 + 0.145, corner_mid, 0.0016)
 	_light_selection_keys()
 	_place_control_strips()
 

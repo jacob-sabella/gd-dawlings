@@ -930,6 +930,10 @@ func select_item(track_index: int, item_index: int, additive: bool) -> void:
 	_locally_select(track_index, item_index, additive)
 
 
+func select_all_items() -> void:
+	_locally_select_all()
+
+
 func clear_item_selection() -> void:
 	_locally_clear_selection()
 

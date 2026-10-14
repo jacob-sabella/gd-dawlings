@@ -64,7 +64,7 @@ const COMMANDS := [
 	&"set_track_bank",
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
-	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
+	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
 	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
@@ -380,6 +380,7 @@ func redo() -> void: _do(&"redo", [])
 func select_item(track_index: int, item_index: int, additive := false) -> void:
 	_do(&"select_item", [track_index, item_index, additive])
 func clear_item_selection() -> void: _do(&"clear_item_selection", [])
+func select_all_items() -> void: _do(&"select_all_items", [])
 ## `to_track`: onto another track as well (0, the one it is on).
 func move_item(track_index: int, item_index: int, start: float, to_track := 0) -> void:
 	_do(&"move_item", [track_index, item_index, maxf(start, 0.0), maxi(to_track, 0)])
@@ -593,7 +594,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed copy_selected_to intent %s." % [args])
 			return
 		args = [maxf(float(args[0]), 0.0)]
-	if verb in [&"delete_selected", &"duplicate_selected"]:
+	if verb in [&"delete_selected", &"duplicate_selected", &"select_all_items"]:
 		args = []
 	if verb == &"set_automation":
 		# Peer input: a track, a target that names a control, and flat points.

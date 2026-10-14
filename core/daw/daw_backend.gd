@@ -270,6 +270,8 @@ func redo() -> void: pass
 ## from the selection instead of replacing it.
 func select_item(_track_index: int, _item_index: int, _additive: bool) -> void: pass
 func clear_item_selection() -> void: pass
+## Every item on every track, selected.
+func select_all_items() -> void: pass
 ## `to_track`, when it is another track, moves the item onto that one as well: off one shelf and
 ## onto another. 0 keeps it where it is.
 func move_item(_track_index: int, _item_index: int, _start: float, _to_track := 0) -> void: pass
@@ -398,6 +400,16 @@ func _locally_select(track_index: int, item_index: int, additive: bool) -> void:
 				item.selected = not item.selected if additive else true
 			elif not additive:
 				item.selected = false
+		_write_lane(index, lane)
+
+
+func _locally_select_all() -> void:
+	for index in state.track_indices():
+		if state.track(index).items.all(func(it): return it.selected):
+			continue
+		var lane := _lane_copy(index)
+		for item in lane:
+			item.selected = true
 		_write_lane(index, lane)
 
 

@@ -3078,3 +3078,11 @@ between 1 and 127 (a guest's amount clamped to +-126, malformed refused), one un
 a live Reaper). V- / V+ keys on the item strip: 8 a press, 32 held fine. Only the whole item: a
 per-note velocity edit wants the piano roll to select notes, which is the next size up.
 Suite 9997 checks, 0 failed; probe 0 failed. Not seen in a screenshot.
+
+## DAW parity, iteration 5: select all items (2026-10-14)
+`DAW.select_all_items()` selects every item on every track (a selection, so not an undo step;
+Reaper `SelectAllItems`, untested live). An ALL key beside COPY and DEL under the timeline, lit
+once there is anything to select; COPY and DEL moved closer to make room, and ALL's lettering is
+smaller because the track area clips anything past it. Looked at in a screenshot of the studio's
+timeline: all three captions read. The item strip (single selection only) was not shown, since
+`tools/shot.sh` cannot select an item. Suite 9999 checks, 0 failed; probe 0 failed.

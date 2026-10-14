@@ -1266,6 +1266,17 @@ function handlers.SelectItem(args)
   return {ok = true}
 end
 
+function handlers.SelectAllItems()
+  for t = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, t)
+    for n = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      reaper.SetMediaItemSelected(reaper.GetTrackMediaItem(tr, n), true)
+    end
+  end
+  reaper.UpdateArrange()
+  return {ok = true}
+end
+
 function handlers.ClearItemSelection()
   unselect_all()
   reaper.UpdateArrange()

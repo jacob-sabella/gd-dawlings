@@ -13637,6 +13637,18 @@ func _test_notes_are_transposed_and_quantised() -> void:
 			int(notes[0][2]) == 60 + DAWBackend.TRANSPOSE_MAX)
 	DAW.apply_intent(&"quantize_item", [lane, 0, INF, 1.0])
 	check("and a malformed quantise refused", s.undo_depth - depth == 1)
+	DAW.clear_item_selection()
+	DAW.select_all_items()
+	var every_selected := true
+	var any_items := false
+	for i in s.track_indices():
+		for it in s.track(i).items:
+			any_items = true
+			every_selected = every_selected and it.selected
+	check("select all picks every item on every track", any_items and every_selected)
+	DAW.clear_item_selection()
+	check("and clearing lets go of them", s.selected_items().is_empty())
+
 	var vel_before: float = s.item(lane, 0).notes[3]
 	var vel_depth := s.undo_depth
 	DAW.shift_velocity(lane, 0, 16)
