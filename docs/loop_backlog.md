@@ -3640,3 +3640,11 @@ no edit). Reaper's `MoveNote` is told the distance really moved, after the hold 
 run live). The piano roll now has per-note insert, delete, pitch, length, time and velocity from the
 ITEM page; still missing are CC and pitch-bend lanes. Probe: host 53, guest 47, 0 failed.
 Suite: 10486 checks, 0 failed.
+
+## 2026-10-14 -- iteration 50: choose which autosave to recover
+
+A fine press on RECOVER (the hand held steady) steps the choice back through the kept copies, round
+to the newest; a plain press opens the chosen one in the project's place and the choice returns to
+the newest. The hover card says "copy N of M, kept at hh:mm". `DAW.autosave_copies()` lists the host's
+copies; no wire change (recovery is the host's own). README gained a short section on the deck.
+Probe: host 53, guest 47, 0 failed. Suite: 10491 checks, 0 failed. The loop's 50 iterations are done.

@@ -415,7 +415,7 @@ func _build_deck() -> void:
 				var file := DAW.project_file()
 				return (file.get_file() if not file.is_empty() else "where the host keeps it") + _autosave_text(), true)
 	_recover_key = _tool("RecoverKey", &"recover", Color(0.98, 0.72, 0.30), "PROJECT  RECOVER",
-			func(): DAW.recover_autosave(), _recover_text)
+			func(): _press_recover(_held_fine(_recover_key)), _recover_text)
 	DAW.project_replaced.connect(_light_recover_key)
 	DAW.project_saved.connect(func(_said): _light_recover_key())
 	_light_recover_key()
@@ -453,13 +453,42 @@ func _autosave_text() -> String:
 	return "  ·  copy kept %s" % ("just now" if minutes < 1 else "%d min ago" % minutes)
 
 
+## Which autosave copy RECOVER opens: 0 the newest. A fine press steps it back one, round to the newest.
+var recover_generation := 0
+
+
+func _held_fine(key: ControlAffordance) -> bool:
+	var by: Node = key.held_by
+	return by != null and by.has_method("fine") and by.fine()
+
+
+## A press opens the chosen copy; a fine press (hand held steady) chooses an older one instead.
+func _press_recover(fine: bool) -> void:
+	var copies := DAW.autosave_copies().size()
+	if fine and copies > 1:
+		recover_generation = (recover_generation + 1) % copies
+		return
+	var generation := mini(recover_generation, maxi(copies - 1, 0))
+	recover_generation = 0
+	DAW.recover_autosave(generation)
+
+
 func _recover_text() -> String:
+	var copies := DAW.autosave_copies()
 	var copy := DAW.recoverable_copy()
 	if copy.is_empty():
 		return "no copy newer than the project is kept"
+	if copies.size() > 1:
+		copy = copies[mini(recover_generation, copies.size() - 1)]
+		return "%s: copy %d of %d, kept at %s; fine: an older one" % [
+				"open it in the project's place", recover_generation + 1, copies.size(), _clock_of(copy)]
+	return "a copy kept at %s, newer than the project: open it in its place" % _clock_of(copy)
+
+
+func _clock_of(copy: String) -> String:
 	var at := Time.get_time_dict_from_unix_time(FileAccess.get_modified_time(copy)
 			+ Time.get_time_zone_from_system()["bias"] * 60)
-	return "a copy kept at %02d:%02d, newer than the project: open it in its place" % [at["hour"], at["minute"]]
+	return "%02d:%02d" % [at["hour"], at["minute"]]
 
 
 func _light_recover_key() -> void:

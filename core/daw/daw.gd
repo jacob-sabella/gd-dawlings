@@ -394,6 +394,13 @@ func recoverable_copy() -> String:
 	return backend.call(&"recoverable")
 
 
+## The autosave copies kept, newest first: [] for a guest and for a DAW that keeps its own.
+func autosave_copies() -> PackedStringArray:
+	if not Session.is_authority() or backend == null or not backend.has_method(&"autosave_history"):
+		return PackedStringArray()
+	return backend.call(&"autosave_history")
+
+
 ## Opens that copy in the project's place, unsaved. Host only: it replaces the project.
 func recover_autosave(generation := 0) -> PackedStringArray:
 	if recoverable_copy().is_empty():

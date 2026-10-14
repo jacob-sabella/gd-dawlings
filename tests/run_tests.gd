@@ -304,6 +304,7 @@ func _ready() -> void:
 	_test_notes_are_played_backwards()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
+	_test_an_older_autosave_is_chosen()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
@@ -19314,6 +19315,41 @@ func _test_a_crashed_session_is_recovered() -> void:
 			DAW.recoverable_copy() == "" and is_equal_approx(DAW.state.track(3).volume, 0.25))
 	timeline.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(second.autosave_path()))
+
+
+func _test_an_older_autosave_is_chosen() -> void:
+	var first := _offline()
+	first.project_title = "Suite Older"
+	var own := "user://suite_older/own.dawproject"
+	for g in OfflineBackend.AUTOSAVE_KEEP + 2:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(first.autosave_generation_path(g)))
+	DAW.save_project_as(own)
+	OS.delay_msec(1100)
+	for step in 3:
+		DAW.set_track_volume(3, 0.2 + 0.2 * step)
+		first.autosave()
+	var second := _offline()
+	second.project_title = "Suite Older"
+	DAW.open_project(own)
+	check("three copies are listed, newest first", DAW.autosave_copies().size() == 3 and DAW.autosave_copies()[0] == second.autosave_path())
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var key: GlyphKey = timeline._recover_key
+	check("its card says which copy (%s)" % key.describe_value.call(0.0), key.describe_value.call(0.0).contains("copy 1 of 3"))
+	timeline._press_recover(true)
+	check("a fine press chooses the next older, and opens nothing", timeline.recover_generation == 1
+			and key.describe_value.call(0.0).contains("copy 2 of 3") and not is_equal_approx(DAW.state.track(3).volume, 0.4))
+	timeline._press_recover(true)
+	timeline._press_recover(true)
+	check("round again to the newest", timeline.recover_generation == 0)
+	timeline._press_recover(true)
+	timeline._press_recover(false)
+	check("a plain press opens the chosen one: its level (%.2f)" % DAW.state.track(3).volume, is_equal_approx(DAW.state.track(3).volume, 0.4)
+			and timeline.recover_generation == 0)
+	timeline.free()
+	for g in OfflineBackend.AUTOSAVE_KEEP + 2:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(second.autosave_generation_path(g)))
 
 
 func _test_a_send_can_be_taken_before_the_fader() -> void:
