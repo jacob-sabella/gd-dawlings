@@ -703,11 +703,6 @@ func parts_windowed() -> bool:
 	return not state.tempo_points.is_empty() or not state.time_signature_points.is_empty()
 
 
-## The signature a looped part is rendered in.
-func parts_signature() -> Vector2i:
-	return Vector2i(maxi(state.beats_per_bar, 1), maxi(state.beat_unit, 1))
-
-
 ## The window of `role` that plays at `seconds`, [stream, its first sample's seconds], or empty
 ## while it renders. Asks for it, and once the playhead is halfway through its first loop, for the
 ## next one too, so it is there when it is wanted.

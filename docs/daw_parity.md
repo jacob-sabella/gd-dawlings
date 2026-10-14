@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 18
+Iterations done: 19
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -75,6 +75,10 @@ Iterations done: 18
 
 ## Undo and project files
 - [x] undo/redo with one step per edit, save/open/new (DAWproject)
+- [x] a reopened project's audio is drawn (2026-10-14; it opened as blank blocks before)
+- [ ] autosave and crash recovery (missing)
+- [ ] undo history list: jump to any step (missing)
+- [ ] project templates: a new project from a saved layout of tracks, routing and plugins (missing)
 
 ## Performance and latency
 - [ ] latency report and compensation (missing; see `tools/budget.sh` for frame cost only)

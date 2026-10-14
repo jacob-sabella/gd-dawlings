@@ -1879,7 +1879,7 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 		return slot
 	var columns := wave_columns(item.peaks, item.source_offset, start, item.length,
 			_x_for(start) + EDGE_GAP + INSET, _x_for(start + item.length) - EDGE_GAP - INSET,
-			_lane_area_x + INSET, _lane_right() - INSET, WAVE_COLUMN)
+			_lane_area_x + INSET, _lane_right() - INSET, WAVE_COLUMN, item.loop_start, item.loop_end)
 	var block_height := lane_height - 0.0024
 	var top := y + block_height * 0.5 - 0.0012
 	var bottom := y - block_height * 0.5 + 0.0020
@@ -1909,9 +1909,11 @@ func _place_wave(item: MixState.ItemState, start: float, tint: Color, y: float, 
 
 ## The columns a take's overview draws as: [[x, loudness 0-1], ...], one per `column` of panel
 ## between `left` and `right`, clipped to [clip_left, clip_right]. Each is the loudest peak in
-## the stretch of the file under it.
+## the stretch of the file under it; for a looped item (loop_end after loop_start), past the
+## loop's end the file comes round again from its start, as it is heard.
 static func wave_columns(peaks: PackedByteArray, offset: float, start: float, length: float,
-		left: float, right: float, clip_left: float, clip_right: float, column: float) -> Array:
+		left: float, right: float, clip_left: float, clip_right: float, column: float,
+		loop_start := 0.0, loop_end := 0.0) -> Array:
 	var out := []
 	if peaks.is_empty() or right - left <= 0.0 or length <= 0.0:
 		return out
@@ -1921,12 +1923,25 @@ static func wave_columns(peaks: PackedByteArray, offset: float, start: float, le
 	while x < end:
 		var from := offset + (x - column * 0.5 - left) * per_metre
 		var to := offset + (x + column * 0.5 - left) * per_metre
-		var a := clampi(int(floor(from * AudioTake.PEAKS_PER_SECOND)), 0, peaks.size())
-		var b := clampi(int(ceil(to * AudioTake.PEAKS_PER_SECOND)), a, peaks.size())
 		var loudest := 0
-		for i in range(a, b):
-			loudest = maxi(loudest, peaks[i])
-		if b > a:
+		var any := false
+		if loop_end > loop_start and to > loop_end:
+			var rate := float(AudioTake.PEAKS_PER_SECOND)
+			for i in range(int(floor(from * rate)), int(ceil(to * rate))):
+				var t := i / rate
+				if t >= loop_end:
+					t = loop_start + fposmod(t - loop_start, loop_end - loop_start)
+				var j := int(t * rate)
+				if j >= 0 and j < peaks.size():
+					loudest = maxi(loudest, peaks[j])
+					any = true
+		else:
+			var a := clampi(int(floor(from * AudioTake.PEAKS_PER_SECOND)), 0, peaks.size())
+			var b := clampi(int(ceil(to * AudioTake.PEAKS_PER_SECOND)), a, peaks.size())
+			for i in range(a, b):
+				loudest = maxi(loudest, peaks[i])
+			any = b > a
+		if any:
 			out.append([x, loudest / 255.0])
 		x += column
 	return out

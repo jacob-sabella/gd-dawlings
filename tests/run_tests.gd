@@ -294,6 +294,7 @@ func _ready() -> void:
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
 	_test_an_item_plays_backwards()
+	_test_a_reopened_take_is_drawn()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -10142,6 +10143,9 @@ func _test_the_built_in_engine_saves_and_opens_dawproject() -> void:
 				looped = it
 	check("its parts are now files it plays, looped", looped != null and looped.source.begins_with("demo_")
 			and FileAccess.file_exists(fresh.media_path(looped.source)))
+	check("and drawn as the sounds they are: each has its file's overview (%d)" % (looped.peaks.size() if looped else 0),
+			looped != null and looped.peaks.size() >= int(looped.loop_end * AudioTake.PEAKS_PER_SECOND) - 1
+			and Array(looped.peaks).max() > 20)
 	if looped != null:
 		var stream := fresh.looped_stream(looped.source, looped.loop_start, looped.loop_end)
 		check("as a stream that goes round its loop", stream != null
@@ -14515,6 +14519,11 @@ func _test_a_recorded_take_shows_its_waveform_on_the_timeline() -> void:
 	var clipped := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 2.0, 0.0, 0.2, 0.1, 0.15, 0.01)
 	check("and only where the window shows it", clipped.size() == 5
 			and clipped.all(func(c): return c[0] >= 0.1 and c[0] <= 0.15))
+	# Looped over its two seconds for six: quiet, loud, quiet, loud... the whole way along.
+	var looped := TimelineSurface.wave_columns(peaks, 0.0, 10.0, 6.0, 0.0, 0.6, -1.0, 1.0, 0.01, 0.0, 2.0)
+	check("a looped take draws the whole way along (%d)" % looped.size(), looped.size() == 60)
+	check("coming round again where the loop does",
+			looped[22][1] < 0.1 and looped[37][1] > 0.9 and looped[42][1] < 0.1 and looped[57][1] > 0.9)
 
 	_offline().open()
 	DAW.insert_audio_take(8, 2.0, "suite-wave.wav", 2.0, peaks, "Grace audio 1")
@@ -19346,4 +19355,53 @@ func _test_an_item_plays_backwards() -> void:
 	DAW.clear_item_selection()
 	timeline.free()
 	DirAccess.remove_absolute(backend.media_path(take.file_name()))
+	_offline()
+
+
+func _test_a_reopened_take_is_drawn() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var take := AudioTake.create("suite-reopen-take.wav")
+	var swell := PackedVector2Array()
+	swell.resize(AudioTake.RATE * 2)
+	for i in swell.size():
+		swell[i] = Vector2.ONE * sin(TAU * 110.0 * i / AudioTake.RATE) * 0.9 * float(i) / swell.size()
+	take.append(AudioTake.encode(swell))
+	take.finish()
+	var lane := 6
+	s.track(lane).items.clear()
+	DAW.insert_audio_take(lane, 10.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 1")
+	DAW.insert_audio_take(lane, 20.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 2")
+	DAW.set_item_reversed(lane, 1, true)
+	var recorded := take.peaks()
+	var read := AudioTake.overview_of(backend.media_path(take.file_name()))
+	var worst := 0
+	for i in mini(read.size(), recorded.size()):
+		worst = maxi(worst, absi(int(read[i]) - int(recorded[i])))
+	check("a file's overview read from it is the one made as it was recorded (%d vs %d, off by %d)" % [read.size(),
+			recorded.size(), worst], absi(read.size() - recorded.size()) <= 1 and worst <= 3)
+	check("and a file that is not there has none", AudioTake.overview_of("/nowhere/at/all.wav").is_empty())
+	var path := ProjectSettings.globalize_path("user://suite_reopen/take.dawproject")
+	var warnings := ProjectFiles.save(backend, path)
+	var fresh := GodotBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	var refused := ProjectFiles.open(fresh, path)
+	check("saved and reopened (%s %s)" % [warnings, refused], refused.is_empty())
+	var items: Array = DAW.state.track(lane).items
+	check("its takes are drawn, not blank (%s)" % [items.map(func(it): return it.peaks.size())],
+			items.size() == 2 and items.all(func(it): return it.peaks.size() >= recorded.size() - 1))
+	if items.size() == 2:
+		check("the forward take louder at its end, as recorded", items[0].peaks[-5] > items[0].peaks[5] + 50)
+		check("the reversed one louder at its start, as it sounds", items[1].reversed and items[1].peaks[5] > items[1].peaks[-5] + 50)
+	DirAccess.remove_absolute(backend.media_path(take.file_name()))
+	DirAccess.remove_absolute(path)
+	# The stand-in hosts too (a run without the engine), and saves like any host.
+	var stand_in := _offline()
+	var plain := ProjectSettings.globalize_path("user://suite_reopen/stand_in.dawproject")
+	var said := ProjectFiles.save(stand_in, plain)
+	check("the stand-in saves a project (%s)" % [said], FileAccess.file_exists(plain))
+	DirAccess.remove_absolute(plain)
 	_offline()

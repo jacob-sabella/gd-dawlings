@@ -99,6 +99,12 @@ var count_in_lead := 0.0
 var instruments := {}
 
 
+## The signature a looped part is rendered in. Here rather than in the engine: a save renders the
+## parts from the song alone, whichever backend is hosting.
+func parts_signature() -> Vector2i:
+	return Vector2i(maxi(state.beats_per_bar, 1), maxi(state.beat_unit, 1))
+
+
 func set_media(where: Dictionary) -> void:
 	media = where.duplicate()
 

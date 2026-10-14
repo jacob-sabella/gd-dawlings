@@ -146,6 +146,20 @@ func seconds() -> float:
 	return float(frames) / RATE
 
 
+## The overview of the sound file at `sound_path`, as a take's own (PEAKS_PER_SECOND bytes a
+## second), read from the sound: for a file the desk did not record as it went, such as one in a
+## project being opened. Every sample is looked at; a stereo minute is about a quarter of a second.
+## Empty for a file that is not there or cannot be read.
+static func overview_of(sound_path: String) -> PackedByteArray:
+	if not FileAccess.file_exists(sound_path):
+		return PackedByteArray()
+	var sound := DawKitAudioFile.read(sound_path)
+	if not str(sound["error"]).is_empty():
+		return PackedByteArray()
+	return DawKitAudioFile.peaks(sound["samples"], int(sound["channels"]), int(sound["rate"]),
+			PEAKS_PER_SECOND)
+
+
 ## The loudest sample of every 1/PEAKS_PER_SECOND of the take, 0-255.
 func peaks() -> PackedByteArray:
 	return _peaks

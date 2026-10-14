@@ -105,6 +105,8 @@ var _tl_road := -1.0
 var _tl_select := ""
 ## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
 var _tl_region := ""
+## `--reopen`: the project saved and opened again at frame 5, to see what a reopened project draws.
+var _reopen := false
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -217,6 +219,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _board = args[i + 1]
 			"--tl-select":
 				if i + 1 < args.size(): _tl_select = args[i + 1]
+			"--reopen":
+				_reopen = true
 			"--tl-region":
 				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-pick":
@@ -278,6 +282,9 @@ func _process(_delta: float) -> void:
 				DAW.select_item(int(ti[0]), int(ti[1]), not first)
 				first = false
 		print("SHOT_TL selected=", DAW.state.selected_items(), " picked=", _tl_pick)
+	if _frames == 5 and _reopen:
+		var path := ProjectSettings.globalize_path("user://shot_reopen.dawproject")
+		print("SHOT_REOPEN ", DAW.save_project_as(path), DAW.open_project(path))
 	if _frames == 7 and _tl_region != "":
 		for spec in _tl_region.split(",", false):
 			var r := spec.split(":")

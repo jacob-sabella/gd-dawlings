@@ -175,6 +175,8 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	var s := backend.state
 	s.tracks.clear()
 	backend.instruments.clear()
+	# Another project's takes may share a file name with this one's.
+	backend.take_peaks.clear()
 	s.markers.clear()
 	s.regions = p.regions.map(func(r: DawKitRegion) -> Array: return [r.start, r.end, r.name])
 	backend.project_title = p.title
@@ -278,6 +280,14 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 			item.reversed = c.reversed
 			item.source = c.source
 			item.source_offset = c.source_offset
+			# The file's overview, so a reopened project draws its takes as the sounds they are.
+			if not c.source.is_empty():
+				if not backend.take_peaks.has(c.source):
+					backend.take_peaks[c.source] = AudioTake.overview_of(backend.media_path(c.source))
+				item.peaks = backend.take_peaks[c.source]
+				if c.reversed:
+					item.peaks = item.peaks.duplicate()
+					item.peaks.reverse()
 			item.notes = PackedFloat32Array(Array(c.notes))
 			item.fade_in = c.fade_in
 			item.fade_out = c.fade_out

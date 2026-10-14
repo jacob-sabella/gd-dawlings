@@ -3244,5 +3244,20 @@ from the section's parent) and `SetItemReversed` runs Toggle take reverse (41051
 alone, putting the selection back after. Whether Reaper's D_STARTOFFS on a reversed take is in
 reversed time, as this assumes, is unchecked -- not yet run against a live Reaper.
 A REVERSE token (a swell and an arrow back along it) beside LOCK on the ITEM page.
-Known: a project loaded from a file gives its audio items no overview (peaks), reversed or not --
-they draw blank until re-recorded. Not from this change.
+Known: a project loaded from a file gave its audio items no overview (peaks): fixed in iteration 19.
+
+## DAW parity, iteration 19: a reopened project's takes are drawn (2026-10-14)
+A project opened from a file gave every audio item -- recorded takes, and the demo's parts, which
+a save writes out as looped files -- an empty overview, so they drew as blank blocks. `ProjectBridge.load`
+now reads each file's overview once (`AudioTake.overview_of`: dawkit reads the file, its peaks at
+the take's 50 a second; about a quarter of a second a stereo minute) and gives it to every item
+that plays the file, turned round for a reversed one. The cache (`take_peaks`) is emptied at the
+start of a load, since another project's takes may share a file name. A sidecar file of the
+overview (Reaper's .reapeaks) was tried and dropped: an opened project's media is unpacked fresh
+each time, so it would never be found again, and the scan is quick.
+A looped item's waveform now comes round again with its loop (`wave_columns` takes the loop's
+range), so a demo part reopened as a two-bar file looped over eight draws the whole way along,
+not just its first pass. And the stand-in host (OfflineBackend) can save: `ProjectFiles.save`
+asked it for `parts_signature`, which only GodotBackend had, so it moved down to OfflineBackend.
+`tools/screenshot.gd --reopen` saves and reopens the project at frame 5, to look at it.
+Suite: 10164 checks, 0 failed.
