@@ -1235,6 +1235,24 @@ function handlers.InsertTrack(args)
   return {ok = true}
 end
 
+-- args: track. A copy right after it, as Track: Duplicate tracks (40062) makes one -- its
+-- settings, effects, sends, items and envelopes -- with the selection put back after.
+function handlers.DuplicateTrack(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local selected = {}
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local t = reaper.GetTrack(0, i)
+    selected[#selected + 1] = {t, reaper.IsTrackSelected(t)}
+    reaper.SetTrackSelected(t, t == tr)
+  end
+  reaper.Main_OnCommand(40062, 0)
+  for i = 0, reaper.CountTracks(0) - 1 do reaper.SetTrackSelected(reaper.GetTrack(0, i), false) end
+  for _, row in ipairs(selected) do reaper.SetTrackSelected(row[1], row[2]) end
+  reaper.TrackList_AdjustWindows(false)
+  return {ok = true}
+end
+
 -- args: track. Gone, with its items and the sends to it, as Remove tracks does.
 function handlers.DeleteTrack(args)
   local tr = track_from_osc(args[1])

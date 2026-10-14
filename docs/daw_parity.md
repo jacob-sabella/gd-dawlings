@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 23
+Iterations done: 24
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -41,6 +41,10 @@ Iterations done: 23
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track
+- [x] duplicate track (2026-10-14; settings, effects and theirs, sends, items and lanes, under the same name, not armed; a token on the TRACK page; Reaper's 40062 through the bridge, not yet run against a live Reaper)
+- [ ] item fade shapes (equal-power, curves) and equal-power crossfades (missing)
+- [ ] nudge the selection by the grid (missing)
+- [ ] glue items into one (missing)
 - [x] clear all solos / clear all mutes (2026-10-14)
 - [x] folders (depth is kept through renumbering)
 - [ ] VCA / group faders, track groups (missing)

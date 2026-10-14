@@ -3321,3 +3321,19 @@ live Reaper.
 Re-marked from the code: rendering a region is there already (LOOP on the REGION page sets the
 loop range, which a render follows), so it moved off the regions item.
 Suite: 10214 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 24: duplicate track (2026-10-14)
+Not on the checklist, and among the most-used edits anywhere: added and done. `DAW.duplicate_track`
+puts a copy of a track right after it, as Reaper's Track: Duplicate tracks does: the same name and
+colour, level and pan, its effects and their settings, its sends, items and automation lanes
+(`DAWBackend._locally_copy_track`, through the snapshot, so the copy is whatever a guest would read
+of the original), the demo part it plays, and an instrument a project gave it. Not armed, nothing
+selected. A folder's last track hands the folder's end to its copy, so the copy stays inside. One
+undo step; a guest asks for it like remove_track, and gets the new structure as a snapshot. The
+built-in engine rebuilds once, with the effects laid on the copy's bus (`_renumber` can now leave
+the rebuild to its caller). A TRACKS DUPLICATE token on the TRACK page (two gems), lit with a
+track picked; the copy is picked after. Reaper: DuplicateTrack in the bridge runs 40062 on that
+track alone and puts the selection back, not yet run against a live Reaper.
+Checklist extended with three more editing items found missing: fade shapes and equal-power
+crossfades, nudging by the grid, and glue.
+Suite: 10233 checks, 0 failed; probe host 53, guest 47, 0 failed.

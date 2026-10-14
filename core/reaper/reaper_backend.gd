@@ -800,6 +800,18 @@ func add_track(at: int, track_name: String) -> void:
 	_restructure("InsertTrack", [at, track_name])
 
 
+func duplicate_track(index: int) -> void:
+	if index < 1:
+		return
+	var order := _order_adding(maxi(state.project_track_count, state.track_indices().size()), index + 1)
+	if _whole_project_in_bank() and state.tracks.has(index):
+		_locally_renumber(order)
+		_locally_copy_track(index, index + 1)
+		state.bank_changed.emit()
+	tracks_renumbered.emit(_map_of(order))
+	_restructure("DuplicateTrack", [index])
+
+
 func remove_track(index: int) -> void:
 	if index < 1:
 		return

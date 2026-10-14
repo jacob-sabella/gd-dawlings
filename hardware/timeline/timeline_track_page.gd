@@ -2,7 +2,8 @@ class_name TimelineTrackPage
 extends TimelinePage
 
 ## Tracks added, removed and named, on the deck's TRACK page: ADD puts a new track after the
-## picked one (or at the end), REMOVE removes the picked one, RENAME renames it. A track is picked
+## picked one (or at the end), DUPLICATE a copy of the picked one after it, REMOVE removes the
+## picked one, RENAME renames it. A track is picked
 ## by pressing its name. Removing is one undo away, like every edit. AUTO steps the picked track
 ## through read, touch and latch: in touch a control moved while the song plays writes its lane
 ## until it is let go, in latch until the transport stops. LANE shows the picked track's
@@ -14,6 +15,7 @@ extends TimelinePage
 ## AUTO and LANE are the master's.
 
 var add: GlyphKey
+var duplicate: GlyphKey
 var remove: GlyphKey
 var rename: GlyphKey
 var auto: GlyphKey
@@ -36,6 +38,11 @@ func _ready() -> void:
 			func() -> String:
 				var picked: int = surface.picked_track
 				return "a new track after %s" % _name_of(picked) if picked > 0 else "a new track at the end")
+	duplicate = _key("TrackDuplicate", &"track_duplicate", Color(0.55, 0.85, 0.55), "TRACKS  DUPLICATE", _duplicate,
+			func() -> String:
+				var picked: int = surface.picked_track
+				return "a copy of %s after it: its effects, sends, items and lanes" % _name_of(picked) \
+						if picked > 0 else "press a track's name first")
 	remove = _key("TrackRemove", &"remove", Color(0.95, 0.38, 0.34), "TRACKS  REMOVE",
 			_remove,
 			func() -> String:
@@ -138,6 +145,7 @@ func refresh() -> void:
 	add.lit = true
 	var picked: bool = surface.picked_track > 0 and DAW.state.tracks.has(surface.picked_track)
 	remove.lit = picked
+	duplicate.lit = picked
 	rename.lit = picked
 	lane.lit = surface.shown_lane != ""
 	lane.caption = TimelineSurface.lane_name(surface.shown_lane) if surface.shown_lane != "" else ""
@@ -147,7 +155,7 @@ func refresh() -> void:
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
 			if input.lit else ""
-	for key in [remove, rename, input, colour]:
+	for key in [remove, duplicate, rename, input, colour]:
 		key.available = picked
 	if picked:
 		colour.led_colour = DAW.state.track(surface.picked_track).shown_colour()
@@ -208,6 +216,13 @@ func _add() -> void:
 	var at: int = picked + 1 if picked > 0 else DAW.state.track_indices().size() + 1
 	DAW.add_track(at, "")
 	surface.pick_track(at)
+
+
+func _duplicate() -> void:
+	var picked: int = surface.picked_track
+	if picked > 0 and DAW.state.tracks.has(picked):
+		DAW.duplicate_track(picked)
+		surface.pick_track(picked + 1)
 
 
 func _remove() -> void:

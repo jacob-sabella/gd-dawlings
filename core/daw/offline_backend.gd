@@ -1146,6 +1146,22 @@ func add_track(at: int, track_name: String) -> void:
 	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
 
 
+func duplicate_track(index: int) -> void:
+	var count := state.track_indices().size()
+	if index < 1 or index > count:
+		return
+	var before := _structure()
+	var kinds := _renumber(_order_adding(count, index + 1), false)
+	_locally_copy_track(index, index + 1)
+	if kinds.has(index):
+		kinds[index + 1] = (kinds[index] as Dictionary).duplicate(true)
+	if instruments.has(index):
+		instruments[index + 1] = (instruments[index] as Dictionary).duplicate(true) \
+				if instruments[index] is Dictionary else instruments[index]
+	_structure_changed(kinds)
+	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
+
+
 func remove_track(index: int) -> void:
 	var count := state.track_indices().size()
 	if index < 1 or index > count:
@@ -1174,7 +1190,8 @@ func set_track_colour(index: int, colour: Color) -> void:
 
 
 ## The tracks renumbered (see `_locally_renumber`), with what is kept beside the mix by index.
-func _renumber(order: Array) -> void:
+## `rebuild` false leaves the engine's rebuild to the caller, which has more to change first.
+func _renumber(order: Array, rebuild := true) -> Dictionary:
 	var kinds := _fx_kinds()
 	var map := _locally_renumber(order)
 	var moved_kinds := {}
@@ -1186,7 +1203,9 @@ func _renumber(order: Array) -> void:
 			moved_instruments[map[old]] = instruments[old]
 	instruments = moved_instruments
 	tracks_renumbered.emit(map)
-	_structure_changed(moved_kinds)
+	if rebuild:
+		_structure_changed(moved_kinds)
+	return moved_kinds
 
 
 ## Which object is which track, and everything a renumbering changes on it: undo puts the same

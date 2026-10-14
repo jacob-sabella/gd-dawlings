@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -520,6 +520,8 @@ const TRACK_NAME_MAX := 64
 func add_track(at: int, track_name := "") -> void:
 	_do(&"add_track", [maxi(at, 1), track_name.left(TRACK_NAME_MAX)])
 func remove_track(index: int) -> void: _do(&"remove_track", [index])
+## A copy of the track right after it (see DAWBackend.duplicate_track).
+func duplicate_track(index: int) -> void: _do(&"duplicate_track", [index])
 func rename_track(index: int, track_name: String) -> void:
 	_do(&"rename_track", [index, track_name.left(TRACK_NAME_MAX)])
 ## A track's colour, as its chip shows it and Reaper keeps it. Opaque, and within 0-1.
@@ -802,9 +804,9 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_track_colour intent %s." % [args])
 			return
 		args = [int(args[0]), _opaque(args[1])]
-	if verb == &"remove_track":
+	if verb in [&"remove_track", &"duplicate_track"]:
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
-			push_warning("DAW: refused a malformed remove_track intent %s." % [args])
+			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])
 			return
 		args = [int(args[0])]
 	if verb in [&"set_send_volume", &"set_send_pan", &"set_send_pre_fader"]:

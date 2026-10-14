@@ -119,6 +119,10 @@ func _build() -> void:
 				_box(Vector2(-0.75 + k * 0.3, -0.1), Vector2(0.16, hs[k]), 0.35, 0.4)
 		&"track":
 			_gem(Vector2.ZERO, 0.95)
+		&"track_duplicate":
+			# The track's gem, and its copy beside it.
+			_gem(Vector2(-0.34, 0.26), 0.62)
+			_gem(Vector2(0.34, -0.26), 0.62)
 		&"tempo", &"bpm":
 			_prism(Vector2(0, -0.1), Vector2(1.3, 1.7), 0.6)
 			_rod(Vector2(0, -0.55), Vector2(0.55, 0.85), 0.09, 0.55)

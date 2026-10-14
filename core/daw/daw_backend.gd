@@ -313,6 +313,10 @@ func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
 ## move out a level.
 func remove_track(_index: int) -> void: pass
+## A copy of a track right after it, as Reaper's duplicate makes one: under the same name, with
+## its settings, effects and theirs, sends, items and automation; not armed, not selected. In a
+## folder it stays in the folder. One undo step.
+func duplicate_track(_index: int) -> void: pass
 func rename_track(_index: int, _track_name: String) -> void: pass
 func set_track_colour(_index: int, _colour: Color) -> void: pass
 func add_fx(_track_index: int, _plugin: String, _at: int) -> void: pass
@@ -850,6 +854,29 @@ static func _map_of(order: Array) -> Dictionary:
 
 
 ## `order` for a track added at `at`, or removed from `index`, when there are `count`.
+## Track `from`'s settings, effects, sends, items and automation written onto `to`, an empty track
+## just after it (see duplicate_track): through the snapshot, so the copy is whatever a guest
+## would read of the original. A folder's end moves to the copy, so the copy stays inside it.
+func _locally_copy_track(from: int, to: int) -> void:
+	var prefix := "/track/%d/" % from
+	for entry in MixWire.snapshot(state):
+		var address: String = entry[0]
+		if address.begins_with(prefix):
+			MixWire.apply(state, "/track/%d/%s" % [to, address.substr(prefix.length())], entry[1])
+	var original := state.track(from)
+	var copy := state.track(to)
+	copy.part = original.part
+	copy.rec_arm = false
+	copy.selected = false
+	for it in copy.items:
+		it.selected = false
+	if original.folder_depth < 0:
+		copy.folder_depth = original.folder_depth
+		original.folder_depth = 0
+	else:
+		copy.folder_depth = 0
+
+
 static func _order_adding(count: int, at: int) -> Array:
 	var order := range(1, count + 1)
 	order.insert(clampi(at, 1, count + 1) - 1, 0)

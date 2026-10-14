@@ -295,6 +295,7 @@ func _ready() -> void:
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
 	_test_a_render_can_be_normalised()
+	_test_a_track_is_duplicated()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19322,6 +19323,88 @@ func _test_a_render_can_be_normalised() -> void:
 	page.busy = false
 	page._render(false)
 	check("and a render from the page carries it (%s)" % [spy.asked], spy.asked == [[false, 24, true]])
+	timeline.free()
+	_offline()
+
+
+func _test_a_track_is_duplicated() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	# A track with something of everything: effects, a send, items.
+	var from := -1
+	for i in s.track_indices():
+		var t := s.track(i)
+		if not t.fx.is_empty() and not t.sends.is_empty() and not t.items.is_empty():
+			from = i
+			break
+	check("the demo has a track with effects, sends and items (%d)" % from, from > 0)
+	if from < 0:
+		_offline()
+		return
+	DAW.set_automation(from, "volume", [[0.0, -3.0, DawKitAutomation.HOLD]])
+	DAW.set_track_rec_arm(from, true)
+	var count := s.track_indices().size()
+	var after_name := s.track(from + 1).name if s.tracks.has(from + 1) else ""
+	var original := s.track(from)
+	var depth := maxi(s.undo_depth, 0)
+	DAW.duplicate_track(from)
+	var copy := s.track(from + 1)
+	check("a track more, the copy right after it", s.track_indices().size() == count + 1 and copy != original
+			and s.track(from) == original)
+	check("under the same name, in the same colour", copy.name == original.name and copy.colour == original.colour)
+	check("at the same level and pan", is_equal_approx(copy.volume, original.volume) and is_equal_approx(copy.pan, original.pan))
+	check("with its effects and their settings (%d)" % copy.fx.size(), copy.fx.size() == original.fx.size()
+			and copy.fx.values()[0].name == original.fx.values()[0].name
+			and copy.fx.values()[0].params == original.fx.values()[0].params)
+	check("its sends", copy.sends.size() == original.sends.size()
+			and copy.sends.values()[0].dest_track == original.sends.values()[0].dest_track)
+	check("its items", copy.items.size() == original.items.size()
+			and copy.items.map(func(it): return it.start) == original.items.map(func(it): return it.start))
+	check("and its lanes", copy.automation.has("volume"))
+	check("but not armed", not copy.rec_arm and original.rec_arm)
+	check("the next track moved down one", after_name == "" or s.track(from + 2).name == after_name)
+	check("the engine has a bus for it with the effects on it", backend._bus.has(from + 1)
+			and AudioServer.get_bus_effect_count(backend._bus[from + 1]) >= copy.fx.size())
+	check("one step to undo", s.undo_depth - depth == 1)
+	DAW.undo()
+	check("undone, gone", s.track_indices().size() == count and s.track(from) == original
+			and (after_name == "" or s.track(from + 1).name == after_name))
+	DAW.set_track_rec_arm(from, false)
+	# A folder's last track: the copy closes the folder instead.
+	var last := -1
+	for i in s.track_indices():
+		if s.track(i).folder_depth < 0:
+			last = i
+			break
+	if last > 0:
+		var closes := s.track(last).folder_depth
+		DAW.duplicate_track(last)
+		check("a folder's last track's copy stays in the folder, and closes it",
+				s.track(last).folder_depth == 0 and s.track(last + 1).folder_depth == closes)
+		DAW.undo()
+	DAW.apply_intent(&"duplicate_track", [from])
+	check("a guest may ask for one", &"duplicate_track" in DAW.COMMANDS and s.track_indices().size() == count + 1)
+	DAW.undo()
+	DAW.apply_intent(&"duplicate_track", ["x"])
+	DAW.apply_intent(&"duplicate_track", [0])
+	check("a malformed one is refused", s.track_indices().size() == count)
+
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineTrackPage = timeline.track_page
+	check("the TRACK page has a duplicate token, dark with no track picked", page.duplicate != null
+			and page.duplicate.glyph == &"track_duplicate" and not page.duplicate.lit and not page.duplicate.available)
+	timeline.pick_track(2)
+	page.refresh()
+	check("lit with one", page.duplicate.lit and page.duplicate.available)
+	var before := DAW.state.track_indices().size()
+	page.duplicate.pressed.emit()
+	check("pressed, the picked track is copied and the copy picked", DAW.state.track_indices().size() == before + 1
+			and DAW.state.track(3).name == DAW.state.track(2).name and timeline.picked_track == 3)
 	timeline.free()
 	_offline()
 
