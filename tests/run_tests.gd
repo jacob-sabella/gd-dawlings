@@ -19190,6 +19190,41 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 	check("the wall is a box for each side of each node: 3 sources, 3 sinks, here (%d cables)" % wall.cables,
 			wall.cables == 3 and wall.height > 0.3)
 	check("it names itself for the layout", wall.surface_id == &"patch_wall" and wall.surface_kind == &"patchwall")
+	wall.tool = tool
+	var mix_out := "dawlings · mix:output_FL"
+	var aux0 := "alsa_output.usb-Scarlett.pro-output-0:playback_AUX0"
+	check("every port is a jack to take hold of (%d)" % wall._jacks.size(), wall._jacks.size() == 7
+			and (wall._jacks[mix_out] as PatchJack).is_output and not (wall._jacks[aux0] as PatchJack).is_output)
+	check("a jack counts the patches it is in", (wall._jacks[mix_out] as PatchJack).patches == 1
+			and (wall._jacks["Recorder:input_1"] as PatchJack).patches == 1 and (wall._jacks["Mic:capture_1"] as PatchJack).patches == 1)
+	var jack_out: PatchJack = wall._jacks[mix_out]
+	var jack_in: PatchJack = wall._jacks[aux0]
+	check("a cable from an output can be let go on any input, and no output",
+			wall._candidates(jack_out).size() == 3 and wall._candidates(jack_in).size() == 4
+			and wall._target_for(jack_out, jack_in) == jack_in and wall._target_for(jack_out, wall._jacks["Mic:capture_1"]) == null)
+	wall._on_drag_began(jack_out, Vector3.ZERO)
+	check("a cable is carried while it is held, and lights what it could cut", wall.get_node_or_null("CarriedCable") != null
+			and jack_in.light() == PatchJack.Light.CUT and (wall._jacks["Recorder:input_1"] as PatchJack).light() == PatchJack.Light.CANDIDATE)
+	wall._on_drag_finished(jack_out, wall._jacks["Recorder:input_1"])
+	check("let go on an input, the two are patched", FileAccess.get_file_as_string(log).ends_with("\ndawlings · mix:output_FL Recorder:input_1\n")
+			and wall.status.begins_with("patched"))
+	check("and nothing is left carried or lit", jack_in.light() == PatchJack.Light.PLAIN)
+	wall._process(0.0)
+	check("the wall is redrawn after", wall.get_node_or_null("CarriedCable") == null)
+	var in_wall: PatchJack = wall._jacks[aux0]
+	wall._on_drag_began(in_wall, Vector3.ZERO)
+	wall._on_drag_finished(in_wall, wall._jacks[mix_out])
+	check("let go from an input onto an output it is patched to, that cable is cut",
+			FileAccess.get_file_as_string(log).ends_with("\n-d dawlings · mix:output_FL " + aux0 + "\n") and wall.status.begins_with("cut"))
+	var calls := FileAccess.get_file_as_string(log)
+	wall._on_drag_began(jack_out, Vector3.ZERO)
+	wall._on_drag_finished(jack_out, wall._jacks["Mic:capture_1"])
+	check("let go on a port of its own kind, or on nothing, nothing is patched",
+			FileAccess.get_file_as_string(log) == calls)
+	wall._on_drag_began(jack_out, Vector3.ZERO)
+	wall._on_drag_finished(jack_out, null)
+	check("and the cable is dropped", FileAccess.get_file_as_string(log) == calls and (wall.get_node_or_null("CarriedCable") == null or wall.get_node("CarriedCable").is_queued_for_deletion()))
+	wall._process(0.0)
 	var before := wall.get_child_count()
 	wall.show_graph(PipeGraph.parse(GRAPH_OUT, GRAPH_IN, GRAPH_LINKS))
 	wall._process(0.0)

@@ -6,7 +6,9 @@ extends Surface
 ## take it down the right, a cable for each link between them (PipeGraph). The Carla / qpwgraph
 ## picture, big enough to stand in front of. It reads the machine's own graph and follows it.
 ##
-## Read only so far: it shows the patching, it does not yet make or break one.
+## Patching is by hand: press on a port and drag a cable to a port of the other kind to patch the
+## two, or onto one it is already patched to, to cut that cable (PatchJack). It is the machine's
+## own graph and the player's own hands, so nothing about it is shared with the session.
 
 const WIDTH := 5.2
 const BOX_WIDTH := 1.7
@@ -34,7 +36,13 @@ var follow := true
 var cables := 0
 var height := 0.0
 
+## What the last patch or cut did, said in the footer.
+var status := ""
 var _shown := ""
+## {port: PatchJack} and where each port's jack is, in this surface's space.
+var _jacks := {}
+var _jack_at := {}
+var _drag := {}
 ## What the screen was dressed in (the venue's palette and gear), so a venue change redraws it.
 var _dressed := ""
 var _thread: Thread
@@ -80,6 +88,9 @@ func show_graph(g: PipeGraph) -> void:
 func _rebuild() -> void:
 	_clear_built()
 	cables = 0
+	_jacks.clear()
+	_jack_at.clear()
+	_drag.clear()
 	_dressed = _dress_key()
 	if graph == null:
 		_shown = ""
@@ -103,7 +114,12 @@ func _rebuild() -> void:
 	_quad(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, -0.006), _panel(), 0.0)
 	_frame(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
 	_note("AUDIO DEVICES", -0.05, 56, _brass())
-	_note("%d nodes · %d links" % [graph.nodes.size(), graph.links.size()], -height + 0.1, 34)
+	for link in graph.links:
+		for end in link:
+			if _jacks.has(end):
+				(_jacks[end] as PatchJack).patches += 1
+	var counts := "%d nodes · %d links" % [graph.nodes.size(), graph.links.size()]
+	_note(counts if status.is_empty() else "%s · %s" % [counts, status], -height + 0.1, 34)
 	var ribbons := ImmediateMesh.new()
 	for link in graph.links:
 		if cables >= CABLE_LIMIT:
@@ -180,6 +196,14 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 			jack.material_override = _paint(tint if used else tint.darkened(0.6))
 			_adopt(jack)
 			jacks[port] = Vector3(side, py, 0.014)
+			var grab := PatchJack.create(port, outputs, tint, Vector2(BOX_WIDTH, ROW * 0.96))
+			grab.position = Vector3(x + BOX_WIDTH * 0.5, py, 0.004)
+			grab.drag_began.connect(_on_drag_began)
+			grab.drag_moved.connect(_on_drag_moved)
+			grab.drag_finished.connect(_on_drag_finished)
+			_adopt(grab)
+			_jacks[port] = grab
+			_jack_at[port] = Vector3(side, py, 0.014)
 			var label := _text(PipeGraph.short_name(PipeGraph.label_of(port), 30), Vector3(x + BOX_WIDTH - 0.1 if outputs else x + 0.1, py, 0.003),
 					INK if used else DIM, 34)
 			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if outputs else HORIZONTAL_ALIGNMENT_LEFT
@@ -191,6 +215,99 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		y -= 0.1
 	return -y
+
+
+# --- carrying a cable ---------------------------------------------------------------------
+
+func _on_drag_began(from: ControlAffordance, at: Vector3) -> void:
+	var jack := from as PatchJack
+	if jack == null:
+		return
+	var carried := MeshInstance3D.new()
+	carried.name = "CarriedCable"
+	carried.mesh = ImmediateMesh.new()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.vertex_color_use_as_albedo = true
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	carried.material_override = m
+	_adopt(carried)
+	_drag = {"from": jack, "cable": carried, "target": null}
+	for other in _candidates(jack):
+		other.set_light(PatchJack.Light.CUT if graph.is_linked(_pair(jack, other)[0], _pair(jack, other)[1]) else PatchJack.Light.CANDIDATE)
+	_draw_carried(to_local(at))
+
+
+func _on_drag_moved(from: ControlAffordance, at: Vector3, over: ControlAffordance) -> void:
+	if _drag.is_empty() or _drag["from"] != from:
+		return
+	var target := _target_for(from as PatchJack, over)
+	_drag["target"] = target
+	var end := to_local(at)
+	if target != null:
+		end = _jack_at[target.port]
+	_draw_carried(end)
+
+
+func _on_drag_finished(from: ControlAffordance, over: ControlAffordance) -> void:
+	if _drag.is_empty() or _drag["from"] != from:
+		return
+	var jack := from as PatchJack
+	var target := _target_for(jack, over)
+	var carried: MeshInstance3D = _drag["cable"]
+	if is_instance_valid(carried):
+		carried.queue_free()
+	_drag.clear()
+	for other in _jacks.values():
+		(other as PatchJack).set_light(PatchJack.Light.PLAIN)
+	if target != null:
+		patch(jack.port, target.port)
+
+
+## Patches two ports, or cuts the patch between them if they are already patched: the output
+## first, whichever the hand started from. Then reads the graph again, so the wall shows it.
+func patch(a: String, b: String) -> bool:
+	var out_port := a if (_jacks.has(a) and (_jacks[a] as PatchJack).is_output) else b
+	var in_port := b if out_port == a else a
+	var cut := graph != null and graph.is_linked(out_port, in_port)
+	var done := PipeGraph.unlink(out_port, in_port, tool) if cut else PipeGraph.link(out_port, in_port, tool)
+	status = "%s %s to %s" % [("cut" if cut else "patched") if done else ("could not cut" if cut else "could not patch"),
+			PipeGraph.short_name(PipeGraph.label_of(out_port), 14), PipeGraph.short_name(PipeGraph.label_of(in_port), 14)]
+	show_graph(PipeGraph.fetch(tool))
+	mark_dirty()
+	return done
+
+
+## The ports a cable carried from `from` could be let go on: the other kind, on any node.
+func _candidates(from: PatchJack) -> Array[PatchJack]:
+	var out: Array[PatchJack] = []
+	for jack in _jacks.values():
+		if (jack as PatchJack).is_output != from.is_output:
+			out.append(jack)
+	return out
+
+
+func _target_for(from: PatchJack, over: ControlAffordance) -> PatchJack:
+	if from == null or not (over is PatchJack):
+		return null
+	return over if over in _candidates(from) else null
+
+
+func _pair(a: PatchJack, b: PatchJack) -> Array:
+	return [a.port, b.port] if a.is_output else [b.port, a.port]
+
+
+func _draw_carried(end: Vector3) -> void:
+	if _drag.is_empty():
+		return
+	var from: PatchJack = _drag["from"]
+	var mesh := (_drag["cable"] as MeshInstance3D).mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var start: Vector3 = _jack_at[from.port]
+	if from.is_output:
+		_ribbon(mesh, start, end, from.tint)
+	else:
+		_ribbon(mesh, end, start, from.tint)
 
 
 func _quad(size: Vector2, at: Vector3, colour: Color, glow: float) -> void:

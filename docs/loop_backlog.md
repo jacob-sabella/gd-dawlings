@@ -3517,3 +3517,14 @@ on its stand with the rest of the gear, and the SCREEN handle still puts it on t
 now puts a screened timeline back on its stand too, as it does the rack. A focused surface leaves
 a berth for all five room surfaces. The side room's back corner bass traps and back-wall panels
 are gone, for the patch wall. Suite: 10394 checks, 0 failed.
+
+## 2026-10-14 -- iteration 37: the patch wall patches (part 3)
+
+Each port on the wall is a `PatchJack` (a ControlAffordance, the whole row the target): press on
+one and a ribbon follows the hand, the ports of the other kind light (patched ones red: letting go
+there cuts that cable); let go on one to `pw-link` the two (output first, whichever the hand began
+on) or `pw-link -d` them; on its own kind or on nothing, nothing happens. The footer says what was
+done or that it could not be, and the graph is read again at once. Machine-local like the rest of
+the wall: a player's hands edit their own PipeWire graph and nothing is sent. Not done: hold a
+node to see more than 12 ports, tap a cable (rather than its ports) to cut it, patching on
+systems without `pw-link`. Suite: 10401 checks, 0 failed.
