@@ -1361,6 +1361,15 @@ function handlers.SetItemGain(args)
   return edited('Item volume')
 end
 
+-- args: track, index, 1 to mute, 0 to unmute.
+function handlers.SetItemMuted(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  reaper.SetMediaItemInfo_Value(it, 'B_MUTE', (args[3] or 0) > 0.5 and 1 or 0)
+  return edited('Item mute')
+end
+
 -- args: track, index, fade in, fade out, in seconds.
 function handlers.SetItemFades(args)
   local it = item_at(args)

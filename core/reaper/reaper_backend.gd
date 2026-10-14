@@ -731,6 +731,11 @@ func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 	_edit("SetItemGain", [track_index, item_index, db])
 
 
+func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
+	if _locally_mute(track_index, item_index, muted):
+		_edit("SetItemMuted", [track_index, item_index, 1.0 if muted else 0.0])
+
+
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_locally_shape(track_index, item_index, NAN, fade_in, fade_out)
 	_edit("SetItemFades", [track_index, item_index, fade_in, fade_out])

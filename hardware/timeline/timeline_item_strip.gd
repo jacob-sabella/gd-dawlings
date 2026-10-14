@@ -27,6 +27,7 @@ var fade_out: Knob
 var down: PanelButton
 var up: PanelButton
 var quant: PanelButton
+var mute: PanelButton
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 
@@ -37,10 +38,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(6 * PITCH, 0.036, 0.004)
+	box.size = Vector3(7 * PITCH, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(2.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(3.0 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	gain = _knob("GAIN", 0, func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -56,6 +57,8 @@ func _ready() -> void:
 			func(): _transpose(1), "a semitone up; fine: an octave")
 	quant = _key("ItemQuant", "Q", 5, Color(0.9, 0.8, 0.4), "ITEM  QUANTISE",
 			func(): _quantise(), "notes onto the beat; fine: onto sixteenths")
+	mute = _key("ItemMute", "M", 6, Color(0.95, 0.45, 0.4), "ITEM  MUTE",
+			func(): _toggle_mute(), "silence it, or play it again")
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -69,13 +72,15 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	visible = item != null
-	for c in [gain, fade_in, fade_out, down, up, quant]:
+	for c in [gain, fade_in, fade_out, down, up, quant, mute]:
 		c.collision_layer = 2 if item != null else 0
 	if item == null:
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
 	fade_in.snap_to(_fade_value(item.fade_in))
 	fade_out.snap_to(_fade_value(item.fade_out))
+	mute.lit = item.muted
+	mute.describe_value = func(_v: float) -> String: return "muted: press to play it again" if item.muted else "silence it"
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant]:
 		key.lit = midi
@@ -110,6 +115,12 @@ func _set_fades(fin: float, fout: float) -> void:
 func _transpose(direction: int) -> void:
 	if not _target.is_empty():
 		DAW.transpose_item(_target[0], _target[1], direction * (12 if _fine(up) or _fine(down) else 1))
+
+
+func _toggle_mute() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item != null:
+		DAW.set_item_muted(_target[0], _target[1], not item.muted)
 
 
 func _quantise() -> void:

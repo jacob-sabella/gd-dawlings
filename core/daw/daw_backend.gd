@@ -286,6 +286,8 @@ func trim_item(_track_index: int, _item_index: int, _start: float, _end: float) 
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
+## Silence an item without removing it: it keeps its place and its edits, and plays again unmuted.
+func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: pass
 ## A new, empty track at `at` (from 1), everything from there on moving down one.
 func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
@@ -544,6 +546,17 @@ func _locally_trim(track_index: int, item_index: int, start: float, end: float) 
 	it.fade_in = minf(it.fade_in, it.length)
 	it.fade_out = minf(it.fade_out, it.length - it.fade_in)
 	_write_lane(track_index, lane)
+
+
+## False when there is no such item or it already is as asked.
+func _locally_mute(track_index: int, item_index: int, muted: bool) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.muted == muted:
+		return false
+	var lane := _lane_copy(track_index)
+	lane[item_index].muted = muted
+	_write_lane(track_index, lane)
+	return true
 
 
 ## NAN leaves that part of the item as it is.

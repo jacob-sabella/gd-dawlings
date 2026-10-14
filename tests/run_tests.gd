@@ -13516,6 +13516,20 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 	DAW.apply_intent(&"set_item_gain", [lane, 1, 999.0])
 	check("and its gain kept on the scale", is_equal_approx(s.item(lane, 1).gain_db, DAWBackend.ITEM_GAIN_MAX))
 
+	var muted_depth := s.undo_depth
+	DAW.set_item_muted(lane, 1, true)
+	check("an item muted stays where it is, silenced", s.item(lane, 1).muted and is_equal_approx(s.item(lane, 1).start, 20.0))
+	DAW.set_item_muted(lane, 1, true)
+	check("muting it again is not another step to undo (%d)" % (s.undo_depth - muted_depth), s.undo_depth - muted_depth == 1)
+	DAW.undo()
+	check("undo plays it again", not s.item(lane, 1).muted)
+	DAW.apply_intent(&"set_item_muted", [lane, 1, 7.0])
+	check("a guest's mute is any nonzero value, and of an item that is there", s.item(lane, 1).muted)
+	DAW.apply_intent(&"set_item_muted", [lane, 99, 1.0])
+	DAW.apply_intent(&"set_item_muted", [lane, 1])
+	check("and a malformed or missing one is refused", s.item(lane, 1).muted)
+	DAW.set_item_muted(lane, 1, false)
+
 	var link := _fresh_link()
 	link.state.track(4)
 	link._on_timeline({"length": 60.0, "markers": [], "tracks": [{"index": 4, "items": [

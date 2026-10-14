@@ -3043,3 +3043,12 @@ test holds every venue to at least three. `DAWLINGS_TESTS=_test_a,_test_b` runs 
   (0.232, 0.265, 0.318 against 0.23), and so is studio's new arrangement (0.231); the station's
   day-side sky is a heavy shader not yet measured on a headset; the festival crowd is blocky up
   close.
+
+## DAW parity loop starts: item mute (2026-10-14)
+`docs/daw_parity.md` is the checklist, built by reading the verbs and `MixState`, not the docs.
+First gap: an item had a `muted` flag that the lanes honoured and the Reaper timeline reported,
+but nothing could set it. Now `DAW.set_item_muted(track, item, muted)` (an item edit, one undo
+step, a guest's value is any nonzero number, a repeat is no step), `SetItemMuted` in the Reaper
+bridge (`B_MUTE`), and an M key on the item strip under the timeline, lit while the item is muted.
+Full suite 9986 checks, 0 failed; session probe host 53 and guest 47, 0 failed. Not looked at in a
+screenshot: the strip's new key needs a selected item, which `tools/shot.sh` does not set up yet.

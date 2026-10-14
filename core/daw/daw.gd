@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"move_item", &"split_selected",
-	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades",
+	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted",
 	&"transpose_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4,
+const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3,
 		&"transpose_item": 3, &"quantize_item": 4}
 
 var backend: DAWBackend
@@ -393,6 +393,8 @@ func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_do(&"set_item_fades", [track_index, item_index, maxf(fade_in, 0.0), maxf(fade_out, 0.0)])
+func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
+	_do(&"set_item_muted", [track_index, item_index, 1.0 if muted else 0.0])
 ## Longest track name sent anywhere, for the same reason as MARKER_NAME_MAX.
 const TRACK_NAME_MAX := 64
 func add_track(at: int, track_name := "") -> void:
@@ -563,6 +565,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		var clean: Array = [int(args[0]), int(args[1])]
 		for v in args.slice(2):
 			clean.append(float(v))
+		if verb == &"set_item_muted":
+			clean[2] = 1.0 if clean[2] > 0.5 else 0.0
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
 		if verb == &"transpose_item":

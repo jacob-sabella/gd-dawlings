@@ -970,6 +970,12 @@ func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out:
 	_remember_edit(before)
 
 
+func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
+	var before := _lanes_snapshot()
+	if _locally_mute(track_index, item_index, muted):
+		_remember_edit(before)
+
+
 func transpose_item(track_index: int, item_index: int, semitones: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_transpose(track_index, item_index, semitones):
