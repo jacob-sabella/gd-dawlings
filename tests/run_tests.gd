@@ -13805,6 +13805,31 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	DAW.undo()
 	check("undone, the notes are as played", is_equal_approx(s.item(lane, 0).notes[3], vel_before))
 
+	var nv_notes: PackedFloat32Array = s.item(lane, 0).notes
+	var nv_count := nv_notes.size() / MidiTake.NOTE_WIDTH
+	var nv_second := mini(1, nv_count - 1)
+	var nv_other := float(nv_notes[3])
+	var nv_depth := maxi(s.undo_depth, 0)
+	DAW.set_note_velocity(lane, 0, nv_second, 17)
+	var nv_after: PackedFloat32Array = s.item(lane, 0).notes
+	check("one note given its own velocity, the rest left", int(nv_after[nv_second * MidiTake.NOTE_WIDTH + 3]) == 17
+			and (nv_second == 0 or is_equal_approx(nv_after[3], nv_other)) and s.undo_depth - nv_depth == 1)
+	DAW.set_note_velocity(lane, 0, nv_second, 17)
+	check("the same velocity again is no edit", s.undo_depth - nv_depth == 1)
+	DAW.apply_intent(&"set_note_velocity", [lane, 0, nv_second, 9999])
+	check("a guest's velocity is kept on the scale", int(s.item(lane, 0).notes[nv_second * MidiTake.NOTE_WIDTH + 3]) == 127)
+	DAW.apply_intent(&"set_note_velocity", [lane, 0, 99999, 50])
+	DAW.apply_intent(&"set_note_velocity", [lane, 0, -3, 50])
+	DAW.apply_intent(&"set_note_velocity", [lane, 0, NAN, 50])
+	check("a note that is not there is refused", s.undo_depth - nv_depth == 2)
+	DAW.undo()
+	DAW.undo()
+	check("undone, the note is as it was", is_equal_approx(s.item(lane, 0).notes[nv_second * MidiTake.NOTE_WIDTH + 3], nv_notes[nv_second * MidiTake.NOTE_WIDTH + 3]))
+	var near := PackedFloat32Array([0.0, 0.5, 60, 90, 0, 1.0, 1.5, 64, 80, 0])
+	check("the note at a moment is the one sounding, else the next, else the last",
+			DAWBackend.note_near(near, 0.2) == 0 and DAWBackend.note_near(near, 0.7) == 1 and DAWBackend.note_near(near, 9.0) == 1
+			and DAWBackend.note_near(PackedFloat32Array(), 0.0) == -1)
+
 	var project := ProjectBridge.capture(DAW.backend as OfflineBackend)
 	var file := OS.get_temp_dir().path_join("suite_transpose.dawproject")
 	var saved := DawKitDawproject.save(project, file)
@@ -20117,6 +20142,14 @@ func _test_notes_are_humanised() -> void:
 			and page.humanise.glyph == &"humanise" and page.humanise.lit)
 	page.humanise.pressed.emit()
 	check("pressed, the notes move", MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start) != before)
+	DAW.undo()
+	check("a NOTE VELOCITY rail on the item page, within reach for a MIDI item", page.note_velocity != null
+			and page.note_velocity.glyph == &"note_velocity" and page.note_velocity.available)
+	DAW.seek(s.item(lane, 0).start + s.item(lane, 0).notes[0] + 0.001)
+	page.refresh()
+	var nv_was := int(s.item(lane, 0).notes[3])
+	page.note_velocity.value_committed.emit(1.0)
+	check("let go, the note at the playhead takes that velocity", int(s.item(lane, 0).notes[3]) == 127 and nv_was != 127 or nv_was == 127)
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()

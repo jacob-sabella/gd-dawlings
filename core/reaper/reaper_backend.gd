@@ -953,6 +953,18 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 
 
 ## Reaper rolls its own dice: the preview here is a likeness, and the next timeline is the truth.
+## Reaper skips muted notes when it counts, so the note goes by where it starts and its pitch.
+func set_note_velocity(track_index: int, item_index: int, note_index: int, velocity: int) -> void:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + 4 >= item.notes.size():
+		return
+	var on: float = item.notes[at]
+	var pitch: int = int(item.notes[at + 2])
+	if _locally_set_note_velocity(track_index, item_index, note_index, velocity):
+		_edit("SetNoteVelocity", [track_index, item_index, on, pitch, clampi(velocity, 1, 127)])
+
+
 func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
 	if _locally_humanise(track_index, item_index, seconds, velocity):
 		_edit("HumaniseItem", [track_index, item_index, clampf(seconds, 0.0, HUMANISE_SECONDS_MAX),

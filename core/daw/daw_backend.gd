@@ -366,6 +366,7 @@ func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> voi
 ## Every note of a MIDI item harder (positive) or softer, kept between 1 and 127.
 func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item nudged at random, up to `seconds` and `velocity`: see _locally_humanise.
+func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _velocity: int) -> void: pass
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
 func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> void: pass
@@ -1099,6 +1100,39 @@ func _locally_shift_velocity(track_index: int, item_index: int, by: int) -> bool
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true
+
+
+## One note of a MIDI item given a velocity. False when there is no such note or it already has it.
+func _locally_set_note_velocity(track_index: int, item_index: int, note_index: int, velocity: int) -> bool:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + 4 >= item.notes.size():
+		return false
+	velocity = clampi(velocity, 1, 127)
+	if int(item.notes[at + 3]) == velocity:
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	notes[at + 3] = velocity
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## The note a velocity edit means at `seconds` into a MIDI item: the one sounding then, else the
+## next to start, else the last. -1 for an item with no notes.
+static func note_near(notes: Array, seconds: float) -> int:
+	var count := notes.size() / MidiTake.NOTE_WIDTH
+	var next := -1
+	for n in count:
+		var on: float = notes[n * MidiTake.NOTE_WIDTH]
+		var off: float = notes[n * MidiTake.NOTE_WIDTH + 1]
+		if on <= seconds and seconds < off:
+			return n
+		if on > seconds and (next < 0 or on < notes[next * MidiTake.NOTE_WIDTH]):
+			next = n
+	return next if next >= 0 else count - 1
 
 
 ## Every note of a MIDI item moved up to `seconds` early or late and made up to `velocity` softer

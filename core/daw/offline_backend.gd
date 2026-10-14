@@ -1162,6 +1162,12 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 		_remember_edit(before)
 
 
+func set_note_velocity(track_index: int, item_index: int, note_index: int, velocity: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_set_note_velocity(track_index, item_index, note_index, velocity):
+		_remember_edit(before)
+
+
 func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_humanise(track_index, item_index, seconds, velocity):

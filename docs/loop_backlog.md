@@ -3457,3 +3457,16 @@ Reaper's project (Reaper's own groups are per-parameter flag bits the bridge doe
 Split off: VCA faders, and overriding a group for one move. `tools/screenshot.gd --tl-group
 T:G,...` groups tracks for a shot.
 Suite: 10360 checks, 0 failed; dawkit 375; probe host 53, guest 47, 0 failed.
+
+## 2026-10-14 -- iteration 33: per-note velocity
+
+`DAW.set_note_velocity(track, item, note_index, velocity)`: one note of a MIDI item given its own
+velocity (1-127), one undo step, a no-op when it already has it. An ITEM_EDITS verb of 4 args;
+a guest's index is clamped to -1..MAX_NOTES and the backend refuses one that is not a note;
+refused for a locked item. NOTE VELOCITY on the ITEM page is a rail (a tall brick among low
+ones) that edits the note sounding at the playhead, else the next to start (`DAWBackend.note_near`):
+move the playhead to pick the note, let go of the rail to set it; it follows the note's velocity
+as the playhead moves. Reaper: `SetNoteVelocity` in the bridge finds the note by start time and
+pitch (Reaper's own indices skip muted notes); not run against a live Reaper.
+Split off: CC / pitch-bend lanes, legato; picking a note by touching it in the item.
+Suite: 10371 checks, 0 failed; dawkit 375; probe host 53, guest 47, 0 failed.

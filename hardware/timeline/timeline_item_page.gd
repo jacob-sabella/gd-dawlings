@@ -51,6 +51,8 @@ var swing: GlyphRail
 var softer: GlyphKey
 var harder: GlyphKey
 var humanise: GlyphKey
+## The velocity of the note sounding at the playhead (else the next to start): a rail, set when let go.
+var note_velocity: GlyphRail
 ## [track, item] being edited, or empty while there is not exactly one selected.
 var _target: Array = []
 ## [track, first, second] while exactly two items of one track are selected, else empty.
@@ -111,6 +113,12 @@ func _ready() -> void:
 	harder = _key("ItemHarder", &"harder", NOTE_INK, "ITEM  NOTES HARDER", func(): _velocity(1),
 			func() -> String: return "every note a little harder; fine: much harder" if harder.lit else "for a MIDI item")
 	humanise = _key("ItemHumanise", &"humanise", NOTE_INK, "ITEM  HUMANISE", _humanise, _humanise_text)
+	note_velocity = _slider("ItemNoteVelocity", &"note_velocity", NOTE_INK, func() -> String: return "ITEM  NOTE VELOCITY",
+			func(v: float) -> String: return "the note at the playhead: velocity %d" % _velocity_of(v))
+	note_velocity.value_committed.connect(func(v: float):
+		var n := _note_index()
+		if n >= 0:
+			DAW.set_note_velocity(_target[0], _target[1], n, _velocity_of(v)))
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -128,7 +136,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, note_velocity]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -154,7 +162,7 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise, note_velocity]:
 		c.available = not item.locked
 	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
 	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
@@ -167,6 +175,24 @@ func refresh() -> void:
 	for key in [down, up, quant, softer, harder, humanise]:
 		key.lit = midi
 	swing.available = midi and not item.locked
+	note_velocity.available = midi and not item.locked
+	var n := _note_index()
+	if n >= 0:
+		note_velocity.snap_to((float(item.notes[n * MidiTake.NOTE_WIDTH + 3]) - 1.0) / 126.0)
+
+
+static func _velocity_of(v: float) -> int:
+	return clampi(1 + roundi(v * 126.0), 1, 127)
+
+
+## Which note of the target the velocity rail means: the one at the playhead. -1 for none.
+func _note_index() -> int:
+	if _target.is_empty():
+		return -1
+	var item: MixState.ItemState = DAW.state.item(_target[0], _target[1])
+	if item == null or item.notes.is_empty():
+		return -1
+	return DAWBackend.note_near(item.notes, DAW.state.position_seconds - item.start)
 
 
 func _gain_db(v: float) -> float:

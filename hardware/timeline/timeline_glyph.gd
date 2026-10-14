@@ -253,6 +253,11 @@ func _build() -> void:
 			_box(Vector2(-0.42, 0.15), Vector2(0.95, 0.55), 0.5)
 			_box(Vector2(0.68, 0.15), Vector2(0.42, 0.55), 0.5)
 			_rod(Vector2(-0.95, -0.55), Vector2(0.95, -0.55), 0.07, 0.25)
+		&"note_velocity":
+			# One brick tall among low ones: the one note.
+			var nh := [0.5, 1.7, 0.7]
+			for k in 3:
+				_box(Vector2(-0.62 + k * 0.62, -0.9 + nh[k] * 0.5), Vector2(0.42, nh[k]), 0.4 if k != 1 else 0.9)
 		&"softer", &"harder":
 			var hs := [1.6, 0.9, 0.45] if _kind == &"softer" else [0.45, 0.9, 1.6]
 			for k in 3:
