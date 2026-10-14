@@ -3463,9 +3463,17 @@ func _test_the_rack_holds_one_track_and_follows_the_selection() -> void:
 	check("so are the power buttons", bodies != null and bodies.multimesh.instance_count == racked.call().size())
 
 	if bare >= 0:
-		rack.show_track(bare)
+		# "i cant get to a track to add an effect if it has no existing effects": the window is
+		# the only way to choose a track on the built-in engine, so it offers the empty ones too.
+		var offered: Array = rack._rackable().map(func(o): return o[0])
+		check("the window offers a track with no plugins, to put the first one on",
+				offered.has(bare) and offered.size() == DAW.state.track_indices().size())
+		rack._picker.choice = bare
+		rack._picker.chosen.emit(bare)
 		rack._process(0.0)
-		check("a track with no plugins racks no units", racked.call().is_empty())
+		check("a track with no plugins racks no units", rack.track_index == bare and racked.call().is_empty())
+		check("but the rack still has its ADD window, to add one",
+				DAW.state.fx_choices.is_empty() or rack.find_child("PluginAdder", true, false) != null)
 		var empty: Label3D = rack.find_child("Empty", true, false)
 		check("and says so", empty != null and empty.text == "NO PLUGINS ON THIS TRACK")
 		check("and keeps the window to scroll away from it", is_instance_valid(rack._picker))

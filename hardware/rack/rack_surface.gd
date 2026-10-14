@@ -147,15 +147,16 @@ func _following() -> bool:
 	return DAW.state.tracks.has(track_index) and DAW.state.track(track_index).selected
 
 
-## The tracks worth racking, for the window: those with plugins, and the one racked now.
+## Every track, for the window: the ones with no plugins too, or there is no way to rack an
+## empty track to put its first plugin on it -- the window is the only way to choose a track on
+## the built-in engine, which has no Reaper selection to follow.
 func _rackable() -> Array:
 	var out: Array = []
 	for i in DAW.state.track_indices():
 		var t := DAW.state.track(i)
 		var count := t.plugins().size()
-		if count > 0 or i == track_index:
-			out.append([i, "%s   ·   %s" % [t.display_name().to_upper(),
-					"%d PLUGIN%s" % [count, "" if count == 1 else "S"] if count > 0 else "NO PLUGINS"]])
+		out.append([i, "%s   ·   %s" % [t.display_name().to_upper(),
+				"%d PLUGIN%s" % [count, "" if count == 1 else "S"] if count > 0 else "NO PLUGINS"]])
 	return out
 
 
@@ -268,7 +269,7 @@ func _build_picker(bay_height: float) -> void:
 	_picker.position = Vector3(0, bay_height + PICKER_RISE, 0.002)
 	_picker.options = _rackable
 	_picker.choice = track_index
-	_picker.hint_text = "scroll to rack another track's plugins  ·  selecting a track in Reaper racks it"
+	_picker.hint_text = "scroll to rack another track  ·  selecting a track in Reaper racks it"
 	_picker.describe_title = func() -> String: return "RACK"
 	_picker.describe_value = func(_v: float) -> String: return _picker.words()
 	_picker.chosen.connect(show_track)
