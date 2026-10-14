@@ -64,6 +64,9 @@ const PRESET_PREVIOUS := "Preset Previous"
 
 ## Whether tablets offer the UI face at all.
 static var window_face := true
+## How much bigger the tablet grows while it shows a plugin's own window: the knobs are
+## readable at 0.32 m, a plugin's drawing of its own is not.
+const WINDOW_SCALE := 2.4
 
 var track_index := 1
 var fx_index := 0
@@ -74,6 +77,9 @@ var page_offset := 0
 var lost := false
 ## Showing the plugin's own window rather than the knobs.
 var showing_window := false
+## 0 at rest, 1 grown to WINDOW_SCALE. It grows from its bottom edge, so the stand keeps holding it.
+var _grown := 0.0
+var _resting := Transform3D.IDENTITY
 
 var _knobs: Array[Knob] = []
 var _captions: Array[Label3D] = []
@@ -488,6 +494,21 @@ func _close_window() -> void:
 	_window_for = []
 
 
+## Grow the tablet while it shows a window, and shrink it back when it shows the knobs.
+func _grow(delta: float) -> void:
+	var target := 1.0 if showing_window else 0.0
+	if is_equal_approx(_grown, target):
+		return
+	if _grown == 0.0:
+		_resting = transform
+	_grown = move_toward(_grown, target, delta * 4.0)
+	if _grown == 0.0:
+		transform = _resting
+		return
+	var s := lerpf(1.0, WINDOW_SCALE, _grown)
+	transform = _resting * Transform3D(Basis.from_scale(Vector3(s, s, s)), Vector3(0, HEIGHT * 0.5 * (s - 1.0), 0))
+
+
 ## The window follows its plugin like the knobs do: moved along the chain or to another track,
 ## it is another window in Reaper, under another title, so the old one is put away and the new
 ## one opened. Lost, or no longer showable here, and the tablet goes back to its knobs.
@@ -638,6 +659,7 @@ func _ask_for_list() -> void:
 func _process(delta: float) -> void:
 	super(delta)
 	_follow_window()
+	_grow(delta)
 	if lost or _knobs.is_empty() or not is_visible_in_tree():
 		return
 	_follow_values()
