@@ -130,6 +130,8 @@ var _all_key: GlyphKey
 var _zoom_out_key: GlyphKey
 var _zoom_in_key: GlyphKey
 var _fit_key: GlyphKey
+## What drags snap to (TimelineLanes.grid): its mark is the grid it is on.
+var _grid_key: GlyphKey
 var _lanes_key: GlyphKey
 var _shelf_key: GlyphKey
 var _road_key: GlyphKey
@@ -361,6 +363,10 @@ func _build_deck() -> void:
 			func() -> String: return "less of the song, bigger, round the playhead")
 	_fit_key = _tool("FitKey", &"fit", TOOL_INK, "VIEW  FIT", fit_view,
 			func() -> String: return "the whole song across the lanes")
+	_grid_key = _tool("GridKey", grid_glyph(TimelineLanes.grid), Color(0.62, 0.86, 1.0), "EDIT  GRID", step_grid,
+			func() -> String: return "drags snap to %s: %s next" % [TimelineLanes.grid_name(TimelineLanes.grid),
+					TimelineLanes.grid_name(TimelineLanes.next_grid(TimelineLanes.grid))])
+	_grid_key.lit = true
 	_lanes_key = _tool("LanesKey", &"lanes", VIEW_INK, "VIEW  LANES", func(): _choose_view(false, false),
 			func() -> String: return "flat lanes of blocks", true)
 	_lanes_key.toggle = true
@@ -443,6 +449,23 @@ func _light_view_keys() -> void:
 	_lanes_key.lit = not shelf and not highway
 	_shelf_key.lit = shelf and not highway
 	_road_key.lit = highway
+
+
+## The grid a step finer, round to the bar after free (TimelineLanes.GRIDS).
+func step_grid() -> void:
+	TimelineLanes.grid = TimelineLanes.next_grid(TimelineLanes.grid)
+	if _grid_key != null:
+		_grid_key.glyph = grid_glyph(TimelineLanes.grid)
+
+
+## A grid's mark: a bar cut into as many cells as the grid has in it, or struck through for free.
+static func grid_glyph(g: float) -> StringName:
+	match g:
+		TimelineLanes.BAR: return &"grid_bar"
+		TimelineLanes.OFF: return &"grid_off"
+		0.5: return &"grid_8"
+		0.25: return &"grid_16"
+	return &"grid_4"
 
 
 ## The whole song across the lanes, as the panel shows it before anyone zooms.

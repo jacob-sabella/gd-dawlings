@@ -79,12 +79,41 @@ func refresh() -> void:
 	_shape.position = Vector3(0, 0, front * 0.5)
 
 
-## Snapped to the beat, unless fine.
+## What a drag snaps to, in beats: BAR for the bar (whatever its signature), OFF for nothing.
+## Each person's own, as Reaper's grid is a view setting and not part of the song: chosen with
+## the grid token on the timeline's tools (TimelineSurface.step_grid), not sent anywhere.
+const BAR := -1.0
+const OFF := 0.0
+## The grid token steps through these, in order.
+const GRIDS: Array[float] = [BAR, 1.0, 0.5, 0.25, OFF]
+static var grid := 1.0
+
+
+## Snapped to the grid, unless fine.
 static func snap(seconds: float, fine: bool) -> float:
 	var s := maxf(seconds, 0.0)
-	if fine:
+	if fine or grid == OFF:
 		return s
-	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s)))
+	if grid == BAR:
+		return DAW.state.bar_to_seconds(roundf(DAW.state.bar_at(s)) + 1.0)
+	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s) / grid) * grid)
+
+
+## The grid after `g`, round to the first after the last.
+static func next_grid(g: float) -> float:
+	var at := GRIDS.find(g)
+	return GRIDS[(at + 1) % GRIDS.size()]
+
+
+## What a grid is called, for the hover card.
+static func grid_name(g: float) -> String:
+	match g:
+		BAR: return "the bar"
+		OFF: return "nothing: free"
+		1.0: return "the beat"
+		0.5: return "half beats"
+		0.25: return "quarter beats"
+	return "%s beats" % g
 
 
 ## Where a sound file let go over `point` would go: [track, seconds], the lane under it and its

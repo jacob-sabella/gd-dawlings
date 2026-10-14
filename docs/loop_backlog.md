@@ -3130,3 +3130,14 @@ floating over the bead only while a hand is on it. The deck starts where the lan
 the names: under them its first token covered the rack's handle from the seat. Every behaviour
 and edit is unchanged; tests that read the old strips read the pages now. Seen from the seat,
 head-on in the room and from the side.
+
+## DAW parity, iteration 10: a choosable grid (2026-10-14)
+`TimelineLanes.grid`: what a move, a trim, a fade, an automation point and a seek snap to -- the
+bar (through the signature map), the beat, half or quarter beats, or nothing. A token on the
+timeline's tools beside FIT steps through them (`TimelineSurface.step_grid`); its mark is a bar
+cut into that many cells, struck through when free, and the hover card says it in words. Each
+person's own, like the view, so nothing crosses the wire and it is not saved with the project or
+the layout yet. Fine (shift) still lets go of any grid. Seen in a screenshot from the seat. Suite
+10022 checks, 0 failed. Known: the suite's teardown prints a SCRIPT ERROR from a callback in
+`scenes/studio.gd` (`_remember_tablets` called on a ChalkVenue) after the summary line; not from
+this change, not yet chased.

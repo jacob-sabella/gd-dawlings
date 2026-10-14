@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 9
+Iterations done: 10
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -27,7 +27,8 @@ Iterations done: 9
 - [ ] item reverse (missing)
 - [ ] time-stretch, warp, item pitch shift (missing)
 - [x] drags snap to the beat unless fine (`TimelineLanes.snap`; the first audit missed it)
-- [ ] ripple edit, a choosable grid size (missing)
+- [x] a choosable grid: bar, beat, half and quarter beats, or free (2026-10-14; each person's own, not saved)
+- [ ] ripple edit (missing)
 - [ ] item locking (missing)
 
 ## Piano roll

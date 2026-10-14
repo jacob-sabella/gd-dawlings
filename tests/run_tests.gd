@@ -284,6 +284,7 @@ func _ready() -> void:
 	_test_the_host_places_a_guest_take_and_says_so()
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
+	_test_the_timeline_grid_is_chosen_with_a_token()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -18710,3 +18711,38 @@ func _test_a_simulated_headset_builds_the_vr_and_ar_rigs() -> void:
 			is_equal_approx(rig.head.position.y, XRRig.SIM_EYE_HEIGHT) and rig.left.position.x < 0.0 and rig.right.position.x > 0.0)
 	for n in [vr, ar, screen, rig]:
 		n.queue_free()
+
+
+func _test_the_timeline_grid_is_chosen_with_a_token() -> void:
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var s := DAW.state
+	var beat := s.seconds_at_beat(1.0) - s.seconds_at_beat(0.0)
+	var at := s.seconds_at_beat(5.3)
+	check("the grid starts on the beat, as drags always snapped", TimelineLanes.grid == 1.0
+			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.0)))
+	var key: GlyphKey = timeline._grid_key
+	check("its token is on the tools, its mark a bar in four", key != null and key in timeline.deck.tools
+			and key.glyph == &"grid_4" and key.caption == "" and key.face == "")
+	timeline._grid_key.pressed.emit()
+	check("pressed, it is half beats, and its mark says so", TimelineLanes.grid == 0.5 and key.glyph == &"grid_8"
+			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.5)))
+	key.pressed.emit()
+	check("then quarter beats", TimelineLanes.grid == 0.25
+			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.25)))
+	key.pressed.emit()
+	check("then free: nothing snaps", TimelineLanes.grid == TimelineLanes.OFF and key.glyph == &"grid_off"
+			and is_equal_approx(TimelineLanes.snap(at, false), at))
+	key.pressed.emit()
+	var bar_at := s.bar_to_seconds(roundf(s.bar_at(at)) + 1.0)
+	check("then the bar (%.3f -> %.3f)" % [at, TimelineLanes.snap(at, false)], TimelineLanes.grid == TimelineLanes.BAR
+			and key.glyph == &"grid_bar" and is_equal_approx(TimelineLanes.snap(at, false), bar_at)
+			and absf(bar_at - s.bar_to_seconds(2.0)) < beat * 0.01)
+	check("fine still lets go of any grid", is_equal_approx(TimelineLanes.snap(at, true), at))
+	check("and the hover card says it in words", key.readout().contains("the bar"))
+	key.pressed.emit()
+	check("and round again to the beat", TimelineLanes.grid == 1.0)
+	TimelineLanes.grid = 1.0
+	timeline.free()

@@ -192,6 +192,14 @@ func _build() -> void:
 		&"fade_out":
 			_rod(Vector2(-0.95, 0.8), Vector2(0.95, -0.8), 0.13, 0.4)
 			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
+		&"grid_bar", &"grid_4", &"grid_8", &"grid_16", &"grid_off":
+			_box(Vector2.ZERO, Vector2(1.9, 0.9), 0.3)
+			var cells: int = {&"grid_4": 4, &"grid_8": 8, &"grid_16": 16}.get(_kind, 1)
+			for k in range(1, cells):
+				var x := -0.95 + 1.9 * k / cells
+				_rod(Vector2(x, -0.62), Vector2(x, 0.62), 0.07 if cells < 16 else 0.04, 0.42)
+			if _kind == &"grid_off":
+				_rod(Vector2(-0.9, -0.8), Vector2(0.9, 0.8), 0.12, 0.5)
 		_:
 			_ball(Vector2.ZERO, 0.4, 0.0)
 
