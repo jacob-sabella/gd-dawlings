@@ -296,6 +296,7 @@ func _ready() -> void:
 	_test_velocities_are_evened()
 	_test_a_tracks_items_are_selected_together()
 	_test_an_item_is_renamed()
+	_test_notes_are_played_backwards()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
@@ -20253,6 +20254,33 @@ func _test_the_last_marker_removed_is_gone_everywhere() -> void:
 	link._on_timeline({"markers": [], "length": 60.0})
 	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
 	link.free()
+
+
+func _test_notes_are_played_backwards() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	var played: Array = [[4.0 * beat, 5.0 * beat, 60, 100, 0], [5.0 * beat, 5.5 * beat, 64, 90, 0]]
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, played, "Retro")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.retrograde_item(lane, 0)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("the last note comes first, as long as it was (%.2f, %.2f)" % [(n[0][0] - 4.0 * beat) / beat, (n[0][1] - n[0][0]) / beat],
+			int(n[0][2]) == 64 and is_equal_approx(n[0][0], 4.0 * beat + 4.0 * beat - 1.5 * beat) and is_equal_approx(n[0][1] - n[0][0], 0.5 * beat))
+	check("the first comes last, velocities kept", int(n[1][2]) == 60 and int(n[1][3]) == 100 and is_equal_approx(n[1][0], 4.0 * beat + 4.0 * beat - 1.0 * beat)
+			and s.undo_depth - depth == 1)
+	DAW.retrograde_item(lane, 0)
+	var back := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	back.sort_custom(func(a, b): return a[0] < b[0])
+	check("twice is as played", int(back[0][2]) == 60 and is_equal_approx(back[0][0], 4.0 * beat) and is_equal_approx(back[1][1], 5.5 * beat))
+	DAW.set_item_locked(lane, 0, true)
+	var locked := s.undo_depth
+	DAW.retrograde_item(lane, 0)
+	check("a locked item is left alone", s.undo_depth == locked)
+	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"retrograde_item") and &"retrograde_item" in DAW.COMMANDS)
 
 
 func _test_an_item_is_renamed() -> void:

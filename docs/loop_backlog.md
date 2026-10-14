@@ -3580,3 +3580,12 @@ engine's rate and `MixRender` resamples each file with `Resampler` (linear: fine
 but no anti-alias filter on the way down to 44.1 -- a sinc resampler would be the next step, an
 engine limit worth noting). Reaper sets RENDER_SRATE through the bridge (syntax-checked, not run
 live). Also `--tl-render` for tools/screenshot.gd. Probe: host 53, guest 47, 0 failed (one click-timing check failed on a first run, unrelated, clean on the rerun). Suite: 10448 checks, 0 failed.
+
+## 2026-10-14 -- iteration 44: notes backwards
+
+A key on the ITEM page (bricks stepping down, an arrow back along them) mirrors a MIDI item's notes
+in time about the middle of the item: the last note plays first, each keeping its length and
+velocity, kept inside the item. `DAW.retrograde_item` is an ITEM_EDITS intent (undoable, refused on
+locked items); pressed twice it is as played. Reaper's `RetrogradeItem` mirrors the PPQ about the
+item's ends (syntax-checked, not run live). Probe not run (the same intent shape as legato).
+Suite: 10453 checks, 0 failed.

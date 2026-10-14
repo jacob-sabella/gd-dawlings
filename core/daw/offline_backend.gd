@@ -1230,6 +1230,12 @@ func rename_item(track_index: int, item_index: int, item_name: String) -> void:
 		_remember_edit(before)
 
 
+func retrograde_item(track_index: int, item_index: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_retrograde(track_index, item_index):
+		_remember_edit(before)
+
+
 func even_velocity(track_index: int, item_index: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_even_velocity(track_index, item_index):

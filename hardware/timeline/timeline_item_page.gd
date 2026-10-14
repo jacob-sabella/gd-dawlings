@@ -57,6 +57,8 @@ var legato: GlyphKey
 var staccato: GlyphKey
 ## Every note given the same velocity (DAW.even_velocity).
 var even: GlyphKey
+## The notes played backwards (DAW.retrograde_item).
+var retrograde: GlyphKey
 ## Name the item, on the keypad (DAW.rename_item).
 var item_name: GlyphKey
 ## The velocity of the note sounding at the playhead (else the next to start): a rail, set when let go.
@@ -127,6 +129,7 @@ func _ready() -> void:
 			func() -> String:
 				var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
 				return "rename \"%s\", on the keypad" % item.name if item != null else "select one item")
+	retrograde = _key("ItemRetrograde", &"retrograde", NOTE_INK, "ITEM  NOTES BACKWARDS", func(): _retrograde(), _retrograde_text)
 	even = _key("ItemEven", &"even", NOTE_INK, "ITEM  EVEN VELOCITY", func(): _even(), _even_text)
 	note_velocity = _slider("ItemNoteVelocity", &"note_velocity", NOTE_INK, func() -> String: return "ITEM  NOTE VELOCITY",
 			func(v: float) -> String: return "the note at the playhead: velocity %d" % _velocity_of(v))
@@ -152,7 +155,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, note_velocity, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -169,7 +172,7 @@ func refresh() -> void:
 	glue.lit = glues
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
-		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, legato, staccato, even, fade_in_shape, fade_out_shape]:
+		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, legato, staccato, even, retrograde, fade_in_shape, fade_out_shape]:
 			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
@@ -178,7 +181,7 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, note_velocity]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
 		c.available = not item.locked
 	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
 	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
@@ -188,7 +191,7 @@ func refresh() -> void:
 	reverse.lit = item.reversed
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
 	var midi := not item.notes.is_empty()
-	for key in [down, up, quant, softer, harder, humanise, legato, staccato, even]:
+	for key in [down, up, quant, softer, harder, humanise, legato, staccato, even, retrograde]:
 		key.lit = midi
 	swing.available = midi and not item.locked
 	note_velocity.available = midi and not item.locked
@@ -285,6 +288,15 @@ func _legato() -> void:
 func _rename() -> void:
 	if not _target.is_empty() and surface != null:
 		surface.ask_item_name(_target[0], _target[1])
+
+
+func _retrograde_text() -> String:
+	return "the notes played backwards, last first" if retrograde.lit else "for a MIDI item"
+
+
+func _retrograde() -> void:
+	if not _target.is_empty():
+		DAW.retrograde_item(_target[0], _target[1])
 
 
 func _even_text() -> String:

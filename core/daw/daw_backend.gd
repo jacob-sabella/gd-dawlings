@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func retrograde_item(_track_index: int, _item_index: int) -> void: pass
 func rename_item(_track_index: int, _item_index: int, _item_name: String) -> void: pass
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
@@ -1176,6 +1177,27 @@ func _locally_staccato(track_index: int, item_index: int) -> bool:
 			changed = true
 	if not changed:
 		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## A MIDI item's notes mirrored in time about the middle of the item: each ends as far from the
+## item's end as it began from its start. Notes are kept inside the item. False when there are none.
+func _locally_retrograde(track_index: int, item_index: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty():
+		return false
+	var notes := item.notes.duplicate()
+	var width := MidiTake.NOTE_WIDTH
+	var span := item.length
+	for n in range(0, notes.size() - width + 1, width):
+		var on := clampf(span - float(notes[n + 1]), 0.0, span)
+		var off := clampf(span - float(notes[n]), 0.0, span)
+		notes[n] = on
+		notes[n + 1] = maxf(off, on + MidiTake.MIN_NOTE)
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
 	it.notes = notes

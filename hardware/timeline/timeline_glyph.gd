@@ -279,6 +279,14 @@ func _build() -> void:
 			_box(Vector2(0.0, -0.1), Vector2(1.7, 1.0), 0.45)
 			_rod(Vector2(-0.55, 0.0), Vector2(0.55, 0.0), 0.12, 0.95)
 			_rod(Vector2(-0.55, -0.3), Vector2(0.2, -0.3), 0.1, 0.8)
+		&"retrograde":
+			# Bricks stepping down to the right, and an arrow back along them.
+			_box(Vector2(-0.62, 0.35), Vector2(0.5, 0.36), 0.55)
+			_box(Vector2(0.0, 0.0), Vector2(0.5, 0.36), 0.55)
+			_box(Vector2(0.62, -0.35), Vector2(0.5, 0.36), 0.55)
+			_rod(Vector2(0.9, -0.85), Vector2(-0.9, -0.85), 0.09, 0.9)
+			_rod(Vector2(-0.9, -0.85), Vector2(-0.55, -0.6), 0.09, 0.9)
+			_rod(Vector2(-0.9, -0.85), Vector2(-0.55, -1.1), 0.09, 0.9)
 		&"even":
 			# Bricks all one height, a level line over them.
 			for k in 3:

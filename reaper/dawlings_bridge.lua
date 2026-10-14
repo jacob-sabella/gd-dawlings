@@ -1716,6 +1716,33 @@ function handlers.RenameItem(args)
   return edited('Rename item')
 end
 
+-- args: track, index: the notes mirrored in time about the item's middle.
+function handlers.RetrogradeItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  local from = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local to = from + reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local s = reaper.MIDI_GetPPQPosFromProjTime(take, from)
+      local e = reaper.MIDI_GetPPQPosFromProjTime(take, to)
+      local _, count = reaper.MIDI_CountEvts(take)
+      for n = 0, count - 1 do
+        local ok, sel, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
+        if ok then
+          local on = math.max(s, math.min(e, s + e - ppq_off))
+          local off = math.max(on + 1, math.min(e, s + e - ppq_on))
+          reaper.MIDI_SetNote(take, n, sel, muted, on, off, chan, pitch, vel, true)
+        end
+      end
+      reaper.MIDI_Sort(take)
+    end
+  end
+  return edited('Retrograde')
+end
+
 -- args: track, index: every note given the rounded average velocity of the item's notes.
 function handlers.EvenVelocity(args)
   local it = item_at(args)
