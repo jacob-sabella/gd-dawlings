@@ -348,10 +348,14 @@ func set_tempo(bpm: float) -> void: _do(&"set_tempo", [clampf(bpm, TEMPO_MIN, TE
 ## Writes the song to WAVs beside the project, as the host's DAW renders: see DAWBackend.render.
 ## Anyone in a session may ask; the files are the host's.
 ## `bits` is the files' depth: 16 or 24 (integer, dithered) or 32 (float). See RENDER_BITS.
-func render(stems: bool, bits := RENDER_BITS_DEFAULT, normalise := false) -> void:
-	_do(&"render", [stems, bits if bits in RENDER_BITS else RENDER_BITS_DEFAULT, normalise])
+## `rate` is the files' sample rate, one of RENDER_RATES.
+func render(stems: bool, bits := RENDER_BITS_DEFAULT, normalise := false, rate := RENDER_RATE_DEFAULT) -> void:
+	_do(&"render", [stems, bits if bits in RENDER_BITS else RENDER_BITS_DEFAULT, normalise,
+			rate if rate in RENDER_RATES else RENDER_RATE_DEFAULT])
 const RENDER_BITS: Array[int] = [16, 24, 32]
 const RENDER_BITS_DEFAULT := 24
+const RENDER_RATES: Array[int] = [44100, 48000, 96000]
+const RENDER_RATE_DEFAULT := 48000
 ## Saves the project where it is. Anyone in a session may press save; nobody but the host
 ## chooses where, so a guest's save carries no path (and one that did is not believed).
 func save_project() -> void:
@@ -787,9 +791,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		# render asked for is still a render.
 		var bits := int(args[1]) if args.size() > 1 and typeof(args[1]) in [TYPE_INT, TYPE_FLOAT] \
 				and is_finite(float(args[1])) else RENDER_BITS_DEFAULT
+		var rate := int(args[3]) if args.size() > 3 and typeof(args[3]) in [TYPE_INT, TYPE_FLOAT] \
+				and is_finite(float(args[3])) else RENDER_RATE_DEFAULT
 		args = [MixWire._as_bool([args[0]]) if not args.is_empty() else false,
 				bits if bits in RENDER_BITS else RENDER_BITS_DEFAULT,
-				MixWire._as_bool([args[2]]) if args.size() > 2 else false]
+				MixWire._as_bool([args[2]]) if args.size() > 2 else false,
+				rate if rate in RENDER_RATES else RENDER_RATE_DEFAULT]
 	if verb == &"set_track_automation_mode":
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 0:
 			push_warning("DAW: refused a malformed set_track_automation_mode intent %s." % [args])

@@ -3570,3 +3570,13 @@ prompt) for the one selected item. `DAW.rename_item` is an intent with a string,
 name rides the existing item wire and is saved as the dawkit clip's name. Reaper's `RenameItem`
 sets the active take's P_NAME (syntax-checked, not run live). The key is not drawn lit/active for
 several items: it renames one. Probe: host 53, guest 47, 0 failed. Suite: 10440 checks, 0 failed.
+
+## 2026-10-14 -- iteration 43: render sample rate
+
+A SAMPLE RATE token on the RENDER page (a row of ticks, closer for a higher rate) steps 48 -> 96 -> 44.1 kHz,
+each person's own, sent with their render as a fourth argument of `DAW.render`; the host takes a rate
+that is not one of `RENDER_RATES` as 48 kHz, like a bad depth. The built-in render captures at the
+engine's rate and `MixRender` resamples each file with `Resampler` (linear: fine for the rates here,
+but no anti-alias filter on the way down to 44.1 -- a sinc resampler would be the next step, an
+engine limit worth noting). Reaper sets RENDER_SRATE through the bridge (syntax-checked, not run
+live). Also `--tl-render` for tools/screenshot.gd. Probe: host 53, guest 47, 0 failed (one click-timing check missed by 20 ms on a first run, unrelated, clean on the rerun). Suite: 10448 checks, 0 failed.

@@ -125,6 +125,8 @@ var _tl_fade := ""
 ## crossfaded over the overlap, frame 7.
 var _tl_xfade := ""
 var _tl_pick := -1
+## `--tl-render`: the deck on its RENDER page, from frame 7.
+var _tl_render := false
 var _roll := false
 var _rig_roll := false
 var _board := ""
@@ -254,6 +256,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-group":
 				if i + 1 < args.size(): _tl_group = args[i + 1]
+			"--tl-render":
+				_tl_render = true
 			"--tl-pick":
 				if i + 1 < args.size(): _tl_pick = int(args[i + 1])
 			"--tl-road":
@@ -313,6 +317,9 @@ func _process(_delta: float) -> void:
 		if not tl.is_empty():
 			DAW.seek(_tl_road)
 			(tl[0] as TimelineSurface).set_highway(true)
+	if _frames == 7 and _tl_render:
+		for tl in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
+			(tl as TimelineSurface).deck.show_page((tl as TimelineSurface).render_page)
 	if _frames == 7 and (_tl_select != "" or _tl_pick >= 0):
 		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
 		if _tl_pick >= 0 and not tl.is_empty():

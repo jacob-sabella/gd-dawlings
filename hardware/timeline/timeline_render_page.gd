@@ -13,6 +13,9 @@ var stems: GlyphKey
 ## The files' depth, stepped round DAW.RENDER_BITS: each person's own, sent with their render.
 var depth: GlyphKey
 var bits := DAW.RENDER_BITS_DEFAULT
+## The files' sample rate, stepped round DAW.RENDER_RATES: each person's own, sent with their render.
+var rate_key: GlyphKey
+var rate := DAW.RENDER_RATE_DEFAULT
 ## Normalised to a peak (DAWBackend.RENDER_NORMALISE_DB), the stems by the mix's gain: each
 ## person's own, sent with their render.
 var normalise_key: GlyphKey
@@ -32,6 +35,9 @@ func _ready() -> void:
 	depth = _key("RenderDepth", depth_glyph(bits), INK, "RENDER  BIT DEPTH", step_depth,
 			func() -> String: return "%s: %s next" % [depth_name(bits), depth_name(_next_depth(bits))])
 	depth.lit = true
+	rate_key = _key("RenderRate", rate_glyph(rate), INK, "RENDER  SAMPLE RATE", step_rate,
+			func() -> String: return "%s: %s next" % [rate_name(rate), rate_name(_next_rate(rate))])
+	rate_key.lit = true
 	normalise_key = _key("RenderNormalise", &"normalise", INK, "RENDER  NORMALISE",
 			func(): set_normalise(not normalise),
 			func() -> String: return ("on: the mix peaks at %d dB, each stem moved by the mix's gain"
@@ -69,13 +75,34 @@ func _what(with_stems: bool) -> String:
 	if busy:
 		return "rendering, as the song plays"
 	return "%s%s, played through once and rung out, %s" % [_span(),
-			" and each track's stem" if with_stems else "", depth_name(bits)] \
+			" and each track's stem" if with_stems else "", depth_name(bits) + (", %s" % rate_name(rate))] \
 			+ (", normalised to %d dB" % int(DAWBackend.RENDER_NORMALISE_DB) if normalise else "")
 
 
 func set_normalise(on: bool) -> void:
 	normalise = on
 	normalise_key.lit = on
+
+
+func step_rate() -> void:
+	rate = _next_rate(rate)
+	rate_key.glyph = rate_glyph(rate)
+
+
+static func _next_rate(r: int) -> int:
+	var at := DAW.RENDER_RATES.find(r)
+	return DAW.RENDER_RATES[(at + 1) % DAW.RENDER_RATES.size()]
+
+
+static func rate_name(r: int) -> String:
+	return "%s kHz" % String.num(r / 1000.0, 1)
+
+
+static func rate_glyph(r: int) -> StringName:
+	match r:
+		44100: return &"rate_44"
+		96000: return &"rate_96"
+	return &"rate_48"
 
 
 func step_depth() -> void:
@@ -105,7 +132,7 @@ func _render(with_stems: bool) -> void:
 		return
 	busy = true
 	refresh()
-	DAW.render(with_stems, bits, normalise)
+	DAW.render(with_stems, bits, normalise, rate)
 
 
 func _on_rendered(_files: PackedStringArray, _problems: PackedStringArray) -> void:

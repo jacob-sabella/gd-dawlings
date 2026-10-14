@@ -344,6 +344,13 @@ func _build() -> void:
 				var x := -0.95 + w * (k + 0.5)
 				var y := roundf(sin(x * PI / 0.95) * (2.0 if n == 5 else 4.0)) / (2.0 if n == 5 else 4.0) * 0.75
 				_box(Vector2(x, y), Vector2(w * 0.92, 0.22), 0.35)
+		&"rate_44", &"rate_48", &"rate_96":
+			# Samples along a line, closer together for a higher rate.
+			var dots: int = {&"rate_44": 5, &"rate_48": 6, &"rate_96": 11}[_kind]
+			_rod(Vector2(-0.95, 0.0), Vector2(0.95, 0.0), 0.05, 0.2)
+			for k in dots:
+				var x := -0.9 + 1.8 * k / (dots - 1)
+				_rod(Vector2(x, -0.6), Vector2(x, 0.6), 0.09 if dots < 8 else 0.06, 0.4)
 		&"depth_32":
 			_arc(Vector2(-0.475, 0.0), 0.475, 180.0, 0.0, 0.1)
 			_arc(Vector2(0.475, 0.0), 0.475, 180.0, 360.0, 0.1)

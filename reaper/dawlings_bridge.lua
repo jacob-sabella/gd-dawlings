@@ -659,6 +659,8 @@ function handlers.RenderProject(args)
   local normalise = (args[6] or 0) > 0.5
   reaper.GetSetProjectInfo(0, 'RENDER_NORMALIZE', normalise and (1 + 4 + 32) or 0, true)
   if normalise then reaper.GetSetProjectInfo(0, 'RENDER_NORMALIZE_TARGET', args[7] or 0.891, true) end
+  -- args[8]: the files' sample rate; the project's own when absent.
+  if (args[8] or 0) >= 8000 then reaper.GetSetProjectInfo(0, 'RENDER_SRATE', math.floor(args[8]), true) end
   reaper.GetSetProjectInfo(0, 'RENDER_BOUNDSFLAG', 0, true)
   reaper.GetSetProjectInfo(0, 'RENDER_STARTPOS', from, true)
   reaper.GetSetProjectInfo(0, 'RENDER_ENDPOS', to, true)

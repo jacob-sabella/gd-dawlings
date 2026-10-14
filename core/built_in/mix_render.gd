@@ -47,6 +47,8 @@ var folder := ""
 var name_stem := ""
 ## The files' depth: 16 or 24 (dithered integer) or 32 (float). See DawKitAudioFile.write_wav.
 var bits := 24
+## The files' sample rate: the mix as captured, at the engine's rate, is resampled to it when it differs.
+var file_rate := 48000
 ## The mix brought to a peak of DAWBackend.RENDER_NORMALISE_DB, the stems by the mix's gain.
 var normalise := false
 ## Track indices to write stems of; the mix is always written.
@@ -201,6 +203,8 @@ func _finish() -> void:
 	var gain := normalise_gain(cut[0]) if normalise else 1.0
 	for key in _taps:
 		var frames: PackedVector2Array = cut[key]
+		if file_rate != _rate:
+			frames = Resampler.new().resample(frames, _rate, file_rate)
 		var samples := PackedFloat32Array()
 		samples.resize(frames.size() * 2)
 		for i in frames.size():
@@ -208,7 +212,7 @@ func _finish() -> void:
 			samples[i * 2 + 1] = frames[i].y * gain
 		var label := "mix" if key == 0 else DAW.state.track(key).display_name()
 		var path := folder.path_join("%s - %s.wav" % [name_stem, label.validate_filename()])
-		var err := DawKitAudioFile.write_wav(path, samples, 2, _rate, bits)
+		var err := DawKitAudioFile.write_wav(path, samples, 2, file_rate, bits)
 		if err == OK:
 			files.append(path)
 		else:

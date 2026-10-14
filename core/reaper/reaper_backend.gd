@@ -1096,7 +1096,7 @@ static func midi_take_request(track_index: int, start: float, end: float, notes:
 
 ## Reaper renders, offline, through the bridge: see the bridge's RenderProject. The files are on
 ## Reaper's machine, which is this one.
-func render(stems: bool, bits := 24, normalise := false) -> void:
+func render(stems: bool, bits := 24, normalise := false, rate := 48000) -> void:
 	if _bridge == null or not _bridge.is_open():
 		render_finished.emit(PackedStringArray(), PackedStringArray(["rendering needs the ReaScript bridge"]))
 		return
@@ -1104,7 +1104,7 @@ func render(stems: bool, bits := 24, normalise := false) -> void:
 	var from := state.loop_start if looped else 0.0
 	var to := state.loop_end if looped else state.timeline_length()
 	_bridge.call_reaper("RenderProject", [from, to, 1 if stems else 0, int(RENDER_TAIL_SECONDS * 1000.0), bits,
-			1 if normalise else 0, db_to_linear(RENDER_NORMALISE_DB)],
+			1 if normalise else 0, db_to_linear(RENDER_NORMALISE_DB), rate],
 			_on_rendered, RENDER_TIMEOUT_MSEC)
 
 

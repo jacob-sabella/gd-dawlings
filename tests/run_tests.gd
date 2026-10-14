@@ -302,6 +302,7 @@ func _ready() -> void:
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
 	_test_a_render_can_be_normalised()
+	_test_a_render_has_a_sample_rate()
 	_test_a_track_is_duplicated()
 	_test_the_selection_is_nudged_by_the_grid()
 	_test_an_item_fades_with_equal_power()
@@ -19472,6 +19473,44 @@ func _test_a_render_is_written_at_a_chosen_depth() -> void:
 	_offline()
 
 
+func _test_a_render_has_a_sample_rate() -> void:
+	_offline()
+	check("three rates, 48 kHz the usual", DAW.RENDER_RATES == [44100, 48000, 96000] and DAW.RENDER_RATE_DEFAULT == 48000)
+	var spy := RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	DAW.apply_intent(&"render", [1.0, 24.0, 0.0, 44100.0])
+	DAW.apply_intent(&"render", [0.0, 16.0, 0.0, 22050.0])
+	DAW.apply_intent(&"render", [0.0, 16.0, 0.0, NAN])
+	DAW.apply_intent(&"render", [1.0, 24.0])
+	check("the host renders a guest's rate, or 48 kHz (%s)" % [spy.asked],
+			spy.asked == [[true, 24, 44100], [false, 16], [false, 16], [true, 24]])
+	# One second of 48 kHz comes out as 44100 frames at 44.1 and 96000 at 96.
+	var second := PackedVector2Array()
+	second.resize(48000)
+	check("resampled to 44.1 kHz, a second is 44100 frames", absi(Resampler.new().resample(second, 48000.0, 44100.0).size() - 44100) <= 2)
+	check("resampled to 96 kHz, a second is 96000", absi(Resampler.new().resample(second, 48000.0, 96000.0).size() - 96000) <= 2)
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRenderPage = timeline.render_page
+	check("the render page has a rate token at 48 kHz", page.rate_key != null and page.rate == 48000
+			and page.rate_key.glyph == &"rate_48" and page.rate_key.lit)
+	page.rate_key.pressed.emit()
+	check("pressed, 96 kHz, its mark dense", page.rate == 96000 and page.rate_key.glyph == &"rate_96")
+	page.rate_key.pressed.emit()
+	check("again, 44.1 kHz", page.rate == 44100 and page.rate_key.glyph == &"rate_44" and TimelineRenderPage.rate_name(44100) == "44.1 kHz")
+	spy = RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	page.busy = false
+	page._render(false)
+	check("and a render from the page carries it (%s)" % [spy.asked], spy.asked == [[false, 24, 44100]])
+	timeline.free()
+	_offline()
+
+
 func _test_a_render_can_be_normalised() -> void:
 	var quiet := PackedVector2Array([Vector2(0.1, -0.25), Vector2(0.05, 0.2)])
 	close_to("a quiet mix is brought up to a peak a decibel under full scale",
@@ -20094,8 +20133,13 @@ class RenderSpy extends OfflineBackend:
 	func can(capability: StringName) -> bool:
 		return capability == DAWBackend.Capability.RENDER or super.can(capability)
 
-	func render(stems: bool, bits := 24, normalise := false) -> void:
-		asked.append([stems, bits] if not normalise else [stems, bits, true])
+	func render(stems: bool, bits := 24, normalise := false, rate := 48000) -> void:
+		var got: Array = [stems, bits]
+		if normalise:
+			got.append(true)
+		if rate != 48000:
+			got.append(rate)
+		asked.append(got)
 
 
 func _test_the_song_has_regions() -> void:

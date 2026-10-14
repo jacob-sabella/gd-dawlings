@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 42
+Iterations done: 43
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -85,7 +85,8 @@ Iterations done: 42
 - [x] mix and stems render
 - [x] render bit depth, with dither (2026-10-14; 16 or 24-bit dithered, 32-bit float; a token on the RENDER page; Reaper's RENDER_FORMAT and RENDER_DITHER, not yet run against a live Reaper)
 - [x] normalise on render (2026-10-14; the mix to a -1 dBFS peak, each stem by the mix's gain; a token on the RENDER page; Reaper's RENDER_NORMALIZE through the bridge, not yet run against a live Reaper)
-- [ ] render file types other than WAV (FLAC, MP3), sample-rate choice (missing)
+- [x] render sample rate: 44.1, 48 or 96 kHz (2026-10-14; a token on the RENDER page; built-in resamples linearly from the engine rate; Reaper's RENDER_SRATE, not run against a live Reaper)
+- [ ] render file types other than WAV (FLAC, MP3) (missing)
 - [x] render a region: LOOP on the REGION page, then a render, renders just that region (render follows the loop range)
 
 ## Undo and project files
