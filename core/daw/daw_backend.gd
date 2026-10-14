@@ -294,6 +294,7 @@ func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pas
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
 ## Silence an item without removing it: it keeps its place and its edits, and plays again unmuted.
 func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: pass
+func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void: pass
 ## A new, empty track at `at` (from 1), everything from there on moving down one.
 func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
@@ -448,13 +449,14 @@ func _locally_split(seconds: float) -> int:
 	for index in state.track_indices():
 		var hit := false
 		for item in state.track(index).items:
-			hit = hit or (item.selected and item.contains(seconds))
+			hit = hit or (item.selected and not item.locked and item.contains(seconds))
 		if not hit:
 			continue
 		var lane := _lane_copy(index)
 		var added: Array = []
 		for item in lane:
-			if item.selected and item.contains(seconds):
+			# A locked item is not cut, selected or not.
+			if item.selected and not item.locked and item.contains(seconds):
 				var right := MixState.ItemState.new()
 				right.start = seconds
 				right.length = item.end() - seconds
@@ -502,10 +504,11 @@ func _split_notes(left: MixState.ItemState, right: MixState.ItemState, seconds: 
 func _locally_delete_selected() -> int:
 	var gone := 0
 	for index in state.track_indices():
-		if not state.track(index).items.any(func(it): return it.selected):
+		if not state.track(index).items.any(func(it): return it.selected and not it.locked):
 			continue
 		var lane := _lane_copy(index)
-		var kept := lane.filter(func(it): return not it.selected)
+		# A locked item stays, selected or not.
+		var kept := lane.filter(func(it): return not it.selected or it.locked)
 		gone += lane.size() - kept.size()
 		_write_lane(index, kept)
 	return gone
@@ -591,6 +594,17 @@ func _locally_trim(track_index: int, item_index: int, start: float, end: float) 
 	it.fade_in = minf(it.fade_in, it.length)
 	it.fade_out = minf(it.fade_out, it.length - it.fade_in)
 	_write_lane(track_index, lane)
+
+
+## False when there is no such item or it already is as asked.
+func _locally_lock(track_index: int, item_index: int, locked: bool) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.locked == locked:
+		return false
+	var lane := _lane_copy(track_index)
+	lane[item_index].locked = locked
+	_write_lane(track_index, lane)
+	return true
 
 
 ## False when there is no such item or it already is as asked.

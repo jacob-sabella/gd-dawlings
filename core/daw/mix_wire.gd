@@ -483,6 +483,7 @@ static func _unpack_items(args: Array) -> Array:
 			item.fade_in = maxf(float(audio.get("fade_in", 0.0)), 0.0)
 			item.fade_out = maxf(float(audio.get("fade_out", 0.0)), 0.0)
 			item.gain_db = float(audio.get("gain_db", 0.0))
+			item.locked = bool(audio.get("locked", false))
 			var loop: Array = audio.get("loop", [])
 			if loop.size() == 2:
 				item.loop_start = maxf(float(loop[0]), 0.0)
@@ -505,7 +506,7 @@ static func _pack_items(items: Array) -> Array:
 			out.append(item.notes)
 		# One optional Dictionary for whatever is not a MIDI payload: a recorded file, and the
 		# clip's fades and gain. Absent when there is neither, so an item costs what it did.
-		if not item.source.is_empty() or item.has_clip_shape():
+		if not item.source.is_empty() or item.has_clip_shape() or item.locked:
 			var extra := {}
 			if not item.source.is_empty():
 				extra = {"source": item.source, "offset": item.source_offset, "peaks": item.peaks}
@@ -515,6 +516,8 @@ static func _pack_items(items: Array) -> Array:
 				extra["gain_db"] = item.gain_db
 				if item.is_looped():
 					extra["loop"] = [item.loop_start, item.loop_end]
+			if item.locked:
+				extra["locked"] = true
 			out.append(extra)
 	return out
 

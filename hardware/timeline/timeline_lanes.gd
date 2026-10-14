@@ -181,6 +181,10 @@ func _on_grab_move(at: Vector3) -> void:
 		return
 	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP and absf(to_local(at).y - _grab_y) < CLICK_SLOP:
 		return
+	# A locked item stays where it is: the press is a click on it, however far the hand goes.
+	var held: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
+	if held != null and held.locked:
+		return
 	_dragged = true
 	var moved: float = surface.seconds_at_point(at) - _grab_seconds
 	if _fade != 0:

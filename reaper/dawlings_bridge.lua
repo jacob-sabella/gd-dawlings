@@ -709,6 +709,7 @@ function handlers.GetTimeline()
         start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION'),
         length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH'),
         muted = reaper.GetMediaItemInfo_Value(it, 'B_MUTE') > 0.5,
+        locked = (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 1,
         selected = reaper.IsMediaItemSelected(it),
         name = name,
         notes = item_notes(it, take),
@@ -1304,7 +1305,8 @@ function handlers.SplitSelected(args)
     local it = reaper.GetSelectedMediaItem(0, n)
     local start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
     local length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
-    if at > start and at < start + length then targets[#targets + 1] = it end
+    local locked = (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 1
+    if at > start and at < start + length and not locked then targets[#targets + 1] = it end
   end
   if #targets == 0 then return {ok = true, split = 0} end
   reaper.Undo_BeginBlock()
@@ -1322,12 +1324,17 @@ function handlers.DeleteSelected()
   local count = reaper.CountSelectedMediaItems(0)
   if count == 0 then return {ok = true, deleted = 0} end
   reaper.Undo_BeginBlock()
+  local deleted = 0
   for n = count - 1, 0, -1 do
     local it = reaper.GetSelectedMediaItem(0, n)
-    reaper.DeleteTrackMediaItem(reaper.GetMediaItem_Track(it), it)
+    -- A locked item stays, as the desk's own delete leaves it.
+    if (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 0 then
+      reaper.DeleteTrackMediaItem(reaper.GetMediaItem_Track(it), it)
+      deleted = deleted + 1
+    end
   end
   local result = edited('Remove items')
-  result.deleted = count
+  result.deleted = deleted
   return result
 end
 
@@ -1408,6 +1415,17 @@ function handlers.SetItemMuted(args)
   reaper.Undo_BeginBlock()
   reaper.SetMediaItemInfo_Value(it, 'B_MUTE', (args[3] or 0) > 0.5 and 1 or 0)
   return edited('Item mute')
+end
+
+-- args: track, index, 1 to lock, 0 to unlock. Reaper's own item lock (C_LOCK's first bit).
+function handlers.SetItemLocked(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  local flags = math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK'))
+  flags = (args[3] or 0) > 0.5 and (flags | 1) or (flags & ~1)
+  reaper.SetMediaItemInfo_Value(it, 'C_LOCK', flags)
+  return edited('Item lock')
 end
 
 -- args: track, index, fade in, fade out, in seconds.

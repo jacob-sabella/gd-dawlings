@@ -10,7 +10,7 @@ extends ControlAffordance
 signal turned(v: float)
 
 const HEIGHT := GlyphKey.SIZE
-const WIDTH := 0.096
+const WIDTH := 0.084
 ## The rod, from after the mark to the right end.
 const MARK := 0.022
 const ROD := 0.0016

@@ -285,6 +285,7 @@ func _ready() -> void:
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
 	_test_the_timeline_grid_is_chosen_with_a_token()
+	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -13536,6 +13537,41 @@ func _test_items_are_deleted_duplicated_trimmed_and_shaped() -> void:
 	check("and a malformed or missing one is refused", s.item(lane, 1).muted)
 	DAW.set_item_muted(lane, 1, false)
 
+	var lock_depth := s.undo_depth
+	var pinned_at: float = s.item(lane, 1).start
+	var pinned_length: float = s.item(lane, 1).length
+	var pinned_gain: float = s.item(lane, 1).gain_db
+	DAW.set_item_locked(lane, 1, true)
+	check("an item locked is one step to undo", s.item(lane, 1).locked and s.undo_depth - lock_depth == 1)
+	DAW.move_item(lane, 1, pinned_at + 4.0)
+	DAW.trim_item(lane, 1, pinned_at + 1.0, pinned_length - 1.0)
+	DAW.set_item_gain(lane, 1, 3.0)
+	DAW.set_item_fades(lane, 1, 1.0, 1.0)
+	DAW.apply_intent(&"move_item", [lane, 1, pinned_at + 8.0])
+	check("a locked item will not move, trim, take a gain or fades, from here or from a guest",
+			is_equal_approx(s.item(lane, 1).start, pinned_at) and is_equal_approx(s.item(lane, 1).length, pinned_length)
+			and is_equal_approx(s.item(lane, 1).gain_db, pinned_gain) and s.item(lane, 1).fade_in != 1.0
+			and s.undo_depth - lock_depth == 1)
+	DAW.set_item_muted(lane, 1, true)
+	check("but it can still be muted", s.item(lane, 1).muted and s.item(lane, 1).locked)
+	DAW.set_item_muted(lane, 1, false)
+	var count_locked: int = s.track(lane).items.size()
+	DAW.select_item(lane, 1, false)
+	DAW.split_selected(pinned_at + pinned_length * 0.5)
+	DAW.delete_selected()
+	check("and it is neither cut nor deleted while selected", s.track(lane).items.size() == count_locked
+			and s.item(lane, 1).locked and is_equal_approx(s.item(lane, 1).start, pinned_at))
+	var wired := MixWire._unpack_items(MixWire._pack_items(s.track(lane).items))
+	check("the lock crosses the wire", wired[1].locked and not wired[0].locked)
+	var clip := DawKitClip.from_dict(ProjectBridge._clip(s.item(lane, 1)).to_dict())
+	check("and is saved with the clip", clip.locked)
+	DAW.apply_intent(&"set_item_locked", [lane, 1, 0.0])
+	check("a guest can unlock it, and then it moves", not s.item(lane, 1).locked)
+	DAW.move_item(lane, 1, pinned_at + 4.0)
+	check("(%.2f)" % s.item(lane, 1).start, is_equal_approx(s.item(lane, 1).start, pinned_at + 4.0))
+	DAW.undo()
+	DAW.clear_item_selection()
+
 	var shaped: MixState.ItemState = s.item(lane, 1)
 	var had_peaks := shaped.peaks
 	var overview := PackedByteArray()
@@ -18746,3 +18782,45 @@ func _test_the_timeline_grid_is_chosen_with_a_token() -> void:
 	check("and round again to the beat", TimelineLanes.grid == 1.0)
 	TimelineLanes.grid = 1.0
 	timeline.free()
+
+
+func _test_a_locked_item_stays_put_on_the_timeline() -> void:
+	_offline()
+	var s := DAW.state
+	DAW.transport_stop()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	timeline.set_view(0.0, s.bar_to_seconds(41.0))
+	var hand := FakeHand.new()
+	add_child(hand)
+	var lanes: TimelineLanes = timeline._lanes
+	var at := func(track_index: int, bar: float) -> Vector3:
+		var i := s.track_indices().find(track_index)
+		return timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(bar)),
+				timeline._lane_y[i], lanes.position.z))
+	lanes.grab_begin(hand, at.call(2, 12.0))
+	lanes.grab_end(hand)
+	var page: TimelineItemPage = timeline.item_page
+	check("the item's page has a lock token, a mark and no word", page.lock != null and page.lock.glyph == &"lock"
+			and page.lock.available and not page.lock.lit)
+	page.lock.pressed.emit()
+	check("pressed, the item is locked and the token lit", s.item(2, 0).locked and page.lock.lit)
+	check("its shape's rails and keys are out of reach", not page.gain.available and not page.fade_in.available
+			and not page.normalise.available and page.mute.available)
+	timeline._process(0.0)
+	var strips := timeline.get_node_or_null("ItemStrips") as MeshBank
+	check("and its thread is drawn white, pinned", strips != null and strips.colour_of(0).b > 1.2)
+	var was: float = s.item(2, 0).start
+	lanes.grab_begin(hand, at.call(2, 12.0))
+	lanes.grab_move(hand, at.call(2, 20.0))
+	lanes.grab_end(hand)
+	check("dragged, it stays where it was (%.2f)" % s.item(2, 0).start, is_equal_approx(s.item(2, 0).start, was)
+			and s.item(2, 0).selected)
+	page.lock.pressed.emit()
+	check("pressed again, it is free", not s.item(2, 0).locked and page.gain.available)
+	DAW.undo()
+	DAW.undo()
+	DAW.clear_item_selection()
+	timeline.free()
+	hand.free()

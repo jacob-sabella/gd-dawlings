@@ -27,6 +27,7 @@ var gain: GlyphRail
 var fade_in: GlyphRail
 var fade_out: GlyphRail
 var mute: GlyphKey
+var lock: GlyphKey
 var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
@@ -59,6 +60,8 @@ func _ready() -> void:
 	_group()
 	mute = _key("ItemMute", &"mute", STOP_INK, "ITEM  MUTE", _toggle_mute,
 			func() -> String: return "muted: press to play it again" if mute.lit else "silence it", true)
+	lock = _key("ItemLock", &"lock", Color(0.92, 0.94, 1.0), "ITEM  LOCK", _toggle_lock,
+			func() -> String: return "locked: press to let it move again" if lock.lit else "pin it where it is", true)
 	normalise = _key("ItemNormalise", &"normalise", EDIT_INK, "ITEM  NORMALISE", _normalise,
 			func() -> String: return "gain so its loudest moment is full scale" if normalise.lit \
 					else "for a recorded item")
@@ -98,7 +101,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, mute, normalise, down, up, quant, softer, harder]:
+	for c in [gain, fade_in, fade_out, mute, lock, normalise, down, up, quant, softer, harder]:
 		c.available = one
 	copy_here.available = not picked.is_empty()
 	loop_to.available = not picked.is_empty()
@@ -108,13 +111,17 @@ func refresh() -> void:
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
-		for c in [mute, normalise, down, up, quant, softer, harder]:
+		for c in [mute, lock, normalise, down, up, quant, softer, harder]:
 			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
 	fade_in.snap_to(_fade_value(item.fade_in))
 	fade_out.snap_to(_fade_value(item.fade_out))
 	mute.lit = item.muted
+	lock.lit = item.locked
+	# A locked item's shape is not the rails' to change.
+	for c in [gain, fade_in, fade_out, normalise, down, up, quant, softer, harder]:
+		c.available = not item.locked
 	normalise.lit = item.sound_peak() > 0.0
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant, softer, harder]:
@@ -176,6 +183,12 @@ func _crossfade() -> void:
 func _normalise() -> void:
 	if not _target.is_empty():
 		DAW.normalise_item(_target[0], _target[1])
+
+
+func _toggle_lock() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item != null:
+		DAW.set_item_locked(_target[0], _target[1], not item.locked)
 
 
 func _toggle_mute() -> void:

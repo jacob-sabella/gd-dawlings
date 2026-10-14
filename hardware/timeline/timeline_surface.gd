@@ -1664,8 +1664,9 @@ func _place_item(item: MixState.ItemState, start: float, tint: Color, y: float,
 	_item_strips.move_slot(slot, Transform3D(
 			Basis.IDENTITY.scaled(Vector3(maxf(span - 0.0012, 0.0002), 0.0009, 0.0005)),
 			Vector3(mid, y - block_height * 0.5 + 0.0011, face + 0.00035)))
-	_item_strips.set_colour(slot, Materials.chip_colour(tint) * 1.2 if not dim
-			else Materials.lamp_colour(tint, false))
+	# White while it is locked: pinned in place.
+	_item_strips.set_colour(slot, Color(1.4, 1.4, 1.5) if item.locked
+			else (Materials.chip_colour(tint) * 1.2 if not dim else Materials.lamp_colour(tint, false)))
 	return true
 
 

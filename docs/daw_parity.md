@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 10
+Iterations done: 11
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -29,7 +29,7 @@ Iterations done: 10
 - [x] drags snap to the beat unless fine (`TimelineLanes.snap`; the first audit missed it)
 - [x] a choosable grid: bar, beat, half and quarter beats, or free (2026-10-14; each person's own, not saved)
 - [ ] ripple edit (missing)
-- [ ] item locking (missing)
+- [x] item locking (2026-10-14; Reaper's C_LOCK through the bridge, not yet run against a live Reaper)
 
 ## Piano roll
 - [x] transpose, quantise with strength, note insert through takes

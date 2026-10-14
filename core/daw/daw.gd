@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"copy_selected_to",
+	&"delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"quantize_item": 4}
 
 var backend: DAWBackend
@@ -452,6 +452,25 @@ func crossfade_items(track_index: int, first: int, second: int) -> bool:
 	return true
 func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 	_do(&"set_item_muted", [track_index, item_index, 1.0 if muted else 0.0])
+
+
+## Lock an item against edits, or unlock it (MixState.ItemState.locked). One undo step.
+func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
+	_do(&"set_item_locked", [track_index, item_index, 1.0 if locked else 0.0])
+
+
+## What a locked item refuses: anything that names it and would change where it is or what it
+## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
+## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
+const LOCKED_REFUSES := [&"move_item", &"trim_item", &"set_item_gain", &"set_item_fades",
+		&"transpose_item", &"shift_velocity", &"quantize_item"]
+
+
+func locked_against(verb: StringName, args: Array) -> bool:
+	if verb not in LOCKED_REFUSES or args.size() < 2:
+		return false
+	var item := state.item(int(args[0]), int(args[1]))
+	return item != null and item.locked
 ## Longest track name sent anywhere, for the same reason as MARKER_NAME_MAX.
 const TRACK_NAME_MAX := 64
 func add_track(at: int, track_name := "") -> void:
@@ -540,6 +559,8 @@ func remove_send(from_track: int, send_index: int) -> bool:
 
 func _do(verb: StringName, args: Array) -> void:
 	if Session.is_authority():
+		if locked_against(verb, args):
+			return
 		backend.callv(verb, args)
 		return
 	Session.send_intent(verb, args)
@@ -625,7 +646,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		var clean: Array = [int(args[0]), int(args[1])]
 		for v in args.slice(2):
 			clean.append(float(v))
-		if verb == &"set_item_muted":
+		if verb == &"set_item_muted" or verb == &"set_item_locked":
 			clean[2] = 1.0 if clean[2] > 0.5 else 0.0
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
@@ -743,6 +764,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		if not midi_take_refusal(args).is_empty():
 			return
 		args = MidiTake.clean_args(args)
+	if locked_against(verb, args):
+		return
 	backend.callv(verb, args)
 
 

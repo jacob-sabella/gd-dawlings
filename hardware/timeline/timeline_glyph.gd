@@ -113,6 +113,9 @@ func _build() -> void:
 		&"render_stems":
 			for k in 3:
 				_ring(Vector2(-0.5 + k * 0.5, 0.25 - k * 0.25), 0.42, 0.11)
+		&"lock":
+			_arc(Vector2(0, 0.15), 0.42, 0.0, 180.0, 0.12)
+			_box(Vector2(0, -0.35), Vector2(1.2, 0.95), 0.5)
 		&"mute":
 			_ring(Vector2.ZERO, 0.72, 0.15)
 			_rod(Vector2(-0.6, -0.6), Vector2(0.6, 0.6), 0.14, 0.3)

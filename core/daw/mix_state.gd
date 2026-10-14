@@ -153,6 +153,9 @@ class ItemState extends RefCounted:
 	var length: float = 0.0
 	var name: String = ""
 	var muted: bool = false
+	## Locked: it cannot be moved, trimmed, faded, cut, deleted or reshaped until it is unlocked
+	## (Reaper's item lock, C_LOCK). Muting, selecting and copying it are still allowed.
+	var locked: bool = false
 	## Selected in the DAW: what a split or a move acts on. The DAW's own selection, not this
 	## desk's, so a click in Reaper's window and a click on the desk are the same selection.
 	var selected: bool = false

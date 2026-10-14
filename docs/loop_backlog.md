@@ -3141,3 +3141,16 @@ the layout yet. Fine (shift) still lets go of any grid. Seen in a screenshot fro
 10022 checks, 0 failed. Known: the suite's teardown prints a SCRIPT ERROR from a callback in
 `scenes/studio.gd` (`_remember_tablets` called on a ChalkVenue) after the summary line; not from
 this change, not yet chased.
+
+## DAW parity, iteration 11: item lock (2026-10-14)
+`DAW.set_item_locked` and `MixState.ItemState.locked`. A locked item refuses a move, trim, gain,
+fades (so crossfade and normalise too), transpose, velocity and quantise, checked by the host for
+its own edits and a guest's (`DAW.locked_against`); a split or delete of the selection passes it
+by. Muting, selecting and copying it are still allowed, as in Reaper. The lock rides the item's
+optional dictionary on the wire, is saved in dawkit's clip (`DawKitClip.locked`, dawkit
+submodule bumped; dawproject has no lock, so it is not written there), and is Reaper's C_LOCK
+through the bridge (`SetItemLocked`, reported by GetTimeline; Split and Delete skip locked
+items there too) -- not yet run against a live Reaper. A padlock token on the ITEM page; while
+locked the shape's rails and keys are out of reach, the clip's thread is drawn white, and a drag
+on it is only a click. Item rails narrowed to keep the page on one row. Suite 10036 checks, 0
+failed; probe 0 failed; dawkit 359 checks, 0 failed. Seen in a screenshot from the seat.

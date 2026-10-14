@@ -746,6 +746,11 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 		_edit("SetItemMuted", [track_index, item_index, 1.0 if muted else 0.0])
 
 
+func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
+	if _locally_lock(track_index, item_index, locked):
+		_edit("SetItemLocked", [track_index, item_index, 1.0 if locked else 0.0])
+
+
 func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out: float) -> void:
 	_locally_shape(track_index, item_index, NAN, fade_in, fade_out)
 	_edit("SetItemFades", [track_index, item_index, fade_in, fade_out])
@@ -1061,6 +1066,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			# Reaper's default fade is a few milliseconds on every item; under that is no fade.
 			if shape["fade_in"] > FADE_FLOOR or shape["fade_out"] > FADE_FLOOR or absf(shape["gain_db"]) > 0.001:
 				extra.merge(shape)
+			if item.get("locked", false):
+				extra["locked"] = true
 			if not extra.is_empty():
 				packed.append(extra)
 		lanes[idx] = packed
