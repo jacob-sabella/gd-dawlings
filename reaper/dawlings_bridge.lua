@@ -1689,6 +1689,28 @@ function handlers.ShiftVelocity(args)
   return edited('Note velocity')
 end
 
+-- args: track, index: every note cut to half its length (a tick at least).
+function handlers.StaccatoItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local _, count = reaper.MIDI_CountEvts(take)
+      for n = 0, count - 1 do
+        local ok, sel, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
+        if ok then
+          local off = ppq_on + math.max((ppq_off - ppq_on) * 0.5, 1)
+          if off < ppq_off then reaper.MIDI_SetNote(take, n, sel, muted, ppq_on, off, chan, pitch, vel, true) end
+        end
+      end
+      reaper.MIDI_Sort(take)
+    end
+  end
+  return edited('Staccato')
+end
+
 -- args: track, index: every note made to end where the next later-starting one begins (any pitch,
 -- so a chord runs to the same place); the last keeps its length.
 function handlers.LegatoItem(args)

@@ -253,6 +253,12 @@ func _build() -> void:
 			_box(Vector2(-0.62, 0.45), Vector2(0.62, 0.38), 0.55)
 			_box(Vector2(0.0, 0.0), Vector2(0.62, 0.38), 0.55)
 			_box(Vector2(0.62, -0.45), Vector2(0.62, 0.38), 0.55)
+		&"staccato":
+			# Short notes with gaps between them.
+			_box(Vector2(-0.8, 0.0), Vector2(0.28, 0.38), 0.55)
+			_box(Vector2(-0.27, 0.0), Vector2(0.28, 0.38), 0.55)
+			_box(Vector2(0.26, 0.0), Vector2(0.28, 0.38), 0.55)
+			_box(Vector2(0.79, 0.0), Vector2(0.28, 0.38), 0.55)
 		&"swing":
 			# A swung pair: long, then short, on a line.
 			_box(Vector2(-0.42, 0.15), Vector2(0.95, 0.55), 0.5)

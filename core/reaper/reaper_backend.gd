@@ -958,6 +958,11 @@ func legato_item(track_index: int, item_index: int) -> void:
 		_edit("LegatoItem", [track_index, item_index])
 
 
+func staccato_item(track_index: int, item_index: int) -> void:
+	if _locally_staccato(track_index, item_index):
+		_edit("StaccatoItem", [track_index, item_index])
+
+
 ## Reaper skips muted notes when it counts, so the note goes by where it starts and its pitch.
 func set_note_velocity(track_index: int, item_index: int, note_index: int, velocity: int) -> void:
 	var item := state.item(track_index, item_index)

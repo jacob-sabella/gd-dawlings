@@ -3536,3 +3536,11 @@ end where the next later-starting note, of any pitch, begins: a chord's notes ru
 place, overlapping notes are cut back, the last note keeps its length. `DAW.legato_item` is an
 ITEM_EDITS intent (host authority, undoable, refused on locked items); Reaper's bridge has a
 `LegatoItem` handler (syntax-checked, not run against a live Reaper). Suite: 10415 checks, 0 failed.
+
+## 2026-10-14 -- iteration 39: staccato
+
+A STACCATO key beside LEGATO on the ITEM page (four short bricks with gaps) cuts every note of a
+MIDI item to half its length (never below `MidiTake.MIN_NOTE`). `DAW.staccato_item` is an
+ITEM_EDITS intent, undoable and refused on locked items; Reaper's bridge has a `StaccatoItem`
+handler (syntax-checked, not run against a live Reaper). Session probe not run: it is the same
+intent shape as legato. Suite: 10420 checks, 0 failed.

@@ -368,6 +368,7 @@ func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item nudged at random, up to `seconds` and `velocity`: see _locally_humanise.
 func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _velocity: int) -> void: pass
 func legato_item(_track_index: int, _item_index: int) -> void: pass
+func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
 func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> void: pass
@@ -1121,6 +1122,29 @@ func _locally_legato(track_index: int, item_index: int) -> bool:
 				next = on
 		if next < INF and not is_equal_approx(notes[n + 1], next):
 			notes[n + 1] = next
+			changed = true
+	if not changed:
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## Every note of a MIDI item cut to half its length, never below the shortest a note may be.
+## False when nothing changes.
+func _locally_staccato(track_index: int, item_index: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty():
+		return false
+	var notes := item.notes.duplicate()
+	var changed := false
+	for n in range(0, notes.size() - MidiTake.NOTE_WIDTH + 1, MidiTake.NOTE_WIDTH):
+		var length: float = notes[n + 1] - notes[n]
+		var short := maxf(length * 0.5, MidiTake.MIN_NOTE)
+		if short < length - 0.0001:
+			notes[n + 1] = notes[n] + short
 			changed = true
 	if not changed:
 		return false
