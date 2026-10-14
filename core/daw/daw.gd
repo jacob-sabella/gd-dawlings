@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
@@ -465,6 +465,11 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 	_do(&"set_item_muted", [track_index, item_index, 1.0 if muted else 0.0])
 
 
+## An audio item played backwards, or forwards again (MixState.ItemState.reversed). One undo step.
+func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> void:
+	_do(&"set_item_reversed", [track_index, item_index, 1.0 if reversed else 0.0])
+
+
 ## Lock an item against edits, or unlock it (MixState.ItemState.locked). One undo step.
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	_do(&"set_item_locked", [track_index, item_index, 1.0 if locked else 0.0])
@@ -474,7 +479,7 @@ func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
 const LOCKED_REFUSES := [&"move_item", &"trim_item", &"set_item_gain", &"set_item_fades",
-		&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item"]
+		&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_item_reversed"]
 
 
 func locked_against(verb: StringName, args: Array) -> bool:
@@ -686,7 +691,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		var clean: Array = [int(args[0]), int(args[1])]
 		for v in args.slice(2):
 			clean.append(float(v))
-		if verb == &"set_item_muted" or verb == &"set_item_locked":
+		if verb in [&"set_item_muted", &"set_item_locked", &"set_item_reversed"]:
 			clean[2] = 1.0 if clean[2] > 0.5 else 0.0
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)

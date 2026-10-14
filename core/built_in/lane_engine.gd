@@ -200,10 +200,11 @@ func _item_clips(t: MixState.TrackState, it: MixState.ItemState, a: float, b: fl
 			"fade_in": it.fade_in if is_equal_approx(a, it.start) else 0.0,
 			"fade_out": it.fade_out if is_equal_approx(b, it.end()) else 0.0}
 	if not it.source.is_empty():
-		var wav := backend.take_stream(it.source)
+		var wav := backend.take_stream(it.source, it.reversed)
 		if wav == null:
 			return []
-		var c := _clip(base, "take:" + it.source, wav, a, b, it.source_offset + a - it.start)
+		var c := _clip(base, ("rtake:" if it.reversed else "take:") + it.source, wav, a, b,
+				it.source_offset + a - it.start)
 		if it.is_looped():
 			c["loop_start"] = it.loop_start
 			c["loop_end"] = it.loop_end

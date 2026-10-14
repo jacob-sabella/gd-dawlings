@@ -761,6 +761,11 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 		_edit("SetItemMuted", [track_index, item_index, 1.0 if muted else 0.0])
 
 
+func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> void:
+	if _locally_reverse(track_index, item_index, reversed):
+		_edit("SetItemReversed", [track_index, item_index, 1.0 if reversed else 0.0])
+
+
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	if _locally_lock(track_index, item_index, locked):
 		_edit("SetItemLocked", [track_index, item_index, 1.0 if locked else 0.0])
@@ -1095,8 +1100,12 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			var source := str(item.get("source", "")).get_file()
 			var extra := {}
 			if take_peaks.has(source):
-				extra = {"source": source, "offset": float(item.get("offset", 0.0)),
-						"peaks": take_peaks[source]}
+				var overview: PackedByteArray = take_peaks[source]
+				if item.get("reversed", false):
+					overview = overview.duplicate()
+					overview.reverse()
+					extra["reversed"] = true
+				extra.merge({"source": source, "offset": float(item.get("offset", 0.0)), "peaks": overview})
 			# The item's fades and its own volume, which the desk can change too.
 			var gain := float(item.get("gain", 1.0))
 			var shape := {"fade_in": float(item.get("fade_in", 0.0)), "fade_out": float(item.get("fade_out", 0.0)),

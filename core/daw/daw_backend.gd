@@ -330,6 +330,8 @@ func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> voi
 func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item nudged at random, up to `seconds` and `velocity`: see _locally_humanise.
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
+## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
+func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> void: pass
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
 ## of the song's beat grid, keeping its length.
 func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float, _swing := 0.0) -> void: pass
@@ -492,6 +494,7 @@ func _locally_split(seconds: float) -> int:
 				right.selected = true
 				right.source = item.source
 				right.peaks = item.peaks
+				right.reversed = item.reversed
 				right.source_offset = item.source_offset + (seconds - item.start)
 				# Each half keeps the end it had: the fade in stays on the left, the fade out goes
 				# with the right, and both keep the clip's gain.
@@ -645,6 +648,31 @@ func _locally_trim(track_index: int, item_index: int, start: float, end: float) 
 	it.fade_in = minf(it.fade_in, it.length)
 	it.fade_out = minf(it.fade_out, it.length - it.fade_in)
 	_write_lane(track_index, lane)
+
+
+## How long an item's file is, in seconds: from its overview here, to a fiftieth of a second; a
+## backend that has the sound itself says exactly.
+func source_seconds(item: MixState.ItemState) -> float:
+	return float(item.peaks.size()) / float(AudioTake.PEAKS_PER_SECOND)
+
+
+## False when there is no such item, it already is as asked, or it cannot be: a MIDI item (it has
+## no sound to turn round) or a looped one (its loop is in the file's forward time). The offset
+## turns round with the sound -- what was the item's right edge in the file is its left -- and the
+## overview with it.
+func _locally_reverse(track_index: int, item_index: int, reversed: bool) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.reversed == reversed or it.source.is_empty() or it.is_looped():
+		return false
+	var lane := _lane_copy(track_index)
+	var item: MixState.ItemState = lane[item_index]
+	item.source_offset = maxf(source_seconds(it) - it.source_offset - it.length, 0.0)
+	var flipped := item.peaks.duplicate()
+	flipped.reverse()
+	item.peaks = flipped
+	item.reversed = reversed
+	_write_lane(track_index, lane)
+	return true
 
 
 ## False when there is no such item or it already is as asked.

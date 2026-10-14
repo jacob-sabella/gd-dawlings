@@ -146,6 +146,7 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 	c.name = item.name
 	c.muted = item.muted
 	c.locked = item.locked
+	c.reversed = item.reversed
 	c.source = item.source
 	c.source_offset = item.source_offset
 	c.notes = PackedFloat64Array(Array(item.notes))
@@ -274,6 +275,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 			item.name = c.name
 			item.muted = c.muted
 			item.locked = c.locked
+			item.reversed = c.reversed
 			item.source = c.source
 			item.source_offset = c.source_offset
 			item.notes = PackedFloat32Array(Array(c.notes))

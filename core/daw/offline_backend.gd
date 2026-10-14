@@ -1003,6 +1003,12 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 		_remember_edit(before)
 
 
+func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> void:
+	var before := _lanes_snapshot()
+	if _locally_reverse(track_index, item_index, reversed):
+		_remember_edit(before)
+
+
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	var before := _lanes_snapshot()
 	if _locally_lock(track_index, item_index, locked):

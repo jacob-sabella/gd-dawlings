@@ -169,8 +169,12 @@ class ItemState extends RefCounted:
 	## A recorded take's file, by name, in the host's AudioTake.DIR; empty for anything else. A
 	## name and not a path, so a guest holding the item learns nothing about the host's disk.
 	var source: String = ""
-	## Seconds into the file at the item's left edge: not zero once the item has been split.
+	## Seconds into the file at the item's left edge: not zero once the item has been split. For
+	## a reversed item, seconds into the reversed sound.
 	var source_offset: float = 0.0
+	## Played backwards (Reaper's take reverse). Its `peaks` are the reversed sound's, so it is
+	## drawn as it sounds.
+	var reversed: bool = false
 	## The file's overview, AudioTake.PEAKS_PER_SECOND bytes a second, for drawing.
 	var peaks := PackedByteArray()
 	## Linear fade lengths at each end, in seconds, and the clip's own gain.

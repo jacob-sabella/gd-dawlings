@@ -706,9 +706,16 @@ function handlers.GetTimeline()
       end
       -- An audio item's file, by name only, and how far into it the item begins: what lets the
       -- desk draw a guest's take it recorded, split or moved in Reaper or not.
-      local source, offset = '', 0
+      local source, offset, reversed = '', 0, false
       if take and not reaper.TakeIsMIDI(take) then
         local src = reaper.GetMediaItemTake_Source(take)
+        -- A reversed take plays a section of its file: the file is its parent's.
+        if src then
+          local _, _, _, rev = reaper.PCM_Source_GetSectionInfo(src)
+          reversed = rev == true
+          local parent = reaper.GetMediaSourceParent(src)
+          if parent then src = parent end
+        end
         local path = src and reaper.GetMediaSourceFileName(src, '') or ''
         source = path:match('([^/\\]+)$') or ''
         offset = reaper.GetMediaItemTakeInfo_Value(take, 'D_STARTOFFS')
@@ -723,6 +730,7 @@ function handlers.GetTimeline()
         notes = item_notes(it, take),
         source = source,
         offset = offset,
+        reversed = reversed,
         fade_in = reaper.GetMediaItemInfo_Value(it, 'D_FADEINLEN'),
         fade_out = reaper.GetMediaItemInfo_Value(it, 'D_FADEOUTLEN'),
         gain = reaper.GetMediaItemInfo_Value(it, 'D_VOL'),
@@ -1474,6 +1482,27 @@ function handlers.SetItemMuted(args)
   reaper.Undo_BeginBlock()
   reaper.SetMediaItemInfo_Value(it, 'B_MUTE', (args[3] or 0) > 0.5 and 1 or 0)
   return edited('Item mute')
+end
+
+-- args: track, index, 1 to play it backwards, 0 forwards. Reaper reverses a take with an action
+-- on the selected items (Item properties: Toggle take reverse), so the item is made the selection
+-- for it and the selection put back after, in the one undo point.
+function handlers.SetItemReversed(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local take = reaper.GetActiveTake(it)
+  if not take or reaper.TakeIsMIDI(take) then return {ok = false, error = 'not an audio item'} end
+  local _, _, _, rev = reaper.PCM_Source_GetSectionInfo(reaper.GetMediaItemTake_Source(take))
+  if (rev == true) == ((args[3] or 0) > 0.5) then return {ok = true} end
+  local was = {}
+  for n = 0, reaper.CountSelectedMediaItems(0) - 1 do was[#was + 1] = reaper.GetSelectedMediaItem(0, n) end
+  reaper.Undo_BeginBlock()
+  unselect_all()
+  reaper.SetMediaItemSelected(it, true)
+  reaper.Main_OnCommand(41051, 0)
+  unselect_all()
+  for _, w in ipairs(was) do reaper.SetMediaItemSelected(w, true) end
+  return edited('Reverse item')
 end
 
 -- args: track, index, 1 to lock, 0 to unlock. Reaper's own item lock (C_LOCK's first bit).

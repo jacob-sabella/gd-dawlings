@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 17
+Iterations done: 18
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -25,7 +25,7 @@ Iterations done: 17
 - [x] crossfade between two overlapping items on a track (2026-10-14; linear fades, not equal-power)
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)
-- [ ] item reverse (missing)
+- [x] item reverse (2026-10-14; audio items, not looped ones; a token on the ITEM page; Reaper's take reverse through the bridge, not yet run against a live Reaper)
 - [ ] time-stretch, warp, item pitch shift (missing)
 - [x] drags snap to the beat unless fine (`TimelineLanes.snap`; the first audit missed it)
 - [x] a choosable grid: bar, beat, half and quarter beats, or free (2026-10-14; each person's own, not saved)

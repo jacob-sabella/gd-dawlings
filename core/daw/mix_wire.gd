@@ -514,6 +514,7 @@ static func _unpack_items(args: Array) -> Array:
 			item.fade_out = maxf(float(audio.get("fade_out", 0.0)), 0.0)
 			item.gain_db = float(audio.get("gain_db", 0.0))
 			item.locked = bool(audio.get("locked", false))
+			item.reversed = bool(audio.get("reversed", false))
 			var loop: Array = audio.get("loop", [])
 			if loop.size() == 2:
 				item.loop_start = maxf(float(loop[0]), 0.0)
@@ -548,6 +549,8 @@ static func _pack_items(items: Array) -> Array:
 					extra["loop"] = [item.loop_start, item.loop_end]
 			if item.locked:
 				extra["locked"] = true
+			if item.reversed:
+				extra["reversed"] = true
 			out.append(extra)
 	return out
 

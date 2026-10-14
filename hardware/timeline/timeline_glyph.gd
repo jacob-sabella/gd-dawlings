@@ -158,6 +158,14 @@ func _build() -> void:
 			_box(Vector2(-0.7, 0.45), Vector2(0.4, 0.3), 0.55)
 			_box(Vector2(0.0, -0.2), Vector2(0.4, 0.3), 0.55)
 			_box(Vector2(0.7, 0.2), Vector2(0.4, 0.3), 0.55)
+		&"reverse":
+			# A wave's swell, and an arrow back along it.
+			_box(Vector2(-0.6, 0.3), Vector2(0.18, 0.25), 0.4)
+			_box(Vector2(-0.25, 0.3), Vector2(0.18, 0.55), 0.4)
+			_box(Vector2(0.1, 0.3), Vector2(0.18, 0.85), 0.4)
+			_box(Vector2(0.45, 0.3), Vector2(0.18, 1.1), 0.4)
+			_rod(Vector2(0.75, -0.6), Vector2(-0.45, -0.6), 0.08, 0.35)
+			_cone(Vector2(-0.45, -0.6), Vector2(-1, 0), 0.25, 0.4)
 		&"humanise":
 			# Notes as a hand plays them: off the grid, each its own size and lean.
 			_box(Vector2(-0.62, 0.42), Vector2(0.55, 0.36), 0.55, 0.0, 14.0)

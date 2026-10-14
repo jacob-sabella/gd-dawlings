@@ -3227,3 +3227,22 @@ and 20 fine. Suite 10132 checks, 0 failed; probe 0 failed.
 Also: an empty `/timeline/markers` was ignored, so removing the last marker never reached a guest,
 a snapshot left markers out when there were none, and Reaper reporting none left the cache's old
 ones in place. Now an empty list is no markers, and the snapshot always carries them.
+
+## DAW parity, iteration 18: item reverse (2026-10-14)
+`DAW.set_item_reversed` and `MixState.ItemState.reversed`, one undo step, refused for a locked,
+MIDI or looped item. A reversed item's `source_offset` is seconds into the reversed sound, so a
+split, trim or move of one is the same arithmetic as of a forward one; reversing turns the offset
+round (file length - offset - length) and the item's overview with it, so it is drawn as it
+sounds. The file's length is the engine's to the sample (`GodotBackend.source_seconds`), else the
+overview's to a fiftieth. The built-in engine plays `take_stream(source, true)`: the take's frames
+in the other order, cached; stereo 16-bit (a take) as int32 words reversed at once, other 8/16-bit
+layouts frame by frame; a compressed stream (IMA ADPCM, QOA) cannot be, and plays nothing.
+On the wire in the item's optional dictionary; saved in dawkit's `DawKitClip.reversed` (5fbd49c,
+submodule bumped), which also now keeps a clip's lock through a dawproject file -- it was lost
+there before. Reaper: the bridge reports a reversed take (PCM_Source_GetSectionInfo, its file
+from the section's parent) and `SetItemReversed` runs Toggle take reverse (41051) on the item
+alone, putting the selection back after. Whether Reaper's D_STARTOFFS on a reversed take is in
+reversed time, as this assumes, is unchecked -- not yet run against a live Reaper.
+A REVERSE token (a swell and an arrow back along it) beside LOCK on the ITEM page.
+Known: a project loaded from a file gives its audio items no overview (peaks), reversed or not --
+they draw blank until re-recorded. Not from this change.

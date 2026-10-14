@@ -839,7 +839,7 @@ func _sync_players() -> void:
 				stream = looped_stream(it.source, it.loop_start, it.loop_end)
 				loop_length = it.loop_end - it.loop_start
 			else:
-				stream = take_stream(it.source)
+				stream = take_stream(it.source, it.reversed)
 			expected = it.file_time(pos)
 			if stream != null and not it.is_looped() and expected >= stream.get_length():
 				stream = null
@@ -1115,11 +1115,51 @@ static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int) ->
 
 
 ## A recorded take's sound, read from the host's takes folder once and kept.
-func take_stream(source: String) -> AudioStreamWAV:
+func take_stream(source: String, reversed := false) -> AudioStreamWAV:
+	if reversed:
+		var key := "~" + source
+		if not _take_streams.has(key):
+			_take_streams[key] = reversed_stream(take_stream(source))
+		return _take_streams[key]
 	if not _take_streams.has(source):
 		var path := media_path(source)
 		_take_streams[source] = AudioStreamWAV.load_from_file(path) if FileAccess.file_exists(path) else null
 	return _take_streams[source]
+
+
+## The file's own length, to the sample, when the engine has it.
+func source_seconds(item: MixState.ItemState) -> float:
+	var wav := take_stream(item.source)
+	return wav.get_length() if wav != null else super.source_seconds(item)
+
+
+## `wav` played backwards: its frames in the other order. Godot loads a file as 8- or 16-bit
+## PCM; a compressed stream (IMA ADPCM, QOA) cannot be turned round frame by frame, and is null.
+## Stereo 16-bit -- what a take is -- is one 32-bit word a frame, and reversed as such at once.
+static func reversed_stream(wav: AudioStreamWAV) -> AudioStreamWAV:
+	if wav == null or wav.format not in [AudioStreamWAV.FORMAT_8_BITS, AudioStreamWAV.FORMAT_16_BITS]:
+		return null
+	var width := (1 if wav.format == AudioStreamWAV.FORMAT_8_BITS else 2) * (2 if wav.stereo else 1)
+	var data := wav.data
+	var out: PackedByteArray
+	if width == 4:
+		var words := data.slice(0, data.size() - data.size() % 4).to_int32_array()
+		words.reverse()
+		out = words.to_byte_array()
+	elif width == 1:
+		out = data.duplicate()
+		out.reverse()
+	else:
+		var frames := data.size() / width
+		out = PackedByteArray()
+		out.resize(frames * width)
+		for f in frames:
+			for b in width:
+				out[f * width + b] = data[(frames - 1 - f) * width + b]
+	var back := wav.duplicate() as AudioStreamWAV
+	back.data = out
+	back.loop_mode = AudioStreamWAV.LOOP_DISABLED
+	return back
 
 
 ## The same sound set to loop between two points in the file, made once per loop asked for:

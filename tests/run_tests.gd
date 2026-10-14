@@ -293,6 +293,7 @@ func _ready() -> void:
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
+	_test_an_item_plays_backwards()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -19254,3 +19255,95 @@ func _test_notes_are_humanised() -> void:
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()
+
+
+func _test_an_item_plays_backwards() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	# Two seconds rising from silence, so which end is which can be heard.
+	var take := AudioTake.create("suite-reverse-take.wav")
+	var ramp := PackedVector2Array()
+	ramp.resize(AudioTake.RATE * 2)
+	for i in ramp.size():
+		ramp[i] = Vector2.ONE * 0.9 * float(i) / ramp.size()
+	take.append(AudioTake.encode(ramp))
+	take.finish()
+	var lane := 6
+	s.track(lane).items.clear()
+	DAW.insert_audio_take(lane, 300.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 1")
+	DAW.select_item(lane, 0, false)
+	DAW.split_selected(300.25)
+	DAW.clear_item_selection()
+	DAW.select_item(lane, 1, false)
+	DAW.split_selected(301.25)
+	DAW.clear_item_selection()
+	var mid: MixState.ItemState = s.item(lane, 1)
+	check("the middle of the take, a quarter second in, a second long",
+			is_equal_approx(mid.source_offset, 0.25) and is_equal_approx(mid.length, 1.0))
+	close_to("the engine knows the file's length to the sample", backend.source_seconds(mid), 2.0, 0.001)
+	var forward_peaks := mid.peaks
+	var depth := maxi(s.undo_depth, 0)
+	DAW.set_item_reversed(lane, 1, true)
+	mid = s.item(lane, 1)
+	check("reversed", mid.reversed and s.undo_depth - depth == 1)
+	close_to("its offset is now into the reversed sound: what was its right edge", mid.source_offset, 0.75, 0.001)
+	var back := forward_peaks.duplicate()
+	back.reverse()
+	check("and its overview turned round, so it is drawn as it sounds", mid.peaks == back)
+	var fwd := backend.take_stream(take.file_name())
+	var rev := backend.take_stream(take.file_name(), true)
+	check("the engine has the sound backwards", rev != null and rev != fwd and rev.data.size() == fwd.data.size()
+			and rev.data.slice(0, 4) == fwd.data.slice(fwd.data.size() - 4))
+	s.position_seconds = 300.35
+	s.playing = true
+	backend._sync_players()
+	var own: AudioStreamPlayer = backend._players[lane][0]
+	check("and plays it for the reversed item", own.playing and own.stream == rev)
+	close_to("from where the item is in it", mid.file_time(300.35), 0.85, 0.001)
+	s.playing = false
+	backend._sync_players()
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest sees it reversed", guest.item(lane, 1) != null and guest.item(lane, 1).reversed)
+	var p := ProjectBridge.capture(backend)
+	check("and it is saved reversed", p.track("t%d" % lane).clips[1].reversed)
+	DAW.set_item_reversed(lane, 1, false)
+	close_to("forwards again, its offset is back", s.item(lane, 1).source_offset, 0.25, 0.001)
+	DAW.undo()
+	DAW.undo()
+	check("undone", not s.item(lane, 1).reversed)
+	check("a guest may ask", &"set_item_reversed" in DAW.COMMANDS)
+	DAW.insert_midi_take(lane, 320.0, 322.0, [[320.0, 320.5, 60, 100, 0]], "Keys")
+	var midi_index := s.track(lane).items.size() - 1
+	DAW.set_item_reversed(lane, midi_index, true)
+	check("a MIDI item is not reversed", not s.item(lane, midi_index).reversed)
+	DAW.set_item_locked(lane, 1, true)
+	DAW.set_item_reversed(lane, 1, true)
+	check("nor a locked one", not s.item(lane, 1).reversed)
+	DAW.set_item_locked(lane, 1, false)
+
+	var mono := AudioStreamWAV.new()
+	mono.format = AudioStreamWAV.FORMAT_16_BITS
+	mono.data = PackedByteArray([1, 2, 3, 4, 5, 6])
+	check("a mono stream turns round frame by frame",
+			GodotBackend.reversed_stream(mono).data == PackedByteArray([5, 6, 3, 4, 1, 2]))
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.select_item(lane, 1, false)
+	page.refresh()
+	check("a REVERSE token on the item page, in reach and dark", page.reverse != null
+			and page.reverse.glyph == &"reverse" and page.reverse.available and not page.reverse.lit)
+	page.reverse.pressed.emit()
+	check("pressed, the item is reversed and the token lit", s.item(lane, 1).reversed and page.reverse.lit)
+	DAW.select_item(lane, midi_index, false)
+	page.refresh()
+	check("out of reach for a MIDI item", not page.reverse.available)
+	DAW.clear_item_selection()
+	timeline.free()
+	DirAccess.remove_absolute(backend.media_path(take.file_name()))
+	_offline()
