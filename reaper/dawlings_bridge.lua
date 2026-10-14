@@ -1606,6 +1606,25 @@ function handlers.SetItemFades(args)
   return edited('Item fades')
 end
 
+-- args: track, earlier item, later item, overlap (seconds). The earlier faded out and the later in
+-- over the overlap, both in the desk's equal-power shape (Reaper's 1): one undo point.
+function handlers.CrossfadeItems(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local items = sorted_items(tr)
+  local a, b = items[math.floor(args[2] or -1) + 1], items[math.floor(args[3] or -1) + 1]
+  if not a or not b then return {ok = false, error = 'no such item'} end
+  local overlap = math.max(0, args[4] or 0)
+  reaper.Undo_BeginBlock()
+  reaper.SetMediaItemInfo_Value(a, 'D_FADEOUTLEN', overlap)
+  reaper.SetMediaItemInfo_Value(b, 'D_FADEINLEN', overlap)
+  for _, it in ipairs({a, b}) do
+    reaper.SetMediaItemInfo_Value(it, 'C_FADEINSHAPE', 1)
+    reaper.SetMediaItemInfo_Value(it, 'C_FADEOUTSHAPE', 1)
+  end
+  return edited('Crossfade items')
+end
+
 -- args: track, index, shape (0 linear, 1 equal power: Reaper's shape 1 at both ends).
 function handlers.SetItemFadeShape(args)
   local it = item_at(args)

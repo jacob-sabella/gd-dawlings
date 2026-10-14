@@ -3367,3 +3367,16 @@ curve is unchecked against a live Reaper. `tools/screenshot.gd --tl-fade T:I:S[:
 Split out, still missing: other shapes, a shape per end, and CROSSFADE choosing equal power
 itself (it is still two plain fade edits).
 Suite: 10270 checks, 0 failed; probe host 53, guest 47, 0 failed; dawkit 371 checks, 0 failed.
+
+## DAW parity, iteration 27: equal-power crossfades, one edit (2026-10-14)
+CROSSFADE was two `set_item_fades` edits (two undo steps) of straight fades, which dip a
+crossfade of unrelated sound by 3 dB in its middle. Now `DAW.crossfade_items` is one item edit,
+`crossfade_items` on the backend: the earlier item faded out and the later in over the overlap,
+both equal-power (the shape is the item's, so its other end's fade becomes equal-power too, until
+there is a shape per end). The two levels' powers add to one across it, which the suite checks
+halfway. Refused with either item locked, by the desk and by the host for a guest's ask
+(`DAWBackend.crossfade_of` works out which is earlier and the overlap for both). Reaper:
+CrossfadeItems in the bridge sets both lengths and shape 1 at both ends of both in one undo point
+-- not yet run against a live Reaper. `tools/screenshot.gd --tl-xfade T:I` copies an item to
+halfway along itself and crossfades the two; the shot shows two bowed lines crossing.
+Suite: 10278 checks, 0 failed; probe host 53, guest 47, 0 failed.

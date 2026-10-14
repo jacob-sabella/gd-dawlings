@@ -115,6 +115,9 @@ var _recover := false
 ## `--tl-fade T:I:S[:shape]`: item I of track T given fades of S seconds at each end, frame 7,
 ## and with a shape (1: equal power) that shape too.
 var _tl_fade := ""
+## `--tl-xfade T:I`: item I of track T copied to start halfway along itself, and the two
+## crossfaded over the overlap, frame 7.
+var _tl_xfade := ""
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -233,6 +236,8 @@ func _ready() -> void:
 				_autosave = true
 			"--recover":
 				_recover = true
+			"--tl-xfade":
+				if i + 1 < args.size(): _tl_xfade = args[i + 1]
 			"--tl-fade":
 				if i + 1 < args.size(): _tl_fade = args[i + 1]
 			"--tl-region":
@@ -308,6 +313,18 @@ func _process(_delta: float) -> void:
 	if _frames == 5 and _reopen:
 		var path := ProjectSettings.globalize_path("user://shot_reopen.dawproject")
 		print("SHOT_REOPEN ", DAW.save_project_as(path), DAW.open_project(path))
+	if _frames == 7 and _tl_xfade != "":
+		var x := _tl_xfade.split(":")
+		var it: MixState.ItemState = DAW.state.item(int(x[0]), int(x[1])) if x.size() == 2 else null
+		if it != null:
+			var at := it.start + it.length * 0.5
+			DAW.select_item(int(x[0]), int(x[1]), false)
+			DAW.copy_selected_to(at)
+			DAW.clear_item_selection()
+			var items: Array = DAW.state.track(int(x[0])).items
+			for k in items.size():
+				if is_equal_approx(items[k].start, at):
+					DAW.crossfade_items(int(x[0]), int(x[1]), k)
 	if _frames == 7 and _tl_fade != "":
 		var f := _tl_fade.split(":")
 		if f.size() >= 3:

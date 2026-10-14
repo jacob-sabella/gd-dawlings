@@ -1106,6 +1106,12 @@ func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 		_remember_edit(before)
 
 
+func crossfade_items(track_index: int, first: int, second: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_crossfade(track_index, first, second):
+		_remember_edit(before)
+
+
 func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_fade_shape(track_index, item_index, shape):

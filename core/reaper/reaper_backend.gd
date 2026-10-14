@@ -787,6 +787,12 @@ func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> voi
 		_edit("SetItemReversed", [track_index, item_index, 1.0 if reversed else 0.0])
 
 
+func crossfade_items(track_index: int, first: int, second: int) -> void:
+	var x := crossfade_of(track_index, first, second)
+	if _locally_crossfade(track_index, first, second):
+		_edit("CrossfadeItems", [track_index, x[0], x[1], x[2]])
+
+
 func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
 	if _locally_fade_shape(track_index, item_index, shape):
 		_edit("SetItemFadeShape", [track_index, item_index, shape])

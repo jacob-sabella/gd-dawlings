@@ -13737,9 +13737,27 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	var x_second := s.track(lane).items.size() - 1
 	var x_overlap: float = x_a.end() - s.item(lane, x_second).start
 	check("a copy half way along overlaps its original (%.2f)" % x_overlap, x_overlap > 0.1)
+	var x_steps := s.undo_depth
 	check("two overlapping items crossfade", DAW.crossfade_items(lane, 0, x_second))
 	check("the earlier fades out and the later in over the overlap (%.2f, %.2f)" % [s.item(lane, 0).fade_out, s.item(lane, x_second).fade_in],
 			absf(s.item(lane, 0).fade_out - x_overlap) < 0.001 and absf(s.item(lane, x_second).fade_in - x_overlap) < 0.001)
+	check("both equal-power, so the middle holds its loudness",
+			s.item(lane, 0).fade_shape == DawKitClip.FADE_EQUAL_POWER and s.item(lane, x_second).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("in one step to undo", s.undo_depth - x_steps == 1)
+	close_to("halfway across, the two together carry the power of one",
+			pow(db_to_linear(s.item(lane, 0).level_db(s.item(lane, x_second).start + x_overlap * 0.5)), 2.0)
+			+ pow(db_to_linear(s.item(lane, x_second).level_db(s.item(lane, x_second).start + x_overlap * 0.5)), 2.0), 1.0)
+	DAW.undo()
+	check("undone, both as they were", s.item(lane, 0).fade_out == 0.0 and s.item(lane, 0).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.apply_intent(&"crossfade_items", [lane, 0, x_second])
+	check("a guest may ask for one", absf(s.item(lane, x_second).fade_in - x_overlap) < 0.001)
+	DAW.undo()
+	DAW.set_item_locked(lane, x_second, true)
+	check("not with a locked item", not DAW.crossfade_items(lane, 0, x_second) and s.item(lane, 0).fade_out == 0.0)
+	DAW.apply_intent(&"crossfade_items", [lane, 0, x_second])
+	check("not even when a guest asks", s.item(lane, 0).fade_out == 0.0)
+	DAW.set_item_locked(lane, x_second, false)
+	check("again", DAW.crossfade_items(lane, 0, x_second))
 	check("either way round", DAW.crossfade_items(lane, x_second, 0))
 	check("an item is not crossfaded with itself", not DAW.crossfade_items(lane, 0, 0))
 	check("nor with one that is not there", not DAW.crossfade_items(lane, 0, 999))

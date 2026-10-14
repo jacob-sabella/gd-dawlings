@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 26
+Iterations done: 27
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -22,7 +22,7 @@ Iterations done: 26
 - [x] select all items (2026-10-14), select, move (across tracks), split, delete, duplicate, trim with source offset
 - [x] item gain, fade in/out (linear), loop points on an item
 - [x] item mute (2026-10-14)
-- [x] crossfade between two overlapping items on a track (2026-10-14; linear fades, not equal-power)
+- [x] crossfade between two overlapping items on a track (2026-10-14; equal-power since iteration 27, one edit)
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)
 - [x] item reverse (2026-10-14; audio items, not looped ones; a token on the ITEM page; Reaper's take reverse through the bridge, not yet run against a live Reaper)
@@ -43,7 +43,7 @@ Iterations done: 26
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track
 - [x] duplicate track (2026-10-14; settings, effects and theirs, sends, items and lanes, under the same name, not armed; a token on the TRACK page; Reaper's 40062 through the bridge, not yet run against a live Reaper)
 - [x] equal-power fades (2026-10-14; per item, both ends, linear or a quarter sine, played by dawkit's lane, drawn as a curve, saved; a token on the ITEM page; Reaper's C_FADEINSHAPE 1 through the bridge, not yet run against a live Reaper)
-- [ ] more fade shapes (slow, fast, S-curve), a shape per end, CROSSFADE making equal-power fades itself (missing)
+- [ ] more fade shapes (slow, fast, S-curve), a shape per end (missing)
 - [x] nudge the selection by the grid (2026-10-14; a bar, a beat or part of one along the tempo map, ten milliseconds with no grid or fine; two tokens on the ITEM page; Reaper path not run against a live Reaper)
 - [ ] glue items into one (missing)
 - [x] clear all solos / clear all mutes (2026-10-14)

@@ -312,6 +312,10 @@ func ripple_trim_item(_track_index: int, _item_index: int, _start: float, _end: 
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
+## Two overlapping items of a track faded into each other over the overlap, the earlier out and
+## the later in, both equal-power. One undo step; nothing when they do not overlap or either is
+## locked.
+func crossfade_items(_track_index: int, _first: int, _second: int) -> void: pass
 ## How an item's fades run: DawKitClip.FADE_LINEAR or FADE_EQUAL_POWER. One undo step; none when it
 ## already is.
 func set_item_fade_shape(_track_index: int, _item_index: int, _shape: int) -> void: pass
@@ -781,6 +785,39 @@ func _locally_reverse(track_index: int, item_index: int, reversed: bool) -> bool
 
 
 ## False when there is no such item or it already is as asked.
+## [earlier, later, overlap] of a crossfade between two items, or [] when there is none to make.
+func crossfade_of(track_index: int, first: int, second: int) -> Array:
+	var a := state.item(track_index, first)
+	var b := state.item(track_index, second)
+	if a == null or b == null or first == second or a.locked or b.locked:
+		return []
+	if b.start < a.start:
+		var swap := first
+		first = second
+		second = swap
+		a = state.item(track_index, first)
+		b = state.item(track_index, second)
+	var overlap := minf(a.end(), b.end()) - b.start
+	return [first, second, overlap] if overlap >= MIN_ITEM_SECONDS else []
+
+
+## False when there is no crossfade to make.
+func _locally_crossfade(track_index: int, first: int, second: int) -> bool:
+	var x := crossfade_of(track_index, first, second)
+	if x.is_empty():
+		return false
+	var lane := _lane_copy(track_index)
+	var a: MixState.ItemState = lane[x[0]]
+	var b: MixState.ItemState = lane[x[1]]
+	a.fade_out = minf(x[2], a.length - a.fade_in)
+	b.fade_in = x[2]
+	b.fade_out = minf(b.fade_out, b.length - b.fade_in)
+	a.fade_shape = DawKitClip.FADE_EQUAL_POWER
+	b.fade_shape = DawKitClip.FADE_EQUAL_POWER
+	_write_lane(track_index, lane)
+	return true
+
+
 ## False when there is no such item or it already is as asked.
 func _locally_fade_shape(track_index: int, item_index: int, shape: int) -> bool:
 	var it := state.item(track_index, item_index)

@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 3, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
@@ -474,9 +474,9 @@ func set_item_fades(track_index: int, item_index: int, fade_in: float, fade_out:
 func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
 	_do(&"set_item_fade_shape", [track_index, item_index, shape])
 ## Two items of one track that overlap, faded into each other over the overlap: the earlier one
-## out, the later one in, through `set_item_fades`, so it is two ordinary edits and nothing new on
-## the wire. Straight lines in amplitude, as every fade here is. False when they are not two items
-## of one track, or do not overlap.
+## out, the later one in, both equal-power so the sound holds its loudness through the middle --
+## one edit (DAWBackend.crossfade_items). False when they are not two items of one track, do not
+## overlap, or either is locked.
 func crossfade_items(track_index: int, first: int, second: int) -> bool:
 	var a := state.item(track_index, first)
 	var b := state.item(track_index, second)
@@ -487,12 +487,9 @@ func crossfade_items(track_index: int, first: int, second: int) -> bool:
 		a = b
 		b = swap
 	var overlap := minf(a.end(), b.end()) - b.start
-	if overlap < DAWBackend.MIN_ITEM_SECONDS:
+	if overlap < DAWBackend.MIN_ITEM_SECONDS or a.locked or b.locked:
 		return false
-	var a_in := a.fade_in
-	var b_out := b.fade_out
-	set_item_fades(track_index, a.index, a_in, overlap)
-	set_item_fades(track_index, b.index, overlap, b_out)
+	_do(&"crossfade_items", [track_index, first, second])
 	return true
 func set_item_muted(track_index: int, item_index: int, muted: bool) -> void:
 	_do(&"set_item_muted", [track_index, item_index, 1.0 if muted else 0.0])

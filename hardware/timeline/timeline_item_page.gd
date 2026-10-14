@@ -89,7 +89,7 @@ func _ready() -> void:
 	loop_to = _key("ItemLoop", &"loop", GO_INK, "ITEM  LOOP IT", func(): DAW.loop_selected_items(),
 			func() -> String: return "loop from the start of the selection to its end")
 	crossfade = _key("ItemCrossfade", &"crossfade", EDIT_INK, "ITEM  CROSSFADE", _crossfade,
-			func() -> String: return "fade the earlier out and the later in, over the overlap" if crossfade.lit \
+			func() -> String: return "fade the earlier out and the later in, equal power, over the overlap" if crossfade.lit \
 					else "select two overlapping items on one track")
 	nudge_earlier = _key("ItemNudgeEarlier", &"nudge_earlier", GO_INK, "ITEM  NUDGE EARLIER", func(): _nudge(-1),
 			func() -> String: return _nudge_text("earlier"))
