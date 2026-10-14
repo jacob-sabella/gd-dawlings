@@ -8,9 +8,10 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 7
+Iterations done: 8
 
 ## Transport and tempo
+- [x] loop to the selected items (2026-10-14)
 - [x] play, stop, record, seek, loop range, punch, metronome, count-in, pre-roll
 - [x] tempo, tempo map, time-signature map
 - [x] tap tempo (the tape deck, `tapped_bpm`; the first audit listed it missing in error)

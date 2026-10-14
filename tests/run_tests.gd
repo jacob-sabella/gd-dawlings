@@ -13677,6 +13677,18 @@ func _test_notes_are_transposed_and_quantised() -> void:
 	DAW.clear_item_selection()
 	check("undone, it is as it was", s.item(lane, 0).fade_out != x_overlap or x_overlap == 0.0)
 
+	DAW.clear_item_selection()
+	check("with nothing selected there is nothing to loop", not DAW.loop_selected_items())
+	DAW.select_all_items()
+	var l_from := INF
+	var l_to := 0.0
+	for pick in s.selected_items():
+		l_from = minf(l_from, s.item(pick[0], pick[1]).start)
+		l_to = maxf(l_to, s.item(pick[0], pick[1]).end())
+	check("the loop goes round the selection", DAW.loop_selected_items()
+			and is_equal_approx(s.loop_start, l_from) and is_equal_approx(s.loop_end, l_to) and s.looping)
+	DAW.clear_item_selection()
+
 	var vel_before: float = s.item(lane, 0).notes[3]
 	var vel_depth := s.undo_depth
 	DAW.shift_velocity(lane, 0, 16)

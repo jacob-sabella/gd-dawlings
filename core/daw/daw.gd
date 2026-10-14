@@ -385,6 +385,23 @@ func mark_clean() -> void:
 func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
 func set_loop_range(start: float, end: float) -> void:
 	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
+## The loop set round the selected items, from the first one's start to the last one's end, and
+## looping switched on. Two ordinary intents, so a guest's press needs nothing new on the wire.
+## False when nothing is selected.
+func loop_selected_items() -> bool:
+	var from := INF
+	var to := -INF
+	for pick in state.selected_items():
+		var it := state.item(pick[0], pick[1])
+		if it != null:
+			from = minf(from, it.start)
+			to = maxf(to, it.end())
+	if from == INF or to - from < DAWBackend.MIN_ITEM_SECONDS:
+		return false
+	set_loop_range(from, to)
+	if not state.looping:
+		set_looping(true)
+	return true
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
 func select_item(track_index: int, item_index: int, additive := false) -> void:

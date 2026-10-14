@@ -3104,3 +3104,10 @@ a pro DAW's equal-power curve would not; a curve choice is the next step. X key 
 which now also shows while exactly two items of one track are selected (lit only if they overlap;
 the other keys stay dark then). Drag snapping, listed missing in the first audit, was there already.
 Not seen in a screenshot (shot.sh cannot select items). Suite 10009 checks, 0 failed; probe 0 failed.
+
+## DAW parity, iteration 8: loop the selection (2026-10-14)
+`DAW.loop_selected_items()` sets the loop from the first selected item's start to the last one's
+end and switches looping on (`set_loop_range` and `set_looping`, so nothing new on the wire).
+LP key on the item strip, which shows for one item or a same-track pair, so a wider selection
+cannot be looped from the strip yet. Not seen in a screenshot. Suite 10011 checks, 0 failed;
+probe 0 failed.

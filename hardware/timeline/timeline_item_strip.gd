@@ -33,6 +33,7 @@ var normalise: PanelButton
 var softer: PanelButton
 var harder: PanelButton
 var crossfade: PanelButton
+var loop_to: PanelButton
 ## [track, first, second] while exactly two items of one track are selected, else empty.
 var _pair: Array = []
 ## [track, item] being edited, or empty while there is not exactly one selected.
@@ -45,10 +46,10 @@ func _ready() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(12 * PITCH, 0.036, 0.004)
+	box.size = Vector3(13 * PITCH, 0.036, 0.004)
 	plate.mesh = box
 	plate.material_override = Materials.chassis()
-	plate.position = Vector3(5.5 * PITCH, -0.004, -0.002)
+	plate.position = Vector3(6.0 * PITCH, -0.004, -0.002)
 	add_child(plate)
 	gain = _knob("GAIN", 0, func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -82,6 +83,9 @@ func _ready() -> void:
 	crossfade.describe_value = func(_v: float) -> String:
 		return "fade the earlier out and the later in, over the overlap" if crossfade.lit \
 				else "select two overlapping items on one track"
+	loop_to = _key("ItemLoop", "LP", 12, Color(0.55, 0.85, 0.55), "ITEM  LOOP IT",
+			func(): DAW.loop_selected_items(), "loop from the start of the selection to its end")
+	loop_to.describe_value = func(_v: float) -> String: return "loop from the start of the selection to its end"
 	DAW.timeline_changed.connect(refresh)
 	DAW.transport_changed.connect(refresh)
 	refresh()
@@ -101,6 +105,8 @@ func refresh() -> void:
 	for c in [gain, fade_in, fade_out, down, up, quant, mute, copy_here, normalise, softer, harder]:
 		c.collision_layer = 2 if item != null else 0
 	crossfade.collision_layer = 2 if visible else 0
+	loop_to.collision_layer = 2 if visible else 0
+	loop_to.lit = visible
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	if item == null:
 		for c in [mute, copy_here, normalise, down, up, quant, softer, harder]:
