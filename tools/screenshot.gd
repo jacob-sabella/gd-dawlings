@@ -83,6 +83,8 @@ var _pulls: Array = []
 ## `--rig-roll`: presses the Rig Roulette ROLL from frame 9.
 ## `--pull-track`: the first track with plugins pulled out of the rack on its own rack, and its
 ## first plugin on a tablet, frame 12.
+## `--pull-tracks <n>`: the first n tracks with plugins pulled out on racks of their own, in a row
+## behind the mix position, frame 12.
 ## `--board <surface id>`: the big board shows that surface live from frame 12 (after any roll).
 ## `--tour intact|broken|brief|draft|chaos|crowd|clock_low|win|loss|spill|rig`: the Tour case and its run put in that state from frame 9,
 ## deterministically (Tour.force_state_for_shot) rather than by waiting out a brief's timer.
@@ -102,6 +104,7 @@ var _roll := false
 var _rig_roll := false
 var _board := ""
 var _pull_track := false
+var _pull_tracks := 0
 
 
 func _ready() -> void:
@@ -202,6 +205,8 @@ func _ready() -> void:
 				_rig_roll = true
 			"--pull-track":
 				_pull_track = true
+			"--pull-tracks":
+				if i + 1 < args.size(): _pull_tracks = int(args[i + 1])
 			"--board":
 				if i + 1 < args.size(): _board = args[i + 1]
 			"--tl-road":
@@ -261,6 +266,14 @@ func _process(_delta: float) -> void:
 					var first: int = DAW.state.track(i).plugins()[0]
 					puller.open_tablet(i, first, DAW.state.fx(i, first).name, Vector2(-0.95, 0.55))
 					break
+	if _frames == 12 and _pull_tracks > 0:
+		var row := get_tree().current_scene.get_node_or_null("Studio")
+		if row != null:
+			var with_plugins := DAW.state.track_indices().filter(
+					func(t): return not DAW.state.track(t).plugins().is_empty())
+			var n := mini(_pull_tracks, with_plugins.size())
+			for k in n:
+				row.open_track_rack(with_plugins[k], Vector2((k - (n - 1) * 0.5) * 0.75, 1.7))
 	if _frames == 12 and not _board.is_empty():
 		var studio_node := get_tree().current_scene.get_node_or_null("Studio")
 		if studio_node != null:
