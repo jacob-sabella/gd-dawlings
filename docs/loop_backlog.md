@@ -3598,3 +3598,12 @@ index clamped in `apply_intent`, undoable, refused on locked items, a missing no
 `DeleteNote` finds it by start and pitch like the velocity edit (syntax-checked, not run live). The
 piano roll is still read-only on the wire beyond this: no insert-a-note or move-a-note verb yet
 (notes come in through takes). Probe: host 53, guest 47, 0 failed. Suite: 10459 checks, 0 failed.
+
+## 2026-10-14 -- iteration 46: move one note in pitch
+
+NOTE UP and NOTE DOWN on the ITEM page (a brick with a point over or under it) move the note
+sounding at the playhead a semitone, or an octave with fine, kept within 0-127. They light with
+DELETE NOTE, while a note sounds. `DAW.transpose_note` is an ITEM_EDITS intent (note index and step
+clamped in `apply_intent`, undoable, refused on locked items, no move at the range's end is no
+edit). Reaper's `TransposeNote` finds the note by start and pitch (syntax-checked, not run live).
+Still no insert-a-note or move-in-time verb. Suite: 10466 checks, 0 failed.

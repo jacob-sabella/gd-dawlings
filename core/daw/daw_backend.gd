@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func transpose_note(_track_index: int, _item_index: int, _note_index: int, _semitones: int) -> void: pass
 func delete_note(_track_index: int, _item_index: int, _note_index: int) -> void: pass
 func retrograde_item(_track_index: int, _item_index: int) -> void: pass
 func rename_item(_track_index: int, _item_index: int, _item_name: String) -> void: pass
@@ -1229,6 +1230,25 @@ func _locally_even_velocity(track_index: int, item_index: int) -> bool:
 		return false
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## One note of a MIDI item moved by semitones, clamped to 0-127. False when there is no such note
+## or it cannot move that way.
+func _locally_transpose_note(track_index: int, item_index: int, note_index: int, semitones: int) -> bool:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + MidiTake.NOTE_WIDTH > item.notes.size() or semitones == 0:
+		return false
+	var pitch := clampi(int(item.notes[at + 2]) + semitones, 0, 127)
+	if pitch == int(item.notes[at + 2]):
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	notes[at + 2] = pitch
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true

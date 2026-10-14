@@ -61,6 +61,9 @@ var even: GlyphKey
 var retrograde: GlyphKey
 ## The note sounding at the playhead taken out (DAW.delete_note).
 var note_delete: GlyphKey
+## The note sounding at the playhead moved a semitone, or an octave when fine (DAW.transpose_note).
+var note_up: GlyphKey
+var note_down: GlyphKey
 ## Name the item, on the keypad (DAW.rename_item).
 var item_name: GlyphKey
 ## The velocity of the note sounding at the playhead (else the next to start): a rail, set when let go.
@@ -132,6 +135,10 @@ func _ready() -> void:
 				var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
 				return "rename \"%s\", on the keypad" % item.name if item != null else "select one item")
 	retrograde = _key("ItemRetrograde", &"retrograde", NOTE_INK, "ITEM  NOTES BACKWARDS", func(): _retrograde(), _retrograde_text)
+	note_down = _key("ItemNoteDown", &"note_down", NOTE_INK, "ITEM  NOTE DOWN", func(): _move_note(-1),
+			func() -> String: return "the note at the playhead a semitone down; fine: an octave" if note_down.lit else "put the playhead on a note")
+	note_up = _key("ItemNoteUp", &"note_up", NOTE_INK, "ITEM  NOTE UP", func(): _move_note(1),
+			func() -> String: return "the note at the playhead a semitone up; fine: an octave" if note_up.lit else "put the playhead on a note")
 	note_delete = _key("ItemNoteDelete", &"note_delete", Color(0.95, 0.38, 0.34), "ITEM  DELETE NOTE", func(): _delete_note(),
 			func() -> String: return "the note sounding at the playhead" if note_delete.lit else "put the playhead on a note")
 	even = _key("ItemEven", &"even", NOTE_INK, "ITEM  EVEN VELOCITY", func(): _even(), _even_text)
@@ -159,7 +166,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -200,7 +207,11 @@ func refresh() -> void:
 	swing.available = midi and not item.locked
 	note_velocity.available = midi and not item.locked
 	note_delete.available = midi and not item.locked
+	note_up.available = midi and not item.locked
+	note_down.available = midi and not item.locked
 	note_delete.lit = midi and _sounding_note() >= 0
+	note_up.lit = note_delete.lit
+	note_down.lit = note_delete.lit
 	var n := _note_index()
 	if n >= 0:
 		note_velocity.snap_to((float(item.notes[n * MidiTake.NOTE_WIDTH + 3]) - 1.0) / 126.0)
@@ -219,6 +230,12 @@ func _sounding_note() -> int:
 	var t := DAW.state.position_seconds - item.start
 	var at := n * MidiTake.NOTE_WIDTH
 	return n if item.notes[at] <= t and t < item.notes[at + 1] else -1
+
+
+func _move_note(direction: int) -> void:
+	var n := _sounding_note()
+	if n >= 0:
+		DAW.transpose_note(_target[0], _target[1], n, direction * (12 if _fine(note_up) or _fine(note_down) else 1))
 
 
 func _delete_note() -> void:

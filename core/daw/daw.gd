@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -75,7 +75,7 @@ const COMMANDS := [
 
 ## Item edits that name an item, and how many arguments each takes.
 const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
-		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5}
+		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"transpose_note": 4, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
 
@@ -551,7 +551,7 @@ func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
 const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape",
-		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"set_item_reversed"]
+		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"set_item_reversed"]
 
 
 func locked_against(verb: StringName, args: Array) -> bool:
@@ -613,6 +613,11 @@ func legato_item(track_index: int, item_index: int) -> void:
 ## An item given a name (its take's name in Reaper). One undo step; a locked item may be named.
 func rename_item(track_index: int, item_index: int, item_name: String) -> void:
 	_do(&"rename_item", [track_index, item_index, item_name.left(MARKER_NAME_MAX)])
+
+
+## One note of a MIDI item moved up or down by semitones, kept within the MIDI range.
+func transpose_note(track_index: int, item_index: int, note_index: int, semitones: int) -> void:
+	_do(&"transpose_note", [track_index, item_index, note_index, clampi(semitones, -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)])
 
 
 ## One note of a MIDI item taken out (by its place in the item's notes).
@@ -851,6 +856,9 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
 		if verb == &"shift_velocity":
 			clean[2] = clampi(int(clean[2]), -DAWBackend.VELOCITY_SHIFT_MAX, DAWBackend.VELOCITY_SHIFT_MAX)
+		if verb == &"transpose_note":
+			clean[2] = clampi(int(clean[2]), -1, MidiTake.MAX_NOTES)
+			clean[3] = clampi(int(clean[3]), -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)
 		if verb == &"delete_note":
 			clean[2] = clampi(int(clean[2]), -1, MidiTake.MAX_NOTES)
 		if verb == &"set_note_velocity":
