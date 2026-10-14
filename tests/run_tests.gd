@@ -221,6 +221,7 @@ func _ready() -> void:
 	_test_focused_gear_fits_the_frame_it_is_shown_in()
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
+	_test_the_big_board_hangs_clear_in_every_venue()
 	_test_the_big_board_shows_any_surface()
 	_test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own()
 	_test_tracks_are_shown_in_the_venues_colours()
@@ -5624,13 +5625,33 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	check("the track count really varies from roll to roll (%s)" % [counts.keys()], counts.size() > 1)
 	var spot := studio.venue.rig_roulette_spot()
 	var board := studio.venue.roll_board_spot()
-	check("the panel and the board stand clear of the wall they hang on (%.2f, %.2f)" % [spot.origin.z, board.origin.z],
-			spot.origin.z >= Studio.ROOM_FRONT + 0.06 and board.origin.z >= Studio.ROOM_FRONT + 0.1)
+	check("the panel and the board stand clear of the wall they hang on (%.2f, %.2f)" % [spot.origin.z, board.origin.x],
+			spot.origin.z >= Studio.ROOM_FRONT + 0.06
+			and board.origin.x <= studio.venue.room_width * 0.5 - 0.1)
+	var facing := board.basis * Vector3.BACK
+	check("the board hangs on a side wall facing into the room, not behind the set (faces %s)" % facing,
+			facing.x < -0.99 and absf(board.origin.x) > studio.venue.room_width * 0.5 - 0.5)
 	Session.roll = {}
 
 	remove_child(studio)
 	studio.free()
 	DAW.use(OfflineBackend.new())
+
+
+## The big board hangs clear in every venue: nothing that stands up to its height (a light pole,
+## a tank) is where it hangs, since a pole through the board shows through its face.
+func _test_the_big_board_hangs_clear_in_every_venue() -> void:
+	for id in Venue.IDS:
+		var venue := Venue.make(id)
+		var spot := venue.roll_board_spot()
+		var board := FloorPlan.footprint(Vector2(spot.origin.x, spot.origin.z),
+				Vector2(RollBoard.WIDTH * 0.5 + 0.05, 0.12), spot.basis.get_euler().y)
+		var through: Array = []
+		for solid in venue.zone_solids():
+			if float(solid.get("top", 0.0)) > spot.origin.y and FloorPlan.separation(board, solid) != Vector2.ZERO:
+				through.append(solid["c"])
+		check("in the %s nothing stands up through the big board (%s)" % [id, through], through.is_empty())
+		venue.free()
 
 
 ## The big board shows any surface live, not only the roll's write-up: the Rig Roulette panel's

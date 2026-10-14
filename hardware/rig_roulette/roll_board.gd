@@ -47,7 +47,10 @@ func _ready() -> void:
 	plate.position = Vector3(0, HEIGHT * 0.5, -0.02)
 	var m := StandardMaterial3D.new()
 	m.albedo_color = SLATE_PLATE if chalky else SCREEN_PLATE
-	m.roughness = 0.9 if chalky else 0.25
+	# A screen's anti-glare finish, not glass: at 0.25 the lamps hung near it (the rooftop's
+	# string lights) sat on the write-up as two big soft discs.
+	m.roughness = 0.9 if chalky else 0.75
+	m.metallic_specular = 0.2
 	if not chalky:
 		# A lit screen, not a painted board: it glows a little against the wall it hangs on.
 		m.emission_enabled = true

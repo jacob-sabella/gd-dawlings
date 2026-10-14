@@ -3002,3 +3002,14 @@ First standalone APK built (2026-10-13): `tools/build_quest.sh [--install]`, pre
 Quest 3, gradle build with the Meta vendor plugin; hand tracking and passthrough optional, no
 eye/face/body). The project imports ETC2/ASTC; Meta passthrough, scene and anchor extensions are
 on (asked for only where the runtime has them). Not yet run on the headset. No project icon yet.
+
+## The big board moves to the right-hand wall (2026-10-13)
+"the big screen for rig randomizer needs to move somewhere else that isnt the backdrop for the
+main set": `Venue.roll_board_spot` hung it centred on the front wall, straight behind the
+timeline. Now high on the right wall, facing in, at the same height (bottom 2.14m, over the
+acoustic panels); free-standing venues stand it 0.45m in from the edge. Not the left wall: the
+mirror, and the studio's window into the live room. The screen's finish went from 0.25 to 0.75
+roughness: on the rooftop two string-light bulbs sat on the write-up as glossy discs.
+Also: the rack's track window offers every track, so an empty one can be racked and given its
+first plugin (it listed only tracks that already had plugins, and the built-in engine has no
+Reaper selection to rack one by).

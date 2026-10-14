@@ -361,11 +361,20 @@ func rig_roulette_spot() -> Transform3D:
 
 
 ## Where the board that writes up a Rig Roulette roll hangs, in studio space (its origin the
-## middle of its bottom edge): the same back wall as the station, as wide as the wall allows,
-## its lower edge just above the acoustic panels (which stand to 2.1m) and its top just under
-## the ceiling, so the whole room can read it from anywhere.
+## middle of its bottom edge): high on the right-hand wall, facing in, its lower edge just above
+## the acoustic panels (which stand to 2.1m) and its top just under the ceiling, so the whole
+## room can read it with a turn of the head. Not on the front wall, where it was: there it hung
+## straight behind the timeline and was the backdrop to the whole set ("the big screen for rig
+## randomizer needs to move somewhere else that isnt the backdrop for the main set"). Not the
+## left wall either, which has the mirror and, in the studio, a window into the live room.
+##
+## Where there is no wall and the board stands on its own legs, it stands in from the edge: the
+## edge is where a venue puts its own uprights (the rooftop's light poles went through it).
 func roll_board_spot() -> Transform3D:
-	return Transform3D(Basis.IDENTITY, Vector3(0.0, 2.14, Studio.ROOM_FRONT + 0.11))
+	# The wall is a box 0.1 thick centred on the room's edge, its face 5cm in.
+	var inset := 0.45 if back_wall_gear_stands() else 0.11
+	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
+			Vector3(room_width * 0.5 - inset, 2.14, Studio.ROOM_MID))
 
 
 ## What the gear is made of here (see GearStyle). The studio's own: no change from the
