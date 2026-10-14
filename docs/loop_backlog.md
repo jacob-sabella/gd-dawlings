@@ -2983,3 +2983,18 @@ rid of it": in a headset a face panel is framed into the middle 56x36 degrees of
 XR camera reports the desktop window's shape, not the eye's), at arm's length so its handle can
 be touched. The menu button, or two fists held half a second, is Escape (`XRRig.escape_requested`
 -> `Studio._on_escape`): face panels go back where they belong.
+
+## A knob in a hand turns by turning (2026-10-13)
+"the dial control with the AR/VR touch/grab is unwieldy"
+A hand turned a knob by the angle of its ray's hit around the knob's centre: on a 22mm knob, a
+pinch ray's tremor or a fingertip's millimetre is a big swing. Now `Interactor.twist()` (an
+XRInteractor counts its roll about where it points, frame to frame so it never wraps) turns a
+knob held by a pinch or a controller: TWIST_GAIN 1.5, so half a turn of the wrist is the whole
+sweep. A fingertip (`touches_directly`) slides up or down the panel instead, SLIDE_PER_SWEEP 10cm.
+Open: TabletSelector (KEY IN, MOVE TO) changes its choice only by scroll, which a hand has not got.
+
+## Toward the Quest, natively (2026-10-13)
+dawkit builds for android arm64 (`tools/build_native.sh android all`). `tools/fetch_openxr_vendors.sh`
+installs GodotVR's vendors plugin 5.1.0 (Meta passthrough, scene, anchors, depth) into the
+gitignored addons/godotopenxrvendors. Project folders are cleared through DirAccess, not `rm -rf`,
+which neither Windows nor a headset can run. Next: Android export templates, a Quest preset.

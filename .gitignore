@@ -4,3 +4,8 @@
 override.cfg
 shots/
 /build/
+
+# Fetched by tools/fetch_openxr_vendors.sh, not committed (80MB of prebuilt libraries).
+addons/godotopenxrvendors/
+# The Android build template, installed by the editor for a gradle (Quest) export.
+/android/

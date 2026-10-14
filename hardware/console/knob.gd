@@ -28,6 +28,11 @@ const RADIUS := 0.011
 ## is the scale plugin UIs settled on: long enough to set a value in one move, short enough
 ## not to run out of desk.
 const PIXELS_PER_SWEEP := 240.0
+## A hand's twist, to the knob's turn: a wrist turns about half a turn in comfort, and the
+## sweep is three quarters of one.
+const TWIST_GAIN := 1.5
+## How far a fingertip slides up the panel for the whole sweep.
+const SLIDE_PER_SWEEP := 0.10
 ## How much finer a fine drag or fine nudge is.
 const FINE := 0.1
 const MESH_PATH := "res://assets/hardware/knob.glb"
@@ -50,6 +55,11 @@ var _grab_angle := 0.0
 var _grab_value := 0.0
 ## Where a linear drag started, or NAN when the hand is turning the knob for real.
 var _grab_reading := NAN
+## The hand's twist when it took hold, or NAN for a hand that cannot twist.
+var _grab_twist := NAN
+## Where a fingertip touched, in the world.
+var _grab_at := Vector3.ZERO
+var _sliding := false
 var _last_detent := -1
 
 
@@ -141,8 +151,14 @@ func _on_grab_begin(at: Vector3) -> void:
 	_last_detent = detent_of(value)
 	_grab_value = value
 	_grab_reading = NAN
+	_grab_twist = NAN
+	_sliding = false
+	_grab_at = at
 	if held_by is Interactor:
-		_grab_reading = (held_by as Interactor).drag_reading()
+		var hand := held_by as Interactor
+		_grab_reading = hand.drag_reading()
+		_sliding = hand.touches_directly()
+		_grab_twist = hand.twist()
 
 
 func _on_grab_move(at: Vector3) -> void:
@@ -156,6 +172,17 @@ func _on_grab_move(at: Vector3) -> void:
 		var hand := held_by as Interactor
 		var travel := (_grab_reading - hand.drag_reading()) / PIXELS_PER_SWEEP
 		to = _grab_value + travel * (FINE if hand.fine() else 1.0)
+	elif _sliding:
+		# A fingertip on it: up the panel turns it up, as a mouse drags. Along the knob's own up,
+		# so "up" is up the panel however the panel is tilted; in metres, whatever its scale.
+		var up := global_basis.y.normalized()
+		to = _grab_value + (at - _grab_at).dot(up) / SLIDE_PER_SWEEP
+	elif not is_nan(_grab_twist):
+		# Held from anywhere, by a pinch or a controller: turned by turning the hand. Where the
+		# ray lands on a 22mm knob says nothing steady about an angle; how far the wrist has
+		# rolled does, and it is how a knob is turned.
+		var hand := held_by as Interactor
+		to = _grab_value + (hand.twist() - _grab_twist) * TWIST_GAIN / SWEEP
 	else:
 		var delta := _angle_of(at) - _grab_angle
 		# Wrapped, or a knob dragged past straight-down would jump a full turn.
@@ -208,7 +235,7 @@ func _notification(what: int) -> void:
 
 
 func hint() -> String:
-	return "drag up/down or scroll  ·  shift for fine"
+	return "drag up/down or scroll  ·  shift for fine  ·  in a hand: twist, or slide a fingertip"
 
 
 ## One detent per wheel notch, which is the knob's own idea of a deliberate step; fine is a

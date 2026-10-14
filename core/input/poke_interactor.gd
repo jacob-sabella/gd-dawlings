@@ -73,6 +73,10 @@ func is_pressing() -> bool:
 	return _pressing
 
 
+func touches_directly() -> bool:
+	return true
+
+
 ## A fingertip has no fine-adjust: it is already one to one.
 func fine() -> bool:
 	return false

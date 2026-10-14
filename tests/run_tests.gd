@@ -40,6 +40,7 @@ func _ready() -> void:
 	_test_rig_tip_is_ahead_of_the_grip()
 	await _test_a_fingertip_touches_the_gear()
 	_test_a_bare_hands_ray_is_steadied()
+	_test_a_hand_counts_its_twist()
 	_test_a_headset_screen_panel_sits_in_the_middle_of_the_view()
 	_test_ar_studio_draws_no_room()
 	_test_handle_is_chrome_not_gear()
@@ -878,6 +879,20 @@ func _test_a_bare_hands_ray_is_steadied() -> void:
 	var follows := XRInteractor.steadied(still, swept, 1.0 / 72.0)
 	check("a sweep is followed most of the way in a frame",
 			(-follows.basis.z).angle_to(-still.basis.z) > 0.08 * 0.35)
+
+
+## A hand's twist counts its roll clockwise as its person sees it, and keeps counting past half a
+## turn rather than jumping back.
+func _test_a_hand_counts_its_twist() -> void:
+	var hand := XRInteractor.new()
+	add_child(hand)
+	var clockwise := Vector3.FORWARD
+	for i in 10:
+		hand.transform = Transform3D(Basis(clockwise, deg_to_rad(25.0 * i)), Vector3.ZERO)
+		hand._count_roll()
+	check("rolled clockwise 225 degrees, it has counted 225 (%.0f)" % rad_to_deg(hand.twist()),
+			absf(rad_to_deg(hand.twist()) - 225.0) < 0.5)
+	hand.free()
 
 
 ## A panel put on the face in a headset is framed into the middle of the view, not to its edges,
@@ -6282,8 +6297,40 @@ func _test_a_cursor_drags_a_knob_up_and_down() -> void:
 	knob.grab_move(hand, knob.global_position + Vector3(0.008, 0, 0))
 	check("a hand still turns a knob by turning it (%.3f)" % knob.value, knob.value < 0.45)
 	knob.grab_end(hand)
-	for n in [knob, probe, hand]:
+
+	# "the dial control with the AR/VR touch/grab is unwieldy": a hand that can twist turns it by
+	# twisting, wherever its ray lands on the knob, and a fingertip by sliding up the panel.
+	var wrist := _TwistProbe.new()
+	add_child(wrist)
+	knob.value = 0.5
+	wrist.roll = 0.3
+	knob.grab_begin(wrist, knob.global_position + Vector3(0, 0.008, 0))
+	knob.grab_move(wrist, knob.global_position + Vector3(0.009, -0.004, 0))
+	close_to("a twisting hand's ray wandering over the knob does not turn it", knob.value, 0.5)
+	wrist.roll = 0.3 + Knob.SWEEP / Knob.TWIST_GAIN * 0.25
+	knob.grab_move(wrist, knob.global_position)
+	close_to("a quarter of the sweep's twist, less the gain, is a quarter turn", knob.value, 0.75)
+	knob.grab_end(wrist)
+	wrist.direct = true
+	wrist.roll = NAN
+	knob.value = 0.5
+	knob.grab_begin(wrist, knob.global_position)
+	knob.grab_move(wrist, knob.global_position + Vector3(0.012, 0.0, 0))
+	close_to("a fingertip slid across it does not turn it", knob.value, 0.5)
+	knob.grab_move(wrist, knob.global_position + Vector3(0, -Knob.SLIDE_PER_SWEEP * 0.2, 0))
+	close_to("slid down the panel a fifth of the way, it turns down a fifth", knob.value, 0.3)
+	knob.grab_end(wrist)
+	for n in [knob, probe, hand, wrist]:
 		n.queue_free()
+
+
+class _TwistProbe extends Interactor:
+	var roll := 0.0
+	var direct := false
+	func twist() -> float:
+		return roll
+	func touches_directly() -> bool:
+		return direct
 
 
 ## The face is the readability fix, so a label built without it is a regression nobody would

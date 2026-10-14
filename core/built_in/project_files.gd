@@ -133,7 +133,22 @@ static func new_project(backend: OfflineBackend, tracks := 4) -> PackedStringArr
 	return refused
 
 
+## Empty `dir`, making it if it is not there. Through DirAccess rather than `rm -rf`, which is not
+## there to run on Windows or on a standalone headset (Android has no shell for a game to use).
 static func _clear(dir: String) -> void:
 	if DirAccess.dir_exists_absolute(dir):
-		OS.execute("rm", ["-rf", dir])
+		_remove_tree(dir)
 	DirAccess.make_dir_recursive_absolute(dir)
+
+
+static func _remove_tree(dir: String) -> void:
+	var at := DirAccess.open(dir)
+	if at == null:
+		return
+	# Dotfiles too, or the folder is not empty and stays.
+	at.include_hidden = true
+	for sub in at.get_directories():
+		_remove_tree(dir.path_join(sub))
+	for file in at.get_files():
+		DirAccess.remove_absolute(dir.path_join(file))
+	DirAccess.remove_absolute(dir)

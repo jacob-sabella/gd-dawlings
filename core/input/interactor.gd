@@ -61,6 +61,20 @@ func drag_reading() -> float:
 	return NAN
 
 
+## Override: how far this hand has turned about the way it points, clockwise as its person sees
+## it, in radians and counted on from whatever it started at (so it never wraps). NAN for a hand
+## that cannot twist -- a mouse. What a knob in a hand follows: you turn a knob by turning it.
+func twist() -> float:
+	return NAN
+
+
+## Override: whether this hand is ON the control rather than pointing at it from somewhere -- a
+## fingertip. A knob under a fingertip is turned by sliding the finger up or down the panel, as
+## a mouse drags; circling a 22mm knob's centre with a fingertip is all tremor.
+func touches_directly() -> bool:
+	return false
+
+
 ## Override: is the fine-adjust modifier held. Shift on a keyboard; nothing yet on a hand.
 func fine() -> bool:
 	return false

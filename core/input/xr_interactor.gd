@@ -31,6 +31,30 @@ const TURNING_SPEED := 1.2
 
 var _steady := Transform3D.IDENTITY
 var _steadied := false
+## The roll counted so far (twist), and the hand's sideways axis it was last counted from.
+var _roll := 0.0
+var _roll_from := Vector3.ZERO
+
+
+func twist() -> float:
+	return _roll
+
+
+## On from last frame by however far the hand has rolled about where it points, clockwise as
+## seen from behind it. Counted frame to frame rather than read as an angle, so turning past
+## half a turn keeps counting instead of jumping back.
+func _count_roll() -> void:
+	var at := aim()
+	var forward := -at.basis.z.normalized()
+	var side := at.basis.x - forward * at.basis.x.dot(forward)
+	if side.length() < 0.001:
+		return
+	side = side.normalized()
+	if _roll_from != Vector3.ZERO:
+		var was := _roll_from - forward * _roll_from.dot(forward)
+		if was.length() > 0.001:
+			_roll += was.normalized().signed_angle_to(side, forward)
+	_roll_from = side
 
 
 func bare_hand() -> bool:
@@ -91,6 +115,7 @@ var _trail: Array = []
 
 func _physics_process(delta: float) -> void:
 	_steady_aim(delta)
+	_count_roll()
 	super(delta)
 	var now := Time.get_ticks_msec() / 1000.0
 	_trail.append([now, aim().origin])
