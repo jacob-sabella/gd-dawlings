@@ -3667,3 +3667,34 @@ changed nothing either; the X pointer is also confined to the monitors' rectangl
 reparented window is `Withdrawn` with no window manager, so GTK may not even repaint it. Untried: a
 WM-less nested server cannot hold Reaper's windows; drawing ReaEQ's graph natively from its band
 parameters is the way left. The UI button stays hidden for "(Cockos)" and "JS:" plugins.
+
+## 2026-10-14 -- Reaper's own plugins' windows work from the tablet
+
+ReaEQ, ReaComp and JSFX windows now take the tablet's clicks, drags and wheel, so their UI button is
+back. Three things stood in the way, found by poking ReaEQ from a script (open it through the
+bridge, send clicks through the helper, diff the pictures) and reading SWELL's and GDK 3's source:
+
+1. GDK reads the pointer through XInput2, so it ignores the core events a client can send.
+   `GDK_CORE_DEVICE_EVENTS=1` fixes that.
+2. GDK drops a press unless an Enter came first, and SWELL turns a click's screen position back
+   into a point using wherever the window last heard it was. plugin_view now sends an Enter once,
+   and sends a synthetic ConfigureNotify with the window's real position. It re-sends that whenever
+   the compositor moves the holder. Telling a fixed spot instead broke Gojira under Wine, which is
+   told the same thing through yabridge.
+3. A drag asks where the pointer is (`gdk_display_get_pointer`) and gets the real one. SWELL also
+   asks for motion hints, which drop sent motions, and it pulls events with `gdk_event_get` as
+   well as the handler. A knob hides the cursor and warps it back, which would move the real
+   pointer.
+
+`native/reaper_pointer.c` is preloaded into Reaper and handles all three: it sets the env var,
+answers pointer questions from the sent events while they arrive, turns warps into an offset, and
+strips the hint mask. A real pointer event puts everything back. The rig builds and preloads it.
+Your own Reaper needs `LD_PRELOAD=.../reaper_pointer.so reaper`. Without the library the button
+stays hidden for "(Cockos)" and JS plugins, which `DAW.works_own_plugin_windows` checks through
+/proc. The JS check never matched before this, because names lose their "JS: " prefix on the way
+in; `FXState.type` now keeps it.
+
+Verified on the rig: in ReaEQ, a tab click, a band node drag, the gain slider drag and the Show
+phase checkbox all work, and the real cursor stays put. The Gojira probe passes 36/36.
+Not handled: a plugin's popup menus and dropdowns open as windows of their own, which the tablet
+does not show.

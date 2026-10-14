@@ -308,6 +308,12 @@ func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
 	return backend.open_plugin_window(track_index, fx_index)
 
 
+## Whether the DAW's own plugins' windows (ReaEQ, not a third party's) can be worked here, not
+## only shown. See DAWBackend.works_own_plugin_windows.
+func works_own_plugin_windows() -> bool:
+	return backend != null and backend.works_own_plugin_windows()
+
+
 ## Whether a plugin's own window can be shown here: only on the host, and only by a DAW that can.
 func shows_plugin_windows() -> bool:
 	return Session.is_authority() and backend != null \

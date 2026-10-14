@@ -38,6 +38,40 @@ var _size := Vector2i.ZERO
 var _on_close: Callable
 
 
+## Whether a Reaper running on this machine works its own windows from sent clicks: it was started
+## with native/reaper_pointer.c preloaded (tools/reaper_rig.sh does), which it then has mapped.
+## Without it ReaEQ and the rest show here but ignore the tablet's hand. Looked up again after a
+## few seconds, since Reaper can be restarted under a running game.
+static func reaper_takes_clicks() -> bool:
+	var now := Time.get_ticks_msec()
+	if _takes_clicks_at >= 0 and now - _takes_clicks_at < 3000:
+		return _takes_clicks
+	_takes_clicks_at = now
+	_takes_clicks = false
+	if OS.get_name() != "Linux":
+		return false
+	for pid in DirAccess.get_directories_at("/proc"):
+		if not pid.is_valid_int() or _first_line("/proc/%s/comm" % pid) != "reaper":
+			continue
+		var maps := FileAccess.open("/proc/%s/maps" % pid, FileAccess.READ)
+		if maps == null:
+			continue
+		while not maps.eof_reached():
+			if maps.get_line().ends_with("/reaper_pointer.so"):
+				_takes_clicks = true
+				return true
+	return false
+
+
+static var _takes_clicks := false
+static var _takes_clicks_at := -1
+
+
+static func _first_line(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	return f.get_line().strip_edges() if f != null else ""
+
+
 ## Whether plugin windows can be shown here at all: an X display, and the helper built.
 static func available() -> bool:
 	return OS.get_name() == "Linux" and OS.get_environment("DISPLAY") != "" and helper() != ""

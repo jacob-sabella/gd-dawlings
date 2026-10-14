@@ -481,15 +481,17 @@ func show_window(on: bool) -> void:
 
 
 func _windows_here() -> bool:
-	return window_face and DAW.shows_plugin_windows() and not _drawn_by_the_daw()
+	return window_face and DAW.shows_plugin_windows() \
+			and (not _drawn_by_the_daw() or DAW.works_own_plugin_windows())
 
 
-## Reaper's own plugins (ReaEQ, ReaComp, JSFX) draw their windows with the same toolkit Reaper
-## does, and that toolkit takes its pointer from the X input extension, which ignores the plain
-## events the helper sends. Their knobs here are the way in; a window it could show but not
-## touch would only be a picture.
+## Reaper's own plugins (ReaEQ, ReaComp, JSFX) draw their windows with Reaper's own toolkit,
+## which only takes the helper's clicks when Reaper was started to (DAW.works_own_plugin_windows).
+## Otherwise their knobs here are the way in; a window it could show but not touch would only be
+## a picture.
 func _drawn_by_the_daw() -> bool:
-	return fx_name.ends_with("(Cockos)") or fx_name.begins_with("JS:")
+	var f := fx()
+	return fx_name.ends_with("(Cockos)") or (f != null and f.type == "JS")
 
 
 func _open_window() -> void:

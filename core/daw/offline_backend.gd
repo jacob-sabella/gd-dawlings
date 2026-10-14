@@ -43,6 +43,9 @@ var _autosave_due_msec := -1
 ## their windows unless this is set, and then shows a plain picture that records what was done
 ## to it (PluginWindow). Never set by anything that ships.
 var stand_in_windows := false
+## Whether its own plugins' windows take clicks (DAWBackend.works_own_plugin_windows), for the
+## suite to say no.
+var own_windows_work := true
 ## The windows the stand-in has handed out, newest last, for whoever is checking.
 var windows_opened: Array[PluginWindow] = []
 
@@ -269,6 +272,10 @@ func project_loaded(_kinds: Dictionary) -> void:
 ## does not run.
 func _fx_kinds() -> Dictionary:
 	return {}
+
+
+func works_own_plugin_windows() -> bool:
+	return own_windows_work
 
 
 func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:

@@ -72,6 +72,8 @@ class SendState extends RefCounted:
 class FXState extends RefCounted:
 	var index: int = 0
 	var name: String = ""
+	## What kind of plugin the DAW said it is -- "VST3", "JS" -- which `name` leaves off.
+	var type: String = ""
 	var enabled: bool = true
 	## Normalised 0..1 by param index. Sparse on purpose: Reaper only reports the current
 	## parameter bank, so a missing key means "not yet told", which is not the same as zero.
@@ -119,6 +121,13 @@ class FXState extends RefCounted:
 		if colon > 0 and colon <= 6 and raw.substr(0, colon) in TYPE_PREFIXES:
 			return raw.substr(colon + 2)
 		return raw
+
+	## The kind `bare_name` takes off, or "" when it has none.
+	static func type_of(raw: String) -> String:
+		var colon := raw.find(": ")
+		if colon > 0 and colon <= 6 and raw.substr(0, colon) in TYPE_PREFIXES:
+			return raw.substr(0, colon)
+		return ""
 
 	const TYPE_PREFIXES := ["VST", "VSTi", "VST3", "VST3i", "JS", "CLAP", "CLAPi", "AU", "AUi",
 			"LV2", "LV2i", "DX", "DXi"]

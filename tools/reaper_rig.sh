@@ -78,9 +78,16 @@ fi
 # by the last run would say up before this Reaper had even launched.
 rm -rf "$RIG/Scripts/dawlings_bridge_data"
 reaper_bin="$(command -v reaper)"
+# So a plugin tablet can work Reaper's own plugins' windows, not just show them: see the comment
+# at the top of native/reaper_pointer.c. Without a C compiler the rig still runs; those windows
+# only show.
+preload=()
+if cc -O2 -shared -fPIC -o "$RIG/reaper_pointer.so" native/reaper_pointer.c -ldl 2>/dev/null; then
+  preload=(env "LD_PRELOAD=$RIG/reaper_pointer.so")
+fi
 BEFORE="$(mktemp)"
 python3 tools/rig/route_audio.py snapshot "$BEFORE" 2>/dev/null || echo '[]' >"$BEFORE"
-( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
+( PULSE_SINK="$SINK" PIPEWIRE_NODE="$SINK" offscreen_run "${preload[@]}" "$reaper_bin" -cfgfile "$RIG/reaper.ini" \
     -nosplash "${open[@]}" >"$RIG/reaper.log" 2>&1 & )
 
 # Up means answering: the bridge writes its data directory when it starts.

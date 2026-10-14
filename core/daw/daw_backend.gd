@@ -219,6 +219,9 @@ func read_fx_params(_track_index: int, _fx_index: int, _params: Array) -> void: 
 ## The plugin's own window, live, or null without Capability.PLUGIN_WINDOW. Whoever opens it
 ## closes it.
 func open_plugin_window(_track_index: int, _fx_index: int) -> PluginWindow: return null
+## Whether the DAW's OWN plugins' windows -- drawn by the DAW's toolkit, not the plugin's -- take
+## the clicks a PluginWindow passes on, as well as showing. True unless a backend knows otherwise.
+func works_own_plugin_windows() -> bool: return true
 
 ## Show the slice of the project starting at `offset` tracks in. A no-op on a backend that
 ## answers false to Capability.TRACK_BANKING.

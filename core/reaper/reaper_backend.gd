@@ -353,6 +353,12 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 		_bridge.call_reaper("SetFxParam", [track_index, fx_index, param, clampf(value, 0.0, 1.0)])
 
 
+## Reaper's own plugins' windows can be worked when the Reaper running here was started with
+## native/reaper_pointer.c, as tools/reaper_rig.sh starts it.
+func works_own_plugin_windows() -> bool:
+	return ReaperPluginWindow.reaper_takes_clicks()
+
+
 ## The plugin's floating window, opened by the bridge and read off the display. The bridge says
 ## what the window's title is and whether it was open already; one that was is left open when
 ## this is closed, because somebody at Reaper opened it and is perhaps looking at it.

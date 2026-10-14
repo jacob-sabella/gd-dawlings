@@ -576,6 +576,7 @@ static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, arg
 	match p[4]:
 		"name":
 			f.name = MixState.FXState.bare_name(str(args[0]))
+			f.type = MixState.FXState.type_of(str(args[0]))
 			state.fx_changed.emit(track_idx, fx_idx)
 		# dawlings's own: the plugin's real parameters, listed by the bridge.
 		"paramlist":
@@ -674,6 +675,7 @@ static func _apply_fx_count(state: MixState, track_idx: int, count: int) -> void
 		var f: MixState.FXState = t.fx[fx_index]
 		if at >= count and f.name != "":
 			f.name = ""
+			f.type = ""
 			f.params.clear()
 			f.param_names.clear()
 			f.param_text.clear()
@@ -741,7 +743,8 @@ static func snapshot(state: MixState) -> Array:
 		fx_indices.sort()
 		for fx_index in fx_indices:
 			var f: MixState.FXState = t.fx[fx_index]
-			out.append(["/track/%d/fx/%d/name" % [index, fx_index], [f.name]])
+			out.append(["/track/%d/fx/%d/name" % [index, fx_index],
+					[("%s: %s" % [f.type, f.name]) if f.type != "" else f.name]])
 			out.append(["/track/%d/fx/%d/bypass" % [index, fx_index], [1.0 if f.enabled else 0.0]])
 			out.append(["/track/%d/fx/%d/wet" % [index, fx_index], [f.wet]])
 			if f.preset != "":

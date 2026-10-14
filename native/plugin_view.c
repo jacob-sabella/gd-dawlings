@@ -104,6 +104,41 @@ static Window holder;
 // Whether to keep the window in `holder`; "--in-place" leaves it where the DAW put it.
 static int keep = 1;
 
+static Window entered;
+
+// Where the holder is put: off every screen, for as long as the compositor leaves it there.
+#define HOLDER_X (-30000)
+
+// Where the kept window was last told it is.
+static int told, told_x, told_y;
+
+// A window manager tells a window where it is on the screen whenever it moves it, and Reaper's own
+// windows (SWELL, on GDK) believe that over anything else: a click's screen position is turned
+// back into a point in the window by subtracting where the window last heard it was. Moved into
+// the holder without being told, Reaper's window still thinks it is wherever the desktop had it,
+// and every click lands that far away. So it is told, the way a window manager would -- and told
+// again whenever that is no longer true: the compositor may move the holder later, and the window
+// inside it hears nothing of that. What it is told is the truth, which a plugin under Wine needs
+// as much as Reaper does: yabridge passes it on, and Wine works its own clicks out from it.
+static void tell_where(Window w) {
+	XWindowAttributes a;
+	int rx = 0, ry = 0;
+	Window child;
+	if (!XGetWindowAttributes(dpy, w, &a)) return;
+	XTranslateCoordinates(dpy, w, DefaultRootWindow(dpy), 0, 0, &rx, &ry, &child);
+	if (told && rx == told_x && ry == told_y) return;
+	XEvent e; memset(&e, 0, sizeof e);
+	e.xconfigure.type = ConfigureNotify;
+	e.xconfigure.display = dpy;
+	e.xconfigure.event = w;
+	e.xconfigure.window = w;
+	e.xconfigure.x = rx; e.xconfigure.y = ry;
+	e.xconfigure.width = a.width; e.xconfigure.height = a.height;
+	XSendEvent(dpy, w, False, StructureNotifyMask, &e);
+	told = 1; told_x = rx; told_y = ry;
+	entered = 0;
+}
+
 static void adopt(Window w) {
 	XWindowAttributes a;
 	if (!w || !XGetWindowAttributes(dpy, w, &a)) return;
@@ -115,7 +150,7 @@ static void adopt(Window w) {
 	XSetWindowAttributes at; memset(&at, 0, sizeof at);
 	at.override_redirect = True;
 	if (holder) XDestroyWindow(dpy, holder);
-	holder = XCreateWindow(dpy, DefaultRootWindow(dpy), -30000, 0, a.width > 0 ? a.width : 1, a.height > 0 ? a.height : 1,
+	holder = XCreateWindow(dpy, DefaultRootWindow(dpy), HOLDER_X, 0, a.width > 0 ? a.width : 1, a.height > 0 ? a.height : 1,
 			0, CopyFromParent, InputOutput, CopyFromParent, CWOverrideRedirect, &at);
 	XMapWindow(dpy, holder);
 	// If this process ever goes without saying so, the window goes back to the desktop rather
@@ -124,6 +159,8 @@ static void adopt(Window w) {
 	XReparentWindow(dpy, w, holder, 0, 0);
 	XMapWindow(dpy, w);
 	XSync(dpy, False);
+	told = 0;
+	tell_where(w);
 }
 
 // Gives the window back to the desktop, so closing the tablet's view leaves it as it was.
@@ -218,12 +255,33 @@ static Window under(int x, int y, int *cx, int *cy) {
 
 static unsigned int held = 0;
 
+// GDK hands a click to the window it last saw the pointer go into, and drops it when there is
+// none -- and nothing ever goes into a window kept in the holder, which no real pointer reaches.
+// So the pointer is said to have gone in, once, before the first thing that needs it.
+static void enter(Window w, int cx, int cy, int rx, int ry) {
+	if (w == entered) return;
+	XEvent e; memset(&e, 0, sizeof e);
+	e.xcrossing.type = EnterNotify;
+	e.xcrossing.display = dpy;
+	e.xcrossing.window = w;
+	e.xcrossing.root = DefaultRootWindow(dpy);
+	e.xcrossing.x = cx; e.xcrossing.y = cy;
+	e.xcrossing.x_root = rx; e.xcrossing.y_root = ry;
+	e.xcrossing.mode = NotifyNormal;
+	e.xcrossing.detail = NotifyNonlinear;
+	e.xcrossing.same_screen = True;
+	e.xcrossing.time = CurrentTime;
+	XSendEvent(dpy, w, True, EnterWindowMask, &e);
+	entered = w;
+}
 
 static void send_button(int x, int y, int button, int down) {
 	int cx, cy, rx, ry;
 	Window dummy;
 	Window w = under(x, y, &cx, &cy);
+	if (keep && top) tell_where(top);
 	XTranslateCoordinates(dpy, target, DefaultRootWindow(dpy), x, y, &rx, &ry, &dummy);
+	enter(w, cx, cy, rx, ry);
 	XEvent e; memset(&e, 0, sizeof e);
 	e.xbutton.type = down ? ButtonPress : ButtonRelease;
 	e.xbutton.display = dpy;
@@ -245,7 +303,9 @@ static void send_motion(int x, int y) {
 	int cx, cy, rx, ry;
 	Window dummy;
 	Window w = under(x, y, &cx, &cy);
+	if (keep && top) tell_where(top);
 	XTranslateCoordinates(dpy, target, DefaultRootWindow(dpy), x, y, &rx, &ry, &dummy);
+	enter(w, cx, cy, rx, ry);
 	XEvent e; memset(&e, 0, sizeof e);
 	e.xmotion.type = MotionNotify;
 	e.xmotion.display = dpy;

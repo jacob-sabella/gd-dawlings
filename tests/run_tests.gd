@@ -96,6 +96,7 @@ func _ready() -> void:
 	_test_a_big_plugin_is_listed_and_named_once()
 	await _test_a_tablet_pages_by_section_and_steps_the_plugins_own_presets()
 	_test_a_tablet_turns_over_to_the_plugins_own_window()
+	_test_the_daws_own_plugins_get_a_ui_button_when_their_windows_take_clicks()
 	_test_a_banked_control_still_moves()
 	_test_nothing_on_a_faceplate_overlaps_or_overhangs()
 	_test_the_rack_holds_one_track_and_follows_the_selection()
@@ -3261,6 +3262,41 @@ func _test_a_tablet_turns_over_to_the_plugins_own_window() -> void:
 	tablet.free()
 	check("a tablet put away puts its window away", not window.is_open())
 	PluginTablet.window_face = true
+	DAW.use(OfflineBackend.new())
+
+
+## Reaper's own plugins draw their windows with Reaper's toolkit, which takes the tablet's clicks
+## only when Reaper was started to (native/reaper_pointer.c): the UI button is offered for them then,
+## and only then -- a window that could be seen but not worked would only be a picture.
+func _test_the_daws_own_plugins_get_a_ui_button_when_their_windows_take_clicks() -> void:
+	var backend := OfflineBackend.new()
+	backend.stand_in_windows = true
+	DAW.use(backend)
+	var state := DAW.state
+	var slot: int = state.track(2).plugins()[0]
+	PluginTablet.window_face = true
+	for name in ["VST: ReaEQ (Cockos)", "JS: Saturation"]:
+		MixWire.apply(state, "/track/2/fx/%d/name" % slot, [name])
+		var tablet := PluginTablet.create(2, slot, name)
+		add_child(tablet)
+		tablet._process(0.0)
+		backend.own_windows_work = false
+		tablet.refresh()
+		check("no UI button for %s while Reaper ignores sent clicks" % name, not tablet._window_button.visible)
+		backend.own_windows_work = true
+		tablet.refresh()
+		check("and one when it takes them", tablet._window_button.visible)
+		remove_child(tablet)
+		tablet.free()
+	MixWire.apply(state, "/track/2/fx/%d/name" % slot, ["VST3: Archetype Gojira X (Neural DSP)"])
+	var other := PluginTablet.create(2, slot, "VST3: Archetype Gojira X (Neural DSP)")
+	add_child(other)
+	other._process(0.0)
+	backend.own_windows_work = false
+	other.refresh()
+	check("another maker's plugin has its button either way", other._window_button.visible)
+	remove_child(other)
+	other.free()
 	DAW.use(OfflineBackend.new())
 
 
