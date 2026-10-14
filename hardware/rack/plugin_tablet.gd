@@ -481,7 +481,15 @@ func show_window(on: bool) -> void:
 
 
 func _windows_here() -> bool:
-	return window_face and DAW.shows_plugin_windows()
+	return window_face and DAW.shows_plugin_windows() and not _drawn_by_the_daw()
+
+
+## Reaper's own plugins (ReaEQ, ReaComp, JSFX) draw their windows with the same toolkit Reaper
+## does, and that toolkit takes its pointer from the X input extension, which ignores the plain
+## events the helper sends. Their knobs here are the way in; a window it could show but not
+## touch would only be a picture.
+func _drawn_by_the_daw() -> bool:
+	return fx_name.ends_with("(Cockos)") or fx_name.begins_with("JS:")
 
 
 func _open_window() -> void:
@@ -545,6 +553,7 @@ func refresh() -> void:
 	_window_button.visible = windows and here
 	_window_word.visible = _window_button.visible
 	_window_button.lit = showing_window
+	_give_the_window_the_footer()
 	if not here:
 		return
 	_bypass.lit = f.enabled
@@ -598,12 +607,26 @@ func refresh() -> void:
 	var can_chain := DAW.can(DAWBackend.Capability.FX_CHAIN)
 	_chain_up.lit = can_chain and at > 0
 	_chain_down.lit = can_chain and at >= 0 and at < order.size() - 1
-	_move_to.visible = can_chain
+	_move_to.visible = can_chain and not showing_window
 
 	var keyed := keyed_by()
 	_key.refresh()
 	_key.lit = _key.choice in keyed
 	_move_to.refresh()
+
+
+## A plugin's own window is drawn for a screen, and the picture is the point of this face: it takes
+## the footer's room too, and the footer (mix, key in, chain, move to) comes back with the knobs.
+func _give_the_window_the_footer() -> void:
+	for c in get_children():
+		if c is Node3D and c != _screen and c.position.y <= FOOTER_RULE + 0.0005 and c.position.y > -HEIGHT * 0.5:
+			c.visible = not showing_window
+	if _screen == null:
+		return
+	var top := HEIGHT * 0.5 - 0.050
+	var low := -HEIGHT * 0.5 + 0.010 if showing_window else FOOTER_RULE
+	_screen.size = Vector2(WIDTH - 0.03, top - low - (0.0 if showing_window else 0.012))
+	_screen.position.y = (top + low) * 0.5
 
 
 func _params() -> Array:
