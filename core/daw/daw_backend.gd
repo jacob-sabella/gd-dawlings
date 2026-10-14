@@ -312,6 +312,9 @@ func ripple_trim_item(_track_index: int, _item_index: int, _start: float, _end: 
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
+## How an item's fades run: DawKitClip.FADE_LINEAR or FADE_EQUAL_POWER. One undo step; none when it
+## already is.
+func set_item_fade_shape(_track_index: int, _item_index: int, _shape: int) -> void: pass
 ## Silence an item without removing it: it keeps its place and its edits, and plays again unmuted.
 func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: pass
 func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void: pass
@@ -523,6 +526,7 @@ func _locally_split(seconds: float) -> int:
 				right.loop_start = item.loop_start
 				right.loop_end = item.loop_end
 				right.fade_out = minf(item.fade_out, right.length)
+				right.fade_shape = item.fade_shape
 				_split_notes(item, right, seconds)
 				item.length = seconds - item.start
 				item.fade_out = 0.0
@@ -777,6 +781,17 @@ func _locally_reverse(track_index: int, item_index: int, reversed: bool) -> bool
 
 
 ## False when there is no such item or it already is as asked.
+## False when there is no such item or it already is as asked.
+func _locally_fade_shape(track_index: int, item_index: int, shape: int) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.fade_shape == shape:
+		return false
+	var lane := _lane_copy(track_index)
+	lane[item_index].fade_shape = shape
+	_write_lane(track_index, lane)
+	return true
+
+
 func _locally_lock(track_index: int, item_index: int, locked: bool) -> bool:
 	var it := state.item(track_index, item_index)
 	if it == null or it.locked == locked:

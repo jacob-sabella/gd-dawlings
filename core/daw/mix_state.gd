@@ -180,6 +180,8 @@ class ItemState extends RefCounted:
 	## Linear fade lengths at each end, in seconds, and the clip's own gain.
 	var fade_in: float = 0.0
 	var fade_out: float = 0.0
+	## How both fades run: DawKitClip.FADE_LINEAR or FADE_EQUAL_POWER (a quarter sine).
+	var fade_shape: int = DawKitClip.FADE_LINEAR
 	var gain_db: float = 0.0
 	## A looped item plays its file between these two points (seconds into the file) for as
 	## long as it lasts. Not looped when loop_end is not after loop_start.
@@ -187,7 +189,8 @@ class ItemState extends RefCounted:
 	var loop_end: float = 0.0
 
 	func has_clip_shape() -> bool:
-		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0 or loop_end > loop_start
+		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0 or loop_end > loop_start \
+				or fade_shape != DawKitClip.FADE_LINEAR
 
 	## The loudest the item's sound gets before its own gain, 0-1 of full scale, from the file's
 	## overview; 0 for an item with none (MIDI, or a file nobody drew). The part of the file it
@@ -206,14 +209,18 @@ class ItemState extends RefCounted:
 	func is_looped() -> bool:
 		return loop_end > loop_start
 
-	## The item's own level at song position `seconds`, in dB: its gain, and its fades, each a
-	## straight line in amplitude from silence to full.
+	## The item's own level at song position `seconds`, in dB: its gain, and its fades, from
+	## silence to full in a straight line in amplitude, or a quarter sine when equal-power -- as
+	## the engine plays them (dawkit's lane).
 	func level_db(seconds: float) -> float:
 		var through := 1.0
 		if fade_in > 0.0:
 			through = minf(through, (seconds - start) / fade_in)
 		if fade_out > 0.0:
 			through = minf(through, (end() - seconds) / fade_out)
+		through = clampf(through, 0.0, 1.0)
+		if fade_shape == DawKitClip.FADE_EQUAL_POWER and through < 1.0:
+			through = sin(through * PI * 0.5)
 		return gain_db + linear_to_db(clampf(through, 0.0001, 1.0))
 
 	## Seconds into the file that sound at song position `seconds`.

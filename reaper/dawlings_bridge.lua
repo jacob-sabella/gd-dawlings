@@ -739,6 +739,8 @@ function handlers.GetTimeline()
         reversed = reversed,
         fade_in = reaper.GetMediaItemInfo_Value(it, 'D_FADEINLEN'),
         fade_out = reaper.GetMediaItemInfo_Value(it, 'D_FADEOUTLEN'),
+        -- The desk's equal-power fade is Reaper's shape 1 on the fade in; anything else is linear.
+        fade_shape = math.floor(reaper.GetMediaItemInfo_Value(it, 'C_FADEINSHAPE')) == 1 and 1 or 0,
         gain = reaper.GetMediaItemInfo_Value(it, 'D_VOL'),
       }
     end
@@ -1602,6 +1604,17 @@ function handlers.SetItemFades(args)
   reaper.SetMediaItemInfo_Value(it, 'D_FADEINLEN', math.max(0, args[3] or 0))
   reaper.SetMediaItemInfo_Value(it, 'D_FADEOUTLEN', math.max(0, args[4] or 0))
   return edited('Item fades')
+end
+
+-- args: track, index, shape (0 linear, 1 equal power: Reaper's shape 1 at both ends).
+function handlers.SetItemFadeShape(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  local shape = (args[3] or 0) == 1 and 1 or 0
+  reaper.SetMediaItemInfo_Value(it, 'C_FADEINSHAPE', shape)
+  reaper.SetMediaItemInfo_Value(it, 'C_FADEOUTSHAPE', shape)
+  return edited('Item fade shape')
 end
 
 -- Every note of every MIDI take of an item, through `change(take, ppq_on, ppq_off, pitch)`,

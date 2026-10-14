@@ -112,6 +112,9 @@ var _reopen := false
 var _autosave := false
 ## `--recover`: a copy kept at frame 5 as if by an earlier run, so the RECOVER token offers it.
 var _recover := false
+## `--tl-fade T:I:S[:shape]`: item I of track T given fades of S seconds at each end, frame 7,
+## and with a shape (1: equal power) that shape too.
+var _tl_fade := ""
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -230,6 +233,8 @@ func _ready() -> void:
 				_autosave = true
 			"--recover":
 				_recover = true
+			"--tl-fade":
+				if i + 1 < args.size(): _tl_fade = args[i + 1]
 			"--tl-region":
 				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-pick":
@@ -303,6 +308,12 @@ func _process(_delta: float) -> void:
 	if _frames == 5 and _reopen:
 		var path := ProjectSettings.globalize_path("user://shot_reopen.dawproject")
 		print("SHOT_REOPEN ", DAW.save_project_as(path), DAW.open_project(path))
+	if _frames == 7 and _tl_fade != "":
+		var f := _tl_fade.split(":")
+		if f.size() >= 3:
+			DAW.set_item_fades(int(f[0]), int(f[1]), float(f[2]), float(f[2]))
+		if f.size() == 4:
+			DAW.set_item_fade_shape(int(f[0]), int(f[1]), int(f[3]))
 	if _frames == 7 and _tl_region != "":
 		for spec in _tl_region.split(",", false):
 			var r := spec.split(":")

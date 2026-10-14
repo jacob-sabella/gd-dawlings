@@ -787,6 +787,11 @@ func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> voi
 		_edit("SetItemReversed", [track_index, item_index, 1.0 if reversed else 0.0])
 
 
+func set_item_fade_shape(track_index: int, item_index: int, shape: int) -> void:
+	if _locally_fade_shape(track_index, item_index, shape):
+		_edit("SetItemFadeShape", [track_index, item_index, shape])
+
+
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	if _locally_lock(track_index, item_index, locked):
 		_edit("SetItemLocked", [track_index, item_index, 1.0 if locked else 0.0])
@@ -1147,6 +1152,8 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 			# Reaper's default fade is a few milliseconds on every item; under that is no fade.
 			if shape["fade_in"] > FADE_FLOOR or shape["fade_out"] > FADE_FLOOR or absf(shape["gain_db"]) > 0.001:
 				extra.merge(shape)
+			if int(item.get("fade_shape", 0)) == DawKitClip.FADE_EQUAL_POWER:
+				extra["fade_shape"] = DawKitClip.FADE_EQUAL_POWER
 			if item.get("locked", false):
 				extra["locked"] = true
 			if not extra.is_empty():

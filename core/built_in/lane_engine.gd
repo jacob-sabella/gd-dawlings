@@ -198,7 +198,8 @@ static func visible(a: float, b: float, covers: Array) -> Array:
 func _item_clips(t: MixState.TrackState, it: MixState.ItemState, a: float, b: float) -> Array:
 	var base := {"gain": db_to_linear(it.gain_db),
 			"fade_in": it.fade_in if is_equal_approx(a, it.start) else 0.0,
-			"fade_out": it.fade_out if is_equal_approx(b, it.end()) else 0.0}
+			"fade_out": it.fade_out if is_equal_approx(b, it.end()) else 0.0,
+			"fade_shape": it.fade_shape}
 	if not it.source.is_empty():
 		var wav := backend.take_stream(it.source, it.reversed)
 		if wav == null:

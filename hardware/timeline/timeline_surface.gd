@@ -195,7 +195,7 @@ var _item_strips: MeshBank
 var _item_notes: MeshBank
 ## The loudness of recorded takes, drawn on their items. See _place_wave.
 var _item_waves: MeshBank
-## A line across each faded corner of an item, two slots an item. See _place_fades.
+## A line across each faded corner of an item, FADE_SEGMENTS slots a fade. See _place_fades.
 var _item_fades: MeshBank
 ## [track, item, fade in, fade out] drawn instead of the item's own while a fade is dragged.
 var _fade_preview: Array = []
@@ -629,7 +629,7 @@ func _rebuild() -> void:
 	_item_fades = MeshBank.strips()
 	_item_fades.name = "ItemFades"
 	_adopt(_item_fades)
-	for i in total_items * 2:
+	for i in total_items * 2 * FADE_SEGMENTS:
 		_item_fades.claim(Transform3D(), Color.WHITE)
 	_item_fades.commit()
 	_gain_labels = Node3D.new()
@@ -1795,8 +1795,23 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 
 
 ## An item's fades, drawn as an arranger draws them: a line from silence in the block's bottom
-## corner to full level at the top, where the fade ends, over each faded end. Clipped to the
-## window. Returns the next free slot.
+## corner to full level at the top, where the fade ends, over each faded end -- straight, or for
+## an equal-power fade a quarter sine in FADE_SEGMENTS pieces. Clipped to the window. Returns the
+## next free slot.
+const FADE_SEGMENTS := 5
+
+
+## The points a fade's line runs through, from (x0, silence) to (x1, full): two for a straight
+## fade, FADE_SEGMENTS + 1 along a quarter sine for an equal-power one. `low` and `high` are
+## silence and full; a fade out is the same read right to left.
+static func fade_points(x0: float, x1: float, low: float, high: float, shape: int) -> Array:
+	if shape != DawKitClip.FADE_EQUAL_POWER:
+		return [Vector2(x0, low), Vector2(x1, high)]
+	var out: Array = []
+	for k in FADE_SEGMENTS + 1:
+		var t := float(k) / FADE_SEGMENTS
+		out.append(Vector2(lerpf(x0, x1, t), lerpf(low, high, sin(t * PI * 0.5))))
+	return out
 func _place_fades(item: MixState.ItemState, start: float, length: float, tint: Color, y: float,
 		slot: int) -> int:
 	var block_height := lane_height - 0.0024
@@ -1811,9 +1826,14 @@ func _place_fades(item: MixState.ItemState, start: float, length: float, tint: C
 		fade_out = minf(float(_fade_preview[3]), length)
 	var lines: Array = []
 	if fade_in > 0.0:
-		lines.append([Vector2(left, low), Vector2(minf(_x_for(start + fade_in), right), high)])
+		var pts := fade_points(left, minf(_x_for(start + fade_in), right), low, high, item.fade_shape)
+		for k in pts.size() - 1:
+			lines.append([pts[k], pts[k + 1]])
 	if fade_out > 0.0:
-		lines.append([Vector2(maxf(_x_for(start + length - fade_out), left), high), Vector2(right, low)])
+		# Drawn from the item's right edge back, then each piece turned to run left to right.
+		var pts := fade_points(right, maxf(_x_for(start + length - fade_out), left), low, high, item.fade_shape)
+		for k in pts.size() - 1:
+			lines.append([pts[k + 1], pts[k]])
 	var colour := Color(1.6, 1.6, 1.7)
 	var z := _back(item) + _depth() + NOTE_RISE + 0.0006
 	for line in lines:

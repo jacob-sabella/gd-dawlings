@@ -26,6 +26,8 @@ const STOP_INK := Color(0.95, 0.45, 0.40)
 var gain: GlyphRail
 var fade_in: GlyphRail
 var fade_out: GlyphRail
+## Straight or equal-power fades (DawKitClip.FADE_*): its mark the shape the item's fades have.
+var fade_shape: GlyphKey
 var mute: GlyphKey
 var lock: GlyphKey
 var reverse: GlyphKey
@@ -65,6 +67,13 @@ func _ready() -> void:
 	fade_out = _slider("ItemOut", &"fade_out", ITEM_INK, func() -> String: return "ITEM  FADE OUT",
 			func(v: float) -> String: return "%.2f s" % _fade_seconds(v))
 	fade_out.value_committed.connect(func(v: float): _set_fades(NAN, _fade_seconds(v)))
+	fade_shape = _key("ItemFadeShape", &"fade_linear", ITEM_INK, "ITEM  FADE SHAPE", _toggle_fade_shape,
+			func() -> String:
+				var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+				if item == null:
+					return "select an item"
+				return "equal power: loud through a crossfade's middle; press for straight" \
+						if item.fade_shape == DawKitClip.FADE_EQUAL_POWER else "straight: press for equal power")
 	_group()
 	mute = _key("ItemMute", &"mute", STOP_INK, "ITEM  MUTE", _toggle_mute,
 			func() -> String: return "muted: press to play it again" if mute.lit else "silence it", true)
@@ -117,7 +126,7 @@ func refresh() -> void:
 	if item == null:
 		_target = []
 	var one := item != null
-	for c in [gain, fade_in, fade_out, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -131,7 +140,7 @@ func refresh() -> void:
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	notice = "" if not picked.is_empty() else "select an item on the timeline"
 	if not one:
-		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise]:
+		for c in [mute, lock, reverse, normalise, down, up, quant, softer, harder, humanise, fade_shape]:
 			c.lit = false
 		return
 	gain.snap_to(clampf((item.gain_db - GAIN_LOW) / (GAIN_HIGH - GAIN_LOW), 0.0, 1.0))
@@ -140,8 +149,11 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
+	for c in [gain, fade_in, fade_out, fade_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise]:
 		c.available = not item.locked
+	var power := item.fade_shape == DawKitClip.FADE_EQUAL_POWER
+	fade_shape.glyph = &"fade_power" if power else &"fade_linear"
+	fade_shape.lit = power
 	normalise.lit = item.sound_peak() > 0.0
 	reverse.lit = item.reversed
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
@@ -247,6 +259,13 @@ func _overlaps(pair: Array) -> bool:
 	var a := DAW.state.item(pair[0], pair[1])
 	var b := DAW.state.item(pair[0], pair[2])
 	return a != null and b != null and minf(a.end(), b.end()) - maxf(a.start, b.start) >= DAWBackend.MIN_ITEM_SECONDS
+
+
+func _toggle_fade_shape() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item != null:
+		DAW.set_item_fade_shape(_target[0], _target[1], DawKitClip.FADE_LINEAR
+				if item.fade_shape == DawKitClip.FADE_EQUAL_POWER else DawKitClip.FADE_EQUAL_POWER)
 
 
 func _crossfade() -> void:

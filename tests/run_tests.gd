@@ -297,6 +297,7 @@ func _ready() -> void:
 	_test_a_render_can_be_normalised()
 	_test_a_track_is_duplicated()
 	_test_the_selection_is_nudged_by_the_grid()
+	_test_an_item_fades_with_equal_power()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -19475,6 +19476,89 @@ func _test_the_selection_is_nudged_by_the_grid() -> void:
 	DAW.clear_item_selection()
 	page.refresh()
 	check("dark with nothing selected", not page.nudge_later.lit and not page.nudge_later.available)
+	timeline.free()
+	_offline()
+
+
+func _test_an_item_fades_with_equal_power() -> void:
+	var it := MixState.ItemState.new()
+	it.start = 10.0
+	it.length = 4.0
+	it.fade_in = 2.0
+	close_to("halfway through a straight fade, half the amplitude", it.level_db(11.0), linear_to_db(0.5))
+	it.fade_shape = DawKitClip.FADE_EQUAL_POWER
+	close_to("halfway through an equal-power one, half the power", it.level_db(11.0), linear_to_db(sin(PI * 0.25)))
+	close_to("and full once it is through", it.level_db(13.0), 0.0)
+	var pts := TimelineSurface.fade_points(0.0, 1.0, 0.0, 1.0, DawKitClip.FADE_EQUAL_POWER)
+	check("drawn as a curve, above the straight line in its middle", pts.size() == TimelineSurface.FADE_SEGMENTS + 1
+			and pts[2].y > pts[2].x and pts[0] == Vector2.ZERO and pts[-1].is_equal_approx(Vector2.ONE))
+	check("a straight one as a line", TimelineSurface.fade_points(0.0, 1.0, 0.0, 1.0, DawKitClip.FADE_LINEAR).size() == 2)
+
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var lane := 2
+	DAW.set_item_fades(lane, 1, 0.5, 0.5)
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
+	check("set equal-power", s.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	check("one step to undo", s.undo_depth - depth == 1)
+	check("and replicated with the lane", backend._repl_durable.has("/track/%d/items" % lane))
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest reads it", guest.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	var lanes := LaneEngine.new()
+	lanes.backend = backend
+	var shaped := lanes.clips_for(lane).filter(func(c): return c["fade_shape"] == DawKitClip.FADE_EQUAL_POWER)
+	check("the engine plays it with the shape (%d clips)" % shaped.size(), not shaped.is_empty())
+	lanes.free()
+	var flat := s.undo_depth
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
+	check("set again, no step", s.undo_depth == flat)
+	var p := ProjectBridge.capture(backend)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	add_child(fresh)
+	ProjectBridge.load(p, fresh)
+	check("saved with the project", fresh.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	fresh.free()
+	DAW.select_item(lane, 1, false)
+	DAW.split_selected(s.item(lane, 1).start + s.item(lane, 1).length * 0.5)
+	check("both halves of a cut keep it", s.track(lane).items.filter(func(x): return x.fade_shape == DawKitClip.FADE_EQUAL_POWER).size() == 2)
+	DAW.undo()
+	DAW.clear_item_selection()
+	DAW.undo()
+	check("undone, straight again", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 7.0])
+	check("a guest's odd shape is a straight one", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.apply_intent(&"set_item_fade_shape", [lane, 1, 1.0])
+	check("a guest may set it", s.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER)
+	DAW.undo()
+	DAW.set_item_locked(lane, 1, true)
+	DAW.set_item_fade_shape(lane, 1, DawKitClip.FADE_EQUAL_POWER)
+	check("a locked item refuses it", s.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.set_item_locked(lane, 1, false)
+
+	_offline()
+	DAW.set_item_fades(lane, 1, 0.5, 0.5)
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.select_item(lane, 1, false)
+	page.refresh()
+	check("the ITEM page has a fade shape token, straight", page.fade_shape.glyph == &"fade_linear"
+			and not page.fade_shape.lit and page.fade_shape.available)
+	page.fade_shape.pressed.emit()
+	check("pressed, equal power, its mark the curve", DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and page.fade_shape.glyph == &"fade_power" and page.fade_shape.lit)
+	timeline._process(0.0)
+	check("and the fades drawn as curves", timeline._item_fades.count() >= DAW.state.track(lane).items.size() * 2 * TimelineSurface.FADE_SEGMENTS)
+	page.fade_shape.pressed.emit()
+	check("again, straight", DAW.state.item(lane, 1).fade_shape == DawKitClip.FADE_LINEAR)
+	DAW.clear_item_selection()
 	timeline.free()
 	_offline()
 

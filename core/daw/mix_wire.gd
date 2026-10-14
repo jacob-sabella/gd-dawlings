@@ -512,6 +512,8 @@ static func _unpack_items(args: Array) -> Array:
 			item.peaks = peaks if peaks is PackedByteArray else PackedByteArray()
 			item.fade_in = maxf(float(audio.get("fade_in", 0.0)), 0.0)
 			item.fade_out = maxf(float(audio.get("fade_out", 0.0)), 0.0)
+			item.fade_shape = DawKitClip.FADE_EQUAL_POWER if int(audio.get("fade_shape", 0)) == DawKitClip.FADE_EQUAL_POWER \
+					else DawKitClip.FADE_LINEAR
 			item.gain_db = float(audio.get("gain_db", 0.0))
 			item.locked = bool(audio.get("locked", false))
 			item.reversed = bool(audio.get("reversed", false))
@@ -545,6 +547,8 @@ static func _pack_items(items: Array) -> Array:
 				extra["fade_in"] = item.fade_in
 				extra["fade_out"] = item.fade_out
 				extra["gain_db"] = item.gain_db
+				if item.fade_shape != DawKitClip.FADE_LINEAR:
+					extra["fade_shape"] = item.fade_shape
 				if item.is_looped():
 					extra["loop"] = [item.loop_start, item.loop_end]
 			if item.locked:

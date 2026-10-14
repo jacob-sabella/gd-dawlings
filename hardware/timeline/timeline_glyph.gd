@@ -253,6 +253,19 @@ func _build() -> void:
 		&"fade_out":
 			_rod(Vector2(-0.95, 0.8), Vector2(0.95, -0.8), 0.13, 0.4)
 			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
+		&"fade_linear":
+			# The shape of a fade, which way the line runs: straight...
+			_rod(Vector2(-0.95, -0.75), Vector2(0.95, 0.85), 0.12, 0.4)
+			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
+		&"fade_power":
+			# ...or a quarter sine, up fast and easing into full.
+			var last := Vector2(-0.95, -0.75)
+			for k in range(1, 6):
+				var t := k / 5.0
+				var p := Vector2(-0.95 + 1.9 * t, -0.75 + 1.6 * sin(t * PI * 0.5))
+				_rod(last, p, 0.12, 0.4)
+				last = p
+			_box(Vector2(0, -0.88), Vector2(1.9, 0.1), 0.2)
 		&"depth_16", &"depth_24":
 			# A sine sampled in steps: fewer for fewer bits.
 			var n := 5 if _kind == &"depth_16" else 9

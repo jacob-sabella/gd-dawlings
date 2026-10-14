@@ -3350,3 +3350,20 @@ works out each item's new start and `NudgeItems` in the bridge moves each select
 track and old start -- not yet run against a live Reaper.
 The screenshot caught the two marks pointing the wrong way round; fixed before the commit.
 Suite: 10249 checks, 0 failed; probe host 53, guest 47, 0 failed.
+
+## DAW parity, iteration 26: equal-power fades (2026-10-14)
+dawkit's native lane already played a `fade_shape` (0 straight, 1 a quarter sine) that nothing
+set, so no native rebuild: dawkit a08b20c adds `DawKitClip.fade_shape` (FADE_LINEAR,
+FADE_EQUAL_POWER) to the clip's plain form and keeps it through a dawproject file beside lock and
+reverse. The game: `MixState.ItemState.fade_shape`, on the wire in the item's extras, given to
+the lane (`LaneEngine`), saved and opened through ProjectBridge, kept by both halves of a split;
+`level_db` follows it, so the waveform's fade is the one heard. `DAW.set_item_fade_shape`, an
+item edit (one undo step, none when already so, refused on a locked item; a guest's odd shape is a
+straight one). The arrangement draws an equal-power fade as a quarter sine in five pieces
+(`TimelineSurface.fade_points`). A FADE SHAPE token on the ITEM page after the fade rails, its mark
+the shape the item has, lit when equal-power. Reaper: SetItemFadeShape writes C_FADEINSHAPE and
+C_FADEOUTSHAPE 1, the timeline reads shape 1 back -- whether Reaper's shape 1 is its equal-power
+curve is unchecked against a live Reaper. `tools/screenshot.gd --tl-fade T:I:S[:shape]`.
+Split out, still missing: other shapes, a shape per end, and CROSSFADE choosing equal power
+itself (it is still two plain fade edits).
+Suite: 10270 checks, 0 failed; probe host 53, guest 47, 0 failed; dawkit 371 checks, 0 failed.
