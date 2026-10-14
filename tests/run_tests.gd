@@ -8831,11 +8831,20 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 	check("beside: the side room has the audio patch wall, on its back wall facing in", patch_wall != null
 			and not patch_wall.follow and is_equal_approx(absf(patch_wall.rotation.y), PI)
 			and patch_wall.position.z > Studio.ROOM_BACK - 0.3 and patch_wall.position.x < -studio.room_width * 0.5)
-	check("and the other arrangements have none", (func() -> bool:
+	check("and the other arrangements stand one on legs by the left wall, facing the desk", (func() -> bool:
 			studio.set_venue(&"studio", false, StudioVenue.BESIDE + 1)
-			var none := studio.venue.get_node_or_null("PatchWall") == null
+			var free := studio.venue.get_node_or_null("PatchWall") as PatchWallSurface
+			var ok := free != null and free.position.x > -studio.room_width * 0.5 \
+					and free.position.x < -studio.room_width * 0.5 + 1.0 and is_equal_approx(free.rotation.y, PI * 0.5)
 			studio.set_venue(&"studio", false, StudioVenue.BESIDE)
-			return none).call())
+			return ok).call())
+	check("and so does every other venue", (func() -> bool:
+			var all := true
+			for id in Venue.IDS:
+				studio.set_venue(id, false, 0)
+				all = all and studio.venue.get_node_or_null("PatchWall") != null
+			studio.set_venue(&"studio", false, StudioVenue.BESIDE)
+			return all).call())
 	var side_rooms := studio.venue.rooms()
 	var all_standable := true
 	for box: AABB in studio.venue.zones().values():

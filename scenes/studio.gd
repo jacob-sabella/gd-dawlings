@@ -450,6 +450,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	add_child(venue)
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
+	_stand_a_patch_wall()
 	mirror.wardrobe.look = Session.local_look
 	mirror.wardrobe.look_changed.connect(Session.set_look)
 	_relight()
@@ -460,6 +461,30 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
 	_publish_room()
+
+
+## The audio patch wall in every venue: where a venue has hung one (the studio's side room), that
+## is the one; anywhere else it stands on two legs against the control room's left side, turned
+## to face the desk, at a little over half the size of the room's own.
+func _stand_a_patch_wall() -> void:
+	if venue.get_node_or_null("PatchWall") != null:
+		return
+	var wall := PatchWallSurface.new()
+	wall.name = "PatchWall"
+	wall.scale = Vector3.ONE * 0.55
+	wall.position = Vector3(-room_width * 0.5 + 0.55, 2.2, -1.3)
+	wall.rotation.y = PI * 0.5
+	wall.follow = DisplayServer.get_name() != "headless"
+	venue.add_child(wall)
+	for dz in [-1.3, 1.3]:
+		var leg := MeshInstance3D.new()
+		leg.name = "PatchWallLeg"
+		var post := BoxMesh.new()
+		post.size = Vector3(0.06, 1.6, 0.06)
+		leg.mesh = post
+		leg.position = Vector3(wall.position.x - 0.04, 0.8, wall.position.z + dz)
+		leg.material_override = Materials.furniture()
+		venue.add_child(leg)
 
 
 ## The practicals back to the venue's own colour and energy, and the venue's own house lights

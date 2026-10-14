@@ -53,8 +53,8 @@ The arrange timeline stands in the room on its own stand; the keys under it are 
 sees one project. Beyond cutting, moving and fading items, the deck now renames an item, selects
 a track's items, and edits a MIDI item's notes: legato, staccato, even velocity, notes backwards,
 and per-note insert, delete, pitch, length, time and velocity. A render picks its bit depth and
-sample rate. The studio's side room has a patch wall of this machine's PipeWire graph (drag jack
-to jack to patch), and RECOVER opens the newest autosave after a crash; hold a hand steady on it
+sample rate. Every venue has a patch wall of this machine's PipeWire graph (in the studio's side room, or
+standing by the left wall elsewhere; drag jack to jack to patch), and RECOVER opens the newest autosave after a crash; hold a hand steady on it
 and press to choose an older copy first.
 
 ### Venues

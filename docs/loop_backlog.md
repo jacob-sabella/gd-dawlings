@@ -3652,3 +3652,18 @@ to the newest; a plain press opens the chosen one in the project's place and the
 the newest. The hover card says "copy N of M, kept at hh:mm". `DAW.autosave_copies()` lists the host's
 copies; no wire change (recovery is the host's own). README gained a short section on the deck.
 Probe: host 53, guest 47, 0 failed. Suite: 10491 checks, 0 failed. The loop's 50 iterations are done.
+
+
+## 2026-10-14 -- the patch wall in every venue
+
+Asked for: the patchbay in every venue. Where a venue hangs one (the studio's side room) that is the
+wall; every other venue and arrangement now gets a `PatchWall` on two legs by the control room's left
+wall, 0.55 scale, facing the desk (`Studio._stand_a_patch_wall`). Not checked against each venue's
+furniture: it may stand in something in a venue whose left side is busy.
+
+Reaper's own plugins' UI (ReaEQ etc.), tried and not working: plain XSendEvent clicks are ignored
+(GTK, XI2) and XTest clicks, with the window moved so the clicked point sat under the pointer,
+changed nothing either; the X pointer is also confined to the monitors' rectangles under XWayland. The
+reparented window is `Withdrawn` with no window manager, so GTK may not even repaint it. Untried: a
+WM-less nested server cannot hold Reaper's windows; drawing ReaEQ's graph natively from its band
+parameters is the way left. The UI button stays hidden for "(Cockos)" and "JS:" plugins.
