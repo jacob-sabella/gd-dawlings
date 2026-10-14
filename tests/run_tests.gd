@@ -17,6 +17,14 @@ var _checks := 0
 
 
 func _ready() -> void:
+	# DAWLINGS_TESTS=_test_a,_test_b runs only those, for working on one corner of the game
+	# without the whole suite's minutes. The full run is still the one that counts.
+	var only := OS.get_environment("DAWLINGS_TESTS")
+	if only != "":
+		for test in only.split(",", false):
+			await call(test.strip_edges())
+		_report()
+		return
 	_test_osc_roundtrip()
 	_test_osc_padding()
 	_test_osc_bundle()
@@ -339,7 +347,10 @@ func _ready() -> void:
 	_test_tour_brief_finishes_on_the_bar_not_the_frame()
 	_test_tour_run_round_trips_the_crowd()
 	_test_tour_hud_shows_the_crowd_lines()
+	_report()
 
+
+func _report() -> void:
 	print("\n%d checks, %d failed" % [_checks, _failures.size()])
 	for f in _failures:
 		print("  FAIL  %s" % f)
@@ -7036,8 +7047,10 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	var grid_zones := studio.venue.zones()
 	var grid_walkable := studio._walkable()
 	check("a venue with arrangements has more than one", Venue.variant_titles(&"grid").size() > 1)
-	check("one without has its own name as its only one", Venue.variant_titles(&"loft")
-			== PackedStringArray([Venue.make_title(&"loft")]))
+	check("every venue has at least two alternates to its first arrangement", Venue.IDS.all(
+			func(v: StringName) -> bool: return Venue.variant_titles(v).size() >= 3))
+	check("one unknown has a name as its only one", Venue.variant_titles(&"nowhere")
+			== PackedStringArray([Venue.make_title(&"nowhere")]))
 	check("the host can arrange it another way", studio.choose_variant(1) and studio.venue.variant == 1
 			and studio.venue.venue_id() == &"grid")
 	check("and is told which (%s)" % studio.venue.title(), studio.venue.title().ends_with(

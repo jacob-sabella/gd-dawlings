@@ -18,17 +18,28 @@ extends Node3D
 ## into is never invisible.
 
 ## Registry, in cycling order. The first is the default.
-const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop", &"station", &"dome", &"club"]
+const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop", &"station", &"dome",
+		&"club", &"cave", &"greenhouse", &"stage", &"garden", &"desert"]
 
 ## A venue can come in more than one arrangement -- the same place with its structure moved
 ## about: walls or none, a city close in or far off. A variant keeps the venue's footprint and
 ## its zones' contract; only what stands round them changes. Variant 0 is the venue as first
 ## built. Chosen by whoever's room it is, and carried with the venue (see Session.room).
 const VARIANTS := {
-	&"studio": ["Live room behind", "Live room beside"],
-	&"grid": ["Highway", "Downtown"],
+	&"studio": ["Live room behind", "Live room beside", "Through the glass"],
+	&"grid": ["Highway", "Downtown", "Neon sea"],
+	&"chalk": ["Open sky", "Sketched room", "Classroom"],
+	&"loft": ["City night", "Sunday morning", "Thunderstorm"],
+	&"cabin": ["Snowy night", "Summer dusk", "Northern lights"],
 	&"rooftop": ["Dusk", "Golden hour", "Night"],
-	&"chalk": ["Open sky", "Sketched room"],
+	&"station": ["Night side", "Day side", "Orbital sunrise"],
+	&"dome": ["Twenty metres", "The deep", "Shipwreck"],
+	&"club": ["After hours", "Showtime", "Speakeasy"],
+	&"cave": ["Crystal grotto", "Glowworm lake", "Lava tube"],
+	&"greenhouse": ["Morning", "Rain", "Night bloom"],
+	&"stage": ["Headline night", "Soundcheck", "Arena"],
+	&"garden": ["Spring", "Autumn", "Winter"],
+	&"desert": ["Starlit canyon", "Dawn dunes", "Oasis"],
 }
 
 ## What people will do here besides mix, each with room of its own. Built later; every venue
@@ -92,6 +103,16 @@ static func make(id: StringName, which := 0) -> Venue:
 			out = DomeVenue.new()
 		&"club":
 			out = ClubVenue.new()
+		&"cave":
+			out = CaveVenue.new()
+		&"greenhouse":
+			out = GreenhouseVenue.new()
+		&"stage":
+			out = StageVenue.new()
+		&"garden":
+			out = GardenVenue.new()
+		&"desert":
+			out = DesertVenue.new()
 		_:
 			out = StudioVenue.new()
 	out.variant = known_variant(id, which)
@@ -129,6 +150,16 @@ static func make_title(id: StringName) -> String:
 			return "Underwater dome"
 		&"club":
 			return "Jazz club"
+		&"cave":
+			return "Crystal cave"
+		&"greenhouse":
+			return "Glasshouse"
+		&"stage":
+			return "Festival stage"
+		&"garden":
+			return "Temple garden"
+		&"desert":
+			return "Desert"
 		_:
 			return "Studio"
 
