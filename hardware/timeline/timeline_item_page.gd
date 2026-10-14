@@ -61,6 +61,8 @@ var even: GlyphKey
 var retrograde: GlyphKey
 ## The note sounding at the playhead taken out (DAW.delete_note).
 var note_delete: GlyphKey
+## A note of a beat put in at the playhead, at the pitch of the one beside it (DAW.insert_note).
+var note_add: GlyphKey
 ## The note sounding at the playhead moved a semitone, or an octave when fine (DAW.transpose_note).
 var note_up: GlyphKey
 var note_down: GlyphKey
@@ -135,6 +137,9 @@ func _ready() -> void:
 				var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
 				return "rename \"%s\", on the keypad" % item.name if item != null else "select one item")
 	retrograde = _key("ItemRetrograde", &"retrograde", NOTE_INK, "ITEM  NOTES BACKWARDS", func(): _retrograde(), _retrograde_text)
+	note_add = _key("ItemNoteAdd", &"note_add", Color(0.55, 0.85, 0.55), "ITEM  ADD NOTE", func(): _add_note(),
+			func() -> String: return "a note a beat long at the playhead, at the pitch of the one beside it" if note_add.lit \
+					else "put the playhead inside a MIDI item")
 	note_down = _key("ItemNoteDown", &"note_down", NOTE_INK, "ITEM  NOTE DOWN", func(): _move_note(-1),
 			func() -> String: return "the note at the playhead a semitone down; fine: an octave" if note_down.lit else "put the playhead on a note")
 	note_up = _key("ItemNoteUp", &"note_up", NOTE_INK, "ITEM  NOTE UP", func(): _move_note(1),
@@ -166,7 +171,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_up, note_down, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -208,6 +213,9 @@ func refresh() -> void:
 	note_velocity.available = midi and not item.locked
 	note_delete.available = midi and not item.locked
 	note_up.available = midi and not item.locked
+	note_add.available = midi and not item.locked
+	var inside := DAW.state.position_seconds > item.start and DAW.state.position_seconds < item.start + item.length - MidiTake.MIN_NOTE
+	note_add.lit = midi and inside
 	note_down.available = midi and not item.locked
 	note_delete.lit = midi and _sounding_note() >= 0
 	note_up.lit = note_delete.lit
@@ -230,6 +238,16 @@ func _sounding_note() -> int:
 	var t := DAW.state.position_seconds - item.start
 	var at := n * MidiTake.NOTE_WIDTH
 	return n if item.notes[at] <= t and t < item.notes[at + 1] else -1
+
+
+func _add_note() -> void:
+	var item: MixState.ItemState = null if _target.is_empty() else DAW.state.item(_target[0], _target[1])
+	if item == null or item.notes.is_empty() and item.source != "":
+		return
+	var on := DAW.state.position_seconds - item.start
+	var n := DAWBackend.note_near(item.notes, on)
+	var pitch := int(item.notes[n * MidiTake.NOTE_WIDTH + 2]) if n >= 0 else 60
+	DAW.insert_note(_target[0], _target[1], on, minf(on + 60.0 / DAW.state.tempo, item.length), pitch)
 
 
 func _move_note(direction: int) -> void:

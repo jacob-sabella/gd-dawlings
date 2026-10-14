@@ -3607,3 +3607,14 @@ DELETE NOTE, while a note sounds. `DAW.transpose_note` is an ITEM_EDITS intent (
 clamped in `apply_intent`, undoable, refused on locked items, no move at the range's end is no
 edit). Reaper's `TransposeNote` finds the note by start and pitch (syntax-checked, not run live).
 Still no insert-a-note or move-in-time verb. Suite: 10466 checks, 0 failed.
+
+## 2026-10-14 -- iteration 47: add a note
+
+ADD NOTE on the ITEM page (a brick and a plus, green) puts a note a beat long into the MIDI item at
+the playhead, at the pitch of the note beside it (60 for an empty item) and velocity 100, then
+NOTE UP / DOWN and the velocity rail shape it. Lit while the playhead is inside the item.
+`DAW.insert_note` is an ITEM_EDITS intent `[track, item, on, off, pitch]` (start and end in seconds
+from the item's start, sanitised and clipped to the item in `apply_intent` and the backend; a start
+at or past the end, a recorded-audio item, or MAX_NOTES notes refuse it). Reaper's `InsertNote` uses
+MIDI_InsertNote on the first MIDI take (syntax-checked, not run live). Still no move-a-note-in-time
+or resize-a-note verb. Probe: host 53, guest 47, 0 failed. Suite: 10472 checks, 0 failed.

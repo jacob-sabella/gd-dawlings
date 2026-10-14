@@ -232,6 +232,11 @@ func _build() -> void:
 			var d := 1.0 if _kind == &"pitch_up" else -1.0
 			_cone(Vector2(0, 0.15 * d), Vector2(0, d), 0.6, 0.85)
 			_box(Vector2(0, -0.7 * d), Vector2(1.3, 0.2), 0.3)
+		&"note_add":
+			# One brick, and a plus where the next goes.
+			_box(Vector2(-0.55, 0.0), Vector2(0.7, 0.45), 0.9)
+			_rod(Vector2(0.45, 0.0), Vector2(1.0, 0.0), 0.13, 0.95)
+			_rod(Vector2(0.725, -0.28), Vector2(0.725, 0.28), 0.13, 0.95)
 		&"note_up", &"note_down":
 			# One brick, with a point over it or under it.
 			var nd := 1.0 if _kind == &"note_up" else -1.0

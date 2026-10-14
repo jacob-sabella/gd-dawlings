@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func insert_note(_track_index: int, _item_index: int, _on: float, _off: float, _pitch: int) -> void: pass
 func transpose_note(_track_index: int, _item_index: int, _note_index: int, _semitones: int) -> void: pass
 func delete_note(_track_index: int, _item_index: int, _note_index: int) -> void: pass
 func retrograde_item(_track_index: int, _item_index: int) -> void: pass
@@ -1228,6 +1229,34 @@ func _locally_even_velocity(track_index: int, item_index: int) -> bool:
 			changed = true
 	if not changed:
 		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## The velocity of a note put in by hand.
+const INSERT_VELOCITY := 100
+
+## A note put into a MIDI item, in its place among the notes by start, clipped to the item. False
+## when the item is not MIDI, the note would begin at or past its end, or it holds MAX_NOTES.
+func _locally_insert_note(track_index: int, item_index: int, on: float, off: float, pitch: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.source != "" or on >= item.length - MidiTake.MIN_NOTE \
+			or item.notes.size() / MidiTake.NOTE_WIDTH >= MidiTake.MAX_NOTES:
+		return false
+	on = maxf(on, 0.0)
+	off = clampf(off, on + MidiTake.MIN_NOTE, maxf(item.length, on + MidiTake.MIN_NOTE))
+	var at := item.notes.size()
+	for n in range(0, item.notes.size() - MidiTake.NOTE_WIDTH + 1, MidiTake.NOTE_WIDTH):
+		if item.notes[n] > on:
+			at = n
+			break
+	var notes := item.notes.duplicate()
+	var fresh := PackedFloat32Array([on, off, clampi(pitch, 0, 127), INSERT_VELOCITY, 0])
+	for k in fresh.size():
+		notes.insert(at + k, fresh[k])
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
 	it.notes = notes

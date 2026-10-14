@@ -996,6 +996,11 @@ func set_note_velocity(track_index: int, item_index: int, note_index: int, veloc
 		_edit("SetNoteVelocity", [track_index, item_index, on, pitch, clampi(velocity, 1, 127)])
 
 
+func insert_note(track_index: int, item_index: int, on: float, off: float, pitch: int) -> void:
+	if _locally_insert_note(track_index, item_index, on, off, pitch):
+		_edit("InsertNote", [track_index, item_index, on, off, pitch, INSERT_VELOCITY])
+
+
 func transpose_note(track_index: int, item_index: int, note_index: int, semitones: int) -> void:
 	var item := state.item(track_index, item_index)
 	var at := note_index * MidiTake.NOTE_WIDTH

@@ -297,6 +297,7 @@ func _ready() -> void:
 	_test_a_tracks_items_are_selected_together()
 	_test_an_item_is_renamed()
 	_test_a_note_is_deleted()
+	_test_a_note_is_inserted()
 	_test_a_note_is_moved_in_pitch()
 	_test_notes_are_played_backwards()
 	_test_the_audio_graph_is_read_and_drawn()
@@ -20317,6 +20318,41 @@ func _test_a_note_is_moved_in_pitch() -> void:
 	DAW.transpose_note(lane, 0, first, -1)
 	check("a locked item is left alone", s.undo_depth == locked)
 	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"transpose_note") and &"transpose_note" in DAW.LOCKED_REFUSES)
+
+
+func _test_a_note_is_inserted() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, [[4.0 * beat, 5.0 * beat, 60, 100, 0], [6.0 * beat, 7.0 * beat, 67, 90, 0]], "Add")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.insert_note(lane, 0, 2.0 * beat, 3.0 * beat, 64)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	check("a third note in, between the two (%d notes)" % n.size(), n.size() == 3 and int(n[1][2]) == 64 and int(n[1][3]) == 100 \
+			and is_equal_approx(n[1][0], 4.0 * beat + 2.0 * beat) and s.undo_depth - depth == 1)
+	DAW.insert_note(lane, 0, 3.5 * beat, 9.0 * beat, 72)
+	n = MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0])
+	check("one that runs past the end is cut at it", n.size() == 4 and is_equal_approx(n[3][1], 8.0 * beat))
+	var count := s.item(lane, 0).notes.size()
+	DAW.insert_note(lane, 0, 4.0 * beat, 5.0 * beat, 60)
+	DAW.insert_note(lane, 0, 5.0 * beat, 6.0 * beat, 60)
+	DAW.insert_note(lane, 9, 0.0, beat, 60)
+	check("one starting at the end is refused, as is no such item", s.item(lane, 0).notes.size() == count)
+	DAW.undo()
+	DAW.undo()
+	DAW.apply_intent(&"insert_note", [lane, 0, NAN, 1.0, 60])
+	DAW.apply_intent(&"insert_note", [lane, 0, -5.0, 0.5 * beat, 500])
+	var m := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	m.sort_custom(func(a, b): return a[0] < b[0])
+	check("a wild one is made safe: from the start, a pitch within range (%s)" % [m], m.any(func(x): return int(x[2]) == 127 and is_equal_approx(x[0], 4.0 * beat)))
+	DAW.set_item_locked(lane, 0, true)
+	var locked := s.undo_depth
+	DAW.insert_note(lane, 0, beat, 2.0 * beat, 60)
+	check("a locked item is left alone", s.undo_depth == locked)
+	check("the verb crosses the wire as an item edit", DAW.ITEM_EDITS.has(&"insert_note") and &"insert_note" in DAW.LOCKED_REFUSES)
 
 
 func _test_a_note_is_deleted() -> void:

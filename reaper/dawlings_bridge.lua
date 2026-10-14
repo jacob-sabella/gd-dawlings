@@ -1823,6 +1823,30 @@ function handlers.LegatoItem(args)
   return edited('Legato')
 end
 
+-- args: track, index, on, off, pitch, velocity: a note from `on` to `off` seconds after the item's
+-- start, in its first MIDI take, cut short at the item's end.
+function handlers.InsertNote(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  local from = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local last = from + reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local on = from + (args[3] or 0)
+      local off = math.min(from + (args[4] or 0), last)
+      if on >= off then return {ok = false, error = 'outside the item'} end
+      reaper.Undo_BeginBlock()
+      reaper.MIDI_InsertNote(take, false, false, reaper.MIDI_GetPPQPosFromProjTime(take, on),
+          reaper.MIDI_GetPPQPosFromProjTime(take, off), 0, math.max(0, math.min(127, math.floor(args[5] or 60))),
+          math.max(1, math.min(127, math.floor(args[6] or 100))), true)
+      reaper.MIDI_Sort(take)
+      return edited('Insert note')
+    end
+  end
+  return {ok = false, error = 'not a MIDI item'}
+end
+
 -- args: track, index, seconds, pitch, semitones: the note of that pitch starting that many seconds
 -- into the item moved by that many semitones.
 function handlers.TransposeNote(args)
