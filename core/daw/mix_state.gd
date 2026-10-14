@@ -64,6 +64,9 @@ class SendState extends RefCounted:
 	## Into the destination's key input (channels 3/4) rather than its mix: a sidechain. Heard
 	## by whatever plugin on that track listens for a key, and by nothing else.
 	var key: bool = false
+	## Taken before the track's fader and pan rather than after them: a cue or an effect send that
+	## stays where it is when the track is pulled down in the mix. Reaper's "pre-fader (post-FX)".
+	var pre_fader: bool = false
 
 
 class FXState extends RefCounted:

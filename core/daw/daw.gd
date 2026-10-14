@@ -68,7 +68,7 @@ const COMMANDS := [
 	&"delete_selected", &"ripple_delete_selected", &"duplicate_selected", &"trim_item", &"set_item_gain", &"set_item_fades", &"set_item_muted", &"set_item_locked", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"rename_track", &"set_track_colour", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
-	&"set_send_volume", &"set_send_pan",
+	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 ]
@@ -246,6 +246,11 @@ func set_send_volume(track_index: int, send_index: int, taper: float) -> void:
 
 func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 	_do(&"set_send_pan", [track_index, send_index, clampf(pan, 0.0, 1.0)])
+
+
+## Before the track's fader and pan, or after them (the default).
+func set_send_pre_fader(track_index: int, send_index: int, pre: bool) -> void:
+	_do(&"set_send_pre_fader", [track_index, send_index, 1.0 if pre else 0.0])
 
 
 ## Through `_do` although it changes nothing: only the host can reach Reaper, and the answer
@@ -732,7 +737,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed remove_track intent %s." % [args])
 			return
 		args = [int(args[0])]
-	if verb in [&"set_send_volume", &"set_send_pan"]:
+	if verb in [&"set_send_volume", &"set_send_pan", &"set_send_pre_fader"]:
 		# Peer input. A send is a track and a 1-based slot; anything else names nothing, and a
 		# level outside the taper is a fader past its end stop.
 		if args.size() != 3 or int(args[0]) < 1 or int(args[1]) < 1:

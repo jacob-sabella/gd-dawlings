@@ -82,6 +82,7 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 			send.volume_db = snappedf(backend.taper_to_db(sd.volume), 0.000001)
 			send.pan = sd.pan * 2.0 - 1.0
 			send.key = sd.key
+			send.pre_fader = sd.pre_fader
 			out.sends.append(send)
 		for it in t.items:
 			out.clips.append(_clip(it))
@@ -246,6 +247,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 			sd.volume = backend.db_to_taper(send.volume_db)
 			sd.pan = (send.pan + 1.0) * 0.5
 			sd.key = send.key
+			sd.pre_fader = send.pre_fader
 		for lane in src.automation:
 			var target: String = lane.target
 			if target.begins_with("send:"):

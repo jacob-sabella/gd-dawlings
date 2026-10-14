@@ -211,6 +211,8 @@ function handlers.GetProjectStructure(args)
         -- Into channels 3/4 or above: a key for a plugin's detector, not part of the mix. The
         -- low ten bits are the first channel; the bits above say mono and the like.
         key = (math.floor(reaper.GetTrackSendInfo_Value(tr, 0, s, 'I_DSTCHAN')) & 1023) >= 2,
+        -- 0 post-fader; 1 pre-FX and 3 pre-fader (post-FX) are both before the fader.
+        pre = math.floor(reaper.GetTrackSendInfo_Value(tr, 0, s, 'I_SENDMODE')) ~= 0,
       }
     end
 
@@ -807,6 +809,19 @@ function handlers.CreateTrackSend(args)
   local index = reaper.CreateTrackSend(src, dst)
   reaper.UpdateArrange()
   return {ok = index >= 0, send_index = index}
+end
+
+-- args: track (OSC-numbered), send (0-based), 1 for pre-fader (post-FX) or 0 for post-fader.
+function handlers.SetSendPreFader(args)
+  local tr = track_from_osc(args[1])
+  local s = math.floor(args[2] or -1)
+  if not tr or s < 0 or s >= reaper.GetTrackNumSends(tr, 0) then
+    return {ok = false, error = 'no such send'}
+  end
+  reaper.Undo_BeginBlock()
+  reaper.SetTrackSendInfo_Value(tr, 0, s, 'I_SENDMODE', (args[3] or 0) > 0.5 and 3 or 0)
+  reaper.Undo_EndBlock('dawlings: send pre/post', -1)
+  return {ok = true}
 end
 
 function handlers.RemoveTrackSend(args)

@@ -3163,3 +3163,15 @@ deleted nor moved, and a ripple that deletes nothing is not a history step. One 
 asks for it as a command. A token beside DELETE on the timeline's tools, lit with a selection.
 Reaper path is `RippleDeleteSelected` in the bridge, not yet run against a live Reaper. Ripple move
 and ripple trim are split out, still missing.
+
+## DAW parity, iteration 13: pre-fader sends (2026-10-14)
+`DAW.set_send_pre_fader` and `MixState.SendState.pre_fader`, on the wire as `/track/N/send/S/pre`
+and in the snapshot. The built-in engine leaves the track's fader and pan out of a pre-fader
+send's player (still after the track's effects, and still muted with the track), so pulling a
+track down no longer pulls its cue or its reverb down with it. Saved through dawkit's existing
+`DawKitSend.pre_fader`. Reaper: `SetSendPreFader` in the bridge writes I_SENDMODE 3 or 0, and the
+structure poll reports any non-zero mode as pre -- not yet run against a live Reaper. On the desk,
+while SENDS ON FADERS shows a return, each strip that sends to it grows a small amber PRE button
+right of R and S; lit is pre. Its lamp's lit and dark are close in the room's light (a lone mesh,
+not the banked lamps); worth a brighter lit colour later. The audit had send automation as missing;
+it has been there all along. Suite 10073 checks, 0 failed; probe 0 failed. Seen in a screenshot.

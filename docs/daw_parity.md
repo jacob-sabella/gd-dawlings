@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 12
+Iterations done: 13
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -46,7 +46,8 @@ Iterations done: 12
 
 ## Routing and sends
 - [x] sends with level and pan, sidechain, remove send
-- [ ] send automation, pre/post-fader sends (missing)
+- [x] send automation (the first audit missed it: `send:<track>` lanes, played, saved in dawkit and dawproject)
+- [x] pre/post-fader sends (2026-10-14; a PRE button on each strip while the desk is flipped to a return; Reaper's I_SENDMODE through the bridge, not yet run against a live Reaper)
 
 ## Automation
 - [x] lanes with points, modes (read/touch/latch/write passes)

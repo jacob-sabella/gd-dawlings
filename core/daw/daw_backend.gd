@@ -201,6 +201,8 @@ func move_fx(_from_track: int, _fx_index: int, _to_track: int, _to_fx: int, _cop
 ## track fader for the level, 0.5 centre for the pan.
 func set_send_volume(_track_index: int, _send_index: int, _taper: float) -> void: pass
 func set_send_pan(_track_index: int, _send_index: int, _pan: float) -> void: pass
+## Taken before the track's fader and pan rather than after.
+func set_send_pre_fader(_track_index: int, _send_index: int, _pre: bool) -> void: pass
 ## Ask for the plugin's own reading of one parameter ("-12.0 dB"), to arrive later as the
 ## parameter's text in the cache. A backend that cannot know a plugin's units says nothing, and
 ## the rack shows the plain percentage it always could.

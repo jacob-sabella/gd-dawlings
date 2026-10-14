@@ -24,6 +24,9 @@ var _mute: PanelButton
 var _solo: PanelButton
 var _rec: PanelButton
 var _monitor: PanelButton
+## Only while the desk is flipped to a return this track sends to: whether that send is taken
+## before the fader (DAW.set_send_pre_fader). Lit is pre.
+var pre: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 var _name_tab: NameTab
@@ -178,6 +181,29 @@ func _ready() -> void:
 		letter.text = legend[0]
 		letter.modulate = Color(0.70, 0.72, 0.76)
 		add_child(letter)
+
+	# Right of rec and solo, in the strip's margin. Drawn by itself rather than through the banks:
+	# it is hidden on every strip but a flipped one, and a banked body cannot be.
+	pre = PanelButton.new()
+	pre.name = "PreFader"
+	pre.led_colour = SEND_INK
+	pre.lamp_scale = Vector2(0.6, 1.0)
+	pre.hit_pad = Vector2(1.0, 1.2)
+	pre.position = Vector3(0.0195, HEIGHT - 0.086, 0.004)
+	pre.scale = Vector3(0.65, 1.2, 1.0)
+	pre.describe_title = func() -> String: return _caption_for("SEND TO " + _dest_name() + "  PRE-FADER")
+	pre.describe_value = func(_v: float) -> String:
+		var slot := send_slot()
+		if slot <= 0:
+			return "no send"
+		return ("PRE: before the fader and pan" if (_state().sends[slot] as MixState.SendState).pre_fader
+				else "POST: follows the fader and pan")
+	pre.pressed.connect(func():
+		var slot := send_slot()
+		if slot > 0:
+			DAW.set_send_pre_fader(track_index, slot,
+					not (_state().sends[slot] as MixState.SendState).pre_fader))
+	add_child(pre)
 
 	# Beside mute and monitor, in the column the meter rises in below: the one place on the strip
 	# with room for a plug to stand out of.
@@ -358,6 +384,9 @@ func refresh() -> void:
 	# control lying about what it does.
 	_fader.collision_layer = 2 if live else 0
 	_pan.collision_layer = 2 if live else 0
+	pre.visible = send_dest > 0 and slot > 0
+	pre.collision_layer = 2 if pre.visible else 0
+	pre.lit = pre.visible and (t.sends[slot] as MixState.SendState).pre_fader
 	Lettering.fit(_name_label, LETTER_SPAN, NAME_SIZE, ConsoleSurface.SMALLEST_FONT)
 	Lettering.fit(_db_label, LETTER_SPAN, DB_SIZE, ConsoleSurface.SMALLEST_FONT)
 	_fader.apply_remote(level)

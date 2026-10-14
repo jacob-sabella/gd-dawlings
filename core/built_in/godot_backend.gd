@@ -624,13 +624,16 @@ func _apply_tracks() -> void:
 			elif p.has_meta(&"send"):
 				var send: MixState.SendState = t.sends.get(p.get_meta(&"send"))
 				# Post-fader, the way a reverb send usually is: the track's own fader is folded
-				# in, so pulling the vocal down pulls its reverb down with it.
-				p.volume_db = taper_to_db(send.volume) + taper_to_db(t.volume) if send != null else -80.0
+				# in, so pulling the vocal down pulls its reverb down with it. Pre-fader, it is
+				# not, nor the track's pan: the send hears the track as it leaves its effects.
+				var pre := send != null and send.pre_fader
+				p.volume_db = taper_to_db(send.volume) + (0.0 if pre else taper_to_db(t.volume)) \
+						if send != null else -80.0
 				var sb := AudioServer.get_bus_index(p.bus)
 				AudioServer.set_bus_mute(sb, not audible(index))
 				# The track's pan first, as the track bus has it, then the send's own.
 				var last := AudioServer.get_bus_effect_count(sb) - 1
-				(AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan = (t.pan - 0.5) * 2.0
+				(AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan = 0.0 if pre else (t.pan - 0.5) * 2.0
 				if send != null and last > 0:
 					(AudioServer.get_bus_effect(sb, last) as AudioEffectPanner).pan = (send.pan - 0.5) * 2.0
 

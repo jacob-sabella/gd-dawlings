@@ -758,6 +758,16 @@ func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 	_write_send(track_index, send_index, "pan", clampf(pan, 0.0, 1.0))
 
 
+func set_send_pre_fader(track_index: int, send_index: int, pre: bool) -> void:
+	var sd := state.send(track_index, send_index, false)
+	if sd == null or sd.pre_fader == pre:
+		return
+	_remember("/track/%d/send/%d/pre" % [track_index, send_index],
+			set_send_pre_fader.bind(track_index, send_index, sd.pre_fader),
+			set_send_pre_fader.bind(track_index, send_index, pre), false)
+	_write_send(track_index, send_index, "pre", 1.0 if pre else 0.0)
+
+
 ## Patched the way Reaper patches: a new send goes on the end of the source's list at 0 dB, and
 ## removing one closes the gap, so every send after it moves down a number. Refused for a track
 ## into itself and for a pair that is already patched -- Reaper would allow the second, and two

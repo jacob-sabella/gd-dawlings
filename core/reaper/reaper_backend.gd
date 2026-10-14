@@ -494,6 +494,16 @@ func set_send_pan(track_index: int, send_index: int, pan: float) -> void:
 	write("/track/%d/send/%d/pan" % [track_index, send_index], [clampf(pan, 0.0, 1.0)])
 
 
+## Reaper's I_SENDMODE through the bridge: 3, pre-fader (post-FX), or 0, post-fader. Shown at
+## once; the structure poll says what Reaper made of it.
+func set_send_pre_fader(track_index: int, send_index: int, pre: bool) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	_apply("/track/%d/send/%d/pre" % [track_index, send_index], [1.0 if pre else 0.0])
+	_bridge.call_reaper("SetSendPreFader", [track_index, send_index - 1, 1.0 if pre else 0.0],
+			func(_result) -> void: _structure_due = 0.0)
+
+
 func set_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
 	write("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
 
@@ -1276,6 +1286,8 @@ func _on_structure(result) -> void:
 					[float(int(send.get("dest_track", -1)))])
 			if send.has("key"):
 				_apply("/track/%d/send/%d/key" % [idx, send_idx], [1.0 if send["key"] else 0.0])
+			if send.has("pre"):
+				_apply("/track/%d/send/%d/pre" % [idx, send_idx], [1.0 if send["pre"] else 0.0])
 			if send.has("dest_name"):
 				_apply("/track/%d/send/%d/name" % [idx, send_idx], [str(send["dest_name"])])
 		# The bridge lists every send a track has, so a send it no longer lists has been removed.

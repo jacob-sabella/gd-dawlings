@@ -287,6 +287,7 @@ func _ready() -> void:
 	_test_the_timeline_grid_is_chosen_with_a_token()
 	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_a_ripple_delete_closes_the_gap()
+	_test_a_send_can_be_taken_before_the_fader()
 	_test_the_tape_decks_keys_are_big_enough_to_aim_at()
 	_test_a_simulated_headset_builds_the_vr_and_ar_rigs()
 	_test_the_timeline_can_be_watched_as_a_road()
@@ -10973,6 +10974,15 @@ func _test_the_built_in_engine_is_a_real_mix() -> void:
 	DAW.set_track_pan(8, 0.75)
 	close_to("the send has its own pan", (AudioServer.get_bus_effect(sb, AudioServer.get_bus_effect_count(sb) - 1) as AudioEffectPanner).pan, -1.0)
 	close_to("on top of the track's", (AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan, 0.5)
+	var to_verb := func(p): return p.has_meta(&"send") and p.bus == GodotBackend.send_bus(8, 13)
+	var sp: AudioStreamPlayer = backend._players[8].filter(to_verb)[0]
+	DAW.set_track_volume(8, 0.3)
+	close_to("post-fader, the send carries the track's fader", sp.volume_db,
+			DAW.taper_to_db(s.send(8, slot).volume) + DAW.taper_to_db(0.3), 0.01)
+	DAW.set_send_pre_fader(8, slot, true)
+	close_to("pre-fader, only its own level", sp.volume_db, DAW.taper_to_db(s.send(8, slot).volume), 0.01)
+	close_to("and not the track's pan", (AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan, 0.0)
+	DAW.set_send_pre_fader(8, slot, false)
 	DAW.remove_send(8, slot)
 	check("and pulled, its bus and player go", AudioServer.get_bus_index(GodotBackend.send_bus(8, 13)) < 0
 			and not backend._players[8].any(func(p): return p.has_meta(&"send") and not p.is_queued_for_deletion()))
@@ -18887,3 +18897,69 @@ func _test_a_ripple_delete_closes_the_gap() -> void:
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()
+
+
+func _test_a_send_can_be_taken_before_the_fader() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var verb := 13
+	var sd := s.send(3, 1, false)
+	check("the snare sends to the return, after its fader", sd != null and not sd.pre_fader)
+	backend._repl_durable.clear()
+	DAW.set_send_pre_fader(3, 1, true)
+	check("set_send_pre_fader takes it before", sd.pre_fader)
+	check("and replicates it on the send's own address", backend._repl_durable.has("/track/3/send/1/pre"))
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest joining later reads it in the snapshot", guest.send(3, 1, false) != null
+			and guest.send(3, 1).pre_fader)
+	DAW.undo()
+	check("one undo step puts it back after", not sd.pre_fader)
+	DAW.set_send_pre_fader(2, 4, true)
+	check("a send that is not there is not made", s.send(2, 4, false) == null)
+	check("a guest may ask for it", &"set_send_pre_fader" in DAW.COMMANDS)
+	DAW.apply_intent(&"set_send_pre_fader", [3, 1, 1.0])
+	check("and its ask is heard", sd.pre_fader)
+	DAW.apply_intent(&"set_send_pre_fader", [3, 0, 0.0])
+	check("a malformed one is not", sd.pre_fader)
+	DAW.set_send_pre_fader(3, 1, false)
+
+	# Reaper: I_SENDMODE through the bridge, reported back by the structure poll.
+	var link := _fresh_link()
+	link._on_structure({"tracks": [{"index": 4, "sends": [{"index": 0, "dest_track": 26,
+			"dest_name": "Verb Rtn", "pre": true}]}], "track_count": 40})
+	check("the bridge says which sends are pre-fader", link.state.send(4, 1).pre_fader)
+	link.free()
+
+	# The desk: a PRE button on each strip while the sends are on the faders.
+	var console := ConsoleSurface.new()
+	add_child(console)
+	console._process(0.0)
+	var by_track := {}
+	for strip in console.strips:
+		by_track[strip.track_index] = strip
+	var snare: ChannelStrip = by_track[3]
+	var kick: ChannelStrip = by_track[2]
+	check("no PRE button while the faders are the tracks'", not snare.pre.visible and snare.pre.collision_layer == 0)
+	console.cycle_sends()
+	check("flipped, the snare's PRE is there and dark", console.send_dest == verb and snare.pre.visible
+			and snare.pre.collision_layer != 0 and not snare.pre.lit)
+	check("and a strip with no send has none", not kick.pre.visible and kick.pre.collision_layer == 0)
+	snare.pre.pressed.emit()
+	check("pressed, the send is pre-fader and the button lit", sd.pre_fader and snare.pre.lit)
+	check("its card says so (%s)" % snare.pre.title(), snare.pre.title() == "SNARE  SEND TO VERB RTN  PRE-FADER")
+	snare.pre.pressed.emit()
+	check("pressed again, post", not sd.pre_fader and not snare.pre.lit)
+	console.free()
+
+	# Saved: a project written and read back keeps it.
+	DAW.set_send_pre_fader(3, 1, true)
+	var p := ProjectBridge.capture(backend)
+	check("the project's send is pre-fader", p.track("t3").sends.size() == 1 and p.track("t3").sends[0].pre_fader)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	var refused := ProjectBridge.load(p, fresh)
+	check("and loaded, it still is (%s)" % [refused], refused.is_empty() and DAW.state.send(3, 1, false) != null
+			and DAW.state.send(3, 1).pre_fader)
+	_offline()

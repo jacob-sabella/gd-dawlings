@@ -579,7 +579,7 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 	# value, and reading "-11.0dB" as a float would zero the level.
 	if p.size() > 5:
 		return
-	var before := [s.dest_name, s.dest_track, s.volume, s.pan, s.key]
+	var before := [s.dest_name, s.dest_track, s.volume, s.pan, s.key, s.pre_fader]
 	match p[4]:
 		"name": s.dest_name = str(args[0])
 		# dawlings's own again, and the one that makes the patchbay exact rather than
@@ -589,9 +589,11 @@ static func _apply_send(state: MixState, track_idx: int, p: PackedStringArray, a
 		"pan": s.pan = float(args[0])
 		# Also dawlings's own: a send into the destination's key input, not its mix.
 		"key": s.key = _as_bool(args)
+		# And this: taken before the track's fader and pan.
+		"pre": s.pre_fader = _as_bool(args)
 	# Told, so a control showing a send level follows it. Only on a change: Reaper restates
 	# every slot of every track on a refresh, and most of them are empty.
-	if before != [s.dest_name, s.dest_track, s.volume, s.pan, s.key]:
+	if before != [s.dest_name, s.dest_track, s.volume, s.pan, s.key, s.pre_fader]:
 		state.track_changed.emit(track_idx, &"sends")
 
 
@@ -720,6 +722,7 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/send/%d/volume" % [index, send_index], [sd.volume]])
 			out.append(["/track/%d/send/%d/pan" % [index, send_index], [sd.pan]])
 			out.append(["/track/%d/send/%d/key" % [index, send_index], [1.0 if sd.key else 0.0]])
+			out.append(["/track/%d/send/%d/pre" % [index, send_index], [1.0 if sd.pre_fader else 0.0]])
 		# After them, so a guest that still holds a send the host has since removed drops it.
 		out.append(["/track/%d/sends" % index, [float(send_indices.max() if not send_indices.is_empty() else 0)]])
 
