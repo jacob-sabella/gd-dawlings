@@ -953,6 +953,11 @@ func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 
 
 ## Reaper rolls its own dice: the preview here is a likeness, and the next timeline is the truth.
+func legato_item(track_index: int, item_index: int) -> void:
+	if _locally_legato(track_index, item_index):
+		_edit("LegatoItem", [track_index, item_index])
+
+
 ## Reaper skips muted notes when it counts, so the note goes by where it starts and its pitch.
 func set_note_velocity(track_index: int, item_index: int, note_index: int, velocity: int) -> void:
 	var item := state.item(track_index, item_index)

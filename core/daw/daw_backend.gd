@@ -367,6 +367,7 @@ func transpose_item(_track_index: int, _item_index: int, _semitones: int) -> voi
 func shift_velocity(_track_index: int, _item_index: int, _by: int) -> void: pass
 ## Every note of a MIDI item nudged at random, up to `seconds` and `velocity`: see _locally_humanise.
 func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _velocity: int) -> void: pass
+func legato_item(_track_index: int, _item_index: int) -> void: pass
 func humanise_item(_track_index: int, _item_index: int, _seconds: float, _velocity: int) -> void: pass
 ## An audio item played backwards, or forwards again (MixState.ItemState.reversed).
 func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> void: pass
@@ -1097,6 +1098,34 @@ func _locally_shift_velocity(track_index: int, item_index: int, by: int) -> bool
 	var notes := it.notes.duplicate()
 	for n in range(0, notes.size() - 4, 5):
 		notes[n + 3] = clampi(int(notes[n + 3]) + by, 1, 127)
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## Every note of a MIDI item made to end where the next one begins -- the next later start, of
+## any pitch, so a chord's notes all run to the same place and the last note keeps its length.
+## Overlapping notes are cut back as well as short ones lengthened. False when nothing changes.
+func _locally_legato(track_index: int, item_index: int) -> bool:
+	var item := state.item(track_index, item_index)
+	if item == null or item.notes.is_empty():
+		return false
+	var notes := item.notes.duplicate()
+	var changed := false
+	var width := MidiTake.NOTE_WIDTH
+	for n in range(0, notes.size() - width + 1, width):
+		var next := INF
+		for m in range(0, notes.size() - width + 1, width):
+			var on: float = notes[m]
+			if on > notes[n] + MidiTake.MIN_NOTE and on < next:
+				next = on
+		if next < INF and not is_equal_approx(notes[n + 1], next):
+			notes[n + 1] = next
+			changed = true
+	if not changed:
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true

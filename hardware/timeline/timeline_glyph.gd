@@ -248,6 +248,11 @@ func _build() -> void:
 			_box(Vector2(0.66, 0.30), Vector2(0.5, 0.42), 0.55, 0.0, 6.0)
 			_arc(Vector2(-0.3, -0.75), 0.3, 200.0, 340.0, 0.06)
 			_arc(Vector2(0.3, -0.75), 0.3, 160.0, 20.0, 0.06)
+		&"legato":
+			# Notes laid end to end, no gap between them.
+			_box(Vector2(-0.62, 0.45), Vector2(0.62, 0.38), 0.55)
+			_box(Vector2(0.0, 0.0), Vector2(0.62, 0.38), 0.55)
+			_box(Vector2(0.62, -0.45), Vector2(0.62, 0.38), 0.55)
 		&"swing":
 			# A swung pair: long, then short, on a line.
 			_box(Vector2(-0.42, 0.15), Vector2(0.95, 0.55), 0.5)

@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 37
+Iterations done: 38
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -38,7 +38,8 @@ Iterations done: 37
 - [x] velocity: whole-item harder/softer (2026-10-14)
 - [x] humanise (2026-10-14; time and velocity, seeded from the notes; a token on the ITEM page; Reaper path not run against a live Reaper)
 - [x] per-note velocity: NOTE VELOCITY rail sets the note at the playhead (done)
-- [ ] CC / pitch-bend lanes, legato (missing)
+- [x] Legato: each note held until the next begins (done, ITEM page)
+- [ ] CC / pitch-bend lanes (missing)
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track

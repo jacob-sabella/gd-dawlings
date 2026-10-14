@@ -291,6 +291,7 @@ func _ready() -> void:
 	_test_ripple_editing_carries_what_follows()
 	_test_the_host_keeps_an_autosave()
 	_test_earlier_autosaves_are_kept()
+	_test_notes_are_made_legato()
 	_test_the_audio_graph_is_read_and_drawn()
 	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
@@ -20204,6 +20205,55 @@ func _test_the_last_marker_removed_is_gone_everywhere() -> void:
 	link._on_timeline({"markers": [], "length": 60.0})
 	check("Reaper reporting none clears the cache", link.state.markers.is_empty())
 	link.free()
+
+
+func _test_notes_are_made_legato() -> void:
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	# A chord of two, a short note, a long one that overlaps the last, and the last.
+	var played: Array = [[4.0 * beat, 4.2 * beat, 60, 100, 0], [4.0 * beat, 4.2 * beat, 64, 100, 0],
+			[5.0 * beat, 5.1 * beat, 62, 90, 0], [6.0 * beat, 8.0 * beat, 65, 80, 0], [7.0 * beat, 7.5 * beat, 67, 70, 0]]
+	DAW.insert_midi_take(lane, 4.0 * beat, 8.0 * beat, played, "Legato")
+	var item: MixState.ItemState = s.item(lane, 0)
+	var depth := maxi(s.undo_depth, 0)
+	DAW.legato_item(lane, 0)
+	var n := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	n.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[2] < b[2]))
+	check("a chord's notes all run to the next start (%.2f, %.2f beats)" % [(n[0][1] - n[0][0]) / beat, (n[1][1] - n[1][0]) / beat],
+			is_equal_approx(n[0][1], 5.0 * beat) and is_equal_approx(n[1][1], 5.0 * beat))
+	check("a short note is held to the next", is_equal_approx(n[2][1], 6.0 * beat))
+	check("an overlapping one is cut back to it", is_equal_approx(n[3][1], 7.0 * beat))
+	check("the last keeps its length", is_equal_approx(n[4][1], 7.5 * beat))
+	check("pitches and velocities are as played", int(n[2][2]) == 62 and int(n[3][3]) == 80 and s.undo_depth - depth == 1)
+	DAW.legato_item(lane, 0)
+	check("done again, it is no edit", s.undo_depth - depth == 1)
+	DAW.undo()
+	var back := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	back.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[2] < b[2]))
+	check("undone, the notes are as played", is_equal_approx(back[2][1], 5.1 * beat))
+	DAW.set_item_locked(lane, 0, true)
+	DAW.legato_item(lane, 0)
+	var locked_depth := s.undo_depth
+	DAW.legato_item(lane, 0)
+	check("a locked item is left alone", s.undo_depth == locked_depth)
+	DAW.set_item_locked(lane, 0, false)
+	check("a guest may ask", &"legato_item" in DAW.COMMANDS)
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	DAW.select_item(lane, 0, false)
+	timeline.item_page.refresh()
+	check("a LEGATO token on the item page, lit for a MIDI item", timeline.item_page.legato != null
+			and timeline.item_page.legato.glyph == &"legato" and timeline.item_page.legato.lit)
+	timeline.item_page.legato.pressed.emit()
+	var pressed := MidiTake.unpack_relative(s.item(lane, 0).notes, s.item(lane, 0).start)
+	pressed.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and a[2] < b[2]))
+	check("pressed, the notes are held", is_equal_approx(pressed[2][1], 6.0 * beat))
+	DAW.clear_item_selection()
+	timeline.free()
 
 
 func _test_notes_are_humanised() -> void:

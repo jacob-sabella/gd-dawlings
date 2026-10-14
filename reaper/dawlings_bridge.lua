@@ -1689,6 +1689,37 @@ function handlers.ShiftVelocity(args)
   return edited('Note velocity')
 end
 
+-- args: track, index: every note made to end where the next later-starting one begins (any pitch,
+-- so a chord runs to the same place); the last keeps its length.
+function handlers.LegatoItem(args)
+  local it = item_at(args)
+  if not it then return {ok = false, error = 'no such item'} end
+  reaper.Undo_BeginBlock()
+  for t = 0, reaper.CountTakes(it) - 1 do
+    local take = reaper.GetTake(it, t)
+    if take and reaper.TakeIsMIDI(take) then
+      local _, count = reaper.MIDI_CountEvts(take)
+      local starts = {}
+      for n = 0, count - 1 do
+        local ok, _, _, ppq_on = reaper.MIDI_GetNote(take, n)
+        if ok then starts[#starts + 1] = ppq_on end
+      end
+      for n = 0, count - 1 do
+        local ok, sel, muted, ppq_on, ppq_off, chan, pitch, vel = reaper.MIDI_GetNote(take, n)
+        if ok then
+          local nxt = nil
+          for _, s in ipairs(starts) do
+            if s > ppq_on + 1 and (not nxt or s < nxt) then nxt = s end
+          end
+          if nxt then reaper.MIDI_SetNote(take, n, sel, muted, ppq_on, nxt, chan, pitch, vel, true) end
+        end
+      end
+      reaper.MIDI_Sort(take)
+    end
+  end
+  return edited('Legato')
+end
+
 -- args: track, index, seconds, pitch, velocity: the note of that pitch starting that many seconds
 -- into the item gets that velocity.
 function handlers.SetNoteVelocity(args)

@@ -3528,3 +3528,11 @@ done or that it could not be, and the graph is read again at once. Machine-local
 the wall: a player's hands edit their own PipeWire graph and nothing is sent. Not done: hold a
 node to see more than 12 ports, tap a cable (rather than its ports) to cut it, patching on
 systems without `pw-link`. Suite: 10401 checks, 0 failed.
+
+## 2026-10-14 -- iteration 38: legato
+
+A LEGATO key on the ITEM page (three bricks end to end, NOTE group) makes each note of a MIDI item
+end where the next later-starting note, of any pitch, begins: a chord's notes run to the same
+place, overlapping notes are cut back, the last note keeps its length. `DAW.legato_item` is an
+ITEM_EDITS intent (host authority, undoable, refused on locked items); Reaper's bridge has a
+`LegatoItem` handler (syntax-checked, not run against a live Reaper). Suite: 10415 checks, 0 failed.

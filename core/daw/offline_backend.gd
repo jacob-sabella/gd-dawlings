@@ -1208,6 +1208,12 @@ func set_note_velocity(track_index: int, item_index: int, note_index: int, veloc
 		_remember_edit(before)
 
 
+func legato_item(track_index: int, item_index: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_legato(track_index, item_index):
+		_remember_edit(before)
+
+
 func humanise_item(track_index: int, item_index: int, seconds: float, velocity: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_humanise(track_index, item_index, seconds, velocity):
