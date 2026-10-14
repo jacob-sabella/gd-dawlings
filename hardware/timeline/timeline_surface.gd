@@ -143,6 +143,8 @@ var _lanes_key: GlyphKey
 var _shelf_key: GlyphKey
 var _road_key: GlyphKey
 var _save_key: GlyphKey
+## Crash recovery: lit when an earlier run left an autosave newer than the project.
+var _recover_key: GlyphKey
 ## Where the song is, in bars, in the corner over the track names: the arrangement's own clock.
 var _clock: Label3D
 var _clock_said := ""
@@ -399,6 +401,11 @@ func _build_deck() -> void:
 					return "this DAW cannot save from here"
 				var file := DAW.project_file()
 				return (file.get_file() if not file.is_empty() else "where the host keeps it") + _autosave_text(), true)
+	_recover_key = _tool("RecoverKey", &"recover", Color(0.98, 0.72, 0.30), "PROJECT  RECOVER",
+			func(): DAW.recover_autosave(), _recover_text)
+	DAW.project_replaced.connect(_light_recover_key)
+	DAW.project_saved.connect(func(_said): _light_recover_key())
+	_light_recover_key()
 	item_page = TimelineItemPage.new()
 	item_page.name = "ItemPage"
 	track_page = TimelineTrackPage.new()
@@ -431,6 +438,23 @@ func _autosave_text() -> String:
 		return ""
 	var minutes := int((Time.get_ticks_msec() - at) / 60000)
 	return "  ·  copy kept %s" % ("just now" if minutes < 1 else "%d min ago" % minutes)
+
+
+func _recover_text() -> String:
+	var copy := DAW.recoverable_copy()
+	if copy.is_empty():
+		return "no copy newer than the project is kept"
+	var at := Time.get_time_dict_from_unix_time(FileAccess.get_modified_time(copy)
+			+ Time.get_time_zone_from_system()["bias"] * 60)
+	return "a copy kept at %02d:%02d, newer than the project: open it in its place" % [at["hour"], at["minute"]]
+
+
+func _light_recover_key() -> void:
+	if _recover_key == null:
+		return
+	var offered := not DAW.recoverable_copy().is_empty()
+	_recover_key.available = offered
+	_recover_key.lit = offered
 
 
 func set_ripple_edit(on: bool) -> void:
@@ -678,6 +702,7 @@ func _place_strips() -> void:
 			-_top_y + SCRUBBER_BAND * 0.5 + 0.001, 0.0016)
 	_clock.position = Vector3(-width * 0.5 + 0.010, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.0016)
 	_save_key.lit = DAW.can(DAWBackend.Capability.PROJECT_SAVE)
+	_light_recover_key()
 	_light_split_key()
 	_light_selection_keys()
 	_light_view_keys()

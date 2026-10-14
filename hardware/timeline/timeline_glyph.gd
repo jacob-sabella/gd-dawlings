@@ -104,6 +104,14 @@ func _build() -> void:
 			_rod(Vector2(-0.85, -0.3), Vector2(-0.85, -0.88), 0.12, 0.4)
 			_rod(Vector2(-0.85, -0.88), Vector2(0.85, -0.88), 0.12, 0.4)
 			_rod(Vector2(0.85, -0.88), Vector2(0.85, -0.3), 0.12, 0.4)
+		&"recover":
+			# The save's tray with an arrow coming back up out of it, and a spark: the kept copy.
+			_rod(Vector2(0, -0.6), Vector2(0, 0.55), 0.15, 0.4)
+			_cone(Vector2(0, 0.68), Vector2(0, 1), 0.36, 0.5)
+			_rod(Vector2(-0.85, -0.3), Vector2(-0.85, -0.88), 0.12, 0.4)
+			_rod(Vector2(-0.85, -0.88), Vector2(0.85, -0.88), 0.12, 0.4)
+			_rod(Vector2(0.85, -0.88), Vector2(0.85, -0.3), 0.12, 0.4)
+			_ball(Vector2(0.72, 0.72), 0.17, 0.3)
 		&"item":
 			_box(Vector2(0, -0.1), Vector2(1.9, 1.0), 0.5)
 			var hs := [0.3, 0.7, 0.45, 0.85, 0.35, 0.6]

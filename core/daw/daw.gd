@@ -352,6 +352,21 @@ func monitor_bus(track_index: int) -> StringName:
 func project_file() -> String: return backend.project_path if Session.is_authority() else ""
 
 
+## Crash recovery, the host's: the autosave copy an earlier run left newer than the project (see
+## OfflineBackend.recoverable), "" for none, for a guest, and for a DAW that keeps its own.
+func recoverable_copy() -> String:
+	if not Session.is_authority() or backend == null or not backend.has_method(&"recoverable"):
+		return ""
+	return backend.call(&"recoverable")
+
+
+## Opens that copy in the project's place, unsaved. Host only: it replaces the project.
+func recover_autosave() -> PackedStringArray:
+	if recoverable_copy().is_empty():
+		return PackedStringArray(["no newer copy is kept"])
+	return backend.call(&"recover")
+
+
 ## When the host's autosave last kept a copy (Time.get_ticks_msec), -1 for never, and for a guest
 ## or a DAW that keeps its own.
 func autosaved_at_msec() -> int:

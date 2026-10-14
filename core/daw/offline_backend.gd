@@ -32,6 +32,8 @@ const AUTOSAVE_DIR := "user://autosave"
 ## When the last copy was kept (Time.get_ticks_msec), or -1 for not yet.
 var autosaved_at_msec := -1
 var _autosaved_edits := -1
+## The copy this run has written or already recovered: not one to offer back.
+var _settled_copy := ""
 var _autosave_due_msec := -1
 ## Plugin windows for the suite: the stand-in has no plugins to draw, so it says it cannot show
 ## their windows unless this is set, and then shows a plain picture that records what was done
@@ -62,10 +64,42 @@ func needs_autosave() -> bool:
 
 
 func autosave() -> PackedStringArray:
+	_settled_copy = autosave_path()
 	var said := ProjectFiles.save(self, autosave_path(), true)
 	_autosaved_edits = _edits
 	autosaved_at_msec = Time.get_ticks_msec()
 	_autosave_due_msec = -1
+	return said
+
+
+## Crash recovery: the autosave's copy of this project when an earlier run left one newer than the
+## project's own file (or the project has no file yet), else "". Not this run's own copy, nor one
+## already recovered.
+func recoverable() -> String:
+	var copy := autosave_path()
+	if copy == _settled_copy or not FileAccess.file_exists(copy):
+		return ""
+	if not project_path.is_empty() and FileAccess.file_exists(project_path) \
+			and FileAccess.get_modified_time(project_path) >= FileAccess.get_modified_time(copy):
+		return ""
+	return copy
+
+
+## The recoverable copy opened in the project's place. It is still the same project, saved where
+## it was (a save writes its own file, not the copy), and unsaved: what came back is in no file
+## of its own yet.
+func recover() -> PackedStringArray:
+	var copy := recoverable()
+	if copy.is_empty():
+		return PackedStringArray(["no newer copy is kept"])
+	var own := project_path
+	_settled_copy = copy
+	var said := ProjectFiles.open(self, copy)
+	if project_path != copy:
+		return said
+	project_path = own
+	name_project()
+	_edits += 1
 	return said
 
 

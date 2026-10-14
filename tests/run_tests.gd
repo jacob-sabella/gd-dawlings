@@ -290,6 +290,7 @@ func _ready() -> void:
 	_test_a_ripple_delete_closes_the_gap()
 	_test_ripple_editing_carries_what_follows()
 	_test_the_host_keeps_an_autosave()
+	_test_a_crashed_session_is_recovered()
 	_test_a_send_can_be_taken_before_the_fader()
 	_test_quantise_can_swing()
 	_test_a_render_is_written_at_a_chosen_depth()
@@ -19056,6 +19057,48 @@ func _test_the_host_keeps_an_autosave() -> void:
 	check("a real save leaves nothing for it to do", not DAW.has_unsaved_changes() and not backend.needs_autosave())
 	OfflineBackend.autosave_every = 0.0
 	DirAccess.remove_absolute(copy)
+
+
+func _test_a_crashed_session_is_recovered() -> void:
+	# A run that kept a copy of unsaved work, then went away without saving.
+	var first := _offline()
+	first.project_title = "Suite Recover"
+	var own := "user://suite_recover/own.dawproject"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(first.autosave_path()))
+	DAW.save_project_as(own)
+	check("its own file is saved", FileAccess.file_exists(own))
+	check("and with nothing newer kept, nothing is offered", DAW.recoverable_copy() == "")
+	OS.delay_msec(1100)
+	DAW.set_track_volume(3, 0.25)
+	first.autosave()
+	check("this run's own copy is not offered back to it", DAW.recoverable_copy() == "")
+	# The next run, opening the same project.
+	var second := _offline()
+	var refused := DAW.open_project(own)
+	check("the next run opens the project (%s)" % [refused], refused.is_empty())
+	check("that one had the old level", not is_equal_approx(DAW.state.track(3).volume, 0.25))
+	check("and is offered the newer copy (%s)" % DAW.recoverable_copy(), DAW.recoverable_copy() == second.autosave_path())
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var key: GlyphKey = timeline._recover_key
+	check("its token is on the tools, lit and in reach", key != null and key in timeline.deck.tools
+			and key.glyph == &"recover" and key.lit and key.available)
+	check("its card says when it was kept (%s)" % key.describe_value.call(0.0),
+			key.describe_value.call(0.0).begins_with("a copy kept at "))
+	key.pressed.emit()
+	check("pressed, the work comes back", is_equal_approx(DAW.state.track(3).volume, 0.25))
+	check("still the same project, its own file, and unsaved",
+			DAW.project_file() == own and DAW.has_unsaved_changes())
+	check("and nothing is offered again", DAW.recoverable_copy() == "" and not key.lit and not key.available)
+	check("recovering with nothing to recover says so", not DAW.recover_autosave().is_empty())
+	DAW.save_project()
+	_offline()
+	DAW.open_project(own)
+	check("once saved, the project's file is newer, and nothing is offered",
+			DAW.recoverable_copy() == "" and is_equal_approx(DAW.state.track(3).volume, 0.25))
+	timeline.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(second.autosave_path()))
 
 
 func _test_a_send_can_be_taken_before_the_fader() -> void:

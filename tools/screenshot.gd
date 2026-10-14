@@ -110,6 +110,8 @@ var _reopen := false
 ## `--autosave`: the transport stopped and an edit at frame 5, and the autosave kept straight
 ## after, to see what says so.
 var _autosave := false
+## `--recover`: a copy kept at frame 5 as if by an earlier run, so the RECOVER token offers it.
+var _recover := false
 var _tl_pick := -1
 var _roll := false
 var _rig_roll := false
@@ -226,6 +228,8 @@ func _ready() -> void:
 				_reopen = true
 			"--autosave":
 				_autosave = true
+			"--recover":
+				_recover = true
 			"--tl-region":
 				if i + 1 < args.size(): _tl_region = args[i + 1]
 			"--tl-pick":
@@ -292,6 +296,10 @@ func _process(_delta: float) -> void:
 		DAW.set_track_volume(3, 0.3)
 		# Held while the song plays: stopped, so it is kept at once.
 		DAW.transport_stop()
+	if _frames == 5 and _recover:
+		DAW.backend.autosave()
+		DAW.backend.set(&"_settled_copy", "")
+		DAW.project_replaced.emit()
 	if _frames == 5 and _reopen:
 		var path := ProjectSettings.globalize_path("user://shot_reopen.dawproject")
 		print("SHOT_REOPEN ", DAW.save_project_as(path), DAW.open_project(path))

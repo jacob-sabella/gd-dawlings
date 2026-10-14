@@ -3291,3 +3291,17 @@ preferences), so the bridge does nothing.
 Split out, still missing: crash recovery, offering the copy at start when it is newer than the
 project; and more than one copy kept (Reaper's timestamped backups).
 Suite: 10192 checks, 0 failed. Host only and nothing on the wire, so no probe.
+
+## DAW parity, iteration 22: crash recovery (2026-10-14)
+`OfflineBackend.recoverable()`: the autosave copy of the open project when an earlier run left one
+newer than the project's own file (or the project has no file yet), and not a copy this run wrote
+or has already recovered. `recover()` opens it in the project's place, keeps the project's own
+path (a save writes the project, not the copy) and leaves it unsaved, since what came back is in
+no file of its own yet. `DAW.recoverable_copy` / `DAW.recover_autosave` are the host's; a guest is
+offered nothing, since the project is the host's to replace. A PROJECT RECOVER token beside SAVE
+(the save's tray with an arrow coming back up out of it) is lit and in reach only while there is
+a copy to offer; its card says when the copy was kept. Relit when a project is opened or saved.
+`tools/screenshot.gd --recover` leaves a copy to offer.
+A copy left by a run that ended without saving on purpose is offered too, as Reaper's would be:
+it is an offer, and it changes nothing until pressed.
+Suite: 10205 checks, 0 failed. Host only, nothing on the wire.
