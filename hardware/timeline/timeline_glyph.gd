@@ -232,6 +232,11 @@ func _build() -> void:
 			var d := 1.0 if _kind == &"pitch_up" else -1.0
 			_cone(Vector2(0, 0.15 * d), Vector2(0, d), 0.6, 0.85)
 			_box(Vector2(0, -0.7 * d), Vector2(1.3, 0.2), 0.3)
+		&"note_end":
+			# A brick cut short at a line.
+			_box(Vector2(-0.3, 0.0), Vector2(1.3, 0.45), 0.9)
+			_rod(Vector2(0.45, -0.75), Vector2(0.45, 0.75), 0.13, 0.95)
+			_box(Vector2(0.78, 0.0), Vector2(0.4, 0.45), 0.2)
 		&"note_add":
 			# One brick, and a plus where the next goes.
 			_box(Vector2(-0.55, 0.0), Vector2(0.7, 0.45), 0.9)

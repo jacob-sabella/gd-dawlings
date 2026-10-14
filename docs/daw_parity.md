@@ -8,7 +8,7 @@ tested here are left out.
 First audit 2026-10-14, from `DAWBackend`'s verbs (core/daw/daw_backend.gd) and `MixState.ItemState`.
 Not yet verified by use: anything marked partial from reading alone.
 
-Iterations done: 47
+Iterations done: 48
 
 ## Transport and tempo
 - [x] loop to the selected items (2026-10-14)
@@ -42,6 +42,7 @@ Iterations done: 47
 - [x] delete a note: the one sounding at the playhead (2026-10-14, DELETE NOTE on the ITEM page; Reaper path not run against a live Reaper)
 - [x] move one note in pitch: a semitone, an octave when fine, the note sounding at the playhead (2026-10-14, NOTE UP and NOTE DOWN on the ITEM page; Reaper path not run against a live Reaper)
 - [x] add a note: a beat long at the playhead, at the pitch of the one beside it (2026-10-14, ADD NOTE on the ITEM page; Reaper path not run against a live Reaper)
+- [x] cut or lengthen one note to the playhead (2026-10-14, NOTE ENDS HERE on the ITEM page; Reaper path not run against a live Reaper)
 - [x] Legato: each note held until the next begins (done, ITEM page)
 - [x] Staccato: each note cut to half its length (2026-10-14, ITEM page; Reaper path not run against a live Reaper)
 - [x] Even velocity: every note at the item's average (2026-10-14, ITEM page; Reaper path not run against a live Reaper)

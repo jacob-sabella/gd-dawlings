@@ -3618,3 +3618,14 @@ from the item's start, sanitised and clipped to the item in `apply_intent` and t
 at or past the end, a recorded-audio item, or MAX_NOTES notes refuse it). Reaper's `InsertNote` uses
 MIDI_InsertNote on the first MIDI take (syntax-checked, not run live). Still no move-a-note-in-time
 or resize-a-note verb. Probe: host 53, guest 47, 0 failed. Suite: 10472 checks, 0 failed.
+
+## 2026-10-14 -- iteration 48: a note ends at the playhead
+
+NOTE ENDS HERE on the ITEM page (a brick cut at a line) makes the note sounding at the playhead end
+there. `DAW.set_note_end` is an ITEM_EDITS intent `[track, item, note, off]` (off in seconds from the
+item's start; clamped between a note's minimum length after its start and the item's end, index
+clamped in `apply_intent`, undoable, refused on locked items). It only lights while a note sounds,
+so it cuts; the verb itself also lengthens (a later hand or rail could use it). Reaper's `SetNoteEnd`
+finds the note by start and pitch (syntax-checked, not run live). The ITEM page's NOTE row now
+wraps onto a second line. Still no move-a-note-in-time. Probe: host 53, guest 47, 0 failed.
+Suite: 10479 checks, 0 failed.

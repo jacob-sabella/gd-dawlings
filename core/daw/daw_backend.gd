@@ -371,6 +371,7 @@ func set_note_velocity(_track_index: int, _item_index: int, _note_index: int, _v
 func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
+func set_note_end(_track_index: int, _item_index: int, _note_index: int, _off: float) -> void: pass
 func insert_note(_track_index: int, _item_index: int, _on: float, _off: float, _pitch: int) -> void: pass
 func transpose_note(_track_index: int, _item_index: int, _note_index: int, _semitones: int) -> void: pass
 func delete_note(_track_index: int, _item_index: int, _note_index: int) -> void: pass
@@ -1231,6 +1232,26 @@ func _locally_even_velocity(track_index: int, item_index: int) -> bool:
 		return false
 	var lane := _lane_copy(track_index)
 	var it: MixState.ItemState = lane[item_index]
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
+
+
+## One note made to end at `off` seconds into its item: at least MIN_NOTE after it starts, at most
+## the item's end. False when there is no such note or it already ends there.
+func _locally_set_note_end(track_index: int, item_index: int, note_index: int, off: float) -> bool:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + MidiTake.NOTE_WIDTH > item.notes.size():
+		return false
+	var on: float = item.notes[at]
+	off = clampf(off, on + MidiTake.MIN_NOTE, maxf(item.length, on + MidiTake.MIN_NOTE))
+	if is_equal_approx(off, item.notes[at + 1]):
+		return false
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	notes[at + 1] = off
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true
