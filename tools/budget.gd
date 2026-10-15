@@ -65,6 +65,11 @@ func _ready() -> void:
 	_hide_labels = args.has("--hide-labels")
 	_no_shadows = args.has("--no-shadows")
 	_script_costs = args.has("--script-costs")
+	# `--without-script res://x.gd`: that script's processing off for the whole sample. One long
+	# run against one long run is steadier than --script-costs' short windows.
+	var wo := args.find("--without-script")
+	if wo >= 0 and wo + 1 < args.size():
+		_without_script = args[wo + 1]
 	# Longer, for a profiler to see steady state rather than the load.
 	var at := args.find("--sample")
 	if at >= 0 and at + 1 < args.size():
@@ -104,6 +109,7 @@ var _no_shadows := false
 ## Windows alternate with an untouched baseline window so drift in the machine is not blamed on
 ## a script.
 var _script_costs := false
+var _without_script := ""
 const COST_WINDOW := 40
 var _cost_scripts: Array[String] = []
 var _cost_nodes: Dictionary = {}
@@ -142,6 +148,15 @@ func _process(delta: float) -> void:
 	if _frames <= WARMUP:
 		if _frames == WARMUP and _hide_labels:
 			_ablate()
+		if _frames == WARMUP and _without_script != "":
+			var off := 0
+			for n in get_tree().root.find_children("*", "", true, false):
+				var sc: Script = n.get_script()
+				if sc != null and sc.resource_path == _without_script and n != self:
+					n.set_process(false)
+					n.set_physics_process(false)
+					off += 1
+			print("BUDGET.ablation switched off %d x %s" % [off, _without_script])
 		if _frames == WARMUP and _no_shadows:
 			var lit := 0
 			for l in get_tree().root.find_children("*", "Light3D", true, false):

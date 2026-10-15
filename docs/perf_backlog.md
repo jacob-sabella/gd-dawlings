@@ -109,6 +109,36 @@ The 40-frame sample over-reports: a 3000-frame run of the same scene (`--sample 
 
 So 2.26 s passes before any dawlings script runs, against 0.55 s for an empty project. Our own building is about 0.5 s. With `--xr-mode off` the first frame comes 200-300 ms sooner (OpenXR looking for a runtime that is not there), but that is a launch decision `xr_bootstrap` makes, and a headset launch needs it, so it is not changed. Loading the entry-point scripts one by one takes about 0.4 s in total, so compiling scripts does not explain the rest. The other roughly 1.3 s (extensions, project load, the autoload cascade) cannot be attributed without symbols for the engine.
 
+## Busy rooms (200-frame samples, wide pose, no shadows)
+
+| room | tracks | draws | objects | nodes | frame ms | render GPU ms |
+|---|---|---|---|---|---|---|
+| studio:0 quiet | 13 | 1133 | 1685 | 3723 | 4.5 | 2.15 |
+| studio:0 quiet | 48 | 1304 | 1856 | 5207 | 6.4 | 2.16 |
+| studio:0 built-in engine, level 0.9 | 48 | 1298 | 1852 | 5261 | 7.6 | 2.17 |
+| garden:0 quiet | 13 | 1319 | 1889 | 3875 | 6.0 | 1.73 |
+| garden:0 quiet | 48 | 1470 | 2045 | 5359 | 5.6 | 1.68 |
+| garden:0 built-in engine, level 0.9 | 48 | 1465 | 2041 | 5413 | 6.7 | 1.69 |
+
+The GPU time is flat; the frame is CPU-bound and grows about 1.9 ms from 13 to 48 tracks. Not measured: a second player joined, a song playing, bytes on the wire, the audio callback.
+
+`--without-script res://x.gd` (new in the budget tool) switches one script's processing off for the whole run. At 48 tracks, five alternating pairs against the base (5.83-6.06 ms): `console_surface.gd` off gave 5.74-6.97, no gain. Single runs of `vu_meter` (50 nodes), `channel_strip` (48), `rack_unit` and `presence` off were all inside the 5.8-7.3 spread. No script's `_process` explains the 48-track growth.
+
+## Stopped: two iterations in a row kept nothing
+
+The startup breakdown and this busy-room pass both found no change that was measurably better, so the loop ends here, with the following left for someone with a symbolised engine build or a profiler that attributes time (see ranked candidates).
+
+## Before / after (what was kept)
+
+| | before | after |
+|---|---|---|
+| studio:0, 13 tracks, wide pose, no shadows: draws | 1232 | 1165 |
+| the same: objects | 1783 | 1717 |
+| the same: nodes | 3807 | 3743 |
+| startup to first frame (5 runs each) | 3189-3296 ms | 2788-2867 ms |
+
+Everything else is unchanged, and the suite stayed at 10601 checks, 0 failed throughout.
+
 ## Ranked candidates
 
 0. Startup before any script runs (1.7 s over an empty project): needs a Godot build with symbols, or bisecting extensions and autoloads one at a time.
