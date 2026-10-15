@@ -78,6 +78,20 @@ var _key: DirectionalLight3D
 ## The frost on the panes, one material for all of them.
 var _frost: ShaderMaterial
 
+## What follows the mix: the fire's glass and light, the candles and lanterns, and a blacklight
+## on the rug's cream border, with embers rising off the stove and motes over the rug.
+const UV_REST := 0.03
+var _fire_mat: StandardMaterial3D
+var _fire_base := Color.WHITE
+var _flame_mat: StandardMaterial3D
+var _flame_base := Color.WHITE
+var _lantern_mat: StandardMaterial3D
+var _lantern_base := Color.WHITE
+var _uv_rug: StandardMaterial3D
+var _uv_light: SpotLight3D
+var _embers: GPUParticles3D
+var _rug_motes: GPUParticles3D
+
 
 func venue_id() -> StringName:
 	return &"cabin"
@@ -311,6 +325,25 @@ func _ready() -> void:
 	_dress_zones()
 
 
+## The fire's glass, the candle flames and the lanterns swell with the mix and flash on each hit
+## (the stove's and candles' lights follow in _process); the rug's cream border fluoresces under a
+## violet blacklight that comes up with it, and embers and motes lift. At rest all as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	if _fire_mat != null:
+		_fire_mat.albedo_color = _fire_base * (1.0 + 0.5 * heard + 0.9 * heard_hit)
+	if _flame_mat != null:
+		_flame_mat.albedo_color = _flame_base * (1.0 + 0.6 * heard + 1.0 * heard_hit)
+	if _lantern_mat != null:
+		_lantern_mat.albedo_color = _lantern_base * (1.0 + 0.4 * heard + 0.8 * heard_hit)
+	if _uv_rug != null:
+		_uv_rug.emission_energy_multiplier = UV_REST + 2.0 * heard + 1.5 * heard_hit
+	if _uv_light != null:
+		_uv_light.light_energy = 3.0 * heard + 2.5 * heard_hit
+	drive_sparks(_embers)
+	drive_sparks(_rug_motes)
+
+
 func _process(delta: float) -> void:
 	_flicker += delta
 	if _stove_light != null:
@@ -319,9 +352,10 @@ func _process(delta: float) -> void:
 		var f := 0.82 + 0.1 * sin(_flicker * 2.3) + 0.06 * sin(_flicker * 5.1 + 1.3) + 0.04 * sin(_flicker * 13.7)
 		if _fire > 1.0:
 			f += 0.07 * sin(_flicker * 9.3 + 0.5) * sin(_flicker * 3.7)
-		_stove_light.light_energy = 2.6 * _fire * f
+		var up := 1.0 + 0.35 * heard + 0.7 * heard_hit
+		_stove_light.light_energy = 2.6 * _fire * f * up
 		if _stove_glow != null:
-			_stove_glow.light_energy = 0.9 * f
+			_stove_glow.light_energy = 0.9 * f * up
 	if _sky_mat != null and variant == AURORA:
 		# The display swells and fades over minutes; the room's green with it.
 		var glow := 0.75 + 0.3 * sin(_flicker * 0.09) * sin(_flicker * 0.053 + 1.1) + 0.08 * sin(_flicker * 0.4)
@@ -331,7 +365,7 @@ func _process(delta: float) -> void:
 	for i in candle_lights.size():
 		var t := _flicker + i * 1.7
 		candle_lights[i].light_energy = 1.6 * (0.85 + 0.07 * sin(t * 3.1) + 0.05 * sin(t * 7.9 + 0.4)
-				+ 0.03 * sin(t * 17.3))
+				+ 0.03 * sin(t * 17.3)) * (1.0 + 0.3 * heard + 0.6 * heard_hit)
 
 
 ## Knotty pine boards, honey-coloured and oiled.
@@ -570,15 +604,18 @@ func _light_the_stove() -> void:
 	iron.metallic = 0.6
 	iron.roughness = 0.6
 	var fire := ZoneKit.glow(Color(1.0, 0.38, 0.1), 1.7)
+	_fire_mat = fire
 	if variant == SUMMER:
 		# Cold: the grate behind the glass grey with old ash.
 		fire = StandardMaterial3D.new()
 		fire.albedo_color = Color(0.09, 0.085, 0.08)
 		fire.roughness = 0.95
+		_fire_mat = null
 	elif variant == AURORA:
 		# Roaring: stoked up against the cold, the glass white-hot orange.
 		_fire = 1.45
 		fire = ZoneKit.glow(Color(1.0, 0.45, 0.12), 3.0)
+		_fire_mat = fire
 	# Turned so its door faces into the room, across the corner.
 	var stove := _model("wood_stove.glb", Vector3(at.x, 0.041, at.y), deg_to_rad(55.0),
 			{"iron": iron, "fire": fire})
@@ -603,6 +640,13 @@ func _light_the_stove() -> void:
 		# the stove top instead (assets/models/cabin_wildflowers.glb).
 		_pick_wildflowers(Vector3(at.x, top + 0.001, at.y) + Basis(Vector3.UP, deg_to_rad(55.0)) * Vector3(0.06, 0, 0.1))
 		return
+	_fire_base = _fire_mat.albedo_color
+	var door := Vector3(at.x, 0.55, at.y) + Basis(Vector3.UP, deg_to_rad(55.0)) * Vector3(0, 0, 0.3)
+	var warm := Gradient.new()
+	warm.set_color(0, Color(1.0, 0.7, 0.25))
+	warm.set_color(1, Color(1.0, 0.35, 0.1))
+	_embers = make_sparks("Embers", door, Vector3(0.12, 0.05, 0.12),
+			AABB(door - Vector3(2.5, 0.6, 2.5), Vector3(5, 4.5, 5)), warm, 60, true)
 	# The fire's light, low, out through the door and across the floor.
 	_stove_light = SpotLight3D.new()
 	_stove_light.name = "Firelight"
@@ -786,7 +830,9 @@ func _put_up_the_shelf() -> void:
 	flame.height = 0.03
 	flame.radial_segments = 8
 	flame.rings = 4
-	flame.material = ZoneKit.glow(Color(1.0, 0.78, 0.45), 2.2)
+	_flame_mat = ZoneKit.glow(Color(1.0, 0.78, 0.45), 2.2)
+	_flame_base = _flame_mat.albedo_color
+	flame.material = _flame_mat
 	var stubs: Array = []
 	var tips: Array = []
 	for jar: Transform3D in placed[2]:
@@ -879,7 +925,10 @@ func _hang_lanterns() -> void:
 
 
 func _lantern(label: String, at: Vector3) -> Node3D:
-	var lantern := _model("lantern.glb", at, 0.0, {"Lantern_01_glass": ZoneKit.glow(Color(1.0, 0.66, 0.34), 1.6)})
+	if _lantern_mat == null:
+		_lantern_mat = ZoneKit.glow(Color(1.0, 0.66, 0.34), 1.6)
+		_lantern_base = _lantern_mat.albedo_color
+	var lantern := _model("lantern.glb", at, 0.0, {"Lantern_01_glass": _lantern_mat})
 	lantern.name = label
 	# Small, and lit from inside: a shadow apiece would cost more than it shows.
 	for mesh: MeshInstance3D in lantern.find_children("*", "MeshInstance3D", true, false):
@@ -1411,10 +1460,24 @@ func _dress_zones() -> void:
 	var lattice: AABB = z[&"matrix"]
 	# A braided rug's border, deep red and cream, the floor inside it bare boards.
 	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3(0, 0.003, 0), 0.14, wool)
-	ZoneKit.floor_frame(matrix, Vector2(2.82, 2.82), Vector3(0, 0.004, 0), 0.05,
-			Materials.cached_scanned("cabin_cream", "wool_boucle", "1k", 0.6, Color(0.7, 0.64, 0.52)))
+	# The cream thread glows blue-white under a blacklight, as bleached wool does.
+	_uv_rug = (Materials.cached_scanned("cabin_cream", "wool_boucle", "1k", 0.6, Color(0.7, 0.64, 0.52))
+			.duplicate() as StandardMaterial3D)
+	_uv_rug.emission_enabled = true
+	_uv_rug.emission = Color(0.55, 0.65, 1.0)
+	_uv_rug.emission_energy_multiplier = UV_REST
+	ZoneKit.floor_frame(matrix, Vector2(2.82, 2.82), Vector3(0, 0.004, 0), 0.05, _uv_rug)
 	ZoneKit.spot_down(matrix, Vector3(0, roof_at(0.0) - 0.45, 0), Color(0.95, 0.8, 0.62), 4.2, 40.0, 6.5,
 			iron)
+	_uv_light = ZoneKit.spot_down(matrix, Vector3(0.4, roof_at(0.0) - 0.45, 0), Color(0.55, 0.25, 1.0), 0.0,
+			46.0, 6.5)
+	_uv_light.light_specular = 0.0
+	var lc := lattice.get_center()
+	var cold := Gradient.new()
+	cold.set_color(0, Color(0.55, 0.7, 1.0))
+	cold.set_color(1, Color(0.7, 0.35, 1.0))
+	_rug_motes = make_sparks("RugMotes", Vector3(lc.x, 0.15, lc.z), Vector3(1.4, 0.05, 1.4),
+			AABB(Vector3(lc.x - 2.5, 0, lc.z - 2.5), Vector3(5, 4, 5)), cold, 80, true)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	var bench: AABB = z[&"bricks"]

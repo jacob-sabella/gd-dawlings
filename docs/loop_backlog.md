@@ -3751,4 +3751,8 @@ Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
   comes up with the music, and lime/violet sparks lift off the square.
   Shots: shots/loft_night_0.png (quiet), shots/loft_night_0.9.png (loud).
   Shared `Venue.make_sparks` / `drive_sparks` now back both rooftop and loft.
-- [ ] cabin, station, dome, studio
+- [x] cabin (all three): stove glass, stove and candle lights, candle flames and lanterns swell
+  and flash; the rug's cream border fluoresces blue-white under a violet blacklight; embers rise
+  off a lit stove and motes lift over the rug. Shots: shots/cabin_night_0.png (quiet),
+  shots/cabin_night_0.9.png (loud).
+- [ ] station, dome, studio

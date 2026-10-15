@@ -7158,6 +7158,31 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		for i in 12:
 			loft.pulse(0.9)
 		check("%s: reactive off holds the room still" % tag, loft.heard == 0.0 and not loft._uv_sparks.emitting)
+	for variant in 3:
+		studio.set_venue(&"cabin", false, variant)
+		var cabin := studio.venue as CabinVenue
+		var ctag := "cabin %d" % variant
+		var rug_rest := cabin._uv_rug.emission_energy_multiplier
+		var flame_rest := cabin._flame_mat.albedo_color
+		for i in 12:
+			cabin.pulse(0.9)
+		check("%s: a loud mix lifts what it has heard" % ctag, cabin.heard > 0.7)
+		check("%s: the candles glow brighter" % ctag, cabin._flame_mat.albedo_color.r > flame_rest.r * 1.3)
+		check("%s: the rug fluoresces and motes lift" % ctag,
+				cabin._uv_rug.emission_energy_multiplier > rug_rest * 10.0 and cabin._rug_motes.emitting
+				and cabin._uv_light.light_energy > 1.0)
+		check("%s: embers rise only where there is a fire" % ctag, (cabin._embers != null) == (variant != CabinVenue.SUMMER)
+				and (cabin._embers == null or cabin._embers.emitting))
+		for i in 120:
+			cabin.pulse(0.0)
+		check("%s: a silent mix settles back to rest" % ctag, cabin.heard == 0.0
+				and is_equal_approx(cabin._uv_rug.emission_energy_multiplier, rug_rest)
+				and cabin._uv_light.light_energy == 0.0 and not cabin._rug_motes.emitting
+				and cabin._flame_mat.albedo_color.is_equal_approx(flame_rest))
+		cabin.reactive = false
+		for i in 12:
+			cabin.pulse(0.9)
+		check("%s: reactive off holds the room still" % ctag, cabin.heard == 0.0 and not cabin._rug_motes.emitting)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 
