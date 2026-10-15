@@ -103,3 +103,25 @@ three ribs and the nameplate read as finished hardware. Cabin: the same casing, 
 venue's own lighting; the nameplate is visible). The studio's wall is hung on the side room's back
 wall facing in (`StudioVenue._hang_patch_wall`), so its back is against plaster and cannot be
 walked behind: no back needed. No change made.
+
+## Iteration 9: front re-read (nothing kept) and final summary
+
+Re-shot the wall from the front in grid (shots/pb_front9.png): node boxes, lettering and the cable
+channel read at a glance; the pager sits at the bottom left, partly behind grid's own furniture
+(a venue layout matter, not the wall's). The empty middle is the cable channel and is needed for
+ribbons. Two iterations in a row kept nothing, so the loop stops.
+
+### Final
+
+| | before | after |
+|---|---|---|
+| Wall back | bare jack dots and cable roots | chassis, rim, ribs, nameplate (rooftop, grid, desert, cabin; studio's wall faces a wall) |
+| Wall at 31 ports | ports beyond a cut-off skipped ("+N more") | 3 pages of at most 12 rows, pager, off-page link count |
+| Wall lettering | font 34 / 40, unused ports 0.55 | 46 / 50, 0.72 |
+| Wall hover | none | port's cables stay lit, others dim |
+| Routing bay, 64 tracks | 2 m tower of 26 mm rows | paged panel that fits the stand |
+| Routing bay, 256 tracks / 512 sends | grew without bound | about 1290 nodes, 16 ms build, 9 cables shown |
+| Busy return | 7 jacks, then shared | 12 jacks at 22 mm pitch |
+
+Open for later: a filter by name, full name on hover for truncated ports, undo for patches, bundling
+at 100+ visible patches, routing bay frame ms in the studio.
