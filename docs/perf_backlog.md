@@ -76,9 +76,13 @@ So two thirds of the desktop draw count is shadow passes, which the headset neve
 
 Labels are batched well (only 103 draws) but cost about 1 ms a frame on the desktop CPU, 20% of it. The same run shows `Caster` is 7 meshes each (plate, kingpin, two cheeks, tyre, two spokes) and 16 of them stand under the furniture: 112 objects that merge to about 48.
 
+## Where the frame goes (studio:0, 13 tracks, wide, no shadows)
+
+`tools/budget.gd` now reports `render_cpu_ms` and `render_gpu_ms` (the renderer's own timing). One run: frame 4.7 ms, render CPU 0.75, render GPU 2.2. So about 1.8 ms a frame is NOT rendering: scripts, physics, audio and the engine's own work. Hiding all 469 labels moved the frame by 0.6 ms but render CPU/GPU by only 0.07, so the label cost is in how they are processed, not drawn.
+
 ## Ranked candidates
 
-1. The 469 Label3Ds: about 1 ms of a 5.2 ms frame. Find why they cost (per-frame text updates? mesh rebuilds? submission?) before changing anything.
+1. The ~1.8 ms of non-render CPU a frame, label handling included. Needs a profiler that can attribute it (see dead ends); try the Godot editor's own profiler on a `--remote-debug` run.
 2. The ~1000 draws that remain on the Quest proxy: merge or instance the busiest parents (PatchWall, Swivel, Wheel, Ruler, PropShelf).
 3. Casters: 7 meshes each, 16 of them; merge into 3 each (plate; fork; wheel with two surfaces).
 4. Garden and desert primitive counts (instancing / LOD).
@@ -86,4 +90,5 @@ Labels are batched well (only 103 draws) but cost about 1 ms a frame on the desk
 
 ## Dead ends
 
-(none yet)
+- **Per-script cost by ablation** (`--script-costs`: switch each script's _process off for 40 frames, compare with a baseline window). Run four times, the same script came out anywhere from -0.4 to +1.5 ms. The noise is larger than every real script cost, so it ranks nothing. Kept in the tool only to show which scripts are processing. One consistent result is not a game cost: `tools/screenshot.gd` (about 1 ms) is on only because the budget run passes `--quit-after`.
+- **`perf` for the native core and the engine split**: not installed on this machine (`pacman -S perf`, needs you). Until it is, CPU cost by script and by engine function is not measurable here.

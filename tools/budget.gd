@@ -64,6 +64,7 @@ func _ready() -> void:
 		return
 	_hide_labels = args.has("--hide-labels")
 	_no_shadows = args.has("--no-shadows")
+	_script_costs = args.has("--script-costs")
 
 	# VSYNC OFF, or this measures the monitor instead of the renderer.
 	#
@@ -78,6 +79,9 @@ func _ready() -> void:
 	# workspace nobody is watching is presented about once a second. Same underlying fact, and
 	# the budget wanted it more.
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	# The renderer's own timing of its CPU and GPU halves, which frame_ms (the slower of the two,
+	# plus everything else) cannot tell apart.
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 
 	# Last, so the scene is up and the backend is installed.
 	await get_tree().process_frame
@@ -90,6 +94,21 @@ var _hide_labels := false
 ## The same, for shadows: what the shadow passes add to the draw count.
 var _no_shadows := false
 
+## PER-SCRIPT CPU, by ablation: with each script's _process/_physics_process switched off in turn,
+## how much shorter is the frame? The engine's own script-time monitor reads nonsense in an
+## autoload (see `_process`), so this measures the same thing the way the wall clock can.
+## Windows alternate with an untouched baseline window so drift in the machine is not blamed on
+## a script.
+var _script_costs := false
+const COST_WINDOW := 40
+var _cost_scripts: Array[String] = []
+var _cost_nodes: Dictionary = {}
+var _cost_step := -1
+var _cost_frames := 0
+var _cost_total := 0.0
+var _cost_base: Array[float] = []
+var _cost_results: Array = []
+
 
 func _ablate() -> void:
 	var n := 0
@@ -100,6 +119,8 @@ func _ablate() -> void:
 
 
 var _delta_ms := 0.0
+var _render_cpu_total := 0.0
+var _render_gpu_total := 0.0
 ## Milliseconds from the process starting to the first frame drawn: what starting the game costs.
 var _first_frame_ms := -1
 
@@ -108,6 +129,9 @@ func _process(delta: float) -> void:
 	if not _active:
 		return
 	_delta_ms = delta * 1000.0
+	if _cost_step >= 0:
+		_cost_tick(_delta_ms)
+		return
 	_frames += 1
 	if _first_frame_ms < 0:
 		_first_frame_ms = Time.get_ticks_msec()
@@ -136,9 +160,69 @@ func _process(delta: float) -> void:
 	# which is the argument for a measuring tool reporting as few numbers as it can defend.
 	var ms := _delta_ms
 	_frame_ms_total += ms
+	var vp := get_viewport().get_viewport_rid()
+	_render_cpu_total += RenderingServer.viewport_get_measured_render_time_cpu(vp)
+	_render_gpu_total += RenderingServer.viewport_get_measured_render_time_gpu(vp)
 	_frame_ms_worst = maxf(_frame_ms_worst, ms)
 	if _frames >= WARMUP + SAMPLE:
 		_report()
+		if _script_costs:
+			_start_costs()
+		else:
+			get_tree().quit()
+
+
+func _start_costs() -> void:
+	for n in get_tree().root.find_children("*", "", true, false):
+		var sc: Script = n.get_script()
+		if sc == null or n == self:
+			continue
+		if not (n.is_processing() or n.is_physics_processing()):
+			continue
+		var path: String = sc.resource_path
+		if not _cost_nodes.has(path):
+			_cost_nodes[path] = []
+			_cost_scripts.append(path)
+		_cost_nodes[path].append(n)
+	_cost_step = 0
+	_cost_frames = 0
+	_cost_total = 0.0
+	set_process(false)
+	set_process(true)
+
+
+func _set_cost_nodes(path: String, on: bool) -> void:
+	for n in _cost_nodes[path]:
+		if is_instance_valid(n):
+			n.set_process(on)
+			n.set_physics_process(on)
+
+
+## Steps: even = a baseline window, odd = a window with script (step/2) off.
+func _cost_tick(ms: float) -> void:
+	_cost_frames += 1
+	if _cost_frames <= 5:
+		return
+	_cost_total += ms
+	if _cost_frames < 5 + COST_WINDOW:
+		return
+	var mean := _cost_total / float(COST_WINDOW)
+	var i := _cost_step / 2
+	if _cost_step % 2 == 0:
+		_cost_base.append(mean)
+		if i < _cost_scripts.size():
+			_set_cost_nodes(_cost_scripts[i], false)
+	else:
+		_set_cost_nodes(_cost_scripts[i], true)
+		var base := (_cost_base[i] + _cost_base[i + 1 if i + 1 < _cost_base.size() else i]) * 0.5
+		_cost_results.append([_cost_scripts[i], base - mean, (_cost_nodes[_cost_scripts[i]] as Array).size()])
+	_cost_step += 1
+	_cost_frames = 0
+	_cost_total = 0.0
+	if _cost_step >= _cost_scripts.size() * 2 + 1:
+		_cost_results.sort_custom(func(a, b): return a[1] > b[1])
+		for r in _cost_results:
+			print("BUDGET.script %s saved_ms=%.2f nodes=%d" % [r[0], r[1], r[2]])
 		get_tree().quit()
 
 
@@ -148,7 +232,7 @@ func _report() -> void:
 
 	# One machine-readable line, because the sweep is a shell loop and a table assembled by awk
 	# is less wrong than one assembled by eye.
-	print("BUDGET tracks=%d prims=%d draws=%d objects=%d vram_mb=%.1f frame_ms=%.2f worst_ms=%.2f nodes=%d start_ms=%d mem_mb=%.1f peak_mb=%.1f" % [
+	print("BUDGET tracks=%d prims=%d draws=%d objects=%d vram_mb=%.1f frame_ms=%.2f worst_ms=%.2f nodes=%d render_cpu_ms=%.2f render_gpu_ms=%.2f start_ms=%d mem_mb=%.1f peak_mb=%.1f" % [
 		tracks,
 		info.call(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 		info.call(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
@@ -157,6 +241,8 @@ func _report() -> void:
 		_frame_ms_total / float(SAMPLE),
 		_frame_ms_worst,
 		get_tree().get_node_count(),
+		_render_cpu_total / float(SAMPLE),
+		_render_gpu_total / float(SAMPLE),
 		_first_frame_ms,
 		float(OS.get_static_memory_usage()) / 1048576.0,
 		float(OS.get_static_memory_peak_usage()) / 1048576.0,
