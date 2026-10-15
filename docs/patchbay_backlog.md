@@ -16,8 +16,7 @@ Two patch surfaces, both in hardware/patchbay/:
 1. ~~Back of the wall: panel, boxes and frame bars are one-sided quads, so from behind it is a
    see-through screen with jacks and cables floating.~~ Fixed (iteration 1, below).
 2. ~~Wall capped at 12 ports a column, the rest unreachable.~~ Paged (iteration 2). Still open: a filter/search by name, and CABLE_LIMIT 150.
-3. Routing bay rows shrink to 26 mm and then the panel grows without bound; 64+ tracks is a
-   tower no one can reach. Needs paging/zoom or a filter by name.
+3. ~~Routing bay rows shrank to 26 mm and the panel grew without bound (64 tracks: a 2 m tower).~~ Paged (iteration 3). Still open: filter by name, an off-page send has no cable, only its plug.
 4. Routing bay `MAX_SLOTS = 7`: a track with more sends than that shares a bore (`mini(i, 6)`).
 5. Cable clutter at 100+ patches: no bundling, no level of detail.
 6. Labels at small rows are tiny from the seat; no hover-for-full-name.
@@ -44,3 +43,12 @@ and only counted ("+N more ports"), so 190 outputs left 178 of them unpatchable.
 make 16 pages, each port on exactly one, a page draws only its own jacks, turning shows others,
 pages wrap. Suite 10605, 0 failed. Not yet looked at in a screenshot (the machine's real graph
 fits one page, so nothing changes on screen until a graph is large).
+
+## Iteration 3: the routing bay pages
+
+Past 24 rows the bay shows a page of 24 per column, each column paged on its own (FROM turned to
+the sender, TO to the receiver), with `<` `>` buttons and "1-24 OF 64" at the foot. 13 tracks are
+one page, drawn exactly as before. 64 tracks went from a 2.1 m tower of 26 mm rows running off the
+stand (shots/pbay_64.png) to a 24-row panel that fits it (shots/pbay_64_after3.png). A send whose far
+end is on another page keeps its plug on the visible end, with no cable; dragging that plug
+re-patches or unplugs it as usual, hovering skips the missing row. Suite 10608, 0 failed.

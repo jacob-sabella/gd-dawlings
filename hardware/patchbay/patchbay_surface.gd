@@ -44,6 +44,12 @@ const ROWS_SPAN := 0.9
 ## The strip above the rows that says which column is which, and the one below that says what to do.
 const HEADER := 0.085
 const FOOTER := 0.05
+## Most rows a column shows at once. A bigger session is paged, each column on its own, so a row
+## stays as tall as it was for a rig this size and a track on page 3 can still be patched to one
+## on page 1: the FROM column is turned to the sender and the TO column to the receiver.
+const PAGE_ROWS := 24
+## The foot is taller when there is a pager in it.
+const PAGER_FOOTER := 0.10
 ## How far above the panel's lower edge the permanent looms enter the back of the bay.
 const LOOM_ENTRY_RISE := 0.068
 ## How far the cables droop crossing the gap. A cable to the bottom row at the usual droop hung
@@ -63,6 +69,10 @@ var _height := 0.0
 var _built_key := ""
 ## The cable being carried, while one is: {from, fixed, cable, hidden, target}.
 var _drag: Dictionary = {}
+## Which page each column is on, and how many pages the session has.
+var _page := {"out": 0, "in": 0}
+var _pages := 1
+var _footer := FOOTER
 
 
 func _ready() -> void:
@@ -133,8 +143,13 @@ func _rebuild() -> void:
 		busiest = maxi(busiest, list.size())
 	_slots = clampi(busiest + 1, 2, MAX_SLOTS)
 
-	_pitch = clampf(ROWS_SPAN / float(indices.size()), ROW_MIN, ROW_MAX)
-	_height = HEADER + _pitch * indices.size() + FOOTER
+	_pages = maxi(ceili(float(indices.size()) / PAGE_ROWS), 1)
+	_page["out"] = clampi(int(_page["out"]), 0, _pages - 1)
+	_page["in"] = clampi(int(_page["in"]), 0, _pages - 1)
+	_footer = PAGER_FOOTER if _pages > 1 else FOOTER
+	var shown := mini(indices.size(), PAGE_ROWS)
+	_pitch = clampf(ROWS_SPAN / float(shown), ROW_MIN, ROW_MAX)
+	_height = HEADER + _pitch * shown + _footer
 
 	# The origin is the middle of the panel's TOP edge: a bigger session grows the bay downward,
 	# the way a rack fills, and the top row stays where you last read it.
@@ -158,10 +173,13 @@ func _rebuild() -> void:
 		socket_bank.name = "JackSockets"
 		_adopt(socket_bank)
 
-	for r in indices.size():
-		var index: int = indices[r]
-		var t := DAW.state.track(index)
-		for kind in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
+	for kind in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
+		var page: int = _page["out"] if kind == PatchPoint.Kind.OUTPUT else _page["in"]
+		var first := page * PAGE_ROWS
+		var last := mini(first + PAGE_ROWS, indices.size())
+		for r in range(first, last):
+			var index: int = indices[r]
+			var t := DAW.state.track(index)
 			var row := PatchPoint.create(index, kind, t.display_name())
 			row.colour = t.shown_colour()
 			row.size = Vector2(COLUMN_WIDTH, _pitch)
@@ -172,7 +190,7 @@ func _rebuild() -> void:
 				row.jack_xs.append(out * (-(COLUMN_WIDTH * 0.5 - 0.025) + k * SLOT_PITCH))
 			var ends: Dictionary = leaving if kind == PatchPoint.Kind.OUTPUT else arriving
 			row.used = (ends[index] as Array).size() if ends.has(index) else 0
-			row.position = Vector3(out * COLUMN_X, -HEADER - _pitch * (r + 0.5), 0)
+			row.position = Vector3(out * COLUMN_X, -HEADER - _pitch * (r - first + 0.5), 0)
 			row.drag_began.connect(_on_drag_began)
 			row.drag_moved.connect(_on_drag_moved)
 			row.drag_finished.connect(_on_drag_finished)
@@ -190,8 +208,11 @@ func _rebuild() -> void:
 		_routes[Vector2i(route["src"], route["send"])] = route
 		route["plugs"] = []
 		for end in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
-			var row: PatchPoint = _outputs[route["src"]] if end == PatchPoint.Kind.OUTPUT \
-					else _inputs[route["dst"]]
+			var row: PatchPoint = _outputs.get(route["src"]) if end == PatchPoint.Kind.OUTPUT \
+					else _inputs.get(route["dst"])
+			# An end on a page that is not showing has no jack to plug into.
+			if row == null:
+				continue
 			var slot: int = route["out_slot"] if end == PatchPoint.Kind.OUTPUT else route["in_slot"]
 			var plug := PatchPlug.create(route["src"], route["send"], route["dst"], end)
 			plug.row = row
@@ -207,6 +228,46 @@ func _rebuild() -> void:
 	# Cables are laid once the rows have their final world transforms, which is after this
 	# returns and the bay is placed.
 	call_deferred("_draw_cables")
+	if _pages > 1:
+		_pager(indices.size())
+
+
+## The foot of a paged bay: each column's own back and forward and which rows it is showing.
+func _pager(total: int) -> void:
+	var y := -_height + _footer * 0.5
+	for key in ["out", "in"]:
+		var out := -1.0 if key == "out" else 1.0
+		var x := out * COLUMN_X
+		var first := int(_page[key]) * PAGE_ROWS
+		_print("%d-%d OF %d" % [first + 1, mini(first + PAGE_ROWS, total), total],
+				Vector3(x, y, 0.001), 62, HORIZONTAL_ALIGNMENT_CENTER, Color(0.75, 0.78, 0.85))
+		for step in [-1, 1]:
+			var button := PanelButton.new()
+			button.scale = Vector3.ONE * 2.6
+			button.hit_pad = Vector2(1.5, 2.2)
+			button.led_colour = Color(0.45, 0.68, 0.95)
+			button.position = Vector3(x + step * 0.16, y, 0.004)
+			button.pressed.connect(_turn.bind(key, step))
+			button.describe_title = func() -> String: return "%s COLUMN  %s PAGE" % [
+					"FROM" if key == "out" else "TO", "PREVIOUS" if step < 0 else "NEXT"]
+			button.describe_value = func(_v: float) -> String: return ""
+			_adopt(button)
+			_print("<" if step < 0 else ">", Vector3(x + step * 0.16, y, 0.024), 70,
+					HORIZONTAL_ALIGNMENT_CENTER, Color(0.9, 0.92, 0.96))
+
+
+func _turn(key: String, step: int) -> void:
+	_page[key] = posmod(int(_page[key]) + step, _pages)
+	mark_dirty()
+
+
+## Which page of rows each column is showing, 0-based.
+func page_of(key: String) -> int:
+	return int(_page[key])
+
+
+func page_count() -> int:
+	return _pages
 
 
 func _lettering() -> void:
@@ -237,7 +298,7 @@ func _lettering() -> void:
 	# there is, and the one thing you cannot do with a row that was never drawn is miss it.
 	var caption := DAW.state.bank_caption()
 	if caption != "":
-		_print(caption, Vector3(0, -_height + FOOTER * 0.5, 0.001), 36,
+		_print(caption, Vector3(0, -_height + _footer * 0.5, 0.001), 36,
 				HORIZONTAL_ALIGNMENT_CENTER, Color(0.86, 0.66, 0.38))
 
 
@@ -315,11 +376,13 @@ func _on_drag_began(from: ControlAffordance, at: Vector3) -> void:
 		var route: Dictionary = _routes.get(Vector2i(plug.source, plug.send_index), {})
 		if route.is_empty():
 			return
-		var other: PatchPoint = _inputs[route["dst"]] if plug.end == PatchPoint.Kind.OUTPUT \
-				else _outputs[route["src"]]
+		var other: PatchPoint = _inputs.get(route["dst"]) if plug.end == PatchPoint.Kind.OUTPUT \
+				else _outputs.get(route["src"])
+		# The far end may be on another page: the cable then hangs from this end's own jack.
 		fixed = other.jack_transform(route["in_slot"] if plug.end == PatchPoint.Kind.OUTPUT
-				else route["out_slot"])
-		tint = (_outputs[route["src"]] as PatchPoint).colour
+				else route["out_slot"]) if other != null else plug.row.jack_transform(
+				route["out_slot"] if plug.end == PatchPoint.Kind.OUTPUT else route["in_slot"])
+		tint = plug.row.colour
 		hidden = route.get("cable")
 		if hidden != null and is_instance_valid(hidden):
 			hidden.visible = false
@@ -497,8 +560,9 @@ func _on_hover(on: bool, node: ControlAffordance) -> void:
 		var cable: PatchCable = route.get("cable")
 		if cable != null and is_instance_valid(cable):
 			cable.dimmed = false
-		(_outputs[route["src"]] as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
-		(_inputs[route["dst"]] as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
+		for row in [_outputs.get(route["src"]), _inputs.get(route["dst"])]:
+			if row != null:
+				(row as PatchPoint).set_light(PatchPoint.Light.EMPHASIS)
 
 
 func _light_all(how: int, dim: bool) -> void:

@@ -269,7 +269,7 @@ func _pager(key: String, x: float, y: float, count: int, total: int) -> void:
 		button.position = Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.006)
 		button.pressed.connect(_turn_page.bind(key, step, count))
 		_adopt(button)
-		var glyph := _text("◀" if step < 0 else "▶", Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.012), INK, 40)
+		var glyph := _text("<" if step < 0 else ">", Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.032), INK, 40)
 		glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 

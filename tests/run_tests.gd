@@ -86,6 +86,7 @@ func _ready() -> void:
 	_test_a_hosted_plugin_comes_back_with_its_project()
 	_test_an_instrument_plugin_plays_a_tracks_notes()
 	_test_one_jack_takes_one_plug()
+	_test_a_big_session_pages_the_bay()
 	_test_the_bay_reads_left_to_right()
 	_test_dragging_across_the_bay_patches_and_unpatches()
 	_test_hovering_a_row_picks_out_its_cables()
@@ -2563,6 +2564,42 @@ func _test_one_jack_takes_one_plug() -> void:
 	check("and a jack to spare", verb.jack_xs.size() > verb.used)
 	check("every row has as many jacks", bay.output_row(1).jack_xs.size() == verb.jack_xs.size())
 	bay.queue_free()
+
+
+func _test_a_big_session_pages_the_bay() -> void:
+	# Past a page of rows the bay is paged, each column on its own, so a row stays as tall as it
+	# was and a send from page 1 to page 3 can still be made.
+	var offline := OfflineBackend.new()
+	offline.track_count = 64
+	DAW.use(offline)
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	check("64 tracks are three pages", bay.page_count() == 3)
+	check("a column shows one page of rows, not all (%d)" % bay._outputs.size(),
+			bay._outputs.size() == PatchbaySurface.PAGE_ROWS and bay._inputs.size() == PatchbaySurface.PAGE_ROWS)
+	check("so the panel is no taller than a full page's (%.2fm)" % bay.panel_height(),
+			bay.panel_height() <= PatchbaySurface.HEADER + PatchbaySurface.PAGE_ROWS * PatchbaySurface.ROW_MAX + PatchbaySurface.PAGER_FOOTER + 0.001)
+	var seen := {}
+	for page in 3:
+		bay._page["out"] = page
+		bay.mark_dirty()
+		bay._process(0.0)
+		for index in bay._outputs:
+			seen[index] = true
+	check("every track's output is on some page (%d of 64)" % seen.size(), seen.size() == 64)
+	bay._turn("out", 1)
+	bay._turn("in", -1)
+	bay._process(0.0)
+	check("the columns turn on their own and wrap", bay.page_of("out") == 0 and bay.page_of("in") == 2)
+	bay.queue_free()
+	var small := OfflineBackend.new()
+	DAW.use(small)
+	var one := PatchbaySurface.new()
+	add_child(one)
+	one._process(0.0)
+	check("13 tracks are one page, as before", one.page_count() == 1)
+	one.queue_free()
 
 
 func _test_the_bay_reads_left_to_right() -> void:
