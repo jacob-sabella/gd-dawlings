@@ -50,7 +50,7 @@ person standing in it sees it.
 
 The arrange timeline stands in the room on its own stand; the keys under it are marks, not words
 (hover one for its card). Each person's hands edit through the host, so everyone in a session
-sees one project. Beyond cutting, moving and fading items, the deck now renames an item, selects
+sees one project. Beyond cutting, moving and fading items, the deck also renames an item, selects
 a track's items, and edits a MIDI item's notes: legato, staccato, even velocity, notes backwards,
 and per-note insert, delete, pitch, length, time and velocity. A render picks its bit depth and
 sample rate. Every venue has a patch wall of this machine's PipeWire graph (in the studio's side room, or
@@ -97,7 +97,7 @@ godot --path . -- --venue grid               # stand in a given venue (studio / 
 godot --path . -- --xr-sim --built-in        # a headset simulated on the desktop (add --ar for passthrough)
 ```
 
-With no Reaper it comes up on a synthetic ten-track mix with the meters moving — silent by
+With no Reaper it comes up on a synthetic thirteen-track mix with the meters moving — silent by
 default, audible with `--built-in` — so the studio can be built, lit and photographed without a
 DAW in the loop. An exported build defaults to `--built-in` on its own, since whoever runs it
 has no Reaper; run from the editor and you get the silent stand-in unless you ask otherwise.
@@ -107,7 +107,7 @@ the same. See `docs/venues.md`.
 
 ## Tour mode
 
-A roguelike gig-rescue mode, one person alone or a band of up to eight online. A run starts by
+A roguelike gig-rescue mode, one person alone or a band online. A run starts by
 breaking open the road case chained shut at the back of the room — the host throws things at it
 until the lid gives. Each run is a gig in trouble: a brief hands the band a looped song with
 something wrong in it (a buried vocal, a muddy EQ, a dragging lane, a hard-panned guitar, a
@@ -181,6 +181,8 @@ Two channels, because one is not enough — see `docs/transport.md` for why.
 
 | Path | What lives there |
 |---|---|
+| `core/audio/` | What the room sounds like: ports, foley, the PipeWire graph, personal mixes, the keys |
+| `core/room/` | The floor plan, the session layout, and furniture on casters |
 | `core/daw/` | The DAW-agnostic layer: backend contract, mix state, wire vocabulary, offline mix |
 | `core/built_in/` | The built-in backend: `GodotBackend` on `AudioServer`, the demo song, the dawkit bridge |
 | `core/reaper/` | The Reaper backend: OSC codec, UDP peer, the ReaScript bridge |
@@ -195,7 +197,7 @@ Two channels, because one is not enough — see `docs/transport.md` for why.
 | `scenes/` | Entry point and the studio itself |
 | `reaper/` | The half that runs inside Reaper |
 | `vendor/dawkit/` | The built-in DAW engine, as its own repository (git submodule) |
-| `tools/` | `verify.sh` (tests), `shot.sh` (screenshots), `tour_probe.sh` (headless Tour run) |
+| `tools/` | `verify.sh` (tests), `shot.sh` (screenshots), `movie.sh` (clips), `tour_probe.sh` (headless Tour run), `reaper_rig.sh` (a private Reaper) |
 
 ## Verifying
 
@@ -214,8 +216,8 @@ It covers nothing about how any of it looks. That is what `shot.sh` is for.
 ## Building and releasing
 
 Clone with `git clone --recurse-submodules` (dawkit is a submodule). CI runs the headless suite on
-every branch and a full Linux and Windows export on every pull request; a release
-with both zips is cut by hand when you want one. See
+every branch but `master`, and the suite plus a full Linux and Windows export on every pull request
+to it; a release with both zips is cut by hand when you want one. See
 `RELEASING.md`.
 
 ## Reading order
