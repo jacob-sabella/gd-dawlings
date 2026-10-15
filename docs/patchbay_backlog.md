@@ -52,3 +52,24 @@ one page, drawn exactly as before. 64 tracks went from a 2.1 m tower of 26 mm ro
 stand (shots/pbay_64.png) to a 24-row panel that fits it (shots/pbay_64_after3.png). A send whose far
 end is on another page keeps its plug on the visible end, with no cable; dragging that plug
 re-patches or unplugs it as usual, hovering skips the missing row. Suite 10608, 0 failed.
+
+## Iteration 4: stress table, and busy returns
+
+`tools/patchbay_stress.tscn` (headless) builds the routing bay at three sizes with random sends:
+
+| tracks | sends | pages | plugs drawn | cables drawn | nodes | build ms |
+|---|---|---|---|---|---|---|
+| 16 | 32 | 1 | 68 | 34 | 1297 | 69 |
+| 64 | 128 | 3 | 95 | 15 | 1373 | 20 |
+| 256 | 512 | 11 | 101 | 9 | 1289 | 16 |
+
+The bay's cost is flat in the size of the session (it only ever builds a page a column), so
+256 tracks and 512 patches cost what 16 do. Not yet measured as frame ms in the studio, nor
+as a screenshot at 256. The cost of that flatness: sends whose far end is on another page show
+a plug and no cable, so at 512 patches only ~9 cables are visible; an off-page indicator or a
+"show this track's routing" view is the next thing to do.
+
+Busy returns: a row was capped at 7 jacks, so an eighth cable shared a bore. Now up to 12, the
+pitch closing from 28 mm to 22 mm past seven (13 tracks and the usual rigs are unchanged). Test: 11
+senders into one return get 11 jacks, no two plugs closer than a plug diameter. Beyond 12 sends
+into one track the last jack is still shared (open). Suite 10613, 0 failed.

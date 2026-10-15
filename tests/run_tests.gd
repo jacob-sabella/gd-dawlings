@@ -87,6 +87,7 @@ func _ready() -> void:
 	_test_an_instrument_plugin_plays_a_tracks_notes()
 	_test_one_jack_takes_one_plug()
 	_test_a_big_session_pages_the_bay()
+	_test_a_busy_return_gets_a_jack_a_cable()
 	_test_the_bay_reads_left_to_right()
 	_test_dragging_across_the_bay_patches_and_unpatches()
 	_test_hovering_a_row_picks_out_its_cables()
@@ -2600,6 +2601,37 @@ func _test_a_big_session_pages_the_bay() -> void:
 	one._process(0.0)
 	check("13 tracks are one page, as before", one.page_count() == 1)
 	one.queue_free()
+
+
+func _test_a_busy_return_gets_a_jack_a_cable() -> void:
+	# Eleven tracks into one return: past seven jacks the row closes up rather than putting two
+	# cables in a bore.
+	var offline := OfflineBackend.new()
+	offline.track_count = 16
+	DAW.use(offline)
+	var idx := DAW.state.track_indices()
+	var target: int = idx[idx.size() - 1]
+	var made := 0
+	for i in idx.size():
+		if idx[i] != target and made < 11 and not DAW.state.track(idx[i]).sends.has(0):
+			DAW.create_send(idx[i], target)
+			made += 1
+	var bay := PatchbaySurface.new()
+	add_child(bay)
+	bay._process(0.0)
+	bay._draw_cables()
+	var row := bay.input_row(target)
+	check("a return fed by many has a jack for each (%d jacks, %d used)" % [row.jack_xs.size(), row.used],
+			row.used >= 11 and row.jack_xs.size() > row.used - 1)
+	var ends: Array[Vector3] = []
+	for cable in bay._cables:
+		ends.append((cable as PatchCable).to_xform.origin)
+	var closest := INF
+	for i in ends.size():
+		for j in range(i + 1, ends.size()):
+			closest = minf(closest, ends[i].distance_to(ends[j]))
+	check("and no two plugs share a bore (%.1fmm apart)" % (closest * 1000.0), closest >= PatchCable.PLUG_RADIUS * 2.0)
+	bay.queue_free()
 
 
 func _test_the_bay_reads_left_to_right() -> void:

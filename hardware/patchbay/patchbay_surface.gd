@@ -35,7 +35,10 @@ const COLUMN_WIDTH := 0.44
 const COLUMN_X := 0.32
 ## Between neighbouring jacks in a row, and the most jacks a row is given.
 const SLOT_PITCH := 0.028
-const MAX_SLOTS := 7
+const MAX_SLOTS := 12
+## Past seven jacks a row the pitch closes up to this, as near as the nuts can sit, so a busy
+## return takes more cables without the names running out of room.
+const TIGHT_PITCH := 0.022
 ## How tall a row is: as tall as fits ROWS_SPAN, within these. 50mm is a name read from across the
 ## room; 26mm is about the smallest a row stays easy to hit from the seat.
 const ROW_MAX := 0.05
@@ -187,7 +190,7 @@ func _rebuild() -> void:
 			row.socket_bank = socket_bank
 			var out := row.outward()
 			for k in _slots:
-				row.jack_xs.append(out * (-(COLUMN_WIDTH * 0.5 - 0.025) + k * SLOT_PITCH))
+				row.jack_xs.append(out * (-(COLUMN_WIDTH * 0.5 - 0.025) + k * (SLOT_PITCH if _slots <= 7 else TIGHT_PITCH)))
 			var ends: Dictionary = leaving if kind == PatchPoint.Kind.OUTPUT else arriving
 			row.used = (ends[index] as Array).size() if ends.has(index) else 0
 			row.position = Vector3(out * COLUMN_X, -HEADER - _pitch * (r - first + 0.5), 0)
