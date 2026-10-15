@@ -3734,3 +3734,16 @@ Verified on the rig: in ReaEQ, a tab click, a band node drag, the gain slider dr
 phase checkbox all work, and the real cursor stays put. The Gojira probe passes 36/36.
 Not handled: a plugin's popup menus and dropdowns open as windows of their own, which the tablet
 does not show.
+
+## Audio-reactive venues (loop)
+
+Shared helper: `Venue.hear(level)` (attack/release smoothing as `heard`, rise flash as `heard_hit`,
+exactly 0 at rest). Off with `reactive = false` (tied to `--no-motion`). `--feed-level F` fixes the
+level for screenshots.
+
+Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
+
+- [x] rooftop: festoon bulbs and string spots swell, city windows breathe, skylight glows, the
+  lattice's chalked square is a violet blacklight, and gold/violet sparks fall under the strings.
+  Shots: shots/rooftop_floor_0.png (quiet), shots/rooftop_floor_0.9.png (loud).
+- [ ] loft, cabin, station, dome, studio

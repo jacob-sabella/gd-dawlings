@@ -74,8 +74,23 @@ const NIGHT_STRINGS := 1.5
 ## The tanks' aircraft lights: on this long, once in this long.
 const BEACON_ON := 0.3
 const BEACON_EVERY := 1.6
+## How brightly the fluorescent chalk glows with the mix at rest (the dusk's own light on it).
+const UV_REST := 0.05
 
 var _sky_mat: ShaderMaterial
+## What reacts to the music: the festoons' bulbs and the lights under them, the city's windows and
+## roofline, and the glass of the skylight over the stairwell's lit landing.
+var _bulb_mat: StandardMaterial3D
+var _bulb_base := Color.WHITE
+var _string_lights: Array[SpotLight3D] = []
+var _string_base: Array[float] = []
+var _window_energy := 1.0
+var _skylight_mat: StandardMaterial3D
+## The blacklight: the lattice's chalked square is fluorescent, and glows violet-white as the mix
+## swells, as if a UV tube over the deck came up with it.
+var _uv_chalk: StandardMaterial3D
+## Sparks shaken loose from the strings on each hit, drifting down through the bulbs' light.
+var _sparks: GPUParticles3D
 var _city_mat: ShaderMaterial
 ## The red lights on the tanks' finials, which blink.
 var beacons: Array[MeshInstance3D] = []
@@ -263,6 +278,7 @@ func _ready() -> void:
 	_string_the_lights(steel)
 	_raise_city()
 	_dress_zones()
+	_shake_sparks()
 
 
 func _steel() -> StandardMaterial3D:
@@ -422,6 +438,100 @@ func _raise_tanks(steel: Material) -> void:
 		beacons.append(beacon)
 
 
+## A box of sparks under the strings, off until the mix is playing. Warm, with the odd violet one
+## for the blacklight's sake; they drift down slowly and are gone before they reach the deck.
+func _shake_sparks() -> void:
+	var half := live_room_half()
+	var soft := GradientTexture2D.new()
+	soft.fill = GradientTexture2D.FILL_RADIAL
+	soft.fill_from = Vector2(0.5, 0.5)
+	soft.fill_to = Vector2(1.0, 0.5)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	soft.gradient = g
+	soft.width = 32
+	soft.height = 32
+	var dot := StandardMaterial3D.new()
+	dot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dot.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dot.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dot.vertex_color_use_as_albedo = true
+	dot.albedo_texture = soft
+	dot.no_depth_test = false
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.05, 0.05)
+	quad.material = dot
+	var m := ParticleProcessMaterial.new()
+	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	m.emission_box_extents = Vector3(half - 0.3, 0.05, 3.0)
+	m.direction = Vector3(0, -1, 0)
+	m.spread = 25.0
+	m.initial_velocity_min = 0.1
+	m.initial_velocity_max = 0.5
+	m.gravity = Vector3(0, -0.25, 0)
+	m.turbulence_enabled = true
+	m.turbulence_noise_strength = 0.35
+	m.turbulence_noise_scale = 2.0
+	m.scale_min = 0.5
+	m.scale_max = 1.6
+	m.color_initial_ramp = _spark_colours()
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 1))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	m.color_ramp = ramp
+	_sparks = GPUParticles3D.new()
+	_sparks.name = "Sparks"
+	_sparks.position = Vector3(0, POLE - 0.25, 1.6)
+	_sparks.amount = 120
+	_sparks.lifetime = 3.0
+	_sparks.local_coords = false
+	_sparks.emitting = false
+	_sparks.draw_pass_1 = quad
+	_sparks.process_material = m
+	_sparks.visibility_aabb = AABB(Vector3(-half, -POLE, -4), Vector3(half * 2.0, POLE + 1.0, 8))
+	_sparks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_sparks)
+
+
+## Mostly the bulbs' warm gold, one in four violet.
+func _spark_colours() -> GradientTexture1D:
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.78, 0.45))
+	g.set_color(1, Color(0.7, 0.45, 1.0))
+	g.add_point(0.74, Color(1.0, 0.62, 0.3))
+	g.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	var t := GradientTexture1D.new()
+	t.gradient = g
+	return t
+
+
+## The strings swell with the mix and flash on each hit; the city's windows breathe with it and
+## its rooflines flare on the hits; the stairwell's skylight glows brighter. A mix at rest leaves
+## every one as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	var swell := 1.0 + 0.55 * heard + 0.9 * heard_hit
+	if _bulb_mat != null:
+		_bulb_mat.albedo_color = _bulb_base * swell
+	for i in _string_lights.size():
+		_string_lights[i].light_energy = _string_base[i] * (1.0 + 0.4 * heard + 0.8 * heard_hit)
+	if _city_mat != null:
+		_city_mat.set_shader_parameter("energy", _window_energy * (1.0 + 0.3 * heard))
+		_city_mat.set_shader_parameter("pulse", heard_hit * 1.5 + heard * 0.5)
+	if _skylight_mat != null:
+		_skylight_mat.emission_energy_multiplier = 0.16 + 0.7 * heard + 0.5 * heard_hit
+	if _uv_chalk != null:
+		_uv_chalk.emission_energy_multiplier = UV_REST + 2.2 * heard + 1.6 * heard_hit
+	if _sparks != null:
+		var rate := clampf(heard * 1.4 + heard_hit, 0.0, 1.0)
+		_sparks.amount_ratio = maxf(rate, 0.01)
+		_sparks.emitting = rate > 0.04
+
+
 func _process(delta: float) -> void:
 	_clock += delta
 	# Both together, the way the pair on one roof are wired.
@@ -458,6 +568,7 @@ func _dot_the_roof(steel: Material) -> void:
 	glass.emission_enabled = true
 	glass.emission = Color(1.0, 0.78, 0.5)
 	glass.emission_energy_multiplier = 0.16
+	_skylight_mat = glass
 	# A hipped roof of glass: a four-sided cone squashed to the curb's plan.
 	var hip := CylinderMesh.new()
 	hip.top_radius = 0.02
@@ -557,7 +668,9 @@ func _string_the_lights(steel: Material) -> void:
 	holder.name = "Festoons"
 	holder.multimesh = mm
 	var up := NIGHT_STRINGS if variant == NIGHT else 1.0
-	holder.material_override = ZoneKit.glow(Color(1.0, 0.72, 0.4), 1.6 * up)
+	_bulb_mat = ZoneKit.glow(Color(1.0, 0.72, 0.4), 1.6 * up)
+	_bulb_base = _bulb_mat.albedo_color
+	holder.material_override = _bulb_mat
 	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(holder)
 	# The wire: from each bulb's cap to the next, and from the end ones to the poles.
@@ -584,6 +697,8 @@ func _string_the_lights(steel: Material) -> void:
 			var over := a.lerp(b, t) - Vector3(0, SAG * 4.0 * t * (1.0 - t) + 0.1, 0)
 			var glow := ZoneKit.spot_down(self, over, Color(1.0, 0.7, 0.42), 2.2 * up, 72.0, 6.0)
 			glow.name = "StringLight"
+			_string_lights.append(glow)
+			_string_base.append(glow.light_energy)
 	var wire := BoxMesh.new()
 	wire.size = Vector3(0.008, 0.008, 1.0)
 	var wm := MultiMesh.new()
@@ -611,7 +726,8 @@ func _raise_city() -> void:
 	_city_mat.set_shader_parameter("lit_a", Color(1.0, 0.7, 0.4))
 	_city_mat.set_shader_parameter("lit_b", Color(0.09, 0.08, 0.1))
 	_city_mat.set_shader_parameter("lit_c", Color(0.42, 0.48, 0.6))
-	_city_mat.set_shader_parameter("energy", EVENINGS[variant]["windows"])
+	_window_energy = EVENINGS[variant]["windows"]
+	_city_mat.set_shader_parameter("energy", _window_energy)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 31
 	var towers: Array[Transform3D] = []
@@ -690,6 +806,10 @@ func _dress_zones() -> void:
 	var chalk := StandardMaterial3D.new()
 	chalk.albedo_color = Color(0.78, 0.76, 0.72)
 	chalk.roughness = 0.9
+	chalk.emission_enabled = true
+	chalk.emission = Color(0.62, 0.35, 1.0)
+	chalk.emission_energy_multiplier = UV_REST
+	_uv_chalk = chalk
 	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3(0, 0.001, 0), 0.05, chalk)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])

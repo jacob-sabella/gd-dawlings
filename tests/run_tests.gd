@@ -7108,6 +7108,32 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		check("%s: the choice is remembered" % id, Session.layout.venue == id)
 		studio.venue.pulse(0.8)
 		studio.venue.pulse(0.0)
+	# A venue that moves to the music follows a level fed in, flashes on a hit, and is back at rest
+	# when the mix stops -- or never leaves it, with `reactive` off.
+	studio.set_venue(&"rooftop", false)
+	var roof: Venue = studio.venue
+	var rest := (roof as RooftopVenue)._bulb_mat.albedo_color
+	for i in 12:
+		roof.pulse(0.9)
+	check("rooftop: a loud mix lifts what it has heard", roof.heard > 0.7)
+	check("rooftop: and the strings glow brighter", (roof as RooftopVenue)._bulb_mat.albedo_color.r > rest.r * 1.3)
+	check("rooftop: sparks fall while it plays", (roof as RooftopVenue)._sparks.emitting)
+	check("rooftop: the blacklight chalk glows",
+			(roof as RooftopVenue)._uv_chalk.emission_energy_multiplier > RooftopVenue.UV_REST * 10.0)
+	for i in 120:
+		roof.pulse(0.0)
+	check("rooftop: a silent mix settles back to rest", roof.heard == 0.0 and roof.heard_hit == 0.0
+			and (roof as RooftopVenue)._bulb_mat.albedo_color.is_equal_approx(rest)
+			and not (roof as RooftopVenue)._sparks.emitting)
+	roof.reactive = false
+	for i in 12:
+		roof.pulse(0.9)
+	check("rooftop: reactive off holds the room still", roof.heard == 0.0
+			and (roof as RooftopVenue)._bulb_mat.albedo_color.is_equal_approx(rest))
+	roof.reactive = true
+	var hit_before := roof.heard_hit
+	roof.pulse(0.9)
+	check("a sudden rise is a hit", roof.heard_hit > hit_before + 0.3)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 

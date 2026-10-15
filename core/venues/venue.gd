@@ -214,6 +214,30 @@ func pulse(_level: float) -> void:
 	pass
 
 
+## Whether the room moves to the music. Off, `hear` takes everything for silence and a venue sits
+## at its authored look: for anyone who would rather the room held still.
+var reactive := true
+## The mix's level through a meter's ballistics (fast up, slow down), 0..1.
+var heard := 0.0
+## A flash on each rise in the level -- a kick or a snare -- that dies away in a few frames, 0..1.
+var heard_hit := 0.0
+var _heard_slow := 0.0
+
+
+## What a venue's `pulse` calls first: smooths `level` into `heard` and finds the hits in it into
+## `heard_hit`. Nothing here allocates, and a mix at rest (or `reactive` off) settles both at 0.
+func hear(level: float) -> void:
+	var l := clampf(level, 0.0, 1.0) if reactive else 0.0
+	heard = lerpf(heard, l, 0.45 if l > heard else 0.08)
+	# A hit is the level jumping above where it has been lately.
+	_heard_slow = lerpf(_heard_slow, l, 0.05)
+	heard_hit = maxf(heard_hit * 0.82, clampf((l - _heard_slow) * 3.0, 0.0, 1.0))
+	if heard < 0.002:
+		heard = 0.0
+	if heard_hit < 0.002:
+		heard_hit = 0.0
+
+
 ## The activity zones, id -> AABB in studio space. The room widens with the desk, and the zones
 ## step out with it on their own side, so they never close in on the footprint or on each other.
 func zones() -> Dictionary:

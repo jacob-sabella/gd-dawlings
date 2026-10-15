@@ -3286,12 +3286,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			_update_camera()
 
 
+## A level to give the venue in place of the mix's (0..1), or -1 for the mix's own: for a
+## photograph of a room at a chosen loudness (`--feed-level`).
+var fed_level := -1.0
+
+
 func _process(delta: float) -> void:
 	_drive_pushed()
 	_refresh_looms_if_moved(delta)
 	_follow_keytar()
 	if venue != null and DAW.state != null:
-		venue.pulse(maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
+		# A room that holds still for anyone who has asked for no motion.
+		venue.reactive = ergonomics.motion_scale > 0.0
+		venue.pulse(fed_level if fed_level >= 0.0 else maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
 	if camera == null or not god_mode:
 		return
 	# Not while typing a name into the session panel, or every "s" in it flies backwards.

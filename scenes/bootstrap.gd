@@ -121,6 +121,7 @@ func _ready() -> void:
 		studio.ergonomics.dwell_seconds = args["dwell"]
 	if args["no_motion"]:
 		studio.ergonomics.motion_scale = 0.0
+	studio.fed_level = args["feed_level"]
 	if args["seated"]:
 		studio.ergonomics = Ergonomics.seated_default()
 	# How tall you are, said once and remembered: `--height 1.60`. Applied after sitting down,
@@ -225,7 +226,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "xr": false, "xr_sim": false, "ar": false,
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -353,6 +354,10 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--seated": out["seated"] = true
 			"--detach-body": out["detach_body"] = true
 			"--no-motion": out["no_motion"] = true
+			"--feed-level":
+				if i + 1 < argv.size():
+					i += 1
+					out["feed_level"] = float(argv[i])
 			"--step":
 				i += 1
 				if i < argv.size():
