@@ -97,6 +97,8 @@ func _ablate() -> void:
 
 
 var _delta_ms := 0.0
+## Milliseconds from the process starting to the first frame drawn: what starting the game costs.
+var _first_frame_ms := -1
 
 
 func _process(delta: float) -> void:
@@ -104,6 +106,8 @@ func _process(delta: float) -> void:
 		return
 	_delta_ms = delta * 1000.0
 	_frames += 1
+	if _first_frame_ms < 0:
+		_first_frame_ms = Time.get_ticks_msec()
 	if _frames <= WARMUP:
 		if _frames == WARMUP and _hide_labels:
 			_ablate()
@@ -134,7 +138,7 @@ func _report() -> void:
 
 	# One machine-readable line, because the sweep is a shell loop and a table assembled by awk
 	# is less wrong than one assembled by eye.
-	print("BUDGET tracks=%d prims=%d draws=%d objects=%d vram_mb=%.1f frame_ms=%.2f worst_ms=%.2f nodes=%d" % [
+	print("BUDGET tracks=%d prims=%d draws=%d objects=%d vram_mb=%.1f frame_ms=%.2f worst_ms=%.2f nodes=%d start_ms=%d mem_mb=%.1f peak_mb=%.1f" % [
 		tracks,
 		info.call(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 		info.call(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
@@ -143,6 +147,9 @@ func _report() -> void:
 		_frame_ms_total / float(SAMPLE),
 		_frame_ms_worst,
 		get_tree().get_node_count(),
+		_first_frame_ms,
+		float(OS.get_static_memory_usage()) / 1048576.0,
+		float(OS.get_static_memory_peak_usage()) / 1048576.0,
 	])
 
 	# And a breakdown by surface, because a total says there is a problem and nothing about

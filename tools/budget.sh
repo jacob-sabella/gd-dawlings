@@ -49,16 +49,16 @@ run() {
   fi
 }
 
-printf '%6s %6s %12s %8s %9s %9s %9s %7s\n' tracks pose prims draws objects frame_ms worst_ms nodes
+printf '%6s %6s %12s %8s %9s %9s %9s %7s %9s %7s\n' tracks pose prims draws objects frame_ms worst_ms nodes start_ms mem_mb
 for n in "${SIZES[@]}"; do
  for pose in fitted wide; do
   [ "$pose" = wide ] && arg="$POSE_WIDE" || arg=""
   run "$n" "$arg" | awk -v n="$n" -v pose="$pose" '
     /^BUDGET tracks=/ {
       for (i = 2; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] }
-      printf "%6d %6s %12d %8d %9d %9.2f %9.2f %7d\n",
+      printf "%6d %6s %12d %8d %9d %9.2f %9.2f %7d %9d %7.1f\n",
              v["tracks"], pose, v["prims"], v["draws"], v["objects"],
-             v["frame_ms"], v["worst_ms"], v["nodes"]
+             v["frame_ms"], v["worst_ms"], v["nodes"], v["start_ms"], v["mem_mb"]
     }
     /^BUDGET.surface/ { if (pose == "wide") surf[++s] = $0 }
     END { for (i = 1; i <= s; i++) print "              " surf[i] }
