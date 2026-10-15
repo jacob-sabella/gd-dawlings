@@ -230,3 +230,7 @@ with both zips is cut by hand when you want one. See
 This entire project was vibe coded with [Claude Code](https://claude.ai/code). The game, the
 hardware, the venues, the session and networking layers, the timeline, the tooling and the tests,
 and its engine, dawkit — all of it. No hand-written code.
+
+## Licence
+
+MIT. See LICENSE. Its engine, dawkit (`vendor/dawkit`), is MIT too, with its own LICENSE and THIRD_PARTY_NOTICES.md.

@@ -112,7 +112,7 @@ can finish music in, saving DAWproject. Steps, in order:
    `take: click` lines in the probe output if it comes back.
 1. **Done 2026-10-09.** The engine is a separate product, **dawkit**, at the user's request
    ("build this daw project layer separate from the game. I may sell it on its own later"). Its
-   own repository at `~/Projects/dawkit` is proprietary ("All rights reserved"), and this game
+   own repository at `~/Projects/dawkit` was proprietary ("All rights reserved") when this was written (now MIT, see the licence entry below), and this game
    holds it as a submodule (`vendor/dawkit`, symlinked to `addons/dawkit`). It has a project
    model: `DawKitProject`/`Track`/`Clip`/`Effect`/`Send`/`Marker`, with a plain form that comes
    back identical, and `problems()` for broken references. dawkit has 23 checks of its own. The
@@ -1514,7 +1514,7 @@ gloriously wrong and you survive anyway.
     after their place, the same in every note (1.04 ms of it the instrument's attack); the
     count-in's clicks within 0.00 ms of each other. Headless runs keep the players. Next: the
     render cut on the sample, an Android arm64 build.
-- **dawkit's licence: proprietary, sold under a commercial licence; the name stays.** Not dual
+- **dawkit's licence: proprietary, sold under a commercial licence; the name stays.** (Superseded 2026-10-15: dawkit and dawlings are both MIT. What follows is the reasoning at the time.) Not dual
   GPL: a GPL edition would let anyone ship it free in a GPL game, and GPL sits badly with console
   and store terms. A search found no audio product called DAWKit (not a trademark clearance,
   which wants a lawyer before money changes hands). The compiled core ships as binaries, the

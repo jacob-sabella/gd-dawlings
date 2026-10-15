@@ -136,7 +136,7 @@ sound), and third-party plugins, which Godot cannot host. See "Built-in DAW" in 
 ### dawkit: the engine is its own product
 
 The DAW engine is being built as **dawkit**, a separate repository (`~/Projects/dawkit`,
-proprietary, so it can be sold on its own), not as part of this game. It is a Godot addon with
+MIT licensed like this game), not as part of this game. It is a Godot addon with
 its own tests (`tools/test.sh` there) and no reference to anything in dawlings. This repository
 holds it as a git submodule at `vendor/dawkit`, with a symlink `addons/dawkit` pointing at the
 addon inside it. `vendor/.gdignore` keeps Godot from scanning dawkit's own project and tests a
