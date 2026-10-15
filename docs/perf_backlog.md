@@ -80,6 +80,20 @@ Labels are batched well (only 103 draws) but cost about 1 ms a frame on the desk
 
 `tools/budget.gd` now reports `render_cpu_ms` and `render_gpu_ms` (the renderer's own timing). One run: frame 4.7 ms, render CPU 0.75, render GPU 2.2. So about 1.8 ms a frame is NOT rendering: scripts, physics, audio and the engine's own work. Hiding all 469 labels moved the frame by 0.6 ms but render CPU/GPU by only 0.07, so the label cost is in how they are processed, not drawn.
 
+## Optimizations kept
+
+| change | draws | objects | nodes | frame ms (40-frame sample) |
+|---|---|---|---|---|
+| Casters merged: fork is one mesh, wheel one mesh of two surfaces (7 meshes to 3 each, 16 casters) | 1232 to 1165 | 1783 to 1717 | 3807 to 3743 | 4.96 to 4.2-5.1 (noise) |
+
+Primitive count is identical (135480) so the geometry is the same. A close-up before/after screenshot was attempted but the camera framing missed the casters (under the floor), so the look is NOT visually compared; the test suite (10601 checks, 0 failed) covers the casters' roll and trailing.
+
+## Method note
+
+The 40-frame sample over-reports: a 3000-frame run of the same scene (`--sample 3000`) averages 2.4 ms a frame against 4.2-5.1 for 40 frames, so the first couple of hundred frames still carry load work. Compare changes by objects/draws, or use long samples for time.
+
+`perf` works (the Arch godot has no symbols, so it shows only the library split: godot 69%, libc, libnvidia; nothing above 1% in the flat profile; pthread mutex lock/unlock about 6% in total).
+
 ## Ranked candidates
 
 1. The ~1.8 ms of non-render CPU a frame, label handling included. Needs a profiler that can attribute it (see dead ends); try the Godot editor's own profiler on a `--remote-debug` run.

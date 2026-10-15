@@ -41,55 +41,60 @@ func _ready() -> void:
 	_swivel.name = "Swivel"
 	add_child(_swivel)
 
-	var kingpin := MeshInstance3D.new()
+	# The fork is one mesh, the wheel one mesh of two surfaces: seven separate objects a caster
+	# were sixteen casters' worth of submissions for two centimetres of metal each.
+	var fork := SurfaceTool.new()
 	var pin_mesh := CylinderMesh.new()
 	pin_mesh.top_radius = 0.009
 	pin_mesh.bottom_radius = 0.009
 	pin_mesh.height = 0.010
 	pin_mesh.radial_segments = 10
-	kingpin.mesh = pin_mesh
-	kingpin.position = Vector3(0, HEIGHT - 0.011, 0)
-	kingpin.material_override = Materials.brushed_metal()
-	_swivel.add_child(kingpin)
+	fork.append_from(pin_mesh, 0, Transform3D(Basis.IDENTITY, Vector3(0, HEIGHT - 0.011, 0)))
 
 	# The two cheeks of the fork, dropping from the kingpin to either end of the axle.
 	var fork_height := HEIGHT - 0.016 - WHEEL_RADIUS + 0.006
 	for side in [-1.0, 1.0]:
-		var cheek := MeshInstance3D.new()
 		var cheek_mesh := BoxMesh.new()
 		cheek_mesh.size = Vector3(0.003, fork_height, 0.030)
-		cheek.mesh = cheek_mesh
-		cheek.position = Vector3(side * (WHEEL_WIDTH * 0.5 + 0.003),
-				WHEEL_RADIUS - 0.006 + fork_height * 0.5, TRAIL * 0.5)
-		cheek.material_override = Materials.brushed_metal()
-		_swivel.add_child(cheek)
+		fork.append_from(cheek_mesh, 0, Transform3D(Basis.IDENTITY, Vector3(
+				side * (WHEEL_WIDTH * 0.5 + 0.003),
+				WHEEL_RADIUS - 0.006 + fork_height * 0.5, TRAIL * 0.5)))
+	var fork_node := MeshInstance3D.new()
+	fork_node.name = "Fork"
+	fork_node.mesh = fork.commit()
+	fork_node.material_override = Materials.brushed_metal()
+	_swivel.add_child(fork_node)
 
 	_wheel = Node3D.new()
 	_wheel.name = "Wheel"
 	_wheel.position = Vector3(0, WHEEL_RADIUS, TRAIL)
 	_swivel.add_child(_wheel)
 
-	var tyre := MeshInstance3D.new()
+	var tyre := SurfaceTool.new()
 	var tyre_mesh := CylinderMesh.new()
 	tyre_mesh.top_radius = WHEEL_RADIUS
 	tyre_mesh.bottom_radius = WHEEL_RADIUS
 	tyre_mesh.height = WHEEL_WIDTH
 	tyre_mesh.radial_segments = 18
-	tyre.mesh = tyre_mesh
-	tyre.rotation_degrees = Vector3(0, 0, 90)
-	tyre.material_override = Materials.cap_plastic(Color(0.07, 0.07, 0.075))
-	_wheel.add_child(tyre)
+	tyre.append_from(tyre_mesh, 0, Transform3D(Basis.from_euler(Vector3(0, 0, deg_to_rad(90.0))), Vector3.ZERO))
 
 	# A spoke on each face, in the fork's metal. Without something off-axis on the wheel, a
 	# spinning cylinder and a stationary one are the same picture and the roll is invisible.
+	var spokes := SurfaceTool.new()
 	for side in [-1.0, 1.0]:
-		var spoke := MeshInstance3D.new()
 		var spoke_mesh := BoxMesh.new()
 		spoke_mesh.size = Vector3(0.0015, WHEEL_RADIUS * 1.5, 0.005)
-		spoke.mesh = spoke_mesh
-		spoke.position = Vector3(side * (WHEEL_WIDTH * 0.5 + 0.0006), 0, 0)
-		spoke.material_override = Materials.brushed_metal()
-		_wheel.add_child(spoke)
+		spokes.append_from(spoke_mesh, 0, Transform3D(Basis.IDENTITY,
+				Vector3(side * (WHEEL_WIDTH * 0.5 + 0.0006), 0, 0)))
+	var wheel_mesh := ArrayMesh.new()
+	tyre.commit(wheel_mesh)
+	spokes.commit(wheel_mesh)
+	wheel_mesh.surface_set_material(0, Materials.cap_plastic(Color(0.07, 0.07, 0.075)))
+	wheel_mesh.surface_set_material(1, Materials.brushed_metal())
+	var wheel_node := MeshInstance3D.new()
+	wheel_node.name = "Rim"
+	wheel_node.mesh = wheel_mesh
+	_wheel.add_child(wheel_node)
 
 	for node in find_children("*", "MeshInstance3D", true, false):
 		# Two centimetres of wheel do not need a shadow map pass each; sixteen of them would be

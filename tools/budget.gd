@@ -48,7 +48,7 @@ extends Node
 const WARMUP := 45
 ## Frames to average over. Long enough to ride out the meter animation, short enough that a
 ## sweep of six sizes is not a coffee break.
-const SAMPLE := 40
+var SAMPLE := 40
 
 var _active := false
 var _frames := 0
@@ -65,6 +65,10 @@ func _ready() -> void:
 	_hide_labels = args.has("--hide-labels")
 	_no_shadows = args.has("--no-shadows")
 	_script_costs = args.has("--script-costs")
+	# Longer, for a profiler to see steady state rather than the load.
+	var at := args.find("--sample")
+	if at >= 0 and at + 1 < args.size():
+		SAMPLE = int(args[at + 1])
 
 	# VSYNC OFF, or this measures the monitor instead of the renderer.
 	#
