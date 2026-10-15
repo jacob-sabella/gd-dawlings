@@ -48,6 +48,9 @@ var _dressed := ""
 var _thread: Thread
 var _next_ask := 0.0
 var _hidden := {"outputs": 0, "inputs": 0}
+## Which page each column is showing, and how many it has.
+var _page := {"outputs": 0, "inputs": 0}
+var _page_count := {"outputs": 1, "inputs": 1}
 
 
 func _ready() -> void:
@@ -160,26 +163,56 @@ func _ribbon(into: ImmediateMesh, from: Vector3, to: Vector3, tint: Color) -> vo
 	into.surface_end()
 
 
+## The boxes of one column, packed into pages of at most MAX_ROWS port rows: [{node, from, to}] a
+## page, the ports `from` to `to` of that node. A node with more ports than a page holds is cut
+## across pages, so every port is somewhere a hand can reach however large the graph.
+func _pages(outputs: bool) -> Array:
+	var key := "outputs" if outputs else "inputs"
+	var pages: Array = []
+	var page: Array = []
+	var rows := 0
+	for node in graph.nodes_by_use():
+		var count: int = (graph.nodes[node][key] as Array).size()
+		var at := 0
+		while at < count:
+			if rows >= MAX_ROWS:
+				pages.append(page)
+				page = []
+				rows = 0
+			var take := mini(count - at, MAX_ROWS - rows)
+			page.append({"node": node, "from": at, "to": at + take})
+			rows += take
+			at += take
+	if not page.is_empty():
+		pages.append(page)
+	return pages
+
+
 ## One column of node boxes, top down; fills `jacks` with where each port's jack is. Returns how
-## far down it went.
+## far down it went. Shows the column's current page, with its pager at the foot when there is
+## more than one.
 func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dictionary) -> float:
 	var key := "outputs" if outputs else "inputs"
 	var y := -top
-	var rows := 0
-	var skipped := 0
-	for node in graph.nodes_by_use():
-		var ports: Array = graph.nodes[node][key]
-		if ports.is_empty():
-			continue
-		if rows + ports.size() > MAX_ROWS:
-			skipped += ports.size()
-			continue
+	var pages := _pages(outputs)
+	_page_count[key] = pages.size()
+	_page[key] = clampi(int(_page.get(key, 0)), 0, maxi(pages.size() - 1, 0))
+	var shown: Array = pages[_page[key]] if not pages.is_empty() else []
+	var total := 0
+	for pg in pages:
+		for part in pg:
+			total += int(part["to"]) - int(part["from"])
+	for part in shown:
+		var node: String = part["node"]
+		var ports: Array = (graph.nodes[node][key] as Array).slice(part["from"], part["to"])
 		var tint := _tint(node)
 		var tall := HEAD + ports.size() * ROW + 0.02
 		_quad(Vector2(BOX_WIDTH + 0.012, tall + 0.012), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.003), tint.darkened(0.45), 0.0)
 		_quad(Vector2(BOX_WIDTH, tall), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.001), _panel().lightened(0.10), 0.0)
 		_quad(Vector2(BOX_WIDTH, HEAD), Vector3(x + BOX_WIDTH * 0.5, y - HEAD * 0.5, 0.0), tint.darkened(0.15), 0.0)
-		var title := _text(PipeGraph.short_name(node, 24), Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 40)
+		var cut := " (%d-%d)" % [int(part["from"]) + 1, part["to"]] \
+				if ports.size() < (graph.nodes[node][key] as Array).size() else ""
+		var title := _text(PipeGraph.short_name(node, 24) + cut, Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 40)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for i in ports.size():
 			var port: String = ports[i]
@@ -208,14 +241,41 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 			var label := _text(PipeGraph.short_name(PipeGraph.label_of(port), 30), Vector3(x + BOX_WIDTH - 0.1 if outputs else x + 0.1, py, 0.003),
 					INK if used else DIM, 34)
 			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if outputs else HORIZONTAL_ALIGNMENT_LEFT
-		rows += ports.size()
 		y -= tall + GAP
-	_hidden[key] = skipped
-	if skipped > 0:
-		var more := _text("+%d more ports" % skipped, Vector3(x + 0.1, y - 0.06, 0.003), DIM, 34)
-		more.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		y -= 0.1
+	_hidden[key] = total - _shown_ports(shown)
+	if pages.size() > 1:
+		_pager(key, x, y - 0.02, pages.size(), total)
+		y -= 0.16
 	return -y
+
+
+func _shown_ports(shown: Array) -> int:
+	var n := 0
+	for part in shown:
+		n += int(part["to"]) - int(part["from"])
+	return n
+
+
+## The foot of a paged column: back, the page it is on, forward. Pressed buttons turn the page
+## and the wall redraws.
+func _pager(key: String, x: float, y: float, count: int, total: int) -> void:
+	var cx := x + BOX_WIDTH * 0.5
+	_text("PAGE %d / %d  ·  %d PORTS" % [int(_page[key]) + 1, count, total], Vector3(cx, y - 0.05, 0.003), DIM, 34)
+	for step in [-1, 1]:
+		var button := PanelButton.new()
+		button.scale = Vector3.ONE * 6.0
+		button.hit_pad = Vector2(1.6, 2.6)
+		button.led_colour = Color(0.45, 0.68, 0.95)
+		button.position = Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.006)
+		button.pressed.connect(_turn_page.bind(key, step, count))
+		_adopt(button)
+		var glyph := _text("◀" if step < 0 else "▶", Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.012), INK, 40)
+		glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func _turn_page(key: String, step: int, count: int) -> void:
+	_page[key] = posmod(int(_page[key]) + step, count)
+	mark_dirty()
 
 
 # --- carrying a cable ---------------------------------------------------------------------

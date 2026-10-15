@@ -19447,6 +19447,42 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 	wall._process(0.0)
 	check("without a graph it says so and draws no cables", wall.cables == 0)
 	wall.free()
+	# However many nodes there are, every port is on some page of twelve rows, and a node larger
+	# than a page is cut across pages rather than dropped.
+	var big_out := ""
+	var big_in := ""
+	for n in 40:
+		for k in 4:
+			big_out += "src%d:out_%d\n" % [n, k]
+			big_in += "dst%d:in_%d\n" % [n, k]
+	for k in 30:
+		big_out += "huge:out_%d\n" % k
+	var paged := PatchWallSurface.new()
+	paged.follow = false
+	add_child(paged)
+	paged.show_graph(PipeGraph.parse(big_out, big_in, ""))
+	paged._process(0.0)
+	var seen := {}
+	var pages_ok := true
+	var out_pages := paged._pages(true)
+	for pg in out_pages:
+		var rows := 0
+		for part in pg:
+			rows += int(part["to"]) - int(part["from"])
+			for i in range(int(part["from"]), int(part["to"])):
+				seen["%s:%d" % [part["node"], i]] = true
+		pages_ok = pages_ok and rows <= PatchWallSurface.MAX_ROWS
+	check("190 outputs make %d pages of at most twelve rows, every port on exactly one" % out_pages.size(),
+			pages_ok and seen.size() == 190 and out_pages.size() == 16)
+	check("a page draws only its own jacks", paged._jacks.size() <= 24 and paged._jacks.size() >= 12)
+	var first_ports := paged._jacks.keys()
+	paged._turn_page("outputs", 1, out_pages.size())
+	paged._process(0.0)
+	check("turning the page shows other ports", paged._page["outputs"] == 1 and paged._jacks.size() >= 12
+			and not paged._jacks.has(first_ports[0]))
+	paged._turn_page("outputs", -2, out_pages.size())
+	check("pages wrap round", paged._page["outputs"] == out_pages.size() - 1)
+	paged.free()
 	DirAccess.remove_absolute(log)
 	DirAccess.remove_absolute(tool)
 
