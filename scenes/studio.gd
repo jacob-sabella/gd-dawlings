@@ -1678,7 +1678,7 @@ func _desk_footprint() -> Array:
 		return []
 	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
 			else console.transform
-	var box := console.content_aabb()
+	var box := _desk_box()
 	if box.size.x <= 0.0:
 		return []
 	var flat := home * box
@@ -1686,6 +1686,26 @@ func _desk_footprint() -> Array:
 	# the desk under it is what a trolley actually runs into.
 	flat = flat.merge(AABB(Vector3(flat.position.x, 0.0, flat.position.z), Vector3(flat.size.x, 0.01, 0.0)))
 	return [FloorPlan.footprint_of_box(flat)]
+
+
+## The desk's measured box. Measuring walks every part of it, and the walker asks every physics
+## tick, so it is kept for a quarter of a second -- or until the desk is rebuilt, which is what
+## changes it.
+const DESK_BOX_FOR_MSEC := 250
+var _desk_box_cache := AABB()
+var _desk_box_at := -DESK_BOX_FOR_MSEC
+
+
+func _desk_box() -> AABB:
+	var now := Time.get_ticks_msec()
+	if now - _desk_box_at >= DESK_BOX_FOR_MSEC:
+		_desk_box_cache = console.content_aabb()
+		_desk_box_at = now
+	return _desk_box_cache
+
+
+func _forget_desk_box() -> void:
+	_desk_box_at = -DESK_BOX_FOR_MSEC
 
 
 ## A piece of furniture that can be pushed around the floor, standing where the layout puts it
@@ -1988,6 +2008,7 @@ func _build_surfaces() -> void:
 
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
+	console.rebuilt.connect(_forget_desk_box)
 	console.rebuilt.connect(_fit_room_to_session)
 	patchbay.rebuilt.connect(_fit_stand_to_bay)
 	_fit_room_to_session()

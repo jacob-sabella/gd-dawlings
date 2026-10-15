@@ -152,3 +152,12 @@ Everything else is unchanged, and the suite stayed at 10601 checks, 0 failed thr
 
 - **Per-script cost by ablation** (`--script-costs`: switch each script's _process off for 40 frames, compare with a baseline window). Run four times, the same script came out anywhere from -0.4 to +1.5 ms. The noise is larger than every real script cost, so it ranks nothing. Kept in the tool only to show which scripts are processing. One consistent result is not a game cost: `tools/screenshot.gd` (about 1 ms) is on only because the budget run passes `--quit-after`.
 - **`perf` for the native core and the engine split**: not installed on this machine (`pacman -S perf`, needs you). Until it is, CPU cost by script and by engine function is not measurable here.
+
+## 144 fps loop, iteration 1: the desk's box
+
+Symbolised perf (studio:0, 48 tracks, no shadows, built-in engine, loud) put `Node::find_children`
+at 12.7% of CPU. The caller was `Walker._physics_process` -> `sync_solids` -> `footprints` ->
+`Studio._desk_footprint` -> `Console.content_aabb()`, which walks every part of the desk (575
+meshes at 48 tracks) on every physics tick. Kept for 250 ms, and dropped on `rebuilt`.
+Alternating A/B, 3000 frames: 5.56 ms average against 5.97 ms. Suite 10601 checks, 0 failed.
+(Order matters: the cache is dropped before `_fit_room_to_session` reads it.)
