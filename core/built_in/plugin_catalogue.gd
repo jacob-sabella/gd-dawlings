@@ -13,6 +13,8 @@ signal changed
 
 const CACHE := "user://plugin_scan.json"
 const VERSION := 1
+## How long one plugin file may take to be looked at before it is given up on.
+const SCAN_TIMEOUT_MS := 60000
 
 static var _shared: PluginCatalogue
 
@@ -39,7 +41,7 @@ static func use_only(plugins: Array) -> void:
 
 
 ## Whether plugins can be hosted here at all: the engine's native core is in, and hosts on this
-## system (Linux, for now).
+## system (Linux and Windows).
 static func available() -> bool:
 	return ClassDB.class_exists(&"DawKitPlugin") and ClassDB.class_call_static(&"DawKitPlugin", &"hosting_available")
 
@@ -81,7 +83,7 @@ func rescan() -> void:
 ## The scanner beside the engine: in the project's addon while developing, beside the game's
 ## executable once exported (where res:// is inside a pack no program can run from).
 static func scanner() -> String:
-	var name := "dawkit_scan.linux.x86_64"
+	var name := "dawkit_scan.windows.x86_64.exe" if OS.get_name() == "Windows" else "dawkit_scan.linux.x86_64"
 	for path in [ProjectSettings.globalize_path("res://addons/dawkit/bin/").path_join(name),
 			OS.get_executable_path().get_base_dir().path_join(name)]:
 		if FileAccess.file_exists(path):
@@ -143,12 +145,24 @@ func _run(exe: String, args: Array) -> Array:
 	if exe == "":
 		# No scanner: in this process, which a crashing plugin takes down with it.
 		return ClassDB.class_call_static(&"DawKitPlugin", &"scan_file", args[0], args[1] if args.size() > 1 else "")
-	var out := []
-	# A plugin that hangs as it starts is given up on.
-	var rc := OS.execute("timeout", ["60", exe] + args, out)
-	if rc != 0 or out.is_empty():
+	# The answer through a file, so the scanner can be watched and, if a plugin hangs as it starts,
+	# given up on: a pipe read would wait for it however long it took.
+	var answer := OS.get_user_data_dir().path_join("plugin_scan_%d.json" % OS.get_process_id())
+	DirAccess.remove_absolute(answer)
+	var pid := OS.create_process(exe, ["--out", answer] + args)
+	if pid <= 0:
 		return []
-	var parsed = JSON.parse_string(out[0])
+	var waited := 0
+	while OS.is_process_running(pid):
+		if waited >= SCAN_TIMEOUT_MS:
+			OS.kill(pid)
+			break
+		OS.delay_msec(20)
+		waited += 20
+	if not FileAccess.file_exists(answer):
+		return []
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(answer))
+	DirAccess.remove_absolute(answer)
 	return parsed if parsed is Array else []
 
 

@@ -76,7 +76,7 @@ Iterations done: 50
 
 ## Plugins and FX
 - [x] add, remove, move/copy between tracks, bypass, wet, presets, parameters, plugin window
-- [x] third-party plugins (CLAP, VST3, LV2) in the built-in engine, effects and instruments, with their windows (Linux)
+- [x] third-party plugins (CLAP, VST3, LV2) in the built-in engine, effects and instruments, with their windows (CLAP and VST3 on Linux and Windows, LV2 on Linux)
 - [ ] parameter modulation / macros (missing)
 
 ## Comping and takes

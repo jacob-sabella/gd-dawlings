@@ -707,10 +707,19 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   MIDI items in its lane, note for note, and the host's keys through it while the track takes
   them. Projects keep each plugin by format, id and state (a VST3's as a .vstpreset); one this
   machine lacks is kept as it came and saved back unchanged. `--add-plugin T:NAME` puts one on a
-  track for a capture. Still to do: Windows hosting (dawkit builds it out for now), a fully
-  hidden display for windows (install xorg-server-xvfb; the off-screen window is used meanwhile),
+  track for a capture. Still to do: a fully hidden display for windows (install xorg-server-xvfb; the off-screen window is used meanwhile),
   plugin wet/dry and presets, an LV2 window drawn in GTK or Qt (only X11 ones show), and a
   plugin this machine lacks keeps its saved state only while it stays in its slot (a move loses it).
+- **Done 2026-10-14, plugins on Windows:** dawkit hosts CLAP and VST3 on Windows too (no LV2),
+  with the scanner shipped beside dawlings.exe. Plugin windows go in an off-screen tool window
+  read by PrintWindow, and clicks are posted to them (dawkit README, "Windows").
+  `PluginCatalogue` runs the scanner with `--out` and its own 60 s limit, not `timeout`. Checked
+  under Wine 11 with the mingw build: the scanner finds the Windows VST3s, and Gojira X loads,
+  plays, keeps its state and draws off screen. A click on its page tabs and a drag on its INPUT
+  knob work, and the host hears about the knob. Still to do: a run on real Windows, in the game
+  itself. A JUCE window there depends on the WindowFromPoint redirect, and GPU-drawn windows on
+  PrintWindow's full-content mode; Wine checked neither. Mantra under Wine drew nothing and made
+  no sound (likely not activated in that prefix).
 
 ## 1.0 for friends (2026-10-10)
 

@@ -150,8 +150,8 @@ to anything game-specific: dawlings adapts to dawkit in `core/built_in/project_b
 the other way around. See `docs/architecture.md` for the split and `vendor/dawkit/README.md`
 for the engine itself.
 
-On Linux the built-in engine hosts your own **CLAP, VST3 and LV2 plugins**, effects and
-instruments, including Windows plugins under yabridge. They are found on their own the first time
+The built-in engine hosts your own **CLAP and VST3 plugins** on Linux and Windows (and LV2 on
+Linux, and Windows plugins under yabridge), effects and instruments. They are found on their own the first time
 it runs (and again when a plugin file changes), offered in the rack's ADD PLUGIN and FIND beside
 Godot's effects, and each plugin's own window turns up on its tablet, live and clickable, without
 anything opening on the desktop. An instrument plugin on a track plays its MIDI clips and your
