@@ -1,7 +1,7 @@
 class_name StudioVenue
 extends Venue
 
-## The control room: parquet, plaster, acoustic treatment, a ceiling with downlights in it.
+## The control room: parquet, plaster, a ceiling with downlights in it.
 ##
 ## The one venue that is a ROOM, and so the one where global illumination earns its cost: light
 ## bounces off four walls and a ceiling here, and nowhere else does it have anything to bounce off.
@@ -14,19 +14,6 @@ const DOWNLIGHTS: Array = [
 	[Vector3(1.25, 0, -0.65), 2.6],
 	[Vector3(0, 0, 1.4), 1.6],
 ]
-## Acoustic treatment: [centre, size, yaw, cloth]. On the back wall either side of where the
-## monitors would be, and first-reflection points on both side walls.
-const ACOUSTIC_PANELS: Array = [
-	[Vector3(-1.95, 1.45, -2.10), Vector3(1.1, 1.3, 0.09), 0.0, "charcoal"],
-	[Vector3(-0.62, 1.55, -2.10), Vector3(0.9, 1.0, 0.09), 0.0, "rust"],
-	[Vector3(0.62, 1.55, -2.10), Vector3(0.9, 1.0, 0.09), 0.0, "slate"],
-	[Vector3(1.95, 1.45, -2.10), Vector3(1.1, 1.3, 0.09), 0.0, "charcoal"],
-	[Vector3(-3.10, 1.40, -0.60), Vector3(1.2, 1.2, 0.09), 90.0, "charcoal"],
-	[Vector3(-3.10, 1.40, 1.00), Vector3(1.2, 1.2, 0.09), 90.0, "slate"],
-	[Vector3(3.10, 1.40, -0.60), Vector3(1.2, 1.2, 0.09), -90.0, "charcoal"],
-	[Vector3(3.10, 1.40, 1.00), Vector3(1.2, 1.2, 0.09), -90.0, "rust"],
-]
-
 ## The second arrangement (Venue.VARIANTS): the kit and the booth in a room of their own off the
 ## control room's left side, seen through a window over the riser -- the way a real studio has
 ## its live room -- and the lattice, the table and the keys in a narrower room behind.
@@ -358,26 +345,6 @@ func _dress_room() -> void:
 		spot.shadow_bias = 0.04
 		spot.light_volumetric_fog_energy = 1.4
 		fitting.add_child(spot)
-
-	# Acoustic panels: fabric over rockwool, framed, standing a few centimetres off the wall.
-	# Charcoal with two in the room's warm and cool colours, so the walls have rhythm rather
-	# than being one plaster plane from corner to corner.
-	for spec in ACOUSTIC_PANELS:
-		# Not on a window.
-		if variant == BESIDE and (spec[0] as Vector3).x < -3.0:
-			continue
-		var panel := MeshInstance3D.new()
-		panel.name = "AcousticPanel"
-		var slab := BoxMesh.new()
-		slab.size = spec[1]
-		panel.mesh = slab
-		var p: Vector3 = spec[0]
-		# Side-wall panels stay on the side walls; back-wall ones spread with the room.
-		var grow := (room_width - SessionLayout.BASE_WIDTH) * 0.5
-		panel.position = Vector3(p.x + signf(p.x) * grow * (1.0 if absf(p.x) > 3.0 else 0.6), p.y, p.z)
-		panel.rotation_degrees = Vector3(0, spec[2], 0)
-		panel.material_override = _cloth(spec[3])
-		add_child(panel)
 
 	# A rug under the desk and the chair that would be at it: the one soft thing on a hard floor,
 	# and what stops the parquet running unbroken under the gear like a showroom.
