@@ -238,6 +238,76 @@ func hear(level: float) -> void:
 		heard_hit = 0.0
 
 
+## A box of soft additive sparks, off until `drive_sparks` turns them on. `colours` is picked per
+## spark from its left to its right; `rise` sends them up instead of down.
+func make_sparks(label: String, at: Vector3, extents: Vector3, seen: AABB, colours: Gradient,
+		amount: int, rise := false) -> GPUParticles3D:
+	var soft := GradientTexture2D.new()
+	soft.fill = GradientTexture2D.FILL_RADIAL
+	soft.fill_from = Vector2(0.5, 0.5)
+	soft.fill_to = Vector2(1.0, 0.5)
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	soft.gradient = g
+	soft.width = 32
+	soft.height = 32
+	var dot := StandardMaterial3D.new()
+	dot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dot.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dot.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dot.vertex_color_use_as_albedo = true
+	dot.albedo_texture = soft
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.05, 0.05)
+	quad.material = dot
+	var m := ParticleProcessMaterial.new()
+	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	m.emission_box_extents = extents
+	m.direction = Vector3(0, 1 if rise else -1, 0)
+	m.spread = 25.0
+	m.initial_velocity_min = 0.1
+	m.initial_velocity_max = 0.5
+	m.gravity = Vector3(0, 0.12 if rise else -0.25, 0)
+	m.turbulence_enabled = true
+	m.turbulence_noise_strength = 0.35
+	m.turbulence_noise_scale = 2.0
+	m.scale_min = 0.5
+	m.scale_max = 1.6
+	var pick := GradientTexture1D.new()
+	pick.gradient = colours
+	m.color_initial_ramp = pick
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 1))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	m.color_ramp = ramp
+	var p := GPUParticles3D.new()
+	p.name = label
+	p.position = at
+	p.amount = amount
+	p.lifetime = 3.0
+	p.local_coords = false
+	p.emitting = false
+	p.draw_pass_1 = quad
+	p.process_material = m
+	p.visibility_aabb = seen
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
+	return p
+
+
+## How many of `p`'s sparks are out, from what the mix is doing: none at rest.
+func drive_sparks(p: GPUParticles3D, gain := 1.0) -> void:
+	if p == null:
+		return
+	var rate := clampf((heard * 1.4 + heard_hit) * gain, 0.0, 1.0)
+	p.amount_ratio = maxf(rate, 0.01)
+	p.emitting = rate > 0.04
+
+
 ## The activity zones, id -> AABB in studio space. The room widens with the desk, and the zones
 ## step out with it on their own side, so they never close in on the footprint or on each other.
 func zones() -> Dictionary:

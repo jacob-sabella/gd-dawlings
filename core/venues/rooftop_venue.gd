@@ -442,71 +442,18 @@ func _raise_tanks(steel: Material) -> void:
 ## for the blacklight's sake; they drift down slowly and are gone before they reach the deck.
 func _shake_sparks() -> void:
 	var half := live_room_half()
-	var soft := GradientTexture2D.new()
-	soft.fill = GradientTexture2D.FILL_RADIAL
-	soft.fill_from = Vector2(0.5, 0.5)
-	soft.fill_to = Vector2(1.0, 0.5)
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_color(1, Color(1, 1, 1, 0))
-	soft.gradient = g
-	soft.width = 32
-	soft.height = 32
-	var dot := StandardMaterial3D.new()
-	dot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dot.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	dot.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	dot.vertex_color_use_as_albedo = true
-	dot.albedo_texture = soft
-	dot.no_depth_test = false
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.05, 0.05)
-	quad.material = dot
-	var m := ParticleProcessMaterial.new()
-	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	m.emission_box_extents = Vector3(half - 0.3, 0.05, 3.0)
-	m.direction = Vector3(0, -1, 0)
-	m.spread = 25.0
-	m.initial_velocity_min = 0.1
-	m.initial_velocity_max = 0.5
-	m.gravity = Vector3(0, -0.25, 0)
-	m.turbulence_enabled = true
-	m.turbulence_noise_strength = 0.35
-	m.turbulence_noise_scale = 2.0
-	m.scale_min = 0.5
-	m.scale_max = 1.6
-	m.color_initial_ramp = _spark_colours()
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 1))
-	fade.set_color(1, Color(1, 1, 1, 0))
-	var ramp := GradientTexture1D.new()
-	ramp.gradient = fade
-	m.color_ramp = ramp
-	_sparks = GPUParticles3D.new()
-	_sparks.name = "Sparks"
-	_sparks.position = Vector3(0, POLE - 0.25, 1.6)
-	_sparks.amount = 120
-	_sparks.lifetime = 3.0
-	_sparks.local_coords = false
-	_sparks.emitting = false
-	_sparks.draw_pass_1 = quad
-	_sparks.process_material = m
-	_sparks.visibility_aabb = AABB(Vector3(-half, -POLE, -4), Vector3(half * 2.0, POLE + 1.0, 8))
-	_sparks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_sparks)
+	_sparks = make_sparks("Sparks", Vector3(0, POLE - 0.25, 1.6), Vector3(half - 0.3, 0.05, 3.0),
+			AABB(Vector3(-half, -POLE, -4), Vector3(half * 2.0, POLE + 1.0, 8)), _spark_colours(), 120)
 
 
 ## Mostly the bulbs' warm gold, one in four violet.
-func _spark_colours() -> GradientTexture1D:
+func _spark_colours() -> Gradient:
 	var g := Gradient.new()
 	g.set_color(0, Color(1.0, 0.78, 0.45))
 	g.set_color(1, Color(0.7, 0.45, 1.0))
 	g.add_point(0.74, Color(1.0, 0.62, 0.3))
 	g.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
-	var t := GradientTexture1D.new()
-	t.gradient = g
-	return t
+	return g
 
 
 ## The strings swell with the mix and flash on each hit; the city's windows breathe with it and
@@ -526,10 +473,7 @@ func pulse(level: float) -> void:
 		_skylight_mat.emission_energy_multiplier = 0.16 + 0.7 * heard + 0.5 * heard_hit
 	if _uv_chalk != null:
 		_uv_chalk.emission_energy_multiplier = UV_REST + 2.2 * heard + 1.6 * heard_hit
-	if _sparks != null:
-		var rate := clampf(heard * 1.4 + heard_hit, 0.0, 1.0)
-		_sparks.amount_ratio = maxf(rate, 0.01)
-		_sparks.emitting = rate > 0.04
+	drive_sparks(_sparks)
 
 
 func _process(delta: float) -> void:

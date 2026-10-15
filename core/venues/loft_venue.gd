@@ -94,6 +94,20 @@ var _strike: Array = []
 ## How bright the lightning is right now, 0..1: read by the tests and by anything that cares.
 var flash := 0.0
 
+## What follows the mix: the pendants' bulbs and their pools, the gallery's festoon, the city's
+## windows, and the lattice's paint under a violet blacklight with sparks lifting off it.
+const UV_REST := 0.04
+var _pendant_mat: StandardMaterial3D
+var _pendant_base := Color.WHITE
+var _pendant_spots: Array[SpotLight3D] = []
+var _pendant_spot_base: Array[float] = []
+var _festoon_mat: StandardMaterial3D
+var _festoon_base := Color.WHITE
+var _city_energy := 0.9
+var _uv_paint: StandardMaterial3D
+var _uv_light: SpotLight3D
+var _uv_sparks: GPUParticles3D
+
 
 func venue_id() -> StringName:
 	return &"loft"
@@ -322,6 +336,27 @@ func _lightning() -> void:
 	if _env != null:
 		_env.ambient_light_energy = STORM_AMBIENT + flash * STRIKE_AMBIENT
 		_env.fog_light_color = STORM_FOG.lerp(Color(0.5, 0.55, 0.7), flash * 0.6)
+
+
+## The pendants and the festoon swell with the mix and flash on each hit, the city's windows
+## breathe, and the lattice's paint glows under a blacklight that comes up with the music, sparks
+## lifting off it. At rest everything is as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	if _pendant_mat != null:
+		_pendant_mat.albedo_color = _pendant_base * (1.0 + 0.5 * heard + 0.9 * heard_hit)
+	for i in _pendant_spots.size():
+		_pendant_spots[i].light_energy = _pendant_spot_base[i] * (1.0 + 0.3 * heard + 0.6 * heard_hit)
+	if _festoon_mat != null:
+		_festoon_mat.albedo_color = _festoon_base * (1.0 + 0.6 * heard + 1.0 * heard_hit)
+	if _city_mat != null and variant != SUNDAY:
+		_city_mat.set_shader_parameter("energy", _city_energy * (1.0 + 0.3 * heard))
+		_city_mat.set_shader_parameter("pulse", heard_hit * 1.5 + heard * 0.5)
+	if _uv_paint != null:
+		_uv_paint.emission_energy_multiplier = UV_REST + 2.0 * heard + 1.5 * heard_hit
+	if _uv_light != null:
+		_uv_light.light_energy = 3.0 * heard + 2.5 * heard_hit
+	drive_sparks(_uv_sparks)
 
 
 func lamp_colour(_index: int, authored: Color) -> Color:
@@ -658,7 +693,13 @@ func _string_festoon(z: float, rail_y: float, length: float) -> void:
 	var holder := MultiMeshInstance3D.new()
 	holder.name = "Festoon"
 	holder.multimesh = bulbs
-	holder.material_override = _dark_bulb() if variant == SUNDAY else ZoneKit.glow(Color(1.0, 0.7, 0.38), 1.5)
+	if variant == SUNDAY:
+		holder.material_override = _dark_bulb()
+	else:
+		if _festoon_mat == null:
+			_festoon_mat = ZoneKit.glow(Color(1.0, 0.7, 0.38), 1.5)
+			_festoon_base = _festoon_mat.albedo_color
+		holder.material_override = _festoon_mat
 	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(holder)
 
@@ -680,6 +721,9 @@ func _hang_pendants() -> void:
 	enamel.roughness = 0.3
 	enamel.metallic_specular = 0.7
 	var half := live_room_half()
+	if variant != SUNDAY:
+		_pendant_mat = ZoneKit.glow(Color(1.0, 0.72, 0.42), 2.4)
+		_pendant_base = _pendant_mat.albedo_color
 	var spots := [Vector3(-half * 0.68, 3.0, 3.25), Vector3(-half * 0.24, 3.0, 3.25),
 			Vector3(half * 0.24, 3.0, 3.25), Vector3(half * 0.68, 3.0, 3.25),
 			# And one either side of the desk, over the floor beside it.
@@ -718,11 +762,13 @@ func _hang_pendants() -> void:
 		# Off on a sunny morning: the bulb only glass.
 		var lit := variant != SUNDAY
 		var bulb := ZoneKit.block(parent, Vector3(0.08, 0.04, 0.08), at + Vector3(0, -0.075, 0) - origin,
-				ZoneKit.glow(Color(1.0, 0.72, 0.42), 2.4) if lit else _dark_bulb(), "Bulb%d" % i)
+				_pendant_mat if lit else _dark_bulb(), "Bulb%d" % i)
 		bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if lit:
 			var light := ZoneKit.spot_down(parent, at + Vector3(0, -0.11, 0) - origin, Color(1.0, 0.74, 0.5), 4.0,
 					66.0, 5.2)
+			_pendant_spots.append(light)
+			_pendant_spot_base.append(6.0 if variant == STORM else 4.0)
 			if variant == STORM:
 				# Turned up against the dark, a wider pool on the concrete, and enough of a highlight
 				# to show in the wet under the windows. A soft glow round each too, for the brick and
@@ -765,7 +811,8 @@ func _raise_city() -> void:
 		_city_mat.set_shader_parameter("lit_b", Color(0.08, 0.09, 0.12))
 		_city_mat.set_shader_parameter("lit_c", Color(0.75, 0.85, 1.0))
 		# In the storm the rain dims every window, and the roofline lights are lost in it.
-		_city_mat.set_shader_parameter("energy", 0.75 if variant == STORM else 0.9)
+		_city_energy = 0.75 if variant == STORM else 0.9
+		_city_mat.set_shader_parameter("energy", _city_energy)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 23
 	var towers: Array[Transform3D] = []
@@ -1264,6 +1311,11 @@ func _dress_zones() -> void:
 	var paint := StandardMaterial3D.new()
 	paint.albedo_color = Color(0.85, 0.66, 0.08)
 	paint.roughness = 0.6
+	_uv_paint = paint
+	paint.emission_enabled = true
+	# Safety paint fluoresces: a lime-yellow that a violet lamp wakes.
+	paint.emission = Color(0.7, 1.0, 0.15)
+	paint.emission_energy_multiplier = UV_REST
 	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3(0, 0.001, 0), 0.07, paint)
 	ZoneKit.block(matrix, Vector3(0.5, 0.002, 0.06), Vector3(0, 0.002, 0), paint, "Cross")
 	ZoneKit.block(matrix, Vector3(0.06, 0.002, 0.5), Vector3(0, 0.0025, 0), paint, "Cross")
@@ -1271,6 +1323,18 @@ func _dress_zones() -> void:
 	var lattice: AABB = z[&"matrix"]
 	ZoneKit.spot_down(matrix, Vector3(0, _under_beam(), _beam_z(lattice) - lattice.get_center().z),
 			Color(0.72, 0.82, 1.0), 7.0, 42.0, 7.0, steel)
+	# And a violet blacklight beside it, dark until the mix plays.
+	_uv_light = ZoneKit.spot_down(matrix, Vector3(0.4, _under_beam(), _beam_z(lattice) - lattice.get_center().z),
+			Color(0.55, 0.25, 1.0), 0.0, 48.0, 7.0)
+	_uv_light.light_specular = 0.0
+	var lc := lattice.get_center()
+	var spark_colours := Gradient.new()
+	spark_colours.set_color(0, Color(0.7, 1.0, 0.2))
+	spark_colours.set_color(1, Color(0.62, 0.3, 1.0))
+	spark_colours.add_point(0.5, Color(0.7, 0.4, 1.0))
+	spark_colours.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	_uv_sparks = make_sparks("UVSparks", Vector3(lc.x, 0.15, lc.z), Vector3(1.4, 0.05, 1.4),
+			AABB(Vector3(lc.x - 2.5, 0, lc.z - 2.5), Vector3(5, 4, 5)), spark_colours, 90, true)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, block_wood, steel)

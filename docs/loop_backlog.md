@@ -3746,4 +3746,9 @@ Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
 - [x] rooftop: festoon bulbs and string spots swell, city windows breathe, skylight glows, the
   lattice's chalked square is a violet blacklight, and gold/violet sparks fall under the strings.
   Shots: shots/rooftop_floor_0.png (quiet), shots/rooftop_floor_0.9.png (loud).
-- [ ] loft, cabin, station, dome, studio
+- [x] loft (all three arrangements): pendant bulbs and pools and the gallery festoon swell, city
+  windows breathe, the lattice's safety-yellow paint fluoresces lime under a violet blacklight that
+  comes up with the music, and lime/violet sparks lift off the square.
+  Shots: shots/loft_night_0.png (quiet), shots/loft_night_0.9.png (loud).
+  Shared `Venue.make_sparks` / `drive_sparks` now back both rooftop and loft.
+- [ ] cabin, station, dome, studio

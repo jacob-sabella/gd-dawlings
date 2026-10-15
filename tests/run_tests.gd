@@ -7134,6 +7134,30 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 	var hit_before := roof.heard_hit
 	roof.pulse(0.9)
 	check("a sudden rise is a hit", roof.heard_hit > hit_before + 0.3)
+	for variant in 3:
+		studio.set_venue(&"loft", false, variant)
+		var loft := studio.venue as LoftVenue
+		var tag := "loft %d" % variant
+		var uv_rest := loft._uv_paint.emission_energy_multiplier
+		var lamp_rest := loft._pendant_mat.albedo_color if loft._pendant_mat != null else Color.BLACK
+		for i in 12:
+			loft.pulse(0.9)
+		check("%s: a loud mix lifts what it has heard" % tag, loft.heard > 0.7)
+		check("%s: the blacklight paint glows and sparks lift" % tag,
+				loft._uv_paint.emission_energy_multiplier > uv_rest * 10.0 and loft._uv_sparks.emitting
+				and loft._uv_light.light_energy > 1.0)
+		if variant != LoftVenue.SUNDAY:
+			check("%s: the pendants glow brighter" % tag, loft._pendant_mat.albedo_color.r > lamp_rest.r * 1.3)
+		for i in 120:
+			loft.pulse(0.0)
+		check("%s: a silent mix settles back to rest" % tag, loft.heard == 0.0
+				and is_equal_approx(loft._uv_paint.emission_energy_multiplier, uv_rest)
+				and loft._uv_light.light_energy == 0.0 and not loft._uv_sparks.emitting
+				and (loft._pendant_mat == null or loft._pendant_mat.albedo_color.is_equal_approx(lamp_rest)))
+		loft.reactive = false
+		for i in 12:
+			loft.pulse(0.9)
+		check("%s: reactive off holds the room still" % tag, loft.heard == 0.0 and not loft._uv_sparks.emitting)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 
