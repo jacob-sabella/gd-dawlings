@@ -19515,6 +19515,11 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 	wall.show_graph(broken)
 	wall._process(0.0)
 	check("without a graph it says so and draws no cables", wall.cables == 0)
+	var drawn_before := wall.cables
+	wall._on_jack_hover(true, mix_out)
+	check("hovering a port lights it and keeps every cable (%d)" % wall.cables, wall._lit_port == mix_out and wall.cables == drawn_before)
+	wall._on_jack_hover(false, mix_out)
+	check("and leaving it puts them all back", wall._lit_port == "" and wall.cables == drawn_before)
 	wall.free()
 	# However many nodes there are, every port is on some page of twelve rows, and a node larger
 	# than a page is cut across pages rather than dropped.

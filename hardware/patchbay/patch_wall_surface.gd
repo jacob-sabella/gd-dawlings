@@ -95,6 +95,7 @@ func _rebuild() -> void:
 	_jack_at.clear()
 	_drag.clear()
 	_dressed = _dress_key()
+	_lit_port = ""
 	if graph == null:
 		_shown = ""
 		_note("listening to the audio graph...", -0.1, 48)
@@ -124,13 +125,32 @@ func _rebuild() -> void:
 				(_jacks[end] as PatchJack).patches += 1
 	var counts := "%d nodes · %d links" % [graph.nodes.size(), graph.links.size()]
 	_note(counts if status.is_empty() else "%s · %s" % [counts, status], -height + 0.1, 34)
+	_ribbon_at = jacks
+	_lay_ribbons()
+
+
+## The port a hand is over, whose cables are the only ones lit while it is; "" for none.
+var _lit_port := ""
+var _ribbon_at := {}
+var _ribbon_mesh: MeshInstance3D
+
+
+## Every link as one ribbon mesh. With a port lit, its own cables keep their colour and the rest
+## fall back toward the panel, so one device's routing can be picked out of a crowded wall.
+func _lay_ribbons() -> void:
+	if _ribbon_mesh != null and is_instance_valid(_ribbon_mesh):
+		_ribbon_mesh.queue_free()
+	cables = 0
 	var ribbons := ImmediateMesh.new()
 	for link in graph.links:
 		if cables >= CABLE_LIMIT:
 			break
-		if not jacks.has(link[0]) or not jacks.has(link[1]):
+		if not _ribbon_at.has(link[0]) or not _ribbon_at.has(link[1]):
 			continue
-		_ribbon(ribbons, jacks[link[0]], jacks[link[1]], _tint(PipeGraph.node_of(link[0])))
+		var tint := _tint(PipeGraph.node_of(link[0]))
+		if _lit_port != "" and link[0] != _lit_port and link[1] != _lit_port:
+			tint = tint.lerp(_panel(), 0.82)
+		_ribbon(ribbons, _ribbon_at[link[0]], _ribbon_at[link[1]], tint)
 		cables += 1
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = ribbons
@@ -140,6 +160,17 @@ func _rebuild() -> void:
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mesh.material_override = m
 	_adopt(mesh)
+	_ribbon_mesh = mesh
+
+
+func _on_jack_hover(on: bool, port: String) -> void:
+	if not _drag.is_empty():
+		return
+	var next := port if on else ""
+	if next == _lit_port or graph == null:
+		return
+	_lit_port = next
+	_lay_ribbons()
 
 
 ## A cable as a ribbon along a curve that leaves one port going sideways and arrives going
@@ -235,6 +266,7 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 			grab.drag_began.connect(_on_drag_began)
 			grab.drag_moved.connect(_on_drag_moved)
 			grab.drag_finished.connect(_on_drag_finished)
+			grab.hover_changed.connect(_on_jack_hover.bind(port))
 			_adopt(grab)
 			_jacks[port] = grab
 			_jack_at[port] = Vector3(side, py, 0.014)

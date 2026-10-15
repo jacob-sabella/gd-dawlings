@@ -81,3 +81,10 @@ a bonus. Port labels on the wall went from font 34 to 46, node titles 40 to 50, 
 colour from 0.55 to 0.72 grey, so the names read from the seat (shots/wall_close.png before,
 shots/wall_close2.png after). Next on the wall: highlight a jack's cables on hover, a filter by name,
 CABLE_LIMIT 150, the empty middle of the wall.
+
+## Iteration 6: the wall's hover
+
+Hovering a port on the wall keeps its own cables lit and dims the rest toward the panel (the ribbons
+are redrawn on their own, not the whole wall). Resting look unchanged (shots/wall_close3.png).
+Tests: hovering keeps every cable and leaving restores. The dimmed look itself has not been seen in
+a shot (no hover in the shot tool). Suite 10615, 0 failed.
