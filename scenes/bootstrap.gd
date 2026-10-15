@@ -41,6 +41,7 @@ var ports: AudioPorts
 
 func _ready() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
+	Materials.prefetch_startup()
 
 	add_child(xr)
 	var medium := xr.start(args["xr"], args["ar"], args["xr_sim"])

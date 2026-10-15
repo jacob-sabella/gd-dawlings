@@ -21,6 +21,23 @@ static func _cached(key: String, factory: Callable) -> StandardMaterial3D:
 	return _cache[key]
 
 
+## The scanned textures every start builds first, as [id, resolution]: the control room's.
+const STARTUP_SCANS: Array = [
+	["black_walnut_veneer_01", "2k"], ["herringbone_parquet", "2k"],
+	["wool_boucle", "1k"], ["rough_linen", "1k"],
+]
+
+
+## Start decoding the textures the first room needs on a thread of their own, so the main thread
+## finds them done instead of waiting on each in turn while it builds. `load()` of a path that
+## is already in flight takes the finished texture, so nothing else has to change.
+static func prefetch_startup() -> void:
+	for scan in STARTUP_SCANS:
+		for map in ["diff", "nor_gl", "arm"]:
+			ResourceLoader.load_threaded_request(
+					"res://assets/textures/%s/%s_%s_%s.jpg" % [scan[0], scan[0], map, scan[1]])
+
+
 ## A scanned surface from assets/textures: colour, normal, and the packed AO/rough/metal map
 ## read a channel at a time. Triplanar, because nearly everything here is a BoxMesh, whose own
 ## UVs stretch one copy of the texture across each face however big the face is -- a two-metre

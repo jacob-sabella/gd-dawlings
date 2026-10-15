@@ -86,6 +86,8 @@ Labels are batched well (only 103 draws) but cost about 1 ms a frame on the desk
 |---|---|---|---|---|
 | Casters merged: fork is one mesh, wheel one mesh of two surfaces (7 meshes to 3 each, 16 casters) | 1232 to 1165 | 1783 to 1717 | 3807 to 3743 | 4.96 to 4.2-5.1 (noise) |
 
+| First room's scanned textures decoded on a thread from the start of `Bootstrap._ready` (`Materials.prefetch_startup`) | | | | startup to first frame 3.2 s to 2.8 s (5 runs each: 3189-3296 vs 2788-2867) |
+
 Primitive count is identical (135480) so the geometry is the same. A close-up before/after screenshot was attempted but the camera framing missed the casters (under the floor), so the look is NOT visually compared; the test suite (10601 checks, 0 failed) covers the casters' roll and trailing.
 
 ## Method note
