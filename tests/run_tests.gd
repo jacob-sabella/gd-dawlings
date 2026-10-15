@@ -7183,6 +7183,30 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		for i in 12:
 			cabin.pulse(0.9)
 		check("%s: reactive off holds the room still" % ctag, cabin.heard == 0.0 and not cabin._rug_motes.emitting)
+	for variant in 3:
+		studio.set_venue(&"station", false, variant)
+		var st := studio.venue as StationVenue
+		var stag := "station %d" % variant
+		var lip_rest := st._lip_mat.albedo_color
+		var cove_rest := st._cove_mat.albedo_color
+		var dust_rest := st._dust_mat.albedo_color
+		for i in 12:
+			st.pulse(0.9)
+		check("%s: a loud mix lifts what it has heard" % stag, st.heard > 0.7)
+		check("%s: the cove and lip brighten" % stag, st._cove_mat.albedo_color.r > cove_rest.r * 1.3
+				and st._lip_mat.albedo_color != lip_rest)
+		check("%s: the dust brightens, the blacklight comes up and motes lift" % stag,
+				st._dust_mat.albedo_color.a > dust_rest.a and st._uv_light.light_energy > 1.0 and st._motes.emitting)
+		for i in 120:
+			st.pulse(0.0)
+		check("%s: a silent mix settles back to rest" % stag, st.heard == 0.0
+				and st._lip_mat.albedo_color.is_equal_approx(lip_rest) and st._cove_mat.albedo_color.is_equal_approx(cove_rest)
+				and st._dust_mat.albedo_color.is_equal_approx(dust_rest)
+				and st._uv_light.light_energy == 0.0 and not st._motes.emitting)
+		st.reactive = false
+		for i in 12:
+			st.pulse(0.9)
+		check("%s: reactive off holds the room still" % stag, st.heard == 0.0 and not st._motes.emitting)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 

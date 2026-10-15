@@ -3755,4 +3755,8 @@ Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
   and flash; the rug's cream border fluoresces blue-white under a violet blacklight; embers rise
   off a lit stove and motes lift over the rug. Shots: shots/cabin_night_0.png (quiet),
   shots/cabin_night_0.9.png (loud).
-- [ ] station, dome, studio
+- [x] station (all three): cove strips, deck lip and riser edge swell, the lip shifting cyan toward
+  violet as it gets loud, downlights and the planet's up-glow lift, the dust brightens, the sky
+  energy breathes, and a violet blacklight over the lattice kicks weightless cyan/violet motes up.
+  Shots: shots/station_night_0.png (quiet), shots/station_night_0.9.png (loud).
+- [ ] dome, studio

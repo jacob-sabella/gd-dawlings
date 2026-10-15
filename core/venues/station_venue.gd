@@ -89,6 +89,21 @@ var _blinkers: Array[StandardMaterial3D] = []
 var _blink_colours: Array[Color] = []
 var _blink_time := 0.0
 
+## What follows the mix: the cool strips (cove, deck lip, riser edge), the downlights, the
+## planet's glow, and a blacklit lattice -- the glass floor's lip going violet, weightless motes
+## kicked up over it.
+var _lip_mat: StandardMaterial3D
+var _lip_base := Color.WHITE
+var _cove_mat: StandardMaterial3D
+var _cove_base := Color.WHITE
+var _downlights: Array[SpotLight3D] = []
+var _down_base := 1.0
+var _planetshine: SpotLight3D
+var _dust_mat: StandardMaterial3D
+var _dust_base := Color.WHITE
+var _uv_light: SpotLight3D
+var _motes: GPUParticles3D
+
 
 func venue_id() -> StringName:
 	return &"station"
@@ -283,6 +298,31 @@ func ring_point(side: float, degrees: float) -> Vector3:
 	return Vector3(side * (x0 + RING * sin(a)), RING * (1.0 - cos(a)), DOOR_Z)
 
 
+## The strips and downlights swell with the mix and flash on each hit, the planet's glow comes up,
+## the dust brightens, and the lattice's lip turns toward violet under a blacklight, motes kicked
+## up over it. At rest all as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	var up := 1.0 + 0.5 * heard + 0.9 * heard_hit
+	if _lip_mat != null:
+		# Toward violet as it gets louder.
+		_lip_mat.albedo_color = (_lip_base * up).lerp(Color(0.8, 0.4, 2.0), clampf(heard * 0.6 + heard_hit * 0.4, 0.0, 0.8))
+	if _cove_mat != null:
+		_cove_mat.albedo_color = _cove_base * (1.0 + 0.4 * heard + 0.7 * heard_hit)
+	for l in _downlights:
+		l.light_energy = _down_base * (1.0 + 0.25 * heard + 0.5 * heard_hit)
+	if _planetshine != null:
+		_planetshine.light_energy = 1.4 * (1.0 + 0.6 * heard + 0.8 * heard_hit)
+	if _dust_mat != null:
+		_dust_mat.albedo_color = Color(_dust_base.r * (1.0 + 0.6 * heard), _dust_base.g, _dust_base.b * (1.0 + 0.8 * heard + heard_hit),
+				minf(_dust_base.a + 0.2 * heard + 0.2 * heard_hit, 1.0))
+	if _sky_mat != null:
+		_sky_mat.set_shader_parameter("energy", (0.85 if variant == DAY_SIDE else 1.0) * (1.0 + 0.15 * heard + 0.3 * heard_hit))
+	if _uv_light != null:
+		_uv_light.light_energy = 3.0 * heard + 2.5 * heard_hit
+	drive_sparks(_motes)
+
+
 func _process(delta: float) -> void:
 	orbit = fmod(orbit + delta * ORBIT_RATE, TAU)
 	_orbit_wait -= delta
@@ -382,8 +422,9 @@ func _lay_the_deck() -> void:
 			[Vector3(0.04, deep, hole.size.y), Vector3(hole.position.x - 0.02, -deep * 0.5 - 0.003, c.y)],
 			[Vector3(0.04, deep, hole.size.y), Vector3(hole.end.x + 0.02, -deep * 0.5 - 0.003, c.y)]]:
 		ZoneKit.block(self, spec[0], spec[1], dark, "DeckEdge")
-	var strip := ZoneKit.glow(Color(0.35, 0.8, 1.0), 1.4)
-	ZoneKit.floor_frame(self, hole.size + Vector2(0.06, 0.06), Vector3(c.x, 0.0, c.y), 0.03, strip)
+	_lip_mat = ZoneKit.glow(Color(0.35, 0.8, 1.0), 1.4)
+	_lip_base = _lip_mat.albedo_color
+	ZoneKit.floor_frame(self, hole.size + Vector2(0.06, 0.06), Vector3(c.x, 0.0, c.y), 0.03, _lip_mat)
 
 
 ## Side walls with a hatch in each, the viewport across the front, a plain back, the chamfers
@@ -560,6 +601,8 @@ func _light_the_module() -> void:
 	var half := live_room_half()
 	var length := LIVE_ROOM_BACK - FRONT
 	var cove := ZoneKit.glow(Color(0.6, 0.85, 1.0), 1.2)
+	_cove_mat = cove
+	_cove_base = cove.albedo_color
 	for side in [-1.0, 1.0]:
 		var strip := ZoneKit.block(self, Vector3(0.03, 0.03, length - 0.2), Vector3(side * (half - 0.1), WALL_TOP - 0.08,
 				(FRONT + LIVE_ROOM_BACK) * 0.5), cove, "Cove")
@@ -567,10 +610,12 @@ func _light_the_module() -> void:
 	var can := _ribs()
 	# By day the sun does the work, and the ship's day cycle has the downlights turned down.
 	var down := 0.9 if variant == DAY_SIDE else 2.0
+	_down_base = down
 	for x in [-2.6, 2.6]:
 		for z in [-0.8, 1.6, 4.0, 6.4]:
 			var light := ZoneKit.spot_down(self, Vector3(x, CEILING - 0.03, z), Color(0.86, 0.92, 1.0), down, 55.0, 6.0, can)
 			light.name = "Downlight"
+			_downlights.append(light)
 
 
 # --- outside --------------------------------------------------------------------------------
@@ -642,6 +687,7 @@ func _dock_the_ship() -> void:
 func _shine_up_through_the_deck() -> void:
 	var hole := glass_floor()
 	var up := SpotLight3D.new()
+	_planetshine = up
 	up.name = "Planetshine"
 	up.light_color = Color(0.45, 0.65, 1.0)
 	up.light_energy = 1.4
@@ -704,7 +750,7 @@ func _dress_zones() -> void:
 	ZoneKit.riser(drums, riser, ZoneKit.RISER_HEIGHT, plates, dark)
 	# A line of light along its front edge, so the step up is seen.
 	ZoneKit.block(drums, Vector3(riser.x, 0.02, 0.02), Vector3(0, ZoneKit.RISER_HEIGHT - 0.03, -riser.y * 0.5 - 0.011),
-			ZoneKit.glow(Color(0.35, 0.8, 1.0), 1.2), "EdgeLight")
+			_lip_mat, "EdgeLight")
 
 	var vocals := ZoneKit.holder(self, &"vocals", z[&"vocals"])
 	var booth_box: AABB = z[&"vocals"]
@@ -716,6 +762,15 @@ func _dress_zones() -> void:
 	var matrix := ZoneKit.holder(self, &"matrix", z[&"matrix"])
 	var lattice: AABB = z[&"matrix"]
 	_hang_dust(matrix, lattice.size)
+	_uv_light = ZoneKit.spot_down(matrix, Vector3(0.3, CEILING - 0.05, 0), Color(0.55, 0.25, 1.0), 0.0, 50.0, 7.0)
+	_uv_light.light_specular = 0.0
+	var cold := Gradient.new()
+	cold.set_color(0, Color(0.45, 0.9, 1.0))
+	cold.set_color(1, Color(0.7, 0.35, 1.0))
+	# Weightless: they leave the floor and keep going, none falling back.
+	_motes = make_sparks("Motes", Vector3(lattice.get_center().x, 0.15, lattice.get_center().z),
+			Vector3(lattice.size.x * 0.4, 0.05, lattice.size.z * 0.4),
+			AABB(lattice.get_center() - Vector3(2.5, 0.3, 2.5), Vector3(5, 4, 5)), cold, 90, true)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, composite, dark)
@@ -765,6 +820,8 @@ func _hang_dust(parent: Node3D, size: Vector3) -> void:
 	shine.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	shine.albedo_texture = spot
 	shine.albedo_color = Color(0.6, 0.85, 1.0, 0.8)
+	_dust_mat = shine
+	_dust_base = shine.albedo_color
 	mote.material = shine
 	dust.draw_pass_1 = mote
 	dust.position = Vector3(0, size.y * 0.5, 0)
