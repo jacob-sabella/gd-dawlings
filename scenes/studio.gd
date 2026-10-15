@@ -350,6 +350,10 @@ func _house_environment() -> Environment:
 	env.ssao_enabled = true
 	env.ssao_radius = 0.4
 	env.ssao_intensity = 1.4
+	if standalone_headset():
+		# The mobile renderer has no SSAO, and a glow pass is a full-frame blur twice per eye.
+		env.ssao_enabled = false
+		env.glow_enabled = false
 	return env
 
 
@@ -374,6 +378,9 @@ func _house_key(key: DirectionalLight3D) -> void:
 	key.light_color = Color(0.92, 0.94, 1.0)
 	key.rotation_degrees = Vector3(-62, 18, 0)
 	key.shadow_enabled = true
+	if standalone_headset():
+		# Four cascades drawn for two eyes is the Quest's whole frame.
+		key.shadow_enabled = false
 
 
 ## Renderer-wide settings for the desktop: shadow resolution and filtering, antialiasing. Not
@@ -439,6 +446,10 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	var env := _house_environment()
 	_house_key(key_light)
 	venue.dress(env, key_light)
+	if standalone_headset():
+		env.glow_enabled = false
+		env.ssao_enabled = false
+		key_light.shadow_enabled = false
 	Materials.apply_style(venue.gear_style())
 	GearShape.use(id, venue.roll_board_chalky(), get_tree() if is_inside_tree() else null)
 	TrackColours.use(venue.track_palette())
@@ -608,6 +619,11 @@ func cycle_venue() -> void:
 func rich_rendering() -> bool:
 	return medium == Presentation.Medium.SCREEN \
 			and RenderingServer.get_current_rendering_method() == "forward_plus"
+
+
+## A standalone headset: the mobile renderer, drawn twice a frame, with a mobile GPU to do it.
+func standalone_headset() -> bool:
+	return medium != Presentation.Medium.SCREEN and not rich_rendering()
 
 
 ## Furniture: the things that hold the gear up.

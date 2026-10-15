@@ -225,7 +225,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		# no Reaper. Run from the editor, as the tests and probes are, the silent stand-in.
 		"reaper": false, "built_in": OS.has_feature("template"), "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
-		"host": false, "public": false, "join": "", "xr": false, "xr_sim": false, "ar": false,
+		"host": false, "public": false, "join": "", "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),

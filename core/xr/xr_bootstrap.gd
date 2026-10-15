@@ -50,6 +50,13 @@ func start(want_xr: bool, want_passthrough: bool, simulate := false) -> int:
 	# owns frame pacing, and leaving the desktop compositor's vsync in the loop fights it.
 	get_viewport().use_xr = true
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	if OS.has_feature("android"):
+		# A standalone headset's GPU is the frame: no multisampling, and the edge of the view drawn
+		# coarser (fixed foveation), so what is looked at stays at full resolution to read.
+		get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		get_viewport().vrs_mode = Viewport.VRS_XR
+		xr_interface.set("foveation_level", 2)
+		xr_interface.set("foveation_dynamic", true)
 
 	medium = Presentation.Medium.VR
 	if want_passthrough and _supports_passthrough():
