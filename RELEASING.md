@@ -1,12 +1,8 @@
 # Releasing dawlings
 
-dawlings ships on two channels that share one project history. Each release is a GitHub release
-carrying a Linux zip and a Windows zip.
-
-| Channel | Example tag | How it is cut |
-| --- | --- | --- |
-| **Beta** | `v0.0.3-beta.412` | Automatically, on every push to `master` that changes code, assets or the dawkit pin |
-| **Stable** | `v0.0.3` | Manually, via the **Stable Release** workflow |
+dawlings has a single release mechanism, cut by hand: run the **Stable Release** workflow from the
+Actions tab. Each release (`v0.0.3`) is a GitHub release carrying a Linux zip and a Windows zip.
+Nothing is released automatically on commit.
 
 ## Single source of truth
 
@@ -18,9 +14,7 @@ just before an export.
 
 - `ci.yml` -- the headless suite, on pushes to any branch but `master`; also the test gate below.
 - `release-check.yml` -- the suite, then dawkit's native core and a full Linux and Windows export,
-  kept as artifacts. Runs on pull requests, on manual dispatch, and as the gate of both channels.
-- `release-beta.yml` -- on a push to `master` (docs, screenshots and workflow edits are ignored):
-  `release-check`, then a GitHub pre-release with the two zips.
+  kept as artifacts. Runs on pull requests, on manual dispatch, and as the gate of the release.
 - `release-stable.yml` -- manual: `release-check`, then a final release at `VERSION`'s base, then a
   PR bumping `VERSION` to the next development base (`patch` by default; `minor` or `major` by input).
   To cut a minor or major, first merge a PR bumping `VERSION`, then run the workflow.

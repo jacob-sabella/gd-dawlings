@@ -5,7 +5,7 @@ name: Release Check
 #
 # Runs on:
 #   - pull_request to master -- keeps every change honest.
-#   - workflow_call          -- reused as the gate by release-beta.yml and release-stable.yml; a
+#   - workflow_call          -- reused as the gate by release-stable.yml; a
 #                               red run blocks the release, and the artifacts are what they ship.
 #   - workflow_dispatch      -- run manually from the Actions tab.
 

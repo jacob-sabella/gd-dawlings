@@ -1,12 +1,12 @@
 name: Stable Release
 
 # Deliberate promotion of the current master to a final release. Run it from the Actions tab when
-# the accumulated beta line is ready to ship:
+# you want to cut a release:
 #
 #   VERSION base 0.0.3  ->  GitHub release v0.0.3 (final) with the Linux and Windows zips
 #
 # After tagging, it opens a PR bumping VERSION to the next development base (patch by default) so
-# the next merge to master starts a fresh beta line.
+# the next development cycle starts on the new base.
 
 on:
   workflow_dispatch:
@@ -97,4 +97,4 @@ jobs:
 
           gh pr create --base master --head "$BRANCH" \
             --title "chore(release): start ${NEXT} development" \
-            --body "Post-release housekeeping for \`${{ steps.ver.outputs.tag }}\`. Bumps the development base to \`${NEXT}\`; the next merge to master cuts \`v${NEXT}-beta.<run>\` on the beta channel."
+            --body "Post-release housekeeping for \`${{ steps.ver.outputs.tag }}\`. Bumps the development base to \`${NEXT}\`."
