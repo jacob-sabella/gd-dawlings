@@ -161,3 +161,13 @@ at 12.7% of CPU. The caller was `Walker._physics_process` -> `sync_solids` -> `f
 meshes at 48 tracks) on every physics tick. Kept for 250 ms, and dropped on `rebuilt`.
 Alternating A/B, 3000 frames: 5.56 ms average against 5.97 ms. Suite 10601 checks, 0 failed.
 (Order matters: the cache is dropped before `_fit_room_to_session` reads it.)
+
+### Iteration 2: dead end, and the real gap
+
+- Replacing `find_children` in `Surface.content_aabb` with a typed walk: alternating A/B, shadows ON,
+  48 tracks busy, 3 pairs each: 9.43 ms new vs 9.47 ms old. Noise. Reverted. (Step-counting showed
+  only the 250 ms desk refresh still reaches `find_children` in steady state: 25 calls in ~600 frames.)
+- Shadows ON, Forward+, studio:0, 48 tracks, `--built-in --feed-level 0.9`: **frame 9.4 ms, worst 14-17 ms**
+  against the 6.94 ms target. Self time: `_render_scene` 15.9%, `_wildcard_match` 5.2%, `StringName(String)`
+  4.3%, GDScriptFunction::call 3.7%, mutex lock/unlock 6.3%, `_render_list` 2.2%, `_fill_render_list` 2.0%.
+  The target is a render-side problem (about 3000 draws with shadows), not a script one.
