@@ -61,7 +61,9 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 		out.group = t.group
 		# A track with notes on it plays them through the engine's instrument, first in its chain.
 		# One the project came with and the engine cannot run is kept as it came.
-		if backend.instruments.has(index):
+		if backend.track_instrument(index) != null:
+			pass  # an instrument plugin of its own, in its chain
+		elif backend.instruments.has(index):
 			out.effects.append(DawKitEffect.from_dict(backend.instruments[index]))
 		elif t.items.any(func(it: MixState.ItemState) -> bool: return not it.notes.is_empty()):
 			var tine := DawKitEffect.new()
@@ -128,6 +130,20 @@ static func _effect(backend: OfflineBackend, t: MixState.TrackState, fx_index: i
 	var e := DawKitEffect.new()
 	e.kind = String(backend.fx_kind(t.index, fx_index))
 	e.name = f.name
+	var hosted = backend.hosted_plugin(t.index, fx_index) if backend is GodotBackend else null
+	if hosted != null:
+		# A third-party plugin: found again by its format and id, and set as it was by its state.
+		var info: Dictionary = hosted.info()
+		e.kind = ""
+		e.plugin_format = info["format"]
+		e.plugin_id = info["id"]
+		e.state = hosted.get_state()
+		e.instrument = hosted.is_instrument()
+	elif f.has_meta(&"unhosted"):
+		# One this machine could not load, kept as it came so saving does not lose it.
+		var kept := DawKitEffect.from_dict(f.get_meta(&"unhosted"))
+		kept.enabled = f.enabled
+		return kept
 	e.enabled = f.enabled
 	e.wet = f.wet
 	e.preset = f.preset
@@ -178,6 +194,9 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	var s := backend.state
 	s.tracks.clear()
 	backend.instruments.clear()
+	if backend is GodotBackend:
+		# The last project's plugins, windows and all; this one's are loaded as its chains are.
+		(backend as GodotBackend).hosted.clear()
 	# Another project's takes may share a file name with this one's.
 	backend.take_peaks.clear()
 	s.markers.clear()
@@ -229,9 +248,9 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 		t.folder_depth = _depth_delta(p, i)
 		# Instruments are not in the desk's chain: the engine plays every track's notes through its
 		# own (INSTRUMENT), and one it cannot run is left out.
-		var chain := src.effects.filter(func(e: DawKitEffect) -> bool: return not e.instrument)
+		var chain := src.effects.filter(func(e: DawKitEffect) -> bool: return not e.instrument or _hostable(backend, e))
 		for e in src.effects:
-			if e.instrument and e.kind != INSTRUMENT:
+			if e.instrument and e.kind != INSTRUMENT and not _hostable(backend, e):
 				backend.instruments[i + 1] = e.to_dict()
 				break
 		for fx_index in chain.size():
@@ -245,10 +264,13 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 				f.params[pi] = e.values[pi]
 				if pi < e.names.size() and not e.names[pi].is_empty():
 					f.param_names[pi] = e.names[pi]
-			if not e.kind.is_empty():
+			var kind := StringName(e.kind)
+			if e.kind.is_empty() and not e.plugin_format.is_empty():
+				kind = _host(backend, e, f)
+			if kind != &"":
 				if not kinds.has(i + 1):
 					kinds[i + 1] = {}
-				kinds[i + 1][fx_index] = StringName(e.kind)
+				kinds[i + 1][fx_index] = kind
 		for send_index in src.sends.size():
 			var send := src.sends[send_index]
 			var sd := s.send(i + 1, send_index + 1)
@@ -313,6 +335,32 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	s.master_changed.emit(&"")
 	s.project_replaced.emit()
 	return PackedStringArray()
+
+
+## Whether the built-in engine can load this third-party plugin here.
+static func _hostable(backend: OfflineBackend, e: DawKitEffect) -> bool:
+	return backend is GodotBackend and not e.plugin_format.is_empty() and HostedPlugins.available() \
+			and not PluginCatalogue.shared().find(e.plugin_format, e.plugin_id).is_empty()
+
+
+## A third-party plugin from the project loaded into its slot `f`, with its saved state: its
+## kind, or none when this machine does not have it, in which case it is kept as it came.
+static func _host(backend: OfflineBackend, e: DawKitEffect, f: MixState.FXState) -> StringName:
+	if _hostable(backend, e):
+		var g := backend as GodotBackend
+		var key := g.hosted.host(PluginCatalogue.shared().find(e.plugin_format, e.plugin_id), e.state)
+		if key != "":
+			var row := g.hosted.row(key)
+			f.name = MixState.FXState.bare_name(row["name"])
+			f.type = MixState.FXState.type_of(row["name"])
+			f.host_key = key
+			f.params = row["params"]
+			f.param_names = row["param_names"]
+			f.param_list = row["param_list"]
+			return StringName(GodotBackend.HOSTED + key)
+	f.type = e.plugin_format
+	f.set_meta(&"unhosted", e.to_dict())
+	return &""
 
 
 ## Reaper's folder depth for the track at `i`: +1 when the next track is inside it, minus the

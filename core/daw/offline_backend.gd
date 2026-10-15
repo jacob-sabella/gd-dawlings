@@ -832,8 +832,12 @@ func _fx_chain_of(track_index: int) -> Array:
 
 
 static func _fx_row(f: MixState.FXState) -> Dictionary:
-	return {"name": f.name, "enabled": f.enabled, "wet": f.wet, "preset": f.preset,
-			"params": f.params.duplicate(), "param_names": f.param_names.duplicate()}
+	var row := {"name": ("%s: %s" % [f.type, f.name]) if f.type != "" else f.name, "enabled": f.enabled,
+			"wet": f.wet, "preset": f.preset, "params": f.params.duplicate(), "param_names": f.param_names.duplicate()}
+	if f.host_key != "":
+		row["key"] = f.host_key
+		row["param_list"] = f.param_list.duplicate()
+	return row
 
 
 func _set_fx_chain(track_index: int, rows: Array) -> void:
@@ -848,7 +852,8 @@ func _write_fx(track_index: int, fx_index: int, row: Dictionary) -> void:
 	var at := "/track/%d/fx/%d/" % [track_index, fx_index]
 	var f := state.fx(track_index, fx_index)
 	# Words describing the plugin that used to be in this slot would describe the wrong one.
-	if f.name != row["name"]:
+	f.host_key = row.get("key", "")
+	if f.name != MixState.FXState.bare_name(row["name"]):
 		f.param_text.clear()
 		f.param_text_at.clear()
 		for param in f.params.keys():
@@ -860,6 +865,8 @@ func _write_fx(track_index: int, fx_index: int, row: Dictionary) -> void:
 		writes.append(["fxparam/%d/value" % param, [float(row["params"][param])]])
 	for param in row["param_names"]:
 		writes.append(["fxparam/%d/name" % param, [str(row["param_names"][param])]])
+	if row.has("param_list") or not f.param_list.is_empty():
+		writes.append(["paramlist", row.get("param_list", []).map(func(i): return float(i))])
 	for w in writes:
 		record_for_replication(at + w[0], w[1])
 		MixWire.apply(state, at + w[0], w[1])

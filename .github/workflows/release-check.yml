@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt-get update -q
           # The keys helper (native/keys.c) is PipeWire and ALSA.
-          sudo apt-get install -y -q cmake g++ mingw-w64 pkg-config libpipewire-0.3-dev libasound2-dev
+          sudo apt-get install -y -q cmake g++ mingw-w64 pkg-config libpipewire-0.3-dev libasound2-dev libx11-dev
           # The posix thread model, which the local builds (Arch's MinGW) are made with.
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
@@ -122,6 +122,9 @@ jobs:
           mkdir -p build/linux build/windows
           godot --headless --path . --export-release "Linux" build/linux/dawlings.x86_64
           godot --headless --path . --export-release "Windows" build/windows/dawlings.exe
+          # dawkit's plugin scanner runs as a program of its own, so it sits beside the game, not in
+          # its pack (PluginCatalogue.scanner).
+          cp addons/dawkit/bin/dawkit_scan.linux.x86_64 build/linux/
           cp docs/playtest.md build/linux/README.md
           cp docs/playtest.md build/windows/README.md
           test -s build/linux/dawlings.x86_64 && test -s build/windows/dawlings.exe

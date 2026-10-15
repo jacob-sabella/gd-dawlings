@@ -481,7 +481,7 @@ func show_window(on: bool) -> void:
 
 
 func _windows_here() -> bool:
-	return window_face and DAW.shows_plugin_windows() \
+	return window_face and DAW.shows_plugin_windows() and DAW.has_plugin_window(track_index, fx_index) \
 			and (not _drawn_by_the_daw() or DAW.works_own_plugin_windows())
 
 

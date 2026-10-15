@@ -219,6 +219,9 @@ func read_fx_params(_track_index: int, _fx_index: int, _params: Array) -> void: 
 ## The plugin's own window, live, or null without Capability.PLUGIN_WINDOW. Whoever opens it
 ## closes it.
 func open_plugin_window(_track_index: int, _fx_index: int) -> PluginWindow: return null
+## Whether this one plugin has a window to open: every one does in a DAW, but Godot's own
+## effects in the built-in engine have none.
+func has_plugin_window(_track_index: int, _fx_index: int) -> bool: return true
 ## Whether the DAW's OWN plugins' windows -- drawn by the DAW's toolkit, not the plugin's -- take
 ## the clicks a PluginWindow passes on, as well as showing. True unless a backend knows otherwise.
 func works_own_plugin_windows() -> bool: return true
@@ -239,6 +242,9 @@ var project_path := ""
 ## The bus a track's live instrument plays on in this engine, for keys played into it to be heard
 ## through the track; empty where the engine has no such bus (Reaper monitors its own inputs).
 func monitor_bus(_track_index: int) -> StringName: return &""
+## A track's instrument plugin, hosted here (DawKitPlugin), or null. Only the built-in engine
+## hosts plugins itself; a DAW's own are played through the DAW.
+func track_instrument(_track_index: int) -> Object: return null
 
 
 func save_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot save from here"])

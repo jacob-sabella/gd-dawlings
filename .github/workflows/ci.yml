@@ -40,7 +40,7 @@ jobs:
           sudo apt-get update -q
           # The keys helper (native/keys.c), which the suite builds and plays, is PipeWire and ALSA.
           # Linux only here: the suite runs on this machine, never Windows.
-          sudo apt-get install -y -q cmake g++ pkg-config libpipewire-0.3-dev libasound2-dev
+          sudo apt-get install -y -q cmake g++ pkg-config libpipewire-0.3-dev libasound2-dev libx11-dev
 
       - name: Cache Godot and its export templates
         uses: actions/cache@v6

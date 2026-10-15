@@ -238,7 +238,12 @@ func _input(event: InputEvent) -> void:
 ## (the helper's); `sounded`: whether it has been heard already, so it is not played twice.
 func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
 	_hear_host_keys()
-	if not sounded:
+	var plugin = _track_plugin()
+	if plugin != null:
+		# The track's own instrument plugin, as a DAW monitors an armed track's instrument.
+		plugin.note_on(pitch, velocity, channel)
+		_plugin_notes[pitch] = plugin
+	elif not sounded:
 		synth.note_on(pitch, velocity)
 	Session.send_note(Session.Note.ON, pitch, velocity, song(age))
 	held[pitch] = velocity
@@ -249,7 +254,11 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 
 
 func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
-	if not sounded:
+	if _plugin_notes.has(pitch):
+		# Off on the plugin it went on, though the keys have moved to another track since.
+		_plugin_notes[pitch].note_off(pitch, channel)
+		_plugin_notes.erase(pitch)
+	elif not sounded:
 		synth.note_off(pitch)
 	Session.send_note(Session.Note.OFF, pitch, 0, song(age))
 	held.erase(pitch)
@@ -260,11 +269,26 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
 
 
 func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
-	if not sounded:
+	var plugin = _track_plugin()
+	if plugin != null:
+		plugin.control(64, 127 if down else 0, channel)
+	elif not sounded:
 		synth.sustain(down)
 	Session.send_note(Session.Note.PEDAL_DOWN if down else Session.Note.PEDAL_UP, 0, 0, song(age))
 	if _take != null:
 		_take.sustain(down, channel, stamp(age))
+
+
+## Notes played on an instrument plugin and not yet let go: pitch -> the plugin.
+var _plugin_notes := {}
+
+
+## The instrument plugin the host's keys play, when they go through the track (`through_track`)
+## and its track has one (the built-in engine's, DAW.track_instrument); null otherwise.
+func _track_plugin() -> Object:
+	if keytar or not through_track or not host_records():
+		return null
+	return DAW.track_instrument(take_track())
 
 
 ## What the helper heard and played since the last frame, into the take.

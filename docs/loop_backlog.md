@@ -692,8 +692,25 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   (`LEVEL_DB` -9): the song now peaks at 0.9-1.1 before the limiter, so it shaves under a
   decibel off the loudest moments only. The band shares barely moved (the mids are the bass's
   harmonics, the driven guitar, the Rhodes and the reverb return); a listen by ear is still due.
-- The alternatives if more than Godot's effects is wanted: a headless Ardour over OSC (GPL at
-  arm's length, desktop only), or Tracktion Engine (GPLv3 or commercial).
+- **Done 2026-10-14, third-party plugins (Linux):** dawkit hosts CLAP, VST3 and LV2 effects and
+  instruments itself (dawkit README, "Third-party plugins"), so the built-in engine no longer
+  needs an Ardour or Tracktion behind it. `PluginCatalogue` lists what is installed, scanned by
+  dawkit's scanner (one process per file; cached in user://plugin_scan.json by file and time),
+  and the rack offers it beside Godot's effects ("VST3: NAMix", "CLAPi: ..."). A slot carries its
+  plugin by a key (`FXState.host_key`, `HostedPlugins`), so moves, copies (a fresh instance with
+  the same state) and undo keep the same plugin and its window. Its parameters are the plugin's
+  automatable ones (Gojira's 2219 become 139: the MIDI CC slots are left out); a knob turned in
+  its own window reaches the desk as a value. Its window is on the tablet (HostedPluginWindow),
+  embedded off screen by dawkit and worked by every click: NAMix, Gojira through yabridge and LSP
+  checked by hand, `tools/probe/hosted_plugin_live.tscn` with real sound (each plugin runs once
+  a mixed block, however many buses it is on). An instrument plugin in a track's chain plays its
+  MIDI items in its lane, note for note, and the host's keys through it while the track takes
+  them. Projects keep each plugin by format, id and state (a VST3's as a .vstpreset); one this
+  machine lacks is kept as it came and saved back unchanged. `--add-plugin T:NAME` puts one on a
+  track for a capture. Still to do: Windows hosting (dawkit builds it out for now), a fully
+  hidden display for windows (install xorg-server-xvfb; the off-screen window is used meanwhile),
+  plugin wet/dry and presets, an LV2 window drawn in GTK or Qt (only X11 ones show), and a
+  plugin this machine lacks keeps its saved state only while it stays in its slot (a move loses it).
 
 ## 1.0 for friends (2026-10-10)
 

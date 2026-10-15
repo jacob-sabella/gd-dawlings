@@ -100,6 +100,9 @@ class FXState extends RefCounted:
 	## OSC only ever streams the first 32; this is the list worth showing. Empty until listed,
 	## and then `params` is the list.
 	var param_list: Array = []
+	## The host's own handle on the plugin loaded for this slot (the built-in engine's
+	## HostedPlugins), carried through moves and undo with the slot. Never on the wire.
+	var host_key: String = ""
 
 	## Every parameter there is to show, in order.
 	func controls() -> Array:

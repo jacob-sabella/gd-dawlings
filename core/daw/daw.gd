@@ -314,6 +314,11 @@ func works_own_plugin_windows() -> bool:
 	return backend != null and backend.works_own_plugin_windows()
 
 
+## Whether this plugin has a window of its own to show (DAWBackend.has_plugin_window).
+func has_plugin_window(track_index: int, fx_index: int) -> bool:
+	return backend != null and backend.has_plugin_window(track_index, fx_index)
+
+
 ## Whether a plugin's own window can be shown here: only on the host, and only by a DAW that can.
 func shows_plugin_windows() -> bool:
 	return Session.is_authority() and backend != null \
@@ -387,6 +392,12 @@ func project_title() -> String:
 ## Where keys played into a track are heard through it: see DAWBackend.monitor_bus.
 func monitor_bus(track_index: int) -> StringName:
 	return backend.monitor_bus(track_index) if backend != null else &""
+
+
+## The instrument plugin a track plays its notes through, on this machine (DawKitPlugin), or null
+## where the track has none or the DAW hosts its own.
+func track_instrument(track_index: int) -> Object:
+	return backend.track_instrument(track_index) if backend != null else null
 
 
 func project_file() -> String: return backend.project_path if Session.is_authority() else ""

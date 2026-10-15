@@ -25,7 +25,11 @@ extends OfflineBackend
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
 ## redo, a guest's intent and a local hand all reach the speakers by the one path.
 ##
-## Not done: third-party plugins, sample-accurate automation. A send runs the track's effects a
+##   - third-party plugins (CLAP, VST3, LV2: PluginCatalogue, HostedPlugins) beside Godot's
+##     effects, with their own windows on the tablet, and instrument plugins playing a track's
+##     notes through its lane.
+##
+## Not done: sample-accurate automation. A send runs the track's effects a
 ## second time on its own bus rather than tapping the track's output, because Godot routes a bus
 ## to exactly one place: the same input through the same settings, so the same sound, at the cost
 ## of the effects' work once per send.
@@ -61,8 +65,11 @@ var _players := {}
 ## Track index -> the [slot, destination, key] of each send its buses were built for, so a send
 ## level moving does not rebuild them and a send patched or pulled does.
 var _built_sends := {}
-## Track index -> fx index -> FX kind.
+## Track index -> fx index -> FX kind: a catalogue kind, or HOSTED + the plugin's key.
 var _kinds := {}
+## The third-party plugins loaded (host only), by the key their slot carries.
+var hosted := HostedPlugins.new()
+const HOSTED := "hosted:"
 ## Role -> finished part.
 var _parts := {}
 ## The tempo and signature `_parts` were rendered at, "<tempo>/<sig>".
@@ -130,6 +137,7 @@ func _start_lanes() -> void:
 	lanes.backend = self
 	add_child(lanes)
 	lanes.build()
+	hosted.set_transport(lanes.transport)
 
 
 ## Where the first frame mixed after play is pressed now is in the song: with lanes, where the
@@ -145,7 +153,30 @@ func summary() -> String:
 func can(capability: StringName) -> bool:
 	if capability == Capability.RENDER:
 		return true
+	if capability == Capability.PLUGIN_WINDOW and HostedPlugins.available():
+		return true
 	return super(capability)
+
+
+## A hosted plugin's own window (HostedPluginWindow); Godot's effects have none, and the stand-in
+## picture is the stand-in's.
+func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
+	var p = hosted_plugin(track_index, fx_index)
+	if p != null:
+		return HostedPluginWindow.opening(p)
+	return super(track_index, fx_index)
+
+
+func has_plugin_window(track_index: int, fx_index: int) -> bool:
+	var p = hosted_plugin(track_index, fx_index)
+	if p != null:
+		return p.editor_supported()
+	return stand_in_windows
+
+
+## Plugin windows here are worked by the engine itself, with every click.
+func works_own_plugin_windows() -> bool:
+	return HostedPlugins.available() or super()
 
 
 ## The render under way, if one is.
@@ -206,6 +237,11 @@ func open(options: Dictionary = {}) -> bool:
 	_build_buses()
 	_start_lanes()
 	_connect_state()
+	if HostedPlugins.available():
+		# A scan finishing after the engine opened offers what it found.
+		var catalogue := PluginCatalogue.shared()
+		if not catalogue.changed.is_connected(publish_fx_choices):
+			catalogue.changed.connect(publish_fx_choices)
 	_render_parts(true)
 	_apply_everything()
 	connection_changed.emit()
@@ -215,6 +251,7 @@ func open(options: Dictionary = {}) -> bool:
 func close() -> void:
 	_finish_renders()
 	super()
+	hosted.clear()
 	for list in _players.values():
 		for p in list:
 			(p as Node).queue_free()
@@ -296,7 +333,7 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 		_kinds[track_index] = {}
 	_kinds[track_index][fx_index] = kind
 	if _bus.has(track_index):
-		AudioServer.add_bus_effect(_bus[track_index], FXCatalogue.make(kind))
+		AudioServer.add_bus_effect(_bus[track_index], _make_effect(kind))
 		_apply_fx(track_index, fx_index)
 		_build_sends(track_index)
 		if track_index in _cues:
@@ -305,15 +342,46 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 	return fx_index
 
 
-## Godot's own effects, by their catalogue kind.
+## Godot's own effects, by their catalogue kind, then every plugin installed on the host, as
+## "plugin:<format>:<id>" with the name the wire gives it ("VST3: Mantra", "CLAPi: Surge XT").
 func fx_choices() -> Array:
 	var out: Array = []
 	for k in FXCatalogue.kinds():
 		out.append([String(k), FXCatalogue.kinds()[k]["name"]])
+	if HostedPlugins.available():
+		for p in PluginCatalogue.shared().plugins():
+			out.append([plugin_choice(p), "%s%s: %s" % [p["format"], "i" if p["instrument"] else "", p["name"]]])
 	return out
 
 
+static func plugin_choice(info: Dictionary) -> String:
+	return "plugin:%s:%s" % [info["format"], info["id"]]
+
+
+## The effect a slot of `kind` puts on its bus. An instrument's slot holds a stand-in that
+## changes nothing, so every slot is still at 1 + its index: the instrument itself plays in
+## the track's lane, before the bus.
+func _make_effect(kind: StringName) -> AudioEffect:
+	var k := String(kind)
+	if k.begins_with(HOSTED):
+		var e = hosted.effect(k.substr(HOSTED.length()))
+		return e if e != null else AudioEffectAmplify.new()
+	return FXCatalogue.make(kind)
+
+
 func _new_fx_row(plugin: String) -> Dictionary:
+	if plugin.begins_with("plugin:"):
+		var rest := plugin.substr(7)
+		var colon := rest.find(":")
+		var info := PluginCatalogue.shared().find(rest.left(colon), rest.substr(colon + 1)) \
+				if colon > 0 and HostedPlugins.available() else {}
+		if info.is_empty():
+			return {}
+		var key := hosted.host(info)
+		if key == "":
+			push_warning("%s would not load: %s" % [info["name"], hosted.last_error])
+			return {}
+		return hosted.row(key)
 	var kind := StringName(plugin)
 	if not FXCatalogue.kinds().has(kind):
 		return {}
@@ -341,11 +409,22 @@ func _restack(track_index: int) -> void:
 	for k in FXCatalogue.kinds():
 		by_name[FXCatalogue.kinds()[k]["name"]] = k
 	var kinds := {}
+	var keys := {}
 	for fx_index in state.track(track_index).plugins():
-		var name: String = state.fx(track_index, fx_index).name
-		if by_name.has(name):
-			kinds[fx_index] = by_name[name]
+		var f := state.fx(track_index, fx_index)
+		if f.host_key != "" and hosted.has(f.host_key):
+			# A copy of a slot names the same plugin as the slot it was copied from: it gets one of
+			# its own, set the same.
+			if _key_in_use(f.host_key, track_index, fx_index):
+				var copy := hosted.clone(f.host_key)
+				if copy == "":
+					continue
+				f.host_key = copy
+			kinds[fx_index] = StringName(HOSTED + f.host_key)
+		elif by_name.has(f.name):
+			kinds[fx_index] = by_name[f.name]
 	_kinds[track_index] = kinds
+	_follow_instrument(track_index)
 	if not _bus.has(track_index):
 		return
 	var b: int = _bus[track_index]
@@ -355,12 +434,48 @@ func _restack(track_index: int) -> void:
 	var order: Array = kinds.keys()
 	order.sort()
 	for fx_index in order:
-		AudioServer.add_bus_effect(b, FXCatalogue.make(kinds[fx_index]))
+		AudioServer.add_bus_effect(b, _make_effect(kinds[fx_index]))
 	_build_sends(track_index)
 	for fx_index in order:
 		_apply_fx(track_index, fx_index)
 	if track_index in _cues:
 		_build_cues()
+
+
+## Whether a slot before (track, fx) -- this track's earlier slots, or any other track's --
+## already holds plugin `key`.
+func _key_in_use(key: String, track_index: int, fx_index: int) -> bool:
+	for t in state.track_indices():
+		for i in state.track(t).plugins():
+			if t == track_index and i >= fx_index:
+				continue
+			if state.fx(t, i).host_key == key:
+				return true
+	return false
+
+
+## The plugin a slot holds, or null.
+func hosted_plugin(track_index: int, fx_index: int) -> Object:
+	var kind := String(fx_kind(track_index, fx_index))
+	return hosted.plugin(kind.substr(HOSTED.length())) if kind.begins_with(HOSTED) else null
+
+
+## The instrument plugin a track plays its notes through: the first instrument in its chain, or
+## null for the built-in one.
+func track_instrument(track_index: int) -> Object:
+	if not state.tracks.has(track_index):
+		return null
+	for fx_index in state.track(track_index).plugins():
+		var p = hosted_plugin(track_index, fx_index)
+		if p != null and p.is_instrument() and state.fx(track_index, fx_index).enabled:
+			return p
+	return null
+
+
+## The track's lane plays through its instrument plugin, if it has one now.
+func _follow_instrument(track_index: int) -> void:
+	if lanes != null:
+		lanes.follow_instrument(track_index)
 
 
 ## Which track's bus each track sends into: its folder's, or the master's.
@@ -406,7 +521,7 @@ func _build_buses() -> void:
 		AudioServer.add_bus_effect(b, AudioEffectPanner.new())
 		var kinds: Dictionary = _kinds.get(index, {})
 		for fx_index in kinds.size():
-			AudioServer.add_bus_effect(b, FXCatalogue.make(kinds[fx_index]))
+			AudioServer.add_bus_effect(b, _make_effect(kinds[fx_index]))
 	for index in _bus:
 		var parent := parent_of(index)
 		AudioServer.set_bus_send(_bus[index],
@@ -647,10 +762,24 @@ func _apply_fx(track_index: int, fx_index: int) -> void:
 	var kind: StringName = _kinds[track_index][fx_index]
 	var f := state.fx(track_index, fx_index)
 	var slot := 1 + fx_index
+	if slot >= AudioServer.get_bus_effect_count(_bus[track_index]):
+		return
 	var effect := AudioServer.get_bus_effect(_bus[track_index], slot)
-	var params := FXCatalogue.params(kind)
-	for pi in params.size():
-		params[pi].set_on(effect, float(f.params.get(pi, 0.5)))
+	var p = hosted_plugin(track_index, fx_index)
+	if p != null:
+		# Only what moved: a plugin's own window moving one knob is not two hundred changes.
+		for pi in f.params:
+			var v := float(f.params[pi])
+			if absf(p.get_param(pi) - v) > 0.000001:
+				p.set_param(pi, v)
+		if p.is_instrument():
+			_follow_instrument(track_index)
+	elif String(kind).begins_with(HOSTED):
+		pass
+	else:
+		var params := FXCatalogue.params(kind)
+		for pi in params.size():
+			params[pi].set_on(effect, float(f.params.get(pi, 0.5)))
 	AudioServer.set_bus_effect_enabled(_bus[track_index], slot, f.enabled)
 	var cue := AudioServer.get_bus_index(cue_bus(track_index))
 	if cue >= 0 and slot - 1 < AudioServer.get_bus_effect_count(cue):
@@ -666,12 +795,22 @@ func _apply_fx(track_index: int, fx_index: int) -> void:
 func read_fx_param_text(track_index: int, fx_index: int, param: int) -> void:
 	if not _kinds.has(track_index) or not _kinds[track_index].has(fx_index):
 		return
-	var params := FXCatalogue.params(_kinds[track_index][fx_index])
-	if param < 0 or param >= params.size():
-		return
 	var v := float(state.fx(track_index, fx_index).params.get(param, 0.5))
+	var text := ""
+	var p = hosted_plugin(track_index, fx_index)
+	if p != null:
+		if param < 0 or param >= p.param_count():
+			return
+		text = p.param_text(param, v)
+	elif String(_kinds[track_index][fx_index]).begins_with(HOSTED):
+		return
+	else:
+		var params := FXCatalogue.params(_kinds[track_index][fx_index])
+		if param < 0 or param >= params.size():
+			return
+		text = params[param].text(v)
 	var address := "/track/%d/fx/%d/fxparam/%d/value/str" % [track_index, fx_index, param]
-	var args := [params[param].text(v), v]
+	var args := [text, v]
 	MixWire.apply(state, address, args)
 	record_for_replication(address, args)
 
@@ -1182,6 +1321,7 @@ func looped_stream(source: String, from: float, to: float) -> AudioStreamWAV:
 ## the same time. Without a sound card to mix (the Dummy driver of a headless run) the frame
 ## moves it, as it did.
 func _drive_meters(delta: float) -> void:
+	_drive_plugins()
 	if lanes != null:
 		lanes.drive(delta)
 		state.position_string = state.bar_beat(state.position_seconds)
@@ -1208,6 +1348,26 @@ func _drive_meters(delta: float) -> void:
 	_sync_players()
 	_sync_click()
 	_drive_levels()
+
+
+## The plugins' own work on the main thread, and any knob a plugin's window moved, to the
+## session: as a value, not an edit, as Reaper reports one.
+func _drive_plugins() -> void:
+	HostedPlugins.pump()
+	for t in _kinds:
+		for fx_index in _kinds[t]:
+			var p = hosted_plugin(t, fx_index)
+			if p == null:
+				continue
+			var f := state.fx(t, fx_index)
+			for pi in p.take_changed():
+				if not f.param_list.is_empty() and not f.param_list.has(pi):
+					continue
+				var v: float = p.get_param(pi)
+				var at := "/track/%d/fx/%d/fxparam/%d/value" % [t, fx_index, pi]
+				record_for_replication(at, [v])
+				MixWire.apply(state, at, [v])
+				f.param_text.erase(pi)
 
 
 ## The meters, and the playhead, to the room.

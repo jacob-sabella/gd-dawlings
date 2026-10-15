@@ -165,6 +165,8 @@ func _ready() -> void:
 		session_panel.bring_in_files.call_deferred(args["bring_in"])
 
 	_apply_cli_placement(args["place"])
+	for wanted in args["plugins"]:
+		_apply_cli_plugin(wanted)
 	for wanted in args["tablets"]:
 		_apply_cli_tablet(wanted)
 	_apply_cli_focus(args["focus"])
@@ -226,7 +228,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
-		"ghost": {}, "tablets": [], "welcome": false,
+		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
 	}
 	var i := 0
 	while i < argv.size():
@@ -244,6 +246,13 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				i += 1
 				if i < argv.size():
 					out["focus"] = argv[i]
+			"--add-plugin":
+				# `--add-plugin 2:NAMix` -- an installed plugin put at the end of track 2's chain,
+				# in the built-in engine, for photographing it (with --tablet) without a hand.
+				i += 1
+				if i < argv.size() and argv[i].find(":") > 0:
+					var colon := argv[i].find(":")
+					out["plugins"].append([int(argv[i].left(colon)), argv[i].substr(colon + 1)])
 			"--tablet":
 				# `--tablet 2:1` -- this plugin, torn off onto a stand in front of the rack, as
 				# if it had been pulled. For photographing the tablet without a hand to pull it.
@@ -450,6 +459,20 @@ func _apply_cli_placement(places: Dictionary) -> void:
 			push_warning("bootstrap: --place %s=%s is not one of %s" % [id, wanted, Presentation.MODE_NAMES.values()])
 			continue
 		studio.mount.set_mode(id, mode)
+
+
+## `--add-plugin T:NAME`: the installed plugin called NAME onto track T, where the engine hosts them.
+func _apply_cli_plugin(wanted: Array) -> void:
+	if not DAW.backend is GodotBackend or not HostedPlugins.available():
+		push_warning("bootstrap: --add-plugin needs the built-in engine, hosting plugins")
+		return
+	var catalogue := PluginCatalogue.shared()
+	catalogue.wait()
+	for p in catalogue.plugins():
+		if p["name"] == wanted[1]:
+			DAW.add_fx(wanted[0], GodotBackend.plugin_choice(p))
+			return
+	push_warning("bootstrap: --add-plugin: no plugin called %s is installed" % wanted[1])
 
 
 ## `--tablet T:F:ui`, as the page it asks for.

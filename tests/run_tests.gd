@@ -18,6 +18,8 @@ var _checks := 0
 
 func _ready() -> void:
 	OfflineBackend.autosave_every = 0.0
+	# Only the plugins a check puts there: none of this machine's.
+	PluginCatalogue.use_only([])
 	# DAWLINGS_TESTS=_test_a,_test_b runs only those, for working on one corner of the game
 	# without the whole suite's minutes. The full run is still the one that counts.
 	var only := OS.get_environment("DAWLINGS_TESTS")
@@ -80,6 +82,9 @@ func _ready() -> void:
 	_test_an_unfilled_rack_bay_is_blanked_off()
 	_test_the_welcome_card_opens_on_f1_and_is_seen_once()
 	_test_plugins_are_added_and_removed_from_the_rack()
+	_test_the_built_in_engine_hosts_a_plugin_effect()
+	_test_a_hosted_plugin_comes_back_with_its_project()
+	_test_an_instrument_plugin_plays_a_tracks_notes()
 	_test_one_jack_takes_one_plug()
 	_test_the_bay_reads_left_to_right()
 	_test_dragging_across_the_bay_patches_and_unpatches()
@@ -20896,3 +20901,143 @@ func _test_a_reopened_take_is_drawn() -> void:
 	check("the stand-in saves a project (%s)" % [said], FileAccess.file_exists(plain))
 	DirAccess.remove_absolute(plain)
 	_offline()
+
+
+# --- third-party plugins in the built-in engine -------------------------------------------------
+
+## The test CLAP dawkit builds for its own checks (a gain and a sine), as the catalogue lists it,
+## or [] where plugins are not hosted.
+func _test_plugins() -> Array:
+	var path := ProjectSettings.globalize_path("res://vendor/dawkit/native/build/dawkit_test.clap")
+	if not HostedPlugins.available() or not FileAccess.file_exists(path):
+		return []
+	return ClassDB.class_call_static(&"DawKitPlugin", &"scan_file", "CLAP", path)
+
+
+func _hosting_engine() -> GodotBackend:
+	var found := _test_plugins()
+	if found.is_empty():
+		check("plugins are hosted here, with dawkit's test plugin built", false)
+		return null
+	PluginCatalogue.use_only(found)
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	return backend
+
+
+func _test_the_built_in_engine_hosts_a_plugin_effect() -> void:
+	var backend := _hosting_engine()
+	if backend == null:
+		return
+	var s := DAW.state
+	var gain := "plugin:CLAP:dawkit.test.gain"
+	check("the installed plugins are offered beside Godot's effects",
+			s.fx_choices.any(func(c): return c[0] == gain and c[1] == "CLAP: Test Gain")
+			and s.fx_choices.any(func(c): return c[0] == "plugin:CLAP:dawkit.test.sine" and c[1] == "CLAPi: Test Sine"))
+	var bus: int = backend._bus[6]
+	var before := s.track(6).plugins().size()
+	DAW.add_fx(6, gain)
+	var at: int = s.track(6).plugins()[-1]
+	var f := s.fx(6, at)
+	var effect := AudioServer.get_bus_effect(bus, 1 + at)
+	check("add_fx loads the plugin into the chain and puts it on the bus (%s, %s)" % [f.name, effect.get_class()],
+			s.track(6).plugins().size() == before + 1 and f.name == "Test Gain" and f.type == "CLAP"
+			and f.host_key != "" and effect.get_class() == "DawKitPluginEffect")
+	check("its parameters are the plugin's own", f.param_names.get(0, "") == "Gain" and f.param_list == [0]
+			and is_equal_approx(f.params.get(0, -1.0), 0.5))
+	DAW.set_fx_param(6, at, 0, 0.25)
+	var p = backend.hosted_plugin(6, at)
+	check("a knob turned on the desk turns the plugin's", p != null and is_equal_approx(p.get_param(0), 0.25))
+	backend.read_fx_param_text(6, at, 0)
+	check("and the plugin says what it reads, in its words (%s)" % f.param_text.get(0, ""), f.param_text.get(0, "") == "-6.0 dB")
+	check("a plugin with no window of its own offers none, nor does Godot's EQ",
+			not backend.has_plugin_window(6, at) and not backend.has_plugin_window(6, 0))
+	var key := f.host_key
+	DAW.move_fx(6, at, 6, at + 1, true)
+	var copy := s.fx(6, at + 1)
+	check("a copy of it is a plugin of its own, set the same (%s, %s)" % [key, copy.host_key],
+			copy.host_key != "" and copy.host_key != key and backend.hosted_plugin(6, at + 1) != p
+			and is_equal_approx(backend.hosted_plugin(6, at + 1).get_param(0), 0.25))
+	DAW.undo()
+	DAW.remove_fx(6, at)
+	check("removed, it is off the bus", AudioServer.get_bus_effect_count(bus) == 1 + before)
+	DAW.undo()
+	check("and undone, the same plugin is back, as it was",
+			s.fx(6, at).host_key == key and backend.hosted_plugin(6, at) == p
+			and AudioServer.get_bus_effect(bus, 1 + at).get_plugin() == p)
+	# A guest is told what is in the slot, and nothing of the host's handle on it.
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	var g := guest.fx(6, at)
+	check("a guest sees the plugin by name, with its parameters (%s/%s)" % [g.type, g.name],
+			g.name == "Test Gain" and g.type == "CLAP" and g.param_list == [0] and g.host_key == "")
+	backend.close()
+	PluginCatalogue.use_only([])
+
+
+func _test_a_hosted_plugin_comes_back_with_its_project() -> void:
+	var backend := _hosting_engine()
+	if backend == null:
+		return
+	var s := DAW.state
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.gain")
+	var at: int = s.track(6).plugins()[-1]
+	DAW.set_fx_param(6, at, 0, 0.8)
+	# The plugin takes a value in its next block.
+	backend.hosted_plugin(6, at).process(PackedVector2Array([Vector2.ZERO]))
+	var project := ProjectBridge.capture(backend)
+	var track: DawKitTrack = project.tracks[5]
+	var e: DawKitEffect = track.effects[-1]
+	check("a saved project keeps the plugin by format and id, with its state (%d bytes)" % e.state.size(),
+			e.plugin_format == "CLAP" and e.plugin_id == "dawkit.test.gain" and e.kind == "" and not e.state.is_empty())
+	var path := OS.get_temp_dir().path_join("dawlings_plugin_%d.dawproject" % OS.get_process_id())
+	DawKitDawproject.save(project, path, OS.get_temp_dir())
+	var opened: DawKitProject = DawKitDawproject.open(path, OS.get_temp_dir().path_join("dawlings_plugin_media"))["project"]
+	DirAccess.remove_absolute(path)
+	var problems := ProjectBridge.load(opened, backend)
+	var f := s.fx(6, at)
+	var p = backend.hosted_plugin(6, at)
+	check("opened again, the plugin is loaded into its slot, set as it was (%s)" % [problems],
+			problems.is_empty() and p != null and f.name == "Test Gain" and is_equal_approx(p.get_param(0), 0.8)
+			and is_equal_approx(f.params.get(0, 0.0), 0.8))
+	check("and is on the track's bus", AudioServer.get_bus_effect(backend._bus[6], 1 + at).get_class() == "DawKitPluginEffect")
+	# On a machine without it, it is kept as it came, and saved again unchanged.
+	PluginCatalogue.use_only([])
+	ProjectBridge.load(opened, backend)
+	var kept: DawKitEffect = ProjectBridge.capture(backend).tracks[5].effects[-1]
+	check("a plugin this machine lacks is kept, state and all", s.fx(6, at).name == "Test Gain"
+			and backend.hosted_plugin(6, at) == null and kept.plugin_id == "dawkit.test.gain" and kept.state == e.state)
+	backend.close()
+
+
+func _test_an_instrument_plugin_plays_a_tracks_notes() -> void:
+	var backend := _hosting_engine()
+	if backend == null:
+		return
+	var s := DAW.state
+	check("a track has no instrument plugin to begin with", DAW.track_instrument(6) == null)
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.sine", s.track(6).plugins()[0])
+	var p = DAW.track_instrument(6)
+	check("an instrument put in its chain is the track's instrument", p != null and p.is_instrument()
+			and s.fx(6, 0).type == "CLAPi")
+	check("and holds its slot on the bus with nothing that changes the sound",
+			AudioServer.get_bus_effect(backend._bus[6], 1).get_class() == "AudioEffectAmplify")
+	var item := MixState.ItemState.new()
+	item.start = 2.0
+	item.length = 4.0
+	item.notes = PackedFloat32Array([0.5, 1.0, 60, 100, 0, 3.5, 5.0, 64, 90, 0])
+	s.set_track_items(6, [item])
+	var lanes := LaneEngine.new()
+	lanes.backend = backend
+	var notes := lanes.notes_for(6)
+	check("the track's notes go to it in song seconds, cut at the item's end (%s)" % [notes],
+			notes == PackedFloat64Array([2.5, 3.0, 60, 100, 0, 5.5, 6.0, 64, 90, 0]))
+	check("and the item is not also rendered through the built-in instrument",
+			lanes.clips_for(6).is_empty())
+	lanes.free()
+	DAW.set_fx_enabled(6, 0, false)
+	check("bypassed, the track goes back to the built-in instrument", DAW.track_instrument(6) == null)
+	backend.close()
+	PluginCatalogue.use_only([])

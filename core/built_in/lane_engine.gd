@@ -28,6 +28,8 @@ var _lanes := {}
 var _click: Array = []
 ## What each lane was last given, to give it again only when it changed.
 var _given := {}
+## Track index -> [the instrument plugin its lane plays through, the notes it was last given].
+var _played := {}
 ## Sound keys -> the ids lanes know them by.
 var _ids := {}
 var _next_id := 1
@@ -82,6 +84,7 @@ func clear() -> void:
 	_lanes.clear()
 	_click = []
 	_given.clear()
+	_played.clear()
 	if transport != null:
 		transport.stop()
 
@@ -90,6 +93,12 @@ func clear() -> void:
 ## moved on by it, and each lane given its clips if they changed.
 func drive(delta: float) -> void:
 	var s := backend.state
+	var bpm := s.tempo
+	if not s.tempo_points.is_empty():
+		var map := s.tempo_map()
+		bpm = map.bpm_at(map.beat_at(s.position_seconds))
+	# For plugins that keep time with the song (a synced delay, an arpeggiator).
+	transport.set_tempo(bpm, s.beats_per_bar, s.beat_unit)
 	transport.set_loop(s.loop_start, s.loop_end, s.looping and s.has_loop_range())
 	# Nothing but the click before a count-in's end, as in Reaper; the song too with pre-roll.
 	transport.set_hold(s.count_in_to if s.count_in_to >= 0.0 and s.playing and not s.pre_roll else -1.0)
@@ -115,6 +124,7 @@ func drive(delta: float) -> void:
 		for p in backend._players.get(index, []):
 			_keep_playing(p, _lanes[index])
 		_give(_lanes[index], index, clips_for(index))
+		_play_through(_lanes[index], index)
 	_keep_playing(_click[1], _click[0])
 	_give(_click[0], 0, click_clips())
 
@@ -145,6 +155,57 @@ func _give(lane: Object, key: int, clips: Array) -> void:
 		return
 	_given[key] = plain
 	lane.set_clips(clips)
+
+
+## A track with an instrument plugin plays its notes through it, in its lane: the plugin and the
+## notes given again when either changed.
+func _play_through(lane: Object, index: int) -> void:
+	var plugin = backend.track_instrument(index)
+	var had: Array = _played.get(index, [null, null])
+	if plugin != had[0]:
+		lane.set_instrument(plugin)
+		had = [plugin, null]
+	if plugin != null:
+		var notes := notes_for(index)
+		if notes != had[1]:
+			lane.set_notes(notes)
+			had[1] = notes
+	_played[index] = had
+
+
+## Called when a track's chain changed: its instrument is looked at again on the next frame.
+func follow_instrument(index: int) -> void:
+	_played.erase(index)
+	if _lanes.has(index) and backend.track_instrument(index) == null:
+		_lanes[index].set_instrument(null)
+
+
+## Every note of a track's MIDI items that sounds, in song seconds: flat [start, end, key,
+## velocity, channel] repeating, as DawKitLane.set_notes takes them. An item's notes are cut to
+## where it is not covered by a newer item, as its sound would be.
+func notes_for(index: int) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	var t: MixState.TrackState = backend.state.tracks.get(index)
+	if t == null:
+		return out
+	var items: Array = t.items
+	for n in items.size():
+		var it := items[n] as MixState.ItemState
+		if it.muted or it.length <= 0.0 or it.notes.is_empty():
+			continue
+		var later: Array = []
+		for m in range(n + 1, items.size()):
+			var o := items[m] as MixState.ItemState
+			if not o.muted:
+				later.append([o.start, o.end()])
+		for seg in visible(it.start, it.end(), later):
+			var notes := it.notes
+			for i in range(0, notes.size() - 4, 5):
+				var on := it.start + notes[i]
+				if on < seg[0] or on >= seg[1]:
+					continue
+				out.append_array([on, minf(it.start + notes[i + 1], seg[1]), notes[i + 2], notes[i + 3], notes[i + 4]])
+	return out
 
 
 func _id_of(key: String) -> int:
@@ -211,6 +272,9 @@ func _item_clips(t: MixState.TrackState, it: MixState.ItemState, a: float, b: fl
 			c["loop_end"] = it.loop_end
 		return [c]
 	if not it.notes.is_empty():
+		if backend.track_instrument(t.index) != null:
+			# Played through the track's instrument plugin, note by note (`notes_for`).
+			return []
 		var midi := backend.midi_stream(it)
 		if midi == null:
 			return []
