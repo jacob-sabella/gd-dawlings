@@ -3763,4 +3763,29 @@ Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
   each hit, the plinth light brightens, the lattice's frame shifts to violet, and a violet
   blacklight over the deck lifts bioluminescent plankton. Shots: shots/dome_deep_0.png (quiet),
   shots/dome_deep_0.9.png (loud).
-- [ ] studio
+- [x] studio (all three): sconces and their washes, pendant bulbs, downlight lenses and the
+  on-air lamp swell; the lattice's LED strip drifts violet under a blacklight and gold/violet motes
+  lift off the floor. Downlight beams are left to `blackout`. Shots: shots/studio_room_0.png
+  (quiet), shots/studio_room_0.9.png (loud).
+
+### Summary: every venue is audio-reactive
+
+All fourteen venues respond to the master level (`Venue.hear`, attack/release smoothing plus a
+hit flash; exactly at rest when silent; off with `reactive = false` or `--no-motion`). Earlier,
+already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden. Done in this loop,
+each with a blacklight (violet spot, fluorescent surface) and rising or falling sparks via
+`Venue.make_sparks` / `drive_sparks`, and a test per arrangement:
+
+| venue | gets | shots |
+|---|---|---|
+| rooftop | festoon and string spots swell, city windows breathe, skylight glows, violet-blacklit chalk, gold/violet sparks | shots/rooftop_floor_0.png, shots/rooftop_floor_0.9.png |
+| loft | pendants, festoon, city windows; lattice paint fluoresces lime, lime/violet sparks | shots/loft_night_0.png, shots/loft_night_0.9.png |
+| cabin | stove glass and light, candles, lanterns; rug border fluoresces, embers and rug motes | shots/cabin_night_0.png, shots/cabin_night_0.9.png |
+| station | cove, deck lip (to violet), downlights, planet glow, dust; blacklit motes | shots/station_night_0.png, shots/station_night_0.9.png |
+| dome | shafts, floods, jellies, plinth light, frame (to violet); plankton | shots/dome_deep_0.png, shots/dome_deep_0.9.png |
+| studio | sconces, pendants, lenses, on-air lamp, LED strip (to violet); gold/violet motes | shots/studio_room_0.png, shots/studio_room_0.9.png |
+
+`--feed-level F` fixes the level for screenshots. Known: the test run prints a harmless
+`_remember_tablets` SCRIPT ERROR at teardown (a deferred `tracks_renumbered` call on a freed
+venue), unrelated to these changes.
+

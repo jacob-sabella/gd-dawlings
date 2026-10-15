@@ -70,6 +70,26 @@ const GLASS_DOOR_WIDTH := 0.95
 const GLASS_DOOR_JAMB := 0.035
 
 
+## What follows the mix: the lattice's LED strip (drifting violet), the sconces and their washes,
+## the pendants' bulbs, the downlights' lenses and the on-air lamp, and a blacklight over the
+## lattice with gold and violet motes lifting off the floor.
+const UV_REST := 0.0
+var _led_mat: StandardMaterial3D
+var _led_base := Color.WHITE
+var _sconce_mat: StandardMaterial3D
+var _sconce_base := Color.WHITE
+var _washes: Array[SpotLight3D] = []
+var _wash_base: Array[float] = []
+var _bulb_mat: StandardMaterial3D
+var _bulb_base := Color.WHITE
+var _lens_mat: StandardMaterial3D
+var _lens_base := Color.WHITE
+var _air_mat: StandardMaterial3D
+var _air_base := Color.WHITE
+var _uv_light: SpotLight3D
+var _motes: GPUParticles3D
+
+
 func venue_id() -> StringName:
 	return &"studio"
 
@@ -77,6 +97,29 @@ func venue_id() -> StringName:
 ## The ceiling's own downlights, dark or back at what they were built with (the meta `_dress_room`
 ## stamps on each as it sets `light_energy`) -- the studio's half of `power_flicker`'s strike,
 ## on top of the practicals every venue dims (scenes/studio.gd's `_lights_out`).
+## The sconces, pendants, lenses and on-air lamp swell with the mix and flash on each hit; the
+## lattice's LED strip drifts toward violet under a blacklight and motes lift off the floor. The
+## downlight beams are left alone (blackout owns them). At rest all as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	var up := 1.0 + 0.5 * heard + 0.9 * heard_hit
+	if _led_mat != null:
+		_led_mat.albedo_color = (_led_base * up).lerp(Color(0.8, 0.4, 2.0), clampf(heard * 0.6 + heard_hit * 0.4, 0.0, 0.8))
+	if _sconce_mat != null:
+		_sconce_mat.albedo_color = _sconce_base * (1.0 + 0.5 * heard + 0.8 * heard_hit)
+	for i in _washes.size():
+		_washes[i].light_energy = _wash_base[i] * (1.0 + 0.3 * heard + 0.6 * heard_hit)
+	if _bulb_mat != null:
+		_bulb_mat.albedo_color = _bulb_base * up
+	if _lens_mat != null:
+		_lens_mat.albedo_color = _lens_base * (1.0 + 0.3 * heard + 0.5 * heard_hit)
+	if _air_mat != null:
+		_air_mat.albedo_color = _air_base * (1.0 + 0.4 * heard + 0.6 * heard_hit)
+	if _uv_light != null:
+		_uv_light.light_energy = 3.0 * heard + 2.5 * heard_hit
+	drive_sparks(_motes)
+
+
 func blackout(on: bool) -> void:
 	for spot in find_children("DownlightBeam", "SpotLight3D", true, false):
 		spot.light_energy = 0.0 if on else float(spot.get_meta("authored_energy", spot.light_energy))
@@ -287,10 +330,12 @@ func _dress_room() -> void:
 		disc.radial_segments = 24
 		lens.mesh = disc
 		lens.position = Vector3(0, -0.006, 0)
-		var glow := StandardMaterial3D.new()
-		glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		glow.albedo_color = Color(1.0, 0.93, 0.82) * 3.0
-		lens.material_override = glow
+		if _lens_mat == null:
+			_lens_mat = StandardMaterial3D.new()
+			_lens_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_lens_mat.albedo_color = Color(1.0, 0.93, 0.82) * 3.0
+			_lens_base = _lens_mat.albedo_color
+		lens.material_override = _lens_mat
 		lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		fitting.add_child(lens)
 
@@ -476,8 +521,11 @@ func _hang_pendant(at: Vector3) -> void:
 	shade.position = cord.position + Vector3(0, -0.82, 0)
 	shade.material_override = Materials.brushed_metal()
 	add_child(shade)
+	if _bulb_mat == null:
+		_bulb_mat = ZoneKit.glow(Color(1.0, 0.78, 0.5), 2.2)
+		_bulb_base = _bulb_mat.albedo_color
 	var bulb := ZoneKit.block(self, Vector3(0.07, 0.03, 0.07), shade.position + Vector3(0, -0.07, 0),
-			ZoneKit.glow(Color(1.0, 0.78, 0.5), 2.2), "Bulb")
+			_bulb_mat, "Bulb")
 	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ZoneKit.spot_down(self, shade.position + Vector3(0, -0.09, 0), Color(1.0, 0.8, 0.6), 2.0,
 			60.0, 4.2)
@@ -687,8 +735,11 @@ func _build_glass_wall(wall_mat: Material) -> void:
 		sign_node.rotation.y = PI if side < 0.0 else 0.0
 		add_child(sign_node)
 		ZoneKit.block(sign_node, Vector3(0.46, 0.15, 0.05), Vector3(0, 0, -0.005), Materials.chassis(), "OnAirBox")
+		if _air_mat == null:
+			_air_mat = ZoneKit.glow(Color(1.0, 0.12, 0.08), 1.6)
+			_air_base = _air_mat.albedo_color
 		var lens := ZoneKit.block(sign_node, Vector3(0.40, 0.10, 0.004), Vector3(0, 0, 0.022),
-				ZoneKit.glow(Color(1.0, 0.12, 0.08), 1.6), "OnAirLens")
+				_air_mat, "OnAirLens")
 		lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var words := Label3D.new()
 		words.name = "OnAirWords"
@@ -832,8 +883,11 @@ func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material, energy 
 	ZoneKit.block(sconce, Vector3(0.12, 0.24, 0.07), Vector3(0, 0, 0.035), brass, "SconceBody")
 	# Light leaks from the top and bottom edges only.
 	for y in [0.121, -0.121]:
+		if _sconce_mat == null:
+			_sconce_mat = ZoneKit.glow(Color(1.0, 0.75, 0.5), 2.0)
+			_sconce_base = _sconce_mat.albedo_color
 		var slit := ZoneKit.block(sconce, Vector3(0.1, 0.002, 0.05), Vector3(0, y, 0.035),
-				ZoneKit.glow(Color(1.0, 0.75, 0.5), 2.0), "SconceGlow")
+				_sconce_mat, "SconceGlow")
 		slit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for dir in [1.0, -1.0]:
 		var wash := SpotLight3D.new()
@@ -849,6 +903,8 @@ func _hang_sconce(i: int, at: Vector3, facing: Vector3, brass: Material, energy 
 		wash.light_specular = 0.05
 		wash.shadow_enabled = false
 		sconce.add_child(wash)
+		_washes.append(wash)
+		_wash_base.append(energy)
 
 
 ## Every activity's place, each lit by its own fitting: a carpeted riser for the kit, a glass
@@ -895,8 +951,20 @@ func _dress_zones() -> void:
 	# border, and a brass cross at its centre. Nothing to walk into, and in a dark room the one
 	# line of light on the floor says "something goes here" from anywhere in it.
 	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3.ZERO, 0.03, brass)
-	ZoneKit.floor_frame(matrix, Vector2(3.0, 3.0), Vector3(0, 0.001, 0), 0.012,
-			ZoneKit.glow(Color(0.55, 0.72, 1.0), 0.9))
+	_led_mat = ZoneKit.glow(Color(0.55, 0.72, 1.0), 0.9)
+	_led_base = _led_mat.albedo_color
+	ZoneKit.floor_frame(matrix, Vector2(3.0, 3.0), Vector3(0, 0.001, 0), 0.012, _led_mat)
+	_uv_light = ZoneKit.spot_down(matrix, Vector3(0.4, LIVE_ROOM_HEIGHT - 0.05, 0), Color(0.55, 0.25, 1.0), 0.0,
+			40.0, LIVE_ROOM_HEIGHT * 1.7)
+	_uv_light.light_specular = 0.0
+	var lc := lattice.get_center()
+	var gold := Gradient.new()
+	gold.set_color(0, Color(1.0, 0.8, 0.45))
+	gold.set_color(1, Color(0.7, 0.4, 1.0))
+	gold.add_point(0.6, Color(0.75, 0.55, 1.0))
+	gold.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CONSTANT
+	_motes = make_sparks("Motes", Vector3(lc.x, 0.15, lc.z), Vector3(1.4, 0.05, 1.4),
+			AABB(Vector3(lc.x - 2.5, 0, lc.z - 2.5), Vector3(5, LIVE_ROOM_HEIGHT, 5)), gold, 90, true)
 	ZoneKit.block(matrix, Vector3(0.4, 0.004, 0.03), Vector3(0, 0.003, 0), brass, "Cross")
 	ZoneKit.block(matrix, Vector3(0.03, 0.004, 0.4), Vector3(0, 0.004, 0), brass, "Cross")
 	ZoneKit.spot_down(matrix, Vector3(0, LIVE_ROOM_HEIGHT - 0.05, 0), Color(0.72, 0.82, 1.0), 3.2,

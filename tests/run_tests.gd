@@ -7232,6 +7232,29 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		for i in 12:
 			dome.pulse(0.9)
 		check("%s: reactive off holds the room still" % dtag, dome.heard == 0.0 and not dome._plankton.emitting)
+	for variant in 3:
+		studio.set_venue(&"studio", false, variant)
+		var room := studio.venue as StudioVenue
+		var rtag := "studio %d" % variant
+		var led_rest := room._led_mat.albedo_color
+		var sconce_rest := room._sconce_mat.albedo_color
+		for i in 12:
+			room.pulse(0.9)
+		check("%s: a loud mix lifts what it has heard" % rtag, room.heard > 0.7)
+		check("%s: the sconces glow brighter and the LED strip shifts" % rtag,
+				room._sconce_mat.albedo_color.r > sconce_rest.r * 1.3 and room._led_mat.albedo_color != led_rest)
+		check("%s: the blacklight comes up and motes lift" % rtag,
+				room._uv_light.light_energy > 1.0 and room._motes.emitting)
+		for i in 120:
+			room.pulse(0.0)
+		check("%s: a silent mix settles back to rest" % rtag, room.heard == 0.0
+				and room._led_mat.albedo_color.is_equal_approx(led_rest)
+				and room._sconce_mat.albedo_color.is_equal_approx(sconce_rest)
+				and room._uv_light.light_energy == 0.0 and not room._motes.emitting)
+		room.reactive = false
+		for i in 12:
+			room.pulse(0.9)
+		check("%s: reactive off holds the room still" % rtag, room.heard == 0.0 and not room._motes.emitting)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 
