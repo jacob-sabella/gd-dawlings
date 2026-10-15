@@ -17,6 +17,11 @@
 //   * A knob hides the cursor while it is turned and warps it back afterwards: that would move the
 //     person's real pointer to wherever the tablet's last was. While sent events are arriving, a
 //     warp only moves the answer above, and the events after it, the way a real warp would.
+//   * Reaper counts itself switched away from whenever another program has the focus -- the game's
+//     window always has it -- and then neither gives its own menus the focus nor keeps open a menu
+//     without it: a dropdown closes the moment it opens. A sent press first tells Reaper its window
+//     has the focus, as a real click would, and while sent events are arriving the window Reaper
+//     asks the desktop for as the active one is that window.
 //
 // The moment a real pointer event arrives -- someone using Reaper on the desktop -- every answer is
 // the real one again. Nothing here does anything to a window that is not being sent events.
@@ -37,7 +42,7 @@ typedef union _GdkEvent GdkEvent;
 typedef void (*GdkEventFunc)(GdkEvent *event, void *data);
 typedef void (*GDestroyNotify)(void *data);
 
-enum { MOTION = 3, PRESS = 4, PRESS2 = 5, PRESS3 = 6, RELEASE = 7, ENTER = 10, LEAVE = 11, SCROLL = 31 };
+enum { MOTION = 3, PRESS = 4, PRESS2 = 5, PRESS3 = 6, RELEASE = 7, ENTER = 10, LEAVE = 11, FOCUS = 12, SCROLL = 31 };
 
 struct any { int type; GdkWindow *window; signed char send_event; };
 struct motion { int type; GdkWindow *window; signed char send_event; unsigned time; double x, y; double *axes;
@@ -46,10 +51,11 @@ struct button { int type; GdkWindow *window; signed char send_event; unsigned ti
 	unsigned state; unsigned button; GdkDevice *device; double x_root, y_root; };
 struct crossing { int type; GdkWindow *window; signed char send_event; GdkWindow *subwindow; unsigned time;
 	double x, y, x_root, y_root; int mode, detail, focus; unsigned state; };
+struct focus { int type; GdkWindow *window; signed char send_event; short in; };
 struct scroll { int type; GdkWindow *window; signed char send_event; unsigned time; double x, y;
 	unsigned state; int direction; GdkDevice *device; double x_root, y_root; };
 union _GdkEvent { int type; struct any any; struct motion motion; struct button button;
-	struct crossing crossing; struct scroll scroll; char pad[256]; };
+	struct crossing crossing; struct focus focus; struct scroll scroll; char pad[256]; };
 
 // Whether the pointer Reaper hears about is the sent one, where it is, and which buttons are down.
 static int sent;
@@ -59,10 +65,25 @@ static unsigned state;
 static double off_x, off_y;
 
 static GdkEventFunc handler;
+// The window the last sent press was in.
+static GdkWindow *pressed_in;
 
 static void *real(const char *name) { return dlsym(RTLD_NEXT, name); }
 
 static unsigned button_mask(unsigned b) { return b >= 1 && b <= 5 ? 1u << (7 + b) : 0; }
+
+// Reaper told that `w` has the focus, before the press in it is handled.
+static void focus_in(GdkWindow *w) {
+	pressed_in = w;
+	if (!handler) return;
+	GdkEvent f;
+	memset(&f, 0, sizeof f);
+	f.focus.type = FOCUS;
+	f.focus.window = w;
+	f.focus.send_event = 1;
+	f.focus.in = 1;
+	handler(&f, NULL);
+}
 
 // What a pointer event tells: whether the pointer is the sent one now, and where, and which buttons.
 static void note(GdkEvent *e) {
@@ -88,6 +109,7 @@ static void note(GdkEvent *e) {
 			at_x = (int)*rx; at_y = (int)*ry;
 			state = *st;
 			if (a->type == PRESS) state |= button_mask(e->button.button);
+			if (a->type == PRESS && a->window) focus_in(a->window);
 			if (a->type == RELEASE) state &= ~button_mask(e->button.button);
 		}
 	}
@@ -153,6 +175,15 @@ GdkWindow *gdk_window_get_pointer(GdkWindow *w, int *x, int *y, unsigned *mask) 
 	if (y) *y = at_y - oy;
 	if (mask) *mask = state;
 	return under;
+}
+
+GdkWindow *gdk_screen_get_active_window(GdkScreen *screen) {
+	GdkWindow *(*get)(GdkScreen *) = real("gdk_screen_get_active_window");
+	if (sent && pressed_in) {
+		void *(*ref)(void *) = real("g_object_ref");
+		if (ref) return ref(pressed_in);
+	}
+	return get(screen);
 }
 
 void gdk_device_warp(GdkDevice *dev, GdkScreen *screen, int x, int y) {

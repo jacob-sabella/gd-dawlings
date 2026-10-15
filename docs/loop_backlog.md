@@ -720,6 +720,16 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   itself. A JUCE window there depends on the WindowFromPoint redirect, and GPU-drawn windows on
   PrintWindow's full-content mode; Wine checked neither. Mantra under Wine drew nothing and made
   no sound (likely not activated in that prefix).
+- **Done 2026-10-14, plugin dropdowns on Linux:** a plugin's menus are drawn over its picture and
+  worked from the tablet, kept off screen. dawkit (d85de37) does it for plugins in the built-in
+  engine (Gojira's preset menu and submenu checked); `native/plugin_view.c` does the same for
+  windows read from Reaper (ReaEQ's Type dropdown checked, outside click closes it). On Hyprland a
+  rule, on for 4 s after each click, parks Wine's and Reaper's menus on `special:dawkit` unfocused;
+  `reaper_pointer.c` tells Reaper its window has the focus on a sent press (Reaper closes menus
+  otherwise). Other window managers leave those menus on the desktop. Probe:
+  `tools/probe/reaper_menu_live.tscn`. Still to do: a Wine plugin (Gojira) inside Reaper opens no
+  menu from a click (not diagnosed); a private Xvfb for plugin windows would make this work on
+  every desktop and stop Reaper's plugin window flashing on the real one; Windows menus.
 
 ## 1.0 for friends (2026-10-10)
 

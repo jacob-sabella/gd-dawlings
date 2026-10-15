@@ -93,7 +93,7 @@ static func helper() -> String:
 		return _helper
 	DirAccess.make_dir_recursive_absolute(built.get_base_dir())
 	var out: Array = []
-	if OS.execute("cc", ["-O2", "-o", built, source, "-lX11"], out, true) == 0:
+	if OS.execute("cc", ["-O2", "-o", built, source, "-lX11", "-lpthread"], out, true) == 0:
 		_helper = built
 	else:
 		push_warning("plugin windows: could not build the helper: %s" % str(out))
