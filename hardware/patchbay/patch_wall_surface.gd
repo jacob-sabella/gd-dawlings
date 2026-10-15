@@ -23,7 +23,7 @@ const RIBBON := 0.022
 const RIBBON_STEPS := 28
 
 const INK := Color(0.92, 0.94, 0.98)
-const DIM := Color(0.55, 0.58, 0.64)
+const DIM := Color(0.72, 0.75, 0.82)
 ## How wide the frame round the screen is.
 const FRAME := 0.10
 
@@ -212,7 +212,7 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 		_quad(Vector2(BOX_WIDTH, HEAD), Vector3(x + BOX_WIDTH * 0.5, y - HEAD * 0.5, 0.0), tint.darkened(0.15), 0.0)
 		var cut := " (%d-%d)" % [int(part["from"]) + 1, part["to"]] \
 				if ports.size() < (graph.nodes[node][key] as Array).size() else ""
-		var title := _text(PipeGraph.short_name(node, 24) + cut, Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 40)
+		var title := _text(PipeGraph.short_name(node, 24) + cut, Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 50)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for i in ports.size():
 			var port: String = ports[i]
@@ -239,7 +239,7 @@ func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dic
 			_jacks[port] = grab
 			_jack_at[port] = Vector3(side, py, 0.014)
 			var label := _text(PipeGraph.short_name(PipeGraph.label_of(port), 30), Vector3(x + BOX_WIDTH - 0.1 if outputs else x + 0.1, py, 0.003),
-					INK if used else DIM, 34)
+					INK if used else DIM, 46)
 			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if outputs else HORIZONTAL_ALIGNMENT_LEFT
 		y -= tall + GAP
 	_hidden[key] = total - _shown_ports(shown)

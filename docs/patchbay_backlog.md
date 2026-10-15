@@ -73,3 +73,11 @@ Busy returns: a row was capped at 7 jacks, so an eighth cable shared a bore. Now
 pitch closing from 28 mm to 22 mm past seven (13 tracks and the usual rigs are unchanged). Test: 11
 senders into one return get 11 jacks, no two plugs closer than a plug diameter. Beyond 12 sends
 into one track the last jack is still shared (open). Suite 10613, 0 failed.
+
+## Iteration 5: the wall's lettering
+
+Steered by the user: the wall (audio devices) is the patch bay that matters most; the routing bay was
+a bonus. Port labels on the wall went from font 34 to 46, node titles 40 to 50, and unused ports'
+colour from 0.55 to 0.72 grey, so the names read from the seat (shots/wall_close.png before,
+shots/wall_close2.png after). Next on the wall: highlight a jack's cables on hover, a filter by name,
+CABLE_LIMIT 150, the empty middle of the wall.
