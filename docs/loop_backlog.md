@@ -3759,4 +3759,8 @@ Already reactive: cave, chalk, stage, club, greenhouse, desert, grid, garden.
   violet as it gets loud, downlights and the planet's up-glow lift, the dust brightens, the sky
   energy breathes, and a violet blacklight over the lattice kicks weightless cyan/violet motes up.
   Shots: shots/station_night_0.png (quiet), shots/station_night_0.9.png (loud).
-- [ ] dome, studio
+- [x] dome (all three): the sun's shafts and the deep's floods swell, the jellies glow harder on
+  each hit, the plinth light brightens, the lattice's frame shifts to violet, and a violet
+  blacklight over the deck lifts bioluminescent plankton. Shots: shots/dome_deep_0.png (quiet),
+  shots/dome_deep_0.9.png (loud).
+- [ ] studio

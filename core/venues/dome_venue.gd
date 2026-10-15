@@ -64,6 +64,21 @@ const NOSE_FLOODS := [0.55, 1.57, 2.6]
 
 ## Where each kelp stalk stands (studio space), kept for the tests: a headless MultiMesh does not
 ## keep its instance transforms.
+## What follows the mix: the sun's shafts, the deep's jellies, floods and plinth light, the
+## lattice's frame (shifting toward violet), and a blacklight over it with bioluminescent plankton
+## lifting off the deck.
+const UV_REST := 0.0
+var _shaft_mats: Array[ShaderMaterial] = []
+var _shaft_base: Array[float] = []
+var _jelly_mat: ShaderMaterial
+var _floods: Array[SpotLight3D] = []
+var _flood_base: Array[float] = []
+var _strip_mat: StandardMaterial3D
+var _strip_base := Color.WHITE
+var _frame_mat: StandardMaterial3D
+var _frame_base := Color.WHITE
+var _uv_light: SpotLight3D
+var _plankton: GPUParticles3D
 var kelp_spots: Array[Transform3D] = []
 var shafts: Array[MeshInstance3D] = []
 ## The reef: each piece's kind (an object in reef.glb) and where it sits.
@@ -255,6 +270,27 @@ func radius() -> float:
 func sub_spot() -> Vector3:
 	var booth: AABB = zones()[&"vocals"]
 	return Vector3(-(radius() + 0.25) - SUB_FLANGE, COLLAR_Y, booth.get_center().z)
+
+
+## The shafts and floods swell with the mix, the jellies glow harder on each hit, the plinth light
+## and the lattice's frame brighten (the frame going violet), and plankton lifts over the lattice
+## under a blacklight. At rest all as authored.
+func pulse(level: float) -> void:
+	hear(level)
+	var up := 1.0 + 0.5 * heard + 0.9 * heard_hit
+	for i in _shaft_mats.size():
+		_shaft_mats[i].set_shader_parameter("strength", _shaft_base[i] * (1.0 + 0.5 * heard + 0.8 * heard_hit))
+	if _jelly_mat != null:
+		_jelly_mat.set_shader_parameter("strength", 1.6 * (1.0 + 0.6 * heard + 1.2 * heard_hit))
+	for i in _floods.size():
+		_floods[i].light_energy = _flood_base[i] * (1.0 + 0.25 * heard + 0.5 * heard_hit)
+	if _strip_mat != null:
+		_strip_mat.albedo_color = _strip_base * up
+	if _frame_mat != null:
+		_frame_mat.albedo_color = (_frame_base * up).lerp(Color(0.8, 0.4, 2.0), clampf(heard * 0.6 + heard_hit * 0.4, 0.0, 0.8))
+	if _uv_light != null:
+		_uv_light.light_energy = 3.0 * heard + 2.5 * heard_hit
+	drive_sparks(_plankton)
 
 
 func _ready() -> void:
@@ -901,7 +937,10 @@ func _slant_the_shafts() -> void:
 		var m := ShaderMaterial.new()
 		m.shader = preload("res://core/venues/shaders/light_shaft.gdshader")
 		m.set_shader_parameter("seed", rng.randf())
-		m.set_shader_parameter("strength", rng.randf_range(0.06, 0.13) * bright)
+		var shaft_strength := rng.randf_range(0.06, 0.13) * bright
+		m.set_shader_parameter("strength", shaft_strength)
+		_shaft_mats.append(m)
+		_shaft_base.append(shaft_strength)
 		var height := rng.randf_range(22.0, 30.0)
 		var width := rng.randf_range(1.5, 3.5)
 		var up := sun_dir().normalized()
@@ -1198,6 +1237,7 @@ func _set_the_jellies_adrift() -> void:
 	var glow := ShaderMaterial.new()
 	glow.shader = preload("res://core/venues/shaders/dome_jelly.gdshader")
 	glow.set_shader_parameter("strength", 1.6)
+	_jelly_mat = glow
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
 	var r := radius()
@@ -1346,6 +1386,8 @@ func _light_the_floods() -> void:
 		beam.light_specular = 0.2
 		beam.transform = Transform3D(turn, at + aim * 0.2)
 		add_child(beam)
+		_floods.append(beam)
+		_flood_base.append(spec[4])
 		# The beam in the water: two crossed quads down its axis, brightest at the lamp.
 		var length: float = spec[3] * 0.8
 		var width := 2.0 * tan(deg_to_rad(spec[2])) * length * 0.5
@@ -1369,6 +1411,8 @@ func _light_the_floods() -> void:
 	# A line of blue light along the plinth's top inside the glass, each side: the deck's edge
 	# from outside, and its own small light inside.
 	var strip := ZoneKit.glow(Color(0.3, 0.75, 1.0), 1.4)
+	_strip_mat = strip
+	_strip_base = strip.albedo_color
 	for side in [-1.0, 1.0]:
 		var line := ZoneKit.block(self, Vector3(0.03, 0.02, BACK - NOSE - 0.2), Vector3(side * (radius() - 0.17), 0.135,
 				(NOSE + BACK) * 0.5), strip, "PlinthLight")
@@ -1398,7 +1442,17 @@ func _dress_zones() -> void:
 			1.3, 60.0, 3.2, dark)
 
 	var matrix := ZoneKit.holder(self, &"matrix", z[&"matrix"])
-	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3(0, 0.001, 0), 0.03, ZoneKit.glow(Color(0.35, 0.9, 0.85), 1.2))
+	_frame_mat = ZoneKit.glow(Color(0.35, 0.9, 0.85), 1.2)
+	_frame_base = _frame_mat.albedo_color
+	ZoneKit.floor_frame(matrix, Vector2(3.08, 3.08), Vector3(0, 0.001, 0), 0.03, _frame_mat)
+	var lc := (z[&"matrix"] as AABB).get_center()
+	_uv_light = ZoneKit.spot_down(matrix, Vector3(0.3, 3.0, 0), Color(0.55, 0.25, 1.0), 0.0, 50.0, 7.0)
+	_uv_light.light_specular = 0.0
+	var cold := Gradient.new()
+	cold.set_color(0, Color(0.3, 1.0, 0.85))
+	cold.set_color(1, Color(0.7, 0.35, 1.0))
+	_plankton = make_sparks("Plankton", Vector3(lc.x, 0.15, lc.z), Vector3(1.4, 0.05, 1.4),
+			AABB(Vector3(lc.x - 2.5, 0, lc.z - 2.5), Vector3(5, 4, 5)), cold, 90, true)
 
 	var bricks := ZoneKit.holder(self, &"bricks", z[&"bricks"])
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.06, teak, steel)

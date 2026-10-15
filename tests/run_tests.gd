@@ -7207,6 +7207,31 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 		for i in 12:
 			st.pulse(0.9)
 		check("%s: reactive off holds the room still" % stag, st.heard == 0.0 and not st._motes.emitting)
+	for variant in 3:
+		studio.set_venue(&"dome", false, variant)
+		var dome := studio.venue as DomeVenue
+		var dtag := "dome %d" % variant
+		var frame_rest := dome._frame_mat.albedo_color
+		for i in 12:
+			dome.pulse(0.9)
+		check("%s: a loud mix lifts what it has heard" % dtag, dome.heard > 0.7)
+		check("%s: the lattice frame brightens, the blacklight comes up and plankton lifts" % dtag,
+				dome._frame_mat.albedo_color != frame_rest and dome._uv_light.light_energy > 1.0 and dome._plankton.emitting)
+		if variant == DomeVenue.DEEP:
+			check("%s: the jellies glow harder" % dtag, dome._jelly_mat.get_shader_parameter("strength") > 2.0)
+		else:
+			check("%s: the shafts strengthen" % dtag,
+					dome._shaft_mats[0].get_shader_parameter("strength") > dome._shaft_base[0] * 1.3)
+		for i in 120:
+			dome.pulse(0.0)
+		check("%s: a silent mix settles back to rest" % dtag, dome.heard == 0.0
+				and dome._frame_mat.albedo_color.is_equal_approx(frame_rest)
+				and dome._uv_light.light_energy == 0.0 and not dome._plankton.emitting
+				and (dome._jelly_mat == null or is_equal_approx(dome._jelly_mat.get_shader_parameter("strength"), 1.6)))
+		dome.reactive = false
+		for i in 12:
+			dome.pulse(0.9)
+		check("%s: reactive off holds the room still" % dtag, dome.heard == 0.0 and not dome._plankton.emitting)
 	check("cycling visits every venue and comes home", seen.size() == Venue.IDS.size()
 			and seen[seen.size() - 1] == Venue.IDS[0] and Venue.IDS.all(func(v): return seen.has(v)))
 
