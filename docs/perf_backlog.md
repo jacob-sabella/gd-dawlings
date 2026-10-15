@@ -96,8 +96,22 @@ The 40-frame sample over-reports: a 3000-frame run of the same scene (`--sample 
 
 `perf` works (the Arch godot has no symbols, so it shows only the library split: godot 69%, libc, libnvidia; nothing above 1% in the flat profile; pthread mutex lock/unlock about 6% in total).
 
+## Startup, taken apart (studio:0, desktop, after the texture prefetch: first frame about 2.9 s)
+
+| step | ms since process start |
+|---|---|
+| an empty Godot 4.7 project, Forward+, same machine: first frame | about 550 |
+| first autoload's `_ready` (Session, DAW, Tour, Screenshot and Budget all start at the same instant) | 2257 |
+| `Bootstrap._ready` | 2284 |
+| `Studio.set_venue` (the studio room) takes | 230 |
+| anchors, furniture, surfaces, items, tour case, roulette station | 2557 to 2781 |
+| first frame drawn | about 3000 |
+
+So 2.26 s passes before any dawlings script runs, against 0.55 s for an empty project. Our own building is about 0.5 s. With `--xr-mode off` the first frame comes 200-300 ms sooner (OpenXR looking for a runtime that is not there), but that is a launch decision `xr_bootstrap` makes, and a headset launch needs it, so it is not changed. Loading the entry-point scripts one by one takes about 0.4 s in total, so compiling scripts does not explain the rest. The other roughly 1.3 s (extensions, project load, the autoload cascade) cannot be attributed without symbols for the engine.
+
 ## Ranked candidates
 
+0. Startup before any script runs (1.7 s over an empty project): needs a Godot build with symbols, or bisecting extensions and autoloads one at a time.
 1. The ~1.8 ms of non-render CPU a frame, label handling included. Needs a profiler that can attribute it (see dead ends); try the Godot editor's own profiler on a `--remote-debug` run.
 2. The ~1000 draws that remain on the Quest proxy: merge or instance the busiest parents (PatchWall, Swivel, Wheel, Ruler, PropShelf).
 3. Casters: 7 meshes each, 16 of them; merge into 3 each (plate; fork; wheel with two surfaces).
