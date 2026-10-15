@@ -56,9 +56,20 @@ Measured with `tools/budget.sh` (desktop RTX 5080, 1600x900, vsync off, wide pos
 - Startup to first frame is 3.3-4.5 s everywhere; memory is 415-465 MB.
 - Not yet measured: CPU per script, audio callback time and xruns, bytes per second on the wire, busy-room runs (song playing, reactive loud, second player), Quest-sized settings.
 
+## Where the draws come from (studio:0, 13 tracks, wide)
+
+`tools/budget.gd` now takes `--no-shadows` (drops shadows from every light, as the headset's mobile renderer does: `rich_rendering()` is false there) and prints `BUDGET.parent`, the busiest mesh parents.
+
+| | draws | objects | prims |
+|---|---|---|---|
+| desktop, 9 shadow-casting lights | 3055 | 3703 | 403k |
+| no shadows (the Quest proxy) | 1056 | 1676 | 81k |
+
+So two thirds of the desktop draw count is shadow passes, which the headset never pays. The Quest cost is the second row. Its biggest mesh parents: PatchWall 69, Swivel 48, Wheel 48, Ruler 31, PropShelf 30, studio venue 26, keytar 26, Plug 24.
+
 ## Ranked candidates
 
-1. Surfaces' mesh/label count (Timeline first): fewer, merged or instanced meshes would cut draws and objects in every venue.
+1. The ~1000 draws that remain on the Quest proxy: merge or instance the busiest parents (PatchWall, Swivel, Wheel, Ruler, PropShelf).
 2. Garden and desert primitive counts (instancing / LOD).
 3. Startup (3.3-4.5 s) and memory.
 

@@ -63,6 +63,7 @@ func _ready() -> void:
 		set_process(false)
 		return
 	_hide_labels = args.has("--hide-labels")
+	_no_shadows = args.has("--no-shadows")
 
 	# VSYNC OFF, or this measures the monitor instead of the renderer.
 	#
@@ -86,6 +87,8 @@ func _ready() -> void:
 ## to find out what the lettering actually costs, as opposed to what counting nodes suggests it
 ## costs. Applied after the warmup so the surfaces have finished building the labels first.
 var _hide_labels := false
+## The same, for shadows: what the shadow passes add to the draw count.
+var _no_shadows := false
 
 
 func _ablate() -> void:
@@ -111,6 +114,13 @@ func _process(delta: float) -> void:
 	if _frames <= WARMUP:
 		if _frames == WARMUP and _hide_labels:
 			_ablate()
+		if _frames == WARMUP and _no_shadows:
+			var lit := 0
+			for l in get_tree().root.find_children("*", "Light3D", true, false):
+				if (l as Light3D).shadow_enabled:
+					lit += 1
+				(l as Light3D).shadow_enabled = false
+			print("BUDGET.ablation dropped shadows from %d lights" % lit)
 		return
 	# WALL CLOCK, from delta.
 	#
@@ -151,6 +161,18 @@ func _report() -> void:
 		float(OS.get_static_memory_usage()) / 1048576.0,
 		float(OS.get_static_memory_peak_usage()) / 1048576.0,
 	])
+
+	# Where the loose meshes hang: the busiest parents, so the next fix goes at the real source.
+	var by_parent := {}
+	for m in get_tree().root.find_children("*", "MeshInstance3D", true, false):
+		if not (m as MeshInstance3D).is_visible_in_tree():
+			continue
+		var key := "%s/%s" % [m.get_parent().name, m.get_parent().get_script().resource_path.get_file() if m.get_parent().get_script() else m.get_parent().get_class()]
+		by_parent[key] = int(by_parent.get(key, 0)) + 1
+	var keys := by_parent.keys()
+	keys.sort_custom(func(a, b): return by_parent[a] > by_parent[b])
+	for k in keys.slice(0, 15):
+		print("BUDGET.parent %s meshes=%d" % [k, by_parent[k]])
 
 	# And a breakdown by surface, because a total says there is a problem and nothing about
 	# where it is. Counted off the live tree rather than from the classes' own arithmetic: the
