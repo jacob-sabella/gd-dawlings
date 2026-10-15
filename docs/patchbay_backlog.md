@@ -95,3 +95,11 @@ The wall's footer now says "N to other pages" for links with one end off-page (t
 to draw). CABLE_LIMIT 150 is no longer a loss: a page of 12 outputs against 12 inputs shows at most
 144 cables, so the cap cannot bite (struck from the list). Test: two links whose output page is
 not showing are counted. Suite 10616, 0 failed. Open: a filter by name; the empty middle of the wall.
+
+## Iteration 8: the back in the other venues (checked, nothing kept)
+
+Shot from behind in cabin, rooftop and the studio (shots/pb_back_*.png). Rooftop: the casing, rim,
+three ribs and the nameplate read as finished hardware. Cabin: the same casing, only very dark (the
+venue's own lighting; the nameplate is visible). The studio's wall is hung on the side room's back
+wall facing in (`StudioVenue._hang_patch_wall`), so its back is against plaster and cannot be
+walked behind: no back needed. No change made.
