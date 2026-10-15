@@ -67,11 +67,22 @@ Measured with `tools/budget.sh` (desktop RTX 5080, 1600x900, vsync off, wide pos
 
 So two thirds of the desktop draw count is shadow passes, which the headset never pays. The Quest cost is the second row. Its biggest mesh parents: PatchWall 69, Swivel 48, Wheel 48, Ruler 31, PropShelf 30, studio venue 26, keytar 26, Plug 24.
 
+## Labels (studio:0, 13 tracks, wide pose, no shadows)
+
+| | draws | objects | frame ms |
+|---|---|---|---|
+| as it is | 1233 | 1783 | 5.19 |
+| 469 Label3Ds hidden | 1130 | 1681 | 4.15 |
+
+Labels are batched well (only 103 draws) but cost about 1 ms a frame on the desktop CPU, 20% of it. The same run shows `Caster` is 7 meshes each (plate, kingpin, two cheeks, tyre, two spokes) and 16 of them stand under the furniture: 112 objects that merge to about 48.
+
 ## Ranked candidates
 
-1. The ~1000 draws that remain on the Quest proxy: merge or instance the busiest parents (PatchWall, Swivel, Wheel, Ruler, PropShelf).
-2. Garden and desert primitive counts (instancing / LOD).
-3. Startup (3.3-4.5 s) and memory.
+1. The 469 Label3Ds: about 1 ms of a 5.2 ms frame. Find why they cost (per-frame text updates? mesh rebuilds? submission?) before changing anything.
+2. The ~1000 draws that remain on the Quest proxy: merge or instance the busiest parents (PatchWall, Swivel, Wheel, Ruler, PropShelf).
+3. Casters: 7 meshes each, 16 of them; merge into 3 each (plate; fork; wheel with two surfaces).
+4. Garden and desert primitive counts (instancing / LOD).
+5. Startup (3.3-4.5 s) and memory.
 
 ## Dead ends
 
