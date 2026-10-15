@@ -88,3 +88,10 @@ Hovering a port on the wall keeps its own cables lit and dims the rest toward th
 are redrawn on their own, not the whole wall). Resting look unchanged (shots/wall_close3.png).
 Tests: hovering keeps every cable and leaving restores. The dimmed look itself has not been seen in
 a shot (no hover in the shot tool). Suite 10615, 0 failed.
+
+## Iteration 7: links on other pages are counted
+
+The wall's footer now says "N to other pages" for links with one end off-page (they have no cable
+to draw). CABLE_LIMIT 150 is no longer a loss: a page of 12 outputs against 12 inputs shows at most
+144 cables, so the cap cannot bite (struck from the list). Test: two links whose output page is
+not showing are counted. Suite 10616, 0 failed. Open: a filter by name; the empty middle of the wall.

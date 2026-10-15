@@ -124,6 +124,14 @@ func _rebuild() -> void:
 			if _jacks.has(end):
 				(_jacks[end] as PatchJack).patches += 1
 	var counts := "%d nodes · %d links" % [graph.nodes.size(), graph.links.size()]
+	# A link with one end on a page that is not showing has no cable to draw, and a wall that does
+	# not say so looks as if the port were free.
+	var elsewhere := 0
+	for link in graph.links:
+		if jacks.has(link[0]) != jacks.has(link[1]):
+			elsewhere += 1
+	if elsewhere > 0:
+		counts += " · %d to other pages" % elsewhere
 	_note(counts if status.is_empty() else "%s · %s" % [counts, status], -height + 0.1, 34)
 	_ribbon_at = jacks
 	_lay_ribbons()

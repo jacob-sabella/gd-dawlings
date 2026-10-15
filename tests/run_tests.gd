@@ -19556,6 +19556,16 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 			and not paged._jacks.has(first_ports[0]))
 	paged._turn_page("outputs", -2, out_pages.size())
 	check("pages wrap round", paged._page["outputs"] == out_pages.size() - 1)
+	var linked_big := PipeGraph.parse(big_out, big_in, "src0:out_0\n   |-> dst0:in_0\nsrc39:out_3\n   |-> dst0:in_0\n")
+	paged._page["outputs"] = out_pages.size() - 1
+	paged._page["inputs"] = 0
+	paged.show_graph(linked_big)
+	paged._process(0.0)
+	var words := ""
+	for child in paged.get_children():
+		if child is Label3D and (child as Label3D).text.contains("links"):
+			words = (child as Label3D).text
+	check("a link to a port on another page is counted, not lost (%s)" % words, words.contains("2 to other pages"))
 	paged.free()
 	DirAccess.remove_absolute(log)
 	DirAccess.remove_absolute(tool)
