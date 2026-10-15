@@ -113,6 +113,7 @@ func _rebuild() -> void:
 	height = maxf(left, right) + 0.3
 	_quad(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, -0.006), _panel(), 0.0)
 	_frame(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
+	_casing(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
 	_note("AUDIO DEVICES", -0.05, 56, _brass())
 	for link in graph.links:
 		for end in link:
@@ -383,3 +384,47 @@ func _frame(size: Vector2, at: Vector3) -> void:
 		m.position = at + bar[1] + Vector3(0, 0, -0.012)
 		m.material_override = Materials.trim()
 		_adopt(m)
+
+
+## The back of the wall: a solid case behind the frame, so from behind it is a piece of hardware
+## with a nameplate and not a see-through screen with jacks and cables floating in front of it
+## (the panel and boxes are one-sided quads). Flush with the frame's outside edge.
+func _casing(size: Vector2, at: Vector3) -> void:
+	var case := MeshInstance3D.new()
+	case.name = "Casing"
+	var box := BoxMesh.new()
+	box.size = Vector3(size.x + FRAME * 2.0, size.y + FRAME * 2.0, 0.05)
+	case.mesh = box
+	case.position = at + Vector3(0, 0, -0.012 - 0.02 - 0.025)
+	case.material_override = Materials.chassis()
+	_adopt(case)
+	# A rim in the venue's trim round the back, and ribs across it, so it reads as a built case.
+	var back_z := at.z - 0.012 - 0.02 - 0.05
+	var full := Vector2(size.x + FRAME * 2.0, size.y + FRAME * 2.0)
+	var ribs: Array = [
+		[Vector3(full.x, 0.04, 0.03), Vector3(0, full.y * 0.5 - 0.02, 0)],
+		[Vector3(full.x, 0.04, 0.03), Vector3(0, -full.y * 0.5 + 0.02, 0)],
+		[Vector3(0.04, full.y, 0.03), Vector3(-full.x * 0.5 + 0.02, 0, 0)],
+		[Vector3(0.04, full.y, 0.03), Vector3(full.x * 0.5 - 0.02, 0, 0)],
+	]
+	for k in range(1, 4):
+		ribs.append([Vector3(full.x, 0.03, 0.02), Vector3(0, full.y * (0.5 - k * 0.25), 0)])
+	for rib in ribs:
+		var bar := MeshInstance3D.new()
+		var bar_mesh := BoxMesh.new()
+		bar_mesh.size = rib[0]
+		bar.mesh = bar_mesh
+		bar.position = Vector3(at.x, at.y, back_z - 0.012) + rib[1]
+		bar.material_override = Materials.trim()
+		_adopt(bar)
+	# Turned to face whoever is behind it, on the case's back face.
+	var plate := Label3D.new()
+	plate.text = "AUDIO DEVICES  ·  PATCH WALL"
+	plate.pixel_size = 0.0017
+	plate.font_size = 56
+	plate.modulate = _brass()
+	plate.outline_size = 0
+	plate.double_sided = false
+	plate.rotation.y = PI
+	plate.position = at + Vector3(0, size.y * 0.5 - 0.06, -0.012 - 0.02 - 0.05 - 0.03)
+	_adopt(plate)
