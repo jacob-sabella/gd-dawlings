@@ -171,3 +171,26 @@ Alternating A/B, 3000 frames: 5.56 ms average against 5.97 ms. Suite 10601 check
   against the 6.94 ms target. Self time: `_render_scene` 15.9%, `_wildcard_match` 5.2%, `StringName(String)`
   4.3%, GDScriptFunction::call 3.7%, mutex lock/unlock 6.3%, `_render_list` 2.2%, `_fill_render_list` 2.0%.
   The target is a render-side problem (about 3000 draws with shadows), not a script one.
+
+### Iteration 3: where the shadows' cost is, and why the loop stops
+
+`tools/budget.gd` gained `--no-omni-shadows` and `--no-dir-shadows` (only that kind of light loses its
+shadow). studio:0, 48 tracks, `--built-in --feed-level 0.9`, Forward+, 1500 frames:
+
+| shadows | lights with shadows | draws | frame ms | worst ms | render CPU | render GPU |
+|---|---|---|---|---|---|---|
+| all on (desktop) | 9 | 5956 | 9.33 | 15.6 | 2.07 | 5.06 |
+| no omni | 1 directional + 5 others | 3764 | 7.39 | 13.6 | 1.42 | 4.05 |
+| no directional | 3 omni + 5 others | 5473 | 9.60 | 17.8 | 2.02 | 3.49 |
+| none (Quest proxy) | 0 | 1299 | 5.42 | 12.0 | 0.73 | 2.11 |
+
+The three practicals' omni shadows are about 2200 draws (about 2 ms); the 4-split directional is
+about 1.5 ms of GPU. Every one of those draws is a caster the shadow passes redraw per light. Fewer
+casters, fewer splits, a smaller atlas or fewer shadowed lamps would each close the gap, and each
+changes the look, so none was done. Even with no shadows the worst frame is 12 ms (load and GC
+spikes, not steady cost).
+
+Loop result: one kept item this round (desk box, 5.97 -> 5.56 ms at 48 tracks busy, no shadows); the
+two iterations since found nothing look-preserving. **144 fps consistently with shadows on is not
+reachable without changing the look.** Without shadows (the headset's setting) the average is
+5.4 ms at 48 tracks busy, inside 6.94 ms, with spikes to 12 ms still to explain.

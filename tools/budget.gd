@@ -63,7 +63,8 @@ func _ready() -> void:
 		set_process(false)
 		return
 	_hide_labels = args.has("--hide-labels")
-	_no_shadows = args.has("--no-shadows")
+	_no_shadows = args.has("--no-shadows") or args.has("--no-omni-shadows") or args.has("--no-dir-shadows")
+	_shadow_kind = "omni" if args.has("--no-omni-shadows") else ("dir" if args.has("--no-dir-shadows") else "")
 	_script_costs = args.has("--script-costs")
 	# `--without-script res://x.gd`: that script's processing off for the whole sample. One long
 	# run against one long run is steadier than --script-costs' short windows.
@@ -102,6 +103,8 @@ func _ready() -> void:
 var _hide_labels := false
 ## The same, for shadows: what the shadow passes add to the draw count.
 var _no_shadows := false
+## With --no-omni-shadows / --no-dir-shadows only that kind of light loses its shadow.
+var _shadow_kind := ""
 
 ## PER-SCRIPT CPU, by ablation: with each script's _process/_physics_process switched off in turn,
 ## how much shorter is the frame? The engine's own script-time monitor reads nonsense in an
@@ -160,6 +163,10 @@ func _process(delta: float) -> void:
 		if _frames == WARMUP and _no_shadows:
 			var lit := 0
 			for l in get_tree().root.find_children("*", "Light3D", true, false):
+				if _shadow_kind == "omni" and not l is OmniLight3D:
+					continue
+				if _shadow_kind == "dir" and not l is DirectionalLight3D:
+					continue
 				if (l as Light3D).shadow_enabled:
 					lit += 1
 				(l as Light3D).shadow_enabled = false
