@@ -205,6 +205,14 @@ func _build() -> void:
 			_box(Vector2(0, -0.75), Vector2(1.6, 0.18), 0.2)
 			_box(Vector2(0, 0.75), Vector2(1.6, 0.18), 0.2)
 			_box(Vector2(0, 0), Vector2(1.6, 0.4), 0.6)
+		&"cc":
+			# A wheel on its side: a disc with a notch at the rim.
+			_ring(Vector2(0, 0), 0.7, 0.14)
+			_box(Vector2(0.7, 0), Vector2(0.3, 0.2), 0.4)
+		&"ramp":
+			# Posts standing taller one after another.
+			for k in 5:
+				_box(Vector2(-0.8 + 0.4 * k, -0.7 + 0.14 * k * 2.5 * 0.5), Vector2(0.18, 0.3 + 0.28 * k), 0.4)
 		&"freeze":
 			# A snowflake: three bars across the middle.
 			_box(Vector2(0, 0), Vector2(1.8, 0.2), 0.3)

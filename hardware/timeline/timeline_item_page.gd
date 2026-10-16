@@ -41,6 +41,14 @@ var comp_here: GlyphKey
 var flatten: GlyphKey
 ## Freeze the track to a file of its sound, or thaw it (DAW.freeze_track, DAW.thaw_track).
 var freeze: GlyphKey
+## Which controller lane the RAMP token works on, and it: the mod wheel, expression, volume, the
+## pedal, the pitch wheel, aftertouch. A MIDI item's lane is a rising ramp, a falling one, or none.
+var cc_kind: GlyphKey
+var cc_ramp: GlyphKey
+var _cc_index := 0
+const CC_KINDS := [1, 11, 7, 64, DawKitClip.PITCH_BEND, DawKitClip.AFTERTOUCH]
+const CC_NAMES := ["mod wheel", "expression", "volume", "sustain pedal", "pitch wheel", "aftertouch"]
+const RAMP_POINTS := 16
 var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
@@ -117,6 +125,8 @@ func _ready() -> void:
 	comp_here = _key("ItemComp", &"comp", GO_INK, "ITEM  COMP HERE", _comp_here, _comp_text)
 	flatten = _key("ItemFlatten", &"flatten", EDIT_INK, "ITEM  FLATTEN COMP", _flatten, _flatten_text)
 	freeze = _key("ItemFreeze", &"freeze", GO_INK, "ITEM  FREEZE TRACK", _freeze, _freeze_text)
+	cc_kind = _key("ItemCcKind", &"cc", EDIT_INK, "ITEM  CONTROLLER", _next_cc, _cc_text)
+	cc_ramp = _key("ItemCcRamp", &"ramp", EDIT_INK, "ITEM  CONTROLLER RAMP", _ramp, _ramp_text)
 	normalise = _key("ItemNormalise", &"normalise", EDIT_INK, "ITEM  NORMALISE", _normalise,
 			func() -> String: return "gain so its loudest moment is full scale" if normalise.lit \
 					else "for a recorded item")
@@ -194,7 +204,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, flatten, freeze, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, flatten, freeze, cc_kind, cc_ramp, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -220,7 +230,7 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, take_lane, comp_here, flatten, freeze, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, take_lane, comp_here, flatten, freeze, cc_kind, cc_ramp, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
 		c.available = not item.locked
 	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
 	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
@@ -232,6 +242,11 @@ func refresh() -> void:
 	comp_here.lit = true
 	flatten.lit = not DAW.state.track(_target[0]).comp.is_empty()
 	freeze.lit = DAW.state.track(_target[0]).is_frozen()
+	var moving := not item.notes.is_empty() and not item.locked
+	cc_kind.available = moving
+	cc_ramp.available = moving
+	cc_ramp.lit = lane_shape(item, CC_KINDS[_cc_index]) != 0
+	cc_kind.lit = item.controls.size() > 0
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant, softer, harder, humanise, legato, staccato, even, retrograde]:
@@ -553,6 +568,70 @@ func _comp_here() -> void:
 func _flatten() -> void:
 	if not _target.is_empty():
 		DAW.flatten_comp(_target[0])
+
+
+## What the item's lane of controller `kind` is: 0 none, 1 a rising ramp, 2 a falling one, 3 anything else.
+static func lane_shape(item: MixState.ItemState, kind: int) -> int:
+	var c := DawKitClip.new()
+	c.controls = item.controls
+	var lane := c.control_lane(kind)
+	if lane.is_empty():
+		return 0
+	for rising in [true, false]:
+		var want := ramp_points(kind, item.length, rising)
+		if lane.size() == want.size() and range(lane.size()).all(func(i): return is_equal_approx(lane[i][0], want[i][0]) and is_equal_approx(lane[i][1], want[i][1])):
+			return 1 if rising else 2
+	return 3
+
+
+## A ramp across an item `length` seconds long, in RAMP_POINTS steps: from the bottom of the
+## controller's range to the top, or from the top to the bottom.
+static func ramp_points(kind: int, length: float, rising: bool) -> Array:
+	var low := DawKitClip.BEND_MIN if kind == DawKitClip.PITCH_BEND else 0.0
+	var high := DawKitClip.BEND_MAX if kind == DawKitClip.PITCH_BEND else 127.0
+	var out: Array = []
+	for k in RAMP_POINTS:
+		var t := float(k) / (RAMP_POINTS - 1)
+		out.append([length * float(k) / RAMP_POINTS, roundf(lerpf(low, high, t if rising else 1.0 - t))])
+	return out
+
+
+func _next_cc() -> void:
+	_cc_index = (_cc_index + 1) % CC_KINDS.size()
+	refresh()
+
+
+## Rising, then falling, then gone: each press moves the chosen controller's lane on one.
+func _ramp() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null:
+		return
+	var kind: int = CC_KINDS[_cc_index]
+	var points: Array = []
+	match lane_shape(item, kind):
+		0, 3:
+			points = ramp_points(kind, item.length, true)
+		1:
+			points = ramp_points(kind, item.length, false)
+	DAW.set_item_controls(_target[0], _target[1], kind, 0, points)
+
+
+func _cc_text() -> String:
+	return "the %s: press for the next controller" % CC_NAMES[_cc_index]
+
+
+func _ramp_text() -> String:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null or item.notes.is_empty():
+		return "for a MIDI item"
+	match lane_shape(item, CC_KINDS[_cc_index]):
+		1:
+			return "%s rises across it: press to make it fall" % CC_NAMES[_cc_index]
+		2:
+			return "%s falls across it: press to take it away" % CC_NAMES[_cc_index]
+		3:
+			return "%s has its own shape: press to ramp it up" % CC_NAMES[_cc_index]
+	return "draw the %s rising across it" % CC_NAMES[_cc_index]
 
 
 func _freeze() -> void:

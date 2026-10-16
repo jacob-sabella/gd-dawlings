@@ -221,6 +221,7 @@ func _ready() -> void:
 	_test_a_comp_picks_which_take_the_lane_plays()
 	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
 	_test_the_item_page_has_lane_and_comp_tokens()
+	_test_the_controller_tokens_ramp_a_lane()
 	_test_flattening_a_comp_makes_plain_items()
 	_test_a_take_the_comp_never_plays_is_drawn_dark()
 	_test_a_midi_items_controller_lanes_follow_its_edits()
@@ -13971,6 +13972,51 @@ func _test_flattening_a_comp_makes_plain_items() -> void:
 	DAW.apply_intent(&"flatten_comp", [0])
 	DAW.apply_intent(&"flatten_comp", [])
 	check("a malformed intent changes nothing", s.track(6).items.size() == 2)
+	_offline()
+
+
+func _test_the_controller_tokens_ramp_a_lane() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0]], "Ada take")
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.select_item(6, 0, false)
+	page.refresh()
+	check("a CC and a RAMP token, in reach for a MIDI item", page.cc_kind.glyph == &"cc" and page.cc_ramp.glyph == &"ramp"
+			and page.cc_kind.available and page.cc_ramp.available and not page.cc_ramp.lit)
+	page.cc_ramp.pressed.emit()
+	var item: MixState.ItemState = s.item(6, 0)
+	check("a press draws the mod wheel rising across the item (%d events)" % [item.controls.size() / 4],
+			item.controls.size() == TimelineItemPage.RAMP_POINTS * 4 and item.controls[1] == 1.0
+			and item.controls[2] == 0.0 and item.controls[item.controls.size() - 2] == 127.0 and page.cc_ramp.lit)
+	check("and it knows that shape", TimelineItemPage.lane_shape(item, 1) == 1 and TimelineItemPage.lane_shape(item, 7) == 0)
+	page.cc_ramp.pressed.emit()
+	check("again, falling", TimelineItemPage.lane_shape(s.item(6, 0), 1) == 2)
+	page.cc_ramp.pressed.emit()
+	check("again, gone", s.item(6, 0).controls.is_empty())
+	page.cc_kind.pressed.emit()
+	page.cc_ramp.pressed.emit()
+	check("the CC token moves on to expression", TimelineItemPage.lane_shape(s.item(6, 0), 11) == 1)
+	for k in 3:
+		page.cc_kind.pressed.emit()
+	page.cc_ramp.pressed.emit()
+	var wheel := DawKitClip.new()
+	wheel.controls = s.item(6, 0).controls
+	check("and on to the pitch wheel, which runs the full 14 bits, beside it",
+			wheel.control_lane(DawKitClip.PITCH_BEND)[-1][1] == 8191.0 and wheel.control_lane(DawKitClip.PITCH_BEND)[0][1] == -8192.0
+			and s.item(6, 0).controls.size() == 2 * TimelineItemPage.RAMP_POINTS * 4)
+	DAW.set_item_locked(6, 0, true)
+	page.refresh()
+	check("out of reach while it is locked", not page.cc_ramp.available)
+	DAW.set_item_locked(6, 0, false)
+	DAW.clear_item_selection()
+	timeline.free()
 	_offline()
 
 

@@ -153,3 +153,11 @@ the window. Posts stand past the tallest note and are sunk less than one, so non
 room's z-fight probe caught both). The demo's Rhodes part gets a mod-wheel swell. Test
 `_test_controller_events_stand_as_tall_as_their_value` (6); suite 10693, 0 failed. Shot: shots/controls_lane.png. Wire
 unchanged. Next: ITEM-page tokens to put a lane on an item (a ramp, a clear), then recording from a controller.
+
+### 2e. Controller tokens
+
+ITEM page: a CC token (glyph `cc`) cycles the controller, a RAMP token (glyph `ramp`) writes it as a 16-step rise, then a
+fall, then removes it, through `set_item_controls` (so one undo step, host-validated). Out of reach for audio and locked
+items. `TimelineItemPage.lane_shape` / `ramp_points`. Test `_test_the_controller_tokens_ramp_a_lane` (8); suite 10701, 0 failed.
+Shot: shots/cc_tokens.png. Wire unchanged. Open: single-event editing, recording from a controller, hosted plugins, Reaper.
+Item 2's remaining pieces need hardware (a MIDI controller) or the native lane, so the loop moves to item 3 (VCA faders).
