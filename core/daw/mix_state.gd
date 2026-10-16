@@ -746,6 +746,22 @@ func set_track_field(index: int, field: StringName, value: Variant) -> void:
 	track_changed.emit(index, field)
 
 
+## A VCA trim, in decibels, for track group `group` (1 and up): added to the fader of every
+## track in the group, with no audio of its own. Saved with the project. `/vca/N`.
+var vca: Array = [0.0, 0.0, 0.0, 0.0]
+
+
+func vca_db(group: int) -> float:
+	return float(vca[group - 1]) if group >= 1 and group <= vca.size() else 0.0
+
+
+func set_vca_db(group: int, db: float) -> void:
+	if group < 1 or group > vca.size() or is_equal_approx(float(vca[group - 1]), db):
+		return
+	vca[group - 1] = db
+	master_changed.emit(&"vca")
+
+
 func set_master_field(field: StringName, value: Variant) -> void:
 	if master.get(field) == value:
 		return

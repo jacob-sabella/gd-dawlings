@@ -42,6 +42,11 @@ static func apply(state: MixState, address: String, args: Array) -> void:
 			_apply_track(state, p, args)
 		"master":
 			_apply_master(state, p, args)
+		"vca":
+			# dawlings's own: a group's trim in dB, `/vca/N`.
+			if p.size() == 2 and not args.is_empty() and typeof(args[0]) in [TYPE_INT, TYPE_FLOAT] \
+					and is_finite(float(args[0])) and p[1].is_valid_int():
+				state.set_vca_db(int(p[1]), clampf(float(args[0]), -60.0, 12.0))
 		"play":
 			state.playing = _as_bool(args)
 			state.transport_changed.emit()
@@ -840,6 +845,9 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/time", [state.position_seconds]])
 	out.append(["/repeat", [1.0 if state.looping else 0.0]])
 	out.append(["/click", [1.0 if state.metronome else 0.0]])
+	for g in state.vca.size():
+		if not is_zero_approx(float(state.vca[g])):
+			out.append(["/vca/%d" % (g + 1), [float(state.vca[g])]])
 	out.append(["/countin", [float(state.count_in_bars)]])
 	out.append(["/countin/play", [1.0 if state.count_in_play else 0.0]])
 	out.append(["/countin/song", [1.0 if state.pre_roll else 0.0]])

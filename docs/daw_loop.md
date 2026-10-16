@@ -168,3 +168,12 @@ Item 2's remaining pieces need hardware (a MIDI controller) or the native lane, 
 and `set_track_solo` skip the group's mates while it is armed; a fader's release (`Fader._on_grab_end`) or a mute/solo spends it.
 Desk-side only, nothing on the wire. Extended `_test_grouped_tracks_move_together` (+4); suite 10705, 0 failed. Next: VCA
 faders (a project-level trim per group, dawkit model first).
+
+### 3b. VCA trims per group
+
+dawkit c5f1668: `DawKitProject.vca` (dB per group), in the plain form and the DAWproject extras. dawlings: `MixState.vca` /
+`vca_db` / `set_vca_db`, verb `DAW.set_vca` (clamped -60..+12, validated from peers, one undo step), `/vca/N` on the wire
+(snapshot only for non-zero), `GodotBackend` adds it to a grouped track's bus level, ProjectBridge saves it. A VCA token (glyph
+`vca`) on the TRACK page steps the picked track's group through 0, +3, -3, -6, -12 dB. Test `_test_a_vca_trims_its_group` (10);
+suite 10715, 0 failed; probe host 53 / guest 47, 0 failed. Open: a real fader for it, and a Reaper path (kept desk-side).
+Item 3 done apart from that; next, item 4 (automation on sends and plugin bypass).

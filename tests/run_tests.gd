@@ -338,6 +338,7 @@ func _ready() -> void:
 	_test_items_glue_into_one()
 	_test_regions_are_renamed_moved_and_listed()
 	_test_grouped_tracks_move_together()
+	_test_a_vca_trims_its_group()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -20821,6 +20822,42 @@ func _test_regions_are_renamed_moved_and_listed() -> void:
 	timeline._process(0.0)
 	check("with none, the list is out of reach", not timeline.region_page.list.available)
 	timeline.free()
+
+
+func _test_a_vca_trims_its_group() -> void:
+	var backend := _offline()
+	var s := DAW.state
+	var fader := s.track(2).volume
+	var depth := maxi(s.undo_depth, 0)
+	backend._repl_durable.clear()
+	DAW.set_vca(1, -6.0)
+	close_to("a group's VCA holds its trim", s.vca_db(1), -6.0, 0.001)
+	check("faders stay where they were", is_equal_approx(s.track(2).volume, fader))
+	check("one undo step, replicated", s.undo_depth - depth == 1 and backend._repl_durable.has("/vca/1"))
+	DAW.set_vca(1, 40.0)
+	close_to("clamped to +12 dB", s.vca_db(1), 12.0, 0.001)
+	DAW.set_vca(9, 3.0)
+	check("a group past the last, the last", is_equal_approx(s.vca_db(DAW.GROUPS), 3.0))
+	DAW.undo()
+	DAW.undo()
+	close_to("undone", s.vca_db(1), -6.0, 0.001)
+	DAW.set_vca(1, -6.0)
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	close_to("a guest knows it", guest.vca_db(1), -6.0, 0.001)
+	DAW.apply_intent(&"set_vca", ["x", 1.0])
+	DAW.apply_intent(&"set_vca", [1, INF])
+	close_to("not with nonsense", s.vca_db(1), -6.0, 0.001)
+	var p := ProjectBridge.capture(backend)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	add_child(fresh)
+	ProjectBridge.load(p, fresh)
+	close_to("saved with the project", fresh.state.vca_db(1), -6.0, 0.001)
+	fresh.free()
+	check("a guest may ask", &"set_vca" in DAW.COMMANDS)
+	DAW.set_vca(1, 0.0)
+	DAW.set_vca(DAW.GROUPS, 0.0)
 
 
 func _test_grouped_tracks_move_together() -> void:

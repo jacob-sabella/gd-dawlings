@@ -892,6 +892,14 @@ func set_track_group(index: int, group: int) -> void:
 		record_for_replication("/track/%d/group" % index, [float(group)])
 
 
+## The desk's own, like groups: kept and sent round the room, not in Reaper's project.
+func set_vca(group: int, db: float) -> void:
+	db = clampf(db, -60.0, 12.0)
+	if group >= 1 and group <= state.vca.size() and not is_equal_approx(state.vca_db(group), db):
+		state.set_vca_db(group, db)
+		record_for_replication("/vca/%d" % group, [db])
+
+
 ## Shown at once, and restated by the structure poll, which reads Reaper's own colour back.
 func set_track_colour(index: int, colour: Color) -> void:
 	if state.tracks.has(index):

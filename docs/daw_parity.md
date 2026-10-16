@@ -60,7 +60,7 @@ Iterations done: 50
 - [x] clear all solos / clear all mutes (2026-10-14)
 - [x] folders (depth is kept through renumbering)
 - [x] track groups (2026-10-14; four, a GROUP token on the TRACK page; faders by the same decibels, mutes and solos as one; saved; desk-side on Reaper, not in its project)
-- [ ] VCA faders: a fader that moves its group without passing audio (missing)
+- [x] VCA faders (2026-10-16; a trim in dB per group, `MixState.vca`, verb `set_vca`, `/vca/N` on the wire, added to the bus level; a VCA token on the TRACK page steps 0/+3/-3/-6/-12; saved in dawkit as `DawKitProject.vca`; desk-side on Reaper, not in its project; no free-form fader yet)
 - [x] a group overridden for one move (2026-10-16; a FREE token on the TRACK page arms `DAW.group_free`; the next fader release, mute or solo is one track's alone; desk-side, not on the wire)
 - [ ] track delay compensation (missing)
 

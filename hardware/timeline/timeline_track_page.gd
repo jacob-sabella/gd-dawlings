@@ -29,6 +29,9 @@ var scheme: GlyphKey
 var group: GlyphKey
 ## Arms DAW.group_free: the next fader move is the picked track's alone.
 var free: GlyphKey
+## Steps the picked track's group VCA trim through VCA_STEPS.
+var vca: GlyphKey
+const VCA_STEPS := [0.0, 3.0, -3.0, -6.0, -12.0]
 
 ## Each group's colour, for its light: group 1 is the first.
 const GROUP_COLOURS := [Color(0.95, 0.62, 0.32), Color(0.45, 0.85, 0.75), Color(0.75, 0.55, 0.95), Color(0.95, 0.85, 0.4)]
@@ -86,6 +89,7 @@ func _ready() -> void:
 			func() -> String:
 				return "the next fader move is one track's alone; press to take it back" if DAW.group_free \
 						else "press, then move a fader: it moves alone, not with its group")
+	vca = _key("TrackVca", &"vca", Color(0.95, 0.85, 0.4), "TRACKS  GROUP  VCA", _step_vca, _vca_text)
 	DAW.group_free_changed.connect(func() -> void: free.lit = DAW.group_free)
 	_group()
 	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
@@ -176,7 +180,7 @@ func refresh() -> void:
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
 			if input.lit else ""
-	for key in [remove, duplicate, items, rename, input, colour, group, free]:
+	for key in [remove, duplicate, items, rename, input, colour, group, free, vca]:
 		key.available = picked
 	var in_group: int = DAW.state.track(surface.picked_track).group if picked else 0
 	group.led_colour = GROUP_COLOURS[in_group - 1] if in_group > 0 else Color(0.62, 0.86, 1.0)
@@ -187,6 +191,26 @@ func refresh() -> void:
 	colour.lit = picked
 	scheme.lit = not _uncoloured().is_empty()
 	notice = "%s" % _name_of(surface.picked_track).to_upper() if picked else "press a track's name to pick it  ·  AUTO and LANE: the master"
+
+
+func _vca_group() -> int:
+	var picked: int = surface.picked_track
+	return DAW.state.track(picked).group if DAW.state.tracks.has(picked) else 0
+
+
+func _step_vca() -> void:
+	var g := _vca_group()
+	if g > 0:
+		var at := VCA_STEPS.find(snappedf(DAW.state.vca_db(g), 0.01))
+		DAW.set_vca(g, VCA_STEPS[(at + 1) % VCA_STEPS.size()])
+
+
+func _vca_text() -> String:
+	var g := _vca_group()
+	if g == 0:
+		return "pick a grouped track: its group's VCA trims every track in it"
+	var at := VCA_STEPS.find(snappedf(DAW.state.vca_db(g), 0.01))
+	return "group %d is at %+.0f dB; press for %+.0f dB" % [g, DAW.state.vca_db(g), VCA_STEPS[(at + 1) % VCA_STEPS.size()]]
 
 
 func _step_group() -> void:

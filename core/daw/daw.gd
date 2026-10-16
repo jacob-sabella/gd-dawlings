@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"set_item_controls", &"flatten_comp", &"freeze_track", &"thaw_track", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -225,6 +225,9 @@ func group_mates(index: int) -> Array:
 	var group := state.track(index).group
 	return state.track_indices().filter(func(j): return j != index and state.track(j).group == group)
 ## A track into a group, 1 to GROUPS, or out of any with 0. One undo step.
+## A group's VCA trim in dB: its tracks all follow, with the faders where they are.
+func set_vca(group: int, db: float) -> void:
+	_do(&"set_vca", [clampi(group, 1, GROUPS), clampf(db, -60.0, 12.0)])
 func set_track_group(index: int, group: int) -> void:
 	_do(&"set_track_group", [index, clampi(group, 0, GROUPS)])
 ## Every soloed (or muted) track let go, each through its own `set_track_solo` / `set_track_mute`,
@@ -1082,6 +1085,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_track_group intent %s." % [args])
 			return
 		args = [int(args[0]), clampi(int(args[1]), 0, GROUPS)]
+	if verb == &"set_vca":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
+				or typeof(args[1]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[1])):
+			push_warning("DAW: refused a malformed set_vca intent %s." % [args])
+			return
+		args = [clampi(int(args[0]), 1, GROUPS), clampf(float(args[1]), -60.0, 12.0)]
 	if verb in [&"remove_track", &"duplicate_track"]:
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])

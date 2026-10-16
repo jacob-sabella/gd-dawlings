@@ -28,6 +28,7 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 	p.time_signature_points = s.time_signature_points.duplicate(true)
 	p.length = s.project_length
 	p.metronome = s.metronome
+	p.vca = s.vca.duplicate()
 	p.loop_on = s.looping
 	p.loop_start = s.loop_start
 	p.loop_end = s.loop_end
@@ -263,6 +264,8 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	s.beats_per_bar = p.time_signature.x
 	s.project_length = p.length
 	s.metronome = p.metronome
+	for g in s.vca.size():
+		s.vca[g] = float(p.vca[g]) if g < p.vca.size() else 0.0
 	s.looping = p.loop_on
 	s.loop_start = p.loop_start
 	s.loop_end = p.loop_end

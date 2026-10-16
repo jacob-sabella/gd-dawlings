@@ -363,6 +363,9 @@ func rename_track(_index: int, _track_name: String) -> void: pass
 func set_track_colour(_index: int, _colour: Color) -> void: pass
 ## A track into group `group` (1 and up), or out of any (0). One undo step.
 func set_track_group(_index: int, _group: int) -> void: pass
+## A group's VCA trim in decibels (-60 to +12): every track in it is that much louder or
+## quieter, with no audio through the VCA. One undo step.
+func set_vca(_group: int, _db: float) -> void: pass
 func add_fx(_track_index: int, _plugin: String, _at: int) -> void: pass
 func remove_fx(_track_index: int, _fx_index: int) -> void: pass
 ## A track's lane of automation for `target` (see MixState.TrackState.automation), whole; empty

@@ -1388,6 +1388,15 @@ func set_track_group(index: int, group: int) -> void:
 	record_for_replication("/track/%d/group" % index, [float(group)])
 
 
+func set_vca(group: int, db: float) -> void:
+	db = clampf(db, -60.0, 12.0)
+	if group < 1 or group > state.vca.size() or is_equal_approx(state.vca_db(group), db):
+		return
+	_remember("/vca/%d" % group, set_vca.bind(group, state.vca_db(group)), set_vca.bind(group, db), false)
+	state.set_vca_db(group, db)
+	record_for_replication("/vca/%d" % group, [db])
+
+
 func set_track_colour(index: int, colour: Color) -> void:
 	if not state.tracks.has(index) or state.tracks[index].colour.is_equal_approx(colour):
 		return

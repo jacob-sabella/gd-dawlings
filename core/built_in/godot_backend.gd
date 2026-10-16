@@ -745,7 +745,10 @@ func _remove_buses() -> void:
 func _connect_state() -> void:
 	if not state.track_changed.is_connected(_on_track_changed):
 		state.track_changed.connect(_on_track_changed)
-		state.master_changed.connect(func(_f): _apply_master())
+		state.master_changed.connect(func(f):
+			_apply_master()
+			if f == &"vca":
+				_apply_tracks())
 		state.fx_changed.connect(_apply_fx)
 		state.transport_changed.connect(_on_transport_changed)
 
@@ -804,7 +807,7 @@ func _apply_tracks() -> void:
 	for index in _bus:
 		var t: MixState.TrackState = state.tracks[index]
 		var b: int = _bus[index]
-		AudioServer.set_bus_volume_db(b, taper_to_db(t.volume))
+		AudioServer.set_bus_volume_db(b, taper_to_db(t.volume) + (state.vca_db(t.group) if t.volume > 0.0 else 0.0))
 		AudioServer.set_bus_mute(b, not audible(index))
 		(AudioServer.get_bus_effect(b, 0) as AudioEffectPanner).pan = (t.pan - 0.5) * 2.0
 		for p in _players.get(index, []):
