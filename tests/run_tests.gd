@@ -344,6 +344,7 @@ func _ready() -> void:
 	_test_an_items_sound_is_stretched_and_shifted()
 	_test_a_rig_roll_is_planned_from_its_settings()
 	_test_the_band_goes_into_the_roulette_room_and_back()
+	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -21799,6 +21800,74 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	studio.enter_roulette_room()
 	studio.leave_roulette_room()
 	check("the venue and its arrangement come back", studio.venue.venue_id() == &"grid" and studio.venue.variant == 1)
+	studio.queue_free()
+	Session.layout = saved_layout
+
+
+func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_door.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	var places: Array = []
+	for id in Venue.IDS:
+		for v in Venue.variant_titles(id).size():
+			places.append([id, v])
+	places.append([Venue.ROULETTE_ID, 0])
+	var walkable := studio._walkable()
+	for place in places:
+		var tag := "%s/%d" % place
+		studio.set_venue(place[0], false, place[1])
+		walkable = studio._walkable()
+		var venue := studio.venue
+		var door := venue.get_node_or_null("RouletteDoor") as RouletteDoor
+		check("%s: has a door" % tag, door != null)
+		if door == null:
+			continue
+		var at := venue.rig_roulette_door()
+		check("%s: it stands where the venue says" % tag, door.transform.is_equal_approx(at)
+				and door.leaving == (place[0] == Venue.ROULETTE_ID))
+		var mine := FloorPlan.footprint(venue.door_solid()["c"], venue.door_solid()["h"], venue.door_solid()["a"])
+		# In front of it, a stride out, is floor a person can stand on and nothing is there.
+		var front: Vector3 = at * Vector3(0, 0, 0.9)
+		var front_pt := Vector2(front.x, front.z)
+		var floor_ok := walkable.any(func(r: Rect2) -> bool: return r.has_point(front_pt))
+		check("%s: the floor in front of it is walkable" % tag, floor_ok)
+		var blocked: Array = []
+		for solid in venue.solids():
+			if solid == venue.door_solid():
+				continue
+			if FloorPlan.separation(mine, solid) != Vector2.ZERO or FloorPlan.separation(
+					FloorPlan.footprint(front_pt, Vector2(0.3, 0.3), 0.0), solid) != Vector2.ZERO:
+				blocked.append(solid["c"])
+		check("%s: nothing stands in it or in front of it (%s)" % [tag, blocked], blocked.is_empty())
+		var in_the_way: Array = []
+		for piece in studio.floor_plan.pieces:
+			if not studio.floor_plan.is_clear(piece, Vector2(piece.position.x, piece.position.z), piece.rotation.y):
+				in_the_way.append(piece.name)
+		check("%s: no gear stands in it (%s)" % [tag, in_the_way], in_the_way.is_empty())
+		var board := venue.roll_board_spot()
+		var board_fp := FloorPlan.footprint(Vector2(board.origin.x, board.origin.z),
+				Vector2(RollBoard.WIDTH * 0.5 + 0.05, 0.12), board.basis.get_euler().y)
+		var panel := venue.rig_roulette_spot()
+		var panel_fp := FloorPlan.footprint(Vector2(panel.origin.x, panel.origin.z),
+				Vector2(RigRouletteStation.WIDTH * 0.5, 0.1), panel.basis.get_euler().y)
+		check("%s: clear of the roll board and the panel" % tag, FloorPlan.separation(mine, board_fp) == Vector2.ZERO
+				and FloorPlan.separation(mine, panel_fp) == Vector2.ZERO)
+		var hits := ZFightProbe.scan(door)
+		check("%s: its faces do not fight (%d)" % [tag, hits.size()], hits.is_empty())
+	# Using it.
+	studio.set_venue(&"loft", false, 0)
+	var door := studio.venue.get_node("RouletteDoor") as RouletteDoor
+	door.used.emit()
+	check("the host goes through it", studio.in_roulette_room())
+	(studio.venue.get_node("RouletteDoor") as RouletteDoor).used.emit()
+	check("and back through the one in the room, to the loft", not studio.in_roulette_room() and studio.venue.venue_id() == &"loft")
 	studio.queue_free()
 	Session.layout = saved_layout
 

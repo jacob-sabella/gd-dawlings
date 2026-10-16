@@ -492,6 +492,22 @@ func rig_roulette_spot() -> Transform3D:
 	return Transform3D(Basis.IDENTITY, Vector3(x, 1.05, z))
 
 
+## Where the door to the Rig Roulette room stands, in studio space (its origin the floor in the
+## middle of the opening, facing into the room, 7cm off the wall): at the right-hand end of the
+## front wall, in the corner -- clear of the roulette panel's end, the first-reflection panels, the
+## roll board and the acoustic treatment. Where the room has no wall it is a gate on its own legs.
+## Every venue has one; a venue whose front wall is taken says where else.
+func rig_roulette_door() -> Transform3D:
+	return Transform3D(Basis.IDENTITY, Vector3(room_width * 0.5 - 1.0, 0.0, Studio.ROOM_FRONT + 0.07))
+
+
+## The door as the walker's footprint: solid to its lintel.
+func door_solid() -> Dictionary:
+	var at := rig_roulette_door()
+	return {"c": Vector2(at.origin.x, at.origin.z), "h": RouletteDoor.HALF, "a": at.basis.get_euler().y,
+			"top": RouletteDoor.OPENING.y + RouletteDoor.LINTEL}
+
+
 ## Where the board that writes up a Rig Roulette roll hangs, in studio space (its origin the
 ## middle of its bottom edge): high on the right-hand wall, facing in, its lower edge just above
 ## the acoustic panels (which stand to 2.1m) and its top just under the ceiling, so the whole
@@ -565,6 +581,9 @@ func mic_spot() -> Variant:
 func solids() -> Array:
 	var out := zone_solids()
 	if prop_shelf_solid():
+		# The door is as solid as the shelf: a venue that only draws its furniture (the chalk
+		# zone) is walked through, door and all.
+		out.append(door_solid())
 		var spot := prop_shelf_spot()
 		out.append({"c": Vector2(spot.origin.x, spot.origin.z),
 				"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,

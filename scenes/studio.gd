@@ -459,6 +459,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	env.tonemap_exposure *= EXPOSURE_LIFT
 	world_env.environment = env
 	add_child(venue)
+	_hang_the_roulette_door()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
@@ -472,6 +473,39 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_walk_where_the_venue_lets()
 	venue_changed.emit(id)
 	_publish_room()
+
+
+## The door to (or, in the room itself, out of) Rig Roulette, in the venue's own frame. It is a
+## child of the venue, so it goes with it; the venue's own `solids` keep people out of it and the
+## floor plan keeps furniture out of it (`_door_footprint`).
+func _hang_the_roulette_door() -> void:
+	var door := RouletteDoor.new()
+	door.name = "RouletteDoor"
+	door.leaving = in_roulette_room_venue(venue)
+	door.transform = venue.rig_roulette_door()
+	door.used.connect(_on_roulette_door_used)
+	venue.add_child(door)
+
+
+static func in_roulette_room_venue(v: Venue) -> bool:
+	return v != null and v.venue_id() == Venue.ROULETTE_ID
+
+
+## The door was used: the host takes the band through it, the way it points. A guest is told whose
+## call it is (the enter and leave asks say so themselves).
+func _on_roulette_door_used() -> void:
+	if in_roulette_room():
+		leave_roulette_room()
+	else:
+		enter_roulette_room()
+
+
+## What furniture keeps clear of: the door's footprint, as the floor plan's rectangles.
+func _door_footprint() -> Array:
+	if venue == null:
+		return []
+	var door := venue.door_solid()
+	return [FloorPlan.footprint(door["c"], door["h"], door["a"])]
 
 
 ## The audio patch wall in every venue: where a venue has hung one (the studio's side room), that
@@ -620,6 +654,9 @@ func enter_roulette_room() -> bool:
 		return false
 	if in_roulette_room() or venue == null:
 		return false
+	if Tour.run != null:
+		Session.notice.emit("Not in the middle of a tour.")
+		return false
 	_before_the_room = {"id": venue.venue_id(), "variant": venue.variant}
 	set_venue(Venue.ROULETTE_ID, false)
 	return true
@@ -696,6 +733,7 @@ func _build_furniture() -> void:
 	floor_plan.name = "FloorPlan"
 	floor_plan.bounds = _room_bounds()
 	floor_plan.fixtures.append(_desk_footprint)
+	floor_plan.fixtures.append(_door_footprint)
 	add_child(floor_plan)
 
 	_build_lamp_stands()

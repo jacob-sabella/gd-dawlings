@@ -70,3 +70,19 @@ Suite 10796, 0 failed. The wire carries the same fields as before (a venue id), 
 No door yet, so nothing in the game takes you in: that is C. The room is deliberately plain: lighting, the wheel's look and sound
 are for the polish slice.
 Next: C, `rig_roulette_door()` in every venue and the way back from the room.
+
+### C. A door in every venue
+
+`RouletteDoor` (hardware/rig_roulette/roulette_door.gd): a frame in the venue's own carpentry (`Materials.furniture`) with brass inlay
+round a felt-green portal, a RIG ROULETTE sign (BACK TO THE BAND inside the room), a lit button and its own spot lamp. A dumb door:
+it emits `used`, and `Studio._on_roulette_door_used` enters or leaves (host only; refused during a Tour run). Where there is no wall
+(open venues) it stands as a gate. `Venue.rig_roulette_door()` (default: the right-hand end of the front wall, mirrored from the
+roulette panel) and `Venue.door_solid()` (a walker footprint, as solid as the prop shelf, so the chalk zone is still walked through);
+`Studio._hang_the_roulette_door` hangs it under each venue (it goes with the venue), and `_door_footprint` keeps furniture out of it
+through the floor plan. The default spot is clear in all 14 venues and every arrangement, so no venue needed an override yet.
+Test `_test_every_venue_has_a_clear_door_to_the_roulette_room` (303 checks: venue x arrangement + the room: has a door, where the
+venue says, walkable floor in front, no solid in or before it, no gear in it, clear of the roll board and the panel, no z-fight on
+the door, and using the doors goes in and back to the loft). Door styling per venue is the venue's furniture finish only; a venue
+that wants its own door look (a hatch, a cave mouth) is a polish item. Seen in the studio and the grid (shots/door_studio.png,
+door_grid.png). Suite 11099, 0 failed.
+Open: the wall panel stays where it is for now (D moves it into the room).
