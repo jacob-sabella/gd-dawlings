@@ -134,3 +134,10 @@ not hide the ROLL button. Full suite 11118 checks, 0 failed.
 Honest limit, seen in the 720p shot from the seat: the plate reads from there, but the words inside
 the wheel windows are still too small and dim at that range. Next: lettering for the wheels sized for the
 wall (they were made for a panel stood at), then the options.
+
+### D2d: the wheels read from the seat
+
+The labels fade out past the distance they could be read at for a panel of their own size, and that
+range ignored the wall's 3.4x scale. `RigRouletteStation._letter_for_the_scale` stretches each
+label's range by the scale. Looked at in a 720p shot from the seat: PEDALS, the pool, SCREEN, LOCK KEY
+and ROLL all read. Full suite 11118 checks, 0 failed. D2 is done; next the options (E).

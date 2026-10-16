@@ -142,6 +142,20 @@ func _ready() -> void:
 	add_child(_last_label)
 
 	_lamp()
+	_letter_for_the_scale()
+
+
+## The labels work out how far away they can be read for a panel of their own size; a wall stood
+## bigger than that (`scale`) is readable from further off by as much, so they say so.
+func _letter_for_the_scale() -> void:
+	var by := maxf(scale.x, 1.0)
+	if by <= 1.0:
+		return
+	for n in find_children("*", "Label3D", true, false):
+		var l := n as Label3D
+		if l.visibility_range_end > 0.0:
+			l.visibility_range_end *= by
+			l.visibility_range_end_margin *= by
 
 
 ## The wheels as the roll's settings.
