@@ -1167,7 +1167,10 @@ static func midi_take_request(track_index: int, start: float, end: float, notes:
 
 ## Reaper renders, offline, through the bridge: see the bridge's RenderProject. The files are on
 ## Reaper's machine, which is this one.
-func render(stems: bool, bits := 24, normalise := false, rate := 48000) -> void:
+func render(stems: bool, bits := 24, normalise := false, rate := 48000, flac := false) -> void:
+	if flac:
+		render_finished.emit(PackedStringArray(), PackedStringArray(["FLAC renders are the built-in engine's; Reaper's bridge writes WAV"]))
+		return
 	if _bridge == null or not _bridge.is_open():
 		render_finished.emit(PackedStringArray(), PackedStringArray(["rendering needs the ReaScript bridge"]))
 		return

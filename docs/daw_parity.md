@@ -93,7 +93,7 @@ Iterations done: 50
 - [x] render bit depth, with dither (2026-10-14; 16 or 24-bit dithered, 32-bit float; a token on the RENDER page; Reaper's RENDER_FORMAT and RENDER_DITHER, not yet run against a live Reaper)
 - [x] normalise on render (2026-10-14; the mix to a -1 dBFS peak, each stem by the mix's gain; a token on the RENDER page; Reaper's RENDER_NORMALIZE through the bridge, not yet run against a live Reaper)
 - [x] render sample rate: 44.1, 48 or 96 kHz (2026-10-14; a token on the RENDER page; built-in resamples linearly from the engine rate; Reaper's RENDER_SRATE, not run against a live Reaper)
-- [ ] render file types other than WAV (FLAC, MP3) (missing)
+- [~] render file types other than WAV (2026-10-16: FLAC done, a FILE TYPE token on the RENDER page, 16 or 24-bit (32 is written as 24), written by dawkit's own `DawKitFlacWriter` and accepted by `flac -t`; the built-in engine only, Reaper's bridge answers that it writes WAV. MP3 is blocked: nothing in the engine encodes it, and a Layer III encoder written from the standard is a project of its own; shelling out to `lame` would need it installed and shipped)
 - [x] render a region: LOOP on the REGION page, then a render, renders just that region (render follows the loop range)
 
 ## Undo and project files

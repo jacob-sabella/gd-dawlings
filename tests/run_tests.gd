@@ -339,6 +339,7 @@ func _ready() -> void:
 	_test_regions_are_renamed_moved_and_listed()
 	_test_grouped_tracks_move_together()
 	_test_a_groove_lends_its_feel()
+	_test_a_render_can_be_flac()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -14785,6 +14786,24 @@ func _test_the_mix_and_its_stems_are_rendered_to_files() -> void:
 	check("normalised, the mix peaks a decibel under full scale (%.2f dB, %.2f dB as it played)"
 			% [linear_to_db(maxf(loud_peak, 1e-9)), linear_to_db(maxf(plain_peak, 1e-9))],
 			plain_peak > 0.0001 and absf(linear_to_db(maxf(loud_peak, 1e-9)) - DAWBackend.RENDER_NORMALISE_DB) < 0.05)
+	# And as FLAC: a file the engine reads back to the same sound and the reference decoder accepts.
+	heard.clear()
+	DAW.render_finished.connect(on_done)
+	DAW.render(false, 24, false, 48000, true)
+	waited = 0.0
+	while heard.is_empty() and waited < 10.0:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	DAW.render_finished.disconnect(on_done)
+	var flacs: PackedStringArray = heard[0][0] if not heard.is_empty() else PackedStringArray()
+	check("a FLAC render writes a .flac mix (%s)" % [flacs], flacs.size() == 1 and flacs[0].ends_with(" - mix.flac"))
+	if flacs.size() == 1:
+		var flac_mix := DawKitAudioFile.read(flacs[0])
+		check("which reads back as stereo, about as long (%d against %d frames)" % [int(flac_mix["frames"]), frames],
+				int(flac_mix["channels"]) == 2 and absi(int(flac_mix["frames"]) - frames) < rate)
+		var status := OS.execute("flac", ["-t", "-s", flacs[0]], [], true)
+		check("and the reference decoder accepts it (exit %d)" % status, status == 0 or status == -1)
+		DirAccess.remove_absolute(flacs[0])
 	DirAccess.remove_absolute(files[0].get_base_dir())
 	s.looping = false
 	_offline()
@@ -20335,6 +20354,38 @@ func _test_a_render_can_be_normalised() -> void:
 	_offline()
 
 
+func _test_a_render_can_be_flac() -> void:
+	_offline()
+	var spy := RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	DAW.apply_intent(&"render", [1.0, 16.0, 0.0, 48000.0, 1.0])
+	DAW.apply_intent(&"render", [1.0, 16.0])
+	check("the host renders a guest's FLAC ask, and an older ask as WAV (%s)" % [spy.asked],
+			spy.asked == [[true, 16, "flac"], [true, 16]])
+	_offline()
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineRenderPage = timeline.render_page
+	check("the render page has a file-type token, WAV", page.flac_key != null and page.flac_key.glyph == &"flac"
+			and not page.flac and not page.flac_key.lit)
+	page.flac_key.pressed.emit()
+	check("pressed, FLAC and lit", page.flac and page.flac_key.lit)
+	check("MIX's card says FLAC (%s)" % page._what(false), page._what(false).contains("24-bit FLAC")
+			or page._what(false).contains("cannot render"))
+	check("32-bit float is written as 24 in FLAC", TimelineRenderPage.file_name(32, true) == "24-bit FLAC"
+			and TimelineRenderPage.file_name(16, false).contains("WAV"))
+	spy = RenderSpy.new()
+	spy.state = DAW.state
+	DAW.use(spy)
+	page.busy = false
+	page._render(false)
+	check("and a render from the page carries it (%s)" % [spy.asked], spy.asked == [[false, 24, "flac"]])
+	timeline.free()
+	_offline()
+
+
 func _test_a_track_is_duplicated() -> void:
 	var backend := GodotBackend.new()
 	backend.state = MixState.new()
@@ -21040,12 +21091,14 @@ class RenderSpy extends OfflineBackend:
 	func can(capability: StringName) -> bool:
 		return capability == DAWBackend.Capability.RENDER or super.can(capability)
 
-	func render(stems: bool, bits := 24, normalise := false, rate := 48000) -> void:
+	func render(stems: bool, bits := 24, normalise := false, rate := 48000, flac := false) -> void:
 		var got: Array = [stems, bits]
 		if normalise:
 			got.append(true)
 		if rate != 48000:
 			got.append(rate)
+		if flac:
+			got.append("flac")
 		asked.append(got)
 
 

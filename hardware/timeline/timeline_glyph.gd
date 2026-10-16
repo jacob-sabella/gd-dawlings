@@ -165,6 +165,11 @@ func _build() -> void:
 			_prism(Vector2(0, -0.1), Vector2(1.3, 1.7), 0.6)
 			_rod(Vector2(0, -0.55), Vector2(0.55, 0.85), 0.09, 0.55)
 			_ball(Vector2(0.38, 0.42), 0.17, 0.6)
+		&"flac":
+			# A wave folded down on itself: the same sound, kept smaller.
+			for k in 5:
+				var h := 0.9 - 0.15 * k
+				_box(Vector2(-0.8 + 0.4 * k, 0.0), Vector2(0.18, 2.0 * h), 0.4)
 		&"render":
 			_ring(Vector2.ZERO, 0.72, 0.2)
 			_ball(Vector2.ZERO, 0.22, 0.0)

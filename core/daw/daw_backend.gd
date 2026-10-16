@@ -380,7 +380,7 @@ func set_automation(_track_index: int, _target: String, _points: Array) -> void:
 ## without Capability.RENDER. `normalise`: the mix brought to a peak of RENDER_NORMALISE_DB, and
 ## every stem by the same gain, so the stems still add up to the mix (Reaper's "normalize stems to
 ## master").
-func render(_stems: bool, _bits := 24, _normalise := false, _rate := 48000) -> void: pass
+func render(_stems: bool, _bits := 24, _normalise := false, _rate := 48000, _flac := false) -> void: pass
 const RENDER_TAIL_SECONDS := 4.0
 ## A normalised render's peak, in dBFS: a decibel under full scale, room for a lossy encoder's
 ## overshoot.

@@ -202,3 +202,12 @@ the source is shorter than one); `groove_beat` pulls a beat to its slot's feel. 
 from_item, grid, strength)` (6 args, an item edit, refused on a locked target, one undo step, validated from peers), done by
 the offline engine; Reaper's bridge has no such edit, so it does nothing there. A GROOVE token (glyph `groove`) on the ITEM
 page works on two selected MIDI items. Test `_test_a_groove_lends_its_feel` (12). Open: named saved templates, playback swing.
+
+### 7a. FLAC render
+
+dawkit 7718756: `DawKitFlacWriter` (encode_ints, write): 4096-frame blocks, each channel constant, verbatim or a fixed predictor
+of order 0-4 with Rice partitions, STREAMINFO with the MD5, CRC-8 and CRC-16; decoded back exact by `DawKitFlac` and accepted
+by the reference `flac -t`. About a fifth bigger than libFLAC (no LPC or stereo decorrelation). dawlings: `render` gains a
+fifth argument `flac` (the host still renders an older 4-argument ask as WAV), `MixRender.flac` writes `.flac`, a FILE TYPE token
+(glyph `flac`) on the RENDER page. Tests `_test_a_render_can_be_flac` and a real FLAC render in
+`_test_the_mix_and_its_stems_are_rendered_to_files`. Reaper's bridge refuses FLAC (reports it). MP3 stays open: blocked, no encoder.

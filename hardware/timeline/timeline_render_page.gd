@@ -12,6 +12,9 @@ var mix: GlyphKey
 var stems: GlyphKey
 ## The files' depth, stepped round DAW.RENDER_BITS: each person's own, sent with their render.
 var depth: GlyphKey
+## FLAC in place of WAV (a lossless, smaller file; 32-bit float is written as 24): each person's own.
+var flac_key: GlyphKey
+var flac := false
 var bits := DAW.RENDER_BITS_DEFAULT
 ## The files' sample rate, stepped round DAW.RENDER_RATES: each person's own, sent with their render.
 var rate_key: GlyphKey
@@ -35,6 +38,10 @@ func _ready() -> void:
 	depth = _key("RenderDepth", depth_glyph(bits), INK, "RENDER  BIT DEPTH", step_depth,
 			func() -> String: return "%s: %s next" % [depth_name(bits), depth_name(_next_depth(bits))])
 	depth.lit = true
+	flac_key = _key("RenderFlac", &"flac", INK, "RENDER  FILE TYPE",
+			func(): set_flac(not flac),
+			func() -> String: return "on: FLAC files, lossless and smaller" if flac else "off: WAV files")
+	flac_key.toggle = true
 	rate_key = _key("RenderRate", rate_glyph(rate), INK, "RENDER  SAMPLE RATE", step_rate,
 			func() -> String: return "%s: %s next" % [rate_name(rate), rate_name(_next_rate(rate))])
 	rate_key.lit = true
@@ -75,8 +82,13 @@ func _what(with_stems: bool) -> String:
 	if busy:
 		return "rendering, as the song plays"
 	return "%s%s, played through once and rung out, %s" % [_span(),
-			" and each track's stem" if with_stems else "", depth_name(bits) + (", %s" % rate_name(rate))] \
+			" and each track's stem" if with_stems else "", file_name(bits, flac) + (", %s" % rate_name(rate))] \
 			+ (", normalised to %d dB" % int(DAWBackend.RENDER_NORMALISE_DB) if normalise else "")
+
+
+func set_flac(on: bool) -> void:
+	flac = on
+	flac_key.lit = on
 
 
 func set_normalise(on: bool) -> void:
@@ -115,6 +127,10 @@ static func _next_depth(b: int) -> int:
 	return DAW.RENDER_BITS[(at + 1) % DAW.RENDER_BITS.size()]
 
 
+static func file_name(b: int, as_flac: bool) -> String:
+	return ("%d-bit FLAC" % mini(b, 24)) if as_flac else depth_name(b)
+
+
 static func depth_name(b: int) -> String:
 	return "32-bit float WAV" if b == 32 else "%d-bit WAV, dithered" % b
 
@@ -132,7 +148,7 @@ func _render(with_stems: bool) -> void:
 		return
 	busy = true
 	refresh()
-	DAW.render(with_stems, bits, normalise, rate)
+	DAW.render(with_stems, bits, normalise, rate, flac)
 
 
 func _on_rendered(_files: PackedStringArray, _problems: PackedStringArray) -> void:
