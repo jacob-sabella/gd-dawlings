@@ -177,3 +177,12 @@ dawkit c5f1668: `DawKitProject.vca` (dB per group), in the plain form and the DA
 `vca`) on the TRACK page steps the picked track's group through 0, +3, -3, -6, -12 dB. Test `_test_a_vca_trims_its_group` (10);
 suite 10715, 0 failed; probe host 53 / guest 47, 0 failed. Open: a real fader for it, and a Reaper path (kept desk-side).
 Item 3 done apart from that; next, item 4 (automation on sends and plugin bypass).
+
+### 4a. Plugin bypass automation
+
+Send lanes already existed. dawkit eb02801: target `enable:<i>` (kind `enable`, 0/1, held), checked by `problems()`, written to
+DAWproject as BoolPoints aimed at the effect's Enabled parameter and read back, kept through freeze. dawlings:
+`OfflineBackend.follow_automation` flips the effect and replicates `/track/N/fx/I/bypass`; the lane list offers `enable:i`
+for each plugin; the lane draws and edits like mute (top = on); ProjectBridge maps the index like `fx:` lanes. Extended the
+automation test (+4); suite 10719, 0 failed. Wire unchanged (existing automation address), so no probe. No shot taken.
+Item 4 done. Next: item 5 (track delay compensation and a latency report).

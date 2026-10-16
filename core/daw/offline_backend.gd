@@ -1664,6 +1664,13 @@ func follow_automation() -> void:
 						var sd: MixState.SendState = t.sends[slot]
 						if sd.dest_track == to and not sd.key and not is_equal_approx(taper_to_db(sd.volume), v):
 							_write_send(index, slot, "volume", db_to_taper(v))
+				"enable":
+					var fi := int(String(target).substr(7))
+					var fe := state.fx(index, fi, false)
+					if fe != null and fe.enabled != (v >= 0.5):
+						fe.enabled = v >= 0.5
+						state.fx_changed.emit(index, fi)
+						record_for_replication("/track/%d/fx/%d/bypass" % [index, fi], [1.0 if fe.enabled else 0.0])
 				"fx":
 					var parts := String(target).split(":")
 					var f := state.fx(index, int(parts[1]), false)

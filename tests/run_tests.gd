@@ -14833,6 +14833,16 @@ func _test_controls_follow_their_automation() -> void:
 	backend.follow_automation()
 	close_to("the send follows its lane", backend.taper_to_db(s.track(sender).sends[slot].volume), -20.0, 0.01)
 	close_to("so does the effect's parameter", float(s.fx(fx_track, fx_index).params[0]), 0.25)
+	# An effect's on/off.
+	DAW.set_automation(fx_track, "enable:%d" % fx_index, [[0.0, 1.0, DawKitAutomation.HOLD], [2.0, 0.0, DawKitAutomation.HOLD]])
+	s.position_seconds = 1.0
+	backend.follow_automation()
+	check("the effect is on before its bypass point", s.fx(fx_track, fx_index).enabled)
+	s.position_seconds = 3.0
+	backend.follow_automation()
+	check("and bypassed after it", not s.fx(fx_track, fx_index).enabled)
+	check("a bypass lane is offered among the track's lanes", ("enable:%d" % fx_index) in TimelineSurface.lane_targets(fx_track))
+	check("named for the effect", TimelineSurface.lane_name("enable:%d" % fx_index).ends_with("ON/OFF"))
 
 	var guest := MixState.new()
 	MixWire.apply_replicated(guest, MixWire.snapshot(s))
@@ -14846,7 +14856,7 @@ func _test_controls_follow_their_automation() -> void:
 	var other := GodotBackend.new()
 	other.state = back
 	check("loaded again (%s)" % [ProjectBridge.load(p, other)], back.track(2).automation == s.track(2).automation
-			and back.track(fx_track).automation.has("fx:0:0")
+			and back.track(fx_track).automation.has("fx:0:0") and back.track(fx_track).automation.has("enable:0")
 			and back.track(sender).automation.has("send:%d" % dest))
 	other.free()
 

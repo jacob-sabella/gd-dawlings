@@ -72,7 +72,7 @@ Iterations done: 50
 
 ## Automation
 - [x] lanes with points, modes (read/touch/latch/write passes)
-- [ ] automation on sends and plugin bypass (missing)
+- [x] automation on sends and plugin bypass (2026-10-16; sends already had `send:` lanes; a plugin's on/off is now an `enable:<i>` lane, 1 on and 0 bypassed: offered on the track's lane list, drawn and edited like mute, followed in read mode, saved in dawkit and DAWproject as the effect's Enabled parameter; not on Reaper's bridge)
 
 ## Plugins and FX
 - [x] add, remove, move/copy between tracks, bypass, wet, presets, parameters, plugin window

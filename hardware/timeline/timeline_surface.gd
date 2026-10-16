@@ -1039,6 +1039,8 @@ static func lane_targets(index: int) -> Array:
 		var dest := sd.resolve(DAW.state)
 		if dest > 0 and not sd.key and not out.has("send:%d" % dest):
 			out.append("send:%d" % dest)
+	for i in t.plugins():
+		out.append("enable:%d" % i)
 	var others: Array = t.automation.keys()
 	others.sort()
 	for target in others:
@@ -1106,6 +1108,9 @@ static func control_value(index: int, target: String) -> float:
 			var f := DAW.state.fx(index, int(parts[1]), false)
 			if f != null:
 				return float(f.params.get(int(parts[2]), 0.0))
+		"enable":
+			var f := DAW.state.fx(index, int(target.substr(7)), false)
+			return 1.0 if f == null or f.enabled else 0.0
 	return 0.0
 
 
@@ -1126,6 +1131,8 @@ static func lane_fraction(target: String, v: float) -> float:
 			return (1.0 - v) * 0.5
 		"mute":
 			return 1.0 - v
+		"enable":
+			return 1.0 if v >= 0.5 else 0.0
 	return clampf(v, 0.0, 1.0)
 
 
@@ -1138,6 +1145,8 @@ static func lane_value(target: String, f: float) -> float:
 			return 1.0 - f * 2.0
 		"mute":
 			return 1.0 if f < 0.5 else 0.0
+		"enable":
+			return 1.0 if f >= 0.5 else 0.0
 	return f
 
 
@@ -1151,6 +1160,8 @@ static func lane_text(target: String, v: float) -> String:
 			return "%d%% %s" % [roundi(absf(v) * 100.0), "left" if v < 0.0 else "right"]
 		"mute":
 			return "muted" if v >= 0.5 else "heard"
+		"enable":
+			return "on" if v >= 0.5 else "bypassed"
 	return "%.3f" % v
 
 
@@ -1164,6 +1175,8 @@ static func lane_name(target: String) -> String:
 		"fx":
 			var parts := target.split(":")
 			return "FX %d  PARAM %d" % [int(parts[1]), int(parts[2])]
+		"enable":
+			return "FX %d  ON/OFF" % int(target.substr(7))
 	return target.to_upper()
 
 

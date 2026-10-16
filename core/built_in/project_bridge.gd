@@ -100,11 +100,11 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 			var name: String = target
 			if name.begins_with("send:"):
 				name = "send:" + id_of(int(name.substr(5)))
-			elif name.begins_with("fx:"):
+			elif name.begins_with("fx:") or name.begins_with("enable:"):
 				var parts := name.split(":")
 				if not plugins.has(int(parts[1])):
 					continue
-				name = "fx:%d:%s" % [plugins.find(int(parts[1])) + shift, parts[2]]
+				name = "%s:%d" % [parts[0], plugins.find(int(parts[1])) + shift] + (":" + parts[2] if parts.size() > 2 else "")
 			out.automation.append(DawKitAutomation.new(name, (t.automation[target] as Array).duplicate(true)))
 		if t.is_frozen():
 			_freeze_out(out, t)
@@ -349,13 +349,13 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 				if not index_of.has(target.substr(5)):
 					continue
 				target = "send:%d" % index_of[target.substr(5)]
-			elif target.begins_with("fx:"):
+			elif target.begins_with("fx:") or target.begins_with("enable:"):
 				# The project's chain counts the instrument; the desk's does not.
 				var parts := target.split(":")
 				var at := int(parts[1])
 				if at < 0 or at >= src.effects.size() or src.effects[at].instrument:
 					continue
-				target = "fx:%d:%s" % [chain.find(src.effects[at]), parts[2]]
+				target = "%s:%d" % [parts[0], chain.find(src.effects[at])] + (":" + parts[2] if parts.size() > 2 else "")
 			if not lane.points.is_empty():
 				t.automation[target] = lane.points.duplicate(true)
 		var items: Array = []

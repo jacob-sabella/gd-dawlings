@@ -146,7 +146,7 @@ func _on_grab_begin(at: Vector3) -> void:
 		_auto_added = _auto_index < 0
 		if _auto_added:
 			var target: String = surface.shown_lane
-			var shape := DawKitAutomation.HOLD if target == "mute" else DawKitAutomation.LINEAR
+			var shape := DawKitAutomation.HOLD if DawKitAutomation.kind_of(target) in ["mute", "enable"] else DawKitAutomation.LINEAR
 			_auto_index = _place_point(snap(surface.seconds_at_point(at), _fine()),
 					surface.value_at_point(at), shape)
 			surface.preview_lane(_auto_points)
@@ -289,7 +289,7 @@ func _finish_point() -> void:
 	if not _dragged and not _auto_added and _auto_index >= 0 and _auto_index < _auto_points.size():
 		if _fine():
 			_auto_points.remove_at(_auto_index)
-		elif target != "mute":
+		elif DawKitAutomation.kind_of(target) not in ["mute", "enable"]:
 			var p: Array = _auto_points[_auto_index]
 			p[2] = DawKitAutomation.LINEAR if int(p[2]) == DawKitAutomation.HOLD else DawKitAutomation.HOLD
 	# The lane as it stands (the preview is gone): a track's, or the master's.
@@ -306,7 +306,7 @@ static func nudge_step(target: String) -> float:
 			return 0.5
 		"pan":
 			return 0.02
-		"mute":
+		"mute", "enable":
 			return 1.0
 	return 0.01
 
@@ -319,7 +319,7 @@ func _on_nudge(notches: int, fine: bool) -> bool:
 			var target: String = surface.shown_lane
 			var points: Array = surface.shown_points().duplicate(true)
 			var v := float(points[i][1])
-			if target == "mute":
+			if DawKitAutomation.kind_of(target) in ["mute", "enable"]:
 				v = 1.0 - v if notches % 2 != 0 else v
 			else:
 				v += notches * nudge_step(target) * (0.1 if fine else 1.0)
