@@ -2489,7 +2489,7 @@ func _stand_the_setup_wall() -> void:
 
 
 static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:
-	return RigRouletteStation.Pool.EVERYTHING if pool == RollSettings.Pool.EVERYTHING else RigRouletteStation.Pool.CHARACTER
+	return int(pool) as RigRouletteStation.Pool
 
 
 ## The board the roll is written up on, built again for each venue: how it is drawn and whether

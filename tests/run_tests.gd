@@ -21726,9 +21726,25 @@ func _test_an_items_sound_is_stretched_and_shifted() -> void:
 
 func _test_a_rig_roll_is_planned_from_its_settings() -> void:
 	var wild := RollSettings.from_dict({"count": 99, "pool": 7, "key_locked": true, "seed": -4})
-	check("settings are held to their limits", wild.count == RollSettings.COUNT_MAX and wild.pool == RollSettings.Pool.EVERYTHING
+	check("settings are held to their limits", wild.count == RollSettings.COUNT_MAX and wild.pool == RollSettings.Pool.DIRTY
 			and wild.key_locked and wild.seed_value == 0)
 	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
+	var catalogue := []
+	for k in [&"eq", &"compressor", &"reverb", &"delay", &"chorus", &"filter", &"distortion", &"phaser", &"limiter"]:
+		catalogue.append([k, String(k)])
+	var drawn := func(pool: RollSettings.Pool) -> Array:
+		var ps := RollSettings.new()
+		ps.pool = pool
+		return RigRoll.pool_of(ps, catalogue, true).map(func(c): return String(c[0]))
+	check("TIME-BASED draws only delay, reverb, chorus, phaser", drawn.call(RollSettings.Pool.TIME_BASED) == ["reverb", "delay", "chorus", "phaser"])
+	check("DIRTY draws only drive, low-pass, compressor", drawn.call(RollSettings.Pool.DIRTY) == ["compressor", "filter", "distortion"])
+	check("EVERYTHING is all of it, CHARACTER the five", drawn.call(RollSettings.Pool.EVERYTHING).size() == 9
+			and drawn.call(RollSettings.Pool.CHARACTER).size() == 5)
+	var only_dirty := RollSettings.new()
+	only_dirty.pool = RollSettings.Pool.DIRTY
+	only_dirty.seed_value = 7
+	var plan := RigRoll.plan(only_dirty, RigRoll.rng_for(only_dirty), [0, 1, 2], RigRoll.pool_of(only_dirty, catalogue, true))
+	check("a DIRTY roll lands only dirty pedals", plan["pedals"].all(func(p): return ["compressor", "filter", "distortion"].has(str(p["plugin"]))))
 	check("junk falls back to the defaults", RollSettings.from_dict({"count": "x"}).count >= RollSettings.COUNT_MIN)
 	var s := RollSettings.new()
 	s.count = 3

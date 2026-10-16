@@ -44,12 +44,12 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 	return {"pedals": pedals, "key": key}
 
 
-## The pool a roll draws from: CHARACTER keeps the character kinds of `choices`; EVERYTHING, or any
+## The pool a roll draws from: CHARACTER, TIME_BASED and DIRTY keep their own kinds of `choices`; EVERYTHING, or any
 ## pool when the engine's list carries no kind to filter by (`kinds_known` false), is all of it.
 static func pool_of(settings: RollSettings, choices: Array, kinds_known: bool) -> Array:
 	if not kinds_known or settings.pool == RollSettings.Pool.EVERYTHING:
 		return choices
 	var kinds := {}
-	for k in RollSettings.CHARACTER_KINDS:
+	for k in RollSettings.kinds_of(settings.pool):
 		kinds[String(k)] = true
 	return choices.filter(func(c): return kinds.has(String(c[0])))

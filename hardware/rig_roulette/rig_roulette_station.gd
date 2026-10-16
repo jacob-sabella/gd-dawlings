@@ -29,7 +29,7 @@ signal screen_chosen(choice: int)
 const WIDTH := 0.2
 const HEIGHT := 0.32
 
-enum Pool { CHARACTER, EVERYTHING }
+enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
 ## Character-only FX, the same curated set Rig Roulette's own Tour-mode version draws from
 ## (`TourProject.RIG_FX`) -- meaningful only against the built-in engine's FXCatalogue kinds.
@@ -245,7 +245,8 @@ func _pool_choices() -> Array:
 	# left to look broken when CHARACTER quietly does nothing different from EVERYTHING.
 	if DAW.backend is ReaperBackend:
 		return [[Pool.CHARACTER, "WHATEVER'S THERE"], [Pool.EVERYTHING, "WHATEVER'S THERE"]]
-	return [[Pool.CHARACTER, "CHARACTER"], [Pool.EVERYTHING, "EVERYTHING"]]
+	return [[Pool.CHARACTER, "CHARACTER"], [Pool.EVERYTHING, "EVERYTHING"], [Pool.TIME_BASED, "TIME-BASED ONLY"],
+			[Pool.DIRTY, "DIRTY ONLY"]]
 
 
 func _on_count_chosen(c: int) -> void:

@@ -141,3 +141,15 @@ The labels fade out past the distance they could be read at for a panel of their
 range ignored the wall's 3.4x scale. `RigRouletteStation._letter_for_the_scale` stretches each
 label's range by the scale. Looked at in a 720p shot from the seat: PEDALS, the pool, SCREEN, LOCK KEY
 and ROLL all read. Full suite 11118 checks, 0 failed. D2 is done; next the options (E).
+
+### E1: pool presets
+
+`RollSettings.Pool` gained TIME_BASED (delay, reverb, chorus, phaser) and DIRTY (drive, low-pass,
+compressor) beside CHARACTER and EVERYTHING; `RollSettings.kinds_of(pool)` names the kinds and
+`RigRoll.pool_of` filters by them. They are wheel positions on the setup wall's pool wheel and travel on
+the same replicated settings (the wire carries the same `pool` int, so no probe run). An out-of-range pool
+from the wire is held to the last one. Against Reaper's live list (no kind to filter by) every
+position still means "whatever's there". Tests: each pool draws only its own kinds, a DIRTY roll lands
+only dirty pedals. Full suite 11119 checks, 0 failed.
+
+Not done yet in the pool: per-kind toggles, weights, a Reaper allow/ban list, and a custom preset.
