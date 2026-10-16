@@ -218,11 +218,82 @@ func render(stems: bool, bits := 24, normalise := false, rate := 48000) -> void:
 	add_child(r)
 
 
+## The track frozen being rendered: its index, or 0.
+var _freezing := 0
+
+
+## Play the song once through and keep the track's sound, after its plugins and before its fader, as
+## a file in the takes folder; then the track is frozen to it. Refused while another render runs, for
+## a track already frozen, or for one with nothing on it.
+func freeze_track(track_index: int) -> void:
+	var t: MixState.TrackState = state.tracks.get(track_index)
+	if t == null or t.is_frozen() or t.items.is_empty() or not _bus.has(track_index):
+		render_finished.emit(PackedStringArray(), PackedStringArray(["that track cannot be frozen"]))
+		return
+	if rendering != null:
+		render_finished.emit(PackedStringArray(), PackedStringArray(["a render is already running"]))
+		return
+	var r := MixRender.new()
+	r.name = "Freeze"
+	r.backend = self
+	r.from = 0.0
+	r.to = state.timeline_length()
+	r.name_stem = "freeze %d %d" % [track_index, Time.get_ticks_msec()]
+	r.bits = 32
+	r.file_rate = int(AudioServer.get_mix_rate())
+	r.pre_fader = true
+	r.folder = ProjectSettings.globalize_path(AudioTake.DIR)
+	r.stems = [track_index]
+	_looping_before_render = state.looping
+	state.looping = false
+	var problem := r.begin()
+	if not problem.is_empty():
+		state.looping = _looping_before_render
+		render_finished.emit(PackedStringArray(), PackedStringArray([problem]))
+		return
+	_freezing = track_index
+	rendering = r
+	r.finished.connect(_on_rendered)
+	add_child(r)
+
+
 func _on_rendered(files: PackedStringArray, problems: PackedStringArray) -> void:
 	rendering = null
+	if _freezing > 0:
+		var index := _freezing
+		_freezing = 0
+		files = _frozen(index, files, problems)
 	state.looping = _looping_before_render
 	state.transport_changed.emit()
 	render_finished.emit(files, problems)
+
+
+## The track's stem among a freeze's `files`, put in as the frozen item. The files left, and the
+## problems, are for `render_finished`.
+func _frozen(index: int, files: PackedStringArray, problems: PackedStringArray) -> PackedStringArray:
+	var label := ("%s.wav" % state.track(index).display_name().validate_filename())
+	var stem := ""
+	for f in files:
+		if f.ends_with("- " + label):
+			stem = f
+	if stem.is_empty():
+		if problems.is_empty():
+			problems.append("the frozen sound was not written")
+		return PackedStringArray()
+	var sound := DawKitAudioFile.read(stem)
+	if not str(sound["error"]).is_empty():
+		problems.append("the frozen sound could not be read: %s" % sound["error"])
+		return PackedStringArray()
+	var item := MixState.ItemState.new()
+	item.start = 0.0
+	item.length = float((sound["samples"] as PackedFloat32Array).size()) / float(maxi(int(sound["channels"]), 1)) / float(maxi(int(sound["rate"]), 1))
+	item.name = "%s (frozen)" % state.track(index).display_name()
+	item.source = stem.get_file()
+	item.peaks = AudioTake.overview_of(stem)
+	take_peaks[item.source] = item.peaks
+	if not _locally_freeze(index, item):
+		problems.append("the track could not be frozen")
+	return PackedStringArray([stem])
 
 
 func open(options: Dictionary = {}) -> bool:

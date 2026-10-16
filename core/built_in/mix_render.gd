@@ -53,6 +53,9 @@ var file_rate := 48000
 var normalise := false
 ## Track indices to write stems of; the mix is always written.
 var stems: Array = []
+## Hear each stem at unity, before its fader and mute: what freezing a track keeps, so the fader
+## still moves the frozen sound.
+var pre_fader := false
 
 ## 0 for the master, else the track: [bus index, capture, frames so far, gain for the next read].
 var _taps := {}
@@ -90,6 +93,8 @@ func _tap(key: int, bus: int) -> void:
 
 ## What the bus's fader multiplies its sound by now; nothing while it is muted.
 func _gain(key: int, bus: int) -> float:
+	if pre_fader and key != 0:
+		return 1.0
 	if key != 0 and AudioServer.is_bus_mute(bus):
 		return 0.0
 	return db_to_linear(AudioServer.get_bus_volume_db(bus))

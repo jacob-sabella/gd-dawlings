@@ -39,6 +39,8 @@ var take_lane: GlyphKey
 var comp_here: GlyphKey
 ## The track's comp made plain clips on the first lane (DAW.flatten_comp).
 var flatten: GlyphKey
+## Freeze the track to a file of its sound, or thaw it (DAW.freeze_track, DAW.thaw_track).
+var freeze: GlyphKey
 var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
@@ -114,6 +116,7 @@ func _ready() -> void:
 	take_lane = _key("ItemLane", &"lane", EDIT_INK, "ITEM  TAKE LANE", _next_lane, _lane_text)
 	comp_here = _key("ItemComp", &"comp", GO_INK, "ITEM  COMP HERE", _comp_here, _comp_text)
 	flatten = _key("ItemFlatten", &"flatten", EDIT_INK, "ITEM  FLATTEN COMP", _flatten, _flatten_text)
+	freeze = _key("ItemFreeze", &"freeze", GO_INK, "ITEM  FREEZE TRACK", _freeze, _freeze_text)
 	normalise = _key("ItemNormalise", &"normalise", EDIT_INK, "ITEM  NORMALISE", _normalise,
 			func() -> String: return "gain so its loudest moment is full scale" if normalise.lit \
 					else "for a recorded item")
@@ -191,7 +194,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, flatten, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, flatten, freeze, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -217,7 +220,7 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, take_lane, comp_here, flatten, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, take_lane, comp_here, flatten, freeze, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
 		c.available = not item.locked
 	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
 	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
@@ -228,6 +231,7 @@ func refresh() -> void:
 	take_lane.lit = item.lane != 0
 	comp_here.lit = true
 	flatten.lit = not DAW.state.track(_target[0]).comp.is_empty()
+	freeze.lit = DAW.state.track(_target[0]).is_frozen()
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant, softer, harder, humanise, legato, staccato, even, retrograde]:
@@ -549,6 +553,23 @@ func _comp_here() -> void:
 func _flatten() -> void:
 	if not _target.is_empty():
 		DAW.flatten_comp(_target[0])
+
+
+func _freeze() -> void:
+	if _target.is_empty():
+		return
+	if DAW.state.track(_target[0]).is_frozen():
+		DAW.thaw_track(_target[0])
+	else:
+		DAW.freeze_track(_target[0])
+
+
+func _freeze_text() -> String:
+	if _target.is_empty():
+		return "select one item"
+	if DAW.state.track(_target[0]).is_frozen():
+		return "frozen: press to thaw it"
+	return "bake the track's sound, plugins and all, into one file (plays the song once)"
 
 
 func _flatten_text() -> String:

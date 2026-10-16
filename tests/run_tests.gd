@@ -143,6 +143,7 @@ func _ready() -> void:
 	_test_every_venue_leaves_room_for_the_activities()
 	_test_gear_never_leaves_its_stand()
 	await _test_the_mix_and_its_stems_are_rendered_to_files()
+	await _test_freezing_a_track_renders_it_to_a_file()
 	await _test_you_walk_into_the_room_and_not_through_it()
 	await _test_a_duck_is_picked_up_squeezed_and_put_down()
 	await _test_the_duck_is_the_rooms()
@@ -13727,6 +13728,48 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_freezing_a_track_renders_it_to_a_file() -> void:
+	# The last test's engine is freed a frame after it; its buses must be gone before ours are made.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	for index in s.track_indices():
+		s.track(index).items.clear()
+		s.track(index).part = ""
+	s.project_length = 1.0
+	var t := s.track(6)
+	DAW.insert_midi_take(6, 0.0, 1.0, [[0.0, 0.5, 60, 100, 0]], "note")
+	var heard: Array = []
+	var on_done := func(files: PackedStringArray, problems: PackedStringArray) -> void:
+		heard.append([files, problems])
+	DAW.render_finished.connect(on_done)
+	DAW.freeze_track(99)
+	check("a track that is not there is refused", heard.size() == 1 and not t.is_frozen())
+	heard.clear()
+	DAW.freeze_track(6)
+	check("a freeze is under way", backend.rendering != null and backend.rendering.pre_fader)
+	var waited := 0.0
+	while heard.is_empty() and waited < 30.0:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	DAW.render_finished.disconnect(on_done)
+	check("it finishes (%.1fs, %s)" % [waited, heard], not heard.is_empty() and (heard[0][1] as PackedStringArray).is_empty())
+	check("the track is frozen to one item of its sound", t.is_frozen() and t.items.size() == 1
+			and t.items[0].source.ends_with(".wav") and t.items[0].length >= 1.0 and t.items[0].notes.is_empty())
+	check("the sound is in the takes folder", FileAccess.file_exists(backend.media_path(t.items[0].source)))
+	DAW.freeze_track(6)
+	check("a frozen track is not frozen again", backend.rendering == null)
+	DAW.thaw_track(6)
+	check("thawed, the note is back", not t.is_frozen() and t.items.size() == 1 and not t.items[0].notes.is_empty())
+	DAW.apply_intent(&"freeze_track", ["x"])
+	DAW.apply_intent(&"thaw_track", [])
+	check("malformed intents change nothing", not t.is_frozen())
+	_offline()
 
 
 func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:

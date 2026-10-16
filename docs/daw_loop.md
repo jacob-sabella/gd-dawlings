@@ -110,3 +110,13 @@ dawlings: `TrackState.frozen`, `DAWBackend._locally_freeze/_locally_thaw` (items
 plugins bypassed; thaw puts all back), `ProjectBridge` carries it both ways (export freezes dawkit's own way;
 import thaws then freezes again). Test `_test_a_frozen_track_is_one_item_and_thaws_and_is_saved` (12); suite
 10664, 0 failed. No verb or wire yet, so no probe. Next: render a track pre-fader to its file, the verb, the token.
+
+### 1i. Freeze: render, verb, token
+
+`MixRender.pre_fader`, `GodotBackend.freeze_track` (plays 0 to the song's end once, tapping the track after its
+plugins and before its fader, 32-bit float WAV into the takes folder, then `_locally_freeze` with that file as
+the one item), `thaw_track`; verbs `DAW.freeze_track/thaw_track` (validated from peers); a FREEZE token (glyph
+`freeze`) on the ITEM page that freezes or thaws. The wire carries only `/track/N/frozen`. Tests: the freeze renders
+to a file and thaws (8, awaited; it waits two frames so the last test's engine has freed its buses); suite 10672,
+0 failed; session probe guest 47, 0 failed. Shot: shots/freeze_token.png. Open: the Reaper path. Item 1 is done
+but for that; next, CC and pitch-bend lanes.

@@ -263,6 +263,12 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 		state.set_track_comp(idx, unpack_comp(args))
 		return
 
+	# Only that it is frozen: what it held stays with the host.
+	if field == "frozen":
+		state.track(idx).frozen = {"remote": true} if _as_bool(args) else {}
+		state.timeline_changed.emit()
+		return
+
 	if field == "items":
 		# FLAT, not one address per item field. A forty-item lane would otherwise be a
 		# hundred and sixty messages that must all arrive before the lane is drawable, and
@@ -770,6 +776,8 @@ static func snapshot(state: MixState) -> Array:
 			out.append(["/track/%d/items" % index, _pack_items(t.items)])
 		if not t.comp.is_empty():
 			out.append(["/track/%d/comp" % index, pack_comp(t.comp)])
+		if t.is_frozen():
+			out.append(["/track/%d/frozen" % index, [1.0]])
 		for target in t.automation:
 			out.append(["/track/%d/automation/%s" % [index, target], pack_automation(t.automation[target])])
 

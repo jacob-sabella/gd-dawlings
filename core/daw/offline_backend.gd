@@ -1226,6 +1226,10 @@ func flatten_comp(track_index: int) -> void:
 		_remember_edit(before)
 
 
+func thaw_track(track_index: int) -> void:
+	_locally_thaw(track_index)
+
+
 func set_comp(track_index: int, from: float, to: float, lane: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_set_comp(track_index, from, to, int(lane)):

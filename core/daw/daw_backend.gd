@@ -342,6 +342,12 @@ func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void
 func set_item_lane(_track_index: int, _item_index: int, _lane: float) -> void: pass
 func set_comp(_track_index: int, _from: float, _to: float, _lane: float) -> void: pass
 func flatten_comp(_track_index: int) -> void: pass
+## Freeze a track: its sound through its plugins, before its fader, written to a file, and its items
+## and plugins swapped for that (MixState.TrackState.frozen). Takes as long as the song plays; a
+## no-op without Capability.RENDER. `render_finished` says how it went.
+func freeze_track(_track_index: int) -> void: pass
+## Put a frozen track back as it was.
+func thaw_track(_track_index: int) -> void: pass
 ## A new, empty track at `at` (from 1), everything from there on moving down one.
 func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
@@ -526,6 +532,7 @@ func _locally_freeze(track_index: int, rendered: MixState.ItemState) -> bool:
 	for fx_index in t.plugins():
 		on[fx_index] = t.fx[fx_index].enabled
 	t.frozen = {"items": MixWire._pack_items(t.items), "comp": MixWire.pack_comp(t.comp), "fx_on": on}
+	record_for_replication("/track/%d/frozen" % track_index, [1.0])
 	_write_comp(track_index, [])
 	_write_lane(track_index, [rendered])
 	for fx_index in on:
@@ -541,6 +548,7 @@ func _locally_thaw(track_index: int) -> bool:
 		return false
 	var was := t.frozen
 	t.frozen = {}
+	record_for_replication("/track/%d/frozen" % track_index, [0.0])
 	_write_lane(track_index, MixWire._unpack_items(was["items"]))
 	_write_comp(track_index, MixWire.unpack_comp(was["comp"]))
 	for fx_index in was["fx_on"]:

@@ -205,6 +205,12 @@ func _build() -> void:
 			_box(Vector2(0, -0.75), Vector2(1.6, 0.18), 0.2)
 			_box(Vector2(0, 0.75), Vector2(1.6, 0.18), 0.2)
 			_box(Vector2(0, 0), Vector2(1.6, 0.4), 0.6)
+		&"freeze":
+			# A snowflake: three bars across the middle.
+			_box(Vector2(0, 0), Vector2(1.8, 0.2), 0.3)
+			_box(Vector2(-0.45, 0), Vector2(0.2, 1.6), 0.4)
+			_box(Vector2(0.45, 0), Vector2(0.2, 1.6), 0.4)
+			_ring(Vector2(0, 0), 0.3, 0.1)
 		&"group":
 			# Three links of a chain: tracks held together.
 			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)
