@@ -62,7 +62,7 @@ Iterations done: 50
 - [x] track groups (2026-10-14; four, a GROUP token on the TRACK page; faders by the same decibels, mutes and solos as one; saved; desk-side on Reaper, not in its project)
 - [x] VCA faders (2026-10-16; a trim in dB per group, `MixState.vca`, verb `set_vca`, `/vca/N` on the wire, added to the bus level; a VCA token on the TRACK page steps 0/+3/-3/-6/-12; saved in dawkit as `DawKitProject.vca`; desk-side on Reaper, not in its project; no free-form fader yet)
 - [x] a group overridden for one move (2026-10-16; a FREE token on the TRACK page arms `DAW.group_free`; the next fader release, mute or solo is one track's alone; desk-side, not on the wire)
-- [ ] track delay compensation (missing)
+- [~] track delay compensation (2026-10-16: the LATENCY report is done, `LatencyReport` per track and folder with the delay each would need to line up, read off a LATENCY token on the TRACK page; the delay itself is not applied: it needs a native delay line on the track buses, to do)
 
 ## Routing and sends
 - [~] audio-device patchbay wall (partial, 2026-10-14: `PatchWallSurface` draws this machine's PipeWire graph in the venue's palette, hung on the studio side room's back wall; ports are dragged jack to jack to patch, onto a patched port to cut; the machine's own, not shared; see the backlog)
@@ -107,4 +107,4 @@ Iterations done: 50
 - [ ] project templates: a new project from a saved layout of tracks, routing and plugins (missing)
 
 ## Performance and latency
-- [ ] latency report and compensation (missing; see `tools/budget.sh` for frame cost only)
+- [~] latency report (2026-10-16, plugin latency by track; compensation still open, see above; `tools/budget.sh` is frame cost only)

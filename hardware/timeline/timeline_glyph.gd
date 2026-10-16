@@ -230,6 +230,11 @@ func _build() -> void:
 			_box(Vector2(0, 0.3), Vector2(1.0, 0.4), 0.5)
 			_box(Vector2(-0.8, -0.7), Vector2(0.5, 0.14), 0.3)
 			_box(Vector2(0.8, -0.7), Vector2(0.5, 0.14), 0.3)
+		&"latency":
+			# A clock face with its hand a little past noon.
+			_ring(Vector2(0, 0), 0.8, 0.12)
+			_box(Vector2(0, 0.3), Vector2(0.14, 0.6), 0.4)
+			_box(Vector2(0.22, 0.0), Vector2(0.4, 0.14), 0.4)
 		&"group_free":
 			# The chain with its middle link lifted out.
 			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)

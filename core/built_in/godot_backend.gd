@@ -525,6 +525,12 @@ func _key_in_use(key: String, track_index: int, fx_index: int) -> bool:
 	return false
 
 
+## What the hosted plugin in a slot reports, in samples.
+func fx_latency(track_index: int, fx_index: int) -> int:
+	var p := hosted_plugin(track_index, fx_index)
+	return int(p.latency()) if p != null else 0
+
+
 ## The plugin a slot holds, or null.
 func hosted_plugin(track_index: int, fx_index: int) -> Object:
 	var kind := String(fx_kind(track_index, fx_index))

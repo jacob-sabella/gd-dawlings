@@ -225,6 +225,11 @@ func group_mates(index: int) -> Array:
 	var group := state.track(index).group
 	return state.track_indices().filter(func(j): return j != index and state.track(j).group == group)
 ## A track into a group, 1 to GROUPS, or out of any with 0. One undo step.
+## The plugins' latency per track and what lining them up would take (LatencyReport).
+func latency_report() -> Array:
+	return LatencyReport.build(state, backend.fx_latency)
+
+
 ## A group's VCA trim in dB: its tracks all follow, with the faders where they are.
 func set_vca(group: int, db: float) -> void:
 	_do(&"set_vca", [clampi(group, 1, GROUPS), clampf(db, -60.0, 12.0)])

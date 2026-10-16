@@ -31,6 +31,8 @@ var group: GlyphKey
 var free: GlyphKey
 ## Steps the picked track's group VCA trim through VCA_STEPS.
 var vca: GlyphKey
+## Reads out the plugins' latency (LatencyReport) when pointed at; pressing does nothing.
+var latency: GlyphKey
 const VCA_STEPS := [0.0, 3.0, -3.0, -6.0, -12.0]
 
 ## Each group's colour, for its light: group 1 is the first.
@@ -90,6 +92,18 @@ func _ready() -> void:
 				return "the next fader move is one track's alone; press to take it back" if DAW.group_free \
 						else "press, then move a fader: it moves alone, not with its group")
 	vca = _key("TrackVca", &"vca", Color(0.95, 0.85, 0.4), "TRACKS  GROUP  VCA", _step_vca, _vca_text)
+	latency = _key("TrackLatency", &"latency", Color(0.55, 0.9, 0.6), "TRACKS  LATENCY", func() -> void: pass,
+			func() -> String:
+				var rows := DAW.latency_report()
+				var mine: Dictionary = {}
+				for r in rows:
+					if int(r["track"]) == surface.picked_track:
+						mine = r
+				var line := LatencyReport.summary(DAW.state, rows, AudioServer.get_mix_rate())
+				if mine.is_empty() or int(mine["own"]) == 0:
+					return line
+				return "%s: its plugins add %.1f ms; %s" % [_name_of(surface.picked_track),
+						LatencyReport.milliseconds(int(mine["own"]), AudioServer.get_mix_rate()), line])
 	DAW.group_free_changed.connect(func() -> void: free.lit = DAW.group_free)
 	_group()
 	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,

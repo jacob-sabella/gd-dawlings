@@ -339,6 +339,7 @@ func _ready() -> void:
 	_test_regions_are_renamed_moved_and_listed()
 	_test_grouped_tracks_move_together()
 	_test_a_vca_trims_its_group()
+	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
 	_test_the_last_marker_removed_is_gone_everywhere()
 	_test_notes_are_humanised()
@@ -20832,6 +20833,32 @@ func _test_regions_are_renamed_moved_and_listed() -> void:
 	timeline._process(0.0)
 	check("with none, the list is out of reach", not timeline.region_page.list.available)
 	timeline.free()
+
+
+func _test_the_latency_report_lines_up_the_slowest_path() -> void:
+	var st := MixState.new()
+	for i in [1, 2, 3]:
+		st.tracks[i] = MixState.TrackState.new()
+		st.tracks[i].index = i
+	st.tracks[1].folder_depth = 1
+	st.tracks[2].folder_depth = -1
+	st.fx(1, 0).name = "Bus comp"
+	st.fx(2, 0).name = "Lead limiter"
+	st.fx(2, 1).name = "Reverb"
+	st.fx(3, 0).name = "Pad"
+	var lat := func(t: int, k: int) -> int: return {"1:0": 64, "2:0": 480, "2:1": 32, "3:0": 0}["%d:%d" % [t, k]]
+	var rows := LatencyReport.build(st, lat)
+	check("a track's own chain adds up", rows[1]["own"] == 512)
+	check("and its folder's after it", rows[1]["path"] == 576 and rows[0]["path"] == 64)
+	check("the slowest sets what the others are held back to", LatencyReport.longest(rows) == 576
+			and rows[0]["comp"] == 512 and rows[1]["comp"] == 0 and rows[2]["comp"] == 576)
+	st.fx(2, 0).enabled = false
+	rows = LatencyReport.build(st, lat)
+	check("a bypassed plugin adds none", rows[1]["own"] == 32)
+	close_to("in milliseconds", LatencyReport.milliseconds(480, 48000.0), 10.0, 0.001)
+	check("said in words", LatencyReport.summary(st, rows, 48000.0).contains("ms")
+			and LatencyReport.summary(MixState.new(), [], 48000.0) == "no plugin adds latency")
+	check("the offline engine hosts nothing, so reports none", DAW.latency_report().all(func(r): return r["path"] == 0))
 
 
 func _test_a_vca_trims_its_group() -> void:

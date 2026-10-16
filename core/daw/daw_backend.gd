@@ -245,6 +245,9 @@ func monitor_bus(_track_index: int) -> StringName: return &""
 ## A track's instrument plugin, hosted here (DawKitPlugin), or null. Only the built-in engine
 ## hosts plugins itself; a DAW's own are played through the DAW.
 func track_instrument(_track_index: int) -> Object: return null
+## The samples of delay the plugin in a slot adds (what it reports), 0 for none or where the
+## engine does not host plugins itself.
+func fx_latency(_track_index: int, _fx_index: int) -> int: return 0
 
 
 func save_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot save from here"])

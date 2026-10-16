@@ -186,3 +186,11 @@ DAWproject as BoolPoints aimed at the effect's Enabled parameter and read back, 
 for each plugin; the lane draws and edits like mute (top = on); ProjectBridge maps the index like `fx:` lanes. Extended the
 automation test (+4); suite 10719, 0 failed. Wire unchanged (existing automation address), so no probe. No shot taken.
 Item 4 done. Next: item 5 (track delay compensation and a latency report).
+
+### 5a. Latency report
+
+`LatencyReport.build(state, fx_latency)` (core/daw/latency_report.gd): per track the samples its enabled plugins report, its
+path (plus the folders it sits in) and `comp`, the hold-back that lines it up with the slowest path. `DAWBackend.fx_latency`
+(0 by default; `GodotBackend` asks the hosted plugin), `DAW.latency_report()`. A LATENCY token (glyph `latency`) on the TRACK
+page reads it out when pointed at. Test `_test_the_latency_report_lines_up_the_slowest_path` (7). Not yet: applying `comp` as
+a delay on the buses (a native delay line in dawkit), so item 5 stays `[~]`; sends are not followed.
