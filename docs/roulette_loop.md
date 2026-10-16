@@ -46,3 +46,12 @@ F. Polish: sound, easing, shots at 720p and from the seat, docs.
 ### 1. Survey and plan
 
 Written. No code changed.
+
+### A. Roll settings and the roll as plain logic
+
+`RollSettings` (core/rig_roulette/roll_settings.gd: count, pool, key lock, seed; `to_dict`/`from_dict` hold every field to its
+limits) and `RigRoll` (rig_roll.gd: `rng_for` seeded or fresh, `track_count`, `plan`, `pool_of`) work a roll out without applying
+it. `Studio._roll_rig` now builds the settings from the panel (`RigRouletteStation.settings()`), plans, then starts the project
+and puts the effects on, so the behaviour is as before (the existing `_test_rig_roulette_rolls_outside_tour` passes unchanged).
+New test `_test_a_rig_roll_is_planned_from_its_settings` (same seed, same roll; limits; pools; locked key). Suite 10780, 0 failed.
+Next: B, the room and its travel.

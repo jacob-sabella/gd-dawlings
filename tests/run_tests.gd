@@ -342,6 +342,7 @@ func _ready() -> void:
 	_test_a_render_can_be_flac()
 	_test_a_project_starts_from_a_template()
 	_test_an_items_sound_is_stretched_and_shifted()
+	_test_a_rig_roll_is_planned_from_its_settings()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -21711,6 +21712,41 @@ func _test_an_items_sound_is_stretched_and_shifted() -> void:
 	check("and a MIDI item has no sound to stretch", is_equal_approx(s.item(lane, midi_index).length, midi_length))
 	for f in [backend.media_path(it.source), backend.media_path(up.source)]:
 		DirAccess.remove_absolute(f)
+
+
+func _test_a_rig_roll_is_planned_from_its_settings() -> void:
+	var wild := RollSettings.from_dict({"count": 99, "pool": 7, "key_locked": true, "seed": -4})
+	check("settings are held to their limits", wild.count == RollSettings.COUNT_MAX and wild.pool == RollSettings.Pool.EVERYTHING
+			and wild.key_locked and wild.seed_value == 0)
+	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
+	check("junk falls back to the defaults", RollSettings.from_dict({"count": "x"}).count >= RollSettings.COUNT_MIN)
+	var s := RollSettings.new()
+	s.count = 3
+	s.seed_value = 4242
+	var choices := [["distortion", "Drive"], ["eq", "EQ"], ["reverb", "Room"], ["limiter", "Limit"], ["delay", "Echo"]]
+	var pool := RigRoll.pool_of(s, choices, true)
+	check("a character pool leaves out the utility kinds", pool.size() == 3 and pool.all(func(c): return c[0] != "eq" and c[0] != "limiter"))
+	check("everything, or a list with no kinds, keeps all", RigRoll.pool_of(s, choices, false).size() == 5)
+	var tracks := [0, 1, 2, 3, 4]
+	var one := RigRoll.rng_for(s)
+	var n := RigRoll.track_count(one)
+	var a := RigRoll.plan(s, one, tracks.slice(0, n), pool)
+	var two := RigRoll.rng_for(s)
+	RigRoll.track_count(two)
+	var b := RigRoll.plan(s, two, tracks.slice(0, n), pool)
+	check("the same seed lands the same roll", a == b and n >= RollSettings.TRACKS_MIN and n <= RollSettings.TRACKS_MAX)
+	var landed: Array = a["pedals"]
+	check("three pedals on three different tracks", landed.size() == 3 and landed.map(func(p): return p["track"]).size() == 3
+			and landed.map(func(p): return p["track"]).filter(func(t): return t in tracks).size() == 3
+			and landed.map(func(p): return p["track"]).duplicate().size() == 3)
+	var distinct := {}
+	for p in landed:
+		distinct[p["track"]] = true
+	check("distinct", distinct.size() == 3)
+	check("and a key is named", not str(a["key"]).is_empty())
+	s.key_locked = true
+	check("a locked key is not rolled", RigRoll.plan(s, RigRoll.rng_for(s), tracks, pool)["key"] == "")
+	check("an empty pool lands nothing", RigRoll.plan(s, RigRoll.rng_for(s), tracks, [])["pedals"].is_empty())
 
 
 func _test_an_item_plays_backwards() -> void:

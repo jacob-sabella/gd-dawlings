@@ -33,7 +33,7 @@ enum Pool { CHARACTER, EVERYTHING }
 ## (`TourProject.RIG_FX`) -- meaningful only against the built-in engine's FXCatalogue kinds.
 ## Against a live Reaper plugin list there is no reliable way to tell a reverb from a synth by
 ## name alone, so EVERYTHING and CHARACTER draw from the same pool there; see `_pool_choices`.
-const CHARACTER_KINDS: Array[StringName] = [&"distortion", &"chorus", &"reverb", &"delay", &"phaser"]
+const CHARACTER_KINDS: Array[StringName] = RollSettings.CHARACTER_KINDS
 
 var count := 2
 var pool := Pool.CHARACTER
@@ -131,6 +131,15 @@ func _ready() -> void:
 	add_child(_last_label)
 
 	_lamp()
+
+
+## The wheels as the roll's settings.
+func settings() -> RollSettings:
+	var s := RollSettings.new()
+	s.count = count
+	s.pool = pool as RollSettings.Pool
+	s.key_locked = key_locked
+	return s
 
 
 ## Reported after a roll actually lands (from `Studio._roll_rig`), so the panel reads back what

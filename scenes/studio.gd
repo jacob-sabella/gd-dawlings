@@ -2443,18 +2443,16 @@ func _on_rig_roulette_roll_requested() -> void:
 
 
 ## How many tracks a roll starts the new project with.
-const ROLL_TRACKS_MIN := 2
-const ROLL_TRACKS_MAX := 8
-const ROLL_KEY_NAMES := ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+const ROLL_TRACKS_MIN := RollSettings.TRACKS_MIN
+const ROLL_TRACKS_MAX := RollSettings.TRACKS_MAX
 
 ## The roll itself, host-only by the time this runs (`_on_rig_roulette_roll_requested`'s own
 ## gate): refused while the open project has changes no save has kept, since it starts a NEW
-## project. That one has a random number of tracks (`ROLL_TRACKS_MIN`..`ROLL_TRACKS_MAX`),
-## `station.count` of them (shuffled, from a fresh unseeded roll -- nothing to do with a Tour
-## run's own seed) get a plugin from `_rig_pool`, and unless LOCK KEY is lit a key is rolled too.
-## The key is only named, never applied: the project is empty, so there is no note to move.
-## The rolled project is the starting point, not an edit, so it counts as saved and can be
-## rolled again untouched.
+## project. The roll is worked out by `RigRoll` from the panel's settings (fresh randomness
+## unless a seed is set -- nothing to do with a Tour run's own seed); this starts the project and
+## puts the effects on. The key is only named, never applied: the project is empty, so there is
+## no note to move. The rolled project is the starting point, not an edit, so it counts as saved
+## and can be rolled again untouched.
 func _roll_rig() -> void:
 	var station := rig_roulette_station
 	if station == null:
@@ -2462,38 +2460,26 @@ func _roll_rig() -> void:
 	if DAW.has_unsaved_changes():
 		Session.notice.emit("Save the project first: a roll starts a new one.")
 		return
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var tracks := rng.randi_range(ROLL_TRACKS_MIN, ROLL_TRACKS_MAX)
+	var settings := station.settings()
+	var rng := RigRoll.rng_for(settings)
+	var tracks := RigRoll.track_count(rng)
 	var refused := DAW.new_project(tracks)
 	if not refused.is_empty():
 		Session.notice.emit("Could not start the new project: %s" % "; ".join(refused))
 		return
 
-	var eligible: Array[int] = []
+	var indices: Array = []
 	for i in DAW.state.track_indices():
-		eligible.append(i)
-	for i in range(eligible.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var tmp: int = eligible[i]
-		eligible[i] = eligible[j]
-		eligible[j] = tmp
-
-	var pool := _rig_roulette_pool()
+		indices.append(i)
+	var plan := RigRoll.plan(settings, rng, indices, _rig_roulette_pool(settings))
 	var landed := 0
 	var pedals: Array = []
-	for i in mini(station.count, eligible.size()):
-		if pool.is_empty():
-			break
-		var plugin: String = str(pool[rng.randi() % pool.size()][0])
-		DAW.add_fx(eligible[i], plugin, -1)
+	for p in plan["pedals"]:
+		DAW.add_fx(int(p["track"]), str(p["plugin"]), -1)
 		landed += 1
-		var added: MixState.FXState = DAW.state.track(eligible[i]).fx.values()[-1]
-		pedals.append({"track": DAW.state.track(eligible[i]).display_name(), "fx": added.name})
-
-	var key := ""
-	if not station.key_locked:
-		key = "%s %s" % [ROLL_KEY_NAMES[rng.randi() % ROLL_KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]
+		var added: MixState.FXState = DAW.state.track(int(p["track"])).fx.values()[-1]
+		pedals.append({"track": DAW.state.track(int(p["track"])).display_name(), "fx": added.name})
+	var key: String = plan["key"]
 	DAW.mark_clean()
 	# The board is for the write-up now, whatever it was showing.
 	_show_board(&"")
@@ -2508,17 +2494,11 @@ func _roll_rig() -> void:
 	Session.tell_room(msg + ".")
 
 
-## `RigRouletteStation.Pool.CHARACTER` on the built-in engine draws only `CHARACTER_KINDS` out of
-## `DAW.state.fx_choices`; EVERYTHING, or any pool against a live Reaper list (no kind metadata
-## to filter by), is the whole thing.
-func _rig_roulette_pool() -> Array:
-	var choices: Array = DAW.state.fx_choices
-	if DAW.backend is ReaperBackend or rig_roulette_station.pool == RigRouletteStation.Pool.EVERYTHING:
-		return choices
-	var kinds := {}
-	for k in RigRouletteStation.CHARACTER_KINDS:
-		kinds[String(k)] = true
-	return choices.filter(func(c): return kinds.has(String(c[0])))
+## The effects a roll may land: CHARACTER draws only the character kinds out of
+## `DAW.state.fx_choices`; EVERYTHING, or any pool against a live Reaper list (no kind metadata to
+## filter by), is the whole thing.
+func _rig_roulette_pool(settings: RollSettings) -> Array:
+	return RigRoll.pool_of(settings, DAW.state.fx_choices, not DAW.backend is ReaperBackend)
 
 
 ## A thrown item has hit the case, broken or not (TourCase.break_attempted): told so only the
