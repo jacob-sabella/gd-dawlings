@@ -2422,23 +2422,58 @@ func _build_tour_case() -> void:
 ## The panel on the control room wall: works against whichever DAW backend is open, not gated to
 ## the built-in engine the way Tour is, so it is built unconditionally alongside the case.
 func _build_rig_roulette_station() -> void:
-	rig_roulette_station = RigRouletteStation.new()
-	studio_set.add_child(rig_roulette_station)
-	rig_roulette_station.transform = venue.rig_roulette_spot()
-	rig_roulette_station.roll_requested.connect(_on_rig_roulette_roll_requested)
-	rig_roulette_station.screen_sources = func() -> Array:
+	_build_roll_board()
+	_stand_the_setup_wall()
+	Session.roll_changed.connect(_on_session_roll_changed)
+	venue_changed.connect(func(_id): _build_roll_board())
+	venue_changed.connect(func(_id): _stand_the_setup_wall())
+
+
+## What the host has set for the next roll: kept here, not in the panel, so it outlives the
+## panel (which only stands in the Rig Roulette room) and a roll anywhere reads it.
+var roll_settings := RollSettings.new()
+
+
+## The setup wall (`RigRouletteStation`) stands in the Rig Roulette room and nowhere else: the
+## venues have a door instead (`RouletteDoor`). It is a child of the venue, so it goes when the
+## venue does; its wheels start from `roll_settings` and write back to it.
+func _stand_the_setup_wall() -> void:
+	rig_roulette_station = null
+	if venue == null or not in_roulette_room():
+		return
+	var wall := RigRouletteStation.new()
+	wall.name = "SetupWall"
+	wall.count = roll_settings.count
+	wall.pool = wall_pool(roll_settings.pool)
+	wall.key_locked = roll_settings.key_locked
+	wall.transform = venue.rig_roulette_spot()
+	wall.roll_requested.connect(_on_rig_roulette_roll_requested)
+	wall.changed.connect(func() -> void:
+		var s := wall.settings()
+		roll_settings.count = s.count
+		roll_settings.pool = s.pool
+		roll_settings.key_locked = s.key_locked)
+	wall.screen_sources = func() -> Array:
 		var out := []
 		var sources := board_sources()
 		for i in sources.size():
 			out.append([i, "SCREEN: " + board_title(sources[i])])
 		return out
-	rig_roulette_station.screen_chosen.connect(func(i: int) -> void:
+	wall.screen_chosen.connect(func(i: int) -> void:
 		var sources := board_sources()
 		if i >= 0 and i < sources.size():
 			choose_board_source(sources[i]))
-	_build_roll_board()
-	Session.roll_changed.connect(_on_session_roll_changed)
-	venue_changed.connect(func(_id): _build_roll_board())
+	venue.add_child(wall)
+	rig_roulette_station = wall
+	if not Session.roll.is_empty():
+		wall.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
+	if wall.screen_wheel != null:
+		wall.screen_wheel.choice = maxi(board_sources().find(board_source), 0)
+		wall.screen_wheel.refresh()
+
+
+static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:
+	return RigRouletteStation.Pool.EVERYTHING if pool == RollSettings.Pool.EVERYTHING else RigRouletteStation.Pool.CHARACTER
 
 
 ## The board the roll is written up on, built again for each venue: how it is drawn and whether
@@ -2450,7 +2485,6 @@ func _build_roll_board() -> void:
 	roll_board = RollBoard.new()
 	roll_board.chalky = venue.roll_board_chalky()
 	roll_board.free_standing = venue.back_wall_gear_stands()
-	rig_roulette_station.set_free_standing(venue.back_wall_gear_stands())
 	roll_board.transform = venue.roll_board_spot()
 	roll_board.rich = rich_rendering()
 	roll_board.environment_from = world_env.environment if world_env != null else null
@@ -2509,7 +2543,7 @@ func _show_board(source: StringName) -> void:
 ## the panel's own line say what it was.
 func _on_session_roll_changed() -> void:
 	roll_board.show_roll(Session.roll)
-	if not Session.roll.is_empty():
+	if not Session.roll.is_empty() and rig_roulette_station != null:
 		rig_roulette_station.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
 
 
@@ -2534,13 +2568,10 @@ const ROLL_TRACKS_MAX := RollSettings.TRACKS_MAX
 ## no note to move. The rolled project is the starting point, not an edit, so it counts as saved
 ## and can be rolled again untouched.
 func _roll_rig() -> void:
-	var station := rig_roulette_station
-	if station == null:
-		return
 	if DAW.has_unsaved_changes():
 		Session.notice.emit("Save the project first: a roll starts a new one.")
 		return
-	var settings := station.settings()
+	var settings := roll_settings
 	var rng := RigRoll.rng_for(settings)
 	var tracks := RigRoll.track_count(rng)
 	var refused := DAW.new_project(tracks)

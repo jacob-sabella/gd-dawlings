@@ -86,3 +86,17 @@ the door, and using the doors goes in and back to the loft). Door styling per ve
 that wants its own door look (a hatch, a cave mouth) is a polish item. Seen in the studio and the grid (shots/door_studio.png,
 door_grid.png). Suite 11099, 0 failed.
 Open: the wall panel stays where it is for now (D moves it into the room).
+
+### D1. The setup wall moves into the room
+
+Decision (the open one from the plan): the wall panel **goes from the venues**; the door takes its place, and the panel (`RigRouletteStation`)
+now stands only in the Rig Roulette room, on its front wall (`Venue.rig_roulette_spot`), as a child of the venue. Reason: setup belongs
+in the room, and the venues' walls were already crowded. What the host has set lives in `Studio.roll_settings` (a `RollSettings`), not in
+the panel, so it outlives the panel: the wheels start from it and write back through the panel's new `changed` signal, a roll
+anywhere reads it, and leaving and re-entering the room finds the wheels as left. The big board that writes up a roll stays in each
+venue, so the band reads it while playing; its BIG SCREEN wheel is on the panel, so it is chosen in the room.
+`_roll_rig` no longer needs the panel. Tests updated (`_test_rig_roulette_rolls_outside_tour`, `_test_the_big_board_shows_any_surface`,
+the room test) and extended: a venue has no wall, the room's wall is built, settings kept across leaving and entering. Suite 11105, 0 failed.
+Honest state: the panel is still the old small one (20 x 32 cm), readable up close, not yet a "wall". The settings are still local to
+each client: a guest's wheels are their own and only the host's ROLL reaches anyone. Both are next: D2 = a large setup wall the whole
+room reads, settings replicated from the host (guests read-only), and the ROLL ceremony.

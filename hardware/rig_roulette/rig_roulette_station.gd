@@ -17,6 +17,8 @@ extends Node3D
 ## happens until the host's own press on ROLL, and that is the one place this matters.
 
 signal roll_requested()
+## A wheel or the key lock moved: the owner reads `settings()` again.
+signal changed()
 ## The BIG SCREEN wheel moved, or was clicked on to step it: show what is at `choice` of
 ## `screen_sources` on the board. Asked of the room by whoever owns the panel, never done here.
 signal screen_chosen(choice: int)
@@ -109,6 +111,7 @@ func _ready() -> void:
 	# here uses.
 	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.218, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
+	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
@@ -212,10 +215,12 @@ func _pool_choices() -> Array:
 
 func _on_count_chosen(c: int) -> void:
 	count = c
+	changed.emit()
 
 
 func _on_pool_chosen(p: int) -> void:
 	pool = p
+	changed.emit()
 
 
 ## A click on the BIG SCREEN wheel: the next thing on the list, so it can be stepped through
@@ -227,6 +232,7 @@ func _on_screen_stepped(_choice: int) -> void:
 func _on_lock_key_pressed() -> void:
 	key_locked = not key_locked
 	_lock_key_button.lit = key_locked
+	changed.emit()
 
 
 func _on_roll_pressed() -> void:

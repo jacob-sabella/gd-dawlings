@@ -5753,10 +5753,15 @@ func _test_rig_roulette_rolls_outside_tour() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
-	check("the station is built", studio.rig_roulette_station != null)
+	check("a venue has no setup wall, only a door", studio.rig_roulette_station == null)
+	check("the host goes into the room", studio.enter_roulette_room())
+	check("the setup wall is built there", studio.rig_roulette_station != null)
 	var station := studio.rig_roulette_station
 	station.count = 2
 	station.pool = RigRouletteStation.Pool.CHARACTER
+	station.changed.emit()
+	check("and what is set is kept by the studio", studio.roll_settings.count == 2
+			and studio.roll_settings.pool == RollSettings.Pool.CHARACTER)
 
 	Session.role = Session.Role.GUEST
 	var notices: Array[String] = []
@@ -5887,6 +5892,7 @@ func _test_the_big_board_shows_any_surface() -> void:
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
+	studio.enter_roulette_room()
 	var station := studio.rig_roulette_station
 	var board := studio.roll_board
 	var sources := studio.board_sources()
@@ -21779,7 +21785,12 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 		if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 			moved.append(surface.surface_id)
 	check("no gear moved (%s)" % [moved], moved.is_empty())
-	check("the panel and the board are still on its walls", studio.rig_roulette_station != null and studio.roll_board != null)
+	check("the setup wall stands in it, and the board", studio.rig_roulette_station != null and studio.roll_board != null)
+	var wall := studio.rig_roulette_station
+	wall.count = 3
+	wall.key_locked = true
+	wall.changed.emit()
+	check("the studio keeps what the wall is set to", studio.roll_settings.count == 3 and studio.roll_settings.key_locked)
 	check("going in twice does nothing", not studio.enter_roulette_room())
 	var room := studio.venue as RouletteRoom
 	var walls := room.get_children().filter(func(n): return String(n.name).ends_with("Wall"))
@@ -21800,6 +21811,10 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	studio.enter_roulette_room()
 	studio.leave_roulette_room()
 	check("the venue and its arrangement come back", studio.venue.venue_id() == &"grid" and studio.venue.variant == 1)
+	check("the setup wall stays behind in the room", studio.rig_roulette_station == null)
+	studio.enter_roulette_room()
+	check("and is set as it was left", studio.rig_roulette_station.count == 3 and studio.rig_roulette_station.key_locked)
+	studio.leave_roulette_room()
 	studio.queue_free()
 	Session.layout = saved_layout
 
