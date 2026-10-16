@@ -332,6 +332,10 @@ func ripple_move_item(_track_index: int, _item_index: int, _start: float) -> voi
 func ripple_trim_item(_track_index: int, _item_index: int, _start: float, _end: float) -> void: pass
 ## An item's own level, in dB on top of its track's.
 func set_item_gain(_track_index: int, _item_index: int, _db: float) -> void: pass
+## An audio item stretched (kind PROCESS_STRETCH, `amount` the new length over the old) or
+## pitch-shifted (PROCESS_PITCH, semitones) into a new file. One undo step. Only the engines that
+## hold the sound do it; Reaper's bridge has no such edit here yet.
+func process_item(_track_index: int, _item_index: int, _kind: int, _amount: float) -> void: pass
 ## An item's fade in and fade out, in seconds.
 func set_item_fades(_track_index: int, _item_index: int, _fade_in: float, _fade_out: float) -> void: pass
 ## Two overlapping items of a track faded into each other over the overlap, the earlier out and
@@ -1078,6 +1082,70 @@ func source_seconds(item: MixState.ItemState) -> float:
 ## no sound to turn round) or a looped one (its loop is in the file's forward time). The offset
 ## turns round with the sound -- what was the item's right edge in the file is its left -- and the
 ## overview with it.
+## Where an item's sound is on this machine; the engines that keep project media say more.
+func media_path(source: String) -> String:
+	return ProjectSettings.globalize_path(AudioTake.DIR.path_join(source.get_file()))
+
+
+## Item sound processing kinds, for `process_item`.
+const PROCESS_STRETCH := 0
+const PROCESS_PITCH := 1
+## The longest sound processed at once: WSOLA in script takes seconds for each ten.
+const PROCESS_MAX_SECONDS := 60.0
+const STRETCH_MIN := DawKitStretch.MIN_RATIO
+const STRETCH_MAX := DawKitStretch.MAX_RATIO
+const PITCH_SHIFT_MAX := 24.0
+
+
+## An audio item's sound made longer or shorter (`amount` is the new length over the old, the pitch
+## kept) or higher or lower (`amount` in semitones, the length kept), as a new file beside the
+## takes; the item then plays that file. Nothing for a MIDI, reversed or looped item, one with no
+## file on this machine, or one too long to process at once. The old file stays, other items use it.
+func _locally_process(track_index: int, item_index: int, kind: int, amount: float) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.source.is_empty() or it.reversed or it.is_looped() or not is_finite(amount):
+		return false
+	var path := media_path(it.source)
+	if not FileAccess.file_exists(path):
+		return false
+	var file := DawKitAudioFile.read(path)
+	if not str(file.get("error", "")).is_empty() or file.get("samples") == null:
+		return false
+	var channels := int(file["channels"])
+	var rate := int(file["rate"])
+	var samples: PackedFloat32Array = file["samples"]
+	if float(samples.size()) / maxi(channels, 1) / maxi(rate, 1) > PROCESS_MAX_SECONDS:
+		return false
+	var ratio := 1.0
+	var made: PackedFloat32Array
+	if kind == PROCESS_STRETCH:
+		ratio = clampf(amount, STRETCH_MIN, STRETCH_MAX)
+		made = DawKitStretch.stretch(samples, channels, rate, ratio)
+	elif kind == PROCESS_PITCH:
+		amount = clampf(amount, -PITCH_SHIFT_MAX, PITCH_SHIFT_MAX)
+		if is_zero_approx(amount):
+			return false
+		made = DawKitStretch.pitch_shift(samples, channels, rate, amount)
+	else:
+		return false
+	DirAccess.make_dir_recursive_absolute(AudioTake.DIR)
+	var name := "%s_%s%d.wav" % [it.source.get_file().get_basename().left(40), "s" if kind == PROCESS_STRETCH else "p",
+			Time.get_ticks_msec()]
+	var made_path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+	if DawKitAudioFile.write_wav(made_path, made, channels, rate, 32) != OK:
+		return false
+	var peaks := DawKitAudioFile.peaks(made, channels, rate)
+	take_peaks[name] = peaks
+	var lane := _lane_copy(track_index)
+	var item: MixState.ItemState = lane[item_index]
+	item.source = name
+	item.peaks = peaks
+	item.source_offset *= ratio
+	item.length *= ratio
+	_write_lane(track_index, lane)
+	return true
+
+
 func _locally_reverse(track_index: int, item_index: int, reversed: bool) -> bool:
 	var it := state.item(track_index, item_index)
 	if it == null or it.reversed == reversed or it.source.is_empty() or it.is_looped():

@@ -341,6 +341,7 @@ func _ready() -> void:
 	_test_a_groove_lends_its_feel()
 	_test_a_render_can_be_flac()
 	_test_a_project_starts_from_a_template()
+	_test_an_items_sound_is_stretched_and_shifted()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -21658,6 +21659,58 @@ func _test_notes_are_humanised() -> void:
 	DAW.undo()
 	DAW.clear_item_selection()
 	timeline.free()
+
+
+func _test_an_items_sound_is_stretched_and_shifted() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var take := AudioTake.create("suite-stretch-take.wav")
+	var tone := PackedVector2Array()
+	tone.resize(AudioTake.RATE / 2)
+	for i in tone.size():
+		tone[i] = Vector2.ONE * 0.5 * sin(TAU * 440.0 * i / AudioTake.RATE)
+	take.append(AudioTake.encode(tone))
+	take.finish()
+	var lane := 6
+	s.track(lane).items.clear()
+	DAW.insert_audio_take(lane, 300.0, take.file_name(), take.seconds(), take.peaks(), "Grace audio 1")
+	var old: MixState.ItemState = s.item(lane, 0)
+	var old_source := old.source
+	var length := old.length
+	var depth := maxi(s.undo_depth, 0)
+	DAW.process_item(lane, 0, DAWBackend.PROCESS_STRETCH, 2.0)
+	var it: MixState.ItemState = s.item(lane, 0)
+	check("stretched: the item plays a new file", it.source != old_source and FileAccess.file_exists(backend.media_path(it.source)))
+	close_to("twice as long", it.length, length * 2.0, 0.001)
+	check("in one step", s.undo_depth - depth == 1)
+	var heard := DawKitAudioFile.read(backend.media_path(it.source))
+	close_to("and the file is that long", float(heard["frames"]) / float(heard["rate"]), length * 2.0, 0.05)
+	DAW.process_item(lane, 0, DAWBackend.PROCESS_PITCH, 12.0)
+	var up: MixState.ItemState = s.item(lane, 0)
+	close_to("an octave up keeps the length", up.length, length * 2.0, 0.001)
+	check("in a file of its own", up.source != it.source and backend.take_peaks.has(up.source))
+	DAW.undo()
+	DAW.undo()
+	check("undone, the old file and length are back", s.item(lane, 0).source == old_source and is_equal_approx(s.item(lane, 0).length, length))
+	check("a guest may ask", &"process_item" in DAW.COMMANDS and &"process_item" in DAW.LOCKED_REFUSES)
+	_as_session(Session.Role.HOST, 1)
+	DAW.apply_intent(&"process_item", [lane, 0, 0, 100.0])
+	close_to("a wild ratio from a peer is held to four times", s.item(lane, 0).length, length * 4.0, 0.001)
+	DAW.undo()
+	_offline()
+	DAW.set_item_locked(lane, 0, true)
+	DAW.process_item(lane, 0, DAWBackend.PROCESS_STRETCH, 2.0)
+	check("a locked item is left alone", s.item(lane, 0).source == old_source)
+	DAW.set_item_locked(lane, 0, false)
+	DAW.insert_midi_take(lane, 320.0, 322.0, [[320.0, 320.5, 60, 100, 0]], "Keys")
+	var midi_index := s.track(lane).items.size() - 1
+	var midi_length := s.item(lane, midi_index).length
+	DAW.process_item(lane, midi_index, DAWBackend.PROCESS_STRETCH, 2.0)
+	check("and a MIDI item has no sound to stretch", is_equal_approx(s.item(lane, midi_index).length, midi_length))
+	for f in [backend.media_path(it.source), backend.media_path(up.source)]:
+		DirAccess.remove_absolute(f)
 
 
 func _test_an_item_plays_backwards() -> void:

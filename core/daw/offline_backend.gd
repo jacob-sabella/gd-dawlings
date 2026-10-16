@@ -1219,6 +1219,12 @@ func set_item_reversed(track_index: int, item_index: int, reversed: bool) -> voi
 		_remember_edit(before)
 
 
+func process_item(track_index: int, item_index: int, kind: int, amount: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_process(track_index, item_index, kind, amount):
+		_remember_edit(before)
+
+
 func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	var before := _lanes_snapshot()
 	if _locally_lock(track_index, item_index, locked):

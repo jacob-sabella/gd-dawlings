@@ -219,3 +219,13 @@ DAWproject file in user://templates with the content stripped (clips, comps, fre
 layout kept; starting from one gives an unsaved "Untitled". `DAW.save_template` / `new_project_from_template` (host only),
 two buttons on the host's session panel ("Keep as template", "From template…", the latter a file dialog on the folder).
 Test `_test_a_project_starts_from_a_template` (11). Panel, not a desk token: project files already live on that panel.
+
+### 9a. Time-stretch and item pitch shift (offline)
+
+dawkit `DawKitStretch` (WSOLA `stretch`, `pitch_shift` by stretch then resample; one grain offset for all channels). dawlings:
+verb `process_item(track, item, kind, amount)` (kind 0 stretch by ratio, 1 pitch in semitones; clamped 0.25–4 and ±24 on the
+host too), `DAWBackend._locally_process` writes a 32-bit float WAV beside the takes, points the item at it and scales its
+length and offset for a stretch; refused for MIDI, locked, reversed, looped items, missing files, sounds over 60 s. One undo step.
+STRETCH (×2, fine ×½) and PITCH SHIFT (+1, fine −1 semitone) tokens on the ITEM page. Test
+`_test_an_items_sound_is_stretched_and_shifted`. Suite 10769, probe host 53 / guest 47. Not done: live playback-rate stretch and
+warp markers, a Reaper path (D_PLAYRATE/D_PITCH exist; not run against a live Reaper).

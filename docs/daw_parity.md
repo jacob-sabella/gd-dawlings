@@ -27,7 +27,7 @@ Iterations done: 50
 - [x] copy items to the playhead (2026-10-14; no clipboard, the selection is copied where the song is; Reaper path not run against a live Reaper)
 - [x] item normalise (2026-10-14; from the file's overview, through `set_item_gain`)
 - [x] item reverse (2026-10-14; audio items, not looped ones; a token on the ITEM page; Reaper's take reverse through the bridge, not yet run against a live Reaper)
-- [ ] time-stretch, warp, item pitch shift (missing)
+- [~] time-stretch, warp, item pitch shift: offline stretch (WSOLA, 0.25-4x, pitch kept) and pitch shift (+-24 semitones, length kept) of an audio item into a new file, one undo step, STRETCH and PITCH SHIFT tokens on the ITEM page (dawkit `DawKitStretch`, verb `process_item`). Not done: live playback-rate stretch, warp markers, a Reaper path (not run against a live Reaper), sounds over 60 s
 - [x] drags snap to the beat unless fine (`TimelineLanes.snap`; the first audit missed it)
 - [x] a choosable grid: bar, beat, half and quarter beats, or free (2026-10-14; each person's own, not saved)
 - [x] ripple delete (2026-10-14; per track; Reaper path not run against a live Reaper)

@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"set_item_controls", &"flatten_comp", &"freeze_track", &"thaw_track", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"process_item", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"set_item_controls", &"flatten_comp", &"freeze_track", &"thaw_track", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3, &"set_item_lane": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"process_item": 4, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3, &"set_item_lane": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"move_note": 4, &"set_note_end": 4, &"insert_note": 5, &"transpose_note": 4, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5, &"groove_item": 6}
 
 var backend: DAWBackend
@@ -564,6 +564,16 @@ func ripple_trim_item(track_index: int, item_index: int, start: float, end: floa
 func set_item_gain(track_index: int, item_index: int, db: float) -> void:
 	_do(&"set_item_gain", [track_index, item_index,
 			clampf(db, DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)])
+## An audio item's sound stretched (`DAWBackend.PROCESS_STRETCH`, `amount` the new length over the old,
+## pitch kept) or pitch-shifted (`PROCESS_PITCH`, semitones, length kept) into a new file. One undo step.
+func process_item(track_index: int, item_index: int, kind: int, amount: float) -> void:
+	_do(&"process_item", [track_index, item_index, clampi(kind, 0, 1), _clean_process(kind, amount)])
+static func _clean_process(kind: int, amount: float) -> float:
+	if not is_finite(amount):
+		return 1.0 if kind == DAWBackend.PROCESS_STRETCH else 0.0
+	if kind == DAWBackend.PROCESS_STRETCH:
+		return clampf(amount, DAWBackend.STRETCH_MIN, DAWBackend.STRETCH_MAX)
+	return clampf(amount, -DAWBackend.PITCH_SHIFT_MAX, DAWBackend.PITCH_SHIFT_MAX)
 ## Gain so the item's loudest moment is at full scale, through `set_item_gain`: the same edit, the
 ## same step to undo, the same intent from a guest. Nothing for an item with no sound to measure.
 func normalise_item(track_index: int, item_index: int) -> void:
@@ -649,7 +659,7 @@ func thaw_track(track_index: int) -> void:
 ## What a locked item refuses: anything that names it and would change where it is or what it
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
-const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape",
+const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"process_item", &"set_item_fades", &"set_item_fade_shape",
 		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_item_reversed", &"set_item_lane", &"set_item_controls"]
 
 
@@ -995,6 +1005,9 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean[3] = DawKitClip.clean_shape(clean[3])
 		if verb == &"set_item_gain":
 			clean[2] = clampf(clean[2], DAWBackend.ITEM_GAIN_MIN, DAWBackend.ITEM_GAIN_MAX)
+		if verb == &"process_item":
+			clean[2] = clampi(int(clean[2]), 0, 1)
+			clean[3] = _clean_process(int(clean[2]), clean[3])
 		if verb == &"shift_velocity":
 			clean[2] = clampi(int(clean[2]), -DAWBackend.VELOCITY_SHIFT_MAX, DAWBackend.VELOCITY_SHIFT_MAX)
 		if verb == &"move_note":

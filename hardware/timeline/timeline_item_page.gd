@@ -66,6 +66,10 @@ var quant: GlyphKey
 var swing: GlyphRail
 ## Two MIDI items selected: the first lends its timing to the second.
 var groove: GlyphKey
+## An audio item's sound made twice as long or half as long (fine), pitch kept; or a semitone
+## higher or lower (fine), length kept. Each makes a new file; one undo step.
+var stretch: GlyphKey
+var pitch_shift: GlyphKey
 var softer: GlyphKey
 var harder: GlyphKey
 var humanise: GlyphKey
@@ -155,6 +159,8 @@ func _ready() -> void:
 			func(v: float) -> String: return "straight" if v <= 0.0 else "%d%% (100%%: triplet)" % roundi(v * 100.0))
 	swing.fixed_width = GlyphRail.WIDTH * 0.8
 	groove = _key("ItemGroove", &"groove", NOTE_INK, "ITEM  GROOVE", _groove, _groove_text)
+	stretch = _key("ItemStretch", &"stretch", EDIT_INK, "ITEM  STRETCH", _stretch, _stretch_text)
+	pitch_shift = _key("ItemPitchShift", &"pitch_shift", EDIT_INK, "ITEM  PITCH SHIFT", _pitch_shift, _pitch_text)
 	softer = _key("ItemSofter", &"softer", NOTE_INK, "ITEM  NOTES SOFTER", func(): _velocity(-1),
 			func() -> String: return "every note a little softer; fine: much softer" if softer.lit else "for a MIDI item")
 	harder = _key("ItemHarder", &"harder", NOTE_INK, "ITEM  NOTES HARDER", func(): _velocity(1),
@@ -220,6 +226,11 @@ func refresh() -> void:
 	crossfade.available = not _pair.is_empty()
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
 	groove.available = picked.size() == 2
+	var processable := one and _processable(item)
+	stretch.available = processable
+	stretch.lit = processable
+	pitch_shift.available = processable
+	pitch_shift.lit = processable
 	groove.lit = not _groove_pair().is_empty()
 	var glues := not DAWBackend.glue_picks(DAW.state).is_empty()
 	glue.available = picked.size() >= 2
@@ -480,6 +491,31 @@ func _groove() -> void:
 	var pair := _groove_pair()
 	if not pair.is_empty():
 		DAW.groove_item(pair[0], pair[1], pair[2], pair[3], QUANT_FINE_GRID if _fine(groove) else 0.5, 1.0)
+
+
+## An item with a sound of its own that is not locked, reversed or looped.
+func _processable(item: MixState.ItemState) -> bool:
+	return not item.source.is_empty() and not item.locked and not item.reversed and not item.is_looped()
+
+
+func _stretch_text() -> String:
+	return "twice as long, same pitch; fine: half as long" if stretch.lit \
+			else "for a sound item that is not locked, reversed or looped"
+
+
+func _stretch() -> void:
+	if not _target.is_empty():
+		DAW.process_item(_target[0], _target[1], DAWBackend.PROCESS_STRETCH, 0.5 if _fine(stretch) else 2.0)
+
+
+func _pitch_text() -> String:
+	return "a semitone up, same length; fine: a semitone down" if pitch_shift.lit \
+			else "for a sound item that is not locked, reversed or looped"
+
+
+func _pitch_shift() -> void:
+	if not _target.is_empty():
+		DAW.process_item(_target[0], _target[1], DAWBackend.PROCESS_PITCH, -1.0 if _fine(pitch_shift) else 1.0)
 
 
 func _quant_text() -> String:

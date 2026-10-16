@@ -310,6 +310,18 @@ func _build() -> void:
 			for k in 4:
 				_box(Vector2(-0.9 + 0.6 * k, 0.45), Vector2(0.14, 0.5), 0.4)
 				_box(Vector2(-0.9 + 0.6 * k + (0.18 if k % 2 == 1 else 0.0), -0.45), Vector2(0.14, 0.5), 0.4)
+		&"stretch":
+			# A short brick pulled into a long one, an arrow each way.
+			_box(Vector2(0.0, 0.0), Vector2(1.0, 0.5), 0.8)
+			_rod(Vector2(-0.4, -0.7), Vector2(-1.0, -0.7), 0.1, 0.4)
+			_rod(Vector2(0.4, -0.7), Vector2(1.0, -0.7), 0.1, 0.4)
+			_cone(Vector2(-1.1, -0.7), Vector2(-1, 0), 0.4, 0.4)
+			_cone(Vector2(1.1, -0.7), Vector2(1, 0), 0.4, 0.4)
+		&"pitch_shift":
+			# A wave brick lifted: a stem and a point above it.
+			_box(Vector2(0.0, -0.45), Vector2(1.6, 0.4), 0.7)
+			_rod(Vector2(0.0, 0.0), Vector2(0.0, 0.7), 0.12, 0.5)
+			_cone(Vector2(0.0, 0.85), Vector2(0, 1), 0.5, 0.5)
 		&"quantise":
 			for x in [-0.7, 0.0, 0.7]:
 				_rod(Vector2(x, -0.95), Vector2(x, 0.95), 0.05, 0.25)
