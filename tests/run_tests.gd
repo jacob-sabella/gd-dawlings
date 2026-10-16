@@ -224,6 +224,7 @@ func _ready() -> void:
 	_test_flattening_a_comp_makes_plain_items()
 	_test_a_take_the_comp_never_plays_is_drawn_dark()
 	_test_a_midi_items_controller_lanes_follow_its_edits()
+	_test_a_controller_lane_is_edited_undone_and_refused_when_bad()
 	_test_a_frozen_track_is_one_item_and_thaws_and_is_saved()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
@@ -13805,6 +13806,38 @@ func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:
 	check("thawed, the items are back", fresh._locally_thaw(6) and not back.is_frozen() and back.items.size() == items_before)
 	check("and the plugins run again", fx_before.all(func(i): return back.fx[i].enabled))
 	check("thawing a track that is not frozen does nothing", not fresh._locally_thaw(6))
+	_offline()
+
+
+func _test_a_controller_lane_is_edited_undone_and_refused_when_bad() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0]], "Ada take")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.set_item_controls(6, 0, 1, 0, [[1.0, 40.0], [0.0, 0.0], [9.0, 5.0]])
+	var it: MixState.ItemState = s.track(6).items[0]
+	check("the lane is set, in order, without what lies past the item (%s)" % [it.controls],
+			it.controls == PackedFloat64Array([0.0, 1, 0, 0, 1.0, 1, 40, 0]))
+	check("in one undo step", s.undo_depth - depth == 1)
+	DAW.set_item_controls(6, 0, DawKitClip.PITCH_BEND, 2, [[2.0, -4096.0]])
+	check("another lane leaves the first", s.track(6).items[0].controls.size() == 12)
+	DAW.set_item_controls(6, 0, 1, 0, [])
+	check("an empty lane takes it away", s.track(6).items[0].controls == PackedFloat64Array([2.0, 128, -4096, 2]))
+	DAW.undo()
+	check("undone, it is back", s.track(6).items[0].controls.size() == 12)
+	DAW.apply_intent(&"set_item_controls", [6, 0, 999, 0, []])
+	DAW.apply_intent(&"set_item_controls", [6, 0, 1, 0, [1.0]])
+	DAW.apply_intent(&"set_item_controls", [6, 0, 1, 99, [1.0, 2.0]])
+	DAW.apply_intent(&"set_item_controls", [6, 0, 1, 0, [NAN, 2.0]])
+	check("a malformed intent changes nothing", s.track(6).items[0].controls.size() == 12)
+	var lane := backend._lane_copy(6)
+	lane[0].locked = true
+	backend._write_lane(6, lane)
+	DAW.apply_intent(&"set_item_controls", [6, 0, 1, 0, [0.5, 9.0]])
+	check("a locked item refuses it", s.track(6).items[0].controls.size() == 12)
 	_offline()
 
 

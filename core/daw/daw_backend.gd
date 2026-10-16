@@ -342,6 +342,8 @@ func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void
 func set_item_lane(_track_index: int, _item_index: int, _lane: float) -> void: pass
 func set_comp(_track_index: int, _from: float, _to: float, _lane: float) -> void: pass
 func flatten_comp(_track_index: int) -> void: pass
+## A MIDI item's lane of controller events: see DAW.set_item_controls. `flat` is [time, value] pairs.
+func set_item_controls(_track_index: int, _item_index: int, _kind: int, _channel: int, _flat: Array) -> void: pass
 ## Freeze a track: its sound through its plugins, before its fader, written to a file, and its items
 ## and plugins swapped for that (MixState.TrackState.frozen). Takes as long as the song plays; a
 ## no-op without Capability.RENDER. `render_finished` says how it went.
@@ -489,6 +491,27 @@ func _write_comp(track_index: int, comp: Array) -> void:
 	var packed := MixWire.pack_comp(comp)
 	record_for_replication("/track/%d/comp" % track_index, packed)
 	MixWire.apply(state, "/track/%d/comp" % track_index, packed)
+
+
+## Lane `kind` on `channel` of the item made `flat`'s [time, value] pairs, the events inside the item
+## and at most MixWire.CONTROLS_MAX in all. False when nothing changed, or the item is not MIDI.
+func _locally_set_controls(track_index: int, item_index: int, kind: int, channel: int, flat: Array) -> bool:
+	var it := state.item(track_index, item_index)
+	if it == null or it.source != "" or kind < 0 or kind > DawKitClip.AFTERTOUCH:
+		return false
+	var c := DawKitClip.new()
+	c.controls = it.controls.duplicate()
+	var points: Array = []
+	for i in range(0, flat.size() - 1, 2):
+		if float(flat[i]) >= 0.0 and float(flat[i]) <= it.length:
+			points.append([float(flat[i]), float(flat[i + 1])])
+	c.set_control_lane(kind, points, clampi(channel, 0, 15))
+	if c.controls == it.controls or c.control_count() > MixWire.CONTROLS_MAX:
+		return false
+	var items := _lane_copy(track_index)
+	items[item_index].controls = c.controls
+	_write_lane(track_index, items)
+	return true
 
 
 func _locally_set_lane(track_index: int, item_index: int, lane: int) -> bool:

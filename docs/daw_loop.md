@@ -129,3 +129,10 @@ dawkit 435 checks, 0 failed. dawlings: `ItemState.controls`, the wire (optional 
 at most 8192 events, cleaned on arrival), split / trim / glue / flatten via `MidiTake.controls_between`, the project
 bridge. Test `_test_a_midi_items_controller_lanes_follow_its_edits` (6); suite 10678, 0 failed; session probe 53 / 47, 0 failed.
 Next: a verb to author a lane, playing it, then the piano roll's lane view.
+
+### 2b. The verb
+
+`DAW.set_item_controls(track, item, kind, channel, points)` (`DAWBackend._locally_set_controls`): a lane replaced whole,
+events inside the item only, one undo step (the lanes snapshot carries them), peer intent validated (kind, channel, finite
+pairs, the count), refused on a locked item. Test `_test_a_controller_lane_is_edited_undone_and_refused_when_bad` (7);
+suite 10685, 0 failed; probe 53 / 47. Next: play pitch bend and CC, then the lane on the piano roll.

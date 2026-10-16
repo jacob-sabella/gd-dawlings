@@ -1220,6 +1220,12 @@ func set_item_lane(track_index: int, item_index: int, lane: float) -> void:
 		_remember_edit(before)
 
 
+func set_item_controls(track_index: int, item_index: int, kind: int, channel: int, flat: Array) -> void:
+	var before := _lanes_snapshot()
+	if _locally_set_controls(track_index, item_index, kind, channel, flat):
+		_remember_edit(before)
+
+
 func flatten_comp(track_index: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_flatten_comp(track_index):
