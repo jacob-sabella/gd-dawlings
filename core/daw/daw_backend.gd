@@ -1541,6 +1541,23 @@ func _locally_quantize(track_index: int, item_index: int, grid_beats: float, str
 	return true
 
 
+## A recorded take added to a track's items (`items`, a copy of them). On a track that comps, it goes
+## on the lane above any it lies over and the comp is made to play it where it was recorded, the usual
+## newest-take-plays; on any other track it is just added, a newer item over an older as always.
+func _land_in_lane(track_index: int, items: Array, item: MixState.ItemState) -> void:
+	var comping := not state.track(track_index).comp.is_empty()
+	if comping:
+		var above := -1
+		for other in items:
+			if other.start < item.end() and other.end() > item.start:
+				above = maxi(above, other.lane)
+		item.lane = mini(above + 1, MixWire.LANES_MAX)
+	items.append(item)
+	_write_lane(track_index, items)
+	if comping:
+		_locally_set_comp(track_index, item.start, item.end(), item.lane)
+
+
 ## A take's item, drawn at once: the offline project's whole edit, and a live DAW's preview of
 ## the answer the bridge is about to give.
 func _locally_insert_take(track_index: int, start: float, end: float, notes: Array,
@@ -1551,8 +1568,7 @@ func _locally_insert_take(track_index: int, start: float, end: float, notes: Arr
 	item.length = end - start
 	item.name = take_name
 	item.notes = MidiTake.pack_relative(notes, start)
-	lane.append(item)
-	_write_lane(track_index, lane)
+	_land_in_lane(track_index, lane, item)
 
 
 func _locally_insert_audio(track_index: int, start: float, source: String, length: float,
@@ -1565,8 +1581,7 @@ func _locally_insert_audio(track_index: int, start: float, source: String, lengt
 	item.name = take_name
 	item.source = source
 	item.peaks = peaks
-	lane.append(item)
-	_write_lane(track_index, lane)
+	_land_in_lane(track_index, lane, item)
 
 
 ## Every lane with something in it, packed, for an undo step to put back.

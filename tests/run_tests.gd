@@ -221,6 +221,7 @@ func _ready() -> void:
 	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
 	_test_the_item_page_has_lane_and_comp_tokens()
 	_test_flattening_a_comp_makes_plain_items()
+	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
@@ -13724,6 +13725,32 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0]], "Ada take 1")
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.5, 301.0, 62, 100, 0]], "Ada take 2")
+	check("with no comp a newer take just lies over, on the first lane, as before",
+			s.item(6, 0).lane == 0 and s.item(6, 1).lane == 0 and s.track(6).comp.is_empty())
+	DAW.set_comp(6, 300.0, 304.0, 0)
+	DAW.insert_midi_take(6, 302.0, 306.0, [[302.25, 302.75, 64, 100, 0]], "Ada take 3")
+	var third: MixState.ItemState = s.track(6).items.filter(func(i): return i.name == "Ada take 3")[0]
+	check("on a comping track the take goes above the ones it lies over (lane %d)" % third.lane, third.lane == 1)
+	check("and the comp plays it where it was recorded (%s)" % [s.track(6).comp],
+			s.track(6).comp == [[300.0, 302.0, 0], [302.0, 306.0, 1]])
+	DAW.insert_midi_take(6, 310.0, 312.0, [[310.25, 310.75, 67, 100, 0]], "Ada take 4")
+	var fourth: MixState.ItemState = s.track(6).items.filter(func(i): return i.name == "Ada take 4")[0]
+	check("one clear of the others stays on the first lane and plays", fourth.lane == 0
+			and s.track(6).comp.back() == [310.0, 312.0, 0])
+	DAW.undo()
+	check("undone, the take and its comp stretch go together", s.track(6).items.size() == 3
+			and s.track(6).comp == [[300.0, 302.0, 0], [302.0, 306.0, 1]])
+	_offline()
 
 
 func _test_flattening_a_comp_makes_plain_items() -> void:

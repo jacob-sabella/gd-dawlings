@@ -85,3 +85,11 @@ show lanes in the timeline, flatten a comp; then freeze.
 comp; one undo step; a malformed intent refused. A FLATTEN token beside LANE and COMP. Tests: dawkit
 418 checks; dawlings `_test_flattening_a_comp_makes_plain_items` (7); suite 10641, 0 failed; session
 probe host 53 / guest 47, 0 failed. Open: record into a lane, lanes drawn in the timeline, then freeze.
+
+### 1f. A new take on a comping track goes on a new lane
+
+`DAWBackend._land_in_lane`: on a track that already has a comp, a recorded take (audio or MIDI) lands on
+the lane above any it lies over and the comp is made to play it where it was recorded (newest take
+plays); on a track with no comp nothing changes (a newer item over an older, as before). One undo step,
+the comp riding in the snapshot. Test `_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane`
+(5); suite 10649, 0 failed. Wire unchanged. Open: lanes drawn in the timeline; then freeze.
