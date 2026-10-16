@@ -1772,16 +1772,18 @@ func _relayout_view() -> void:
 					length = _preview[3]
 				else:
 					content = start
-			if _place_item(item, start, t.shown_colour(), y, t.mute, slot, length):
+			# Dark as a muted track is: a track's mute, or a take the comp plays nowhere.
+			var quiet: bool = t.mute or comp_silent(t, item)
+			if _place_item(item, start, t.shown_colour(), y, quiet, slot, length):
 				slot += 1
-				note_slot = _place_notes(item, content, t.shown_colour(), y, item.muted or t.mute,
+				note_slot = _place_notes(item, content, t.shown_colour(), y, item.muted or quiet,
 						note_slot)
-				wave_slot = _place_wave(item, content, t.shown_colour(), y, item.muted or t.mute,
+				wave_slot = _place_wave(item, content, t.shown_colour(), y, item.muted or quiet,
 						wave_slot)
 				# Fades and gain belong to the block: they move with it and follow a trim.
 				fade_slot = _place_fades(item, start, length, t.shown_colour(), y, fade_slot)
 				gain_label = _place_gain(item, start, length, y, gain_label)
-				name_label = _place_name(item, start, length, y, name_label, t.display_name(), item.muted or t.mute)
+				name_label = _place_name(item, start, length, y, name_label, t.display_name(), item.muted or quiet)
 	# Items off the end of the window keep whatever they last held and are simply not drawn.
 	_item_blocks.show_first(slot)
 	_item_strips.show_first(slot)
@@ -1795,6 +1797,12 @@ func _relayout_view() -> void:
 		(_item_labels.get_child(k) as Label3D).visible = false
 	_draw_loop()
 	_draw_automation()
+
+
+## Whether the track's comp has `item` sounding nowhere: it is on a lane the comp never names across
+## it. False on a track with no comp. Such a take is drawn dark, like a muted one.
+static func comp_silent(t: MixState.TrackState, item: MixState.ItemState) -> bool:
+	return not t.comp.is_empty() and LaneEngine.comp_spans(t.comp, item.lane, item.start, item.end()).is_empty()
 
 
 ## Put one item in the banks at `slot`, or report that it is not on screen.

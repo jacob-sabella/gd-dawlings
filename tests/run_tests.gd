@@ -221,6 +221,7 @@ func _ready() -> void:
 	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
 	_test_the_item_page_has_lane_and_comp_tokens()
 	_test_flattening_a_comp_makes_plain_items()
+	_test_a_take_the_comp_never_plays_is_drawn_dark()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
@@ -13725,6 +13726,23 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_a_take_the_comp_never_plays_is_drawn_dark() -> void:
+	var t := MixState.TrackState.new()
+	var a := MixState.ItemState.new()
+	a.start = 0.0
+	a.length = 4.0
+	var b := MixState.ItemState.new()
+	b.start = 0.0
+	b.length = 4.0
+	b.lane = 1
+	check("with no comp nothing is dark", not TimelineSurface.comp_silent(t, a) and not TimelineSurface.comp_silent(t, b))
+	t.comp = [[0.0, 2.0, 0], [2.0, 4.0, 0]]
+	check("a take on a lane the comp does not name is dark, the other is not",
+			TimelineSurface.comp_silent(t, b) and not TimelineSurface.comp_silent(t, a))
+	t.comp = [[0.0, 1.0, 0], [1.0, 4.0, 1]]
+	check("a take played for only part of it is not dark", not TimelineSurface.comp_silent(t, a) and not TimelineSurface.comp_silent(t, b))
 
 
 func _test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane() -> void:
