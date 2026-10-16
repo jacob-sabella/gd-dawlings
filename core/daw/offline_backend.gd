@@ -1336,6 +1336,13 @@ func quantize_item(track_index: int, item_index: int, grid_beats: float, strengt
 		_remember_edit(before)
 
 
+func groove_item(track_index: int, item_index: int, from_track: int, from_item: int, grid_beats: float,
+		strength: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_groove(track_index, item_index, from_track, from_item, grid_beats, strength):
+		_remember_edit(before)
+
+
 func add_track(at: int, track_name: String) -> void:
 	var count := state.track_indices().size()
 	at = clampi(at, 1, count + 1)

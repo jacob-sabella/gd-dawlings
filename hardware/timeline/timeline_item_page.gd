@@ -64,6 +64,8 @@ var quant: GlyphKey
 ## How swung QUANTISE is, from straight to triplet: a setting of the next press, this person's
 ## own, not an edit of anything.
 var swing: GlyphRail
+## Two MIDI items selected: the first lends its timing to the second.
+var groove: GlyphKey
 var softer: GlyphKey
 var harder: GlyphKey
 var humanise: GlyphKey
@@ -152,6 +154,7 @@ func _ready() -> void:
 	swing = _slider("ItemSwing", &"swing", NOTE_INK, func() -> String: return "ITEM  QUANTISE SWING",
 			func(v: float) -> String: return "straight" if v <= 0.0 else "%d%% (100%%: triplet)" % roundi(v * 100.0))
 	swing.fixed_width = GlyphRail.WIDTH * 0.8
+	groove = _key("ItemGroove", &"groove", NOTE_INK, "ITEM  GROOVE", _groove, _groove_text)
 	softer = _key("ItemSofter", &"softer", NOTE_INK, "ITEM  NOTES SOFTER", func(): _velocity(-1),
 			func() -> String: return "every note a little softer; fine: much softer" if softer.lit else "for a MIDI item")
 	harder = _key("ItemHarder", &"harder", NOTE_INK, "ITEM  NOTES HARDER", func(): _velocity(1),
@@ -216,6 +219,8 @@ func refresh() -> void:
 	loop_to.lit = not picked.is_empty()
 	crossfade.available = not _pair.is_empty()
 	crossfade.lit = not _pair.is_empty() and _overlaps(_pair)
+	groove.available = picked.size() == 2
+	groove.lit = not _groove_pair().is_empty()
 	var glues := not DAWBackend.glue_picks(DAW.state).is_empty()
 	glue.available = picked.size() >= 2
 	glue.lit = glues
@@ -451,6 +456,30 @@ func _humanise() -> void:
 	if not _target.is_empty():
 		var by: Array = HUMANISE_FINE if _fine(humanise) else HUMANISE
 		DAW.humanise_item(_target[0], _target[1], by[0], by[1])
+
+
+## With two MIDI items selected (not one), [target track, target item, source track, source item]: the
+## second, in lane order, is pulled to the first's feel.
+func _groove_pair() -> Array:
+	var picked: Array = DAW.state.selected_items()
+	if picked.size() != 2:
+		return []
+	for p in picked:
+		var it := DAW.state.item(p[0], p[1])
+		if it == null or it.notes.is_empty() or it.locked:
+			return []
+	return [picked[1][0], picked[1][1], picked[0][0], picked[0][1]]
+
+
+func _groove_text() -> String:
+	return "the second selected item takes the first's timing" if not _groove_pair().is_empty() \
+			else "select two MIDI items: the first lends its feel to the second"
+
+
+func _groove() -> void:
+	var pair := _groove_pair()
+	if not pair.is_empty():
+		DAW.groove_item(pair[0], pair[1], pair[2], pair[3], QUANT_FINE_GRID if _fine(groove) else 0.5, 1.0)
 
 
 func _quant_text() -> String:

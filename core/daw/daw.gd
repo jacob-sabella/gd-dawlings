@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"set_item_controls", &"flatten_comp", &"freeze_track", &"thaw_track", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -75,7 +75,7 @@ const COMMANDS := [
 
 ## Item edits that name an item, and how many arguments each takes.
 const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3, &"set_item_lane": 3,
-		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"move_note": 4, &"set_note_end": 4, &"insert_note": 5, &"transpose_note": 4, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5}
+		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"move_note": 4, &"set_note_end": 4, &"insert_note": 5, &"transpose_note": 4, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5, &"groove_item": 6}
 
 var backend: DAWBackend
 
@@ -634,7 +634,7 @@ func thaw_track(track_index: int) -> void:
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
 const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape",
-		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"set_item_reversed", &"set_item_lane", &"set_item_controls"]
+		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_item_reversed", &"set_item_lane", &"set_item_controls"]
 
 
 func locked_against(verb: StringName, args: Array) -> bool:
@@ -752,6 +752,12 @@ func quantize_item(track_index: int, item_index: int, grid_beats: float, strengt
 	_do(&"quantize_item", [track_index, item_index,
 			clampf(grid_beats, DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX),
 			clampf(strength, 0.0, 1.0), clampf(swing, 0.0, DAWBackend.SWING_MAX)])
+## The notes of a MIDI item pulled onto the feel of another's: its timing against a straight grid of
+## `grid_beats`, slot by slot over a bar (or a beat, for a short feel), applied to this one's notes.
+func groove_item(track_index: int, item_index: int, from_track: int, from_item: int, grid_beats: float,
+		strength := 1.0) -> void:
+	_do(&"groove_item", [track_index, item_index, from_track, from_item,
+			clampf(grid_beats, DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX), clampf(strength, 0.0, 1.0)])
 ## Longest marker name sent anywhere. Reaper takes more, but nothing here can show more, and a
 ## guest's intent should not be able to hand the host a megabyte of name.
 const MARKER_NAME_MAX := 64
@@ -997,6 +1003,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean[3] = clampi(int(clean[3]), 0, DAWBackend.HUMANISE_VELOCITY_MAX)
 		if verb == &"transpose_item":
 			clean[2] = clampi(int(clean[2]), -DAWBackend.TRANSPOSE_MAX, DAWBackend.TRANSPOSE_MAX)
+		if verb == &"groove_item":
+			clean[2] = int(clean[2])
+			clean[3] = int(clean[3])
+			clean[4] = clampf(clean[4], DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX)
+			clean[5] = clampf(clean[5], 0.0, 1.0)
 		if verb == &"quantize_item":
 			clean[2] = clampf(clean[2], DAWBackend.QUANTIZE_GRID_MIN, DAWBackend.QUANTIZE_GRID_MAX)
 			clean[3] = clampf(clean[3], 0.0, 1.0)

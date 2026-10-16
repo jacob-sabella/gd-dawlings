@@ -16,7 +16,7 @@ Iterations done: 50
 - [x] tempo, tempo map, time-signature map
 - [x] tap tempo (the tape deck, `tapped_bpm`; the first audit listed it missing in error)
 - [x] swing quantise (2026-10-14; off-beats up to a triplet's third late, a rail beside QUANTISE on the ITEM page; Reaper path not run against a live Reaper)
-- [ ] groove templates: quantise to the feel of another item, swing on playback (missing)
+- [~] groove templates (2026-10-16: quantise to the feel of another item: select two MIDI items and press GROOVE on the ITEM page, the second takes the first's timing against an eighth grid (fine: sixteenths), over a bar, or a beat for a short feel; verb `groove_item`, one undo step; not on Reaper's bridge. Still open: saved named templates, swing on playback)
 
 ## Audio and MIDI editing
 - [x] select all items (2026-10-14), select all items on one track (2026-10-14, TRACK page), select, move (across tracks), split, delete, duplicate, trim with source offset

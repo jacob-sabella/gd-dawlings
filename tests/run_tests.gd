@@ -338,6 +338,7 @@ func _ready() -> void:
 	_test_items_glue_into_one()
 	_test_regions_are_renamed_moved_and_listed()
 	_test_grouped_tracks_move_together()
+	_test_a_groove_lends_its_feel()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -20859,6 +20860,54 @@ func _test_the_latency_report_lines_up_the_slowest_path() -> void:
 	check("said in words", LatencyReport.summary(st, rows, 48000.0).contains("ms")
 			and LatencyReport.summary(MixState.new(), [], 48000.0) == "no plugin adds latency")
 	check("the offline engine hosts nothing, so reports none", DAW.latency_report().all(func(r): return r["path"] == 0))
+
+
+func _test_a_groove_lends_its_feel() -> void:
+	var g := DAWBackend.groove_of([0.0, 0.3, 1.0, 1.3, 2.0, 2.3], 0.5, 2)
+	close_to("the off-beats are late by their mean", g[1], -0.2, 0.0001)
+	close_to("and the on-beats are on the grid", g[0], 0.0, 0.0001)
+	close_to("a note near a late slot is pulled to it", DAWBackend.groove_beat(0.52, 0.5, g), 0.3, 0.0001)
+	check("no onsets, no groove", DAWBackend.groove_of([], 0.5).is_empty())
+	_offline()
+	var s := DAW.state
+	var lane := 6
+	s.track(lane).items.clear()
+	var beat := 60.0 / s.tempo
+	# Source: eighths with the off-beats a sixth of a beat late. Target: straight eighths, a hair off.
+	DAW.insert_midi_take(lane, 0.0, 2.0 * beat, [[0.0, 0.2 * beat, 60, 100, 0], [0.5 * beat + beat / 6.0, 0.9 * beat, 60, 100, 0],
+			[1.0 * beat, 1.2 * beat, 60, 100, 0], [1.5 * beat + beat / 6.0, 1.9 * beat, 60, 100, 0]], "Feel")
+	DAW.insert_midi_take(lane, 4.0 * beat, 6.0 * beat, [[4.0 * beat + 0.01, 4.4 * beat, 62, 100, 0],
+			[4.5 * beat - 0.01, 4.9 * beat, 62, 100, 0], [5.0 * beat, 5.4 * beat, 62, 100, 0],
+			[5.5 * beat + 0.01, 5.9 * beat, 62, 100, 0]], "Straight")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.groove_item(lane, 1, lane, 0, 0.5, 1.0)
+	var notes := MidiTake.unpack_relative(s.item(lane, 1).notes, s.item(lane, 1).start)
+	var ons: Array = notes.map(func(n): return n[0] / beat)
+	check("the target takes the source's late off-beats (%s)" % [ons],
+			absf(ons[0] - 4.0) < 1e-3 and absf(ons[1] - (4.5 + 1.0 / 6.0)) < 1e-3
+			and absf(ons[2] - 5.0) < 1e-3 and absf(ons[3] - (5.5 + 1.0 / 6.0)) < 1e-3)
+	check("one undo step", s.undo_depth - depth == 1)
+	DAW.undo()
+	DAW.groove_item(lane, 1, lane, 1, 0.5, 1.0)
+	check("an item cannot lend to itself", s.undo_depth - depth == 0)
+	DAW.apply_intent(&"groove_item", [lane, 1, lane, 0, 0.5])
+	check("the old five-word ask is refused", s.undo_depth - depth == 0)
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	check("a GROOVE token on the item page", page.groove != null and page.groove.glyph == &"groove")
+	DAW.select_item(lane, 1, false)
+	page.refresh()
+	check("out of reach with one item (%s, %s)" % [s.selected_items(), page.groove.available], not page.groove.available)
+	DAW.select_item(lane, 0, true)
+	page.refresh()
+	check("in reach with two", page.groove.available and page.groove.lit)
+	page.groove.pressed.emit()
+	notes = MidiTake.unpack_relative(s.item(lane, 1).notes, s.item(lane, 1).start)
+	check("pressed, the second item is grooved (%.3f)" % (notes[1][0] / beat), absf(notes[1][0] / beat - (4.5 + 1.0 / 6.0)) < 1e-3)
+	DAW.undo()
+	timeline.queue_free()
 
 
 func _test_a_vca_trims_its_group() -> void:

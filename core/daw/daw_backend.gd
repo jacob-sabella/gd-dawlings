@@ -410,6 +410,9 @@ func set_item_reversed(_track_index: int, _item_index: int, _reversed: bool) -> 
 ## Every note of a MIDI item pulled `strength` (0-1) of the way to the nearest `grid_beats` line
 ## of the song's beat grid, keeping its length.
 func quantize_item(_track_index: int, _item_index: int, _grid_beats: float, _strength: float, _swing := 0.0) -> void: pass
+## Quantise a MIDI item to the feel of another (see `groove_of`). Only the engines that edit
+## notes themselves do it; Reaper's bridge has no such edit, so it leaves the notes as they are.
+func groove_item(_track_index: int, _item_index: int, _from_track: int, _from_item: int, _grid_beats: float, _strength: float) -> void: pass
 ## A marker at `seconds`, called `marker_name`. An edit, so it is undoable where the DAW keeps
 ## history. A no-op on a backend that answers false to Capability.MARKERS.
 func add_marker(_seconds: float, _marker_name: String) -> void: pass
@@ -1607,6 +1610,67 @@ static func swung_grid_beat(beat: float, grid: float, swing: float) -> float:
 		if absf(b - beat) < absf(best - beat):
 			best = b
 	return best
+
+
+## How early (negative) or late each grid slot of a cycle of `slots` is played, in beats, from the
+## notes' onsets (in beats): the mean of its notes' distances from the straight grid. Slots with
+## no note are on the grid. Empty if there are no onsets.
+static func groove_of(onsets: Array, grid: float, slots := 16) -> Array:
+	if onsets.is_empty() or grid <= 0.0 or slots < 1:
+		return []
+	var sum: Array = []
+	var count: Array = []
+	sum.resize(slots)
+	count.resize(slots)
+	sum.fill(0.0)
+	count.fill(0)
+	for b in onsets:
+		var k := roundi(float(b) / grid)
+		var slot := posmod(k, slots)
+		sum[slot] += float(b) - k * grid
+		count[slot] += 1
+	var out: Array = []
+	for n in slots:
+		out.append(sum[n] / count[n] if count[n] > 0 else 0.0)
+	return out
+
+
+## The beat `beat` is pulled to: the nearest straight grid point, moved by its slot's groove.
+static func groove_beat(beat: float, grid: float, groove: Array) -> float:
+	var k := roundi(beat / grid)
+	return k * grid + (float(groove[posmod(k, groove.size())]) if not groove.is_empty() else 0.0)
+
+
+## False when either item is missing or has no notes, or the two are the same item.
+func _locally_groove(track_index: int, item_index: int, from_track: int, from_item: int,
+		grid_beats: float, strength: float) -> bool:
+	var item := state.item(track_index, item_index)
+	var source := state.item(from_track, from_item)
+	if item == null or source == null or item.notes.is_empty() or source.notes.is_empty() \
+			or (track_index == from_track and item_index == from_item) or strength <= 0.0:
+		return false
+	var grid := clampf(grid_beats, QUANTIZE_GRID_MIN, QUANTIZE_GRID_MAX)
+	strength = clampf(strength, 0.0, 1.0)
+	var onsets: Array = []
+	for n in range(0, source.notes.size() - 4, 5):
+		onsets.append(state.beat_at(source.start + source.notes[n]))
+	# A cycle of a bar when the feel lasts a bar or more, else of a beat, so a short pattern still
+	# reaches every bar of the one it is lent to.
+	var bar_beats := float(state.beats_per_bar)
+	var span := state.beat_at(source.end()) - state.beat_at(source.start)
+	var groove := groove_of(onsets, grid, maxi(roundi((bar_beats if span >= bar_beats else 1.0) / grid), 1))
+	var lane := _lane_copy(track_index)
+	var it: MixState.ItemState = lane[item_index]
+	var notes := it.notes.duplicate()
+	for n in range(0, notes.size() - 4, 5):
+		var on := it.start + notes[n]
+		var target := state.seconds_at_beat(groove_beat(state.beat_at(on), grid, groove))
+		var moved := maxf(on + (target - on) * strength, it.start) - on
+		notes[n] += moved
+		notes[n + 1] += moved
+	it.notes = notes
+	_write_lane(track_index, lane)
+	return true
 
 
 func _locally_quantize(track_index: int, item_index: int, grid_beats: float, strength: float,

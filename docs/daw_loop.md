@@ -194,3 +194,11 @@ path (plus the folders it sits in) and `comp`, the hold-back that lines it up wi
 (0 by default; `GodotBackend` asks the hosted plugin), `DAW.latency_report()`. A LATENCY token (glyph `latency`) on the TRACK
 page reads it out when pointed at. Test `_test_the_latency_report_lines_up_the_slowest_path` (7). Not yet: applying `comp` as
 a delay on the buses (a native delay line in dawkit), so item 5 stays `[~]`; sends are not followed.
+
+### 6a. Groove from another item
+
+`DAWBackend.groove_of(onsets, grid, slots)` is each grid slot's mean distance from the straight grid, over a bar (a beat when
+the source is shorter than one); `groove_beat` pulls a beat to its slot's feel. Verb `DAW.groove_item(track, item, from_track,
+from_item, grid, strength)` (6 args, an item edit, refused on a locked target, one undo step, validated from peers), done by
+the offline engine; Reaper's bridge has no such edit, so it does nothing there. A GROOVE token (glyph `groove`) on the ITEM
+page works on two selected MIDI items. Test `_test_a_groove_lends_its_feel` (12). Open: named saved templates, playback swing.

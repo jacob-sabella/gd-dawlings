@@ -300,6 +300,11 @@ func _build() -> void:
 			var nd := 1.0 if _kind == &"note_up" else -1.0
 			_box(Vector2(0, 0.1 * -nd), Vector2(1.5, 0.45), 0.9)
 			_cone(Vector2(0, 0.62 * nd), Vector2(0, nd), 0.5, 0.55)
+		&"groove":
+			# Two rows of ticks, the upper pushed a little late: one feel laid on another.
+			for k in 4:
+				_box(Vector2(-0.9 + 0.6 * k, 0.45), Vector2(0.14, 0.5), 0.4)
+				_box(Vector2(-0.9 + 0.6 * k + (0.18 if k % 2 == 1 else 0.0), -0.45), Vector2(0.14, 0.5), 0.4)
 		&"quantise":
 			for x in [-0.7, 0.0, 0.7]:
 				_rod(Vector2(x, -0.95), Vector2(x, 0.95), 0.05, 0.25)
