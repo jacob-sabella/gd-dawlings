@@ -229,3 +229,21 @@ length and offset for a stretch; refused for MIDI, locked, reversed, looped item
 STRETCH (×2, fine ×½) and PITCH SHIFT (+1, fine −1 semitone) tokens on the ITEM page. Test
 `_test_an_items_sound_is_stretched_and_shifted`. Suite 10769, probe host 53 / guest 47. Not done: live playback-rate stretch and
 warp markers, a Reaper path (D_PLAYRATE/D_PITCH exist; not run against a live Reaper).
+
+## Summary (loop ended)
+
+All nine items have been worked. Everything is committed locally and unpushed; no release was cut.
+
+Done: VCA trims and one-move group override (3), plugin bypass lanes (4; send lanes already existed), project templates (8).
+Partly done (`[~]` in docs/daw_parity.md): take lanes, comping and freeze (1), CC and pitch-bend lanes (2), latency report (5),
+groove (6), FLAC render (7), offline stretch and pitch shift (9).
+
+Open:
+- A Reaper path for lanes, comping, freeze, controller lanes, VCA, bypass lanes, groove, FLAC, templates and stretch. None was
+  run against a live Reaper.
+- Applying track delay compensation (needs a native delay line in dawkit C++); sends are not followed by the report.
+- Named groove templates and swing on playback.
+- MP3 render: blocked, there is no encoder in the engine and a Layer III encoder is a project of its own.
+- Live playback-rate stretch and warp markers; sounds over 60 s.
+- Free-hand single-event editing of controllers, recording from a MIDI controller, hosted-plugin controller playback.
+- A real VCA fader.
