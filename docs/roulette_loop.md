@@ -122,3 +122,15 @@ Full suite 11118 checks, 0 failed. Not yet looked at in a screenshot, and the wh
 the only wheel; the setup wall is still the small panel.
 
 Still to do in D2: the large setup wall.
+
+### D2c: the setup wall is big, and stands where the seat sees it
+
+In the room the setup wall is 3.4 times the panel it was (about 0.7 x 1.1 m) on a post of its own
+(`RouletteRoom.rig_roulette_spot`, with a walker solid): the room's walls are taken by the same
+gear every venue has, and a panel hung on the left wall was hidden behind the patchbay and rack from
+the seat. It stands at x -2.2, z -1.5, turned toward the seat, with its foot at 1.5 m so the rack does
+not hide the ROLL button. Full suite 11118 checks, 0 failed.
+
+Honest limit, seen in the 720p shot from the seat: the plate reads from there, but the words inside
+the wheel windows are still too small and dim at that range. Next: lettering for the wheels sized for the
+wall (they were made for a panel stood at), then the options.

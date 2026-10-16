@@ -2434,6 +2434,9 @@ func _build_rig_roulette_station() -> void:
 ## panel (which only stands in the Rig Roulette room) and a roll anywhere reads it.
 var roll_settings := RollSettings.new()
 
+## How much bigger the setup wall in the room is than the panel it was.
+const SETUP_WALL_SCALE := 3.4
+
 
 ## The setup wall (`RigRouletteStation`) stands in the Rig Roulette room and nowhere else: the
 ## venues have a door instead (`RouletteDoor`). It is a child of the venue, so it goes when the
@@ -2451,6 +2454,8 @@ func _stand_the_setup_wall() -> void:
 	wall.pool = wall_pool(roll_settings.pool)
 	wall.key_locked = roll_settings.key_locked
 	wall.transform = venue.rig_roulette_spot()
+	# A wall for the whole room to read from the seat, not a panel to stand at.
+	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
 	wall.roll_requested.connect(_on_rig_roulette_roll_requested)
 	wall.changed.connect(func() -> void:
 		if not Session.is_authority():
@@ -2474,6 +2479,7 @@ func _stand_the_setup_wall() -> void:
 		if i >= 0 and i < sources.size():
 			choose_board_source(sources[i]))
 	venue.add_child(wall)
+	wall.set_free_standing(true)
 	rig_roulette_station = wall
 	if not Session.roll.is_empty():
 		wall.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])

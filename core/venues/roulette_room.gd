@@ -13,6 +13,8 @@ extends Venue
 ## class places against a side wall (the prop shelf, the hoop, the Tour case) stands inside it.
 
 const HEIGHT := 3.6
+## Floor position of the setup wall's post.
+const STAND_AT := Vector2(-2.2, -1.5)
 const WALL := 0.1
 ## The wheel inlaid in the floor: its centre, how far out the ring of pockets runs, how many.
 const WHEEL_AT := Vector2(0.0, 4.6)
@@ -36,6 +38,19 @@ func title() -> String:
 
 func live_room_half() -> float:
 	return room_width * 0.5
+
+
+## The setup wall stands on its own in the room, between the patchbay and the console and turned
+## a little toward the seat: the walls here are taken by the same gear every venue has, and
+## a panel on one is hidden behind it from the seat.
+func rig_roulette_spot() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, 0.5), Vector3(STAND_AT.x, 1.5, STAND_AT.y))
+
+
+func solids() -> Array:
+	var out := super.solids()
+	out.append({"c": STAND_AT, "h": Vector2(0.55, 0.3), "a": 0.5, "top": 2.7})
+	return out
 
 
 func zones() -> Dictionary:
