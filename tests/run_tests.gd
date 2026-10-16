@@ -225,6 +225,7 @@ func _ready() -> void:
 	_test_a_take_the_comp_never_plays_is_drawn_dark()
 	_test_a_midi_items_controller_lanes_follow_its_edits()
 	_test_a_controller_lane_is_edited_undone_and_refused_when_bad()
+	_test_a_midi_items_pitch_bend_is_in_its_sound()
 	_test_a_frozen_track_is_one_item_and_thaws_and_is_saved()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
@@ -13807,6 +13808,21 @@ func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:
 	check("and the plugins run again", fx_before.all(func(i): return back.fx[i].enabled))
 	check("thawing a track that is not frozen does nothing", not fresh._locally_thaw(6))
 	_offline()
+
+
+func _test_a_midi_items_pitch_bend_is_in_its_sound() -> void:
+	var notes := PackedFloat64Array([0.0, 0.5, 69, 100, 0])
+	var plain := GodotBackend.render_midi(notes, 1.0, 48000)
+	var bent := GodotBackend.render_midi(notes, 1.0, 48000, PackedFloat64Array([0.0, DawKitClip.PITCH_BEND, 8191.0, 0]))
+	check("a bend changes what the item sounds like", plain.data != bent.data)
+	var a := MixState.ItemState.new()
+	a.notes = PackedFloat32Array(Array(notes))
+	a.length = 1.0
+	var b := MixState.ItemState.new()
+	b.notes = a.notes
+	b.length = 1.0
+	b.controls = PackedFloat64Array([0.0, 1, 5, 0])
+	check("and it is a different render to keep", GodotBackend.midi_key(a) != GodotBackend.midi_key(b))
 
 
 func _test_a_controller_lane_is_edited_undone_and_refused_when_bad() -> void:

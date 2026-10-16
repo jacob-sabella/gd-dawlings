@@ -136,3 +136,11 @@ Next: a verb to author a lane, playing it, then the piano roll's lane view.
 events inside the item only, one undo step (the lanes snapshot carries them), peer intent validated (kind, channel, finite
 pairs, the count), refused on a locked item. Test `_test_a_controller_lane_is_edited_undone_and_refused_when_bad` (7);
 suite 10685, 0 failed; probe 53 / 47. Next: play pitch bend and CC, then the lane on the piano roll.
+
+### 2c. Playing them (dawkit c53408d)
+
+`DawKitTine.render_notes(..., controls)`, `pitch_bend`, `control`: the wheel (+-2 semitones), CC 64 / 7 / 11; other
+controllers are ignored; channels are not told apart. dawkit 440 checks. dawlings: the item's controls go to
+`render_midi` and into `midi_key`. Test `_test_a_midi_items_pitch_bend_is_in_its_sound`; suite 10687, 0 failed. Hosted plugin
+instruments are not given the events: that is the native lane's `set_notes` (C++), left for later. Next: the lane view
+on the piano roll.

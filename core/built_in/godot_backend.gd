@@ -1263,9 +1263,9 @@ func _drift(player: AudioStreamPlayer, off: float) -> float:
 	return off - bias
 
 
-## What a MIDI item sounds like depends on nothing but its notes and its length.
+## What a MIDI item sounds like depends on nothing but its notes, its controller lanes and its length.
 static func midi_key(it: MixState.ItemState) -> String:
-	return "%d/%s" % [hash(it.notes), it.length]
+	return "%d/%d/%s" % [hash(it.notes), hash(it.controls), it.length]
 
 
 ## A MIDI item's sound, or null while it is still being rendered (`wait` waits for it). The render
@@ -1277,9 +1277,10 @@ func midi_stream(it: MixState.ItemState, wait := false) -> AudioStreamWAV:
 	if not _midi_tasks.has(key):
 		var result := [null]
 		var notes := PackedFloat64Array(Array(it.notes))
+		var controls := it.controls.duplicate()
 		var seconds := it.length
 		var rate := int(AudioServer.get_mix_rate())
-		var task := WorkerThreadPool.add_task(func(): result[0] = render_midi(notes, seconds, rate),
+		var task := WorkerThreadPool.add_task(func(): result[0] = render_midi(notes, seconds, rate, controls),
 				false, "render a MIDI item")
 		_midi_tasks[key] = [task, result]
 	var running: Array = _midi_tasks[key]
@@ -1306,8 +1307,9 @@ func prune_renders() -> void:
 
 
 ## Notes through the instrument, as a stream. Safe off the main thread.
-static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int) -> AudioStreamWAV:
-	var frames := DawKitTine.render_notes(notes, seconds, float(rate))
+static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int,
+		controls := PackedFloat64Array()) -> AudioStreamWAV:
+	var frames := DawKitTine.render_notes(notes, seconds, float(rate), controls)
 	var data := PackedByteArray()
 	data.resize(frames.size() * 4)
 	for i in frames.size():
