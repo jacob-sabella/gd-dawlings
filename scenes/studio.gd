@@ -2455,6 +2455,8 @@ func _stand_the_setup_wall() -> void:
 	wall.key_locked = roll_settings.key_locked
 	wall.per_track_cap = roll_settings.per_track_cap
 	wall.no_repeats = roll_settings.no_repeats
+	wall.scales = int(roll_settings.scales)
+	wall.near_semitones = roll_settings.near_semitones
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2471,6 +2473,8 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.key_locked = s.key_locked
 		roll_settings.per_track_cap = s.per_track_cap
 		roll_settings.no_repeats = s.no_repeats
+		roll_settings.scales = s.scales
+		roll_settings.near_semitones = s.near_semitones
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.screen_sources = func() -> Array:
 		var out := []
@@ -2629,7 +2633,7 @@ func _roll_rig() -> void:
 	var indices: Array = []
 	for i in DAW.state.track_indices():
 		indices.append(i)
-	var plan := RigRoll.plan(settings, rng, indices, _rig_roulette_pool(settings))
+	var plan := RigRoll.plan(settings, rng, indices, _rig_roulette_pool(settings), str(Session.roll.get("key", "")))
 	var landed := 0
 	var pedals: Array = []
 	for p in plan["pedals"]:

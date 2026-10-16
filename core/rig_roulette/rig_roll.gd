@@ -6,6 +6,23 @@ extends RefCounted
 ## this is the same for any engine and can be replayed from a seed.
 
 const KEY_NAMES := ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+const MODES := ["major", "dorian", "phrygian", "lydian", "mixolydian", "minor", "locrian"]
+const PENTATONICS := ["major pentatonic", "minor pentatonic", "blues"]
+
+
+## The scale names a pool draws from.
+static func scale_names(scales: RollSettings.Scales) -> Array:
+	match scales:
+		RollSettings.Scales.MODES:
+			return MODES
+		RollSettings.Scales.PENTATONIC:
+			return PENTATONICS
+	return ["major", "minor"]
+
+
+## The root's index in KEY_NAMES out of a key's name ("D minor"), or -1.
+static func root_of(key: String) -> int:
+	return KEY_NAMES.find(key.get_slice(" ", 0))
 
 
 ## The generator for a roll: seeded when the settings carry a seed, fresh otherwise.
@@ -24,9 +41,10 @@ static func track_count(rng: RandomNumberGenerator) -> int:
 
 
 ## `tracks` are the new project's track indices, `pool` the effects it may land
-## ([plugin, label] pairs, as `fx_choices` gives them). Returns {"pedals": [{track, plugin}], "key": String}
+## ([plugin, label] pairs, as `fx_choices` gives them). `last_key` is the key the last roll named, for a NEAR roll. Returns {"pedals": [{track, plugin}], "key": String}
 ## ("" when the key is locked). `rng` carries on from `track_count`.
-static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Array, pool: Array) -> Dictionary:
+static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Array, pool: Array,
+		last_key := "") -> Dictionary:
 	var eligible := tracks.duplicate()
 	for i in range(eligible.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
@@ -50,7 +68,13 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 		pedals.append({"track": slots[i], "plugin": plugin})
 	var key := ""
 	if not settings.key_locked:
-		key = "%s %s" % [KEY_NAMES[rng.randi() % KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]
+		var roots := range(KEY_NAMES.size())
+		var last := root_of(last_key)
+		if settings.near_semitones > 0 and last >= 0:
+			roots = roots.filter(func(r): return mini(posmod(r - last, 12), posmod(last - r, 12)) <= settings.near_semitones)
+		var names := scale_names(settings.scales)
+		var root: int = roots[rng.randi() % roots.size()]
+		key = "%s %s" % [KEY_NAMES[root], names[rng.randi() % names.size()]]
 	return {"pedals": pedals, "key": key}
 
 

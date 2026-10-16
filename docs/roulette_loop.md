@@ -166,3 +166,15 @@ post is a little lower (1.4 m). Looked at in a 720p shot from the seat: all rows
 
 Not done: whole mix vs per track, and which tracks are eligible. Both need a notion of track roles,
 so they are a later slice.
+
+### E3: key and scale
+
+The rolled key can be drawn from MAJOR OR MINOR (as before; the draw order is unchanged so seeds replay),
+ANY MODE (the seven), or PENTATONIC + BLUES; and a NEAR wheel keeps the new root within 1 to 6 semitones
+(either way round the circle) of the key the last roll named, from `Session.roll`. LOCK KEY is as before. Settings
+`scales`, `near` are clamped on the wire. Two honest notes: "NEAR" needs a last roll to be near (the
+first roll is free), and the key is still only named, never applied, because the rolled project is empty.
+Setup wall now has rows for scales and nearness (the panel is 0.52 tall; checked in a 720p seat shot).
+Full suite 11165 checks, 0 failed.
+
+Not done in key: a separate root-only lock (LOCK KEY covers the whole key).

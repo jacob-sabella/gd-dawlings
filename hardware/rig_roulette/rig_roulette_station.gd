@@ -27,7 +27,7 @@ signal screen_chosen(choice: int)
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.44
+const HEIGHT := 0.52
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -42,6 +42,8 @@ var pool := Pool.CHARACTER
 var key_locked := false
 var per_track_cap := 1
 var no_repeats := false
+var scales := 0
+var near_semitones := 0
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
 ## whoever owns the panel, since only the room knows what gear it has.
@@ -54,6 +56,8 @@ var read_only := false
 var _count_wheel: TabletSelector
 var _pool_wheel: TabletSelector
 var _cap_wheel: TabletSelector
+var _scale_wheel: TabletSelector
+var _near_wheel: TabletSelector
 var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
@@ -110,6 +114,37 @@ func _ready() -> void:
 	cap_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDALS PER TRACK"
 	add_child(cap_wheel)
 
+	_scale_wheel = TabletSelector.new()
+	_scale_wheel.name = "ScaleWheel"
+	_scale_wheel.size = Vector2(0.15, 0.030)
+	_scale_wheel.hint_text = "scroll: which scales the key is drawn from"
+	_scale_wheel.options = func() -> Array:
+		return [[0, "MAJOR OR MINOR"], [1, "ANY MODE"], [2, "PENTATONIC + BLUES"]]
+	_scale_wheel.choice = scales
+	_scale_wheel.position = Vector3(0, HEIGHT - 0.214, 0.004)
+	_scale_wheel.chosen.connect(func(c: int) -> void:
+		scales = c
+		changed.emit())
+	_scale_wheel.describe_title = func() -> String: return "RIG ROULETTE  SCALES"
+	add_child(_scale_wheel)
+
+	_near_wheel = TabletSelector.new()
+	_near_wheel.name = "NearWheel"
+	_near_wheel.size = Vector2(0.15, 0.030)
+	_near_wheel.hint_text = "scroll: how far from the last roll's key the new one may land"
+	_near_wheel.options = func() -> Array:
+		var out := [[0, "ANY KEY"]]
+		for n in range(1, RollSettings.NEAR_MAX + 1):
+			out.append([n, "WITHIN %d SEMITONE%s" % [n, "" if n == 1 else "S"]])
+		return out
+	_near_wheel.choice = near_semitones
+	_near_wheel.position = Vector3(0, HEIGHT - 0.256, 0.004)
+	_near_wheel.chosen.connect(func(c: int) -> void:
+		near_semitones = c
+		changed.emit())
+	_near_wheel.describe_title = func() -> String: return "RIG ROULETTE  NEAR THE LAST KEY"
+	add_child(_near_wheel)
+
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
 	screen_wheel.size = Vector2(0.15, 0.030)
@@ -117,13 +152,13 @@ func _ready() -> void:
 	screen_wheel.options = func() -> Array:
 		return screen_sources.call() if screen_sources.is_valid() else [[0, "ROLL"]]
 	screen_wheel.choice = 0
-	screen_wheel.position = Vector3(0, HEIGHT - 0.214, 0.004)
+	screen_wheel.position = Vector3(0, HEIGHT - 0.298, 0.004)
 	screen_wheel.chosen.connect(func(c: int) -> void: screen_chosen.emit(c))
 	screen_wheel.pressed.connect(_on_screen_stepped)
 	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
 	add_child(screen_wheel)
 
-	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.262, 0.001))
+	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.344, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -134,21 +169,21 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.262, 0.014)
+	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.344, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.304, 0.001))
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.386, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.304, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.386, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -168,7 +203,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.346, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.428, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -197,6 +232,8 @@ func settings() -> RollSettings:
 	s.key_locked = key_locked
 	s.per_track_cap = per_track_cap
 	s.no_repeats = no_repeats
+	s.scales = scales as RollSettings.Scales
+	s.near_semitones = near_semitones
 	return s
 
 
@@ -207,7 +244,13 @@ func apply_settings(s: RollSettings) -> void:
 	key_locked = s.key_locked
 	per_track_cap = s.per_track_cap
 	no_repeats = s.no_repeats
+	scales = int(s.scales)
+	near_semitones = s.near_semitones
 	if _count_wheel != null:
+		_scale_wheel.choice = scales
+		_scale_wheel.refresh()
+		_near_wheel.choice = near_semitones
+		_near_wheel.refresh()
 		_cap_wheel.choice = per_track_cap
 		_cap_wheel.refresh()
 		_no_repeats_button.lit = no_repeats

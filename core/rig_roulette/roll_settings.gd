@@ -5,6 +5,7 @@ extends RefCounted
 ## it for the wire and a saved preset, and `from_dict` holds every field to its limits, so a
 ## guest's or a file's word is never trusted as it comes.
 
+enum Scales { MAJOR_MINOR, MODES, PENTATONIC }
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
 ## The effects a CHARACTER pool draws from (the built-in engine's FXCatalogue kinds); the same
@@ -15,6 +16,8 @@ const TIME_BASED_KINDS: Array[StringName] = [&"delay", &"reverb", &"chorus", &"p
 const DIRTY_KINDS: Array[StringName] = [&"distortion", &"filter", &"compressor"]
 const COUNT_MIN := 0
 const COUNT_MAX := 6
+## How far from the last roll's key (in semitones, either way) a new root may land; 0 is anywhere.
+const NEAR_MAX := 6
 const CAP_MIN := 1
 const CAP_MAX := 3
 const TRACKS_MIN := 2
@@ -27,6 +30,10 @@ var key_locked := false
 var per_track_cap := 1
 ## No two pedals of the same kind in one roll.
 var no_repeats := false
+## Which scales a rolled key is drawn from.
+var scales := Scales.MAJOR_MINOR
+## Roots within this many semitones of the last roll's key only; 0 is any.
+var near_semitones := 0
 ## 0 rolls off fresh randomness; anything else replays: the same seed on the same settings and
 ## the same open tracks lands the same roll.
 var seed_value := 0
@@ -34,7 +41,8 @@ var seed_value := 0
 
 func to_dict() -> Dictionary:
 	return {"count": count, "pool": int(pool), "key_locked": key_locked, "seed": seed_value,
-			"cap": per_track_cap, "no_repeats": no_repeats}
+			"cap": per_track_cap, "no_repeats": no_repeats,
+			"scales": int(scales), "near": near_semitones}
 
 
 ## The kinds a pool allows, or empty for EVERYTHING.
@@ -56,5 +64,7 @@ static func from_dict(d: Dictionary) -> RollSettings:
 	s.key_locked = bool(d.get("key_locked", s.key_locked))
 	s.per_track_cap = clampi(int(d.get("cap", s.per_track_cap)), CAP_MIN, CAP_MAX)
 	s.no_repeats = bool(d.get("no_repeats", s.no_repeats))
+	s.scales = clampi(int(d.get("scales", s.scales)), 0, Scales.size() - 1) as Scales
+	s.near_semitones = clampi(int(d.get("near", s.near_semitones)), 0, NEAR_MAX)
 	s.seed_value = maxi(int(d.get("seed", 0)), 0)
 	return s

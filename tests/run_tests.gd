@@ -347,6 +347,7 @@ func _ready() -> void:
 	_test_guests_see_the_hosts_roll_settings_and_cannot_change_them()
 	_test_a_roll_lands_on_the_board_one_result_at_a_time()
 	_test_how_many_pedals_a_roll_lands_and_where()
+	_test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21934,6 +21935,45 @@ func _test_how_many_pedals_a_roll_lands_and_where() -> void:
 	check("the same seed lands the same pedals", plan_for.call(4, 2, false, 77) == plan_for.call(4, 2, false, 77))
 	var wild := RollSettings.from_dict({"cap": 50, "no_repeats": true, "count": -3})
 	check("the cap and the count are held to their limits", wild.per_track_cap == RollSettings.CAP_MAX and wild.count == RollSettings.COUNT_MIN and wild.no_repeats)
+
+
+func _test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near() -> void:
+	var key_for := func(scales: RollSettings.Scales, near: int, last: String, seed_value: int) -> String:
+		var s := RollSettings.new()
+		s.scales = scales
+		s.near_semitones = near
+		s.seed_value = seed_value
+		return RigRoll.plan(s, RigRoll.rng_for(s), [0, 1], [], last)["key"]
+	var seen := {}
+	for seed_value in range(1, 60):
+		var k: String = key_for.call(RollSettings.Scales.MAJOR_MINOR, 0, "", seed_value)
+		seen[k.get_slice(" ", 1)] = true
+	check("the default scales are major and minor only (%s)" % [seen.keys()], seen.size() == 2 and seen.has("major") and seen.has("minor"))
+	seen.clear()
+	for seed_value in range(1, 200):
+		seen[String(key_for.call(RollSettings.Scales.MODES, 0, "", seed_value)).get_slice(" ", 1)] = true
+	check("ANY MODE reaches all seven (%d)" % seen.size(), seen.size() == 7)
+	var penta := true
+	for seed_value in range(1, 60):
+		penta = penta and RigRoll.PENTATONICS.has(String(key_for.call(RollSettings.Scales.PENTATONIC, 0, "", seed_value)).substr(
+				String(key_for.call(RollSettings.Scales.PENTATONIC, 0, "", seed_value)).find(" ") + 1))
+	check("PENTATONIC lands pentatonics and the blues", penta)
+	var near := true
+	var moved := {}
+	for seed_value in range(1, 120):
+		var k: String = key_for.call(RollSettings.Scales.MAJOR_MINOR, 2, "A minor", seed_value)
+		var r := RigRoll.root_of(k)
+		var d := mini(posmod(r - 9, 12), posmod(9 - r, 12))
+		near = near and d <= 2
+		moved[r] = true
+	check("within 2 semitones of A stays within 2 (and uses the room: %d roots)" % moved.size(), near and moved.size() >= 4)
+	check("with no last key a near roll is free", RigRoll.root_of(key_for.call(RollSettings.Scales.MAJOR_MINOR, 1, "", 5)) >= 0)
+	var locked := RollSettings.new()
+	locked.key_locked = true
+	check("a locked key names nothing", RigRoll.plan(locked, RigRoll.rng_for(locked), [0], [], "A minor")["key"] == "")
+	var wild := RollSettings.from_dict({"scales": 9, "near": 99})
+	check("scales and nearness are held to their limits", wild.scales == RollSettings.Scales.PENTATONIC and wild.near_semitones == RollSettings.NEAR_MAX)
+	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
 
 
 func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
