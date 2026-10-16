@@ -422,6 +422,9 @@ func _arrange() -> void:
 			item.name = "%s %s" % [state.track(index).name, section]
 			if state.track(index).name == "Rhodes":
 				item.notes = _comping(item.length, bar)
+				# A slow swell of the mod wheel across the part (the built-in instrument leaves it be).
+				for k in 9:
+					item.controls.append_array(PackedFloat64Array([item.length * k / 9.0, 1, 12 + 14 * k, 0]))
 			items.append(item)
 		state.set_track_items(index, items)
 

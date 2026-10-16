@@ -144,3 +144,12 @@ controllers are ignored; channels are not told apart. dawkit 440 checks. dawling
 `render_midi` and into `midi_key`. Test `_test_a_midi_items_pitch_bend_is_in_its_sound`; suite 10687, 0 failed. Hosted plugin
 instruments are not given the events: that is the native lane's `set_notes` (C++), left for later. Next: the lane view
 on the piano roll.
+
+### 2d. Controller events drawn on the item
+
+`TimelineSurface._place_controls` / `control_level`: each event a thin amber post standing up from the bottom of a MIDI
+item's block, as tall as its value (a pitch bend from the bottom of its range, centre half way), in the notes' bank, clipped to
+the window. Posts stand past the tallest note and are sunk less than one, so none of their faces lies in a note's plane (the
+room's z-fight probe caught both). The demo's Rhodes part gets a mod-wheel swell. Test
+`_test_controller_events_stand_as_tall_as_their_value` (6); suite 10693, 0 failed. Shot: shots/controls_lane.png. Wire
+unchanged. Next: ITEM-page tokens to put a lane on an item (a ramp, a clear), then recording from a controller.

@@ -226,6 +226,7 @@ func _ready() -> void:
 	_test_a_midi_items_controller_lanes_follow_its_edits()
 	_test_a_controller_lane_is_edited_undone_and_refused_when_bad()
 	_test_a_midi_items_pitch_bend_is_in_its_sound()
+	_test_controller_events_stand_as_tall_as_their_value()
 	_test_a_frozen_track_is_one_item_and_thaws_and_is_saved()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
@@ -13808,6 +13809,15 @@ func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:
 	check("and the plugins run again", fx_before.all(func(i): return back.fx[i].enabled))
 	check("thawing a track that is not frozen does nothing", not fresh._locally_thaw(6))
 	_offline()
+
+
+func _test_controller_events_stand_as_tall_as_their_value() -> void:
+	close_to("a controller at 127 is full height", TimelineSurface.control_level(1, 127.0), 1.0)
+	close_to("at 0 it is none", TimelineSurface.control_level(1, 0.0), 0.0)
+	close_to("a centred wheel is half way", TimelineSurface.control_level(DawKitClip.PITCH_BEND, 0.0), 0.5, 0.001)
+	close_to("a wheel pushed all the way down is none", TimelineSurface.control_level(DawKitClip.PITCH_BEND, -8192.0), 0.0)
+	close_to("and all the way up is full", TimelineSurface.control_level(DawKitClip.PITCH_BEND, 8191.0), 1.0)
+	close_to("a value past its range is held to it", TimelineSurface.control_level(1, 900.0), 1.0)
 
 
 func _test_a_midi_items_pitch_bend_is_in_its_sound() -> void:

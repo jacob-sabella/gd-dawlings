@@ -716,7 +716,7 @@ func _rebuild() -> void:
 	var total_notes := 0
 	for index in indices:
 		for item in DAW.state.track(index).items:
-			total_notes += item.notes.size() / MidiTake.NOTE_WIDTH
+			total_notes += item.notes.size() / MidiTake.NOTE_WIDTH + item.controls.size() / DawKitClip.CONTROL_WIDTH
 	for i in mini(total_notes, MAX_DRAWN_NOTES):
 		_item_notes.claim(Transform3D(), Color.WHITE)
 	_item_notes.commit()
@@ -1778,6 +1778,8 @@ func _relayout_view() -> void:
 				slot += 1
 				note_slot = _place_notes(item, content, t.shown_colour(), y, item.muted or quiet,
 						note_slot)
+				note_slot = _place_controls(item, content, t.shown_colour(), y, item.muted or quiet,
+						note_slot)
 				wave_slot = _place_wave(item, content, t.shown_colour(), y, item.muted or quiet,
 						wave_slot)
 				# Fades and gain belong to the block: they move with it and follow a trim.
@@ -1907,6 +1909,50 @@ func _place_notes(item: MixState.ItemState, start: float, tint: Color, y: float,
 		_item_notes.move_slot(slot, Transform3D(
 				Basis.IDENTITY.scaled(Vector3(right - left, maxf(row * 0.8, MIN_NOTE_HEIGHT), out + SUNK)),
 				Vector3((left + right) * 0.5, centre_y, face + (out - SUNK) * 0.5)))
+		_item_notes.set_colour(slot, colour)
+		slot += 1
+	return slot
+
+
+## How far up its lane a controller event stands, 0-1: a pitch bend from the bottom of its range to
+## the top (centre half way), anything else 0 to 127.
+static func control_level(kind: int, value: float) -> float:
+	if kind == DawKitClip.PITCH_BEND:
+		return clampf((value - DawKitClip.BEND_MIN) / (DawKitClip.BEND_MAX - DawKitClip.BEND_MIN), 0.0, 1.0)
+	return clampf(value / 127.0, 0.0, 1.0)
+
+
+## A MIDI item's controller events, as thin amber posts standing up from the bottom of the block, as
+## tall as the value they set (a third of the block at most), in the notes' bank. Clipped to the
+## window like the notes. Returns the next free slot.
+func _place_controls(item: MixState.ItemState, start: float, tint: Color, y: float, dim: bool,
+		slot: int) -> int:
+	if item.controls.is_empty():
+		return slot
+	var block_height := lane_height - 0.0024
+	var bottom := y - block_height * 0.5 + 0.0020
+	var reach := block_height / 3.0
+	var left_edge := maxf(_x_for(start) + EDGE_GAP, _lane_area_x) + INSET
+	var right_edge := minf(_x_for(start + item.length) - EDGE_GAP, _lane_right()) - INSET
+	var colour := Color(1.0, 0.62, 0.18).srgb_to_linear()
+	if dim:
+		colour = tint.darkened(0.5).srgb_to_linear()
+	var face := _back(item) + _depth()
+	# Sunk less than a note is, so the back of a post is not in the plane of the back of a note.
+	var sunk := SUNK * 0.25
+	var n := 0
+	while n + DawKitClip.CONTROL_WIDTH <= item.controls.size() and slot < _item_notes.count():
+		var at := _x_for(start + item.controls[n])
+		var level := control_level(int(item.controls[n + 1]), item.controls[n + 2])
+		n += DawKitClip.CONTROL_WIDTH
+		if at < left_edge or at > right_edge:
+			continue
+		var height := maxf(reach * level, MIN_NOTE_HEIGHT)
+		# Standing out past the tallest note, so no face of one lies in a note's plane.
+		var out := NOTE_RISE * 1.25
+		_item_notes.move_slot(slot, Transform3D(
+				Basis.IDENTITY.scaled(Vector3(MIN_NOTE_WIDTH, height, out + sunk)),
+				Vector3(at, bottom + height * 0.5, face + (out - sunk) * 0.5)))
 		_item_notes.set_colour(slot, colour)
 		slot += 1
 	return slot
