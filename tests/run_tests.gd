@@ -219,6 +219,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_a_comp_picks_which_take_the_lane_plays()
 	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
+	_test_the_item_page_has_lane_and_comp_tokens()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
@@ -13722,6 +13723,41 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_the_item_page_has_lane_and_comp_tokens() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0]], "Ada take 1")
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.5, 301.0, 62, 100, 0]], "Ada take 2")
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var page: TimelineItemPage = timeline.item_page
+	DAW.select_item(6, 1, false)
+	page.refresh()
+	check("a LANE and a COMP token on the item page, in reach", page.take_lane != null and page.comp_here != null
+			and page.take_lane.glyph == &"lane" and page.comp_here.glyph == &"comp"
+			and page.take_lane.available and page.comp_here.available)
+	check("the lane token is dark on the first lane", not page.take_lane.lit)
+	page.take_lane.pressed.emit()
+	check("pressed, the item is on the second lane and the token lit", s.item(6, 1).lane == 1 and page.take_lane.lit)
+	page.take_lane.pressed.emit()
+	check("pressed again, round to the first (no third lane while none is used)", s.item(6, 1).lane == 0)
+	page.take_lane.pressed.emit()
+	page.comp_here.pressed.emit()
+	check("COMP makes the track play this lane over this item (%s)" % [s.track(6).comp],
+			s.track(6).comp == [[300.0, 304.0, 1]])
+	DAW.set_item_locked(6, 1, true)
+	page.refresh()
+	check("out of reach while it is locked", not page.take_lane.available and not page.comp_here.available)
+	DAW.set_item_locked(6, 1, false)
+	DAW.clear_item_selection()
+	timeline.free()
+	_offline()
 
 
 func _test_lanes_and_the_comp_are_edited_undone_and_replicated() -> void:

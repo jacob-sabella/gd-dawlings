@@ -189,6 +189,17 @@ func _build() -> void:
 			_box(Vector2(-0.4, 0), Vector2(0.95, 0.85), 0.55)
 			_rod(Vector2(0.6, -1.0), Vector2(0.6, 0.85), 0.08, 0.4)
 			_ball(Vector2(0.6, 0.95), 0.2, 0.0)
+		&"lane":
+			# Three stacked takes, the second of them the one held out.
+			_box(Vector2(0, -0.7), Vector2(1.6, 0.28), 0.3)
+			_box(Vector2(0.3, 0), Vector2(1.6, 0.28), 0.5)
+			_box(Vector2(0, 0.7), Vector2(1.6, 0.28), 0.3)
+		&"comp":
+			# Three stacked takes and a stretch of the middle one picked out to sound.
+			_box(Vector2(0, -0.7), Vector2(1.6, 0.2), 0.2)
+			_box(Vector2(0, 0), Vector2(1.6, 0.2), 0.2)
+			_box(Vector2(0, 0.7), Vector2(1.6, 0.2), 0.2)
+			_box(Vector2(0.3, 0), Vector2(0.8, 0.5), 0.55)
 		&"group":
 			# Three links of a chain: tracks held together.
 			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)

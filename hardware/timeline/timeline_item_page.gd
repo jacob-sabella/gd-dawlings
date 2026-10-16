@@ -33,6 +33,10 @@ var fade_out_shape: GlyphKey
 var mute: GlyphKey
 var lock: GlyphKey
 var reverse: GlyphKey
+## Which take lane the item is on, a press the next (DAW.set_item_lane), and the track's comp made to
+## sound this item's lane over this item's stretch (DAW.set_comp).
+var take_lane: GlyphKey
+var comp_here: GlyphKey
 var normalise: GlyphKey
 var copy_here: GlyphKey
 var loop_to: GlyphKey
@@ -105,6 +109,8 @@ func _ready() -> void:
 	lock = _key("ItemLock", &"lock", Color(0.92, 0.94, 1.0), "ITEM  LOCK", _toggle_lock,
 			func() -> String: return "locked: press to let it move again" if lock.lit else "pin it where it is", true)
 	reverse = _key("ItemReverse", &"reverse", EDIT_INK, "ITEM  REVERSE", _toggle_reverse, _reverse_text, true)
+	take_lane = _key("ItemLane", &"lane", EDIT_INK, "ITEM  TAKE LANE", _next_lane, _lane_text)
+	comp_here = _key("ItemComp", &"comp", GO_INK, "ITEM  COMP HERE", _comp_here, _comp_text)
 	normalise = _key("ItemNormalise", &"normalise", EDIT_INK, "ITEM  NORMALISE", _normalise,
 			func() -> String: return "gain so its loudest moment is full scale" if normalise.lit \
 					else "for a recorded item")
@@ -182,7 +188,7 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
 	for key in [nudge_earlier, nudge_later]:
@@ -208,7 +214,7 @@ func refresh() -> void:
 	mute.lit = item.muted
 	lock.lit = item.locked
 	# A locked item's shape is not the rails' to change.
-	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
+	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, reverse, take_lane, comp_here, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity]:
 		c.available = not item.locked
 	fade_in_shape.glyph = TimelineGlyph.fade_glyph(item.fade_shape, false)
 	fade_in_shape.lit = item.fade_shape != DawKitClip.FADE_LINEAR
@@ -216,6 +222,8 @@ func refresh() -> void:
 	fade_out_shape.lit = item.fade_out_shape != DawKitClip.FADE_LINEAR
 	normalise.lit = item.sound_peak() > 0.0
 	reverse.lit = item.reversed
+	take_lane.lit = item.lane != 0
+	comp_here.lit = true
 	reverse.available = not item.locked and not item.source.is_empty() and not item.is_looped()
 	var midi := not item.notes.is_empty()
 	for key in [down, up, quant, softer, harder, humanise, legato, staccato, even, retrograde]:
@@ -502,6 +510,43 @@ func _toggle_reverse() -> void:
 	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
 	if item != null:
 		DAW.set_item_reversed(_target[0], _target[1], not item.reversed)
+
+
+## The lane after this item's, going back to the first past one more than the highest the other
+## items use.
+func _next_lane() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null:
+		return
+	var top := 0
+	for other in DAW.state.track(_target[0]).items:
+		if other != item:
+			top = maxi(top, other.lane)
+	var next := item.lane + 1
+	if next > mini(top + 1, MixWire.LANES_MAX):
+		next = 0
+	DAW.set_item_lane(_target[0], _target[1], next)
+
+
+func _lane_text() -> String:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null:
+		return "select one item"
+	return "on take lane %d: press for the next" % (item.lane + 1)
+
+
+## The track plays this item's lane across this item's stretch.
+func _comp_here() -> void:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item != null:
+		DAW.set_comp(_target[0], item.start, item.end(), item.lane)
+
+
+func _comp_text() -> String:
+	var item := DAW.state.item(_target[0], _target[1]) if not _target.is_empty() else null
+	if item == null:
+		return "select one item"
+	return "play take lane %d from here to its end" % (item.lane + 1)
 
 
 func _toggle_lock() -> void:

@@ -68,3 +68,12 @@ comp is its own address, `/track/N/comp`, flat triples. Reaper backend: no-op (n
 run against a live Reaper). Test `_test_lanes_and_the_comp_are_edited_undone_and_replicated` (11
 checks); suite 10631, 0 failed; session probe 47 guest checks, 0 failed. Open for 1d: the desk's TAKES
 page, record into a lane, flatten, then freeze.
+
+### 1d. LANE and COMP tokens on the ITEM page
+
+Two tokens beside REVERSE (new glyphs `lane`, `comp`): LANE puts the selected item on the next take
+lane (past one more than the others use, back to the first), COMP makes the track play that item's lane
+across that item's stretch (`DAW.set_comp`). Out of reach while the item is locked. Shot:
+shots/lane_tokens2.png. Test `_test_the_item_page_has_lane_and_comp_tokens` (6 checks); suite 10637,
+0 failed. Open for 1e: record into a lane (a new take lands on the next lane over what it covers),
+show lanes in the timeline, flatten a comp; then freeze.
