@@ -200,6 +200,11 @@ func _build() -> void:
 			_box(Vector2(0, 0), Vector2(1.6, 0.2), 0.2)
 			_box(Vector2(0, 0.7), Vector2(1.6, 0.2), 0.2)
 			_box(Vector2(0.3, 0), Vector2(0.8, 0.5), 0.55)
+		&"flatten":
+			# Three takes pressed into one.
+			_box(Vector2(0, -0.75), Vector2(1.6, 0.18), 0.2)
+			_box(Vector2(0, 0.75), Vector2(1.6, 0.18), 0.2)
+			_box(Vector2(0, 0), Vector2(1.6, 0.4), 0.6)
 		&"group":
 			# Three links of a chain: tracks held together.
 			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)

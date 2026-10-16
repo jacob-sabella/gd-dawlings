@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"flatten_comp", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -582,6 +582,12 @@ func set_comp(track_index: int, from: float, to: float, lane: int) -> void:
 	_do(&"set_comp", [track_index, from, to, float(lane)])
 
 
+## The comp made plain: each item cut to what the comp plays of it, all on the first lane. One
+## undo step.
+func flatten_comp(track_index: int) -> void:
+	_do(&"flatten_comp", [track_index])
+
+
 ## What a locked item refuses: anything that names it and would change where it is or what it
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
@@ -838,6 +844,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed move_item intent %s." % [args])
 			return
 		args = [int(args[0]), int(args[1]), maxf(float(args[2]), 0.0), maxi(int(args[3]) if args.size() == 4 else 0, 0)]
+	if verb == &"flatten_comp":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])) or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed flatten_comp intent %s." % [args])
+			return
+		args = [int(args[0])]
 	if verb == &"set_comp":
 		if args.size() != 4 or int(args[0]) < 1 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
 			push_warning("DAW: refused a malformed set_comp intent %s." % [args])

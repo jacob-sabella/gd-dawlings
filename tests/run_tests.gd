@@ -220,6 +220,7 @@ func _ready() -> void:
 	_test_a_comp_picks_which_take_the_lane_plays()
 	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
 	_test_the_item_page_has_lane_and_comp_tokens()
+	_test_flattening_a_comp_makes_plain_items()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
@@ -13723,6 +13724,38 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_flattening_a_comp_makes_plain_items() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0], [302.5, 303.5, 64, 100, 0]], "Ada take 1")
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.5, 301.0, 62, 100, 0], [301.5, 302.5, 65, 90, 0]], "Ada take 2")
+	DAW.flatten_comp(6)
+	check("with no comp there is nothing to flatten", s.track(6).items.size() == 2)
+	DAW.set_item_lane(6, 1, 1)
+	DAW.set_comp(6, 301.0, 303.0, 1)
+	var depth := maxi(s.undo_depth, 0)
+	DAW.flatten_comp(6)
+	var items: Array = s.track(6).items
+	check("three plain items replace the two (%d)" % items.size(), items.size() == 3 and s.track(6).comp.is_empty()
+			and items.all(func(i): return i.lane == 0))
+	check("each is the stretch it played", is_equal_approx(items[0].start, 300.0) and is_equal_approx(items[0].length, 1.0)
+			and is_equal_approx(items[1].start, 301.0) and is_equal_approx(items[1].length, 2.0)
+			and is_equal_approx(items[2].start, 303.0) and is_equal_approx(items[2].length, 1.0))
+	check("its notes counted from its new start (%s)" % [items[1].notes],
+			items[1].notes.size() == 5 and is_equal_approx(items[1].notes[0], 0.5) and is_equal_approx(items[1].notes[1], 1.5)
+			and is_equal_approx(items[1].notes[2], 65.0))
+	check("in one undo step", s.undo_depth - depth == 1)
+	DAW.undo()
+	check("undone, the two takes and the comp are back", s.track(6).items.size() == 2 and s.track(6).comp.size() == 3)
+	DAW.apply_intent(&"flatten_comp", [0])
+	DAW.apply_intent(&"flatten_comp", [])
+	check("a malformed intent changes nothing", s.track(6).items.size() == 2)
+	_offline()
 
 
 func _test_the_item_page_has_lane_and_comp_tokens() -> void:

@@ -1220,6 +1220,12 @@ func set_item_lane(track_index: int, item_index: int, lane: float) -> void:
 		_remember_edit(before)
 
 
+func flatten_comp(track_index: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_flatten_comp(track_index):
+		_remember_edit(before)
+
+
 func set_comp(track_index: int, from: float, to: float, lane: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_set_comp(track_index, from, to, int(lane)):

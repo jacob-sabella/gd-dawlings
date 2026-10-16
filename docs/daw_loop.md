@@ -77,3 +77,11 @@ across that item's stretch (`DAW.set_comp`). Out of reach while the item is lock
 shots/lane_tokens2.png. Test `_test_the_item_page_has_lane_and_comp_tokens` (6 checks); suite 10637,
 0 failed. Open for 1e: record into a lane (a new take lands on the next lane over what it covers),
 show lanes in the timeline, flatten a comp; then freeze.
+
+### 1e. Flatten a comp (dawkit 5517ec3)
+
+`DawKitTrack.flatten_comp()` and `DAW.flatten_comp(track)` (`DAWBackend.item_slice`,
+`_locally_flatten_comp`): each item cut to the stretches that name its lane, all on the first lane, no
+comp; one undo step; a malformed intent refused. A FLATTEN token beside LANE and COMP. Tests: dawkit
+418 checks; dawlings `_test_flattening_a_comp_makes_plain_items` (7); suite 10641, 0 failed; session
+probe host 53 / guest 47, 0 failed. Open: record into a lane, lanes drawn in the timeline, then freeze.

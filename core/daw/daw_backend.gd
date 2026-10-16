@@ -341,6 +341,7 @@ func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: 
 func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void: pass
 func set_item_lane(_track_index: int, _item_index: int, _lane: float) -> void: pass
 func set_comp(_track_index: int, _from: float, _to: float, _lane: float) -> void: pass
+func flatten_comp(_track_index: int) -> void: pass
 ## A new, empty track at `at` (from 1), everything from there on moving down one.
 func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
@@ -511,6 +512,55 @@ func _locally_set_comp(track_index: int, from: float, to: float, lane: int) -> b
 	if t.comp == state.track(track_index).comp:
 		return false
 	_write_comp(track_index, t.comp)
+	return true
+
+
+## `item` cut to [from, to) (song seconds, inside it) as an item of its own, sounding as it did there:
+## the file offset moved on by what was cut off the front, the notes trimmed to the window and counted
+## from the new start, a fade kept only on an end that is still the item's own. On the first lane.
+static func item_slice(item: MixState.ItemState, from: float, to: float) -> MixState.ItemState:
+	var c: MixState.ItemState = MixWire._unpack_items(MixWire._pack_items([item]))[0]
+	c.selected = false
+	c.lane = 0
+	c.start = from
+	c.length = to - from
+	c.source_offset = item.source_offset + (from - item.start)
+	if from > item.start:
+		c.fade_in = 0.0
+	if to < item.end():
+		c.fade_out = 0.0
+	c.fade_in = minf(c.fade_in, c.length)
+	c.fade_out = minf(c.fade_out, c.length)
+	if not item.notes.is_empty():
+		var kept := PackedFloat32Array()
+		var shift := from - item.start
+		for i in range(0, item.notes.size() - 4, 5):
+			var on := item.notes[i] - shift
+			var off := item.notes[i + 1] - shift
+			if off <= 0.0 or on >= c.length:
+				continue
+			kept.append_array(PackedFloat32Array([maxf(on, 0.0), minf(off, c.length), item.notes[i + 2], item.notes[i + 3], item.notes[i + 4]]))
+		c.notes = kept
+	return c
+
+
+## The track's comp made plain: each item cut to the stretches that name its lane, all on the first
+## lane, and no comp. False when there was none.
+func _locally_flatten_comp(track_index: int) -> bool:
+	var t: MixState.TrackState = state.tracks.get(track_index)
+	if t == null or t.comp.is_empty():
+		return false
+	var out: Array = []
+	for item in t.items:
+		for s in t.comp:
+			if s[2] != item.lane:
+				continue
+			var from := maxf(item.start, s[0])
+			var to := minf(item.end(), s[1])
+			if to - from > MIN_ITEM_SECONDS:
+				out.append(item_slice(item, from, to))
+	_write_lane(track_index, out)
+	_write_comp(track_index, [])
 	return true
 
 
