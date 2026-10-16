@@ -222,6 +222,7 @@ func _ready() -> void:
 	_test_the_item_page_has_lane_and_comp_tokens()
 	_test_flattening_a_comp_makes_plain_items()
 	_test_a_take_the_comp_never_plays_is_drawn_dark()
+	_test_a_frozen_track_is_one_item_and_thaws_and_is_saved()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
@@ -13726,6 +13727,41 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var t := s.track(6)
+	var items_before := t.items.size()
+	var fx_before := t.plugins()
+	var rendered := MixState.ItemState.new()
+	rendered.start = 0.0
+	rendered.length = 12.0
+	rendered.name = "frozen"
+	check("a track the engine does not have cannot freeze", not backend._locally_freeze(99, rendered))
+	check("it freezes", backend._locally_freeze(6, rendered) and t.is_frozen())
+	check("its items are the one rendered item and it has no comp", t.items.size() == 1 and t.items[0].name == "frozen" and t.comp.is_empty())
+	check("its plugins are bypassed", fx_before.all(func(i): return not t.fx[i].enabled))
+	check("it will not freeze twice", not backend._locally_freeze(6, rendered))
+	var captured := ProjectBridge.capture(backend)
+	check("the project says it is frozen, over what it held", captured.track("t6").is_frozen()
+			and captured.track("t6").clips.size() == 1 and captured.track("t6").frozen["clips"].size() == items_before)
+	var fresh := GodotBackend.new()
+	fresh.state = MixState.new()
+	DAW.use(fresh)
+	check("it loads", ProjectBridge.load(captured, fresh).is_empty())
+	var back := fresh.state.track(6)
+	check("frozen again on the other side", back.is_frozen() and back.items.size() == 1 and back.items[0].name == "frozen"
+			and fx_before.all(func(i): return not back.fx[i].enabled))
+	check("captured again it is the same project (%s)" % captured.first_difference(ProjectBridge.capture(fresh)),
+			captured.same_as(ProjectBridge.capture(fresh)))
+	check("thawed, the items are back", fresh._locally_thaw(6) and not back.is_frozen() and back.items.size() == items_before)
+	check("and the plugins run again", fx_before.all(func(i): return back.fx[i].enabled))
+	check("thawing a track that is not frozen does nothing", not fresh._locally_thaw(6))
+	_offline()
 
 
 func _test_a_take_the_comp_never_plays_is_drawn_dark() -> void:

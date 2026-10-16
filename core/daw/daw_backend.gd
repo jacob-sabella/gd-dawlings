@@ -515,6 +515,48 @@ func _locally_set_comp(track_index: int, from: float, to: float, lane: int) -> b
 	return true
 
 
+## Freeze the track to `rendered`, an item of its sound played through its plugins: what the track
+## held is kept (MixState.TrackState.frozen), its items become that one item, its comp goes and its
+## plugins are bypassed, since they are in the sound now. False if it is already frozen or unknown.
+func _locally_freeze(track_index: int, rendered: MixState.ItemState) -> bool:
+	var t: MixState.TrackState = state.tracks.get(track_index)
+	if t == null or t.is_frozen():
+		return false
+	var on := {}
+	for fx_index in t.plugins():
+		on[fx_index] = t.fx[fx_index].enabled
+	t.frozen = {"items": MixWire._pack_items(t.items), "comp": MixWire.pack_comp(t.comp), "fx_on": on}
+	_write_comp(track_index, [])
+	_write_lane(track_index, [rendered])
+	for fx_index in on:
+		_write_fx_enabled(track_index, fx_index, false)
+	return true
+
+
+## The track put back as it was before `_locally_freeze`: the rendered item goes, its items and comp
+## return and its plugins run as they did. False if it was not frozen.
+func _locally_thaw(track_index: int) -> bool:
+	var t: MixState.TrackState = state.tracks.get(track_index)
+	if t == null or not t.is_frozen():
+		return false
+	var was := t.frozen
+	t.frozen = {}
+	_write_lane(track_index, MixWire._unpack_items(was["items"]))
+	_write_comp(track_index, MixWire.unpack_comp(was["comp"]))
+	for fx_index in was["fx_on"]:
+		_write_fx_enabled(track_index, fx_index, was["fx_on"][fx_index])
+	return true
+
+
+func _write_fx_enabled(track_index: int, fx_index: int, enabled: bool) -> void:
+	var f := state.fx(track_index, fx_index, false)
+	if f == null:
+		return
+	f.enabled = enabled
+	state.fx_changed.emit(track_index, fx_index)
+	record_for_replication("/track/%d/fx/%d/bypass" % [track_index, fx_index], [1.0 if enabled else 0.0])
+
+
 ## `item` cut to [from, to) (song seconds, inside it) as an item of its own, sounding as it did there:
 ## the file offset moved on by what was cut off the front, the notes trimmed to the window and counted
 ## from the new start, a fade kept only on an end that is still the item's own. On the first lane.

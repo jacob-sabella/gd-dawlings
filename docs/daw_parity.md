@@ -81,7 +81,7 @@ Iterations done: 50
 
 ## Comping and takes
 - [~] take lanes and comping (partial, 2026-10-15: a clip's lane and a track's comp are in dawkit, saved in the project and DAWproject extras, and the built-in engine plays only the lane the comp names where it names it; the host edits them (set_item_lane, set_comp: one undo step each, validated from peers) and guests see them over the wire; LANE and COMP tokens on the ITEM page put an item on the next lane and make its lane sound over its stretch; a FLATTEN token turns the comp into plain items on the first lane; a take recorded on a track that comps lands on the lane above what it lies over and the comp plays it where it was recorded; a take the comp never plays is drawn dark in the timeline; a Reaper path and track freeze are still to do)
-- [ ] track freeze (missing)
+- [~] track freeze (partial, 2026-10-16: dawkit freezes a track to one rendered clip and thaws it (DawKitTrack.freeze/unfreeze), saved in the project and the DAWproject extras; the desk holds the same (TrackState.frozen, _locally_freeze/_thaw: the items become the rendered item, the plugins are bypassed) and the project bridge carries it both ways; still to do: rendering the track to the file (MixRender, pre-fader), the verb, a FREEZE token, the guest's view of it, and a Reaper path (its freeze action))
 
 ## Markers and regions
 - [x] markers add/edit/remove (2026-10-14: removing the last one now reaches guests and clears a Reaper cache)

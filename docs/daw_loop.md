@@ -100,3 +100,13 @@ the comp riding in the snapshot. Test `_test_a_take_recorded_on_a_comping_track_
 nowhere across it is drawn dark (as a muted one is); a take sounding for only part of it is not. No comp,
 nothing dark. Test `_test_a_take_the_comp_never_plays_is_drawn_dark` (3); suite 0 failed. Wire unchanged.
 Open: a Reaper path for lanes; track freeze.
+
+### 1h. Track freeze, the model (dawkit df163d1)
+
+dawkit: `DawKitTrack.frozen`, `freeze(rendered_clip)`, `unfreeze()`, `is_frozen()`: the clips, comp, effects and
+the effects' automation are kept as plain data and the track holds the one rendered clip; saved in the plain form
+and the DAWproject extras (the stashed clips' media goes in the zip too). dawkit 427 checks, 0 failed.
+dawlings: `TrackState.frozen`, `DAWBackend._locally_freeze/_locally_thaw` (items to the rendered item, comp gone,
+plugins bypassed; thaw puts all back), `ProjectBridge` carries it both ways (export freezes dawkit's own way;
+import thaws then freezes again). Test `_test_a_frozen_track_is_one_item_and_thaws_and_is_saved` (12); suite
+10664, 0 failed. No verb or wire yet, so no probe. Next: render a track pre-fader to its file, the verb, the token.

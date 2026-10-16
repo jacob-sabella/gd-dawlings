@@ -105,6 +105,8 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 					continue
 				name = "fx:%d:%s" % [plugins.find(int(parts[1])) + shift, parts[2]]
 			out.automation.append(DawKitAutomation.new(name, (t.automation[target] as Array).duplicate(true)))
+		if t.is_frozen():
+			_freeze_out(out, t)
 		p.tracks.append(out)
 		# Reaper's folder depth: +1 makes this track a folder holding what follows, -n closes n
 		# folders after it.
@@ -115,6 +117,54 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 				if not folders.is_empty():
 					folders.pop_back()
 	return p
+
+
+## `out`, built from a frozen track `t` as it is now (the one rendered clip, plugins bypassed), made
+## the track it was and then frozen by dawkit's own rule, so the file keeps what it was.
+static func _freeze_out(out: DawKitTrack, t: MixState.TrackState) -> void:
+	if out.clips.is_empty():
+		return
+	var rendered := out.clips[0]
+	out.clips.clear()
+	for it in MixWire._unpack_items(t.frozen["items"]):
+		out.clips.append(_clip(it))
+	out.comp = MixWire.unpack_comp(t.frozen["comp"])
+	var plugins: Array = t.plugins()
+	var shift := out.effects.size() - plugins.size()
+	for k in plugins.size():
+		out.effects[shift + k].enabled = t.frozen["fx_on"].get(plugins[k], true)
+	out.freeze(rendered)
+
+
+## A project's clip as the desk's item, with its file's overview.
+static func _item_of(backend: OfflineBackend, c: DawKitClip) -> MixState.ItemState:
+	var item := MixState.ItemState.new()
+	item.start = c.start
+	item.length = c.length
+	item.name = c.name
+	item.muted = c.muted
+	item.locked = c.locked
+	item.lane = c.lane
+	item.reversed = c.reversed
+	item.source = c.source
+	item.source_offset = c.source_offset
+	# The file's overview, so a reopened project draws its takes as the sounds they are.
+	if not c.source.is_empty():
+		if not backend.take_peaks.has(c.source):
+			backend.take_peaks[c.source] = AudioTake.overview_of(backend.media_path(c.source))
+		item.peaks = backend.take_peaks[c.source]
+		if c.reversed:
+			item.peaks = item.peaks.duplicate()
+			item.peaks.reverse()
+	item.notes = PackedFloat32Array(Array(c.notes))
+	item.fade_in = c.fade_in
+	item.fade_out = c.fade_out
+	item.fade_shape = c.fade_shape
+	item.fade_out_shape = c.fade_out_shape
+	item.gain_db = c.gain_db
+	item.loop_start = c.loop_start
+	item.loop_end = c.loop_end
+	return item
 
 
 static func id_of(index: int) -> String:
@@ -234,6 +284,11 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	var kinds := {}
 	for i in p.tracks.size():
 		var src := p.tracks[i]
+		# A frozen track is loaded as it was, then frozen again to its rendered clip.
+		var rendered: DawKitClip = src.clips[0] if src.is_frozen() and not src.clips.is_empty() else null
+		if rendered != null:
+			src = DawKitTrack.from_dict(src.to_dict())
+			src.unfreeze()
 		var t := s.track(i + 1)
 		t.name = src.name
 		t.part = str(track_parts.get(i + 1, ""))
@@ -300,34 +355,16 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 				t.automation[target] = lane.points.duplicate(true)
 		var items: Array = []
 		for c in src.clips:
-			var item := MixState.ItemState.new()
-			item.start = c.start
-			item.length = c.length
-			item.name = c.name
-			item.muted = c.muted
-			item.locked = c.locked
-			item.lane = c.lane
-			item.reversed = c.reversed
-			item.source = c.source
-			item.source_offset = c.source_offset
-			# The file's overview, so a reopened project draws its takes as the sounds they are.
-			if not c.source.is_empty():
-				if not backend.take_peaks.has(c.source):
-					backend.take_peaks[c.source] = AudioTake.overview_of(backend.media_path(c.source))
-				item.peaks = backend.take_peaks[c.source]
-				if c.reversed:
-					item.peaks = item.peaks.duplicate()
-					item.peaks.reverse()
-			item.notes = PackedFloat32Array(Array(c.notes))
-			item.fade_in = c.fade_in
-			item.fade_out = c.fade_out
-			item.fade_shape = c.fade_shape
-			item.fade_out_shape = c.fade_out_shape
-			item.gain_db = c.gain_db
-			item.loop_start = c.loop_start
-			item.loop_end = c.loop_end
-			items.append(item)
+			items.append(_item_of(backend, c))
 		s.set_track_items(i + 1, items)
+		if rendered != null:
+			var on := {}
+			for fx_index in t.plugins():
+				on[fx_index] = t.fx[fx_index].enabled
+				t.fx[fx_index].enabled = false
+			t.frozen = {"items": MixWire._pack_items(items), "comp": MixWire.pack_comp(t.comp), "fx_on": on}
+			t.comp = []
+			s.set_track_items(i + 1, [_item_of(backend, rendered)])
 	s.bank_offset = 0
 	s.project_track_count = p.tracks.size()
 	s.bank_size = mini(maxi(p.tracks.size(), 1), 64)

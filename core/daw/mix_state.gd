@@ -293,9 +293,17 @@ class TrackState extends RefCounted:
 	## Which take lane sounds where, [start, end, lane] in seconds (DawKitTrack.comp). Empty: no
 	## comp, and the items sound as they lie, a newer one over an older.
 	var comp: Array = []
+	## A frozen track (DAWBackend._locally_freeze): empty, or what it was -- "items" and "comp" as
+	## MixWire packs them and "fx_on", whether each plugin slot ran -- while `items` is the one
+	## rendered item and the plugins are bypassed. Held by the host (and saved with the project);
+	## guests are not sent it.
+	var frozen: Dictionary = {}
 	## Automated controls: target -> [[seconds, value, shape], ...], as DawKitAutomation's, except
 	## that a send is "send:<destination track index>". Read while the song plays.
 	var automation: Dictionary = {}
+
+	func is_frozen() -> bool:
+		return not frozen.is_empty()
 
 	## The plugin slots that hold a plugin, in chain order. Reaper's OSC reports every slot its
 	## device is configured for -- sixteen here -- and the empty ones arrive with empty names.
