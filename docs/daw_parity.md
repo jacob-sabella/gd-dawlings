@@ -61,7 +61,7 @@ Iterations done: 50
 - [x] folders (depth is kept through renumbering)
 - [x] track groups (2026-10-14; four, a GROUP token on the TRACK page; faders by the same decibels, mutes and solos as one; saved; desk-side on Reaper, not in its project)
 - [ ] VCA faders: a fader that moves its group without passing audio (missing)
-- [ ] a group overridden for one move (Reaper's modifier on a grouped fader) (missing)
+- [x] a group overridden for one move (2026-10-16; a FREE token on the TRACK page arms `DAW.group_free`; the next fader release, mute or solo is one track's alone; desk-side, not on the wire)
 - [ ] track delay compensation (missing)
 
 ## Routing and sends

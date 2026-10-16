@@ -161,3 +161,10 @@ fall, then removes it, through `set_item_controls` (so one undo step, host-valid
 items. `TimelineItemPage.lane_shape` / `ramp_points`. Test `_test_the_controller_tokens_ramp_a_lane` (8); suite 10701, 0 failed.
 Shot: shots/cc_tokens.png. Wire unchanged. Open: single-event editing, recording from a controller, hosted plugins, Reaper.
 Item 2's remaining pieces need hardware (a MIDI controller) or the native lane, so the loop moves to item 3 (VCA faders).
+
+### 3a. A group overridden for one move
+
+`DAW.group_free` (armed by a FREE token, glyph `group_free`, on the TRACK page beside GROUP): `set_track_volume`, `set_track_mute`
+and `set_track_solo` skip the group's mates while it is armed; a fader's release (`Fader._on_grab_end`) or a mute/solo spends it.
+Desk-side only, nothing on the wire. Extended `_test_grouped_tracks_move_together` (+4); suite 10705, 0 failed. Next: VCA
+faders (a project-level trim per group, dawkit model first).

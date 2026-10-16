@@ -224,6 +224,11 @@ func _build() -> void:
 			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)
 			_ring(Vector2(0.0, 0.0), 0.36, 0.11)
 			_ring(Vector2(0.62, 0.0), 0.36, 0.11)
+		&"group_free":
+			# The chain with its middle link lifted out.
+			_ring(Vector2(-0.62, 0.0), 0.36, 0.11)
+			_ring(Vector2(0.0, 0.55), 0.36, 0.11)
+			_ring(Vector2(0.62, 0.0), 0.36, 0.11)
 		&"region_fit":
 			# A region's posts pushed out to new places, an arrow at each.
 			_box(Vector2(-0.55, 0.1), Vector2(0.14, 1.4), 0.4)

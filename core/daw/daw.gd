@@ -184,7 +184,7 @@ func db_to_taper(db: float) -> float:
 ## each track's own move, so a guest's drag is the same intents the host's would be. A track
 ## pulled all the way down pulls its group down with it.
 func set_track_volume(index: int, taper: float) -> void:
-	var mates := group_mates(index)
+	var mates := [] if group_free else group_mates(index)
 	if mates.is_empty():
 		_do(&"set_track_volume", [index, taper])
 		return
@@ -197,11 +197,25 @@ func set_track_volume(index: int, taper: float) -> void:
 func set_track_pan(index: int, pan: float) -> void: _do(&"set_track_pan", [index, pan])
 ## A grouped track's mute and solo are its group's.
 func set_track_mute(index: int, muted: bool) -> void:
-	for j in [index] + group_mates(index):
+	for j in [index] + ([] if group_free else group_mates(index)):
 		_do(&"set_track_mute", [j, muted])
+	spend_group_free()
 func set_track_solo(index: int, soloed: bool) -> void:
-	for j in [index] + group_mates(index):
+	for j in [index] + ([] if group_free else group_mates(index)):
 		_do(&"set_track_solo", [j, soloed])
+	spend_group_free()
+## Armed from the desk (FREE on the TRACK page): the next fader move, mute or solo is the one
+## track's alone, as a desk's group-override key is held for one move. A fader's release (or the
+## next mute or solo) puts it back. Local to the desk; nothing on the wire.
+var group_free := false
+signal group_free_changed
+func set_group_free(on: bool) -> void:
+	if group_free != on:
+		group_free = on
+		group_free_changed.emit()
+## One move spent: the group is the group again.
+func spend_group_free() -> void:
+	set_group_free(false)
 ## How many track groups there are to put a track in.
 const GROUPS := 4
 ## The other tracks in `index`'s group, in order; none for a track in no group.

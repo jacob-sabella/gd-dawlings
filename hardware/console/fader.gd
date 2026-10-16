@@ -174,6 +174,7 @@ func _on_grab_move(at: Vector3) -> void:
 
 
 func _on_grab_end() -> void:
+	DAW.spend_group_free()
 	if _slide != null:
 		_slide.stop()
 	_speed = 0.0

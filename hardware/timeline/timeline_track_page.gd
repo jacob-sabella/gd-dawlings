@@ -27,6 +27,8 @@ var input: GlyphKey
 var colour: GlyphKey
 var scheme: GlyphKey
 var group: GlyphKey
+## Arms DAW.group_free: the next fader move is the picked track's alone.
+var free: GlyphKey
 
 ## Each group's colour, for its light: group 1 is the first.
 const GROUP_COLOURS := [Color(0.95, 0.62, 0.32), Color(0.45, 0.85, 0.75), Color(0.75, 0.55, 0.95), Color(0.95, 0.85, 0.4)]
@@ -79,6 +81,12 @@ func _ready() -> void:
 				return "every track already has a colour" if n == 0 \
 						else "colour the %d track%s with none" % [n, "" if n == 1 else "s"])
 	group = _key("TrackGroup", &"group", Color(0.62, 0.86, 1.0), "TRACKS  GROUP", _step_group, _group_text)
+	free = _key("TrackGroupFree", &"group_free", Color(0.62, 0.86, 1.0), "TRACKS  GROUP  FREE",
+			func() -> void: DAW.set_group_free(not DAW.group_free),
+			func() -> String:
+				return "the next fader move is one track's alone; press to take it back" if DAW.group_free \
+						else "press, then move a fader: it moves alone, not with its group")
+	DAW.group_free_changed.connect(func() -> void: free.lit = DAW.group_free)
 	_group()
 	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
 			func() -> String:
@@ -168,7 +176,7 @@ func refresh() -> void:
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
 	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
 			if input.lit else ""
-	for key in [remove, duplicate, items, rename, input, colour, group]:
+	for key in [remove, duplicate, items, rename, input, colour, group, free]:
 		key.available = picked
 	var in_group: int = DAW.state.track(surface.picked_track).group if picked else 0
 	group.led_colour = GROUP_COLOURS[in_group - 1] if in_group > 0 else Color(0.62, 0.86, 1.0)
