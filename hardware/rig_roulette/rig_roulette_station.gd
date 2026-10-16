@@ -45,6 +45,12 @@ var key_locked := false
 ## whoever owns the panel, since only the room knows what gear it has.
 var screen_sources: Callable = Callable()
 var screen_wheel: TabletSelector
+## A guest's wall: the wheels show the host's settings and a nudge is put back (the owner
+## calls `apply_settings` again from `changed`).
+var read_only := false
+
+var _count_wheel: TabletSelector
+var _pool_wheel: TabletSelector
 
 var _last_label: Label3D
 var _lock_key_button: PanelButton
@@ -69,6 +75,7 @@ func _ready() -> void:
 	count_wheel.hint_text = "scroll: how many pedals land"
 	count_wheel.options = func() -> Array: return [[1, "1 PEDAL"], [2, "2 PEDALS"], [3, "3 PEDALS"]]
 	count_wheel.choice = count
+	_count_wheel = count_wheel
 	count_wheel.position = Vector3(0, HEIGHT - 0.082, 0.004)
 	count_wheel.chosen.connect(_on_count_chosen)
 	count_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL COUNT"
@@ -80,6 +87,7 @@ func _ready() -> void:
 	pool_wheel.hint_text = "scroll: which pedals are in the pool"
 	pool_wheel.options = func() -> Array: return _pool_choices()
 	pool_wheel.choice = pool
+	_pool_wheel = pool_wheel
 	pool_wheel.position = Vector3(0, HEIGHT - 0.130, 0.004)
 	pool_wheel.chosen.connect(_on_pool_chosen)
 	pool_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL POOL"
@@ -143,6 +151,19 @@ func settings() -> RollSettings:
 	s.pool = pool as RollSettings.Pool
 	s.key_locked = key_locked
 	return s
+
+
+## Show `s` on the wheels and the lock, without telling the owner it changed.
+func apply_settings(s: RollSettings) -> void:
+	count = s.count
+	pool = int(s.pool) as Pool
+	key_locked = s.key_locked
+	if _count_wheel != null:
+		_count_wheel.choice = count
+		_count_wheel.refresh()
+		_pool_wheel.choice = pool
+		_pool_wheel.refresh()
+		_lock_key_button.lit = key_locked
 
 
 ## Reported after a roll actually lands (from `Studio._roll_rig`), so the panel reads back what

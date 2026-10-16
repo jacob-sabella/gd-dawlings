@@ -2425,6 +2425,7 @@ func _build_rig_roulette_station() -> void:
 	_build_roll_board()
 	_stand_the_setup_wall()
 	Session.roll_changed.connect(_on_session_roll_changed)
+	Session.roll_setup_changed.connect(_on_session_roll_setup_changed)
 	venue_changed.connect(func(_id): _build_roll_board())
 	venue_changed.connect(func(_id): _stand_the_setup_wall())
 
@@ -2443,16 +2444,25 @@ func _stand_the_setup_wall() -> void:
 		return
 	var wall := RigRouletteStation.new()
 	wall.name = "SetupWall"
+	if not Session.is_authority() and not Session.roll_setup.is_empty():
+		roll_settings = RollSettings.from_dict(Session.roll_setup)
+	wall.read_only = not Session.is_authority()
 	wall.count = roll_settings.count
 	wall.pool = wall_pool(roll_settings.pool)
 	wall.key_locked = roll_settings.key_locked
 	wall.transform = venue.rig_roulette_spot()
 	wall.roll_requested.connect(_on_rig_roulette_roll_requested)
 	wall.changed.connect(func() -> void:
+		if not Session.is_authority():
+			# Only the host sets the roll: a guest's nudge is put back to the host's word.
+			wall.apply_settings(roll_settings)
+			Session.notice.emit("Only %s can change the roll." % Session.name_of(1))
+			return
 		var s := wall.settings()
 		roll_settings.count = s.count
 		roll_settings.pool = s.pool
-		roll_settings.key_locked = s.key_locked)
+		roll_settings.key_locked = s.key_locked
+		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.screen_sources = func() -> Array:
 		var out := []
 		var sources := board_sources()
@@ -2537,6 +2547,15 @@ func _show_board(source: StringName) -> void:
 	if rig_roulette_station != null and rig_roulette_station.screen_wheel != null:
 		rig_roulette_station.screen_wheel.choice = board_sources().find(source)
 		rig_roulette_station.screen_wheel.refresh()
+
+
+## The host's word on the roll's settings reached this guest: kept, and shown on the wall.
+func _on_session_roll_setup_changed() -> void:
+	if Session.is_authority():
+		return
+	roll_settings = RollSettings.from_dict(Session.roll_setup)
+	if rig_roulette_station != null:
+		rig_roulette_station.apply_settings(roll_settings)
 
 
 ## `Session.roll` changed (the host's own roll, or word of it reaching a guest): the board and

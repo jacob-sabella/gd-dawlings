@@ -100,3 +100,13 @@ the room test) and extended: a venue has no wall, the room's wall is built, sett
 Honest state: the panel is still the old small one (20 x 32 cm), readable up close, not yet a "wall". The settings are still local to
 each client: a guest's wheels are their own and only the host's ROLL reaches anyone. Both are next: D2 = a large setup wall the whole
 room reads, settings replicated from the host (guests read-only), and the ROLL ceremony.
+
+### D2a: the roll's settings come from the host
+
+`Session.roll_setup` (host-authoritative, sent whole, sent again to a guest admitted later, like
+`roll`) carries `RollSettings.to_dict()`. The host's wall publishes it on every change; a guest's
+studio takes it through `RollSettings.from_dict` (clamped) and the wall's wheels show it
+(`RigRouletteStation.apply_settings`). A guest who nudges a wheel has it put back and is told only
+the host changes the roll. Full suite 11113 checks, 0 failed; session probe host 53 / guest 47, 0 failed.
+
+Still to do in D2: the large setup wall and the ROLL ceremony. The wall is still the small 20x32 cm panel.

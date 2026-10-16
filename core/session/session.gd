@@ -76,6 +76,8 @@ signal tour_changed()
 signal tour_asked(verb: StringName, args: Array, from: int)
 ## Guest: the host's word on the last Rig Roulette roll arrived; see `roll`.
 signal roll_changed()
+## Guest: the host's word on what the next Rig Roulette roll is set to arrived; see `roll_setup`.
+signal roll_setup_changed()
 ## Something in the room being pushed right now, by `from`: where it is this moment. Unconfirmed
 ## and unsaved -- the ask when it is let go is what counts -- and only for drawing it moving.
 signal room_motion(piece: StringName, x: float, z: float, heading: float, from: int)
@@ -209,6 +211,11 @@ var tour: Dictionary = {}
 ## wall board reads. Built like `tour`: host-authoritative, replicated whole, sent again to a
 ## guest admitted afterwards.
 var roll: Dictionary = {}
+
+## What the host has set for the next roll (`RollSettings.to_dict`), or `{}` before it set anything.
+## What the setup wall's wheels show a guest. Host-authoritative like `roll`: only the host's
+## word is taken, and a guest's own nudge of a wheel is put back.
+var roll_setup: Dictionary = {}
 
 ## Whether this guest has had its first roster yet. Everyone on the first one is "arriving",
 ## and greeting each of them by name would be noise.
@@ -653,6 +660,8 @@ func admit(peer_id: int) -> void:
 		_receive_tour.rpc_id(peer_id, tour)
 	if not roll.is_empty() and _connected():
 		_receive_roll.rpc_id(peer_id, roll)
+	if not roll_setup.is_empty() and _connected():
+		_receive_roll_setup.rpc_id(peer_id, roll_setup)
 	if mix_feed != null and mix_feed.sending and _connected():
 		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
 
@@ -1384,6 +1393,22 @@ func publish_roll(state: Dictionary) -> void:
 func _receive_roll(state: Dictionary) -> void:
 	roll = state
 	roll_changed.emit()
+
+
+## Host: this is what the next roll is set to. Sent to everyone in the room, and heard here too.
+func publish_roll_setup(state: Dictionary) -> void:
+	if not is_authority():
+		return
+	roll_setup = state
+	roll_setup_changed.emit()
+	for id in _audience():
+		_receive_roll_setup.rpc_id(id, roll_setup)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_roll_setup(state: Dictionary) -> void:
+	roll_setup = state
+	roll_setup_changed.emit()
 
 
 # --- state replication --------------------------------------------------------------------

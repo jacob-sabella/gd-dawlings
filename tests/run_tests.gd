@@ -344,6 +344,7 @@ func _ready() -> void:
 	_test_an_items_sound_is_stretched_and_shifted()
 	_test_a_rig_roll_is_planned_from_its_settings()
 	_test_the_band_goes_into_the_roulette_room_and_back()
+	_test_guests_see_the_hosts_roll_settings_and_cannot_change_them()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21816,6 +21817,56 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	check("and is set as it was left", studio.rig_roulette_station.count == 3 and studio.rig_roulette_station.key_locked)
 	studio.leave_roulette_room()
 	studio.queue_free()
+	Session.layout = saved_layout
+
+
+func _test_guests_see_the_hosts_roll_settings_and_cannot_change_them() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	DAW.use(OfflineBackend.new())
+	_as_session(Session.Role.GUEST, 5)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	var setup := RollSettings.new()
+	setup.count = 3
+	setup.pool = RollSettings.Pool.EVERYTHING
+	setup.key_locked = true
+	# The host's word arrives while the guest stands in the room.
+	studio.set_venue(Venue.ROULETTE_ID, false, 0)
+	var wall := studio.rig_roulette_station
+	check("a guest has a wall in the room, read only", wall != null and wall.read_only)
+	Session._receive_roll_setup(setup.to_dict())
+	check("the guest's settings are the host's", studio.roll_settings.count == 3 and studio.roll_settings.key_locked
+			and studio.roll_settings.pool == RollSettings.Pool.EVERYTHING)
+	check("and the wheels show them", wall.count == 3 and wall.key_locked and wall._count_wheel.choice == 3
+			and wall._pool_wheel.choice == RollSettings.Pool.EVERYTHING)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	wall.count = 1
+	wall.changed.emit()
+	Session.notice.disconnect(hear)
+	check("a guest's nudge is put back", studio.roll_settings.count == 3 and wall.count == 3 and wall._count_wheel.choice == 3)
+	check("and they are told why", notices.size() == 1 and notices[0].contains("can change the roll"))
+	check("a hostile word is clamped", RollSettings.from_dict({"count": 99, "pool": 7}).count == RollSettings.COUNT_MAX)
+	studio.queue_free()
+	_as_session(Session.Role.HOST, 1)
+	Session.roll_setup = {}
+	var host := Studio.new()
+	host.medium = Presentation.Medium.SCREEN
+	add_child(host)
+	var heard := []
+	var listen := func(): heard.append(Session.roll_setup.duplicate())
+	Session.roll_setup_changed.connect(listen)
+	check("the host enters", host.enter_roulette_room())
+	host.rig_roulette_station.count = 3
+	host.rig_roulette_station.changed.emit()
+	Session.roll_setup_changed.disconnect(listen)
+	check("the host's change is published whole", heard.size() == 1 and int(heard[0]["count"]) == 3 and host.roll_settings.count == 3)
+	host.queue_free()
+	Session.roll_setup = {}
 	Session.layout = saved_layout
 
 
