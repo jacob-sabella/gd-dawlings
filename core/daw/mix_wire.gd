@@ -259,6 +259,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			state.track_changed.emit(idx, &"automation")
 		return
 
+	if field == "comp":
+		state.set_track_comp(idx, unpack_comp(args))
+		return
+
 	if field == "items":
 		# FLAT, not one address per item field. A forty-item lane would otherwise be a
 		# hundred and sixty messages that must all arrive before the lane is drawable, and
@@ -348,6 +352,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 ## lane from a sender that knows nothing of notes reads exactly as it always did. A recorded
 ## take carries one more entry the same way, a Dictionary: {source, offset, peaks}.
 const ITEM_WIDTH := 5
+## Take lanes a track can have (DawKitClip.lane), and so what a peer's lane is clamped to.
+const LANES_MAX := 15
 
 
 ## [position, name, position, name, ...], in time order.
@@ -522,6 +528,7 @@ static func _unpack_items(args: Array) -> Array:
 			item.fade_out_shape = DawKitClip.clean_shape(audio.get("fade_out_shape", item.fade_shape))
 			item.gain_db = float(audio.get("gain_db", 0.0))
 			item.locked = bool(audio.get("locked", false))
+			item.lane = clampi(int(audio.get("lane", 0)), 0, LANES_MAX)
 			item.reversed = bool(audio.get("reversed", false))
 			var loop: Array = audio.get("loop", [])
 			if loop.size() == 2:
@@ -529,6 +536,29 @@ static func _unpack_items(args: Array) -> Array:
 				item.loop_end = maxf(float(loop[1]), item.loop_start)
 			i += 1
 		out.append(item)
+	return out
+
+
+## A comp's stretches flat, start, end and lane a stretch.
+static func pack_comp(comp: Array) -> Array:
+	var out: Array = []
+	for s in comp:
+		out.append_array([float(s[0]), float(s[1]), float(s[2])])
+	return out
+
+
+## The stretches back, from a peer or a file: whole triples of finite numbers, each longer than
+## nothing, in order, with a lane that exists.
+static func unpack_comp(args: Array) -> Array:
+	var out: Array = []
+	var i := 0
+	while i + 2 < args.size():
+		var a := float(args[i])
+		var b := float(args[i + 1])
+		if is_finite(a) and is_finite(b) and b > a and a >= 0.0:
+			out.append([a, b, clampi(int(float(args[i + 2])), 0, LANES_MAX)])
+		i += 3
+	out.sort_custom(func(x, y): return x[0] < y[0])
 	return out
 
 
@@ -545,7 +575,7 @@ static func _pack_items(items: Array) -> Array:
 			out.append(item.notes)
 		# One optional Dictionary for whatever is not a MIDI payload: a recorded file, and the
 		# clip's fades and gain. Absent when there is neither, so an item costs what it did.
-		if not item.source.is_empty() or item.has_clip_shape() or item.locked:
+		if not item.source.is_empty() or item.has_clip_shape() or item.locked or item.lane != 0:
 			var extra := {}
 			if not item.source.is_empty():
 				extra = {"source": item.source, "offset": item.source_offset, "peaks": item.peaks}
@@ -562,6 +592,8 @@ static func _pack_items(items: Array) -> Array:
 					extra["loop"] = [item.loop_start, item.loop_end]
 			if item.locked:
 				extra["locked"] = true
+			if item.lane != 0:
+				extra["lane"] = item.lane
 			if item.reversed:
 				extra["reversed"] = true
 			out.append(extra)
@@ -736,6 +768,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/folder" % index, [float(t.folder_depth)]])
 		if not t.items.is_empty():
 			out.append(["/track/%d/items" % index, _pack_items(t.items)])
+		if not t.comp.is_empty():
+			out.append(["/track/%d/comp" % index, pack_comp(t.comp)])
 		for target in t.automation:
 			out.append(["/track/%d/automation/%s" % [index, target], pack_automation(t.automation[target])])
 

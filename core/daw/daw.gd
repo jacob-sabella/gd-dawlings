@@ -65,7 +65,7 @@ const COMMANDS := [
 	&"transport_play", &"transport_stop", &"transport_record",
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
-	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"copy_selected_to",
+	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"copy_selected_to",
 	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
@@ -74,7 +74,7 @@ const COMMANDS := [
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
-const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3,
+const ITEM_EDITS := {&"trim_item": 4, &"ripple_move_item": 3, &"ripple_trim_item": 4, &"set_item_gain": 3, &"set_item_fades": 4, &"set_item_fade_shape": 4, &"crossfade_items": 3, &"set_item_muted": 3, &"set_item_locked": 3, &"set_item_reversed": 3, &"set_item_lane": 3,
 		&"transpose_item": 3, &"shift_velocity": 3, &"set_note_velocity": 4, &"legato_item": 2, &"staccato_item": 2, &"even_velocity": 2, &"move_note": 4, &"set_note_end": 4, &"insert_note": 5, &"transpose_note": 4, &"delete_note": 3, &"retrograde_item": 2, &"humanise_item": 4, &"quantize_item": 5}
 
 var backend: DAWBackend
@@ -571,11 +571,22 @@ func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 	_do(&"set_item_locked", [track_index, item_index, 1.0 if locked else 0.0])
 
 
+## Put an item on take lane `lane` (0 the first; MixState.ItemState.lane). One undo step.
+func set_item_lane(track_index: int, item_index: int, lane: int) -> void:
+	_do(&"set_item_lane", [track_index, item_index, float(lane)])
+
+
+## Make take lane `lane` the one that sounds on a track from `from` to `to` seconds
+## (MixState.TrackState.comp). One undo step.
+func set_comp(track_index: int, from: float, to: float, lane: int) -> void:
+	_do(&"set_comp", [track_index, from, to, float(lane)])
+
+
 ## What a locked item refuses: anything that names it and would change where it is or what it
 ## sounds like. Its mute, its lock, and being selected or copied are still its to have. Checked
 ## by the host, for its own edits and a guest's, so a guest's stale view cannot move one.
 const LOCKED_REFUSES := [&"move_item", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"set_item_fades", &"set_item_fade_shape",
-		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"set_item_reversed"]
+		&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"humanise_item", &"quantize_item", &"set_item_reversed", &"set_item_lane"]
 
 
 func locked_against(verb: StringName, args: Array) -> bool:
@@ -827,6 +838,11 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed move_item intent %s." % [args])
 			return
 		args = [int(args[0]), int(args[1]), maxf(float(args[2]), 0.0), maxi(int(args[3]) if args.size() == 4 else 0, 0)]
+	if verb == &"set_comp":
+		if args.size() != 4 or int(args[0]) < 1 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
+			push_warning("DAW: refused a malformed set_comp intent %s." % [args])
+			return
+		args = [int(args[0]), maxf(float(args[1]), 0.0), float(args[2]), float(clampi(int(args[3]), 0, MixWire.LANES_MAX))]
 	if verb == &"remove_marker":
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])):
 			push_warning("DAW: refused a malformed remove_marker intent %s." % [args])
@@ -891,6 +907,8 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			clean.append(float(v))
 		if verb in [&"set_item_muted", &"set_item_locked", &"set_item_reversed"]:
 			clean[2] = 1.0 if clean[2] > 0.5 else 0.0
+		if verb == &"set_item_lane":
+			clean[2] = float(clampi(int(clean[2]), 0, MixWire.LANES_MAX))
 		if verb == &"set_item_fade_shape":
 			clean[2] = DawKitClip.clean_shape(clean[2])
 			clean[3] = DawKitClip.clean_shape(clean[3])

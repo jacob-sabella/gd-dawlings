@@ -1214,6 +1214,18 @@ func set_item_locked(track_index: int, item_index: int, locked: bool) -> void:
 		_remember_edit(before)
 
 
+func set_item_lane(track_index: int, item_index: int, lane: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_set_lane(track_index, item_index, int(lane)):
+		_remember_edit(before)
+
+
+func set_comp(track_index: int, from: float, to: float, lane: float) -> void:
+	var before := _lanes_snapshot()
+	if _locally_set_comp(track_index, from, to, int(lane)):
+		_remember_edit(before)
+
+
 func shift_velocity(track_index: int, item_index: int, by: int) -> void:
 	var before := _lanes_snapshot()
 	if _locally_shift_velocity(track_index, item_index, by):

@@ -57,3 +57,14 @@ restricts an item to the stretches the comp names for its lane (`LaneEngine.comp
 of the same lane lies over it. No comp: unchanged. Test `_test_a_comp_picks_which_take_the_lane_plays`
 (4 checks); full suite 10617, 0 failed. Open for 1c: the wire (guests do not see lanes yet), the desk's
 TAKES page, record into a lane, flatten.
+
+### 1c. Lanes and the comp are edited, undone and replicated
+
+`DAW.set_item_lane(track, item, lane)` and `DAW.set_comp(track, from, to, lane)`: verbs through the
+usual `_do`/intent path, one undo step each (the undo snapshot now carries the comp under "c<track>"),
+validated from peers (a malformed `set_comp` is refused; a lane past `MixWire.LANES_MAX` 15 is the
+last). On the wire an item's lane rides in its optional extra dictionary (only when not 0) and the
+comp is its own address, `/track/N/comp`, flat triples. Reaper backend: no-op (not implemented, not
+run against a live Reaper). Test `_test_lanes_and_the_comp_are_edited_undone_and_replicated` (11
+checks); suite 10631, 0 failed; session probe 47 guest checks, 0 failed. Open for 1d: the desk's TAKES
+page, record into a lane, flatten, then freeze.

@@ -218,6 +218,7 @@ func _ready() -> void:
 	_test_the_lanes_hear_the_newest_item_where_items_overlap()
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
 	_test_a_comp_picks_which_take_the_lane_plays()
+	_test_lanes_and_the_comp_are_edited_undone_and_replicated()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
@@ -13721,6 +13722,45 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 	lanes.free()
 	_offline()
 	take.discard()
+
+
+func _test_lanes_and_the_comp_are_edited_undone_and_replicated() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0]], "Ada take 1")
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.5, 301.0, 62, 100, 0]], "Ada take 2")
+	var depth := maxi(s.undo_depth, 0)
+	DAW.set_item_lane(6, 1, 1)
+	check("an item goes to a lane", s.item(6, 1).lane == 1)
+	check("in one undo step", s.undo_depth - depth == 1)
+	DAW.set_comp(6, 301.0, 303.0, 1)
+	check("a stretch is named for a lane, the rest left on the first (%s)" % [s.track(6).comp],
+			s.track(6).comp == [[300.0, 301.0, 0], [301.0, 303.0, 1], [303.0, 304.0, 0]])
+	var guest := MixState.new()
+	MixWire.apply_replicated(guest, MixWire.snapshot(s))
+	check("a guest sees the lane and the comp", guest.item(6, 1).lane == 1 and guest.track(6).comp == s.track(6).comp)
+	var flat := s.undo_depth
+	DAW.set_comp(6, 301.0, 303.0, 1)
+	check("choosing what is already chosen is no step", s.undo_depth == flat)
+	DAW.undo()
+	check("undo puts the comp back to none", s.track(6).comp.is_empty())
+	DAW.redo()
+	check("and redo again", s.track(6).comp.size() == 3)
+	DAW.undo()
+	DAW.undo()
+	check("two more undos take the item back to the first lane", s.item(6, 1).lane == 0)
+	var before := s.track(6).comp.duplicate(true)
+	DAW.apply_intent(&"set_comp", [6, 1.0, NAN, 1])
+	DAW.apply_intent(&"set_comp", [6, 1.0])
+	check("a malformed comp intent changes nothing", s.track(6).comp == before)
+	DAW.apply_intent(&"set_item_lane", [6, 1, 99])
+	check("a lane past the last is the last", s.item(6, 1).lane == MixWire.LANES_MAX)
+	check("a comp from a peer keeps whole, ordered, longer-than-nothing stretches",
+			MixWire.unpack_comp([5.0, 6.0, 1, 1.0, 2.0, 0, 3.0, 3.0, 2, 7.0]) == [[1.0, 2.0, 0], [5.0, 6.0, 1]])
+	_offline()
 
 
 func _test_a_comp_picks_which_take_the_lane_plays() -> void:

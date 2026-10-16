@@ -339,6 +339,8 @@ func set_item_fade_shape(_track_index: int, _item_index: int, _in_shape: int, _o
 ## Silence an item without removing it: it keeps its place and its edits, and plays again unmuted.
 func set_item_muted(_track_index: int, _item_index: int, _muted: bool) -> void: pass
 func set_item_locked(_track_index: int, _item_index: int, _locked: bool) -> void: pass
+func set_item_lane(_track_index: int, _item_index: int, _lane: float) -> void: pass
+func set_comp(_track_index: int, _from: float, _to: float, _lane: float) -> void: pass
 ## A new, empty track at `at` (from 1), everything from there on moving down one.
 func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
@@ -474,6 +476,42 @@ func _write_lane(track_index: int, items: Array) -> void:
 	var packed := MixWire._pack_items(items)
 	record_for_replication("/track/%d/items" % track_index, packed)
 	MixWire.apply(state, "/track/%d/items" % track_index, packed)
+
+
+func _write_comp(track_index: int, comp: Array) -> void:
+	var packed := MixWire.pack_comp(comp)
+	record_for_replication("/track/%d/comp" % track_index, packed)
+	MixWire.apply(state, "/track/%d/comp" % track_index, packed)
+
+
+func _locally_set_lane(track_index: int, item_index: int, lane: int) -> bool:
+	var it := state.item(track_index, item_index)
+	lane = clampi(lane, 0, MixWire.LANES_MAX)
+	if it == null or it.lane == lane:
+		return false
+	var items := _lane_copy(track_index)
+	items[item_index].lane = lane
+	_write_lane(track_index, items)
+	return true
+
+
+## `lane` sounds from `from` to `to` on the track (DawKitTrack.set_comp's rule, on the desk's
+## own copy of the comp). False when nothing changed.
+func _locally_set_comp(track_index: int, from: float, to: float, lane: int) -> bool:
+	if state.tracks.get(track_index) == null or to <= from:
+		return false
+	var t := DawKitTrack.new()
+	for it in state.track(track_index).items:
+		var c := DawKitClip.new()
+		c.start = it.start
+		c.length = it.length
+		t.clips.append(c)
+	t.comp = state.track(track_index).comp.map(func(s): return s.duplicate())
+	t.set_comp(maxf(from, 0.0), to, clampi(lane, 0, MixWire.LANES_MAX))
+	if t.comp == state.track(track_index).comp:
+		return false
+	_write_comp(track_index, t.comp)
+	return true
 
 
 ## A lane's items as fresh objects, so an edit never mutates what a surface is still drawing.
@@ -1486,6 +1524,8 @@ func _lanes_snapshot() -> Dictionary:
 	var out := {}
 	for index in state.track_indices():
 		out[index] = MixWire._pack_items(state.track(index).items)
+		# The comp rides under its own key, "c<track>".
+		out["c%d" % index] = MixWire.pack_comp(state.track(index).comp)
 	return out
 
 
@@ -1505,6 +1545,10 @@ func _write_markers(markers: Dictionary) -> void:
 func _restore_lanes(snapshot: Dictionary) -> void:
 	for index in snapshot:
 		var packed: Array = snapshot[index]
+		if index is String:
+			record_for_replication("/track/%s/comp" % index.substr(1), packed)
+			MixWire.apply(state, "/track/%s/comp" % index.substr(1), packed)
+			continue
 		record_for_replication("/track/%d/items" % index, packed)
 		MixWire.apply(state, "/track/%d/items" % index, packed)
 

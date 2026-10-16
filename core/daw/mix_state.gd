@@ -622,6 +622,12 @@ func set_bank(offset: int, size: int = -1) -> void:
 ## Wholesale and not per item, because the only honest unit of change is the lane: a DAW that
 ## reports items at all reports them as a list, and diffing to find the three that moved costs
 ## more than redrawing twelve rectangles.
+## The comp of a track's takes, as [start, end, lane] stretches (see TrackState.comp).
+func set_track_comp(index: int, comp: Array) -> void:
+	track(index).comp = comp
+	timeline_changed.emit()
+
+
 func set_track_items(index: int, items: Array) -> void:
 	var t := track(index)
 	t.items = items
