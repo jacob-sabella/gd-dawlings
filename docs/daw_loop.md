@@ -40,3 +40,12 @@ Reaper paths go through the ReaScript bridge where Reaper has the feature, and a
 against a live Reaper" until they are.
 
 ## Slices
+
+### 1a. Take lanes and the comp in dawkit (dawkit 01ecaaf)
+
+`DawKitClip.lane`, `DawKitClip.slice(from, to)`, `DawKitTrack.comp`, `lane_count()`, `set_comp(from, to,
+lane)` (joins neighbours, splits what it lands in) and `playing_clips()`. A fade stays only on an end
+that is still the clip's own; a MIDI slice keeps the notes in its window. Lane and comp survive the plain
+form and the DAWproject file (clip extras and `tracks.<id>.comp`). dawkit suite 417 checks, 0 failed.
+Not yet reached by the desk: dawlings mirrors items in `MixState`, so 1b threads `lane` and the comp
+through `MixState.ItemState`/`TrackState`, `ProjectBridge` (both ways) and `LaneEngine.clips_for`.
