@@ -229,13 +229,32 @@ func clips_for(index: int) -> Array:
 		var it := items[n] as MixState.ItemState
 		if it.muted or it.length <= 0.0:
 			continue
+		# With a comp, an item sounds only where the comp names its lane, and only an item of the
+		# same lane lies over it; without one, as the items lie.
+		var spans: Array = [[it.start, it.end()]]
+		if not t.comp.is_empty():
+			spans = comp_spans(t.comp, it.lane, it.start, it.end())
 		var later: Array = []
 		for m in range(n + 1, items.size()):
 			var o := items[m] as MixState.ItemState
-			if not o.muted:
+			if not o.muted and (t.comp.is_empty() or o.lane == it.lane):
 				later.append([o.start, o.end()])
-		for seg in visible(it.start, it.end(), later):
-			out.append_array(_item_clips(t, it, seg[0], seg[1]))
+		for span in spans:
+			for seg in visible(span[0], span[1], later):
+				out.append_array(_item_clips(t, it, seg[0], seg[1]))
+	return out
+
+
+## The parts of [a, b) where `comp` ([start, end, lane] stretches) names `lane`, in order.
+static func comp_spans(comp: Array, lane: int, a: float, b: float) -> Array:
+	var out: Array = []
+	for s in comp:
+		if s[2] != lane:
+			continue
+		var from := maxf(a, s[0])
+		var to := minf(b, s[1])
+		if to - from > 0.000001:
+			out.append([from, to])
 	return out
 
 

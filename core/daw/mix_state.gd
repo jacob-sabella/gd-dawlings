@@ -171,6 +171,8 @@ class ItemState extends RefCounted:
 	## Locked: it cannot be moved, trimmed, faded, cut, deleted or reshaped until it is unlocked
 	## (Reaper's item lock, C_LOCK). Muting, selecting and copying it are still allowed.
 	var locked: bool = false
+	## The take lane it is on, 0 the first (DawKitClip.lane); see TrackState.comp.
+	var lane: int = 0
 	## Selected in the DAW: what a split or a move acts on. The DAW's own selection, not this
 	## desk's, so a click in Reaper's window and a click on the desk are the same selection.
 	var selected: bool = false
@@ -288,6 +290,9 @@ class TrackState extends RefCounted:
 	## ItemState, in start order. Empty when the backend cannot report an arrangement at all,
 	## which is not the same as a track with nothing on it -- see DAWBackend.Capability.
 	var items: Array = []
+	## Which take lane sounds where, [start, end, lane] in seconds (DawKitTrack.comp). Empty: no
+	## comp, and the items sound as they lie, a newer one over an older.
+	var comp: Array = []
 	## Automated controls: target -> [[seconds, value, shape], ...], as DawKitAutomation's, except
 	## that a send is "send:<destination track index>". Read while the song plays.
 	var automation: Dictionary = {}

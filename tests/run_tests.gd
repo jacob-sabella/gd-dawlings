@@ -217,6 +217,7 @@ func _ready() -> void:
 	_test_the_built_in_engine_plays_a_recorded_take()
 	_test_the_lanes_hear_the_newest_item_where_items_overlap()
 	_test_the_built_in_engine_plays_notes_through_its_instrument()
+	_test_a_comp_picks_which_take_the_lane_plays()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
 	_test_notes_are_transposed_and_quantised()
 	_test_tracks_are_added_removed_and_renamed()
@@ -13717,6 +13718,44 @@ func _test_the_lanes_hear_the_newest_item_where_items_overlap() -> void:
 			clips.size() == 3 and is_equal_approx(clips[0]["start"], 300.0) and is_equal_approx(clips[0]["length"], 1.0)
 			and is_equal_approx(clips[1]["start"], 301.0) and is_equal_approx(clips[1]["offset"], 0.0)
 			and is_equal_approx(clips[2]["start"], 302.0) and is_equal_approx(clips[2]["offset"], 2.0))
+	lanes.free()
+	_offline()
+	take.discard()
+
+
+func _test_a_comp_picks_which_take_the_lane_plays() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var take := AudioTake.create("suite-comp-take.wav")
+	var tone := PackedVector2Array()
+	tone.resize(AudioTake.RATE * 6)
+	take.append(AudioTake.encode(tone))
+	take.finish()
+	DAW.state.track(6).items.clear()
+	DAW.insert_audio_take(6, 300.0, take.file_name(), 6.0, take.peaks(), "Grace take 1")
+	DAW.insert_audio_take(6, 300.0, take.file_name(), 6.0, take.peaks(), "Grace take 2")
+	DAW.state.track(6).items[1].lane = 1
+	var lanes := LaneEngine.new()
+	lanes.backend = backend
+	check("with no comp the newer take lies over the older, as before",
+			lanes.clips_for(6).size() == 1)
+	DAW.state.track(6).comp = [[300.0, 302.0, 0], [302.0, 304.0, 1], [304.0, 306.0, 0]]
+	var clips := lanes.clips_for(6)
+	clips.sort_custom(func(a, b): return a["start"] < b["start"])
+	check("with one, each take sounds where its lane is named (%d clips)" % clips.size(), clips.size() == 3
+			and is_equal_approx(clips[0]["start"], 300.0) and is_equal_approx(clips[0]["length"], 2.0)
+			and is_equal_approx(clips[1]["start"], 302.0) and is_equal_approx(clips[1]["offset"], 2.0)
+			and is_equal_approx(clips[2]["start"], 304.0) and is_equal_approx(clips[2]["offset"], 4.0))
+	check("a stretch no lane names is silent", LaneEngine.comp_spans([[0.0, 1.0, 0]], 1, 0.0, 4.0).is_empty())
+	var p := ProjectBridge.capture(backend)
+	var fresh := OfflineBackend.new()
+	fresh.state = MixState.new()
+	add_child(fresh)
+	ProjectBridge.load(p, fresh)
+	check("lanes and the comp are saved with the project", fresh.state.item(6, 1).lane == 1
+			and fresh.state.track(6).comp == [[300.0, 302.0, 0], [302.0, 304.0, 1], [304.0, 306.0, 0]])
+	fresh.free()
 	lanes.free()
 	_offline()
 	take.discard()

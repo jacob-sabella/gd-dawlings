@@ -80,7 +80,7 @@ Iterations done: 50
 - [ ] parameter modulation / macros (missing)
 
 ## Comping and takes
-- [ ] take lanes and comping (missing)
+- [~] take lanes and comping (partial, 2026-10-15: a clip's lane and a track's comp are in dawkit, saved in the project and DAWproject extras, and the built-in engine plays only the lane the comp names where it names it; no desk page to record into a lane or choose a stretch yet, no wire for guests, no Reaper path)
 - [ ] track freeze (missing)
 
 ## Markers and regions

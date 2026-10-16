@@ -49,3 +49,11 @@ that is still the clip's own; a MIDI slice keeps the notes in its window. Lane a
 form and the DAWproject file (clip extras and `tracks.<id>.comp`). dawkit suite 417 checks, 0 failed.
 Not yet reached by the desk: dawlings mirrors items in `MixState`, so 1b threads `lane` and the comp
 through `MixState.ItemState`/`TrackState`, `ProjectBridge` (both ways) and `LaneEngine.clips_for`.
+
+### 1b. The built-in engine plays the comp
+
+`MixState.ItemState.lane` and `TrackState.comp`; `ProjectBridge` carries both ways; `LaneEngine.clips_for`
+restricts an item to the stretches the comp names for its lane (`LaneEngine.comp_spans`), and only an item
+of the same lane lies over it. No comp: unchanged. Test `_test_a_comp_picks_which_take_the_lane_plays`
+(4 checks); full suite 10617, 0 failed. Open for 1c: the wire (guests do not see lanes yet), the desk's
+TAKES page, record into a lane, flatten.

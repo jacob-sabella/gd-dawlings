@@ -91,6 +91,7 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 			out.sends.append(send)
 		for it in t.items:
 			out.clips.append(_clip(it))
+		out.comp = t.comp.map(func(s): return s.duplicate())
 		# The engine's instrument, when there is one, is first in the project's chain.
 		var shift := out.effects.size() - t.plugins().size()
 		var plugins: Array = t.plugins()
@@ -163,6 +164,7 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 	c.name = item.name
 	c.muted = item.muted
 	c.locked = item.locked
+	c.lane = item.lane
 	c.reversed = item.reversed
 	c.source = item.source
 	c.source_offset = item.source_offset
@@ -244,6 +246,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 		t.rec_arm = src.armed
 		t.monitor = src.monitor
 		t.group = clampi(src.group, 0, DAW.GROUPS)
+		t.comp = src.comp.map(func(s): return s.duplicate())
 		t.input = src.input
 		t.folder_depth = _depth_delta(p, i)
 		# Instruments are not in the desk's chain: the engine plays every track's notes through its
@@ -303,6 +306,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 			item.name = c.name
 			item.muted = c.muted
 			item.locked = c.locked
+			item.lane = c.lane
 			item.reversed = c.reversed
 			item.source = c.source
 			item.source_offset = c.source_offset
