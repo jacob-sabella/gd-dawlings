@@ -16,6 +16,12 @@ extends Node3D
 ## Which one is the room's choice, made on the Rig Roulette panel's BIG SCREEN wheel, and a roll
 ## puts the board back to the write-up.
 
+## One part of a ceremony has landed (the first is the track count): `step` of `of`, from 1.
+signal landed(step: int, of: int)
+
+## Seconds between one result landing and the next.
+const BEAT := 0.7
+
 const WIDTH := 3.6
 const HEIGHT := 1.14
 
@@ -35,6 +41,9 @@ var environment_from: Environment
 
 var _text: Node3D
 var _roll: Dictionary = {}
+## The writing in the order it lands in a ceremony: each an array of labels that appear together.
+var _steps: Array = []
+var _ceremony: Tween
 var _feed: BoardFeed
 var _feed_caption: Label3D
 
@@ -122,8 +131,12 @@ func show_source(surface: Surface, title := "") -> void:
 
 
 ## Writes the board out again from `roll` (empty before any roll has been made).
-func show_roll(roll: Dictionary) -> void:
+func show_roll(roll: Dictionary, ceremony := false) -> void:
 	_roll = roll
+	_steps = []
+	if _ceremony != null:
+		_ceremony.kill()
+		_ceremony = null
 	if _text != null:
 		# Out of the tree now, not at the end of the frame: two writings in a row would overlap.
 		remove_child(_text)
@@ -146,25 +159,54 @@ func show_roll(roll: Dictionary) -> void:
 	var tracks: int = roll.get("tracks", 0)
 	var key: String = roll.get("key", "")
 	var left := -WIDTH * 0.25
-	_write("%d TRACKS" % tracks, 190, Vector3(left, HEIGHT * 0.53, 0), ink)
-	_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
-			Vector3(left, HEIGHT * 0.25, 0), ink)
+	_step(_write("%d TRACKS" % tracks, 190, Vector3(left, HEIGHT * 0.53, 0), ink))
 
 	var pedals: Array = roll.get("pedals", [])
 	var right := WIDTH * 0.22
 	if pedals.is_empty():
-		_write("no pedals landed", 84, Vector3(right, HEIGHT * 0.5, 0), ink)
+		_step(_write("no pedals landed", 84, Vector3(right, HEIGHT * 0.5, 0), ink))
 	else:
 		var y := HEIGHT * 0.66
 		for p: Dictionary in pedals:
-			_write("%s  on  %s" % [str(p.get("fx", "")).to_upper(), str(p.get("track", "")).to_upper()], 76,
-					Vector3(right, y, 0), ink)
+			_step(_write("%s  on  %s" % [str(p.get("fx", "")).to_upper(), str(p.get("track", "")).to_upper()], 76,
+					Vector3(right, y, 0), ink))
 			y -= 0.20
-	_write("A new project, started by %s (roll %d).  No re-rolls: write the song with this." % [
+	_step(_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
+			Vector3(left, HEIGHT * 0.25, 0), ink))
+	var foot := _write("A new project, started by %s (roll %d).  No re-rolls: write the song with this." % [
 			roll.get("by", "someone"), roll.get("n", 1)], 42, Vector3(0, 0.06, 0), accent)
+	_steps[-1].append(foot)
+	if ceremony and _text.visible:
+		_run_ceremony()
 
 
-func _write(text: String, size: int, at: Vector3, colour: Color) -> void:
+## One part of the writing that lands as a unit.
+func _step(label: Label3D) -> void:
+	_steps.append([label])
+
+
+## Everything hidden, then each part lands in turn with a small drop in; `landed` says so for the
+## sound. Ends with the writing exactly as a plain `show_roll` leaves it.
+func _run_ceremony() -> void:
+	for step: Array in _steps:
+		for l: Label3D in step:
+			l.visible = false
+	_ceremony = create_tween()
+	for i in _steps.size():
+		_ceremony.tween_interval(BEAT)
+		_ceremony.tween_callback(_land.bind(i))
+
+
+func _land(i: int) -> void:
+	for l: Label3D in _steps[i]:
+		l.visible = true
+		var home := l.position
+		l.position = home + Vector3(0, 0.06, 0)
+		create_tween().tween_property(l, "position", home, 0.18).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	landed.emit(i + 1, _steps.size())
+
+
+func _write(text: String, size: int, at: Vector3, colour: Color) -> Label3D:
 	var l := Label3D.new()
 	l.text = text
 	l.font_size = size
@@ -175,3 +217,4 @@ func _write(text: String, size: int, at: Vector3, colour: Color) -> void:
 	l.double_sided = false
 	Lettering.range_to_legibility(l)
 	_text.add_child(l)
+	return l

@@ -345,6 +345,7 @@ func _ready() -> void:
 	_test_a_rig_roll_is_planned_from_its_settings()
 	_test_the_band_goes_into_the_roulette_room_and_back()
 	_test_guests_see_the_hosts_roll_settings_and_cannot_change_them()
+	_test_a_roll_lands_on_the_board_one_result_at_a_time()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21868,6 +21869,26 @@ func _test_guests_see_the_hosts_roll_settings_and_cannot_change_them() -> void:
 	host.queue_free()
 	Session.roll_setup = {}
 	Session.layout = saved_layout
+
+
+func _test_a_roll_lands_on_the_board_one_result_at_a_time() -> void:
+	var board := RollBoard.new()
+	add_child(board)
+	var roll := {"by": "Ann", "n": 1, "tracks": 4, "key": "D", "pedals": [{"track": "Bass", "fx": "Reverb"}, {"track": "Lead", "fx": "Delay"}]}
+	var landings := []
+	board.landed.connect(func(step: int, of: int): landings.append([step, of]))
+	board.show_roll(roll, true)
+	check("a ceremony has the tracks, each pedal, the key", board._steps.size() == 4)
+	check("nothing is up when it starts", board._steps.all(func(st): return st.all(func(l): return not l.visible)))
+	board._land(0)
+	check("the first result lands alone", board._steps[0][0].visible and not board._steps[1][0].visible and landings == [[1, 4]])
+	for i in range(1, 4):
+		board._land(i)
+	check("after all of them it reads whole, the foot with the last", board._steps.all(func(st): return st.all(func(l): return l.visible))
+			and landings.size() == 4 and landings[3] == [4, 4])
+	board.show_roll(roll)
+	check("shown plainly it is all up at once", board._text.get_children().all(func(l): return l.visible) and board._ceremony == null)
+	board.queue_free()
 
 
 func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:

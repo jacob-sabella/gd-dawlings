@@ -110,3 +110,15 @@ studio takes it through `RollSettings.from_dict` (clamped) and the wall's wheels
 the host changes the roll. Full suite 11113 checks, 0 failed; session probe host 53 / guest 47, 0 failed.
 
 Still to do in D2: the large setup wall and the ROLL ceremony. The wall is still the small 20x32 cm panel.
+
+### D2b: the ROLL ceremony
+
+A roll the board has not shown yet no longer appears at once: `RollBoard.show_roll(roll, true)` hides
+the writing and lands it part by part every 0.7 s (the track count, each pedal, the key and the foot),
+each with a small drop-in. `landed(step, of)` makes `Studio` play a board thud, pitched higher
+each time, and spin the room's floor wheel up (`pulse`). Guests see and hear the same, off the same
+`Session.roll`; a roll sent again (a guest admitted late, a venue change) is written up plainly.
+Full suite 11118 checks, 0 failed. Not yet looked at in a screenshot, and the wheel on the floor is
+the only wheel; the setup wall is still the small panel.
+
+Still to do in D2: the large setup wall.

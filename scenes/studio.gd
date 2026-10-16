@@ -2493,6 +2493,7 @@ func _build_roll_board() -> void:
 		studio_set.remove_child(roll_board)
 		roll_board.queue_free()
 	roll_board = RollBoard.new()
+	roll_board.landed.connect(_on_roll_result_landed)
 	roll_board.chalky = venue.roll_board_chalky()
 	roll_board.free_standing = venue.back_wall_gear_stands()
 	roll_board.transform = venue.roll_board_spot()
@@ -2558,10 +2559,27 @@ func _on_session_roll_setup_changed() -> void:
 		rig_roulette_station.apply_settings(roll_settings)
 
 
+var _roll_shown := 0
+
+
+## A result landed on the board: a thud, higher each time, and the wheel on the floor spun up.
+func _on_roll_result_landed(step: int, of: int) -> void:
+	Foley.play(roll_board, Foley.board_thud(step), -6.0, 0.8 + 0.5 * float(step) / float(of))
+	if venue.has_method("pulse"):
+		venue.pulse(1.0 if step < of else 0.4)
+
+
 ## `Session.roll` changed (the host's own roll, or word of it reaching a guest): the board and
 ## the panel's own line say what it was.
 func _on_session_roll_changed() -> void:
-	roll_board.show_roll(Session.roll)
+	# A roll not seen yet lands part by part; the same one sent again (a guest admitted late) is
+	# simply written up.
+	var n: int = Session.roll.get("n", 0)
+	var fresh := n != 0 and n != _roll_shown
+	_roll_shown = n
+	roll_board.show_roll(Session.roll, fresh)
+	if fresh and venue.has_method("pulse"):
+		venue.pulse(1.0)
 	if not Session.roll.is_empty() and rig_roulette_station != null:
 		rig_roulette_station.show_result(Session.roll["tracks"], Session.roll["pedals"].size(), Session.roll["key"])
 
