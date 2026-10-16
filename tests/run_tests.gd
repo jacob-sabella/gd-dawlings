@@ -343,6 +343,7 @@ func _ready() -> void:
 	_test_a_project_starts_from_a_template()
 	_test_an_items_sound_is_stretched_and_shifted()
 	_test_a_rig_roll_is_planned_from_its_settings()
+	_test_the_band_goes_into_the_roulette_room_and_back()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -21747,6 +21748,59 @@ func _test_a_rig_roll_is_planned_from_its_settings() -> void:
 	s.key_locked = true
 	check("a locked key is not rolled", RigRoll.plan(s, RigRoll.rng_for(s), tracks, pool)["key"] == "")
 	check("an empty pool lands nothing", RigRoll.plan(s, RigRoll.rng_for(s), tracks, [])["pedals"].is_empty())
+
+
+func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	for surface in studio.focus.surfaces:
+		surface._process(0.0)
+	check("the room is a place the game knows, and not one of the venues", Venue.is_known(Venue.ROULETTE_ID)
+			and not Venue.IDS.has(Venue.ROULETTE_ID))
+	check("cycling never lands in it", Venue.IDS.all(func(v: StringName) -> bool: return Venue.next_after(v) != Venue.ROULETTE_ID))
+	check("leaving when not in it does nothing", not studio.leave_roulette_room())
+	studio.choose_venue(&"grid", 1)
+	var poses := {}
+	for surface in studio.focus.surfaces:
+		poses[surface.surface_id] = surface.global_transform
+	check("the host goes in", studio.enter_roulette_room() and studio.in_roulette_room())
+	check("it is the roulette room (%s)" % studio.venue.title(), studio.venue is RouletteRoom
+			and studio.venue.venue_id() == Venue.ROULETTE_ID and studio.venue.title() == "Rig Roulette room")
+	check("and is not written down as the room's venue", Session.layout.venue == &"grid" and Session.layout.venue_variant == 1)
+	check("the room the host publishes names it", studio.room_state()["venue"] == Venue.ROULETTE_ID)
+	var moved := []
+	for surface in studio.focus.surfaces:
+		if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
+			moved.append(surface.surface_id)
+	check("no gear moved (%s)" % [moved], moved.is_empty())
+	check("the panel and the board are still on its walls", studio.rig_roulette_station != null and studio.roll_board != null)
+	check("going in twice does nothing", not studio.enter_roulette_room())
+	var room := studio.venue as RouletteRoom
+	var walls := room.get_children().filter(func(n): return String(n.name).ends_with("Wall"))
+	check("it is shut in by walls", walls.size() >= 2 and room.find_child("Ceiling", false, false) != null)
+	for i in 12:
+		room.pulse(0.9)
+	var spun := room._spin
+	room._process(0.5)
+	check("a loud mix turns the wheel", room.heard > 0.7 and room._spin != spun)
+	check("everything the band shares stands inside its walls", absf(room.prop_shelf_spot().origin.x) < room.room_width * 0.5
+			and absf(room.hoop_spot().origin.x) < room.room_width * 0.5 and absf(room.tour_case_spot().origin.x) < room.room_width * 0.5)
+	studio.set_venue(&"nowhere", false)
+	check("an unknown venue is still the studio", studio.venue.venue_id() == &"studio")
+	studio.enter_roulette_room()
+	check("and the way out goes back to where the band was (%s)" % studio.venue.venue_id(),
+			studio.leave_roulette_room() and studio.venue.venue_id() == &"studio" and not studio.in_roulette_room())
+	studio.choose_venue(&"grid", 1)
+	studio.enter_roulette_room()
+	studio.leave_roulette_room()
+	check("the venue and its arrangement come back", studio.venue.venue_id() == &"grid" and studio.venue.variant == 1)
+	studio.queue_free()
+	Session.layout = saved_layout
 
 
 func _test_an_item_plays_backwards() -> void:

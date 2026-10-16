@@ -21,6 +21,9 @@ extends Node3D
 const IDS: Array[StringName] = [&"studio", &"grid", &"chalk", &"loft", &"cabin", &"rooftop", &"station", &"dome",
 		&"club", &"cave", &"greenhouse", &"stage", &"garden", &"desert"]
 
+## The Rig Roulette room's id. A place the band is taken to, not one of the venues (`IDS`).
+const ROULETTE_ID := &"roulette"
+
 ## A venue can come in more than one arrangement -- the same place with its structure moved
 ## about: walls or none, a city close in or far off. A variant keeps the venue's footprint and
 ## its zones' contract; only what stands round them changes. Variant 0 is the venue as first
@@ -113,6 +116,8 @@ static func make(id: StringName, which := 0) -> Venue:
 			out = GardenVenue.new()
 		&"desert":
 			out = DesertVenue.new()
+		ROULETTE_ID:
+			out = RouletteRoom.new()
 		_:
 			out = StudioVenue.new()
 	out.variant = known_variant(id, which)
@@ -160,6 +165,8 @@ static func make_title(id: StringName) -> String:
 			return "Temple garden"
 		&"desert":
 			return "Desert"
+		ROULETTE_ID:
+			return "Rig Roulette room"
 		_:
 			return "Studio"
 
@@ -170,7 +177,7 @@ static func next_after(id: StringName) -> StringName:
 
 
 static func is_known(id: StringName) -> bool:
-	return IDS.has(id)
+	return IDS.has(id) or id == ROULETTE_ID
 
 
 func venue_id() -> StringName:

@@ -55,3 +55,18 @@ it. `Studio._roll_rig` now builds the settings from the panel (`RigRouletteStati
 and puts the effects on, so the behaviour is as before (the existing `_test_rig_roulette_rolls_outside_tour` passes unchanged).
 New test `_test_a_rig_roll_is_planned_from_its_settings` (same seed, same roll; limits; pools; locked key). Suite 10780, 0 failed.
 Next: B, the room and its travel.
+
+### B. The room and its travel
+
+`RouletteRoom` (core/venues/roulette_room.gd), a `Venue` with id `Venue.ROULETTE_ID` (`&"roulette"`): known to `Venue.make`/`is_known`
+and not in `Venue.IDS`, so cycling and the stage manager never reach it. One closed room the width of the control room, from its
+front wall to the live room's back: felt-green walls, brass rail, dark floor, three pendant lamps, a wheel inlaid in the floor that
+turns with the mix. `live_room_half` is the room's own half-width so the prop shelf, hoop and Tour case stand inside the walls;
+the desk, racks, roll board and roulette panel stand where they always do (no gear moves). `Studio.enter_roulette_room` /
+`leave_roulette_room` (host only, a guest is told so): not persisted as the room's venue (a restart opens the venue it was left
+from), remembered venue + arrangement come back; guests follow through the room the host already publishes (the venue id).
+Test `_test_the_band_goes_into_the_roulette_room_and_back` (16). Seen with `--venue roulette:0` (shots/roulette2.png).
+Suite 10796, 0 failed. The wire carries the same fields as before (a venue id), so no session probe was needed.
+No door yet, so nothing in the game takes you in: that is C. The room is deliberately plain: lighting, the wheel's look and sound
+are for the polish slice.
+Next: C, `rig_roulette_door()` in every venue and the way back from the room.

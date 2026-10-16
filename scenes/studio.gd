@@ -602,6 +602,48 @@ func choose_venue(id: StringName, variant := 0) -> bool:
 	return true
 
 
+## Where the band was before the Rig Roulette room took them: {"id", "variant"}, or empty.
+var _before_the_room := {}
+
+
+func in_roulette_room() -> bool:
+	return venue != null and venue.venue_id() == Venue.ROULETTE_ID
+
+
+## The host takes the whole band into the Rig Roulette room. It is a place, not a venue: it is
+## not saved as the room's venue (a restart opens the venue it was left from), and it reaches
+## guests the way a venue does, through the room the host publishes. Remembers the venue and its
+## arrangement for `leave_roulette_room`.
+func enter_roulette_room() -> bool:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can take the band into the roulette room." % Session.name_of(1))
+		return false
+	if in_roulette_room() or venue == null:
+		return false
+	_before_the_room = {"id": venue.venue_id(), "variant": venue.variant}
+	set_venue(Venue.ROULETTE_ID, false)
+	return true
+
+
+## And back out, to the venue and arrangement the band left, or the room's saved venue if this
+## never saw them go in.
+func leave_roulette_room() -> bool:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can take the band out of the roulette room." % Session.name_of(1))
+		return false
+	if not in_roulette_room():
+		return false
+	var id: StringName = _before_the_room.get("id", &"")
+	var variant: int = _before_the_room.get("variant", 0)
+	if not Venue.is_known(id) or id == Venue.ROULETTE_ID:
+		id = Session.layout.venue if Session.layout != null and Venue.is_known(Session.layout.venue) \
+				and Session.layout.venue != Venue.ROULETTE_ID else Venue.IDS[0]
+		variant = Session.layout.venue_variant if Session.layout != null else 0
+	_before_the_room = {}
+	set_venue(id, false, variant)
+	return true
+
+
 ## The same venue, arranged another way. The host's to choose, like the venue.
 func choose_variant(variant: int) -> bool:
 	return choose_venue(venue.venue_id() if venue != null else Venue.IDS[0], variant)
