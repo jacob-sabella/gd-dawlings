@@ -340,6 +340,7 @@ func _ready() -> void:
 	_test_grouped_tracks_move_together()
 	_test_a_groove_lends_its_feel()
 	_test_a_render_can_be_flac()
+	_test_a_project_starts_from_a_template()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
 	_test_the_song_has_regions()
@@ -10569,6 +10570,37 @@ func _test_the_official_dawproject_examples_open_in_the_game() -> void:
 			check("test-complex's volume lane and markers reach the game",
 					DAW.state.track(1).automation.has("volume") and DAW.state.markers.size() == 2)
 	OS.execute("rm", ["-rf", dir])
+
+
+func _test_a_project_starts_from_a_template() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	var s := DAW.state
+	DAW.set_track_group(2, 3)
+	DAW.set_vca(3, -4.5)
+	DAW.add_marker(3.0, "Verse")
+	var names: Array = s.track_indices().map(func(i): return s.track(i).name)
+	var with_sound := s.track_indices().filter(func(i): return not s.track(i).items.is_empty()).size()
+	check("the demo has sound on its tracks to leave out", with_sound > 0)
+	var name := "Test Band %d" % OS.get_process_id()
+	var said := DAW.save_template(name)
+	check("a template is kept (%s)" % [said], said.is_empty() and FileAccess.file_exists(ProjectFiles.template_path(name)))
+	check("and listed", ProjectFiles.templates().has(name))
+	check("keeping it leaves the project as it was", s.track_indices().filter(func(i): return not s.track(i).items.is_empty()).size() == with_sound)
+	said = DAW.new_project_from_template(name)
+	s = DAW.state
+	check("a project starts from it with nothing refused (%s)" % [said], said.is_empty())
+	check("with the same tracks (%s)" % [s.track_indices().map(func(i): return s.track(i).name)],
+			s.track_indices().map(func(i): return s.track(i).name) == names)
+	check("none with any sound", s.track_indices().all(func(i): return s.track(i).items.is_empty()))
+	check("the groups and VCAs kept", s.track(2).group == 3 and is_equal_approx(s.vca_db(3), -4.5))
+	check("the markers not", s.markers.is_empty())
+	check("and it is a new project, unsaved", backend.project_path.is_empty() and backend.project_title == "Untitled")
+	check("a template that is not there is refused", not DAW.new_project_from_template("No Such Template").is_empty())
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(ProjectFiles.template_path(name)))
+	_offline()
 
 
 func _test_the_project_is_saved_from_the_room_and_the_room_is_told() -> void:

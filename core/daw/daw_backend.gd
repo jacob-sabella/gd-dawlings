@@ -255,6 +255,8 @@ func save_project(_path: String) -> PackedStringArray: return PackedStringArray(
 ## as sentences. It opened when `project_path` is `path` afterwards, whatever it returns.
 func open_project(_path: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot open files from here"])
 ## Replaces the open project with an empty one.
+func save_template(_template_name: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot keep templates"])
+func new_project_from_template(_template_name: String) -> PackedStringArray: return PackedStringArray(["this DAW cannot start from a template"])
 func new_project(_tracks := 4) -> PackedStringArray: return PackedStringArray(["this DAW cannot start a project from here"])
 ## Whether anything changed since the project was saved, opened or started. A DAW that cannot
 ## say answers false.

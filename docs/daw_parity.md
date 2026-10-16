@@ -104,7 +104,7 @@ Iterations done: 50
 - [x] earlier autosave copies kept: the newest and four before it (done; recovery token opens the newest)
 - [x] choose an older autosave to recover (2026-10-14; a fine press on RECOVER steps back through the kept copies, a plain press opens the chosen one; the hover card says which)
 - [x] undo history list: jump to any step (HISTORY rail on the timeline tools, each step named; on Reaper the card says "step N")
-- [ ] project templates: a new project from a saved layout of tracks, routing and plugins (missing)
+- [x] project templates (2026-10-16; "Keep as template" and "From template…" beside New on the host's session panel; a template is a .dawproject in user://templates with the clips, comps, freezes, automation, markers and regions taken out and tracks, folders, groups, VCAs, sends, plugins with their state, levels and tempo kept; host only, built-in engine; not on Reaper (its own template files)
 
 ## Performance and latency
 - [~] latency report (2026-10-16, plugin latency by track; compensation still open, see above; `tools/budget.sh` is frame cost only)

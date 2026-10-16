@@ -137,6 +137,68 @@ static func new_project(backend: OfflineBackend, tracks := 4) -> PackedStringArr
 	return refused
 
 
+## Where project templates are kept: DAWproject files like any other, with the sound taken out.
+const TEMPLATE_DIR := "user://templates"
+
+
+static func template_path(template_name: String) -> String:
+	var safe := template_name.strip_edges().validate_filename()
+	return TEMPLATE_DIR.path_join("%s.%s" % [safe if not safe.is_empty() else "Template", EXTENSION])
+
+
+## The templates there are, by name, in order.
+static func templates() -> PackedStringArray:
+	var out := PackedStringArray()
+	var dir := DirAccess.open(TEMPLATE_DIR)
+	if dir != null:
+		for file in dir.get_files():
+			if file.get_extension().to_lower() == EXTENSION:
+				out.append(file.get_basename())
+	out.sort()
+	return out
+
+
+## A project's layout without its content: the tracks, folders, groups, VCAs, routing, effects (with
+## their saved state), levels, tempo and click stay; clips, comps, freezes, automation, markers and
+## regions go.
+static func layout_of(project: DawKitProject) -> DawKitProject:
+	for t in project.tracks:
+		if t.is_frozen():
+			t.unfreeze()
+		t.clips.clear()
+		t.comp = []
+		t.automation.clear()
+	project.master.automation.clear()
+	project.markers.clear()
+	project.regions.clear()
+	project.length = 60.0 * 4
+	project.loop_on = false
+	return project
+
+
+## Keeps the project's layout as a template called `template_name`. The project itself is untouched.
+static func save_template(backend: OfflineBackend, template_name: String) -> PackedStringArray:
+	var project := layout_of(ProjectBridge.capture(backend))
+	project.title = template_name
+	var path := ProjectSettings.globalize_path(template_path(template_name))
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var staging := ProjectSettings.globalize_path(STAGING)
+	_clear(staging)
+	return DawKitDawproject.save(project, path, staging)
+
+
+## A new, unsaved project laid out as the template.
+static func new_from_template(backend: OfflineBackend, template_name: String) -> PackedStringArray:
+	var path := template_path(template_name)
+	if not FileAccess.file_exists(path):
+		return PackedStringArray(["there is no template called %s" % template_name])
+	var said := open(backend, path)
+	backend.project_path = ""
+	backend.project_title = "Untitled"
+	backend.name_project()
+	return said
+
+
 ## Empty `dir`, making it if it is not there. Through DirAccess rather than `rm -rf`, which is not
 ## there to run on Windows or on a standalone headset (Android has no shell for a game to use).
 static func _clear(dir: String) -> void:

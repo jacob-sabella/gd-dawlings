@@ -211,3 +211,11 @@ by the reference `flac -t`. About a fifth bigger than libFLAC (no LPC or stereo 
 fifth argument `flac` (the host still renders an older 4-argument ask as WAV), `MixRender.flac` writes `.flac`, a FILE TYPE token
 (glyph `flac`) on the RENDER page. Tests `_test_a_render_can_be_flac` and a real FLAC render in
 `_test_the_mix_and_its_stems_are_rendered_to_files`. Reaper's bridge refuses FLAC (reports it). MP3 stays open: blocked, no encoder.
+
+### 8a. Project templates
+
+`ProjectFiles.save_template` / `new_from_template` / `templates` / `layout_of` (core/built_in/project_files.gd): a template is a
+DAWproject file in user://templates with the content stripped (clips, comps, freezes, automation, markers, regions) and the
+layout kept; starting from one gives an unsaved "Untitled". `DAW.save_template` / `new_project_from_template` (host only),
+two buttons on the host's session panel ("Keep as template", "From template…", the latter a file dialog on the folder).
+Test `_test_a_project_starts_from_a_template` (11). Panel, not a desk token: project files already live on that panel.

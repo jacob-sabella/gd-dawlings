@@ -84,6 +84,7 @@ var _project_host_row: HBoxContainer
 var _project_save: Button
 var _files: FileDialog
 var _confirm_new: ConfirmationDialog
+var _template_files: FileDialog
 var _import_box: VBoxContainer
 var _import_into: OptionButton
 var _import_caption: Label
@@ -1064,12 +1065,22 @@ func _build_project(column: VBoxContainer) -> void:
 	_project_host_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_project_host_row)
 	for spec in [["Save As…", "SaveProjectAs", _ask_save_as], ["Open…", "OpenProject", _ask_open],
-			["New", "NewProject", _ask_new]]:
+			["New", "NewProject", _ask_new], ["Keep as template", "KeepTemplate", keep_as_template],
+			["From template…", "NewFromTemplate", _ask_template]]:
 		var b := _button(spec[0], false)
 		b.name = spec[1]
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(spec[2])
 		_project_host_row.add_child(b)
+
+	_template_files = FileDialog.new()
+	_template_files.name = "TemplateFiles"
+	_template_files.access = FileDialog.ACCESS_FILESYSTEM
+	_template_files.filters = PackedStringArray(["*.dawproject ; Project template"])
+	_template_files.use_native_dialog = true
+	_template_files.title = "Start from a template"
+	_template_files.file_selected.connect(func(path: String): start_from_template(path.get_file().get_basename()))
+	add_child(_template_files)
 
 	_files = FileDialog.new()
 	_files.name = "ProjectFiles"
@@ -1237,6 +1248,28 @@ func _on_audio_import_done(brought: PackedStringArray, _failed: PackedStringArra
 	Session.tell_room("%s brought in %s on %s." % [Session.local_name,
 			", ".join(Array(brought).map(func(p): return p.get_file())),
 			where.display_name() if where != null else "track %d" % track])
+
+
+func _ask_template() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectFiles.TEMPLATE_DIR)
+	_template_files.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_template_files.current_dir = ProjectSettings.globalize_path(ProjectFiles.TEMPLATE_DIR)
+	_template_files.popup_centered_ratio(0.6)
+
+
+## The project's layout (tracks, routing, plugins, groups) kept under its title, without its sound.
+func keep_as_template() -> PackedStringArray:
+	var title := DAW.project_title()
+	var said := DAW.save_template(title if not title.is_empty() else "Template")
+	_report(said, "kept the layout as a template", "could not keep the template", said.is_empty())
+	return said
+
+
+func start_from_template(template_name: String) -> PackedStringArray:
+	var said := DAW.new_project_from_template(template_name)
+	_report(said, "started a project from the %s template" % template_name, "could not start from the template",
+			DAW.project_file().is_empty())
+	return said
 
 
 func _ask_new() -> void:

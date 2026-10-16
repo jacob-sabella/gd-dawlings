@@ -482,6 +482,20 @@ func new_project(tracks := 4) -> PackedStringArray:
 	return backend.new_project(tracks)
 
 
+## Host only: keeps the project's layout, without its content, as a template (ProjectFiles).
+func save_template(template_name: String) -> PackedStringArray:
+	if not Session.is_authority():
+		return PackedStringArray(["only the host keeps templates"])
+	return backend.save_template(template_name)
+
+
+## Host only: a new unsaved project laid out as the template.
+func new_project_from_template(template_name: String) -> PackedStringArray:
+	if not Session.is_authority():
+		return PackedStringArray(["only the host starts a project"])
+	return backend.new_project_from_template(template_name)
+
+
 ## Host only: whether the open project has changes no save has kept.
 func has_unsaved_changes() -> bool:
 	return Session.is_authority() and backend.has_unsaved_changes()

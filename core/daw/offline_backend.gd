@@ -257,6 +257,14 @@ func open_project(path: String) -> PackedStringArray:
 	return ProjectFiles.open(self, path)
 
 
+func save_template(template_name: String) -> PackedStringArray:
+	return ProjectFiles.save_template(self, template_name)
+
+
+func new_project_from_template(template_name: String) -> PackedStringArray:
+	return ProjectFiles.new_from_template(self, template_name)
+
+
 func new_project(tracks := 4) -> PackedStringArray:
 	return ProjectFiles.new_project(self, tracks)
 
