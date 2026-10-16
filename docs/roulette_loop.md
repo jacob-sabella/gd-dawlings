@@ -153,3 +153,16 @@ position still means "whatever's there". Tests: each pool draws only its own kin
 only dirty pedals. Full suite 11119 checks, 0 failed.
 
 Not done yet in the pool: per-kind toggles, weights, a Reaper allow/ban list, and a custom preset.
+
+### E2: how much
+
+Pedals per roll is 0 to 6 (was 1 to 3); a CAP wheel lets one track take up to 3; NO REPEATS keeps two
+pedals of the same kind out of one roll (the roll stops short rather than repeat when the pool
+runs out). All in `RollSettings` (`count`, `per_track_cap`, `no_repeats`, clamped on the wire) and
+`RigRoll.plan`, which with the defaults draws exactly what it did before, so seeds still replay. The
+board's pedal lines tighten to fit six. The setup wall grew a row (CAP) and a NO REPEATS button; the
+post is a little lower (1.4 m). Looked at in a 720p shot from the seat: all rows read. Full suite
+11157 checks, 0 failed (the settings dict only gained keys, so no probe run).
+
+Not done: whole mix vs per track, and which tracks are eligible. Both need a notion of track roles,
+so they are a later slice.

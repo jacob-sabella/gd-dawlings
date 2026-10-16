@@ -167,10 +167,12 @@ func show_roll(roll: Dictionary, ceremony := false) -> void:
 		_step(_write("no pedals landed", 84, Vector3(right, HEIGHT * 0.5, 0), ink))
 	else:
 		var y := HEIGHT * 0.66
+		# Up to six lines fit between the top rule and the key's line.
+		var step := minf(0.20, 0.62 / pedals.size())
 		for p: Dictionary in pedals:
 			_step(_write("%s  on  %s" % [str(p.get("fx", "")).to_upper(), str(p.get("track", "")).to_upper()], 76,
 					Vector3(right, y, 0), ink))
-			y -= 0.20
+			y -= step
 	_step(_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
 			Vector3(left, HEIGHT * 0.25, 0), ink))
 	var foot := _write("A new project, started by %s (roll %d).  No re-rolls: write the song with this." % [

@@ -13,21 +13,28 @@ const CHARACTER_KINDS: Array[StringName] = [&"distortion", &"chorus", &"reverb",
 ## The kinds the narrower pools draw from. EVERYTHING is not here: it is whatever there is.
 const TIME_BASED_KINDS: Array[StringName] = [&"delay", &"reverb", &"chorus", &"phaser"]
 const DIRTY_KINDS: Array[StringName] = [&"distortion", &"filter", &"compressor"]
-const COUNT_MIN := 1
-const COUNT_MAX := 3
+const COUNT_MIN := 0
+const COUNT_MAX := 6
+const CAP_MIN := 1
+const CAP_MAX := 3
 const TRACKS_MIN := 2
 const TRACKS_MAX := 8
 
 var count := 2
 var pool := Pool.CHARACTER
 var key_locked := false
+## Most pedals one track may take.
+var per_track_cap := 1
+## No two pedals of the same kind in one roll.
+var no_repeats := false
 ## 0 rolls off fresh randomness; anything else replays: the same seed on the same settings and
 ## the same open tracks lands the same roll.
 var seed_value := 0
 
 
 func to_dict() -> Dictionary:
-	return {"count": count, "pool": int(pool), "key_locked": key_locked, "seed": seed_value}
+	return {"count": count, "pool": int(pool), "key_locked": key_locked, "seed": seed_value,
+			"cap": per_track_cap, "no_repeats": no_repeats}
 
 
 ## The kinds a pool allows, or empty for EVERYTHING.
@@ -47,5 +54,7 @@ static func from_dict(d: Dictionary) -> RollSettings:
 	s.count = clampi(int(d.get("count", s.count)), COUNT_MIN, COUNT_MAX)
 	s.pool = clampi(int(d.get("pool", s.pool)), 0, Pool.size() - 1) as Pool
 	s.key_locked = bool(d.get("key_locked", s.key_locked))
+	s.per_track_cap = clampi(int(d.get("cap", s.per_track_cap)), CAP_MIN, CAP_MAX)
+	s.no_repeats = bool(d.get("no_repeats", s.no_repeats))
 	s.seed_value = maxi(int(d.get("seed", 0)), 0)
 	return s

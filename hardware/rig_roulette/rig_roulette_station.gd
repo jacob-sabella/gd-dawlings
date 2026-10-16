@@ -27,7 +27,7 @@ signal screen_chosen(choice: int)
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.32
+const HEIGHT := 0.44
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -40,6 +40,8 @@ const CHARACTER_KINDS: Array[StringName] = RollSettings.CHARACTER_KINDS
 var count := 2
 var pool := Pool.CHARACTER
 var key_locked := false
+var per_track_cap := 1
+var no_repeats := false
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
 ## whoever owns the panel, since only the room knows what gear it has.
@@ -51,6 +53,8 @@ var read_only := false
 
 var _count_wheel: TabletSelector
 var _pool_wheel: TabletSelector
+var _cap_wheel: TabletSelector
+var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
 var _lock_key_button: PanelButton
@@ -73,7 +77,7 @@ func _ready() -> void:
 	count_wheel.name = "CountWheel"
 	count_wheel.size = Vector2(0.15, 0.034)
 	count_wheel.hint_text = "scroll: how many pedals land"
-	count_wheel.options = func() -> Array: return [[1, "1 PEDAL"], [2, "2 PEDALS"], [3, "3 PEDALS"]]
+	count_wheel.options = func() -> Array: return _count_choices()
 	count_wheel.choice = count
 	_count_wheel = count_wheel
 	count_wheel.position = Vector3(0, HEIGHT - 0.082, 0.004)
@@ -93,6 +97,19 @@ func _ready() -> void:
 	pool_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL POOL"
 	add_child(pool_wheel)
 
+	var cap_wheel := TabletSelector.new()
+	cap_wheel.name = "CapWheel"
+	cap_wheel.size = Vector2(0.15, 0.030)
+	cap_wheel.hint_text = "scroll: most pedals one track may take"
+	cap_wheel.options = func() -> Array:
+		return [[1, "1 PER TRACK"], [2, "UP TO 2 PER TRACK"], [3, "UP TO 3 PER TRACK"]]
+	cap_wheel.choice = per_track_cap
+	_cap_wheel = cap_wheel
+	cap_wheel.position = Vector3(0, HEIGHT - 0.172, 0.004)
+	cap_wheel.chosen.connect(_on_cap_chosen)
+	cap_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDALS PER TRACK"
+	add_child(cap_wheel)
+
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
 	screen_wheel.size = Vector2(0.15, 0.030)
@@ -100,13 +117,13 @@ func _ready() -> void:
 	screen_wheel.options = func() -> Array:
 		return screen_sources.call() if screen_sources.is_valid() else [[0, "ROLL"]]
 	screen_wheel.choice = 0
-	screen_wheel.position = Vector3(0, HEIGHT - 0.172, 0.004)
+	screen_wheel.position = Vector3(0, HEIGHT - 0.214, 0.004)
 	screen_wheel.chosen.connect(func(c: int) -> void: screen_chosen.emit(c))
 	screen_wheel.pressed.connect(_on_screen_stepped)
 	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
 	add_child(screen_wheel)
 
-	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.218, 0.001))
+	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.262, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -117,27 +134,41 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.218, 0.014)
+	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.262, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.304, 0.001))
+	repeat_label.text = "NO REPEATS"
+	add_child(repeat_label)
+
+	_no_repeats_button = PanelButton.new()
+	_no_repeats_button.name = "NoRepeatsButton"
+	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.304, 0.014)
+	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
+	_no_repeats_button.lit = no_repeats
+	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
+	_no_repeats_button.describe_title = func() -> String: return "RIG ROULETTE  NO REPEATS"
+	add_child(_no_repeats_button)
+
 	var roll_button := PanelButton.new()
 	roll_button.name = "RollButton"
 	roll_button.led_colour = Color(0.3, 0.85, 0.4)
-	roll_button.position = Vector3(0, 0.064, 0.022)
+	roll_button.position = Vector3(0, 0.056, 0.022)
 	roll_button.scale = Vector3(5.0, 5.0, 5.0)
 	roll_button.pressed.connect(_on_roll_pressed)
 	roll_button.describe_title = func() -> String: return "RIG ROULETTE  ROLL"
 	add_child(roll_button)
 
-	var roll_label := _label(18, Vector3(0, 0.030, 0.001))
+	var roll_label := _label(18, Vector3(0, 0.020, 0.001))
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.250, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.346, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -164,6 +195,8 @@ func settings() -> RollSettings:
 	s.count = count
 	s.pool = pool as RollSettings.Pool
 	s.key_locked = key_locked
+	s.per_track_cap = per_track_cap
+	s.no_repeats = no_repeats
 	return s
 
 
@@ -172,7 +205,12 @@ func apply_settings(s: RollSettings) -> void:
 	count = s.count
 	pool = int(s.pool) as Pool
 	key_locked = s.key_locked
+	per_track_cap = s.per_track_cap
+	no_repeats = s.no_repeats
 	if _count_wheel != null:
+		_cap_wheel.choice = per_track_cap
+		_cap_wheel.refresh()
+		_no_repeats_button.lit = no_repeats
 		_count_wheel.choice = count
 		_count_wheel.refresh()
 		_pool_wheel.choice = pool
@@ -247,6 +285,24 @@ func _pool_choices() -> Array:
 		return [[Pool.CHARACTER, "WHATEVER'S THERE"], [Pool.EVERYTHING, "WHATEVER'S THERE"]]
 	return [[Pool.CHARACTER, "CHARACTER"], [Pool.EVERYTHING, "EVERYTHING"], [Pool.TIME_BASED, "TIME-BASED ONLY"],
 			[Pool.DIRTY, "DIRTY ONLY"]]
+
+
+func _count_choices() -> Array:
+	var out := []
+	for n in range(RollSettings.COUNT_MIN, RollSettings.COUNT_MAX + 1):
+		out.append([n, "NO PEDALS" if n == 0 else ("%d PEDAL%s" % [n, "" if n == 1 else "S"])])
+	return out
+
+
+func _on_cap_chosen(c: int) -> void:
+	per_track_cap = c
+	changed.emit()
+
+
+func _on_no_repeats_pressed() -> void:
+	no_repeats = not no_repeats
+	_no_repeats_button.lit = no_repeats
+	changed.emit()
 
 
 func _on_count_chosen(c: int) -> void:

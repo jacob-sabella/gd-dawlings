@@ -33,11 +33,21 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 		var tmp = eligible[i]
 		eligible[i] = eligible[j]
 		eligible[j] = tmp
+	# Each track's turn comes round once per pedal it may take: the shuffled order, then again.
+	var slots: Array = []
+	for _round in settings.per_track_cap:
+		slots.append_array(eligible)
 	var pedals: Array = []
-	for i in mini(settings.count, eligible.size()):
-		if pool.is_empty():
+	var used := {}
+	for i in mini(settings.count, slots.size()):
+		var from := pool
+		if settings.no_repeats:
+			from = pool.filter(func(c): return not used.has(str(c[0])))
+		if from.is_empty():
 			break
-		pedals.append({"track": eligible[i], "plugin": str(pool[rng.randi() % pool.size()][0])})
+		var plugin := str(from[rng.randi() % from.size()][0])
+		used[plugin] = true
+		pedals.append({"track": slots[i], "plugin": plugin})
 	var key := ""
 	if not settings.key_locked:
 		key = "%s %s" % [KEY_NAMES[rng.randi() % KEY_NAMES.size()], "major" if rng.randi() % 2 == 0 else "minor"]

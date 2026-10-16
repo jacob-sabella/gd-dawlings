@@ -2453,6 +2453,8 @@ func _stand_the_setup_wall() -> void:
 	wall.count = roll_settings.count
 	wall.pool = wall_pool(roll_settings.pool)
 	wall.key_locked = roll_settings.key_locked
+	wall.per_track_cap = roll_settings.per_track_cap
+	wall.no_repeats = roll_settings.no_repeats
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2467,6 +2469,8 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.count = s.count
 		roll_settings.pool = s.pool
 		roll_settings.key_locked = s.key_locked
+		roll_settings.per_track_cap = s.per_track_cap
+		roll_settings.no_repeats = s.no_repeats
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.screen_sources = func() -> Array:
 		var out := []

@@ -346,6 +346,7 @@ func _ready() -> void:
 	_test_the_band_goes_into_the_roulette_room_and_back()
 	_test_guests_see_the_hosts_roll_settings_and_cannot_change_them()
 	_test_a_roll_lands_on_the_board_one_result_at_a_time()
+	_test_how_many_pedals_a_roll_lands_and_where()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21905,6 +21906,34 @@ func _test_a_roll_lands_on_the_board_one_result_at_a_time() -> void:
 	board.show_roll(roll)
 	check("shown plainly it is all up at once", board._text.get_children().all(func(l): return l.visible) and board._ceremony == null)
 	board.queue_free()
+
+
+func _test_how_many_pedals_a_roll_lands_and_where() -> void:
+	var catalogue := []
+	for k in [&"reverb", &"delay", &"chorus", &"phaser", &"distortion"]:
+		catalogue.append([k, String(k)])
+	var tracks := [0, 1, 2, 3]
+	var plan_for := func(count: int, cap: int, no_repeats: bool, seed_value: int) -> Array:
+		var s := RollSettings.new()
+		s.count = count
+		s.per_track_cap = cap
+		s.no_repeats = no_repeats
+		s.seed_value = seed_value
+		return RigRoll.plan(s, RigRoll.rng_for(s), tracks, catalogue)["pedals"]
+	check("no pedals is a roll too", plan_for.call(0, 1, false, 5).is_empty())
+	check("six pedals on four tracks at one a track land four", plan_for.call(6, 1, false, 5).size() == 4)
+	var capped: Array = plan_for.call(6, 2, false, 5)
+	var per := {}
+	for p in capped:
+		per[p["track"]] = per.get(p["track"], 0) + 1
+	check("two a track lands six, none on more than two (%s)" % [per], capped.size() == 6 and per.values().all(func(n): return n <= 2))
+	for seed_value in range(1, 30):
+		var kinds: Array = plan_for.call(5, 2, true, seed_value).map(func(p): return p["plugin"])
+		check("seed %d: five pedals with no repeats are five different kinds" % seed_value, kinds.size() == 5 and kinds.size() == {}.merged(kinds.reduce(func(d, k): d[k] = true; return d, {})).size())
+	check("no repeats runs out of kinds and stops, not repeats (%d)" % plan_for.call(6, 2, true, 3).size(), plan_for.call(6, 2, true, 3).size() == 5)
+	check("the same seed lands the same pedals", plan_for.call(4, 2, false, 77) == plan_for.call(4, 2, false, 77))
+	var wild := RollSettings.from_dict({"cap": 50, "no_repeats": true, "count": -3})
+	check("the cap and the count are held to their limits", wild.per_track_cap == RollSettings.CAP_MAX and wild.count == RollSettings.COUNT_MIN and wild.no_repeats)
 
 
 func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
