@@ -180,6 +180,9 @@ class ItemState extends RefCounted:
 	## the item's left edge so that moving the item moves its notes. Empty for audio, and for a
 	## backend that cannot read an item's contents. See MidiTake.
 	var notes := PackedFloat32Array()
+	## A MIDI item's controller, pitch-bend and aftertouch events, flat: [time, kind, value, channel]
+	## repeating, seconds from the item's left edge (DawKitClip.controls, which says what the kinds are).
+	var controls := PackedFloat64Array()
 	## A recorded take's file, by name, in the host's AudioTake.DIR; empty for anything else. A
 	## name and not a path, so a guest holding the item learns nothing about the host's disk.
 	var source: String = ""

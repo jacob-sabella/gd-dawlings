@@ -591,6 +591,7 @@ static func item_slice(item: MixState.ItemState, from: float, to: float) -> MixS
 				continue
 			kept.append_array(PackedFloat32Array([maxf(on, 0.0), minf(off, c.length), item.notes[i + 2], item.notes[i + 3], item.notes[i + 4]]))
 		c.notes = kept
+	c.controls = MidiTake.controls_between(item.controls, item.start, from, to, from)
 	return c
 
 
@@ -739,6 +740,10 @@ func _locally_split(seconds: float) -> int:
 ## A cut MIDI item's notes go with the half they start in, and a note that runs over the cut is
 ## shortened to it: what Reaper does with a split that crosses a held note.
 func _split_notes(left: MixState.ItemState, right: MixState.ItemState, seconds: float) -> void:
+	if not left.controls.is_empty():
+		var whole := left.controls
+		left.controls = MidiTake.controls_between(whole, left.start, left.start, seconds, left.start)
+		right.controls = MidiTake.controls_between(whole, left.start, seconds, INF, seconds)
 	if left.notes.is_empty():
 		return
 	var keep: Array = []
@@ -814,6 +819,10 @@ func _locally_glue_selected() -> int:
 						notes.append(n)
 			notes.sort_custom(func(a, b): return a[0] < b[0])
 			glued.notes = MidiTake.pack_relative(notes, glued.start)
+			var events := PackedFloat64Array()
+			for it in parts:
+				events.append_array(MidiTake.controls_between(it.controls, it.start, it.start, it.end(), glued.start))
+			glued.controls = DawKitClip.clean_controls(Array(events))
 		glued.length = end - glued.start
 		glued.fade_out = last.fade_out
 		glued.fade_out_shape = last.fade_out_shape
@@ -1015,6 +1024,8 @@ func _locally_trim(track_index: int, item_index: int, start: float, end: float) 
 				n[1] = minf(n[1], end)
 				kept.append(n)
 		it.notes = MidiTake.pack_relative(kept, start)
+	if not it.controls.is_empty():
+		it.controls = MidiTake.controls_between(it.controls, it.start, start, end, start)
 	it.source_offset += moved
 	it.start = start
 	it.length = end - start

@@ -48,7 +48,7 @@ Iterations done: 50
 - [x] Staccato: each note cut to half its length (2026-10-14, ITEM page; Reaper path not run against a live Reaper)
 - [x] Even velocity: every note at the item's average (2026-10-14, ITEM page; Reaper path not run against a live Reaper)
 - [x] Retrograde: the notes of a MIDI item played backwards (2026-10-14, ITEM page; Reaper path not run against a live Reaper)
-- [ ] CC / pitch-bend lanes (missing)
+- [~] CC / pitch-bend lanes (partial, 2026-10-16: a MIDI clip keeps controller, pitch-bend and aftertouch events (DawKitClip.controls) saved in the project and DAWproject extras; the desk's items carry them over the wire, through split, trim, glue and flatten, and the project bridge; still to do: playing them (the Tine and hosted instruments), authoring them (a verb and a lane on the piano roll), recording them from a controller, and a Reaper path)
 
 ## Mixer
 - [x] volume, pan, mute, solo, arm, monitor, input, master, colour, rename, add/remove track

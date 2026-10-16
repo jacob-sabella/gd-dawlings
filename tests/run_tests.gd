@@ -223,6 +223,7 @@ func _ready() -> void:
 	_test_the_item_page_has_lane_and_comp_tokens()
 	_test_flattening_a_comp_makes_plain_items()
 	_test_a_take_the_comp_never_plays_is_drawn_dark()
+	_test_a_midi_items_controller_lanes_follow_its_edits()
 	_test_a_frozen_track_is_one_item_and_thaws_and_is_saved()
 	_test_a_take_recorded_on_a_comping_track_goes_on_a_new_lane()
 	_test_items_are_deleted_duplicated_trimmed_and_shaped()
@@ -13804,6 +13805,38 @@ func _test_a_frozen_track_is_one_item_and_thaws_and_is_saved() -> void:
 	check("thawed, the items are back", fresh._locally_thaw(6) and not back.is_frozen() and back.items.size() == items_before)
 	check("and the plugins run again", fx_before.all(func(i): return back.fx[i].enabled))
 	check("thawing a track that is not frozen does nothing", not fresh._locally_thaw(6))
+	_offline()
+
+
+func _test_a_midi_items_controller_lanes_follow_its_edits() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	s.track(6).items.clear()
+	DAW.insert_midi_take(6, 300.0, 304.0, [[300.25, 300.75, 60, 100, 0], [302.5, 303.5, 64, 100, 0]], "Ada take")
+	var lane := backend._lane_copy(6)
+	lane[0].controls = PackedFloat64Array([0.5, 1, 30, 0, 1.0, 128, -1000, 0, 3.0, 1, 90, 0])
+	backend._write_lane(6, lane)
+	var wire := MixWire._unpack_items(MixWire._pack_items(s.track(6).items))
+	check("controller events cross the wire", wire[0].controls == lane[0].controls)
+	var junk := MixWire._pack_items(s.track(6).items)
+	junk[junk.size() - 1]["controls"] = [1.0, 999, 5, 0, 2.0, 1, 500, 0]
+	check("and a peer's bad event is cleaned", MixWire._unpack_items(junk)[0].controls == PackedFloat64Array([2.0, 1.0, 127.0, 0.0]))
+	var p := ProjectBridge.capture(backend)
+	check("they are in the project", p.track("t6").clips[0].controls == lane[0].controls)
+	var item: MixState.ItemState = s.track(6).items[0]
+	var cut := DAWBackend.item_slice(item, 301.0, 304.0)
+	check("a slice keeps those in its window, from its new start (%s)" % [cut.controls],
+			cut.controls == PackedFloat64Array([0.0, 128, -1000, 0, 2.0, 1, 90, 0]))
+	s.track(6).items[0].selected = true
+	DAW.split_selected(302.0)
+	var halves: Array = s.track(6).items
+	check("a split gives each half its own (%s | %s)" % [halves[0].controls, halves[1].controls], halves.size() == 2
+			and halves[0].controls == PackedFloat64Array([0.5, 1, 30, 0, 1.0, 128, -1000, 0])
+			and halves[1].controls == PackedFloat64Array([1.0, 1, 90, 0]))
+	DAW.trim_item(6, 1, 303.5, 304.0)
+	check("a trim drops what it cut off", s.track(6).items[1].controls.is_empty())
 	_offline()
 
 

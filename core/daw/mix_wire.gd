@@ -358,6 +358,8 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 ## lane from a sender that knows nothing of notes reads exactly as it always did. A recorded
 ## take carries one more entry the same way, a Dictionary: {source, offset, peaks}.
 const ITEM_WIDTH := 5
+## Controller events one item can carry across the wire.
+const CONTROLS_MAX := 8192
 ## Take lanes a track can have (DawKitClip.lane), and so what a peer's lane is clamped to.
 const LANES_MAX := 15
 
@@ -536,6 +538,7 @@ static func _unpack_items(args: Array) -> Array:
 			item.locked = bool(audio.get("locked", false))
 			item.lane = clampi(int(audio.get("lane", 0)), 0, LANES_MAX)
 			item.reversed = bool(audio.get("reversed", false))
+			item.controls = DawKitClip.clean_controls(audio.get("controls", [])).slice(0, CONTROLS_MAX * DawKitClip.CONTROL_WIDTH)
 			var loop: Array = audio.get("loop", [])
 			if loop.size() == 2:
 				item.loop_start = maxf(float(loop[0]), 0.0)
@@ -581,7 +584,7 @@ static func _pack_items(items: Array) -> Array:
 			out.append(item.notes)
 		# One optional Dictionary for whatever is not a MIDI payload: a recorded file, and the
 		# clip's fades and gain. Absent when there is neither, so an item costs what it did.
-		if not item.source.is_empty() or item.has_clip_shape() or item.locked or item.lane != 0:
+		if not item.source.is_empty() or item.has_clip_shape() or item.locked or item.lane != 0 or not item.controls.is_empty():
 			var extra := {}
 			if not item.source.is_empty():
 				extra = {"source": item.source, "offset": item.source_offset, "peaks": item.peaks}
@@ -602,6 +605,8 @@ static func _pack_items(items: Array) -> Array:
 				extra["lane"] = item.lane
 			if item.reversed:
 				extra["reversed"] = true
+			if not item.controls.is_empty():
+				extra["controls"] = item.controls
 			out.append(extra)
 	return out
 

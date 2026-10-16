@@ -120,3 +120,12 @@ the one item), `thaw_track`; verbs `DAW.freeze_track/thaw_track` (validated from
 to a file and thaws (8, awaited; it waits two frames so the last test's engine has freed its buses); suite 10672,
 0 failed; session probe guest 47, 0 failed. Shot: shots/freeze_token.png. Open: the Reaper path. Item 1 is done
 but for that; next, CC and pitch-bend lanes.
+
+### 2a. Controller lanes, the model (dawkit fd9f8fa)
+
+dawkit: `DawKitClip.controls` ([time, kind, value, channel]; kind a CC number, PITCH_BEND or AFTERTOUCH), `control_lane`,
+`control_at`, `set_control_lane`, `clean_controls`; kept through `slice`, the plain form and the DAWproject extras.
+dawkit 435 checks, 0 failed. dawlings: `ItemState.controls`, the wire (optional `controls` in an item's extra dictionary,
+at most 8192 events, cleaned on arrival), split / trim / glue / flatten via `MidiTake.controls_between`, the project
+bridge. Test `_test_a_midi_items_controller_lanes_follow_its_edits` (6); suite 10678, 0 failed; session probe 53 / 47, 0 failed.
+Next: a verb to author a lane, playing it, then the piano roll's lane view.

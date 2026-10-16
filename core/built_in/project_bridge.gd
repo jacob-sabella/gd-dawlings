@@ -157,6 +157,7 @@ static func _item_of(backend: OfflineBackend, c: DawKitClip) -> MixState.ItemSta
 			item.peaks = item.peaks.duplicate()
 			item.peaks.reverse()
 	item.notes = PackedFloat32Array(Array(c.notes))
+	item.controls = c.controls.duplicate()
 	item.fade_in = c.fade_in
 	item.fade_out = c.fade_out
 	item.fade_shape = c.fade_shape
@@ -219,6 +220,7 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 	c.source = item.source
 	c.source_offset = item.source_offset
 	c.notes = PackedFloat64Array(Array(item.notes))
+	c.controls = item.controls.duplicate()
 	c.fade_in = item.fade_in
 	c.fade_out = item.fade_out
 	c.fade_shape = item.fade_shape

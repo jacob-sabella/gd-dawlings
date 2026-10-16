@@ -218,3 +218,16 @@ static func unpack_relative(packed: PackedFloat32Array, item_start: float) -> Ar
 				int(packed[i + 3]), int(packed[i + 4])])
 		i += NOTE_WIDTH
 	return out
+
+
+## Controller events (DawKitClip.controls: [time, kind, value, channel] repeating, seconds from the
+## item's left edge) of an item that began at `old_start`, kept for the window [from, to) of the
+## song and counted from `new_start`.
+static func controls_between(controls: PackedFloat64Array, old_start: float, from: float, to: float,
+		new_start: float) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	for o in range(0, controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		var at := old_start + controls[o]
+		if at >= from - 0.000001 and at < to:
+			out.append_array(PackedFloat64Array([maxf(at - new_start, 0.0), controls[o + 1], controls[o + 2], controls[o + 3]]))
+	return out
