@@ -269,3 +269,14 @@ host. Suite 11227, 0 failed; no wire shape change. The label is shorter than the
 
 "Which tracks are eligible" is honestly not a setting: a roll creates a fresh project whose tracks are anonymous, so
 there is nothing to pick between beyond how many tracks take pedals (the count and cap already decide it).
+
+### E11: a pinned seed
+
+The SEED wheel now goes FRESH, REPLAY THE LAST ROLL, then PINNED SEED 1 to 99: a pinned seed makes every roll run off
+it (it beats REPLAY), so a roll can be replayed on purpose and handed to a friend by number (the board's foot already
+shows the seed). It rides the existing `seed` key of the settings dict (no new wire shape, no probe). Loading a preset
+keeps the current pin (presets say how to roll, not which roll). A seed above 99, from a hand-made dict, shows as its own
+stop. Suite 11230, 0 failed; the wheel's label length is the same as its neighbours, not re-shot.
+
+Honest limit: this is a dial of 99 seeds, not a typed number: VR has no keyboard and a digit-by-digit dial needs wall
+space the wall does not have. Seeds beyond 99 are reachable by REPLAY of a fresh roll's seed only.

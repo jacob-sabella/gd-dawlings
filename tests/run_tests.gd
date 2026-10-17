@@ -347,6 +347,7 @@ func _ready() -> void:
 	_test_guests_see_the_hosts_roll_settings_and_cannot_change_them()
 	_test_a_roll_lands_on_the_board_one_result_at_a_time()
 	_test_how_many_pedals_a_roll_lands_and_where()
+	_test_a_seed_can_be_pinned_from_the_wall()
 	_test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near()
 	_test_a_roll_can_be_replayed_and_re_rolls_can_run_out()
 	_test_chaos_throws_the_knobs_of_the_pedals_that_land()
@@ -21944,6 +21945,19 @@ func _test_how_many_pedals_a_roll_lands_and_where() -> void:
 	check("the whole mix survives the wire", RollSettings.from_dict({"cap": 0}).per_track_cap == 0)
 	var wild := RollSettings.from_dict({"cap": 50, "no_repeats": true, "count": -3})
 	check("the cap and the count are held to their limits", wild.per_track_cap == RollSettings.CAP_MAX and wild.count == RollSettings.COUNT_MIN and wild.no_repeats)
+
+
+func _test_a_seed_can_be_pinned_from_the_wall() -> void:
+	var wall := RigRouletteStation.new()
+	add_child(wall)
+	var s := RollSettings.new()
+	s.seed_value = 42
+	wall.apply_settings(s)
+	check("a pinned seed reads back off the wall", wall.settings().seed_value == 42)
+	check("a pinned seed beats replaying", RigRoll.seed_for(wall.settings(), 9) == 42)
+	wall.seed_value = 0
+	check("unpinned, the wall pins nothing", wall.settings().seed_value == 0)
+	wall.queue_free()
 
 
 func _test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near() -> void:

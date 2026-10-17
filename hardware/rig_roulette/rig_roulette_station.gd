@@ -49,6 +49,8 @@ var per_track_cap := 1
 var no_repeats := false
 var scales := 0
 var replay_last := false
+## A seed pinned from the wall (0 = none): every roll runs off it.
+var seed_value := 0
 var reroll_limit := -1
 var chaos := 0
 var tempo_pick := 0
@@ -167,12 +169,13 @@ func _ready() -> void:
 	_seed_wheel = TabletSelector.new()
 	_seed_wheel.name = "SeedWheel"
 	_seed_wheel.size = Vector2(0.15, 0.030)
-	_seed_wheel.hint_text = "scroll: a fresh seed each roll, or the last roll again"
-	_seed_wheel.options = func() -> Array: return [[0, "FRESH SEED EACH ROLL"], [1, "REPLAY THE LAST ROLL"]]
-	_seed_wheel.choice = 1 if replay_last else 0
+	_seed_wheel.hint_text = "scroll: a fresh seed each roll, the last roll again, or a seed pinned to replay"
+	_seed_wheel.options = _seed_options
+	_seed_wheel.choice = _seed_choice()
 	_seed_wheel.position = Vector3(0, _row(5), 0.004)
 	_seed_wheel.chosen.connect(func(c: int) -> void:
 		replay_last = c == 1
+		seed_value = c - SEED_PIN if c >= SEED_PIN else 0
 		changed.emit())
 	_seed_wheel.describe_title = func() -> String: return "RIG ROULETTE  SEED"
 	add_child(_seed_wheel)
@@ -372,6 +375,7 @@ func settings() -> RollSettings:
 	s.scales = scales as RollSettings.Scales
 	s.near_semitones = near_semitones
 	s.replay_last = replay_last
+	s.seed_value = seed_value
 	s.reroll_limit = reroll_limit
 	s.chaos = chaos
 	s.tempo_pick = tempo_pick
@@ -389,6 +393,7 @@ func apply_settings(s: RollSettings) -> void:
 	scales = int(s.scales)
 	near_semitones = s.near_semitones
 	replay_last = s.replay_last
+	seed_value = s.seed_value
 	reroll_limit = s.reroll_limit
 	chaos = s.chaos
 	tempo_pick = s.tempo_pick
@@ -399,7 +404,7 @@ func apply_settings(s: RollSettings) -> void:
 		_tempo_wheel.refresh()
 		_chaos_wheel.choice = chaos
 		_chaos_wheel.refresh()
-		_seed_wheel.choice = 1 if replay_last else 0
+		_seed_wheel.choice = _seed_choice()
 		_seed_wheel.refresh()
 		_limit_wheel.choice = reroll_limit
 		_limit_wheel.refresh()
@@ -495,6 +500,26 @@ func _count_choices() -> Array:
 	var out := []
 	for n in range(RollSettings.COUNT_MIN, RollSettings.COUNT_MAX + 1):
 		out.append([n, "NO PEDALS" if n == 0 else ("%d PEDAL%s" % [n, "" if n == 1 else "S"])])
+	return out
+
+
+## A seed pinned from the wall is a choice of SEED_PIN plus the seed.
+const SEED_PIN := 1000
+const SEED_DIAL_MAX := 99
+
+
+func _seed_choice() -> int:
+	if seed_value > 0:
+		return SEED_PIN + seed_value
+	return 1 if replay_last else 0
+
+
+func _seed_options() -> Array:
+	var out := [[0, "FRESH SEED EACH ROLL"], [1, "REPLAY THE LAST ROLL"]]
+	for n in range(1, SEED_DIAL_MAX + 1):
+		out.append([SEED_PIN + n, "PINNED SEED %d" % n])
+	if seed_value > SEED_DIAL_MAX:
+		out.append([SEED_PIN + seed_value, "PINNED SEED %d" % seed_value])
 	return out
 
 

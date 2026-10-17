@@ -2548,7 +2548,7 @@ func _on_preset_chosen(wall: RigRouletteStation, id: int) -> void:
 		Session.notice.emit("That slot is empty: set the wheels and press SAVE.")
 		return
 	var loaded := RollSettings.from_dict(d)
-	loaded.seed_value = 0
+	loaded.seed_value = roll_settings.seed_value
 	roll_settings = loaded
 	wall.apply_settings(roll_settings)
 	Session.publish_roll_setup(roll_settings.to_dict())
