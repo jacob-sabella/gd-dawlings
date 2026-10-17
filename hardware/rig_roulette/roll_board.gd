@@ -179,6 +179,8 @@ func show_roll(roll: Dictionary, ceremony := false) -> void:
 	var rule := "No re-rolls: write the song with this." if rerolls == 0 else (
 			"%d re-roll%s left." % [rerolls, "" if rerolls == 1 else "s"] if rerolls > 0 else "Roll again if you dare.")
 	var seed_text := "  Seed %d." % roll["seed"] if roll.has("seed") else ""
+	if int(roll.get("chaos", 0)) > 0:
+		seed_text += "  Knobs thrown (%d%%)." % (int(roll["chaos"]) * 100 / RollSettings.CHAOS_MAX)
 	var foot := _write("A new project, started by %s (roll %d).%s  %s" % [
 			roll.get("by", "someone"), roll.get("n", 1), seed_text, rule], 42, Vector3(0, 0.06, 0), accent)
 	_steps[-1].append(foot)

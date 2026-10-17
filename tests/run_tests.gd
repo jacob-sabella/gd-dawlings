@@ -349,6 +349,7 @@ func _ready() -> void:
 	_test_how_many_pedals_a_roll_lands_and_where()
 	_test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near()
 	_test_a_roll_can_be_replayed_and_re_rolls_can_run_out()
+	_test_chaos_throws_the_knobs_of_the_pedals_that_land()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -22018,6 +22019,58 @@ func _test_a_roll_can_be_replayed_and_re_rolls_can_run_out() -> void:
 	studio.enter_roulette_room()
 	studio._roll_rig()
 	check("a new visit starts again, and with none allowed the one roll lands", Session.roll["n"] == n + 1 and Session.roll["left"] == 0)
+	studio.queue_free()
+	Session.roll = {}
+	Session.layout = saved_layout
+
+
+func _test_chaos_throws_the_knobs_of_the_pedals_that_land() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	check("no chaos leaves a knob where it was", RigRoll.knob(rng, 0.3, 0) == 0.3)
+	var far := 0.0
+	var inside := true
+	for i in 200:
+		var v := RigRoll.knob(rng, 0.5, RollSettings.CHAOS_MAX)
+		far = maxf(far, absf(v - 0.5))
+		inside = inside and v >= 0.0 and v <= 1.0
+	check("full chaos goes far from where it was (%.2f) and stays on the dial" % far, far > 0.4 and inside)
+	var mild := 0.0
+	for i in 200:
+		mild = maxf(mild, absf(RigRoll.knob(rng, 0.5, 1) - 0.5))
+	check("a quarter of chaos only goes a little way (%.2f)" % mild, mild <= 0.125 + 0.0001)
+	check("chaos is held to its steps", RollSettings.from_dict({"chaos": 99}).chaos == RollSettings.CHAOS_MAX and RollSettings.new().chaos == 0)
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.enter_roulette_room()
+	studio.roll_settings.chaos = RollSettings.CHAOS_MAX
+	backend.mark_clean()
+	studio._roll_rig()
+	check("the roll says the chaos it was thrown with", Session.roll["chaos"] == RollSettings.CHAOS_MAX)
+	# The stand-in engine's pedals report no knobs (like Reaper's first answer), so a roll leaves
+	# them alone; the throw itself is checked on a pedal given some.
+	var track: int = DAW.state.track_indices()[0]
+	DAW.add_fx(track, DAW.state.fx_choices[0][0], -1)
+	var pedal: MixState.FXState = DAW.state.track(track).fx.values()[-1]
+	var throw := func(chaos: int, seed_value: int) -> Dictionary:
+		pedal.params = {0: 0.5, 1: 0.2, 2: 0.9}
+		var r := RandomNumberGenerator.new()
+		r.seed = seed_value
+		studio._throw_the_knobs(track, pedal, r, chaos)
+		return pedal.params.duplicate()
+	var untouched: Dictionary = throw.call(0, 9)
+	var thrown: Dictionary = throw.call(RollSettings.CHAOS_MAX, 9)
+	check("no chaos leaves the knobs", untouched == {0: 0.5, 1: 0.2, 2: 0.9})
+	check("chaos moves them, all still on the dial", thrown != untouched and thrown.values().all(func(v): return v >= 0.0 and v <= 1.0))
+	check("a replay throws them the same way", throw.call(RollSettings.CHAOS_MAX, 9) == thrown)
 	studio.queue_free()
 	Session.roll = {}
 	Session.layout = saved_layout

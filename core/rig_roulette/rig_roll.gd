@@ -88,6 +88,15 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 	return {"pedals": pedals, "key": key}
 
 
+## Where a knob lands: `current` moved toward a random position by the chaos (0 leaves it,
+## `CHAOS_MAX` is anywhere). Always 0..1.
+static func knob(rng: RandomNumberGenerator, current: float, chaos: int) -> float:
+	var throw := rng.randf()
+	if chaos <= 0:
+		return current
+	return clampf(lerpf(current, throw, float(chaos) / float(RollSettings.CHAOS_MAX)), 0.0, 1.0)
+
+
 ## The pool a roll draws from: CHARACTER, TIME_BASED and DIRTY keep their own kinds of `choices`; EVERYTHING, or any
 ## pool when the engine's list carries no kind to filter by (`kinds_known` false), is all of it.
 static func pool_of(settings: RollSettings, choices: Array, kinds_known: bool) -> Array:

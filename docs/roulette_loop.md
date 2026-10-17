@@ -191,3 +191,12 @@ visit to the room starts the count again. The wall gained two rows (now 0.58 tal
 
 Honest limits: a seed cannot be typed (no keyboard in VR; a numeric dial is a later idea), only
 replayed from the last roll; and a single-wheel re-roll (change just the pedals or just the key) is not built.
+
+### E5: knobs
+
+A KNOBS wheel on the wall: SAFE DEFAULTS (as before) or CHAOS 25/50/75/100%. Each landed pedal's knobs are moved
+toward a random position by that fraction (`RigRoll.knob`) off the roll's own generator, so a replay of a
+seed throws them the same; the board's foot says "Knobs thrown". Setting `chaos` is clamped on the wire.
+Honest limit: the built-in stand-in engine's pedals (and Reaper's first answer) report no
+parameters, so a roll there throws nothing; the throw is tested on a pedal given knobs, and has not been
+heard on a real engine or Reaper. Wall is 0.62 tall; seat shot reads. Full suite 11179 checks, 0 failed.

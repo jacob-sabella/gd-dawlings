@@ -2460,6 +2460,7 @@ func _stand_the_setup_wall() -> void:
 	wall.near_semitones = roll_settings.near_semitones
 	wall.replay_last = roll_settings.replay_last
 	wall.reroll_limit = roll_settings.reroll_limit
+	wall.chaos = roll_settings.chaos
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2480,6 +2481,7 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.near_semitones = s.near_semitones
 		roll_settings.replay_last = s.replay_last
 		roll_settings.reroll_limit = s.reroll_limit
+		roll_settings.chaos = s.chaos
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.screen_sources = func() -> Array:
 		var out := []
@@ -2653,6 +2655,7 @@ func _roll_rig() -> void:
 		DAW.add_fx(int(p["track"]), str(p["plugin"]), -1)
 		landed += 1
 		var added: MixState.FXState = DAW.state.track(int(p["track"])).fx.values()[-1]
+		_throw_the_knobs(int(p["track"]), added, rng, settings.chaos)
 		pedals.append({"track": DAW.state.track(int(p["track"])).display_name(), "fx": added.name})
 	var key: String = plan["key"]
 	DAW.mark_clean()
@@ -2662,13 +2665,25 @@ func _roll_rig() -> void:
 	_publish_room()
 
 	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1,
-			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value,
+			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos,
 			"left": -1 if limit < 0 else limit - _rolls_this_visit + 1})
 	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
 			landed, "" if landed == 1 else "s"]
 	if not key.is_empty():
 		msg += ", key of %s" % key
 	Session.tell_room(msg + ".")
+
+
+## A landed pedal's knobs thrown by the chaos, off the roll's own generator so a replay throws them
+## the same. The pedal's parameters as the engine reports them; a DAW that has not listed any (Reaper
+## gives only the current bank) is left alone.
+func _throw_the_knobs(track: int, fx: MixState.FXState, rng: RandomNumberGenerator, chaos: int) -> void:
+	if chaos <= 0:
+		return
+	var params := fx.params.keys()
+	params.sort()
+	for param in params:
+		DAW.set_fx_param(track, fx.index, int(param), RigRoll.knob(rng, float(fx.params[param]), chaos))
 
 
 ## The effects a roll may land: CHARACTER draws only the character kinds out of

@@ -27,7 +27,7 @@ signal screen_chosen(choice: int)
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.58
+const HEIGHT := 0.62
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -45,6 +45,7 @@ var no_repeats := false
 var scales := 0
 var replay_last := false
 var reroll_limit := -1
+var chaos := 0
 var near_semitones := 0
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
@@ -62,6 +63,7 @@ var _scale_wheel: TabletSelector
 var _near_wheel: TabletSelector
 var _seed_wheel: TabletSelector
 var _limit_wheel: TabletSelector
+var _chaos_wheel: TabletSelector
 var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
@@ -179,6 +181,23 @@ func _ready() -> void:
 	_limit_wheel.describe_title = func() -> String: return "RIG ROULETTE  RE-ROLLS"
 	add_child(_limit_wheel)
 
+	_chaos_wheel = TabletSelector.new()
+	_chaos_wheel.name = "ChaosWheel"
+	_chaos_wheel.size = Vector2(0.15, 0.030)
+	_chaos_wheel.hint_text = "scroll: leave each pedal's knobs alone, or throw them"
+	_chaos_wheel.options = func() -> Array:
+		var out := [[0, "KNOBS: SAFE DEFAULTS"]]
+		for n in range(1, RollSettings.CHAOS_MAX + 1):
+			out.append([n, "KNOBS: CHAOS %d%%" % (n * 100 / RollSettings.CHAOS_MAX)])
+		return out
+	_chaos_wheel.choice = chaos
+	_chaos_wheel.position = Vector3(0, _row(7), 0.004)
+	_chaos_wheel.chosen.connect(func(c: int) -> void:
+		chaos = c
+		changed.emit())
+	_chaos_wheel.describe_title = func() -> String: return "RIG ROULETTE  KNOBS"
+	add_child(_chaos_wheel)
+
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
 	screen_wheel.size = Vector2(0.15, 0.030)
@@ -186,13 +205,13 @@ func _ready() -> void:
 	screen_wheel.options = func() -> Array:
 		return screen_sources.call() if screen_sources.is_valid() else [[0, "ROLL"]]
 	screen_wheel.choice = 0
-	screen_wheel.position = Vector3(0, _row(7), 0.004)
+	screen_wheel.position = Vector3(0, _row(8), 0.004)
 	screen_wheel.chosen.connect(func(c: int) -> void: screen_chosen.emit(c))
 	screen_wheel.pressed.connect(_on_screen_stepped)
 	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
 	add_child(screen_wheel)
 
-	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.398, 0.001))
+	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.438, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -203,21 +222,21 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.398, 0.014)
+	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.438, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.438, 0.001))
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.478, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.438, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.478, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -237,7 +256,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.478, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.522, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -270,6 +289,7 @@ func settings() -> RollSettings:
 	s.near_semitones = near_semitones
 	s.replay_last = replay_last
 	s.reroll_limit = reroll_limit
+	s.chaos = chaos
 	return s
 
 
@@ -284,7 +304,10 @@ func apply_settings(s: RollSettings) -> void:
 	near_semitones = s.near_semitones
 	replay_last = s.replay_last
 	reroll_limit = s.reroll_limit
+	chaos = s.chaos
 	if _count_wheel != null:
+		_chaos_wheel.choice = chaos
+		_chaos_wheel.refresh()
 		_seed_wheel.choice = 1 if replay_last else 0
 		_seed_wheel.refresh()
 		_limit_wheel.choice = reroll_limit
