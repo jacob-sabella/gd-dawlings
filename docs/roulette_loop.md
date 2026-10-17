@@ -280,3 +280,23 @@ stop. Suite 11230, 0 failed; the wheel's label length is the same as its neighbo
 
 Honest limit: this is a dial of 99 seeds, not a typed number: VR has no keyboard and a digit-by-digit dial needs wall
 space the wall does not have. Seeds beyond 99 are reachable by REPLAY of a fresh roll's seed only.
+
+## Summary (loop closed)
+
+**Done and committed:** the shared Rig Roulette room with travel there and back (B); a door in every venue x arrangement
+with the all-venue test (C); the setup wall with the host-only settings, guests read-only, the ROLL ceremony and the
+result board that stays up (D1-D2d); options: pool kinds, presets and per-kind weights (E1, E9), how many pedals, cap per
+track and WHOLE MIX (E2, E10), key and scale with LOCK KEY and nearness (E3), seed, pinned seed, re-roll limit (E4, E11),
+knobs and CHAOS (E5), presets save/load with three built in (E6), history with undo (E7), tempo (E8). Tour still rolls off
+its own seed. Suite last run 11230 checks, 0 failed.
+
+**Honestly blocked or not built:**
+- Instruments (patch or drum kit per track): see E8, dawkit has one instrument and no kit, and a rolled project has no notes.
+- Reaper allow/ban list by plugin name: cannot be exercised without a live Reaper in the tests, and the pool there is
+  "whatever is installed" (CUSTOM weights do not apply, Reaper gives no kind metadata).
+- Single-wheel re-roll: a roll builds a whole new project; re-rolling one wheel would mean mutating a played project
+  in place (and undoing it), a separate feature.
+- Typed seed and typed preset names: VR has no keyboard. A 99-stop seed dial (E11) and names from the settings' own words
+  (`RollPresets.name_of`) stand in.
+- "Which tracks are eligible": a rolled project's tracks are anonymous (E10).
+- Not checked: an in-headset VR pass, and re-shots of the last few wheel labels (E10, E11) at 720p/seat.
