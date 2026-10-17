@@ -352,6 +352,7 @@ func _ready() -> void:
 	_test_chaos_throws_the_knobs_of_the_pedals_that_land()
 	_test_presets_load_save_and_replicate()
 	_test_a_roll_can_be_undone_back_to_the_project_before_it()
+	_test_a_roll_can_set_the_tempo()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -22188,6 +22189,57 @@ func _test_a_roll_can_be_undone_back_to_the_project_before_it() -> void:
 	check("a guest cannot undo", notices.size() == 1 and notices[0].begins_with("Only "))
 	Session.notice.disconnect(hear)
 	_as_session(Session.Role.HOST, 1)
+	studio.queue_free()
+	Session.roll = {}
+	Session.layout = saved_layout
+
+
+func _test_a_roll_can_set_the_tempo() -> void:
+	var tempo_for := func(pick: int, seed_value: int) -> int:
+		var s := RollSettings.new()
+		s.tempo_pick = pick
+		s.seed_value = seed_value
+		return RigRoll.plan(s, RigRoll.rng_for(s), [0, 1], [])["tempo"]
+	check("locked rolls no tempo", tempo_for.call(0, 5) == 0)
+	var inside := true
+	var seen := {}
+	for pick in range(1, RollSettings.TEMPO_RANGES.size()):
+		var r: Array = RollSettings.TEMPO_RANGES[pick]
+		for seed_value in range(1, 80):
+			var t: int = tempo_for.call(pick, seed_value)
+			inside = inside and t >= r[0] and t <= r[1]
+			seen[t] = true
+	check("every range keeps to itself and the draw varies (%d tempos)" % seen.size(), inside and seen.size() > 30)
+	var same := RollSettings.new()
+	same.seed_value = 12
+	var with_locked := RigRoll.plan(same, RigRoll.rng_for(same), [0, 1, 2], [["reverb", ""], ["delay", ""]])
+	same.tempo_pick = 1
+	var with_tempo := RigRoll.plan(same, RigRoll.rng_for(same), [0, 1, 2], [["reverb", ""], ["delay", ""]])
+	check("the tempo wheel changes nothing else of a seeded roll", with_locked["pedals"] == with_tempo["pedals"] and with_locked["key"] == with_tempo["key"])
+	check("the pick is held to the wheel", RollSettings.from_dict({"tempo": 99}).tempo_pick == RollSettings.TEMPO_RANGES.size() - 1)
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.enter_roulette_room()
+	studio.roll_settings.tempo_pick = 3
+	backend.mark_clean()
+	studio._roll_rig()
+	var rolled: int = Session.roll["tempo"]
+	check("a rolled tempo is the project's (%d)" % rolled, rolled >= 90 and rolled <= 120 and is_equal_approx(DAW.state.tempo, float(rolled)))
+	check("and it is on the board", studio.roll_board.find_child("Writing", false, false).get_children().any(func(l): return (l as Label3D).text.contains("%d BPM" % rolled)))
+	check("the roll leaves the project saved", not DAW.has_unsaved_changes())
+	studio.roll_settings.tempo_pick = 0
+	DAW.set_tempo(101.0)
+	backend.mark_clean()
+	studio._roll_rig()
+	check("a locked roll does not choose one (the new project's own)", Session.roll["tempo"] == 0)
 	studio.queue_free()
 	Session.roll = {}
 	Session.layout = saved_layout

@@ -2461,6 +2461,7 @@ func _stand_the_setup_wall() -> void:
 	wall.replay_last = roll_settings.replay_last
 	wall.reroll_limit = roll_settings.reroll_limit
 	wall.chaos = roll_settings.chaos
+	wall.tempo_pick = roll_settings.tempo_pick
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2482,6 +2483,7 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.replay_last = s.replay_last
 		roll_settings.reroll_limit = s.reroll_limit
 		roll_settings.chaos = s.chaos
+		roll_settings.tempo_pick = s.tempo_pick
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.preset_sources = _preset_choices
 	wall.undo_requested.connect(undo_the_roll)
@@ -2707,6 +2709,10 @@ func _roll_rig() -> void:
 	for i in DAW.state.track_indices():
 		indices.append(i)
 	var plan := RigRoll.plan(settings, rng, indices, _rig_roulette_pool(settings), str(Session.roll.get("key", "")))
+	# The project is empty, so a new tempo has no item to leave behind in time.
+	var tempo: int = plan["tempo"]
+	if tempo > 0:
+		DAW.set_tempo(float(tempo))
 	var landed := 0
 	var pedals: Array = []
 	for p in plan["pedals"]:
@@ -2727,12 +2733,14 @@ func _roll_rig() -> void:
 		while _roll_history.size() > ROLL_HISTORY_MAX:
 			_forget(_roll_history.pop_front())
 	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1, "past": _past_rolls(),
-			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos,
+			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos, "tempo": tempo,
 			"left": -1 if limit < 0 else limit - _rolls_this_visit + 1})
 	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
 			landed, "" if landed == 1 else "s"]
 	if not key.is_empty():
 		msg += ", key of %s" % key
+	if tempo > 0:
+		msg += ", %d BPM" % tempo
 	Session.tell_room(msg + ".")
 
 

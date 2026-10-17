@@ -227,3 +227,23 @@ Honest limits: only the built-in engine and its stand-in own project files, so a
 undone (the button says so); an undone project is read back from a DAWproject file, so anything that format does not
 keep is not kept; and the UNDO label is small in the seat shot (the button and its row are there, the word is hard to
 read at that range). History is not saved across sessions.
+
+### E8: tempo (and instruments, blocked)
+
+**Tempo is done.** A TEMPO wheel: LOCKED (as before), ANY 60-180, SLOW 60-90, MEDIUM 90-120, FAST 120-160. The tempo is
+a whole number of BPM drawn last from the roll's generator (so a locked roll, and every seed made before the wheel,
+draws exactly what it did) and set on the new project, shown beside the key on the board and in the room's
+message. Beats-relative item times, which the goal warned about, are not needed: a roll starts a NEW project with no
+item in it, so there is nothing to leave behind in time. CHAOS now also rolls a tempo. Full suite 11216 checks,
+0 failed; seat shot reads (the wall holds 11 wheels and 4 buttons, 0.67 tall).
+
+**Instruments (a synth patch or a drum kit per track) are BLOCKED**, honestly:
+- dawkit has one instrument, the Tine electric piano (`DawKitTine`), put on a track only when it has notes
+  (`ProjectBridge`); there is no second patch to roll between, and a patch of its own parameters is a knob throw on a
+  sound nobody can hear.
+- A rolled project is empty (no notes, no clips), so an instrument on it would play nothing; rolling one would
+  need the roll to also write notes, which is a feature of its own (a rolled starting riff), not a setting.
+- A drum kit does not exist in the engine: the demo song's parts are rendered loops, not kits.
+- Hosted CLAP/VST3 instruments depend on what the machine has installed and need the Reaper-style allow/ban list
+  that is also not built.
+Unblocking: give dawkit a second instrument (or a patch bank on the Tine) and a roll that writes a few notes.

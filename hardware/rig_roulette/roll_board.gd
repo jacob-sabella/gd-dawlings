@@ -173,8 +173,11 @@ func show_roll(roll: Dictionary, ceremony := false) -> void:
 			_step(_write("%s  on  %s" % [str(p.get("fx", "")).to_upper(), str(p.get("track", "")).to_upper()], 76,
 					Vector3(right, y, 0), ink))
 			y -= step
-	_step(_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
-			Vector3(left, HEIGHT * 0.25, 0), ink))
+	var tempo: int = roll.get("tempo", 0)
+	var key_line := ("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT"
+	if tempo > 0:
+		key_line += "  ·  %d BPM" % tempo
+	_step(_write(key_line, 96 if tempo == 0 else 78, Vector3(left, HEIGHT * 0.25, 0), ink))
 	var past: Array = roll.get("past", [])
 	if not past.is_empty():
 		_step(_write("BEFORE:  " + "   ·   ".join(past), 40, Vector3(0, HEIGHT * 0.13, 0), accent))

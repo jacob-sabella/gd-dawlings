@@ -51,7 +51,7 @@ static func track_count(rng: RandomNumberGenerator) -> int:
 
 
 ## `tracks` are the new project's track indices, `pool` the effects it may land
-## ([plugin, label] pairs, as `fx_choices` gives them). `last_key` is the key the last roll named, for a NEAR roll. Returns {"pedals": [{track, plugin}], "key": String}
+## ([plugin, label] pairs, as `fx_choices` gives them). `last_key` is the key the last roll named, for a NEAR roll. Returns {"pedals": [{track, plugin}], "key": String, "tempo": BPM or 0 for locked}
 ## ("" when the key is locked). `rng` carries on from `track_count`.
 static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Array, pool: Array,
 		last_key := "") -> Dictionary:
@@ -85,7 +85,12 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 		var names := scale_names(settings.scales)
 		var root: int = roots[rng.randi() % roots.size()]
 		key = "%s %s" % [KEY_NAMES[root], names[rng.randi() % names.size()]]
-	return {"pedals": pedals, "key": key}
+	# Last, so a roll with the tempo locked draws exactly what it did before the tempo wheel.
+	var tempo := 0
+	var range_bpm: Array = RollSettings.TEMPO_RANGES[settings.tempo_pick]
+	if range_bpm[1] > 0:
+		tempo = rng.randi_range(range_bpm[0], range_bpm[1])
+	return {"pedals": pedals, "key": key, "tempo": tempo}
 
 
 ## Where a knob lands: `current` moved toward a random position by the chaos (0 leaves it,

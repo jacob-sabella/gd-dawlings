@@ -32,7 +32,7 @@ signal undo_requested()
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.66
+const HEIGHT := 0.67
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -51,6 +51,7 @@ var scales := 0
 var replay_last := false
 var reroll_limit := -1
 var chaos := 0
+var tempo_pick := 0
 var near_semitones := 0
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
@@ -72,6 +73,7 @@ var _near_wheel: TabletSelector
 var _seed_wheel: TabletSelector
 var _limit_wheel: TabletSelector
 var _chaos_wheel: TabletSelector
+var _tempo_wheel: TabletSelector
 var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
@@ -206,6 +208,24 @@ func _ready() -> void:
 	_chaos_wheel.describe_title = func() -> String: return "RIG ROULETTE  KNOBS"
 	add_child(_chaos_wheel)
 
+	_tempo_wheel = TabletSelector.new()
+	_tempo_wheel.name = "TempoWheel"
+	_tempo_wheel.size = Vector2(0.15, 0.030)
+	_tempo_wheel.hint_text = "scroll: keep the tempo, or roll one in a range"
+	_tempo_wheel.options = func() -> Array:
+		var names := ["TEMPO: LOCKED", "TEMPO: ANY 60-180", "TEMPO: SLOW 60-90", "TEMPO: MEDIUM 90-120", "TEMPO: FAST 120-160"]
+		var out := []
+		for i in names.size():
+			out.append([i, names[i]])
+		return out
+	_tempo_wheel.choice = tempo_pick
+	_tempo_wheel.position = Vector3(0, _row(9), 0.004)
+	_tempo_wheel.chosen.connect(func(c: int) -> void:
+		tempo_pick = c
+		changed.emit())
+	_tempo_wheel.describe_title = func() -> String: return "RIG ROULETTE  TEMPO"
+	add_child(_tempo_wheel)
+
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
 	screen_wheel.size = Vector2(0.15, 0.030)
@@ -226,7 +246,7 @@ func _ready() -> void:
 	preset_wheel.options = func() -> Array:
 		return preset_sources.call() if preset_sources.is_valid() else [[0, "PRESETS"]]
 	preset_wheel.choice = 0
-	preset_wheel.position = Vector3(0, _row(9), 0.004)
+	preset_wheel.position = Vector3(0, _row(10), 0.004)
 	preset_wheel.chosen.connect(func(c: int) -> void:
 		preset_chosen.emit(c)
 		# It loads and rests: the wheel says what it does, not what is set.
@@ -235,7 +255,7 @@ func _ready() -> void:
 	preset_wheel.describe_title = func() -> String: return "RIG ROULETTE  PRESETS"
 	add_child(preset_wheel)
 
-	var lock_label := _label(15, Vector3(-0.068, HEIGHT - 0.478, 0.001))
+	var lock_label := _label(15, Vector3(-0.068, HEIGHT - 0.490, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -246,47 +266,47 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(-0.020, HEIGHT - 0.478, 0.014)
+	_lock_key_button.position = Vector3(-0.020, HEIGHT - 0.490, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var save_label := _label(15, Vector3(0.044, HEIGHT - 0.478, 0.001))
+	var save_label := _label(15, Vector3(0.044, HEIGHT - 0.490, 0.001))
 	save_label.text = "SAVE"
 	add_child(save_label)
 
 	var save_button := PanelButton.new()
 	save_button.name = "SaveButton"
 	save_button.led_colour = Color(0.4, 0.8, 0.95)
-	save_button.position = Vector3(0.086, HEIGHT - 0.478, 0.014)
+	save_button.position = Vector3(0.086, HEIGHT - 0.490, 0.014)
 	save_button.scale = Vector3(2.8, 2.8, 2.8)
 	save_button.pressed.connect(func() -> void: preset_save_requested.emit())
 	save_button.describe_title = func() -> String: return "RIG ROULETTE  SAVE PRESET"
 	add_child(save_button)
 
-	var undo_label := _label(15, Vector3(0.044, HEIGHT - 0.518, 0.001))
+	var undo_label := _label(15, Vector3(0.044, HEIGHT - 0.532, 0.001))
 	undo_label.text = "UNDO"
 	add_child(undo_label)
 
 	var undo_button := PanelButton.new()
 	undo_button.name = "UndoButton"
 	undo_button.led_colour = Color(0.95, 0.4, 0.3)
-	undo_button.position = Vector3(0.086, HEIGHT - 0.518, 0.014)
+	undo_button.position = Vector3(0.086, HEIGHT - 0.532, 0.014)
 	undo_button.scale = Vector3(2.8, 2.8, 2.8)
 	undo_button.pressed.connect(func() -> void: undo_requested.emit())
 	undo_button.describe_title = func() -> String: return "RIG ROULETTE  UNDO THE LAST ROLL"
 	add_child(undo_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.518, 0.001))
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.532, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.518, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.532, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -306,7 +326,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.562, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.574, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -340,6 +360,7 @@ func settings() -> RollSettings:
 	s.replay_last = replay_last
 	s.reroll_limit = reroll_limit
 	s.chaos = chaos
+	s.tempo_pick = tempo_pick
 	return s
 
 
@@ -355,7 +376,10 @@ func apply_settings(s: RollSettings) -> void:
 	replay_last = s.replay_last
 	reroll_limit = s.reroll_limit
 	chaos = s.chaos
+	tempo_pick = s.tempo_pick
 	if _count_wheel != null:
+		_tempo_wheel.choice = tempo_pick
+		_tempo_wheel.refresh()
 		_chaos_wheel.choice = chaos
 		_chaos_wheel.refresh()
 		_seed_wheel.choice = 1 if replay_last else 0
@@ -447,7 +471,7 @@ func _pool_choices() -> Array:
 
 ## The y of the n-th wheel down the wall.
 func _row(n: int) -> float:
-	return HEIGHT - 0.076 - 0.040 * n
+	return HEIGHT - 0.076 - 0.037 * n
 
 
 func _count_choices() -> Array:

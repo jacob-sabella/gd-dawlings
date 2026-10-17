@@ -21,6 +21,8 @@ const NEAR_MAX := 6
 ## Re-rolls allowed after the first roll of a visit: -1 as many as it takes, 0 none (the Riff
 ## Randomizer rule: write the song with what you got).
 const REROLLS_MAX := 3
+## The tempo wheel: LOCKED leaves the project's own; the others roll a whole number of BPM in range.
+const TEMPO_RANGES := [[0, 0], [60, 180], [60, 90], [90, 120], [120, 160]]
 ## Steps of chaos: 0 leaves every knob where the pedal came, 4 puts them anywhere.
 const CHAOS_MAX := 4
 const CAP_MIN := 1
@@ -44,6 +46,8 @@ var replay_last := false
 var reroll_limit := -1
 ## How far a landed pedal's knobs are thrown from where they were, in quarters (see CHAOS_MAX).
 var chaos := 0
+## An index of TEMPO_RANGES; 0 is LOCKED.
+var tempo_pick := 0
 ## 0 rolls off fresh randomness; anything else replays: the same seed on the same settings and
 ## the same open tracks lands the same roll.
 var seed_value := 0
@@ -53,7 +57,8 @@ func to_dict() -> Dictionary:
 	return {"count": count, "pool": int(pool), "key_locked": key_locked, "seed": seed_value,
 			"cap": per_track_cap, "no_repeats": no_repeats,
 			"scales": int(scales), "near": near_semitones,
-			"replay": replay_last, "limit": reroll_limit, "chaos": chaos}
+			"replay": replay_last, "limit": reroll_limit, "chaos": chaos,
+			"tempo": tempo_pick}
 
 
 ## The kinds a pool allows, or empty for EVERYTHING.
@@ -80,5 +85,6 @@ static func from_dict(d: Dictionary) -> RollSettings:
 	s.replay_last = bool(d.get("replay", s.replay_last))
 	s.reroll_limit = clampi(int(d.get("limit", s.reroll_limit)), -1, REROLLS_MAX)
 	s.chaos = clampi(int(d.get("chaos", s.chaos)), 0, CHAOS_MAX)
+	s.tempo_pick = clampi(int(d.get("tempo", s.tempo_pick)), 0, TEMPO_RANGES.size() - 1)
 	s.seed_value = maxi(int(d.get("seed", 0)), 0)
 	return s

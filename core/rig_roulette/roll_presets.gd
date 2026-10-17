@@ -25,6 +25,7 @@ static func built_in() -> Array:
 	chaos.per_track_cap = 2
 	chaos.scales = RollSettings.Scales.MODES
 	chaos.chaos = RollSettings.CHAOS_MAX
+	chaos.tempo_pick = 1
 	return [["RIFF RANDOMIZER", riff.to_dict()], ["GENTLE", gentle.to_dict()], ["CHAOS", chaos.to_dict()]]
 
 
