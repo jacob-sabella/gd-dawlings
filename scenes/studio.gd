@@ -2436,7 +2436,7 @@ func _build_rig_roulette_station() -> void:
 var roll_settings := RollSettings.new()
 
 ## How much bigger the setup wall in the room is than the panel it was.
-const SETUP_WALL_SCALE := 3.0
+const SETUP_WALL_SCALE := 2.9
 
 
 ## The setup wall (`RigRouletteStation`) stands in the Rig Roulette room and nowhere else: the
@@ -2462,6 +2462,7 @@ func _stand_the_setup_wall() -> void:
 	wall.reroll_limit = roll_settings.reroll_limit
 	wall.chaos = roll_settings.chaos
 	wall.tempo_pick = roll_settings.tempo_pick
+	wall.weights = roll_settings.weights.duplicate()
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2484,6 +2485,7 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.reroll_limit = s.reroll_limit
 		roll_settings.chaos = s.chaos
 		roll_settings.tempo_pick = s.tempo_pick
+		roll_settings.weights = s.weights
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.preset_sources = _preset_choices
 	wall.undo_requested.connect(undo_the_roll)

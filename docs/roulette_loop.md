@@ -247,3 +247,15 @@ item in it, so there is nothing to leave behind in time. CHAOS now also rolls a 
 - Hosted CLAP/VST3 instruments depend on what the machine has installed and need the Reaper-style allow/ban list
   that is also not built.
 Unblocking: give dawkit a second instrument (or a patch bank on the Tine) and a roll that writes a few notes.
+
+### E9: custom pool weights
+
+A KIND row on the setup wall: scroll picks a kind, click cycles its weight OFF / x1 / x2 / x3. Touching it makes
+the pool CUSTOM, and the draw is weighted (an OFF kind never lands; seeds of the other pools keep their draws, as the
+weighted pick is only used for CUSTOM). Weights travel in `RollSettings.to_dict()` (new keys only, clamped on the host,
+saved in presets), so no probe was needed. The wall is 0.71 tall at scale 2.9; from the seat the KIND row and the
+bottom rows (LOCK KEY/SAVE, NO REPEATS/UNDO, last-roll line, ROLL) all read and ROLL is clear of the rack.
+Full suite 11225 checks, 0 failed.
+
+Honest limit: Reaper has no kind metadata, so CUSTOM there means "whatever is installed"; the allow/ban list by
+plugin name is not built yet.

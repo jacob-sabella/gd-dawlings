@@ -32,7 +32,7 @@ static func built_in() -> Array:
 ## The words a settings dict is known by when nobody could type a name: "3 DIRTY PEDALS, PENTATONIC".
 static func name_of(d: Dictionary) -> String:
 	var s := RollSettings.from_dict(d)
-	var pool: String = ["CHARACTER", "ANY", "TIME-BASED", "DIRTY"][s.pool]
+	var pool: String = ["CHARACTER", "ANY", "TIME-BASED", "DIRTY", "CUSTOM"][s.pool]
 	var scale: String = ["", ", ANY MODE", ", PENTATONIC"][s.scales]
 	return "%d %s PEDAL%s%s%s" % [s.count, pool, "" if s.count == 1 else "S", scale,
 			", CHAOS" if s.chaos > 0 else ""]

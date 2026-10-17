@@ -73,7 +73,7 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 			from = pool.filter(func(c): return not used.has(str(c[0])))
 		if from.is_empty():
 			break
-		var plugin := str(from[rng.randi() % from.size()][0])
+		var plugin := _pick(settings, rng, from)
 		used[plugin] = true
 		pedals.append({"track": slots[i], "plugin": plugin})
 	var key := ""
@@ -102,12 +102,34 @@ static func knob(rng: RandomNumberGenerator, current: float, chaos: int) -> floa
 	return clampf(lerpf(current, throw, float(chaos) / float(RollSettings.CHAOS_MAX)), 0.0, 1.0)
 
 
+## One effect out of `from`: evenly, or by weight in a CUSTOM pool.
+static func _pick(settings: RollSettings, rng: RandomNumberGenerator, from: Array) -> String:
+	if settings.pool != RollSettings.Pool.CUSTOM:
+		return str(from[rng.randi() % from.size()][0])
+	var total := 0
+	for c in from:
+		total += int(settings.weights.get(str(c[0]), 0))
+	if total <= 0:
+		return str(from[rng.randi() % from.size()][0])
+	var at := int(rng.randi() % total)
+	for c in from:
+		at -= int(settings.weights.get(str(c[0]), 0))
+		if at < 0:
+			return str(c[0])
+	return str(from.back()[0])
+
+
 ## The pool a roll draws from: CHARACTER, TIME_BASED and DIRTY keep their own kinds of `choices`; EVERYTHING, or any
 ## pool when the engine's list carries no kind to filter by (`kinds_known` false), is all of it.
 static func pool_of(settings: RollSettings, choices: Array, kinds_known: bool) -> Array:
 	if not kinds_known or settings.pool == RollSettings.Pool.EVERYTHING:
 		return choices
 	var kinds := {}
-	for k in RollSettings.kinds_of(settings.pool):
-		kinds[String(k)] = true
+	if settings.pool == RollSettings.Pool.CUSTOM:
+		for k in settings.weights:
+			if int(settings.weights[k]) > 0:
+				kinds[String(k)] = true
+	else:
+		for k in RollSettings.kinds_of(settings.pool):
+			kinds[String(k)] = true
 	return choices.filter(func(c): return kinds.has(String(c[0])))

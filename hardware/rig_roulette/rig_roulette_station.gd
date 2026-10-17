@@ -32,9 +32,9 @@ signal undo_requested()
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.67
+const HEIGHT := 0.71
 
-enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
+enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY, CUSTOM }
 
 ## Character-only FX, the same curated set Rig Roulette's own Tour-mode version draws from
 ## (`TourProject.RIG_FX`) -- meaningful only against the built-in engine's FXCatalogue kinds.
@@ -52,6 +52,8 @@ var replay_last := false
 var reroll_limit := -1
 var chaos := 0
 var tempo_pick := 0
+## A CUSTOM pool's weights by kind name, as `RollSettings.weights`.
+var weights := {}
 var near_semitones := 0
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
@@ -74,6 +76,7 @@ var _seed_wheel: TabletSelector
 var _limit_wheel: TabletSelector
 var _chaos_wheel: TabletSelector
 var _tempo_wheel: TabletSelector
+var _kind_wheel: TabletSelector
 var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
@@ -226,6 +229,17 @@ func _ready() -> void:
 	_tempo_wheel.describe_title = func() -> String: return "RIG ROULETTE  TEMPO"
 	add_child(_tempo_wheel)
 
+	_kind_wheel = TabletSelector.new()
+	_kind_wheel.name = "KindWheel"
+	_kind_wheel.size = Vector2(0.15, 0.030)
+	_kind_wheel.hint_text = "scroll: which kind of pedal  ·  click: how much it weighs (off, 1, 2, 3)"
+	_kind_wheel.options = _kind_choices
+	_kind_wheel.choice = 0
+	_kind_wheel.position = Vector3(0, _row(10), 0.004)
+	_kind_wheel.pressed.connect(_on_kind_stepped)
+	_kind_wheel.describe_title = func() -> String: return "RIG ROULETTE  KINDS"
+	add_child(_kind_wheel)
+
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
 	screen_wheel.size = Vector2(0.15, 0.030)
@@ -246,7 +260,7 @@ func _ready() -> void:
 	preset_wheel.options = func() -> Array:
 		return preset_sources.call() if preset_sources.is_valid() else [[0, "PRESETS"]]
 	preset_wheel.choice = 0
-	preset_wheel.position = Vector3(0, _row(10), 0.004)
+	preset_wheel.position = Vector3(0, _row(11), 0.004)
 	preset_wheel.chosen.connect(func(c: int) -> void:
 		preset_chosen.emit(c)
 		# It loads and rests: the wheel says what it does, not what is set.
@@ -255,7 +269,7 @@ func _ready() -> void:
 	preset_wheel.describe_title = func() -> String: return "RIG ROULETTE  PRESETS"
 	add_child(preset_wheel)
 
-	var lock_label := _label(15, Vector3(-0.068, HEIGHT - 0.490, 0.001))
+	var lock_label := _label(15, Vector3(-0.068, HEIGHT - 0.527, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -266,47 +280,47 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(-0.020, HEIGHT - 0.490, 0.014)
+	_lock_key_button.position = Vector3(-0.020, HEIGHT - 0.527, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var save_label := _label(15, Vector3(0.044, HEIGHT - 0.490, 0.001))
+	var save_label := _label(15, Vector3(0.044, HEIGHT - 0.527, 0.001))
 	save_label.text = "SAVE"
 	add_child(save_label)
 
 	var save_button := PanelButton.new()
 	save_button.name = "SaveButton"
 	save_button.led_colour = Color(0.4, 0.8, 0.95)
-	save_button.position = Vector3(0.086, HEIGHT - 0.490, 0.014)
+	save_button.position = Vector3(0.086, HEIGHT - 0.527, 0.014)
 	save_button.scale = Vector3(2.8, 2.8, 2.8)
 	save_button.pressed.connect(func() -> void: preset_save_requested.emit())
 	save_button.describe_title = func() -> String: return "RIG ROULETTE  SAVE PRESET"
 	add_child(save_button)
 
-	var undo_label := _label(15, Vector3(0.044, HEIGHT - 0.532, 0.001))
+	var undo_label := _label(15, Vector3(0.044, HEIGHT - 0.569, 0.001))
 	undo_label.text = "UNDO"
 	add_child(undo_label)
 
 	var undo_button := PanelButton.new()
 	undo_button.name = "UndoButton"
 	undo_button.led_colour = Color(0.95, 0.4, 0.3)
-	undo_button.position = Vector3(0.086, HEIGHT - 0.532, 0.014)
+	undo_button.position = Vector3(0.086, HEIGHT - 0.569, 0.014)
 	undo_button.scale = Vector3(2.8, 2.8, 2.8)
 	undo_button.pressed.connect(func() -> void: undo_requested.emit())
 	undo_button.describe_title = func() -> String: return "RIG ROULETTE  UNDO THE LAST ROLL"
 	add_child(undo_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.532, 0.001))
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.569, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.532, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.569, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -326,7 +340,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.574, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.611, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -361,6 +375,7 @@ func settings() -> RollSettings:
 	s.reroll_limit = reroll_limit
 	s.chaos = chaos
 	s.tempo_pick = tempo_pick
+	s.weights = RollSettings.clean_weights(weights)
 	return s
 
 
@@ -377,7 +392,9 @@ func apply_settings(s: RollSettings) -> void:
 	reroll_limit = s.reroll_limit
 	chaos = s.chaos
 	tempo_pick = s.tempo_pick
+	weights = s.weights.duplicate()
 	if _count_wheel != null:
+		_kind_wheel.refresh()
 		_tempo_wheel.choice = tempo_pick
 		_tempo_wheel.refresh()
 		_chaos_wheel.choice = chaos
@@ -466,7 +483,7 @@ func _pool_choices() -> Array:
 	if DAW.backend is ReaperBackend:
 		return [[Pool.CHARACTER, "WHATEVER'S THERE"], [Pool.EVERYTHING, "WHATEVER'S THERE"]]
 	return [[Pool.CHARACTER, "CHARACTER"], [Pool.EVERYTHING, "EVERYTHING"], [Pool.TIME_BASED, "TIME-BASED ONLY"],
-			[Pool.DIRTY, "DIRTY ONLY"]]
+			[Pool.DIRTY, "DIRTY ONLY"], [Pool.CUSTOM, "CUSTOM (KINDS ROW)"]]
 
 
 ## The y of the n-th wheel down the wall.
@@ -497,8 +514,42 @@ func _on_count_chosen(c: int) -> void:
 	changed.emit()
 
 
+## What each kind weighs as the wall shows it: the CUSTOM pool's own, or what the pool in force
+## amounts to.
+func _shown_weights() -> Dictionary:
+	return weights if pool == Pool.CUSTOM else RollSettings.weights_of(pool as RollSettings.Pool)
+
+
+func _kind_choices() -> Array:
+	var shown := _shown_weights()
+	var out := []
+	for i in RollSettings.ALL_KINDS.size():
+		var k := String(RollSettings.ALL_KINDS[i])
+		var w := int(shown.get(k, 0))
+		out.append([i, "%s: %s" % [k.to_upper(), "OFF" if w == 0 else "x%d" % w]])
+	return out
+
+
+## A click on the KIND row: the next weight for the kind in the window. Touching any kind makes the
+## pool CUSTOM, starting from whatever it was.
+func _on_kind_stepped(choice: int) -> void:
+	var k := String(RollSettings.ALL_KINDS[choice])
+	var now := _shown_weights().duplicate()
+	now[k] = (int(now.get(k, 0)) + 1) % (RollSettings.WEIGHT_MAX + 1)
+	weights = now
+	pool = Pool.CUSTOM
+	_pool_wheel.choice = pool
+	_pool_wheel.refresh()
+	_kind_wheel.refresh()
+	changed.emit()
+
+
 func _on_pool_chosen(p: int) -> void:
+	if p == Pool.CUSTOM and weights.is_empty():
+		weights = RollSettings.weights_of(pool as RollSettings.Pool)
 	pool = p
+	if _kind_wheel != null:
+		_kind_wheel.refresh()
 	changed.emit()
 
 

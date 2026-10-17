@@ -6,7 +6,7 @@ extends RefCounted
 ## guest's or a file's word is never trusted as it comes.
 
 enum Scales { MAJOR_MINOR, MODES, PENTATONIC }
-enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
+enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY, CUSTOM }
 
 ## The effects a CHARACTER pool draws from (the built-in engine's FXCatalogue kinds); the same
 ## curated set Tour's own rig roll uses (`TourProject.RIG_FX`).
@@ -14,6 +14,11 @@ const CHARACTER_KINDS: Array[StringName] = [&"distortion", &"chorus", &"reverb",
 ## The kinds the narrower pools draw from. EVERYTHING is not here: it is whatever there is.
 const TIME_BASED_KINDS: Array[StringName] = [&"delay", &"reverb", &"chorus", &"phaser"]
 const DIRTY_KINDS: Array[StringName] = [&"distortion", &"filter", &"compressor"]
+## Every kind the built-in engine has, in the order the wall's KIND row walks them.
+const ALL_KINDS: Array[StringName] = [&"eq", &"compressor", &"reverb", &"delay", &"chorus", &"filter",
+		&"distortion", &"phaser", &"limiter"]
+## The most one kind can weigh in a CUSTOM pool (0 keeps it out).
+const WEIGHT_MAX := 3
 const COUNT_MIN := 0
 const COUNT_MAX := 6
 ## How far from the last roll's key (in semitones, either way) a new root may land; 0 is anywhere.
@@ -46,6 +51,8 @@ var replay_last := false
 var reroll_limit := -1
 ## How far a landed pedal's knobs are thrown from where they were, in quarters (see CHAOS_MAX).
 var chaos := 0
+## A CUSTOM pool's kinds and how much each weighs, 0 to WEIGHT_MAX (a kind not here is out).
+var weights := {}
 ## An index of TEMPO_RANGES; 0 is LOCKED.
 var tempo_pick := 0
 ## 0 rolls off fresh randomness; anything else replays: the same seed on the same settings and
@@ -58,7 +65,7 @@ func to_dict() -> Dictionary:
 			"cap": per_track_cap, "no_repeats": no_repeats,
 			"scales": int(scales), "near": near_semitones,
 			"replay": replay_last, "limit": reroll_limit, "chaos": chaos,
-			"tempo": tempo_pick}
+			"tempo": tempo_pick, "weights": weights.duplicate()}
 
 
 ## The kinds a pool allows, or empty for EVERYTHING.
@@ -71,6 +78,26 @@ static func kinds_of(pool: Pool) -> Array[StringName]:
 		Pool.DIRTY:
 			return DIRTY_KINDS
 	return []
+
+
+## What each kind weighs under `pool`, as a CUSTOM pool would start from it: 1 for the kinds it
+## allows, 0 for the rest (EVERYTHING allows all).
+static func weights_of(pool: Pool) -> Dictionary:
+	var out := {}
+	var allowed := ALL_KINDS if pool == Pool.EVERYTHING else kinds_of(pool)
+	for k in ALL_KINDS:
+		out[String(k)] = 1 if allowed.has(k) else 0
+	return out
+
+
+## A weights dict held to the known kinds and to 0..WEIGHT_MAX.
+static func clean_weights(d) -> Dictionary:
+	var out := {}
+	if d is Dictionary:
+		for k in ALL_KINDS:
+			if d.has(String(k)):
+				out[String(k)] = clampi(int(d[String(k)]), 0, WEIGHT_MAX)
+	return out
 
 
 static func from_dict(d: Dictionary) -> RollSettings:
@@ -86,5 +113,6 @@ static func from_dict(d: Dictionary) -> RollSettings:
 	s.reroll_limit = clampi(int(d.get("limit", s.reroll_limit)), -1, REROLLS_MAX)
 	s.chaos = clampi(int(d.get("chaos", s.chaos)), 0, CHAOS_MAX)
 	s.tempo_pick = clampi(int(d.get("tempo", s.tempo_pick)), 0, TEMPO_RANGES.size() - 1)
+	s.weights = clean_weights(d.get("weights", {}))
 	s.seed_value = maxi(int(d.get("seed", 0)), 0)
 	return s

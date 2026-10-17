@@ -353,6 +353,7 @@ func _ready() -> void:
 	_test_presets_load_save_and_replicate()
 	_test_a_roll_can_be_undone_back_to_the_project_before_it()
 	_test_a_roll_can_set_the_tempo()
+	_test_a_custom_pool_weighs_its_kinds()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21733,7 +21734,7 @@ func _test_an_items_sound_is_stretched_and_shifted() -> void:
 
 func _test_a_rig_roll_is_planned_from_its_settings() -> void:
 	var wild := RollSettings.from_dict({"count": 99, "pool": 7, "key_locked": true, "seed": -4})
-	check("settings are held to their limits", wild.count == RollSettings.COUNT_MAX and wild.pool == RollSettings.Pool.DIRTY
+	check("settings are held to their limits", wild.count == RollSettings.COUNT_MAX and wild.pool == RollSettings.Pool.CUSTOM
 			and wild.key_locked and wild.seed_value == 0)
 	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
 	var catalogue := []
@@ -22242,6 +22243,53 @@ func _test_a_roll_can_set_the_tempo() -> void:
 	check("a locked roll does not choose one (the new project's own)", Session.roll["tempo"] == 0)
 	studio.queue_free()
 	Session.roll = {}
+	Session.layout = saved_layout
+
+
+func _test_a_custom_pool_weighs_its_kinds() -> void:
+	var catalogue := []
+	for k in RollSettings.ALL_KINDS:
+		catalogue.append([k, String(k)])
+	var custom := RollSettings.new()
+	custom.pool = RollSettings.Pool.CUSTOM
+	custom.weights = {"reverb": 3, "delay": 1, "eq": 0}
+	var pool := RigRoll.pool_of(custom, catalogue, true).map(func(c): return String(c[0]))
+	check("a custom pool is the kinds that weigh something (%s)" % [pool], pool == ["reverb", "delay"])
+	var counts := {"reverb": 0, "delay": 0}
+	for seed_value in range(1, 401):
+		custom.seed_value = seed_value
+		var plan := RigRoll.plan(custom, RigRoll.rng_for(custom), [0], RigRoll.pool_of(custom, catalogue, true))
+		counts[plan["pedals"][0]["plugin"]] += 1
+	check("a weight of 3 against 1 lands about three to one (%s)" % [counts], counts["reverb"] > counts["delay"] * 2 and counts["delay"] > 40)
+	custom.weights = {}
+	check("a custom pool with nothing weighed lands nothing", RigRoll.pool_of(custom, catalogue, true).is_empty())
+	check("weights start from the pool they were made from", RollSettings.weights_of(RollSettings.Pool.DIRTY)["distortion"] == 1
+			and RollSettings.weights_of(RollSettings.Pool.DIRTY)["reverb"] == 0
+			and RollSettings.weights_of(RollSettings.Pool.EVERYTHING).values().all(func(w): return w == 1))
+	var wild := RollSettings.from_dict({"pool": 99, "weights": {"reverb": 50, "nonsense": 2, "delay": -4}})
+	check("weights are held to the kinds there are and 0 to 3", wild.pool == RollSettings.Pool.CUSTOM and wild.weights == {"reverb": 3, "delay": 0})
+	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	DAW.use(OfflineBackend.new())
+	_as_session(Session.Role.HOST, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.enter_roulette_room()
+	var wall := studio.rig_roulette_station
+	var listed: Array = wall._kind_wheel.options.call()
+	check("the KIND row lists every kind with what it weighs now", listed.size() == RollSettings.ALL_KINDS.size() and listed[2][1] == "REVERB: x1" and listed[0][1] == "EQ: OFF")
+	wall._kind_wheel.choice = 2
+	wall._kind_wheel.pressed.emit(2)
+	check("a click steps the kind's weight and makes the pool custom", wall.pool == RigRouletteStation.Pool.CUSTOM
+			and studio.roll_settings.pool == RollSettings.Pool.CUSTOM and studio.roll_settings.weights["reverb"] == 2
+			and studio.roll_settings.weights["distortion"] == 1)
+	for i in 2:
+		wall._kind_wheel.pressed.emit(2)
+	check("past 3 it comes round to off", studio.roll_settings.weights["reverb"] == 0)
+	studio.queue_free()
 	Session.layout = saved_layout
 
 
