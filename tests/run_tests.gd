@@ -350,6 +350,7 @@ func _ready() -> void:
 	_test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near()
 	_test_a_roll_can_be_replayed_and_re_rolls_can_run_out()
 	_test_chaos_throws_the_knobs_of_the_pedals_that_land()
+	_test_presets_load_save_and_replicate()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -22073,6 +22074,70 @@ func _test_chaos_throws_the_knobs_of_the_pedals_that_land() -> void:
 	check("a replay throws them the same way", throw.call(RollSettings.CHAOS_MAX, 9) == thrown)
 	studio.queue_free()
 	Session.roll = {}
+	Session.layout = saved_layout
+
+
+func _test_presets_load_save_and_replicate() -> void:
+	var path := "user://test_roll_presets.cfg"
+	DirAccess.remove_absolute(path)
+	var built := RollPresets.built_in()
+	check("three presets ship, each a valid settings dict", built.size() == 3
+			and built.all(func(b): return RollSettings.from_dict(b[1]).to_dict() == b[1]))
+	check("the Riff Randomizer one allows no re-rolls", RollSettings.from_dict(built[0][1]).reroll_limit == 0)
+	check("Chaos throws the knobs and Gentle does not", RollSettings.from_dict(built[2][1]).chaos == RollSettings.CHAOS_MAX
+			and RollSettings.from_dict(built[1][1]).chaos == 0)
+	check("a fresh file has three empty slots", RollPresets.saved(path).size() == RollPresets.SLOTS and RollPresets.saved(path).all(func(d): return d.is_empty()))
+	var s := RollSettings.new()
+	s.count = 4
+	s.pool = RollSettings.Pool.DIRTY
+	s.seed_value = 123
+	check("saving fills the first slot", RollPresets.save(s, path) == 0)
+	s.count = 5
+	check("then the next", RollPresets.save(s, path) == 1)
+	RollPresets.save(s, path)
+	check("when all are full the oldest turns over", RollPresets.save(s, path) == 0)
+	var back := RollPresets.saved(path)
+	check("what was saved comes back, without its seed", RollSettings.from_dict(back[0]).count == 5 and back[0]["seed"] == 0
+			and RollSettings.from_dict(back[0]).pool == RollSettings.Pool.DIRTY)
+	check("an unnamed preset is named by what it does (%s)" % RollPresets.name_of(back[0]), RollPresets.name_of(back[0]) == "5 DIRTY PEDALS")
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	DAW.use(OfflineBackend.new())
+	_as_session(Session.Role.HOST, 1)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	studio.roll_presets_path = path
+	add_child(studio)
+	studio.enter_roulette_room()
+	var wall := studio.rig_roulette_station
+	var listed: Array = wall.preset_wheel.options.call()
+	check("the wheel lists a resting word, three built in, three slots", listed.size() == 7 and listed[0][0] == 0)
+	var heard := []
+	var listen := func(): heard.append(Session.roll_setup.duplicate())
+	Session.roll_setup_changed.connect(listen)
+	wall.preset_chosen.emit(3)
+	check("picking Chaos sets the room to it and tells everyone", studio.roll_settings.chaos == RollSettings.CHAOS_MAX
+			and studio.roll_settings.count == 5 and wall.count == 5 and heard.size() == 1)
+	check("the wheel goes back to resting", wall.preset_wheel.choice == 0)
+	wall.preset_chosen.emit(4)
+	check("loading a saved slot works", studio.roll_settings.count == 5 and studio.roll_settings.pool == RollSettings.Pool.DIRTY)
+	DirAccess.remove_absolute(path)
+	studio.roll_settings.count = 2
+	wall.preset_save_requested.emit()
+	check("SAVE keeps the room's settings in a slot", RollPresets.saved(path)[0].get("count", 0) == 2)
+	Session.roll_setup_changed.disconnect(listen)
+	_as_session(Session.Role.GUEST, 5)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	wall.preset_chosen.emit(1)
+	wall.preset_save_requested.emit()
+	Session.notice.disconnect(hear)
+	check("a guest can do neither, and is told", notices.size() == 2 and studio.roll_settings.count == 2)
+	_as_session(Session.Role.HOST, 1)
+	studio.queue_free()
+	DirAccess.remove_absolute(path)
 	Session.layout = saved_layout
 
 

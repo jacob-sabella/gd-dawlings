@@ -200,3 +200,16 @@ seed throws them the same; the board's foot says "Knobs thrown". Setting `chaos`
 Honest limit: the built-in stand-in engine's pedals (and Reaper's first answer) report no
 parameters, so a roll there throws nothing; the throw is tested on a pedal given knobs, and has not been
 heard on a real engine or Reaper. Wall is 0.62 tall; seat shot reads. Full suite 11179 checks, 0 failed.
+
+### E6: presets
+
+`RollPresets` (core/rig_roulette): three that ship, RIFF RANDOMIZER (2 character pedals, no re-rolls), GENTLE (1
+time-based pedal, key within 2 semitones, safe knobs, 2 re-rolls), CHAOS (5 pedals of anything, 2 a track, any mode,
+knobs at 100%), and three saved slots in `user://roll_presets.cfg`. A PRESETS wheel on the wall loads one (host only;
+it is published like any change, so guests see the wheels move; the wheel goes back to resting) and a SAVE button keeps
+the room's settings in the first empty slot, then the oldest. Full suite 11197 checks, 0 failed. A preset never
+carries a seed.
+
+Honest limit: naming. Nobody can type in VR, so a saved preset is named by what it does ("5 DIRTY PEDALS, PENTATONIC,
+CHAOS"), not by a name the host chooses; a keyboard-free naming dial is not built. The wall is 3.0x with the
+post at 1.45 m now (0.66 tall panel, top under the 3.6 m ceiling) so ROLL clears the rack from the seat.

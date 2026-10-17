@@ -44,7 +44,7 @@ func live_room_half() -> float:
 ## a little toward the seat: the walls here are taken by the same gear every venue has, and
 ## a panel on one is hidden behind it from the seat.
 func rig_roulette_spot() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, 0.5), Vector3(STAND_AT.x, 1.3, STAND_AT.y))
+	return Transform3D(Basis(Vector3.UP, 0.5), Vector3(STAND_AT.x, 1.45, STAND_AT.y))
 
 
 func solids() -> Array:

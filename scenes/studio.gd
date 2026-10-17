@@ -2436,7 +2436,7 @@ func _build_rig_roulette_station() -> void:
 var roll_settings := RollSettings.new()
 
 ## How much bigger the setup wall in the room is than the panel it was.
-const SETUP_WALL_SCALE := 3.4
+const SETUP_WALL_SCALE := 3.0
 
 
 ## The setup wall (`RigRouletteStation`) stands in the Rig Roulette room and nowhere else: the
@@ -2483,6 +2483,9 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.reroll_limit = s.reroll_limit
 		roll_settings.chaos = s.chaos
 		Session.publish_roll_setup(roll_settings.to_dict()))
+	wall.preset_sources = _preset_choices
+	wall.preset_chosen.connect(func(id: int) -> void: _on_preset_chosen(wall, id))
+	wall.preset_save_requested.connect(func() -> void: _on_preset_save_requested(wall))
 	wall.screen_sources = func() -> Array:
 		var out := []
 		var sources := board_sources()
@@ -2501,6 +2504,58 @@ func _stand_the_setup_wall() -> void:
 	if wall.screen_wheel != null:
 		wall.screen_wheel.choice = maxi(board_sources().find(board_source), 0)
 		wall.screen_wheel.refresh()
+
+
+## Where the saved presets live; a test points it elsewhere.
+var roll_presets_path := RollPresets.PATH
+
+
+## The PRESET wheel's list: a resting word, the ones that ship, the saved slots.
+func _preset_choices() -> Array:
+	var out := [[0, "PRESETS"]]
+	var built := RollPresets.built_in()
+	for i in built.size():
+		out.append([1 + i, "LOAD: " + built[i][0]])
+	var slots := RollPresets.saved(roll_presets_path)
+	for i in slots.size():
+		out.append([1 + built.size() + i, "LOAD MINE %d: %s" % [i + 1, "EMPTY" if slots[i].is_empty() else RollPresets.name_of(slots[i])]])
+	return out
+
+
+## A preset was picked: the host's settings become it (seed apart), told to the room.
+func _on_preset_chosen(wall: RigRouletteStation, id: int) -> void:
+	if id == 0:
+		return
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can change the roll." % Session.name_of(1))
+		wall.apply_settings(roll_settings)
+		return
+	var built := RollPresets.built_in()
+	var d: Dictionary = {}
+	if id <= built.size():
+		d = built[id - 1][1]
+	else:
+		var slots := RollPresets.saved(roll_presets_path)
+		var slot := id - 1 - built.size()
+		if slot >= 0 and slot < slots.size():
+			d = slots[slot]
+	if d.is_empty():
+		Session.notice.emit("That slot is empty: set the wheels and press SAVE.")
+		return
+	var loaded := RollSettings.from_dict(d)
+	loaded.seed_value = 0
+	roll_settings = loaded
+	wall.apply_settings(roll_settings)
+	Session.publish_roll_setup(roll_settings.to_dict())
+
+
+func _on_preset_save_requested(wall: RigRouletteStation) -> void:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can save a preset." % Session.name_of(1))
+		return
+	var at := RollPresets.save(roll_settings, roll_presets_path)
+	wall.preset_wheel.refresh()
+	Session.notice.emit("Saved as mine %d: %s." % [at + 1, RollPresets.name_of(roll_settings.to_dict())])
 
 
 static func wall_pool(pool: RollSettings.Pool) -> RigRouletteStation.Pool:

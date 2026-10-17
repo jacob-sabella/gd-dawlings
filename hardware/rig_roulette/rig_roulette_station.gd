@@ -22,12 +22,15 @@ signal changed()
 ## The BIG SCREEN wheel moved, or was clicked on to step it: show what is at `choice` of
 ## `screen_sources` on the board. Asked of the room by whoever owns the panel, never done here.
 signal screen_chosen(choice: int)
+## A preset was picked off the PRESET wheel (an id from `preset_sources`) or SAVE was pressed.
+signal preset_chosen(choice: int)
+signal preset_save_requested()
 
 ## Sized for a wall the band reads from across the room, not a console the seat is already close
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.62
+const HEIGHT := 0.66
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -52,6 +55,9 @@ var near_semitones := 0
 ## whoever owns the panel, since only the room knows what gear it has.
 var screen_sources: Callable = Callable()
 var screen_wheel: TabletSelector
+## () -> Array of [id: int, words: String] for the PRESET wheel; id 0 is the resting word.
+var preset_sources: Callable = Callable()
+var preset_wheel: TabletSelector
 ## A guest's wall: the wheels show the host's settings and a nudge is put back (the owner
 ## calls `apply_settings` again from `changed`).
 var read_only := false
@@ -211,7 +217,23 @@ func _ready() -> void:
 	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
 	add_child(screen_wheel)
 
-	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.438, 0.001))
+	preset_wheel = TabletSelector.new()
+	preset_wheel.name = "PresetWheel"
+	preset_wheel.size = Vector2(0.15, 0.030)
+	preset_wheel.hint_text = "scroll: load a preset, built in or saved"
+	preset_wheel.options = func() -> Array:
+		return preset_sources.call() if preset_sources.is_valid() else [[0, "PRESETS"]]
+	preset_wheel.choice = 0
+	preset_wheel.position = Vector3(0, _row(9), 0.004)
+	preset_wheel.chosen.connect(func(c: int) -> void:
+		preset_chosen.emit(c)
+		# It loads and rests: the wheel says what it does, not what is set.
+		preset_wheel.choice = 0
+		preset_wheel.refresh())
+	preset_wheel.describe_title = func() -> String: return "RIG ROULETTE  PRESETS"
+	add_child(preset_wheel)
+
+	var lock_label := _label(15, Vector3(-0.068, HEIGHT - 0.478, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -222,21 +244,34 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.438, 0.014)
+	_lock_key_button.position = Vector3(-0.020, HEIGHT - 0.478, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.478, 0.001))
+	var save_label := _label(15, Vector3(0.044, HEIGHT - 0.478, 0.001))
+	save_label.text = "SAVE"
+	add_child(save_label)
+
+	var save_button := PanelButton.new()
+	save_button.name = "SaveButton"
+	save_button.led_colour = Color(0.4, 0.8, 0.95)
+	save_button.position = Vector3(0.086, HEIGHT - 0.478, 0.014)
+	save_button.scale = Vector3(2.8, 2.8, 2.8)
+	save_button.pressed.connect(func() -> void: preset_save_requested.emit())
+	save_button.describe_title = func() -> String: return "RIG ROULETTE  SAVE PRESET"
+	add_child(save_button)
+
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.518, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.478, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.518, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -256,7 +291,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.522, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.562, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
