@@ -348,6 +348,7 @@ func _ready() -> void:
 	_test_a_roll_lands_on_the_board_one_result_at_a_time()
 	_test_how_many_pedals_a_roll_lands_and_where()
 	_test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near()
+	_test_a_roll_can_be_replayed_and_re_rolls_can_run_out()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -21974,6 +21975,52 @@ func _test_a_rolled_key_comes_from_the_chosen_scales_and_stays_near() -> void:
 	var wild := RollSettings.from_dict({"scales": 9, "near": 99})
 	check("scales and nearness are held to their limits", wild.scales == RollSettings.Scales.PENTATONIC and wild.near_semitones == RollSettings.NEAR_MAX)
 	check("and round-trip", RollSettings.from_dict(wild.to_dict()).to_dict() == wild.to_dict())
+
+
+func _test_a_roll_can_be_replayed_and_re_rolls_can_run_out() -> void:
+	var s := RollSettings.new()
+	var fresh := RigRoll.seed_for(s, 4242)
+	check("a fresh roll has a seed to report (%d)" % fresh, fresh >= 1 and fresh <= 99999)
+	s.replay_last = true
+	check("replaying takes the last roll's seed", RigRoll.seed_for(s, 4242) == 4242)
+	check("replaying with no last roll still has a seed", RigRoll.seed_for(s, 0) != 0)
+	s.seed_value = 7
+	check("a seed set by hand wins", RigRoll.seed_for(s, 4242) == 7)
+	check("the limit is held to its range", RollSettings.from_dict({"limit": 99}).reroll_limit == RollSettings.REROLLS_MAX
+			and RollSettings.from_dict({"limit": -9}).reroll_limit == -1 and RollSettings.new().reroll_limit == -1)
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.enter_roulette_room()
+	studio.roll_settings.reroll_limit = 1
+	studio.roll_settings.replay_last = false
+	backend.mark_clean()
+	studio._roll_rig()
+	var first: Dictionary = Session.roll.duplicate(true)
+	check("the roll says its seed and what is left", first["seed"] > 0 and first["left"] == 1)
+	studio.roll_settings.replay_last = true
+	studio._roll_rig()
+	var second: Dictionary = Session.roll
+	check("replaying lands the same tracks, key and pedals", second["seed"] == first["seed"] and second["tracks"] == first["tracks"]
+			and second["key"] == first["key"] and second["pedals"] == first["pedals"] and second["left"] == 0)
+	var n: int = second["n"]
+	studio._roll_rig()
+	check("with no re-rolls left a third is refused", Session.roll["n"] == n)
+	studio.roll_settings.reroll_limit = 0
+	studio.leave_roulette_room()
+	studio.enter_roulette_room()
+	studio._roll_rig()
+	check("a new visit starts again, and with none allowed the one roll lands", Session.roll["n"] == n + 1 and Session.roll["left"] == 0)
+	studio.queue_free()
+	Session.roll = {}
+	Session.layout = saved_layout
 
 
 func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:

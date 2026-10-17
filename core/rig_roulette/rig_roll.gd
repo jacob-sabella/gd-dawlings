@@ -25,6 +25,16 @@ static func root_of(key: String) -> int:
 	return KEY_NAMES.find(key.get_slice(" ", 0))
 
 
+## The seed a roll runs off, so it can always be replayed: the settings' own, else the last roll's
+## when replaying, else a fresh one. Never 0.
+static func seed_for(settings: RollSettings, last_seed: int) -> int:
+	if settings.seed_value != 0:
+		return settings.seed_value
+	if settings.replay_last and last_seed != 0:
+		return last_seed
+	return randi_range(1, 99999)
+
+
 ## The generator for a roll: seeded when the settings carry a seed, fresh otherwise.
 static func rng_for(settings: RollSettings) -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()

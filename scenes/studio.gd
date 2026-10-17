@@ -658,6 +658,7 @@ func enter_roulette_room() -> bool:
 		Session.notice.emit("Not in the middle of a tour.")
 		return false
 	_before_the_room = {"id": venue.venue_id(), "variant": venue.variant}
+	_rolls_this_visit = 0
 	set_venue(Venue.ROULETTE_ID, false)
 	return true
 
@@ -2457,6 +2458,8 @@ func _stand_the_setup_wall() -> void:
 	wall.no_repeats = roll_settings.no_repeats
 	wall.scales = int(roll_settings.scales)
 	wall.near_semitones = roll_settings.near_semitones
+	wall.replay_last = roll_settings.replay_last
+	wall.reroll_limit = roll_settings.reroll_limit
 	wall.transform = venue.rig_roulette_spot()
 	# A wall for the whole room to read from the seat, not a panel to stand at.
 	wall.scale = Vector3.ONE * SETUP_WALL_SCALE
@@ -2475,6 +2478,8 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.no_repeats = s.no_repeats
 		roll_settings.scales = s.scales
 		roll_settings.near_semitones = s.near_semitones
+		roll_settings.replay_last = s.replay_last
+		roll_settings.reroll_limit = s.reroll_limit
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.screen_sources = func() -> Array:
 		var out := []
@@ -2574,6 +2579,8 @@ func _on_session_roll_setup_changed() -> void:
 
 
 var _roll_shown := 0
+## Rolls made since the band last came into the Rig Roulette room.
+var _rolls_this_visit := 0
 
 
 ## A result landed on the board: a thud, higher each time, and the wheel on the floor spun up.
@@ -2622,7 +2629,13 @@ func _roll_rig() -> void:
 	if DAW.has_unsaved_changes():
 		Session.notice.emit("Save the project first: a roll starts a new one.")
 		return
-	var settings := roll_settings
+	var limit := roll_settings.reroll_limit
+	if limit >= 0 and _rolls_this_visit > limit:
+		Session.notice.emit("No re-rolls left: write the song with this one.")
+		return
+	# Every roll runs off a seed of its own, so the board can say it and the band can replay it.
+	var settings := RollSettings.from_dict(roll_settings.to_dict())
+	settings.seed_value = RigRoll.seed_for(settings, int(Session.roll.get("seed", 0)))
 	var rng := RigRoll.rng_for(settings)
 	var tracks := RigRoll.track_count(rng)
 	var refused := DAW.new_project(tracks)
@@ -2643,12 +2656,14 @@ func _roll_rig() -> void:
 		pedals.append({"track": DAW.state.track(int(p["track"])).display_name(), "fx": added.name})
 	var key: String = plan["key"]
 	DAW.mark_clean()
+	_rolls_this_visit += 1
 	# The board is for the write-up now, whatever it was showing.
 	_show_board(&"")
 	_publish_room()
 
 	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1,
-			"tracks": tracks, "key": key, "pedals": pedals})
+			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value,
+			"left": -1 if limit < 0 else limit - _rolls_this_visit + 1})
 	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
 			landed, "" if landed == 1 else "s"]
 	if not key.is_empty():

@@ -27,7 +27,7 @@ signal screen_chosen(choice: int)
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
 ## `tests/run_tests.gd`'s seat-aim-size floor from `core/venues/venue.gd`'s `rig_roulette_spot`.
 const WIDTH := 0.2
-const HEIGHT := 0.52
+const HEIGHT := 0.58
 
 enum Pool { CHARACTER, EVERYTHING, TIME_BASED, DIRTY }
 
@@ -43,6 +43,8 @@ var key_locked := false
 var per_track_cap := 1
 var no_repeats := false
 var scales := 0
+var replay_last := false
+var reroll_limit := -1
 var near_semitones := 0
 
 ## () -> Array of [id: int, words: String]: what the board can show, the write-up first. Set by
@@ -58,6 +60,8 @@ var _pool_wheel: TabletSelector
 var _cap_wheel: TabletSelector
 var _scale_wheel: TabletSelector
 var _near_wheel: TabletSelector
+var _seed_wheel: TabletSelector
+var _limit_wheel: TabletSelector
 var _no_repeats_button: PanelButton
 
 var _last_label: Label3D
@@ -84,7 +88,7 @@ func _ready() -> void:
 	count_wheel.options = func() -> Array: return _count_choices()
 	count_wheel.choice = count
 	_count_wheel = count_wheel
-	count_wheel.position = Vector3(0, HEIGHT - 0.082, 0.004)
+	count_wheel.position = Vector3(0, _row(0), 0.004)
 	count_wheel.chosen.connect(_on_count_chosen)
 	count_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL COUNT"
 	add_child(count_wheel)
@@ -96,7 +100,7 @@ func _ready() -> void:
 	pool_wheel.options = func() -> Array: return _pool_choices()
 	pool_wheel.choice = pool
 	_pool_wheel = pool_wheel
-	pool_wheel.position = Vector3(0, HEIGHT - 0.130, 0.004)
+	pool_wheel.position = Vector3(0, _row(1), 0.004)
 	pool_wheel.chosen.connect(_on_pool_chosen)
 	pool_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDAL POOL"
 	add_child(pool_wheel)
@@ -109,7 +113,7 @@ func _ready() -> void:
 		return [[1, "1 PER TRACK"], [2, "UP TO 2 PER TRACK"], [3, "UP TO 3 PER TRACK"]]
 	cap_wheel.choice = per_track_cap
 	_cap_wheel = cap_wheel
-	cap_wheel.position = Vector3(0, HEIGHT - 0.172, 0.004)
+	cap_wheel.position = Vector3(0, _row(2), 0.004)
 	cap_wheel.chosen.connect(_on_cap_chosen)
 	cap_wheel.describe_title = func() -> String: return "RIG ROULETTE  PEDALS PER TRACK"
 	add_child(cap_wheel)
@@ -121,7 +125,7 @@ func _ready() -> void:
 	_scale_wheel.options = func() -> Array:
 		return [[0, "MAJOR OR MINOR"], [1, "ANY MODE"], [2, "PENTATONIC + BLUES"]]
 	_scale_wheel.choice = scales
-	_scale_wheel.position = Vector3(0, HEIGHT - 0.214, 0.004)
+	_scale_wheel.position = Vector3(0, _row(3), 0.004)
 	_scale_wheel.chosen.connect(func(c: int) -> void:
 		scales = c
 		changed.emit())
@@ -138,12 +142,42 @@ func _ready() -> void:
 			out.append([n, "WITHIN %d SEMITONE%s" % [n, "" if n == 1 else "S"]])
 		return out
 	_near_wheel.choice = near_semitones
-	_near_wheel.position = Vector3(0, HEIGHT - 0.256, 0.004)
+	_near_wheel.position = Vector3(0, _row(4), 0.004)
 	_near_wheel.chosen.connect(func(c: int) -> void:
 		near_semitones = c
 		changed.emit())
 	_near_wheel.describe_title = func() -> String: return "RIG ROULETTE  NEAR THE LAST KEY"
 	add_child(_near_wheel)
+
+	_seed_wheel = TabletSelector.new()
+	_seed_wheel.name = "SeedWheel"
+	_seed_wheel.size = Vector2(0.15, 0.030)
+	_seed_wheel.hint_text = "scroll: a fresh seed each roll, or the last roll again"
+	_seed_wheel.options = func() -> Array: return [[0, "FRESH SEED EACH ROLL"], [1, "REPLAY THE LAST ROLL"]]
+	_seed_wheel.choice = 1 if replay_last else 0
+	_seed_wheel.position = Vector3(0, _row(5), 0.004)
+	_seed_wheel.chosen.connect(func(c: int) -> void:
+		replay_last = c == 1
+		changed.emit())
+	_seed_wheel.describe_title = func() -> String: return "RIG ROULETTE  SEED"
+	add_child(_seed_wheel)
+
+	_limit_wheel = TabletSelector.new()
+	_limit_wheel.name = "RerollWheel"
+	_limit_wheel.size = Vector2(0.15, 0.030)
+	_limit_wheel.hint_text = "scroll: how many times the band may roll again after the first"
+	_limit_wheel.options = func() -> Array:
+		var out := [[-1, "RE-ROLL: AS MANY AS IT TAKES"], [0, "NO RE-ROLLS: WRITE WITH IT"]]
+		for n in range(1, RollSettings.REROLLS_MAX + 1):
+			out.append([n, "%d RE-ROLL%s" % [n, "" if n == 1 else "S"]])
+		return out
+	_limit_wheel.choice = reroll_limit
+	_limit_wheel.position = Vector3(0, _row(6), 0.004)
+	_limit_wheel.chosen.connect(func(c: int) -> void:
+		reroll_limit = c
+		changed.emit())
+	_limit_wheel.describe_title = func() -> String: return "RIG ROULETTE  RE-ROLLS"
+	add_child(_limit_wheel)
 
 	screen_wheel = TabletSelector.new()
 	screen_wheel.name = "ScreenWheel"
@@ -152,13 +186,13 @@ func _ready() -> void:
 	screen_wheel.options = func() -> Array:
 		return screen_sources.call() if screen_sources.is_valid() else [[0, "ROLL"]]
 	screen_wheel.choice = 0
-	screen_wheel.position = Vector3(0, HEIGHT - 0.298, 0.004)
+	screen_wheel.position = Vector3(0, _row(7), 0.004)
 	screen_wheel.chosen.connect(func(c: int) -> void: screen_chosen.emit(c))
 	screen_wheel.pressed.connect(_on_screen_stepped)
 	screen_wheel.describe_title = func() -> String: return "BIG SCREEN"
 	add_child(screen_wheel)
 
-	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.344, 0.001))
+	var lock_label := _label(15, Vector3(-0.052, HEIGHT - 0.398, 0.001))
 	lock_label.text = "LOCK KEY"
 	add_child(lock_label)
 
@@ -169,21 +203,21 @@ func _ready() -> void:
 	# backward too -- clear of the backing plate's own front face (z = -0.001) by the scaled
 	# half-depth plus a margin, not the unscaled 0.004 every other flat-against-the-plate control
 	# here uses.
-	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.344, 0.014)
+	_lock_key_button.position = Vector3(0.024, HEIGHT - 0.398, 0.014)
 	_lock_key_button.scale = Vector3(2.8, 2.8, 2.8)
 	_lock_key_button.lit = key_locked
 	_lock_key_button.pressed.connect(_on_lock_key_pressed)
 	_lock_key_button.describe_title = func() -> String: return "RIG ROULETTE  LOCK KEY"
 	add_child(_lock_key_button)
 
-	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.386, 0.001))
+	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.438, 0.001))
 	repeat_label.text = "NO REPEATS"
 	add_child(repeat_label)
 
 	_no_repeats_button = PanelButton.new()
 	_no_repeats_button.name = "NoRepeatsButton"
 	_no_repeats_button.led_colour = Color(0.95, 0.75, 0.2)
-	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.386, 0.014)
+	_no_repeats_button.position = Vector3(0.036, HEIGHT - 0.438, 0.014)
 	_no_repeats_button.scale = Vector3(2.8, 2.8, 2.8)
 	_no_repeats_button.lit = no_repeats
 	_no_repeats_button.pressed.connect(_on_no_repeats_pressed)
@@ -203,7 +237,7 @@ func _ready() -> void:
 	roll_label.text = "ROLL"
 	add_child(roll_label)
 
-	_last_label = _label(13, Vector3(0, HEIGHT - 0.428, 0.001))
+	_last_label = _label(13, Vector3(0, HEIGHT - 0.478, 0.001))
 	_last_label.text = "no roll yet"
 	add_child(_last_label)
 
@@ -234,6 +268,8 @@ func settings() -> RollSettings:
 	s.no_repeats = no_repeats
 	s.scales = scales as RollSettings.Scales
 	s.near_semitones = near_semitones
+	s.replay_last = replay_last
+	s.reroll_limit = reroll_limit
 	return s
 
 
@@ -246,7 +282,13 @@ func apply_settings(s: RollSettings) -> void:
 	no_repeats = s.no_repeats
 	scales = int(s.scales)
 	near_semitones = s.near_semitones
+	replay_last = s.replay_last
+	reroll_limit = s.reroll_limit
 	if _count_wheel != null:
+		_seed_wheel.choice = 1 if replay_last else 0
+		_seed_wheel.refresh()
+		_limit_wheel.choice = reroll_limit
+		_limit_wheel.refresh()
 		_scale_wheel.choice = scales
 		_scale_wheel.refresh()
 		_near_wheel.choice = near_semitones
@@ -328,6 +370,11 @@ func _pool_choices() -> Array:
 		return [[Pool.CHARACTER, "WHATEVER'S THERE"], [Pool.EVERYTHING, "WHATEVER'S THERE"]]
 	return [[Pool.CHARACTER, "CHARACTER"], [Pool.EVERYTHING, "EVERYTHING"], [Pool.TIME_BASED, "TIME-BASED ONLY"],
 			[Pool.DIRTY, "DIRTY ONLY"]]
+
+
+## The y of the n-th wheel down the wall.
+func _row(n: int) -> float:
+	return HEIGHT - 0.076 - 0.040 * n
 
 
 func _count_choices() -> Array:

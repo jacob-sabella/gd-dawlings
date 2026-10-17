@@ -178,3 +178,16 @@ Setup wall now has rows for scales and nearness (the panel is 0.52 tall; checked
 Full suite 11165 checks, 0 failed.
 
 Not done in key: a separate root-only lock (LOCK KEY covers the whole key).
+
+### E4: seed and re-rolls
+
+Every roll now runs off a seed of its own (`RigRoll.seed_for`: fresh 1 to 99999, or the last roll's when the
+SEED wheel says REPLAY THE LAST ROLL), written on the board's foot and in the roll's dictionary, so any roll
+can be replayed: the same tracks, key and pedals land (tested). A RE-ROLLS wheel limits how many times the band
+may roll again after the first in one visit to the room (as many as it takes, none, 1 to 3); none is the Riff
+Randomizer rule, and the board says "No re-rolls: write the song with this." or how many are left. A new
+visit to the room starts the count again. The wall gained two rows (now 0.58 tall, post at 1.3 m); a
+720p seat shot reads. Full suite 11174 checks, 0 failed.
+
+Honest limits: a seed cannot be typed (no keyboard in VR; a numeric dial is a later idea), only
+replayed from the last roll; and a single-wheel re-roll (change just the pedals or just the key) is not built.

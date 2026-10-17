@@ -175,8 +175,12 @@ func show_roll(roll: Dictionary, ceremony := false) -> void:
 			y -= step
 	_step(_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
 			Vector3(left, HEIGHT * 0.25, 0), ink))
-	var foot := _write("A new project, started by %s (roll %d).  No re-rolls: write the song with this." % [
-			roll.get("by", "someone"), roll.get("n", 1)], 42, Vector3(0, 0.06, 0), accent)
+	var rerolls: int = roll.get("left", 0)
+	var rule := "No re-rolls: write the song with this." if rerolls == 0 else (
+			"%d re-roll%s left." % [rerolls, "" if rerolls == 1 else "s"] if rerolls > 0 else "Roll again if you dare.")
+	var seed_text := "  Seed %d." % roll["seed"] if roll.has("seed") else ""
+	var foot := _write("A new project, started by %s (roll %d).%s  %s" % [
+			roll.get("by", "someone"), roll.get("n", 1), seed_text, rule], 42, Vector3(0, 0.06, 0), accent)
 	_steps[-1].append(foot)
 	if ceremony and _text.visible:
 		_run_ceremony()
