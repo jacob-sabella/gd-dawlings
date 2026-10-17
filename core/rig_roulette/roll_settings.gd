@@ -30,7 +30,8 @@ const REROLLS_MAX := 3
 const TEMPO_RANGES := [[0, 0], [60, 180], [60, 90], [90, 120], [120, 160]]
 ## Steps of chaos: 0 leaves every knob where the pedal came, 4 puts them anywhere.
 const CHAOS_MAX := 4
-const CAP_MIN := 1
+## 0 is the whole mix: every pedal stacked on one track.
+const CAP_MIN := 0
 const CAP_MAX := 3
 const TRACKS_MIN := 2
 const TRACKS_MAX := 8

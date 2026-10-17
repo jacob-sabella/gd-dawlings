@@ -259,3 +259,13 @@ Full suite 11225 checks, 0 failed.
 
 Honest limit: Reaper has no kind metadata, so CUSTOM there means "whatever is installed"; the allow/ban list by
 plugin name is not built yet.
+
+### E10: whole mix
+
+The cap wheel gained a first stop, WHOLE MIX: ONE TRACK (cap 0): every pedal of the roll stacks on one randomly
+chosen track, as a chain, instead of being spread. Seeds of the other caps draw as before. Settings clamp 0..3 on the
+host. Suite 11227, 0 failed; no wire shape change. The label is shorter than the wall's longest existing wheel text
+("RE-ROLL: AS MANY AS IT TAKES"), so no new layout; not re-shot.
+
+"Which tracks are eligible" is honestly not a setting: a roll creates a fresh project whose tracks are anonymous, so
+there is nothing to pick between beyond how many tracks take pedals (the count and cap already decide it).

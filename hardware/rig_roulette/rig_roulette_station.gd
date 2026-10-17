@@ -123,9 +123,9 @@ func _ready() -> void:
 	var cap_wheel := TabletSelector.new()
 	cap_wheel.name = "CapWheel"
 	cap_wheel.size = Vector2(0.15, 0.030)
-	cap_wheel.hint_text = "scroll: most pedals one track may take"
+	cap_wheel.hint_text = "scroll: most pedals one track may take, or the whole mix on one"
 	cap_wheel.options = func() -> Array:
-		return [[1, "1 PER TRACK"], [2, "UP TO 2 PER TRACK"], [3, "UP TO 3 PER TRACK"]]
+		return [[0, "WHOLE MIX: ONE TRACK"], [1, "1 PER TRACK"], [2, "UP TO 2 PER TRACK"], [3, "UP TO 3 PER TRACK"]]
 	cap_wheel.choice = per_track_cap
 	_cap_wheel = cap_wheel
 	cap_wheel.position = Vector3(0, _row(2), 0.004)

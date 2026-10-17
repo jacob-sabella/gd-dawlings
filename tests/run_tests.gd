@@ -21939,6 +21939,9 @@ func _test_how_many_pedals_a_roll_lands_and_where() -> void:
 		check("seed %d: five pedals with no repeats are five different kinds" % seed_value, kinds.size() == 5 and kinds.size() == {}.merged(kinds.reduce(func(d, k): d[k] = true; return d, {})).size())
 	check("no repeats runs out of kinds and stops, not repeats (%d)" % plan_for.call(6, 2, true, 3).size(), plan_for.call(6, 2, true, 3).size() == 5)
 	check("the same seed lands the same pedals", plan_for.call(4, 2, false, 77) == plan_for.call(4, 2, false, 77))
+	var whole: Array = plan_for.call(5, 0, false, 9)
+	check("the whole mix stacks all five pedals on one track (%s)" % [whole], whole.size() == 5 and whole.all(func(p): return p["track"] == whole[0]["track"]))
+	check("the whole mix survives the wire", RollSettings.from_dict({"cap": 0}).per_track_cap == 0)
 	var wild := RollSettings.from_dict({"cap": 50, "no_repeats": true, "count": -3})
 	check("the cap and the count are held to their limits", wild.per_track_cap == RollSettings.CAP_MAX and wild.count == RollSettings.COUNT_MIN and wild.no_repeats)
 

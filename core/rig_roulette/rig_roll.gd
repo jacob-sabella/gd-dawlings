@@ -63,6 +63,10 @@ static func plan(settings: RollSettings, rng: RandomNumberGenerator, tracks: Arr
 		eligible[j] = tmp
 	# Each track's turn comes round once per pedal it may take: the shuffled order, then again.
 	var slots: Array = []
+	if settings.per_track_cap == 0 and not eligible.is_empty():
+		# The whole mix: one track takes the lot.
+		for _round in settings.count:
+			slots.append(eligible[0])
 	for _round in settings.per_track_cap:
 		slots.append_array(eligible)
 	var pedals: Array = []
