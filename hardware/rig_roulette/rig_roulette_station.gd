@@ -25,6 +25,8 @@ signal screen_chosen(choice: int)
 ## A preset was picked off the PRESET wheel (an id from `preset_sources`) or SAVE was pressed.
 signal preset_chosen(choice: int)
 signal preset_save_requested()
+## UNDO ROLL was pressed.
+signal undo_requested()
 
 ## Sized for a wall the band reads from across the room, not a console the seat is already close
 ## to -- about twice the linear size console controls get away with, so a wheel here still clears
@@ -263,6 +265,19 @@ func _ready() -> void:
 	save_button.pressed.connect(func() -> void: preset_save_requested.emit())
 	save_button.describe_title = func() -> String: return "RIG ROULETTE  SAVE PRESET"
 	add_child(save_button)
+
+	var undo_label := _label(15, Vector3(0.044, HEIGHT - 0.518, 0.001))
+	undo_label.text = "UNDO"
+	add_child(undo_label)
+
+	var undo_button := PanelButton.new()
+	undo_button.name = "UndoButton"
+	undo_button.led_colour = Color(0.95, 0.4, 0.3)
+	undo_button.position = Vector3(0.086, HEIGHT - 0.518, 0.014)
+	undo_button.scale = Vector3(2.8, 2.8, 2.8)
+	undo_button.pressed.connect(func() -> void: undo_requested.emit())
+	undo_button.describe_title = func() -> String: return "RIG ROULETTE  UNDO THE LAST ROLL"
+	add_child(undo_button)
 
 	var repeat_label := _label(15, Vector3(-0.052, HEIGHT - 0.518, 0.001))
 	repeat_label.text = "NO REPEATS"

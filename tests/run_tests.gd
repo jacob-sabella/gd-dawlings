@@ -351,6 +351,7 @@ func _ready() -> void:
 	_test_a_roll_can_be_replayed_and_re_rolls_can_run_out()
 	_test_chaos_throws_the_knobs_of_the_pedals_that_land()
 	_test_presets_load_save_and_replicate()
+	_test_a_roll_can_be_undone_back_to_the_project_before_it()
 	_test_every_venue_has_a_clear_door_to_the_roulette_room()
 	_test_a_vca_trims_its_group()
 	_test_the_latency_report_lines_up_the_slowest_path()
@@ -22138,6 +22139,57 @@ func _test_presets_load_save_and_replicate() -> void:
 	_as_session(Session.Role.HOST, 1)
 	studio.queue_free()
 	DirAccess.remove_absolute(path)
+	Session.layout = saved_layout
+
+
+func _test_a_roll_can_be_undone_back_to_the_project_before_it() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile_roulette.cfg"
+	var backend := OfflineBackend.new()
+	DAW.use(backend)
+	_as_session(Session.Role.HOST, 1)
+	Session.roll = {}
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.enter_roulette_room()
+	DAW.new_project(5)
+	DAW.set_tempo(133.0)
+	backend.mark_clean()
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	studio.undo_the_roll()
+	check("nothing to undo before a roll, and it says so", notices.size() == 1 and notices[0] == "Nothing to undo.")
+	studio._roll_rig()
+	var first_tracks: int = Session.roll["tracks"]
+	check("the first roll has no earlier ones listed", Session.roll["past"] == [])
+	backend.mark_clean()
+	studio._roll_rig()
+	check("the second lists the first on the board", Session.roll["past"].size() == 1 and String(Session.roll["past"][0]).contains("%d tracks" % first_tracks))
+	check("and the board writes it", studio.roll_board.find_child("Writing", false, false).get_children().any(func(l): return (l as Label3D).text.begins_with("BEFORE:")))
+	DAW.set_tempo(90.0)
+	notices.clear()
+	studio.undo_the_roll()
+	check("an unsaved project is not replaced", notices.size() == 1 and notices[0].begins_with("Save the project first") and DAW.state.tempo == 90.0)
+	backend.mark_clean()
+	studio.undo_the_roll()
+	check("undo brings back the first roll's project", DAW.state.track_indices().size() == first_tracks and Session.roll["n"] == 1)
+	check("and the board is that roll again, without a ceremony", studio.roll_board._ceremony == null)
+	check("it is clean, as a roll leaves it", not DAW.has_unsaved_changes())
+	studio.undo_the_roll()
+	check("another undo goes back past the first roll, to the project as it was",
+			DAW.state.track_indices().size() == 5 and DAW.state.tempo == 133.0 and Session.roll.is_empty())
+	check("no files are left behind", DirAccess.get_files_at("user://roll_history").is_empty())
+	_as_session(Session.Role.GUEST, 5)
+	notices.clear()
+	studio.undo_the_roll()
+	check("a guest cannot undo", notices.size() == 1 and notices[0].begins_with("Only "))
+	Session.notice.disconnect(hear)
+	_as_session(Session.Role.HOST, 1)
+	studio.queue_free()
+	Session.roll = {}
 	Session.layout = saved_layout
 
 

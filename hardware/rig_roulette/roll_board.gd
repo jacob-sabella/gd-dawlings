@@ -175,6 +175,9 @@ func show_roll(roll: Dictionary, ceremony := false) -> void:
 			y -= step
 	_step(_write(("KEY OF %s" % key.to_upper()) if not key.is_empty() else "KEY KEPT", 96,
 			Vector3(left, HEIGHT * 0.25, 0), ink))
+	var past: Array = roll.get("past", [])
+	if not past.is_empty():
+		_step(_write("BEFORE:  " + "   ·   ".join(past), 40, Vector3(0, HEIGHT * 0.13, 0), accent))
 	var rerolls: int = roll.get("left", 0)
 	var rule := "No re-rolls: write the song with this." if rerolls == 0 else (
 			"%d re-roll%s left." % [rerolls, "" if rerolls == 1 else "s"] if rerolls > 0 else "Roll again if you dare.")

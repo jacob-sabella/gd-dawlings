@@ -213,3 +213,17 @@ carries a seed.
 Honest limit: naming. Nobody can type in VR, so a saved preset is named by what it does ("5 DIRTY PEDALS, PENTATONIC,
 CHAOS"), not by a name the host chooses; a keyboard-free naming dial is not built. The wall is 3.0x with the
 post at 1.45 m now (0.66 tall panel, top under the 3.6 m ceiling) so ROLL clears the rack from the seat.
+
+### E7: history and undo
+
+Before each roll the project as it stands is kept aside as a DAWproject copy (`user://roll_history`, up to 8; a run's
+leftovers are swept on the first roll of the next), and the board's foot lists the three rolls before the one on show
+("BEFORE: #2 4 tracks, 2 pedals, D minor ..."), carried in `Session.roll["past"]` so guests read it too. An UNDO button on
+the wall (host only) brings the project back as it was before the last roll (tracks, tempo, its own file name; clean),
+puts the board back to the roll before without a ceremony, and can be pressed again to go further back. Refused with
+unsaved changes, as a roll is. Full suite 11208 checks, 0 failed (one test run left files behind: fixed by the sweep).
+
+Honest limits: only the built-in engine and its stand-in own project files, so against Reaper a roll cannot be
+undone (the button says so); an undone project is read back from a DAWproject file, so anything that format does not
+keep is not kept; and the UNDO label is small in the seat shot (the button and its row are there, the word is hard to
+read at that range). History is not saved across sessions.

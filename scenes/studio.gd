@@ -2484,6 +2484,7 @@ func _stand_the_setup_wall() -> void:
 		roll_settings.chaos = s.chaos
 		Session.publish_roll_setup(roll_settings.to_dict()))
 	wall.preset_sources = _preset_choices
+	wall.undo_requested.connect(undo_the_roll)
 	wall.preset_chosen.connect(func(id: int) -> void: _on_preset_chosen(wall, id))
 	wall.preset_save_requested.connect(func() -> void: _on_preset_save_requested(wall))
 	wall.screen_sources = func() -> Array:
@@ -2695,8 +2696,10 @@ func _roll_rig() -> void:
 	settings.seed_value = RigRoll.seed_for(settings, int(Session.roll.get("seed", 0)))
 	var rng := RigRoll.rng_for(settings)
 	var tracks := RigRoll.track_count(rng)
+	var before := _remember_before_roll()
 	var refused := DAW.new_project(tracks)
 	if not refused.is_empty():
+		_forget(before)
 		Session.notice.emit("Could not start the new project: %s" % "; ".join(refused))
 		return
 
@@ -2719,7 +2722,11 @@ func _roll_rig() -> void:
 	_show_board(&"")
 	_publish_room()
 
-	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1,
+	if not before.is_empty():
+		_roll_history.append(before)
+		while _roll_history.size() > ROLL_HISTORY_MAX:
+			_forget(_roll_history.pop_front())
+	Session.publish_roll({"by": Session.name_of(Session.local_peer_id), "n": Session.roll.get("n", 0) + 1, "past": _past_rolls(),
 			"tracks": tracks, "key": key, "pedals": pedals, "seed": settings.seed_value, "chaos": settings.chaos,
 			"left": -1 if limit < 0 else limit - _rolls_this_visit + 1})
 	var msg := "%s rolled a new project: %d tracks, %d pedal%s" % [Session.name_of(Session.local_peer_id), tracks,
@@ -2739,6 +2746,88 @@ func _throw_the_knobs(track: int, fx: MixState.FXState, rng: RandomNumberGenerat
 	params.sort()
 	for param in params:
 		DAW.set_fx_param(track, fx.index, int(param), RigRoll.knob(rng, float(fx.params[param]), chaos))
+
+
+## How many rolls back an undo can go.
+const ROLL_HISTORY_MAX := 8
+
+## What the project was before each roll, newest last: {file, original, prev_roll}.
+var _roll_history: Array = []
+var _history_swept := false
+
+
+## The project as it stands, kept aside before a roll replaces it, so an undo can bring it back.
+## Only the built-in engine and its stand-in own project files; against Reaper there is nothing
+## to keep, so a roll there cannot be undone (and the wall says so when asked).
+func _remember_before_roll() -> Dictionary:
+	if not DAW.backend is OfflineBackend:
+		return {}
+	if not _history_swept:
+		# What an earlier run left (a quit, a crash) is no history of this one.
+		_history_swept = true
+		for f in DirAccess.get_files_at("user://roll_history"):
+			DirAccess.remove_absolute("user://roll_history".path_join(f))
+	var file := "user://roll_history/before_%d_%d.%s" % [Time.get_ticks_msec(), _roll_history.size(), ProjectFiles.EXTENSION]
+	if not ProjectFiles.save(DAW.backend, file, true).is_empty() and not FileAccess.file_exists(file):
+		return {}
+	return {"file": file, "original": DAW.backend.project_path, "prev_roll": Session.roll.duplicate(true)}
+
+
+func _forget(entry: Dictionary) -> void:
+	if not entry.is_empty():
+		DirAccess.remove_absolute(entry["file"])
+
+
+## A roll in a few words, for the board's list of the ones before.
+static func roll_summary(roll: Dictionary) -> String:
+	var key: String = roll.get("key", "")
+	return "#%d  %d tracks, %d pedal%s%s" % [roll.get("n", 0), roll.get("tracks", 0), (roll.get("pedals", []) as Array).size(),
+			"" if (roll.get("pedals", []) as Array).size() == 1 else "s", (", " + key) if not key.is_empty() else ""]
+
+
+## The rolls before the one on the board, newest first, a few of them.
+func _past_rolls() -> Array:
+	var out := []
+	for i in range(_roll_history.size() - 1, -1, -1):
+		var prev: Dictionary = _roll_history[i]["prev_roll"]
+		if not prev.is_empty():
+			out.append(roll_summary(prev))
+		if out.size() >= 3:
+			break
+	return out
+
+
+## Host: put the project back as it was before the last roll. Refused with changes no save has
+## kept, as a roll is, since it replaces the project.
+func undo_the_roll() -> void:
+	if not Session.is_authority():
+		Session.notice.emit("Only %s can undo a roll." % Session.name_of(1))
+		return
+	if _roll_history.is_empty():
+		Session.notice.emit("Nothing to undo." if DAW.backend is OfflineBackend else "This engine cannot undo a roll.")
+		return
+	if DAW.has_unsaved_changes():
+		Session.notice.emit("Save the project first: undoing a roll replaces it.")
+		return
+	var entry: Dictionary = _roll_history.back()
+	var refused := DAW.open_project(entry["file"])
+	if not refused.is_empty():
+		Session.notice.emit("Could not bring it back: %s" % "; ".join(refused))
+		return
+	_roll_history.pop_back()
+	# It is the project it was, not the file it was kept in.
+	DAW.backend.project_path = entry["original"]
+	DAW.backend.name_project()
+	DAW.backend.mark_clean()
+	_forget(entry)
+	_rolls_this_visit = maxi(_rolls_this_visit - 1, 0)
+	var prev: Dictionary = entry["prev_roll"].duplicate(true)
+	if not prev.is_empty():
+		prev["past"] = _past_rolls()
+	_roll_shown = int(prev.get("n", 0))
+	_publish_room()
+	Session.publish_roll(prev)
+	Session.tell_room("%s undid the roll." % Session.name_of(Session.local_peer_id))
 
 
 ## The effects a roll may land: CHARACTER draws only the character kinds out of
