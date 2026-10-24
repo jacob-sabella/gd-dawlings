@@ -922,21 +922,12 @@ func _step_page(direction: int) -> void:
 func _shift(direction: int) -> void:
 	if lost or not DAW.can(DAWBackend.Capability.FX_CHAIN):
 		return
-	var order := DAW.state.track(track_index).plugins()
-	var at := order.find(fx_index)
-	var to := at + direction
-	if at < 0 or to < 0 or to >= order.size():
+	var aim := RackUnit.chain_aim(track_index, fx_index, direction)
+	if aim.is_empty():
 		return
-	# Slots are named as they are now; going down, the slot to aim for is the one past the
-	# plugin being stepped over, or past the end.
-	var aim: int
-	if direction < 0:
-		aim = order[to]
-	else:
-		aim = order[to + 1] if to + 1 < order.size() else int(order[-1]) + 1
-	_expect = [track_index, order[to]]
-	DAW.move_fx(track_index, fx_index, track_index, aim)
-	fx_index = order[to]
+	_expect = [track_index, aim[1]]
+	DAW.move_fx(track_index, fx_index, track_index, aim[0])
+	fx_index = aim[1]
 	mark_dirty()
 
 

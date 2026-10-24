@@ -22,6 +22,14 @@ const TITLES := {&"mix": "MIX", &"keys": "MY KEYS"}
 ## A channel strip's send socket is named for its track: "track_5". Its sound here is the track's
 ## cue (GodotBackend.cue_bus), where this machine plays the tracks itself.
 const TRACK := "track_"
+## An effects rack's OUT socket is named for the track it racks: "rack_5". It carries the same
+## sound as that track's SEND (the cue: the track as it leaves its effects), at the rack, so a
+## plug can go in where the effects are being worked on.
+const RACK := "rack_"
+## A rack unit's OUT is a probe at that point in its track's chain: "tap_5_2", the track as it
+## leaves slot 2's plugin, before the ones after it. Named for the slot, not the plugin, so a plug
+## stays at its place in the chain when plugins are moved past it.
+const TAP := "tap_"
 ## A player's keys, on the pack their ghost wears: "keys_7", by peer id. Their notes are played
 ## here (TheirKeys), so wherever this machine is, it hears them.
 const PLAYER := "keys_"
@@ -63,9 +71,35 @@ static func track_socket(index: int) -> StringName:
 	return StringName(TRACK + str(index))
 
 
-## The track a socket is on a strip of, or 0 for the master's.
+static func rack_socket(index: int) -> StringName:
+	return StringName(RACK + str(index))
+
+
+static func tap_socket(index: int, slot: int) -> StringName:
+	return StringName("%s%d_%d" % [TAP, index, slot])
+
+
+## The point a rack unit's OUT probes, Vector2i(track, slot), or (0, -1) for any other socket.
+static func tap_of(socket: StringName) -> Vector2i:
+	var s := String(socket)
+	if not s.begins_with(TAP):
+		return Vector2i(0, -1)
+	var parts := s.substr(TAP.length()).split("_")
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int() \
+			or int(parts[0]) <= 0 or int(parts[1]) < 0:
+		return Vector2i(0, -1)
+	return Vector2i(int(parts[0]), int(parts[1]))
+
+
+## The track a socket carries, on its strip, its rack's OUT or one of its rack's units, or 0
+## for the master's.
 static func track_of(socket: StringName) -> int:
-	return _numbered(socket, TRACK)
+	return maxi(maxi(_numbered(socket, TRACK), _numbered(socket, RACK)), tap_of(socket).x)
+
+
+## Whether a socket is a rack's OUT rather than a SEND.
+static func is_rack(socket: StringName) -> bool:
+	return _numbered(socket, RACK) > 0
 
 
 static func player_socket(peer: int) -> StringName:
@@ -106,7 +140,17 @@ static func title_of(socket: StringName) -> String:
 	if index <= 0:
 		return ""
 	var t: MixState.TrackState = DAW.state.tracks.get(index)
-	return t.display_name().to_upper() if t != null else "TRACK %d" % index
+	var track_name := t.display_name().to_upper() if t != null else "TRACK %d" % index
+	var tap := tap_of(socket)
+	if tap.x > 0:
+		var f: MixState.FXState = DAW.state.fx(index, tap.y, false) if t != null else null
+		return "%s AFTER %s" % [track_name, f.name.to_upper() if f != null and f.name != "" else "SLOT %d" % (tap.y + 1)]
+	return track_name + " RACK OUT" if is_rack(socket) else track_name
+
+
+## Where a plug is, in a sentence: "SEND MIX", "VOX RACK OUT", "VOX AFTER COMP".
+static func place_of(socket: StringName) -> String:
+	return title_of(socket) if is_rack(socket) or tap_of(socket).x > 0 else "SEND " + title_of(socket)
 
 
 ## The plugs as the room has them, for this person: one socket name per receiver.
@@ -160,6 +204,9 @@ func bus_of(receiver: int) -> StringName:
 		return TheirKeys.bus_of(player_of(s))
 	if monitor_of(s) > 0:
 		return TheirMonitor.bus_of(monitor_of(s))
+	var tap := tap_of(s)
+	if tap.x > 0:
+		return GodotBackend.tap_bus(tap.x, tap.y) if hears_tracks else &""
 	var index := track_of(s)
 	return GodotBackend.cue_bus(index) if index > 0 and hears_tracks else &""
 
@@ -169,13 +216,25 @@ func unheard(receiver: int) -> bool:
 	return sockets[receiver] != &"" and bus_of(receiver) == &""
 
 
-## The tracks patched, for their cues to be played: in order, each once.
+## The tracks patched whole, for their cues to be played: in order, each once. A probe at a
+## point in a chain is not a cue (`taps`).
 func tracks() -> Array[int]:
 	var out: Array[int] = []
 	for s in sockets:
 		var index := track_of(s)
-		if index > 0 and index not in out:
+		if index > 0 and tap_of(s).x == 0 and index not in out:
 			out.append(index)
+	out.sort()
+	return out
+
+
+## The points in chains patched, Vector2i(track, slot), for their probes to be played.
+func taps() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for s in sockets:
+		var at := tap_of(s)
+		if at.x > 0 and at not in out:
+			out.append(at)
 	out.sort()
 	return out
 

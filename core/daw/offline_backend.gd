@@ -1382,6 +1382,24 @@ func duplicate_track(index: int) -> void:
 	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
 
 
+func move_track(index: int, to: int, parent: int) -> void:
+	var indices := state.track_indices()
+	var plan := move_plan(indices.map(func(i: int) -> int: return state.track(i).folder_depth), index, to, parent)
+	if plan.is_empty():
+		return
+	var same := true
+	for n in indices.size():
+		same = same and plan["order"][n] == indices[n] and plan["depths"][n] == state.track(indices[n]).folder_depth
+	if same:
+		return
+	var before := _structure()
+	var kinds := _renumber(plan["order"], false)
+	for n in plan["depths"].size():
+		state.tracks[n + 1].folder_depth = plan["depths"][n]
+	_structure_changed(kinds)
+	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
+
+
 func remove_track(index: int) -> void:
 	var count := state.track_indices().size()
 	if index < 1 or index > count:

@@ -371,7 +371,7 @@ class Sender extends ControlAffordance:
 		var socket: StringName = face.mix.sockets[receiver]
 		if socket == &"":
 			return "in the tray"
-		return "in SEND " + PersonalMix.title_of(socket) + (": not heard on this machine" if face.mix.unheard(receiver) else "")
+		return "in " + PersonalMix.place_of(socket) + (": not heard on this machine" if face.mix.unheard(receiver) else "")
 
 	func hint() -> String:
 		return "click to bring it back" if _out else "drag onto a SEND socket"

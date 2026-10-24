@@ -284,6 +284,21 @@ ergonomics.
       button's click box, so its own box stands out in front of the panel, where a plug does.
       A row of bright nickel nuts read as white rings, louder than the lamps, so they are dark
       satin now.
+- [x] Every effects rack has an OUT, and its chain can be reordered and probed (the user's ask,
+      2026-10-24: "a generic output patch to every effects rack I can plug one of the wireless
+      receivers into for my headphones", then "it should represent the chain in order. the idea
+      being you can probe at a specific point").
+      Done: the rack's own OUT on its top rail (`rack_N`, the track as it leaves the whole chain:
+      the same sound as its strip's SEND, which is the cue), and an OUT on every unit
+      (`tap_N_S`, `PersonalMix.tap_socket`): the track as it leaves slot S, before the plugins
+      after it. `GodotBackend.set_taps` plays each probe on a bus of its own holding the track
+      bus's own effect objects up to that slot, so a knob on the rack turns the probe too. Each
+      unit shows its place in the chain on its left ear between EARLIER and LATER
+      (`RackUnit.shift`, the DAW's `move_fx`, the same aim as the plugin tablet's CHAIN). A probe
+      is named for its slot, not its plugin, so a plug stays at its point in the chain while
+      plugins are moved past it. Same limits as a strip's SEND: heard where this machine plays
+      the tracks (the built-in engine on a host); a guest's or a Reaper host's tablet says
+      "not here".
 - [x] Other players' gear into the personal mix: a send socket on someone else's instrument or mic.
       Needs their notes (played here on the same instrument) or their audio sent across the
       session. Say what latency it adds.

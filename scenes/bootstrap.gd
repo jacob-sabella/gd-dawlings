@@ -197,6 +197,34 @@ func _ready() -> void:
 	if args["stage"]:
 		stage.open()
 
+	# The whole mix as a flat DAW: F2, or `--flat` to start in it.
+	var flat := FlatView.new()
+	flat.name = "FlatView"
+	flat.studio = studio
+	flat.in_headset = medium != Presentation.Medium.SCREEN
+	flat.said.connect(func(text: String): Session.notice.emit(text))
+	add_child(flat)
+	if args["flat"]:
+		flat.set_open(true)
+	var fx: Vector2i = args["flat_fx"]
+	if fx.x > 0:
+		flat.view.effect_panel.show_effect(ProjectBridge.id_of(fx.x), fx.y)
+	for spec: String in args["flat_lanes"]:
+		var lane := spec.get_slice("@", 0)
+		var id := ProjectBridge.id_of(lane.get_slice(":", 0).to_int())
+		var target := lane.substr(lane.find(":") + 1)
+		if spec.contains("@"):
+			var points: Array = []
+			for pair in spec.get_slice("@", 1).split(","):
+				points.append([pair.get_slice(":", 0).to_float(), pair.get_slice(":", 1).to_float(), DawKitAutomation.LINEAR])
+			flat.host.set_automation(id, target, points)
+		flat.view.arrange.show_lane(id, target)
+	if args["flat_view"] >= 0:
+		flat.view.show_view(clampi(args["flat_view"], 0, 2))
+	var clip: Vector2i = args["flat_clip"]
+	if clip.x > 0:
+		flat.view.open_clip(ProjectBridge.id_of(clip.x), clip.y)
+
 
 ## The backend is started BEFORE the studio is built, and the order matters: surfaces build
 ## themselves from whatever is in the state cache, so a studio built first would come up as an
@@ -227,7 +255,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -388,6 +416,28 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 				out["xr"] = true
 				out["xr_sim"] = true
 			"--stage": out["stage"] = true
+			"--flat": out["flat"] = true
+			# `--flat-fx 2:0`: the 2D view's controls for track 2's first effect, for a photograph.
+			"--flat-fx":
+				i += 1
+				if i < argv.size() and argv[i].contains(":"):
+					out["flat_fx"] = Vector2i(argv[i].get_slice(":", 0).to_int(), argv[i].get_slice(":", 1).to_int())
+			# `--flat-clip 2:0`: the 2D view's piano roll on track 2's first clip, for a photograph.
+			"--flat-clip":
+				i += 1
+				if i < argv.size() and argv[i].contains(":"):
+					out["flat_clip"] = Vector2i(argv[i].get_slice(":", 0).to_int(), argv[i].get_slice(":", 1).to_int())
+			# `--flat-lane 7:volume` (repeatable): the 2D view shows that automation lane; with
+			# `@1:-6,6:0` after it, the lane is drawn with those points first, for a photograph.
+			# `--flat-view 0`: the 2D view's arrangement (0), mixer (1) or both (2).
+			"--flat-view":
+				i += 1
+				if i < argv.size():
+					out["flat_view"] = int(argv[i])
+			"--flat-lane":
+				i += 1
+				if i < argv.size() and argv[i].contains(":"):
+					out["flat_lanes"].append(argv[i])
 			"--view":
 				# `--view 32:64` -- start and span in seconds, for photographing the timeline
 				# at a zoom. Same reason as --place: a view you have to drag your way into
@@ -577,7 +627,7 @@ func _process(_delta: float) -> void:
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
 	if OS.has_feature("template"):
 		# A sent-out build: what it is, and where the rest is said (WelcomeCard).
-		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back" % [
+		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  F2 2D view  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back" % [
 			role_name, DAW.summary(), _track_count()]
 		return
 	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [

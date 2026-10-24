@@ -158,6 +158,18 @@ func _ready() -> void:
 	_test_a_personal_mix_adds_up_its_receivers()
 	await _test_the_tablet_patches_your_headphones()
 	_test_a_track_has_a_cue_for_headphones()
+	await _test_a_rack_has_outs_to_probe_its_chain()
+	await _test_the_flat_view_is_the_mix_in_2d()
+	_test_clips_edited_in_2d_are_edited_at_the_desk()
+	_test_notes_edited_in_2d_are_edited_at_the_desk()
+	_test_the_song_edited_in_2d_is_the_desks()
+	_test_automation_drawn_in_2d_is_the_desks()
+	_test_projects_saved_and_opened_in_2d_are_the_desks()
+	_test_the_2d_view_is_drawn_for_the_readers_eyes()
+	await _test_the_2d_view_is_a_panel_in_the_room_in_a_headset()
+	_test_a_track_moves_in_and_out_of_folders()
+	_test_tracks_edited_in_2d_are_edited_at_the_desk()
+	_test_effects_and_sends_edited_in_2d_are_the_desks()
 	await _test_a_strip_send_puts_one_track_in_your_headphones()
 	await _test_a_players_keys_pack_puts_their_playing_in_your_headphones()
 	await _test_their_monitor_plays_their_notes_where_they_heard_them()
@@ -8816,6 +8828,92 @@ func _test_a_strip_send_puts_one_track_in_your_headphones() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	check("leaving the studio lets every cue go", backend.cues().is_empty())
+	Session.role = saved_role
+	Session.layout = saved_layout
+	_offline()
+
+
+## Every effects rack has an OUT for a wireless plug: the rack's own on its top rail (the whole
+## chain), and one on every unit (the chain up to and including that plugin, a probe at that
+## point). Its units can be moved up and down the chain from the rack, and a probe stays at its
+## point as they move.
+func _test_a_rack_has_outs_to_probe_its_chain() -> void:
+	await get_tree().process_frame
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	var saved_role := Session.role
+	Session.role = Session.Role.SOLO
+	AudioPorts.ensure_buses()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var index: int = DAW.state.track_indices()[0]
+	for kind in [&"eq", &"compressor", &"reverb"]:
+		backend.add_effect(index, kind)
+	var rack := studio.rack
+	rack.show_track(index)
+	for _f in 4:
+		await get_tree().process_frame
+	var outs := rack.out_sockets()
+	var order := DAW.state.track(index).plugins()
+	check("the rack has its own OUT and one per unit (%d for %d plugins)" % [outs.size(), order.size()],
+			outs.size() == order.size() + 1 and outs[0].source == PersonalMix.rack_socket(index)
+			and outs[2].source == PersonalMix.tap_socket(index, order[1]))
+	check("a unit's OUT says where in the chain it listens (%s)" % outs[2].title(),
+			outs[2].title().begins_with("OUT") and outs[2].title().contains("AFTER"))
+	var units := rack.find_children("Rack_t*", "RackUnit", true, false)
+	check("each unit shows its place in the chain", units.size() == 3 and units.all(func(u: RackUnit) -> bool:
+			return (u.get_node("ChainSlot") as Label3D).text == str(order.find(u.fx_index) + 1)))
+
+	studio._on_patch_asked(0, outs[2].source)
+	studio._on_patch_asked(1, outs[0].source)
+	check("plugs in a unit's OUT and the rack's are seen in them", outs[2].plug_count() == 1 and outs[0].plug_count() == 1
+			and outs[1].plug_count() == 0)
+	check("PersonalMix tells a probe from a whole track", studio.personal.taps() == [Vector2i(index, order[1])]
+			and studio.personal.tracks() == [index])
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var phones := studio.items.items[&"headphones"] as HeadphonesItem
+	hand.pick_up(phones)
+	hand.wear()
+	var tap := GodotBackend.tap_bus(index, order[1])
+	var tb := AudioServer.get_bus_index(tap)
+	var own: int = backend._bus[index]
+	check("headphones on, the probe plays, through the chain up to its unit and no further (%s)" % [backend.taps()],
+			backend.taps() == [Vector2i(index, order[1])] and tb >= 0 and AudioServer.get_bus_effect_count(tb) == 2
+			and AudioServer.get_bus_effect(tb, 0) == AudioServer.get_bus_effect(own, 1)
+			and AudioServer.get_bus_effect(tb, 1) == AudioServer.get_bus_effect(own, 2)
+			and is_zero_approx(Ears.gain_db(tap)))
+	check("and the rack's OUT is the whole track's cue", backend.cues() == [index]
+			and is_zero_approx(Ears.gain_db(GodotBackend.cue_bus(index))))
+
+	var first_name := DAW.state.fx(index, order[0]).name
+	var second_name := DAW.state.fx(index, order[1]).name
+	check("the first unit cannot go earlier", RackUnit.chain_aim(index, order[0], -1).is_empty())
+	var top: RackUnit = units.filter(func(u: RackUnit) -> bool: return u.fx_index == order[0])[0]
+	top.shift(1)
+	for _f in 4:
+		await get_tree().process_frame
+	check("LATER on the rack moves a plugin down the chain (%s, %s)" % [DAW.state.fx(index, order[0]).name, DAW.state.fx(index, order[1]).name],
+			DAW.state.fx(index, order[0]).name == second_name and DAW.state.fx(index, order[1]).name == first_name)
+	outs = rack.out_sockets()
+	tb = AudioServer.get_bus_index(tap)
+	check("the probe stays at its point in the chain, and is still seen there", outs.size() == 4
+			and outs[2].plug_count() == 1 and tb >= 0 and AudioServer.get_bus_effect_count(tb) == 2
+			and AudioServer.get_bus_effect(tb, 1) == AudioServer.get_bus_effect(backend._bus[index], 2))
+
+	studio._on_patch_asked(0, &"")
+	check("pulled out, the probe goes", backend.taps().is_empty() and AudioServer.get_bus_index(tap) < 0)
+	hand.take_off()
+	hand.lose_carrying()
+	phones.snap_home()
+	studio.queue_free()
+	await get_tree().process_frame
+	check("leaving the studio lets every probe go", backend.taps().is_empty() and backend.cues().is_empty())
 	Session.role = saved_role
 	Session.layout = saved_layout
 	_offline()
@@ -22657,3 +22755,472 @@ func _test_an_instrument_plugin_plays_a_tracks_notes() -> void:
 	check("bypassed, the track goes back to the built-in instrument", DAW.track_instrument(6) == null)
 	backend.close()
 	PluginCatalogue.use_only([])
+
+
+## F2's 2D view (FlatView): dawkit's interface over the game's own mix, every edit made at the desk.
+func _test_the_flat_view_is_the_mix_in_2d() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var flat := FlatView.new()
+	add_child(flat)
+	await get_tree().process_frame
+	check("the 2D view starts closed", not flat.is_open() and not flat.view.visible)
+	flat.set_open(true)
+	check("it opens", flat.is_open() and flat.view.is_visible_in_tree())
+	var view := flat.view
+	view.refresh()
+	check("a strip for every track and the master (%d for %d)" % [view.mixer.strips.size(), s.tracks.size()],
+			view.mixer.strips.size() == s.tracks.size() + 1)
+	var index: int = s.track_indices()[1]
+	var id := ProjectBridge.id_of(index)
+	var strip: DawKitStrip = view.mixer.strips[id]
+	check("a strip is named for its track", strip.name_label.text == s.track(index).name)
+	var p := flat.host.project()
+	var with_parent := p.tracks.filter(func(t: DawKitTrack) -> bool: return not t.parent.is_empty())
+	var folders := s.track_indices().filter(func(i: int) -> bool: return s.track(i).folder_depth > 0)
+	check("the desk's folders are folders in 2D", folders.is_empty() or not with_parent.is_empty())
+	var clips := 0
+	for i in s.track_indices():
+		clips += s.track(i).items.size()
+	var drawn := 0
+	for t in p.tracks:
+		drawn += t.clips.size()
+	check("every item on the desk is a clip in 2D (%d of %d)" % [drawn, clips], drawn == clips and clips > 0)
+
+	strip.fader.value = DawKitLook.fader_of(-12.0)
+	close_to("a 2D fader moves the desk's", s.track(index).volume_db, -12.0, 0.05)
+	view.refresh()
+	check("and the strip says what the desk now has", strip.db_label.text == "-12.0")
+	(view.arrange.headers[id].get_node("Row/Mute") as Button).button_pressed = true
+	check("a 2D mute mutes the track", s.track(index).mute)
+	view.transport.tempo.value = 133.0
+	close_to("the 2D tempo is the song's", s.tempo, 133.0)
+	DAW.undo()
+	await get_tree().process_frame
+	view.refresh()
+	check("an undo at the desk is shown in 2D", is_equal_approx(view.transport.tempo.value, s.tempo) and not is_equal_approx(s.tempo, 133.0))
+	var moving := -1
+	for i in s.track_indices():
+		if not s.track(i).items.is_empty() and not s.track(i).items[0].locked:
+			moving = i
+			break
+	var was: float = s.track(moving).items[0].start
+	flat.host.move_clip(ProjectBridge.id_of(moving), 0, was + 2.0)
+	var moved := s.track(moving).items.any(func(it: MixState.ItemState) -> bool: return is_equal_approx(it.start, was + 2.0))
+	check("a clip dragged in 2D is an item moved at the desk", moved)
+	DAW.state.master.vu_l = 0.5
+	check("the master's meter is the desk's", is_equal_approx(flat.host.meter(DawKitProject.MASTER_ID).x, 0.5))
+
+	var f2 := InputEventKey.new()
+	f2.keycode = KEY_F2
+	f2.pressed = true
+	flat._input(f2)
+	check("F2 goes back to the room", not flat.is_open())
+	flat._input(f2)
+	check("and F2 comes back to 2D", flat.is_open())
+	flat.set_open(false)
+	flat.queue_free()
+
+
+func _test_the_2d_view_is_a_panel_in_the_room_in_a_headset() -> void:
+	DAW.use(OfflineBackend.new())
+	var eyes := Camera3D.new()
+	add_child(eyes)
+	eyes.global_position = Vector3(0.5, 1.6, 2.0)
+	eyes.rotation = Vector3(-0.3, 0.4, 0.0)
+	eyes.make_current()
+	var flat := FlatView.new()
+	flat.in_headset = true
+	add_child(flat)
+	await get_tree().process_frame
+	var panel := flat.panel
+	check("in a headset the 2D view is a panel in the room", panel != null and panel.is_inside_tree() and flat.view == panel.view)
+	check("put away until it is asked for, and in no ray's way", not panel.visible and panel.collision_layer == 0)
+	var told: Array[String] = []
+	flat.said.connect(func(text: String): told.append(text))
+	flat.set_open(true)
+	check("asked for, it is up", flat.is_open() and panel.visible and panel.collision_layer != 0)
+	check("and it says how to put it away", told.size() == 1 and "menu button" in told[0])
+	var flat_gap := panel.global_position - eyes.global_position
+	flat_gap.y = 0.0
+	close_to("it is put up at arm's length", flat_gap.length(), 1.1, 0.01)
+	var ahead := -eyes.global_basis.z
+	ahead.y = 0.0
+	check("in front of where you look", flat_gap.normalized().dot(ahead.normalized()) > 0.99)
+	check("square to you, its glass toward you", panel.global_basis.z.dot(-flat_gap.normalized()) > 0.99)
+	check("and upright", panel.global_basis.y.dot(Vector3.UP) > 0.99)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var px := Vector2(400, 300)
+	check("a point on the glass is a pixel of the view and back", panel.pixel_of(panel.world_of(px)).distance_to(px) < 0.01)
+	check("the corners of the glass are the corners of the view", panel.pixel_of(panel.to_global(Vector3(-FlatPanel.SIZE.x / 2, FlatPanel.SIZE.y / 2, 0))).length() < 0.01)
+	var loop := flat.view.transport.loop_button
+	var spot := panel.world_of(loop.get_global_rect().get_center())
+	var was := loop.button_pressed
+	var hand := Node.new()
+	add_child(hand)
+	panel.grab_begin(hand, spot)
+	panel.grab_end(hand)
+	check("a hand pressing on LOOP on the glass presses LOOP", loop.button_pressed != was)
+	check("and the song loops as it does from the desk", DAW.state.looping == loop.button_pressed)
+	panel.grab_begin(hand, spot)
+	panel._process(FlatPanel.HOLD_SECONDS + 0.1)
+	panel.grab_end(hand)
+	check("a press held still is the right button, not a click", loop.button_pressed != was and panel._held_still == false)
+	var ruler := flat.view.arrange.ruler
+	var on_ruler := panel.world_of(ruler.get_global_rect().position + Vector2(ruler.size.x * 0.6, ruler.size.y - 6))
+	panel.grab_begin(hand, on_ruler)
+	panel._process(FlatPanel.HOLD_SECONDS + 0.1)
+	panel.grab_end(hand)
+	check("so a hand held still on the ruler opens its menu", ruler._menu != null and ruler._menu.visible)
+	if ruler._menu != null:
+		ruler._menu.hide()
+	check("the wheel is the wheel on it", panel.nudge(hand, 2, false))
+	flat.set_open(false)
+	check("put away, it is gone from the room and from rays", not panel.visible and panel.collision_layer == 0 and not flat.is_open())
+	flat.set_open(true)
+	check("and comes back where you look now", panel.visible)
+	flat.queue_free()
+	await get_tree().process_frame
+	check("it goes with the 2D view", not is_instance_valid(panel))
+	hand.queue_free()
+	eyes.queue_free()
+
+
+func _test_clips_edited_in_2d_are_edited_at_the_desk() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var host := FlatHost.new()
+	var index := -1
+	for i in s.track_indices():
+		if not s.track(i).items.is_empty() and not s.track(i).items[0].locked and s.track(i).items[0].length > 4.0:
+			index = i
+			break
+	var id := ProjectBridge.id_of(index)
+	var item: MixState.ItemState = s.track(index).items[0]
+	var start := item.start
+	var count := s.track(index).items.size()
+	host.select_clip(id, 0)
+	check("selecting in 2D selects at the desk", s.item(index, 0).selected and host.is_selected(id, 0))
+	check("and the selection is in the project the 2D view draws", host.project() != null)
+	host.split_selection(start + 2.0)
+	check("a 2D split is the desk's split", s.track(index).items.size() == count + 1
+			and is_equal_approx(s.item(index, 0).length, 2.0))
+	host.trim_clip(id, 0, start + 0.5, start + 2.0)
+	close_to("a 2D trim is the desk's trim", s.item(index, 0).start, start + 0.5)
+	host.set_clip_fades(id, 0, 0.25, 0.5)
+	check("2D fades are the desk's", is_equal_approx(s.item(index, 0).fade_in, 0.25) and is_equal_approx(s.item(index, 0).fade_out, 0.5))
+	host.set_clip_gain(id, 0, -4.0)
+	close_to("a 2D clip gain is the desk's", s.item(index, 0).gain_db, -4.0)
+	host.set_clip_muted(id, 0, true)
+	check("a 2D clip mute is the desk's", s.item(index, 0).muted)
+	host.select_clip(id, 0)
+	host.delete_selection()
+	check("a 2D delete is the desk's", s.track(index).items.size() == count)
+	DAW.undo()
+	check("and one undo at the desk brings it back", s.track(index).items.size() == count + 1)
+	host.clear_selection()
+	check("Esc in 2D selects nothing at the desk", s.selected_items().is_empty())
+	check("the desk's clip editing is offered in 2D", host.can(DawKitHost.SELECT) and host.can(DawKitHost.EDIT_CLIPS))
+
+
+func _test_notes_edited_in_2d_are_edited_at_the_desk() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var host := FlatHost.new()
+	var index := -1
+	var at := -1
+	for i in s.track_indices():
+		for k in s.track(i).items.size():
+			var it: MixState.ItemState = s.track(i).items[k]
+			if it.source == "" and not it.locked and it.notes.size() >= 2 * MidiTake.NOTE_WIDTH and it.length > 1.0:
+				index = i
+				at = k
+				break
+		if index >= 0:
+			break
+	check("the session has a MIDI clip to edit", index >= 0)
+	if index < 0:
+		return
+	var id := ProjectBridge.id_of(index)
+	var item := func() -> MixState.ItemState: return s.item(index, at)
+	var clip := host.project().track(id).clips[at]
+	check("its notes are in the project the 2D view draws", clip.note_count() == item.call().notes.size() / MidiTake.NOTE_WIDTH)
+	check("and the desk's note editing is offered in 2D", host.can(DawKitHost.NOTES))
+	var count: int = item.call().notes.size()
+	host.insert_note(id, at, 0.0, 0.2, 30)
+	var mine := func() -> int:
+		var notes: PackedFloat32Array = item.call().notes
+		for n in notes.size() / MidiTake.NOTE_WIDTH:
+			if int(notes[n * MidiTake.NOTE_WIDTH + 2]) in [30, 33]:
+				return n * MidiTake.NOTE_WIDTH
+		return -1
+	check("a note drawn in 2D is put in at the desk", item.call().notes.size() == count + MidiTake.NOTE_WIDTH and mine.call() >= 0)
+	host.move_note(id, at, mine.call() / MidiTake.NOTE_WIDTH, 0.1, 33)
+	var o: int = mine.call()
+	check("a 2D move is the desk's, in time and pitch", o >= 0 and is_equal_approx(item.call().notes[o], 0.1)
+			and int(item.call().notes[o + 2]) == 33 and is_equal_approx(item.call().notes[o + 1], 0.3))
+	host.set_note_end(id, at, mine.call() / MidiTake.NOTE_WIDTH, 0.5)
+	close_to("a 2D note's end is the desk's", item.call().notes[mine.call() + 1], 0.5)
+	host.set_note_velocity(id, at, mine.call() / MidiTake.NOTE_WIDTH, 40)
+	check("a 2D velocity is the desk's", int(item.call().notes[mine.call() + 3]) == 40)
+	host.move_note(id, at, mine.call() / MidiTake.NOTE_WIDTH, 0.13, 33)
+	host.quantize_clip(id, at, 0.25)
+	var map := s.tempo_map()
+	var beat := map.beat_at(item.call().start + item.call().notes[mine.call()]) / 0.25
+	check("a 2D quantize is the desk's", absf(beat - roundf(beat)) < 0.01)
+	host.delete_note(id, at, mine.call() / MidiTake.NOTE_WIDTH)
+	check("a 2D delete is the desk's", item.call().notes.size() == count)
+	var flat := DawKitStudio.new(host)
+	flat.size = Vector2(1280, 720)
+	add_child(flat)
+	flat.refresh()
+	flat.open_clip(id, at)
+	check("and the piano roll opens on it", flat.piano_roll.is_open() and flat.piano_roll.clip() != null)
+	flat.free()
+
+
+func _test_the_song_edited_in_2d_is_the_desks() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var host := FlatHost.new()
+	check("the desk's song editing is offered in 2D", host.can(DawKitHost.MARKERS) and host.can(DawKitHost.LOOP_RANGE)
+			and host.can(DawKitHost.TEMPO_MAP) and host.can(DawKitHost.COUNT_IN))
+	host.set_loop_range(12.0, 4.0)
+	check("a 2D loop range is the desk's, its start the earlier", is_equal_approx(s.loop_start, 4.0) and is_equal_approx(s.loop_end, 12.0))
+	var markers := s.markers.size()
+	host.add_marker(301.0, "Late")
+	host.add_marker(300.0, "Early")
+	var p := host.project()
+	var early := p.markers.size() - 2
+	check("2D markers are the desk's, in time order", s.markers.size() == markers + 2 and p.markers[early].name == "Early"
+			and p.markers[early + 1].name == "Late")
+	host.edit_marker(early, 302.0, "Moved")
+	check("a 2D marker moved and renamed is the desk's", s.markers.has(302.0) and str(s.markers[302.0]) == "Moved"
+			and not s.markers.has(300.0))
+	host.remove_marker(host.project().markers.size() - 1)
+	check("a 2D marker removed is gone at the desk", not s.markers.has(302.0) and s.markers.size() == markers + 1)
+	var regions := s.regions.size()
+	host.add_region(320.0, 310.0, "Outro")
+	p = host.project()
+	var at := -1
+	for i in p.regions.size():
+		if p.regions[i].name == "Outro":
+			at = i
+	check("a 2D region is the desk's", s.regions.size() == regions + 1 and at >= 0 and is_equal_approx(p.regions[at].start, 310.0))
+	host.edit_region(at, 311.0, 325.0, "Coda")
+	p = host.project()
+	var coda := false
+	for r in p.regions:
+		coda = coda or (r.name == "Coda" and is_equal_approx(r.start, 311.0) and is_equal_approx(r.end, 325.0))
+	check("a 2D region edited is the desk's", coda)
+	for i in p.regions.size():
+		if p.regions[i].name == "Coda":
+			host.remove_region(i)
+	check("and removed", s.regions.size() == regions)
+	var tempo := s.tempo
+	host.set_tempo_points([[0.0, tempo, 0], [64.0, tempo + 20.0, 0]])
+	check("a 2D tempo change is the desk's", s.tempo_points.size() == 2 and is_equal_approx(s.tempo_map().bpm_at(70.0), tempo + 20.0)
+			and is_equal_approx(s.tempo, tempo))
+	check("and the 2D view draws it", host.project().tempo_points.size() == 2)
+	host.set_meter_points([[0.0, s.beats_per_bar, s.beat_unit], [32.0, 3, 4]])
+	check("a 2D time signature change is the desk's", s.time_signature_points.size() == 2)
+	host.set_count_in(2)
+	check("a 2D count-in is the desk's", s.count_in_bars == 2 and host.count_in() == 2)
+
+
+func _test_automation_drawn_in_2d_is_the_desks() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var host := FlatHost.new()
+	check("the desk's automation is offered in 2D", host.can(DawKitHost.AUTOMATION))
+	var index := -1
+	var other := -1
+	for i in s.track_indices():
+		if not s.track(i).plugins().is_empty() and index < 0:
+			index = i
+		elif other < 0:
+			other = i
+	var id := ProjectBridge.id_of(index)
+	var t: MixState.TrackState = s.track(index)
+	host.set_automation(id, "volume", [[1.0, -6.0, 1], [3.0, 0.0, 1]])
+	check("a 2D volume lane is the desk's", (t.automation.get("volume", []) as Array).size() == 2)
+	var shown := host.project().track(id).automation_of("volume")
+	check("and the 2D view draws it", shown != null and shown.points.size() == 2 and is_equal_approx(shown.points[0][1], -6.0))
+	var slot: int = t.plugins()[0]
+	host.set_automation(id, "fx:0:1", [[2.0, 0.25, 1]])
+	check("an effect's lane is named by its slot at the desk", t.automation.has("fx:%d:1" % slot))
+	check("and by its place in the chain in 2D", host.project().track(id).automation_of("fx:0:1") != null)
+	host.set_automation(id, "send:" + ProjectBridge.id_of(other), [[0.5, -10.0, 1]])
+	check("a send's lane is named by the track it goes to", t.automation.has("send:%d" % other)
+			and host.project().track(id).automation_of("send:" + ProjectBridge.id_of(other)) != null)
+	host.set_automation(id, "volume", [])
+	check("an empty lane takes it away at the desk", not t.automation.has("volume") or (t.automation["volume"] as Array).is_empty())
+	check("a lane the desk cannot name is not sent", FlatHost.desk_lane(t, "fx:99:0") == "" and FlatHost.desk_lane(t, "nonsense") == "")
+
+
+func _test_projects_saved_and_opened_in_2d_are_the_desks() -> void:
+	DAW.use(OfflineBackend.new())
+	var host := FlatHost.new()
+	var heard: Array[String] = []
+	host.said.connect(func(text: String): heard.append(text))
+	check("the desk's project files are offered in 2D", host.can(DawKitHost.FILES) and host.can(DawKitHost.SAVE)
+			and host.file_extension() == "dawproject")
+	var path := ProjectSettings.globalize_path("user://flat_2d_test.dawproject")
+	host.save_project_as(path.get_basename())
+	check("a 2D save as is the desk's, with the extension", FileAccess.file_exists(path) and host.project_file() == path)
+	check("and said, and remembered", not heard.is_empty() and heard.back().begins_with("Saved") and host.recent_files()[0] == path)
+	DAW.set_track_volume(DAW.state.track_indices()[0], 0.4)
+	check("an edit at the desk is unsaved in 2D", host.is_dirty())
+	host.save_project()
+	check("a 2D save keeps it", not host.is_dirty())
+	var count := DAW.state.track_indices().size()
+	host.new_project()
+	check("a 2D new project is the desk's", heard.back() == "New project." and DAW.state.track_indices().size() != count or host.project_file() != path)
+	host.open_project(path)
+	check("a 2D open is the desk's", host.project_file() == path and heard.back().begins_with("Opened")
+			and DAW.state.track_indices().size() == count)
+	host.open_project(path + ".missing")
+	check("a file that will not open is said", heard.back().begins_with("Could not") and host.project_file() == path)
+	Session.notice.emit("Only the host can do that.")
+	check("what the session says is the status line's", heard.back() == "Only the host can do that.")
+	var flat := FlatView.new()
+	add_child(flat)
+	var was := get_window().title
+	flat.set_open(true)
+	check("the window says the project while the 2D view is up", get_window().title.begins_with(DAW.project_title()) and get_window().title != was)
+	flat.set_open(false)
+	check("and what it said before once it closes", get_window().title == was)
+	flat.free()
+	DirAccess.remove_absolute(path)
+	DAW.use(OfflineBackend.new())
+
+
+func _test_the_2d_view_is_drawn_for_the_readers_eyes() -> void:
+	var was := Ergonomics.current
+	for vision in [Ergonomics.ColourVision.FULL, Ergonomics.ColourVision.DEUTAN, Ergonomics.ColourVision.PROTAN,
+			Ergonomics.ColourVision.TRITAN, Ergonomics.ColourVision.MONO]:
+		var eyes := Ergonomics.new()
+		eyes.colour_vision = vision
+		Ergonomics.current = eyes
+		var flat := FlatView.new()
+		add_child(flat)
+		var worst := 99.0
+		for group in [[DawKitLook.ARM, DawKitLook.SOLO, DawKitLook.MUTE], [DawKitLook.METER_LOW, DawKitLook.METER_HIGH, DawKitLook.METER_CLIP]]:
+			for i in group.size():
+				for j in range(i + 1, group.size()):
+					worst = minf(worst, eyes.separation(group[i], group[j]))
+		check("the 2D view's record, solo and mute, and its meter's ranges, stay apart for vision %d (%.2f)" % [vision, worst], worst > 0.30)
+		flat.free()
+	var big := Ergonomics.new()
+	big.text_scale = 1.5
+	Ergonomics.current = Ergonomics.new()
+	var flat := FlatView.new()
+	add_child(flat)
+	var first := flat.view
+	Ergonomics.current = big
+	flat.set_open(true)
+	check("the 2D view's text follows the game's text scale", flat.view != first and flat.view.theme.default_font_size == roundi(13 * 1.5))
+	flat.set_open(false)
+	flat.free()
+	Ergonomics.current = was
+	DawKitLook.use_signals({})
+	DawKitLook.set_text_scale(1.0)
+
+
+func _test_a_track_moves_in_and_out_of_folders() -> void:
+	# 1 folder holding 2 and 3; 4 at the top.
+	var depths := [1, 0, -1, 0]
+	var plan := DAWBackend.move_plan(depths, 4, 2, 1)
+	check("a track moved into a folder", plan.get("order") == [1, 4, 2, 3] and plan.get("depths") == [1, 0, 0, -1])
+	plan = DAWBackend.move_plan(depths, 1, 2, 0)
+	check("a folder moves with what is in it", plan.get("order") == [4, 1, 2, 3] and plan.get("depths") == [0, 1, 0, -1])
+	plan = DAWBackend.move_plan(depths, 3, 4, 0)
+	check("a folder's last track moved out closes it before", plan.get("order") == [1, 2, 4, 3] and plan.get("depths") == [1, -1, 0, 0])
+	check("a folder is not put inside itself", DAWBackend.move_plan(depths, 1, 3, 2).is_empty())
+	check("nor a track in a folder it would not be in", DAWBackend.move_plan(depths, 4, 1, 1).is_empty())
+	plan = DAWBackend.move_plan(depths, 2, 4, 0)
+	check("the folder's first track moved to the end", plan.get("order") == [1, 3, 4, 2] and plan.get("depths") == [1, -1, 0, 0])
+
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var names: Array = s.track_indices().map(func(i: int): return s.track(i).name)
+	var last: int = s.track_indices().back()
+	var moving: String = s.track(last).name
+	DAW.move_track(last, 1, 0)
+	check("the desk moves a track to the top", s.track(1).name == moving and s.track(1).folder_depth == 0)
+	check("and it is a step to undo, called what it was", "move track" in DAW.backend.acting or s.undo_depth > 0)
+	DAW.undo()
+	check("one undo puts every track back", s.track_indices().map(func(i: int): return s.track(i).name) == names)
+	DAW.apply_intent(&"move_track", ["x", 1, 0])
+	check("a malformed move from a guest is refused", s.track_indices().map(func(i: int): return s.track(i).name) == names)
+	check("the built-in desk can reorder tracks", DAW.can(DAWBackend.Capability.TRACK_ORDER))
+
+
+func _test_tracks_edited_in_2d_are_edited_at_the_desk() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var host := FlatHost.new()
+	var count := s.track_indices().size()
+	host.add_track("", "Choir")
+	check("a track added in 2D is added at the desk, at the end", s.track_indices().size() == count + 1 and s.track(count + 1).name == "Choir")
+	var id := ProjectBridge.id_of(count + 1)
+	host.rename_track(id, "Choir 2")
+	check("renamed in 2D", s.track(count + 1).name == "Choir 2")
+	host.set_track_colour(id, Color(0.2, 0.4, 0.9))
+	check("coloured in 2D", s.track(count + 1).colour.is_equal_approx(Color(0.2, 0.4, 0.9)))
+	host.move_track(id, 0, "")
+	check("moved to the top in 2D", s.track(1).name == "Choir 2" and host.project().tracks[0].name == "Choir 2")
+	host.duplicate_track("t1")
+	check("duplicated in 2D", s.track(2).name == "Choir 2" and s.track_indices().size() == count + 2)
+	host.remove_track("t2")
+	host.remove_track("t1")
+	check("removed in 2D", s.track_indices().size() == count and not s.track_indices().any(func(i: int): return s.track(i).name == "Choir 2"))
+	check("the 2D view may add and move tracks here", host.can(DawKitHost.TRACKS) and host.can(DawKitHost.TRACK_ORDER))
+
+
+func _test_effects_and_sends_edited_in_2d_are_the_desks() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var host := FlatHost.new()
+	check("the 2D view offers the desk's effects", not host.effect_choices().is_empty() and host.can(DawKitHost.EFFECTS))
+	var index: int = s.track_indices().filter(func(i: int) -> bool: return not s.track(i).plugins().is_empty())[0]
+	var id := ProjectBridge.id_of(index)
+	var before := s.track(index).plugins().size()
+	var choice: String = host.effect_choices()[0][0]
+	host.add_effect(id, choice)
+	var t := s.track(index)
+	check("an effect added in 2D is on the desk's chain, last", t.plugins().size() == before + 1
+			and host.project().track(id).effects.size() == before + 1)
+	var last := before
+	host.set_effect_enabled(id, last, false)
+	check("bypassed in 2D", not (t.fx[t.plugins()[last]] as MixState.FXState).enabled)
+	host.set_effect_wet(id, last, 0.4)
+	close_to("its wet in 2D", (t.fx[t.plugins()[last]] as MixState.FXState).wet, 0.4)
+	var e := host.project().track(id).effects[last]
+	if not e.values.is_empty():
+		host.set_effect_value(id, last, 0, 0.3)
+		close_to("a control moved in 2D", float((t.fx[t.plugins()[last]] as MixState.FXState).params.get(0, -1.0)), 0.3, 0.001)
+	if before > 0:
+		var name_last := host.project().track(id).effects[last].name
+		host.move_effect(id, last, "", 0)
+		check("moved first in its chain in 2D", host.project().track(id).effects[0].name == name_last)
+		host.move_effect(id, 0, "", last)
+		check("and back to last", host.project().track(id).effects[last].name == name_last)
+	host.remove_effect(id, last)
+	check("removed in 2D", t.plugins().size() == before)
+	var to: int = s.track_indices()[3]
+	var sends := host.project().track(id).sends.size()
+	host.add_send(id, ProjectBridge.id_of(to))
+	var sent := host.project().track(id).sends
+	check("a send made in 2D is the desk's", sent.size() == sends + 1 and sent.back().target == ProjectBridge.id_of(to))
+	host.set_send_level(id, sends, -9.0)
+	close_to("its level set in 2D", host.project().track(id).sends[sends].volume_db, -9.0, 0.05)
+	host.set_send_pre_fader(id, sends, true)
+	check("before the fader in 2D", host.project().track(id).sends[sends].pre_fader)
+	host.remove_send(id, sends)
+	check("removed in 2D", host.project().track(id).sends.size() == sends)
+	# The engine's buses go with it a frame later; the next check's engine must not lose its own.
+	DAW.use(OfflineBackend.new())

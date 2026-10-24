@@ -1288,6 +1288,35 @@ function handlers.DuplicateTrack(args)
   return {ok = true}
 end
 
+-- args: the old track numbers in their new order, then each track's folder depth in that order
+-- (the desk's DAWBackend.move_plan). Each track is put in its place in turn, then the folders set.
+-- One undo point. Not yet run against a live Reaper.
+function handlers.ReorderTracks(args)
+  local count = math.floor(#args / 2)
+  if count ~= reaper.CountTracks(0) then return {ok = false, error = 'the desk sees another number of tracks'} end
+  local old = {}
+  for i = 0, count - 1 do old[i + 1] = reaper.GetTrack(0, i) end
+  local selected = {}
+  for i = 1, count do selected[i] = {old[i], reaper.IsTrackSelected(old[i])} end
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+  for n = 1, count do
+    local tr = old[math.floor(args[n])]
+    if not tr then break end
+    for i = 0, count - 1 do reaper.SetTrackSelected(reaper.GetTrack(0, i), false) end
+    reaper.SetTrackSelected(tr, true)
+    reaper.ReorderSelectedTracks(n - 1, 0)
+  end
+  for n = 1, count do
+    reaper.SetMediaTrackInfo_Value(reaper.GetTrack(0, n - 1), 'I_FOLDERDEPTH', math.floor(args[count + n]))
+  end
+  for _, row in ipairs(selected) do reaper.SetTrackSelected(row[1], row[2]) end
+  reaper.PreventUIRefresh(-1)
+  reaper.TrackList_AdjustWindows(false)
+  reaper.Undo_EndBlock('Move track', -1)
+  return {ok = true}
+end
+
 -- args: track. Gone, with its items and the sends to it, as Remove tracks does.
 function handlers.DeleteTrack(args)
   local tr = track_from_osc(args[1])

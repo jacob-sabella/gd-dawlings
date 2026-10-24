@@ -83,6 +83,8 @@ var _master_bus := -1
 var _capture: AudioEffectCapture
 ## The tracks being cued, in order.
 var _cues: Array[int] = []
+## The points in a chain being probed (`set_taps`): Vector2i(track, slot), in order.
+var _taps: Array[Vector2i] = []
 ## The song clock (`_drive_meters`): a silent loop, how many times it has gone round, where it was
 ## last read, the song position at its zero, and the playhead as it last set it.
 const CLOCK_SECONDS := 8.0
@@ -408,7 +410,7 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 		AudioServer.add_bus_effect(_bus[track_index], _make_effect(kind))
 		_apply_fx(track_index, fx_index)
 		_build_sends(track_index)
-		if track_index in _cues:
+		if _cued(track_index):
 			_build_cues()
 	state.fx_changed.emit(track_index, fx_index)
 	return fx_index
@@ -510,7 +512,7 @@ func _restack(track_index: int) -> void:
 	_build_sends(track_index)
 	for fx_index in order:
 		_apply_fx(track_index, fx_index)
-	if track_index in _cues:
+	if _cued(track_index):
 		_build_cues()
 
 
@@ -615,7 +617,7 @@ func _build_buses() -> void:
 	_built_sends.clear()
 	for index in state.track_indices():
 		_build_sends(index)
-	if not _cues.is_empty():
+	if not _cues.is_empty() or not _taps.is_empty():
 		_build_cues()
 
 
@@ -703,6 +705,37 @@ func cues() -> Array[int]:
 	return _cues.duplicate()
 
 
+## The bus a probe at one point in a track's chain plays on: the track as it leaves the plugin in
+## `slot`, before the ones after it. Heard only through headphones, as a cue is.
+static func tap_bus(index: int, slot: int) -> StringName:
+	return StringName("%s%d after %d" % [CUE_PREFIX, index, slot])
+
+
+## Play a probe at each of `points` (Vector2i(track, slot)), and of nothing else: for a personal
+## mix with a plug in a rack unit's OUT. A cue cut short: the same part, through the track's own
+## effects up to and including that slot, before its fader.
+func set_taps(points: Array) -> void:
+	var want: Array[Vector2i] = []
+	for p in points:
+		var at := p as Vector2i
+		if state.tracks.has(at.x) and at.y >= 0 and at not in want:
+			want.append(at)
+	want.sort()
+	if want == _taps:
+		return
+	_taps = want
+	_build_cues()
+
+
+func taps() -> Array[Vector2i]:
+	return _taps.duplicate()
+
+
+## Whether a track has a cue or a probe on it, which an effect changing must build again.
+func _cued(index: int) -> bool:
+	return index in _cues or _taps.any(func(t: Vector2i) -> bool: return t.x == index)
+
+
 ## The cue buses and their players, made again from `_cues`. Each bus holds the track bus's own
 ## effect objects, so a knob on the rack turns the cue's too; an effect added, removed or moved
 ## changes those objects, and comes here again.
@@ -735,6 +768,23 @@ func _build_cues() -> void:
 		p.set_meta(&"cue", true)
 		add_child(p)
 		_players[index].append(p)
+	for at in _taps:
+		if not _bus.has(at.x):
+			continue
+		var b: int = _bus[at.x]
+		var tb := AudioServer.bus_count
+		AudioServer.add_bus(tb)
+		AudioServer.set_bus_name(tb, tap_bus(at.x, at.y))
+		AudioServer.set_bus_send(tb, &"Master")
+		# Past the panner, up to and including the probed slot (bus slot 1 + fx slot).
+		for slot in range(1, mini(at.y + 2, AudioServer.get_bus_effect_count(b))):
+			AudioServer.add_bus_effect(tb, AudioServer.get_bus_effect(b, slot))
+			AudioServer.set_bus_effect_enabled(tb, slot - 1, AudioServer.is_bus_effect_enabled(b, slot))
+		var tp := AudioStreamPlayer.new()
+		tp.bus = tap_bus(at.x, at.y)
+		tp.set_meta(&"cue", true)
+		add_child(tp)
+		_players[at.x].append(tp)
 	_apply_tracks()
 
 

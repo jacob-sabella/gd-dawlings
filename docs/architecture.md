@@ -231,6 +231,20 @@ in the same way, crediting the guest.
 What moves into dawkit next, step by step: the file format, then the mixer and transport
 (today `GodotBackend` here), then everything after.
 
+### The 2D view: dawkit's interface over the game's mix
+
+F2 (or `--flat`) puts dawkit's 2D DAW interface (`DawKitStudio`, `vendor/dawkit/addons/dawkit/ui/`)
+over the room: `FlatView` (`scenes/flat_view.gd`). The interface asks a `DawKitHost` for every
+change, and the game's is `FlatHost` (`core/flat/flat_host.gd`): it reads the state cache as a
+project (any backend, a guest's copy too) and turns every edit into a `DAW` call, so a fader
+moved in 2D is a fader moved at the desk, one undo step, sent to the host from a guest. The room
+keeps playing behind it; its keys and clicks stop at the 2D view. In a headset (holding the
+menu button, or F2) the same view is a panel in the room instead, `FlatPanel`
+(`core/flat/flat_panel.gd`): a SubViewport on a quad drawn over the room, and a control like a
+fader is, so the ray, a poke or the mouse all reach it the same way -- hover is the pointer, a
+grab is the left button, a press held still is the right, a nudge is the wheel. How the
+interface was built, a slice at a time: `docs/flat_loop.md`.
+
 ### Its file format: DAWproject
 
 The built-in engine saves and opens **DAWproject** (`.dawproject`,

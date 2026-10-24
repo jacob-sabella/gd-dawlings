@@ -209,6 +209,11 @@ static func _effect(backend: OfflineBackend, t: MixState.TrackState, fx_index: i
 	return e
 
 
+## An item of the desk's as a project's clip.
+static func clip_of(item: MixState.ItemState) -> DawKitClip:
+	return _clip(item)
+
+
 static func _clip(item: MixState.ItemState) -> DawKitClip:
 	var c := DawKitClip.new()
 	c.start = item.start

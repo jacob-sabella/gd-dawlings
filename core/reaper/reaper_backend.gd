@@ -197,6 +197,9 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.TRACK_ORDER:
+		# Only ReaScript can move a track; and only with the whole project in view is the plan whole.
+		return _bridge != null and _bridge.is_open() and _whole_project_in_bank()
 	if capability == Capability.PROJECT_FILES:
 		# Reaper's files are on Reaper's machine, opened by Reaper's own dialogs.
 		return false
@@ -864,6 +867,23 @@ func duplicate_track(index: int) -> void:
 		state.bank_changed.emit()
 	tracks_renumbered.emit(_map_of(order))
 	_restructure("DuplicateTrack", [index])
+
+
+## The whole new order and every folder depth go to the bridge, which lays Reaper's tracks out
+## to match: one plan, worked out here the same as for the built-in engine.
+func move_track(index: int, to: int, parent: int) -> void:
+	var indices := state.track_indices()
+	if not _whole_project_in_bank():
+		return
+	var plan := move_plan(indices.map(func(i: int) -> int: return state.track(i).folder_depth), index, to, parent)
+	if plan.is_empty():
+		return
+	var map := _locally_renumber(plan["order"])
+	for n in plan["depths"].size():
+		state.tracks[n + 1].folder_depth = plan["depths"][n]
+	state.bank_changed.emit()
+	tracks_renumbered.emit(map)
+	_restructure("ReorderTracks", plan["order"] + plan["depths"])
 
 
 func remove_track(index: int) -> void:

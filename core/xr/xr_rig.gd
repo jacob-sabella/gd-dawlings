@@ -28,6 +28,10 @@ signal calibration_step(step: int, total: int)
 ## keyboard (studio.gd), because a panel pinned to the face whose handle you cannot find is a
 ## panel you cannot otherwise get rid of.
 signal escape_requested
+## The menu button held down for MENU_HOLD: the 2D view, up in front of you or put away. A tap
+## is still the way out (above), and comes first, so whatever is in the way is gone before the
+## panel arrives.
+signal flat_requested
 
 ## The tip of the controller, not its tracked centre. A controller's pose is reported somewhere
 ## around the user's fist; the point they will actually press against a floor mark is ahead of
@@ -39,6 +43,7 @@ const PRESS_ACTION := &"trigger_click"
 const MENU_ACTION := &"menu_button"
 const FIST_ACTION := &"grip_click"
 const ESCAPE_HOLD := 0.5
+const MENU_HOLD := 0.8
 ## Where each bare hand's joints are reported.
 const HAND_TRACKERS := {&"left_hand": &"/user/hand_tracker/left", &"right_hand": &"/user/hand_tracker/right"}
 
@@ -58,6 +63,7 @@ var _marks_taken := 0
 var _calibrate_was_down := false
 var _menu_was_down := false
 var _fists_for := 0.0
+var _menu_for := 0.0
 ## Per hand (the controller node): its fingertip and its drawn joints.
 var pokes: Dictionary = {}
 var skeletons: Dictionary = {}
@@ -211,6 +217,12 @@ func _watch_escape(delta: float) -> void:
 	if menu and not _menu_was_down:
 		escape_requested.emit()
 	_menu_was_down = menu
+	if menu:
+		_menu_for += delta
+		if _menu_for >= MENU_HOLD and _menu_for - delta < MENU_HOLD:
+			flat_requested.emit()
+	else:
+		_menu_for = 0.0
 	if fists == 2:
 		_fists_for += delta
 		if _fists_for >= ESCAPE_HOLD and _fists_for - delta < ESCAPE_HOLD:

@@ -49,6 +49,10 @@ var pinned := false
 
 var _picker: TabletSelector
 var _empty_label: Label3D
+## The rack's own OUT, on the top rail past the track's colour chip: the racked track as it leaves
+## the whole chain (PersonalMix.rack_socket). Each unit has an OUT of its own for a point inside it.
+var out_socket: SendSocket
+var _units: Array[RackUnit] = []
 ## The racked chain as it was built: a rebuild is for a change to THIS, not for every plugin
 ## update anywhere in the project.
 var _built_chain := ""
@@ -164,6 +168,8 @@ func _rebuild() -> void:
 	_clear_built()
 	_picker = null
 	_empty_label = null
+	out_socket = null
+	_units.clear()
 	_settle_track()
 	_built_chain = _chain_key()
 	if not DAW.state.tracks.has(track_index):
@@ -211,6 +217,7 @@ func _rebuild() -> void:
 			unit.body_bank = banks[2]
 			unit.lamp_bank = banks[3]
 			unit.tear_requested.connect(func(t: int, f: int, at: Vector3): tear_requested.emit(t, f, at))
+			_units.append(unit)
 			# Filled from the top down so that the first track's FX are at eye level rather than
 			# at the floor: a 20-unit rack read bottom-up puts channel 1 at your ankles.
 			unit.position = Vector3(0, per_bay * unit_height - (row + 0.5) * unit_height, 0)
@@ -229,6 +236,7 @@ func _rebuild() -> void:
 		_build_track_grip(per_bay * unit_height)
 	_build_adder(per_bay * unit_height)
 	_build_find(per_bay * unit_height)
+	_build_out(per_bay * unit_height)
 	if slots.is_empty():
 		_empty_label = Label3D.new()
 		_empty_label.name = "Empty"
@@ -409,6 +417,50 @@ func _build_find(bay_height: float) -> void:
 	caption.position = find_button.position + Vector3(0, -0.014, 0.0012)
 	Lettering.range_to_legibility(caption)
 	_adopt(caption)
+
+
+## OUT on the top rail, right of the colour chip: anyone's wireless plug goes in it to hear the
+## track as the whole rack leaves it.
+func _build_out(bay_height: float) -> void:
+	out_socket = SendSocket.new()
+	out_socket.name = "RackOut"
+	out_socket.source = PersonalMix.rack_socket(track_index)
+	out_socket.kind = "OUT"
+	out_socket.label = "%s RACK" % DAW.state.track(track_index).display_name().to_upper()
+	out_socket.position = Vector3(PICKER_SIZE.x * 0.5 * PICKER_SCALE + 0.036, bay_height + PICKER_RISE, 0.002)
+	_adopt(out_socket)
+	# On a dark plate of its own: the rail glows in the track's colour, which an amber word on it
+	# disappears into.
+	var plate := MeshInstance3D.new()
+	plate.name = "RackOutPlate"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.044, PICKER_SIZE.y * PICKER_SCALE)
+	plate.mesh = quad
+	plate.material_override = Materials.cap_plastic(Color(0.05, 0.05, 0.06))
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	plate.position = out_socket.position + Vector3(0.012, 0, -0.0005)
+	_adopt(plate)
+	var caption := Label3D.new()
+	caption.name = "RackOutCaption"
+	caption.text = "OUT"
+	caption.font_size = 40
+	caption.pixel_size = 0.00019
+	caption.modulate = SendSocket.LAMP
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	caption.position = out_socket.position + Vector3(0.010, 0, 0.001)
+	Lettering.range_to_legibility(caption)
+	_adopt(caption)
+
+
+## Every OUT on this rack: its own, and each unit's, for the studio to put plugs in.
+func out_sockets() -> Array[SendSocket]:
+	var out: Array[SendSocket] = []
+	if out_socket != null and is_instance_valid(out_socket):
+		out.append(out_socket)
+	for u in _units:
+		if is_instance_valid(u) and u.out_socket != null:
+			out.append(u.out_socket)
+	return out
 
 
 func _open_plugin_search() -> void:

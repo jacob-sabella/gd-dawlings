@@ -28,6 +28,8 @@ const MOST_SHOWN := 4
 
 ## Which socket this is, by its source's name (PersonalMix.SOURCES).
 var source: StringName = &""
+## What the panel calls this kind of socket: a desk's SEND, a rack's OUT.
+var kind := "SEND"
 ## What it is called on the panel and on its hover card.
 var label := ""
 ## What a click lands on.
@@ -87,7 +89,7 @@ func personal() -> bool:
 
 
 func title() -> String:
-	return "SEND  " + label
+	return kind + "  " + label
 
 
 func readout() -> String:

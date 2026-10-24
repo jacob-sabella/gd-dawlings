@@ -66,7 +66,7 @@ const COMMANDS := [
 	&"set_looping", &"set_tempo", &"save_project", &"seek", &"set_loop_range", &"undo", &"redo", &"undo_to",
 	&"select_item", &"clear_item_selection", &"select_all_items", &"select_track_items", &"move_item", &"split_selected",
 	&"delete_selected", &"ripple_delete_selected", &"glue_selected", &"nudge_selected", &"duplicate_selected", &"trim_item", &"ripple_move_item", &"ripple_trim_item", &"set_item_gain", &"process_item", &"set_item_fades", &"set_item_fade_shape", &"crossfade_items", &"set_item_muted", &"set_item_locked", &"set_item_reversed", &"set_item_lane", &"set_comp", &"set_item_controls", &"flatten_comp", &"freeze_track", &"thaw_track", &"copy_selected_to",
-	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
+	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"move_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
@@ -673,6 +673,10 @@ const TRACK_NAME_MAX := 64
 func add_track(at: int, track_name := "") -> void:
 	_do(&"add_track", [maxi(at, 1), track_name.left(TRACK_NAME_MAX)])
 func remove_track(index: int) -> void: _do(&"remove_track", [index])
+## Track `index` (and what is in it) to be track `to`, inside folder `parent` (0 for none): see
+## DAWBackend.move_track.
+func move_track(index: int, to: int, parent: int) -> void:
+	_do(&"move_track", [index, maxi(to, 1), maxi(parent, 0)])
 ## A copy of the track right after it (see DAWBackend.duplicate_track).
 func duplicate_track(index: int) -> void: _do(&"duplicate_track", [index])
 func rename_track(index: int, track_name: String) -> void:
@@ -850,7 +854,7 @@ func _call(verb: StringName, args: Array) -> void:
 ## What an edit is called in the history list: the verb in words, and the track it is on when it
 ## names one ("Kick: move item").
 const NAMED_BY_TRACK := [&"move_item", &"add_fx", &"remove_fx", &"move_fx", &"create_send", &"remove_send",
-		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track", &"set_track_group"]
+		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track", &"move_track", &"set_track_group"]
 func step_name(verb: StringName, args: Array) -> String:
 	var words := String(verb).trim_prefix("set_").replace("_", " ")
 	var by_track := verb in ITEM_EDITS or verb in NAMED_BY_TRACK or String(verb).begins_with("set_track") \
@@ -1137,6 +1141,12 @@ func apply_intent(verb: StringName, args: Array) -> void:
 			push_warning("DAW: refused a malformed set_vca intent %s." % [args])
 			return
 		args = [clampi(int(args[0]), 1, GROUPS), clampf(float(args[1]), -60.0, 12.0)]
+	if verb == &"move_track":
+		if args.size() != 3 or args.any(func(a) -> bool: return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))) \
+				or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed move_track intent %s." % [args])
+			return
+		args = [int(args[0]), maxi(int(args[1]), 1), maxi(int(args[2]), 0)]
 	if verb in [&"remove_track", &"duplicate_track"]:
 		if args.size() != 1 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed %s intent %s." % [verb, args])

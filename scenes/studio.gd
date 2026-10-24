@@ -427,6 +427,7 @@ func _exit_tree() -> void:
 	Ears.listen(false)
 	if DAW.backend is GodotBackend:
 		(DAW.backend as GodotBackend).set_cues([])
+		(DAW.backend as GodotBackend).set_taps([])
 	if get_tree().node_added.is_connected(_keep_out_of_mirrors):
 		get_tree().node_added.disconnect(_keep_out_of_mirrors)
 
@@ -1158,6 +1159,7 @@ func _build_track_rack(id: StringName, track: int) -> void:
 	pulled.rebuilt.connect(func() -> void:
 		if track_racks.has(id):
 			_paint_track_band(id))
+	pulled.rebuilt.connect(_show_patches)
 	if focus != null:
 		focus.surfaces.append(pulled)
 		pulled.rebuilt.connect(focus._on_surface_rebuilt.bind(pulled))
@@ -2364,6 +2366,9 @@ func _build_items() -> void:
 	add_child(their_monitor)
 	Session.note_played.connect(their_monitor.play)
 	console.rebuilt.connect(_show_patches)
+	# A rack's OUT is made again with the rack, and shows the plugs in it again.
+	if rack != null:
+		rack.rebuilt.connect(_show_patches)
 	Session.roster_changed.connect(_on_roster_for_patches)
 	_show_patches()
 	items.asked.connect(_on_items_asked)
@@ -3235,6 +3240,7 @@ func _on_personal_changed() -> void:
 func _listen() -> void:
 	if DAW.backend is GodotBackend:
 		(DAW.backend as GodotBackend).set_cues(personal.tracks() if _heard_phones and personal.hears_tracks else [])
+		(DAW.backend as GodotBackend).set_taps(personal.taps() if _heard_phones and personal.hears_tracks else [])
 	if their_keys != null:
 		their_keys.set_players(personal.players() if _heard_phones else [])
 	if their_monitor != null:
@@ -3261,8 +3267,8 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 	if socket == &"":
 		Session.notice.emit("Plug %s is back in the tray." % letter)
 	elif personal.unheard(receiver):
-		Session.notice.emit("Plug %s in SEND %s. One track by itself is not heard here: %s" % [letter,
-				PersonalMix.title_of(socket), _why_no_tracks()])
+		Session.notice.emit("Plug %s in %s. One track by itself is not heard here: %s" % [letter,
+				PersonalMix.place_of(socket), _why_no_tracks()])
 	else:
 		var late := ""
 		var player := PersonalMix.player_of(socket)
@@ -3273,8 +3279,8 @@ func _on_patch_asked(receiver: int, socket: StringName) -> void:
 			late = " In time with the backing they hear: your mix waits for their notes."
 			if not Ears.reaches_mix(Session.role == Session.Role.GUEST, DAW.backend is ReaperBackend):
 				late += " Reaper's mix is not the game's to copy, so only their notes are heard."
-		Session.notice.emit("Plug %s in SEND %s: in your headphones%s.%s" % [letter,
-				PersonalMix.title_of(socket), "" if _heard_phones else " when you put them on", late])
+		Session.notice.emit("Plug %s in %s: in your headphones%s.%s" % [letter,
+				PersonalMix.place_of(socket), "" if _heard_phones else " when you put them on", late])
 
 
 ## Whether the keytar is in this player's hands now, and if that has changed, its keys given or
@@ -3355,6 +3361,13 @@ func _show_patches() -> void:
 	var sockets: Array[SendSocket] = console.master.sends.duplicate()
 	for strip in console.strips:
 		sockets.append(strip.send)
+	# Every effects rack's OUT: the main one and each track pulled out on a rack of its own.
+	var racks: Array = [rack] if rack != null else []
+	for id in track_racks:
+		racks.append(track_racks[id][1])
+	for r: RackSurface in racks:
+		if is_instance_valid(r):
+			sockets.append_array(r.out_sockets())
 	if presence != null:
 		for peer in Session.participants:
 			var avatar := presence.avatar_of(peer)
@@ -3389,8 +3402,8 @@ func _on_send_pressed(source: StringName) -> void:
 			_on_patch_asked(i, &"")
 			any = true
 	if not any:
-		Session.notice.emit("Drag a plug onto SEND %s from your tablet: it lies on the prop shelf's lower tier."
-				% PersonalMix.title_of(source))
+		Session.notice.emit("Drag a plug onto %s from your tablet: it lies on the prop shelf's lower tier."
+				% PersonalMix.place_of(source))
 
 
 ## Who is here changed: colours may have, and a guest who left takes their plugs with them.

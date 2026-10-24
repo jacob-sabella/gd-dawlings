@@ -88,6 +88,10 @@ var lamp_bank: MeshBank
 
 var _knobs: Array[Knob] = []
 var _bypass: PanelButton
+## The unit's OUT: a probe at this point in the chain, the track as it leaves this plugin
+## (PersonalMix.tap_socket). The studio puts the plugs in it.
+var out_socket: SendSocket
+var _chain_label: Label3D
 var _name_label: Label3D
 var _page_label: Label3D
 var _page_prev: PanelButton
@@ -249,6 +253,9 @@ func _ready() -> void:
 	_page_next.describe_value = func(_v: float) -> String: return _page_label.text
 	add_child(_page_next)
 
+	_build_chain_controls(h)
+	_build_out(h)
+
 	# All eight now, used or not: a bank is sized once, so a knob made later -- when a plugin's
 	# parameters arrive after its name, as Reaper's do -- would have nowhere to be drawn.
 	while _knobs.size() < MAX_KNOBS:
@@ -257,6 +264,92 @@ func _ready() -> void:
 	DAW.fx_changed.connect(_on_fx_changed)
 	set_process(true)
 	refresh()
+
+
+## On the left ear: where this unit is in the chain, with EARLIER above it and LATER below, the
+## way the rack reads (the first plugin at the top). Moved with the DAW's own move, so the rack is
+## built again in the new order -- and a probe in an OUT stays at its point in the chain, which is
+## the slot, as the plugins move past it.
+func _build_chain_controls(_h: float) -> void:
+	var x := -RACK_WIDTH * 0.5 + 0.0315
+	_chain_label = Label3D.new()
+	_chain_label.name = "ChainSlot"
+	_chain_label.font_size = 48
+	_chain_label.pixel_size = 0.00019
+	_chain_label.modulate = Color(0.82, 0.83, 0.86)
+	_chain_label.position = Vector3(x, -0.0045, 0.002)
+	Lettering.range_to_legibility(_chain_label)
+	add_child(_chain_label)
+	if not DAW.can(DAWBackend.Capability.FX_CHAIN):
+		return
+	for spec in [[0.0095, -1, "EARLIER IN THE CHAIN", "ChainEarlier"], [-0.0185, 1, "LATER IN THE CHAIN", "ChainLater"]]:
+		var b := PanelButton.new()
+		b.name = spec[3]
+		b.hit_pad = RACK_HIT_PAD
+		b.led_colour = Color(0.45, 0.68, 0.95)
+		b.position = Vector3(x, spec[0], 0.004)
+		b.lit = true
+		var direction: int = spec[1]
+		b.pressed.connect(func(): shift(direction))
+		var words: String = spec[2]
+		b.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), words]
+		b.describe_value = func(_v: float) -> String: return _chain_words()
+		add_child(b)
+
+
+## On the right, past the last knob: OUT, the chain as it is after this plugin.
+func _build_out(_h: float) -> void:
+	out_socket = SendSocket.new()
+	out_socket.name = "Out"
+	out_socket.source = PersonalMix.tap_socket(track_index, fx_index)
+	out_socket.kind = "OUT"
+	out_socket.hit = Vector3(0.021, 0.026, 0.012)
+	out_socket.position = Vector3(RACK_WIDTH * 0.5 - 0.0335, -0.002, 0.001)
+	add_child(out_socket)
+	var caption := Label3D.new()
+	caption.name = "OutCaption"
+	caption.text = "OUT"
+	caption.font_size = 40
+	caption.pixel_size = 0.00019
+	caption.modulate = Color(0.95, 0.62, 0.22)
+	caption.position = out_socket.position + Vector3(0, -0.0135, 0.001)
+	Lettering.range_to_legibility(caption)
+	add_child(caption)
+
+
+func _chain_words() -> String:
+	if not DAW.state.tracks.has(track_index):
+		return ""
+	var order := DAW.state.track(track_index).plugins()
+	return "%d OF %d" % [order.find(fx_index) + 1, order.size()]
+
+
+## Where to move a plugin one place earlier (-1) or later (+1) on its own track: [the slot to aim
+## DAW.move_fx at, the slot it lands in], or [] where it cannot go. Slots are named as they are
+## now; going later, the slot to aim for is the one past the plugin being stepped over.
+static func chain_aim(track: int, fx: int, direction: int) -> Array:
+	if not DAW.state.tracks.has(track):
+		return []
+	var order := DAW.state.track(track).plugins()
+	var at := order.find(fx)
+	var to := at + direction
+	if at < 0 or to < 0 or to >= order.size():
+		return []
+	var aim: int
+	if direction < 0:
+		aim = order[to]
+	else:
+		aim = order[to + 1] if to + 1 < order.size() else int(order[-1]) + 1
+	return [aim, int(order[to])]
+
+
+## One place earlier or later in the chain.
+func shift(direction: int) -> void:
+	if not DAW.can(DAWBackend.Capability.FX_CHAIN):
+		return
+	var aim := chain_aim(track_index, fx_index, direction)
+	if not aim.is_empty():
+		DAW.move_fx(track_index, fx_index, track_index, aim[0])
 
 
 ## Only ever running to land a deferred page change; see `_pending_page`.
@@ -372,6 +465,9 @@ func refresh() -> void:
 	# to come off the span or a name just inside this fit would still touch the page readout.
 	Lettering.fit(_name_label, NAME_SPAN - 0.012, NAME_SIZE, NAME_SIZE_MIN)
 	_bypass.lit = f.enabled
+	var order := track.plugins()
+	_chain_label.text = str(order.find(fx_index) + 1)
+	out_socket.label = PersonalMix.title_of(out_socket.source)
 
 	var params: Array = f.params.keys()
 	params.sort()

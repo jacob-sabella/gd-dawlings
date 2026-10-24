@@ -86,6 +86,8 @@ const Capability := {
 	RECORDS_OWN_INPUTS = &"records_own_inputs",
 	## Write the mix, and each track's stem, to sound files: see `render`.
 	RENDER = &"render",
+	## Reorder tracks and put them in and out of folders (move_track).
+	TRACK_ORDER = &"track_order",
 }
 
 
@@ -364,6 +366,11 @@ func add_track(_at: int, _track_name: String) -> void: pass
 ## A track gone, with its items and effects, and the sends that went to it. A folder's children
 ## move out a level.
 func remove_track(_index: int) -> void: pass
+## Track `index` moved, with whatever is in it when it is a folder, to be track `to` (from 1, in
+## the order after the move), inside folder `parent` (a track's index now, 0 for none). Refused
+## when the folder is not just before it or around it there, or is the track itself or in it.
+## Without Capability.TRACK_ORDER a no-op. One undo step.
+func move_track(_index: int, _to: int, _parent: int) -> void: pass
 ## A copy of a track right after it, as Reaper's duplicate makes one: under the same name, with
 ## its settings, effects and theirs, sends, items and automation; not armed, not selected. In a
 ## folder it stays in the folder. One undo step.
@@ -1355,6 +1362,62 @@ func _locally_copy_track(from: int, to: int) -> void:
 		original.folder_depth = 0
 	else:
 		copy.folder_depth = 0
+
+
+## How `move_track(index, to, parent)` changes a project whose tracks have these folder depths
+## (Reaper's deltas, track 1 first): {"order": the old indices in their new order (for
+## `_locally_renumber`), "depths": the folder depth of each, new order}. Empty when it cannot be.
+static func move_plan(depths: Array, index: int, to: int, parent: int) -> Dictionary:
+	var count := depths.size()
+	if index < 1 or index > count or parent < 0 or parent > count or parent == index:
+		return {}
+	# Each track's folder, from the running depth.
+	var parents := {}
+	var open: Array[int] = []
+	for i in range(1, count + 1):
+		parents[i] = open.back() if not open.is_empty() else 0
+		var d: int = depths[i - 1]
+		if d > 0:
+			for _k in d:
+				open.append(i)
+		else:
+			for _k in -d:
+				if not open.is_empty():
+					open.pop_back()
+	# The track and everything inside it go together.
+	var block: Array[int] = [index]
+	for i in range(index + 1, count + 1):
+		if block.has(parents[i]):
+			block.append(i)
+		else:
+			break
+	if block.has(parent):
+		return {}
+	var order: Array = []
+	for i in range(1, count + 1):
+		if not block.has(i):
+			order.append(i)
+	var at := clampi(to - 1, 0, order.size())
+	for k in block.size():
+		order.insert(at + k, block[k])
+	parents[index] = parent
+	# Each track's folder has to be open where it is: the last track before it, or one that
+	# track is in.
+	var stack: Array = []
+	var levels: Array[int] = []
+	for i in order:
+		var p: int = parents[i]
+		while not stack.is_empty() and stack.back() != p:
+			stack.pop_back()
+		if p != 0 and stack.is_empty():
+			return {}
+		levels.append(stack.size())
+		stack.append(i)
+	var out_depths: Array[int] = []
+	for n in order.size():
+		var next := levels[n + 1] if n + 1 < order.size() else 0
+		out_depths.append(next - levels[n])
+	return {"order": order, "depths": out_depths}
 
 
 static func _order_adding(count: int, at: int) -> Array:
