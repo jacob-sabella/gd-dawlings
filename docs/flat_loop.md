@@ -37,7 +37,7 @@ slice: dawkit tests (`tools/test.sh`), the dawlings suite at 0 failed, a shot of
    click or Delete deletes, the arrows transpose the picked note (Shift an octave), a bar per note
    under them is its velocity, Q or QUANTIZE pulls every note onto the grid (1/4 to 1/32). The
    desk's note verbs take an index and a "by"; FlatHost turns an absolute move into
-   transpose_note then move_note. `--flat-clip T:N` opens a clip's notes at launch.
+   place_note (time and pitch in one undo step). `--flat-clip T:N` opens a clip's notes at launch.
 6. [x] **The song.** The ruler (DawKitRuler, a child of the arrangement) has three rows. Markers
    and regions: double-click for a marker, drag one (a region by its middle or either end),
    double-click to rename, right-click for a region over the loop, loop this region, delete.

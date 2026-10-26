@@ -22956,10 +22956,17 @@ func _test_notes_edited_in_2d_are_edited_at_the_desk() -> void:
 				return n * MidiTake.NOTE_WIDTH
 		return -1
 	check("a note drawn in 2D is put in at the desk", item.call().notes.size() == count + MidiTake.NOTE_WIDTH and mine.call() >= 0)
+	var depth := s.undo_depth
 	host.move_note(id, at, mine.call() / MidiTake.NOTE_WIDTH, 0.1, 33)
 	var o: int = mine.call()
 	check("a 2D move is the desk's, in time and pitch", o >= 0 and is_equal_approx(item.call().notes[o], 0.1)
 			and int(item.call().notes[o + 2]) == 33 and is_equal_approx(item.call().notes[o + 1], 0.3))
+	check("in one undo step", s.undo_depth == depth + 1)
+	DAW.undo()
+	check("which takes it back in both", mine.call() >= 0 and is_equal_approx(item.call().notes[mine.call()], 0.0)
+			and int(item.call().notes[mine.call() + 2]) == 30)
+	DAW.redo()
+	check("and redo puts it back in both", mine.call() >= 0 and int(item.call().notes[mine.call() + 2]) == 33)
 	host.set_note_end(id, at, mine.call() / MidiTake.NOTE_WIDTH, 0.5)
 	close_to("a 2D note's end is the desk's", item.call().notes[mine.call() + 1], 0.5)
 	host.set_note_velocity(id, at, mine.call() / MidiTake.NOTE_WIDTH, 40)

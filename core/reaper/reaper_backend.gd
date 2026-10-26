@@ -1043,6 +1043,19 @@ func move_note(track_index: int, item_index: int, note_index: int, by: float) ->
 		_edit("MoveNote", [track_index, item_index, on, pitch, float(state.item(track_index, item_index).notes[at]) - before])
 
 
+func place_note(track_index: int, item_index: int, note_index: int, by: float, semitones: int) -> void:
+	var item := state.item(track_index, item_index)
+	var at := note_index * MidiTake.NOTE_WIDTH
+	if item == null or note_index < 0 or at + 4 >= item.notes.size():
+		return
+	var on: float = item.notes[at]
+	var pitch: int = int(item.notes[at + 2])
+	if _locally_place_note(track_index, item_index, note_index, by, semitones):
+		# Where it really went, after being held inside the item and the MIDI range.
+		var now := state.item(track_index, item_index)
+		_edit("PlaceNote", [track_index, item_index, on, pitch, float(now.notes[at]) - on, int(now.notes[at + 2]) - pitch])
+
+
 func set_note_end(track_index: int, item_index: int, note_index: int, off: float) -> void:
 	var item := state.item(track_index, item_index)
 	var at := note_index * MidiTake.NOTE_WIDTH

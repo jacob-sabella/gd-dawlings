@@ -411,6 +411,7 @@ func legato_item(_track_index: int, _item_index: int) -> void: pass
 func staccato_item(_track_index: int, _item_index: int) -> void: pass
 func even_velocity(_track_index: int, _item_index: int) -> void: pass
 func move_note(_track_index: int, _item_index: int, _note_index: int, _by: float) -> void: pass
+func place_note(_track_index: int, _item_index: int, _note_index: int, _by: float, _semitones: int) -> void: pass
 func set_note_end(_track_index: int, _item_index: int, _note_index: int, _off: float) -> void: pass
 func insert_note(_track_index: int, _item_index: int, _on: float, _off: float, _pitch: int) -> void: pass
 func transpose_note(_track_index: int, _item_index: int, _note_index: int, _semitones: int) -> void: pass
@@ -1584,6 +1585,12 @@ func _locally_move_note(track_index: int, item_index: int, note_index: int, by: 
 	it.notes = notes
 	_write_lane(track_index, lane)
 	return true
+
+
+## One note moved in time and pitch at once (see the two above). False when it does neither.
+func _locally_place_note(track_index: int, item_index: int, note_index: int, by: float, semitones: int) -> bool:
+	var moved := _locally_move_note(track_index, item_index, note_index, by)
+	return _locally_transpose_note(track_index, item_index, note_index, semitones) or moved
 
 
 ## One note made to end at `off` seconds into its item: at least MIN_NOTE after it starts, at most

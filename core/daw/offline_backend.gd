@@ -1301,6 +1301,12 @@ func move_note(track_index: int, item_index: int, note_index: int, by: float) ->
 		_remember_edit(before)
 
 
+func place_note(track_index: int, item_index: int, note_index: int, by: float, semitones: int) -> void:
+	var before := _lanes_snapshot()
+	if _locally_place_note(track_index, item_index, note_index, by, semitones):
+		_remember_edit(before)
+
+
 func set_note_end(track_index: int, item_index: int, note_index: int, off: float) -> void:
 	var before := _lanes_snapshot()
 	if _locally_set_note_end(track_index, item_index, note_index, off):

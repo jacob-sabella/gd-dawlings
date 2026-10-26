@@ -493,10 +493,8 @@ func move_note(id: String, clip_index: int, note: int, on: float, pitch: int) ->
 	if item == null or note < 0 or at + MidiTake.NOTE_WIDTH > item.notes.size():
 		return
 	var by := clampi(pitch, 0, 127) - int(item.notes[at + 2])
-	if by != 0:
-		DAW.transpose_note(track, clip_index, note, by)
-	if not is_equal_approx(on, item.notes[at]):
-		DAW.move_note(track, clip_index, note, on - float(item.notes[at]))
+	if by != 0 or not is_equal_approx(on, item.notes[at]):
+		DAW.place_note(track, clip_index, note, on - float(item.notes[at]), by)
 
 
 func set_note_end(id: String, clip_index: int, note: int, off: float) -> void:
