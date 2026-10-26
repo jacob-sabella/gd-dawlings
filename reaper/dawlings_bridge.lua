@@ -121,6 +121,46 @@ local function decode_request(text)
   return id, fn, args
 end
 
+-- A Batch request's arguments, flat as every request's are: the undo step's name, then each
+-- call as its function's name, how many arguments it takes, and those. Read by count, not by
+-- type, so a call whose arguments are names is never mistaken for the next call.
+local function decode_batch(args)
+  local label = type(args[1]) == 'string' and args[1] or ''
+  local calls, i = {}, 2
+  while type(args[i]) == 'string' and type(args[i + 1]) == 'number' do
+    local fn, n = args[i], math.max(math.floor(args[i + 1]), 0)
+    local a = {}
+    for k = 1, n do a[k] = args[i + 1 + k] end
+    calls[#calls + 1] = {fn = fn, args = a}
+    i = i + 2 + n
+  end
+  return label, calls
+end
+
+-- One gesture's edits, in order, inside one Undo block: one step in Reaper's history, called what
+-- dawlings called it. Each handler opens and closes a block of its own, as it must when it runs
+-- alone; inside a batch those are this one's, so they are stood down for the length of it and put
+-- back whatever happens. A Batch inside a batch is refused rather than run.
+local function run_batch(handlers, label, calls)
+  local begin_block, end_block = reaper.Undo_BeginBlock, reaper.Undo_EndBlock
+  begin_block()
+  reaper.Undo_BeginBlock = function() end
+  reaper.Undo_EndBlock = function() end
+  local results = {}
+  for i, call in ipairs(calls) do
+    local handler = call.fn ~= 'Batch' and handlers[call.fn] or nil
+    if not handler then
+      results[i] = {ok = false, error = 'unknown function: ' .. tostring(call.fn)}
+    else
+      local ok, value = pcall(handler, call.args)
+      results[i] = ok and (value or {ok = true}) or {ok = false, error = tostring(value)}
+    end
+  end
+  reaper.Undo_BeginBlock, reaper.Undo_EndBlock = begin_block, end_block
+  end_block(label ~= '' and ('dawlings: ' .. label) or 'dawlings: edit', -1)
+  return {ok = true, results = results}
+end
+
 -- Reaper indexes tracks from 0 and OSC addresses them from 1. Everything crossing this boundary
 -- goes through these two, because an off-by-one here moves the wrong fader -- which looks like a
 -- working bridge until the moment it matters.
@@ -129,6 +169,18 @@ local function track_from_osc(n)
 end
 
 local handlers = {}
+
+-- Reaper's pan modes that have a width: stereo pan (5) uses D_WIDTH, and dual pan (6) keeps it.
+-- The others (-1 the project's default, 0 Reaper 3's, 3 stereo balance) ignore it, so a track
+-- in one of those is full width whatever D_WIDTH says.
+local STEREO_PAN = 5
+local function track_width(tr)
+  local mode = math.floor(reaper.GetMediaTrackInfo_Value(tr, 'I_PANMODE'))
+  if mode == STEREO_PAN or mode == 6 then
+    return reaper.GetMediaTrackInfo_Value(tr, 'D_WIDTH')
+  end
+  return 1
+end
 
 --- The whole project shape in one call: what dawlings builds its racks and patchbay from.
 --
@@ -222,6 +274,7 @@ function handlers.GetProjectStructure(args)
       colour = {r / 255.0, g / 255.0, b / 255.0},
       rec_arm = reaper.GetMediaTrackInfo_Value(tr, 'I_RECARM') > 0.5,
       folder_depth = reaper.GetMediaTrackInfo_Value(tr, 'I_FOLDERDEPTH'),
+      width = track_width(tr),
       fx = fx,
       sends = sends,
     }
@@ -273,6 +326,36 @@ local function item_notes(it, take)
       out[#out + 1] = pitch
       out[#out + 1] = vel
       out[#out + 1] = chan
+    end
+  end
+  if #out == 0 then return nil end
+  return out
+end
+
+-- A MIDI take's controller events, as DawKitClip.controls has them: flat {time, kind, value,
+-- channel, ...}, seconds from the item's start, the pitch wheel as kind 128 (-8192 to 8191) and a
+-- CC as its number. Capped like the notes, for the same poll.
+local CONTROLS_PER_ITEM = 2048
+local function item_controls(it, take)
+  if not take or not reaper.TakeIsMIDI(take) then return nil end
+  local item_start = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+  local _, _, count = reaper.MIDI_CountEvts(take)
+  local out = {}
+  for n = 0, math.min(count or 0, CONTROLS_PER_ITEM) - 1 do
+    local ok, _, muted, ppq, msg, chan, a, b = reaper.MIDI_GetCC(take, n)
+    if ok and not muted then
+      local kind, value
+      if msg == 0xE0 then
+        kind, value = 128, b * 128 + a - 8192
+      elseif msg == 0xB0 then
+        kind, value = a, b
+      end
+      if kind then
+        out[#out + 1] = reaper.MIDI_GetProjTimeFromPPQPos(take, ppq) - item_start
+        out[#out + 1] = kind
+        out[#out + 1] = value
+        out[#out + 1] = chan
+      end
     end
   end
   if #out == 0 then return nil end
@@ -746,6 +829,7 @@ function handlers.GetTimeline()
         selected = reaper.IsMediaItemSelected(it),
         name = name,
         notes = item_notes(it, take),
+        controls = item_controls(it, take),
         source = source,
         offset = offset,
         reversed = reversed,
@@ -1128,6 +1212,7 @@ function handlers.GetState(args)
       sends = sends,
       volume = reaper.GetMediaTrackInfo_Value(tr, 'D_VOL'),
       pan = reaper.GetMediaTrackInfo_Value(tr, 'D_PAN'),
+      width = track_width(tr),
       mute = reaper.GetMediaTrackInfo_Value(tr, 'B_MUTE') > 0.5,
       solo = reaper.GetMediaTrackInfo_Value(tr, 'I_SOLO') > 0.5,
       arm = reaper.GetMediaTrackInfo_Value(tr, 'I_RECARM') > 0.5,
@@ -1347,6 +1432,23 @@ function handlers.SetTrackColour(args)
   reaper.SetTrackColor(tr, reaper.ColorToNative(byte(args[2]), byte(args[3]), byte(args[4])))
   reaper.Undo_EndBlock('Set track color', 1)
   return {ok = true}
+end
+
+-- How wide a track's stereo image is (the stage table's ring): D_WIDTH, 0 mono to 1 as recorded.
+-- A track whose pan mode ignores D_WIDTH is put in stereo pan first, in the same Undo block, and
+-- the answer says so (mode_set) for the desk to tell its player. args: track, width.
+function handlers.SetTrackWidth(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local width = math.max(0, math.min(1, tonumber(args[2]) or 1))
+  reaper.Undo_BeginBlock()
+  local mode_set = math.floor(reaper.GetMediaTrackInfo_Value(tr, 'I_PANMODE')) ~= STEREO_PAN
+  if mode_set then
+    reaper.SetMediaTrackInfo_Value(tr, 'I_PANMODE', STEREO_PAN)
+  end
+  reaper.SetMediaTrackInfo_Value(tr, 'D_WIDTH', width)
+  reaper.Undo_EndBlock('Set track width', 1)
+  return {ok = true, mode_set = mode_set, width = width}
 end
 
 -- --- editing ----------------------------------------------------------------------------
@@ -2218,10 +2320,34 @@ function handlers.InsertMidiTake(args)
       end
     end
   end
+  -- Then the controls: a count, and four per control -- project seconds, kind (128 the pitch
+  -- wheel, else the controller), value, channel. A request from before controls has none.
+  local at = 6 + count * 5
+  local controls = math.floor(args[at] or 0)
+  local moved = 0
+  for c = 0, controls - 1 do
+    local o = at + 1 + c * 4
+    local t, kind, value, chan = args[o], args[o + 1], args[o + 2], args[o + 3]
+    if t and kind and value and chan then
+      local ppq = reaper.MIDI_GetPPQPosFromProjTime(take, t)
+      local msg, a, b
+      if kind == 128 then
+        -- The wheel's fourteen bits, centre 8192: low seven, then high seven.
+        local v = math.max(0, math.min(16383, math.floor(value) + 8192))
+        msg, a, b = 0xE0, v % 128, math.floor(v / 128)
+      elseif kind == 1 or kind == 11 then
+        msg, a, b = 0xB0, math.floor(kind), math.max(0, math.min(127, math.floor(value)))
+      end
+      if msg and reaper.MIDI_InsertCC(take, false, false, ppq, msg, math.floor(chan), a, b) then
+        moved = moved + 1
+      end
+    end
+  end
   reaper.MIDI_Sort(take)
   reaper.UpdateItemInProject(item)
   local result = edited('Insert MIDI take')
   result.notes = placed
+  result.controls = moved
   return result
 end
 
@@ -2285,6 +2411,12 @@ function handlers.GetParamText(args)
   local fx, p = (args[2] or 1) - 1, (args[3] or 1) - 1
   local _, text = reaper.TrackFX_GetFormattedParamValue(tr, fx, p, '')
   return {ok = true, text = text, value = reaper.TrackFX_GetParamNormalized(tr, fx, p)}
+end
+
+-- See run_batch: the bridge's verbs from inside one dawlings edit, as one undo step.
+function handlers.Batch(args)
+  local label, calls = decode_batch(args)
+  return run_batch(handlers, label, calls)
 end
 
 function handlers.Ping()

@@ -30,6 +30,11 @@ extends Node
 ## thumb, a controller's trigger or grip travel), KEY_VELOCITY where there is nothing to read (a
 ## button, a key).
 ##
+## Bent by the hand itself (docs/spatial_loop.md part two, slice 15): tipped from where its first
+## note began, its roll bends what its fingers hold and its shake wobbles it (`wobble`); on a
+## desktop the mouse's wiggle and Alt with the mouse moving up or down. A held finger's letter
+## says by how much (Glove.bent: `E4 +1.3`).
+##
 ## Shown, not coloured: the hand's fingertips are lettered with the notes they play and the chord
 ## over the palm (Interactor.finger_names, finger_chord, drawn on the mouse's glove; and the
 ## tracked hand's HandSkeleton, `skeleton`). A controller's hand is not drawn, and turning it over
@@ -70,6 +75,8 @@ var keys: GuestMidi = null
 var catcher: KeyCatcher = null
 ## A tracked hand's drawing, to letter its fingertips; null for none.
 var skeleton: HandSkeleton = null
+## This hand's bend and wobble on what its fingers hold (Wobble): made at its first frame on.
+var wobble: Wobble = null
 
 ## Whether the fingertips play now.
 var on := false
@@ -77,6 +84,9 @@ var on := false
 var _notes := {}
 ## The fingers pinched last frame, as a mask.
 var _was := 0
+## When this hand last pinched a note, in pinches on any hand here (`_pinches`): the newest bends.
+var _pinch_order := 0
+static var _pinches := 0
 ## How long the hand has been held in the turning pose, and whether this hold has turned it yet:
 ## one turn a hold, so a hand left palm up does not flicker on and off.
 var _held_for := 0.0
@@ -136,8 +146,41 @@ func step(delta: float) -> void:
 		_watch_turn(delta, mask)
 	if on:
 		_play(mask)
+		_bend(delta)
+	elif wobble != null:
+		wobble.hand = null
 	_was = mask
 	_letter(mask)
+
+
+## The hand, one frame on, bending what its fingers hold, while they hold something and no
+## other hand's fingertips here pinched since (the wheel is one, and both hands' notes are SOURCE):
+## the newest pinch's hand bends, as the newest note owns the wheel. Not bending, it is let go,
+## and measures again from its next note.
+func _bend(delta: float) -> void:
+	if keys == null:
+		return
+	if wobble == null:
+		wobble = Wobble.new(keys, [SOURCE])
+	wobble.keys = keys
+	if _notes.is_empty() or _pinched_since():
+		wobble.hand = null
+		return
+	wobble.hand = hand
+	wobble.step(delta)
+
+
+## Whether another hand's fingertips on these keys have a note down from a pinch newer than this
+## hand's newest.
+func _pinched_since() -> bool:
+	if not is_inside_tree():
+		return false
+	for node in get_tree().get_nodes_in_group(GROUP):
+		var other := node as FingertipNotes
+		if other != null and other != self and other.keys == keys and not other._notes.is_empty() \
+				and other._pinch_order > _pinch_order:
+			return true
+	return false
 
 
 ## The turning pose (an empty open hand, palm up, unpinched, not toward the eyes) held for HOLD
@@ -222,6 +265,8 @@ func _start(f: int) -> void:
 	var pitch: int = tones_at(seconds)[f]
 	var sounding := _sounding(pitch)
 	_notes[f] = pitch
+	_pinches += 1
+	_pinch_order = _pinches
 	# A pitch another finger here already has down (after a chord change, or the other hand's) is
 	# one note: it sounds until the last finger on it lets go.
 	if not sounding:
@@ -291,6 +336,10 @@ func _letter(mask: int) -> void:
 		return
 	var said := names()
 	var chord := chord_name()
+	if wobble != null and wobble.engaged():
+		for f in said.size():
+			if _notes.has(f):
+				said[f] = Glove.bent(said[f], wobble.semitones)
 	hand.finger_names = said
 	hand.finger_chord = chord
 	if skeleton != null and is_instance_valid(skeleton):

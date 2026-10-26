@@ -315,6 +315,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# NOT a Reaper OSC address: the bridge reads and writes I_AUTOMODE.
 			if not args.is_empty():
 				state.set_track_field(idx, &"automation_mode", automation_mode_of(args[0]))
+		"width":
+			# NOT a Reaper OSC address: the bridge reads and writes D_WIDTH (SetTrackWidth).
+			if not args.is_empty():
+				state.set_track_field(idx, &"width", clampf(float(args[0]), 0.0, 1.0))
 		"group":
 			# dawlings's own: Reaper's OSC surface says nothing of track groups.
 			if not args.is_empty():
@@ -363,8 +367,9 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 ## lane from a sender that knows nothing of notes reads exactly as it always did. A recorded
 ## take carries one more entry the same way, a Dictionary: {source, offset, peaks}.
 const ITEM_WIDTH := 5
-## Controller events one item can carry across the wire.
-const CONTROLS_MAX := 8192
+## Controller events one item can carry across the wire: as many as a take may have
+## (MidiTake.MAX_CONTROLS), so a recorded wheel reaches everyone whole.
+const CONTROLS_MAX := MidiTake.MAX_CONTROLS
 ## Take lanes a track can have (DawKitClip.lane), and so what a peer's lane is clamped to.
 const LANES_MAX := 15
 
@@ -769,6 +774,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/volume" % index, [t.volume]])
 		out.append(["/track/%d/volume/db" % index, [t.volume_db]])
 		out.append(["/track/%d/pan" % index, [t.pan]])
+		# Always, full width too: a renumbering resends the mix onto tracks a guest already has.
+		out.append(["/track/%d/width" % index, [t.width]])
 		out.append(["/track/%d/mute" % index, [1.0 if t.mute else 0.0]])
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])

@@ -23,6 +23,12 @@ extends Item
 ## `song`). Whoever hears it elsewhere pitches it by that same position (`heard`), so a hit played
 ## just before a bar line rings the old chord's tone everywhere, however late it arrives.
 ##
+## Hand percussion (`held_in_fist`: the shaker, the tambourine) is held in a closed bare hand as
+## well as a pinch or a controller (XRInteractor.step_hold, docs/spatial_loop.md slice 17), round
+## its `grip_point`, and its strokes are read off the palm then. Its recorded hits are snapped
+## gently to the beat (HitRecorder.snapped_at): the take's note moves, never the sound. A tag over it
+## on the shelf says SNAP while this player snaps, and in a headset how it is held.
+##
 ## Every instrument has an output jack (`jack`, a JackSocket at `jack_point`, docs/spatial_loop.md
 ## slice 5). Unplugged, a hit does all of the above and nothing else; plugged into a track, the
 ## take it is recorded in goes onto that track instead of the armed one (Jacks, HitRecorder).
@@ -54,6 +60,16 @@ const LATENCY_MOST := 0.025
 ## HitRecorder's `stamp`, so this file still knows nothing of core/session/. Unset (or its owner
 ## gone), the playhead.
 static var clock: Callable = Callable()
+## Whether this player's hand percussion is snapped ("Snap hand percussion", GuestMidi.snap_hits),
+## for the shelf tag to say: set by the studio, as `clock` is. Unset, not said.
+static var snapping: Callable = Callable()
+## Whether this player is in a headset, so the shelf tag says how a hand holds it: set by the
+## studio from its medium.
+static var hands_hint := false
+## What the shelf tag says in a headset, under SNAP.
+const HANDS_HINT := "close your hand round it and shake\ncontrollers are steadier for fast parts"
+## How often the shelf tag is read again (s): a setting changed shows within this.
+const RETAG := 0.25
 
 var _last := Vector3.INF
 var _peak := 0.0
@@ -69,6 +85,10 @@ var jack: JackSocket = null
 ## second copy of a kind is a different job, not a decoy, only because it sounds (and is
 ## recorded) a fifth lower -- see `pitch_scale`, and each subclass's own `pitch()`.
 var voice := 0
+## Its shelf tag (`tag_text`), for hand percussion only.
+var _tag: Label3D = null
+## Whether the bandmate whose hand it is in snaps their hits, as their last hit said (`heard`).
+var holder_snaps := false
 ## A curse on its sound only (Tour's "sour"/"low" spill): 1.0 untouched. The judge reads
 ## `pitch()`, not this, so a cursed instrument still plays its part -- it just sounds wrong.
 var curse_pitch := 1.0
@@ -85,6 +105,65 @@ func _ready() -> void:
 	if jack == null:
 		jack = JackSocket.new(self)
 		add_child(jack)
+	if held_in_fist() and _tag == null:
+		_tag = Label3D.new()
+		_tag.name = "ShelfTag"
+		_tag.font_size = 48
+		_tag.pixel_size = 0.0004
+		_tag.outline_size = 8
+		_tag.modulate = Color(0.97, 0.94, 0.86)
+		_tag.outline_modulate = Color(0.05, 0.04, 0.03)
+		_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_tag.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		_tag.position = Vector3(0, centre_height() * 2.0 + 0.05, 0)
+		_tag.visible = false
+		Lettering.range_to_legibility(_tag)
+		add_child(_tag)
+		_retag()
+		# Read again on a timer, not in a frame tick: at rest on its shelf an item does not tick.
+		var again := Timer.new()
+		again.name = "Retag"
+		again.wait_time = RETAG
+		again.autostart = true
+		again.timeout.connect(_retag)
+		add_child(again)
+
+
+## Whether a closed bare hand holds it (XRInteractor.step_hold), not only a pinch: hand
+## percussion, the shaker and the tambourine. A bell is held by its handle, by a pinch.
+func held_in_fist() -> bool:
+	return false
+
+
+## Where a hand holds it, in global space: the point its held pose puts at the hand (`held_pose`),
+## wherever it lies. What a closed hand has to close round (HandPose.grips).
+func grip_point() -> Vector3:
+	return global_transform * held_pose().affine_inverse().origin
+
+
+## What its shelf tag says: SNAP while this player snaps (or, in a bandmate's hand, while they do),
+## and in a headset how a hand holds it; "" for nothing to say. Only hand percussion has one.
+func tag_text() -> String:
+	if not held_in_fist():
+		return ""
+	var lines: PackedStringArray = []
+	var snaps := holder_snaps if is_held_elsewhere() else (snapping.is_valid() and bool(snapping.call()))
+	if snaps:
+		lines.append("SNAP")
+	if hands_hint and state != State.HELD:
+		lines.append(HANDS_HINT)
+	return "\n".join(lines)
+
+
+func _retag() -> void:
+	if _tag == null:
+		return
+	var said := tag_text()
+	# Not over it in your own hand, where it would sit in front of everything you look at.
+	_tag.visible = said != "" and not in_hand()
+	if _tag.text != said:
+		_tag.text = said
 
 
 ## Where its jack is, in its own frame: out of the end on your right as you face it (-X), at its
@@ -186,19 +265,28 @@ func play(velocity: int, struck := false) -> void:
 
 ## Somebody else's hit, as their hand plays it: in the room, from where the instrument is.
 ## `song` is the song position they played it to; -1 (not known) is this player's own. A pitched
-## item rings its note there, exactly; percussion is given a little wobble, so a run of hits is
-## not one sample said again and again.
-func heard(velocity: int, struck := false, song := -1.0) -> void:
+## item rings its note there, exactly. `take` is which of Foley's takes their hand rang
+## (`sound_take`), so everyone hears the sound its player heard; -1 (not known) is the next of
+## this copy's own, with a little wobble, so a run of hits is not one sample said again and again.
+## `snap`, whether they snap their hits, for its tag.
+func heard(velocity: int, struck := false, song := -1.0, take := -1, snap := false) -> void:
 	_take += 1
 	_jiggle(velocity)
+	holder_snaps = snap
 	var tune := pitch_scale()
 	if pitched():
 		var note := note_at(song if song >= 0.0 else now())
 		last_note = note
 		tune *= sound_pitch(note)
-	else:
+	elif take < 0:
 		tune *= randf_range(0.97, 1.03)
-	Foley.play(self, sound(struck, _take), level_db(velocity) + 2.0, tune)
+	Foley.play(self, sound(struck, take if take >= 0 else _take), level_db(velocity) + 2.0, tune)
+
+
+## Which of Foley's takes its last hit rang (`sound`'s `take`): sent with a hit (Session.item_hit),
+## so whoever hears it hears that one.
+func sound_take() -> int:
+	return _take
 
 
 static func level_db(velocity: int) -> float:
@@ -215,19 +303,21 @@ static func velocity_for(speed: float) -> int:
 func _physics_process(delta: float) -> void:
 	super(delta)
 	_since += delta
-	if in_hand():
-		feel(carried_by.shake_point(), delta)
+	# A bare hand out of tracking is no stroke, and coming back is a fresh one, not the jump.
+	if in_hand() and carried_by.shake_tracked():
+		feel(carried_by.shake_point(), delta, carried_by.shake_lever())
 	else:
 		_last = Vector3.INF
 		_peak = 0.0
 
 
 ## Where the hand shakes it from now, `delta` on from the last: a hit if a stroke has stopped.
-func feel(at: Vector3, delta: float) -> void:
+## `lever`, how much further the instrument goes than `at` does (Interactor.shake_lever).
+func feel(at: Vector3, delta: float, lever := 1.0) -> void:
 	if _last == Vector3.INF or delta <= 0.0:
 		_last = at
 		return
-	var moving := (at - _last) / delta
+	var moving := (at - _last) / delta * lever
 	_last = at
 	var speed := moving.length()
 	if speed > _peak:

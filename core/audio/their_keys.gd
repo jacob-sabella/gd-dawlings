@@ -73,5 +73,21 @@ func play(kind: int, pitch: int, velocity: int, from: int, _song := -1.0, source
 		Session.Note.OFF:
 			if down.let_go(pitch, source):
 				synth.note_off(pitch)
+			if down.is_empty():
+				# Their last note-off: their wheel rests, here as on their end (GuestMidi.control).
+				synth.rest_controls()
 		Session.Note.PEDAL_DOWN: synth.sustain(true)
 		Session.Note.PEDAL_UP: synth.sustain(false)
+
+
+## A control from `from`, as Session.control_played says it, on the one synth they have here: a
+## player has one wheel (GuestMidi.wheel_source), so whichever of their instruments moved it, it
+## bends all of their keys. Played only while they have a note down: one arriving after their
+## last note-off (the controls have no order against the notes) would leave the wheel off rest
+## with nothing to put it back, and one moved before a note is sent again right behind it.
+func control(kind: int, value: int, from: int, _song := -1.0, _source := &"") -> void:
+	var synth: MonitorSynth = synths.get(from)
+	var down: KeysDown = _down.get(from)
+	if synth == null or down == null or down.is_empty():
+		return
+	synth.control(kind, value)

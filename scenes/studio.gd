@@ -233,6 +233,9 @@ var rack_trolley: Trolley
 var deck_trolley: Trolley
 var timeline_stand: Trolley
 var patch_stand: Trolley
+## The stage table (StageTable, docs/spatial_loop.md slice 18) and the trolley it stands on.
+var stage: StageTable
+var stage_trolley: Trolley
 ## Surface id -> [the trolley it stands on, where on that trolley].
 var _seated_on := {}
 var _lamps: Array[OmniLight3D] = []
@@ -445,6 +448,9 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	if _seat_finder != null:
+		_seat_finder.free()
+		_seat_finder = null
 	mic_arm.let_go()
 	Ears.listen(false)
 	if DAW.backend is GodotBackend:
@@ -517,13 +523,13 @@ func _hang_the_roulette_door() -> void:
 ## was let go as it went (`_exit_tree`).
 func _stand_the_harp() -> void:
 	harp = ChordHarp.new()
-	harp.transform = venue.harp_spot()
+	harp.transform = Stations.spot(venue, &"harp")
 	venue.add_child(harp)
 	if presence != null:
 		presence.harp = harp
 	# The handbells' stand beside it (the bells themselves are items: their homes are its seats).
 	var stand := HandbellItem.stand()
-	stand.transform = venue.bell_stand_spot()
+	stand.transform = Stations.spot(venue, &"bells")
 	venue.add_child(stand)
 
 
@@ -532,7 +538,7 @@ func _stand_the_harp() -> void:
 ## None in a venue with no bricks table.
 func _stand_the_wheel() -> void:
 	wheel = null
-	var spot: Variant = venue.wheel_spot()
+	var spot: Variant = Stations.spot(venue, &"wheel")
 	if spot == null:
 		return
 	wheel = FifthsWheel.new()
@@ -828,6 +834,9 @@ func _build_furniture() -> void:
 	add_child(floor_plan)
 
 	_build_lamp_stands()
+	# Before the board, whose rows are the stations standing here, the stage table among them.
+	_build_stage_trolley()
+	_build_station_board()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
 	# cart is what the right-hand side of a control room looks like, and it is the thing in
@@ -928,6 +937,62 @@ func _build_furniture() -> void:
 	timeline_stand.add_part(crossbar)
 
 	_build_patch_stand()
+
+
+## Where the stage table's trolley stands: beside the mix position on the right and a little
+## behind it, turned to face it, clear of the deck trolley and the patch stand however wide the
+## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
+## it). The top is desk height; the rail along its front drops RAIL below it.
+const STAGE_AT := Vector3(1.3, 0, 1.1)
+const STAGE_TOP := 0.74
+
+
+## The stage table's trolley: four legs under an apron, a shelf low down, casters, and the
+## table's plaque on its front under the rail (Stations.plaque). The table itself is a surface
+## and rides it (`_ride`, in `_build_surfaces`).
+func _build_stage_trolley() -> void:
+	var at := Vector2(STAGE_AT.x, STAGE_AT.z)
+	stage_trolley = _trolley("StageTrolley", &"stage_trolley", STAGE_AT, rad_to_deg(_facing_mix(at)))
+	# The table and the rail along its front, on the floor.
+	stage_trolley.footprint_centre = Vector2(0, 0.065)
+	stage_trolley.footprint_half = Vector2(0.62, 0.53)
+	stage_trolley.follow = 9.0
+	var apron := MeshInstance3D.new()
+	apron.name = "Apron"
+	var apron_mesh := BoxMesh.new()
+	apron_mesh.size = Vector3(1.12, 0.07, 0.82)
+	apron.mesh = apron_mesh
+	apron.position = Vector3(0, STAGE_TOP - StageTable.THICK - 0.035, 0)
+	apron.material_override = Materials.furniture()
+	GearTrim.edges(apron)
+	stage_trolley.add_part(apron)
+	var shelf := MeshInstance3D.new()
+	shelf.name = "Shelf"
+	var shelf_mesh := BoxMesh.new()
+	shelf_mesh.size = Vector3(1.08, 0.025, 0.78)
+	shelf.mesh = shelf_mesh
+	shelf.position = Vector3(0, Caster.HEIGHT + 0.12, 0)
+	shelf.material_override = Materials.furniture()
+	stage_trolley.add_part(shelf)
+	var leg_bottom := Caster.HEIGHT
+	var leg_top := STAGE_TOP - StageTable.THICK - 0.07
+	for dx in [-0.53, 0.53]:
+		for dz in [-0.38, 0.38]:
+			var leg := MeshInstance3D.new()
+			var leg_mesh := BoxMesh.new()
+			leg_mesh.size = Vector3(0.035, leg_top - leg_bottom, 0.035)
+			leg.mesh = leg_mesh
+			leg.position = Vector3(dx, (leg_top + leg_bottom) * 0.5, dz)
+			leg.material_override = Materials.brushed_metal()
+			stage_trolley.add_part(leg)
+			stage_trolley.add_caster(Vector2(dx, dz))
+	var plaque := Stations.plaque(&"stage_table")
+	plaque.position = Vector3(0, STAGE_PLAQUE_Y, StageTable.SIZE.y * 0.5 + 0.135)
+	stage_trolley.add_child(plaque)
+
+
+## The plaque's lettering's middle on the trolley's front, under the rail.
+const STAGE_PLAQUE_Y := 0.5
 
 
 ## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
@@ -2028,6 +2093,15 @@ func _build_anchors() -> void:
 		add_child(rig)
 		head = rig.head
 		rig.escape_requested.connect(_on_escape)
+		rig.travelled.connect(func(_home: bool) -> void:
+			if body != null:
+				body.recentre())
+		# A VR player's play space is centred on the mix position, in front of the desk, where a
+		# desktop's body stands: not at the room's origin, which is inside the console's carcass.
+		# From here the desk is at arm's length and the station board is in view, ahead and to
+		# the left. Passthrough keeps its own: its floor is a real one, put where the marks say.
+		if medium == Presentation.Medium.VR:
+			rig.settle(Transform3D(Basis.IDENTITY, Vector3(0, 0, MIX_POSITION_Z)))
 
 	screen_stage = Node3D.new()
 	screen_stage.name = "ScreenStage"
@@ -2223,6 +2297,15 @@ func _build_surfaces() -> void:
 	focus.body = body
 	focus.ergonomics = ergonomics
 	focus.surfaces = [console, patchbay, rack, deck, timeline]
+	# The stage table, on its trolley beside the mix position (slice 18). None in AR, which has
+	# no furniture to stand it on yet.
+	if stage_trolley != null:
+		stage = StageTable.new()
+		stage.name = "StageTable"
+		stage.transform = stage_trolley.transform * Transform3D(Basis.IDENTITY, Vector3(0, STAGE_TOP, 0))
+		studio_set.add_child(stage)
+		mount.register(stage)
+		focus.surfaces.append(stage)
 	focus.show_halo = medium != Presentation.Medium.SCREEN
 	focus.visits = medium == Presentation.Medium.SCREEN
 	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
@@ -2255,6 +2338,8 @@ func _build_surfaces() -> void:
 		_ride(deck_trolley, deck)
 		_ride(timeline_stand, timeline)
 		_ride(patch_stand, patchbay)
+		if stage != null:
+			_ride(stage_trolley, stage)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -2265,6 +2350,7 @@ func _build_surfaces() -> void:
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
 	console.rebuilt.connect(_forget_desk_box)
+	console.rebuilt.connect(_place_station_board)
 	console.rebuilt.connect(_fit_room_to_session)
 	patchbay.rebuilt.connect(_fit_stand_to_bay)
 	_fit_room_to_session()
@@ -2276,15 +2362,31 @@ func _build_surfaces() -> void:
 		_restore_track_racks()
 	Session.room_changed.connect(_on_room_changed)
 	# The tablets follow their tracks themselves; what is remembered and told follows them.
-	DAW.tracks_renumbered.connect(func(_map: Dictionary) -> void:
-		(func() -> void:
-			_remember_tablets()
-			_fold_orphaned_track_racks()
-			_publish_room_soon()).call_deferred())
+	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 	Session.room_asked.connect(_on_room_asked)
 	Session.role_changed.connect(_on_role_changed)
 	Session.room_motion.connect(_on_room_motion)
 	_publish_room()
+
+
+## A renumbering is answered a frame late, once every tablet has followed its track.
+##
+## A named method rather than a lambda, because DAW is an autoload that outlives every studio:
+## a bound method's connection goes when the studio is freed, and a lambda's does not, so a
+## renumbering after a studio was gone ran its deferred body on whatever object later took the
+## freed one's memory. A bound method is checked by instance id before it is called, deferred or
+## not, and the deferred half also stands down when the studio has left the tree between the
+## signal and the next idle frame.
+func _on_tracks_renumbered(_map: Dictionary) -> void:
+	_after_tracks_renumbered.call_deferred()
+
+
+func _after_tracks_renumbered() -> void:
+	if not is_inside_tree():
+		return
+	_remember_tablets()
+	_fold_orphaned_track_racks()
+	_publish_room_soon()
 
 
 ## A stand under every practical.
@@ -2520,10 +2622,12 @@ func _build_items() -> void:
 	their_keys.name = "TheirKeys"
 	add_child(their_keys)
 	Session.note_played.connect(their_keys.play)
+	Session.control_played.connect(their_keys.control)
 	their_monitor = TheirMonitor.new()
 	their_monitor.name = "TheirMonitor"
 	add_child(their_monitor)
 	Session.note_played.connect(their_monitor.play)
+	Session.control_played.connect(their_monitor.control)
 	console.rebuilt.connect(_show_patches)
 	# A rack's OUT is made again with the rack, and shows the plugs in it again.
 	if rack != null:
@@ -2539,6 +2643,10 @@ func _build_items() -> void:
 	add_child(hit_recorder)
 	# Every hit's one song position is read from the take's own stamp (InstrumentItem.clock).
 	InstrumentItem.clock = hit_recorder.stamp
+	# The shelf tags of the hand percussion say SNAP while this player snaps, and in a headset how
+	# a bare hand holds one.
+	InstrumentItem.snapping = HitRecorder.snaps
+	InstrumentItem.hands_hint = medium != Presentation.Medium.SCREEN
 	hit_recorder.unarmed.connect(func() -> void:
 		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
 	jacks = Jacks.new()
@@ -3483,7 +3591,7 @@ func _keytar_play(on: bool) -> void:
 		return
 	keytar_keys.set_active(on)
 	if on:
-		Session.notice.emit("Keytar: A to ' play from %s, Z and X move the octave, the arrows walk. Esc gives the keys back; click the keytar to take them again."
+		Session.notice.emit("Keytar: A to ' play from %s, Z and X move the octave, the arrows walk. Alt with the mouse moving up or down bends. Esc gives the keys back; click the keytar to take them again."
 				% keytar_keys.octave_name())
 
 
@@ -3497,12 +3605,14 @@ func _on_key_played(pitch: int, down: bool) -> void:
 ## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
 ## click on percussion is out already, as a use; a pitched item's click is sent as a hit too,
 ## since its ring is all a use of it is, and only a hit carries the song position (`at`) that
-## pitches it. The take and the room both get that one `at`.
+## pitches it. The take and the room both get that one `at`, unmoved: a snap moves only the
+## recorded note (HitRecorder.snapped_at), and whether this player snaps goes with the hit, with the
+## Foley take their hand rang, so everyone hears the sound they heard.
 func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float) -> void:
 	# Onto the armed track, or the track its jack goes into.
 	jacks.hit(item, velocity, at)
 	if not struck or item.pitched():
-		send_item_hit.call(item.id, velocity, at)
+		send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take())
 
 
 ## A hand here stepped an instrument's jack (Jacks.asked): done here at once, and asked of the
@@ -3994,8 +4104,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Your fingertips as notes, on J K L ;: T, beside the home row they play on.
 			KEY_T:
 				toggle_fingertips()
+			# Go to the instruments one at a time, as F goes to the gear: I for instrument.
+			# Shift goes the other way. The help card's PLAY pages go to one by name.
+			KEY_I:
+				cycle_stations(-1 if event.shift_pressed else 1)
 			KEY_ESCAPE:
 				_on_escape()
+			# Backspace over a voice on the stage table, or anything of its tag: that track back to
+			# centre, 0 dB and full width, as a double-click on it does.
+			KEY_BACKSPACE:
+				var hand := get_node_or_null("MouseHand") as MouseInteractor
+				if stage != null and hand != null:
+					stage.reset_under(hand.held if hand.held != null else hand.hovered)
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
 			# by changing it while looking at the thing.
 			KEY_EQUAL, KEY_KP_ADD:
@@ -4324,6 +4444,282 @@ func _toggle_summoning() -> void:
 	if was != &"":
 		focus.focus(was)
 	_sit_down()
+
+
+# --- going to the instruments (docs/spatial_loop.md part two, slice 10) ------------------------
+
+## The station last gone to (a Stations id), so I and Shift-I go on round from it; empty before
+## the first.
+var station := &""
+
+
+## The stations that stand here, in Stations' order: none in AR, where the room is a real one and
+## nothing stands in it yet (slice 60), and none without a venue.
+func station_ids() -> Array[StringName]:
+	if medium == Presentation.Medium.AR or venue == null:
+		return []
+	return Stations.ids(venue)
+
+
+## I and Shift-I: go to the next station, or the one before, from the one last gone to, round
+## and round. Unlike F's cycle there is no end to walk off: Esc is the way back to the desk, and
+## the toast at each one says so. Answers the station gone to, or empty.
+func cycle_stations(direction: int) -> StringName:
+	var ids := station_ids()
+	if ids.is_empty():
+		Session.notice.emit("No instruments stand in this room.")
+		return &""
+	var at := ids.find(station)
+	var next := (0 if direction >= 0 else ids.size() - 1) if at < 0 \
+			else posmod(at + (1 if direction >= 0 else -1), ids.size())
+	return ids[next] if go_to_station(ids[next]) else &""
+
+
+## Walk to station `id`: the walker eased to its seat (Stations.seat, SEAT in front of it on
+## floor a person fits on), facing what is played, on the curve visiting gear uses
+## (`_walk_to_seat`), longer for a longer way and scaled by Ergonomics.motion_scale (a cut at 0),
+## and looking where it holds the station's controls in view (Stations.look_from). God mode is
+## left first and focused gear let go, and the monitor's own panels step aside, as they do at
+## gear, so the instrument is in full view. The body goes too, as it does to gear,
+## so Esc walks back to the desk. A toast says its title and its desk line. In a headset the
+## play space travels there instead (`_travel_to_station`). False where it does not stand here,
+## or travel is refused.
+func go_to_station(id: StringName) -> bool:
+	var r := Stations.row(id)
+	if r.is_empty() or not station_ids().has(id):
+		Session.notice.emit("%s does not stand in this room." % r.get("title", String(id)))
+		return false
+	var area: String = Stations.AREA_TITLES.get(r["area"], "room")
+	# A headset puts the rows beside a plaque away only once it goes: refused, they stay up and
+	# say why, where the press was made.
+	if medium != Presentation.Medium.SCREEN or camera == null:
+		return _travel_to_station(id)
+	_put_away_beside()
+	if god_mode:
+		set_god_mode(false)
+	if focus != null and focus.is_focused():
+		focus.release()
+	var fits := walker.fits if walker != null else Callable()
+	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
+	var seat: Transform3D = frame_of * (Stations.seat(venue, id, fits) as Transform3D)
+	station = id
+	_stand_down_screen(true)
+	camera.fov = ROOM_FOV
+	var standing := walker.standing_eye if walker != null else ergonomics.eye_height
+	var eye := seat.origin + Vector3(0, standing, 0)
+	# Framed from where you actually stand, which the room may have brought in short of SEAT:
+	# the look tips to hold the station's top and foot, its controls' top first.
+	var look: Vector3 = frame_of * (Stations.look_from(venue, id, frame_of.affine_inverse() * eye, camera.fov) as Vector3)
+	var from := walker.global_position if walker != null else camera.global_position
+	var way := Vector2(eye.x - from.x, eye.z - from.z).length()
+	var seconds := clampf(way / STATION_PACE, 0.55, 2.0) * clampf(ergonomics.motion_scale, 0.0, 2.0)
+	if not is_inside_tree():
+		seconds = 0.0
+	var stand := Transform3D(seat.basis, eye)
+	if walker != null:
+		walker.eye_height = walker.standing_eye
+		_orbit_target = look
+		walker.travel_to(eye, look, seconds)
+	else:
+		var back := eye - look
+		frame(look, back.length(), atan2(back.x, back.z), -atan2(back.y, Vector2(back.x, back.z).length()))
+	if body != null and focus != null and focus.visits:
+		if _walk != null and _walk.is_valid():
+			_walk.kill()
+		if seconds <= 0.01:
+			body.transform = stand
+		else:
+			_walk = create_tween()
+			_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+			_walk.tween_property(body, "transform", stand, seconds)
+	Session.notice.emit("%s, in the %s: %s  ·  Esc back to the desk" % [r["title"], area.to_lower(), r["desk"]])
+	return true
+
+
+## How fast going to a station covers the floor (m/s), at motion 1: a brisk walk, so the live
+## room's far wall is a second and a half from the desk rather than a lurch.
+const STATION_PACE := 4.0
+
+
+# --- going to a station in a headset (docs/spatial_loop.md part two, slice 11) -----------------
+
+## The station board's stand, by the desk's left end at the mix position, turned to face it: in
+## view from the desk's seat and a step from where a headset player stands at home. A desk wide
+## enough to reach it (forty tracks spread out) has it stand BOARD_CLEAR beyond its left end, in
+## front of the rack (BOARD_WIDE_Z), so it is never between the seat and a strip.
+const BOARD_AT := Vector3(-0.7, 0, -0.22)
+const BOARD_HEADING := 38.0
+const BOARD_CLEAR := 0.26
+## How far toward the desk the stand's face reaches from its middle, turned as it is.
+const BOARD_REACH := 0.22
+const BOARD_WIDE_Z := 0.25
+
+## The board by the desk (StationBoard): every station that stands here, a row each, and a press
+## goes there. Null in AR, where nothing stands yet (slice 60).
+var station_board: StationBoard
+## The board's rows beside a plaque, while its INSTRUMENTS key has them up; else null.
+var _beside: StationBoard
+## A walker kept out of the tree, for where a person fits when there is no walker of our own (a
+## headset): so a headset's seat is the desktop's seat, in from a table that stands in the way.
+var _seat_finder: Walker
+
+
+func _build_station_board() -> void:
+	station_board = StationBoard.new()
+	station_board.name = "StationBoard"
+	station_board.venue = venue
+	station_board.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), BOARD_AT)
+	station_board.chosen.connect(_on_board_chosen)
+	studio_set.add_child(station_board)
+	_place_station_board()
+	floor_plan.fixtures.append(func() -> Array:
+		return [station_board.footprint()] if is_instance_valid(station_board) else [])
+	venue_changed.connect(func(_id: StringName) -> void:
+		_put_away_beside()
+		station_board.set_venue(venue))
+
+
+## Stand the board by the desk's left end as the desk now measures (`_desk_footprint`).
+func _place_station_board() -> void:
+	if station_board == null:
+		return
+	var at := BOARD_AT
+	var desk: Array = _desk_footprint() if console != null else []
+	if not desk.is_empty():
+		var left: float = (desk[0]["c"] as Vector2).x - (desk[0]["h"] as Vector2).x
+		if left < at.x + BOARD_REACH:
+			at = Vector3(left - BOARD_CLEAR, 0, BOARD_WIDE_Z)
+	station_board.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), at)
+
+
+func _on_board_chosen(id: StringName) -> void:
+	go_to_station(id)
+
+
+## A key on a station's plaque (StationBoard.PlaqueKey) was pressed: INSTRUMENTS puts the board's
+## rows up beside that plaque, or away again; BACK goes home to the desk.
+func plaque_key(id: StringName, kind: StringName, key: Node3D) -> void:
+	if kind == StationBoard.PlaqueKey.BACK:
+		go_home()
+		return
+	var plaque := key.get_parent() as Node3D
+	var shown := _beside != null and is_instance_valid(_beside) and _beside.get_parent() == plaque
+	_put_away_beside()
+	if shown or plaque == null:
+		return
+	_beside = StationBoard.new()
+	_beside.name = "Beside"
+	_beside.compact = true
+	_beside.venue = venue
+	_beside.chosen.connect(_on_board_chosen)
+	# To the plaque's right, its top level with the plaque's, on the plaque's own lean.
+	var plate := plaque.get_node_or_null("Plate") as MeshInstance3D
+	var size: Vector3 = (plate.mesh as BoxMesh).size if plate != null else Vector3(Stations.PLAQUE_WIDTH, 0.2, 0.01)
+	var top := plate.position.y + size.y * 0.5 if plate != null else 0.1
+	_beside.position = Vector3(size.x * 0.5 + 0.02 + StationBoard.WIDTH * 0.5, top, 0)
+	plaque.add_child(_beside)
+	Session.notice.emit("Every instrument, beside the %s's plaque: press one to go there, INSTRUMENTS again to put them away."
+			% String(Stations.row(id).get("title", id)).to_lower())
+
+
+## Take the rows beside a plaque away, if they are up: hidden and out of the physics space at
+## once, freed at the frame's end, since the press that put them away may be one of their own.
+func _put_away_beside() -> void:
+	if _beside != null and is_instance_valid(_beside):
+		_beside.visible = false
+		_beside.process_mode = Node.PROCESS_MODE_DISABLED
+		_beside.queue_free()
+	_beside = null
+
+
+## Why a headset may not travel now, or empty if it may. In a co-located room (`co_located`) a
+## body has to stay where the others in the room see it: they see the real person, and a ghost
+## sent somewhere else would be standing in the wrong place for everyone.
+func travel_refusal() -> String:
+	if rig == null:
+		return "only a headset travels; on a screen I walks there"
+	if co_located():
+		return "you share this floor with the others in the room, who see you where you stand: walk over to it, as they would"
+	return ""
+
+
+## Whether this headset shares a real floor with someone else in the session: its frame was taken
+## from marks on a real floor (RoomAnchor.marked), and another headset is in the session. Two
+## rigs calibrated to the same marks are standing in the same room; a frame handed over whole
+## (`adopt_virtual_frame`) is a room of one's own.
+func co_located() -> bool:
+	if room_anchor == null or not room_anchor.marked or Session.role == Session.Role.SOLO:
+		return false
+	for peer: int in Session.participants:
+		var p: Session.Participant = Session.participants[peer]
+		if peer != Session.local_peer_id and p.medium != Presentation.Medium.SCREEN:
+			return true
+	return false
+
+
+## The headset's way to station `id`: the play space travels (XRRig.travel) so its centre is on
+## the station's seat, facing it, behind a blink of XRRig.FADE (a plain cut at motion 0). The seat
+## is the desktop's (Stations.seat, where a person fits), and focused gear is let go first, as on
+## a desktop. Refused, the boards say why (StationBoard.refuse) and so does a toast, the rows
+## beside a plaque staying up to say it where they were pressed; going, those are put away. The
+## toast at the station says its title, its hands line and how to come back.
+func _travel_to_station(id: StringName) -> bool:
+	var r := Stations.row(id)
+	var refused := travel_refusal()
+	if refused != "":
+		for board in [station_board, _beside]:
+			if board != null and is_instance_valid(board):
+				(board as StationBoard).refuse(refused)
+		Session.notice.emit("%s: %s." % [StationBoard.REFUSED.capitalize(), refused])
+		return false
+	_put_away_beside()
+	if focus != null and focus.is_focused():
+		focus.release()
+	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
+	var seat: Transform3D = frame_of * (Stations.seat(venue, id, _station_fits()) as Transform3D)
+	station = id
+	if station_board != null:
+		station_board.clear_refusal()
+	rig.travel(seat, _travel_fade())
+	Session.notice.emit("%s, in the %s: %s  ·  BACK on its plaque comes home" % [r["title"],
+			String(Stations.AREA_TITLES.get(r["area"], "room")).to_lower(), r["hands"]])
+	return true
+
+
+## Home to the desk: BACK on a plaque. A headset's play space travels back to the mix position
+## (XRRig.travel_home), co-located or not, since home is where everyone expects you, and at home
+## already a toast says so; a desktop walks back as Esc does.
+func go_home() -> void:
+	_put_away_beside()
+	station = &""
+	if rig != null:
+		if rig.away:
+			rig.travel_home(_travel_fade())
+			Session.notice.emit("Back at the desk.")
+		else:
+			Session.notice.emit("Already at the desk.")
+		return
+	_on_escape()
+
+
+## How long the blink closes, and opens, on a travel: XRRig.FADE, or none at motion 0.
+func _travel_fade() -> float:
+	return XRRig.FADE if ergonomics.motion_scale > 0.0 else 0.0
+
+
+## Where a person fits on the floor (Walker.fits): our walker's, or, in a headset that has none,
+## one kept out of the tree for the purpose, told the same floor and solids.
+func _station_fits() -> Callable:
+	if walker != null:
+		return walker.fits
+	if floor_plan == null:
+		return Callable()
+	if _seat_finder == null:
+		_seat_finder = Walker.new()
+	_seat_finder.floor_plan = floor_plan
+	_seat_finder.walkable = _walkable()
+	_seat_finder.fixed = venue.solids() if venue != null else []
+	return _seat_finder.fits
 
 
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot

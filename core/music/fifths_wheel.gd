@@ -72,6 +72,9 @@ const CENTRE_Y := 0.48
 const STRIP_Y := -0.405
 const TILE := Vector2(0.066, 0.062)
 const TILE_STEP := 0.075
+## Its plaque (Stations.plaque) hangs on the table's end under the board, facing whoever stands
+## there: this far below the table top.
+const PLAQUE_DROP := 0.12
 
 ## Where its notes are played: this player's keys. Session.guest_midi unless told otherwise.
 var keys: GuestMidi = null
@@ -192,6 +195,11 @@ func _ready() -> void:
 	_set.titled = "FIFTHS WHEEL  SET"
 	_set.says = set_text
 	_set.hinted = "press to write the key and the strip into the song from that bar"
+	# In the stand's frame (Venue.wheel_spot), out past the board's bottom edge to the table's end.
+	var plaque := Stations.plaque(&"wheel")
+	var stand := on_stand(Transform3D.IDENTITY).affine_inverse()
+	plaque.transform = stand * Transform3D(Basis.IDENTITY, Vector3(0, -PLAQUE_DROP, Venue.WHEEL_IN + 0.006))
+	add_child(plaque)
 	_show()
 
 

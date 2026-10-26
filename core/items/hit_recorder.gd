@@ -16,8 +16,22 @@ extends Node
 ## of the speakers a moment from now with the mix coming out then: the stamp is moved on by the
 ## output's latency.
 
+##
+## SNAPPED GENTLY (docs/spatial_loop.md slice 17). A hand percussion hit (not a pitched item's) is
+## recorded a little nearer the beat than it was played: within SNAP_WINDOW of the nearest
+## sixteenth (`snapped_at`, on MixState's bar grid), it is moved SNAP_PULL of the way there. Only the
+## stamp moves: what was heard, and the `at` sent to the room, are the hit's own. Whether a hit is
+## snapped is its player's ("Snap hand percussion", GuestMidi.snap_hits), carried with each hit
+## (Session.item_hit's `snap`), so it is the player's choice whichever machine takes it down.
+
 ## Drums, in MIDI's numbering from 0.
 const CHANNEL := 9
+## How far of the way to the nearest sixteenth a snapped hit is moved: half, so a feel is kept.
+const SNAP_PULL := 0.5
+## Only a hit this near a sixteenth (s) is moved; one further off was played there on purpose.
+const SNAP_WINDOW := 0.035
+## A sixteenth, in the tempo map's quarter-note beats.
+const SIXTEENTH := 0.25
 
 ## Where the song is, here: {seconds, playing, recording, valid}. GuestMidi.heard by default; the
 ## suite gives its own.
@@ -80,14 +94,19 @@ func jacked_tracks() -> Array:
 ## the item's channel (`channel`: the drums', or InstrumentItem.MELODIC_CHANNEL), as long as the
 ## item says (`note_seconds`). `track`, a track its jack goes into (Jacks.hit): onto that track's
 ## own take, whether or not anything is armed, and not into the armed one; 0, the armed one.
-func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0) -> void:
+## `snap`: whether its player snaps it (1 yes, 0 no; -1 this player's own `snaps`). A pitched
+## item's note is never moved: its tone is the chord's at `at`.
+func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0, snap := -1) -> void:
 	var h := heard()
 	follow(h)
+	var moved := (snap == 1 or (snap < 0 and snaps())) and not item.pitched()
 	if track > 0:
 		if not _rolling(h):
 			return
 		if is_nan(at):
 			at = stamp()
+		if moved:
+			at = snapped_at(at, DAW.state)
 		var take: MidiTake = _jacked.get(track)
 		if take == null:
 			take = MidiTake.new()
@@ -103,7 +122,35 @@ func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0) -> void:
 		return
 	if is_nan(at):
 		at = stamp()
+	if moved:
+		at = snapped_at(at, DAW.state)
 	_note(_take, item, velocity, at)
+
+
+## Whether this player's hand percussion is snapped: "Snap hand percussion" (GuestMidi.snap_hits),
+## on unless they turned it off.
+static func snaps() -> bool:
+	return Session.guest_midi == null or Session.guest_midi.snap_hits
+
+
+## The sixteenth nearest song position `seconds`, on `state`'s grid: counted from the start of the
+## bar it is in (MixState.bar_at), through the tempo's and the signature's changes.
+static func nearest_sixteenth(seconds: float, state: MixState) -> float:
+	if state == null:
+		return seconds
+	var beat := state.beat_at(seconds)
+	var meter := state.meter()
+	var bar_from := meter.beat_of_bar(floorf(meter.bar_at(beat)))
+	return state.seconds_at_beat(bar_from + roundf((beat - bar_from) / SIXTEENTH) * SIXTEENTH)
+
+
+## Where a snapped hit played to `seconds` is recorded: SNAP_PULL of the way to the nearest
+## sixteenth when it is within SNAP_WINDOW of it, where it was played otherwise.
+static func snapped_at(seconds: float, state: MixState) -> float:
+	var off := nearest_sixteenth(seconds, state) - seconds
+	if absf(off) > SNAP_WINDOW:
+		return seconds
+	return seconds + off * SNAP_PULL
 
 
 ## One hit into `take`: the item's note at `at`, on its channel, as long as it says.

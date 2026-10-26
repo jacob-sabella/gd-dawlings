@@ -260,6 +260,10 @@ class TrackState extends RefCounted:
 	var volume: float = 0.716
 	var volume_db: float = 0.0
 	var pan: float = 0.5
+	## How wide its stereo image is, 0 (folded to mono) to 1 (as it was recorded): the stage
+	## table's ring (docs/spatial_loop.md slice 18). Reaper's D_WIDTH in its stereo pan mode, the
+	## built-in engine's StereoEnhance on the track's bus. `/track/N/width`.
+	var width: float = 1.0
 	var mute: bool = false
 	var solo: bool = false
 	var rec_arm: bool = false

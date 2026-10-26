@@ -139,6 +139,8 @@ func open(options: Dictionary = {}) -> bool:
 
 
 func close() -> void:
+	# What an open edit holds is sent while there is still a bridge to send it by.
+	close_all_edits()
 	for w in _windows:
 		w.close()
 	_windows.clear()
@@ -203,6 +205,12 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.PROJECT_FILES:
 		# Reaper's files are on Reaper's machine, opened by Reaper's own dialogs.
 		return false
+	if capability == Capability.EDIT_GROUPS:
+		# One Undo block for a gesture's bridge verbs; OSC writes have no block to share.
+		return _bridge != null and _bridge.is_open()
+	if capability == Capability.WIDTH:
+		# OSC has no width; the bridge sets D_WIDTH, and the stereo pan mode it needs.
+		return _bridge != null and _bridge.is_open()
 	return true
 
 
@@ -223,6 +231,8 @@ func _process(delta: float) -> void:
 		if _refresh_clock >= float(_refresh_after[0]):
 			_refresh_after.pop_front()
 			_peer.send("/action", [REFRESH_SURFACES])
+	if not _batches.is_empty():
+		close_idle_edits()
 	if _bridge:
 		_bridge.poll()
 		_poll_timeline(delta)
@@ -327,6 +337,49 @@ func set_track_mute(index: int, muted: bool) -> void:
 	write("/track/%d/mute" % index, [1.0 if muted else 0.0])
 
 
+## Reaper's D_WIDTH, by the bridge's SetTrackWidth: shown on the cache at once, and kept there
+## against the structure poll for WIDTH_SETTLE_MSEC after the bridge has it. A track whose pan
+## mode ignores D_WIDTH (anything but stereo pan) is put in stereo pan first, inside the same
+## Undo block, and `stereo_panned` remembers it was, for the stage voice's card. Inside an
+## edit a drag's widths are one call, the last, so a batch carries one width per track.
+func set_track_width(index: int, width: float) -> void:
+	width = clampf(width, 0.0, 1.0)
+	_apply("/track/%d/width" % index, [width])
+	_width_written[index] = Time.get_ticks_msec()
+	if _bridge == null or not _bridge.is_open():
+		return
+	if _batches.has(acting_peer):
+		var calls: Array = _batches[acting_peer]["calls"]
+		for c in calls:
+			if c[0] == "SetTrackWidth" and int(c[1][0]) == index:
+				c[1] = [index, width]
+				_batches[acting_peer]["at"] = Time.get_ticks_msec()
+				return
+	_bridge_write("SetTrackWidth", [index, width], func(result) -> void:
+		_width_written[index] = Time.get_ticks_msec()
+		if result is Dictionary and result.get("mode_set", false):
+			stereo_panned[index] = true
+			pan_mode_set.emit(index))
+
+
+## Tracks whose pan mode the bridge has put in stereo pan to give them a width, this session.
+var stereo_panned := {}
+## A track's pan mode was set to stereo pan, so its width is heard.
+signal pan_mode_set(index: int)
+var _width_written := {}
+const WIDTH_SETTLE_MSEC := 2000
+
+
+## Whether a width the structure poll reports for track `index` should be taken: not while a
+## width for it waits in an open edit, nor soon after one was sent.
+func _width_settled(index: int) -> bool:
+	for peer in _batches:
+		for c in _batches[peer]["calls"]:
+			if c[0] == "SetTrackWidth" and int(c[1][0]) == index:
+				return false
+	return Time.get_ticks_msec() - int(_width_written.get(index, -WIDTH_SETTLE_MSEC)) >= WIDTH_SETTLE_MSEC
+
+
 func set_track_solo(index: int, soloed: bool) -> void:
 	write("/track/%d/solo" % index, [1.0 if soloed else 0.0])
 
@@ -353,7 +406,7 @@ func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> 
 	record_for_replication(address, [clampf(value, 0.0, 1.0)])
 	MixWire.apply(state, address, [clampf(value, 0.0, 1.0)])
 	if _bridge != null and _bridge.is_open():
-		_bridge.call_reaper("SetFxParam", [track_index, fx_index, param, clampf(value, 0.0, 1.0)])
+		_bridge_write("SetFxParam", [track_index, fx_index, param, clampf(value, 0.0, 1.0)])
 
 
 ## Reaper's own plugins' windows can be worked when the Reaper running here was started with
@@ -439,13 +492,13 @@ func set_fx_wet(track_index: int, fx_index: int, wet: float) -> void:
 	record_for_replication(address, [clampf(wet, 0.0, 1.0)])
 	MixWire.apply(state, address, [clampf(wet, 0.0, 1.0)])
 	if _bridge != null and _bridge.is_open():
-		_bridge.call_reaper("SetFxWet", [track_index, fx_index, clampf(wet, 0.0, 1.0)])
+		_bridge_write("SetFxWet", [track_index, fx_index, clampf(wet, 0.0, 1.0)])
 
 
 func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
 	if _bridge == null or not _bridge.is_open():
 		return
-	_bridge.call_reaper("StepFxPreset", [track_index, fx_index, signi(direction)], func(result) -> void:
+	_bridge_write("StepFxPreset", [track_index, fx_index, signi(direction)], func(result) -> void:
 		if typeof(result) == TYPE_DICTIONARY and result.has("preset"):
 			_apply("/track/%d/fx/%d/preset" % [track_index, fx_index], [str(result["preset"])]))
 
@@ -456,7 +509,7 @@ func step_fx_preset(track_index: int, fx_index: int, direction: int) -> void:
 func move_fx(from_track: int, fx_index: int, to_track: int, to_fx: int, copy: bool) -> void:
 	if _bridge == null or not _bridge.is_open():
 		return
-	_bridge.call_reaper("MoveFx", [from_track, fx_index, to_track, to_fx, copy],
+	_bridge_write("MoveFx", [from_track, fx_index, to_track, to_fx, copy],
 			func(_result) -> void: _structure_due = 0.0)
 
 
@@ -475,21 +528,21 @@ func fx_choices() -> Array:
 func add_fx(track_index: int, plugin: String, at: int) -> void:
 	if _bridge == null or not _bridge.is_open() or not fx_choices().any(func(c): return c[0] == plugin):
 		return
-	_bridge.call_reaper("AddFx", [track_index, plugin, at],
+	_bridge_write("AddFx", [track_index, plugin, at],
 			func(_result) -> void: _structure_due = 0.0)
 
 
 func remove_fx(track_index: int, fx_index: int) -> void:
 	if _bridge == null or not _bridge.is_open():
 		return
-	_bridge.call_reaper("RemoveFx", [track_index, fx_index],
+	_bridge_write("RemoveFx", [track_index, fx_index],
 			func(_result) -> void: _structure_due = 0.0)
 
 
 func create_sidechain(from_track: int, to_track: int) -> bool:
 	if _bridge == null or not _bridge.is_open():
 		return false
-	return _bridge.call_reaper("CreateSidechain", [from_track, to_track],
+	return _bridge_write("CreateSidechain", [from_track, to_track],
 			func(_result) -> void: _structure_due = 0.0)
 
 
@@ -509,7 +562,7 @@ func set_send_pre_fader(track_index: int, send_index: int, pre: bool) -> void:
 	if _bridge == null or not _bridge.is_open():
 		return
 	_apply("/track/%d/send/%d/pre" % [track_index, send_index], [1.0 if pre else 0.0])
-	_bridge.call_reaper("SetSendPreFader", [track_index, send_index - 1, 1.0 if pre else 0.0],
+	_bridge_write("SetSendPreFader", [track_index, send_index - 1, 1.0 if pre else 0.0],
 			func(_result) -> void: _structure_due = 0.0)
 
 
@@ -705,8 +758,11 @@ func undo_to(depth: int) -> void:
 
 
 func _undo_or_redo(fn: String, action: int) -> void:
+	# An open edit is sent first, ahead of the undo: it is the step an undo takes back. It stays
+	# open, so what a hand still on it writes next is one fresh step (OfflineBackend.undo).
+	_send_open_edits()
 	if _bridge != null and _bridge.is_open():
-		_edit(fn, [])
+		_edit(fn, [], true)
 	elif _peer != null:
 		_peer.send("/action", [action])
 	# Whatever came back may be an edit, and the timeline is only polled every two seconds; or a
@@ -937,7 +993,7 @@ func _restructure(fn: String, args: Array) -> void:
 		return
 	_timeline_epoch += 1
 	_edits_in_flight += 1
-	_bridge.call_reaper(fn, args, func(_result) -> void:
+	_bridge_write(fn, args, func(_result) -> void:
 		_structure_due = 0.0
 		if _peer != null:
 			_peer.send("/action", [REFRESH_SURFACES])
@@ -1163,16 +1219,16 @@ func remove_marker(at: float) -> void:
 	_edit("RemoveMarker", [at])
 
 
-## A take, as one bridge call: a MIDI item created at `start` and filled note by note, inside one
-## undo block. Shown on the cache at once like every other edit; the next timeline poll brings
-## back Reaper's own copy, notes and all.
+## A take, as one bridge call: a MIDI item created at `start` and filled note by note and control
+## by control (MIDI_InsertCC), inside one undo block. Shown on the cache at once like every other
+## edit; the next timeline poll brings back Reaper's own copy, notes, controls and all.
 func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
-		take_name: String) -> void:
+		take_name: String, controls: Array = []) -> void:
 	if _bridge == null or not _bridge.is_open():
 		push_warning("insert_midi_take needs the ReaScript bridge; OSC cannot create an item.")
 		return
-	_locally_insert_take(track_index, start, end, notes, take_name)
-	_edit("InsertMidiTake", midi_take_request(track_index, start, end, notes, take_name))
+	_locally_insert_take(track_index, start, end, notes, take_name, controls)
+	_edit("InsertMidiTake", midi_take_request(track_index, start, end, notes, take_name, controls))
 
 
 ## The file, by its absolute path, since Reaper is on this machine; the bridge copies it into a
@@ -1189,12 +1245,19 @@ func insert_audio_take(track_index: int, start: float, source: String, length: f
 
 ## The bridge's argument list for a take. Flat, because the bridge's request decoder reads one
 ## flat list of numbers and strings: track, start, end, name, note count, then five numbers per
-## note -- on and off in project seconds, pitch, velocity, channel.
+## note -- on and off in project seconds, pitch, velocity, channel -- and then the control count
+## and four numbers per control: its time in project seconds, kind (DawKitClip.PITCH_BEND, 1 or
+## 11), value and channel. A bridge from before controls stops reading after the notes.
 static func midi_take_request(track_index: int, start: float, end: float, notes: Array,
-		take_name: String) -> Array:
+		take_name: String, controls: Array = []) -> Array:
 	var out: Array = [track_index, start, end, MidiTake.clean_name(take_name), notes.size()]
 	for n in notes:
 		out.append_array([float(n[0]), float(n[1]), int(n[2]), int(n[3]), int(n[4])])
+	var count := controls.size() / DawKitClip.CONTROL_WIDTH
+	out.append(count)
+	for c in count:
+		var o := c * DawKitClip.CONTROL_WIDTH
+		out.append_array([float(controls[o]), int(controls[o + 1]), int(controls[o + 2]), int(controls[o + 3])])
 	return out
 
 
@@ -1260,14 +1323,120 @@ static func _same_lane(a: Array, b: Array) -> bool:
 ## were, and laying that over the cache would snap the block back to where it was dragged from
 ## until the next poll. So polls wait while any edit is outstanding, and an answer to a poll that
 ## was sent before the latest edit is thrown away.
-func _edit(fn: String, args: Array) -> void:
+## `alone` sends it now even with an edit open: an undo is a move through history, never part
+## of an edit's step.
+func _edit(fn: String, args: Array, alone := false) -> void:
 	if _bridge == null or not _bridge.is_open():
 		return
 	_timeline_epoch += 1
 	_edits_in_flight += 1
-	_bridge.call_reaper(fn, args, func(_result) -> void:
+	var done := func(_result) -> void:
 		_edits_in_flight -= 1
-		_timeline_due = 0.0)
+		_timeline_due = 0.0
+	if alone:
+		_bridge.call_reaper(fn, args, done)
+	else:
+		_bridge_write(fn, args, done)
+
+
+# --- edit groups --------------------------------------------------------------------------
+#
+# See DAWBackend.open_edit. Reaper keeps its own history, and the one way to make several
+# changes one step in it is to make them inside one Undo block: so the bridge's verbs inside an
+# edit are held, shown on the cache at once as every edit is, and sent at the let-go as one
+# `Batch` request that the bridge runs inside one block. Plain control writes (OSC volume, pan,
+# a send's level) go as they always do and stay Reaper's own undo points, one per control: OSC
+# has no block to put them in.
+
+## Open edits by player (acting_peer): {"name", "at": msec of the last write or the opening,
+## "calls": [[fn, args, cb], ...] held for the batch}.
+var _batches := {}
+
+
+func open_edit(edit_name: String) -> void:
+	close_edit()
+	if _bridge == null or not _bridge.is_open():
+		return
+	_batches[acting_peer] = {"name": edit_name, "at": Time.get_ticks_msec(), "calls": []}
+
+
+func close_edit() -> void:
+	if not _batches.has(acting_peer):
+		return
+	var batch: Dictionary = _batches[acting_peer]
+	_batches.erase(acting_peer)
+	_send_batch(batch)
+
+
+## Whether `peer` (0 for this machine) has an edit open.
+func edit_open(peer := 0) -> bool:
+	return _batches.has(peer)
+
+
+## Every open edit's calls sent now, each edit kept open and empty: before an undo or a redo,
+## which must find them in Reaper's history.
+func _send_open_edits() -> void:
+	for peer in _batches:
+		var batch: Dictionary = _batches[peer]
+		_send_batch(batch.duplicate())
+		batch["calls"] = []
+
+
+## Every open edit sent and closed now: the link is closing.
+func close_all_edits() -> void:
+	for peer in _batches.keys():
+		var batch: Dictionary = _batches[peer]
+		_batches.erase(peer)
+		_send_batch(batch)
+
+
+## Every edit nothing has been written into for EDIT_IDLE_MSEC sent as it stands.
+func close_idle_edits(now := Time.get_ticks_msec()) -> void:
+	for peer in _batches.keys():
+		if now - int(_batches[peer]["at"]) >= EDIT_IDLE_MSEC:
+			var batch: Dictionary = _batches[peer]
+			_batches.erase(peer)
+			_send_batch(batch)
+
+
+## A bridge verb that changes the project: held in the acting player's open edit, or sent now.
+## True when it was sent or held, as call_reaper answers.
+func _bridge_write(fn: String, args: Array, cb := Callable()) -> bool:
+	if _batches.has(acting_peer):
+		var batch: Dictionary = _batches[acting_peer]
+		batch["at"] = Time.get_ticks_msec()
+		(batch["calls"] as Array).append([fn, args, cb])
+		return true
+	return _bridge != null and _bridge.call_reaper(fn, args, cb)
+
+
+## The bridge's arguments for a batch, flat as its request decoder reads them: the step's name,
+## then each call as its function, how many arguments it has, and those.
+static func batch_request(edit_name: String, calls: Array) -> Array:
+	var out: Array = [edit_name]
+	for c in calls:
+		out.append_array([str(c[0]), (c[1] as Array).size()])
+		out.append_array(c[1])
+	return out
+
+
+func _send_batch(batch: Dictionary) -> void:
+	var calls: Array = batch["calls"]
+	if calls.is_empty():
+		return
+	var sent := _bridge != null and _bridge.call_reaper("Batch", batch_request(str(batch["name"]), calls),
+			func(result) -> void:
+				# Each call's own answer to its own callback, as if it had gone alone; nothing
+				# for any of them when the batch was never answered.
+				var each: Array = _as_array(result.get("results", [])) if typeof(result) == TYPE_DICTIONARY else []
+				for i in calls.size():
+					var cb: Callable = calls[i][2]
+					if cb.is_valid():
+						cb.call(each[i] if i < each.size() else null))
+	if not sent:
+		for c in calls:
+			if (c[2] as Callable).is_valid():
+				(c[2] as Callable).call(null)
 
 
 ## Routing changes have no OSC pattern -- Reaper streams send VOLUMES but has no message for
@@ -1349,6 +1518,10 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 				extra["fade_out_shape"] = out_shape
 			if item.get("locked", false):
 				extra["locked"] = true
+			# Its controller events, relative to its start, as the bridge reads them back.
+			var controls = item.get("controls", [])
+			if controls is Array and not controls.is_empty():
+				extra["controls"] = controls
 			if not extra.is_empty():
 				packed.append(extra)
 		lanes[idx] = packed
@@ -1543,6 +1716,10 @@ func _on_structure(result) -> void:
 		if entry.has("folder_depth"):
 			_apply("/track/%d/folder" % idx, [float(entry["folder_depth"])])
 
+		# D_WIDTH, which the bridge reads only in the pan modes that use it (else full width).
+		if entry.has("width") and _width_settled(idx):
+			_apply("/track/%d/width" % idx, [clampf(float(entry["width"]), 0.0, 1.0)])
+
 		var sends := _as_array(entry.get("sends", []))
 		for send in sends:
 			if typeof(send) != TYPE_DICTIONARY:
@@ -1611,14 +1788,14 @@ func create_send(from_track: int, to_track: int) -> bool:
 	if _bridge == null or not _bridge.is_open():
 		push_warning("create_send(%d -> %d) needs the ReaScript bridge; OSC cannot express it." % [from_track, to_track])
 		return false
-	return _bridge.call_reaper("CreateTrackSend", [from_track, to_track])
+	return _bridge_write("CreateTrackSend", [from_track, to_track])
 
 
 func remove_send(from_track: int, send_index: int) -> bool:
 	if _bridge == null or not _bridge.is_open():
 		return false
 	# 1-based here as everywhere above the bridge; the Lua takes ReaScript's 0-based index.
-	return _bridge.call_reaper("RemoveTrackSend", [from_track, send_index - 1])
+	return _bridge_write("RemoveTrackSend", [from_track, send_index - 1])
 
 
 # --- replication --------------------------------------------------------------------------

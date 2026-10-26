@@ -16,6 +16,10 @@ const DEFAULT_DIR := "user://projects"
 const STAGING := "user://project_staging"
 const OPEN_DIR := "user://open_project"
 const EXTENSION := "dawproject"
+## What the game keeps in a project that neither DAWproject nor dawkit has a word for, in the
+## same zip: each track's width (TrackState.width), by its id (ProjectBridge.id_of), where it is
+## not full. Another program ignores an entry it does not know, as it does dawkit's extras.
+const EXTRAS := "dawlings/extras.json"
 
 
 ## Where a project with this title is saved when nobody has said where.
@@ -66,12 +70,48 @@ static func save(backend: OfflineBackend, path: String, copy := false) -> Packed
 	var abs_path := ProjectSettings.globalize_path(path)
 	DirAccess.make_dir_recursive_absolute(abs_path.get_base_dir())
 	warnings.append_array(DawKitDawproject.save(project, abs_path, staging))
+	warnings.append_array(_keep_extras(backend, abs_path))
 	if copy:
 		return warnings
 	backend.project_path = path
 	backend.name_project()
 	backend.mark_clean()
 	return warnings
+
+
+## The game's own extras (EXTRAS) added to the project file just written at `path`: nothing when
+## every track is full width.
+static func _keep_extras(backend: OfflineBackend, path: String) -> PackedStringArray:
+	var widths := {}
+	for index in backend.state.track_indices():
+		var w: float = backend.state.track(index).width
+		if w < 1.0:
+			widths[ProjectBridge.id_of(index)] = w
+	if widths.is_empty():
+		return PackedStringArray()
+	var zip := ZIPPacker.new()
+	if zip.open(path, ZIPPacker.APPEND_ADDINZIP) != OK:
+		return PackedStringArray(["the tracks' widths could not be added to %s" % path.get_file()])
+	zip.start_file(EXTRAS)
+	zip.write_file(JSON.stringify({"format": 1, "widths": widths}, "  ").to_utf8_buffer())
+	zip.close_file()
+	zip.close()
+	return PackedStringArray()
+
+
+## The game's extras in the project file at `path` ({"widths": {track id: width}}), or empty for
+## a file without them: one from before, or from another program.
+static func extras_of(path: String) -> Dictionary:
+	var zip := ZIPReader.new()
+	if zip.open(ProjectSettings.globalize_path(path)) != OK:
+		return {}
+	var out := {}
+	if EXTRAS in zip.get_files():
+		var parsed = JSON.parse_string(zip.read_file(EXTRAS).get_string_from_utf8())
+		if parsed is Dictionary and parsed.get("widths") is Dictionary:
+			out["widths"] = parsed["widths"]
+	zip.close()
+	return out
 
 
 static func _render_part(role: String, tempo: float, sig: Vector2i, staging: String) -> Dictionary:
@@ -109,7 +149,7 @@ static func open(backend: OfflineBackend, path: String) -> PackedStringArray:
 			where[name] = full
 			c.source = name
 	backend.set_media(where)
-	var refused := ProjectBridge.load(project, backend)
+	var refused := ProjectBridge.load(project, backend, {}, extras_of(path).get("widths", {}))
 	if not refused.is_empty():
 		return refused
 	backend.project_path = path

@@ -23,6 +23,10 @@ extends Control
 ## little), and FingertipNotes reads them as pinches through the mouse's hand (`held`). Its focus
 ## is whether the fingertips play, so it lets go on a click as well (`click_releases`): one way
 ## off for the keys and the mouse's grab together.
+##
+## Alt is not a shortcut here (docs/spatial_loop.md part two, slice 15): held, with the mouse moving
+## up or down, it bends what the keys play, so a key pressed under Alt plays, and one let go under
+## any modifier still stops.
 
 signal note_on(pitch: int, velocity: int)
 signal note_off(pitch: int)
@@ -91,8 +95,16 @@ func _gui_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null:
 		return
-	# Shortcuts with a modifier stay the studio's: Ctrl+Z is undo whether or not this plays.
-	if key.ctrl_pressed or key.meta_pressed or key.alt_pressed:
+	# A key let go always lets its note go, whatever modifier is down by then: a piano key held
+	# into a Ctrl never hangs.
+	if not key.pressed and _down.has(key.physical_keycode):
+		handle(key.physical_keycode, false)
+		accept_event()
+		return
+	# Shortcuts with Ctrl or Meta stay the studio's: Ctrl+Z is undo whether or not this plays. Alt
+	# is not one: with the mouse moving it is the bend wheel (MouseInteractor.bend_wheel), so the
+	# keys go on playing under it.
+	if key.ctrl_pressed or key.meta_pressed:
 		return
 	if key.physical_keycode in ARROWS:
 		accept_event()

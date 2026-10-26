@@ -26,6 +26,12 @@ var head: Node3D
 ## Whether a whole hand was read this frame. Everything below is its last reading while it was,
 ## and let go (no pinch, level, nothing up) while it is not.
 var tracked := false
+## Tracked, and every joint seen rather than guessed (the runtime's POSITION_TRACKED, not only
+## VALID): a hand half out of view, its joints inferred, is tracked but not confident. What a held
+## shaker's letting go and its throw are read from (XRInteractor), so a guess is never a throw.
+var confident := false
+## Closed round something (HandPose.closed): three fingers past HOLD_CURL.
+var closed := false
 ## The joints, in global space.
 var joints := PackedVector3Array()
 var size := 0.0
@@ -38,6 +44,8 @@ var open := false
 var palm_up := false
 var faces_head := false
 var tilt := Vector2.ZERO
+## Its roll and pitch in radians, unclamped (HandPose.angles): what a bend is measured by (Wobble).
+var angles := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -61,44 +69,69 @@ func read(hand: XRHandTracker) -> void:
 		_lose()
 		return
 	var valid := XRHandTracker.HAND_JOINT_FLAG_POSITION_VALID
+	var seen := XRHandTracker.HAND_JOINT_FLAG_POSITION_TRACKED
 	var space := origin.global_transform if origin != null and origin.is_inside_tree() \
 			else Transform3D.IDENTITY
 	var at := PackedVector3Array()
 	at.resize(XRHandTracker.HAND_JOINT_MAX)
+	var all_seen := true
 	for j in XRHandTracker.HAND_JOINT_MAX:
-		if hand.get_hand_joint_flags(j) & valid == 0:
+		var flags := hand.get_hand_joint_flags(j)
+		if flags & valid == 0:
 			_lose()
 			return
+		all_seen = all_seen and flags & seen != 0
 		at[j] = space * hand.get_hand_joint_transform(j).origin
-	take(at)
+	take(at, all_seen)
 
 
-## The readings of a hand whose joints are `at`, global space.
-func take(at: PackedVector3Array) -> void:
+## The readings of a hand whose joints are `at`, global space; `sure` false for joints the runtime
+## only guessed at (`confident`).
+func take(at: PackedVector3Array, sure := true) -> void:
 	if not HandPose.whole(at) or HandPose.size(at) < 0.01:
 		_lose()
 		return
 	tracked = true
+	confident = sure
 	joints = at
 	size = HandPose.size(at)
 	curls = HandPose.curls(at)
 	pinched = HandPose.pinches(at, pinched, Ergonomics.current.finger_scale)
 	travel = HandPose.travel(at, Ergonomics.current.finger_scale)
 	open = HandPose.is_open(at, pinched)
+	closed = HandPose.closed(at)
 	palm_up = HandPose.palm_up(at, side)
 	faces_head = head != null and head.is_inside_tree() \
 			and HandPose.faces_head(at, head.global_position, side)
-	tilt = HandPose.tilt(at, side)
+	angles = HandPose.angles(at, side)
+	tilt = HandPose.tilt_of(HandPose.frame(at, side))
 
 
 func _lose() -> void:
 	tracked = false
+	confident = false
+	closed = false
 	pinched = 0
 	travel = PackedFloat32Array()
 	open = false
 	palm_up = false
 	faces_head = false
 	tilt = Vector2.ZERO
+	angles = Vector2.ZERO
+
+
+## The middle of the palm (its PALM joint), global space, while it is tracked: where a bare hand
+## shakes what it holds from (XRInteractor.shake_point), so a wrist's shake is a stroke.
+func palm() -> Vector3:
+	return joints[HandPose.PALM] if tracked else Vector3.INF
+
+
+## The palm as a pose, global space, while it is tracked: at its middle, faced as HandPose.frame
+## (+Y out of the back of the hand, -Z along it). Where a closed hand carries what it holds.
+func palm_pose() -> Transform3D:
+	if not tracked:
+		return Transform3D.IDENTITY
+	return Transform3D(HandPose.frame(joints, side), joints[HandPose.PALM])
 
 
 ## This hand's index and middle fingertips, global space, while it is tracked: {&"index",

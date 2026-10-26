@@ -48,6 +48,15 @@ var _plug := ""
 ## of that mask's fingers held down (HandPose's bits: 1 J, 2 K, 4 L, 8 ;), for a shot of the glove
 ## playing them (docs/spatial_loop.md slice 8).
 var _fingertips := -1
+## `--stations 2`: I pressed that many times at frame 10, as a desktop player goes to the
+## instruments one by one (Studio.cycle_stations).
+var _stations := 0
+## `--plaque-rows`: after `--stations`, INSTRUMENTS pressed on the plaque of the station gone to,
+## at frame 14, for a shot of the board's rows beside it (docs/spatial_loop.md slice 11).
+var _plaque_rows := false
+## `--help-page LIVE`: the help card open from frame 6 at the first page whose name has that in it
+## (`PLAY · LIVE ROOM`).
+var _help_page := ""
 ## `--posed-hand 1.2,1.1,-3.4,0.5,20,1`: a right hand posed (HandPose.posed) at that studio point,
 ## turned by that yaw (radians), rolled that many degrees right side down, its thumb pinching the
 ## fingers in that mask (HandPose's bits), from frame 5: reported on a tracker of its own, drawn by
@@ -56,6 +65,24 @@ var _fingertips := -1
 var _posed_hand: Array = []
 var _posed_gestures: HandGestures
 var _posed_label: Label3D
+## `--harp-bend 20`: with `--posed-hand`, the harp string nearest the hand plucked by it at frame
+## HARP_PLUCK_FRAME, at its posed roll, and the hand then tipped that many degrees further over the
+## next four frames, so the string rings bent and bows by it (docs/spatial_loop.md part two, slice
+## 15). Late, so it still rings at a shot at frame 38 or so: a shot's frames are slow, and the ring
+## is ChordHarp.RING of physics time, which catches up.
+const HARP_PLUCK_FRAME := 30
+var _harp_bend := NAN
+var _posed_tracker: XRHandTracker
+var _posed_place: Array = []
+## `--fist-shake`: with `--posed-hand`, the hand put round the studio's shaker instead, palm down
+## over its grip, open at first and closed round it at frame FIST_FRAME, so a bare hand's closed-hand
+## hold takes it (XRInteractor.step_hold, read off the posed hand); then lifted FIST_LIFT and swung
+## across at 4 Hz, so it plays (docs/spatial_loop.md slice 17). Its yaw and roll still apply.
+const FIST_FRAME := 8
+const FIST_LIFT := 0.22
+var _fist_shake := false
+var _fist_hand: XRInteractor
+var _posed_curls: Array = [0.15, 0.05, 0.1, 0.35, 0.5]
 ## `--on-air 7`: that player ON AIR from frame 8, so their pack has its MONITOR socket
 ## (`--carry tablet:monitor_7`); `--on-air 1` is the one at this machine.
 var _on_air := 0
@@ -141,6 +168,11 @@ var _tl_fade := ""
 ## crossfaded over the overlap, frame 7.
 var _tl_xfade := ""
 var _tl_pick := -1
+## `--wheel-take 7`: a phrase played on track 7 from a MIDI keyboard at frame 6, through the door a
+## real one comes in by (GuestMidi._input), its pitch wheel swept and wobbled and its mod wheel
+## raised, recorded to a clock of its own a second past the playhead, and the take selected: the
+## thinned controls stand on its block as the timeline draws them (docs/spatial_loop.md slice 14).
+var _wheel_take := -1
 ## `--tl-render`: the deck on its RENDER page, from frame 7.
 var _tl_render := false
 var _roll := false
@@ -215,8 +247,18 @@ func _ready() -> void:
 				if i + 1 < args.size(): _plug = args[i + 1]
 			"--fingertips":
 				if i + 1 < args.size(): _fingertips = int(args[i + 1])
+			"--stations":
+				if i + 1 < args.size(): _stations = int(args[i + 1])
+			"--plaque-rows":
+				_plaque_rows = true
+			"--help-page":
+				if i + 1 < args.size(): _help_page = args[i + 1]
+			"--harp-bend":
+				if i + 1 < args.size(): _harp_bend = float(args[i + 1])
 			"--posed-hand":
 				if i + 1 < args.size(): _posed_hand = Array(args[i + 1].split(",")).map(func(v): return float(v))
+			"--fist-shake":
+				_fist_shake = true
 			"--throw":
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
@@ -284,6 +326,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_pick = int(args[i + 1])
 			"--tl-road":
 				if i + 1 < args.size(): _tl_road = float(args[i + 1])
+			"--wheel-take":
+				if i + 1 < args.size(): _wheel_take = int(args[i + 1])
 			"--tour-band":
 				if i + 1 < args.size(): _tour_band = int(args[i + 1])
 	if _shot_tick >= 0:
@@ -303,17 +347,18 @@ func _pose_a_hand() -> void:
 	var yaw: float = _posed_hand[3] if _posed_hand.size() > 3 else 0.0
 	var roll: float = _posed_hand[4] if _posed_hand.size() > 4 else 0.0
 	var mask := int(_posed_hand[5]) if _posed_hand.size() > 5 else 0
-	var palm := Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, deg_to_rad(roll)), at)
-	var joints := HandPose.posed([0.15, 0.05, 0.1, 0.35, 0.5], mask, palm)
 	var tracker_name := &"/user/hand_tracker/shot"
+	var shaker := (studio as Studio).items.items.get(&"shaker") as ShakerItem if _fist_shake else null
+	if shaker != null:
+		at = shaker.grip_point() + Vector3(0, 0.03, 0)
+		_posed_curls = [0.0, 0.0, 0.0, 0.0, 0.0]
+		print("SHOT_SHAKER grip ", shaker.grip_point())
 	var hand := XRHandTracker.new()
 	hand.name = tracker_name
 	hand.hand = XRPositionalTracker.TRACKER_HAND_RIGHT
-	var valid := XRHandTracker.HAND_JOINT_FLAG_POSITION_VALID | XRHandTracker.HAND_JOINT_FLAG_ORIENTATION_VALID
-	for j in XRHandTracker.HAND_JOINT_MAX:
-		hand.set_hand_joint_flags(j, valid)
-		hand.set_hand_joint_radius(j, 0.009)
-		hand.set_hand_joint_transform(j, Transform3D(Basis.IDENTITY, joints[j]))
+	_posed_tracker = hand
+	_posed_place = [at, yaw, mask]
+	_tip_posed_hand(roll)
 	hand.has_tracking_data = true
 	XRServer.add_tracker(hand)
 	var skeleton := HandSkeleton.new()
@@ -336,6 +381,47 @@ func _pose_a_hand() -> void:
 	_posed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_posed_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	studio.add_child(_posed_label)
+	if shaker != null:
+		# Up close to a shelf: smaller lettering, so the readings sit beside the hand.
+		_posed_label.pixel_size = 0.00028
+		# A bare hand's pinch ray and closed-hand hold, reading the posed hand, as the rig makes one.
+		_fist_hand = XRInteractor.new()
+		_fist_hand.name = "PosedFist"
+		_fist_hand.gestures = _posed_gestures
+		studio.add_child(_fist_hand)
+
+
+## The posed hand's joints, rolled `roll` degrees and moved `offset`, onto its tracker, every joint
+## seen (HandGestures.confident).
+func _tip_posed_hand(roll: float, offset := Vector3.ZERO) -> void:
+	var palm := Transform3D(Basis(Vector3.UP, _posed_place[1]) * Basis(Vector3.FORWARD, deg_to_rad(roll)),
+			_posed_place[0] + offset)
+	var joints := HandPose.posed(_posed_curls, int(_posed_place[2]), palm)
+	var valid := XRHandTracker.HAND_JOINT_FLAG_POSITION_VALID | XRHandTracker.HAND_JOINT_FLAG_ORIENTATION_VALID \
+			| XRHandTracker.HAND_JOINT_FLAG_POSITION_TRACKED | XRHandTracker.HAND_JOINT_FLAG_ORIENTATION_TRACKED
+	for j in XRHandTracker.HAND_JOINT_MAX:
+		_posed_tracker.set_hand_joint_flags(j, valid)
+		_posed_tracker.set_hand_joint_radius(j, 0.009)
+		_posed_tracker.set_hand_joint_transform(j, Transform3D(Basis.IDENTITY, joints[j]))
+
+
+## `--harp-bend`: the string nearest the posed hand plucked by it, at HARP_PLUCK_FRAME; then the hand
+## tipped further, a quarter of the way a frame.
+func _bend_the_harp() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio")
+	var harp: ChordHarp = studio.get("harp") if studio != null else null
+	if harp == null or _posed_tracker == null:
+		return
+	var roll: float = _posed_hand[4] if _posed_hand.size() > 4 else 0.0
+	if _frames == HARP_PLUCK_FRAME:
+		var x := harp.to_local(_posed_place[0] as Vector3).x
+		harp.pluck([ChordHarp.nearest(x)], 96, _posed_gestures)
+	elif _frames > HARP_PLUCK_FRAME:
+		_tip_posed_hand(roll + _harp_bend * clampf((_frames - HARP_PLUCK_FRAME) / 4.0, 0.0, 1.0))
+	if OS.get_cmdline_user_args().has("--shot-debug"):
+		print("HARP_BEND frame %d at %d ms: ringing %s, wheel %s, engaged %s, %.2f st" % [_frames,
+				Time.get_ticks_msec(), harp.ringing(), harp.keys.wheel_source() if harp.keys != null else "-",
+				harp.wobble != null and harp.wobble.engaged(), harp.wobble.semitones if harp.wobble != null else 0.0])
 
 
 func _parse_res(spec: String) -> Vector2i:
@@ -379,6 +465,8 @@ func _process(_delta: float) -> void:
 		else:
 			print("SHOT_TL none found")
 
+	if _frames == 6 and _wheel_take > 0:
+		_play_wheel_take(_wheel_take)
 	if _frames == 6 and _tl_road >= 0.0:
 		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
 		if not tl.is_empty():
@@ -500,11 +588,51 @@ func _process(_delta: float) -> void:
 
 	if _frames == 5 and _posed_hand.size() >= 3:
 		_pose_a_hand()
+	if _frames >= HARP_PLUCK_FRAME and not is_nan(_harp_bend):
+		_bend_the_harp()
+	if _fist_hand != null and is_instance_valid(_fist_hand) and _frames >= FIST_FRAME:
+		# Closed round it, then up and shaken across at 4 Hz.
+		_posed_curls = [0.5, 0.8, 0.8, 0.8, 0.8]
+		var lifted := clampf((_frames - FIST_FRAME - 2) / 6.0, 0.0, 1.0) * FIST_LIFT
+		var swing := 0.03 * sin(TAU * 4.0 * Time.get_ticks_msec() / 1000.0) if _frames > FIST_FRAME + 8 else 0.0
+		_tip_posed_hand(_posed_hand[4] if _posed_hand.size() > 4 else 0.0, Vector3(swing, lifted, 0))
 	if _posed_gestures != null and is_instance_valid(_posed_gestures):
 		_posed_label.text = _posed_gestures.describe()
+		if _fist_hand != null and is_instance_valid(_fist_hand) and _fist_hand.fist_holding:
+			_posed_label.text += "\nHOLDING %s, CLOSED HAND" % (_fist_hand.carrying as Item).item_title()
+		var studio_harp: ChordHarp = get_tree().current_scene.get_node_or_null("Studio").get("harp") \
+				if get_tree().current_scene.get_node_or_null("Studio") != null else null
+		if studio_harp != null and studio_harp.wobble != null and studio_harp.wobble.engaged():
+			_posed_label.text += "\nBEND %s semitones" % Wobble.words(studio_harp.wobble.semitones)
 		if _posed_gestures.tracked:
 			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
 
+	if _frames == 10 and _stations > 0:
+		var going := get_tree().current_scene.get_node_or_null("Studio")
+		if going != null and going.has_method("cycle_stations"):
+			for n in _stations:
+				print("SHOT_STATION ", going.cycle_stations(1))
+	if _frames == 14 and _plaque_rows:
+		var at := get_tree().current_scene.get_node_or_null("Studio") as Studio
+		if at != null and at.venue != null:
+			for key in at.venue.find_children("Instruments", "", true, false):
+				if key is StationBoard.PlaqueKey and key.station == at.station:
+					var hand := Node.new()
+					key.grab_begin(hand, key.global_position)
+					key.grab_end(hand)
+					hand.free()
+					print("SHOT_PLAQUE_ROWS ", at.station)
+	if _frames == 6 and _help_page != "":
+		var card := get_tree().current_scene.get_node_or_null("Welcome") as WelcomeCard
+		if card != null:
+			var at := 0
+			for n in card.page_names().size():
+				if card.page_names()[n].contains(_help_page.to_upper()):
+					at = n
+					break
+			card.page = at
+			card.open()
+			print("SHOT_HELP %s of %s" % [card.page, card.page_names()])
 	if _frames == 10 and _fingertips >= 0:
 		var tips_studio := get_tree().current_scene.get_node_or_null("Studio")
 		if tips_studio != null and tips_studio.has_method("toggle_fingertips"):
@@ -801,3 +929,53 @@ func _drive_scripted() -> void:
 			hand.press_override = 1
 		elif _ticks == b + 1:
 			hand.press_override = 0
+
+
+## `--wheel-take`: a phrase on `track` from a MIDI keyboard, wheels and all, taken down and selected.
+func _play_wheel_take(track: int) -> void:
+	var gm := Session.guest_midi
+	var start := DAW.state.position_seconds + 1.0
+	var now := {"seconds": start, "playing": true, "recording": true, "valid": true}
+	gm.heard_source = func() -> Dictionary: return now.duplicate()
+	gm.target_track = track
+	gm.follow(now)
+	var midi := func(message: int, a: int, b: int) -> void:
+		var e := InputEventMIDI.new()
+		e.message = message
+		e.pitch = a
+		e.velocity = b
+		e.controller_number = a
+		e.controller_value = b
+		gm._input(e)
+	# A note bent up a whole tone over 0.6 s and held there.
+	midi.call(MIDI_MESSAGE_NOTE_ON, 60, 100)
+	for i in 37:
+		now["seconds"] = start + 0.1 + i / 60.0
+		midi.call(MIDI_MESSAGE_PITCH_BEND, 8192 + roundi(8191.0 * sin(PI / 2.0 * i / 36.0)), 0)
+	now["seconds"] = start + 1.4
+	midi.call(MIDI_MESSAGE_NOTE_OFF, 60, 0)
+	# A second, wobbled at 5 Hz with the mod wheel coming up under it.
+	now["seconds"] = start + 1.7
+	midi.call(MIDI_MESSAGE_NOTE_ON, 64, 100)
+	for i in 90:
+		now["seconds"] = start + 1.8 + i / 60.0
+		midi.call(MIDI_MESSAGE_PITCH_BEND, 8192 + roundi(2048.0 * sin(TAU * 5.0 * i / 60.0)), 0)
+		if i % 6 == 0:
+			midi.call(MIDI_MESSAGE_CONTROL_CHANGE, 1, i)
+	now["seconds"] = start + 3.4
+	midi.call(MIDI_MESSAGE_NOTE_OFF, 64, 0)
+	now["seconds"] = start + 3.8
+	gm.follow(now)
+	now["recording"] = false
+	gm.follow(now)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	var items: Array = DAW.state.track(track).items
+	for k in items.size():
+		if is_equal_approx(items[k].start, start):
+			DAW.select_item(track, k, false)
+	# The take filling the timeline's window, so its posts can be told apart.
+	for tl in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
+		(tl as TimelineSurface).set_view(start - 0.4, 4.6)
+		(tl as TimelineSurface).set_size((tl as TimelineSurface).width_scale, TimelineSurface.LANE_HEIGHT_MAX)
+	print("SHOT_WHEEL_TAKE ", gm.last_take)

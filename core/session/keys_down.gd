@@ -12,6 +12,8 @@ extends RefCounted
 
 ## {pitch: {source: velocity}}
 var _by := {}
+## What is down, [pitch, source], in the order it went down: the newest last (`newest`).
+var _order: Array = []
 
 
 ## `source` put `pitch` down.
@@ -21,6 +23,8 @@ func press(pitch: int, source: StringName, velocity := 100) -> void:
 	# Taken out and put back, so the latest to put it down is last.
 	_by[pitch].erase(source)
 	_by[pitch][source] = velocity
+	_order.erase([pitch, source])
+	_order.append([pitch, source])
 
 
 ## `source` let `pitch` go: whether the pitch is up now, so its note-off is to be sounded. A
@@ -29,6 +33,7 @@ func press(pitch: int, source: StringName, velocity := 100) -> void:
 func let_go(pitch: int, source: StringName) -> bool:
 	var by: Dictionary = _by.get(pitch, {})
 	by.erase(source)
+	_order.erase([pitch, source])
 	if by.is_empty():
 		_by.erase(pitch)
 		return true
@@ -68,5 +73,17 @@ func pitches() -> Dictionary:
 	return out
 
 
+## The source of the newest note still down, which owns the player's wheel (GuestMidi.wheel_source),
+## or null when nothing is down.
+func newest() -> Variant:
+	return null if _order.is_empty() else _order[-1][1]
+
+
+## Whether nothing at all is down: the player's last note-off has been, and the wheel rests.
+func is_empty() -> bool:
+	return _by.is_empty()
+
+
 func clear() -> void:
 	_by.clear()
+	_order.clear()

@@ -391,8 +391,28 @@ func _default_readout() -> String:
 	if item == null:
 		return "view %s - %s" % [s.bar_beat(surface.view_start), s.bar_beat(surface.view_start + surface.view_span)]
 	var bar := s.bar_to_seconds(2.0)
-	return "%s - %s  (%.2f bars, %s)" % [s.bar_beat(item.start), s.bar_beat(item.end()),
-			item.length / maxf(bar, 0.0001), TimelineRuler._clock(item.start)]
+	return "%s - %s  (%.2f bars, %s)%s" % [s.bar_beat(item.start), s.bar_beat(item.end()),
+			item.length / maxf(bar, 0.0001), TimelineRuler._clock(item.start), controls_text(item.controls)]
+
+
+## What a MIDI item's controller events are, for its hover card, so the amber posts on it are
+## named: "  pitch wheel 12, mod wheel 4", by controller, in TimelineItemPage's order; "" for none.
+static func controls_text(controls: PackedFloat64Array) -> String:
+	var counts := {}
+	for o in range(0, controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		var kind := int(controls[o + 1])
+		counts[kind] = int(counts.get(kind, 0)) + 1
+	var parts: PackedStringArray = []
+	for i in TimelineItemPage.CC_KINDS.size():
+		if counts.has(TimelineItemPage.CC_KINDS[i]):
+			parts.append("%s %d" % [TimelineItemPage.CC_NAMES[i], counts[TimelineItemPage.CC_KINDS[i]]])
+	var others := 0
+	for kind: int in counts:
+		if not TimelineItemPage.CC_KINDS.has(kind):
+			others += counts[kind]
+	if others > 0:
+		parts.append("other %d" % others)
+	return "" if parts.is_empty() else "  " + ", ".join(parts)
 
 
 func hint() -> String:

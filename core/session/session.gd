@@ -101,12 +101,23 @@ signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float,
 ## everyone else to hear from their hand. A click on percussion is a use (`item_used`), not this;
 ## a click on a pitched item (a handbell) is this too. `song`: the song position they played it
 ## to (the hit's one stamp, InstrumentItem.played's `at`), or -1 when not known, so a pitched item
-## rings here the note it rang there, whenever it arrives.
-signal item_hit(item: StringName, velocity: int, from: int, song: float)
+## rings here the note it rang there, whenever it arrives. `snap`: whether its player snaps their
+## hand percussion (GuestMidi.snap_hits), so whoever takes the hit down snaps it by their choice,
+## not their own (HitRecorder.hit). `take`: which of Foley's takes their hand rang
+## (InstrumentItem.sound_take), so everyone hears the sound its player heard; -1 for not known.
+signal item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int)
 ## An event down a jack into this player's instrument (docs/spatial_loop.md slice 6): `source`'s
 ## (an item's id, `harp`, `keys:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER), sent by `from`
 ## at song position `song` (-1 for not known), passed on by the host to this player alone (Jacks).
 signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float)
+
+## A control on `from`'s keys, as they move it (`send_control`): `kind` the pitch wheel
+## (DawKitClip.PITCH_BEND) or controller 1 (the mod wheel) or 11 (expression), `value` already
+## kept in bounds by the host (`control_value`). For whoever plays their keys here (TheirKeys,
+## TheirMonitor, the harp), to the one voice they have for that player. Unreliable: a lost one is
+## sent again soon, and the wheel goes back to rest at the player's last note-off on every end
+## (GuestMidi.control).
+signal control_played(kind: int, value: int, from: int, song: float, source: StringName)
 
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
@@ -174,6 +185,17 @@ const AUDIO_TAKE_CHANNEL := 3
 const MOTION_CHANNEL := 4
 ## Notes as they are played: their own channel, so a key is never queued behind a room update.
 const KEYS_CHANNEL := 5
+## Pitch bend and the two controllers beside it, as they move: a channel of their own,
+## unreliable and ordered, so a lost control never holds a note back behind its resend (the
+## head-of-line delay a reliable channel has) and the notes stay reliable on KEYS_CHANNEL.
+const CONTROLS_CHANNEL := 6
+## The controls a player's keys carry (`send_control`): the pitch wheel, the mod wheel (1) and
+## expression (11). The host passes these and refuses any other. A take carries the same
+## (MidiTake.CONTROL_KINDS), and so does a jack (Jack.Kind.CC).
+const CONTROL_KINDS := MidiTake.CONTROL_KINDS
+## Host: how many controls have been refused (a controller not in CONTROL_KINDS), for the probe
+## and the suite.
+var controls_refused := 0
 ## The longest a note's source may be (`send_note`): an instrument's name. Anything longer that
 ## a guest sends is taken as plain keys.
 const NOTE_SOURCE_MAX := 24
@@ -604,6 +626,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 			dropped = true
 	if dropped:
 		_send_holds()
+	# And an edit group they left open is closed: their let-go is never coming, and the step it
+	# was gathering is a whole step as it stands.
+	DAW.close_edits_of(peer_id)
 	_broadcast_roster()
 	notice.emit("%s left the session." % who)
 
@@ -841,7 +866,8 @@ func _receive_intent(verb: StringName, args: Array) -> void:
 	if verb == &"save_project":
 		save_project_for(name_of(multiplayer.get_remote_sender_id()))
 		return
-	DAW.apply_intent(verb, args)
+	# Whose it is, so their edit group gathers their writes and nobody else's (DAW.open_edit).
+	DAW.apply_intent(verb, args, multiplayer.get_remote_sender_id())
 
 
 ## Saves the open project where it is, and tells the whole room how it went: a save is the one
@@ -892,7 +918,8 @@ func _place_take(from: int, args: Array) -> void:
 		if _connected():
 			_told.rpc_id(from, "Your take was not placed. " + refusal)
 		return
-	DAW.apply_intent(&"insert_midi_take", args)
+	# Hers, not the host's: a take landing mid-way through the host's drag is a step of its own.
+	DAW.apply_intent(&"insert_midi_take", args, from)
 	var cleaned := MidiTake.clean_args(args)
 	var track: String = DAW.state.track(cleaned[0]).display_name()
 	var at := DAW.state.bar_beat(cleaned[1])
@@ -1037,8 +1064,9 @@ func _place_part(from: int, entry: Dictionary, part: Dictionary) -> void:
 		if still_here:
 			_told.rpc_id(from, "Your recording was not placed. " + refusal)
 		return
-	DAW.insert_audio_take(track, entry["start"], take.file_name(), take.seconds(),
-			take.peaks(), entry["name"])
+	DAW.on_behalf_of(from, func() -> void:
+		DAW.insert_audio_take(track, entry["start"], take.file_name(), take.seconds(),
+				take.peaks(), entry["name"]))
 	var track_name: String = DAW.state.track(track).display_name()
 	var at := DAW.state.bar_beat(entry["start"])
 	var length := "%.1fs" % take.seconds()
@@ -1234,34 +1262,41 @@ func _item_use(item: StringName, down: bool, from: int) -> void:
 
 
 ## A shake of the instrument in my hand, to everyone else, with the song position it was played
-## to (`song`, -1 for not known).
-func send_item_hit(item: StringName, velocity: int, song := -1.0) -> void:
+## to (`song`, -1 for not known), whether I snap my hand percussion (`snap`), and the Foley take my
+## hand rang (`take`, -1 for not known).
+func send_item_hit(item: StringName, velocity: int, song := -1.0, snap := false, take := -1) -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_item_hit.rpc_id(id, item, velocity, local_peer_id, song)
+			_item_hit.rpc_id(id, item, velocity, local_peer_id, song, snap, take)
 	else:
-		_item_hit_up.rpc_id(1, item, velocity, song)
+		_item_hit_up.rpc_id(1, item, velocity, song, snap, take)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit_up(item: StringName, velocity: int, song: float) -> void:
+func _item_hit_up(item: StringName, velocity: int, song: float, snap: bool, take: int) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
-	velocity = clampi(velocity, 1, 127)
-	if not is_finite(song) or song < 0.0:
-		song = -1.0
-	item_hit.emit(item, velocity, from, song)
+	var hit := clean_item_hit(velocity, song, take)
+	item_hit.emit(item, hit[0], from, hit[1], snap, hit[2])
 	for id in _audience():
 		if id != from:
-			_item_hit.rpc_id(id, item, velocity, from, song)
+			_item_hit.rpc_id(id, item, hit[0], from, hit[1], snap, hit[2])
 
 
 @rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit(item: StringName, velocity: int, from: int, song: float) -> void:
-	item_hit.emit(item, velocity, from, song)
+func _item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int) -> void:
+	item_hit.emit(item, velocity, from, song, snap, take)
+
+
+## A guest's hit as the host passes it on: [velocity 1 to 127, song (-1 for anything not a song
+## position), take (-1 for anything not one of Foley's takes)].
+static func clean_item_hit(velocity: int, song: float, take: int) -> Array:
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	return [clampi(velocity, 1, 127), song, take if take >= 0 and take < 1 << 24 else -1]
 
 
 ## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and
@@ -1295,6 +1330,66 @@ func _note(kind: int, pitch: int, velocity: int, from: int, song: float, source:
 	note_played.emit(kind, pitch, velocity, from, song, source)
 
 
+## A control on my keys (`kind` one of CONTROL_KINDS), to everyone else, as it moves, with the
+## song position it went with and what moved it (`source`, as `send_note`'s). On a channel of its
+## own (CONTROLS_CHANNEL), unreliable and ordered: GuestMidi sends one off rest again at least
+## every GuestMidi.CONTROL_EVERY, so a lost one costs a few tens of milliseconds and never a note.
+## Sent as it is asked: the host is the one that refuses and clamps (`_pass_control`).
+func send_control(kind: int, value: int, song := -1.0, source := &"") -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		_pass_control(kind, value, song, source, local_peer_id)
+	else:
+		_control_up.rpc_id(1, kind, value, song, source)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered", CONTROLS_CHANNEL)
+func _control_up(kind: int, value: int, song: float, source: StringName) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	_pass_control(kind, value, song, source, from)
+
+
+## Host: `from`'s control, refused unless it is one of CONTROL_KINDS, its value clamped by kind,
+## heard here (unless it is the host's own) and passed on to everyone else. Whether it passed.
+func _pass_control(kind: int, value: int, song: float, source: StringName, from: int) -> bool:
+	if not CONTROL_KINDS.has(kind):
+		controls_refused += 1
+		return false
+	value = control_value(kind, value)
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	if String(source).length() > NOTE_SOURCE_MAX:
+		source = &""
+	if from != local_peer_id:
+		control_played.emit(kind, value, from, song, source)
+	for id in _audience():
+		if id != from:
+			_control.rpc_id(id, kind, value, from, song, source)
+	return true
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", CONTROLS_CHANNEL)
+func _control(kind: int, value: int, from: int, song: float, source: StringName) -> void:
+	control_played.emit(kind, value, from, song, source)
+
+
+## `value` kept in bounds for a control of `kind`: the pitch wheel -8192 to 8191, a controller 0
+## to 127.
+static func control_value(kind: int, value: int) -> int:
+	if kind == DawKitClip.PITCH_BEND:
+		return clampi(value, int(DawKitClip.BEND_MIN), int(DawKitClip.BEND_MAX))
+	return clampi(value, 0, 127)
+
+
+## Where a control of `kind` rests, as a keyboard sits untouched: the wheel at its centre, the mod
+## wheel down, expression full. What every end puts it back to at a player's last note-off.
+static func control_rest(kind: int) -> int:
+	return 127 if kind == 11 else 0
+
+
 ## An event down `source`'s jack into player `to`'s instrument, at song position `song` (-1 for
 ## not known): up to the host, which checks it (`jack_refusal`) and passes it on to `to` alone.
 ## Reliable, on the keys' channel with the notes, because a lost note-off is a note that never
@@ -1317,14 +1412,21 @@ func _jack_up(to: int, source: StringName, kind: int, pitch: int, velocity: int,
 
 
 ## Host: `from`'s jack event, checked, and passed on to `to` (or played here, when `to` is the
-## host). Its numbers are kept in bounds before anyone plays them. Whether it passed.
+## host). Its numbers are kept in bounds by its kind before anyone plays them, and a CC that is
+## not one of CONTROL_KINDS is refused. Whether it passed.
 func _pass_jack(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float,
 		from: int) -> bool:
-	if kind < Jack.Kind.NOTE_ON or kind > Jack.Kind.TRIGGER or jack_refusal(to, source, from) != "":
+	if kind < Jack.Kind.NOTE_ON or kind > Jack.Kind.CC or jack_refusal(to, source, from) != "" \
+			or (kind == Jack.Kind.CC and not CONTROL_KINDS.has(pitch)):
 		jacks_refused += 1
 		return false
-	pitch = clampi(pitch, 0, 127)
-	velocity = clampi(velocity, 0, 127)
+	# Clamped by kind: a note's pitch and velocity are MIDI's 0-127, a control's `pitch` is its
+	# controller and its `velocity` its value, the bend's -8192 to 8191 (`control_value`).
+	if kind == Jack.Kind.CC:
+		velocity = control_value(pitch, velocity)
+	else:
+		pitch = clampi(pitch, 0, 127)
+		velocity = clampi(velocity, 0, 127)
 	if not is_finite(song) or song < 0.0:
 		song = -1.0
 	if to == local_peer_id:
@@ -1414,7 +1516,9 @@ func _room_asked(seq: int, verb: StringName, args: Array) -> void:
 	_room_acks[from] = maxi(int(_room_acks.get(from, 0)), seq)
 	_room_sent = false
 	if room_ask_is_valid(verb, args):
-		room_asked.emit(verb, args, from)
+		# Whatever the host does to answer it is the asker's to undo, not folded into the host's
+		# own open edit (DAW.on_behalf_of).
+		DAW.on_behalf_of(from, func() -> void: room_asked.emit(verb, args, from))
 	if not _room_sent:
 		publish_room(room)
 

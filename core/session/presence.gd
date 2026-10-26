@@ -76,6 +76,7 @@ func _enter_tree() -> void:
 	Session.item_used.connect(_on_item_used)
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
+	Session.control_played.connect(_on_control_played)
 	Session.participant_left.connect(_on_participant_left)
 
 
@@ -86,6 +87,7 @@ func _exit_tree() -> void:
 	Session.item_used.disconnect(_on_item_used)
 	Session.item_hit.disconnect(_on_item_hit)
 	Session.note_played.disconnect(_on_note_played)
+	Session.control_played.disconnect(_on_control_played)
 	Session.roster_changed.disconnect(_sync_avatars)
 	Session.holds_changed.disconnect(_apply_holds)
 	Session.hold_refused.disconnect(_on_hold_refused)
@@ -202,7 +204,7 @@ func _publish() -> void:
 		local = control.to_local(interactor.hover_point) if interactor.hovered == control \
 				else Vector3.ZERO
 		break
-	Session.publish_presence(_to_session(head_node.global_transform), key, local)
+	Session.publish_presence(head_in_session(), key, local)
 	var carried := _my_carried()
 	if carried != null and carried.carried_by != null:
 		Session.send_carry(carried.id, _carry_local(carried))
@@ -210,6 +212,13 @@ func _publish() -> void:
 	var flier := items.items.get(&"rcplane") as RcPlaneItem if items != null else null
 	if flier != null and flier.carried_by != null and flier.away():
 		Session.send_flier(flier.id, _to_session(flier.plane_pose()), flier.mode)
+
+
+## Where my head is in the session's frame: what `_publish` sends, and where every bandmate
+## stands my ghost. A headset that has travelled to a station (XRRig.travel) is there, because the
+## head is a child of the play space that moved.
+func head_in_session() -> Transform3D:
+	return _to_session(head_node.global_transform) if head_node != null else Transform3D.IDENTITY
 
 
 ## Where the item in my hand is, relative to my head: what everyone else puts in my ghost's glove.
@@ -554,15 +563,31 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 		keytar.heard(kind, pitch, velocity)
 
 
+## Somebody's control (Session.control_played): a harp's goes to the harp, as its notes do, and
+## their keys' to the keytar in their hands. Their keys' own are played where their keys are
+## (TheirKeys, TheirMonitor) too.
+func _on_control_played(kind: int, value: int, from: int, _song: float, source := &"") -> void:
+	if source == ChordHarp.SOURCE and is_instance_valid(harp) and from != Session.local_peer_id:
+		harp.heard_control(from, kind, value)
+		return
+	# Their keytar's, out of the keytar in their hands, as its notes are (slice 15's bend tag).
+	if (source == &"" or source == &"keytar") and items != null and from != Session.local_peer_id \
+			and _item_holders.get(&"keytar", 0) == from:
+		var keytar := items.items.get(&"keytar") as KeytarItem
+		if keytar != null:
+			keytar.heard_control(kind, value)
+
+
 ## Somebody else shook the instrument in their hand: ours plays the hit, in their glove. A pitched
 ## one rings the note it rang for them, at the song position they played it to (`song`), not
-## at this machine's own when it arrives.
-func _on_item_hit(id: StringName, velocity: int, from: int, song := -1.0) -> void:
+## at this machine's own when it arrives; any rings the Foley take their hand rang (`take`), and
+## its tag says whether they snap (`snap`).
+func _on_item_hit(id: StringName, velocity: int, from: int, song := -1.0, snap := false, take := -1) -> void:
 	if items == null or _item_holders.get(id, 0) != from:
 		return
 	var item := items.items.get(id) as InstrumentItem
 	if item != null:
-		item.heard(velocity, false, song)
+		item.heard(velocity, false, song, take, snap)
 
 
 ## The control `peer_id` has their hand on -- not an item they carry, which is in the other glove.

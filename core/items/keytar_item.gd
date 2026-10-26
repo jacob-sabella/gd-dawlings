@@ -10,6 +10,13 @@ extends Item
 ## position, all as a guest's keys are; the keytar is where you see it happen, each key going
 ## down as its note plays. Anyone else's keytar is heard from their hands in the room, on a synth
 ## of its own that plays out of the keytar (`heard`).
+##
+## The hand holding it bends what it plays (docs/spatial_loop.md part two, slice 15): tipped from
+## where a note began, its roll bends the note, and its shake wobbles it (`wobble`, a Wobble on
+## that hand, for the keytar's keys and the plain keys it plays as). On a desktop the hand is the
+## mouse: its wiggle is the tilt, and Alt with the mouse moving up or down bends. A tag on the neck
+## says BEND and by how much while it is bent, mine or a bandmate's (`bend_text`), so a bend is
+## seen and not only heard.
 
 ## Pressed from the studio, for the computer keyboard to be the keytar's again after it was let
 ## go (Esc, a click elsewhere): a click with the keytar in hand.
@@ -41,6 +48,13 @@ const IVORY := Color(0.78, 0.76, 0.7)
 const EBONY := Color(0.03, 0.03, 0.035)
 const DISPLAY := Color(1.0, 0.45, 0.12)
 
+## Where the bend tag sits, in its own frame: over the neck, beside the grip.
+const BEND_TAG_AT := Vector3(-0.3, 0.075, 0.0)
+
+## Where my notes are bent: this player's keys. Session.guest_midi unless told otherwise.
+var midi: GuestMidi = null
+## The hand holding it, bending what it plays (Wobble): made at its first frame in a hand.
+var wobble: Wobble = null
 ## {key index: MeshInstance3D}, from the model.
 var keys: Dictionary = {}
 ## {key index: how many notes are holding it down}: two pitches an octave apart fall on one key
@@ -49,6 +63,9 @@ var _down: Dictionary = {}
 ## Somebody else's playing, out of the keytar: made the first time they play.
 var _room: MonitorSynth = null
 var _lit: StandardMaterial3D = null
+## The neck's tag, and a bandmate's bend on it as they sent it (semitones).
+var _bend_tag: Label3D = null
+var _their_bend := 0.0
 
 
 func _init() -> void:
@@ -63,7 +80,7 @@ func item_title() -> String:
 
 func hint() -> String:
 	if state == State.HELD and not is_held_elsewhere():
-		return "A–' play  ·  Z X octave  ·  arrows walk  ·  click for the keys again"
+		return "A–' play  ·  Z X octave  ·  arrows walk  ·  click for the keys again\nwiggle the mouse to wobble  ·  Alt + mouse up or down bends"
 	return _hint("click to take your own and play it")
 
 
@@ -96,6 +113,67 @@ func is_down(pitch: int) -> bool:
 	return _down.has(key_of(pitch))
 
 
+## The bend its tag says now, in words: `BEND +1.3`, or "" for none to see. Mine while it is in my
+## hand, a bandmate's while it is in theirs.
+func bend_text() -> String:
+	var st := _their_bend
+	if wobble != null and in_hand():
+		st = wobble.semitones
+	var said := Wobble.words(st)
+	return "BEND %s" % said if said != "" else ""
+
+
+func _physics_process(delta: float) -> void:
+	super(delta)
+	_bend_by_hand(delta)
+	_show_bend()
+
+
+## The hand holding it, one frame on, bending the keytar's notes and the plain keys it plays as.
+func _bend_by_hand(delta: float) -> void:
+	if not in_hand() or is_held_elsewhere():
+		if wobble != null:
+			wobble.hand = null
+		return
+	if midi == null:
+		midi = Session.guest_midi
+	if wobble == null:
+		wobble = Wobble.new(midi, [&"keytar", &""])
+	wobble.keys = midi
+	wobble.hand = carried_by
+	wobble.step(delta)
+
+
+func _show_bend() -> void:
+	var said := bend_text()
+	if _bend_tag == null:
+		if said == "":
+			return
+		_bend_tag = Label3D.new()
+		_bend_tag.name = "BendTag"
+		_bend_tag.font_size = 56
+		_bend_tag.pixel_size = 0.0004
+		_bend_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_bend_tag.no_depth_test = true
+		_bend_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_bend_tag.modulate = Color(0.98, 0.95, 0.88)
+		_bend_tag.position = BEND_TAG_AT
+		Lettering.range_to_legibility(_bend_tag)
+		add_child(_bend_tag)
+	_bend_tag.visible = said != ""
+	_bend_tag.text = said
+
+
+## Somebody else's control on the keys this keytar plays for them (Presence, as `heard`): out of
+## the keytar while a note of theirs is down on it, and their bend on its tag.
+func heard_control(kind: int, value: int) -> void:
+	if _room == null or _down.is_empty():
+		return
+	_room.control(kind, value)
+	if kind == DawKitClip.PITCH_BEND:
+		_their_bend = Wobble.semitones_of(value)
+
+
 ## Every key up, and anything sounding out of it stopped.
 func release_all() -> void:
 	for k in _down.keys():
@@ -104,8 +182,10 @@ func release_all() -> void:
 			key.rotation.x = 0.0
 			key.material_override = null
 	_down.clear()
+	_their_bend = 0.0
 	if _room != null:
 		_room.all_off()
+		_room.rest_controls()
 
 
 ## Somebody else's note, as Session.note_played says it, while it is in their hands: out of the
@@ -126,6 +206,10 @@ func heard(kind: int, pitch: int, velocity: int) -> void:
 		Session.Note.OFF:
 			_room.note_off(pitch)
 			press(pitch, false)
+			if _down.is_empty():
+				# Their last note on it let go: their wheel rests, here as on their end.
+				_room.rest_controls()
+				_their_bend = 0.0
 		Session.Note.PEDAL_DOWN:
 			_room.sustain(true)
 		Session.Note.PEDAL_UP:

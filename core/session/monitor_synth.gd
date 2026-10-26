@@ -26,7 +26,7 @@ const RATE := 48000.0
 ## Godot's mixer takes this many frames at once; the queue must hold one gulp and a little more.
 const MIX_STEP := 512
 const QUEUE_FRAMES := 768
-enum { OFF, ON, SUSTAIN }
+enum { OFF, ON, SUSTAIN, CONTROL }
 
 ## Whether anything is played. Off for a guest monitoring through their own gear.
 var enabled := true:
@@ -64,6 +64,9 @@ var _mutex := Mutex.new()
 ## Note events from the main thread, applied by the render thread: [on?, pitch, velocity].
 var _events: Array = []
 var _sustain := false
+## The controls as they are set now, {kind: value}, as `control` was last told: the pitch wheel
+## (DawKitClip.PITCH_BEND) and controllers 1 and 11. Only what has been set is here.
+var controls := {}
 ## The voice itself: dawkit's instrument (DawKitTine), the same one the engine plays MIDI items
 ## through, so what a player hears of their keys is what the take will sound like.
 var _voice := DawKitTine.new(RATE)
@@ -181,6 +184,25 @@ func sustain(down: bool) -> void:
 	_queue([SUSTAIN, int(down), 0])
 
 
+## A control on the keys: the pitch wheel (DawKitClip.PITCH_BEND, -8192 to 8191, every sounding
+## note bent up to DawKitTine.BEND_SEMITONES), expression (11, the voice's level) or the mod wheel
+## (1, which this tine has no use for and ignores). Through the event queue like a note, to
+## DawKitTine.control on the render thread, or to the helper.
+func control(kind: int, value: int) -> void:
+	controls[kind] = value
+	if native != null:
+		native.control(kind, value)
+		return
+	_queue([CONTROL, kind, value])
+
+
+## Every control back where it rests (Session.control_rest): at a player's last note-off.
+func rest_controls() -> void:
+	for kind in Session.CONTROL_KINDS:
+		if int(controls.get(kind, Session.control_rest(kind))) != Session.control_rest(kind):
+			control(kind, Session.control_rest(kind))
+
+
 func all_off() -> void:
 	if native != null:
 		native.panic()
@@ -232,6 +254,8 @@ func _apply_events() -> void:
 				_voice.note_off(e[1])
 			SUSTAIN:
 				_voice.sustain(e[1] == 1)
+			CONTROL:
+				_voice.control(e[1], e[2])
 
 
 ## `count` frames of every sounding voice, mixed. Public so the suite can listen to it.

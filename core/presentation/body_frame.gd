@@ -52,6 +52,13 @@ func detach() -> void:
 	head = null
 
 
+## Take the head's yaw whole on the next frame, as on the first: the play space has just been
+## cut somewhere else (XRRig.travel), and catching up with a turn made by a cut would swing the
+## whole workspace round in front of you.
+func recentre() -> void:
+	_started = false
+
+
 func _process(delta: float) -> void:
 	if head == null:
 		return

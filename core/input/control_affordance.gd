@@ -38,6 +38,24 @@ var claimed_by: Object = null
 ## mix that really did settle somewhere else (Reaper clamps, quantises) still has the last word.
 const SETTLE_MSEC := 450
 
+## One undo step for the whole of a grab, for a control whose drag writes more than one value (a
+## puck that is pan and volume, a grouped fader that moves its group): DAW.open_edit when the hand
+## closes, DAW.close_edit when it lets go. Writes to one control fold by time already; writes to
+## several, alternating every frame, do not, and without this a drag is a step a frame.
+var edits_as_one := false
+## () -> String. What this control's edit is called in the history list; see edit_name.
+var describe_edit: Callable = Callable()
+## Whether this control's edit is open, so one let-go closes exactly the one grab opened.
+var _edit_open := false
+## Whether the edit open is a scroll's (nudge) rather than a grab's, and when it ends: notches
+## closer together than OfflineBackend.GESTURE_MS are one gesture, as a drag's frames are.
+var _scrolling := false
+var _scroll_ends_at := 0
+## The control whose edit is open on this machine. One player has one edit open at a time
+## (DAW.open_edit), so a second hand's grab, or a scroll on another control, opens its own over
+## it; a let-go then closes it only if it is still the one this control opened.
+static var _edit_owner: ControlAffordance = null
+
 var _settle_until := 0
 var _settle_value := 0.0
 var _settle_pending := NAN
@@ -66,6 +84,13 @@ func network_key() -> String:
 ## Mine alone: never claimed as a hold or shown as someone's pointer across the session. A
 ## wardrobe button by a mirror is; a fader is not.
 func personal() -> bool:
+	return false
+
+
+## Something that plays while the cursor is over it, with no hand on it: the harp's strings, which
+## a wiggle of the mouse over a ringing one wobbles (MouseInteractor.wiggle; docs/spatial_loop.md
+## part two, slice 15). False for everything that is only worked by a grab.
+func plays_under_cursor() -> bool:
 	return false
 
 
@@ -99,6 +124,12 @@ func grab_begin(by: Node, at: Vector3) -> void:
 		# rather than the two averaging into a value neither person asked for.
 		return
 	held_by = by
+	if edits_as_one:
+		# Before the handler: a control that writes on contact (the trough of a fader) writes
+		# into the edit too.
+		_open_edit()
+	else:
+		_end_others_scroll()
 	_on_grab_begin(at)
 	# After the handler, so a control whose sound depends on where it was grabbed has been told
 	# where that was. Before the signal, because the signal is what the rest of the scene reacts
@@ -118,9 +149,49 @@ func grab_end(by: Node) -> void:
 		return
 	_on_grab_end()
 	held_by = null
+	_close_edit()
 	_hold_against_echoes()
 	grab_ended.emit(by)
 	value_committed.emit(value)
+
+
+## A grab that lapses without a let-go -- the control taken out of the room in a hand -- still
+## closes its edit, or history would wait EDIT_IDLE for a release that is never coming.
+func _exit_tree() -> void:
+	_close_edit()
+
+
+## What this control's edit is called in the history list, or "" for the name of its first write
+## ("Kick: volume"), which is right for a control that is one thing however much it moves. Set
+## `describe_edit` where the gesture is more than that: a puck that is pan and volume is "Kick:
+## place", not "Kick: pan".
+func edit_name() -> String:
+	return describe_edit.call() if describe_edit.is_valid() else ""
+
+
+func _open_edit() -> void:
+	_end_others_scroll()
+	DAW.open_edit(edit_name())
+	_edit_open = true
+	_scrolling = false
+	_edit_owner = self
+
+
+func _close_edit() -> void:
+	if not _edit_open:
+		return
+	_edit_open = false
+	_scrolling = false
+	if _edit_owner == self:
+		_edit_owner = null
+		DAW.close_edit()
+
+
+## Another control's scroll still gathering is over once this one is taken hold of: what this
+## hand does next is not part of that wheel turn.
+func _end_others_scroll() -> void:
+	if _edit_owner != null and _edit_owner != self and is_instance_valid(_edit_owner) and _edit_owner._scrolling:
+		_edit_owner._close_edit()
 
 
 ## Reaper says this control is now at `v`. Honoured unless a hand is on it.
@@ -203,13 +274,39 @@ var contact_volume_db: float = 0.0
 func nudge(by: Node, notches: int, fine: bool) -> bool:
 	if notches == 0 or claimed_by != null or (held_by != null and held_by != by):
 		return false
+	# A wheel turn on a control that writes several values is one step, as its drag is: the first
+	# notch opens an edit, and notches closer together than GESTURE_MS share it. Not while a
+	# grab's edit is open on it -- the notch is part of that drag.
+	var gathering := edits_as_one and is_inside_tree() and not (_edit_open and not _scrolling)
+	if gathering and not (_edit_open and _edit_owner == self):
+		_open_edit()
+		_scrolling = true
+	elif not edits_as_one:
+		_end_others_scroll()
 	if not _on_nudge(notches, fine):
+		if gathering and _scrolling:
+			_close_edit()
 		return false
+	if gathering:
+		_scroll_ends_at = Time.get_ticks_msec() + OfflineBackend.GESTURE_MS
+		get_tree().create_timer(OfflineBackend.GESTURE_MS / 1000.0).timeout.connect(_end_scroll)
 	_hold_against_echoes()
 	# A nudge is a whole gesture, so it commits like the end of one. Whatever records history
 	# listens to this, and a wheel turn that it never heard of would be a change nobody can undo.
 	value_committed.emit(value)
 	return true
+
+
+## A scroll's edit closed once no notch has come for GESTURE_MS. Each notch sets a timer; one
+## that fires while a later notch is still within its time waits out the rest of it.
+func _end_scroll() -> void:
+	if not _scrolling:
+		return
+	var left := _scroll_ends_at - Time.get_ticks_msec()
+	if left <= 0 or not is_inside_tree():
+		_close_edit()
+	else:
+		get_tree().create_timer(left / 1000.0 + 0.005).timeout.connect(_end_scroll)
 
 
 ## Override to accept nudges. Move `value`, write it wherever a drag would, return true.

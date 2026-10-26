@@ -234,6 +234,10 @@ static func stand() -> Node3D:
 			var m := mesh.mesh.surface_get_material(s)
 			if m != null and swap.has(m.resource_name):
 				mesh.set_surface_override_material(s, swap[m.resource_name])
+	# Its plaque on its front, under the bells (Stations.plaque).
+	var plaque := Stations.plaque(&"bells", STAND.x - 0.02)
+	plaque.position = Vector3(0, STAND_TOP - 0.2, STAND.y * 0.5 + 0.006)
+	model.add_child(plaque)
 	return model
 
 

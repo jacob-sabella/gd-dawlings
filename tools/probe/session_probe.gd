@@ -46,6 +46,34 @@ const SENT_AT := 30.0
 ## everything else the probe writes or plays at, and what it writes there. Its second bar is C.
 const WHEEL_BAR := 420
 const WHEEL_INSIDE := "E minor: Em C G D"
+## Where the guest's head is in its play space when it travels to the harp (slice 11): off the
+## centre, as a person stands, so the probe sees the offset kept.
+const TRAVEL_OFFSET := Vector3(0.25, 1.6, -0.15)
+## One undo step per gesture (slice 12): the track the guest drags pan and volume on at once,
+## inside an edit, where to, what the edit is called, and the track the host moves meanwhile.
+const EDIT_TRACK := 6
+const EDIT_PAN := 0.2
+const EDIT_VOLUME := 0.3
+const EDIT_NAME := "Probe: place"
+const EDIT_HOST_TRACK := 10
+## Controls beside the keys (slice 13): the note the host holds while it bends, and the bend.
+const BEND_PITCH := 67
+const BEND_VALUE := 4096
+## Controls in takes (slice 14): where in the song the guest records a held note it bends with a
+## keyboard's wheel at 56.2 s, onto TAKE_TRACK, to a clock of its own; the host finds it there.
+const BENT_SONG := 480.0
+## The note it holds: not the one the guest's first take left down on purpose (its "hanging"
+## note, 67), which the guest lets go of first, so this note's off is its last and rests the wheel.
+const BENT_PITCH := 69
+## Bend and wobble by tilting (slice 15): where in the song the guest records a keytar note its
+## neck hand tips TILT_DEGREES after the press, onto TAKE_TRACK to a clock of its own, and the note.
+const TILT_SONG := 520.0
+const TILT_PITCH := 72
+const TILT_DEGREES := 20.0
+## Snapped gently (slice 17): where in the song the guest records two shaker hits onto TAKE_TRACK
+## to a clock of its own, each this far (s) before a sixteenth, the first snapped and the second not.
+const SNAP_SONG := 560.0
+const SNAP_EARLY := 0.02
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
@@ -122,7 +150,8 @@ var _notes: Array = []
 var _sourced: Array = []
 ## The other half's harp notes, from when the strums begin: [kind, pitch, from, song].
 var _harped: Array = []
-## The other half's item hits, as Session.item_hit gives them: [item, velocity, from, song].
+## The other half's item hits, as Session.item_hit gives them: [item, velocity, from, song, snap,
+## take].
 var _item_hits: Array = []
 ## Each half's room of items, as the studio keeps one: the four handbells are in it.
 var _room: ItemRoom = null
@@ -136,6 +165,12 @@ var _plane_holders: Array = []
 var _jacks: Jacks = null
 var _jacked: Array = []
 var _cabled: Array = []
+## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_harp`).
+var _head := Transform3D.IDENTITY
+## Host: the history's depth before the guest's two-value drag (slice 12), and the guest's track's
+## pan and volume and the host's own track's volume then.
+var _edit_depth := 0
+var _edit_was: Array = [0.5, 0.5, 0.5]
 
 
 func _ready() -> void:
@@ -213,8 +248,8 @@ func _host(port: int) -> void:
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
 	Session.note_played.connect(_on_note_played)
-	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float):
-		_item_hits.append([item, velocity, from, song]))
+	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
+		_item_hits.append([item, velocity, from, song, snap, take]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
 		if verb == &"put_item":
@@ -486,18 +521,87 @@ func _host(port: int) -> void:
 	gm.roll_every = saved_roll
 	Session.release_hold(bell1.network_key())
 
+	# Slice 12: where history is before the guest's two-value drag, and my own fader in the middle
+	# of it, as another player's write between the edit's.
+	await _until(54.4)
+	_edit_depth = DAW.state.undo_depth
+	_edit_was = [DAW.state.track(EDIT_TRACK).pan, DAW.state.track(EDIT_TRACK).volume,
+			DAW.state.track(EDIT_HOST_TRACK).volume]
+	await _until(54.7)
+	DAW.set_track_volume(EDIT_HOST_TRACK, 0.42)
+
 	# The fifths wheel (docs/spatial_loop.md slice 9): the guest's SET at 53.7, asked with its bar.
 	await _until(55.0)
 	var sets := _room_asks.filter(func(a: Array) -> bool: return a[0] == FifthsWheel.VERB)
 	check("the guest's SET reached me as an ask with its bar (%s)" % [sets], sets.size() == 1
 			and sets[0][1] == [WHEEL_BAR, WHEEL_INSIDE] and sets[0][2] == _other_id())
 	_check_wheel("my")
+	# The guest travelled to the harp at 53.8, in a headset (slice 11): its head, which its ghost
+	# stands at, is at the harp's seat in my room's venue.
+	var seat: Variant = _harp_seat()
+	var guest_head: Transform3D = Session.participants[_other_id()].head if Session.participants.has(_other_id()) \
+			else Transform3D.IDENTITY
+	var wanted: Vector3 = (seat as Transform3D) * TRAVEL_OFFSET if seat != null else Vector3.INF
+	check("the guest's travel put its ghost at the harp's seat (%.3f m off)" % guest_head.origin.distance_to(wanted),
+			guest_head.origin.distance_to(wanted) < 0.05)
 
-	# How much of the time before the end the work took: the end has moved twice as it grew.
+	# One undo step per gesture (slice 12): the guest's two-value drag, 54.55 to about 54.9,
+	# inside an edit; my own fader in the middle of it is a step of my own. After 55.1, when the
+	# guest has read the same.
+	await _until(55.25)
+	var depth: int = DAW.state.undo_depth
+	var names: Array = DAW.state.undo_names.slice(_edit_depth, depth)
+	check("the guest's drag moved both its pan and its volume (%.3f, %.3f)" % [DAW.state.track(EDIT_TRACK).pan,
+			DAW.state.track(EDIT_TRACK).volume], absf(DAW.state.track(EDIT_TRACK).pan - EDIT_PAN) < 0.002
+			and absf(DAW.state.track(EDIT_TRACK).volume - EDIT_VOLUME) < 0.002)
+	if _reaper_resource == "":
+		check("and is one step in my history, beside my own (%s)" % [names], depth == _edit_depth + 2
+				and names.count(EDIT_NAME) == 1 and names.any(func(n) -> bool: return str(n).ends_with(": volume")))
+		DAW.undo()
+		DAW.undo()
+		check("two undos take back my fader, and the guest's whole drag (%.3f %.3f %.3f)" % [
+				DAW.state.track(EDIT_TRACK).pan, DAW.state.track(EDIT_TRACK).volume, DAW.state.track(EDIT_HOST_TRACK).volume],
+				absf(DAW.state.track(EDIT_TRACK).pan - float(_edit_was[0])) < 0.0001
+				and absf(DAW.state.track(EDIT_TRACK).volume - float(_edit_was[1])) < 0.0001
+				and absf(DAW.state.track(EDIT_HOST_TRACK).volume - float(_edit_was[2])) < 0.0001
+				and DAW.state.undo_depth == _edit_depth)
+	else:
+		# Reaper's OSC writes stay its own undo points (docs/spatial_loop.md): put back by hand.
+		DAW.set_track_pan(EDIT_TRACK, float(_edit_was[0]))
+		DAW.set_track_volume(EDIT_TRACK, float(_edit_was[1]))
+		DAW.set_track_volume(EDIT_HOST_TRACK, float(_edit_was[2]))
+
+	# Controls beside the keys (slice 13): my bend during a held note, which the guest hears on its
+	# TheirKeys, and which rests there at my note-off. The guest's CC 7 at 55.27 is refused here.
+	await _until(55.29)
+	gm.note_on(BEND_PITCH, 100)
+	check("my bend during a held note is taken", gm.control(DawKitClip.PITCH_BEND, BEND_VALUE))
+	await _until(55.35)
+	gm.note_off(BEND_PITCH)
+	check("and rests at my note-off", int(gm.controls.get(DawKitClip.PITCH_BEND, -1)) == 0)
+	check("the guest's volume controller was refused, as no controller but the bend, 1 and 11 is passed (%d)"
+			% Session.controls_refused, Session.controls_refused == 1)
+
+	# Controls in takes (slice 14): the guest's keyboard wheel at 56.2, during a held note, is a
+	# control in the take it sends me, at the song it was moved at, and back at rest at its note-off.
+	await _until(56.7)
+	_check_bent_take()
+
+	# Bend and wobble by tilting (slice 15): the guest's keytar note, bent by its neck hand's tilt,
+	# is in the take it sends me with its bend.
+	await _until(57.55)
+	_check_tilted_take()
+
+	# Snapped gently (slice 17): the guest's shaker hit 20 ms before a sixteenth, snapped, is half
+	# way there in the take it sends me; its unsnapped one is where it was played.
+	await _until(57.65)
+	_check_snapped_take()
+
+	# How much of the time before the end the work took: the end has moved three times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	print("host work done at %.1fs of 55.4" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(55.4)
+	print("host work done at %.1fs of 57.8" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(57.8)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -511,7 +615,108 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(56.4)
+	await _until(58.7)
+
+
+## The guest's bent take (slice 14), as my DAW has it: its note, and its keyboard's bend as a
+## control at the song the guest moved the wheel at, then back at rest at the note-off.
+func _check_bent_take() -> void:
+	var expected_path := "/tmp/r3d_probe_bend_%d.json" % _port
+	var expected = JSON.parse_string(FileAccess.get_file_as_string(expected_path))
+	DirAccess.remove_absolute(expected_path)
+	check("the guest wrote down where it bent", expected is Dictionary)
+	if not expected is Dictionary:
+		return
+	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > BENT_SONG - 0.1 and it.start < BENT_SONG + 1.0)
+	check("the guest's bent take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	if takes.size() != 1:
+		return
+	var item: MixState.ItemState = takes[0]
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	var bends: Array = []
+	for o in range(0, item.controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		if int(item.controls[o + 1]) == DawKitClip.PITCH_BEND:
+			bends.append([item.start + item.controls[o], int(item.controls[o + 2])])
+	var bent: Array = bends.filter(func(b: Array) -> bool: return b[1] == BEND_VALUE)
+	var off := float(notes[0][1]) if notes.size() == 1 else NAN
+	print("bend: placed ", bends, " expected ", expected)
+	check("with its held note (%s)" % [notes], notes.size() == 1 and int(notes[0][2]) == BENT_PITCH)
+	check("and the guest's bend at 56.2 is a control in it at that song, during the note, worst %.2fms (%s)" % [
+			absf(float(bent[0][0]) - float(expected["at"])) * 1000.0 if bent.size() == 1 else -1.0, bends],
+			bent.size() == 1 and notes.size() == 1 and absf(float(bent[0][0]) - float(expected["at"])) < TAKE_TOLERANCE
+			and float(bent[0][0]) > float(notes[0][0]) and float(bent[0][0]) < off)
+	check("then back at rest at the note-off", bends.size() == 2 and bends[1][1] == 0
+			and absf(float(bends[1][0]) - off) <= MidiTake.CONTROL_GAP + 0.0001)
+
+
+## The guest's tilted keytar take (slice 15), as my DAW has it: its note, and the bend its neck
+## hand's tilt made, risen to what the guest's keys had and back at rest at the note-off.
+func _check_tilted_take() -> void:
+	var expected_path := "/tmp/r3d_probe_tilt_%d.json" % _port
+	var expected = JSON.parse_string(FileAccess.get_file_as_string(expected_path))
+	DirAccess.remove_absolute(expected_path)
+	check("the guest wrote down how far its tilt bent", expected is Dictionary)
+	if not expected is Dictionary:
+		return
+	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > TILT_SONG - 0.1 and it.start < TILT_SONG + 1.0)
+	check("the guest's tilted keytar take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	if takes.size() != 1:
+		return
+	var item: MixState.ItemState = takes[0]
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	var bends: Array = []
+	for o in range(0, item.controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		if int(item.controls[o + 1]) == DawKitClip.PITCH_BEND:
+			bends.append([item.start + item.controls[o], int(item.controls[o + 2])])
+	print("tilt: placed ", bends, " expected ", expected)
+	var held := int(bends[-2][1]) if bends.size() >= 2 else 0
+	check("with its keytar note (%s)" % [notes], notes.size() == 1 and int(notes[0][2]) == TILT_PITCH)
+	check("and its bend, risen to the %d the tilt made it, during the note (%d)" % [int(expected["value"]), held],
+			bends.size() >= 3 and absi(held - int(expected["value"])) <= 8 and notes.size() == 1
+			and float(bends[0][0]) > float(notes[0][0]) and float(bends[-2][0]) < float(notes[0][1]))
+	check("then back at rest at the note-off", not bends.is_empty() and int(bends[-1][1]) == 0)
+
+
+## The guest's snapped shaker take (slice 17), as my DAW has it: its snapped hit half way to the
+## sixteenth it was played 20 ms before, by the guest's grid and by mine; its unsnapped one where it
+## was played; and both hits as they reached me, each with its snap flag and its Foley take.
+func _check_snapped_take() -> void:
+	var expected_path := "/tmp/r3d_probe_snap_%d.json" % _port
+	var expected = JSON.parse_string(FileAccess.get_file_as_string(expected_path))
+	DirAccess.remove_absolute(expected_path)
+	check("the guest wrote down where it shook", expected is Dictionary)
+	if not expected is Dictionary:
+		return
+	var first := float(expected["first"])
+	var second := float(expected["second"])
+	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > SNAP_SONG - 0.1 and it.start < SNAP_SONG + 1.0)
+	check("the guest's shaker take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	if takes.size() != 1:
+		return
+	var item: MixState.ItemState = takes[0]
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	print("snap: placed ", notes, " expected ", expected)
+	check("with both its hits, as the shaker (%s)" % [notes], notes.size() == 2
+			and notes.all(func(n: Array) -> bool: return int(n[2]) == 82 and int(n[4]) == HitRecorder.CHANNEL))
+	if notes.size() != 2:
+		return
+	var mine := HitRecorder.snapped_at(first, DAW.state)
+	check("its snapped hit, played 20 ms early, landed 10 ms early by its grid and mine (%.4f for %.4f, %.4f)" % [
+			float(notes[0][0]), float(expected["snapped"]), mine],
+			absf(float(notes[0][0]) - float(expected["snapped"])) < 0.0005 and absf(mine - float(expected["snapped"])) < 0.0005
+			and absf(float(notes[0][0]) - first - SNAP_EARLY * HitRecorder.SNAP_PULL) < 0.0005)
+	check("and its unsnapped one where it was played (%.4f for %.4f)" % [float(notes[1][0]), second],
+			absf(float(notes[1][0]) - second) < 0.0005)
+	var shakes := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"shaker" and h.size() == 6)
+	var on := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - first) < 0.0001)
+	var off := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - second) < 0.0001)
+	check("both hits reached me with their snap and their take, at the song they were played to (%s)" % [shakes],
+			on.size() == 1 and bool(on[0][4]) and int(on[0][5]) == 5
+			and off.size() == 1 and not bool(off[0][4]) and int(off[0][5]) == 6)
 
 
 ## The guest's take, as the host's DAW has it, against when the guest heard each note played.
@@ -1713,8 +1918,8 @@ func _guest(port: int) -> void:
 	Session.item_used.connect(func(item: StringName, down: bool, from: int):
 		_uses.append([item, down, from]))
 	Session.note_played.connect(_on_note_played)
-	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float):
-		_item_hits.append([item, velocity, from, song]))
+	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
+		_item_hits.append([item, velocity, from, song, snap, take]))
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
 	await _until(1.4)
@@ -1935,20 +2140,196 @@ func _guest(port: int) -> void:
 	# ask carrying the bar I chose.
 	await _until(53.7)
 	Session.ask_room(FifthsWheel.VERB, [WHEEL_BAR, WHEEL_INSIDE])
+	# And to the harp, in a headset: the host sees my ghost there by 55.
+	await _until(53.8)
+	await _travel_to_the_harp()
 
 	# While the session is still on: once the host leaves, my own project is back.
 	await _until(54.5)
 	if _reaper_host:
 		check("I know the host's Reaper project by its name and file (%s, %s)" % [DAW.project_title(), DAW.project_file_name()],
 				DAW.project_title() == "rig" and DAW.project_file_name() == "rig.RPP")
+	# One undo step per gesture (slice 12): pan and volume dragged at once inside an edit, as a
+	# control that edits as one sends them, frame by frame. The host moves a fader of its own
+	# meanwhile, at 54.7.
+	var steps_before: int = DAW.state.undo_depth
+	await _until(54.55)
+	DAW.open_edit(EDIT_NAME)
+	var from_pan: float = DAW.state.track(EDIT_TRACK).pan
+	var from_volume: float = DAW.state.track(EDIT_TRACK).volume
+	for i in 30:
+		var f := (i + 1) / 30.0
+		DAW.set_track_pan(EDIT_TRACK, lerpf(from_pan, EDIT_PAN, f))
+		DAW.set_track_volume(EDIT_TRACK, lerpf(from_volume, EDIT_VOLUME, f))
+		await get_tree().create_timer(0.01).timeout
+	DAW.close_edit()
 	await _until(55.0)
 	_check_wheel("the host's")
-	await _until(56.0)
+	await _until(55.1)
+	if not _reaper_host:
+		check("my drag is one step in the host's history, its own fader another (%d after %d: %s)" % [
+				DAW.state.undo_depth, steps_before, DAW.state.undo_names.slice(steps_before)],
+				DAW.state.undo_depth == steps_before + 2 and DAW.state.undo_names.slice(steps_before).count(EDIT_NAME) == 1)
+	# Controls beside the keys (slice 13): the host's keys played here, as a plug in them would;
+	# a controller the host must refuse; and the host's bend, heard while its note is down and
+	# rested at its note-off.
+	var their := TheirKeys.new()
+	their.name = "TheirKeys"
+	add_child(their)
+	their.set_players([1])
+	Session.note_played.connect(their.play)
+	Session.control_played.connect(their.control)
+	await _until(55.27)
+	Session.send_control(7, 100)
+	await _until(55.33)
+	var synth: MonitorSynth = their.synths[1]
+	var down: KeysDown = their._down.get(1)
+	check("the host's bend during its held note is heard on my TheirKeys (%s)" % [synth.controls],
+			int(synth.controls.get(DawKitClip.PITCH_BEND, 0)) == BEND_VALUE and down != null
+			and down.is_down(BEND_PITCH))
+	await _until(55.39)
+	check("and rests at its note-off (%s)" % [synth.controls], int(synth.controls.get(DawKitClip.PITCH_BEND, -1)) == 0
+			and down != null and down.is_empty())
+	Session.note_played.disconnect(their.play)
+	Session.control_played.disconnect(their.control)
+	their.queue_free()
+	await _bend_into_a_take()
+	await _tilt_into_a_take()
+	await _snap_into_a_take()
+	await _until(58.3)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
 	check("and no longer listening", not Session.mix_feed.listening)
 	check("with a mix of my own again", DAW.is_live() and DAW.state.tracks.size() > 0)
+
+
+## Controls in takes (slice 14): a note held from 56.0 to 56.3 and bent at 56.2 by a keyboard's
+## pitch wheel (an InputEventMIDI, the door a real one comes in by), recorded onto TAKE_TRACK at
+## BENT_SONG to a clock of my own, and sent to the host when that clock stops recording. Where the
+## bend was taken down is written for the host to look for.
+func _bend_into_a_take() -> void:
+	var gm := Session.guest_midi
+	await _until(55.9)
+	for pitch in gm.held.keys():
+		gm.note_off(pitch)
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(BENT_SONG, true)
+	await _until(56.0)
+	var key := InputEventMIDI.new()
+	key.message = MIDI_MESSAGE_NOTE_ON
+	key.pitch = BENT_PITCH
+	key.velocity = 100
+	gm._input(key)
+	check("my held note is in a take of my own", gm.is_recording() and gm.held.has(BENT_PITCH))
+	await _until(56.2)
+	var wheel := InputEventMIDI.new()
+	wheel.message = MIDI_MESSAGE_PITCH_BEND
+	wheel.pitch = 8192 + BEND_VALUE
+	var at := gm.stamp()
+	gm._input(wheel)
+	check("my keyboard's wheel bends my keys (%s)" % [gm.controls], int(gm.controls.get(DawKitClip.PITCH_BEND, 0)) == BEND_VALUE)
+	var file := FileAccess.open("/tmp/r3d_probe_bend_%d.json" % _port, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"at": at, "value": BEND_VALUE}))
+	file.close()
+	await _until(56.3)
+	key.message = MIDI_MESSAGE_NOTE_OFF
+	key.velocity = 0
+	gm._input(key)
+	await _until(56.4)
+	gm.heard_source = _given_clock(BENT_SONG + 0.6, false)
+	await _until(56.5)
+	check("and the take went to the host with the bend and its rest (%s)" % [gm.last_take],
+			not gm.is_recording() and gm.last_take.get("controls", 0) == 2)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+
+
+## Bend and wobble by tilting (slice 15): a keytar in a hand of mine whose readings are a posed
+## bare hand (an XRInteractor on a HandGestures, as the rig makes them), a note played on it at
+## 56.65 and held to 57.25 while the hand tips TILT_DEGREES over 56.7 to 56.8, recorded onto TAKE_TRACK at TILT_SONG
+## to a clock of my own and sent to the host when that clock stops. The bend it made is written
+## for the host to look for.
+func _tilt_into_a_take() -> void:
+	var gm := Session.guest_midi
+	await _until(56.6)
+	gm.reach(&"keytar", true)
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(TILT_SONG, true)
+	var hand := HandGestures.new()
+	var pad := XRInteractor.new()
+	pad.gestures = hand
+	var keytar := KeytarItem.new()
+	keytar.midi = gm
+	keytar.state = Item.State.HELD
+	keytar.carried_by = pad
+	var tip := func(degrees: float) -> void:
+		hand.take(HandPose.posed([0, 0, 0, 0, 0], 0,
+				Transform3D(Basis(Vector3.FORWARD, deg_to_rad(degrees)), Vector3(0.0, 1.2, -0.3))))
+	tip.call(0.0)
+	await _until(56.65)
+	gm.note_on(TILT_PITCH, 100, 0, 0.0, false, &"keytar")
+	check("my keytar note is in a take of my own", gm.is_recording() and gm.held.has(TILT_PITCH))
+	var from := (Time.get_ticks_msec() - _start) / 1000.0 - _shift
+	var now := from
+	while now < 57.25:
+		tip.call(TILT_DEGREES * clampf((now - from - 0.05) / 0.1, 0.0, 1.0))
+		keytar._bend_by_hand(1.0 / 60.0)
+		await get_tree().physics_frame
+		now = (Time.get_ticks_msec() - _start) / 1000.0 - _shift
+	var bent := int(gm.controls.get(DawKitClip.PITCH_BEND, 0))
+	var wanted := Wobble.value_of(Wobble.bend_for(TILT_DEGREES))
+	check("my neck hand's tilt bends my keytar note (%d, the tilt's own %d)" % [bent, wanted],
+			absi(bent - wanted) <= 64 and keytar.wobble != null and keytar.wobble.sends > 0)
+	var file := FileAccess.open("/tmp/r3d_probe_tilt_%d.json" % _port, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"value": bent}))
+	file.close()
+	gm.note_off(TILT_PITCH, 0, 0.0, false, &"keytar")
+	await _until(57.3)
+	gm.heard_source = _given_clock(TILT_SONG + 1.0, false)
+	await _until(57.4)
+	check("and the take went to the host with the bend and its rest (%s)" % [gm.last_take],
+			not gm.is_recording() and int(gm.last_take.get("controls", 0)) >= 3)
+	gm.reach(&"keytar", false)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	keytar.free()
+	pad.free()
+	hand.free()
+
+
+## Snapped gently (slice 17): two shaker hits taken down at 57.42 by a HitRecorder of my own onto
+## TAKE_TRACK at SNAP_SONG, to a clock of my own, as the studio's takes them (`hit`'s `snap`, the
+## player's flag): one SNAP_EARLY before a sixteenth with snap on, one SNAP_EARLY before the next
+## with it off. Each goes to the room too, with its flag and its Foley take, as the studio sends a
+## hit. Sent to the host when the clock stops recording; where each was played, and where the
+## snapped one is to land, is written for the host to look for.
+func _snap_into_a_take() -> void:
+	await _until(57.42)
+	var rec := HitRecorder.new()
+	rec.name = "SnapRecorder"
+	add_child(rec)
+	rec.heard_source = _given_clock(SNAP_SONG, true)
+	var shaker := _room.items.get(&"shaker") as InstrumentItem
+	var first := HitRecorder.nearest_sixteenth(SNAP_SONG + 0.2, DAW.state) - SNAP_EARLY
+	var second := HitRecorder.nearest_sixteenth(first + 0.3, DAW.state) - SNAP_EARLY
+	rec.hit(shaker, 90, first, TAKE_TRACK, 1)
+	rec.hit(shaker, 90, second, TAKE_TRACK, 0)
+	Session.send_item_hit(shaker.id, 90, first, true, 5)
+	Session.send_item_hit(shaker.id, 90, second, false, 6)
+	var file := FileAccess.open("/tmp/r3d_probe_snap_%d.json" % _port, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"first": first, "second": second,
+			"snapped": HitRecorder.snapped_at(first, DAW.state)}))
+	file.close()
+	check("my snapped hit is half way to its sixteenth in my take, my other where I played it",
+			is_equal_approx(HitRecorder.snapped_at(first, DAW.state), first + SNAP_EARLY * HitRecorder.SNAP_PULL)
+			and rec.jacked_tracks() == [TAKE_TRACK])
+	await _until(57.46)
+	rec.heard_source = _given_clock(SNAP_SONG + 1.0, false)
+	await _until(57.5)
+	check("and the take went to the host (%s)" % [rec.last_take],
+			int(rec.last_take.get("notes", 0)) == 2 and int(rec.last_take.get("track", 0)) == TAKE_TRACK)
+	rec.queue_free()
 
 
 ## Plays a take into track TAKE_TRACK while the host records, through the same door a MIDI
@@ -2042,11 +2423,50 @@ func _play(down: bool, pitch: int, velocity: int, changed_usec: Array) -> int:
 
 
 func _keep_publishing(head: Transform3D, pointing: String) -> void:
+	_head = head
 	var timer := Timer.new()
 	timer.wait_time = 0.05
 	timer.autostart = true
-	timer.timeout.connect(func(): Session.publish_presence(head, pointing, Vector3.ZERO))
+	timer.timeout.connect(func(): Session.publish_presence(_head, pointing, Vector3.ZERO))
 	add_child(timer)
+
+
+## The harp's seat in the room's venue (Session.room), in the session's frame, as both halves
+## stand it: Stations.seat with nothing to say where a person fits, since neither half here stands
+## a studio's furniture round it. Null where the venue stands no harp.
+func _harp_seat() -> Variant:
+	var venue := Venue.make(Session.room.get("venue", Venue.IDS[0]))
+	var seat: Variant = Stations.seat(venue, &"harp")
+	venue.free()
+	return seat
+
+
+## Going to a station in a headset (docs/spatial_loop.md slice 11), as the studio does it: a
+## simulated rig in the session's frame (RoomAnchor, handed over whole) travels to the harp's
+## seat, and from then on the head this half publishes is the one Presence would, wherever the
+## travel put it.
+func _travel_to_the_harp() -> void:
+	var anchor := RoomAnchor.new()
+	add_child(anchor)
+	anchor.adopt_virtual_frame(1.2)
+	var rig := XRRig.new()
+	rig.simulated = true
+	add_child(rig)
+	rig.head.position = TRAVEL_OFFSET
+	var seat: Variant = _harp_seat()
+	check("the room's venue stands a harp to go to", seat != null)
+	if seat == null:
+		return
+	rig.travel(seat as Transform3D)
+	await get_tree().create_timer(XRRig.FADE * 2.0 + 0.1).timeout
+	var presence := Presence.new()
+	presence.head_node = rig.head
+	presence.frame = anchor
+	_head = presence.head_in_session()
+	presence.free()
+	var wanted := (seat as Transform3D) * TRAVEL_OFFSET
+	check("my travel put my head at the harp's seat, as I stood in my play space (%.3f m)" % _head.origin.distance_to(wanted),
+			_head.origin.distance_to(wanted) < 0.05 and rig.away and rig.veil() == 0.0)
 
 
 ## The first send that goes somewhere, as [track, slot]: the same answer on both halves, since

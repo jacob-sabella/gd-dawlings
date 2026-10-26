@@ -10,12 +10,16 @@
 // frames (128 is 2.7ms at 48kHz), so key to sound is a few milliseconds plus the card's own.
 //
 // The synth is MonitorSynth's (core/session/monitor_synth.gd), the same arithmetic in C: a
-// two-operator tine, sixteen voices, and the sustain pedal.
+// two-operator tine, sixteen voices, the sustain pedal, the pitch wheel and expression.
 //
 // Commands on stdin, one per line:
 //   on P V        note P down at velocity V (from the app: the computer keys, the panel's keys)
 //   off P         note P up
 //   sus 0|1       the sustain pedal
+//   bend V        the pitch wheel, -8192 to 8191: every sounding note bent, two semitones at the
+//                 ends (DawKitTine.BEND_SEMITONES)
+//   cc K V        controller K at V, 0 to 127: 11 (expression) scales the output; 1 (the mod
+//                 wheel) and any other this tine has no use for are ignored
 //   vol DB        volume, in dB
 //   enable 0|1    whether anything is heard (off: monitoring through the player's own gear)
 //   midi 0|1      take every hardware MIDI source's notes, or none (the port takes any others
@@ -65,6 +69,10 @@ static long v_born[VOICES];
 static long clock_n;
 static int sustain;
 static float gain = 0.5f;
+// The pitch wheel, as the ratio every voice's increment is scaled by; and expression, 0-1.
+static float bend = 1.0f;
+static float expression = 1.0f;
+#define BEND_SEMITONES 2.0f
 static int enabled = 1;
 
 static void synth_init(void) {
@@ -128,6 +136,16 @@ static void pedal(int down) {
 				damp(v);
 }
 
+static void wheel(int value) {
+	float v = fminf(fmaxf((float)value, -8192.0f), 8191.0f);
+	bend = powf(2.0f, v / 8192.0f * BEND_SEMITONES / 12.0f);
+}
+
+static void controller(int kind, int value) {
+	if (kind == 11)
+		expression = fminf(fmaxf(value / 127.0f, 0.0f), 1.0f);
+}
+
 static void panic(void) {
 	sustain = 0;
 	for (int v = 0; v < VOICES; v++) {
@@ -144,7 +162,7 @@ static void render(float *out, uint32_t count) {
 		float amp = v_amp[v];
 		if (amp < 0.0005f)
 			continue;
-		float phase = v_phase[v], tine = v_tine[v], inc = v_inc[v], index = v_index[v];
+		float phase = v_phase[v], tine = v_tine[v], inc = v_inc[v] * bend, index = v_index[v];
 		float decay = v_decay[v] * v_release[v], attack = v_attack[v];
 		float left = 0.5f - v_pan[v], right = 0.5f + v_pan[v], tine_amp = v_strike[v];
 		for (uint32_t i = 0; i < count; i++) {
@@ -173,14 +191,17 @@ static void render(float *out, uint32_t count) {
 		if (amp < 0.0005f)
 			v_pitch[v] = -1;
 	}
-	// Gentle saturation, so a fistful of keys gets fuller rather than clipping; then the volume.
-	for (uint32_t i = 0; i < count * 2; i++)
-		out[i] = out[i] / (1.0f + fabsf(out[i])) * gain;
+	// Expression, then gentle saturation, so a fistful of keys gets fuller rather than clipping;
+	// then the volume.
+	for (uint32_t i = 0; i < count * 2; i++) {
+		float f = out[i] * expression;
+		out[i] = f / (1.0f + fabsf(f)) * gain;
+	}
 }
 
 // --- Events: from the main loop (stdin, the sequencer) to the realtime thread. ------------------
 
-enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC };
+enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC, EV_BEND, EV_CC };
 struct event {
 	uint32_t kind, a, b;
 	float f;
@@ -237,6 +258,8 @@ static uint64_t apply_events(void) {
 				panic();
 			break;
 		case EV_PANIC: panic(); break;
+		case EV_BEND: wheel((int)e->a - 8192); break;
+		case EV_CC: controller(e->a, e->b); break;
 		}
 	}
 	if (filled > 0)
@@ -371,7 +394,17 @@ static void on_seq(void *data, int fd, uint32_t mask) {
 				int down = ev->data.control.value >= 64;
 				push(EV_SUS, down, 0, 0);
 				printf("sus %d %d %llu\n", down, ev->data.control.channel, (unsigned long long)when);
+			} else if (ev->data.control.param == 1 || ev->data.control.param == 11) {
+				// The mod wheel and expression: passed on, not played. Whose wheel it is is the
+				// app's to say (GuestMidi.control), and it answers with a `cc` line.
+				printf("ctl %u %d %d %llu\n", ev->data.control.param, ev->data.control.value,
+						ev->data.control.channel, (unsigned long long)when);
 			}
+			break;
+		case SND_SEQ_EVENT_PITCHBEND:
+			// The pitch wheel, -8192 to 8191, passed on in the same way, answered with `bend`.
+			printf("wheel %d %d %llu\n", ev->data.control.value, ev->data.control.channel,
+					(unsigned long long)when);
 			break;
 		case SND_SEQ_EVENT_PORT_START:
 			// A keyboard plugged in while the session runs.
@@ -418,6 +451,11 @@ static void command(char *s) {
 		push(EV_OFF, a, 0, 0);
 	else if (sscanf(s, "sus %d", &a) == 1)
 		push(EV_SUS, a != 0, 0, 0);
+	else if (sscanf(s, "bend %d", &a) == 1)
+		// Carried offset, as the event's fields are unsigned.
+		push(EV_BEND, (uint32_t)((a < -8192 ? -8192 : a > 8191 ? 8191 : a) + 8192), 0, 0);
+	else if (sscanf(s, "cc %d %d", &a, &b) == 2)
+		push(EV_CC, a, b, 0);
 	else if (sscanf(s, "vol %f", &f) == 1)
 		push(EV_VOL, 0, 0, f);
 	else if (sscanf(s, "enable %d", &a) == 1)

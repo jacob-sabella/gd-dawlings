@@ -247,7 +247,10 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 ## rendered to WAVs instead. A DawKitProject does not carry it, so a plain load leaves every
 ## track with none: giving loaded tracks parts by name sounded the band under a count-in and
 ## after a render's range, where a file's own tracks are meant to be silent.
-static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Dictionary = {}) -> PackedStringArray:
+## `track_widths`, by track id, is each track's width (TrackState.width) where it is not full: what
+## DAWproject has no word for, kept beside it by ProjectFiles.
+static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Dictionary = {},
+		track_widths: Dictionary = {}) -> PackedStringArray:
 	var problems := p.problems()
 	if not problems.is_empty():
 		return problems
@@ -306,6 +309,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 		t.volume = backend.db_to_taper(src.volume_db)
 		t.volume_db = src.volume_db
 		t.pan = (src.pan + 1.0) * 0.5
+		t.width = clampf(float(track_widths.get(src.id, 1.0)), 0.0, 1.0)
 		t.mute = src.mute
 		t.solo = src.solo
 		t.rec_arm = src.armed

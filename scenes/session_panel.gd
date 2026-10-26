@@ -13,10 +13,17 @@ extends CanvasLayer
 ## going away all reach here as Session.notice and are shown for a few seconds where the eye
 ## already is, rather than in a log nobody at a mixing desk is reading.
 
+## "Tilt bends"'s hover card (docs/spatial_loop.md part two, slice 15).
+const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to bend it, up to two semitones, and shake it to wobble it: the keytar's neck hand, the harp's plucking hand, the fingertips. "
+		+ "At a desk the mouse's wiggle is the tilt. Off, for a steady pitch from a hand that moves; Alt with the mouse moving up or down still bends.")
+## "Snap hand percussion"'s hover card (slice 17): HitRecorder.SNAP_WINDOW and SNAP_PULL, in words.
+const SNAP_HITS_TIP := ("The shaker's and the tambourine's hits are recorded a little nearer the beat: one within 35 ms of a sixteenth is moved half way to it. "
+		+ "You hear every hit where you played it; only the recorded note moves. Yours alone: it goes with each hit you play.")
 const WIDTH := 360.0
 const TOAST_SECONDS := 4.5
 ## A beacon is heard once a second. Three missed and the session is taken to be gone.
 const NEARBY_FORGET_MSEC := 3500
+
 
 const INK := Color(0.86, 0.89, 0.93)
 const DIM := Color(0.56, 0.60, 0.67)
@@ -64,6 +71,11 @@ var _item_latency: Label
 var _through_track: CheckButton
 var _record_with: CheckButton
 var _computer_keys: CheckButton
+## Whether a playing hand's tilt bends and its shake wobbles (GuestMidi.tilt_bends).
+var _tilt_bends: CheckButton
+## Whether this player's hand percussion is snapped gently to the beat as it is recorded
+## (GuestMidi.snap_hits, HitRecorder.snapped_at).
+var _snap_hits: CheckButton
 var _take_status: Label
 var _mic_into: OptionButton
 var _mic_input: OptionButton
@@ -76,6 +88,10 @@ var _mic_status: Label
 var _mic_box: VBoxContainer
 ## The keys' controls, placed the same way as the microphone's.
 var _keys_box: VBoxContainer
+## Hand percussion's own setting ("Snap hand percussion"), just after the keys and always shown:
+## a solo player or host on Reaper, whose keys box is hidden, still records the shaker's and the
+## tambourine's hits (HitRecorder), and the setting is each player's own.
+var _hits_box: VBoxContainer
 var _column: VBoxContainer
 var _keys: KeyCatcher
 var _keys_hint: Label
@@ -362,6 +378,11 @@ func _build_panel() -> void:
 	_keys_box.add_theme_constant_override("separation", 8)
 	_build_midi(_keys_box)
 	_guest_box.add_child(_keys_box)
+	_hits_box = VBoxContainer.new()
+	_hits_box.name = "Hits"
+	_hits_box.add_theme_constant_override("separation", 8)
+	_build_hits(_hits_box)
+	_guest_box.add_child(_hits_box)
 	_mic_box = VBoxContainer.new()
 	_mic_box.name = "Mic"
 	_mic_box.add_theme_constant_override("separation", 8)
@@ -467,7 +488,8 @@ func _build_midi(box: VBoxContainer) -> void:
 	_midi_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	device_row.add_child(_midi_status)
 	_midi_button = _button("Open MIDI", false)
-	_midi_button.tooltip_text = "Listen to every MIDI keyboard this computer can see."
+	_midi_button.tooltip_text = ("Listen to every MIDI keyboard this computer can see: its keys, its pitch wheel, "
+			+ "its mod wheel and expression, all played, heard by the band and kept in your takes.")
 	_midi_button.pressed.connect(func():
 		Session.guest_midi.open_midi()
 		_refresh_midi())
@@ -517,10 +539,25 @@ func _build_midi(box: VBoxContainer) -> void:
 	_computer_keys.tooltip_text = "A to ' play from C, the row above plays the black keys, Z and X change octave. Esc gives the keys back."
 	_computer_keys.toggled.connect(func(on: bool): _keys.set_active(on))
 	box.add_child(_computer_keys)
+	_tilt_bends = _toggle("Tilt bends")
+	_tilt_bends.tooltip_text = TILT_BENDS_TIP
+	_tilt_bends.toggled.connect(func(on: bool): Session.guest_midi.tilt_bends = on)
+	box.add_child(_tilt_bends)
 
 	_take_status = _label("", 13, DIM)
 	_take_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_take_status)
+
+
+## The shaker's and the tambourine's recorded hits: whether they are snapped gently to the beat
+## (GuestMidi.snap_hits, HitRecorder.snapped_at). Shown to every player, whatever their DAW.
+func _build_hits(box: VBoxContainer) -> void:
+	box.add_child(_caption("YOUR HAND PERCUSSION"))
+	_snap_hits = _toggle("Snap hand percussion")
+	_snap_hits.tooltip_text = SNAP_HITS_TIP
+	_snap_hits.set_pressed_no_signal(Session.guest_midi == null or Session.guest_midi.snap_hits)
+	_snap_hits.toggled.connect(func(on: bool): Session.guest_midi.snap_hits = on)
+	box.add_child(_snap_hits)
 	if Session.guest_midi != null:
 		Session.guest_midi.changed.connect(_refresh_take)
 		# A keytar picked up makes this machine's keys play (GuestMidi.plays) even on a host
@@ -682,7 +719,17 @@ func _place_mic() -> void:
 	_mic_box.visible = guest or host_records
 	if _keys_box.get_parent() != home:
 		_keys_box.reparent(home, false)
-	home.move_child(_keys_box, home.get_children().find(_mic_box))
+	# Just before the microphone, wherever it was: move_child's index is the child's own afterwards.
+	var before := _mic_box.get_index()
+	if _keys_box.get_index() < before:
+		before -= 1
+	home.move_child(_keys_box, before)
+	if _hits_box.get_parent() != home:
+		_hits_box.reparent(home, false)
+	var after := _keys_box.get_index()
+	if _hits_box.get_index() > after:
+		after += 1
+	home.move_child(_hits_box, after)
 	# An instrument in reach (a keytar in hand, the harp...) plays through GuestMidi regardless of
 	# whether Reaper records its own MIDI input (GuestMidi.plays): "anyone's with an instrument".
 	# Without this, a host or solo player on Reaper had no way back into "Play into" to choose
@@ -766,6 +813,8 @@ func _refresh_keys() -> void:
 
 func _refresh_midi() -> void:
 	var gm := Session.guest_midi
+	if gm != null and _snap_hits != null and _snap_hits.button_pressed != gm.snap_hits:
+		_snap_hits.set_pressed_no_signal(gm.snap_hits)
 	if gm == null or _midi_status == null or not _keys_box.visible:
 		return
 	if not gm.midi_open:
@@ -775,7 +824,7 @@ func _refresh_midi() -> void:
 		_midi_status.text = "No MIDI keyboard found. Plug one in and look again."
 		_midi_button.text = "Rescan"
 	else:
-		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
+		_midi_status.text = "Listening to %s: keys, pitch wheel, mod wheel." % ", ".join(gm.devices)
 		_midi_button.text = "Rescan"
 	# Matches take_track()'s own fallback: unset, an instrument in reach (or a host whose DAW does
 	# not record its own input) still lands on the first armed track, never nowhere.
@@ -800,6 +849,8 @@ func _refresh_midi() -> void:
 			else "Record my keys when %s records" % Session.name_of(1)
 	if _record_with.button_pressed != gm.record_with_host:
 		_record_with.set_pressed_no_signal(gm.record_with_host)
+	if _tilt_bends.button_pressed != gm.tilt_bends:
+		_tilt_bends.set_pressed_no_signal(gm.tilt_bends)
 	_refresh_keys()
 	_refresh_take()
 	_refresh_mic()

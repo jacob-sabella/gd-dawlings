@@ -220,6 +220,9 @@ func _ready() -> void:
 	_fader.cap_bank = cap_bank
 	_fader.position = Vector3(-0.011, 0.040, 0.004)
 	_fader.write_value = _on_fader_moved
+	# A grouped track's fader moves its whole group (DAW.set_track_volume), a write to each
+	# track's own fader every frame: one undo step for the drag, not one a frame.
+	_fader.edits_as_one = true
 	_fader.describe_title = func() -> String:
 		return _caption_for("LEVEL") if send_dest <= 0 else _caption_for("SEND TO " + _dest_name())
 	add_child(_fader)

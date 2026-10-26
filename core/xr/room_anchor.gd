@@ -34,6 +34,11 @@ signal calibration_drift(local_span: float, expected_span: float)
 const SPAN_TOLERANCE := 0.03
 
 var is_calibrated := false
+## Calibrated against two marks on a real floor, rather than handed the session's frame outright
+## (`adopt_virtual_frame`). A player whose frame is the real room's shares that floor with anyone
+## else who marked it: a co-located room, where a headset may not travel (XRRig.travel), since
+## a body there has to stay where the others in the room see it.
+var marked := false
 ## Distance between the two marks, as the session agreed it. Set by the first participant to
 ## calibrate; later ones are checked against it.
 var session_span: float = 0.0
@@ -83,6 +88,7 @@ func mark_forward(point_in_world: Vector3) -> bool:
 	# first piece of tape.
 	transform = Transform3D(Basis(x_axis, y_axis, z_axis), _mark_a)
 	is_calibrated = true
+	marked = true
 	calibrated.emit(session_span)
 	return true
 
@@ -93,6 +99,7 @@ func adopt_virtual_frame(span: float) -> void:
 	session_span = span
 	transform = Transform3D.IDENTITY
 	is_calibrated = true
+	marked = false
 	calibrated.emit(span)
 
 

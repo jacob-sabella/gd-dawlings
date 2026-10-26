@@ -215,6 +215,13 @@ whole on a worker thread, every note on its own sample, and played like a take, 
 item's start. A project marks the track with a built-in instrument device, and opening one keeps
 instruments out of the desk's effect chain.
 
+Notes on the hand percussion's channel (9) and the pitched items' (10) are not the tine's:
+`ItemVoices` (core/built_in/item_voices.gd) rings them from Foley's own synthesis (`Foley.samples`),
+channel 9 as General MIDI drums (each of the room's items' notes as that item's sound) and channel
+10 as the handbell at the note's pitch, each note's take seeded by its time. `render_midi` splits
+an item by channel and sums the two; an item with neither is the tine's alone, to the sample. On
+Reaper the track's own instrument plays them, as any MIDI.
+
 Sound files come in through `DAW.import_audio` (`core/daw/audio_import.gd` chooses the name and
 the track). dawkit's `DawKitAudioFile.bring_in` reads the file (WAV, AIFF, FLAC through
 `DawKitFlac`, Ogg, MP3) and puts it in the takes folder as a
@@ -522,6 +529,29 @@ grants claims first-come. Everyone else is told; their copy of the control gets 
 It then refuses grabs and nudges, wears the holder's colour on its rim, and still follows the
 holder's values as they arrive. A losing claim gets `hold_refused` and the local grab is let
 go. A participant who leaves frees every hold they had.
+
+### One undo step per gesture, by edit group
+
+A fader's drag is many writes to one control, and `OfflineBackend._remember` folds those by time
+(`GESTURE_MS`) into one step, as Reaper does. A gesture that writes several values -- a grouped
+fader taking its group, pan and volume at once, a send and a threshold -- alternates between
+controls, and folding by control made a step of nearly every frame. So a gesture brackets itself:
+`DAW.open_edit(name)` on the grab and `DAW.close_edit()` on the let-go (a ControlAffordance with
+`edits_as_one`). Between them, everything that player writes is one step, whatever it writes: a
+control written again keeps where it started, switches and lane edits keep their order, and undo
+takes them back last first. Each player has their own: `DAWBackend.acting_peer` says whose a
+write is (`DAW.apply_intent`'s `from`, the guest's peer id; 0 for the host's own), a guest's
+open and close are intents like its writes, and another player's write in between is a step of
+its own, and so are the writes the host makes in answer to a guest (her take placed, her room
+ask carried out: `DAW.on_behalf_of`). An edit closes on its let-go, after `EDIT_IDLE_MSEC` (10 s)
+with nothing written, and when its player leaves (`DAW.close_edits_of`), so a lost let-go cannot
+hold history open. Any undo or redo, by anyone, ends every open edit's step but keeps the edit:
+the undo takes the step back whole, and what a hand still on the control writes next is one fresh
+step rather than a step a frame. A scroll on an `edits_as_one` control is one edit too: the first
+notch opens it, and notches closer together than `GESTURE_MS` share it. On Reaper (`EDIT_GROUPS` only with the bridge) the bridge verbs inside an edit are
+held, shown on the cache at once, and sent at the let-go as one `Batch` request that the bridge
+runs inside one Undo block, the handlers' own blocks stood down for it; OSC writes have no block
+to share and stay Reaper's own undo points, one per control.
 
 ### A control ignores its own echo
 
@@ -1613,6 +1643,76 @@ Two instruments can hold the same pitch, so wherever one player's notes are soun
 each pitch by source, and its note-off is sounded only when the last source lets it go.
 `Presence` plays only a keytar holder's keys notes (`&"keytar"` or plain) out of the keytar.
 
+Beside the notes go the controls: the pitch wheel (`DawKitClip.PITCH_BEND`), the mod wheel (CC 1)
+and expression (CC 11), `GuestMidi.control(kind, value, source, at)`. They travel by
+`Session.send_control` on `CONTROLS_CHANNEL`, unreliable and ordered, so a lost one never holds a
+note-on back behind a retransmit; notes stay reliable on `KEYS_CHANNEL`. The host passes those
+three (`Session.CONTROL_KINDS`), clamps each by kind (`control_value`: -8192 to 8191, 0 to 127),
+refuses any other (`controls_refused`) and emits `control_played` everywhere else. A player has
+one wheel, as a keyboard does: it belongs to the source of their newest held note
+(`GuestMidi.wheel_source`, from `KeysDown.newest`), and another source's moves are dropped until
+it does, so two instruments never fight over one voice. A control off its rest
+(`Session.control_rest`: the wheel centred, the mod wheel down, expression full) is sent again
+at least every `GuestMidi.CONTROL_EVERY` (50 ms), and at the player's last note-off every end
+rests it by itself, so no reset has to arrive. Each receiver (`TheirKeys.control`,
+`TheirMonitor.control`, which queues it in the line with the notes, and `ChordHarp.heard_control`
+through `Presence`) plays a control only while that player has a note down, because a resend
+overtaking the last note-off on its own channel would otherwise leave the wheel off rest with
+nothing to put it back; one moved before a note is sent again right behind the note-on. Controls
+sound through `MonitorSynth.control`, into the render thread's queue to `DawKitTine.control`, or
+to the native helper as `bend V` and `cc K V` lines (`NativeKeys.control`), which bend every
+voice's increment and scale the output by expression, as the tine does. Neither plays the mod
+wheel; it is kept for a track's own instrument.
+
+A take keeps the controls too (docs/spatial_loop.md slice 14). `MidiTake.control` thins them as
+they come: a move is kept when it has gone `BEND_STEP` (32) for the bend or `CC_STEP` (1) for a CC
+since the last one kept of its kind *and* `CONTROL_GAP` (8 ms) has passed; a move that is neither
+waits, and the latest one waiting is kept once it has stood `CONTROL_HOLD` (50 ms), a note lets go
+or the take ends, so where a bend came to rest is exact. No two land closer than 8 ms, and there
+are at most `MAX_CONTROLS` (20,000). The player's last note-off puts the wheel back at rest in the
+take as it does everywhere else, kept whatever the thinning says, so an item never bends its next
+note. A hardware keyboard's controls go in on its own MIDI channel, as its notes do. Its mod wheel
+and expression are not sprung and are never sent again, so the plain keys remember where they
+stand (`GuestMidi._hardware`); a plain-keys note-on that takes the wheel puts them back, heard,
+sent right behind the note and kept in the take, after a note-off rested them. The helper's wheel
+moves are stamped where they were played (`song(age)`), as its notes are. A MIDI item's hover card
+names its controller events (`TimelineLanes.controls_text`: "mod wheel 4, pitch wheel 2"). `finish()` gives `controls`, flat `[time, kind, value, channel]` in song seconds, which
+`insert_midi_take` carries as its sixth argument; `clean_args` refuses any row whose controller is
+not one of `MidiTake.CONTROL_KINDS` (which `Session.CONTROL_KINDS` is) or whose value is out of its
+kind's range, and pulls each time inside the take. Every backend puts them on the new item,
+counted from its start (`ItemState.controls`, which the built-in engine renders with the notes
+and the wire carries whole: `MixWire.CONTROLS_MAX` is `MAX_CONTROLS`). Reaper's bridge writes them
+with `MIDI_InsertCC` (`0xE0` and the wheel's fourteen bits, low then high; `0xB0` for 1 and 11)
+after the notes, inside the same Undo block, and its timeline poll reads them back
+(`item_controls`, 2,048 an item, like the notes' sketch). A MIDI keyboard's wheels come in as the
+plain keys' (`&""`) controls: `GuestMidi._input` reads `MIDI_MESSAGE_PITCH_BEND` (0 to 16383 in
+`pitch`, less 8192) and CC 1 and 11; where the native helper reads the keyboard it passes them on
+as `wheel V` and `ctl K V` lines without playing them, since whether this player's wheel takes them
+is `GuestMidi.control`'s to say.
+
+What moves the wheel without a keyboard is the playing hand (docs/spatial_loop.md part two, slice
+15). `Wobble` (`core/music/wobble.gd`, a RefCounted, one per playing hand on each instrument that
+bends: `KeytarItem.wobble` on the hand holding it, `ChordHarp.wobble` on the hand that plucked last,
+`FingertipNotes.wobble` on its own hand, and `MouseInteractor`'s own for the plain keys) is stepped
+each physics frame. It reads its hand's `Interactor.tilt_angles()` (`HandPose.angles_of`: roll and
+pitch in radians, unclamped, of which `tilt()` is the clamped form; a bare hand's `HandGestures
+.angles`, a controller's aim, the mouse's wiggle) and, only while one of its `sources` owns the
+wheel, sends one bend through `GuestMidi.control` with that source, at most 60 a second and only
+when it changed. The bend is measured from the roll at the moment its source took the wheel (a
+note's press, or the first after every note let go, `GuestMidi.rests`), wrapped to half a turn:
+`sign(d) * clamp((|d|/45 - 0.08) / 0.92, 0, 1) * 2` semitones, so a bare hand level palm down and a
+controller level thumb up bend alike, and a hand held tilted before it played bends nothing. The
+wobble is the roll band-passed from 3 to 8 Hz (two one-pole high-passes and a low-pass), the
+hand's own shake rather than an LFO, up to 0.4 semitones; the bend is read from the roll less that
+shake, so a tremble is not also a bend. `GuestMidi.tilt_bends` ("Tilt bends" in the session panel)
+off, the tilt counts for nothing. The hand's `bend_wheel()` is added: the desktop's Alt with the
+mouse moving up or down, 100 px a semitone, springing back as Alt is let go
+(`MouseInteractor.bend_by`). So nothing new crosses the wire: a tilt is a bend like any other,
+heard, sent, rested at the last note-off and kept in the take. The mouse's wiggle runs while an
+instrument or the keytar is carried, the fingers play, or the cursor rests ungrabbed on a control
+that `plays_under_cursor()` (the harp). `KeyCatcher` gives only Ctrl and Meta keys to the studio,
+and a key let go always sends its note-off.
+
 A player who switches ON AIR on their tablet (the room's `on_air` list) grows a MONITOR socket
 under their KEYS pack (`monitor_N`). Plugged in, `TheirMonitor` (`core/audio/their_monitor.gd`)
 rebuilds what they hear without anything being streamed. Their notes carry the song position they
@@ -1630,6 +1730,21 @@ holds it (`Presence._on_item_hit`). `HitRecorder` (`core/items/hit_recorder.gd`)
 transport as `GuestMidi.heard()` reports it and records each hit as a drum note, stamped by song
 position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
 players' hits are only heard in the room, never in a personal mix.
+
+A tracked bare hand holds the shaker and the tambourine (`InstrumentItem.held_in_fist`) by
+closing round them, not only by a pinch (`XRInteractor.step_hold`, docs/spatial_loop.md slice 17):
+three fingers past `HandPose.HOLD_CURL` with the palm within 6 cm of the item's `grip_point`, taken
+as the hand closes. It lets go only after 0.1 s open on confident frames (`HandGestures.confident`:
+every joint seen, not inferred); a hand tracked with guessed joints goes on carrying it at the palm
+and playing it. It holds through a tracking loss where the hand was last seen for `LOST_HOLD`
+(0.4 s) and then sends it home, and throws only from the palm's speed over confident
+frames. Its strokes are the palm's (`shake_point`, levered by `shake_lever`), and none are felt
+while the hand is not tracked (`shake_tracked`). A hand carrying anything is not one of XRRig's two
+escape fists (`XRRig.escape_fist`). `HitRecorder.hit` snaps a hand percussion hit's recorded
+stamp, never its sound or its sent `at`, half way to the nearest sixteenth when within 35 ms
+(`snapped_at`), by its player's flag (`GuestMidi.snap_hits`, "Snap hand percussion" in the
+session panel, in a box of its own after the keys, shown whatever the DAW), which
+`Session.item_hit` carries with the hit's Foley take (`snap`, `take`).
 
 Pitched items are instruments of the same kind whose note is a function of song position
 (`InstrumentItem.note_at`, `channel`, `note_seconds`). The four handbells (`HandbellItem`,
@@ -1668,15 +1783,20 @@ A jack into a bandmate (`player_P`) is a cable between players. What the source 
 own keys instead of where it went: a bell its note and, `note_seconds` later, its off; the harp
 its strings (heard here from the harp itself); percussion a TRIGGER; and `keys:P` what P plays,
 as a thru (P's keys go on as before, and what came in on a cable or from the harp is not passed
-on, so two players plugged into each other never feed back). Each event carries the one song
+on, so two players plugged into each other never feed back), with its controls beside the notes
+as `Jack.Kind.CC` (`pitch` the controller, `velocity` its value; a resend of the value the cable
+already has is not sent again, but one right behind a note-on is). Each event carries the one song
 position it was played to. `Session.send_jack` takes it up to the host on `KEYS_CHANNEL`,
 reliable, and the host passes it to P alone (`jack_played`) only when both are in the room, P is
 not the sender, the room's patch sends that source into P and the sender is the source's player:
 the holder of an item (Session.holds), P for `keys:P`, anyone for the harp (`Session.jack_refusal`,
-`Session.jack_check`, the studio's `Jacks.send_refusal`). On P, `Jacks.received` plays it on P's
+`Session.jack_check`, the studio's `Jacks.send_refusal`). It clamps by kind: a note's or a
+trigger's pitch and velocity to 0-127, a CC's value by its controller (`control_value`, so a bend
+of -8192 arrives intact), and refuses a CC that is not one of `CONTROL_KINDS`. On P, `Jacks.received` plays it on P's
 keys with source `&"cable"` at that song position, so it sounds on P's synth, goes to everyone as
 P's notes and lands in P's take where it was played; a TRIGGER is the chord tone at its song, one
-up the chord each hit, for 0.3 s. `&"cable"` is in P's `GuestMidi.instruments` while anything
+up the chord each hit, for 0.3 s; a CC moves P's wheel as the cable (`GuestMidi.control`), taken
+while the cable owns it, and so lands in P's take beside the notes. `&"cable"` is in P's `GuestMidi.instruments` while anything
 goes into P. Whoever a jack goes into may unplug it (a press on it, or Shift+P with an empty hand
 on a desktop), and is told who plugged what. The harp's socket is on its pillar; a player's keys'
 is on their left wrist (`HandSkeleton.wrist`), on the left controller while that hand holds one,
@@ -1712,6 +1832,46 @@ of strums is one take. `Presence` routes everyone else's harp notes by their sou
 `ChordHarp.heard`, a `MonitorSynth` speaking from the harp, keyed by (peer, pitch) rather than by
 who holds the harp, and lets go of a leaver's. The octave (two crown buttons, the wheel, the
 thumbstick) is each player's own. docs/spatial_loop.md has the decisions.
+
+Everything that stands somewhere to be played is a station, and the stations are one list:
+`Stations` (`core/music/stations.gd`, static). A row is `id`, `title`, `area` (control, live or
+venue), `zone` (the Venue.ZONES zone it is mounted in, or empty), `air`, `spot` (the Venue method
+that places it, null where the venue has no room for it), `at` (what is looked at) and two help
+lines, `desk` and `hands`; a free-standing row also gives its footprint, so `Stations.solid` is
+the venue's own solid for it. `Stations.HELD` is the same help for what is carried. Made from the
+list: the studio's stands (`_stand_the_harp`, `_stand_the_wheel` read their spots through it), the
+help card's PLAY pages (`WelcomeCard.pages`, one an area, running on to numbered pages that each
+fit 1600x900 less margins), the desktop's go-to (`Studio.cycle_stations` on I and Shift-I, and
+`go_to_station`, which eases the walker to `Stations.seat` facing the station, looking where
+`Stations.look_from` holds its `frame` (its controls' top first) in view from that seat, and moves
+the body so Esc walks home), each station's plaque (`Stations.plaque`: title and hands line at 30 mm), and
+the suite's clearance loop, in two kinds: free-standing rows take the harp's checks, zone-mounted
+ones are checked inside their zone. The help card holds the keyboard focus while open, so the
+walker stands still; F2 still opens the 2D view, which puts the card away. docs/spatial_loop.md part two, slice 10.
+
+A headset goes to a station by travelling, since a play space is two metres square and the live
+room's stations are several metres behind the desk. `XRRig.travel(to)` puts the play space's centre
+(the XROrigin3D) on `to`'s floor point facing its way, so where the player stands in their own play
+space is kept, and `travel_home()` puts it back at `home`, the mix position (`XRRig.settle`: the
+studio centres a VR play space at (0, 0, MIX_POSITION_Z), in front of the desk with the station
+board in view; passthrough keeps its real floor). It is a cut behind a veil, a black sphere round the head drawn through
+everything and never in a mirror, closing over `XRRig.FADE` (0.15 s) and opening again; a plain
+cut at motion 0. Calibration does not travel: RoomAnchor keeps the session's frame, and a floor
+mark taken while away is converted to the play space at home (`untravelled`). `travelled` fires at
+the cut, and the body frame takes the new yaw whole (`BodyFrame.recentre`). `Studio.go_to_station`
+in a headset is `_travel_to_station`: the desktop's seat (`Stations.seat` with a walker's `fits`,
+one kept out of the tree when there is no walker), focused gear let go. `StationBoard`
+(`hardware/station_board.gd`) stands on a post by the desk's left end: the PLAY pages' stations a
+row each (`rows_for`, Stations.by_area in the card's order), a press going there (a walk on a
+desktop, a travel in a headset). Every plaque has two keys (`StationBoard.PlaqueKey`):
+INSTRUMENTS puts a `compact` board's rows up beside the plaque until a row or INSTRUMENTS again,
+and BACK goes home (`Studio.go_home`: `travel_home`, or Esc's walk). A key finds the studio by
+walking up to an ancestor with `plaque_key`. In a co-located room (`Studio.co_located`: the frame
+taken from floor marks, `RoomAnchor.marked`, with another headset in the session) travel is
+refused (`travel_refusal`), every board lettering CAN'T GO and the reason, the rows beside a
+plaque left up so the refusal is read where it was pressed. Presence publishes the
+travelled head as it is (`Presence.head_in_session`), so bandmates see the ghost at the station.
+docs/spatial_loop.md part two, slice 11.
 
 The chips and the cards (`ChipsItem`, `CardsItem`) are pure idle, and both are a `FidgetItem`.
 Each press of the hand's button starts the next of its tricks in turn. A press while a trick is

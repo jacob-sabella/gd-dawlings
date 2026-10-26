@@ -51,6 +51,8 @@ var windows_opened: Array[PluginWindow] = []
 
 
 func _process(delta: float) -> void:
+	if not _open_edits.is_empty():
+		close_idle_edits()
 	_drive_meters(delta)
 	follow_count_in()
 	follow_automation()
@@ -589,6 +591,17 @@ func set_track_pan(index: int, pan: float) -> void:
 	record_for_replication("/track/%d/pan" % index, [state.track(index).pan])
 
 
+## No lane: width has no automation here, so every write is history.
+func set_track_width(index: int, width: float) -> void:
+	if not state.tracks.has(index):
+		return
+	width = clampf(width, 0.0, 1.0)
+	_remember("/track/%d/width" % index, set_track_width.bind(index, state.track(index).width),
+			set_track_width.bind(index, width))
+	state.set_track_field(index, &"width", width)
+	record_for_replication("/track/%d/width" % index, [width])
+
+
 func set_track_mute(index: int, muted: bool) -> void:
 	if not _writes_lane(index, "mute", 1.0 if muted else 0.0, 1.0 if state.track(index).mute else 0.0):
 		_remember("/track/%d/mute" % index, set_track_mute.bind(index, state.track(index).mute),
@@ -1032,6 +1045,10 @@ func _remember(key: String, back: Callable, again: Callable, folds := true) -> v
 		return
 	_edits += 1
 	var now := Time.get_ticks_msec()
+	close_idle_edits(now)
+	if _open_edits.has(acting_peer):
+		_fold_into_edit(_open_edits[acting_peer], key, back, again, folds, now)
+		return
 	if folds and not _undo.is_empty():
 		var last: Dictionary = _undo[-1]
 		if last["key"] == key and now - int(last["t"]) < GESTURE_MS:
@@ -1043,7 +1060,90 @@ func _remember(key: String, back: Callable, again: Callable, folds := true) -> v
 	_say_depth()
 
 
+# --- edit groups --------------------------------------------------------------------------
+#
+# See DAWBackend.open_edit. An open edit's step is in the history from its first write, so an
+# undo can take it back whole at any moment; what the edit adds is where that step's writes go.
+
+## Open edits by player (DAWBackend.acting_peer): {"name", "at": msec of the last write or the
+## opening, "step": its history step once something is written, "slots": control -> its place
+## among the step's writes}.
+var _open_edits := {}
+
+
+func open_edit(edit_name: String) -> void:
+	close_edit()
+	_open_edits[acting_peer] = {"name": edit_name, "at": Time.get_ticks_msec(), "step": {}, "slots": {}}
+
+
+func close_edit() -> void:
+	_open_edits.erase(acting_peer)
+
+
+## Whether `peer` (0 for this machine) has an edit open.
+func edit_open(peer := 0) -> bool:
+	return _open_edits.has(peer)
+
+
+## Every edit nothing has been written into for EDIT_IDLE_MSEC closed. Run every frame, and before
+## every write, so a write after a forgotten edit is never folded into it.
+func close_idle_edits(now := Time.get_ticks_msec()) -> void:
+	for peer in _open_edits.keys():
+		if now - int(_open_edits[peer]["at"]) >= EDIT_IDLE_MSEC:
+			_open_edits.erase(peer)
+
+
+## Every open edit's step ended, the edit kept: an undo or a redo, by anyone, has moved history
+## under it. Closing them instead would leave a hand still dragging two values (or a grouped
+## fader) writing through GESTURE_MS folding, alternating controls, a step a frame until its
+## let-go; restarted, what it writes next gathers into one new step of its own.
+func _restart_open_edits() -> void:
+	for peer in _open_edits:
+		_open_edits[peer]["step"] = {}
+		_open_edits[peer]["slots"] = {}
+
+
+## One write into an open edit's step. A control written again keeps where it started and takes
+## where it went, as a single fader's drag does, so a long drag is two writes to undo, not two
+## thousand. A write that does not fold (a mute, a lane edit, a change of tracks) is kept in
+## order, and after it a control written before starts afresh: what it changes may be laid out
+## differently now. Undone, the step's writes are taken back last first; redone, first first.
+func _fold_into_edit(edit: Dictionary, key: String, back: Callable, again: Callable, folds: bool, now: int) -> void:
+	edit["at"] = now
+	var step: Dictionary = edit["step"]
+	if step.is_empty():
+		var writes: Array = []
+		var back_all := func() -> void:
+			for i in range(writes.size() - 1, -1, -1):
+				(writes[i][1] as Callable).call()
+		var again_all := func() -> void:
+			for w in writes:
+				(w[2] as Callable).call()
+		var called := str(edit["name"])
+		if called == "":
+			called = acting if acting != "" else _name_of_key(key)
+		step = {"key": "group", "t": 0, "name": called, "parts": writes, "back": back_all, "again": again_all}
+		edit["step"] = step
+		_undo.append(step)
+		_redo.clear()
+		_say_depth()
+	var parts: Array = step["parts"]
+	var slots: Dictionary = edit["slots"]
+	if folds and slots.has(key):
+		parts[slots[key]][2] = again
+		return
+	parts.append([key, back, again])
+	if folds:
+		slots[key] = parts.size() - 1
+	else:
+		slots.clear()
+
+
 func undo() -> void:
+	# Whatever is open ends its step first: history is about to change under it, and an edit's
+	# step taken back while its hand is still moving must not go on gathering writes off the redo
+	# list. The edits stay open, so what a still-moving hand writes next is one fresh step.
+	_restart_open_edits()
 	if _undo.is_empty():
 		return
 	var step: Dictionary = _undo.pop_back()
@@ -1056,6 +1156,7 @@ func undo() -> void:
 
 
 func redo() -> void:
+	_restart_open_edits()
 	if _redo.is_empty():
 		return
 	var step: Dictionary = _redo.pop_back()
@@ -1087,6 +1188,7 @@ func undo_to(depth: int) -> void:
 
 ## A different project has been opened: what could be undone belonged to the old one.
 func forget_history() -> void:
+	_open_edits.clear()
 	_undo.clear()
 	_redo.clear()
 	mark_clean()
@@ -1573,9 +1675,9 @@ func _change_markers(after: Dictionary) -> void:
 
 
 func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
-		take_name: String) -> void:
+		take_name: String, controls: Array = []) -> void:
 	var before := _lanes_snapshot()
-	_locally_insert_take(track_index, start, end, notes, take_name)
+	_locally_insert_take(track_index, start, end, notes, take_name, controls)
 	_remember_edit(before)
 
 

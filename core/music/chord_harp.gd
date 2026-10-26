@@ -30,6 +30,13 @@ extends ControlAffordance
 ## and the thumbstick (`nudge`) move the strings an octave at a time, at most MOST_OCTAVES either
 ## way. The crown says the shift in words (`+1 OCT`) and the chord's name; each string's note is
 ## lettered at its top; a sounding string shakes. Nothing here is told by colour.
+##
+## The plucking hand bends what rings (docs/spatial_loop.md part two, slice 15): tipped from where
+## its first string began, its roll bends the harp's notes and its shake wobbles them, while a
+## string it plucked rings (`wobble`, on the hand that plucked last: an Interactor, or a bare
+## hand's HandGestures for a touch). On a desktop the mouse's wiggle over the strings is that
+## shake (`plays_under_cursor`), and Alt with the mouse moving up or down bends. A ringing string
+## bows across by its bend (`bow`), a bandmate's as they bend it too.
 
 ## What this harp's notes say they came from (Session.send_note's `source`).
 const SOURCE := &"harp"
@@ -69,6 +76,13 @@ const SHAKE_HZ := 11.0
 ## Where the jack is: on the front of the short pillar (the high strings' side), at a standing
 ## hand's height, clear of the strings' frame.
 const JACK_AT := Vector3(FRAME_X, 0.98, 0.026)
+## How far a ringing string's middle bows across at the most bend (m), toward the high strings
+## for a bend up: under half the strings' spacing, so it never reaches the next.
+const BOW_MOST := 0.03
+## Where its plaque stands (Stations.plaque): on a plate at the plinth's front, under the strings,
+## leant back PLAQUE_LEAN so a standing player reads it from where they play.
+const PLAQUE_AT := Vector3(0, 0.3, FOOT_Z + FOOT.y + 0.02)
+const PLAQUE_LEAN := 0.6
 
 ## Where its notes are played: this player's keys. Session.guest_midi unless told otherwise.
 var keys: GuestMidi = null
@@ -83,6 +97,8 @@ var shift := 0
 var room: MonitorSynth = null
 ## Its output jack, on the short pillar.
 var jack: JackSocket = null
+## The plucking hand's bend and wobble on what rings (Wobble): the hand that plucked last.
+var wobble: Wobble = null
 
 ## {string index: [pitch sounding, seconds left, the bandmate it went into down the jack or 0]}
 ## for the strings ringing from this player's hand.
@@ -91,6 +107,13 @@ var _ringing := {}
 var _shaking := {}
 ## A bandmate's notes sounding: {Vector2i(peer, pitch): true}, so their note-off finds its own.
 var _theirs := {}
+## The bandmate whose controls the bandmates' synth (`room`) has now, 0 for none (`heard_control`).
+var _wheel_peer := 0
+## Their bend as they sent it (semitones), which their shaking strings bow by.
+var _their_bend := 0.0
+## How far each string bows across now (m), and each string's own material, which bows it.
+var _bows := PackedFloat32Array()
+var _gut: Array[ShaderMaterial] = []
 ## Each fingertip's place in the harp's frame last physics frame, while it touched the strings.
 var _tips_was := {}
 ## Where the held hand was along the strings at its last move, and when (usec).
@@ -143,10 +166,7 @@ func _ready() -> void:
 	shape.shape = bounds
 	shape.position = Vector3(0, (top + BOARD_Y) * 0.5, 0)
 	add_child(shape)
-	var gut := StandardMaterial3D.new()
-	gut.albedo_color = Color(0.93, 0.88, 0.76)
-	gut.roughness = 0.35
-	gut.metallic = 0.4
+	_bows.resize(STRINGS)
 	for i in STRINGS:
 		var line := MeshInstance3D.new()
 		line.name = "String%d" % i
@@ -156,8 +176,13 @@ func _ready() -> void:
 		mesh.bottom_radius = 0.0016
 		mesh.height = length
 		mesh.radial_segments = 6
-		mesh.rings = 1
+		# Rings enough to bow smoothly (`bow`).
+		mesh.rings = 12
 		line.mesh = mesh
+		var gut := ShaderMaterial.new()
+		gut.shader = _bowed()
+		gut.set_shader_parameter(&"half_length", length * 0.5)
+		_gut.append(gut)
 		line.material_override = gut
 		line.position = Vector3(string_x(i), BOARD_Y + length * 0.5, 0)
 		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -178,7 +203,34 @@ func _ready() -> void:
 	# Facing out of the pillar's front, toward whoever stands at the strings.
 	jack.transform = Transform3D(Basis(Vector3.UP, PI), JACK_AT)
 	add_child(jack)
+	var plaque := Stations.plaque(&"harp")
+	plaque.transform = Transform3D(Basis(Vector3.RIGHT, -PLAQUE_LEAN), PLAQUE_AT)
+	add_child(plaque)
 	_show_tuning(true)
+
+
+## The strings' gut, bowed across by `bow` metres at the middle, nothing at the ends: one shader
+## for every string, a material each.
+static var _bow_shader: Shader = null
+
+
+static func _bowed() -> Shader:
+	if _bow_shader == null:
+		_bow_shader = Shader.new()
+		_bow_shader.code = """shader_type spatial;
+uniform float bow = 0.0;
+uniform float half_length = 0.5;
+void vertex() {
+	float t = clamp(VERTEX.y / half_length, -1.0, 1.0);
+	VERTEX.x += bow * (1.0 - t * t);
+}
+void fragment() {
+	ALBEDO = vec3(0.93, 0.88, 0.76);
+	METALLIC = 0.4;
+	ROUGHNESS = 0.35;
+}
+"""
+	return _bow_shader
 
 
 ## A music-stand lamp on an arm out from the crown, down onto the strings: the harp stands in the
@@ -319,9 +371,13 @@ static func velocity_at(speed: float) -> int:
 
 
 ## Pluck `strings` (indices), in order, at `velocity`: each at its pitch at one song position.
-func pluck(strings: Array, velocity: int) -> void:
+## `by`, the hand that plucked them (an Interactor, a bare hand's HandGestures), bends them while
+## they ring (`wobble`); null leaves the bending hand as it was.
+func pluck(strings: Array, velocity: int, by: Object = null) -> void:
 	if strings.is_empty():
 		return
+	if by != null:
+		_bending(by)
 	var moment := _moment()
 	var seconds: float = moment[0]
 	var timed: bool = moment[1]
@@ -372,7 +428,28 @@ func grab_begin(by: Node, at: Vector3) -> void:
 	# would pluck the string twice, and hold the harp against everyone else's hand.
 	if by is PokeInteractor:
 		return
+	_bending(by)
 	super(by, at)
+
+
+## The hand that bends what rings, from its next frame: `by`.
+func _bending(by: Object) -> void:
+	if wobble == null:
+		wobble = Wobble.new(keys, [SOURCE])
+	wobble.keys = keys
+	wobble.hand = by
+
+
+## The harp plays under the cursor: a wiggle of the mouse over a ringing string wobbles it, with
+## nothing carried and no grab (MouseInteractor.wiggles).
+func plays_under_cursor() -> bool:
+	return true
+
+
+## How far string `i` bows across now (m): by its bend, mine while it rings from my hand, a
+## bandmate's while theirs shakes it. For the suite and the shot.
+func bow(i: int) -> float:
+	return _bows[i] if i >= 0 and i < _bows.size() else 0.0
 
 
 func _on_grab_begin(at: Vector3) -> void:
@@ -398,6 +475,17 @@ func _on_grab_move(at: Vector3) -> void:
 func _physics_process(delta: float) -> void:
 	_strum_by_touch(delta)
 	_ring_on(delta)
+	if wobble != null:
+		wobble.keys = keys
+		wobble.step(delta)
+
+
+## The hand a strumming tip's key names (HandGestures.local_tips keys it [hand, finger]): its
+## HandGestures, or null for a key of the suite's own.
+static func _tip_hand(id: Variant) -> Object:
+	if id is Array and not (id as Array).is_empty() and (id as Array)[0] is int:
+		return instance_from_id(int((id as Array)[0])) as HandGestures
+	return null
 
 
 ## The fingertips, through the strings: a tip within TOUCH of their plane and inside the frame
@@ -419,7 +507,7 @@ func _strum_by_touch(delta: float) -> void:
 			# Only the strings long enough to be where the tip passed them.
 			var passed := crossed(was.x, p.x).filter(func(i: int) -> bool: return p.y <= string_top(i))
 			if not passed.is_empty():
-				pluck(passed, velocity_at(absf(p.x - was.x) / maxf(delta, 0.001)))
+				pluck(passed, velocity_at(absf(p.x - was.x) / maxf(delta, 0.001)), _tip_hand(id))
 		_tips_was[id] = p
 	for id in _tips_was.keys():
 		if not seen.has(id):
@@ -447,6 +535,15 @@ func _process(delta: float) -> void:
 		if _shaking.has(i):
 			left = maxf(left, float(_shaking[i]))
 		_strings[i].position.z = sin(_clock * TAU * SHAKE_HZ + i) * SHAKE * left / RING
+		var st := 0.0
+		if _ringing.has(i) and wobble != null and wobble.engaged():
+			st = wobble.semitones
+		elif _shaking.has(i):
+			st = _their_bend
+		var bowed := st / Wobble.BEND_MOST * BOW_MOST
+		if bowed != _bows[i]:
+			_bows[i] = bowed
+			_gut[i].set_shader_parameter(&"bow", bowed)
 
 
 # --- the octave ---------------------------------------------------------------------------------
@@ -496,6 +593,29 @@ func heard(peer: int, kind: int, pitch: int, velocity: int) -> void:
 			_theirs.erase(key)
 			if room != null and not _theirs.keys().any(func(k: Vector2i) -> bool: return k.y == pitch):
 				room.note_off(pitch)
+			if room != null and peer == _wheel_peer and not _sounding_for(peer):
+				# Their last harp note let go: their wheel rests, here as on their end.
+				room.rest_controls()
+				_wheel_peer = 0
+				_their_bend = 0.0
+
+
+## A bandmate's control on their harp notes, as Session.control_played says it (Presence routes
+## them here by source): on the one synth every bandmate's harp notes play on here, while they
+## have one sounding (as TheirKeys.control has it). The latest to move one has the synth's wheel
+## (`_wheel_peer`) until their own last harp note lets go, when it rests: another bandmate's
+## note-off does not take it back to rest under them.
+func heard_control(peer: int, kind: int, value: int) -> void:
+	if room != null and _sounding_for(peer):
+		_wheel_peer = peer
+		room.control(kind, value)
+		if kind == DawKitClip.PITCH_BEND:
+			_their_bend = Wobble.semitones_of(value)
+
+
+## Whether any of `peer`'s harp notes is sounding here.
+func _sounding_for(peer: int) -> bool:
+	return _theirs.keys().any(func(k: Vector2i) -> bool: return k.x == peer)
 
 
 ## Whether a bandmate's `pitch` is sounding out of the harp (any bandmate's, or `peer`'s).
@@ -566,7 +686,7 @@ func _bracket_bar(seconds: float) -> int:
 
 
 func hint() -> String:
-	return "click a string to pluck  ·  drag across to strum  ·  wheel or 8va for the octave"
+	return "click a string to pluck  ·  drag across to strum  ·  wheel or 8va for the octave\nwiggle over a ringing string to wobble  ·  Alt + mouse up or down bends"
 
 
 ## The crown's chord and shift, and each string's note at its top, from the tuning now.

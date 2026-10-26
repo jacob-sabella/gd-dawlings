@@ -32,7 +32,9 @@ var devices: PackedStringArray = []
 var latency := 0.0
 var ready := false
 ## MIDI the helper has passed on and the app has not yet taken: {"on": bool, "pitch",
-## "velocity", "channel", "age": seconds since it arrived} or {"sustain": bool, "channel", "age"}.
+## "velocity", "channel", "age": seconds since it arrived}, {"sustain": bool, "channel", "age"},
+## or {"control": DawKitClip.PITCH_BEND, 1 or 11, "value", "channel", "age"}, a keyboard's wheels,
+## which the helper passes on without playing (GuestMidi.control decides whether they are heard).
 var pending: Array[Dictionary] = []
 
 var _pid := -1
@@ -121,6 +123,19 @@ func sustain(down: bool) -> void:
 	_say("sus %d" % int(down))
 
 
+## A control on the keys, as MonitorSynth.control has it: the pitch wheel (DawKitClip.PITCH_BEND)
+## as `bend V`, a controller as `cc K V`.
+func control(kind: int, value: int) -> void:
+	_say(control_line(kind, value))
+
+
+## The helper's line for a control (`control`).
+static func control_line(kind: int, value: int) -> String:
+	if kind == DawKitClip.PITCH_BEND:
+		return "bend %d" % value
+	return "cc %d %d" % [kind, value]
+
+
 func volume(db: float) -> void:
 	_say("vol %.2f" % db)
 
@@ -182,6 +197,16 @@ func hear(line: String, now_unix := Time.get_unix_time_from_system()) -> void:
 		"sus":
 			if w.size() >= 4:
 				pending.append({"sustain": w[1] == "1", "channel": int(w[2]), "age": _age(w[3], now_unix)})
+		"wheel":
+			# The pitch wheel as the sequencer has it, -8192 to 8191: `wheel V channel when`.
+			if w.size() >= 4:
+				pending.append({"control": DawKitClip.PITCH_BEND, "value": clampi(int(w[1]), -8192, 8191),
+						"channel": int(w[2]), "age": _age(w[3], now_unix)})
+		"ctl":
+			# The mod wheel or expression: `ctl K V channel when`. Any other controller is not passed.
+			if w.size() >= 5 and int(w[1]) in [1, 11]:
+				pending.append({"control": int(w[1]), "value": clampi(int(w[2]), 0, 127), "channel": int(w[3]),
+						"age": _age(w[4], now_unix)})
 
 
 ## How long ago a stamp of the helper's was: both clocks are the system's wall clock.

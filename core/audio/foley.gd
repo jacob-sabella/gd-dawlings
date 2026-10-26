@@ -33,6 +33,9 @@ const UNIT_SIZE := 0.55
 const MAX_DISTANCE := 14.0
 
 static var _cache: Dictionary = {}
+## The built-in engine renders a MIDI item's hits from these on a worker thread (ItemVoices) while
+## the room plays them on the main one, so the cache is read and filled under a lock.
+static var _lock := Mutex.new()
 
 
 ## A panel button. Two transients, because a snap-action switch has two: your finger arriving,
@@ -1017,14 +1020,236 @@ static func emitter(stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> Audi
 
 # --- Synthesis ------------------------------------------------------------------------------
 #
+## A kick drum: a sine falling fast from a knock to a boom, the beater's click on top. Short of
+## the demo song's (DemoSong._kick), which is a mix's kick; this is a hit's.
+static func kick(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("kick_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.42)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1301 + take * 7
+		var low := 48.0 * rng.randf_range(0.98, 1.02)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * (low + 110.0 * exp(-t / 0.018)) / float(RATE)
+			s[i] += 0.62 * exp(-t / 0.15) * minf(1.0, t / 0.0008) * sin(phase)
+		_impulse(s, 0.0, 0.16, 0.0025, 2900.0, 1307 + take)
+		_lowpass(s, 6000.0)
+		_fade_out(s, 0.05)
+		return _wav(s, false))
+
+
+## A snare: the head's short tone under the wires' hiss. The hiss is most of it and all top end
+## (above 2 kHz, highpassed twice), the tone two drum modes near 190 and 330 Hz -- a snare has no
+## note of its own to speak of.
+static func snare(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("snare_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(0.26, 0.75, 1321 + take * 11)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.07)
+		_highpass(s, 2600.0)
+		_highpass(s, 2200.0)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1327 + take * 5
+		for mode in [[188.0, 0.05, 0.17], [332.0, 0.03, 0.08]]:
+			var hz: float = mode[0] * rng.randf_range(0.98, 1.02)
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var env := exp(-float(i) / float(RATE) / float(mode[1]))
+				if env < 0.001:
+					break
+				s[i] += float(mode[2]) * env * sin(step * float(i))
+		_impulse(s, 0.0, 0.2, 0.002, 3400.0, 1331 + take)
+		_lowpass(s, 12000.0)
+		_fade_out(s, 0.03)
+		return _wav(s, false))
+
+
+## A rim click (side stick): the stick across the rim, a hard, hollow knock and no wires.
+static func rim(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("rim_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.08)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1361 + take * 13
+		_impulse(s, 0.0, 0.5, 0.006, 1650.0 * rng.randf_range(0.97, 1.03), 1367 + take)
+		_impulse(s, 0.0, 0.22, 0.012, 480.0, 1373 + take)
+		_highpass(s, 250.0)
+		return _wav(s, false))
+
+
+## A hand clap: a few hands not quite together (bursts of noise a few milliseconds apart), then
+## the room's short tail, all in the middle of the range where palms are.
+static func clap(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("clap_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.24)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1381 + take * 17
+		var bursts := [0.0, 0.009, 0.019, 0.03]
+		for b in bursts.size():
+			var at: float = bursts[b] + rng.randf_range(-0.0015, 0.0015) * float(b > 0)
+			var decay := 0.006 if b < bursts.size() - 1 else 0.06
+			var start := int(maxf(at, 0.0) * RATE)
+			for i in range(start, s.size()):
+				var env := exp(-float(i - start) / float(RATE) / decay)
+				if env < 0.001:
+					break
+				s[i] += 0.85 * env * rng.randf_range(-1.0, 1.0)
+		_highpass(s, 900.0)
+		_lowpass(s, 3600.0)
+		_lowpass(s, 5200.0)
+		_fade_out(s, 0.03)
+		return _wav(s, false))
+
+
+## A crash cymbal: a wash of noise and a dozen inharmonic partials spread over the top octaves,
+## loud at once and long to die. Pitched up, a splash; down, a china.
+static func crash(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("crash_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(1.8, 0.32, 1409 + take * 19)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.5)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1427 + take * 3
+		for p in 12:
+			var hz := rng.randf_range(3000.0, 9500.0)
+			var decay := rng.randf_range(0.25, 0.7)
+			var level := rng.randf_range(0.015, 0.035)
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var env := exp(-float(i) / float(RATE) / decay)
+				if env < 0.001:
+					break
+				s[i] += level * env * sin(step * float(i))
+		_highpass(s, 3000.0)
+		_highpass(s, 2400.0)
+		_lowpass(s, 13000.0)
+		_fade_out(s, 0.3)
+		return _wav(s, false))
+
+
+## A ride cymbal: the stick's ping (a few close partials that ring and beat) over a quieter,
+## darker wash than the crash's. Pitched up, its bell.
+static func ride(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("ride_%d" % take, func() -> AudioStreamWAV:
+		var s := _noise(1.2, 0.12, 1433 + take * 23)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.4)
+		_highpass(s, 2400.0)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1439 + take * 7
+		for mode in [[3150.0, 0.6, 0.06], [3420.0, 0.5, 0.05], [4980.0, 0.35, 0.035], [6720.0, 0.2, 0.025]]:
+			var hz: float = mode[0] * rng.randf_range(0.99, 1.01)
+			var step := TAU * hz / float(RATE)
+			for i in s.size():
+				var env := exp(-float(i) / float(RATE) / float(mode[1]))
+				if env < 0.001:
+					break
+				s[i] += float(mode[2]) * env * sin(step * float(i))
+		_impulse(s, 0.0, 0.18, 0.0015, 5200.0, 1447 + take)
+		_lowpass(s, 12000.0)
+		_fade_out(s, 0.2)
+		return _wav(s, false))
+
+
+## A conga struck open: `bongo`'s swept sine, bigger and lower and longer -- a tall drum's deep
+## tone -- with the palm's slap on top.
+static func conga(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("conga_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.36)
+		var phase := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			phase += TAU * lerpf(265.0, 196.0, minf(1.0, t / 0.03)) / float(RATE)
+			s[i] += 0.42 * exp(-t / 0.11) * sin(phase)
+		_impulse(s, 0.0, 0.16, 0.003, 1500.0, 1451 + take)
+		_lowpass(s, 5500.0)
+		_fade_out(s, 0.04)
+		return _wav(s, false))
+
+
+## A drum note there is no sound for here: a short, plain click, so a hit is heard where it is
+## rather than not at all.
+static func click(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("click_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(0.03)
+		_impulse(s, 0.0, 0.4, 0.0015, 2500.0, 1459 + take)
+		return _wav(s, false))
+
+
+## A sound's samples, by kind and take, as the built-in engine mixes them (ItemVoices): the same
+## buffer the room plays as a stream, mono at RATE, in -1..1. `kind` is the name of the sound's
+## own function here (&"snare", &"cowbell", &"handbell"...); one with no sound is `click`'s.
+static func samples(kind: StringName, take: int) -> PackedFloat32Array:
+	take = posmod(take, TAKES)
+	var key := "samples/%s_%d" % [kind, take]
+	_lock.lock()
+	var had: PackedFloat32Array = _cache.get(key, PackedFloat32Array())
+	_lock.unlock()
+	if not had.is_empty():
+		return had
+	var wav := sound(kind, take)
+	var data := wav.data
+	var s := PackedFloat32Array()
+	s.resize(data.size() / 2)
+	for i in s.size():
+		s[i] = float(data.decode_s16(i * 2)) / 32767.0
+	_lock.lock()
+	_cache[key] = s
+	_lock.unlock()
+	return s
+
+
+## The struck sounds by name, for `samples`.
+static func sound(kind: StringName, take: int) -> AudioStreamWAV:
+	match kind:
+		&"kick": return kick(take)
+		&"snare": return snare(take)
+		&"rim": return rim(take)
+		&"clap": return clap(take)
+		&"hihat": return hihat(take)
+		&"pad": return pad(take)
+		&"crash": return crash(take)
+		&"ride": return ride(take)
+		&"tambourine_hit": return tambourine_hit(take)
+		&"jingle": return jingle(take)
+		&"cowbell": return cowbell(take)
+		&"bongo": return bongo(take)
+		&"conga": return conga(take)
+		&"shaker": return shaker(take)
+		&"claves": return claves(take)
+		&"woodblock": return woodblock(take)
+		&"triangle": return triangle(take)
+		&"handbell": return handbell(take)
+	return click(take)
+
+
 # Everything below works on a PackedFloat32Array of mono samples in -1..1 and is deterministic:
 # the noise is seeded per sound, so a build is the same build and the suite can assert on it.
 
 
+## Built outside the lock, so a hand's click never waits on a cymbal a render is making; two
+## threads that both build one build the same sound, and the first kept is the one.
 static func _cached(key: String, factory: Callable) -> AudioStreamWAV:
+	_lock.lock()
+	var wav: AudioStreamWAV = _cache.get(key)
+	_lock.unlock()
+	if wav != null:
+		return wav
+	var made: AudioStreamWAV = factory.call()
+	_lock.lock()
 	if not _cache.has(key):
-		_cache[key] = factory.call()
-	return _cache[key]
+		_cache[key] = made
+	wav = _cache[key]
+	_lock.unlock()
+	return wav
 
 
 static func _silence(seconds: float) -> PackedFloat32Array:
@@ -1066,6 +1291,14 @@ static func _tone(s: PackedFloat32Array, hz: float, amplitude: float) -> void:
 	var step := TAU * hz / float(RATE)
 	for i in s.size():
 		s[i] += amplitude * sin(step * float(i))
+
+
+## The last `seconds` faded to nothing, so a buffer cut where its tail is still sounding does not
+## end on a step.
+static func _fade_out(s: PackedFloat32Array, seconds: float) -> void:
+	var fade := mini(int(seconds * RATE), s.size())
+	for i in fade:
+		s[s.size() - fade + i] *= 1.0 - float(i) / float(fade)
 
 
 static func _lowpass(s: PackedFloat32Array, hz: float) -> void:

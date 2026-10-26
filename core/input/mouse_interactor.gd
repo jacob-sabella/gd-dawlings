@@ -131,10 +131,17 @@ func finger_pinches() -> int:
 #
 # An instrument in the hand is shaken by moving the mouse: the hand follows the cursor's
 # movement a little way and springs back, so a wiggle of the mouse is a shake of the shaker, and
-# each stroke that stops is a hit (InstrumentItem). Only while an instrument is carried, or while
-# the fingers play (docs/spatial_loop.md slice 7): a duck rides still while the cursor points at
-# things. The wiggle is the desktop's tilt as well (`tilt`), so a bend read from a tipped hand in
-# a headset is read from the mouse on a desk.
+# each stroke that stops is a hit (InstrumentItem). Only while an instrument (or the keytar) is
+# carried, while the fingers play (docs/spatial_loop.md slice 7), or while the cursor rests on
+# something that plays under it with no grab (the harp's strings, `plays_under_cursor`; part two,
+# slice 15): a duck rides still while the cursor points at things. The wiggle is the desktop's
+# tilt as well (`tilt`, `tilt_angles`), so a bend and a wobble read from a tipped hand in a
+# headset are read from the mouse on a desk (Wobble).
+#
+# Alt with the mouse moving up or down is the desktop's pitch wheel (`bend_wheel`): BEND_PIXELS a
+# semitone up or down, at most Wobble.BEND_MOST, springing back to the middle as Alt is let go.
+# It bends whatever of this player's is sounding: the instrument's own Wobble adds it, and the
+# plain keys (a MIDI keyboard, the computer's piano) have one of their own here (`_keys_wobble`).
 
 ## How far the hand moves for a pixel of the cursor's, and the most it moves (m).
 const WIGGLE_PER_PIXEL := 0.0007
@@ -156,9 +163,22 @@ func tilt() -> Vector2:
 	return Vector2(_wiggle.x, _wiggle.y) / WIGGLE_MOST
 
 
+## The same, in radians: WIGGLE_MOST is a hand tipped HandPose.TILT_MOST.
+func tilt_angles() -> Vector2:
+	return tilt() * deg_to_rad(HandPose.TILT_MOST)
+
+
+## Whether the mouse's movement is a shake now: an instrument or the keytar carried, the fingers
+## playing, or the cursor resting, ungrabbed, on something that plays under it.
+func wiggles() -> bool:
+	if carrying is InstrumentItem or carrying is KeytarItem or fingers_play:
+		return true
+	return held == null and hovered != null and is_instance_valid(hovered) and hovered.plays_under_cursor()
+
+
 ## The hand's wiggle for where the cursor is now, `delta` seconds on.
 func wiggle(at: Vector2, delta: float) -> void:
-	if not (carrying is InstrumentItem) and not fingers_play:
+	if not wiggles():
 		_wiggle = Vector3.ZERO
 		_wiggle_anchor = Vector2(-1, -1)
 		return
@@ -167,6 +187,63 @@ func wiggle(at: Vector2, delta: float) -> void:
 	_wiggle_anchor = _wiggle_anchor.lerp(at, 1.0 - exp(-delta / WIGGLE_SETTLE))
 	var d := (at - _wiggle_anchor) * WIGGLE_PER_PIXEL
 	_wiggle = Vector3(clampf(d.x, -WIGGLE_MOST, WIGGLE_MOST), clampf(-d.y, -WIGGLE_MOST, WIGGLE_MOST), 0)
+
+
+## Semitones a pixel of Alt's mouse travel bends: 100 pixels a semitone.
+const BEND_PIXELS := 100.0
+## How quickly the Alt bend comes back to the middle once Alt is let go (s).
+const BEND_SETTLE := 0.06
+
+## Alt as the bend wheel's key, for the suite: -1 reads the keyboard, 0 is up, 1 is down.
+var alt_override := -1
+## Where Alt's bend wheel stands (semitones, up positive).
+var _bend := 0.0
+## The plain keys' own wobble: no tilt, only the Alt bend (`bend_wheel`), for a MIDI keyboard or
+## the computer's piano, whose notes no instrument here plays. With the keytar in hand its plain
+## keys are the keytar's, which bends them itself (KeytarItem).
+var _keys_wobble: Wobble = null
+
+
+func bend_wheel() -> float:
+	return _bend
+
+
+## Whether Alt is down: the bend wheel's key.
+func alt_down() -> bool:
+	return alt_override == 1 if alt_override >= 0 else Input.is_key_pressed(KEY_ALT)
+
+
+## The mouse moved `up` pixels up (down negative) with Alt held: the bend wheel turned by as much.
+func bend_by(up: float) -> void:
+	_bend = clampf(_bend + up / BEND_PIXELS, -Wobble.BEND_MOST, Wobble.BEND_MOST)
+
+
+## Alt let go: the bend wheel springs back to the middle, `delta` seconds on.
+func _spring_bend(delta: float) -> void:
+	if alt_down() or _bend == 0.0:
+		return
+	_bend *= exp(-delta / BEND_SETTLE)
+	if absf(_bend) < 0.01:
+		_bend = 0.0
+
+
+## The plain keys' wobble, one frame on: bent by Alt alone.
+func _bend_plain_keys(delta: float) -> void:
+	var keys := Session.guest_midi
+	if keys == null or not is_instance_valid(keys):
+		return
+	if _keys_wobble == null:
+		_keys_wobble = Wobble.new(keys, [&""], self)
+		_keys_wobble.tilts = false
+	_keys_wobble.keys = keys
+	_keys_wobble.sources = [] if keys.keytar else [&""]
+	_keys_wobble.step(delta)
+
+
+func _input(event: InputEvent) -> void:
+	var motion := event as InputEventMouseMotion
+	if motion != null and alt_down():
+		bend_by(-motion.relative.y)
 
 
 # --- throwing ------------------------------------------------------------------------------
@@ -320,6 +397,9 @@ func _physics_process(delta: float) -> void:
 	super(delta)
 	if camera != null or pointer_override.x >= 0.0:
 		wiggle(pointer(), delta)
+	_spring_bend(delta)
+	if camera != null:
+		_bend_plain_keys(delta)
 	if _card == null:
 		_card = HoverCard.new()
 		_card.name = "HoverCard"

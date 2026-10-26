@@ -285,6 +285,14 @@ func letter(names: PackedStringArray, chord: String) -> void:
 		_chord_letter.text = chord
 
 
+## A fingertip's letter with the bend its note is bent by (docs/spatial_loop.md part two, slice
+## 15): `E4 +1.3`, or the note alone for one too small to see (Wobble.words). So a bend is read on
+## the finger playing it, by its number, not by a colour.
+static func bent(note: String, semitones: float) -> String:
+	var said := Wobble.words(semitones)
+	return note if said == "" or note == "" else "%s %s" % [note, said]
+
+
 ## The fingertips' letters as shown now, index to little ("" for one hidden), and the chord's.
 func letters() -> PackedStringArray:
 	var out := PackedStringArray()

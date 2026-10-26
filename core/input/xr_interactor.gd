@@ -89,7 +89,8 @@ static func steadied(was: Transform3D, raw: Transform3D, delta: float) -> Transf
 
 
 func is_pressing() -> bool:
-	if controller == null or fingers_play:
+	# A hand closed round a shaker is not pinching anything, whatever the runtime reads off a fist.
+	if controller == null or fingers_play or fist_holding:
 		return false
 	return controller.is_button_pressed(press_action)
 
@@ -174,6 +175,17 @@ func tilt() -> Vector2:
 	return HandPose.tilt_of(aim().basis.orthonormalized())
 
 
+## A bare hand's palm, unclamped; NAN while it is out of tracking. A controller's aim, read held
+## thumb up as level (where a bare hand is level palm down): a bend is the roll since its note
+## began, so either start bends the same.
+func tilt_angles() -> Vector2:
+	if _reads_hand():
+		return gestures.angles
+	if controller == null or bare_hand():
+		return Vector2(NAN, NAN)
+	return HandPose.angles_of(aim().basis.orthonormalized())
+
+
 ## The grip, squeezed and let go while carrying something, lets go of it: a flick throws it at the
 ## speed the hand was moving, anything slower puts it down where the hand is pointing.
 @export var grip_action: StringName = &"grip_click"
@@ -255,8 +267,11 @@ func _physics_process(delta: float) -> void:
 	_trail.append([now, aim().origin])
 	while _trail.size() > 2 and now - float(_trail[0][0]) > FLICK_WINDOW:
 		_trail.pop_front()
+	step_hold(delta)
 	var gripping := controller != null and controller.is_button_pressed(grip_action)
-	if _gripping and not gripping and carrying != null and is_instance_valid(carrying) and not fingers_play:
+	# A closed bare hand's own fist reads as the grip too; what it holds is let go by `step_hold`.
+	if _gripping and not gripping and carrying != null and is_instance_valid(carrying) and not fingers_play \
+			and not fist_holding:
 		var moving := hand_velocity()
 		if moving.length() > FLICK_SPEED:
 			throw_item(moving, aim().basis.x * -moving.length() * 1.5)
@@ -319,3 +334,197 @@ func hand_velocity() -> Vector3:
 	var last: Array = _trail[-1]
 	var span := float(last[0]) - float(first[0])
 	return (last[1] - first[1]) / span if span > 0.0001 else Vector3.ZERO
+
+
+# --- a closed bare hand round hand percussion (docs/spatial_loop.md slice 17) ----------------
+#
+# A tracked bare hand takes hold of a shaker or a tambourine (InstrumentItem.held_in_fist) by
+# closing round it, as a hand holds one: three fingers past HandPose.HOLD_CURL with the middle of
+# the palm within HandPose.GRIP_REACH of its grip, not a pinch. It keeps it while it is closed, or
+# half closed, and lets go only once the hand has been open (HandPose.is_open) for LET_GO_AFTER
+# with every joint seen (HandGestures.confident). A hand still tracked but with some joints only
+# guessed -- fingers hidden inside a fist, or blurred by a fast shake, are just when a runtime
+# infers them -- goes on carrying it at its palm and playing its strokes; only letting go and the
+# throw wait for confident frames. A hand that drops out of tracking altogether keeps it where it
+# was last seen for LOST_HOLD, and sends it home after that, never on the first lost frame. A
+# throw is only ever from how fast the palm went over confident frames (`_palm_trail`), so a hand
+# that vanishes on one side and reappears on the other throws nothing. A pinch still carries one
+# too, the way it did.
+
+## Open, and seen, this long (s) before a closed hand lets go of what it holds.
+const LET_GO_AFTER := 0.1
+## Out of tracking this long (s) while holding, and what it held goes home. A hand tracked with
+## guessed joints is not out of tracking.
+const LOST_HOLD := 0.4
+## How much further a held instrument's end swings than the middle of the palm does
+## (`shake_lever`): a wrist's shake turns the hand, and the shaker's far end goes further.
+const PALM_LEVER := 1.6
+## Where a closed hand carries what it holds: this far into the fist from the middle of the palm (m).
+const FIST_DEPTH := 0.02
+
+## Whether what this hand carries is held by a closed bare hand (`step_hold`).
+var fist_holding := false
+## Whether the hand was closed when last tracked (confidently or not): a hold is taken as the hand
+## closes, not by a fist already made and moved past the shelf, even through a guess or a dropout.
+var _closed_was := false
+var _open_for := 0.0
+var _lost_for := 0.0
+## Where the closed hand was last seen, as `carry_pose`: what it holds rides there while it is lost.
+var _fist_seen := Transform3D.IDENTITY
+## [time, palm] of the closed hand's confident frames over FLICK_WINDOW, for its throw.
+var _palm_trail: Array = []
+var _hold_clock := 0.0
+
+
+func carry_pose() -> Transform3D:
+	if fist_holding:
+		return _fist_seen
+	return super()
+
+
+## A bare hand's palm (HandGestures.palm), where its wrist's shake is felt; while a closed hand is
+## out of tracking, where it was last seen. A controller's own pose otherwise.
+func shake_point() -> Vector3:
+	if _reads_hand():
+		return gestures.palm()
+	if fist_holding:
+		return _fist_seen.origin
+	return super()
+
+
+## A bare hand's palm is seen while the hand is tracked at all, guessed joints or not: a fast shake
+## is just when a runtime infers some, and it is still the hand's shake.
+func shake_tracked() -> bool:
+	if gestures != null and is_instance_valid(gestures) and (fist_holding or gestures.tracked or bare_hand()):
+		return gestures.tracked
+	return true
+
+
+func shake_lever() -> float:
+	return PALM_LEVER if _reads_hand() or fist_holding else 1.0
+
+
+## One frame of a closed bare hand round hand percussion, `delta` on: taking hold as the hand
+## closes round one, keeping it, letting go of it, holding it through a dropout. Called each
+## physics frame; the suite steps it itself.
+func step_hold(delta: float) -> void:
+	_hold_clock += delta
+	var g := gestures if gestures != null and is_instance_valid(gestures) else null
+	var seen := g != null and g.tracked
+	var sure := seen and g.confident
+	if fist_holding:
+		if not is_instance_valid(carrying) or carrying.carried_by != self or not carrying.in_hand():
+			# Taken by the host for somebody else, or put away some other way: not ours to hold.
+			_end_hold()
+			return
+		if seen:
+			# Tracked, if only guessed at in places: still carried at the palm, still held.
+			_lost_for = 0.0
+			_fist_seen = _fist_pose(g)
+			if not sure:
+				# A guess neither opens the hand nor goes into a throw.
+				_open_for = 0.0
+				_palm_trail.clear()
+				return
+			_palm_trail.append([_hold_clock, g.palm()])
+			while _palm_trail.size() > 2 and _hold_clock - float(_palm_trail[0][0]) > FLICK_WINDOW:
+				_palm_trail.pop_front()
+			_open_for = _open_for + delta if g.open else 0.0
+			if _open_for >= LET_GO_AFTER - 0.0001:
+				_let_go_of_fist()
+			return
+		# Lost: held where it was last seen, and no throw from what follows.
+		_open_for = 0.0
+		_palm_trail.clear()
+		_lost_for += delta
+		if _lost_for >= LOST_HOLD - 0.0001:
+			var item := carrying
+			_end_hold()
+			var room := ItemRoom.of(item)
+			if room != null:
+				room.send_home(item)
+			else:
+				item.go_home()
+		return
+	# The closing edge is read off every tracked frame, guessed joints or not: fingers closing round
+	# a grip are just the ones a runtime hides, and a guess on the way must not make a fist already
+	# made look newly closed. Lost altogether, the hand is as it was last seen.
+	if not seen:
+		return
+	var closing := g.closed and not _closed_was
+	_closed_was = g.closed
+	if not closing or carrying != null or held != null or fingers_play:
+		return
+	var item := grippable(g.joints)
+	if item == null:
+		return
+	# Pose first: the item hops to where the hand is, not to the pinch ray's.
+	_fist_seen = _fist_pose(g)
+	fist_holding = true
+	pick_up(item)
+	if carrying != item:
+		fist_holding = false
+		return
+	_open_for = 0.0
+	_lost_for = 0.0
+	_palm_trail = [[_hold_clock, g.palm()]]
+
+
+## The hand percussion a hand posed as `joints` (global space) is closed round: the nearest whose
+## grip (InstrumentItem.grip_point) it grips (HandPose.grips), on a shelf or the floor and not in
+## anyone's hand or the air. Null for none.
+func grippable(joints: PackedVector3Array) -> InstrumentItem:
+	if not is_inside_tree() or not HandPose.closed(joints):
+		return null
+	var best: InstrumentItem = null
+	var best_d := INF
+	for node in get_tree().get_nodes_in_group(Item.ITEMS):
+		var item := node as InstrumentItem
+		if item == null or not item.held_in_fist() or item.state == Item.State.HELD or item.is_flying() \
+				or not item.may_hold():
+			continue
+		var grip := item.grip_point()
+		if not HandPose.grips(joints, grip):
+			continue
+		var d := joints[HandPose.PALM].distance_to(grip)
+		if d < best_d:
+			best = item
+			best_d = d
+	return best
+
+
+## The closed hand's carry: the palm's pose, FIST_DEPTH in toward the fingers.
+func _fist_pose(g: HandGestures) -> Transform3D:
+	var palm := g.palm_pose()
+	return Transform3D(palm.basis, palm.origin - palm.basis.y * FIST_DEPTH)
+
+
+## The closed hand has opened: thrown at the palm's speed over its last confident frames if that
+## is a flick, put down where the hand points otherwise.
+func _let_go_of_fist() -> void:
+	var moving := palm_velocity()
+	if moving.length() > FLICK_SPEED:
+		throw_item(moving, _fist_seen.basis.x * -moving.length() * 1.5)
+	else:
+		put_down()
+	_end_hold()
+
+
+## How fast the closed hand's palm went over its last confident frames (FLICK_WINDOW); nothing
+## while it is lost or has been seen only once since.
+func palm_velocity() -> Vector3:
+	if _palm_trail.size() < 2:
+		return Vector3.ZERO
+	var first: Array = _palm_trail[0]
+	var last: Array = _palm_trail[-1]
+	var span := float(last[0]) - float(first[0])
+	return (last[1] - first[1]) / span if span > 0.0001 else Vector3.ZERO
+
+
+func _end_hold() -> void:
+	fist_holding = false
+	_open_for = 0.0
+	_lost_for = 0.0
+	_palm_trail.clear()
+	# The hand that let go is still closed, or about to be: it takes hold again only by closing anew.
+	_closed_was = true

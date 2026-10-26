@@ -19,11 +19,14 @@ extends Node
 ## (`send_to`, Session.send_jack: up to the host, which checks it, and on to P alone). A pitched
 ## source sends its own notes: a bell its chord tone and, `note_seconds` later, its off; the harp
 ## its strings (ChordHarp); a player's keys what they play (`keys:P`, a thru: they are still
-## heard, sent and taken down at home as well). Percussion sends a TRIGGER. Every event carries
+## heard, sent and taken down at home as well), and their controls beside the notes as CC (the
+## bend, the mod wheel, expression: GuestMidi.control_sent). Percussion sends a TRIGGER. Every event carries
 ## the one song position it was played to. On P (`received`) each plays on P's keys with source
 ## `&"cable"` at that position, so it sounds on P's synth, goes to everyone as P's notes and lands
 ## in P's take where it was played, not where it arrived. A TRIGGER becomes the chord tone at its
-## position, one tone up each hit (root, third, fifth, top, round again), for TRIGGER_SECONDS.
+## position, one tone up each hit (root, third, fifth, top, round again), for TRIGGER_SECONDS. A
+## CC moves P's wheel (GuestMidi.control, source `&"cable"`), so it bends what the cable plays and
+## lands in P's take beside its notes.
 ## `&"cable"` is in P's instruments (GuestMidi.reach) while anything is plugged into P.
 ##
 ## A jack into the player who is playing its source is no cable (`cable_into`): somebody else
@@ -73,9 +76,11 @@ var keys: GuestMidi = null:
 	set(v):
 		if keys != null and is_instance_valid(keys) and keys.note.is_connected(_on_keys_note):
 			keys.note.disconnect(_on_keys_note)
+			keys.control_sent.disconnect(_on_keys_control)
 		keys = v
 		if keys != null:
 			keys.note.connect(_on_keys_note)
+			keys.control_sent.connect(_on_keys_control)
 		_follow_cables()
 
 ## The notes a cable has down on this player's keys: {"from|source|pitch": [from, source, pitch]}.
@@ -90,6 +95,10 @@ var _later: Array = []
 ## {source: true}, both.
 var _mine := {}
 var _cut := {}
+## What this player's keys last sent down their cable of each control, {kind: value}: a resend of
+## the same value is not sent down a reliable cable again. Forgotten at every note, so the one
+## right behind a note-on (GuestMidi.resend_controls) always goes.
+var _cabled := {}
 
 
 func _enter_tree() -> void:
@@ -105,6 +114,7 @@ func _exit_tree() -> void:
 		keys.reach(CABLE, false)
 		if keys.note.is_connected(_on_keys_note):
 			keys.note.disconnect(_on_keys_note)
+			keys.control_sent.disconnect(_on_keys_control)
 
 
 ## The jacks of the room `node` is in, or null outside one (an item alone in a test).
@@ -231,6 +241,7 @@ func _on_keys_note(kind: int, pitch: int, velocity: int, song: float, source: St
 	var to := cable_into(mine)
 	if to <= 0:
 		return
+	_cabled.clear()
 	match kind:
 		Session.Note.ON:
 			send_to(to, mine, Jack.Kind.NOTE_ON, pitch, velocity, song)
@@ -238,13 +249,29 @@ func _on_keys_note(kind: int, pitch: int, velocity: int, song: float, source: St
 			send_to(to, mine, Jack.Kind.NOTE_OFF, pitch, 0, song)
 
 
+## A control on this player's own keys (GuestMidi.control_sent): out of `keys:P` as CC too, while
+## it goes into a bandmate, the controller as `pitch` and its value as `velocity`. Not a cable's or
+## the harp's, as `_on_keys_note`; and a resend of what the cable already has is not sent again,
+## since the cable is reliable and loses nothing.
+func _on_keys_control(kind: int, value: int, song: float, source: StringName) -> void:
+	if source == CABLE or source == Jack.HARP:
+		return
+	var mine := Jack.keys_source(Session.local_peer_id)
+	var to := cable_into(mine)
+	if to <= 0 or _cabled.get(kind) == value:
+		return
+	_cabled[kind] = value
+	send_to(to, mine, Jack.Kind.CC, kind, value, song)
+
+
 # --- a cable into this player -----------------------------------------------------------------
 
 ## An event down a cable into this player (Session.jack_played), passed by the host: played on
 ## this player's keys with source `&"cable"` at the song position it was played to (`song`; -1,
 ## not known, plays it at this player's own). A TRIGGER becomes the next tone of the chord at
-## `song`, held TRIGGER_SECONDS. A NOTE_ON or TRIGGER from a source this player has taken out
-## (`_cut`) is dropped: the host passed it before it heard, and its off will not come.
+## `song`, held TRIGGER_SECONDS. A CC moves this player's wheel as the cable (GuestMidi.control),
+## taken only while the cable owns it. A NOTE_ON, TRIGGER or CC from a source this player has taken
+## out (`_cut`) is dropped: the host passed it before it heard, and its off will not come.
 func received(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
 	if keys == null:
 		return
@@ -263,6 +290,8 @@ func received(source: StringName, kind: int, pitch: int, velocity: int, from: in
 			var tone := walk(from, source, song)
 			_press(from, source, tone, velocity, at)
 			_later.append([TRIGGER_SECONDS, 0, source, tone, song + TRIGGER_SECONDS if song >= 0.0 else NAN, from])
+		Jack.Kind.CC:
+			keys.control(pitch, velocity, CABLE, at)
 
 
 ## The chord tone a TRIGGER from `from`'s `source` plays at `song`: one up the chord each hit,

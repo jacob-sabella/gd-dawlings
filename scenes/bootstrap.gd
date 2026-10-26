@@ -137,6 +137,10 @@ func _ready() -> void:
 		studio.ergonomics.text_scale = args["eyes"]
 	Ergonomics.current = studio.ergonomics
 	add_child(studio)
+	# The card's PLAY pages are the stations standing in the studio's venue, and a line walks there.
+	welcome.studio = studio
+	if welcome.visible:
+		welcome.open()
 
 	if args["venue"] != "":
 		# `grid:1` is the grid's second arrangement (Venue.VARIANTS).
@@ -204,6 +208,11 @@ func _ready() -> void:
 	flat.in_headset = medium != Presentation.Medium.SCREEN
 	flat.said.connect(func(text: String): Session.notice.emit(text))
 	add_child(flat)
+	# F2 is the one key the open help card does not keep: the 2D view, later in the tree, hears it
+	# first. Its opening puts the card away rather than leave it holding the keyboard over the view.
+	flat.visibility_changed.connect(func() -> void:
+		if flat.is_open() and welcome.visible:
+			welcome.close())
 	if args["flat"]:
 		flat.set_open(true)
 	var fx: Vector2i = args["flat_fx"]
@@ -612,7 +621,7 @@ func _build_hud() -> void:
 	_hud = Label.new()
 	_hud.position = Vector2(16, 12)
 	_hud.add_theme_color_override("font_color", Color(0.72, 0.78, 0.86))
-	_hud.add_theme_font_size_override("font_size", 13)
+	_hud.add_theme_font_size_override("font_size", HUD_SIZE)
 	# Outlined, because some venues put a sunset behind it.
 	_hud.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_hud.add_theme_constant_override("outline_size", 5)
@@ -625,15 +634,51 @@ func _process(_delta: float) -> void:
 		return
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
-	if OS.has_feature("template"):
-		# A sent-out build: what it is, and where the rest is said (WelcomeCard).
-		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  F2 2D view  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back  |  T fingertips J K L ;" % [
-			role_name, DAW.summary(), _track_count()]
-		return
-	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  T fingertips J K L ;  |  P jack / shift-P unplug  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
-		role_name, medium_name, DAW.summary(), _track_count(),
-		"god mode" if studio.god_mode else "walking",
-		studio.venue.title() if studio.venue != null else "room"]
+	var focused := ""
+	if studio != null and studio.focus != null and studio.focus.is_focused():
+		focused = String(studio.focus.focused_id).to_upper()
+	elif studio != null:
+		focused = "FLYING" if studio.god_mode else "WALKING"
+	_hud.text = hud_text(role_name, medium_name, DAW.summary(), _track_count(),
+			studio.venue.title() if studio != null and studio.venue != null else "room", focused,
+			_hud.get_theme_font("font"))
+
+
+## How wide the corner readout may run: a 1600 px window less 16 px either side.
+const HUD_WIDTH := 1568
+const HUD_SIZE := 13
+## Where the rest is said: the help card's pages, the 2D view, the instruments, the session.
+const HUD_KEYS := "F1 help · F2 2D view · I instruments · M session"
+
+
+## The corner readout, both builds: who you are, the DAW, the room and what has your attention,
+## then where everything else is said (HUD_KEYS; the long list of keys is the help card's ROOM
+## page). Cut to HUD_WIDTH at HUD_SIZE in `font`: the DAW's summary first, then the venue's
+## title, each shortened with an ellipsis, so the keys at its end are always on the screen.
+static func hud_text(role: String, medium: String, summary: String, tracks: int, venue: String,
+		focused: String, font: Font) -> String:
+	var line := func(daw: String, where: String) -> String:
+		var fields := ["dawlings", "%s / %s" % [role, medium], daw, "%d track%s" % [tracks, "" if tracks == 1 else "s"], where]
+		if not focused.is_empty():
+			fields.append(focused)
+		fields.append(HUD_KEYS)
+		return "  |  ".join(fields)
+	var daw := summary
+	var where := venue
+	var text: String = line.call(daw, where)
+	if font == null:
+		return text
+	while font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, HUD_SIZE).x > HUD_WIDTH - 12:
+		if daw.length() > 12:
+			daw = daw.left(daw.length() - 2).strip_edges() + "…"
+			daw = daw.replace("……", "…")
+		elif where.length() > 8:
+			where = where.left(where.length() - 2).strip_edges() + "…"
+			where = where.replace("……", "…")
+		else:
+			break
+		text = line.call(daw, where)
+	return text
 
 
 ## The project's size once Reaper has said it, and only until then the slots that have arrived.

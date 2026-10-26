@@ -15,6 +15,19 @@ extends Node
 ## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor),
 ## and with what played it (`source`: the keytar, the harp, the fingertips...; `instruments`).
 ##
+## Beside the notes go the controls (`control`): the pitch wheel, the mod wheel and expression,
+## on a channel of their own that may drop one (Session.send_control). A player has one wheel, as
+## a keyboard does: it belongs to the source of their newest held note (`wheel_source`), and every
+## other source's controls are dropped until it does. One off rest is sent again at least every
+## CONTROL_EVERY, and at the player's last note-off every end puts the wheel back to rest by
+## itself, so no reset ever has to arrive. A take keeps them too, thinned (MidiTake.control), with
+## the return to rest at that note-off, so the item plays back as the player heard it. A hardware
+## keyboard's pitch wheel, mod wheel and CC 11 are the plain keys' controls, on the channel the
+## keyboard plays on. Its mod wheel and expression stay where the hand left them, unlike its
+## sprung pitch wheel, and the keyboard never says so again: they are remembered (`_hardware`) and
+## a plain-keys note-on puts them back, here, for everyone and in the take, after a note-off rested
+## them.
+##
 ## A take follows the host's transport: it begins when the guest HEARS the host start recording
 ## and ends when it hears the recording stop -- heard, not told, so the take's edges are on the
 ## same clock as its notes.
@@ -25,6 +38,15 @@ signal key(pitch: int, down: bool)
 ## A note on or off (Session.Note's ON, OFF) as it is sent to everyone, with the song position and
 ## source it went with: for this player's keys' own jack (`keys:P`, Jacks), which passes it on.
 signal note(kind: int, pitch: int, velocity: int, song: float, source: StringName)
+## A control as it is sent to everyone (Session.send_control), first sends and resends alike.
+signal control_sent(kind: int, value: int, song: float, source: StringName)
+
+## How often a control off rest is sent again, in seconds: the controls go unreliable
+## (Session.CONTROLS_CHANNEL), so a lost one is made good within this.
+const CONTROL_EVERY := 0.05
+## A frame's slack on CONTROL_EVERY, so a resend falling due a little after this frame is sent on
+## it and not a whole frame late.
+const CONTROL_SLACK := 0.004
 
 ## Notes from MIDI devices and from the computer keyboard both land here. MIDI comes from the
 ## monitor keys' helper where it runs (NativeKeys: read from the sequencer the moment it
@@ -56,6 +78,20 @@ var keytar: bool:
 		return instruments.has(&"keytar")
 	set(v):
 		reach(&"keytar", v)
+## Whether a playing hand's tilt bends its notes and its shake wobbles them (Wobble; "Tilt bends"
+## in the session panel's keys box). On by default; off, for a player who wants a steady pitch
+## from a hand that moves. A bend wheel held on purpose (the desktop's Alt-drag) still bends.
+var tilt_bends := true:
+	set(v):
+		tilt_bends = v
+		changed.emit()
+## Whether this player's hand percussion hits are snapped gently to the beat as they are recorded
+## (HitRecorder.snapped_at; "Snap hand percussion" in the session panel's keys box). The player's own,
+## carried with each hit (Session.item_hit's `snap`). On by default; what is heard never moves.
+var snap_hits := true:
+	set(v):
+		snap_hits = v
+		changed.emit()
 ## Hear my own keys, locally.
 var monitor := true:
 	set(v):
@@ -118,6 +154,26 @@ var held := {}
 var _down := KeysDown.new()
 ## The sources played into the running take, in the order they first played, to name it by.
 var _take_sources: Array = []
+## This player's controls as they are now, {kind: value} (Session.CONTROL_KINDS): what was last
+## played and sent, and what a resend sends. Back at rest at the last note-off.
+var controls := {}
+## How many times the player's last note has let go, so every control rested: a bend measured
+## from a note's press (Wobble) begins again at the next.
+var rests := 0
+## When each control was last sent, {kind: `_ticks()`}.
+var _control_sent := {}
+## The channel each control was last moved on, {kind: channel}, which the take keeps it and its
+## rest on.
+var _control_channel := {}
+## Where a hardware keyboard's mod wheel and expression stand, {kind: [value, channel]}: the plain
+## keys' CC 1 and 11 as last moved, whether the wheel took them or not. Its pitch wheel springs
+## back to the centre and is not kept here.
+var _hardware := {}
+## The source the controls were last moved by, which a resend goes out with.
+var _moved_by := &""
+## What time it is, in microseconds, when set: for the suite, which runs a clock of its own past
+## the controls' resends. Time.get_ticks_usec() otherwise.
+var ticks: Callable = Callable()
 
 
 func _ready() -> void:
@@ -269,6 +325,13 @@ func _input(event: InputEvent) -> void:
 		MIDI_MESSAGE_CONTROL_CHANGE:
 			if midi.controller_number == 64:
 				sustain(midi.controller_value >= 64, midi.channel)
+			elif Session.CONTROL_KINDS.has(midi.controller_number):
+				# The mod wheel and expression, as the plain keys' (a hardware keyboard's wheel is
+				# the plain keys' source, docs/spatial_loop.md).
+				control(midi.controller_number, midi.controller_value, &"", NAN, midi.channel)
+		MIDI_MESSAGE_PITCH_BEND:
+			# Godot gives the wheel's fourteen bits in `pitch`, 0 to 16383 with 8192 at the centre.
+			control(DawKitClip.PITCH_BEND, midi.pitch - 8192, &"", NAN, midi.channel)
 
 
 ## A key down. `age`: how long ago it went down, for a note that was heard before it got here
@@ -292,6 +355,11 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 	Session.send_note(Session.Note.ON, pitch, velocity, sent, source)
 	note.emit(Session.Note.ON, pitch, velocity, sent, source)
 	_down.press(pitch, source, velocity)
+	if wheel_source() == &"":
+		_restore_hardware(at if timed else stamp(age))
+	# A wheel already off rest goes out right behind the note: everyone else plays a control only
+	# while this player has a note down (TheirKeys.control).
+	resend_controls(_ticks(), true)
 	held[pitch] = velocity
 	key.emit(pitch, true)
 	if _take != null:
@@ -322,9 +390,13 @@ func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := 
 	elif not sounded:
 		synth.note_off(pitch)
 	held.erase(pitch)
-	key.emit(pitch, false)
+	var off_at := at if timed else stamp(age)
 	if _take != null:
-		_take.note_off(pitch, channel, at if timed else stamp(age))
+		_take.note_off(pitch, channel, off_at)
+	if _down.is_empty():
+		rests += 1
+		_rest_controls(off_at)
+	key.emit(pitch, false)
 	changed.emit()
 
 
@@ -337,6 +409,109 @@ func sustain(down: bool, channel := 0, age := 0.0, sounded := false) -> void:
 	Session.send_note(Session.Note.PEDAL_DOWN if down else Session.Note.PEDAL_UP, 0, 0, song(age))
 	if _take != null:
 		_take.sustain(down, channel, stamp(age))
+
+
+## A control moved: the pitch wheel (DawKitClip.PITCH_BEND, -8192 to 8191) or controller 1 or 11
+## (0 to 127), by `source` (as `note_on`'s), at song position `at` (NAN for now), on MIDI
+## `channel`, which the take keeps it on. Played and sent only while `source` owns the wheel
+## (`wheel_source`); any other controller, and another source's move, is dropped. Whether it was
+## taken. A plain-keys mod wheel or expression is remembered either way (`_hardware`).
+func control(kind: int, value: int, source := &"", at := NAN, channel := 0) -> bool:
+	if not Session.CONTROL_KINDS.has(kind):
+		return false
+	value = Session.control_value(kind, value)
+	if source == &"" and kind != DawKitClip.PITCH_BEND:
+		_hardware[kind] = [value, channel]
+	var owner: Variant = wheel_source()
+	if owner != null and owner != source:
+		return false
+	controls[kind] = value
+	_control_channel[kind] = channel
+	_moved_by = source
+	_sound_control(kind, value)
+	_send_control(kind, _ticks(), at)
+	if _take != null:
+		_take.control(kind, value, channel, at if not is_nan(at) else stamp())
+	return true
+
+
+## The plain keys have just taken the wheel with a note-on at song position `at`: a hardware mod
+## wheel or expression a note-off rested (or another source moved since) is put back where the
+## keyboard's stands, heard here and kept in the take whatever the thinning says; `note_on`'s
+## resend right after sends it to everyone, who play it from that note on.
+func _restore_hardware(at: float) -> void:
+	for kind: int in _hardware:
+		var value: int = _hardware[kind][0]
+		if int(controls.get(kind, Session.control_rest(kind))) == value:
+			continue
+		controls[kind] = value
+		_control_channel[kind] = int(_hardware[kind][1])
+		_moved_by = &""
+		_sound_control(kind, value)
+		if value == Session.control_rest(kind):
+			# Off rest only by another source's move: the resend leaves a rest out, so it is sent.
+			_send_control(kind, _ticks())
+		if _take != null:
+			_take.control(kind, value, _control_channel[kind], at, true)
+
+
+## What owns this player's wheel: the source of their newest note still down (`_down`), or null
+## with nothing down, when the wheel is anyone's to move. The harp hand, the keytar's neck and a
+## hardware wheel never fight over it, because only one of them is ever its owner.
+func wheel_source() -> Variant:
+	return _down.newest()
+
+
+## Every control off rest whose last send is CONTROL_EVERY old, sent again (all of them off rest,
+## with `now_all`), as of `now` (`_ticks`): what was sent, [[kind, value]].
+func resend_controls(now: int, now_all := false) -> Array:
+	var out: Array = []
+	for kind: int in controls:
+		if int(controls[kind]) == Session.control_rest(kind):
+			continue
+		var age := (now - int(_control_sent.get(kind, 0))) / 1e6
+		if now_all or age >= CONTROL_EVERY - CONTROL_SLACK:
+			_send_control(kind, now)
+			out.append([kind, controls[kind]])
+	return out
+
+
+func _send_control(kind: int, now: int, at := NAN) -> void:
+	_control_sent[kind] = now
+	var sent := at if not is_nan(at) else song()
+	Session.send_control(kind, int(controls[kind]), sent, _moved_by)
+	control_sent.emit(kind, int(controls[kind]), sent, _moved_by)
+
+
+func _ticks() -> int:
+	return int(ticks.call()) if ticks.is_valid() else Time.get_ticks_usec()
+
+
+## A control, heard here: on the track's instrument plugin where the keys play one, else on the
+## keys' synth.
+func _sound_control(kind: int, value: int) -> void:
+	var plugin = _track_plugin()
+	if plugin == null:
+		synth.control(kind, value)
+	elif kind != DawKitClip.PITCH_BEND:
+		plugin.control(kind, value, 0)
+	elif plugin.has_method(&"pitch_bend"):
+		plugin.pitch_bend(value)
+
+
+## The player's last note let go, at song position `at` (NAN for now): every control back at
+## rest, here and in the take, where it is kept whatever the thinning says (a bend left bent in an
+## item would bend its next note). Nothing is sent; everyone else does the same at the same
+## note-off.
+func _rest_controls(at := NAN) -> void:
+	for kind: int in controls.keys():
+		if int(controls[kind]) != Session.control_rest(kind):
+			controls[kind] = Session.control_rest(kind)
+			_sound_control(kind, controls[kind])
+			if _take != null:
+				_take.control(kind, controls[kind], int(_control_channel.get(kind, 0)),
+						at if not is_nan(at) else stamp(), true)
+	_control_sent.clear()
 
 
 ## Notes played on an instrument plugin and not yet let go: pitch -> the plugin.
@@ -362,6 +537,14 @@ func _take_native_midi() -> void:
 	for e in native.take():
 		if e.has("sustain"):
 			sustain(e["sustain"], e["channel"], e["age"], true)
+		elif e.has("control"):
+			# Not played by the helper as it came: whether this player's wheel takes it is the
+			# wheel's owner's to say (`control`), which then plays it there (`_sound_control`), a
+			# frame later than a note. A wheel's move is not a strike, and a frame does not show;
+			# but it is stamped where it was played, as the helper's notes are, so a move just
+			# before a note-off in the same frame stays before it in the take.
+			var at := song(e["age"])
+			control(e["control"], e["value"], &"", at if at >= 0.0 else NAN, e["channel"])
 		elif e["on"]:
 			note_on(e["pitch"], e["velocity"], e["channel"], e["age"], true)
 		else:
@@ -415,6 +598,7 @@ func song(age := 0.0) -> float:
 
 
 func _process(_delta: float) -> void:
+	resend_controls(_ticks())
 	# On a host too: there, what is heard is the host's own playhead, and a monitor (TheirMonitor)
 	# asks it.
 	if DAW.state != null:
@@ -483,11 +667,15 @@ func follow(h: Dictionary) -> void:
 			_take.begin(h["seconds"])
 			_take_track = take_track()
 			_take_sources.clear()
-			# Keys already down when the take starts are in it from its first moment.
+			# Keys already down when the take starts are in it from its first moment, and so is
+			# where the wheel stands.
 			for pitch in held:
 				_take.note_on(pitch, held[pitch], 0, h["seconds"])
 				for source in _down.sources_of(pitch):
 					_take_played(source)
+			for kind: int in controls:
+				if int(controls[kind]) != Session.control_rest(kind):
+					_take.control(kind, controls[kind], 0, h["seconds"])
 			changed.emit()
 		_take.reach(h["seconds"])
 	elif _take != null:
@@ -507,9 +695,10 @@ func _commit() -> void:
 		var name := "%s %s %d" % [Session.local_name, take_name(_take_sources), takes_sent]
 		var onto := take_tracks()
 		for index in onto:
-			DAW.insert_midi_take(index, done["start"], done["end"], notes, name)
+			DAW.insert_midi_take(index, done["start"], done["end"], notes, name, done["controls"])
 		last_take = {"notes": notes.size(), "track": _take_track, "start": done["start"],
-				"end": done["end"], "tracks": onto}
+				"end": done["end"], "tracks": onto,
+				"controls": (done["controls"] as Array).size() / DawKitClip.CONTROL_WIDTH}
 	changed.emit()
 
 

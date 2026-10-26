@@ -169,11 +169,39 @@ func tilt() -> Vector2:
 	return Vector2.ZERO
 
 
+## Override: the same roll and pitch in radians, unclamped (HandPose.angles_of), which `tilt` is
+## the clamped form of: what a bend is measured by, from the roll its note began at (Wobble).
+## NAN for a hand with nothing to read this frame (a bare hand out of tracking), so a bend holds
+## where it was rather than leaping to level.
+func tilt_angles() -> Vector2:
+	return Vector2.ZERO
+
+
+## Override: a bend this hand is holding by other means than tilting, in semitones: the desktop's
+## Alt with the mouse moving up or down (MouseInteractor). Added to the tilt's bend (Wobble).
+func bend_wheel() -> float:
+	return 0.0
+
+
 ## Where a carried thing is being shaken from, for an instrument to hear its strokes
 ## (InstrumentItem): a controller's hand, in the world. A mouse's is its wiggle, in the view, so
 ## turning round is not a shake (MouseInteractor).
 func shake_point() -> Vector3:
 	return carry_pose().origin
+
+
+## Whether `shake_point` is seen now rather than held where it was last seen: false for a bare
+## hand out of tracking, so an instrument starts its stroke afresh when the hand comes back
+## rather than hearing the jump as one.
+func shake_tracked() -> bool:
+	return true
+
+
+## How much further the instrument moves than `shake_point` does: 1 for a controller or the
+## mouse, which move it bodily. A bare hand's is its palm, and a wrist's shake swings the end of
+## what it holds further than the palm goes (XRInteractor.PALM_LEVER).
+func shake_lever() -> float:
+	return 1.0
 
 
 ## Override: whether this hand needs drawing to be seen holding something. A controller is

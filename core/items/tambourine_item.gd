@@ -32,7 +32,12 @@ func item_title() -> String:
 
 
 func hint() -> String:
-	return _hint("click to pick up, then shake the mouse to play it, click to strike it")
+	return _hint("click to pick up · shake it · click strikes · P jack")
+
+
+## Held in a closed bare hand, by the bare stretch of hoop (XRInteractor.step_hold).
+func held_in_fist() -> bool:
+	return true
 
 
 func pitch() -> int:

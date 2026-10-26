@@ -57,7 +57,7 @@ const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"trans
 ## here as well because a guest's intent names its verb, and a verb missing from this list is a
 ## verb that silently stops working for everyone who is not the host.
 const COMMANDS := [
-	&"set_track_volume", &"set_track_pan", &"set_track_mute", &"set_track_solo",
+	&"set_track_volume", &"set_track_pan", &"set_track_width", &"set_track_mute", &"set_track_solo",
 	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
 	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text", &"read_fx_params",
 	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
@@ -71,6 +71,7 @@ const COMMANDS := [
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
+	&"open_edit", &"close_edit",
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
@@ -195,6 +196,8 @@ func set_track_volume(index: int, taper: float) -> void:
 		var db: float = taper_to_db(state.track(j).volume) + by
 		_do(&"set_track_volume", [j, clampf(db_to_taper(db), 0.0, 1.0) if is_finite(db) and taper > 0.0 else 0.0])
 func set_track_pan(index: int, pan: float) -> void: _do(&"set_track_pan", [index, pan])
+## How wide the track's stereo image is, 0 (mono) to 1 (as recorded): the stage table's ring.
+func set_track_width(index: int, width: float) -> void: _do(&"set_track_width", [index, clampf(width, 0.0, 1.0)])
 ## A grouped track's mute and solo are its group's.
 func set_track_mute(index: int, muted: bool) -> void:
 	for j in [index] + ([] if group_free else group_mates(index)):
@@ -528,6 +531,21 @@ func loop_selected_items() -> bool:
 	if not state.looping:
 		set_looping(true)
 	return true
+## One undo step for a whole gesture, however many values it writes (DAWBackend.open_edit): a
+## drag that moves pan and volume at once, a send and a threshold, an EQ band's gains. Opened when
+## the hand closes and closed when it lets go (ControlAffordance.edits_as_one). A guest's are
+## intents like the writes between them, and the host keeps one open per player. `edit_name` is
+## what the step is called in the history list ("Kick: level").
+func open_edit(edit_name: String) -> void: _do(&"open_edit", [edit_name.left(MARKER_NAME_MAX)])
+func close_edit() -> void: _do(&"close_edit", [])
+## A player gone from the session: an edit they left open is closed, on the host. `peer` is their
+## peer id, 0 for this machine.
+func close_edits_of(peer: int) -> void:
+	if backend == null or not Session.is_authority():
+		return
+	backend.acting_peer = peer
+	backend.close_edit()
+	backend.acting_peer = 0
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
 ## Back or forward through history to `depth` steps done: the history list's jump.
@@ -814,11 +832,12 @@ func remove_region(at: float) -> void:
 func edit_region(at: float, start: float, end: float, region_name: String) -> void:
 	_do(&"edit_region", [at, maxf(start, 0.0), maxf(end, 0.0), region_name.left(MARKER_NAME_MAX)])
 ## A take of notes onto a track, placed by song position: notes are [on, off, pitch, velocity,
-## channel] rows in seconds. Cleaned here and cleaned again on the host, since a guest's take
-## arrives there as peer input. See MidiTake.
+## channel] rows in seconds, and `controls` the bend, mod wheel and expression moved while it was
+## played, flat [time, kind, value, channel] in seconds (MidiTake.finish). Cleaned here and cleaned
+## again on the host, since a guest's take arrives there as peer input. See MidiTake.
 func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
-		take_name := "") -> void:
-	var args := MidiTake.clean_args([track_index, start, end, notes, take_name])
+		take_name := "", controls: Array = []) -> void:
+	var args := MidiTake.clean_args([track_index, start, end, notes, take_name, controls])
 	if not args.is_empty():
 		_do(&"insert_midi_take", args)
 
@@ -850,11 +869,33 @@ func _do(verb: StringName, args: Array) -> void:
 	Session.send_intent(verb, args)
 
 
-## The backend does it, knowing what to call it in the history list.
-func _call(verb: StringName, args: Array) -> void:
+## The backend does it, knowing what to call it in the history list and whose it is (`from`, the
+## peer a guest's intent came from; 0 for this machine, or whoever on_behalf_of is answering).
+func _call(verb: StringName, args: Array, from := 0) -> void:
 	backend.acting = step_name(verb, args)
+	backend.acting_peer = from if from != 0 else _on_behalf_of
 	backend.callv(verb, args)
 	backend.acting = ""
+	backend.acting_peer = _on_behalf_of
+
+
+## Whose writes the host is making now, for on_behalf_of: 0 for its own.
+var _on_behalf_of := 0
+
+
+## `fn` run with every write it makes counted as `peer`'s (DAWBackend.acting_peer): the host
+## answering a guest with its own calls -- a room ask, a take or a recording placed -- makes
+## writes that are the guest's, and in the host's open edit they would be undone with the host's
+## drag. `peer` is the guest's peer id; this machine's own id is the host's own, 0.
+func on_behalf_of(peer: int, fn: Callable) -> void:
+	var was := _on_behalf_of
+	_on_behalf_of = 0 if peer == Session.local_peer_id else peer
+	if backend != null:
+		backend.acting_peer = _on_behalf_of
+	fn.call()
+	_on_behalf_of = was
+	if backend != null:
+		backend.acting_peer = was
 
 
 ## What an edit is called in the history list: the verb in words, and the track it is on when it
@@ -873,11 +914,25 @@ func step_name(verb: StringName, args: Array) -> String:
 
 ## An intent that arrived from a guest. Checked against the vocabulary rather than called
 ## blindly: this is a trusted-LAN model, but trusting a peer to move a fader is not the same as
-## letting it name any method on this object.
-func apply_intent(verb: StringName, args: Array) -> void:
+## letting it name any method on this object. `from` is the guest's peer id (0 for this machine),
+## so the edit group a write folds into is its own player's.
+func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 	if verb not in COMMANDS:
 		push_warning("DAW: refused an intent for unknown verb '%s'." % verb)
 		return
+	if verb == &"open_edit":
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_STRING, TYPE_STRING_NAME]:
+			push_warning("DAW: refused a malformed open_edit intent %s." % [args])
+			return
+		args = [str(args[0]).left(MARKER_NAME_MAX)]
+	if verb == &"close_edit":
+		args = []
+	if verb == &"set_track_width":
+		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))) \
+				or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_width intent %s." % [args])
+			return
+		args = [int(args[0]), clampf(float(args[1]), 0.0, 1.0)]
 	if verb == &"save_project":
 		args = [""]
 	if verb == &"set_tempo" and args.size() == 1:
@@ -1204,7 +1259,7 @@ func apply_intent(verb: StringName, args: Array) -> void:
 		args = [maxi(int(args[0]), 0)]
 	if locked_against(verb, args):
 		return
-	_call(verb, args)
+	_call(verb, args, from)
 
 
 ## A recorded file onto a track, by song position. The host's own verb and not an intent: a

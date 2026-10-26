@@ -12,11 +12,14 @@ extends RefCounted
 ## there were jacks.
 ##
 ## A jack sends what its source is. A pitched source (the harp, a player's keys, a bell) sends
-## NOTE_ON and NOTE_OFF of its own pitches; unpitched percussion sends TRIGGER, which a receiving
-## instrument turns into a note of its own (slice 6). Onto a track, both are recorded as the
-## source would record them anyway: a bell its chord tone on its channel, a shaker its drum note.
+## NOTE_ON and NOTE_OFF of its own pitches, and CC, its controls beside them: `pitch` the
+## controller (DawKitClip.PITCH_BEND, 1 or 11, Session.CONTROL_KINDS) and `velocity` its value,
+## -8192 to 8191 for the bend (docs/spatial_loop.md slice 14). Unpitched percussion sends TRIGGER,
+## which a receiving instrument turns into a note of its own (slice 6). Onto a track, both are
+## recorded as the source would record them anyway: a bell its chord tone on its channel, a
+## shaker its drum note.
 
-enum Kind { NOTE_ON, NOTE_OFF, TRIGGER }
+enum Kind { NOTE_ON, NOTE_OFF, TRIGGER, CC }
 
 const TRACK := "track_"
 const PLAYER := "player_"
@@ -78,11 +81,11 @@ static func valid_source(source: StringName) -> bool:
 	return source != &"" and String(source).length() <= NAME_MOST
 
 
-## What a source sends down a jack: NOTE_ON and NOTE_OFF for one with pitches of its own,
+## What a source sends down a jack: NOTE_ON, NOTE_OFF and CC for one with pitches of its own,
 ## TRIGGER for one without.
 static func kinds_of(pitched: bool) -> Array[Kind]:
 	if pitched:
-		return [Kind.NOTE_ON, Kind.NOTE_OFF]
+		return [Kind.NOTE_ON, Kind.NOTE_OFF, Kind.CC]
 	return [Kind.TRIGGER]
 
 

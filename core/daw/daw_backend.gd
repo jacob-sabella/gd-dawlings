@@ -88,6 +88,12 @@ const Capability := {
 	RENDER = &"render",
 	## Reorder tracks and put them in and out of folders (move_track).
 	TRACK_ORDER = &"track_order",
+	## Fold everything one gesture writes into one undo step, whatever it writes (open_edit and
+	## close_edit). Reaper can only through the bridge; its plain OSC writes stay its own steps.
+	EDIT_GROUPS = &"edit_groups",
+	## Set how wide a track's stereo image is (set_track_width): the stage table's ring. Reaper
+	## only through the bridge, which puts the track in its stereo pan mode to have one.
+	WIDTH = &"width",
 }
 
 
@@ -177,6 +183,9 @@ func can(_capability: StringName) -> bool:
 
 func set_track_volume(_index: int, _taper: float) -> void: pass
 func set_track_pan(_index: int, _pan: float) -> void: pass
+## How wide the track's stereo image is: 0 folds it to mono, 1 leaves it as it was recorded.
+## One undo step. A no-op without Capability.WIDTH.
+func set_track_width(_index: int, _width: float) -> void: pass
 func set_track_mute(_index: int, _muted: bool) -> void: pass
 func set_track_solo(_index: int, _soloed: bool) -> void: pass
 func set_track_rec_arm(_index: int, _armed: bool) -> void: pass
@@ -293,6 +302,22 @@ func undo_to(_depth: int) -> void: pass
 ## What the edit under way is called, for the history list: set by DAW around each call, "" when
 ## nobody said.
 var acting := ""
+## Whose edit it is: the peer a guest's intent came from, 0 for this machine's own. Set by DAW
+## around each call, as `acting` is, so an edit group is the one its own player opened.
+var acting_peer := 0
+
+## Edit groups (Capability.EDIT_GROUPS): one undo step per gesture, however many values it writes.
+## A drag that moves pan and volume at once alternates between two controls, and folding by time
+## and control (as a single fader's drag folds) would make a step of almost every frame. Between
+## `open_edit` and `close_edit` everything `acting_peer` writes is one step, called `edit_name`,
+## in the place in history where its first write was. One edit open per player: another
+## player's write in between is a step of its own. An edit opened over one still open closes the
+## first. Closed as well by an undo or a redo, by EDIT_IDLE_MSEC with nothing written, and by the
+## player leaving the session (DAW.close_edits_of), so a lost let-go cannot hold history open.
+func open_edit(_edit_name: String) -> void: pass
+func close_edit() -> void: pass
+## An open edit nothing has been written into for this long is closed.
+const EDIT_IDLE_MSEC := 10000
 
 ## Item editing. Items are (track, index in lane, left to right). `additive` adds to or takes
 ## from the selection instead of replacing it.
@@ -483,10 +508,11 @@ static func markers_edited(markers: Dictionary, at: float, to: float, marker_nam
 
 ## A take of notes, placed by song position: a new MIDI item on `track_index` from `start` to
 ## `end` seconds, holding `notes` as [on, off, pitch, velocity, channel] rows in absolute
-## seconds. One undo step. Arguments arrive already cleaned (MidiTake.clean_args). A backend
-## that cannot do it answers false to Capability.MIDI_TAKES.
+## seconds, and `controls` (the bend, the mod wheel, expression) flat [time, kind, value, channel]
+## in absolute seconds. One undo step. Arguments arrive already cleaned (MidiTake.clean_args). A
+## backend that cannot do it answers false to Capability.MIDI_TAKES.
 func insert_midi_take(_track_index: int, _start: float, _end: float, _notes: Array,
-		_name: String) -> void: pass
+		_name: String, _controls: Array = []) -> void: pass
 
 ## A recorded take: a new audio item on `track_index` at `start` seconds, `length` long, playing
 ## `source` -- a file name in AudioTake.DIR on this machine -- from its beginning. `peaks` is the
@@ -1853,15 +1879,20 @@ func _land_in_lane(track_index: int, items: Array, item: MixState.ItemState) -> 
 
 
 ## A take's item, drawn at once: the offline project's whole edit, and a live DAW's preview of
-## the answer the bridge is about to give.
+## the answer the bridge is about to give. Its controls are counted from its start, as an item
+## carries them (ItemState.controls), and play on the built-in engine with its notes.
 func _locally_insert_take(track_index: int, start: float, end: float, notes: Array,
-		take_name: String) -> void:
+		take_name: String, controls: Array = []) -> void:
 	var lane := _lane_copy(track_index)
 	var item := MixState.ItemState.new()
 	item.start = start
 	item.length = end - start
 	item.name = take_name
 	item.notes = MidiTake.pack_relative(notes, start)
+	var relative: Array = []
+	for o in range(0, controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		relative.append_array([float(controls[o]) - start, controls[o + 1], controls[o + 2], controls[o + 3]])
+	item.controls = DawKitClip.clean_controls(relative)
 	_land_in_lane(track_index, lane, item)
 
 

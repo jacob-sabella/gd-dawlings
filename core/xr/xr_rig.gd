@@ -33,6 +33,10 @@ signal escape_requested
 ## is still the way out (above), and comes first, so whatever is in the way is gone before the
 ## panel arrives.
 signal flat_requested
+## The play space has just been put somewhere else (`travel`), or back `home`: the moment of the
+## cut, under the veil, so whatever follows the head (the body frame) can take the new place
+## whole rather than chase it.
+signal travelled(home: bool)
 
 ## The tip of the controller, not its tracked centre. A controller's pose is reported somewhere
 ## around the user's fist; the point they will actually press against a floor mark is ahead of
@@ -54,6 +58,31 @@ const HAND_TRACKERS := {&"left_hand": &"/user/hand_tracker/left", &"right_hand":
 var simulated := false
 const SIM_EYE_HEIGHT := 1.6
 const SIM_HAND := Vector3(0.22, 1.25, -0.35)
+
+## GOING SOMEWHERE (docs/spatial_loop.md part two, slice 11). A play space is about two metres
+## square and the live room's instruments are several metres behind the desk, so a headset player
+## cannot walk to them. `travel(to)` moves the whole play space instead: the rig (this
+## XROrigin3D) is put with its centre on `to`'s floor point, its forward along `to`'s, so where
+## the player stands and faces inside their own play space is kept. The calibration is not
+## touched: RoomAnchor holds where the session's frame is, and the floor marks are taken in the
+## play space as it stood at `home` (`untravelled`), so marking the floor is the same wherever
+## the player has gone.
+##
+## It is a cut, never a glide: a view that moves while the body stands still is what makes
+## people sick. The cut happens behind a veil, a black sphere round the head, that closes over
+## FADE and opens again over FADE; a fade of 0 is a plain cut (Ergonomics.motion_scale at 0).
+const FADE := 0.15
+## The veil's radius round the eye: inside the hands, and drawn over everything regardless.
+const VEIL_RADIUS := 0.25
+## Where the play space stands when it has gone nowhere, in the parent's frame. Taken from the
+## rig's own transform as it enters the tree, and set by whoever knows where home is (`settle`):
+## the studio puts a VR player's at the mix position, in front of the desk.
+var home := Transform3D.IDENTITY
+## Whether the play space is somewhere other than `home`.
+var away := false
+var _veil: MeshInstance3D
+var _veil_material: StandardMaterial3D
+var _trip: Tween
 
 var head: XRCamera3D
 var left: XRController3D
@@ -84,6 +113,8 @@ func _ready() -> void:
 	if simulated:
 		head.position.y = SIM_EYE_HEIGHT
 	add_child(head)
+	home = transform
+	_build_veil()
 
 	left = _build_hand(&"left_hand", "LeftHand")
 	right = _build_hand(&"right_hand", "RightHand")
@@ -203,20 +234,130 @@ func left_fingers_play() -> bool:
 
 
 func _take_mark() -> void:
+	# Where the tip is in the play space as it stands at home: a mark is a spot on the real floor,
+	# and the real floor did not move when the play space travelled.
+	var tip := untravelled(tip_of(left))
 	match _marks_taken:
 		0:
-			room_anchor.mark_origin(tip_of(left))
+			room_anchor.mark_origin(tip)
 			_marks_taken = 1
 		1:
 			# A refused second mark means the two points were too close to fix a direction. The
 			# rig stays on step 1 so the next press retries it, rather than silently accepting
 			# a frame built from a guess.
-			if room_anchor.mark_forward(tip_of(left)):
+			if room_anchor.mark_forward(tip):
 				_marks_taken = 2
 		_:
-			room_anchor.mark_origin(tip_of(left))
+			room_anchor.mark_origin(tip)
 			_marks_taken = 1
 	calibration_step.emit(_marks_taken, 2)
+
+
+# --- going somewhere --------------------------------------------------------------------------
+
+## Put the play space's centre at `to` (global; its floor point and the way it faces, levelled:
+## only its yaw is taken), behind the veil, over `fade` seconds each way, or at once with a fade
+## of 0. A travel already under way is overtaken from wherever its veil has got to.
+func travel(to: Transform3D, fade := FADE) -> void:
+	var ahead := -to.basis.z
+	ahead.y = 0.0
+	if ahead.length() < 0.001:
+		ahead = Vector3.FORWARD
+	var put := Transform3D(Basis.looking_at(ahead.normalized(), Vector3.UP), Vector3(to.origin.x, 0.0, to.origin.z))
+	var parent := get_parent() as Node3D
+	if parent != null and parent.is_inside_tree():
+		put = parent.global_transform.affine_inverse() * put
+	_go(put, true, fade)
+
+
+## Back to `home`, the mix position, the same way.
+func travel_home(fade := FADE) -> void:
+	_go(home, false, fade)
+
+
+## Make `at` (in the parent's frame) home, and put the play space there now unless it is away,
+## at once and without the veil: this is where it starts, not a trip. Floor marks taken from
+## here on are where they are with the play space standing here (`untravelled`), which is the
+## same real floor for everyone who marks it from a home of their own.
+func settle(at: Transform3D) -> void:
+	home = at
+	if not away:
+		transform = at
+
+
+## Whether the veil is closing or opening on a travel.
+func travelling() -> bool:
+	return _trip != null and _trip.is_valid() and _trip.is_running()
+
+
+## How closed the veil is, 0 (open, not drawn) to 1 (black).
+func veil() -> float:
+	return _veil_material.albedo_color.a if _veil_material != null and _veil.visible else 0.0
+
+
+## `point` (global) as it would be with the play space at home: what a floor mark taken here is
+## in the room's own terms.
+func untravelled(point: Vector3) -> Vector3:
+	if not away:
+		return point
+	var at_home := home
+	var parent := get_parent() as Node3D
+	if parent != null and parent.is_inside_tree():
+		at_home = parent.global_transform * home
+	return at_home * (global_transform.affine_inverse() * point)
+
+
+func _go(to: Transform3D, away_after: bool, fade: float) -> void:
+	if _trip != null and _trip.is_valid():
+		_trip.kill()
+	if fade <= 0.0 or not is_inside_tree():
+		_arrive(to, away_after)
+		_show_veil(0.0)
+		return
+	var from := veil()
+	_trip = create_tween()
+	_trip.tween_method(_show_veil, from, 1.0, fade * (1.0 - from))
+	_trip.tween_callback(_arrive.bind(to, away_after))
+	_trip.tween_method(_show_veil, 1.0, 0.0, fade)
+
+
+func _arrive(to: Transform3D, away_after: bool) -> void:
+	transform = to
+	away = away_after
+	travelled.emit(not away_after)
+
+
+func _show_veil(closed: float) -> void:
+	if _veil == null:
+		return
+	_veil_material.albedo_color.a = clampf(closed, 0.0, 1.0)
+	_veil.visible = closed > 0.0
+
+
+## A black sphere round the eye, drawn last and through everything: the hands too, which are
+## outside it, since a hand left lit in the dark is the one thing that would show the room moving.
+## Never in a mirror (Mirror.NOT_REFLECTED), where it would be a black ball on your ghost's head.
+func _build_veil() -> void:
+	_veil = MeshInstance3D.new()
+	_veil.name = "Veil"
+	var ball := SphereMesh.new()
+	ball.radius = VEIL_RADIUS
+	ball.height = VEIL_RADIUS * 2.0
+	ball.radial_segments = 16
+	ball.rings = 8
+	_veil.mesh = ball
+	_veil_material = StandardMaterial3D.new()
+	_veil_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_veil_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_veil_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_veil_material.no_depth_test = true
+	_veil_material.render_priority = Material.RENDER_PRIORITY_MAX
+	_veil_material.albedo_color = Color(0, 0, 0, 0)
+	_veil.material_override = _veil_material
+	_veil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_veil.layers = Mirror.NOT_REFLECTED
+	_veil.visible = false
+	head.add_child(_veil)
 
 
 ## A fingertip on something lights its tip, and the pinch ray of that hand goes away while it is:
@@ -243,7 +384,8 @@ func _watch_escape(delta: float) -> void:
 		if controller == null:
 			continue
 		menu = menu or controller.is_button_pressed(MENU_ACTION)
-		if (pokes[controller] as PokeInteractor).tracked() and controller.is_button_pressed(FIST_ACTION):
+		if escape_fist((pokes[controller] as PokeInteractor).tracked(), controller.is_button_pressed(FIST_ACTION),
+				interactors.get(controller) as Interactor):
 			fists += 1
 	if menu and not _menu_was_down:
 		escape_requested.emit()
@@ -254,6 +396,19 @@ func _watch_escape(delta: float) -> void:
 			flat_requested.emit()
 	else:
 		_menu_for = 0.0
+	watch_fists(fists, delta)
+
+
+## Whether a hand counts toward the two-fists escape: a tracked bare hand made into a fist, and
+## carrying nothing. A shaker held in a closed hand is a fist too (XRInteractor.step_hold), and
+## shaking it with both hands, or holding it in one while the other makes a fist, is not a way out.
+static func escape_fist(tracked: bool, fist: bool, hand: Interactor) -> bool:
+	return tracked and fist and not (hand != null and is_instance_valid(hand) and is_instance_valid(hand.carrying))
+
+
+## `fists` hands counting toward the escape this frame, `delta` on: both, held for ESCAPE_HOLD,
+## is the way out, said once a hold.
+func watch_fists(fists: int, delta: float) -> void:
 	if fists == 2:
 		_fists_for += delta
 		if _fists_for >= ESCAPE_HOLD and _fists_for - delta < ESCAPE_HOLD:

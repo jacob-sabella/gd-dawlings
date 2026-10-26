@@ -35,6 +35,8 @@ const AHEAD_S := 2.0
 ## Measured with a tone (an 80 ms line came out 84 ms behind the mix, while the queue read a
 ## sawtooth of 69 and 80): a step's worth puts the estimate on it.
 const CAPTURE_LAG_FRAMES := 512
+## A line's event that is a control, not a note: [due, CONTROL, controller, value].
+const CONTROL := -1
 
 ## {peer id: Line}, the performers being listened to.
 var lines: Dictionary = {}
@@ -76,6 +78,7 @@ func performers() -> Array:
 ## A note-off from one of their instruments (`source`) while another still holds the pitch is
 ## not sounded: it would stop the other's note. Counted as they come, which is the order they
 ## were played in, and so the order the line sounds them.
+## Their last note-off puts their wheel back to rest as it sounds, as on their end.
 func play(kind: int, pitch: int, velocity: int, from: int, song := -1.0, source := &"") -> void:
 	var line: Line = lines.get(from)
 	if line == null:
@@ -84,7 +87,17 @@ func play(kind: int, pitch: int, velocity: int, from: int, song := -1.0, source 
 		line.down.press(pitch, source, velocity)
 	elif kind == Session.Note.OFF and not line.down.let_go(pitch, source):
 		return
-	line.arrive(kind, pitch, velocity, song, heard())
+	line.arrive(kind, pitch, velocity, song, heard(), kind == Session.Note.OFF and line.down.is_empty())
+
+
+## A control from `from`, as Session.control_played says it: into their line with the notes, so
+## it bends what they played when it sounds, at the position they moved it at. Only while they
+## have a note down, as TheirKeys.control has it.
+func control(kind: int, value: int, from: int, song := -1.0, _source := &"") -> void:
+	var line: Line = lines.get(from)
+	if line == null or line.down.is_empty():
+		return
+	line.arrive(CONTROL, kind, value, song, heard())
 
 
 func heard() -> Dictionary:
@@ -151,13 +164,16 @@ class Line extends Node:
 	var peer := 0
 	## How far behind this machine's own mix the copy is held, in seconds: what it is meant to be.
 	var delay := START_S
-	## Notes waiting for the backing to reach them: [song, kind, pitch, velocity], in the order
-	## they were played.
+	## Notes waiting for the backing to reach them: [song, kind, pitch, velocity, rest], in the
+	## order they were played; `rest` on their last note-off, which puts the wheel back to rest.
+	## A control waits among them as [song, CONTROL, controller, value, false].
 	var waiting: Array = []
 	## How far the latest late note missed by, for the suite and the tablet: 0 when none has.
 	var last_late := 0.0
 	## What has been played on this line, for the suite: [kind, pitch].
 	var sounded: Array = []
+	## The controls played on this line, for the suite: [controller, value].
+	var controlled: Array = []
 	## What of theirs has each pitch down (TheirMonitor.play).
 	var down := KeysDown.new()
 	var synth: MonitorSynth
@@ -230,14 +246,19 @@ class Line extends Node:
 	## A note of theirs, `song` the position they played it to, as `h` this machine hears now:
 	## kept for the backing to reach it, or, if the backing is past it already, played now and the
 	## line made that much longer, so the next one is in time.
-	func arrive(kind: int, pitch: int, velocity: int, song: float, h: Dictionary) -> void:
+	func arrive(kind: int, pitch: int, velocity: int, song: float, h: Dictionary, rest := false) -> void:
 		if song < 0.0 or not (h["valid"] and h["playing"]):
-			_sound(kind, pitch, velocity)
+			_sound(kind, pitch, velocity, rest)
 			return
 		var due := song - synth_latency()
 		var late := position(h) - due
 		if late > MOST_S or -late > AHEAD_S:
-			_sound(kind, pitch, velocity)
+			_sound(kind, pitch, velocity, rest)
+			return
+		if late > 0.0 and kind == CONTROL:
+			# Behind the backing already, and so ahead of everything waiting: played now. A control
+			# does not grow the line; it may be a resend, or one of a stream that drops some.
+			_sound(kind, pitch, velocity, rest)
 			return
 		if late > 0.0:
 			last_late = late
@@ -247,11 +268,11 @@ class Line extends Node:
 				_owed += int(grow * AudioServer.get_mix_rate())
 			# Behind it, nothing waiting can be due any later than this.
 			for w in waiting:
-				_sound(w[1], w[2], w[3])
+				_sound(w[1], w[2], w[3], w[4])
 			waiting.clear()
-			_sound(kind, pitch, velocity)
+			_sound(kind, pitch, velocity, rest)
 			return
-		waiting.append([due, kind, pitch, velocity])
+		waiting.append([due, kind, pitch, velocity, rest])
 
 	## The notes the backing has reached, played, in order.
 	func tick(h: Dictionary) -> void:
@@ -259,23 +280,31 @@ class Line extends Node:
 			return
 		if not (h["valid"] and h["playing"]):
 			for w in waiting:
-				_sound(w[1], w[2], w[3])
+				_sound(w[1], w[2], w[3], w[4])
 			waiting.clear()
 			return
 		var at := position(h)
 		while not waiting.is_empty() and float(waiting[0][0]) <= at:
 			var w: Array = waiting.pop_front()
-			_sound(w[1], w[2], w[3])
+			_sound(w[1], w[2], w[3], w[4])
 
 	func synth_latency() -> float:
 		return synth.latency_seconds() if synth != null else 0.0
 
-	func _sound(kind: int, pitch: int, velocity: int) -> void:
+	func _sound(kind: int, pitch: int, velocity: int, rest := false) -> void:
+		if kind == CONTROL:
+			controlled.append([pitch, velocity])
+			if synth != null:
+				synth.control(pitch, velocity)
+			return
 		sounded.append([kind, pitch])
 		if synth == null:
 			return
 		match kind:
 			Session.Note.ON: synth.note_on(pitch, velocity)
-			Session.Note.OFF: synth.note_off(pitch)
+			Session.Note.OFF:
+				synth.note_off(pitch)
+				if rest:
+					synth.rest_controls()
 			Session.Note.PEDAL_DOWN: synth.sustain(true)
 			Session.Note.PEDAL_UP: synth.sustain(false)

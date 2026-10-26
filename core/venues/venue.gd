@@ -524,6 +524,17 @@ func wheel_spot() -> Variant:
 			Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z - ZoneKit.TABLE_TOP.z * 0.5 + WHEEL_IN))
 
 
+## Where the stage table stands (StageTable, docs/spatial_loop.md slice 18), in studio space: on
+## its trolley in the control room, which is the studio's furniture and not the venue's, so read
+## from the studio this venue stands in, wherever the trolley has since been wheeled. Its front
+## (+Z) faces the mix position. Null for a venue in no studio, or one with no table (AR).
+func stage_table_spot() -> Variant:
+	var studio := get_parent() as Studio
+	if studio == null or studio.stage_trolley == null or not is_instance_valid(studio.stage_trolley):
+		return null
+	return transform.affine_inverse() * studio.studio_set.transform * studio.stage_trolley.transform
+
+
 ## Where the Rig Roulette station hangs, in studio space: on the control room's own back wall,
 ## within reach of the console rather than tucked away in the back of house like the Tour case --
 ## this is a thing the whole band gathers around between takes, not a run's own opening move.
