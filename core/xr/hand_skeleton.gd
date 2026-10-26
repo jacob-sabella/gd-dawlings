@@ -12,10 +12,19 @@ extends Node3D
 ##
 ## Parented to the XROrigin3D, whose space the joints are reported in. Hidden whenever the hand
 ## is not tracked -- a controller in it, or out of view.
+##
+## `wrist` rides the wrist joint, for what is worn there: the player's own keys' jack and, up the
+## arm from it, the socket that takes out whatever goes into them (docs/spatial_loop.md slice 6),
+## both pressed by the other hand. They are hidden with the hand.
+##
+## While the hand's fingertips play notes (docs/spatial_loop.md slice 8), each fingertip is
+## lettered with the note it plays, grown while pinched, and the chord over the palm (`letter`).
 
 @export var tracker_name: StringName = &"/user/hand_tracker/right"
 ## Set by the rig from the hand's PokeInteractor each frame.
 var touching := false
+## On the wrist joint while the hand is tracked: its back, facing up out of the hand (-Z out).
+var wrist: Node3D
 
 const JOINTS := XRHandTracker.HAND_JOINT_MAX
 ## Every finger as a chain from the wrist out: the bones are the links between neighbours.
@@ -37,6 +46,10 @@ var _bones: MultiMeshInstance3D
 var _bone_pairs: Array = []
 var _tip: MeshInstance3D
 var _tip_material: StandardMaterial3D
+## The fingertips' notes, index to little, and the chord over the palm: made at the first
+## `letter`, hidden with no words.
+var _letters: Array[Label3D] = []
+var _chord: Label3D
 
 
 func _ready() -> void:
@@ -67,6 +80,9 @@ func _ready() -> void:
 	_tip.material_override = _tip_material
 	_quiet(_tip)
 	add_child(_tip)
+	wrist = Node3D.new()
+	wrist.name = "Wrist"
+	add_child(wrist)
 	visible = false
 
 
@@ -98,10 +114,75 @@ func show_hand(hand: XRHandTracker) -> void:
 			_bones.multimesh.set_instance_transform(b, gone)
 			continue
 		_bones.multimesh.set_instance_transform(b, bone(at[a], at[z]))
+	var w := XRHandTracker.HAND_JOINT_WRIST
+	if ok[w]:
+		wrist.transform = wrist_mount(hand.get_hand_joint_transform(w))
+	for f in _letters.size():
+		var j: int = HandPose.TIPS[f]
+		_letters[f].position = at[j] + Vector3.UP * LETTER_ABOVE
+	if _chord != null:
+		_chord.position = at[XRHandTracker.HAND_JOINT_PALM] + Vector3.UP * CHORD_ABOVE
 	var tip := XRHandTracker.HAND_JOINT_INDEX_FINGER_TIP
 	_tip.visible = ok[tip]
 	_tip.position = at[tip]
 	_tip_material.albedo_color = TOUCH_COLOUR if touching else COLOUR
+
+
+## How far over a fingertip its note is lettered, and over the palm the chord (m).
+const LETTER_ABOVE := 0.018
+const CHORD_ABOVE := 0.06
+
+
+## What each finger plays, index to little, the chord, and which are pinched (HandPose's mask):
+## lettered at the fingertips, a pinched one grown, and over the palm. Empty names hide them.
+func letter(names: PackedStringArray, chord: String, pinched := 0) -> void:
+	if _letters.is_empty():
+		if names.is_empty():
+			return
+		for f in 4:
+			_letters.append(letter_label(36))
+			add_child(_letters[-1])
+		_chord = letter_label(48)
+		add_child(_chord)
+	for f in _letters.size():
+		var l := _letters[f]
+		l.visible = f < names.size() and names[f] != ""
+		if l.visible:
+			l.text = names[f]
+		l.scale = Vector3.ONE * (1.5 if pinched & HandPose.FINGER_BITS[f] else 1.0)
+	_chord.visible = chord != ""
+	_chord.text = chord
+
+
+## A fingertip's or a chord's name, `font_size` at HandSkeleton's scale: billboarded, drawn over the
+## hand it names, only in your own eyes, and hidden until it is given words. Not yet in the tree.
+## A controller's lettering (FingertipNotes) is made of the same.
+static func letter_label(font_size: int) -> Label3D:
+	var l := Label3D.new()
+	l.font_size = font_size
+	l.pixel_size = 0.0002
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Over the hand they name, whatever of it is nearer.
+	l.no_depth_test = true
+	l.render_priority = 10
+	l.outline_render_priority = 9
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.modulate = Color(0.98, 0.96, 0.9)
+	l.visible = false
+	Lettering.range_to_legibility(l)
+	l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	l.layers = Mirror.NOT_REFLECTED
+	return l
+
+
+## Where a thing worn on the wrist sits, from the wrist joint's pose: a little up its back (the
+## joint's +Y is the back of the hand), turned so its -Z faces out of the back.
+static func wrist_mount(joint: Transform3D) -> Transform3D:
+	var basis := joint.basis.orthonormalized()
+	var up := basis.y
+	var along := -basis.z
+	var turned := Basis.looking_at(up, along if absf(up.dot(along)) < 0.95 else basis.x)
+	return Transform3D(turned, joint.origin + up * 0.02)
 
 
 ## A unit-high rod (standing along Y) stretched from `a` to `b`.

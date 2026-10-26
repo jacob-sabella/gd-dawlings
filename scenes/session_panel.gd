@@ -57,6 +57,9 @@ var _midi_button: Button
 var _play_into: OptionButton
 var _monitor: CheckButton
 var _monitor_volume: HSlider
+## How late the hand percussion and the handbells are, beside how late the keys are: they sound
+## through Godot's mixer, not the keys' own node (InstrumentItem).
+var _item_latency: Label
 ## A host's: its keys heard through their track, or straight out (GuestMidi.through_track).
 var _through_track: CheckButton
 var _record_with: CheckButton
@@ -497,6 +500,11 @@ func _build_midi(box: VBoxContainer) -> void:
 	_monitor_volume.value_changed.connect(func(v: float):
 		Session.guest_midi.monitor_db = v if v > -29.9 else -80.0)
 	monitor_row.add_child(_monitor_volume)
+	_item_latency = _label("", 12, DIM)
+	_item_latency.mouse_filter = Control.MOUSE_FILTER_PASS
+	_item_latency.tooltip_text = ("The handbells and the hand percussion you play sound through the app's mixer, not your keys' own node, so they are this late.\n"
+			+ "Over %d ms, the bells are to get a voice of their own, as your keys have." % roundi(InstrumentItem.LATENCY_MOST * 1000.0))
+	monitor_row.add_child(_item_latency)
 
 	_through_track = _toggle("Hear my keys through the track")
 	_through_track.tooltip_text = "With the track's fader and effects, and recorded exactly where you heard them. Off, they play straight out, sooner, but notes you record can land tens of milliseconds late."
@@ -675,11 +683,12 @@ func _place_mic() -> void:
 	if _keys_box.get_parent() != home:
 		_keys_box.reparent(home, false)
 	home.move_child(_keys_box, home.get_children().find(_mic_box))
-	# A keytar in hand plays through GuestMidi regardless of whether Reaper records its own MIDI
-	# input (GuestMidi.plays): "anyone's with a keytar". Without this, a host or solo player on
-	# Reaper had no way back into "Play into" to choose where their keytar's notes land, and fell
-	# through to take_track()'s own guess (the first armed, non-microphone track).
-	_keys_box.visible = guest or host_records or Session.guest_midi.keytar
+	# An instrument in reach (a keytar in hand, the harp...) plays through GuestMidi regardless of
+	# whether Reaper records its own MIDI input (GuestMidi.plays): "anyone's with an instrument".
+	# Without this, a host or solo player on Reaper had no way back into "Play into" to choose
+	# where their instrument's notes land, and fell through to take_track()'s own guess (the
+	# first armed, non-microphone track).
+	_keys_box.visible = guest or host_records or Session.guest_midi.has_instruments()
 
 
 ## A dropdown of the project's tracks, rebuilt only when they changed: rebuilding closes it
@@ -768,9 +777,9 @@ func _refresh_midi() -> void:
 	else:
 		_midi_status.text = "Listening to %s." % ", ".join(gm.devices)
 		_midi_button.text = "Rescan"
-	# Matches take_track()'s own fallback: unset, a keytar (or a host whose DAW does not record
-	# its own input) still lands on the first armed track, never nowhere.
-	_fill_tracks(_play_into, gm.target_track, "The armed track" if gm.host_records() or gm.keytar else "Nowhere")
+	# Matches take_track()'s own fallback: unset, an instrument in reach (or a host whose DAW does
+	# not record its own input) still lands on the first armed track, never nowhere.
+	_fill_tracks(_play_into, gm.target_track, "The armed track" if gm.host_records() or gm.has_instruments() else "Nowhere")
 	if _monitor.button_pressed != gm.monitor:
 		_monitor.set_pressed_no_signal(gm.monitor)
 	_monitor.disabled = not MonitorSynth.available()
@@ -782,6 +791,7 @@ func _refresh_midi() -> void:
 			+ ("\nPlayed by its own audio node, %.1f ms from key to output, before your sound card's own." % late
 					if gm.synth.native != null else ""))
 	_monitor_volume.editable = gm.monitor and MonitorSynth.available()
+	_item_latency.text = item_latency_text(AudioServer.get_output_latency())
 	_through_track.visible = gm.host_records()
 	if _through_track.button_pressed != gm.through_track:
 		_through_track.set_pressed_no_signal(gm.through_track)
@@ -820,6 +830,15 @@ func _refresh_take() -> void:
 				_track_name(t["track"]), DAW.state.bar_beat(t["start"]) if DAW.state != null else ""]
 	else:
 		_take_status.text = "Ready. Your keys go onto %s when %s." % [_track_name(gm.take_track()), when]
+
+
+## The item path's lateness, said beside the keys': "Bells  ·  12 ms", and over
+## InstrumentItem.LATENCY_MOST, that it is (in words, not only by colour).
+static func item_latency_text(seconds: float) -> String:
+	var ms := seconds * 1000.0
+	if seconds > InstrumentItem.LATENCY_MOST:
+		return "Bells  ·  %.0f ms, over %d" % [ms, roundi(InstrumentItem.LATENCY_MOST * 1000.0)]
+	return "Bells  ·  %.0f ms" % ms
 
 
 static func _track_name(index: int) -> String:

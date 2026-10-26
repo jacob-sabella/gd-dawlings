@@ -150,6 +150,11 @@ var dwell_seconds := 0.0
 ## Off by default, because quantising a mix engineer's fader without being asked is taking
 ## resolution away from someone who had a use for it.
 var step := 0.0
+## How far apart a pinch's thumb and fingertip may be, against what is right for a hand of their
+## size (HandPose: in under 18 mm, out over 30 mm on the reference hand). Up for fingers that do
+## not close all the way, or that tremble while held; down for someone whose hand at rest has its
+## fingertips near the thumb. 1 is the measured default.
+var finger_scale := 1.0
 
 # --- derived geometry -----------------------------------------------------------------------
 

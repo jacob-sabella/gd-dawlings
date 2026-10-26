@@ -74,12 +74,14 @@ func _here() -> Array:
 	return DAW.state.regions[i] if i >= 0 else []
 
 
-## What ADD would call it: the marker at the loop's start, or the next "Region N".
+## What ADD would call it: the section of the marker at the loop's start (its name without the
+## harmony's brackets), or the next "Region N" when there is none or it is only brackets.
 func next_name() -> String:
 	var s := DAW.state
 	var at := DAWBackend.marker_key(s.markers, s.loop_start)
-	if not is_nan(at) and str(s.markers[at]) != "":
-		return str(s.markers[at])
+	var section := Harmony.section_of(str(s.markers[at])) if not is_nan(at) else ""
+	if section != "":
+		return section
 	var n := 1
 	var taken: Array = s.regions.map(func(r): return str(r[2]))
 	while "Region %d" % n in taken:

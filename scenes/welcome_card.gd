@@ -19,6 +19,7 @@ const LINES := [
 	["Change things", "Click, drag or scroll any control. Hover over it first to see what it does."],
 	["Record", "Press a channel's red key to arm it, then REC on the tape deck."],
 	["Your keys and mic", "M opens the session panel: \"Play with the computer keys\", \"Open MIDI\", your microphone."],
+	["Your fingertips", "T makes J K L ; play the song's chord: root, third, fifth and top. T, Esc or a click gives them back."],
 	["Play with friends", "M, then \"Host a session\", or type a friend's address and \"Join\". See the README."],
 	["Headphones", "H puts them on. Best when you record, so the song does not end up in your microphone."],
 ]

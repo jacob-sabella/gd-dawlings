@@ -627,10 +627,10 @@ func _process(_delta: float) -> void:
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
 	if OS.has_feature("template"):
 		# A sent-out build: what it is, and where the rest is said (WelcomeCard).
-		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  F2 2D view  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back" % [
+		_hud.text = "dawlings  |  %s  |  %s  |  %d track(s)  |  F1 help  |  F2 2D view  |  M session  |  WASD walk / right-drag look  |  F focus / shift-F back  |  T fingertips J K L ;" % [
 			role_name, DAW.summary(), _track_count()]
 		return
-	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
+	_hud.text = "dawlings  |  %s / %s  |  %s  |  %d track(s)  |  F focus / shift-F back / esc release  |  G bring gear to you  |  WASD walk / shift run / space jump / right-drag look  |  N %s  |  V venue: %s  |  E expand desk  |  Q put down / hold R throw / 1-3 pockets  |  T fingertips J K L ;  |  P jack / shift-P unplug  |  M session  |  +/- text size  |  tab move gear  |  drag stands to roll them" % [
 		role_name, medium_name, DAW.summary(), _track_count(),
 		"god mode" if studio.god_mode else "walking",
 		studio.venue.title() if studio.venue != null else "room"]

@@ -472,6 +472,58 @@ func tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
 
 
+## Where the chord harp stands (ChordHarp), in studio space: its feet on the floor under its
+## strings, turned so whoever plays it faces the back wall. Against the live room's back wall,
+## behind the bricks table: the side away from the prop shelf, the mirror and the wardrobe, the
+## roulette door and the Tour case, out of the zones and of the way to the keyboard stand. Walk
+## round the table and it is in front of you.
+func harp_spot() -> Transform3D:
+	var at := zones()
+	var x := live_room_half() - (LIVE_ROOM_HALF - (ZONES[&"bricks"] as AABB).get_center().x)
+	if at.has(&"bricks"):
+		x = (at[&"bricks"] as AABB).get_center().x
+	# Its plinth's back a hand's width off the wall.
+	var z := LIVE_ROOM_BACK - 0.05 - 0.08 - (ChordHarp.FOOT.y - ChordHarp.FOOT_Z)
+	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
+
+
+## Where the handbells' stand stands (HandbellItem.stand), in studio space: beside the chord harp,
+## its back in line with the harp's plinth, facing the same way, so whoever walks round the
+## bricks table to the harp finds the bells at their elbow. On the harp's high side, `BELL_SIDE`,
+## a hand's width clear of its plinth.
+const BELL_SIDE := 1.0
+const BELL_GAP := 0.12
+
+
+func bell_stand_spot() -> Transform3D:
+	var along := ChordHarp.FOOT.x + BELL_GAP + HandbellItem.STAND.x * 0.5
+	var back := ChordHarp.FOOT_Z - ChordHarp.FOOT.y + HandbellItem.STAND.y * 0.5
+	return harp_spot() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
+
+
+## Where handbell `n` (1 to 4) lives, in studio space: on its seat on the stand, mouth down, its
+## tab toward the room (HandbellItem.seat).
+func bell_spot(n: int) -> Transform3D:
+	return bell_stand_spot() * HandbellItem.seat(n)
+
+
+## Where the fifths wheel stands (FifthsWheel.on_stand), in studio space: on the bricks table,
+## the bottom edge of its board WHEEL_IN in from the table's end nearest the control room, facing
+## back toward it. So whoever walks back from the desk meets it at the end of the table, where
+## both hands reach it and the table's length is behind it. Null where there is no bricks table
+## (the Rig Roulette room has no zones).
+const WHEEL_IN := 0.06
+
+
+func wheel_spot() -> Variant:
+	var at := zones()
+	if not at.has(&"bricks"):
+		return null
+	var c := (at[&"bricks"] as AABB).get_center()
+	return Transform3D(Basis(Vector3.UP, PI),
+			Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z - ZoneKit.TABLE_TOP.z * 0.5 + WHEEL_IN))
+
+
 ## Where the Rig Roulette station hangs, in studio space: on the control room's own back wall,
 ## within reach of the console rather than tucked away in the back of house like the Tour case --
 ## this is a thing the whole band gathers around between takes, not a run's own opening move.
@@ -576,8 +628,10 @@ func mic_spot() -> Variant:
 	return at * Transform3D(along, ZoneKit.mic_clip() - along * Vector3(0, MicItem.AXIS_HEIGHT, 0))
 
 
-## Everything the venue puts on the floor that stops a person: the zones' dressing and the prop
-## shelf. What the walker is given.
+## Everything the venue puts on the floor that stops a person: the zones' dressing, the prop
+## shelf and what stands about the room with it (the door, the hoop, the Tour case, the harp and
+## the bells' stand).
+## What the walker is given.
 func solids() -> Array:
 	var out := zone_solids()
 	if prop_shelf_solid():
@@ -590,6 +644,8 @@ func solids() -> Array:
 				"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
 		out.append_array(Hoop.solids(hoop_spot()))
 		out.append_array(TourCase.solids(tour_case_spot()))
+		out.append(ChordHarp.solid(harp_spot()))
+		out.append(HandbellItem.stand_solid(bell_stand_spot()))
 	return out
 
 

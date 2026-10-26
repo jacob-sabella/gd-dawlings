@@ -12,7 +12,8 @@ extends Node
 ##
 ## Every note also goes to everyone as it is played (Session.send_note), the host's keys and
 ## guests' alike, for whoever has a plug in this player's keys (TheirKeys), stamped with the song
-## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor).
+## position it was played to (`song`), for whoever has a plug in their monitor (TheirMonitor),
+## and with what played it (`source`: the keytar, the harp, the fingertips...; `instruments`).
 ##
 ## A take follows the host's transport: it begins when the guest HEARS the host start recording
 ## and ends when it hears the recording stop -- heard, not told, so the take's edges are on the
@@ -21,6 +22,9 @@ extends Node
 signal changed()
 ## A key down or up, wherever it was played from: for the keytar in this player's hands to show.
 signal key(pitch: int, down: bool)
+## A note on or off (Session.Note's ON, OFF) as it is sent to everyone, with the song position and
+## source it went with: for this player's keys' own jack (`keys:P`, Jacks), which passes it on.
+signal note(kind: int, pitch: int, velocity: int, song: float, source: StringName)
 
 ## Notes from MIDI devices and from the computer keyboard both land here. MIDI comes from the
 ## monitor keys' helper where it runs (NativeKeys: read from the sequencer the moment it
@@ -38,22 +42,21 @@ var record_with_host := true:
 			_commit()
 		record_with_host = v
 		changed.emit()
-## Hear my own keys, locally.
-## A keytar in this player's hands (KeytarItem): their keys are played, sent and taken down
-## whatever this machine is, a host or alone too, and a take with no track chosen goes on the
-## armed one (HitRecorder.armed_track).
-var keytar := false:
+## The instruments in this player's reach that play their keys: {name: true}, from `&"keytar"`,
+## `&"harp"`, `&"fingertips"`, `&"cable"` and `&"wheel"`. While any is here, their keys are
+## played, sent and taken down whatever this machine is, a host or alone too, and a take with no
+## track chosen goes on the armed one (HitRecorder.armed_track). Each instrument puts in and takes
+## out only its own name (`reach`), so one leaving never takes another's away. An instrument is
+## in reach before it plays, so the synth is running by its first note, and stays in between
+## notes, so a recording is one take across the gaps between strums, not one per strum.
+var instruments := {}
+## A keytar in this player's hands (KeytarItem): `&"keytar"` in `instruments`.
+var keytar: bool:
+	get:
+		return instruments.has(&"keytar")
 	set(v):
-		if v == keytar:
-			return
-		keytar = v
-		if Session.role != Session.Role.GUEST:
-			if v:
-				synth.start()
-			else:
-				_release_all()
-				synth.stop()
-		changed.emit()
+		reach(&"keytar", v)
+## Hear my own keys, locally.
 var monitor := true:
 	set(v):
 		monitor = v
@@ -107,8 +110,14 @@ var heard_source: Callable = Callable()
 ## sent when the song wraps round its loop; 0.0 (default) sends only when recording stops, as
 ## before. Set by Tour during a brief that needs parts ticked live (Tour.take_roll_seconds).
 var roll_every := 0.0
-## Pitches down right now, for the panel's keys and for closing them if the guest leaves.
+## Pitches down right now, for the panel's keys and for closing them if the guest leaves:
+## {pitch: velocity}, whatever is holding them. What holds each is counted in `_down`.
 var held := {}
+## What has each pitch down (KeysDown), by source: a pitch two instruments hold sounds until
+## both have let it go.
+var _down := KeysDown.new()
+## The sources played into the running take, in the order they first played, to name it by.
+var _take_sources: Array = []
 
 
 func _ready() -> void:
@@ -154,10 +163,38 @@ func _route_midi() -> void:
 	changed.emit()
 
 
-## Whether keys played here are this machine's to play: a guest's always, anyone's with a keytar,
-## and a host's whose DAW does not record its own inputs (`host_records`).
+## `name` come into this player's reach (`on`) or gone out of it: the only writer of
+## `instruments`. Off the session's keys (not a guest, whose synth always runs), the synth is
+## started when the first instrument comes and stopped when the last goes. What the one going
+## still had down is let go.
+func reach(name: StringName, on: bool) -> void:
+	if on == instruments.has(name):
+		return
+	var had := has_instruments()
+	if on:
+		instruments[name] = true
+	else:
+		instruments.erase(name)
+		for pitch in _down.held_by(name):
+			note_off(pitch, 0, 0.0, false, name)
+	if Session.role != Session.Role.GUEST and had != has_instruments():
+		if on:
+			synth.start()
+		else:
+			_release_all()
+			synth.stop()
+	changed.emit()
+
+
+## Whether any instrument is in this player's reach (`instruments`).
+func has_instruments() -> bool:
+	return not instruments.is_empty()
+
+
+## Whether keys played here are this machine's to play: a guest's always, anyone's with an
+## instrument in reach, and a host's whose DAW does not record its own inputs (`host_records`).
 func plays() -> bool:
-	return Session.role == Session.Role.GUEST or keytar or host_records()
+	return Session.role == Session.Role.GUEST or has_instruments() or host_records()
 
 
 ## A host (or someone alone) on a DAW that cannot record its own inputs, the built-in engine:
@@ -167,12 +204,12 @@ func host_records() -> bool:
 			and not DAW.can(DAWBackend.Capability.RECORDS_OWN_INPUTS)
 
 
-## The track a take goes on: the one chosen, or with a keytar or as such a host and none chosen,
-## the first armed one that does not take a microphone.
+## The track a take goes on: the one chosen, or with an instrument in reach or as such a host and
+## none chosen, the first armed one that does not take a microphone.
 func take_track() -> int:
 	if target_track > 0:
 		return target_track
-	if not (keytar or host_records()) or DAW.state == null:
+	if not (has_instruments() or host_records()) or DAW.state == null:
 		return 0
 	for index in GuestAudio._armed():
 		if not DAW.state.input_of(index).begins_with("audio:"):
@@ -210,7 +247,7 @@ func _on_role_changed() -> void:
 	_take = null
 	_release_all()
 	synth.stop()
-	if keytar:
+	if has_instruments():
 		synth.start()
 	_route_midi()
 	target_track = 0
@@ -236,7 +273,12 @@ func _input(event: InputEvent) -> void:
 
 ## A key down. `age`: how long ago it went down, for a note that was heard before it got here
 ## (the helper's); `sounded`: whether it has been heard already, so it is not played twice.
-func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false) -> void:
+## `source`: what played it (`instruments`' names, `&""` for plain keys), sent with it and
+## counted in `held`. `at`: the song position it was played to, when the one who played it
+## already knows (a note from another player's instrument); NAN for now, `stamp()`. The take and
+## the sent note both take it.
+func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := false,
+		source := &"", at := NAN) -> void:
 	_hear_host_keys()
 	var plugin = _track_plugin()
 	if plugin != null:
@@ -245,26 +287,44 @@ func note_on(pitch: int, velocity: int, channel := 0, age := 0.0, sounded := fal
 		_plugin_notes[pitch] = plugin
 	elif not sounded:
 		synth.note_on(pitch, velocity)
-	Session.send_note(Session.Note.ON, pitch, velocity, song(age))
+	var timed := not is_nan(at)
+	var sent := at if timed else song(age)
+	Session.send_note(Session.Note.ON, pitch, velocity, sent, source)
+	note.emit(Session.Note.ON, pitch, velocity, sent, source)
+	_down.press(pitch, source, velocity)
 	held[pitch] = velocity
 	key.emit(pitch, true)
 	if _take != null:
-		_take.note_on(pitch, velocity, channel, stamp(age))
+		_take.note_on(pitch, velocity, channel, at if timed else stamp(age))
+		_take_played(source)
 	changed.emit()
 
 
-func note_off(pitch: int, channel := 0, age := 0.0, sounded := false) -> void:
+## A key up, as `note_on` has it. Sent whatever else holds the pitch, so whoever plays this
+## player's instruments elsewhere hears that one let go; but here the pitch sounds on, and stays
+## in the take, until the last source holding it lets go (`_down`). An up from a source that
+## never had down a pitch another source holds touches nothing.
+func note_off(pitch: int, channel := 0, age := 0.0, sounded := false, source := &"",
+		at := NAN) -> void:
+	if not _down.holds(pitch, source) and _down.is_down(pitch):
+		return
+	var timed := not is_nan(at)
+	var sent := at if timed else song(age)
+	Session.send_note(Session.Note.OFF, pitch, 0, sent, source)
+	note.emit(Session.Note.OFF, pitch, 0, sent, source)
+	if not _down.let_go(pitch, source):
+		changed.emit()
+		return
 	if _plugin_notes.has(pitch):
 		# Off on the plugin it went on, though the keys have moved to another track since.
 		_plugin_notes[pitch].note_off(pitch, channel)
 		_plugin_notes.erase(pitch)
 	elif not sounded:
 		synth.note_off(pitch)
-	Session.send_note(Session.Note.OFF, pitch, 0, song(age))
 	held.erase(pitch)
 	key.emit(pitch, false)
 	if _take != null:
-		_take.note_off(pitch, channel, stamp(age))
+		_take.note_off(pitch, channel, at if timed else stamp(age))
 	changed.emit()
 
 
@@ -286,7 +346,7 @@ var _plugin_notes := {}
 ## The instrument plugin the host's keys play, when they go through the track (`through_track`)
 ## and its track has one (the built-in engine's, DAW.track_instrument); null otherwise.
 func _track_plugin() -> Object:
-	if keytar or not through_track or not host_records():
+	if has_instruments() or not through_track or not host_records():
 		return null
 	return DAW.track_instrument(take_track())
 
@@ -367,7 +427,7 @@ func _process(_delta: float) -> void:
 			_host_synth = false
 			synth.set_bus(&"")
 			synth.allow_native = OS.get_environment("R3D_GODOT_KEYS") != "1"
-			if not keytar:
+			if not has_instruments():
 				_release_all()
 				synth.stop()
 		return
@@ -389,7 +449,7 @@ func _process(_delta: float) -> void:
 ## Started when MIDI is opened or the first key is played, not before, so a host who never plays
 ## never has it running.
 func _hear_host_keys() -> void:
-	if _host_synth or keytar or not host_records():
+	if _host_synth or has_instruments() or not host_records():
 		return
 	_host_synth = true
 	if synth.is_running():
@@ -422,9 +482,12 @@ func follow(h: Dictionary) -> void:
 			_take = MidiTake.new()
 			_take.begin(h["seconds"])
 			_take_track = take_track()
+			_take_sources.clear()
 			# Keys already down when the take starts are in it from its first moment.
 			for pitch in held:
 				_take.note_on(pitch, held[pitch], 0, h["seconds"])
+				for source in _down.sources_of(pitch):
+					_take_played(source)
 			changed.emit()
 		_take.reach(h["seconds"])
 	elif _take != null:
@@ -441,7 +504,7 @@ func _commit() -> void:
 	var notes: Array = done["notes"]
 	if not notes.is_empty() and _take_track > 0:
 		takes_sent += 1
-		var name := "%s %s %d" % [Session.local_name, "keytar" if keytar else "take", takes_sent]
+		var name := "%s %s %d" % [Session.local_name, take_name(_take_sources), takes_sent]
 		var onto := take_tracks()
 		for index in onto:
 			DAW.insert_midi_take(index, done["start"], done["end"], notes, name)
@@ -450,11 +513,34 @@ func _commit() -> void:
 	changed.emit()
 
 
-## Every key down let go: heard, sent and shown, as if each were.
+## `source` played into the running take: kept, to name the take by. Plain keys played with
+## the keytar in hand are the keytar's, as they show on it.
+func _take_played(source: StringName) -> void:
+	var played := source
+	if played == &"":
+		played = &"keytar" if keytar else &"keys"
+	if played not in _take_sources:
+		_take_sources.append(played)
+
+
+## What a take is called after what played in it (`_take_played`): `harp`, `harp+fingertips`,
+## `keytar`, and `take` for plain keys alone, as every take was before there were instruments.
+static func take_name(played: Array) -> String:
+	if played.is_empty() or played == [&"keys"]:
+		return "take"
+	return "+".join(PackedStringArray(played.map(func(s: StringName) -> String: return String(s))))
+
+
+## Every key down let go, by whatever holds it: heard, sent and shown, as if each were.
 func _release_all() -> void:
 	for pitch in held.keys():
-		note_off(pitch)
+		var sources := _down.sources_of(pitch)
+		if sources.is_empty():
+			note_off(pitch)
+		for source in sources:
+			note_off(pitch, 0, 0.0, false, source)
 	held.clear()
+	_down.clear()
 
 
 ## Tracks were added or removed on the host: the chosen track is still the same track, and none

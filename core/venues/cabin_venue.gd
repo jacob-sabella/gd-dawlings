@@ -1483,7 +1483,8 @@ func _dress_zones() -> void:
 	var bench: AABB = z[&"bricks"]
 	ZoneKit.table(bricks, ZoneKit.TABLE_TOP, ZoneKit.TABLE_HEIGHT, 0.08, pine, frame)
 	_dress_prop_shelf(pine, frame)
-	var on_table := Vector3(0.25, ZoneKit.TABLE_HEIGHT + 0.001, -0.75)
+	# At the far end: the near end is the fifths wheel's (Venue.wheel_spot).
+	var on_table := Vector3(0.25, ZoneKit.TABLE_HEIGHT + 0.001, 0.75)
 	_lantern("TableLantern", bench.get_center() * Vector3(1, 0, 1) + on_table)
 	ZoneKit.spot_down(bricks, Vector3(0, roof_at(bench.get_center().x) - 0.5, 0), Color(1.0, 0.72, 0.45),
 			2.2, 50.0, 4.4, iron)

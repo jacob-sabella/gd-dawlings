@@ -92,12 +92,21 @@ signal item_flown(item: StringName, pose: Transform3D, mode: int, from: int)
 signal item_used(item: StringName, down: bool, from: int)
 ## A key or the pedal on `from`'s keys, as they play it (`send_note`): for anyone patched into
 ## their keys to play here (TheirKeys), or into their monitor (TheirMonitor). `song`: the song
-## position they were hearing as they played it, or -1 with their transport stopped. Reliable
-## and ordered, because a lost note-off is a note that never stops.
-signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float)
+## position they were hearing as they played it, or -1 with their transport stopped. `source`:
+## what of theirs played it (GuestMidi.instruments' names, `&""` for plain keys), so a note can
+## be heard from the instrument that played it. Reliable and ordered, because a lost note-off is
+## a note that never stops.
+signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float, source: StringName)
 ## An instrument in `from`'s hand shaken into a hit (InstrumentItem), `velocity` 1 to 127: for
-## everyone else to hear from their hand. A click is a use (`item_used`), not this.
-signal item_hit(item: StringName, velocity: int, from: int)
+## everyone else to hear from their hand. A click on percussion is a use (`item_used`), not this;
+## a click on a pitched item (a handbell) is this too. `song`: the song position they played it
+## to (the hit's one stamp, InstrumentItem.played's `at`), or -1 when not known, so a pitched item
+## rings here the note it rang there, whenever it arrives.
+signal item_hit(item: StringName, velocity: int, from: int, song: float)
+## An event down a jack into this player's instrument (docs/spatial_loop.md slice 6): `source`'s
+## (an item's id, `harp`, `keys:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER), sent by `from`
+## at song position `song` (-1 for not known), passed on by the host to this player alone (Jacks).
+signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float)
 
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
@@ -165,6 +174,15 @@ const AUDIO_TAKE_CHANNEL := 3
 const MOTION_CHANNEL := 4
 ## Notes as they are played: their own channel, so a key is never queued behind a room update.
 const KEYS_CHANNEL := 5
+## The longest a note's source may be (`send_note`): an instrument's name. Anything longer that
+## a guest sends is taken as plain keys.
+const NOTE_SOURCE_MAX := 24
+## Host: the studio's word on a jack's event (`send_jack`): (to, source, from) -> String, empty
+## when the room's patch sends `source` into `to` and `from` is the one who plays it
+## (Jacks.send_refusal). Unset, nothing is passed: there is no room here to say.
+var jack_check: Callable = Callable()
+## Host: how many jack events have been refused, for the probe and the suite.
+var jacks_refused := 0
 ## Host: the take each guest is sending now, by peer id -- {id, take, track, start, name, refused}.
 var _incoming_takes := {}
 ## Takes written on this host this run, for naming their files.
@@ -188,7 +206,8 @@ var layout: LayoutProfile = null
 ## [track, fx, plugin name, x, z, heading]}, "floor": {piece id: [x, z, heading]}, "placed":
 ## {surface id: Transform3D}, "items": {item id: [x, y, z, yaw] on the floor -- and, while it is
 ## in the air, [..., throws, origin, velocity, spin] -- or [] in a hand, [true] on a head},
-## "patches": {peer id: [SEND socket per tablet receiver, "" for none]}}
+## "patches": {peer id: [SEND socket per tablet receiver, "" for none]},
+## "jacks": {source: sink}, where each instrument's output jack goes (Jacks)}
 ## -- the venue, the plugins out on stands, where every stand and
 ## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
@@ -1065,7 +1084,11 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"throw_item": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3, TYPE_VECTOR3],
 		&"wear_item": [TYPE_STRING_NAME, TYPE_BOOL], &"pocket_item": [TYPE_STRING_NAME, TYPE_INT], &"patch": [TYPE_INT, TYPE_STRING_NAME],
 		&"on_air": [TYPE_BOOL], &"take_personal": [TYPE_STRING_NAME], &"board_source": [TYPE_STRING_NAME],
-		&"open_track_rack": [TYPE_INT, TYPE_FLOAT, TYPE_FLOAT], &"close_track_rack": [TYPE_STRING_NAME]}
+		&"open_track_rack": [TYPE_INT, TYPE_FLOAT, TYPE_FLOAT], &"close_track_rack": [TYPE_STRING_NAME],
+		# An instrument's output jack into a sink (Jack), or unplugged (an empty sink).
+		&"plug": [TYPE_STRING_NAME, TYPE_STRING_NAME],
+		# The fifths wheel's SET: the bar it writes at and the brackets' inside (FifthsWheel).
+		&"harmony": [TYPE_INT, TYPE_STRING]}
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.
@@ -1210,61 +1233,135 @@ func _item_use(item: StringName, down: bool, from: int) -> void:
 	item_used.emit(item, down, from)
 
 
-## A shake of the instrument in my hand, to everyone else.
-func send_item_hit(item: StringName, velocity: int) -> void:
+## A shake of the instrument in my hand, to everyone else, with the song position it was played
+## to (`song`, -1 for not known).
+func send_item_hit(item: StringName, velocity: int, song := -1.0) -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_item_hit.rpc_id(id, item, velocity, local_peer_id)
+			_item_hit.rpc_id(id, item, velocity, local_peer_id, song)
 	else:
-		_item_hit_up.rpc_id(1, item, velocity)
+		_item_hit_up.rpc_id(1, item, velocity, song)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit_up(item: StringName, velocity: int) -> void:
+func _item_hit_up(item: StringName, velocity: int, song: float) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
 	velocity = clampi(velocity, 1, 127)
-	item_hit.emit(item, velocity, from)
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	item_hit.emit(item, velocity, from, song)
 	for id in _audience():
 		if id != from:
-			_item_hit.rpc_id(id, item, velocity, from)
+			_item_hit.rpc_id(id, item, velocity, from, song)
 
 
 @rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit(item: StringName, velocity: int, from: int) -> void:
-	item_hit.emit(item, velocity, from)
+func _item_hit(item: StringName, velocity: int, from: int, song: float) -> void:
+	item_hit.emit(item, velocity, from, song)
 
 
 ## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and
 ## come in tens a second at most, so they go to everyone rather than being asked for; whoever is
-## patched into my keys plays them.
-func send_note(kind: int, pitch: int, velocity: int, song := -1.0) -> void:
+## patched into my keys plays them. `source`: what played it (GuestMidi.instruments).
+func send_note(kind: int, pitch: int, velocity: int, song := -1.0, source := &"") -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_note.rpc_id(id, kind, pitch, velocity, local_peer_id, song)
+			_note.rpc_id(id, kind, pitch, velocity, local_peer_id, song, source)
 	else:
-		_note_up.rpc_id(1, kind, pitch, velocity, song)
+		_note_up.rpc_id(1, kind, pitch, velocity, song, source)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _note_up(kind: int, pitch: int, velocity: int, song: float) -> void:
+func _note_up(kind: int, pitch: int, velocity: int, song: float, source: StringName) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
-	note_played.emit(kind, pitch, velocity, from, song)
+	if String(source).length() > NOTE_SOURCE_MAX:
+		source = &""
+	note_played.emit(kind, pitch, velocity, from, song, source)
 	for id in _audience():
 		if id != from:
-			_note.rpc_id(id, kind, pitch, velocity, from, song)
+			_note.rpc_id(id, kind, pitch, velocity, from, song, source)
 
 
 @rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
-func _note(kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
-	note_played.emit(kind, pitch, velocity, from, song)
+func _note(kind: int, pitch: int, velocity: int, from: int, song: float, source: StringName) -> void:
+	note_played.emit(kind, pitch, velocity, from, song, source)
+
+
+## An event down `source`'s jack into player `to`'s instrument, at song position `song` (-1 for
+## not known): up to the host, which checks it (`jack_refusal`) and passes it on to `to` alone.
+## Reliable, on the keys' channel with the notes, because a lost note-off is a note that never
+## stops. docs/spatial_loop.md slice 6.
+func send_jack(to: int, source: StringName, kind: int, pitch: int, velocity: int, song := -1.0) -> void:
+	if not _connected():
+		return
+	if role == Role.HOST:
+		_pass_jack(to, source, kind, pitch, velocity, song, local_peer_id)
+	else:
+		_jack_up.rpc_id(1, to, source, kind, pitch, velocity, song)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _jack_up(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	_pass_jack(to, source, kind, pitch, velocity, song, from)
+
+
+## Host: `from`'s jack event, checked, and passed on to `to` (or played here, when `to` is the
+## host). Its numbers are kept in bounds before anyone plays them. Whether it passed.
+func _pass_jack(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float,
+		from: int) -> bool:
+	if kind < Jack.Kind.NOTE_ON or kind > Jack.Kind.TRIGGER or jack_refusal(to, source, from) != "":
+		jacks_refused += 1
+		return false
+	pitch = clampi(pitch, 0, 127)
+	velocity = clampi(velocity, 0, 127)
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	if to == local_peer_id:
+		jack_played.emit(source, kind, pitch, velocity, from, song)
+	else:
+		_jack.rpc_id(to, source, kind, pitch, velocity, from, song)
+	return true
+
+
+## Host: why `from`'s event down `source`'s jack may not go into `to`, or empty if it may. Both
+## are in the room, they are not the same player, and the room's patch and who plays the source
+## say so (`jack_check`).
+func jack_refusal(to: int, source: StringName, from: int) -> String:
+	if not _is_member(to):
+		return "player %d is not in the room" % to
+	if not _is_member(from):
+		return "player %d is not in the room" % from
+	if to == from:
+		return "a jack goes into a bandmate, not into yourself"
+	if not Jack.valid_source(source):
+		return "there is no such jack"
+	if not jack_check.is_valid():
+		return "there is no room here to say where it goes"
+	return str(jack_check.call(to, source, from))
+
+
+@rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
+func _jack(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
+	jack_played.emit(source, kind, pitch, velocity, from, song)
+
+
+## Host: words for `peer` alone, here if it is the host itself.
+func tell(peer: int, text: String) -> void:
+	if peer == local_peer_id:
+		notice.emit(text)
+	elif role == Role.HOST and _connected() and _is_member(peer):
+		_told.rpc_id(peer, text)
 
 
 ## The round trip to `peer` in milliseconds, as the connection measures it: a host knows it for

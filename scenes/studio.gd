@@ -93,6 +93,8 @@ const PATCH_STAND_AT := Vector3(SessionLayout.PATCH_AT.x, 0, SessionLayout.PATCH
 const PATCH_STAND_HEADING := SessionLayout.PATCH_HEADING
 const PATCH_BAY_TOP := 1.78
 const PATCH_BAY_FRONT := 0.03
+## How far up the arm from MY KEYS the wrist's INTO ME socket is worn (m): clear of both reaches.
+const WRIST_IN_APART := 0.06
 const PATCH_CABINET_DEPTH := 0.12
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
@@ -150,10 +152,30 @@ var their_keys: TheirKeys
 var their_monitor: TheirMonitor
 ## The hand percussion played here, taken down onto the armed track while recording.
 var hit_recorder: HitRecorder
+## Where a hit played here goes out to the room: Session.send_item_hit, or the suite's.
+var send_item_hit: Callable = Session.send_item_hit
+## Every instrument's output jack: where its hits are recorded (docs/spatial_loop.md slice 5), or
+## the bandmate they play into (slice 6). The room's patch, like `patches`.
+var jacks: Jacks
+## This player's own keys' jack, on their left wrist in a headset (HandSkeleton.wrist) and on
+## the left controller while that hand holds one; P with an empty hand on a desktop.
+var wrist_jacks: Array[JackSocket] = []
 ## The computer keyboard as the keytar's keys, while it is in this player's hands (KeytarItem).
 var keytar_keys: KeyCatcher
 ## Whether the keytar is in this player's hands, as last seen: for GuestMidi to play it.
 var _keytar_mine := false
+## The desktop's fingertips' keys, J K L ; (docs/spatial_loop.md slice 8): while it has the
+## keyboard the mouse's fingers play notes and the mouse grabs nothing. T gives it the keys.
+var fingertip_keys: KeyCatcher
+## Each hand's fingertip notes: the mouse's on a desktop, each controller's in a headset.
+var fingertips: Array[FingertipNotes] = []
+var _told_fingertips := false
+## The chord harp against the live room's back wall (ChordHarp), stood again with each venue at
+## its `harp_spot`. Null in AR, where the room is a real one.
+var harp: ChordHarp
+## The circle-of-fifths wheel on the bricks table (FifthsWheel), stood again with each venue at
+## its `wheel_spot`: where the song's key and chords are written from the room. Null in AR.
+var wheel: FifthsWheel
 ## Who is ON AIR, by peer id: whose monitor anyone may plug into. The room's, like `patches`.
 var on_air: Array = []
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
@@ -461,6 +483,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	world_env.environment = env
 	add_child(venue)
 	_hang_the_roulette_door()
+	_stand_the_harp()
+	_stand_the_wheel()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
@@ -486,6 +510,71 @@ func _hang_the_roulette_door() -> void:
 	door.transform = venue.rig_roulette_door()
 	door.used.connect(_on_roulette_door_used)
 	venue.add_child(door)
+
+
+## The chord harp, in the venue's own frame at its spot: a child of the venue, so it goes with
+## it, and the venue's `solids` keep people out of it. Whatever the old one still had ringing
+## was let go as it went (`_exit_tree`).
+func _stand_the_harp() -> void:
+	harp = ChordHarp.new()
+	harp.transform = venue.harp_spot()
+	venue.add_child(harp)
+	if presence != null:
+		presence.harp = harp
+	# The handbells' stand beside it (the bells themselves are items: their homes are its seats).
+	var stand := HandbellItem.stand()
+	stand.transform = venue.bell_stand_spot()
+	venue.add_child(stand)
+
+
+## The fifths wheel, in the venue's own frame on the bricks table: a child of the venue, so it
+## goes with it. Each player's is their own (its key and strip); what SET writes is the song's.
+## None in a venue with no bricks table.
+func _stand_the_wheel() -> void:
+	wheel = null
+	var spot: Variant = venue.wheel_spot()
+	if spot == null:
+		return
+	wheel = FifthsWheel.new()
+	wheel.transform = FifthsWheel.on_stand(spot)
+	venue.add_child(wheel)
+
+
+## The wheel in this player's reach (`&"wheel"` in GuestMidi.instruments) while a hand of theirs
+## is on it or over it, or a chord pressed on it still sounds: so the synth is up before the
+## first press, and a run of presses is one take.
+func _follow_wheel() -> void:
+	if Session.guest_midi == null:
+		return
+	var near := wheel != null and is_instance_valid(wheel) and wheel.is_inside_tree() \
+			and (wheel.touched() or wheel.sounding())
+	Session.guest_midi.reach(FifthsWheel.SOURCE, near)
+
+
+## The harp in this player's reach (`&"harp"` in GuestMidi.instruments) while they stand near
+## it, a hand of theirs is on it or over it, or a string they plucked still rings: so the synth
+## is up before the first pluck, and the strums with gaps between them are one take.
+func _follow_harp() -> void:
+	if Session.guest_midi == null:
+		return
+	var near := false
+	if harp != null and is_instance_valid(harp) and harp.is_inside_tree():
+		var me := _standing_at()
+		var at := harp.global_position
+		near = harp.touched() or harp.ringing() \
+				or Vector2(me.x - at.x, me.z - at.z).length() < ChordHarp.NEAR
+	Session.guest_midi.reach(ChordHarp.SOURCE, near)
+
+
+## Where this player stands, in global space: the walker on a desktop, the head in a headset.
+func _standing_at() -> Vector3:
+	if walker != null and walker.is_inside_tree():
+		return walker.global_position
+	if rig != null and rig.head != null and rig.head.is_inside_tree():
+		return rig.head.global_position
+	if camera != null and camera.is_inside_tree():
+		return camera.global_position
+	return Vector3(0, 0, 1e6)
 
 
 static func in_roulette_room_venue(v: Venue) -> bool:
@@ -1303,7 +1392,7 @@ func room_state() -> Dictionary:
 			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
 			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
-			"track_racks": pulled}
+			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {}}
 
 
 func _publish_room() -> void:
@@ -1339,7 +1428,7 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	for p in _predictions:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item": pending_items[p["args"][0]] = true
-			&"patch", &"on_air": pass
+			&"patch", &"on_air", &"plug": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -1427,6 +1516,13 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == &"patch":
 				_set_patch(Session.local_peer_id, p["args"][0], p["args"][1], false)
 		_show_patches()
+	if jacks != null and state.has("jacks"):
+		var rows: Dictionary = (state["jacks"] as Dictionary).duplicate()
+		# This guest's plugs it has not heard back about, on top: an empty sink, unplugged.
+		for p in _predictions:
+			if p["verb"] == &"plug":
+				rows[String(p["args"][0])] = String(p["args"][1])
+		jacks.set_patch(rows)
 	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
 		_show_board(StringName(state["board"]))
 	_applying_room = false
@@ -1551,6 +1647,14 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"on_air":
 			_set_on_air(from, args[0])
 			_publish_room_soon()
+		&"plug":
+			# The hand that holds it, or anyone while it is home; into a track there is or a
+			# bandmate in the room; and whoever a jack goes into may take it out.
+			if jacks != null and _plug_refusal(args[0], args[1], from) == "":
+				var was := jacks.sink_of(args[0])
+				jacks.plug(args[0], args[1])
+				_tell_plugged(args[0], was, args[1], from)
+				_publish_room_soon()
 		&"open_tablet":
 			if floor_plan != null and DAW.state.fx(args[0], args[1], false) != null:
 				open_tablet(args[0], args[1], args[2], Vector2(args[3], args[4]))
@@ -1587,6 +1691,9 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 				open_track_rack(args[0], Vector2(args[1], args[2]))
 		&"close_track_rack":
 			close_track_rack(args[0])
+		&"harmony":
+			# A guest's SET on the fifths wheel: written at the bar they chose, if it reads.
+			FifthsWheel.answer(args[0], args[1])
 		&"board_source":
 			if board_sources().has(args[0]):
 				_show_board(args[0])
@@ -1638,6 +1745,9 @@ func _on_studio_placed(surface_id: StringName, where: Transform3D) -> bool:
 ## Joined someone: their room arrives on its own. Back on our own, or hosting: our own room, and
 ## as host, everyone is told what it is.
 func _on_role_changed() -> void:
+	# This player's keys are `keys:P` for whoever they are now.
+	if jacks != null:
+		jacks.show_all()
 	if Session.role == Session.Role.GUEST:
 		return
 	if _showing_hosts_room:
@@ -1910,6 +2020,7 @@ func _build_anchors() -> void:
 		mouse.camera = camera
 		mouse.name = "MouseHand"
 		add_child(mouse)
+		mouse.bare_jack.connect(_on_bare_jack)
 	else:
 		rig = XRRig.new()
 		rig.name = "XRRig"
@@ -2009,6 +2120,52 @@ func _build_anchors() -> void:
 	presence.head_node = head
 	presence.frame = room_anchor
 	add_child(presence)
+	presence.harp = harp
+	_lend_fingertips()
+
+
+## This player's fingertips as notes (FingertipNotes, docs/spatial_loop.md slice 8), one per hand:
+## each of the headset's, turned on by an open palm up; on a desktop the mouse's, whose fingers
+## are J K L ; on a KeyCatcher of their own (`fingertip_keys`), on while it has the keyboard (T).
+func _lend_fingertips() -> void:
+	if camera != null:
+		var mouse := get_node_or_null("MouseHand") as MouseInteractor
+		fingertip_keys = KeyCatcher.new()
+		fingertip_keys.name = "FingertipKeys"
+		fingertip_keys.layout = KeyCatcher.FINGERS
+		fingertip_keys.base = 0
+		fingertip_keys.octave_keys = false
+		fingertip_keys.velocity = FingertipNotes.KEY_VELOCITY
+		fingertip_keys.click_releases = true
+		add_child(fingertip_keys)
+		if mouse != null:
+			mouse.finger_source = fingertip_keys
+			_add_fingertips(mouse, null)
+	if rig != null:
+		for controller in rig.interactors:
+			_add_fingertips(rig.interactors[controller], rig.skeletons.get(controller) as HandSkeleton)
+
+
+func _add_fingertips(hand: Interactor, skeleton: HandSkeleton) -> void:
+	var notes := FingertipNotes.new()
+	notes.name = "Fingertips" + String(hand.get_parent().name if hand.get_parent() != self else hand.name)
+	notes.hand = hand
+	notes.skeleton = skeleton
+	if hand is MouseInteractor:
+		notes.catcher = fingertip_keys
+	add_child(notes)
+	fingertips.append(notes)
+
+
+## T on a desktop: the fingertips' keys on, or back to the studio. Said the first time.
+func toggle_fingertips() -> void:
+	if fingertip_keys == null:
+		return
+	var on := not fingertip_keys.is_active()
+	fingertip_keys.set_active(on)
+	if on and not _told_fingertips:
+		_told_fingertips = true
+		Session.notice.emit("Fingertips: J K L ; play the chord's root, third, fifth and top, held as long as the key. T, Esc or a click gives the keys back.")
 
 
 func _build_surfaces() -> void:
@@ -2291,8 +2448,8 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 # --- desktop camera -----------------------------------------------------------------------
 
-## The items' homes off the shelf: the headphones on their hook under it, and the mic in the
-## booth's stand, where the venue has one.
+## The items' homes off the shelf: the headphones on their hook under it, the handbells on their
+## stand by the harp, and the mic in the booth's stand, where the venue has one.
 func _item_homes() -> Dictionary:
 	if venue == null:
 		return {}
@@ -2303,6 +2460,8 @@ func _item_homes() -> Dictionary:
 			&"rcplane": venue.rcplane_spot()}
 	for n in 3:
 		out[StringName("dart%d" % (n + 1))] = venue.dart_spot(n)
+	for n in HandbellItem.COUNT:
+		out[StringName("bell%d" % (n + 1))] = venue.bell_spot(n + 1)
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
@@ -2378,18 +2537,37 @@ func _build_items() -> void:
 	hit_recorder = HitRecorder.new()
 	hit_recorder.name = "HitRecorder"
 	add_child(hit_recorder)
+	# Every hit's one song position is read from the take's own stamp (InstrumentItem.clock).
+	InstrumentItem.clock = hit_recorder.stamp
 	hit_recorder.unarmed.connect(func() -> void:
 		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
+	jacks = Jacks.new()
+	jacks.name = "Jacks"
+	jacks.recorder = hit_recorder
+	add_child(jacks)
+	jacks.asked.connect(_on_plug_asked)
+	# A cable into a bandmate ends at their ghost's glove; one into this player plays their keys.
+	jacks.far_end = func(peer: int, from: Vector3) -> Variant:
+		return presence.cable_end(peer, from) if presence != null else null
+	jacks.keys = Session.guest_midi
+	Session.jack_played.connect(jacks.received)
+	Session.jack_check = _jack_refusal
+	Session.participant_left.connect(_on_jack_player_left)
+	_wear_wrist_jacks()
+	# The sockets made before there were jacks to ask: shown now.
+	jacks.show_all()
+	items.child_exiting_tree.connect(_on_item_leaving)
 	items.played.connect(_on_item_played)
 	keytar_keys = KeyCatcher.new()
 	keytar_keys.name = "KeytarKeys"
 	add_child(keytar_keys)
+	# The keytar's piano plays the player's keys as the keytar (GuestMidi.instruments).
 	keytar_keys.note_on.connect(func(pitch: int, velocity: int) -> void:
 		if Session.guest_midi != null:
-			Session.guest_midi.note_on(pitch, velocity))
+			Session.guest_midi.note_on(pitch, velocity, 0, 0.0, false, &"keytar"))
 	keytar_keys.note_off.connect(func(pitch: int) -> void:
 		if Session.guest_midi != null:
-			Session.guest_midi.note_off(pitch))
+			Session.guest_midi.note_off(pitch, 0, 0.0, false, &"keytar"))
 	var keytar := items.items.get(&"keytar") as KeytarItem
 	if keytar != null:
 		keytar.wants_keys.connect(func() -> void: _keytar_play(true))
@@ -3317,11 +3495,195 @@ func _on_key_played(pitch: int, down: bool) -> void:
 
 
 ## An instrument played by a hand here: into the take, and, shaken, out to everyone else. A
-## click is out already, as a use.
-func _on_item_played(item: InstrumentItem, velocity: int, struck: bool) -> void:
-	hit_recorder.hit(item, velocity)
-	if not struck:
-		Session.send_item_hit(item.id, velocity)
+## click on percussion is out already, as a use; a pitched item's click is sent as a hit too,
+## since its ring is all a use of it is, and only a hit carries the song position (`at`) that
+## pitches it. The take and the room both get that one `at`.
+func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float) -> void:
+	# Onto the armed track, or the track its jack goes into.
+	jacks.hit(item, velocity, at)
+	if not struck or item.pitched():
+		send_item_hit.call(item.id, velocity, at)
+
+
+## A hand here stepped an instrument's jack (Jacks.asked): done here at once, and asked of the
+## host, whose table it is. One that plainly is not this player's to plug -- in somebody else's
+## hand, or lying on the floor -- is said instead, and nothing is asked.
+func _on_plug_asked(source: StringName, sink: StringName) -> void:
+	var item: Item = items.items.get(source) if items != null else null
+	if item == null and Jack.is_item(source):
+		return
+	var whose := "Your keys'" if Jack.keys_player(source) > 0 else "The %s's" % Jacks.source_name(source, item)
+	var why := _plug_refusal(source, sink, Session.local_peer_id, true)
+	if why != "":
+		Session.notice.emit("%s jack: %s." % [whose, why])
+		return
+	if Jack.keys_player(source) > 0 and sink == &"" and jacks.sink_of(source) == &"":
+		Session.notice.emit("Your keys' jack: there is nobody in the room to plug them into.")
+		return
+	var was := jacks.sink_of(source)
+	if not jacks.plug(source, sink):
+		return
+	if Session.is_authority():
+		_tell_plugged(source, was, sink, Session.local_peer_id)
+		_publish_room_soon()
+	else:
+		_predict(&"plug", [source, sink])
+	Session.notice.emit(plugged_text(source, item, was, sink))
+
+
+## What this player is told on plugging `source` (its `item`, if it is one) from `was` into
+## `sink`: where what it plays goes now.
+static func plugged_text(source: StringName, item: Item, was: StringName, sink: StringName) -> String:
+	var the := "Your keys" if Jack.keys_player(source) > 0 else "The " + Jacks.source_name(source, item)
+	var player := Jack.player_of(sink)
+	if player > 0:
+		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
+				else "its notes play"
+		if Jack.keys_player(source) > 0:
+			plays = "what you play plays"
+		return "%s go%s into %s: %s on their keys." % [the, "" if Jack.keys_player(source) > 0 else "es",
+				Session.name_of(player), plays]
+	if sink != &"":
+		return "%s's jack is in %s: its hits are recorded there, armed or not." % [the, Jacks.sink_name(sink)]
+	if Jack.player_of(was) == Session.local_peer_id and Session.local_peer_id != 0:
+		return "%s is unplugged from you." % the
+	if not Jack.is_item(source):
+		return "%s %s unplugged." % [the, "are" if Jack.keys_player(source) > 0 else "is"]
+	return "%s is unplugged: its hits go on the armed track again." % the
+
+
+## The host's word on `from`'s plug of `source` into `sink` (Jacks.plug_refusal), from what this
+## machine knows: who holds the source item, where it goes now, who is in the room. `here`: asked
+## by a hand on this machine, which knows its own hand better than the holds table does.
+func _plug_refusal(source: StringName, sink: StringName, from: int, here := false) -> String:
+	var item: Item = items.items.get(source) if items != null else null
+	var holder := 0
+	if item != null:
+		holder = _holder_here(item) if here else Session.holder_of(item.network_key())
+	var members: Array = Session.participants.keys()
+	if not members.has(Session.local_peer_id):
+		members.append(Session.local_peer_id)
+	return Jacks.plug_refusal(source, item, sink, from, holder, jacks.sink_of(source), members)
+
+
+## The host tells whoever a jack now goes into, or no longer does, who plugged what: a bandmate's
+## shaker playing your keys is not a thing to find out by surprise. Not the one who did it.
+func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: int) -> void:
+	var item: Item = items.items.get(source) if items != null else null
+	var what := "the %s" % Jacks.source_name(source, item) if Jack.keys_player(source) == 0 \
+			else "their keys"
+	var into := Jack.player_of(sink)
+	if into > 0 and into != by:
+		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
+				else "its notes play"
+		if Jack.keys_player(source) > 0:
+			plays = "what they play plays"
+		Session.tell(into, "%s plugged %s into you: %s on your keys. %s"
+				% [Session.name_of(by), what, plays, unplug_how(_medium_of(into), Jack.keys_player(source) == 0)])
+	var out := Jack.player_of(was)
+	if out > 0 and out != by and out != into:
+		Session.tell(out, "%s unplugged %s from you." % [Session.name_of(by), what])
+
+
+## How a player at `medium` (Presentation.Medium) takes out a jack that goes into them, in words:
+## at a desk Shift+P with an empty hand, in a headset a press on the INTO ME jack on their left
+## wrist; and, `own_jack` (an item or the harp, not a bandmate's keys, whose socket is on the
+## bandmate), a press on its own jack as well.
+static func unplug_how(medium: int, own_jack: bool) -> String:
+	var how := "Shift+P with an empty hand" if medium == Presentation.Medium.SCREEN \
+			else "A press on the INTO ME jack on your left wrist"
+	return "%s%s unplugs it." % [how, ", or a press on its jack," if own_jack else ""]
+
+
+## The medium player `peer` is in, as they said on joining (screen where not known).
+func _medium_of(peer: int) -> int:
+	if peer == Session.local_peer_id:
+		return medium
+	var p: Variant = Session.participants.get(peer)
+	return int(p.medium) if p != null else Presentation.Medium.SCREEN
+
+
+## Host: the studio's word on a jack's event (Session.jack_check): the room's patch and who has
+## the source in hand (Jacks.send_refusal).
+func _jack_refusal(to: int, source: StringName, from: int) -> String:
+	if jacks == null:
+		return "there is no room here to say where it goes"
+	var item: Item = items.items.get(source) if items != null else null
+	var holder := Session.holder_of(item.network_key()) if item != null else 0
+	return Jacks.send_refusal(jacks.patch, source, to, from, holder)
+
+
+## Somebody left: as host, every jack into them and out of their keys comes out.
+func _on_jack_player_left(peer: int) -> void:
+	if Session.role == Session.Role.HOST and jacks != null and jacks.drop_player(peer):
+		_publish_room_soon()
+
+
+## P with nothing in the mouse's hand: this player's own keys' jack steps on (a headset wears it on
+## the wrist); Shift+P takes out every jack going into this player.
+func _on_bare_jack(unplug: bool) -> void:
+	if jacks == null:
+		return
+	if not unplug:
+		jacks.step_source(Jack.keys_source(Session.local_peer_id), 1)
+	elif jacks.unplug_mine() == 0:
+		Session.notice.emit("Nothing is plugged into you.")
+
+
+## This player's keys' jack, worn on the left wrist: on the tracked hand's wrist, and on the left
+## controller while it is held, a hand's width back from the grip. The other hand presses it.
+## Beside each, a little further up the arm, the socket for what goes into this player
+## (JackSocket.into_me), there while anything does: a press takes it all out, as Shift+P does at a
+## desk, and it is the only way a bandmate's keys come out of a headset player.
+func _wear_wrist_jacks() -> void:
+	if rig == null or rig.left == null or not rig.skeletons.has(rig.left) or not wrist_jacks.is_empty():
+		return
+	var skeleton := rig.skeletons[rig.left] as HandSkeleton
+	var poke := rig.pokes.get(rig.left) as PokeInteractor
+	var on_hand := JackSocket.new(null)
+	on_hand.mine_keys = true
+	on_hand.label = "MY KEYS"
+	skeleton.wrist.add_child(on_hand)
+	var on_controller := JackSocket.new(null)
+	on_controller.mine_keys = true
+	on_controller.label = "MY KEYS"
+	on_controller.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.03, 0.09))
+	on_controller.available = func() -> bool: return poke == null or not poke.tracked()
+	rig.left.add_child(on_controller)
+	var in_hand := JackSocket.new(null)
+	in_hand.into_me = true
+	in_hand.label = "INTO ME"
+	# The wrist mount's +Y runs out toward the fingers: up the forearm, clear of MY KEYS' reach.
+	in_hand.position = Vector3(0, -WRIST_IN_APART, 0)
+	skeleton.wrist.add_child(in_hand)
+	var in_controller := JackSocket.new(null)
+	in_controller.into_me = true
+	in_controller.label = "INTO ME"
+	in_controller.transform = on_controller.transform.translated(Vector3(0, 0, WRIST_IN_APART))
+	in_controller.available = on_controller.available
+	rig.left.add_child(in_controller)
+	wrist_jacks = [on_hand, on_controller, in_hand, in_controller]
+
+
+## Whose hand has `item`, as this machine sees it: this player's when a hand here carries it,
+## the holder's (or somebody's, -1) when a ghost does, else nobody's (0).
+func _holder_here(item: Item) -> int:
+	if item.carried_by != null:
+		return Session.local_peer_id
+	if item.is_held_elsewhere():
+		var holder := Session.holder_of(item.network_key())
+		return holder if holder != 0 else -1
+	return 0
+
+
+## An item left the room (ItemRoom.despawn: a Tour spill swallowed, a personal copy put back):
+## its jack goes with it. Not one leaving with the whole room, which still lists it.
+func _on_item_leaving(node: Node) -> void:
+	var item := node as Item
+	if item == null or jacks == null or items == null or items.items.has(item.id):
+		return
+	if jacks.drop(item.id):
+		_publish_room_soon()
 
 
 ## Why a single track is not heard on this machine (`_hears_tracks`).
@@ -3629,6 +3991,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)
+			# Your fingertips as notes, on J K L ;: T, beside the home row they play on.
+			KEY_T:
+				toggle_fingertips()
 			KEY_ESCAPE:
 				_on_escape()
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
@@ -3671,6 +4036,8 @@ func _process(delta: float) -> void:
 	_drive_pushed()
 	_refresh_looms_if_moved(delta)
 	_follow_keytar()
+	_follow_harp()
+	_follow_wheel()
 	if venue != null and DAW.state != null:
 		# A room that holds still for anyone who has asked for no motion.
 		venue.reactive = ergonomics.motion_scale > 0.0

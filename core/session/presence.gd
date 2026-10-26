@@ -59,6 +59,9 @@ var _carry_claims: Dictionary = {}
 var _item_holders: Dictionary = {}
 ## {peer: Transform3D}: where the item in their hand is, relative to their head, as last heard.
 var _carry_at: Dictionary = {}
+## The room's chord harp (ChordHarp), set by the studio as each venue stands one: everyone's harp
+## notes are heard out of it.
+var harp: ChordHarp = null
 
 
 ## Listening only while in the tree. A studio taken out of the scene -- the suite builds dozens --
@@ -73,9 +76,11 @@ func _enter_tree() -> void:
 	Session.item_used.connect(_on_item_used)
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
+	Session.participant_left.connect(_on_participant_left)
 
 
 func _exit_tree() -> void:
+	Session.participant_left.disconnect(_on_participant_left)
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_flown.disconnect(_on_item_flown)
 	Session.item_used.disconnect(_on_item_used)
@@ -393,8 +398,17 @@ func _on_role_changed() -> void:
 	_my_claims.clear()
 	_carry_claims.clear()
 	_carry_at.clear()
+	# In a session or out of one, nobody else's harp notes are still coming.
+	if is_instance_valid(harp):
+		harp.forget()
 	_apply_holds()
 	_sync_avatars()
+
+
+## Somebody left: whatever they had sounding out of the harp is let go, their note-offs with them.
+func _on_participant_left(peer_id: int) -> void:
+	if is_instance_valid(harp):
+		harp.forget(peer_id)
 
 
 ## Every control another participant holds is refused to this participant's hands, and every
@@ -458,6 +472,15 @@ func avatars() -> Array:
 	return _avatars.values()
 
 
+## Where a jack's cable into `peer` ends (docs/spatial_loop.md slice 6): the glove of their ghost
+## nearer `from`, or null while they have no ghost here to hold it (Jacks.far_end).
+func cable_end(peer: int, from: Vector3) -> Variant:
+	var avatar: Avatar = _avatars.get(peer)
+	if avatar == null or not is_instance_valid(avatar) or not avatar.is_visible_in_tree():
+		return null
+	return avatar.nearer_glove(from)
+
+
 func _palm_of(peer: int, item: Item) -> Transform3D:
 	var avatar: Avatar = _avatars.get(peer)
 	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
@@ -511,8 +534,19 @@ func _on_item_used(id: StringName, down: bool, from: int) -> void:
 		item.use(down)
 
 
-## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar.
-func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float) -> void:
+## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar. Only
+## what their keys play as keys (`source` `&"keytar"`, or plain keys): a note from another
+## instrument of theirs is heard from that instrument. The harp's are routed by their source
+## alone, never by who holds it: a pluck's hold is over long before its string stops ringing,
+## and the holds go on a channel of their own with no order against the notes'.
+func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: float,
+		source := &"") -> void:
+	if source == ChordHarp.SOURCE:
+		if is_instance_valid(harp) and from != Session.local_peer_id:
+			harp.heard(from, kind, pitch, velocity)
+		return
+	if source != &"" and source != &"keytar":
+		return
 	if items == null or _item_holders.get(&"keytar", 0) != from:
 		return
 	var keytar := items.items.get(&"keytar") as KeytarItem
@@ -520,13 +554,15 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 		keytar.heard(kind, pitch, velocity)
 
 
-## Somebody else shook the instrument in their hand: ours plays the hit, in their glove.
-func _on_item_hit(id: StringName, velocity: int, from: int) -> void:
+## Somebody else shook the instrument in their hand: ours plays the hit, in their glove. A pitched
+## one rings the note it rang for them, at the song position they played it to (`song`), not
+## at this machine's own when it arrives.
+func _on_item_hit(id: StringName, velocity: int, from: int, song := -1.0) -> void:
 	if items == null or _item_holders.get(id, 0) != from:
 		return
 	var item := items.items.get(id) as InstrumentItem
 	if item != null:
-		item.heard(velocity)
+		item.heard(velocity, false, song)
 
 
 ## The control `peer_id` has their hand on -- not an item they carry, which is in the other glove.
@@ -946,6 +982,17 @@ void fragment() {
 		var fingers := turn * Vector3(side * 0.25, -0.8, -0.5).normalized()
 		var inward := turn * Vector3(-side, 0, 0)
 		return Transform3D(_attitude(fingers, inward), at)
+
+	## The middle of whichever of its gloves is nearer `to`, in global space; its own middle while
+	## the gloves are hidden (a head too close to the camera).
+	func nearer_glove(to: Vector3) -> Vector3:
+		var best := global_position
+		var nearest := INF
+		for glove in _hands:
+			if is_instance_valid(glove) and glove.visible and glove.global_position.distance_to(to) < nearest:
+				nearest = glove.global_position.distance_to(to)
+				best = glove.global_position
+		return best
 
 	## A glove's basis with its fingers along `fingers` and its palm turned toward `palm`.
 	static func _attitude(fingers: Vector3, palm: Vector3) -> Basis:

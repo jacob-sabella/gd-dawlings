@@ -439,7 +439,8 @@ func _arrange() -> void:
 	state.markers.clear()
 	state.regions.clear()
 	for section in sections:
-		state.markers[(sections[section][0] - 1) * bar] = section
+		state.markers[(sections[section][0] - 1) * bar] = section if section != "Intro" \
+				else "Intro [%s]" % DemoSong.HARMONY
 	state.set_project_length(96 * bar)
 
 	state.track(2).rec_arm = true

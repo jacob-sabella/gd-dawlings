@@ -7,6 +7,11 @@ extends Interactor
 ## the desk with a mouse is driving the same ControlAffordance objects, through the same grab
 ## contract, as the person standing in the room pinching the same fader.
 
+## P with nothing in this hand (docs/spatial_loop.md slice 6): for the studio, which steps this
+## player's own keys' jack on (`unplug` false), or with Shift takes out every jack that goes into
+## this player (`unplug` true).
+signal bare_jack(unplug: bool)
+
 @export var camera: Camera3D
 
 var _card: HoverCard
@@ -16,6 +21,13 @@ var pointer_override := Vector2(-1, -1)
 ## override this lets a capture DRAG something through the same path a hand on the mouse does,
 ## rather than poking the control directly and photographing a result no person could produce.
 var press_override := -1
+## The fingertips' keys (a KeyCatcher, J K L ;): the one reader of them. While it has the
+## keyboard its keys down are this hand's pinches (`finger_pinches`), and the studio's
+## FingertipNotes turns `fingers_play` on and off with its focus. This hand reads no keys for it.
+var finger_source: KeyCatcher = null
+## The button was down as the fingers stopped playing: it is not a press until it has come up,
+## so the click that gave the keys back does not also grab what it landed on.
+var _press_spent := false
 
 
 func reach() -> float:
@@ -62,12 +74,67 @@ func carry_pose() -> Transform3D:
 	return Transform3D(view.basis * Basis(Vector3.RIGHT, CARRY_TIP - 0.6 * wound), view * at)
 
 
+## Low on the right of the view, the left's mirror: the right hand, which plays the fingertips
+## while they are on (docs/spatial_loop.md slice 8). It rides with the camera and the wiggle.
+## High enough that its fingertips' letters clear the bottom of the screen.
+const FINGERS_AT := Vector3(0.2, -0.12, -0.5)
+## The field of view FINGERS_AT is placed for (the room's, Studio.ROOM_FOV, degrees). Zoomed in
+## with the wheel the view narrows, and the glove is drawn in toward the middle and smaller by as
+## much (`view_scale`), so it stays where it was on the screen and the size it was, letters and
+## all, rather than swelling off the bottom corner.
+const FINGERS_FOV := 58.0
+## Turned in toward the middle of the view, so it is seen from its side and its cuff does not
+## hide its fingers, and tipped down at them, palm down: the back of the hand faces you.
+const FINGERS_TURN := 0.35
+const FINGERS_TIP := -1.0
+
+
+func finger_pose() -> Transform3D:
+	if camera == null:
+		return global_transform
+	var view := camera.global_transform.orthonormalized()
+	var turned := view.basis * Basis(Vector3.UP, FINGERS_TURN) * Basis(Vector3.RIGHT, FINGERS_TIP)
+	var k := view_scale()
+	var at := FINGERS_AT + _wiggle
+	return Transform3D(turned, view * Vector3(at.x * k, at.y * k, at.z))
+
+
+func finger_glove_size() -> float:
+	return super() * view_scale()
+
+
+## How much smaller what rides the view is drawn at the camera's field of view than at
+## FINGERS_FOV's: 1 there, under 1 zoomed in.
+func view_scale() -> float:
+	if camera == null or camera.fov <= 0.0:
+		return 1.0
+	return tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(FINGERS_FOV) * 0.5)
+
+
+## The fingers stopped: a button down now is the click that stopped them, spent until it comes up.
+func _fingers_stopped() -> void:
+	_press_spent = true
+
+
+## The fingertips' keys down, as fingers: J the index, K the middle, L the ring, ; the little.
+func finger_pinches() -> int:
+	if finger_source == null or not is_instance_valid(finger_source) or not finger_source.is_active():
+		return 0
+	var mask := 0
+	for finger in finger_source.held():
+		if int(finger) >= 0 and int(finger) < HandPose.FINGER_BITS.size():
+			mask |= HandPose.FINGER_BITS[int(finger)]
+	return mask
+
+
 # --- shaking -------------------------------------------------------------------------------
 #
 # An instrument in the hand is shaken by moving the mouse: the hand follows the cursor's
 # movement a little way and springs back, so a wiggle of the mouse is a shake of the shaker, and
-# each stroke that stops is a hit (InstrumentItem). Only while an instrument is carried: a duck
-# rides still while the cursor points at things.
+# each stroke that stops is a hit (InstrumentItem). Only while an instrument is carried, or while
+# the fingers play (docs/spatial_loop.md slice 7): a duck rides still while the cursor points at
+# things. The wiggle is the desktop's tilt as well (`tilt`), so a bend read from a tipped hand in
+# a headset is read from the mouse on a desk.
 
 ## How far the hand moves for a pixel of the cursor's, and the most it moves (m).
 const WIGGLE_PER_PIXEL := 0.0007
@@ -83,9 +150,15 @@ func shake_point() -> Vector3:
 	return _wiggle
 
 
+## The wiggle over WIGGLE_MOST: right is rolled right, up is pitched up, the most of either a
+## hand tipped HandPose.TILT_MOST.
+func tilt() -> Vector2:
+	return Vector2(_wiggle.x, _wiggle.y) / WIGGLE_MOST
+
+
 ## The hand's wiggle for where the cursor is now, `delta` seconds on.
 func wiggle(at: Vector2, delta: float) -> void:
-	if not (carrying is InstrumentItem):
+	if not (carrying is InstrumentItem) and not fingers_play:
 		_wiggle = Vector3.ZERO
 		_wiggle_anchor = Vector2(-1, -1)
 		return
@@ -184,7 +257,20 @@ func fine() -> bool:
 ## is nothing adjustable. Handled here, before the studio sees it, because this is a child of
 ## the studio and children get input first -- which is the order wanted: the thing under the
 ## pointer has the stronger claim on what the wheel meant.
+##
+## P steps the jack of the instrument this hand carries on, and Shift+P back (JackSocket): the
+## cursor's own ray never reaches that socket, so the key is the desktop's other hand. With
+## nothing in the hand, P is the player's own keys' jack, which a headset wears on the wrist, and
+## Shift+P unplugs everything going into the player (`bare_jack`).
 func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_P:
+		if step_own_jack(-1 if key.shift_pressed else 1):
+			get_viewport().set_input_as_handled()
+		elif not is_instance_valid(carrying):
+			bare_jack.emit(key.shift_pressed)
+			get_viewport().set_input_as_handled()
+		return
 	var wheel := event as InputEventMouseButton
 	if wheel == null or not wheel.pressed:
 		return
@@ -200,14 +286,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## The carried instrument's jack one step on (`way` 1) or back (-1): P and Shift+P. False with no
+## instrument in this hand.
+func step_own_jack(way: int) -> bool:
+	var jack := own_jack()
+	if jack == null or not (carrying as Item).in_hand():
+		return false
+	return jack.step(way)
+
+
 func is_pressing() -> bool:
+	var down := press_override == 1 if press_override >= 0 \
+			else Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	if _press_spent and not down:
+		_press_spent = false
+	if fingers_play or _press_spent:
+		return false
 	if press_override >= 0:
-		return press_override == 1
+		return down
 	# A click on a panel is a click on the panel. Without this, pressing a button in the
 	# session panel also grabbed whatever fader happened to be behind it in the room.
 	if held == null and _over_gui():
 		return false
-	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	return down
 
 
 func _over_gui() -> bool:

@@ -35,6 +35,18 @@ var carrying: Item = null
 var worn: Item = null
 ## Its person's pockets (Pockets), shared by every hand they have; null, a hand with none.
 var pockets: Pockets = null
+## This hand's fingers are playing (fingertip notes, docs/spatial_loop.md slice 8): its pinches
+## are notes, so it presses nothing. `is_pressing()` is false while it is, and nothing is grabbed,
+## dwelt on, used or caught.
+var fingers_play := false:
+	set(v):
+		if fingers_play and not v:
+			_fingers_stopped()
+		fingers_play = v
+## What each finger plays now, index to little, and the chord they are in, while its fingers play
+## (FingertipNotes writes them): lettered on the glove a mouse plays with. Empty while not.
+var finger_names := PackedStringArray()
+var finger_chord := ""
 ## Where on `hovered` the ray landed, in world space. For a control that is one thing to the
 ## hand and many to the eye -- a lane of items -- the readout depends on which part is under it.
 var hover_point := Vector3.ZERO
@@ -47,6 +59,14 @@ var _dwelt := 0.0
 var _dwell_spent := false
 var _using := false
 var _glove: Glove
+## The glove a hand that draws its own plays its fingertips with: the right hand, while its
+## fingers play, whatever the other glove carries.
+var _finger_glove: Glove
+
+
+## Override: this hand's fingers have just stopped playing.
+func _fingers_stopped() -> void:
+	pass
 
 
 ## Override: where this interactor is pointing from and in which direction.
@@ -97,6 +117,58 @@ func carry_pose() -> Transform3D:
 	return aim()
 
 
+## Override: the fingers this hand's thumb is pinching, as a mask: index 1, middle 2, ring 4,
+## little 8 (HandPose). A tracked hand reads its pinches, a controller its trigger, grip, A/X and
+## B/Y (XRInteractor); none for a hand with no fingers to read (docs/spatial_loop.md slice 7).
+func finger_pinches() -> int:
+	return 0
+
+
+## Override: whether this hand is held palm up (HandPose.PALM_UP_WITHIN of straight up): a bare
+## hand by its palm, a controller turned over.
+func palm_up() -> bool:
+	return false
+
+
+## Override: whether this hand's palm faces its person's eyes (HandPose.faces_head): the way
+## Quest's own menu pinch is made, so nothing is played from it. Only a bare hand can.
+func faces_head() -> bool:
+	return false
+
+
+## Override: whether this hand is held open, nothing pinched: a bare hand by its curls, a
+## controller with none of its finger buttons down.
+func hand_open() -> bool:
+	return finger_pinches() == 0
+
+
+## Override: how far each finger has come in toward the thumb, index to little, 0..1, for how
+## fast a pinch closed (a fingertip note's velocity): a bare hand's gaps (HandPose.travel), a
+## controller's trigger and grip travel. NAN for a finger with no travel to read (a button, a
+## key), and empty for a hand with none at all.
+func finger_travel() -> PackedFloat32Array:
+	return PackedFloat32Array()
+
+
+## Override: where the glove a hand that draws its own (`draws_own_hand`) plays its fingertips
+## with is, in the world. A mouse's is low on the right of the view (MouseInteractor).
+func finger_pose() -> Transform3D:
+	return aim()
+
+
+## Override: how big that glove is drawn. A mouse's shrinks as the view zooms in, so it keeps its
+## size on the screen (MouseInteractor.view_scale).
+func finger_glove_size() -> float:
+	return CARRY_GLOVE_SIZE
+
+
+## Override: how far this hand is tipped from level, -1..1 each way: x its roll (clockwise as its
+## person sees it from behind), y its pitch (fingers up), each full at HandPose.TILT_MOST. A
+## bare hand's palm, a controller's aim, a mouse's wiggle.
+func tilt() -> Vector2:
+	return Vector2.ZERO
+
+
 ## Where a carried thing is being shaken from, for an instrument to hear its strokes
 ## (InstrumentItem): a controller's hand, in the world. A mouse's is its wiggle, in the view, so
 ## turning round is not a shake (MouseInteractor).
@@ -125,7 +197,7 @@ func catch_point() -> Vector3:
 ## the same way, so the host and everyone else see it land in this hand.
 func _catch() -> void:
 	var reach := catch_reach()
-	if reach <= 0.0 or carrying != null or held != null or not is_inside_tree():
+	if reach <= 0.0 or carrying != null or held != null or fingers_play or not is_inside_tree():
 		return
 	var at := catch_point()
 	for node in get_tree().get_nodes_in_group(Item.ITEMS):
@@ -394,7 +466,7 @@ func _end_use() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_forget_freed()
-	var pressed := is_pressing()
+	var pressed := is_pressing() and not fingers_play
 	var origin := aim().origin
 	var direction := -aim().basis.z
 
@@ -441,6 +513,7 @@ func _physics_process(_delta: float) -> void:
 
 	_was_pressed = pressed
 	_show_glove()
+	_show_finger_glove()
 	_tick_dwell(hit["point"], _delta)
 	_show_rim()
 
@@ -487,7 +560,7 @@ func _show_rim() -> void:
 func _tick_dwell(at: Vector3, delta: float) -> void:
 	var seconds: float = Ergonomics.current.dwell_seconds
 	var target: ControlAffordance = hovered
-	if seconds <= 0.0 or held != null or is_pressing() \
+	if seconds <= 0.0 or held != null or is_pressing() or fingers_play \
 			or target == null or not target.dwell_activates():
 		target = null
 
@@ -550,6 +623,40 @@ func _show_glove() -> void:
 	_glove.pose = Glove.Pose.GRIP if _using else Glove.Pose.OPEN
 
 
+## The right glove, drawn while this hand's fingers play (fingertip notes, docs/spatial_loop.md
+## slice 8), empty-handed or not: palm down at `finger_pose`, the pinched fingers curled to the
+## thumb, each lettered with the note it plays and the chord over the palm. Only for a hand that
+## draws its own; a headset's hands are the player's own, drawn by the rig.
+func _show_finger_glove() -> void:
+	if not draws_own_hand():
+		return
+	if _finger_glove == null:
+		if not fingers_play:
+			return
+		_finger_glove = Glove.new(1.0)
+		_finger_glove.name = "FingertipGlove"
+		_finger_glove.size = finger_glove_size()
+		_finger_glove.make_letters()
+		add_child(_finger_glove)
+		for node in _finger_glove.find_children("*", "VisualInstance3D", true, false):
+			(node as VisualInstance3D).layers = Mirror.NOT_REFLECTED
+			if node is GeometryInstance3D:
+				(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_finger_glove.visible = fingers_play
+	if not fingers_play:
+		return
+	_finger_glove.target = finger_pose()
+	_finger_glove.size = finger_glove_size()
+	_finger_glove.pose = Glove.Pose.OPEN
+	_finger_glove.pinched = finger_pinches()
+	_finger_glove.letter(finger_names, finger_chord)
+
+
+## Whether the fingertips' glove is drawn now: for the suite and the shot.
+func finger_glove_shown() -> bool:
+	return _finger_glove != null and _finger_glove.visible and _finger_glove.is_inside_tree()
+
+
 func _set_hovered(control: ControlAffordance) -> void:
 	if control == hovered:
 		return
@@ -589,15 +696,29 @@ func let_go() -> void:
 		released.emit(null)
 
 
+## The ray leaves out the jack on the instrument this hand carries (`own_jack`): it rides in the
+## hand, under every ray the hand casts, and the hand's button is the instrument's to strike.
 func _cast(origin: Vector3, direction: Vector3) -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * reach())
 	query.collision_mask = 1 << (CONTROL_LAYER - 1)
+	var jack := own_jack()
+	if jack != null:
+		query.exclude = [jack.get_rid()]
 	var result := space.intersect_ray(query)
 	if result.is_empty():
 		return {"control": null, "point": Vector3.ZERO}
 	var collider = result["collider"]
 	return {"control": collider if collider is ControlAffordance else null, "point": result["position"]}
+
+
+## The jack on what this hand carries, if it is an instrument with one: never this hand's to
+## reach for with its own ray (another hand, or a key, steps it; docs/spatial_loop.md slice 5).
+func own_jack() -> JackSocket:
+	var instrument := carrying as InstrumentItem if is_instance_valid(carrying) else null
+	if instrument == null or instrument.jack == null or not is_instance_valid(instrument.jack):
+		return null
+	return instrument.jack
 
 
 ## Where the aim ray meets the plane the held control moves in. Without this, a grab would need a

@@ -20,7 +20,8 @@ extends XROrigin3D
 ##   press once   mark the origin -- touch the controller tip to the first floor mark
 ##   press again  mark forward -- touch it to the second
 ## A third press starts over, because the most likely thing after a bad calibration is wanting
-## to do it again, not wanting to find a menu.
+## to do it again, not wanting to find a menu. Not while the left hand's fingers play, when that
+## button is its little finger (`watch_calibration`).
 
 signal calibration_step(step: int, total: int)
 ## The way out of whatever has been put in front of your face: the menu button on a controller,
@@ -67,6 +68,9 @@ var _menu_for := 0.0
 ## Per hand (the controller node): its fingertip and its drawn joints.
 var pokes: Dictionary = {}
 var skeletons: Dictionary = {}
+## Per hand (the controller node): its pinch ray (XRInteractor) and its readings (HandGestures).
+var interactors: Dictionary = {}
+var gestures: Dictionary = {}
 
 
 func _ready() -> void:
@@ -153,6 +157,16 @@ func _build_hand(tracker: StringName, node_name: String) -> XRController3D:
 	skeleton.tracker_name = HAND_TRACKERS[tracker]
 	add_child(skeleton)
 	skeletons[controller] = skeleton
+	var reading := HandGestures.new()
+	reading.name = node_name + "Gestures"
+	reading.tracker_name = HAND_TRACKERS[tracker]
+	reading.side = -1 if tracker == &"left_hand" else 1
+	reading.origin = self
+	reading.head = head
+	add_child(reading)
+	gestures[controller] = reading
+	hand.gestures = reading
+	interactors[controller] = hand
 
 	return controller
 
@@ -167,12 +181,25 @@ func _process(delta: float) -> void:
 	_watch_escape(delta)
 	if left == null or room_anchor == null:
 		return
-	var down := left.is_button_pressed(CALIBRATE_ACTION)
-	# Edge-triggered. A held button is one press; polling the level would take forty marks in
-	# the time it takes to lift a thumb.
-	if down and not _calibrate_was_down:
+	watch_calibration(left.is_button_pressed(CALIBRATE_ACTION))
+
+
+## One frame of the calibration button, `down` or not. Edge-triggered: a held button is one
+## press; polling the level would take forty marks in the time it takes to lift a thumb.
+##
+## The left hand's B/Y is its little finger while that hand's fingers play (fingertip notes), so
+## no press then is a mark. The button is still followed all the while, so a Y held down as the
+## fingers stop playing is not a fresh press either: only one pressed after it is.
+func watch_calibration(down: bool) -> void:
+	if down and not _calibrate_was_down and not left_fingers_play():
 		_take_mark()
 	_calibrate_was_down = down
+
+
+## Whether the left hand's fingers are playing (Interactor.fingers_play), on its pinch ray.
+func left_fingers_play() -> bool:
+	var hand: XRInteractor = interactors.get(left) as XRInteractor if left != null else null
+	return hand != null and is_instance_valid(hand) and hand.fingers_play
 
 
 func _take_mark() -> void:
@@ -194,6 +221,8 @@ func _take_mark() -> void:
 
 ## A fingertip on something lights its tip, and the pinch ray of that hand goes away while it is:
 ## a ray sticking out past the fader you are touching says you are pointing at what is behind it.
+## It goes too while the hand's fingers play (fingertip notes, Interactor.fingers_play): its
+## pinches and trigger are notes then and grab nothing, and a ray would say they still did.
 ## The ray's ball, the controller's tip, is not drawn on a bare hand, which has no tip there.
 func _show_hands() -> void:
 	for controller in pokes:
@@ -201,7 +230,9 @@ func _show_hands() -> void:
 		var touching := poke.tracked() and (poke.held != null or poke.hovered != null)
 		(skeletons[controller] as HandSkeleton).touching = poke.held != null
 		var ray := controller.get_meta(&"ray") as Node3D
-		ray.visible = not touching
+		var hand := interactors.get(controller) as Interactor
+		var playing := hand != null and is_instance_valid(hand) and hand.fingers_play
+		ray.visible = not touching and not playing
 		(controller.get_meta(&"ray_tip") as Node3D).visible = not poke.tracked()
 
 

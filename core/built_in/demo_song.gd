@@ -28,6 +28,9 @@ const CACHE_DIR := "user://built_in"
 ## A minor: Am | F | C | G. MIDI note numbers.
 const CHORDS := [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]]
 const ROOTS := [33, 29, 36, 31]
+## The same song as the brackets of the stand-in's Intro marker (Harmony): its key and a chord a
+## bar, so the chord instruments play in the demo song's key from the first launch.
+const HARMONY := "A minor: Am F C G"
 ## [beat, length in beats, MIDI note]. Four bars, one per chord.
 const MELODY := [
 	[0.0, 1.0, 64], [1.0, 0.5, 62], [1.5, 0.5, 60], [2.0, 2.0, 64],

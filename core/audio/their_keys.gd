@@ -16,6 +16,8 @@ extends Node
 
 ## {peer id: MonitorSynth}, for the players being played.
 var synths: Dictionary = {}
+## {peer id: KeysDown}: what of theirs has each pitch down.
+var _down: Dictionary = {}
 
 
 ## The bus a player's keys play on here, by name.
@@ -29,6 +31,7 @@ func set_players(peers: Array) -> void:
 		if peer not in peers:
 			(synths[peer] as MonitorSynth).queue_free()
 			synths.erase(peer)
+			_down.erase(peer)
 	for peer in peers:
 		if synths.has(peer):
 			continue
@@ -53,13 +56,22 @@ func players() -> Array:
 	return synths.keys()
 
 
-## A key or the pedal from `from`, as Session.note_played says it.
-func play(kind: int, pitch: int, velocity: int, from: int, _song := -1.0) -> void:
+## A key or the pedal from `from`, as Session.note_played says it. A pitch two of their
+## instruments (`source`) hold sounds until both have let it go.
+func play(kind: int, pitch: int, velocity: int, from: int, _song := -1.0, source := &"") -> void:
 	var synth: MonitorSynth = synths.get(from)
 	if synth == null:
 		return
+	var down: KeysDown = _down.get(from)
+	if down == null:
+		down = KeysDown.new()
+		_down[from] = down
 	match kind:
-		Session.Note.ON: synth.note_on(pitch, velocity)
-		Session.Note.OFF: synth.note_off(pitch)
+		Session.Note.ON:
+			down.press(pitch, source, velocity)
+			synth.note_on(pitch, velocity)
+		Session.Note.OFF:
+			if down.let_go(pitch, source):
+				synth.note_off(pitch)
 		Session.Note.PEDAL_DOWN: synth.sustain(true)
 		Session.Note.PEDAL_UP: synth.sustain(false)

@@ -40,6 +40,22 @@ var _pockets: PackedStringArray = []
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
 ## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
 var _visitor: Array = []
+## `--plug shaker:player_7`: that source's jack stepped into that sink at frame 10, asked as a hand
+## here asks (Studio._on_plug_asked; docs/spatial_loop.md slices 5 and 6). With --visitor, a
+## jack into `player_7` runs its cable to Lin's ghost.
+var _plug := ""
+## `--fingertips 5`: the desktop's fingertips turned on at frame 10, as T turns them, with the keys
+## of that mask's fingers held down (HandPose's bits: 1 J, 2 K, 4 L, 8 ;), for a shot of the glove
+## playing them (docs/spatial_loop.md slice 8).
+var _fingertips := -1
+## `--posed-hand 1.2,1.1,-3.4,0.5,20,1`: a right hand posed (HandPose.posed) at that studio point,
+## turned by that yaw (radians), rolled that many degrees right side down, its thumb pinching the
+## fingers in that mask (HandPose's bits), from frame 5: reported on a tracker of its own, drawn by
+## a HandSkeleton and read by a HandGestures, whose readings are lettered over it
+## (docs/spatial_loop.md slice 7). Its index and middle tips strum the harp, as a tracked hand's do.
+var _posed_hand: Array = []
+var _posed_gestures: HandGestures
+var _posed_label: Label3D
 ## `--on-air 7`: that player ON AIR from frame 8, so their pack has its MONITOR socket
 ## (`--carry tablet:monitor_7`); `--on-air 1` is the one at this machine.
 var _on_air := 0
@@ -195,6 +211,12 @@ func _ready() -> void:
 				if i + 1 < args.size(): _on_air = int(args[i + 1])
 			"--visitor":
 				if i + 1 < args.size(): _visitor = Array(args[i + 1].split(",")).map(func(v): return float(v))
+			"--plug":
+				if i + 1 < args.size(): _plug = args[i + 1]
+			"--fingertips":
+				if i + 1 < args.size(): _fingertips = int(args[i + 1])
+			"--posed-hand":
+				if i + 1 < args.size(): _posed_hand = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--throw":
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
@@ -269,6 +291,51 @@ func _ready() -> void:
 		_quit_after = -1
 	if _shot_path == "" and _quit_after < 0 and _shot_tick < 0:
 		set_process(false)
+
+
+## `--posed-hand`'s hand, in the studio's space: a tracker reporting it, its joints drawn, its
+## readings read and lettered.
+func _pose_a_hand() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Node3D
+	if studio == null:
+		return
+	var at := Vector3(_posed_hand[0], _posed_hand[1], _posed_hand[2])
+	var yaw: float = _posed_hand[3] if _posed_hand.size() > 3 else 0.0
+	var roll: float = _posed_hand[4] if _posed_hand.size() > 4 else 0.0
+	var mask := int(_posed_hand[5]) if _posed_hand.size() > 5 else 0
+	var palm := Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, deg_to_rad(roll)), at)
+	var joints := HandPose.posed([0.15, 0.05, 0.1, 0.35, 0.5], mask, palm)
+	var tracker_name := &"/user/hand_tracker/shot"
+	var hand := XRHandTracker.new()
+	hand.name = tracker_name
+	hand.hand = XRPositionalTracker.TRACKER_HAND_RIGHT
+	var valid := XRHandTracker.HAND_JOINT_FLAG_POSITION_VALID | XRHandTracker.HAND_JOINT_FLAG_ORIENTATION_VALID
+	for j in XRHandTracker.HAND_JOINT_MAX:
+		hand.set_hand_joint_flags(j, valid)
+		hand.set_hand_joint_radius(j, 0.009)
+		hand.set_hand_joint_transform(j, Transform3D(Basis.IDENTITY, joints[j]))
+	hand.has_tracking_data = true
+	XRServer.add_tracker(hand)
+	var skeleton := HandSkeleton.new()
+	skeleton.name = "PosedHand"
+	skeleton.tracker_name = tracker_name
+	studio.add_child(skeleton)
+	_posed_gestures = HandGestures.new()
+	_posed_gestures.name = "PosedHandGestures"
+	_posed_gestures.tracker_name = tracker_name
+	_posed_gestures.origin = studio
+	var camera := get_viewport().get_camera_3d()
+	_posed_gestures.head = camera
+	studio.add_child(_posed_gestures)
+	_posed_label = Label3D.new()
+	_posed_label.name = "PosedHandReadings"
+	_posed_label.pixel_size = 0.0006
+	_posed_label.font_size = 48
+	_posed_label.outline_size = 10
+	_posed_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_posed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_posed_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	studio.add_child(_posed_label)
 
 
 func _parse_res(spec: String) -> Vector2i:
@@ -430,6 +497,27 @@ func _process(_delta: float) -> void:
 		Session.roster_changed.emit()
 	if _frames >= 5 and Session.participants.has(7):
 		(Session.participants[7] as Session.Participant).heard_msec = Time.get_ticks_msec()
+
+	if _frames == 5 and _posed_hand.size() >= 3:
+		_pose_a_hand()
+	if _posed_gestures != null and is_instance_valid(_posed_gestures):
+		_posed_label.text = _posed_gestures.describe()
+		if _posed_gestures.tracked:
+			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
+
+	if _frames == 10 and _fingertips >= 0:
+		var tips_studio := get_tree().current_scene.get_node_or_null("Studio")
+		if tips_studio != null and tips_studio.has_method("toggle_fingertips"):
+			tips_studio.toggle_fingertips()
+			var keys: KeyCatcher = tips_studio.fingertip_keys
+			for physical in KeyCatcher.FINGERS:
+				if _fingertips & HandPose.FINGER_BITS[KeyCatcher.FINGERS[physical]]:
+					keys.handle(physical, true)
+	if _frames == 10 and _plug.contains(":"):
+		var plug_studio := get_tree().current_scene.get_node_or_null("Studio")
+		if plug_studio != null and plug_studio.has_method("_on_plug_asked"):
+			var ends := _plug.split(":")
+			plug_studio._on_plug_asked(StringName(ends[0]), StringName(ends[1]))
 
 	if _frames == 8 and _on_air > 0:
 		var on_air_studio := get_tree().current_scene.get_node_or_null("Studio")

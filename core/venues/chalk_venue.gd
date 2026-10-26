@@ -405,7 +405,9 @@ func _board_lights(half: float, high: float, reach: float) -> void:
 
 ## What the board says about the session: the song's sections from its markers, in order, the
 ## tempo, how many tracks, and the take -- what the armed track would be on if it were
-## recording now, or is on while it is. No take when nothing is armed.
+## recording now, or is on while it is. No take when nothing is armed. A section is its marker's
+## name without the harmony's brackets (Harmony.section_of), and a marker that is only brackets
+## names no section.
 static func board_from(state: MixState) -> Dictionary:
 	var out := {"sections": PackedStringArray(), "tempo": "", "tracks": "", "take": ""}
 	if state == null:
@@ -413,7 +415,7 @@ static func board_from(state: MixState) -> Dictionary:
 	var times: Array = state.markers.keys()
 	times.sort()
 	for t in times:
-		var said := str(state.markers[t]).strip_edges().to_upper()
+		var said := Harmony.section_of(str(state.markers[t])).strip_edges().to_upper()
 		if said != "" and out["sections"].size() < BOARD_SECTIONS:
 			out["sections"].append(said.left(10))
 	var bpm := state.tempo

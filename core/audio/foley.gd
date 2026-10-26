@@ -415,6 +415,49 @@ static func pad(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## The note a handbell's sound (`handbell`) rings as it is: C5. A bell is pitched to its note
+## from here (HandbellItem.sound_pitch), as a sample is.
+const HANDBELL_NOTE := 72
+
+
+## A handbell rung: a cast bronze bell's few partials, tuned the way an English handbell is (its
+## strike note and the twelfth over it ring true, the rest a little off true), the low ones long
+## and the high ones short, over the clapper's soft knock. At C5 (HANDBELL_NOTE), and pitched to
+## the bell's note as it plays. Long enough to ring out, never cut off.
+static func handbell(take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("handbell_%d" % take, func() -> AudioStreamWAV:
+		var s := _silence(2.2)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 907 + take * 17
+		var hz := 523.25
+		# [ratio, decay (s), level]: the strike note, the twelfth, and the hum, tierce and the
+		# shimmer over them that make it a bell and not a sine.
+		for mode in [[1.0, 0.62, 0.34], [3.0, 0.3, 0.13], [0.5, 0.9, 0.05], [2.4, 0.18, 0.06],
+				[5.43, 0.08, 0.05], [8.12, 0.04, 0.03]]:
+			var ratio: float = mode[0]
+			if ratio != 1.0 and ratio != 3.0:
+				ratio *= rng.randf_range(0.995, 1.005)
+			var decay: float = mode[1]
+			var level: float = mode[2]
+			var step := TAU * hz * ratio / float(RATE)
+			var phase := rng.randf() * TAU
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.0005:
+					break
+				# A few milliseconds' rise: the clapper leaves the bronze a moment after it lands.
+				s[i] += level * env * minf(1.0, t / 0.002) * sin(phase + step * float(i))
+		_impulse(s, 0.0, 0.08, 0.002, 1800.0, 913 + take)
+		_lowpass(s, 9000.0)
+		# The last of the hum faded to nothing, so the end of the buffer is not a step.
+		var fade := int(0.4 * RATE)
+		for i in fade:
+			s[s.size() - fade + i] *= 1.0 - float(i) / float(fade)
+		return _wav(s, false))
+
+
 ## Clay chips on clay chips, one landing: a short bright knock, the dense edge of one disc on
 ## the face of another, with the faint ring a clay composite chip has and a plastic one does not.
 static func chip_clack(take: int) -> AudioStreamWAV:

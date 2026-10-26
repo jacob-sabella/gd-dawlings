@@ -371,6 +371,40 @@ end up where the mix really is.
 Two people reaching for one fader: first hand wins, second is told no. Averaging two hands
 produces a value neither person asked for.
 
+A nudge (`ControlAffordance.nudge`) is the contract's relative move: the mouse wheel over a
+control, and a controller's thumbstick (`XRInteractor.flick`: a notch per flick past 0.6, again
+every 0.25 s while held, ready again under 0.3) on whatever the hand hovers or holds. A bare hand
+has no stick, so anything that nudges has buttons a finger can press too.
+
+Beside the grab contract, an interactor gives readings an instrument may ask for:
+`finger_pinches()` (a mask, index 1, middle 2, ring 4, little 8), `palm_up()` and `tilt()`
+(roll and pitch, -1..1, full at 45 degrees). A bare hand answers from its `HandGestures`
+(`core/xr/hand_gestures.gd`, one per hand under the XRRig), which reads its joint tracker each
+physics frame through `HandPose` (`core/input/hand_pose.gd`): static and pure over the 26 joint
+positions, so the suite poses hands of its own. A pinch closes under 18 mm and opens over 30,
+scaled by the hand's size (wrist to middle knuckle, 95 mm the reference) and by Ergonomics'
+`finger_scale`. A controller answers the same questions from its trigger, grip, A/X and B/Y and
+its aim's basis: its palm is round the side of the grip, toward the other hand (OpenXR's grip X,
+`-side * aim().basis.x`), so held thumb up it faces sideways and a quarter turn outward is palm
+up. The mouse answers its tilt from its wiggle (`MouseInteractor.tilt`). While
+`fingers_play` is on, a hand's pinches are notes, so `is_pressing()` is false and it grabs,
+dwells, uses and catches nothing; the left hand's B/Y is then its little finger, not the rig's
+calibration button (`XRRig.watch_calibration`). Hand poses never cross the wire: what they play
+does. docs/spatial_loop.md slice 7.
+
+Fingertip notes (`FingertipNotes`, `core/music/fingertip_notes.gd`, one per local hand, made by
+`Studio._lend_fingertips`) play those readings: thumb to index, middle, ring and little play the
+song's chord's root, third, fifth and top, voiced at C4 and read at the pinch's own stamp, as the
+player's keys with source `&"fingertips"`. A bare hand or a controller turns them on and off by
+being held empty, open and palm up, not toward the eyes, for 0.4 s, and plays with the palm down
+or on its side; no pinch is played palm up or toward the head, which is Quest's own menu gesture.
+The interactor's `faces_head()`, `hand_open()` and `finger_travel()` (how far each finger has come
+in, for velocity) are what it reads. On a desktop there is one reader of the keys: a second
+`KeyCatcher` (`Studio.fingertip_keys`, J K L ;) whose keys down are the mouse's
+`finger_pinches()`, and whose focus is whether the fingertips play (T gives it; a click, Esc or T
+takes it back). While they are on the interactor draws a right `Glove` playing them, its pinched
+fingers curled to the thumb and each lettered with its note. docs/spatial_loop.md slice 8.
+
 ## Furniture is not a surface
 
 A surface exists because the project has tracks or plugins, and its size follows them. A stand, a
@@ -870,6 +904,30 @@ the new marker into the cache straight away, so MARK shows at once; `_edit` hold
 was already on its way, so it cannot draw the marker away again for a beat. Markers are keyed by
 seconds, and Reaper keeps a marker on its beat when the tempo changes, so the same marker has a
 different key after a tempo edit. Anything that looks a marker up afterwards goes by name.
+
+### The song's key is written in its markers
+
+`Harmony` (core/music/harmony.gd) reads a key and a chord a bar from brackets at the end of a
+marker's name, `Intro [A minor: Am F C G]`, and `Harmony.at(state, seconds)` answers the key and
+chord at any song position by counting bars from that marker with `MixState.bar_at`. Markers
+already replicate, undo, save through Reaper and .dawproject and are edited on the 2D ruler, so
+the harmony needs no DAW verb and every machine reading the same markers hears the same chord.
+Before the first bracket it is `Harmony.NONE` (C major, `named` false). Everything that shows a
+marker as a section shows `Harmony.section_of(name)`, the name without its brackets: the chalk
+board, the tape deck's section and locator text, the 3D ruler's flags (with the harmony as a
+second line) and the region page's ADD name. A marker that is only brackets names no section.
+Only the 2D ruler shows the whole name, because that is where it is typed. The stand-in's Intro
+carries `DemoSong.HARMONY`, so the demo song is in its own key. docs/spatial_loop.md has the
+decisions.
+
+The key and chords are also written from the room, on the circle-of-fifths wheel on the bricks
+table (`FifthsWheel`, `core/music/fifths_wheel.gd`, stood by the studio at `Venue.wheel_spot`).
+Its key and strip of chords are each player's own; SET writes `[key: chords]` into the markers at
+one bar (the next while playing, the playhead's while stopped): onto a marker already there, its
+section kept and its old brackets replaced (`Harmony.written`, `DAW.edit_marker`), or as a marker
+of brackets alone (`DAW.add_marker`). That is one undo step, still no DAW verb, and nothing before
+the bar changes. A guest's SET is a room ask, `harmony` [bar, inside], so the host writes at the bar
+the guest chose rather than at its own playhead, and the markers replicate as any edit's do.
 
 ### Three states on one lamp
 
@@ -1548,6 +1606,13 @@ Notes are played on arrival with no jitter buffer, so they land one network trip
 to guest) plus the synth's queue. The notice gives the figure from ENet's round trip
 (`Session.note_delay_ms`).
 
+Each note also carries its `source`: what of the player's played it (`GuestMidi.instruments`'
+names, `&""` for plain keys; the host takes a name over `Session.NOTE_SOURCE_MAX` as plain keys).
+Two instruments can hold the same pitch, so wherever one player's notes are sounded on one synth
+(their own monitor, `TheirKeys`, `TheirMonitor`) a `KeysDown` (`core/session/keys_down.gd`) counts
+each pitch by source, and its note-off is sounded only when the last source lets it go.
+`Presence` plays only a keytar holder's keys notes (`&"keytar"` or plain) out of the keytar.
+
 A player who switches ON AIR on their tablet (the room's `on_air` list) grows a MONITOR socket
 under their KEYS pack (`monitor_N`). Plugged in, `TheirMonitor` (`core/audio/their_monitor.gd`)
 rebuilds what they hear without anything being streamed. Their notes carry the song position they
@@ -1566,14 +1631,87 @@ transport as `GuestMidi.heard()` reports it and records each hit as a drum note,
 position. The take goes onto the first armed track through `DAW.insert_midi_take`. Other
 players' hits are only heard in the room, never in a personal mix.
 
+Pitched items are instruments of the same kind whose note is a function of song position
+(`InstrumentItem.note_at`, `channel`, `note_seconds`). The four handbells (`HandbellItem`,
+`bell1`..`bell4`, on a stand beside the chord harp at `Venue.bell_spot`) ring their number's
+chord tone, voiced at 72, on `InstrumentItem.MELODIC_CHANNEL` (10, 0-based), 0.8 s long. Each hit
+reads `InstrumentItem.clock` (the studio's `HitRecorder.stamp`) once: that one position pitches
+the sound, which is started before `play` returns, is what HitRecorder records it at (`hit`'s
+`at`, no second stamp), and goes out with it (`Session.item_hit`'s `song`). Whoever hears it
+pitches it by that `song` (`heard`), not by their own position when it arrives, so a ring just
+before a bar line is the old chord's tone everywhere. A click on a bell is sent as a hit as well
+as a use, and a bandmate's use of a pitched item rings nothing, so it rings once. Tour's keys
+parts ignore both item channels (`TourPart.ITEM_CHANNELS`). The bells sound through Godot's
+mixer like the percussion; the session panel shows that path's latency beside the keys', and over
+25 ms they are to get a `MonitorSynth` voice. docs/spatial_loop.md slice 4 has the decisions.
+
+Every instrument has an output jack (`JackSocket`, `core/music/jack_socket.gd`, a
+`ControlAffordance` at `InstrumentItem.jack_point()`). Where each goes is a row in the room, not
+a send and not a PipeWire link: `room_state()["jacks"]`, {source: sink}, kept by the studio's
+`Jacks` (`core/music/jacks.gd`) and asked with the `plug` room verb, predicted and rolled back
+like the tablet's `patch`. `Jack` (`core/music/jack.gd`) names the ends: sources are item ids,
+`harp` and `keys:P` (player P's own keys), sinks `track_N` and `player_P`; an empty sink is
+unplugged. Every hit played here goes through `Jacks.hit` (from `ItemRoom.played`): unplugged it
+is the old path, onto the armed track; into `track_N`, `HitRecorder` keeps a take of its own for
+N and records it there, armed or not, and not on the armed track as well. A press steps a socket
+through unplugged and every track that takes MIDI (`Jacks.sinks`: all but a frozen one), round
+again; the wheel and thumbstick step either way. The hand that carries the instrument never
+reaches its own socket: `Interactor._cast` leaves `own_jack()` out of its ray, so that hand's
+trigger or click still strikes the instrument, and the other hand (or P and Shift+P,
+`MouseInteractor.step_own_jack`, on a desktop) steps it. The host takes a plug from the hand that
+holds the source, or from anyone while it is at home, and never into a track that is not there
+(`Jacks.refusal`); a copy that leaves the room (`ItemRoom.despawn`) takes its plug with it. A
+plugged instrument shows a tag in words (`-> 3 SNARE`) and a short lead ending in a plug, never a
+cable to the patchbay, which shows sends. docs/spatial_loop.md slice 5.
+
+A jack into a bandmate (`player_P`) is a cable between players. What the source plays goes to P's
+own keys instead of where it went: a bell its note and, `note_seconds` later, its off; the harp
+its strings (heard here from the harp itself); percussion a TRIGGER; and `keys:P` what P plays,
+as a thru (P's keys go on as before, and what came in on a cable or from the harp is not passed
+on, so two players plugged into each other never feed back). Each event carries the one song
+position it was played to. `Session.send_jack` takes it up to the host on `KEYS_CHANNEL`,
+reliable, and the host passes it to P alone (`jack_played`) only when both are in the room, P is
+not the sender, the room's patch sends that source into P and the sender is the source's player:
+the holder of an item (Session.holds), P for `keys:P`, anyone for the harp (`Session.jack_refusal`,
+`Session.jack_check`, the studio's `Jacks.send_refusal`). On P, `Jacks.received` plays it on P's
+keys with source `&"cable"` at that song position, so it sounds on P's synth, goes to everyone as
+P's notes and lands in P's take where it was played; a TRIGGER is the chord tone at its song, one
+up the chord each hit, for 0.3 s. `&"cable"` is in P's `GuestMidi.instruments` while anything
+goes into P. Whoever a jack goes into may unplug it (a press on it, or Shift+P with an empty hand
+on a desktop), and is told who plugged what. The harp's socket is on its pillar; a player's keys'
+is on their left wrist (`HandSkeleton.wrist`), on the left controller while that hand holds one,
+and P with an empty hand on a desktop. Into a bandmate the socket draws a slack cable to the
+nearer glove of their ghost (`Presence.cable_end`), rebuilt at most 15 times a second while an
+end moves. docs/spatial_loop.md slice 6.
+
 The keytar (`KeytarItem`) has no sound of its own here. In this player's hands it sets
-`GuestMidi.keytar`. Their keys then play on the keys' low-latency synth, go to everyone as notes,
-and are recorded as a take whatever this machine's role (`GuestMidi.plays`). A take with no track
-chosen goes onto the armed one. On a desktop the studio's own `KeyCatcher` (`keytar_keys`) is its
+`GuestMidi.keytar`, a view of `&"keytar"` in `GuestMidi.instruments`: the set of instruments in
+this player's reach that play their keys (the keytar, the harp, the fingertips, a cable, the
+wheel; docs/spatial_loop.md). Each puts in and takes out only its own name (`GuestMidi.reach`).
+While the set is not empty their keys play on the keys' low-latency synth, go to everyone as
+notes, and are recorded as a take whatever this machine's role (`GuestMidi.plays`). Off a guest
+the synth is started when the first instrument comes into reach, before its first note, and
+stopped when the last goes. A take with no track chosen goes onto the armed one, runs across the
+gaps between notes, and is named after what played in it (`GuestMidi.take_name`:
+`Ada harp+fingertips 1`; plain keys alone are `Ada take 1`). A note given its own song position
+(`note_on`'s `at`, for one played elsewhere) is recorded and sent at it. On a desktop the studio's own `KeyCatcher` (`keytar_keys`) is its
 piano while it is held. `Walker` reads the arrow keys while a control in the `walks_on_arrows`
 group has the keyboard. `GuestMidi.key` shows each note on its key. Someone else's notes, while
 they hold the keytar (`Presence._on_note_played`), play out of it on a `MonitorSynth` with a
 `speaker`: an AudioStreamPlayer3D on the room's bus.
+
+The chord harp (`ChordHarp`, `core/music/chord_harp.gd`) is not an item but a control, stood by
+the studio in each venue at `Venue.harp_spot` (behind the bricks table, against the live room's
+back wall). Its eight strings are `Harmony.tones(55, 8)` at the song position each strum is played
+to, so it is always in the song's chord. A grab plucks the nearest string and a held move plucks
+every string it crosses; a bare hand strums by touch through `tips` (the tracked fingertips), and
+a fingertip's poke is not also a grab. Its notes are this player's keys with source `&"harp"`
+(heard at once, sent to everyone, a take on the armed track), and the studio keeps `&"harp"` in
+`GuestMidi.instruments` while the player is near it, a hand is on it, or a string rings, so a run
+of strums is one take. `Presence` routes everyone else's harp notes by their source to
+`ChordHarp.heard`, a `MonitorSynth` speaking from the harp, keyed by (peer, pitch) rather than by
+who holds the harp, and lets go of a leaver's. The octave (two crown buttons, the wheel, the
+thumbstick) is each player's own. docs/spatial_loop.md has the decisions.
 
 The chips and the cards (`ChipsItem`, `CardsItem`) are pure idle, and both are a `FidgetItem`.
 Each press of the hand's button starts the next of its tricks in turn. A press while a trick is

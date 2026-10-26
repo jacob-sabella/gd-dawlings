@@ -15,9 +15,21 @@ extends Item
 ## path, the same as their keys: AudioPorts.MONITOR, "MY KEYS" in a personal mix), and is
 ## `played` for the studio to tell everyone and to record. Anyone else's hit is heard in the
 ## room, from their hand (`heard`).
+##
+## A pitched instrument (a handbell, docs/spatial_loop.md slice 4) plays a note that is a function
+## of song position (`note_at`). Each hit takes ONE song position, read from `clock` as it is
+## played: that one position pitches what is heard here, is what the take records it at
+## (HitRecorder.hit), and is what it is sent with (`played`'s `at`, Session.send_item_hit's
+## `song`). Whoever hears it elsewhere pitches it by that same position (`heard`), so a hit played
+## just before a bar line rings the old chord's tone everywhere, however late it arrives.
+##
+## Every instrument has an output jack (`jack`, a JackSocket at `jack_point`, docs/spatial_loop.md
+## slice 5). Unplugged, a hit does all of the above and nothing else; plugged into a track, the
+## take it is recorded in goes onto that track instead of the armed one (Jacks, HitRecorder).
 
-## A hit played by a hand here: `velocity` 1 to 127, `struck` for a click rather than a shake.
-signal played(velocity: int, struck: bool)
+## A hit played by a hand here: `velocity` 1 to 127, `struck` for a click rather than a shake, `at`
+## the song position it was played to (one read of `clock`).
+signal played(velocity: int, struck: bool, at: float)
 
 ## Slower than this (m/s) is moving it, not playing it.
 const STROKE_MIN := 0.35
@@ -31,12 +43,27 @@ const AGAIN_AFTER := 0.06
 const STRUCK := 104
 ## How long a hit is as a note, in a take.
 const NOTE_SECONDS := 0.06
+## The MIDI channel (0-based) a pitched item records on: not the drums' (HitRecorder.CHANNEL),
+## which Tour reads as hand percussion, and not the keys' (0). TourPart.ITEM_CHANNELS mirrors it.
+const MELODIC_CHANNEL := 10
+## The most the item path's output may be late (s, AudioServer.get_output_latency) before a
+## pitched item wants a MonitorSynth voice of its own (the session panel says when it is over).
+const LATENCY_MOST := 0.025
+
+## The song position a hit played now lands on, in the player's ears. Set by the studio to its
+## HitRecorder's `stamp`, so this file still knows nothing of core/session/. Unset (or its owner
+## gone), the playhead.
+static var clock: Callable = Callable()
 
 var _last := Vector3.INF
 var _peak := 0.0
 var _peak_way := Vector3.ZERO
 var _since := 1.0
 var _take := 0
+## The note its last hit rang, here or heard from elsewhere (`note_at` of that hit's position).
+var last_note := -1
+## Its output jack, made as it enters the room: where what it plays goes (Jacks).
+var jack: JackSocket = null
 
 ## Which of the kind's voices this copy is: 0 the first out of the case, 1 the low one. A
 ## second copy of a kind is a different job, not a decoy, only because it sounds (and is
@@ -53,9 +80,71 @@ func pitch_scale() -> float:
 	return VOICE_PITCH[mini(voice, 1)] * curse_pitch
 
 
+func _ready() -> void:
+	super()
+	if jack == null:
+		jack = JackSocket.new(self)
+		add_child(jack)
+
+
+## Where its jack is, in its own frame: out of the end on your right as you face it (-X), at its
+## middle's height, just past its grip, so a ray aimed at the socket finds it before the
+## instrument. From the mix position the shelf is seen along its length from that end. Override
+## for an instrument with a better place (HandbellItem).
+func jack_point() -> Vector3:
+	var half := Vector3(0.05, 0.05, 0.05)
+	var s := _shape.shape
+	if s is BoxShape3D:
+		half = (s as BoxShape3D).size * 0.5
+	elif s is CylinderShape3D:
+		half = Vector3((s as CylinderShape3D).radius, (s as CylinderShape3D).height * 0.5, (s as CylinderShape3D).radius)
+	elif s is SphereShape3D:
+		half = Vector3.ONE * (s as SphereShape3D).radius
+	var middle := _shape.position
+	return Vector3(middle.x - half.x - JackSocket.REACH * 0.6, centre_height(), middle.z)
+
+
+## Which way its jack faces out of it, in its own frame: along its length, for one at its end.
+func jack_out() -> Vector3:
+	return Vector3.LEFT
+
+
 ## The General MIDI percussion note a hit is recorded as.
 func pitch() -> int:
 	return 82
+
+
+## The note a hit played to song position `seconds` is: `pitch()` for percussion, whatever the
+## song is doing. A pitched item asks the song (HandbellItem: its chord tone there).
+func note_at(_seconds: float) -> int:
+	return pitch()
+
+
+## The MIDI channel a hit is recorded on (0-based): the drums', for hand percussion.
+func channel() -> int:
+	return HitRecorder.CHANNEL
+
+
+## How long a hit is as a note, in a take.
+func note_seconds() -> float:
+	return NOTE_SECONDS
+
+
+## Whether its hits are notes of the song rather than drum strokes: its channel says so.
+func pitched() -> bool:
+	return channel() != HitRecorder.CHANNEL
+
+
+## How far the sound is pitched to ring `note`: 1.0 for percussion, whose sound is its own.
+func sound_pitch(_note: int) -> float:
+	return 1.0
+
+
+## One read of the song position a hit played now is played to: `clock`, or the playhead.
+static func now() -> float:
+	if clock.is_valid():
+		return float(clock.call())
+	return DAW.state.position_seconds if DAW.state != null else 0.0
 
 
 ## The sound of a hit: shaken, or `struck`.
@@ -63,37 +152,53 @@ func sound(_struck: bool, take: int) -> AudioStream:
 	return Foley.shaker(take)
 
 
+## A click. Somebody else's click on a pitched item is not rung from here: it comes as a hit
+## with its song position (`heard`), so it is rung in the chord they played it in.
 func use(down: bool) -> void:
 	if not down:
 		return
 	if carried_by != null:
 		play(STRUCK, true)
-	else:
+	elif not pitched():
 		heard(STRUCK, true)
 
 
-## A hit by a hand here: in this player's ears at once, and out to the room and the take.
+## A hit by a hand here: in this player's ears at once, and out to the room and the take. The song
+## position is read once (`now`), and the sound is started, pitched by it, before this returns.
 func play(velocity: int, struck := false) -> void:
 	velocity = clampi(velocity, 1, 127)
+	var at := now()
+	var note := note_at(at)
+	last_note = note
 	_take += 1
 	_jiggle(velocity)
 	if is_inside_tree():
 		var player := AudioStreamPlayer.new()
 		player.stream = sound(struck, _take)
 		player.volume_db = level_db(velocity)
-		player.pitch_scale = pitch_scale()
+		player.pitch_scale = pitch_scale() * sound_pitch(note)
 		player.bus = AudioPorts.bus(AudioPorts.MONITOR)
 		add_child(player)
 		player.finished.connect(player.queue_free)
 		player.play()
-	played.emit(velocity, struck)
+	played.emit(velocity, struck, at)
 
 
 ## Somebody else's hit, as their hand plays it: in the room, from where the instrument is.
-func heard(velocity: int, struck := false) -> void:
+## `song` is the song position they played it to; -1 (not known) is this player's own. A pitched
+## item rings its note there, exactly; percussion is given a little wobble, so a run of hits is
+## not one sample said again and again.
+func heard(velocity: int, struck := false, song := -1.0) -> void:
 	_take += 1
 	_jiggle(velocity)
-	Foley.play(self, sound(struck, _take), level_db(velocity) + 2.0, pitch_scale() * randf_range(0.97, 1.03))
+	var tune := pitch_scale()
+	if pitched():
+		var note := note_at(song if song >= 0.0 else now())
+		last_note = note
+		tune *= sound_pitch(note)
+	else:
+		tune *= randf_range(0.97, 1.03)
+	Foley.play(self, sound(struck, _take), level_db(velocity) + 2.0, tune)
 
 
 static func level_db(velocity: int) -> float:

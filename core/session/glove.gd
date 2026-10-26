@@ -12,6 +12,11 @@ extends Node3D
 ##
 ## Modelled pointing down -Z, palm down (-Y): so a right hand's thumb is toward -X and a
 ## left's toward +X. `top_level`, so it flies in world space however its owner is posed.
+##
+## Playing fingertip notes (docs/spatial_loop.md slice 8) it says which fingers the thumb is
+## pinching (`pinched`, HandPose's mask): each of those curls in to meet the thumb, and the thumb
+## comes across to them. A glove that plays is lettered (`make_letters`, `letter`): each fingertip
+## with the note it plays, grown while it is pinched, and the chord over the back of the hand.
 
 enum Pose { OPEN, POINT, GRIP }
 
@@ -32,6 +37,9 @@ const WHITE := Color(0.97, 0.97, 0.95)
 ## Where it is going. The basis is the attitude it should arrive at; its scale is ignored.
 var target := Transform3D.IDENTITY
 var pose := Pose.OPEN
+## The fingers the thumb is pinching (HandPose.INDEX, MIDDLE, RING, LITTLE): each curls in to meet
+## it, whatever the pose.
+var pinched := 0
 ## Its overall size; 1 is a glove for a ghost.
 var size := 1.0
 ## -1 for a left hand.
@@ -49,6 +57,11 @@ var _cuff_material := StandardMaterial3D.new()
 var _cloth := StandardMaterial3D.new()
 var _clock := randf() * TAU
 var _placed := false
+## The fingertips' letters, index to little, and the chord's over the hand; empty until
+## `make_letters`.
+var _tip_letters: Array[Label3D] = []
+var _chord_letter: Label3D
+var _lengths: Array[float] = []
 
 
 func _init(hand_side := 1.0) -> void:
@@ -114,6 +127,7 @@ func _finger(root: Vector3, length: float, splay: float, droop: float, cloth: Ma
 	finger.rotation = Vector3(PI * 0.5, 0, 0)
 	finger.position = Vector3(0, 0, -length * 0.5 + bone.radius)
 	_knuckles.append(knuckle)
+	_lengths.append(length)
 
 
 func _part(mesh: Mesh, material: Material, parent: Node3D) -> MeshInstance3D:
@@ -200,6 +214,12 @@ func _curl(delta: float) -> void:
 			want = [0.2, 0.25, 0.3, 0.35, 0.1]
 			for i in 4:
 				want[i] += sin(_clock * 3.1 + i * 0.9) * 0.08
+	if pinched != 0:
+		# Pinched fingers bend in to the thumb, and the thumb comes across under them to meet them.
+		for i in 4:
+			if pinched & HandPose.FINGER_BITS[i]:
+				want[i] = PINCH_CURL
+		want[4] = PINCH_THUMB
 	var weight := 1.0 - exp(-delta * CURL_RATE)
 	for i in _knuckles.size():
 		_curls[i] = lerpf(_curls[i], want[i], weight)
@@ -209,6 +229,69 @@ func _curl(delta: float) -> void:
 		else:
 			# The thumb folds in across the palm.
 			k.rotation.y = side * (0.95 - _curls[i] * 0.9)
+
+
+## How far a pinched finger curls, and the thumb as it meets it: in under the palm, short of a fist.
+const PINCH_CURL := 0.95
+const PINCH_THUMB := 0.85
+## The fingertips' letters' size, and how much a pinched one grows.
+const LETTER_SIZE := 44
+const LETTER_PIXEL := 0.0003
+const PINCHED_GROWS := 1.5
+
+
+## Letters for each fingertip and the chord, for a glove that plays: hidden until `letter` gives
+## them words. Each rides its finger, so it curls in with it.
+func make_letters() -> void:
+	if not _tip_letters.is_empty():
+		return
+	for i in 4:
+		var l := _letter_label(LETTER_SIZE)
+		l.position = Vector3(0, 0.012, -_lengths[i] - 0.022)
+		_knuckles[i].add_child(l)
+		_tip_letters.append(l)
+	_chord_letter = _letter_label(LETTER_SIZE + 12)
+	_chord_letter.position = Vector3(0, 0.05, 0.01)
+	_palm.add_child(_chord_letter)
+
+
+func _letter_label(font_size: int) -> Label3D:
+	var l := Label3D.new()
+	l.font_size = font_size
+	l.pixel_size = LETTER_PIXEL
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Over the hand they name, whatever of it is nearer.
+	l.no_depth_test = true
+	l.render_priority = 10
+	l.outline_render_priority = 9
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.modulate = Color(0.98, 0.96, 0.9)
+	l.visible = false
+	Lettering.range_to_legibility(l)
+	return l
+
+
+## What each finger plays, index to little, and the chord: empty hides them. A pinched finger's
+## grows, so which ones are down reads by size as well as by the curl.
+func letter(names: PackedStringArray, chord: String) -> void:
+	for i in _tip_letters.size():
+		var l := _tip_letters[i]
+		l.visible = i < names.size() and names[i] != ""
+		if l.visible:
+			l.text = names[i]
+		l.scale = Vector3.ONE * (PINCHED_GROWS if pinched & HandPose.FINGER_BITS[i] else 1.0)
+	if _chord_letter != null:
+		_chord_letter.visible = chord != ""
+		_chord_letter.text = chord
+
+
+## The fingertips' letters as shown now, index to little ("" for one hidden), and the chord's.
+func letters() -> PackedStringArray:
+	var out := PackedStringArray()
+	for l in _tip_letters:
+		out.append(l.text if l.visible else "")
+	out.append(_chord_letter.text if _chord_letter != null and _chord_letter.visible else "")
+	return out
 
 
 ## How far each finger is curled: index, middle, ring, little, thumb.

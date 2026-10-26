@@ -73,10 +73,18 @@ func performers() -> Array:
 
 
 ## A note from `from`, as Session.note_played says it: into their line, if it is listened to.
-func play(kind: int, pitch: int, velocity: int, from: int, song := -1.0) -> void:
+## A note-off from one of their instruments (`source`) while another still holds the pitch is
+## not sounded: it would stop the other's note. Counted as they come, which is the order they
+## were played in, and so the order the line sounds them.
+func play(kind: int, pitch: int, velocity: int, from: int, song := -1.0, source := &"") -> void:
 	var line: Line = lines.get(from)
-	if line != null:
-		line.arrive(kind, pitch, velocity, song, heard())
+	if line == null:
+		return
+	if kind == Session.Note.ON:
+		line.down.press(pitch, source, velocity)
+	elif kind == Session.Note.OFF and not line.down.let_go(pitch, source):
+		return
+	line.arrive(kind, pitch, velocity, song, heard())
 
 
 func heard() -> Dictionary:
@@ -150,6 +158,8 @@ class Line extends Node:
 	var last_late := 0.0
 	## What has been played on this line, for the suite: [kind, pitch].
 	var sounded: Array = []
+	## What of theirs has each pitch down (TheirMonitor.play).
+	var down := KeysDown.new()
 	var synth: MonitorSynth
 	var _player: AudioStreamPlayer = null
 	var _playback: AudioStreamGeneratorPlayback = null

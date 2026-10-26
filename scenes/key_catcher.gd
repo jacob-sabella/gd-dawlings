@@ -17,6 +17,12 @@ extends Control
 ## The arrow keys are not the piano's: they walk (Walker, which looks for WALKS_ON_ARROWS), so
 ## the keytar can be played on the move. Taken here all the same, or the GUI would move focus on
 ## them and the piano would stop.
+##
+## The same control, laid out otherwise, is the fingertips' four keys (docs/spatial_loop.md slice
+## 8): `layout` J K L ; with `base` 0, so what each key "plays" is the finger it is (0 index to 3
+## little), and FingertipNotes reads them as pinches through the mouse's hand (`held`). Its focus
+## is whether the fingertips play, so it lets go on a click as well (`click_releases`): one way
+## off for the keys and the mouse's grab together.
 
 signal note_on(pitch: int, velocity: int)
 signal note_off(pitch: int)
@@ -35,9 +41,20 @@ const LAYOUT := {
 }
 const LOWEST_C := 24
 const HIGHEST_C := 96
+## The fingertips' keys: J the index, K the middle, L the ring and ; the little finger.
+const FINGERS := {KEY_J: 0, KEY_K: 1, KEY_L: 2, KEY_SEMICOLON: 3}
 
+## Physical key -> what it plays, added to `base`: the piano (LAYOUT) unless told otherwise.
+var layout: Dictionary = LAYOUT
 ## The C under the A key. Middle C to start with.
 var base := 60
+## Whether Z and X move the octave: the piano's, not the fingertips'.
+var octave_keys := true
+## How hard a key plays: a key has no speed to read.
+var velocity := VELOCITY
+## Whether a click anywhere lets the keys go, as Esc does. This control takes no clicks itself
+## (it is invisible and has no size), so every click is somewhere else.
+var click_releases := false
 ## Physical key -> the pitch it started, so a key let go after an octave change stops the note
 ## it started rather than one it did not.
 var _down := {}
@@ -81,7 +98,7 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 		return
 	if key.echo:
-		if LAYOUT.has(key.physical_keycode):
+		if layout.has(key.physical_keycode):
 			accept_event()
 		return
 	if key.physical_keycode == KEY_ESCAPE and key.pressed:
@@ -94,29 +111,47 @@ func _gui_input(event: InputEvent) -> void:
 
 ## One key, down or up. True when the key is this piano's. Public so the suite can play it.
 func handle(physical: int, pressed: bool) -> bool:
-	if physical == KEY_Z or physical == KEY_X:
+	if octave_keys and (physical == KEY_Z or physical == KEY_X):
 		if pressed:
 			base = clampi(base + (12 if physical == KEY_X else -12), LOWEST_C, HIGHEST_C)
 		return true
-	if not LAYOUT.has(physical):
+	if not layout.has(physical):
 		return false
 	if pressed:
 		if _down.has(physical):
 			return true
-		var pitch: int = clampi(base + LAYOUT[physical], 0, 127)
+		var pitch: int = clampi(base + layout[physical], 0, 127)
 		_down[physical] = pitch
-		note_on.emit(pitch, VELOCITY)
+		note_on.emit(pitch, velocity)
 	elif _down.has(physical):
-		note_off.emit(_down[physical])
+		# Up before it is said, so a reader that polls (`held`) hears it gone.
+		var pitch: int = _down[physical]
 		_down.erase(physical)
+		note_off.emit(pitch)
 	return true
+
+
+## What every key down now plays, as `note_on` gave it: for a reader that polls (the fingertips'
+## mask, MouseInteractor.finger_pinches).
+func held() -> Array:
+	return _down.values()
+
+
+## A click somewhere, while this has the keys and lets go on a click: they go back. The click
+## itself goes on to whatever it was on.
+func _input(event: InputEvent) -> void:
+	var click := event as InputEventMouseButton
+	if click_releases and click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT \
+			and has_focus():
+		set_active(false)
 
 
 ## Every key this piano has down, let go.
 func release_all() -> void:
 	for physical in _down.keys():
-		note_off.emit(_down[physical])
-	_down.clear()
+		var pitch: int = _down[physical]
+		_down.erase(physical)
+		note_off.emit(pitch)
 
 
 func _on_focus_exited() -> void:

@@ -687,7 +687,7 @@ func _build_locator() -> void:
 					return "needs the ReaScript bridge"
 				var here := _marker_here()
 				if not is_nan(here):
-					return "rename %s; fine press removes it" % str(DAW.state.markers[here])
+					return "rename %s; fine press removes it" % marker_label(str(DAW.state.markers[here]))
 				return "%s at %s" % [next_marker_name(DAW.state.markers),
 						DAW.state.bar_beat(DAW.state.position_seconds)]
 			_mark_key = key
@@ -700,8 +700,8 @@ func _build_locator() -> void:
 						else marker_after(DAW.state.markers, DAW.state.position_seconds)
 				if at < 0.0:
 					return "the start" if way < 0 else "no marker after here"
-				return str(DAW.state.markers.get(at, "")) if str(DAW.state.markers.get(at, "")) != "" \
-						else DAW.state.bar_beat(at)
+				var said := marker_label(str(DAW.state.markers.get(at, "")))
+				return said if said != "" else DAW.state.bar_beat(at)
 		_adopt(key)
 
 		var legend := Label3D.new()
@@ -741,13 +741,29 @@ static func marker_after(markers: Dictionary, seconds: float) -> float:
 	return best
 
 
-## The marker at or before `seconds`: the section the playhead is in. "" before the first.
+## The marker at or before `seconds`: the section the playhead is in, without the harmony's
+## brackets (Harmony.section_of). "" before the first. A marker that is only brackets changes
+## the harmony, not the section, so it is passed over and the section before it goes on.
 static func section_at(markers: Dictionary, seconds: float) -> String:
 	var best := -1.0
 	for at in markers:
-		if float(at) <= seconds + 0.001 and float(at) > best:
+		if float(at) <= seconds + 0.001 and float(at) > best and not _only_brackets(str(markers[at])):
 			best = float(at)
-	return str(markers[best]) if best >= 0.0 else ""
+	return Harmony.section_of(str(markers[best])) if best >= 0.0 else ""
+
+
+## What the locator's keys call a marker: its section, or for one that is only brackets the key
+## it sets ("A minor"), which is why PREV and NEXT still stop there.
+static func marker_label(marker_name: String) -> String:
+	var section := Harmony.section_of(marker_name)
+	if section != "":
+		return section
+	var h := Harmony.parse(marker_name)
+	return h.key_name if h != null else ""
+
+
+static func _only_brackets(marker_name: String) -> bool:
+	return Harmony.section_of(marker_name) == "" and Harmony.parse(marker_name) != null
 
 
 ## What MARK calls the marker it drops: the next free number, the way Reaper numbers markers it

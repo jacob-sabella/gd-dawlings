@@ -20,7 +20,7 @@ extends Node3D
 ## The items there are, in the order they take the shelf's spots.
 const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
 		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3",
-		&"cradle", &"yoyo", &"toy", &"rcplane"]
+		&"cradle", &"yoyo", &"toy", &"rcplane", &"bell1", &"bell2", &"bell3", &"bell4"]
 ## How far in front of you a put-down can land; past this, it is put at your feet.
 const PUT_REACH := 2.6
 ## Where it lands when the aim finds no floor in reach: this far in front of where you stand.
@@ -43,8 +43,9 @@ signal asked(verb: StringName, args: Array)
 signal used(item: Item, down: bool)
 ## Something about where an item is changed: for a host to tell the room.
 signal moved(item: Item)
-## An instrument played by a hand here (InstrumentItem.played): for the session and the take.
-signal played(item: InstrumentItem, velocity: int, struck: bool)
+## An instrument played by a hand here (InstrumentItem.played): for the session and the take. `at`
+## is the song position it was played to, the one its note was pitched by.
+signal played(item: InstrumentItem, velocity: int, struck: bool, at: float)
 ## A hand here was refused an item (Item.may_hold, a Tour "marked" spill): for the studio's toast.
 signal refused(item: Item, why: String)
 ## `item` is a fresh personal copy, just spawned and bound (`take_personal`): for the studio to
@@ -123,6 +124,14 @@ static func make(kind: StringName) -> Item:
 			return DartItem.new(1)
 		&"dart3":
 			return DartItem.new(2)
+		&"bell1":
+			return HandbellItem.new(1)
+		&"bell2":
+			return HandbellItem.new(2)
+		&"bell3":
+			return HandbellItem.new(3)
+		&"bell4":
+			return HandbellItem.new(4)
 		&"cowbell":
 			return CowbellItem.new()
 		&"woodblock":
@@ -142,8 +151,9 @@ static func make(kind: StringName) -> Item:
 
 ## The kind a spilled instance's own id names, its voice number stripped off: "cowbell2" ->
 ## "cowbell", "cowbell" -> "cowbell". An id the shelf itself holds is its own kind, digits and
-## all -- the darts are "dart1".."dart3", and `make` answers to exactly those -- so KINDS is
-## checked first rather than trusting that no shelf id ends in a number.
+## all -- the darts are "dart1".."dart3" and the handbells "bell1".."bell4", and `make` answers to
+## exactly those -- so KINDS is checked first rather than trusting that no shelf id ends in a
+## number.
 static func kind_of(id: StringName) -> StringName:
 	if id in KINDS:
 		return id
@@ -197,8 +207,8 @@ func _adopt(item: Item) -> void:
 	item.landed.connect(func() -> void: moved.emit(item))
 	item.worn_changed.connect(func() -> void: moved.emit(item))
 	if item is InstrumentItem:
-		(item as InstrumentItem).played.connect(func(velocity: int, struck: bool) -> void:
-			played.emit(item, velocity, struck))
+		(item as InstrumentItem).played.connect(func(velocity: int, struck: bool, at: float) -> void:
+			played.emit(item, velocity, struck, at))
 
 
 ## A copy of `kind` that is not one of KINDS -- a Tour spill, cowbell or cowbell2 -- given `id`

@@ -19,9 +19,15 @@ var id: StringName
 var instrument: StringName
 ## What the band is told.
 var line: String = ""
+## The channels items record on, 0-based: 9 the hand percussion's (HitRecorder.CHANNEL) and 10
+## the pitched items' (InstrumentItem.MELODIC_CHANNEL, the handbells). Mirrored here rather than
+## referenced, because Tour code knows nothing of core/items/; a suite check keeps them equal.
+const ITEM_CHANNELS: Array[int] = [9, 10]
+
 ## A note's MIDI channel, 0-based as HitRecorder/GuestMidi write it: 9 is the hand percussion's
 ## channel (HitRecorder.CHANNEL, not referenced directly -- Tour code knows nothing of
-## core/items/). -1 means any channel but 9: a keytar's keys, wherever they come from.
+## core/items/). -1 means any channel but the items' (ITEM_CHANNELS): a keytar's keys, wherever
+## they come from, and never a handbell rung during the brief.
 var channel: int = 9
 ## Which General MIDI pitches count; empty means any pitch counts (a keytar's stabs, whose chord
 ## is the player's call).

@@ -1555,7 +1555,7 @@ func _build_ruler() -> void:
 	var named: Array = []
 	for at in DAW.state.markers:
 		var nx := _x_for(float(at))
-		named.append(Vector2(nx - 0.003, nx + 0.006 + str(DAW.state.markers[at]).length() * 0.0072))
+		named.append(Vector2(nx - 0.003, nx + flag_width(str(DAW.state.markers[at]))))
 	for n in range(first, last + 1, step):
 		if n < 0:
 			continue
@@ -1602,6 +1602,8 @@ func _build_ruler() -> void:
 		_ruler.add_child(sig)
 
 	# Section markers sit on the ruler, where the arrangement is actually named.
+	var flag_xs: Array = DAW.state.markers.keys().map(func(t): return _x_for(float(t)))
+	flag_xs.sort()
 	for at in DAW.state.markers:
 		var mx := _x_for(float(at))
 		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
@@ -1610,10 +1612,28 @@ func _build_ruler() -> void:
 		# ends draw their ends in the same plane.
 		_ruler.add_child(_flat_box(Vector3(0.0008, NUMBERS_HEIGHT * 0.58, 0.0008),
 				Vector3(mx, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.69, 0.0015), MARKER_COLOUR))
-		var flag := _text(str(DAW.state.markers[at]).to_upper(), 40, MARKER_COLOUR)
-		flag.position = Vector3(mx + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.74, 0.0016)
-		flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		_ruler.add_child(flag)
+		# The section on the flag; a bracketed marker's harmony under it, smaller, with the section
+		# lifted into the bar numbers' row (none are drawn under a flag) to make room.
+		var said := flag_lines(str(DAW.state.markers[at]))
+		if said[0] != "":
+			var flag := _text(said[0], FLAG_SIZE, MARKER_COLOUR)
+			flag.position = Vector3(mx + 0.0022, _top_y - LOOP_BAND
+					- NUMBERS_HEIGHT * (0.74 if said[1] == "" else 0.34), 0.0016)
+			flag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_ruler.add_child(flag)
+		if said[1] != "":
+			# Cut short of the next flag, which a long progression in a short section would run into.
+			var room := _lane_right() - mx
+			for fx in flag_xs:
+				if fx > mx + 0.001:
+					room = fx - mx
+					break
+			var key := _text(said[1], FLAG_HARMONY_SIZE, MARKER_COLOUR)
+			key.text = fit_text(said[1], (room - 0.006) / key.pixel_size, key.font_size)
+			key.name = "Harmony"
+			key.position = Vector3(mx + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.8, 0.0016)
+			key.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_ruler.add_child(key)
 
 	# The regions, in the loop band under the loop's own bar: a slab of colour each, end to end,
 	# its name at its left. Behind the loop bar, which is the one being dragged.
@@ -2116,6 +2136,20 @@ static func fit_text(text: String, room: float, size: int) -> String:
 	return ""
 
 
+## What a marker's flag says: [its section, upper case; the brackets' harmony as written ("A
+## minor: Am F C G"), or ""]. A marker that is only brackets has no section line.
+static func flag_lines(marker_name: String) -> PackedStringArray:
+	var h := Harmony.parse(marker_name)
+	return PackedStringArray([Harmony.section_of(marker_name).to_upper(), h.text if h != null else ""])
+
+
+## How far right of its marker a flag reaches: the longer of its two lines.
+static func flag_width(marker_name: String) -> float:
+	var lines := flag_lines(marker_name)
+	return 0.006 + maxf(lines[0].length() * FLAG_LETTER,
+			lines[1].length() * FLAG_LETTER * FLAG_HARMONY_SIZE / FLAG_SIZE)
+
+
 ## A recorded take's loudness, on the item, as an arranger draws a waveform: a column for every
 ## few millimetres of panel, as tall as the loudest moment under it, mirrored about the middle
 ## of the block below its strip. Read from the item's overview (AudioTake.peaks), from where in
@@ -2433,6 +2467,11 @@ const GRID_BAR := Color(0.30, 0.34, 0.42)
 const RULER_TEXT := Color(0.90, 0.92, 0.96)
 const RULER_TICK := Color(0.55, 0.60, 0.70)
 const MARKER_COLOUR := Color(1.0, 0.80, 0.42)
+## A marker flag's lettering: its section, and the harmony a bracketed one sets under it; and how
+## wide a letter of the section's is on the ruler, for keeping bar numbers out from under a flag.
+const FLAG_SIZE := 40
+const FLAG_HARMONY_SIZE := 30
+const FLAG_LETTER := 0.0072
 const REGION_COLOUR := Color(0.62, 0.85, 0.72)
 const PLAYHEAD_COLOUR := Color(1.0, 0.92, 0.62)
 ## How far either side of the playhead a clip it is cutting through is lit by it.
