@@ -217,6 +217,21 @@ func _on_value_changed() -> void:
 		cap_bank.move_slot(_cap_slot, cap_bank.global_transform.affine_inverse() * _cap.global_transform)
 
 
+## A write bead's value, as a drag's (WriteBead): the cap goes there and the level is written.
+func _on_bead_write(v: float) -> void:
+	_set_value(v)
+
+
+## Over the top of the travel, out from the panel, so a cursor goes up off the strip's fader to it
+## and a hand reaches up to it; its thread hangs from the cap, wherever the cap is.
+func bead_anchor() -> Vector3:
+	return Vector3(0, TRAVEL + 0.03, 0.022)
+
+
+func bead_foot() -> Vector3:
+	return Vector3(0, value * TRAVEL, 0.012)
+
+
 func _default_title() -> String:
 	return "LEVEL"
 

@@ -361,6 +361,8 @@ func _draw_cables() -> void:
 				to_row.jack_transform(route["in_slot"]), from_row.colour,
 				hash(Vector2i(route["src"], route["dst"])))
 		cable.sag_ratio = CABLE_SAG
+		cable.source_track = route["src"]
+		cable.send_index = route["send"]
 		_adopt(cable)
 		_cables.append(cable)
 		route["cable"] = cable

@@ -150,6 +150,9 @@ var personal := PersonalMix.new()
 var their_keys: TheirKeys
 ## Other players' monitors, rebuilt here in time for the personal mix's plugs in them.
 var their_monitor: TheirMonitor
+## A cassette held to the ear here, playing its clip to this player alone (docs/spatial_loop.md
+## part two, slice 25): `_follow_ear` tells it which, each frame.
+var ear: EarCue
 ## The hand percussion played here, taken down onto the armed track while recording.
 var hit_recorder: HitRecorder
 ## Where a hit played here goes out to the room: Session.send_item_hit, or the suite's.
@@ -176,6 +179,23 @@ var harp: ChordHarp
 ## The circle-of-fifths wheel on the bricks table (FifthsWheel), stood again with each venue at
 ## its `wheel_spot`: where the song's key and chords are written from the room. Null in AR.
 var wheel: FifthsWheel
+## The cassette rack beside the prop shelf (CassetteRack, docs/spatial_loop.md part two, slice 23),
+## stood again with each venue at its `cassette_rack_spot`: the clips pulled out of the timeline,
+## shelved. Null in AR.
+var cassette_rack: CassetteRack
+## The sampler beside the rack (Sampler, docs/spatial_loop.md part two, slice 26), stood again with
+## each venue at its `sampler_spot`: REC, then a sound, is a sample cassette on the rack. Null in AR.
+var sampler: Sampler
+## A guest's pulls the host has not answered: {seq, hand, look}, the look a blank cassette in that
+## hand until the host's made one arrives there or the ask is refused (`_settle_makes`).
+var _making: Array = []
+## The hands a made item the host has answered for is to go into, oldest first (`_take_given`).
+var _awaiting_hands: Array = []
+## A headset hand holding a made item by a bandmate's glove: {hand: [peer, seconds]} (`_follow_gives`).
+var _give_held := {}
+## How near a bandmate's glove a carried made item is held to hand it over (m), and for how long (s).
+const GIVE_REACH := 0.25
+const GIVE_HOLD := 0.5
 ## Who is ON AIR, by peer id: whose monitor anyone may plug into. The room's, like `patches`.
 var on_air: Array = []
 ## Who has a plug in which SEND socket: {peer id: [socket name per receiver, "" in the tray]}.
@@ -235,7 +255,18 @@ var timeline_stand: Trolley
 var patch_stand: Trolley
 ## The stage table (StageTable, docs/spatial_loop.md slice 18) and the trolley it stands on.
 var stage: StageTable
+## Signal you can see (SignalBeads, docs/spatial_loop.md part two, slice 21): one bank of beads
+## riding every cable in the room, and how far the practicals were last lifted by a clip.
+var signal_beads: SignalBeads
+var _lamps_lifted := 0.0
 var stage_trolley: Trolley
+## Clap to mute (Clap, docs/spatial_loop.md slice 19): the two hands' palms or grips, and K held at
+## a desk. Two of them, so a key and the hands never let go of each other's press.
+var clap := Clap.new()
+var key_clap := Clap.new()
+## Leaning in (Ears.lean): L held at a desk, and the track it was refused for, said once.
+var _lean_key := false
+var _lean_refused := 0
 ## Surface id -> [the trolley it stands on, where on that trolley].
 var _seated_on := {}
 var _lamps: Array[OmniLight3D] = []
@@ -452,6 +483,7 @@ func _exit_tree() -> void:
 		_seat_finder.free()
 		_seat_finder = null
 	mic_arm.let_go()
+	Ears.lean(0)
 	Ears.listen(false)
 	if DAW.backend is GodotBackend:
 		(DAW.backend as GodotBackend).set_cues([])
@@ -491,6 +523,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_hang_the_roulette_door()
 	_stand_the_harp()
 	_stand_the_wheel()
+	_stand_the_cassette_rack()
+	_stand_the_sampler()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
@@ -544,6 +578,69 @@ func _stand_the_wheel() -> void:
 	wheel = FifthsWheel.new()
 	wheel.transform = FifthsWheel.on_stand(spot)
 	venue.add_child(wheel)
+
+
+## The cassette rack, in the venue's own frame beside the prop shelf: a child of the venue, so it
+## goes with it. Its slots are the room's holder RACK and its bin BIN (`_hold_the_rack`).
+func _stand_the_cassette_rack() -> void:
+	cassette_rack = null
+	var spot: Variant = Stations.spot(venue, &"cassette_rack")
+	if spot == null:
+		return
+	cassette_rack = CassetteRack.new()
+	cassette_rack.transform = spot
+	cassette_rack.items = items
+	venue.add_child(cassette_rack)
+
+
+## The sampler, in the venue's own frame beside the cassette rack: a child of the venue, so it goes
+## with it. REC is the room's (`sampler`), kept across a change of venue.
+func _stand_the_sampler() -> void:
+	var was := sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0
+	sampler = null
+	var spot: Variant = Stations.spot(venue, &"sampler")
+	if spot == null:
+		return
+	sampler = Sampler.new()
+	sampler.transform = spot
+	sampler.items = items
+	sampler.authority = Session.is_authority
+	sampler.local_peer = func() -> int: return Session.local_peer_id
+	sampler.name_of = Session.name_of
+	sampler.armed_by = was
+	sampler.rec_pressed.connect(_on_rec_pressed)
+	sampler.told.connect(func(peer: int, text: String) -> void: Session.tell(peer, text))
+	sampler.armed_changed.connect(_publish_room_soon)
+	venue.add_child(sampler)
+
+
+## The rack's slots and bin as the room's holders, and each made item's home its tray, in the
+## room's frame (the venue's, as the shelf's spots are).
+func _hold_the_rack() -> void:
+	if items == null:
+		return
+	if cassette_rack == null or not is_instance_valid(cassette_rack):
+		items.holders.clear()
+		return
+	cassette_rack.items = items
+	if sampler != null and is_instance_valid(sampler):
+		sampler.items = items
+	var at := cassette_rack.transform
+	items.set_holder(CassetteRack.RACK, CassetteRack.slots_in(at))
+	var bin: Array[Transform3D] = [at * CassetteRack.bin_pose()]
+	items.set_holder(CassetteRack.BIN, bin)
+	for id in items.made_ids():
+		var item: Item = items.items[id]
+		item.home = _made_home(ItemRoom.kind_of(id), int(String(id).trim_prefix(String(ItemRoom.kind_of(id)))))
+		if item.state == Item.State.HOME:
+			item.snap_home()
+
+
+## Where made item number `n` lies with nowhere else to be: the rack's tray.
+func _made_home(_kind: StringName, n: int) -> Transform3D:
+	if cassette_rack == null or not is_instance_valid(cassette_rack):
+		return venue.prop_shelf_spot() if venue != null else Transform3D.IDENTITY
+	return cassette_rack.transform * CassetteRack.tray_spot(n)
 
 
 ## The wheel in this player's reach (`&"wheel"` in GuestMidi.instruments) while a hand of theirs
@@ -641,6 +738,42 @@ func _relight() -> void:
 		venue.blackout(false)
 
 
+## The room hearing a clip, one frame: the master or any heard track over 0 dBFS lights its OVER
+## lamp (MasterSection.show_over, ChannelStrip.show_over) and lifts the practicals (Venue.hear_clip,
+## at most once every Venue.FLASH_GAP). A chaos event's flicker or blackout has the lamps meanwhile.
+func follow_clip(delta: float) -> void:
+	var master_over := MasterSection.clipping(SignalBeads.master_level())
+	var any := master_over
+	var over := {}
+	# Every track, in no order, each asked in constant time (SignalBeads.heard): a frame of this
+	# on a ninety-track desk is ninety looks, not ninety sorts.
+	for index in DAW.state.tracks:
+		if MasterSection.clipping(SignalBeads.track_level(index)):
+			over[index] = true
+			any = true
+	if console != null:
+		if console.master != null:
+			console.master.show_over(master_over, delta)
+		for strip in console.strips:
+			if is_instance_valid(strip):
+				strip.show_over(over.has(strip.track_index), delta)
+	venue.hear_clip(any, delta)
+	lift_lamps(venue.lift)
+
+
+## The practicals at their venue's energy, `by` (a share) above it. Left alone while a chaos
+## event's tween has them, and written only when it changes.
+func lift_lamps(by: float) -> void:
+	if _lights_tween != null and _lights_tween.is_valid() and _lights_tween.is_running():
+		return
+	if is_equal_approx(by, _lamps_lifted):
+		return
+	_lamps_lifted = by
+	for i in _lamps.size():
+		if i < PRACTICALS.size():
+			_lamps[i].light_energy = venue.lamp_energy(i, PRACTICALS[i][2]) * (1.0 + by)
+
+
 ## `power_flicker`'s telegraph: the practicals dip to a sixth and back, twice, fast -- a flicker
 ## you feel coming, not a cut you only notice after. `_lights_tween` is the one tween either this
 ## or `_lights_out` ever runs, killed first so the two can never fight over the same lamps.
@@ -699,6 +832,7 @@ func _walk_where_the_venue_lets() -> void:
 		items.hoops = venue.hoops()
 		items.set_venue(venue.venue_id())
 		items.set_spots(venue.item_spots(), _item_homes())
+	_hold_the_rack()
 	if tour_case != null and venue != null:
 		tour_case.transform = venue.tour_case_spot()
 		if items != null:
@@ -942,8 +1076,9 @@ func _build_furniture() -> void:
 ## Where the stage table's trolley stands: beside the mix position on the right and a little
 ## behind it, turned to face it, clear of the deck trolley and the patch stand however wide the
 ## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
-## it). The top is desk height; the rail along its front drops RAIL below it.
-const STAGE_AT := Vector3(1.3, 0, 1.1)
+## it). The top is desk height; the rail along its front drops RAIL below it. Far enough back
+## that from the seat the right-hand lamp's foot is seen past its corner, not through it.
+const STAGE_AT := Vector3(1.1, 0, 1.4)
 const STAGE_TOP := 0.74
 
 
@@ -1456,8 +1591,11 @@ func room_state() -> Dictionary:
 	return {"venue": venue.venue_id() if venue != null else Venue.IDS[0],
 			"variant": venue.variant if venue != null else 0, "tablets": out,
 			"floor": floor, "placed": placed, "items": items.state() if items != null else {},
+			"made": items.made_ids() if items != null else [],
 			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
-			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {}}
+			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
+			"ropes": stage.ropes.duplicate() if stage != null else {},
+			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0}
 
 
 func _publish_room() -> void:
@@ -1492,8 +1630,9 @@ func apply_room(state: Dictionary, glide := false) -> void:
 	var pending_items := {}
 	for p in _predictions:
 		match p["verb"]:
-			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item": pending_items[p["args"][0]] = true
-			&"patch", &"on_air", &"plug": pass
+			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
+				pending_items[p["args"][0]] = true
+			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -1567,8 +1706,12 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		var placed: Dictionary = (state.get("placed", {}) as Dictionary).duplicate()
 		placed.merge(pending_place, true)
 		mount.share_studio(placed, GLIDE_SECONDS if glide else 0.0)
+	if items != null and state.has("made"):
+		# The made items the room names, real here from the rows the host sent first.
+		items.apply_made(state["made"])
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
+	_settle_makes(answered)
 	if state.has("on_air"):
 		on_air = (state["on_air"] as Array).duplicate()
 		for p in _predictions:
@@ -1588,6 +1731,13 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			if p["verb"] == &"plug":
 				rows[String(p["args"][0])] = String(p["args"][1])
 		jacks.set_patch(rows)
+	if stage != null and state.has("ropes"):
+		# The stage table keeps its own unanswered ties and cuts on top.
+		stage.apply_ropes(state["ropes"], answered)
+	if sampler != null and is_instance_valid(sampler) and state.has("sampler") \
+			and not _predictions.any(func(p): return p["verb"] == Sampler.VERB):
+		# Once its press is answered, the host's word: on for whoever the room says, or off.
+		sampler.armed_by = int(state["sampler"])
 	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
 		_show_board(StringName(state["board"]))
 	_applying_room = false
@@ -1751,6 +1901,28 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"take_personal":
 			if items != null:
 				items.take_personal(args[0], from)
+		&"make":
+			# A guest's pull: the host packs the clip from its own song, mints it, and it is in
+			# their hand -- or it is refused, and they are told why.
+			var made := _mint_for(args[0], args[1], from)
+			if made != null:
+				_hand_made(made, from)
+		&"slot_item":
+			var item: Item = items.items.get(args[0]) if items != null else null
+			if item != null and _may_put(item, from) and not items.slot(item, args[1], args[2]):
+				Session.tell(from, items.slot_refusal(item, args[1], args[2]))
+		&"give":
+			var item: Item = items.items.get(args[0]) if items != null else null
+			if item != null and Session.holder_of(item.network_key()) == from and args[1] != from \
+					and Session.participants.has(args[1]):
+				_give(item, args[1], from)
+		&"paste":
+			# A guest's paste: the cassette in its hand, by id; the clip is the host's own row.
+			var cassette := items.items.get(args[0]) as CassetteItem if items != null else null
+			if cassette == null or Session.holder_of(cassette.network_key()) != from:
+				Session.tell(from, "That cassette is not in your hand here yet: pick it up again and paste.")
+			else:
+				paste_cassette(cassette, args[1], args[2], from)
 		&"open_track_rack":
 			if floor_plan != null and DAW.state.tracks.has(args[0]):
 				open_track_rack(args[0], Vector2(args[1], args[2]))
@@ -1759,6 +1931,13 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"harmony":
 			# A guest's SET on the fifths wheel: written at the bar they chose, if it reads.
 			FifthsWheel.answer(args[0], args[1])
+		&"rope":
+			# A guest's rope tied or cut on its stage table: the row says what the rope added.
+			if stage != null:
+				stage.answer_rope(args[0], args[1], args[2])
+		&"sampler":
+			# A guest's REC: on for their next sound, or off.
+			_arm_sampler(args[0], from)
 		&"board_source":
 			if board_sources().has(args[0]):
 				_show_board(args[0])
@@ -1817,6 +1996,8 @@ func _on_role_changed() -> void:
 		return
 	if _showing_hosts_room:
 		_put_back_own_room()
+	# This player's made items, set aside while a guest (Session.join): theirs again.
+	_restore_made(true)
 	_publish_room()
 
 
@@ -2284,6 +2465,8 @@ func _build_surfaces() -> void:
 	timeline.size_chosen.connect(_on_timeline_size_chosen)
 	studio_set.add_child(timeline)
 	mount.register(timeline)
+	# A write bead pulled out shows its lane on the timeline, so the pass is seen to land there.
+	WriteBead.on_pull = _show_written_lane
 
 	deck = TapeDeck.new()
 	deck.name = "TapeDeck"
@@ -2302,9 +2485,11 @@ func _build_surfaces() -> void:
 	if stage_trolley != null:
 		stage = StageTable.new()
 		stage.name = "StageTable"
+		StageLink.wire(stage)
 		stage.transform = stage_trolley.transform * Transform3D(Basis.IDENTITY, Vector3(0, STAGE_TOP, 0))
 		studio_set.add_child(stage)
 		mount.register(stage)
+		stage.ropes_changed.connect(_publish_room_soon)
 		focus.surfaces.append(stage)
 	focus.show_halo = medium != Presentation.Medium.SCREEN
 	focus.visits = medium == Presentation.Medium.SCREEN
@@ -2346,6 +2531,10 @@ func _build_surfaces() -> void:
 	# across it: a session that gains tracks moves where its own looms land.
 	patchbay.rebuilt.connect(refresh_looms)
 	refresh_looms()
+	# The beads ride whatever cables there are, found every frame, so a cable rebuilt or freed
+	# needs telling nobody.
+	signal_beads = SignalBeads.create()
+	add_child(signal_beads)
 
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
@@ -2520,9 +2709,25 @@ func refresh_looms() -> void:
 			via = stand.transform * (_authored_floor[stand.piece_id] as Transform3D).affine_inverse() * via
 		var loom := GearLoom.create(from_at, from_dir, to_at, to_dir, via, hash(run[0]))
 		loom.on_floor = run[5]
+		loom.level_source = loom_level(String(run[0]))
 		loom.name = "Loom_%s" % run[0]
 		studio_set.add_child(loom)
 		_looms.append(loom)
+
+
+## What a machine's loom carries to the bay, for its beads: the console's every heard track (so a
+## desk of muted strips sends nothing down it), the rack's every heard track with a plugin on it,
+## and the deck's the master it records and plays.
+static func loom_level(machine: String) -> Callable:
+	match machine:
+		"console":
+			return func() -> float: return SignalBeads.loudest()
+		"rack":
+			return func() -> float: return SignalBeads.loudest(
+					func(i: int) -> bool: return not DAW.state.track(i).plugins().is_empty())
+		"deck":
+			return func() -> float: return SignalBeads.master_level()
+	return Callable()
 
 
 func _stands_in_cabinet() -> bool:
@@ -2626,6 +2831,9 @@ func _build_items() -> void:
 	their_monitor = TheirMonitor.new()
 	their_monitor.name = "TheirMonitor"
 	add_child(their_monitor)
+	ear = EarCue.new()
+	ear.name = "EarCue"
+	add_child(ear)
 	Session.note_played.connect(their_monitor.play)
 	Session.control_played.connect(their_monitor.control)
 	console.rebuilt.connect(_show_patches)
@@ -2636,7 +2844,11 @@ func _build_items() -> void:
 	_show_patches()
 	items.asked.connect(_on_items_asked)
 	items.refused.connect(_on_item_refused)
-	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down))
+	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down, item.use_take))
+	# What the sampler catches (slice 26): a use or a hit by a hand here, or anyone's the host hears.
+	items.used.connect(_sample_use_here)
+	Session.item_used.connect(_on_someones_use)
+	Session.item_hit.connect(_on_someones_hit)
 	items.personal_taken.connect(_on_item_personal_taken)
 	hit_recorder = HitRecorder.new()
 	hit_recorder.name = "HitRecorder"
@@ -2681,9 +2893,419 @@ func _build_items() -> void:
 		keytar.wants_keys.connect(func() -> void: _keytar_play(true))
 	if Session.guest_midi != null:
 		Session.guest_midi.key.connect(_on_key_played)
-	items.moved.connect(func(_item: Item) -> void: _publish_room_soon())
+	items.moved.connect(_on_item_moved)
 	if presence != null:
 		presence.items = items
+	_wire_made_items()
+
+
+# --- made items: cassettes (docs/spatial_loop.md part two, slice 23) ------------------------
+#
+# A clip pulled out of the timeline is a cassette in the hand that pulled it: minted by the host
+# (ItemRoom.mint) from its own song, its data sent once (Session.publish_made) and named by id in
+# the room. A guest's pull is an ask (`make`) and a blank cassette in its hand until the host's
+# arrives there or the ask is refused. Handed over: thrown, held by a bandmate's glove
+# (GIVE_REACH, GIVE_HOLD), or clicked on their ghost at a desk; the room's `give` puts it in their
+# hand. Shelved on the rack's slots, binned in its BIN. Pressed onto a lane, a strip or a stage voice,
+# pasted there (slice 24): the host's own at once, a guest's asked by id with the room's `paste`.
+
+func _wire_made_items() -> void:
+	items.made = Session.made
+	items.authority = Session.is_authority
+	items.made_home = _made_home
+	items.press_ahead = _press_ahead
+	items.minted.connect(_on_minted)
+	items.unmade.connect(_on_unmade)
+	items.told.connect(_on_items_told)
+	items.used.connect(_on_item_used_here)
+	items.paste_pressed.connect(_on_paste_pressed)
+	Session.made_changed.connect(_on_made_changed)
+	Session.holds_changed.connect(_take_given_soon)
+	if timeline != null:
+		timeline.clip_pulled.connect(_on_clip_pulled)
+	_hold_the_rack()
+	_restore_made()
+
+
+## Something in the room moved: told to the room, and a made item's place kept with the layout.
+func _on_item_moved(item: Item) -> void:
+	_publish_room_soon()
+	if ItemRoom.is_made(item.id) and Session.is_authority():
+		_remember_made_soon()
+
+
+func _on_items_told(text: String) -> void:
+	Session.notice.emit(text)
+
+
+## Minted here, on the host: its row to everyone once, and kept with this host's layout.
+func _on_minted(item: Item) -> void:
+	Session.publish_made(item.id)
+	_remember_made()
+	_publish_room_soon()
+
+
+## Binned here, on the host: gone everywhere, row and all.
+func _on_unmade(id: StringName) -> void:
+	Session.drop_made(id)
+	Session.notice.emit("Binned %s." % _made_name(id))
+	_remember_made()
+	_publish_room_soon()
+
+
+func _made_name(id: StringName) -> String:
+	return "cassette %s" % String(id).trim_prefix("cassette")
+
+
+## A guest heard the host take a made item away: here too.
+func _on_made_changed(id: StringName, gone: bool) -> void:
+	if gone and items != null:
+		items.forget_made(id)
+
+
+## A hand here pulled track `track`'s item `index` out of the timeline: the host's own pull is a
+## cassette in that hand at once; a guest's is an ask, and a blank one in the hand meanwhile.
+func _on_clip_pulled(track: int, index: int, hand: Node) -> void:
+	var interactor := hand as Interactor
+	if items == null or interactor == null:
+		return
+	var from := "clip:%d:%d" % [track, index]
+	if Session.is_authority():
+		var made := _mint_for(CassetteItem.KIND, from, Session.local_peer_id)
+		if made != null:
+			interactor.pick_up(made)
+			_say_cassette(made)
+		return
+	var seq := _predict(&"make", [CassetteItem.KIND, from])
+	if seq > 0:
+		var look := ItemRoom.look_of(CassetteItem.KIND)
+		look.top_level = true
+		look.name = "MakingCassette"
+		add_child(look)
+		_making.append({"seq": seq, "hand": interactor, "look": look})
+		Session.notice.emit("Asking %s for a cassette of it..." % Session.name_of(1))
+
+
+## A made item of `kind`, of what `from` names in the host's own song, made by `maker`: minted, or
+## null with `maker` told why not.
+func _mint_for(kind: StringName, from: String, maker: int) -> Item:
+	if items == null:
+		return null
+	var made := items.mint(kind, ItemRoom.made_data(kind, from), maker)
+	if made == null:
+		Session.tell(maker, items.mint_refusal)
+	return made
+
+
+## Made item `made`, just minted for `maker`'s pull: in their hand, everywhere.
+func _hand_made(made: Item, maker: int) -> void:
+	if maker == Session.local_peer_id:
+		var hand := _free_hand()
+		if hand != null:
+			hand.pick_up(made)
+	else:
+		Session.hand_to(maker, made.network_key())
+	_publish_room_soon()
+
+
+## How a cassette just put in a hand is used, said once. A tracked bare hand has no trigger, so it is
+## told only of the push (Interactor.paste_press_words).
+func _say_cassette(made: Item) -> void:
+	var desk := medium == Presentation.Medium.SCREEN
+	var press := made.carried_by.paste_press_words() if is_instance_valid(made.carried_by) else "a press"
+	Session.notice.emit(("%s is in your hand: hold L to hear it; click a timeline lane, a strip or a stage voice to paste it, a bandmate to hand it over, a rack slot to shelve it; Q puts it down."
+			if desk else "%s is in your hand: hold it to your ear to hear it; " + press + " on a timeline lane, a strip or a stage voice pastes it; hold it by a bandmate's glove to hand it over, let it go by a rack slot to shelve it.")
+			% made.item_title().capitalize())
+
+
+## The blank cassettes waiting in hands follow them.
+func _follow_making() -> void:
+	for m: Dictionary in _making:
+		var hand := m["hand"] as Interactor
+		var look := m["look"] as Node3D
+		if is_instance_valid(hand) and is_instance_valid(look):
+			look.global_transform = hand.carry_pose() * Transform3D(Basis(Vector3.UP, PI), Vector3(0, -0.01, 0))
+
+
+## The host has answered every pull up to `answered`: each one's blank cassette goes, and its hand
+## waits for the made one the holds put there (`_take_given`); a refused one's hand waits for
+## nothing, and the host has said why.
+func _settle_makes(answered: int) -> void:
+	var still: Array = []
+	for m: Dictionary in _making:
+		if int(m["seq"]) > answered:
+			still.append(m)
+			continue
+		if is_instance_valid(m["look"]):
+			(m["look"] as Node3D).queue_free()
+		_awaiting_hands.append(m["hand"])
+	_making = still
+	_take_given()
+	_awaiting_hands.clear()
+
+
+func _take_given_soon() -> void:
+	_take_given.call_deferred()
+
+
+## Whatever the holds say is in this player's hand and no hand here has yet: a made item minted
+## for this guest's pull, or something handed over. Into the hand that pulled it, else a free one.
+func _take_given() -> void:
+	if items == null or not is_inside_tree():
+		return
+	var pending := {}
+	for p in _predictions:
+		if p["verb"] in [&"put_item", &"home_item", &"throw_item", &"slot_item", &"give"]:
+			pending[p["args"][0]] = true
+	for id in items.items:
+		var item: Item = items.items[id]
+		if item.carried_by != null or pending.has(id) or not ItemRoom.is_made(id) \
+				or Session.holder_of(item.network_key()) != Session.local_peer_id \
+				or not (item.is_held_elsewhere() or item.state == Item.State.HOME):
+			continue
+		var hand: Interactor = null
+		while hand == null and not _awaiting_hands.is_empty():
+			var waiting = _awaiting_hands.pop_front()
+			if is_instance_valid(waiting) and (waiting as Interactor).carrying == null:
+				hand = waiting
+		if hand == null:
+			hand = _free_hand()
+		if hand != null:
+			hand.pick_up(item)
+
+
+## A hand of this player's with nothing in it: the mouse's on a desktop, else an empty controller
+## or hand, else the mouse's or the first, whose pick-up pockets what it has.
+func _free_hand() -> Interactor:
+	var first: Interactor = null
+	for node in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var hand := node as Interactor
+		if hand == null or not hand.is_inside_tree():
+			continue
+		if hand.carrying == null:
+			return hand
+		if first == null:
+			first = hand
+	return first
+
+
+## Hand `item`, in a hand here, to `peer`: at once on the host; a guest asks, and its glove lets go
+## into theirs meanwhile.
+func give_item(item: Item, peer: int) -> void:
+	if peer <= 0 or peer == Session.local_peer_id or not Session.participants.has(peer):
+		return
+	if Session.is_authority():
+		_give(item, peer, Session.local_peer_id)
+		return
+	if item.carried_by != null:
+		item.carried_by.lose_carrying()
+	if presence != null:
+		item.follow(presence.palm_of(peer, item))
+	_predict(&"give", [item.id, peer])
+	Session.notice.emit("Handed %s to %s." % [_given_name(item), Session.name_of(peer)])
+
+
+## The host hands `item` from `from` to `peer`: out of a hand here if one has it, into theirs.
+func _give(item: Item, peer: int, from: int) -> void:
+	if item.carried_by != null:
+		item.carried_by.lose_carrying()
+	# The table first: the hand that takes it here then finds it already this player's.
+	Session.hand_to(peer, item.network_key())
+	if peer == Session.local_peer_id:
+		var hand := _free_hand()
+		if hand != null:
+			hand.pick_up(item)
+	var what := _given_name(item)
+	Session.tell(peer, "%s handed you %s." % [Session.name_of(from), what])
+	if from == Session.local_peer_id:
+		Session.notice.emit("Handed %s to %s." % [what, Session.name_of(peer)])
+	_publish_room_soon()
+
+
+## A cassette pressed onto `track` at `seconds` by a hand here (ItemRoom.paste_pressed;
+## docs/spatial_loop.md part two, slice 24): the host pastes it at once; a guest asks with the room's
+## `paste` [id, track, time], and the host pastes the clip it holds. The cassette stays in the hand.
+func _on_paste_pressed(item: Item, track: int, seconds: float) -> void:
+	var cassette := item as CassetteItem
+	if cassette == null or not cassette.pastes():
+		return
+	if Session.is_authority():
+		paste_cassette(cassette, track, seconds, Session.local_peer_id)
+		return
+	if _predict(&"paste", [cassette.id, track, seconds]) > 0:
+		var t := DAW.state.track(track, false)
+		Session.notice.emit("Asking %s to paste the %s cassette onto %s at %s..." % [Session.name_of(1),
+				cassette.clip_name(), t.display_name() if t != null else "track %d" % track, DAW.state.bar_beat(seconds)])
+
+
+## The host pastes `cassette`'s clip onto `track` at `seconds` for `who` (this machine's own peer, or
+## the guest who asked): one undo step that is theirs, or refused with the reason. Both are told; the
+## host as well when it is a guest's, since an item appearing on its timeline unannounced is a
+## surprise mid-session.
+func paste_cassette(cassette: CassetteItem, track: int, seconds: float, who: int) -> void:
+	var why := DAW.paste_item(track, seconds, cassette.clip)
+	if not why.is_empty():
+		Session.tell(who, why)
+		return
+	var said := "the %s cassette onto %s at %s" % [cassette.clip_name(), DAW.state.track(track).display_name(),
+			DAW.state.bar_beat(seconds)]
+	Session.tell(who, "Pasted %s." % said)
+	if who != Session.local_peer_id:
+		Session.notice.emit("%s pasted %s." % [Session.name_of(who), said])
+
+
+## What a hand-over toast calls `item`: a cassette by its clip's name as the song has it ("the
+## Kick verse 1 cassette"), anything else by its title.
+func _given_name(item: Item) -> String:
+	var cassette := item as CassetteItem
+	if cassette != null:
+		return "the %s cassette" % cassette.clip_name()
+	return item.item_title().to_lower()
+
+
+## A click with a made item in the mouse's hand and nothing under the cursor: on a bandmate's
+## ghost, it is theirs.
+func _on_item_used_here(item: Item, down: bool) -> void:
+	if not down or presence == null or not ItemRoom.is_made(item.id) or not (item.carried_by is MouseInteractor):
+		return
+	var aim := item.carried_by.aim()
+	var peer := presence.peer_at(aim.origin, -aim.basis.z)
+	if peer != 0:
+		give_item(item, peer)
+
+
+# --- the sampler (docs/spatial_loop.md part two, slice 26) ----------------------------------
+#
+# REC is the room's row `sampler`, the peer it is armed for: a guest's press is the room's ask
+# `sampler` [on], shown at once here; the host's is done. Every use and hit reaches the host with
+# the Foley take its player's hand rang, and the host's sampler (`Sampler.heard`) catches the first
+# one in its reach, or in its presser's hand, as a WAV and a cassette on the rack, and REC goes off.
+
+## A hand here pressed the sampler's REC.
+func _on_rec_pressed(on: bool) -> void:
+	if sampler == null or not is_instance_valid(sampler):
+		return
+	var me := Session.local_peer_id
+	if Session.is_authority():
+		_arm_sampler(on, me)
+	elif _predict(Sampler.VERB, [on]) > 0:
+		sampler.armed_by = me if on else 0
+	var desk := medium == Presentation.Medium.SCREEN
+	Session.notice.emit(("Sampler REC: the next thing you squeeze, click or shake, or anything used within %.1f m of its mic, is a sample on the rack. Click REC again to stop."
+			if desk else "Sampler REC: the next thing you squeeze, hit or shake, or anything used within %.1f m of its mic, is a sample on the rack. Press REC again to stop.") % Sampler.REACH
+			if on else "Sampler REC off.")
+
+
+## The room's word on REC: on for `from`'s next sound, or off.
+func _arm_sampler(on: bool, from: int) -> void:
+	if sampler == null or not is_instance_valid(sampler):
+		return
+	sampler.armed_by = from if on else 0
+	_publish_room_soon()
+
+
+## A use of `item` (Foley's `kind`, take `take`) by `from`, for the sampler to catch: only the
+## host's does (Sampler.heard).
+func _sample(item: Item, kind: StringName, take: int, from: int) -> void:
+	if sampler != null and is_instance_valid(sampler) and sampler.armed_by != 0:
+		sampler.heard(item, kind, take, from)
+
+
+## A hand here used what it carries: a squeeze, a click.
+func _sample_use_here(item: Item, down: bool) -> void:
+	if down:
+		_sample(item, item.use_kind(true), item.use_take, Session.local_peer_id)
+
+
+## Somebody else's use, as the host hears it, with the take their hand rang: only of what is in
+## their hand, as Presence rings only that.
+func _on_someones_use(id: StringName, down: bool, from: int, take := -1) -> void:
+	var item: Item = items.items.get(id) if items != null else null
+	if down and item != null and from != Session.local_peer_id and Session.is_authority() \
+			and Session.holder_of(item.network_key()) == from:
+		_sample(item, item.use_kind(true), take, from)
+
+
+## Somebody else's shake: heard here as shaken (Presence: `heard`, not struck), and caught so.
+func _on_someones_hit(id: StringName, _velocity: int, from: int, _song := -1.0, _snap := false, take := -1) -> void:
+	var item := items.items.get(id) as InstrumentItem if items != null else null
+	if item != null and from != Session.local_peer_id and Session.is_authority() \
+			and Session.holder_of(item.network_key()) == from:
+		_sample(item, item.sound_kind(false), take, from)
+
+
+## How far along the mouse's ray the bandmate a made item in its hand would be handed to stands,
+## or INF: nearer than the control behind them, the click is the hand-over (Interactor).
+func _press_ahead(item: Item, origin: Vector3, direction: Vector3) -> float:
+	if presence == null or not ItemRoom.is_made(item.id) or not (item.carried_by is MouseInteractor):
+		return INF
+	var hit := presence.peer_along(origin, direction)
+	return float(hit[1]) if int(hit[0]) != 0 else INF
+
+
+## A headset hand holding a made item within GIVE_REACH of a bandmate's glove for GIVE_HOLD hands
+## it to them.
+func _follow_gives(delta: float) -> void:
+	if presence == null or items == null:
+		return
+	for node in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var hand := node as Interactor
+		if hand == null or hand is MouseInteractor or not hand.is_inside_tree():
+			continue
+		var item := hand.carrying
+		if not is_instance_valid(item) or not ItemRoom.is_made(item.id):
+			_give_held.erase(hand)
+			continue
+		var peer := presence.glove_near(item.middle(), GIVE_REACH)
+		var was: Array = _give_held.get(hand, [0, 0.0])
+		if peer == 0:
+			_give_held.erase(hand)
+			continue
+		var held := (float(was[1]) if int(was[0]) == peer else 0.0) + delta
+		if held >= GIVE_HOLD:
+			_give_held.erase(hand)
+			give_item(item, peer)
+		else:
+			_give_held[hand] = [peer, held]
+
+
+## The host's made items, with where each is, kept with its layout to be there next time.
+func _remember_made() -> void:
+	if Session.layout == null or not Session.is_authority() or items == null:
+		return
+	var where := items.state()
+	var out := {}
+	for id in items.made:
+		var row: Array = items.made[id]
+		out[id] = [row[0], row[1], row[2], where.get(id, [])]
+	if out == Session.layout.made:
+		return
+	Session.layout.set_made(out)
+	Session.layout.save()
+
+
+## What the host's layout kept of its made items: theirs again, where they were. `missing_only`,
+## only those not here already (back from being a guest), never moving one a hand may have.
+func _restore_made(missing_only := false) -> void:
+	if Session.layout == null or not Session.is_authority() or items == null:
+		return
+	for id in Session.layout.made:
+		if missing_only and items.items.has(id):
+			continue
+		var row: Array = Session.layout.made[id]
+		# A row the session still has (a studio built again in the same run) is the same row.
+		if not items.made.has(id):
+			if not ItemRoom.made_refusal(items.made, (row[2] as PackedByteArray).size()).is_empty():
+				continue
+			items.made[id] = [row[0], int(row[1]), row[2]]
+		var item := items._make_real(id)
+		var place: Variant = row[3]
+		if item == null or not (place is Array):
+			continue
+		if (place as Array).size() == 3 and str(place[0]) == "slot":
+			items.slot(item, StringName(str(place[1])), int(place[2]))
+		elif (place as Array).size() >= 4:
+			items.lay(item, Vector2(float(place[0]), float(place[2])), float(place[3]))
 
 
 ## The case that starts a Tour run, chained in the back of house. The small hook the studio
@@ -3534,6 +4156,154 @@ func _listen() -> void:
 	Ears.listen(_heard_phones, personal.ears_levels())
 
 
+## How near (m) a head comes to a stage voice to lean in to it (Ears.lean).
+const LEAN_REACH := 0.25
+
+
+## The track a ray from `origin` along `direction` points at, 0 for none (docs/spatial_loop.md
+## slice 19): whatever control it meets first, read by `track_of`. The head's gaze, for a clap
+## made pointing at nothing.
+func track_under(origin: Vector3, direction: Vector3) -> int:
+	if not is_inside_tree() or direction.length() < 0.0001:
+		return 0
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction.normalized() * Interactor.RAY_LENGTH)
+	query.collision_mask = 1 << (Interactor.CONTROL_LAYER - 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return 0
+	return track_of(hit["collider"], hit["position"])
+
+
+## The track a control at `point` belongs to, 0 for none: a stage voice and anything of its tag,
+## ring or stalk (their `stage_track`), a console strip and anything on it, a track's rack and its
+## units, and the timeline's lanes (TimelineSurface.track_at_point, the lane under the point).
+static func track_of(node: Node, point: Vector3) -> int:
+	var n := node
+	while n != null:
+		if n.has_meta(&"stage_track"):
+			return int(n.get_meta(&"stage_track"))
+		if n is ChannelStrip:
+			return (n as ChannelStrip).track_index
+		if n is RackUnit:
+			return (n as RackUnit).track_index
+		if n is RackSurface:
+			return maxi((n as RackSurface).track_index, 0)
+		if n is TimelineSurface:
+			return (n as TimelineSurface).track_at_point(point)
+		n = n.get_parent()
+	return 0
+
+
+## The track what a hand holds or hovers belongs to, 0 for none.
+func pointed_by(hand: Interactor) -> int:
+	if hand == null or not is_instance_valid(hand):
+		return 0
+	var control: ControlAffordance = hand.held if hand.held != null else hand.hovered
+	if control == null or not is_instance_valid(control):
+		return 0
+	return track_of(control, hand.hover_point)
+
+
+func _mouse_track() -> int:
+	return pointed_by(get_node_or_null("MouseHand") as Interactor)
+
+
+## The track a clap is aimed at as the hands meet: under either hand's ray, or else the head's gaze.
+func _clap_target() -> int:
+	if rig == null:
+		return _mouse_track()
+	for controller in rig.interactors:
+		var t := pointed_by(rig.interactors[controller] as Interactor)
+		if t > 0:
+			return t
+	if rig.head != null and rig.head.is_inside_tree():
+		return track_under(rig.head.global_position, -rig.head.global_basis.z)
+	return 0
+
+
+## One frame of the two hands for a clap: their palms (bare hands) or grips (controllers).
+func _follow_clap(delta: float) -> void:
+	key_clap.hold(delta)
+	if not clap.target.is_valid():
+		clap.target = _clap_target
+	if rig == null or rig.left == null or rig.right == null:
+		return
+	var a := rig.interactors.get(rig.left) as XRInteractor
+	var b := rig.interactors.get(rig.right) as XRInteractor
+	if a == null or b == null:
+		return
+	var r := Clap.reading(a.clap_palm(), b.clap_palm())
+	clap.step(r[0], r[1], delta)
+
+
+## The track to lean in to now, 0 for none: in a headset the stage voice the head is within
+## LEAN_REACH of, the nearest; at a desk, the voice under the cursor while L is held.
+func lean_wanted() -> int:
+	if stage == null or not is_instance_valid(stage):
+		return 0
+	if rig != null and rig.head != null and rig.head.is_inside_tree():
+		var best := 0
+		var near := LEAN_REACH
+		for track in stage.voices:
+			var d := (stage.voices[track] as Node3D).global_position.distance_to(rig.head.global_position)
+			if d <= near:
+				near = d
+				best = int(track)
+		if best > 0:
+			return best
+	if not _lean_key:
+		return 0
+	var hand := get_node_or_null("MouseHand") as Interactor
+	var control: Node = (hand.held if hand.held != null else hand.hovered) if hand != null else null
+	if control == null or not is_instance_valid(control) or not stage.is_ancestor_of(control):
+		return 0
+	return track_of(control, hand.hover_point)
+
+
+## Leaning in, or out, as `lean_wanted` says: Ears.lean, in this player's ears alone. Where it
+## cannot be done, the card says why, once for each voice leant toward.
+func _follow_lean() -> void:
+	var want := lean_wanted()
+	if want == 0:
+		_lean_refused = 0
+	if want == Ears.leaning:
+		return
+	if want > 0 and not Ears.can_lean():
+		if want != _lean_refused:
+			_lean_refused = want
+			Session.notice.emit("%s: %s." % [stage.title_of(want), Ears.CANNOT_LEAN])
+		return
+	if Ears.lean(want) and want > 0:
+		Session.notice.emit("Leaning in to %s: %+d dB in your ears alone, the mix %d dB down. Nothing changes in the song."
+				% [stage.title_of(want), int(GodotBackend.LEAN_DB), int(Ears.LEAN_MIX_DB)])
+
+
+## The cassette at an ear here now, null for none (docs/spatial_loop.md part two, slice 25): any
+## hand's here that holds one there (Interactor.cassette_at_ear), and that hand. Every hand is
+## asked every frame, so each one's memory of being at the ear (XRInteractor.EAR_LEAVE) is of
+## now; with one at each ear, the one already playing keeps on, else the first.
+func ear_wanted() -> Array:
+	var wanted := [null, null]
+	for node in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var hand := node as Interactor
+		var c := hand.cassette_at_ear() if hand != null else null
+		if c == null:
+			continue
+		if wanted[0] == null or (ear != null and c == ear.cassette and wanted[0] != ear.cassette):
+			wanted = [c, hand]
+	return wanted
+
+
+## The cassette at the ear playing, or stopping, as `ear_wanted` says.
+func _follow_ear() -> void:
+	if ear == null:
+		return
+	var wanted := ear_wanted()
+	if wanted[0] != ear.cassette:
+		ear.desk = wanted[1] is MouseInteractor or wanted[1] == null
+	ear.hold(wanted[0])
+
+
 ## Whether a strip's socket can be heard here: the tracks are played one by one on this machine.
 func _hears_tracks() -> bool:
 	return DAW.backend is GodotBackend and Session.role != Session.Role.GUEST
@@ -3611,6 +4381,7 @@ func _on_key_played(pitch: int, down: bool) -> void:
 func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float) -> void:
 	# Onto the armed track, or the track its jack goes into.
 	jacks.hit(item, velocity, at)
+	_sample(item, item.sound_kind(struck), item.sound_take(), Session.local_peer_id)
 	if not struck or item.pitched():
 		send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take())
 
@@ -3940,6 +4711,22 @@ func _colour_of(peer: int) -> Color:
 	return p.colour if p != null else SendSocket.LAMP
 
 
+var _made_remember_due := false
+
+
+## Where the made items are, kept once at the end of the frame (a rack slot taken, a put-down).
+func _remember_made_soon() -> void:
+	if _made_remember_due:
+		return
+	_made_remember_due = true
+	_remember_made_due.call_deferred()
+
+
+func _remember_made_due() -> void:
+	_made_remember_due = false
+	_remember_made()
+
+
 ## A hand here put an item down, or sent it home: a guest asks the host, having done it already.
 ## A host's room is told by the item moving (`_publish_room_soon`).
 func _on_items_asked(verb: StringName, args: Array) -> void:
@@ -3952,9 +4739,13 @@ func _publish_room_soon() -> void:
 	if Session.role != Session.Role.HOST or _applying_room or _room_publish_due:
 		return
 	_room_publish_due = true
-	(func() -> void:
-		_room_publish_due = false
-		_publish_room()).call_deferred()
+	# A method and not a lambda: a studio freed before the frame ends is skipped, not called.
+	_publish_room_due.call_deferred()
+
+
+func _publish_room_due() -> void:
+	_room_publish_due = false
+	_publish_room()
 
 
 
@@ -4060,6 +4851,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				hand.begin_throw()
 			else:
 				hand.release_throw()
+	elif event is InputEventKey and event.keycode == KEY_K and not event.echo and not event.ctrl_pressed:
+		# The desktop's clap: K held over a track mutes it while held, a tap latches it.
+		# Held for as long as the frames say (_follow_clap), the clock a clap is timed by.
+		if event.pressed and not key_clap.pressed:
+			key_clap.press(_mouse_track(), true)
+		elif not event.pressed and key_clap.pressed:
+			key_clap.release(key_clap.held_for())
+	elif event is InputEventKey and event.keycode == KEY_L and not event.echo and not event.ctrl_pressed:
+		# Lean in to the stage voice under the cursor while L is held.
+		_lean_key = event.pressed
+		_follow_lean()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			# Walk the gear past you one piece at a time, and off either end to put it back.
@@ -4155,13 +4957,20 @@ var fed_level := -1.0
 func _process(delta: float) -> void:
 	_drive_pushed()
 	_refresh_looms_if_moved(delta)
+	_follow_clap(delta)
+	_follow_lean()
+	_follow_ear()
 	_follow_keytar()
 	_follow_harp()
 	_follow_wheel()
+	_follow_making()
+	_follow_gives(delta)
 	if venue != null and DAW.state != null:
-		# A room that holds still for anyone who has asked for no motion.
-		venue.reactive = ergonomics.motion_scale > 0.0
+		# A room that holds still for anyone who has asked it to (COMFORT's "Room reacts").
+		venue.reactive = ergonomics.room_reacts
+		venue.lift_on_clip = ergonomics.lift_on_clip
 		venue.pulse(fed_level if fed_level >= 0.0 else maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
+		follow_clip(delta)
 	if camera == null or not god_mode:
 		return
 	# Not while typing a name into the session panel, or every "s" in it flies backwards.
@@ -4745,3 +5554,11 @@ func _update_camera() -> void:
 	var offset := Basis(Vector3.UP, _orbit_yaw) * (Basis(Vector3.RIGHT, _orbit_pitch) * Vector3(0, 0, _orbit_distance))
 	camera.position = _orbit_target + offset
 	camera.look_at(_orbit_target, Vector3.UP)
+
+
+## A write bead pulled out (WriteBead.on_pull): its lane shown on the timeline, its track picked, so
+## each pass is seen to land there.
+func _show_written_lane(track: int, target: String) -> void:
+	if timeline != null and is_instance_valid(timeline):
+		timeline.pick_track(track)
+		timeline.show_lane(target)

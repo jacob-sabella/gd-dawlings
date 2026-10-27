@@ -68,8 +68,127 @@ func _enter_tree() -> void:
 	add_to_group(GROUP)
 
 
+## Held by a hand, or written by a write bead over it (WriteBead): either way its value is not
+## the mix's to move until it is let go, and nothing may rebuild or re-point it meanwhile.
 func is_held() -> bool:
-	return held_by != null
+	return held_by != null or bead != null
+
+
+# --- automation by gesture (docs/spatial_loop.md part two, slice 22) --------------------------
+
+## () -> Array: the lane this control writes, [track index, target] as MixState.TrackState.
+## automation names it ("volume", "pan", "mute", "send:<destination>", "fx:<slot>:<param>"; track 0
+## the master), or [] for none. Set by whoever builds the control, as `describe_title` is, and
+## asked each time, because a strip flipped to show a send is writing a different lane.
+var automates: Callable = Callable()
+## (value: float, again: bool) -> void. How a write bead's value is written, for a control whose
+## own path is not a value (a mute button): the bead's 0..1, as the lane would set it. `again` is a
+## still bead's keep-alive (write_from_bead), which must reach the DAW even when nothing changes.
+## Unset, the control's own `_on_bead_write` is used.
+var bead_writes: Callable = Callable()
+## The write bead writing this control now, or null. While it is, the control ignores the mix's
+## echoes as a held one does, and a hand cannot take it: the bead was first.
+var bead: Node = null
+
+
+## The lane a write bead over this control writes ([track index, target]), or [] when it writes
+## none: no `automates`, or a target DawKitAutomation cannot name.
+func automation_target() -> Array:
+	if not automates.is_valid():
+		return []
+	var lane = automates.call()
+	if not (lane is Array) or (lane as Array).size() != 2 or typeof(lane[0]) not in [TYPE_INT, TYPE_FLOAT] \
+			or int(lane[0]) < 0 or DawKitAutomation.kind_of(str(lane[1])).is_empty():
+		return []
+	return [int(lane[0]), str(lane[1])]
+
+
+## Where a write bead stands over this control and where its thread starts, in the control's own
+## space. Overridden where "above" is somewhere else: a fader's bead stands over the top of its
+## travel, its thread from the cap.
+func bead_anchor() -> Vector3:
+	return Vector3(0, 0.032, 0.016)
+
+
+func bead_foot() -> Vector3:
+	return Vector3(0, 0, 0.006)
+
+
+## The bead's value (0..1, this control's own terms) written as the hand would write it, so the
+## control follows the bead and the mix follows the control. `again`: the same value written once
+## more by a still bead (WriteBead.KEEP_ALIVE_MSEC), so the edit it is in has a write and is not
+## closed as idle; a control that writes only what changes (`bead_writes`) writes it anyway.
+func write_from_bead(v: float, again := false) -> void:
+	v = clampf(v, 0.0, 1.0)
+	if bead_writes.is_valid():
+		value = v
+		_on_value_changed()
+		bead_writes.call(v, again)
+		return
+	_on_bead_write(v)
+
+
+## Override: write `v` wherever a drag would. The default only shows it.
+func _on_bead_write(v: float) -> void:
+	value = v
+	_on_value_changed()
+
+
+# --- a cassette onto a track (docs/spatial_loop.md part two, slice 24) ------------------------
+
+## () -> int: the track a cassette pressed on this control pastes onto, at the playhead: a console
+## strip's controls, a stage voice. Set by whoever builds the control, as `automates` is, and asked
+## each time. Unset, or 0, nothing pastes here, and a press with a cassette in the hand works the
+## control as ever.
+var pastes_onto: Callable = Callable()
+
+
+## Where something that pastes (Item.pastes), pressed on this control at `at` (global), goes:
+## [track, song seconds], or [] for nowhere. `fine` is the hand's fine modifier, for a control
+## whose time snaps (TimelineLanes). By `pastes_onto`, at the playhead.
+func paste_spot(_at: Vector3, _fine: bool) -> Array:
+	if not pastes_onto.is_valid() or DAW.state == null:
+		return []
+	var track := int(pastes_onto.call())
+	if track <= 0 or not DAW.state.tracks.has(track):
+		return []
+	return [track, DAW.state.position_seconds]
+
+
+## What a press here would paste, for a hand over this control carrying something that pastes:
+## "click pastes the Kick Verse 1 cassette onto Bass at 12.1.00"; "" for none. What the hover card
+## says instead of the control's own hint, since the press is the paste's.
+func paste_words() -> String:
+	for by in _hovered_by:
+		var hand := by as Interactor
+		if hand == null or not is_instance_valid(hand.carrying) or not hand.carrying.pastes():
+			continue
+		var spot := paste_spot(hand.hover_point, hand.fine())
+		if spot.is_empty():
+			continue
+		var cassette := hand.carrying as CassetteItem
+		var what := "the %s cassette" % cassette.clip_name() if cassette != null else hand.carrying.item_title().to_lower()
+		var desk := hand is MouseInteractor
+		# The press as the hand has it (Interactor.paste_press_words): a bare hand has no trigger.
+		var press := hand.paste_press_words()
+		return "%s pastes %s onto %s at %s; %s" % [press + ("," if press.contains(" or ") else ""), what,
+				DAW.state.track(int(spot[0])).display_name(), DAW.state.bar_beat(float(spot[1])),
+				"Q puts it down" if desk else "letting go puts it down"]
+	return ""
+
+
+## The hover card's hint: `hint()`, and while the song plays, on a control a write bead can write,
+## that the bead is there. With a cassette in the hand over a control it pastes onto, what the press
+## pastes, and where (`paste_words`).
+func card_hint() -> String:
+	var pasting := paste_words()
+	if not pasting.is_empty():
+		return pasting
+	var said := hint()
+	if automation_target().is_empty() or DAW.state == null or not DAW.state.playing:
+		return said
+	var bead_words := "the bead above writes automation"
+	return bead_words if said.is_empty() else "%s  ·  %s" % [said, bead_words]
 
 
 ## The name this control goes by across the session: how one participant's "I am holding
@@ -117,7 +236,7 @@ func set_dwell_progress(_fraction: float) -> void:
 
 
 func grab_begin(by: Node, at: Vector3) -> void:
-	if claimed_by != null:
+	if claimed_by != null or bead != null:
 		return
 	if held_by != null and held_by != by:
 		# Two people reaching for one fader. First hand wins and the second is simply told no,
@@ -272,7 +391,7 @@ var contact_volume_db: float = 0.0
 ## Refused while someone ELSE holds the control, for the same reason a second grab is: their
 ## hand is the value until they let go.
 func nudge(by: Node, notches: int, fine: bool) -> bool:
-	if notches == 0 or claimed_by != null or (held_by != null and held_by != by):
+	if notches == 0 or claimed_by != null or bead != null or (held_by != null and held_by != by):
 		return false
 	# A wheel turn on a control that writes several values is one step, as its drag is: the first
 	# notch opens an edit, and notches closer together than GESTURE_MS share it. Not while a

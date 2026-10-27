@@ -17,6 +17,13 @@ extends ControlAffordance
 ## hold or ramp to the next, fine-click it to remove it, and the wheel over a point nudges its
 ## value. Each change to the lane is one undo step.
 ##
+## Pulled out, an item is a cassette in the hand that pulled it (docs/spatial_loop.md part two,
+## slice 23): drag it toward you, off the lanes' face by PULL, with a hand, or off the lanes' edge
+## by PULL_EDGE with the mouse (or any hand), and the drag ends there, the arrangement as it was,
+## and the surface says so (TimelineSurface.clip_pulled) for the host to mint a copy of it. And a
+## cassette pressed on a lane is pasted there (slice 24, `paste_spot`): a click, a trigger, or the
+## cassette pushed into the face, the lane and time under it, snapped as a drag is.
+##
 ## One control over every lane rather than one per item. Items come and go with every edit and
 ## every poll, and a control rebuilt under a held drag drops the drag; this one is built once.
 ## The surface answers "what is under this point", so the lanes need no picture of their own.
@@ -25,6 +32,10 @@ extends ControlAffordance
 const CLICK_SLOP := 0.0025
 ## How much one wheel notch zooms. Fine zooms a fifth as far.
 const ZOOM_STEP := 0.8
+## How far toward you a hand draws an item out of the lanes' face to pull it out as a cassette
+## (m), and how far past the lanes' edge a drag goes to do the same.
+const PULL := 0.08
+const PULL_EDGE := 0.04
 
 var width := 0.4
 var height := 0.2
@@ -55,6 +66,8 @@ var _auto_points: Array = []
 var _auto_index := -1
 var _auto_added := false
 var _grab_y := 0.0
+## How far in front of the face the hand that pressed was, at the press (m); NAN for a mouse.
+var _grab_out := NAN
 
 
 func _ready() -> void:
@@ -125,6 +138,12 @@ func drop_spot(point: Vector3, fine: bool) -> Array:
 	return [track, snap(surface.seconds_at_point(point), fine)]
 
 
+## A cassette pressed on the lanes (docs/spatial_loop.md part two, slice 24) pastes onto the lane
+## under it, at the time there snapped to the grid unless fine, as a sound file let go there goes.
+func paste_spot(at: Vector3, fine: bool) -> Array:
+	return drop_spot(at, fine)
+
+
 func _fine() -> bool:
 	return held_by != null and held_by.has_method("fine") and held_by.fine()
 
@@ -153,6 +172,7 @@ func _on_grab_begin(at: Vector3) -> void:
 		return
 	_grab_seconds = surface.seconds_at_point(at)
 	_hit = surface.item_at_point(at)
+	_grab_out = _hand_out()
 	_edge = 0
 	if not _hit.is_empty():
 		var item: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
@@ -180,6 +200,10 @@ func _on_grab_move(at: Vector3) -> void:
 	if _hit.is_empty():
 		return
 	if not _dragged and absf(to_local(at).x - _grab_x) < CLICK_SLOP and absf(to_local(at).y - _grab_y) < CLICK_SLOP:
+		return
+	# Drawn out of the face, or off the edge: a cassette of it, and the drag is over.
+	if _fade == 0 and _edge == 0 and pulled_out(at):
+		_pull()
 		return
 	# A locked item stays where it is: the press is a click on it, however far the hand goes.
 	var held: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
@@ -265,6 +289,38 @@ func _finish_grab() -> void:
 		DAW.ripple_move_item(_hit[0], _hit[1], _target_start)
 	elif not is_equal_approx(_target_start, item.start) or onto > 0:
 		DAW.move_item(_hit[0], _hit[1], _target_start, onto)
+
+
+## How far in front of the lanes' face the hand holding them is (m), or NAN for a mouse, whose
+## ray starts at the eye: a hand's aim starts at the hand.
+func _hand_out() -> float:
+	var by := held_by as Interactor
+	if by == null or by is MouseInteractor or not is_inside_tree():
+		return NAN
+	return (by.aim().origin - global_position).dot(global_basis.z.normalized())
+
+
+## Whether the drag at `at` (the face's plane, global) has pulled the held item out: the hand drawn
+## PULL toward you since the press, or the point PULL_EDGE past the lanes' edge.
+func pulled_out(at: Vector3) -> bool:
+	var out := _hand_out()
+	if not is_nan(out) and not is_nan(_grab_out) and out - _grab_out > PULL:
+		return true
+	var p := to_local(at)
+	var metre := global_basis.x.length() if is_inside_tree() else 1.0
+	var past := maxf(absf(p.x) - width * 0.5, absf(p.y) - height * 0.5) * metre
+	return past > PULL_EDGE
+
+
+## The held item, pulled out: the surface says which and by whose hand, its preview goes, and the
+## rest of the drag moves nothing.
+func _pull() -> void:
+	var track: int = _hit[0]
+	var index: int = _hit[1]
+	surface.preview_item(-1, -1, 0.0)
+	_hit = []
+	_dragged = true
+	surface.clip_pulled.emit(track, index, held_by)
 
 
 ## A point into the lane being edited, replacing one at the same moment; its index.
@@ -416,4 +472,4 @@ static func controls_text(controls: PackedFloat64Array) -> String:
 
 
 func hint() -> String:
-	return "click to select, shift adds; drag to move, by an edge to trim, by a top corner to fade; wheel zooms; B or SPLIT cuts at the playhead"
+	return "click to select, shift adds; drag to move, by an edge to trim, by a top corner to fade, off the edge for a cassette of it, and click a cassette onto a lane to paste it; wheel zooms; B or SPLIT cuts at the playhead"

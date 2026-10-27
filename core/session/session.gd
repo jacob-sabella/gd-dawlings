@@ -66,6 +66,9 @@ signal notice(text: String)
 signal audio_take_placed(info: Dictionary)
 ## Guest: the host's word on the room arrived; see `room`.
 signal room_changed()
+## A made item's row arrived (`made`, ItemRoom.mint), or was taken away (`gone`): a guest's word
+## from the host, for the room to make it real or let it go.
+signal made_changed(id: StringName, gone: bool)
 ## Host: someone asked to change the room. One of ROOM_VERBS, already checked for shape; the
 ## studio decides, and says what the room now is with `publish_room`.
 signal room_asked(verb: StringName, args: Array, from: int)
@@ -88,8 +91,10 @@ signal item_carried(item: StringName, local: Transform3D, from: int)
 ## and how it is flying (its Mode).
 signal item_flown(item: StringName, pose: Transform3D, mode: int, from: int)
 ## Something in `from`'s hand, used: a duck squeezed (`down`) or let go of. Reliable, because a
-## squeak is an event, and a lost one is a silence nobody can account for.
-signal item_used(item: StringName, down: bool, from: int)
+## squeak is an event, and a lost one is a silence nobody can account for. `take`: which of Foley's
+## takes their hand rang (Item.use_take), so everyone hears the sound its player heard and the
+## host's sampler catches exactly that (Sampler); -1 for not known.
+signal item_used(item: StringName, down: bool, from: int, take: int)
 ## A key or the pedal on `from`'s keys, as they play it (`send_note`): for anyone patched into
 ## their keys to play here (TheirKeys), or into their monitor (TheirMonitor). `song`: the song
 ## position they were hearing as they played it, or -1 with their transport stopped. `source`:
@@ -235,6 +240,13 @@ var layout: LayoutProfile = null
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
 ## for when it is on its own again. Empty until the host has said.
 var room: Dictionary = {}
+## Every made item's row, {id: [kind, maker, bytes]} (docs/spatial_loop.md part two, slice 23):
+## what a cassette carries, var_to_bytes of its data. The host's, as its room mints them
+## (ItemRoom.mint, `publish_made`); sent once to everyone on a reliable message of its own
+## (`_made`) and all of it to a guest as it is let in, never inside `room`, which names only
+## the ids ("made"), so a put-down, a throw or a plug never resends a clip. One Dictionary for
+## the whole run, the room's own (ItemRoom.made is this): cleared, never replaced.
+var made: Dictionary = {}
 ## Guest: the number of the last ask sent. The host's room says which it has answered, so
 ## whatever is newer is still this guest's prediction and is put back on top of the host's word.
 var room_seq := 0
@@ -379,6 +391,10 @@ func start_solo() -> void:
 	if mix_feed != null:
 		mix_feed.stop()
 	_audio_ticket = 0
+	# A guest's made items were the host's room's; a host's own stay with its room. Our own, set
+	# aside on joining, are the layout's to give back (Studio._restore_made).
+	if role == Role.GUEST:
+		_forget_made()
 	role = Role.SOLO
 	room = {}
 	local_peer_id = 1
@@ -432,6 +448,10 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	multiplayer.multiplayer_peer = peer
 	multiplayer.server_relay = false
 	role = Role.GUEST
+	# This player's own made items are set aside, not saved over: the host's room's are the ones
+	# here now, and ours would only count against what it may carry (`_made`). Their layout
+	# still has them, and gives them back on leaving (Studio._restore_made).
+	_forget_made()
 	room = {}
 	room_seq = 0
 	port = at_port
@@ -698,6 +718,11 @@ func admission_refusal(offered: String) -> String:
 ## desk they are about to be shown is never empty; the roster and holds follow from `_hello`.
 func admit(peer_id: int) -> void:
 	_send_snapshot_to(peer_id)
+	# What the room's made items carry, before the room that names them.
+	if _connected():
+		for id in made:
+			var row: Array = made[id]
+			_made.rpc_id(peer_id, id, row[0], int(row[1]), row[2])
 	if not room.is_empty() and _connected():
 		_receive_room.rpc_id(peer_id, _room_with_acks())
 	if not tour.is_empty() and _connected():
@@ -836,6 +861,11 @@ func apply_roster(rows: Array) -> void:
 
 # --- intents ------------------------------------------------------------------------------
 
+## For the suite: while true, every intent a guest sends is also kept in `kept_intents` as
+## [verb, args], whether or not there is a host to send it to, so what a guest asks can be counted.
+var keep_intents := false
+var kept_intents: Array = []
+
 ## A guest's write, forwarded to the host.
 ##
 ## Intents name a VERB from the DAW vocabulary -- `set_track_volume`, `transport_play` -- and
@@ -846,6 +876,8 @@ func send_intent(verb: StringName, args: Array) -> void:
 	if is_authority():
 		DAW.apply_intent(verb, args)
 		return
+	if keep_intents:
+		kept_intents.append([verb, args])
 	if not _connected():
 		return
 	_receive_intent.rpc_id(1, verb, args)
@@ -1116,7 +1148,81 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		# An instrument's output jack into a sink (Jack), or unplugged (an empty sink).
 		&"plug": [TYPE_STRING_NAME, TYPE_STRING_NAME],
 		# The fifths wheel's SET: the bar it writes at and the brackets' inside (FifthsWheel).
-		&"harmony": [TYPE_INT, TYPE_STRING]}
+		&"harmony": [TYPE_INT, TYPE_STRING],
+		# A stage table's rope tied or cut, and whether it added the compressor it keys: the room's
+		# `ropes` row (StageTable.ropes; docs/spatial_loop.md slice 20).
+		&"rope": [TYPE_STRING, TYPE_BOOL, TYPE_BOOL],
+		# Made while playing (docs/spatial_loop.md part two, slice 23): a made item of a kind, of
+		# something the host has ("clip:<track>:<item>"), never its data, which the host packs;
+		# an item into a holder's slot (ItemRoom.holders: the cassette rack, its bin); and an
+		# item handed to a bandmate, into their hand.
+		&"make": [TYPE_STRING_NAME, TYPE_STRING],
+		&"slot_item": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_INT],
+		&"give": [TYPE_STRING_NAME, TYPE_INT],
+		# A cassette in the asker's hand pasted onto a track at a song time (slice 24): named by
+		# its id, never its clip, which the host pastes from its own row (DAW.paste_item).
+		&"paste": [TYPE_STRING_NAME, TYPE_INT, TYPE_FLOAT],
+		# The sampler's REC pressed on (for the asker's next sound) or off (slice 26): the room's
+		# `sampler` row, the peer it is armed for or 0 (Sampler.armed_by).
+		&"sampler": [TYPE_BOOL]}
+
+
+## Every made item's row gone from this machine, and said (`made_changed`), so its item goes too.
+## Nothing is saved by it: as a guest, nothing here is this player's to save.
+func _forget_made() -> void:
+	for id in made.keys():
+		made.erase(id)
+		made_changed.emit(id, true)
+
+
+## Host: made item `id`'s row (`made`) to everyone, once, on its own reliable message: before the
+## room that will name it, on the same channel, so it is there when the room arrives.
+func publish_made(id: StringName) -> void:
+	if role != Role.HOST or not made.has(id):
+		return
+	var row: Array = made[id]
+	for peer in _audience():
+		_made.rpc_id(peer, id, row[0], int(row[1]), row[2])
+
+
+## Host: made item `id` is gone (the BIN): its row with it, everywhere.
+func drop_made(id: StringName) -> void:
+	made.erase(id)
+	if role != Role.HOST:
+		return
+	for peer in _audience():
+		_unmade.rpc_id(peer, id)
+
+
+## A made item's row, from the host: kept if it is one, within what a room may carry
+## (ItemRoom.MADE_BYTES, MADE_MOST), and said.
+@rpc("authority", "call_remote", "reliable")
+func _made(id: StringName, kind: StringName, maker: int, bytes: PackedByteArray) -> void:
+	if role != Role.GUEST or not ItemRoom.is_made(id) or ItemRoom.kind_of(id) != kind \
+			or bytes.size() > ItemRoom.MADE_BYTES or (not made.has(id) and made.size() >= ItemRoom.MADE_MOST):
+		return
+	made[id] = [kind, maker, bytes]
+	made_changed.emit(id, false)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _unmade(id: StringName) -> void:
+	if role != Role.GUEST:
+		return
+	made.erase(id)
+	made_changed.emit(id, true)
+
+
+## Host: `key` (an item's network key) is in `peer`'s hand now, whoever had it: a give, or a made
+## item minted for the guest who asked (docs/spatial_loop.md part two, slice 23). Their hand takes
+## it when they hear (the studio's `_take_given`); one that had it lets go (Presence).
+func hand_to(peer: int, key: String) -> void:
+	if not is_authority() or key.is_empty() or (peer != local_peer_id and not _is_member(peer)):
+		return
+	if holds.get(key, 0) == peer:
+		return
+	holds[key] = peer
+	_send_holds()
 
 
 ## Host: this is the room now. Sent to everyone in it, and to each guest as they come in.
@@ -1234,31 +1340,38 @@ func _flier(item: StringName, pose: Transform3D, mode: int, from: int) -> void:
 	item_flown.emit(item, pose, mode, from)
 
 
-## The thing in my hand, used, for everyone else to hear and see.
-func send_item_use(item: StringName, down: bool) -> void:
+## The thing in my hand, used, for everyone else to hear and see, with the Foley take my hand
+## rang (`take`, Item.use_take; -1 for not known).
+func send_item_use(item: StringName, down: bool, take := -1) -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_item_use.rpc_id(id, item, down, local_peer_id)
+			_item_use.rpc_id(id, item, down, local_peer_id, take)
 	else:
-		_item_use_up.rpc_id(1, item, down)
+		_item_use_up.rpc_id(1, item, down, take)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _item_use_up(item: StringName, down: bool) -> void:
+func _item_use_up(item: StringName, down: bool, take: int) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
-	item_used.emit(item, down, from)
+	take = clean_take(take)
+	item_used.emit(item, down, from, take)
 	for id in _audience():
 		if id != from:
-			_item_use.rpc_id(id, item, down, from)
+			_item_use.rpc_id(id, item, down, from, take)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _item_use(item: StringName, down: bool, from: int) -> void:
-	item_used.emit(item, down, from)
+func _item_use(item: StringName, down: bool, from: int, take: int) -> void:
+	item_used.emit(item, down, from, take)
+
+
+## A guest's Foley take as the host passes it on: one of Foley's (0 to 2^24), or -1 for not known.
+static func clean_take(take: int) -> int:
+	return take if take >= 0 and take < 1 << 24 else -1
 
 
 ## A shake of the instrument in my hand, to everyone else, with the song position it was played
@@ -1296,7 +1409,7 @@ func _item_hit(item: StringName, velocity: int, from: int, song: float, snap: bo
 static func clean_item_hit(velocity: int, song: float, take: int) -> Array:
 	if not is_finite(song) or song < 0.0:
 		song = -1.0
-	return [clampi(velocity, 1, 127), song, take if take >= 0 and take < 1 << 24 else -1]
+	return [clampi(velocity, 1, 127), song, clean_take(take)]
 
 
 ## A key or the pedal on my keys, to everyone else, as it is played. Notes are a few bytes and

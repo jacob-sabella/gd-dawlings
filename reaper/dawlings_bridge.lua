@@ -470,6 +470,22 @@ local function set_active(env, on)
   reaper.GetSetEnvelopeInfo_String(env, 'VISIBLE', flag, true)
 end
 
+-- Lanes a write bead holds (HoldLane, docs/spatial_loop.md part two slice 22), by track number and
+-- target: {env, was}, the envelope switched off while held and whether it played before. Read back
+-- as playing by the timeline poll, so a held lane does not vanish from anyone's desk.
+local held_lanes = {}
+
+local function held_key(n, target)
+  return tostring(math.floor(n or -1)) .. '|' .. target
+end
+
+local function is_held(env)
+  for _, h in pairs(held_lanes) do
+    if h.env == env then return true end
+  end
+  return false
+end
+
 local function env_points(env, tr, target, fx, param)
   local out = {}
   for p = 0, reaper.CountEnvelopePoints(env) - 1 do
@@ -490,7 +506,7 @@ local function track_automation(tr)
   local any = false
   for target, _ in pairs(ENVELOPE_CHUNKS) do
     local env = envelope_of(tr, target, false)
-    if env and reaper.CountEnvelopePoints(env) > 0 and is_active(env) then
+    if env and reaper.CountEnvelopePoints(env) > 0 and (is_active(env) or is_held(env)) then
       lanes[target] = env_points(env, tr, target)
       any = true
     end
@@ -499,7 +515,7 @@ local function track_automation(tr)
     local env = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_ENV:<VOLENV')
     local d = reaper.GetTrackSendInfo_Value(tr, 0, s, 'P_DESTTRACK')
     if env and reaper.ValidatePtr(env, 'TrackEnvelope*') and reaper.CountEnvelopePoints(env) > 0
-        and is_active(env) and d and reaper.ValidatePtr(d, 'MediaTrack*') then
+        and (is_active(env) or is_held(env)) and d and reaper.ValidatePtr(d, 'MediaTrack*') then
       local target = 'send:' .. math.floor(reaper.GetMediaTrackInfo_Value(d, 'IP_TRACKNUMBER'))
       lanes[target] = env_points(env, tr, target)
       any = true
@@ -510,7 +526,8 @@ local function track_automation(tr)
   for e = 0, reaper.CountTrackEnvelopes(tr) - 1 do
     local env = reaper.GetTrackEnvelope(tr, e)
     local _, fx, param = reaper.Envelope_GetParentTrack(env)
-    if fx and fx >= 0 and param and param >= 0 and reaper.CountEnvelopePoints(env) > 0 and is_active(env) then
+    if fx and fx >= 0 and param and param >= 0 and reaper.CountEnvelopePoints(env) > 0
+        and (is_active(env) or is_held(env)) then
       local target = ('fx:%d:%d'):format(fx + 1, param + 1)
       lanes[target] = env_points(env, tr, target, fx, param)
       any = true
@@ -546,11 +563,46 @@ function handlers.SetEnvelope(args)
     if #args > 2 and reaper.GetMediaTrackInfo_Value(tr, 'I_AUTOMODE') == 0 then
       reaper.SetMediaTrackInfo_Value(tr, 'I_AUTOMODE', 1)
     end
+    -- A write bead's pass, written while its lane is held: kept from playing until the let-go,
+    -- which plays it if it has points.
+    local h = held_lanes[held_key(args[1], target)]
+    if h then
+      h.env, h.was = env, #args > 2
+      reaper.GetSetEnvelopeInfo_String(env, 'ACTIVE', '0', true)
+    end
   end
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
   reaper.Undo_EndBlock('Automation', -1)
   return {ok = env ~= nil}
+end
+
+-- args: track (0 the master), target, on (1 or true) or off. While on the target's envelope does
+-- not play (its active flag off, still visible), so the fader a write bead moves is what is heard;
+-- off, it plays again if it did before or a pass has written it since. Not an undo point, and no
+-- automation mode is changed. A target with no envelope yet holds nothing until SetEnvelope makes
+-- one.
+function handlers.HoldLane(args)
+  local tr = args[1] == 0 and reaper.GetMasterTrack(0) or track_from_osc(args[1])
+  local target = tostring(args[2] or '')
+  if not tr then return {ok = false, error = 'no such track'} end
+  local on = args[3] == true or (tonumber(args[3]) or 0) >= 0.5
+  local key = held_key(args[1], target)
+  local env = envelope_of(tr, target, false)
+  if on then
+    if not held_lanes[key] then
+      held_lanes[key] = {env = env, was = env ~= nil and is_active(env)}
+    end
+    if env then reaper.GetSetEnvelopeInfo_String(env, 'ACTIVE', '0', true) end
+    return {ok = true, held = env ~= nil}
+  end
+  local h = held_lanes[key]
+  held_lanes[key] = nil
+  env = env or (h and h.env)
+  if h and env then
+    reaper.GetSetEnvelopeInfo_String(env, 'ACTIVE', h.was and '1' or '0', true)
+  end
+  return {ok = true, held = false}
 end
 
 -- args: track, mode (Reaper's I_AUTOMODE; dawlings's read is Reaper's Read, 1, so its faders move).
@@ -922,6 +974,48 @@ function handlers.GetTimeline()
   }
 end
 
+-- The ReaComps in a track's chain, by their 0-based slots.
+local function compressors(tr)
+  local out = {}
+  for fx = 0, reaper.TrackFX_GetCount(tr) - 1 do
+    local _, name = reaper.TrackFX_GetFXName(tr, fx, '')
+    if (name or ''):lower():find('reacomp', 1, true) then out[#out + 1] = fx end
+  end
+  return out
+end
+
+-- Whether anything sends into a track's channels 3/4: a key, which a compressor may listen to.
+local function keyed(tr)
+  for r = 0, reaper.GetTrackNumSends(tr, -1) - 1 do
+    if reaper.GetTrackSendInfo_Value(tr, -1, r, 'I_DSTCHAN') >= 2 then return true end
+  end
+  return false
+end
+
+-- A compressor's detector to the auxiliary input (a sidechain's channels 3/4), or back to its main
+-- input. Found by the plugin's own words, not by number: the parameter whose name says detector,
+-- and the setting whose words say aux (or, for the main input, the first). True when it was set.
+local function set_detector(tr, fx, aux)
+  for p = 0, reaper.TrackFX_GetNumParams(tr, fx) - 1 do
+    local _, pname = reaper.TrackFX_GetParamName(tr, fx, p, '')
+    local lower = (pname or ''):lower()
+    if lower:find('detector', 1, true) then
+      if not aux then
+        reaper.TrackFX_SetParamNormalized(tr, fx, p, 0)
+        return true
+      end
+      for k = 0, 64 do
+        local _, words = reaper.TrackFX_FormatParamValueNormalized(tr, fx, p, k / 64, '')
+        if (words or ''):lower():find('aux', 1, true) then
+          reaper.TrackFX_SetParamNormalized(tr, fx, p, k / 64)
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
 --- Create a send. The one thing the patchbay exists to do and the one thing OSC cannot express.
 function handlers.CreateTrackSend(args)
   local src = track_from_osc(args[1])
@@ -945,17 +1039,31 @@ function handlers.SetSendPreFader(args)
   return {ok = true}
 end
 
+-- A key's removal (a send into channels 3/4) leaves the compressors of a track nothing keys any
+-- more listening to their own input again: on the auxiliary input they would hear silence.
 function handlers.RemoveTrackSend(args)
   local src = track_from_osc(args[1])
   if not src then return {ok = false, error = 'no such track'} end
-  local ok = reaper.RemoveTrackSend(src, 0, math.floor(args[2] or 0))
+  local s = math.floor(args[2] or 0)
+  local was_key = s >= 0 and s < reaper.GetTrackNumSends(src, 0)
+    and reaper.GetTrackSendInfo_Value(src, 0, s, 'I_DSTCHAN') >= 2
+  local dst = was_key and reaper.GetTrackSendInfo_Value(src, 0, s, 'P_DESTTRACK') or nil
+  reaper.Undo_BeginBlock()
+  local ok = reaper.RemoveTrackSend(src, 0, s)
+  if ok and dst and not keyed(dst) then
+    for _, fx in ipairs(compressors(dst)) do set_detector(dst, fx, false) end
+  end
   reaper.UpdateArrange()
+  reaper.Undo_EndBlock('dawlings: remove send', -1)
   return {ok = ok}
 end
 
 --- A sidechain: a send into the destination's channels 3/4, which is where Reaper's own
 -- compressors and gates listen when their detector is set to the auxiliary input. The
--- destination is widened to four channels first, or there would be no 3/4 to send into.
+-- destination is widened to four channels first, or there would be no 3/4 to send into. Every
+-- ReaComp on it then listens there (docs/spatial_loop.md slice 20, the stage table's rope), and a
+-- destination with none is given one, so a key always has something hearing it; the answer says
+-- whether it was.
 function handlers.CreateSidechain(args)
   local src = track_from_osc(args[1])
   local dst = track_from_osc(args[2])
@@ -965,12 +1073,21 @@ function handlers.CreateSidechain(args)
     reaper.SetMediaTrackInfo_Value(dst, 'I_NCHAN', 4)
   end
   local index = reaper.CreateTrackSend(src, dst)
+  local added = false
   if index >= 0 then
     reaper.SetTrackSendInfo_Value(src, 0, index, 'I_DSTCHAN', 2)
+    local comps = compressors(dst)
+    if #comps == 0 then
+      local fx = reaper.TrackFX_AddByName(dst, 'ReaComp', false, -1)
+      if fx >= 0 then
+        comps, added = {fx}, true
+      end
+    end
+    for _, fx in ipairs(comps) do set_detector(dst, fx, true) end
   end
   reaper.UpdateArrange()
   reaper.Undo_EndBlock('dawlings: sidechain', -1)
-  return {ok = index >= 0, send_index = index}
+  return {ok = index >= 0, send_index = index, compressor_added = added}
 end
 
 -- args: track, fx, to track, to fx (all 1-based, as OSC), copy. A slot past the end of the
@@ -2397,6 +2514,113 @@ function handlers.InsertAudioTake(args)
   local result = edited('Insert audio take')
   result.path = path
   result.length = length
+  return result
+end
+
+-- A cassette's clip pasted onto a track (docs/spatial_loop.md part two, slice 24). args, flat:
+-- track (1-based, as OSC), start and length in project seconds, name, muted (1 or 0), the file's
+-- absolute path ('' for a MIDI item), its offset into the file, fade in and out (seconds), their
+-- shapes in the desk's numbering, gain (dB), the loop's start and end in the file (equal for none),
+-- reversed (1 or 0); then a note count and five per note -- on and off in project seconds, pitch,
+-- velocity, channel -- and a control count and four per control, as InsertMidiTake reads them.
+-- An audio file is kept in a saved project's media folder, as a recorded take's is. Reaper loops
+-- an item's whole file, so a loop is its B_LOOPSRC. One Undo block, called "Paste item".
+function handlers.PasteItem(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  local t0, length = math.max(0, args[2] or 0), args[3] or 0
+  if length <= 0 then return {ok = false, error = 'empty item'} end
+  local name = type(args[4]) == 'string' and args[4] or ''
+  local path = type(args[6]) == 'string' and args[6] or ''
+  if path ~= '' then
+    if not reaper.file_exists(path) then return {ok = false, error = 'no such file'} end
+    local _, project_file = reaper.EnumProjects(-1)
+    if project_file and project_file ~= '' then
+      local folder = reaper.GetProjectPathEx(0)
+      reaper.RecursiveCreateDirectory(folder, 0)
+      local kept = folder .. '/' .. (path:match('([^/\\]+)$') or 'pasted.wav')
+      if kept == path or copy_file(path, kept) then path = kept end
+    end
+  end
+  reaper.Undo_BeginBlock()
+  local item, take
+  if path ~= '' then
+    item = reaper.AddMediaItemToTrack(tr)
+    take = item and reaper.AddTakeToMediaItem(item)
+    if take then
+      reaper.SetMediaItemTake_Source(take, reaper.PCM_Source_CreateFromFile(path))
+      reaper.SetMediaItemTakeInfo_Value(take, 'D_STARTOFFS', math.max(0, args[7] or 0))
+      reaper.SetMediaItemInfo_Value(item, 'D_POSITION', t0)
+      reaper.SetMediaItemInfo_Value(item, 'D_LENGTH', length)
+    end
+  else
+    item = reaper.CreateNewMIDIItemInProj(tr, t0, t0 + length, false)
+    take = item and reaper.GetActiveTake(item)
+  end
+  if not take then
+    reaper.Undo_EndBlock('Paste item', 4)
+    return {ok = false, error = 'could not create an item'}
+  end
+  if name ~= '' then reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true) end
+  reaper.SetMediaItemInfo_Value(item, 'B_MUTE', (args[5] or 0) > 0.5 and 1 or 0)
+  reaper.SetMediaItemInfo_Value(item, 'D_FADEINLEN', math.max(0, args[8] or 0))
+  reaper.SetMediaItemInfo_Value(item, 'D_FADEOUTLEN', math.max(0, args[9] or 0))
+  reaper.SetMediaItemInfo_Value(item, 'C_FADEINSHAPE', REAPER_SHAPE[math.floor(args[10] or 0)] or 0)
+  reaper.SetMediaItemInfo_Value(item, 'C_FADEOUTSHAPE', REAPER_SHAPE[math.floor(args[11] or args[10] or 0)] or 0)
+  reaper.SetMediaItemInfo_Value(item, 'D_VOL', 10 ^ ((args[12] or 0) / 20))
+  reaper.SetMediaItemInfo_Value(item, 'B_LOOPSRC', (args[14] or 0) > (args[13] or 0) and 1 or 0)
+  local count = math.floor(args[16] or 0)
+  local placed = 0
+  for n = 0, count - 1 do
+    local at = 17 + n * 5
+    local on, off = args[at], args[at + 1]
+    local pitch, vel, chan = args[at + 2], args[at + 3], args[at + 4]
+    if on and off and pitch and vel and chan then
+      local ppq_on = reaper.MIDI_GetPPQPosFromProjTime(take, on)
+      local ppq_off = reaper.MIDI_GetPPQPosFromProjTime(take, off)
+      if reaper.MIDI_InsertNote(take, false, false, ppq_on, math.max(ppq_off, ppq_on + 1),
+          math.floor(chan), math.floor(pitch), math.floor(vel), true) then
+        placed = placed + 1
+      end
+    end
+  end
+  local at = 17 + count * 5
+  local controls = math.floor(args[at] or 0)
+  local moved = 0
+  for c = 0, controls - 1 do
+    local o = at + 1 + c * 4
+    local t, kind, value, chan = args[o], args[o + 1], args[o + 2], args[o + 3]
+    if t and kind and value and chan then
+      local ppq = reaper.MIDI_GetPPQPosFromProjTime(take, t)
+      local msg, a, b
+      if kind == 128 then
+        local v = math.max(0, math.min(16383, math.floor(value) + 8192))
+        msg, a, b = 0xE0, v % 128, math.floor(v / 128)
+      elseif kind >= 0 and kind < 128 then
+        msg, a, b = 0xB0, math.floor(kind), math.max(0, math.min(127, math.floor(value)))
+      end
+      if msg and reaper.MIDI_InsertCC(take, false, false, ppq, msg, math.floor(chan), a, b) then
+        moved = moved + 1
+      end
+    end
+  end
+  if count > 0 or controls > 0 then reaper.MIDI_Sort(take) end
+  reaper.UpdateItemInProject(item)
+  if (args[15] or 0) > 0.5 and path ~= '' then
+    -- Reaper reverses a take with an action on the selected items, as SetItemReversed does.
+    local was = {}
+    for n = 0, reaper.CountSelectedMediaItems(0) - 1 do was[#was + 1] = reaper.GetSelectedMediaItem(0, n) end
+    unselect_all()
+    reaper.SetMediaItemSelected(item, true)
+    reaper.Main_OnCommand(41051, 0)
+    unselect_all()
+    for _, w in ipairs(was) do reaper.SetMediaItemSelected(w, true) end
+  end
+  if path ~= '' then reaper.Main_OnCommand(40047, 0) end
+  local result = edited('Paste item')
+  result.notes = placed
+  result.controls = moved
+  result.path = path
   return result
 end
 

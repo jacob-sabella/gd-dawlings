@@ -71,7 +71,7 @@ const COMMANDS := [
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
-	&"open_edit", &"close_edit",
+	&"open_edit", &"close_edit", &"hold_lane",
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
@@ -538,6 +538,12 @@ func loop_selected_items() -> bool:
 ## what the step is called in the history list ("Kick: level").
 func open_edit(edit_name: String) -> void: _do(&"open_edit", [edit_name.left(MARKER_NAME_MAX)])
 func close_edit() -> void: _do(&"close_edit", [])
+## Lane `target` of track `track_index` (0 the master) held off following the song while `on`, and
+## following it again after (DAWBackend.hold_lane): a write bead out over its control, so the
+## player hears what they write rather than the lane they are writing over. Not history, and no
+## automation mode is changed. A guest's is an intent, released by the host if they leave.
+func hold_lane(track_index: int, target: String, on: bool) -> void:
+	_do(&"hold_lane", [track_index, target, on])
 ## A player gone from the session: an edit they left open is closed, on the host. `peer` is their
 ## peer id, 0 for this machine.
 func close_edits_of(peer: int) -> void:
@@ -546,6 +552,8 @@ func close_edits_of(peer: int) -> void:
 	backend.acting_peer = peer
 	backend.close_edit()
 	backend.acting_peer = 0
+	# And any lane their write bead held: a bead let go of by somebody who is not here any more.
+	backend.release_lanes_of(peer)
 func undo() -> void: _do(&"undo", [])
 func redo() -> void: _do(&"redo", [])
 ## Back or forward through history to `depth` steps done: the history list's jump.
@@ -708,6 +716,9 @@ static func _opaque(c: Color) -> Color:
 	return Color(clampf(c.r, 0.0, 1.0), clampf(c.g, 0.0, 1.0), clampf(c.b, 0.0, 1.0), 1.0)
 ## `points` as MixState.TrackState.automation's: [seconds, value, shape]. Empty takes the lane away.
 ## Track 0 is the master, whose volume and pan can be automated.
+##
+## A write bead (WriteBead, docs/spatial_loop.md part two slice 22) writes a pass with this: the
+## lane whole, its points over the pass's span, inside the pass's edit.
 func set_automation(track_index: int, target: String, points: Array) -> void:
 	var flat := MixWire.pack_automation(points)
 	if Session.is_authority():
@@ -900,7 +911,7 @@ func on_behalf_of(peer: int, fn: Callable) -> void:
 
 ## What an edit is called in the history list: the verb in words, and the track it is on when it
 ## names one ("Kick: move item").
-const NAMED_BY_TRACK := [&"move_item", &"add_fx", &"remove_fx", &"move_fx", &"create_send", &"remove_send",
+const NAMED_BY_TRACK := [&"move_item", &"paste_item", &"add_fx", &"remove_fx", &"move_fx", &"create_send", &"remove_send",
 		&"create_sidechain", &"set_automation", &"rename_track", &"duplicate_track", &"remove_track", &"move_track", &"set_track_group"]
 func step_name(verb: StringName, args: Array) -> String:
 	var words := String(verb).trim_prefix("set_").replace("_", " ")
@@ -927,6 +938,15 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 		args = [str(args[0]).left(MARKER_NAME_MAX)]
 	if verb == &"close_edit":
 		args = []
+	if verb == &"hold_lane":
+		# Peer input: a track (0 the master), a target that names a control, and on or off.
+		if args.size() != 3 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])) \
+				or int(args[0]) < 0 or typeof(args[1]) not in [TYPE_STRING, TYPE_STRING_NAME] \
+				or DawKitAutomation.kind_of(str(args[1])).is_empty() \
+				or (int(args[0]) == 0 and str(args[1]) not in MixWire.MASTER_LANES):
+			push_warning("DAW: refused a malformed hold_lane intent %s." % [args])
+			return
+		args = [int(args[0]), str(args[1]), MixWire._as_bool([args[2]])]
 	if verb == &"set_track_width":
 		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))) \
 				or int(args[0]) < 1:
@@ -1371,6 +1391,59 @@ func _import_name(path: String) -> String:
 	return AudioImport.file_name_for(path, func(n: String) -> bool:
 		return FileAccess.file_exists(AudioTake.DIR.path_join(n)) or (media is Dictionary and media.has(n)) \
 				or (not _import_job.is_empty() and _import_job[2] == n))
+
+
+## A clip off a cassette onto a track (docs/spatial_loop.md part two, slice 24): `packed` is the
+## cassette's clip (MixWire.pack_item), read as a peer's would be (MixWire.unpack_item), and it lands
+## on `track_index` at `start` seconds as the item it was cut from, part and all, but for its start
+## and its track. One undo step, under Capability.PASTE_ITEMS. The host's own verb and not an
+## intent, as insert_audio_take is: a guest's paste is the room's `paste` [cassette, track, time],
+## and the host pastes the clip its own row holds, so no peer hands the host a clip. Not in
+## COMMANDS. Answers why it was not pasted (paste_refusal), or "" when it was.
+func paste_item(track_index: int, start: float, packed: Dictionary) -> String:
+	if not Session.is_authority():
+		return "Only the host pastes onto the song."
+	var why := paste_refusal(track_index, packed)
+	if not why.is_empty():
+		return why
+	_call(&"paste_item", [track_index, maxf(start, 0.0) if is_finite(start) else 0.0, packed])
+	return ""
+
+
+## Why a cassette's clip cannot go onto `track_index` here, in words for the person who pressed it,
+## or "": a DAW that cannot paste; nothing on it; no such track; a frozen one; MIDI onto a track
+## that takes none (its input a microphone, or a DAW that takes no MIDI); a file this machine does
+## not have; a demo part where there are no parts (Reaper); a clip with no notes, controls, file or
+## part, which is what a cassette of a Reaper item's own audio is (the cache knows the file only of
+## takes recorded through the desk), and pasted would be an empty MIDI item and not the sound.
+func paste_refusal(track_index: int, packed: Dictionary) -> String:
+	if backend == null or not backend.can(DAWBackend.Capability.PASTE_ITEMS):
+		return "This DAW cannot paste a cassette yet: in Reaper, load the dawlings bridge script."
+	var item := MixWire.unpack_item(packed)
+	if item == null:
+		return "That cassette has no clip on it to paste."
+	if state == null or not state.tracks.has(track_index):
+		return "There is no track %d to paste onto." % track_index
+	var t := state.track(track_index)
+	if t.is_frozen():
+		return "%s is frozen: thaw it to paste onto it." % t.display_name()
+	if item.source.is_empty() and item.part.is_empty() and item.notes.is_empty() and item.controls.is_empty():
+		return "That cassette holds no notes and no sound recorded here, so there is nothing to paste: " \
+				+ "the sound of an item Reaper made itself stays in Reaper. Copy it there."
+	if not item.source.is_empty():
+		if not FileAccess.file_exists(backend.media_path(item.source)):
+			return "%s is not on this machine, so its cassette cannot be pasted here." % item.source
+		return ""
+	if not item.part.is_empty():
+		if not backend.can(DAWBackend.Capability.DEMO_PARTS):
+			return "A demo part plays only on the built-in engine."
+		return ""
+	if not backend.can(DAWBackend.Capability.MIDI_TAKES):
+		return "This DAW cannot take MIDI yet: in Reaper, load the dawlings bridge script."
+	if state.input_of(track_index).begins_with("audio:"):
+		return "%s takes no MIDI: its input is %s. Paste MIDI where the keys go." % [t.display_name(),
+				state.input_name(state.input_of(track_index))]
+	return ""
 
 
 ## Why a recorded take cannot be placed, in words for the person who played it, or "".

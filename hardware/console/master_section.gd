@@ -23,6 +23,12 @@ const GAP := 0.022
 ## Where the SEND sockets sit: over the fader's top end stop (its cap's top is 0.151 up) and
 ## under the flip key, where a desk keeps its headphone and cue sockets.
 const SENDS_Y := 0.163
+## The OVER lamp, over the two meters (slice 21): lit while the master is over 0 dBFS, and held
+## OVER_HOLD after, so a single clipped hit is still there to be seen. The level readout says OVER
+## in words meanwhile, so it is never the lamp's colour alone that says so.
+const OVER_Y := 0.1445
+const OVER_SIZE := Vector3(0.026, 0.0035, 0.002)
+const OVER_HOLD := 1.0
 
 ## Pressed to move the faders on to the next return's sends, and from the last back to levels.
 ## The console decides what that means; the master section only has the key.
@@ -39,6 +45,15 @@ var _unmute_key: PanelButton
 var sends: Array[SendSocket] = []
 ## What the sends key says it is showing, for its hover card: "" when the faders are levels.
 var _sends_to := ""
+var _over_lamp: MeshInstance3D
+## Whether the OVER lamp is lit, and for how much longer it is held after the clip ended.
+var over := false
+var _over_hold := 0.0
+
+
+## Whether a meter at `level` (0..1 on the fader law) is over 0 dBFS.
+static func clipping(level: float) -> bool:
+	return level > FaderLaw.to_taper(0.0) + 0.0005
 
 
 func _ready() -> void:
@@ -71,6 +86,7 @@ func _ready() -> void:
 	_pan.turned.connect(func(v: float): DAW.set_master_pan(v))
 	_pan.describe_title = func() -> String: return "MASTER  BALANCE"
 	_pan.describe_value = Knob.pan_text
+	_pan.automates = func() -> Array: return [0, "pan"]
 	add_child(_pan)
 
 	# Let go of every solo, and every mute: the one key that finds them all, where finding the
@@ -124,6 +140,7 @@ func _ready() -> void:
 	_fader = Fader.new()
 	_fader.write_value = func(v: float): DAW.set_master_volume(v)
 	_fader.describe_title = func() -> String: return "MASTER  LEVEL"
+	_fader.automates = func() -> Array: return [0, "volume"]
 	_fader.position = Vector3(-0.022, 0.040, 0.004)
 	add_child(_fader)
 
@@ -143,6 +160,16 @@ func _ready() -> void:
 
 	_db_label = _label(15, Vector3(0, 0.020, 0.001))
 	add_child(_db_label)
+
+	_over_lamp = MeshInstance3D.new()
+	_over_lamp.name = "OverLamp"
+	var over_mesh := BoxMesh.new()
+	over_mesh.size = OVER_SIZE
+	_over_lamp.mesh = over_mesh
+	_over_lamp.position = Vector3(0.021, OVER_Y, 0.002)
+	_over_lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_over_lamp)
+	_paint_over()
 
 	DAW.master_changed.connect(func(_field: StringName): refresh())
 	DAW.track_changed.connect(func(_i: int, _field: StringName): refresh())
@@ -186,9 +213,28 @@ func show_sends(return_name: String) -> void:
 	Lettering.fit(_sends_label, WIDTH - 0.008, 52, ConsoleSurface.SMALLEST_FONT)
 
 
+## The master clipping now (`now`), `delta` seconds on: the OVER lamp lit while it does and for
+## OVER_HOLD after, and the level readout saying OVER meanwhile.
+func show_over(now: bool, delta: float) -> void:
+	_over_hold = OVER_HOLD if now else maxf(_over_hold - delta, 0.0)
+	var lit := now or _over_hold > 0.0
+	if lit == over:
+		return
+	over = lit
+	_paint_over()
+	refresh()
+
+
+func _paint_over() -> void:
+	if _over_lamp != null:
+		_over_lamp.material_override = Materials.led(Ergonomics.current.signal_colour(&"over"), over)
+
+
 func refresh() -> void:
 	var m := DAW.state.master
 	_db_label.text = "%+.1f" % m.volume_db if m.volume_db > -150.0 else "-inf"
+	if over:
+		_db_label.text = "OVER"
 	_fader.apply_remote(m.volume)
 	_pan.apply_remote(m.pan)
 	var tracks := DAW.state.track_indices()

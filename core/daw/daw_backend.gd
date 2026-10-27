@@ -94,6 +94,18 @@ const Capability := {
 	## Set how wide a track's stereo image is (set_track_width): the stage table's ring. Reaper
 	## only through the bridge, which puts the track in its stereo pan mode to have one.
 	WIDTH = &"width",
+	## Hold one lane of automation off following the song (hold_lane) while a write bead writes
+	## over it. Reaper only through the bridge, which switches the envelope off and back; without
+	## it the bead still writes, and the lane plays over the player while they do.
+	LANE_HOLD = &"lane_hold",
+	## Paste a clip carried on a cassette onto a track as a new item (paste_item): a MIDI item with
+	## its notes and controls, or an audio item with its file, offset, fades, gain and loop. Reaper
+	## only through the bridge, whose PasteItem makes the item; OSC cannot make one.
+	PASTE_ITEMS = &"paste_items",
+	## Play a demo part (ItemState.part) in an item's window: the built-in demo song's parts are the
+	## built-in engine's and its stand-in's alone. Reaper has no parts, so a demo cassette is refused
+	## there (docs/spatial_loop.md part two, slice 24).
+	DEMO_PARTS = &"demo_parts",
 }
 
 
@@ -319,6 +331,49 @@ func close_edit() -> void: pass
 ## An open edit nothing has been written into for this long is closed.
 const EDIT_IDLE_MSEC := 10000
 
+## Lanes held off following the song (Capability.LANE_HOLD): [track index, target] -> the player
+## holding it (`acting_peer`). A write bead (WriteBead) holds the lane it writes for as long as it
+## is out, so its player hears the control they move rather than the lane they are writing over,
+## and its pass replaces that stretch of the lane when it ends (set_automation). Not history, not a
+## touch pass and not an automation mode: nothing times it out but the let-go, or its player
+## leaving (`release_lanes_of`).
+var held_lanes := {}
+
+
+## A lane another player holds is theirs: neither held again nor let go by anybody else, so one
+## guest cannot let go of another's lane under their bead (`acting_peer` is who asks).
+func hold_lane(track_index: int, target: String, on: bool) -> void:
+	var key := [track_index, target]
+	if held_lanes.has(key) and int(held_lanes[key]) != acting_peer:
+		push_warning("DAW: refused player %d's %s of lane %s, held by player %d." % [acting_peer, "hold" if on else "let-go", key, int(held_lanes[key])])
+		return
+	if on:
+		held_lanes[key] = acting_peer
+	elif held_lanes.has(key):
+		held_lanes.erase(key)
+	else:
+		return
+	_hold_lane(track_index, target, on)
+
+
+## Whether lane `target` of `track_index` is held (hold_lane).
+func lane_held(track_index: int, target: String) -> bool:
+	return held_lanes.has([track_index, target])
+
+
+## Every lane `peer` (0 for this machine) holds, followed again.
+func release_lanes_of(peer: int) -> void:
+	var was := acting_peer
+	acting_peer = peer
+	for key in held_lanes.keys():
+		if int(held_lanes[key]) == peer:
+			hold_lane(int(key[0]), str(key[1]), false)
+	acting_peer = was
+
+
+## Override: the lane held or let go, in whatever this DAW follows lanes with.
+func _hold_lane(_track_index: int, _target: String, _on: bool) -> void: pass
+
 ## Item editing. Items are (track, index in lane, left to right). `additive` adds to or takes
 ## from the selection instead of replacing it.
 func select_item(_track_index: int, _item_index: int, _additive: bool) -> void: pass
@@ -521,6 +576,14 @@ func insert_midi_take(_track_index: int, _start: float, _end: float, _notes: Arr
 ## backend that cannot do it answers false to Capability.AUDIO_TAKES.
 func insert_audio_take(_track_index: int, _start: float, _source: String, _length: float,
 		_peaks: PackedByteArray, _name: String) -> void: pass
+
+## A clip off a cassette (docs/spatial_loop.md part two, slice 24): a new item on `track_index` at
+## `start` seconds, made from `packed` (MixWire.pack_item) as MixWire.unpack_item reads it -- the
+## item it was cut from, notes, controls, file, fades, gain, loop and demo part, but for where it
+## is. One undo step. Arguments arrive already checked (DAW.paste_refusal): a track that is there
+## and not frozen, a file this machine has. A backend that cannot answers false to
+## Capability.PASTE_ITEMS.
+func paste_item(_track_index: int, _start: float, _packed: Dictionary) -> void: pass
 
 
 # --- item edits, on the cache ------------------------------------------------------------
@@ -789,6 +852,7 @@ func _locally_split(seconds: float) -> int:
 				right.source = item.source
 				right.peaks = item.peaks
 				right.reversed = item.reversed
+				right.part = item.part
 				right.source_offset = item.source_offset + (seconds - item.start)
 				# Each half keeps the end it had: the fade in stays on the left, the fade out goes
 				# with the right, and both keep the clip's gain.
@@ -1907,6 +1971,21 @@ func _locally_insert_audio(track_index: int, start: float, source: String, lengt
 	item.source = source
 	item.peaks = peaks
 	_land_in_lane(track_index, lane, item)
+
+
+## A pasted clip's item (`paste_item`), drawn at once: `item` (MixWire.unpack_item's) at `start` on
+## `track_index`, its file's overview drawn from the file where this machine has it, since a clip
+## never carries its peaks.
+func _locally_paste(track_index: int, start: float, item: MixState.ItemState) -> void:
+	item.start = maxf(start, 0.0)
+	if not item.source.is_empty():
+		if not take_peaks.has(item.source):
+			take_peaks[item.source] = AudioTake.overview_of(media_path(item.source))
+		item.peaks = take_peaks[item.source]
+		if item.reversed:
+			item.peaks = item.peaks.duplicate()
+			item.peaks.reverse()
+	_land_in_lane(track_index, _lane_copy(track_index), item)
 
 
 ## Every lane with something in it, packed, for an undo step to put back.

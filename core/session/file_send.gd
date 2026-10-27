@@ -9,6 +9,12 @@ extends Node
 ## after another from where the guest let them go), says how it went to the guest, and tells the
 ## room. The original is sent rather than the guest's own decoding of it: an MP3 is a tenth of its
 ## WAV, and the host reads every format the guest could.
+##
+## And the other way, one file at a time (`fetch`, docs/spatial_loop.md part two, slice 25): a guest
+## holding an audio cassette to its ear asks the host once for the file the clip plays, by name. The
+## host sends it from its project's media folder, on the same channel and a slice at a time, but only
+## a file something in the room plays (an item of the song, or a made cassette's clip); the guest
+## keeps it in FETCHED for as long as it is a guest there, and plays it from that copy.
 
 ## Each file is checked here for size before a byte is sent, and again by the host as it arrives.
 const MAX_BYTES := 256 * 1024 * 1024
@@ -20,6 +26,8 @@ const SLICES_PER_FRAME := 4
 ## fader or the room.
 const FILE_CHANNEL := 6
 const INCOMING := "user://incoming"
+## Guest: where the host's files it fetched are kept, by their names, while it is a guest.
+const FETCHED := "user://fetched"
 
 ## Guest: how far the batch being sent has got, 0-1, and its files' names.
 signal progress(fraction: float, names: PackedStringArray)
@@ -34,10 +42,32 @@ var _in := {}
 ## Host: an incoming file's path -> [peer, batch key], until it is brought in.
 var _incoming_paths := {}
 
+## Guest: a fetch finished, its copy here at `path`; or the host could not send it, and `why`.
+signal fetched(file_name: String, path: String)
+signal fetch_failed(file_name: String, why: String)
+
+## Guest: each file asked of the host, by name: {state: FETCHING, FETCHED or REFUSED, size, got,
+## file (FileAccess while it arrives), why}. A name is asked once: `fetch` again does nothing.
+var _fetches := {}
+## Guest: how many fetches have been asked of the host, for the suite.
+var fetches_asked := 0
+## Host: files being sent to guests, oldest first: {peer, fname, file (FileAccess), size}; and how
+## many have been sent whole.
+var _serving: Array = []
+var fetches_served := 0
+## For the suite, in place of the network: called (peer, method, args) with what would have gone
+## by RPC, the handler's own name (`fetch_asked`, `fetch_began`, ...) and its arguments.
+var wire: Callable = Callable()
+
+const FETCHING := &"fetching"
+const FETCHED_STATE := &"fetched"
+const REFUSED := &"refused"
+
 
 func _ready() -> void:
 	DAW.audio_imported.connect(_on_imported)
 	DAW.audio_import_done.connect(_on_import_done)
+	Session.role_changed.connect(_on_role_changed)
 
 
 ## Guest: sends `paths` for the host to bring in onto `track` from `at`. Answers why not, or "".
@@ -68,6 +98,7 @@ func sending() -> bool:
 
 
 func _process(_delta: float) -> void:
+	_serve_some()
 	if _out.is_empty() or Session.role != Session.Role.GUEST or not Session._connected():
 		if not _out.is_empty() and not Session._connected():
 			_out.clear()
@@ -227,3 +258,239 @@ func _tell(peer_id: int, text: String) -> void:
 		Session.notice.emit(text)
 	elif Session._connected() and multiplayer.get_peers().has(peer_id):
 		Session._told.rpc_id(peer_id, text)
+
+
+# --- a host's file, fetched by a guest (docs/spatial_loop.md part two, slice 25) ------------------
+
+## Guest: asks the host for its file `file_name` (a clip's source, by name), once. Answers why not, or
+## "": asked now, or already asked, arriving or here.
+func fetch(file_name: String) -> String:
+	var fname := file_name.get_file()
+	if fname.is_empty() or fname.validate_filename() != fname:
+		return "%s is not a file name" % file_name
+	if _fetches.has(fname):
+		return ""
+	if Session.role != Session.Role.GUEST:
+		return "not in a session as a guest"
+	if not wire.is_valid() and not Session._connected():
+		return "not connected to the host"
+	_fetches[fname] = {"state": FETCHING, "size": 0, "got": 0, "file": null, "why": ""}
+	fetches_asked += 1
+	_send(1, &"fetch_asked", [fname])
+	return ""
+
+
+## Guest: where `file_name` is if it has been fetched here, or "".
+func fetched_path(file_name: String) -> String:
+	var fname := file_name.get_file()
+	var f: Dictionary = _fetches.get(fname, {})
+	if f.get("state") != FETCHED_STATE:
+		return ""
+	var path := ProjectSettings.globalize_path(FETCHED.path_join(fname))
+	return path if FileAccess.file_exists(path) else ""
+
+
+## Guest: where a fetch of `file_name` is: FETCHING, FETCHED_STATE, REFUSED, or &"" never asked.
+func fetch_state(file_name: String) -> StringName:
+	return (_fetches.get(file_name.get_file(), {}) as Dictionary).get("state", &"")
+
+
+## Guest: why the host refused `file_name`, or "".
+func fetch_refusal(file_name: String) -> String:
+	return str((_fetches.get(file_name.get_file(), {}) as Dictionary).get("why", ""))
+
+
+## Host: guest `from` asked for `file_name`. Sent from the media folder if something in the room
+## plays it (`_plays_here`), a slice at a time (`_serve_some`); refused with why otherwise.
+func fetch_asked(file_name: String, from: int) -> void:
+	var fname := file_name.get_file()
+	for s in _serving:
+		if s["peer"] == from and s["fname"] == fname:
+			return
+	var path := DAW.backend.media_path(fname) if DAW.backend != null else ""
+	var why := ""
+	if fname.is_empty() or fname != file_name or not _plays_here(fname):
+		why = "nothing in the room plays %s" % file_name.get_file()
+	elif path.is_empty() or not FileAccess.file_exists(path):
+		why = "%s is not on the host's machine either" % fname
+	var f := FileAccess.open(path, FileAccess.READ) if why.is_empty() else null
+	if why.is_empty() and f == null:
+		why = "the host could not read %s" % fname
+	elif f != null and (f.get_length() <= 0 or f.get_length() > MAX_BYTES):
+		why = "%s is over %d MB" % [fname, MAX_BYTES / (1024 * 1024)]
+		f.close()
+		f = null
+	if not why.is_empty():
+		_send(from, &"fetch_refused", [fname, why])
+		return
+	_serving.append({"peer": from, "fname": fname, "file": f, "size": f.get_length()})
+	_send(from, &"fetch_began", [fname, f.get_length()])
+
+
+## Whether something in the room plays file `fname`: an item of the song, or a made cassette's clip.
+## A guest may fetch only those, never whatever else is in the host's folder.
+static func _plays_here(fname: String) -> bool:
+	if DAW.state != null:
+		for index in DAW.state.track_indices():
+			for it: MixState.ItemState in DAW.state.track(index).items:
+				if it.source.get_file() == fname:
+					return true
+	for id in Session.made:
+		var row: Variant = Session.made[id]
+		if row is Array and (row as Array).size() == 3 and row[2] is PackedByteArray:
+			var data: Variant = bytes_to_var(row[2])
+			if data is Dictionary and data.get("clip") is Dictionary \
+					and str((data["clip"] as Dictionary).get("source", "")).get_file() == fname:
+				return true
+	return false
+
+
+## Host: a frame's worth of the files being fetched, the oldest first, SLICES_PER_FRAME slices in all.
+func _serve_some() -> void:
+	var budget := SLICES_PER_FRAME
+	while budget > 0 and not _serving.is_empty():
+		var s: Dictionary = _serving[0]
+		var f: FileAccess = s["file"]
+		if not wire.is_valid() and (not Session._connected() or not multiplayer.get_peers().has(int(s["peer"]))):
+			f.close()
+			_serving.pop_front()
+			continue
+		if f.get_position() >= f.get_length():
+			f.close()
+			_serving.pop_front()
+			_send(int(s["peer"]), &"fetch_ended", [s["fname"]])
+			fetches_served += 1
+			continue
+		_send(int(s["peer"]), &"fetch_got", [s["fname"], f.get_buffer(SLICE)])
+		budget -= 1
+
+
+## Guest: the host is sending `file_name`, `size` bytes, into FETCHED.
+func fetch_began(file_name: String, size: int) -> void:
+	var f: Dictionary = _fetches.get(file_name, {})
+	if f.get("state") != FETCHING or size <= 0 or size > MAX_BYTES:
+		return
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(FETCHED))
+	var into := FileAccess.open(ProjectSettings.globalize_path(FETCHED.path_join(file_name + ".part")), FileAccess.WRITE)
+	if into == null:
+		_refused_here(file_name, "this machine could not write %s to its disk" % file_name)
+		return
+	f["size"] = size
+	f["got"] = 0
+	f["file"] = into
+
+
+## Guest: a slice of `file_name`.
+func fetch_got(file_name: String, bytes: PackedByteArray) -> void:
+	var f: Dictionary = _fetches.get(file_name, {})
+	var into: FileAccess = f.get("file")
+	if into == null:
+		return
+	if int(f["got"]) + bytes.size() > int(f["size"]):
+		_refused_here(file_name, "%s was not the size it said" % file_name)
+		return
+	into.store_buffer(bytes)
+	f["got"] = int(f["got"]) + bytes.size()
+
+
+## Guest: all of `file_name` sent: kept under its own name, and said.
+func fetch_ended(file_name: String) -> void:
+	var f: Dictionary = _fetches.get(file_name, {})
+	var into: FileAccess = f.get("file")
+	if into == null:
+		return
+	into.close()
+	f["file"] = null
+	var part := ProjectSettings.globalize_path(FETCHED.path_join(file_name + ".part"))
+	if int(f["got"]) != int(f["size"]):
+		_refused_here(file_name, "%s arrived short" % file_name)
+		return
+	var path := ProjectSettings.globalize_path(FETCHED.path_join(file_name))
+	DirAccess.remove_absolute(path)
+	DirAccess.rename_absolute(part, path)
+	f["state"] = FETCHED_STATE
+	fetched.emit(file_name, path)
+
+
+## Guest: the host will not send `file_name`, and why.
+func fetch_refused(file_name: String, why: String) -> void:
+	if (_fetches.get(file_name, {}) as Dictionary).get("state") == FETCHING:
+		_refused_here(file_name, why)
+
+
+func _refused_here(file_name: String, why: String) -> void:
+	var f: Dictionary = _fetches[file_name]
+	var into: FileAccess = f.get("file")
+	if into != null:
+		into.close()
+	f["file"] = null
+	f["state"] = REFUSED
+	f["why"] = why
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(FETCHED.path_join(file_name + ".part")))
+	fetch_failed.emit(file_name, why)
+
+
+## No longer a guest: the fetched copies were that host's, and go.
+func _on_role_changed() -> void:
+	if Session.role == Session.Role.GUEST:
+		return
+	forget_fetched()
+
+
+## Every fetch forgotten, and the copies in FETCHED gone.
+func forget_fetched() -> void:
+	for fname in _fetches:
+		var into: FileAccess = (_fetches[fname] as Dictionary).get("file")
+		if into != null:
+			into.close()
+	_fetches.clear()
+	var dir := ProjectSettings.globalize_path(FETCHED)
+	if DirAccess.dir_exists_absolute(dir):
+		for n in DirAccess.get_files_at(dir):
+			DirAccess.remove_absolute(dir.path_join(n))
+
+
+## What would go by RPC to `peer`: through `wire` for the suite, or the network.
+func _send(peer: int, method: StringName, args: Array) -> void:
+	if wire.is_valid():
+		wire.call(peer, method, args)
+		return
+	if not Session._connected():
+		return
+	match method:
+		&"fetch_asked": _fetch_ask.rpc_id(peer, args[0])
+		&"fetch_began": _fetch_begin.rpc_id(peer, args[0], args[1])
+		&"fetch_got": _fetch_slice.rpc_id(peer, args[0], args[1])
+		&"fetch_ended": _fetch_end.rpc_id(peer, args[0])
+		&"fetch_refused": _fetch_refuse.rpc_id(peer, args[0], args[1])
+
+
+@rpc("any_peer", "call_remote", "reliable", FILE_CHANNEL)
+func _fetch_ask(file_name: String) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if Session.is_authority() and Session._is_member(from):
+		fetch_asked(file_name, from)
+
+
+@rpc("authority", "call_remote", "reliable", FILE_CHANNEL)
+func _fetch_begin(file_name: String, size: int) -> void:
+	if Session.role == Session.Role.GUEST and multiplayer.get_remote_sender_id() == 1:
+		fetch_began(file_name, size)
+
+
+@rpc("authority", "call_remote", "reliable", FILE_CHANNEL)
+func _fetch_slice(file_name: String, bytes: PackedByteArray) -> void:
+	if Session.role == Session.Role.GUEST and multiplayer.get_remote_sender_id() == 1:
+		fetch_got(file_name, bytes)
+
+
+@rpc("authority", "call_remote", "reliable", FILE_CHANNEL)
+func _fetch_end(file_name: String) -> void:
+	if Session.role == Session.Role.GUEST and multiplayer.get_remote_sender_id() == 1:
+		fetch_ended(file_name)
+
+
+@rpc("authority", "call_remote", "reliable", FILE_CHANNEL)
+func _fetch_refuse(file_name: String, why: String) -> void:
+	if Session.role == Session.Role.GUEST and multiplayer.get_remote_sender_id() == 1:
+		fetch_refused(file_name, why.substr(0, 200))

@@ -42,6 +42,7 @@ const START := [
 	["Play the song", "PLAY on the tape deck, to your right. Drag along the top band of the timeline to loop a stretch."],
 	["Look and move", "Right-drag looks, WASD walks. F brings you to the gear you are looking at, Shift-F back again."],
 	["Change things", "Click, drag or scroll any control. Hover over it first to see what it does."],
+	["Automation", "While the song plays, a bead rises over the control you point at: drag it up and down to write its automation, one undo a loop. In a headset, pinch it."],
 	["The 2D view", "F2 opens the whole mix as a flat DAW: the precise way into everything the room does, and back."],
 	["Undo", "Ctrl-Z undoes and Ctrl-Shift-Z redoes, from anywhere in the room: a whole drag at a time, however much it moved."],
 	["Record", "Press a channel's red key to arm it, then REC on the tape deck. B splits the selected items at the playhead."],
@@ -53,6 +54,10 @@ const TOGETHER := [
 	["Join", "M, then a session ON THIS NETWORK, or an address under JOIN BY ADDRESS, and its code if it has one."],
 	["Hear the mix", "As a guest, \"Hear the mix\" in the session panel plays the host's mix to you."],
 	["Into their takes", "\"Record when the host records\" puts your keys and your mic on the host's tracks."],
+	["Hand it over", "Carrying a cassette (a clip dragged off the timeline's edge), click a bandmate to give it to them. In a headset, hold it by their glove."],
+	["Paste it", "Carrying a cassette, click a timeline lane to paste its clip there, on the beat (Shift: anywhere), or a channel strip or stage voice for that track at the playhead. It stays in your hand to paste again; Ctrl-Z takes it back."],
+	["Listen to it", "Carrying a cassette, hold L to hear its clip in your ears alone, the room 10 dB down. In a headset, hold it to your ear."],
+	["Sample it", "At the SAMPLER by the cassette rack, click REC, then squeeze, click or shake what you carry: that one sound is a WAV and a cassette on the rack, whoever's REC it was."],
 	["A cable to a bandmate", "P steps the jack of what you carry into a track or a bandmate's keys; with an empty hand, your own keys. Shift-P unplugs."],
 	["Headphones", "H puts them on. Best when you record, so the song does not end up in your microphone."],
 ]
@@ -64,6 +69,7 @@ const ROOM := [
 	["Somewhere else", "V changes the venue. Tab opens the stage manager, to move the gear about."],
 	["Rolling stands", "Drag a stand on wheels to roll it somewhere else."],
 	["Lettering", "+ and - make the room's lettering larger or smaller, 0 puts it back."],
+	["Signal and comfort", "Beads ride every cable, closer, faster and brighter the louder it is: follow them to where the sound stops. M, then COMFORT: Motion, Room reacts, Lift on clip."],
 	["Fingertips", "T makes J K L ; play the song's chord. T, Esc or a click gives the keys back."],
 	["Bend", "Hold Alt and move the mouse up or down to bend what you are playing; let go and it springs back. A wiggle wobbles it. \"Tilt bends\" in the session panel."],
 ]

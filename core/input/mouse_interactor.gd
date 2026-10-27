@@ -28,6 +28,10 @@ var finger_source: KeyCatcher = null
 ## The button was down as the fingers stopped playing: it is not a press until it has come up,
 ## so the click that gave the keys back does not also grab what it landed on.
 var _press_spent := false
+## L held while this hand carries a cassette (docs/spatial_loop.md part two, slice 25): the desk's
+## way of holding it to the ear, which plays its clip to this player alone (EarCue). L with
+## anything else, or nothing, is the studio's lean.
+var ear_held := false
 
 
 func reach() -> float:
@@ -64,10 +68,18 @@ const CARRY_AT := Vector3(-0.19, -0.15, -0.5)
 const CARRY_TIP := 0.25
 
 
+## Where a cassette at the ear rides instead: raised up the left of the view and in toward it, the
+## way a hand lifts one beside the head, and tipped further toward you, so its tag clears the hand.
+const EAR_AT := Vector3(-0.2, -0.03, -0.36)
+const EAR_TIP := 0.75
+
+
 func carry_pose() -> Transform3D:
 	if camera == null:
 		return global_transform
 	var view := camera.global_transform.orthonormalized()
+	if cassette_at_ear() != null:
+		return Transform3D(view.basis * Basis(Vector3.UP, 0.35) * Basis(Vector3.RIGHT, EAR_TIP), view * EAR_AT)
 	# Drawn back over the shoulder as a throw winds up, and tipped back with it.
 	var wound := charge()
 	var at := CARRY_AT + Vector3(0.04, 0.07, 0.16) * wound + _wiggle
@@ -307,6 +319,19 @@ func throw_with(wound: float) -> void:
 	throw_item(toward * speed, a.basis.x * -TUMBLE * (0.3 + 0.7 * wound))
 
 
+## A cassette carried in the view pastes by a click on a lane, a strip or a voice.
+func paste_press_words() -> String:
+	return "click"
+
+
+## The cassette carried while L is held.
+func cassette_at_ear() -> CassetteItem:
+	var c := _ear_cassette()
+	if c == null:
+		return null
+	return c if ear_held else null
+
+
 ## A ball thrown at your face is caught, not walked through: a screen has no hand to put up,
 ## so the catch is round your head, a little ahead of it.
 func catch_reach() -> float:
@@ -341,6 +366,13 @@ func fine() -> bool:
 ## Shift+P unplugs everything going into the player (`bare_jack`).
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	if key != null and not key.echo and key.keycode == KEY_L and not key.ctrl_pressed \
+			and (ear_held or (key.pressed and _ear_cassette() != null)):
+		# L with a cassette in the hand holds it to the ear while it is down; the studio's lean
+		# never hears it.
+		ear_held = key.pressed
+		get_viewport().set_input_as_handled()
+		return
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_P:
 		if step_own_jack(-1 if key.shift_pressed else 1):
 			get_viewport().set_input_as_handled()
@@ -395,6 +427,9 @@ func _over_gui() -> bool:
 
 func _physics_process(delta: float) -> void:
 	super(delta)
+	if ear_held and _ear_cassette() == null:
+		# Put down, pocketed or handed over with L still down: off the ear, until L is pressed anew.
+		ear_held = false
 	if camera != null or pointer_override.x >= 0.0:
 		wiggle(pointer(), delta)
 	_spring_bend(delta)

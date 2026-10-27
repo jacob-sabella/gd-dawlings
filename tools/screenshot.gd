@@ -51,6 +51,15 @@ var _fingertips := -1
 ## `--stations 2`: I pressed that many times at frame 10, as a desktop player goes to the
 ## instruments one by one (Studio.cycle_stations).
 var _stations := 0
+## `--cassettes 3`: that many clips pulled out of the timeline at frame 8, each a cassette shelved
+## in the cassette rack, and the rack gone to, for a shot of it holding them (docs/spatial_loop.md
+## part two, slice 23).
+var _cassettes := 0
+## `--samples 2`: at frame 8 the sampler's REC pressed and something carried used that many times
+## (the duck squeezed, the tambourine struck, the shaker struck), each a sample cassette on the rack,
+## REC pressed once more so it is lit and listening, and the sampler gone to unless SHOT_CAM frames
+## it (docs/spatial_loop.md part two, slice 26). Its WAVs go to user://shot_samples, never the project's media.
+var _samples := 0
 ## `--plaque-rows`: after `--stations`, INSTRUMENTS pressed on the plaque of the station gone to,
 ## at frame 14, for a shot of the board's rows beside it (docs/spatial_loop.md slice 11).
 var _plaque_rows := false
@@ -148,6 +157,8 @@ var _tl_road := -1.0
 var _tl_select := ""
 ## `--patch-wall`: the audio-device patch wall, hung in the middle of the room, showing this machine's graph.
 var _patch_wall := false
+## `--comfort`: the session panel open from frame 5 and scrolled to its COMFORT box.
+var _comfort := false
 ## `--no-timeline`: the timeline hidden, for a shot of something it would cover.
 var _no_timeline := false
 ## `--tl-region 9:17:Verse,17:25:Chorus`: regions from bar to bar, made at frame 7.
@@ -180,6 +191,27 @@ var _rig_roll := false
 var _board := ""
 var _pull_track := false
 var _pull_tracks := 0
+## `--rope 2,6,0.3`: a rope tied on the stage table at frame 6 from track 2's knot to track 6's
+## voice, pulled that far (0..1), and the song played, so the kick's own meter lifts it
+## (docs/spatial_loop.md slice 20). How far it ducks at the shot is printed.
+var _rope: Array = []
+## `--paste 6:4@30`: the first item of track 6 pulled into the mouse hand as a cassette at frame 6,
+## the timeline opened round bar 30 with the pointer parked on track 4's lane a third of a beat
+## past it, and the mouse pressed there at frame 12, so the take is pasted onto the beat and the
+## lanes' card still says what a press pastes (docs/spatial_loop.md part two slice 24).
+var _paste: Array = []
+## `--ear 6`: the first item of track 6 pulled into the mouse hand as a cassette at frame 6 and held to
+## the ear with L at frame 8, so it rides raised beside the view with its tag saying what it is doing
+## and the toast what it plays (docs/spatial_loop.md part two slice 25).
+var _ear := 0
+## `--bead KICK_IN__LEVEL@40`: the song rolling round a loop of BEAD_LOOP seconds from the playhead
+## (frame 7), the pointer parked on that control so its write bead shows over it, and on that
+## physics tick the bead pressed and dragged up and down in a wave, held to the shot: a pass is
+## written at each wrap, and its lane drawn (docs/spatial_loop.md part two slice 22).
+var _bead_aim := ""
+var _bead_tick := -1
+var _bead_from := Vector2(-1, -1)
+const BEAD_LOOP := 2.4
 
 
 func _ready() -> void:
@@ -249,6 +281,10 @@ func _ready() -> void:
 				if i + 1 < args.size(): _fingertips = int(args[i + 1])
 			"--stations":
 				if i + 1 < args.size(): _stations = int(args[i + 1])
+			"--cassettes":
+				if i + 1 < args.size(): _cassettes = int(args[i + 1])
+			"--samples":
+				if i + 1 < args.size(): _samples = int(args[i + 1])
 			"--plaque-rows":
 				_plaque_rows = true
 			"--help-page":
@@ -259,6 +295,13 @@ func _ready() -> void:
 				if i + 1 < args.size(): _posed_hand = Array(args[i + 1].split(",")).map(func(v): return float(v))
 			"--fist-shake":
 				_fist_shake = true
+			"--rope":
+				if i + 1 < args.size(): _rope = Array(args[i + 1].split(",")).map(func(v): return float(v))
+			"--bead":
+				if i + 1 < args.size():
+					var at := args[i + 1].rsplit("@", true, 1)
+					_bead_aim = at[0]
+					_bead_tick = int(at[1]) if at.size() == 2 else 40
 			"--throw":
 				if i + 1 < args.size():
 					var parts := args[i + 1].split("@")
@@ -304,6 +347,8 @@ func _ready() -> void:
 				_no_timeline = true
 			"--patch-wall":
 				_patch_wall = true
+			"--comfort":
+				_comfort = true
 			"--tl-select":
 				if i + 1 < args.size(): _tl_select = args[i + 1]
 			"--reopen":
@@ -328,6 +373,14 @@ func _ready() -> void:
 				if i + 1 < args.size(): _tl_road = float(args[i + 1])
 			"--wheel-take":
 				if i + 1 < args.size(): _wheel_take = int(args[i + 1])
+			"--paste":
+				if i + 1 < args.size():
+					var at := args[i + 1].split("@")
+					var ends := at[0].split(":")
+					if at.size() == 2 and ends.size() == 2:
+						_paste = [int(ends[0]), int(ends[1]), float(at[1])]
+			"--ear":
+				if i + 1 < args.size(): _ear = int(args[i + 1])
 			"--tour-band":
 				if i + 1 < args.size(): _tour_band = int(args[i + 1])
 	if _shot_tick >= 0:
@@ -405,6 +458,95 @@ func _tip_posed_hand(roll: float, offset := Vector3.ZERO) -> void:
 		_posed_tracker.set_hand_joint_transform(j, Transform3D(Basis.IDENTITY, joints[j]))
 
 
+## `--rope`'s rope: tied and pulled at frame 6, the song played from the start of the kick's first
+## item, and at the shot frame how far it ducks.
+## `--cassettes`: a clip off each of the first tracks with one, minted as the host mints a pull
+## (the studio's own `_mint_for`), shelved one to a slot from the top left, and the rack gone to.
+## Its walk there takes up to two seconds: shoot it at a later frame (`tools/shot.sh out 200 206`).
+func _shelve_cassettes() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.items == null or studio.cassette_rack == null:
+		return
+	var made := 0
+	for index in DAW.state.track_indices():
+		if made >= _cassettes:
+			break
+		if DAW.state.track(index).items.is_empty():
+			continue
+		var item := studio._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
+		if item == null:
+			continue
+		studio.items.slot_item(item, CassetteRack.RACK, made)
+		item.transform = item.resting
+		made += 1
+	# Where the rack stands and which way its front faces, for a SHOT_CAM framed on its slots.
+	var rack := studio.cassette_rack.global_transform
+	print("SHOT_CASSETTES ", studio.items.made_ids(), " rack at ", rack.origin, " facing ", rack.basis.z)
+	studio.go_to_station(&"cassette_rack")
+
+
+## `--samples`: REC, then a use, that many times, by the mouse's hand, as a desktop player samples:
+## the sampler's own press (Studio._on_rec_pressed) and the item's own use (Item.work).
+func _make_samples() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.items == null or studio.sampler == null:
+		return
+	var dir := ProjectSettings.globalize_path("user://shot_samples")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for name in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(name))
+	studio.sampler.media_path = func(name: String) -> String: return dir.path_join(name)
+	var hand := studio.get_node_or_null("MouseHand") as MouseInteractor
+	var kinds: Array[StringName] = [&"duck", &"tambourine", &"shaker"]
+	for n in _samples:
+		var item: Item = studio.items.items.get(kinds[n % kinds.size()])
+		if item == null or hand == null:
+			continue
+		studio._on_rec_pressed(true)
+		hand.pick_up(item)
+		item.work(true)
+		item.work(false)
+		hand.lose_carrying()
+		item.snap_home()
+	studio._on_rec_pressed(true)
+	var at := studio.sampler.global_transform
+	print("SHOT_SAMPLES ", studio.items.made_ids(), " sampler at ", at.origin, " facing ", at.basis.z,
+			" rack at ", studio.cassette_rack.global_position if studio.cassette_rack != null else Vector3.ZERO)
+	# Framed by SHOT_CAM, it stays framed there, the rack beside it in the shot too, and the room is
+	# the picture: the toasts it said are let go.
+	if _cam.size() != 6:
+		studio.go_to_station(&"sampler")
+		return
+	var panel := get_tree().current_scene.find_child("SessionPanel", true, false) as SessionPanel
+	if panel != null and panel._toasts != null:
+		for card in panel._toasts.get_children():
+			card.free()
+
+
+func _tie_the_rope() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	var table: StageTable = studio.stage if studio != null else null
+	if table == null:
+		return
+	var from := int(_rope[0])
+	var to := int(_rope[1])
+	if _frames == 6:
+		if Sidechain.key_send(from, to) == 0:
+			table.tie(from, to)
+		if _rope.size() > 2:
+			table.pull(from, to, float(_rope[2]))
+		var t := DAW.state.track(from, false)
+		if t != null and not t.items.is_empty():
+			DAW.seek((t.items[0] as MixState.ItemState).start)
+		DAW.transport_play()
+	if _frames == _shot_frame:
+		var rope: StageTable.Rope = table.rope_nodes.get(Sidechain.rope_key(from, to))
+		if rope != null:
+			var camera := get_viewport().get_camera_3d()
+			print("SHOT_ROPE ducking %.1f dB, lifted %.3f m, its middle at %s on screen: %s" % [rope.ducking, rope.lifted,
+					camera.unproject_position(rope.global_position) if camera != null else Vector2.ZERO, rope.readout()])
+
+
 ## `--harp-bend`: the string nearest the posed hand plucked by it, at HARP_PLUCK_FRAME; then the hand
 ## tipped further, a quarter of the way a frame.
 func _bend_the_harp() -> void:
@@ -450,6 +592,18 @@ func _process(_delta: float) -> void:
 		for hidden in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
 			hidden.visible = false
 
+	if _frames >= 5 and _frames <= 12 and _comfort:
+		var panel := get_tree().current_scene.find_child("SessionPanel", true, false) as SessionPanel
+		if panel != null:
+			if not panel.is_open():
+				panel.open()
+			var box := panel.find_child("Comfort", true, false) as Control
+			if box != null:
+				panel._scroll.ensure_control_visible(box)
+				if _frames == 12:
+					print("SHOT_COMFORT %s motion=%.1f room_reacts=%s lift_on_clip=%s" % [box.get_global_rect(),
+							Ergonomics.current.motion_scale, Ergonomics.current.room_reacts, Ergonomics.current.lift_on_clip])
+
 	if _frames == 3 and _patch_wall:
 		var wall := PatchWallSurface.new()
 		wall.position = Vector3(0, 2.2, 1.0)
@@ -465,8 +619,14 @@ func _process(_delta: float) -> void:
 		else:
 			print("SHOT_TL none found")
 
+	if _rope.size() >= 2:
+		_tie_the_rope()
 	if _frames == 6 and _wheel_take > 0:
 		_play_wheel_take(_wheel_take)
+	if _paste.size() == 3:
+		_paste_a_cassette()
+	if _ear > 0:
+		_hold_a_cassette_to_the_ear()
 	if _frames == 6 and _tl_road >= 0.0:
 		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
 		if not tl.is_empty():
@@ -530,6 +690,15 @@ func _process(_delta: float) -> void:
 				DAW.add_region(DAW.state.bar_to_seconds(float(r[0])), DAW.state.bar_to_seconds(float(r[1])), r[2])
 	if _frames == 7 and _roll:
 		DAW.transport_play()
+	if _frames == 7 and _bead_aim != "":
+		var from := DAW.state.position_seconds
+		DAW.set_loop_range(from, from + BEAD_LOOP)
+		DAW.set_looping(true)
+		DAW.transport_play()
+		# The timeline zoomed onto the loop, so the passes are drawn wide enough to see.
+		var studio := get_tree().current_scene.get_node_or_null("Studio")
+		if studio != null and studio.get("timeline") != null:
+			(studio.timeline as TimelineSurface).set_view(maxf(from - 0.3, 0.0), BEAD_LOOP + 0.6)
 	if _frames == 12 and _pull_track:
 		var puller := get_tree().current_scene.get_node_or_null("Studio")
 		if puller != null:
@@ -607,6 +776,10 @@ func _process(_delta: float) -> void:
 		if _posed_gestures.tracked:
 			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
 
+	if _frames == 8 and _cassettes > 0:
+		_shelve_cassettes()
+	if _frames == 8 and _samples > 0:
+		_make_samples()
 	if _frames == 10 and _stations > 0:
 		var going := get_tree().current_scene.get_node_or_null("Studio")
 		if going != null and going.has_method("cycle_stations"):
@@ -756,6 +929,10 @@ func _process(_delta: float) -> void:
 					hand._glove.global_position if hand._glove else Vector3.ZERO, hand.carry_pose().origin,
 					hand.carrying.state, hand.carrying.is_physics_processing()])
 
+	if _bead_aim != "" and _scripted_hand() != null and _ticks > 2 and _ticks < _bead_tick:
+		var on := _screen_of(_bead_aim)
+		if on.x >= 0.0:
+			_hover = on
 	if _aim != "" and _scripted_hand() != null and _ticks > 2:
 		var at := _screen_of(_aim)
 		if at.x >= 0.0:
@@ -809,6 +986,7 @@ func _physics_process(_delta: float) -> void:
 	if not _drags.is_empty():
 		_drive_drag()
 	_drive_scripted()
+	_drive_bead()
 	if _lob.size() == 4 and _ticks == _lob_tick:
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var hand := studio.get_node_or_null("MouseHand") as MouseInteractor if studio else null
@@ -851,6 +1029,29 @@ func _drive_drag() -> void:
 		hand.press_override = 1
 		if _turn != 0 and _ticks == (first + last) / 2:
 			_wheel(hand)
+
+
+## `--bead`: on its tick the shown bead's place on the screen, and from two ticks on the button
+## down on it and the pointer up and down from there, 70 px each way every 1.2 s, drifting down.
+func _drive_bead() -> void:
+	var hand := _scripted_hand()
+	if hand == null or _bead_aim == "" or _ticks < _bead_tick:
+		return
+	var camera := get_viewport().get_camera_3d()
+	if _ticks == _bead_tick:
+		if hand.bead != null and hand.bead.shown() and camera != null:
+			_bead_from = camera.unproject_position(hand.bead.global_position)
+			hand.pointer_override = _bead_from
+			_hover = _bead_from
+			print("SHOT_BEAD over %s at %s" % [hand.bead.control.title(), _bead_from])
+		else:
+			push_warning("SHOT: no bead shown over %s" % _bead_aim)
+		return
+	if _bead_from.x < 0.0:
+		return
+	var t := float(_ticks - _bead_tick - 2) / 60.0
+	hand.pointer_override = _bead_from + Vector2(0, -70.0 * sin(TAU * t / 1.2) + 50.0 * minf(t, 1.0))
+	hand.press_override = 1 if _ticks >= _bead_tick + 2 else 0
 
 
 func _wheel(hand: MouseInteractor) -> void:
@@ -929,6 +1130,48 @@ func _drive_scripted() -> void:
 			hand.press_override = 1
 		elif _ticks == b + 1:
 			hand.press_override = 0
+
+
+## `--paste`: a cassette pulled at frame 6, the pointer parked on the lane it goes on, and the press.
+func _paste_a_cassette() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	var mouse := _scripted_hand()
+	if studio == null or mouse == null or studio.timeline == null:
+		return
+	var s := DAW.state
+	var bar_at := s.bar_to_seconds(float(_paste[2]))
+	if _frames == 6:
+		studio._on_clip_pulled(int(_paste[0]), 0, mouse)
+		studio.timeline.set_view(s.bar_to_seconds(float(_paste[2]) - 2.0), s.bar_to_seconds(float(_paste[2]) + 6.0) - s.bar_to_seconds(float(_paste[2]) - 2.0))
+	if _frames == 9:
+		var timeline: TimelineSurface = studio.timeline
+		var i := s.track_indices().find(int(_paste[1]))
+		var raw := s.seconds_at_beat(s.beat_at(bar_at) + 0.35)
+		var point := timeline.to_global(Vector3(timeline._x_for(raw), timeline._lane_y[i], timeline._lanes.position.z))
+		_hover = get_viewport().get_camera_3d().unproject_position(point)
+		mouse.pointer_override = _hover
+		print("SHOT_PASTE carrying %s, pointer at %s" % [mouse.carrying.item_title() if mouse.carrying != null else "nothing", _hover])
+	if _frames == 12:
+		mouse.press_override = 1
+	if _frames == 15:
+		mouse.press_override = 0
+		var pasted: Array = s.track(int(_paste[1])).items.filter(func(it): return is_equal_approx(it.start, bar_at))
+		print("SHOT_PASTE pasted %d onto track %d at %s; the lanes say: %s" % [pasted.size(), _paste[1], s.bar_beat(bar_at), studio.timeline._lanes.card_hint()])
+
+
+## `--ear`: a cassette pulled at frame 6 and held to the ear with L at frame 8.
+func _hold_a_cassette_to_the_ear() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	var mouse := _scripted_hand()
+	if studio == null or mouse == null:
+		return
+	if _frames == 6:
+		studio._on_clip_pulled(_ear, 0, mouse)
+	if _frames == 8:
+		mouse.ear_held = true
+	if _frames == 238:
+		print("SHOT_EAR %s: %s (%s)" % [mouse.carrying.item_title() if mouse.carrying != null else "nothing",
+				EarCue.Hearing.keys()[studio.ear.hearing], studio.ear.tag()])
 
 
 ## `--wheel-take`: a phrase on `track` from a MIDI keyboard, wheels and all, taken down and selected.

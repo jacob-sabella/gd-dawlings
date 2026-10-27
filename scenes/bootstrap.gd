@@ -109,6 +109,9 @@ func _ready() -> void:
 	studio.medium = medium
 	studio.xr_bootstrap = xr
 	# The body before the room, so nothing is ever built for the wrong one and then corrected.
+	# Sitting down first: it is a whole other default body, and what follows is said of it.
+	if args["seated"]:
+		studio.ergonomics = Ergonomics.seated_default()
 	var vision := String(args["vision"]).to_upper()
 	if not vision.is_empty():
 		if Ergonomics.ColourVision.has(vision):
@@ -120,11 +123,9 @@ func _ready() -> void:
 		studio.ergonomics.step = args["step"]
 	if args["dwell"] > 0.0:
 		studio.ergonomics.dwell_seconds = args["dwell"]
-	if args["no_motion"]:
-		studio.ergonomics.motion_scale = 0.0
+	# COMFORT as the session panel kept it, beside the height; `--no-motion` over it.
+	studio.ergonomics.take_comfort(Ergonomics.HEIGHT_PATH, args["no_motion"])
 	studio.fed_level = args["feed_level"]
-	if args["seated"]:
-		studio.ergonomics = Ergonomics.seated_default()
 	# How tall you are, said once and remembered: `--height 1.60`. Applied after sitting down,
 	# because a seated eye is a different fraction of the same height.
 	if args["height"] > 0.0:

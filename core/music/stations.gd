@@ -28,7 +28,8 @@ extends RefCounted
 ## back edge out of reach.
 ##
 ## Things carried, not stood anywhere (the keytar, the shaker, the tambourine, the bells in a
-## hand, the fingertips, the jacks), are `HELD`: help lines only, on PLAY · HELD.
+## hand, the fingertips, the jacks), and what the hands do anywhere (clapping to mute, leaning in),
+## are `HELD`: help lines only, on PLAY · HELD.
 
 const CONTROL := &"control"
 const LIVE := &"live"
@@ -81,8 +82,24 @@ const ALL := [
 		"spot": &"stage_table_spot", "at": Vector3(0, 0.74, 0.05),
 		"frame": [Vector3(0, 0.80, -0.47), Vector3(0, 0.30, 0.585)],
 		"seat": 0.95, "surface": &"stage_table",
-		"desk": "drag a track's ball: across is pan, back is quieter · wheel 0.5 dB, Shift 0.1 · its ring, or the wheel while held, is width · double-click or Backspace resets · < > banks, SHOW",
-		"hands": "take a track's ball and stand it where it should sound: across is pan, back is quieter · pull its ring out for width · press it twice to reset",
+		"desk": "drag a track's ball, or its tag's name: across is pan, back is quieter · wheel 0.5 dB, Shift 0.1 · its ring, or the wheel while held, is width · drag the stalk under it up for more of the room (ROOM makes one) · drag from the knot under a ball to another: a sidechain rope, pull its middle to duck harder, X cuts · double-click or Backspace resets · < > banks, SHOW · L held leans in",
+		"hands": "take a track's ball, or its tag's name, and stand it where it should sound: across is pan, back is quieter · its ring is width, its stalk the room · pull a rope from the knot under it to another to duck that one, harder the more you pull, the X by the knot cuts it · press it twice to reset · lean in to hear it",
+	},
+	{
+		"id": &"cassette_rack", "title": "CASSETTE RACK", "area": LIVE, "zone": &"", "air": 0.5,
+		"spot": &"cassette_rack_spot", "at": Vector3(0, 1.15, 0),
+		"frame": [Vector3(0, 1.5, 0), Vector3(0, 0.05, 0.1)],
+		"foot": CassetteRack.FOOT, "foot_z": 0.0, "top": CassetteRack.TOP,
+		"desk": "drag a clip off the timeline's edge: a cassette of it in your hand · carried, hold L to hear it, click a slot to shelve it, the BIN to bin it, a bandmate to hand it over · click a racked one to take it",
+		"hands": "pull a clip out of the timeline toward you · hold it to your ear to hear it · let it go by a slot to shelve it, in the BIN to bin it · hold it by a bandmate's glove to hand it over",
+	},
+	{
+		"id": &"sampler", "title": "SAMPLER", "area": LIVE, "zone": &"", "air": 0.5,
+		"spot": &"sampler_spot", "at": Vector3(0, 1.0, 0),
+		"frame": [Vector3(0, 1.33, 0), Vector3(0, 0.3, 0.13)],
+		"foot": Sampler.FOOT, "foot_z": 0.0, "top": Sampler.TOP,
+		"desk": "click REC, then squeeze, click or shake something you carry, or anything used within 1.5 m of its mic: one sample, a WAV and a cassette on the rack · click REC again to stop",
+		"hands": "press REC, then squeeze, hit or shake something in your hand, or near the mic · that one sound is a cassette on the rack · press REC again to stop",
 	},
 ]
 
@@ -111,6 +128,21 @@ const HELD := [
 		"id": &"fingertips", "title": "FINGERTIPS", "area": HELD_AREA,
 		"desk": "T, then J K L ; play the chord's root, third, fifth and top · T or Esc gives them back · wiggle the mouse to wobble · Alt + mouse up or down bends",
 		"hands": "hold an empty hand open, palm up, to turn them on · thumb to each fingertip plays · tilt to bend · shake to wobble",
+	},
+	{
+		"id": &"clap", "title": "CLAP TO MUTE", "area": HELD_AREA,
+		"desk": "K held over a track (a stage voice, a strip, a lane, a rack) mutes it while held · a tap latches it, another unlatches",
+		"hands": "palms pressed together, pointing at a track, mute it until they part · a quick clap latches it · controllers: grips together",
+	},
+	{
+		"id": &"lean", "title": "LEAN IN", "area": HELD_AREA,
+		"desk": "L held over a stage voice: that track 6 dB up in your ears alone, the mix 6 dB down · a host on the built-in engine",
+		"hands": "lean your head within 25 cm of a stage voice to hear it up close · a host on the built-in engine",
+	},
+	{
+		"id": &"cassette", "title": "A CASSETTE", "area": HELD_AREA,
+		"desk": "drag a clip off the timeline's edge for one · hold L to hear it · click a timeline lane, a strip or a stage voice to paste it · click a bandmate to hand it over · click a rack slot to shelve it · Q puts it down · 1 to 3 pocket it",
+		"hands": "pull a clip out of the timeline toward you · hold it to your ear to hear it · push it into a timeline lane, a strip or a stage voice to paste it · hold it by a bandmate's glove for half a second to hand it over · throw it to them · let it go by a rack slot to shelve it",
 	},
 	{
 		"id": &"jacks", "title": "JACKS", "area": HELD_AREA,

@@ -31,8 +31,8 @@ func pitch() -> int:
 	return PITCHES[mini(voice, 1)]
 
 
-func sound(_struck: bool, take: int) -> AudioStream:
-	return Foley.woodblock(take)
+func sound_kind(_struck: bool) -> StringName:
+	return &"woodblock"
 
 
 func _build_body() -> Node3D:

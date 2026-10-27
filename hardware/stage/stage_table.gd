@@ -10,6 +10,8 @@ extends Surface
 ## Its frame: the origin is the middle of the table top, +Y up, +Z toward the player. The front
 ## edge carries a sloped rail with a tag for each voice (its number and name, what it is set to,
 ## PAN < > keys and a RESET key), the bank keys at the left end and the SHOW key at the right.
+## A tag's name is a handle on its voice (NameGrip): tracks at one pan and level stand in one
+## place, and the name is how a ball under another is taken.
 ##
 ## Banked like the console: it shows eight tracks at a time, paged within the cached bank and
 ## asking the DAW for another bank past its end (ConsoleSurface._go_to_track). Or it shows the
@@ -18,6 +20,25 @@ extends Surface
 ## Every write goes through DAW, so a guest's placing is an intent the host carries out, and a
 ## placing is one edit (StageVoice.edits_as_one): pan, volume and the width the wheel set while it
 ## was held are one undo step.
+##
+## Depth is its own handle (docs/spatial_loop.md slice 19): each voice stands on a stalk
+## (StageVoice.Stalk), and how far it is lifted off the table, up to StageVoice.STALK_MOST, is
+## how much it sends to the project's room (`room_track`), ROOM_LOW_DB just off the table to
+## ROOM_TOP_DB at the top, linear in decibels. A mist round the voice shows the send; a voice on
+## the table has none, however quiet it is. The first lift makes the send, inside the lift's own
+## edit (`send_to_room`). With no room, the ROOM key on the rail's left end makes one (`add_room`):
+## a track ROOM with a reverb on it.
+##
+## A sidechain is a rope (docs/spatial_loop.md slice 20, idea #18): dragged from the knot under one
+## voice (StageVoice.Knot) to another, a rope is tied (`tie`), in one edit: the key send
+## (DAW.create_sidechain) and a compressor on the other track listening to it, added first if it has
+## none. Whether the rope added it is a room row (`ropes`), so whoever cuts it takes away only what
+## it made. Every key send between two voices on the table is a rope (`Rope`), whoever made it: it
+## sags when slack and lifts straight each time its track ducks, by Sidechain's estimate from the
+## key's meter. Pulling its middle away ducks harder: the key send up and the threshold down,
+## together, one undo step a let-go. The X beside the knot, or Backspace over the rope, cuts it
+## (`cut`), one edit again. No verb of its own: create_sidechain, add_fx, set_send_volume,
+## set_fx_param, remove_send and remove_fx.
 
 ## The top, across and deep (m), and how thick it is.
 const SIZE := Vector2(1.2, 0.9)
@@ -52,6 +73,39 @@ const RAIL_DEEP := 0.16
 const RAIL_END := 0.13
 ## What SHOW steps through.
 const SHOWS := [&"bank", &"soloed", &"selected"]
+## A voice's stalk is its send to the room: just off the table ROOM_LOW_DB, at StageVoice.STALK_MOST
+## ROOM_TOP_DB, linear in dB between; on the table, no send at all. The wheel over a stalk moves
+## it ROOM_STEP a notch, ROOM_FINE fine.
+const ROOM_LOW_DB := -40.0
+const ROOM_TOP_DB := 0.0
+const ROOM_STEP := 1.0
+const ROOM_FINE := 0.1
+## What ADD ROOM calls the track it makes.
+const ROOM_NAME := "ROOM"
+## A send asked for and not come this long after (ms) is asked for again, by the next lift or
+## notch: long past a host's answer or Reaper's poll, so one that is merely slow is not made twice.
+const ASK_AGAIN_MSEC := 3000
+## A rope let go within this of a voice's foot (m, across the table) is tied to it.
+const TIE_REACH := 0.07
+## How far a rope's middle is pulled away at the most (m): Sidechain's pull of 1. The wheel over a
+## rope pulls PULL_STEP of that a notch, PULL_FINE fine.
+const PULL_MOST := 0.2
+const PULL_STEP := 0.05
+const PULL_FINE := 0.01
+## How far a slack rope sags (a share of its span, at most SAG_MOST m), and how much ducking pulls it
+## straight (dB).
+const SAG_SHARE := 0.35
+const SAG_MOST := 0.08
+const DUCK_TAUT_DB := 12.0
+const ROPE_RADIUS := 0.0035
+## How fast the key's heard peak falls (dB a second), for the card's "ducks N dB on each hit".
+const PEAK_FALL_DB := 3.0
+
+## The rope rows have changed here: the host publishes the room.
+signal ropes_changed
+## A line for the room's notices. The surface does not reach the network: whoever stands it up
+## (StageLink.wire) relays this, and gives `hosting` and `asking` below.
+signal told(text: String)
 
 ## What the table is showing: the bank (a page of it), the soloed tracks or the selected ones.
 var showing := &"bank"
@@ -69,6 +123,42 @@ var _leads := {}
 var _presses := {}
 var _levels := {}
 var _pending_view := -1
+var _room_key: TableKey
+var _room_label: Label3D
+## Lifts waiting for their sends: {track: send taper}, set once the send arrives. A guest's, which
+## the host makes, and a host's on a DAW that makes its sends later (Reaper, by its poll). And the
+## sends asked for, {track: when}, so a drag asks once rather than every frame (and a later lift or
+## notch again only after ASK_AGAIN_MSEC, `forget_asked`), and the room asked for.
+var _room_wanted := {}
+var _sends_asked := {}
+var _room_asked := ""
+## The room row of ropes: {"2>6": whether the rope added the compressor it keys} (Sidechain.rope_key).
+## The host's is the room's; a guest's has its own unanswered ties and cuts on top (`_rows_asked`,
+## {key: [ask, tied, added]}).
+var ropes := {}
+## Whether this process writes the mix itself (the host, or alone), and how a guest asks the host
+## for a room change (its ask's number, 0 for none sent). Given by StageLink.wire; a table no one
+## wired is a host by itself.
+var hosting: Callable = func() -> bool: return true
+var asking: Callable = func(_verb: StringName, _args: Array) -> int: return 0
+var _rows_asked := {}
+## The host's bookkeeping of rows against undo (`_reconcile_rows`): the rows whose key send it has
+## seen in the cache; rows that said the rope added its compressor, taken off by a cut or an undo,
+## kept for the redo or undo that brings their key send back; the keys standing at the last look;
+## and whether a look is due at the frame's end.
+var _rows_seen := {}
+var _rows_shelved := {}
+var _keys_standing := {}
+var _reconcile_due := false
+## The ropes standing on the table, by key; the rope being drawn from a knot, from which track and
+## to where; ropes whose compressor was asked for and has not come, {key: [from, to]}, given their
+## threshold when it does; and each key track's heard peak (dB).
+var rope_nodes := {}
+var _loose: MeshInstance3D
+var _tying := 0
+var _tie_at := Vector2.ZERO
+var _rope_wanted := {}
+var _key_peaks := {}
 
 
 func _ready() -> void:
@@ -80,6 +170,11 @@ func _ready() -> void:
 	screen_pitch_degrees = 70.0
 	super()
 	DAW.track_changed.connect(_on_track_changed)
+	DAW.track_added.connect(_on_track_added)
+	DAW.fx_changed.connect(func(t: int, _f: int) -> void:
+		_refresh_room()
+		_rope_arrived(t)
+		_refresh_ropes())
 	DAW.bank_changed.connect(mark_dirty)
 	DAW.project_replaced.connect(mark_dirty)
 	_hook_pan_mode()
@@ -101,6 +196,12 @@ func _process(delta: float) -> void:
 		var level := now if now > was else lerpf(was, now, clampf(delta * 6.0, 0.0, 1.0))
 		_levels[track] = level
 		(voices[track] as StageVoice).glow(level)
+	for key in rope_nodes:
+		var rope: Rope = rope_nodes[key]
+		var db := FaderLaw.to_db(float(_levels.get(rope.from, 0.0)))
+		_key_peaks[rope.from] = maxf(db, float(_key_peaks.get(rope.from, -INF)) - PEAK_FALL_DB * delta)
+		rope.ducking = Sidechain.ducks(rope.from, rope.to, db)
+		rope.shape()
 
 
 # --- the arithmetic of the table ------------------------------------------------------------
@@ -162,6 +263,88 @@ static func db_words(taper: float) -> String:
 	if db == -INF:
 		return "-inf dB"
 	return "%+.1f dB" % db if db > 0.05 else "%.1f dB" % db
+
+
+## The send to the room a stalk lifted `lift` (m) off the table stands for, in dB: -inf on it.
+static func send_db_of_lift(lift: float) -> float:
+	if lift <= 0.0005:
+		return -INF
+	return lerpf(ROOM_LOW_DB, ROOM_TOP_DB, clampf(lift / StageVoice.STALK_MOST, 0.0, 1.0))
+
+
+## How far off the table (m) a send of `db` stands: on it at -inf, at the top for ROOM_TOP_DB or
+## more. A send quieter than ROOM_LOW_DB, but a send, is just off the table, where it shows.
+static func lift_of_send_db(db: float) -> float:
+	if db == -INF or is_nan(db):
+		return 0.0
+	var f := (clampf(db, ROOM_LOW_DB, ROOM_TOP_DB) - ROOM_LOW_DB) / (ROOM_TOP_DB - ROOM_LOW_DB)
+	return maxf(f * StageVoice.STALK_MOST, 0.001)
+
+
+## Whether a track's chain holds a reverb, by its plugins' names: "ReaVerbate", "Reverb".
+static func has_reverb(t: MixState.TrackState) -> bool:
+	if t == null:
+		return false
+	for f in t.fx.values():
+		if (f as MixState.FXState).name.to_lower().contains("verb"):
+			return true
+	return false
+
+
+## The project's room: the first track whose chain holds a reverb and that another track sends to
+## (into its mix, not its key). With none, the first called ROOM_NAME with a reverb, which ADD ROOM
+## made and nothing yet sends to. 0 for none.
+static func room_track() -> int:
+	var s := DAW.state
+	if s == null:
+		return 0
+	var sent := {}
+	for i in s.track_indices():
+		for send in (s.tracks[i] as MixState.TrackState).sends.values():
+			var to := (send as MixState.SendState).resolve(s)
+			if to > 0 and to != i and not (send as MixState.SendState).key:
+				sent[to] = true
+	for i in s.track_indices():
+		if sent.has(i) and has_reverb(s.tracks[i]):
+			return i
+	for i in s.track_indices():
+		var t: MixState.TrackState = s.tracks[i]
+		if t.display_name().to_upper() == ROOM_NAME and has_reverb(t):
+			return i
+	return 0
+
+
+## Which of `track`'s sends goes to `room` (its send number, 1 first), 0 for none.
+static func send_to(track: int, room: int) -> int:
+	var t := DAW.state.track(track, false) if DAW.state != null else null
+	if t == null or room <= 0:
+		return 0
+	for n in t.sends:
+		var send: MixState.SendState = t.sends[n]
+		if not send.key and send.resolve(DAW.state) == room:
+			return int(n)
+	return 0
+
+
+## How loud `track` sends to the room, in dB: -inf with no room or no send.
+static func room_send_db(track: int) -> float:
+	var room := room_track()
+	var n := send_to(track, room)
+	if n == 0:
+		return -INF
+	return FaderLaw.to_db((DAW.state.track(track).sends[n] as MixState.SendState).volume)
+
+
+## The plugin a room is made with: the first of the DAW's choices that is a reverb, by its id or
+## name; empty where it offers none.
+static func reverb_choice() -> String:
+	if DAW.state == null:
+		return ""
+	for c in DAW.state.fx_choices:
+		var row := c as Array
+		if row.size() >= 2 and (str(row[0]).to_lower().contains("verb") or str(row[1]).to_lower().contains("verb")):
+			return str(row[0])
+	return ""
 
 
 # --- what it shows --------------------------------------------------------------------------
@@ -245,7 +428,7 @@ func _hook_pan_mode() -> void:
 ## Reaper's balance panner has no width, so the first width on a track sets it to stereo pan.
 ## Said once, here, and on the voice's card from then on (hint_of).
 func _on_pan_mode_set(index: int) -> void:
-	Session.notice.emit("%s: pan mode set to stereo pan, so it can have a width." % title_of(index))
+	told.emit("%s: pan mode set to stereo pan, so it can have a width." % title_of(index))
 
 
 func _on_track_changed(index: int, field: StringName) -> void:
@@ -258,6 +441,17 @@ func _on_track_changed(index: int, field: StringName) -> void:
 		(tags[index] as Tag).refresh()
 	if field == &"name" or field == &"colour":
 		_refresh_range()
+	# Which track is the room is any track's sends and names.
+	if field == &"sends" or field == &"name":
+		_refresh_room()
+	if field == &"sends" and _room_wanted.has(index):
+		_send_wanted(index)
+	if field == &"sends":
+		for key in _rope_wanted.keys():
+			_rope_arrived(int(_rope_wanted[key][1]))
+		_refresh_ropes()
+	if field == &"name" and _room_asked != "":
+		_on_track_added(index)
 
 
 # --- placing --------------------------------------------------------------------------------
@@ -308,6 +502,14 @@ func nudge_volume(track: int, notches: int, fine: bool) -> bool:
 	if absf(taper - t.volume) > 0.00001:
 		DAW.set_track_volume(track, taper)
 	return true
+
+
+## The wheel over a voice or its tag's name: its level, or its width while it is held (and the
+## DAW can set one).
+func nudge_voice(track: int, held: bool, notches: int, fine: bool) -> bool:
+	if held and DAW.can(DAWBackend.Capability.WIDTH):
+		return nudge_width(track, notches, fine)
+	return nudge_volume(track, notches, fine)
 
 
 ## The wheel while a voice is held: its width, five percent a notch, one fine.
@@ -368,6 +570,8 @@ func reset(track: int) -> void:
 func reset_under(control: Node) -> bool:
 	if control == null or not is_instance_valid(control) or not is_ancestor_of(control):
 		return false
+	if control is Rope:
+		return cut((control as Rope).from, (control as Rope).to)
 	var n := control
 	while n != null and n != self:
 		if n.has_meta(&"stage_track"):
@@ -375,6 +579,549 @@ func reset_under(control: Node) -> bool:
 			return true
 		n = n.get_parent()
 	return false
+
+
+# --- the room -------------------------------------------------------------------------------
+
+## A stalk at `db` (-inf for on the table): `track`'s send to the room at that level, made first
+## if it has none. Inside whatever edit the stalk has open, so a first lift is one undo step with
+## its level, as the notice says. Asked for once a lift: a guest asks the host to make the send, and
+## a DAW may make it only later (Reaper, by its poll); either way its level is set once it arrives
+## (`_send_wanted`). Nothing with no room, or for the room itself; false then, and false for a send
+## the DAW could not make.
+func send_to_room(track: int, db: float) -> bool:
+	var room := room_track()
+	if room == 0 or room == track or DAW.state.track(track, false) == null:
+		return false
+	var taper := 0.0 if db == -INF else FaderLaw.to_taper(db)
+	var n := send_to(track, room)
+	if n == 0:
+		if db == -INF:
+			return true
+		if _sends_asked.has(track):
+			# Asked already: the level it is to have when it comes, or nothing if it could not be made.
+			if _room_wanted.has(track):
+				_room_wanted[track] = taper
+			return _room_wanted.has(track)
+		_sends_asked[track] = Time.get_ticks_msec()
+		if not hosting.call():
+			_room_wanted[track] = taper
+			DAW.create_send(track, room)
+			return true
+		if not DAW.create_send(track, room):
+			return false
+		n = send_to(track, room)
+		if n == 0:
+			_room_wanted[track] = taper
+			told.emit("%s: a send to %s asked for, at %s once it is made." % [title_of(track),
+					title_of(room), "%.1f dB" % db])
+			return true
+		_sends_asked.erase(track)
+		told.emit("%s: a send to %s made, at %s: one undo step with this lift." % [title_of(track),
+				title_of(room), "%.1f dB" % db])
+	var send: MixState.SendState = DAW.state.track(track).sends[n]
+	if absf(send.volume - taper) > 0.00001:
+		DAW.set_send_volume(track, n, taper)
+	return true
+
+
+## A lift's send has arrived (made by the host, or by a DAW's poll): set to the level it wanted.
+func _send_wanted(track: int) -> void:
+	var n := send_to(track, room_track())
+	if n == 0:
+		return
+	var taper: float = _room_wanted[track]
+	_room_wanted.erase(track)
+	_sends_asked.erase(track)
+	DAW.set_send_volume(track, n, taper)
+
+
+## A new lift of `track`'s stalk, or a notch of its wheel: a send asked for ASK_AGAIN_MSEC ago or
+## more that never came is asked for again. Not within a lift, which may hold its edit (and so the
+## send) for as long as the hand holds the stalk.
+func forget_asked(track: int) -> void:
+	if Time.get_ticks_msec() - int(_sends_asked.get(track, -ASK_AGAIN_MSEC)) >= ASK_AGAIN_MSEC:
+		_sends_asked.erase(track)
+
+
+## The wheel over a stalk: ROOM_STEP a notch, ROOM_FINE fine. Up from no send is ROOM_LOW_DB; down
+## past it is none.
+func nudge_room(track: int, notches: int, fine: bool) -> bool:
+	if room_track() == 0:
+		told.emit(no_room_words())
+		return true
+	forget_asked(track)
+	var db := room_send_db(track)
+	var to: float
+	if db == -INF:
+		if notches < 0:
+			return true
+		to = ROOM_LOW_DB
+	else:
+		to = minf(db + notches * (ROOM_FINE if fine else ROOM_STEP), maxf(db, ROOM_TOP_DB))
+		if to < ROOM_LOW_DB - 0.001:
+			to = -INF
+	return send_to_room(track, to)
+
+
+## ADD ROOM: a track ROOM at the end of the project with a reverb on it, as one undo step. With a
+## room already, says which. A guest asks for the track, and for its reverb once it arrives.
+func add_room() -> void:
+	var room := room_track()
+	if room > 0:
+		told.emit("The room is %s: lift a voice on its stalk to send to it." % title_of(room))
+		return
+	var plugin := reverb_choice()
+	if plugin == "":
+		told.emit("This DAW offers no reverb to make a room with.")
+		return
+	var count := DAW.state.project_track_count if DAW.state.project_track_count > 0 \
+			else DAW.state.bank_offset + DAW.state.tracks.size()
+	if not hosting.call():
+		_room_asked = plugin
+		DAW.add_track(count + 1, ROOM_NAME)
+		told.emit("Asked the host for a ROOM track with a reverb on it.")
+		return
+	DAW.open_edit("Stage: add room")
+	DAW.add_track(count + 1, ROOM_NAME)
+	var made := count + 1 - DAW.state.bank_offset
+	if DAW.state.tracks.has(made) and DAW.state.track(made).display_name() == ROOM_NAME:
+		DAW.add_fx(made, plugin)
+	else:
+		# A DAW that adds its tracks later (Reaper, by its poll): the reverb when it comes.
+		_room_asked = plugin
+	DAW.close_edit()
+	_refresh_room()
+	if room_track() > 0:
+		told.emit("%s made, with a reverb: lift a voice on its stalk to send to it." % title_of(room_track()))
+
+
+## A track has come: on a guest that asked for a room, the ROOM it asked for, which is given its
+## reverb now.
+func _on_track_added(index: int) -> void:
+	if _room_asked == "":
+		return
+	var t := DAW.state.track(index, false)
+	if t == null or t.display_name() != ROOM_NAME or has_reverb(t):
+		return
+	DAW.add_fx(index, _room_asked)
+	_room_asked = ""
+
+
+## The room may be another track now, or none: the key's lettering and every voice's stalk.
+func _refresh_room() -> void:
+	if _room_label != null:
+		var room := room_track()
+		_room_label.text = "ROOM  %s" % title_of(room) if room > 0 else "ADD ROOM"
+		Lettering.fit(_room_label, RAIL_END * 0.95, 26, 12)
+		_room_key.lit = room == 0
+	for track in voices:
+		(voices[track] as StageVoice).refresh()
+
+
+func no_room_words() -> String:
+	return "No room to send to yet: ROOM, at the table's left end, makes a ROOM track with a reverb."
+
+
+# --- the ropes ------------------------------------------------------------------------------
+
+## The tracks `track` has a rope to (a key send to another voice on the table), and from.
+func ropes_from(track: int) -> Array:
+	return Sidechain.pairs().filter(func(p: Array) -> bool: return p[0] == track and voices.has(p[1])) \
+			.map(func(p: Array) -> int: return p[1])
+
+
+func ropes_into(track: int) -> Array:
+	return Sidechain.pairs().filter(func(p: Array) -> bool: return p[1] == track and voices.has(p[0])) \
+			.map(func(p: Array) -> int: return p[0])
+
+
+## Where a voice's knot is (the table's frame): under its ball, wherever the ball stands.
+func knot_point(track: int) -> Vector3:
+	var v: StageVoice = voices.get(track)
+	if v == null:
+		return Vector3.ZERO
+	return Vector3(v.position.x, v.position.y - StageVoice.KNOT_DROP, v.position.z)
+
+
+## The voice a rope let go at `at` (across the table, x and z) is tied to: the nearest other voice
+## whose foot is within TIE_REACH, or 0 for none.
+func drop_target(from: int, at: Vector2) -> int:
+	var best := 0
+	var nearest := TIE_REACH
+	for track in voices:
+		if track == from:
+			continue
+		var v: StageVoice = voices[track]
+		var d := at.distance_to(Vector2(v.position.x, v.position.z))
+		if d <= nearest:
+			nearest = d
+			best = track
+	return best
+
+
+## A knot is being dragged from: the rope from it to the hand at `at` (across the table), lying
+## loose, and the voice it would be tied to named on the notice line once, as the hand comes over it.
+func draw_loose(from: int, at: Vector2) -> void:
+	var start := knot_point(from)
+	var end := Vector3(at.x, start.y, at.y)
+	var target := drop_target(from, at)
+	if target > 0:
+		end = knot_point(target)
+	if target != _tying_to():
+		if target > 0:
+			told.emit("%s -> %s: let go to tie the rope." % [title_of(from), title_of(target)])
+	_tying = from
+	_tie_at = at
+	_loose.mesh = CableSweep.tube(rope_spine(start, end, Vector3.ZERO, sag_of(start, end, 0.0)), ROPE_RADIUS, 6)
+	_loose.visible = true
+
+
+func _tying_to() -> int:
+	return drop_target(_tying, _tie_at) if _tying > 0 else 0
+
+
+## The knot's let-go: tied to the voice under the hand, or put back.
+func let_go_rope(from: int) -> void:
+	var to := drop_target(from, _tie_at) if _tying == from else 0
+	_tying = 0
+	_loose.visible = false
+	if to > 0:
+		tie(from, to)
+	else:
+		told.emit("%s: no voice there to tie the rope to." % title_of(from))
+
+
+## A rope from `from` to `to`, in one edit: a compressor on `to` if it has none (the DAW's first
+## compressor choice), then the key send that it listens to, and the room's row saying whether the
+## rope added the compressor. A compressor the rope adds starts at Sidechain.THRESHOLD_SLACK_DB, at
+## once where the DAW has made it (the built-in engine), else as it arrives (a guest's host, Reaper's
+## poll). False when there is a rope already, or nothing to listen with.
+func tie(from: int, to: int) -> bool:
+	if from == to or DAW.state.track(from, false) == null or DAW.state.track(to, false) == null:
+		return false
+	if Sidechain.key_send(from, to) > 0:
+		told.emit("%s already ducks under %s." % [title_of(to), title_of(from)])
+		return false
+	var comp := Sidechain.compressor_on(to)
+	var choice := Sidechain.compressor_choice()
+	if comp < 0 and choice == "":
+		told.emit("This DAW offers no compressor for %s to duck with." % title_of(to))
+		return false
+	var key := Sidechain.rope_key(from, to)
+	DAW.open_edit("%s > %s: rope" % [_name_of(from), _name_of(to)])
+	if comp < 0:
+		DAW.add_fx(to, choice)
+	var made := DAW.create_sidechain(from, to)
+	if hosting.call() and not made:
+		DAW.close_edit()
+		told.emit("%s: the key send to %s could not be made." % [title_of(from), title_of(to)])
+		return false
+	_set_row(key, true, comp < 0)
+	if hosting.call() and Sidechain.key_send(from, to) > 0:
+		_rows_seen[key] = true
+	if comp < 0:
+		_rope_wanted[key] = [from, to]
+		_rope_arrived(to)
+	DAW.close_edit()
+	_refresh_ropes()
+	told.emit("%s -> %s: tied, %s: one undo step. Pull the rope's middle to duck harder." % [title_of(from),
+			title_of(to), "a key send and a compressor listening to it" if comp < 0
+			else "a key send that its compressor listens to"])
+	return true
+
+
+## A rope's compressor, asked for, has come to `track`: set to where a slack rope has it, once.
+func _rope_arrived(track: int) -> void:
+	for key in _rope_wanted.keys():
+		var pair: Array = _rope_wanted[key]
+		if int(pair[1]) != track:
+			continue
+		var comp := Sidechain.compressor_on(track)
+		if comp < 0 or Sidechain.key_send(int(pair[0]), track) == 0:
+			continue
+		_rope_wanted.erase(key)
+		var f := DAW.state.fx(track, comp)
+		DAW.set_fx_param(track, comp, Sidechain.THRESHOLD_PARAM, Sidechain.threshold_value(f, Sidechain.THRESHOLD_SLACK_DB))
+
+
+## Cut the rope from `from` to `to`, in one edit: its key send, and the compressor if the rope added
+## it (the room's row says) and no other key send feeds `to`; one that was there before stays. A
+## compressor another key still listens to stays too, and that key's row is given the rope's
+## "added", so the last of them cut takes it away. False with no rope.
+func cut(from: int, to: int) -> bool:
+	var n := Sidechain.key_send(from, to)
+	if n == 0:
+		return false
+	var key := Sidechain.rope_key(from, to)
+	var added := bool(ropes.get(key, false))
+	var heir := _heir_of(from, to) if added else 0
+	var comp := Sidechain.compressor_on(to) if added and heir == 0 else -1
+	DAW.open_edit("%s > %s: cut" % [_name_of(from), _name_of(to)])
+	if comp >= 0:
+		DAW.remove_fx(to, comp)
+	DAW.remove_send(from, n)
+	DAW.close_edit()
+	_set_row(key, false, false)
+	if heir > 0:
+		_set_row(Sidechain.rope_key(heir, to), true, true)
+	_rope_wanted.erase(key)
+	_refresh_ropes()
+	var what := "the key send and the compressor the rope added"
+	if heir > 0:
+		what = "the key send; %s's compressor stays, listening to %s" % [title_of(to), title_of(heir)]
+	elif comp < 0:
+		what = "the key send; %s keeps its own compressor" % title_of(to)
+	told.emit("%s -> %s: cut, %s: one undo step." % [title_of(from), title_of(to), what])
+	return true
+
+
+## Another track whose key send feeds `to`, besides `from`'s: a voice on the table first (a rope
+## that can be cut), else any; 0 for none.
+func _heir_of(from: int, to: int) -> int:
+	var others := ropes_into(to).filter(func(t: int) -> bool: return t != from)
+	if others.is_empty():
+		others = Sidechain.pairs().filter(func(p: Array) -> bool: return p[1] == to and p[0] != from) \
+				.map(func(p: Array) -> int: return p[0])
+	return int(others[0]) if not others.is_empty() else 0
+
+
+## The X at a knot: every rope from that track cut, each its own step.
+func cut_from(from: int) -> void:
+	for to in ropes_from(from):
+		cut(from, to)
+
+
+## A rope pulled to `amount` (0 slack to 1, Sidechain.of_pull): its key send's level and its
+## compressor's threshold, written only where they changed, inside whatever edit the rope's hand
+## has open.
+func pull(from: int, to: int, amount: float) -> void:
+	var n := Sidechain.key_send(from, to)
+	var comp := Sidechain.compressor_on(to)
+	if n == 0 or comp < 0:
+		return
+	var want := Sidechain.of_pull(amount)
+	var send: MixState.SendState = DAW.state.track(from).sends[n]
+	var taper := FaderLaw.to_taper(want.x)
+	if absf(send.volume - taper) > 0.00001:
+		DAW.set_send_volume(from, n, taper)
+	var f := DAW.state.fx(to, comp)
+	var v := Sidechain.threshold_value(f, want.y)
+	if absf(float(f.params.get(Sidechain.THRESHOLD_PARAM, -1.0)) - v) > 0.00001:
+		DAW.set_fx_param(to, comp, Sidechain.THRESHOLD_PARAM, v)
+
+
+## How far a rope is pulled now (0..1): its compressor's threshold, read back.
+func rope_pull(from: int, to: int) -> float:
+	var comp := Sidechain.compressor_on(to)
+	if comp < 0:
+		return 0.0
+	return Sidechain.pull_of(Sidechain.threshold_db(DAW.state.fx(to, comp)))
+
+
+## How far a rope ducks on each hit of its key track (dB): from the key's heard peak, or
+## Sidechain.HIT_DB while none has been heard.
+func rope_ducks(from: int, to: int) -> float:
+	var peak := float(_key_peaks.get(from, -INF))
+	return Sidechain.ducks(from, to, Sidechain.HIT_DB if peak == -INF else peak)
+
+
+## Its card: "KICK -> BASS · ducks 6 dB on each hit · pull for more".
+func rope_words(from: int, to: int) -> String:
+	var ducks := roundi(rope_ducks(from, to))
+	var duck := "ducks %d dB on each hit" % ducks if ducks > 0 else "not ducking yet"
+	var more := "pull for more" if rope_pull(from, to) < 0.999 else "pulled as far as it goes"
+	return "%s -> %s · %s · %s" % [_name_of(from).to_upper(), _name_of(to).to_upper(), duck, more]
+
+
+## A knot's card: its ropes, or how to tie one.
+func ropes_words(track: int) -> String:
+	var out := ropes_from(track).map(func(to: int) -> String: return "rope to %s" % title_of(to))
+	out.append_array(ropes_into(track).map(func(from: int) -> String: return "ducks under %s" % title_of(from)))
+	return " · ".join(out) if not out.is_empty() else "no rope"
+
+
+func knot_hint(track: int) -> String:
+	var words := "drag from the knot under the ball to another voice: a rope, and that track ducks under this one (one undo step)"
+	if not ropes_from(track).is_empty():
+		words += "  ·  X beside the knot: cut"
+	return words
+
+
+func _name_of(track: int) -> String:
+	var t := DAW.state.track(track, false)
+	return t.display_name() if t != null else "Track %d" % track
+
+
+## The rope rows as this room has them, `tied` or cut. Written at once on the host, and published;
+## asked of the host on a guest, and kept on top of the room's until it answers.
+func _set_row(key: String, tied: bool, added: bool) -> void:
+	_shelve(key, tied)
+	if tied:
+		ropes[key] = added
+	else:
+		ropes.erase(key)
+	if hosting.call():
+		ropes_changed.emit()
+		return
+	var ask: int = asking.call(&"rope", [key, tied, added])
+	if ask > 0:
+		_rows_asked[key] = [ask, tied, added]
+
+
+## The host's rows kept true to the mix across undo, which does not carry room state. A row whose
+## key send it has seen and is gone now (an undo of the tie, the patchbay's X) is dropped and the
+## room published, so a stale row can never take away a compressor someone else put there later;
+## not before its send has first been seen, which on Reaper comes a poll after the tie, and only
+## while both its tracks are in the cache, so a bank turned away from is not a send gone. A row
+## that said "added", dropped or cut, is shelved, and comes back when its key send does by this
+## rope's own history: the step just redone is its tie (`Kick > Bass DI: rope`) or the one just
+## undone its cut. A key send back any other way (the patchbay) drops the shelved row. Run at the
+## frame's end, after the backend has said what its history is now; a DAW that names no steps
+## (Reaper) never brings a row back, and that rope then cuts as one keeping its compressor.
+func _reconcile_rows() -> void:
+	_reconcile_due = false
+	if not hosting.call() or DAW.state == null:
+		return
+	var s := DAW.state
+	var standing := {}
+	for p in Sidechain.pairs():
+		standing[Sidechain.rope_key(p[0], p[1])] = p
+	var changed := false
+	for key in ropes.keys():
+		if standing.has(key):
+			_rows_seen[key] = true
+		elif _rows_seen.has(key) and _in_cache(key):
+			if ropes[key]:
+				_rows_shelved[key] = true
+			ropes.erase(key)
+			changed = true
+	for key in _rows_seen.keys():
+		if not ropes.has(key):
+			_rows_seen.erase(key)
+	var redone := str(s.undo_names[s.undo_depth - 1]) if s.undo_depth > 0 and s.undo_depth <= s.undo_names.size() else ""
+	var undone := str(s.undo_names[s.undo_depth]) if s.undo_depth >= 0 and s.undo_depth < s.undo_names.size() else ""
+	for key in _rows_shelved.keys():
+		if not standing.has(key) or _keys_standing.has(key):
+			continue
+		_rows_shelved.erase(key)
+		var pair: Array = standing[key]
+		var named := "%s > %s: " % [_name_of(pair[0]), _name_of(pair[1])]
+		if not ropes.has(key) and (redone == named + "rope" or undone == named + "cut"):
+			ropes[key] = true
+			_rows_seen[key] = true
+			changed = true
+	_keys_standing = standing
+	if changed:
+		ropes_changed.emit()
+
+
+## Whether both tracks of a rope row ("2>6", project numbers) are in the cache's bank.
+func _in_cache(key: String) -> bool:
+	var ends := key.split(">")
+	if ends.size() != 2 or not ends[0].is_valid_int() or not ends[1].is_valid_int():
+		return false
+	var off := DAW.state.bank_offset
+	return DAW.state.tracks.has(int(ends[0]) - off) and DAW.state.tracks.has(int(ends[1]) - off)
+
+
+## The host, answering a guest's tie or cut.
+func answer_rope(key: String, tied: bool, added: bool) -> void:
+	_shelve(key, tied)
+	if tied:
+		ropes[key] = added
+	else:
+		ropes.erase(key)
+	ropes_changed.emit()
+
+
+## The host: a row saying "added" that is being cut is kept for an undo of the cut
+## (`_reconcile_rows`); one tied again needs none.
+func _shelve(key: String, tied: bool) -> void:
+	if not hosting.call():
+		return
+	if tied:
+		_rows_shelved.erase(key)
+	elif ropes.get(key, false):
+		_rows_shelved[key] = true
+
+
+## A guest: the room's rope rows, with its own asks the host has not answered (`answered`, the last
+## of them it has) on top.
+func apply_ropes(rows: Dictionary, answered: int) -> void:
+	ropes = rows.duplicate()
+	for key in _rows_asked.keys():
+		var ask: Array = _rows_asked[key]
+		if int(ask[0]) <= answered:
+			_rows_asked.erase(key)
+		elif ask[1]:
+			ropes[key] = ask[2]
+		else:
+			ropes.erase(key)
+
+
+## The ropes standing on the table: one for each key send between two voices on it.
+func _refresh_ropes() -> void:
+	if not _reconcile_due:
+		_reconcile_due = true
+		_reconcile_rows.call_deferred()
+	if _loose == null:
+		return
+	var wanted := {}
+	for p in Sidechain.pairs():
+		if voices.has(p[0]) and voices.has(p[1]):
+			wanted[Sidechain.rope_key(p[0], p[1])] = p
+	for key in rope_nodes.keys():
+		if not wanted.has(key):
+			var gone: Rope = rope_nodes[key]
+			rope_nodes.erase(key)
+			gone.line.queue_free()
+			gone.queue_free()
+	for key in wanted:
+		if rope_nodes.has(key):
+			continue
+		var rope := Rope.new()
+		rope.name = "Rope%s" % key.replace(">", "_")
+		rope.table = self
+		rope.from = wanted[key][0]
+		rope.to = wanted[key][1]
+		rope.line = MeshInstance3D.new()
+		rope.line.name = "Line%s" % key.replace(">", "_")
+		rope.line.material_override = rope_paint()
+		rope.line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_adopt(rope.line)
+		_adopt(rope)
+		rope_nodes[key] = rope
+		rope.shape()
+	for track in voices:
+		(voices[track] as StageVoice).refresh()
+
+
+## How far a rope between `a` and `b` sags when slack: a share of its span, less the more it is
+## pulled.
+static func sag_of(a: Vector3, b: Vector3, pulled: float) -> float:
+	return minf(a.distance_to(b) * SAG_SHARE, SAG_MOST) * (1.0 - clampf(pulled, 0.0, 1.0))
+
+
+## A rope's line from knot `a` to knot `b` (the table's frame), its middle moved `aside` and
+## sagging `sag`, laid on the table where it would go through it.
+static func rope_spine(a: Vector3, b: Vector3, aside: Vector3, sag: float) -> PackedVector3Array:
+	var mid := (a + b) * 0.5 + aside - Vector3(0, sag, 0)
+	var spine := CableSweep.smooth(PackedVector3Array([a, a.lerp(mid, 0.5) - Vector3(0, sag * 0.4, 0), mid,
+			b.lerp(mid, 0.5) - Vector3(0, sag * 0.4, 0), b]), 6)
+	return CableSweep.rest_on(spine, ROPE_RADIUS + 0.0005, 0.01)
+
+
+static var _rope_paint: StandardMaterial3D
+
+
+## A rope's finish: pale hemp, so it reads against the dark top as a thing and not a light.
+static func rope_paint() -> StandardMaterial3D:
+	if _rope_paint == null:
+		_rope_paint = StandardMaterial3D.new()
+		_rope_paint.albedo_color = Color(0.82, 0.74, 0.58)
+		_rope_paint.roughness = 0.9
+	return _rope_paint
 
 
 # --- what the cards say ---------------------------------------------------------------------
@@ -394,6 +1141,13 @@ func readout_of(track: int) -> String:
 	var parts := [pan_words(t.pan), db_words(t.volume)]
 	if DAW.can(DAWBackend.Capability.WIDTH):
 		parts.append("width %d%%" % roundi(t.width * 100.0))
+	var room := room_send_db(track)
+	if room != -INF:
+		parts.append("room %.1f dB" % room)
+	for to in ropes_from(track):
+		parts.append("rope to %s" % title_of(to))
+	for from in ropes_into(track):
+		parts.append("ducks under %s" % title_of(from))
 	if t.mute:
 		parts.append("MUTE")
 	if t.solo:
@@ -402,14 +1156,29 @@ func readout_of(track: int) -> String:
 
 
 func hint_of(track: int) -> String:
-	var lines := ["drag: across is pan, back is quieter, off the back is -inf  ·  wheel 0.5 dB, Shift 0.1"]
+	var lines := ["drag: across is pan, back is quieter, off the back is -inf  ·  wheel 0.5 dB, Shift 0.1",
+			"a ball under another: drag the name on its tag instead"]
 	if DAW.can(DAWBackend.Capability.WIDTH):
 		lines.append("wheel while held: width  ·  drag the ring: width  ·  double-click, Backspace or RESET: back to centre")
 	else:
 		lines.append("no width ring: this DAW cannot set a track's width  ·  double-click, Backspace or RESET: back to centre")
 	if DAW.backend is ReaperBackend and (DAW.backend as ReaperBackend).stereo_panned.has(track):
 		lines.append("pan mode set to stereo pan, for the width")
+	lines.append(stalk_hint(track))
+	lines.append(knot_hint(track))
+	lines.append("L held over it: lean in, this track louder in your ears alone  ·  K held: muted while held, a tap latches"
+			if Ears.can_lean() else "K held: muted while held, a tap latches  ·  " + Ears.CANNOT_LEAN)
 	return "\n".join(lines)
+
+
+## What a voice's stalk does, or why it does nothing yet.
+func stalk_hint(track: int) -> String:
+	var room := room_track()
+	if room == 0:
+		return "the stalk under it is its send to the room: no room yet, ROOM at the left end makes one"
+	if room == track:
+		return "this is the room the others send to"
+	return "drag the stalk under it up: more of the room (%s)  ·  wheel 1 dB, Shift 0.1  ·  on the table, none" % title_of(room)
 
 
 # --- building it ----------------------------------------------------------------------------
@@ -442,6 +1211,8 @@ func _rebuild() -> void:
 		lead.mesh = line
 		lead.material_override = Materials.legend()
 		lead.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Each a little higher than the last, so two that cross never lie in one plane.
+		lead.set_meta(&"lift", 0.0015 + 0.0007 * n)
 		_adopt(lead)
 		_leads[track] = lead
 	for track in shown:
@@ -452,6 +1223,14 @@ func _rebuild() -> void:
 		voice.set_meta(&"stage_track", track)
 		_adopt(voice)
 		voices[track] = voice
+	_loose = MeshInstance3D.new()
+	_loose.name = "LooseRope"
+	_loose.material_override = rope_paint()
+	_loose.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_loose.visible = false
+	_adopt(_loose)
+	rope_nodes.clear()
+	_refresh_ropes()
 	_empty_label.visible = shown.is_empty()
 	_empty_label.text = {&"bank": "NO TRACKS", &"soloed": "NO TRACK SOLOED", &"selected": "NO TRACK SELECTED"}[showing]
 	_refresh_range()
@@ -464,8 +1243,9 @@ func lead(voice: StageVoice) -> void:
 	var tag: Tag = tags.get(voice.track)
 	if line == null or tag == null:
 		return
-	var from := Vector3(tag.position.x, 0.0007, SIZE.y * 0.5 - 0.004)
-	var to := Vector3(voice.position.x, 0.0007, voice.position.z)
+	var lift: float = line.get_meta(&"lift", 0.0015)
+	var from := Vector3(tag.position.x, lift, SIZE.y * 0.5 - 0.004)
+	var to := Vector3(voice.position.x, lift, voice.position.z)
 	var length := from.distance_to(to)
 	if length < 0.001:
 		line.visible = false
@@ -521,7 +1301,8 @@ func _build_top() -> void:
 		var bar := BoxMesh.new()
 		bar.size = Vector3(SIZE.x - 0.14, 0.0008, 0.003 if db == 0.0 else 0.0012)
 		line.mesh = bar
-		line.position = Vector3(0, 0.0004, z)
+		# Clear of the top, and under the spine that crosses it: no two faces in one plane.
+		line.position = Vector3(0, 0.0005, z)
 		line.material_override = Materials.legend()
 		line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_adopt(line)
@@ -533,13 +1314,13 @@ func _build_top() -> void:
 	var spine := BoxMesh.new()
 	spine.size = Vector3(0.0018, 0.0008, SIZE.y)
 	centre.mesh = spine
-	centre.position = Vector3(0, 0.0004, 0)
+	centre.position = Vector3(0, 0.0006, 0)
 	centre.material_override = Materials.legend()
 	_adopt(centre)
 	for mark in [[-HALF_PAN, "L"], [-HALF_PAN * 0.5, "50 L"], [0.0, "C"], [HALF_PAN * 0.5, "50 R"], [HALF_PAN, "R"]]:
 		_flat_label(mark[1], 56 if (mark[1] as String).length() == 1 else 36,
 				Vector3(mark[0], 0.0005, SIZE.y * 0.5 - 0.035), HORIZONTAL_ALIGNMENT_CENTER)
-	_flat_label("ACROSS IS PAN  ·  BACK IS QUIETER  ·  THE RING IS WIDTH", 34,
+	_flat_label("ACROSS IS PAN  ·  BACK IS QUIETER  ·  THE RING IS WIDTH  ·  A KNOT TIES A ROPE", 34,
 			Vector3(0, 0.0005, -SIZE.y * 0.5 + 0.03), HORIZONTAL_ALIGNMENT_CENTER)
 	_empty_label = _flat_label("", 60, Vector3(0, 0.0005, 0.1), HORIZONTAL_ALIGNMENT_CENTER)
 
@@ -572,7 +1353,8 @@ func _build_rail() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(SIZE.x, RAIL_DEEP, 0.012)
+	# A hair narrower than the top, so their ends are not one plane.
+	box.size = Vector3(SIZE.x - 0.002, RAIL_DEEP, 0.012)
 	plate.mesh = box
 	plate.position = Vector3(0, 0, -0.006)
 	plate.material_override = Materials.master_plate()
@@ -591,6 +1373,15 @@ func _build_rail() -> void:
 	later.describe_value = func(_v: float) -> String: return range_text()
 	later.says = "the eight tracks after these"
 	later.pressed.connect(page.bind(1))
+	_room_label = _rail_label("", 26, Vector3(left, -0.034, 0.001))
+	_room_key = _key("ROOM", Vector3(left, -0.058, 0.004))
+	_room_key.describe_title = func() -> String: return "STAGE  ROOM" if room_track() > 0 else "STAGE  ADD ROOM"
+	_room_key.describe_value = func(_v: float) -> String:
+		return title_of(room_track()) if room_track() > 0 else "no room yet"
+	_room_key.says = "with no room: ADD ROOM, a track ROOM with a reverb (one undo step)  ·  a voice's stalk, lifted, sends to it"
+	_room_key.dwells = false
+	_room_key.pressed.connect(add_room)
+	_refresh_room()
 	_show_label = _rail_label("", 34, Vector3(right, 0.04, 0.001))
 	var shows := _key("SHOW", Vector3(right, -0.01, 0.004))
 	shows.describe_title = func() -> String: return "STAGE  SHOW"
@@ -640,7 +1431,8 @@ class TableKey extends PanelButton:
 		face.text = glyph
 		face.font_size = 26 if glyph.length() > 1 else 40
 		face.pixel_size = 0.0003
-		face.position = Vector3(0, 0, 0.0045)
+		# In front of the key's lamp (PanelButton.LAMP_OFFSET, whose face is at 4.55 mm).
+		face.position = Vector3(0, 0, 0.0055)
 		face.modulate = Color(0.92, 0.93, 0.95)
 		Lettering.range_to_legibility(face)
 		Lettering.fit(face, PanelButton.SIZE.x * 0.95, face.font_size, 12)
@@ -694,6 +1486,7 @@ class Tag extends Node3D:
 		right.pressed.connect(func(): table.nudge_pan(track, StageTable.PAN_STEP))
 		right.wheel = _wheel_pan
 		right.set_meta(&"stage_track", track)
+		_build_grip()
 		var pan := _label(26, Vector3(0, -0.012, 0.001))
 		pan.text = "PAN"
 		var reset := table._key("RESET", Vector3(0, -0.048, 0.0), self)
@@ -705,8 +1498,27 @@ class Tag extends Node3D:
 		reset.set_meta(&"stage_track", track)
 		refresh()
 
+	## The name, state and readout are a handle on the voice (NameGrip). The grip's own frame is
+	## the voices': level with the table at their height, its +Z the table's up, so a held ray
+	## moves in their plane (Interactor._plane_point). Its hit box is here on the sloped rail.
+	func _build_grip() -> void:
+		var grip := NameGrip.new()
+		grip.name = "Grip"
+		grip.table = table
+		grip.track = track
+		var on_table := table._rail.transform * transform
+		grip.transform = on_table.affine_inverse() * Transform3D(Basis(Vector3.RIGHT, -PI * 0.5),
+				Vector3(on_table.origin.x, StageVoice.LIFT, StageTable.SIZE.y * 0.5))
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(width, 0.068, 0.006)
+		shape.shape = box
+		shape.transform = grip.transform.affine_inverse() * Transform3D(Basis(), Vector3(0, 0.044, 0.002))
+		grip.add_child(shape)
+		add_child(grip)
+
 	func _wheel_pan(notches: int, fine: bool) -> bool:
-		return table.nudge_pan(track, notches * (StageTable.PAN_STEP * 2.0 if fine else StageTable.PAN_WHEEL))
+		return table.nudge_pan(track, notches * (StageTable.PAN_STEP if fine else StageTable.PAN_WHEEL))
 
 	func _label(size: int, at: Vector3) -> Label3D:
 		var label := Label3D.new()
@@ -737,3 +1549,236 @@ class Tag extends Node3D:
 		_readout.text = "  ".join(shown)
 		Lettering.fit(_readout, width, 26, 12)
 		_chip.material_override = Materials.track_glow(t.shown_colour())
+
+
+## The name on a voice's tag, taken hold of: a handle on that voice from the rail, so a track
+## whose ball stands under another's can still be placed, wheeled and reset. A drag moves the voice
+## as far as the hand moves, from where it stands; the wheel is its level, or its width while held;
+## two presses put it back. Hovered or held, its voice is raised over the rest (StageVoice.pick).
+## One edit a drag, called a placing, as on the ball.
+class NameGrip extends ControlAffordance:
+	var table: StageTable
+	var track := 0
+	var _started := false
+
+	func _init() -> void:
+		edits_as_one = true
+		describe_edit = func() -> String:
+			var t := DAW.state.track(track, false)
+			var who := t.display_name() if t != null else "Track %d" % track
+			return "%s: %s" % [who, "place" if held_by != null else "level"]
+		# A cassette pressed on the name pastes on its track at the playhead, as on the ball.
+		pastes_onto = func() -> int: return track
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		set_meta(&"stage_track", track)
+		hover_changed.connect(func(_on: bool) -> void: _pick())
+
+	func voice() -> StageVoice:
+		return table.voices.get(track) if table != null else null
+
+	func _pick() -> void:
+		var v := voice()
+		if v != null and is_instance_valid(v):
+			v.pick(is_hovered() or is_held())
+
+	func _on_grab_begin(_at: Vector3) -> void:
+		var v := voice()
+		if v == null:
+			return
+		# Where the drag starts is taken from the first move, in the voices' plane: the press
+		# itself lands on the rail, below it.
+		_started = false
+		v.steered = true
+		_pick()
+
+	func _on_grab_move(at: Vector3) -> void:
+		var v := voice()
+		if v == null:
+			return
+		var p := table.to_local(at)
+		if not _started:
+			_started = true
+			v.begin_drag(Vector2(p.x, p.z))
+			return
+		v.drag_to(Vector2(p.x, p.z), held_by is Interactor and (held_by as Interactor).fine())
+
+	func _on_grab_end() -> void:
+		var v := voice()
+		if v == null:
+			return
+		v.steered = false
+		v.end_drag()
+		_started = false
+		# Once the let-go is through and it is no longer held.
+		_pick.call_deferred()
+
+	func _on_nudge(notches: int, fine: bool) -> bool:
+		return table.nudge_voice(track, is_held(), notches, fine)
+
+	func _default_title() -> String:
+		return "%s  BALL" % table.title_of(track)
+
+	func _default_readout() -> String:
+		return table.readout_of(track)
+
+	func hint() -> String:
+		return "drag: moves this track's ball as far as you move  ·  wheel 0.5 dB, Shift 0.1, width while held  ·  double-click: back to centre"
+
+	## Not dwellable, as the ball is not.
+	func dwell_activates() -> bool:
+		return false
+
+
+## A rope between two voices (docs/spatial_loop.md slice 20): a key send from `from` into `to`, which
+## ducks `to` under it. Drawn as a CableSweep tube from knot to knot, sagging when slack, lifted
+## straight each time `to` ducks, by `ducking` (StageTable._process, from Sidechain's estimate) and
+## as far as Ergonomics lets things move. Taken by its middle and pulled away from the line between
+## its knots, it ducks harder (StageTable.pull): one edit a pull, so the send's level and the
+## threshold are one undo step. The wheel pulls it too. Its frame is level with the table at its
+## middle, +X along it and +Z up, so a held ray moves in the level plane through it; it is not moved
+## while held, only its line.
+class Rope extends ControlAffordance:
+	var table: StageTable
+	var from := 0
+	var to := 0
+	## Its drawn line, a sibling on the table.
+	var line: MeshInstance3D
+	## How far its track ducks now (dB), and how far that has lifted its middle (m).
+	var ducking := 0.0
+	var lifted := 0.0
+	var _held_pull := -1.0
+	var _grab_off := 0.0
+	var _grab_pull := 0.0
+	var _box: BoxShape3D
+	var _drawn := PackedFloat32Array()
+	## Its line's centre, in its line's space, and that line's length: what the beads ride
+	## (SignalBeads), the key going from `from` to `to`.
+	var _spine := PackedVector3Array()
+	var _length := 0.0
+
+	func _init() -> void:
+		edits_as_one = true
+		describe_edit = func() -> String:
+			return "%s > %s: pull" % [table._name_of(from), table._name_of(to)] if table != null else "rope: pull"
+
+	func _enter_tree() -> void:
+		super()
+		add_to_group(SignalBeads.CARRIERS)
+
+	func signal_spine() -> PackedVector3Array:
+		return line.global_transform * _spine if line != null and line.is_inside_tree() else PackedVector3Array()
+
+	func signal_length() -> float:
+		return _length
+
+	## What the key send carries: the key track's level through the send.
+	func signal_level() -> float:
+		return SignalBeads.level_between(from, to)
+
+	func signal_radius() -> float:
+		return StageTable.ROPE_RADIUS
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		var shape := CollisionShape3D.new()
+		_box = BoxShape3D.new()
+		_box.size = Vector3(0.05, 0.03, 0.03)
+		shape.shape = _box
+		add_child(shape)
+
+	## How far it is pulled (0..1): where the hand has it while held, else its threshold's.
+	func pull() -> float:
+		return _held_pull if _held_pull >= 0.0 else table.rope_pull(from, to)
+
+	## Across the table from its line, toward the player: where a pull moves its middle.
+	func _across() -> Vector3:
+		var a := table.knot_point(from)
+		var b := table.knot_point(to)
+		var along := Vector3(b.x - a.x, 0, b.z - a.z)
+		if along.length_squared() < 0.000001:
+			return Vector3.BACK
+		var side := Vector3.UP.cross(along.normalized())
+		return side if side.z >= 0.0 else -side
+
+	## How far `p` (the table's frame) is from the line between its knots, across the table.
+	func _off(p: Vector3) -> float:
+		var a := table.knot_point(from)
+		var b := table.knot_point(to)
+		var flat := Vector2(b.x - a.x, b.z - a.z)
+		if flat.length_squared() < 0.000001:
+			return Vector2(p.x - a.x, p.z - a.z).length()
+		var n := Vector2(-flat.y, flat.x).normalized()
+		return absf(Vector2(p.x - a.x, p.z - a.z).dot(n))
+
+	## Its line and its hit, where its knots, its pull and its ducking have them. Only when they move.
+	func shape() -> void:
+		if table == null or line == null:
+			return
+		var a := table.knot_point(from)
+		var b := table.knot_point(to)
+		var p := pull()
+		var slack := StageTable.sag_of(a, b, p)
+		var tight := clampf(ducking / StageTable.DUCK_TAUT_DB, 0.0, 1.0) * Ergonomics.current.motion_scale \
+				if Ergonomics.current != null else 0.0
+		lifted = slack * tight
+		var sag := slack - lifted
+		var aside := _across() * p * StageTable.PULL_MOST
+		var now := PackedFloat32Array([a.x, a.y, a.z, b.x, b.y, b.z, aside.x, aside.z, sag])
+		if now.size() == _drawn.size():
+			var same := true
+			for i in now.size():
+				if absf(now[i] - _drawn[i]) > 0.0004:
+					same = false
+					break
+			if same:
+				return
+		_drawn = now
+		_spine = StageTable.rope_spine(a, b, aside, sag)
+		_length = SignalBeads.length_of(_spine)
+		line.mesh = CableSweep.tube(_spine, StageTable.ROPE_RADIUS, 6)
+		if is_held():
+			return
+		var mid := (a + b) * 0.5 + aside
+		mid.y = maxf(mid.y - sag, StageTable.ROPE_RADIUS)
+		var along := Vector3(b.x - a.x, 0, b.z - a.z)
+		var x := along.normalized() if along.length_squared() > 0.000001 else Vector3.RIGHT
+		transform = Transform3D(Basis(x, Vector3.UP.cross(x), Vector3.UP), mid)
+		_box.size = Vector3(maxf(along.length() * 0.5, 0.03), 0.03, 0.03)
+
+	func _on_grab_begin(at: Vector3) -> void:
+		_grab_pull = pull()
+		_grab_off = _off(table.to_local(at))
+		_held_pull = _grab_pull
+
+	func _on_grab_move(at: Vector3) -> void:
+		var off := _off(table.to_local(at))
+		_held_pull = clampf(_grab_pull + (off - _grab_off) / StageTable.PULL_MOST, 0.0, 1.0)
+		table.pull(from, to, _held_pull)
+		shape()
+
+	func _on_grab_end() -> void:
+		_held_pull = -1.0
+		_drawn = PackedFloat32Array()
+
+	func _on_nudge(notches: int, fine: bool) -> bool:
+		var to_pull := clampf(pull() + notches * (StageTable.PULL_FINE if fine else StageTable.PULL_STEP), 0.0, 1.0)
+		table.pull(from, to, to_pull)
+		return true
+
+	func _default_title() -> String:
+		return "%s -> %s  ROPE" % [table.title_of(from), table.title_of(to)]
+
+	func _default_readout() -> String:
+		return table.rope_words(from, to)
+
+	func hint() -> String:
+		return "\n".join(["drag its middle away: ducks harder, the key send up and the threshold down (one undo step)",
+				"wheel: a little more or less  ·  Backspace, or the X at %s's knot: cut" % table.title_of(from),
+				"the patchbay shows it as a key send"])
+
+	func dwell_activates() -> bool:
+		return false

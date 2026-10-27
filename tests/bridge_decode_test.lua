@@ -147,5 +147,172 @@ values = {I_PANMODE = 6, D_WIDTH = 0.25}
 check('a width is read in dual pan', read_width('track') == 0.25)
 values = {I_PANMODE = 3, D_WIDTH = 0.25}
 check('and is full in a pan mode that ignores it', read_width('track') == 1)
+
+-- The stage table's rope (docs/spatial_loop.md slice 20): CreateSidechain sends into channels 3/4,
+-- gives a track with no ReaComp one and sets every ReaComp's detector to the auxiliary input, by
+-- the parameter's own words; removing the last key into it sets them back to the main input, and
+-- a ReaComp that was there before is kept.
+local fxs, sends, nchan = {kick = {}, bass = {}}, {}, {}
+local function of(tr, cat)
+  local out = {}
+  for _, s in ipairs(sends) do
+    if (cat == 0 and s.src == tr) or (cat == -1 and s.dst == tr) then out[#out + 1] = s end
+  end
+  return out
+end
+reaper = {
+  GetTrack = function(_, n) return ({[1] = 'kick', [5] = 'bass'})[n] end,
+  GetMediaTrackInfo_Value = function(tr) return nchan[tr] or 2 end,
+  SetMediaTrackInfo_Value = function(tr, _, v) nchan[tr] = v end,
+  CreateTrackSend = function(src, dst) sends[#sends + 1] = {src = src, dst = dst, chan = 0}; return #of(src, 0) - 1 end,
+  SetTrackSendInfo_Value = function(tr, cat, i, _, v) of(tr, cat)[i + 1].chan = v end,
+  GetTrackSendInfo_Value = function(tr, cat, i, key)
+    local s = of(tr, cat)[i + 1]
+    return key == 'I_DSTCHAN' and s.chan or s.dst
+  end,
+  GetTrackNumSends = function(tr, cat) return #of(tr, cat) end,
+  RemoveTrackSend = function(tr, cat, i)
+    local s = of(tr, cat)[i + 1]
+    for k, v in ipairs(sends) do if v == s then table.remove(sends, k); return true end end
+    return false
+  end,
+  TrackFX_GetCount = function(tr) return #fxs[tr] end,
+  TrackFX_GetFXName = function(tr, fx) return true, fxs[tr][fx + 1].name end,
+  TrackFX_AddByName = function(tr, name)
+    fxs[tr][#fxs[tr] + 1] = {name = 'VST: ' .. name .. ' (Cockos)', detector = 0}
+    return #fxs[tr] - 1
+  end,
+  TrackFX_GetNumParams = function() return 3 end,
+  TrackFX_GetParamName = function(_, _, p) return true, ({'Thresh', 'Ratio', 'Detector input'})[p + 1] end,
+  TrackFX_FormatParamValueNormalized = function(_, _, _, v)
+    return true, v >= 0.25 and 'Auxiliary Input L+R' or 'Main Input L+R'
+  end,
+  TrackFX_SetParamNormalized = function(tr, fx, p, v) if p == 2 then fxs[tr][fx + 1].detector = v end end,
+  UpdateArrange = function() end,
+  Undo_BeginBlock = function() end,
+  Undo_EndBlock = function() end,
+}
+local routing = assert(load('local handlers, track_from_osc = ...\n'
+  .. lift('-- The ReaComps in a track', '-- args: track, fx, to track, to fx') .. '\nreturn handlers'))(
+  {}, function(n) return reaper.GetTrack(0, (n or 1) - 1) end)
+local tied = routing.CreateSidechain({2, 6})
+check('a sidechain into a track with no compressor gives it a ReaComp listening to its aux input',
+  tied.ok and tied.compressor_added == true and #fxs.bass == 1 and fxs.bass[1].detector >= 0.25
+  and sends[1].chan == 2 and nchan.bass == 4)
+routing.RemoveTrackSend({2, 0})
+check('cut, the ReaComp stays and listens to its own input again', #sends == 0 and #fxs.bass == 1
+  and fxs.bass[1].detector == 0)
+local again = routing.CreateSidechain({2, 6})
+check('tied again, the ReaComp there is the one that listens, and none is added',
+  again.ok and again.compressor_added == false and #fxs.bass == 1 and fxs.bass[1].detector >= 0.25)
+routing.CreateTrackSend({2, 6})
+routing.RemoveTrackSend({2, 1})
+check('an ordinary send removed leaves the key listened to', fxs.bass[1].detector >= 0.25 and #sends == 1)
+
+-- Automation by gesture (docs/spatial_loop.md part two slice 22): HoldLane switches an envelope off
+-- while a write bead is out over its control and back at the let-go, as it was; the poll still reads
+-- a held lane; a pass written by SetEnvelope while held stays off, and plays at the let-go.
+local envs = {kick = {ACTIVE = '1', VISIBLE = '1', points = 3}}
+reaper = {
+  GetTrack = function(_, n) return n == 1 and 'kick' or nil end,
+  GetMasterTrack = function() return 'master' end,
+  GetSetEnvelopeInfo_String = function(env, key, v, set)
+    if set then env[key] = v end
+    return true, env[key]
+  end,
+  CountEnvelopePoints = function(env) return env.points or 0 end,
+  DeleteEnvelopePointEx = function(env) env.points = math.max((env.points or 0) - 1, 0) end,
+  InsertEnvelopePoint = function(env) env.points = (env.points or 0) + 1 end,
+  Envelope_SortPoints = function() end,
+  GetMediaTrackInfo_Value = function() return 1 end,
+  SetMediaTrackInfo_Value = function() end,
+  TrackList_AdjustWindows = function() end,
+  UpdateArrange = function() end,
+  Undo_BeginBlock = function() end,
+  Undo_EndBlock = function() end,
+}
+local hold_handlers, is_held = assert(load('local handlers, track_from_osc, envelope_of, set_active, env_write = ...\n'
+  .. lift('local function is_active', 'local function set_active')
+  .. lift('-- Lanes a write bead holds', 'local function env_points')
+  .. lift('-- args: track (0 the master), target, then flat', "-- args: track (0 the master), target, on")
+  .. lift("-- args: track (0 the master), target, on", "-- args: track, mode (Reaper's I_AUTOMODE")
+  .. '\nreturn handlers, is_held'))(
+  {}, function(n) return reaper.GetTrack(0, (n or 1) - 1) end,
+  function(tr, target) return target == 'volume' and envs[tr] or nil end,
+  function(env, on) env.ACTIVE = on and '1' or '0'; env.VISIBLE = on and '1' or '0' end,
+  function(_, _, _, v) return v end)
+local _, hfn, h = decode_request('{"args":[2,"volume",1],"fn":"HoldLane","id":12}')
+check('HoldLane decodes with its track, target and on', hfn == 'HoldLane' and h[1] == 2 and h[2] == 'volume' and h[3] == 1)
+local held = hold_handlers.HoldLane(h)
+check('held, the envelope stops playing and stays in view', held.ok and held.held and envs.kick.ACTIVE == '0'
+  and envs.kick.VISIBLE == '1')
+check('and the poll still reads it', is_held(envs.kick))
+hold_handlers.SetEnvelope({2, 'volume', 1.0, -6.0, 1, 2.0, -3.0, 1})
+check('a pass written while held is kept from playing', envs.kick.ACTIVE == '0' and envs.kick.points == 2)
+hold_handlers.HoldLane({2, 'volume', false})
+check('let go, it plays again', envs.kick.ACTIVE == '1' and not is_held(envs.kick))
+envs.kick.ACTIVE = '0'
+hold_handlers.HoldLane({2, 'volume', true})
+hold_handlers.HoldLane({2, 'volume', 0})
+check('a lane that was not playing is left not playing', envs.kick.ACTIVE == '0')
+check('a lane with no envelope holds nothing, and no track is refused', hold_handlers.HoldLane({2, 'pan', 1}).held == false
+  and hold_handlers.HoldLane({9, 'volume', 1}).ok == false)
+-- A cassette onto a track (docs/spatial_loop.md part two, slice 24): PasteItem decodes as any call,
+-- and makes a MIDI item with its notes and controls at the start asked, or an audio item of its
+-- file with its offset, fades, shapes, gain and loop, inside one Undo block called "Paste item".
+local _, pfn, p = decode_request([[{"args":[4,96.0,8.0,"Kick Verse 1",0,"",0,0.5,1.0,1,4,-3.0,0,0,0,1,96.25,96.75,36,100,9,1,96.5,1,64,0],"fn":"PasteItem","id":12}]])
+check('PasteItem decodes with its track, start, length and name', pfn == 'PasteItem' and p[1] == 4 and p[2] == 96.0
+  and p[3] == 8.0 and p[4] == 'Kick Verse 1' and p[6] == '' and p[16] == 1 and p[22] == 1)
+local made, values, notes, ccs2, opened, closed = {}, {}, {}, {}, 0, {}
+reaper = {
+  Undo_BeginBlock = function() opened = opened + 1 end,
+  Undo_EndBlock = function(name) closed[#closed + 1] = name end,
+  CreateNewMIDIItemInProj = function(_, t0, t1) made[#made + 1] = {'midi', t0, t1}; return 'item' end,
+  AddMediaItemToTrack = function() made[#made + 1] = {'audio'}; return 'item' end,
+  AddTakeToMediaItem = function() return 'take' end,
+  GetActiveTake = function() return 'take' end,
+  PCM_Source_CreateFromFile = function(path) return 'src:' .. path end,
+  SetMediaItemTake_Source = function(_, src) values.source = src end,
+  SetMediaItemTakeInfo_Value = function(_, key, v) values[key] = v end,
+  SetMediaItemInfo_Value = function(_, key, v) values[key] = v end,
+  GetSetMediaItemTakeInfo_String = function(_, key, v) values[key] = v end,
+  MIDI_GetPPQPosFromProjTime = function(_, t) return t * 960 end,
+  MIDI_InsertNote = function(_, sel, muted, on, off, chan, pitch, vel) notes[#notes + 1] = {on, off, chan, pitch, vel}; return true end,
+  MIDI_InsertCC = function(_, sel, muted, ppq, msg, chan, a, b) ccs2[#ccs2 + 1] = {ppq, msg, chan, a, b}; return true end,
+  MIDI_Sort = function() end,
+  UpdateItemInProject = function() end,
+  file_exists = function(path) return path == '/takes/kick.wav' end,
+  EnumProjects = function() return 0, '' end,
+  Main_OnCommand = function() end,
+  CountSelectedMediaItems = function() return 0 end,
+}
+local REAPER_SHAPE_T = {[0] = 0, [1] = 1, [2] = 2, [3] = 3, [4] = 5}
+local paste = assert(load('local handlers, track_from_osc, edited, copy_file, unselect_all, REAPER_SHAPE = ...\n'
+  .. lift('function handlers.PasteItem', '-- args: track (1-based, as OSC), fx (1-based), param (1-based).')
+  .. '\nreturn handlers.PasteItem'))(
+  {}, function(n) return n == 4 and 'track' or nil end,
+  function(label) reaper.Undo_EndBlock(label); return {ok = true} end, function() return true end, function() end,
+  REAPER_SHAPE_T)
+local midi = paste(p)
+check('a MIDI cassette is a MIDI item from its start for its length', midi.ok and #made == 1 and made[1][1] == 'midi'
+  and made[1][2] == 96.0 and made[1][3] == 104.0)
+check('with its name, its fades, their shapes and its gain', values.P_NAME == 'Kick Verse 1' and values.D_FADEINLEN == 0.5
+  and values.D_FADEOUTLEN == 1.0 and values.C_FADEINSHAPE == 1 and values.C_FADEOUTSHAPE == 5
+  and math.abs(values.D_VOL - 10 ^ (-3 / 20)) < 1e-9 and values.B_LOOPSRC == 0 and values.B_MUTE == 0)
+check('its note at its project time, on its channel', midi.notes == 1 and #notes == 1 and notes[1][1] == 96.25 * 960
+  and notes[1][2] == 96.75 * 960 and notes[1][3] == 9 and notes[1][4] == 36 and notes[1][5] == 100)
+check('its mod wheel as 0xB0', midi.controls == 1 and ccs2[1][2] == 0xB0 and ccs2[1][4] == 1 and ccs2[1][5] == 64)
+check('in one Undo block, called Paste item', opened == 1 and #closed == 1 and closed[1] == 'Paste item')
+made, values, opened, closed = {}, {}, 0, {}
+local audio = paste({4, 30.0, 6.0, 'Kick take', 1, '/takes/kick.wav', 1.5, 0, 0, 0, 0, 0, 0.5, 4.5, 0, 0, 0})
+check('an audio cassette is its file at the start asked, from its offset, looped, muted', audio.ok and made[1][1] == 'audio'
+  and values.source == 'src:/takes/kick.wav' and values.D_STARTOFFS == 1.5 and values.D_POSITION == 30.0
+  and values.D_LENGTH == 6.0 and values.B_LOOPSRC == 1 and values.B_MUTE == 1 and opened == 1)
+made = {}
+check('a file this machine does not have is refused, and nothing made', paste({4, 30.0, 6.0, 'x', 0, '/takes/gone.wav'}).ok == false
+  and #made == 0)
+check('no such track is refused', paste({9, 30.0, 6.0, 'x', 0, ''}).ok == false)
+check('nor an empty item', paste({4, 30.0, 0, 'x', 0, ''}).ok == false)
+
 print(string.format('[bridge] %d checks, %d failed', checks, failures))
 os.exit(failures == 0 and 0 or 1)

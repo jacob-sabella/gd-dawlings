@@ -62,9 +62,15 @@ func held_pose() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, -1.05), Vector3.ZERO)
 
 
+## A squeeze squeaks, and letting go squeaks back: each a take of its own (Foley.squeak_take), the
+## same take wherever it is heard, so a squeeze sampled (Sampler) is the squeak its player heard.
 func use(down: bool) -> void:
 	poke(-0.42 if down else 0.25)
-	Foley.play(self, Foley.squeak(down), 0.0 if down else -5.0, randf_range(0.94, 1.08))
+	Foley.play(self, Foley.take_of(use_kind(down), _next_take()), 0.0 if down else -5.0)
+
+
+func use_kind(down: bool) -> StringName:
+	return &"duck_squeeze" if down else &"duck_release"
 
 
 func _foley_contact() -> AudioStream:

@@ -79,7 +79,7 @@ func show_for(control: ControlAffordance, at: Vector2) -> void:
 	var reading := control.readout()
 	_value.text = reading
 	_value.visible = reading != ""
-	_hint.text = control.hint()
+	_hint.text = control.card_hint()
 	_hint.visible = _hint.text != "" and not control.is_held()
 	_panel.visible = true
 	# Shrink to the text every time, or a card that once showed a long name keeps its width.

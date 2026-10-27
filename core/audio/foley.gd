@@ -141,26 +141,44 @@ static func gear_bump() -> AudioStreamWAV:
 ## rather than a beep.
 static func squeak(out: bool) -> AudioStreamWAV:
 	return _cached("squeak_out" if out else "squeak_in", func() -> AudioStreamWAV:
-		var seconds := 0.2 if out else 0.26
-		var s := _silence(seconds)
-		var from := 1900.0 if out else 1350.0
-		var to := 2600.0 if out else 1750.0
-		var level := 0.34 if out else 0.2
-		var phase := 0.0
-		var rng := RandomNumberGenerator.new()
-		rng.seed = 31 if out else 37
-		for i in s.size():
-			var t := float(i) / float(RATE)
-			var along := t / seconds
-			# Up fast and then holding: a hand closing on rubber.
-			var hz := lerpf(from, to, 1.0 - exp(-along * 5.0))
-			phase += TAU * hz / float(RATE)
-			var env := minf(1.0, t / 0.008) * pow(1.0 - along, 1.6)
-			var buzz := sin(phase) + 0.5 * sin(phase * 2.0) + 0.28 * sin(phase * 3.0) + 0.12 * sin(phase * 4.0)
-			var breath := rng.randf_range(-1.0, 1.0) * (0.12 if out else 0.35)
-			s[i] = level * env * (buzz * 0.55 + breath)
-		_lowpass(s, 7000.0)
-		return _wav(s, false))
+		return _squeak(out, 1.0, 31 if out else 37))
+
+
+## How each of the duck's takes (`squeak_take`) is tuned against the plain squeak: a squeeze is never
+## quite the same twice, and the difference is baked into the take rather than played as a pitch,
+## so the sound a take is (`take_of`) is the sound the room heard.
+const SQUEAK_TUNES: Array[float] = [1.0, 0.95, 1.06, 1.02]
+
+
+## The duck's squeeze (`out`) or its letting go, take `take` (posmod TAKES): `squeak`, tuned by
+## SQUEAK_TUNES and its breath seeded by the take.
+static func squeak_take(out: bool, take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("squeak_%s_%d" % ["out" if out else "in", take], func() -> AudioStreamWAV:
+		return _squeak(out, SQUEAK_TUNES[take], (31 if out else 37) + take * 13))
+
+
+static func _squeak(out: bool, tune: float, seed_value: int) -> AudioStreamWAV:
+	var seconds := 0.2 if out else 0.26
+	var s := _silence(seconds)
+	var from := (1900.0 if out else 1350.0) * tune
+	var to := (2600.0 if out else 1750.0) * tune
+	var level := 0.34 if out else 0.2
+	var phase := 0.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for i in s.size():
+		var t := float(i) / float(RATE)
+		var along := t / seconds
+		# Up fast and then holding: a hand closing on rubber.
+		var hz := lerpf(from, to, 1.0 - exp(-along * 5.0))
+		phase += TAU * hz / float(RATE)
+		var env := minf(1.0, t / 0.008) * pow(1.0 - along, 1.6)
+		var buzz := sin(phase) + 0.5 * sin(phase * 2.0) + 0.28 * sin(phase * 3.0) + 0.12 * sin(phase * 4.0)
+		var breath := rng.randf_range(-1.0, 1.0) * (0.12 if out else 0.35)
+		s[i] = level * env * (buzz * 0.55 + breath)
+	_lowpass(s, 7000.0)
+	return _wav(s, false)
 
 
 ## Something soft and hollow tapped or set down: a rubber toy on a shelf, in a palm.
@@ -1229,6 +1247,23 @@ static func sound(kind: StringName, take: int) -> AudioStreamWAV:
 		&"triangle": return triangle(take)
 		&"handbell": return handbell(take)
 	return click(take)
+
+
+## The kinds `sound` knows by name: the struck and shaken sounds an instrument's hit rings.
+const SOUNDS: Array[StringName] = [&"kick", &"snare", &"rim", &"clap", &"hihat", &"pad", &"crash",
+		&"ride", &"tambourine_hit", &"jingle", &"cowbell", &"bongo", &"conga", &"shaker", &"claves",
+		&"woodblock", &"triangle", &"handbell"]
+
+
+## The sound one use of an item rang, by its kind (Item.use_kind, InstrumentItem.sound_kind) and
+## its take (Item.use_take, InstrumentItem.sound_take): the duck's squeeze (`duck_squeeze`) and
+## its letting go (`duck_release`), and every sound `sound` knows. The very stream the room played,
+## so what the sampler catches (Sampler) is what the player heard. Null for a kind with none.
+static func take_of(kind: StringName, take: int) -> AudioStreamWAV:
+	match kind:
+		&"duck_squeeze": return squeak_take(true, take)
+		&"duck_release": return squeak_take(false, take)
+	return sound(kind, take) if kind in SOUNDS else null
 
 
 # Everything below works on a PackedFloat32Array of mono samples in -1..1 and is deterministic:

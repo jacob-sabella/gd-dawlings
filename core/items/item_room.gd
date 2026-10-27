@@ -36,6 +36,21 @@ const AIM_LENGTH := 2.5
 ## shelf spot that would mean nothing shared between two people's copies (`retire`).
 const PERSONAL_KINDS: Array[StringName] = [&"mic", &"headphones", &"tablet", &"keytar"]
 
+## The kinds that exist only once somebody makes one while playing (docs/spatial_loop.md part two,
+## slice 23): never on the shelf (not KINDS), minted by the host (`mint`) under the next free id in
+## the shape `kind_of` reads, `cassette1`, `cassette2`. What a made item carries is not room state:
+## its row ({id: [kind, maker, bytes]}, `made`) is sent once on a message of its own and to each
+## guest as it joins, and the room names only its id (`made_ids`), so a put-down never resends a
+## clip.
+const MADE_KINDS: Array[StringName] = [&"cassette"]
+## What a made item may carry, packed (var_to_bytes): at most this much one item, this much the
+## whole room, and this many items. Past any of them a mint is refused, and says which.
+const MADE_BYTES := 256 * 1024
+const MADE_TOTAL := 4 * 1024 * 1024
+const MADE_MOST := 64
+## How near a free slot (`holders`) a made item has to be let go to go into it (m).
+const SLOT_REACH := 0.08
+
 ## A hand here put `item` somewhere: `put_item` [id, x, z, yaw] or `home_item` [id], already
 ## done here. The studio sends it to the host as an ask.
 signal asked(verb: StringName, args: Array)
@@ -52,6 +67,16 @@ signal refused(item: Item, why: String)
 ## say whose it is (`Item.bound_name`), which needs `Session.name_of` and so stays out of this
 ## file, the same as `local_peer` above is asked through a callable rather than named here.
 signal personal_taken(item: Item)
+## `item` was just minted on this machine (`mint`): its row (`made[item.id]`) is for the session to
+## send everyone, once.
+signal minted(item: Item)
+## Made item `id` is gone for good (`unmake`: the BIN): for the session to tell everyone.
+signal unmade(id: StringName)
+## Something for this player to be told (a full rack, a taken slot): the studio's toast.
+signal told(text: String)
+## A hand here pressed `item` (one that `pastes`: a cassette) onto `track` at `seconds` (docs/
+## spatial_loop.md part two, slice 24): for the studio to paste it, or ask the host to.
+signal paste_pressed(item: Item, track: int, seconds: float)
 
 ## {id: Item}.
 var items: Dictionary = {}
@@ -84,6 +109,28 @@ var _spots: Array[Transform3D] = []
 ## Homes of their own, off the shelf's top, by kind: the mic's stand, the headphones' hook, the
 ## tablet's lower tier.
 var _homes: Dictionary = {}
+## Every made item's row, {id: [kind, maker, bytes]}: the session's (`Session.made`, set by the
+## studio, the same Dictionary), or this room's own where there is no session.
+var made: Dictionary = {}
+## Furniture that holds made items in slots, {holder: [Transform3D per slot]} in this node's
+## frame, filled by whatever builds it: the cassette rack (`rack`, 12) and its bin (`bin`, 1).
+var holders: Dictionary = {}
+## Where a made item with nowhere else to be lies, by kind and number ((kind, n) -> Transform3D,
+## this node's frame): the cassette rack's tray. Unset, the room's origin.
+var made_home: Callable = Callable()
+## Whether this machine's word is the room's (Session.is_authority): a slot in the bin retires an
+## item here, or waits for the host to. Unset, as with no session, it is.
+var authority: Callable = Callable()
+## How far along a hand's ray ((item, origin, direction) -> metres, global) what the carried item's
+## own press is for lies, when it is not a control: a bandmate's ghost a made item is handed to
+## (the studio's). Nearer than the control under the ray, the press is the item's (Interactor);
+## unset, or INF, the control takes it.
+var press_ahead: Callable = Callable()
+## Why the last `mint` was refused, or "".
+var mint_refusal := ""
+## The number the next made item of each kind is after: ids are never given twice in a room, so a
+## row heard late can never be taken for a newer one.
+var _made_after: Dictionary = {}
 
 
 static func make(kind: StringName) -> Item:
@@ -146,6 +193,8 @@ static func make(kind: StringName) -> Item:
 			return HihatItem.new()
 		&"bongo":
 			return BongoItem.new()
+		&"cassette":
+			return CassetteItem.new()
 	return null
 
 
@@ -180,6 +229,48 @@ static func look_of(kind: StringName) -> Node3D:
 	item.free()
 	look.scale = Vector3.ONE
 	return look
+
+
+## Whether `id` is a made item's (MADE_KINDS): one somebody made while playing.
+static func is_made(id: StringName) -> bool:
+	return not (id in KINDS) and kind_of(id) in MADE_KINDS
+
+
+## Why a made item of `size` bytes would not fit in a room whose rows are `rows`, or "" if it
+## would: MADE_BYTES an item, MADE_TOTAL a room, MADE_MOST items.
+static func made_refusal(rows: Dictionary, size: int) -> String:
+	if rows.size() >= MADE_MOST:
+		return "The room has %d made things already: drop one in the BIN on the cassette rack first." % MADE_MOST
+	if size > MADE_BYTES:
+		return "That clip is too much to carry (%d KiB; a cassette holds %d KiB)." % [ceili(size / 1024.0), MADE_BYTES / 1024]
+	var total := size
+	for id in rows:
+		var row: Array = rows[id]
+		if row.size() == 3 and row[2] is PackedByteArray:
+			total += (row[2] as PackedByteArray).size()
+	if total > MADE_TOTAL:
+		return "The room's made things are full (%d MiB): drop one in the BIN on the cassette rack first." % (MADE_TOTAL / 1024 / 1024)
+	return ""
+
+
+## What a made item of `kind` made `from` something here carries: a cassette of a clip
+## ("clip:<track>:<item index>", CassetteItem.data_of the song as it is now). Empty where there is
+## nothing there to make one of. The host packs it from its own state: a guest asks with `from`,
+## never with the data.
+static func made_data(kind: StringName, from: String) -> Dictionary:
+	match kind:
+		&"cassette":
+			var part := from.split(":")
+			if part.size() == 3 and part[0] == "clip" and part[1].is_valid_int() and part[2].is_valid_int():
+				return CassetteItem.data_of(DAW.state, int(part[1]), int(part[2]))
+	return {}
+
+
+## `item`, pressed onto `track` at `seconds` by a hand here: said (`paste_pressed`), for the studio.
+## Nothing in the room moves: the cassette stays in the hand.
+func paste(item: Item, track: int, seconds: float) -> void:
+	if item != null and is_instance_valid(item) and item.pastes():
+		paste_pressed.emit(item, track, seconds)
 
 
 ## The room an item is in, if any.
@@ -247,13 +338,198 @@ func despawn(id: StringName) -> void:
 
 
 ## Every spawned item's id, not one of KINDS, in the order it fell out of the case: a Dictionary
-## keeps insertion order, and KINDS is always populated first (`_ready`).
+## keeps insertion order, and KINDS is always populated first (`_ready`). Not the made items
+## (`made_ids`), which no case spilled and no run's end swallows.
 func spawned_ids() -> Array[StringName]:
 	var out: Array[StringName] = []
 	for id in items:
-		if not (id in KINDS):
+		if not (id in KINDS) and not is_made(id):
 			out.append(id)
 	return out
+
+
+## Every made item here, in the order they were made.
+func made_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for id in items:
+		if is_made(id):
+			out.append(id)
+	return out
+
+
+## On the host: a made item of `kind` carrying `data`, made by `maker` (a peer id), under the next
+## free id (`cassette1`, ...), its row kept in `made` and said (`minted`), and spawned at its home.
+## Null, and `mint_refusal` saying why, past MADE_MOST, MADE_TOTAL or MADE_BYTES, or for no data.
+func mint(kind: StringName, data: Dictionary, maker := 1) -> Item:
+	mint_refusal = ""
+	if not (kind in MADE_KINDS) or data.is_empty():
+		mint_refusal = "There is nothing there to make a %s of." % kind
+		return null
+	var bytes := var_to_bytes(data)
+	mint_refusal = made_refusal(made, bytes.size())
+	if not mint_refusal.is_empty():
+		return null
+	var n := int(_made_after.get(kind, 0)) + 1
+	while items.has(StringName("%s%d" % [kind, n])) or made.has(StringName("%s%d" % [kind, n])):
+		n += 1
+	_made_after[kind] = n
+	var id := StringName("%s%d" % [kind, n])
+	made[id] = [kind, maker, bytes]
+	var item := _make_real(id)
+	minted.emit(item)
+	return item
+
+
+## Made item `id` real here, from its row in `made`: spawned at its home and given what it carries.
+## Idempotent, as `spawn` is. Null without a row, or with one that does not read.
+func _make_real(id: StringName) -> Item:
+	if items.has(id):
+		return items[id]
+	var row: Variant = made.get(id)
+	if not (row is Array) or (row as Array).size() != 3 or not ((row as Array)[2] is PackedByteArray):
+		return null
+	var data: Variant = bytes_to_var((row as Array)[2])
+	if not (data is Dictionary):
+		return null
+	var kind := kind_of(id)
+	var n := int(String(id).trim_prefix(String(kind)))
+	_made_after[kind] = maxi(int(_made_after.get(kind, 0)), n)
+	var item := spawn(kind, id, made_home.call(kind, n) if made_home.is_valid() else Transform3D.IDENTITY)
+	if item != null and item.has_method("read"):
+		item.read(data)
+	return item
+
+
+## The made items the host's room names (`made_ids`), here: each one this machine has the row of
+## and has not met made real, and each one here the room no longer names gone. Its row, if any,
+## stays until the host says it is gone (`forget_made`): a row can arrive before the room names it.
+func apply_made(ids: Array) -> void:
+	for id in ids:
+		_make_real(StringName(id))
+	for id in made_ids():
+		if not ids.has(id) and not ids.has(String(id)):
+			despawn(id)
+
+
+## Made item `id` gone for good, on the host: out of the room and out of `made`, and said.
+func unmake(id: StringName) -> void:
+	if not is_made(id):
+		return
+	despawn(id)
+	made.erase(id)
+	unmade.emit(id)
+
+
+## The host said made item `id` is gone: here too, row and all.
+func forget_made(id: StringName) -> void:
+	despawn(id)
+	made.erase(id)
+
+
+# --- slots (docs/spatial_loop.md part two, slice 23) -------------------------------------------
+
+## Holder `holder`'s slots are `slots` now (this node's frame): what is in them is laid there again.
+func set_holder(holder: StringName, slots: Array[Transform3D]) -> void:
+	holders[holder] = slots
+	for id in items:
+		var item: Item = items[id]
+		if item.slot_in == holder and item.slot_n >= 0 and item.slot_n < slots.size():
+			_lay_in_slot(item, holder, item.slot_n)
+
+
+## Whatever is in `holder`'s slot `n`, or null. The bin's is never taken: it swallows.
+func in_slot(holder: StringName, n: int) -> Item:
+	if holder == CassetteRack.BIN:
+		return null
+	for id in items:
+		var item: Item = items[id]
+		if item.slot_in == holder and item.slot_n == n and item.state == Item.State.LOOSE:
+			return item
+	return null
+
+
+## Why `item` may not go into `holder`'s slot `n`, or "".
+func slot_refusal(item: Item, holder: StringName, n: int) -> String:
+	if not is_made(item.id):
+		return "Only things made while playing go on the %s." % holder
+	var slots: Array = holders.get(holder, [])
+	if n < 0 or n >= slots.size():
+		return "There is no slot %d there." % (n + 1)
+	var there := in_slot(holder, n)
+	if there != null and there != item:
+		return "That slot has %s in it." % there.item_title().to_lower()
+	return ""
+
+
+## The room's word: `item` into `holder`'s slot `n`, if it may go there. The bin, on the host,
+## retires it. Whether it went.
+func slot(item: Item, holder: StringName, n: int) -> bool:
+	if not slot_refusal(item, holder, n).is_empty():
+		return false
+	if holder == CassetteRack.BIN and (not authority.is_valid() or authority.call()):
+		unmake(item.id)
+		return true
+	_lay_in_slot(item, holder, n)
+	return true
+
+
+## A hand here put `item` into `holder`'s slot `n`: done at once, and said; or refused, and told.
+func slot_item(item: Item, holder: StringName, n: int) -> bool:
+	var why := slot_refusal(item, holder, n)
+	if not why.is_empty():
+		told.emit(why)
+		return false
+	var id := item.id
+	slot(item, holder, n)
+	asked.emit(&"slot_item", [id, holder, n])
+	return true
+
+
+func _lay_in_slot(item: Item, holder: StringName, n: int) -> void:
+	var slots: Array = holders.get(holder, [])
+	if n < 0 or n >= slots.size():
+		return
+	item.stick_at(slots[n])
+	item.slot_in = holder
+	item.slot_n = n
+
+
+## The slot nearest `at` (global) within `reach`, [holder, n], taken or not; [] for none.
+func slot_near(at: Vector3, reach := SLOT_REACH) -> Array:
+	var best: Array = []
+	var nearest := reach
+	var local := global_transform.affine_inverse() * at if is_inside_tree() else at
+	for holder in holders:
+		var slots: Array = holders[holder]
+		for n in slots.size():
+			var d := ((slots[n] as Transform3D) * Vector3(0, CassetteItem.SIZE.y * 0.5, 0)).distance_to(local)
+			if d < nearest:
+				nearest = d
+				best = [holder, n]
+	return best
+
+
+## The free slot nearest the line `aim` (global) points along, within PUT_REACH, and within
+## SLOT_REACH and a half of it: [holder, n], or [] for none.
+func free_slot_along(item: Item, aim: Transform3D) -> Array:
+	var inv := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
+	var local := inv * aim
+	var origin := local.origin
+	var toward := -local.basis.z.normalized()
+	var best: Array = []
+	var nearest := SLOT_REACH * 1.5
+	for holder in holders:
+		var slots: Array = holders[holder]
+		for n in slots.size():
+			var at := (slots[n] as Transform3D) * Vector3(0, CassetteItem.SIZE.y * 0.5, 0)
+			var along := (at - origin).dot(toward)
+			if along <= 0.0 or along > PUT_REACH:
+				continue
+			var off := (origin + toward * along).distance_to(at)
+			if off < nearest and slot_refusal(item, holder, n).is_empty():
+				nearest = off
+				best = [holder, n]
+	return best
 
 
 ## `id`'s kind, said in the same breath: not `kind_of(id)`, which is also true of the dispenser
@@ -354,21 +630,25 @@ func _rehome() -> void:
 				item.snap_home()
 			Item.State.LOOSE:
 				var at := Vector2(item.resting.origin.x, item.resting.origin.z)
-				if not _can_lie(at):
+				if item.slot_in == &"" and not _can_lie(at):
 					item.snap_home()
 
 
 ## Every item that is not at home, as the room has it: {id: [x, y, z, yaw]} for one lying on
 ## the floor (and "stuck" and the quaternion it is turned by after, for one stuck in a board),
 ## {id: []} for one in a hand, {id: [true]} for one on a head, {id: ["pocket", n]} for one in a
-## pocket. One left out is on the
-## shelf.
+## pocket, {id: ["slot", holder, n]} for one in a slot (`holders`). One left out is on the
+## shelf, or, made, at its home (`made_home`). What a made item carries is never here.
 func state() -> Dictionary:
 	var out := {}
 	for id in items:
 		var item: Item = items[id]
 		match item.state:
 			Item.State.LOOSE:
+				# In a slot: which holder's, and which slot; where that is, the holder's.
+				if item.slot_in != &"":
+					out[id] = ["slot", String(item.slot_in), item.slot_n]
+					continue
 				var at := item.resting.origin
 				var entry := [at.x, at.y, at.z, item.resting.basis.get_euler().y]
 				# In the air: how it was thrown too, for a copy that has not flown it to fly.
@@ -421,6 +701,12 @@ func apply(room_items: Dictionary, pending: Dictionary = {}) -> void:
 		if spot.size() == 1:
 			item.set_pocket(-1)
 			item.set_worn(bool(spot[0]))
+			continue
+		# In a slot: laid there, unless it already is.
+		if spot.size() == 3 and spot[0] is String and spot[0] == "slot":
+			var holder := StringName(str(spot[1]))
+			if item.slot_in != holder or item.slot_n != int(spot[2]) or item.state != Item.State.LOOSE:
+				_lay_in_slot(item, holder, int(spot[2]))
 			continue
 		# In somebody's pocket: which, the room's; whose, the holds'.
 		if spot.size() == 2 and spot[0] is String and spot[0] == "pocket":
@@ -626,8 +912,20 @@ func send_home(item: Item) -> void:
 
 
 ## Put `item` down along `aim` (world space): where the aim meets the floor within reach, or at
-## the aimer's feet when it does not. Home if neither is somewhere it can lie.
+## the aimer's feet when it does not. Home if neither is somewhere it can lie. A made item let go
+## within SLOT_REACH of a slot, or aimed at a free one, goes into it instead (`slot_item`).
 func put_down(item: Item, aim: Transform3D) -> void:
+	# A made item let go by a slot goes into it -- or, the slot taken, stays in the hand and says
+	# so -- and one aimed at a free slot within reach goes there.
+	if is_made(item.id) and not holders.is_empty():
+		var near := slot_near(item.middle())
+		if not near.is_empty():
+			slot_item(item, near[0], near[1])
+			return
+		var along := free_slot_along(item, aim)
+		if not along.is_empty():
+			slot_item(item, along[0], along[1])
+			return
 	var local := global_transform.affine_inverse() * aim
 	var origin := local.origin
 	var toward := -local.basis.z.normalized()

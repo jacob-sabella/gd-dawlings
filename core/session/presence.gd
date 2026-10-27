@@ -490,6 +490,61 @@ func cable_end(peer: int, from: Vector3) -> Variant:
 	return avatar.nearer_glove(from)
 
 
+## Who a bandmate's ghost is along a ray from `origin` toward `direction` (global): the nearest
+## whose body passes within GIVE_RAY of it, no further than GIVE_RANGE; 0 for nobody. What a
+## desktop player clicks to hand over what they carry (docs/spatial_loop.md part two, slice 23).
+const GIVE_RAY := 0.35
+const GIVE_RANGE := 8.0
+
+
+func peer_at(origin: Vector3, direction: Vector3) -> int:
+	return int(peer_along(origin, direction)[0])
+
+
+## `peer_at`'s bandmate and how far along the ray their ghost is: [peer, metres], [0, INF] for
+## nobody. A click is theirs, not a control's, when they stand nearer than it (Studio's
+## `_press_ahead`): a bandmate is usually found in front of the desk or a station.
+func peer_along(origin: Vector3, direction: Vector3) -> Array:
+	var toward := direction.normalized()
+	var best := 0
+	var nearest := INF
+	for peer in _avatars:
+		var avatar: Avatar = _avatars[peer]
+		if not is_instance_valid(avatar) or not avatar.visible:
+			continue
+		# The head and the chest: a click on either is a click on them.
+		for at: Vector3 in [avatar.head_position(), avatar.head_position() + Vector3.DOWN * 0.35]:
+			var along := (at - origin).dot(toward)
+			if along <= 0.0 or along > GIVE_RANGE:
+				continue
+			if (origin + toward * along).distance_to(at) < GIVE_RAY and along < nearest:
+				nearest = along
+				best = peer
+	return [best, nearest]
+
+
+## Whose ghost's glove is within `reach` of `at` (global), the nearest; 0 for nobody's. A headset
+## player hands over what they carry by holding it there (Studio's GIVE_HOLD).
+func glove_near(at: Vector3, reach: float) -> int:
+	var best := 0
+	var nearest := reach
+	for peer in _avatars:
+		var avatar: Avatar = _avatars[peer]
+		if not is_instance_valid(avatar) or not avatar.visible:
+			continue
+		var d := avatar.nearer_glove(at).distance_to(at)
+		if d < nearest:
+			nearest = d
+			best = peer
+	return best
+
+
+## Where the item in `peer`'s hand is, for an item handed to them before the host has said so: the
+## same pose the holds will put it in (`_palm_of`).
+func palm_of(peer: int, item: Item) -> Callable:
+	return _palm_of.bind(peer, item)
+
+
 func _palm_of(peer: int, item: Item) -> Transform3D:
 	var avatar: Avatar = _avatars.get(peer)
 	if avatar == null or not is_instance_valid(avatar) or not avatar.visible:
@@ -534,13 +589,14 @@ func _on_item_flown(id: StringName, pose: Transform3D, mode: int, from: int) -> 
 		flier.hear(_from_session(pose), mode)
 
 
-## Somebody else squeezed what is in their hand: ours squeaks, in their glove, where it is.
-func _on_item_used(id: StringName, down: bool, from: int) -> void:
+## Somebody else squeezed what is in their hand: ours squeaks, in their glove, where it is, the
+## Foley take their hand rang (`take`; -1, not known, is this copy's own next).
+func _on_item_used(id: StringName, down: bool, from: int, take := -1) -> void:
 	if items == null or _item_holders.get(id, 0) != from:
 		return
 	var item: Item = items.items.get(id)
 	if item != null:
-		item.use(down)
+		item.heard_use(down, take)
 
 
 ## Somebody's keys: if the keytar is in their hands, it plays them, out of the keytar. Only

@@ -44,8 +44,8 @@ func pitch() -> int:
 	return 54
 
 
-func sound(struck: bool, take: int) -> AudioStream:
-	return Foley.tambourine_hit(take) if struck else Foley.jingle(take)
+func sound_kind(struck: bool) -> StringName:
+	return &"tambourine_hit" if struck else &"jingle"
 
 
 func _build_body() -> Node3D:

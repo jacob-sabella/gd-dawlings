@@ -45,6 +45,13 @@ var tablets: Dictionary = {}
 ## The tracks this participant has pulled out of the rack onto racks of their own:
 ## {stand id: track index}. Where each stands is a floor transform, "floor/<stand id>".
 var track_racks: Dictionary = {}
+## The made items this participant's room has, as its host (docs/spatial_loop.md part two, slice
+## 23): {id: [kind, maker, bytes, where]}, Session.made's row and where it was (ItemRoom.state's
+## entry, [] for at its home). Kept beside the profile in a file of its own (`made_path`), written
+## only when it changes (`set_made`): a room's cassettes can be megabytes, and the profile is
+## written whenever a stand is pushed.
+var made: Dictionary = {}
+var _made_dirty := false
 ## Whether this participant reads the timeline as shelves of blocks (TimelineSurface.shelf), as
 ## it is first shown, or as flat lanes.
 var timeline_shelves := true
@@ -104,6 +111,24 @@ func save() -> void:
 	for id in track_racks:
 		cfg.set_value("track_racks", String(id), track_racks[id])
 	cfg.save(save_path)
+	if _made_dirty:
+		_made_dirty = false
+		var f := FileAccess.open(made_path(), FileAccess.WRITE)
+		if f != null:
+			f.store_var(made)
+
+
+## Where `made` is kept: beside the profile.
+func made_path() -> String:
+	return save_path.get_basename() + "_made.bin"
+
+
+## The room's made items are `rows` now (see `made`): written with the next save.
+func set_made(rows: Dictionary) -> void:
+	if rows == made:
+		return
+	made = rows
+	_made_dirty = true
 
 
 func load_saved() -> void:
@@ -130,3 +155,12 @@ func load_saved() -> void:
 	if cfg.has_section("track_racks"):
 		for key in cfg.get_section_keys("track_racks"):
 			track_racks[StringName(key)] = int(cfg.get_value("track_racks", key))
+	var f := FileAccess.open(made_path(), FileAccess.READ)
+	if f != null:
+		var kept: Variant = f.get_var()
+		if kept is Dictionary:
+			for id in kept:
+				var row: Variant = kept[id]
+				if row is Array and (row as Array).size() == 4 and ItemRoom.is_made(StringName(id)) \
+						and row[2] is PackedByteArray and (row[2] as PackedByteArray).size() <= ItemRoom.MADE_BYTES:
+					made[StringName(id)] = row

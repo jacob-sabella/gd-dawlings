@@ -1688,6 +1688,16 @@ func insert_audio_take(track_index: int, start: float, source: String, length: f
 	_remember_edit(before)
 
 
+## The cassette's clip as an item of its own here, `part` and all: one step, as a take is.
+func paste_item(track_index: int, start: float, packed: Dictionary) -> void:
+	var item := MixWire.unpack_item(packed)
+	if item == null or not state.tracks.has(track_index):
+		return
+	var before := _lanes_snapshot()
+	_locally_paste(track_index, start, item)
+	_remember_edit(before)
+
+
 ## An edit is one step, never folded: two moves in a row are two things you might take back.
 func _remember_edit(before: Dictionary) -> void:
 	var after := _lanes_snapshot()
@@ -1763,9 +1773,17 @@ func set_automation(track_index: int, target: String, points: Array) -> void:
 var _followed_at := NAN
 
 
+## Let go, the lane is followed again at once, so the control goes to what the pass wrote.
+func _hold_lane(_track_index: int, _target: String, on: bool) -> void:
+	if not on:
+		_followed_at = NAN
+
+
 ## Every automated control to where its lane says at the playhead, as Reaper's read mode does:
 ## the control moves on the desk, for everyone, and the mix follows the control. Not history. While
-## stopped only when the playhead has moved, so a control can still be set by hand there.
+## stopped only when the playhead has moved, so a control can still be set by hand there. A held
+## lane (hold_lane: a write bead out over its control) is not followed, here or by the built-in
+## engine, which plays what this leaves on the controls.
 func follow_automation() -> void:
 	var at := state.position_seconds
 	_tick_passes(at)
@@ -1773,7 +1791,7 @@ func follow_automation() -> void:
 		return
 	_followed_at = at
 	for target in state.master.automation:
-		if _passes.has([0, target]):
+		if _passes.has([0, target]) or held_lanes.has([0, str(target)]):
 			continue
 		var mv := DawKitAutomation.value_in(state.master.automation[target], at)
 		if target == "volume" and not is_equal_approx(state.master.volume_db, mv):
@@ -1786,7 +1804,7 @@ func follow_automation() -> void:
 	for index in state.tracks:
 		var t: MixState.TrackState = state.tracks[index]
 		for target in t.automation:
-			if _passes.has([index, target]):
+			if _passes.has([index, target]) or held_lanes.has([int(index), str(target)]):
 				continue
 			var v := DawKitAutomation.value_in(t.automation[target], at)
 			var kind := DawKitAutomation.kind_of(target)
@@ -1850,6 +1868,10 @@ var _passes := {}
 ## the master.
 func _writes_lane(track_index: int, target: String, value: float, was: float) -> bool:
 	if _replaying or not state.playing or (track_index != 0 and not state.tracks.has(track_index)):
+		return false
+	# A write bead's lane: its writes are ordinary sets inside its pass's edit, and the bead
+	# writes the lane itself when the pass ends, whatever mode the track is in.
+	if held_lanes.has([track_index, target]):
 		return false
 	var mode := state.master.automation_mode if track_index == 0 else state.track(track_index).automation_mode
 	if mode != DAW.AUTOMATION_TOUCH and mode != DAW.AUTOMATION_LATCH:

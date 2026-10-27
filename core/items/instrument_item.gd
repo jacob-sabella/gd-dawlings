@@ -226,9 +226,19 @@ static func now() -> float:
 	return DAW.state.position_seconds if DAW.state != null else 0.0
 
 
-## The sound of a hit: shaken, or `struck`.
-func sound(_struck: bool, take: int) -> AudioStream:
-	return Foley.shaker(take)
+## The sound of a hit: shaken, or `struck`, Foley's take `take` of its kind (`sound_kind`).
+func sound(struck: bool, take: int) -> AudioStream:
+	return Foley.take_of(sound_kind(struck), take)
+
+
+## Override: which of Foley's sounds (Foley.take_of) a hit rings, shaken or `struck`.
+func sound_kind(_struck: bool) -> StringName:
+	return &"shaker"
+
+
+## A click rings it struck (`use`): the sampler (Sampler) catches that sound.
+func use_kind(down: bool) -> StringName:
+	return sound_kind(true) if down else &""
 
 
 ## A click. Somebody else's click on a pitched item is not rung from here: it comes as a hit
@@ -238,8 +248,10 @@ func use(down: bool) -> void:
 		return
 	if carried_by != null:
 		play(STRUCK, true)
+		use_take = _take
 	elif not pitched():
-		heard(STRUCK, true)
+		heard(STRUCK, true, -1.0, _heard_take)
+		use_take = _heard_take if _heard_take >= 0 else _take
 
 
 ## A hit by a hand here: in this player's ears at once, and out to the room and the take. The song

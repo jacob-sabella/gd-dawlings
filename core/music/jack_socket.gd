@@ -88,6 +88,10 @@ var _cable: MeshInstance3D
 var _boot: MeshInstance3D
 var _cable_ends := [Vector3.INF, Vector3.INF]
 var _cable_in := 0.0
+## The lead's centre line in the lead's own space, and the cable's into a bandmate in world space:
+## what the beads ride (SignalBeads).
+var _lead_spine := PackedVector3Array()
+var _cable_spine := PackedVector3Array()
 
 
 func _init(on: InstrumentItem = null, named := &"") -> void:
@@ -107,6 +111,8 @@ func _init(on: InstrumentItem = null, named := &"") -> void:
 func _enter_tree() -> void:
 	super()
 	add_to_group(SOCKETS)
+	if not into_me:
+		add_to_group(SignalBeads.CARRIERS)
 
 
 ## What it plugs: the item's id, this player's keys, or the source it was made for.
@@ -267,7 +273,8 @@ func _follow_cable(delta: float) -> void:
 	_cable_in = 1.0 / CABLE_HZ
 	_cable_ends = [from, to]
 	_cable.global_transform = Transform3D.IDENTITY
-	_cable.mesh = CableSweep.tube(slack(from, (_look.global_basis * Vector3.FORWARD).normalized(), to), CABLE_RADIUS, 8)
+	_cable_spine = slack(from, (_look.global_basis * Vector3.FORWARD).normalized(), to)
+	_cable.mesh = CableSweep.tube(_cable_spine, CABLE_RADIUS, 8)
 	_cable.layers = _body_layers() if item != null else 1
 	_cable.visible = _cable.mesh != null
 
@@ -280,6 +287,37 @@ static func slack(from: Vector3, out: Vector3, to: Vector3) -> PackedVector3Arra
 	middle.y = maxf(minf(from.y, to.y) - 0.08 - span * 0.18, 0.03)
 	return CableSweep.smooth(PackedVector3Array([from, from + out * 0.05, middle,
 			to + Vector3.DOWN * 0.06, to]), 8)
+
+
+# --- what its beads ride (SignalBeads) ----------------------------------------------------
+
+## The cable into a bandmate while it runs, else the short lead while it hangs, in world space;
+## nothing unplugged.
+func signal_spine() -> PackedVector3Array:
+	if sink == &"" or _look == null:
+		return PackedVector3Array()
+	if cable_running():
+		return _cable_spine
+	if _lead != null and _lead.is_visible_in_tree():
+		return _lead.global_transform * _lead_spine
+	return PackedVector3Array()
+
+
+func signal_length() -> float:
+	return SignalBeads.length_of(signal_spine())
+
+
+## What it plays, as its last hit fades (Jacks.level_of): still when nothing is playing, and
+## nothing unplugged.
+func signal_level() -> float:
+	if sink == &"":
+		return 0.0
+	var jacks := Jacks.of(self)
+	return jacks.level_of(source_id()) if jacks != null else 0.0
+
+
+func signal_radius() -> float:
+	return CABLE_RADIUS if cable_running() else LEAD_RADIUS
 
 
 ## Whether the cable into a bandmate is running, and where its far end is.
@@ -383,6 +421,7 @@ func _build_lead() -> Node3D:
 	var spine := CableSweep.smooth(PackedVector3Array([
 			Vector3(0, 0, out - 0.024), Vector3(0, -0.006, out - 0.045),
 			Vector3(0.008, -0.045, out - 0.062), Vector3(0.012, -LEAD_DROP + 0.02, out - 0.066)]), 6)
+	_lead_spine = spine
 	var tube := MeshInstance3D.new()
 	tube.name = "Cable"
 	tube.mesh = CableSweep.tube(spine, LEAD_RADIUS, 10)

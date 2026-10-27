@@ -155,6 +155,18 @@ var step := 0.0
 ## not close all the way, or that tremble while held; down for someone whose hand at rest has its
 ## fingertips near the thumb. 1 is the measured default.
 var finger_scale := 1.0
+## Whether the room moves to the music (Venue.reactive): the venue's lights breathing with the
+## master, its sparks, the practicals lifting on a clip. Off, the room holds its authored look.
+var room_reacts := true
+## Whether a clip lifts the room's practicals (Venue.lift_on_clip), while the room reacts at all.
+var lift_on_clip := true
+
+## COMFORT (the session panel, docs/spatial_loop.md part two, slice 21): Motion's three settings
+## as motion_scale, their names in the same order, and where they are kept -- the body's own file
+## (HEIGHT_PATH), beside the height, in a section of their own.
+const MOTION_STEPS: Array[float] = [1.0, 0.4, 0.0]
+const MOTION_NAMES: Array[String] = ["Full", "Gentle", "Still"]
+const COMFORT := "comfort"
 
 # --- derived geometry -----------------------------------------------------------------------
 
@@ -202,6 +214,58 @@ static func save_height(height: float, path: String) -> void:
 	file.load(path)
 	file.set_value("body", "height", clampf(height, HEIGHT_RANGE.x, HEIGHT_RANGE.y))
 	file.save(path)
+
+
+## Which of MOTION_STEPS `scale` is nearest: 0 full, 1 gentle, 2 still.
+static func motion_step(scale: float) -> int:
+	var best := 0
+	for i in MOTION_STEPS.size():
+		if absf(MOTION_STEPS[i] - scale) < absf(MOTION_STEPS[best] - scale):
+			best = i
+	return best
+
+
+## What COMFORT has kept at `path`: {"motion", "room_reacts", "lift_on_clip"}, only those said.
+static func load_comfort(path: String) -> Dictionary:
+	var file := ConfigFile.new()
+	if path.is_empty() or file.load(path) != OK or not file.has_section(COMFORT):
+		return {}
+	var out := {}
+	for key in file.get_section_keys(COMFORT):
+		match key:
+			"motion": out[key] = clampf(float(file.get_value(COMFORT, key, 1.0)), 0.0, 1.0)
+			"room_reacts", "lift_on_clip": out[key] = bool(file.get_value(COMFORT, key, true))
+	return out
+
+
+## Keep `values` (any of COMFORT's keys) at `path`, leaving the height and every other key as it
+## was: one choice in the box writes only itself.
+static func save_comfort(path: String, values: Dictionary) -> void:
+	if path.is_empty():
+		return
+	var file := ConfigFile.new()
+	file.load(path)
+	for key in values:
+		if key in ["motion", "room_reacts", "lift_on_clip"]:
+			file.set_value(COMFORT, key, values[key])
+	file.save(path)
+
+
+## This body's COMFORT as kept at `path`, then `--no-motion` over it: still, and a room that does
+## not move to the music, whatever was kept. The launch's own word wins over any saved one.
+func take_comfort(path: String, no_motion: bool) -> void:
+	var kept := load_comfort(path)
+	motion_scale = kept.get("motion", motion_scale)
+	room_reacts = kept.get("room_reacts", room_reacts)
+	lift_on_clip = kept.get("lift_on_clip", lift_on_clip)
+	if no_motion:
+		motion_scale = 0.0
+		room_reacts = false
+
+
+## COMFORT as it is now, as `save_comfort` keeps it.
+func comfort() -> Dictionary:
+	return {"motion": motion_scale, "room_reacts": room_reacts, "lift_on_clip": lift_on_clip}
 
 
 static func standing() -> Ergonomics:

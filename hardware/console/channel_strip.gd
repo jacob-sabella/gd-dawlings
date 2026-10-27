@@ -30,6 +30,11 @@ var pre: PanelButton
 var _name_label: Label3D
 var _db_label: Label3D
 var _name_tab: NameTab
+## Whether this track is shown clipping (slice 21): its level readout is its OVER lamp, the word
+## OVER lit in the over colour while it is over 0 dBFS and MasterSection.OVER_HOLD after. A lamp
+## of its own would be ninety more objects on a desk this size; the readout is already there.
+var over := false
+var _over_hold := 0.0
 
 ## Where this strip's repeated geometry gets drawn, if the console gave it somewhere. See
 ## hardware/mesh_bank.gd -- ninety strips of three buttons is 540 objects otherwise. All seven
@@ -126,6 +131,8 @@ func _ready() -> void:
 	_pan.describe_title = func() -> String:
 		return _caption_for("PAN") if send_dest <= 0 else _caption_for("SEND PAN TO " + _dest_name())
 	_pan.describe_value = Knob.pan_text
+	# A send's pan has no lane to write (DawKitAutomation names a send's level only).
+	_pan.automates = func() -> Array: return [track_index, "pan"] if send_dest <= 0 else []
 	add_child(_pan)
 
 	_rec = PanelButton.new()
@@ -159,6 +166,13 @@ func _ready() -> void:
 	_mute.scale = Vector3(BUTTON_SCALE, BUTTON_SCALE, 1.0)
 	_mute.describe_title = func() -> String: return _caption_for("MUTE")
 	_mute.pressed.connect(func(): DAW.set_track_mute(track_index, not _state().mute))
+	# A bead over the mute writes its lane: held over the middle of the bead's travel is muted. A
+	# write is only a change, but a still bead's keep-alive (`again`) is written as it stands, so
+	# the pass's edit is not closed as idle between the flip and the pass's end.
+	_mute.automates = func() -> Array: return [track_index, "mute"]
+	_mute.bead_writes = func(v: float, again: bool) -> void:
+		if again or (v >= 0.5) != _state().mute:
+			DAW.set_track_mute(track_index, v >= 0.5)
 	add_child(_mute)
 
 	# Input monitoring, under the three. Its lamp is a dot: the fourth silhouette, after the bar,
@@ -225,6 +239,11 @@ func _ready() -> void:
 	_fader.edits_as_one = true
 	_fader.describe_title = func() -> String:
 		return _caption_for("LEVEL") if send_dest <= 0 else _caption_for("SEND TO " + _dest_name())
+	# Its level's lane, or flipped the send's to the return the desk shows, named by where it goes.
+	_fader.automates = func() -> Array:
+		if send_dest <= 0:
+			return [track_index, "volume"]
+		return [track_index, "send:%d" % send_dest] if send_slot() > 0 else []
 	add_child(_fader)
 
 	var meter := VUMeter.new()
@@ -235,7 +254,23 @@ func _ready() -> void:
 	_db_label = _make_label(DB_SIZE / 4, Vector3(0, 0.022, 0.001))
 	add_child(_db_label)
 
+	# A cassette pressed on any of the strip's own controls pastes on its track at the playhead
+	# (docs/spatial_loop.md part two, slice 24). Not the send socket: that is a plug's.
+	for control: ControlAffordance in [_name_tab, _pan, _rec, _solo, _mute, _monitor, pre, _fader]:
+		control.pastes_onto = func() -> int: return track_index
+
 	DAW.track_changed.connect(_on_track_changed)
+	refresh()
+
+
+## This track clipping now (`now`), `delta` seconds on: OVER while it does and for
+## MasterSection.OVER_HOLD after. Written only when it changes.
+func show_over(now: bool, delta: float) -> void:
+	_over_hold = MasterSection.OVER_HOLD if now else maxf(_over_hold - delta, 0.0)
+	var lit := now or _over_hold > 0.0
+	if lit == over:
+		return
+	over = lit
 	refresh()
 
 
@@ -382,6 +417,9 @@ func refresh() -> void:
 	else:
 		_db_label.text = "NO SEND"
 		_db_label.modulate = ABSENT_INK
+	if over:
+		_db_label.text = "OVER"
+		_db_label.modulate = Ergonomics.current.signal_colour(&"over")
 	# A strip with no send to the return has nothing for the fader to move. Taken off the
 	# collision layer rather than left grabbable: a cap that slides and changes nothing is a
 	# control lying about what it does.

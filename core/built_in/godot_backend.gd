@@ -15,19 +15,34 @@ extends OfflineBackend
 ##     reverb return returns reverb. The send bus holds the track's own pan and effect objects
 ##     (as a cue does), then the send's pan, and the player plays at the send level times the
 ##     fader: post-effects, post-fader, as Reaper sends by default;
-##   - a track's width (TrackState.width, the stage table's ring) as an AudioEffectStereoEnhance in
-##     the bus's tail, after the panner and every effect: its pan_pullout is the width. Only the
-##     track's own bus has one; its cue, probe and send copies take the effect slots alone;
+##   - a track's width (TrackState.width, the stage table's ring) and then its pan in the bus's
+##     tail, after every effect: an AudioEffectStereoEnhance whose pan_pullout is the width, then
+##     the AudioEffectPanner that is the pan. Width before pan, as Reaper's stereo pan has it: the
+##     enhancer folds each side toward the middle, so after the pan it would pull a panned track
+##     back to the centre. Slot 0 stays a panner left at the centre, so `1 + fx` is still each
+##     effect's slot. Only the track's own bus has the tail; its cue, probe and send copies take
+##     the effect slots alone;
+##   - a sidechain (a key send, SendState.key; docs/spatial_loop.md slice 20): a send bus like any
+##     other, but played into KEYS_BUS, a muted bus that goes nowhere, rather than into its
+##     destination's mix. Every compressor on the destination listens to it: its
+##     AudioEffectCompressor.sidechain is the key's bus by name (`listen`), and with no key into
+##     the track again, its own input;
 ##   - meters read off the buses' peaks rather than synthesised;
 ##   - a cue per track on request (`set_cues`): a third player of the part, through the track's
 ##     own effects but not its fader, on a bus that plays to this machine's headphones only;
+##   - a lean (`set_lean`, Ears.lean; docs/spatial_loop.md slice 19): one track's cue more, kept
+##     at the track's own fader plus LEAN_DB, heard with headphones on or off while the mix comes
+##     down under it, in this player's ears alone;
 ##   - a demo song (DemoSong), one synthesised part per instrument, played through the
 ##     timeline's items: an item is a window in which its track's part sounds;
 ##   - MIDI items played through the built-in instrument (DawKitTine), rendered per item; their
 ##     drum and handbell notes (channels 9 and 10) as drums and bells (ItemVoices).
 ##
 ## It is driven from the state's own signals rather than by overriding each command, so undo,
-## redo, a guest's intent and a local hand all reach the speakers by the one path.
+## redo, a guest's intent and a local hand all reach the speakers by the one path. Automation too:
+## the stand-in's `follow_automation` moves the controls and this plays them, so a lane held by a
+## write bead (`hold_lane`, docs/spatial_loop.md part two slice 22) is not followed and what is
+## heard is the control the bead is moving.
 ##
 ##   - third-party plugins (CLAP, VST3, LV2: PluginCatalogue, HostedPlugins) beside Godot's
 ##     effects, with their own windows on the tablet, and instrument plugins playing a track's
@@ -41,6 +56,12 @@ extends OfflineBackend
 const BUS_PREFIX := "R3D "
 const MASTER_BUS := "R3D Master"
 const CUE_PREFIX := "R3D Cue "
+## Where the key sends play: a bus with nothing after it, muted, so a key is heard only by the
+## compressors listening to it. A compressor reads its key bus's own buffer, which the mixer has
+## filled (and, for a bus it has already mixed, scaled by that bus's volume and mute) by the time
+## the compressor's bus is mixed, so the key buses play at full volume and only this one is muted.
+## Before the track buses, so every key bus can send to it (a bus sends only to one before it).
+const KEYS_BUS := "R3D Keys"
 ## How far a player may move from where it started against the song clock before it is put back
 ## (see `_drift`). Every player and the clock are moved by the same mixer, so this is for a player
 ## that stalled or was starved, not for steady running; a re-seek is a small click. More than a
@@ -87,6 +108,10 @@ var _master_bus := -1
 var _capture: AudioEffectCapture
 ## The tracks being cued, in order.
 var _cues: Array[int] = []
+## The track leant in to (`set_lean`), 0 for none: cued as well as `_cues`, at its fader plus LEAN_DB.
+var _lean := 0
+## How much louder than its own fader a track leant in to is (dB).
+const LEAN_DB := 6.0
 ## The points in a chain being probed (`set_taps`): Vector2i(track, slot), in order.
 var _taps: Array[Vector2i] = []
 ## The song clock (`_drive_meters`): a silent loop, how many times it has gone round, where it was
@@ -411,7 +436,7 @@ func add_effect(track_index: int, kind: StringName, settings := {}) -> int:
 		_kinds[track_index] = {}
 	_kinds[track_index][fx_index] = kind
 	if _bus.has(track_index):
-		# Before the tail, so slot 1 + fx_index is still this effect and the width stays last.
+		# Before the tail, so slot 1 + fx_index is still this effect and the width and pan stay last.
 		AudioServer.add_bus_effect(_bus[track_index], _make_effect(kind), 1 + fx_index)
 		_apply_fx(track_index, fx_index)
 		_build_sends(track_index)
@@ -507,7 +532,7 @@ func _restack(track_index: int) -> void:
 	if not _bus.has(track_index):
 		return
 	var b: int = _bus[track_index]
-	# Every effect slot, between the panner and the width, which are the track's own and not
+	# Every effect slot, between slot 0 and the tail (width, pan), which are the track's own and not
 	# plugins; a capture a render has hung on the end stays where it is.
 	for i in range(_fx_end(b) - 1, 0, -1):
 		AudioServer.remove_bus_effect(b, i)
@@ -598,6 +623,11 @@ func _build_buses() -> void:
 	_capture = AudioEffectCapture.new()
 	_capture.buffer_length = 0.25
 	AudioServer.add_bus_effect(_master_bus, _capture)
+	var keys := AudioServer.bus_count
+	AudioServer.add_bus(keys)
+	AudioServer.set_bus_name(keys, KEYS_BUS)
+	AudioServer.set_bus_send(keys, MASTER_BUS)
+	AudioServer.set_bus_mute(keys, true)
 
 	for index in state.track_indices():
 		var b := AudioServer.bus_count
@@ -609,6 +639,7 @@ func _build_buses() -> void:
 		for fx_index in kinds.size():
 			AudioServer.add_bus_effect(b, _make_effect(kinds[fx_index]))
 		AudioServer.add_bus_effect(b, AudioEffectStereoEnhance.new())
+		AudioServer.add_bus_effect(b, AudioEffectPanner.new())
 	for index in _bus:
 		var parent := parent_of(index)
 		AudioServer.set_bus_send(_bus[index],
@@ -624,7 +655,7 @@ func _build_buses() -> void:
 	_built_sends.clear()
 	for index in state.track_indices():
 		_build_sends(index)
-	if not _cues.is_empty() or not _taps.is_empty():
+	if not _cued_tracks().is_empty() or not _taps.is_empty():
 		_build_cues()
 
 
@@ -645,7 +676,8 @@ func _send_shape(index: int) -> Array:
 
 ## A track's send buses and players, made again: one bus per send into its destination, holding
 ## the track's pan, then the track bus's own effect objects (a knob on the rack turns the send's
-## too), then the send's pan.
+## too), then the send's pan. A key send's bus plays into KEYS_BUS instead, where only the
+## destination's compressors hear it (`listen`).
 func _build_sends(index: int) -> void:
 	if not _bus.has(index):
 		return
@@ -662,14 +694,14 @@ func _build_sends(index: int) -> void:
 	_built_sends[index] = _send_shape(index)
 	for row in _built_sends[index]:
 		var dest: int = row[1]
-		# A key goes to a detector, and nothing here listens for one: playing it into the
-		# destination's mix would make a sidechain an ordinary send.
-		if row[2] or not _bus.has(dest):
+		if not _bus.has(dest):
 			continue
 		var sb := AudioServer.bus_count
 		AudioServer.add_bus(sb)
 		AudioServer.set_bus_name(sb, send_bus(index, dest))
-		AudioServer.set_bus_send(sb, AudioServer.get_bus_name(_bus[dest]))
+		# A key goes to the destination's detectors, never into its mix: that would make a
+		# sidechain an ordinary send.
+		AudioServer.set_bus_send(sb, KEYS_BUS if row[2] else AudioServer.get_bus_name(_bus[dest]))
 		AudioServer.add_bus_effect(sb, AudioEffectPanner.new())
 		for slot in range(1, _fx_end(b)):
 			AudioServer.add_bus_effect(sb, AudioServer.get_bus_effect(b, slot))
@@ -682,6 +714,32 @@ func _build_sends(index: int) -> void:
 		list.append(p)
 	_players[index] = list
 	_apply_tracks()
+	listen()
+
+
+## The bus of the first key send into track `index` (by `send_bus`), or empty for none.
+func key_bus_into(index: int) -> StringName:
+	var from: Array = _built_sends.keys()
+	from.sort()
+	for source in from:
+		for row in _built_sends[source]:
+			if row[2] and int(row[1]) == index and AudioServer.get_bus_index(send_bus(source, index)) >= 0:
+				return StringName(send_bus(source, index))
+	return &""
+
+
+## Every compressor on every track listening to the key sent into that track, or to its own input
+## with none: AudioEffectCompressor.sidechain is the key's bus by name. On the effect objects, so
+## the track's cue and send copies, which hold the same objects, listen too. After any send or
+## chain is made again.
+func listen() -> void:
+	for index in _bus:
+		var key := key_bus_into(index)
+		var b: int = _bus[index]
+		for slot in range(1, _fx_end(b)):
+			var comp := AudioServer.get_bus_effect(b, slot) as AudioEffectCompressor
+			if comp != null and comp.sidechain != key:
+				comp.sidechain = key
 
 
 ## The bus a track's cue plays on, by name: whatever its level, it is heard only through a pair
@@ -712,6 +770,30 @@ func cues() -> Array[int]:
 	return _cues.duplicate()
 
 
+## Lean in to track `index`, or 0 for none: a cue of it as `set_cues` makes one, beside theirs,
+## whose bus `_apply_tracks` keeps at the track's own fader (and its VCA) plus LEAN_DB, so the
+## track lifts out of the mix by that much over Ears' lowered mix, and follows its fader while it
+## is leant in to. Nothing in the state changes.
+func set_lean(index: int) -> void:
+	var want := index if state.tracks.has(index) else 0
+	if want == _lean:
+		return
+	_lean = want
+	_build_cues()
+
+
+func leaning() -> int:
+	return _lean
+
+
+## The tracks with a cue: the personal mix's and the lean's.
+func _cued_tracks() -> Array[int]:
+	var out := _cues.duplicate()
+	if _lean > 0 and _lean not in out:
+		out.append(_lean)
+	return out
+
+
 ## The bus a probe at one point in a track's chain plays on: the track as it leaves the plugin in
 ## `slot`, before the ones after it. Heard only through headphones, as a cue is.
 static func tap_bus(index: int, slot: int) -> StringName:
@@ -740,7 +822,7 @@ func taps() -> Array[Vector2i]:
 
 ## Whether a track has a cue or a probe on it, which an effect changing must build again.
 func _cued(index: int) -> bool:
-	return index in _cues or _taps.any(func(t: Vector2i) -> bool: return t.x == index)
+	return index in _cued_tracks() or _taps.any(func(t: Vector2i) -> bool: return t.x == index)
 
 
 ## The cue buses and their players, made again from `_cues`. Each bus holds the track bus's own
@@ -758,7 +840,7 @@ func _build_cues() -> void:
 	for i in range(AudioServer.bus_count - 1, 0, -1):
 		if AudioServer.get_bus_name(i).begins_with(CUE_PREFIX):
 			AudioServer.remove_bus(i)
-	for index in _cues:
+	for index in _cued_tracks():
 		if not _bus.has(index):
 			continue
 		var b: int = _bus[index]
@@ -766,8 +848,8 @@ func _build_cues() -> void:
 		AudioServer.add_bus(cb)
 		AudioServer.set_bus_name(cb, cue_bus(index))
 		AudioServer.set_bus_send(cb, &"Master")
-		# Past the panner, which is the track's place in the mix and not its sound, and short of
-		# the width, which is its place too.
+		# Past slot 0 and short of the tail (the width, then the pan), which are the track's
+		# place in the mix and not its sound.
 		for slot in range(1, _fx_end(b)):
 			AudioServer.add_bus_effect(cb, AudioServer.get_bus_effect(b, slot))
 			AudioServer.set_bus_effect_enabled(cb, slot - 1, AudioServer.is_bus_effect_enabled(b, slot))
@@ -784,7 +866,7 @@ func _build_cues() -> void:
 		AudioServer.add_bus(tb)
 		AudioServer.set_bus_name(tb, tap_bus(at.x, at.y))
 		AudioServer.set_bus_send(tb, &"Master")
-		# Past the panner, up to and including the probed slot (bus slot 1 + fx slot).
+		# Past slot 0, up to and including the probed slot (bus slot 1 + fx slot).
 		for slot in range(1, mini(at.y + 2, _fx_end(b))):
 			AudioServer.add_bus_effect(tb, AudioServer.get_bus_effect(b, slot))
 			AudioServer.set_bus_effect_enabled(tb, slot - 1, AudioServer.is_bus_effect_enabled(b, slot))
@@ -874,13 +956,25 @@ func _apply_tracks() -> void:
 		var b: int = _bus[index]
 		AudioServer.set_bus_volume_db(b, taper_to_db(t.volume) + (state.vca_db(t.group) if t.volume > 0.0 else 0.0))
 		AudioServer.set_bus_mute(b, not audible(index))
-		(AudioServer.get_bus_effect(b, 0) as AudioEffectPanner).pan = (t.pan - 0.5) * 2.0
+		# Slot 0 holds the rack's place and is left at the centre; the pan is the tail's, after
+		# the width, so narrowing a panned track keeps it where it was put.
+		(AudioServer.get_bus_effect(b, 0) as AudioEffectPanner).pan = 0.0
 		var wide := width_effect(index)
 		if wide != null:
 			wide.pan_pullout = clampf(t.width, 0.0, 1.0)
+		var panner := pan_effect(index)
+		if panner != null:
+			panner.pan = (t.pan - 0.5) * 2.0
 		for p in _players.get(index, []):
 			if p.has_meta(&"cue"):
-				AudioServer.set_bus_mute(AudioServer.get_bus_index(p.bus), t.mute)
+				var cb := AudioServer.get_bus_index(p.bus)
+				AudioServer.set_bus_mute(cb, t.mute)
+				# Leant in to: as loud as its fader has it in the mix, and LEAN_DB more.
+				if index == _lean and p.bus == cue_bus(index):
+					AudioServer.set_bus_volume_db(cb, taper_to_db(t.volume) + LEAN_DB
+							+ (state.vca_db(t.group) if t.volume > 0.0 else 0.0))
+				elif p.bus == cue_bus(index):
+					AudioServer.set_bus_volume_db(cb, 0.0)
 			elif p.has_meta(&"send"):
 				var send: MixState.SendState = t.sends.get(p.get_meta(&"send"))
 				# Post-fader, the way a reverb send usually is: the track's own fader is folded
@@ -890,7 +984,9 @@ func _apply_tracks() -> void:
 				p.volume_db = taper_to_db(send.volume) + (0.0 if pre else taper_to_db(t.volume)) \
 						if send != null else -80.0
 				var sb := AudioServer.get_bus_index(p.bus)
-				AudioServer.set_bus_mute(sb, not audible(index))
+				# A key follows its track's own mute, not the desk's solos: a soloed bass still ducks
+				# under the kick it is keyed by.
+				AudioServer.set_bus_mute(sb, t.mute if send != null and send.key else not audible(index))
 				# The track's pan first, as the track bus has it, then the send's own.
 				var last := AudioServer.get_bus_effect_count(sb) - 1
 				(AudioServer.get_bus_effect(sb, 0) as AudioEffectPanner).pan = 0.0 if pre else (t.pan - 0.5) * 2.0
@@ -898,8 +994,8 @@ func _apply_tracks() -> void:
 					(AudioServer.get_bus_effect(sb, last) as AudioEffectPanner).pan = (send.pan - 0.5) * 2.0
 
 
-## Where a track bus's effect slots end: the place of its width (the AudioEffectStereoEnhance in
-## its tail), or the end of the bus when it has none. Found by kind, not counted, because a
+## Where a track bus's effect slots end: the place of its width (the AudioEffectStereoEnhance that
+## starts its tail, the pan after it), or the end of the bus when it has none. Found by kind, not counted, because a
 ## render's capture may hang after it for a while.
 func _fx_end(b: int) -> int:
 	for i in range(AudioServer.get_bus_effect_count(b) - 1, 0, -1):
@@ -915,6 +1011,16 @@ func width_effect(track_index: int) -> AudioEffectStereoEnhance:
 	var b: int = _bus[track_index]
 	var at := _fx_end(b)
 	return AudioServer.get_bus_effect(b, at) as AudioEffectStereoEnhance if at < AudioServer.get_bus_effect_count(b) else null
+
+
+## The effect that is a track's pan on its bus: the panner just after its width, so the width is
+## taken before the pan. Null before its bus is built.
+func pan_effect(track_index: int) -> AudioEffectPanner:
+	if not _bus.has(track_index):
+		return null
+	var b: int = _bus[track_index]
+	var at := _fx_end(b) + 1
+	return AudioServer.get_bus_effect(b, at) as AudioEffectPanner if at < AudioServer.get_bus_effect_count(b) else null
 
 
 func _apply_fx(track_index: int, fx_index: int) -> void:
@@ -984,7 +1090,20 @@ func _roles() -> Array:
 		var role: String = state.tracks[index].part
 		if role != "" and role not in out:
 			out.append(role)
+		# And the parts items carry of their own (ItemState.part): a demo cassette pasted here.
+		for it in state.tracks[index].items:
+			var own: String = (it as MixState.ItemState).part
+			if own != "" and own not in out and DemoSong.ROLES.values().has(own):
+				out.append(own)
 	return out
+
+
+## The demo part `it` plays on track `index`: its own (ItemState.part, docs/spatial_loop.md part
+## two, slice 23) where it has one, before its track's. "" for none.
+func part_of(index: int, it: MixState.ItemState) -> String:
+	if it != null and it.part != "":
+		return it.part
+	return state.tracks[index].part
 
 
 func _waiting_roles() -> Array:
@@ -1147,16 +1266,16 @@ func _sync_players() -> void:
 			expected = pos - it.start
 			if stream != null and expected >= stream.get_length():
 				stream = null
-		elif it != null and parts_windowed() and state.tracks[index].part != "":
+		elif it != null and parts_windowed() and part_of(index, it) != "":
 			# Through the tempo's changes: the window holding the playhead, played from its start.
-			var window := _part_window(state.tracks[index].part, pos)
+			var window := _part_window(part_of(index, it), pos)
 			if not window.is_empty():
 				stream = window[0]
 				expected = pos - float(window[1])
 				if expected < 0.0 or expected >= stream.get_length():
 					stream = null
 		elif it != null:
-			stream = _parts.get(state.tracks[index].part)
+			stream = _parts.get(part_of(index, it))
 			if stream != null:
 				expected = fposmod(pos, stream.get_length())
 				wraps = true
@@ -1402,6 +1521,14 @@ func prune_renders() -> void:
 ## the sample.
 static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int,
 		controls := PackedFloat64Array()) -> AudioStreamWAV:
+	return wav_of(render_midi_frames(notes, seconds, rate, controls), rate)
+
+
+## `render_midi`'s sound as stereo frames, before it is a stream: `seconds` and the tine's tail
+## (DawKitTine.TAIL_SECONDS). Safe off the main thread. A cassette held to the ear folds the tail
+## round into a loop of the clip (EarCue).
+static func render_midi_frames(notes: PackedFloat64Array, seconds: float, rate: int,
+		controls := PackedFloat64Array()) -> PackedVector2Array:
 	var parts := ItemVoices.split(notes)
 	var tine: PackedFloat64Array = parts[0]
 	var hits: PackedFloat64Array = parts[1]
@@ -1413,6 +1540,11 @@ static func render_midi(notes: PackedFloat64Array, seconds: float, rate: int,
 	else:
 		frames = DawKitTine.render_notes(tine, seconds, float(rate), controls)
 	ItemVoices.add_to(frames, hits, seconds, rate)
+	return frames
+
+
+## Stereo frames as a 16-bit stereo stream at `rate`, not looping.
+static func wav_of(frames: PackedVector2Array, rate: int) -> AudioStreamWAV:
 	var data := PackedByteArray()
 	data.resize(frames.size() * 4)
 	for i in frames.size():

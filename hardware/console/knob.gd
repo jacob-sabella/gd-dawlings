@@ -234,6 +234,18 @@ func _notification(what: int) -> void:
 		body_bank.move_slot(_slot, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
 
 
+## A write bead's value, as a turn's (WriteBead): the knob turns there, ticking at each detent it
+## crosses, and says so to whoever writes what it means.
+func _on_bead_write(v: float) -> void:
+	var was := detent_of(value)
+	value = v
+	if detent_of(value) != was:
+		_last_detent = detent_of(value)
+		Foley.play(self, Foley.knob_detent(), DETENT_DB)
+	_on_value_changed()
+	turned.emit(value)
+
+
 func hint() -> String:
 	return "drag up/down or scroll  ·  shift for fine  ·  in a hand: twist, or slide a fingertip"
 

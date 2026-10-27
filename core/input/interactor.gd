@@ -62,6 +62,9 @@ var _glove: Glove
 ## The glove a hand that draws its own plays its fingertips with: the right hand, while its
 ## fingers play, whatever the other glove carries.
 var _finger_glove: Glove
+## This hand's write bead (docs/spatial_loop.md part two, slice 22): over the automatable control
+## it is on while the song plays, made the first time there is one.
+var bead: WriteBead = null
 
 
 ## Override: this hand's fingers have just stopped playing.
@@ -437,6 +440,21 @@ func head_point() -> Vector3:
 	return Vector3(0, 1e6, 0)
 
 
+## Override: the cassette this hand holds to its person's ear (docs/spatial_loop.md part two, slice
+## 25), which plays its clip to them alone (EarCue); null for none. A headset's hand near the head
+## (XRInteractor), L held at a desk (MouseInteractor).
+func cassette_at_ear() -> CassetteItem:
+	return null
+
+
+## The cassette in this hand that could go to the ear: one with a clip on it, in the hand.
+func _ear_cassette() -> CassetteItem:
+	if not is_instance_valid(carrying):
+		return null
+	var c := carrying as CassetteItem
+	return c if c != null and c.pastes() and c.in_hand() and c.carried_by == self else null
+
+
 ## Put down what this hand carries, where it is aiming: on the floor if it can stay there,
 ## otherwise home to its shelf (ItemRoom.put_down).
 func put_down() -> void:
@@ -499,6 +517,10 @@ func _physics_process(_delta: float) -> void:
 	var direction := -aim().basis.z
 
 	var hit := _cast(origin, direction)
+	if hit["control"] != null and _press_is_items(origin, direction, hit["point"]):
+		# Something the carried item's press is for stands in front of the control: a bandmate
+		# at the desk, a cassette in hand. The control behind them is not under the hand.
+		hit["control"] = null
 	_set_hovered(hit["control"])
 	if hit["control"] != null:
 		hover_point = hit["point"]
@@ -520,6 +542,9 @@ func _physics_process(_delta: float) -> void:
 			# Nothing under the ray, something in the hand: the button is the item's.
 			_using = true
 			carrying.work(true)
+		elif hovered != null and _paste_press(hit["point"]):
+			# A cassette in the hand, on a control that takes one: pasted there, not grabbed.
+			pass
 		elif hovered != null:
 			hovered.grab_begin(self, hit["point"])
 			# Only if it took the hand. A control someone else is holding says no, and a hand
@@ -540,10 +565,111 @@ func _physics_process(_delta: float) -> void:
 		_end_use()
 
 	_was_pressed = pressed
+	_tend_push()
 	_show_glove()
 	_show_finger_glove()
 	_tick_dwell(hit["point"], _delta)
 	_show_rim()
+	_tend_bead(_delta)
+
+
+# --- a cassette onto a track (docs/spatial_loop.md part two, slice 24) ------------------------
+#
+# Pasting is a press, never a let-go: letting go still puts down, slots or throws (XRInteractor's
+# grip). A press with something that pastes in the hand (Item.pastes) on a control that takes it
+# (ControlAffordance.paste_spot) -- the mouse's click, a controller's trigger while its grip holds
+# the cassette, a pinch -- pastes it there; and a hand that pushes (`pushes_to_paste`) pastes by
+# pushing the cassette into the control's face, a crossing of it inward. The room is told
+# (ItemRoom.paste); the cassette stays in the hand.
+
+## Where the carried item's middle was last frame, for a push's crossing; INF for nowhere.
+var _push_from := Vector3.INF
+
+## The furthest (m) the carried item's middle goes in one frame and still counts as a push. A hand
+## does not go further than this in a frame; the play space does, when it travels (XRRig._arrive
+## moves it all at once), and a tracking glitch can, and the line from where the cassette was to
+## where it landed must not paste on whatever lane or strip it happens to cross.
+const PUSH_MAX_STEP := 0.25
+
+
+## Override: whether this hand pastes a cassette by pushing it into a control's face: a headset's
+## hand or controller. A mouse's carried item rides in the view, and turning round is not a push.
+func pushes_to_paste() -> bool:
+	return false
+
+
+## Override: the press that pastes what this hand carries, in words for a card or a notice: a
+## controller's "the trigger, or a push in". A bare hand has no trigger (XRInteractor).
+func paste_press_words() -> String:
+	return "the trigger, or a push in"
+
+
+## Override: whether this hand is seen well enough this frame for its movement to be a push. A bare
+## hand only with every joint seen (HandGestures.confident): a guessed hand's middle jumps about.
+func push_tracked() -> bool:
+	return true
+
+
+## Forgets where the carried item was, so the next frame starts a push afresh rather than reading
+## the step there as one. Called when the play space travels (XRRig._arrive).
+func forget_push() -> void:
+	_push_from = Vector3.INF
+
+
+## A press on `hovered` at `point`, with something that pastes in the hand: pasted where the control
+## says, and true. False, and the press is the control's own, where it takes no paste.
+func _paste_press(point: Vector3) -> bool:
+	if not is_instance_valid(carrying) or not carrying.pastes():
+		return false
+	var spot := hovered.paste_spot(point, fine())
+	var room := ItemRoom.of(carrying)
+	if spot.is_empty() or room == null:
+		return false
+	room.paste(carrying, int(spot[0]), float(spot[1]))
+	if _glove != null:
+		_glove.poke(0.3)
+	return true
+
+
+## One frame of a push: the carried item's middle, from where it was to where it is, crossing a
+## control's face inward (into it, along against the face's outward normal) is a press there. From
+## inside the face out is no crossing, so it pastes once a push, and again only when pushed in anew.
+## Both frames must be seen (`push_tracked`), and the step no longer than a hand goes in one
+## (PUSH_MAX_STEP): a jump of the play space or of the tracking is not a push.
+func _tend_push() -> void:
+	if not pushes_to_paste() or not is_instance_valid(carrying) or not carrying.pastes() or held != null \
+			or fingers_play or not is_inside_tree() or not push_tracked():
+		_push_from = Vector3.INF
+		return
+	var now := carrying.middle()
+	var was := _push_from
+	_push_from = now
+	if was == Vector3.INF or was.distance_to(now) < 0.0005 or was.distance_to(now) > PUSH_MAX_STEP:
+		return
+	var query := PhysicsRayQueryParameters3D.create(was, now)
+	query.collision_mask = 1 << (CONTROL_LAYER - 1)
+	# Never the cassette itself, which rides along the very line it is pushed down.
+	query.exclude = [carrying.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var control := hit.get("collider") as ControlAffordance if not hit.is_empty() else null
+	if control == null or (now - was).dot(hit["normal"]) >= 0.0:
+		return
+	var spot := control.paste_spot(hit["position"], fine())
+	var room := ItemRoom.of(carrying)
+	if spot.is_empty() or room == null:
+		return
+	room.paste(carrying, int(spot[0]), float(spot[1]))
+
+
+## Whether what the carried item's press is for (ItemRoom.press_ahead) is nearer along the ray
+## than `point`, where the control under it was hit.
+func _press_is_items(origin: Vector3, direction: Vector3, point: Vector3) -> bool:
+	if not is_instance_valid(carrying):
+		return false
+	var room := ItemRoom.of(carrying)
+	if room == null or not room.press_ahead.is_valid():
+		return false
+	return float(room.press_ahead.call(carrying, origin, direction)) < origin.distance_to(point)
 
 
 ## A control can be freed under the hand: a bank moves, a rack page turns, a desk is rebuilt
@@ -616,6 +742,20 @@ func _tick_dwell(at: Vector3, delta: float) -> void:
 	_dwelling.set_dwell_progress(0.0)
 	_dwelling.grab_begin(self, at)
 	_dwelling.grab_end(self)
+
+
+## The write bead over what this hand is on, after the press: next tick's ray finds it where it
+## now stands. None while the fingers play or the hand holds some other control.
+func _tend_bead(delta: float) -> void:
+	_forget_freed()
+	var over: ControlAffordance = null if fingers_play or (held != null and held != bead) else hovered
+	if bead == null:
+		if over == null or not DAW.state.playing or over.automation_target().is_empty():
+			return
+		bead = WriteBead.new()
+		bead.hand = self
+		add_child(bead)
+	bead.tend(over, delta)
 
 
 ## The glove a mouse carries with, low in the view, palm up under whatever it holds. Only drawn

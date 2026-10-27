@@ -172,6 +172,10 @@ var highway := false
 var _highway: TimelineHighway
 ## The view key was pressed: the studio keeps the choice in this person's layout.
 signal shelf_chosen(on: bool)
+## Track `track`'s item `index` was pulled out of the lanes by `hand` (TimelineLanes.PULL): for the
+## studio to have the host mint a cassette of it in that hand (docs/spatial_loop.md part two,
+## slice 23). The arrangement is as it was: a cassette is a copy.
+signal clip_pulled(track: int, index: int, hand: Node)
 ## The shelf boards, one per lane.
 var _shelf_lips: MeshBank
 ## The item being dragged, which stands out of its shelf like a selected one: in the hand.

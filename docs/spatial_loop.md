@@ -1703,7 +1703,7 @@ none.
     --hover 1580,880" tools/shot.sh shots/spatial17.png 40 46`; `--fist-shake` puts the posed hand
     over the shaker's grip, closes it at frame 8 and swings it at 4 Hz, an XRInteractor reading it).
 
-18. [ ] **The stereo field as a stage.** The proving idea, #1. `StageTable`
+18. [x] **The stereo field as a stage.** The proving idea, #1. `StageTable`
     (hardware/stage/stage_table.gd) is a Surface on its own trolley beside the desk, so F visits it
     and G brings it: a table top 1.2 m wide and 0.9 m deep at the desk's height, lettered L, C and R
     along its front and with distance rings in dB, so it hides neither the timeline nor the console,
@@ -1722,9 +1722,10 @@ none.
     presses are not two notes), Backspace on a desktop, or the RESET on its tag sets it back to
     centre, 0 dB and full width. Every move is DAW.set_track_pan, set_track_volume or
     `set_track_width(index, width)`. TrackState gains `width` (1). The built-in engine's track bus
-    gains an AudioEffectStereoEnhance whose `pan_pullout` is the width, in the bus's tail: after the
-    panner and every FX slot, so `fx + 1` still finds each effect, and moved past an effect added
-    later. The cue, tap and send copies take the FX slots only, not the tail. .dawproject keeps the
+    gains an AudioEffectStereoEnhance whose `pan_pullout` is the width, in the bus's tail: after
+    every FX slot, so `fx + 1` still finds each effect, and moved past an effect added later; the
+    track's pan follows it there, since a width after the pan would pull a panned track back to
+    the middle (slot 0 stays a panner, at the centre). The cue, tap and send copies take the FX slots only, not the tail. .dawproject keeps the
     width in an extension attribute. The bridge's SetTrackWidth sets I_PANMODE to stereo pan (5)
     when the track's mode ignores D_WIDTH, then sets D_WIDTH; GetState reads D_WIDTH back only in
     the stereo and dual pan modes (else 1). The card says `pan mode set to stereo pan` the first
@@ -1744,7 +1745,65 @@ none.
     checks that a guest's drag reaches the host as pan and volume in one step. Both sides at 0
     failed. shots/spatial18.png is the demo song's tracks on the table.
 
-19. [ ] **The stage in depth, leaning in, and clapping to mute.** #1 finished, and #14. Depth is its
+    Built. `StageTable` (hardware/stage/stage_table.gd) and `StageVoice`
+    (hardware/stage/stage_voice.gd, with `StageVoice.Ring` for the width) stand on the stage
+    trolley at `Studio.STAGE_AT` (1.1, 1.4), turned to face the mix position, its top at
+    `STAGE_TOP` (0.74). It stands far enough back that from the seat the right-hand lamp's foot is
+    seen past its corner. The trolley carries the station's plaque, and the table is a focus
+    surface, so F visits it and G brings it. `Stations` has a `stage_table` row in the control room
+    with a `surface`. The PLAY · CONTROL ROOM page, the station board and I (now four stations)
+    name it. The table's arithmetic is static (`spot_of`, `z_of_db`, `db_of_z`, `pan_of_x`,
+    `ring_of`, `width_of`, `pan_words`, `db_words`), and so is the probe's. `place` writes pan and
+    volume only where they changed, snaps within SNAP unless fine, and puts anything past the back
+    edge at -inf on the lip (OFF_Z). `nudge_volume` (DB_STEP 0.5, DB_FINE 0.1), `nudge_width`
+    (WIDTH_STEP 5%, WIDTH_FINE 1%) and `nudge_pan` (PAN_STEP 1%; the wheel over PAN < > 5% a
+    notch, Shift 1%) are the wheel's. A voice's wheel is its level, or its width while it is held,
+    inside the placing's edit. `pressed`/`forget_press` count double presses. `reset` is its own
+    edit (`<name>: reset`). `reset_under` is the studio's Backspace, given the mouse's held or
+    hovered control. The rail along the front edge, sloped toward the player, has a `Tag` per voice
+    (number and name, a colour chip, MUTE/SOLO in words, the readout, PAN < >, RESET, which does not
+    dwell), BANK < > (`page`, held while a hand is on the table, then `_go_to`, which asks
+    `DAW.set_track_bank` past the cached bank) with "9-16 OF 20", and SHOW. A leader runs from each
+    tag to its voice, so which ball is which is read without colour. A muted voice is darkened,
+    barely lit and struck through, and a soloed one wears a halo. Voices glow with their meters.
+    DAW gains `set_track_width` (a COMMAND, its intent checked). DAWBackend gains
+    `Capability.WIDTH`. MixState.TrackState gains `width` (1), on the wire as `/track/N/width`
+    (MixWire, kept to 0..1). OfflineBackend undoes it. GodotBackend puts an
+    AudioEffectStereoEnhance in each track bus's tail (`_fx_end`, `width_effect`), then the
+    track's pan (`pan_effect`; slot 0 is left at the centre), so the width is taken before the pan
+    as Reaper's stereo pan takes it, and the rack's adds, moves, removals and the cue, tap and send
+    copies work within the slots before it. A ball under another (tracks at one pan and level
+    stand in one place) is taken by the name on its tag (`StageTable.NameGrip`, "2 KICK  BALL"),
+    whose frame is the voices' plane: a drag from it moves the voice as far as the hand goes
+    (`StageVoice.steered`), the wheel is its level or, held, its width (`nudge_voice`), two
+    presses and Backspace reset, and while it is hovered or held its voice stands RAISE over the
+    pile (`StageVoice.pick`). The voice's card and the station's desk and hands lines say so.
+    ProjectFiles and ProjectBridge keep widths in the .dawproject extras by track id. ReaperBackend
+    sends `SetTrackWidth` by the bridge (one call per track in an edit's batch, the last), holds
+    the poll's width off for WIDTH_SETTLE_MSEC, and has `stereo_panned` and `pan_mode_set`. The
+    table's notice says `<n NAME>: pan mode set to stereo pan, so it can have a width.`, and the
+    card says so after. The bridge gains `SetTrackWidth` and `track_width` in GetState and the
+    structure poll. The suite: `_test_a_placing_on_the_stage_table_is_one_step`,
+    `_test_the_stage_table_snaps_to_centre_and_resets`, `_test_a_ball_under_another_is_taken_by_its_tag`,
+    `_test_the_stage_table_banks_and_shows`,
+    `_test_with_no_width_the_stage_table_has_no_ring`, `_test_the_built_in_engine_keeps_a_tracks_width`,
+    `_test_reaper_sets_a_width_by_the_bridge`, `_test_the_stage_tables_voices_are_clickable_at_it`
+    (from the table's own visit, a click lands on every tag key and tag name, and on every voice
+    and ring band unless it is under another, wholly or in part, and so is taken by its name; the
+    seat audit leaves voices to it, since tracks at one pan and
+    level stand together and the top is seen nearly edge-on from the seat) and
+    `_test_the_stage_table_stands_clear_in_every_venue`. tests/bridge_decode_test.lua decodes
+    SetTrackWidth, sets stereo pan once inside the Undo block, and reads a width only in pan modes
+    5 and 6. The older rack, cue, send and hosted-plugin tests count the rack's slots up to
+    `_fx_end`. The station tests expect four stations, and the board's plaque keys are looked
+    for in the whole studio. The probe's guest stands a table of its own at 57.7 and drags
+    STAGE_TRACK (4) to STAGE_PAN 0.3 and STAGE_DB -10 in fifteen moves. The host finds both at
+    58.1, as one step named `<name>: place`, which one undo takes back whole (on Reaper it puts them
+    back by hand), and now leaves at 58.2. shots/spatial18.png is the demo song's eight first tracks
+    on the table, the HAT muted and struck through, with RHODES' card (`SHOT_CAM="-2.165,-0.75,1.35,1.1,0.74,1.4"
+    SHOT_ARGS="--hover 704,585" tools/shot.sh shots/spatial18.png 40 46`).
+
+19. [x] **The stage in depth, leaning in, and clapping to mute.** #1 finished, and #14. Depth is its
     own handle, never a side effect of volume. Each voice stands on a stalk, and lifting it off the
     table (up to 0.3 m) is how much it sends to the project's room. The room is the first track
     whose chain holds a reverb and that another track sends to (`StageTable.room_track()`). A mist
@@ -1772,7 +1831,59 @@ none.
     checks that the guest's latched clap-mute reaches the host's track. Both sides at 0 failed.
     shots/spatial19.png is a raised voice with its room mist beside a muted one.
 
-20. [ ] **Sidechain as a rope.** The proving idea, #18. Each stage voice has a knot under it.
+    Built. Every `StageVoice` stands on a `StageVoice.Stalk` (a ControlAffordance in the table's
+    own frame, its foot on the table, so a held ray moves in the upright plane through it), and
+    `LIFT` is now 0.06 so the stalk shows between the ball and its ring. How far it is lifted
+    (`lift()`, up to `STALK_MOST` 0.3 m) is the send to `StageTable.room_track()`, the first track
+    whose chain holds a reverb (a plugin named "...verb...") that another track sends to (not as a
+    key), or else the first called ROOM with a reverb: `send_db_of_lift` is -inf on the table,
+    `ROOM_LOW_DB` (-40) just off it and `ROOM_TOP_DB` (0) at the top, linear in dB, and
+    `lift_of_send_db` reads it back. `send_to_room` makes the send (`DAW.create_send`) inside the
+    stalk's own edit (`<name>: room`), so the first lift is one undo step with its level, and the
+    toast says `4 HAT: a send to 13 VERB RTN made, at -20.0 dB: one undo step with this lift.`; a
+    guest asks for the send and sets its level when it arrives. Set back on the table, the send
+    stays at -inf. The wheel over a stalk is a decibel a notch (`nudge_room`, Shift a tenth). A
+    `Mist` round the ball, its size and opacity by the send, shows it, and the card says
+    `room -12.8 dB`. The rail's left end has the ROOM key and a label, `ADD ROOM` (lit) while there
+    is no room and `ROOM  13 VERB RTN` after: `add_room` adds a track ROOM at the end with the DAW's
+    first reverb choice (`reverb_choice`), as one step `Stage: add room` (or, on a DAW that adds
+    tracks by its poll, the reverb when the track arrives). `Ears.lean(track)` (`can_lean`: not a
+    guest, and the built-in engine) asks `GodotBackend.set_lean`, a cue of that track beside the
+    personal mix's (`_cued_tracks`) whose bus `_apply_tracks` keeps at the track's fader, and its
+    VCA, plus `LEAN_DB` (6), and lowers the Mix bus by `LEAN_MIX_DB` (-6), headphones on or off;
+    `listen` keeps both while it lasts. The studio leans (`_follow_lean`, `lean_wanted`): in a
+    headset to the nearest voice within `LEAN_REACH` (0.25 m) of the head, at a desk to the voice
+    under the cursor while L is held; elsewhere the notice is `3 SNARE: leaning needs the tracks
+    played here (a host on the built-in engine).`, once a voice, and every voice's card says so.
+    `HandPose.palms_meet` (`PALMS_TOUCH` 5 cm, `PALMS_OPPOSED_WITHIN` 40 degrees) and
+    `palms_pressed`; `XRInteractor.clap_palm` gives a bare hand's palm and its normal, or a
+    controller's grip point. `Clap` (core/input/clap.gd) reads the two (`Clap.reading`: palms by
+    palms_meet, grips by `GRIPS_TOUCH` 8 cm) a frame at a time (`step`): the meeting presses
+    (`press`), reading the track once from `target`, mutes it unless it is muted, and says
+    `3 SNARE muted while held`; the parting (`release`) latches if the meeting was faster than
+    `CLAP_SPEED` (0.8 m/s, over `SPEED_WINDOW`) and it parted within `LATCH_WITHIN` (0.3 s), toggling
+    the mute from what it was, and else puts it back. It keeps what it asked, so a guest's release
+    answers its own press. The studio has two: `clap` for the rig's hands, aimed by
+    `_clap_target` (either hand's held or hovered control, else `track_under` the head's gaze),
+    and `key_clap` for K, whose press is always quick, so a tap latches. `Studio.track_under`
+    casts on the control layer, and `track_of` answers a `stage_track` meta (voices, rings,
+    stalks, tags and their keys), a ChannelStrip, a RackUnit or the rack, and the timeline's lanes
+    (`track_at_point`); `pointed_by(hand)` is a hand's. `Stations.HELD` gains CLAP TO MUTE and LEAN
+    IN, and the stage table's desk and hands lines name the stalk and L. The suite:
+    `_test_a_voices_stalk_is_its_send_to_the_room`, `_test_add_room_makes_a_room_to_send_to`,
+    `_test_leaning_in_lifts_one_track_in_your_ears_alone`,
+    `_test_pressed_palms_mute_and_a_clap_latches` (posed palms 2 cm apart pressed, 9 cm or turned
+    60 degrees not, read through two XRInteractors' HandGestures; two XRController3D grips),
+    `_test_k_mutes_and_l_leans_at_a_desk` and `_test_track_under_answers_each_kind_of_surface`; the
+    slice 18 tests stand voices at their lift, read `room` on the card, and click every stalk too
+    (one behind another raised voice's stalk is taken by its tag's name). The probe's guest claps
+    a latch at CLAP_TRACK (6) at 58.2 and sees the mute come back by 58.35; the host finds it
+    toggled at 58.4 and puts it back, and now leaves at 58.5. shots/spatial19.png is the demo
+    song's table with 7 RHODES and 3 SNARE lifted in their mist beside 4 HAT muted, and RHODES'
+    stalk's card (`SHOT_CAM="-2.165,-0.75,1.35,1.1,0.74,1.4" SHOT_ARGS="--hover 700,560"
+    tools/shot.sh shots/spatial19.png 40 46`).
+
+20. [x] **Sidechain as a rope.** The proving idea, #18. Each stage voice has a knot under it.
     Dragging from one voice's knot (the kick) to another voice (the bass) ties a rope, in one edit:
     `DAW.create_sidechain(kick, bass)` and a compressor on the bass that listens to it. On the
     built-in engine the key send is no longer skipped (godot_backend.gd's "nothing here listens for
@@ -1797,7 +1908,91 @@ none.
     the rope's lift follows the estimate. The probe checks that a guest's rope is the host's send.
     Both sides at 0 failed. shots/spatial20.png is the rope taut on a kick.
 
-21. [ ] **Signal you can see, and a room that hears the mix.** The proving ideas, #3 and #5.
+    Built. Every `StageVoice` has a `StageVoice.Knot` on its stalk, `KNOT_DROP` (3 cm) under the
+    ball, a lump of rope taken within `KNOT_REACH`; the ball is taken within `BALL_REACH` (1.3 of
+    its radius, was 1.6) and the stalk up to the knot. A drag from a knot draws a loose rope to the
+    hand (`StageTable.draw_loose`, naming the voice it is over once), and the let-go ties it to
+    the nearest other voice within `TIE_REACH` (7 cm, `drop_target`), else says there is none; a
+    press with no drag says how. `StageTable.tie(from, to)` is one edit, `Kick > Bass DI: rope`:
+    `DAW.add_fx` of `Sidechain.compressor_choice()` (the built-in "compressor", Reaper's ReaComp)
+    when the track has no compressor, then `DAW.create_sidechain`, and the threshold of a
+    compressor it added set to `Sidechain.THRESHOLD_SLACK_DB` (-30) once it is there (at once on
+    the built-in engine, inside the edit; as it arrives on a guest or by Reaper's poll,
+    `_rope_wanted`). The room row is `ropes` (`{"2>6": added}`, project track numbers,
+    `Sidechain.rope_key`): the host writes it and publishes the room (`ropes_changed`); a guest
+    asks `Session.ask_room(&"rope", [key, tied, added])` (a ROOM_VERB) and keeps its own on top
+    until answered (`apply_ropes`); the studio's room carries it and `_on_room_asked` answers it.
+    Every key send between two voices on the table is a `StageTable.Rope` (`Sidechain.pairs()`,
+    so one the patchbay made too), a CableSweep tube from knot to knot (`rope_spine`, laid on the
+    table by `rest_on`) that sags `sag_of` (35% of its span, at most 8 cm, less the more it is
+    pulled) and lifts `lifted` = the sag times `ducking / DUCK_TAUT_DB` (12 dB), times
+    Ergonomics' motion scale. `ducking` is `Sidechain.ducks`: `Sidechain.reduction(key_db,
+    threshold, ratio)` (a hard knee) of the key track's meter plus the key send's level over the
+    first compressor's threshold at its ratio, each frame from the table's smoothed meter, the
+    same on both engines. A threshold and ratio are read from the plugin's own words while they
+    describe the knob, else by its law: ReaComp's threshold as an amplitude, the built-in one's as
+    FXCatalogue's -60 to 0 dB. A rope's middle, taken (its frame level with the table, +X along
+    it), is pulled by how far the hand goes from the line between the knots: `pull` (0..1 of
+    `PULL_MOST`, 20 cm) is `Sidechain.of_pull`, the key send 0 to +6 dB and the threshold -30 to
+    -60 dB, written by `StageTable.pull` inside the rope's own edit (`Kick > Bass DI: pull`), and
+    read back from the threshold (`pull_of`); the wheel pulls it 5% a notch, Shift 1%. Its card
+    is `KICK -> BASS DI · ducks 9 dB on each hit · pull for more`, from the key's heard peak
+    (`Sidechain.HIT_DB`, -6, before one is heard), and its hint names the pull, the wheel, the
+    cut and the patchbay, in three lines. The X (`StageVoice.cut_key`, a TableKey beside the knot,
+    there only while the voice has a rope out) and Backspace over a rope (`reset_under`) cut it:
+    `StageTable.cut`, one edit `Kick > Bass DI: cut`, `remove_fx` of the compressor if the row says
+    the rope added it and no other key send still feeds that track, then `remove_send`; when another
+    does (the snare roped to the bass too), the compressor stays and that key's row is given the
+    rope's "added" (`_heir_of`), so the last rope cut takes it away. Only the compressor a key
+    reaches counts (`Sidechain.compressor_on` by `Sidechain.listens`, the engine read from the
+    DAW's plugin choices so a guest reads it as its host): the built-in AudioEffectCompressor, not a
+    hosted plugin with the word in its name; on Reaper a ReaComp, as the bridge's `compressors`
+    keys, not a third-party compressor, beside which a rope adds a ReaComp of its own. Undo and the
+    `ropes` row: the row is room state, not mix state, so an undo does not carry it, and the host
+    keeps it true to the mix at each frame's end (`_reconcile_rows`, asked for by `_refresh_ropes`).
+    A row whose key send it has seen and is gone is dropped: an undone tie leaves no row that could
+    later take away a compressor someone added. A row that said "added", dropped or cut, is
+    shelved, and comes back when its key send does by the rope's own history (the step just
+    redone is its `: rope`, or the one just undone its `: cut`), so tie, undo, redo and tie, cut,
+    undo both cut away the compressor the rope made; a key send back by the patchbay drops it. A
+    DAW that names no steps (Reaper) never brings a row back: there an undone cut's rope cuts as
+    one that keeps its compressor, which the desk's X on the plugin takes away. A voice's card says `rope to 6 BASS DI` or `ducks under
+    2 KICK`, its hint how to tie one, and the table's top says A KNOT TIES A ROPE; the station's
+    desk and hands lines name the knot, the pull and the X. The built-in engine: a key send's bus
+    plays into `GodotBackend.KEYS_BUS` ("R3D Keys", muted, made just after the master so every key
+    bus can send to it) rather than the destination's mix, and `GodotBackend.listen()` sets every
+    AudioEffectCompressor on a keyed track's bus to `sidechain` = its first key bus
+    (`key_bus_into`), and back to empty, after any send or chain is built; a key bus follows its
+    track's own mute and not the solos. The bridge's `CreateSidechain` sets every ReaComp on the
+    destination to its auxiliary input (`set_detector`, by the parameter named detector and the
+    setting whose words say aux), adding a ReaComp where there is none (`compressor_added` in its
+    answer); `RemoveTrackSend` sets them back to their main input once nothing keys the track
+    (`keyed`), in an Undo block of its own. No new verb: ReaperBackend and OfflineBackend are
+    unchanged. The suite: `_test_a_rope_ties_a_sidechain_on_the_built_in_engine` (a knot dragged
+    to the keys makes the key send and a compressor whose sidechain is the key bus, which plays
+    into the muted keys bus, as one step; the row says added; undo and redo; the X cuts both in
+    one step; tied to the bass its own compressor listens and Backspace's cut leaves it, listening
+    to itself again), `_test_a_rope_ducks_the_bass_in_a_render` (two bars rendered by MixRender
+    with every stem, the bass's own compressor off its chain: on the kick's hits the bass is 9.2
+    dB lower with the rope, 0.8 dB between them), `_test_a_pulled_rope_ducks_harder_in_one_step`
+    (30 frames pulled 60%: the send +3.6 dB and the threshold -48 dB, one undo step that puts both
+    back; the wheel), `_test_a_ropes_lift_follows_the_estimate` (Sidechain.reduction; a kick at -16
+    dB ducks 10.5 dB and the rope lifts that share of its sag; still with motion held; slack again
+    with the kick silent) and `_test_a_guests_rope_asks_the_host` (one edit of intents, add_fx then
+    create_sidechain; the threshold asked for when they arrive; the row kept on top until
+    answered; a cut is remove_fx then remove_send). The clickable test aims at every knot too.
+    tests/bridge_decode_test.lua runs CreateSidechain and RemoveTrackSend on a stand-in Reaper.
+    The probe's guest drags a rope at 58.5 on a table of its own from ROPE_FROM (2) to ROPE_TO
+    (6) and sees the key send come back by 58.65; the host finds it at 58.7 (and, on the built-in
+    engine, the bass's compressor listening to it), as one step named for the rope, which one undo
+    takes back (on Reaper, by hand), and now leaves at 58.8. tools/screenshot.gd's `--rope 2,8,0.35`
+    ties and pulls a rope at frame 6 and plays the song. shots/spatial20.png is the demo's table
+    with 2 KICK roped to 8 GTR AMP, pulled a third of the way and lifted on a hit, and the rope's
+    card (`SHOT_CAM="-2.165,-0.75,1.35,1.1,0.74,1.4" SHOT_ARGS="--rope 2,8,0.35 --hover 887,669"
+    tools/shot.sh shots/spatial20.png 40 46`), and shots/spatial20_close.png the same up close
+    (`SHOT_CAM="-2.165,-0.7,0.55,0.74,0.77,1.3" SHOT_ARGS="--rope 2,8,0.35 --hover 787,542"`).
+
+21. [x] **Signal you can see, and a room that hears the mix.** The proving ideas, #3 and #5.
     `SignalBeads` (hardware/signal_beads.gd) is one MeshBank of small bright beads riding cables:
     the patch cables (PatchCable), the looms' runs (GearLoom), the jacks' leads and cables, the
     modular's cables, and the stage's ropes. They are spaced and paced by the level at the cable's
@@ -1821,7 +2016,73 @@ none.
     in budget with every cable drawn. shots/spatial21_beads.png is the patchbay with signal running,
     and shots/spatial21_comfort.png the box.
 
-22. [ ] **Automation by gesture.** The proving idea, #2. Every automatable control (fader, pan,
+    Built. `SignalBeads` (hardware/signal_beads.gd) extends MeshBank: one MultiMesh of `CAPACITY`
+    (640) unshaded beads, committed once and drawn `show_first(n)` deep, so every bead in the room
+    is one draw call. It finds what to ride each frame in the `SignalBeads.CARRIERS` group. A carrier
+    answers `signal_spine()` (world space, cached against its transform), `signal_length()`,
+    `signal_level()` (the fader law, 0.716 is 0 dBFS) and `signal_radius()`. PatchCable carries
+    `source_track`'s send `send_index` (set by PatchbaySurface._draw_cables) through the send's
+    fader (`SignalBeads.send_level`, the dBs added), so a carried cable and a send at zero carry
+    nothing. GearLoom carries its `level_source` along its middle core. `Studio.loom_level` gives
+    the console's loom the loudest heard track, the rack's the loudest heard track with a plugin,
+    and the deck's the master. "Heard" (`SignalBeads.heard`) is not muted and not left out by a
+    solo, so a desk of muted strips sends nothing down its loom whatever the meters show. It is
+    constant time: whether anything is soloed (`SignalBeads.any_solo`) is worked out again only
+    when MixState.TrackState.solo_version moves (a solo changed, a track came or went), so a
+    ninety-track frame of strips, looms and cables costs ninety looks, not ninety sorts of ninety.
+    JackSocket carries its lead, or its cable into a bandmate, at `Jacks.level_of` its source.
+    Jacks.hit and a keys or harp note-on (`heard_from`) set it, fading over HEARD_FADE (0.6 s), so
+    an instrument with nothing playing is still. A note or trigger down a cable into this player
+    (`Jacks.received`) sets it too, so a bandmate's lead playing into me carries what I hear
+    through it. A third player watching A play into B sees that cable dark: the notes go only to
+    B, and the beads are not networked. StageTable.Rope carries `level_between` its key
+    and its voice. `SignalBeads.Run` is the same for anything else. There is no modular in the room
+    yet; its cables would be Runs. A carrier's level follows its source fast up and slow down.
+    Spacing goes in five steps from 15 cm to 4.5 cm, speed from 7 to 42 cm/s times
+    Ergonomics.motion_scale, size 1.6 to 2.7 cable radii, and brightness 0.55 to 3.2 of one warm
+    white. At motion 0 the beads stand at 9 cm, one size, and only their brightness follows the
+    level. Over capacity `allot` shares the bank so every lit carrier keeps at least one bead. The
+    room: `Venue.hear_clip(over, delta)` lifts `lift` to LIFT (0.3) and lets it fall over
+    LIFT_SECONDS (0.15 s), at most once in FLASH_GAP (2 s), only while `reactive` and
+    `lift_on_clip`. `Studio.follow_clip` finds the master or any heard track over 0 dBFS
+    (`MasterSection.clipping`) every frame and lifts the practicals (`lift_lamps`: their venue
+    energy times 1 + lift, written only when it changes, never under a chaos event's tween). It
+    lights the master's new OVER lamp over its meters, with its readout saying OVER
+    (`MasterSection.show_over`). A strip's readout says OVER in the over colour
+    (`ChannelStrip.show_over`): its lamp is the readout already there rather than ninety new
+    objects. Each OVER is held OVER_HOLD (1 s). COMFORT is the session panel's last box: Motion
+    (Full, Gentle, Still: Ergonomics.MOTION_STEPS 1, 0.4, 0), Room reacts (Ergonomics.room_reacts,
+    which the studio now gives Venue.reactive in place of motion > 0) and Lift on clip (greyed
+    while the room does not react). Each has a hover card. Each choice is saved by itself
+    (`Ergonomics.save_comfort`) in the `comfort` section of Ergonomics.HEIGHT_PATH, beside the
+    height. Bootstrap reads it with `Ergonomics.take_comfort(path, no_motion)`, and `--no-motion`
+    then sets Still and a room that does not react. `--seated` is now applied first, so the
+    choices after it are no longer lost to its fresh body. The help card's ROOM page has "Signal
+    and comfort". The project buttons in the panel flow onto more lines (HFlowContainer): in one
+    line they pushed the panel past the screen's edge and every switch in it off. The suite:
+    `_test_beads_go_with_the_level` (the rate goes with the level; closer, bigger and brighter on
+    the louder cable, one hue; none on a silent one; the pace at full and at gentle; still and
+    evenly spaced at motion 0, brightness alone telling them apart; a jack's last hit fades to
+    nothing; an unplugged socket carries nothing), `_test_no_beads_on_a_muted_loom_or_past_a_zero_send`
+    (a 0 dB send carries its track's level, 12 dB down 12 dB less, at zero nothing; every track
+    muted with the meters up, the console's loom and the send carry nothing; a soloed track
+    carries again; a track left out by a solo is not heard), `_test_every_cable_is_drawn_within_the_bead_budget`
+    (`allot`; 300 loud 2 m cables fit in the bank with none dark; one MultiMesh),
+    `_test_a_clip_on_every_beat_lifts_the_room_once_in_two_seconds` (six seconds of a 50 ms over
+    every half second: three lifts, 2 s apart, at 30% and never more, gone in 0.15 s; none with
+    Lift on clip or Room reacts off), `_test_a_clip_lifts_the_studios_lamps_and_lights_over` (in
+    the studio: one bank, every loom and patch cable a carrier; a clipping track lifts the
+    practicals 30% and says OVER on its strip, not on the master; the master over lights its
+    lamp, with no second lift inside 2 s; both let go after their hold; Room reacts off holds the
+    lamps) and `_test_comfort_is_kept_and_no_motion_wins` (round trip beside the height; taken at
+    launch; `--no-motion` wins; the box shows the body, fits the panel, has hover cards, and sets
+    and keeps each choice by itself). tools/screenshot.gd's `--comfort` opens the panel scrolled to
+    the box. shots/spatial21_beads.png is the patchbay with the demo rolling, beads on the sends
+    into VERB RTN, closer on the louder, and none on the snare's at that moment (`SHOT_CAM="-1.2566,-0.08,0.95,1.8,1.2,-0.3"
+    SHOT_ARGS="--roll" tools/shot.sh shots/spatial21_beads.png 50 56`). shots/spatial21_comfort.png
+    is the box (`SHOT_ARGS="--comfort" tools/shot.sh shots/spatial21_comfort.png 30 36`).
+
+22. [x] **Automation by gesture.** The proving idea, #2. Every automatable control (fader, pan,
     mute, send level, a rack knob) has a write bead. While the control is hovered and the song
     plays, a small bead on a thread shows above it, itself a ControlAffordance. A pinch or grab
     pulls it out in a headset, and a drag of the bead does at a desk (its hover card says "drag the
@@ -1855,7 +2116,79 @@ none.
     lane at its song positions. Both sides at 0 failed. shots/spatial22.png is a bead held over a
     fader with the lane below.
 
-23. [ ] **Items made while playing, and clips as cassettes.** The proving idea, #4, first half. Made
+    Built. `WriteBead` (core/input/write_bead.gd) extends ControlAffordance. Each Interactor makes
+    one the first time it is on an automatable control while the song plays (`Interactor.bead`,
+    `_tend_bead` after the press each physics tick), and `tend` shows it over that control:
+    `bead_anchor()` (a fader's is over the top of its travel, out from the panel) on a thread from
+    `bead_foot()` (a fader's cap). It faces the viewer, is kept LINGER_SECONDS (0.8 s) after the
+    hand leaves the control so the hand can reach it, and is not shown over a held or claimed
+    control or over one another hand's bead is on. A control says what it writes with `automates`,
+    asked as `automation_target()`, which gives [track, target] or []: a strip's fader "volume", or
+    flipped to a return "send:<dest>"; its pan "pan" (none while flipped: a send's pan has no lane);
+    its mute "mute" (written through `bead_writes`); a rack knob "fx:<slot>:<param>" for whatever
+    parameter it means then; and the master's fader and balance on track 0. Pulled (the base grab
+    contract, so a pinch, a trigger or a click), it calls `DAW.hold_lane(track, target, true)` and
+    opens an edit named "Kick: level automation". Its height from where it was taken, over
+    RANGE_METRES (0.5 m), is the control's whole range (Shift a tenth of it). In a headset the
+    height is the hand's own (`catch_point`), and at a desk it is the drag's point in the plane of
+    the screen through the bead. Each value is written through the control (`write_from_bead`:
+    Fader `_set_value`, Knob turns and emits `turned`), so the control follows the bead and the mix
+    follows the control. Meanwhile the control is `is_held()` (its `bead`): it ignores echoes, takes
+    no hand, and no bank or page moves under it. `network_key()` is the control's, so its claim
+    holds the control for everyone. Each physics tick it `follow`s what this player hears (`heard`:
+    GuestMidi.heard, as every take is stamped, or `heard_source`). It keeps a point at least every
+    POINT_SECONDS (50 ms) of song, at the heard position, so a still hand is a flat stretch. A pass
+    begins where it is rolling: anywhere not looping, inside the loop while looping, and at the
+    loop's start when it came in from before or wrapped. It ends when the heard position goes back
+    (a wrap, to the loop's end, or a seek), leaves the loop by PAST_LOOP (0.15 s), the loop is
+    switched, the song stops, or at the let-go. Ending writes `merged`: the lane's points outside
+    the span are kept, pinned EDGE (1 ms) either side to what the lane was (or the control's value
+    before the bead, for a lane that had none), and the pass's points go between, thinned to the
+    wire's AUTOMATION_POINTS_MAX. It is one `DAW.set_automation`, inside the edit, and then the edit
+    closes. Held on, the next edit opens at once. A pass shorter than a point (a let-go at a wrap's
+    instant) writes nothing. A still bead rewrites its value every second so a long pass's edit is
+    never closed as idle (`write_from_bead(v, true)`: a control that writes only changes, the
+    mute, writes it anyway). At the let-go it writes what is open, closes the edit, releases the hold
+    and lets the control settle (`_hold_against_echoes`). One pass per player at a time. The
+    backend side: `DAWBackend.held_lanes` ([track, target] -> acting_peer), `hold_lane` (a lane another
+    player holds is neither held nor let go by anybody else), `lane_held` and `release_lanes_of(peer)`, called by `DAW.close_edits_of` when a player leaves. It is a DAW
+    verb, a guest's an intent checked like set_automation's (a target DawKitAutomation names, only
+    volume and pan on the master), and not history. OfflineBackend (and the built-in engine, which
+    plays what it leaves on the controls) does not follow a held lane in `follow_automation`, and
+    `_writes_lane` makes no touch pass of one, so no automation mode is changed. Let go, it is
+    followed again at once. ReaperBackend's `_hold_lane` is the bridge's `HoldLane`, sent at once
+    and never batched: the envelope's ACTIVE flag off (still visible) and back to what it was. The
+    bridge's `held_lanes` keeps a pass's SetEnvelope from switching it on again, and the timeline
+    poll reads a held envelope as playing, so no lane vanishes from anyone's desk. Reaper has
+    LANE_HOLD only with the bridge, and the bead's card says "the lane plays over you while
+    writing" without it. On Reaper the bead's OSC writes stay Reaper's own undo points (as every
+    OSC write in an edit does), and a track Reaper itself has in touch or latch may also write its
+    own envelope from them. The 3D timeline shows the lane being written: the studio's
+    `WriteBead.on_pull` picks the track and `show_lane`s the target. Discoverable: the control's
+    hover card (`card_hint`) adds "the bead above writes automation" while the song plays, the
+    bead's own says "drag the bead up or down to write automation · shift for fine" and reads the
+    value with "writing" or "waiting for the loop" (and a ring round it while writing, so not by
+    colour), and the help card's START page has "Automation". The suite:
+    `_test_a_looped_bead_pass_writes_inside_the_loop_a_step_a_pass` (looping 2-6 on a track in
+    touch: punched in at the loop's start, points only between the loop's ends, the lane outside as
+    it was, 2 s held still a flat point every 50 ms, FlatHost's lane the same, the held lane not
+    followed and followed again after, two wraps two steps each undone to its pass, a let-go at the
+    wrap no third, no mode changed and no touch pass), `_test_a_bead_not_looping_records_from_where_it_began`
+    (10 to 12 s, one step undoing pan and lane), `_test_a_bead_writes_a_plugin_parameter_a_send_and_a_mute`,
+    `_test_a_guests_bead_pass_lands_at_its_song_positions` (heard 0.3 s behind the host's playhead:
+    intents hold, edit, sets, the lane, close, release, at the guest's positions; carried out by the
+    host as its lane, one step; malformed holds refused; a leaving guest's hold released) and
+    `_test_a_bead_shows_over_a_hovered_control_and_its_drag_is_ordinary` (shown only while playing,
+    over the travel's top, lingering, gone while the fader is held, whose drag is one ordinary step
+    with no lane; the card without LANE_HOLD). tests/bridge_decode_test.lua checks HoldLane. The
+    probe: the guest's bead rides BEAD_TRACK's fader at 58.72 to a clock of its own from 640 s, and
+    the host finds its lane at those positions, a point each 50 ms, rising, let go, one step undone;
+    the guest has the lane back by 58.8. The host's end moved to 58.9. shots/spatial22.png is the
+    lead vox fader's bead held mid-pass on a 2.4 s loop, its card saying "writing", and the pass's
+    wave on the timeline's VOLUME row above (`SHOT_ARGS="--bead LEAD_VOX__LEVEL@40 --shot-tick 330"
+    tools/shot.sh shots/spatial22.png`).
+
+23. [x] **Items made while playing, and clips as cassettes.** The proving idea, #4, first half. Made
     items, slots and clip packing as decided: `ItemRoom.mint`, `Session.made` and its `_made`
     message, the `make` and `slot_item` room verbs, ItemRoom.holders, MADE_BYTES, MADE_TOTAL and
     MADE_MOST, the ghost in the glove, MixWire.`pack_item`, and ItemState.`part` played by
@@ -1884,7 +2217,121 @@ none.
     from host to guest arrives. Both sides at 0 failed. shots/spatial23.png is the rack with three
     cassettes.
 
-24. [ ] **A cassette onto a track.** #4 finished. `DAW.paste_item(track, start, packed)`:
+    Built. Made items are ItemRoom's (docs/architecture.md, "Items made while playing"). They are
+    MADE_KINDS ([cassette]) and never KINDS, so the shelf keeps its 22, `spawned_ids` leaves them
+    out, and a Tour run's end does not swallow them. `mint(kind, data, maker)` refuses past
+    MADE_MOST (64), MADE_BYTES (256 KiB) or MADE_TOTAL (4 MiB), and `mint_refusal` says which.
+    Otherwise it picks the next id never given in this room and keeps the row
+    [kind, maker, var_to_bytes(data)] in `made`, which is `Session.made` itself. It then spawns
+    the item at its home, the rack's tray (`made_home`, `CassetteRack.tray_spot`). The room state
+    names only `"made"` ids and where each one is, ["slot", holder, n] for a slotted one. The row
+    travels once: `Session.publish_made` sends `_made` to every guest, `admit` sends it before the
+    room, and `drop_made` sends `_unmade`. A guest's `_made` keeps only a made id of its own kind
+    within MADE_BYTES and MADE_MOST. `apply_made` makes real what the room names and the row is
+    here for, and removes what it no longer names. `MixWire.pack_item` packs the clip:
+    notes and controls as PackedFloat32Array, a file by name with its offset, fades, gain, loop and
+    reversal, never peaks, and a demo item's `part` (its own, else its track's) with its window.
+    `unpack_item` sanitises it as a lane from a peer is. `ItemState.part` rides the wire in
+    `_pack_items`, a split keeps it, and GodotBackend plays it (`part_of`, `_roles`), so a demo clip
+    pasted elsewhere plays what it was cut from. `CassetteItem` is tools/blender/cassette.py's
+    100 x 64 x 12 mm cassette (label, window, hubs, tape and screws). Its label is lettered on both
+    faces with the clip's name and "TRACK · n bars". Its card reads MIDI, audio or the demo's part,
+    the track it came from, its length and where it is. Pulling is in `TimelineLanes`: a press on
+    an item records how far out of the face the hand was. The drag is pulled out
+    (`pulled_out`) when a hand has come PULL (8 cm) toward you, or the point is PULL_EDGE (4 cm)
+    past the lanes' edge, which a mouse can do. The preview goes, nothing moves and nothing enters
+    the history, and the surface emits `clip_pulled(track, index, hand)`. The lanes' card says "off
+    the edge for a cassette of it". The studio's `_on_clip_pulled` has the host mint it into the
+    pulling hand. A guest predicts `make` [kind, "clip:t:i"] and holds a blank look-alike
+    (`look_of`) that follows its hand (`_making`). The host's `make` mints from its own song,
+    `Session.hand_to` puts it in the guest's hand by the holds, and the room names it. The guest's
+    `apply_room` settles the ask by its ack: the look-alike goes, and `_take_given` puts the made
+    one in the waiting hand, or a free one. A refusal is told to the asker, and its look-alike
+    goes. The cassette rack (`CassetteRack`, tools/blender/cassette.py) is a station in the live
+    room, `cassette_rack` in Stations.ALL beside the prop shelf (`Venue.cassette_rack_spot`), and a
+    walker solid. It has twelve face-out ledges (holder `rack`), a tray and the BIN (holder `bin`).
+    Item gains `slot_in`/`slot_n`: slotted is LOOSE at the slot's pose and never tidied away.
+    `slot_item` is a hand's (a guest's is the room verb `slot_item`). A put-down within SLOT_REACH
+    of a slot, or aimed at a free one, slots it. A click on the rack's face shelves into the free
+    slot nearest the click, and a click on the BIN bins. A taken slot or a full rack is told, not
+    done. The bin on the host is `unmake`: gone everywhere, "Binned cassette N.". `give`
+    [id, peer] is a room verb, from the item's holder to someone in the room. The host carries it
+    out with `_give`: the holds first, then a hand here if it is the host's. At a desk, a click
+    with a cassette in hand on a bandmate's ghost gives it (`Presence.peer_at`, within 0.35 m of
+    their head or chest along the ray). In a headset, a hand held within GIVE_REACH (0.25 m) of
+    their glove for GIVE_HOLD (0.5 s) gives it (`Presence.glove_near`). The guest's own glove lets
+    go into theirs meanwhile (`palm_of`). The host's made items and their places are kept beside
+    its layout (`LayoutProfile.made`, `<profile>_made.bin`, written only when changed), and are
+    restored when the room is built again. Long toasts now wrap in the session panel
+    (TOAST_WIDTH), so a station's or a cassette's line fits a 1600-wide window. The welcome card's
+    TOGETHER page has "Hand it over". The suite:
+    `_test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand` checks:
+    - a mouse drag off the lanes' edge is cassette1, kind cassette, in the hand, the arrangement
+      and history unchanged;
+    - `look_of`;
+    - the demo item's part and window;
+    - the room naming it without its clip;
+    - let go by a slot, it is shelved, with ["slot", "rack", 0] in the room;
+    - twelve by the face, then a thirteenth refused, and a taken slot refused;
+    - the BIN retires one;
+    - ids are never reused;
+    - a studio built again has them back in their slots.
+
+    `_test_a_cassette_packs_its_clip_whole_and_small` checks:
+    - a two-minute take bent 60 times a second packs to 122 KiB, under MADE_BYTES;
+    - an hour of audio packs to 308 bytes with no peaks;
+    - fades, gain, loop and file by name round-trip;
+    - a demo part plays on another track and reaches a guest's mirror;
+    - each of the three limits refuses.
+
+    `_test_a_guests_pull_is_a_ghost_until_the_host_answers` checks:
+    - the ask names the clip;
+    - the look-alike follows the hand;
+    - the row is kept until the room names it;
+    - the answer is the made cassette in the pulling hand;
+    - a refusal drops the look-alike;
+    - bad rows are refused;
+    - `_unmade` removes it;
+    - leaving clears the rows.
+
+    `_test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over` checks:
+    - the guest's pull is minted into its glove by the holds;
+    - the room grows by the name, not the clip;
+    - a put-down sends no clip;
+    - a guest's slotting;
+    - each refusal through `make`;
+    - `give` only from the holder to a member, guest to host and host to guest;
+    - `peer_at`, `glove_near`, and a headset's hold-to-give;
+    - a click through the mouse hand's own tick on a bandmate standing in front of a fader hands
+      it over and leaves the fader alone; with them behind it, the fader is under the hand;
+    - a late joiner's room makes it, slotted, from the rows.
+
+    `_test_a_players_own_cassettes_wait_while_they_are_a_guest` checks:
+    - joining sets the player's own cassettes aside (`Session.join` clears its rows and their
+      items) without saving over the layout;
+    - the host's room may then carry MADE_MOST - 1 of its own, ours counting nothing;
+    - leaving gives the host's back and ours again, in their slots (`Studio._restore_made`, only
+      what is missing);
+    - the next mint keeps all three, on disk too.
+
+    A click on a bandmate is theirs even with a control behind them: `ItemRoom.press_ahead` (the
+    studio's `_press_ahead`, from `Presence.peer_along`) says how far along the ray a made item's
+    hand-over target stands, and the Interactor drops a control further than that from the hover,
+    so the press is the item's. A hand-over toast names the clip as the song has it: "Handed the
+    Kick Verse 1 cassette to Grace."
+
+    The probe: the guest asks `make` for clip 2:0 at 58.86. The host mints cassette1 into the
+    guest's hand and, at 58.9, hands it a cassette2 of its own. By 58.97 both halves find both
+    cassettes in the guest's glove, with the rows the same. The host's end moved to 59.0.
+    shots/spatial23.png is the rack with Kick, Snare and Hat cassettes in its top row, the Hat
+    one hovered (`SHOT_ARGS="--cassettes 3 --hover 770,243" tools/shot.sh shots/spatial23.png 200
+    206`; the station's framing settles a little differently each run, so the hover point may
+    need moving). The lettering on the cassettes is pen-sized (about 9 mm) and at the station's
+    distance is too small to read at 1600x900. On a desktop the name comes from the hover card
+    ("CASSETTE  Hat Verse 1", its track, length and slot). The rack's plaque runs off the
+    bottom of the frame, as spatial19's does.
+
+24. [x] **A cassette onto a track.** #4 finished. `DAW.paste_item(track, start, packed)`:
     OfflineBackend makes the ItemState from the packed clip (`MixWire.unpack_item`) at `start`,
     `part` and all. The bridge's PasteItem makes it in Reaper (CreateNewMIDIItemInProj with its
     notes and CCs, or AddMediaItemToTrack with its source, offset, fades, gain and loop). It is one
@@ -1905,7 +2352,94 @@ none.
     time; the bridge decodes PasteItem. The probe checks that a guest pastes a host-made cassette
     onto track 4 at bar 30. Both sides at 0 failed.
 
-25. [ ] **Hold a cassette to your ear.** The proving idea, #13. A cassette (or a sample, slice 26)
+    Built. `DAW.paste_item(track, start, packed)` is host-only and outside COMMANDS: it returns
+    "" when pasted and otherwise why not, from `DAW.paste_refusal`. The reasons are checked in
+    this order: no PASTE_ITEMS (Reaper without the bridge), no clip, no such track, a frozen track,
+    a clip with no notes, controls, file or part, a source file not on this machine (`media_path`),
+    a demo part where the backend lacks the new Capability DEMO_PARTS (Reaper), and MIDI onto a
+    track whose input is an audio one ("takes no MIDI"). The empty clip is what a cassette of a
+    Reaper item's own audio is: the cache knows a file only for takes recorded through the desk
+    (`take_peaks`), and pasted down the MIDI path it would be an empty MIDI item, so it is refused
+    with the reason. Carrying Reaper's own audio by its full path is left for later: a cached
+    `source` turns on the desk's own stretch, reverse and overview paths for that item too. Its step is named for the track (NAMED_BY_TRACK: "Hat: paste item").
+    `DAWBackend._locally_paste` lands the unpacked ItemState in a copy of the lane
+    (`_land_in_lane`) at `start`. Its overview comes from the file here (`take_peaks`, reversed
+    when it is), since a clip carries no peaks. OfflineBackend.`paste_item` wraps that in one
+    `_remember_edit`, so one Ctrl-Z takes it back. ReaperBackend shows it on the cache at once and
+    sends the bridge's `PasteItem` as one flat list (`paste_request`). Notes and controls are in
+    project seconds. The source is a full path, which the bridge copies into a saved project's
+    media folder. PasteItem refuses a missing track, an empty length or a missing file. In one
+    undo block it makes a MIDI item (CreateNewMIDIItemInProj, notes and CCs) or an audio one
+    (AddMediaItemToTrack, its source, offset, length, fades and their shapes, gain, loop and
+    reversal), then rebuilds peaks. Reaper loops the item's whole file, not its loop window.
+
+    The press is in the Interactor, not in each surface. A ControlAffordance has `paste_spot(at,
+    fine)`, which for a strip's or voice's controls is [track, playhead] from `pastes_onto`, and for
+    the lanes is their `drop_spot` (snapped unless fine). An `Item.pastes()` one in the hand (a
+    cassette with a clip), pressed on such a control, goes to `ItemRoom.paste` and
+    `paste_pressed` in place of the control's own press. A headset hand (`pushes_to_paste`) also
+    pastes by crossing into a pasting control's face from outside, a ray from last tick's hand to
+    this one that leaves out the cassette itself. Held in and drawn out does nothing more, and a
+    new push pastes again. A jump is not a push: a step longer than PUSH_MAX_STEP (0.25 m) in one
+    frame pastes nothing, XRRig._arrive forgets where every hand's cassette was (`forget_push`)
+    when the play space travels, and a bare hand pushes only on frames it is tracked with every
+    joint seen (`push_tracked`, HandGestures.confident), this one and the last. Letting go is as it was: put down, slotted or thrown. The cassette stays
+    in the hand. The control's card says what a press would do: "click pastes the Rhodes Intro
+    cassette onto OH L/R at 20.1.00; Q puts it down", or the trigger or a push in a headset
+    (`Interactor.paste_press_words`); a tracked bare hand, which has no trigger, is told of the
+    push alone, on the card and in the held cassette's notice. Every
+    strip control but the send socket pastes, as do the stage voices and the table's name grips.
+    The studio's `paste_cassette` tells the paster, and the host when a guest pasted. A guest
+    predicts the room verb `paste` [id, track, seconds] (ROOM_VERBS). The host pastes the clip of
+    its own row for that id, only when the asker holds it (`Session.holder_of`), and tells it why
+    not otherwise. The cassette's held hint, the welcome card's TOGETHER page ("Paste it") and the
+    lanes' hint say so.
+
+    `_test_a_cassette_pastes_onto_a_track_as_the_clip_it_was` checks:
+    - a MIDI take pasted by the trigger onto Track 4's lane, snapped to the beat, equal to its
+      source but for start and track, as one undo step named for the track;
+    - undone, it is gone;
+    - fine, it goes off the grid where it was pressed;
+    - a let-go over a lane pastes nothing;
+    - a push into the face pastes, held in pastes nothing more, and a fresh push pastes again,
+      while a mouse moving in does not;
+    - a one-frame jump through the face, a step across a travel, and a step from or to a frame
+      the hand was not seen well on paste nothing, and a bare hand's card names only the push;
+    - an audio cassette on Track 5's strip pastes at the playhead with its file, offset, fades,
+      gain and loop, and its overview drawn here;
+    - a demo cassette on a stage voice pastes its window and plays the part it was cut from, not
+      its track's.
+
+    `_test_a_paste_is_refused_and_says_why` checks:
+    - a frozen track, MIDI where none is taken (though audio goes there), a missing file, no such
+      track, no clip and a clip of nothing (a Reaper item's own audio) are each refused with the
+      reason, and nothing is pasted;
+    - a guest's DAW never pastes itself;
+    - Reaper without the bridge says so, and a demo part on Reaper is refused for the built-in
+      engine;
+    - with the bridge, a MIDI cassette is one PasteItem with its notes in project seconds, shown
+      on the cache, and an audio one names its file by path, offset and loop.
+
+    `_test_a_guests_paste_names_its_cassette_track_and_time` checks:
+    - a guest's press is asked as `paste` naming the cassette, track and time, never the clip;
+    - from someone not holding it, nothing is pasted;
+    - the host pastes its own row's clip there and is told who pasted what where;
+    - a refused one pastes nothing.
+
+    tests/bridge_decode_test.lua decodes PasteItem and runs its MIDI, audio and refusal paths
+    against a stand-in reaper. The probe: at 58.99 the guest asks `paste` for the host-made
+    cassette2 on track 4 at bar 30. At 59.08 both sides find the pasted item, and the guest has
+    the "Pasted" notice. On Reaper, a demo-part cassette expects the built-in-engine refusal
+    instead. At 59.1 the host undoes it and unmakes the made items. The host's end moved to 59.14
+    and the guest's to 59.32. shots/spatial24_paste.png is the Rhodes Intro cassette clicked onto
+    OH L/R's lane a third of a beat past bar 20 and pasted on the beat
+    (`SHOT_ARGS="--paste 7:5@20 --no-hud" SHOT_CAM="0,-0.05,1.0,0.15,1.45,-1.0" tools/shot.sh
+    shots/spatial24_paste.png 30 36`). The cassette is in the hand. The toast says where it went,
+    and the card under the pointer says what the next click would paste. The timeline's view
+    is held within the song's length (`_clamp_view`), which cannot frame bar 30 of the demo song,
+    so the shot uses bar 20.
+
+25. [x] **Hold a cassette to your ear.** The proving idea, #13. A cassette (or a sample, slice 26)
     held at the ear (XRInteractor.HEAD_REACH, as headphones are put on) plays its clip to this
     player alone, from its start, looping, at its own gain, until taken away. A desk holds L while
     carrying one. It plays on MONITOR as a cue (Ears), never the mix, and the room ducks 10 dB for
@@ -1919,7 +2453,69 @@ none.
     plays when it arrives; L at a desk. The probe checks that a guest's ear on an audio cassette
     fetches the host's file. Both sides at 0 failed.
 
-26. [ ] **Anything can be a sample.** The proving idea, #12. The sampler is a station (`sampler`, a
+    Built. `EarCue` (core/audio/ear_cue.gd, one per studio, `Studio.ear`) plays the cassette at an
+    ear here. `Studio._follow_ear` asks every hand each frame (`Interactor.cassette_at_ear`): a
+    headset's, the cassette's middle within XRInteractor.HEAD_REACH (0.22 m) of the eyes, and away
+    again only past HEAD_REACH + EAR_LEAVE (0.06 m), so a hand wavering at the edge does not start and
+    stop it; a desk's, L held while carrying one (`MouseInteractor.ear_held`, taken before the studio's
+    lean sees the key, and let go when the cassette leaves the hand). Held up, the desk's cassette
+    rides raised beside the view (`EAR_AT`), tipped toward you. The clip plays on the keys' bus
+    (AudioPorts.MONITOR) as a cue, from its start, looping, at its own gain. `Ears.cue` takes the Mix
+    bus, the room's sounds and any cues CUE_DUCK_DB (10 dB) down for this player while it sounds, and
+    keeps the keys' bus heard even where a personal mix leaves it out. MIDI is rendered on a worker
+    (`EarCue.midi_frames`: GodotBackend.render_midi_frames, the tine and ItemVoices for channels 9
+    and 10, now split out of `render_midi` with `wav_of`), exactly the clip long, its tail added
+    onto its start. A demo part is `EarCue.demo_samples`: DemoSong.render_window through the song's
+    tempo map and meter, each window from its loop's first bar to the next's, the clip's start to its
+    end. Both are made into their streams on the worker (`midi_stream`, `demo_stream`); a render goes
+    on when the cassette is taken away, is kept when done, and is picked up if it is held up again,
+    so changing cassettes never waits for one. Audio is its file (`clip_stream`): the stream loops the clip's stretch from its offset; one
+    with a loop of its own is started again every clip length; a reversed one plays the file backwards.
+    The host plays it from its media folder. A guest asks `FileSend.fetch` once by name. The host
+    (`fetch_asked`) sends only a file something in the room plays (`_plays_here`: an item of the
+    song or a made cassette's clip), a slice at a time on FILE_CHANNEL, into the guest's
+    `user://fetched`, which goes when it stops being a guest. Meanwhile the tag says FETCHING, and
+    the clip plays as the copy lands. Refused, or with no file anywhere, the tag says `not on this
+    machine` and keeps it once lowered. A clip of nothing (a Reaper item's own audio) says "nothing
+    to hear". Renders are kept (six), so a cassette held up again plays at once. The tag is the
+    cassette's lower line (`CassetteItem.hearing`: RENDERING, AT YOUR EAR, FETCHING, ...), and one
+    notice says what it plays and how to stop it. Discoverable: the held cassette's card and notice,
+    the cassette rack's desk and hands lines, and the welcome card's TOGETHER page ("Listen to it").
+
+    `_test_a_cassette_at_the_ear_plays_to_this_player_alone` checks:
+    - L held at a desk with a MIDI cassette starts it, RENDERING then AT YOUR EAR, and is no lean;
+    - the render is the clip's length to the frame, looping, the clip's notes with the tail rung in;
+    - it is on Monitor alone, never the Mix bus, the Mix and the room 10 dB down, the keys not;
+    - one notice; nothing changed in the song;
+    - L let go stops it and the room is as it was; held up again, the kept render plays at once;
+    - drums and bells (channels 9 and 10) are rung, the clip long;
+    - a headset hand: held out, nothing; at the ear, it plays; just past the edge, still; away, it
+      stops; back at the edge, not again until within HEAD_REACH.
+
+    `_test_a_demo_or_audio_cassette_at_the_ear_plays_its_own_sound` checks:
+    - a demo cassette renders, then plays its part's window from the clip's start, the clip long;
+    - an audio cassette plays its file at once on the host, from its offset, the clip's stretch
+      looping, at its gain; a looped one goes back to its start each clip length;
+    - a file this machine lacks is `not on this machine`, said, and kept on the tag once lowered;
+    - a clip of nothing has nothing to hear, and says why.
+
+    `_test_a_guest_fetches_an_audio_cassettes_file_once_to_hear_it` checks:
+    - a guest without the file asks the host once by name, FETCHING meanwhile, and says so;
+    - lowered and raised again, it does not ask again;
+    - it plays as the copy arrives, byte for byte the host's, from `user://fetched`;
+    - the host refuses a file nothing in the room plays, and a path, and the copy here is untouched;
+    - no longer a guest, the copies go.
+
+    The probe: at 59.12 the host mints an audio cassette of a file only its media folder has (`Probe
+    Ear <port>.wav`). At 59.2 the guest's EarCue holds it, FETCHING, asked once. By 59.32 the copy is
+    in its fetched folder, byte for byte the host's, and plays on Monitor. At 59.34 the host has sent
+    one file whole (`FileSend.fetches_served`), then unmakes the cassette and deletes the file. The
+    host's end moved to 59.38 and the guest's to 59.56. shots/spatial25_ear.png is the Rhodes Intro
+    demo cassette held up with L, AT YOUR EAR on its tag and the notice saying what it plays
+    (`SHOT_ARGS="--ear 7" tools/shot.sh shots/spatial25_ear.png 240 246`: a long demo part takes a
+    few seconds to render in a window).
+
+26. [x] **Anything can be a sample.** The proving idea, #12. The sampler is a station (`sampler`, a
     small pad bank with a mic on a gooseneck beside the cassette rack). Its REC is a room row
     (`sampler` [the peer who pressed it, or 0]). One press of REC catches one sound: the next use,
     by anyone, of an item within 1.5 m of its mic, or of one held by whoever pressed REC: the duck
@@ -1938,6 +2534,71 @@ none.
     does nothing; a guest's squeeze is sampled on the host with the guest's take; REC replicates.
     The probe checks it from the guest. Both sides at 0 failed. shots/spatial26.png is the sampler
     with two sample cassettes.
+
+    Built. `Sampler` (core/music/sampler.gd, station `sampler`, model tools/blender/sampler.py) stands
+    with its back to the outside of the vocal booth's front wall, a step from the cassette rack, facing
+    the front of the live room (`Venue.sampler_spot`; none in the Rig Roulette room, which has no
+    booth). The floor beside the rack is too narrow for it: the booth starts 0.29 m past the rack. It
+    is a cabinet with eight pads and a round REC key on its deck, a screen along the back and a mic on
+    a gooseneck bent over the pads. REC is the room row `sampler`, the peer it is armed for or 0
+    (`Sampler.armed_by`), asked by a guest with the room verb `sampler` [on] and shown at once. A
+    press while it is on turns it off. The key lights, says REC ON, and its card and the screen say
+    whose next sound it waits for (LISTENING FOR YOUR NEXT SOUND), so it is never colour alone.
+    Every use now carries its take: `Item.use_take`, sent as `Session.item_used`'s `take` (cleaned like
+    a hit's, `Session.clean_take`), and rung by every copy (`Item.heard_use`). The duck's squeak is
+    a take of its own (`Foley.squeak_take`, its tuning baked in, not a random pitch), and an
+    instrument's sound is named (`InstrumentItem.sound_kind`). `Foley.take_of(kind, take)` is the one
+    stream for any of them. Only the host catches (`Sampler.heard`): its own hand's uses and hits, and
+    a guest's use or hit of something in that guest's hand, with the guest's take. It catches one within
+    REACH (1.5 m) of the mic, or anywhere by whoever armed it. It writes the stream's own samples
+    after a header at Foley's rate (`Sampler.write`, `AudioTake.header` now takes a rate) to
+    `DAWBackend.media_path`, the kind and the next free number (`duck_squeeze_1.wav`,
+    `tambourine_hit_1.wav`). It mints a cassette (`Sampler.sample_data`: an audio clip of the whole
+    file, `sample` in its data) into the rack's first free slot, turns REC off and tells the presser
+    what it caught and where it went. A sample cassette is lettered `SAMPLE · 0.26 s`
+    (`CassetteItem.is_sample`). It goes to the ear, the guest fetching its file, and pastes as audio.
+    Not caught: what rings no take: the ball's squeeze, a bounce, a throw, the yo-yo's and the cards'
+    tricks (FidgetItem plays them over time) and the keytar. Their `use_kind` is empty, so REC waits
+    for something it can keep. Discoverable: the plaque and both help lines (PLAY · LIVE ROOM, the
+    I walk), the REC key's hover card, the notice on each press and each catch, the screen, and the
+    welcome card's TOGETHER page ("Sample it").
+
+    `_test_a_squeeze_after_rec_is_one_sample_on_the_rack` checks:
+    - the sampler stands beside the rack with its plaque and REC key;
+    - REC off, a squeeze writes nothing, and the key and screen say off;
+    - REC by the key is this player's, the room's row, said in words and lit, with a notice;
+    - a squeeze in the presser's hand writes one WAV, byte for byte Foley's stream for its take at
+      44.1 kHz, the squeak the duck rang, and it opens as a WAV;
+    - one sample cassette, an audio clip of the whole file named for it, in the rack's first slot,
+      REC off, the screen naming it, the presser told, and it pastes;
+    - a second squeeze writes nothing; REC pressed twice is off and catches nothing;
+    - with a guest's REC, the host's squeeze far from the mic catches nothing and REC stays on;
+    - the ball's squeeze by the mic rings nothing it knows, and REC stays on;
+    - the tambourine struck within reach is caught for the guest's REC, made by whoever struck it,
+      onto the next slot;
+    - a shaker shaken is caught as its take;
+    - as a guest, the host's row shows; its own press is asked and shown at once, kept against a room
+      that crossed it, and the answer is the room's; its own squeeze writes nothing.
+
+    `_test_a_guests_squeeze_is_sampled_on_the_host_with_its_take` checks:
+    - the take is cleaned as a hit's is;
+    - a squeeze by someone not holding the duck is not caught;
+    - hers, take 3, rings take 3 on the host's copy and is written as Foley's take 3, not 2;
+    - the cassette is hers, on the rack, and REC is off for the room;
+    - her second squeeze writes nothing;
+    - her shake is caught as her take, shaken;
+    - her REC off is the room's, and a REC ask is a yes or no.
+
+    The probe: at 59.36 the guest asks REC. By 59.42 the room's `sampler` row is the guest. At 59.44
+    it takes the duck, and at 59.48 squeezes it with take SAMPLE_TAKE (3). At 59.52 the host has
+    heard that take. Its Sampler (as the studio's) has written one WAV equal to Foley's stream for
+    it, made a cassette the guest made, and turned REC off, in the room too. By 59.56 the guest has
+    the cassette's row, the room naming it, and REC off. The host takes them away at 59.58. The host's
+    end moved to 59.6 and the guest's to 59.78. Not run with this slice: the checkpoint runs it.
+    shots/spatial26.png is the sampler lit and listening, its screen saying so, beside the rack with
+    the two sample cassettes on its top row
+    (`SHOT_CAM="2.35,-0.28,1.75,-6.3,1.15,4.45" SHOT_ARGS="--samples 2 --hover 30,890"
+    tools/shot.sh shots/spatial26.png 60 66`).
 
 27. [ ] **A DJ platter.** The proving idea, #17. `Platter` (core/music/platter.gd, station
     `platter`, on the deck cart beside the tape deck) is a turntable whose label turns with the

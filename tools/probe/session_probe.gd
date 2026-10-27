@@ -74,6 +74,47 @@ const TILT_DEGREES := 20.0
 ## to a clock of its own, each this far (s) before a sixteenth, the first snapped and the second not.
 const SNAP_SONG := 560.0
 const SNAP_EARLY := 0.02
+## The stage table (slice 18): the track whose voice the guest places on a table of its own, by a
+## hand, from 57.7, and where to: pan 40 L at -10 dB. The host finds both, as one step.
+const STAGE_TRACK := 4
+const STAGE_PAN := 0.3
+const STAGE_DB := -10.0
+## Clap to mute (slice 19): the track the guest's latched clap mutes at 58.2, which the host finds
+## toggled at 58.4 and puts back.
+const CLAP_TRACK := 6
+## Sidechain as a rope (slice 20): the guest drags a rope at 58.5 from ROPE_FROM's knot to ROPE_TO's
+## voice on a table of its own (the demo's kick to its bass); the host finds the key send at 58.7.
+const ROPE_FROM := 2
+const ROPE_TO := 6
+## Automation by gesture (slice 22): the track whose fader the guest's write bead rides at 58.72, to a
+## clock of its own from BEAD_SONG for BEAD_SECONDS, the song not looping; the host finds the pass
+## as its lane at those song positions at 58.85.
+const BEAD_TRACK := 13
+const BEAD_SONG := 640.0
+const BEAD_SECONDS := 1.0
+## Clips as cassettes (slice 23): the clip the guest pulls at 58.86, as "clip:<track>:<index>" names
+## it; the host mints it and it is in the guest's glove. At 58.9 the host hands the guest one of its
+## own; by 58.97 both halves find both cassettes in the guest's hand and their rows the same.
+const PULL_TRACK := 2
+const PULL_FROM := "clip:2:0"
+## A cassette onto a track (slice 24): at 58.99 the guest pastes the host-made cassette it was handed
+## (cassette2) onto PASTE_TRACK at PASTE_BAR, by the room's `paste` naming it, its track and its time;
+## the host pastes its own row's clip there, and by 59.08 both halves find it, the clip it was but
+## for its start and track. The host takes it back at 59.1.
+const PASTE_TRACK := 4
+const PASTE_BAR := 30.0
+## A cassette at the ear (slice 25): at 59.12 the host mints an audio cassette of a file only its own
+## media folder has (EAR_FILE, a half second of tone, named for the port); at 59.2 the guest holds it
+## to its ear with no file of it, FETCHING, and asks the host once (FileSend.fetch); by 59.32 the copy
+## is in its FETCHED folder, byte for byte the host's, and it plays. The host has sent it once by 59.34.
+const EAR_SECONDS := 0.5
+## Anything can be a sample (slice 26): at 59.36 the guest presses the host's sampler's REC (the
+## room's `sampler` [true]); by 59.42 the room's row is the guest. At 59.44 it takes the duck, and at
+## 59.48 squeezes it, its hand ringing Foley's take SAMPLE_TAKE. By 59.52 the host has heard that take,
+## caught it (its Sampler, as the studio's) as one WAV equal to Foley's stream for it and a sample
+## cassette the guest made, and REC is off; by 59.56 the guest has the cassette's row, the room naming
+## it, and REC off. The host takes them away at 59.58.
+const SAMPLE_TAKE := 3
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
@@ -144,6 +185,8 @@ var _rooms_heard := 0
 ## Heard from the other side: [item, local or down, from] for carries and uses.
 var _carries: Array = []
 var _uses: Array = []
+## The Foley take each of `_uses` rang (Session.item_used's `take`, slice 26), in the same order.
+var _use_takes: Array = []
 ## Notes heard from the other half, as Session.note_played gives them: plain keys' here, and an
 ## instrument's [kind, pitch, from, source] in `_sourced`.
 var _notes: Array = []
@@ -171,6 +214,26 @@ var _head := Transform3D.IDENTITY
 ## pan and volume and the host's own track's volume then.
 var _edit_depth := 0
 var _edit_was: Array = [0.5, 0.5, 0.5]
+## The stage track's pan and volume before the guest placed it.
+var _stage_was: Array = [0.5, 0.716]
+## Whether the clap's track was muted before the guest clapped at it.
+var _clap_was := false
+## How many plugins the rope's track had before the guest tied it, so a compressor the rope added on
+## Reaper is taken away by hand.
+var _rope_plugins_were := 0
+## The bead track's lane and level before the guest's pass, to put back on Reaper.
+var _bead_was: Array = []
+var _bead_volume_was := 0.0
+## Host: the made items the guest's pull and the host's give put in the guest's hand (slice 23).
+var _made_for_guest: Array[StringName] = []
+## Host: the guest's paste as asked, [id, track, seconds] (slice 24), and what pasting it said.
+var _paste_asked: Array = []
+var _paste_said := "not asked"
+## Host: the audio cassette minted for the guest's ear (slice 25).
+var _ear_cassette: StringName = &""
+## Host: the sampler the guest's REC arms (slice 26), and what it caught: [cassette id, file, from].
+var _sampler: Sampler = null
+var _sampled: Array = []
 
 
 func _ready() -> void:
@@ -245,8 +308,10 @@ func _host(port: int) -> void:
 		_motions.append([piece, x, z, h, from]))
 	Session.item_carried.connect(func(item: StringName, local: Transform3D, from: int):
 		_carries.append([item, local, from]))
-	Session.item_used.connect(func(item: StringName, down: bool, from: int):
-		_uses.append([item, down, from]))
+	Session.item_used.connect(func(item: StringName, down: bool, from: int, take: int):
+		_uses.append([item, down, from])
+		_use_takes.append(take))
+	Session.item_used.connect(_sample_a_use)
 	Session.note_played.connect(_on_note_played)
 	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
 		_item_hits.append([item, velocity, from, song, snap, take]))
@@ -256,6 +321,12 @@ func _host(port: int) -> void:
 			_duck_holder_at_put = Session.holder_of(DUCK)
 		if verb == &"plug":
 			_answer_plug(args, from)
+		if verb == &"make":
+			_answer_make(args, from)
+		if verb == &"paste":
+			_answer_paste(args, from)
+		if verb == Sampler.VERB:
+			_answer_sampler(args, from)
 		if verb == FifthsWheel.VERB:
 			# As the studio answers a guest's SET: written at the bar the guest chose.
 			FifthsWheel.answer(args[0], args[1])
@@ -597,11 +668,62 @@ func _host(port: int) -> void:
 	await _until(57.65)
 	_check_snapped_take()
 
-	# How much of the time before the end the work took: the end has moved three times as it grew.
+	# The stage table (slice 18): the guest's placing, from 57.7, is its pan and its level at once,
+	# and one step in my history: one undo takes both back.
+	_stage_was = [DAW.state.track(STAGE_TRACK).pan, DAW.state.track(STAGE_TRACK).volume]
+	await _until(58.1)
+	_check_stage_placing()
+
+	# Clap to mute (slice 19): the guest's clap at 58.2, a latch, toggles my track's mute.
+	_clap_was = DAW.state.track(CLAP_TRACK).mute
+	await _until(58.4)
+	_check_clap_mute()
+
+	# Sidechain as a rope (slice 20): the guest's rope, tied at 58.5, is my key send.
+	_rope_plugins_were = DAW.state.track(ROPE_TO).plugins().size()
+	await _until(58.7)
+	_check_rope()
+
+	# Automation by gesture (slice 22): the guest's write bead, pulled at 58.72 to a clock of its
+	# own, is my lane at its song positions.
+	_bead_was = WriteBead.lane_now(BEAD_TRACK, "volume")
+	_bead_volume_was = DAW.state.track(BEAD_TRACK).volume
+	await _until(58.85)
+	_check_written_lane()
+
+	# Clips as cassettes (slice 23): the guest's pull at 58.86 is a cassette I mint and put in its
+	# glove (`_answer_make`); at 58.9 I hand it one of my own, as the studio's give does.
+	await _until(58.9)
+	_give_a_cassette()
+	await _until(58.97)
+	_check_cassettes_given()
+
+	# A cassette onto a track (slice 24): the guest's paste at 58.99 of the cassette I gave it is my
+	# own row's clip on PASTE_TRACK at PASTE_BAR (`_answer_paste`), one step I take back at 59.1.
+	await _until(59.08)
+	_check_pasted()
+	await _until(59.1)
+	_take_back_the_paste()
+
+	# A cassette at the ear (slice 25): an audio cassette of a file only I have, minted at 59.12; the
+	# guest's ear on it at 59.2 asks me for the file, and by 59.34 I have sent it, once.
+	await _until(59.12)
+	_mint_an_ear_cassette()
+	await _until(59.34)
+	_check_ear_file_sent()
+
+	# Anything can be a sample (slice 26): the guest's REC at 59.36 arms my sampler for it
+	# (`_answer_sampler`); its squeeze at 59.48 is caught here with its take (`_sample_a_use`).
+	await _until(59.52)
+	_check_sampled()
+	await _until(59.58)
+	_take_back_the_sample()
+
+	# How much of the time before the end the work took: the end has moved nine times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	print("host work done at %.1fs of 57.8" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(57.8)
+	print("host work done at %.1fs of 59.6" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(59.6)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -615,7 +737,90 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(58.7)
+	await _until(59.72)
+
+
+## The guest's rope (slice 20), as my DAW has it: a key send from ROPE_FROM into ROPE_TO and a
+## compressor on ROPE_TO to hear it, listening to it on the built-in engine, as one step named for
+## the rope, which one undo takes back. On Reaper the bridge's Batch is Reaper's own one step; it is
+## taken back by hand.
+func _check_rope() -> void:
+	var n := Sidechain.key_send(ROPE_FROM, ROPE_TO)
+	var comp := Sidechain.compressor_on(ROPE_TO)
+	check("the guest's rope is my key send from track %d into %d (send %d)" % [ROPE_FROM, ROPE_TO, n], n > 0)
+	check("with a compressor on %d to hear it (%d)" % [ROPE_TO, comp], comp >= 0)
+	var engine := DAW.backend as GodotBackend
+	if engine != null and comp >= 0:
+		var effect := AudioServer.get_bus_effect(engine._bus[ROPE_TO], 1 + comp) as AudioEffectCompressor
+		check("which listens to the key (%s)" % (effect.sidechain if effect != null else &"none"),
+				effect != null and effect.sidechain == StringName(GodotBackend.send_bus(ROPE_FROM, ROPE_TO)))
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		var named := "%s > %s: rope" % [DAW.state.track(ROPE_FROM).display_name(), DAW.state.track(ROPE_TO).display_name()]
+		check("as one step, called the rope (%s)" % last, last == named)
+		DAW.undo()
+		check("which one undo takes back whole", Sidechain.key_send(ROPE_FROM, ROPE_TO) == 0
+				and DAW.state.track(ROPE_TO).plugins().size() == _rope_plugins_were)
+	else:
+		if comp >= 0 and DAW.state.track(ROPE_TO).plugins().size() > _rope_plugins_were:
+			DAW.remove_fx(ROPE_TO, comp)
+		if n > 0:
+			DAW.remove_send(ROPE_FROM, n)
+
+
+## The guest's write bead pass (slice 22), as my DAW has it: BEAD_TRACK's volume lane, its points
+## at the guest's song positions from BEAD_SONG, one each WriteBead.POINT_SECONDS, rising as the
+## guest's hand did, and the lane let go again. One step named for the lane, which one undo takes
+## back; on Reaper the lane and the level are put back by hand.
+func _check_written_lane() -> void:
+	var lane := WriteBead.lane_now(BEAD_TRACK, "volume")
+	var inside := lane.filter(func(pt): return absf(float(pt[0]) - BEAD_SONG - BEAD_SECONDS * 0.5) <= BEAD_SECONDS * 0.5 + 0.0001)
+	var spaced := true
+	for i in inside.size():
+		spaced = spaced and absf(float(inside[i][0]) - (BEAD_SONG + i * WriteBead.POINT_SECONDS)) < 0.002
+	var wanted := roundi(BEAD_SECONDS / WriteBead.POINT_SECONDS) + 1
+	check("the guest's bead pass is my track %d's lane at its song positions from %.1f (%d of %d points)"
+			% [BEAD_TRACK, BEAD_SONG, inside.size(), wanted], inside.size() == wanted and spaced)
+	check("rising as its hand did (%s)" % [[inside[0][1], inside[-1][1]] if not inside.is_empty() else []],
+			not inside.is_empty() and float(inside[-1][1]) > float(inside[0][1]) + 1.0)
+	check("and the lane is followed again", not DAW.backend.lane_held(BEAD_TRACK, "volume"))
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		check("as one step, named for the lane (%s)" % last, last.ends_with("level automation"))
+		DAW.undo()
+		check("which one undo takes back", ReaperBackend._same_lane(WriteBead.lane_now(BEAD_TRACK, "volume"), _bead_was))
+	else:
+		DAW.set_automation(BEAD_TRACK, "volume", _bead_was)
+		DAW.set_track_volume(BEAD_TRACK, _bead_volume_was)
+
+
+## The guest's latched clap (slice 19), as my DAW has it: CLAP_TRACK's mute toggled from what it
+## was, and left so once its hands parted. Put back.
+func _check_clap_mute() -> void:
+	var t := DAW.state.track(CLAP_TRACK)
+	check("the guest's latched clap toggled my track %d's mute (%s, was %s)" % [CLAP_TRACK, t.mute, _clap_was],
+			t.mute != _clap_was)
+	DAW.set_track_mute(CLAP_TRACK, _clap_was)
+
+
+## The guest's placing on its stage table (slice 18), as my DAW has it: the stage track's pan and
+## level where the guest put its voice, the last step in my history named for it as a placing,
+## which one undo takes back whole. On Reaper its OSC writes stay Reaper's own undo points, so
+## the track is put back by hand.
+func _check_stage_placing() -> void:
+	var t := DAW.state.track(STAGE_TRACK)
+	var db := DAW.taper_to_db(t.volume)
+	check("the guest's placing on its stage table moved my track %d's pan and level at once (%s, %.2f dB)"
+			% [STAGE_TRACK, StageTable.pan_words(t.pan), db], absf(t.pan - STAGE_PAN) < 0.002 and absf(db - STAGE_DB) < 0.05)
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		check("as one step, called a placing (%s)" % last, last == "%s: place" % t.display_name())
+		DAW.undo()
+		check("which one undo takes back whole (%.3f %.3f)" % [t.pan, t.volume],
+				absf(t.pan - float(_stage_was[0])) < 0.0001 and absf(t.volume - float(_stage_was[1])) < 0.0001)
+	else:
+		DAW.set_track_pan(STAGE_TRACK, float(_stage_was[0]))
+		DAW.set_track_volume(STAGE_TRACK, float(_stage_was[1]))
 
 
 ## The guest's bent take (slice 14), as my DAW has it: its note, and its keyboard's bend as a
@@ -1915,8 +2120,9 @@ func _guest(port: int) -> void:
 	# are already in the room. Asked for here, because the probe is what is listening.
 	Session.listen_choice = 1
 	Session.room_changed.connect(func(): _rooms_heard += 1)
-	Session.item_used.connect(func(item: StringName, down: bool, from: int):
-		_uses.append([item, down, from]))
+	Session.item_used.connect(func(item: StringName, down: bool, from: int, take: int):
+		_uses.append([item, down, from])
+		_use_takes.append(take))
 	Session.note_played.connect(_on_note_played)
 	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
 		_item_hits.append([item, velocity, from, song, snap, take]))
@@ -2196,7 +2402,15 @@ func _guest(port: int) -> void:
 	await _bend_into_a_take()
 	await _tilt_into_a_take()
 	await _snap_into_a_take()
-	await _until(58.3)
+	await _place_on_the_stage()
+	await _clap_to_mute()
+	await _tie_a_rope()
+	await _write_a_lane()
+	await _pull_a_cassette()
+	await _paste_a_cassette()
+	await _hear_a_cassette()
+	await _sample_a_squeeze()
+	await _until(59.78)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
@@ -2296,6 +2510,125 @@ func _tilt_into_a_take() -> void:
 	keytar.free()
 	pad.free()
 	hand.free()
+
+
+## The stage table (slice 18): a table of my own over the host's mix, and STAGE_TRACK's voice on it
+## taken by a hand at 57.7 and placed at STAGE_PAN and STAGE_DB in fifteen moves, as a drag sends
+## them: pan and volume inside one edit, intents the host carries out.
+func _place_on_the_stage() -> void:
+	await _until(57.7)
+	var table := StageTable.new()
+	table.name = "StageTable"
+	StageLink.wire(table)
+	add_child(table)
+	table._process(0.0)
+	var voice: StageVoice = table.voices.get(STAGE_TRACK)
+	check("my stage table stands the host's track %d as a voice (%s)" % [STAGE_TRACK, table.voices.keys()], voice != null)
+	if voice == null:
+		table.queue_free()
+		return
+	var hand := Node.new()
+	add_child(hand)
+	var from := voice.position
+	var to := StageTable.spot_of(STAGE_PAN, STAGE_DB)
+	voice.grab_begin(hand, table.to_global(from))
+	for i in 15:
+		voice.grab_move(hand, table.to_global(from.lerp(to, (i + 1) / 15.0)))
+		await get_tree().create_timer(0.01).timeout
+	voice.grab_end(hand)
+	check("and my hand put it where I meant (%s)" % voice.readout(), voice.position.is_equal_approx(to))
+	hand.queue_free()
+	table.queue_free()
+
+
+## Clap to mute (slice 19): a clap at 58.2, my palms meeting fast and parting at once, while
+## pointing at CLAP_TRACK: a latch, which asks the host to toggle its mute.
+func _clap_to_mute() -> void:
+	await _until(58.2)
+	var clap := Clap.new()
+	clap.target = func() -> int: return CLAP_TRACK
+	var was := DAW.state.track(CLAP_TRACK).mute
+	var dt := 1.0 / 60.0
+	for gap in [0.2, 0.17, 0.14, 0.11, 0.08, 0.05, 0.03]:
+		clap.step(gap <= HandPose.PALMS_TOUCH, gap, dt)
+	check("my palms met fast at track %d" % CLAP_TRACK, clap.pressed and clap.track == CLAP_TRACK)
+	for i in 4:
+		clap.step(true, 0.02, dt)
+	clap.step(false, 0.15, dt)
+	check("and parted at once: a latch", not clap.pressed and clap.latches(5 * dt))
+	await _until(58.35)
+	check("which the host's mix gives back to me (%s, was %s)" % [DAW.state.track(CLAP_TRACK).mute, was],
+			DAW.state.track(CLAP_TRACK).mute != was)
+
+
+## Sidechain as a rope (slice 20): a table of my own over the host's mix at 58.5, and a rope dragged
+## from ROPE_FROM's knot to ROPE_TO's voice, as a hand drags it: the compressor (if the track has
+## none) and the key send, one edit of intents the host carries out. By 58.65 the host's mix gives
+## the key send back to me.
+func _tie_a_rope() -> void:
+	await _until(58.5)
+	var table := StageTable.new()
+	table.name = "RopeTable"
+	StageLink.wire(table)
+	add_child(table)
+	table._process(0.0)
+	var from: StageVoice = table.voices.get(ROPE_FROM)
+	check("my stage table stands the host's tracks %d and %d (%s)" % [ROPE_FROM, ROPE_TO, table.voices.keys()],
+			from != null and table.voices.has(ROPE_TO))
+	if from == null or not table.voices.has(ROPE_TO):
+		table.queue_free()
+		return
+	var hand := Node.new()
+	add_child(hand)
+	var a := table.knot_point(ROPE_FROM)
+	var b := table.knot_point(ROPE_TO)
+	from.knot.grab_begin(hand, table.to_global(a))
+	for i in 10:
+		from.knot.grab_move(hand, table.to_global(a.lerp(Vector3(b.x, a.y, b.z), (i + 1) / 10.0)))
+	check("my rope is over track %d's voice as I let go" % ROPE_TO, table.drop_target(ROPE_FROM, Vector2(b.x, b.z)) == ROPE_TO)
+	from.knot.grab_end(hand)
+	check("and asks for the rope's row", table.ropes.has(Sidechain.rope_key(ROPE_FROM, ROPE_TO)))
+	await _until(58.65)
+	check("which the host's mix gives back to me as a key send (%d)" % Sidechain.key_send(ROPE_FROM, ROPE_TO),
+			Sidechain.key_send(ROPE_FROM, ROPE_TO) > 0)
+	hand.queue_free()
+	table.queue_free()
+
+
+## Automation by gesture (slice 22): at 58.72 a write bead of my own over a fader of BEAD_TRACK on the
+## host's mix, pulled as a hand pulls it and raised 0.3 m over BEAD_SECONDS of a clock of my own from
+## BEAD_SONG, the song not looping: the hold, an edit of sets, the pass as the whole lane and the
+## let-go, intents the host carries out. By 58.8 the host's mix gives the lane back to me.
+func _write_a_lane() -> void:
+	await _until(58.72)
+	var fader := Fader.new()
+	fader.track_index = BEAD_TRACK
+	fader.automates = func() -> Array: return [BEAD_TRACK, "volume"]
+	add_child(fader)
+	var now := {"seconds": BEAD_SONG, "playing": true, "valid": true}
+	var bead := WriteBead.new()
+	add_child(bead)
+	bead.control = fader
+	bead.heard_source = func() -> Dictionary: return now
+	var hand := Node.new()
+	add_child(hand)
+	check("my bead pass is not looped (the host's song is not looping)", not DAW.state.looping)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	var ticks := roundi(BEAD_SECONDS * 60.0)
+	for i in ticks:
+		now["seconds"] = BEAD_SONG + (i + 1) / 60.0
+		bead.grab_move(hand, Vector3(0, 1.0 + 0.3 * float(i + 1) / ticks, 0))
+		bead.follow(now)
+	bead.grab_end(hand)
+	check("and wrote one pass", bead.passes_written == 1)
+	await _until(58.8)
+	var lane := WriteBead.lane_now(BEAD_TRACK, "volume")
+	var inside := lane.filter(func(pt): return absf(float(pt[0]) - BEAD_SONG - BEAD_SECONDS * 0.5) <= BEAD_SECONDS * 0.5 + 0.0001)
+	check("which the host's mix gives back to me as the lane (%d points)" % inside.size(),
+			inside.size() == roundi(BEAD_SECONDS / WriteBead.POINT_SECONDS) + 1)
+	hand.queue_free()
+	bead.queue_free()
+	fader.queue_free()
 
 
 ## Snapped gently (slice 17): two shaker hits taken down at 57.42 by a HitRecorder of my own onto
@@ -2522,6 +2855,16 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, song: floa
 func _check_bells() -> void:
 	_room = ItemRoom.new()
 	add_child(_room)
+	# Made items' rows are the session's, as the studio shares them (slice 23).
+	_room.made = Session.made
+	# The sampler (slice 26), as the studio stands one: its cassettes into this room.
+	if Session.role == Session.Role.HOST:
+		_sampler = Sampler.new()
+		_sampler.items = _room
+		_sampler.authority = Session.is_authority
+		_sampler.local_peer = func() -> int: return Session.local_peer_id
+		_sampler.name_of = Session.name_of
+		add_child(_sampler)
 	var bells := ["bell1", "bell2", "bell3", "bell4"].filter(func(id: String) -> bool:
 		return _room.items.get(StringName(id)) is HandbellItem)
 	check("the four handbells are in my room's items (%s)" % [bells], bells.size() == HandbellItem.COUNT)
@@ -2545,6 +2888,309 @@ func _answer_plug(args: Array, from: int) -> void:
 	Session.publish_room(room)
 	if _jacks != null:
 		_jacks.set_patch(rows)
+
+
+## The host's answer to a guest's pull (slice 23), as the studio's: the clip packed from my own song,
+## minted, its row sent once, the cassette put in the guest's hand by the holds, and the room naming
+## it.
+func _answer_make(args: Array, from: int) -> void:
+	var made := _room.mint(args[0], ItemRoom.made_data(args[0], args[1]), from) if _room != null else null
+	check("the guest's pull is one I can mint (%s)" % (_room.mint_refusal if _room != null else "no room"), made != null)
+	if made == null:
+		return
+	Session.publish_made(made.id)
+	Session.hand_to(from, made.network_key())
+	_made_for_guest.append(made.id)
+	var room: Dictionary = Session.room.duplicate(true)
+	room["made"] = _room.made_ids()
+	Session.publish_room(room)
+
+
+## A cassette of my own, minted here and handed to the guest, as the studio's give does it.
+func _give_a_cassette() -> void:
+	var guest := _other_id()
+	var made := _room.mint(CassetteItem.KIND, ItemRoom.made_data(CassetteItem.KIND, PULL_FROM))
+	check("I mint a cassette of my own (%s)" % _room.mint_refusal, made != null)
+	if made == null:
+		return
+	Session.publish_made(made.id)
+	Session.hand_to(guest, made.network_key())
+	_made_for_guest.append(made.id)
+	var room: Dictionary = Session.room.duplicate(true)
+	room["made"] = _room.made_ids()
+	Session.publish_room(room)
+
+
+## Both cassettes are the guest's, as my table has it, and their rows mine.
+func _check_cassettes_given() -> void:
+	var guest := _other_id()
+	check("the guest's pull and my give are two cassettes (%s)" % [_made_for_guest],
+			_made_for_guest == [&"cassette1", &"cassette2"])
+	for id in _made_for_guest:
+		var item: Item = _room.items.get(id)
+		check("%s is in the guest's glove, as my table has it (%d)" % [id, Session.holder_of(item.network_key()) if item != null else -1],
+				item != null and Session.holder_of(item.network_key()) == guest)
+		check("and its row is the room's (%s)" % id, Session.made.has(id))
+	var pulled := _room.items.get(&"cassette1") as CassetteItem
+	var from := DAW.state.item(PULL_TRACK, 0)
+	if pulled != null and from != null:
+		var clip := MixWire.unpack_item(pulled.clip)
+		check("and the pulled one is my clip (%s, %.2f s)" % [pulled.clip_name(), pulled.length()],
+				clip != null and is_equal_approx(clip.start, from.start) and is_equal_approx(clip.length, from.length))
+
+
+## The host's answer to a guest's paste (slice 24), as the studio's: only the cassette in the
+## asker's hand, its clip from my own row, pasted as one step for the guest, or refused with why.
+func _answer_paste(args: Array, from: int) -> void:
+	_paste_asked = args
+	var cassette := _room.items.get(args[0]) as CassetteItem if _room != null else null
+	if cassette == null or Session.holder_of(cassette.network_key()) != from:
+		_paste_said = "not in the asker's hand"
+		return
+	_paste_said = DAW.paste_item(args[1], args[2], cassette.clip)
+	Session.tell(from, _paste_said if not _paste_said.is_empty() else "Pasted.")
+
+
+## The guest's paste, as my DAW has it: asked by the cassette's id, PASTE_TRACK and its time at
+## PASTE_BAR, and an item there that is the cassette's clip but for its start and track, one step.
+## The demo song's items are windows of parts, so on Reaper (which has none) it is refused, and says so.
+func _check_pasted() -> void:
+	check("the guest's paste names the cassette I gave it, track %d and a time at bar %d (%s)" % [PASTE_TRACK, int(PASTE_BAR), _paste_asked],
+			_paste_asked.size() == 3 and _paste_asked[0] == &"cassette2" and _paste_asked[1] == PASTE_TRACK
+			and DAW.state.bar_beat(float(_paste_asked[2])).begins_with("%d.1." % int(PASTE_BAR)))
+	var cassette := _room.items.get(&"cassette2") as CassetteItem
+	if cassette != null and cassette.clip.has("part") and not DAW.can(DAWBackend.Capability.DEMO_PARTS):
+		check("on Reaper a demo part is refused, and it says why (%s)" % _paste_said, _paste_said.contains("built-in engine"))
+		return
+	check("and I pasted it (%s)" % ("yes" if _paste_said.is_empty() else _paste_said), _paste_said.is_empty())
+	var it: MixState.ItemState = null
+	if _paste_asked.size() == 3:
+		for item: MixState.ItemState in DAW.state.track(PASTE_TRACK).items:
+			if absf(item.start - float(_paste_asked[2])) < 0.001:
+				it = item
+	var mine := MixWire.pack_item(it) if it != null else {}
+	var theirs := cassette.clip.duplicate() if cassette != null else {}
+	mine.erase("start")
+	theirs.erase("start")
+	check("on track %d at bar %d is the cassette's clip but for its start and track (%s)" % [PASTE_TRACK, int(PASTE_BAR), it.name if it != null else "none"],
+			it != null and not theirs.is_empty() and mine == theirs)
+
+
+## The paste taken back, one step, and the made items gone.
+func _take_back_the_paste() -> void:
+	if _paste_said.is_empty():
+		DAW.undo()
+	for id in _made_for_guest:
+		_room.unmake(id)
+		Session.drop_made(id)
+
+
+## The host's answer to the guest's REC (slice 26), as the studio's: on for its next sound, or off,
+## and the room published with the row.
+func _answer_sampler(args: Array, from: int) -> void:
+	if _sampler == null:
+		return
+	_sampler.armed_by = from if args[0] else 0
+	_publish_sampler_room()
+
+
+func _publish_sampler_room() -> void:
+	var room: Dictionary = Session.room.duplicate(true)
+	room["sampler"] = _sampler.armed_by if _sampler != null else 0
+	room["made"] = _room.made_ids() if _room != null else []
+	Session.publish_room(room)
+
+
+## A use the host hears (Session.item_used), for the sampler, as the studio's: only of what is in
+## its user's hand. Caught, its cassette's row goes to everyone and the room names it, REC off.
+func _sample_a_use(id: StringName, down: bool, from: int, take: int) -> void:
+	if _sampler == null or _room == null or not down or from == Session.local_peer_id:
+		return
+	var item: Item = _room.items.get(id)
+	if item == null or Session.holder_of(item.network_key()) != from:
+		return
+	var file_name := _sampler.next_name(item.use_kind(true))
+	var made := _sampler.heard(item, item.use_kind(true), take, from)
+	if made == null:
+		return
+	_sampled = [made.id, file_name, from]
+	Session.publish_made(made.id)
+	_publish_sampler_room()
+
+
+## The guest's squeeze, as I caught it: its take came with it, one WAV of exactly Foley's stream for
+## that take, a cassette the guest made of it, and REC off.
+func _check_sampled() -> void:
+	var guest := _other_id()
+	var takes: Array = []
+	for n in _uses.size():
+		if _uses[n][0] == &"duck" and _uses[n][1] and _uses[n][2] == guest:
+			takes.append(_use_takes[n])
+	check("the guest's squeeze reached me with the take its hand rang (%s)" % [takes], takes.has(SAMPLE_TAKE))
+	check("my sampler caught it (%s)" % [_sampled], _sampled.size() == 3 and _sampled[2] == guest)
+	if _sampled.size() != 3:
+		return
+	var path := DAW.backend.media_path(_sampled[1])
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var body := bytes.slice(AudioTake.HEADER_BYTES) if bytes.size() > AudioTake.HEADER_BYTES else PackedByteArray()
+	check("as one WAV in my media, %s, equal to Foley's stream for take %d (%d bytes)" % [_sampled[1], SAMPLE_TAKE, body.size()],
+			String(_sampled[1]).begins_with("duck_squeeze_") and body == Foley.take_of(&"duck_squeeze", SAMPLE_TAKE).data)
+	var cassette := _room.items.get(_sampled[0]) as CassetteItem
+	check("and a sample cassette of it, made by the guest", cassette != null and cassette.data.get("sample") == "duck_squeeze"
+			and cassette.clip.get("source") == _sampled[1] and (Session.made[_sampled[0]] as Array)[1] == guest)
+	check("and REC is off, in the room too (%s)" % [Session.room.get("sampler")], _sampler.armed_by == 0
+			and int(Session.room.get("sampler", -1)) == 0)
+
+
+## The sample cassette and its file taken away again.
+func _take_back_the_sample() -> void:
+	if _sampled.size() == 3:
+		_room.unmake(_sampled[0])
+		Session.drop_made(_sampled[0])
+		DirAccess.remove_absolute(DAW.backend.media_path(_sampled[1]))
+		_publish_sampler_room()
+
+
+## Anything can be a sample (slice 26): at 59.36 I press the host's sampler's REC, as the studio's
+## press asks; by 59.42 the room's row is mine. At 59.44 I take the duck, and at 59.48 squeeze it,
+## my hand ringing SAMPLE_TAKE. By 59.56 the host's sample cassette of it is mine, its row here and
+## the room naming it, and REC is off.
+func _sample_a_squeeze() -> void:
+	await _until(59.36)
+	var seq := Session.ask_room(Sampler.VERB, [true])
+	check("my REC is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(59.42)
+	check("and the room's sampler row is mine: REC replicates (%s)" % [Session.room.get("sampler")],
+			int(Session.room.get("sampler", 0)) == Session.local_peer_id)
+	await _until(59.44)
+	Session.claim_hold(DUCK)
+	await _until(59.48)
+	check("the duck is in my hand, as the host's table has it", Session.holder_of(DUCK) == Session.local_peer_id)
+	Session.send_item_use(&"duck", true, SAMPLE_TAKE)
+	Session.send_item_use(&"duck", false, SAMPLE_TAKE + 1)
+	await _until(59.56)
+	check("REC is off again in the host's room (%s)" % [Session.room.get("sampler")], int(Session.room.get("sampler", -1)) == 0)
+	var mine: Array = []
+	for id in Session.made:
+		var row: Array = Session.made[id]
+		var data: Variant = bytes_to_var(row[2]) if row.size() == 3 and row[2] is PackedByteArray else null
+		if data is Dictionary and data.get("sample") == "duck_squeeze" and int(row[1]) == Session.local_peer_id:
+			mine.append(id)
+	check("and the host's sample cassette of my squeeze is here, made by me (%s)" % [mine], mine.size() == 1)
+	check("named in the room", mine.size() == 1 and (Session.room.get("made", []) as Array).has(mine[0]))
+	Session.release_hold(DUCK)
+
+
+## The file the ear's cassette plays (slice 25): in my media folder only, named for this run's port.
+func _ear_file() -> String:
+	return "Probe Ear %d.wav" % _port
+
+
+## A cassette at the ear (slice 25): an audio cassette of EAR_FILE, a file only my media folder has,
+## minted and named in the room. Its clip names the file, so a guest may fetch it (FileSend._plays_here).
+func _mint_an_ear_cassette() -> void:
+	var path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(_ear_file()))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(AudioTake.DIR))
+	var tone := PackedFloat32Array()
+	for n in int(EAR_SECONDS * 48000):
+		tone.append(sin(n * 0.04) * 0.3)
+	DawKitAudioFile.write_wav(path, tone, 1, 48000)
+	var clip := {"start": 0.0, "length": EAR_SECONDS, "name": "Probe ear", "source": _ear_file()}
+	var made := _room.mint(CassetteItem.KIND, {"clip": clip, "track": SENT_TRACK, "index": 0, "track_name": "EAR"})
+	check("I mint an audio cassette of a file only I have (%s)" % _room.mint_refusal, made != null and FileAccess.file_exists(path))
+	if made == null:
+		return
+	_ear_cassette = made.id
+	Session.publish_made(made.id)
+	var room: Dictionary = Session.room.duplicate(true)
+	room["made"] = _room.made_ids()
+	Session.publish_room(room)
+
+
+## The guest's ear asked me for the file, once, and I sent it whole; then the cassette and file go.
+func _check_ear_file_sent() -> void:
+	check("the guest's ear fetched the file from me, once (%d sent)" % Session.files.fetches_served,
+			Session.files.fetches_served == 1)
+	if _ear_cassette != &"":
+		_room.unmake(_ear_cassette)
+		Session.drop_made(_ear_cassette)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(AudioTake.DIR.path_join(_ear_file())))
+
+
+## A cassette at the ear (slice 25): at 59.2 I hold the host's audio cassette to my ear (an EarCue, as
+## the studio's), with no file of it here: FETCHING, and asked of the host once. By 59.32 the copy is
+## in FETCHED, byte for byte the host's, and it plays on the keys' bus.
+func _hear_a_cassette() -> void:
+	await _until(59.2)
+	_room.apply_made(Session.room.get("made", []))
+	var tape: CassetteItem = null
+	for id in _room.items:
+		var c := _room.items[id] as CassetteItem
+		if c != null and str(c.clip.get("source", "")) == _ear_file():
+			tape = c
+	check("the host's audio cassette is real here (%s)" % (tape.clip_name() if tape != null else "none"), tape != null)
+	var ear := EarCue.new()
+	add_child(ear)
+	ear.hold(tape)
+	check("held to my ear with no file of it here, it is FETCHING, asked once (%s, %d)" % [ear.tag(), Session.files.fetches_asked],
+			ear.hearing == EarCue.Hearing.FETCHING and tape != null and tape.hearing == "FETCHING"
+			and Session.files.fetches_asked == 1)
+	await _until(59.32)
+	var copy := Session.files.fetched_path(_ear_file())
+	var theirs := ProjectSettings.globalize_path(AudioTake.DIR.path_join(_ear_file()))
+	check("the host's file is in my FETCHED folder (%s)" % copy, not copy.is_empty() and copy.contains("fetched"))
+	if FileAccess.file_exists(theirs):
+		check("byte for byte the host's", FileAccess.get_file_as_bytes(copy) == FileAccess.get_file_as_bytes(theirs))
+	check("and it plays at my ear, on the keys' bus (%s)" % ear.tag(), ear.hearing == EarCue.Hearing.PLAYING
+			and ear.player.bus == AudioPorts.MONITOR)
+	check("asked only once", Session.files.fetches_asked == 1)
+	ear.hold(null)
+	ear.queue_free()
+
+
+## Clips as cassettes (slice 23): at 58.86 I pull PULL_TRACK's first clip, as the studio's pull asks;
+## by 58.97 the host has minted it and handed me one of its own, and both are in my glove: their
+## rows here, the holds mine, and the room naming them made real.
+func _pull_a_cassette() -> void:
+	await _until(58.86)
+	var seq := Session.ask_room(&"make", [CassetteItem.KIND, PULL_FROM])
+	check("my pull is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(58.97)
+	_room.apply_made(Session.room.get("made", []))
+	for id: StringName in [&"cassette1", &"cassette2"]:
+		var item := _room.items.get(id) as CassetteItem
+		check("%s's row reached me before the room named it (%s)" % [id, Session.made.keys()], Session.made.has(id))
+		check("and it is real here, carrying its clip (%s)" % (item.clip_name() if item != null else "none"),
+				item != null and not item.clip.is_empty() and item.length() > 0.0)
+		check("in my glove: the host's table says so (%d)" % [Session.holder_of(item.network_key()) if item != null else -1],
+				item != null and Session.holder_of(item.network_key()) == Session.local_peer_id)
+	var pulled := _room.items.get(&"cassette1") as CassetteItem
+	check("the one I pulled is the host's clip from track %d" % PULL_TRACK,
+			pulled != null and pulled.from_track == PULL_TRACK and pulled.from_index == 0)
+
+
+## A cassette onto a track (slice 24): at 58.99 I paste the cassette the host gave me (cassette2) onto
+## PASTE_TRACK at PASTE_BAR, as the studio's press asks: its id, the track and the time, never the
+## clip. By 59.08 the host's mix has given me the item there, the clip it was but for its start.
+func _paste_a_cassette() -> void:
+	await _until(58.99)
+	var at := DAW.state.bar_to_seconds(PASTE_BAR)
+	var cassette := _room.items.get(&"cassette2") as CassetteItem
+	var seq := Session.ask_room(&"paste", [&"cassette2", PASTE_TRACK, at])
+	check("my paste of the host's cassette is asked by its id, track and time (seq %d)" % seq, seq > 0 and cassette != null)
+	await _until(59.08)
+	if _reaper_host and cassette != null and cassette.clip.has("part"):
+		check("on Reaper the host refused my demo part, and said why (%s)" % [_notices.slice(-3)],
+				_notices.any(func(t): return str(t).contains("built-in engine")))
+		return
+	var it: MixState.ItemState = null
+	for item: MixState.ItemState in DAW.state.track(PASTE_TRACK).items:
+		if absf(item.start - at) < 0.001:
+			it = item
+	check("the host's mix gives me it on track %d at bar %d (%s)" % [PASTE_TRACK, int(PASTE_BAR), it.name if it != null else "none"],
+			it != null and cassette != null and it.name == cassette.clip_name()
+			and is_equal_approx(it.length, cassette.length()))
+	check("and the host told me (%s)" % [_notices.slice(-2)], _notices.any(func(t): return str(t) == "Pasted."))
 
 
 ## Jacks of this half's own, as the studio keeps them: what comes down a cable plays this half's

@@ -245,6 +245,37 @@ func hear(level: float) -> void:
 		heard_hit = 0.0
 
 
+## The room hears a clip (docs/spatial_loop.md part two, slice 21, idea #5): the master or any
+## track over 0 dBFS lifts the practicals by LIFT, falling to nothing over LIFT_SECONDS -- the shape
+## of `heard_hit`, a jump and a fall -- and at most once every FLASH_GAP however often it clips. A
+## mix clipping on every beat is told once in two seconds, not strobed at.
+const LIFT := 0.3
+const LIFT_SECONDS := 0.15
+const FLASH_GAP := 2.0
+## Whether a clip lifts the room at all (COMFORT's "Lift on clip"). Only while `reactive` too.
+var lift_on_clip := true
+## How far the practicals are lifted now, 0..LIFT, as a share of their own energy.
+var lift := 0.0
+## How many lifts there have been, for the suite and a shot's log.
+var lifts := 0
+var _lift_left := 0.0
+var _since_lift := INF
+
+
+## One frame of the room hearing whether anything is over (`over`), `delta` seconds on: a clip
+## after FLASH_GAP of none starts a lift; the lift falls away over LIFT_SECONDS.
+func hear_clip(over: bool, delta: float) -> void:
+	_since_lift += delta
+	_lift_left = maxf(_lift_left - delta, 0.0)
+	if over and reactive and lift_on_clip and _since_lift >= FLASH_GAP:
+		_since_lift = 0.0
+		_lift_left = LIFT_SECONDS
+		lifts += 1
+	if not reactive or not lift_on_clip:
+		_lift_left = 0.0
+	lift = LIFT * _lift_left / LIFT_SECONDS
+
+
 ## A box of soft additive sparks, off until `drive_sparks` turns them on. `colours` is picked per
 ## spark from its left to its right; `rise` sends them up instead of down.
 func make_sparks(label: String, at: Vector3, extents: Vector3, seen: AABB, colours: Gradient,
@@ -507,6 +538,39 @@ func bell_spot(n: int) -> Transform3D:
 	return bell_stand_spot() * HandbellItem.seat(n)
 
 
+## Where the cassette rack stands (CassetteRack, docs/spatial_loop.md part two, slice 23), in
+## studio space: on the floor beside the prop shelf, on the side away from its lamp, its back in
+## line with the shelf's against the same wall and facing into the room the same way. So the
+## clips the band pulls out of the timeline stand beside the toys, where everyone walks past.
+const RACK_GAP := 0.12
+
+
+func cassette_rack_spot() -> Transform3D:
+	var along := ZoneKit.SHELF.x * 0.5 + RACK_GAP + CassetteRack.FOOT.x
+	return prop_shelf_spot() * Transform3D(Basis.IDENTITY,
+			Vector3(-along, 0, -ZoneKit.SHELF.z * 0.5 + CassetteRack.FOOT.y))
+
+
+## Where the sampler stands (Sampler, docs/spatial_loop.md part two, slice 26), in studio space: its
+## back to the outside of the vocal booth's front wall, a step along it from the cassette rack's
+## corner, facing the front of the live room. So whoever comes out of the control room meets it
+## beside the rack and the prop shelf, its rack seat left clear, with the open floor in front of the
+## shelf for its seat. SAMPLER_ALONG is how far along the booth's wall from its left-hand end its
+## middle is, and SAMPLER_GAP how far off the wall it stands. Null where there is no booth (the Rig
+## Roulette room has no zones).
+const SAMPLER_ALONG := 1.5
+const SAMPLER_GAP := 0.03
+
+
+func sampler_spot() -> Variant:
+	var at := zones()
+	if not at.has(&"vocals"):
+		return null
+	var booth := at[&"vocals"] as AABB
+	return Transform3D(Basis(Vector3.UP, PI),
+			Vector3(booth.position.x + SAMPLER_ALONG, 0, booth.position.z - SAMPLER_GAP - Sampler.FOOT.y))
+
+
 ## Where the fifths wheel stands (FifthsWheel.on_stand), in studio space: on the bricks table,
 ## the bottom edge of its board WHEEL_IN in from the table's end nearest the control room, facing
 ## back toward it. So whoever walks back from the desk meets it at the end of the table, where
@@ -640,8 +704,8 @@ func mic_spot() -> Variant:
 
 
 ## Everything the venue puts on the floor that stops a person: the zones' dressing, the prop
-## shelf and what stands about the room with it (the door, the hoop, the Tour case, the harp and
-## the bells' stand).
+## shelf and what stands about the room with it (the door, the hoop, the Tour case, the harp, the
+## bells' stand and the cassette rack).
 ## What the walker is given.
 func solids() -> Array:
 	var out := zone_solids()
@@ -657,6 +721,10 @@ func solids() -> Array:
 		out.append_array(TourCase.solids(tour_case_spot()))
 		out.append(ChordHarp.solid(harp_spot()))
 		out.append(HandbellItem.stand_solid(bell_stand_spot()))
+		out.append(CassetteRack.solid(cassette_rack_spot()))
+		var sampler_at: Variant = sampler_spot()
+		if sampler_at != null:
+			out.append(Sampler.solid(sampler_at))
 	return out
 
 

@@ -324,6 +324,11 @@ func _go(to: Transform3D, away_after: bool, fade: float) -> void:
 func _arrive(to: Transform3D, away_after: bool) -> void:
 	transform = to
 	away = away_after
+	# Everything in the hands jumped with the play space: no hand pushed it there (Interactor._tend_push).
+	for controller in interactors:
+		var hand := interactors[controller] as Interactor
+		if hand != null and is_instance_valid(hand):
+			hand.forget_push()
 	travelled.emit(not away_after)
 
 

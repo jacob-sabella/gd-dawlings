@@ -549,6 +549,7 @@ static func _unpack_items(args: Array) -> Array:
 			item.lane = clampi(int(audio.get("lane", 0)), 0, LANES_MAX)
 			item.reversed = bool(audio.get("reversed", false))
 			item.controls = DawKitClip.clean_controls(audio.get("controls", [])).slice(0, CONTROLS_MAX * DawKitClip.CONTROL_WIDTH)
+			item.part = str(audio.get("part", "")).substr(0, 32)
 			var loop: Array = audio.get("loop", [])
 			if loop.size() == 2:
 				item.loop_start = maxf(float(loop[0]), 0.0)
@@ -594,7 +595,8 @@ static func _pack_items(items: Array) -> Array:
 			out.append(item.notes)
 		# One optional Dictionary for whatever is not a MIDI payload: a recorded file, and the
 		# clip's fades and gain. Absent when there is neither, so an item costs what it did.
-		if not item.source.is_empty() or item.has_clip_shape() or item.locked or item.lane != 0 or not item.controls.is_empty():
+		if not item.source.is_empty() or item.has_clip_shape() or item.locked or item.lane != 0 \
+				or not item.controls.is_empty() or not item.part.is_empty():
 			var extra := {}
 			if not item.source.is_empty():
 				extra = {"source": item.source, "offset": item.source_offset, "peaks": item.peaks}
@@ -617,8 +619,84 @@ static func _pack_items(items: Array) -> Array:
 				extra["reversed"] = true
 			if not item.controls.is_empty():
 				extra["controls"] = item.controls
+			if not item.part.is_empty():
+				extra["part"] = item.part
 			out.append(extra)
 	return out
+
+
+## One item packed whole, to be carried away from its lane and pasted somewhere else (a cassette,
+## docs/spatial_loop.md part two, slice 23): what makes it sound and nothing that does not. A MIDI
+## item's notes and controls, as PackedFloat32Array (half the bytes, and finer than a tick at an
+## hour in); an audio item's source by name with its offset, fades, gain, loop and direction, never
+## its peaks, which the cassette draws from the file where a machine has it; a demo item's `part`,
+## the role it plays (its own, or `track_part`, its track's, where it has none of its own), whose
+## window is its start and length. Its place on its lane, its selection and its lock are not the
+## clip's and stay behind.
+static func pack_item(item: MixState.ItemState, track_part := "") -> Dictionary:
+	var out := {"start": item.start, "length": item.length, "name": item.name}
+	if item.muted:
+		out["muted"] = true
+	if not item.notes.is_empty():
+		out["notes"] = PackedFloat32Array(item.notes)
+	if not item.controls.is_empty():
+		out["controls"] = PackedFloat32Array(Array(item.controls))
+	if not item.source.is_empty():
+		out["source"] = item.source
+		out["offset"] = item.source_offset
+		if item.reversed:
+			out["reversed"] = true
+	if item.has_clip_shape():
+		out["fade_in"] = item.fade_in
+		out["fade_out"] = item.fade_out
+		out["gain_db"] = item.gain_db
+		out["fade_shape"] = item.fade_shape
+		out["fade_out_shape"] = item.fade_out_shape
+		if item.is_looped():
+			out["loop"] = PackedFloat32Array([item.loop_start, item.loop_end])
+	var part: String = item.part if not item.part.is_empty() else track_part
+	if item.notes.is_empty() and item.source.is_empty() and not part.is_empty():
+		out["part"] = part
+	return out
+
+
+## `pack_item` read back, from anyone: an ItemState made safe the way a lane from a peer is
+## (finite, in range, a file by name only), its notes and controls whole up to what a take may
+## carry, at index 0, unselected, on no lane. Null for what is not a clip.
+static func unpack_item(d: Variant) -> MixState.ItemState:
+	if not (d is Dictionary):
+		return null
+	var c: Dictionary = d
+	var start := float(c.get("start", 0.0))
+	var length := float(c.get("length", 0.0))
+	if not is_finite(start) or not is_finite(length) or length <= 0.0:
+		return null
+	var item := MixState.ItemState.new()
+	item.start = maxf(start, 0.0)
+	item.length = length
+	item.name = str(c.get("name", "")).substr(0, 128)
+	item.muted = bool(c.get("muted", false))
+	var notes: Variant = c.get("notes", PackedFloat32Array())
+	if _is_note_payload(notes):
+		var flat := PackedFloat32Array(notes)
+		flat.resize(mini(flat.size() - flat.size() % MidiTake.NOTE_WIDTH, MidiTake.MAX_NOTES * MidiTake.NOTE_WIDTH))
+		item.notes = flat
+	item.controls = DawKitClip.clean_controls(c.get("controls", [])).slice(0, CONTROLS_MAX * DawKitClip.CONTROL_WIDTH)
+	item.source = str(c.get("source", "")).get_file()
+	item.source_offset = maxf(float(c.get("offset", 0.0)), 0.0)
+	item.reversed = bool(c.get("reversed", false))
+	item.fade_in = clampf(float(c.get("fade_in", 0.0)), 0.0, length)
+	item.fade_out = clampf(float(c.get("fade_out", 0.0)), 0.0, length)
+	item.gain_db = clampf(float(c.get("gain_db", 0.0)), -150.0, 24.0)
+	item.fade_shape = DawKitClip.clean_shape(c.get("fade_shape", 0))
+	item.fade_out_shape = DawKitClip.clean_shape(c.get("fade_out_shape", item.fade_shape))
+	var loop: Variant = c.get("loop", [])
+	if (loop is Array or loop is PackedFloat32Array or loop is PackedFloat64Array) and loop.size() == 2:
+		item.loop_start = maxf(float(loop[0]), 0.0)
+		item.loop_end = maxf(float(loop[1]), item.loop_start)
+	if item.notes.is_empty() and item.source.is_empty():
+		item.part = str(c.get("part", "")).substr(0, 32)
+	return item
 
 
 static func _apply_fx(state: MixState, track_idx: int, p: PackedStringArray, args: Array) -> void:

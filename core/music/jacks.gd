@@ -54,6 +54,12 @@ const TRIGGER_SECONDS := 0.3
 const TRIGGER_CENTRE := 60
 const TRIGGER_TONES := 4
 
+## How long a source's last hit shows on its lead (s), falling to nothing (SignalBeads), and the
+## level a hit at full velocity shows at (the fader law: 0.716 is 0 dBFS) and at the softest.
+const HEARD_FADE := 0.6
+const HEARD_LOUD := 0.74
+const HEARD_SOFT := 0.3
+
 ## A hand here stepped `source`'s socket on to `sink`: for the studio to do, and ask the host.
 signal asked(source: StringName, sink: StringName)
 ## The patch changed, and every socket shows it.
@@ -87,6 +93,8 @@ var keys: GuestMidi = null:
 var _down := {}
 ## How far up its chord each sender's percussion has walked: {"from|source": hits}.
 var _walks := {}
+## Each source's last hit here, for its lead's beads: {source: [level, Time msec]}.
+var _heard := {}
 ## Notes to let go later: [seconds left, to, source, pitch, song] for a bell's off to send down
 ## its cable (`to` above 0), [seconds left, 0, source, pitch, song, from] for a TRIGGER's tone here.
 var _later: Array = []
@@ -206,6 +214,7 @@ func drop_player(peer: int) -> bool:
 ## went. Into a bandmate a bell sends its note and, `note_seconds` later, its off; percussion a
 ## TRIGGER. Neither is taken down here: it lands in their take.
 func hit(item: InstrumentItem, velocity: int, at: float) -> void:
+	heard_from(item.id, velocity)
 	var to := cable_into(item.id)
 	if to > 0:
 		if item.pitched():
@@ -223,6 +232,22 @@ func hit(item: InstrumentItem, velocity: int, at: float) -> void:
 	recorder.hit(item, velocity, at, track if takes_midi(track) else 0)
 
 
+## `source` played here at `velocity`: what its lead's beads show, fading over HEARD_FADE.
+func heard_from(source: StringName, velocity: int, now_msec: int = -1) -> void:
+	var level := lerpf(HEARD_SOFT, HEARD_LOUD, clampf(float(velocity) / 127.0, 0.0, 1.0))
+	_heard[source] = [level, Time.get_ticks_msec() if now_msec < 0 else now_msec]
+
+
+## How loud `source`'s last hit here still shows, 0..1: its level at the hit, falling to nothing
+## over HEARD_FADE. Nothing for a source that has not played.
+func level_of(source: StringName, now_msec: int = -1) -> float:
+	var last: Array = _heard.get(source, [])
+	if last.is_empty():
+		return 0.0
+	var age := float((Time.get_ticks_msec() if now_msec < 0 else now_msec) - int(last[1])) / 1000.0
+	return maxf(float(last[0]) * (1.0 - age / HEARD_FADE), 0.0) if age >= 0.0 else float(last[0])
+
+
 ## One event down the cable into player `to`, at song position `song` (-1 for not known).
 func send_to(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float) -> void:
 	if send.is_valid():
@@ -235,6 +260,8 @@ func send_to(to: int, source: StringName, kind: int, pitch: int, velocity: int, 
 ## bandmate. Not what came in on a cable, so two players plugged into each other never feed
 ## back, and not the harp's, which has a jack of its own.
 func _on_keys_note(kind: int, pitch: int, velocity: int, song: float, source: StringName) -> void:
+	if kind == Session.Note.ON and source != CABLE:
+		heard_from(Jack.HARP if source == Jack.HARP else Jack.keys_source(Session.local_peer_id), velocity)
 	if source == CABLE or source == Jack.HARP:
 		return
 	var mine := Jack.keys_source(Session.local_peer_id)
@@ -271,7 +298,9 @@ func _on_keys_control(kind: int, value: int, song: float, source: StringName) ->
 ## not known, plays it at this player's own). A TRIGGER becomes the next tone of the chord at
 ## `song`, held TRIGGER_SECONDS. A CC moves this player's wheel as the cable (GuestMidi.control),
 ## taken only while the cable owns it. A NOTE_ON, TRIGGER or CC from a source this player has taken
-## out (`_cut`) is dropped: the host passed it before it heard, and its off will not come.
+## out (`_cut`) is dropped: the host passed it before it heard, and its off will not come. A
+## NOTE_ON or TRIGGER also lights its source's lead here (`heard_from`), so the cable a bandmate
+## plays into this player carries beads on this player's machine too.
 func received(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
 	if keys == null:
 		return
@@ -283,6 +312,9 @@ func received(source: StringName, kind: int, pitch: int, velocity: int, from: in
 		return
 	# In reach at once, though the room saying so may not have come yet: the host checked it.
 	keys.reach(CABLE, true)
+	# Its lead here (a bandmate's, hanging where their glove would be) carries what came down it.
+	if kind == Jack.Kind.NOTE_ON or kind == Jack.Kind.TRIGGER:
+		heard_from(source, velocity)
 	match kind:
 		Jack.Kind.NOTE_ON:
 			_press(from, source, pitch, velocity, at)

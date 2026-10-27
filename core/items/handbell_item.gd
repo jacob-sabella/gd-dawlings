@@ -100,8 +100,8 @@ func note_seconds() -> float:
 	return RING_SECONDS
 
 
-func sound(_struck: bool, take: int) -> AudioStream:
-	return Foley.handbell(take)
+func sound_kind(_struck: bool) -> StringName:
+	return &"handbell"
 
 
 ## From C5, where Foley.handbell rings, to `note`.

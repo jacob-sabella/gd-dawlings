@@ -517,6 +517,10 @@ func _add_knob() -> void:
 		if param_index >= 0:
 			DAW.set_fx_param(track_index, fx_index, param_index, v))
 	k.describe_title = func() -> String: return "%s  %s" % [_unit_caption(), _param_name(slot)]
+	# The lane of whichever parameter the knob means now, asked when a bead is pulled from it.
+	k.automates = func() -> Array:
+		var param_index := _param_for(slot)
+		return [track_index, "fx:%d:%d" % [fx_index, param_index]] if param_index >= 0 else []
 	k.describe_value = func(v: float) -> String: return _param_reading(slot, v)
 	add_child(k)
 	# Hidden until a parameter is pointed at it; after it is in the tree, so a banked knob's

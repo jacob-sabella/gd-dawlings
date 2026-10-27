@@ -106,8 +106,19 @@ var pocket := -1
 var pocket_at: Callable = Callable()
 ## Its home is a place of its own (a hook, a clip) rather than a spot on the shelf: ItemRoom.
 var own_home := false
+## In a slot of some furniture (ItemRoom.holders: the cassette rack's twelve, docs/spatial_loop.md
+## part two, slice 23): which holder, and which of its slots; &"" and -1 when it is not. A slotted
+## item is LOOSE, lying at the slot's pose, and never tidies itself away.
+var slot_in := &""
+var slot_n := -1
 ## How big it is drawn: 1 in a hand, a ghost's head's size on one (worn poses carry a scale).
 var _size := 1.0
+## Which of Foley's takes its last use rang (Foley.take_of, of `use_kind`), or -1 before any: sent
+## with the use (Session.item_used), so everyone hears the sound its player heard, and the sampler
+## (Sampler, docs/spatial_loop.md part two, slice 26) catches exactly that.
+var use_take := -1
+## The take somebody else's hand rang, for the `use` theirs is heard as (`heard_use`); -1 meanwhile.
+var _heard_take := -1
 
 ## What it looks like, under the item: the item's own node only moves.
 var body: Node3D
@@ -158,6 +169,34 @@ func held_pose() -> Transform3D:
 ## Override: the hand's button went down (`down`) or came up while holding this.
 func use(_down: bool) -> void:
 	pass
+
+
+## Override: which of Foley's sounds (Foley.take_of) a use of it rings, squeezed (`down`) or let
+## go, or &"" for a use that rings nothing a sampler could catch.
+func use_kind(_down: bool) -> StringName:
+	return &""
+
+
+## Somebody else's use of it, heard here (Presence): `use`, ringing the take their hand rang
+## (`take`, Session.item_used's), or this copy's own next for -1, not known.
+func heard_use(down: bool, take := -1) -> void:
+	_heard_take = take
+	use(down)
+	_heard_take = -1
+
+
+## The take a use rings now, kept as `use_take`: the one somebody else's hand rang (`heard_use`),
+## or the next of this copy's own.
+func _next_take() -> int:
+	use_take = _heard_take if _heard_take >= 0 else posmod(use_take + 1, 1 << 24)
+	return use_take
+
+
+## Override: whether a press with this in the hand on a control that takes a paste
+## (ControlAffordance.paste_spot) pastes it there rather than working the control: a cassette with
+## a clip on it (docs/spatial_loop.md part two, slice 24). Nothing else does.
+func pastes() -> bool:
+	return false
 
 
 ## Override: it has just come into a hand.
@@ -507,6 +546,9 @@ func _leave_hand() -> void:
 
 func _set_state(to: State) -> void:
 	state = to
+	# Out of any slot, whatever it does next: a slot is laid again by whoever puts it in one.
+	slot_in = &""
+	slot_n = -1
 	set_physics_process(true)
 	state_changed.emit(to)
 	if to != State.HELD:
@@ -679,5 +721,5 @@ func _tidy_later() -> void:
 		return
 	var lay := resting
 	get_tree().create_timer(maxf(0.1, TIDY_SECONDS - loose_for)).timeout.connect(func() -> void:
-		if is_instance_valid(self) and state == State.LOOSE and resting == lay:
+		if is_instance_valid(self) and state == State.LOOSE and resting == lay and slot_in == &"":
 			go_home())

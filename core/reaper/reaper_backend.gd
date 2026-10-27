@@ -196,9 +196,13 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.PLUGIN_WINDOW:
 		# The bridge opens the window; the display is where it is read from.
 		return _bridge != null and _bridge.is_open() and ReaperPluginWindow.available()
-	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES:
+	if capability == Capability.MIDI_TAKES or capability == Capability.AUDIO_TAKES \
+			or capability == Capability.PASTE_ITEMS:
 		# OSC can play notes into Reaper but cannot make an item; only ReaScript can.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.DEMO_PARTS:
+		# The demo song's parts are the built-in engine's: Reaper has nothing to play one with.
+		return false
 	if capability == Capability.TRACK_ORDER:
 		# Only ReaScript can move a track; and only with the whole project in view is the plan whole.
 		return _bridge != null and _bridge.is_open() and _whole_project_in_bank()
@@ -210,6 +214,9 @@ func can(capability: StringName) -> bool:
 		return _bridge != null and _bridge.is_open()
 	if capability == Capability.WIDTH:
 		# OSC has no width; the bridge sets D_WIDTH, and the stereo pan mode it needs.
+		return _bridge != null and _bridge.is_open()
+	if capability == Capability.LANE_HOLD:
+		# OSC cannot stop an envelope playing; the bridge's HoldLane switches it off and back.
 		return _bridge != null and _bridge.is_open()
 	return true
 
@@ -1243,6 +1250,47 @@ func insert_audio_take(track_index: int, start: float, source: String, length: f
 	_edit("InsertAudioTake", [track_index, start, path, MidiTake.clean_name(take_name)])
 
 
+## A cassette's clip, as one bridge call (the bridge's PasteItem): a MIDI item made with its notes
+## and controls, or an audio item of its file, by the file's absolute path on this machine, with
+## its offset, fades, gain, loop and direction, inside one undo block. Shown on the cache at once,
+## like every edit. A demo part is never asked for: DAW.paste_refusal says Reaper has none.
+func paste_item(track_index: int, start: float, packed: Dictionary) -> void:
+	if _bridge == null or not _bridge.is_open():
+		push_warning("paste_item needs the ReaScript bridge; OSC cannot create an item.")
+		return
+	var item := MixWire.unpack_item(packed)
+	if item == null or not item.part.is_empty():
+		return
+	_locally_paste(track_index, start, item)
+	var path := "" if item.source.is_empty() else media_path(item.source)
+	_edit("PasteItem", paste_request(track_index, item, path))
+
+
+## The bridge's argument list for a paste, flat as every request's is: track, start, length, name,
+## muted, the file's absolute path ("" for MIDI), its offset, fade in and out, their shapes in the
+## desk's numbering, gain in dB, the loop's start and end in the file (equal for none), reversed,
+## then the note count and five numbers per note -- on and off in project seconds, pitch, velocity,
+## channel -- and the control count and four per control: project seconds, kind, value, channel.
+static func paste_request(track_index: int, item: MixState.ItemState, path: String) -> Array:
+	var out: Array = [track_index, item.start, item.length, MidiTake.clean_name(item.name),
+			1 if item.muted else 0, path, item.source_offset, item.fade_in, item.fade_out,
+			item.fade_shape, item.fade_out_shape, item.gain_db, item.loop_start, item.loop_end,
+			1 if item.reversed else 0]
+	var count := item.notes.size() / MidiTake.NOTE_WIDTH
+	out.append(count)
+	for n in count:
+		var o := n * MidiTake.NOTE_WIDTH
+		out.append_array([item.start + item.notes[o], item.start + item.notes[o + 1], int(item.notes[o + 2]),
+				int(item.notes[o + 3]), int(item.notes[o + 4])])
+	var controls := item.controls.size() / DawKitClip.CONTROL_WIDTH
+	out.append(controls)
+	for c in controls:
+		var o := c * DawKitClip.CONTROL_WIDTH
+		out.append_array([item.start + item.controls[o], int(item.controls[o + 1]), int(item.controls[o + 2]),
+				int(item.controls[o + 3])])
+	return out
+
+
 ## The bridge's argument list for a take. Flat, because the bridge's request decoder reads one
 ## flat list of numbers and strings: track, start, end, name, note count, then five numbers per
 ## note -- on and off in project seconds, pitch, velocity, channel -- and then the control count
@@ -1299,6 +1347,14 @@ func _on_rendered(result) -> void:
 func set_automation(track_index: int, target: String, points: Array) -> void:
 	_apply(MixWire.automation_address(track_index, target), MixWire.pack_automation(points))
 	_edit("SetEnvelope", [track_index, target] + MixWire.pack_automation(points))
+
+
+## The bridge's HoldLane: the envelope stops playing (its active flag off) while a write bead is
+## out over its control, and plays again at the let-go. Still read back by the timeline poll while
+## held, so nobody's lane vanishes. Sent at once, never in an edit's batch: it is not history.
+func _hold_lane(track_index: int, target: String, on: bool) -> void:
+	if _bridge != null and _bridge.is_open():
+		_bridge.call_reaper("HoldLane", [track_index, target, 1 if on else 0])
 
 
 func set_track_automation_mode(index: int, mode: int) -> void:

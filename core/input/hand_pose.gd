@@ -43,6 +43,12 @@ const PALM_UP_WITHIN := 35.0
 const FACES_HEAD_WITHIN := 60.0
 ## The most a tilt reads, either way, in pitch and in roll (degrees): tipped this far is 1.
 const TILT_MOST := 45.0
+## Two palms are pressed together (Clap, docs/spatial_loop.md slice 19) with their middles within
+## PALMS_TOUCH (m) and each facing the other: the one's normal within PALMS_OPPOSED_WITHIN
+## (degrees) of straight against the other's. Not scaled with the hand: palms flat together are
+## a centimetre or two apart at their middles whatever their size.
+const PALMS_TOUCH := 0.05
+const PALMS_OPPOSED_WITHIN := 40.0
 
 ## The pinch mask: one bit a finger, the thumb pinching it.
 const INDEX := 1
@@ -200,6 +206,22 @@ static func faces_head(joints: PackedVector3Array, head: Vector3, side: int) -> 
 	if toward.length() < 0.0001:
 		return false
 	return rad_to_deg(palm_normal(joints, side).angle_to(toward)) <= FACES_HEAD_WITHIN
+
+
+## Whether two palms, at `a` and `b` and facing `a_normal` and `b_normal` (any one space), are
+## pressed together: within PALMS_TOUCH, and opposed within PALMS_OPPOSED_WITHIN. Two palms side
+## by side, both down, are near but not pressed; two held flat a hand apart are opposed but not.
+static func palms_meet(a: Vector3, a_normal: Vector3, b: Vector3, b_normal: Vector3) -> bool:
+	if a.distance_to(b) > PALMS_TOUCH or a_normal.length() < 0.0001 or b_normal.length() < 0.0001:
+		return false
+	return rad_to_deg(a_normal.angle_to(-b_normal)) <= PALMS_OPPOSED_WITHIN
+
+
+## `palms_meet` of a left hand's joints and a right hand's (same space).
+static func palms_pressed(left: PackedVector3Array, right: PackedVector3Array) -> bool:
+	if not whole(left) or not whole(right):
+		return false
+	return palms_meet(left[PALM], palm_normal(left, -1), right[PALM], palm_normal(right, 1))
 
 
 ## How far the hand is tipped from level, read -1..1 each way: x its roll (positive rolled

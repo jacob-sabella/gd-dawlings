@@ -205,6 +205,10 @@ class ItemState extends RefCounted:
 	## long as it lasts. Not looped when loop_end is not after loop_start.
 	var loop_start: float = 0.0
 	var loop_end: float = 0.0
+	## The demo part (DemoSong.ROLES) it plays in its window, before its track's: a demo item
+	## pasted from a cassette onto another track still plays what it was cut from. Empty for
+	## everything else, which plays its track's part (GodotBackend.part_of).
+	var part: String = ""
 
 	func has_clip_shape() -> bool:
 		return fade_in != 0.0 or fade_out != 0.0 or gain_db != 0.0 or loop_end > loop_start \
@@ -253,6 +257,11 @@ class ItemState extends RefCounted:
 
 
 class TrackState extends RefCounted:
+	## Moved on whenever any track anywhere is soloed or let out of its solo, or a track comes or
+	## goes: what SignalBeads keys "is anything soloed" on, so a frame of every cable's beads asks
+	## it once rather than once a cable.
+	static var solo_version := 0
+
 	var index: int = 0
 	var name: String = ""
 	## The DAW's normalised fader position, 0..1 -- NOT a gain multiplier and NOT dB. Converting it
@@ -265,7 +274,11 @@ class TrackState extends RefCounted:
 	## built-in engine's StereoEnhance on the track's bus. `/track/N/width`.
 	var width: float = 1.0
 	var mute: bool = false
-	var solo: bool = false
+	var solo: bool = false:
+		set(value):
+			if value != solo:
+				solo = value
+				solo_version += 1
 	var rec_arm: bool = false
 	## Input monitoring: 0 off, 1 on, 2 auto. Reaper's I_RECMON, and what `/track/N/monitor` says.
 	var monitor: int = 0
@@ -331,7 +344,10 @@ class TrackState extends RefCounted:
 		return TrackColours.shown(colour, index)
 
 
-var tracks: Dictionary = {}
+var tracks: Dictionary = {}:
+	set(value):
+		tracks = value
+		TrackState.solo_version += 1
 var master := MasterState.new()
 var playing: bool = false
 var recording: bool = false
@@ -586,6 +602,7 @@ func trim_to_project() -> void:
 	for index in tracks.keys():
 		if not in_project(index):
 			tracks.erase(index)
+			TrackState.solo_version += 1
 			gone = true
 	if gone:
 		bank_changed.emit()
@@ -629,6 +646,7 @@ func set_bank(offset: int, size: int = -1) -> void:
 	# stale. Dropping it is the only honest move: keeping it would leave the previous bank's
 	# names on this bank's faders until each one happened to be re-sent.
 	tracks.clear()
+	TrackState.solo_version += 1
 	bank_changed.emit()
 
 
@@ -697,6 +715,7 @@ func track(index: int, create: bool = true) -> TrackState:
 	var t := TrackState.new()
 	t.index = index
 	tracks[index] = t
+	TrackState.solo_version += 1
 	track_added.emit(index)
 	return t
 

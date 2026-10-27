@@ -19,8 +19,18 @@ const TILT_BENDS_TIP := ("Tip the hand that plays from where its note began to b
 ## "Snap hand percussion"'s hover card (slice 17): HitRecorder.SNAP_WINDOW and SNAP_PULL, in words.
 const SNAP_HITS_TIP := ("The shaker's and the tambourine's hits are recorded a little nearer the beat: one within 35 ms of a sixteenth is moved half way to it. "
 		+ "You hear every hit where you played it; only the recorded note moves. Yours alone: it goes with each hit you play.")
+## COMFORT's hover cards (docs/spatial_loop.md part two, slice 21).
+const MOTION_TIP := ("How much the room moves for you. Full glides the gear to you and runs the signal beads along the cables; Gentle does both at under half the pace; Still cuts every move and holds the beads still, their brightness alone saying how loud each cable is. "
+		+ "--no-motion at launch starts Still whatever was kept.")
+const ROOM_REACTS_TIP := ("The venue's lights breathe with the master, its sparks rise with the beat, and a clip lifts the lamps. "
+		+ "Off, the room holds its own look however loud the mix is.")
+const LIFT_TIP := ("A track or the master over 0 dBFS lifts the room's lamps by a third for a moment, at most once every two seconds, and lights the OVER readout on its strip. "
+		+ "Off, only the OVER readout says so. Needs Room reacts.")
 const WIDTH := 360.0
 const TOAST_SECONDS := 4.5
+## How wide a toast's line runs before it wraps: the toasts' column, less the card's margins. A
+## station's desk line or a cassette's is longer than a 1600-wide window has room for on one line.
+const TOAST_WIDTH := 500
 ## A beacon is heard once a second. Three missed and the session is taken to be gone.
 const NEARBY_FORGET_MSEC := 3500
 
@@ -99,7 +109,9 @@ var _strip: HBoxContainer
 var _project_name: Label
 var _project_caption: Label
 var _project_where: Label
-var _project_host_row: HBoxContainer
+## The host's project buttons, flowed onto as many lines as the panel's width needs: in one line
+## they were wider than the panel, and pushed every switch in it off the screen's edge.
+var _project_host_row: HFlowContainer
 var _project_save: Button
 var _files: FileDialog
 var _confirm_new: ConfirmationDialog
@@ -108,6 +120,13 @@ var _import_box: VBoxContainer
 var _import_into: OptionButton
 var _import_caption: Label
 var _imports: FileDialog
+
+## COMFORT: where it is kept (the body's file, beside the height; the suite points it elsewhere),
+## and its three controls, which set Ergonomics.current at once.
+var comfort_path := Ergonomics.HEIGHT_PATH
+var _motion: OptionButton
+var _room_reacts: CheckButton
+var _lift_on_clip: CheckButton
 
 var _listener: PacketPeerUDP = null
 var _found: Dictionary = {}
@@ -142,6 +161,73 @@ func open() -> void:
 	_root.visible = true
 	_name_edit.text = Session.local_name
 	_refresh()
+	refresh_comfort()
+
+
+# --- comfort --------------------------------------------------------------------------------
+
+## COMFORT: Motion (full, gentle, still), Room reacts, Lift on clip. Each is this person's, set
+## on Ergonomics.current at once and kept at `comfort_path` beside the height; `--no-motion` at
+## launch still wins over what was kept (Ergonomics.take_comfort).
+func _build_comfort(column: VBoxContainer) -> void:
+	var box := VBoxContainer.new()
+	box.name = "Comfort"
+	box.add_theme_constant_override("separation", 8)
+	column.add_child(box)
+	box.add_child(_caption("COMFORT"))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	box.add_child(row)
+	row.add_child(_label("Motion", 14, INK))
+	_motion = _choice()
+	_motion.name = "Motion"
+	for word in Ergonomics.MOTION_NAMES:
+		_motion.add_item(word)
+	_motion.tooltip_text = MOTION_TIP
+	_motion.item_selected.connect(set_motion)
+	row.add_child(_motion)
+	_room_reacts = _toggle("Room reacts")
+	_room_reacts.name = "RoomReacts"
+	_room_reacts.tooltip_text = ROOM_REACTS_TIP
+	_room_reacts.toggled.connect(set_room_reacts)
+	box.add_child(_room_reacts)
+	_lift_on_clip = _toggle("Lift on clip")
+	_lift_on_clip.name = "LiftOnClip"
+	_lift_on_clip.tooltip_text = LIFT_TIP
+	_lift_on_clip.toggled.connect(set_lift_on_clip)
+	box.add_child(_lift_on_clip)
+	refresh_comfort()
+
+
+## Motion to MOTION_STEPS[`step`]: 0 full, 1 gentle, 2 still.
+func set_motion(step: int) -> void:
+	Ergonomics.current.motion_scale = Ergonomics.MOTION_STEPS[clampi(step, 0, Ergonomics.MOTION_STEPS.size() - 1)]
+	Ergonomics.save_comfort(comfort_path, {"motion": Ergonomics.current.motion_scale})
+	refresh_comfort()
+
+
+func set_room_reacts(on: bool) -> void:
+	Ergonomics.current.room_reacts = on
+	Ergonomics.save_comfort(comfort_path, {"room_reacts": on})
+	refresh_comfort()
+
+
+func set_lift_on_clip(on: bool) -> void:
+	Ergonomics.current.lift_on_clip = on
+	Ergonomics.save_comfort(comfort_path, {"lift_on_clip": on})
+	refresh_comfort()
+
+
+## The box as Ergonomics.current has it. Lift on clip is greyed while the room does not react,
+## since then nothing lifts.
+func refresh_comfort() -> void:
+	if _motion == null:
+		return
+	var e := Ergonomics.current
+	_motion.select(Ergonomics.motion_step(e.motion_scale))
+	_room_reacts.set_pressed_no_signal(e.room_reacts)
+	_lift_on_clip.set_pressed_no_signal(e.lift_on_clip)
+	_lift_on_clip.disabled = not e.room_reacts
 
 
 func close() -> void:
@@ -394,6 +480,7 @@ func _build_panel() -> void:
 
 	_column = column
 	_build_project(column)
+	_build_comfort(column)
 
 	var foot := _label("M  close   ·   the mix is the host's; your view is your own", 11, DIM)
 	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1098,6 +1185,9 @@ func toast(text: String) -> void:
 	card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	var line := _label(text, 14, INK)
 	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if line.get_minimum_size().x > TOAST_WIDTH:
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size.x = TOAST_WIDTH
 	card.add_child(line)
 	_toasts.add_child(card)
 	# Five at most: a room filling up all at once should not bury the desk in cards.
@@ -1127,11 +1217,13 @@ func _build_project(column: VBoxContainer) -> void:
 	save.name = "SaveProject"
 	save.tooltip_text = "Ctrl+S"
 	save.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	save.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	save.pressed.connect(func(): DAW.save_project())
 	row.add_child(save)
 	_project_save = save
-	_project_host_row = HBoxContainer.new()
-	_project_host_row.add_theme_constant_override("separation", 8)
+	_project_host_row = HFlowContainer.new()
+	_project_host_row.add_theme_constant_override("h_separation", 8)
+	_project_host_row.add_theme_constant_override("v_separation", 8)
 	_project_host_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_project_host_row)
 	for spec in [["Save As…", "SaveProjectAs", _ask_save_as], ["Open…", "OpenProject", _ask_open],

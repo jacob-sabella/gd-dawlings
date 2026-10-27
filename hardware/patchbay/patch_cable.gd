@@ -85,8 +85,18 @@ var dimmed := false:
 			dimmed = v
 			_paint()
 
+## Which send it is, for the level its beads carry (SignalBeads): the track it leaves and that
+## track's send. -1 for a cable that is no send yet (one being carried), which carries nothing.
+var source_track := -1
+var send_index := -1
+
 var _jacket: MeshInstance3D
 var _boots: Array[MeshInstance3D] = []
+## The jacket's centre line in this node's space, its length, and in world space as last asked.
+var _spine := PackedVector3Array()
+var _spine_length := 0.0
+var _spine_world := PackedVector3Array()
+var _spine_at := Transform3D()
 
 
 static func create(a: Transform3D, b: Transform3D, tint: Color, seed_value: int = 0) -> PatchCable:
@@ -96,6 +106,10 @@ static func create(a: Transform3D, b: Transform3D, tint: Color, seed_value: int 
 	c.colour = tint
 	c.variation_seed = seed_value
 	return c
+
+
+func _enter_tree() -> void:
+	add_to_group(SignalBeads.CARRIERS)
 
 
 func _ready() -> void:
@@ -123,8 +137,37 @@ func rebuild() -> void:
 
 	_build_plug(a, colour)
 	_build_plug(b, colour)
-	_build_jacket(_spine(a_start, a_axis, b_start, b_axis))
+	_spine = _sweep(a_start, a_axis, b_start, b_axis)
+	_spine_length = SignalBeads.length_of(_spine)
+	_spine_at = Transform3D()
+	_spine_world = PackedVector3Array()
+	_build_jacket(_spine)
 	_paint()
+
+
+# --- what its beads ride (SignalBeads) ----------------------------------------------------
+
+func signal_spine() -> PackedVector3Array:
+	if _spine_world.size() != _spine.size() or global_transform != _spine_at:
+		_spine_at = global_transform
+		_spine_world = _spine_at * _spine
+	return _spine_world
+
+
+func signal_length() -> float:
+	return _spine_length
+
+
+## What the send carries: its track's level through the send's fader; nothing from a muted track,
+## past a send at zero, or on a cable being carried.
+func signal_level() -> float:
+	if source_track < 0 or send_index < 0:
+		return 0.0
+	return SignalBeads.send_level(source_track, send_index)
+
+
+func signal_radius() -> float:
+	return JACKET_RADIUS
 
 
 ## A dimmed cable keeps its colour and loses most of its light, so the ones still lit are the
@@ -144,7 +187,7 @@ func _paint() -> void:
 ## makes the cable leave the panel square to it, with no special-casing of the first segment.
 ## Gravity is then applied to the two control points rather than to the curve, which keeps the
 ## whole thing a single smooth cubic instead of a curve with a sag bolted on.
-func _spine(a: Vector3, a_axis: Vector3, b: Vector3, b_axis: Vector3) -> PackedVector3Array:
+func _sweep(a: Vector3, a_axis: Vector3, b: Vector3, b_axis: Vector3) -> PackedVector3Array:
 	var span := a.distance_to(b)
 	var sag := maxf(span * sag_ratio, MIN_SAG)
 

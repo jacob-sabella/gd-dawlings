@@ -530,10 +530,50 @@ func _ready() -> void:
 	_test_snap_hand_percussion_is_in_reach_where_reaper_records_its_own_input()
 	await _test_a_placing_on_the_stage_table_is_one_step()
 	await _test_the_stage_table_snaps_to_centre_and_resets()
+	await _test_a_ball_under_another_is_taken_by_its_tag()
 	await _test_the_stage_table_banks_and_shows()
 	await _test_with_no_width_the_stage_table_has_no_ring()
 	_test_the_built_in_engine_keeps_a_tracks_width()
+	_test_reaper_sets_a_width_by_the_bridge()
+	await _test_the_stage_tables_voices_are_clickable_at_it()
 	await _test_the_stage_table_stands_clear_in_every_venue()
+	await _test_a_voices_stalk_is_its_send_to_the_room()
+	await _test_add_room_makes_a_room_to_send_to()
+	await _test_a_lift_on_reaper_asks_for_its_send_once()
+	await _test_a_guest_asks_for_the_room_and_its_sends()
+	await _test_leaning_in_lifts_one_track_in_your_ears_alone()
+	await _test_pressed_palms_mute_and_a_clap_latches()
+	await _test_k_mutes_and_l_leans_at_a_desk()
+	await _test_track_under_answers_each_kind_of_surface()
+	await _test_a_rope_ties_a_sidechain_on_the_built_in_engine()
+	await _test_a_rope_ducks_the_bass_in_a_render()
+	await _test_a_pulled_rope_ducks_harder_in_one_step()
+	await _test_a_ropes_lift_follows_the_estimate()
+	await _test_a_guests_rope_asks_the_host()
+	await _test_beads_go_with_the_level()
+	await _test_no_beads_on_a_muted_loom_or_past_a_zero_send()
+	await _test_every_cable_is_drawn_within_the_bead_budget()
+	_test_a_clip_on_every_beat_lifts_the_room_once_in_two_seconds()
+	await _test_a_clip_lifts_the_studios_lamps_and_lights_over()
+	await _test_comfort_is_kept_and_no_motion_wins()
+	await _test_a_looped_bead_pass_writes_inside_the_loop_a_step_a_pass()
+	await _test_a_bead_not_looping_records_from_where_it_began()
+	await _test_a_bead_writes_a_plugin_parameter_a_send_and_a_mute()
+	await _test_a_guests_bead_pass_lands_at_its_song_positions()
+	await _test_a_bead_shows_over_a_hovered_control_and_its_drag_is_ordinary()
+	await _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand()
+	_test_a_cassette_packs_its_clip_whole_and_small()
+	await _test_a_guests_pull_is_a_ghost_until_the_host_answers()
+	await _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over()
+	await _test_a_players_own_cassettes_wait_while_they_are_a_guest()
+	await _test_a_cassette_pastes_onto_a_track_as_the_clip_it_was()
+	_test_a_paste_is_refused_and_says_why()
+	await _test_a_guests_paste_names_its_cassette_track_and_time()
+	await _test_a_cassette_at_the_ear_plays_to_this_player_alone()
+	await _test_a_demo_or_audio_cassette_at_the_ear_plays_its_own_sound()
+	await _test_a_guest_fetches_an_audio_cassettes_file_once_to_hear_it()
+	await _test_a_squeeze_after_rec_is_one_sample_on_the_rack()
+	await _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take()
 	_report()
 
 
@@ -1264,6 +1304,30 @@ class FakeHand extends Interactor:
 		return pose
 	func fine() -> bool:
 		return holding_shift
+
+
+## A headset's hand, as far as a paste cares (docs/spatial_loop.md part two, slice 24): a trigger to
+## press, and a cassette it pushes into a control's face.
+class PastingHand extends FakeHand:
+	var pressing := false
+	var pushes := true
+	var seen := true
+	func is_pressing() -> bool:
+		return pressing
+	func pushes_to_paste() -> bool:
+		return pushes
+	func push_tracked() -> bool:
+		return seen
+	var words := ""
+	func paste_press_words() -> String:
+		return words if not words.is_empty() else super()
+
+
+## A headset's hand whose head is wherever the test says (docs/spatial_loop.md part two, slice 25).
+class EarHand extends XRInteractor:
+	var head := Vector3(0, 1.6, 0)
+	func head_point() -> Vector3:
+		return head
 
 
 ## Builds a mount with the anchors named in `modes`, one registered BoxSurface, and a throwaway
@@ -3236,10 +3300,11 @@ func _test_the_room_is_the_hosts() -> void:
 	check("and the room says so, where it stands (%s)" % [room], room["tablets"].has(id)
 			and room["tablets"][id][0] == 2 and room["tablets"][id][2] == plugin
 			and Vector2(room["tablets"][id][3], room["tablets"][id][4]).is_equal_approx(Vector2(0.4, 0.2)))
-	studio._on_room_asked(&"move_tablet", [id, -0.3, 0.1, 0.5], 7)
+	# Clear of the station board by the desk's left end, which is taller by a row for each station.
+	studio._on_room_asked(&"move_tablet", [id, -0.05, 0.2, 0.5], 7)
 	var stand: Trolley = studio.tablets[id][0]
-	check("a guest wheeling it moves it on the host",
-			Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(-0.3, 0.1)))
+	check("a guest wheeling it moves it on the host (%s)" % [Vector2(stand.position.x, stand.position.z)],
+			Vector2(stand.position.x, stand.position.z).is_equal_approx(Vector2(-0.05, 0.2)))
 	studio._on_room_asked(&"close_tablet", [id], 7)
 	check("and docking it puts it away", studio.tablets.is_empty())
 	var rack_home := Vector2(studio.rack_trolley.position.x, studio.rack_trolley.position.z)
@@ -3258,8 +3323,10 @@ func _test_the_room_is_the_hosts() -> void:
 	check("only what a guest may ask is heard", not Session.room_ask_is_valid(&"set_venue", [&"grid"])
 			and not Session.room_ask_is_valid(&"open_tablet", [2, "x"]))
 
-	# A guest, shown the host's room.
+	# A guest, shown the host's room. Talking to the host over a peer that is up: not the one the
+	# tree started with, which any earlier test's start_solo has closed.
 	Session.role = Session.Role.GUEST
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	var own_venue := studio.venue.venue_id()
 	var own_choice := Session.layout.venue
 	var notices: Array[String] = []
@@ -4132,9 +4199,10 @@ func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 	DAW.use(backend)
 	var s := DAW.state
 	var bus: int = backend._bus[6]
+	# The FX slots: after the panner, before the width in the bus's tail (slice 18).
 	var effects := func() -> Array:
 		var out: Array = []
-		for i in range(1, AudioServer.get_bus_effect_count(bus)):
+		for i in range(1, backend._fx_end(bus)):
 			out.append(AudioServer.get_bus_effect(bus, i).get_class())
 		return out
 	check("the built-in engine offers its own effects (%d)" % s.fx_choices.size(),
@@ -5444,7 +5512,7 @@ func _test_you_can_tell_which_surface_has_your_attention() -> void:
 					(studio.studio_set.global_transform * (studio.focus._home[
 					surface.surface_id][1] as Transform3D)).origin) < 0.001)
 	check("nothing is drawn on the camera for a berth", studio.camera.find_children("Berth_*", "", true, false).is_empty())
-	check("every room surface left one (%d)" % berthed, berthed == 5)
+	check("every room surface left one (%d)" % berthed, berthed == studio.focus.surfaces.size())
 
 	studio.focus.release()
 	for surface in studio.focus.surfaces:
@@ -8004,9 +8072,9 @@ func _test_the_duck_is_the_rooms() -> void:
 			and avatar._hands[0].pose == Glove.Pose.OPEN)
 	check("and her ghost says what it is holding", avatar._caption.text == "HOLDING  RUBBER DUCK")
 	duck._squash_speed = 0.0
-	Session.item_used.emit(&"duck", true, 9)
+	Session.item_used.emit(&"duck", true, 9, 1)
 	check("a squeeze from someone not holding it is nothing", duck._squash_speed == 0.0)
-	Session.item_used.emit(&"duck", true, 7)
+	Session.item_used.emit(&"duck", true, 7, 1)
 	check("hers squeezes ours", duck._squash_speed < -1.0)
 	studio._on_room_asked(&"put_item", [&"duck", spot.x, spot.y, 0.3], 9)
 	check("nobody else may put it down", duck.is_held_elsewhere())
@@ -8843,11 +8911,12 @@ func _test_a_track_has_a_cue_for_headphones() -> void:
 	var cue := AudioServer.get_bus_index(GodotBackend.cue_bus(2))
 	var own: int = backend._bus[2]
 	check("a cue of a track there is, once (%s)" % [backend.cues()], backend.cues() == [2] and cue >= 0)
-	var shared := AudioServer.get_bus_effect_count(own) - 1 == AudioServer.get_bus_effect_count(cue) \
+	# Its FX slots: after its panner and before its width (slice 18), which a cue does not take.
+	var shared := backend._fx_end(own) - 1 == AudioServer.get_bus_effect_count(cue) \
 			and AudioServer.get_bus_effect_count(cue) > 0
-	for slot in range(1, AudioServer.get_bus_effect_count(own)):
+	for slot in range(1, backend._fx_end(own)):
 		shared = shared and AudioServer.get_bus_effect(own, slot) == AudioServer.get_bus_effect(cue, slot - 1)
-	check("through the track's own effects, the very ones, and not its panner", shared)
+	check("through the track's own effects, the very ones, and not its panner or its width", shared)
 	check("to Master, not into the mix", AudioServer.get_bus_send(cue) == &"Master")
 	var players: Array = backend._players[2].filter(func(p: Node) -> bool: return p.has_meta(&"cue"))
 	check("played by a player of its own", players.size() == 1
@@ -9164,6 +9233,15 @@ func _seat_audit(tracks: int) -> void:
 	var small: Array = []
 	var smallest := INF
 	for c: ControlAffordance in controls:
+		# The stage table's voices stand where the mix has them, so tracks at one pan and level
+		# stand together, and from the seat the table top is seen nearly edge-on: they are
+		# audited from the table's own visit (_test_the_stage_tables_voices_are_clickable_at_it).
+		# So are the stalks they stand on (slice 19), under them and behind each other from here,
+		# and the knots under their balls with the X beside one (slice 20), which another voice's
+		# ball in front can cover from the seat just as it covers a stalk.
+		if c is StageVoice or c is StageVoice.Ring or c is StageVoice.Stalk or c is StageVoice.Knot \
+				or c.get_parent() is StageVoice:
+			continue
 		var shape: CollisionShape3D = null
 		for child in c.get_children():
 			if child is CollisionShape3D:
@@ -9207,7 +9285,7 @@ func _seat_audit(tracks: int) -> void:
 	# other control is, from the desk's seat, the plaques' the far side of the live room.
 	var travel := controls.filter(func(c: Node) -> bool: return c is StationBoard.Row or c is StationBoard.PlaqueKey)
 	check("%d tracks: the station board's %d rows and every plaque's two keys are audited (%d)" % [tracks,
-			studio.station_board.rows().size(), travel.size()], studio.station_board.rows().size() == 3
+			studio.station_board.rows().size(), travel.size()], studio.station_board.rows().size() == studio.station_ids().size()
 			and travel.size() == studio.station_board.rows().size() + 2 * studio.station_ids().size())
 	check("%d tracks: from the seat, a click on each of %d controls lands on it (%d miss: %s)" % [
 			tracks, controls.size(), missed.size(), ", ".join(missed.slice(0, 8))], missed.is_empty())
@@ -9872,14 +9950,15 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			across.size() == 2 and lengths.all(func(l): return is_equal_approx(l, 2.0)))
 	check("and walls everything else (%d edges)" % edges.size(), edges.size() == 8)
 
-	# Momentum: letting go does not stop you dead, but friction does stop you.
+	# Momentum: letting go does not stop you dead, but friction does stop you. Walked toward -x,
+	# away from the stage table's trolley (Studio.STAGE_AT), which stands across the +x lane.
 	walker.global_position = Vector3(0, 0, 1.6)
 	walker.velocity = Vector3.ZERO
 	for i in 60:
-		walker.step(1.0 / 60.0, Vector3(Walker.WALK_SPEED, 0, 0))
+		walker.step(1.0 / 60.0, Vector3(-Walker.WALK_SPEED, 0, 0))
 	var start_x := walker.global_position.x
 	walker.step(1.0 / 60.0, Vector3.ZERO)
-	check("letting go carries you on a little", walker.global_position.x > start_x)
+	check("letting go carries you on a little", walker.global_position.x < start_x)
 	for i in 60:
 		walker.step(1.0 / 60.0, Vector3.ZERO)
 	check("and friction brings you to rest", walker.velocity.length() < 0.01)
@@ -11533,7 +11612,7 @@ func _test_the_built_in_engine_is_a_real_mix() -> void:
 	DAW.set_track_volume(6, 0.5)
 	close_to("a fader is the bus's gain", AudioServer.get_bus_volume_db(bus.call(6)), backend.taper_to_db(0.5), 0.01)
 	DAW.set_track_pan(6, 1.0)
-	close_to("a pan is the bus's panner", (AudioServer.get_bus_effect(bus.call(6), 0) as AudioEffectPanner).pan, 1.0)
+	close_to("a pan is the bus's panner", backend.pan_effect(6).pan, 1.0)
 	check("the demo's muted hat is silent", AudioServer.is_bus_mute(bus.call(4)))
 	DAW.set_track_solo(3, true)
 	check("a solo silences the rest", AudioServer.is_bus_mute(bus.call(6)))
@@ -11568,8 +11647,8 @@ func _test_the_built_in_engine_is_a_real_mix() -> void:
 	check("a send patched while playing gets its own bus at once", slot > 0 and sb >= 0
 			and backend._players[8].any(func(p): return p.has_meta(&"send") and p.bus == GodotBackend.send_bus(8, 13)))
 	check("which runs the track's own effects, after its pan, before the send's (%d)" % AudioServer.get_bus_effect_count(sb),
-			AudioServer.get_bus_effect_count(sb) == AudioServer.get_bus_effect_count(tb) + 1
-			and range(1, AudioServer.get_bus_effect_count(tb)).all(func(i):
+			AudioServer.get_bus_effect_count(sb) == backend._fx_end(tb) + 1
+			and range(1, backend._fx_end(tb)).all(func(i):
 				return AudioServer.get_bus_effect(sb, i) == AudioServer.get_bus_effect(tb, i))
 			and AudioServer.get_bus_effect(sb, 0) is AudioEffectPanner
 			and AudioServer.get_bus_effect(sb, AudioServer.get_bus_effect_count(sb) - 1) is AudioEffectPanner)
@@ -22817,7 +22896,7 @@ func _test_the_built_in_engine_hosts_a_plugin_effect() -> void:
 			and is_equal_approx(backend.hosted_plugin(6, at + 1).get_param(0), 0.25))
 	DAW.undo()
 	DAW.remove_fx(6, at)
-	check("removed, it is off the bus", AudioServer.get_bus_effect_count(bus) == 1 + before)
+	check("removed, it is off the bus", backend._fx_end(bus) == 1 + before)
 	DAW.undo()
 	check("and undone, the same plugin is back, as it was",
 			s.fx(6, at).host_key == key and backend.hosted_plugin(6, at) == p
@@ -24186,8 +24265,8 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var venue := studio.venue
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
-			check("%s: the harp, the bells, the wheel and the stage table stand here (%s)" % [tag, here],
-					here == [&"harp", &"bells", &"wheel", &"stage_table"])
+			check("%s: the harp, the bells, the wheel, the stage table, the cassette rack and the sampler stand here (%s)" % [tag, here],
+					here == [&"harp", &"bells", &"wheel", &"stage_table", &"cassette_rack", &"sampler"])
 			for station: StringName in here:
 				var r := Stations.row(station)
 				var spot: Transform3D = Stations.spot(venue, station)
@@ -24217,8 +24296,9 @@ func _test_every_venue_stands_every_station_clear() -> void:
 	check("in the Rig Roulette room the harp stands inside the walls (%s)" % in_room.origin,
 			absf(in_room.origin.x) + ChordHarp.FOOT.x < roulette.room_width * 0.5
 			and roulette.back_of_house().has_point(Vector2(in_room.origin.x, in_room.origin.z)))
-	check("and there is no bricks table, so no wheel: it stands only the harp and the bells (%s)" % [Stations.ids(roulette)],
-			Stations.ids(roulette) == [&"harp", &"bells"] and Stations.spot(roulette, &"wheel") == null
+	check("and there is no bricks table, so no wheel, and no booth, so no sampler: it stands only the harp, the bells and the cassette rack (%s)" % [Stations.ids(roulette)],
+			Stations.ids(roulette) == [&"harp", &"bells", &"cassette_rack"] and Stations.spot(roulette, &"wheel") == null
+			and Stations.spot(roulette, &"sampler") == null
 			and Stations.seat(roulette, &"wheel") == null)
 	roulette.free()
 
@@ -24261,6 +24341,14 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 		&"wheel":
 			node = studio.wheel
 			if node == null or not node.transform.is_equal_approx(FifthsWheel.on_stand(spot)):
+				return false
+		&"cassette_rack":
+			node = studio.cassette_rack
+			if node == null or not node.transform.is_equal_approx(spot):
+				return false
+		&"sampler":
+			node = studio.sampler
+			if node == null or not node.transform.is_equal_approx(spot):
 				return false
 		&"stage_table":
 			# On its trolley in the control room, which is the studio's, with the table riding it.
@@ -25080,6 +25168,8 @@ func _test_a_trigger_into_a_player_walks_the_chord_at_its_song() -> void:
 			sent.all(func(n: Array) -> bool: return n[0] == Session.Note.ON and n[3] == Jacks.CABLE)
 			and sent.map(func(n: Array) -> float: return n[2]) == played)
 	check("all four sounding on my synth (%s)" % [spy.on.keys()], spy.on.has(57) and spy.on.has(69) and gm.held.size() == 4)
+	check("and the shaker's lead here carries them, its beads lit (%.2f)" % jacks.level_of(&"shaker"),
+			jacks.level_of(&"shaker") > SignalBeads.FLOOR and jacks.level_of(&"tambourine") == 0.0)
 	jacks.received(&"shaker", Jack.Kind.TRIGGER, 0, 90, 7, line + 0.1)
 	check("the fifth, played in F, is F's next tone round, its root F4 (%d)" % sent[-1][1], sent[-1][1] == 65)
 	jacks.tick(Jacks.TRIGGER_SECONDS - 0.05)
@@ -26848,8 +26938,8 @@ func _test_every_station_says_how_to_play_it() -> void:
 			is_equal_approx(Vector2(seat.origin.x - spot.origin.x, seat.origin.z - spot.origin.z).length(), Stations.SEAT)
 			and is_zero_approx(seat.origin.y))
 	var areas := Stations.by_area(venue)
-	check("by area: the three in the live room, none yet in the control room or the venue's own",
-			(areas[Stations.LIVE] as Array).size() == 3 and (areas[Stations.CONTROL] as Array).is_empty()
+	check("by area: the five in the live room, none yet in the control room or the venue's own",
+			(areas[Stations.LIVE] as Array).size() == 5 and (areas[Stations.CONTROL] as Array).is_empty()
 			and (areas[Stations.VENUE] as Array).is_empty())
 	venue.free()
 	var plaque := Stations.plaque(&"harp")
@@ -26889,7 +26979,7 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 			held_sub.contains("shelf") and held_sub.contains("beside the harp") and held_sub.contains("always on you"))
 	var live: Dictionary = pages[names.find("PLAY · LIVE ROOM")]
 	check("each PLAY line of a stood station is its title and its desk line, and goes there",
-			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel"]
+			live["lines"].map(func(l): return l[2]) == [&"harp", &"bells", &"wheel", &"cassette_rack", &"sampler"]
 			and live["lines"][0][0] == "CHORD HARP" and live["lines"][0][1] == Stations.row(&"harp")["desk"])
 	var sizes: Array = []
 	for i in pages.size():
@@ -26912,9 +27002,9 @@ func _test_the_help_cards_pages_name_every_instrument_and_fit() -> void:
 		fit = fit and z.x <= WelcomeCard.FIT.x and z.y <= WelcomeCard.FIT.y
 		if String(pages[i]["section"]) == "PLAY · LIVE ROOM":
 			counted += (pages[i]["lines"] as Array).size()
-	check("43 rows in the live room run on to numbered pages %s, every one fitting, none lost" % [run],
+	check("45 rows in the live room run on to numbered pages %s, every one fitting, none lost" % [run],
 			run.size() >= 2 and run[0] == "PLAY · LIVE ROOM 1/%d" % run.size()
-			and run[-1] == "PLAY · LIVE ROOM %d/%d" % [run.size(), run.size()] and fit and counted == 43)
+			and run[-1] == "PLAY · LIVE ROOM %d/%d" % [run.size(), run.size()] and fit and counted == 45)
 	card.free()
 	Ergonomics.current.text_scale = saved_scale
 
@@ -27105,7 +27195,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 4:
+	for n in 7:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -27118,13 +27208,13 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		facing = facing and Vector2(forward.x, forward.z).normalized().dot(Vector2(toward.x, toward.z).normalized()) > 0.99
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].contains(r["title"]) and said[0].contains(r["desk"])
-	check("I three times walks to the harp, the bells and the wheel, and a fourth comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"harp"])
+	check("I six times walks to the harp, the bells, the wheel, the stage table, the cassette rack and the sampler, and a seventh comes back round (%s)" % [visits],
+			visits == [&"harp", &"bells", &"wheel", &"stage_table", &"cassette_rack", &"sampler", &"harp"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title and its desk line", toasts)
 	key.shift_pressed = true
 	studio._unhandled_input(key)
-	check("Shift-I goes back to the one before (%s)" % studio.station, studio.station == &"wheel")
+	check("Shift-I goes back to the one before (%s)" % studio.station, studio.station == &"sampler")
 	studio.set_god_mode(true)
 	studio.go_to_station(&"bells")
 	var bells: Transform3D = Stations.seat(studio.venue, &"bells", walker.fits)
@@ -27180,7 +27270,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"harp", &"bells", &"wheel"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"harp", &"bells", &"wheel", &"cassette_rack", &"sampler"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there, looking ahead as a player stands, the board is in view.
 	check("a VR play space starts centred on the mix position (%s)" % rig.global_position,
@@ -27382,7 +27472,8 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 			.distance_to(Vector2(harp.origin.x, harp.origin.z)) < 0.01)
 	var keys: Array = []
 	for station: StringName in studio.station_ids():
-		for key: StationBoard.PlaqueKey in studio.venue.find_children("*", "", true, false).filter(
+		# The venue's stations and the studio's own (the stage table's trolley).
+		for key: StationBoard.PlaqueKey in studio.find_children("*", "", true, false).filter(
 				func(n: Node) -> bool: return n is StationBoard.PlaqueKey and n.station == station):
 			keys.append([station, key.kind, key.title()])
 	check("every station's plaque has INSTRUMENTS and BACK, named for its station (%s)" % [keys],
@@ -29650,6 +29741,7 @@ func _test_a_guests_hit_is_snapped_by_its_flag_and_heard_as_its_take() -> void:
 ## A stage table on its own, built, over the mix that is in use.
 func _stage_table() -> StageTable:
 	var table := StageTable.new()
+	StageLink.wire(table)
 	add_child(table)
 	table._process(0.0)
 	return table
@@ -29671,7 +29763,8 @@ func _test_a_placing_on_the_stage_table_is_one_step() -> void:
 			table.voices.keys() == [1, 2, 3, 4, 5, 6, 7, 8] and table.tags.size() == 8)
 	var voice: StageVoice = table.voices[3]
 	var t := s.track(3)
-	var spot := StageTable.spot_of(t.pan, StageTable.db_of_volume(t.volume))
+	# Lifted on its stalk by its send to the room (slice 19): the demo's snare sends to the verb.
+	var spot := StageTable.spot_of(t.pan, StageTable.db_of_volume(t.volume)) + Vector3(0, voice.lift(), 0)
 	check("a voice stands where the mix has its track (%s at %s)" % [voice.position, spot], voice.position.is_equal_approx(spot))
 	check("and wears its ring and its number", voice.ring != null and voice._number.text == "3")
 	close_to("the front edge is +6 dB", StageTable.db_of_z(StageTable.SIZE.y * 0.5), 6.0)
@@ -29682,7 +29775,8 @@ func _test_a_placing_on_the_stage_table_is_one_step() -> void:
 	close_to("and of 8 cm, full", StageTable.width_of(0.08), 1.0)
 	var strip := ChannelStrip.create(3)
 	add_child(strip)
-	var depth := s.undo_depth
+	# -1 until the stand-in has said how deep its history is.
+	var depth := maxi(s.undo_depth, 0)
 	var hand := FakeHand.new()
 	add_child(hand)
 	voice.grab_begin(hand, table.to_global(voice.position))
@@ -29703,13 +29797,13 @@ func _test_a_placing_on_the_stage_table_is_one_step() -> void:
 	check("pan, level and width are one step, called a placing (%d after %d: %s)" % [s.undo_depth, depth, s.undo_names],
 			s.undo_depth == depth + 1 and String(s.undo_names[s.undo_depth - 1]).ends_with(": place"))
 	var card := "%s · %s" % [voice.title(), voice.readout()]
-	check("its card reads number, name, pan, level and width (%s)" % card,
-			card == "3 %s · pan 20 L · -4.2 dB · width 60%%" % t.display_name().to_upper())
+	check("its card reads number, name, pan, level, width and its room (%s)" % card,
+			card == "3 %s · pan 20 L · -4.2 dB · width 60%% · room %.1f dB" % [t.display_name().to_upper(), StageTable.room_send_db(3)])
 	close_to("the console's pan knob follows", strip._pan.value, t.pan)
 	close_to("and its fader", strip._fader.value, t.volume)
 	await get_tree().process_frame
 	check("let go, the voice stands where the mix now has it (%s)" % voice.position,
-			voice.position.is_equal_approx(StageTable.spot_of(t.pan, DAW.taper_to_db(t.volume))))
+			voice.position.is_equal_approx(StageTable.spot_of(t.pan, DAW.taper_to_db(t.volume)) + Vector3(0, voice.lift(), 0)))
 	DAW.undo()
 	close_to("one undo puts its pan back", t.pan, pan0)
 	close_to("its level", t.volume, volume0)
@@ -29786,14 +29880,14 @@ func _test_the_stage_table_snaps_to_centre_and_resets() -> void:
 	DAW.set_track_width(2, 0.3)
 	check("Backspace over the voice resets it", table.reset_under(voice) and t.pan == 0.5 and t.width == 1.0)
 	DAW.set_track_pan(2, 0.2)
-	var reset := table.tags[2].find_children("*", "PanelButton", true, false).filter(
+	var reset: Array = (table.tags[2] as Node).find_children("*", "PanelButton", true, false).filter(
 			func(k): return (k as StageTable.TableKey).glyph == "RESET")
 	check("its tag has a RESET key that does not dwell", reset.size() == 1 and not (reset[0] as ControlAffordance).dwell_activates())
 	(reset[0] as PanelButton).pressed.emit()
 	check("and it resets", t.pan == 0.5)
 	check("Backspace over anything not the table's is nothing", not table.reset_under(hand))
 	# PAN < >: a percent a press, and the wheel over them.
-	var keys := table.tags[2].find_children("*", "PanelButton", true, false)
+	var keys: Array = (table.tags[2] as Node).find_children("*", "PanelButton", true, false)
 	var left: StageTable.TableKey = keys.filter(func(k): return k.glyph == "<")[0]
 	var right: StageTable.TableKey = keys.filter(func(k): return k.glyph == ">")[0]
 	left.pressed.emit()
@@ -29804,6 +29898,85 @@ func _test_the_stage_table_snaps_to_centre_and_resets() -> void:
 	right.nudge(hand, 2, false)
 	close_to("the wheel over them nudges pan", t.pan, 0.555)
 	check("and its card says so", right.hint().contains("wheel") and right.title().ends_with("PAN RIGHT"))
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## Tracks at one pan and level stand in one place, and only the top ball can be taken: a ball
+## under another is taken by the name on its tag. Hovered, its voice stands raised over the pile;
+## a drag from the name moves that track and no other, as one placing; the wheel there is its
+## level, or its width while held; two presses put it back; and the card says so.
+func _test_a_ball_under_another_is_taken_by_its_tag() -> void:
+	_offline(16)
+	var s := DAW.state
+	var table := _stage_table()
+	# The kick under the drums: one pan, one level.
+	DAW.set_track_pan(1, 0.5)
+	DAW.set_track_pan(2, 0.5)
+	DAW.set_track_volume(1, FaderLaw.to_taper(0.0))
+	DAW.set_track_volume(2, FaderLaw.to_taper(0.0))
+	DAW.set_track_width(2, 1.0)
+	var under: StageVoice = table.voices[2]
+	var over: StageVoice = table.voices[1]
+	check("two tracks at one pan and level stand in one place",
+			under.position.is_equal_approx(over.position))
+	var grip: StageTable.NameGrip = (table.tags[2] as Node).get_node_or_null("Grip")
+	check("the tag's name is a handle on its voice (%s)" % [grip], grip != null and grip.voice() == under)
+	check("and its card says what it is (%s · %s)" % [grip.title() if grip else "", grip.readout() if grip else ""],
+			grip != null and grip.title().begins_with("2 ") and grip.title().ends_with("BALL")
+			and grip.readout() == table.readout_of(2) and grip.hint().contains("drag"))
+	check("a voice's card says how to take one under another", under.hint().contains("name on its tag"))
+	var hand := FakeHand.new()
+	add_child(hand)
+	grip.hover_enter(hand)
+	check("hovered, its voice stands raised over the pile (%s over %s)" % [under.position.y, over.position.y],
+			under.picked and under.position.y > over.position.y + StageVoice.RADIUS * 2.0)
+	var t1 := s.track(1)
+	var t2 := s.track(2)
+	var drums := [t1.pan, t1.volume, t1.width]
+	var depth := maxi(s.undo_depth, 0)
+	# The press lands on the rail; the drag is read in the voices' plane from the first move on.
+	grip.grab_begin(hand, grip.global_position + Vector3(0, -0.03, 0.02))
+	check("a grab opens an edit", (DAW.backend as OfflineBackend).edit_open(0))
+	var start := table.to_local(grip.global_position)
+	var to_x := (0.3 - 0.5) * 2.0 * StageTable.HALF_PAN
+	var dz := StageTable.z_of_db(-6.0) - StageTable.z_of_db(0.0)
+	for i in 11:
+		var f := i / 10.0
+		grip.grab_move(hand, _on_stage(table, start.x + to_x * f, start.z + dz * f))
+	check("held from its name, its voice stands where the hand put it, not the mix's echo",
+			under.steered and absf(under.position.x - to_x) < 0.002)
+	check("the wheel while held is its width", grip.nudge(hand, -4, false))
+	grip.grab_end(hand)
+	check("the let-go closes it", not (DAW.backend as OfflineBackend).edit_open(0))
+	close_to("the drag from the name pans that track (%s)" % StageTable.pan_words(t2.pan), t2.pan, 0.3, 0.002)
+	close_to("and sets its level", DAW.taper_to_db(t2.volume), -6.0, 0.05)
+	close_to("and the wheel took its width", t2.width, 0.8)
+	check("and leaves the one over it alone (%s)" % [[t1.pan, t1.volume, t1.width]],
+			[t1.pan, t1.volume, t1.width] == drums)
+	check("as one step, called a placing (%d after %d: %s)" % [s.undo_depth, depth, s.undo_names],
+			s.undo_depth == depth + 1 and String(s.undo_names[s.undo_depth - 1]).ends_with(": place"))
+	await get_tree().process_frame
+	check("let go, it is not steered and still raised while the name is hovered",
+			not under.steered and under.picked)
+	grip.hover_exit(hand)
+	await get_tree().process_frame
+	check("and set down once it is not (%s)" % under.position.y,
+			not under.picked and is_equal_approx(under.position.y, StageVoice.LIFT))
+	var before := DAW.taper_to_db(t2.volume)
+	grip.nudge(hand, 2, false)
+	close_to("the wheel over the name is its level", DAW.taper_to_db(t2.volume), before + 1.0, 0.01)
+	var press := func() -> void:
+		grip.grab_begin(hand, grip.global_position)
+		grip.grab_end(hand)
+	press.call()
+	await get_tree().process_frame
+	press.call()
+	await get_tree().process_frame
+	check("two presses on the name put it back (%s)" % table.readout_of(2),
+			t2.pan == 0.5 and absf(DAW.taper_to_db(t2.volume)) < 0.01 and t2.width == 1.0)
+	check("Backspace over the name resets it too", table.reset_under(grip))
 	hand.queue_free()
 	table.queue_free()
 	await get_tree().process_frame
@@ -29885,8 +30058,9 @@ func _test_with_no_width_the_stage_table_has_no_ring() -> void:
 	_offline()
 
 
-## The built-in engine: the width is an AudioEffectStereoEnhance at the end of the track's bus,
-## after its plugins, so a plugin added later still lands at its own index; a cue or a probe takes
+## The built-in engine: the width is an AudioEffectStereoEnhance in the track bus's tail, after its
+## plugins and before the panner that is its pan (a width after the pan would pull a panned track
+## back to the middle), so a plugin added later still lands at its own index; a cue or a probe takes
 ## the plugins and not the width; a guest is told it; and a saved project keeps it.
 func _test_the_built_in_engine_keeps_a_tracks_width() -> void:
 	var backend := GodotBackend.new()
@@ -29899,18 +30073,32 @@ func _test_the_built_in_engine_keeps_a_tracks_width() -> void:
 		for i in AudioServer.get_bus_effect_count(bus):
 			out.append(AudioServer.get_bus_effect(bus, i).get_class())
 		return out
-	check("the bass's bus: panner, its compressor, then its width (%s)" % [kinds.call()],
-			kinds.call() == ["AudioEffectPanner", "AudioEffectCompressor", "AudioEffectStereoEnhance"])
+	check("the bass's bus: slot 0, its compressor, then its width and its pan (%s)" % [kinds.call()],
+			kinds.call() == ["AudioEffectPanner", "AudioEffectCompressor", "AudioEffectStereoEnhance", "AudioEffectPanner"])
+	DAW.set_track_pan(6, 0.0)
+	DAW.set_track_width(6, 0.0)
+	# The enhancer folds each side toward the mid, so only a pan after it keeps a narrowed track
+	# where it was put: hard left at no width is still hard left, not the middle at half level.
+	var panned_before := false
+	for i in backend._fx_end(bus):
+		var e := AudioServer.get_bus_effect(bus, i)
+		panned_before = panned_before or (e is AudioEffectPanner and not is_zero_approx((e as AudioEffectPanner).pan))
+	check("a panned track stays panned when narrowed: the width comes before the pan (%s)" % [kinds.call()],
+			backend.width_effect(6).pan_pullout == 0.0
+			and backend.pan_effect(6) == AudioServer.get_bus_effect(bus, backend._fx_end(bus) + 1)
+			and is_equal_approx(backend.pan_effect(6).pan, -1.0)
+			and not panned_before)
+	DAW.set_track_pan(6, 0.5)
 	DAW.set_track_width(6, 0.4)
 	close_to("the enhancer follows its width", backend.width_effect(6).pan_pullout, 0.4)
 	DAW.add_fx(6, "reverb")
 	check("a plugin added later goes before the width, at its own slot (%s)" % [kinds.call()],
-			kinds.call() == ["AudioEffectPanner", "AudioEffectCompressor", "AudioEffectReverb", "AudioEffectStereoEnhance"]
+			kinds.call() == ["AudioEffectPanner", "AudioEffectCompressor", "AudioEffectReverb", "AudioEffectStereoEnhance", "AudioEffectPanner"]
 			and AudioServer.get_bus_effect(bus, 1 + 1) is AudioEffectReverb)
 	close_to("and the width is still there", backend.width_effect(6).pan_pullout, 0.4)
 	DAW.add_fx(6, "eq", 0)
 	check("one put first too (%s)" % [kinds.call()],
-			kinds.call() == ["AudioEffectPanner", "AudioEffectEQ6", "AudioEffectCompressor", "AudioEffectReverb", "AudioEffectStereoEnhance"])
+			kinds.call() == ["AudioEffectPanner", "AudioEffectEQ6", "AudioEffectCompressor", "AudioEffectReverb", "AudioEffectStereoEnhance", "AudioEffectPanner"])
 	backend.set_cues([6])
 	var cue := AudioServer.get_bus_index(GodotBackend.cue_bus(6))
 	var copied: Array = []
@@ -29944,6 +30132,151 @@ func _test_the_built_in_engine_keeps_a_tracks_width() -> void:
 	_offline()
 
 
+## At the stage table, as F brings a desktop player to it, a click on each tag's keys and on the
+## name on every tag lands on it, and a click on every voice and on every ring at its band lands
+## on it. Tracks at one pan and level stand in one place, and a ball partly or wholly under another
+## is excused only because the name on its tag, which is checked, takes it.
+func _test_the_stage_tables_voices_are_clickable_at_it() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_offline(16)
+	var monitor := SubViewport.new()
+	monitor.size = Vector2i(1600, 900)
+	add_child(monitor)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	monitor.add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for i in 3:
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		await get_tree().physics_frame
+	var table := studio.stage
+	studio.focus.focus(&"stage_table")
+	for _pass in 2:
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		await get_tree().physics_frame
+	studio._sit_down()
+	for i in 3:
+		await get_tree().physics_frame
+	var hand: Interactor = studio.get_node("MouseHand")
+	var eye := studio.camera.global_position
+	var missed: Array = []
+	var together := 0
+	var aimed := 0
+	for track in table.voices:
+		var voice: StageVoice = table.voices[track]
+		var targets: Array = [[voice, [voice.global_position]]]
+		if voice.ring != null:
+			# Anywhere round the ring's band, clear of the ball over its middle: where another
+			# voice's ring crosses it, the rest of it is still there to take.
+			var r := StageTable.ring_of(DAW.state.track(track).width) + 0.006
+			var band: Array = []
+			for a in 8:
+				var round := Vector2.from_angle(TAU * a / 8.0) * r
+				band.append(table.to_global(Vector3(voice.position.x + round.x, 0.003, voice.position.z + round.y)))
+			targets.append([voice.ring, band])
+		# Its stalk, anywhere up it (slice 19).
+		var foot := table.to_global(Vector3(voice.position.x, 0.0, voice.position.z))
+		targets.append([voice.stalk, [foot.lerp(voice.global_position, 0.3), foot.lerp(voice.global_position, 0.45),
+				foot.lerp(voice.global_position, 0.6)]])
+		# Its knot under the ball (slice 20), on its face toward the eye or a little either side.
+		var knot_at := voice.knot.global_position
+		var toward := (eye - knot_at).normalized() * 0.004
+		var side := table.global_basis.x.normalized() * 0.005
+		targets.append([voice.knot, [knot_at + toward, knot_at + toward + side, knot_at + toward - side]])
+		for k: Node in (table.tags[track] as Node).find_children("*", "PanelButton", true, false):
+			targets.append([k, [(k as Node3D).global_position]])
+		var grip: StageTable.NameGrip = (table.tags[track] as Node).get_node_or_null("Grip")
+		if grip == null:
+			missed.append("%d's name has no grip" % track)
+		else:
+			var name_at := (table.tags[track] as Node3D).to_global(Vector3(0, 0.05, 0.002))
+			targets.append([grip, [name_at, (table.tags[track] as Node3D).to_global(Vector3(0, 0.025, 0.002))]])
+		var by_name: bool = grip != null and hand._cast(eye, ((table.tags[track] as Node3D).to_global(
+				Vector3(0, 0.05, 0.002)) - eye).normalized())["control"] == grip
+		for target: Array in targets:
+			aimed += 1
+			var got: Node = null
+			for at: Vector3 in target[1]:
+				got = hand._cast(eye, (at - eye).normalized())["control"]
+				if got == target[0]:
+					break
+			if got == target[0]:
+				continue
+			# A ball under another, wholly or in part, or behind another's stalk, and its ring and
+			# stalk: taken by its tag's name.
+			if by_name and (got is StageVoice or got is StageVoice.Ring or got is StageVoice.Stalk or got is StageVoice.Knot):
+				if target[0] == voice or target[0] == voice.ring or target[0] == voice.stalk or target[0] == voice.knot:
+					together += 1
+					continue
+			missed.append("%s (got %s)" % [_who(target[0]), _who(got)])
+	check("at the stage table a click on each of %d voices, rings, stalks, knots, tag names and tag keys lands on it (%d under another, taken by name; %d miss: %s)"
+			% [aimed, together, missed.size(), ", ".join(missed.slice(0, 6))], aimed > 8 * 5 and missed.is_empty())
+	monitor.queue_free()
+	await get_tree().process_frame
+	Session.layout = saved_layout
+
+
+## Reaper's width is the bridge's SetTrackWidth, since OSC has none: without the bridge there is no
+## ring; a width is on the cache at once and goes as one call; an answer that the pan mode was set
+## is remembered for the card and said; inside an edit a drag's widths are one call, the last; and
+## a structure poll does not take a width back from under one just sent.
+func _test_reaper_sets_a_width_by_the_bridge() -> void:
+	var dir := ProjectSettings.globalize_path("user://test_width_bridge")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	add_child(reaper)
+	check("Reaper has no width without the bridge", not reaper.can(DAWBackend.Capability.WIDTH))
+	reaper._bridge = ScriptBridge.new()
+	reaper._bridge.open(dir)
+	check("and has one with it", reaper.can(DAWBackend.Capability.WIDTH))
+	var requests := func() -> Array:
+		var out: Array = []
+		var names := Array(DirAccess.get_files_at(dir)).filter(func(n): return n.begins_with("request_") and n.ends_with(".json"))
+		names.sort_custom(func(a, b): return int(a.split("_")[1]) < int(b.split("_")[1]))
+		for n in names:
+			out.append(JSON.parse_string(FileAccess.get_file_as_string(dir.path_join(n))))
+		return out
+	var told: Array = []
+	reaper.pan_mode_set.connect(func(i: int) -> void: told.append(i))
+	reaper.set_track_width(3, 1.4)
+	close_to("a width is on the cache at once, kept to 0..1", reaper.state.track(3).width, 1.0)
+	reaper.set_track_width(3, 0.6)
+	var sent: Array = requests.call()
+	check("and goes to the bridge as SetTrackWidth (%s)" % [sent],
+			sent.size() == 2 and sent[1]["fn"] == "SetTrackWidth" and str(sent[1]["args"]) == str([3.0, 0.6]))
+	var id: int = reaper._bridge._pending.keys().max()
+	(reaper._bridge._pending[id]["cb"] as Callable).call({"ok": true, "mode_set": true})
+	check("a pan mode put in stereo pan is remembered and said (%s)" % [told],
+			reaper.stereo_panned.has(3) and told == [3])
+	check("and a poll just after does not take the width back", not reaper._width_settled(3))
+	reaper._bridge._pending.clear()
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	reaper.open_edit("Bass: width")
+	for w in [0.5, 0.4, 0.3]:
+		reaper.set_track_width(2, w)
+	check("inside an edit nothing goes yet", requests.call().is_empty())
+	reaper.close_edit()
+	sent = requests.call()
+	check("the let-go sends one Batch with one width, the last (%s)" % [sent],
+			sent.size() == 1 and sent[0]["fn"] == "Batch"
+			and str(sent[0]["args"]) == str(["Bass: width", "SetTrackWidth", 2.0, 2.0, 0.3]))
+	reaper._bridge._pending.clear()
+	reaper._bridge.close()
+	reaper._bridge = null
+	reaper.queue_free()
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	_offline()
+
+
 ## The stage table stands on its trolley beside the mix position, clear of the desk, the timeline,
 ## the mix position and everything else on the floor, in every venue and variant, with a 40-track
 ## desk too; it is the control room's station, and F visits it; Backspace over a voice resets it.
@@ -29970,6 +30303,8 @@ func _test_the_stage_table_stands_clear_in_every_venue() -> void:
 			studio.console._rebuild()
 			studio._forget_desk_box()
 			studio._fit_room_to_session()
+			# The old desk's strips are freed at the frame's end.
+			await get_tree().process_frame
 		for id: StringName in Venue.IDS:
 			for v in Venue.variant_titles(id).size():
 				studio.set_venue(id, false, v)
@@ -30011,3 +30346,3348 @@ func _test_the_stage_table_stands_clear_in_every_venue() -> void:
 	studio.queue_free()
 	await get_tree().process_frame
 	_offline()
+
+
+
+# --- slice 19: the stage in depth, leaning in, and clapping to mute -------------------------
+
+## Pressed or lifted, by a hand on a voice's stalk: the table's frame, `up` off its resting height.
+func _up_the_stalk(table: StageTable, voice: StageVoice, up: float) -> Vector3:
+	return table.to_global(Vector3(voice.position.x, StageVoice.LIFT + up, voice.position.z))
+
+
+## A voice's stalk is its send to the room: lifted, the send is made inside the lift's own edit
+## (one undo step with its level, said in a notice) at the level its height says, and a mist shows
+## it; a voice standing on the table at -20 dB has no send at all; the wheel moves it a decibel;
+## set back on the table, the send is -inf and the mist goes.
+func _test_a_voices_stalk_is_its_send_to_the_room() -> void:
+	_offline(16)
+	var s := DAW.state
+	var table := _stage_table()
+	check("the demo's room is its verb return, which four tracks send to (%d)" % StageTable.room_track(),
+			StageTable.room_track() == 13)
+	var notices: Array[String] = []
+	var heard := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(heard)
+	var voice: StageVoice = table.voices[4]
+	check("every voice stands on a stalk", table.voices.values().all(func(v): return (v as StageVoice).stalk != null))
+	DAW.set_track_volume(4, FaderLaw.to_taper(-20.0))
+	await get_tree().process_frame
+	check("a voice on the table at -20 dB has no send, and no mist (%s)" % voice.readout(),
+			StageTable.send_to(4, 13) == 0 and not voice._mist.visible and is_zero_approx(voice.lift())
+			and not voice.readout().contains("room"))
+	close_to("and stands at its resting height", voice.position.y, StageVoice.LIFT)
+	var hand := FakeHand.new()
+	add_child(hand)
+	var depth := maxi(s.undo_depth, 0)
+	var stalk := voice.stalk
+	stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	for i in 10:
+		stalk.grab_move(hand, _up_the_stalk(table, voice, 0.015 * (i + 1)))
+	check("held, the voice stands where the hand lifts it", is_equal_approx(voice.position.y, StageVoice.LIFT + 0.15))
+	stalk.grab_end(hand)
+	await get_tree().process_frame
+	var n := StageTable.send_to(4, 13)
+	check("the lift made a send to the room", n > 0)
+	close_to("half way up is -20 dB, linear in dB from -40 just off the table to 0 at the top",
+			StageTable.room_send_db(4), -20.0, 0.01)
+	check("made and set as one step, called the room (%d after %d: %s)" % [s.undo_depth, depth, s.undo_names],
+			s.undo_depth == depth + 1 and String(s.undo_names[s.undo_depth - 1]).ends_with(": room"))
+	check("which the toast says (%s)" % [notices], notices.any(func(t): return t.contains("a send to 13") and t.contains("one undo step")))
+	check("a mist round it shows the send, and its card says it (%s)" % voice.readout(),
+			voice._mist.visible and voice.readout().contains("room -20.0 dB"))
+	close_to("it stands lifted where its send has it", voice.position.y, StageVoice.LIFT + 0.15, 0.001)
+	check("its level is its own: the lift moved no fader", is_equal_approx(DAW.taper_to_db(s.track(4).volume), -20.0))
+	var big := voice._mist.scale.x
+	stalk.nudge(hand, 2, false)
+	close_to("two notches of the wheel on the stalk are two decibels more", StageTable.room_send_db(4), -18.0, 0.01)
+	check("and the mist grows", voice._mist.scale.x > big)
+	check("its card says what it is and how it goes", stalk.title().ends_with("ROOM SEND") and stalk.hint().contains("drag the stalk")
+			and stalk.readout() == "room -18.0 dB")
+	DAW.undo()
+	DAW.undo()
+	await get_tree().process_frame
+	check("one undo for the wheel, one for the lift, and there is no send again", StageTable.send_to(4, 13) == 0
+			and not voice._mist.visible)
+	# Lifted, then set back down on the table: the send stays, at -inf.
+	stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	stalk.grab_move(hand, _up_the_stalk(table, voice, 0.1))
+	stalk.grab_move(hand, _up_the_stalk(table, voice, -0.05))
+	stalk.grab_end(hand)
+	await get_tree().process_frame
+	check("set back down on the table it sends nothing (%s)" % voice.readout(),
+			StageTable.room_send_db(4) == -INF and not voice._mist.visible and is_zero_approx(voice.lift()))
+	check("the room itself has nothing to send to", not table.send_to_room(13, -10.0))
+	check("a voice's card says how its stalk goes, and how to lean in", voice.hint().contains("drag the stalk")
+			and voice.hint().contains("K held"))
+	Session.notice.disconnect(heard)
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## With no room, a stalk does nothing and says so, and the ROOM key at the rail's left end makes
+## one, ADD ROOM: a track ROOM with a reverb, one undo step, which the next lift sends to.
+func _test_add_room_makes_a_room_to_send_to() -> void:
+	_offline(16)
+	var s := DAW.state
+	for src in [3, 7, 10, 12]:
+		DAW.remove_send(src, StageTable.send_to(src, 13))
+	var table := _stage_table()
+	check("with nothing sending to the verb there is no room", StageTable.room_track() == 0)
+	var notices: Array[String] = []
+	var heard := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(heard)
+	var hand := FakeHand.new()
+	add_child(hand)
+	var voice: StageVoice = table.voices[2]
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.1))
+	voice.stalk.grab_end(hand)
+	check("a stalk with no room lifts nothing and says why (%s)" % [notices],
+			s.track(2).sends.is_empty() and notices.any(func(t): return t.begins_with("No room")))
+	var key: StageTable.TableKey = table.find_children("*", "PanelButton", true, false).filter(
+			func(k): return (k as StageTable.TableKey).glyph == "ROOM")[0]
+	check("the rail has a ROOM key, ADD ROOM while there is none, lit", key.title() == "STAGE  ADD ROOM" and key.lit
+			and table._room_label.text == "ADD ROOM")
+	var depth := maxi(s.undo_depth, 0)
+	var count := s.track_indices().size()
+	key.pressed.emit()
+	var room := StageTable.room_track()
+	check("ADD ROOM makes a track ROOM at the end with a reverb on it (%d: %s)" % [room, s.track(count + 1).fx.values().map(func(f): return f.name)],
+			room == count + 1 and s.track(room).display_name() == "ROOM" and StageTable.has_reverb(s.track(room)))
+	check("as one step (%d after %d: %s)" % [s.undo_depth, depth, s.undo_names], s.undo_depth == depth + 1)
+	await get_tree().process_frame
+	table._process(0.0)
+	# The table is built again for a track more: its key is a new one.
+	key = table.find_children("*", "PanelButton", true, false).filter(
+			func(k): return (k as StageTable.TableKey).glyph == "ROOM")[0]
+	check("the rail says which track is the room now (%s)" % table._room_label.text,
+			table._room_label.text.contains("ROOM") and table._room_label.text.contains(str(count + 1)) and not key.lit)
+	notices.clear()
+	key.pressed.emit()
+	check("pressed again, it says the room and makes no other", s.track_indices().size() == count + 1
+			and notices.any(func(t): return t.begins_with("The room is")))
+	voice = table.voices[2]
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.3))
+	voice.stalk.grab_end(hand)
+	close_to("and a lift to the top sends to it at 0 dB", StageTable.room_send_db(2), 0.0, 0.01)
+	check("the room is still the room once something sends to it", StageTable.room_track() == count + 1)
+	DAW.undo()
+	DAW.undo()
+	check("undone, the room is gone", StageTable.room_track() == 0 and s.track_indices().size() == count)
+	Session.notice.disconnect(heard)
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## On a host whose DAW makes its sends later (Reaper, inside an edit's batch, then by its poll), a
+## lift asks for its send to the room once, not once a frame: one CreateTrackSend in the lift's
+## batch. The level waits for the send and is set when the poll brings it. Another lift soon after
+## asks for nothing more; one long after an ask that never came asks again.
+func _test_a_lift_on_reaper_asks_for_its_send_once() -> void:
+	_offline(16)
+	var s := DAW.state
+	var reaper := ReaperBackend.new()
+	reaper.state = s
+	DAW.use(reaper, false)
+	var dir := ProjectSettings.globalize_path("user://test_room_bridge")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	reaper._bridge = ScriptBridge.new()
+	reaper._bridge.open(dir)
+	var table := _stage_table()
+	var hand := FakeHand.new()
+	add_child(hand)
+	var voice: StageVoice = table.voices[4]
+	check("track 4 has no send to the room yet", StageTable.send_to(4, 13) == 0)
+	var creates := func() -> Array:
+		var calls: Array = reaper._batches[0]["calls"] if reaper._batches.has(0) else []
+		return calls.filter(func(c): return c[0] == "CreateTrackSend")
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	for i in 5:
+		voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.03 * (i + 1)))
+	var made: Array = creates.call()
+	check("five frames of a lift are one CreateTrackSend in its batch (%s)" % [made],
+			made.size() == 1 and str(made[0][1]) == str([4, 13]))
+	close_to("the level it is to have waits for it", float(table._room_wanted.get(4, -1.0)), FaderLaw.to_taper(-20.0))
+	voice.stalk.grab_end(hand)
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.15))
+	check("another lift straight after asks for nothing more (%s)" % [creates.call()], creates.call().is_empty())
+	voice.stalk.grab_end(hand)
+	table._sends_asked[4] = int(table._sends_asked[4]) - StageTable.ASK_AGAIN_MSEC
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.15))
+	check("one long after an ask that never came asks again (%s)" % [creates.call()], creates.call().size() == 1)
+	voice.stalk.grab_end(hand)
+	# The poll brings the send.
+	var n := s.track(4).sends.size() + 1
+	MixWire.apply(s, "/track/4/send/%d/dest" % n, [13.0])
+	MixWire.apply(s, "/track/4/sends", [float(n)])
+	close_to("when it comes it is set to the lift's level", StageTable.room_send_db(4), -20.0, 0.01)
+	check("and nothing is waiting or asked any more", not table._room_wanted.has(4) and not table._sends_asked.has(4))
+	reaper._bridge._pending.clear()
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## A guest's lift asks the host for the send once, however many frames it lasts, and sets the
+## level the lift wanted when the send arrives; a guest's ADD ROOM asks for the ROOM track and, when
+## it arrives, for its reverb.
+func _test_a_guest_asks_for_the_room_and_its_sends() -> void:
+	_offline(16)
+	var s := DAW.state
+	var table := _stage_table()
+	var hand := FakeHand.new()
+	add_child(hand)
+	_as_session(Session.Role.GUEST, 5)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	var asked := func(verb: StringName) -> Array:
+		return Session.kept_intents.filter(func(c): return c[0] == verb)
+	var voice: StageVoice = table.voices[4]
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	for i in 5:
+		voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.03 * (i + 1)))
+	voice.stalk.grab_end(hand)
+	var sends: Array = asked.call(&"create_send")
+	check("a guest's lift asks the host for its send once (%s)" % [sends], sends.size() == 1 and str(sends[0][1]) == str([4, 13]))
+	check("and changes nothing itself", StageTable.send_to(4, 13) == 0 and asked.call(&"set_send_volume").is_empty())
+	voice.stalk.grab_begin(hand, _up_the_stalk(table, voice, 0.0))
+	voice.stalk.grab_move(hand, _up_the_stalk(table, voice, 0.15))
+	voice.stalk.grab_end(hand)
+	check("another lift straight after does not ask again", asked.call(&"create_send").size() == 1)
+	# The host's send, as replication brings it.
+	var n := s.track(4).sends.size() + 1
+	MixWire.apply(s, "/track/4/send/%d/dest" % n, [13.0])
+	MixWire.apply(s, "/track/4/sends", [float(n)])
+	var levels: Array = asked.call(&"set_send_volume")
+	check("when it arrives the guest asks for the level its lift wanted (%s)" % [levels],
+			levels.size() == 1 and int(levels[0][1][0]) == 4 and int(levels[0][1][1]) == n
+			and absf(float(levels[0][1][2]) - FaderLaw.to_taper(-20.0)) < 0.0001)
+	check("and is waiting on nothing", table._room_wanted.is_empty() and not table._sends_asked.has(4))
+	table.queue_free()
+	await get_tree().process_frame
+
+	# ADD ROOM.
+	Session.start_solo()
+	_offline(16)
+	s = DAW.state
+	for src in [3, 7, 10, 12]:
+		DAW.remove_send(src, StageTable.send_to(src, 13))
+	table = _stage_table()
+	_as_session(Session.Role.GUEST, 5)
+	Session.kept_intents.clear()
+	var count := s.track_indices().size()
+	var plugin := StageTable.reverb_choice()
+	table.add_room()
+	var tracks: Array = asked.call(&"add_track")
+	check("a guest's ADD ROOM asks the host for a ROOM track at the end (%s)" % [tracks],
+			tracks.size() == 1 and str(tracks[0][1]) == str([count + 1, "ROOM"]))
+	check("and for no reverb yet, with no track to put it on", asked.call(&"add_fx").is_empty() and table._room_asked == plugin)
+	# The host's ROOM track, as replication brings it: the project a track longer, then its name.
+	MixWire.apply(s, "/project/tracks", [count + 1])
+	MixWire.apply(s, "/track/%d/name" % (count + 1), ["ROOM"])
+	var fx: Array = asked.call(&"add_fx")
+	check("when it arrives the guest asks for its reverb on it (%s)" % [fx],
+			fx.size() == 1 and int(fx[0][1][0]) == count + 1 and str(fx[0][1][1]) == plugin)
+	check("once", table._room_asked == "")
+	Session.keep_intents = false
+	Session.kept_intents.clear()
+	Session.start_solo()
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## Leaning in, on a host on the built-in engine: the track's cue at its own fader +6 dB, following
+## the fader, and the mix 6 dB down, with nothing changed in DAW.state; let go, all as before. On a
+## guest, or with no built-in engine, nothing changes and the card says why.
+func _test_leaning_in_lifts_one_track_in_your_ears_alone() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	Ears.lean(0)
+	Ears.listen(false)
+	var before := str(MixWire.snapshot(s))
+	check("a host on the built-in engine can lean in", Ears.can_lean() and Ears.lean(6))
+	var cue := AudioServer.get_bus_index(GodotBackend.cue_bus(6))
+	check("leaning in plays the track's cue", cue >= 0 and backend.leaning() == 6)
+	close_to("at its own fader plus 6 dB", AudioServer.get_bus_volume_db(cue), DAW.taper_to_db(s.track(6).volume) + 6.0, 0.001)
+	close_to("and the mix comes down 6 dB", Ears.gain_db(Ears.MIX), -6.0)
+	close_to("heard with no headphones on", Ears.gain_db(GodotBackend.cue_bus(6)), 0.0)
+	check("nothing changes in the song", str(MixWire.snapshot(s)) == before)
+	Ears.listen(true)
+	close_to("headphones on, the mix is still 6 dB under", Ears.gain_db(Ears.MIX), -6.0)
+	close_to("and the lean's cue still heard", Ears.gain_db(GodotBackend.cue_bus(6)), 0.0)
+	Ears.listen(false)
+	DAW.set_track_volume(6, FaderLaw.to_taper(-10.0))
+	close_to("the cue follows the track's fader", AudioServer.get_bus_volume_db(cue), -4.0, 0.01)
+	check("to another track", Ears.lean(2) and AudioServer.get_bus_index(GodotBackend.cue_bus(6)) < 0
+			and AudioServer.get_bus_index(GodotBackend.cue_bus(2)) >= 0)
+	Ears.lean(0)
+	check("let go, there is no cue", AudioServer.get_bus_index(GodotBackend.cue_bus(2)) < 0 and backend.leaning() == 0)
+	close_to("and the mix is back", Ears.gain_db(Ears.MIX), 0.0)
+	var table := _stage_table()
+	check("a voice's card says L leans in", (table.voices[2] as StageVoice).hint().contains("L held over it: lean in"))
+	Session.role = Session.Role.GUEST
+	var guest_was := str(MixWire.snapshot(s))
+	check("a guest cannot lean in", not Ears.can_lean() and not Ears.lean(6))
+	check("and nothing changes", backend.leaning() == 0 and AudioServer.get_bus_index(GodotBackend.cue_bus(6)) < 0
+			and is_zero_approx(Ears.gain_db(Ears.MIX)) and str(MixWire.snapshot(s)) == guest_was)
+	check("its voice's card says why", (table.voices[2] as StageVoice).hint().contains(Ears.CANNOT_LEAN))
+	Session.role = Session.Role.SOLO
+	table.queue_free()
+	_offline()
+	check("nor a host whose engine is not the built-in one (Reaper's stand-in)", not Ears.can_lean() and not Ears.lean(6))
+	await get_tree().process_frame
+
+
+## A left and a right hand posed palm to palm.
+func _palms(apart: float, turned_degrees := 0.0) -> Array:
+	var face := Basis(Vector3.UP, deg_to_rad(turned_degrees))
+	# The right hand's back to +X, so its palm faces -X; the left's back to -X.
+	var right := Transform3D(Basis(Vector3(0, -1, 0), Vector3(1, 0, 0), Vector3(0, 0, 1)), Vector3(apart * 0.5, 1.2, -0.3))
+	var left := Transform3D(face * Basis(Vector3(0, 1, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1)), Vector3(-apart * 0.5, 1.2, -0.3))
+	return [HandPose.posed([], 0, left, 1.0, -1), HandPose.posed([], 0, right, 1.0, 1)]
+
+
+## Two bare palms pressed together (within 5 cm, facing within 40 degrees) mute the track pointed
+## at while pressed and put it back as they part; a clap, meeting fast and parting quickly, latches
+## it, and another unlatches it; two controllers' grips within 8 cm are the same; a hand read by an
+## XRInteractor gives its palm or its grip.
+func _test_pressed_palms_mute_and_a_clap_latches() -> void:
+	_offline(16)
+	var s := DAW.state
+	var pair := _palms(0.02)
+	check("palms flat together, 2 cm apart, are pressed", HandPose.palms_pressed(pair[0], pair[1]))
+	pair = _palms(0.09)
+	check("a hand apart are not", not HandPose.palms_pressed(pair[0], pair[1]))
+	pair = _palms(0.02, 60.0)
+	check("nor palms turned 60 degrees from each other", not HandPose.palms_pressed(pair[0], pair[1]))
+	pair = _palms(0.02, 30.0)
+	check("but 30 degrees is still pressed", HandPose.palms_pressed(pair[0], pair[1]))
+	var down := Transform3D(Basis.IDENTITY, Vector3(0, 1.2, -0.3))
+	check("two hands side by side, both palm down, are not",
+			not HandPose.palms_pressed(HandPose.posed([], 0, down.translated(Vector3(-0.02, 0, 0)), 1.0, -1),
+					HandPose.posed([], 0, down.translated(Vector3(0.02, 0, 0)), 1.0, 1)))
+	# Two tracked bare hands, read as the rig reads them.
+	var hands: Array = []
+	for side in [-1, 1]:
+		var g := HandGestures.new()
+		g.side = side
+		add_child(g)
+		var x := XRInteractor.new()
+		x.gestures = g
+		add_child(x)
+		hands.append(x)
+	var pose := func(apart: float) -> Array:
+		var p := _palms(apart)
+		(hands[0] as XRInteractor).gestures.take(p[0])
+		(hands[1] as XRInteractor).gestures.take(p[1])
+		return Clap.reading((hands[0] as XRInteractor).clap_palm(), (hands[1] as XRInteractor).clap_palm())
+	var clap := Clap.new()
+	# Boxed, since a lambda keeps the value a local had when it was made.
+	var pointed := [3]
+	clap.target = func() -> int: return pointed[0]
+	var dt := 1.0 / 60.0
+	# Slowly together, 0.2 m/s, held half a second, and apart.
+	var gap := 0.15
+	while not clap.pressed and gap > 0.0:
+		var r: Array = pose.call(gap)
+		clap.step(r[0], r[1], dt)
+		gap -= 0.2 * dt
+	check("posed palms brought slowly together press", clap.pressed and clap.track == 3)
+	check("and the track pointed at is muted while they are", s.track(3).mute)
+	for i in 30:
+		var r: Array = pose.call(0.02)
+		clap.step(r[0], r[1], dt)
+	check("still muted after half a second pressed", s.track(3).mute and clap.pressed)
+	var r: Array = pose.call(0.12)
+	clap.step(r[0], r[1], dt)
+	check("parted, it is unmuted again", not clap.pressed and not s.track(3).mute)
+	# A clap: together at 1.5 m/s, parted after a tenth of a second.
+	var smack := func() -> void:
+		var g2 := 0.2
+		while not clap.pressed and g2 > -0.05:
+			var q: Array = pose.call(maxf(g2, 0.02))
+			clap.step(q[0], q[1], dt)
+			g2 -= 1.5 * dt
+		for i in 6:
+			var q: Array = pose.call(0.02)
+			clap.step(q[0], q[1], dt)
+		var q: Array = pose.call(0.15)
+		clap.step(q[0], q[1], dt)
+	smack.call()
+	check("a fast meet and part latches the mute", s.track(3).mute and not clap.pressed)
+	smack.call()
+	check("and another clap unlatches it", not s.track(3).mute)
+	pointed[0] = 0
+	var muted := s.track_indices().map(func(i): return s.track(i).mute)
+	smack.call()
+	check("a clap at nothing mutes nothing", s.track_indices().map(func(i): return s.track(i).mute) == muted)
+	pointed[0] = 5
+	# Controllers: two grips 6 cm apart are hands together, 12 cm apart are not.
+	var left := XRController3D.new()
+	var right := XRController3D.new()
+	left.tracker = &"left_hand"
+	right.tracker = &"right_hand"
+	add_child(left)
+	add_child(right)
+	var cl := XRInteractor.new()
+	cl.controller = left
+	var cr := XRInteractor.new()
+	cr.controller = right
+	add_child(cl)
+	add_child(cr)
+	left.global_position = Vector3(-0.03, 1.2, -0.3)
+	right.global_position = Vector3(0.03, 1.2, -0.3)
+	var grips := Clap.reading(cl.clap_palm(), cr.clap_palm())
+	check("a controller's clap reading is its grip point (%s)" % [cl.clap_palm()], cl.clap_palm().size() == 2
+			and cl.clap_palm()[1] == Vector3.ZERO and grips[0])
+	right.global_position = Vector3(0.09, 1.2, -0.3)
+	check("two grips 12 cm apart are not together", not Clap.reading(cl.clap_palm(), cr.clap_palm())[0])
+	for at in [0.12, 0.09, 0.06]:
+		right.global_position = Vector3(-0.03 + at, 1.2, -0.3)
+		var q := Clap.reading(cl.clap_palm(), cr.clap_palm())
+		clap.step(q[0], q[1], dt)
+	check("controllers brought together mute the track pointed at", clap.pressed and s.track(5).mute)
+	right.global_position = Vector3(0.2, 1.2, -0.3)
+	var apart := Clap.reading(cl.clap_palm(), cr.clap_palm())
+	clap.step(apart[0], apart[1], dt)
+	check("a fast meet and part of the grips latches it", s.track(5).mute)
+	DAW.set_track_mute(5, false)
+	for n: Node in hands + [cl, cr, left, right]:
+		n.queue_free()
+	for h: XRInteractor in hands:
+		h.gestures.queue_free()
+	await get_tree().process_frame
+
+
+## At a desk: K held over a track mutes it until it is let go; a tap latches the mute, and another
+## unlatches it; over nothing it mutes nothing. L held over a stage voice leans in, and where that
+## cannot be done the card says why.
+func _test_k_mutes_and_l_leans_at_a_desk() -> void:
+	_offline(16)
+	var s := DAW.state
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	var studio_path := [studio.get_path()]
+	await get_tree().process_frame
+	studio.stage._process(0.0)
+	var notices: Array[String] = []
+	var heard := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(heard)
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var voice: StageVoice = studio.stage.voices[2]
+	var key := func(code: Key, down: bool) -> void:
+		var e := InputEventKey.new()
+		e.keycode = code
+		e.pressed = down
+		# The studio of the moment: the lambda keeps the one it was made with.
+		(get_node(studio_path[0]) as Studio)._unhandled_input(e)
+	hand.hovered = voice
+	key.call(KEY_K, true)
+	check("K down over a voice mutes its track", s.track(2).mute)
+	check("and says it is muted while held (%s)" % [notices], notices.any(func(t): return t.ends_with("muted while held")))
+	await get_tree().create_timer(Clap.LATCH_WITHIN + 0.15).timeout
+	key.call(KEY_K, false)
+	check("held and let go, it is unmuted", not s.track(2).mute)
+	# The hand's own ray hovers what the cursor is over, each physics frame: over the voice again.
+	hand.hovered = voice
+	key.call(KEY_K, true)
+	key.call(KEY_K, false)
+	check("a tap latches the mute", s.track(2).mute)
+	key.call(KEY_K, true)
+	key.call(KEY_K, false)
+	check("and another tap unlatches it", not s.track(2).mute)
+	var strip: ChannelStrip = studio.console.find_children("*", "ChannelStrip", true, false)[0]
+	hand.hovered = strip.find_children("*", "Fader", true, false)[0]
+	key.call(KEY_K, true)
+	key.call(KEY_K, false)
+	check("K over a console strip's fader latches that strip's track", s.track(strip.track_index).mute)
+	DAW.set_track_mute(strip.track_index, false)
+	hand.hovered = null
+	var was := s.track_indices().map(func(i): return s.track(i).mute)
+	key.call(KEY_K, true)
+	key.call(KEY_K, false)
+	check("K over nothing mutes nothing", s.track_indices().map(func(i): return s.track(i).mute) == was)
+	# L on Reaper's stand-in: nothing, and the card says why.
+	hand.hovered = voice
+	notices.clear()
+	key.call(KEY_L, true)
+	check("L held over a voice where the tracks are not played here says why (%s)" % [notices],
+			Ears.leaning == 0 and notices.any(func(t): return t.contains(Ears.CANNOT_LEAN)))
+	key.call(KEY_L, false)
+	studio.queue_free()
+	await get_tree().process_frame
+	# And on the built-in engine, it leans.
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	studio = Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio_path[0] = studio.get_path()
+	await get_tree().process_frame
+	studio.stage._process(0.0)
+	hand = studio.get_node("MouseHand") as MouseInteractor
+	hand.hovered = studio.stage.voices[3]
+	notices.clear()
+	key.call(KEY_L, true)
+	check("L held over a voice on the built-in engine leans in to it (%s)" % [notices],
+			Ears.leaning == 3 and backend.leaning() == 3 and notices.any(func(t): return t.begins_with("Leaning in to 3")))
+	key.call(KEY_L, false)
+	check("let go, it stops", Ears.leaning == 0 and backend.leaning() == 0)
+	hand.hovered = null
+	Session.notice.disconnect(heard)
+	studio.queue_free()
+	await get_tree().process_frame
+	_offline()
+
+
+## Studio.track_under and track_of answer the track of every kind of surface: a stage voice and its
+## stalk, ring and tag keys, a console strip and its controls, the rack and its units, and the
+## timeline's lanes by the lane under the point; a ray at a voice finds it, and one at nothing is 0.
+func _test_track_under_answers_each_kind_of_surface() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_offline(16)
+	var monitor := SubViewport.new()
+	monitor.size = Vector2i(1600, 900)
+	add_child(monitor)
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	monitor.add_child(studio)
+	studio.ergonomics.motion_scale = 0.0
+	for i in 3:
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		await get_tree().physics_frame
+	var table := studio.stage
+	var voice: StageVoice = table.voices[4]
+	check("a stage voice is its track", Studio.track_of(voice, voice.global_position) == 4)
+	check("and its stalk, its ring and its tag's keys", Studio.track_of(voice.stalk, Vector3.ZERO) == 4
+			and (voice.ring == null or Studio.track_of(voice.ring, Vector3.ZERO) == 4)
+			and (table.tags[4] as Node).find_children("*", "PanelButton", true, false).all(
+					func(k): return Studio.track_of(k, Vector3.ZERO) == 4))
+	var strip: ChannelStrip = studio.console.find_children("*", "ChannelStrip", true, false)[2]
+	var knob: Node = strip.find_children("*", "Knob", true, false)[0]
+	check("a console strip's knob is the strip's track (%d)" % strip.track_index,
+			strip.track_index > 0 and Studio.track_of(knob, Vector3.ZERO) == strip.track_index)
+	var units := studio.find_children("*", "RackUnit", true, false)
+	check("a rack unit is its track", units.size() > 0 and Studio.track_of(units[0], Vector3.ZERO) == (units[0] as RackUnit).track_index
+			and (units[0] as RackUnit).track_index > 0)
+	var lanes: Node = studio.timeline.find_children("*", "TimelineLanes", true, false)[0]
+	var shown: Array = studio.timeline._shown()
+	var lane_at := studio.timeline.to_global(Vector3(0, studio.timeline._lane_y[1], 0))
+	check("the timeline's lanes are the track of the lane under the point (%d)" % Studio.track_of(lanes, lane_at),
+			Studio.track_of(lanes, lane_at) == shown[1])
+	check("and anything that is no track's is 0", Studio.track_of(studio, Vector3.ZERO) == 0)
+	# A ray, from the stage table's own visit.
+	studio.focus.focus(&"stage_table")
+	for _pass in 2:
+		for surface in studio.focus.surfaces:
+			surface._process(0.0)
+		await get_tree().physics_frame
+	studio._sit_down()
+	for i in 3:
+		await get_tree().physics_frame
+	var eye := studio.camera.global_position
+	var found: Array = []
+	var own := 0
+	for track in table.voices:
+		var v: StageVoice = table.voices[track]
+		var got := studio.track_under(eye, (v.global_position - eye).normalized())
+		found.append(got)
+		own += 1 if got == track else 0
+	# A ball under another, wholly or in part, finds the one on top: taken by its tag's name.
+	check("a ray at each voice finds a track, and most of them their own (%s, %d own)" % [found, own],
+			found.all(func(t): return t > 0) and own >= 5)
+	check("a ray at the sky finds none", studio.track_under(eye, Vector3.UP) == 0)
+	monitor.queue_free()
+	await get_tree().process_frame
+	Session.layout = saved_layout
+	_offline()
+
+
+# --- Sidechain as a rope (docs/spatial_loop.md slice 20) ------------------------------------------
+
+## The built-in engine with the demo, and a stage table over it.
+func _built_in_stage() -> StageTable:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	return _stage_table()
+
+
+## A knot dragged from `from`'s voice to `to`'s, as a mouse on the knot's level plane moves it.
+func _drag_a_rope(table: StageTable, hand: Node, from: int, to: int) -> void:
+	var knot := (table.voices[from] as StageVoice).knot
+	var a := table.knot_point(from)
+	var b := table.knot_point(to)
+	knot.grab_begin(hand, table.to_global(a))
+	for i in 10:
+		knot.grab_move(hand, table.to_global(a.lerp(Vector3(b.x, a.y, b.z), (i + 1) / 10.0)))
+
+
+## On the built-in engine a rope dragged from the kick's knot to a voice with no compressor is, as
+## one undo step, the key send and a compressor listening to it: its AudioEffectCompressor.sidechain
+## is the key's bus, which plays into the muted keys bus and not into the track's mix. The room's row
+## says the rope added it. Undone, both go; redone, both come back. The X at the kick's knot cuts it,
+## one step, and takes the compressor the rope added. A rope to the bass, which has its own
+## compressor, keys that one, and cut leaves it, listening to its own input again.
+func _test_a_rope_ties_a_sidechain_on_the_built_in_engine() -> void:
+	var table := _built_in_stage()
+	var s := DAW.state
+	var backend := DAW.backend as GodotBackend
+	var hand := FakeHand.new()
+	add_child(hand)
+	var kick: StageVoice = table.voices[2]
+	check("every voice has a knot under its ball", table.voices.values().all(func(v): return (v as StageVoice).knot != null)
+			and is_equal_approx(table.knot_point(2).y, kick.position.y - StageVoice.KNOT_DROP))
+	check("the keys (7) have no compressor to start with", Sidechain.compressor_on(7) < 0 and kick.cut_key == null)
+	check("the knot's card says how to tie one", kick.knot.hint().contains("drag from the knot") and kick.hint().contains("knot"))
+	var fx_before := s.track(7).plugins().size()
+	var depth := maxi(s.undo_depth, 0)
+	_drag_a_rope(table, hand, 2, 7)
+	check("a loose rope follows the hand from the knot", table._loose.visible and table._loose.mesh != null)
+	kick.knot.grab_end(hand)
+	await get_tree().process_frame
+	check("and goes when it is tied", not table._loose.visible)
+	var n := Sidechain.key_send(2, 7)
+	var comp := Sidechain.compressor_on(7)
+	check("let go over the keys, the kick has a key send into them (%d)" % n, n > 0
+			and (s.track(2).sends[n] as MixState.SendState).key)
+	check("and the keys a compressor (%d plugins, was %d)" % [s.track(7).plugins().size(), fx_before],
+			comp >= 0 and s.track(7).plugins().size() == fx_before + 1)
+	check("as one undo step, called the rope (%s)" % [s.undo_names], s.undo_depth == depth + 1
+			and String(s.undo_names[s.undo_depth - 1]) == "Kick > Rhodes: rope")
+	check("the room's row says the rope added it (%s)" % [table.ropes], table.ropes.get("2>7", false) == true)
+	var bus := AudioServer.get_bus_index(GodotBackend.send_bus(2, 7))
+	var effect := AudioServer.get_bus_effect(backend._bus[7], 1 + comp) as AudioEffectCompressor
+	check("the compressor listens to the kick's key bus (%s)" % (effect.sidechain if effect != null else &"none"),
+			effect != null and effect.sidechain == StringName(GodotBackend.send_bus(2, 7)))
+	check("which plays into the muted keys bus, not into the keys' mix", bus >= 0
+			and AudioServer.get_bus_send(bus) == StringName(GodotBackend.KEYS_BUS)
+			and AudioServer.is_bus_mute(AudioServer.get_bus_index(GodotBackend.KEYS_BUS)))
+	close_to("a compressor the rope adds starts at the slack threshold", Sidechain.threshold_db(s.fx(7, comp)),
+			Sidechain.THRESHOLD_SLACK_DB, 0.05)
+	check("a rope stands between them, and an X at the kick's knot", table.rope_nodes.has("2>7") and kick.cut_key != null)
+	var rope: StageTable.Rope = table.rope_nodes["2>7"]
+	check("its card says who ducks under whom and how (%s)" % rope.readout(),
+			rope.readout().begins_with("KICK -> RHODES · ducks") and rope.readout().ends_with("pull for more")
+			and rope.title().contains("ROPE") and rope.hint().contains("Backspace"))
+	check("and the voices' cards say so", kick.readout().contains("rope to 7 RHODES")
+			and (table.voices[7] as StageVoice).readout().contains("ducks under 2 KICK"))
+	DAW.undo()
+	await get_tree().process_frame
+	check("one undo takes the key send and the compressor back", Sidechain.key_send(2, 7) == 0
+			and Sidechain.compressor_on(7) < 0 and not table.rope_nodes.has("2>7"))
+	DAW.redo()
+	await get_tree().process_frame
+	comp = Sidechain.compressor_on(7)
+	effect = AudioServer.get_bus_effect(backend._bus[7], 1 + comp) as AudioEffectCompressor if comp >= 0 else null
+	check("and a redo brings both, listening again", Sidechain.key_send(2, 7) > 0 and effect != null
+			and effect.sidechain == StringName(GodotBackend.send_bus(2, 7)) and table.rope_nodes.has("2>7"))
+	depth = maxi(s.undo_depth, 0)
+	kick.cut_key.pressed.emit()
+	await get_tree().process_frame
+	check("the X cuts it in one step: the key send and the compressor the rope added (%s)" % [s.undo_names],
+			Sidechain.key_send(2, 7) == 0 and Sidechain.compressor_on(7) < 0 and s.undo_depth == depth + 1
+			and String(s.undo_names[s.undo_depth - 1]) == "Kick > Rhodes: cut" and not table.ropes.has("2>7"))
+	check("and the X goes with the rope", kick.cut_key == null and table.rope_nodes.is_empty())
+	# Two ropes into the keys: the first adds the compressor, the second keys the same one.
+	check("two ropes into the keys, the first adding its compressor (%s)" % [table.ropes], table.tie(2, 7)
+			and table.tie(3, 7) and table.ropes.get("2>7", false) == true and table.ropes.get("3>7", true) == false)
+	comp = Sidechain.compressor_on(7)
+	var count := s.track(7).plugins().size()
+	check("cutting the first keeps the compressor the other rope still keys", table.cut(2, 7)
+			and Sidechain.compressor_on(7) == comp and s.track(7).plugins().size() == count
+			and Sidechain.key_send(3, 7) > 0 and table.rope_nodes.has("3>7"))
+	await get_tree().process_frame
+	effect = AudioServer.get_bus_effect(backend._bus[7], 1 + comp) as AudioEffectCompressor
+	check("listening to the snare now, whose row has the compressor (%s)" % [table.ropes], effect != null
+			and effect.sidechain == StringName(GodotBackend.send_bus(3, 7)) and table.ropes.get("3>7", false) == true)
+	var threshold_was := Sidechain.threshold_db(s.fx(7, comp))
+	table.pull(3, 7, 0.5)
+	check("and the snare's rope still pulls", Sidechain.threshold_db(s.fx(7, comp)) < threshold_was - 1.0)
+	check("the last cut takes the compressor away", table.cut(3, 7) and Sidechain.compressor_on(7) < 0
+			and s.track(7).plugins().size() == count - 1 and table.ropes.is_empty())
+	# An undone tie leaves no row behind to take a compressor somebody adds later.
+	check("tied again", table.tie(2, 7) and table.ropes.get("2>7", false) == true)
+	DAW.undo()
+	await get_tree().process_frame
+	check("and undone, its row goes with its key send (%s)" % [table.ropes], Sidechain.key_send(2, 7) == 0
+			and not table.ropes.has("2>7"))
+	DAW.redo()
+	await get_tree().process_frame
+	check("redone, the row comes back with it (%s)" % [table.ropes], Sidechain.key_send(2, 7) > 0
+			and table.ropes.get("2>7", false) == true)
+	check("cut", table.cut(2, 7) and Sidechain.compressor_on(7) < 0)
+	await get_tree().process_frame
+	DAW.undo()
+	await get_tree().process_frame
+	check("an undone cut brings the row back with the send and the compressor (%s)" % [table.ropes],
+			Sidechain.key_send(2, 7) > 0 and Sidechain.compressor_on(7) >= 0 and table.ropes.get("2>7", false) == true)
+	check("so cut again it still takes the compressor it made", table.cut(2, 7) and Sidechain.compressor_on(7) < 0
+			and s.track(7).plugins().size() == count - 1)
+	await get_tree().process_frame
+	DAW.undo()
+	await get_tree().process_frame
+	DAW.undo()
+	await get_tree().process_frame
+	check("undone back past the tie, nothing is left", Sidechain.key_send(2, 7) == 0 and Sidechain.compressor_on(7) < 0
+			and table.ropes.is_empty())
+	# A key send made by the patchbay into a compressor somebody added is not the rope's to take.
+	DAW.add_fx(7, "compressor")
+	check("a key send the patchbay makes after it", DAW.create_sidechain(2, 7))
+	await get_tree().process_frame
+	check("is a rope with no row, so its cut leaves their compressor (%s)" % [table.ropes], not table.ropes.has("2>7")
+			and table.cut(2, 7) and Sidechain.compressor_on(7) >= 0)
+	DAW.remove_fx(7, Sidechain.compressor_on(7))
+	await get_tree().process_frame
+	# The bass has a compressor of its own.
+	var own := Sidechain.compressor_on(6)
+	var own_count := s.track(6).plugins().size()
+	check("tied to the bass, its own compressor is the one that listens", own >= 0 and table.tie(2, 6)
+			and s.track(6).plugins().size() == own_count and table.ropes.get("2>6", true) == false)
+	effect = AudioServer.get_bus_effect(backend._bus[6], 1 + own) as AudioEffectCompressor
+	check("keyed by the kick", effect != null and effect.sidechain == StringName(GodotBackend.send_bus(2, 6)))
+	var rope_6: StageTable.Rope = table.rope_nodes.get("2>6")
+	check("Backspace over the rope cuts it", rope_6 != null and table.reset_under(rope_6))
+	await get_tree().process_frame
+	effect = AudioServer.get_bus_effect(backend._bus[6], 1 + Sidechain.compressor_on(6)) as AudioEffectCompressor
+	check("and the bass keeps its own compressor, listening to itself again", Sidechain.key_send(2, 6) == 0
+			and Sidechain.compressor_on(6) == own and s.track(6).plugins().size() == own_count
+			and effect != null and effect.sidechain == &"")
+	check("a rope to nowhere ties nothing", not table.tie(2, 2))
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+	_offline()
+	# The engine let go of is freed at the frame's end, taking its buses' names with it.
+	await get_tree().process_frame
+
+
+## Two bars of the demo's kick and bass rendered by MixRender, without the rope and with it (the
+## bass's own compressor taken off first, so without the rope nothing turns it down): on the kick's
+## hits the bass is quieter with the rope.
+func _test_a_rope_ducks_the_bass_in_a_render() -> void:
+	var table := _built_in_stage()
+	var s := DAW.state
+	DAW.remove_fx(6, Sidechain.compressor_on(6))
+	var start := 0.0
+	for t in [2, 6]:
+		if not s.track(t).items.is_empty():
+			start = maxf(start, (s.track(t).items[0] as MixState.ItemState).start)
+	var bars := 2.0 * s.beats_per_bar * 60.0 / s.tempo
+	s.looping = true
+	s.loop_start = start
+	s.loop_end = start + bars
+	var plain: Array = await _render_kick_and_bass()
+	check("tied", table.tie(2, 6))
+	s.looping = true
+	s.loop_start = start
+	s.loop_end = start + bars
+	var roped: Array = await _render_kick_and_bass()
+	if plain.is_empty() or roped.is_empty():
+		check("both renders came back", false)
+		table.queue_free()
+		_offline()
+		return
+	# 10 ms windows: the kick's hits are the windows where it is loud, from the render without the
+	# rope (the kick is the same in both); the bass's level is read in those.
+	var rate := int(plain[2])
+	var window := rate / 100
+	var kick_rms := _rms_windows(plain[0], window)
+	var loudest := 0.0
+	for v in kick_rms:
+		loudest = maxf(loudest, v)
+	var hits: Array[int] = []
+	for w in kick_rms.size():
+		if kick_rms[w] > loudest * 0.4:
+			hits.append(w)
+	var bass_plain := _rms_windows(plain[1], window)
+	var bass_roped := _rms_windows(roped[1], window)
+	var on_plain := 0.0
+	var on_roped := 0.0
+	for w in hits:
+		if w < bass_plain.size() and w < bass_roped.size():
+			on_plain += bass_plain[w]
+			on_roped += bass_roped[w]
+	var drop := linear_to_db(maxf(on_roped, 1e-9)) - linear_to_db(maxf(on_plain, 1e-9))
+	var off_plain := 0.0
+	var off_roped := 0.0
+	for w in mini(bass_plain.size(), bass_roped.size()):
+		if kick_rms[w] < loudest * 0.05:
+			off_plain += bass_plain[w]
+			off_roped += bass_roped[w]
+	var off := linear_to_db(maxf(off_roped, 1e-9)) - linear_to_db(maxf(off_plain, 1e-9))
+	check("the kick hits in the two bars (%d windows)" % hits.size(), hits.size() >= 4 and on_plain > 0.0)
+	check("and on its hits the bass is lower with the rope than without (%.1f dB on them, %.1f dB between)" % [drop, off],
+			drop < -3.0 and drop < off - 2.0)
+	table.queue_free()
+	await get_tree().process_frame
+	_offline()
+	# The engine let go of is freed at the frame's end, taking its buses' names with it.
+	await get_tree().process_frame
+
+
+## The engine's mix rendered with every stem: [the kick's left channel, the bass's, the rate], or []
+## when it did not finish. The files are removed.
+func _render_kick_and_bass() -> Array:
+	var heard: Array = []
+	var on_done := func(files: PackedStringArray, _problems: PackedStringArray) -> void: heard.append(files)
+	DAW.render_finished.connect(on_done)
+	DAW.render(true, 32)
+	var waited := 0.0
+	while heard.is_empty() and waited < 20.0:
+		await get_tree().create_timer(0.1).timeout
+		waited += 0.1
+	DAW.render_finished.disconnect(on_done)
+	if heard.is_empty():
+		return []
+	var out: Array = [PackedFloat32Array(), PackedFloat32Array(), int(AudioServer.get_mix_rate())]
+	for f: String in heard[0]:
+		for pair in [[0, " - Kick.wav"], [1, " - Bass DI.wav"]]:
+			if f.ends_with(pair[1]):
+				var read := DawKitAudioFile.read(f)
+				var samples: PackedFloat32Array = read["samples"]
+				var left := PackedFloat32Array()
+				left.resize(int(read["frames"]))
+				for i in left.size():
+					left[i] = samples[i * int(read["channels"])]
+				out[pair[0]] = left
+				out[2] = int(read.get("rate", out[2]))
+		DirAccess.remove_absolute(f)
+	return out if not (out[0] as PackedFloat32Array).is_empty() and not (out[1] as PackedFloat32Array).is_empty() else []
+
+
+func _rms_windows(samples: PackedFloat32Array, window: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	var w := 0
+	while (w + 1) * window <= samples.size():
+		var sum := 0.0
+		for i in range(w * window, (w + 1) * window):
+			sum += samples[i] * samples[i]
+		out.append(sqrt(sum / window))
+		w += 1
+	return out
+
+
+## The rope's middle taken and pulled away over 30 frames is one undo step: the key send up and the
+## compressor's threshold down, together, as far as the pull says. Undone, both come back. The wheel
+## over it pulls it too.
+func _test_a_pulled_rope_ducks_harder_in_one_step() -> void:
+	var table := _built_in_stage()
+	var s := DAW.state
+	var hand := FakeHand.new()
+	add_child(hand)
+	check("tied", table.tie(2, 7))
+	await get_tree().process_frame
+	var rope: StageTable.Rope = table.rope_nodes.get("2>7")
+	if rope == null:
+		check("a rope stands", false)
+		table.queue_free()
+		return
+	var comp := Sidechain.compressor_on(7)
+	var send_was := Sidechain.send_db(2, 7)
+	var threshold_was := Sidechain.threshold_db(s.fx(7, comp))
+	var ducks_was := table.rope_ducks(2, 7)
+	var depth := maxi(s.undo_depth, 0)
+	var mid := table.to_local(rope.global_position)
+	var away := mid + rope._across() * StageTable.PULL_MOST * 0.6
+	rope.grab_begin(hand, table.to_global(mid))
+	for i in 30:
+		rope.grab_move(hand, table.to_global(mid.lerp(away, (i + 1) / 30.0)))
+		await get_tree().process_frame
+	rope.grab_end(hand)
+	await get_tree().process_frame
+	var want := Sidechain.of_pull(0.6)
+	close_to("pulled 60%%, the key send is up (was %.1f dB)" % send_was, Sidechain.send_db(2, 7), want.x, 0.05)
+	close_to("and the threshold down (was %.1f dB)" % threshold_was, Sidechain.threshold_db(s.fx(7, comp)), want.y, 0.05)
+	check("as one undo step, called a pull (%s)" % [s.undo_names], s.undo_depth == depth + 1
+			and String(s.undo_names[s.undo_depth - 1]) == "Kick > Rhodes: pull")
+	check("it ducks harder, and says so (%s)" % rope.readout(), table.rope_ducks(2, 7) > ducks_was + 10.0)
+	close_to("and the rope stands pulled where its threshold has it", rope.pull(), 0.6, 0.01)
+	DAW.undo()
+	await get_tree().process_frame
+	close_to("one undo puts the send back", Sidechain.send_db(2, 7), send_was, 0.05)
+	close_to("and the threshold", Sidechain.threshold_db(s.fx(7, comp)), threshold_was, 0.05)
+	rope.nudge(hand, 2, false)
+	close_to("two notches of the wheel pull it a tenth", rope.pull(), 2 * StageTable.PULL_STEP, 0.01)
+	hand.queue_free()
+	table.queue_free()
+	await get_tree().process_frame
+	_offline()
+	# The engine let go of is freed at the frame's end, taking its buses' names with it.
+	await get_tree().process_frame
+
+
+## How hard a rope ducks is Sidechain's estimate from its key's meter, and its middle lifts by it:
+## a kick at -16 dB over a -30 dB threshold at 4:1 ducks 10.5 dB, and the rope lifts that share of
+## its sag toward straight; with the kick silent it sags again; with motion held still it does not
+## move, though its card still says how far it ducks.
+func _test_a_ropes_lift_follows_the_estimate() -> void:
+	close_to("10 dB over the threshold at 4:1 is 7.5 dB down", Sidechain.reduction(-10.0, -20.0, 4.0), 7.5)
+	check("under it, nothing", Sidechain.reduction(-30.0, -20.0, 4.0) == 0.0 and Sidechain.reduction(-INF, -20.0, 4.0) == 0.0)
+	close_to("at 1:1, nothing", Sidechain.reduction(0.0, -20.0, 1.0), 0.0)
+	_offline(16)
+	var s := DAW.state
+	var table := _stage_table()
+	check("tied on the stand-in, with its ReaComp", table.tie(2, 7) and Sidechain.is_reacomp(s.fx(7, Sidechain.compressor_on(7))))
+	await get_tree().process_frame
+	var rope: StageTable.Rope = table.rope_nodes.get("2>7")
+	if rope == null:
+		check("a rope stands", false)
+		table.queue_free()
+		return
+	close_to("a ReaComp's threshold is read as an amplitude", Sidechain.threshold_db(s.fx(7, Sidechain.compressor_on(7))),
+			Sidechain.THRESHOLD_SLACK_DB, 0.05)
+	var kick := s.track(2)
+	kick.vu_l = FaderLaw.to_taper(-16.0)
+	kick.vu_r = kick.vu_l
+	# Full motion, whatever an earlier test left the shared setting at.
+	var was_ergonomics := Ergonomics.current
+	Ergonomics.current = Ergonomics.new()
+	table._process(1.0 / 60.0)
+	var expected := Sidechain.reduction(-16.0 + Sidechain.send_db(2, 7), Sidechain.THRESHOLD_SLACK_DB, Sidechain.RATIO_DEFAULT)
+	close_to("a kick at -16 dB ducks by the estimate (10.5 dB)", rope.ducking, expected, 0.05)
+	var a := table.knot_point(2)
+	var b := table.knot_point(7)
+	var slack := StageTable.sag_of(a, b, rope.pull())
+	close_to("and lifts the rope that share of its sag", rope.lifted, slack * clampf(expected / StageTable.DUCK_TAUT_DB, 0.0, 1.0), 0.0005)
+	check("its card says it (%s)" % rope.readout(), rope.readout().contains("ducks %d dB on each hit" % roundi(expected)))
+	var was_motion := Ergonomics.current.motion_scale
+	Ergonomics.current.motion_scale = 0.0
+	table._process(1.0 / 60.0)
+	check("with motion held still the rope does not lift, and still says how far it ducks",
+			rope.lifted == 0.0 and rope.ducking > 1.0 and rope.readout().contains("ducks"))
+	Ergonomics.current.motion_scale = was_motion
+	kick.vu_l = 0.0
+	kick.vu_r = 0.0
+	table._process(1.0)
+	check("the kick silent, it sags again", rope.ducking == 0.0 and rope.lifted == 0.0)
+	Ergonomics.current = was_ergonomics
+	# On Reaper only a ReaComp hears a key (the bridge's `compressors`): a third-party compressor is
+	# not the rope's, so a rope adds a ReaComp beside it and its cut takes only that away.
+	var other := 0
+	while s.track(9).fx.has(other) and s.fx(9, other).name != "":
+		other += 1
+	s.fx(9, other).name = "Pro-C 2 Compressor (FabFilter)"
+	var plugins := s.track(9).plugins().size()
+	check("a third-party compressor is not one a key reaches on Reaper", Sidechain.engine() == &"reaper"
+			and Sidechain.is_compressor(s.fx(9, other)) and Sidechain.compressor_on(9) < 0
+			and Sidechain.compressor_choice() == "ReaComp")
+	check("so a rope to it adds a ReaComp, and says so (%s)" % [table.ropes], table.tie(2, 9)
+			and table.ropes.get("2>9", false) == true and Sidechain.is_reacomp(s.fx(9, Sidechain.compressor_on(9))))
+	check("and its cut leaves the third-party one", table.cut(2, 9) and Sidechain.compressor_on(9) < 0
+			and s.track(9).plugins().size() == plugins and Sidechain.is_compressor(s.fx(9, other)))
+	table.queue_free()
+	await get_tree().process_frame
+
+
+## A guest's rope is intents the host carries out, in one edit: the compressor and the key send, and
+## a room row asked for. The threshold follows once the compressor arrives. A guest's cut takes away
+## only what the row says the rope added.
+func _test_a_guests_rope_asks_the_host() -> void:
+	_offline(16)
+	var s := DAW.state
+	var table := _stage_table()
+	_as_session(Session.Role.GUEST, 5)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	check("a guest's tie goes ahead", table.tie(2, 7))
+	var verbs: Array = Session.kept_intents.map(func(c): return c[0])
+	check("as one edit: a compressor, then the key send it listens to (%s)" % [verbs],
+			verbs == [&"open_edit", &"add_fx", &"create_sidechain", &"close_edit"])
+	check("and keeps the row it asks for", table.ropes.get("2>7", false) == true)
+	# The host's answer, as replication brings it: the compressor, then the key send.
+	Session.kept_intents.clear()
+	MixWire.apply(s, "/track/7/fx/%d/name" % s.track(7).plugins().size(), ["ReaComp"])
+	MixWire.apply(s, "/track/7/fxs", [float(s.track(7).plugins().size() + 1)])
+	var n := s.track(2).sends.size() + 1
+	MixWire.apply(s, "/track/2/send/%d/dest" % n, [7.0])
+	MixWire.apply(s, "/track/2/send/%d/key" % n, [1.0])
+	MixWire.apply(s, "/track/2/sends", [float(n)])
+	var params: Array = Session.kept_intents.filter(func(c): return c[0] == &"set_fx_param")
+	check("when they arrive it asks for the slack threshold on the compressor (%s)" % [params],
+			params.size() == 1 and int(params[0][1][0]) == 7 and int(params[0][1][2]) == Sidechain.THRESHOLD_PARAM)
+	table._rows_asked["2>7"] = [3, true, true]
+	table.apply_ropes({}, 2)
+	check("a room from before the host answered keeps the guest's own row on top", table.ropes.get("2>7", false) == true)
+	table.apply_ropes({"2>7": true}, 3)
+	check("once answered, the room's is the row", table._rows_asked.is_empty() and table.ropes.get("2>7", false) == true)
+	Session.kept_intents.clear()
+	check("a guest's cut", table.cut(2, 7))
+	verbs = Session.kept_intents.map(func(c): return c[0])
+	check("is one edit, the compressor the rope added and the key send (%s)" % [verbs],
+			verbs == [&"open_edit", &"remove_fx", &"remove_send", &"close_edit"])
+	Session.keep_intents = false
+	Session.kept_intents.clear()
+	Session.start_solo()
+	table.queue_free()
+	await get_tree().process_frame
+
+
+# --- signal you can see, and a room that hears the mix (part two, slice 21) ----------------
+
+## A straight carrier `length` m long along x at height `y`, at `level`.
+func _bead_run(length: float, y: float, level: float) -> SignalBeads.Run:
+	var run := SignalBeads.Run.new()
+	var points := PackedVector3Array()
+	for i in 21:
+		points.append(Vector3(length * float(i) / 20.0, y, 0.0))
+	run.lay(points)
+	run.level = func() -> float: return level
+	add_child(run)
+	return run
+
+
+## Louder is closer, faster and brighter, one hue: the rate a point on a cable sees goes with the
+## level; nothing below the floor; at motion 0.4 the beads go at 0.4 of the pace, and at 0 they
+## stand still, evenly spaced whatever the level, their brightness alone saying it.
+func _test_beads_go_with_the_level() -> void:
+	var beads := SignalBeads.create()
+	add_child(beads)
+	check("one bank, sized once, nothing shown yet", beads.count() == SignalBeads.CAPACITY and beads.shown == 0)
+	check("the rate a point sees goes with the level (%.2f, %.2f, %.2f a second)"
+			% [SignalBeads.rate(0.2, 1.0), SignalBeads.rate(0.45, 1.0), SignalBeads.rate(0.7, 1.0)],
+			SignalBeads.rate(0.2, 1.0) < SignalBeads.rate(0.45, 1.0) and SignalBeads.rate(0.45, 1.0) < SignalBeads.rate(0.7, 1.0))
+	check("none under the floor", SignalBeads.rate(SignalBeads.FLOOR * 0.5, 1.0) == 0.0)
+	var quiet := _bead_run(1.0, 0.0, 0.2)
+	var loud := _bead_run(1.0, 0.5, 0.7)
+	var silent := _bead_run(1.0, 1.0, 0.0)
+	beads.drive(0.0, 1.0)
+	check("closer on the louder cable (%d against %d)" % [beads.beads_on(loud), beads.beads_on(quiet)],
+			beads.beads_on(loud) > beads.beads_on(quiet) and beads.beads_on(quiet) > 0)
+	check("none on a cable with nothing on it", beads.beads_on(silent) == 0)
+	var lq := beads.slots_of(quiet)
+	var ll := beads.slots_of(loud)
+	check("one hue, brighter louder", beads.colour_of(ll.x).v > beads.colour_of(lq.x).v
+			and is_equal_approx(beads.colour_of(ll.x).h, beads.colour_of(lq.x).h))
+	check("bigger louder", beads.transform_of(ll.x).basis.get_scale().x > beads.transform_of(lq.x).basis.get_scale().x)
+	var was: Array[Vector3] = beads.places_on(loud)
+	beads.drive(0.1, 1.0)
+	var moved: float = beads.places_on(loud)[0].x - was[0].x
+	var gap := SignalBeads.spacing(0.7, 1.0)
+	var along := fposmod(moved, gap)
+	close_to("at full motion they go on by the pace in a tenth of a second", along,
+			fposmod(SignalBeads.speed(0.7, 1.0) * 0.1, gap), 0.002)
+	was = beads.places_on(loud)
+	beads.drive(0.1, 0.4)
+	close_to("gentle, at 0.4 of it", fposmod(beads.places_on(loud)[0].x - was[0].x, gap),
+			fposmod(SignalBeads.speed(0.7, 1.0) * 0.04, gap), 0.002)
+	beads.drive(0.0, 0.0)
+	was = beads.places_on(loud)
+	var quiet_was: Array[Vector3] = beads.places_on(quiet)
+	for i in 30:
+		beads.drive(1.0 / 60.0, 0.0)
+	check("still at motion 0", beads.places_on(loud) == was and beads.places_on(quiet) == quiet_was and not was.is_empty())
+	check("evenly spaced whatever the level (%d and %d)" % [beads.beads_on(loud), beads.beads_on(quiet)],
+			beads.beads_on(loud) == beads.beads_on(quiet))
+	check("and the brightness alone says which is louder",
+			beads.colour_of(beads.slots_of(loud).x).v > beads.colour_of(beads.slots_of(quiet).x).v
+			and is_equal_approx(beads.transform_of(beads.slots_of(loud).x).basis.get_scale().x,
+					beads.transform_of(beads.slots_of(quiet).x).basis.get_scale().x))
+	# A jack's lead carries its last hit, fading to nothing.
+	var jacks := Jacks.new()
+	check("a jack that has played nothing carries nothing", jacks.level_of(&"shaker_1", 1000) == 0.0)
+	jacks.heard_from(&"shaker_1", 127, 1000)
+	check("a hit shows at once", is_equal_approx(jacks.level_of(&"shaker_1", 1000), Jacks.HEARD_LOUD))
+	check("and fades (%.2f half way)" % jacks.level_of(&"shaker_1", 1300),
+			jacks.level_of(&"shaker_1", 1300) < Jacks.HEARD_LOUD and jacks.level_of(&"shaker_1", 1300) > 0.0)
+	check("to stillness", jacks.level_of(&"shaker_1", 1000 + int(Jacks.HEARD_FADE * 1000.0)) == 0.0)
+	jacks.free()
+	var socket := JackSocket.new(null, Jack.HARP)
+	check("an unplugged socket carries nothing", socket.signal_level() == 0.0 and socket.signal_spine().is_empty())
+	socket.free()
+	for run in [quiet, loud, silent]:
+		run.queue_free()
+	beads.queue_free()
+	await get_tree().process_frame
+
+
+## A muted track's loom stops at its strip: the console's loom carries every heard track, so with
+## every track muted it carries nothing, whatever the meters say; and a send at zero carries
+## nothing past its jack, at 0 dB it carries the track's level.
+func _test_no_beads_on_a_muted_loom_or_past_a_zero_send() -> void:
+	_offline(13)
+	var s := DAW.state
+	DAW.transport_stop()
+	var beads := SignalBeads.create()
+	add_child(beads)
+	var loom := GearLoom.create(Vector3(0, 0.8, 0), Vector3.BACK, Vector3(2, 1.2, 0), Vector3.FORWARD, Vector3(1, 0, 0.5))
+	loom.level_source = Studio.loom_level("console")
+	add_child(loom)
+	check("a loom's run is a carrier", loom.is_in_group(SignalBeads.CARRIERS) and loom.signal_length() > 1.0)
+	var src := -1
+	var send := -1
+	for index in s.track_indices():
+		for k in s.track(index).sends:
+			if src < 0:
+				src = index
+				send = int(k)
+	check("the stand-in has a send to cable", src > 0)
+	if src < 0:
+		loom.queue_free()
+		beads.queue_free()
+		return
+	var cable := PatchCable.create(Transform3D(Basis.IDENTITY, Vector3(0, 1.5, 0)),
+			Transform3D(Basis.IDENTITY, Vector3(0.6, 1.4, 0)), Color.WHITE, 1)
+	cable.source_track = src
+	cable.send_index = send
+	add_child(cable)
+	var loud := func() -> void:
+		for index in s.track_indices():
+			s.track(index).vu_l = 0.6
+			s.track(index).vu_r = 0.6
+	loud.call()
+	var sd: MixState.SendState = s.track(src).sends[send]
+	sd.volume = FaderLaw.to_taper(0.0)
+	beads.drive(0.0, 1.0)
+	check("a loud desk's loom carries it (%d beads)" % beads.beads_on(loom), beads.beads_on(loom) > 0)
+	close_to("a send at 0 dB carries its track's level", cable.signal_level(), 0.6, 0.002)
+	check("and has beads on it", beads.beads_on(cable) > 0)
+	sd.volume = 0.0
+	beads.drive(0.0, 1.0)
+	check("a send at zero carries nothing", cable.signal_level() == 0.0 and beads.beads_on(cable) == 0)
+	sd.volume = FaderLaw.to_taper(-12.0)
+	check("a send 12 dB down carries 12 dB less", is_equal_approx(snappedf(FaderLaw.to_db(cable.signal_level()), 0.01),
+			snappedf(FaderLaw.to_db(0.6) - 12.0, 0.01)))
+	for index in s.track_indices():
+		s.track(index).mute = true
+	loud.call()
+	beads.drive(0.0, 1.0)
+	check("every track muted, the meters still up: the loom carries nothing",
+			SignalBeads.loudest() == 0.0 and beads.beads_on(loom) == 0)
+	check("and nor does the muted track's send", cable.signal_level() == 0.0 and beads.beads_on(cable) == 0)
+	s.track(src).mute = false
+	s.track(src).solo = true
+	beads.drive(0.0, 1.0)
+	check("one track heard again, the loom carries it", beads.beads_on(loom) > 0)
+	var other: int = s.track_indices()[0] if s.track_indices()[0] != src else s.track_indices()[1]
+	s.track(other).mute = false
+	check("a track left out by another's solo is not heard", not SignalBeads.heard(other) and SignalBeads.track_level(other) == 0.0)
+	s.track(src).solo = false
+	check("its solo let go, the other is heard again at once", SignalBeads.heard(other) and not SignalBeads.any_solo())
+	var soloed := s.track(src)
+	soloed.solo = true
+	check("soloed again, the other is left out again", not SignalBeads.heard(other) and SignalBeads.any_solo())
+	var without := s.tracks.duplicate()
+	without.erase(src)
+	s.tracks = without
+	check("the soloed track gone, nothing is soloed any more", SignalBeads.heard(other) and not SignalBeads.any_solo())
+	without[src] = soloed
+	check("and back, it is again", not SignalBeads.heard(other) and SignalBeads.any_solo())
+	for index in s.track_indices():
+		s.track(index).mute = false
+		s.track(index).solo = false
+	check("the rack's loom carries only tracks with a plugin on them",
+			Studio.loom_level("rack").is_valid() and Studio.loom_level("deck").is_valid())
+	cable.queue_free()
+	loom.queue_free()
+	beads.queue_free()
+	await get_tree().process_frame
+
+
+## One MultiMesh for every bead in the room, sized once: a room of ninety tracks' patching at full
+## level still draws every cable with at least one bead, and never more than CAPACITY.
+func _test_every_cable_is_drawn_within_the_bead_budget() -> void:
+	var given := SignalBeads.allot(PackedInt32Array([40, 40, 0, 1]), 100)
+	check("under capacity, what each wanted (%s)" % given, given == PackedInt32Array([40, 40, 0, 1]))
+	given = SignalBeads.allot(PackedInt32Array([48, 48, 48, 1, 0]), 20)
+	var total := 0
+	for n in given:
+		total += n
+	check("over it, shared, each lit one keeping at least one (%s)" % given,
+			total <= 20 and given[0] >= 1 and given[3] >= 1 and given[4] == 0 and given[0] > given[3])
+	var beads := SignalBeads.create()
+	add_child(beads)
+	var runs: Array = []
+	for i in 300:
+		runs.append(_bead_run(2.0, float(i) * 0.01, 0.72))
+	beads.drive(0.0, 1.0)
+	var dark := runs.filter(func(r): return beads.beads_on(r) == 0).size()
+	check("three hundred loud 2 m cables: within the bank (%d of %d)" % [beads.shown, SignalBeads.CAPACITY],
+			beads.shown <= SignalBeads.CAPACITY and beads.shown > 300)
+	check("and every one drawn (%d dark)" % dark, dark == 0)
+	check("all in one MultiMesh: one draw call", beads.multimesh.instance_count == SignalBeads.CAPACITY
+			and beads.multimesh.visible_instance_count == beads.shown)
+	for run in runs:
+		run.queue_free()
+	beads.queue_free()
+	await get_tree().process_frame
+
+
+## A track clipping on every beat at 120 bpm (an over 50 ms long each half second) lifts the room
+## at most once in FLASH_GAP, by LIFT and never more, falling away over LIFT_SECONDS; and not at all
+## with Lift on clip or Room reacts off.
+func _test_a_clip_on_every_beat_lifts_the_room_once_in_two_seconds() -> void:
+	var venue := Venue.new()
+	var dt := 1.0 / 60.0
+	var run := func() -> Array:
+		var most := 0.0
+		var onsets: Array[float] = []
+		var before := 0.0
+		for f in 360:
+			var t := float(f) * dt
+			venue.hear_clip(fmod(t, 0.5) < 0.05, dt)
+			most = maxf(most, venue.lift)
+			if venue.lift > before + 0.0001 and before == 0.0:
+				onsets.append(t)
+			before = venue.lift
+		return [most, onsets]
+	var heard: Array = run.call()
+	var onsets: Array = heard[1]
+	var gaps_ok := true
+	for i in range(1, onsets.size()):
+		gaps_ok = gaps_ok and float(onsets[i]) - float(onsets[i - 1]) >= Venue.FLASH_GAP - dt
+	check("six seconds of a clip a beat lift it three times (%s)" % [onsets], onsets.size() == 3 and gaps_ok)
+	close_to("by 30%, and never more", float(heard[0]), Venue.LIFT, 0.0001)
+	venue.hear_clip(true, dt)
+	var lifted := venue.lift
+	for f in int(ceil(Venue.LIFT_SECONDS / dt)) + 1:
+		venue.hear_clip(false, dt)
+	check("falling away within %.2f s" % Venue.LIFT_SECONDS, venue.lift == 0.0 and lifted <= Venue.LIFT)
+	venue.lift_on_clip = false
+	venue._since_lift = INF
+	check("Lift on clip off: never", float(run.call()[0]) == 0.0)
+	venue.lift_on_clip = true
+	venue.reactive = false
+	venue._since_lift = INF
+	check("Room reacts off: never", float(run.call()[0]) == 0.0)
+	venue.free()
+
+
+## In the studio: a clipping track lifts the practicals by the venue's lift, lights its strip's
+## OVER readout and not the master's lamp; the master over lights the master's; COMFORT's Room
+## reacts off holds the lamps. Every cable in the room is a carrier for the one bank of beads.
+func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var s := DAW.state
+	DAW.transport_stop()
+	check("one bank of beads in the room", studio.find_children("*", "SignalBeads", true, false).size() == 1)
+	var looms := studio._looms.filter(func(l): return is_instance_valid(l))
+	check("every loom carries something (%d)" % looms.size(), not looms.is_empty()
+			and looms.all(func(l: GearLoom) -> bool: return l.level_source.is_valid() and l.is_in_group(SignalBeads.CARRIERS)))
+	studio.patchbay._draw_cables()
+	var cables: Array = studio.patchbay._cables
+	check("every patch cable knows its send (%d)" % cables.size(), not cables.is_empty() and cables.all(
+			func(c: PatchCable) -> bool: return c.source_track > 0 and c.send_index >= 0 and c.is_in_group(SignalBeads.CARRIERS)))
+	var base: Array[float] = []
+	for i in studio._lamps.size():
+		base.append(studio.venue.lamp_energy(i, Studio.PRACTICALS[i][2]))
+	for index in s.track_indices():
+		s.track(index).vu_l = 0.3
+		s.track(index).vu_r = 0.3
+	s.master.vu_l = 0.3
+	s.master.vu_r = 0.3
+	studio.venue._since_lift = INF
+	var hot: int = s.track_indices()[0]
+	s.track(hot).vu_l = 0.9
+	studio.follow_clip(1.0 / 60.0)
+	close_to("a clipping track lifts the practicals 30%", studio._lamps[0].light_energy, base[0] * (1.0 + Venue.LIFT), 0.001)
+	var strip: ChannelStrip = null
+	for st in studio.console.strips:
+		if st.track_index == hot:
+			strip = st
+	check("its strip says OVER", strip != null and strip.over and strip._db_label.text == "OVER")
+	check("the master's lamp is not lit", not studio.console.master.over)
+	s.track(hot).vu_l = 0.3
+	s.master.vu_l = 0.95
+	studio.follow_clip(1.0 / 60.0)
+	check("the master over lights its OVER lamp and says it", studio.console.master.over
+			and studio.console.master._db_label.text == "OVER")
+	check("and the room does not lift again inside FLASH_GAP", studio.venue.lifts == 1)
+	s.master.vu_l = 0.3
+	for f in 120:
+		studio.follow_clip(1.0 / 60.0)
+	check("the lift gone and OVER let go once the clip has been held its second",
+			is_equal_approx(studio._lamps[0].light_energy, base[0]) and not studio.console.master.over
+			and strip != null and not strip.over)
+	studio.ergonomics.room_reacts = false
+	studio._process(1.0 / 60.0)
+	studio.venue._since_lift = INF
+	s.track(hot).vu_l = 0.9
+	studio.follow_clip(1.0 / 60.0)
+	check("Room reacts off: the lamps hold", is_equal_approx(studio._lamps[0].light_energy, base[0]))
+	s.track(hot).vu_l = 0.0
+	_drop_floor_studio(rig)
+
+
+## COMFORT writes beside the height and reads back; the panel's three set Ergonomics.current at
+## once and keep only what changed; --no-motion at launch still wins.
+func _test_comfort_is_kept_and_no_motion_wins() -> void:
+	var path := "user://test_comfort_body.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	Ergonomics.save_height(1.71, path)
+	Ergonomics.save_comfort(path, {"motion": 0.4, "room_reacts": false, "lift_on_clip": false})
+	var kept := Ergonomics.load_comfort(path)
+	check("COMFORT reads back (%s)" % kept, is_equal_approx(float(kept.get("motion", -1.0)), 0.4)
+			and kept.get("room_reacts") == false and kept.get("lift_on_clip") == false)
+	close_to("beside the height, which it leaves", Ergonomics.load_height(path), 1.71, 0.001)
+	var body := Ergonomics.new()
+	body.take_comfort(path, false)
+	check("taken at launch", is_equal_approx(body.motion_scale, 0.4) and not body.room_reacts and not body.lift_on_clip)
+	Ergonomics.save_comfort(path, {"motion": 1.0, "room_reacts": true})
+	body = Ergonomics.new()
+	body.take_comfort(path, true)
+	check("--no-motion wins: still, and the room still", body.motion_scale == 0.0 and not body.room_reacts)
+	check("Gentle is 0.4 and nearest it", Ergonomics.MOTION_STEPS[1] == 0.4 and Ergonomics.motion_step(0.4) == 1
+			and Ergonomics.motion_step(0.0) == 2 and Ergonomics.motion_step(1.0) == 0)
+	var was := Ergonomics.current
+	Ergonomics.current = Ergonomics.new()
+	var panel := SessionPanel.new()
+	panel.comfort_path = path
+	add_child(panel)
+	panel.open()
+	check("the box shows what the body has", panel._motion.selected == 0 and panel._room_reacts.button_pressed
+			and panel._lift_on_clip.button_pressed and not panel._lift_on_clip.disabled)
+	var comfort_box := panel.find_child("Comfort", true, false) as Control
+	check("the box fits the panel's width (%.0f)" % (comfort_box.get_combined_minimum_size().x if comfort_box != null else -1.0),
+			comfort_box != null and comfort_box.get_combined_minimum_size().x <= SessionPanel.WIDTH)
+	check("every one of its controls has a hover card", not panel._motion.tooltip_text.is_empty()
+			and not panel._room_reacts.tooltip_text.is_empty() and not panel._lift_on_clip.tooltip_text.is_empty())
+	panel._motion.select(1)
+	panel._motion.item_selected.emit(1)
+	check("Gentle sets the body at once", is_equal_approx(Ergonomics.current.motion_scale, 0.4))
+	panel._room_reacts.button_pressed = false
+	check("Room reacts off, and Lift on clip greyed", not Ergonomics.current.room_reacts and panel._lift_on_clip.disabled)
+	panel._lift_on_clip.button_pressed = false
+	kept = Ergonomics.load_comfort(path)
+	check("each kept (%s)" % kept, is_equal_approx(float(kept["motion"]), 0.4) and kept["room_reacts"] == false
+			and kept["lift_on_clip"] == false)
+	close_to("and the height still there", Ergonomics.load_height(path), 1.71, 0.001)
+	panel.queue_free()
+	Ergonomics.current = was
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	await get_tree().process_frame
+
+
+# --- automation by gesture (part two, slice 22) ----------------------------------------------
+
+## A stand-in that cannot hold a lane, as Reaper without its bridge: the bead's card says so.
+class NoLaneHold extends OfflineBackend:
+	func can(capability: StringName) -> bool:
+		return capability != DAWBackend.Capability.LANE_HOLD and super(capability)
+
+
+## A write bead over `control`, hearing `now` (its "seconds" and "playing" changed by the caller).
+func _bead_over(control: ControlAffordance, now: Dictionary) -> WriteBead:
+	var bead := WriteBead.new()
+	add_child(bead)
+	bead.control = control
+	bead.heard_source = func() -> Dictionary: return now
+	return bead
+
+
+## `seconds` of heard song from `now`'s, a physics tick (1/60 s) at a time, the bead's height going from
+## `from` to `to` (m, as a hand's or a drag's) on the way; each tick the bead hears the song.
+func _bead_rides(bead: WriteBead, hand: Node, now: Dictionary, seconds: float, from: float, to: float) -> void:
+	var ticks := maxi(roundi(seconds * 60.0), 1)
+	var t0: float = now["seconds"]
+	for i in ticks:
+		now["seconds"] = t0 + (i + 1) / 60.0
+		bead.grab_move(hand, Vector3(0, lerpf(from, to, float(i + 1) / ticks), 0))
+		bead.follow(now)
+
+
+## Looping 2..6 on a track in touch, a bead pulled before the loop: its first pass punches in at the
+## loop's start and ends at the wrap, its points only between the loop's ends, a value held still
+## for 2 s a flat stretch; the lane outside the loop is as it was. Its second pass is a second step.
+## The lane is not followed while held, and is again at the let-go, which at the wrap's instant
+## makes no third step. Each undo restores its pass. No automation mode changes and no touch pass is
+## made. FlatHost's lane has the points.
+func _test_a_looped_bead_pass_writes_inside_the_loop_a_step_a_pass() -> void:
+	var backend := _offline(4)
+	var s := DAW.state
+	var strip := ChannelStrip.create(1)
+	add_child(strip)
+	DAW.set_track_automation_mode(1, DAW.AUTOMATION_TOUCH)
+	DAW.set_automation(1, "volume", [[0.0, -6.0, 1], [10.0, -6.0, 1]])
+	var original := WriteBead.lane_now(1, "volume")
+	DAW.set_loop_range(2.0, 6.0)
+	DAW.set_looping(true)
+	DAW.transport_play()
+	s.position_seconds = 1.5
+	backend.follow_automation()
+	var depth := maxi(s.undo_depth, 0)
+	check("the fader writes the level's lane, and its card says a bead does", strip._fader.automation_target() == [1, "volume"]
+			and strip._fader.card_hint().contains("bead"))
+	var now := {"seconds": 1.5, "playing": true, "valid": true}
+	var bead := _bead_over(strip._fader, now)
+	var hand := Node.new()
+	add_child(hand)
+	var pulled: Array = []
+	var shows_lane := WriteBead.on_pull
+	WriteBead.on_pull = func(track: int, target: String) -> void: pulled.append([track, target])
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	WriteBead.on_pull = shows_lane
+	check("pulled, it holds the fader and the lane", bead.is_held() and strip._fader.is_held()
+			and backend.lane_held(1, "volume"))
+	check("and has its lane shown on the timeline (%s)" % [pulled], pulled == [[1, "volume"]])
+	_bead_rides(bead, hand, now, 0.48, 1.0, 1.05)
+	check("before the loop it writes nothing yet", bead._pass.is_empty() and bead.passes_written == 0)
+	check("and says it waits for the loop (%s)" % bead.readout(), bead.readout().ends_with("waiting for the loop"))
+	_bead_rides(bead, hand, now, 0.98, 1.05, 1.15)
+	check("in the loop it writes, from the loop's start (%s)" % bead.readout(), not bead._pass.is_empty()
+			and bead.readout().ends_with("writing") and is_equal_approx(float(bead._pass["start"]), 2.0))
+	# The lane says -6 all the way; the fader is where the bead put it.
+	s.position_seconds = 2.9
+	backend.follow_automation()
+	var held_db := s.track(1).volume_db
+	check("a held lane is not followed (%.2f dB)" % held_db, absf(held_db + 6.0) > 1.0)
+	_bead_rides(bead, hand, now, 2.0, 1.15, 1.15)
+	_bead_rides(bead, hand, now, 1.0, 1.15, 0.9)
+	now["seconds"] = 2.01
+	bead.follow(now)
+	check("the wrap ends the first pass", bead.passes_written == 1 and s.undo_depth == depth + 1)
+	var first := WriteBead.lane_now(1, "volume")
+	var inside := first.filter(func(pt): return absf(float(pt[1]) + 6.0) > 0.01)
+	check("its points are only between the loop's ends (%d)" % inside.size(), not inside.is_empty()
+			and inside.all(func(pt): return float(pt[0]) >= 2.0 - 0.0001 and float(pt[0]) <= 6.0 + 0.0001))
+	close_to("the lane before the loop is as it was", DawKitAutomation.value_in(first, 1.9), -6.0, 0.001)
+	close_to("and after it", DawKitAutomation.value_in(first, 6.1), -6.0, 0.001)
+	var still := first.filter(func(pt): return float(pt[0]) > 3.0 and float(pt[0]) < 4.94)
+	check("a value held still 2 s is a point each 50 ms (%d)" % still.size(), still.size() >= 38)
+	check("and a flat stretch", still.all(func(pt): return is_equal_approx(float(pt[1]), float(still[0][1]))))
+	var drawn := FlatHost.new().project().track(ProjectBridge.id_of(1)).automation_of("volume")
+	check("FlatHost's lane has the points", drawn != null and drawn.points.size() == first.size())
+	check("held on, the next pass is under way from the loop's start", not bead._pass.is_empty()
+			and is_equal_approx(float(bead._pass["start"]), 2.0))
+	_bead_rides(bead, hand, now, 3.98, 0.9, 0.7)
+	now["seconds"] = 2.0
+	bead.follow(now)
+	check("the second wrap is a second step", bead.passes_written == 2 and s.undo_depth == depth + 2)
+	var second := WriteBead.lane_now(1, "volume")
+	bead.grab_end(hand)
+	check("a let-go at the wrap's instant writes no third", bead.passes_written == 2 and s.undo_depth == depth + 2)
+	check("and lets the lane and the fader go", not backend.lane_held(1, "volume") and not strip._fader.is_held())
+	s.position_seconds = 3.0
+	backend.follow_automation()
+	close_to("the lane is followed again", s.track(1).volume_db, DawKitAutomation.value_in(second, 3.0), 0.01)
+	check("no automation mode changed and no touch pass made", s.track(1).automation_mode == DAW.AUTOMATION_TOUCH
+			and backend._passes.is_empty())
+	check("each step is called for the lane (%s)" % s.undo_names[depth], str(s.undo_names[depth]).ends_with("level automation"))
+	DAW.undo()
+	check("undo takes back the second pass", ReaperBackend._same_lane(WriteBead.lane_now(1, "volume"), first))
+	DAW.undo()
+	check("and again, the first", ReaperBackend._same_lane(WriteBead.lane_now(1, "volume"), original))
+	hand.queue_free()
+	bead.queue_free()
+	strip.queue_free()
+	DAW.transport_stop()
+	await get_tree().process_frame
+
+
+## Not looping, a bead pulled at 10 s and let go at 12 records from 10 to 12, as one step; before and
+## after, the lane (here none) is as it was.
+func _test_a_bead_not_looping_records_from_where_it_began() -> void:
+	var backend := _offline(4)
+	var s := DAW.state
+	var strip := ChannelStrip.create(2)
+	add_child(strip)
+	DAW.set_looping(false)
+	DAW.set_automation(2, "pan", [])
+	DAW.transport_play()
+	var was := s.track(2).pan
+	var depth := maxi(s.undo_depth, 0)
+	var now := {"seconds": 10.0, "playing": true, "valid": true}
+	check("the pan writes its lane", strip._pan.automation_target() == [2, "pan"])
+	var bead := _bead_over(strip._pan, now)
+	var hand := Node.new()
+	add_child(hand)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	_bead_rides(bead, hand, now, 2.0, 1.0, 1.2)
+	bead.grab_end(hand)
+	var lane := WriteBead.lane_now(2, "pan")
+	var moved := lane.filter(func(pt): return absf(float(pt[1]) - (was * 2.0 - 1.0)) > 0.001)
+	check("it records from where it began to the let-go (%d)" % moved.size(), not moved.is_empty()
+			and moved.all(func(pt): return float(pt[0]) >= 10.0 - 0.0001 and float(pt[0]) <= 12.0 + 0.0001))
+	close_to("the pan went up with the hand, 0.2 m of 0.5 (%.3f)" % s.track(2).pan, float(moved[-1][1]),
+			clampf(was + 0.4, 0.0, 1.0) * 2.0 - 1.0, 0.02)
+	close_to("before it, the lane is where the pan was", DawKitAutomation.value_in(lane, 9.9), was * 2.0 - 1.0, 0.001)
+	close_to("and after", DawKitAutomation.value_in(lane, 12.1), was * 2.0 - 1.0, 0.001)
+	check("one step", s.undo_depth == depth + 1 and bead.passes_written == 1)
+	DAW.undo()
+	check("which undo takes back, pan and lane", WriteBead.lane_now(2, "pan").is_empty() and is_equal_approx(s.track(2).pan, was))
+	hand.queue_free()
+	bead.queue_free()
+	strip.queue_free()
+	DAW.transport_stop()
+	backend.follow_automation()
+	await get_tree().process_frame
+
+
+## A rack knob's bead writes its plugin parameter's lane; a strip flipped to a return, its send's;
+## the mute button's, its mute.
+func _test_a_bead_writes_a_plugin_parameter_a_send_and_a_mute() -> void:
+	_offline(13)
+	var s := DAW.state
+	DAW.transport_play()
+	var unit := RackUnit.create(2, 0)
+	add_child(unit)
+	var knob: Knob = unit._knobs[0]
+	var lane: Array = knob.automation_target()
+	check("a rack knob writes its parameter's lane (%s)" % [lane], lane.size() == 2 and str(lane[1]).begins_with("fx:0:"))
+	var now := {"seconds": 5.0, "playing": true, "valid": true}
+	var hand := Node.new()
+	add_child(hand)
+	var bead := _bead_over(knob, now)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	_bead_rides(bead, hand, now, 1.0, 1.0, 0.8)
+	bead.grab_end(hand)
+	check("its lane is written", WriteBead.lane_now(2, lane[1]).size() > 10 and bead.passes_written == 1)
+	bead.queue_free()
+	unit.queue_free()
+	var first: Array = []
+	for index in s.track_indices():
+		for slot in s.track(index).sends:
+			var sd: MixState.SendState = s.track(index).sends[slot]
+			if first.is_empty() and int(slot) >= 1 and not sd.key and sd.resolve(s) > 0:
+				first = [index, sd.resolve(s)]
+	check("the stand-in has a send", not first.is_empty())
+	if first.is_empty():
+		hand.queue_free()
+		return
+	var strip := ChannelStrip.create(first[0])
+	add_child(strip)
+	strip.show_sends_to(first[1])
+	var target := "send:%d" % first[1]
+	check("flipped to the return, the fader writes its send's lane", strip._fader.automation_target() == [first[0], target]
+			and strip._pan.automation_target().is_empty())
+	now["seconds"] = 7.0
+	bead = _bead_over(strip._fader, now)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	_bead_rides(bead, hand, now, 1.0, 1.0, 0.9)
+	bead.grab_end(hand)
+	check("its lane is written", WriteBead.lane_now(first[0], target).size() > 10)
+	bead.queue_free()
+	strip.show_sends_to(0)
+	check("the mute button writes the mute's lane", strip._mute.automation_target() == [first[0], "mute"])
+	now["seconds"] = 9.0
+	bead = _bead_over(strip._mute, now)
+	var muted := s.track(first[0]).mute
+	var depth := maxi(s.undo_depth, 0)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	_bead_rides(bead, hand, now, 0.5, 1.0, 1.0 + (-0.4 if muted else 0.4))
+	check("the bead over the middle of its travel flips it", s.track(first[0]).mute != muted)
+	# Held still past EDIT_IDLE_MSEC: the flip's edit aged to just short of idle, the bead's last
+	# write a keep-alive ago. The keep-alive must reach the backend though the mute does not
+	# change, or the edit closes and the pass's lane is a second step apart from the flip.
+	var backend: OfflineBackend = DAW.backend
+	var edit: Dictionary = backend._open_edits.get(0, {})
+	check("the flip is in the pass's edit", not edit.is_empty() and not (edit["step"] as Dictionary).is_empty())
+	edit["at"] = Time.get_ticks_msec() - DAWBackend.EDIT_IDLE_MSEC + 500
+	bead._last_write_msec -= WriteBead.KEEP_ALIVE_MSEC * 2
+	now["seconds"] += 1.0 / 60.0
+	bead.follow(now)
+	backend.close_idle_edits(Time.get_ticks_msec() + 1000)
+	check("a still bead's keep-alive over a mute keeps its edit open", backend.edit_open(0))
+	bead.grab_end(hand)
+	check("the flip and its lane are one step (%s)" % [s.undo_names], s.undo_depth == depth + 1)
+	var mute_lane := WriteBead.lane_now(first[0], "mute")
+	check("and its lane holds from point to point", not mute_lane.is_empty()
+			and mute_lane.all(func(pt): return int(pt[2]) == DawKitAutomation.HOLD and (float(pt[1]) == 0.0 or float(pt[1]) == 1.0)))
+	hand.queue_free()
+	bead.queue_free()
+	strip.queue_free()
+	DAW.transport_stop()
+	await get_tree().process_frame
+
+
+## A guest's pass, heard 0.3 s behind the host's playhead, is sent as the guest's own song
+## positions: hold, the edit, the sets, the whole lane and the let-go, as intents; carried out by
+## the host they are its lane, one step, the lane let go. A malformed hold is refused, and a guest
+## who leaves has their holds let go.
+func _test_a_guests_bead_pass_lands_at_its_song_positions() -> void:
+	_offline(4)
+	var s := DAW.state
+	DAW.transport_play()
+	s.position_seconds = 20.3
+	var strip := ChannelStrip.create(3)
+	add_child(strip)
+	_as_session(Session.Role.GUEST, 5)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	var now := {"seconds": 20.0, "playing": true, "valid": true}
+	var bead := _bead_over(strip._fader, now)
+	var hand := Node.new()
+	add_child(hand)
+	bead.grab_begin(hand, Vector3(0, 1.0, 0))
+	_bead_rides(bead, hand, now, 1.0, 1.0, 0.9)
+	bead.grab_end(hand)
+	var verbs: Array = Session.kept_intents.map(func(c): return c[0])
+	check("as intents: the hold, the edit, the sets, the lane, the let-go (%s)" % [verbs.slice(0, 3)],
+			verbs[0] == &"hold_lane" and verbs[1] == &"open_edit" and verbs.has(&"set_track_volume")
+			and verbs[-3] == &"set_automation" and verbs[-2] == &"close_edit" and verbs[-1] == &"hold_lane")
+	var sent: Array = Session.kept_intents.filter(func(c): return c[0] == &"set_automation")
+	var flat: Array = sent[0][1][2] if not sent.is_empty() else []
+	var times: Array = []
+	for i in range(0, flat.size(), 3):
+		times.append(float(flat[i]))
+	check("at the guest's song positions, 20 to 21, not the host's 20.3 (%s)" % [times.slice(0, 3)],
+			times.size() > 20 and absf(float(times[1]) - 20.0) < 0.0001 and absf(float(times[-2]) - 21.0) < 0.001
+			and absf(float(times[2]) - 20.05) < 0.0001)
+	var kept := Session.kept_intents.duplicate(true)
+	Session.keep_intents = false
+	Session.kept_intents.clear()
+	Session.start_solo()
+	var depth := maxi(s.undo_depth, 0)
+	for c in kept:
+		DAW.apply_intent(c[0], c[1], 5)
+	var lane := WriteBead.lane_now(3, "volume")
+	var guest_lane := MixWire.unpack_automation("volume", flat)
+	check("carried out by the host, its lane is the guest's (%d points)" % lane.size(), ReaperBackend._same_lane(lane, guest_lane))
+	check("one step, and the lane let go (%s)" % [s.undo_names], s.undo_depth == depth + 1 and not DAW.backend.lane_held(3, "volume"))
+	DAW.apply_intent(&"hold_lane", [3, "nonsense", true], 5)
+	DAW.apply_intent(&"hold_lane", [0, "mute", true], 5)
+	check("a hold of no lane is refused", DAW.backend.held_lanes.is_empty())
+	DAW.apply_intent(&"hold_lane", [3, "pan", true], 5)
+	check("a guest's hold is theirs", DAW.backend.lane_held(3, "pan") and int(DAW.backend.held_lanes[[3, "pan"]]) == 5)
+	DAW.apply_intent(&"hold_lane", [3, "pan", false], 6)
+	DAW.apply_intent(&"hold_lane", [3, "pan", true], 6)
+	check("another guest can neither let it go nor take it", DAW.backend.lane_held(3, "pan") and int(DAW.backend.held_lanes[[3, "pan"]]) == 5)
+	DAW.close_edits_of(5)
+	check("and let go when they leave", not DAW.backend.lane_held(3, "pan"))
+	hand.queue_free()
+	bead.queue_free()
+	strip.queue_free()
+	DAW.transport_stop()
+	await get_tree().process_frame
+
+
+## A hand over a fader while the song plays shows a bead over it, which stays while the hand goes
+## to it and goes once it has been away LINGER_SECONDS; none while stopped, and none while the
+## fader itself is held, whose drag is ordinary: no lane, no hold, one step. Its card says how, and
+## where the lane cannot be held, that it plays over you.
+func _test_a_bead_shows_over_a_hovered_control_and_its_drag_is_ordinary() -> void:
+	var backend := _offline(4)
+	var s := DAW.state
+	var strip := ChannelStrip.create(1)
+	add_child(strip)
+	var hand := MouseInteractor.new()
+	add_child(hand)
+	var bead := WriteBead.new()
+	bead.hand = hand
+	add_child(bead)
+	DAW.transport_stop()
+	bead.tend(strip._fader, 0.016)
+	check("no bead while the song is stopped", not bead.shown())
+	check("nor a word of one on the card", not strip._fader.card_hint().contains("bead"))
+	DAW.transport_play()
+	bead.tend(strip._fader, 0.016)
+	check("over the hovered fader while it plays", bead.shown() and bead.control == strip._fader)
+	var top := strip._fader.global_transform * strip._fader.bead_anchor()
+	check("over the top of its travel", bead.global_position.distance_to(top) < 0.001
+			and strip._fader.to_local(bead.global_position).y > Fader.TRAVEL)
+	bead.tend(bead, 0.4)
+	bead.tend(null, 0.5)
+	check("kept while the hand goes up to it", bead.shown())
+	bead.tend(null, 0.5)
+	check("gone once the hand has been away", not bead.shown())
+	check("its card says how to write (%s)" % bead.hint(), bead.hint().contains("drag the bead")
+			and not bead.hint().contains("plays over you"))
+	var depth := maxi(s.undo_depth, 0)
+	var lane_was := WriteBead.lane_now(1, "volume")
+	var grip := Node.new()
+	add_child(grip)
+	var base := strip._fader.global_transform * Vector3(0, strip._fader.value * Fader.TRAVEL, 0)
+	strip._fader.grab_begin(grip, base)
+	bead.tend(strip._fader, 0.016)
+	check("no bead while the fader itself is held", not bead.shown())
+	strip._fader.grab_move(grip, base + strip._fader.global_basis.y.normalized() * 0.02)
+	strip._fader.grab_end(grip)
+	check("and its drag is ordinary: no lane, no hold, one step (%s)" % [s.undo_names], ReaperBackend._same_lane(WriteBead.lane_now(1, "volume"), lane_was)
+			and not backend.lane_held(1, "volume") and s.undo_depth == depth + 1)
+	DAW.use(NoLaneHold.new())
+	DAW.transport_play()
+	check("where the lane cannot be held, the card says it plays over you", bead.hint().contains("the lane plays over you"))
+	grip.queue_free()
+	bead.queue_free()
+	hand.queue_free()
+	strip.queue_free()
+	DAW.transport_stop()
+	await get_tree().process_frame
+
+
+# --- Items made while playing, and clips as cassettes (docs/spatial_loop.md part two, slice 23) ---
+
+## A studio of its own for the cassette tests: the stand-in's song, a layout of the tests' own
+## whose made items are kept beside it, and no made items left over from another test.
+func _cassette_studio() -> Studio:
+	DAW.use(OfflineBackend.new())
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_cassette_layout.cfg"
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	studio.focus.visits = false
+	return studio
+
+
+## A MIDI clip of `seconds` on `track`, a note every half beat and the wheel moved `bends_per_second`
+## times a second throughout: a long bent take, as the keys record one.
+static func _bent_clip(track: int, start: float, seconds: float, bends_per_second: float) -> MixState.ItemState:
+	var it := MixState.ItemState.new()
+	it.start = start
+	it.length = seconds
+	it.name = "Bent take"
+	var notes := PackedFloat32Array()
+	var t := 0.0
+	while t + 0.25 <= seconds:
+		notes.append_array(PackedFloat32Array([t, t + 0.2, 60 + int(t * 2.0) % 12, 96, 0]))
+		t += 0.25
+	it.notes = notes
+	var controls := PackedFloat64Array()
+	for n in int(seconds * bends_per_second):
+		var at := n / bends_per_second
+		controls.append_array(PackedFloat64Array([at, DawKitClip.PITCH_BEND, roundf(sin(at * 3.0) * 4000.0), 0]))
+	it.controls = controls
+	it.index = DAW.state.track(track).items.size()
+	DAW.state.track(track).items.append(it)
+	return it
+
+
+## Pulled out of the 3D timeline, a clip is a cassette in the hand that pulled it: `cassette1`,
+## of kind `cassette`, carrying the clip packed whole, and the arrangement as it was. It is not
+## the shelf's (the shelf's count is the same), it shelves in the rack's twelve slots, which the
+## room keeps, and a thirteenth is refused; the BIN retires it, and the host's layout keeps them.
+func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var s := DAW.state
+	var room := studio.items
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	check("the shelf is what it was: no cassette on it (%d kinds)" % ItemRoom.KINDS.size(),
+			ItemRoom.KINDS.size() == 22 and not (&"cassette" in ItemRoom.KINDS)
+			and room.spawned_ids().is_empty() and room.made_ids().is_empty())
+	check("the cassette rack stands in the live room, its slots and its bin the room's",
+			studio.cassette_rack != null and studio.cassette_rack.is_inside_tree()
+			and (room.holders.get(CassetteRack.RACK, []) as Array).size() == CassetteRack.SLOTS
+			and (room.holders.get(CassetteRack.BIN, []) as Array).size() == 1)
+
+	# The pull, as a mouse does it: an item pressed and dragged off the lanes' edge.
+	var timeline := studio.timeline
+	timeline._process(0.0)
+	timeline.set_view(0.0, s.bar_to_seconds(41.0))
+	var lanes: TimelineLanes = timeline._lanes
+	var on := func(track_index: int, bar: float) -> Vector3:
+		var i := s.track_indices().find(track_index)
+		return timeline.to_global(Vector3(timeline._x_for(s.bar_to_seconds(bar)), timeline._lane_y[i], lanes.position.z))
+	var arrangement := func() -> Array:
+		var out := []
+		for i in s.track_indices():
+			for it: MixState.ItemState in s.track(i).items:
+				out.append([i, snappedf(it.start, 0.0001), snappedf(it.length, 0.0001), it.name, it.notes.size()])
+		return out
+	var before: Array = arrangement.call()
+	var depth := s.undo_depth
+	var kick: MixState.ItemState = s.item(2, 0)
+	var pulled := []
+	var heard := func(t: int, i: int, by: Node) -> void: pulled.append([t, i, by])
+	timeline.clip_pulled.connect(heard)
+	var press: Vector3 = on.call(2, 12.0)
+	lanes.grab_begin(hand, press)
+	var y := lanes.to_local(press).y
+	lanes.grab_move(hand, lanes.to_global(Vector3(-lanes.width * 0.5 + 0.02, y, 0)))
+	check("dragged along the lanes it is only a move", pulled.is_empty())
+	lanes.grab_move(hand, lanes.to_global(Vector3(-lanes.width * 0.5 - TimelineLanes.PULL_EDGE - 0.02, y, 0)))
+	check("off the lanes' edge it is pulled out, by that hand (%s)" % [pulled], pulled.size() == 1
+			and pulled[0][0] == 2 and pulled[0][1] == 0 and pulled[0][2] == hand)
+	lanes.grab_end(hand)
+	timeline.clip_pulled.disconnect(heard)
+	check("and the arrangement is as it was, nothing in its history", arrangement.call() == before and s.undo_depth == depth)
+	check("and no block drawn where it was going", timeline._preview.is_empty())
+	var cassette := room.items.get(&"cassette1") as CassetteItem
+	check("the pull is cassette1, in the hand that pulled it (%s)" % [room.made_ids()],
+			cassette != null and hand.carrying == cassette and room.made_ids() == [&"cassette1"])
+	check("its kind is cassette, and it is made", ItemRoom.kind_of(&"cassette1") == &"cassette"
+			and ItemRoom.is_made(&"cassette1") and not ItemRoom.is_made(&"duck"))
+	var look := ItemRoom.look_of(&"cassette1")
+	check("a blank one is what a ghost's glove holds of it", look != null and look.get_child_count() > 0)
+	if look != null:
+		look.free()
+	if cassette == null:
+		Session.layout = saved_layout
+		studio.queue_free()
+		return
+	var clip := MixWire.unpack_item(cassette.clip)
+	check("it carries the clip: Kick's %s, where it was and as long" % kick.name, clip != null
+			and clip.name == kick.name and is_equal_approx(clip.start, kick.start) and is_equal_approx(clip.length, kick.length)
+			and clip.notes == kick.notes and clip.source == kick.source)
+	check("a demo item carries its part and its window (%s)" % [cassette.clip], kick.notes.is_empty()
+			and kick.source.is_empty() and str(cassette.clip.get("part", "")) == s.track(2).part
+			and not s.track(2).part.is_empty() and clip.part == s.track(2).part)
+	check("and where it came from", cassette.from_track == 2 and cassette.from_index == 0
+			and cassette.track_name == s.track(2).name)
+	check("its title names the clip and its card where from (%s; %s)" % [cassette.item_title(), cassette.readout()],
+			cassette.item_title() == "CASSETTE  %s" % kick.name and cassette.readout().contains(s.track(2).name)
+			and cassette.readout().contains("bars"))
+	check("in the hand, its card says how to hand it over and shelve it (%s)" % cassette.hint(),
+			cassette.hint().contains("bandmate") and cassette.hint().contains("rack") and cassette.hint().contains("BIN"))
+	check("its row is the session's, once (%s)" % [Session.made.keys()], Session.made.has(&"cassette1")
+			and room.made == Session.made and (Session.made[&"cassette1"] as Array)[0] == &"cassette"
+			and (Session.made[&"cassette1"] as Array)[2] is PackedByteArray)
+	check("the room names it and carries nothing of its clip", studio.room_state()["made"] == [&"cassette1"]
+			and not var_to_str(studio.room_state()).contains(kick.name))
+	check("and the layout keeps it", Session.layout.made.has(&"cassette1"))
+
+	# Shelved: let go by a slot, it goes into it; the room says which.
+	var slot0: Transform3D = (room.holders[CassetteRack.RACK] as Array)[0]
+	var slot_middle := room.global_transform * (slot0 * Vector3(0, CassetteItem.SIZE.y * 0.5, 0))
+	check("a slot is found by its middle", room.slot_near(slot_middle) == [CassetteRack.RACK, 0]
+			and room.slot_near(slot_middle + Vector3(0, 0, 0.3)).is_empty())
+	cassette.global_transform = Transform3D(Basis.IDENTITY, slot_middle - Vector3(0, CassetteItem.SIZE.y * 0.5, 0))
+	var eye := slot_middle + Vector3(0, 0.3, 0.6)
+	room.put_down(cassette, Transform3D(Basis.looking_at(slot_middle - eye, Vector3.UP), eye))
+	check("let go by a slot, it is shelved in it (%s)" % [studio.room_state()["items"].get(&"cassette1")],
+			hand.carrying == null and cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 0
+			and cassette.state == Item.State.LOOSE
+			and studio.room_state()["items"].get(&"cassette1") == ["slot", "rack", 0])
+	check("its card says where (%s)" % cassette.readout(), cassette.readout().contains("slot 1"))
+	check("the rack's face counts it (%s)" % studio.cassette_rack.face.readout(),
+			studio.cassette_rack.face.readout().begins_with("1 of 12"))
+	check("a racked cassette stays racked: nothing tidies it away", cassette.slot_in == CassetteRack.RACK)
+
+	# Eleven more, by the face: a click with one in the hand shelves it in the nearest free slot.
+	var face := studio.cassette_rack.face
+	for n in range(1, CassetteRack.SLOTS):
+		studio._on_clip_pulled(2 + n % 4, 0, hand)
+		face.grab_begin(hand, studio.cassette_rack.global_transform * CassetteRack.slot_pose(n).origin)
+	check("twelve are shelved, one to a slot (%s)" % [room.made_ids()], room.made_ids().size() == CassetteRack.SLOTS
+			and range(CassetteRack.SLOTS).all(func(n: int) -> bool: return room.in_slot(CassetteRack.RACK, n) != null))
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	studio._on_clip_pulled(3, 0, hand)
+	var thirteenth := CassetteRack.made_in(hand)
+	face.grab_begin(hand, studio.cassette_rack.global_transform * CassetteRack.slot_pose(4).origin)
+	check("a thirteenth is refused, and the rack says it is full (%s)" % [notices], thirteenth != null
+			and hand.carrying == thirteenth and thirteenth.slot_in == &"" and notices.any(func(t: String) -> bool: return t.contains("full")))
+	check("into a taken slot by name, too", not room.slot_item(thirteenth, CassetteRack.RACK, 4)
+			and notices.any(func(t: String) -> bool: return t.contains("That slot has")))
+	check("and the face says so", face.readout().begins_with("full"))
+	check("nothing off the shelf goes in a slot", room.slot_refusal(room.items[&"duck"], CassetteRack.RACK, 0) != "")
+
+	# The BIN: in it goes, and it is gone, row and all.
+	var gone := thirteenth.id
+	studio.cassette_rack.bin.grab_begin(hand, studio.cassette_rack.bin.global_position)
+	await get_tree().process_frame
+	check("the BIN retires it: out of the room and the session (%s)" % [notices], not room.items.has(gone)
+			and not Session.made.has(gone) and hand.carrying == null
+			and notices.any(func(t: String) -> bool: return t == "Binned cassette %s." % String(gone).trim_prefix("cassette")))
+	check("and the layout forgets it", not Session.layout.made.has(gone))
+	Session.notice.disconnect(listen)
+	var racked := room.in_slot(CassetteRack.RACK, 5)
+	room.slot_item(racked, CassetteRack.BIN, 0)
+	check("a racked one binned leaves its slot free", room.in_slot(CassetteRack.RACK, 5) == null
+			and not room.items.has(racked.id if is_instance_valid(racked) else &"x"))
+	check("and the next is numbered past every one made, never again (%s)" % [room.made_ids()],
+			room.mint(CassetteItem.KIND, ItemRoom.made_data(CassetteItem.KIND, "clip:2:0")).id == &"cassette14")
+
+	# The host's layout keeps them: a studio built again has them, where they were.
+	await get_tree().process_frame
+	var kept := Session.layout.made.duplicate()
+	studio.queue_free()
+	await get_tree().process_frame
+	Session.made.clear()
+	var layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = layout.save_path
+	Session.layout.load_saved()
+	check("the made items are saved with the layout (%d)" % Session.layout.made.size(),
+			Session.layout.made.keys() == kept.keys())
+	var again := Studio.new()
+	again.medium = Presentation.Medium.SCREEN
+	add_child(again)
+	await get_tree().physics_frame
+	var back := again.items.items.get(&"cassette1") as CassetteItem
+	check("built again, the host's room has them back, in their slots (%s)" % [again.items.made_ids()],
+			again.items.made_ids().size() == kept.size() and back != null and back.slot_in == CassetteRack.RACK
+			and back.slot_n == 0 and back.clip_name() == kick.name)
+	again.queue_free()
+	await get_tree().process_frame
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## What a cassette carries is the clip whole and small: a two-minute bent MIDI take under
+## MADE_BYTES, an hour of audio with no peaks, the fades, gain and loop, a demo item's part and its
+## window; read back, the same item. The room refuses past MADE_MOST, MADE_BYTES and MADE_TOTAL.
+func _test_a_cassette_packs_its_clip_whole_and_small() -> void:
+	_offline()
+	var s := DAW.state
+	var bent := _bent_clip(4, 10.0, 120.0, 60.0)
+	var data := CassetteItem.data_of(s, 4, bent.index)
+	var size := var_to_bytes(data).size()
+	check("a two-minute take, bent all through, packs under a cassette's %d KiB (%d KiB)" % [ItemRoom.MADE_BYTES / 1024, size / 1024],
+			size < ItemRoom.MADE_BYTES and ItemRoom.made_refusal({}, size) == "")
+	var back := MixWire.unpack_item(data["clip"])
+	check("and reads back the same take: its notes and its wheel", back != null and back.notes == bent.notes
+			and back.controls.size() == bent.controls.size() and is_equal_approx(back.length, 120.0)
+			and is_equal_approx(back.controls[back.controls.size() - 2], bent.controls[bent.controls.size() - 2]))
+
+	var hour := MixState.ItemState.new()
+	hour.start = 0.0
+	hour.length = 3600.0
+	hour.name = "Rehearsal"
+	hour.source = "take_9.wav"
+	hour.source_offset = 1.5
+	hour.peaks.resize(3600 * AudioTake.PEAKS_PER_SECOND)
+	hour.fade_in = 2.0
+	hour.fade_out = 3.0
+	hour.gain_db = -4.0
+	hour.fade_shape = DawKitClip.FADE_EQUAL_POWER
+	hour.loop_start = 1.0
+	hour.loop_end = 9.0
+	var packed := MixWire.pack_item(hour)
+	check("an hour of audio packs without its peaks (%d bytes)" % var_to_bytes(packed).size(),
+			not packed.has("peaks") and var_to_bytes(packed).size() < 1024)
+	var heard := MixWire.unpack_item(packed)
+	check("and reads back its file by name, its offset, fades, gain and loop", heard != null
+			and heard.source == "take_9.wav" and is_equal_approx(heard.source_offset, 1.5)
+			and is_equal_approx(heard.fade_in, 2.0) and is_equal_approx(heard.fade_out, 3.0)
+			and is_equal_approx(heard.gain_db, -4.0) and heard.fade_shape == DawKitClip.FADE_EQUAL_POWER
+			and is_equal_approx(heard.loop_start, 1.0) and is_equal_approx(heard.loop_end, 9.0) and heard.part == "")
+	hour.source = "../../etc/passwd"
+	check("a file is a name, never a path", MixWire.unpack_item(MixWire.pack_item(hour)).source == "passwd")
+	check("what is not a clip reads as nothing", MixWire.unpack_item({"length": 0.0}) == null
+			and MixWire.unpack_item("clip") == null)
+
+	# A demo item: its part, its window, and it plays its part on whatever track it is on.
+	var demo := MixState.ItemState.new()
+	demo.start = 8.0
+	demo.length = 4.0
+	var demo_packed := MixWire.pack_item(demo, "bass")
+	check("a demo item packs its part and its window (%s)" % [demo_packed], demo_packed.get("part") == "bass"
+			and is_equal_approx(float(demo_packed["start"]), 8.0) and is_equal_approx(float(demo_packed["length"]), 4.0))
+	var pasted := MixWire.unpack_item(demo_packed)
+	var engine := GodotBackend.new()
+	engine.state = s
+	s.track(3).items.append(pasted)
+	check("on another track it plays the part it was cut from (%s on %s's)" % [engine.part_of(3, pasted), s.track(3).part],
+			engine.part_of(3, pasted) == "bass" and engine.part_of(3, null) == s.track(3).part
+			and engine._roles().has("bass"))
+	var mirror := MixState.new()
+	for entry in MixWire.snapshot(s):
+		MixWire.apply(mirror, entry[0], entry[1])
+	var seen: Array = mirror.track(3).items.filter(func(it: MixState.ItemState) -> bool: return is_equal_approx(it.start, 8.0))
+	check("and a guest's mirror has its part too", seen.size() == 1 and seen[0].part == "bass")
+	s.track(3).items.pop_back()
+	engine.free()
+
+	# What a room holds.
+	var full := {}
+	for n in ItemRoom.MADE_MOST:
+		full[StringName("cassette%d" % (n + 1))] = [&"cassette", 1, PackedByteArray([1])]
+	check("the room holds at most %d made things" % ItemRoom.MADE_MOST, ItemRoom.made_refusal(full, 10).contains("%d" % ItemRoom.MADE_MOST))
+	check("a cassette at most %d KiB" % (ItemRoom.MADE_BYTES / 1024),
+			ItemRoom.made_refusal({}, ItemRoom.MADE_BYTES + 1).contains("too much"))
+	var heavy := {}
+	var block := PackedByteArray()
+	block.resize(ItemRoom.MADE_BYTES - 16)
+	for n in ItemRoom.MADE_TOTAL / ItemRoom.MADE_BYTES:
+		heavy[StringName("cassette%d" % (n + 1))] = [&"cassette", 1, block]
+	check("and the room %d MiB in all" % (ItemRoom.MADE_TOTAL / 1024 / 1024),
+			ItemRoom.made_refusal(heavy, 1024).contains("full") and ItemRoom.made_refusal(heavy, 16).is_empty())
+	var room := ItemRoom.new()
+	add_child(room)
+	room.made = heavy
+	check("a mint past it is refused, and says why", room.mint(CassetteItem.KIND, data) == null
+			and room.mint_refusal.contains("full") and room.made_ids().is_empty())
+	room.made = {}
+	var huge := _bent_clip(5, 0.0, 600.0, 60.0)
+	check("a clip too much to carry is refused (%s)" % room.mint_refusal,
+			room.mint(CassetteItem.KIND, CassetteItem.data_of(s, 5, huge.index)) == null and room.mint_refusal.contains("too much"))
+	check("and nothing there is nothing to make", room.mint(CassetteItem.KIND, {}) == null
+			and ItemRoom.made_data(CassetteItem.KIND, "clip:99:0").is_empty()
+			and ItemRoom.made_data(CassetteItem.KIND, "clip:2").is_empty())
+	room.queue_free()
+	s.track(4).items.erase(bent)
+	s.track(5).items.erase(huge)
+
+
+## A guest's pull is a blank cassette in its glove at once and an ask of the host. The host's
+## answer is its row, the holds putting it in the hand that pulled, and the room naming it: the
+## blank one goes and the real one is in the hand. A refused pull's blank one goes, and nothing is
+## left. Rows that arrive before the room are kept until it names them; one taken away goes.
+func _test_a_guests_pull_is_a_ghost_until_the_host_answers() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	# The host's own copy of what it would mint, to compare with.
+	var minted := CassetteItem.data_of(DAW.state, 2, 0)
+	_as_session(Session.Role.GUEST, 5)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	Session.room_seq = 0
+	studio._predictions.clear()
+	var here := {"venue": studio.venue.venue_id(), "variant": studio.venue.variant}
+	var room_with := func(made: Array, acks: int) -> Dictionary:
+		var out := here.duplicate()
+		out["made"] = made
+		out["items"] = {}
+		out["acks"] = {5: acks}
+		return out
+
+	studio._on_clip_pulled(2, 0, hand)
+	check("a guest's pull is asked of the host, by what it names, never with the clip",
+			studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"make"
+			and studio._predictions[0]["args"] == [&"cassette", "clip:2:0"])
+	check("with a blank cassette in its glove meanwhile", studio._making.size() == 1
+			and is_instance_valid(studio._making[0]["look"]) and studio.items.made_ids().is_empty())
+	studio._follow_making()
+	var ghost := studio._making[0]["look"] as Node3D
+	check("which follows the hand", ghost.global_position.distance_to(hand.carry_pose().origin) < 0.1)
+	var seq := Session.room_seq
+
+	# The host's answer: the row first, then the holds and the room.
+	Session._made(&"cassette1", &"cassette", 5, var_to_bytes(minted))
+	check("its row arrives first, and is kept", Session.made.has(&"cassette1") and not studio.items.items.has(&"cassette1"))
+	studio.apply_room(room_with.call([], 0))
+	check("a room that does not name it yet makes nothing", not studio.items.items.has(&"cassette1")
+			and studio._making.size() == 1)
+	Session._receive_holds({"CASSETTE 1": 5})
+	studio.apply_room(room_with.call([&"cassette1"], seq))
+	await get_tree().process_frame
+	var cassette := studio.items.items.get(&"cassette1") as CassetteItem
+	check("answered: the blank one goes and the made one is in the hand that pulled (%s)" % [hand.carrying],
+			cassette != null and hand.carrying == cassette and studio._making.is_empty()
+			and not is_instance_valid(ghost) and studio._predictions.is_empty())
+	check("carrying the host's clip", cassette != null and cassette.clip == minted["clip"] and cassette.from_track == 2)
+
+	# Refused: the blank one goes, nothing is left.
+	studio._on_clip_pulled(3, 0, hand)
+	var refused_ghost := studio._making[0]["look"] as Node3D if not studio._making.is_empty() else null
+	studio.apply_room(room_with.call([&"cassette1"], Session.room_seq))
+	await get_tree().process_frame
+	check("a refused pull: its blank one goes, and nothing new is made", studio._making.is_empty()
+			and not is_instance_valid(refused_ghost) and studio.items.made_ids() == [&"cassette1"]
+			and studio._predictions.is_empty())
+
+	# Rows from anyone but the host's rules are not kept.
+	Session._made(&"duck", &"duck", 1, var_to_bytes({}))
+	var big := PackedByteArray()
+	big.resize(ItemRoom.MADE_BYTES + 1)
+	Session._made(&"cassette9", &"cassette", 1, big)
+	check("a row that is not a made item's, or too big, is not kept", not Session.made.has(&"duck")
+			and not Session.made.has(&"cassette9"))
+	# Taken away: the BIN on the host.
+	Session._unmade(&"cassette1")
+	check("binned by the host, it is gone here, from the hand too", not studio.items.items.has(&"cassette1")
+			and not Session.made.has(&"cassette1") and hand.carrying == null)
+	Session._made(&"cassette2", &"cassette", 5, var_to_bytes(minted))
+	Session.start_solo()
+	check("alone again, a guest's made items were the host's: gone", Session.made.is_empty())
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	Session.layout = saved_layout
+
+
+## The host answers a guest's pull: minted from the host's own song, in the guest's glove by the
+## holds, the room naming it; past what a room holds it is refused. A put-down after it sends the
+## room again, never the clip. A cassette is handed over: the host's to a guest, a guest's to the
+## host, only by whoever has it; a desktop click finds the ghost it points at, a headset's hand
+## the glove it is held by. A guest who joins later is given the rows, and the room makes them.
+func _test_the_host_mints_a_guests_pull_and_cassettes_are_handed_over() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var room := studio.items
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	var take := _bent_clip(6, 30.0, 8.0, 20.0)
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	var grace = Session._register(5, "Grace", 1)
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+
+	var room_before := var_to_bytes(studio.room_state()).size()
+	studio._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
+	var cassette := room.items.get(&"cassette1") as CassetteItem
+	check("a guest's pull is minted by the host, from its own song", cassette != null
+			and cassette.clip.get("notes") == take.notes and cassette.from_track == 6)
+	check("made by the guest, in the guest's glove by the holds (%s)" % [Session.holds],
+			cassette != null and (Session.made[&"cassette1"] as Array)[1] == 5
+			and Session.holder_of(cassette.network_key()) == 5 and hand.carrying == null)
+	var row_bytes := ((Session.made[&"cassette1"] as Array)[2] as PackedByteArray).size()
+	var room_after := var_to_bytes(studio.room_state()).size()
+	check("the room grows by its name, not its clip (%d bytes more; the clip %d)" % [room_after - room_before, row_bytes],
+			studio.room_state()["made"] == [&"cassette1"] and room_after - room_before < 128 and row_bytes > 1024)
+	var row: PackedByteArray = (Session.made[&"cassette1"] as Array)[2]
+	studio._on_room_asked(&"put_item", [&"cassette1", -1.0, 3.6, 0.0], 5)
+	check("a put-down after the mint is the room again: the clip is not in it (%d bytes)" % var_to_bytes(studio.room_state()).size(),
+			cassette.state == Item.State.LOOSE and var_to_bytes(studio.room_state()).size() - room_before < 160
+			and (Session.made[&"cassette1"] as Array)[2] == row)
+	studio._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 7], 5)
+	check("a guest's shelving is the room's (%s)" % [studio.room_state()["items"].get(&"cassette1")],
+			cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 7
+			and studio.room_state()["items"].get(&"cassette1") == ["slot", "rack", 7])
+
+	# Refused past what the room holds; told, and nothing made.
+	var fake := {}
+	for n in ItemRoom.MADE_MOST - 1:
+		fake[StringName("cassette%d" % (100 + n))] = [&"cassette", 1, PackedByteArray([1])]
+	Session.made.merge(fake)
+	studio._on_room_asked(&"make", [&"cassette", "clip:2:0"], 5)
+	check("past %d made things a pull is refused (%s)" % [ItemRoom.MADE_MOST, room.mint_refusal],
+			room.mint_refusal.contains("%d" % ItemRoom.MADE_MOST) and room.made_ids() == [&"cassette1"])
+	for id in fake:
+		Session.made.erase(id)
+	var huge := _bent_clip(7, 0.0, 600.0, 60.0)
+	studio._on_room_asked(&"make", [&"cassette", "clip:7:%d" % huge.index], 5)
+	check("a clip too much to carry is refused (%s)" % room.mint_refusal, room.mint_refusal.contains("too much")
+			and room.made_ids() == [&"cassette1"])
+	DAW.state.track(7).items.erase(huge)
+	var heavy := PackedByteArray()
+	heavy.resize(ItemRoom.MADE_BYTES - 64)
+	for n in ItemRoom.MADE_TOTAL / ItemRoom.MADE_BYTES:
+		Session.made[StringName("cassette%d" % (200 + n))] = [&"cassette", 1, heavy]
+	studio._on_room_asked(&"make", [&"cassette", "clip:6:%d" % take.index], 5)
+	check("and past the room's %d MiB (%s)" % [ItemRoom.MADE_TOTAL / 1024 / 1024, room.mint_refusal],
+			room.mint_refusal.contains("full") and room.made_ids() == [&"cassette1"])
+	for n in ItemRoom.MADE_TOTAL / ItemRoom.MADE_BYTES:
+		Session.made.erase(StringName("cassette%d" % (200 + n)))
+	studio._on_room_asked(&"make", [&"cassette", "clip:99:0"], 5)
+	check("nothing there makes nothing", room.made_ids() == [&"cassette1"])
+
+	# Handed over. The guest has cassette1; it gives it to the host, whose free hand takes it.
+	studio._on_room_asked(&"give", [&"cassette1", 1], 7)
+	check("only whoever has it hands it over", Session.holder_of(cassette.network_key()) == 5)
+	studio._on_room_asked(&"give", [&"cassette1", 9], 5)
+	check("and only to someone in the room", Session.holder_of(cassette.network_key()) == 5)
+	notices.clear()
+	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.presence.claim_carries()
+	check("a guest's give puts it in the host's hand (%s)" % [notices], hand.carrying == cassette
+			and Session.holder_of(cassette.network_key()) == 1 and cassette.slot_in == &"")
+	# The host's to the guest.
+	notices.clear()
+	studio.give_item(cassette, 5)
+	check("the host's give puts it in the guest's glove, and says so (%s)" % [notices], hand.carrying == null
+			and Session.holder_of(cassette.network_key()) == 5 and notices.has("Handed the %s cassette to Grace." % cassette.clip_name()))
+	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.presence.claim_carries()
+
+	# Who a click gives it to: the ghost it points at. Who a headset's hand gives it to: the glove
+	# it is held by, for GIVE_HOLD.
+	grace.heard_msec = Time.get_ticks_msec()
+	grace.head = Transform3D(Basis.IDENTITY, Vector3(-1.0, 1.5, 1.2))
+	studio.presence._sync_avatars()
+	studio.presence._process(0.016)
+	var eye := Vector3(0.0, 1.6, 3.0)
+	check("a click toward a bandmate's ghost is a click on them",
+			studio.presence.peer_at(eye, Vector3(-1.0, 1.5, 1.2) - eye) == 5
+			and studio.presence.peer_at(eye, Vector3(1.0, 0.0, -1.0)) == 0)
+	var avatar: Presence.Avatar = studio.presence._avatars[5]
+	var glove: Vector3 = avatar.nearer_glove(Vector3(-1.0, 1.0, 1.6))
+	check("a hand by their glove is by them", studio.presence.glove_near(glove + Vector3(0.05, 0, 0), Studio.GIVE_REACH) == 5
+			and studio.presence.glove_near(glove + Vector3(1.0, 0, 0), Studio.GIVE_REACH) == 0)
+	var headset := FakeHand.new()
+	add_child(headset)
+	headset.pose = Transform3D(Basis.IDENTITY, glove + Vector3(0, 0.02, 0))
+	if hand.carrying == cassette:
+		hand.lose_carrying()
+	headset.pick_up(cassette)
+	cassette.global_transform = headset.carry_pose() * cassette.held_pose()
+	studio._follow_gives(Studio.GIVE_HOLD * 0.6)
+	check("held there a moment, it is still in the hand", headset.carrying == cassette)
+	studio._follow_gives(Studio.GIVE_HOLD * 0.6)
+	check("held there for GIVE_HOLD, it is theirs", headset.carrying == null
+			and Session.holder_of(cassette.network_key()) == 5)
+	headset.queue_free()
+
+	# A desktop click on a bandmate standing in front of a control, through the hand's own tick:
+	# theirs, not the control's. Standing behind it, the control is still the click's.
+	studio._on_room_asked(&"give", [&"cassette1", 1], 5)
+	studio.presence.claim_carries()
+	var holder := Node3D.new()
+	add_child(holder)
+	var view := studio.camera.global_transform
+	holder.global_transform = Transform3D(view.basis, view.origin - view.basis.z * 3.0)
+	var fader := Fader.new()
+	fader.write_value = func(_v: float): pass
+	holder.add_child(fader)
+	await get_tree().physics_frame
+	var grab_at := fader.to_global(Vector3(0, Fader.TRAVEL * 0.5, 0))
+	var toward := (grab_at - view.origin).normalized()
+	var stand := func(along: float) -> void:
+		grace.heard_msec = Time.get_ticks_msec()
+		grace.head = Transform3D(Basis.IDENTITY, view.origin + toward * along)
+		# Placed there at once: not played back from the trail of where they were.
+		studio.presence._trails.erase(5)
+		studio.presence._heard_at.erase(5)
+		studio.presence._avatars[5].placed = false
+		studio.presence._process(0.016)
+	var click := func() -> void:
+		hand.press_override = 0
+		hand._physics_process(1.0 / 60.0)
+		hand.press_override = 1
+		hand._physics_process(1.0 / 60.0)
+		hand.press_override = 0
+		hand._physics_process(1.0 / 60.0)
+	hand.pointer_override = studio.camera.unproject_position(grab_at)
+	stand.call(view.origin.distance_to(grab_at) + 2.0)
+	hand._physics_process(1.0 / 60.0)
+	check("a bandmate behind the fader: the fader is under the hand (%s)" % [hand.hovered],
+			hand.hovered == fader and hand.carrying == cassette)
+	stand.call(1.4)
+	hand._physics_process(1.0 / 60.0)
+	check("in front of it, the fader is not (%s)" % [hand.hovered], hand.hovered == null)
+	notices.clear()
+	click.call()
+	check("and a click on them hands it over, the fader behind them untouched (%s)" % [notices],
+			hand.carrying == null and hand.held == null and fader.held_by == null
+			and Session.holder_of(cassette.network_key()) == 5
+			and notices.has("Handed the %s cassette to Grace." % cassette.clip_name()))
+	hand.pointer_override = Vector2(-1, -1)
+	hand.press_override = -1
+	holder.queue_free()
+
+	# A guest who joins later: the rows, then the room, and the room makes them, where they are.
+	studio._on_room_asked(&"slot_item", [&"cassette1", CassetteRack.RACK, 2], 5)
+	var late := ItemRoom.new()
+	add_child(late)
+	for id in Session.made:
+		late.made[id] = (Session.made[id] as Array).duplicate()
+	late.set_holder(CassetteRack.RACK, room.holders[CassetteRack.RACK])
+	late.apply_made(studio.room_state()["made"])
+	late.apply(studio.room_state()["items"])
+	var theirs := late.items.get(&"cassette1") as CassetteItem
+	check("a guest who joins later has it, carrying the clip, where it is", theirs != null
+			and theirs.clip == cassette.clip and theirs.slot_in == CassetteRack.RACK and theirs.slot_n == 2)
+	late.apply_made([])
+	check("and the room no longer naming it, it goes", not late.items.has(&"cassette1"))
+	late.queue_free()
+
+	Session.notice.disconnect(listen)
+	DAW.state.track(6).items.erase(take)
+	Session.start_solo()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## A player's own cassettes are set aside while they are someone else's guest, never saved over:
+## the host's room's are the ones there then, and ours count nothing against what it may carry.
+## Back on their own, theirs are back where they were, and the next one made keeps them all.
+func _test_a_players_own_cassettes_wait_while_they_are_a_guest() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var room := studio.items
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	for n in 2:
+		studio._on_clip_pulled(2 + n, 0, hand)
+		room.slot_item(hand.carrying, CassetteRack.RACK, n)
+	await get_tree().process_frame
+	var own := Session.layout.made.duplicate(true)
+	var data := ItemRoom.made_data(CassetteItem.KIND, "clip:2:0")
+	var on_disk := func() -> Dictionary:
+		var read := LayoutProfile.new()
+		read.save_path = Session.layout.save_path
+		read.load_saved()
+		return read.made
+	check("on their own, two of theirs, racked and kept (%s)" % [own.keys()], own.size() == 2
+			and room.in_slot(CassetteRack.RACK, 0) != null and room.in_slot(CassetteRack.RACK, 1) != null
+			and (on_disk.call() as Dictionary).size() == 2)
+
+	check("joining", Session.join("127.0.0.1", 47391))
+	await get_tree().process_frame
+	check("a guest now: theirs are set aside, out of the room and the session",
+			Session.made.is_empty() and room.made_ids().is_empty())
+	check("and not saved over: the layout still has them", Session.layout.made == own
+			and (on_disk.call() as Dictionary).size() == 2)
+	for n in ItemRoom.MADE_MOST - 1:
+		Session._made(StringName("cassette%d" % (n + 1)), &"cassette", 1, PackedByteArray([1]))
+	check("the host's room may carry its own %d, ours counting nothing (%d)" % [ItemRoom.MADE_MOST - 1, Session.made.size()],
+			Session.made.size() == ItemRoom.MADE_MOST - 1)
+
+	Session.leave()
+	await get_tree().process_frame
+	var first := room.in_slot(CassetteRack.RACK, 0)
+	check("on their own again, the host's are gone and theirs back, in their slots (%s)" % [room.made_ids()],
+			room.made_ids().size() == 2 and Session.made.size() == 2 and first != null
+			and room.in_slot(CassetteRack.RACK, 1) != null
+			and (Session.made[first.id] as Array)[2] == (own[first.id] as Array)[2])
+	var next := room.mint(CassetteItem.KIND, data)
+	await get_tree().process_frame
+	check("and the next one made keeps all three (%s)" % [Session.layout.made.keys()], next != null
+			and Session.layout.made.size() == 3 and (on_disk.call() as Dictionary).size() == 3
+			and own.keys().all(func(id) -> bool: return Session.layout.made.has(id)))
+
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+# --- a cassette onto a track (docs/spatial_loop.md part two, slice 24) ---------------------------
+
+## A cassette's clip as the bridge and the suite compare it: packed whole, but for where it starts.
+static func _clip_but_start(clip: Dictionary) -> Dictionary:
+	var out := clip.duplicate(true)
+	out.erase("start")
+	return out
+
+
+## The item on `track` that starts at `seconds`, or null.
+static func _item_starting(s: MixState, track: int, seconds: float) -> MixState.ItemState:
+	for it: MixState.ItemState in s.track(track).items:
+		if absf(it.start - seconds) < 0.0005:
+			return it
+	return null
+
+
+## Pressed onto a lane, a cassette is a copy of its clip there: a MIDI take, an audio clip and a demo
+## part paste items equal to their sources but for start and track, one undo step each, the cassette
+## still in the hand. On a lane it is snapped to the beat, unless fine; on a strip or a stage voice it
+## is at the playhead; a pasted demo part plays its own part on the built-in engine. A let-go over a
+## lane puts it down and pastes nothing; a push into the face pastes, once a push.
+func _test_a_cassette_pastes_onto_a_track_as_the_clip_it_was() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var s := DAW.state
+	var mouse := studio.get_node("MouseHand") as MouseInteractor
+	var timeline := studio.timeline
+	timeline._process(0.0)
+	timeline.set_view(0.0, s.bar_to_seconds(41.0))
+	await get_tree().physics_frame
+	var lanes: TimelineLanes = timeline._lanes
+	var on := func(track_index: int, seconds: float) -> Vector3:
+		var i := s.track_indices().find(track_index)
+		return timeline.to_global(Vector3(timeline._x_for(seconds), timeline._lane_y[i], lanes.position.z))
+	var face := lanes.global_basis.z.normalized()
+	var hand := PastingHand.new()
+	add_child(hand)
+	var press := func(point: Vector3, out: Vector3, fine: bool) -> void:
+		hand.holding_shift = fine
+		hand.pose = Transform3D(Basis.looking_at(-out, Vector3.UP if absf(out.y) < 0.9 else Vector3.FORWARD), point + out * 0.3)
+		for down in [false, true, false]:
+			hand.pressing = down
+			hand._physics_process(1.0 / 60.0)
+
+	# A MIDI take, pulled out and pressed onto Track 4 by the trigger at a time off the beat.
+	var take := _bent_clip(6, 30.0, 8.0, 20.0)
+	studio._on_clip_pulled(6, take.index, mouse)
+	var cassette := mouse.carrying as CassetteItem
+	mouse.lose_carrying()
+	hand.pick_up(cassette)
+	check("a cassette in hand says it pastes (%s)" % cassette.hint(), cassette != null and cassette.pastes()
+			and cassette.hint().contains("paste") and not CassetteItem.new().pastes())
+	var bar30 := s.bar_to_seconds(30.0)
+	var raw := s.seconds_at_beat(s.beat_at(bar30) + 0.35)
+	var depth := maxi(s.undo_depth, 0)
+	var count := s.track(4).items.size()
+	var arranged := s.track(6).items.size()
+	press.call(on.call(4, raw), face, false)
+	var pasted := _item_starting(s, 4, bar30)
+	check("the trigger on Track 4's lane pastes the take there, snapped to the beat (%s)" % [s.track(4).items.map(func(it): return snappedf(it.start, 0.01))],
+			pasted != null and s.track(4).items.size() == count + 1)
+	check("as the clip it was, but for its start and track", pasted != null
+			and _clip_but_start(MixWire.pack_item(pasted)) == _clip_but_start(cassette.clip)
+			and pasted.notes == take.notes and pasted.controls.size() == take.controls.size())
+	check("one undo step, called for the track (%s; %d to %d)" % [DAW.step_name(&"paste_item", [4]), depth, s.undo_depth], s.undo_depth == depth + 1
+			and DAW.step_name(&"paste_item", [4]) == "%s: paste item" % s.track(4).display_name())
+	check("the cassette still in the hand, and its own track as it was", hand.carrying == cassette
+			and s.track(6).items.size() == arranged)
+	check("the lanes' card says what a press pastes, and where (%s)" % lanes.card_hint(),
+			lanes.card_hint().contains("pastes the Bent take cassette onto %s at %s" % [s.track(4).display_name(), s.bar_beat(bar30)]))
+	hand.words = "a push in"
+	check("to a bare hand, with no trigger, it names only the push (%s)" % lanes.card_hint(),
+			lanes.card_hint().begins_with("a push in pastes") and not lanes.card_hint().contains("trigger"))
+	hand.words = ""
+	DAW.undo()
+	check("undone, it is gone", _item_starting(s, 4, bar30) == null and s.track(4).items.size() == count)
+	press.call(on.call(4, raw), face, true)
+	var free := s.track(4).items.filter(func(it): return it.name == take.name)
+	check("fine, it goes where it was pressed, off the grid (%s)" % [free.map(func(it): return it.start)],
+			free.size() == 1 and absf(free[0].start - raw) < 0.01 and absf(free[0].start - bar30) > 0.05)
+	DAW.undo()
+
+	# A let-go over the lane puts it down: nothing pasted.
+	depth = maxi(s.undo_depth, 0)
+	hand.pose = Transform3D(Basis.looking_at(-face, Vector3.UP), on.call(4, raw) + face * 0.3)
+	hand.put_down()
+	check("a let-go over a lane does not paste", maxi(s.undo_depth, 0) == depth and s.track(4).items.size() == count
+			and hand.carrying == null)
+	hand.pick_up(cassette)
+
+	# Pushed into the lane's face: a paste, once a push.
+	var point: Vector3 = on.call(4, bar30)
+	var at := func(p: Vector3) -> void:
+		cassette.global_transform = Transform3D(Basis.IDENTITY, p - Vector3.UP * cassette.centre_height())
+		hand._tend_push()
+	at.call(point + face * 0.06)
+	at.call(point - face * 0.004)
+	check("pushed into the face, it pastes there", s.track(4).items.size() == count + 1
+			and _item_starting(s, 4, bar30) != null)
+	at.call(point - face * 0.006)
+	at.call(point + face * 0.06)
+	check("held in and drawn out again, nothing more", s.track(4).items.size() == count + 1)
+	at.call(point - face * 0.004)
+	check("and pushed in anew, again: a clipboard pastes again", s.track(4).items.size() == count + 2)
+	hand.pushes = false
+	at.call(point + face * 0.06)
+	at.call(point - face * 0.004)
+	check("a hand that does not push (the mouse) pastes nothing by moving", s.track(4).items.size() == count + 2)
+	hand.pushes = true
+
+	# A jump is not a push: the play space travelling, or tracking lost and found again, carries the
+	# cassette through a lane's face in one frame (docs/spatial_loop.md slice 24).
+	at.call(point + face * 0.5)
+	at.call(point - face * 0.004)
+	check("through the face in one step longer than a hand goes (%.2f m), nothing pasted" % 0.504,
+			s.track(4).items.size() == count + 2)
+	at.call(point + face * 0.06)
+	hand.forget_push()
+	at.call(point - face * 0.004)
+	check("nor across a travel, which forgets where it was", s.track(4).items.size() == count + 2)
+	at.call(point + face * 0.06)
+	hand.seen = false
+	at.call(point + face * 0.03)
+	hand.seen = true
+	at.call(point - face * 0.004)
+	check("nor from a frame the hand was not seen well on", s.track(4).items.size() == count + 2)
+	at.call(point + face * 0.06)
+	hand.seen = false
+	at.call(point - face * 0.004)
+	hand.seen = true
+	check("nor into one", s.track(4).items.size() == count + 2)
+	var bare := XRInteractor.new()
+	bare.gestures = HandGestures.new()
+	bare.gestures.tracked = true
+	bare.gestures.confident = false
+	var guessed := bare.push_tracked()
+	bare.gestures.confident = true
+	check("a bare hand pushes only while every joint is seen", not guessed and bare.push_tracked())
+	bare.gestures.free()
+	bare.free()
+	DAW.undo()
+	DAW.undo()
+
+	# An audio clip, onto a console strip: at the playhead, its file's overview drawn here.
+	var tone := "paste_test_tone.wav"
+	var tone_path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(tone))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(AudioTake.DIR))
+	var samples := PackedFloat32Array()
+	for n in 24000:
+		samples.append(sin(n * 0.05) * 0.5)
+	DawKitAudioFile.write_wav(tone_path, samples, 1, 24000)
+	var clip := MixState.ItemState.new()
+	clip.start = 12.0
+	clip.length = 2.0
+	clip.name = "Tone"
+	clip.source = tone
+	clip.source_offset = 0.25
+	clip.fade_in = 0.1
+	clip.fade_out = 0.2
+	clip.gain_db = -3.0
+	clip.loop_start = 0.0
+	clip.loop_end = 0.5
+	clip.index = s.track(8).items.size()
+	s.track(8).items.append(clip)
+	hand.lose_carrying()
+	studio._on_clip_pulled(8, clip.index, hand)
+	var tape := hand.carrying as CassetteItem
+	var strip := ChannelStrip.create(5)
+	strip.position = Vector3(40.0, 1.0, 40.0)
+	add_child(strip)
+	await get_tree().physics_frame
+	s.position_seconds = 41.5
+	press.call(strip._mute.global_position, strip.global_basis.z.normalized(), false)
+	var heard := _item_starting(s, 5, 41.5)
+	check("an audio cassette pressed on Track 5's strip pastes there at the playhead", tape != null and heard != null)
+	check("its file, offset, fades, gain and loop as they were", heard != null and tape != null
+			and _clip_but_start(MixWire.pack_item(heard)) == _clip_but_start(tape.clip) and heard.source == tone
+			and is_equal_approx(heard.source_offset, 0.25) and is_equal_approx(heard.loop_end, 0.5))
+	check("and its overview drawn from the file here, since a clip carries none", heard != null and not heard.peaks.is_empty())
+	check("the strip's card says so (%s)" % strip._mute.card_hint(), strip._mute.card_hint().contains("onto %s at %s" % [s.track(5).display_name(), s.bar_beat(41.5)]))
+	DAW.undo()
+
+	# A demo part, onto a stage voice: it plays the part it was cut from on the built-in engine.
+	hand.lose_carrying()
+	studio._on_clip_pulled(2, 0, hand)
+	var demo := hand.carrying as CassetteItem
+	var table := StageTable.new()
+	StageLink.wire(table)
+	table.position = Vector3(-40.0, 1.0, -40.0)
+	add_child(table)
+	table._process(0.0)
+	await get_tree().physics_frame
+	var voice: StageVoice = table.voices[3]
+	s.position_seconds = 20.0
+	press.call(voice.global_position, table.global_basis.y.normalized(), false)
+	var part := _item_starting(s, 3, 20.0)
+	check("a demo cassette pressed on Track 3's voice pastes there at the playhead (%s)" % [demo.clip if demo != null else {}],
+			demo != null and part != null and part.part == s.track(2).part and s.track(2).part != s.track(3).part)
+	check("as the window it was", part != null and _clip_but_start(MixWire.pack_item(part)) == _clip_but_start(demo.clip))
+	var engine := GodotBackend.new()
+	engine.state = s
+	check("and plays the part it was cut from, not its track's (%s)" % (engine.part_of(3, part) if part != null else ""),
+			part != null and engine.part_of(3, part) == s.track(2).part and engine._roles().has(s.track(2).part))
+	engine.free()
+	DAW.undo()
+	check("undone, Track 3 is as it was", _item_starting(s, 3, 20.0) == null)
+
+	hand.lose_carrying()
+	strip.queue_free()
+	table.queue_free()
+	hand.queue_free()
+	s.track(6).items.erase(take)
+	s.track(8).items.erase(clip)
+	DirAccess.remove_absolute(tone_path)
+	studio.queue_free()
+	await get_tree().process_frame
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## Each refusal says why, and pastes nothing: a frozen track, MIDI onto a track that takes none (its
+## input a microphone), a file this machine does not have, a demo part on Reaper; and a track that
+## is not there, a cassette with nothing on it, a DAW that cannot paste. On Reaper with the bridge,
+## a paste is one PasteItem, its arguments as the bridge reads them.
+func _test_a_paste_is_refused_and_says_why() -> void:
+	_offline()
+	_as_session(Session.Role.SOLO, 1)
+	var s := DAW.state
+	var take := MixState.ItemState.new()
+	take.start = 4.0
+	take.length = 2.0
+	take.name = "Riff"
+	take.notes = PackedFloat32Array([0.25, 0.75, 60, 100, 0, 1.0, 1.5, 64, 90, 0])
+	take.controls = PackedFloat64Array([0.5, 1, 64, 0])
+	var midi := MixWire.pack_item(take)
+	var gone := {"start": 0.0, "length": 2.0, "name": "Gone", "source": "not_on_any_machine.wav"}
+	var window := MixState.ItemState.new()
+	window.start = 8.0
+	window.length = 4.0
+	var demo := MixWire.pack_item(window, "bass")
+	var depth := maxi(s.undo_depth, 0)
+	s.track(5).frozen = {"items": [], "comp": [], "fx_on": {}}
+	var why := DAW.paste_item(5, 10.0, midi)
+	check("onto a frozen track: refused, and it says so (%s)" % why, why.contains("frozen") and why.contains(s.track(5).display_name()))
+	s.track(5).frozen = {}
+	s.track(6).input = "audio:#1"
+	why = DAW.paste_item(6, 10.0, midi)
+	check("MIDI onto a track that takes none (%s)" % why, why.contains("takes no MIDI"))
+	check("though audio goes there", not DAW.paste_refusal(6, demo).contains("MIDI"))
+	s.track(6).input = ""
+	why = DAW.paste_item(4, 10.0, gone)
+	check("a file this machine does not have (%s)" % why, why.contains("not_on_any_machine.wav") and why.contains("not on this machine"))
+	why = DAW.paste_item(99, 10.0, midi)
+	check("no such track (%s)" % why, why.contains("no track 99"))
+	why = DAW.paste_item(4, 10.0, {})
+	check("nothing on it (%s)" % why, why.contains("no clip"))
+	# A Reaper item's own audio is cached with no file (only the desk's takes have one): its cassette
+	# is a clip of nothing, and pasted would be an empty MIDI item, not the sound.
+	var native := {"start": 3.0, "length": 2.0, "name": "Drums.wav", "fade_in": 0.1, "fade_out": 0.1, "gain_db": 0.0}
+	why = DAW.paste_item(4, 10.0, native)
+	check("a clip with no notes, file or part says there is nothing to paste (%s)" % why,
+			why.contains("nothing to paste") and why.contains("Reaper"))
+	check("and none of them pasted anything", maxi(s.undo_depth, 0) == depth)
+	check("the stand-in has the demo's parts, so a demo part goes", DAW.paste_refusal(4, demo).is_empty())
+	_as_session(Session.Role.GUEST, 5)
+	check("a guest pastes nothing itself: the host does", not DAW.paste_item(4, 10.0, midi).is_empty() and maxi(s.undo_depth, 0) == depth)
+	_as_session(Session.Role.SOLO, 1)
+
+	# Reaper: through the bridge, or not at all; never a demo part.
+	var dir := ProjectSettings.globalize_path("user://test_paste_bridge")
+	DirAccess.make_dir_recursive_absolute(dir)
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	reaper.state.track(4).name = "Keys"
+	DAW.use(reaper, false)
+	why = DAW.paste_item(4, 96.0, midi)
+	check("Reaper without the bridge cannot paste (%s)" % why, why.contains("bridge") and reaper.state.track(4).items.is_empty())
+	reaper._bridge = ScriptBridge.new()
+	reaper._bridge.open(dir)
+	why = DAW.paste_refusal(4, demo)
+	check("a demo part on Reaper is refused with the reason (%s)" % why, why == "A demo part plays only on the built-in engine.")
+	why = DAW.paste_item(4, 96.0, native)
+	check("on Reaper, a cassette of a Reaper item's own audio is refused, not pasted as an empty MIDI item",
+			why.contains("nothing to paste") and reaper.state.track(4).items.is_empty())
+	why = DAW.paste_item(4, 96.0, midi)
+	var sent: Array = []
+	for n in DirAccess.get_files_at(dir):
+		if n.begins_with("request_"):
+			sent.append(JSON.parse_string(FileAccess.get_file_as_string(dir.path_join(n))))
+	var wanted := ReaperBackend.paste_request(4, _item_starting(reaper.state, 4, 96.0) if why.is_empty() else take, "")
+	check("with it, a MIDI cassette is one PasteItem (%s)" % [sent], why.is_empty() and sent.size() == 1
+			and sent[0]["fn"] == "PasteItem" and str(sent[0]["args"]) == str(wanted.map(func(v): return float(v) if v is int else v)))
+	check("its notes in project seconds, from where it is pasted (%s)" % [wanted.slice(15, 21)], wanted[1] == 96.0
+			and wanted[15] == 2 and is_equal_approx(float(wanted[16]), 96.25) and wanted[18] == 60 and wanted[26] == 1
+			and is_equal_approx(float(wanted[27]), 96.5))
+	check("and shown on the cache at once", _item_starting(reaper.state, 4, 96.0) != null)
+	var tone := MixState.ItemState.new()
+	tone.start = 0.0
+	tone.length = 1.0
+	tone.source = "kick.wav"
+	tone.source_offset = 0.5
+	tone.loop_start = 0.0
+	tone.loop_end = 0.5
+	var flat := ReaperBackend.paste_request(4, tone, "/takes/kick.wav")
+	check("an audio one names its file by path, its offset and its loop (%s)" % [flat], flat[5] == "/takes/kick.wav"
+			and is_equal_approx(float(flat[6]), 0.5) and is_equal_approx(float(flat[13]), 0.5) and flat[15] == 0 and flat[16] == 0)
+	reaper._bridge._pending.clear()
+	reaper._bridge.close()
+	reaper._bridge = null
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	_offline()
+
+
+## A guest's paste is an ask naming the cassette, the track and the time, never the clip; nothing is
+## pasted on the guest. The host pastes the clip its own row holds, for the guest who holds the
+## cassette, as one step, and both are told; someone who does not hold it is told so.
+func _test_a_guests_paste_names_its_cassette_track_and_time() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var s := DAW.state
+	var mouse := studio.get_node("MouseHand") as MouseInteractor
+	var take := _bent_clip(6, 30.0, 8.0, 20.0)
+	studio._on_clip_pulled(6, take.index, mouse)
+	var cassette := mouse.carrying as CassetteItem
+	var at := s.bar_to_seconds(30.0) + 0.125
+	_as_session(Session.Role.GUEST, 5)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	Session.room_seq = 0
+	studio._predictions.clear()
+	var depth := maxi(s.undo_depth, 0)
+	var count := s.track(4).items.size()
+	studio.items.paste(cassette, 4, at)
+	check("a guest's paste is asked of the host, naming the cassette, its track and its time (%s)" % [studio._predictions],
+			studio._predictions.size() == 1 and studio._predictions[0]["verb"] == &"paste"
+			and studio._predictions[0]["args"] == [&"cassette1", 4, at]
+			and Session.room_ask_is_valid(&"paste", studio._predictions[0]["args"]))
+	check("never the clip, and nothing pasted here", not var_to_str(studio._predictions[0]["args"]).contains("Bent")
+			and maxi(s.undo_depth, 0) == depth and s.track(4).items.size() == count)
+
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	studio._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
+	check("from someone not holding it, nothing is pasted", s.track(4).items.size() == count)
+	Session.holds[cassette.network_key()] = 5
+	studio._on_room_asked(&"paste", [&"cassette1", 4, at], 5)
+	var pasted := _item_starting(s, 4, at)
+	check("the host pastes its own row's clip where the guest asked, at its time (%s; %d to %d; %s)" % [pasted, depth, s.undo_depth, notices], pasted != null
+			and _clip_but_start(MixWire.pack_item(pasted)) == _clip_but_start(cassette.clip) and s.undo_depth == depth + 1)
+	check("and is told who pasted what where (%s)" % [notices], notices.has("Grace pasted the Bent take cassette onto %s at %s."
+			% [s.track(4).display_name(), s.bar_beat(at)]))
+	s.track(4).frozen = {"items": [], "comp": [], "fx_on": {}}
+	studio._on_room_asked(&"paste", [&"cassette1", 4, at + 4.0], 5)
+	check("a refused one pastes nothing", _item_starting(s, 4, at + 4.0) == null and s.undo_depth == depth + 1)
+	s.track(4).frozen = {}
+	DAW.undo()
+	Session.notice.disconnect(listen)
+	s.track(6).items.erase(take)
+	Session.start_solo()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+
+# --- A cassette at the ear (docs/spatial_loop.md part two, slice 25) --------------------------------
+
+## Waits, a frame at a time, up to `seconds`, until `ear` is no longer rendering or fetching.
+func _ear_settles(ear: EarCue, seconds := 30.0) -> void:
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while ear.hearing in [EarCue.Hearing.RENDERING, EarCue.Hearing.FETCHING] and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+
+
+## Every player in the tree playing `stream`, by bus: the cue's must be on the keys' bus alone.
+func _buses_playing(stream: AudioStream) -> Array:
+	var buses: Array = []
+	for p in get_tree().root.find_children("*", "AudioStreamPlayer", true, false):
+		if (p as AudioStreamPlayer).stream == stream and (p as AudioStreamPlayer).playing:
+			buses.append((p as AudioStreamPlayer).bus)
+	return buses
+
+
+## L held at a desk with a MIDI cassette in the hand plays its clip, rendered exactly the clip long and
+## looping, on the keys' bus (Monitor) as a cue, never the Mix bus, the room 10 dB down; let go, it
+## stops and the room is as it was. In a headset, the cassette within HEAD_REACH of the head plays,
+## and away it stops. Drum and bell notes (channels 9 and 10) are rung, not left silent.
+func _test_a_cassette_at_the_ear_plays_to_this_player_alone() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	Ears.listen(false)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var mouse := studio.get_node("MouseHand") as MouseInteractor
+	var ear := studio.ear
+	var take := _bent_clip(6, 30.0, 2.0, 4.0)
+	studio._on_clip_pulled(6, take.index, mouse)
+	var cassette := mouse.carrying as CassetteItem
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	check("in the hand, its card says L hears it (%s)" % cassette.hint(), cassette.hint().contains("hold L to hear it"))
+	var key := func(down: bool) -> void:
+		var e := InputEventKey.new()
+		e.keycode = KEY_L
+		e.pressed = down
+		mouse._unhandled_input(e)
+	studio._follow_ear()
+	check("carried, it is not at the ear until L", ear.cassette == null and mouse.cassette_at_ear() == null)
+	key.call(true)
+	studio._follow_ear()
+	check("L held at a desk with a cassette puts it to the ear, and is no lean", ear.cassette == cassette
+			and mouse.cassette_at_ear() == cassette and not studio._lean_key and Ears.leaning == 0)
+	check("its MIDI is rendered first, and the tag says so (%s)" % cassette.hearing,
+			ear.hearing == EarCue.Hearing.RENDERING and cassette.hearing == "RENDERING")
+	await _ear_settles(ear)
+	var rate := int(AudioServer.get_mix_rate())
+	var stream := ear.player.stream as AudioStreamWAV
+	check("then it plays, its tag AT YOUR EAR (%s, %s)" % [ear.tag(), cassette.hearing], ear.hearing == EarCue.Hearing.PLAYING
+			and ear.player.playing and cassette.hearing == "AT YOUR EAR" and cassette.readout().ends_with("AT YOUR EAR"))
+	check("the MIDI render is the clip's length to the frame, looping round it (%d frames, wanted %d)"
+			% [stream.data.size() / 4 if stream != null else -1, int(round(take.length * rate))], stream != null and stream.stereo
+			and stream.data.size() / 4 == int(round(take.length * rate)) and stream.loop_mode == AudioStreamWAV.LOOP_FORWARD
+			and stream.loop_begin == 0 and stream.loop_end == stream.data.size() / 4)
+	var heard: PackedByteArray = GodotBackend.wav_of(EarCue.midi_frames(PackedFloat64Array(Array(take.notes)), take.length, rate,
+			take.controls), rate).data if stream != null else PackedByteArray()
+	check("and it is the clip's notes through the built-in instrument, its tail rung into its start", stream != null
+			and stream.data == heard)
+	check("on the keys' bus as a cue, nothing on the Mix bus (%s)" % [_buses_playing(stream)],
+			ear.player.bus == AudioPorts.MONITOR and _buses_playing(stream) == [AudioPorts.MONITOR])
+	check("the room 10 dB down for this player, the cue's bus not (%.1f, %.1f, %.1f)" % [Ears.gain_db(Ears.MIX),
+			Ears.gain_db(Ears.ROOM), Ears.gain_db(Ears.KEYS)], is_equal_approx(Ears.gain_db(Ears.MIX), Ears.CUE_DUCK_DB)
+			and is_equal_approx(Ears.gain_db(Ears.ROOM), Ears.CUE_DUCK_DB) and is_zero_approx(Ears.gain_db(Ears.KEYS)))
+	var told := func(t: String) -> bool:
+		return t.contains("the Bent take cassette") and t.contains("ears alone") and t.contains("10 dB") and t.contains("let go of L")
+	check("said once, in your ears alone, and how to stop (%s)" % [notices], notices.filter(func(t): return t.begins_with("Listening to")).size() == 1
+			and notices.any(told))
+	check("and the song is as it was: nothing went to the DAW", DAW.state.track(6).items.size() == take.index + 1)
+	key.call(false)
+	studio._follow_ear()
+	check("L let go, it stops and the room is as it was (%.1f dB)" % Ears.gain_db(Ears.MIX), ear.cassette == null
+			and not ear.player.playing and is_zero_approx(Ears.gain_db(Ears.MIX)) and is_zero_approx(Ears.gain_db(Ears.ROOM))
+			and cassette.hearing == "" and not Ears.cueing)
+	key.call(true)
+	studio._follow_ear()
+	check("held up again, it plays at once: its render was kept", ear.hearing == EarCue.Hearing.PLAYING and ear.player.stream == stream)
+	key.call(false)
+	studio._follow_ear()
+	var drums := EarCue.midi_frames(PackedFloat64Array([0.0, 0.1, 36, 110, 9, 0.5, 0.6, 72, 100, 10]), 1.0, 48000)
+	var loud := 0.0
+	for f in drums:
+		loud = maxf(loud, absf(f.x))
+	check("a clip's drums (channel 9) and bells (10) are rung by ItemVoices, exactly the clip long (%d frames, %.2f)" % [drums.size(), loud],
+			drums.size() == 48000 and loud > 0.01)
+
+	# In a headset: up by the head it plays, and away it stops.
+	var hand := EarHand.new()
+	add_child(hand)
+	hand.set_physics_process(false)
+	mouse.lose_carrying()
+	hand.pick_up(cassette)
+	hand.head = Vector3(3.0, 1.6, 3.0)
+	var hold_at := func(p: Vector3) -> void:
+		cassette.global_transform = Transform3D(Basis.IDENTITY, p - Vector3.UP * cassette.centre_height())
+		studio._follow_ear()
+	hold_at.call(hand.head + Vector3(0.6, -0.4, -0.2))
+	check("held out in front, nothing plays", ear.cassette == null)
+	hold_at.call(hand.head + Vector3(0.12, -0.02, 0.0))
+	check("at the ear, within HEAD_REACH of the head, it plays (%s)" % ear.tag(), ear.cassette == cassette
+			and ear.hearing == EarCue.Hearing.PLAYING and not ear.desk)
+	check("and says to take it from the ear to stop", notices.any(func(t): return t.contains("take it from your ear")))
+	hold_at.call(hand.head + Vector3(XRInteractor.HEAD_REACH + 0.03, 0, 0))
+	check("a hand wavering just past the edge keeps it playing", ear.cassette == cassette)
+	hold_at.call(hand.head + Vector3(0.5, -0.3, 0.0))
+	check("taken away, it stops", ear.cassette == null and not ear.player.playing and is_zero_approx(Ears.gain_db(Ears.MIX)))
+	hold_at.call(hand.head + Vector3(XRInteractor.HEAD_REACH + 0.03, 0, 0))
+	check("and coming back, it plays only once within HEAD_REACH", ear.cassette == null)
+
+	# One at each ear: the one playing keeps on, and every hand's edge is of now, not of when it was
+	# last asked.
+	studio._on_clip_pulled(6, take.index, mouse)
+	var other := mouse.carrying as CassetteItem
+	mouse.lose_carrying()
+	var hand2 := EarHand.new()
+	add_child(hand2)
+	hand2.set_physics_process(false)
+	hand2.pick_up(other)
+	hand2.head = hand.head
+	var place := func(c: CassetteItem, p: Vector3) -> void:
+		c.global_transform = Transform3D(Basis.IDENTITY, p - Vector3.UP * c.centre_height())
+		studio._follow_ear()
+	place.call(cassette, hand.head + Vector3(0.6, -0.4, -0.2))
+	place.call(other, hand.head + Vector3(-0.12, -0.02, 0.0))
+	check("a second cassette at the other ear plays", ear.cassette == other)
+	place.call(cassette, hand.head + Vector3(0.12, -0.02, 0.0))
+	check("the first brought up beside it does not take over", ear.cassette == other)
+	place.call(other, hand.head + Vector3(-0.5, -0.3, 0.0))
+	check("the second taken away, the first plays", ear.cassette == cassette)
+	place.call(other, hand.head + Vector3(-(XRInteractor.HEAD_REACH + 0.03), 0, 0))
+	place.call(cassette, hand.head + Vector3(0.5, -0.3, 0.0))
+	check("and the second, back just past the edge while the first played, is not at the ear (%s)"
+			% (ear.cassette.clip_name() if ear.cassette != null else "none"), ear.cassette == null)
+	hand2.lose_carrying()
+	hand2.queue_free()
+
+	hand.lose_carrying()
+	hand.queue_free()
+	Session.notice.disconnect(listen)
+	DAW.state.track(6).items.erase(take)
+	studio.queue_free()
+	await get_tree().process_frame
+	Ears.listen(false)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## A demo cassette at the ear plays the part it was cut from, as the song plays it there: its window
+## (DemoSong.render_window) from the clip's start, the clip long. An audio cassette plays its file
+## where the host has it, from its offset, the clip's stretch looping, at its gain; through its own
+## loop, it goes back to its start each clip's length. Where the file is not here, the tag says `not
+## on this machine` and stays to be read once it is down; a clip of nothing says it has nothing.
+func _test_a_demo_or_audio_cassette_at_the_ear_plays_its_own_sound() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	Ears.listen(false)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var s := DAW.state
+	var mouse := studio.get_node("MouseHand") as MouseInteractor
+	# An ear of its own: the studio's follows the hands, and none of them holds one up.
+	var ear := EarCue.new()
+	add_child(ear)
+	studio._on_clip_pulled(2, 0, mouse)
+	var demo := mouse.carrying as CassetteItem
+	var clip := MixWire.unpack_item(demo.clip)
+	check("a demo cassette carries its part (%s)" % [demo.clip], clip != null and clip.part == s.track(2).part and clip.notes.is_empty())
+	ear.hold(demo)
+	check("its part is rendered first", ear.hearing == EarCue.Hearing.RENDERING)
+	var rendering: Array = ear._tasks.keys()
+	var t0 := Time.get_ticks_msec()
+	ear.hold(null)
+	ear.hold(demo)
+	var waited := Time.get_ticks_msec() - t0
+	check("taken away and held up again mid-render, nothing waits for it (%d ms), and the render under way is picked up (%s)"
+			% [waited, ear._tasks.keys()], waited < 100 and ear.hearing == EarCue.Hearing.RENDERING
+			and rendering.size() == 1 and ear._tasks.keys() == rendering)
+	await _ear_settles(ear, 60.0)
+	var stream := ear.player.stream as AudioStreamWAV
+	var map := s.tempo_map().to_array()
+	var meter := s.meter().to_array()
+	var loop := floori(s.meter().bar_at(s.tempo_map().beat_at(clip.start)) / DemoSong.BARS)
+	var window := DemoSong.render_window(clip.part, map, loop, meter)
+	var want := int(round(clip.length * DemoSong.RATE))
+	var from := int(round((clip.start - float(window[1])) * DemoSong.RATE))
+	var next := s.tempo_map().seconds_at(s.meter().beat_of_bar((loop + 1) * DemoSong.BARS))
+	var in_window := mini(want, int(round((next - clip.start) * DemoSong.RATE)))
+	var expected := (window[0] as PackedFloat32Array).slice(from, from + in_window)
+	var played := EarCue.demo_samples(clip.part, clip.start, clip.length, map, meter)
+	check("then it plays, on the keys' bus (%s)" % ear.tag(), ear.hearing == EarCue.Hearing.PLAYING and ear.player.bus == AudioPorts.MONITOR)
+	check("the clip long, at the demo's rate (%d samples, wanted %d)" % [stream.data.size() / 2 if stream != null else -1, want],
+			stream != null and not stream.stereo and stream.mix_rate == DemoSong.RATE and stream.data.size() / 2 == want)
+	check("its part's window from the clip's start, as the song plays it there (%d of %d samples from loop %d's window)"
+			% [in_window, want, loop], played.size() == want and played.slice(0, in_window) == expected
+			and stream != null and stream.data == DemoSong.encode(played))
+	ear.hold(null)
+	# Taken from the ear before its render is done, the render goes on and is kept.
+	ear._streams.clear()
+	ear.hold(demo)
+	ear.hold(null)
+	check("taken away mid-render, it stops, its render still going (%s)" % [ear._tasks.keys()], ear.hearing == EarCue.Hearing.NONE
+			and ear._tasks.size() == 1 and demo.hearing == "")
+	var until := Time.get_ticks_msec() + 60000
+	while not ear._tasks.is_empty() and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+	check("done away from the ear, it is kept, and nothing plays meanwhile", ear._streams.size() == 1 and not ear.player.playing
+			and ear.hearing == EarCue.Hearing.NONE and demo.hearing == "")
+	ear.hold(demo)
+	check("held up again, it plays at once (%s)" % ear.tag(), ear.hearing == EarCue.Hearing.PLAYING
+			and (ear.player.stream as AudioStreamWAV).data == stream.data)
+	ear.hold(null)
+	mouse.lose_carrying()
+
+	# An audio clip, its file in the host's media folder.
+	var tone := "ear_test_tone.wav"
+	var tone_path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(tone))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(AudioTake.DIR))
+	var samples := PackedFloat32Array()
+	for n in 24000:
+		samples.append(sin(n * 0.05) * 0.5)
+	DawKitAudioFile.write_wav(tone_path, samples, 1, 24000)
+	var audio := MixState.ItemState.new()
+	audio.start = 12.0
+	audio.length = 0.5
+	audio.name = "Tone"
+	audio.source = tone
+	audio.source_offset = 0.25
+	audio.gain_db = -3.0
+	audio.fade_in = 0.01
+	audio.index = s.track(8).items.size()
+	s.track(8).items.append(audio)
+	studio._on_clip_pulled(8, audio.index, mouse)
+	var tape := mouse.carrying as CassetteItem
+	ear.hold(tape)
+	var wav := ear.player.stream as AudioStreamWAV
+	check("an audio cassette plays its file at once where the host has it (%s)" % ear.tag(), ear.hearing == EarCue.Hearing.PLAYING
+			and wav != null and ear.player.playing)
+	check("from its offset, the clip's stretch looping (%d to %d)" % [wav.loop_begin if wav else -1, wav.loop_end if wav else -1],
+			wav != null and wav.loop_mode == AudioStreamWAV.LOOP_FORWARD and wav.loop_begin == 6000 and wav.loop_end == 18000)
+	check("at its own gain (%.1f dB)" % ear.player.volume_db, is_equal_approx(ear.player.volume_db, -3.0))
+	ear.hold(null)
+	var looped := MixWire.unpack_item(tape.clip)
+	looped.loop_start = 0.1
+	looped.loop_end = 0.4
+	looped.length = 0.9
+	var round_it := EarCue.clip_stream(looped, AudioStreamWAV.load_from_file(tone_path))
+	check("through its own loop, it goes back to its start each clip's length (%s)" % [round_it.slice(1)], round_it.size() == 3
+			and (round_it[0] as AudioStreamWAV).loop_begin == 2400 and (round_it[0] as AudioStreamWAV).loop_end == 9600
+			and is_equal_approx(float(round_it[1]), looped.file_time(looped.start)) and is_equal_approx(float(round_it[2]), 0.9))
+
+	# What this machine has no file of, and a clip of nothing.
+	var gone := CassetteItem.new()
+	gone.read({"clip": {"start": 0.0, "length": 2.0, "name": "Gone", "source": "not_on_any_machine.wav"}, "track": 8})
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	ear.hold(gone)
+	check("a file this machine does not have: the tag says not on this machine (%s)" % gone.hearing,
+			ear.hearing == EarCue.Hearing.MISSING and gone.hearing == "not on this machine" and not ear.player.playing
+			and is_zero_approx(Ears.gain_db(Ears.MIX)))
+	check("and says so (%s)" % [notices], notices.any(func(t): return t.contains("not_on_any_machine.wav is not on this machine")))
+	ear.hold(null)
+	check("which stays on its tag, to read once it is down", gone.hearing == "not on this machine")
+	var native := CassetteItem.new()
+	native.read({"clip": {"start": 3.0, "length": 2.0, "name": "Drums.wav", "fade_in": 0.1, "fade_out": 0.1, "gain_db": 0.0}})
+	ear.hold(native)
+	check("a clip of nothing has nothing to hear, and says why (%s)" % native.hearing, ear.hearing == EarCue.Hearing.EMPTY
+			and native.hearing == "nothing to hear" and notices.any(func(t): return t.contains("stays in Reaper")))
+	ear.hold(null)
+	Session.notice.disconnect(listen)
+	gone.free()
+	native.free()
+
+	mouse.lose_carrying()
+	ear.queue_free()
+	s.track(8).items.erase(audio)
+	DirAccess.remove_absolute(tone_path)
+	studio.queue_free()
+	await get_tree().process_frame
+	Ears.listen(false)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## A guest's ear on an audio cassette it has no file of asks the host for it, once, the tag FETCHING
+## meanwhile, and plays it as it arrives, the copy byte for byte the host's. The host sends only what
+## something in the room plays; refused, the tag says `not on this machine`. No longer a guest, the
+## copies go.
+func _test_a_guest_fetches_an_audio_cassettes_file_once_to_hear_it() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	Ears.listen(false)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var s := DAW.state
+	var mouse := studio.get_node("MouseHand") as MouseInteractor
+	var tone := "ear_fetch_tone.wav"
+	var tone_path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(tone))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(AudioTake.DIR))
+	var samples := PackedFloat32Array()
+	for n in 48000:
+		samples.append(sin(n * 0.03) * 0.4)
+	DawKitAudioFile.write_wav(tone_path, samples, 1, 48000)
+	var audio := MixState.ItemState.new()
+	audio.start = 20.0
+	audio.length = 0.75
+	audio.name = "Fetched tone"
+	audio.source = tone
+	audio.index = s.track(8).items.size()
+	s.track(8).items.append(audio)
+	studio._on_clip_pulled(8, audio.index, mouse)
+	var tape := mouse.carrying as CassetteItem
+	# Only the made row names the file now: the room plays it on a cassette, and on no track.
+	s.track(8).items.erase(audio)
+	var host_files := FileSend.new()
+	add_child(host_files)
+	var guest_files := FileSend.new()
+	add_child(guest_files)
+	var ear := EarCue.new()
+	add_child(ear)
+	ear.files = guest_files
+	var asked: Array = []
+	guest_files.wire = func(peer: int, method: StringName, args: Array) -> void:
+		asked.append([peer, method, args])
+		host_files.callv(method, args + [5])
+	var answered: Array = []
+	host_files.wire = func(peer: int, method: StringName, args: Array) -> void:
+		answered.append([peer, method, args])
+		if peer == 5:
+			guest_files.callv(method, args)
+	_as_session(Session.Role.GUEST, 5)
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	ear.hold(tape)
+	check("a guest without the file asks the host for it by name (%s)" % [asked], asked == [[1, &"fetch_asked", [tone]]])
+	check("the tag says FETCHING meanwhile, and nothing plays (%s)" % tape.hearing, ear.hearing == EarCue.Hearing.FETCHING
+			and tape.hearing == "FETCHING" and not ear.player.playing)
+	check("and says so (%s)" % [notices], notices.any(func(t): return t.begins_with("Fetching %s from" % tone)))
+	ear.hold(null)
+	ear.hold(tape)
+	check("taken away and put back, it does not ask again", guest_files.fetches_asked == 1 and asked.size() == 1)
+	await _ear_settles(ear, 10.0)
+	var copy := FileAccess.get_file_as_bytes(guest_files.fetched_path(tone))
+	check("it plays as it arrives (%s)" % ear.tag(), ear.hearing == EarCue.Hearing.PLAYING and ear.player.playing
+			and tape.hearing == "AT YOUR EAR")
+	check("from the copy here, byte for byte the host's (%d bytes)" % copy.size(), not copy.is_empty()
+			and copy == FileAccess.get_file_as_bytes(tone_path) and guest_files.fetched_path(tone).contains("fetched"))
+	check("still asked only once", guest_files.fetches_asked == 1)
+	ear.hold(null)
+
+	# The host sends only what something in the room plays.
+	var stray := CassetteItem.new()
+	stray.read({"clip": {"start": 0.0, "length": 1.0, "name": "Stray", "source": "settings.wav"}})
+	ear.hold(stray)
+	check("one the host's room plays nothing of is refused: not on this machine (%s, %s)" % [stray.hearing,
+			guest_files.fetch_refusal("settings.wav")], ear.hearing == EarCue.Hearing.MISSING
+			and stray.hearing == "not on this machine" and guest_files.fetch_refusal("settings.wav").contains("nothing in the room plays"))
+	ear.hold(null)
+	stray.free()
+	host_files.fetch_asked("../takes/%s" % tone, 5)
+	check("and a path is never a name: refused, and the copy here as it was (%s)" % [answered.back()],
+			answered.back()[1] == &"fetch_refused" and str(answered.back()[2][1]).contains("nothing in the room plays")
+			and guest_files.fetch_state(tone) == FileSend.FETCHED_STATE)
+
+	Session.notice.disconnect(listen)
+	_as_session(Session.Role.SOLO, 1)
+	guest_files._on_role_changed()
+	check("no longer a guest, the copies go", guest_files.fetched_path(tone).is_empty()
+			and not FileAccess.file_exists(ProjectSettings.globalize_path(FileSend.FETCHED.path_join(tone))))
+	mouse.lose_carrying()
+	ear.queue_free()
+	host_files.queue_free()
+	guest_files.queue_free()
+	DirAccess.remove_absolute(tone_path)
+	studio.queue_free()
+	await get_tree().process_frame
+	Ears.listen(false)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+# --- Anything can be a sample (docs/spatial_loop.md part two, slice 26) ---------------------------
+
+## A WAV's samples, after its 44-byte header, and the rate the header says.
+static func _wav_body(path: String) -> Array:
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.size() < AudioTake.HEADER_BYTES:
+		return [PackedByteArray(), 0]
+	return [bytes.slice(AudioTake.HEADER_BYTES), bytes.decode_u32(24)]
+
+
+## The sample files the media folder has of `kind`, numbered from 1, by name.
+static func _samples_of(kind: StringName) -> Array:
+	var out: Array = []
+	for n in range(1, 40):
+		var name := "%s_%d.wav" % [kind, n]
+		if FileAccess.file_exists(DAW.backend.media_path(name)):
+			out.append(name)
+	return out
+
+
+## The sampler stands beside the cassette rack with its REC key. REC, then a squeeze of the duck in
+## the hand: one WAV in the media, the very stream Foley made for that take, and a sample cassette of
+## it on the rack's first free slot, and REC off. A second squeeze writes nothing; REC off does
+## nothing; out of the mic's reach nothing is caught unless it is in the presser's hand; anything
+## used within reach is caught, whoever used it; a shaker's shake is a hit, caught as its take; a use
+## that rings nothing the sampler knows leaves REC on. REC is the room's row.
+func _test_a_squeeze_after_rec_is_one_sample_on_the_rack() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var room := studio.items
+	var sampler := studio.sampler
+	var hand := studio.get_node("MouseHand") as MouseInteractor
+	check("the sampler stands beside the cassette rack, in the venue, with its plaque and its REC key",
+			sampler != null and sampler.get_parent() == studio.venue and sampler.find_child("Plaque", true, false) != null
+			and sampler.rec != null and sampler.global_position.distance_to(studio.cassette_rack.global_position) < 2.0)
+	var stale: Array = _samples_of(&"duck_squeeze") + _samples_of(&"shaker") + _samples_of(&"tambourine_hit")
+	for name in stale:
+		DirAccess.remove_absolute(DAW.backend.media_path(name))
+	var notices: Array[String] = []
+	var listen := func(t: String) -> void: notices.append(t)
+	Session.notice.connect(listen)
+	var duck: Item = room.items[&"duck"]
+	hand.pick_up(duck)
+
+	# REC off: a squeeze is only a squeeze.
+	duck.work(true)
+	duck.work(false)
+	check("with REC off a squeeze writes nothing and makes nothing", _samples_of(&"duck_squeeze").is_empty()
+			and room.made_ids().is_empty())
+	check("REC off says so, on its key and its screen (%s; %s)" % [sampler.rec.readout(), sampler.screen_text()],
+			sampler.rec.readout() == "off" and sampler.screen_text().begins_with("PRESS REC"))
+
+	# REC, by the key, as a hand presses it.
+	sampler.rec.grab_begin(hand, sampler.rec.global_position)
+	check("REC pressed is on for this player, the room's row (%s)" % [studio.room_state().get("sampler")],
+			sampler.armed_by == 1 and studio.room_state().get("sampler") == 1)
+	check("and said, in words, on its key and its screen, not only by its light (%s; %s)" % [sampler.rec.readout(), sampler.screen_text()],
+			sampler.rec.readout().contains("your next sound") and sampler.screen_text().contains("LISTENING FOR YOUR NEXT SOUND")
+			and sampler.rec.legend.text == "REC ON" and (sampler.rec.cap.material_override as StandardMaterial3D).emission_enabled)
+	check("and a notice says what it will catch (%s)" % [notices], notices.size() > 0 and notices[-1].begins_with("Sampler REC: the next thing you squeeze"))
+	var far := duck.middle().distance_to(sampler.mic_point())
+	notices.clear()
+	duck.work(true)
+	var take := duck.use_take
+	var made := _samples_of(&"duck_squeeze")
+	var body: Array = _wav_body(DAW.backend.media_path("duck_squeeze_1.wav"))
+	var stream := Foley.take_of(&"duck_squeeze", take)
+	check("a squeeze in the presser's hand, %.1f m from the mic, writes one WAV (%s)" % [far, made], made == ["duck_squeeze_1.wav"])
+	check("equal to Foley's stream for that take (take %d, %d bytes, at %d Hz)" % [take, (body[0] as PackedByteArray).size(), body[1]],
+			body[0] == stream.data and body[1] == Foley.RATE and take >= 0)
+	check("which is the squeak the duck rang", Foley.take_of(duck.use_kind(true), duck.use_take) == stream)
+	var loaded := AudioStreamWAV.load_from_file(DAW.backend.media_path("duck_squeeze_1.wav"))
+	check("and opens as a WAV, the same samples", loaded != null and loaded.data == stream.data and loaded.mix_rate == Foley.RATE)
+	var cassette := room.items.get(room.made_ids()[0]) as CassetteItem if room.made_ids().size() == 1 else null
+	check("a sample cassette is minted (%s)" % [room.made_ids()], cassette != null and cassette.data.get("sample") == "duck_squeeze")
+	check("an audio clip of the whole file, from its start, named for it (%s, %.3f s)" % [cassette.clip_name() if cassette != null else "", cassette.length() if cassette != null else 0.0],
+			cassette != null and cassette.clip.get("source") == "duck_squeeze_1.wav" and cassette.clip_name() == "duck squeeze 1"
+			and is_equal_approx(cassette.length(), float(stream.data.size() / 2) / Foley.RATE) and cassette.track_name == Sampler.TRACK_NAME
+			and MixWire.unpack_item(cassette.clip) != null)
+	check("into the rack's first free slot", cassette != null and cassette.slot_in == CassetteRack.RACK and cassette.slot_n == 0)
+	check("and REC is off after, the room's row too (%s)" % [studio.room_state().get("sampler")],
+			sampler.armed_by == 0 and studio.room_state().get("sampler") == 0 and sampler.screen_text().contains("last: duck squeeze 1"))
+	check("and the presser is told what it caught and where it went (%s)" % [notices],
+			notices.any(func(t: String) -> bool: return t.begins_with("Sampled the rubber duck's squeeze: duck_squeeze_1.wav") and t.contains("slot 1")))
+	check("the cassette pastes as audio: the file is on this machine (%s)" % DAW.paste_refusal(4, cassette.clip),
+			DAW.paste_refusal(4, cassette.clip).is_empty())
+
+	# A second squeeze: REC is off.
+	duck.work(false)
+	duck.work(true)
+	check("a second squeeze writes nothing and makes nothing", _samples_of(&"duck_squeeze") == ["duck_squeeze_1.wav"]
+			and room.made_ids().size() == 1)
+
+	# REC on and off again: nothing.
+	sampler.rec.grab_begin(hand, sampler.rec.global_position)
+	sampler.rec.grab_begin(hand, sampler.rec.global_position)
+	duck.work(false)
+	duck.work(true)
+	check("REC pressed twice is off, and a squeeze then does nothing (%s)" % [notices.slice(-1)],
+			sampler.armed_by == 0 and room.made_ids().size() == 1 and notices[-1] == "Sampler REC off.")
+
+	# Somebody else's REC: the host's own squeeze far from the mic is not theirs to catch.
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	studio._on_room_asked(&"sampler", [true], 5)
+	check("a guest's REC is on for them, the room's row (%s; %s)" % [studio.room_state().get("sampler"), sampler.screen_text()],
+			sampler.armed_by == 5 and studio.room_state().get("sampler") == 5 and sampler.screen_text().contains("GRACE'S NEXT SOUND"))
+	duck.work(false)
+	duck.work(true)
+	check("out of the mic's reach (%.1f m), someone else's squeeze catches nothing, and REC stays on" % duck.middle().distance_to(sampler.mic_point()),
+			room.made_ids().size() == 1 and sampler.armed_by == 5)
+	# A ball squeezed by the mic rings nothing the sampler knows.
+	hand.lose_carrying()
+	var ball: Item = room.items[&"ball"]
+	hand.pick_up(ball)
+	ball.global_position = sampler.mic_point() + Vector3(0.2, -0.3, 0.4)
+	ball.work(true)
+	check("a use that rings nothing it knows (the ball's) leaves REC on", room.made_ids().size() == 1 and sampler.armed_by == 5)
+	hand.lose_carrying()
+	ball.go_home()
+	# The tambourine struck within reach: caught, whoever's REC it was.
+	var tambourine := room.items[&"tambourine"] as InstrumentItem
+	hand.pick_up(tambourine)
+	tambourine.global_position = sampler.mic_point() + Vector3(0.3, -0.4, 0.6)
+	var near := tambourine.middle().distance_to(sampler.mic_point())
+	tambourine.work(true)
+	var hit := Foley.take_of(&"tambourine_hit", tambourine.sound_take())
+	check("within reach (%.2f m), the tambourine struck is caught for the guest's REC (%s)" % [near, _samples_of(&"tambourine_hit")],
+			near <= Sampler.REACH and _samples_of(&"tambourine_hit") == ["tambourine_hit_1.wav"] and room.made_ids().size() == 2
+			and _wav_body(DAW.backend.media_path("tambourine_hit_1.wav"))[0] == hit.data and sampler.armed_by == 0)
+	var second := room.items.get(room.made_ids()[1]) as CassetteItem
+	check("made by whoever struck it, onto the next free slot", second != null and (Session.made[second.id] as Array)[1] == 1
+			and second.slot_in == CassetteRack.RACK and second.slot_n == 1)
+	tambourine.work(false)
+	hand.lose_carrying()
+	tambourine.go_home()
+
+	# A shake, as a hand here shakes it: a hit, caught as its take.
+	studio._on_rec_pressed(true)
+	var shaker := room.items[&"shaker"] as InstrumentItem
+	hand.pick_up(shaker)
+	shaker.play(90)
+	check("a shaker shaken after REC is its take, shaken (%s)" % [_samples_of(&"shaker")],
+			_samples_of(&"shaker") == ["shaker_1.wav"]
+			and _wav_body(DAW.backend.media_path("shaker_1.wav"))[0] == Foley.take_of(&"shaker", shaker.sound_take()).data
+			and sampler.armed_by == 0 and room.made_ids().size() == 3)
+	hand.lose_carrying()
+	shaker.go_home()
+	check("the screen says the newest one (%s)" % sampler.screen_text().replace("\n", " / "), sampler.screen_text().contains("last: shaker 1"))
+
+	# The room's row as a guest has it: the host's word, once its own press is answered.
+	_as_session(Session.Role.GUEST, 5)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	studio._predictions.clear()
+	Session.room_seq = 0
+	var state := studio.room_state()
+	state["sampler"] = 1
+	studio.apply_room(state)
+	check("a guest's REC shows the host's row (%s)" % sampler.screen_text(), sampler.armed_by == 1 and sampler.screen_text().contains("ADA'S NEXT SOUND"))
+	studio._on_rec_pressed(false)
+	check("its own press is asked of the host and shown at once (%s)" % [studio._predictions],
+			studio._predictions.size() == 1 and studio._predictions[0]["verb"] == Sampler.VERB
+			and studio._predictions[0]["args"] == [false] and Session.room_ask_is_valid(Sampler.VERB, [false]) and sampler.armed_by == 0)
+	state["sampler"] = 1
+	studio.apply_room(state)
+	check("and not taken back by a room that crossed it", sampler.armed_by == 0)
+	state["acks"] = {5: studio._predictions[0]["seq"]}
+	state["sampler"] = 0
+	studio.apply_room(state)
+	check("the host's answer is the room's word", sampler.armed_by == 0 and studio._predictions.is_empty())
+	var count := room.made_ids().size()
+	sampler.armed_by = 5
+	hand.pick_up(duck)
+	duck.work(false)
+	duck.work(true)
+	check("a guest's own squeeze writes nothing here: only the host catches", room.made_ids().size() == count
+			and _samples_of(&"duck_squeeze") == ["duck_squeeze_1.wav"])
+	hand.lose_carrying()
+	duck.go_home()
+
+	Session.notice.disconnect(listen)
+	for name in _samples_of(&"duck_squeeze") + _samples_of(&"shaker") + _samples_of(&"tambourine_hit"):
+		DirAccess.remove_absolute(DAW.backend.media_path(name))
+	Session.start_solo()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+
+
+## A guest's squeeze reaches the host with the take its hand rang (Session.item_used's `take`): the
+## host's copy rings that take, and the host's sampler writes exactly it, the cassette made by the
+## guest; the same for a guest's shake (item_hit's take). Only of what is in their hand. A guest's
+## take is cleaned by the host as a hit's is; the probe sends one across a real connection.
+func _test_a_guests_squeeze_is_sampled_on_the_host_with_its_take() -> void:
+	var saved_layout := Session.layout
+	_as_session(Session.Role.SOLO, 1)
+	var studio := _cassette_studio()
+	await get_tree().physics_frame
+	var room := studio.items
+	var sampler := studio.sampler
+	for name in _samples_of(&"duck_squeeze") + _samples_of(&"shaker"):
+		DirAccess.remove_absolute(DAW.backend.media_path(name))
+	_as_session(Session.Role.HOST, 1)
+	Session.multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	Session._register(1, "Ada", 0)
+	Session._register(5, "Grace", 1)
+	var duck: Item = room.items[&"duck"]
+	var key := duck.network_key()
+	check("the take is cleaned as a hit's is", Session.clean_take(3) == 3 and Session.clean_take(-4) == -1
+			and Session.clean_take(1 << 25) == -1)
+
+	studio._on_room_asked(&"sampler", [true], 5)
+	Session._grant(5, key)
+	await get_tree().physics_frame
+	# Not hers: nothing.
+	Session.item_used.emit(&"duck", true, 7, 2)
+	check("a squeeze from someone not holding it is not caught", room.made_ids().is_empty() and sampler.armed_by == 5)
+	# Hers, take 3, far from the mic: hers to catch, in her hand.
+	Session.item_used.emit(&"duck", true, 5, 3)
+	var body: Array = _wav_body(DAW.backend.media_path("duck_squeeze_1.wav"))
+	check("the host's copy rings her take (%d)" % duck.use_take, duck.use_take == 3)
+	check("and the host's sampler writes it: Foley's take 3, not another (%d bytes)" % (body[0] as PackedByteArray).size(),
+			body[0] == Foley.take_of(&"duck_squeeze", 3).data and body[0] != Foley.take_of(&"duck_squeeze", 2).data)
+	var cassette := room.items.get(room.made_ids()[0]) as CassetteItem if room.made_ids().size() == 1 else null
+	check("a cassette made by her, on the rack, and REC off for the room (%s)" % [studio.room_state().get("sampler")],
+			cassette != null and (Session.made[cassette.id] as Array)[1] == 5 and cassette.slot_in == CassetteRack.RACK
+			and sampler.armed_by == 0 and studio.room_state().get("sampler") == 0)
+	Session.item_used.emit(&"duck", false, 5, 4)
+	Session.item_used.emit(&"duck", true, 5, 5)
+	check("her second squeeze writes nothing", room.made_ids().size() == 1 and _samples_of(&"duck_squeeze") == ["duck_squeeze_1.wav"])
+
+	# Her shake, take 6.
+	var shaker := room.items[&"shaker"] as InstrumentItem
+	studio._on_room_asked(&"sampler", [true], 5)
+	Session._grant(5, shaker.network_key())
+	Session.item_hit.emit(&"shaker", 90, 5, -1.0, false, 6)
+	check("her shake is caught as her take, shaken (%s)" % [_samples_of(&"shaker")], _samples_of(&"shaker") == ["shaker_1.wav"]
+			and _wav_body(DAW.backend.media_path("shaker_1.wav"))[0] == Foley.take_of(&"shaker", 6).data
+			and room.made_ids().size() == 2 and sampler.armed_by == 0)
+	# Her REC off.
+	studio._on_room_asked(&"sampler", [true], 5)
+	studio._on_room_asked(&"sampler", [false], 5)
+	check("her REC off is the room's", sampler.armed_by == 0 and studio.room_state().get("sampler") == 0)
+	check("a REC ask must be a yes or no", Session.room_ask_is_valid(&"sampler", [true])
+			and not Session.room_ask_is_valid(&"sampler", [1]) and not Session.room_ask_is_valid(&"sampler", []))
+
+	for name in _samples_of(&"duck_squeeze") + _samples_of(&"shaker"):
+		DirAccess.remove_absolute(DAW.backend.media_path(name))
+	Session.start_solo()
+	studio.queue_free()
+	await get_tree().process_frame
+	_as_session(Session.Role.SOLO, 1)
+	DirAccess.remove_absolute(Session.layout.made_path())
+	Session.made.clear()
+	Session.layout = saved_layout
+

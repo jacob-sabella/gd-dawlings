@@ -42,8 +42,9 @@ static func create(file_name: String) -> AudioTake:
 	return take
 
 
-## A RIFF/WAVE header for `data_frames` frames of mono 16-bit at RATE.
-static func header(data_frames: int) -> PackedByteArray:
+## A RIFF/WAVE header for `data_frames` frames of mono 16-bit at `rate` (RATE; a sample, Sampler,
+## is at Foley's own).
+static func header(data_frames: int, rate := RATE) -> PackedByteArray:
 	var data_bytes := data_frames * 2
 	var b := PackedByteArray()
 	b.resize(HEADER_BYTES)
@@ -54,8 +55,8 @@ static func header(data_frames: int) -> PackedByteArray:
 	b.encode_u32(16, 16)
 	b.encode_u16(20, 1)              # PCM
 	b.encode_u16(22, 1)              # mono
-	b.encode_u32(24, RATE)
-	b.encode_u32(28, RATE * 2)
+	b.encode_u32(24, rate)
+	b.encode_u32(28, rate * 2)
 	b.encode_u16(32, 2)
 	b.encode_u16(34, 16)
 	b.encode_u32(36, 0x61746164)     # "data"

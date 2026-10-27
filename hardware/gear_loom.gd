@@ -76,8 +76,16 @@ var band_colour: Color = DEFAULT_BAND
 ## Left at this, the band takes the venue's own (`Materials.loom_band`, a GearStyle finish).
 const DEFAULT_BAND := Color(0.70, 0.56, 0.22)
 var variation_seed := 0
+## () -> float: how loud what the loom carries is now, 0..1 on the fader law, for its beads
+## (SignalBeads). The studio says, per machine: the console's carries every heard track, so a desk
+## of muted strips sends nothing down it. Unset, it carries nothing.
+var level_source: Callable = Callable()
 
 var _spines: Array[PackedVector3Array] = []
+## The middle core's length, and its spine in world space as last asked.
+var _length := 0.0
+var _world := PackedVector3Array()
+var _world_at := Transform3D()
 
 
 static func create(from_at: Vector3, from_dir: Vector3, to_at: Vector3, to_dir: Vector3,
@@ -111,8 +119,34 @@ func spine(core: int) -> PackedVector3Array:
 	return _spines[core]
 
 
+func _enter_tree() -> void:
+	add_to_group(SignalBeads.CARRIERS)
+
+
 func _ready() -> void:
 	rebuild()
+
+
+# --- what its beads ride (SignalBeads): the middle core, from the machine to the bay ----------
+
+func signal_spine() -> PackedVector3Array:
+	var middle := spine(CORES / 2)
+	if _world.size() != middle.size() or global_transform != _world_at:
+		_world_at = global_transform
+		_world = _world_at * middle
+	return _world
+
+
+func signal_length() -> float:
+	return _length
+
+
+func signal_level() -> float:
+	return float(level_source.call()) if level_source.is_valid() else 0.0
+
+
+func signal_radius() -> float:
+	return CORE_RADIUS
 
 
 func rebuild() -> void:
@@ -153,6 +187,8 @@ func rebuild() -> void:
 		core_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(core_mesh)
 
+	_length = SignalBeads.length_of(spine(CORES / 2))
+	_world = PackedVector3Array()
 	_build_gland(from_point, from_axis, "FromGland")
 	_build_gland(to_point, to_axis, "ToGland")
 	_build_ties()

@@ -162,6 +162,17 @@ func finger_travel() -> PackedFloat32Array:
 			controller.get_float(grip_travel_action), NAN, NAN])
 
 
+## What a clap reads of this hand (Clap.reading): [the middle of the palm, the way it faces] for a
+## tracked bare hand, [the grip point, Vector3.ZERO] for a controller, whose palm is round its
+## grip and not read; empty for a bare hand out of tracking.
+func clap_palm() -> Array:
+	if _reads_hand():
+		return [gestures.palm(), HandPose.palm_normal(gestures.joints, gestures.side)]
+	if controller == null or bare_hand() or not controller.is_inside_tree():
+		return []
+	return [controller.global_position, Vector3.ZERO]
+
+
 ## -1 for the left hand's controller, 1 for the right (HandPose's `side`), from its tracker.
 func hand_side() -> int:
 	return -1 if controller != null and controller.tracker == &"left_hand" else 1
@@ -284,9 +295,47 @@ func catch_reach() -> float:
 	return CATCH_REACH
 
 
+## A cassette pushed into a lane's face, a strip or a voice pastes there (docs/spatial_loop.md part
+## two, slice 24), as the trigger does while the grip holds it.
+func pushes_to_paste() -> bool:
+	return true
+
+
+## A tracked bare hand pastes by its push alone: it has no trigger to pull.
+func paste_press_words() -> String:
+	return "a push in" if bare_hand() else super()
+
+
+## A bare hand's push counts only while it is tracked with every joint seen (HandGestures.confident),
+## this frame and the last. A controller holds still where it was last seen while its tracking is
+## lost, and the jump when it comes back is longer than a push (PUSH_MAX_STEP).
+func push_tracked() -> bool:
+	if not bare_hand() and not _reads_hand():
+		return true
+	return gestures != null and is_instance_valid(gestures) and gestures.tracked and gestures.confident
+
+
 ## The trigger, with an empty hand up by your ear, takes off what you have on your head.
 func head_reach() -> float:
 	return HEAD_REACH
+
+
+## How much further than HEAD_REACH a cassette at the ear goes before it is away from it (m), so a
+## hand that wavers at the edge does not start and stop it.
+const EAR_LEAVE := 0.06
+var _at_ear := false
+
+
+## A cassette held up by the head (docs/spatial_loop.md part two, slice 25): its middle within
+## HEAD_REACH of the eyes, as headphones are put on; away again past HEAD_REACH + EAR_LEAVE.
+func cassette_at_ear() -> CassetteItem:
+	var c := _ear_cassette()
+	if c == null:
+		_at_ear = false
+		return null
+	var d := c.middle().distance_to(head_point())
+	_at_ear = d < (HEAD_REACH + EAR_LEAVE if _at_ear else HEAD_REACH)
+	return c if _at_ear else null
 
 
 ## A hand at a hip, or reached back over the shoulder, with the trigger: into the pocket there, or
