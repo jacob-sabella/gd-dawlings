@@ -1143,12 +1143,15 @@ func _build_stage_trolley() -> void:
 			stage_trolley.add_part(leg)
 			stage_trolley.add_caster(Vector2(dx, dz))
 	var plaque := Stations.plaque(&"stage_table")
-	plaque.position = Vector3(0, STAGE_PLAQUE_Y, StageTable.SIZE.y * 0.5 + 0.135)
+	# Hung by its top edge, which is where a folded plaque's title and key row stay: low enough
+	# under the rail that its title key is not in the way of the rail's tags from the seat.
+	plaque.position = Vector3(0, STAGE_PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5,
+			StageTable.SIZE.y * 0.5 + 0.135)
 	stage_trolley.add_child(plaque)
 
 
-## The plaque's lettering's middle on the trolley's front, under the rail.
-const STAGE_PLAQUE_Y := 0.5
+## The plaque's top edge on the trolley's front, under the rail.
+const STAGE_PLAQUE_TOP := 0.6
 
 
 ## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side

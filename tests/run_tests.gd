@@ -27195,10 +27195,26 @@ func _test_every_station_says_how_to_play_it() -> void:
 	var hands := plaque.get_node("Hands") as Label3D
 	check("a plaque letters the title and the hands line, 30 mm high, legible at 1.5 m (%.3f m, to %.1f m)"
 			% [Lettering.cap_height(title), Lettering.legible_to(title)],
-			title.text == "CHORD HARP" and hands.text == Stations.row(&"harp")["hands"]
+			title.text.begins_with("CHORD HARP") and hands.text == Stations.row(&"harp")["hands"]
 			and is_equal_approx(Lettering.cap_height(title), Stations.PLAQUE_CAP)
 			and is_equal_approx(Lettering.cap_height(hands), Stations.PLAQUE_CAP)
 			and Lettering.legible_to(title) >= 1.5 and Lettering.legible_to(hands) >= 1.5)
+	# Folded to start with: the title, a + to say there is more, and the keys under it.
+	var plate := plaque.get_node("Plate") as MeshInstance3D
+	var keys := plaque.get_node("Back") as Node3D
+	var top_of := func() -> float:
+		return plate.position.y + (plate.mesh as BoxMesh).size.y * 0.5
+	var folded_top: float = top_of.call()
+	var folded_keys := keys.position.y
+	check("a plaque starts folded: the title and its +, no how-to-play lines (%s)" % title.text,
+			not Stations.plaque_open(plaque) and not hands.visible and title.text.ends_with("+"))
+	(plaque.get_node("Fold") as ControlAffordance).call("_on_grab_begin", Vector3.ZERO)
+	check("a press on the title opens it, its top edge where it was and the keys below the lines",
+			Stations.plaque_open(plaque) and hands.visible and title.text.ends_with("–")
+			and is_equal_approx(top_of.call(), folded_top) and keys.position.y < folded_keys - 0.05)
+	(plaque.get_node("Fold") as ControlAffordance).call("_on_grab_begin", Vector3.ZERO)
+	check("and a second press folds it again", not Stations.plaque_open(plaque) and not hands.visible
+			and is_equal_approx(keys.position.y, folded_keys))
 	plaque.free()
 
 

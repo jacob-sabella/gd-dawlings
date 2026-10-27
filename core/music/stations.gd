@@ -335,7 +335,46 @@ static func plaque(id: StringName, width := PLAQUE_WIDTH) -> Node3D:
 		var side := -1.0 if kind == StationBoard.PlaqueKey.INSTRUMENTS else 1.0
 		key.position = Vector3(side * (wide * 0.5 + 0.01), -tall * 0.5 - PLAQUE_KEYS_ROW * 0.5 + 0.005, 0.0)
 		holder.add_child(key)
+	# The title row is the key that opens and closes the how-to-play lines under it.
+	var fold := StationBoard.PlaqueFold.new()
+	fold.name = "Fold"
+	fold.station = id
+	# The whole of the folded plate above the keys, so it is as big to aim at as it looks.
+	fold.size = Vector2(width, PLAQUE_CAP * 1.6 + 0.03)
+	fold.position = Vector3(0, tall * 0.5 - (PLAQUE_CAP * 1.6 + 0.03) * 0.5, 0.0)
+	holder.add_child(fold)
+	holder.set_meta(&"plaque_tall", tall)
+	fold_plaque(holder, false)
 	return holder
+
+
+## Whether `holder`'s how-to-play lines are showing.
+static func plaque_open(holder: Node3D) -> bool:
+	return bool(holder.get_meta(&"plaque_open", false))
+
+
+## A plaque opened to its how-to-play lines, or folded to its title and keys (how every plaque
+## starts: the lines are for the first time at a station, not every time). The top edge stays where
+## it is and the plate grows down from it, so a folded plaque does not hang in mid-air.
+static func fold_plaque(holder: Node3D, open: bool) -> void:
+	holder.set_meta(&"plaque_open", open)
+	var r := row(StringName(holder.get_node("Fold").get("station"))) if holder.has_node("Fold") else {}
+	var tall: float = holder.get_meta(&"plaque_tall", 0.2)
+	var shown := tall if open else PLAQUE_CAP * 1.6 + 0.03
+	var plate := holder.get_node_or_null("Plate") as MeshInstance3D
+	if plate != null:
+		(plate.mesh as BoxMesh).size.y = shown + PLAQUE_KEYS_ROW
+		plate.position.y = tall * 0.5 - (shown + PLAQUE_KEYS_ROW) * 0.5
+	var hands := holder.get_node_or_null("Hands") as Node3D
+	if hands != null:
+		hands.visible = open
+	var title := holder.get_node_or_null("Title") as Label3D
+	if title != null:
+		title.text = "%s  %s" % [r.get("title", title.text.rstrip(" +–")), "–" if open else "+"]
+	for key_name in ["Instruments", "Back"]:
+		var key := holder.get_node_or_null(key_name) as Node3D
+		if key != null:
+			key.position.y = tall * 0.5 - shown - PLAQUE_KEYS_ROW * 0.5 + 0.005
 
 
 ## How far below a plaque's origin its plate's bottom edge is, for `id`'s hands line at `width`:

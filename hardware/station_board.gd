@@ -344,6 +344,43 @@ class PlaqueKey extends ControlAffordance:
 			keeper.plaque_key(station, kind, self)
 
 
+## A plaque's title row, as a key: a press opens the how-to-play lines under it, or folds them
+## away again (Stations.fold_plaque). Each player's own: it changes nothing anyone else sees.
+class PlaqueFold extends ControlAffordance:
+	var station := &""
+	var size := Vector2(0.3, 0.06)
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(size.x, size.y, 0.02)
+		shape.shape = box
+		shape.position = Vector3(0, 0, 0.01)
+		add_child(shape)
+
+	func _default_title() -> String:
+		return "%s  HOW TO PLAY" % Stations.row(station).get("title", String(station))
+
+	func hint() -> String:
+		var holder := get_parent() as Node3D
+		if holder != null and Stations.plaque_open(holder):
+			return "press to fold the how-to-play lines away"
+		return "press for how to play it"
+
+	func dwell_activates() -> bool:
+		return true
+
+	func personal() -> bool:
+		return true
+
+	func _on_grab_begin(_at: Vector3) -> void:
+		var holder := get_parent() as Node3D
+		if holder != null:
+			Stations.fold_plaque(holder, not Stations.plaque_open(holder))
+
+
 ## A key's body: its collision box, a dark cap a little proud of what it is on, and its legend in
 ## light lettering (unshaded, so it reads however the corner is lit), as the harp's crown buttons.
 static func dress_key(key: ControlAffordance, size: Vector2, legend: String, cap: float) -> void:
