@@ -63,7 +63,7 @@ const PRACTICALS: Array = [
 	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
 	# Forward on the right since the patch stand took that side of the room: anywhere behind it
 	# the stand was in the way from the seat.
-	[Vector3(3.10, 1.70, 0.95), Color(0.6, 0.78, 1.0), 5.5],
+	[Vector3(1.9, 1.70, -2.7), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -260,6 +260,14 @@ var stage: StageTable
 var signal_beads: SignalBeads
 var _lamps_lifted := 0.0
 var stage_trolley: Trolley
+## What stands on the floor by itself and is pushed about like the gear, though it is not in the
+## control room's rig: the venue's free-standing stations and back-of-house furniture
+## (Venue.WHEELED), the station board's stand and the audio patch wall's legs. id -> Trolley. Built
+## once and the same in every venue, as the rack is; a venue with no room for one hides it
+## (`_wheel_in_live_pieces`). Empty in AR.
+var live_pieces := {}
+## The handbells' stand, a child of the venue at `bell_stand_spot` (HandbellItem.stand).
+var _bell_stand: Node3D
 ## Clap to mute (Clap, docs/spatial_loop.md slice 19): the two hands' palms or grips, and K held at
 ## a desk. Two of them, so a key and the hands never let go of each other's press.
 var clap := Clap.new()
@@ -521,6 +529,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	world_env.environment = env
 	add_child(venue)
 	_hang_the_roulette_door()
+	# Before anything stands at its spot: the spots of what is wheeled about are its trolley's.
+	_wheel_in_live_pieces()
 	_stand_the_harp()
 	_stand_the_wheel()
 	_stand_the_cassette_rack()
@@ -528,6 +538,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
+	# The venue built its shelf and hoop where their trolleys stood in the last one.
+	_carry_all_live()
 	mirror.wardrobe.look = Session.local_look
 	mirror.wardrobe.look_changed.connect(Session.set_look)
 	_relight()
@@ -562,9 +574,9 @@ func _stand_the_harp() -> void:
 	if presence != null:
 		presence.harp = harp
 	# The handbells' stand beside it (the bells themselves are items: their homes are its seats).
-	var stand := HandbellItem.stand()
-	stand.transform = Stations.spot(venue, &"bells")
-	venue.add_child(stand)
+	_bell_stand = HandbellItem.stand()
+	_bell_stand.transform = Stations.spot(venue, &"bells")
+	venue.add_child(_bell_stand)
 
 
 ## The fifths wheel, in the venue's own frame on the bricks table: a child of the venue, so it
@@ -702,27 +714,40 @@ func _door_footprint() -> Array:
 
 
 ## The audio patch wall in every venue: where a venue has hung one (the studio's side room), that
-## is the one; anywhere else it stands on two legs against the control room's left side, turned
-## to face the desk, at a little over half the size of the room's own.
+## is the one; anywhere else it stands on two legs, at a little over half the size of the room's
+## own: the legs are a trolley (`live_pieces`' "patch_wall"), pushed about like the rest of the
+## gear, and the screen goes where they are. By default against the control room's left side,
+## turned to face the desk (`_patch_wall_default`).
 func _stand_a_patch_wall() -> void:
 	if venue.get_node_or_null("PatchWall") != null:
 		return
 	var wall := PatchWallSurface.new()
 	wall.name = "PatchWall"
-	wall.scale = Vector3.ONE * 0.55
-	wall.position = Vector3(-room_width * 0.5 + 0.55, 2.2, -1.3)
-	wall.rotation.y = PI * 0.5
+	wall.set_meta(&"on_legs", true)
+	wall.transform = _patch_wall_frame()
 	wall.follow = DisplayServer.get_name() != "headless"
 	venue.add_child(wall)
-	for dz in [-1.3, 1.3]:
-		var leg := MeshInstance3D.new()
-		leg.name = "PatchWallLeg"
-		var post := BoxMesh.new()
-		post.size = Vector3(0.06, 1.6, 0.06)
-		leg.mesh = post
-		leg.position = Vector3(wall.position.x - 0.04, 0.8, wall.position.z + dz)
-		leg.material_override = Materials.furniture()
-		venue.add_child(leg)
+
+
+## The screen on the legs, its top PATCH_WALL_TOP over them, in the venue's frame.
+const PATCH_WALL_SCALE := 0.55
+const PATCH_WALL_TOP := 2.2
+## The legs: how far either side of the middle, and how far behind the screen's face.
+const PATCH_WALL_LEG_X := 1.3
+const PATCH_WALL_LEG_Z := -0.04
+
+
+func _patch_wall_frame() -> Transform3D:
+	var legs: Trolley = live_pieces.get(&"patch_wall")
+	var at := legs.transform if legs != null else _patch_wall_default()
+	return _set_to_venue(at) * Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * PATCH_WALL_SCALE),
+			Vector3(0, PATCH_WALL_TOP, 0))
+
+
+## Where the legs stand until they are pushed: 55 cm off the control room's left wall, a little
+## behind the desk's left end, facing across the room.
+func _patch_wall_default() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-room_width * 0.5 + 0.55, 0, -1.3))
 
 
 ## The practicals back to the venue's own colour and energy, and the venue's own house lights
@@ -834,13 +859,8 @@ func _walk_where_the_venue_lets() -> void:
 		items.set_spots(venue.item_spots(), _item_homes())
 	_hold_the_rack()
 	if tour_case != null and venue != null:
-		tour_case.transform = venue.tour_case_spot()
-		if items != null:
-			var spilled := items.spawned_ids()
-			for n in spilled.size():
-				var item: Item = items.items.get(spilled[n])
-				if item != null:
-					item.home = _spill_home(n)
+		tour_case.transform = _venue_to_set(venue.tour_case_spot())
+		_rehome_spills()
 
 
 ## Somewhere else to stand, if this is somebody's to say: the room is the host's, so a guest
@@ -1071,6 +1091,7 @@ func _build_furniture() -> void:
 	timeline_stand.add_part(crossbar)
 
 	_build_patch_stand()
+	_build_live_pieces()
 
 
 ## Where the stage table's trolley stands: beside the mix position on the right and a little
@@ -1078,7 +1099,7 @@ func _build_furniture() -> void:
 ## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
 ## it). The top is desk height; the rail along its front drops RAIL below it. Far enough back
 ## that from the seat the right-hand lamp's foot is seen past its corner, not through it.
-const STAGE_AT := Vector3(1.1, 0, 1.4)
+const STAGE_AT := Vector3(-2.1, 0, 1.95)
 const STAGE_TOP := 0.74
 
 
@@ -1159,6 +1180,267 @@ func _build_patch_stand() -> void:
 		_patch_cheeks.append(cheek)
 	patch_stand.add_corner_casters(0.06)
 	_fit_stand_to_bay()
+
+
+# --- what stands out in the venue on its own ------------------------------------------------
+#
+# The harp, the bells' stand, the cassette rack, the sampler, the Tour case, the prop shelf and
+# the hoop stand on the floor by themselves, the way the rack and the deck's cart do, so they are
+# pushed about the same way: a trolley each, saved where it was left (`floor/<id>`) and shared
+# with the room like the rest. What is built into a venue -- its walls and doors, the riser, the
+# booth, the bricks table and the wheel on it, the lattice's frame, the screens on the walls --
+# stays where the venue put it, and is what a pushed piece stops at (FloorPlan.stops).
+#
+# The things themselves are still the venue's children, built with each venue in its own
+# materials; their trolley is the studio's and says where they stand (Venue._spot_of), so moving
+# it moves them (`_carry_live`), and everything that is measured from them -- a station's seat
+# and the board's rows, the items' homes on the shelf and the bells' seats, the rack's slots, the
+# baskets a ball goes through, the dartboard on the shelf's posts -- goes with them.
+
+## Each wheeled piece's trolley: its node's name, the footprint in its own frame (centre, half
+## extents, from its Stations row or its own class's solid), how heavy it is to push, and the
+## grips it is taken hold of by: boxes [size, centre] of its own lowest structure -- a plinth,
+## feet, a base -- under whatever on it is played or picked up.
+const LIVE_TROLLEYS := {
+	&"harp": ["HarpTrolley", Vector2(0, ChordHarp.FOOT_Z), ChordHarp.FOOT, 9.0,
+			[[Vector3(0.7, 0.3, 0.4), Vector3(0, 0.15, ChordHarp.FOOT_Z)]]],
+	&"bells": ["BellStandTrolley", Vector2.ZERO, HandbellItem.STAND * 0.5, 10.0,
+			[[Vector3(HandbellItem.STAND.x, 0.3, HandbellItem.STAND.y), Vector3(0, 0.15, 0)]]],
+	&"cassette_rack": ["CassetteRackTrolley", Vector2.ZERO, CassetteRack.FOOT, 9.0,
+			[[Vector3(CassetteRack.FOOT.x * 2.0, 0.15, CassetteRack.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
+	&"sampler": ["SamplerTrolley", Vector2.ZERO, Sampler.FOOT, 9.0,
+			[[Vector3(Sampler.FOOT.x * 2.0, 0.15, Sampler.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
+	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
+	&"tour_case": ["TourCaseTrolley", Vector2.ZERO, Vector2(TourCase.CASE_WIDTH, TourCase.CASE_DEPTH) * 0.5, 7.5,
+			[[Vector3(TourCase.CASE_WIDTH + 0.08, 0.1, TourCase.CASE_DEPTH + 0.08), Vector3(0, 0.05, 0)]]],
+	# Its legs, under the lower tier the tablet and the percussion lie on.
+	&"prop_shelf": ["PropShelfTrolley", Vector2.ZERO, Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5, 8.0,
+			[[Vector3(ZoneKit.SHELF.x, 0.18, ZoneKit.SHELF.z), Vector3(0, 0.09, 0)]]],
+	# The base in front of the pole: the board overhangs the rest of it, which reaches back under
+	# the wall's skirting where the venue stands it, and would have the hoop shoved off the wall.
+	&"hoop": ["HoopTrolley", Vector2(0, (Hoop.POLE_Z - 0.03 + Hoop.BASE_Z + Hoop.BASE_HALF.y) * 0.5),
+			Vector2(Hoop.BASE_HALF.x, (Hoop.BASE_Z + Hoop.BASE_HALF.y - Hoop.POLE_Z + 0.03) * 0.5), 10.0,
+			# The pole first, up to under the board: from across the room it is what shows over
+			# whatever stands between, and what a hand reaches for.
+			[[Vector3(0.07, 1.75, 0.07), Vector3(0, 0.975, Hoop.POLE_Z)],
+			[Vector3(Hoop.BASE_HALF.x * 2.0, 0.1, Hoop.BASE_HALF.y * 2.0), Vector3(0, 0.05, Hoop.BASE_Z)]]],
+}
+
+
+## A wheeled piece's trolley for each of Venue.WHEELED, and the patch wall's legs; stood where
+## this venue has them (`_wheel_in_live_pieces`) and what stands on them taken there.
+func _build_live_pieces() -> void:
+	floor_plan.rooms = venue.rooms() if venue != null else []
+	floor_plan.stops.append(_venue_stops)
+	for id: StringName in Venue.WHEELED:
+		var spec: Array = LIVE_TROLLEYS[id]
+		var spot: Variant = venue.default_spot(id) if venue != null else null
+		var at: Transform3D = spot if spot != null else Transform3D.IDENTITY
+		var t := _trolley(spec[0], id, at.origin, rad_to_deg(at.basis.get_euler().y))
+		t.footprint_centre = spec[1]
+		t.footprint_half = spec[2]
+		t.follow = spec[3]
+		# Pushed across the floor on its own feet, not wheeled.
+		t.rolls = false
+		for grip: Array in spec[4]:
+			_grip(t, grip[0], grip[1])
+		if id == &"hoop":
+			# Its base is a step underfoot (Hoop.solids); its pole is what a person walks into.
+			t.body_centre = Vector2(0, Hoop.POLE_Z)
+			t.body_half = Vector2.ONE * Hoop.POLE_RADIUS
+		_go_live(t)
+	_build_patch_wall_legs()
+	_wheel_in_live_pieces()
+	_carry_all_live()
+
+
+## A box to take a trolley by, of `size` centred at `at` in its frame, with nothing drawn: the
+## piece's own plinth or feet are drawn by the piece.
+func _grip(t: Trolley, size: Vector3, at: Vector3) -> CollisionShape3D:
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	shape.position = at
+	t.add_child(shape)
+	return shape
+
+
+## Known as one of `live_pieces`, and what stands on it carried along as it moves.
+func _go_live(t: Trolley) -> void:
+	live_pieces[t.piece_id] = t
+	t.moved.connect(_carry_live.bind(t.piece_id))
+	t.settled.connect(_carry_live.bind(t.piece_id))
+
+
+## The patch wall's two legs, on a trolley; the screen is the venue's child (`_stand_a_patch_wall`),
+## and goes where the legs are.
+func _build_patch_wall_legs() -> void:
+	var at := _patch_wall_default()
+	var legs := _trolley("PatchWallLegs", &"patch_wall", at.origin, rad_to_deg(at.basis.get_euler().y))
+	legs.footprint_centre = Vector2(0, PATCH_WALL_LEG_Z)
+	legs.footprint_half = Vector2(PATCH_WALL_LEG_X + 0.06, 0.06)
+	legs.follow = 8.0
+	legs.rolls = false
+	for side in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		leg.name = "PatchWallLeg"
+		var post := BoxMesh.new()
+		post.size = Vector3(0.06, 1.6, 0.06)
+		leg.mesh = post
+		leg.position = Vector3(side * PATCH_WALL_LEG_X, 0.8, PATCH_WALL_LEG_Z)
+		leg.material_override = Materials.furniture()
+		legs.add_part(leg)
+	_go_live(legs)
+
+
+## Where piece `id` of `live_pieces` stands in this venue until somebody moves it, in the set's
+## frame; null where this venue has no room for it: the Rig Roulette room has no booth for the
+## sampler to stand against, and a venue that hangs its own patch wall needs no legs for one.
+func _live_default(id: StringName) -> Variant:
+	if venue == null:
+		return null
+	match id:
+		&"station_board":
+			return Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), BOARD_AT)
+		&"patch_wall":
+			var hung := venue.get_node_or_null("PatchWall")
+			if hung != null and not hung.has_meta(&"on_legs"):
+				return null
+			return _patch_wall_default()
+	var spot: Variant = venue.default_spot(id)
+	return _venue_to_set(spot) if spot != null else null
+
+
+## Every piece of `live_pieces` stood for this venue: hidden, and out of everyone's way, where it
+## has no room for it; else where this player last left it, or, never moved, where the venue
+## stands it. Then each is settled against the others and the venue's own solids, so a spot left
+## in one venue that is a wall in this one is the nearest clear place to it. Not saved: none of
+## this was anyone's push.
+func _wheel_in_live_pieces() -> void:
+	if floor_plan == null or venue == null or live_pieces.is_empty():
+		return
+	floor_plan.rooms = venue.rooms()
+	var placing: Array[Trolley] = []
+	for id: StringName in live_pieces:
+		var t: Trolley = live_pieces[id]
+		var spot: Variant = _live_default(id)
+		t.visible = spot != null
+		# Where the venue only draws the shelf, what stands about with it is drawn to walk through.
+		t.walk_through = Venue.WHEELED.has(id) and not venue.prop_shelf_solid()
+		if spot == null or t.held_by != null:
+			continue
+		var at: Transform3D = spot
+		var key := StringName("floor/%s" % id)
+		if not _showing_hosts_room and Session.layout != null \
+				and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
+			at = Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
+		t.position = Vector3(at.origin.x, 0, at.origin.z)
+		t.rotation = Vector3(0, at.basis.get_euler().y, 0)
+		placing.append(t)
+	var was := _fitting
+	_fitting = true
+	for t in placing:
+		t.place(Vector2(t.position.x, t.position.z), t.rotation.y)
+	_fitting = was
+
+
+func _carry_all_live() -> void:
+	for id: StringName in live_pieces:
+		_carry_live(id)
+
+
+## Take what stands on piece `id` to where its trolley is now: the thing itself, and whatever is
+## measured from it. Each frame it moves, so a shelf's toys ride on it rather than catching up.
+func _carry_live(id: StringName) -> void:
+	if venue == null or not venue.is_inside_tree():
+		return
+	match id:
+		&"harp":
+			if harp != null and is_instance_valid(harp):
+				harp.transform = venue.harp_spot()
+		&"bells":
+			if _bell_stand != null and is_instance_valid(_bell_stand):
+				_bell_stand.transform = venue.bell_stand_spot()
+			_rehome_items()
+		&"cassette_rack":
+			if cassette_rack != null and is_instance_valid(cassette_rack):
+				cassette_rack.transform = venue.cassette_rack_spot()
+				_hold_the_rack()
+		&"sampler":
+			var at: Variant = venue.sampler_spot()
+			if sampler != null and is_instance_valid(sampler) and at != null:
+				sampler.transform = at
+		&"tour_case":
+			if tour_case != null:
+				tour_case.transform = _venue_to_set(venue.tour_case_spot())
+				_rehome_spills()
+		&"prop_shelf":
+			var shelf := venue.get_node_or_null("PropShelf") as Node3D
+			if shelf != null:
+				shelf.transform = venue.prop_shelf_spot()
+			if items != null:
+				items.boards = venue.dart_boards()
+			_rehome_items()
+			# A cassette lies on the shelf when the rack is gone (`_made_home`).
+			if cassette_rack == null or not is_instance_valid(cassette_rack):
+				_hold_the_rack()
+		&"hoop":
+			var hoop := venue.get_node_or_null("Hoop") as Node3D
+			if hoop != null:
+				hoop.transform = venue.hoop_spot()
+			if items != null:
+				items.hoops = venue.hoops()
+			_rehome_items()
+		&"station_board":
+			if station_board != null and is_instance_valid(station_board):
+				station_board.transform = (live_pieces[id] as Trolley).transform
+		&"patch_wall":
+			var wall := venue.get_node_or_null("PatchWall") as Node3D
+			if wall != null and wall.has_meta(&"on_legs"):
+				wall.transform = _patch_wall_frame()
+
+
+## The items' homes from where the shelf, the hoop and the bells' stand now are: one at home goes
+## to its new spot (ItemRoom.set_spots).
+func _rehome_items() -> void:
+	if items != null and venue != null:
+		items.set_spots(venue.item_spots(), _item_homes())
+
+
+## What the Tour case spilled, homed round where the case now stands (`_spill_home`).
+func _rehome_spills() -> void:
+	if items == null or tour_case == null:
+		return
+	var spilled := items.spawned_ids()
+	for n in spilled.size():
+		var item: Item = items.items.get(spilled[n])
+		if item != null:
+			item.home = _spill_home(n)
+
+
+## What a pushed piece stops at among the venue's own things: its solids (Venue.solids), which in
+## a studio no longer include anything of `live_pieces`, flattened to floor-plan footprints.
+func _venue_stops() -> Array:
+	var out: Array = []
+	if venue == null or not venue.is_inside_tree():
+		return out
+	for f: Dictionary in venue.solids():
+		out.append(FloorPlan.footprint(f["c"], f["h"], f["a"]))
+	return out
+
+
+## A transform in the venue's frame, in the set's (where the trolleys and the items are); and back.
+func _venue_to_set(at: Transform3D) -> Transform3D:
+	if venue == null or studio_set == null:
+		return at
+	return studio_set.transform.affine_inverse() * venue.transform * at
+
+
+func _set_to_venue(at: Transform3D) -> Transform3D:
+	if venue == null or studio_set == null:
+		return at
+	return venue.transform.affine_inverse() * studio_set.transform * at
 
 
 # --- plugin tablets -------------------------------------------------------------------------
@@ -2018,9 +2300,14 @@ func _put_back_own_room() -> void:
 			var t := piece as Trolley
 			if t == null or not is_instance_valid(t) or not _authored_floor.has(t.piece_id):
 				continue
+			# Each venue stands these where it does: put back for this one below.
+			if live_pieces.has(t.piece_id):
+				continue
 			var own: Transform3D = Session.layout.transform_for(StringName("floor/%s" % t.piece_id),
 					Presentation.Mode.STUDIO, _authored_floor[t.piece_id])
 			t.place(Vector2(own.origin.x, own.origin.z), own.basis.get_euler().y)
+		_wheel_in_live_pieces()
+		_carry_all_live()
 		_applying_room = false
 		_fit_room_to_session()
 	var own := Session.layout.venue if Venue.is_known(Session.layout.venue) else Venue.IDS[0]
@@ -2175,12 +2462,52 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	_authored_floor[id] = piece.transform
 	var key := StringName("floor/%s" % id)
 	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
-		piece.transform = Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
+		var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
+		if not _left_where_it_was_authored(id, saved):
+			piece.transform = saved
 	piece.settled.connect(_on_trolley_settled.bind(piece))
 	piece.moved.connect(_on_trolley_moved.bind(piece))
 	studio_set.add_child(piece)
 	floor_plan.add_piece(piece)
 	return piece
+
+
+## Where pieces stood by default before the room was spread out (2026-10-26). A layout saves every
+## piece once it settles, moved or not, so a saved spot that is one of these was never chosen by
+## anyone: the piece takes its new default instead. A piece somebody did move keeps its place.
+const OLD_FLOOR_DEFAULTS := {
+	&"rack": Vector2(-1.18, -0.42),
+	&"deck_trolley": Vector2(0.80, -0.22),
+	&"patch_stand": Vector2(1.80, -0.30),
+	&"stage_trolley": Vector2(1.10, 1.40),
+	&"lamp_2": Vector2(3.10, 0.95),
+}
+
+
+func _left_where_it_was_authored(id: StringName, saved: Transform3D) -> bool:
+	if not OLD_FLOOR_DEFAULTS.has(id):
+		return false
+	var was: Vector2 = OLD_FLOOR_DEFAULTS[id]
+	return Vector2(saved.origin.x, saved.origin.z).distance_to(was) < 0.02
+
+
+## Whether a piece of `live_pieces` is where this venue stands it (`_live_default`), as near as
+## the floor plan lets it be. Every piece settling is saved, moved or not; one of these saved where
+## the venue happens to stand it would stay there in a venue that stands it somewhere else.
+func _where_the_venue_stands_it(piece: Trolley) -> bool:
+	if not live_pieces.has(piece.piece_id):
+		return false
+	var spot: Variant = _live_default(piece.piece_id)
+	if spot == null:
+		return false
+	var at := Vector2((spot as Transform3D).origin.x, (spot as Transform3D).origin.z)
+	var heading := (spot as Transform3D).basis.get_euler().y
+	if absf(wrapf(piece.rotation.y - heading, -PI, PI)) > 0.002:
+		return false
+	var here := Vector2(piece.position.x, piece.position.z)
+	if here.distance_to(at) < 0.005:
+		return true
+	return floor_plan != null and here.distance_to(floor_plan.resolve(piece, at, heading)["at"]) < 0.005
 
 
 func _on_trolley_settled(piece: Trolley) -> void:
@@ -2198,8 +2525,12 @@ func _on_trolley_settled(piece: Trolley) -> void:
 	if Session.layout == null or _fitting or _showing_hosts_room:
 		_looms_dirty = true
 		return
-	Session.layout.set_transform(StringName("floor/%s" % piece.piece_id),
-			Presentation.Mode.STUDIO, piece.transform)
+	var key := StringName("floor/%s" % piece.piece_id)
+	if _where_the_venue_stands_it(piece):
+		# Not a place anyone chose: in the next venue, or a wider room, it goes where that stands it.
+		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
+	else:
+		Session.layout.set_transform(key, Presentation.Mode.STUDIO, piece.transform)
 	Session.layout.save()
 	_looms_dirty = true
 
@@ -2539,7 +2870,6 @@ func _build_surfaces() -> void:
 	# The room is fitted to the desk every time the desk changes shape: a live session's tracks
 	# arrive after the room is built, and a project that gains a bank gains a metre of console.
 	console.rebuilt.connect(_forget_desk_box)
-	console.rebuilt.connect(_place_station_board)
 	console.rebuilt.connect(_fit_room_to_session)
 	patchbay.rebuilt.connect(_fit_stand_to_bay)
 	_fit_room_to_session()
@@ -2784,7 +3114,10 @@ func _build_items() -> void:
 		items.fits = walker.reachable
 		items.ground_at = walker.ground_at
 		items.floor_rects = func() -> Array: return walker.walkable
-		items.solids = func() -> Array: return walker.fixed
+		# What a throw lands on: the venue's fixed things, and the free-standing ones wherever they
+		# have been pushed (the walker stops at those as trolleys, which say nothing of how tall).
+		items.solids = func() -> Array:
+			return walker.fixed + (venue.wheeled_solids() if venue != null and not live_pieces.is_empty() else [])
 		items.gear = walker.footprints
 	items.local_peer = func() -> int: return Session.local_peer_id
 	Session.takeable = func(key: String) -> bool:
@@ -3314,7 +3647,7 @@ func _restore_made(missing_only := false) -> void:
 func _build_tour_case() -> void:
 	tour_case = TourCase.new()
 	studio_set.add_child(tour_case)
-	tour_case.transform = venue.tour_case_spot()
+	tour_case.transform = _venue_to_set(venue.tour_case_spot())
 	tour_case.local_peer = func() -> int: return Session.local_peer_id
 	if items != null:
 		items.targets = [{"node": tour_case, "radius": TourCase.STRIKE_RADIUS}]
@@ -5352,16 +5685,12 @@ const STATION_PACE := 4.0
 
 # --- going to a station in a headset (docs/spatial_loop.md part two, slice 11) -----------------
 
-## The station board's stand, by the desk's left end at the mix position, turned to face it: in
-## view from the desk's seat and a step from where a headset player stands at home. A desk wide
-## enough to reach it (forty tracks spread out) has it stand BOARD_CLEAR beyond its left end, in
-## front of the rack (BOARD_WIDE_Z), so it is never between the seat and a strip.
-const BOARD_AT := Vector3(-0.7, 0, -0.22)
-const BOARD_HEADING := 38.0
-const BOARD_CLEAR := 0.26
-## How far toward the desk the stand's face reaches from its middle, turned as it is.
-const BOARD_REACH := 0.22
-const BOARD_WIDE_Z := 0.25
+## The station board's stand, back by the way into the live room on the right, turned to face the
+## mix position: out of the seat's view of the desk (it stood at the desk's left elbow, in the face
+## of everyone who sat down), and on the way to the stations it lists. Desktop players reach the
+## same rows with I and F1; a headset player turns round to it.
+const BOARD_AT := Vector3(1.55, 0, 2.3)
+const BOARD_HEADING := 223.0
 
 ## The board by the desk (StationBoard): every station that stands here, a row each, and a press
 ## goes there. Null in AR, where nothing stands yet (slice 60).
@@ -5373,6 +5702,10 @@ var _beside: StationBoard
 var _seat_finder: Walker
 
 
+## The board stands on a stand of its own on the floor, pushed about like the rest of the gear
+## (`live_pieces`' "station_board"): taken by its post or its foot, the face's rows still being
+## pressed. Behind the mix position, so a desk of any width grows clear of it; one it is pushed
+## into is shoved off the desk as the room is fitted to it.
 func _build_station_board() -> void:
 	station_board = StationBoard.new()
 	station_board.name = "StationBoard"
@@ -5380,25 +5713,35 @@ func _build_station_board() -> void:
 	station_board.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), BOARD_AT)
 	station_board.chosen.connect(_on_board_chosen)
 	studio_set.add_child(station_board)
-	_place_station_board()
-	floor_plan.fixtures.append(func() -> Array:
-		return [station_board.footprint()] if is_instance_valid(station_board) else [])
+	var stand := _trolley("StationBoardStand", &"station_board", BOARD_AT, BOARD_HEADING)
+	stand.follow = 11.0
+	stand.rolls = false
+	_board_grip = _grip(stand, Vector3.ONE * 0.1, Vector3.ZERO)
+	_go_live(stand)
+	_fit_board_stand()
+	_carry_live(&"station_board")
 	venue_changed.connect(func(_id: StringName) -> void:
 		_put_away_beside()
-		station_board.set_venue(venue))
+		station_board.set_venue(venue)
+		_fit_board_stand())
 
 
-## Stand the board by the desk's left end as the desk now measures (`_desk_footprint`).
-func _place_station_board() -> void:
-	if station_board == null:
+## The stand's grip, round the board's foot and post.
+var _board_grip: CollisionShape3D
+
+
+## The stand's footprint and grip to the board as it now stands: the face is as tall as its rows,
+## and the foot comes forward under its middle (StationBoard.footprint).
+func _fit_board_stand() -> void:
+	var stand: Trolley = live_pieces.get(&"station_board")
+	if stand == null or station_board == null:
 		return
-	var at := BOARD_AT
-	var desk: Array = _desk_footprint() if console != null else []
-	if not desk.is_empty():
-		var left: float = (desk[0]["c"] as Vector2).x - (desk[0]["h"] as Vector2).x
-		if left < at.x + BOARD_REACH:
-			at = Vector3(left - BOARD_CLEAR, 0, BOARD_WIDE_Z)
-	station_board.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(BOARD_HEADING)), at)
+	var z := station_board._middle_z()
+	stand.footprint_centre = Vector2(0, z)
+	stand.footprint_half = StationBoard.FOOT
+	var top := StationBoard.FACE_TOP - station_board._height * 0.5 * cos(StationBoard.TILT)
+	(_board_grip.shape as BoxShape3D).size = Vector3(StationBoard.FOOT.x * 2.0, maxf(top - 0.05, 0.1), 0.12)
+	_board_grip.position = Vector3(0, maxf(top - 0.05, 0.1) * 0.5, z - 0.03)
 
 
 func _on_board_chosen(id: StringName) -> void:

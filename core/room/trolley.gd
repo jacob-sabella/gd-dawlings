@@ -35,6 +35,11 @@ var floor_plan: FloorPlan
 ## The footprint in the trolley's own frame, on the floor: centre and half extents in (x, z).
 var footprint_centre := Vector2.ZERO
 var footprint_half := Vector2(0.2, 0.2)
+## What of it a person walks into, when that is less than what the floor plan pushes about: a
+## hoop's base is a step a person walks over, and only its pole stops them. Zero half extents
+## means the whole footprint.
+var body_centre := Vector2.ZERO
+var body_half := Vector2.ZERO
 ## What rides on it. Each is {"get": Callable() -> Transform3D, "set": Callable(Transform3D,
 ## bool)}, both in the trolley's parent frame; the bool says the move has settled and is worth
 ## keeping. Callables rather than nodes because a surface on a trolley may be somewhere else
@@ -44,6 +49,11 @@ var riders: Array = []
 ## Being moved from elsewhere -- someone else's hand, or the room's keeper putting it back. It
 ## rolls where it is told, and when it comes to rest that is not news to tell anyone.
 var steered := false
+## Walked through rather than into. For a piece in a venue that only draws its furniture (the
+## chalk zone: Venue.prop_shelf_solid), where the shelf it stands for is a sketch on the air and
+## a person walks through it the way they walk through the rest; the floor plan still keeps
+## other pieces out of it.
+var walk_through := false
 
 ## Turned this far per wheel notch while held, and this far with the fine modifier.
 const TURN_STEP := deg_to_rad(15.0)
@@ -143,6 +153,13 @@ func casters() -> Array[Caster]:
 func footprint_at(at: Vector2, heading: float) -> Dictionary:
 	var c := at + _floor_rotate(footprint_centre, heading)
 	return FloorPlan.footprint(c, footprint_half, heading)
+
+
+## What the walker stops at, standing at `at` facing `heading` (`body_half`).
+func body_at(at: Vector2, heading: float) -> Dictionary:
+	if body_half == Vector2.ZERO:
+		return footprint_at(at, heading)
+	return FloorPlan.footprint(at + _floor_rotate(body_centre, heading), body_half, heading)
 
 
 static func _floor_rotate(v: Vector2, heading: float) -> Vector2:

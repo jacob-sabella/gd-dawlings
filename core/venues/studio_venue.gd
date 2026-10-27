@@ -137,7 +137,7 @@ func rooms() -> Array[Rect2]:
 
 ## Beside: the room behind is no wider than the control room on the left, so the shelf stands
 ## against that wall instead, in the corner the booth and the riser left for the side room.
-func prop_shelf_spot() -> Transform3D:
+func default_prop_shelf_spot() -> Transform3D:
 	var spot := super()
 	if variant == BESIDE:
 		spot.origin.x = -room_width * 0.5 + 0.05 + 0.08 + ZoneKit.SHELF.z * 0.5

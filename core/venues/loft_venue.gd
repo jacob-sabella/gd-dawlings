@@ -371,7 +371,7 @@ func lamp_energy(_index: int, authored: float) -> float:
 ## The harp: the gallery and its stair take the back wall behind the bricks table, so it stands
 ## at the gallery's edge in the aisle between the riser and the lattice, short of the rail, facing
 ## the desk like everywhere else.
-func harp_spot() -> Transform3D:
+func default_harp_spot() -> Transform3D:
 	var at := zones()
 	var aisle := ((at[&"drums"] as AABB).end.x + (at[&"matrix"] as AABB).position.x) * 0.5
 	var z := LIVE_ROOM_BACK - GALLERY_DEPTH - 0.06 - (ChordHarp.FOOT.y - ChordHarp.FOOT_Z)
@@ -381,8 +381,8 @@ func harp_spot() -> Transform3D:
 ## The bells' stand: the aisle is too narrow for the usual hand's width either side, so it stands
 ## in the middle of what is left between the harp's plinth and the drum riser, on the harp's
 ## high side as everywhere else, its back in line with the plinth's.
-func bell_stand_spot() -> Transform3D:
-	var harp := harp_spot()
+func default_bell_stand_spot() -> Transform3D:
+	var harp := default_harp_spot()
 	var riser := (zones()[&"drums"] as AABB).end.x
 	var plinth := harp.origin.x - ChordHarp.FOOT.x
 	var x := (riser + plinth) * 0.5

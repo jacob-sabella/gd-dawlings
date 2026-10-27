@@ -347,9 +347,10 @@ func footprints() -> Array:
 		return out
 	for piece in floor_plan.pieces:
 		if is_instance_valid(piece) and piece.is_inside_tree() and piece.visible \
-				and piece.has_method("footprint_at"):
-			out.append(piece.footprint_at(Vector2(piece.position.x, piece.position.z),
-					piece.rotation.y))
+				and piece.has_method("footprint_at") and not piece.get(&"walk_through"):
+			var at := Vector2(piece.position.x, piece.position.z)
+			out.append(piece.body_at(at, piece.rotation.y) if piece.has_method("body_at")
+					else piece.footprint_at(at, piece.rotation.y))
 	for fixture in floor_plan.fixtures:
 		if fixture.is_valid():
 			out.append_array(fixture.call())

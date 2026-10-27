@@ -365,10 +365,17 @@ func zone_solids() -> Array:
 
 
 ## Where the prop shelf stands, in studio space: its floor centre, turned so its front faces
-## into the room. Against the left wall at the front of the back of house, the side the mirror and
-## the wardrobe are on: turn round from the desk and it is on your right as you come out of the
-## control room, short of the booth and the riser.
+## into the room. On its trolley (WHEELED), wherever that has been pushed; else where the venue
+## stands it.
 func prop_shelf_spot() -> Transform3D:
+	return _spot_of(&"prop_shelf")
+
+
+## Where the venue stands the prop shelf until it is pushed somewhere else. Against the left wall
+## at the front of the back of house, the side the mirror and the wardrobe are on: turn round from
+## the desk and it is on your right as you come out of the control room, short of the booth and
+## the riser.
+func default_prop_shelf_spot() -> Transform3D:
 	var x := -live_room_half() + 0.08 + ZoneKit.SHELF.z * 0.5
 	var z := Studio.ROOM_BACK + 0.3 + ZoneKit.SHELF.x * 0.5
 	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0, z))
@@ -468,11 +475,16 @@ func dart_spot(n: int) -> Transform3D:
 	return dartboard_spot() * Transform3D(Basis(Vector3.RIGHT, 0.15), Vector3(on.x, on.y, -DartItem.POINT_IN))
 
 
-## Where the mini hoop stands, in studio space: its foot, its board facing into the room. On
-## the right-hand wall at the front of the live room, the opposite side from the shelf the ball
-## lives on: in front of the bricks table and the synth stand, clear of both, a throw across the
-## room from the shelf.
+## Where the mini hoop stands, in studio space: its foot, its board facing into the room. On its
+## trolley (WHEELED), wherever that has been pushed; else where the venue stands it.
 func hoop_spot() -> Transform3D:
+	return _spot_of(&"hoop")
+
+
+## Where the venue stands the hoop until it is pushed somewhere else. On the right-hand wall at
+## the front of the live room, the opposite side from the shelf the ball lives on: in front of the
+## bricks table and the synth stand, clear of both, a throw across the room from the shelf.
+func default_hoop_spot() -> Transform3D:
 	var x := live_room_half() - 0.12 + Hoop.POLE_Z
 	var z := Studio.ROOM_BACK + 0.32
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(x, 0, z))
@@ -491,10 +503,16 @@ func rcplane_spot() -> Transform3D:
 	return hoop_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.55, 0, 1.25))
 
 
-## Where the Tour case stands, in studio space: chained in the back of house, against the back
-## wall on the opposite side from the hoop, its stencilled front facing into the room -- clear
-## of the mirror and the wardrobe, a throw from the middle of the floor.
+## Where the Tour case stands, in studio space. On its trolley (WHEELED), wherever that has been
+## pushed; else where the venue stands it.
 func tour_case_spot() -> Transform3D:
+	return _spot_of(&"tour_case")
+
+
+## Where the venue stands the Tour case until it is pushed somewhere else: in the back of house,
+## against the back wall on the opposite side from the hoop, its stencilled front facing into the
+## room -- clear of the mirror and the wardrobe, a throw from the middle of the floor.
+func default_tour_case_spot() -> Transform3D:
 	var x := -live_room_half() + 0.65
 	var z := LIVE_ROOM_BACK - 0.5
 	# Turned a half-circle from identity: the case's front (+Z, tools/blender/tour_case.py) then
@@ -503,12 +521,18 @@ func tour_case_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
 
 
-## Where the chord harp stands (ChordHarp), in studio space: its feet on the floor under its
-## strings, turned so whoever plays it faces the back wall. Against the live room's back wall,
-## behind the bricks table: the side away from the prop shelf, the mirror and the wardrobe, the
-## roulette door and the Tour case, out of the zones and of the way to the keyboard stand. Walk
-## round the table and it is in front of you.
+## Where the chord harp stands (ChordHarp), in studio space. On its trolley (WHEELED), wherever that
+## has been pushed; else where the venue stands it.
 func harp_spot() -> Transform3D:
+	return _spot_of(&"harp")
+
+
+## Where the venue stands the chord harp until it is pushed somewhere else: its feet on the floor
+## under its strings, turned so whoever plays it faces the back wall. Against the live room's back
+## wall, behind the bricks table: the side away from the prop shelf, the mirror and the wardrobe,
+## the roulette door and the Tour case, out of the zones and of the way to the keyboard stand. Walk
+## round the table and it is in front of you.
+func default_harp_spot() -> Transform3D:
 	var at := zones()
 	var x := live_room_half() - (LIVE_ROOM_HALF - (ZONES[&"bricks"] as AABB).get_center().x)
 	if at.has(&"bricks"):
@@ -518,7 +542,8 @@ func harp_spot() -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, z))
 
 
-## Where the handbells' stand stands (HandbellItem.stand), in studio space: beside the chord harp,
+## Where the handbells' stand stands (HandbellItem.stand), in studio space: on its trolley (WHEELED)
+## wherever that has been pushed, else beside the chord harp,
 ## its back in line with the harp's plinth, facing the same way, so whoever walks round the
 ## bricks table to the harp finds the bells at their elbow. On the harp's high side, `BELL_SIDE`,
 ## a hand's width clear of its plinth.
@@ -527,9 +552,15 @@ const BELL_GAP := 0.12
 
 
 func bell_stand_spot() -> Transform3D:
+	return _spot_of(&"bells")
+
+
+## Where the venue stands the bells' stand until it is pushed somewhere else: beside where it
+## stands the harp, whichever way the harp has since been wheeled.
+func default_bell_stand_spot() -> Transform3D:
 	var along := ChordHarp.FOOT.x + BELL_GAP + HandbellItem.STAND.x * 0.5
 	var back := ChordHarp.FOOT_Z - ChordHarp.FOOT.y + HandbellItem.STAND.y * 0.5
-	return harp_spot() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
+	return default_harp_spot() * Transform3D(Basis.IDENTITY, Vector3(BELL_SIDE * along, 0, back))
 
 
 ## Where handbell `n` (1 to 4) lives, in studio space: on its seat on the stand, mouth down, its
@@ -539,20 +570,26 @@ func bell_spot(n: int) -> Transform3D:
 
 
 ## Where the cassette rack stands (CassetteRack, docs/spatial_loop.md part two, slice 23), in
-## studio space: on the floor beside the prop shelf, on the side away from its lamp, its back in
+## studio space: on its trolley (WHEELED) wherever that has been pushed, else on the floor beside the prop shelf, on the side away from its lamp, its back in
 ## line with the shelf's against the same wall and facing into the room the same way. So the
 ## clips the band pulls out of the timeline stand beside the toys, where everyone walks past.
 const RACK_GAP := 0.12
 
 
 func cassette_rack_spot() -> Transform3D:
+	return _spot_of(&"cassette_rack")
+
+
+## Where the venue stands the cassette rack until it is pushed somewhere else: beside where it
+## stands the prop shelf.
+func default_cassette_rack_spot() -> Transform3D:
 	var along := ZoneKit.SHELF.x * 0.5 + RACK_GAP + CassetteRack.FOOT.x
-	return prop_shelf_spot() * Transform3D(Basis.IDENTITY,
+	return default_prop_shelf_spot() * Transform3D(Basis.IDENTITY,
 			Vector3(-along, 0, -ZoneKit.SHELF.z * 0.5 + CassetteRack.FOOT.y))
 
 
-## Where the sampler stands (Sampler, docs/spatial_loop.md part two, slice 26), in studio space: its
-## back to the outside of the vocal booth's front wall, a step along it from the cassette rack's
+## Where the sampler stands (Sampler, docs/spatial_loop.md part two, slice 26), in studio space: on
+## its trolley (WHEELED) wherever that has been pushed, else its back to the outside of the vocal booth's front wall, a step along it from the cassette rack's
 ## corner, facing the front of the live room. So whoever comes out of the control room meets it
 ## beside the rack and the prop shelf, its rack seat left clear, with the open floor in front of the
 ## shelf for its seat. SAMPLER_ALONG is how far along the booth's wall from its left-hand end its
@@ -563,6 +600,11 @@ const SAMPLER_GAP := 0.03
 
 
 func sampler_spot() -> Variant:
+	return _spot_of(&"sampler")
+
+
+## Where the venue stands the sampler until it is pushed somewhere else; null where it has no booth.
+func default_sampler_spot() -> Variant:
 	var at := zones()
 	if not at.has(&"vocals"):
 		return null
@@ -586,6 +628,56 @@ func wheel_spot() -> Variant:
 	var c := (at[&"bricks"] as AABB).get_center()
 	return Transform3D(Basis(Vector3.UP, PI),
 			Vector3(c.x, ZoneKit.TABLE_HEIGHT, c.z - ZoneKit.TABLE_TOP.z * 0.5 + WHEEL_IN))
+
+
+## The stations and the furniture of the back of house that stand on the floor by themselves, and
+## so are pushed about it like the gear in the control room: each is a trolley of the studio's
+## (Studio.live_pieces), and its `*_spot` is wherever that trolley has been wheeled. The venue says
+## only where each stands until somebody moves it (`default_spot`), and null where it has no room
+## for it at all. The fifths wheel is not here: it is mounted on the bricks table, which is the
+## venue's and does not move.
+const WHEELED: Array[StringName] = [&"harp", &"bells", &"cassette_rack", &"sampler", &"tour_case",
+		&"prop_shelf", &"hoop"]
+
+
+## Where the venue stands wheeled piece `id` (WHEELED) until it is pushed somewhere else, in
+## studio space; null where the venue has no room for it.
+func default_spot(id: StringName) -> Variant:
+	match id:
+		&"harp":
+			return default_harp_spot()
+		&"bells":
+			return default_bell_stand_spot()
+		&"cassette_rack":
+			return default_cassette_rack_spot()
+		&"sampler":
+			return default_sampler_spot()
+		&"tour_case":
+			return default_tour_case_spot()
+		&"prop_shelf":
+			return default_prop_shelf_spot()
+		&"hoop":
+			return default_hoop_spot()
+	return null
+
+
+## The trolley that wheeled piece `id` stands on, in the studio this venue stands in; null in no
+## studio (a venue made to be measured) or one that has not built it (AR).
+func _trolley_of(id: StringName) -> Trolley:
+	var studio := get_parent() as Studio
+	if studio == null or studio.studio_set == null:
+		return null
+	var t: Trolley = studio.live_pieces.get(id)
+	return t if t != null and is_instance_valid(t) else null
+
+
+## Where wheeled piece `id` stands, in studio space: where its trolley has been wheeled while it
+## is out in this venue, else the venue's own `default_spot` for it.
+func _spot_of(id: StringName) -> Variant:
+	var t := _trolley_of(id)
+	if t != null and t.visible:
+		return transform.affine_inverse() * get_parent().studio_set.transform * t.transform
+	return default_spot(id)
 
 
 ## Where the stage table stands (StageTable, docs/spatial_loop.md slice 18), in studio space: on
@@ -707,24 +799,39 @@ func mic_spot() -> Variant:
 ## shelf and what stands about the room with it (the door, the hoop, the Tour case, the harp, the
 ## bells' stand and the cassette rack).
 ## What the walker is given.
+##
+## In a studio the free-standing ones (WHEELED) are left out: they stand on trolleys there, and the
+## walker already stops at every trolley in the floor plan, wherever it has been pushed.
 func solids() -> Array:
 	var out := zone_solids()
 	if prop_shelf_solid():
 		# The door is as solid as the shelf: a venue that only draws its furniture (the chalk
 		# zone) is walked through, door and all.
 		out.append(door_solid())
-		var spot := prop_shelf_spot()
-		out.append({"c": Vector2(spot.origin.x, spot.origin.z),
-				"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
-				"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
-		out.append_array(Hoop.solids(hoop_spot()))
-		out.append_array(TourCase.solids(tour_case_spot()))
-		out.append(ChordHarp.solid(harp_spot()))
-		out.append(HandbellItem.stand_solid(bell_stand_spot()))
-		out.append(CassetteRack.solid(cassette_rack_spot()))
-		var sampler_at: Variant = sampler_spot()
-		if sampler_at != null:
-			out.append(Sampler.solid(sampler_at))
+		if _trolley_of(&"prop_shelf") == null:
+			out.append_array(wheeled_solids())
+	return out
+
+
+## The free-standing pieces (WHEELED) where they stand now, as walker footprints with how tall each
+## is: what a thrown thing lands on top of or bounces off the side of (Flight.fly), which a
+## trolley's footprint alone does not say. None where they are only drawn (`prop_shelf_solid`).
+func wheeled_solids() -> Array:
+	var out: Array = []
+	if not prop_shelf_solid():
+		return out
+	var spot := prop_shelf_spot()
+	out.append({"c": Vector2(spot.origin.x, spot.origin.z),
+			"h": Vector2(ZoneKit.SHELF.x, ZoneKit.SHELF.z) * 0.5,
+			"a": spot.basis.get_euler().y, "top": ZoneKit.SHELF.y})
+	out.append_array(Hoop.solids(hoop_spot()))
+	out.append_array(TourCase.solids(tour_case_spot()))
+	out.append(ChordHarp.solid(harp_spot()))
+	out.append(HandbellItem.stand_solid(bell_stand_spot()))
+	out.append(CassetteRack.solid(cassette_rack_spot()))
+	var sampler_at: Variant = sampler_spot()
+	if sampler_at != null:
+		out.append(Sampler.solid(sampler_at))
 	return out
 
 

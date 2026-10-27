@@ -134,6 +134,8 @@ func _ready() -> void:
 	_test_a_stand_taken_at_eye_height_pushes_naturally()
 	_test_you_can_say_how_tall_you_are_in_the_room()
 	_test_furniture_is_solid()
+	_test_what_stands_on_its_own_is_pushed_about_too()
+	_test_floor_past_the_control_room_holds_a_piece_at_its_walls()
 	_test_the_wheel_turns_furniture_only_while_held()
 	_test_a_summoned_surface_goes_home_to_where_its_stand_went()
 	_test_a_monitor_goes_to_the_gear_and_leaves_the_room_alone()
@@ -6933,8 +6935,9 @@ func _test_a_stand_pulled_into_you_stops_at_you() -> void:
 	check("the floor plan knows where you stand", studio.floor_plan.bodies.size() == 1
 			and walker.body_footprint().size() == 1)
 	var from := Vector2(piece.position.x, piece.position.z)
-	# Somewhere clear, a metre and a half on from the rack, and drag the rack right through it.
-	var stand_at := from + Vector2(0, 1.5)
+	# Somewhere clear, a metre on from the rack (short of the left-hand lamp and the stage table
+	# behind it), and drag the rack right through it.
+	var stand_at := from + Vector2(0, 1.0)
 	var level := (walker._plan_frame().affine_inverse() * walker.global_position).y
 	walker.global_position = walker._plan_frame() * Vector3(stand_at.x, level, stand_at.y)
 	var body: Dictionary = walker.body_footprint()[0]
@@ -7124,6 +7127,223 @@ func _test_you_can_say_how_tall_you_are_in_the_room() -> void:
 	_drop_floor_studio(rig)
 
 
+## Everything standing on the floor by itself is pushed about like the rack: the venue's harp,
+## bells' stand, cassette rack, sampler, Tour case, prop shelf and hoop, the station board's stand
+## and the patch wall's legs. What is measured from one goes with it; it stays in the rooms you
+## can walk and stops at what the venue has built into them; it is where it was left next time;
+## and where a venue has no room for it, it is not there at all.
+func _test_what_stands_on_its_own_is_pushed_about_too() -> void:
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var venue := studio.venue
+	var ids: Array[StringName] = []
+	ids.append_array(Venue.WHEELED)
+	ids.append_array([&"station_board", &"patch_wall"])
+	var missing: Array = []
+	for id in ids:
+		var t: Trolley = studio.live_pieces.get(id)
+		if t == null or not studio.floor_plan.pieces.has(t) or not t.visible or t.piece_id != id \
+				or t.get_parent() != studio.studio_set:
+			missing.append(id)
+	check("every free-standing piece is a trolley on the floor plan (%s missing)" % [missing], missing.is_empty())
+	var harp_t: Trolley = studio.live_pieces[&"harp"]
+	check("standing where the venue stands it, never moved", (venue.harp_spot() as Transform3D).is_equal_approx(
+			venue.default_harp_spot()) and studio.harp.transform.is_equal_approx(venue.harp_spot()))
+	check("and the venue's solids leave it to the trolley", not venue.solids().has(ChordHarp.solid(venue.harp_spot())))
+
+	# The harp, pulled out from the back wall and along it: the harp goes, and its station with it.
+	var seat_was: Transform3D = Stations.seat(venue, &"harp")
+	_push(harp_t, hand, Vector2(-0.8, -0.4))
+	_roll_until_still(harp_t)
+	var harp_at := Vector2(harp_t.position.x, harp_t.position.z)
+	var seat_now: Transform3D = Stations.seat(venue, &"harp")
+	check("a pushed harp moves (%.2f m)" % harp_at.distance_to(Vector2(venue.default_harp_spot().origin.x,
+			venue.default_harp_spot().origin.z)), harp_at.distance_to(Vector2(venue.default_harp_spot().origin.x,
+			venue.default_harp_spot().origin.z)) > 0.5)
+	check("and the harp on it, and its spot, are where its trolley is", studio.harp.transform.is_equal_approx(
+			venue.harp_spot()) and Vector2(venue.harp_spot().origin.x, venue.harp_spot().origin.z).distance_to(harp_at) < 0.001)
+	check("and where a player stands to play it went with it (%.2f m)" % seat_now.origin.distance_to(seat_was.origin),
+			seat_now.origin.distance_to(seat_was.origin) > 0.5 and (Stations.look_point(venue, &"harp") as Vector3)
+			.is_equal_approx(venue.harp_spot() * (Stations.row(&"harp")["at"] as Vector3)))
+	check("and the station board's row for it is still there", studio.station_board.rows().has(&"harp"))
+	check("and it is saved where it was left", Session.layout.has_transform(&"floor/harp", Presentation.Mode.STUDIO)
+			and Session.layout.transform_for(&"floor/harp", Presentation.Mode.STUDIO, Transform3D()).is_equal_approx(harp_t.transform))
+	check("and the room says where it is", (studio.room_state()["floor"] as Dictionary).has(&"harp"))
+
+	# The shelf, pushed along the wall: the things at home on it ride with it.
+	var shelf_t: Trolley = studio.live_pieces[&"prop_shelf"]
+	var tablet: Item = studio.items.items.get(&"tablet")
+	var dart: Item = studio.items.items.get(&"dart1")
+	check("the tablet and a dart start at home on the shelf", tablet != null and tablet.state == Item.State.HOME
+			and dart != null and dart.state == Item.State.HOME)
+	_push(shelf_t, hand, Vector2(0, 0.7))
+	_roll_until_still(shelf_t)
+	var shelf_node := venue.get_node("PropShelf") as Node3D
+	check("a pushed shelf is drawn where its trolley is", shelf_node.transform.is_equal_approx(venue.prop_shelf_spot())
+			and Vector2(shelf_node.position.x, shelf_node.position.z).distance_to(
+				Vector2(shelf_t.position.x, shelf_t.position.z)) < 0.001
+			and not venue.prop_shelf_spot().is_equal_approx(venue.default_prop_shelf_spot()))
+	check("and what is at home on it went with it", tablet.home.is_equal_approx(venue.tablet_spot())
+			and tablet.transform.is_equal_approx(tablet.home) and dart.home.is_equal_approx(venue.dart_spot(0))
+			and dart.transform.is_equal_approx(dart.home))
+	check("and darts stick in the board where it now is", (studio.items.boards[0]["at"] as Transform3D).is_equal_approx(
+			venue.dartboard_spot()))
+
+	# The bells' stand and the cassette rack: the bells' seats and the rack's slots go with them.
+	var bells_t: Trolley = studio.live_pieces[&"bells"]
+	_push(bells_t, hand, Vector2(0.3, -0.5))
+	_roll_until_still(bells_t)
+	var bell: Item = studio.items.items.get(&"bell1")
+	check("a pushed bells' stand takes the bells' homes with it", bell != null and bell.home.is_equal_approx(venue.bell_spot(1))
+			and bell.transform.is_equal_approx(bell.home)
+			and (venue.get_node("BellStand") as Node3D).transform.is_equal_approx(venue.bell_stand_spot())
+			and not venue.bell_stand_spot().is_equal_approx(venue.default_bell_stand_spot()))
+	var rack_t: Trolley = studio.live_pieces[&"cassette_rack"]
+	_push(rack_t, hand, Vector2(0.5, 0.3))
+	_roll_until_still(rack_t)
+	var slots: Array = studio.items.holders.get(CassetteRack.RACK, [])
+	check("a pushed cassette rack takes its slots with it", studio.cassette_rack.transform.is_equal_approx(
+			venue.cassette_rack_spot()) and slots.size() == CassetteRack.SLOTS
+			and (slots[0] as Transform3D).is_equal_approx(CassetteRack.slots_in(studio.cassette_rack.transform)[0])
+			and not venue.cassette_rack_spot().is_equal_approx(venue.default_cassette_rack_spot()))
+
+	# The hoop and the Tour case: the basket a ball goes through, and the case's spills, follow.
+	var hoop_t: Trolley = studio.live_pieces[&"hoop"]
+	_push(hoop_t, hand, Vector2(-0.6, 0.4))
+	_roll_until_still(hoop_t)
+	check("a pushed hoop is drawn where it stands, and a ball goes through it there",
+			(venue.get_node("Hoop") as Node3D).transform.is_equal_approx(venue.hoop_spot())
+			and (studio.items.hoops[0]["at"] as Transform3D).is_equal_approx(Hoop.shape(venue.hoop_spot())["at"])
+			and not venue.hoop_spot().is_equal_approx(venue.default_hoop_spot()))
+	var case_t: Trolley = studio.live_pieces[&"tour_case"]
+	_push(case_t, hand, Vector2(0.6, -0.3))
+	_roll_until_still(case_t)
+	check("a pushed Tour case is where its trolley is", studio.tour_case.transform.is_equal_approx(case_t.transform)
+			and not venue.tour_case_spot().is_equal_approx(venue.default_tour_case_spot()))
+
+	# The board and the patch wall's legs: the board's face and the screen go with their stands.
+	var board_t: Trolley = studio.live_pieces[&"station_board"]
+	_push(board_t, hand, Vector2(-0.4, 0.2))
+	_roll_until_still(board_t)
+	check("a pushed station board is where its stand is", studio.station_board.transform.is_equal_approx(board_t.transform)
+			and not board_t.position.is_equal_approx(Studio.BOARD_AT))
+	var legs: Trolley = studio.live_pieces[&"patch_wall"]
+	_push(legs, hand, Vector2(0.5, 0.3))
+	_roll_until_still(legs)
+	var screen := venue.get_node("PatchWall") as Node3D
+	check("a pushed patch wall's screen is on its legs", screen.has_meta(&"on_legs")
+			and screen.transform.is_equal_approx(legs.transform * Transform3D(
+				Basis.IDENTITY.scaled(Vector3.ONE * Studio.PATCH_WALL_SCALE), Vector3(0, Studio.PATCH_WALL_TOP, 0)))
+			and legs.position.distance_to(studio._patch_wall_default().origin) > 0.3)
+
+	# Another venue and back: what was pushed is where it was left, and in the Rig Roulette room,
+	# which has no booth to stand it against, the sampler is not there at all.
+	var sampler_t: Trolley = studio.live_pieces[&"sampler"]
+	studio.set_venue(Venue.ROULETTE_ID, false)
+	check("where a venue has no room for one, its trolley is hidden and out of the way",
+			not sampler_t.visible and sampler_t.collision_layer == 0 and studio.sampler == null
+			and not studio.walker.footprints().has(sampler_t.footprint_at(Vector2(sampler_t.position.x, sampler_t.position.z),
+				sampler_t.rotation.y)))
+	check("and what the venue does have room for is out", harp_t.visible and shelf_t.visible)
+	studio.set_venue(&"studio", false, StudioVenue.BESIDE)
+	check("a venue that hangs its own patch wall hides the legs", not legs.visible
+			and not studio.venue.get_node("PatchWall").has_meta(&"on_legs"))
+	studio.set_venue(&"studio", false, 0)
+	check("back again, the sampler is out where it was", sampler_t.visible and studio.sampler != null
+			and studio.sampler.transform.is_equal_approx(studio.venue.sampler_spot()) and legs.visible)
+	check("and the harp is where it was pushed (%s)" % harp_t.position,
+			Vector2(harp_t.position.x, harp_t.position.z).distance_to(harp_at) < 0.01
+			and studio.harp.transform.is_equal_approx(studio.venue.harp_spot()))
+	studio.set_venue(&"chalk", false)
+	check("in the chalk zone, where the shelf is only drawn, its trolley is walked through", shelf_t.walk_through
+			and not studio.walker.footprints().has(shelf_t.footprint_at(Vector2(shelf_t.position.x, shelf_t.position.z),
+				shelf_t.rotation.y)) and not board_t.walk_through)
+	studio.set_venue(&"studio", false, 0)
+
+	# A new studio on the same layout: the harp is where this player left it.
+	var saved_harp := harp_t.transform
+	var layout := Session.layout
+	var saved_layout: LayoutProfile = rig["saved_layout"]
+	(rig["hand"] as Node).free()
+	remove_child(studio)
+	studio.free()
+	var again := Studio.new()
+	again.medium = Presentation.Medium.SCREEN
+	add_child(again)
+	var harp_again: Trolley = again.live_pieces.get(&"harp")
+	check("next time, a pushed piece is where it was left (%s)" % (harp_again.position if harp_again != null else null),
+			harp_again != null and Vector2(harp_again.position.x, harp_again.position.z).distance_to(
+				Vector2(saved_harp.origin.x, saved_harp.origin.z)) < 0.01
+			and again.harp.transform.is_equal_approx(again.venue.harp_spot()))
+	remove_child(again)
+	again.free()
+	Session.layout = saved_layout
+	if layout != null and FileAccess.file_exists(layout.save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(layout.save_path))
+
+
+## The floor a piece is pushed on is every room you can walk: out of the control room into the
+## live room, held there by its walls, and stopped at what the venue has built into it.
+func _test_floor_past_the_control_room_holds_a_piece_at_its_walls() -> void:
+	# Two rooms meeting along a line, the second wider, as the control room and the live room do.
+	var plan := FloorPlan.new()
+	plan.bounds = Rect2(-2, -2, 4, 4)
+	plan.rooms = [Rect2(-4, 2, 8, 3)]
+	check("a box across the line, inside both, is on the floor",
+			FloorPlan.on_floor([plan.bounds, plan.rooms[0]], Vector2(-1, 1), Vector2(1, 3)))
+	check("one across the line past the narrow room's side is not",
+			not FloorPlan.on_floor([plan.bounds, plan.rooms[0]], Vector2(-3, 1), Vector2(-1, 3)))
+	var c := plan._held_on_floor(Vector2(-1.6, 2.0), Vector2(0.5, 0.5))
+	check("pushed past the narrow room's side astride the line, it is held by that wall (%s)" % c,
+			c.is_equal_approx(Vector2(-1.5, 2.0)))
+	c = plan._held_on_floor(Vector2(-2.6, 2.4), Vector2(0.5, 0.5))
+	check("and pushed back toward the narrow room from beside it, by the wide room's front wall (%s)" % c,
+			c.is_equal_approx(Vector2(-2.6, 2.5)))
+	plan.free()
+
+	var rig := _floor_studio()
+	var studio: Studio = rig["studio"]
+	var hand: FakeHand = rig["hand"]
+	var venue := studio.venue
+	var live := venue.back_of_house()
+	var floor: Array[Rect2] = [studio.floor_plan.bounds]
+	floor.append_array(studio.floor_plan.rooms)
+	check("the floor plan's floor is where you can walk", studio.floor_plan.rooms == venue.rooms())
+	# The Tour case, shoved hard at the live room's side wall: it stays in the live room.
+	var case_t: Trolley = studio.live_pieces[&"tour_case"]
+	_push(case_t, hand, Vector2(-3.0, 0.0))
+	_roll_until_still(case_t)
+	var print_of := func(t: Trolley) -> Dictionary:
+		return t.footprint_at(Vector2(t.position.x, t.position.z), t.rotation.y)
+	var reach := FloorPlan._reach(print_of.call(case_t))
+	var middle: Vector2 = print_of.call(case_t)["c"]
+	check("a piece pushed at the live room's wall stays in the live room (%.3f, wall %.3f)" % [
+			middle.x - reach.x, live.position.x], middle.x - reach.x >= live.position.x - 0.001
+			and middle.y - reach.y >= live.position.y - 0.001
+			and FloorPlan.on_floor(floor, middle - reach, middle + reach))
+	# The harp, pulled straight at the bricks table in front of it: it stops at the table.
+	var harp_t: Trolley = studio.live_pieces[&"harp"]
+	var from := Vector2(harp_t.position.x, harp_t.position.z)
+	_push(harp_t, hand, Vector2(0, -3.0))
+	_roll_until_still(harp_t)
+	var bricks: AABB = venue.zones()[&"bricks"]
+	var table := FloorPlan.footprint(Vector2(bricks.get_center().x, bricks.get_center().z),
+			Vector2(ZoneKit.TABLE_TOP.x, ZoneKit.TABLE_TOP.z) * 0.5, 0.0)
+	var at := Vector2(harp_t.position.x, harp_t.position.z)
+	var gap := FloorPlan.separation(print_of.call(harp_t), table)
+	check("a piece pushed at the bricks table stops at it (%.3f m on, table at z %.2f)" % [from.distance_to(at),
+			bricks.end.z], gap.length() < 0.002 and from.distance_to(at) > 0.2 and from.distance_to(at) < 2.0
+			and (print_of.call(harp_t)["c"] as Vector2).y > bricks.get_center().z)
+	# And one wheeled out of the control room goes into the live room, through the way between.
+	var board_t: Trolley = studio.live_pieces[&"station_board"]
+	_push(board_t, hand, Vector2(0, 1.6), 80)
+	_roll_until_still(board_t)
+	check("a piece in the control room can be pushed out into the live room (z %.2f, its edge %.2f)" % [
+			board_t.position.z, studio.floor_plan.bounds.end.y], board_t.position.z > studio.floor_plan.bounds.end.y + 0.5)
+	_drop_floor_studio(rig)
+
+
 func _test_furniture_is_solid() -> void:
 	var rig := _floor_studio()
 	var studio: Studio = rig["studio"]
@@ -7183,7 +7403,7 @@ func _test_the_wheel_turns_furniture_only_while_held() -> void:
 	var turned := rad_to_deg(wrapf(piece.rotation.y - heading, -PI, PI))
 	check("two notches and one fine notch back is 27 degrees (%.2f)" % turned,
 			absf(turned - 27.0) < 0.05)
-	var deck_turned := rad_to_deg(wrapf(studio.deck.rotation.y - deg_to_rad(-32.0), -PI, PI))
+	var deck_turned := rad_to_deg(wrapf(studio.deck.rotation.y - deg_to_rad(SessionLayout.DECK_HEADING), -PI, PI))
 	check("and the tape machine turned with its cart (%.2f)" % deck_turned,
 			absf(deck_turned - 27.0) < 0.05)
 	_drop_floor_studio(rig)
@@ -7874,8 +8094,12 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
 					and clear_of_solids and on_floor and standable and home_ok)
 	studio.set_venue(&"studio", false)
-	var shelf_print: Dictionary = studio.venue.solids().back()
-	check("the shelf stops you walking into it", walker.fixed.has(shelf_print)
+	# On its trolley, which the walker stops at: the shelf's solid is the first of the free-standing ones.
+	var shelf_print: Dictionary = studio.venue.wheeled_solids()[0]
+	var shelf_t: Trolley = studio.live_pieces[&"prop_shelf"]
+	check("the shelf stops you walking into it", walker.footprints().has(shelf_t.footprint_at(
+			Vector2(shelf_t.position.x, shelf_t.position.z), shelf_t.rotation.y))
+			and (shelf_print["c"] as Vector2).is_equal_approx(Vector2(shelf_t.position.x, shelf_t.position.z))
 			and not walker.fits(shelf_print["c"]))
 	check("and in the chalk zone it is only drawn", ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
 
@@ -8398,14 +8622,18 @@ func _test_a_paper_plane_glides() -> void:
 			and plane.position.is_equal_approx(studio.venue.item_spots()[2].origin))
 	var walker := studio.walker
 	var by_wall := Vector2.INF
+	# Along each wall, not only at its middle: the patch wall's legs stand along the control room's.
 	for r: Rect2 in walker.walkable:
-		var p := Vector2(r.position.x + 0.06, r.get_center().y)
-		if walker.reachable(p) and not walker.fits(p):
-			by_wall = p
+		for along in [0.5, 0.3, 0.7]:
+			var p := Vector2(r.position.x + 0.06, r.position.y + r.size.y * along)
+			if walker.reachable(p) and not walker.fits(p):
+				by_wall = p
+				break
+		if by_wall != Vector2.INF:
 			break
 	check("a thing against a wall can lie there, though nobody could stand there (%s)" % [by_wall],
 			by_wall != Vector2.INF)
-	var shelf_print: Dictionary = studio.venue.solids().back()
+	var shelf_print: Dictionary = studio.venue.wheeled_solids()[0]
 	check("but not inside the shelf, nor off the floor", not walker.reachable(shelf_print["c"])
 			and not walker.reachable(Vector2(1000, 1000)))
 	var hand := studio.get_node("MouseHand") as MouseInteractor
@@ -9242,6 +9470,11 @@ func _seat_audit(tracks: int) -> void:
 		if c is StageVoice or c is StageVoice.Ring or c is StageVoice.Stalk or c is StageVoice.Knot \
 				or c.get_parent() is StageVoice:
 			continue
+		# The live room's free-standing furniture is taken by its feet where it stands, by whoever
+		# has walked over to push it: from the seat the gear between hides its feet (the hoop's,
+		# across the room behind the patch stand). What is played on it is audited all the same.
+		if c is Trolley and Venue.WHEELED.has((c as Trolley).piece_id):
+			continue
 		var shape: CollisionShape3D = null
 		for child in c.get_children():
 			if child is CollisionShape3D:
@@ -9363,8 +9596,9 @@ func _test_you_walk_into_the_room_and_not_through_it() -> void:
 			at.z > b.end.y + 1.0)
 	check("and the live room's back wall stops you (z %.2f, wall %.2f)" % [at.z, live.end.y],
 			at.z < live.end.y and at.z > live.end.y - Walker.RADIUS - 0.1)
-	# Just in front of the doorway, where nothing of the gear's stands between you and the wall.
-	at = walk_until_still.call(Vector3(0, 0, b.end.y - 0.3), Vector3(-1, 0, 0))
+	# Behind the desk and in front of the lamps and the stage table, where nothing of the gear's
+	# stands between you and the wall.
+	at = walk_until_still.call(Vector3(-0.9, 0, 0.35), Vector3(-1, 0, 0))
 	check("the control room's side wall still holds (x %.2f, wall %.2f)" % [at.x, b.position.x],
 			at.x > b.position.x and at.x < b.position.x + Walker.RADIUS + 0.1)
 	at = walk_until_still.call(Vector3(b.end.x + 1.0, 0, live.position.y + 1.0), Vector3(0, 0, -1))
@@ -22673,7 +22907,8 @@ func _test_every_venue_has_a_clear_door_to_the_roulette_room() -> void:
 		check("%s: nothing stands in it or in front of it (%s)" % [tag, blocked], blocked.is_empty())
 		var in_the_way: Array = []
 		for piece in studio.floor_plan.pieces:
-			if not studio.floor_plan.is_clear(piece, Vector2(piece.position.x, piece.position.z), piece.rotation.y):
+			# One a venue has no room for is put away, not standing anywhere.
+			if piece.visible and not studio.floor_plan.is_clear(piece, Vector2(piece.position.x, piece.position.z), piece.rotation.y):
 				in_the_way.append(piece.name)
 		check("%s: no gear stands in it (%s)" % [tag, in_the_way], in_the_way.is_empty())
 		var board := venue.roll_board_spot()
@@ -24381,7 +24616,8 @@ func _check_free_station(studio: Studio, id: StringName, spot: Transform3D, tag:
 	var on_floor := corners.all(func(c: Vector2) -> bool:
 		return walker.walkable.any(func(f: Rect2) -> bool: return f.has_point(c)))
 	var blocked: Array = []
-	for f: Dictionary in venue.solids():
+	# The venue's fixed things, and the other free-standing ones where they stand on their trolleys.
+	for f: Dictionary in venue.solids() + venue.wheeled_solids():
 		if f == mine:
 			continue
 		if FloorPlan.separation(mine, f) != Vector2.ZERO:
@@ -24406,8 +24642,16 @@ func _check_free_station(studio: Studio, id: StringName, spot: Transform3D, tag:
 	check("%s: free-standing, off the footprint, clear of the zones %s, solids %s and props %s, on the floor, with room to stand at it"
 			% [tag, zoned, blocked, near], not rect.intersects(studio._room_bounds()) and zoned.is_empty()
 			and blocked.is_empty() and near.is_empty() and on_floor and standable)
-	check("%s: and solid where the room is solid" % tag,
-			venue.solids().has(mine) == venue.prop_shelf_solid() and walker.fixed.has(mine) == venue.prop_shelf_solid())
+	# On a trolley of its own whose footprint is its own, which the walker stops at where the room is
+	# solid; the venue's solids leave it to the trolley.
+	var trolley: Trolley = studio.live_pieces.get(id)
+	var own: Dictionary = trolley.footprint_at(Vector2(trolley.position.x, trolley.position.z), trolley.rotation.y) \
+			if trolley != null else {}
+	var same := not own.is_empty() and (own["c"] as Vector2).distance_to(mine["c"]) < 0.001 \
+			and (own["h"] as Vector2).is_equal_approx(mine["h"]) and is_equal_approx(wrapf(own["a"] - mine["a"], -PI, PI), 0.0)
+	check("%s: and on a trolley, solid where the room is solid" % tag, same and trolley.visible
+			and studio.floor_plan.pieces.has(trolley) and not venue.solids().has(mine)
+			and walker.footprints().has(own) == venue.prop_shelf_solid() and venue.wheeled_solids().has(mine) == venue.prop_shelf_solid())
 
 
 ## A zone-mounted station: in its zone, its air clear of every zone solid that rises above what it
@@ -24689,7 +24933,7 @@ func _test_every_venue_gives_the_bells_reachable_homes() -> void:
 			var on_floor := corners.all(func(c: Vector2) -> bool:
 				return walker.walkable.any(func(r: Rect2) -> bool: return r.has_point(c)))
 			var blocked: Array = []
-			for f: Dictionary in venue.solids():
+			for f: Dictionary in venue.solids() + venue.wheeled_solids():
 				if f == mine:
 					continue
 				if FloorPlan.separation(mine, f) != Vector2.ZERO:
@@ -24712,8 +24956,12 @@ func _test_every_venue_gives_the_bells_reachable_homes() -> void:
 			check("%s: the stand is off the footprint, clear of the zones %s, solids %s and props %s, on the floor, with room to stand at it"
 					% [tag, zoned, blocked, near], not rect.intersects(studio._room_bounds()) and zoned.is_empty()
 					and blocked.is_empty() and near.is_empty() and on_floor and standable)
-			check("%s: and solid where the room is solid" % tag,
-					venue.solids().has(mine) == venue.prop_shelf_solid() and walker.fixed.has(mine) == venue.prop_shelf_solid())
+			# On its trolley, which the walker stops at where the room is solid.
+			var bells_t: Trolley = studio.live_pieces[&"bells"]
+			var own := bells_t.footprint_at(Vector2(bells_t.position.x, bells_t.position.z), bells_t.rotation.y)
+			check("%s: and on a trolley, solid where the room is solid" % tag,
+					(own["c"] as Vector2).distance_to(mine["c"]) < 0.001 and not venue.solids().has(mine)
+					and walker.footprints().has(own) == venue.prop_shelf_solid())
 	check("in the chalk zone it is only drawn, like everything else there",
 			ChalkVenue.new().solids().size() == ChalkVenue.new().zone_solids().size())
 	var roulette := Venue.make(Venue.ROULETTE_ID)
@@ -27272,13 +27520,17 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
 			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"harp", &"bells", &"wheel", &"cassette_rack", &"sampler"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
-	# and from there, looking ahead as a player stands, the board is in view.
+	# and from there the board is out of the way ahead (the desk is what is in view) and a few
+	# steps behind.
 	check("a VR play space starts centred on the mix position (%s)" % rig.global_position,
 			rig.home.origin.is_equal_approx(Vector3(0, 0, Studio.MIX_POSITION_Z))
 			and rig.global_position.is_equal_approx(Vector3(0, 0, Studio.MIX_POSITION_Z)) and not rig.away)
 	var middle: Vector3 = (board.get_node("Face") as Node3D).global_transform * Vector3(0, -board.face_height() * 0.5, 0)
-	check("and the board is in view from the head at home",
-			_in_view(rig.head.global_transform, Studio.HEADSET_FOV, 1.0, middle))
+	check("and the board is not in the way from the head at home",
+			not _in_view(rig.head.global_transform, Studio.HEADSET_FOV, 1.0, middle))
+	check("but a few steps behind it (%.2f m)" % Vector2(board.global_position.x, board.global_position.z).distance_to(
+			Vector2(0, Studio.MIX_POSITION_Z)), Vector2(board.global_position.x, board.global_position.z).distance_to(
+			Vector2(0, Studio.MIX_POSITION_Z)) < 2.5)
 	var said: Array = []
 	var listen := func(text: String) -> void: said.append(text)
 	Session.notice.connect(listen)
@@ -27458,11 +27710,17 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	card.free()
 	check("in every venue the board's rows are the PLAY pages' stations, in order (%s)" % [differ], differ.is_empty())
 	studio.set_venue(Venue.IDS[0], false)
+	# On a stand of its own pushed about the floor: the stand's footprint is the board's foot.
 	var fixture := board.footprint()
-	check("it stands on the floor plan, clear of the desk", studio.floor_plan.fixtures.any(
-			func(f: Callable) -> bool: return f.call().has(fixture)) and not fixture.is_empty())
+	var stand: Trolley = studio.live_pieces.get(&"station_board")
+	var stood: Dictionary = stand.footprint_at(Vector2(stand.position.x, stand.position.z), stand.rotation.y) \
+			if stand != null else {}
+	check("it stands on the floor plan, on a stand of its own, clear of the desk", stand != null
+			and studio.floor_plan.pieces.has(stand) and not fixture.is_empty()
+			and (stood["c"] as Vector2).distance_to(fixture["c"]) < 0.001 and (stood["h"] as Vector2).is_equal_approx(fixture["h"])
+			and FloorPlan.separation(stood, studio._desk_footprint()[0]) == Vector2.ZERO)
 	var middle: Vector3 = (board.get_node("Face") as Node3D).global_transform * Vector3(0, -board.face_height() * 0.5, 0)
-	check("and is in view from the desk's seat", _in_view(studio.camera.global_transform, studio.camera.fov, 1600.0 / 900.0, middle))
+	check("and is out of the desk seat's view, which is the desk's", not _in_view(studio.camera.global_transform, studio.camera.fov, 1600.0 / 900.0, middle))
 	var says := board.get_node("Face/Says") as Label3D
 	check("its face says how it works (%s)" % says.text, says.text == StationBoard.FACE_LINE)
 	var walker := studio.walker

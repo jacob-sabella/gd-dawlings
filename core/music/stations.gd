@@ -19,8 +19,9 @@ extends RefCounted
 ## stands there, facing back along -Z.
 ##
 ## A free-standing row also says its footprint (`foot`, half its size on the floor, and `foot_z`,
-## how far along Z its middle is) and how tall it stands (`top`), which is the walker solid the
-## venue gives it, so the clearance loop and the venue cannot disagree about where it is.
+## how far along Z its middle is) and how tall it stands (`top`): the footprint of the trolley it
+## is pushed about on in a studio (Venue.WHEELED), and the solid a venue gives it standing on its
+## own, so the clearance loop, the trolley and the venue cannot disagree about where it is.
 ##
 ## A row that is a surface rather than an instrument (the stage table, slice 18) says so
 ## (`surface`, its surface id), stands on a trolley rather than a venue solid (no `foot`), and

@@ -29,15 +29,16 @@ const DECK_GAP := 0.34
 const WALL_CLEARANCE := 0.75
 
 ## The authored positions for a thirteen-track desk, which this must reproduce.
-const RACK_AT := Vector2(-1.18, -0.42)
-const RACK_HEADING := 38.0
+const RACK_AT := Vector2(-1.75, -0.42)
+const RACK_HEADING := 45.0
 const RACK_HALF := 0.30
-const DECK_AT := Vector2(0.80, -0.22)
-const DECK_HEADING := -32.0
+const DECK_AT := Vector2(1.25, -0.10)
+const DECK_HEADING := -50.0
 const DECK_HALF := 0.28
-## The patch stand, out to the right past the deck, a walkway clear of it.
-const PATCH_AT := Vector2(1.80, -0.30)
-const PATCH_HEADING := -72.0
+## The patch stand, along the right-hand wall behind the deck, turned to face across the room: a
+## walkway clear of it, and out of the way of the seat.
+const PATCH_AT := Vector2(3.05, 1.25)
+const PATCH_HEADING := -90.0
 const PATCH_GAP := 1.0
 
 
