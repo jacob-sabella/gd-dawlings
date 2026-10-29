@@ -23,14 +23,17 @@ extends Node3D
 ## The walls of the control room: the working footprint. Each venue builds the rest of its
 ## world -- and the activity zones behind the mix position -- around this (see Venue.ZONES).
 ## Sized to feel like a room you can move about in, not a booth: at 6.4 x 5 m under a 2.8 m
-## ceiling every venue read as cramped round the gear.
-const ROOM_WIDTH := 8.0
-const ROOM_DEPTH := 6.0
-const WALL_HEIGHT := 3.3
-## The footprint's open rear and front wall, along z, and its middle. The rear stays where the
-## zones, the prop shelf and the toys on it were laid out from; a deeper room is more of it in
-## front of the desk, which is where it was cramped.
-const ROOM_BACK := 2.8
+## ceiling every venue read as cramped round the gear, and at 8 x 6 m under 3.3 m it still was once
+## the room had twenty stations in it (2026-10-28, "EVERYTHING is way too cramped"). The mixing
+## neighbourhood is a ring round the seat with aisles between its pieces (docs/architecture.md,
+## "Room layout").
+const ROOM_WIDTH := 11.2
+const ROOM_DEPTH := 8.0
+const WALL_HEIGHT := 3.6
+## The footprint's open rear and front wall, along z, and its middle. The rear is the line the
+## live room's neighbourhoods are laid out from; there is as much room behind the seat (the stage
+## table and the station board) as in front of the desk.
+const ROOM_BACK := 4.0
 const ROOM_FRONT := ROOM_BACK - ROOM_DEPTH
 const ROOM_MID := (ROOM_FRONT + ROOM_BACK) * 0.5
 ## The stand that carries the timeline. Its top sits just under the panel's lower edge, which
@@ -59,11 +62,11 @@ const TIMELINE_LEG_X := 0.36 * TIMELINE_SCALE
 ## Spread 0.8 m further out each side than first placed, with the room: left where they were
 ## in a wider room they bunched round the desk and stood between the seat and the wardrobe.
 const PRACTICALS: Array = [
-	[Vector3(-2.85, 1.76, 1.25), Color(1.0, 0.78, 0.52), 6.0],
+	[Vector3(-4.3, 1.76, 2.2), Color(1.0, 0.78, 0.52), 6.0],
 	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
 	# Forward on the right since the patch stand took that side of the room: anywhere behind it
 	# the stand was in the way from the seat.
-	[Vector3(1.9, 1.70, -2.7), Color(0.6, 0.78, 1.0), 5.5],
+	[Vector3(2.7, 1.70, -3.1), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -74,12 +77,13 @@ const PRACTICALS: Array = [
 	# From here, against the body's own work light, inverse-square irradiance at the two ends
 	# comes out within a couple of percent. Summoned gear is lit by the work light; the room's
 	# lamps light the ROOM. `_test_the_desk_is_lit_evenly_end_to_end` holds the balance.
-	[Vector3(-2.30, 1.72, 0.95), Color(1.0, 0.82, 0.60), 4.5],
+	[Vector3(-3.2, 1.72, 0.75), Color(1.0, 0.82, 0.60), 4.5],
 ]
 ## How far a practical reaches. Short on purpose: at 6.5m each lamp lit all three walls, and
 ## three of them made the empty half of the room as bright as the gear (37.0 against 38.7 on
 ## the console's face). A floor lamp is a pool, not a sun.
-const LAMP_RANGE := 3.6
+## Longer since the room grew: at 3.6 m the 11 m room's corners were black.
+const LAMP_RANGE := 4.6
 ## The lamp head. Wide and low rather than tall and thin: the first pass put a 105mm shade on a
 ## two-metre pole, which from across the room is a street light. A floor lamp is shorter than
 ## the people using it and its head is the part you notice.
@@ -95,6 +99,9 @@ const PATCH_BAY_TOP := 1.78
 const PATCH_BAY_FRONT := 0.03
 ## How far up the arm from MY KEYS the wrist's INTO ME socket is worn (m): clear of both reaches.
 const WRIST_IN_APART := 0.06
+## How far down onto the back of the hand from MY KEYS the chord hand's MY CHORDS socket is worn,
+## and across the controller from it (m): clear of both reaches, as INTO ME is the other way.
+const WRIST_CHORD_APART := 0.056
 const PATCH_CABINET_DEPTH := 0.12
 
 ## Set by whoever builds the studio, BEFORE adding it to the tree. The medium is not a rendering
@@ -105,6 +112,9 @@ var medium: int = Presentation.Medium.SCREEN
 var xr_bootstrap: XRBootstrap = null
 
 signal venue_changed(id: StringName)
+## EDIT on the lyric board at a desk: the session panel's LYRICS box, which is not the studio's, is
+## asked to open (LyricBoard, docs/spatial_loop.md part two, slice 56).
+signal lyrics_edit_asked()
 
 ## The world the studio stands in. See core/venues/venue.gd.
 var venue: Venue
@@ -155,13 +165,25 @@ var their_monitor: TheirMonitor
 var ear: EarCue
 ## The hand percussion played here, taken down onto the armed track while recording.
 var hit_recorder: HitRecorder
+## The strikes on the instruments that stand still, by this player's hands and controllers (Strike,
+## docs/spatial_loop.md part two, slice 38).
+var strike: Strike
+## This player's own hits on the fast path (docs/spatial_loop.md part two, slice 39): a keys helper
+## of its own with no MIDI, "dawlings · hits", holding Foley's struck sounds, while it runs; null
+## where it cannot (`_start_hit_voices`), and every hit plays on MONITOR through Godot.
+var hit_voices: NativeKeys = null
 ## Where a hit played here goes out to the room: Session.send_item_hit, or the suite's.
 var send_item_hit: Callable = Session.send_item_hit
 ## Every instrument's output jack: where its hits are recorded (docs/spatial_loop.md slice 5), or
 ## the bandmate they play into (slice 6). The room's patch, like `patches`.
 var jacks: Jacks
+## This player's drum pads on real surfaces (SurfacePads, docs/spatial_loop.md part two, slice 41):
+## the room's kit's own (KitItem.surface), in the session frame, saved on this machine.
+var pads: SurfacePads
 ## This player's own keys' jack, on their left wrist in a headset (HandSkeleton.wrist) and on
-## the left controller while that hand holds one; P with an empty hand on a desktop.
+## the left controller while that hand holds one; P with an empty hand on a desktop. Beside it the
+## chord hand's (`chord:P`, MY CHORDS, part two slice 33), on the chord hand: the left, or for a
+## left-handed player the right; P in the chord layer on a desktop.
 var wrist_jacks: Array[JackSocket] = []
 ## The computer keyboard as the keytar's keys, while it is in this player's hands (KeytarItem).
 var keytar_keys: KeyCatcher
@@ -173,12 +195,27 @@ var fingertip_keys: KeyCatcher
 ## Each hand's fingertip notes: the mouse's on a desktop, each controller's in a headset.
 var fingertips: Array[FingertipNotes] = []
 var _told_fingertips := false
+## This player's chord hand (ChordHand, docs/spatial_loop.md part two, slice 32): the shape the
+## left hand holds up (the right for a left-handed player), the chord stick, and on a desktop the
+## chord layer (C).
+var chord_hand: ChordHand
+var _told_chords := false
 ## The chord harp against the live room's back wall (ChordHarp), stood again with each venue at
 ## its `harp_spot`. Null in AR, where the room is a real one.
 var harp: ChordHarp
 ## The circle-of-fifths wheel on the bricks table (FifthsWheel), stood again with each venue at
 ## its `wheel_spot`: where the song's key and chords are written from the room. Null in AR.
 var wheel: FifthsWheel
+## The song's sections as blocks along the bricks table's far edge (SectionBlocks, docs/spatial_loop.md
+## part two, slice 30), stood again with each venue at its `sections_spot`. Null in AR.
+var sections: SectionBlocks
+## The ledge for chord bricks along the bricks table's near edge (ChordLedge, docs/spatial_loop.md
+## part two, slice 31), stood again with each venue at its `ledge_spot`: a row of bricks is a
+## progression, its slots the room's holder ChordBrick.LEDGE. Null in AR.
+var ledge: ChordLedge
+## The last section harmony a guest's brick asked the host for, as [FifthsWheel.VERB, [bar, inside]]
+## (`press_brick`); empty before one.
+var brick_asked: Array = []
 ## The cassette rack beside the prop shelf (CassetteRack, docs/spatial_loop.md part two, slice 23),
 ## stood again with each venue at its `cassette_rack_spot`: the clips pulled out of the timeline,
 ## shelved. Null in AR.
@@ -186,6 +223,107 @@ var cassette_rack: CassetteRack
 ## The sampler beside the rack (Sampler, docs/spatial_loop.md part two, slice 26), stood again with
 ## each venue at its `sampler_spot`: REC, then a sound, is a sample cassette on the rack. Null in AR.
 var sampler: Sampler
+## The circle of hand drums on the drum riser (HandDrum, docs/spatial_loop.md part two, slice 40): its
+## plaque, low on a post between the front two drums and leant back, stood again with each venue at its
+## `drum_circle_spot`. The drums are items of the room (ItemRoom.KINDS), at home round it
+## (`_item_homes`). Null where there is no riser (the Rig Roulette room) and in AR.
+var drum_circle: Node3D
+## The venue's own instrument's mount (VenueInstrument, docs/spatial_loop.md part two, slice 42): its
+## beam, eave, shelf or frame, its plaque and the set's one jack, in the venue's frame at
+## `Venue.instrument_spot`. The bars are items of the room (`venue1`..`venue8`), dressed as its set
+## and at home on it (`_dress_venue_bars`, `_item_homes`). Null where the venue has none.
+var venue_instrument: VenueInstrument
+## The venue's weather (Weather, docs/spatial_loop.md part two, slice 44): its switch, plaque and jack
+## on a window's sill or a post, and the drops it draws on the glass or into the cave's pools, in the
+## venue's frame at `Venue.weather_spot`. Null where this arrangement has none.
+var weather: Weather
+## The switch's state, the room's row `weather`: LISTEN (true) or OFF. The room's, not the venue's,
+## so it is kept across a change of venue and said to a weather stood afterwards.
+var weather_listening := false
+## The looper on its stand at the drum riser's front corner (Looper, docs/spatial_loop.md part two,
+## slice 45), stood again with each venue at its `looper_spot`. Null where there is no riser and in AR.
+var looper: Looper
+## The room's row `looper`: [peer, from_bar, bars] of whoever is looping, or [] for nobody. The room's,
+## not the venue's, so it is kept across a change of venue.
+var looper_row: Array = []
+## How many bars this player's next layer is where no loop range is set (the looper's LENGTH): their
+## own, kept across a change of venue.
+var looper_length := Looper.LENGTH_DEFAULT
+## The music box beside the harp (MusicBox, docs/spatial_loop.md part two, slice 47), stood again with
+## each venue at its `music_box_spot`, on its trolley. Null where there are no zones and in AR.
+var music_box: MusicBox
+## The room's row `music_box`: [track, length, root, chromatic] (MusicBox.row). The room's, not the
+## venue's, so it is kept across a change of venue.
+var music_box_row: Array = MusicBox.DEFAULT_ROW.duplicate()
+## The string spool in the aisle between the drum riser and the lattice, at the lattice's front corner
+## in the loft (RoomString.Spool, docs/spatial_loop.md part two, slice 48; Venue.default_string_spool_spot),
+## stood again with each venue at its `string_spool_spot`, on its trolley. Null where there are no zones
+## and in AR.
+var spool: RoomString.Spool
+## The theremin in front of the drum riser's outer end (Theremin, docs/spatial_loop.md part two,
+## slice 50; Venue.default_theremin_spot), stood again with each venue at its `theremin_spot`, on its
+## trolley. Its SCALE switch is this player's own, kept across a change of venue (`theremin_snap`).
+## Null where there are no zones and in AR.
+var theremin: Theremin
+var theremin_snap := Theremin.Snap.SCALE
+## The grain cloud in the aisle between the drum riser and the lattice (GrainCloud, docs/spatial_loop.md
+## part two, slice 54; Venue.default_grains_spot), stood again with each venue at its `grains_spot`, on
+## its trolley, its bowl the room's holder `bowl`. Null where there are no zones and in AR.
+var grain_cloud: GrainCloud
+## The room's row `grains_key`: the cloud's KEY switch, on to follow the chord's root. The room's, not
+## the venue's, so it is kept across a change of venue.
+var grains_key := false
+## The room's row `strings`: {id: [a, b, maker]}, each string's ends in the venue's frame and who tied
+## it (RoomString.answer). The room's, not the venue's, so it is kept across a change of venue and
+## stood again in the next.
+var strings_row := {}
+## The strings standing in the room, by id (RoomString), stood from `strings_row` (`_show_strings`).
+var room_strings := {}
+## How many strings this player has tied, for the next one's id.
+var _strings_tied := 0
+## The marble run in the lattice (MarbleRun, docs/spatial_loop.md part two, slice 49), its tray at the
+## lattice's face toward the desk, stood again with each venue at its `marbles_spot`. Null where there
+## is no lattice and in AR.
+var marbles: MarbleRun
+## The room's rows `marbles` {cell: [kind, facing]} (MarbleRun.answer) and `marble_balls`, the beats
+## BALL let marbles go on (MarbleRun.answer_ball). The room's, not the venue's, so they are kept across
+## a change of venue and stood again in the next.
+var marbles_row := {}
+var marble_balls: Array = []
+## The modular wall over the synth zone's keyboard stand (ModularWall, docs/spatial_loop.md part two,
+## slice 51), a surface hung again with each venue at its `modular_spot`; null in AR. The voice that
+## plays this player's keys through its patch while they stand at it (ModularVoice), and the room's
+## row `modular` {cables, knobs} (Modular), the room's and not the venue's.
+var modular_wall: ModularWall
+## The lyric board in the vocal booth (LyricBoard, docs/spatial_loop.md part two, slice 56), stood
+## again with each venue at its `lyrics_spot`; null where there is no booth and in AR. What it shows is
+## the song's (MixState.lyrics), so nothing of it is the room's.
+var lyric_board: LyricBoard
+var modular_voice: ModularVoice
+var modular_row := Modular.default_patch()
+## Each bandmate playing the modular, heard through the room's patch at the wall (slice 52): a
+## ModularVoice of theirs by peer, and what they hold on it ({peer: {pitch: true}}).
+var modular_heard := {}
+var _modular_heard_held := {}
+## The knobs as this player last streamed them ({id: v}): what their own voice and their take hear
+## of a turn, kept on the voice while the room's row has not caught up (`_show_modular`).
+var _modular_streamed := {}
+## The computer keys as the modular's keys (PLAY on its KEYS module), and this player's newest key
+## and how many are held, for KEYS' readout.
+var modular_keys: KeyCatcher
+var _modular_held := {}
+var _modular_last := -1
+## The world into the modular (slice 53): what the weather, the venue's instrument, the looper's rings
+## and the marble run play into its world sockets (ModularWorld), on every machine from the song
+## clock and the rows; and the world's own voice at the wall, which plays the patch with no keys while
+## a world socket is patched into it and no other voice here is playing it, so a drip into an ENV's
+## gate sounds with nobody playing, and once, not twice, with somebody.
+var modular_world: ModularWorld
+var modular_world_voice: ModularVoice
+## The DJ platter on the leaf of the tape deck's cart (Platter, docs/spatial_loop.md part two, slice
+## 27): bare it is the playhead, scrubbed by hand; a cassette in its slot is scratched. Rides the
+## cart, so it is the studio's and not the venue's. Null in AR.
+var platter: Platter
 ## A guest's pulls the host has not answered: {seq, hand, look}, the look a blank cassette in that
 ## hand until the host's made one arrives there or the ask is refused (`_settle_makes`).
 var _making: Array = []
@@ -260,6 +398,11 @@ var stage: StageTable
 var signal_beads: SignalBeads
 var _lamps_lifted := 0.0
 var stage_trolley: Trolley
+## The EQ wall (EqWall, docs/spatial_loop.md part two, slice 36), the trolley it stands on at the
+## control room's side wall, and the spectra it shows (Spectra: measured here, or the host's).
+var eq_wall: EqWall
+var eq_wall_trolley: Trolley
+var spectra: Spectra
 ## What stands on the floor by itself and is pushed about like the gear, though it is not in the
 ## control room's rig: the venue's free-standing stations and back-of-house furniture
 ## (Venue.WHEELED), the station board's stand and the audio patch wall's legs. id -> Trolley. Built
@@ -338,6 +481,7 @@ func _ready() -> void:
 	if medium != Presentation.Medium.AR:
 		_build_furniture()
 	_build_surfaces()
+	_build_point_and_mark()
 	if camera != null:
 		_build_walker()
 		_update_camera()
@@ -345,6 +489,11 @@ func _ready() -> void:
 		_build_items()
 		_build_tour_case()
 		_build_rig_roulette_station()
+	else:
+		# AR's room is the player's own real one: of the room's items, only the drum pads' kit on the
+		# desk's rail, which plays there as anywhere (docs/spatial_loop.md part two, slice 41).
+		_build_items()
+	_build_pads()
 	if medium == Presentation.Medium.AR and xr_bootstrap != null:
 		# Now, and not in XRBootstrap.start(): the environment it has to clear is the one built
 		# four lines up.
@@ -487,6 +636,9 @@ func _keep_out_of_mirrors(node: Node) -> void:
 
 
 func _exit_tree() -> void:
+	if hit_voices != null:
+		hit_voices.stop()
+		hit_voices = null
 	if _seat_finder != null:
 		_seat_finder.free()
 		_seat_finder = null
@@ -510,6 +662,8 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 		venue.queue_free()
 	venue = Venue.make(id, variant)
 	venue.name = "Venue"
+	# The rows that are the venue's own (its instrument's) say this one's from now on.
+	Stations.here = venue
 	venue.rich = rich_rendering()
 	venue.room_width = room_width
 	var env := _house_environment()
@@ -533,8 +687,22 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	_wheel_in_live_pieces()
 	_stand_the_harp()
 	_stand_the_wheel()
+	_stand_the_sections()
+	_stand_the_ledge()
 	_stand_the_cassette_rack()
 	_stand_the_sampler()
+	_stand_the_drum_circle()
+	_stand_the_looper()
+	_stand_the_music_box()
+	_stand_the_spool()
+	_stand_the_theremin()
+	_stand_the_grains()
+	_stand_the_marbles()
+	_stand_the_lyrics()
+	_stand_the_venue_instrument()
+	_stand_the_modular()
+	_stand_the_weather()
+	_hang_hood_signs()
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
@@ -589,7 +757,36 @@ func _stand_the_wheel() -> void:
 		return
 	wheel = FifthsWheel.new()
 	wheel.transform = FifthsWheel.on_stand(spot)
+	wheel.brick_pulled.connect(_on_brick_pulled)
+	wheel.bricks_made.connect(make_bricks)
 	venue.add_child(wheel)
+
+
+## The section blocks, in the venue's own frame on the bricks table, past the wheel: a child of the
+## venue, so they go with it. What they show and rearrange is the song's regions. None in a venue
+## with no bricks table.
+func _stand_the_sections() -> void:
+	sections = null
+	var spot: Variant = Stations.spot(venue, &"sections")
+	if spot == null:
+		return
+	sections = SectionBlocks.new()
+	sections.transform = spot
+	venue.add_child(sections)
+
+
+## The chord ledge, in the venue's own frame on the bricks table, along its near edge: a child of
+## the venue, so it goes with it. Its slots are the room's holder ChordBrick.LEDGE and its bin
+## ChordBrick.BIN (`_hold_the_ledge`). None in a venue with no bricks table.
+func _stand_the_ledge() -> void:
+	ledge = null
+	var spot: Variant = Stations.spot(venue, &"ledge")
+	if spot == null:
+		return
+	ledge = ChordLedge.new()
+	ledge.transform = spot
+	ledge.items = items
+	venue.add_child(ledge)
 
 
 ## The cassette rack, in the venue's own frame beside the prop shelf: a child of the venue, so it
@@ -626,6 +823,168 @@ func _stand_the_sampler() -> void:
 	venue.add_child(sampler)
 
 
+## The circle of hand drums' plaque, in the venue's own frame at the ring's middle on the drum riser:
+## a child of the venue, so it goes with it. The drums themselves are the room's items, whose homes
+## are their places round it (`_item_homes`). None in a venue with no riser.
+func _stand_the_drum_circle() -> void:
+	drum_circle = null
+	var spot: Variant = Stations.spot(venue, &"drums")
+	if spot == null:
+		return
+	drum_circle = Node3D.new()
+	drum_circle.name = "DrumCircle"
+	drum_circle.transform = spot
+	var plaque := Stations.plaque(&"drums", Stations.DRUM_PLAQUE_WIDTH)
+	plaque.transform = Transform3D(Basis(Vector3.RIGHT, -Stations.DRUM_PLAQUE_TILT), Stations.DRUM_PLAQUE)
+	drum_circle.add_child(plaque)
+	# A slim post under it, so it stands on the riser rather than hanging in the air.
+	var post := MeshInstance3D.new()
+	post.name = "Post"
+	var rod := CylinderMesh.new()
+	rod.top_radius = 0.012
+	rod.bottom_radius = 0.018
+	rod.height = Stations.DRUM_PLAQUE.y - 0.02
+	post.mesh = rod
+	post.position = Vector3(0, rod.height * 0.5, Stations.DRUM_PLAQUE.z - 0.03)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.1, 0.1, 0.11)
+	metal.roughness = 0.4
+	metal.metallic = 0.8
+	post.material_override = metal
+	drum_circle.add_child(post)
+	venue.add_child(drum_circle)
+
+
+## The looper (Looper), in the venue's own frame at the drum riser's front corner: a child of the venue,
+## so it goes with it. Its row is the room's (`looper_row`) and LENGTH this player's (`looper_length`);
+## a layer it was taking down here carries over to the new one. Its rings (LooperRings) are the mix's
+## LOOPER folder, so they stand again with it. None in a venue with no riser.
+func _stand_the_looper() -> void:
+	var was := looper if looper != null and is_instance_valid(looper) else null
+	looper = null
+	var spot: Variant = Stations.spot(venue, Looper.STATION)
+	if spot == null:
+		if was != null and was.mine():
+			_on_looper_called_off()
+		return
+	looper = Looper.new()
+	looper.transform = spot
+	looper.local_peer = func() -> int: return Session.local_peer_id
+	looper.name_of = _looper_name
+	looper.length = looper_length
+	looper.row = looper_row
+	if was != null:
+		looper.take_over(was)
+	looper.slapped.connect(_on_looper_slapped)
+	looper.length_changed.connect(func(bars: int) -> void: looper_length = bars)
+	looper.layer_done.connect(_on_looper_layer)
+	looper.called_off.connect(_on_looper_called_off)
+	venue.add_child(looper)
+	# Its layers' rings (slice 46) say what a grab, a click or a pull did, as a toast.
+	looper.rings.told.connect(func(text: String) -> void: Session.notice.emit(text))
+
+
+## The music box (MusicBox), in the venue's own frame at its spot beside the harp: a child of the venue,
+## so it goes with it, its trolley the studio's. Its row is the room's (`music_box_row`); its pegs are
+## its track's item in the mix, so they stand again with it. None where there are no zones.
+func _stand_the_music_box() -> void:
+	music_box = null
+	var spot: Variant = Stations.spot(venue, MusicBox.STATION)
+	if spot == null:
+		return
+	music_box = MusicBox.new()
+	music_box.transform = spot
+	music_box.row = music_box_row
+	music_box.row_asked.connect(_on_music_box_asked)
+	music_box.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	venue.add_child(music_box)
+
+
+## The theremin (Theremin), in the venue's own frame at its spot in front of the drum riser: a child of
+## the venue, so it goes with it, its trolley the studio's. Its notes are this player's keys; its
+## SCALE switch is theirs too, and goes from one venue's theremin to the next. None where there are
+## no zones.
+func _stand_the_theremin() -> void:
+	if theremin != null and is_instance_valid(theremin):
+		theremin_snap = theremin.snap
+	theremin = null
+	var spot: Variant = Stations.spot(venue, Theremin.STATION)
+	if spot == null:
+		return
+	theremin = Theremin.new()
+	theremin.transform = spot
+	theremin.snap = theremin_snap
+	venue.add_child(theremin)
+
+
+## The grain cloud (GrainCloud), in the venue's own frame at its spot in the aisle: a child of the venue,
+## so it goes with it, its trolley the studio's. Its bowl is the room's holder `bowl` (`_hold_the_bowl`);
+## its KEY switch the room's row `grains_key`. What it plays is this player's alone. None where there are
+## no zones.
+func _stand_the_grains() -> void:
+	grain_cloud = null
+	var spot: Variant = Stations.spot(venue, GrainCloud.STATION)
+	if spot == null:
+		if items != null:
+			items.holders.erase(GrainCloud.HOLDER)
+		return
+	grain_cloud = GrainCloud.new()
+	grain_cloud.transform = spot
+	grain_cloud.find_file = _platter_file
+	grain_cloud.fetching = func(source: String) -> bool:
+		return Session.role == Session.Role.GUEST and Session.files != null \
+				and Session.files.fetch_state(source) == FileSend.FETCHING
+	grain_cloud.key_on = grains_key
+	grain_cloud.key_pressed.connect(_on_grains_key_pressed)
+	# Slice 55: each event played goes to the band and into a take, stamped with the song as this
+	# player hears it; a bandmate's are played here from the same sound; and the host renders a take
+	# from this cloud's sound.
+	grain_cloud.played.connect(_on_grains_played)
+	if not Session.participant_left.is_connected(_forget_grains_player):
+		Session.participant_left.connect(_forget_grains_player)
+	Session.grain_takes.sound = grains_sound
+	venue.add_child(grain_cloud)
+	_hold_the_bowl()
+
+
+## The venue's own instrument's mount (VenueInstrument), in the venue's own frame at its spot: a child
+## of the venue, so it goes with it, its plaque and the set's jack on it. Its bars are the room's
+## items, dressed as its set here (`_dress_venue_bars`) and at home on it (`_item_homes`). None in a
+## venue with no instrument, whose bars are put away.
+func _stand_the_venue_instrument() -> void:
+	venue_instrument = null
+	var spec := VenueInstrument.spec_of(venue)
+	if not spec.is_empty():
+		venue_instrument = VenueInstrument.new(spec)
+		venue_instrument.transform = spec["spot"]
+		venue.add_child(venue_instrument)
+	_dress_venue_bars()
+
+
+## The venue's weather (Weather), in the venue's own frame at its switch's spot: a child of the venue,
+## so it goes with it. Its switch is the room's (`weather_listening`). None in an arrangement with no
+## weather.
+func _stand_the_weather() -> void:
+	weather = null
+	var spec := Weather.spec_of(venue)
+	if spec.is_empty():
+		return
+	weather = Weather.new(spec, Weather.seed_of(venue.venue_id()))
+	weather.transform = spec["spot"]
+	weather.listening = weather_listening
+	weather.switch_pressed.connect(_on_weather_pressed)
+	weather.dropped.connect(_on_weather_dropped)
+	venue.add_child(weather)
+
+
+## The room's venue bars dressed as this venue's set, the first of them its count, for the mount to
+## brush across: before their homes are stood (ItemRoom.set_spots), so each stands in its own look.
+func _dress_venue_bars() -> void:
+	if items == null or venue_instrument == null or not is_instance_valid(venue_instrument):
+		return
+	venue_instrument.bars = VenueInstrument.dress(items, venue_instrument.spec)
+
+
 ## The rack's slots and bin as the room's holders, and each made item's home its tray, in the
 ## room's frame (the venue's, as the shelf's spots are).
 func _hold_the_rack() -> void:
@@ -633,6 +992,9 @@ func _hold_the_rack() -> void:
 		return
 	if cassette_rack == null or not is_instance_valid(cassette_rack):
 		items.holders.clear()
+		_hold_the_platter()
+		_hold_the_ledge()
+		_hold_the_bowl()
 		return
 	cassette_rack.items = items
 	if sampler != null and is_instance_valid(sampler):
@@ -646,10 +1008,65 @@ func _hold_the_rack() -> void:
 		item.home = _made_home(ItemRoom.kind_of(id), int(String(id).trim_prefix(String(ItemRoom.kind_of(id)))))
 		if item.state == Item.State.HOME:
 			item.snap_home()
+	_hold_the_platter()
+	_hold_the_ledge()
+	_hold_the_bowl()
 
 
-## Where made item number `n` lies with nowhere else to be: the rack's tray.
-func _made_home(_kind: StringName, n: int) -> Transform3D:
+## The ledge's slots and its bin as the room's holders (slice 31), where the bricks table has it; a
+## venue with none has neither, and a brick that stood in it goes to its home.
+func _hold_the_ledge() -> void:
+	if items == null:
+		return
+	if ledge == null or not is_instance_valid(ledge):
+		items.holders.erase(ChordBrick.LEDGE)
+		items.holders.erase(ChordBrick.BIN)
+		for id in items.made_ids():
+			var item: Item = items.items[id]
+			if item.slot_in == ChordBrick.LEDGE:
+				item.snap_home()
+		return
+	ledge.items = items
+	var at := ledge.transform
+	items.set_holder(ChordBrick.LEDGE, ChordLedge.slots_in(at))
+	var bin: Array[Transform3D] = [at * ChordLedge.bin_pose()]
+	items.set_holder(ChordBrick.BIN, bin)
+	for id in items.made_ids():
+		var item: Item = items.items[id]
+		if not (item is ChordBrick):
+			continue
+		item.home = _made_home(ChordBrick.KIND, int(String(id).trim_prefix(String(ChordBrick.KIND))))
+		if item.state == Item.State.HOME:
+			item.snap_home()
+
+
+## The platter's slot as a holder, where the deck cart stands now (slice 27): again whenever the
+## cart is pushed, so a cassette stood in it rides with it.
+func _hold_the_platter() -> void:
+	if items == null or platter == null or not is_instance_valid(platter):
+		return
+	platter.items = items
+	if deck_trolley == null or not is_instance_valid(deck_trolley):
+		return
+	var at: Array[Transform3D] = [deck_trolley.transform * Platter.ON_CART * Platter.SLOT_POSE]
+	items.set_holder(Platter.HOLDER, at)
+
+
+## The grain cloud's bowl as a holder of one slot (slice 54), in the room's frame (the venue's), where
+## the cloud stands now: again whenever its trolley is pushed, so a cassette in it rides with it.
+func _hold_the_bowl() -> void:
+	if items == null or grain_cloud == null or not is_instance_valid(grain_cloud):
+		return
+	grain_cloud.items = items
+	var at: Array[Transform3D] = [grain_cloud.slot_in(grain_cloud.transform)]
+	items.set_holder(GrainCloud.HOLDER, at)
+
+
+## Where made item number `n` lies with nowhere else to be: the rack's tray; a chord brick, the
+## ledge's tray behind its rail.
+func _made_home(kind: StringName, n: int) -> Transform3D:
+	if kind == ChordBrick.KIND and ledge != null and is_instance_valid(ledge):
+		return ledge.transform * ChordLedge.tray_spot(n)
 	if cassette_rack == null or not is_instance_valid(cassette_rack):
 		return venue.prop_shelf_spot() if venue != null else Transform3D.IDENTITY
 	return cassette_rack.transform * CassetteRack.tray_spot(n)
@@ -747,7 +1164,7 @@ func _patch_wall_frame() -> Transform3D:
 ## Where the legs stand until they are pushed: 55 cm off the control room's left wall, a little
 ## behind the desk's left end, facing across the room.
 func _patch_wall_default() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-room_width * 0.5 + 0.55, 0, -1.3))
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(-room_width * 0.5 + 0.55, 0, -1.5))
 
 
 ## The practicals back to the venue's own colour and energy, and the venue's own house lights
@@ -990,6 +1407,7 @@ func _build_furniture() -> void:
 	_build_lamp_stands()
 	# Before the board, whose rows are the stations standing here, the stage table among them.
 	_build_stage_trolley()
+	_build_eq_wall_trolley()
 	_build_station_board()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
@@ -1024,6 +1442,11 @@ func _build_furniture() -> void:
 			post.material_override = Materials.brushed_metal()
 			deck_trolley.add_part(post)
 	deck_trolley.add_corner_casters()
+	_build_platter_leaf()
+	# The board was made before the cart, and the platter on it is a station: its rows again.
+	if station_board != null:
+		station_board.set_venue(venue)
+		_fit_board_stand()
 
 	# A plinth under the rack. A floor-standing rack puts its lowest unit at ankle height; every
 	# control room that has one has it up on something -- and here the something has wheels,
@@ -1094,12 +1517,67 @@ func _build_furniture() -> void:
 	_build_live_pieces()
 
 
+## The leaf off the deck cart's far end, away from the seat, at the shelf's height, on two posts
+## and a foot with casters of its own, and the DJ platter on it (Platter.ON_CART, slice 27). The
+## cart's footprint grows to take it in, so it is pushed, and stood clear of, as one piece.
+func _build_platter_leaf() -> void:
+	var leaf_x := Platter.ON_CART.origin.x
+	var top := Platter.ON_CART.origin.y
+	# From just under the shelf's end, a step below it, so the two never share a face.
+	var leaf_from := Platter.LEAF_FROM
+	var leaf_to := leaf_x + Platter.LEAF.x * 0.5
+	var leaf := MeshInstance3D.new()
+	leaf.name = "PlatterLeaf"
+	var leaf_mesh := BoxMesh.new()
+	leaf_mesh.size = Vector3(leaf_to - leaf_from, Platter.LEAF_THICK, Platter.LEAF.y)
+	leaf.mesh = leaf_mesh
+	leaf.position = Vector3((leaf_from + leaf_to) * 0.5, top - Platter.LEAF_THICK * 0.5, 0)
+	leaf.material_override = Materials.furniture()
+	GearTrim.edges(leaf)
+	deck_trolley.add_part(leaf)
+	var outer := leaf_x + Platter.LEAF.x * 0.5 - 0.03
+	var post_bottom := Caster.HEIGHT + 0.025
+	for dz in [-0.16, 0.16]:
+		var post := MeshInstance3D.new()
+		var post_mesh := BoxMesh.new()
+		post_mesh.size = Vector3(0.03, top - Platter.LEAF_THICK - post_bottom, 0.03)
+		post.mesh = post_mesh
+		post.position = Vector3(outer, (top - Platter.LEAF_THICK + post_bottom) * 0.5, dz)
+		post.material_override = Materials.brushed_metal()
+		deck_trolley.add_part(post)
+	var foot := MeshInstance3D.new()
+	var foot_mesh := BoxMesh.new()
+	foot_mesh.size = Vector3(0.06, 0.025, 0.42)
+	foot.mesh = foot_mesh
+	foot.position = Vector3(outer, Caster.HEIGHT + 0.0125, 0)
+	foot.material_override = Materials.furniture()
+	deck_trolley.add_part(foot)
+	for dz in [-0.165, 0.165]:
+		deck_trolley.add_caster(Vector2(outer, dz))
+	# From the cart's near end to the leaf's far one.
+	var near := -0.28
+	var far := leaf_x + Platter.LEAF.x * 0.5
+	deck_trolley.footprint_centre = Vector2((near + far) * 0.5, 0)
+	deck_trolley.footprint_half = Vector2((far - near) * 0.5, maxf(0.21, Platter.LEAF.y * 0.5))
+	platter = Platter.new()
+	platter.transform = Platter.ON_CART
+	platter.authority = Session.is_authority
+	platter.find_file = _platter_file
+	platter.fetching = func(source: String) -> bool:
+		return Session.role == Session.Role.GUEST and Session.files != null \
+				and Session.files.fetch_state(source) == FileSend.FETCHING
+	platter.scratched.connect(_on_scratched)
+	deck_trolley.add_child(platter)
+	deck_trolley.moved.connect(_hold_the_platter)
+	deck_trolley.settled.connect(_hold_the_platter)
+
+
 ## Where the stage table's trolley stands: beside the mix position on the right and a little
 ## behind it, turned to face it, clear of the deck trolley and the patch stand however wide the
 ## desk grows (the desk's footprint ends in front of the mix position, and these stand behind
 ## it). The top is desk height; the rail along its front drops RAIL below it. Far enough back
 ## that from the seat the right-hand lamp's foot is seen past its corner, not through it.
-const STAGE_AT := Vector3(-2.1, 0, 1.95)
+const STAGE_AT := Vector3(-2.3, 0, 2.3)
 const STAGE_TOP := 0.74
 
 
@@ -1152,6 +1630,58 @@ func _build_stage_trolley() -> void:
 
 ## The plaque's top edge on the trolley's front, under the rail.
 const STAGE_PLAQUE_TOP := 0.6
+
+
+## Where the EQ wall's trolley stands: against the right-hand side wall in front of the deck, this
+## far in from it, turned a little toward the mix position, clear of the deck's cart, the corner's
+## lamp and the door to the Rig Roulette room in the front wall. Its x follows the wall out as the
+## room widens (`_fit_room_to_session`).
+## Off the wall and into the ring since the room grew: against an 11 m room's wall its handle was
+## 5.5 px from the seat.
+const EQ_WALL_IN := 1.9
+const EQ_WALL_Z := -1.6
+const EQ_WALL_HEADING := -74.0
+
+
+func _eq_wall_at() -> Vector3:
+	return Vector3(room_width * 0.5 - EQ_WALL_IN, 0, EQ_WALL_Z)
+
+
+## The EQ wall's trolley: a plinth on casters and two uprights behind the board's edges, and the
+## wall's plaque on the board's right-hand column, under SHOW (Stations.plaque, narrowed to the
+## column). The board itself is a surface and rides it (`_ride`, in `_build_surfaces`).
+func _build_eq_wall_trolley() -> void:
+	eq_wall_trolley = _trolley("EqWallTrolley", &"eq_wall", _eq_wall_at(), EQ_WALL_HEADING)
+	var wide := EqWall.PLATE_WIDE + EqWall.BORDER * 2.0
+	eq_wall_trolley.footprint_centre = Vector2(0, -0.06)
+	eq_wall_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
+	eq_wall_trolley.follow = 9.0
+	# The uprights first: they are its handle, standing up over the deck's reels from the seat,
+	# where the plinth at the floor is behind them (and is taken all the same).
+	for side in [-1.0, 1.0]:
+		var post := MeshInstance3D.new()
+		post.name = "Upright"
+		var post_mesh := BoxMesh.new()
+		var high := EqWall.BOTTOM + EqWall.TALL + EqWall.BORDER
+		post_mesh.size = Vector3(0.05, high - Caster.HEIGHT, 0.05)
+		post.mesh = post_mesh
+		post.position = Vector3(side * (wide * 0.5 - 0.06), (high + Caster.HEIGHT) * 0.5, -0.06)
+		post.material_override = Materials.brushed_metal()
+		eq_wall_trolley.add_part(post)
+	var plinth := MeshInstance3D.new()
+	plinth.name = "Plinth"
+	var plinth_mesh := BoxMesh.new()
+	plinth_mesh.size = Vector3(wide, 0.04, 0.3)
+	plinth.mesh = plinth_mesh
+	plinth.position = Vector3(0, Caster.HEIGHT + 0.02, -0.06)
+	plinth.material_override = Materials.furniture()
+	GearTrim.edges(plinth)
+	eq_wall_trolley.add_part(plinth)
+	eq_wall_trolley.add_corner_casters(0.06)
+	var plaque := Stations.plaque(&"eq_wall", EqWall.SIDE - 0.02)
+	plaque.position = Vector3(EqWall.PLATE_WIDE * 0.5 - EqWall.SIDE * 0.5,
+			EqWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.012)
+	eq_wall_trolley.add_child(plaque)
 
 
 ## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
@@ -1213,6 +1743,20 @@ const LIVE_TROLLEYS := {
 			[[Vector3(CassetteRack.FOOT.x * 2.0, 0.15, CassetteRack.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
 	&"sampler": ["SamplerTrolley", Vector2.ZERO, Sampler.FOOT, 9.0,
 			[[Vector3(Sampler.FOOT.x * 2.0, 0.15, Sampler.FOOT.y * 2.0), Vector3(0, 0.075, 0)]]],
+	# The plinth under the case: above it a click is a cell, a key or the plaque.
+	&"music_box": ["MusicBoxTrolley", Vector2(0, MusicBox.FOOT_Z), MusicBox.FOOT, 9.0,
+			[[Vector3(MusicBox.FOOT.x * 2.0, 0.3, MusicBox.FOOT.y * 2.0), Vector3(0, 0.15, MusicBox.FOOT_Z)]]],
+	# The spool's round foot: above it a click is the reel or its plaque.
+	&"strings": ["StringSpoolTrolley", Vector2(0, RoomString.SPOOL_FOOT_Z), RoomString.SPOOL_FOOT, 9.0,
+			[[Vector3(RoomString.SPOOL_FOOT.x * 2.0, 0.12, RoomString.SPOOL_FOOT.y * 2.0), Vector3(0, 0.06, RoomString.SPOOL_FOOT_Z)]]],
+	# The theremin's splayed foot and its post, under the cabinet: above them a click is its field,
+	# its SCALE switch or its plaque.
+	&"theremin": ["ThereminTrolley", Vector2(0, Theremin.FOOT_Z), Theremin.FOOT, 9.0,
+			[[Vector3(0.58, 0.08, 0.32), Vector3(0, 0.04, 0)], [Vector3(0.07, 0.7, 0.07), Vector3(0, 0.45, 0)]]],
+	# The grain cloud's plinth, to the foot of its plaque: above it a click is its plaque, its KEY
+	# switch, the bowl or the cloud.
+	&"grains": ["GrainCloudTrolley", Vector2(0, GrainCloud.FOOT_Z), GrainCloud.FOOT, 9.0,
+			[[Vector3(GrainCloud.FOOT.x * 2.0, 0.3, GrainCloud.FOOT.y * 2.0), Vector3(0, 0.15, GrainCloud.FOOT_Z)]]],
 	# The case's bottom edge, a little proud of it: above that a click on the case knocks on it.
 	&"tour_case": ["TourCaseTrolley", Vector2.ZERO, Vector2(TourCase.CASE_WIDTH, TourCase.CASE_DEPTH) * 0.5, 7.5,
 			[[Vector3(TourCase.CASE_WIDTH + 0.08, 0.1, TourCase.CASE_DEPTH + 0.08), Vector3(0, 0.05, 0)]]],
@@ -1337,7 +1881,10 @@ func _wheel_in_live_pieces() -> void:
 		var key := StringName("floor/%s" % id)
 		if not _showing_hosts_room and Session.layout != null \
 				and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
-			at = Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
+			var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, at)
+			# Saved where an older, smaller room stood it: nobody's choice, so where this one does.
+			if not was_an_old_default(id, saved):
+				at = saved
 		t.position = Vector3(at.origin.x, 0, at.origin.z)
 		t.rotation = Vector3(0, at.basis.get_euler().y, 0)
 		placing.append(t)
@@ -1374,6 +1921,23 @@ func _carry_live(id: StringName) -> void:
 			var at: Variant = venue.sampler_spot()
 			if sampler != null and is_instance_valid(sampler) and at != null:
 				sampler.transform = at
+		&"music_box":
+			var at: Variant = venue.music_box_spot()
+			if music_box != null and is_instance_valid(music_box) and at != null:
+				music_box.transform = at
+		&"strings":
+			var at: Variant = venue.string_spool_spot()
+			if spool != null and is_instance_valid(spool) and at != null:
+				spool.transform = at
+		&"theremin":
+			var at: Variant = venue.theremin_spot()
+			if theremin != null and is_instance_valid(theremin) and at != null:
+				theremin.transform = at
+		&"grains":
+			var at: Variant = venue.grains_spot()
+			if grain_cloud != null and is_instance_valid(grain_cloud) and at != null:
+				grain_cloud.transform = at
+				_hold_the_bowl()
 		&"tour_case":
 			if tour_case != null:
 				tour_case.transform = _venue_to_set(venue.tour_case_spot())
@@ -1402,6 +1966,34 @@ func _carry_live(id: StringName) -> void:
 			var wall := venue.get_node_or_null("PatchWall") as Node3D
 			if wall != null and wall.has_meta(&"on_legs"):
 				wall.transform = _patch_wall_frame()
+	_place_hood_signs()
+
+
+## The neighbourhoods' banners (Neighbourhoods), the venue's children, one over each neighbourhood
+## that stands here: built with the venue, and moved with what they name (`_place_hood_signs`).
+func _hang_hood_signs() -> void:
+	if venue == null or medium == Presentation.Medium.AR:
+		return
+	for r: Dictionary in Neighbourhoods.ALL:
+		if Neighbourhoods.sign_spot(venue, r["id"]) == null:
+			continue
+		venue.add_child(Neighbourhoods.make_sign(r["id"]))
+	_place_hood_signs()
+
+
+## Each banner over its neighbourhood's middle as it stands now: a piece wheeled across the room
+## takes its neighbourhood's middle, and so its banner, some of the way with it.
+func _place_hood_signs() -> void:
+	if venue == null or not is_instance_valid(venue):
+		return
+	for r: Dictionary in Neighbourhoods.ALL:
+		var sign := venue.get_node_or_null("Sign_%s" % r["id"]) as Node3D
+		if sign == null:
+			continue
+		var at: Variant = Neighbourhoods.sign_spot(venue, r["id"])
+		sign.visible = at != null
+		if at != null:
+			sign.position = at
 
 
 ## The items' homes from where the shelf, the hoop and the bells' stand now are: one at home goes
@@ -1880,7 +2472,11 @@ func room_state() -> Dictionary:
 			"patches": patches.duplicate(true), "on_air": on_air.duplicate(), "board": board_source,
 			"track_racks": pulled, "jacks": jacks.state() if jacks != null else {},
 			"ropes": stage.ropes.duplicate() if stage != null else {},
-			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0}
+			"sampler": sampler.armed_by if sampler != null and is_instance_valid(sampler) else 0,
+			"weather": weather_listening, "bricks": _bricks_row(), "looper": looper_row.duplicate(),
+			"music_box": music_box_row.duplicate(), RoomString.ROW: strings_row.duplicate(),
+			MarbleRun.ROW: marbles_row.duplicate(), MarbleRun.BALLS: marble_balls.duplicate(),
+			Modular.ROW: modular_row.duplicate(true), GrainCloud.ROW: grains_key}
 
 
 func _publish_room() -> void:
@@ -1917,7 +2513,9 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		match p["verb"]:
 			&"put_item", &"home_item", &"throw_item", &"wear_item", &"pocket_item", &"slot_item", &"give":
 				pending_items[p["args"][0]] = true
-			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler": pass
+			&"patch", &"on_air", &"plug", &"rope", &"make", &"paste", &"sampler", &"weather", &"bricks", \
+					&"looper", &"looper_layer", &"music_box", &"string", &"marble", &"marble_ball", \
+					&"modular_patch", &"modular_knob": pass
 			&"open_tablet", &"open_track_rack": pending_open[p["id"]] = true
 			&"close_tablet", &"close_track_rack": pending_close[p["args"][0]] = true
 			&"move_tablet", &"move_piece": pending_move[p["args"][0]] = true
@@ -1996,6 +2594,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		items.apply_made(state["made"])
 	if items != null and state.has("items"):
 		items.apply(state["items"], pending_items)
+	if items != null and state.has("bricks"):
+		_apply_bricks(state["bricks"])
 	_settle_makes(answered)
 	if state.has("on_air"):
 		on_air = (state["on_air"] as Array).duplicate()
@@ -2011,6 +2611,8 @@ func apply_room(state: Dictionary, glide := false) -> void:
 		_show_patches()
 	if jacks != null and state.has("jacks"):
 		var rows: Dictionary = (state["jacks"] as Dictionary).duplicate()
+		# The host's word alone first: a chord hand it now says goes into a bandmate sends again.
+		jacks.answered(rows)
 		# This guest's plugs it has not heard back about, on top: an empty sink, unplugged.
 		for p in _predictions:
 			if p["verb"] == &"plug":
@@ -2023,6 +2625,47 @@ func apply_room(state: Dictionary, glide := false) -> void:
 			and not _predictions.any(func(p): return p["verb"] == Sampler.VERB):
 		# Once its press is answered, the host's word: on for whoever the room says, or off.
 		sampler.armed_by = int(state["sampler"])
+	if state.has("weather") and not _predictions.any(func(p): return p["verb"] == Weather.VERB):
+		# Once its press is answered, the host's word: LISTEN or OFF.
+		_show_weather(bool(state["weather"]))
+	if state.has(GrainCloud.ROW) and not _predictions.any(func(p): return p["verb"] == GrainCloud.VERB):
+		# Once its press is answered, the host's word: KEY on or off.
+		_show_grains_key(bool(state[GrainCloud.ROW]))
+	if state.has("looper") and not _predictions.any(func(p): return p["verb"] == Looper.VERB or p["verb"] == Looper.LAYER_VERB):
+		# Once its slaps and layers are answered, the host's word: who is looping, from which bar.
+		_show_looper(state["looper"])
+	if state.has("music_box") and not _predictions.any(func(p): return p["verb"] == MusicBox.VERB):
+		# Once its keys are answered, the host's word: TRACK, LENGTH, ROOT and SCALE.
+		_show_music_box(state["music_box"])
+	if state.has(RoomString.ROW):
+		# The host's strings, with this guest's own ties and cuts it has not heard back about on top.
+		var rows: Dictionary = (state[RoomString.ROW] as Dictionary).duplicate()
+		for p in _predictions:
+			if p["verb"] == RoomString.VERB:
+				RoomString.answer(rows, p["args"][0], p["args"][1], p["args"][2], Session.local_peer_id)
+		_show_strings(rows)
+	if state.has(MarbleRun.ROW):
+		# The host's blocks, with this guest's own it has not heard back about on top.
+		var blocks: Dictionary = (state[MarbleRun.ROW] as Dictionary).duplicate()
+		for p in _predictions:
+			if p["verb"] == MarbleRun.VERB:
+				MarbleRun.answer(blocks, p["args"][0], p["args"][1], p["args"][2])
+		_show_marbles(blocks)
+	if state.has(MarbleRun.BALLS):
+		var held: Array = (state[MarbleRun.BALLS] as Array).duplicate()
+		for p in _predictions:
+			if p["verb"] == MarbleRun.BALL_VERB:
+				held = MarbleRun.answer_ball(held, p["args"][0])
+		_show_marble_balls(held)
+	if state.has(Modular.ROW):
+		# The host's patch, with this guest's own cables and knobs it has not heard back about on top.
+		var patch := Modular.clean(state[Modular.ROW])
+		for p in _predictions:
+			if p["verb"] == Modular.PATCH_VERB:
+				Modular.answer_patch(patch, p["args"][0], p["args"][1])
+			elif p["verb"] == Modular.KNOB_VERB:
+				Modular.answer_knob(patch, p["args"][0], p["args"][1])
+		_show_modular(patch)
 	if state.has("board") and not _predictions.any(func(p): return p["verb"] == &"board_source"):
 		_show_board(StringName(state["board"]))
 	_applying_room = false
@@ -2188,10 +2831,20 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 				items.take_personal(args[0], from)
 		&"make":
 			# A guest's pull: the host packs the clip from its own song, mints it, and it is in
-			# their hand -- or it is refused, and they are told why.
+			# their hand -- or it is refused, and they are told why. A brick of MAKE BRICKS goes
+			# onto the ledge instead (slice 31).
 			var made := _mint_for(args[0], args[1], from)
-			if made != null:
+			if made != null and made is ChordBrick and ChordBrick.into_ledge(args[1]):
+				_onto_ledge(made as ChordBrick, from)
+			elif made != null:
 				_hand_made(made, from)
+		&"bricks":
+			# A guest's nudge of a chord brick's length: the room's row, if nobody else has it.
+			var brick := items.items.get(args[0]) as ChordBrick if items != null else null
+			if brick != null and _may_put(brick, from) and args[1] in ChordBrick.LENGTHS:
+				brick.bars = args[1]
+				_remember_made_soon()
+				_publish_room_soon()
 		&"slot_item":
 			var item: Item = items.items.get(args[0]) if items != null else null
 			if item != null and _may_put(item, from) and not items.slot(item, args[1], args[2]):
@@ -2223,6 +2876,44 @@ func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 		&"sampler":
 			# A guest's REC: on for their next sound, or off.
 			_arm_sampler(args[0], from)
+		&"weather":
+			# A guest's press on the weather's switch: LISTEN or OFF, for everyone.
+			_set_weather(args[0])
+		&"grains_key":
+			# A guest's press on the grain cloud's KEY: on or off, for everyone.
+			_set_grains_key(args[0])
+		&"looper":
+			# A guest's slap on the looper's pad: armed for them, or refused while somebody else loops.
+			_answer_looper(args[0], args[1], from)
+		&"looper_layer":
+			# A guest's finished layer: onto a track of theirs in the LOOPER folder.
+			_write_looper_layer(args[0], args[1], args[2], from)
+		&"music_box":
+			# A guest's key on the music box: the room's row, if it is one.
+			_set_music_box(args)
+		&"string":
+			# A guest's string tied or cut: the room's row, or told why not.
+			_answer_string(args[0], args[1], args[2], from)
+		&"marble":
+			# A guest's block in the lattice, or taken out: the room's row, or told why not.
+			_answer_marble(args[0], args[1], args[2], from)
+		&"marble_ball":
+			# A guest's BALL: a marble on that beat, for everyone.
+			_answer_marble_ball(args[0])
+		&"modular_patch":
+			# A guest's cable on the modular wall, or one pulled: the room's row, or told why not.
+			_answer_modular_patch(args[0], args[1], from, args[2])
+		&"modular_knob":
+			# A guest's knob let go: the room's row.
+			_answer_modular_knob(args[0], args[1], from, args[2])
+		&"scratch":
+			# A guest's scratch on the platter, for the sampler: of what is in its slot here, and
+			# a path that fits (Varispeed.fits: bounded in steps and in time). Rendered only when
+			# REC would catch it (_sample_scratch), so an ask with REC off costs the host nothing.
+			var path: PackedFloat32Array = args[1]
+			var there: Item = items.in_slot(Platter.HOLDER, 0) if items != null else null
+			if there != null and there.id == args[0] and there is CassetteItem and Varispeed.fits(path):
+				_sample_scratch(there as CassetteItem, path, from)
 		&"board_source":
 			if board_sources().has(args[0]):
 				_show_board(args[0])
@@ -2396,6 +3087,9 @@ func _fit_room_to_session() -> void:
 		var want: Variant = null
 		if fit.has(id):
 			want = [fit[id][0], deg_to_rad(fit[id][1])]
+		elif id == "eq_wall":
+			var at := _eq_wall_at()
+			want = [Vector2(at.x, at.z), deg_to_rad(EQ_WALL_HEADING)]
 		elif id.begins_with("lamp_") and _authored_floor.has(t.piece_id):
 			var home: Transform3D = _authored_floor[t.piece_id]
 			want = [SessionLayout.widen(Vector2(home.origin.x, home.origin.z), room_width),
@@ -2475,23 +3169,55 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	return piece
 
 
-## Where pieces stood by default before the room was spread out (2026-10-26). A layout saves every
-## piece once it settles, moved or not, so a saved spot that is one of these was never chosen by
-## anyone: the piece takes its new default instead. A piece somebody did move keeps its place.
+## Where pieces stood by default before the room was spread out, each time it was (2026-10-26, and
+## the 8 x 6 m room of 2026-10-28). A layout saves every piece once it settles, moved or not, so a
+## saved spot that is one of these was never chosen by anyone: the piece takes its new default
+## instead. A piece somebody did move keeps its place.
 const OLD_FLOOR_DEFAULTS := {
-	&"rack": Vector2(-1.18, -0.42),
-	&"deck_trolley": Vector2(0.80, -0.22),
-	&"patch_stand": Vector2(1.80, -0.30),
-	&"stage_trolley": Vector2(1.10, 1.40),
-	&"lamp_2": Vector2(3.10, 0.95),
+	&"rack": [Vector2(-1.18, -0.42), Vector2(-1.75, -0.42)],
+	&"deck_trolley": [Vector2(0.80, -0.22), Vector2(1.25, -0.10)],
+	&"patch_stand": [Vector2(1.80, -0.30), Vector2(3.05, 1.25)],
+	&"stage_trolley": [Vector2(1.10, 1.40), Vector2(-2.1, 1.95)],
+	&"eq_wall": [Vector2(3.38, -1.55)],
+	&"station_board": [Vector2(1.55, 2.3)],
+	&"patch_wall": [Vector2(-3.45, -1.3)],
+	&"lamp_1": [Vector2(-2.85, 1.25)],
+	&"lamp_2": [Vector2(3.10, 0.95), Vector2(1.9, -2.7)],
+	&"lamp_3": [Vector2(-2.30, 0.95)],
 }
+## The old rule's lines for the pieces that make room for the desk (SessionLayout.fit): in a room
+## widened for a bigger desk the rack, the deck and the patch stand stood further out along these
+## z, so a saved spot on one of them, at the old heading, was the old room's too.
+const OLD_FIT_LINES := {
+	&"rack": [-0.42, 45.0],
+	&"deck_trolley": [-0.10, -50.0],
+	&"patch_stand": [1.25, -90.0],
+}
+## Where the 8 x 6 m room's EQ wall stood off its right-hand wall, whatever its width.
+const OLD_EQ_WALL := Vector2(0.62, -1.55)
 
 
 func _left_where_it_was_authored(id: StringName, saved: Transform3D) -> bool:
-	if not OLD_FLOOR_DEFAULTS.has(id):
-		return false
-	var was: Vector2 = OLD_FLOOR_DEFAULTS[id]
-	return Vector2(saved.origin.x, saved.origin.z).distance_to(was) < 0.02
+	return Studio.was_an_old_default(id, saved)
+
+
+## Whether a saved floor spot `saved` for piece `id` is one of the defaults an older room stood it
+## at (OLD_FLOOR_DEFAULTS, OLD_FIT_LINES, OLD_EQ_WALL), rather than somewhere a player pushed it.
+static func was_an_old_default(id: StringName, saved: Transform3D) -> bool:
+	var at := Vector2(saved.origin.x, saved.origin.z)
+	for was: Vector2 in OLD_FLOOR_DEFAULTS.get(id, []):
+		if at.distance_to(was) < 0.02:
+			return true
+	var heading := rad_to_deg(saved.basis.get_euler().y)
+	if OLD_FIT_LINES.has(id):
+		var line: Array = OLD_FIT_LINES[id]
+		if absf(at.y - float(line[0])) < 0.02 and absf(wrapf(heading - float(line[1]), -180.0, 180.0)) < 0.5:
+			return true
+	if id == &"eq_wall" and absf(at.y - OLD_EQ_WALL.y) < 0.02 and absf(wrapf(heading - EQ_WALL_HEADING, -180.0, 180.0)) < 0.5:
+		# Its x followed the old room's right-hand wall out, in 0.8 m steps.
+		var off := at.x + OLD_EQ_WALL.x
+		return absf(off / SessionLayout.WIDTH_STEP * 2.0 - roundf(off / SessionLayout.WIDTH_STEP * 2.0)) < 0.03
+	return false
 
 
 ## Whether a piece of `live_pieces` is where this venue stands it (`_live_default`), as near as
@@ -2710,7 +3436,10 @@ func _build_anchors() -> void:
 	presence.frame = room_anchor
 	add_child(presence)
 	presence.harp = harp
+	presence.strings_heard = _on_string_heard
+	presence.grains_heard = _on_grains_heard
 	_lend_fingertips()
+	_lend_chord_hand()
 
 
 ## This player's fingertips as notes (FingertipNotes, docs/spatial_loop.md slice 8), one per hand:
@@ -2746,6 +3475,35 @@ func _add_fingertips(hand: Interactor, skeleton: HandSkeleton) -> void:
 	fingertips.append(notes)
 
 
+## This player's chord hand (ChordHand): in a headset the rig's left hand, or its right for a
+## left-handed player (Ergonomics.handedness); on a desktop the chord layer, over the mouse's view
+## and the fingertips' keys.
+func _lend_chord_hand() -> void:
+	chord_hand = ChordHand.new()
+	if camera != null:
+		chord_hand.mouse = get_node_or_null("MouseHand") as MouseInteractor
+		chord_hand.fingertip_keys = fingertip_keys
+	if rig != null:
+		var controller: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
+		if controller != null:
+			chord_hand.hand = rig.interactors.get(controller) as XRInteractor
+			chord_hand.gestures = rig.gestures.get(controller) as HandGestures
+			chord_hand.head = rig.head
+	add_child(chord_hand)
+
+
+## C on a desktop: the chord layer on, or off (ChordHand.set_layer). On, 1 to 7 pick the key's
+## chords in whichever keys have the keyboard, and with none, the fingertips' take it. Said the
+## first time.
+func toggle_chords() -> void:
+	if chord_hand == null or camera == null:
+		return
+	chord_hand.set_layer(not chord_hand.layer)
+	if chord_hand.layer and not _told_chords:
+		_told_chords = true
+		Session.notice.emit("Chords: 1 to 7 play the key's I to vii° on the harp, the fingertips (J K L ;) and the bells you hold; Shift adds the seventh, 0 the song's own. A click strums the harp. C or Esc ends it.")
+
+
 ## T on a desktop: the fingertips' keys on, or back to the studio. Said the first time.
 func toggle_fingertips() -> void:
 	if fingertip_keys == null:
@@ -2766,6 +3524,8 @@ func _build_surfaces() -> void:
 	console.position = Vector3(0, 0.74, 0.1)
 	studio_set.add_child(console)
 	mount.register(console)
+	if medium != Presentation.Medium.AR:
+		_build_desk_wing()
 
 	# On its stand, as authored: the stand's own placement times where the bay sits on it. The
 	# stand may since have been wheeled somewhere else; riding it (below) takes care of that.
@@ -2825,6 +3585,26 @@ func _build_surfaces() -> void:
 		mount.register(stage)
 		stage.ropes_changed.connect(_publish_room_soon)
 		focus.surfaces.append(stage)
+	# The spectra the EQ wall shows: measured here on the built-in engine, sent on to guests, or a
+	# guest's host's (slice 36). And the wall, on its trolley at the side wall; none in AR.
+	spectra = Spectra.new()
+	spectra.name = "Spectra"
+	add_child(spectra)
+	if eq_wall_trolley != null:
+		eq_wall = EqWall.new()
+		eq_wall.name = "EqWall"
+		eq_wall.spectra = spectra.latest
+		eq_wall.reason = spectra.reason
+		eq_wall.reference = func() -> float: return spectra.reference
+		eq_wall.motion = func() -> float: return ergonomics.motion_scale
+		eq_wall.transform = _authored_floor[&"eq_wall"]
+		studio_set.add_child(eq_wall)
+		mount.register(eq_wall)
+		focus.surfaces.append(eq_wall)
+	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
+	if medium != Presentation.Medium.AR:
+		_build_modular()
+		focus.surfaces.append(modular_wall)
 	focus.show_halo = medium != Presentation.Medium.SCREEN
 	focus.visits = medium == Presentation.Medium.SCREEN
 	# Re-seat once the focused surface has been PLACED, which is when it finally knows both its
@@ -2847,6 +3627,7 @@ func _build_surfaces() -> void:
 	add_child(focus)
 	if mount != null:
 		mount.held = focus.holds
+	_stand_the_modular()
 
 	# What rides on what. After the rig, because a surface that is summoned rides by its home,
 	# and the rig is what holds that.
@@ -2859,6 +3640,8 @@ func _build_surfaces() -> void:
 		_ride(patch_stand, patchbay)
 		if stage != null:
 			_ride(stage_trolley, stage)
+		if eq_wall != null:
+			_ride(eq_wall_trolley, eq_wall)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -3089,10 +3872,12 @@ func _refresh_looms_if_moved(delta: float) -> void:
 # --- desktop camera -----------------------------------------------------------------------
 
 ## The items' homes off the shelf: the headphones on their hook under it, the handbells on their
-## stand by the harp, and the mic in the booth's stand, where the venue has one.
+## stand by the harp, the mic in the booth's stand, where the venue has one, the session in
+## miniature on the desk's left wing, the hand drums in their ring on the drum riser, and the venue's
+## instrument's bars on its mount.
 func _item_homes() -> Dictionary:
 	if venue == null:
-		return {}
+		return _kit_homes({})
 	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
 			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
 			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
@@ -3105,7 +3890,27 @@ func _item_homes() -> Dictionary:
 	var mic_at: Variant = venue.mic_spot()
 	if mic_at != null:
 		out[&"mic"] = mic_at
-	return out
+	var mini_at: Variant = venue.miniature_spot()
+	if mini_at != null:
+		out[MiniatureItem.KIND] = mini_at
+	# The hand drums round their ring on the drum riser (slice 40); none where there is no riser.
+	for n in HandDrum.KINDS.size():
+		var drum_at: Variant = venue.drum_circle_spot(n)
+		if drum_at != null:
+			out[HandDrum.KINDS[n]] = drum_at
+	# The venue's instrument's bars on its mount (slice 42); past its count, or with none, put away.
+	if venue_instrument != null and is_instance_valid(venue_instrument):
+		out.merge(VenueInstrument.homes(venue_instrument.spec))
+	return _kit_homes(out)
+
+
+## `homes` with the drum pads' kit's (slice 41): on the console's front rail, wherever the desk is,
+## in AR too; none (put away) with no console built yet.
+func _kit_homes(homes: Dictionary) -> Dictionary:
+	var at: Variant = kit_home()
+	if at != null:
+		homes[KitItem.KIND] = at
+	return homes
 
 
 ## The things people pick up (docs/items_loop.md), in the set's frame, the floor plan's. They
@@ -3113,6 +3918,8 @@ func _item_homes() -> Dictionary:
 func _build_items() -> void:
 	items = ItemRoom.new()
 	items.name = "Items"
+	if medium == Presentation.Medium.AR:
+		items.only = ItemRoom.AR_KINDS
 	if walker != null:
 		items.fits = walker.reachable
 		items.ground_at = walker.ground_at
@@ -3135,12 +3942,18 @@ func _build_items() -> void:
 			if item.network_key() == key:
 				return item.bound_to
 		return 0
-	ToyItem.shown = venue.venue_id()
+	if venue != null:
+		ToyItem.shown = venue.venue_id()
 	studio_set.add_child(items)
-	items.boards = venue.dart_boards()
-	items.hoops = venue.hoops()
-	items.set_venue(venue.venue_id())
-	items.set_spots(venue.item_spots(), _item_homes())
+	if venue != null:
+		items.boards = venue.dart_boards()
+		items.hoops = venue.hoops()
+		items.set_venue(venue.venue_id())
+	var shelf: Array[Transform3D] = []
+	if venue != null:
+		shelf = venue.item_spots()
+	_dress_venue_bars()
+	items.set_spots(shelf, _item_homes())
 	var mic := items.items.get(&"mic") as MicItem
 	if mic != null:
 		mic.live_changed.connect(func(live: bool) -> void:
@@ -3159,6 +3972,7 @@ func _build_items() -> void:
 		tablet.patch_asked.connect(_on_patch_asked)
 		tablet.on_air_asked.connect(_on_air_asked)
 	personal.changed.connect(_on_personal_changed)
+	_wire_miniature()
 	their_keys = TheirKeys.new()
 	their_keys.name = "TheirKeys"
 	add_child(their_keys)
@@ -3183,6 +3997,7 @@ func _build_items() -> void:
 	items.used.connect(func(item: Item, down: bool) -> void: Session.send_item_use(item.id, down, item.use_take))
 	# What the sampler catches (slice 26): a use or a hit by a hand here, or anyone's the host hears.
 	items.used.connect(_sample_use_here)
+	items.rang.connect(_sample_ring)
 	Session.item_used.connect(_on_someones_use)
 	Session.item_hit.connect(_on_someones_hit)
 	items.personal_taken.connect(_on_item_personal_taken)
@@ -3197,6 +4012,14 @@ func _build_items() -> void:
 	InstrumentItem.hands_hint = medium != Presentation.Medium.SCREEN
 	hit_recorder.unarmed.connect(func() -> void:
 		Session.notice.emit("Arm a track to record the percussion: hits are only heard until one is."))
+	# A fixed instrument is struck where it stands: by a hand or a controller crossing its head here.
+	strike = Strike.new()
+	strike.name = "Strike"
+	add_child(strike)
+	# This player's own hits a few milliseconds after the hand, where the helper can run.
+	InstrumentItem.fast_path = _hit_on_fast_path
+	InstrumentItem.fast_latency = _fast_path_latency
+	_start_hit_voices()
 	jacks = Jacks.new()
 	jacks.name = "Jacks"
 	jacks.recorder = hit_recorder
@@ -3229,10 +4052,15 @@ func _build_items() -> void:
 		keytar.wants_keys.connect(func() -> void: _keytar_play(true))
 	if Session.guest_midi != null:
 		Session.guest_midi.key.connect(_on_key_played)
+		# Everything this player's keys send, from every source, into their loop while they loop.
+		Session.guest_midi.sends.connect(_on_keys_sent)
+	Session.participant_left.connect(_on_looper_player_left)
 	items.moved.connect(_on_item_moved)
 	if presence != null:
 		presence.items = items
-	_wire_made_items()
+	# AR makes no items while playing: no rack, no shelf to keep them on.
+	if medium != Presentation.Medium.AR:
+		_wire_made_items()
 
 
 # --- made items: cassettes (docs/spatial_loop.md part two, slice 23) ------------------------
@@ -3255,6 +4083,7 @@ func _wire_made_items() -> void:
 	items.told.connect(_on_items_told)
 	items.used.connect(_on_item_used_here)
 	items.paste_pressed.connect(_on_paste_pressed)
+	items.resized.connect(_on_brick_resized)
 	Session.made_changed.connect(_on_made_changed)
 	Session.holds_changed.connect(_take_given_soon)
 	if timeline != null:
@@ -3290,7 +4119,8 @@ func _on_unmade(id: StringName) -> void:
 
 
 func _made_name(id: StringName) -> String:
-	return "cassette %s" % String(id).trim_prefix("cassette")
+	var kind := ItemRoom.kind_of(id)
+	return "%s %s" % ["chord brick" if kind == ChordBrick.KIND else String(kind), String(id).trim_prefix(String(kind))]
 
 
 ## A guest heard the host take a made item away: here too.
@@ -3462,6 +4292,9 @@ func _give(item: Item, peer: int, from: int) -> void:
 ## docs/spatial_loop.md part two, slice 24): the host pastes it at once; a guest asks with the room's
 ## `paste` [id, track, time], and the host pastes the clip it holds. The cassette stays in the hand.
 func _on_paste_pressed(item: Item, track: int, seconds: float) -> void:
+	if item is ChordBrick:
+		press_brick(item as ChordBrick, track, seconds)
+		return
 	var cassette := item as CassetteItem
 	if cassette == null or not cassette.pastes():
 		return
@@ -3496,7 +4329,157 @@ func _given_name(item: Item) -> String:
 	var cassette := item as CassetteItem
 	if cassette != null:
 		return "the %s cassette" % cassette.clip_name()
+	var brick := item as ChordBrick
+	if brick != null:
+		return "the %s chord brick" % brick.chord
 	return item.item_title().to_lower()
+
+
+# --- chord bricks (docs/spatial_loop.md part two, slice 31) -----------------------------------
+#
+# The fifths wheel feeds them: a strip tile pulled off it is a brick of its chord in the hand that
+# pulled it, and MAKE BRICKS makes the strip as bricks at the end of the ledge's row. Both are made
+# items the host mints (`make`, "chord:<key>:<chord>" and "ledge:<key>:<chord>"). A brick's length
+# is the room's row `bricks` {id: bars}, its nudge; a guest's is the room's ask `bricks`. Pressed
+# into a track it writes its row's block chords as one take (a guest's is the take's intent, as any
+# take is); into a section block, its row's harmony at that section's marker (a guest's is the
+# wheel's `harmony` ask).
+
+## Every chord brick's length, {id: bars}: the room's row.
+func _bricks_row() -> Dictionary:
+	var out := {}
+	if items != null:
+		for id in items.items:
+			var brick := items.items[id] as ChordBrick
+			if brick != null:
+				out[id] = brick.bars
+	return out
+
+
+## The host's row of brick lengths, here: each brick its length, but one this guest has nudged and
+## not heard back about.
+func _apply_bricks(row: Dictionary) -> void:
+	var pending := {}
+	for p in _predictions:
+		if p["verb"] == &"bricks":
+			pending[p["args"][0]] = true
+	for id in row:
+		var brick := items.items.get(StringName(id)) as ChordBrick
+		if brick != null and not pending.has(StringName(id)) and int(row[id]) in ChordBrick.LENGTHS:
+			brick.bars = int(row[id])
+
+
+## A brick's length nudged by a hand here: the host's room is told; a guest asks.
+func _on_brick_resized(item: Item, bars: int) -> void:
+	if Session.is_authority():
+		_remember_made_soon()
+		_publish_room_soon()
+	else:
+		_predict(&"bricks", [item.id, bars])
+
+
+## Brick `made`, just minted for `maker`'s MAKE BRICKS: at the end of the ledge's row, or, the ledge
+## full, left on its tray and they are told. Whether it went on the ledge.
+func _onto_ledge(made: ChordBrick, maker: int) -> bool:
+	var n := items.next_in_order(ChordBrick.LEDGE) if items.holders.has(ChordBrick.LEDGE) else -1
+	if n < 0:
+		Session.tell(maker, "The ledge is full: the %s brick is on its tray. Bin some, or press CLEAR." % made.chord)
+		_publish_room_soon()
+		return false
+	items.slot(made, ChordBrick.LEDGE, n)
+	_publish_room_soon()
+	return true
+
+
+## The wheel's MAKE BRICKS: a brick of each of `chords`, in `key`, at the end of the ledge's row. The
+## host's are minted at once; a guest asks for each.
+func make_bricks(chords: PackedStringArray, key: String) -> void:
+	if items == null or chords.is_empty():
+		return
+	if not Session.is_authority():
+		for c in chords:
+			_predict(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, key, c)])
+		Session.notice.emit("Asking %s for chord bricks of %s on the ledge..." % [Session.name_of(1), " ".join(chords)])
+		return
+	var made := PackedStringArray()
+	for c in chords:
+		var brick := _mint_for(ChordBrick.KIND, ChordBrick.from_text(true, key, c), Session.local_peer_id) as ChordBrick
+		if brick == null or not _onto_ledge(brick, Session.local_peer_id):
+			break
+		made.append(c)
+	if not made.is_empty():
+		var desk := medium == Presentation.Medium.SCREEN
+		Session.notice.emit(("Made %s as chord bricks on the ledge: %s." % [" ".join(made),
+				"click one to take it, then click a lane, a strip or a section block to write the row; the wheel over one makes it 1, 2 or 4 bars"
+				if desk else "take one and press it into a lane, a strip or a section block to write the row; turn one in your hand, or the stick over it, for 1, 2 or 4 bars"]))
+
+
+## A hand here pulled a strip tile off the wheel: the host's own is a brick of it in that hand at
+## once; a guest's is an ask, and a blank brick in the hand meanwhile.
+func _on_brick_pulled(chord: String, key: String, hand: Node) -> void:
+	var interactor := hand as Interactor
+	if items == null or interactor == null:
+		return
+	var from := ChordBrick.from_text(false, key, chord)
+	if Session.is_authority():
+		var made := _mint_for(ChordBrick.KIND, from, Session.local_peer_id)
+		if made != null:
+			interactor.pick_up(made)
+			_say_brick(made as ChordBrick)
+		return
+	var seq := _predict(&"make", [ChordBrick.KIND, from])
+	if seq > 0:
+		var look := ItemRoom.look_of(ChordBrick.KIND)
+		look.top_level = true
+		look.name = "MakingBrick"
+		add_child(look)
+		_making.append({"seq": seq, "hand": interactor, "look": look})
+		Session.notice.emit("Asking %s for a chord brick of %s..." % [Session.name_of(1), chord])
+
+
+## How a brick just put in a hand is used, said once.
+func _say_brick(made: ChordBrick) -> void:
+	var desk := medium == Presentation.Medium.SCREEN
+	var press := made.carried_by.paste_press_words() if is_instance_valid(made.carried_by) else "a press"
+	Session.notice.emit(("The %s chord brick is in your hand: click a timeline lane, a strip or a stage voice to write it there, a section block for its harmony, the ledge to stand it in the row; Q puts it down."
+			if desk else "The %s chord brick is in your hand: " + press + " on a timeline lane, a strip or a stage voice writes it there, on a section block its harmony; let it go by the ledge to stand it in the row.")
+			% made.chord)
+
+
+## A chord brick pressed by a hand here (ItemRoom.paste_pressed): its row (ChordBrick.row_of: the
+## ledge's, when it was taken from there) written. Into a track: its block chords from the bar of
+## `seconds` (the lane's bar, or the playhead's), one take named ChordBrick.TAKE_NAME, one undo step;
+## a guest's is the take's intent. Into a section block (`track` ChordBrick.SECTION, `seconds` its
+## start): the row's harmony at that section's bar, by the wheel's SET (FifthsWheel.write), or a
+## guest's `harmony` ask. The brick stays in the hand.
+func press_brick(brick: ChordBrick, track: int, seconds: float) -> void:
+	var s := DAW.state
+	if s == null or brick == null or not brick.pastes():
+		return
+	var row := ChordBrick.row_of(brick)
+	var chords := ChordBrick.chords_text(row)
+	if track == ChordBrick.SECTION:
+		var r := s.region_at(seconds + 0.001)
+		var section := str(s.regions[r][2]) if r >= 0 else "the section at %s" % s.bar_beat(seconds)
+		var asked := ChordBrick.section_ask(row, s, seconds)
+		if not Session.is_authority():
+			brick_asked = [FifthsWheel.VERB, asked]
+			Session.ask_room(FifthsWheel.VERB, asked)
+			Session.notice.emit("Asked %s to put %s in [%s]." % [Session.name_of(1), section, asked[1]])
+			return
+		var named := FifthsWheel.write(asked[0], asked[1])
+		Session.notice.emit("%s is in [%s] now: the harp, the bells and the fingertips follow it there." % [section, asked[1]]
+				if named != "" else "Those bricks do not read as a key and chords.")
+		return
+	var why := ChordBrick.write_refusal(s, track)
+	if not why.is_empty():
+		Session.notice.emit(why)
+		return
+	var first := ChordBrick.bar_of(s, seconds)
+	var span := ChordBrick.span_of(row, s, first)
+	DAW.insert_midi_take(track, span[0], span[1], ChordBrick.notes_of(row, s, first), ChordBrick.TAKE_NAME)
+	var said := "%s (%d bars) onto %s from bar %d" % [chords, ChordBrick.bars_in(row), s.track(track).display_name(), first + 1]
+	Session.notice.emit(("Wrote %s." if Session.is_authority() else "Asked %s to write %%s." % Session.name_of(1)) % said)
 
 
 ## A click with a made item in the mouse's hand and nothing under the cursor: on a bandmate's
@@ -3508,6 +4491,1042 @@ func _on_item_used_here(item: Item, down: bool) -> void:
 	var peer := presence.peer_at(aim.origin, -aim.basis.z)
 	if peer != 0:
 		give_item(item, peer)
+
+
+# --- the grain cloud (docs/spatial_loop.md part two, slice 54) -------------------------------
+#
+# Its KEY switch is the room's row `grains_key`: a guest's press is the room's ask `grains_key` [on],
+# shown at once here; the host's is done. What this player's cloud plays goes to the band and, while the
+# song records, into a take (Session.send_grains, GrainTakes); a bandmate's plays here (GrainCloud.hear).
+
+## An event this player's grain cloud played (slice 55): to the band, and into a take while the song
+## records (Session.send_grains), at the song as this player hears it, moved on by the cloud's figure.
+func _on_grains_played(e: PackedFloat32Array) -> void:
+	Session.send_grains(e, Session.grain_takes.song())
+
+
+## A bandmate's grain event (Presence.grains_heard): played from this grain cloud's sound.
+func _on_grains_heard(peer: int, e: PackedFloat32Array) -> void:
+	if grain_cloud != null and is_instance_valid(grain_cloud):
+		grain_cloud.hear(peer, e)
+
+
+func _forget_grains_player(peer: int) -> void:
+	if grain_cloud != null and is_instance_valid(grain_cloud):
+		grain_cloud.forget(peer)
+
+
+## The grain cloud's sound here (mono at GrainVoice.RATE), empty while it has none: what the host
+## renders a take on it from (GrainTakes.sound).
+func grains_sound() -> PackedFloat32Array:
+	if grain_cloud == null or not is_instance_valid(grain_cloud) or grain_cloud.source != GrainCloud.Source.READY:
+		return PackedFloat32Array()
+	return grain_cloud.voice.source
+
+
+## A hand here pressed the grain cloud's KEY: on to follow the chord's root, off for its own pitch.
+func _on_grains_key_pressed(on: bool) -> void:
+	if Session.is_authority():
+		_set_grains_key(on)
+	elif _predict(GrainCloud.VERB, [on]) > 0:
+		_show_grains_key(on)
+	Session.notice.emit("Grain cloud: KEY on. Its grains follow the chord's root, for everyone's cloud." if on
+			else "Grain cloud: KEY off. Its grains are at the sound's own pitch.")
+
+
+## The room's word on KEY: shown here and told to the room.
+func _set_grains_key(on: bool) -> void:
+	_show_grains_key(on)
+	_publish_room_soon()
+
+
+## KEY shown as the room has it, on this cloud and any stood later.
+func _show_grains_key(on: bool) -> void:
+	grains_key = on
+	if grain_cloud != null and is_instance_valid(grain_cloud):
+		grain_cloud.key_on = on
+
+
+# --- the weather (docs/spatial_loop.md part two, slice 44) ----------------------------------
+#
+# The switch is the room's row `weather`: a guest's press is the room's ask `weather` [on], shown at
+# once here; the host's is done. Every machine schedules the same drops from its own song clock, so
+# nothing else crosses the wire: the host alone records them, onto the track the jack goes into.
+
+## A hand here pressed the weather's switch: `on` for LISTEN, off for OFF.
+func _on_weather_pressed(on: bool) -> void:
+	if Session.is_authority():
+		_set_weather(on)
+	elif _predict(Weather.VERB, [on]) > 0:
+		_show_weather(on)
+	var what := str(weather.spec.get("title", "the weather")).to_lower() if weather != null else "the weather"
+	var said := what.left(1).to_upper() + what.substr(1)
+	Session.notice.emit("%s: LISTEN. Each drop is a note of the song's scale, %s, heard by everyone. Its jack records them onto a track." \
+			% [said, Weather.pitch_of(weather.spec if weather != null else {})] if on else "%s: OFF. The drops fall silent." % said)
+
+
+## The room's word on the switch: LISTEN or OFF, shown here and told to the room.
+func _set_weather(on: bool) -> void:
+	_show_weather(on)
+	_publish_room_soon()
+
+
+## The switch shown as the room has it, on this weather and any stood later.
+func _show_weather(on: bool) -> void:
+	weather_listening = on
+	if weather != null and is_instance_valid(weather):
+		weather.listening = on
+
+
+## A drop landed (Weather.dropped): its jack's lead shows it, and the host records it onto the track
+## the jack goes into, heard or not. Every machine has the same drop, so only one takes it down.
+func _on_weather_dropped(drop: Dictionary) -> void:
+	if jacks == null:
+		return
+	var source := StringName(drop["source"])
+	var track := Jack.track_of(jacks.sink_of(source))
+	if track <= 0:
+		return
+	jacks.heard_from(source, int(drop["velocity"]))
+	if Session.is_authority() and hit_recorder != null and Jacks.takes_midi(track):
+		hit_recorder.note(track, int(drop["note"]), int(drop["velocity"]), InstrumentItem.MELODIC_CHANNEL,
+				float(drop["length"]), float(drop["song"]))
+
+
+# --- the looper (docs/spatial_loop.md part two, slice 45) -----------------------------------
+#
+# Who is looping is the room's row `looper` [peer, from_bar, bars]: a guest's slap is the room's ask
+# `looper` [from_bar, bars], shown at once here; the host's is answered (Looper.answer). The layer is
+# taken down where it is played, by the song as its player hears it, and written on the host: a
+# guest's sent whole (`looper_layer`), for the host to put on a track of theirs.
+
+## What a player is called on the looper's screen and their tracks: their name, or this player's own.
+func _looper_name(peer: int) -> String:
+	if peer == Session.local_peer_id and Session.local_name != "":
+		return Session.local_name
+	return Session.name_of(peer)
+
+
+## A hand here slapped the looper's pad: armed (the host's own at once, a guest's asked and shown),
+## refused while somebody else loops, called off during this player's own count.
+func _on_looper_slapped() -> void:
+	if looper == null:
+		return
+	var me := Session.local_peer_id
+	var why := Looper.refusal(looper_row, me, _looper_name)
+	if why != "":
+		Session.notice.emit("%s: one player at a time. Slap again when their layer is done." % why)
+		return
+	if not looper_row.is_empty():
+		if looper.phase == Looper.Phase.COUNT:
+			_on_looper_called_off()
+			Session.notice.emit("Loop called off.")
+		elif looper.phase == Looper.Phase.REC:
+			Session.notice.emit("Recording your layer: it ends at bar %d." % (int(looper_row[1]) + int(looper_row[2])))
+		return
+	var plan := Looper.plan(DAW.state, looper.heard(), looper_length)
+	# Read before the answer, which sets the loop for a first layer.
+	var stacking := Looper.loop_set(DAW.state)
+	if Session.is_authority():
+		_answer_looper(plan[0], plan[1], me)
+	elif _predict(Looper.VERB, plan) > 0:
+		_show_looper([me, plan[0], plan[1]])
+	var bars := int(plan[1])
+	Session.notice.emit(("Stacking a layer: the rest of this pass counts in, then %d bar%s of everything you play." \
+			if stacking else "Looping: a bar's count, then %d bar%s of everything you play, keys and hits, as a layer of your own.") \
+			% [bars, "" if bars == 1 else "s"])
+
+
+## Host: `from`'s slap (theirs asked, or this player's own): Looper.answer against the room's row, and
+## the row told to the room. A refusal is told to them; their own screen goes back with the room.
+func _answer_looper(from_bar: int, bars: int, from: int) -> void:
+	var out := Looper.answer(looper_row, from_bar, bars, from, _looper_name)
+	if bool(out["refused"]):
+		Session.tell(from, "%s One player at a time." % out["said"])
+	_show_looper(out["row"])
+	_publish_room_soon()
+
+
+## This player's layer is taken down (Looper.layer_done): the host's written at once, a guest's sent.
+func _on_looper_layer(start: float, end: float, notes: Array) -> void:
+	if Session.is_authority():
+		_write_looper_layer(start, end, notes, Session.local_peer_id)
+	elif _predict(Looper.LAYER_VERB, [start, end, notes]) > 0:
+		_show_looper([])
+
+
+## Host: `from`'s layer onto a track of theirs (Looper.write_layer), their row cleared. A layer with
+## nothing played in it makes no track. Only the row's own player's, and only while it is theirs; and
+## it goes where the row says, over the row's bars as the host has them (Looper.span_of), not where
+## the layer says it began and ended, with only the notes begun inside them (Looper.inside).
+func _write_looper_layer(_start: float, _end: float, notes: Array, from: int) -> void:
+	if looper_row.is_empty() or int(looper_row[0]) != from:
+		return
+	var span := Looper.span_of(looper_row, DAW.state)
+	_show_looper([])
+	_publish_room_soon()
+	var kept := Looper.inside(notes, span).slice(0, MidiTake.MAX_NOTES)
+	if kept.is_empty():
+		Session.tell(from, "Nothing was played into the loop, so there is no layer. Slap again to try another.")
+		return
+	var made := Looper.write_layer(_looper_name(from), float(span[0]), float(span[1]), kept)
+	Session.tell(from, "%s: %d note%s on a track of its own in the LOOPER folder. Slap again while it loops to stack another." \
+			% [made["name"], kept.size(), "" if kept.size() == 1 else "s"])
+
+
+## This player's count or layer was cut short (the transport stopped, the riser gone): their row
+## cleared, by the host or asked of it.
+func _on_looper_called_off() -> void:
+	if Session.is_authority():
+		_answer_looper(0, 0, Session.local_peer_id)
+	elif _predict(Looper.VERB, [0, 0]) > 0:
+		_show_looper([])
+
+
+## The room's row on this looper and any stood later.
+func _show_looper(row: Array) -> void:
+	looper_row = row.duplicate()
+	if looper != null and is_instance_valid(looper):
+		looper.row = looper_row
+
+
+## What this player's keys send, into their loop while they loop.
+func _on_keys_sent(kind: int, pitch: int, velocity: int, song: float, channel: int) -> void:
+	if looper != null and is_instance_valid(looper):
+		looper.key(kind, pitch, velocity, song, channel)
+
+
+## Host: whoever was looping left: nobody is now.
+func _on_looper_player_left(peer: int) -> void:
+	if Session.is_authority() and not looper_row.is_empty() and int(looper_row[0]) == peer:
+		_show_looper([])
+		_publish_room_soon()
+
+
+# --- the music box (docs/spatial_loop.md part two, slice 47) --------------------------------
+#
+# TRACK, LENGTH, ROOT and SCALE are the room's row `music_box`: a guest's key is the room's ask
+# `music_box` [track, length, root, chromatic], shown at once here; the host's is done. The pegs are
+# its track's item in the mix, written by DAW.insert_note and delete_note like any edit, so nothing
+# else of it crosses the wire.
+
+## A key here asked for the row to be `wanted`.
+func _on_music_box_asked(wanted: Array) -> void:
+	if Session.is_authority():
+		_set_music_box(wanted)
+	elif _predict(MusicBox.VERB, wanted) > 0:
+		_show_music_box(wanted)
+
+
+## The room's word on the music box's row: `wanted`, if it is one the host keeps (MusicBox.clean),
+## shown here and told to the room.
+func _set_music_box(wanted: Array) -> void:
+	var row := MusicBox.clean(wanted, DAW.state)
+	if row.is_empty():
+		return
+	_show_music_box(row)
+	_publish_room_soon()
+
+
+## The row shown as the room has it, on this box and any stood later.
+func _show_music_box(row: Array) -> void:
+	if row.size() != 4:
+		return
+	music_box_row = row.duplicate()
+	if music_box != null and is_instance_valid(music_box):
+		music_box.row = music_box_row
+
+
+# --- strings across the room (docs/spatial_loop.md part two, slice 48) ----------------------
+#
+# The strings are the room's row `strings` {id: [a, b, maker]}: a guest's tie or cut is the room's ask
+# `string` [id, a, b] (a and b the same point to cut), shown at once here; the host's is done. Each
+# string is stood from the row on every machine; its plucks are this player's keys, and a bandmate's
+# arrive as notes, heard from the string that plays them (`_on_string_heard`).
+
+## The spool (RoomString.Spool), in the venue's own frame at its spot: a child of the venue, so it
+## goes with it, its trolley the studio's. Then the room's strings stood again in this venue.
+func _stand_the_spool() -> void:
+	spool = null
+	var spot: Variant = Stations.spot(venue, RoomString.STATION)
+	if spot != null:
+		spool = RoomString.Spool.new()
+		spool.transform = spot
+		spool.bounds = _string_bounds
+		spool.count = func() -> int: return strings_row.size()
+		spool.string_asked.connect(_on_string_asked)
+		spool.told.connect(func(text: String) -> void: Session.notice.emit(text))
+		venue.add_child(spool)
+	# The old venue's strings went with it.
+	room_strings.clear()
+	_show_strings(strings_row.duplicate())
+
+
+## What a string's end can meet in this venue, in its frame: the floors a person walks (the rooms
+## past the desk and the control room's own), and what stands on them.
+func _string_bounds() -> Array:
+	if venue == null:
+		return [[], []]
+	var rooms: Array = venue.rooms().duplicate()
+	rooms.append(_room_bounds().grow(0.05))
+	return [rooms, venue.solids()]
+
+
+## The spool's two ends tied by a hand here: a new string, asked of the room.
+func _on_string_asked(from_a: Vector3, to_b: Vector3) -> void:
+	_strings_tied += 1
+	var id := StringName("s%d_%d" % [Session.local_peer_id, _strings_tied])
+	while strings_row.has(id):
+		_strings_tied += 1
+		id = StringName("s%d_%d" % [Session.local_peer_id, _strings_tied])
+	ask_string(id, from_a, to_b)
+
+
+## String `id` tied from `from_a` to `to_b` (the venue's frame), or cut where they are the same point:
+## done on the host, asked by a guest and shown at once, or refused here in words where the host
+## would refuse it.
+func ask_string(id: StringName, from_a: Vector3, to_b: Vector3) -> void:
+	if Session.is_authority():
+		_answer_string(id, from_a, to_b, Session.local_peer_id)
+		return
+	var rows := strings_row.duplicate()
+	var refusal := RoomString.answer(rows, id, from_a, to_b, Session.local_peer_id)
+	if refusal != "":
+		Session.notice.emit(refusal)
+		return
+	if _predict(RoomString.VERB, [id, from_a, to_b]) > 0:
+		_show_strings(rows)
+
+
+## String `id` cut, for everyone.
+func cut_string(id: StringName) -> void:
+	if strings_row.has(id):
+		ask_string(id, Vector3.ZERO, Vector3.ZERO)
+
+
+## The room's word on a string tied or cut by `from`: the row, told to the room, or why not, to them.
+func _answer_string(id: StringName, from_a: Vector3, to_b: Vector3, from: int) -> void:
+	var rows := strings_row.duplicate()
+	var refusal := RoomString.answer(rows, id, from_a, to_b, from)
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	var cut := not rows.has(id) and strings_row.has(id)
+	_show_strings(rows)
+	if cut:
+		Session.tell(from, "The string is cut.")
+	_publish_room_soon()
+
+
+## The room's strings as `rows` has them, here: each stood at its ends, the ones gone taken down.
+func _show_strings(rows: Dictionary) -> void:
+	strings_row = rows.duplicate()
+	for id in room_strings.keys():
+		var s: RoomString = room_strings[id]
+		if not rows.has(id) or s == null or not is_instance_valid(s) or not s.is_inside_tree():
+			room_strings.erase(id)
+			if s != null and is_instance_valid(s):
+				# Out of the room now, so what it rang is let go before anything stands in its place.
+				if s.get_parent() != null:
+					s.get_parent().remove_child(s)
+				s.queue_free()
+	if venue == null:
+		return
+	for id: StringName in rows:
+		var row: Array = rows[id]
+		var s: RoomString = room_strings.get(id)
+		if s == null:
+			s = RoomString.new()
+			s.id = id
+			s.name = "String_%s" % id
+			s.a = row[0]
+			s.b = row[1]
+			s.maker = int(row[2])
+			s.cut_asked.connect(cut_string)
+			venue.add_child(s)
+			room_strings[id] = s
+		else:
+			s.tie(row[0], row[1], int(row[2]))
+
+
+## A bandmate's string note (Presence.strings_heard): heard from the string that plays its pitch
+## here, or the first one ringing it, if any does.
+func _on_string_heard(peer: int, kind: int, pitch: int, velocity: int) -> void:
+	var playing: RoomString = null
+	for id in room_strings:
+		var s: RoomString = room_strings[id]
+		if s == null or not is_instance_valid(s):
+			continue
+		if kind == Session.Note.OFF and s.sounds_for(peer, pitch):
+			playing = s
+			break
+		if playing == null and s.pitch() == pitch:
+			playing = s
+	if playing != null:
+		playing.heard(peer, kind, pitch, velocity)
+
+
+## The strings in this player's reach (`&"string"` in GuestMidi.instruments) while a hand of theirs
+## is on one or carries an end, one they plucked still rings, or they stand at the spool: so the
+## synth is up before the first pluck, and a run of plucks is one take.
+func _follow_strings() -> void:
+	if Session.guest_midi == null:
+		return
+	var near := spool != null and is_instance_valid(spool) and spool.is_inside_tree() \
+			and (spool.carrying() or spool.reel.is_hovered() \
+			or Vector2(_standing_at().x - spool.global_position.x, _standing_at().z - spool.global_position.z).length() < ChordHarp.NEAR)
+	for id in room_strings:
+		var s: RoomString = room_strings[id]
+		if s != null and is_instance_valid(s) and (s.touched() or s.ringing()):
+			near = true
+			break
+	Session.guest_midi.reach(RoomString.SOURCE, near)
+
+
+## The theremin in this player's reach (`&"theremin"` in GuestMidi.instruments) while they stand at
+## it, the cursor rests in its field, or it sounds: so the synth is up before the first note, and a
+## phrase with rests in it is one take.
+func _follow_theremin() -> void:
+	if Session.guest_midi == null:
+		return
+	var near := false
+	if theremin != null and is_instance_valid(theremin) and theremin.is_inside_tree():
+		var me := _standing_at()
+		var at := theremin.global_position
+		near = theremin.sounding() or theremin.field.is_hovered() \
+				or Vector2(me.x - at.x, me.z - at.z).length() < ChordHarp.NEAR
+	Session.guest_midi.reach(Theremin.SOURCE, near)
+
+
+# --- the marble run (docs/spatial_loop.md part two, slice 49) ------------------------------
+#
+# The blocks are the room's row `marbles` {cell: [kind, facing]}: a guest's block put in or taken out
+# is the room's ask `marble` [cell, kind, facing] (an empty kind to take it out), shown at once here;
+# the host's is done. BALL is the room's ask `marble_ball` [beat], kept in the row `marble_balls`.
+# Every machine rolls the same marbles from its own song clock and the rows, so nothing else crosses
+# the wire: the host alone records the bells, onto the track the run's jack goes into.
+
+## The lyric board (LyricBoard), in the venue's own frame at its spot in the booth: a child of the venue,
+## so it goes with it. Its notices are toasts, and its EDIT is `edit_lyrics`.
+func _stand_the_lyrics() -> void:
+	lyric_board = null
+	var spot: Variant = Stations.spot(venue, LyricBoard.STATION)
+	if spot == null:
+		return
+	lyric_board = LyricBoard.new()
+	lyric_board.transform = spot
+	lyric_board.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	lyric_board.edit_asked.connect(edit_lyrics)
+	venue.add_child(lyric_board)
+
+
+## EDIT on the lyric board: in a headset, the typing pad by the singer's hand (LyricBoard.PAD_AT), its
+## line added to the end of the lyrics untimed; at a desk, the session panel's LYRICS box, which has
+## them all, or where it is when nothing opens it.
+func edit_lyrics() -> void:
+	if lyric_board == null or not is_instance_valid(lyric_board):
+		return
+	if get_viewport() != null and get_viewport().use_xr:
+		var old := lyric_board.get_node_or_null("TypingPad")
+		if old != null:
+			old.queue_free()
+		var pad := TypingPad.ask(lyric_board, "A line for the lyrics: OK adds it at the end, untimed", "",
+				LyricBoard.PAD_AT)
+		pad.answered.connect(func(words: String) -> void:
+			if lyric_board != null and is_instance_valid(lyric_board):
+				lyric_board.add_line(words))
+		return
+	if lyrics_edit_asked.get_connections().is_empty():
+		Session.notice.emit("M opens the session panel: its LYRICS box has the song's lyrics.")
+		return
+	lyrics_edit_asked.emit()
+
+
+## The marble run (MarbleRun), in the venue's own frame at its spot in the lattice: a child of the
+## venue, so it goes with it. Then the room's blocks and BALL marbles stood again in this venue.
+func _stand_the_marbles() -> void:
+	marbles = null
+	var spot: Variant = Stations.spot(venue, MarbleRun.STATION)
+	if spot == null:
+		return
+	marbles = MarbleRun.new()
+	marbles.transform = MarbleRun.frame_at(spot)
+	marbles.rows = marbles_row.duplicate()
+	marbles.balls = marble_balls.duplicate()
+	marbles.block_asked.connect(ask_marble)
+	marbles.ball_asked.connect(ask_marble_ball)
+	marbles.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	marbles.rang.connect(_on_marble_rang)
+	venue.add_child(marbles)
+
+
+## Block `kind` facing `way` in `cell` (an empty kind takes it out): done on the host, asked by a guest
+## and shown at once, or refused here in words where the host would refuse it.
+func ask_marble(cell: Vector3i, kind: StringName, way: int) -> void:
+	if Session.is_authority():
+		_answer_marble(cell, kind, way, Session.local_peer_id)
+		return
+	var rows := marbles_row.duplicate()
+	var refusal := MarbleRun.answer(rows, cell, kind, way)
+	if refusal != "":
+		Session.notice.emit(refusal)
+		return
+	if _predict(MarbleRun.VERB, [cell, kind, way]) > 0:
+		_show_marbles(rows)
+
+
+## The room's word on a block asked by `from`: the row, told to the room, or why not, to them.
+func _answer_marble(cell: Vector3i, kind: StringName, way: int, from: int) -> void:
+	var rows := marbles_row.duplicate()
+	var refusal := MarbleRun.answer(rows, cell, kind, way)
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	_show_marbles(rows)
+	_publish_room_soon()
+
+
+## The room's blocks as `rows` has them, here.
+func _show_marbles(rows: Dictionary) -> void:
+	marbles_row = rows.duplicate()
+	if marbles != null and is_instance_valid(marbles):
+		marbles.show_rows(rows)
+
+
+## BALL pressed here with the song playing: a marble on beat `beat`, for everyone.
+func ask_marble_ball(beat: float) -> void:
+	Session.notice.emit("A marble on the next beat, from the top of the run.")
+	if Session.is_authority():
+		_answer_marble_ball(beat)
+	elif _predict(MarbleRun.BALL_VERB, [beat]) > 0:
+		_show_marble_balls(MarbleRun.answer_ball(marble_balls, beat))
+
+
+## The room's word on a BALL marble: kept with the others, told to the room.
+func _answer_marble_ball(beat: float) -> void:
+	_show_marble_balls(MarbleRun.answer_ball(marble_balls, beat))
+	_publish_room_soon()
+
+
+## The room's BALL marbles as `held` has them, here.
+func _show_marble_balls(held: Array) -> void:
+	marble_balls = held.duplicate()
+	if marbles != null and is_instance_valid(marbles):
+		marbles.balls = held.duplicate()
+
+
+## A bell rang in the run (MarbleRun.rang): its jack's lead shows it, and the host records it onto the
+## track the jack goes into, heard or not. Every machine rings the same bell, so only one takes it
+## down; a preview, rolled here alone with the song stopped, is nobody's take.
+func _on_marble_rang(r: Dictionary) -> void:
+	if jacks == null or r.get("preview", false):
+		return
+	var track := Jack.track_of(jacks.sink_of(MarbleRun.SOURCE))
+	if track <= 0:
+		return
+	jacks.heard_from(MarbleRun.SOURCE, int(r["velocity"]))
+	if Session.is_authority() and hit_recorder != null and Jacks.takes_midi(track):
+		hit_recorder.note(track, int(r["note"]), int(r["velocity"]), InstrumentItem.MELODIC_CHANNEL,
+				float(r["length"]), float(r["song"]))
+
+
+# --- the modular wall (docs/spatial_loop.md part two, slice 51) ------------------------------
+#
+# The patch is the room's row `modular` {cables: [[from, to]], knobs: {id: v}} (Modular): a cable put in
+# or pulled is the room's ask `modular_patch` [from, to, song] (an empty `to` pulls), a knob let go the
+# ask `modular_knob` [id, v, song], each shown at once here and rolled back if the host refuses it, as
+# the patchbay's `patch` is. A knob as it turns is streamed (Session.send_knob, at most
+# Session.KNOBS_PER_SECOND), heard where it is made and by bandmates, but never the room's until let
+# go. This player's keys play the patch while they stand at the stand (ModularVoice).
+#
+# Slice 52: a turn is heard here as it is streamed (`_on_knob_streamed`), the same events the band
+# hears and a take keeps; each bandmate playing the wall is heard through the room's patch on a voice
+# of theirs at it (`modular_heard`, from Presence.modular_heard); and every change of the room's patch
+# goes into a take through the modular at the song it was asked at (`_take_modular_change`,
+# Session.modular_takes), which the host renders and puts in as audio when it ends.
+
+## Where a player stands to play the wall, in its frame (m): in front of the stand, out to a step
+## past the station's seat (1.3), and no wider than the case. Its jacks and knobs take the pointer
+## only from here (and only where no other station's seat is nearer, `at_modular`), or while it is
+## visited or brought. The harp, the music box and the bells stand within a metre or two of the
+## stand: a wider area played the harp's plucks through the patch and put 2 cm jacks under a
+## harp player's cursor.
+const MODULAR_NEAR := 0.3
+const MODULAR_FAR := 1.7
+const MODULAR_SIDE := 0.6
+## How often the stations' seats are worked out again for `at_modular` (s): a trolley pushed
+## moves its seat, but not every frame's worth.
+const MODULAR_SEATS_EVERY := 0.5
+
+## Every station's seat here on the floor (global x, z), by id, for `at_modular`, and when they were
+## worked out (ms) and for which venue.
+var _modular_seats := {}
+var _modular_seats_at := -1
+var _modular_seats_venue := 0
+
+
+## The wall, its voice and its computer keys, made once with the surfaces; hung at the venue's spot
+## (`_stand_the_modular`). None in AR.
+func _build_modular() -> void:
+	modular_wall = ModularWall.new()
+	modular_wall.name = "ModularWall"
+	modular_wall.parks = false
+	modular_wall.within_reach = false
+	modular_wall.patch = modular_row.duplicate(true)
+	studio_set.add_child(modular_wall)
+	mount.register(modular_wall)
+	modular_wall.patch_asked.connect(ask_modular_patch)
+	modular_wall.knob_set.connect(ask_modular_knob)
+	# A turn is heard here as it is streamed, not as the hand moves the knob: the same events the
+	# band hears and the take keeps (slice 52).
+	modular_wall.knob_streamed.connect(_on_knob_streamed)
+	modular_wall.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	modular_wall.touched.connect(_on_modular_touched)
+	modular_wall.keys_asked.connect(func() -> void: _modular_play(not modular_keys.is_active()))
+	Session.knob_turned.connect(_on_knob_turned)
+	modular_voice = ModularVoice.new()
+	modular_voice.name = "ModularVoice"
+	modular_voice.keys = Session.guest_midi.synth if Session.guest_midi != null else null
+	modular_voice.set_patch(modular_row)
+	add_child(modular_voice)
+	# Takes through the modular start from the patch as it is heard here; bandmates' keys through it
+	# play at the wall (slice 52).
+	Session.modular_takes.patch = heard_modular_patch
+	if presence != null:
+		presence.modular_heard = _on_modular_heard
+		presence.modular_control_heard = _on_modular_control_heard
+	Session.participant_left.connect(_forget_modular_player)
+	Session.role_changed.connect(_on_modular_role_changed)
+	modular_keys = KeyCatcher.new()
+	modular_keys.name = "ModularKeys"
+	modular_keys.base = 48
+	add_child(modular_keys)
+	modular_keys.note_on.connect(func(pitch: int, velocity: int) -> void: _on_modular_touched(pitch, true, velocity))
+	modular_keys.note_off.connect(func(pitch: int) -> void: _on_modular_touched(pitch, false))
+	modular_keys.active_changed.connect(func(on: bool) -> void: modular_wall.show_playing(on))
+	# The world into it (slice 53).
+	modular_world = ModularWorld.new()
+	modular_world.weather = func() -> Variant: return weather
+	modular_world.marbles = func() -> Variant: return marbles
+	modular_world.has_venue = func() -> bool: return venue_instrument != null and is_instance_valid(venue_instrument)
+	add_child(modular_world)
+	modular_world.fired.connect(_on_world_fired)
+	Session.modular_takes.world = modular_world.for_take
+	modular_world_voice = ModularVoice.new()
+	modular_world_voice.name = "ModularWorldVoice"
+	modular_world_voice.speaker = modular_wall
+	modular_world_voice.world_only = true
+	modular_world_voice.volume_db = -6.0
+	modular_world_voice.set_patch(modular_row)
+	add_child(modular_world_voice)
+	if Session.guest_midi != null:
+		Session.guest_midi.key.connect(_on_modular_key)
+
+
+## The wall, hung at this venue's spot over the stand (Venue.modular_spot), the venue's rack giving way
+## to it; put away, and out of F's round, where the venue has none.
+func _stand_the_modular() -> void:
+	if modular_wall == null or not is_instance_valid(modular_wall) or venue == null:
+		return
+	var spot: Variant = Stations.spot(venue, Modular.STATION)
+	modular_wall.visible = spot != null
+	if spot == null:
+		if focus != null:
+			if focus.focused_id == modular_wall.surface_id:
+				focus.release()
+			focus.surfaces.erase(modular_wall)
+		return
+	ZoneKit.yield_rack(venue)
+	var at := _venue_to_set(spot as Transform3D)
+	mount.seat(modular_wall.surface_id, func() -> Transform3D: return at)
+	if focus != null and not focus.surfaces.has(modular_wall):
+		focus.surfaces.append(modular_wall)
+
+
+## The song position a cable or a knob is made at: this player's keys' clock, or -1.
+func _modular_song() -> float:
+	return Session.guest_midi.song() if Session.guest_midi != null else -1.0
+
+
+## A cable from `from` into `to`, or with `to` empty the cable at `from` pulled: done on the host, asked
+## by a guest and shown at once, or refused here in words where the host would refuse it.
+func ask_modular_patch(from: StringName, to: StringName) -> void:
+	var song := _modular_song()
+	if Session.is_authority():
+		_answer_modular_patch(from, to, Session.local_peer_id, song)
+		return
+	var patch := modular_row.duplicate(true)
+	var refusal := Modular.answer_patch(patch, from, to)
+	if refusal != "":
+		Session.notice.emit(refusal)
+		return
+	if _predict(Modular.PATCH_VERB, [from, to, song]) > 0:
+		_show_modular(patch, song)
+
+
+## The room's word on a cable asked by `from` at song position `song`: the row, told to the room, or
+## why not, to them.
+func _answer_modular_patch(cable_from: StringName, to: StringName, from: int, song := -1.0) -> void:
+	var patch := modular_row.duplicate(true)
+	var refusal := Modular.answer_patch(patch, cable_from, to)
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	_show_modular(patch, song)
+	_publish_room_soon()
+
+
+## Knob `id` let go at `v`: the room's from now on, done on the host, asked by a guest and kept here.
+func ask_modular_knob(id: StringName, v: float) -> void:
+	var song := _modular_song()
+	if Session.is_authority():
+		_answer_modular_knob(id, v, Session.local_peer_id, song)
+		return
+	var patch := modular_row.duplicate(true)
+	var refusal := Modular.answer_knob(patch, id, v)
+	if refusal != "":
+		Session.notice.emit(refusal)
+		return
+	if _predict(Modular.KNOB_VERB, [id, v, song]) > 0:
+		_show_modular(patch, song)
+
+
+func _answer_modular_knob(id: StringName, v: float, from: int, song := -1.0) -> void:
+	var patch := modular_row.duplicate(true)
+	var refusal := Modular.answer_knob(patch, id, v)
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	_show_modular(patch, song)
+	_publish_room_soon()
+
+
+## The room's patch as `patch` has it, here: on the wall, in this player's voice and every
+## bandmate's, with a knob a hand here is still turning kept where its stream has it. What changed
+## goes into a take through the modular (Session.modular_takes) at `song`, the song position it was
+## asked at (NAN: now, as this player hears it): a cable in or out, and a knob not under a hand here,
+## whose stream the take has already.
+func _show_modular(patch: Dictionary, song := NAN) -> void:
+	var was := modular_row
+	modular_row = Modular.clean(patch)
+	var turning := modular_wall.turning() if modular_wall != null and is_instance_valid(modular_wall) else {}
+	_take_modular_change(was, modular_row, turning, song if is_finite(song) else _modular_song())
+	if modular_wall != null and is_instance_valid(modular_wall):
+		modular_wall.show_patch(modular_row)
+	for voice: ModularVoice in _modular_voices():
+		voice.set_patch(modular_row)
+		for id: StringName in turning:
+			voice.knob(id, _modular_streamed.get(id, turning[id]))
+
+
+## The room's patch gone from `was` to `now`, into a take through the modular at `song`: each cable
+## pulled, then each put in, and each knob moved that no hand here is turning.
+func _take_modular_change(was: Dictionary, now: Dictionary, turning: Dictionary, song: float) -> void:
+	var before: Array = was.get("cables", [])
+	var after: Array = now.get("cables", [])
+	for c: Array in before:
+		if not after.has(c):
+			Session.modular_takes.cable(c[1], &"", song)
+	for c: Array in after:
+		if not before.has(c):
+			Session.modular_takes.cable(c[0], c[1], song)
+	var knobs: Dictionary = now["knobs"]
+	for id: StringName in knobs:
+		if not turning.has(id) and not is_equal_approx(float(knobs[id]), float((was["knobs"] as Dictionary).get(id, -1.0))):
+			Session.modular_takes.knob(id, knobs[id], song)
+
+
+## The modular's patch as it is heard here: the room's, with the knobs as they are being streamed
+## (this player's voice has both). What a take through the modular starts from (ModularTakes.patch).
+func heard_modular_patch() -> Dictionary:
+	return modular_voice.patch if modular_voice != null and is_instance_valid(modular_voice) else modular_row
+
+
+## This player's voice, every bandmate's and the world's own: all of them play the room's patch.
+func _modular_voices() -> Array[ModularVoice]:
+	var out: Array[ModularVoice] = []
+	if modular_voice != null and is_instance_valid(modular_voice):
+		out.append(modular_voice)
+	if modular_world_voice != null and is_instance_valid(modular_world_voice):
+		out.append(modular_world_voice)
+	for peer: int in modular_heard:
+		var v: ModularVoice = modular_heard[peer]
+		if is_instance_valid(v):
+			out.append(v)
+	return out
+
+
+## A knob's turn here as it is streamed (ModularWall.knob_streamed, at most Session.KNOBS_PER_SECOND):
+## heard in every voice here, sent to the band and kept in a take, all at once, so what this player
+## hears of the turn is what the take renders.
+func _on_knob_streamed(id: StringName, v: float) -> void:
+	_modular_streamed[id] = v
+	for voice: ModularVoice in _modular_voices():
+		voice.knob(id, v)
+	Session.send_knob(id, v, _modular_song())
+
+
+## A bandmate's knob as they turn it: on the wall and in every voice here.
+func _on_knob_turned(id: StringName, v: float, _from: int, _song: float) -> void:
+	if modular_wall != null and is_instance_valid(modular_wall):
+		modular_wall.show_knob(id, v)
+	for voice: ModularVoice in _modular_voices():
+		voice.knob(id, v)
+
+
+## A bandmate's note through the modular (Presence.modular_heard): played on their voice at the wall,
+## made the first time they play it, through the room's patch. Their last note let go rests their
+## wheel, as it does on their end.
+func _on_modular_heard(peer: int, kind: int, pitch: int, velocity: int) -> void:
+	if kind != Session.Note.ON and kind != Session.Note.OFF:
+		return
+	var voice := _modular_voice_of(peer, kind == Session.Note.ON)
+	if voice == null:
+		return
+	var held: Dictionary = _modular_heard_held.get(peer, {})
+	if kind == Session.Note.ON:
+		held[pitch] = true
+		voice.note_on(pitch, velocity)
+	else:
+		voice.note_off(pitch)
+		if held.erase(pitch) and held.is_empty():
+			voice.bend(0)
+	_modular_heard_held[peer] = held
+
+
+## A bandmate's wheel through the modular (Presence.modular_control_heard), while they hold a note.
+func _on_modular_control_heard(peer: int, kind: int, value: int) -> void:
+	if kind != DawKitClip.PITCH_BEND or (_modular_heard_held.get(peer, {}) as Dictionary).is_empty():
+		return
+	var voice := _modular_voice_of(peer, false)
+	if voice != null:
+		voice.bend(value)
+
+
+## `peer`'s voice at the wall, made (with `make`) if they have none yet; null where there is no wall
+## to play it from.
+func _modular_voice_of(peer: int, make: bool) -> ModularVoice:
+	var voice: ModularVoice = modular_heard.get(peer)
+	if voice != null and is_instance_valid(voice):
+		return voice
+	if not make or modular_wall == null or not is_instance_valid(modular_wall):
+		return null
+	voice = ModularVoice.new()
+	voice.name = "ModularHeard%d" % peer
+	voice.speaker = modular_wall
+	voice.volume_db = -4.0
+	voice.set_patch(modular_voice.patch if modular_voice != null else modular_row)
+	if modular_voice != null:
+		for socket: StringName in modular_voice.world_levels():
+			voice.world(socket, float(modular_voice.world_levels()[socket]))
+	add_child(voice)
+	voice.engaged = true
+	modular_heard[peer] = voice
+	return voice
+
+
+## Out of the session: no bandmate is playing the wall any more.
+func _on_modular_role_changed() -> void:
+	if Session.role == Session.Role.SOLO:
+		for peer: int in modular_heard.keys():
+			_forget_modular_player(peer)
+
+
+## A bandmate gone: their voice at the wall with them.
+func _forget_modular_player(peer: int) -> void:
+	var voice: ModularVoice = modular_heard.get(peer)
+	modular_heard.erase(peer)
+	_modular_heard_held.erase(peer)
+	if voice != null and is_instance_valid(voice):
+		voice.queue_free()
+
+
+## A touch key, or the computer keys under PLAY: a note on this player's keys, as the modular.
+func _on_modular_touched(pitch: int, down: bool, velocity := 100) -> void:
+	if Session.guest_midi == null:
+		return
+	if down:
+		Session.guest_midi.note_on(pitch, velocity, 0, 0.0, false, Modular.SOURCE)
+	else:
+		Session.guest_midi.note_off(pitch, 0, 0.0, false, Modular.SOURCE)
+
+
+## A key played on this player's keys, from anywhere: KEYS' readout, its newest note and its lamp.
+func _on_modular_key(pitch: int, down: bool) -> void:
+	if down:
+		_modular_held[pitch] = true
+		_modular_last = pitch
+	else:
+		_modular_held.erase(pitch)
+	if modular_wall != null and is_instance_valid(modular_wall):
+		modular_wall.show_keys(_modular_last, not _modular_held.is_empty())
+
+
+## The computer keys as the modular's, on or off, and said so the first time.
+func _modular_play(on: bool) -> void:
+	if modular_keys == null or on == modular_keys.is_active():
+		return
+	modular_keys.set_active(on)
+	if on:
+		Session.notice.emit("Modular: A to ' play from %s, Z and X move the octave. Esc gives the keys back; PLAY takes them again."
+				% modular_keys.octave_name())
+
+
+## Whether this player is at the wall: with it visited or brought, or standing in front of the
+## stand (MODULAR_NEAR to MODULAR_FAR out, MODULAR_SIDE either side) where the wall's own seat is
+## the nearest station's, so standing at the harp, the music box or the bells beside it plays them
+## and not the patch.
+func at_modular() -> bool:
+	if modular_wall == null or not is_instance_valid(modular_wall) or not modular_wall.visible \
+			or not modular_wall.is_inside_tree():
+		return false
+	if focus != null and focus.focused_id == modular_wall.surface_id:
+		return true
+	var me := _standing_at()
+	var local := modular_wall.global_transform.affine_inverse() * me
+	if local.z <= MODULAR_NEAR or local.z >= MODULAR_FAR or absf(local.x) >= MODULAR_SIDE:
+		return false
+	var seats := _station_seats()
+	if not seats.has(Modular.STATION):
+		return true
+	var floor := Vector2(me.x, me.z)
+	var own := floor.distance_to(seats[Modular.STATION])
+	for id: StringName in seats:
+		if id != Modular.STATION and floor.distance_to(seats[id]) < own:
+			return false
+	return true
+
+
+## Every station's seat here (Stations.seat, a headset's where this is one), on the floor in global
+## space, by id: worked out again every MODULAR_SEATS_EVERY, or for another venue.
+func _station_seats() -> Dictionary:
+	var now := Time.get_ticks_msec()
+	var here := venue.get_instance_id() if venue != null else 0
+	if _modular_seats_venue == here and _modular_seats_at >= 0 \
+			and now - _modular_seats_at < MODULAR_SEATS_EVERY * 1000.0:
+		return _modular_seats
+	_modular_seats_venue = here
+	_modular_seats_at = now
+	_modular_seats = {}
+	if venue == null:
+		return _modular_seats
+	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
+	var fits := walker.fits if walker != null else _station_fits()
+	var hands := medium != Presentation.Medium.SCREEN
+	for id in station_ids():
+		var seat: Variant = Stations.seat(venue, id, fits, hands)
+		if seat != null:
+			var p: Vector3 = frame_of * (seat as Transform3D).origin
+			_modular_seats[id] = Vector2(p.x, p.z)
+	return _modular_seats
+
+
+# --- the world into the modular (docs/spatial_loop.md part two, slice 53) ----------------------
+#
+# The world's sockets (Modular.WORLD) are outputs on the modular's patch, out in the room on the
+# stations that make what they carry (WorldSocket): a press steps a socket's long cable through the
+# wall's free inputs, each step the room's ask `modular_patch` like any cable. What they carry is
+# ModularWorld's, the same on every machine: played into every voice here as the song plays
+# (`_on_world_fired`), and into a take when it ends (ModularTakes.world).
+
+## A world socket's press (WorldSocket.step_asked): its cable out of the input it is in, and into the
+## next free one `way` on, each asked of the room, and said.
+func _on_world_step(socket: StringName, way: int) -> void:
+	var now := Modular.sinks_of(modular_row, socket)
+	var next := Modular.step_input(modular_row, socket, way)
+	if not now.is_empty():
+		if next == now[0]:
+			return
+		ask_modular_patch(now[0], &"")
+	if next != &"":
+		ask_modular_patch(socket, next)
+		Session.notice.emit(world_patched_text(socket, next))
+	elif not now.is_empty():
+		Session.notice.emit("%s is out of the modular wall." % Modular.world_title(socket).capitalize())
+
+
+## What this player is told on patching world socket `socket` into the wall's input `to`.
+static func world_patched_text(socket: StringName, to: StringName) -> String:
+	var what: String = {"world:weather": "its density, and a gate each drop", "world:drips": "a gate each drip",
+			"world:venue": "a gate each strike", "world:marbles": "a gate each bell rung"}.get(String(socket),
+			"its layer's notes as a level, and a gate each note")
+	return "%s goes into %s on the modular wall: %s. Press it again for the next free input." % [
+			Modular.world_title(socket).capitalize(), Modular.jack_title(to), what]
+
+
+## What the world played into the sockets as the song played here, into every voice.
+func _on_world_fired(events: Array) -> void:
+	for voice: ModularVoice in _modular_voices():
+		ModularWorld.play_into(voice, events)
+
+
+## Where a plug in the wall's input `id` sits, for a world socket's cable: null where the wall is not
+## up here.
+func _wall_jack(id: StringName) -> Variant:
+	if modular_wall == null or not is_instance_valid(modular_wall) or not modular_wall.is_visible_in_tree():
+		return null
+	var jack: ModularJack = modular_wall.jacks.get(id)
+	return jack.plug_transform() if jack != null and jack.is_inside_tree() else null
+
+
+## Each frame: every world socket in the room wired to its press and the wall, and showing where the
+## room's patch has its cable.
+func _follow_world_sockets() -> void:
+	for node in get_tree().get_nodes_in_group(WorldSocket.SOCKETS):
+		var socket := node as WorldSocket
+		if socket == null:
+			continue
+		if not socket.has_meta(&"wired"):
+			socket.set_meta(&"wired", true)
+			socket.step_asked.connect(_on_world_step)
+			socket.wall_jack = _wall_jack
+		var sinks := Modular.sinks_of(modular_row, socket.socket)
+		var into: StringName = sinks[0] if not sinks.is_empty() else &""
+		if socket.into != into:
+			socket.show_into(into)
+
+
+## Whether the room's patch has a cable out of any world socket.
+static func world_patched(patch: Dictionary) -> bool:
+	for c: Array in patch.get("cables", []):
+		if Modular.is_world(StringName(c[0])):
+			return true
+	return false
+
+
+## Each frame: this player's keys play the patch while they are at the wall (or its PLAY has the
+## computer keys), its controls take the pointer only then, and OUT says which road it sounds on,
+## and REC while a take goes through it.
+func _follow_modular() -> void:
+	if modular_wall == null or not is_instance_valid(modular_wall):
+		return
+	_follow_world_sockets()
+	var here := at_modular()
+	var engaged := here or (modular_keys != null and modular_keys.is_active())
+	modular_wall.within_reach = here
+	if Session.guest_midi != null:
+		Session.guest_midi.reach(Modular.SOURCE, engaged)
+	if modular_voice != null:
+		modular_voice.engaged = engaged
+		# Recording through it (slice 52): OUT says so, in words, as the take is the wall's sound.
+		var recording := engaged and Session.modular_takes.mine != null
+		modular_wall.set_recording(recording)
+		modular_wall.set_tag(modular_voice.tag())
+	if not here and modular_keys != null and modular_keys.is_active() and not modular_wall.visible:
+		_modular_play(false)
+	if modular_world_voice != null:
+		modular_world_voice.engaged = modular_wall.visible and world_patched(modular_row) \
+				and not _modular_played_here()
+
+
+## Whether a voice here other than the world's own is sounding the patch: this player's at the wall
+## or under PLAY, or a bandmate's not yet rested. Each already hears the world's sockets, so the
+## world's own voice rests then and a drip into a gate is heard once and not again a few ms later.
+func _modular_played_here() -> bool:
+	for voice: ModularVoice in _modular_voices():
+		if voice != modular_world_voice and voice.engaged and voice.path != ModularVoice.Path.NONE:
+			return true
+	return false
 
 
 # --- the sampler (docs/spatial_loop.md part two, slice 26) ----------------------------------
@@ -3527,8 +5546,8 @@ func _on_rec_pressed(on: bool) -> void:
 	elif _predict(Sampler.VERB, [on]) > 0:
 		sampler.armed_by = me if on else 0
 	var desk := medium == Presentation.Medium.SCREEN
-	Session.notice.emit(("Sampler REC: the next thing you squeeze, click or shake, or anything used within %.1f m of its mic, is a sample on the rack. Click REC again to stop."
-			if desk else "Sampler REC: the next thing you squeeze, hit or shake, or anything used within %.1f m of its mic, is a sample on the rack. Press REC again to stop.") % Sampler.REACH
+	Session.notice.emit(("Sampler REC: the next thing you squeeze, click or shake, a yo-yo or card trick, or a bounce of the ball, or anything used within %.1f m of its mic, is a sample on the rack. Click REC again to stop."
+			if desk else "Sampler REC: the next thing you squeeze, hit or shake, a yo-yo or card trick, or a bounce of the ball, or anything used within %.1f m of its mic, is a sample on the rack. Press REC again to stop.") % Sampler.REACH
 			if on else "Sampler REC off.")
 
 
@@ -3540,34 +5559,98 @@ func _arm_sampler(on: bool, from: int) -> void:
 	_publish_room_soon()
 
 
-## A use of `item` (Foley's `kind`, take `take`) by `from`, for the sampler to catch: only the
-## host's does (Sampler.heard).
-func _sample(item: Item, kind: StringName, take: int, from: int) -> void:
-	if sampler != null and is_instance_valid(sampler) and sampler.armed_by != 0:
-		sampler.heard(item, kind, take, from)
+## A use of `item` (Foley's `kind`, take `take`, played `pitch` fast) by `from`, for the sampler to
+## catch: only the host's does (Sampler.heard).
+func _sample(item: Item, kind: StringName, take: int, from: int, pitch := 1.0) -> void:
+	if _sampling():
+		sampler.heard(item, kind, take, from, pitch)
 
 
-## A hand here used what it carries: a squeeze, a click.
+## Whether the sampler is waiting for a sound: what is asked of a use (its pitch reads the song
+## clock) only then.
+func _sampling() -> bool:
+	return sampler != null and is_instance_valid(sampler) and sampler.armed_by != 0
+
+
+## Where this machine has the platter's audio clip's file `source`: the host's media folder, or a
+## guest's fetched copy, its fetch begun when it has none yet (FileSend.fetch); "" until then.
+func _platter_file(source: String) -> String:
+	if source.is_empty():
+		return ""
+	if Session.role == Session.Role.GUEST:
+		if Session.files == null:
+			return ""
+		var got := Session.files.fetched_path(source)
+		if got.is_empty() and Session.files.fetch_state(source) == &"":
+			Session.files.fetch(source)
+		return got
+	var path := DAW.backend.media_path(source) if DAW.backend != null else ""
+	return path if not path.is_empty() and FileAccess.file_exists(path) else ""
+
+
+## A scratch a hand here made on the platter (Platter.scratched), for the sampler: the host renders
+## it from its own render of the clip and catches it as a sound of the cassette; a guest's is the
+## room's ask `scratch`, its path, only while REC waits.
+func _on_scratched(cassette: CassetteItem, path: PackedFloat32Array) -> void:
+	if not _sampling() or cassette == null or not is_instance_valid(cassette):
+		return
+	if Session.is_authority():
+		_sample_scratch(cassette, path, Session.local_peer_id)
+	else:
+		Session.ask_room(Platter.SCRATCH_VERB, [cassette.id, path])
+
+
+## The host: `from`'s scratch of `cassette` along `path`, rendered (Platter.render_scratch) and given
+## the sampler as the platter's sound of it. Only when REC waits and would catch it (Sampler.catches):
+## a render is real work, and nobody's ask makes it for nothing.
+func _sample_scratch(cassette: CassetteItem, path: PackedFloat32Array, from: int) -> void:
+	if platter == null or not is_instance_valid(platter) or not _sampling() \
+			or not sampler.catches(cassette, from) or not Varispeed.fits(path):
+		return
+	platter.render_scratch(cassette, path, func(wav: AudioStreamWAV) -> void:
+		if wav != null and _sampling() and is_instance_valid(cassette):
+			sampler.heard_stream(cassette, &"platter_scratch", wav, from))
+
+
+## A hand here used what it carries: a squeeze, a click, a trick.
 func _sample_use_here(item: Item, down: bool) -> void:
-	if down:
-		_sample(item, item.use_kind(true), item.use_take, Session.local_peer_id)
+	if down and _sampling():
+		_sample(item, item.use_kind(true), item.use_take, Session.local_peer_id, item.use_pitch())
+
+
+## A sound an item rang of its own on this copy (Item.rang): a ball's bounce, the thrower's. Every
+## copy flies a throw the same, so the host's copy's is the one its thrower heard.
+func _sample_ring(item: Item, kind: StringName, take: int, pitch: float) -> void:
+	_sample(item, kind, take, item.thrown_by, pitch)
 
 
 ## Somebody else's use, as the host hears it, with the take their hand rang: only of what is in
-## their hand, as Presence rings only that.
+## their hand, as Presence rings only that. A pitched instrument's click comes as a hit too, with
+## the song position that pitches it, and is caught from that (`_on_someones_hit`).
 func _on_someones_use(id: StringName, down: bool, from: int, take := -1) -> void:
 	var item: Item = items.items.get(id) if items != null else null
-	if down and item != null and from != Session.local_peer_id and Session.is_authority() \
-			and Session.holder_of(item.network_key()) == from:
-		_sample(item, item.use_kind(true), take, from)
+	if down and _sampling() and item != null and from != Session.local_peer_id and Session.is_authority() \
+			and Session.holder_of(item.network_key()) == from \
+			and not (item is InstrumentItem and (item as InstrumentItem).pitched()):
+		_sample(item, item.use_kind(true), take, from, item.use_pitch())
 
 
-## Somebody else's shake: heard here as shaken (Presence: `heard`, not struck), and caught so.
-func _on_someones_hit(id: StringName, _velocity: int, from: int, _song := -1.0, _snap := false, take := -1) -> void:
+## Somebody else's shake: heard here as shaken (Presence: `heard`, not struck), and caught so, at
+## the pitch it rang for them (their song position `song` pitches a bell). Their strike on one that
+## stands still is nobody's to hold: caught struck, on its zone.
+func _on_someones_hit(id: StringName, velocity: int, from: int, song := -1.0, _snap := false, take := -1,
+		zone := &"") -> void:
 	var item := items.items.get(id) as InstrumentItem if items != null else null
-	if item != null and from != Session.local_peer_id and Session.is_authority() \
-			and Session.holder_of(item.network_key()) == from:
-		_sample(item, item.sound_kind(false), take, from)
+	# A bandmate's strike of the venue's instrument, at the song they struck it at (slice 53).
+	if item != null and modular_world != null and from != Session.local_peer_id \
+			and item.jack_source() == VenueInstrument.SOURCE:
+		modular_world.strike(song, velocity)
+	if not _sampling() or item == null or from == Session.local_peer_id or not Session.is_authority():
+		return
+	if item.fixed:
+		_sample(item, item.kind_of_hit(true, zone if item.has_zone(zone) else &""), take, from, item.tune_at(song))
+	elif Session.holder_of(item.network_key()) == from:
+		_sample(item, item.sound_kind(false), take, from, item.tune_at(song))
 
 
 ## How far along the mouse's ray the bandmate a made item in its hand would be handed to stands,
@@ -3614,6 +5697,10 @@ func _remember_made() -> void:
 	for id in items.made:
 		var row: Array = items.made[id]
 		out[id] = [row[0], row[1], row[2], where.get(id, [])]
+		# A chord brick's length is the room's, not its data (slice 31): kept beside its place.
+		var brick := items.items.get(id) as ChordBrick
+		if brick != null:
+			out[id].append(brick.bars)
 	if out == Session.layout.made:
 		return
 	Session.layout.set_made(out)
@@ -3635,6 +5722,8 @@ func _restore_made(missing_only := false) -> void:
 				continue
 			items.made[id] = [row[0], int(row[1]), row[2]]
 		var item := items._make_real(id)
+		if item is ChordBrick and row.size() > 4:
+			(item as ChordBrick).bars = int(row[4])
 		var place: Variant = row[3]
 		if item == null or not (place is Array):
 			continue
@@ -4713,29 +6802,41 @@ func _on_key_played(pitch: int, down: bool) -> void:
 ## since its ring is all a use of it is, and only a hit carries the song position (`at`) that
 ## pitches it. The take and the room both get that one `at`, unmoved: a snap moves only the
 ## recorded note (HitRecorder.snapped_at), and whether this player snaps goes with the hit, with the
-## Foley take their hand rang, so everyone hears the sound they heard.
-func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float) -> void:
+## Foley take their hand rang, so everyone hears the sound they heard. A strike on an instrument that
+## stands still (Item.fixed) has no use to go as, so it goes as a hit, with where on it it landed
+## (`zone`).
+func _on_item_played(item: InstrumentItem, velocity: int, struck: bool, at: float, zone := &"") -> void:
 	# Onto the armed track, or the track its jack goes into.
-	jacks.hit(item, velocity, at)
-	_sample(item, item.sound_kind(struck), item.sound_take(), Session.local_peer_id)
-	if not struck or item.pitched():
-		send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take())
+	jacks.hit(item, velocity, at, zone)
+	# A strike of the venue's instrument into the modular's `world:venue` (slice 53).
+	if modular_world != null and item.jack_source() == VenueInstrument.SOURCE:
+		modular_world.strike(at, velocity)
+	# And into this player's loop, while they loop (slice 45).
+	if looper != null and is_instance_valid(looper):
+		looper.hit(item, velocity, at, zone)
+	if _sampling():
+		_sample(item, item.kind_of_hit(struck, zone), item.sound_take(), Session.local_peer_id, item.tune_at(at))
+	if not struck or item.pitched() or item.fixed:
+		send_item_hit.call(item.id, velocity, at, HitRecorder.snaps(), item.sound_take(), zone)
 
 
 ## A hand here stepped an instrument's jack (Jacks.asked): done here at once, and asked of the
 ## host, whose table it is. One that plainly is not this player's to plug -- in somebody else's
 ## hand, or lying on the floor -- is said instead, and nothing is asked.
 func _on_plug_asked(source: StringName, sink: StringName) -> void:
-	var item: Item = items.items.get(source) if items != null else null
+	var item: Item = items.source_item(source) if items != null else null
 	if item == null and Jack.is_item(source):
 		return
 	var whose := "Your keys'" if Jack.keys_player(source) > 0 else "The %s's" % Jacks.source_name(source, item)
+	if Jack.chord_player(source) > 0:
+		whose = "Your chord hand's"
 	var why := _plug_refusal(source, sink, Session.local_peer_id, true)
 	if why != "":
 		Session.notice.emit("%s jack: %s." % [whose, why])
 		return
-	if Jack.keys_player(source) > 0 and sink == &"" and jacks.sink_of(source) == &"":
-		Session.notice.emit("Your keys' jack: there is nobody in the room to plug them into.")
+	if Jack.own_player(source) > 0 and sink == &"" and jacks.sink_of(source) == &"":
+		Session.notice.emit("%s jack: there is nobody in the room to plug %s into." % [whose,
+				"them" if Jack.keys_player(source) > 0 else "it"])
 		return
 	var was := jacks.sink_of(source)
 	if not jacks.plug(source, sink):
@@ -4753,6 +6854,12 @@ func _on_plug_asked(source: StringName, sink: StringName) -> void:
 static func plugged_text(source: StringName, item: Item, was: StringName, sink: StringName) -> String:
 	var the := "Your keys" if Jack.keys_player(source) > 0 else "The " + Jacks.source_name(source, item)
 	var player := Jack.player_of(sink)
+	if Jack.chord_player(source) > 0:
+		# A chord hand (part two, slice 33): no notes, a chord for their harp and fingertips.
+		if player > 0:
+			return "Your chord hand goes into %s: the chord you hold is theirs, on their harp, fingertips and bells." \
+					% Session.name_of(player)
+		return "Your chord hand is unplugged."
 	if player > 0:
 		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
 				else "its notes play"
@@ -4760,10 +6867,18 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 			plays = "what you play plays"
 		return "%s go%s into %s: %s on their keys." % [the, "" if Jack.keys_player(source) > 0 else "es",
 				Session.name_of(player), plays]
+	if sink != &"" and source == MarbleRun.SOURCE:
+		return "%s's jack is in %s: every bell a marble rings is recorded there while the song records, heard or not." % [the, Jacks.sink_name(sink)]
+	if sink != &"" and Jack.is_world(source):
+		return "%s's jack is in %s: every drop is recorded there while the song records, heard or not." % [the, Jacks.sink_name(sink)]
 	if sink != &"":
 		return "%s's jack is in %s: its hits are recorded there, armed or not." % [the, Jacks.sink_name(sink)]
 	if Jack.player_of(was) == Session.local_peer_id and Session.local_peer_id != 0:
 		return "%s is unplugged from you." % the
+	if source == MarbleRun.SOURCE:
+		return "%s is unplugged: its bells are recorded nowhere." % the
+	if Jack.is_world(source):
+		return "%s is unplugged: its drops are recorded nowhere." % the
 	if not Jack.is_item(source):
 		return "%s %s unplugged." % [the, "are" if Jack.keys_player(source) > 0 else "is"]
 	return "%s is unplugged: its hits go on the armed track again." % the
@@ -4773,7 +6888,7 @@ static func plugged_text(source: StringName, item: Item, was: StringName, sink: 
 ## machine knows: who holds the source item, where it goes now, who is in the room. `here`: asked
 ## by a hand on this machine, which knows its own hand better than the holds table does.
 func _plug_refusal(source: StringName, sink: StringName, from: int, here := false) -> String:
-	var item: Item = items.items.get(source) if items != null else null
+	var item: Item = items.source_item(source) if items != null else null
 	var holder := 0
 	if item != null:
 		holder = _holder_here(item) if here else Session.holder_of(item.network_key())
@@ -4786,17 +6901,22 @@ func _plug_refusal(source: StringName, sink: StringName, from: int, here := fals
 ## The host tells whoever a jack now goes into, or no longer does, who plugged what: a bandmate's
 ## shaker playing your keys is not a thing to find out by surprise. Not the one who did it.
 func _tell_plugged(source: StringName, was: StringName, sink: StringName, by: int) -> void:
-	var item: Item = items.items.get(source) if items != null else null
+	var item: Item = items.source_item(source) if items != null else null
 	var what := "the %s" % Jacks.source_name(source, item) if Jack.keys_player(source) == 0 \
 			else "their keys"
+	if Jack.chord_player(source) > 0:
+		what = "their chord hand"
 	var into := Jack.player_of(sink)
 	if into > 0 and into != by:
 		var plays := "its hits play chord tones" if item is InstrumentItem and not (item as InstrumentItem).pitched() \
 				else "its notes play"
 		if Jack.keys_player(source) > 0:
 			plays = "what they play plays"
-		Session.tell(into, "%s plugged %s into you: %s on your keys. %s"
-				% [Session.name_of(by), what, plays, unplug_how(_medium_of(into), Jack.keys_player(source) == 0)])
+		var said := "%s on your keys" % plays
+		if Jack.chord_player(source) > 0:
+			said = "the chord they hold is yours, on the harp, your fingertips and your bells, while you hold none"
+		Session.tell(into, "%s plugged %s into you: %s. %s"
+				% [Session.name_of(by), what, said, unplug_how(_medium_of(into), Jack.own_player(source) == 0)])
 	var out := Jack.player_of(was)
 	if out > 0 and out != by and out != into:
 		Session.tell(out, "%s unplugged %s from you." % [Session.name_of(by), what])
@@ -4825,9 +6945,9 @@ func _medium_of(peer: int) -> int:
 func _jack_refusal(to: int, source: StringName, from: int) -> String:
 	if jacks == null:
 		return "there is no room here to say where it goes"
-	var item: Item = items.items.get(source) if items != null else null
+	var item: Item = items.source_item(source) if items != null else null
 	var holder := Session.holder_of(item.network_key()) if item != null else 0
-	return Jacks.send_refusal(jacks.patch, source, to, from, holder)
+	return Jacks.send_refusal(jacks.patch, source, to, from, holder, item != null and item.fixed)
 
 
 ## Somebody left: as host, every jack into them and out of their keys comes out.
@@ -4880,6 +7000,35 @@ func _wear_wrist_jacks() -> void:
 	in_controller.available = on_controller.available
 	rig.left.add_child(in_controller)
 	wrist_jacks = [on_hand, on_controller, in_hand, in_controller]
+	_wear_chord_jacks()
+
+
+## The chord hand's jack (`chord:P`, MY CHORDS; part two, slice 33), worn on the chord hand as
+## MY KEYS is: on the tracked hand's wrist and on its controller while it holds one. On the left
+## hand it sits beside MY KEYS, down onto the back of the hand on the wrist and across the
+## controller, clear of both reaches; a left-handed player's chord hand is the right, where it
+## sits where MY KEYS does on the left. The other hand presses it, through each bandmate.
+func _wear_chord_jacks() -> void:
+	var controller: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
+	if controller == null or not rig.skeletons.has(controller):
+		return
+	var skeleton := rig.skeletons[controller] as HandSkeleton
+	var poke := rig.pokes.get(controller) as PokeInteractor
+	var beside := controller == rig.left
+	var on_hand := JackSocket.new(null)
+	on_hand.mine_chord = true
+	on_hand.label = "MY CHORDS"
+	on_hand.position = Vector3(0, WRIST_CHORD_APART if beside else 0.0, 0)
+	skeleton.wrist.add_child(on_hand)
+	var on_controller := JackSocket.new(null)
+	on_controller.mine_chord = true
+	on_controller.label = "MY CHORDS"
+	on_controller.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0.03, 0.09))
+	if beside:
+		on_controller.transform = on_controller.transform.translated(Vector3(WRIST_CHORD_APART, 0, 0))
+	on_controller.available = func() -> bool: return poke == null or not poke.tracked()
+	controller.add_child(on_controller)
+	wrist_jacks.append_array([on_hand, on_controller])
 
 
 ## Whose hand has `item`, as this machine sees it: this player's when a hand here carries it,
@@ -4933,13 +7082,15 @@ func _set_patch(peer: int, receiver: int, socket: StringName, show := true) -> v
 func _show_patches() -> void:
 	personal.hears_tracks = _hears_tracks()
 	personal.set_sockets(patches.get(Session.local_peer_id, []))
-	if console == null or console.master == null:
-		return
 	var peers := patches.keys()
 	peers.sort()
-	var sockets: Array[SendSocket] = console.master.sends.duplicate()
-	for strip in console.strips:
-		sockets.append(strip.send)
+	# The desk's sockets once it is built (it builds a frame or two after the studio, and shows
+	# them then: `console.rebuilt`); a bandmate's pack and the racks' OUTs whether it is or not.
+	var sockets: Array[SendSocket] = []
+	if console != null and console.master != null:
+		sockets.append_array(console.master.sends)
+		for strip in console.strips:
+			sockets.append(strip.send)
 	# Every effects rack's OUT: the main one and each track pulled out on a rack of its own.
 	var racks: Array = [rack] if rack != null else []
 	for id in track_racks:
@@ -5236,12 +7387,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			# in comes out.
 			KEY_1, KEY_2, KEY_3:
 				_pocket(event.keycode - KEY_1)
+			# The desk's six drum pads, KICK to RIM along its front rail: 4 to 9, the number row's
+			# next six after the pockets.
+			KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
+				strike_desk_pad(event.keycode - KEY_4, event.shift_pressed)
 			# Leave your body and fly, or come back down into it.
 			KEY_N:
 				set_god_mode(not god_mode)
 			# Your fingertips as notes, on J K L ;: T, beside the home row they play on.
 			KEY_T:
 				toggle_fingertips()
+			# The chord layer: C for chords. 1 to 7 then pick them in the keys that play.
+			KEY_C when not event.ctrl_pressed and not event.meta_pressed:
+				toggle_chords()
 			# Go to the instruments one at a time, as F goes to the gear: I for instrument.
 			# Shift goes the other way. The help card's PLAY pages go to one by name.
 			KEY_I:
@@ -5250,10 +7408,22 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_escape()
 			# Backspace over a voice on the stage table, or anything of its tag: that track back to
 			# centre, 0 dB and full width, as a double-click on it does.
+			# Over a block in the marble run's lattice (or with one picked up), it is taken out.
 			KEY_BACKSPACE:
 				var hand := get_node_or_null("MouseHand") as MouseInteractor
-				if stage != null and hand != null:
-					stage.reset_under(hand.held if hand.held != null else hand.hovered)
+				var under: Node = (hand.held if hand.held != null else hand.hovered) if hand != null else null
+				if marbles != null and is_instance_valid(marbles) and hand != null and marbles.take_out_under(under):
+					pass
+				elif stage != null and hand != null:
+					stage.reset_under(under)
+			# [ and ] over a section block on the bricks table: it a place earlier or later, as one
+			# rearrangement of the song; again with the cursor still, the same block on. Held, it
+			# moves in the held order, written when it is let go.
+			KEY_BRACKETLEFT, KEY_BRACKETRIGHT:
+				var hand := get_node_or_null("MouseHand") as MouseInteractor
+				if sections != null and is_instance_valid(sections) and hand != null:
+					sections.step_under(hand.held if hand.held != null else hand.hovered,
+							-1 if event.keycode == KEY_BRACKETLEFT else 1, hand.hover_point)
 			# Comfort and eyesight, live, because the only way anyone finds the right value is
 			# by changing it while looking at the thing.
 			KEY_EQUAL, KEY_KP_ADD:
@@ -5267,6 +7437,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		# still zooms.
 		var hand := get_node_or_null("MouseHand") as MouseInteractor
 		var notches := 1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 0
+		# A marble run's block in the mouse's hand: the wheel turns it, Shift and the wheel move the
+		# layer it goes on, wherever the cursor is.
+		if notches != 0 and not event.ctrl_pressed and marbles != null and is_instance_valid(marbles) \
+				and marbles.carried_by_mouse():
+			if event.shift_pressed:
+				marbles.move_layer(-notches)
+			else:
+				marbles.turn_carried(-notches)
+			return
 		if notches != 0 and not event.ctrl_pressed and hand != null and hand.pockets != null \
 				and (hand.carrying != null or not hand.pockets.items().is_empty()):
 			if hand.cycle_pockets(notches):
@@ -5290,7 +7469,49 @@ func _unhandled_input(event: InputEvent) -> void:
 var fed_level := -1.0
 
 
+# --- strikes on the fast path (docs/spatial_loop.md part two, slice 39) ---------------------------
+
+## The hits' helper started, where it can run as the keys' does (MonitorSynth.start's conditions:
+## a sound card, the ports not bypassed, NativeKeys buildable, R3D_GODOT_KEYS not set), and Foley's
+## struck sounds written and loaded into it. Until they are loaded, and wherever it cannot run,
+## hits play on MONITOR through Godot, and the tag says so.
+func _start_hit_voices() -> void:
+	if hit_voices != null or not MonitorSynth.available() or AudioPorts.direct \
+			or OS.get_environment("R3D_GODOT_KEYS") == "1" or not NativeKeys.available():
+		return
+	var keys := NativeKeys.new()
+	if not keys.start(AudioPorts.target, false, "dawlings · hits"):
+		return
+	hit_voices = keys
+	hit_voices.load_hits()
+
+
+## The helper's news read each frame: what it has loaded, how late it is; and if it has gone,
+## every hit back on MONITOR.
+func _follow_hit_voices() -> void:
+	if hit_voices == null:
+		return
+	hit_voices.poll()
+	if not hit_voices.running():
+		push_warning("The hits' helper stopped; playing them through the app instead.")
+		hit_voices.stop()
+		hit_voices = null
+
+
+## InstrumentItem.fast_path: this player's own hit on the helper, if it holds that sound.
+func _hit_on_fast_path(kind: StringName, take: int, gain: float, pan: float, speed: float) -> bool:
+	return hit_voices != null and hit_voices.play_hit(kind, take, gain, pan, speed)
+
+
+## InstrumentItem.fast_latency: the helper's figure once its sounds are in, else -1 (MONITOR).
+func _fast_path_latency() -> float:
+	if hit_voices == null or hit_voices.loaded.is_empty():
+		return -1.0
+	return hit_voices.hit_latency()
+
+
 func _process(delta: float) -> void:
+	_follow_hit_voices()
 	_drive_pushed()
 	_refresh_looms_if_moved(delta)
 	_follow_clap(delta)
@@ -5299,8 +7520,12 @@ func _process(delta: float) -> void:
 	_follow_keytar()
 	_follow_harp()
 	_follow_wheel()
+	_follow_strings()
+	_follow_theremin()
+	_follow_modular()
 	_follow_making()
 	_follow_gives(delta)
+	_follow_kit()
 	if venue != null and DAW.state != null:
 		# A room that holds still for anyone who has asked it to (COMFORT's "Room reacts").
 		venue.reactive = ergonomics.room_reacts
@@ -5413,6 +7638,14 @@ func _follow_viewport_shape() -> void:
 ## Escape on a keyboard, the menu button or two fists in a headset: let go of what has focus, send
 ## anything pinned to the face back where it belongs, and sit back down at the desk.
 func _on_escape() -> void:
+	# A marble run's block in the mouse's hand goes back, and that is all Esc does.
+	if marbles != null and is_instance_valid(marbles) and marbles.carried_by_mouse():
+		marbles.drop("The block is back in its cell." if marbles.lifted != MarbleRun.NONE else "The block is back on the tray.")
+		return
+	# An end of string in the mouse's hand goes back on the spool, and that is all Esc does.
+	if spool != null and is_instance_valid(spool) and spool.carrying():
+		spool.drop("The end is back on the spool.")
+		return
 	if focus != null:
 		focus.release()
 	_release_stray_screens()
@@ -5499,6 +7732,12 @@ func _walk_to_seat() -> void:
 		for surface in focus.surfaces:
 			if surface.surface_id == focus.focused_id:
 				target = surface
+	# A surface that is a station mounted in a zone (the modular wall, slice 51) is visited where its
+	# station is played: where `seat_for` would stand a desk to fit it, the bricks table stands, and
+	# the fifths wheel's board across the view.
+	if target != null and target == modular_wall and venue != null and Stations.spot(venue, Modular.STATION) != null:
+		_walk_to_station(Modular.STATION)
+		return
 	# Anywhere in the set: a tablet stands on its own stand, a level further down.
 	if target != null and studio_set.is_ancestor_of(target):
 		var box := target.content_aabb()
@@ -5634,7 +7873,6 @@ func go_to_station(id: StringName) -> bool:
 	if r.is_empty() or not station_ids().has(id):
 		Session.notice.emit("%s does not stand in this room." % r.get("title", String(id)))
 		return false
-	var area: String = Stations.AREA_TITLES.get(r["area"], "room")
 	# A headset puts the rows beside a plaque away only once it goes: refused, they stay up and
 	# say why, where the press was made.
 	if medium != Presentation.Medium.SCREEN or camera == null:
@@ -5644,10 +7882,18 @@ func go_to_station(id: StringName) -> bool:
 		set_god_mode(false)
 	if focus != null and focus.is_focused():
 		focus.release()
+	station = id
+	_walk_to_station(id)
+	Session.notice.emit("%s, %s: %s  ·  Esc back to the desk" % [r["title"], Stations.where(r), r["desk"]])
+	return true
+
+
+## The walk (or the cut, at motion 0) to station `id`'s seat, the look framing it from there: for going
+## to it, and for visiting a surface that is one (the modular wall, `_walk_to_seat`).
+func _walk_to_station(id: StringName) -> void:
 	var fits := walker.fits if walker != null else Callable()
 	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
 	var seat: Transform3D = frame_of * (Stations.seat(venue, id, fits) as Transform3D)
-	station = id
 	_stand_down_screen(true)
 	camera.fov = ROOM_FOV
 	var standing := walker.standing_eye if walker != null else ergonomics.eye_height
@@ -5677,8 +7923,6 @@ func go_to_station(id: StringName) -> bool:
 			_walk = create_tween()
 			_walk.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 			_walk.tween_property(body, "transform", stand, seconds)
-	Session.notice.emit("%s, in the %s: %s  ·  Esc back to the desk" % [r["title"], area.to_lower(), r["desk"]])
-	return true
 
 
 ## How fast going to a station covers the floor (m/s), at motion 1: a brisk walk, so the live
@@ -5692,7 +7936,7 @@ const STATION_PACE := 4.0
 ## mix position: out of the seat's view of the desk (it stood at the desk's left elbow, in the face
 ## of everyone who sat down), and on the way to the stations it lists. Desktop players reach the
 ## same rows with I and F1; a headset player turns round to it.
-const BOARD_AT := Vector3(1.55, 0, 2.3)
+const BOARD_AT := Vector3(2.2, 0, 2.9)
 const BOARD_HEADING := 223.0
 
 ## The board by the desk (StationBoard): every station that stands here, a row each, and a press
@@ -5814,7 +8058,8 @@ func co_located() -> bool:
 
 ## The headset's way to station `id`: the play space travels (XRRig.travel) so its centre is on
 ## the station's seat, facing it, behind a blink of XRRig.FADE (a plain cut at motion 0). The seat
-## is the desktop's (Stations.seat, where a person fits), and focused gear is let go first, as on
+## is the desktop's (Stations.seat, where a person fits) but for a set played only by hand, whose
+## headset seat is within arm's reach of it (its row's `reach`), and focused gear is let go first, as on
 ## a desktop. Refused, the boards say why (StationBoard.refuse) and so does a toast, the rows
 ## beside a plaque staying up to say it where they were pressed; going, those are put away. The
 ## toast at the station says its title, its hands line and how to come back.
@@ -5831,13 +8076,13 @@ func _travel_to_station(id: StringName) -> bool:
 	if focus != null and focus.is_focused():
 		focus.release()
 	var frame_of := venue.global_transform if venue.is_inside_tree() else venue.transform
-	var seat: Transform3D = frame_of * (Stations.seat(venue, id, _station_fits()) as Transform3D)
+	var seat: Transform3D = frame_of * (Stations.seat(venue, id, _station_fits(), true) as Transform3D)
 	station = id
 	if station_board != null:
 		station_board.clear_refusal()
 	rig.travel(seat, _travel_fade())
-	Session.notice.emit("%s, in the %s: %s  ·  BACK on its plaque comes home" % [r["title"],
-			String(Stations.AREA_TITLES.get(r["area"], "room")).to_lower(), r["hands"]])
+	Session.notice.emit("%s, %s: %s  ·  BACK on its plaque comes home" % [r["title"], Stations.where(r),
+			r["hands"]])
 	return true
 
 
@@ -5877,6 +8122,229 @@ func _station_fits() -> Callable:
 	return _seat_finder.fits
 
 
+# --- the session in miniature (docs/spatial_loop.md part two, slice 34) --------------------------
+#
+# A 40 cm model of the song to hold (MiniatureItem), at home on the desk's left wing. A press on its
+# bed seeks the song there and brings that track's gear by FocusRig: the console, banked to the
+# track. A press on an item selects it and brings the timeline, scrolled to it. A press on one of
+# the stations' pins round its lip goes there, as the station board's rows do: a headset travels, a
+# desk walks (`go_to_station`).
+
+## The desk's left wing: a little table bolted to the console's left end at the desk's height,
+## WING_GAP off its end, standing out toward the seat as a desk's return does, its back edge
+## WING_BACK in behind the desk's front: where the miniature lies at home, within reach of the
+## seat and out of its line to the rack behind (a wide desk's left end is on it). WING is its
+## board, WING_TOP the height of its top.
+const WING := Vector3(0.48, 0.03, 0.36)
+## The board runs on WING_PAD past the tray's end, outward, for the note pad (NotePad, slice 35):
+## its own place beside the miniature, out of the tray's way and of the seat's.
+const WING_PAD := 0.10
+const WING_TOP := 0.74
+const WING_GAP := 0.02
+const WING_BACK := 0.1
+## How far into the timeline's window an item it is brought to starts, of the window's span.
+const SHOWN_IN := 0.1
+
+## The wing, its origin on the floor under the middle of its board. Null in AR.
+var desk_wing: Node3D
+## Whether the wing has been put beside a measured desk yet. Until the console has been built
+## there is no left end to stand it at, and a wing still at the origin is not on the floor: the
+## desk's own footprint is empty then too (`_desk_footprint`).
+var _wing_placed := false
+## Pointing, sticky notes and listening from a spot (slice 35), and the pad of notes: on the wing,
+## or in AR (no wing; the room's furniture is the player's own) at the console's left end, at its
+## height, NOTE_PAD_GAP off it (`_place_note_pad`).
+var point_and_mark: PointAndMark
+var note_pad: NotePad
+const NOTE_PAD_GAP := 0.04
+
+
+## The board, a cheek down to the floor at its outer end and a rail under its inner edge, the
+## desk's own furniture: it stands in the room's floor plan (`_wing_footprint`) and goes where the
+## desk grows to (`_place_desk_wing`).
+func _build_desk_wing() -> void:
+	desk_wing = _assembly("DeskWing")
+	var board := MeshInstance3D.new()
+	board.name = "Board"
+	var top := BoxMesh.new()
+	top.size = WING + Vector3(WING_PAD, 0, 0)
+	board.mesh = top
+	board.position = Vector3(-WING_PAD * 0.5, WING_TOP - WING.y * 0.5, 0)
+	board.material_override = Materials.furniture()
+	GearTrim.edges(board)
+	desk_wing.add_child(board)
+	var cheek := MeshInstance3D.new()
+	cheek.name = "Cheek"
+	var side := BoxMesh.new()
+	side.size = Vector3(0.025, WING_TOP - WING.y, WING.z - 0.04)
+	cheek.mesh = side
+	cheek.position = Vector3(-WING.x * 0.5 - WING_PAD + 0.03, (WING_TOP - WING.y) * 0.5, 0)
+	cheek.material_override = Materials.furniture()
+	desk_wing.add_child(cheek)
+	var rail := MeshInstance3D.new()
+	rail.name = "Rail"
+	var bar := BoxMesh.new()
+	# From the cheek's inner face, not through it: run into the cheek, the rail's top and the
+	# cheek's were one plane under the board.
+	var rail_from := cheek.position.x + side.size.x * 0.5
+	var rail_to := WING.x * 0.5 - 0.03
+	bar.size = Vector3(rail_to - rail_from, 0.05, 0.02)
+	rail.mesh = bar
+	rail.position = Vector3((rail_from + rail_to) * 0.5, WING_TOP - WING.y - 0.025, -WING.z * 0.5 + 0.03)
+	rail.material_override = Materials.brushed_metal()
+	desk_wing.add_child(rail)
+	_place_desk_wing()
+	console.rebuilt.connect(_place_desk_wing)
+	if floor_plan != null:
+		floor_plan.fixtures.append(_wing_footprint)
+
+
+## Beside the desk's left end, where it is at home (as `_desk_footprint` measures it), and the
+## miniature's home with it when it moved.
+func _place_desk_wing() -> void:
+	if desk_wing == null or console == null:
+		return
+	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
+			else console.transform
+	var box := console.content_aabb()
+	if box.size.x <= 0.0:
+		return
+	var flat := home * box
+	var at := Vector3(flat.position.x - WING_GAP - WING.x * 0.5, 0.0, flat.end.z - WING_BACK + WING.z * 0.5)
+	if _wing_placed and desk_wing.position.distance_to(at) < 0.001:
+		return
+	_wing_placed = true
+	desk_wing.position = at
+	_rehome_items()
+
+
+## The wing on the floor: the walker and the trolleys stop at it as they do at the desk.
+func _wing_footprint() -> Array:
+	if desk_wing == null or not desk_wing.visible or not _wing_placed:
+		return []
+	# The tray's board, and the note pad's run on past its end.
+	return [FloorPlan.footprint(Vector2(desk_wing.position.x, desk_wing.position.z),
+			Vector2(WING.x, WING.z) * 0.5, 0.0),
+			FloorPlan.footprint(Vector2(desk_wing.position.x - (WING.x + WING_PAD) * 0.5, desk_wing.position.z),
+			Vector2(WING_PAD, WING.z) * 0.5, 0.0)]
+
+
+## Point, mark and listen together (PointAndMark, docs/spatial_loop.md part two, slice 35): Z, Enter
+## and O at a desk, a pointing hand and its pinch in a headset. Presence reads song times through
+## it and finds them on this timeline's ruler; a note card's LISTEN key and the wing's note pad
+## (`note_pad`) are its too. A controller points by the stick click of the hand that is not the
+## chord hand (whose click is the chord stick's).
+func _build_point_and_mark() -> void:
+	point_and_mark = PointAndMark.new()
+	point_and_mark.name = "PointAndMark"
+	point_and_mark.studio = self
+	point_and_mark.mouse = get_node_or_null("MouseHand") as MouseInteractor
+	if rig != null:
+		var chords: XRController3D = rig.left if ergonomics.handedness >= 0 else rig.right
+		for controller in rig.interactors:
+			var hand := rig.interactors[controller] as XRInteractor
+			if hand != null:
+				hand.points_by_stick = controller != chords
+				point_and_mark.hands.append(hand)
+	add_child(point_and_mark)
+	if presence != null:
+		presence.time_at = point_and_mark.time_at
+		presence.ruler_point = func(seconds: float) -> Vector3:
+			return timeline.ruler_point(seconds) if timeline != null and is_instance_valid(timeline) \
+					and timeline.is_visible_in_tree() else Vector3.INF
+	if timeline != null:
+		timeline.listen_asked.connect(point_and_mark.listen_from)
+	if desk_wing == null and console == null:
+		return
+	note_pad = NotePad.new()
+	note_pad.name = "NotePad"
+	if desk_wing != null:
+		note_pad.position = Vector3(-WING.x * 0.5 - WING_PAD * 0.5, WING_TOP, 0.02)
+		desk_wing.add_child(note_pad)
+	else:
+		studio_set.add_child(note_pad)
+		_place_note_pad()
+		console.rebuilt.connect(_place_note_pad)
+	note_pad.stuck.connect(point_and_mark.on_pad_stuck)
+
+
+## In AR, the note pad beside the console's left end, as the wing would be, at the desk's height
+## and its front edge with the desk's: where the console is at home, wherever it has grown to.
+func _place_note_pad() -> void:
+	if note_pad == null or desk_wing != null or console == null:
+		return
+	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
+			else console.transform
+	var box := console.content_aabb()
+	if box.size.x <= 0.0:
+		return
+	note_pad.transform = home * Transform3D(Basis.IDENTITY,
+			Vector3(box.position.x - NOTE_PAD_GAP - NotePad.SIZE.x * 0.5, 0.0, box.end.z - NotePad.SIZE.z * 0.5))
+
+
+## The miniature's pins are the stations standing here; its presses are the studio's.
+func _wire_miniature() -> void:
+	var mini := items.items.get(MiniatureItem.KIND) as MiniatureItem
+	if mini == null:
+		return
+	mini.pressed.connect(_on_miniature_pressed)
+	mini.station_pressed.connect(func(id: StringName) -> void: go_to_station(id))
+	_pin_stations()
+	venue_changed.connect(func(_id: StringName) -> void: _pin_stations())
+
+
+## The stations standing here, for the miniature's pins: each with its plan bearing from the mix
+## position, the side of the tray its pin stands on.
+func _pin_stations() -> void:
+	var mini := items.items.get(MiniatureItem.KIND) as MiniatureItem if items != null else null
+	if mini == null:
+		return
+	var rows: Array = []
+	for id in station_ids():
+		var spot: Variant = Stations.spot(venue, id)
+		if spot == null:
+			continue
+		var at := _venue_to_set(spot as Transform3D).origin
+		var r := Stations.row(id)
+		rows.append([id, r["title"], r["area"], Vector2(at.x, at.z - MIX_POSITION_Z)])
+	mini.set_stations(rows)
+
+
+## A press on the miniature's bed: the song sought to `seconds` (none for a track's name), and the
+## gear for what was pressed brought by FocusRig. On an item, the item selected alone and the
+## timeline brought, its window scrolled so the item starts SHOWN_IN into it; on a track, the
+## console brought, banked to the page with that track on it. A guest's seek and selection are
+## intents like any other (DAW).
+func _on_miniature_pressed(track: int, seconds: float, item: int) -> void:
+	if seconds >= 0.0:
+		DAW.seek(seconds)
+	var it := DAW.state.item(track, item) if item >= 0 else null
+	if it != null:
+		DAW.select_item(track, item)
+		if timeline != null and is_instance_valid(timeline):
+			timeline.pick_track(track)
+			var span := timeline.view_span if timeline.view_span > 0.0 else DAW.state.timeline_length()
+			timeline.set_view(maxf(0.0, it.start - span * SHOWN_IN), span)
+			_bring(&"timeline")
+		return
+	if track > 0 and console != null:
+		console.bank_to_track(track)
+		_bring(&"console")
+
+
+## Bring surface `id` by FocusRig: to you in a headset, you to it at a desk (FocusRig.visits). One
+## the mount shows on the screen is in front of you already: at a desk, whatever gear you went to is
+## let go so the screen's panels come back (`_stand_down_screen`).
+func _bring(id: StringName) -> void:
+	if focus == null or focus.surface(id) == null:
+		return
+	if mount != null and mount.mode_of(id) == Presentation.Mode.SCREEN:
+		if focus.visits and focus.is_focused():
+			focus.release()
+		return
+	focus.focus(id)
+
+
 ## No-op in a headset, where the camera is a head. Kept callable either way so the screenshot
 ## harness does not have to know which medium it is pointing at.
 func frame(target: Vector3, distance: float, yaw: float, pitch: float) -> void:
@@ -5908,3 +8376,82 @@ func _show_written_lane(track: int, target: String) -> void:
 	if timeline != null and is_instance_valid(timeline):
 		timeline.pick_track(track)
 		timeline.show_lane(target)
+
+
+# --- drum pads on anything (docs/spatial_loop.md part two, slice 41) ------------------------------
+#
+# The room's kit (KitItem) stands on the console's front rail, six pads KICK to RIM, struck by a
+# click, by 4 to 9, or by a hand or a controller's tip (Strike). This player's own pads on real
+# surfaces (SurfacePads) are its faces too: marked in a headset from the PADS card under the rail.
+
+## How far the kit may be from the rail before it is stood there again (m): a desk that moved, grew
+## or was brought (FocusRig) takes its pads with it.
+const KIT_FOLLOW := 0.001
+
+
+## The kit's place on the console's rail (ConsoleSurface.pad_rail), in the items' frame; null with no
+## console or no room of items.
+func kit_home() -> Variant:
+	if console == null or items == null or not console.is_inside_tree() or not items.is_inside_tree():
+		return null
+	var at := items.global_transform.affine_inverse() * console.global_transform * console.pad_rail()
+	return at.orthonormalized()
+
+
+## This player's pads on real surfaces, the kit's: drawn through the session frame (RoomAnchor), moved
+## with the play space when it travels (XRRig.away_from_home), saved on this machine; marked from the
+## PADS card, which hangs off the rail under the kit's pads. At a desk there are no hands to mark
+## with, and the card says how a desk plays them.
+func _build_pads() -> void:
+	var kit := items.items.get(KitItem.KIND) as KitItem if items != null else null
+	pads = SurfacePads.new()
+	pads.name = "SurfacePads"
+	pads.hands = medium != Presentation.Medium.SCREEN
+	pads.frame = func() -> Transform3D:
+		var anchor := room_anchor.global_transform if room_anchor != null else Transform3D.IDENTITY
+		return (rig.away_from_home() if rig != null else Transform3D.IDENTITY) * anchor
+	pads.eye = func() -> Vector3:
+		var eye: Node3D = rig.head if rig != null else camera
+		return eye.global_position if eye != null and eye.is_inside_tree() else Vector3.ZERO
+	pads.kit = kit
+	pads.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	# None are drawn at a desk: there is no real surface under a mouse.
+	pads.visible = pads.hands
+	add_child(pads)
+	if kit == null:
+		return
+	kit.surface = pads if pads.hands else null
+	var card := pads.build_card()
+	card.transform = Transform3D(Basis(Vector3.RIGHT, -deg_to_rad(SurfacePads.CARD_TILT)), KitItem.CARD_AT)
+	kit.add_child(card)
+	console.rebuilt.connect(_follow_kit.bind(true))
+	_follow_kit(true)
+
+
+## The kit stood on the rail again wherever the desk now is; and, `retag`, its jack's tag shown again,
+## since a new desk may have a new drum track (KitItem.default_sink).
+func _follow_kit(retag := false) -> void:
+	var kit := items.items.get(KitItem.KIND) as KitItem if items != null else null
+	if kit == null:
+		return
+	var at: Variant = kit_home()
+	if at == null:
+		return
+	if not items.stands(KitItem.KIND):
+		items.stand(KitItem.KIND, at)
+	elif (at as Transform3D).origin.distance_to(kit.home.origin) > KIT_FOLLOW \
+			or not (at as Transform3D).basis.is_equal_approx(kit.home.basis):
+		# Carried along with a desk on the move, quietly: it never left home, so nothing is told.
+		kit.home = at
+		kit.transform = at
+	if retag and kit.jack != null and jacks != null:
+		kit.jack.show_sink(jacks.sink_of(kit.id))
+
+
+## The desk's pad `n` (0 to 5, KICK to RIM) struck from the keyboard, as a click on it is: 96, or 64
+## with Shift.
+func strike_desk_pad(n: int, soft := false) -> void:
+	var kit := items.items.get(KitItem.KIND) as KitItem if items != null else null
+	if kit == null or not items.stands(KitItem.KIND):
+		return
+	kit.strike_rail(n, Strike.CLICK_SOFT if soft else Strike.CLICK)

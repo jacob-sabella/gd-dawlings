@@ -12,7 +12,9 @@ extends Node
 ##
 ## Every instrument hit played here comes through `hit` (ItemRoom.played), so every percussion
 ## item and every bell has a jack with no change to any of them. Unplugged, a hit goes where it
-## always went: into the take on the armed track. Into `track_N`, the HitRecorder records it onto
+## always went: into the take on the armed track; or where its instrument says it goes by default
+## (`goes_to`, InstrumentItem.default_sink: the drum pads' kit onto the drum track, part two,
+## slice 41). Into `track_N`, the HitRecorder records it onto
 ## track N, armed or not, and not onto the armed track as well.
 ##
 ## Into `player_P`, a bandmate, what the source plays goes down a cable to P's own keys instead
@@ -29,6 +31,16 @@ extends Node
 ## lands in P's take beside its notes.
 ## `&"cable"` is in P's instruments (GuestMidi.reach) while anything is plugged into P.
 ##
+## A player's chord hand has a jack too (`chord:P`, part two, slice 33): into a bandmate, the
+## chord P's hand holds goes down it as a CHORD on each change (`send_chord`: the shape, a new
+## key under a latched one, the plug itself), and an open hand as one of no quality. On Q it is
+## Q's chord from P (ChordHand.take) while P holds it, and let go when it is unplugged or P
+## leaves (`_follow_cables`). Only P plugs it and sends down it, and never onto a track: a chord
+## is not notes to record. A chord is sent once, not over and over, so neither end may lose one
+## to a plug the room has not told everyone about yet: a CHORD that reaches Q before the room
+## says the jack goes into Q again is held until it does (`_held_chords`), and P sends what it
+## holds again once the host's room says where the jack goes (`answered`).
+##
 ## A jack into the player who is playing its source is no cable (`cable_into`): somebody else
 ## plugged the room's harp into Ada, or a shaker at home, and then Ada played it. Its notes go
 ## where an unplugged source's would, onto her keys and into her take, not down a cable back into
@@ -41,8 +53,9 @@ extends Node
 ##
 ## Who may plug what is the host's (`plug_refusal`): the hand that holds the source, or anyone
 ## while the source is at home on its shelf or stand; anyone the harp, which is the room's; only
-## P their own keys; only into a track there is or a bandmate in the room. And whoever a jack goes
-## into may always take it out. Who may send down one is the host's too (`send_refusal`).
+## P their own keys and chord hand; only into a track there is or a bandmate in the room. And
+## whoever a jack goes into may always take it out. Who may send down one is the host's too
+## (`send_refusal`).
 
 const GROUP := &"jacks"
 ## What a cable's notes say they came from, on the keys they play (GuestMidi.instruments).
@@ -107,6 +120,17 @@ var _cut := {}
 ## the same value is not sent down a reliable cable again. Forgotten at every note, so the one
 ## right behind a note-on (GuestMidi.resend_controls) always goes.
 var _cabled := {}
+## What this player's chord hand last sent down its jack: [to, root, quality], `to` 0 while it goes
+## into nobody, quality 0 for no shape held (Jack.Kind.CHORD), -1 for not known there: whatever
+## the hand holds then goes, an open hand too.
+var _chord_sent := [0, -1, 0]
+## The bandmate the host's room last said this player's chord hand goes into (`answered`), 0 for
+## nobody.
+var _chord_answered := 0
+## A CHORD that came down a jack cut here (`_cut`), for the next patch to say yes or no to:
+## {source: [from, root, quality]}. The host passes a chord the moment it plugs the jack, and
+## the room saying so comes after it.
+var _held_chords := {}
 
 
 func _enter_tree() -> void:
@@ -120,6 +144,7 @@ func _exit_tree() -> void:
 			var d: Array = _down[key]
 			_release(d[0], d[1], d[2], NAN)
 		keys.reach(CABLE, false)
+		_let_go_chords(&"")
 		if keys.note.is_connected(_on_keys_note):
 			keys.note.disconnect(_on_keys_note)
 			keys.control_sent.disconnect(_on_keys_control)
@@ -189,6 +214,22 @@ func set_patch(rows: Dictionary) -> void:
 		_follow_cables()
 
 
+## The host's own patch (Studio.apply_room, before this guest's unanswered plugs go on top). Once
+## it says this player's chord hand goes into a bandmate it did not say before, what the hand
+## holds goes down the jack again at the next tick, an open hand too: sent at the plug, it could
+## reach them before the room told them the jack goes into them (`_cut`), and this one comes
+## after the room did.
+func answered(rows: Dictionary) -> void:
+	if Session.local_peer_id == 0:
+		return
+	var to := Jack.player_of(StringName(str(rows.get(String(Jack.chord_source(Session.local_peer_id)), ""))))
+	if to == _chord_answered:
+		return
+	_chord_answered = to
+	if to > 0:
+		_chord_sent = [to, -1, -1]
+
+
 ## The patch, in the shape the room's state carries.
 func state() -> Dictionary:
 	return patch.duplicate()
@@ -200,11 +241,12 @@ func drop(source: StringName) -> bool:
 	return plug(source, &"") if patch.has(String(source)) else false
 
 
-## Player `peer` left: every jack into them, and their keys' own, unplugged. True if any was.
+## Player `peer` left: every jack into them, and their keys' and chord hand's own, unplugged. True
+## if any was.
 func drop_player(peer: int) -> bool:
 	var any := false
 	for source in patch.keys():
-		if Jack.player_of(StringName(patch[source])) == peer or Jack.keys_player(StringName(source)) == peer:
+		if Jack.player_of(StringName(patch[source])) == peer or Jack.own_player(StringName(source)) == peer:
 			any = plug(StringName(source), &"") or any
 	return any
 
@@ -212,24 +254,37 @@ func drop_player(peer: int) -> bool:
 ## A hit played by a hand here, at song position `at` (InstrumentItem.played's one read): onto
 ## the track its jack goes into, down the cable into a bandmate, or, unplugged, the way it always
 ## went. Into a bandmate a bell sends its note and, `note_seconds` later, its off; percussion a
-## TRIGGER. Neither is taken down here: it lands in their take.
-func hit(item: InstrumentItem, velocity: int, at: float) -> void:
-	heard_from(item.id, velocity)
-	var to := cable_into(item.id)
+## TRIGGER. Neither is taken down here: it lands in their take. `zone`, where on a fixed one it was
+## struck, for the note the take records (HitRecorder.hit).
+func hit(item: InstrumentItem, velocity: int, at: float, zone := &"") -> void:
+	# Its source: its id, or a venue's set's one (InstrumentItem.jack_source), whichever bar it was.
+	var source := item.jack_source()
+	heard_from(source, velocity)
+	var to := cable_into(source)
 	if to > 0:
 		if item.pitched():
 			var pitch := item.last_note
 			# Rung again before the last ring's off: that one ends now, so its off never ends this.
-			_let_go(func(due: Array) -> bool: return int(due[1]) > 0 and due[2] == item.id and int(due[3]) == pitch)
-			send_to(to, item.id, Jack.Kind.NOTE_ON, pitch, velocity, at)
-			_later.append([item.note_seconds(), to, item.id, pitch, at + item.note_seconds()])
+			_let_go(func(due: Array) -> bool: return int(due[1]) > 0 and due[2] == source and int(due[3]) == pitch)
+			send_to(to, source, Jack.Kind.NOTE_ON, pitch, velocity, at)
+			_later.append([item.note_seconds(), to, source, pitch, at + item.note_seconds()])
 		else:
-			send_to(to, item.id, Jack.Kind.TRIGGER, 0, velocity, at)
+			send_to(to, source, Jack.Kind.TRIGGER, 0, velocity, at)
 		return
 	if recorder == null:
 		return
-	var track := Jack.track_of(sink_of(item.id))
-	recorder.hit(item, velocity, at, track if takes_midi(track) else 0)
+	var track := Jack.track_of(goes_to(source, item))
+	recorder.hit(item, velocity, at, track if takes_midi(track) else 0, -1, zone)
+
+
+## Where `source`'s hits go: its plug, or, unplugged, its `item`'s default sink (InstrumentItem.
+## default_sink: the kit's drum track, docs/spatial_loop.md part two, slice 41), which is never a
+## bandmate and never a row in the room. Empty for the armed track.
+func goes_to(source: StringName, item: Item = null) -> StringName:
+	var sink := sink_of(source)
+	if sink == &"" and item is InstrumentItem:
+		return (item as InstrumentItem).default_sink()
+	return sink
 
 
 ## `source` played here at `velocity`: what its lead's beads show, fading over HEARD_FADE.
@@ -246,6 +301,35 @@ func level_of(source: StringName, now_msec: int = -1) -> float:
 		return 0.0
 	var age := float((Time.get_ticks_msec() if now_msec < 0 else now_msec) - int(last[1])) / 1000.0
 	return maxf(float(last[0]) * (1.0 - age / HEARD_FADE), 0.0) if age >= 0.0 else float(last[0])
+
+
+## The chord this player's chord hand holds (ChordHand.own_chord), down `chord:P`'s jack while it
+## goes into a bandmate: sent when it changes, from no shape to one, one to another, a latched
+## degree into a new key, or the jack into another bandmate; and an open hand as quality 0 to the
+## one who had a chord. Nothing goes while nothing was sent and no shape is held. Everything goes
+## again once the host's room says where the jack goes (`answered`). Each frame (`tick`), so no
+## change is missed however it came.
+func send_chord() -> void:
+	if Session.local_peer_id == 0:
+		return
+	var mine := Jack.chord_source(Session.local_peer_id)
+	var to := cable_into(mine)
+	if to <= 0:
+		_chord_sent = [0, -1, 0]
+		return
+	var hand := ChordHand.mine
+	var song := hand.now() if hand != null and is_instance_valid(hand) else -1.0
+	var chord := hand.own_chord(song) if hand != null and is_instance_valid(hand) else ""
+	var now := [to, Jack.chord_root(chord), Jack.chord_quality(chord)]
+	if now == _chord_sent:
+		return
+	var was_here := int(_chord_sent[0]) == to and int(_chord_sent[2]) != 0
+	_chord_sent = now
+	if int(now[2]) == 0 and not was_here:
+		return
+	if int(now[2]) > 0:
+		heard_from(mine, 100)
+	send_to(to, mine, Jack.Kind.CHORD, maxi(int(now[1]), 0), int(now[2]), song)
 
 
 ## One event down the cable into player `to`, at song position `song` (-1 for not known).
@@ -300,7 +384,10 @@ func _on_keys_control(kind: int, value: int, song: float, source: StringName) ->
 ## taken only while the cable owns it. A NOTE_ON, TRIGGER or CC from a source this player has taken
 ## out (`_cut`) is dropped: the host passed it before it heard, and its off will not come. A
 ## NOTE_ON or TRIGGER also lights its source's lead here (`heard_from`), so the cable a bandmate
-## plays into this player carries beads on this player's machine too.
+## plays into this player carries beads on this player's machine too. A CHORD is a bandmate's chord
+## hand (`chord:P`): taken as this player's chord from them (ChordHand.take), quality 0 let go.
+## One from a cut source is held for the next patch instead (`_held_chords`): plugged in again,
+## the host passed it before the room told this player so, and it is not sent twice.
 func received(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float) -> void:
 	if keys == null:
 		return
@@ -309,6 +396,11 @@ func received(source: StringName, kind: int, pitch: int, velocity: int, from: in
 		_release(from, source, pitch, at)
 		return
 	if _cut.has(String(source)):
+		if kind == Jack.Kind.CHORD:
+			_held_chords[String(source)] = [from, pitch, velocity]
+		return
+	if kind == Jack.Kind.CHORD:
+		_take_chord(source, from, pitch, velocity)
 		return
 	# In reach at once, though the room saying so may not have come yet: the host checked it.
 	keys.reach(CABLE, true)
@@ -324,6 +416,15 @@ func received(source: StringName, kind: int, pitch: int, velocity: int, from: in
 			_later.append([TRIGGER_SECONDS, 0, source, tone, song + TRIGGER_SECONDS if song >= 0.0 else NAN, from])
 		Jack.Kind.CC:
 			keys.control(pitch, velocity, CABLE, at)
+
+
+## A bandmate's chord hand down `source`: this player's chord while it is held, no note of its own.
+func _take_chord(source: StringName, from: int, root: int, quality: int) -> void:
+	var hand := ChordHand.mine
+	if hand != null and is_instance_valid(hand):
+		hand.take(source, from, root, quality)
+	if quality > 0:
+		heard_from(source, 100)
 
 
 ## The chord tone a TRIGGER from `from`'s `source` plays at `song`: one up the chord each hit,
@@ -368,7 +469,9 @@ func cable_holds(pitch: int) -> bool:
 
 ## `&"cable"` in this player's instruments while anything goes into them, and out once the last
 ## plug has gone, which lets go of all it had down. What a source still had down when it was
-## unplugged is let go, and the source is cut (`_cut`) until it goes into this player again.
+## unplugged is let go, and the source is cut (`_cut`) until it goes into this player again. A
+## chord held from a cut source (`_held_chords`) is taken once the patch says it goes into this
+## player again, and dropped if it says it does not.
 func _follow_cables() -> void:
 	var mine := Jack.player_sink(Session.local_peer_id)
 	var now := {}
@@ -380,14 +483,28 @@ func _follow_cables() -> void:
 		if not now.has(source):
 			_cut[source] = true
 	_mine = now
+	var held := _held_chords
+	_held_chords = {}
+	for source in held:
+		if now.has(source):
+			var c: Array = held[source]
+			_take_chord(StringName(source), int(c[0]), int(c[1]), int(c[2]))
 	if keys == null or not is_instance_valid(keys):
 		return
 	for key in _down.keys():
 		var d: Array = _down[key]
 		if sink_of(d[1]) != mine:
 			_release(d[0], d[1], d[2], NAN)
+	# A bandmate's chord from a jack that no longer goes into this player (or that the room never
+	# said did) is let go, as a stray note is.
+	var hand := ChordHand.mine
+	if hand != null and is_instance_valid(hand):
+		for source in hand.taken_sources():
+			if not now.has(String(source)):
+				hand.let_go(source)
 	var plugged := Session.local_peer_id != 0 and not into(Session.local_peer_id).is_empty()
 	if not plugged:
+		_let_go_chords(&"")
 		_down.clear()
 		_walks.clear()
 		_later = _later.filter(func(due: Array) -> bool: return int(due[1]) > 0)
@@ -398,8 +515,17 @@ func _process(delta: float) -> void:
 	tick(delta)
 
 
-## Time passing: every TRIGGER tone here and every bell's off to send that is due, let go.
+## A bandmate's chord down `source`'s jack let go here (all of them, with none named).
+func _let_go_chords(source: StringName) -> void:
+	var hand := ChordHand.mine
+	if hand != null and is_instance_valid(hand):
+		hand.let_go(source)
+
+
+## Time passing: every TRIGGER tone here and every bell's off to send that is due, let go, and the
+## chord hand's chord sent down its jack if it changed (`send_chord`).
 func tick(delta: float) -> void:
+	send_chord()
 	if _later.is_empty():
 		return
 	for due in _later:
@@ -464,16 +590,19 @@ func unplug_mine() -> int:
 
 ## What `source`'s socket steps through: unplugged; then, for an instrument item, each track that
 ## takes MIDI, in order; then each bandmate in the room but the source's own player. The harp and
-## a player's keys are keys already, and go onto the armed track by the keys' own choice, so
-## their sockets step through bandmates only.
+## a player's keys are keys already, and go onto the armed track by the keys' own choice, and a
+## chord hand's chord is no notes, so their sockets step through bandmates only.
 static func sinks(source := &"") -> Array[StringName]:
 	var out: Array[StringName] = [&""]
-	if DAW.state != null and Jack.is_item(source):
+	if DAW.state != null and (Jack.is_item(source) or Jack.is_world(source)):
 		for index in DAW.state.track_indices():
 			if takes_midi(int(index)):
 				out.append(Jack.track_sink(int(index)))
+	# The weather plays on every machine already: onto a track, never down a cable.
+	if Jack.is_world(source):
+		return out
 	for peer in bandmates():
-		if peer != Jack.keys_player(source):
+		if peer != Jack.own_player(source):
 			out.append(Jack.player_sink(peer))
 	return out
 
@@ -511,15 +640,27 @@ static func sink_name(sink: StringName) -> String:
 	return "unplugged"
 
 
-## What a source is called in a notice: `shaker`, `handbell 2`, `chord harp`, `your keys`.
+## What a source is called in a notice: `shaker`, `handbell 2`, `chord harp`, `your keys`,
+## `Ada's chord hand`.
 static func source_name(source: StringName, item: Item = null) -> String:
+	if item is InstrumentItem:
+		return (item as InstrumentItem).jack_title().to_lower()
 	if item != null:
 		return item.item_title().to_lower()
 	if source == Jack.HARP:
 		return "chord harp"
+	if source == MarbleRun.SOURCE:
+		return "marble run"
+	if Jack.is_world(source):
+		var title := str(Weather.spec_of(Stations.here).get("title", "")) if Stations.here != null \
+				and is_instance_valid(Stations.here) else ""
+		return title.to_lower() if title != "" else ("drips" if source == Weather.DRIPS else "weather")
 	var player := Jack.keys_player(source)
 	if player > 0:
 		return "your keys" if player == Session.local_peer_id else "%s's keys" % Session.name_of(player)
+	player = Jack.chord_player(source)
+	if player > 0:
+		return "your chord hand" if player == Session.local_peer_id else "%s's chord hand" % Session.name_of(player)
 	return String(source)
 
 
@@ -548,7 +689,8 @@ static func refusal(item: Item, sink: StringName, from: int, holder: int) -> Str
 ## instrument that is the source (null for the harp and a player's keys), `holder` whose hand has
 ## it, `now` where it goes now and `members` who is in the room. Whoever a jack goes into may take
 ## it out. Into a player: one in the room, and not the one plugging it. The harp is anyone's to
-## plug, a player's keys only theirs, and neither goes onto a track. An item is `refusal`'s.
+## plug, a player's keys and chord hand only theirs, and none of them goes onto a track. The weather
+## (Jack.WORLD) is anyone's, onto a track only. An item is `refusal`'s.
 static func plug_refusal(source: StringName, item: Item, sink: StringName, from: int, holder: int,
 		now: StringName, members: Array) -> String:
 	if not Jack.valid_sink(sink):
@@ -561,6 +703,23 @@ static func plug_refusal(source: StringName, item: Item, sink: StringName, from:
 			return "player %d is not in the room" % player
 		if player == from:
 			return "a jack goes into a bandmate, not into yourself"
+	if Jack.is_world(source):
+		# The weather is the room's, anyone's to plug, onto a track only: everyone hears it already.
+		if player > 0:
+			if source == MarbleRun.SOURCE:
+				return "the marble run goes onto a track: everyone hears its bells already"
+			return "the weather goes onto a track: everyone hears it already"
+		var onto := Jack.track_of(sink)
+		if onto > 0 and not takes_midi(onto):
+			return "there is no track %d to record onto" % onto
+		return ""
+	var chords := Jack.chord_player(source)
+	if chords > 0:
+		if chords != from:
+			return "only %s plugs their own chord hand" % Session.name_of(chords)
+		if Jack.track_of(sink) > 0:
+			return "a chord hand goes into a bandmate, not onto a track"
+		return ""
 	var keys := Jack.keys_player(source)
 	if keys > 0 or source == Jack.HARP:
 		if keys > 0 and keys != from:
@@ -574,15 +733,20 @@ static func plug_refusal(source: StringName, item: Item, sink: StringName, from:
 ## The host's word on an event peer `from` sends down `source`'s jack into player `to`, given the
 ## room's patch (`rows`) and `holder`, the peer whose hand has the source item (Session.holds): it
 ## passes only while the patch sends `source` into `to`, and only from the source's player: an
-## item's holder, P for `keys:P`, any member for the harp. Whether `to` and `from` are in the room
-## is Session's to say (Session.jack_refusal).
-static func send_refusal(rows: Dictionary, source: StringName, to: int, from: int, holder: int) -> String:
+## item's holder, P for `keys:P` and `chord:P`, any member for the harp and for an instrument that
+## stands still (`fixed`: the hand drums, a venue's set), which nobody holds and anyone plays where
+## it stands. Whether `to` and `from` are in the room is Session's to say (Session.jack_refusal).
+static func send_refusal(rows: Dictionary, source: StringName, to: int, from: int, holder: int,
+		fixed := false) -> String:
 	if StringName(str(rows.get(String(source), ""))) != Jack.player_sink(to):
 		return "its jack does not go into player %d" % to
 	var keys := Jack.keys_player(source)
 	if keys > 0:
 		return "" if keys == from else "those are %s's keys" % Session.name_of(keys)
-	if source == Jack.HARP:
+	var chords := Jack.chord_player(source)
+	if chords > 0:
+		return "" if chords == from else "that is %s's chord hand" % Session.name_of(chords)
+	if source == Jack.HARP or fixed:
 		return ""
 	return "" if holder != 0 and holder == from else "it is not in their hand"
 

@@ -111,6 +111,51 @@ func finger_pose() -> Transform3D:
 	return Transform3D(turned, view * Vector3(at.x * k, at.y * k, at.z))
 
 
+## Low on the left of the view, further out than the carrying glove so the two do not meet: the
+## left hand holding up a chord shape while the chord layer is on (ChordHand, docs/spatial_loop.md
+## part two, slice 32). Placed by the view's own size, CHORD_ACROSS of the half-width left and
+## CHORD_DOWN of the half-height down at CHORD_OUT, so it stays put on the screen in any window and
+## at any zoom. Fingers up and the back of the hand to you, turned in a little so the fingers held
+## up stand clear of the ones curled; palm up and the fingers out across for vi and vii°; flat, palm
+## down, for the song's own chord. It rides the wiggle, and is sized as the fingertips' glove is.
+const CHORD_OUT := 0.5
+const CHORD_ACROSS := 0.62
+const CHORD_DOWN := 0.55
+const CHORD_TURN := -0.35
+## Palm up (vi, vii°), in the view's own frame: where the fingers point (right, toward the middle,
+## a little up and away) and where the palm faces (up, and back toward the eye).
+const CHORD_PALM_UP_FINGERS := Vector3(0.85, 0.3, -0.35)
+const CHORD_PALM_UP_FACING := Vector3(0.0, 0.75, 0.65)
+
+
+func chord_pose(degree: int) -> Transform3D:
+	if camera == null:
+		return global_transform
+	var view := camera.global_transform.orthonormalized()
+	var high := CHORD_OUT * tan(deg_to_rad(camera.fov) * 0.5)
+	var window := camera.get_viewport().get_visible_rect().size
+	var wide := high * window.x / maxf(window.y, 1.0)
+	var at := Vector3(-CHORD_ACROSS * wide, -CHORD_DOWN * high, -CHORD_OUT) + _wiggle * view_scale()
+	var turned := view.basis * Basis(Vector3.UP, CHORD_TURN)
+	var shape: Basis
+	if degree < 0:
+		# Flat, palm down, fingers ahead and tipped down a little.
+		shape = turned * Basis(Vector3.RIGHT, -0.5)
+	elif degree >= 5:
+		# Palm up and tipped back to the eye, the fingers out across toward the middle of the view
+		# and a little up: seen side on, the one or two held out stand clear past the curled ones,
+		# where pointing away they hid behind them and the hand read as a fist.
+		var out := CHORD_PALM_UP_FINGERS.normalized()
+		var palm := (CHORD_PALM_UP_FACING - out * CHORD_PALM_UP_FACING.dot(out)).normalized()
+		var back := -out
+		var down := -palm
+		shape = view.basis * Basis(down.cross(back), down, back)
+	else:
+		# Fingers up (-Z up), the back of the hand to you (+Y toward the eye).
+		shape = turned * Basis(Vector3.RIGHT, PI * 0.5)
+	return Transform3D(shape, view * at)
+
+
 func finger_glove_size() -> float:
 	return super() * view_scale()
 
@@ -121,6 +166,12 @@ func view_scale() -> float:
 	if camera == null or camera.fov <= 0.0:
 		return 1.0
 	return tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(FINGERS_FOV) * 0.5)
+
+
+## While the chord layer is on its fingers are J K L ; and its button is free: a click strums the
+## harp, and the keys stay (KeyCatcher.click_releases waits for the layer).
+func presses_while_playing() -> bool:
+	return KeyCatcher.chords_on()
 
 
 ## The fingers stopped: a button down now is the click that stopped them, spent until it comes up.
@@ -363,7 +414,9 @@ func fine() -> bool:
 ## P steps the jack of the instrument this hand carries on, and Shift+P back (JackSocket): the
 ## cursor's own ray never reaches that socket, so the key is the desktop's other hand. With
 ## nothing in the hand, P is the player's own keys' jack, which a headset wears on the wrist, and
-## Shift+P unplugs everything going into the player (`bare_jack`).
+## Shift+P unplugs everything going into the player (`bare_jack`). Over one of the world's sockets
+## on the modular's patch (WorldSocket, slice 53), P steps its cable through the modular wall's free
+## inputs, and Shift+P back.
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and not key.echo and key.keycode == KEY_L and not key.ctrl_pressed \
@@ -374,7 +427,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_P:
-		if step_own_jack(-1 if key.shift_pressed else 1):
+		if hovered is WorldSocket and is_instance_valid(hovered) \
+				and (hovered as WorldSocket).step(-1 if key.shift_pressed else 1):
+			get_viewport().set_input_as_handled()
+		elif step_own_jack(-1 if key.shift_pressed else 1):
 			get_viewport().set_input_as_handled()
 		elif not is_instance_valid(carrying):
 			bare_jack.emit(key.shift_pressed)
@@ -409,7 +465,7 @@ func is_pressing() -> bool:
 			else Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	if _press_spent and not down:
 		_press_spent = false
-	if fingers_play or _press_spent:
+	if (fingers_play and not presses_while_playing()) or _press_spent:
 		return false
 	if press_override >= 0:
 		return down

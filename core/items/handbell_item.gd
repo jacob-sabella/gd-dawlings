@@ -16,7 +16,9 @@ extends InstrumentItem
 ##
 ## The tab at the foot of its handle letters its number and the note it rings now, so which bell is
 ## which, and what it will ring, is read rather than told by colour; it changes at each chord
-## change. Its home is a seat on the bell stand beside the chord harp (Venue.bell_spot).
+## change. Carried by a hand here under a chord shape, it rings the shape's chord tone, and its tab
+## says so (InstrumentItem.harmony_at, docs/spatial_loop.md part two, slice 32). Its home is a seat
+## on the bell stand beside the chord harp (Venue.bell_spot).
 
 const MODEL := "res://assets/models/handbell.glb"
 const STAND_MODEL := "res://assets/models/bell_stand.glb"
@@ -74,11 +76,6 @@ func readout() -> String:
 	if not h.named:
 		said += " (NO KEY SET)"
 	return "%s  ·  %s" % [super(), said]
-
-
-## The harmony at `seconds`, from the song's markers (Harmony.at).
-func harmony_at(seconds: float) -> Harmony:
-	return Harmony.at(DAW.state, seconds)
 
 
 ## Its chord tone at `seconds`: the chord there voiced at CENTRE, this bell's number's place in it.

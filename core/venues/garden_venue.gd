@@ -42,8 +42,16 @@ const BEAM_TOP := 4.3
 const EAVES_OUT := 1.9
 const EAVE := 4.2
 const ROOF_DRAWN_HALF := 9.35
+## And 7.5 m half-depth, front eave to back: the pavilion's depth when its floor ran from 3.2 m in
+## front of the seat to 7.3 m behind it.
+const ROOF_DRAWN_DEPTH := 7.5
+## The deck's front edge as the garden in front of it was first laid out to (Studio.ROOM_FRONT was
+## -3.2): the steps' stones and the lanterns flanking them are moved out by as much as it has.
+const DRAWN_FRONT := -3.2
 ## The railing round the veranda, its height.
 const RAIL := 0.62
+## Where the wind chimes hang along the deck's right-hand edge beside the desk (z of their middle).
+const CHIMES_ALONG := 1.0
 
 const MODELS := "res://assets/models/"
 const SPRING := 0
@@ -212,6 +220,13 @@ func rooms() -> Array[Rect2]:
 	return out
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): eight wind chimes off a
+## short beam hung from the pavilion's ceiling on two cords, along the right-hand edge of the deck
+## beside the desk, where the breeze comes through.
+func instrument() -> Dictionary:
+	return {"kind": &"chimes", "spot": side_wall_instrument(1.0, CHIMES_ALONG, 0.03), "hang_to": BEAM_TOP}
+
+
 func zone_solids() -> Array:
 	return ZoneKit.solids(zones(), true)
 
@@ -254,7 +269,8 @@ func column_spots() -> Array[Vector2]:
 		var x := -cx + cx * 2.0 * i / across
 		out.append(Vector2(x, column_front()))
 		out.append(Vector2(x, column_back()))
-	var along := 4
+	# Down the sides about every three metres too, however deep the pavilion has grown.
+	var along := maxi(roundi((column_back() - column_front()) / 3.0), 4)
 	for i in range(1, along):
 		var z := lerpf(column_front(), column_back(), float(i) / along)
 		out.append(Vector2(-cx, z))
@@ -576,7 +592,8 @@ func _lay_ceiling() -> void:
 func _put_on_the_roof() -> void:
 	var soffit := Materials.cached_scanned("garden_soffit", "wood_floor_deck", "2k", 1.0, Color(0.5, 0.38, 0.28))
 	var stretch := (live_room_half() + COLUMN_OUT + EAVES_OUT) / ROOF_DRAWN_HALF
-	_place(_roof_mesh(soffit), Vector3(0, EAVE, (column_front() + column_back()) * 0.5), 0.0, Vector3(stretch, 1, 1),
+	var deep := ((column_back() - column_front()) * 0.5 + EAVES_OUT) / ROOF_DRAWN_DEPTH
+	_place(_roof_mesh(soffit), Vector3(0, EAVE, (column_front() + column_back()) * 0.5), 0.0, Vector3(stretch, 1, deep),
 			"Roof")
 
 
@@ -642,6 +659,12 @@ func _hang_paper_lanterns() -> void:
 		row.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.y < b.y)
 		for i in row.size() - 1:
 			hangs.append(Vector3(x, 4.0, (row[i].y + row[i + 1].y) * 0.5))
+	# And from the ceiling over the walks between the neighbourhoods, in the middle of a back of
+	# house twice as big as it was, which the lanterns round its edge no longer reach.
+	var inner: Array[Vector3] = []
+	for at: Vector2 in [Vector2(-0.5, 6.4), Vector2(0.5, 6.6), Vector2(-0.41, 10.6), Vector2(0.52, 9.0)]:
+		inner.append(Vector3(at.x * cx, 4.0, at.y))
+	hangs.append_array(inner)
 	var xforms: Array = []
 	for h: Vector3 in hangs:
 		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU), h))
@@ -649,7 +672,7 @@ func _hang_paper_lanterns() -> void:
 	# Light from the ones along the sides of the back of house and at the front corners.
 	var lit: float = 0.6 + 0.4 * _season()["paper"]
 	for h: Vector3 in hangs:
-		if absf(h.x) > cx - 0.01 or (h.z < 0.0 and absf(h.x) > cx * 0.5):
+		if absf(h.x) > cx - 0.01 or (h.z < 0.0 and absf(h.x) > cx * 0.5) or inner.has(h):
 			var l := OmniLight3D.new()
 			l.name = "LanternLight"
 			l.position = h + Vector3(0, -0.36, 0)
@@ -874,7 +897,10 @@ func _set_the_stones() -> void:
 	var across := [Vector2(3.6, -18.0), Vector2(4.4, -19.2), Vector2(4.0, -20.4), Vector2(4.9, -21.6), Vector2(4.5, -22.8),
 			Vector2(5.4, -24.0), Vector2(5.1, -25.3), Vector2(6.0, -26.5), Vector2(5.8, -27.8), Vector2(6.6, -29.0)]
 	var xforms: Array = []
-	for p: Vector2 in path:
+	for i in path.size():
+		# The first ones out from the steps, moved out as far as the deck's front has, easing back
+		# to where they cross the pond.
+		var p: Vector2 = path[i] + Vector2(0, (Studio.ROOM_FRONT - DRAWN_FRONT) * (1.0 - float(i) / path.size()))
 		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(1.05, 0.5, 1.05)),
 				Vector3(p.x, ground_at(p) - 0.05, p.y)))
 	for p: Vector2 in across:
@@ -892,7 +918,8 @@ func _stand_the_lanterns() -> void:
 	var half := live_room_half()
 	var toro := _mesh("garden_props.glb", "Toro", {"stone": stone, "light": _stone_glow})
 	var yukimi := _mesh("garden_props.glb", "Yukimi", {"stone": stone, "light": _stone_glow})
-	var spots := [[toro, Vector2(-2.7, -5.5), 1.0], [toro, Vector2(2.7, -5.5), 1.0], [yukimi, Vector2(1.4, -17.0), 1.1],
+	var ahead := Studio.ROOM_FRONT - DRAWN_FRONT
+	var spots := [[toro, Vector2(-2.7, -5.5 + ahead), 1.0], [toro, Vector2(2.7, -5.5 + ahead), 1.0], [yukimi, Vector2(1.4, -17.0), 1.1],
 			[yukimi, Vector2(11.8, -23.9), 1.0], [toro, Vector2(-8.4, -12.6), 0.9], [toro, Vector2(-half - 3.4, 2.6), 1.0],
 			[toro, Vector2(half + 3.4, 4.4), 1.0], [toro, Vector2(-3.4, WALL_Z + 3.5), 1.1], [toro, Vector2(3.4, WALL_Z + 3.5), 1.1]]
 	var lit: bool = _season()["stone"] > 0.0
@@ -1135,7 +1162,7 @@ func _plant_the_trees() -> void:
 	var pine_mesh := _mesh("garden_trees.glb", "Pine", {"bark": bark, "needles": needles})
 	var pines := [[Vector2(-5.6, -16.6), 2.8], [Vector2(7.8, -15.4), 0.5], [Vector2(-1.0, -30.6), 4.4],
 			[Vector2(11.6, -20.8), 3.6], [Vector2(-half - 3.4, LIVE_ROOM_BACK + 2.4), 0.9],
-			[Vector2(half + 4.2, Studio.ROOM_FRONT - 3.2), 2.2], [Vector2(-6.0, 15.0), 1.2], [Vector2(7.0, 14.0), 4.0]]
+			[Vector2(half + 4.2, Studio.ROOM_FRONT - 3.2), 2.2], [Vector2(-6.0, LIVE_ROOM_BACK + 4.0), 1.2], [Vector2(7.0, LIVE_ROOM_BACK + 3.6), 4.0]]
 	var pine_xf: Array = []
 	for p: Array in pines:
 		var at: Vector2 = p[0]
@@ -1153,9 +1180,10 @@ func _plant_the_trees() -> void:
 			var r := _rng.randf() * m.z * 0.6
 			var p := Vector2(m.x + cos(a) * r, m.y + sin(a) * r)
 			_add_shrub(shrubs, shrub_tints, p, _rng.randf_range(0.8, 1.6))
-	for i in 14:
+	for i in 20:
 		var side := -1.0 if i % 2 == 0 else 1.0
-		var p := Vector2(side * (half + ENGAWA + _rng.randf_range(2.6, 3.4)), lerpf(-1.5, 8.5, float(i) / 13.0))
+		var p := Vector2(side * (half + ENGAWA + _rng.randf_range(2.6, 3.4)),
+				lerpf(Studio.ROOM_FRONT + 1.7, LIVE_ROOM_BACK + 1.2, float(i) / 19.0))
 		_add_shrub(shrubs, shrub_tints, p, _rng.randf_range(0.9, 1.3))
 	for e: Vector4 in POND:
 		for k in 4:

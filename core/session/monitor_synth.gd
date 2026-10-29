@@ -45,6 +45,10 @@ var volume_db := -6.0:
 			native.volume(v)
 ## The helper this plays through, while it runs; null when playing through Godot.
 var native: NativeKeys = null
+## The modular wall's voice the keys play through Godot instead of the tine while this player stands
+## at it (ModularVoice, docs/spatial_loop.md part two, slice 51), or null. On the helper the helper
+## routes the keys itself (`mod on`), so this is only ever set while `native` is null.
+var modular: ModularVoice = null
 ## Off: always through Godot. For the suite, and R3D_GODOT_KEYS=1 to compare.
 var allow_native := OS.get_environment("R3D_GODOT_KEYS") != "1"
 ## The bus it plays on through Godot: the keys' own (Monitor) unless told otherwise -- another
@@ -166,6 +170,9 @@ func note_on(pitch: int, velocity: int) -> void:
 	if native != null:
 		native.note_on(pitch, velocity)
 		return
+	if modular != null:
+		modular.note_on(pitch, velocity)
+		return
 	_queue([ON, pitch, velocity])
 
 
@@ -173,6 +180,8 @@ func note_off(pitch: int) -> void:
 	if native != null:
 		native.note_off(pitch)
 		return
+	if modular != null:
+		modular.note_off(pitch)
 	_queue([OFF, pitch, 0])
 
 
@@ -193,6 +202,8 @@ func control(kind: int, value: int) -> void:
 	if native != null:
 		native.control(kind, value)
 		return
+	if modular != null and kind == DawKitClip.PITCH_BEND:
+		modular.bend(value)
 	_queue([CONTROL, kind, value])
 
 
@@ -207,6 +218,8 @@ func all_off() -> void:
 	if native != null:
 		native.panic()
 		return
+	if modular != null:
+		modular.all_off()
 	_queue([SUSTAIN, 0, 0])
 	for p in 128:
 		_queue([OFF, p, 0])

@@ -62,6 +62,48 @@ var _carry_at: Dictionary = {}
 ## The room's chord harp (ChordHarp), set by the studio as each venue stands one: everyone's harp
 ## notes are heard out of it.
 var harp: ChordHarp = null
+## (peer, kind, pitch, velocity) -> void: a bandmate's note from a string across the room
+## (RoomString, docs/spatial_loop.md part two, slice 48), for the studio to sound from the string
+## that plays it here. Routed by source alone, as the harp's are.
+var strings_heard: Callable = Callable()
+## (peer, kind, pitch, velocity) -> void and (peer, kind, value) -> void: a bandmate's note and
+## control through the modular wall (docs/spatial_loop.md part two, slice 52), for the studio to
+## play through the room's patch on a voice of theirs at the wall. Routed by source alone, as the
+## harp's are: everything a player's keys sound while they stand at the wall goes out as the
+## modular's (GuestMidi.through_modular).
+var modular_heard: Callable = Callable()
+var modular_control_heard: Callable = Callable()
+## (peer, event) -> void: a bandmate's grain event (Session.grains_played, docs/spatial_loop.md part
+## two, slice 55), for the studio's grain cloud to play from its own sound on a voice of theirs.
+var grains_heard: Callable = Callable()
+
+## Pointing on purpose (docs/spatial_loop.md part two, slice 35): Z held at a desk, the index held
+## level or the stick clicked in a headset (Interactor.pointing). Then what this participant
+## points at is published as more than a control's key, each named so it lands on what is meant on
+## every machine, however each has its gear placed or its timeline scrolled:
+##
+##   * `ruler:<seconds>` a song time: on the timeline's ruler or lanes, or the miniature's bed
+##     (`time_at`); drawn on MY ruler at that time (`ruler_point`);
+##   * `ghost:<peer>` a bandmate: drawn to their ghost's head, or to my own eyes if it is me;
+##   * a control's key, as before, `pointing_local` in its frame;
+##   * `room` anywhere else: `pointing_local` the point in the session's frame, where the ray met
+##     the room (or POINT_REACH along it).
+##
+## Without pointing, what a hand is on is published as it always was. Either way it rides the
+## presence stream, unreliable like the head: a lost one is superseded in 50 ms.
+const RULER_KEY := "ruler:"
+const GHOST_KEY := "ghost:"
+const ROOM_KEY := "room"
+## How far along the ray a point in the room is put that meets nothing, and the furthest a point
+## is looked for (m): across the live room.
+const POINT_REACH := 4.0
+const POINT_FURTHEST := 14.0
+## (control: Object, global point: Vector3) -> float: the song time under that point, or NAN where
+## the control is not one that means a time. Set by the studio (the timeline, the miniature).
+var time_at: Callable
+## (seconds: float) -> Vector3: where on my ruler that song time is, global, or INF for nowhere.
+## Set by the studio (TimelineSurface.ruler_point).
+var ruler_point: Callable
 
 
 ## Listening only while in the tree. A studio taken out of the scene -- the suite builds dozens --
@@ -77,11 +119,13 @@ func _enter_tree() -> void:
 	Session.item_hit.connect(_on_item_hit)
 	Session.note_played.connect(_on_note_played)
 	Session.control_played.connect(_on_control_played)
+	Session.grains_played.connect(_on_grains_played)
 	Session.participant_left.connect(_on_participant_left)
 
 
 func _exit_tree() -> void:
 	Session.participant_left.disconnect(_on_participant_left)
+	Session.grains_played.disconnect(_on_grains_played)
 	Session.item_carried.disconnect(_on_item_carried)
 	Session.item_flown.disconnect(_on_item_flown)
 	Session.item_used.disconnect(_on_item_used)
@@ -170,9 +214,12 @@ func _process(delta: float) -> void:
 		avatar.set_away(p.heard_msec > 0 and Time.get_ticks_msec() - p.heard_msec > STALE_MSEC)
 		var held_key := _key_held_by(id)
 		var key: String = held_key if not held_key.is_empty() else p.pointing_at
-		var control := find_control(key)
+		var spot: Array = point_of(key, p.pointing_local, p.display_name) if held_key.is_empty() else [Vector3.INF, ""]
+		var control := find_control(key) if spot[1] == "" else null
 		if control != null:
 			avatar.point_at(control, control.global_transform * p.pointing_local, not held_key.is_empty())
+		elif spot[0] != Vector3.INF:
+			avatar.point_at(null, spot[0], false, spot[1])
 		else:
 			avatar.point_at(null, Vector3.ZERO, false)
 		var theirs := _item_held_by(id)
@@ -191,20 +238,8 @@ func _publish() -> void:
 	# Published, it stood an avatar in the middle of everybody's desk pointing at the timeline.
 	if head_node == null or DisplayServer.get_name() == "headless":
 		return
-	var key := ""
-	var local := Vector3.ZERO
-	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
-		var interactor := hand as Interactor
-		if interactor == null or not interactor.is_inside_tree():
-			continue
-		var control: ControlAffordance = interactor.held if interactor.held != null else interactor.hovered
-		if control == null or not is_instance_valid(control) or control.personal():
-			continue
-		key = control.network_key()
-		local = control.to_local(interactor.hover_point) if interactor.hovered == control \
-				else Vector3.ZERO
-		break
-	Session.publish_presence(head_in_session(), key, local)
+	var said := pointed()
+	Session.publish_presence(head_in_session(), said[0], said[1])
 	var carried := _my_carried()
 	if carried != null and carried.carried_by != null:
 		Session.send_carry(carried.id, _carry_local(carried))
@@ -212,6 +247,82 @@ func _publish() -> void:
 	var flier := items.items.get(&"rcplane") as RcPlaneItem if items != null else null
 	if flier != null and flier.carried_by != null and flier.away():
 		Session.send_flier(flier.id, _to_session(flier.plane_pose()), flier.mode)
+
+
+## What this participant is pointing at, as `_publish` sends it: [key, local]. A hand pointing on
+## purpose (Interactor.pointing) first, read by `pointing_of`; else the first hand on a control that
+## is not personal, its key and the point in its frame, as before; else ["", ZERO].
+func pointed() -> Array:
+	var hands: Array = get_tree().get_nodes_in_group(Interactor.GROUP)
+	for hand in hands:
+		var interactor := hand as Interactor
+		if interactor != null and interactor.is_inside_tree() and interactor.pointing:
+			return pointing_of(interactor)
+	for hand in hands:
+		var interactor := hand as Interactor
+		if interactor == null or not interactor.is_inside_tree():
+			continue
+		var control: ControlAffordance = interactor.held if interactor.held != null else interactor.hovered
+		if control == null or not is_instance_valid(control) or control.personal():
+			continue
+		return [control.network_key(), control.to_local(interactor.hover_point) if interactor.hovered == control \
+				else Vector3.ZERO]
+	return ["", Vector3.ZERO]
+
+
+## What `interactor`'s ray points at, on purpose: a song time on whatever means one (`time_at`), a
+## bandmate nearer along it than the control under it, the control, or the room where the ray meets
+## it. [key, local], as RULER_KEY and the rest have them.
+func pointing_of(interactor: Interactor) -> Array:
+	var aim := interactor.aim()
+	var origin := aim.origin
+	var toward := -aim.basis.z
+	var control: ControlAffordance = interactor.held if interactor.held != null else interactor.hovered
+	if control != null and not is_instance_valid(control):
+		control = null
+	var control_at := origin.distance_to(interactor.hover_point) if control != null else INF
+	var ghost := peer_along(origin, toward)
+	if int(ghost[0]) != 0 and float(ghost[1]) < control_at:
+		return [GHOST_KEY + str(int(ghost[0])), Vector3.ZERO]
+	if control != null and time_at.is_valid():
+		var seconds: float = time_at.call(control, interactor.hover_point)
+		if not is_nan(seconds):
+			return [RULER_KEY + ("%.3f" % maxf(seconds, 0.0)), Vector3.ZERO]
+	if control != null and not control.personal():
+		return [control.network_key(), control.to_local(interactor.hover_point)]
+	var point := origin + toward * POINT_REACH
+	if is_inside_tree():
+		var query := PhysicsRayQueryParameters3D.create(origin, origin + toward * POINT_FURTHEST)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty():
+			point = hit["position"]
+	return [ROOM_KEY, _to_session(Transform3D(Basis.IDENTITY, point)).origin]
+
+
+## Where on MY copy of the room `key` (with `local`, as published) points, and the words for its
+## end: [global point, words], or [INF, ""] for nothing here. A control's key is not one of these:
+## `find_control` has it. `who` names the pointer.
+func point_of(key: String, local: Vector3, who: String) -> Array:
+	if key.begins_with(RULER_KEY):
+		var seconds := key.trim_prefix(RULER_KEY).to_float()
+		var at: Vector3 = ruler_point.call(seconds) if ruler_point.is_valid() else Vector3.INF
+		return [at, "%s  %s" % [who, Presence.clock(seconds)]]
+	if key.begins_with(GHOST_KEY):
+		var peer := key.trim_prefix(GHOST_KEY).to_int()
+		if peer == Session.local_peer_id:
+			# At me: to just under my eyes, so the end is seen coming at me rather than inside my head.
+			return [head_node.global_position + Vector3.DOWN * 0.25 if head_node != null else Vector3.INF, who]
+		var avatar := avatar_of(peer)
+		return [avatar.head_position() if avatar != null and avatar.visible else Vector3.INF, who]
+	if key == ROOM_KEY:
+		return [_from_session(Transform3D(Basis.IDENTITY, local)).origin, who]
+	return [Vector3.INF, ""]
+
+
+## A song time as a clock says it: `1:23`, minutes and seconds.
+static func clock(seconds: float) -> String:
+	var whole := maxi(0, floori(seconds))
+	return "%d:%02d" % [whole / 60, whole % 60]
 
 
 ## Where my head is in the session's frame: what `_publish` sends, and where every bandmate
@@ -610,6 +721,14 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 		if is_instance_valid(harp) and from != Session.local_peer_id:
 			harp.heard(from, kind, pitch, velocity)
 		return
+	if source == RoomString.SOURCE:
+		if strings_heard.is_valid() and from != Session.local_peer_id:
+			strings_heard.call(from, kind, pitch, velocity)
+		return
+	if source == Modular.SOURCE:
+		if modular_heard.is_valid() and from != Session.local_peer_id:
+			modular_heard.call(from, kind, pitch, velocity)
+		return
 	if source != &"" and source != &"keytar":
 		return
 	if items == null or _item_holders.get(&"keytar", 0) != from:
@@ -619,12 +738,22 @@ func _on_note_played(kind: int, pitch: int, velocity: int, from: int, _song: flo
 		keytar.heard(kind, pitch, velocity)
 
 
+## Somebody's grain event (Session.grains_played, slice 55): to the grain cloud, a bandmate's.
+func _on_grains_played(e: PackedFloat32Array, from: int, _song: float) -> void:
+	if grains_heard.is_valid() and from != Session.local_peer_id:
+		grains_heard.call(from, e)
+
+
 ## Somebody's control (Session.control_played): a harp's goes to the harp, as its notes do, and
 ## their keys' to the keytar in their hands. Their keys' own are played where their keys are
 ## (TheirKeys, TheirMonitor) too.
 func _on_control_played(kind: int, value: int, from: int, _song: float, source := &"") -> void:
 	if source == ChordHarp.SOURCE and is_instance_valid(harp) and from != Session.local_peer_id:
 		harp.heard_control(from, kind, value)
+		return
+	if source == Modular.SOURCE:
+		if modular_control_heard.is_valid() and from != Session.local_peer_id:
+			modular_control_heard.call(from, kind, value)
 		return
 	# Their keytar's, out of the keytar in their hands, as its notes are (slice 15's bend tag).
 	if (source == &"" or source == &"keytar") and items != null and from != Session.local_peer_id \
@@ -637,11 +766,27 @@ func _on_control_played(kind: int, value: int, from: int, _song: float, source :
 ## Somebody else shook the instrument in their hand: ours plays the hit, in their glove. A pitched
 ## one rings the note it rang for them, at the song position they played it to (`song`), not
 ## at this machine's own when it arrives; any rings the Foley take their hand rang (`take`), and
-## its tag says whether they snap (`snap`).
-func _on_item_hit(id: StringName, velocity: int, from: int, song := -1.0, snap := false, take := -1) -> void:
-	if items == null or _item_holders.get(id, 0) != from:
+## its tag says whether they snap (`snap`). An instrument that stands still (Item.fixed) is in
+## nobody's hand: their strike on it is played from where it stands, struck, on the zone they hit
+## (`zone`), whoever they are but this player; on the drum pads' kit, from their ghost.
+func _on_item_hit(id: StringName, velocity: int, from: int, song := -1.0, snap := false, take := -1,
+		zone := &"") -> void:
+	if items == null:
 		return
 	var item := items.items.get(id) as InstrumentItem
+	if item != null and item.fixed:
+		if from == Session.local_peer_id:
+			return
+		# The drum pads' kit (slice 41): the pad they struck may be on their own knee, nowhere in this
+		# room, so it is heard from their ghost, at its glove nearer the desk's pads.
+		var glove: Variant = cable_end(from, item.global_position) if item is KitItem else null
+		if glove is Vector3:
+			(item as KitItem).heard_at(glove, velocity, song, take, snap, zone)
+		else:
+			item.heard(velocity, true, song, take, snap, zone)
+		return
+	if _item_holders.get(id, 0) != from:
+		return
 	if item != null:
 		item.heard(velocity, false, song, take, snap)
 
@@ -744,6 +889,8 @@ class Avatar extends Node3D:
 	const LID_SHUT := -1.45
 	## How far a hand will fly from its side to reach something, in metres.
 	const REACH := 0.95
+	## How far back along a ray to a point its pointer's name stands from the end (m).
+	const SPOT_NAME_BACK := 0.09
 
 	const SKIN_SHADER := """
 shader_type spatial;
@@ -802,6 +949,10 @@ void fragment() {
 	var _hands: Array[Glove] = []
 	var _pointing: ControlAffordance = null
 	var _point := Vector3.ZERO
+	## Pointing at a point rather than a control (a song time on the ruler, a bandmate, the room:
+	## Presence.point_of), and the words at the ray's end: their name.
+	var _spot := false
+	var _spot_name := Label3D.new()
 	## What the left glove carries (docs/items_loop.md): a look of the item, sat on its palm, in
 	## a mirror; nothing of its own for somebody else's ghost, whose glove the real item rides.
 	var _carried: Node3D = null
@@ -854,7 +1005,7 @@ void fragment() {
 		_lean.add_child(_hat)
 		_build_hands()
 
-		for label in [_tag, _caption]:
+		for label in [_tag, _caption, _spot_name]:
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 			# Was no_depth_test: floated the name and the "HOLDING ..." caption in front of
 			# anything nearer the camera too, not just whatever was actually behind the ghost's
@@ -876,6 +1027,12 @@ void fragment() {
 		_caption.outline_size = 10
 		_caption.pixel_size = 0.0011
 		_caption.modulate = Color(0.82, 0.85, 0.9)
+		_spot_name.name = "PointName"
+		_spot_name.font_size = 40
+		_spot_name.outline_size = 10
+		_spot_name.pixel_size = 0.0009
+		_spot_name.top_level = true
+		_spot_name.visible = false
 
 		var rod := CylinderMesh.new()
 		rod.top_radius = 0.0022
@@ -1098,7 +1255,7 @@ void fragment() {
 			left.target = _rest(-1.0)
 			left.pose = Glove.Pose.GRIP if _holding else Glove.Pose.OPEN
 		var rest := _rest(1.0)
-		if _pointing == null:
+		if _pointing == null and not _spot:
 			right.target = rest
 			right.pose = Glove.Pose.OPEN
 			return
@@ -1131,6 +1288,7 @@ void fragment() {
 			glove.set_colour(colour)
 		_tag.text = display_name
 		_tag.modulate = colour.lightened(0.25)
+		_spot_name.modulate = colour.lightened(0.35)
 		wear(look if not look.is_empty() else _look)
 		_skin.set_shader_parameter("glow", colour)
 		(_dot.material_override as StandardMaterial3D).albedo_color = colour.lightened(0.3)
@@ -1312,6 +1470,7 @@ void fragment() {
 		_caption.visible = false
 		_beam.visible = false
 		_dot.visible = false
+		_spot_name.visible = false
 
 	func set_caption(text: String) -> void:
 		if _caption.text != text:
@@ -1570,6 +1729,7 @@ void fragment() {
 			glove.visible = not close
 		_tag.visible = not close
 		_caption.visible = not close
+		_spot_name.visible = _spot and not close
 
 	## Away: the glow fades and the lids droop. A ghost that has dozed off.
 	func set_away(away: bool) -> void:
@@ -1579,16 +1739,28 @@ void fragment() {
 		_skin.set_shader_parameter("glow_amount", 0.25 if away else 1.0)
 		_tag.modulate = Color(0.6, 0.6, 0.62) if away else _colour.lightened(0.25)
 
+	## What this ghost points at now, for the suite: {control, point, spot (a point, not a control),
+	## words (at the spot's end), beam (drawn)}.
+	func pointing_to() -> Dictionary:
+		return {"control": _pointing, "point": _point, "spot": _spot, "words": _spot_name.text if _spot else "",
+				"beam": _beam.visible}
+
 	## Their right glove flies to what they mean on MY copy of it -- points at it, or grips it --
 	## and a beam runs from its fingertip to the spot when it cannot reach. Every change is a
 	## bounce: a new target, a grab (a squash, and the other hand jumps), a let-go (a boing).
-	func point_at(control: ControlAffordance, at: Vector3, holding: bool) -> void:
+	##
+	## With no control and `named` words, they point at a point (`at`): a time on my ruler, a
+	## bandmate, a place in the room (Presence.point_of). The beam runs to it all the same, and the
+	## words, their name, stand at its end.
+	func point_at(control: ControlAffordance, at: Vector3, holding: bool, named := "") -> void:
 		var right: Glove = _hands[1]
 		var left: Glove = _hands[0]
-		if control != _pointing and control != null:
+		var spot := control == null and named != ""
+		if (control != _pointing and control != null) or (spot and not _spot):
 			right.poke(0.35)
-		elif control == null and _pointing != null:
+		elif control == null and not spot and (_pointing != null or _spot):
 			right.poke(0.2)
+		_spot = spot
 		if holding and not _holding:
 			right.poke(-0.6)
 			left.poke(0.35)
@@ -1601,8 +1773,17 @@ void fragment() {
 		if _mirror_only:
 			return
 		_rim.show_on(control, holding)
-		var on := control != null
+		var on := control != null or spot
 		_dot.visible = on
+		_spot_name.visible = spot and not _close
+		if spot:
+			if _spot_name.text != named:
+				_spot_name.text = named
+			# A little back along the ray from its end, toward them: what is pointed at stays in sight,
+			# and the end of a ray at the ruler's top is not lettered off the top of a screen's band.
+			var back := right.fingertip() - at
+			_spot_name.global_position = at + (back.normalized() * SPOT_NAME_BACK if back.length() > 0.01 else Vector3.ZERO) \
+					+ Vector3.UP * 0.015
 		if not on:
 			_beam.visible = false
 			return

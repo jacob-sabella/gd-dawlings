@@ -23,23 +23,26 @@ const WIDTH_STEP := 0.8
 ## From the end of the desk to the middle of the piece beside it, as authored round the small
 ## desk: the rack a walkway off the left end, the deck tucked in close on the right where the
 ## transport is reached from the chair.
-const RACK_GAP := 0.72
-const DECK_GAP := 0.34
+## Spread with the room (2026-10-28): the rack is played from the seat but stands well clear of
+## the desk's end, and the deck's cart, whose transport is reached from the chair, stands its 0.6 m
+## of clearance off it.
+const RACK_GAP := 0.95
+const DECK_GAP := 0.51
 ## Between that gear and the wall behind it.
-const WALL_CLEARANCE := 0.75
+const WALL_CLEARANCE := 1.2
 
 ## The authored positions for a thirteen-track desk, which this must reproduce.
-const RACK_AT := Vector2(-1.75, -0.42)
+const RACK_AT := Vector2(-1.9, -0.5)
 const RACK_HEADING := 45.0
 const RACK_HALF := 0.30
-const DECK_AT := Vector2(1.25, -0.10)
+const DECK_AT := Vector2(1.42, -0.15)
 const DECK_HEADING := -50.0
 const DECK_HALF := 0.28
 ## The patch stand, along the right-hand wall behind the deck, turned to face across the room: a
 ## walkway clear of it, and out of the way of the seat.
-const PATCH_AT := Vector2(3.05, 1.25)
+const PATCH_AT := Vector2(3.4, 1.3)
 const PATCH_HEADING := -90.0
-const PATCH_GAP := 1.0
+const PATCH_GAP := 1.3
 
 
 ## `desk_half`: half the console's width on the floor, in metres. Returns room_width, and for each

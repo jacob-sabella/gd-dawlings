@@ -116,6 +116,12 @@ func drive(delta: float) -> void:
 			if s.looping and s.has_loop_range() and s.position_seconds >= s.loop_end:
 				s.position_seconds = s.loop_start + fmod(s.position_seconds - s.loop_end, s.loop_end - s.loop_start)
 		_said = s.position_seconds
+	elif backend.scrubbing():
+		# A scrub's window: the song from where the hand has it, each move afresh, the playhead
+		# standing where the scrub put it (GodotBackend.scrub).
+		if backend.take_fresh_scrub() or not transport.is_playing():
+			transport.play_from(s.position_seconds, MIX_SECONDS_AHEAD)
+		_said = NAN
 	else:
 		if transport.is_playing():
 			transport.stop()

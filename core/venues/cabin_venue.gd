@@ -19,9 +19,12 @@ extends Venue
 ## left-hand wall with the axe left in the chopping block.
 
 ## Floor to the top of the side walls, and to the underside of the ridge. Above every zone's head
-## room (Venue.ZONES): the lattice's 3.4 m stands under the eaves.
-const EAVES := 3.5
-const RIDGE := 5.7
+## room (Venue.ZONES): the lattice's 3.4 m stands under the eaves, and the tie beams at the eaves
+## clear the neighbourhoods' banners (Neighbourhoods.SIGN_HEIGHT) by most of a metre. Raised with
+## the live room (Venue.LIVE_ROOM_HEIGHT) when the room was spread to 17.6 x 16.4 m: a roof that
+## wide at the old pitch sat on your head at the walls.
+const EAVES := 3.9
+const RIDGE := 6.3
 ## Log walls, thick.
 const WALL := 0.24
 ## Where the front wall stands, in front of the desk: the footprint's front edge.
@@ -30,19 +33,23 @@ const FRONT := Studio.ROOM_FRONT
 const SILL := 0.9
 const HEAD := 2.4
 const BAY := 1.3
-## The front's bays (x) and the right wall's (z): the last is the big one over the keys.
-const FRONT_BAYS := [-4.3, -1.6, 1.6, 4.3]
-const RIGHT_BAYS := [0.3]
+## The front's bays (x) and the right wall's (z), spread down the bigger room: the first of the
+## right's is the weather's, beside the desk; then one by the front corner and one over the bricks
+## table; and the keys' own big one past them (KEYS_BAY).
+const FRONT_BAYS := [-7.0, -4.3, -1.6, 1.6, 4.3, 7.0]
+const RIGHT_BAYS := [0.3, -2.4, 6.05]
 const KEYS_BAY := 2.2
-## The left wall has one bay, past the stove.
-const LEFT_BAYS := [1.4]
-## The stove, in the front-left corner beside the desk, door to the room.
-const STOVE_AT := Vector2(-5.35, -1.15)
+## The left wall's bays: the porch window past the stove (the icicles' one), and one over the toys'
+## shelf, whose top is under the sill.
+const LEFT_BAYS := [1.4, 5.0]
+## The stove, in the front-left corner beside the desk, door to the room: out in the floor beside
+## the footprint, clear of the gear's ring round the seat.
+const STOVE_AT := Vector2(-7.6, -2.8)
 const STOVE_SIZE := Vector2(0.62, 0.6)
 ## The rafters, this far apart, and where the two tie beams cross the room: clear of the
-## lattice's volume, one over the desk and one at the back.
+## lattice's volume, one over the desk and one between the riser and the lattice.
 const RAFTER_SPACING := 1.1
-const TIES := [0.5, 6.7]
+const TIES := [0.5, 7.95]
 ## Where the ground outside lies: the cabin stands on a sill of logs above the snow.
 const GROUND := -0.55
 
@@ -275,6 +282,27 @@ func rooms() -> Array[Rect2]:
 
 func stove_spot() -> Vector2:
 	return Vector2(STOVE_AT.x - _grow(), STOVE_AT.y)
+
+
+## Its weather (Weather, docs/spatial_loop.md part two, slice 44): on the Snowy night, the snow on
+## the right-hand wall's window beside the desk, and the switch on its sill board. The big window
+## past it is the keys' zone's, out of reach behind the keys. No weather in summer or under the
+## northern lights, whose night is clear.
+func weather() -> Dictionary:
+	if variant != SNOWY:
+		return {}
+	var half := live_room_half()
+	var along := float(RIGHT_BAYS[0])
+	var turn := Basis(Vector3.UP, -PI * 0.5)
+	return {"kind": &"snow", "spot": Transform3D(turn, Vector3(half, 0, along)), "sill": SILL + 0.003,
+			"switch_z": 0.05, "glass": Transform3D(turn, Vector3(half + WALL * 0.5 - 0.006, (SILL + HEAD) * 0.5, along)),
+			"size": Vector2(BAY - 0.12, HEAD - SILL - 0.12), "low": 76}
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): icicles along an eave
+## board across the porch window on the left wall, inside the glass, where a hand can reach them.
+func instrument() -> Dictionary:
+	return {"kind": &"icicles", "spot": side_wall_instrument(-1.0, float(LEFT_BAYS[0]), 0.06)}
 
 
 func zone_solids() -> Array:
@@ -722,7 +750,7 @@ func _furnish() -> void:
 	var wall := -live_room_half() + 0.3
 	for r in rows.size():
 		for i: int in rows[r]:
-			var z: float = at.y + 0.75 + (i - (rows[r] - 1) * 0.5) * 0.145
+			var z: float = at.y + 1.3 + (i - (rows[r] - 1) * 0.5) * 0.145
 			var y: float = 0.07 + r * 0.125
 			logs.set_instance_transform(n, Transform3D(Basis(Vector3.BACK, PI * 0.5)
 					* Basis(Vector3.UP, i * 1.7), Vector3(wall, y, z)))
@@ -749,8 +777,11 @@ var candle_lights: Array[SpotLight3D] = []
 
 func _put_up_the_shelf() -> void:
 	var back := LIVE_ROOM_BACK
-	var from := -2.75 - _grow()
-	var to := 1.35 + _grow() * 0.5
+	# Behind the riser, between the walk out of the booth's door and the lattice, which stands
+	# close to the wall.
+	var zone := zones()
+	var from := (zone[&"vocals"] as AABB).end.x + 1.3
+	var to := (zone[&"matrix"] as AABB).position.x - 0.6
 	var length := to - from
 	var plank := _timber()
 	var iron := StandardMaterial3D.new()
@@ -889,7 +920,8 @@ func _lay_rug(at: Vector2, yaw: float) -> void:
 
 
 ## Oil lanterns (assets/models/lantern.glb) hung on chains from the rafters over the walk to the
-## zones, and one on the table. Each lantern's glass glows; the hung ones light the floor.
+## zones and over the walkways between the neighbourhoods (never over a middle, where its banner
+## hangs), and one on the table. Each lantern's glass glows; the hung ones light the floor.
 func _hang_lanterns() -> void:
 	var half := live_room_half()
 	var chain := StandardMaterial3D.new()
@@ -897,7 +929,8 @@ func _hang_lanterns() -> void:
 	chain.metallic = 0.7
 	chain.roughness = 0.5
 	var spots := [Vector3(-half * 0.62, 2.55, 2.95), Vector3(0, 2.7, 1.05), Vector3(half * 0.62, 2.55, 2.95),
-			Vector3(-half * 0.62, 2.6, -0.3), Vector3(half * 0.62, 2.6, -0.3)]
+			Vector3(-half * 0.62, 2.6, -0.3), Vector3(half * 0.62, 2.6, -0.3),
+			Vector3(-4.2, 2.8, 4.9), Vector3(-4.0, 2.8, 8.6), Vector3(4.0, 2.8, 8.0), Vector3(4.0, 2.8, 11.0)]
 	for i in spots.size():
 		var at: Vector3 = spots[i]
 		var hook := roof_at(at.x) - 0.2
@@ -910,7 +943,8 @@ func _hang_lanterns() -> void:
 	# Two more on iron brackets on the back wall, between the zones, washing the boards.
 	var back := LIVE_ROOM_BACK
 	for i in 2:
-		var x: float = [-3.3 - _grow(), 2.0 + _grow()][i]
+		# At the shelf's end by the booth, and in the walkway between the lattice and the synths.
+		var x: float = [-4.35 - _grow(), 4.0 + _grow()][i]
 		var at := Vector3(x, 2.05, back - 0.26)
 		ZoneKit.block(self, Vector3(0.03, 0.03, 0.26), Vector3(x, at.y + 0.33, back - 0.13), chain,
 				"Bracket%d" % i)
@@ -1062,12 +1096,12 @@ func _let_it_snow() -> void:
 	# Each box a metre and more clear of the walls, and the drift too gentle to carry a flake
 	# that far, so nothing falls indoors.
 	for side in [["SnowFront", Vector3(0, 4.0, FRONT - 6.5), Vector3(half + 6.0, 4.5, 5.0)],
-			["SnowRight", Vector3(half + 5.6, 4.0, 2.6), Vector3(4.0, 4.5, 6.5)],
-			["SnowLeft", Vector3(-half - 5.6, 4.0, 2.6), Vector3(4.0, 4.5, 6.5)]]:
+			["SnowRight", Vector3(half + 5.6, 4.0, 4.2), Vector3(4.0, 4.5, 8.6)],
+			["SnowLeft", Vector3(-half - 5.6, 4.0, 4.2), Vector3(4.0, 4.5, 8.6)]]:
 		var fall := GPUParticles3D.new()
 		fall.name = side[0]
 		fall.position = side[1]
-		fall.amount = 700
+		fall.amount = 900
 		fall.lifetime = 12.0
 		fall.preprocess = 12.0
 		fall.draw_pass_1 = quad

@@ -18,19 +18,31 @@ const PARAPET := 1.05
 const WALL := 0.3
 ## Where the front railing stands: the footprint's front edge, which is the building's edge too.
 const FRONT := Studio.ROOM_FRONT
+## How far in from the left parapet the railing's tuned run (its instrument) has its middle.
+const RAILING_IN := 1.55
+## How far the terrace's deck runs on past the live room's sides and its back before the parapet:
+## open boards behind the gear along the walls, so the edge of the roof is somewhere you walk to
+## rather than the back of a shelf. The front stays the building's edge, where the railing is.
+const TERRACE_MARGIN := 1.2
 ## How far the rest of the roof reaches past the terrace's sides and its back.
 const ROOF_SIDE := 9.0
 const ROOF_BACK := 9.0
 ## How far down the street is. Most of the city's roofs are under you; the tall ones are not.
 const STOREYS_DOWN := 40.0
 ## The festoon poles' height, and how much a string sags between two of them. The lowest bulb
-## hangs above every zone's head room (Venue.ZONES): the lattice's 3.4 m stands under them.
-const POLE := 4.1
-const SAG := 0.45
-## Where the strings cross, front to back (z at the left pole, z at the right): straight across
-## over the desk, then zig-zagging over the zones.
-const STRINGS := [Vector2(-1.4, -1.4), Vector2(1.2, 1.2), Vector2(3.0, 4.6), Vector2(6.6, 3.0),
-		Vector2(6.6, 6.6)]
+## hangs above every zone's head room (Venue.ZONES): the lattice's 3.4 m stands under them, and
+## the neighbourhoods' banners under that.
+const POLE := 4.6
+const SAG := 0.7
+## The poles, at the parapet's inside face: down each side at these z (the same both sides, so
+## the strings across are square to the room), and along the back at these x.
+const SIDE_POLES := [-2.8, 1.4, 5.6, 9.8]
+const BACK_POLES := [-4.6, 4.6]
+## The strings, each between two poles (pole_spots' order: the left side's front to back, the
+## right's, then the back's left to right): straight across over the desk and behind it, then
+## zig-zagging back over the zones, and the last two in from the back corners to the back.
+const STRINGS := [Vector2i(0, 4), Vector2i(1, 5), Vector2i(5, 2), Vector2i(2, 6), Vector2i(6, 3),
+		Vector2i(3, 7), Vector2i(3, 8), Vector2i(7, 9), Vector2i(8, 9)]
 ## The stair house on the roof behind the terrace: x, and how far past the back parapet.
 const STAIR_HOUSE := Vector2(2.4, 2.6)
 ## The skylight over the stairwell's landing, on the roof to the left of the terrace (x past
@@ -181,27 +193,39 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * 0.85
 
 
-## The terrace is one open floor: the deck either side of the desk joins the far end.
+## The terrace is one open floor, parapet to parapet and the railing to the back: the deck
+## either side of the desk, the live room, and the margin of boards round both.
 func rooms() -> Array[Rect2]:
-	var out: Array[Rect2] = [back_of_house()]
-	out.append_array(beside_the_desk())
-	return out
+	var half := terrace_half() - 0.05
+	var front := FRONT + 0.05
+	return [Rect2(-half, front, half * 2.0, terrace_back() - 0.05 - front)]
 
 
-## The festoon poles, at the parapet's inside face on both sides: where each string ends.
+## Where the parapet's inside face is: the live room's side (and back) and TERRACE_MARGIN more.
+func terrace_half() -> float:
+	return live_room_half() + TERRACE_MARGIN
+
+
+func terrace_back() -> float:
+	return LIVE_ROOM_BACK + TERRACE_MARGIN
+
+
+## The festoon poles, at the parapet's inside face: where each string ends. Out past the
+## live room's edge, so the gear stood along its walls never has a pole at its back.
 func pole_spots() -> Array[Vector2]:
-	var x := live_room_half() - 0.12
+	var x := terrace_half() - 0.12
 	var out: Array[Vector2] = []
-	for s: Vector2 in STRINGS:
-		for spot in [Vector2(-x, s.x), Vector2(x, s.y)]:
-			if not out.has(spot):
-				out.append(spot)
+	for side in [-1.0, 1.0]:
+		for z: float in SIDE_POLES:
+			out.append(Vector2(side * x, z))
+	for bx: float in BACK_POLES:
+		out.append(Vector2(bx, terrace_back() - 0.12))
 	return out
 
 
 ## Where the stair house and each tank stand, in studio space.
 func stair_house_spot() -> Vector2:
-	return Vector2(STAIR_HOUSE.x, LIVE_ROOM_BACK + WALL + STAIR_HOUSE.y)
+	return Vector2(STAIR_HOUSE.x, terrace_back() + WALL + STAIR_HOUSE.y)
 
 
 func skylight_spot() -> Vector2:
@@ -217,14 +241,21 @@ func vent_spots() -> Array[Vector2]:
 
 ## `at`.x measured out from the side parapet's outside face on its sign's side.
 func _past_parapet(at: Vector2) -> Vector2:
-	return Vector2(signf(at.x) * (live_room_half() + WALL) + at.x, at.y)
+	return Vector2(signf(at.x) * (terrace_half() + WALL) + at.x, at.y)
 
 
 func tank_spots() -> Array[Vector2]:
 	var out: Array[Vector2] = []
 	for t: Vector3 in TANKS:
-		out.append(Vector2(signf(t.x) * (live_room_half() + WALL) + t.x, t.y))
+		out.append(Vector2(signf(t.x) * (terrace_half() + WALL) + t.x, t.y))
 	return out
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): eight balusters of the
+## front railing, collared in brass, each a note, in the run of it beside the desk on the left, where
+## the floor reaches the railing. `_build_parapet` leaves the plain ones out of their run.
+func instrument() -> Dictionary:
+	return {"kind": &"railing", "spot": Transform3D(Basis.IDENTITY, Vector3(-live_room_half() + RAILING_IN, 0, FRONT - WALL * 0.5))}
 
 
 func zone_solids() -> Array:
@@ -236,14 +267,20 @@ func zone_solids() -> Array:
 	return out
 
 
+## Where string `s` is tied at each end, in studio space.
+func _ends(s: Vector2i) -> Array[Vector3]:
+	var poles := pole_spots()
+	return [Vector3(poles[s.x].x, POLE - 0.06, poles[s.x].y), Vector3(poles[s.y].x, POLE - 0.06, poles[s.y].y)]
+
+
 ## Every bulb on every string, in studio space: each string is a catenary-ish sag between its two
 ## poles, a bulb every half metre or so.
 func bulbs() -> Array[Vector3]:
-	var x := live_room_half() - 0.12
 	var out: Array[Vector3] = []
-	for s: Vector2 in STRINGS:
-		var a := Vector3(-x, POLE - 0.06, s.x)
-		var b := Vector3(x, POLE - 0.06, s.y)
+	for s: Vector2i in STRINGS:
+		var ends := _ends(s)
+		var a := ends[0]
+		var b := ends[1]
 		var count := int(a.distance_to(b) / 0.5)
 		for i in count:
 			var t := (i + 0.5) / count
@@ -252,8 +289,8 @@ func bulbs() -> Array[Vector3]:
 
 
 func _ready() -> void:
-	var half := live_room_half()
-	var back := LIVE_ROOM_BACK
+	var half := terrace_half()
+	var back := terrace_back()
 	var deck := MeshInstance3D.new()
 	deck.name = "Deck"
 	var plane := PlaneMesh.new()
@@ -301,8 +338,8 @@ func _coping() -> StandardMaterial3D:
 ## The roof round the terrace, its membrane a little under the deck, and the building's face
 ## going down from its front edge to the street: what you see if you look over the railing.
 func _lay_the_roof(brick: Material) -> void:
-	var half := live_room_half()
-	var back := LIVE_ROOM_BACK
+	var half := terrace_half()
+	var back := terrace_back()
 	var wide := (half + ROOF_SIDE) * 2.0
 	var deep := back + ROOF_BACK - FRONT
 	# Ballast: grey gravel spread over the membrane to hold it down.
@@ -339,8 +376,8 @@ func _lay_the_roof(brick: Material) -> void:
 ## Brick to hip height round the terrace's sides and back, coped in stone; along the front, where
 ## the view is, an iron railing on a low kerb, so the city is seen through it from the desk.
 func _build_parapet(brick: Material, steel: Material) -> void:
-	var half := live_room_half()
-	var back := LIVE_ROOM_BACK
+	var half := terrace_half()
+	var back := terrace_back()
 	var coping := _coping()
 	var outside := half + WALL * 0.5
 	# The sides take the corners, front and back.
@@ -375,12 +412,21 @@ func _build_parapet(brick: Material, steel: Material) -> void:
 	bars.mesh = bar
 	var spacing := 0.12
 	var count := int(half * 2.0 / spacing)
-	bars.instance_count = count
+	# The run of tuned balusters (`instrument`, VenueInstrument) stands in for the plain ones there.
+	var tuned := VenueInstrument.spec_of(self)
+	var tuned_x: float = (tuned["spot"] as Transform3D).origin.x if not tuned.is_empty() else INF
+	var tuned_half := VenueInstrument.half_width(tuned) + 0.04 if not tuned.is_empty() else 0.0
+	var places: Array[Transform3D] = []
 	for i in count:
 		var x := -half + spacing * (i + 0.5)
+		if absf(x - tuned_x) < tuned_half:
+			continue
 		# Every twelfth a post: heavier.
 		var basis := Basis.from_scale(Vector3(3.0, 1.0, 3.0)) if i % 12 == 6 else Basis()
-		bars.set_instance_transform(i, Transform3D(basis, Vector3(x, (kerb + 0.05 + top - 0.025) * 0.5, rail_z)))
+		places.append(Transform3D(basis, Vector3(x, (kerb + 0.05 + top - 0.025) * 0.5, rail_z)))
+	bars.instance_count = places.size()
+	for i in places.size():
+		bars.set_instance_transform(i, places[i])
 	var holder := MultiMeshInstance3D.new()
 	holder.name = "Balusters"
 	holder.multimesh = bars
@@ -441,9 +487,11 @@ func _raise_tanks(steel: Material) -> void:
 ## A box of sparks under the strings, off until the mix is playing. Warm, with the odd violet one
 ## for the blacklight's sake; they drift down slowly and are gone before they reach the deck.
 func _shake_sparks() -> void:
-	var half := live_room_half()
-	_sparks = make_sparks("Sparks", Vector3(0, POLE - 0.25, 1.6), Vector3(half - 0.3, 0.05, 3.0),
-			AABB(Vector3(-half, -POLE, -4), Vector3(half * 2.0, POLE + 1.0, 8)), _spark_colours(), 120)
+	var half := terrace_half()
+	var mid := (FRONT + terrace_back()) * 0.5
+	var long := terrace_back() - FRONT
+	_sparks = make_sparks("Sparks", Vector3(0, POLE - 0.5, mid), Vector3(half - 0.3, 0.05, long * 0.5 - 0.3),
+			AABB(Vector3(-half, -POLE, FRONT), Vector3(half * 2.0, POLE + 1.0, long)), _spark_colours(), 240)
 
 
 ## Mostly the bulbs' warm gold, one in four violet.
@@ -486,16 +534,16 @@ func _process(delta: float) -> void:
 
 ## The building's plant on the far side of the roof: two condenser units and a run of duct.
 func _put_in_plant(steel: Material) -> void:
-	var half := live_room_half()
+	var half := terrace_half()
 	var casing := StandardMaterial3D.new()
 	casing.albedo_color = Color(0.36, 0.37, 0.38)
 	casing.metallic = 0.4
 	casing.roughness = 0.6
 	for i in 2:
-		var at := Vector3(half + WALL + 2.4 + i * 1.6, -DECK_LIFT, LIVE_ROOM_BACK + 4.6)
+		var at := Vector3(half + WALL + 2.4 + i * 1.6, -DECK_LIFT, terrace_back() + 4.6)
 		ZoneKit.block(self, Vector3(1.2, 1.1, 1.2), at + Vector3(0, 0.55, 0), casing, "Condenser")
 		ZoneKit.block(self, Vector3(0.9, 0.02, 0.9), at + Vector3(0, 1.11, 0), steel, "FanGrille")
-	ZoneKit.block(self, Vector3(0.5, 0.5, 6.0), Vector3(half + WALL + 4.8, -DECK_LIFT + 0.25, LIVE_ROOM_BACK + 1.0),
+	ZoneKit.block(self, Vector3(0.5, 0.5, 6.0), Vector3(half + WALL + 4.8, -DECK_LIFT + 0.25, terrace_back() + 1.0),
 			casing, "Duct")
 
 
@@ -557,10 +605,21 @@ func _dot_the_roof(steel: Material) -> void:
 		add_child(cap)
 
 
-## Planters of cedar along the parapets beside the desk, with low clipped shrubs in them.
+## Planters of cedar against the parapets, with low clipped shrubs in them: down both sides in the
+## bays between the poles, and along the back, behind the booth, the lattice and the sampler.
+const SIDE_PLANTERS := [-0.7, 3.5, 7.7, 11.7]
+const BACK_PLANTERS := [-7.4, 0.0, 7.4]
+
+
 func _planter_spots() -> Array[Vector2]:
-	var x := live_room_half() - 0.34
-	return [Vector2(-x, -0.2), Vector2(-x, 2.4), Vector2(x, -0.2), Vector2(x, 2.4)]
+	var x := terrace_half() - 0.37
+	var out: Array[Vector2] = []
+	for side in [-1.0, 1.0]:
+		for z: float in SIDE_PLANTERS:
+			out.append(Vector2(side * x, z))
+	for bx: float in BACK_PLANTERS:
+		out.append(Vector2(bx, terrace_back() - 0.37))
+	return out
 
 
 func _plant_planters() -> void:
@@ -618,13 +677,13 @@ func _string_the_lights(steel: Material) -> void:
 	holder.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(holder)
 	# The wire: from each bulb's cap to the next, and from the end ones to the poles.
-	var x := live_room_half() - 0.12
 	var wires: Array[Transform3D] = []
 	var at := 0
-	for s: Vector2 in STRINGS:
-		var points: Array[Vector3] = [Vector3(-x, POLE - 0.06, s.x)]
-		var a := Vector3(-x, POLE - 0.06, s.x)
-		var b := Vector3(x, POLE - 0.06, s.y)
+	for s: Vector2i in STRINGS:
+		var ends := _ends(s)
+		var a := ends[0]
+		var b := ends[1]
+		var points: Array[Vector3] = [a]
 		var count := int(a.distance_to(b) / 0.5)
 		for i in count:
 			points.append(all[at + i] + Vector3(0, 0.04, 0))
@@ -636,10 +695,12 @@ func _string_the_lights(steel: Material) -> void:
 			var length := from.distance_to(to)
 			var look := Basis.looking_at(to - from, Vector3.UP) * Basis.from_scale(Vector3(1, 1, length))
 			wires.append(Transform3D(look, (from + to) * 0.5))
-		# Two soft lights down from the string, a third of the way from each end.
-		for t in [0.3, 0.7]:
+		# Soft lights down from the string: two on a short one, a third of the way from each end;
+		# three on one that crosses the whole terrace, so its middle and its ends are both lit.
+		var along: Array = [0.3, 0.7] if a.distance_to(b) < 12.0 else [0.2, 0.5, 0.8]
+		for t: float in along:
 			var over := a.lerp(b, t) - Vector3(0, SAG * 4.0 * t * (1.0 - t) + 0.1, 0)
-			var glow := ZoneKit.spot_down(self, over, Color(1.0, 0.7, 0.42), 2.2 * up, 72.0, 6.0)
+			var glow := ZoneKit.spot_down(self, over, Color(1.0, 0.7, 0.42), 2.4 * up, 80.0, 7.0)
 			glow.name = "StringLight"
 			_string_lights.append(glow)
 			_string_base.append(glow.light_energy)
@@ -677,9 +738,9 @@ func _raise_city() -> void:
 	var towers: Array[Transform3D] = []
 	var roofs: Array[float] = []
 	var cell := 16.0
-	var half := live_room_half()
+	var half := terrace_half()
 	var keep_clear := Rect2(-half - ROOF_SIDE - 10.0, FRONT - 10.0, (half + ROOF_SIDE) * 2.0 + 20.0,
-			LIVE_ROOM_BACK + ROOF_BACK - FRONT + 20.0)
+			terrace_back() + ROOF_BACK - FRONT + 20.0)
 	for gx in range(-16, 17):
 		for gz in range(-16, 10):
 			var at := Vector2(gx * cell, gz * cell)

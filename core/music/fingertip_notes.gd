@@ -3,7 +3,8 @@ extends Node
 
 ## Your fingertips are notes (docs/spatial_loop.md slice 8; idea #36): with them on, thumb to
 ## index plays the song's chord's root, to the middle its third, to the ring its fifth and to the
-## little finger its top, voiced at centre 60 (`Harmony.voiced`), held as long as the pinch.
+## little finger its top, voiced at centre 60 (`Harmony.voiced`), held as long as the pinch. While
+## the chord hand holds a shape it is the shape's chord (ChordHand.at, part two, slice 32).
 ##
 ## One per local hand (`hand`, an Interactor), read through the hand's readings, so a bare hand,
 ## a controller and the desktop's keys play the same way: a bare hand's pinches, a controller's
@@ -252,9 +253,10 @@ func _moment() -> Array:
 	return [DAW.state.position_seconds if DAW.state != null else 0.0, false]
 
 
-## The four tones the fingers play at `seconds`, index to little: root, third, fifth, top.
+## The four tones the fingers play at `seconds`, index to little: root, third, fifth, top. In
+## this player's chord: the song's, or the shape their chord hand holds (ChordHand.at).
 static func tones_at(seconds: float) -> PackedInt32Array:
-	return Harmony.voiced(Harmony.at(DAW.state, seconds), CENTRE, HandPose.FINGER_BITS.size())
+	return Harmony.voiced(ChordHand.at(seconds), CENTRE, HandPose.FINGER_BITS.size())
 
 
 func _start(f: int) -> void:
@@ -317,7 +319,7 @@ static func velocity_for(speed: float) -> int:
 ## What each finger plays now, index to little, in words: the note it has down, or the one it
 ## would play, at the keys' clock.
 func names() -> PackedStringArray:
-	var h := Harmony.at(DAW.state, _moment()[0])
+	var h := ChordHand.at(_moment()[0])
 	var now := Harmony.voiced(h, CENTRE, HandPose.FINGER_BITS.size())
 	var out := PackedStringArray()
 	for f in now.size():
@@ -327,7 +329,7 @@ func names() -> PackedStringArray:
 
 ## The chord the fingers are in, in words: NO KEY SET with no bracket to say one.
 func chord_name() -> String:
-	var h := Harmony.at(DAW.state, _moment()[0])
+	var h := ChordHand.at(_moment()[0])
 	return h.chord_name if h.named else "NO KEY SET"
 
 

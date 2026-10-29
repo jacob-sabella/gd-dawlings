@@ -238,6 +238,12 @@ func rooms() -> Array[Rect2]:
 	return out
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): a row of tuned cymbals
+## and a gong on one rack, in the backline between the kit and the lattice.
+func instrument() -> Dictionary:
+	return {"kind": &"cymbals", "spot": back_wall_instrument(0.43)}
+
+
 ## The zones, and a road case at the front of each strip beside the desk.
 func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
@@ -281,10 +287,25 @@ func tower_spots() -> Array[Vector2]:
 
 
 ## The lighting trusses: front (over the desk's front edge), mid (over the footprint's back
-## edge), each at RIG; the back one carries the LED wall.
+## edge), each at RIG; the back one carries the LED wall; and one over the middle of the back of
+## house, which is twice as deep as it was and lay in the dark between the mid truss and the wall.
 func truss_lines() -> Array[Vector3]:
 	return [Vector3(0, RIG, Studio.ROOM_FRONT + 0.4), Vector3(0, RIG, Studio.ROOM_BACK - 0.6),
-			Vector3(0, WALL_TOP + 0.4, wall_z())]
+			Vector3(0, WALL_TOP + 0.4, wall_z()), Vector3(0, RIG, (Studio.ROOM_BACK + LIVE_ROOM_BACK) * 0.5)]
+
+
+## The deck's dressing was first placed by number for a floor 6.3 m either side of centre and 3.2 m
+## in front of the seat to 7.3 m behind it: `_wide` and `_deep` take those numbers to the floor now.
+const DRAWN_NUMBERS_HALF := 6.3
+const DRAWN_FRONT := -3.2
+
+
+func _wide(x: float) -> float:
+	return x * live_room_half() / DRAWN_NUMBERS_HALF
+
+
+func _deep(z: float) -> float:
+	return remap(z, DRAWN_FRONT, DRAWN_BACK, Studio.ROOM_FRONT, LIVE_ROOM_BACK)
 
 
 # --- building it -----------------------------------------------------------------------------
@@ -514,7 +535,8 @@ func _lay_the_deck() -> void:
 	var tapes := [Color(1.0, 0.85, 0.1), Color(0.2, 0.9, 0.3), Color(1.0, 0.25, 0.6), Color(0.3, 0.6, 1.0)]
 	var spikes := [Vector3(-1.8, 0, Studio.ROOM_FRONT - 0.85), Vector3(0.0, 0, Studio.ROOM_FRONT - 0.85),
 			Vector3(1.8, 0, Studio.ROOM_FRONT - 0.85), Vector3(live_room_half() - 0.5, 0, 1.6),
-			Vector3(-live_room_half() + 0.5, 0, 1.4), Vector3(-2.2, 0, 3.0), Vector3(2.4, 0, 2.95)]
+			Vector3(-live_room_half() + 0.5, 0, 1.4), Vector3(-4.2, 0, Studio.ROOM_BACK + 0.4),
+			Vector3(4.4, 0, Studio.ROOM_BACK + 0.35)]
 	for i in spikes.size():
 		var m := _paint(tapes[i % tapes.size()], 0.7)
 		# Their faces at heights of their own: not the deck's, not each other's.
@@ -759,7 +781,7 @@ func _hang_the_movers() -> void:
 	var cone_mesh := _plain(cone)
 	var x := deck_half() - 1.6
 	var lines := truss_lines()
-	var counts := [8, 6, 8]
+	var counts := [8, 6, 8, 6]
 	var n := 0
 	for li in lines.size():
 		var line: Vector3 = lines[li]
@@ -884,7 +906,7 @@ func _stack_the_stage() -> void:
 	var heads: Array = []
 	var back := LIVE_ROOM_BACK + 0.32
 	for spec in [[-5.0, 2], [-1.6, 2], [1.6, 2], [4.6, 1]]:
-		var cx: float = spec[0] * (half / LIVE_ROOM_HALF)
+		var cx := _wide(spec[0])
 		var stack: int = spec[1]
 		for k in stack:
 			cabs.append(Transform3D(Basis.IDENTITY, Vector3(cx, 0.761 * k, back)))
@@ -902,9 +924,12 @@ func _stack_the_stage() -> void:
 	if variant == SOUNDCHECK:
 		wing_spots.append_array([Vector2(-half - 1.4, -1.2), Vector2(-half - 3.0, 0.4), Vector2(half + 2.6, -0.4),
 				Vector2(half + 1.4, 2.0), Vector2(-half - 2.0, 2.2)])
+	# Down the wings beside the whole floor, not only its first half.
+	wing_spots.append_array([Vector2(-half - 2.4, 9.6), Vector2(-half - 1.8, 11.6), Vector2(half + 2.2, 8.8),
+			Vector2(half + 1.6, 11.2)])
 	for s: Vector2 in wing_spots:
 		cases.append(Transform3D(Basis(Vector3.UP, rng.randf_range(-0.3, 0.3) + PI * 0.5 * float(rng.randi() % 2)),
-				Vector3(s.x, 0, s.y)))
+				Vector3(s.x, 0, _deep(s.y) if s.y < 8.0 else s.y)))
 	var bz := wall_z() + 0.9
 	var bx := -half
 	while bx < half:
@@ -981,6 +1006,15 @@ func _light_the_stage() -> void:
 			2.5 if day else 14.0, 46.0, 16.0, 0.0 if day else 0.7, "ZoneWash")
 	_wash(Vector3(3.0, mid.y - 0.5, mid.z), Vector3(right.x, 0.0, right.z), washes[1].lerp(Color.WHITE, 0.35),
 			2.5 if day else 12.0, 46.0, 16.0, 0.0 if day else 0.7, "ZoneWash")
+	# And from the truss over the middle of the back of house, down on its far half: the booth
+	# and the toys on the left, the lattice in the middle, the synth corner on the right.
+	var over: Vector3 = truss_lines()[3]
+	var half := live_room_half()
+	for spec: Array in [[-0.45, Vector3(-half * 0.7, 0.0, LIVE_ROOM_BACK - 3.0), 0], [0.0, (zs[&"matrix"] as AABB).get_center()
+			* Vector3(1, 0, 1), 1], [0.45, Vector3(half * 0.7, 0.0, LIVE_ROOM_BACK - 2.2), 1]]:
+		var colour: Color = (washes[spec[2]] as Color).lerp(Color.WHITE, 0.4)
+		_wash(Vector3(half * float(spec[0]), over.y - 0.5, over.z), spec[1], colour, 2.0 if day else 10.0, 50.0, 14.0,
+				0.0 if day else 0.7, "ZoneWash")
 	# And from behind them, off the back truss over the wall: the band's backlight, down over
 	# the riser and the lattice's square toward the desk.
 	var back: Vector3 = truss_lines()[2]
@@ -1044,7 +1078,8 @@ func _wash(at: Vector3, aim: Vector3, colour: Color, energy: float, angle: float
 ## MultiMesh each, swayed and bounced in stage_crowd.gdshader; the phones another.
 func _fill_the_field() -> void:
 	var keep_out: Array[Rect2] = [Rect2(-5.5, -40.0, 11.0, 8.5), Rect2(-15.0, -44.0, 4.0, 4.0), Rect2(11.0, -44.0, 4.0, 4.0)]
-	var spots := _crowd_spots(barricade_z() - 1.0, -78.0, 14.0, 34.0, 0.62, 1.15, keep_out, 47)
+	# As wide at the barrier as the stage, which has grown with the room.
+	var spots := _crowd_spots(barricade_z() - 1.0, -78.0, deck_half() + 2.7, 34.0, 0.62, 1.15, keep_out, 47)
 	_place_crowd(spots, Vector3(0, -DECK, front_edge()), 1.6, 1.4)
 	_build_foh(Vector3(0, -DECK, -36.0))
 

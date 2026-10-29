@@ -21,20 +21,24 @@ extends Venue
 ## the zones, the lights still on for the night just ending, and the station's power truss
 ## standing across the view, black against the dawn.
 
-## Floor to the top of the side walls, and to the ceiling between the chamfers. Above every
-## zone's head room (Venue.ZONES): the lattice's 3.4 m stands under the ceiling.
-const WALL_TOP := 3.3
-const CEILING := 4.2
+## Floor to the top of the side walls, and to the ceiling between the chamfers: the live room's
+## own height (Venue.LIVE_ROOM_HEIGHT), so the lattice's 3.4 m stands under the ceiling with a
+## hand raised over it, and the neighbourhoods' banners hang clear under the ribs.
+const WALL_TOP := 3.9
+const CEILING := 5.0
 ## How far in from the side walls the ceiling starts: the chamfer's run, at 45 degrees.
-const CHAMFER := 0.9
+const CHAMFER := 1.1
 const WALL := 0.2
 ## Where the viewport wall stands, in front of the desk: the footprint's front edge.
 const FRONT := Studio.ROOM_FRONT
-## The viewport: three wide bays across the front.
+## The viewport: four bays across the front, a pair either side of a pier behind the timeline,
+## and the wide piers between each pair and the next where the roulette panel (left) and the door
+## to its room (right) hang on the front wall (Venue.rig_roulette_spot / rig_roulette_door), so
+## neither stands in front of the glass.
 const SILL := 0.7
-const HEAD := 2.7
-const BAY := 3.6
-const FRONT_BAYS := [-4.4, 0.0, 4.4]
+const HEAD := 3.2
+const BAY := 2.8
+const FRONT_BAYS := [-7.0, -1.9, 1.9, 7.0]
 ## The hatches: in each side wall, beside the desk. Their outside size, from hatch.glb.
 const DOOR_Z := 0.8
 const HATCH := Vector2(2.0, 2.7)
@@ -202,7 +206,7 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	if variant == DAY_SIDE:
 		_sky_mat.set_shader_parameter("dawn", 0.0)
 		_sky_mat.set_shader_parameter("stars", 0.15)
-		# The lit planet fills three viewports: a step down, or from the seat it is the room.
+		# The lit planet fills four viewports: a step down, or from the seat it is the room.
 		_sky_mat.set_shader_parameter("energy", 0.85)
 		# The planet below fills the room with its blue.
 		env.ambient_light_color = Color(0.42, 0.56, 0.78)
@@ -277,6 +281,13 @@ func rooms() -> Array[Rect2]:
 	var out: Array[Rect2] = [back_of_house()]
 	out.append_array(beside_the_desk())
 	return out
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): a ring of tuned hull
+## panels between two of the hull's ribs, on the back wall between the kit and the lattice, the
+## ring curving round whoever stands at it.
+func instrument() -> Dictionary:
+	return {"kind": &"hull_panels", "spot": back_wall_instrument(0.06)}
 
 
 func zone_solids() -> Array:
@@ -596,7 +607,13 @@ func _multimesh(label: String, mesh: Mesh, at: Array[Transform3D], material: Mat
 	add_child(holder)
 
 
-## LED coves along the chamfers' feet, and two rows of downlights in the ceiling.
+## The downlights in the ceiling: three rows down the module's length, a pair either side of the
+## middle row over the desk and the zones, every RIB_SPACING from the viewport to the back wall.
+const DOWN_X := [-5.2, 0.0, 5.2]
+const DOWN_FROM := -2.2
+
+
+## LED coves along the chamfers' feet, and three rows of downlights in the ceiling.
 func _light_the_module() -> void:
 	var half := live_room_half()
 	var length := LIVE_ROOM_BACK - FRONT
@@ -609,13 +626,20 @@ func _light_the_module() -> void:
 		strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var can := _ribs()
 	# By day the sun does the work, and the ship's day cycle has the downlights turned down.
-	var down := 0.9 if variant == DAY_SIDE else 2.0
+	# From a five-metre ceiling over twice the floor they throw harder than the old module's did.
+	var down := 1.8 if variant == DAY_SIDE else 3.2
 	_down_base = down
-	for x in [-2.6, 2.6]:
-		for z in [-0.8, 1.6, 4.0, 6.4]:
-			var light := ZoneKit.spot_down(self, Vector3(x, CEILING - 0.03, z), Color(0.86, 0.92, 1.0), down, 55.0, 6.0, can)
-			light.name = "Downlight"
-			_downlights.append(light)
+	var glass := glass_floor()
+	for x: float in DOWN_X:
+		var z := DOWN_FROM
+		while z < LIVE_ROOM_BACK - 0.6:
+			# Between the ribs, never on one; none over the glass, where the UV lamp hangs.
+			var at := Vector3(x, CEILING - 0.03, z)
+			if not glass.grow(0.3).has_point(Vector2(x, z)):
+				var light := ZoneKit.spot_down(self, at, Color(0.86, 0.92, 1.0), down, 64.0, 8.0, can)
+				light.name = "Downlight"
+				_downlights.append(light)
+			z += RIB_SPACING
 
 
 # --- outside --------------------------------------------------------------------------------

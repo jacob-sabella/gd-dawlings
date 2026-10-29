@@ -67,6 +67,36 @@ static func data_of(state: MixState, track: int, index: int) -> Dictionary:
 	return {"clip": MixWire.pack_item(item, t.part), "track": track, "index": index, "track_name": t.name}
 
 
+## What makes a clip's sound when it is not a file, for what plays a cassette by hand (the DJ
+## platter, slice 27; the grain cloud, slice 54): a Callable for a worker that answers [stereo
+## frames, their rate]. A MIDI clip through the built-in instrument (EarCue.midi_frames, at `rate`),
+## a demo part as the song plays it there (EarCue.demo_samples, at DemoSong.RATE, from the song's
+## tempo map and meter read now, on the main thread). An invalid Callable for a clip with neither.
+static func sound_work(item: MixState.ItemState, rate: int) -> Callable:
+	if item == null:
+		return Callable()
+	if not item.notes.is_empty():
+		var notes := PackedFloat64Array(Array(item.notes))
+		var controls := item.controls.duplicate()
+		var seconds := item.length
+		return func() -> Array:
+			return [EarCue.midi_frames(notes, seconds, rate, controls), rate]
+	if item.part.is_empty() or DAW.state == null:
+		return Callable()
+	var map := DAW.state.tempo_map().to_array()
+	var meter := DAW.state.meter().to_array()
+	var part := item.part
+	var start := item.start
+	var long := item.length
+	return func() -> Array:
+		var mono := EarCue.demo_samples(part, start, long, map, meter)
+		var frames := PackedVector2Array()
+		frames.resize(mono.size())
+		for i in mono.size():
+			frames[i] = Vector2(mono[i], mono[i])
+		return [frames, DemoSong.RATE]
+
+
 ## The made item's row read back (`data`, from the host or a file): what it carries, lettered.
 func read(made: Dictionary) -> void:
 	data = made
@@ -124,6 +154,8 @@ func readout() -> String:
 	var where := super()
 	if slot_in == &"rack":
 		where = "on the rack, slot %d" % (slot_n + 1)
+	elif slot_in == GrainCloud.HOLDER:
+		where = "in the grain cloud's bowl"
 	if is_sample():
 		var heard := "a sample, %s, %.2f s, %s" % [str(clip.get("source", "")), length(), where]
 		return heard if hearing.is_empty() else "%s · %s" % [heard, hearing]
@@ -141,7 +173,7 @@ func pastes() -> bool:
 
 func hint() -> String:
 	if state == State.HELD and carried_by != null:
-		return "hold L to hear it · click a timeline lane, a channel strip or a stage voice to paste it there · click a bandmate to hand it over · click a rack slot to shelve it, or the BIN to bin it · Q puts it down"
+		return "hold L to hear it · click a timeline lane, a channel strip or a stage voice to paste it there · click a bandmate to hand it over · click a rack slot to shelve it, or the BIN to bin it · click the grain cloud's bowl to play it as grains · Q puts it down"
 	return _hint("click to pick up · pull a clip off the timeline for another")
 
 

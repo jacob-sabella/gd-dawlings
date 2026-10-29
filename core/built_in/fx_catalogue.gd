@@ -76,8 +76,17 @@ static func kinds() -> Dictionary:
 		var band := b
 		p.apply = func(e: AudioEffect, x: float): (e as AudioEffectEQ6).set_band_gain_db(band, x)
 		eq_params.append(p)
+	# EQ21: half-octave bands, gain only, each named by its centre. EQ6's 100 Hz band covers a
+	# kick's lows and a bass's both, so the EQ wall carves with this one (EqCarve).
+	var eq21_params: Array = []
+	for b in EQ21_HZ.size():
+		var p := Param.new(band_name(EQ21_HZ[b]), "", -15.0, 15.0, "dB")
+		var band := b
+		p.apply = func(e: AudioEffect, x: float): (e as AudioEffectEQ21).set_band_gain_db(band, x)
+		eq21_params.append(p)
 	_kinds = {
 		&"eq": {"name": "EQ6", "make": func(): return AudioEffectEQ6.new(), "params": eq_params},
+		&"eq21": {"name": "EQ21", "make": func(): return AudioEffectEQ21.new(), "params": eq21_params},
 		&"compressor": {"name": "Compressor", "make": func(): return AudioEffectCompressor.new(),
 			"params": [
 				Param.new("Thresh", "threshold", -60.0, 0.0, "dB"),
@@ -140,6 +149,30 @@ static func kinds() -> Dictionary:
 			]},
 	}
 	return _kinds
+
+
+## AudioEffectEQ21's fixed band centres (Hz), half an octave apart, 22 Hz to 22 kHz, in its order.
+const EQ21_HZ := [22.0, 32.0, 44.0, 63.0, 90.0, 125.0, 175.0, 250.0, 350.0, 500.0, 700.0, 1000.0,
+		1400.0, 2000.0, 2800.0, 4000.0, 5600.0, 8000.0, 11000.0, 16000.0, 22000.0]
+
+
+## A band's parameter name, by its centre: "63 Hz", "1.4 kHz".
+static func band_name(hz: float) -> String:
+	if hz >= 1000.0:
+		var k := hz / 1000.0
+		return ("%d kHz" % roundi(k)) if is_equal_approx(k, roundf(k)) else ("%s kHz" % String.num(k, 1))
+	return "%d Hz" % roundi(hz)
+
+
+## Which of `kind`'s parameters is called `param_name`, or -1: an EQ's band by its name.
+static func param_named(kind: StringName, param_name: String) -> int:
+	if not kinds().has(kind):
+		return -1
+	var list := params(kind)
+	for i in list.size():
+		if (list[i] as Param).name == param_name:
+			return i
+	return -1
 
 
 static func make(kind: StringName) -> AudioEffect:

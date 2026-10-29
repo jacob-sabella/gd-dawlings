@@ -156,6 +156,8 @@ func _ready() -> void:
 	session_panel = SessionPanel.new()
 	session_panel.name = "SessionPanel"
 	add_child(session_panel)
+	# EDIT on the lyric board at a desk opens the panel at its LYRICS box (slice 56).
+	studio.lyrics_edit_asked.connect(session_panel.edit_lyrics)
 	if args["session_panel"]:
 		session_panel.open()
 	var tour_hud := TourHud.new()
@@ -190,6 +192,132 @@ func _ready() -> void:
 		DAW.select_item(pair.x, pair.y, true)
 	if args["at_bar"] > 0.0:
 		DAW.seek(DAW.state.bar_to_seconds(args["at_bar"]))
+	if args["play"]:
+		DAW.transport_play()
+	if args["slap"] and studio.looper != null:
+		studio._on_looper_slapped()
+	# `--rings N`: N layers already on the looper (docs/spatial_loop.md part two, slice 46), for a shot
+	# of its rings: two bars each from bar 2, the players taking turns, the second muted.
+	if args["rings"] > 0 and studio.looper != null:
+		var span := [DAW.state.bar_to_seconds(2), DAW.state.bar_to_seconds(4)]
+		for n in mini(args["rings"], LooperRings.MOST):
+			var made := Looper.write_layer(["Ada", "Grace", "Jsabella"][n % 3], span[0], span[1],
+					[[span[0] + 0.25 * n, span[0] + 0.25 * n + 0.2, 60 + n * 4, 100, 0]])
+			if n == 1 and int(made["track"]) > 0:
+				DAW.set_track_mute(int(made["track"]), true)
+		DAW.set_loop_range(span[0], span[1])
+		DAW.set_looping(true)
+	# `--pegs`: a pattern on the music box (docs/spatial_loop.md part two, slice 47), for a shot of it:
+	# a run up the rows and back, pressed as a hand presses them, and one note off its rows, a
+	# semitone above the third row's, for its mark.
+	if args["pegs"] and studio.music_box != null:
+		var box := studio.music_box
+		box.show_at(DAW.state.position_seconds, 1.0)
+		for cell in [Vector2i(0, 0), Vector2i(2, 1), Vector2i(4, 2), Vector2i(7, 3), Vector2i(4, 4),
+				Vector2i(0, 4), Vector2i(5, 6), Vector2i(3, 7), Vector2i(1, 8), Vector2i(4, 10),
+				Vector2i(2, 12), Vector2i(0, 14)]:
+			box.press(cell)
+		var track := MusicBox.track_of(DAW.state, box.row)
+		var item := MusicBox.item_of(DAW.state, track, box.span)
+		var it := DAW.state.item(track, item)
+		if it != null:
+			var rows := MusicBox.rows_of(MusicBox.key_of(DAW.state, box.span), box.row)
+			var on := MusicBox.step_time(DAW.state, box.span, 5) - it.start
+			DAW.insert_note(track, item, on, on + 0.1, rows[2] + 1 if not rows.has(rows[2] + 1) else rows[2] - 1)
+	# `--strings`: strings across the room (docs/spatial_loop.md part two, slice 48), for a shot of them:
+	# a long bass string from the live room's left wall to the bricks table's near corner, across the
+	# whole room, and three short ones fanning up from the spool's reel into the aisle, each tied as
+	# the spool ties them, and the bass one plucked so it rings and shakes.
+	if args["strings"] and studio.spool != null:
+		var half := studio.venue.live_room_half() - 0.05
+		var reel: Vector3 = studio.spool.transform * RoomString.SPOOL_AXLE
+		for ends in [[Vector3(-half, 1.5, 3.35), Vector3(4.45, 0.92, 3.85)],
+				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.35, 0.55, 0.62)],
+				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.25, 0.4, 0.45)],
+				[reel + Vector3(0, 0.09, 0), reel + Vector3(-0.15, 0.25, 0.3)]]:
+			studio.spool.string_asked.emit(ends[0], ends[1])
+		var bass: RoomString = studio.room_strings.values()[0] if not studio.room_strings.is_empty() else null
+		if bass != null:
+			bass.pluck(96)
+	# `--marbles`: a run in the marble run's lattice (docs/spatial_loop.md part two, slice 49), for a
+	# shot of it: a ramp at the top rolling along a row of bells, down a drop, back through two more
+	# into a splitter, and from there down either side's drops through falling bells, each block asked
+	# as the tray asks it.
+	if args["marbles"] and studio.marbles != null:
+		for b: Array in [[Vector3i(2, 8, 2), &"ramp", 1], [Vector3i(3, 8, 2), &"bell", 1], [Vector3i(4, 8, 2), &"bell", 1],
+				[Vector3i(5, 8, 2), &"drop", 0], [Vector3i(5, 7, 2), &"bell", 0], [Vector3i(5, 7, 3), &"bell", 0],
+				[Vector3i(5, 7, 4), &"split", 1], [Vector3i(6, 7, 4), &"drop", 0], [Vector3i(6, 6, 4), &"bell", 1],
+				[Vector3i(7, 6, 4), &"bell", 1], [Vector3i(8, 6, 4), &"drop", 0], [Vector3i(8, 5, 4), &"bell", 2],
+				[Vector3i(8, 5, 3), &"bell", 2], [Vector3i(8, 5, 2), &"ramp", 2], [Vector3i(4, 7, 4), &"drop", 0],
+				[Vector3i(4, 6, 4), &"bell", 3], [Vector3i(3, 6, 4), &"bell", 3], [Vector3i(2, 6, 4), &"drop", 0],
+				[Vector3i(2, 5, 4), &"bell", 2], [Vector3i(2, 5, 3), &"bell", 2], [Vector3i(2, 5, 2), &"ramp", 2]]:
+			studio.ask_marble(b[0], b[1], b[2])
+	# `--theremin`: the theremin played (docs/spatial_loop.md part two, slice 50), for a shot of it and
+	# its guide: two hands of the shot's own, the pitch hand 30 cents sharp of A4 out from the rod at
+	# the rule, so its ring is lit with the bar out to the hand, and the volume hand half way up over
+	# the loop.
+	if args["theremin"] and studio.theremin != null:
+		var t := studio.theremin
+		t.hands = func() -> Array:
+			return [{"at": t.to_global(Vector3(Theremin.ROD.x + Theremin.distance_for(69.3), Theremin.GUIDE_Y,
+					Theremin.ROD.y)), "by": t.field},
+					{"at": t.to_global(Theremin.LOOP + Vector3(0, Theremin.LOOP_REST + Theremin.VOLUME_SPAN * 0.5, 0)),
+					"by": t.key}]
+	# `--grains`: the grain cloud played (docs/spatial_loop.md part two, slice 54), for a shot of it: a
+	# cassette of the song's first clip in its bowl, and a hand of the shot's own in the cloud a third of
+	# the way across, grains 120 ms long, half way in, the fingers spread half open.
+	# `--grains-band` (slice 55): a bandmate, Grace, playing it too, long grains two thirds of the way
+	# across and well in, her events fed to the cloud each frame as Session.grains_played would; alone
+	# (without `--grains`), the tag says she plays it.
+	if (args["grains"] or args["grains_band"]) and studio.grain_cloud != null and studio.items != null and DAW.state != null:
+		var cloud := studio.grain_cloud
+		for track: int in DAW.state.track_indices():
+			if DAW.state.track(track).items.is_empty():
+				continue
+			var made := studio.items.mint(CassetteItem.KIND, CassetteItem.data_of(DAW.state, track, 0))
+			if made != null:
+				studio.items.slot(made, GrainCloud.HOLDER, 0)
+			break
+		if args["grains"]:
+			cloud.hands = func() -> Array:
+				return [{"at": cloud.to_global(GrainCloud.place_for(0.34, 0.12, GrainCloud.density_of(0.5))), "by": cloud,
+						"spread": 0.5}]
+		else:
+			cloud.hands = func() -> Array: return []
+		if args["grains_band"]:
+			var grace := Session.Participant.new()
+			grace.peer_id = 2
+			grace.display_name = "Grace"
+			Session.participants[2] = grace
+			get_tree().process_frame.connect(func() -> void:
+				if is_instance_valid(cloud):
+					cloud.hear(2, GrainVoice.event(cloud.ticks + 1, 0.68, 0.17, GrainCloud.density_of(0.75), 0.06)))
+	# `--lyrics`: the song's lyrics on the vocal booth's lyric board (docs/spatial_loop.md part two, slice
+	# 56), for a shot of it: four lines timed and two left to TAP, the board held at 7 s, half way
+	# through the second line, as the song would put it there.
+	if args["lyrics"] and studio.lyric_board != null and DAW.state != null:
+		DAW.set_lyrics("[00:01.00]Wires hum beneath the floor\n[00:05.00]Every fader finds its place\n[00:09.00]We tune the room until it's ours\n[00:13.00]And sing it back into the space\n\nTurn the lamps down, let it ring\nHold the last note, let it go")
+		studio.lyric_board.heard_source = func() -> Dictionary: return {"seconds": 7.0, "playing": true, "valid": true}
+	# `--modular`: the modular wall re-patched (docs/spatial_loop.md part two, slice 51), for a shot of
+	# it: the LFO onto the VCF's CV, the second VCO a fifth up through the MIX with the first, ENV 2 on
+	# the first VCO's FM, the noise into the MIX low, each cable and knob asked as the wall asks them,
+	# and an A held on its touch keys.
+	if args["modular"] and studio.modular_wall != null:
+		for c: Array in [[&"vcf.in", &""], [&"vco1.out", &"mix.in1"], [&"vco2.out", &"mix.in2"], [&"noise.out", &"mix.in3"],
+				[&"mix.out", &"vcf.in"], [&"keys.pitch", &"vco2.pitch"], [&"lfo.out", &"vcf.cv"],
+				[&"keys.gate", &"env2.gate"], [&"env2.out", &"vco1.fm"]]:
+			studio.ask_modular_patch(c[0], c[1])
+		for k: Array in [[&"vco2.wave", 0.0], [&"vco2.tune", 0.5 + 7.0 / 24.0], [&"vco1.fm", 0.3], [&"mix.l3", 0.15],
+				[&"vcf.res", 0.7], [&"lfo.rate", 0.4]]:
+			studio.ask_modular_knob(k[0], k[1])
+		studio.modular_wall.touch_keys[9].grab_begin(studio, studio.modular_wall.touch_keys[9].global_position)
+		# `--modular-rec`: a take through it under way (slice 52), as the keys at the wall begin one.
+		if args["modular_rec"]:
+			Session.modular_takes.begin(0.0)
+	# `--world`: the venue's weather patched into the modular wall's VCF CV (slice 53), as a press on
+	# its MODULAR socket asks it, for a shot of the long cable from the window to the wall.
+	if args["world"] and studio.weather != null and studio.weather.modular != null:
+		studio._on_world_step(studio.weather.modular.socket, 1)
 	var view: Vector2 = args["view"]
 	if view.y > 0.0 and studio.timeline != null:
 		studio.timeline.set_view(view.x, view.y)
@@ -265,7 +393,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
 		"host": false, "public": false, "join": "", "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
-		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
+		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
 		"venue": "", "reaper_resource": "", "loop": Vector2.ZERO, "select": [], "at_bar": 0.0,
 		"ghost": {}, "tablets": [], "plugins": [], "welcome": false,
@@ -403,6 +531,39 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 					out["step"] = float(argv[i])
 			# For photographs: the corner readout is for whoever is debugging, not for a picture.
 			"--no-hud": out["no_hud"] = true
+			# The song playing from the start: for photographing what moves with it, the weather's
+			# drops (docs/spatial_loop.md part two, slice 44) among them.
+			"--play": out["play"] = true
+			# `--slap`: the looper's pad slapped once everything is up (docs/spatial_loop.md part two,
+			# slice 45), for a shot of its count or its recording.
+			"--slap": out["slap"] = true
+			# `--pegs`: a pattern on the music box, for a shot of it (slice 47).
+			"--pegs": out["pegs"] = true
+			# `--strings`: strings across the room, a bass one ringing, for a shot of them (slice 48).
+			"--strings": out["strings"] = true
+			# `--marbles`: a run in the marble run's lattice, for a shot of it (slice 49).
+			"--marbles": out["marbles"] = true
+			# `--theremin`: the theremin played by two hands of the shot's own, for a shot of it (slice 50).
+			"--theremin": out["theremin"] = true
+			# `--grains`: the grain cloud played by a hand of the shot's own (slice 54), for a shot of it.
+			"--grains": out["grains"] = true
+			# `--grains-band`: a bandmate's grains in the cloud too, fed as they would arrive (slice 55).
+			"--grains-band": out["grains_band"] = true
+			# `--lyrics`: lyrics on the booth's lyric board, held mid-song, for a shot of it (slice 56).
+			"--lyrics": out["lyrics"] = true
+			# `--modular`: the modular wall re-patched, an A held on its keys, for a shot of it (slice 51).
+			"--modular": out["modular"] = true
+			# `--modular-rec`: and a take recording through it, OUT saying REC (slice 52).
+			"--modular-rec":
+				out["modular"] = true
+				out["modular_rec"] = true
+			# `--world`: the weather patched into the modular wall, for a shot of its cable (slice 53).
+			"--world": out["world"] = true
+			# `--rings N`: N layers on the looper, for a shot of its rings (slice 46).
+			"--rings":
+				i += 1
+				if i < argv.size():
+					out["rings"] = int(argv[i])
 			"--height":
 				i += 1
 				if i < argv.size():
@@ -636,7 +797,11 @@ func _process(_delta: float) -> void:
 	var role_name: String = ["solo", "host", "guest"][Session.role]
 	var medium_name: String = ["screen", "ar", "vr"][Session.layout.medium]
 	var focused := ""
-	if studio != null and studio.focus != null and studio.focus.is_focused():
+	var chords := studio.chord_hand.hud_text() if studio != null and studio.chord_hand != null else ""
+	if chords != "":
+		# The chord layer, or a shape held (docs/spatial_loop.md part two, slice 32): `CHORDS · IV F`.
+		focused = chords
+	elif studio != null and studio.focus != null and studio.focus.is_focused():
 		focused = String(studio.focus.focused_id).to_upper()
 	elif studio != null:
 		focused = "FLYING" if studio.god_mode else "WALKING"

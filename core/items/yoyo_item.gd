@@ -49,8 +49,31 @@ func trick_name(k: int) -> String:
 	return ["throw it down", "go around the world", "loop the loop"][k]
 
 
+## How long each trick takes, and what it rings when (FidgetItem.trick_sounds): the whirr as it
+## goes out to the end of its string, and the clack of it back in the palm.
+const SECONDS := [1.7, 2.2, 2.0]
+const SOUNDS := [
+	[[0.3 / 1.7, &"yoyo_spin", -8.0, 1.0], [1.55 / 1.7, &"yoyo_catch", -6.0, 1.0]],
+	[[0.3 / 2.2, &"yoyo_spin", -8.0, 0.9], [1.95 / 2.2, &"yoyo_catch", -6.0, 1.0]],
+	[[0.2 / 2.0, &"yoyo_spin", -10.0, 1.1], [1.85 / 2.0, &"yoyo_catch", -6.0, 1.0]],
+]
+
+
 func trick_seconds(k: int) -> float:
-	return [1.7, 2.2, 2.0][k]
+	return SECONDS[k]
+
+
+func trick_sounds(k: int) -> Array:
+	return SOUNDS[k]
+
+
+func trick_kind() -> StringName:
+	return &"yoyo_trick"
+
+
+## Trick `take` heard whole (Foley.take_of's `yoyo_trick`): what the sampler keeps of one.
+static func trick_take(take: int) -> AudioStreamWAV:
+	return FidgetItem.trick_stream("yoyo_trick", SOUNDS, SECONDS, take)
 
 
 func _build_body() -> Node3D:
@@ -170,10 +193,6 @@ func pose(k: int, p: float) -> void:
 			else:
 				length = lerpf(full, IN_HAND, span(t, 1.2, 1.55))
 			_hang(down * length, SPIN * t)
-			if cue(p, 0.3 / 1.7):
-				Foley.play(self, Foley.yoyo_spin(tricks_done), -8.0)
-			if cue(p, 1.55 / 1.7):
-				Foley.play(self, Foley.yoyo_catch(tricks_done), -6.0)
 		1:
 			# Out in front at the end of its string, then up, over, behind, under and round to in
 			# front again, and back to the hand.
@@ -185,10 +204,6 @@ func pose(k: int, p: float) -> void:
 				_hang((forward * cos(a) + up * sin(a)) * full, SPIN * t)
 			else:
 				_hang(out.lerp(start, span(t, 1.6, 1.95)), SPIN * t)
-			if cue(p, 0.3 / 2.2):
-				Foley.play(self, Foley.yoyo_spin(tricks_done), -8.0, 0.9)
-			if cue(p, 1.95 / 2.2):
-				Foley.play(self, Foley.yoyo_catch(tricks_done), -6.0)
 		2:
 			# Out in front a short way, then round past the hand twice, down first.
 			var reach := minf(full, STRING * 0.45)
@@ -200,10 +215,6 @@ func pose(k: int, p: float) -> void:
 				_hang((forward * cos(a) + up * sin(a)) * reach, SPIN * t)
 			else:
 				_hang(out.lerp(start, span(t, 1.6, 1.85)), SPIN * t)
-			if cue(p, 0.2 / 2.0):
-				Foley.play(self, Foley.yoyo_spin(tricks_done), -10.0, 1.1)
-			if cue(p, 1.85 / 2.0):
-				Foley.play(self, Foley.yoyo_catch(tricks_done), -6.0)
 
 
 ## How long a string this hand throws: short for your own on a desktop (DESK_STRING).

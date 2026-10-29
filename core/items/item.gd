@@ -53,6 +53,10 @@ signal used(down: bool)
 signal landed()
 ## Put on or taken off a head (`set_worn`).
 signal worn_changed()
+## It rang a sound of its own that no hand's use made -- a ball's bounce -- Foley's `kind` take
+## `take` (Foley.take_of), played `pitch` fast. A throw is flown the same on every copy (Flight), so
+## every copy rings the same take of it: the host's sampler hears its own (Sampler).
+signal rang(kind: StringName, take: int, pitch: float)
 
 ## Which item this is in the room, the same on every machine: "duck".
 var id: StringName
@@ -113,6 +117,11 @@ var slot_in := &""
 var slot_n := -1
 ## How big it is drawn: 1 in a hand, a ghost's head's size on one (worn poses carry a scale).
 var _size := 1.0
+## An instrument that stands still (docs/spatial_loop.md part two, slice 38): a drum head, a chime, a
+## pad. A grab plays it rather than picking it up (`struck_by`), its home is its station (a spot of
+## its own, `own_home`), and the room never lays, throws or pockets it (ItemRoom), nor does a hand
+## carry it (Interactor.pick_up). Set by the kind, before it enters the room.
+var fixed := false
 ## Which of Foley's takes its last use rang (Foley.take_of, of `use_kind`), or -1 before any: sent
 ## with the use (Session.item_used), so everyone hears the sound its player heard, and the sampler
 ## (Sampler, docs/spatial_loop.md part two, slice 26) catches exactly that.
@@ -177,6 +186,12 @@ func use_kind(_down: bool) -> StringName:
 	return &""
 
 
+## How fast a use's sound is played against Foley's take of it (an AudioStreamPlayer's
+## pitch_scale): 1 but for an instrument's voice (InstrumentItem). The sampler keeps it so.
+func use_pitch() -> float:
+	return 1.0
+
+
 ## Somebody else's use of it, heard here (Presence): `use`, ringing the take their hand rang
 ## (`take`, Session.item_used's), or this copy's own next for -1, not known.
 func heard_use(down: bool, take := -1) -> void:
@@ -194,9 +209,23 @@ func _next_take() -> int:
 
 ## Override: whether a press with this in the hand on a control that takes a paste
 ## (ControlAffordance.paste_spot) pastes it there rather than working the control: a cassette with
-## a clip on it (docs/spatial_loop.md part two, slice 24). Nothing else does.
+## a clip on it (docs/spatial_loop.md part two, slice 24), and a chord brick, which writes its
+## chords (slice 31). Nothing else does.
 func pastes() -> bool:
 	return false
+
+
+## Override: what a press of this at `spot` ([track, seconds], from ControlAffordance.paste_spot_for)
+## does, in words for the control's hover card ("writes Am F C G onto Bass from bar 12"); "" for
+## the plain paste's words.
+func paste_text(_spot: Array) -> String:
+	return ""
+
+
+## Override: a hand's grab on a fixed item (`fixed`) at `at` (global), from `hand`: a strike, for
+## an instrument (InstrumentItem.struck_by). Nothing otherwise.
+func struck_by(_hand: Interactor, _at: Vector3) -> void:
+	pass
 
 
 ## Override: it has just come into a hand.
@@ -347,10 +376,17 @@ func work(down: bool) -> void:
 ## The shelf's own copy of a personal kind (`ItemRoom.PERSONAL_KINDS`) is never actually held: it
 ## is a dispenser, and a hand reaching for it is given a copy of its own instead
 ## (`ItemRoom.take_for`). The grab it was given here is let go of at once, so the dispenser stays
-## there for the next hand.
-func _on_grab_begin(_at: Vector3) -> void:
+## there for the next hand. A fixed instrument's grab (`fixed`) is a strike where it landed.
+func _on_grab_begin(at: Vector3) -> void:
 	var hand := held_by as Interactor
 	if hand == null:
+		return
+	# A fixed instrument is struck, not taken: the grab is let go of at once, as the dispenser's is.
+	# A fingertip touching it is Strike's to read, as it crosses the head, so it is not struck twice.
+	if fixed:
+		grab_end(hand)
+		if not hand.touches_directly():
+			struck_by(hand, at)
 		return
 	var room := ItemRoom.of(self)
 	if room != null and id in ItemRoom.PERSONAL_KINDS:
@@ -408,6 +444,9 @@ func is_flying() -> bool:
 ## Into somebody else's hand, wherever `pose` (a Callable giving a global Transform3D) says it
 ## is: their ghost's palm. Seen by everyone, mirrors too, and not to be taken out of it.
 func follow(pose: Callable) -> void:
+	# A fixed instrument is in nobody's hand, whatever a hold says.
+	if fixed:
+		return
 	_leave_hand()
 	held_elsewhere = pose
 	# Still there to grab: reaching for it takes it from them. Not off their head, though, nor

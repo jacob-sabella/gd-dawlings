@@ -49,6 +49,15 @@ const QUALITIES := {
 const BAR_SLACK := 0.0001
 ## A marker at or within this of a time is at it, as TapeDeck.section_at has it.
 const AT_SLACK := 0.001
+## How a sticky note's marker begins (docs/spatial_loop.md part two, "Markers carry notes"): a note
+## is not a section and sets no harmony, so `parse` answers null for one, `section_of` "", and what
+## reads markers as sections (SectionBlocks.spans, `section_at`, the chalk board, the deck, the 3D
+## ruler's flags) skips it.
+const NOTE_PREFIX := "NOTE "
+## How far after another marker a note is put that would land on it (`note_spot`): one marker a
+## time, and a millisecond and a half rather than one, since a marker is found within AT_SLACK of a
+## time (DAWBackend.marker_key) and 1.0 + 0.001 is a hair less than a millisecond from 1.0.
+const NOTE_NUDGE := 0.0015
 
 ## The key, as it is said: "A minor", the root as it was written.
 var key_name := "C major"
@@ -85,6 +94,9 @@ static var NONE := Harmony.new()
 ## The harmony a marker's name sets, with its first chord; or null when it has no brackets, or
 ## brackets that do not read as a key and chords.
 static func parse(marker_name: String) -> Harmony:
+	# A note's brackets are its words: `NOTE try [G major] here` changes nothing.
+	if is_note(marker_name):
+		return null
 	var open := _bracket_open(marker_name)
 	if open < 0:
 		return null
@@ -114,10 +126,55 @@ static func parse(marker_name: String) -> Harmony:
 	return h
 
 
+## Whether a marker is a sticky note (NOTE_PREFIX) rather than a section or a key.
+static func is_note(marker_name: String) -> bool:
+	return marker_name.strip_edges().begins_with(NOTE_PREFIX)
+
+
+## What a sticky note says: its marker's name without NOTE_PREFIX.
+static func note_text(marker_name: String) -> String:
+	return marker_name.strip_edges().trim_prefix(NOTE_PREFIX).strip_edges()
+
+
+## The marker name a note saying `text` goes by, cut to what a marker's name may be
+## (DAW.MARKER_NAME_MAX).
+static func note_named(text: String) -> String:
+	return (NOTE_PREFIX + text.strip_edges()).left(DAW.MARKER_NAME_MAX)
+
+
+## Where a note meant for `seconds` goes among `markers`: there, or NOTE_NUDGE after a marker it
+## would land within AT_SLACK of (and after that one's, and so on), so it never renames one.
+static func note_spot(markers: Dictionary, seconds: float) -> float:
+	var at := maxf(seconds, 0.0)
+	var moved := true
+	while moved:
+		moved = false
+		for t in markers:
+			if absf(float(t) - at) < NOTE_NUDGE * 0.99:
+				at = float(t) + NOTE_NUDGE
+				moved = true
+				break
+	return at
+
+
+## The section `seconds` is in, from `markers`: the latest marker at or before it (within AT_SLACK)
+## that names one, without its brackets; "" before the first. A marker that is only brackets changes
+## the harmony, not the section, and a note is neither, so both are passed over and the section
+## before them goes on.
+static func section_at(markers: Dictionary, seconds: float) -> String:
+	var best := -1.0
+	for t in markers:
+		if float(t) <= seconds + AT_SLACK and float(t) > best and section_of(str(markers[t])) != "":
+			best = float(t)
+	return section_of(str(markers[best])) if best >= 0.0 else ""
+
+
 ## A marker's name without its brackets: the section it names, "" for a marker that is only
-## brackets. Brackets that do not read as a key are left in, so a mistyped one is seen where the
-## section is shown, not quietly dropped.
+## brackets and for a sticky note. Brackets that do not read as a key are left in, so a mistyped
+## one is seen where the section is shown, not quietly dropped.
 static func section_of(marker_name: String) -> String:
+	if is_note(marker_name):
+		return ""
 	var open := _bracket_open(marker_name)
 	if open < 0:
 		return marker_name

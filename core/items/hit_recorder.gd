@@ -95,8 +95,9 @@ func jacked_tracks() -> Array:
 ## item says (`note_seconds`). `track`, a track its jack goes into (Jacks.hit): onto that track's
 ## own take, whether or not anything is armed, and not into the armed one; 0, the armed one.
 ## `snap`: whether its player snaps it (1 yes, 0 no; -1 this player's own `snaps`). A pitched
-## item's note is never moved: its tone is the chord's at `at`.
-func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0, snap := -1) -> void:
+## item's note is never moved: its tone is the chord's at `at`. `zone`, where on a fixed one it was
+## struck: its note is that zone's (InstrumentItem.zone_note), a drum's bass, tone or slap.
+func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0, snap := -1, zone := &"") -> void:
 	var h := heard()
 	follow(h)
 	var moved := (snap == 1 or (snap < 0 and snaps())) and not item.pitched()
@@ -107,13 +108,7 @@ func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0, snap := -1)
 			at = stamp()
 		if moved:
 			at = snapped_at(at, DAW.state)
-		var take: MidiTake = _jacked.get(track)
-		if take == null:
-			take = MidiTake.new()
-			# From where the song is heard, or from the hit if it was played a hair before that.
-			take.begin(minf(float(h["seconds"]), at))
-			_jacked[track] = take
-		_note(take, item, velocity, at)
+		_note(_jacked_take(track, h, at), item, velocity, at, zone)
 		return
 	if _take == null:
 		if h["valid"] and h.get("recording", false) and not _warned:
@@ -124,7 +119,34 @@ func hit(item: InstrumentItem, velocity: int, at := NAN, track := 0, snap := -1)
 		at = stamp()
 	if moved:
 		at = snapped_at(at, DAW.state)
-	_note(_take, item, velocity, at)
+	_note(_take, item, velocity, at, zone)
+
+
+## A note of a source that is no item, onto the track its jack goes into (`track`), while the song
+## records: the weather's drops (Weather, docs/spatial_loop.md part two, slice 44), `pitch` at
+## `velocity` on `channel`, from song position `at` for `length` seconds, exactly where the schedule
+## put it. Nothing while the song does not record, nor for no track: an unplugged weather is in no
+## take.
+func note(track: int, pitch: int, velocity: int, channel: int, length: float, at: float) -> void:
+	var h := heard()
+	follow(h)
+	if track <= 0 or not _rolling(h):
+		return
+	var take := _jacked_take(track, h, at)
+	take.note_on(pitch, clampi(velocity, 1, 127), channel, at)
+	take.note_off(pitch, channel, at + length)
+	take.reach(at + length)
+
+
+## The take running onto `track` for its jack, begun now if there is none: from where the song is
+## heard (`h`), or from `at` if that is a hair before it.
+func _jacked_take(track: int, h: Dictionary, at: float) -> MidiTake:
+	var take: MidiTake = _jacked.get(track)
+	if take == null:
+		take = MidiTake.new()
+		take.begin(minf(float(h["seconds"]), at))
+		_jacked[track] = take
+	return take
 
 
 ## Whether this player's hand percussion is snapped: "Snap hand percussion" (GuestMidi.snap_hits),
@@ -153,9 +175,9 @@ static func snapped_at(seconds: float, state: MixState) -> float:
 	return seconds + off * SNAP_PULL
 
 
-## One hit into `take`: the item's note at `at`, on its channel, as long as it says.
-func _note(take: MidiTake, item: InstrumentItem, velocity: int, at: float) -> void:
-	var note := item.note_at(at)
+## One hit into `take`: the item's note at `at` on `zone`, on its channel, as long as it says.
+func _note(take: MidiTake, item: InstrumentItem, velocity: int, at: float, zone := &"") -> void:
+	var note := item.zone_note(zone, at)
 	var length := item.note_seconds()
 	take.note_on(note, velocity, item.channel(), at)
 	take.note_off(note, item.channel(), at + length)

@@ -26,16 +26,20 @@ const AFTER_HOURS := 0
 const SHOWTIME := 1
 const SPEAKEASY := 2
 
-const HEIGHT := 4.2
+## As tall as the live room is now (Venue.LIVE_ROOM_HEIGHT): the pressed tin over the lattice, the
+## banners and a hand raised over both.
+const HEIGHT := LIVE_ROOM_HEIGHT
 const WALL := 0.3
 ## The front wall, in front of the desk: the footprint's front edge.
 const FRONT := Studio.ROOM_FRONT
 ## The wainscot's height, and how proud of the brick it stands.
 const WAINSCOT := 1.1
-## The bar: its counter's front face (x), its ends (z), its height.
-const BAR_FRONT := 4.9
-const BAR_FROM := -1.6
-const BAR_TO := 2.2
+## The bar: how far its counter's front face stands in from the right-hand wall, its ends (z), its
+## height. Measured from the wall, so it stays in the strip beside the control room however wide the
+## room is drawn (it was a number for the old 8 m footprint, and stood inside the new one).
+const BAR_IN := 2.2
+const BAR_FROM := -2.0
+const BAR_TO := 2.6
 const BAR_TOP := 1.08
 const COUNTER_DEPTH := 0.6
 ## The booths along the left wall: each one's centre (z). A booth is two benches facing each
@@ -45,17 +49,32 @@ const BENCH := 1.3
 ## How far each bench's seat front is from the booth's centre.
 const BENCH_GAP := 0.3
 ## The spot: where it hangs, and the stage it is on.
-const SPOT_AT := Vector3(-2.2, HEIGHT - 0.3, 2.9)
+const SPOT_AT := Vector3(-2.1, HEIGHT - 0.3, 3.0)
 ## The upright piano pushed back against the ends of the two booths' back-to-back benches,
-## between their openings, its keys to the room; the double bass laid on the floor beside it.
-## Both in the side strip: the back of house is kept clear for people.
+## between their openings, its keys to the room; the double bass laid on the floor past the far
+## booth, its scroll to the wall, clear of the keys' middle octave, where a person stands to play it
+## (`instrument`), and of the way from the strip into the back of house. Both in the side strip:
+## the back of house is kept clear for people.
 const PIANO_Z := 0.1
 const PIANO_DEPTH := 0.6
 const PIANO_WIDTH := 1.5
-const BASS_AT := Vector3(-3.5, 0.0, 0.25)
-const BASS_YAW := PI * 0.5 + 0.1
+## The piano's keys in its case's frame (club.glb's Piano, its keys toward +Z): their middle this far
+## in front of the case's middle, and the middle of the octave that is the club's instrument (club.py's
+## GAP, key 26 of the keyboard's 52 to key 33, A to A) this far along it.
+const PIANO_KEYS_OUT := PIANO_DEPTH * 0.5 + 0.2
+const PIANO_OCTAVE := -0.68 + 1.36 * 30.0 / 52.0
+## How far the case stands off the back wall in the speakeasy, where the piano stands by the stage.
+const PIANO_OFF_WALL := 0.04
+## The bass's foot: in from the strip's control-room edge, and along (z) past the far booth.
+const BASS_AT := Vector2(1.05, 3.3)
+const BASS_YAW := PI - 0.1
 const BASS_LENGTH := 1.95
 const MOTES := 180
+## Where the after-hours sconces hang along each side wall (z), and how high.
+const SCONCES := [5.0, 8.0]
+## The cans on the tin over each neighbourhood of the back of house, aimed down at its middle: each
+## (x, z) from the zones they light, so a moved zone carries its light.
+const HOUSE_CAN_DROP := 0.35
 const MODELS := "res://assets/models/"
 
 ## Showtime: the bistro tables set out in the strips' free corners, each as (x from the side
@@ -63,18 +82,20 @@ const MODELS := "res://assets/models/"
 ## room keeps them clear of the gear -- and which way round each of its two chairs stands
 ## (radians about the table, 0 toward +X, PI/2 toward +Z).
 const SHOW_TABLES := [
-	[-1, 0.8, -2.45, [PI, PI * 0.5]],
-	[-1, 0.75, 2.0, [PI, PI * 0.5]],
-	[1, 0.85, -2.45, [PI * 0.5, PI * 0.5 + 1.0]],
-	[1, 2.25, -2.45, [PI * 0.5, 0.0]],
+	[-1, 0.75, -3.0, [PI, PI * 0.5]],
+	[-1, 0.75, 3.15, [PI, -PI * 0.5]],
+	[1, 1.1, -3.25, [PI * 0.5, PI]],
+	[1, 2.4, -3.25, [PI * 0.5, 0.0]],
 ]
 ## How far a chair's seat stands from its table's middle.
 const CHAIR_OUT := 0.5
-## Showtime: the bench before the keys, and the bass in its stand beside them.
+## Showtime: the bench before the keys, slid along toward their bass end (BENCH_ALONG) so the middle
+## octave, the club's instrument, has room to stand at; and the bass in its stand beside them.
 const BENCH_OUT := 0.36
-const BASS_STAND := Vector2(0.45, -0.95)
+const BENCH_ALONG := 0.75
+const BASS_STAND := Vector2(0.5, -1.2)
 ## Showtime: a second bar of cans in front of the spot's, washing the stage and curtain.
-const RIG_Z := 3.7
+const RIG_Z := 4.0
 const CAN_COLOURS := [Color(1.0, 0.25, 0.55), Color(1.0, 0.6, 0.2), Color(0.3, 0.45, 1.0), Color(1.0, 0.6, 0.2),
 		Color(1.0, 0.25, 0.55)]
 ## How long each set of the marquee's bulbs stays lit before the other set takes over.
@@ -111,9 +132,9 @@ const CARD_CHAIRS := [0.0, 1.35, -1.35]
 const CARD_CHAIR_OUT := 0.78
 ## The gramophone's spot in the left strip's front corner (in from the footprint, out from the
 ## front wall) and the barrel table's in the strip's back corner.
-const GRAMOPHONE_AT := Vector2(0.4, 0.75)
-const BARREL_TABLE_AT := Vector2(0.75, 1.95)
-const SMOKE := 46
+const GRAMOPHONE_AT := Vector2(0.5, 1.05)
+const BARREL_TABLE_AT := Vector2(0.85, 3.0)
+const SMOKE := 80
 ## Showtime: the points of light in the show cloth.
 const STARS := 260
 const CURTAIN_FOLDS := 2.2
@@ -178,7 +199,9 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 	env.background_color = Color(0.0, 0.0, 0.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.6, 0.42, 0.3)
-	env.ambient_light_energy = 0.4
+	# A touch more than a basement's: the room is twice the floor it was, and its far corners are
+	# metres further from any lamp.
+	env.ambient_light_energy = 0.5
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.glow_enabled = true
@@ -203,14 +226,14 @@ func dress(env: Environment, key: DirectionalLight3D) -> void:
 		SHOWTIME:
 			# The house lights up for the show, warm, and the air clearer: no set has played yet.
 			env.ambient_light_color = Color(0.72, 0.46, 0.3)
-			env.ambient_light_energy = 0.5
+			env.ambient_light_energy = 0.6
 			env.fog_light_color = Color(0.06, 0.035, 0.03)
 			env.fog_depth_begin = 5.0
 			env.glow_intensity = 0.8
 		SPEAKEASY:
 			# Darker, browner, and thick with smoke: the far end of the room goes soft.
 			env.ambient_light_color = Color(0.5, 0.36, 0.24)
-			env.ambient_light_energy = 0.3
+			env.ambient_light_energy = 0.38
 			env.fog_light_color = Color(0.075, 0.058, 0.042)
 			env.fog_depth_begin = 0.5
 			env.fog_depth_end = 15.0
@@ -226,14 +249,17 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * (0.7 if variant == SPEAKEASY else 0.85)
 
 
-## One open floor: the strips either side of the footprint join the back of house.
+## One open floor: the strips either side of the footprint, wall to wall and from the front wall to
+## the back of house, overlapping the footprint's edge so they join the control room beside them
+## and meeting the back of house behind. They were drawn 5 cm off the footprint and 30 cm short of
+## the back of house, so each was a walled island no one could walk into.
 func rooms() -> Array[Rect2]:
 	var half := live_room_half()
 	var cr := room_width * 0.5
-	var depth := Studio.ROOM_DEPTH - 0.3
+	var depth := Studio.ROOM_BACK - FRONT
 	return [back_of_house(),
-			Rect2(-half, FRONT, half - cr, depth),
-			Rect2(cr, FRONT, half - cr, depth)]
+			Rect2(-half, FRONT, half - cr + 0.05, depth),
+			Rect2(cr - 0.05, FRONT, half - cr + 0.05, depth)]
 
 
 func zone_solids() -> Array:
@@ -248,13 +274,15 @@ func zone_solids() -> Array:
 		for side in [-1.0, 1.0]:
 			out.append({"c": Vector2(-half + BENCH * 0.5, z + side * (BENCH_GAP + 0.3)), "h": Vector2(BENCH * 0.5, 0.3),
 					"a": 0.0, "top": 1.15})
-		out.append({"c": Vector2(-half + BENCH * 0.5, z), "h": Vector2(0.33, 0.33), "a": 0.0, "top": 0.74})
+		out.append({"c": Vector2(-half + BENCH * 0.5, z), "h": Vector2(0.33, BENCH_GAP - 0.01), "a": 0.0, "top": 0.74})
 	for at in stool_spots():
 		out.append({"c": at, "h": Vector2(0.2, 0.2), "a": 0.0, "top": 0.79})
 	if variant == SPEAKEASY:
 		out.append_array(_speakeasy_solids())
 		return out
-	out.append({"c": Vector2(piano_x(), PIANO_Z), "h": Vector2(PIANO_DEPTH * 0.5 + 0.15, PIANO_WIDTH * 0.5), "a": 0.0,
+	# The case and the keybed's back, to the keys: they are the instrument's own solid
+	# (Venue.instrument_solids).
+	out.append({"c": Vector2(piano_x() + 0.05, PIANO_Z), "h": Vector2(PIANO_DEPTH * 0.5 + 0.05, PIANO_WIDTH * 0.5), "a": 0.0,
 			"top": 1.25})
 	if variant == SHOWTIME:
 		out.append_array(_showtime_solids())
@@ -291,6 +319,10 @@ func _speakeasy_solids() -> Array:
 				"top": BAY.y})
 	var rack := barrel_rack()
 	out.append({"c": rack.get_center(), "h": rack.size * 0.5, "a": 0.0, "top": 1.2})
+	var case := piano_case()
+	var middle := case * Vector3(0, 0, 0.05)
+	out.append({"c": Vector2(middle.x, middle.z), "h": Vector2(PIANO_WIDTH * 0.5, PIANO_DEPTH * 0.5 + 0.05),
+			"a": case.basis.get_euler().y, "top": 1.25})
 	var crates := crate_stack()
 	out.append({"c": crates.get_center(), "h": crates.size * 0.5, "a": 0.0, "top": 0.72})
 	out.append({"c": card_table_at(), "h": Vector2.ONE * CARD_TABLE * 0.5, "a": 0.0, "top": 0.8})
@@ -325,7 +357,7 @@ func chair_spots(t: int) -> Array[Vector2]:
 
 
 func piano_bench_at() -> Vector2:
-	return Vector2(piano_x() + PIANO_DEPTH * 0.5 + 0.35 + BENCH_OUT, PIANO_Z)
+	return Vector2(piano_x() + PIANO_DEPTH * 0.5 + 0.35 + BENCH_OUT, PIANO_Z + BENCH_ALONG)
 
 
 func bass_stand_at() -> Vector2:
@@ -334,12 +366,12 @@ func bass_stand_at() -> Vector2:
 
 ## Showtime: the coat stand by the door, between it and the corner.
 func coat_stand_at() -> Vector2:
-	return Vector2(-live_room_half() + 0.4, FRONT + 0.5)
+	return Vector2(-live_room_half() + 0.3, FRONT + 0.5)
 
 
 ## Showtime: the champagne bucket by the right-hand table nearest the desk.
 func bucket_at() -> Vector2:
-	return show_table_at(2) + Vector2(-0.45, -0.42)
+	return show_table_at(2) + Vector2(0.5, -0.5)
 
 
 ## Speakeasy: bay `i` of the bookcases along the left strip's front wall, as the transform of its
@@ -411,19 +443,48 @@ func barrel_stools() -> Array[Vector2]:
 	return [barrel_table_at() + Vector2(-0.52, 0.1), barrel_table_at() + Vector2(0.1, 0.52)]
 
 
-## The middle of the piano's case, its back to the booths' bench ends.
-## The bar and the bass stand where they were drawn against a room DRAWN_WIDTH wide, moved out
-## with its walls as it widens: left where they were, a wider room put them inside it.
+## The bar's counter's front face (x), BAR_IN in from the right-hand wall.
 func bar_front() -> float:
-	return BAR_FRONT + _grow()
+	return live_room_half() - BAR_IN
 
 
+## The bass's foot, in the left strip past the far booth, from the strip's edge by the control room.
 func bass_at() -> Vector3:
-	return BASS_AT - Vector3(_grow(), 0, 0)
+	return Vector3(-_strip_edge() - BASS_AT.x, 0, BASS_AT.y)
 
+
+## The middle of the piano's case, its back to the booths' bench ends.
 
 func piano_x() -> float:
 	return -live_room_half() + BENCH + 0.05 + PIANO_DEPTH * 0.5
+
+
+## The piano's case's frame, on the floor under its middle, its keys toward +Z: against the booths'
+## bench ends, its keys to the room; in the speakeasy, where the card table has its place, against
+## the back wall between the kit and the lattice, its keys toward the desk.
+func piano_case() -> Transform3D:
+	if variant == SPEAKEASY:
+		# Where every venue's back-wall instrument stands (Venue.back_wall_instrument): behind the
+		# riser, the rhythm neighbourhood's back wall.
+		var x := back_wall_instrument(0.0).origin.x
+		return Transform3D(Basis(Vector3.UP, PI), Vector3(x, 0, LIVE_ROOM_BACK - 0.05 - PIANO_OFF_WALL - PIANO_DEPTH * 0.5))
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(piano_x(), 0, PIANO_Z))
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): the upright piano's own
+## keys, the octave from A in the middle of its keyboard. club.glb leaves that octave out
+## (tools/blender/club.py's GAP) for the set's eight keys and its sunk black keys, wherever the piano
+## stands (`piano_case`).
+func instrument() -> Dictionary:
+	return {"kind": &"piano", "spot": piano_case() * Transform3D(Basis.IDENTITY, Vector3(PIANO_OCTAVE, 0, PIANO_KEYS_OUT))}
+
+
+## Speakeasy: the upright moved out of the strip for the card table, against the back wall by the
+## band, its lid down; its octave is the club's instrument there too.
+func _move_the_piano_by_the_stage() -> void:
+	var piano := _piece(load(MODELS + "club.glb") as PackedScene, "Piano")
+	piano.name = "Piano"
+	piano.transform = piano_case()
 
 
 ## Where each bar stool stands, in front of the counter.
@@ -461,8 +522,10 @@ func _ready() -> void:
 			_rack_the_barrels()
 			_hang_the_sunbursts()
 			_deal_the_cards()
+			_move_the_piano_by_the_stage()
 			_wind_the_gramophone()
 			_light_the_band_low()
+			_light_the_house()
 			_string_the_bulbs()
 			_blow_the_smoke()
 		_:
@@ -470,6 +533,8 @@ func _ready() -> void:
 			_light_the_sign()
 			_leave_the_instruments()
 			_leave_the_glasses()
+	if variant != SPEAKEASY:
+		_light_the_house()
 	_dress_zones()
 
 
@@ -684,9 +749,11 @@ func _build_walls() -> void:
 	red.omni_range = 1.6
 	red.position = Vector3(door_x, 2.4, face + 0.3)
 	add_child(red)
-	# Sconces on the brick, a warm pool each: two either side, high on the side walls.
+	# Sconces on the brick, a warm pool each, high on the side walls of the back of house: over the
+	# prop shelf and the cassette rack on the left, the bricks table and the bells on the right,
+	# clear of the booth and the modular wall at the back.
 	for side in [-1.0, 1.0]:
-		for z in [3.6, 6.4]:
+		for z in SCONCES:
 			var at := Vector3(side * (half - 0.08), 2.3, z)
 			ZoneKit.block(self, Vector3(0.12, 0.2, 0.12), at, _brass(), "Sconce")
 			ZoneKit.block(self, Vector3(0.1, 0.06, 0.1), at + Vector3(0, 0.13, 0), ZoneKit.glow(Color(1.0, 0.7, 0.4), 1.6),
@@ -694,8 +761,8 @@ func _build_walls() -> void:
 			var lamp := OmniLight3D.new()
 			lamp.name = "SconceLight"
 			lamp.light_color = Color(1.0, 0.68, 0.4)
-			lamp.light_energy = 1.0
-			lamp.omni_range = 3.2
+			lamp.light_energy = 1.3
+			lamp.omni_range = 4.2
 			lamp.position = at + Vector3(-side * 0.15, 0.25, 0)
 			add_child(lamp)
 
@@ -944,7 +1011,7 @@ func _hang_the_curtain() -> void:
 		velvet.set_shader_parameter("colour", Color(0.36, 0.34, 0.36))
 		velvet.set_shader_parameter("sheen", Color(0.9, 0.88, 0.95))
 	curtain.material_override = velvet
-	curtain.position = Vector3((x0 + x1) * 0.5, (HEIGHT - 0.12) * 0.5 + 0.02, LIVE_ROOM_BACK - 0.14)
+	curtain.position = Vector3((x0 + x1) * 0.5, (HEIGHT - 0.12) * 0.5 + 0.02, LIVE_ROOM_BACK - 0.1)
 	# The plane faces +Z; turned round to face the room.
 	curtain.rotation.y = PI
 	add_child(curtain)
@@ -971,7 +1038,7 @@ func _hang_the_curtain() -> void:
 	if variant == SHOWTIME:
 		_sew_the_stars(x0, x1, curtain.position.z)
 	# The track it hangs from.
-	ZoneKit.block(self, Vector3(x1 - x0 + 0.1, 0.05, 0.08), Vector3((x0 + x1) * 0.5, HEIGHT - 0.06, LIVE_ROOM_BACK - 0.14),
+	ZoneKit.block(self, Vector3(x1 - x0 + 0.1, 0.05, 0.08), Vector3((x0 + x1) * 0.5, HEIGHT - 0.06, LIVE_ROOM_BACK - 0.1),
 			_black(), "CurtainTrack")
 
 
@@ -1098,8 +1165,7 @@ func _leave_the_instruments() -> void:
 	var piano := _piece(club, "Piano")
 	piano.name = "Piano"
 	# The model's keys face +Z; turned to face the room (+X).
-	piano.rotation.y = PI * 0.5
-	piano.position = Vector3(piano_x(), 0, PIANO_Z)
+	piano.transform = piano_case()
 	# A brass lamp on the piano's lid, left on, bent over the keys.
 	var lamp_at := Vector3(piano_x() + 0.12, 1.25, PIANO_Z - 0.45)
 	ZoneKit.block(self, Vector3(0.12, 0.015, 0.12), lamp_at + Vector3(0, 0.008, 0), _brass(), "PianoLampBase")
@@ -1361,8 +1427,7 @@ func _set_the_stage_for_the_band() -> void:
 	var swaps := _show_swaps()
 	var piano := _set_piece(SHOW_MODELS, "PianoOpen", swaps)
 	piano.name = "Piano"
-	piano.rotation.y = PI * 0.5
-	piano.position = Vector3(piano_x(), 0, PIANO_Z)
+	piano.transform = piano_case()
 	var bench := _set_piece(SHOW_MODELS, "PianoBench", swaps)
 	bench.name = "PianoBench"
 	bench.rotation.y = PI * 0.5
@@ -1555,8 +1620,13 @@ func _panel_the_walls() -> void:
 	# (stopping short of the side walls' own rails and bands, as the after-hours wainscot does)
 	ZoneKit.block(self, Vector3(half - 0.075 - from, 0.05, 0.07), Vector3((from + half - 0.075) * 0.5, PANEL + 0.02, z0 + 0.037),
 			panel, "CapRail")
-	ZoneKit.block(self, Vector3(half - 0.075 - from, 0.02, 0.008), Vector3((from + half - 0.075) * 0.5, PANEL - 0.05, z0 + 0.044),
-			brass, "BrassBand")
+	# The band stops at the Rig Roulette door's frame either side, rather than running across it.
+	var door_x := rig_roulette_door().origin.x
+	var band_ends := [[from, door_x - RouletteDoor.HALF.x - 0.01], [door_x + RouletteDoor.HALF.x + 0.01, half - 0.075]]
+	for ends: Array in band_ends:
+		if ends[1] - ends[0] > 0.05:
+			ZoneKit.block(self, Vector3(ends[1] - ends[0], 0.02, 0.008), Vector3((ends[0] + ends[1]) * 0.5, PANEL - 0.05, z0 + 0.044),
+					brass, "BrassBand")
 	var roulette := rig_roulette_spot().origin.x
 	var sconce_x := [0.6 - 1.75, 0.6 + 1.75]
 	var x := from + 0.6
@@ -1568,11 +1638,13 @@ func _panel_the_walls() -> void:
 	rib.size = Vector3(0.012, PANEL - 0.35, 0.03)
 	rib.material = brass
 	_scatter(rib, ribs, "BrassRibs", false)
-	# Deco sconces: two on each side wall between the ribs, two on the front wall either side of
-	# the sunburst.
+	# Deco sconces: three on each side wall between the ribs (over the booths and the crates, past
+	# the bar and the far booth, and in the back of house clear of the booth and the synth), two on
+	# the front wall either side of the sunburst.
 	var lamps: Array[Transform3D] = []
 	for side: float in [-1.0, 1.0]:
-		for z: float in [z0 + 1.2 * 6.0, z0 + 1.2 * 8.0]:
+		for k: float in ([1.0, 6.0, 10.0] if side < 0.0 else [1.0, 6.0, 11.0]):
+			var z := z0 + 1.2 * k
 			lamps.append(Transform3D(Basis(Vector3.UP, -side * PI * 0.5), Vector3(side * (half - 0.041), 1.8, z)))
 	for sx: float in sconce_x:
 		lamps.append(Transform3D(Basis.IDENTITY, Vector3(sx, 1.75, z0 + 0.041)))
@@ -1888,6 +1960,53 @@ func _light_the_band_low() -> void:
 	_flickers(glow)
 
 
+## Where the house lights fall in the back of house: the middle of each neighbourhood round the
+## zones (harmony off the bricks table's long side, synth off its stand, the lattice, tape and toys
+## off the prop shelf), and the walk down the middle between them.
+func house_light_spots() -> Array[Vector3]:
+	var z := zones()
+	var out: Array[Vector3] = []
+	if z.has(&"bricks"):
+		var c := (z[&"bricks"] as AABB).get_center()
+		out.append(Vector3(c.x - HARMONY_AISLE, 0, c.z + 0.6))
+	if z.has(&"synth"):
+		var c := (z[&"synth"] as AABB).get_center()
+		out.append(Vector3(c.x - SYNTH_MIDDLE, 0, c.z))
+	if z.has(&"matrix"):
+		var c := (z[&"matrix"] as AABB).get_center()
+		out.append(Vector3(c.x, (z[&"matrix"] as AABB).end.y, c.z))
+	var shelf := prop_shelf_spot().origin
+	out.append(Vector3(shelf.x + signf(-shelf.x) * TOYS_ACROSS * 0.5, 0, shelf.z + 1.0))
+	out.append(Vector3(2.6, 0, (Studio.ROOM_BACK + LIVE_ROOM_BACK) * 0.5 - 1.0))
+	return out
+
+
+## The back of house is twice the floor it was: a warm can on the tin over each neighbourhood, a
+## pool of light to work in, the way the spot is the stage's. In the speakeasy, bare bulbs dropped
+## from the joists instead, a cluster over each.
+func _light_the_house() -> void:
+	for at in house_light_spots():
+		var top := Vector3(at.x, HEIGHT - HOUSE_CAN_DROP, at.z - 0.6)
+		if variant == SPEAKEASY:
+			for k in 3:
+				_hang_bulb(Vector3(at.x - 0.25 + 0.25 * k, 3.6 + 0.15 * ((k + 1) % 2), at.z - 0.6 + 0.1 * (k - 1)))
+			var bulbs := OmniLight3D.new()
+			bulbs.name = "HouseBulbs"
+			bulbs.light_color = Color(1.0, 0.6, 0.3)
+			bulbs.light_energy = 2.2
+			bulbs.omni_range = 5.5
+			bulbs.position = Vector3(at.x, 3.4, at.z - 0.6)
+			add_child(bulbs)
+			_flickers(bulbs)
+			continue
+		ZoneKit.block(self, Vector3(0.03, HOUSE_CAN_DROP - 0.1, 0.03), Vector3(top.x, HEIGHT - (HOUSE_CAN_DROP - 0.1) * 0.5, top.z),
+				_black(), "HouseCanDrop")
+		# Under the stage spot's 14: that one is the room's only hard light.
+		var light := _can(top, at, Color(1.0, 0.74, 0.46), 4.6 if variant == SHOWTIME else 4.0, 44.0)
+		light.name = "HouseLight"
+		light.spot_range += 1.5
+
+
 ## Speakeasy: every bulb gathered above strung at once, each on its own cord up to the boards.
 func _string_the_bulbs() -> void:
 	var swaps := _speak_swaps()
@@ -1915,7 +2034,7 @@ func _blow_the_smoke() -> void:
 	lamps.append(Vector3(card.x, 1.7, card.y))
 	var where: Array[Vector3] = []
 	for i in SMOKE:
-		where.append(Vector3(rng.randf_range(-half + 1.0, half - 1.0), rng.randf_range(2.3, 3.6),
+		where.append(Vector3(rng.randf_range(-half + 1.0, half - 1.0), rng.randf_range(HEIGHT - 2.7, HEIGHT - 0.6),
 				rng.randf_range(FRONT + 1.0, LIVE_ROOM_BACK - 1.0)))
 	for i in 8:
 		where.append(Vector3(card.x + rng.randf_range(-0.5, 0.5), rng.randf_range(1.5, 2.2), card.y + rng.randf_range(-0.6, 0.6)))

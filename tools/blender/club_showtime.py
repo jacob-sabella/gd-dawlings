@@ -165,11 +165,15 @@ for sx in (-1, 1):
 p.box((W - 0.12, 0.3, 0.08), (0, -D / 2 - 0.15, 0.66), "lacquer")
 KEYS = 52
 kw = (W - 0.14) / KEYS
+# As club.py's: the octave the club's instrument is, left out for the set's own keys.
+GAP = range(26, 34)
 for i in range(KEYS):
+    if i in GAP:
+        continue
     x = -(W - 0.14) / 2 + kw * (i + 0.5)
     p.box((kw - 0.002, 0.15, 0.022), (x, -D / 2 - 0.2, 0.711), "ivory")
 for i in range(KEYS - 1):
-    if (i % 7) in (2, 6):
+    if (i % 7) in (2, 6) or GAP[0] - 1 <= i <= GAP[-1]:
         continue
     x = -(W - 0.14) / 2 + kw * (i + 1)
     p.box((kw * 0.55, 0.09, 0.03), (x, -D / 2 - 0.17, 0.73), "ebony")

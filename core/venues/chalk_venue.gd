@@ -22,9 +22,10 @@ const SEED := 11
 const OPEN_SKY := 0
 const SKETCHED_ROOM := 1
 const CLASSROOM := 2
-## The sketched room: its ceiling line, and the board wall behind the zones.
-const ROOM_HEIGHT := 4.2
-const BOARD_HEIGHT := 5.2
+## The sketched room: its ceiling line (the live room's own height), and the board wall behind
+## the zones, standing up past it.
+const ROOM_HEIGHT := LIVE_ROOM_HEIGHT
+const BOARD_HEIGHT := 5.6
 const BOARD_Z := LIVE_ROOM_BACK + 0.15
 ## The classroom: a tall old schoolroom, its ceiling well over the board, which stands on the back
 ## wall from the dado rail up; tall sash windows down the left wall, each a pair of z extents.
@@ -34,8 +35,10 @@ const CLASS_BOARD_TOP := 4.95
 const DADO := 0.9
 const SILL := 1.0
 const HEAD := 4.4
-const CLASS_WINDOWS: Array[Vector2] = [Vector2(-2.95, -1.65), Vector2(-0.95, 0.35), Vector2(1.05, 2.35),
-		Vector2(4.95, 6.25)]
+## Three over the desks pushed to that side, one between the cassette rack and the booth, and one
+## behind the booth (no radiator there: see _radiator_under).
+const CLASS_WINDOWS: Array[Vector2] = [Vector2(-3.25, -1.95), Vector2(-1.05, 0.25), Vector2(1.15, 2.45),
+		Vector2(7.2, 8.5), Vector2(10.1, 11.4)]
 ## The way the moonlight travels in through them: from high on the left, a little from behind
 ## the board, so its patches fall across the desks pushed to that side and onto the floor by the
 ## mix position.
@@ -213,11 +216,14 @@ func _draw_floor() -> void:
 		return
 	# Out past the footprint, big floor doodles in colour -- arrows, a star, a spiral -- that
 	# you see when you look down past the desk.
-	var marks := [[Chalk.star(), Vector3(-4.6, 0, -3.6), 1.1, Chalk.YELLOW],
-			[Chalk.spiral(), Vector3(4.8, 0, -3.2), 1.3, Chalk.CYAN],
+	var marks := [[Chalk.star(), Vector3(-5.8, 0, -5.5), 1.1, Chalk.YELLOW],
+			[Chalk.spiral(), Vector3(6.0, 0, -5.3), 1.3, Chalk.CYAN],
 			# Behind the desk, out past the zones on either side.
-			[Chalk.heart(), Vector3(-7.6, 0, 3.4), 0.9, Chalk.PINK],
-			[Chalk.lightning(), Vector3(7.8, 0, 2.6), 1.2, Chalk.LIME]]
+			[Chalk.heart(), Vector3(-10.4, 0, 3.0), 0.9, Chalk.PINK],
+			[Chalk.lightning(), Vector3(10.4, 0, 2.2), 1.2, Chalk.LIME],
+			# And past the back of the floor, behind the lattice and the booth.
+			[Chalk.spiral(), Vector3(-6.6, 0, 14.4), 1.0, Chalk.VIOLET],
+			[Chalk.star(), Vector3(4.6, 0, 14.2), 0.9, Chalk.ORANGE]]
 	for i in marks.size():
 		var flat: Array = []
 		for line: PackedVector3Array in marks[i][0]:
@@ -266,19 +272,20 @@ func _sketch_the_room() -> void:
 		lines.append(PackedVector3Array([a, a + Vector3(0, h, 0)]))
 	var walls: Array = []
 	# The left wall: a door, and a window with the moon in it.
+	# Down the length of the wall beside the desk, clear of the prop shelf and the rack behind.
 	walls.append_array(_on_wall(_rect(1.0, 2.1, Vector2(0, 1.05)) + [Chalk.loop(Vector3(0.36, 1.0, 0), 0.04, 10)],
-			Vector3(-half, 0, -0.6), PI * 0.5))
-	var window := _rect(2.2, 1.5, Vector2(0, 1.95))
-	window.append(PackedVector3Array([Vector3(0, 1.2, 0), Vector3(0, 2.7, 0)]))
-	window.append(PackedVector3Array([Vector3(-1.1, 1.95, 0), Vector3(1.1, 1.95, 0)]))
-	walls.append_array(_on_wall(window, Vector3(-half, 0, 2.4), PI * 0.5))
-	walls.append_array(_on_wall(_scaled(Chalk.moon(), 0.28, Vector2(0.5, 2.35)), Vector3(-half, 0, 2.4), PI * 0.5))
-	# The right wall: foam panels in a row, each ruled in wedges.
-	for k in 4:
-		var panel := _rect(0.9, 1.2, Vector2(0, 2.2))
+			Vector3(-half, 0, -2.0), PI * 0.5))
+	var window := _rect(2.6, 1.8, Vector2(0, 2.3))
+	window.append(PackedVector3Array([Vector3(0, 1.4, 0), Vector3(0, 3.2, 0)]))
+	window.append(PackedVector3Array([Vector3(-1.3, 2.3, 0), Vector3(1.3, 2.3, 0)]))
+	walls.append_array(_on_wall(window, Vector3(-half, 0, 1.6), PI * 0.5))
+	walls.append_array(_on_wall(_scaled(Chalk.moon(), 0.32, Vector2(0.6, 2.75)), Vector3(-half, 0, 1.6), PI * 0.5))
+	# The right wall: foam panels in a row, each ruled in wedges, beside the desk up to the table.
+	for k in 5:
+		var panel := _rect(0.9, 1.2, Vector2(0, 2.6))
 		for w in [-0.3, 0.0, 0.3]:
-			panel.append(PackedVector3Array([Vector3(w, 1.6, 0), Vector3(w, 2.8, 0)]))
-		walls.append_array(_on_wall(panel, Vector3(half, 0, -1.2 + k * 1.3), -PI * 0.5))
+			panel.append(PackedVector3Array([Vector3(w, 2.0, 0), Vector3(w, 3.2, 0)]))
+		walls.append_array(_on_wall(panel, Vector3(half, 0, -2.8 + k * 1.55), -PI * 0.5))
 	# The front wall: a clock, high, its hands at a little past ten, and an on-air light.
 	var clock: Array = [Chalk.loop(Vector3.ZERO, 0.38, 32), Chalk.loop(Vector3.ZERO, 0.32, 32),
 			PackedVector3Array([Vector3.ZERO, Vector3(-0.15, 0.1, 0)]),
@@ -286,8 +293,8 @@ func _sketch_the_room() -> void:
 	for t in 12:
 		var a := TAU * t / 12.0
 		clock.append(PackedVector3Array([Vector3(cos(a), sin(a), 0) * 0.27, Vector3(cos(a), sin(a), 0) * 0.31]))
-	walls.append_array(_on_wall(_scaled(clock, 1.0, Vector2(-2.6, 3.0)), Vector3(0, 0, z0), 0.0))
-	walls.append_array(_on_wall(_rect(1.0, 0.36, Vector2(2.6, 3.0)), Vector3(0, 0, z0), 0.0))
+	walls.append_array(_on_wall(_scaled(clock, 1.2, Vector2(-3.6, 3.5)), Vector3(0, 0, z0), 0.0))
+	walls.append_array(_on_wall(_rect(1.2, 0.42, Vector2(3.6, 3.5)), Vector3(0, 0, z0), 0.0))
 	# Speakers on stands in the front corners, angled in.
 	for side in [-1.0, 1.0]:
 		var at := Vector3(side * (half - 0.9), 0, z0 + 0.8)
@@ -302,8 +309,10 @@ func _sketch_the_room() -> void:
 			for p in line:
 				placed.append(at + turn * p)
 			walls.append(placed)
-	# Lamps hanging from the ceiling line, over the desk and over the floor behind it.
-	for at in [Vector3(-1.6, 0, 1.0), Vector3(1.6, 0, 1.0), Vector3(-1.6, 0, 3.4), Vector3(1.6, 0, 3.4)]:
+	# Lamps hanging from the ceiling line, over the desk, over the floor behind it, and over the
+	# neighbourhoods either side of the middle further back.
+	for at in [Vector3(-2.6, 0, 0.6), Vector3(2.6, 0, 0.6), Vector3(-2.6, 0, 3.8), Vector3(2.6, 0, 3.8),
+			Vector3(-5.6, 0, 7.6), Vector3(5.4, 0, 9.0)]:
 		var lamp: Array = [PackedVector3Array([Vector3(0, h, 0), Vector3(0, h - 1.1, 0)])]
 		lamp.append(Chalk.loop(Vector3.ZERO, 0.22, 20))
 		for k in lamp[1].size():
@@ -373,11 +382,13 @@ func _stand_the_board() -> void:
 	self.board = board_from(DAW.state)
 	_write_the_session(self.board)
 	_watch_the_session()
-	var doodles := [[Chalk.beamed_notes(), Vector3(-5.4, 3.5, face), 0.35, Chalk.LIME],
-			[Chalk.headphones(), Vector3(5.5, 3.6, face), 0.4, Chalk.VIOLET],
-			[Chalk.star(), Vector3(-1.9, 3.75, face), 0.16, Chalk.YELLOW],
-			[Chalk.heart(), Vector3(1.6, 3.62, face), 0.15, Chalk.PINK],
-			[Chalk.cassette(), Vector3(-5.6, 4.0, face), 0.3, Chalk.ORANGE]]
+	# Placed for the board as first drawn, and spread with it across the wider one.
+	var wide := half / DRAWN_HALF
+	var doodles := [[Chalk.beamed_notes(), Vector3(-5.4 * wide, 3.5, face), 0.35, Chalk.LIME],
+			[Chalk.headphones(), Vector3(5.5 * wide, 3.6, face), 0.4, Chalk.VIOLET],
+			[Chalk.star(), Vector3(-1.9 * wide, 3.75, face), 0.16, Chalk.YELLOW],
+			[Chalk.heart(), Vector3(1.6 * wide, 3.62, face), 0.15, Chalk.PINK],
+			[Chalk.cassette(), Vector3(-5.6 * wide, 4.0, face), 0.3, Chalk.ORANGE]]
 	for i in doodles.size():
 		var drawn: Array = []
 		for line: PackedVector3Array in doodles[i][0]:
@@ -388,9 +399,11 @@ func _stand_the_board() -> void:
 		_art.append(art)
 
 
-## Picture lights along the top of the board, washing the slate down its height.
+## Picture lights along the top of the board, washing the slate down its height: one to every
+## three metres or so of it.
 func _board_lights(half: float, high: float, reach: float) -> void:
-	for i in 4:
+	var count := maxi(4, roundi(half * 2.0 / 3.0))
+	for i in count:
 		var wash := SpotLight3D.new()
 		wash.name = "BoardLight%d" % i
 		wash.light_color = Color(0.8, 0.85, 1.0)
@@ -398,7 +411,7 @@ func _board_lights(half: float, high: float, reach: float) -> void:
 		wash.spot_range = reach
 		wash.spot_angle = 50.0
 		wash.shadow_enabled = false
-		wash.position = Vector3(-half + half * 2.0 * (i + 0.5) / 4.0, high, BOARD_Z - 0.7)
+		wash.position = Vector3(-half + half * 2.0 * (i + 0.5) / count, high, BOARD_Z - 0.7)
 		wash.basis = Basis.looking_at(Vector3(0, -1.0, 0.28), Vector3.FORWARD)
 		add_child(wash)
 
@@ -407,7 +420,7 @@ func _board_lights(half: float, high: float, reach: float) -> void:
 ## tempo, how many tracks, and the take -- what the armed track would be on if it were
 ## recording now, or is on while it is. No take when nothing is armed. A section is its marker's
 ## name without the harmony's brackets (Harmony.section_of), and a marker that is only brackets
-## names no section.
+## names no section, nor does a sticky note (a `NOTE ` marker): section_of is "" for both.
 static func board_from(state: MixState) -> Dictionary:
 	var out := {"sections": PackedStringArray(), "tempo": "", "tracks": "", "take": ""}
 	if state == null:
@@ -461,8 +474,9 @@ func _write_the_session(said: Dictionary) -> void:
 		lines.append_array(_board_lines(_rect(cell - 0.12, 0.5, Vector2(-x, 4.55)), face))
 		_write(sections[i], Vector3(x, 4.55, face), size, Chalk.WHITE, _session)
 	var sweep := [_board_line(Chalk.arc(Vector3(0, 0, 0), width * 0.5, 0.25, PI, -PI, 40), Vector3(0, 4.15, face))]
-	_write(said["tracks"], Vector3(3.6, 3.65, face), 1.0, Chalk.YELLOW, _session)
-	_write(said["tempo"], Vector3(-3.4, 3.65, face), 1.0, Chalk.CYAN, _session)
+	var wide := half / DRAWN_HALF
+	_write(said["tracks"], Vector3(3.6 * wide, 3.65, face), 1.0, Chalk.YELLOW, _session)
+	_write(said["tempo"], Vector3(-3.4 * wide, 3.65, face), 1.0, Chalk.CYAN, _session)
 	var ring: Array = []
 	if said["take"] != "":
 		_write(said["take"], Vector3(-0.2, 3.65, face), 0.8, Chalk.PINK, _session)
@@ -665,8 +679,8 @@ func _in_a_zone(at: Vector3, margin: float) -> bool:
 
 
 ## The activity zones, drawn: each one's floor taped out in its own colour, and the thing that
-## will stand there sketched standing up in the air the way every doodle here is -- a riser and
-## a kit's two drums, a booth with a mic, the lattice's cube with its cells ruled on the faces,
+## will stand there sketched standing up in the air the way every doodle here is -- a riser (the
+## hand drums stand in their ring on the floor inside it themselves), a booth with a mic, the lattice's cube with its cells ruled on the faces,
 ## a table, a keyboard on its stand. Drawn on as you arrive with everything else.
 func _draw_zones() -> void:
 	var z := zones()
@@ -773,12 +787,10 @@ func _zone_sketch(id: StringName, box: AABB) -> Array:
 	var lines: Array = []
 	match id:
 		&"drums":
+			# Only the riser: the hand drums stand in their ring inside it (Venue.drum_ring, on the
+			# floor here, since a drawn riser is walked through), and a kit drawn among them would
+			# say "kit" in the middle of the hand drums.
 			lines.append_array(_box_lines(Vector3(box.size.x - 0.3, 0.3, box.size.z - 0.3), Vector3(0, 0.15, 0)))
-			# A kick on its side and a snare: enough of a kit to say "kit".
-			var kick := Chalk.loop(Vector3.ZERO, 0.28, 28)
-			lines.append(_placed(kick, Vector3(0, 0.6, -0.3), 0.0))
-			lines.append(_placed(Chalk.loop(Vector3.ZERO, 0.18, 24), Vector3(0.55, 0.85, 0.1), PI * 0.5,
-					true))
 		&"vocals":
 			lines.append_array(_box_lines(box.size - Vector3(0.2, 0, 0.2), Vector3(0, box.size.y * 0.5, 0)))
 			# The stand where the other venues stand theirs, boom reaching in, mic at its end.
@@ -1258,9 +1270,10 @@ func _glaze_the_windows(half: float) -> void:
 		# The sill inside, deep enough for a pot plant.
 		ZoneKit.block(self, Vector3(0.17, 0.035, width + 0.1), Vector3(-half - 0.0, SILL + 0.0125, zc), _oak(),
 				"InnerSill")
-		var radiator := _model("chalk_radiator.glb", Vector3(-half + 0.13, 0, zc), PI * 0.5,
-				{"iron": _iron(), "brass": _brass()})
-		radiator.name = "Radiator%d" % i
+		if _radiator_under(w):
+			var radiator := _model("chalk_radiator.glb", Vector3(-half + RADIATOR_IN, 0, zc), PI * 0.5,
+					{"iron": _iron(), "brass": _brass()})
+			radiator.name = "Radiator%d" % i
 	bars.instance_count = placed.size()
 	for i in placed.size():
 		bars.set_instance_transform(i, placed[i])
@@ -1300,6 +1313,17 @@ func _glaze_the_windows(half: float) -> void:
 		beam.material_override = shaft
 		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(beam)
+
+
+## How far in from the window wall a radiator's middle stands: its back a hand off the plaster.
+const RADIATOR_IN := 0.16
+
+
+## Whether the window over `w` has a radiator under it: not where it would stand in an activity's
+## space (the booth is drawn round the back of that wall, and a singer does not want one at their
+## back).
+func _radiator_under(w: Vector2) -> bool:
+	return not _in_a_zone(Vector3(-live_room_half() + RADIATOR_IN, 0.4, (w.x + w.y) * 0.5), 0.3)
 
 
 func _iron() -> StandardMaterial3D:
@@ -1450,7 +1474,7 @@ func _hang_the_boards(half: float, front: float) -> void:
 			SEED * 73, "BoardDoodle")
 
 	# The right-hand wall's board, over the desks pushed against it.
-	var right := _frame_board(Vector3(half - 0.065, 0, -0.3), -PI * 0.5, 5.2, CLASS_BOARD_FOOT, 3.1, true)
+	var right := _frame_board(Vector3(half - 0.065, 0, 0.7), -PI * 0.5, 5.2, CLASS_BOARD_FOOT, 3.1, true)
 	var sky: Array = []
 	sky.append_array(_scaled_at(Chalk.sun(), Vector2(-2.05, 2.05), 0.42))
 	for k in 4:
@@ -1568,19 +1592,20 @@ func _pin_the_alphabet(half: float, front: float) -> void:
 		add_child(words)
 
 
-## Opal globes on rods from the high ceiling, two rows of three. Those over the zones are on; the
-## front pair, over the desk, are off, as someone left them.
+## Opal globes on rods from the high ceiling, four rows of three down the room, hung high enough
+## to clear the lattice's head room. Those over the zones are on; the front row, over the desk, is
+## off, as someone left it.
 func _hang_the_lights(half: float, front: float, back: float) -> void:
 	var rod_mat := _brass()
 	var off_glass := StandardMaterial3D.new()
 	off_glass.albedo_color = Color(0.55, 0.55, 0.52)
 	off_glass.roughness = 0.2
 	var on_glass := ZoneKit.glow(Color(1.0, 0.88, 0.7), 1.1)
-	var spread := minf(3.4, half - 2.6)
-	for z in [-1.2, 2.4, 5.6]:
-		for side in [-1.0, 1.0]:
+	var spread := minf(5.6, half - 3.0)
+	for z in [-1.4, 2.6, 6.6, 10.6]:
+		for side in [-1.0, 0.0, 1.0]:
 			var on: bool = z > 0.0
-			var at := Vector3(side * spread, 3.7, z)
+			var at := Vector3(side * spread, 4.0, z)
 			ZoneKit.block(self, Vector3(0.025, CLASS_HEIGHT - at.y - 0.18, 0.025),
 					Vector3(at.x, (CLASS_HEIGHT + at.y + 0.18) * 0.5, at.z), rod_mat, "LightRod")
 			var shade := MeshInstance3D.new()
@@ -1601,22 +1626,23 @@ func _hang_the_lights(half: float, front: float, back: float) -> void:
 				lamp.position = at + Vector3(0, -0.25, 0)
 				lamp.light_color = Color(1.0, 0.86, 0.66)
 				lamp.light_energy = 0.9
-				lamp.omni_range = 6.0
+				lamp.omni_range = 7.0
 				lamp.omni_attenuation = 1.2
 				lamp.shadow_enabled = false
 				add_child(lamp)
 
 
 ## Where the pupils' desks stand, pushed to the sides out of the way: each [centre, yaw, chair],
-## chair 0 none, 1 standing behind it, 2 upturned on it. Two deep against each long wall, the
-## left run all the way from the front wall, the right's starting past the teacher's desk.
+## chair 0 none, 1 standing behind it, 2 upturned on it. Two deep against each long wall beside
+## the desk, the left run all the way from the front wall to short of the prop shelf, the right's
+## starting past the teacher's desk and stopping short of the bricks table's harmony row.
 func _desk_spots() -> Array:
 	var half := live_room_half()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED * 97
 	var out: Array = []
 	for side in [-1.0, 1.0]:
-		var rows: Array = [-2.7, -1.75, -0.8, 0.15, 1.1, 2.05] if side < 0 else [-1.45, -0.5, 0.45, 1.4]
+		var rows: Array = [-3.2, -2.25, -1.3, -0.35, 0.6, 1.55, 2.5] if side < 0 else [-1.2, -0.25, 0.7, 1.65, 2.6]
 		for col in 2:
 			var x: float = side * (half - 0.65 - col * 0.66)
 			for z in rows:
@@ -1669,7 +1695,7 @@ func _push_the_desks() -> void:
 ## Where the teacher's desk stands: the front right-hand corner, between the board and the
 ## class, its drawers to the board.
 func _teachers_desk_spot() -> Transform3D:
-	return Transform3D(Basis.IDENTITY, Vector3(live_room_half() - 1.35, 0, _class_front() + 1.05))
+	return Transform3D(Basis.IDENTITY, Vector3(live_room_half() - 1.35, 0, _class_front() + 1.25))
 
 
 func _stand_the_teachers_desk() -> void:
@@ -1786,6 +1812,13 @@ func _dust_the_moonlight() -> void:
 	add_child(motes)
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): a xylophone drawn in
+## chalk in the air at the back of the floor, between the kit and the lattice, as everything here is
+## drawn; its bars are struck all the same.
+func instrument() -> Dictionary:
+	return {"kind": &"chalk", "spot": back_wall_instrument(0.2)}
+
+
 ## What stops a person in the classroom: the desks pushed together on each side (one block each,
 ## chairs and all), the teacher's desk and the radiators under the windows. The zones themselves
 ## are still only drawn.
@@ -1794,6 +1827,7 @@ func zone_solids() -> Array:
 		return []
 	var out := []
 	var half := live_room_half()
+	var blocks: Array[Rect2] = []
 	for side in [-1.0, 1.0]:
 		var lo := Vector2(INF, INF)
 		var hi := Vector2(-INF, -INF)
@@ -1803,16 +1837,21 @@ func zone_solids() -> Array:
 				continue
 			lo = Vector2(minf(lo.x, at.x - 0.34), minf(lo.y, at.z - 0.25))
 			hi = Vector2(maxf(hi.x, at.x + 0.34), maxf(hi.y, at.z + 0.25 + (0.62 if spot[2] == 1 else 0.0)))
-		# Out to the wall, so nothing slips behind them.
+		# Out to the wall (the floor's edge), so nothing slips behind them: the radiators under
+		# the windows behind them are inside the block.
 		if side < 0:
-			lo.x = -half
+			lo.x = -half + 0.06
 		else:
-			hi.x = half
+			hi.x = half - 0.06
+		blocks.append(Rect2(lo, hi - lo))
 		out.append({"c": (lo + hi) * 0.5, "h": (hi - lo) * 0.5, "a": 0.0, "top": 1.2})
 	var desk := _teachers_desk_spot().origin
 	out.append({"c": Vector2(desk.x, desk.z - 0.15), "h": Vector2(0.72, 0.6), "a": 0.0, "top": 0.8})
 	for w in CLASS_WINDOWS:
-		out.append({"c": Vector2(-half + 0.13, (w.x + w.y) * 0.5), "h": Vector2(0.1, 0.56), "a": 0.0, "top": 0.72})
+		var at := Vector2(-half + RADIATOR_IN, (w.x + w.y) * 0.5)
+		if not _radiator_under(w) or blocks.any(func(b: Rect2) -> bool: return b.has_point(at)):
+			continue
+		out.append({"c": at, "h": Vector2(0.1, 0.56), "a": 0.0, "top": 0.72})
 	return out
 
 ## The tracks' colours here (TrackColours), in its STANDARD order.

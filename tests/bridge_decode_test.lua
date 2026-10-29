@@ -314,5 +314,114 @@ check('a file this machine does not have is refused, and nothing made', paste({4
 check('no such track is refused', paste({9, 30.0, 6.0, 'x', 0, ''}).ok == false)
 check('nor an empty item', paste({4, 30.0, 0, 'x', 0, ''}).ok == false)
 
+-- Sections rearranged (docs/spatial_loop.md part two, slice 29): ArrangeSections decodes as any
+-- call; an item across a moving edge is split there and each part goes with its section; markers
+-- and regions move by their numbers; an envelope plays each section as it did; the tempo map is set
+-- inside the same Undo block, and the master's "Tempo map" envelope is left to it; a bracket that
+-- keeps a section's harmony renames the marker where it lands, or is a new one; a locked item in
+-- the way refuses the lot, with nothing changed.
+local _, afn, a2 = decode_request([[{"args":[2,10.0,20.0,0.0,0.0,10.0,10.0,1,0.0,120.0,0,0,2,0.0,"B [C major]",20.0,"[A minor]"],"fn":"ArrangeSections","id":13}]])
+check('ArrangeSections decodes with its pieces, its tempo map and its brackets', afn == 'ArrangeSections' and a2[1] == 2
+  and a2[2] == 10.0 and a2[4] == 0.0 and a2[8] == 1 and a2[10] == 120.0 and a2[12] == 0 and a2[13] == 2
+  and a2[15] == 'B [C major]' and a2[16] == 20.0)
+local items, marks, envs, set_marks, added_marks, blocks2, ended2, tempo_set = {}, {}, {}, {}, {}, 0, {}, nil
+local function new_item(pos, len, lock) items[#items + 1] = {D_POSITION = pos, D_LENGTH = len, C_LOCK = lock or 0}; return items[#items] end
+local env = {name = 'Volume', points = {{0, 1.0, 0}, {20, 0.0, 1}}}
+local tempo_env = {name = 'Tempo map', points = {{0, 120.0, 1}, {15, 90.0, 1}}}
+local function env_value(t)
+  local pts = env.points
+  if t <= pts[1][1] then return pts[1][2] end
+  for i = #pts, 1, -1 do
+    if pts[i][1] <= t then
+      local nxt = pts[i + 1]
+      if not nxt or pts[i][3] == 1 then return pts[i][2] end
+      return pts[i][2] + (nxt[2] - pts[i][2]) * (t - pts[i][1]) / (nxt[1] - pts[i][1])
+    end
+  end
+end
+reaper = {
+  Undo_BeginBlock = function() blocks2 = blocks2 + 1 end,
+  Undo_EndBlock = function(name) ended2[#ended2 + 1] = name end,
+  CountTracks = function() return 1 end,
+  GetTrack = function() return 'track' end,
+  GetMasterTrack = function() return 'master' end,
+  CountTrackMediaItems = function() return #items end,
+  GetTrackMediaItem = function(_, i) return items[i + 1] end,
+  GetMediaItemInfo_Value = function(it, key) return it[key] end,
+  SetMediaItemPosition = function(it, pos) it.D_POSITION = pos; return true end,
+  SplitMediaItem = function(it, at)
+    local right = new_item(at, it.D_POSITION + it.D_LENGTH - at)
+    it.D_LENGTH = at - it.D_POSITION
+    return right
+  end,
+  CountProjectMarkers = function()
+    local regions = 0
+    for _, mk in ipairs(marks) do if mk.region then regions = regions + 1 end end
+    return #marks, #marks - regions, regions
+  end,
+  EnumProjectMarkers3 = function(_, m)
+    local mk = marks[m + 1]
+    return 1, mk.region, mk.pos, mk.stop, mk.name, mk.number, 0
+  end,
+  SetProjectMarker4 = function(_, number, region, pos, stop, name)
+    set_marks[#set_marks + 1] = {number = number, region = region, pos = pos, stop = stop, name = name}
+    return true
+  end,
+  AddProjectMarker2 = function(_, region, pos, stop, name)
+    added_marks[#added_marks + 1] = {region = region, pos = pos, name = name}
+    return #marks + #added_marks
+  end,
+  CountTrackEnvelopes = function() return 1 end,
+  GetTrackEnvelope = function(tr) return tr == 'master' and tempo_env or env end,
+  GetEnvelopeName = function(e) return true, e.name end,
+  CountEnvelopePoints = function(e) return #e.points end,
+  GetEnvelopePoint = function(e, p) local pt = e.points[p + 1]; return true, pt[1], pt[2], pt[3], 0, false end,
+  Envelope_Evaluate = function(_, t) return 1, env_value(t) end,
+  DeleteEnvelopePointRange = function(e) e.points = {} end,
+  InsertEnvelopePoint = function(e, t, v, shape) e.points[#e.points + 1] = {t, v, shape} end,
+  Envelope_SortPoints = function(e) table.sort(e.points, function(x, y) return x[1] < y[1] end) end,
+  UpdateArrange = function() end,
+  UpdateTimeline = function() end,
+}
+local arrange = assert(load('local handlers = ...\n'
+  .. lift('-- Sections rearranged (docs/spatial_loop.md part two, slice 29), planned', '-- args: where (from 1), name. A new track there')
+  .. '\nreturn handlers.ArrangeSections'))({SetTempoMap = function(args) reaper.Undo_BeginBlock(); tempo_set = args; reaper.Undo_EndBlock('Tempo map'); return {ok = true} end})
+local crossing = new_item(5, 10)
+local early = new_item(2, 2)
+local after = new_item(25, 5)
+marks = {{region = true, pos = 0, stop = 10, name = 'A', number = 1}, {region = true, pos = 10, stop = 20, name = 'B', number = 2},
+  {region = false, pos = 12, stop = 0, name = 'Hook [A minor]', number = 3}, {region = false, pos = 10, stop = 0, name = 'B', number = 4}}
+local done = arrange(a2)
+check('BA: done, as one Undo block called Arrange sections', done.ok and blocks2 == 1 and #ended2 == 1 and ended2[1] == 'Arrange sections')
+check('an item across the edge is cut there, each part with its section', crossing.D_POSITION == 15 and crossing.D_LENGTH == 5
+  and #items == 4 and items[4].D_POSITION == 0 and items[4].D_LENGTH == 5)
+check('an item inside a section goes with it, and one past them stays', early.D_POSITION == 12 and after.D_POSITION == 25)
+local by_number = {}
+for _, m in ipairs(set_marks) do by_number[m.number] = m end
+check('the regions and the marker in them move by their numbers', by_number[1] and by_number[1].pos == 10 and by_number[1].stop == 20
+  and by_number[2] and by_number[2].pos == 0 and by_number[2].stop == 10 and by_number[3] and by_number[3].pos == 2
+  and not by_number[3].region)
+local sounds = true
+for k = 0, 19 do
+  local t = 0.0 + k * 0.49
+  local was = 1.0 - t / 20
+  local now_at = t < 10 and t + 10 or t - 10
+  local _, now = reaper.Envelope_Evaluate(env, now_at)
+  if math.abs(was - now) > 0.001 then sounds = false end
+end
+check('the envelope plays each section as it did, where it now is', sounds and #env.points == 5)
+check('and the tempo map is set inside the same block', tempo_set and #tempo_set == 3 and tempo_set[2] == 120.0)
+check('the master\'s Tempo map envelope is left to it, not put back as it was', #tempo_env.points == 2
+  and tempo_env.points[2][1] == 15 and tempo_env.points[2][2] == 90.0 and done.envelopes == 1)
+check('a bracket renames the marker where it lands, by its number', by_number[4] and by_number[4].pos == 0
+  and by_number[4].name == 'B [C major]' and not by_number[4].region)
+check('and one where no marker is is a new marker', #added_marks == 1 and added_marks[1].pos == 20.0
+  and added_marks[1].name == '[A minor]' and not added_marks[1].region)
+items, set_marks, added_marks, blocks2, tempo_set = {}, {}, {}, 0, nil
+local locked = new_item(12, 2, 1)
+local refused = arrange({2, 10.0, 20.0, 0.0, 0.0, 10.0, 10.0, 0, 0})
+check('a locked item in the way refuses the lot, with nothing changed', refused.ok == false and blocks2 == 0
+  and locked.D_POSITION == 12 and #set_marks == 0)
+
 print(string.format('[bridge] %d checks, %d failed', checks, failures))
 os.exit(failures == 0 and 0 or 1)

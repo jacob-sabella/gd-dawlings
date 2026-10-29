@@ -14,9 +14,10 @@ const SUN_DIR := Vector3(0.0, 0.11, -1.0)
 ## past it), out past the zones, behind them.
 const OPEN_FLOOR := 3.0
 ## The palms near the room, there so they are in the shot from the chair and not only on the
-## horizon. Walked round: the floor reaches some of them.
-const NEAR_PALMS: Array[Vector3] = [Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-9.0, 0, 6.0),
-		Vector3(10.0, 0, 7.0)]
+## horizon. Walked round: they stand on the open floor in the margin past the live room's sides
+## and behind it, clear of the gear stood along its edges.
+const NEAR_PALMS: Array[Vector3] = [Vector3(-10.6, 0, 0.8), Vector3(10.6, 0, -1.4), Vector3(-10.6, 0, 7.8),
+		Vector3(10.6, 0, 8.8), Vector3(-5.2, 0, 14.2), Vector3(5.8, 0, 14.0)]
 ## A palm trunk's footprint, half a side.
 const TRUNK := 0.3
 
@@ -42,7 +43,7 @@ const DOWNTOWN_TOWER_MAX := 7.0
 ## The avenue the road runs down, kerb to kerb, and the block left clear round the room so its
 ## zones and the near palms stand in an open plaza rather than against a wall of windows.
 const DOWNTOWN_AVENUE_HALF := 11.0
-const DOWNTOWN_PLAZA := Rect2(-22.0, -12.0, 44.0, 36.0)
+const DOWNTOWN_PLAZA := Rect2(-24.0, -14.0, 48.0, 44.0)
 var _clock := 0.0
 
 ## The third arrangement: no road and no desert, but a sea. The floor is a pier standing over it,
@@ -53,8 +54,9 @@ const SEA_LEVEL := -1.6
 ## How far the pier's deck runs past the walkable floor, so its rail stands on it.
 const PIER_LIP := 0.25
 ## The palms on the pier, at the base width; they step out with the room on their own side.
-const PIER_PALMS: Array[Vector3] = [Vector3(-7.5, 0, 1.5), Vector3(8.0, 0, -0.5), Vector3(-8.4, 0, 6.0),
-		Vector3(8.4, 0, 8.6)]
+## In the deck's margin past the live room, where the plain has its own.
+const PIER_PALMS: Array[Vector3] = [Vector3(-10.6, 0, 0.8), Vector3(10.6, 0, -1.4), Vector3(-10.6, 0, 7.8),
+		Vector3(10.6, 0, 8.8), Vector3(-5.2, 0, 14.2), Vector3(5.8, 0, 14.0)]
 ## The sun lower than over the desert: its foot already in the sea.
 const SEA_SUN_DIR := Vector3(0.0, 0.06, -1.0)
 var _sea_mat: ShaderMaterial
@@ -287,6 +289,12 @@ func rooms() -> Array[Rect2]:
 	return [open_floor(OPEN_FLOOR)]
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): neon bars, a vibraphone
+## of light on a lit frame at the back of the floor, between the kit and the lattice.
+func instrument() -> Dictionary:
+	return {"kind": &"neon", "spot": back_wall_instrument(0.21)}
+
+
 ## The riser, the table and the stand are glass and stop you; the booth is only its neon edges,
 ## and an invisible wall between them would be a wall you could not see. The palms near the room
 ## stand on the floor and are walked round.
@@ -335,8 +343,9 @@ func pulse(level: float) -> void:
 
 
 ## A road out of the back of the room straight at the sun, so the eye has somewhere to go.
-## Starts well clear of the working floor: nobody wants traffic through the patchbay.
-const ROAD_START := -6.0
+## Starts well clear of the working floor, which runs OPEN_FLOOR past the desk's front: nobody
+## wants traffic through the patchbay.
+const ROAD_START := Studio.ROOM_FRONT - OPEN_FLOOR - 3.0
 const ROAD_LENGTH := 400.0
 const ROAD_HALF := 5.0
 const LANES := [-3.75, -1.25, 1.25, 3.75]

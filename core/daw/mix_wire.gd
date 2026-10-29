@@ -195,6 +195,12 @@ static func _apply_timeline(state: MixState, p: PackedStringArray, args: Array) 
 				i += 2
 			state.markers = out
 			state.timeline_changed.emit()
+		"lyrics":
+			# dawlings's own: the song's LRC text whole (MixState.lyrics), [""] for none.
+			var text := str(args[0])
+			if text != state.lyrics:
+				state.lyrics = text
+				state.lyrics_changed.emit()
 
 
 ## `/master/volume`, `/master/pan`, `/master/vu/L`, `/master/vu/R`. All four are in the pattern
@@ -946,6 +952,7 @@ static func snapshot(state: MixState) -> Array:
 	out.append(["/timeline/length", [state.project_length]])
 	out.append(["/timeline/markers", _pack_markers(state.markers)])
 	out.append(["/timeline/regions", pack_regions(state.regions)])
+	out.append(["/timeline/lyrics", [state.lyrics]])
 	return out
 
 

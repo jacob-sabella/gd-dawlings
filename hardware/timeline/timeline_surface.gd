@@ -176,6 +176,12 @@ signal shelf_chosen(on: bool)
 ## studio to have the host mint a cassette of it in that hand (docs/spatial_loop.md part two,
 ## slice 23). The arrangement is as it was: a cassette is a copy.
 signal clip_pulled(track: int, index: int, hand: Node)
+## A note's LISTEN key was pressed (`_build_note_cards`): for the studio to play the song from
+## `seconds` for everyone (PointAndMark.listen_from). A surface does not talk to the session itself.
+signal listen_asked(seconds: float)
+## The sticky notes' cards on the ruler now, by their time: {seconds: Node3D}, each with its
+## "Listen" key.
+var note_cards: Dictionary = {}
 ## The shelf boards, one per lane.
 var _shelf_lips: MeshBank
 ## The item being dragged, which stands out of its shelf like a selected one: in the hand.
@@ -1542,7 +1548,9 @@ func _build_ruler() -> void:
 		if n >= 0:
 			lines.append([_x_for(s.bar_to_seconds(n + 1.0)), GRID_BAR, 0.0006])
 	for at in DAW.state.markers:
-		lines.append([_x_for(float(at)), MARKER_COLOUR.darkened(0.45), 0.0007])
+		# A sticky note is not a section: its card has a stem of its own, and no line down the song.
+		if not Harmony.is_note(str(DAW.state.markers[at])):
+			lines.append([_x_for(float(at)), MARKER_COLOUR.darkened(0.45), 0.0007])
 	# One line per place, the later (a section's over a bar's) taking it.
 	var at_x := {}
 	for line in lines:
@@ -1555,11 +1563,18 @@ func _build_ruler() -> void:
 				Vector3(lx, (grid_top + _lanes_bottom) * 0.5, GRID_Z)), (line[1] as Color).srgb_to_linear())
 	grid.commit()
 
-	# Where the section names are written: no bar number under one.
+	# Where the section names are written: no bar number under one, nor under a note's card on the
+	# ruler itself.
 	var named: Array = []
 	for at in DAW.state.markers:
+		if Harmony.is_note(str(DAW.state.markers[at])):
+			continue
 		var nx := _x_for(float(at))
 		named.append(Vector2(nx - 0.003, nx + flag_width(str(DAW.state.markers[at]))))
+	var notes := _note_layout(named)
+	for spot: Array in notes:
+		if int(spot[2]) == 0:
+			named.append(Vector2(float(spot[1]) - 0.003, float(spot[1]) + float(spot[3]) + 0.003))
 	for n in range(first, last + 1, step):
 		if n < 0:
 			continue
@@ -1605,10 +1620,12 @@ func _build_ruler() -> void:
 		sig.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_ruler.add_child(sig)
 
-	# Section markers sit on the ruler, where the arrangement is actually named.
-	var flag_xs: Array = DAW.state.markers.keys().map(func(t): return _x_for(float(t)))
+	# Section markers sit on the ruler, where the arrangement is actually named. A sticky note is
+	# drawn as a card pinned over its time instead (`_build_note_cards`).
+	var sections: Array = DAW.state.markers.keys().filter(func(t): return not Harmony.is_note(str(DAW.state.markers[t])))
+	var flag_xs: Array = sections.map(func(t): return _x_for(float(t)))
 	flag_xs.sort()
-	for at in DAW.state.markers:
+	for at in sections:
 		var mx := _x_for(float(at))
 		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
 			continue
@@ -1638,6 +1655,8 @@ func _build_ruler() -> void:
 			key.position = Vector3(mx + 0.0022, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.8, 0.0016)
 			key.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 			_ruler.add_child(key)
+
+	_build_note_cards(notes)
 
 	# The regions, in the loop band under the loop's own bar: a slab of colour each, end to end,
 	# its name at its left. Behind the loop bar, which is the one being dragged.
@@ -2147,6 +2166,132 @@ static func flag_lines(marker_name: String) -> PackedStringArray:
 	return PackedStringArray([Harmony.section_of(marker_name).to_upper(), h.text if h != null else ""])
 
 
+## Where each sticky note's card goes: [[seconds, left x, row, width]] for each `NOTE ` marker in
+## the window, in time order. Row 0 is on the ruler itself, in the bar numbers' band, its pin over
+## its time; a card that would run into a section's flag (`flags`, spans of x) or another card stands
+## a row up, above the ruler on a stem, up to NOTE_ROWS. Above the ruler is out of view on a screen's
+## band, so the ruler's own row comes first. A card is as wide as its words, within NOTE_WIDEST.
+func _note_layout(flags: Array) -> Array:
+	var times: Array = DAW.state.markers.keys().filter(func(t): return Harmony.is_note(str(DAW.state.markers[t])))
+	times.sort()
+	var taken: Array = []
+	for r in NOTE_ROWS:
+		taken.append(flags.duplicate() if r == 0 else [])
+	var out: Array = []
+	for t in times:
+		var mx := _x_for(float(t))
+		if mx < _lane_area_x - 0.0001 or mx > _lane_right():
+			continue
+		var wide := note_width(str(DAW.state.markers[t]))
+		var left := mx - NOTE_PIN_IN
+		var span := Vector2(left - NOTE_GAP, left + wide + NOTE_GAP)
+		var row := 0
+		while row < NOTE_ROWS - 1 and (taken[row] as Array).any(func(o: Vector2) -> bool: return o.x < span.y and span.x < o.y):
+			row += 1
+		(taken[row] as Array).append(span)
+		out.append([float(t), left, row, wide])
+	return out
+
+
+## How wide a note's card is: its words at NOTE_TEXT_SIZE, the pin's room before them and the play
+## mark's after, between NOTE_NARROWEST and NOTE_WIDEST (past which the words are cut short).
+static func note_width(marker_name: String) -> float:
+	var words := Harmony.note_text(marker_name)
+	var letters := ThemeDB.fallback_font.get_string_size(words, HORIZONTAL_ALIGNMENT_LEFT, -1, NOTE_TEXT_SIZE * 4).x * TEXT_PIXEL
+	return clampf(NOTE_WORDS_IN + letters + NOTE_PLAY_ROOM, NOTE_NARROWEST, NOTE_WIDEST)
+
+
+## The sticky notes (docs/spatial_loop.md part two, slice 35): each `NOTE ` marker in the window a
+## pale card pinned over its time (`_note_layout`'s places), saying the note's words, with a play
+## mark at its end. The whole card is its LISTEN key: a press plays the song from there for
+## everyone (`listen_asked`), and its hover card says so. A card stood above the ruler hangs on a
+## stem down to it. Rebuilt with the ruler; `note_cards` has them by time, for the suite.
+func _build_note_cards(layout: Array) -> void:
+	note_cards.clear()
+	for spot: Array in layout:
+		var at: float = spot[0]
+		var left: float = spot[1]
+		var row: int = spot[2]
+		var wide: float = spot[3]
+		var bottom := _top_y - RULER_HEIGHT + (NUMBERS_HEIGHT - NOTE_CARD.y) * 0.5 if row == 0 \
+				else _top_y + NOTE_STEM + (row - 1) * (NOTE_CARD.y + NOTE_GAP)
+		var card := Node3D.new()
+		card.name = "Note"
+		_ruler.add_child(card)
+		card.position = Vector3(left, bottom, 0.0016)
+		# The stem, from the ruler's top edge up to the foot of a card stood above it.
+		if row > 0:
+			var stem_tall := bottom - _top_y
+			card.add_child(_flat_box(Vector3(0.0007, stem_tall, 0.0006), Vector3(NOTE_PIN_IN, -stem_tall * 0.5, 0.0), NOTE_INK))
+		var plate := _flat_box(Vector3(wide, NOTE_CARD.y, 0.0008), Vector3(wide * 0.5, NOTE_CARD.y * 0.5, 0.0), NOTE_PAPER)
+		plate.name = "Card"
+		card.add_child(plate)
+		# The pin, a dark head at its top over its time.
+		card.add_child(_flat_box(Vector3(0.0024, 0.0024, 0.0012), Vector3(NOTE_PIN_IN, NOTE_CARD.y - 0.0024, 0.0008), NOTE_INK))
+		# A play mark at its end, the shape every transport's PLAY has.
+		var play := MeshInstance3D.new()
+		play.name = "Play"
+		var prism := PrismMesh.new()
+		prism.size = Vector3(0.009, 0.0085, 0.0006)
+		play.mesh = prism
+		play.material_override = flat(NOTE_PLAY)
+		play.rotation = Vector3(0, 0, -PI * 0.5)
+		play.position = Vector3(wide - NOTE_PLAY_ROOM * 0.45, NOTE_CARD.y * 0.5, 0.0008)
+		card.add_child(play)
+		var said := Harmony.note_text(str(DAW.state.markers[at]))
+		var words := _text("", NOTE_TEXT_SIZE, NOTE_INK)
+		words.name = "Words"
+		words.outline_size = 0
+		words.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		words.text = fit_text(said, (wide - NOTE_WORDS_IN - NOTE_PLAY_ROOM) / words.pixel_size, words.font_size)
+		words.position = Vector3(NOTE_WORDS_IN, NOTE_CARD.y * 0.5, 0.0006)
+		card.add_child(words)
+		var key := ControlAffordance.new()
+		key.name = "Listen"
+		key.collision_layer = 2
+		key.collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(wide, NOTE_CARD.y, 0.006)
+		shape.shape = box
+		key.add_child(shape)
+		key.position = Vector3(wide * 0.5, NOTE_CARD.y * 0.5, 0.002)
+		key.grab_started.connect(func(_by: Node): listen_asked.emit(at))
+		key.describe_title = func() -> String: return "NOTE  %s" % said
+		key.describe_value = func(_v: float) -> String:
+			return "press: LISTEN, everyone hears the song from %s" % DAW.state.bar_beat(at)
+		card.add_child(key)
+		note_cards[at] = card
+
+
+## The point on the ruler at `seconds`, in global space: on the bar numbers' band, held inside the
+## lanes' window at either end. What a bandmate's ghost points at for `ruler:<seconds>`
+## (Presence), so it lands on the time they mean however this timeline is scrolled. INF before the
+## panel is laid out.
+func ruler_point(seconds: float) -> Vector3:
+	if _lane_area_width <= 0.0 or not is_inside_tree():
+		return Vector3.INF
+	var x := clampf(_x_for(seconds), _lane_area_x, _lane_right())
+	return to_global(Vector3(x, _top_y - LOOP_BAND - NUMBERS_HEIGHT * 0.5, 0.004))
+
+
+## Whether `control` is this timeline's ruler or its lanes: where a point means a song time.
+func is_time_control(control: Object) -> bool:
+	return control != null and (control == _seek_strip or control == _loop_strip or control == _lanes)
+
+
+## The time of the note whose card's LISTEN key `control` is (`note_cards`), or NAN for anything
+## else: a card stands over its time, so pointing at it, or Enter with Z held over it, means that.
+func note_time(control: Object) -> float:
+	if control == null:
+		return NAN
+	for at in note_cards:
+		var card := note_cards[at] as Node3D
+		if is_instance_valid(card) and card.get_node_or_null("Listen") == control:
+			return float(at)
+	return NAN
+
+
 ## How far right of its marker a flag reaches: the longer of its two lines.
 static func flag_width(marker_name: String) -> float:
 	var lines := flag_lines(marker_name)
@@ -2477,6 +2622,26 @@ const FLAG_SIZE := 40
 const FLAG_HARMONY_SIZE := 30
 const FLAG_LETTER := 0.0072
 const REGION_COLOUR := Color(0.62, 0.85, 0.72)
+## A sticky note's card over the ruler (`_build_note_cards`): its size, the stem under it, how far
+## in from its left edge its pin is (over its time), the room on its right for the LISTEN key, the
+## gap between cards and how many rows of them stand over each other before they overlap.
+const NOTE_CARD := Vector2(0.06, 0.018)
+const NOTE_STEM := 0.004
+const NOTE_PIN_IN := 0.003
+const NOTE_GAP := 0.0015
+const NOTE_ROWS := 3
+## Its words: their size, where they start (past the pin), the room after them for the play mark,
+## and how narrow and how wide a card is.
+const NOTE_TEXT_SIZE := 34
+const NOTE_WORDS_IN := 0.0062
+const NOTE_PLAY_ROOM := 0.015
+const NOTE_NARROWEST := 0.03
+const NOTE_WIDEST := 0.12
+const NOTE_PAPER := Color(0.96, 0.92, 0.55)
+const NOTE_INK := Color(0.16, 0.14, 0.09)
+const NOTE_PLAY := Color(0.10, 0.32, 0.14)
+## `_text`'s pixel size: a label's width in metres is its font's width in pixels times this.
+const TEXT_PIXEL := 0.000078
 const PLAYHEAD_COLOUR := Color(1.0, 0.92, 0.62)
 ## How far either side of the playhead a clip it is cutting through is lit by it.
 const BEAM_REACH := 0.010
@@ -2539,7 +2704,7 @@ func _text(content: String, size: int, tint: Color) -> Label3D:
 	l.text = content
 	l.font_size = size * 4
 	# Was 0.000055, scaled up with LANE_HEIGHT's own increase (2026-10-11: too small to read).
-	l.pixel_size = 0.000078
+	l.pixel_size = TEXT_PIXEL
 	l.modulate = tint
 	# Outlined dark: there is no panel behind it, only the room.
 	l.outline_size = maxi(8, size / 3)

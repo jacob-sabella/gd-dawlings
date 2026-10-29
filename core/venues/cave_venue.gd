@@ -75,6 +75,13 @@ const JETTY_IN := 0.9
 const JETTY_WIDTH := 1.2
 const JETTY_RUN := 5.4
 
+## The pit, the giants and the columns in it were placed by number when the floor was 6.3 m either
+## side of centre (the old LIVE_ROOM_HALF) and its front was 3.2 m ahead of the seat: what `_wide`
+## and `_ahead` scale and shift those numbers from, so they stand round the floor it is now rather
+## than huddling in front of the old one.
+const PIT_DRAWN_HALF := 6.3
+const PIT_DRAWN_FRONT := -3.2
+
 const AMETHYST := Color(0.55, 0.16, 1.0)
 const QUARTZ := Color(0.25, 0.68, 1.0)
 const WORM := Color(0.3, 1.0, 0.85)
@@ -207,6 +214,70 @@ func rooms() -> Array[Rect2]:
 	return out
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 42): crystals growing out of a
+## shelf of rock at the foot of the back wall, between the kit and the lattice, glowing as the
+## cave's own do.
+func instrument() -> Dictionary:
+	return {"kind": &"crystals", "spot": back_wall_instrument(0.2)}
+
+
+## Its weather (Weather, docs/spatial_loop.md part two, slice 44): drips off the ceiling into a few
+## pools of standing water on the floor along its left edge, beside the desk, and the switch on an
+## iron post at the edge among them. In the grotto and on the glowworm lake's landing, whose boards
+## are as wet; nothing drips into the lava tube.
+func weather() -> Dictionary:
+	if variant == TUBE:
+		return {}
+	# Its post's whole foot on the floor, not half over the edge into the rubble.
+	var x := -live_room_half() + 0.16
+	var pools: Array = []
+	for p: Vector2 in POOLS:
+		pools.append(Vector3(x + p.x, POOL_TOP, POOLS_ALONG + p.y))
+	return {"kind": &"drips", "spot": Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0, POOLS_ALONG)),
+			"sill": 0.95, "post": true, "pools": pools, "low": 64}
+
+
+## The drips' pools: where each is from the switch's post, across (x, into the room) and along the
+## edge (z) from POOLS_ALONG; how wide each is, and how far its water stands over the floor.
+const POOLS := [Vector2(0.05, -0.8), Vector2(0.18, -0.42), Vector2(0.1, 0.45), Vector2(0.02, 0.85)]
+const POOLS_ALONG := 1.25
+const POOL_RADIUS := 0.16
+const POOL_TOP := 0.004
+
+
+## The drips' pools: still dark water standing on the floor, each a thin disc, for the drips to
+## fall into (Weather draws the drops and their rings).
+func _fill_the_pools() -> void:
+	var spec := weather()
+	if spec.is_empty():
+		return
+	var water := StandardMaterial3D.new()
+	water.albedo_color = Color(0.09, 0.11, 0.16)
+	water.metallic = 0.2
+	water.roughness = 0.04
+	water.rim_enabled = true
+	water.rim = 0.6
+	# A faint sheen of its own: the grotto's light on still water, so a pool reads as water and
+	# not a hole in the floor.
+	water.emission_enabled = true
+	water.emission = Color(0.05, 0.07, 0.12)
+	var disc := CylinderMesh.new()
+	disc.top_radius = POOL_RADIUS
+	disc.bottom_radius = POOL_RADIUS
+	# Down through the floor as far as it stands over it: no face on the floor's own plane.
+	disc.height = POOL_TOP * 2.0
+	disc.radial_segments = 32
+	for n in (spec["pools"] as Array).size():
+		var pool := MeshInstance3D.new()
+		pool.name = "Pool%d" % n
+		pool.mesh = disc
+		pool.material_override = water
+		pool.position = (spec["pools"][n] as Vector3) - Vector3(0, POOL_TOP, 0)
+		# Each a little out of round, as standing water is.
+		pool.scale = Vector3(1.0 + 0.25 * float(n % 2), 1.0, 1.0 + 0.2 * float((n + 1) % 2))
+		add_child(pool)
+
+
 func zone_solids() -> Array:
 	return ZoneKit.solids(zones(), true)
 
@@ -239,11 +310,7 @@ func _process(delta: float) -> void:
 
 
 func _ready() -> void:
-	_ground_noise = FastNoiseLite.new()
-	_ground_noise.seed = 9 + variant
-	_ground_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	_ground_noise.frequency = 0.22
-	_ground_noise.fractal_octaves = 3
+	_make_ground_noise()
 	match variant:
 		LAKE:
 			_build_lake()
@@ -251,6 +318,19 @@ func _ready() -> void:
 			_build_tube()
 		_:
 			_build_grotto()
+	_fill_the_pools()
+
+
+## The ground's noise, made once: by _ready, or by the first thing to ask where the ground is before
+## then (`weather`, whose pools lie on it).
+func _make_ground_noise() -> void:
+	if _ground_noise != null:
+		return
+	_ground_noise = FastNoiseLite.new()
+	_ground_noise.seed = 9 + variant
+	_ground_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_ground_noise.frequency = 0.22
+	_ground_noise.fractal_octaves = 3
 
 
 # --- materials -------------------------------------------------------------------------------
@@ -533,6 +613,21 @@ func _on_rock(rng: RandomNumberGenerator, v_from: float, v_to: float) -> Array:
 
 
 ## Over the floor you walk on, with `margin` to spare.
+## An x placed by number round the old floor (PIT_DRAWN_HALF), as far out round this one.
+func _wide(x: float) -> float:
+	return x * live_room_half() / PIT_DRAWN_HALF
+
+
+## A z placed by number ahead of the old floor's front (PIT_DRAWN_FRONT), as far ahead of this one's.
+func _ahead(z: float) -> float:
+	return z + Studio.ROOM_FRONT - PIT_DRAWN_FRONT
+
+
+## A z placed by number along the old back of house (DRAWN_BACK), as far along this one's.
+func _along(z: float) -> float:
+	return remap(z, 2.8, DRAWN_BACK, Studio.ROOM_BACK, LIVE_ROOM_BACK)
+
+
 func _over_floor(p: Vector3, margin: float) -> bool:
 	return _outside(p.x, p.z, live_room_half(), Studio.ROOM_FRONT, LIVE_ROOM_BACK) < margin
 
@@ -663,12 +758,19 @@ func _flood(at: Vector3, target: Vector3, colour: Color, energy: float) -> void:
 
 # --- the crystal grotto -------------------------------------------------------------------------
 
+## The grotto's plan: as far round the floor as it ever was -- 12.8 m of pit ahead of its front,
+## 4.7 m of rubble behind its back -- so the vault grows with the room rather than pressing its
+## back wall flat against the back of house.
+const GROTTO_AHEAD := 12.8
+const GROTTO_BEHIND := 4.7
+
+
 func _grotto_centre() -> Vector2:
-	return Vector2(0.0, -2.0)
+	return Vector2(0.0, (Studio.ROOM_FRONT - GROTTO_AHEAD + LIVE_ROOM_BACK + GROTTO_BEHIND) * 0.5)
 
 
 func _grotto_size() -> Vector2:
-	return Vector2(live_room_half() + 5.5, 14.0)
+	return Vector2(live_room_half() + 5.5, (LIVE_ROOM_BACK + GROTTO_BEHIND - Studio.ROOM_FRONT + GROTTO_AHEAD) * 0.5)
 
 
 func _grotto_h(x: float, z: float) -> float:
@@ -805,12 +907,13 @@ func _raise_stalagmites(material: Material, count: int, height: Vector2) -> void
 	# Three columns in the pit, where the roof has had the longest to come down to the floor.
 	var cols: Array[Transform3D] = []
 	for at in [Vector2(-4.5, -11.0), Vector2(5.8, -9.5), Vector2(-9.5, -6.5)]:
-		var x: float = at.x * (live_room_half() / LIVE_ROOM_HALF)
-		var y := _ground_h(x, at.y)
-		var top := _roof_over(x, at.y)
+		var x := _wide(at.x)
+		var z := _ahead(at.y)
+		var y := _ground_h(x, z)
+		var top := _roof_over(x, z)
 		var span := top - y + 0.3
 		var r := 0.9 + span * 0.05
-		cols.append(Transform3D(Basis.from_scale(Vector3(r * 2.2, span, r * 2.2)), Vector3(x, y - 0.15, at.y)))
+		cols.append(Transform3D(Basis.from_scale(Vector3(r * 2.2, span, r * 2.2)), Vector3(x, y - 0.15, z)))
 	_many(FORMATIONS, "Column", cols, {"rock": material}, "Columns")
 
 
@@ -892,8 +995,8 @@ func _grow_crystals(host: Material) -> void:
 	for spec in [[-3.2, -9.5, 4.6], [1.5, -11.5, 5.0], [4.6, -8.0, 3.6], [-6.8, -12.0, 4.2], [7.6, -12.5, 4.8],
 			[0.0, -14.0, 3.4], [-1.4, -7.4, 2.4], [2.8, -6.6, 2.2], [-9.4, -3.5, 3.0], [9.8, -2.0, 3.2],
 			[-5.4, -14.2, 3.0], [5.6, -14.6, 2.6]]:
-		var gx: float = spec[0] * (half / LIVE_ROOM_HALF)
-		var gz: float = spec[1]
+		var gx := _wide(spec[0])
+		var gz := _ahead(spec[1])
 		var p := Vector3(gx, _ground_h(gx, gz), gz)
 		var lean := Vector3(rng.randf_range(-0.6, 0.6), 1.0, rng.randf_range(-0.2, 0.6))
 		var s: float = spec[2]
@@ -909,7 +1012,7 @@ func _grow_crystals(host: Material) -> void:
 	# Round the back of house, just off the floor: big clusters whose light is the zones' light.
 	# Each is [across (-1..1 of the floor's width, +-1 a side), along (over 0.9: the back), kind].
 	for spec in [[-0.75, 1.0, 0], [-0.3, 1.0, 1], [0.15, 1.0, 0], [0.6, 1.0, 1], [-1.0, -0.35, 0], [1.0, -0.2, 1],
-			[-1.0, 0.45, 1], [1.0, 0.5, 0]]:
+			[-1.0, 0.45, 1], [1.0, 0.5, 0], [-1.0, 0.05, 0], [1.0, 0.15, 1]]:
 		var side := absf(spec[0]) > 0.99
 		var at_back: bool = spec[1] > 0.9
 		var bx: float = signf(spec[0]) * (half + 0.95) if side else spec[0] * (half + 0.9)
@@ -934,18 +1037,24 @@ func _grow_crystals(host: Material) -> void:
 ## of the dark.
 func _light_the_grotto() -> void:
 	var half := live_room_half()
-	var r := half / LIVE_ROOM_HALF
-	for spec in [[Vector3(-3.0 * r, -1.0, -9.0), AMETHYST, 6.0, 14.0], [Vector3(3.0 * r, -1.4, -11.5), AMETHYST, 5.0, 14.0],
-			[Vector3(6.5 * r, -1.0, -9.5), QUARTZ, 4.5, 12.0], [Vector3(-half - 2.6, 1.6, -1.0), AMETHYST, 3.0, 9.0],
-			[Vector3(half + 2.6, 1.6, 0.5), QUARTZ, 3.0, 9.0], [Vector3(-half - 2.2, 1.8, 5.5), AMETHYST, 2.6, 8.0],
-			[Vector3(half + 2.2, 1.8, 6.0), QUARTZ, 2.6, 8.0], [Vector3(0.0, 2.0, LIVE_ROOM_BACK + 2.4), AMETHYST, 2.6, 9.0],
+	for spec in [[Vector3(_wide(-3.0), -1.0, _ahead(-9.0)), AMETHYST, 6.0, 14.0],
+			[Vector3(_wide(3.0), -1.4, _ahead(-11.5)), AMETHYST, 5.0, 14.0],
+			[Vector3(_wide(6.5), -1.0, _ahead(-9.5)), QUARTZ, 4.5, 12.0], [Vector3(-half - 2.6, 1.6, -1.0), AMETHYST, 3.0, 9.0],
+			[Vector3(half + 2.6, 1.6, 0.5), QUARTZ, 3.0, 9.0], [Vector3(-half - 2.2, 1.8, _along(5.5)), AMETHYST, 2.6, 8.0],
+			[Vector3(half + 2.2, 1.8, _along(6.0)), QUARTZ, 2.6, 8.0], [Vector3(0.0, 2.0, LIVE_ROOM_BACK + 2.4), AMETHYST, 2.6, 9.0],
 			[Vector3(0.0, 0.6, Studio.ROOM_FRONT - 1.4), AMETHYST.lerp(QUARTZ, 0.5), 1.0, 4.0]]:
 		_light(spec[0], spec[1], spec[2], spec[3], &"crystal", 0.8)
+	# The back of house is twice the floor it was: the crystals over it, high on the vault, throw
+	# down onto the zones' middle as well as round their edges.
+	var mid := (Studio.ROOM_BACK + LIVE_ROOM_BACK) * 0.5
+	for spec in [[Vector3(-half * 0.5, 4.4, mid), AMETHYST], [Vector3(half * 0.5, 4.4, mid), QUARTZ],
+			[Vector3(0.0, 4.4, LIVE_ROOM_BACK - 1.6), AMETHYST.lerp(QUARTZ, 0.5)]]:
+		_light(spec[0], spec[1], 2.2, 9.0, &"crystal", 0.8)
 	var warm := Color(1.0, 0.86, 0.72)
-	for spec in [[Vector3(-half - 1.4, 0.0, -2.2), Vector3(-4.0 * r, 14.0, -6.0)],
-			[Vector3(half + 1.4, 0.0, -1.6), Vector3(4.0 * r, 14.0, -5.0)],
-			[Vector3(-half - 1.2, 0.0, LIVE_ROOM_BACK + 0.8), Vector3(-2.0 * r, 13.0, 2.0)],
-			[Vector3(half + 1.2, 0.0, LIVE_ROOM_BACK + 0.8), Vector3(2.0 * r, 13.0, 2.5)]]:
+	for spec in [[Vector3(-half - 1.4, 0.0, -2.2), Vector3(_wide(-4.0), 14.0, _ahead(-6.0))],
+			[Vector3(half + 1.4, 0.0, -1.6), Vector3(_wide(4.0), 14.0, _ahead(-5.0))],
+			[Vector3(-half - 1.2, 0.0, LIVE_ROOM_BACK + 0.8), Vector3(_wide(-2.0), 13.0, _along(2.0 + 2.8))],
+			[Vector3(half + 1.2, 0.0, LIVE_ROOM_BACK + 0.8), Vector3(_wide(2.0), 13.0, _along(2.5 + 2.8))]]:
 		var at: Vector3 = spec[0]
 		at.y = maxf(_ground_h(at.x, at.z), 0.0) + 0.3
 		_flood(at, spec[1], warm, 7.0)
@@ -1026,12 +1135,17 @@ func _drip() -> void:
 
 # --- the glowworm lake ---------------------------------------------------------------------------
 
+## The lake's cave the same way: 23.8 m of water and shore ahead of the landing, 5.7 m behind it.
+const LAKE_AHEAD := 23.8
+const LAKE_BEHIND := 5.7
+
+
 func _lake_centre() -> Vector2:
-	return Vector2(0.0, -7.0)
+	return Vector2(0.0, (Studio.ROOM_FRONT - LAKE_AHEAD + LIVE_ROOM_BACK + LAKE_BEHIND) * 0.5)
 
 
 func _lake_size() -> Vector2:
-	return Vector2(live_room_half() + 8.0, 20.0)
+	return Vector2(live_room_half() + 8.0, (LIVE_ROOM_BACK + LAKE_BEHIND - Studio.ROOM_FRONT + LAKE_AHEAD) * 0.5)
 
 
 ## Where the shore is, at x: straight across under the landing's front, then drawn forward along
@@ -1177,8 +1291,10 @@ func _build_landing() -> void:
 		_lantern(at, true)
 	# Lanterns on taller posts along the sides and at the back corners, so the back of house
 	# has light, each on the landing's edge clear of the floor you walk on.
-	for spec in [Vector3(-edge + 0.12, 0, 1.2), Vector3(edge - 0.12, 0, 1.2), Vector3(-edge + 0.12, 0, back - 0.12),
-			Vector3(edge - 0.12, 0, back - 0.12), Vector3(-2.6, 0, back - 0.12), Vector3(2.6, 0, back - 0.12)]:
+	var mid := (Studio.ROOM_BACK + LIVE_ROOM_BACK) * 0.5
+	for spec in [Vector3(-edge + 0.12, 0, 0.0), Vector3(edge - 0.12, 0, 0.0), Vector3(-edge + 0.12, 0, mid),
+			Vector3(edge - 0.12, 0, mid), Vector3(-edge + 0.12, 0, back - 0.12), Vector3(edge - 0.12, 0, back - 0.12),
+			Vector3(-half * 0.45, 0, back - 0.12), Vector3(half * 0.45, 0, back - 0.12)]:
 		var at: Vector3 = spec
 		ZoneKit.block(self, Vector3(0.09, 1.7, 0.09), at + Vector3(0, 0.85, 0), timber, "LanternPost")
 		ZoneKit.block(self, Vector3(0.3, 0.05, 0.05), at + Vector3(signf(-at.x) * 0.12, 1.66, 0), timber, "LanternArm")
@@ -1398,10 +1514,12 @@ func _tube_half() -> float:
 
 
 func _bend(z: float) -> float:
-	if z < -9.0:
-		return 0.03 * (z + 9.0) * (z + 9.0)
-	if z > 11.0:
-		return -0.035 * (z - 11.0) * (z - 11.0)
+	var ahead := _ahead(-9.0)
+	var behind := LIVE_ROOM_BACK + 3.7
+	if z < ahead:
+		return 0.03 * (z - ahead) * (z - ahead)
+	if z > behind:
+		return -0.035 * (z - behind) * (z - behind)
 	return 0.0
 
 
@@ -1711,7 +1829,7 @@ func _stand_basalt(material: Material) -> void:
 	rng.seed = 81
 	var half := live_room_half()
 	var stands: Array[Transform3D] = []
-	for z in [-5.2, -1.6, 2.6, 6.2, 9.4, -11.5, -15.0]:
+	for z in [_ahead(-5.2), -1.8, 2.4, 6.6, 10.4, 14.2, _ahead(-11.5), _ahead(-15.0)]:
 		var x := _tube_x(z) - _tube_half() + 0.9 + rng.randf_range(-0.2, 0.2)
 		var s := rng.randf_range(1.0, 1.7)
 		# None stands in the river where it runs down the left ahead.
@@ -1722,10 +1840,10 @@ func _stand_basalt(material: Material) -> void:
 	for x in [-3.5, 0.5, 3.8]:
 		var z := LIVE_ROOM_BACK + 2.4 + rng.randf_range(-0.3, 0.6)
 		var s := rng.randf_range(1.1, 1.6)
-		var xx: float = x * half / LIVE_ROOM_HALF
+		var xx := _wide(x)
 		stands.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * 1.4, s)),
 				Vector3(xx, _ground_h(xx, z) - 0.1, z)))
-	for z in [-1.0, 2.5, 6.0]:
+	for z in [-1.0, 3.0, 7.0, 11.0]:
 		var x := half + RIVER_OUT + RIVER_HALF + 1.4
 		var s := rng.randf_range(0.9, 1.3)
 		stands.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(x, _ground_h(x, z) - 0.1, z)))
@@ -1733,8 +1851,9 @@ func _stand_basalt(material: Material) -> void:
 	var pavement: Array[Transform3D] = []
 	for spec in [Vector2(-2.6, -16.0), Vector2(1.2, -19.5), Vector2(-4.8, -21.0), Vector2(-1.0, 12.5),
 			Vector2(-4.2, -12.5)]:
-		var z: float = spec.y
-		var x: float = _tube_x(z) - 1.9 + spec.x * half / LIVE_ROOM_HALF
+		# Ahead down the tube from the old front, or behind the old back of house, as far as ever.
+		var z: float = _ahead(spec.y) if spec.y < 0.0 else spec.y - DRAWN_BACK + LIVE_ROOM_BACK
+		var x: float = _tube_x(z) - 1.9 + _wide(spec.x)
 		var s := rng.randf_range(1.2, 2.0)
 		if _river_d(x, z) < RIVER_HALF + 1.6:
 			continue
@@ -1750,14 +1869,14 @@ func _hang_work_lamps() -> void:
 	var steel := _iron()
 	var cable := _paint(Color(0.02, 0.02, 0.02), 0.6)
 	var tops: Array[Vector3] = []
-	for z in [-1.8, 2.4, 6.6]:
+	for z in [-2.4, 1.6, 5.6, 9.2, 12.0]:
 		tops.append(_work_lamp(x, z, steel))
 	for i in tops.size() - 1:
 		_rope(tops[i], tops[i + 1], 0.25, cable)
 	# And two across the back of house, where the river's light does not reach round the stands.
 	var back := LIVE_ROOM_BACK + 0.4
 	var behind: Array[Vector3] = []
-	for bx in [-live_room_half() * 0.4, live_room_half() * 0.4]:
+	for bx in [-live_room_half() * 0.55, 0.0, live_room_half() * 0.55]:
 		behind.append(_work_lamp(bx, back, steel))
 	for i in behind.size() - 1:
 		_rope(behind[i], behind[i + 1], 0.3, cable)
@@ -1775,7 +1894,8 @@ func _work_lamp(x: float, z: float, steel: Material) -> Vector3:
 	ZoneKit.block(self, Vector3(0.14, 0.012, 0.14), at + Vector3(0, 0.04, 0), steel, "LampCage")
 	ZoneKit.block(self, Vector3(0.14, 0.012, 0.14), at + Vector3(0, -0.04, 0), steel, "LampCage")
 	ZoneKit.block(self, Vector3(0.13, 0.02, 0.13), at + Vector3(0, 0.095, 0), steel, "LampCap")
-	var l := _light(at + Vector3(0.1, -0.05, 0), Color(1.0, 0.8, 0.58), 2.4, 7.5, &"crew")
+	# Far enough to meet the next lamp's light across a back of house twice the size it was.
+	var l := _light(at + Vector3(0.1, -0.05, 0), Color(1.0, 0.8, 0.58), 2.6, 9.0, &"crew")
 	l.light_specular = 0.15
 	return Vector3(x, top - 0.02, z)
 

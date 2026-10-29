@@ -9,6 +9,13 @@ extends Item
 ## still playing finishes that one at once and starts the next, so a quick run of clicks never
 ## queues up and everybody's copy -- played by the same presses, relayed (Item.work) -- ends
 ## each trick the same way: the trick count is the whole of its state.
+##
+## A trick is a use with a take (Item.use_take): the count of tricks with this one, which says
+## which trick it is and which of Foley's takes its sounds ring. Sent with the press
+## (Session.item_used), so a copy that hears it plays that trick, not its own count's next. A kind
+## whose tricks make sounds lists them (`trick_sounds`) and names the whole of one (`trick_kind`):
+## the sampler (Sampler) catches a trick as that one sound, every sound it rings where it rings it
+## (`trick_stream`).
 
 ## How many tricks have been started since it was last picked up: which comes next, and the
 ## seed for anything a trick deals (CardsItem's faces).
@@ -37,6 +44,36 @@ func trick_seconds(_k: int) -> float:
 	return 0.5
 
 
+## Override: the sounds trick `k` rings and when, for `_pose` to play at their moments and the
+## sampler to keep whole: each [how far through it (0 to 1), Foley's kind (Foley.take_of), level
+## (dB), how fast it is played].
+func trick_sounds(_k: int) -> Array:
+	return []
+
+
+## Override: what Foley calls one whole trick of this kind (Foley.take_of: `yoyo_trick`), the
+## use the sampler catches; &"" for one it has no sound for.
+func trick_kind() -> StringName:
+	return &""
+
+
+## A press starts a trick: the trick's sound, its kind's `trick_kind`.
+func use_kind(down: bool) -> StringName:
+	return trick_kind() if down else &""
+
+
+## Trick number `take` (1 for the first since it was picked up) of tricks `sounds` (each trick's
+## `trick_sounds`), each `seconds` long, heard whole: every sound it rings, at its moment, played as
+## the trick plays it, Foley's take `take` of each. Kept as `key`.
+static func trick_stream(key: String, sounds: Array, seconds: Array, take: int) -> AudioStreamWAV:
+	var k := posmod(take - 1, sounds.size())
+	take = posmod(take, Foley.TAKES)
+	var layers: Array = []
+	for ring: Array in sounds[k]:
+		layers.append([float(ring[0]) * float(seconds[k]), Foley.take_of(ring[1], take), ring[2], ring[3]])
+	return Foley.layered("%s_%d_%d" % [key, k, take], layers)
+
+
 ## Override: trick `k` begins. What it will leave behind is decided here.
 func begin(_k: int) -> void:
 	pass
@@ -59,7 +96,7 @@ func rest() -> void:
 
 ## Which trick a press now starts.
 func next_trick() -> int:
-	return tricks_done % tricks()
+	return posmod(tricks_done, tricks())
 
 
 func hint() -> String:
@@ -68,12 +105,17 @@ func hint() -> String:
 	return _hint("click to pick up, then click to play with it")
 
 
+## A press: the next trick, or the one somebody else's hand played (`heard_use`'s take, their
+## count).
 func use(down: bool) -> void:
 	if not down:
 		return
 	finish()
+	if _heard_take >= 1:
+		tricks_done = _heard_take - 1
 	playing = next_trick()
 	tricks_done += 1
+	use_take = tricks_done
 	_t = 0.0
 	begin(playing)
 	_was = -1.0
@@ -129,6 +171,9 @@ func _process(delta: float) -> void:
 
 func _pose(k: int, p: float) -> void:
 	pose(k, p)
+	for ring: Array in trick_sounds(k):
+		if cue(p, float(ring[0])):
+			Foley.play(self, Foley.take_of(ring[1], tricks_done), float(ring[2]), float(ring[3]))
 	_was = p
 
 

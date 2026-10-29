@@ -11,10 +11,14 @@ extends Item
 ## desktop it is the mouse, which wiggles the hand that holds it (MouseInteractor). A click is
 ## one firm hit, the way a tambourine is struck with the heel of a hand.
 ##
-## A hit played here is heard at once, by the player, on their own keys' bus (the low-latency
-## path, the same as their keys: AudioPorts.MONITOR, "MY KEYS" in a personal mix), and is
-## `played` for the studio to tell everyone and to record. Anyone else's hit is heard in the
-## room, from their hand (`heard`).
+## A hit played here is heard at once, by the player, and is `played` for the studio to tell
+## everyone and to record. Where the studio's hits helper runs (`fast_path`, NativeKeys:
+## docs/spatial_loop.md part two, slice 39) it is played there, a few milliseconds after the hand,
+## panned a little to the hand's side (HAND_PAN); where it does not, or has not loaded that sound
+## yet, on their own keys' bus through Godot (AudioPorts.MONITOR, "MY KEYS" in a personal mix),
+## tens of milliseconds late. Its hover card and its tag say which, and how late (`path_tag`).
+## Anyone else's hit is heard in the room, from their hand or where it stands (`heard`), always
+## through Godot: a sound placed in the room is Godot's to place.
 ##
 ## A pitched instrument (a handbell, docs/spatial_loop.md slice 4) plays a note that is a function
 ## of song position (`note_at`). Each hit takes ONE song position, read from `clock` as it is
@@ -32,10 +36,19 @@ extends Item
 ## Every instrument has an output jack (`jack`, a JackSocket at `jack_point`, docs/spatial_loop.md
 ## slice 5). Unplugged, a hit does all of the above and nothing else; plugged into a track, the
 ## take it is recorded in goes onto that track instead of the armed one (Jacks, HitRecorder).
+##
+## An instrument that stands still (`Item.fixed`, docs/spatial_loop.md part two, slice 38) is played
+## where it is: its `faces` are struck by a hand or a controller crossing them (Strike), or a grab
+## lands on it (`struck_by`: a click, 96, Shift-click 64). Where on it a strike lands is a `zone`
+## (`zone_at`: bass, tone and slap on a drum, which drum on a pad), and the zone goes with the hit
+## everywhere a hit goes: the sound (`zone_kind`), the note it is recorded as (`zone_note`),
+## `played`, the room (Session.send_item_hit) and a bandmate's copy (`heard`), which rings it from
+## where it stands, since nobody's hand has it.
 
 ## A hit played by a hand here: `velocity` 1 to 127, `struck` for a click rather than a shake, `at`
-## the song position it was played to (one read of `clock`).
-signal played(velocity: int, struck: bool, at: float)
+## the song position it was played to (one read of `clock`), `zone` where on it a fixed one was
+## struck (&"" for none).
+signal played(velocity: int, struck: bool, at: float, zone: StringName)
 
 ## Slower than this (m/s) is moving it, not playing it.
 const STROKE_MIN := 0.35
@@ -66,6 +79,18 @@ static var snapping: Callable = Callable()
 ## Whether this player is in a headset, so the shelf tag says how a hand holds it: set by the
 ## studio from its medium.
 static var hands_hint := false
+## This player's own hits on the fast path (docs/spatial_loop.md part two, slice 39), set by the
+## studio as `clock` is: called with (Foley's kind, take, gain (linear), pan (-1 to 1), speed (an
+## AudioStreamPlayer's pitch_scale)), it plays the hit on the hits' helper and says true, or says
+## false where it cannot (not running, that sound not loaded) and the hit is played on MONITOR.
+## Unset, always MONITOR.
+static var fast_path: Callable = Callable()
+## How late the fast path is now (s), or a negative number while there is none: for the tag. Set
+## with `fast_path`.
+static var fast_latency: Callable = Callable()
+## How far a hit on the fast path is panned to the side of the hand that played it: a little, so
+## two hands on one drum are two hands, and never so far that a hit is only in one ear.
+const HAND_PAN := 0.3
 ## What the shelf tag says in a headset, under SNAP.
 const HANDS_HINT := "close your hand round it and shake\ncontrollers are steadier for fast parts"
 ## How often the shelf tag is read again (s): a setting changed shows within this.
@@ -78,6 +103,10 @@ var _since := 1.0
 var _take := 0
 ## The note its last hit rang, here or heard from elsewhere (`note_at` of that hit's position).
 var last_note := -1
+## Where on it its last hit landed, here or heard from elsewhere (`zone_at`): &"" for one carried.
+var last_zone := &""
+## Which way its last hit here was heard: &"fast" on the hits' helper, &"monitor" through Godot.
+var last_path := &""
 ## Its output jack, made as it enters the room: where what it plays goes (Jacks).
 var jack: JackSocket = null
 
@@ -100,12 +129,18 @@ func pitch_scale() -> float:
 	return VOICE_PITCH[mini(voice, 1)] * curse_pitch
 
 
+func _enter_tree() -> void:
+	super()
+	if fixed:
+		add_to_group(Strike.GROUP)
+
+
 func _ready() -> void:
 	super()
-	if jack == null:
+	if jack == null and has_own_jack():
 		jack = JackSocket.new(self)
 		add_child(jack)
-	if held_in_fist() and _tag == null:
+	if (held_in_fist() or fixed) and _tag == null:
 		_tag = Label3D.new()
 		_tag.name = "ShelfTag"
 		_tag.font_size = 48
@@ -143,16 +178,20 @@ func grip_point() -> Vector3:
 
 
 ## What its shelf tag says: SNAP while this player snaps (or, in a bandmate's hand, while they do),
-## and in a headset how a hand holds it; "" for nothing to say. Only hand percussion has one.
+## and in a headset how a hand holds it and which way its hits are heard (`path_tag`), since a
+## headset has no hover card; "" for nothing to say. Only hand percussion and the instruments that
+## stand still have one.
 func tag_text() -> String:
-	if not held_in_fist():
+	if not held_in_fist() and not fixed:
 		return ""
 	var lines: PackedStringArray = []
 	var snaps := holder_snaps if is_held_elsewhere() else (snapping.is_valid() and bool(snapping.call()))
-	if snaps:
+	if snaps and held_in_fist():
 		lines.append("SNAP")
 	if hands_hint and state != State.HELD:
-		lines.append(HANDS_HINT)
+		if held_in_fist():
+			lines.append(HANDS_HINT)
+		lines.append(path_tag())
 	return "\n".join(lines)
 
 
@@ -188,6 +227,28 @@ func jack_out() -> Vector3:
 	return Vector3.LEFT
 
 
+## The source its hits are, in the room's jacks (Jacks.hit): its own id. A venue's set is one source
+## however many bars it has (VenueInstrument.Bar, docs/spatial_loop.md part two, slice 42).
+func jack_source() -> StringName:
+	return id
+
+
+## Whether it carries a jack of its own (`jack`): a venue's bars do not, the set's is on its mount.
+func has_own_jack() -> bool:
+	return true
+
+
+## What its jack is called in a notice and on a tag (Jacks.source_name): its title, or its set's.
+func jack_title() -> String:
+	return item_title()
+
+
+## Where its jack goes while it is unplugged (Jacks.goes_to): &"" for where any unplugged
+## instrument's hits go, the armed track. The kit says the drum track (KitItem, slice 41).
+func default_sink() -> StringName:
+	return &""
+
+
 ## The General MIDI percussion note a hit is recorded as.
 func pitch() -> int:
 	return 82
@@ -197,6 +258,16 @@ func pitch() -> int:
 ## song is doing. A pitched item asks the song (HandbellItem: its chord tone there).
 func note_at(_seconds: float) -> int:
 	return pitch()
+
+
+## The harmony a pitched hit played to song position `seconds` is in: the song's, or while a
+## hand here carries it, this player's own chord (ChordHand.at, docs/spatial_loop.md part two,
+## slice 32), so a bell rung under a chord shape rings the shape's tone. A bandmate's carried one is
+## rung here in the song's, as the hit carries only its song position.
+func harmony_at(seconds: float) -> Harmony:
+	if carried_by != null and is_instance_valid(carried_by):
+		return ChordHand.at(seconds)
+	return Harmony.at(DAW.state, seconds)
 
 
 ## The MIDI channel a hit is recorded on (0-based): the drums', for hand percussion.
@@ -226,9 +297,122 @@ static func now() -> float:
 	return DAW.state.position_seconds if DAW.state != null else 0.0
 
 
-## The sound of a hit: shaken, or `struck`, Foley's take `take` of its kind (`sound_kind`).
-func sound(struck: bool, take: int) -> AudioStream:
-	return Foley.take_of(sound_kind(struck), take)
+## The sound of a hit: shaken, or `struck`, Foley's take `take` of its kind (`sound_kind`), or
+## struck on `zone`, of that zone's (`zone_kind`).
+func sound(struck: bool, take: int, zone := &"") -> AudioStream:
+	return Foley.take_of(kind_of_hit(struck, zone), take)
+
+
+## Which of Foley's sounds a hit rings: its zone's, where it has one, or `sound_kind`'s.
+func kind_of_hit(struck: bool, zone := &"") -> StringName:
+	var kind := zone_kind(zone) if zone != &"" else &""
+	return kind if kind != &"" else sound_kind(struck)
+
+
+# --- standing still (docs/spatial_loop.md part two, slice 38) ------------------------------------
+
+## Override: where a fixed instrument is struck, global space: each {"frame": Transform3D, its
+## origin the face's middle and its +Y out of the face, and "radius" for a round head or "half"
+## (Vector2, along the frame's X and Z) for a square one}. Strike reads them every frame. None for
+## an instrument that is carried.
+func faces() -> Array:
+	return []
+
+
+## Override: how slowly a hand may cross one of its faces and still strike it (m/s): a strike's
+## (Strike.STRIKE_MIN), slower than which is a touch. A venue's glass rings at a touch.
+func strike_least() -> float:
+	return Strike.STRIKE_MIN
+
+
+## Override: how hard a crossing of one of its faces at `speed` (m/s) strikes it: `velocity_for`'s.
+func velocity_of(speed: float) -> int:
+	return velocity_for(speed)
+
+
+## Override: which part of it a strike at `point` (global) lands on, &"" for one with no parts.
+func zone_at(_point: Vector3) -> StringName:
+	return &""
+
+
+## Override: its zones, in words for its card: "centre bass · rim slap".
+func zone_words() -> String:
+	return ""
+
+
+## Override: which of Foley's sounds a strike on `zone` rings, &"" for `sound_kind`'s.
+func zone_kind(_zone: StringName) -> StringName:
+	return &""
+
+
+## Override: the note a hit on `zone` played to song position `seconds` is recorded as: `note_at`,
+## for one with no zones.
+func zone_note(_zone: StringName, seconds: float) -> int:
+	return note_at(seconds)
+
+
+## Whether `zone` is one of its own (`zone_at` could answer it): a bandmate's hit naming another is
+## heard as struck on none.
+func has_zone(zone: StringName) -> bool:
+	return zone == &""
+
+
+## A strike on a fixed instrument by a hand here, `velocity` 1 to 127 on `zone` (Strike, `struck_by`),
+## by the hand on `side` (-1 left, 1 right, 0 neither: the mouse).
+func strike(velocity: int, zone: StringName, side := 0) -> void:
+	play(velocity, true, zone, side)
+
+
+## A grab on it by `hand` at `at`, a fixed one's strike: a click is Strike.CLICK, Shift-click
+## Strike.CLICK_SOFT (`Interactor.fine`), on the zone it landed on.
+func struck_by(hand: Interactor, at: Vector3) -> void:
+	if fixed:
+		strike(Strike.click_velocity(hand), zone_at(at), side_of(hand))
+
+
+## Which side `hand` is: -1 a left controller or hand, 1 a right, 0 the mouse (or none).
+static func side_of(hand: Interactor) -> int:
+	if hand != null and hand.has_method(&"hand_side"):
+		return int(hand.call(&"hand_side"))
+	return 0
+
+
+## What its card says it is doing, and which way its hits are heard (`path_tag`).
+func readout() -> String:
+	var said := super()
+	if fixed:
+		said = zone_words() if zone_words() != "" else "it stands here"
+	return "%s  ·  %s" % [said, path_words()]
+
+
+## Whether this player's own hits are heard on the fast path now: the hits' helper is running and
+## has its sounds (`fast_latency`).
+static func on_fast_path() -> bool:
+	return fast_latency.is_valid() and float(fast_latency.call()) >= 0.0
+
+
+## How late a hit here is heard (s): the fast path's figure, or Godot's output on MONITOR.
+static func path_latency() -> float:
+	return float(fast_latency.call()) if on_fast_path() else AudioServer.get_output_latency()
+
+
+## The tag's line for which way a hit here is heard, and its figure, as the platter's tag says its
+## scratch's: "FAST PATH · 5 ms", or "MONITOR · 41 ms" through Godot.
+static func path_tag() -> String:
+	return "%s · %d ms" % ["FAST PATH" if on_fast_path() else "MONITOR", roundi(path_latency() * 1000.0)]
+
+
+## The same in the card's words: "heard on the fast path, 5 ms", or "heard on MONITOR through the
+## app, 41 ms".
+static func path_words() -> String:
+	return "heard %s, %d ms" % ["on the fast path" if on_fast_path() else "on MONITOR through the app",
+			roundi(path_latency() * 1000.0)]
+
+
+func hint() -> String:
+	if fixed:
+		return STRIKE_HANDS if hands_hint else STRIKE_DESK
+	return super()
 
 
 ## Override: which of Foley's sounds (Foley.take_of) a hit rings, shaken or `struck`.
@@ -241,13 +425,32 @@ func use_kind(down: bool) -> StringName:
 	return sound_kind(true) if down else &""
 
 
+## How fast a hit played to song position `song` (-1, now) is played against Foley's take of it:
+## its voice and curse (`pitch_scale`), and a pitched one's note there (`sound_pitch`). What the
+## room hears it at, and so what the sampler keeps (Sampler.heard's `pitch`).
+func tune_at(song := -1.0) -> float:
+	if not pitched():
+		return pitch_scale()
+	return pitch_scale() * sound_pitch(note_at(song if song >= 0.0 else now()))
+
+
+## A click is a hit now (`tune_at`).
+func use_pitch() -> float:
+	return tune_at()
+
+
+## What a fixed instrument's card says to do with it, at a desk and in a headset.
+const STRIKE_DESK := "click to strike it, Shift-click softly · where you click picks the sound"
+const STRIKE_HANDS := "strike it with a hand, or a controller's tip or grip"
+
+
 ## A click. Somebody else's click on a pitched item is not rung from here: it comes as a hit
 ## with its song position (`heard`), so it is rung in the chord they played it in.
 func use(down: bool) -> void:
 	if not down:
 		return
 	if carried_by != null:
-		play(STRUCK, true)
+		play(STRUCK, true, &"", side_of(carried_by))
 		use_take = _take
 	elif not pitched():
 		heard(STRUCK, true, -1.0, _heard_take)
@@ -255,24 +458,45 @@ func use(down: bool) -> void:
 
 
 ## A hit by a hand here: in this player's ears at once, and out to the room and the take. The song
-## position is read once (`now`), and the sound is started, pitched by it, before this returns.
-func play(velocity: int, struck := false) -> void:
+## position is read once (`now`), and the sound is started, pitched by it, before this returns: on
+## the fast path where it runs (`fast_path`), panned to the hand's `side` (-1 left, 1 right, 0 the
+## mouse), or on MONITOR through Godot. The same take of the same sound, at the same level and
+## pitch, either way.
+func play(velocity: int, struck := false, zone := &"", side := 0) -> void:
 	velocity = clampi(velocity, 1, 127)
 	var at := now()
 	var note := note_at(at)
 	last_note = note
+	last_zone = zone
 	_take += 1
 	_jiggle(velocity)
 	if is_inside_tree():
-		var player := AudioStreamPlayer.new()
-		player.stream = sound(struck, _take)
-		player.volume_db = level_db(velocity)
-		player.pitch_scale = pitch_scale() * sound_pitch(note)
-		player.bus = AudioPorts.bus(AudioPorts.MONITOR)
-		add_child(player)
-		player.finished.connect(player.queue_free)
-		player.play()
-	played.emit(velocity, struck, at)
+		var speed := pitch_scale() * sound_pitch(note)
+		if fast_path.is_valid() and bool(fast_path.call(kind_of_hit(struck, zone), _take,
+				monitor_gain(velocity), HAND_PAN * signf(side), speed)):
+			last_path = &"fast"
+		else:
+			last_path = &"monitor"
+			var player := AudioStreamPlayer.new()
+			player.stream = sound(struck, _take, zone)
+			player.volume_db = level_db(velocity)
+			player.pitch_scale = speed
+			player.bus = AudioPorts.bus(AudioPorts.MONITOR)
+			add_child(player)
+			player.finished.connect(player.queue_free)
+			player.play()
+	played.emit(velocity, struck, at, zone)
+
+
+## A hit's level on the fast path, linear: what `level_db` is on MONITOR, through that bus's own
+## fader and mute, as Godot would have played it.
+static func monitor_gain(velocity: int) -> float:
+	var bus := AudioServer.get_bus_index(AudioPorts.bus(AudioPorts.MONITOR))
+	if bus < 0:
+		return db_to_linear(level_db(velocity))
+	if AudioServer.is_bus_mute(bus):
+		return 0.0
+	return db_to_linear(level_db(velocity) + AudioServer.get_bus_volume_db(bus))
 
 
 ## Somebody else's hit, as their hand plays it: in the room, from where the instrument is.
@@ -280,11 +504,14 @@ func play(velocity: int, struck := false) -> void:
 ## item rings its note there, exactly. `take` is which of Foley's takes their hand rang
 ## (`sound_take`), so everyone hears the sound its player heard; -1 (not known) is the next of
 ## this copy's own, with a little wobble, so a run of hits is not one sample said again and again.
-## `snap`, whether they snap their hits, for its tag.
-func heard(velocity: int, struck := false, song := -1.0, take := -1, snap := false) -> void:
+## `snap`, whether they snap their hits, for its tag. `zone`, where on a fixed one they struck it:
+## one it has not got is struck on none.
+func heard(velocity: int, struck := false, song := -1.0, take := -1, snap := false, zone := &"") -> void:
 	_take += 1
 	_jiggle(velocity)
 	holder_snaps = snap
+	zone = zone if has_zone(zone) else &""
+	last_zone = zone
 	var tune := pitch_scale()
 	if pitched():
 		var note := note_at(song if song >= 0.0 else now())
@@ -292,7 +519,13 @@ func heard(velocity: int, struck := false, song := -1.0, take := -1, snap := fal
 		tune *= sound_pitch(note)
 	elif take < 0:
 		tune *= randf_range(0.97, 1.03)
-	Foley.play(self, sound(struck, take if take >= 0 else _take), level_db(velocity) + 2.0, tune)
+	Foley.play(ring_on(), sound(struck, take if take >= 0 else _take, zone), level_db(velocity) + 2.0, tune)
+
+
+## Where somebody else's hit is rung from: here, where it stands or is held. The kit (KitItem)
+## rings a bandmate's from their ghost instead, since the pad they struck is on their own surface.
+func ring_on() -> Node3D:
+	return self
 
 
 ## Which of Foley's takes its last hit rang (`sound`'s `take`): sent with a hit (Session.item_hit),
@@ -342,7 +575,7 @@ func feel(at: Vector3, delta: float, lever := 1.0) -> void:
 		return
 	if _since >= AGAIN_AFTER:
 		_since = 0.0
-		play(velocity_for(_peak))
+		play(velocity_for(_peak), false, &"", side_of(carried_by))
 	# Whatever it is doing now is the next stroke.
 	_peak = speed if moving.dot(_peak_way) < 0.0 else 0.0
 	_peak_way = moving.normalized()

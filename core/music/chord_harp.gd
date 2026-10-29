@@ -26,6 +26,12 @@ extends ControlAffordance
 ## down the cable to their keys instead of onto this player's, each with the song position it
 ## was plucked at, and this player hears them from the harp itself (`heard`, as a bandmate's).
 ##
+## Under a chord shape (docs/spatial_loop.md part two, slice 32; ChordHand) the strings are the
+## shape's chord, for the player holding it and nobody else: their strings, letters and crown
+## retune to it and back as the hand opens, and what they pluck goes out as the notes it is. A
+## bandmate's chord hand plugged into this player (part two, slice 33) retunes them the same way,
+## and the crown says whose it is: `IV from ADA` (ChordHand.crown_text).
+##
 ## The octave: two buttons on the crown, `8va UP` and `8va DOWN` (any hand, and dwell), the wheel
 ## and the thumbstick (`nudge`) move the strings an octave at a time, at most MOST_OCTAVES either
 ## way. The crown says the shift in words (`+1 OCT`) and the chord's name; each string's note is
@@ -64,6 +70,9 @@ const NECK_LEFT := 1.58
 const NECK_RIGHT := 1.30
 const FRAME_X := 0.31
 const CROWN_Y := 1.665
+## How wide the crown's chord may be lettered (m): between its two octave buttons, so a long one
+## (`IV from GRACE`) is set smaller rather than run under them.
+const CROWN_TEXT_WIDE := 0.15
 const SPACING := 0.062
 ## Its footprint on the floor, from the plinth: half its size, and how far behind the string
 ## plane its middle is. And how tall it stands.
@@ -124,8 +133,9 @@ var _notes: Array[Label3D] = []
 var _chord_label: Label3D
 var _shift_label: Label3D
 var _clock := 0.0
-## The tuning the labels show, so they are only rewritten when it changes.
+## The tuning the labels show, and the crown's words, so they are only rewritten when they change.
 var _shown := PackedInt32Array()
+var _crown := ""
 
 
 ## Its footprint for the walker, at `at` (Venue.harp_spot), as {c, h, a, top}.
@@ -313,9 +323,10 @@ func _moment() -> Array:
 	return [DAW.state.position_seconds if DAW.state != null else 0.0, false]
 
 
-## The harmony at `seconds`.
+## The harmony at `seconds`, as this player plays in it: the song's, or the chord shape they hold
+## (ChordHand.at). The strings, their letters and the crown retune for them alone.
 func harmony_at(seconds: float) -> Harmony:
-	return Harmony.at(DAW.state, seconds)
+	return ChordHand.at(seconds)
 
 
 ## The strings' pitches at `seconds`, lowest first, with the octave shift.
@@ -481,8 +492,9 @@ func _physics_process(delta: float) -> void:
 
 
 ## The hand a strumming tip's key names (HandGestures.local_tips keys it [hand, finger]): its
-## HandGestures, or null for a key of the suite's own.
-static func _tip_hand(id: Variant) -> Object:
+## HandGestures, or null for a key of the suite's own. Public so the room's strings (RoomString), which
+## take the same fingertip keys from FingertipNotes, can name the plucking hand the same way.
+static func tip_hand(id: Variant) -> Object:
 	if id is Array and not (id as Array).is_empty() and (id as Array)[0] is int:
 		return instance_from_id(int((id as Array)[0])) as HandGestures
 	return null
@@ -507,7 +519,7 @@ func _strum_by_touch(delta: float) -> void:
 			# Only the strings long enough to be where the tip passed them.
 			var passed := crossed(was.x, p.x).filter(func(i: int) -> bool: return p.y <= string_top(i))
 			if not passed.is_empty():
-				pluck(passed, velocity_at(absf(p.x - was.x) / maxf(delta, 0.001)), _tip_hand(id))
+				pluck(passed, velocity_at(absf(p.x - was.x) / maxf(delta, 0.001)), tip_hand(id))
 		_tips_was[id] = p
 	for id in _tips_was.keys():
 		if not seen.has(id):
@@ -661,6 +673,17 @@ func _default_title() -> String:
 func _default_readout() -> String:
 	var seconds := _now()
 	var h := harmony_at(seconds)
+	var shaped := ChordHand.mine
+	if shaped != null and is_instance_valid(shaped) and shaped.holds():
+		# Under a chord shape: its chord, as yours, not the song's bar.
+		var song := Harmony.at(DAW.state, seconds)
+		return "%s, your %s (%s)" % [h.chord_name, ChordHand.numeral_of(song, shaped.degree, shaped.seventh),
+				h.key_name if h.named else "NO KEY SET"]
+	if shaped != null and is_instance_valid(shaped) and shaped.plays_theirs():
+		# A bandmate's chord hand down a jack into this player: theirs, and whose.
+		var song := Harmony.at(DAW.state, seconds)
+		return "%s, %s's %s (%s)" % [h.chord_name, Session.name_of(shaped.their_player()),
+				ChordHand.numeral_named(song, h.chord_name), h.key_name if h.named else "NO KEY SET"]
 	if not h.named:
 		return "%s, NO KEY SET" % h.chord_name
 	var said := "%s (%s)" % [h.chord_name, h.key_name]
@@ -686,7 +709,7 @@ func _bracket_bar(seconds: float) -> int:
 
 
 func hint() -> String:
-	return "click a string to pluck  ·  drag across to strum  ·  wheel or 8va for the octave\nwiggle over a ringing string to wobble  ·  Alt + mouse up or down bends"
+	return "click a string to pluck  ·  drag across to strum  ·  wheel or 8va for the octave\nwiggle over a ringing string to wobble  ·  Alt + mouse up or down bends  ·  C, then 1 to 7: chords"
 
 
 ## The crown's chord and shift, and each string's note at its top, from the tuning now.
@@ -695,11 +718,16 @@ func _show_tuning(force := false) -> void:
 		return
 	var seconds := _now()
 	var pitches := tuning_at(seconds)
-	if not force and pitches == _shown:
+	var shaped := ChordHand.mine
+	var from := shaped.crown_text(Harmony.at(DAW.state, seconds)) \
+			if shaped != null and is_instance_valid(shaped) else ""
+	if not force and pitches == _shown and from == _crown:
 		return
 	_shown = pitches
+	_crown = from
 	var h := harmony_at(seconds)
-	_chord_label.text = h.chord_name if h.named else "NO KEY SET"
+	_chord_label.text = from if from != "" else (h.chord_name if h.named else "NO KEY SET")
+	Lettering.fit(_chord_label, CROWN_TEXT_WIDE, 160, 48)
 	_shift_label.text = shift_text()
 	for i in mini(_notes.size(), pitches.size()):
 		_notes[i].text = h.note_name(pitches[i])

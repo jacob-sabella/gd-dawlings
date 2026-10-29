@@ -8,11 +8,14 @@ extends Node3D
 ## Its REC key is a room row, `sampler`: the peer who pressed it, or 0 (`armed_by`). A press asks
 ## the host (the room's `sampler` [on]) and shows at once here; the host's room is the truth. One
 ## press catches one sound: the next use, by anyone, of an item within REACH of the mic, or of one
-## in the hand of whoever pressed REC -- the duck squeezed, the cowbell struck, the shaker shaken.
-## Then REC goes off, so it is a sample a press, never a file a hit. Only the host catches (`heard`):
+## in the hand of whoever pressed REC -- the duck squeezed, the cowbell struck, the shaker shaken,
+## a yo-yo's or a deck's trick -- or the next bounce of a ball by the mic or thrown by them. Then
+## REC goes off, so it is a sample a press, never a file a hit. Only the host catches (`heard`):
 ## every use reaches it with the Foley take its player's hand rang (Session.item_used's and
-## item_hit's `take`), so the sound it writes is Foley.take_of that kind and take, the very stream
-## the player heard. It writes it as a WAV into the project's media (DAWBackend.media_path:
+## item_hit's `take`), and a bounce is the host's own copy's (Item.rang: every copy flies a throw
+## the same), so the sound it writes is Foley.take_of that kind and take, the very stream the
+## player heard, at the pitch it was played (a second voice, a curse, a bell's chord tone: its
+## `pitch`). It writes it as a WAV into the project's media (DAWBackend.media_path:
 ## `duck_squeeze_3.wav`, the use's kind and the next number free) and mints a sample cassette of it
 ## (`sample_data`: an audio clip of the file) into the cassette rack's first free slot. A sample
 ## cassette is a cassette: held to the ear it plays (slice 25, fetched by a guest), pressed onto a
@@ -38,6 +41,16 @@ const REC_RADIUS := 0.032
 const SCREEN_Z := -0.13
 const SCREEN_Y := 0.96
 const SCREEN_WIDTH := 0.33
+## The screen's two lines: what it is doing, large, and what that means, under it (`_show`).
+const HEADLINE_Y := 0.974
+const HEADLINE_SIZE := 160
+const DETAIL_Y := 0.938
+const DETAIL_SIZE := 110
+## Where the REC key's legend lies, on the deck in front of the key (in the key's frame), and how
+## wide it may be: read from where you stand, not only from over it.
+const LEGEND_AT := Vector3(0, 0.0005, 0.076)
+const LEGEND_WIDTH := 0.12
+const LEGEND_SIZE := 170
 ## Half its footprint and how tall it stands: its walker solid (Stations' row says the same).
 const FOOT := Vector2(0.2, 0.16)
 const TOP := 1.33
@@ -77,6 +90,7 @@ var local_peer: Callable = Callable()
 var name_of: Callable = Callable()
 var rec: Rec
 var _screen: Label3D
+var _detail: Label3D
 var _cap: StandardMaterial3D
 var _since_shown := 0.0
 const SHOW_EVERY := 0.25
@@ -96,23 +110,30 @@ func _ready() -> void:
 	rec.position = Vector3(REC_AT.x, DECK_TOP + 0.004, REC_AT.y)
 	add_child(rec)
 	_cap = rec.cap.material_override as StandardMaterial3D
-	_screen = Label3D.new()
-	_screen.name = "Screen"
-	_screen.pixel_size = 0.0002
-	_screen.font_size = 100
-	_screen.outline_size = 0
-	_screen.modulate = Color(0.75, 0.95, 0.8)
-	_screen.shaded = false
-	_screen.double_sided = false
-	_screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_screen.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_screen.position = Vector3(0, SCREEN_Y, SCREEN_Z + 0.0015)
-	Lettering.range_to_legibility(_screen)
-	add_child(_screen)
+	_screen = _line("Screen", HEADLINE_SIZE, HEADLINE_Y)
+	_detail = _line("ScreenDetail", DETAIL_SIZE, DETAIL_Y)
 	var plaque := Stations.plaque(&"sampler", PLAQUE_WIDTH)
 	plaque.position = PLAQUE_AT
 	add_child(plaque)
 	_show()
+
+
+## One of the screen's lines, at height `y`.
+func _line(named: String, size: int, y: float) -> Label3D:
+	var line := Label3D.new()
+	line.name = named
+	line.pixel_size = 0.0002
+	line.font_size = size
+	line.outline_size = 0
+	line.modulate = Color(0.75, 0.95, 0.8)
+	line.shaded = false
+	line.double_sided = false
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line.position = Vector3(0, y, SCREEN_Z + 0.0015)
+	Lettering.range_to_legibility(line)
+	add_child(line)
+	return line
 
 
 ## The screen kept to what the room has: a sample cassette made or binned anywhere, a guest's
@@ -154,7 +175,8 @@ func press() -> void:
 
 
 ## Whether a use of `item` by `from` is one REC catches now: armed, and the item within REACH of
-## the mic or in the hand of whoever armed it (a use is always its user's hand's).
+## the mic or in the hand of whoever armed it (a use is always its user's hand's; a bounce, its
+## thrower's).
 func catches(item: Item, from: int) -> bool:
 	if armed_by == 0 or item == null or not is_instance_valid(item) or not is_inside_tree():
 		return false
@@ -162,14 +184,24 @@ func catches(item: Item, from: int) -> bool:
 
 
 ## On the host: `item`, used by `from`, rang Foley's `kind` take `take` (Item.use_kind and
-## use_take, InstrumentItem.sound_kind and sound_take). Caught if REC `catches` it: that take
-## written as a WAV into the media (`write`), a sample cassette of it minted into the rack, and REC
-## off. The cassette, or null for nothing caught (or nothing kept, and the presser told why).
-func heard(item: Item, kind: StringName, take: int, from: int) -> Item:
+## use_take, InstrumentItem.sound_kind and sound_take, Item.rang), played `pitch` fast (Item.
+## use_pitch, InstrumentItem.tune_at). Caught if REC `catches` it: that take, at that pitch
+## (Foley.resampled), written as a WAV into the media (`write`), a sample cassette of it minted into
+## the rack, and REC off. The cassette, or null for nothing caught (or nothing kept, and the presser
+## told why).
+func heard(item: Item, kind: StringName, take: int, from: int, pitch := 1.0) -> Item:
 	if not _is_authority() or kind == &"" or take < 0 or items == null or not catches(item, from):
 		return null
-	var stream := Foley.take_of(kind, take)
-	if stream == null:
+	return heard_stream(item, kind, Foley.resampled(Foley.take_of(kind, take), pitch), from)
+
+
+## On the host: `stream` (16-bit mono), a sound of `item` that is not a Foley take, Foley's word
+## for what it is `kind` (the platter's scratch, Platter.render_scratch, slice 27), made by `from`:
+## caught as `heard` catches a take, if REC `catches` it. The cassette, or null.
+func heard_stream(item: Item, kind: StringName, stream: AudioStreamWAV, from: int) -> Item:
+	if not _is_authority() or kind == &"" or items == null or not catches(item, from):
+		return null
+	if stream == null or stream.data.is_empty():
 		return null
 	var presser := armed_by
 	armed_by = 0
@@ -197,11 +229,16 @@ func heard(item: Item, kind: StringName, take: int, from: int) -> Item:
 	return made
 
 
-## "the rubber duck's squeeze", for the notice.
+## What a sound of each kind is, of the thing that made it, for the notice.
+const SAID := {&"duck_squeeze": "squeeze", &"duck_release": "letting go", &"ball_bounce": "bounce",
+		&"yoyo_trick": "trick", &"cards_trick": "trick", &"platter_scratch": "scratch"}
+
+
+## "the rubber duck's squeeze", "the deck of cards' trick", "the tambourine", for the notice.
 static func _what(item: Item, kind: StringName) -> String:
 	var title := item.item_title().to_lower() if item != null else "something"
-	if kind == &"duck_squeeze" or kind == &"duck_release":
-		return "the %s's %s" % [title, "squeeze" if kind == &"duck_squeeze" else "letting go"]
+	if SAID.has(kind):
+		return "the %s%s %s" % [title, "'" if title.ends_with("s") else "'s", SAID[kind]]
 	return "the %s" % title
 
 
@@ -281,14 +318,20 @@ func latest() -> CassetteItem:
 	return null
 
 
-## The key lit while armed, and the screen saying so in words: whose next sound it waits for, or
-## how to use it and what it last caught.
+## The key lit while armed, and the screen saying so in words, two short lines large enough to
+## read from where you stand: whose next sound it waits for and where, or what to do and what it
+## last caught.
 func screen_text() -> String:
+	return "\n".join(screen_lines())
+
+
+## The screen's headline and the line under it (`screen_text`).
+func screen_lines() -> PackedStringArray:
 	if armed_by != 0:
-		return "REC  ·  LISTENING FOR %s NEXT SOUND\nwithin %.1f m of the mic, or in %s hand" \
-				% [_name(armed_by).to_upper(), REACH, "your" if armed_by == _me() else "their"]
+		return PackedStringArray(["REC · %s NEXT SOUND" % _name(armed_by).to_upper(),
+				"by the mic, or in %s hand" % ("your" if armed_by == _me() else "their")])
 	var last := latest()
-	return "PRESS REC, THEN MAKE A SOUND\n%s" % ("last: %s" % last.clip_name() if last != null else "squeeze, hit or shake something by the mic")
+	return PackedStringArray(["PRESS REC", "last: %s" % last.clip_name() if last != null else "then make a sound by the mic"])
 
 
 func _show() -> void:
@@ -299,12 +342,18 @@ func _show() -> void:
 		_cap.emission = REC_LIT
 		_cap.emission_energy_multiplier = 1.4
 	if _screen != null:
-		var text := screen_text()
-		if text != _screen.text:
-			_screen.text = text
-			Lettering.fit(_screen, SCREEN_WIDTH, 100, 40)
+		var lines := screen_lines()
+		if lines[0] != _screen.text:
+			_screen.text = lines[0]
+			Lettering.fit(_screen, SCREEN_WIDTH, HEADLINE_SIZE, 60)
+		if lines[1] != _detail.text:
+			_detail.text = lines[1]
+			Lettering.fit(_detail, SCREEN_WIDTH, DETAIL_SIZE, 50)
 	if rec != null:
-		rec.legend.text = "REC ON" if armed_by != 0 else "REC"
+		var said := "REC ON" if armed_by != 0 else "REC"
+		if said != rec.legend.text:
+			rec.legend.text = said
+			Lettering.fit(rec.legend, LEGEND_WIDTH, LEGEND_SIZE, 80)
 
 
 ## The REC key: round, on the deck's right, lit while armed. A press is the sampler's (`press`).
@@ -340,15 +389,16 @@ class Rec extends ControlAffordance:
 		legend.name = "Legend"
 		legend.text = "REC"
 		legend.pixel_size = 0.0002
-		legend.font_size = 70
+		legend.font_size = LEGEND_SIZE
 		legend.outline_size = 0
 		legend.modulate = Color(0.98, 0.95, 0.9)
 		legend.shaded = false
 		legend.double_sided = false
 		legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		# Lying on the cap, its top toward the back: read by whoever stands at the front.
+		# Lying on the deck in front of the key, its top toward the back: read by whoever stands at
+		# the front, from where they stand.
 		legend.rotation.x = -PI * 0.5
-		legend.position = Vector3(0, 0.0145, 0)
+		legend.position = LEGEND_AT
 		Lettering.range_to_legibility(legend)
 		add_child(legend)
 
@@ -367,7 +417,7 @@ class Rec extends ControlAffordance:
 		return "on: catching %s next sound" % sampler._name(sampler.armed_by)
 
 	func hint() -> String:
-		return "press, then squeeze, hit or shake something within %.1f m of the mic, or in your hand: one sample, a cassette on the rack · press again to stop" % REACH
+		return "press, then squeeze, hit or shake something, do a yo-yo or card trick, or bounce the ball, within %.1f m of the mic or in your hand: one sample, a cassette on the rack · press again to stop" % REACH
 
 	func _on_grab_begin(_at: Vector3) -> void:
 		var hand := held_by

@@ -226,6 +226,29 @@ func rooms() -> Array[Rect2]:
 	return out
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): eight terracotta pots
+## upside down on a potting bench, at the potting side along the back, between the kit and the
+## lattice.
+func instrument() -> Dictionary:
+	return {"kind": &"pots", "spot": back_wall_instrument(0.2)}
+
+
+## Its weather (Weather, docs/spatial_loop.md part two, slice 44): in the Rain, the rain on the left
+## side's glass, one bay of it beside the desk, and the switch on a cast-iron post at the walk's edge
+## in front of it, the planted bed between (the glass is past the bed, out of a hand's reach). No
+## weather in the morning or the night.
+func weather() -> Dictionary:
+	if variant != RAIN:
+		return {}
+	var half := live_room_half()
+	var along := 1.25
+	var turn := Basis(Vector3.UP, PI * 0.5)
+	# The post's whole foot on the walk, not half over the kerb.
+	return {"kind": &"rain", "spot": Transform3D(turn, Vector3(-half + 0.16, 0, along)), "sill": 0.95, "post": true,
+			"glass": Transform3D(turn, Vector3(-wall_x() + 0.04, (DWARF_H + EAVES) * 0.5, along)),
+			"size": Vector2(RIB_EVERY - 0.2, EAVES - DWARF_H - 0.2), "low": 74}
+
+
 func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
 	# The fountain's basin stands a little into the walk: you walk up to its rim.
@@ -991,7 +1014,8 @@ func _plant_the_borders() -> void:
 	for spec: Array in [["Palm", -2.4, 1.05], ["Palm", 2.6, 1.15], ["Palm", 0.2, 0.9], ["FanPalm", -1.0, 1.0],
 			["FanPalm", 4.0, 0.95], ["TreeFern", 1.4, 1.0], ["Banana", -3.6, 0.9], ["TreeFern", 7.2, 0.95],
 			["Banana", 8.0, 0.85], ["TreeFern", -7.6, 0.9]]:
-		var x: float = spec[1] * (1.0 + _grow() / DRAWN_WIDTH)
+		# Placed by number along the old house's front (DRAWN_HALF a side): as far along this one's.
+		var x: float = spec[1] * live_room_half() / DRAWN_HALF
 		_plant(spec[0], Vector3(x, SOIL, fz + rng.randf_range(-0.3, 0.2)), rng.randf() * TAU, spec[2])
 	var x2 := -outer + 0.3
 	var f := fountain_spot()
@@ -1142,8 +1166,13 @@ func _hang_the_lanterns() -> void:
 	var z := zones()
 	var lit: float = WEATHERS[variant]["lanterns"]
 	var side := (room_width * 0.5 + live_room_half()) * 0.5
-	var spots: Array = [Vector3(-2.2, 3.2, Studio.ROOM_BACK + 0.45), Vector3(2.2, 3.2, Studio.ROOM_BACK + 0.45),
-			Vector3(-side, 3.2, -1.9), Vector3(side, 3.2, -1.9), Vector3(-side, 3.2, 1.2), Vector3(side, 3.2, 1.2)]
+	var spots: Array = [Vector3(-2.8, 3.2, Studio.ROOM_BACK + 0.45), Vector3(2.8, 3.2, Studio.ROOM_BACK + 0.45),
+			Vector3(-side, 3.2, -2.4), Vector3(side, 3.2, -2.4), Vector3(-side, 3.2, 1.6), Vector3(side, 3.2, 1.6)]
+	# The back of house is twice the floor it was: a lantern over each walk between the
+	# neighbourhoods as well as over the zones, clear of every banner.
+	for at: Vector3 in [Vector3(-4.4, 3.6, 6.4), Vector3(4.4, 3.6, 6.6), Vector3(-3.6, 3.8, 10.6),
+			Vector3(4.6, 3.8, 9.0)]:
+		spots.append(Vector3(at.x * live_room_half() / LIVE_ROOM_HALF, at.y, at.z))
 	# Each lantern's ring: the body hangs 0.76 m under it, clear of every zone's head room.
 	var over := {&"drums": 3.65, &"matrix": 4.25, &"bricks": 2.75, &"synth": 3.0}
 	for id: StringName in over:

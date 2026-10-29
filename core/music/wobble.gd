@@ -28,6 +28,9 @@ extends RefCounted
 ##
 ## "Tilt bends" off (GuestMidi.tilt_bends) and the tilt counts for nothing, but a bend wheel the
 ## hand holds (`Interactor.bend_wheel`, the desktop's Alt-drag) still bends: that is meant.
+##
+## With `sending` off it reads the hand and sends nothing: the theremin adds its `semitones` to its
+## own glide and sends one bend for both, since a player has one wheel.
 
 ## A tilt this far (degrees) from where the note began is the most it bends.
 const TIP := 45.0
@@ -61,6 +64,14 @@ var hand: Object = null:
 		hand = v
 ## Whether the hand's tilt bends at all here: off, only its bend wheel does (the plain keys').
 var tilts := true
+## Whether it sends the bend itself. Off, it only reads the hand: what owns it adds `semitones` to a
+## bend of its own and sends the sum as one (the theremin, whose glide is the wheel already:
+## Theremin, docs/spatial_loop.md part two, slice 50).
+var sending := true
+## Which of an Interactor's tilt angles is read as its roll: 0 its roll (`tilt_angles().x`), 1 its
+## pitch, up and down (`.y`). The theremin's desk reads the cursor's up and down, since across its
+## rule is the pitch itself (Theremin).
+var axis := 0
 
 ## The last frame's bend, vibrato and their sum with the hand's bend wheel (semitones).
 var bend := 0.0
@@ -116,12 +127,14 @@ static func words(st: float) -> String:
 	return "%+.1f" % st if absf(st) >= 0.05 else ""
 
 
-## A hand's roll now (radians, unclamped), NAN when there is nothing to read.
-static func roll_of(by: Variant) -> float:
+## A hand's roll now (radians, unclamped), NAN when there is nothing to read; `axis` 1 reads an
+## Interactor's tilt up and down instead (`axis`).
+static func roll_of(by: Variant, axis_ := 0) -> float:
 	if by == null or not is_instance_valid(by):
 		return NAN
 	if by is Interactor:
-		return (by as Interactor).tilt_angles().x
+		var a := (by as Interactor).tilt_angles()
+		return a.y if axis_ == 1 else a.x
 	if by is HandGestures:
 		var g := by as HandGestures
 		return g.angles.x if g.tracked else NAN
@@ -141,7 +154,7 @@ func step(delta: float, at := NAN) -> bool:
 		_let_go()
 		return false
 	var alive := hand != null and is_instance_valid(hand)
-	var roll := roll_of(hand) if alive else NAN
+	var roll := roll_of(hand, axis) if alive else NAN
 	if is_nan(roll):
 		roll = _roll
 	_roll = roll
@@ -164,6 +177,8 @@ func step(delta: float, at := NAN) -> bool:
 	vibrato = _vibrato_for(shake) if tilting else 0.0
 	var wheel := (hand as Interactor).bend_wheel() if alive and hand is Interactor else 0.0
 	semitones = clampf(bend + vibrato + wheel, -BEND_MOST, BEND_MOST)
+	if not sending:
+		return false
 	_since += delta
 	var value := value_of(semitones)
 	if value == _sent or _since < 1.0 / SENDS_A_SECOND - SEND_SLACK:

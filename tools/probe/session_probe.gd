@@ -83,10 +83,10 @@ const STAGE_DB := -10.0
 ## toggled at 58.4 and puts back.
 const CLAP_TRACK := 6
 ## Sidechain as a rope (slice 20): the guest drags a rope at 58.5 from ROPE_FROM's knot to ROPE_TO's
-## voice on a table of its own (the demo's kick to its bass); the host finds the key send at 58.7.
+## voice on a table of its own (the demo's kick to its bass); the host finds the key send at 58.67.
 const ROPE_FROM := 2
 const ROPE_TO := 6
-## Automation by gesture (slice 22): the track whose fader the guest's write bead rides at 58.72, to a
+## Automation by gesture (slice 22): the track whose fader the guest's write bead rides at 58.74, to a
 ## clock of its own from BEAD_SONG for BEAD_SECONDS, the song not looping; the host finds the pass
 ## as its lane at those song positions at 58.85.
 const BEAD_TRACK := 13
@@ -112,11 +112,218 @@ const EAR_SECONDS := 0.5
 ## room's `sampler` [true]); by 59.42 the room's row is the guest. At 59.44 it takes the duck, and at
 ## 59.48 squeezes it, its hand ringing Foley's take SAMPLE_TAKE. By 59.52 the host has heard that take,
 ## caught it (its Sampler, as the studio's) as one WAV equal to Foley's stream for it and a sample
-## cassette the guest made, and REC is off; by 59.56 the guest has the cassette's row, the room naming
-## it, and REC off. The host takes them away at 59.58.
+## cassette the guest made, and REC is off; by 59.55 the guest has the cassette's row, the room naming
+## it, and REC off. The host takes them away at 59.62.
 const SAMPLE_TAKE := 3
+## A DJ platter (slice 27): at 59.6 the guest takes hold of a platter of its own (as the studio's, on
+## the deck's cart), turns it to PLATTER_TURNS, a bar a turn, over 30 ms, holds it still there until
+## its speed (read over Platter.SPEED_SPAN) is nothing, and lets go: a drag put down, not a flick, so no
+## spin-back, whichever way the playhead it started from is. Its turns are seeks asked of the host,
+## SEEK_HZ a second at most, the last always sent, within a SEEK_HZ'th of the turning. At 59.74 the host's
+## playhead is there (or just past it, playing on), and the guest asked no more than the rate allows.
+const PLATTER_TURNS := 6.0
+## A tape reel for undo history (slice 28): at 59.78 the guest turns a history crank of its own (as
+## the studio's, on the tape deck's supply reel) back CRANK_NOTCHES, a notch at a time, and leaves it;
+## once it has stood SETTLE it asks the host one undo_to (two undos where the host's DAW does not say
+## its depth). By 60.12 the host's history is CRANK_NOTCHES back from where it was at 59.76, and the
+## guest's copy says so; the host puts it back at 60.14.
+const CRANK_NOTCHES := 2
+## Sections rearranged (slice 29): at 60.16 the host makes three regions of two bars each from
+## ARRANGE_BAR, past everything else the probe writes ("Probe A", "Probe B", "Probe C"), a marker a
+## bar and a half in (in B) and a take of its own on HOST_MIDI_TRACK half a bar into C. At 60.24 the
+## guest asks the order C A B of its copy of them, the host's other regions where they are; by 60.34
+## the host has C at ARRANGE_BAR with the take in it, the marker gone with B, as one step, and the
+## guest's copy and the room's notice say so. The host takes all of it back at 60.36.
+const ARRANGE_BAR := 460.0
+const ARRANGE_NAMES := ["Probe A", "Probe B", "Probe C"]
+## Chord bricks (slice 31): at 60.38 the host lays out a section of four bars from BRICK_BAR, past
+## the arrangement's ("Probe D", its marker at its start). At 60.42 the guest's MAKE BRICKS asks
+## for BRICK_CHORDS in BRICK_KEY onto the ledge (`make`, "ledge:<key>:<chord>"); the host mints them
+## from the words alone into its ledge's next slots, and by 60.46 the guest's copy of the room has
+## them in a row there. The guest nudges the second to 2 bars (the room's `bricks` ask), and at 60.5,
+## the host's row saying so, presses its ledge's row onto the host's section block: the wheel's
+## `harmony` ask with that section's bar, ChordBrick.section_ask's. By 60.56 both halves have the
+## section's marker bracketed with the row (BRICK_MARKER) and its third bar in F; the host takes all
+## of it back at 60.58.
+const BRICK_BAR := 480.0
+const BRICK_SECTION := "Probe D"
+const BRICK_KEY := "A minor"
+const BRICK_CHORDS := ["Am", "F", "C"]
+const BRICK_MARKER := "Probe D [A minor: Am F - C]"
+## Point, mark and listen together (slice 35): from 60.82 the guest points at the song time POINT_AT
+## on its ruler (Presence's `ruler:<seconds>`, on the presence stream) and drops a sticky note at
+## NOTE_AT (an add_marker intent of NOTE_WORDS, Harmony.note_named). By 60.9 the host has heard the
+## point and has the note in its markers, and takes the note back at 60.92.
+const POINT_AT := 37.25
+const NOTE_AT := 520.0
+const NOTE_WORDS := "probe note"
+## The EQ wall's spectra (slice 36): from 60.92 to 61.12 the host stands a Spectra, as the studio
+## does, measuring SPECTRA_KICK's bands at SPECTRA_KICK_DB and SPECTRA_BASS's at SPECTRA_BASS_DB
+## (the rest silent), and sending them on five times a second; by 61.1 the guest has them, within a
+## byte's half step, and finds the two clashing where they overlap.
+const SPECTRA_KICK := 2
+const SPECTRA_BASS := 6
+const SPECTRA_KICK_BANDS := [3, 7]
+const SPECTRA_BASS_BANDS := [4, 8]
+const SPECTRA_KICK_DB := -12.0
+const SPECTRA_BASS_DB := -15.0
+## Carving the clash (slice 37): at 61.14 the guest stands an EQ wall of its own over the same kick and
+## bass, grabs their glow on the bass's side and drags it CARVE_SHARE of EqCarve.PUSH_FULL down,
+## holding it until 61.22: an edit, an add_fx of the carving EQ and, once the host's EQ is back on
+## the guest, its bands' set_fx_param, intents the host carries out. By 61.26 the host's bass ends
+## its chain with the EQ, on the built-in engine its bands in the clash cut CARVE_DB, one step named
+## for the carve, which one undo takes back (on Reaper the ReaEQ is removed by hand).
+const CARVE_SHARE := 0.5
+const CARVE_DB := -6.0
+## Instruments that stand still (slice 38): by 61.28 each half stands the test drum (TestDrumItem, a
+## fixed kind no room has) at DRUM_HOME; at 61.3 the guest's fingertip comes down through its rim at
+## DRUM_SPEED (its Strike, stepped by hand), to a clock of its own at DRUM_SONG. By 61.46 the host
+## has the hit from the guest with its zone, the slap, and its song, and its own drum plays it where
+## it stands, held by nobody. The host leaves at 64.76 and waits until 64.83; the guest ends at 64.88.
+const DRUM_HOME := Transform3D(Basis.IDENTITY, Vector3(2.0, 0.0, 2.0))
+const DRUM_SONG := 700.0
+const DRUM_SPEED := 2.0
+## A circle of hand drums (slice 40): the djembe is a fixed kind every room has (ItemRoom.KINDS), put
+## away until it stands somewhere; by 61.28 each half stands it at DJEMBE_HOME (ItemRoom.stand), and at
+## 61.32 the guest's fingertip comes down through its rim at DRUM_SPEED to DJEMBE_SONG. By 61.46 the
+## host has the slap from the guest with its zone and song, and its own djembe rings it where it
+## stands.
+const DJEMBE_HOME := Transform3D(Basis.IDENTITY, Vector3(-2.0, 0.3, 2.0))
+const DJEMBE_SONG := 702.0
+## Drum pads on anything (slice 41): the kit is a fixed kind every room has, stood by each half at
+## KIT_HOME by 61.28 (no console stands it in the probe). At 61.32 the guest marks a pad of its own
+## on a surface at PAD_AT (SurfacePads, a fingertip's dwell, saved to PAD_FILE) and comes down
+## through it at DRUM_SPEED to PAD_SONG: the kick. By 61.46 the host has the hit on `kit` from the
+## guest with its drum and song, and rings it, with no ghost here to ring it from, at the kit.
+const KIT_HOME := Transform3D(Basis.IDENTITY, Vector3(1.0, 0.74, 0.2))
+const PAD_AT := Vector3(-1.0, 0.6, 1.5)
+const PAD_SONG := 704.0
+const PAD_FILE := "user://probe_pads.cfg"
+## Every venue has something to play (slice 42): the rooftop's railing, its tuned balusters the fixed
+## kinds venue1..venue8 every room has, dressed as the rooftop's set and stood by each half at its
+## spot by 61.28 (`_stand_the_railing`). At 61.32 the guest's fingertip goes into the third
+## baluster's front at DRUM_SPEED to RAILING_SONG. By 61.46 the host has the hit on venue3 from the
+## guest with its song, and its own baluster rings it where it stands, on the song's scale tone there.
+const RAILING_BAR := 2
+const RAILING_SONG := 706.0
+## Generative weather (slice 44): at 61.28 the host schedules the loft's Thunderstorm over one bar,
+## WEATHER_BAR (1-based, the top of its gust), from its own song (Weather.drops, the loft's seed) and
+## publishes what it scheduled in its room (`weather_probe`, [step, note, velocity] each). At 61.46 the
+## guest presses the switch (the room's `weather` [true]), the drums done with (the first ring of a
+## baluster is a sound made, some tens of milliseconds) and with room for the halves' clocks, started
+## a moment apart, to be as much out; by 61.56 the room's row is LISTEN, and the
+## guest's own schedule of the same bar, from its copy of the host's song, is the host's drop for
+## drop. By 61.56 the host has the ask from the guest.
+const WEATHER_BAR := 5.0
+## A looper, by hand (slice 45): at 61.6 the guest slaps the looper, asking the host (the room's
+## `looper` [LOOPER_ASKED_BAR, LOOPER_BARS]) for a bar too far off to be the next one, so the host
+## gives it the next bar instead and publishes the room's row [guest, bar, LOOPER_BARS]. At 61.68 the
+## guest's layer over that span (LOOPER_NOTES, a key and a hit, as Looper takes them down) is sent
+## (`looper_layer`); by 61.76 the host has written it onto a track of the guest's own,
+## "<GUEST> LOOP 1" in a LOOPER folder, and cleared the row; by 61.82 the guest's mirror of the host's
+## mix has that track in that folder. Its ring (slice 46): at 61.84 the guest stands the looper's rings
+## of its own (LooperRings, from its mirror of the host's LOOPER folder), closes a hand on the layer's
+## ring and pulls it 0.5 m off: one edit, the mute and the track's removal in it, asked of the host. By
+## 61.92 the host's project no longer has "<GUEST> LOOP 1" (on the built-in engine one step, named for
+## the ring), and by 61.98 nor does the guest's mirror. The host takes the rest back (the folder, loop
+## and transport) at 61.98.
+const LOOPER_ASKED_BAR := 900
+const LOOPER_BARS := 2
+## [on, off, pitch, velocity, channel] in seconds after the span's start: a key, and a hand drum's hit.
+const LOOPER_NOTES := [[0.1, 0.35, 60, 100, 0], [0.5, 0.6, 38, 90, 9]]
+## A music-box sequencer (slice 47): at 62.02 the guest stands a music box of its own, hearing the song
+## at MUSIC_BOX_SONG (past everything else the probe writes), and presses MUSIC_BOX_CELL (row, step)
+## on it. Its peg shows at once; the box asks the host for the MUSIC BOX track (add_track), and once
+## its mirror has it, the item over the box's bar with the peg as its note (insert_midi_take), in one
+## edit. By 62.14 the host's MUSIC BOX track has one item with that note: the row's pitch in the song's
+## key there, at the step's time (on the built-in engine one step, "MUSIC BOX: pegs"), and a box of
+## the host's own reads it back as that peg; so does the guest's mirror. The host takes the track out
+## again at 62.26.
+const MUSIC_BOX_SONG := 760.0
+const MUSIC_BOX_CELL := Vector2i(3, 5)
 ## How far a placed note may be from the moment the guest heard it, in seconds.
 const TAKE_TOLERANCE := 0.005
+## A string across the room (slice 48): at 62.3 the guest ties STRING_ID from STRING_A to STRING_B
+## (the venue's frame), asking the host (the room's verb `string`), which answers as the studio does
+## (RoomString.answer) and publishes the room's row `strings`; by 62.36 the host's row has it with
+## the guest as its maker, and the guest's mirror of the room has it too. At 62.36 the guest plucks a
+## string of its own at those ends, hearing the song at STRING_SONG, recording onto TAKE_TRACK; it
+## rings to 62.4 and its clock stops at 62.42, sending the take. By 62.5 the host has the pluck on
+## TAKE_TRACK at STRING_SONG, on the string's note in the song's key there, and heard it with the
+## string's source.
+const STRING_ID := &"probe_string"
+const STRING_A := Vector3(-0.6, 1.2, 5.0)
+const STRING_B := Vector3(-0.6, 1.2, 7.0)
+const STRING_SONG := 780.0
+## A marble run (slice 49): at 62.56 the guest asks two blocks of the lattice (the room's verb
+## `marble`): a ramp at MARBLE_TOP facing right and a bell in the cell it rolls into, and one cell
+## outside the lattice, which the host refuses to it in words. The host answers as the studio does
+## (MarbleRun.answer) and publishes the room's row `marbles`; by 62.62 its row has both and not the
+## third, and it publishes its rings over MARBLE_BAR (`marbles_probe`, [beat, cell, note] each). By
+## 62.68 the guest's mirror of the room has both blocks, and its own rings over that bar, from its
+## copy of the host's song, are the host's, bell for bell.
+const MARBLE_TOP := Vector3i(4, 9, 5)
+const MARBLE_BELL := Vector3i(5, 9, 5)
+const MARBLE_OUTSIDE := Vector3i(4, 12, 5)
+const MARBLE_BAR := 7.0
+## A theremin (slice 50): from 62.72 the guest plays a theremin of its own (Theremin, its SCALE switch
+## FREE) with two hands of the probe's: the volume hand half way up over the loop, the pitch hand
+## gliding in from THEREMIN_FROM's distance from the rod to THEREMIN_TO's by 62.84, past the bend's
+## two semitones so its note is handed on legato, hearing the song at THEREMIN_SONG and recording
+## onto TAKE_TRACK. At 62.84 the volume hand comes down onto the loop and it is silent; its clock
+## stops at 62.86, sending the take. By 62.92 the host has the glide on TAKE_TRACK at THEREMIN_SONG,
+## named for the theremin: its notes rising, each down before the last let go, and its bends and
+## CC 11 in the item; and heard its notes with the theremin's source. THEREMIN_TO is more than two
+## semitones past the first hand-on's note whichever frame that falls in (71 or 72, the glide's frames
+## a semitone apart), so the note is handed on twice.
+const THEREMIN_SONG := 800.0
+const THEREMIN_FROM := 69.0
+const THEREMIN_TO := 74.6
+## A modular wall (slice 51): at 62.94 the guest re-patches the room's modular (the room's verb
+## `modular_patch`): an LFO onto the VCF's CV, and the noise into that same CV, which the host refuses
+## to it in words (an input taken twice); it streams MODULAR_TURNS of a knob's turn (Session.send_knob)
+## and lets it go at MODULAR_KNOB (`modular_knob`). The host answers as the studio does
+## (Modular.answer_patch, answer_knob) and publishes the room's row `modular`; by 63.0 its row has the
+## guest's cable and knob and not the refused cable, and it heard every streamed value from the guest.
+## By 63.04 the guest's mirror of the room has them too.
+const MODULAR_TURNS := [0.6, 0.7, 0.8]
+const MODULAR_KNOB := 0.85
+## The modular recorded and heard (slice 52): from 63.06 the guest plays the modular (its keys at the
+## wall, GuestMidi.through_modular) hearing the song at MODULAR_SONG and recording onto TAKE_TRACK:
+## MODULAR_PITCH held, and from 63.1 the cutoff swept down through MODULAR_SWEEP a frame at a time
+## (Session.send_knob, stamped as it is turned); let go at 63.24, its clock stopped at 63.26. Its
+## take is marked to the host on both lanes and nothing else is sent. By 63.62 the host has one
+## audio take named `modular` on TAKE_TRACK at the guest's song and no MIDI take there, heard the
+## notes with the modular's source and every step of the sweep, and publishes the WAV's start,
+## frames and digest (the room's row `modular_probe`); by 63.68 the guest finds them equal to its
+## own render of the take.
+## The world into the modular (slice 53): at 63.74 the guest pulls the LFO out of the VCF's CV and
+## patches the weather's socket into it (`modular_patch` [world:weather, vcf.cv]); by 63.8 the host's
+## row has it, and the host renders WEATHER_BAR of the loft's Thunderstorm through its patch, MODULAR_PITCH
+## held and the weather's level and drops played in from its own song (ModularWorld.weather_events),
+## and publishes the render's frames and digest (`world_probe`); by 63.86 the guest's own render of the
+## same bar, from its mirror of the room's patch and its copy of the host's song, begins, and by 64.0
+## (the host's render takes most of a tenth of a second) it is the host's sample for sample.
+## The grain cloud recorded and heard (slice 55): from 64.08 the guest's cloud plays GRAINS events, one
+## a frame (Session.send_grains, stamped with the song it hears from GRAINS_SONG plus the cloud's
+## figure), while it records onto TAKE_TRACK, both halves' clouds sounding the same tone
+## (`_probe_grain_sound`, standing in for a sample both have). Its first event begins its take, marked
+## to the host on the gestures' channel; its clock stopped at 64.3 ends it. By 64.4 the host has
+## heard every event from the guest, in order, and has one audio take named `grains` on TAKE_TRACK at
+## the guest's first event's song, rendered from its own sound, and publishes the WAV's start, frames
+## and digest (the room's row `grains_probe`); by 64.46 the guest finds them equal to its own render
+## of its take.
+## The lyrics in the booth (slice 56): at 64.52 the guest's own board (a LyricBoard of its own, not in
+## a room) writes two untimed lines, which is a set_lyrics intent to the host; at 64.6, hearing the
+## song from LYRIC_SONG, it TAPs, which is a second intent stamping the first line. By 64.7 the
+## host's lyrics are those two lines, the first stamped at LYRIC_SONG as the guest heard it and the
+## second still untimed. The session ends at 64.76.
+const GRAINS_SONG := 960.0
+const LYRIC_SONG := 980.0
+const GRAINS := 12
+const MODULAR_SONG := 900.0
+const MODULAR_PITCH := 57
+const MODULAR_SWEEP := [0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.25, 0.2]
 ## The host's own take, on the built-in engine: a track, a stretch of song with nothing in it,
 ## and how far from the beat a click may land.
 const HOST_TAKE_TRACK := 3
@@ -178,6 +385,13 @@ var _audio_placed := {}
 var _placed_all: Array = []
 ## Host: what guests asked of the room, as [verb, args, from].
 var _room_asks: Array = []
+## The modular's knobs as the guest turned them (slice 51), heard on the host: [id, v, from] each.
+var _knobs_heard: Array = []
+## Host: the modular takes placed (slice 52), as ModularTakes.placed says each.
+var _modular_placed: Array = []
+## Host: the grain events heard (slice 55), [event, from, song] each; and the grain takes placed.
+var _grains_heard: Array = []
+var _grains_placed: Array = []
 ## Host: where the guest said something was while pushing it.
 var _motions: Array = []
 ## Guest: how many times the host's room arrived.
@@ -194,7 +408,7 @@ var _sourced: Array = []
 ## The other half's harp notes, from when the strums begin: [kind, pitch, from, song].
 var _harped: Array = []
 ## The other half's item hits, as Session.item_hit gives them: [item, velocity, from, song, snap,
-## take].
+## take, zone].
 var _item_hits: Array = []
 ## Each half's room of items, as the studio keeps one: the four handbells are in it.
 var _room: ItemRoom = null
@@ -210,6 +424,10 @@ var _jacked: Array = []
 var _cabled: Array = []
 ## The head this half publishes (`_keep_publishing`), until the guest travels (`_travel_to_the_harp`).
 var _head := Transform3D.IDENTITY
+## What this half publishes it points at, and where (`_keep_publishing`); the guest's ruler time
+## from 60.82 (slice 35).
+var _pointing := ""
+var _pointing_local := Vector3.ZERO
 ## Host: the history's depth before the guest's two-value drag (slice 12), and the guest's track's
 ## pan and volume and the host's own track's volume then.
 var _edit_depth := 0
@@ -262,17 +480,55 @@ func _ready() -> void:
 	Session.hold_refused.connect(func(k: String, h: int): _refused.append([k, h]))
 	_start = Time.get_ticks_msec()
 	if role == "host":
+		_write_epoch()
 		await _host(port)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_epoch_path()))
 	else:
+		await _share_the_hosts_epoch()
 		await _guest(port)
 	print("\n[%s] %d session checks, %d failed" % [role, _checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## Where the host writes when its timeline began, for the guest's to begin with it.
+func _epoch_path() -> String:
+	return "user://session_probe_%d.epoch" % _port
+
+
+## Host: my timeline's 0, in the machine's clock, written for the guest (`_share_the_hosts_epoch`).
+func _write_epoch() -> void:
+	var f := FileAccess.open(_epoch_path(), FileAccess.WRITE)
+	if f != null:
+		f.store_string("%.6f" % Time.get_unix_time_from_system())
+
+
+## Guest: my timeline begun when the host's did. The two halves are started together but each is up
+## when it is, tens of ms apart under load (60 ms has been seen), and every step's gap is a few tens of
+## ms: a guest ahead of its host acted before the host looked (a clap before the host's check of the
+## placing before it), one behind looked before the host had answered. Both run on one machine, so
+## the host's start in the machine's clock is the guest's 0 too. A file from an earlier run is older.
+func _share_the_hosts_epoch() -> void:
+	var mine := Time.get_unix_time_from_system()
+	while Time.get_unix_time_from_system() - mine < 5.0:
+		var text := FileAccess.get_file_as_string(_epoch_path())
+		if text.is_valid_float() and float(text) > mine - 5.0:
+			_start = Time.get_ticks_msec() - int((Time.get_unix_time_from_system() - float(text)) * 1000.0)
+			return
+		await get_tree().process_frame
+	print("the host's epoch never came: my timeline is my own")
 
 
 func _host(port: int) -> void:
 	Session.audio_take_placed.connect(func(info: Dictionary):
 		_audio_placed = info
 		_placed_all.append(info))
+	# The patch a take through the modular starts from, as the studio hears it (slice 52).
+	Session.modular_takes.patch = _probe_patch
+	Session.modular_takes.placed.connect(func(info: Dictionary): _modular_placed.append(info))
+	# The grain cloud's sound both halves hear, and what the guest's grains do here (slice 55).
+	Session.grain_takes.sound = _probe_grain_sound
+	Session.grain_takes.placed.connect(func(info: Dictionary): _grains_placed.append(info))
+	Session.grains_played.connect(func(e: PackedFloat32Array, from: int, song: float): _grains_heard.append([e, from, song]))
 	Session.local_name = "Ada"
 	var restore := NAN
 	var tempo_restore := NAN
@@ -313,8 +569,10 @@ func _host(port: int) -> void:
 		_use_takes.append(take))
 	Session.item_used.connect(_sample_a_use)
 	Session.note_played.connect(_on_note_played)
-	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
-		_item_hits.append([item, velocity, from, song, snap, take]))
+	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName):
+		_item_hits.append([item, velocity, from, song, snap, take, zone]))
+	Session.knob_turned.connect(func(id: StringName, v: float, from: int, _song: float):
+		_knobs_heard.append([id, v, from]))
 	Session.room_asked.connect(func(verb: StringName, args: Array, from: int):
 		_room_asks.append([verb, args, from])
 		if verb == &"put_item":
@@ -325,11 +583,25 @@ func _host(port: int) -> void:
 			_answer_make(args, from)
 		if verb == &"paste":
 			_answer_paste(args, from)
+		if verb == &"bricks":
+			_answer_bricks(args, from)
 		if verb == Sampler.VERB:
 			_answer_sampler(args, from)
+		if verb == Weather.VERB:
+			_answer_weather(args, from)
+		if verb == Looper.VERB:
+			_answer_looper(args, from)
+		if verb == Looper.LAYER_VERB:
+			_answer_looper_layer(args, from)
 		if verb == FifthsWheel.VERB:
 			# As the studio answers a guest's SET: written at the bar the guest chose.
 			FifthsWheel.answer(args[0], args[1])
+		if verb == RoomString.VERB:
+			_answer_string(args, from)
+		if verb == MarbleRun.VERB:
+			_answer_marble(args, from)
+		if verb == Modular.PATCH_VERB or verb == Modular.KNOB_VERB:
+			_answer_modular(verb, args, from)
 		if verb == &"open_tablet":
 			var room: Dictionary = Session.room.duplicate(true)
 			room["tablets"][&"tablet_2"] = [args[0], args[1], args[2], args[3], args[4], 0.0]
@@ -530,8 +802,8 @@ func _host(port: int) -> void:
 	# my word on every event down one, as the studio's (Session.jack_check).
 	_wear_jacks()
 	_jacks.set_patch(rows)
-	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float) -> void:
-		_jacks.hit(item, velocity, at))
+	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float, zone: StringName) -> void:
+		_jacks.hit(item, velocity, at, zone))
 	Session.jack_check = func(to: int, source: StringName, from: int) -> String:
 		var item: Item = _room.items.get(source)
 		var holder := Session.holder_of(item.network_key()) if item != null else 0
@@ -647,7 +919,7 @@ func _host(port: int) -> void:
 	await _until(55.29)
 	gm.note_on(BEND_PITCH, 100)
 	check("my bend during a held note is taken", gm.control(DawKitClip.PITCH_BEND, BEND_VALUE))
-	await _until(55.35)
+	await _until(55.45)
 	gm.note_off(BEND_PITCH)
 	check("and rests at my note-off", int(gm.controls.get(DawKitClip.PITCH_BEND, -1)) == 0)
 	check("the guest's volume controller was refused, as no controller but the bend, 1 and 11 is passed (%d)"
@@ -681,10 +953,10 @@ func _host(port: int) -> void:
 
 	# Sidechain as a rope (slice 20): the guest's rope, tied at 58.5, is my key send.
 	_rope_plugins_were = DAW.state.track(ROPE_TO).plugins().size()
-	await _until(58.7)
+	await _until(58.67)
 	_check_rope()
 
-	# Automation by gesture (slice 22): the guest's write bead, pulled at 58.72 to a clock of its
+	# Automation by gesture (slice 22): the guest's write bead, pulled at 58.74 to a clock of its
 	# own, is my lane at its song positions.
 	_bead_was = WriteBead.lane_now(BEAD_TRACK, "volume")
 	_bead_volume_was = DAW.state.track(BEAD_TRACK).volume
@@ -716,14 +988,149 @@ func _host(port: int) -> void:
 	# (`_answer_sampler`); its squeeze at 59.48 is caught here with its take (`_sample_a_use`).
 	await _until(59.52)
 	_check_sampled()
-	await _until(59.58)
+	await _until(59.62)
 	_take_back_the_sample()
 
-	# How much of the time before the end the work took: the end has moved nine times as it grew.
+	# A DJ platter (slice 27): the guest's turns of its platter, 59.6 to 59.68, are seeks of mine.
+	await _until(59.74)
+	_check_platter_seek()
+	# And my playhead back in the harp's D minor, where the chord hand (slice 33) is held at 60.66:
+	# the platter left it at bar 7, in the intro's A minor, whose IV is Dm and not Gm.
+	DAW.seek(_ring_song())
+
+	# A tape reel for undo history (slice 28): the guest's crank, settled about 60.05, is one
+	# undo_to of my history, CRANK_NOTCHES back from where it is at 59.76; put back at 60.14.
+	await _until(59.76)
+	var crank_from: int = DAW.state.undo_depth
+	await _until(60.12)
+	_check_cranked(crank_from)
+	await _until(60.14)
+	if crank_from >= 0:
+		DAW.undo_to(crank_from)
+	else:
+		for _i in CRANK_NOTCHES:
+			DAW.redo()
+
+	# Sections rearranged (slice 29): three regions of mine past the song, laid out at 60.16; the
+	# guest's order at 60.24 is one step of mine by 60.34, taken back with them at 60.36.
+	await _until(60.16)
+	_lay_out_sections()
+	await _until(60.34)
+	_check_rearranged()
+	await _until(60.36)
+	_take_back_the_sections()
+
+	# Chord bricks (slice 31): a section of mine at 60.38; the guest's ledge bricks (60.42) minted
+	# onto my ledge, its nudge my room's row, its press of the row onto my section block (60.5) the
+	# wheel's ask, written by 60.56; all of it taken back at 60.58.
+	await _until(60.38)
+	_lay_out_a_brick_section()
+	await _until(60.56)
+	_check_bricks_pressed()
+	await _until(60.58)
+	_take_back_the_bricks()
+
+	# A chord hand down a jack (part two, slice 33): a chord hand of mine to take the guest's chord,
+	# its chord:G plugged into me at 60.62, IV held at 60.66; my harp retuned to it by 60.7 and
+	# strummed, and let go once the guest unplugs it at 60.74.
+	await _until(60.6)
+	var chords := ChordHand.new()
+	add_child(chords)
+	await _until(60.7)
+	_check_chord_into_me(chords, harp)
+	await _until(60.8)
+	check("unplugged, the guest's chord is let go, and my harp is D minor's again (%s)" % [harp.tuning()],
+			not chords.plays_theirs() and harp.tuning() == PackedInt32Array(HARP_STRINGS))
+	chords.queue_free()
+
+	# Point, mark and listen together (slice 35): the guest's ruler point and its sticky note, by
+	# 60.9; the note taken back at 60.92.
+	await _until(60.9)
+	_check_point_and_note()
+	await _until(60.92)
+	_take_back_the_note()
+
+	# The EQ wall's spectra (slice 36): sent from 60.92 to 61.12, as the studio's Spectra sends them.
+	var spectra := Spectra.new()
+	spectra.measure = _probe_spectrum
+	add_child(spectra)
+	await _until(61.12)
+	check("my spectra went out: measured, a guest here to send them to", not spectra.latest().is_empty()
+			and Session.role == Session.Role.HOST)
+	spectra.queue_free()
+
+	# Carving the clash (slice 37): the guest's push on the bass's side, from 61.14, is my bass's EQ by
+	# 61.26, taken back at once.
+	var carve_chain := DAW.state.track(SPECTRA_BASS).plugins().size()
+	var carve_depth := maxi(DAW.state.undo_depth, 0)
+	await _until(61.26)
+	_check_carve(carve_chain, carve_depth)
+
+	# Instruments that stand still (slice 38): the guest's strike on the test drum, at 61.3, is mine
+	# by 61.46 with its zone and song, and my drum plays it where it stands.
+	await _until(61.28)
+	_room.spawn(&"testdrum", &"testdrum", DRUM_HOME)
+	_room.stand(&"djembe", DJEMBE_HOME)
+	_room.stand(KitItem.KIND, KIT_HOME)
+	_stand_the_railing()
+	_publish_the_weather()
+	await _until(61.46)
+	_check_drum_strike()
+	_check_djembe_slap()
+	_check_pad_hit()
+	_check_railing_strike()
+	await _until(61.56)
+	_check_weather_asked()
+	await _until(61.76)
+	_check_looper_layer()
+	await _until(61.92)
+	_check_ring_pulled()
+	await _until(61.98)
+	_take_back_the_looper()
+	# A music box (slice 47): the guest's peg, pressed at 62.02, is a note in my MUSIC BOX item by 62.14.
+	await _until(62.14)
+	_check_music_box_peg()
+	await _until(62.26)
+	_take_back_the_music_box()
+	# A string across the room (slice 48): the guest's tie at 62.3 is in my room's row by 62.36, and
+	# its pluck at 62.36 a note on TAKE_TRACK by 62.5.
+	await _until(62.36)
+	_check_string_tied()
+	await _until(62.5)
+	_check_string_take()
+	# A marble run (slice 49): the guest's blocks at 62.56 are in my room's row by 62.62, its one outside
+	# the lattice refused; my rings over MARBLE_BAR published for the guest to set its own beside.
+	await _until(62.62)
+	_check_and_publish_the_marbles()
+	# A theremin (slice 50): the guest's glide from 62.72, sent at 62.86, is a take on TAKE_TRACK by 62.92.
+	await _until(62.92)
+	_check_theremin_take()
+	# A modular wall (slice 51): the guest's cable and knob at 62.94 are my room's row by 63.0, its
+	# second cable into the same input refused, and its knob's turn heard here as it streamed.
+	await _until(63.0)
+	_check_the_modular()
+	# The modular recorded (slice 52): the guest's take from 63.06, ended at 63.26, is an audio take on
+	# TAKE_TRACK by 63.62, which I render from what reached me.
+	await _until(63.62)
+	_check_the_modular_take()
+
+	# How much of the time before the end the work took: the end has moved twelve times as it grew.
 	if DAW.backend is GodotBackend:
 		print("engine: %s" % ("native lanes" if (DAW.backend as GodotBackend).lanes != null else "players"))
-	print("host work done at %.1fs of 59.6" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
-	await _until(59.6)
+	# The world into the modular (slice 53): the guest's weather into my VCF's CV at 63.74 is my row by
+	# 63.8, and my render of the storm's bar through it is published for the guest's.
+	await _until(63.8)
+	_check_the_world_patched()
+	# The grain cloud recorded (slice 55): the guest's grains from 64.08, its take ended at 64.3, are
+	# an audio take on TAKE_TRACK by 64.4, which I render from my own sound.
+	await _until(64.4)
+	_check_the_grain_take()
+	# The lyrics in the booth (slice 56): the guest's two lines from 64.52 and its TAP at 64.6.
+	await _until(64.7)
+	_check_the_guests_tap()
+
+	print("host work done at %.2fs of 64.76" % ((Time.get_ticks_msec() - _start) / 1000.0 - _shift))
+	await _until(64.76)
 	Session.leave()
 	check("ending the session leaves the host solo", Session.role == Session.Role.SOLO)
 	check("with its own mix still open", DAW.is_live() and DAW.state.track(2).volume > 0.12)
@@ -737,7 +1144,8 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
-	await _until(59.72)
+	DAW.set_lyrics("")
+	await _until(64.83)
 
 
 ## The guest's rope (slice 20), as my DAW has it: a key send from ROPE_FROM into ROPE_TO and a
@@ -916,7 +1324,7 @@ func _check_snapped_take() -> void:
 			and absf(float(notes[0][0]) - first - SNAP_EARLY * HitRecorder.SNAP_PULL) < 0.0005)
 	check("and its unsnapped one where it was played (%.4f for %.4f)" % [float(notes[1][0]), second],
 			absf(float(notes[1][0]) - second) < 0.0005)
-	var shakes := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"shaker" and h.size() == 6)
+	var shakes := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"shaker" and h.size() == 7)
 	var on := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - first) < 0.0001)
 	var off := shakes.filter(func(h: Array) -> bool: return absf(float(h[3]) - second) < 0.0001)
 	check("both hits reached me with their snap and their take, at the song they were played to (%s)" % [shakes],
@@ -2116,6 +2524,8 @@ func _undo_takes() -> void:
 
 func _guest(port: int) -> void:
 	Session.local_name = "Grace"
+	Session.modular_takes.patch = _probe_patch
+	Session.grain_takes.sound = _probe_grain_sound
 	# On the host's own machine, which would ordinarily mean not listening: the host's speakers
 	# are already in the room. Asked for here, because the probe is what is listening.
 	Session.listen_choice = 1
@@ -2124,8 +2534,8 @@ func _guest(port: int) -> void:
 		_uses.append([item, down, from])
 		_use_takes.append(take))
 	Session.note_played.connect(_on_note_played)
-	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int):
-		_item_hits.append([item, velocity, from, song, snap, take]))
+	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName):
+		_item_hits.append([item, velocity, from, song, snap, take, zone]))
 	await _until(0.3)
 	Session.join("127.0.0.1", port, "XX99")
 	await _until(1.4)
@@ -2283,8 +2693,8 @@ func _guest(port: int) -> void:
 	_strum(harp)
 	# A bell rung, as the studio sends one: its one song position goes with it.
 	await _until(44.0)
-	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float) -> void:
-		Session.send_item_hit(item.id, velocity, at))
+	_room.played.connect(func(item: InstrumentItem, velocity: int, _struck: bool, at: float, zone: StringName) -> void:
+		Session.send_item_hit(item.id, velocity, at, false, -1, zone))
 	InstrumentItem.clock = _ring_song
 	var bell := _room.items.get(&"bell2") as HandbellItem
 	if bell != null:
@@ -2387,13 +2797,13 @@ func _guest(port: int) -> void:
 	Session.control_played.connect(their.control)
 	await _until(55.27)
 	Session.send_control(7, 100)
-	await _until(55.33)
+	await _until(55.37)
 	var synth: MonitorSynth = their.synths[1]
 	var down: KeysDown = their._down.get(1)
 	check("the host's bend during its held note is heard on my TheirKeys (%s)" % [synth.controls],
 			int(synth.controls.get(DawKitClip.PITCH_BEND, 0)) == BEND_VALUE and down != null
 			and down.is_down(BEND_PITCH))
-	await _until(55.39)
+	await _until(55.55)
 	check("and rests at its note-off (%s)" % [synth.controls], int(synth.controls.get(DawKitClip.PITCH_BEND, -1)) == 0
 			and down != null and down.is_empty())
 	Session.note_played.disconnect(their.play)
@@ -2410,7 +2820,27 @@ func _guest(port: int) -> void:
 	await _paste_a_cassette()
 	await _hear_a_cassette()
 	await _sample_a_squeeze()
-	await _until(59.78)
+	await _spin_the_platter()
+	await _crank_the_history()
+	await _rearrange_the_sections()
+	await _press_the_bricks()
+	await _drive_their_harp()
+	await _point_and_note()
+	await _hear_the_spectra()
+	await _carve_the_clash()
+	await _strike_the_drum()
+	await _press_the_weather()
+	await _loop_a_layer()
+	await _press_the_music_box()
+	await _tie_and_pluck_a_string()
+	await _build_a_marble_run()
+	await _play_a_theremin()
+	await _patch_the_modular()
+	await _play_the_modular()
+	await _patch_the_world()
+	await _play_the_grains()
+	await _tap_the_lyrics()
+	await _until(64.88)
 	print("notices: ", _notices)
 	check("the host's goodbye arrived", _notices.any(func(t): return t.contains("ended the session")))
 	check("and I am back on my own", Session.role == Session.Role.SOLO)
@@ -2563,7 +2993,7 @@ func _clap_to_mute() -> void:
 
 ## Sidechain as a rope (slice 20): a table of my own over the host's mix at 58.5, and a rope dragged
 ## from ROPE_FROM's knot to ROPE_TO's voice, as a hand drags it: the compressor (if the track has
-## none) and the key send, one edit of intents the host carries out. By 58.65 the host's mix gives
+## none) and the key send, one edit of intents the host carries out. By 58.6 the host's mix gives
 ## the key send back to me.
 func _tie_a_rope() -> void:
 	await _until(58.5)
@@ -2588,19 +3018,19 @@ func _tie_a_rope() -> void:
 	check("my rope is over track %d's voice as I let go" % ROPE_TO, table.drop_target(ROPE_FROM, Vector2(b.x, b.z)) == ROPE_TO)
 	from.knot.grab_end(hand)
 	check("and asks for the rope's row", table.ropes.has(Sidechain.rope_key(ROPE_FROM, ROPE_TO)))
-	await _until(58.65)
+	await _until(58.6)
 	check("which the host's mix gives back to me as a key send (%d)" % Sidechain.key_send(ROPE_FROM, ROPE_TO),
 			Sidechain.key_send(ROPE_FROM, ROPE_TO) > 0)
 	hand.queue_free()
 	table.queue_free()
 
 
-## Automation by gesture (slice 22): at 58.72 a write bead of my own over a fader of BEAD_TRACK on the
+## Automation by gesture (slice 22): at 58.74 a write bead of my own over a fader of BEAD_TRACK on the
 ## host's mix, pulled as a hand pulls it and raised 0.3 m over BEAD_SECONDS of a clock of my own from
 ## BEAD_SONG, the song not looping: the hold, an edit of sets, the pass as the whole lane and the
-## let-go, intents the host carries out. By 58.8 the host's mix gives the lane back to me.
+## let-go, intents the host carries out. By 58.81 the host's mix gives the lane back to me.
 func _write_a_lane() -> void:
-	await _until(58.72)
+	await _until(58.74)
 	var fader := Fader.new()
 	fader.track_index = BEAD_TRACK
 	fader.automates = func() -> Array: return [BEAD_TRACK, "volume"]
@@ -2621,7 +3051,7 @@ func _write_a_lane() -> void:
 		bead.follow(now)
 	bead.grab_end(hand)
 	check("and wrote one pass", bead.passes_written == 1)
-	await _until(58.8)
+	await _until(58.81)
 	var lane := WriteBead.lane_now(BEAD_TRACK, "volume")
 	var inside := lane.filter(func(pt): return absf(float(pt[0]) - BEAD_SONG - BEAD_SECONDS * 0.5) <= BEAD_SECONDS * 0.5 + 0.0001)
 	check("which the host's mix gives back to me as the lane (%d points)" % inside.size(),
@@ -2757,10 +3187,11 @@ func _play(down: bool, pitch: int, velocity: int, changed_usec: Array) -> int:
 
 func _keep_publishing(head: Transform3D, pointing: String) -> void:
 	_head = head
+	_pointing = pointing
 	var timer := Timer.new()
 	timer.wait_time = 0.05
 	timer.autostart = true
-	timer.timeout.connect(func(): Session.publish_presence(_head, pointing, Vector3.ZERO))
+	timer.timeout.connect(func(): Session.publish_presence(_head, _pointing, _pointing_local))
 	add_child(timer)
 
 
@@ -2857,6 +3288,8 @@ func _check_bells() -> void:
 	add_child(_room)
 	# Made items' rows are the session's, as the studio shares them (slice 23).
 	_room.made = Session.made
+	# The chord ledge's sixteen slots (slice 31), as the studio holds them, here in front of the room.
+	_room.set_holder(ChordBrick.LEDGE, ChordLedge.slots_in(Transform3D(Basis.IDENTITY, Vector3(0, 0.76, 1.0))))
 	# The sampler (slice 26), as the studio stands one: its cassettes into this room.
 	if Session.role == Session.Role.HOST:
 		_sampler = Sampler.new()
@@ -2899,6 +3332,15 @@ func _answer_make(args: Array, from: int) -> void:
 	if made == null:
 		return
 	Session.publish_made(made.id)
+	# A guest's MAKE BRICKS (slice 31): onto my ledge, at the end of its row, as the studio's.
+	if made is ChordBrick and ChordBrick.into_ledge(str(args[1])):
+		var n := _room.next_in_order(ChordBrick.LEDGE)
+		check("there is a free slot on my ledge for the guest's %s brick (%d)" % [(made as ChordBrick).chord, n], n >= 0)
+		if n >= 0:
+			_room.slot(made, ChordBrick.LEDGE, n)
+		_bricks_for_guest.append(made.id)
+		_publish_brick_room()
+		return
 	Session.hand_to(from, made.network_key())
 	_made_for_guest.append(made.id)
 	var room: Dictionary = Session.room.duplicate(true)
@@ -2976,6 +3418,160 @@ func _check_pasted() -> void:
 			it != null and not theirs.is_empty() and mine == theirs)
 
 
+## Host: the bricks minted for the guest's MAKE BRICKS (slice 31), and the history's depth before
+## the section they are pressed onto.
+var _bricks_for_guest: Array[StringName] = []
+var _brick_depth := -1
+
+
+## The song's seconds at a bar of the bricks' section, BRICK_BAR from 0.
+func _brick_at(bars: float) -> float:
+	return DAW.state.bar_to_seconds(BRICK_BAR + 1.0 + bars)
+
+
+## The room with my bricks in it, as the studio publishes it: their ids, where they are (the room's
+## `items`, only theirs here) and their lengths (`bricks`).
+func _publish_brick_room() -> void:
+	var room: Dictionary = Session.room.duplicate(true)
+	room["made"] = _room.made_ids()
+	var where := _room.state()
+	var items := {}
+	var bricks := {}
+	for id in _room.items:
+		var brick := _room.items[id] as ChordBrick
+		if brick != null:
+			bricks[id] = brick.bars
+			if where.has(id):
+				items[id] = where[id]
+	room["items"] = items
+	room["bricks"] = bricks
+	Session.publish_room(room)
+
+
+## The guest's nudge of a brick (slice 31), as the studio answers it: a length that is one, of a
+## brick nobody else holds.
+func _answer_bricks(args: Array, from: int) -> void:
+	var brick := _room.items.get(args[0]) as ChordBrick if _room != null else null
+	var holder := Session.holder_of(brick.network_key()) if brick != null else 0
+	if brick == null or not int(args[1]) in ChordBrick.LENGTHS or (holder != 0 and holder != from):
+		return
+	brick.bars = int(args[1])
+	_publish_brick_room()
+
+
+## A section of mine past the arrangement's, four bars, its marker at its start (slice 31).
+func _lay_out_a_brick_section() -> void:
+	_brick_depth = DAW.state.undo_depth
+	DAW.add_region(_brick_at(0.0), _brick_at(4.0), BRICK_SECTION)
+	DAW.add_marker(_brick_at(0.0), BRICK_SECTION)
+
+
+## The guest's bricks and its press of their row (slice 31), as my room and my DAW have them: three
+## on my ledge in its order, made by the guest, the second 2 bars; and the section's marker
+## bracketed with the row, as one step, so the third bar of it is in F and its first in A minor.
+func _check_bricks_pressed() -> void:
+	var guest := _other_id()
+	var row := ChordBrick.ledge_row(_room)
+	check("the guest's MAKE BRICKS is %d bricks on my ledge, in order (%s)" % [BRICK_CHORDS.size(), ChordBrick.chords_text(row)],
+			row.map(func(b: ChordBrick) -> String: return b.chord) == BRICK_CHORDS
+			and row.map(func(b: ChordBrick) -> int: return b.slot_n) == range(BRICK_CHORDS.size()))
+	var theirs := func(b: ChordBrick) -> bool:
+		return Session.made.has(b.id) and int(Session.made[b.id][1]) == guest and b.key == BRICK_KEY
+	check("each made by the guest, minted from its words, a chord and its key (%s)" % [row.map(func(b): return b.data)],
+			row.all(theirs))
+	check("its nudge made the second 2 bars, my room's row (%s)" % [Session.room.get("bricks", {})],
+			row.size() == 3 and row[1].bars == 2 and int(Session.room.get("bricks", {}).get(row[1].id, 0)) == 2)
+	var at := DAWBackend.marker_key(DAW.state.markers, _brick_at(0.0))
+	var named := str(DAW.state.markers[at]) if not is_nan(at) else ""
+	check("its press of the row onto my section block bracketed the section's marker (%s)" % named, named == BRICK_MARKER)
+	var third := Harmony.at(DAW.state, _brick_at(2.0) + 0.05)
+	var first := Harmony.at(DAW.state, _brick_at(0.0) + 0.05)
+	check("so the section's third bar is in F and its first in A minor (%s, %s)" % [third.chord_name if third != null else "none",
+			first.chord_name if first != null else "none"], third != null and third.chord_name == "F" and first != null
+			and first.chord_name == "Am")
+	var sets := _room_asks.filter(func(a: Array) -> bool: return a[0] == FifthsWheel.VERB)
+	check("as the wheel's ask with the section's bar (%s)" % [sets.slice(-1)], sets.size() == 2
+			and sets[-1][1] == [int(BRICK_BAR), "A minor: Am F - C"] and sets[-1][2] == guest)
+
+
+## The section and its harmony taken back, and the bricks gone.
+func _take_back_the_bricks() -> void:
+	if _brick_depth >= 0 and DAW.state.undo_depth >= 0:
+		DAW.undo_to(_brick_depth)
+	else:
+		for _i in 3:
+			DAW.undo()
+	for id in _bricks_for_guest:
+		_room.unmake(id)
+		Session.drop_made(id)
+	_publish_brick_room()
+
+
+## Host: how many steps the sections' layout made (slice 29), the rearrangement among them, so all
+## of it is taken back; and the history's depth before them, where the DAW says it.
+var _arrange_steps := 0
+var _arrange_depth := -1
+
+
+## The song's seconds at a bar of the sections' stretch, ARRANGE_BAR from 0.
+func _arrange_at(bars: float) -> float:
+	return DAW.state.bar_to_seconds(ARRANGE_BAR + 1.0 + bars)
+
+
+## Three regions of mine past the song, two bars each, a marker inside the second and a take of
+## mine inside the third (slice 29), for the guest to rearrange.
+func _lay_out_sections() -> void:
+	_arrange_depth = DAW.state.undo_depth
+	for k in 3:
+		DAW.add_region(_arrange_at(2.0 * k), _arrange_at(2.0 * k + 2.0), ARRANGE_NAMES[k])
+	DAW.add_marker(_arrange_at(3.5), "Probe hook")
+	DAW.insert_midi_take(HOST_MIDI_TRACK, _arrange_at(4.5), _arrange_at(5.5),
+			[[_arrange_at(4.75), _arrange_at(5.0), 60, 100, 0]], "Probe take")
+	_arrange_steps = 5
+
+
+## The guest's order C A B (slice 29), as my DAW has it: C first, where A was, with my take in it, and
+## B last with its marker; as one step named for it, on the built-in engine.
+func _check_rearranged() -> void:
+	var regions: Array = DAW.state.regions
+	var named := func(n: String) -> Array:
+		for r in regions:
+			if r[2] == n:
+				return r
+		return []
+	var a: Array = named.call("Probe A")
+	var b: Array = named.call("Probe B")
+	var c: Array = named.call("Probe C")
+	check("the guest's order put C first, then A, then B, where the three were (%s)" % [[a, b, c]],
+			not c.is_empty() and absf(float(c[0]) - _arrange_at(0.0)) < 0.002 and not a.is_empty()
+			and absf(float(a[0]) - _arrange_at(2.0)) < 0.002 and not b.is_empty() and absf(float(b[0]) - _arrange_at(4.0)) < 0.002)
+	var hook := false
+	for t in DAW.state.markers:
+		if DAW.state.markers[t] == "Probe hook" and absf(float(t) - _arrange_at(5.5)) < 0.002:
+			hook = true
+	check("the marker inside B went with it", hook)
+	var take := false
+	for it: MixState.ItemState in DAW.state.track(HOST_MIDI_TRACK).items:
+		if it.name == "Probe take" and absf(it.start - _arrange_at(0.5)) < 0.002:
+			take = true
+	check("and my take inside C with C", take)
+	if not c.is_empty() and absf(float(c[0]) - _arrange_at(0.0)) < 0.002:
+		_arrange_steps += 1
+	if _reaper_resource == "" and DAW.state.undo_depth > 0:
+		var last := str(DAW.state.undo_names[DAW.state.undo_depth - 1])
+		check("as one step of mine, called for it (%s)" % last, last == "arrange sections")
+
+
+## The rearrangement and the layout taken back: to where the history was, or a step at a time where
+## the DAW does not say its depth.
+func _take_back_the_sections() -> void:
+	if _arrange_depth >= 0 and DAW.state.undo_depth >= 0:
+		DAW.undo_to(_arrange_depth)
+	else:
+		for _i in _arrange_steps:
+			DAW.undo()
+
+
 ## The paste taken back, one step, and the made items gone.
 func _take_back_the_paste() -> void:
 	if _paste_said.is_empty():
@@ -3010,7 +3606,7 @@ func _sample_a_use(id: StringName, down: bool, from: int, take: int) -> void:
 	if item == null or Session.holder_of(item.network_key()) != from:
 		return
 	var file_name := _sampler.next_name(item.use_kind(true))
-	var made := _sampler.heard(item, item.use_kind(true), take, from)
+	var made := _sampler.heard(item, item.use_kind(true), take, from, item.use_pitch())
 	if made == null:
 		return
 	_sampled = [made.id, file_name, from]
@@ -3053,7 +3649,7 @@ func _take_back_the_sample() -> void:
 
 ## Anything can be a sample (slice 26): at 59.36 I press the host's sampler's REC, as the studio's
 ## press asks; by 59.42 the room's row is mine. At 59.44 I take the duck, and at 59.48 squeeze it,
-## my hand ringing SAMPLE_TAKE. By 59.56 the host's sample cassette of it is mine, its row here and
+## my hand ringing SAMPLE_TAKE. By 59.55 the host's sample cassette of it is mine, its row here and
 ## the room naming it, and REC is off.
 func _sample_a_squeeze() -> void:
 	await _until(59.36)
@@ -3068,7 +3664,7 @@ func _sample_a_squeeze() -> void:
 	check("the duck is in my hand, as the host's table has it", Session.holder_of(DUCK) == Session.local_peer_id)
 	Session.send_item_use(&"duck", true, SAMPLE_TAKE)
 	Session.send_item_use(&"duck", false, SAMPLE_TAKE + 1)
-	await _until(59.56)
+	await _until(59.55)
 	check("REC is off again in the host's room (%s)" % [Session.room.get("sampler")], int(Session.room.get("sampler", -1)) == 0)
 	var mine: Array = []
 	for id in Session.made:
@@ -3079,6 +3675,187 @@ func _sample_a_squeeze() -> void:
 	check("and the host's sample cassette of my squeeze is here, made by me (%s)" % [mine], mine.size() == 1)
 	check("named in the room", mine.size() == 1 and (Session.room.get("made", []) as Array).has(mine[0]))
 	Session.release_hold(DUCK)
+
+
+## The guest's spin of its platter, as my DAW has it (slice 27): my playhead at PLATTER_TURNS, a bar a
+## turn, or just past it if the song played on when the guest let go.
+func _check_platter_seek() -> void:
+	var at := Platter.seconds_of(PLATTER_TURNS)
+	var now := DAW.state.position_seconds
+	check("the guest's spin of its platter moved my playhead to bar %d (%.3f s, wanted %.3f)" % [roundi(PLATTER_TURNS) + 1, now, at],
+			now >= at - 0.01 and now <= at + (0.3 if DAW.state.playing else 0.01))
+
+
+## The guest's crank, as my history has it (slice 28): CRANK_NOTCHES steps back from `from`, in one
+## jump. Where my DAW does not say its depth, that it asked two undos is the guest's check.
+func _check_cranked(from: int) -> void:
+	if from < 0:
+		check("my DAW does not say its history's depth, so the guest's crank asked undos (checked there)", true)
+		return
+	check("the guest's history crank took my history %d back, from %d to %d" % [CRANK_NOTCHES, from,
+			DAW.state.undo_depth], from >= CRANK_NOTCHES and DAW.state.undo_depth == from - CRANK_NOTCHES)
+
+
+## Chord bricks (slice 31): at 60.42 my MAKE BRICKS asks the host for BRICK_CHORDS onto the ledge, as
+## the studio's wheel does, by their words; by 60.46 the host's room has them in a row on my copy of
+## its ledge. I nudge the second to 2 bars (the room's `bricks`), and at 60.5, the host's row saying
+## so, press my ledge's row onto the host's section block: the wheel's `harmony` ask with that
+## section's bar. By 60.56 my copy of the host's markers has the section bracketed with the row.
+func _press_the_bricks() -> void:
+	await _until(60.42)
+	for c in BRICK_CHORDS:
+		Session.ask_room(&"make", [ChordBrick.KIND, ChordBrick.from_text(true, BRICK_KEY, c)])
+	await _until(60.46)
+	_apply_brick_room()
+	var row := ChordBrick.ledge_row(_room)
+	check("the host's room has my bricks on its ledge, in order, here too (%s)" % ChordBrick.chords_text(row),
+			row.map(func(b: ChordBrick) -> String: return b.chord) == BRICK_CHORDS
+			and row.all(func(b: ChordBrick) -> bool: return Session.made.has(b.id)))
+	if row.size() != BRICK_CHORDS.size():
+		return
+	var seq := Session.ask_room(&"bricks", [row[1].id, 2])
+	check("my nudge of the second is asked of the host as the room's bricks row (seq %d)" % seq, seq > 0)
+	await _until(60.5)
+	_apply_brick_room()
+	check("and the host's row has it 2 bars (%s)" % [Session.room.get("bricks", {})], row[1].bars == 2)
+	var start := NAN
+	for r in DAW.state.regions:
+		if r[2] == BRICK_SECTION:
+			start = float(r[0])
+	check("I have the host's section %s (%s)" % [BRICK_SECTION, start], not is_nan(start))
+	if is_nan(start):
+		return
+	var asked := ChordBrick.section_ask(row, DAW.state, start)
+	check("my ledge's row pressed onto its block asks [%s] at its bar (%s)" % [asked[1], asked],
+			asked == [int(BRICK_BAR), "A minor: Am F - C"])
+	Session.ask_room(FifthsWheel.VERB, asked)
+	await _until(60.56)
+	var at := DAWBackend.marker_key(DAW.state.markers, start)
+	var named := str(DAW.state.markers[at]) if not is_nan(at) else ""
+	check("and my copy of the host's markers has the section bracketed with the row (%s)" % named, named == BRICK_MARKER)
+	var third := Harmony.at(DAW.state, DAW.state.bar_to_seconds(BRICK_BAR + 3.0) + 0.05)
+	check("its third bar in F here too (%s)" % (third.chord_name if third != null else "none"), third != null and third.chord_name == "F")
+
+
+## The host's bricks, as its room has them (slice 31): made real here, laid in my copy of its ledge
+## where it says, each its length. Only the bricks: everything else in the room stays as it is.
+func _apply_brick_room() -> void:
+	_room.apply_made(Session.room.get("made", []))
+	var where: Dictionary = Session.room.get("items", {})
+	var entries := {}
+	var others := {}
+	for id in _room.items:
+		if _room.items[id] is ChordBrick:
+			if where.has(id):
+				entries[id] = where[id]
+			elif where.has(String(id)):
+				entries[id] = where[String(id)]
+		else:
+			others[id] = true
+	_room.apply(entries, others)
+	var lengths: Dictionary = Session.room.get("bricks", {})
+	for id in lengths:
+		var brick := _room.items.get(StringName(id)) as ChordBrick
+		if brick != null and int(lengths[id]) in ChordBrick.LENGTHS:
+			brick.bars = int(lengths[id])
+
+
+## Sections rearranged (slice 29): at 60.24 I ask the order C A B of the host's three probe regions,
+## as my copy of its regions has them, its other regions where they are; nothing moves here until the
+## host's mix says so. By 60.34 my copy has C first, and the room's notice names the new order.
+func _rearrange_the_sections() -> void:
+	await _until(60.24)
+	var regions: Array = DAW.state.regions
+	var at: Array = []
+	for n in ARRANGE_NAMES:
+		for i in regions.size():
+			if regions[i][2] == n:
+				at.append(i)
+	check("I have the host's three probe sections, one after another (%s)" % [at], at.size() == 3
+			and at[1] == at[0] + 1 and at[2] == at[1] + 1)
+	if at.size() != 3:
+		return
+	var order: Array = range(regions.size())
+	order[at[0]] = at[2]
+	order[at[1]] = at[0]
+	order[at[2]] = at[1]
+	var said := DAW.arrange_sections(order)
+	check("my order is asked of the host (%s)" % ("asked" if said.is_empty() else said), said.is_empty())
+	await _until(60.34)
+	var first: Array = DAW.state.regions[at[0]] if DAW.state.regions.size() > at[0] else []
+	check("and my copy has C where A was (%s)" % [first], not first.is_empty() and first[2] == "Probe C")
+	check("and the room was told the new order (%s)" % [_notices.filter(func(t): return t.contains("sections"))],
+			_notices.any(func(t): return t.contains("rearranged the sections") and t.contains("Probe C · Probe A · Probe B")))
+
+
+## A tape reel for undo history (slice 28): at 59.78 I turn a history crank of my own, as the
+## studio's on the tape deck, back CRANK_NOTCHES a notch at a time, and leave it to settle. Not
+## played back, so the host's transport is as the end needs it. It asks the host one undo_to, and
+## by 60.12 my copy of the host's history is there.
+func _crank_the_history() -> void:
+	await _until(59.78)
+	var crank := ReelCrank.new()
+	crank.plays_back = false
+	add_child(crank)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	var from: int = DAW.state.undo_depth
+	for n in CRANK_NOTCHES:
+		crank.turn_to(-(n + 1))
+		await get_tree().process_frame
+	await _until(60.08)
+	var asks := Session.kept_intents.filter(func(i: Array) -> bool: return i[0] in [&"undo_to", &"undo", &"redo"])
+	if from >= 0:
+		check("my crank, settled, asked the host one undo_to(%d) (%s)" % [from - CRANK_NOTCHES, asks], asks.size() == 1
+				and asks[0][0] == &"undo_to" and int(asks[0][1][0]) == from - CRANK_NOTCHES and crank.clicks == CRANK_NOTCHES)
+	else:
+		check("my crank, settled, asked the host %d undos, its depth unsaid (%s)" % [CRANK_NOTCHES, asks],
+				asks.size() == CRANK_NOTCHES and asks.all(func(i: Array) -> bool: return i[0] == &"undo"))
+	Session.keep_intents = false
+	Session.kept_intents.clear()
+	await _until(60.12)
+	if from >= 0:
+		check("and the host's history came back %d steps back (%d, from %d)" % [CRANK_NOTCHES, DAW.state.undo_depth, from],
+				DAW.state.undo_depth == from - CRANK_NOTCHES and crank.standing() == from - CRANK_NOTCHES)
+	crank.queue_free()
+
+
+## A DJ platter (slice 27): at 59.6 I take hold of a platter of my own, as the studio's on the deck's
+## cart, and turn it to PLATTER_TURNS over the next frames, letting go once my hand has been still on
+## it long enough to read as still (from where the sections before leave the song, well past bar 7, a
+## quick turn back let go at once would be a flick, and spin back). My turns are seeks asked of the host,
+## SEEK_HZ a second at most, and never a scrub: the host's DAW is the host's.
+func _spin_the_platter() -> void:
+	await _until(59.6)
+	var platter := Platter.new()
+	platter.authority = Session.is_authority
+	add_child(platter)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	var began := Time.get_ticks_msec()
+	platter.hold()
+	var from := platter.turns
+	var frames := 0
+	while (Time.get_ticks_msec() - began) / 1000.0 < 0.04:
+		frames += 1
+		platter.turn_to(lerpf(from, PLATTER_TURNS, minf((Time.get_ticks_msec() - began) / 30.0, 1.0)))
+		await get_tree().process_frame
+	platter.turn_to(PLATTER_TURNS)
+	await get_tree().process_frame
+	var still_from := Time.get_ticks_msec()
+	while absf(platter.speed()) > 0.001 and Time.get_ticks_msec() - still_from < 250:
+		await get_tree().process_frame
+	platter.let_go()
+	await _until(59.72)
+	var seconds := (Time.get_ticks_msec() - began) / 1000.0
+	var seeks := Session.kept_intents.filter(func(i: Array) -> bool: return i[0] == &"seek")
+	check("my platter's turns were seeks asked of the host, %d in %.2f s, %d a second at most" % [seeks.size(), seconds,
+			roundi(Platter.SEEK_HZ)], not seeks.is_empty() and seeks.size() <= ceili(seconds * Platter.SEEK_HZ) + 1
+			and is_equal_approx(float(seeks[-1][1][0]), Platter.seconds_of(PLATTER_TURNS)))
+	check("and never a scrub", not Session.kept_intents.any(func(i: Array) -> bool: return i[0] == &"scrub"))
+	Session.keep_intents = false
+	Session.kept_intents.clear()
+	platter.queue_free()
 
 
 ## The file the ear's cassette plays (slice 25): in my media folder only, named for this run's port.
@@ -3223,6 +4000,1063 @@ func _ring_song() -> float:
 	return -1.0
 
 
+## Host: the guest's chord hand, plugged into me (part two, slice 33), holding IV of D minor: my
+## chord hand takes Gm from them, my harp's strings and crown are theirs, and a strum plays Gm's
+## tones on my keys.
+func _check_chord_into_me(chords: ChordHand, harp: ChordHarp) -> void:
+	var source := Jack.chord_source(_other_id())
+	var key := Harmony.at(DAW.state, DAW.state.position_seconds)
+	var gm_tones := ChordHand.with_chord(key, "Gm").tones(ChordHarp.LOWEST, ChordHarp.STRINGS)
+	check("the guest's chord hand is plugged into me (%s)" % [_jacks.patch],
+			_jacks.sink_of(source) == Jack.player_sink(1))
+	check("and its chord came down the jack: IV of D minor, Gm, from the guest (%s from %d)"
+			% [chords.their_chord(key), chords.their_player()],
+			chords.their_chord(key) == "Gm" and chords.their_player() == _other_id() and chords.plays_theirs())
+	harp._process(0.016)
+	check("my harp's strings are Gm's, and its crown says whose (%s, %s)" % [harp.tuning(), harp._chord_label.text],
+			harp.tuning() == gm_tones and harp._chord_label.text == "iv from %s" % Session.name_of(_other_id()).to_upper())
+	var ons: Array = []
+	var heard := func(kind: int, pitch: int, _v: int, _song: float, from: StringName) -> void:
+		if kind == Session.Note.ON and from == ChordHarp.SOURCE:
+			ons.append(pitch)
+	Session.guest_midi.note.connect(heard)
+	_strum(harp)
+	Session.guest_midi.note.disconnect(heard)
+	check("and my strum plays Gm's tones on my keys (%s)" % [ons], ons == Array(gm_tones))
+	harp._physics_process(ChordHarp.RING + 0.01)
+
+
+## Guest: my chord hand's jack into the host at 60.62, as P in the chord layer asks it; IV held at
+## 60.66, sent down it as Jacks.send_chord does each frame; unplugged at 60.74.
+func _drive_their_harp() -> void:
+	await _until(60.62)
+	var chords := ChordHand.new()
+	add_child(chords)
+	var mine := Jack.chord_source(Session.local_peer_id)
+	Session.ask_room(&"plug", [mine, Jack.player_sink(1)])
+	await _until(60.66)
+	check("the host's room has my chord hand into the host (%s)" % [_jacks.patch], _jacks.sink_of(mine) == Jack.player_sink(1))
+	chords.pick(3)
+	var key := Harmony.at(DAW.state, chords.now())
+	check("I hold IV, which in D minor is Gm (%s)" % chords.own_chord(chords.now()),
+			chords.own_chord(chords.now()) == "Gm" and ChordHand.numeral_of(key, 3) == "iv")
+	await _until(60.74)
+	Session.ask_room(&"plug", [mine, &""])
+	await _until(60.78)
+	check("and unplugged it (%s)" % [_jacks.patch], _jacks.sink_of(mine) == &"")
+	chords.queue_free()
+
+
+## Guest: from 60.82 my ruler point at POINT_AT on the presence stream, as Presence.pointing_of says a
+## time on the ruler, and a sticky note at NOTE_AT, as PointAndMark.add_note makes one: an add_marker
+## intent. I stop pointing at 60.94.
+func _point_and_note() -> void:
+	await _until(60.82)
+	_pointing = Presence.RULER_KEY + ("%.3f" % POINT_AT)
+	_pointing_local = Vector3.ZERO
+	check("my sticky note is asked as a marker", PointAndMark.add_note(NOTE_AT, NOTE_WORDS))
+	await _until(60.94)
+	_pointing = ""
+
+
+## Host: the guest's point, heard on the presence stream as the song time it means, and its note in
+## my markers (slice 35).
+func _check_point_and_note() -> void:
+	var guest: Session.Participant = Session.participants.get(_other_id())
+	var said := guest.pointing_at if guest != null else ""
+	check("the guest's ruler point arrived as the time it means (%s)" % said, said.begins_with(Presence.RULER_KEY)
+			and absf(said.trim_prefix(Presence.RULER_KEY).to_float() - POINT_AT) < 0.001)
+	var at := DAWBackend.marker_key(DAW.state.markers, NOTE_AT)
+	check("and its sticky note is in my markers (%s)" % [DAW.state.markers.get(at, "-") if not is_nan(at) else "-"],
+			not is_nan(at) and str(DAW.state.markers[at]) == Harmony.note_named(NOTE_WORDS))
+
+
+## The host's measure for the probe's spectra (slice 36): the kick's and the bass's bands, the rest
+## of every track silent.
+static func _probe_spectrum(track: int) -> PackedFloat32Array:
+	var out := Spectra.silent()
+	for spec in [[SPECTRA_KICK, SPECTRA_KICK_BANDS, SPECTRA_KICK_DB], [SPECTRA_BASS, SPECTRA_BASS_BANDS, SPECTRA_BASS_DB]]:
+		if track == spec[0]:
+			for i in range(spec[1][0], spec[1][1] + 1):
+				out[i] = spec[2]
+	return out
+
+
+## Guest: by 61.1 the host's spectra are mine, as the wall reads them (a Spectra of my own, as the
+## studio stands one): the kick's and the bass's bands within a byte's half step, and the two found
+## clashing over the bands they share.
+func _hear_the_spectra() -> void:
+	await _until(61.1)
+	var mine := Spectra.new()
+	add_child(mine)
+	var shown := mine.latest()
+	var step := (Spectra.TOP_DB - Spectra.FLOOR_DB) / 255.0
+	var near := func(track: int, band: int, db: float) -> bool:
+		return shown.has(track) and absf((shown[track] as PackedFloat32Array)[band] - db) <= step * 0.5 + 0.001
+	check("the host's spectra reached me (%d tracks, %s)" % [shown.size(), mine.reason()],
+			mine.reason() == "" and near.call(SPECTRA_KICK, 5, SPECTRA_KICK_DB) and near.call(SPECTRA_BASS, 5, SPECTRA_BASS_DB)
+			and near.call(SPECTRA_KICK, 0, Spectra.FLOOR_DB) and near.call(SPECTRA_BASS, 8, SPECTRA_BASS_DB))
+	var clashes := Spectra.clashes(shown)
+	check("and the kick and the bass clash where they meet (%s)" % [clashes],
+			clashes.size() == 1 and clashes[0]["a"] == SPECTRA_KICK and clashes[0]["b"] == SPECTRA_BASS
+			and clashes[0]["from"] == SPECTRA_BASS_BANDS[0] and clashes[0]["to"] == SPECTRA_KICK_BANDS[1])
+	mine.queue_free()
+
+
+## Guest: from 61.14 my own EQ wall over the probe's kick and bass, their glow clicked without a push
+## (which asks for nothing), then grabbed on the bass's side and dragged CARVE_SHARE of a full push down, held until 61.22 so the host's EQ comes back to
+## me while the push is still one edit; by 61.24 the host's mix gives the carve back to me.
+func _carve_the_clash() -> void:
+	await _until(61.14)
+	var given := {SPECTRA_KICK: _probe_spectrum(SPECTRA_KICK), SPECTRA_BASS: _probe_spectrum(SPECTRA_BASS)}
+	var wall := EqWall.new()
+	wall.name = "CarveWall"
+	wall.spectra = func() -> Dictionary: return given
+	wall.reference = func() -> float: return 0.0
+	add_child(wall)
+	wall._process(0.0)
+	var glow: EqWall.Clash = wall.glows[0] if not wall.glows.is_empty() else null
+	check("my wall lights the kick's and the bass's clash, the bass on its right (%s)" % [glow.clash if glow != null else {}],
+			glow != null and glow.visible and glow.right_track() == SPECTRA_BASS and EqCarve.choice() != "")
+	if glow == null or not glow.visible:
+		wall.queue_free()
+		return
+	var hand := Node.new()
+	add_child(hand)
+	var mid := (EqWall.y_of_hz(Spectra.edges(glow.clash["from"]).x) + EqWall.y_of_hz(Spectra.edges(glow.clash["to"]).y)) * 0.5
+	var at := Vector3(EqWall.middle_x() + 0.05, mid, 0.022)
+	# A click first, as a desk does to see what a glow does: no push, so nothing asked for, and the
+	# host's chain has only the push's EQ after (_check_carve), not a flat one of the click's too.
+	glow.grab_begin(hand, wall.to_global(at))
+	glow.grab_end(hand)
+	check("a click on the glow with no push asks for no EQ", glow.push.is_empty() and not EqWall.Clash.asked_for(SPECTRA_BASS))
+	glow.grab_begin(hand, wall.to_global(at))
+	glow.grab_move(hand, wall.to_global(at - Vector3(0, EqCarve.PUSH_FULL * CARVE_SHARE, 0)))
+	check("my push is on the bass (%s)" % glow.readout(), not glow.push.is_empty() and int(glow.push["track"]) == SPECTRA_BASS)
+	await _until(61.22)
+	glow.grab_end(hand)
+	await _until(61.24)
+	var fx := EqCarve.carver_on(SPECTRA_BASS)
+	check("the host's mix gives my carve back to me: an EQ on the bass (%s)" % [DAW.state.fx(SPECTRA_BASS, fx).name if fx >= 0 else "none"],
+			fx >= 0)
+	if fx >= 0 and EqCarve.engine() == &"built_in":
+		var f := DAW.state.fx(SPECTRA_BASS, fx)
+		var bands := EqCarve.bands_for(SPECTRA_BASS_BANDS[0], SPECTRA_KICK_BANDS[1])
+		var cut := bands.map(func(b: int) -> float: return EqCarve.eq21_db(float(f.params.get(b, 0.5))))
+		check("its bands in the clash cut %.0f dB (%s)" % [CARVE_DB, cut], cut.all(func(db: float) -> bool: return absf(db - CARVE_DB) < 0.05))
+	hand.queue_free()
+	wall.queue_free()
+
+
+## Host: the guest's carve (slice 37), as my DAW has it: an EQ at the end of the bass's chain, on the
+## built-in engine its bands in the clash at CARVE_DB, as one step named for the carve, which one
+## undo takes back. On Reaper the ReaEQ is taken away by hand; its band waits on its parameters'
+## names, which the stand-in does not have, so only the built-in engine's cut is checked.
+func _check_carve(chain_was: int, depth_was: int) -> void:
+	var t := DAW.state.track(SPECTRA_BASS)
+	var fx := EqCarve.carver_on(SPECTRA_BASS)
+	check("the guest's push is an EQ at the end of my track %d's chain (%s, %s from %d)" % [SPECTRA_BASS, DAW.state.fx(SPECTRA_BASS, fx).name if fx >= 0 else "none", t.plugins(), chain_was],
+			fx >= 0 and t.plugins().size() == chain_was + 1 and t.plugins()[-1] == fx)
+	var from: int = SPECTRA_BASS_BANDS[0]
+	var to: int = SPECTRA_KICK_BANDS[1]
+	if fx >= 0 and EqCarve.engine() == &"built_in":
+		var f := DAW.state.fx(SPECTRA_BASS, fx)
+		var bands := EqCarve.bands_for(from, to)
+		var cut := bands.map(func(b: int) -> float: return EqCarve.eq21_db(float(f.params.get(b, 0.5))))
+		var flat := range(21).filter(func(b: int) -> bool: return not bands.has(b)) \
+				.all(func(b: int) -> bool: return is_equal_approx(EqCarve.eq21_db(float(f.params.get(b, 0.5))), 0.0))
+		check("its bands in the clash cut %.0f dB, the rest flat (%s, %s)" % [CARVE_DB, EqCarve.bands_words(bands), cut],
+				cut.all(func(db: float) -> bool: return absf(db - CARVE_DB) < 0.05) and flat)
+		var engine := DAW.backend as GodotBackend
+		if engine != null:
+			var effect := AudioServer.get_bus_effect(engine._bus[SPECTRA_BASS], 1 + fx) as AudioEffectEQ21
+			check("an EQ21 on the bass's bus, cut there too", effect != null and absf(effect.get_band_gain_db(bands[0]) - CARVE_DB) < 0.05)
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		var named := "%s: carve %s" % [t.display_name(), Spectra.span_words(from, to)]
+		check("as one step, called the carve (%s, %d after %d: %s)" % [last, DAW.state.undo_depth, depth_was, DAW.state.undo_names.slice(maxi(depth_was - 2, 0), DAW.state.undo_depth)], DAW.state.undo_depth == depth_was + 1 and last == named)
+		DAW.undo()
+		check("which one undo takes back whole", EqCarve.carver_on(SPECTRA_BASS) == -1 and t.plugins().size() == chain_was)
+	elif fx >= 0:
+		DAW.remove_fx(SPECTRA_BASS, fx)
+
+
+## Guest: the test drum stood at DRUM_HOME by 61.28, as the host stands its own, and at 61.3 my
+## fingertip down through its rim at DRUM_SPEED, as Strike reads a tracked hand, to DRUM_SONG: the
+## slap, sent to the host as a hit by my room's `played` (Session.send_item_hit, with its zone).
+func _strike_the_drum() -> void:
+	await _until(61.28)
+	var drum := _room.spawn(&"testdrum", &"testdrum", DRUM_HOME) as TestDrumItem
+	var strike := Strike.new()
+	strike.set_physics_process(false)
+	add_child(strike)
+	await _until(61.3)
+	var clock := InstrumentItem.clock
+	InstrumentItem.clock = func() -> float: return DRUM_SONG
+	var face: Dictionary = drum.faces()[0]
+	var rim: Vector3 = (face["frame"] as Transform3D).origin + Vector3(TestDrumItem.HEAD_RADIUS * 0.9, 0, 0)
+	var dt := 1.0 / 90.0
+	for i in 6:
+		strike.step({[&"probe", 0]: rim + Vector3.UP * (0.05 - i * DRUM_SPEED * dt)}, dt)
+	InstrumentItem.clock = clock
+	check("my fingertip through the test drum's rim plays its slap (%s)" % drum.last_zone,
+			drum.last_zone == &"slap" and drum.state == Item.State.HOME)
+	# The djembe (slice 40), which my room has had put away since it was made: stood as the host
+	# stands its own, and slapped at its rim at 61.32.
+	_room.stand(&"djembe", DJEMBE_HOME)
+	var djembe := _room.items.get(&"djembe") as HandDrum
+	await _until(61.32)
+	InstrumentItem.clock = func() -> float: return DJEMBE_SONG
+	var head: Vector3 = (djembe.faces()[0]["frame"] as Transform3D).origin + Vector3(djembe.head_radius() * 0.92, 0, 0)
+	for i in 6:
+		strike.step({[&"probe", 1]: head + Vector3.UP * (0.05 - i * DRUM_SPEED * dt)}, dt)
+	InstrumentItem.clock = clock
+	check("my fingertip through the djembe's rim plays its slap (%s)" % djembe.last_zone,
+			_room.stands(&"djembe") and djembe.last_zone == &"slap" and djembe.state == Item.State.HOME)
+	# Drum pads on anything (slice 41): a pad of my own marked on a surface by a fingertip's dwell, the
+	# kit's face, and struck at once, to PAD_SONG.
+	var kit := _room.items.get(KitItem.KIND) as KitItem
+	_room.stand(KitItem.KIND, KIT_HOME)
+	var pads := SurfacePads.new()
+	pads.path = PAD_FILE
+	pads.hands = true
+	pads.set_physics_process(false)
+	add_child(pads)
+	pads.clear()
+	kit.surface = pads
+	pads.set_marking(true)
+	for i in 10:
+		pads.dwell({[&"probe", 2]: PAD_AT + Vector3.UP * (0.05 - i * 0.005)}, dt)
+	for i in ceili(SurfacePads.DWELL / dt) + 2:
+		pads.dwell({[&"probe", 2]: PAD_AT}, dt)
+	pads.set_marking(false)
+	InstrumentItem.clock = func() -> float: return PAD_SONG
+	var pad: Vector3 = (pads.pad_frame(0).origin if pads.pads.size() == 1 else PAD_AT)
+	for i in 6:
+		strike.step({[&"probe", 3]: pad + Vector3.UP * (0.05 - i * DRUM_SPEED * dt)}, dt)
+	InstrumentItem.clock = clock
+	check("my fingertip's dwell marks a pad, and coming down through it plays the kit's kick (%s)" % kit.last_zone,
+			pads.pads.size() == 1 and kit.last_zone == &"kick" and kit.state == Item.State.HOME)
+	pads.clear()
+	kit.surface = null
+	pads.queue_free()
+	# The rooftop's railing (slice 42), stood as the host stands its own: my fingertip into the third
+	# tuned baluster's front, toward the parapet, to RAILING_SONG.
+	var spec := _stand_the_railing()
+	var baluster := _room.items.get(VenueInstrument.bar_id(RAILING_BAR)) as VenueInstrument.Bar
+	InstrumentItem.clock = func() -> float: return RAILING_SONG
+	var middle: Vector3 = (spec["spot"] as Transform3D) * (VenueInstrument.bar_frame(spec, RAILING_BAR).origin
+			+ Vector3(0, VenueInstrument.bar_length(spec, RAILING_BAR) * 0.5, 0))
+	for i in 6:
+		strike.step({[&"probe", 4]: middle + Vector3.BACK * (0.05 - i * DRUM_SPEED * dt)}, dt)
+	InstrumentItem.clock = clock
+	var tone := VenueInstrument.scale_tone(Harmony.at(DAW.state, RAILING_SONG), int(spec["low"]), RAILING_BAR)
+	check("my fingertip into the railing's third baluster rings its scale tone (%d, %d)" % [baluster.last_note, tone],
+			_room.stands(baluster.id) and baluster.last_note == tone and baluster.state == Item.State.HOME)
+	strike.queue_free()
+
+
+## Host: the guest's strike on the test drum (slice 38) reached me from the guest with its zone and
+## the song position it was played to, and, as Presence plays a bandmate's strike, my drum rings it
+## where it stands: nobody holds it.
+func _check_drum_strike() -> void:
+	var hits := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"testdrum")
+	check("the guest's strike on the test drum reached me with its zone and song (%s)" % [hits],
+			hits.size() == 1 and hits[0][2] == _other_id() and hits[0][6] == &"slap"
+			and is_equal_approx(float(hits[0][3]), DRUM_SONG) and int(hits[0][1]) == InstrumentItem.velocity_for(DRUM_SPEED))
+	var drum := _room.items.get(&"testdrum") as TestDrumItem
+	if hits.size() != 1 or drum == null:
+		return
+	var presence := Presence.new()
+	presence.items = _room
+	var was := drum._take
+	var hit: Array = hits[0]
+	presence._on_item_hit(hit[0], hit[1], hit[2], hit[3], hit[4], hit[5], hit[6])
+	check("and my drum plays it where it stands, on the slap, held by nobody",
+			drum._take == was + 1 and drum.last_zone == &"slap" and drum.state == Item.State.HOME
+			and Session.holder_of(drum.network_key()) == 0)
+	presence.free()
+
+
+## Host: the guest's slap on the djembe (slice 40) reached me from the guest with its zone and song,
+## and my djembe, which stands where the guest's does, rings it there on its slap, held by nobody.
+func _check_djembe_slap() -> void:
+	var hits := _item_hits.filter(func(h: Array) -> bool: return h[0] == &"djembe")
+	check("the guest's slap on the djembe reached me with its zone and song (%s)" % [hits],
+			hits.size() == 1 and hits[0][2] == _other_id() and hits[0][6] == &"slap"
+			and is_equal_approx(float(hits[0][3]), DJEMBE_SONG) and int(hits[0][1]) == InstrumentItem.velocity_for(DRUM_SPEED))
+	var djembe := _room.items.get(&"djembe") as HandDrum
+	if hits.size() != 1 or djembe == null:
+		return
+	var presence := Presence.new()
+	presence.items = _room
+	var was := djembe._take
+	var hit: Array = hits[0]
+	presence._on_item_hit(hit[0], hit[1], hit[2], hit[3], hit[4], hit[5], hit[6])
+	check("and my djembe plays it where it stands, its slap's sound, held by nobody",
+			_room.stands(&"djembe") and djembe._take == was + 1 and djembe.last_zone == &"slap"
+			and djembe.kind_of_hit(true, djembe.last_zone) == &"djembe_slap" and Session.holder_of(djembe.network_key()) == 0)
+	presence.free()
+
+
+## The rooftop's railing (slice 42), as the studio stands it there: the room's venue bars dressed as
+## its set and stood on its spot. Answers the set.
+func _stand_the_railing() -> Dictionary:
+	var rooftop := RooftopVenue.new()
+	var spec := VenueInstrument.filled(rooftop.instrument())
+	rooftop.free()
+	VenueInstrument.dress(_room, spec)
+	for id: StringName in VenueInstrument.homes(spec):
+		_room.stand(id, VenueInstrument.homes(spec)[id])
+	return spec
+
+
+## The loft's Thunderstorm (slice 44), as the studio stands it in the loft's storm, and what it
+## schedules over WEATHER_BAR of this half's song: [step, note, velocity] for each drop, in order.
+func _weather_schedule() -> Array:
+	var loft := Venue.make(&"loft", LoftVenue.STORM)
+	var spec := Weather.spec_of(loft)
+	var venue_seed := Weather.seed_of(loft.venue_id())
+	loft.free()
+	var out: Array = []
+	if spec.is_empty():
+		return out
+	var from := DAW.state.bar_to_seconds(WEATHER_BAR)
+	for drop: Dictionary in Weather.drops(spec, venue_seed, DAW.state, from, DAW.state.bar_to_seconds(WEATHER_BAR + 1.0)):
+		out.append([int(drop["step"]), int(drop["note"]), int(drop["velocity"])])
+	return out
+
+
+## Host: my schedule of the Thunderstorm's bar (slice 44) in my room for the guest to set its own
+## beside, and the switch OFF, as a room starts.
+func _publish_the_weather() -> void:
+	var room: Dictionary = Session.room.duplicate(true)
+	room["weather_probe"] = _weather_schedule()
+	room[Weather.VERB] = false
+	Session.publish_room(room)
+	check("my Thunderstorm schedules drops over its gusting bar (%d)" % (room["weather_probe"] as Array).size(),
+			not (room["weather_probe"] as Array).is_empty())
+
+
+## The host's answer to the guest's press on the weather's switch (slice 44), as the studio's: the
+## room's row `weather`, LISTEN or OFF, published.
+func _answer_weather(args: Array, _from: int) -> void:
+	var room: Dictionary = Session.room.duplicate(true)
+	room[Weather.VERB] = bool(args[0])
+	Session.publish_room(room)
+
+
+## The host's answer to the guest's slap on the looper (slice 45), as the studio's (Looper.answer): the
+## room's row `looper` [player, from bar, bars], published. What the answer did to my transport and
+## loop is kept first, to be put back when the probe is done with it.
+var _looper_was: Dictionary = {}
+var _looper_layers: Array = []
+
+
+func _answer_looper(args: Array, from: int) -> void:
+	if _looper_was.is_empty():
+		var s := DAW.state
+		_looper_was = {"playing": s.playing, "at": s.position_seconds, "looping": s.looping,
+				"loop": [s.loop_start, s.loop_end]}
+	var out := Looper.answer(Session.room.get(Looper.VERB, []), int(args[0]), int(args[1]), from, Session.name_of)
+	var room: Dictionary = Session.room.duplicate(true)
+	room[Looper.VERB] = out["row"]
+	Session.publish_room(room)
+
+
+## The host's answer to the guest's layer (slice 45), as the studio's: written onto a track of the
+## guest's own (Looper.write_layer) while the row is theirs, and the row cleared.
+func _answer_looper_layer(args: Array, from: int) -> void:
+	var row: Array = Session.room.get(Looper.VERB, [])
+	if row.is_empty() or int(row[0]) != from:
+		return
+	_looper_layers.append(Looper.write_layer(Session.name_of(from), float(args[0]), float(args[1]), args[2]))
+	var room: Dictionary = Session.room.duplicate(true)
+	room[Looper.VERB] = []
+	Session.publish_room(room)
+
+
+## Host: the guest's slap asked me for the looper and was given the next bar, not the far one it
+## named; its layer is on "<GUEST> LOOP 1" in the LOOPER folder, its key and its hit over the span
+## the row gave it; and the row is clear. On Reaper with more of the project than the bank, the
+## tracks are made but not yet in my mirror when write_layer looks them up (see docs/spatial_loop.md).
+func _check_looper_layer() -> void:
+	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == Looper.VERB)
+	var layers := _room_asks.filter(func(a: Array) -> bool: return a[0] == Looper.LAYER_VERB)
+	check("the guest's slap on the looper reached me (%s)" % [asks],
+			asks.size() == 1 and asks[0][1] == [LOOPER_ASKED_BAR, LOOPER_BARS] and asks[0][2] == _other_id())
+	check("and its layer (%d)" % layers.size(), layers.size() == 1 and layers[0][2] == _other_id())
+	var named := Looper.layer_name(Session.name_of(_other_id()), 1)
+	var index := Looper.track_named(DAW.state, named)
+	var folder := Looper.folder_of(DAW.state)
+	check("which is on a track of its own, %s, in the LOOPER folder (track %d, folder %d)" % [named, index, folder],
+			index > 0 and folder > 0 and index > folder and Looper.folder_end(DAW.state, folder) >= index)
+	var t := DAW.state.tracks.get(index) as MixState.TrackState
+	var notes: Array = []
+	if t != null and t.items.size() == 1:
+		notes = MidiTake.unpack_relative(t.items[0].notes, t.items[0].start)
+	var span: Array = [layers[0][1][0], layers[0][1][1]] if layers.size() == 1 else []
+	check("its key and its hit, one item over the %d bars it was given (%s)" % [LOOPER_BARS, notes],
+			notes.size() == LOOPER_NOTES.size() and not span.is_empty()
+			and is_equal_approx(t.items[0].start, float(span[0]))
+			and is_equal_approx(t.items[0].start + t.items[0].length, float(span[1]))
+			and notes.map(func(n: Array) -> int: return int(n[2])) == [60, 38])
+	check("and my room's looper row is clear", (Session.room.get(Looper.VERB, [0]) as Array).is_empty())
+
+
+## Host: the guest's pull on its layer's ring (slice 46) took "<GUEST> LOOP 1" out of my project and
+## left the LOOPER folder; on the built-in engine as one step, named for the ring (the edit the guest
+## opened round its grab). On Reaper the mute is an OSC write, an undo point of Reaper's own.
+func _check_ring_pulled() -> void:
+	var named := Looper.layer_name(Session.name_of(_other_id()), 1)
+	var index := Looper.track_named(DAW.state, named)
+	check("the guest's pull on its looper ring deleted %s from my project (track %d), the LOOPER folder left (%d)" % [named, index, Looper.folder_of(DAW.state)],
+			index == 0 and Looper.folder_of(DAW.state) > 0)
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		check("as one step, named for the ring (%s)" % last, last == "%s: ring" % named)
+
+
+## Host: the guest's layer and the LOOPER folder taken out again, last first, and my transport and
+## loop as they were before its slap.
+func _take_back_the_looper() -> void:
+	for at in [Looper.track_named(DAW.state, Looper.layer_name(Session.name_of(_other_id()), 1)),
+			Looper.folder_of(DAW.state)]:
+		if at > 0:
+			DAW.remove_track(at)
+	if _looper_was.is_empty():
+		return
+	DAW.set_loop_range(_looper_was["loop"][0], _looper_was["loop"][1])
+	DAW.set_looping(_looper_was["looping"])
+	if not _looper_was["playing"]:
+		DAW.transport_stop()
+	DAW.seek(_looper_was["at"])
+
+
+## Guest: the looper slapped (slice 45), asking for a far bar; by 61.68 the host's row gives me the
+## next bar instead, LOOPER_BARS of it; my layer over that span sent; by 61.82 my mirror of the host's
+## mix has it on a track of my own in the LOOPER folder. At 61.84 I pull its ring off (slice 46), and by
+## 61.98 my mirror no longer has it.
+func _loop_a_layer() -> void:
+	await _until(61.6)
+	var seq := Session.ask_room(Looper.VERB, [LOOPER_ASKED_BAR, LOOPER_BARS])
+	check("my slap on the looper is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(61.68)
+	var row: Array = Session.room.get(Looper.VERB, [])
+	var span := Looper.span_of(row, DAW.state)
+	check("and the host's row gives me the looper, %d bars from a bar of its choosing (%s)" % [LOOPER_BARS, row],
+			row.size() == 3 and int(row[0]) == Session.local_peer_id and int(row[1]) != LOOPER_ASKED_BAR
+			and int(row[2]) == LOOPER_BARS and not span.is_empty())
+	if span.is_empty():
+		return
+	var notes: Array = []
+	for n: Array in LOOPER_NOTES:
+		notes.append([span[0] + n[0], span[0] + n[1], n[2], n[3], n[4]])
+	Session.ask_room(Looper.LAYER_VERB, [float(span[0]), float(span[1]), notes])
+	await _until(61.82)
+	var named := Looper.layer_name(Session.name_of(Session.local_peer_id), 1)
+	var index := Looper.track_named(DAW.state, named)
+	var folder := Looper.folder_of(DAW.state)
+	check("and my copy of the host's mix has %s in its LOOPER folder (track %d, folder %d)" % [named, index, folder],
+			index > folder and folder > 0 and Looper.folder_end(DAW.state, folder) >= index)
+	check("and the room's looper row is clear again", (Session.room.get(Looper.VERB, [0]) as Array).is_empty())
+	# Its ring (slice 46): a stand of my own from my mirror, a hand closed on the layer's ring and pulled
+	# 0.5 m off it, then opened.
+	await _until(61.84)
+	var rings := LooperRings.new()
+	add_child(rings)
+	rings.set_physics_process(false)
+	rings.set_process(false)
+	rings.refresh()
+	var ring := rings.ring_named(named)
+	check("my stand has %s's ring, from my mirror of the host's LOOPER folder (%d rings)" % [named, rings.rings.size()], ring != null)
+	if ring != null:
+		var at := rings.global_transform * (LooperRings.rest_of(ring.slot) + Vector3(0, 0, LooperRings.RADIUS))
+		rings.step_hands([{"hand": &"probe", "at": at, "closed": true}], 1.0 / 60.0)
+		rings.step_hands([{"hand": &"probe", "at": at + Vector3(0, 0, 0.5), "closed": true}], 1.0 / 60.0)
+		rings.step_hands([{"hand": &"probe", "at": at + Vector3(0, 0, 0.5), "closed": false}], 1.0 / 60.0)
+		check("and my pull takes it off my stand at once, asked of the host", rings.ring_named(named) == null)
+	await _until(61.98)
+	check("by 61.98 my copy of the host's mix no longer has %s" % named, Looper.track_named(DAW.state, named) == 0)
+	rings.queue_free()
+
+
+## A music box hearing the song at MUSIC_BOX_SONG, stood still: what either half's reads its pegs by.
+func _probe_music_box() -> MusicBox:
+	var box := MusicBox.new()
+	box.heard_source = func() -> Dictionary: return {"seconds": MUSIC_BOX_SONG, "playing": false, "valid": true}
+	add_child(box)
+	return box
+
+
+## Where MUSIC_BOX_CELL's note is in `state`: the MUSIC BOX track, the bar's span, the row's pitch in
+## the song's key there, and the step's time.
+func _music_box_note(state: MixState) -> Dictionary:
+	var span := MusicBox.span_of(state, 1, MUSIC_BOX_SONG)
+	var rows := MusicBox.rows_of(MusicBox.key_of(state, span), MusicBox.DEFAULT_ROW)
+	return {"track": MusicBox.named_track(state), "span": span, "pitch": rows[MUSIC_BOX_CELL.x],
+			"on": MusicBox.step_time(state, span, MUSIC_BOX_CELL.y)}
+
+
+## Whether `state`'s MUSIC BOX track has one item over the box's bar, its one note MUSIC_BOX_CELL's.
+func _has_music_box_peg(state: MixState) -> bool:
+	var want := _music_box_note(state)
+	var t := state.tracks.get(int(want["track"])) as MixState.TrackState
+	if t == null or t.items.size() != 1:
+		return false
+	var it := t.items[0] as MixState.ItemState
+	var notes := MidiTake.unpack_relative(it.notes, it.start)
+	return notes.size() == 1 and int(notes[0][2]) == int(want["pitch"]) \
+			and absf(float(notes[0][0]) - float(want["on"])) < TAKE_TOLERANCE \
+			and absf(it.start - (want["span"] as Vector2).x) < TAKE_TOLERANCE
+
+
+## Host: the guest's peg on its music box (slice 47) is a note in my MUSIC BOX track's item, at its
+## row's pitch and its step's time; on the built-in engine one step named for the pegs; and a box of
+## my own reads it back as that peg.
+func _check_music_box_peg() -> void:
+	var want := _music_box_note(DAW.state)
+	var t := DAW.state.tracks.get(int(want["track"])) as MixState.TrackState
+	check("the guest's peg on its music box is a note in my MUSIC BOX track's item (track %d, pitch %d at %.3fs: %s)" % [
+			want["track"], want["pitch"], want["on"], str(t.items[0].notes) if t != null and t.items.size() > 0 else "none"],
+			int(want["track"]) > 0 and _has_music_box_peg(DAW.state))
+	if _reaper_resource == "":
+		var last: String = str(DAW.state.undo_names[DAW.state.undo_depth - 1]) if DAW.state.undo_depth > 0 else ""
+		check("the track and its item, one step named for the pegs (%s)" % last, last == "%s: pegs" % MusicBox.TRACK_NAME)
+	# Stood still at the song's place, as its first frame would show it: the bar it reads is the one
+	# the guest's box was showing.
+	var box := _probe_music_box()
+	box.set_process(false)
+	box.show_at(MUSIC_BOX_SONG, 0.0)
+	check("and a music box of my own reads it back as the guest's peg (%s)" % [box.pegs().keys()],
+			box.pegs().keys() == [MUSIC_BOX_CELL])
+	box.queue_free()
+
+
+## Host: the MUSIC BOX track taken out again.
+func _take_back_the_music_box() -> void:
+	var track := MusicBox.named_track(DAW.state)
+	if track > 0:
+		DAW.remove_track(track)
+
+
+## Guest: a peg pressed on a music box of my own (slice 47) at 62.02, shown at once and asked of the
+## host as the MUSIC BOX track and its item; by 62.18 my mirror of the host's mix has it as the note.
+func _press_the_music_box() -> void:
+	await _until(62.02)
+	var box := _probe_music_box()
+	var had := MusicBox.named_track(DAW.state)
+	box.press(MUSIC_BOX_CELL)
+	check("my press on my music box shows its peg at once, the MUSIC BOX track asked of the host (had %d)" % had,
+			box.has_peg(MUSIC_BOX_CELL) and had == 0)
+	await _until(62.18)
+	check("by 62.18 my copy of the host's mix has my peg as the note in its MUSIC BOX item, and my box still shows it",
+			_has_music_box_peg(DAW.state) and box.has_peg(MUSIC_BOX_CELL) and box.peg_count() == 1)
+	box.queue_free()
+
+
+## Host: the guest's string tied (slice 48), answered as the studio answers it (RoomString.answer): the
+## room's row `strings` with it, published, or the refusal told to the guest.
+func _answer_string(args: Array, from: int) -> void:
+	var rows: Dictionary = (Session.room.get(RoomString.ROW, {}) as Dictionary).duplicate()
+	var refusal := RoomString.answer(rows, args[0], args[1], args[2], from)
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	var room: Dictionary = Session.room.duplicate(true)
+	room[RoomString.ROW] = rows
+	Session.publish_room(room)
+
+
+## Host: the guest's string (slice 48) is in my room's row, at its ends, with the guest as its maker.
+func _check_string_tied() -> void:
+	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == RoomString.VERB)
+	var row: Variant = (Session.room.get(RoomString.ROW, {}) as Dictionary).get(STRING_ID)
+	check("the guest's string reached me as the room's ask (%s)" % [asks],
+			asks.size() == 1 and asks[0][2] == _other_id())
+	check("and is in my room's strings, at its ends, the guest its maker (%s)" % [row],
+			row is Array and (row[0] as Vector3).is_equal_approx(STRING_A) and (row[1] as Vector3).is_equal_approx(STRING_B)
+			and int(row[2]) == _other_id())
+
+
+## Host: the guest's pluck on its string (slice 48) heard here with the string's source, and in the
+## take it sent me: one note on TAKE_TRACK at STRING_SONG, the string's note in my song's key there.
+func _check_string_take() -> void:
+	var want := RoomString.pitch_in(STRING_A.distance_to(STRING_B), Harmony.at(DAW.state, STRING_SONG))
+	var heard := _sourced.filter(func(n: Array) -> bool: return n[3] == RoomString.SOURCE and n[0] == Session.Note.ON)
+	check("the guest's pluck reached me as a note from its string (%s, wanted %d)" % [heard, want],
+			heard.size() == 1 and int(heard[0][1]) == want and int(heard[0][2]) == _other_id())
+	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > STRING_SONG - 0.1 and it.start < STRING_SONG + 1.0)
+	check("and its take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	if takes.size() != 1:
+		return
+	var item: MixState.ItemState = takes[0]
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	check("named for the string, with its one note (%s, %s)" % [item.name, notes],
+			item.name.contains("string") and notes.size() == 1 and int(notes[0][2]) == want)
+
+
+## Guest: a string tied (slice 48) at 62.3, asked of the host; by 62.36 my mirror of the room has it,
+## and I pluck a string of my own at its ends onto TAKE_TRACK, my clock at STRING_SONG, sent when the
+## clock stops at 62.42.
+func _tie_and_pluck_a_string() -> void:
+	await _until(62.3)
+	var seq := Session.ask_room(RoomString.VERB, [STRING_ID, STRING_A, STRING_B])
+	check("my string is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(62.36)
+	var row: Variant = (Session.room.get(RoomString.ROW, {}) as Dictionary).get(STRING_ID)
+	check("and by 62.36 the room's strings have it, mine (%s)" % [row],
+			row is Array and int(row[2]) == Session.local_peer_id)
+	var gm := Session.guest_midi
+	gm.reach(RoomString.SOURCE, true)
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(STRING_SONG, true)
+	var string := RoomString.new()
+	string.id = STRING_ID
+	string.a = STRING_A
+	string.b = STRING_B
+	string.tips = func() -> Dictionary: return {}
+	add_child(string)
+	# The keys begin their take as they next hear the clock recording (GuestMidi.follow, a frame on).
+	await get_tree().process_frame
+	await get_tree().process_frame
+	string.pluck(RoomString.PLUCK_VELOCITY)
+	check("my pluck is in a take of my own", gm.is_recording() and gm.held.has(string.pitch()))
+	await _until(62.4)
+	string.silence()
+	await _until(62.42)
+	gm.heard_source = _given_clock(STRING_SONG + 1.0, false)
+	await _until(62.48)
+	check("and the take went to the host, my one note from STRING_SONG (%s)" % [gm.last_take],
+			not gm.is_recording() and int(gm.last_take.get("notes", 0)) == 1
+			and absf(float(gm.last_take.get("start", 0.0)) - STRING_SONG) < 0.1)
+	gm.reach(RoomString.SOURCE, false)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	string.queue_free()
+
+
+## Host: the guest's block (slice 49), answered as the studio answers it (MarbleRun.answer): the room's
+## row `marbles` with it, published, or the refusal told to the guest.
+func _answer_marble(args: Array, from: int) -> void:
+	var rows: Dictionary = (Session.room.get(MarbleRun.ROW, {}) as Dictionary).duplicate()
+	var refusal := MarbleRun.answer(rows, args[0], args[1], args[2])
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	var room: Dictionary = Session.room.duplicate(true)
+	room[MarbleRun.ROW] = rows
+	Session.publish_room(room)
+
+
+## The bells the marbles ring over MARBLE_BAR in `rows`, in this side's song: [beat, cell, note] each.
+func _marble_rings(rows: Dictionary) -> Array:
+	var from := DAW.state.bar_to_seconds(MARBLE_BAR)
+	return MarbleRun.rings(rows, [], DAW.state, from, DAW.state.bar_to_seconds(MARBLE_BAR + 1.0)).map(
+			func(r: Dictionary) -> Array: return [snappedf(float(r["beat"]), 0.0001), r["cell"], int(r["note"])])
+
+
+## Host: the guest's two blocks (slice 49) are in my room's row, its third outside the lattice not;
+## and my rings over MARBLE_BAR published (`marbles_probe`) for the guest to set its own beside.
+func _check_and_publish_the_marbles() -> void:
+	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == MarbleRun.VERB)
+	var rows: Dictionary = Session.room.get(MarbleRun.ROW, {})
+	check("the guest's three blocks reached me as the room's asks (%d)" % asks.size(),
+			asks.size() == 3 and asks.all(func(a: Array) -> bool: return a[2] == _other_id()))
+	check("and its two in the lattice are my room's blocks, the one outside not (%s)" % [rows],
+			rows.size() == 2 and rows.get(MARBLE_TOP) == [&"ramp", 1] and rows.get(MARBLE_BELL) == [&"bell", 1])
+	var room: Dictionary = Session.room.duplicate(true)
+	room["marbles_probe"] = _marble_rings(rows)
+	Session.publish_room(room)
+	check("over MARBLE_BAR my run rings its bell once, a sixteenth into the bar (%s)" % [room["marbles_probe"]],
+			(room["marbles_probe"] as Array).size() == 1 and room["marbles_probe"][0][1] == MARBLE_BELL)
+
+
+## Guest: two blocks of the lattice asked of the host at 62.56 (slice 49), and one outside it, which
+## it refuses to me in words; by 62.68 my mirror of the room has the two, and my own rings over
+## MARBLE_BAR, from my copy of the host's song, are the host's.
+func _build_a_marble_run() -> void:
+	await _until(62.56)
+	var seq := Session.ask_room(MarbleRun.VERB, [MARBLE_TOP, &"ramp", 1])
+	Session.ask_room(MarbleRun.VERB, [MARBLE_BELL, &"bell", 1])
+	Session.ask_room(MarbleRun.VERB, [MARBLE_OUTSIDE, &"bell", 0])
+	check("my blocks are asked of the host (seq %d)" % seq, seq > 0)
+	await _until(62.68)
+	var rows: Dictionary = Session.room.get(MarbleRun.ROW, {})
+	check("and by 62.68 the room's blocks are my two (%s)" % [rows],
+			rows.size() == 2 and rows.get(MARBLE_TOP) == [&"ramp", 1] and rows.get(MARBLE_BELL) == [&"bell", 1])
+	check("the one outside the lattice was refused to me, in words",
+			_notices.any(func(t) -> bool: return String(t).begins_with("That cell is outside the lattice")))
+	var theirs: Array = Session.room.get("marbles_probe", [])
+	var mine := _marble_rings(rows)
+	check("my run rings the host's bells over MARBLE_BAR, bell for bell (%s / %s)" % [mine, theirs],
+			not mine.is_empty() and mine == theirs)
+
+
+## Host: the guest's cable or knob on the modular wall (slice 51), answered as the studio answers it
+## (Modular.answer_patch, answer_knob): the room's row `modular` with it, published, or the refusal
+## told to the guest.
+func _answer_modular(verb: StringName, args: Array, from: int) -> void:
+	var patch := Modular.clean(Session.room.get(Modular.ROW, Modular.default_patch()))
+	var refusal := Modular.answer_patch(patch, args[0], args[1]) if verb == Modular.PATCH_VERB \
+			else Modular.answer_knob(patch, args[0], args[1])
+	if refusal != "":
+		Session.tell(from, refusal)
+		return
+	var room: Dictionary = Session.room.duplicate(true)
+	room[Modular.ROW] = patch
+	Session.publish_room(room)
+	# Into a take through the modular, at the song it was asked at, as the studio does (slice 52).
+	if verb == Modular.PATCH_VERB:
+		Session.modular_takes.cable(args[0], args[1], args[2])
+	else:
+		Session.modular_takes.knob(args[0], args[1], args[2])
+
+
+## The grain cloud's sound on both halves (slice 55): two seconds of a tone swelling from silence, at
+## GrainVoice.RATE, every place in it different, standing in for a sample both machines have.
+func _probe_grain_sound() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(2 * GrainVoice.RATE)
+	for i in out.size():
+		out[i] = sin(float(i) * 0.05) * 0.6 * float(i) / out.size()
+	return out
+
+
+## Host: the guest's take on the grain cloud (slice 55), as my DAW has it: every event heard from the
+## guest in order, and one audio take named `grains` on TAKE_TRACK at its first event's song; its
+## start, frames and digest published for the guest.
+func _check_the_grain_take() -> void:
+	var heard := _grains_heard.filter(func(g: Array) -> bool: return g[1] == _other_id())
+	var ticks: Array = heard.map(func(g: Array) -> int: return int((g[0] as PackedFloat32Array)[GrainVoice.TICK]))
+	check("the guest's grain events reached me, every one, in order (%s)" % [ticks],
+			heard.size() == GRAINS and range(ticks.size()).all(func(i: int) -> bool: return ticks[i] == ticks[0] + i))
+	var near := DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > GRAINS_SONG - 0.1 and it.start < GRAINS_SONG + 1.0)
+	check("and its take is one audio take named grains on track %d at its first event's song (%s)" % [TAKE_TRACK,
+			near.map(func(it: MixState.ItemState) -> String: return "%s %.3f %.3f" % [it.name, it.start, it.length])],
+			near.size() == 1 and near[0].name == GrainTakes.NAME and near[0].source.ends_with(".wav")
+			and _grains_placed.size() == 1 and not heard.is_empty() and absf(near[0].start - float(heard[0][2])) < 1e-3)
+	if _grains_placed.size() != 1:
+		return
+	var info: Dictionary = _grains_placed[0]
+	var bytes := FileAccess.get_file_as_bytes(info["path"])
+	var frames := (bytes.size() - AudioTake.HEADER_BYTES) / 2
+	check("rendered from my own sound: %d frames, %.3f s from %.3f" % [frames, info["seconds"], info["start"]],
+			frames > 0 and info["peer"] == _other_id())
+	var room: Dictionary = Session.room.duplicate(true)
+	room["grains_probe"] = [info["start"], frames, _digest(bytes.slice(AudioTake.HEADER_BYTES))]
+	Session.publish_room(room)
+
+
+## Guest: the grain cloud played (slice 55) from 64.08, GRAINS events a frame apart stamped with the
+## song I hear from GRAINS_SONG, recording onto TAKE_TRACK; the clock stopped at 64.3 ends the take.
+## By 64.46 the host's WAV of it is my own render of it, at my first event's song.
+func _play_the_grains() -> void:
+	await _until(64.08)
+	var gm := Session.guest_midi
+	var gt := Session.grain_takes
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(GRAINS_SONG, true)
+	for n in GRAINS:
+		Session.send_grains(GrainVoice.event(777 + n, 0.2 + n * 0.05, 0.03 + n * 0.01, 12.0 + n * 3.0, 0.1), gt.song())
+		await get_tree().process_frame
+	check("recording, my grains are a take of my own (%d events)" % (gt.mine.events.size() if gt.mine != null else -1),
+			gt.mine != null and gt.mine.events.size() == GRAINS)
+	await _until(64.3)
+	gm.heard_source = _given_clock(GRAINS_SONG + 2.0, false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check("the song stopped, my take is ended and kept, from my first event's song (%.3f)" % (gt.last_mine.lands() if gt.last_mine != null else -1.0),
+			gt.mine == null and gt.last_mine != null and gt.last_mine.events.size() == GRAINS
+			and absf(gt.last_mine.lands() - GRAINS_SONG - GrainVoice.latency_seconds()) < 0.25)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	await _until(64.46)
+	var theirs: Array = Session.room.get("grains_probe", [])
+	var mine := ModularTake.pcm(GrainTake.at_take_rate(gt.last_mine.render(_probe_grain_sound()))) if gt.last_mine != null else PackedByteArray()
+	check("and the host's audio take of it is my own render: at my first event's song, as long, the same samples (%s)" % [theirs],
+			theirs.size() == 3 and gt.last_mine != null and absf(float(theirs[0]) - gt.last_mine.lands()) < 1e-6
+			and int(theirs[1]) == mine.size() / 2 and theirs[2] == _digest(mine))
+
+
+## Host: the guest's lyrics (slice 56), as my song has them: its two lines, the first stamped by its
+## TAP at the song it heard, LYRIC_SONG, and the second still untimed.
+func _check_the_guests_tap() -> void:
+	var lyr := Lyrics.parse(DAW.state.lyrics)
+	var lines := lyr.lines
+	check("the guest's lyrics are my song's: two lines (%s)" % DAW.state.lyrics.c_escape(),
+			lines.size() == 2 and str(lines[0]["text"]) == "line one" and str(lines[1]["text"]) == "line two")
+	check("its TAP stamped the first at the song it heard, the second still untimed",
+			lines.size() == 2 and absf(float(lines[0]["t"]) - LYRIC_SONG) < 0.1 and float(lines[1]["t"]) == Lyrics.UNTIMED)
+
+
+## Guest: a lyric board of my own (slice 56): at 64.52 it writes two untimed lines, and at 64.6,
+## hearing the song from LYRIC_SONG, TAP stamps the first. Both are intents the host's song takes.
+func _tap_the_lyrics() -> void:
+	await _until(64.52)
+	var board := LyricBoard.new()
+	add_child(board)
+	check("my board writes two lines to the host's song", board.write_text("line one\nline two") == "")
+	await _until(64.6)
+	board.heard_source = _given_clock(LYRIC_SONG, true)
+	var why := board.tap()
+	check("and TAP, the song playing, stamps the first (%s)" % why, why.is_empty())
+	board.queue_free()
+
+
+## The modular's patch as both halves hear it here: the room's row (slice 52's takes start from it).
+func _probe_patch() -> Dictionary:
+	return Modular.clean(Session.room.get(Modular.ROW, Modular.default_patch()))
+
+
+## The MD5 of `bytes`, hex.
+static func _digest(bytes: PackedByteArray) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_MD5)
+	ctx.update(bytes)
+	return ctx.finish().hex_encode()
+
+
+## Host: the guest's take through the modular (slice 52), as my DAW has it: one audio take named
+## `modular` on TAKE_TRACK at MODULAR_SONG, no MIDI take of it there, its notes heard as the
+## modular's and its sweep as it streamed; its start, frames and digest published for the guest.
+func _check_the_modular_take() -> void:
+	var notes := _sourced.filter(func(n: Array) -> bool: return n[3] == Modular.SOURCE and n[2] == _other_id())
+	check("the guest's keys at the wall reached me as the modular's (%s)" % [notes],
+			notes.size() >= 2 and int(notes[0][1]) == MODULAR_PITCH)
+	var sweep := _knobs_heard.filter(func(k: Array) -> bool: return k[2] == _other_id()).slice(MODULAR_TURNS.size())
+	check("and its sweep as it streamed (%d of %d)" % [sweep.size(), MODULAR_SWEEP.size()],
+			sweep.size() == MODULAR_SWEEP.size() and range(sweep.size()).all(func(i: int) -> bool:
+				return is_equal_approx(sweep[i][1], MODULAR_SWEEP[i])))
+	var near := DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > MODULAR_SONG - 0.1 and it.start < MODULAR_SONG + 1.0)
+	check("and its take is one audio take named modular on track %d at its song, no MIDI (%s)" % [TAKE_TRACK,
+			near.map(func(it: MixState.ItemState) -> String: return "%s %.3f %.3f" % [it.name, it.start, it.length])],
+			near.size() == 1 and near[0].name == ModularTakes.NAME and near[0].notes.is_empty()
+			and near[0].source.ends_with(".wav") and _modular_placed.size() == 1)
+	if _modular_placed.size() != 1:
+		return
+	var info: Dictionary = _modular_placed[0]
+	var bytes := FileAccess.get_file_as_bytes(info["path"])
+	var frames := (bytes.size() - AudioTake.HEADER_BYTES) / 2
+	check("rendered from what reached me: %d frames, %.3f s from %.3f" % [frames, info["seconds"], info["start"]],
+			frames > 0 and info["peer"] == _other_id())
+	var room: Dictionary = Session.room.duplicate(true)
+	room["modular_probe"] = [info["start"], frames, _digest(bytes.slice(AudioTake.HEADER_BYTES))]
+	Session.publish_room(room)
+
+
+## Guest: the modular played (slice 52) from 63.06 at the wall, onto TAKE_TRACK at MODULAR_SONG:
+## MODULAR_PITCH held, the wheel moved up at 63.1 (its move to the host reliable, behind the notes:
+## ModularTakes.bend) and the cutoff swept down from then a frame at a time, let go at 63.24, the
+## clock stopped at 63.26 and the take ended. By 63.68 the host's WAV of it is my own render of it.
+func _play_the_modular() -> void:
+	await _until(63.06)
+	var gm := Session.guest_midi
+	var mt := Session.modular_takes
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(MODULAR_SONG, true)
+	gm.reach(Modular.SOURCE, true)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check("at the wall my keys record through the modular (%s)" % [mt.mine],
+			gm.is_recording() and gm.through_modular() and mt.mine != null)
+	gm.note_on(MODULAR_PITCH, 100)
+	await _until(63.1)
+	gm.control(DawKitClip.PITCH_BEND, 4096)
+	for v: float in MODULAR_SWEEP:
+		Session.send_knob(&"vcf.cutoff", v, gm.song())
+		await get_tree().physics_frame
+	await _until(63.24)
+	gm.note_off(MODULAR_PITCH)
+	await _until(63.26)
+	gm.heard_source = _given_clock(MODULAR_SONG + 1.0, false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check("ended, my take is the modular's, from MODULAR_SONG, and no MIDI take was sent (%s)" % [gm.last_take],
+			not gm.is_recording() and gm.last_take.get("modular", false) and mt.last_mine != null
+			and absf(mt.last_mine.start - MODULAR_SONG) < 0.1
+			and mt.last_mine.events.filter(func(e: Array) -> bool: return e[1] == Modular.Event.KNOB).size() == MODULAR_SWEEP.size()
+			and mt.last_mine.events.any(func(e: Array) -> bool: return e[1] == Modular.Event.BEND and e[2] == 4096))
+	gm.reach(Modular.SOURCE, false)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	await _until(63.68)
+	var theirs: Array = Session.room.get("modular_probe", [])
+	var mine := ModularTake.pcm(mt.last_mine.render()) if mt.last_mine != null else PackedByteArray()
+	check("and the host's audio take of it is my own render: at my song, as long, the same samples (%s)" % [theirs],
+			theirs.size() == 3 and absf(float(theirs[0]) - mt.last_mine.start) < 1e-6 and int(theirs[1]) == mine.size() / 2
+			and theirs[2] == _digest(mine))
+
+
+## WEATHER_BAR of the loft's Thunderstorm through `patch` (slice 53): MODULAR_PITCH held from its start,
+## and the weather's level and drops played into the patch from this half's song
+## (ModularWorld.weather_events), as both halves work it out.
+func _world_render(patch: Dictionary) -> PackedFloat32Array:
+	var loft := Venue.make(&"loft", LoftVenue.STORM)
+	var spec := Weather.spec_of(loft)
+	var venue_seed := Weather.seed_of(loft.venue_id())
+	loft.free()
+	var from := DAW.state.bar_to_seconds(WEATHER_BAR)
+	var to := DAW.state.bar_to_seconds(WEATHER_BAR + 1.0)
+	var events := [[from, Modular.Event.ON, MODULAR_PITCH, 100]] + ModularWorld.weather_events(spec, venue_seed, DAW.state, from, to)
+	return Modular.render(patch, events, from, roundi((to - from) * Modular.RATE))
+
+
+## Host: the guest's weather into my VCF's CV (slice 53) is my room's row, the LFO it pulled out of
+## there gone, and my render of the storm's bar through it is published for the guest (`world_probe`).
+func _check_the_world_patched() -> void:
+	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
+	var asks := _room_asks.filter(func(a: Array) -> bool:
+			return a[0] == Modular.PATCH_VERB and a[2] == _other_id() and Modular.is_world(StringName(a[1][0])))
+	check("the guest's weather into the VCF's CV reached me as the room's ask, and is my row (%s)" % [patch["cables"]],
+			asks.size() == 1 and Modular.source_of(patch, &"vcf.cv") == &"world:weather"
+			and not Modular.sinks_of(patch, &"lfo.out").has(&"vcf.cv"))
+	var out := _world_render(patch)
+	var loudest := 0.0
+	for v in out:
+		loudest = maxf(loudest, absf(v))
+	check("my render of the storm's bar through it sounds (%d frames, %.3f)" % [out.size(), loudest], loudest > 0.05)
+	var room: Dictionary = Session.room.duplicate(true)
+	room["world_probe"] = [out.size(), _digest(out.to_byte_array())]
+	Session.publish_room(room)
+
+
+## Guest: at 63.74 the LFO out of the room's VCF's CV and the weather's socket into it (slice 53), each
+## asked of the host; by 63.86 my mirror of the room's patch has it, and my render of the storm's bar
+## through it is, by 64.0, the host's, sample for sample.
+func _patch_the_world() -> void:
+	await _until(63.74)
+	var song := Session.guest_midi.song() if Session.guest_midi != null else -1.0
+	Session.ask_room(Modular.PATCH_VERB, [&"vcf.cv", &"", song])
+	var seq := Session.ask_room(Modular.PATCH_VERB, [&"world:weather", &"vcf.cv", song])
+	check("the weather into the VCF's CV is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(63.86)
+	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
+	check("and by 63.86 the room's patch has the weather on the VCF's CV (%s)" % [patch["cables"]],
+			Modular.source_of(patch, &"vcf.cv") == &"world:weather")
+	var mine := _world_render(patch)
+	# The host's render of the bar takes it most of a tenth of a second past 63.8 before it publishes.
+	await _until(64.0)
+	var theirs: Array = Session.room.get("world_probe", [])
+	check("both renders of the storm's bar through it agree, sample for sample (%s)" % [theirs],
+			theirs.size() == 2 and int(theirs[0]) == mine.size() and theirs[1] == _digest(mine.to_byte_array()))
+
+
+## Host: the guest's re-patch (slice 51) is in my room's row, its cable into a taken input not; its
+## knob let go is the row's, and its turn reached me as it streamed, from the guest, in order.
+func _check_the_modular() -> void:
+	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == Modular.PATCH_VERB or a[0] == Modular.KNOB_VERB)
+	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
+	check("the guest's two cables and its knob reached me as the room's asks (%d)" % asks.size(),
+			asks.size() == 3 and asks.all(func(a: Array) -> bool: return a[2] == _other_id()))
+	check("and my room's patch has its LFO on the VCF's CV, not the noise refused there (%s)" % [patch["cables"]],
+			Modular.source_of(patch, &"vcf.cv") == &"lfo.out" and patch["cables"].size() == Modular.DEFAULT_CABLES.size() + 1)
+	check("and its knob let go (%.2f)" % patch["knobs"][&"vcf.cutoff"], is_equal_approx(patch["knobs"][&"vcf.cutoff"], MODULAR_KNOB))
+	var turned := _knobs_heard.filter(func(k: Array) -> bool: return k[2] == _other_id())
+	check("its knob's turn reached me as it streamed, in order, from the guest (%s)" % [turned],
+			turned.size() == MODULAR_TURNS.size() and turned.all(func(k: Array) -> bool: return k[0] == &"vcf.cutoff")
+			and range(turned.size()).all(func(i: int) -> bool: return is_equal_approx(turned[i][1], MODULAR_TURNS[i])))
+
+
+## Guest: the room's modular re-patched at 62.94 (slice 51): an LFO onto the VCF's CV asked of the
+## host, and the noise into the same input, which it refuses to me in words; a knob's turn streamed
+## and let go. By 63.04 my mirror of the room has the cable and the knob.
+func _patch_the_modular() -> void:
+	await _until(62.94)
+	var song := Session.guest_midi.song() if Session.guest_midi != null else -1.0
+	var seq := Session.ask_room(Modular.PATCH_VERB, [&"lfo.out", &"vcf.cv", song])
+	Session.ask_room(Modular.PATCH_VERB, [&"noise.out", &"vcf.cv", song])
+	for v: float in MODULAR_TURNS:
+		Session.send_knob(&"vcf.cutoff", v, song)
+	Session.ask_room(Modular.KNOB_VERB, [&"vcf.cutoff", MODULAR_KNOB, song])
+	check("my cables and my knob are asked of the host (seq %d)" % seq, seq > 0)
+	await _until(63.04)
+	var patch := Modular.clean(Session.room.get(Modular.ROW, {}))
+	check("and by 63.04 the room's patch has my LFO on the VCF's CV and my knob (%s)" % [patch["cables"]],
+			Modular.source_of(patch, &"vcf.cv") == &"lfo.out" and is_equal_approx(patch["knobs"][&"vcf.cutoff"], MODULAR_KNOB))
+	check("the noise into the same input was refused to me, in words",
+			_notices.any(func(t) -> bool: return String(t).contains("VCF CV IN has a cable in it already")))
+
+
+## Host: the guest's press on the weather's switch (slice 44) reached me from the guest, and my
+## room's row is LISTEN.
+func _check_weather_asked() -> void:
+	var asks := _room_asks.filter(func(a: Array) -> bool: return a[0] == Weather.VERB)
+	check("the guest's press on the weather's switch reached me (%s)" % [asks],
+			asks.size() == 1 and asks[0][1] == [true] and asks[0][2] == _other_id())
+	check("and my room's weather row is LISTEN", Session.room.get(Weather.VERB, false) == true)
+
+
+## Guest: the weather's switch pressed (slice 44), LISTEN asked of the host, and by 61.56 its room's
+## row says so; and my own schedule of the Thunderstorm's bar, from my copy of the host's song, is
+## the host's drop for drop.
+func _press_the_weather() -> void:
+	await _until(61.46)
+	var seq := Session.ask_room(Weather.VERB, [true])
+	check("my press on the weather's switch is asked of the host (seq %d)" % seq, seq > 0)
+	await _until(61.56)
+	check("and the room's weather row is LISTEN (%s)" % [Session.room.get(Weather.VERB)],
+			Session.room.get(Weather.VERB, false) == true)
+	var theirs: Array = Session.room.get("weather_probe", [])
+	var mine := _weather_schedule()
+	check("both halves schedule the same drops over the Thunderstorm's bar (%d here, %d there)" % [mine.size(), theirs.size()],
+			not mine.is_empty() and mine == theirs)
+
+
+## Host: the guest's strike on the railing's third baluster (slice 42) reached me from the guest with
+## its song, and my baluster, which stands where the guest's does, rings it there on the song's
+## scale tone at that moment, its own sound, held by nobody.
+func _check_railing_strike() -> void:
+	var id := VenueInstrument.bar_id(RAILING_BAR)
+	var hits := _item_hits.filter(func(h: Array) -> bool: return h[0] == id)
+	check("the guest's strike on the railing reached me with its song (%s)" % [hits],
+			hits.size() == 1 and hits[0][2] == _other_id() and is_equal_approx(float(hits[0][3]), RAILING_SONG)
+			and int(hits[0][1]) == InstrumentItem.velocity_for(DRUM_SPEED))
+	var baluster := _room.items.get(id) as VenueInstrument.Bar
+	if hits.size() != 1 or baluster == null:
+		return
+	var presence := Presence.new()
+	presence.items = _room
+	var was := baluster._take
+	var hit: Array = hits[0]
+	presence._on_item_hit(hit[0], hit[1], hit[2], hit[3], hit[4], hit[5], hit[6])
+	var tone := VenueInstrument.scale_tone(Harmony.at(DAW.state, RAILING_SONG), int(baluster.set_spec["low"]), RAILING_BAR)
+	check("and my baluster rings it where it stands, on the song's scale tone there (%d), held by nobody" % baluster.last_note,
+			_room.stands(id) and baluster._take == was + 1 and baluster.last_note == tone
+			and baluster.sound_kind(true) == &"baluster" and Session.holder_of(baluster.network_key()) == 0)
+	presence.free()
+
+
+## Host: the guest's hit on a pad of its own (slice 41) reached me on the kit with its drum and song,
+## and my kit rings it: from the guest's ghost where there is one, here at the kit, held by nobody.
+func _check_pad_hit() -> void:
+	var hits := _item_hits.filter(func(h: Array) -> bool: return h[0] == KitItem.KIND)
+	check("the guest's pad hit reached me on the kit with its drum and song (%s)" % [hits],
+			hits.size() == 1 and hits[0][2] == _other_id() and hits[0][6] == &"kick"
+			and is_equal_approx(float(hits[0][3]), PAD_SONG) and int(hits[0][1]) == InstrumentItem.velocity_for(DRUM_SPEED))
+	var kit := _room.items.get(KitItem.KIND) as KitItem
+	if hits.size() != 1 or kit == null:
+		return
+	var presence := Presence.new()
+	presence.items = _room
+	var was := kit._take
+	var hit: Array = hits[0]
+	presence._on_item_hit(hit[0], hit[1], hit[2], hit[3], hit[4], hit[5], hit[6])
+	check("and my kit rings it, its kick's sound, held by nobody",
+			kit._take == was + 1 and kit.last_zone == &"kick" and kit.kind_of_hit(true, kit.last_zone) == &"kick"
+			and Session.holder_of(kit.network_key()) == 0)
+	presence.free()
+
+
+func _take_back_the_note() -> void:
+	var at := DAWBackend.marker_key(DAW.state.markers, NOTE_AT)
+	if not is_nan(at):
+		DAW.remove_marker(at)
+
+
 ## A chord harp of my own, on my keys, as the studio stands one.
 func _harp() -> ChordHarp:
 	var harp := ChordHarp.new()
@@ -3259,10 +5093,15 @@ func _check_strum(from: int, label: String) -> void:
 	check("and each rang out and was let go (%d)" % offs.size(), offs.size() == ChordHarp.STRINGS)
 
 
+## Waits until `seconds` into the probe by this process's clock, never before. A timer made at the end
+## of a long frame is credited with that whole frame on its first tick and so can fire early by as
+## much (the first ring of a sound made is tens of milliseconds), so it is waited out again until the
+## clock agrees.
 func _until(seconds: float) -> void:
 	var left := seconds + _shift - (Time.get_ticks_msec() - _start) / 1000.0
-	if left > 0.0:
+	while left > 0.0:
 		await get_tree().create_timer(left).timeout
+		left = seconds + _shift - (Time.get_ticks_msec() - _start) / 1000.0
 
 
 func check(label: String, ok: bool) -> void:
@@ -3314,3 +5153,82 @@ class Clapper extends MixSource:
 
 	func describe() -> String:
 		return "A clapping test microphone"
+
+
+## Host: the guest's theremin glide (slice 50), as my DAW has it: one item on TAKE_TRACK at
+## THEREMIN_SONG named for the theremin, its notes rising from THEREMIN_FROM and each down before the
+## last let go, its bends and its CC 11 in it; and its notes heard with the theremin's source.
+func _check_theremin_take() -> void:
+	var heard := _sourced.filter(func(n: Array) -> bool: return n[3] == Theremin.SOURCE and n[0] == Session.Note.ON)
+	check("the guest's theremin reached me as notes from it, handed on (%s)" % [heard],
+			heard.size() >= 2 and int(heard[0][1]) == roundi(THEREMIN_FROM) and int(heard[0][2]) == _other_id())
+	var takes: Array = DAW.state.track(TAKE_TRACK).items.filter(func(it: MixState.ItemState) -> bool:
+			return it.start > THEREMIN_SONG - 0.1 and it.start < THEREMIN_SONG + 1.0)
+	check("and its take is an item on track %d (%d)" % [TAKE_TRACK, takes.size()], takes.size() == 1)
+	if takes.size() != 1:
+		return
+	var item: MixState.ItemState = takes[0]
+	var notes := MidiTake.unpack_relative(item.notes, item.start)
+	notes.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	var legato := notes.size() >= 2 and int(notes[0][2]) == roundi(THEREMIN_FROM)
+	for i in range(1, notes.size()):
+		legato = legato and int(notes[i][2]) > int(notes[i - 1][2]) and notes[i][0] <= notes[i - 1][1] + 0.001
+	check("named for the theremin, its notes rising, each down before the last let go (%s, %s)" % [item.name, notes],
+			item.name.contains("theremin") and legato)
+	var bends := 0
+	var swells: Array = []
+	for o in range(0, item.controls.size() - DawKitClip.CONTROL_WIDTH + 1, DawKitClip.CONTROL_WIDTH):
+		if int(item.controls[o + 1]) == DawKitClip.PITCH_BEND:
+			bends += 1
+		elif int(item.controls[o + 1]) == 11:
+			swells.append(int(item.controls[o + 2]))
+	check("with its glide's bends and its CC 11 from the loop, half way up (%d bends, CC 11 %s)" % [bends, swells],
+			bends >= 3 and not swells.is_empty() and swells[0] == 64)
+
+
+## Guest: a theremin of my own (slice 50) played from 62.72 by two hands of mine, its pitch hand
+## gliding in from THEREMIN_FROM to THEREMIN_TO by 62.84, onto TAKE_TRACK at THEREMIN_SONG; the volume
+## hand down at 62.84, the clock stopped at 62.86, and the take sent.
+func _play_a_theremin() -> void:
+	await _until(62.72)
+	var gm := Session.guest_midi
+	gm.reach(Theremin.SOURCE, true)
+	gm.target_track = TAKE_TRACK
+	gm.heard_source = _given_clock(THEREMIN_SONG, true)
+	var t := Theremin.new()
+	t.keys = gm
+	t.snap = Theremin.Snap.FREE
+	var at := {"pitch": THEREMIN_FROM, "volume": Theremin.VOLUME_SPAN * 0.5 + 0.001}
+	t.hands = func() -> Array:
+		return [{"at": t.to_global(Vector3(Theremin.ROD.x + Theremin.distance_for(float(at["pitch"])), Theremin.GUIDE_Y,
+				Theremin.ROD.y)), "by": self},
+				{"at": t.to_global(Theremin.LOOP + Vector3(0, Theremin.LOOP_REST + float(at["volume"]), 0)), "by": t}]
+	t.clock = func() -> float: return float(gm.heard_source.call()["seconds"])
+	add_child(t)
+	# Its first step: physics_frame is emitted before the frame's _physics_process, so the second one
+	# is the first after the theremin has read its hands. The glide begins from there.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var began := Time.get_ticks_msec()
+	check("my theremin holds A4 at half volume, recording (%d, %d)" % [t.note, t.expression],
+			t.note == roundi(THEREMIN_FROM) and t.expression == 64 and gm.is_recording())
+	while (Time.get_ticks_msec() - _start) / 1000.0 - _shift < 62.84:
+		var gone := (Time.get_ticks_msec() - began) / 1000.0
+		at["pitch"] = lerpf(THEREMIN_FROM, THEREMIN_TO, clampf(gone / 0.06, 0.0, 1.0))
+		await get_tree().physics_frame
+	check("and glided in past the bend's edge it handed its note on (%d hand-ons, at %d)" % [t.handed_on, t.note],
+			t.handed_on >= 2 and t.note > roundi(THEREMIN_FROM) + 2)
+	at["volume"] = -0.01
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	check("the volume hand down on the loop, it is silent", not t.sounding() and gm.held.is_empty())
+	await _until(62.86)
+	gm.heard_source = _given_clock(THEREMIN_SONG + 1.0, false)
+	await _until(62.9)
+	check("and the take went to the host from THEREMIN_SONG, with its controls (%s)" % [gm.last_take],
+			not gm.is_recording() and int(gm.last_take.get("notes", 0)) >= 2 and int(gm.last_take.get("controls", 0)) >= 3
+			and absf(float(gm.last_take.get("start", 0.0)) - THEREMIN_SONG) < 0.1)
+	gm.reach(Theremin.SOURCE, false)
+	gm.heard_source = Callable()
+	gm.target_track = 0
+	t.queue_free()

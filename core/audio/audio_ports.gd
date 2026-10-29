@@ -6,6 +6,7 @@ extends Node
 ##
 ##   dawlings · mix       the built-in DAW's master, or on a guest the host's mix it hears
 ##   dawlings · monitor   a guest's own keys, played here the instant they are pressed
+##   dawlings · hits      this player's own strikes and shakes, on a second NativeKeys helper
 ##   dawlings · gear      the room: buttons, faders, tape motors, castors
 ##   dawlings · mic       what a guest records (MixSource.Piped)
 ##   dawlings · mix tap   what a host passes on to its guests, tapped from the DAW (MixTap)

@@ -59,6 +59,14 @@ var compact := false:
 		compact = value
 		mark_dirty()
 
+## Whether this surface goes out to the arc of parked gear when another one is summoned (FocusRig).
+##
+## False for a surface that is a place rather than a panel: the 2 m EQ wall is visited or brought
+## on its own, and parked beside other work it set the arc's one radius by itself, pushing every
+## other piece out past three metres and the patchbay up over the eye. One that does not park
+## stays home on its trolley while something else is brought.
+var parks := true
+
 ## Nonzero when this surface is bent around the viewer, and the radius it is bent on.
 ##
 ## A flat surface is placed by putting its CENTRE at a distance. That stops working the moment

@@ -86,6 +86,33 @@ func _ready() -> void:
 	var plaque := Stations.plaque(&"cassette_rack", PLAQUE_WIDTH)
 	plaque.position = PLAQUE_AT
 	add_child(plaque)
+	_lamp()
+
+
+## A display cabinet's light under its top, onto the slots: the top overhangs the rows, and
+## in its shade a racked cassette's label (a sample's, `SAMPLE · 0.26 s`) cannot be read. A glowing
+## strip tucked behind the top's front edge for its fixture, as the Tour case has (TourCase._lamp),
+## and no shadow, so every row has it.
+func _lamp() -> void:
+	var at := Vector3(0, TOP - 0.014, FOOT.y - 0.016)
+	var strip := ZoneKit.block(self, Vector3(FOOT.x * 1.5, 0.008, 0.016), at, ZoneKit.glow(Color(1.0, 0.86, 0.66), 2.0),
+			"RackLampStrip")
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# A spot, as every station's own lamp is (a room's OmniLight3D is a practical on a stand,
+	# Studio.PRACTICALS): wide, because the top row is a hand under it and a cone that only reached
+	# the bottom row would light the middle of the top one, and falling off gently so the bottom
+	# row has it too.
+	var light := SpotLight3D.new()
+	light.name = "RackLight"
+	light.light_color = Color(1.0, 0.86, 0.66)
+	light.light_energy = 1.0
+	light.spot_range = 0.9
+	light.spot_angle = 72.0
+	light.spot_attenuation = 0.4
+	light.shadow_enabled = false
+	var from := at + Vector3(0, -0.02, -0.03)
+	light.transform = Transform3D(Basis.looking_at(Vector3(0, ROWS[ROWS.size() - 1], SLOT_Z) - from, Vector3.UP), from)
+	add_child(light)
 
 
 ## Slot `n` (0 top left, along each row), in the rack's frame: standing on its ledge, its front

@@ -52,6 +52,17 @@ var _pending_bank := -1
 ## watches levels on their own copy -- so it lives here and is never replicated.
 var send_dest := 0
 
+## How long the drum pads' row is (pad_rail): KitItem's six at its spacing.
+const PAD_ROW := 0.384
+## The armrest's top and the middle of its depth: the flat desk's slab (`_build_slabs`) and the
+## wrapped desk's per-slot rail (`_build_shell`), each in its own frame.
+const RAIL_TOP := 0.016
+const RAIL_Z := 0.055
+const SHELL_RAIL_TOP := 0.007
+const SHELL_RAIL_Z := 0.052
+## Where along the desk the pads' row has its middle (pad_rail), set as the desk is built.
+var _pads_x := 0.0
+
 
 func _ready() -> void:
 	surface_kind = &"console"
@@ -83,6 +94,13 @@ func _request_bank(offset: int) -> void:
 		_pending_bank = offset
 		return
 	_go_to_track(offset)
+
+
+## Bank to the page with track `index` (this cache's) on it, as the bank keys would: held until no
+## hand is on a control. For something that brings the desk to a track (the session in miniature,
+## docs/spatial_loop.md part two, slice 34).
+func bank_to_track(index: int) -> void:
+	_request_bank(DAW.state.absolute_track_number(index) - 1)
 
 
 ## Show the page beginning at project track `offset`, fetching a different protocol bank first
@@ -393,6 +411,9 @@ func _rebuild() -> void:
 
 	if _wrap > 0.0:
 		_build_shell(width)
+	# The drum pads' row (pad_rail) under the middle of the channel strips, not the master's.
+	_pads_x = clampf(-width * 0.5 + PANEL_MARGIN + bank_width + channels_width * 0.5,
+			-width * 0.5 + PAD_ROW * 0.5, width * 0.5 - PAD_ROW * 0.5)
 
 	master = MasterSection.new()
 	master.name = "Master"
@@ -486,6 +507,17 @@ func _group_rule(at_x: float) -> void:
 	# the panel after the meters, carrying the least.
 	rule.material_override = Materials.recess()
 	_panel.add_child(rule)
+
+
+## The drum pads' row on the front rail (docs/spatial_loop.md part two, slice 41): where its middle is
+## on the armrest's top, in this desk's own frame, +X along the rail, +Y up out of it and +Z toward
+## whoever sits at the desk. Under the middle of the channel strips, kept on the armrest, PAD_ROW
+## long (KitItem's six at its spacing). The studio stands the room's kit (KitItem) here; the desk
+## knows nothing of what plays on it.
+func pad_rail() -> Transform3D:
+	if _wrap > 0.0 and _panel != null:
+		return _panel.transform * _seat(_pads_x, SHELL_RAIL_TOP, SHELL_RAIL_Z, true)
+	return Transform3D(Basis.IDENTITY, Vector3(_pads_x, RAIL_TOP, RAIL_Z))
 
 
 ## The tilted panel, not the desk. The carcass is twice the height of the controls and carries

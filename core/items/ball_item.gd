@@ -59,15 +59,25 @@ func flies() -> Dictionary:
 	return {"bounce": 0.78, "roll": 0.7, "drag": 0.05, "radius": RADIUS}
 
 
+## A squeeze, which only gives a little: its sound is its bounce.
 func use(down: bool) -> void:
 	poke(-0.25 if down else 0.15)
 	if down:
 		Foley.play(self, Foley.rubber_tap(), -6.0, 1.3)
 
 
+## Each bounce of a throw the next of Foley's takes (`ball_bounce`), counted from the throw, so
+## every copy -- flying the same launch -- rings the same one, and the sampler can keep it
+## (`rang`, Sampler).
 func on_bounce(speed: float) -> void:
-	Foley.play(self, Foley.ball_bounce(), clampf(linear_to_db(speed / 5.0), -24.0, 0.0),
-			randf_range(0.95, 1.06))
+	var take := bounce_take()
+	Foley.play(self, Foley.take_of(&"ball_bounce", take), clampf(linear_to_db(speed / 5.0), -24.0, 0.0))
+	rang.emit(&"ball_bounce", take, 1.0)
+
+
+## Which take the bounce ringing now is: how many it has made since it was thrown.
+func bounce_take() -> int:
+	return _hits_played
 
 
 func _foley_contact() -> AudioStream:

@@ -196,8 +196,8 @@ func can(capability: StringName) -> bool:
 		return stand_in_windows
 	if capability == Capability.RECORDS_OWN_INPUTS:
 		return records_inputs
-	if capability == Capability.RENDER:
-		# The stand-in makes no sound to write.
+	if capability == Capability.RENDER or capability == Capability.SCRUB or capability == Capability.SPECTRA:
+		# The stand-in makes no sound to write, to scrub or to measure: its scrub is a quiet seek.
 		return false
 	return true
 
@@ -1470,8 +1470,11 @@ func add_track(at: int, track_name: String) -> void:
 	var count := state.track_indices().size()
 	at = clampi(at, 1, count + 1)
 	var before := _structure()
-	_renumber(_order_adding(count, at))
+	# Named before the room gets the whole mix (`_structure_changed`): a guest that asked for a track
+	# by name (the music box's) finds it by that name in its mirror.
+	var kinds := _renumber(_order_adding(count, at), false)
 	state.track(at).name = track_name
+	_structure_changed(kinds)
 	_remember("structure", _restore_structure.bind(before), _restore_structure.bind(_structure()), false)
 
 
@@ -1696,6 +1699,30 @@ func paste_item(track_index: int, start: float, packed: Dictionary) -> void:
 	var before := _lanes_snapshot()
 	_locally_paste(track_index, start, item)
 	_remember_edit(before)
+
+
+## The sections in a new order (DAWBackend.arrange_sections): one step, whatever it moved -- every
+## lane, the markers, the regions, the automation and the tempo -- so one Ctrl-Z puts it all back.
+func arrange_sections(order: Array) -> void:
+	var before := _arrangement()
+	if not _locally_arrange(order):
+		return
+	_followed_at = NAN
+	_remember("arrange", _put_arrangement.bind(before), _put_arrangement.bind(_arrangement()), false)
+
+
+## The lyrics (DAWBackend.set_lyrics): one step each, never folded, so a TAP is one undo.
+func set_lyrics(text: String) -> void:
+	if text == state.lyrics:
+		return
+	_remember("lyrics", set_lyrics.bind(state.lyrics), set_lyrics.bind(text), false)
+	_write_lyrics(text)
+
+
+## Put back, the controls follow the lanes put back with it at once.
+func _put_arrangement(saved: Dictionary) -> void:
+	super(saved)
+	_followed_at = NAN
 
 
 ## An edit is one step, never folded: two moves in a row are two things you might take back.
@@ -1962,13 +1989,7 @@ func _end_pass(key: Array) -> void:
 func set_tempo_map(points: Array) -> void:
 	_remember("/tempo/map", set_tempo_map.bind(state.tempo_points.duplicate(true)),
 			set_tempo_map.bind(points.duplicate(true)), false)
-	state.tempo_points = points.duplicate(true)
-	if not points.is_empty():
-		state.tempo = float(points[0][1])
-	state.position_string = state.bar_beat(state.position_seconds)
-	state.transport_changed.emit()
-	record_for_replication("/tempo/map", MixWire.pack_tempo_points(points))
-	record_for_replication("/tempo/raw", [state.tempo])
+	_write_tempo_points(state.tempo, points)
 
 
 func set_time_signature_map(points: Array) -> void:
@@ -1976,14 +1997,7 @@ func set_time_signature_map(points: Array) -> void:
 	if was.is_empty():
 		was = [[0.0, state.beats_per_bar, state.beat_unit]]
 	_remember("/timesig/map", set_time_signature_map.bind(was), set_time_signature_map.bind(points.duplicate(true)), false)
-	if not points.is_empty():
-		state.beats_per_bar = int(points[0][1])
-		state.beat_unit = int(points[0][2])
-	state.time_signature_points = points.duplicate(true) if points.size() > 1 else []
-	state.position_string = state.bar_beat(state.position_seconds)
-	state.transport_changed.emit()
-	record_for_replication("/timesig", [float(state.beats_per_bar), float(state.beat_unit)])
-	record_for_replication("/timesig/map", MixWire.pack_meter_points(state.time_signature_points))
+	_write_meter_points(state.beats_per_bar, state.beat_unit, points)
 
 
 func seek(seconds: float) -> void:

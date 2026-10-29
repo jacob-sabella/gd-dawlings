@@ -17,8 +17,12 @@ extends Node3D
 ## pinching (`pinched`, HandPose's mask): each of those curls in to meet the thumb, and the thumb
 ## comes across to them. A glove that plays is lettered (`make_letters`, `letter`): each fingertip
 ## with the note it plays, grown while it is pinched, and the chord over the back of the hand.
+##
+## Holding a chord shape (docs/spatial_loop.md part two, slice 32; ChordHand) it holds up the
+## digits in `held_up` (HandPose.extended's mask, the thumb its THUMB bit) and curls the rest in
+## (Pose.SHAPE), and says the chord over its fingertips (`say`): `IV · F`.
 
-enum Pose { OPEN, POINT, GRIP }
+enum Pose { OPEN, POINT, GRIP, SHAPE }
 
 ## Palm-to-fingertip length in metres at scale 1.
 const LENGTH := 0.15
@@ -40,6 +44,8 @@ var pose := Pose.OPEN
 ## The fingers the thumb is pinching (HandPose.INDEX, MIDDLE, RING, LITTLE): each curls in to meet
 ## it, whatever the pose.
 var pinched := 0
+## The digits held out in Pose.SHAPE, as HandPose.extended's mask: the rest are curled in.
+var held_up := 0
 ## Its overall size; 1 is a glove for a ghost.
 var size := 1.0
 ## -1 for a left hand.
@@ -61,6 +67,8 @@ var _placed := false
 ## `make_letters`.
 var _tip_letters: Array[Label3D] = []
 var _chord_letter: Label3D
+## What it says over its fingertips (`say`), made the first time.
+var _words: Label3D
 var _lengths: Array[float] = []
 
 
@@ -209,6 +217,12 @@ func _curl(delta: float) -> void:
 			want = [1.25, 1.3, 1.3, 1.25, 0.7]
 		Pose.POINT:
 			want = [0.0, 1.35, 1.4, 1.35, 0.6]
+		Pose.SHAPE:
+			# Held out straight, or curled in tight; the thumb out to the side or across the palm.
+			want = [0.0, 0.0, 0.0, 0.0, 0.0]
+			for i in 4:
+				want[i] = 0.0 if held_up & HandPose.FINGER_BITS[i] else 1.4
+			want[4] = 0.0 if held_up & HandPose.THUMB else SHAPE_THUMB
 		_:
 			# Relaxed, and never quite still: the fingers drum a little.
 			want = [0.2, 0.25, 0.3, 0.35, 0.1]
@@ -234,6 +248,10 @@ func _curl(delta: float) -> void:
 ## How far a pinched finger curls, and the thumb as it meets it: in under the palm, short of a fist.
 const PINCH_CURL := 0.95
 const PINCH_THUMB := 0.85
+## The thumb tucked in a chord shape: past straight ahead (a curl of 0.95 / 0.9 swings it to the
+## fingers' line) and on across the palm, so a shape that does not hold it up shows it folded away,
+## not standing beside the fingers as a fifth digit.
+const SHAPE_THUMB := 1.65
 ## The fingertips' letters' size, and how much a pinched one grows.
 const LETTER_SIZE := 44
 const LETTER_PIXEL := 0.0003
@@ -285,6 +303,30 @@ func letter(names: PackedStringArray, chord: String) -> void:
 		_chord_letter.text = chord
 
 
+## How far beyond the palm, along the fingers, its words ride (m at size 1), and their size.
+const WORDS_OUT := 0.15
+const WORDS_SIZE := 64
+
+
+## Its words, over its fingertips, whatever way they point: a chord shape's `IV · F`. "" hides
+## them.
+func say(text: String) -> void:
+	if _words == null:
+		if text == "":
+			return
+		_words = _letter_label(WORDS_SIZE)
+		_words.name = "Words"
+		_words.position = Vector3(0, 0, -WORDS_OUT)
+		_palm.add_child(_words)
+	_words.visible = text != ""
+	_words.text = text
+
+
+## What it says over its fingertips now, "" for nothing.
+func said() -> String:
+	return _words.text if _words != null and _words.visible else ""
+
+
 ## A fingertip's letter with the bend its note is bent by (docs/spatial_loop.md part two, slice
 ## 15): `E4 +1.3`, or the note alone for one too small to see (Wobble.words). So a bend is read on
 ## the finger playing it, by its number, not by a colour.
@@ -305,3 +347,9 @@ func letters() -> PackedStringArray:
 ## How far each finger is curled: index, middle, ring, little, thumb.
 func curls() -> Array[float]:
 	return _curls.duplicate()
+
+
+## Where the thumb's tip is in the glove's own frame, at size 1 and unstretched: across from its
+## root toward the fingers when it is tucked. For the suite.
+func thumb_tip() -> Vector3:
+	return _knuckles[4].transform * Vector3(0, 0, -_lengths[4])

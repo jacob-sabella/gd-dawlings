@@ -1,7 +1,8 @@
 // keys: a guest's own keys, heard the moment they go down -- the monitor synth, as a PipeWire
 // node of its own, rendered in the graph's realtime callback rather than through Godot's mixer.
 //
-//   keys [--name "dawlings · monitor"] [--device SINK] [--quantum 128] [--render FRAMES]
+//   keys [--name "dawlings · monitor"] [--device SINK] [--quantum 128] [--no-midi]
+//        [--render FRAMES | --parse]
 //
 // Why it is not GDScript. A note played through Godot waits for the next frame to be read (up to
 // 17ms), then behind a generator queue deep enough to feed Godot's 512-frame mix (16ms), then
@@ -11,6 +12,12 @@
 //
 // The synth is MonitorSynth's (core/session/monitor_synth.gd), the same arithmetic in C: a
 // two-operator tine, sixteen voices, the sustain pedal, the pitch wheel and expression.
+//
+// Beside it, one-shot sample voices, for things struck (docs/spatial_loop.md part two, slice 39):
+// the app renders Foley's sounds to 48 kHz WAVs, loads each into one of SLOTS slots once, and then
+// fires one with a line, played on one of HIT_VOICES voices in the same callback as the notes. A
+// hit is added after the tine's saturation and volume, so it sounds exactly as its WAV at the gain
+// it was fired at, and the app's own level (InstrumentItem.level_db) is the whole of its level.
 //
 // Commands on stdin, one per line:
 //   on P V        note P down at velocity V (from the app: the computer keys, the panel's keys)
@@ -25,6 +32,21 @@
 //   midi 0|1      take every hardware MIDI source's notes, or none (the port takes any others
 //                 linked to it either way)
 //   panic         every note off now
+//   load SLOT PATH       a 48 kHz 16-bit mono WAV into slot SLOT (0 to SLOTS-1), read now, here,
+//                        on the main loop; said back as `loaded SLOT FRAMES` or `refused SLOT WHY`
+//   hit SLOT GAIN PAN [SPEED]
+//                        play slot SLOT once: GAIN linear (0 to 4), PAN -1 (left) to 1 (right),
+//                        both sides whole at 0; SPEED how fast it is read (0.25 to 4, 1 when left
+//                        out), an AudioStreamPlayer's pitch_scale. An empty slot plays nothing
+//   mod on 0|1           the keys play the modular wall's patch (native/modular.c) rather than the
+//                        tine: the app's `on` and `off` and the sequencer's notes alike, and `bend`
+//                        bends both (docs/spatial_loop.md part two, slice 51)
+//   mod clear            every cable of the modular's out (its knobs stay as they are)
+//   mod cable FROM TO    a cable from output FROM (`vco1.out`) into input TO (`vcf.in`)
+//   mod cut JACK         the cable at JACK out: an input's one, or every one from an output
+//   mod knob ID V        knob ID (`vcf.cutoff`) at V, 0 to 1
+//   mod world NAME V     world socket NAME (`world:weather`) at level V (slice 53)
+//   mod trig NAME        world socket NAME's gate opened
 // EOF quits.
 //
 // Lines on stdout:
@@ -32,13 +54,23 @@
 //   midi-from NAME           a hardware source now linked in
 //   note 1|0 P V CH UNIX_US  a note from MIDI, for the app's takes; UNIX_US is when it arrived
 //   sus 0|1 CH UNIX_US       the pedal, likewise
-//   latency US               the last note's, key to the graph's sink: its wait for a buffer,
-//                            what is queued ahead of it (pw_stream_get_time_n), and a cycle
+//   latency US               the last note's or hit's, key to the graph's sink: its wait for a
+//                            buffer, what is queued ahead of it (pw_stream_get_time_n), and a cycle
+//   loaded SLOT FRAMES       a `load` read, ready to hit
+//   refused SLOT WHY         a `load` that could not be: no such file, not a 48 kHz 16-bit mono WAV
 //
-// --render FRAMES: no PipeWire, no MIDI. Reads all of stdin, plays its notes from the first
-// frame, and writes FRAMES of raw stereo float to stdout. For the suite.
+// --no-midi: no ALSA sequencer port, for a node that only plays the app's hits.
 //
-// Built on demand by core/audio/native_keys.gd:
+// --render FRAMES: no PipeWire, no MIDI. Reads all of stdin, plays its notes and hits from the
+// first frame, and writes FRAMES of raw stereo float to stdout. For the suite. A line `wait N`
+// writes the next N frames before the lines after it are played, so a knob turned or a note let go
+// partway through lands where it should (on a modular block's edge when N is a multiple of 64).
+//
+// --parse: no PipeWire, no MIDI, no sound. Reads all of stdin and says what each line was taken
+// as, one line each (`on 60 100`, `hit 3 0.500 -0.300 1.000`, `loaded 3 4800`, `mod cable vco1.out
+// vcf.in`, `ignored ...`). For the suite: the line parser, headless.
+//
+// Built on demand by core/audio/native_keys.gd (modular.c, beside it, is included):
 //   cc -O2 -o keys keys.c $(pkg-config --cflags --libs libpipewire-0.3 alsa) -lm
 #include <alsa/asoundlib.h>
 #include <errno.h>
@@ -57,6 +89,12 @@
 #define RATE 48000
 #define VOICES 16
 #define TABLE 4096
+// One-shot sample voices: how many sounds can be loaded (Foley.HIT_SLOTS mirrors it), and how many
+// ring at once.
+#define SLOTS 256
+#define HIT_VOICES 16
+// The longest a loaded sound may be: ten seconds.
+#define SLOT_MOST (RATE * 10)
 
 // --- The synth: MonitorSynth's, sample for sample. ----------------------------------------------
 
@@ -155,6 +193,74 @@ static void panic(void) {
 	}
 }
 
+// --- One-shot sample voices: things struck. ---------------------------------------------------
+
+// What each slot holds, as the realtime thread sees it: set only there (EV_LOAD), so a voice never
+// reads a sound being swapped. A replaced one goes to `trash` for the main loop to free.
+static float *slot_data[SLOTS];
+static uint32_t slot_frames[SLOTS];
+struct hit_voice {
+	float *data;
+	uint32_t frames;
+	int slot;
+	double at;
+	float speed, left, right;
+	long born;
+};
+static struct hit_voice hits[HIT_VOICES];
+
+static void hit_on(int slot, float level, float pan, float speed) {
+	if (slot < 0 || slot >= SLOTS || slot_data[slot] == NULL)
+		return;
+	int v = -1, oldest = 0;
+	for (int i = 0; i < HIT_VOICES; i++) {
+		if (hits[i].data == NULL) {
+			v = i;
+			break;
+		}
+		if (hits[i].born < hits[oldest].born)
+			oldest = i;
+	}
+	if (v < 0)
+		v = oldest;
+	level = fminf(fmaxf(level, 0.0f), 4.0f);
+	pan = fminf(fmaxf(pan, -1.0f), 1.0f);
+	// Both sides whole in the middle, as a mono stream through Godot is; the far side falls away.
+	hits[v] = (struct hit_voice){slot_data[slot], slot_frames[slot], slot, 0.0,
+			fminf(fmaxf(speed, 0.25f), 4.0f), level * fminf(1.0f, 1.0f - pan), level * fminf(1.0f, 1.0f + pan),
+			++clock_n};
+}
+
+// Every ringing hit, added to `out`. Read between samples in a straight line, as
+// Foley.resampled does, so a hit at SPEED 1 is its samples exactly.
+static void render_hits(float *out, uint32_t count) {
+	for (int v = 0; v < HIT_VOICES; v++) {
+		struct hit_voice *h = &hits[v];
+		if (h->data == NULL)
+			continue;
+		for (uint32_t i = 0; i < count; i++) {
+			uint32_t j = (uint32_t)h->at;
+			if (j + 1 >= h->frames) {
+				if (j < h->frames) {
+					out[i * 2] += h->data[j] * h->left;
+					out[i * 2 + 1] += h->data[j] * h->right;
+				}
+				h->data = NULL;
+				break;
+			}
+			float k = (float)(h->at - j);
+			float s = h->data[j] + (h->data[j + 1] - h->data[j]) * k;
+			out[i * 2] += s * h->left;
+			out[i * 2 + 1] += s * h->right;
+			h->at += h->speed;
+		}
+	}
+}
+
+// --- The modular wall: native/modular.c. ------------------------------------------------------
+
+#include "modular.c"
+
 static void render(float *out, uint32_t count) {
 	memset(out, 0, count * 2 * sizeof(float));
 	float index_fall = powf(0.12f, 1.0f / (0.25f * RATE));
@@ -197,15 +303,26 @@ static void render(float *out, uint32_t count) {
 		float f = out[i] * expression;
 		out[i] = f / (1.0f + fabsf(f)) * gain;
 	}
+	render_hits(out, count);
+	// The modular, while the keys play it, at the keys' volume: after the tine's saturation, since
+	// its OUT module has its own.
+	if (mod_on && enabled)
+		mod_render(out, count, gain);
 }
 
 // --- Events: from the main loop (stdin, the sequencer) to the realtime thread. ------------------
 
-enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC, EV_BEND, EV_CC };
+enum { EV_ON, EV_OFF, EV_SUS, EV_VOL, EV_ENABLE, EV_PANIC, EV_BEND, EV_CC, EV_LOAD, EV_HIT, EV_MOD_ON,
+	EV_MOD_CLEAR, EV_MOD_CABLE, EV_MOD_CUT, EV_MOD_KNOB, EV_MOD_WORLD, EV_MOD_TRIG };
 struct event {
 	uint32_t kind, a, b;
 	float f;
 	uint64_t at_ns;
+	// EV_LOAD's samples (b frames), EV_HIT's pan and speed.
+	float *p;
+	float g, h;
+	// EV_MOD_KNOB's value, whole: a float would round the knob the app sends.
+	double d;
 };
 #define EVENTS 1024
 static struct event events[EVENTS];
@@ -227,13 +344,72 @@ static uint64_t unix_us(void) {
 	return (uint64_t)ts.tv_sec * 1000000ull + ts.tv_nsec / 1000;
 }
 
-static void push(uint32_t kind, uint32_t a, uint32_t b, float f) {
+// Sounds the realtime thread let go of (a slot loaded again), for the main loop to free.
+#define TRASH 256
+static float *trash[TRASH];
+static struct spa_ringbuffer trash_ring = SPA_RINGBUFFER_INIT();
+
+static void throw_out(float *p) {
+	uint32_t at;
+	if (p == NULL || spa_ringbuffer_get_write_index(&trash_ring, &at) >= TRASH)
+		return; // Full: kept rather than freed under a voice.
+	trash[at & (TRASH - 1)] = p;
+	spa_ringbuffer_write_update(&trash_ring, at + 1);
+}
+
+static void empty_trash(void) {
+	uint32_t at;
+	int32_t filled = spa_ringbuffer_get_read_index(&trash_ring, &at);
+	for (int32_t i = 0; i < filled; i++)
+		free(trash[(at + i) & (TRASH - 1)]);
+	if (filled > 0)
+		spa_ringbuffer_read_update(&trash_ring, at + filled);
+}
+
+// --parse: what each line was taken as, said rather than played.
+static int parse_only;
+
+static void say_event(const struct event *e) {
+	switch (e->kind) {
+	case EV_ON: printf("on %u %u\n", e->a, e->b); break;
+	case EV_OFF: printf("off %u\n", e->a); break;
+	case EV_SUS: printf("sus %u\n", e->a); break;
+	case EV_VOL: printf("vol %.2f\n", e->f); break;
+	case EV_ENABLE: printf("enable %u\n", e->a); break;
+	case EV_PANIC: printf("panic\n"); break;
+	case EV_BEND: printf("bend %d\n", (int)e->a - 8192); break;
+	case EV_CC: printf("cc %u %u\n", e->a, e->b); break;
+	case EV_LOAD: break; // Said as `loaded` where it was read.
+	case EV_HIT: printf("hit %u %.3f %.3f %.3f\n", e->a, e->f, e->g, e->h); break;
+	case EV_MOD_ON: printf("mod on %u\n", e->a); break;
+	case EV_MOD_CLEAR: printf("mod clear\n"); break;
+	case EV_MOD_CABLE: printf("mod cable %s %s\n", mod_out_name(e->a), IN_NAMES[e->b]); break;
+	case EV_MOD_CUT: printf("mod cut %s\n", (int)e->a >= 0 ? IN_NAMES[e->a] : mod_out_name(e->b)); break;
+	case EV_MOD_KNOB: printf("mod knob %s %.6f\n", KNOB_NAMES[e->a], e->d); break;
+	case EV_MOD_WORLD: printf("mod world %s %.6f\n", WORLD_NAMES[e->a], e->d); break;
+	case EV_MOD_TRIG: printf("mod trig %s\n", WORLD_NAMES[e->a]); break;
+	}
+}
+
+static void push_full(struct event e) {
+	e.at_ns = now_ns();
+	if (parse_only) {
+		say_event(&e);
+		free(e.p);
+		return;
+	}
 	uint32_t at;
 	int32_t filled = spa_ringbuffer_get_write_index(&event_ring, &at);
-	if (filled >= EVENTS)
+	if (filled >= EVENTS) {
+		free(e.p);
 		return;
-	events[at & (EVENTS - 1)] = (struct event){kind, a, b, f, now_ns()};
+	}
+	events[at & (EVENTS - 1)] = e;
 	spa_ringbuffer_write_update(&event_ring, at + 1);
+}
+
+static void push(uint32_t kind, uint32_t a, uint32_t b, float f) {
+	push_full((struct event){.kind = kind, .a = a, .b = b, .f = f});
 }
 
 // The waiting events, applied. Returns the arrival of the first note-on among them, or 0.
@@ -245,11 +421,20 @@ static uint64_t apply_events(void) {
 		struct event *e = &events[(at + i) & (EVENTS - 1)];
 		switch (e->kind) {
 		case EV_ON:
-			voice_on(e->a, e->b);
+			if (mod_on) {
+				if (enabled)
+					mod_note_on(e->a, e->b);
+			} else {
+				voice_on(e->a, e->b);
+			}
 			if (!first_on)
 				first_on = e->at_ns;
 			break;
-		case EV_OFF: voice_off(e->a); break;
+		case EV_OFF:
+			// Both, so a key held across `mod on` still lets go of whichever it went down on.
+			voice_off(e->a);
+			mod_note_off(e->a);
+			break;
 		case EV_SUS: pedal(e->a); break;
 		case EV_VOL: gain = 0.5f * powf(10.0f, e->f / 20.0f); break;
 		case EV_ENABLE:
@@ -257,9 +442,42 @@ static uint64_t apply_events(void) {
 			if (!enabled)
 				panic();
 			break;
-		case EV_PANIC: panic(); break;
-		case EV_BEND: wheel((int)e->a - 8192); break;
+		case EV_PANIC:
+			panic();
+			mod_held_n = 0;
+			break;
+		case EV_BEND:
+			wheel((int)e->a - 8192);
+			mod_wheel((int)e->a - 8192);
+			break;
+		case EV_MOD_ON:
+			mod_on = e->a;
+			if (mod_on)
+				panic();
+			else
+				mod_held_n = 0;
+			break;
+		case EV_MOD_CLEAR: mod_clear(); break;
+		case EV_MOD_CABLE: mod_cable(e->a, e->b); break;
+		case EV_MOD_CUT: mod_cut((int)e->a, (int)e->b); break;
+		case EV_MOD_KNOB: mod_knob(e->a, e->d); break;
+		case EV_MOD_WORLD: mod_world(e->a, e->d); break;
+		case EV_MOD_TRIG: mod_trig(e->a); break;
 		case EV_CC: controller(e->a, e->b); break;
+		case EV_LOAD:
+			// Every voice still on the old sound stops before it is let go of.
+			for (int v = 0; v < HIT_VOICES; v++)
+				if (hits[v].slot == (int)e->a)
+					hits[v].data = NULL;
+			throw_out(slot_data[e->a]);
+			slot_data[e->a] = e->p;
+			slot_frames[e->a] = e->b;
+			break;
+		case EV_HIT:
+			hit_on(e->a, e->f, e->g, e->h);
+			if (!first_on)
+				first_on = e->at_ns;
+			break;
 		}
 	}
 	if (filled > 0)
@@ -437,15 +655,170 @@ static int open_seq(struct pw_loop *l) {
 	return 0;
 }
 
+// --- Loading a sound. ---------------------------------------------------------------------------
+
+static uint32_t le32(const unsigned char *b) {
+	return b[0] | b[1] << 8 | b[2] << 16 | (uint32_t)b[3] << 24;
+}
+
+static uint16_t le16(const unsigned char *b) {
+	return (uint16_t)(b[0] | b[1] << 8);
+}
+
+// A WAV's samples, -1 to 1 (as Foley's own: a 16-bit sample over 32767), or NULL with `why` said.
+// Only what Foley.hit_wav writes: RIFF, PCM, one channel, 16 bits, RATE.
+static float *read_wav(const char *path, uint32_t *frames, const char **why) {
+	FILE *f = fopen(path, "rb");
+	if (f == NULL) {
+		*why = "no such file";
+		return NULL;
+	}
+	unsigned char head[12], chunk[8], fmt[16];
+	float *out = NULL;
+	int have_fmt = 0;
+	*why = "not a WAV";
+	if (fread(head, 1, 12, f) != 12 || memcmp(head, "RIFF", 4) || memcmp(head + 8, "WAVE", 4))
+		goto done;
+	while (fread(chunk, 1, 8, f) == 8) {
+		uint32_t size = le32(chunk + 4);
+		if (!memcmp(chunk, "fmt ", 4) && size >= 16) {
+			if (fread(fmt, 1, 16, f) != 16)
+				goto done;
+			fseek(f, (long)(size - 16 + (size & 1)), SEEK_CUR);
+			if (le16(fmt) != 1 || le16(fmt + 2) != 1 || le16(fmt + 14) != 16) {
+				*why = "not 16-bit mono PCM";
+				goto done;
+			}
+			if (le32(fmt + 4) != RATE) {
+				*why = "not 48 kHz";
+				goto done;
+			}
+			have_fmt = 1;
+		} else if (!memcmp(chunk, "data", 4)) {
+			if (!have_fmt)
+				goto done;
+			uint32_t n = size / 2;
+			if (n == 0 || n > SLOT_MOST) {
+				*why = n == 0 ? "empty" : "longer than ten seconds";
+				goto done;
+			}
+			int16_t *raw = malloc(n * 2);
+			out = malloc(n * sizeof(float));
+			if (raw == NULL || out == NULL || fread(raw, 2, n, f) != n) {
+				free(raw);
+				free(out);
+				out = NULL;
+				*why = "short";
+				goto done;
+			}
+			for (uint32_t i = 0; i < n; i++)
+				out[i] = (int16_t)le16((unsigned char *)&raw[i]) / 32767.0f;
+			free(raw);
+			*frames = n;
+			goto done;
+		} else {
+			fseek(f, (long)(size + (size & 1)), SEEK_CUR);
+		}
+	}
+done:
+	fclose(f);
+	return out;
+}
+
+// Where `loaded` and `refused` are said: stdout, but stderr under --render, whose stdout is sound.
+static FILE *news;
+
+static void load(int slot, const char *path) {
+	if (slot < 0 || slot >= SLOTS) {
+		fprintf(news, "refused %d no such slot\n", slot);
+		return;
+	}
+	uint32_t frames = 0;
+	const char *why = "";
+	float *data = read_wav(path, &frames, &why);
+	if (data == NULL) {
+		fprintf(news, "refused %d %s\n", slot, why);
+		return;
+	}
+	fprintf(news, "loaded %d %u\n", slot, frames);
+	push_full((struct event){.kind = EV_LOAD, .a = (uint32_t)slot, .b = frames, .p = data});
+}
+
 // --- Commands from the app. ---------------------------------------------------------------------
 
-static char line[256];
+static char line[1024];
 static size_t line_len;
+
+// --render's frames still to write, or -1 when playing live.
+static long offline_left = -1;
+
+static void render_offline_frames(long frames);
+
+// A `mod` line (the modular wall's patch, its knobs, and whether the keys play it): an event, or
+// said to be ignored under --parse when a name is not one of its jacks or knobs.
+static void mod_command(const char *s) {
+	char x[32], y[32];
+	int a = 0;
+	double d = 0;
+	if (sscanf(s, "mod on %d", &a) == 1) {
+		push(EV_MOD_ON, a != 0, 0, 0);
+	} else if (strncmp(s, "mod clear", 9) == 0) {
+		push(EV_MOD_CLEAR, 0, 0, 0);
+	} else if (sscanf(s, "mod cable %31s %31s", x, y) == 2) {
+		int from = mod_find_out(x), to = mod_find(IN_NAMES, MOD_INS, y);
+		if (from < 0 || to < 0) {
+			// Carried from an input to an output, the same cable.
+			from = mod_find_out(y);
+			to = mod_find(IN_NAMES, MOD_INS, x);
+		}
+		if (from >= 0 && to >= 0)
+			push(EV_MOD_CABLE, (uint32_t)from, (uint32_t)to, 0);
+		else if (parse_only)
+			printf("ignored %s\n", s);
+	} else if (sscanf(s, "mod cut %31s", x) == 1) {
+		int in = mod_find(IN_NAMES, MOD_INS, x), out = mod_find_out(x);
+		if (in >= 0 || out >= 0)
+			push(EV_MOD_CUT, (uint32_t)in, (uint32_t)out, 0);
+		else if (parse_only)
+			printf("ignored %s\n", s);
+	} else if (sscanf(s, "mod world %31s %lf", x, &d) == 2) {
+		int w = mod_find(WORLD_NAMES, MOD_WORLD, x);
+		if (w >= 0 && isfinite(d))
+			push_full((struct event){.kind = EV_MOD_WORLD, .a = (uint32_t)w, .d = d});
+		else if (parse_only)
+			printf("ignored %s\n", s);
+	} else if (sscanf(s, "mod trig %31s", x) == 1) {
+		int w = mod_find(WORLD_NAMES, MOD_WORLD, x);
+		if (w >= 0)
+			push(EV_MOD_TRIG, (uint32_t)w, 0, 0);
+		else if (parse_only)
+			printf("ignored %s\n", s);
+	} else if (sscanf(s, "mod knob %31s %lf", x, &d) == 2) {
+		int k = mod_find(KNOB_NAMES, MOD_KNOBS, x);
+		if (k >= 0 && isfinite(d))
+			push_full((struct event){.kind = EV_MOD_KNOB, .a = (uint32_t)k, .d = d});
+		else if (parse_only)
+			printf("ignored %s\n", s);
+	} else if (parse_only) {
+		printf("ignored %s\n", s);
+	}
+}
 
 static void command(char *s) {
 	int a = 0, b = 0;
-	float f = 0;
-	if (sscanf(s, "on %d %d", &a, &b) == 2)
+	float f = 0, g = 0, h = 1;
+	int used = 0;
+	long n = 0;
+	if (strncmp(s, "mod ", 4) == 0)
+		mod_command(s);
+	else if (sscanf(s, "wait %ld", &n) == 1) {
+		if (offline_left >= 0)
+			render_offline_frames(n < offline_left ? n : offline_left);
+	} else if (sscanf(s, "load %d %n", &a, &used) == 1 && used > 0 && s[used] != 0)
+		load(a, s + used);
+	else if (sscanf(s, "hit %d %f %f %f", &a, &f, &g, &h) >= 3 && a >= 0 && a < SLOTS)
+		push_full((struct event){.kind = EV_HIT, .a = (uint32_t)a, .f = f, .g = g, .h = h});
+	else if (sscanf(s, "on %d %d", &a, &b) == 2)
 		push(EV_ON, a, b, 0);
 	else if (sscanf(s, "off %d", &a) == 1)
 		push(EV_OFF, a, 0, 0);
@@ -465,6 +838,8 @@ static void command(char *s) {
 			link_hardware(a != 0);
 	} else if (strncmp(s, "panic", 5) == 0)
 		push(EV_PANIC, 0, 0, 0);
+	else if (parse_only && s[0] != 0)
+		printf("ignored %s\n", s);
 }
 
 // Reads what stdin has; returns 0 at EOF.
@@ -499,27 +874,37 @@ static void on_tick(void *data, uint64_t expirations) {
 	(void)expirations;
 	if (atomic_exchange(&latency_fresh, 0))
 		printf("latency %lld\n", (long long)atomic_load(&last_latency_us));
+	empty_trash();
 }
 
 // --- Offline, for the suite. --------------------------------------------------------------------
 
-static int render_offline(long frames) {
-	while (read_commands())
-		;
+// `frames` of what the lines so far have played, written; for `wait` and the end of the lines.
+static void render_offline_frames(long frames) {
 	apply_events();
 	float buf[256 * 2];
+	offline_left -= frames;
 	while (frames > 0) {
 		uint32_t n = frames < 256 ? (uint32_t)frames : 256;
 		render(buf, n);
 		fwrite(buf, sizeof(float), n * 2, stdout);
 		frames -= n;
 	}
+}
+
+static int render_offline(long frames) {
+	news = stderr;
+	offline_left = frames;
+	while (read_commands())
+		;
+	render_offline_frames(offline_left);
 	return 0;
 }
 
 int main(int argc, char **argv) {
 	const char *name = "dawlings · monitor", *device = NULL;
 	long offline = -1;
+	int midi = 1;
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--name") && i + 1 < argc)
 			name = argv[++i];
@@ -529,8 +914,20 @@ int main(int argc, char **argv) {
 			quantum = (uint32_t)atoi(argv[++i]);
 		else if (!strcmp(argv[i], "--render") && i + 1 < argc)
 			offline = atol(argv[++i]);
+		else if (!strcmp(argv[i], "--parse"))
+			parse_only = 1;
+		else if (!strcmp(argv[i], "--no-midi"))
+			midi = 0;
 	}
 	synth_init();
+	mod_init();
+	news = stdout;
+	if (parse_only) {
+		setvbuf(stdout, NULL, _IOLBF, 0);
+		while (read_commands())
+			;
+		return 0;
+	}
 	if (offline >= 0)
 		return render_offline(offline);
 
@@ -568,7 +965,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "keys: could not connect the stream\n");
 		return 1;
 	}
-	if (open_seq(l) < 0)
+	if (midi && open_seq(l) < 0)
 		fprintf(stderr, "keys: no ALSA sequencer; keys come only from the app\n");
 	pw_loop_add_io(l, STDIN_FILENO, SPA_IO_IN | SPA_IO_HUP | SPA_IO_ERR, false, on_stdin, NULL);
 	struct spa_source *tick = pw_loop_add_timer(l, on_tick, NULL);

@@ -106,6 +106,25 @@ const Capability := {
 	## built-in engine's and its stand-in's alone. Reaper has no parts, so a demo cassette is refused
 	## there (docs/spatial_loop.md part two, slice 24).
 	DEMO_PARTS = &"demo_parts",
+	## Sound the song where the playhead is dragged (scrub): the DJ platter turned by hand plays it
+	## there (docs/spatial_loop.md part two, slice 27). The built-in engine plays short windows of
+	## the mix; Reaper takes OSC's scrub. A DAW that cannot is moved by quiet seeks, and the
+	## platter's card says so.
+	SCRUB = &"scrub",
+	## Lay the song's sections end to end in a new order (arrange_sections): the items, markers,
+	## regions, automation and comps between the first region's start and the last's end, as one
+	## edit (docs/spatial_loop.md part two, slice 29). Reaper only through the bridge, whose
+	## ArrangeSections splits and moves them inside one Undo block; OSC can move none of it.
+	ARRANGE = &"arrange",
+	## Measure each track's spectrum (Spectra, GodotBackend.track_spectrum): the EQ wall's shapes
+	## (docs/spatial_loop.md part two, slice 36). Only where the tracks are played: the built-in
+	## engine. Reaper hands its tracks' audio to nobody, so the wall says "spectra need the
+	## built-in engine".
+	SPECTRA = &"spectra",
+	## Keep the song's lyrics (set_lyrics, MixState.lyrics; docs/spatial_loop.md part two, slice 56):
+	## the built-in engine and the stand-in in the .dawproject's metadata comment, Reaper in its
+	## project notes through the bridge's SetLyrics. OSC has no notes.
+	LYRICS = &"lyrics",
 }
 
 
@@ -305,6 +324,11 @@ func set_punch(_on: bool) -> void: pass
 func set_tempo(_bpm: float) -> void: pass
 ## Move the playhead. Seconds from the project start.
 func seek(_seconds: float) -> void: pass
+## The playhead dragged to `seconds` by a hand moving the song `speed` song-seconds a second
+## (negative is backwards), heard there where the DAW can (Capability.SCRUB): not history, and
+## the transport left as it is. Where it cannot, a quiet seek.
+func scrub(seconds: float, _speed: float) -> void:
+	seek(seconds)
 ## The loop range / time selection, in seconds.
 func set_loop_range(_start: float, _end: float) -> void: pass
 func undo() -> void: pass
@@ -584,6 +608,21 @@ func insert_audio_take(_track_index: int, _start: float, _source: String, _lengt
 ## and not frozen, a file this machine has. A backend that cannot answers false to
 ## Capability.PASTE_ITEMS.
 func paste_item(_track_index: int, _start: float, _packed: Dictionary) -> void: pass
+
+## The song's sections laid end to end in a new order (docs/spatial_loop.md part two, slice 29):
+## `order` is MixState.regions (in song order) by their indices there, in the order they are to
+## play, already checked (DAW.arrange_refusal). Everything from the first region's start to the
+## last's end moves with the section it is in (arrange_pieces): items, split where a section's
+## edge crosses them; markers, so a section's harmony and notes go with it; the regions; every lane
+## of automation; and each comp. A gap between regions is a piece of its own and keeps its place.
+## A tempo or signature change at a piece's start moves with it. What is after the last region does
+## not move. One undo step. A backend that cannot answers false to Capability.ARRANGE.
+func arrange_sections(_order: Array) -> void: pass
+
+## The song's lyrics made `text`, LRC (Lyrics), already cleaned (Lyrics.clean): MixState.lyrics, the
+## whole text at once, so a TAP's one new time and a pasted verse are the same write. One undo step.
+## A backend that cannot answers false to Capability.LYRICS.
+func set_lyrics(_text: String) -> void: pass
 
 
 # --- item edits, on the cache ------------------------------------------------------------
@@ -1988,6 +2027,499 @@ func _locally_paste(track_index: int, start: float, item: MixState.ItemState) ->
 	_land_in_lane(track_index, _lane_copy(track_index), item)
 
 
+# --- sections rearranged (docs/spatial_loop.md part two, slice 29) -------------------------------
+#
+# A rearrangement is planned as pieces: each region, and each gap between two of them, as
+# [from, end, to] in seconds, `from` and `end` where it is and `to` where it is to start, in the
+# new order. The regions take the new order; a gap keeps its place among them. Laid end to end from
+# the first region's start, the pieces end where the last region ended, so nothing after moves.
+# Only where two pieces next to each other move by different amounts is anything cut (`cuts`):
+# a section that stays where it is is left as it was.
+
+## How near two times are to be one, in seconds: a region's edge and the item that ends on it.
+const ARRANGE_EPSILON := 0.0005
+## How far before a cut edge a closing point of automation goes, to keep a ramp's slope there.
+const ARRANGE_EDGE := 0.001
+
+
+## The pieces for `order` (indices into `regions`, which are in song order), in the new order: one
+## [from, end, to] each. Empty when `order` is not a reordering of every region (each once), there
+## are fewer than two, or two overlap.
+static func arrange_pieces(regions: Array, order: Array) -> Array:
+	var n := regions.size()
+	if n < 2 or order.size() != n:
+		return []
+	var seen := {}
+	for k in order:
+		if typeof(k) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(k)) or int(k) < 0 or int(k) >= n \
+				or seen.has(int(k)):
+			return []
+		seen[int(k)] = true
+	if not regions_overlapping(regions).is_empty():
+		return []
+	var slots: Array = []
+	for i in n:
+		slots.append(i)
+		if i < n - 1 and float(regions[i + 1][0]) - float(regions[i][1]) > ARRANGE_EPSILON:
+			slots.append([float(regions[i][1]), float(regions[i + 1][0])])
+	var at := float(regions[0][0])
+	var next := 0
+	var out: Array = []
+	for slot in slots:
+		var span: Array = slot if slot is Array else regions[int(order[next])]
+		if not slot is Array:
+			next += 1
+		out.append([float(span[0]), float(span[1]), at])
+		at += float(span[1]) - float(span[0])
+	return out
+
+
+## The first two regions (indices) that overlap, or [] for none.
+static func regions_overlapping(regions: Array) -> Array:
+	for i in regions.size() - 1:
+		if float(regions[i + 1][0]) < float(regions[i][1]) - ARRANGE_EPSILON:
+			return [i, i + 1]
+	return []
+
+
+## How far the piece that holds `seconds` moves (0 outside them).
+static func arrange_delta(pieces: Array, seconds: float) -> float:
+	for p in pieces:
+		if seconds >= float(p[0]) - 0.000001 and seconds < float(p[1]) - 0.000001:
+			return float(p[2]) - float(p[0])
+	return 0.0
+
+
+## Where things are cut: each edge, where it is now, between two pieces (or a piece and the song
+## beyond them) that move by different amounts. Empty when nothing moves.
+static func arrange_cuts(pieces: Array) -> Array:
+	var song := pieces.duplicate()
+	song.sort_custom(func(a, b): return a[0] < b[0])
+	var cuts: Array = []
+	var left := 0.0
+	for p in song:
+		var d := float(p[2]) - float(p[0])
+		if absf(d - left) > 0.000001:
+			cuts.append(float(p[0]))
+		left = d
+	if not song.is_empty() and absf(left) > 0.000001:
+		cuts.append(float(song[-1][1]))
+	return cuts
+
+
+## The cuts that fall inside [from, to), not on its ends.
+static func _cuts_inside(cuts: Array, from: float, to: float) -> Array:
+	return cuts.filter(func(c): return c > from + ARRANGE_EPSILON and c < to - ARRANGE_EPSILON)
+
+
+## Whether a rearrangement would cut or move `item`.
+static func arrange_touches(item: MixState.ItemState, pieces: Array, cuts: Array) -> bool:
+	return not _cuts_inside(cuts, item.start, item.end()).is_empty() \
+			or absf(arrange_delta(pieces, item.start + item.length * 0.5)) > 0.000001
+
+
+## A lane's items laid out as the pieces say: each cut where it crosses an edge (item_slice, on the
+## lane it was on), and each part moved with the piece it is in. Fresh objects, in no order.
+static func arranged_items(items: Array, pieces: Array, cuts: Array) -> Array:
+	var out: Array = []
+	for it: MixState.ItemState in MixWire._unpack_items(MixWire._pack_items(items)):
+		var inside := _cuts_inside(cuts, it.start, it.end())
+		if inside.is_empty():
+			it.start += arrange_delta(pieces, it.start + it.length * 0.5)
+			out.append(it)
+			continue
+		var edges: Array = [it.start] + inside + [it.end()]
+		for k in edges.size() - 1:
+			var part := item_slice(it, edges[k], edges[k + 1])
+			part.lane = it.lane
+			part.start += arrange_delta(pieces, (edges[k] + edges[k + 1]) * 0.5)
+			out.append(part)
+	return out
+
+
+## Spans of [start, end, ...] (a comp's) laid out as the pieces say, cut at the edges they cross.
+static func arranged_spans(spans: Array, pieces: Array, cuts: Array) -> Array:
+	var out: Array = []
+	for span in spans:
+		var edges: Array = [float(span[0])] + _cuts_inside(cuts, float(span[0]), float(span[1])) + [float(span[1])]
+		for k in edges.size() - 1:
+			var d := arrange_delta(pieces, (edges[k] + edges[k + 1]) * 0.5)
+			var part: Array = span.duplicate()
+			part[0] = edges[k] + d
+			part[1] = edges[k + 1] + d
+			out.append(part)
+	out.sort_custom(func(a, b): return a[0] < b[0])
+	return out
+
+
+## Markers moved with the piece each is on: one on a section's start goes with that section.
+static func arranged_markers(markers: Dictionary, pieces: Array) -> Dictionary:
+	var out := {}
+	for t in markers:
+		out[float(t) + arrange_delta(pieces, float(t) + ARRANGE_EPSILON)] = markers[t]
+	return out
+
+
+## The brackets a rearrangement writes so each section keeps its harmony, [seconds, name] each in
+## the new song (Harmony). A section with no bracket at its start plays the one before it; moved,
+## another may be before it now, so the one it had is written at its new start: onto the marker
+## there ("Verse 2 [A minor]"), or as a marker that is only brackets. A progression goes on from
+## the bar it had reached, so it is written turned round to start there. The song after the last
+## region, when anything is there, keeps its harmony the same way. A section before any bracket
+## takes what is before it now: no bracket says "no key".
+static func arranged_brackets(s: MixState, pieces: Array) -> Array:
+	var out: Array = []
+	if pieces.is_empty():
+		return out
+	var now := arranged_markers(s.markers, pieces)
+	var clocks := arranged_clocks(s, pieces)
+	var map := DawKitTempoMap.from_array(clocks[0])
+	var meter := DawKitMeter.from_array(clocks[1], maxi(s.beats_per_bar, 1), maxi(s.beat_unit, 1))
+	var bar_was := func(t: float) -> float: return s.bar_at(t)
+	var bar_now := func(t: float) -> float: return meter.bar_at(map.beat_at(t))
+	# Each piece's start, [where it was, where it goes], in the new order; then the song after.
+	var starts: Array = []
+	var last := -INF
+	for p in pieces:
+		starts.append([float(p[0]), float(p[2])])
+		last = maxf(last, float(p[1]))
+	if _anything_after(s, last):
+		starts.append([last, last])
+	starts.sort_custom(func(a, b): return a[1] < b[1])
+	for start in starts:
+		var was := _harmony_from(s.markers, start[0], bar_was)
+		if was.is_empty() or was[2]:
+			continue
+		var here := _harmony_from(now, start[1], bar_now)
+		if not here.is_empty() and here[0] == was[0]:
+			continue
+		var at: float = start[1]
+		var name := "[%s]" % was[1]
+		for t in now:
+			if absf(float(t) - at) <= Harmony.AT_SLACK:
+				at = float(t)
+				name = "%s [%s]" % [str(now[t]).strip_edges(), was[1]]
+				break
+		now[at] = name
+		out.append([at, name])
+	return out
+
+
+## The harmony in force at `seconds` among `markers` (Harmony.at's latest bracket at or before
+## it), as [what it plays, the bracket to write for it there, whether its bracket is at
+## `seconds`]; empty before any. What it plays is the key and the chords from the bar `seconds`
+## is in (`bar_of`), so two that say the same compare equal however they were written.
+static func _harmony_from(markers: Dictionary, seconds: float, bar_of: Callable) -> Array:
+	var times: Array = markers.keys()
+	times.sort()
+	var h: Harmony = null
+	var from := 0.0
+	for t in times:
+		if float(t) > seconds + Harmony.AT_SLACK:
+			break
+		var parsed := Harmony.parse(str(markers[t]))
+		if parsed != null:
+			h = parsed
+			from = float(t)
+	if h == null:
+		return []
+	var colon := h.text.find(":")
+	var key := (h.text if colon < 0 else h.text.left(colon)).strip_edges()
+	var n := h.progression.size()
+	var plays := "%d %s" % [h.root, h.mode]
+	if n == 0:
+		return [plays, h.text, absf(from - seconds) <= Harmony.AT_SLACK]
+	var by := posmod(floori(float(bar_of.call(seconds)) + Harmony.BAR_SLACK)
+			- floori(float(bar_of.call(from)) + Harmony.BAR_SLACK), n)
+	var words := PackedStringArray()
+	for i in n:
+		words.append(str(h.progression[(by + i) % n][0]))
+	# A held bar first holds the chord before it, which the turned round one must say.
+	var held := by
+	while held > 0 and str(h.progression[held][0]) == "-":
+		held -= 1
+	words[0] = str(h.progression[held][0])
+	var chords := " ".join(words)
+	return ["%s: %s" % [plays, chords], h.text if by == 0 else "%s: %s" % [key, chords],
+			absf(from - seconds) <= Harmony.AT_SLACK]
+
+
+## Whether the song goes on after `seconds`: a marker at or past it, or an item ending past it.
+static func _anything_after(s: MixState, seconds: float) -> bool:
+	if s.markers.keys().any(func(t): return float(t) >= seconds - ARRANGE_EPSILON):
+		return true
+	for index in s.track_indices():
+		if s.track(index).items.any(func(it): return it.start + it.length > seconds + ARRANGE_EPSILON):
+			return true
+	return false
+
+
+## The regions moved with themselves, in the new song order.
+static func arranged_regions(regions: Array, pieces: Array) -> Array:
+	var out: Array = []
+	for r in regions:
+		var d := arrange_delta(pieces, float(r[0]) + ARRANGE_EPSILON)
+		out.append([float(r[0]) + d, float(r[1]) + d, r[2]])
+	out.sort_custom(func(a, b): return a[0] < b[0])
+	return out
+
+
+## The shape of the stretch of `points` at `seconds`: HOLD before the first and after the last.
+static func _shape_at(points: Array, seconds: float) -> int:
+	var shape := DawKitAutomation.HOLD
+	for i in points.size():
+		if float(points[i][0]) > seconds:
+			return shape if i > 0 else DawKitAutomation.HOLD
+		shape = int(points[i][2])
+	return DawKitAutomation.HOLD
+
+
+## A lane of automation ([seconds, value, shape] in order) laid out as the pieces say, so each
+## piece sounds as it did: its own points moved with it, and where a piece now meets one it did not,
+## a point at its start with its value there (and, ramping into an edge, one just before its end).
+## Past the last region the lane is as it was, a point at the end keeping it there. A lane with no
+## point in the pieces and nothing ramping through them is returned as it is.
+static func arranged_lane(points: Array, pieces: Array, cuts: Array) -> Array:
+	if points.is_empty() or cuts.is_empty():
+		return points
+	var first := INF
+	var last := -INF
+	for p in pieces:
+		first = minf(first, float(p[0]))
+		last = maxf(last, float(p[1]))
+	var within := points.filter(func(pt): return float(pt[0]) >= first - ARRANGE_EPSILON and float(pt[0]) < last + ARRANGE_EPSILON)
+	if within.is_empty() and _shape_at(points, first) == DawKitAutomation.HOLD:
+		return points
+	var is_cut := func(t: float) -> bool: return cuts.any(func(c): return absf(c - t) < ARRANGE_EPSILON)
+	var has_point := func(t: float) -> bool: return points.any(func(pt): return absf(float(pt[0]) - t) < ARRANGE_EPSILON)
+	var out: Array = points.filter(func(pt): return float(pt[0]) < first - ARRANGE_EPSILON)
+	var before_any := out.is_empty()
+	for p in pieces:
+		var from := float(p[0])
+		var end := float(p[1])
+		var d := float(p[2]) - from
+		if is_cut.call(from) and not has_point.call(from):
+			out.append([from + d, DawKitAutomation.value_in(points, from), _shape_at(points, from)])
+		for pt in points:
+			if float(pt[0]) >= from - ARRANGE_EPSILON and float(pt[0]) < end - ARRANGE_EPSILON:
+				out.append([float(pt[0]) + d, float(pt[1]), int(pt[2])])
+		var close := end - ARRANGE_EDGE
+		if is_cut.call(end) and _shape_at(points, close) == DawKitAutomation.LINEAR:
+			out.append([close + d, DawKitAutomation.value_in(points, close), DawKitAutomation.HOLD])
+	if is_cut.call(last) and not has_point.call(last):
+		out.append([last, DawKitAutomation.value_in(points, last), _shape_at(points, last)])
+	out.append_array(points.filter(func(pt): return float(pt[0]) >= last - ARRANGE_EPSILON))
+	# Before the first point its value holds: with none before the pieces any more, keep the start
+	# of the song at the value it had.
+	if before_any and first > ARRANGE_EDGE and not out.is_empty() \
+			and not is_equal_approx(float(out[0][1]), float(points[0][1])):
+		out.push_front([0.0, float(points[0][1]), DawKitAutomation.HOLD])
+	out.sort_custom(func(a, b): return a[0] < b[0])
+	var kept: Array = []
+	for pt in out:
+		if kept.is_empty() or float(pt[0]) > float(kept[-1][0]) + 0.000001:
+			kept.append(pt)
+	return kept
+
+
+## The beats of the song's clock that a tempo or signature change sits on inside the pieces anywhere
+## but at a piece's start, or a tempo ramp through them: why they cannot be laid end to end, in
+## words naming where, or "". `pieces` in any order; `named` names a piece by its start.
+static func arrange_clock_refusal(s: MixState, pieces: Array, named: Callable) -> String:
+	var map := s.tempo_map()
+	var meter := s.meter()
+	var first := INF
+	var last := -INF
+	var starts: Array = []
+	for p in pieces:
+		first = minf(first, float(p[0]))
+		last = maxf(last, float(p[1]))
+		starts.append(map.beat_at(float(p[0])))
+	var b0 := map.beat_at(first)
+	var b1 := map.beat_at(last)
+	var tempo: Array = map.to_array()
+	for i in tempo.size():
+		var b := float(tempo[i][0])
+		var ramps := DawKitTempoMap.shape_of(tempo[i][2]) != DawKitTempoMap.HOLD and i + 1 < tempo.size()
+		if ramps and b < b1 - 0.0001 and float(tempo[i + 1][0]) > b0 - 0.0001:
+			return "The tempo ramps through %s, so it cannot be moved in time: hold the tempo there first." \
+					% named.call(_piece_at(pieces, map.seconds_at(maxf(b, b0))))
+		if b > b0 + 0.0001 and b < b1 - 0.0001 and not starts.any(func(st): return absf(st - b) < 0.0001):
+			return "The tempo changes inside %s, so it cannot be moved in time: put the change at its start." \
+					% named.call(_piece_at(pieces, map.seconds_at(b)))
+	for pt in meter.to_array():
+		var b := float(pt[0])
+		if b > b0 + 0.0001 and b < b1 - 0.0001 and not starts.any(func(st): return absf(st - b) < 0.0001):
+			return "The time signature changes inside %s, so it cannot be moved: put the change at its start." \
+					% named.call(_piece_at(pieces, map.seconds_at(b)))
+	return ""
+
+
+## The start of the piece that holds `seconds`, or the first piece's.
+static func _piece_at(pieces: Array, seconds: float) -> float:
+	for p in pieces:
+		if seconds >= float(p[0]) - 0.000001 and seconds < float(p[1]) - 0.000001:
+			return float(p[0])
+	return float(pieces[0][0]) if not pieces.is_empty() else 0.0
+
+
+## The song's clock laid out as the pieces say: `points` ([beat, ..., ...] from beat 0, a tempo
+## map's or a signature's, as DawKitTempoMap.to_array and DawKitMeter.to_array give them) with what
+## holds at each piece's start put at its new start, and what held past the last region kept there.
+## `value_at` gives the point (less its beat) in force at a beat. Checked first: no change but at a
+## piece's start, and no ramp (arrange_clock_refusal), so each piece keeps its beats.
+static func arranged_clock(points: Array, pieces: Array, map: DawKitTempoMap, value_at: Callable) -> Array:
+	var first := INF
+	var last := -INF
+	for p in pieces:
+		first = minf(first, float(p[0]))
+		last = maxf(last, float(p[1]))
+	var b0 := map.beat_at(first)
+	var b1 := map.beat_at(last)
+	var out: Array = points.filter(func(pt): return float(pt[0]) < b0 - 0.0001)
+	var held: Array = value_at.call(b0 - 0.0001) if not out.is_empty() else []
+	var beat := b0
+	for p in pieces:
+		var from_beat := map.beat_at(float(p[0]))
+		var now: Array = value_at.call(from_beat + 0.0001)
+		if not _same_values(now, held):
+			out.append([beat] + now)
+			held = now
+		beat += map.beat_at(float(p[1])) - from_beat
+	var after: Array = points.filter(func(pt): return float(pt[0]) >= b1 - 0.0001)
+	# A change back at the last region's end that the new last piece already holds says nothing.
+	if not after.is_empty() and absf(float(after[0][0]) - b1) <= 0.0001 and _same_values(after[0].slice(1), held):
+		after.remove_at(0)
+	elif after.is_empty() or absf(float(after[0][0]) - b1) > 0.0001:
+		var past: Array = value_at.call(b1 + 0.0001)
+		if not _same_values(past, held):
+			out.append([b1] + past)
+	out.append_array(after)
+	return out
+
+
+## Whether two lists of numbers say the same, to a ten-thousandth.
+static func _same_values(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if absf(float(a[i]) - float(b[i])) > 0.0001:
+			return false
+	return true
+
+
+## Whether two clocks' points (arranged_clock's) say the same.
+static func _same_clock(a: Array, b: Array) -> bool:
+	return a.size() == b.size() and range(a.size()).all(func(i): return _same_values(a[i], b[i]))
+
+
+## The tempo map and signatures laid out as the pieces say ([tempo points, signature points], each
+## whole from beat 0, as arranged_clock gives them).
+static func arranged_clocks(s: MixState, pieces: Array) -> Array:
+	var map := s.tempo_map()
+	var meter := s.meter()
+	var tempo := arranged_clock(map.to_array(), pieces, map, func(b: float) -> Array:
+		return [map.bpm_at(b), DawKitTempoMap.HOLD])
+	var sig := arranged_clock(meter.to_array(), pieces, map, func(b: float) -> Array:
+		var at := meter.signature_at(b)
+		return [at.x, at.y])
+	return [tempo, sig]
+
+
+## Everything a rearrangement changes, for an undo step to put back: every lane and comp, the
+## markers, the regions, every lane of automation (the master's under 0), the tempo and its changes,
+## and the signature and its changes.
+func _arrangement() -> Dictionary:
+	var lanes := {0: state.master.automation.duplicate(true)}
+	for index in state.track_indices():
+		lanes[index] = state.track(index).automation.duplicate(true)
+	return {"lanes": _lanes_snapshot(), "markers": state.markers.duplicate(), "regions": state.regions.duplicate(true),
+			"automation": lanes, "tempo": [state.tempo, state.tempo_points.duplicate(true)],
+			"meter": [state.beats_per_bar, state.beat_unit, state.time_signature_points.duplicate(true)]}
+
+
+func _put_arrangement(saved: Dictionary) -> void:
+	_restore_lanes(saved["lanes"])
+	_write_markers(saved["markers"])
+	_write_regions(saved["regions"])
+	for index in saved["automation"]:
+		var was: Dictionary = saved["automation"][index]
+		var now: Dictionary = state.master.automation if index == 0 else state.track(index).automation
+		for target in now.keys() + was.keys():
+			if was.get(target, []) != now.get(target, []):
+				_write_automation(index, target, was.get(target, []))
+	_write_tempo_points(float(saved["tempo"][0]), saved["tempo"][1])
+	_write_meter_points(int(saved["meter"][0]), int(saved["meter"][1]), saved["meter"][2])
+
+
+## The rearrangement made on the cache (see arrange_sections): the offline project's whole edit, and
+## a live DAW's preview of what the bridge is about to do. False when nothing would move.
+func _locally_arrange(order: Array) -> bool:
+	var pieces := arrange_pieces(state.regions, order)
+	var cuts := arrange_cuts(pieces)
+	if pieces.is_empty() or cuts.is_empty():
+		return false
+	var clocks := arranged_clocks(state, pieces)
+	var markers := arranged_markers(state.markers, pieces)
+	for bracket in arranged_brackets(state, pieces):
+		markers[bracket[0]] = bracket[1]
+	for index in state.track_indices():
+		var t := state.track(index)
+		if t.items.any(func(it): return arrange_touches(it, pieces, cuts)):
+			_write_lane(index, arranged_items(t.items, pieces, cuts))
+		if not t.comp.is_empty():
+			var comp := arranged_spans(t.comp, pieces, cuts)
+			if comp != t.comp:
+				_write_comp(index, comp)
+		_arrange_automation(index, t.automation, pieces, cuts)
+	_arrange_automation(0, state.master.automation, pieces, cuts)
+	_write_markers(markers)
+	_write_regions(arranged_regions(state.regions, pieces))
+	var tempo: Array = clocks[0]
+	if not _same_clock(tempo, state.tempo_map().to_array()):
+		_write_tempo_points(float(tempo[0][1]), tempo if tempo.size() > 1 else [])
+	var sig: Array = clocks[1]
+	if not _same_clock(sig, state.meter().to_array()):
+		_write_meter_points(int(sig[0][1]), int(sig[0][2]), sig if sig.size() > 1 else [])
+	return true
+
+
+func _arrange_automation(index: int, lanes: Dictionary, pieces: Array, cuts: Array) -> void:
+	for target in lanes.keys():
+		var lane := arranged_lane(lanes[target], pieces, cuts)
+		if lane != lanes[target]:
+			_write_automation(index, target, lane)
+
+
+## One lane of automation, whole, through the address it arrives on, so it replicates.
+func _write_automation(index: int, target: String, points: Array) -> void:
+	var address := MixWire.automation_address(index, target)
+	MixWire.apply(state, address, MixWire.pack_automation(points))
+	record_for_replication(address, MixWire.pack_automation(points))
+
+
+## The song's tempo and its changes ([beat, bpm, shape], empty for one tempo), so they replicate.
+func _write_tempo_points(bpm: float, points: Array) -> void:
+	state.tempo_points = points.duplicate(true)
+	state.tempo = float(points[0][1]) if not points.is_empty() else bpm
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/tempo/map", MixWire.pack_tempo_points(points))
+	record_for_replication("/tempo/raw", [state.tempo])
+
+
+## The song's signature and its changes ([beat, numerator, denominator], empty for one), so they
+## replicate.
+func _write_meter_points(numerator: int, denominator: int, points: Array) -> void:
+	state.beats_per_bar = int(points[0][1]) if not points.is_empty() else numerator
+	state.beat_unit = int(points[0][2]) if not points.is_empty() else denominator
+	state.time_signature_points = points.duplicate(true) if points.size() > 1 else []
+	state.position_string = state.bar_beat(state.position_seconds)
+	state.transport_changed.emit()
+	record_for_replication("/timesig", [float(state.beats_per_bar), float(state.beat_unit)])
+	record_for_replication("/timesig/map", MixWire.pack_meter_points(state.time_signature_points))
+
+
 ## Every lane with something in it, packed, for an undo step to put back.
 func _lanes_snapshot() -> Dictionary:
 	var out := {}
@@ -2003,6 +2535,12 @@ func _write_regions(regions: Array) -> void:
 	var packed := MixWire.pack_regions(regions)
 	record_for_replication("/timeline/regions", packed)
 	MixWire.apply(state, "/timeline/regions", packed)
+
+
+## The song's lyrics, through the address the timeline delivers them on, so they replicate.
+func _write_lyrics(text: String) -> void:
+	record_for_replication("/timeline/lyrics", [text])
+	MixWire.apply(state, "/timeline/lyrics", [text])
 
 
 func _write_markers(markers: Dictionary) -> void:

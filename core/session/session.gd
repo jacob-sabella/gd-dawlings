@@ -110,9 +110,13 @@ signal note_played(kind: int, pitch: int, velocity: int, from: int, song: float,
 ## hand percussion (GuestMidi.snap_hits), so whoever takes the hit down snaps it by their choice,
 ## not their own (HitRecorder.hit). `take`: which of Foley's takes their hand rang
 ## (InstrumentItem.sound_take), so everyone hears the sound its player heard; -1 for not known.
-signal item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int)
+## A strike on an instrument that stands still (Item.fixed, docs/spatial_loop.md part two, slice 38)
+## is this too, held by nobody: `zone` is where on it they struck it (InstrumentItem.zone_at, &""
+## for an item with none), and it is heard from where the instrument stands.
+signal item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName)
 ## An event down a jack into this player's instrument (docs/spatial_loop.md slice 6): `source`'s
-## (an item's id, `harp`, `keys:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER), sent by `from`
+## (an item's id, `harp`, `keys:P`, `chord:P`) `kind` (Jack.Kind: NOTE_ON, NOTE_OFF, TRIGGER, CC,
+## CHORD), sent by `from`
 ## at song position `song` (-1 for not known), passed on by the host to this player alone (Jacks).
 signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, from: int, song: float)
 
@@ -123,11 +127,26 @@ signal jack_played(source: StringName, kind: int, pitch: int, velocity: int, fro
 ## sent again soon, and the wheel goes back to rest at the player's last note-off on every end
 ## (GuestMidi.control).
 signal control_played(kind: int, value: int, from: int, song: float, source: StringName)
+## The host's track spectra have arrived (`spectra`), on a guest.
+signal spectra_heard()
+## A knob on the modular wall turning in `from`'s hand (`send_knob`, docs/spatial_loop.md part two,
+## slice 51): `id` (Modular.KNOBS) at `value` (0..1, kept in bounds by the host), at song position
+## `song` (-1 for not known). Only the let-go is the room's (`modular_knob`); these are for hearing
+## and seeing the turn on the way there.
+signal knob_turned(id: StringName, value: float, from: int, song: float)
+## A grain event from `from`'s grain cloud (`send_grains`, docs/spatial_loop.md part two, slice 55):
+## `event` (GrainVoice.event, checked by the host) made at song position `song` (-1 for not known),
+## for the cloud here to play from the same sound on a voice of theirs.
+signal grains_played(event: PackedFloat32Array, from: int, song: float)
 
 ## What a `note_played` is.
 enum Note { OFF, ON, PEDAL_UP, PEDAL_DOWN }
 
 var role: int = Role.SOLO
+## On a guest, the host's track spectra as last heard (Spectra): track -> its bands in dB; and when
+## (msec, -1 for never). Empty on a host or alone, which measure their own.
+var spectra: Dictionary = {}
+var spectra_heard_msec := -1
 ## {peer_id: Participant}
 var participants: Dictionary = {}
 var local_peer_id: int = 1
@@ -182,6 +201,14 @@ var guest_audio: GuestAudio = null
 var host_audio: GuestAudio = null
 ## Sound files from a guest's machine into the host's project. See core/session/file_send.gd.
 var files: FileSend = null
+## Takes played through the modular wall, recorded as audio from what was played: a player's own,
+## and on the host each player's, rendered and put in when they end (docs/spatial_loop.md part two,
+## slice 52). See core/session/modular_takes.gd.
+var modular_takes: ModularTakes = null
+## Takes played on the grain cloud, recorded as audio from its events: a player's own, and on the
+## host each player's, rendered and put in when they end (docs/spatial_loop.md part two, slice 55).
+## See core/session/grain_takes.gd.
+var grain_takes: GrainTakes = null
 ## The ENet channel a guest's recording travels on: its own, so a take in flight never queues a
 ## fader move or a hold behind it.
 const AUDIO_TAKE_CHANNEL := 3
@@ -194,6 +221,26 @@ const KEYS_CHANNEL := 5
 ## unreliable and ordered, so a lost control never holds a note back behind its resend (the
 ## head-of-line delay a reliable channel has) and the notes stay reliable on KEYS_CHANNEL.
 const CONTROLS_CHANNEL := 6
+## The host's track spectra (Spectra, the EQ wall's), five times a second: unreliable and ordered,
+## a lost one overtaken by the next, on a channel of their own so they never wait behind a key.
+const SPECTRA_CHANNEL := 7
+## A gesture streamed as it moves (`send_knob`, the modular's knobs; `send_grains`, the grain cloud's
+## events): reliable, so every turn and every grain arrives in order to be heard where it was made,
+## and on a channel of its own, so a retransmit holds back only the gestures behind it and never a
+## note (KEYS_CHANNEL) or the room.
+const GESTURE_CHANNEL := 8
+## How often a knob's turn may be streamed (`send_knob`), a second: the studio holds a turn to this.
+const KNOBS_PER_SECOND := 30.0
+## Host: how many knob events have been refused (an unknown knob, a value that is not one), and how
+## many this machine has sent; and how many times this host has published the room. For the suite
+## and the probe.
+var knobs_refused := 0
+var knobs_sent := 0
+## Host: how many grain events have been refused (bytes that are not one); and how many this machine
+## has sent. For the suite and the probe.
+var grains_refused := 0
+var grains_sent := 0
+var rooms_published := 0
 ## The controls a player's keys carry (`send_control`): the pitch wheel, the mod wheel (1) and
 ## expression (11). The host passes these and refuses any other. A take carries the same
 ## (MidiTake.CONTROL_KINDS), and so does a jack (Jack.Kind.CC).
@@ -234,7 +281,10 @@ var layout: LayoutProfile = null
 ## {surface id: Transform3D}, "items": {item id: [x, y, z, yaw] on the floor -- and, while it is
 ## in the air, [..., throws, origin, velocity, spin] -- or [] in a hand, [true] on a head},
 ## "patches": {peer id: [SEND socket per tablet receiver, "" for none]},
-## "jacks": {source: sink}, where each instrument's output jack goes (Jacks)}
+## "jacks": {source: sink}, where each instrument's output jack goes (Jacks),
+## "weather": whether the venue's weather's switch is on LISTEN (Weather),
+## "modular": the modular wall's patch, {cables: [[from, to]], knobs: {id: v}} (Modular), its cables'
+##   `from` a module's output or one of the world's sockets (`world:weather`, slice 53)}
 ## -- the venue, the plugins out on stands, where every stand and
 ## trolley is, and where gear that stands on nothing (the desk) has been put. A fact about the room, like where the desk is, so
 ## it is the host's and there is one of it; a guest's own venue and tablets wait in its layout
@@ -331,6 +381,12 @@ func _ready() -> void:
 	files = FileSend.new()
 	files.name = "FileSend"
 	add_child(files)
+	modular_takes = ModularTakes.new()
+	modular_takes.name = "ModularTakes"
+	add_child(modular_takes)
+	grain_takes = GrainTakes.new()
+	grain_takes.name = "GrainTakes"
+	add_child(grain_takes)
 	layout = LayoutProfile.new()
 	local_name = _default_name()
 	local_look = GhostLook.load_from(look_path)
@@ -397,6 +453,7 @@ func start_solo() -> void:
 		_forget_made()
 	role = Role.SOLO
 	room = {}
+	_forget_spectra()
 	local_peer_id = 1
 	participants.clear()
 	holds.clear()
@@ -420,6 +477,7 @@ func host(at_port: int = DEFAULT_PORT) -> bool:
 	multiplayer.server_relay = false
 	role = Role.HOST
 	room = {}
+	_forget_spectra()
 	_room_acks.clear()
 	port = at_port
 	local_peer_id = 1
@@ -453,6 +511,7 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	# still has them, and gives them back on leaving (Studio._restore_made).
 	_forget_made()
 	room = {}
+	_forget_spectra()
 	room_seq = 0
 	port = at_port
 	joined_address = address
@@ -636,6 +695,10 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# A take still arriving is kept: what was sung before the line dropped is still a take.
 	_finish_take(peer_id)
 	participants.erase(peer_id)
+	if modular_takes != null:
+		modular_takes.forget(peer_id)
+	if grain_takes != null:
+		grain_takes.forget(peer_id)
 	participant_left.emit(peer_id)
 	# Whatever they had their hand on is free the moment they are gone. A fader held by an
 	# absent person cannot be moved by anybody, which is a broken desk.
@@ -898,6 +961,9 @@ func _receive_intent(verb: StringName, args: Array) -> void:
 	if verb == &"save_project":
 		save_project_for(name_of(multiplayer.get_remote_sender_id()))
 		return
+	if verb == &"arrange_sections":
+		_arrange_for(multiplayer.get_remote_sender_id(), args)
+		return
 	# Whose it is, so their edit group gathers their writes and nobody else's (DAW.open_edit).
 	DAW.apply_intent(verb, args, multiplayer.get_remote_sender_id())
 
@@ -937,6 +1003,55 @@ func tell_room(text: String) -> void:
 	if is_authority():
 		for id in _audience():
 			_told.rpc_id(id, text)
+
+
+## Listen from my spot (docs/spatial_loop.md part two, slice 35): the shared transport sought to
+## `seconds` and played -- `seek` and `transport_play`, intents from a guest like any other -- and
+## everyone told who asked and from where, `Ada: listen from 1:23 (CHORUS)`: the song jumping
+## under the whole band's hands is not a thing to do unannounced. A guest's words are the host's
+## to say, from its own markers, after the intents it has already had.
+func listen_from(seconds: float) -> void:
+	var at := maxf(seconds, 0.0) if is_finite(seconds) else 0.0
+	DAW.seek(at)
+	DAW.transport_play()
+	if is_authority():
+		tell_room(listen_words(local_name if not participants.has(local_peer_id) else name_of(local_peer_id),
+				DAW.state.markers, at))
+	elif _connected():
+		_listen_asked.rpc_id(1, at)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _listen_asked(seconds: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if not is_authority() or not _is_member(from) or not is_finite(seconds):
+		return
+	tell_room(listen_words(name_of(from), DAW.state.markers, maxf(seconds, 0.0)))
+
+
+## What the room is told of a listen from `seconds`: who, the clock there, and the section it is in
+## (Harmony.section_at), upper case, when there is one.
+static func listen_words(who: String, markers: Dictionary, seconds: float) -> String:
+	var section := Harmony.section_at(markers, seconds).to_upper()
+	return "%s: listen from %s%s" % [who, Presence.clock(seconds), " (%s)" % section if section != "" else ""]
+
+
+## A guest's rearrangement of the song's sections (DAW.arrange_sections), made as hers, and the room
+## told: the whole song moving under everyone's hands is not a change to make unannounced. A refusal
+## is told to her, as she could not see it any other way.
+func _arrange_for(from: int, args: Array) -> void:
+	var who := name_of(from)
+	var order: Array = args[0] if args.size() == 1 and args[0] is Array else []
+	var refusal := DAW.arrange_refusal(order)
+	if not refusal.is_empty():
+		notice.emit("%s's rearrangement was not made. %s" % [who, refusal])
+		if _connected():
+			_told.rpc_id(from, "Your rearrangement was not made. " + refusal)
+		return
+	var regions: Array = DAW.state.regions
+	var names: Array = order.map(func(k): return str(regions[int(k)][2]))
+	DAW.apply_intent(&"arrange_sections", args, from)
+	tell_room("%s rearranged the sections: %s." % [who, " · ".join(names)])
 
 
 ## A guest's take, placed, and both sides told how it went: the guest because it cannot see a
@@ -1153,8 +1268,9 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		# `ropes` row (StageTable.ropes; docs/spatial_loop.md slice 20).
 		&"rope": [TYPE_STRING, TYPE_BOOL, TYPE_BOOL],
 		# Made while playing (docs/spatial_loop.md part two, slice 23): a made item of a kind, of
-		# something the host has ("clip:<track>:<item>"), never its data, which the host packs;
-		# an item into a holder's slot (ItemRoom.holders: the cassette rack, its bin); and an
+		# something the host has ("clip:<track>:<item>", or a chord brick's "chord:<key>:<chord>"
+		# and "ledge:<key>:<chord>", slice 31), never its data, which the host packs; an item
+		# into a holder's slot (ItemRoom.holders: the cassette rack, its bin, the ledge); and an
 		# item handed to a bandmate, into their hand.
 		&"make": [TYPE_STRING_NAME, TYPE_STRING],
 		&"slot_item": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_INT],
@@ -1164,7 +1280,40 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		&"paste": [TYPE_STRING_NAME, TYPE_INT, TYPE_FLOAT],
 		# The sampler's REC pressed on (for the asker's next sound) or off (slice 26): the room's
 		# `sampler` row, the peer it is armed for or 0 (Sampler.armed_by).
-		&"sampler": [TYPE_BOOL]}
+		&"sampler": [TYPE_BOOL],
+		# The weather's switch (slice 44): LISTEN or OFF, the room's `weather` row (Weather.listening).
+		&"weather": [TYPE_BOOL],
+		# The grain cloud's KEY switch (slice 54): on or off, the room's `grains_key` row (GrainCloud.key_on).
+		&"grains_key": [TYPE_BOOL],
+		# A scratch on the DJ platter, for the sampler (slice 27): the cassette in its slot by id,
+		# and the scratch's path (Varispeed.path), which the host renders from its own render.
+		&"scratch": [TYPE_STRING_NAME, TYPE_PACKED_FLOAT32_ARRAY],
+		# A chord brick's length nudged (slice 31): the room's `bricks` row {id: bars}, which a
+		# brick's length is, so a nudge never resends what it was made of (ChordBrick.LENGTHS).
+		&"bricks": [TYPE_STRING_NAME, TYPE_INT],
+		# The looper's pad slapped (slice 45): armed for the asker from a bar (-1 to start the
+		# transport) for so many bars, or 0 bars to clear their own row; the room's `looper` row
+		# [peer, from_bar, bars] (Looper.answer). And a guest's finished layer, its notes [on, off,
+		# pitch, velocity, channel] in song seconds, for the host to write as their track (Looper.write_layer).
+		&"looper": [TYPE_INT, TYPE_INT],
+		&"looper_layer": [TYPE_FLOAT, TYPE_FLOAT, TYPE_ARRAY],
+		# The music box's keys (slice 47): the room's `music_box` row whole, [track (0 the MUSIC BOX
+		# track), bars a turn, root (semitones from the key's tonic), chromatic] (MusicBox.clean).
+		&"music_box": [TYPE_INT, TYPE_INT, TYPE_INT, TYPE_BOOL],
+		# A string across the room tied or cut (slice 48): the room's `strings` row {id: [a, b,
+		# maker]}, its ends in the venue's frame; a and b the same point to cut it (RoomString.answer).
+		&"string": [TYPE_STRING_NAME, TYPE_VECTOR3, TYPE_VECTOR3],
+		# A marble run's block put in a cell or taken out (slice 49): the room's `marbles` row {cell:
+		# [kind, facing]}, an empty kind to take it out (MarbleRun.answer); and its BALL key, a marble
+		# let go on a beat, the room's `marble_balls` row (MarbleRun.answer_ball).
+		&"marble": [TYPE_VECTOR3I, TYPE_STRING_NAME, TYPE_INT],
+		&"marble_ball": [TYPE_FLOAT],
+		# The modular wall (slice 51): a cable from an output jack into an input, or with an empty
+		# `to` the cable at a jack pulled (Modular.answer_patch); and a knob let go at a value
+		# (Modular.answer_knob). Each with the song position it was made at. The room's `modular` row.
+		# A cable from one of the world's sockets (slice 53, `world:weather`) is asked the same way.
+		&"modular_patch": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_FLOAT],
+		&"modular_knob": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT]}
 
 
 ## Every made item's row gone from this machine, and said (`made_changed`), so its item goes too.
@@ -1231,6 +1380,7 @@ func publish_room(state: Dictionary) -> void:
 		return
 	room = state
 	_room_sent = true
+	rooms_published += 1
 	for id in _audience():
 		_receive_room.rpc_id(id, _room_with_acks())
 
@@ -1374,34 +1524,52 @@ static func clean_take(take: int) -> int:
 	return take if take >= 0 and take < 1 << 24 else -1
 
 
-## A shake of the instrument in my hand, to everyone else, with the song position it was played
-## to (`song`, -1 for not known), whether I snap my hand percussion (`snap`), and the Foley take my
-## hand rang (`take`, -1 for not known).
-func send_item_hit(item: StringName, velocity: int, song := -1.0, snap := false, take := -1) -> void:
+## A shake of the instrument in my hand, or a strike on one that stands still, to everyone else,
+## with the song position it was played to (`song`, -1 for not known), whether I snap my hand
+## percussion (`snap`), the Foley take my hand rang (`take`, -1 for not known), and where on a fixed
+## one I struck it (`zone`).
+func send_item_hit(item: StringName, velocity: int, song := -1.0, snap := false, take := -1, zone := &"") -> void:
 	if not _connected():
 		return
 	if role == Role.HOST:
 		for id in _audience():
-			_item_hit.rpc_id(id, item, velocity, local_peer_id, song, snap, take)
+			_item_hit.rpc_id(id, item, velocity, local_peer_id, song, snap, take, zone)
 	else:
-		_item_hit_up.rpc_id(1, item, velocity, song, snap, take)
+		_item_hit_up.rpc_id(1, item, velocity, song, snap, take, zone)
 
 
 @rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit_up(item: StringName, velocity: int, song: float, snap: bool, take: int) -> void:
+func _item_hit_up(item: StringName, velocity: int, song: float, snap: bool, take: int, zone: StringName) -> void:
 	var from := multiplayer.get_remote_sender_id()
 	if role != Role.HOST or not _is_member(from):
 		return
 	var hit := clean_item_hit(velocity, song, take)
-	item_hit.emit(item, hit[0], from, hit[1], snap, hit[2])
+	zone = clean_zone(zone)
+	item_hit.emit(item, hit[0], from, hit[1], snap, hit[2], zone)
 	for id in _audience():
 		if id != from:
-			_item_hit.rpc_id(id, item, hit[0], from, hit[1], snap, hit[2])
+			_item_hit.rpc_id(id, item, hit[0], from, hit[1], snap, hit[2], zone)
 
 
 @rpc("authority", "call_remote", "reliable", KEYS_CHANNEL)
-func _item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int) -> void:
-	item_hit.emit(item, velocity, from, song, snap, take)
+func _item_hit(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName) -> void:
+	item_hit.emit(item, velocity, from, song, snap, take, zone)
+
+
+## The most a hit's zone may be (characters): a word, "bass" or "slap", or a pad's drum.
+const ZONE_MOST := 16
+
+
+## A guest's zone as the host passes it on: a short word of lower-case letters, digits and
+## underscores, or &"" for anything else. Whether the instrument has it is its own (InstrumentItem.has_zone).
+static func clean_zone(zone: StringName) -> StringName:
+	var said := String(zone)
+	if said.length() > ZONE_MOST:
+		return &""
+	for c in said:
+		if not (c >= "a" and c <= "z") and not (c >= "0" and c <= "9") and c != "_":
+			return &""
+	return zone
 
 
 ## A guest's hit as the host passes it on: [velocity 1 to 127, song (-1 for anything not a song
@@ -1433,6 +1601,8 @@ func _note_up(kind: int, pitch: int, velocity: int, song: float, source: StringN
 	if String(source).length() > NOTE_SOURCE_MAX:
 		source = &""
 	note_played.emit(kind, pitch, velocity, from, song, source)
+	# A note through the modular, into their take here (ModularTakes, slice 52).
+	modular_takes.heard_note(from, kind, pitch, velocity, song, source)
 	for id in _audience():
 		if id != from:
 			_note.rpc_id(id, kind, pitch, velocity, from, song, source)
@@ -1489,6 +1659,173 @@ func _control(kind: int, value: int, from: int, song: float, source: StringName)
 	control_played.emit(kind, value, from, song, source)
 
 
+## A knob on the modular wall as it turns (docs/spatial_loop.md part two, slice 51): `id` at `value`,
+## at song position `song` (-1 for not known), to everyone, through the host, which refuses an unknown
+## knob and keeps the value 0..1 (`_pass_knob`). Reliable and ordered on GESTURE_CHANNEL. The studio
+## sends at most KNOBS_PER_SECOND; the let-go is the room's ask (`modular_knob`), never this.
+func send_knob(id: StringName, value: float, song := -1.0) -> void:
+	# Into a take through the modular, this player's, and on a host its players' (slice 52).
+	if modular_takes != null and Modular.KNOBS.has(id) and is_finite(value):
+		modular_takes.knob(id, clampf(value, 0.0, 1.0), song)
+	if not _connected():
+		return
+	knobs_sent += 1
+	if role == Role.HOST:
+		_pass_knob(id, value, song, local_peer_id)
+	else:
+		_knob_up.rpc_id(1, id, value, song)
+
+
+@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
+func _knob_up(id: StringName, value: float, song: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	_pass_knob(id, value, song, from)
+
+
+## Host: `from`'s knob, refused unless it is one of the modular's with a value, kept 0..1, heard here
+## (unless it is the host's own) and passed on to everyone else. Whether it passed.
+func _pass_knob(id: StringName, value: float, song: float, from: int) -> bool:
+	if not Modular.KNOBS.has(id) or not is_finite(value):
+		knobs_refused += 1
+		return false
+	value = clampf(value, 0.0, 1.0)
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	if from != local_peer_id:
+		knob_turned.emit(id, value, from, song)
+		modular_takes.knob(id, value, song)
+	for peer in _audience():
+		if peer != from:
+			_knob.rpc_id(peer, id, value, from, song)
+	return true
+
+
+@rpc("authority", "call_remote", "reliable", GESTURE_CHANNEL)
+func _knob(id: StringName, value: float, from: int, song: float) -> void:
+	if not Modular.KNOBS.has(id) or not is_finite(value):
+		return
+	knob_turned.emit(id, clampf(value, 0.0, 1.0), from, song)
+	modular_takes.knob(id, clampf(value, 0.0, 1.0), song)
+
+
+## A grain event from this player's grain cloud as it plays it (docs/spatial_loop.md part two, slice
+## 55): `e` (GrainVoice.event) made at song position `song` (-1 for not known, GrainTakes.song), to
+## everyone, through the host, which refuses what is not an event (`_pass_grains`). Fourteen bytes
+## (GrainVoice.pack), reliable and ordered on GESTURE_CHANNEL: a lost one is sent again and arrives
+## where it was played, and holds back only the gestures behind it, never a note. Into a take on the
+## cloud first, this player's (GrainTakes.played), whether or not anyone is here to hear it.
+func send_grains(e: PackedFloat32Array, song := -1.0) -> void:
+	if not GrainVoice.is_event(e):
+		return
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	if grain_takes != null:
+		grain_takes.played(e, song)
+	if not _connected():
+		return
+	grains_sent += 1
+	var bytes := GrainVoice.pack(e)
+	if role == Role.HOST:
+		_pass_grains(bytes, song, local_peer_id)
+	else:
+		_grains_up.rpc_id(1, bytes, song)
+
+
+@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
+func _grains_up(bytes: PackedByteArray, song: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role != Role.HOST or not _is_member(from):
+		return
+	_pass_grains(bytes, song, from)
+
+
+## Host: `from`'s grain event, refused unless its bytes are one (GrainVoice.unpack), heard here (unless
+## it is the host's own) and into their take, and passed on to everyone else. Whether it passed.
+func _pass_grains(bytes: PackedByteArray, song: float, from: int) -> bool:
+	var e := GrainVoice.unpack(bytes)
+	if e.is_empty():
+		grains_refused += 1
+		return false
+	if not is_finite(song) or song < 0.0:
+		song = -1.0
+	if from != local_peer_id:
+		grains_played.emit(e, from, song)
+		grain_takes.heard_event(from, e, song)
+	for peer in _audience():
+		if peer != from:
+			_grains.rpc_id(peer, bytes, from, song)
+	return true
+
+
+@rpc("authority", "call_remote", "reliable", GESTURE_CHANNEL)
+func _grains(bytes: PackedByteArray, from: int, song: float) -> void:
+	var e := GrainVoice.unpack(bytes)
+	if e.is_empty():
+		return
+	grains_played.emit(e, from, song if is_finite(song) and song >= 0.0 else -1.0)
+
+
+## A take on the grain cloud (slice 55) marked to the host, `begun` at song position `start` or ended
+## at `end` onto `tracks` (none: abandoned): on GESTURE_CHANNEL, behind and before the take's events,
+## so the host takes exactly the events between the two (GrainTakes.heard_mark). Nothing else of the
+## take is sent: the host renders it from what reached it.
+func send_grain_take(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	if role != Role.GUEST or not _connected():
+		return
+	_grain_take_up.rpc_id(1, take_id, begun, start, end, tracks)
+
+
+@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
+func _grain_take_up(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and _is_member(from):
+		grain_takes.heard_mark(from, take_id, begun, start, end, tracks)
+
+
+## A take through the modular wall (docs/spatial_loop.md part two, slice 52) marked to the host,
+## `begun` at song position `start` or ended at `end` onto `tracks` (none: abandoned): twice, once
+## on the keys' channel behind this player's notes and once on the gestures' behind their knobs, so
+## the host takes each lane's events from its own begin to its own end (ModularTakes.heard_mark).
+## Nothing else of the take is sent: the host renders it from what reached it.
+func send_modular_take(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	if role != Role.GUEST or not _connected():
+		return
+	_modular_take_keys.rpc_id(1, take_id, begun, start, end, tracks)
+	_modular_take_gestures.rpc_id(1, take_id, begun, start, end, tracks)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _modular_take_keys(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and _is_member(from):
+		modular_takes.heard_mark(from, ModularTakes.Lane.KEYS, take_id, begun, start, end, tracks)
+
+
+## A move of this player's wheel kept in their take through the modular (ModularTakes.bend), to the
+## host for its render of the take: reliable, on the keys' channel behind the notes and inside the
+## take's keys' marks. What bandmates hear of the wheel live is still the controls' (send_control).
+func send_modular_bend(value: int, song: float) -> void:
+	if role != Role.GUEST or not _connected():
+		return
+	_modular_bend_up.rpc_id(1, value, song)
+
+
+@rpc("any_peer", "call_remote", "reliable", KEYS_CHANNEL)
+func _modular_bend_up(value: int, song: float) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and _is_member(from) and is_finite(song):
+		modular_takes.heard_bend(from, control_value(DawKitClip.PITCH_BEND, value), song)
+
+
+@rpc("any_peer", "call_remote", "reliable", GESTURE_CHANNEL)
+func _modular_take_gestures(take_id: int, begun: bool, start: float, end: float, tracks: Array) -> void:
+	var from := multiplayer.get_remote_sender_id()
+	if role == Role.HOST and _is_member(from):
+		modular_takes.heard_mark(from, ModularTakes.Lane.GESTURES, take_id, begun, start, end, tracks)
+
+
 ## `value` kept in bounds for a control of `kind`: the pitch wheel -8192 to 8191, a controller 0
 ## to 127.
 static func control_value(kind: int, value: int) -> int:
@@ -1526,17 +1863,24 @@ func _jack_up(to: int, source: StringName, kind: int, pitch: int, velocity: int,
 
 ## Host: `from`'s jack event, checked, and passed on to `to` (or played here, when `to` is the
 ## host). Its numbers are kept in bounds by its kind before anyone plays them, and a CC that is
-## not one of CONTROL_KINDS is refused. Whether it passed.
+## not one of CONTROL_KINDS is refused. A CHORD goes only down a chord hand's jack and nothing
+## else does (part two, slice 33), and one naming no quality there is is refused. Whether it passed.
 func _pass_jack(to: int, source: StringName, kind: int, pitch: int, velocity: int, song: float,
 		from: int) -> bool:
-	if kind < Jack.Kind.NOTE_ON or kind > Jack.Kind.CC or jack_refusal(to, source, from) != "" \
-			or (kind == Jack.Kind.CC and not CONTROL_KINDS.has(pitch)):
+	var chord_hand := Jack.chord_player(source) > 0
+	if kind < Jack.Kind.NOTE_ON or kind > Jack.Kind.CHORD or jack_refusal(to, source, from) != "" \
+			or (kind == Jack.Kind.CC and not CONTROL_KINDS.has(pitch)) \
+			or (kind == Jack.Kind.CHORD) != chord_hand \
+			or (kind == Jack.Kind.CHORD and (velocity < 0 or velocity > Jack.quality_count())):
 		jacks_refused += 1
 		return false
 	# Clamped by kind: a note's pitch and velocity are MIDI's 0-127, a control's `pitch` is its
-	# controller and its `velocity` its value, the bend's -8192 to 8191 (`control_value`).
+	# controller and its `velocity` its value, the bend's -8192 to 8191 (`control_value`), and a
+	# chord's `pitch` its root, a pitch class.
 	if kind == Jack.Kind.CC:
 		velocity = control_value(pitch, velocity)
+	elif kind == Jack.Kind.CHORD:
+		pitch = clampi(pitch, 0, 11)
 	else:
 		pitch = clampi(pitch, 0, 127)
 		velocity = clampi(velocity, 0, 127)
@@ -1723,6 +2067,45 @@ func publish_roll_setup(state: Dictionary) -> void:
 func _receive_roll_setup(state: Dictionary) -> void:
 	roll_setup = state
 	roll_setup_changed.emit()
+
+
+# --- spectra (the EQ wall, docs/spatial_loop.md part two, slice 36) ------------------------
+
+## The host's track spectra (track -> Spectra.BANDS levels in dB) to every guest, as Spectra.pack
+## parcels them: a byte a band per track. The host only; Spectra sends them SEND_HZ times a second.
+func send_spectra(by_track: Dictionary) -> void:
+	if role != Role.HOST or not _connected():
+		return
+	var audience := _audience()
+	if audience.is_empty():
+		return
+	for parcel in Spectra.pack(by_track):
+		for id in audience:
+			_spectra_from_host.rpc_id(id, parcel)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered", SPECTRA_CHANNEL)
+func _spectra_from_host(parcel: PackedByteArray) -> void:
+	if role != Role.GUEST:
+		return
+	hear_spectra(parcel)
+
+
+## A parcel of the host's spectra, taken in: each track in it replaces what was heard for it. A
+## parcel that is not whole is dropped.
+func hear_spectra(parcel: PackedByteArray) -> void:
+	var got := Spectra.unpack(parcel)
+	if got.is_empty():
+		return
+	for t in got:
+		spectra[t] = got[t]
+	spectra_heard_msec = Time.get_ticks_msec()
+	spectra_heard.emit()
+
+
+func _forget_spectra() -> void:
+	spectra = {}
+	spectra_heard_msec = -1
 
 
 # --- state replication --------------------------------------------------------------------

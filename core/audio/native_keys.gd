@@ -14,8 +14,20 @@ extends RefCounted
 ##
 ## Linux with PipeWire, a C compiler, and the PipeWire and ALSA headers; elsewhere MonitorSynth
 ## plays through Godot as before.
+##
+## Things struck take the same road (docs/spatial_loop.md part two, slice 39): a helper of the
+## studio's own, started with no MIDI (`start`'s `midi`) as "dawlings · hits", has Foley's sounds
+## loaded into its slots once (`load_hits`: Foley.write_hits on a worker thread, then a `load`
+## line each), and plays this player's own hits by a line each (`play_hit`, `hit`), a few
+## milliseconds after the hand rather than Godot's tens.
+##
+## And the modular wall (docs/spatial_loop.md part two, slice 51): native/modular.c, built in, plays
+## the wall's patch with this player's keys while they stand at it (`modular_on`), its cables and
+## knobs told by `mod` lines (`modular_patch`, `modular_knob`), so the modular is on the fast path too.
 
 const SOURCE := "res://native/keys.c"
+## The modular's arithmetic, included by SOURCE: the helper is built again when either is newer.
+const MODULAR_SOURCE := "res://native/modular.c"
 const BUILT := "user://bin/keys"
 ## Frames per graph cycle asked for: 2.7ms at 48kHz. The graph runs at the smallest any of its
 ## nodes asks for, so while a guest session is open everything on that card runs at this.
@@ -37,9 +49,20 @@ var ready := false
 ## which the helper passes on without playing (GuestMidi.control decides whether they are heard).
 var pending: Array[Dictionary] = []
 
+## The slots the helper has said it holds (`loaded SLOT FRAMES`), {slot: frames}: only these are
+## hit here; a hit on any other plays through Godot.
+var loaded := {}
+## The loads it refused, {slot: why}: a file gone, or not the WAV it wants.
+var refused := {}
+
 var _pid := -1
 var _io: FileAccess
 var _partial := ""
+## Foley's sounds being written for `load_hits`, on a worker thread: its task, or -1.
+var _writing := -1
+## What that thread wrote, [[slot, path], ...], taken by `poll` and loaded.
+var _written: Array = []
+var _written_lock := Mutex.new()
 
 
 ## Whether the helper can run here: Linux, and built (or buildable) from its source.
@@ -63,8 +86,10 @@ static func _build() -> String:
 	var built := ProjectSettings.globalize_path(BUILT)
 	if not FileAccess.file_exists(source):
 		return ""
-	if FileAccess.file_exists(built) \
-			and FileAccess.get_modified_time(built) >= FileAccess.get_modified_time(source):
+	var modular := ProjectSettings.globalize_path(MODULAR_SOURCE)
+	var newest := maxi(FileAccess.get_modified_time(source),
+			FileAccess.get_modified_time(modular) if FileAccess.file_exists(modular) else 0)
+	if FileAccess.file_exists(built) and FileAccess.get_modified_time(built) >= newest:
 		return built
 	var flags: Array = []
 	if OS.execute("pkg-config", ["--cflags", "--libs", "libpipewire-0.3", "alsa"], flags, true) != 0:
@@ -81,7 +106,8 @@ static func _build() -> String:
 
 
 ## Start the node, playing to `device` (a sink's name; empty for the session manager's choice).
-func start(device := "") -> bool:
+## `midi` off makes no sequencer port: a node only for the app's hits, named `name`.
+func start(device := "", midi := true, name := "") -> bool:
 	var path := helper()
 	if path == "":
 		return false
@@ -89,6 +115,10 @@ func start(device := "") -> bool:
 	var args := PackedStringArray(["--quantum", told if told.is_valid_int() else str(QUANTUM)])
 	if device != "":
 		args.append_array(["--device", device])
+	if not midi:
+		args.append("--no-midi")
+	if name != "":
+		args.append_array(["--name", name])
 	var started := OS.execute_with_pipe(path, args, false)
 	if started.is_empty():
 		return false
@@ -98,6 +128,9 @@ func start(device := "") -> bool:
 
 
 func stop() -> void:
+	if _writing >= 0:
+		WorkerThreadPool.wait_for_task_completion(_writing)
+		_writing = -1
 	if _io != null:
 		_io.close()
 		_io = null
@@ -155,6 +188,104 @@ func take_midi(on: bool) -> void:
 	_say("midi %d" % int(on))
 
 
+# --- the modular wall (docs/spatial_loop.md part two, slice 51) ---------------------------------
+
+## The keys play the modular's patch (on) or the tine (off): the app's notes and the sequencer's.
+func modular_on(on: bool) -> void:
+	_say("mod on %d" % int(on))
+
+
+## The whole of `patch` (Modular's {cables, knobs}) told to the helper: its cables cleared and put
+## in again, and every knob.
+func modular_patch(patch: Dictionary) -> void:
+	for line in modular_lines(patch):
+		_say(line)
+
+
+## One knob as it turns.
+func modular_knob(id: StringName, v: float) -> void:
+	_say(modular_knob_line(id, v))
+
+
+## A world socket's level now, and its gate opened (docs/spatial_loop.md part two, slice 53): what
+## the world plays into the patch (ModularWorld), as it happens.
+func modular_world(socket: StringName, level: float) -> void:
+	_say(modular_world_line(socket, level))
+
+
+func modular_trig(socket: StringName) -> void:
+	_say("mod trig %s" % socket)
+
+
+## The helper's line for world socket `socket` at `level`, with every digit, as a knob's.
+static func modular_world_line(socket: StringName, level: float) -> String:
+	return "mod world %s %s" % [socket, String.num(level, 17)]
+
+
+## The helper's lines for the whole of `patch`: `mod clear`, a `mod cable` each, a `mod knob` each.
+static func modular_lines(patch: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray(["mod clear"])
+	for c: Array in patch.get("cables", []):
+		out.append("mod cable %s %s" % [c[0], c[1]])
+	var knobs: Dictionary = patch.get("knobs", {})
+	for id: StringName in Modular.KNOBS:
+		out.append(modular_knob_line(id, float(knobs.get(id, Modular.KNOB_REST[id]))))
+	return out
+
+
+## The helper's line for knob `id` at `v`, with all the digits a double has, so the helper's knob is
+## the app's to the last bit (Modular.render, checked against `--render`).
+static func modular_knob_line(id: StringName, v: float) -> String:
+	return "mod knob %s %s" % [id, String.num(v, 17)]
+
+
+# --- things struck (docs/spatial_loop.md part two, slice 39) ------------------------------------
+
+## The sound in `path` (a 48 kHz 16-bit mono WAV, Foley.hit_wav) into slot `slot`, read by the
+## helper now. It answers `loaded` or `refused` (`hear`).
+func load_slot(slot: int, path: String) -> void:
+	_say("load %d %s" % [slot, path])
+
+
+## Slot `slot` played once: `gain` linear, `pan` -1 (left) to 1 (right), `speed` as an
+## AudioStreamPlayer's pitch_scale.
+func hit(slot: int, gain: float, pan := 0.0, speed := 1.0) -> void:
+	_say(hit_line(slot, gain, pan, speed))
+
+
+## The helper's line for a hit (`hit`).
+static func hit_line(slot: int, gain: float, pan := 0.0, speed := 1.0) -> String:
+	return "hit %d %.5f %.3f %.5f" % [slot, gain, clampf(pan, -1.0, 1.0), speed]
+
+
+## Every one of Foley's struck sounds written to Foley.HITS_DIR on a worker thread and, as `poll`
+## finds them written, loaded: once, as the hits' helper starts.
+func load_hits() -> void:
+	if _writing >= 0:
+		return
+	_writing = WorkerThreadPool.add_task(func() -> void:
+		var wrote := Foley.write_hits()
+		_written_lock.lock()
+		_written = wrote
+		_written_lock.unlock(), false, "hit sounds")
+
+
+## Take `take` of Foley's `kind` played on the helper (`hit`), if it holds it: true when it did,
+## false when it must be played through Godot (not started, or that sound not loaded yet).
+func play_hit(kind: StringName, take: int, gain: float, pan := 0.0, speed := 1.0) -> bool:
+	var slot := Foley.hit_slot(kind, take)
+	if slot < 0 or not loaded.has(slot) or _io == null:
+		return false
+	hit(slot, gain, pan, speed)
+	return true
+
+
+## How late a hit on the helper is (s): as it last counted, or before its first, the two cycles
+## it measures at.
+func hit_latency() -> float:
+	return latency if latency > 0.0 else 2.0 * QUANTUM / float(Foley.HIT_RATE)
+
+
 func _say(line: String) -> void:
 	if _io != null:
 		_io.store_string(line + "\n")
@@ -165,6 +296,15 @@ func _say(line: String) -> void:
 func poll() -> void:
 	if _io == null:
 		return
+	if _writing >= 0 and WorkerThreadPool.is_task_completed(_writing):
+		WorkerThreadPool.wait_for_task_completion(_writing)
+		_writing = -1
+		_written_lock.lock()
+		var wrote := _written
+		_written = []
+		_written_lock.unlock()
+		for row: Array in wrote:
+			load_slot(int(row[0]), String(row[1]))
 	var bytes := _io.get_buffer(65536)
 	if bytes.is_empty():
 		return
@@ -190,6 +330,14 @@ func hear(line: String, now_unix := Time.get_unix_time_from_system()) -> void:
 		"latency":
 			if w.size() >= 2:
 				latency = int(w[1]) / 1e6
+		"loaded":
+			if w.size() >= 3:
+				loaded[int(w[1])] = int(w[2])
+				refused.erase(int(w[1]))
+		"refused":
+			if w.size() >= 2:
+				refused[int(w[1])] = " ".join(w.slice(2))
+				loaded.erase(int(w[1]))
 		"note":
 			if w.size() >= 6:
 				pending.append({"on": w[1] == "1", "pitch": int(w[2]), "velocity": int(w[3]),

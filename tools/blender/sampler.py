@@ -5,7 +5,7 @@
 # WHAT IT IS FOR
 #
 # Anything can be a sample (docs/spatial_loop.md part two, slice 26, idea #12): press REC, then
-# squeeze the duck or hit the cowbell near the mic, and the sound it made is a WAV in the
+# squeeze the duck or hit the tambourine near the mic, and the sound it made is a WAV in the
 # project's media and a sample cassette on the rack beside it. So it looks like what it does: a
 # small pad bank on a cabinet the height of a table, eight rubber pads and a round REC key on its
 # deck, a little screen along the back that says what it is listening for, and a microphone on a

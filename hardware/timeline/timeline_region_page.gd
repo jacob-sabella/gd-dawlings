@@ -75,7 +75,8 @@ func _here() -> Array:
 
 
 ## What ADD would call it: the section of the marker at the loop's start (its name without the
-## harmony's brackets), or the next "Region N" when there is none or it is only brackets.
+## harmony's brackets), or the next "Region N" when there is none, it is only brackets or it is a
+## sticky note (Harmony.section_of is "" for both).
 func next_name() -> String:
 	var s := DAW.state
 	var at := DAWBackend.marker_key(s.markers, s.loop_start)

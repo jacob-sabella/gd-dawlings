@@ -50,12 +50,21 @@ const TILT_MOST := 45.0
 const PALMS_TOUCH := 0.05
 const PALMS_OPPOSED_WITHIN := 40.0
 
+## Pointing (`pointing`; docs/spatial_loop.md part two, "Gestures do not collide"): the index out
+## (curled under OPEN_CURL) with the other three fingers curled past POINT_CURL, the hand held level
+## -- its pitch, as `tilt` reads it, within POINT_LEVEL either way -- so a chord shape's degree I,
+## the same finger held up (pitch over 0.6), is never a point.
+const POINT_CURL := 0.45
+const POINT_LEVEL := 0.3
+
 ## The pinch mask: one bit a finger, the thumb pinching it.
 const INDEX := 1
 const MIDDLE := 2
 const RING := 4
 const LITTLE := 8
 const FINGER_BITS: Array[int] = [INDEX, MIDDLE, RING, LITTLE]
+## The thumb's bit in `extended`'s mask, beside the four fingers': a thumb pinches nothing.
+const THUMB := 16
 
 const WRIST := XRHandTracker.HAND_JOINT_WRIST
 const PALM := XRHandTracker.HAND_JOINT_PALM
@@ -151,6 +160,39 @@ static func is_open(joints: PackedVector3Array, pinched: int) -> bool:
 	var curled := curls(joints)
 	for d in range(1, curled.size()):
 		if curled[d] >= OPEN_CURL:
+			return false
+	return true
+
+
+## Which digits are held out: each one curled under OPEN_CURL, as a mask of the four fingers'
+## bits and THUMB. What a chord shape counts (ChordHand, docs/spatial_loop.md part two, slice 32):
+## the fingers held up, the thumb as the fifth. Nothing pinched is asked: a pinched finger is
+## curled in to the thumb, so it is not out.
+static func extended(joints: PackedVector3Array) -> int:
+	var curled := curls(joints)
+	var out := 0
+	if curled.size() > 0 and curled[0] < OPEN_CURL:
+		out |= THUMB
+	for f in FINGER_BITS.size():
+		if curled.size() > f + 1 and curled[f + 1] < OPEN_CURL:
+			out |= FINGER_BITS[f]
+	return out
+
+
+## Whether the hand points: the index out and level, the middle, ring and little fingers curled in
+## (POINT_CURL, POINT_LEVEL). The thumb lies where it likes. `held` is whether it pointed the frame
+## before: then only the index and the level are asked, so a pointing hand that pinches its middle
+## to its thumb (listen from there, slice 35) or lets its little finger drift goes on pointing.
+static func pointing(joints: PackedVector3Array, side: int, held := false) -> bool:
+	if not whole(joints):
+		return false
+	var curled := curls(joints)
+	if curled.size() < 5 or curled[1] >= OPEN_CURL or absf(tilt(joints, side).y) > POINT_LEVEL:
+		return false
+	if held:
+		return true
+	for d in range(2, 5):
+		if curled[d] <= POINT_CURL:
 			return false
 	return true
 

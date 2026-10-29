@@ -155,24 +155,35 @@ func paste_spot(_at: Vector3, _fine: bool) -> Array:
 	return [track, DAW.state.position_seconds]
 
 
+## Where `item` (one that pastes), pressed on this control at `at`, goes: `paste_spot`, for
+## anything a track takes. Override where what is pressed matters: a section block takes a chord
+## brick and nothing else (docs/spatial_loop.md part two, slice 31).
+func paste_spot_for(_item: Item, at: Vector3, fine: bool) -> Array:
+	return paste_spot(at, fine)
+
+
 ## What a press here would paste, for a hand over this control carrying something that pastes:
 ## "click pastes the Kick Verse 1 cassette onto Bass at 12.1.00"; "" for none. What the hover card
-## says instead of the control's own hint, since the press is the paste's.
+## says instead of the control's own hint, since the press is the paste's. What the carried thing
+## says it does there (Item.paste_text: a chord brick's chords) where it says.
 func paste_words() -> String:
 	for by in _hovered_by:
 		var hand := by as Interactor
 		if hand == null or not is_instance_valid(hand.carrying) or not hand.carrying.pastes():
 			continue
-		var spot := paste_spot(hand.hover_point, hand.fine())
+		var spot := paste_spot_for(hand.carrying, hand.hover_point, hand.fine())
 		if spot.is_empty():
 			continue
-		var cassette := hand.carrying as CassetteItem
-		var what := "the %s cassette" % cassette.clip_name() if cassette != null else hand.carrying.item_title().to_lower()
 		var desk := hand is MouseInteractor
 		# The press as the hand has it (Interactor.paste_press_words): a bare hand has no trigger.
 		var press := hand.paste_press_words()
-		return "%s pastes %s onto %s at %s; %s" % [press + ("," if press.contains(" or ") else ""), what,
-				DAW.state.track(int(spot[0])).display_name(), DAW.state.bar_beat(float(spot[1])),
+		var does := hand.carrying.paste_text(spot)
+		if does.is_empty():
+			var cassette := hand.carrying as CassetteItem
+			var what := "the %s cassette" % cassette.clip_name() if cassette != null else hand.carrying.item_title().to_lower()
+			does = "pastes %s onto %s at %s" % [what, DAW.state.track(int(spot[0])).display_name(),
+					DAW.state.bar_beat(float(spot[1]))]
+		return "%s %s; %s" % [press + ("," if press.contains(" or ") else ""), does,
 				"Q puts it down" if desk else "letting go puts it down"]
 	return ""
 

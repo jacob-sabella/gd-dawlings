@@ -215,8 +215,20 @@ func can(capability: StringName) -> bool:
 	if capability == Capability.WIDTH:
 		# OSC has no width; the bridge sets D_WIDTH, and the stereo pan mode it needs.
 		return _bridge != null and _bridge.is_open()
+	if capability == Capability.ARRANGE:
+		# OSC can move no item; the bridge's ArrangeSections splits and moves them, one Undo block.
+		return _bridge != null and _bridge.is_open()
 	if capability == Capability.LANE_HOLD:
 		# OSC cannot stop an envelope playing; the bridge's HoldLane switches it off and back.
+		return _bridge != null and _bridge.is_open()
+	if capability == Capability.SCRUB:
+		# Reaper's own scrub, its OSC rotary `/scrub`: no bridge needed.
+		return true
+	if capability == Capability.SPECTRA:
+		# Reaper plays its tracks to its own outputs; neither OSC nor the bridge hands their audio over.
+		return false
+	if capability == Capability.LYRICS:
+		# OSC has no notes; the bridge's SetLyrics keeps them in the project notes' [lyrics] block.
 		return _bridge != null and _bridge.is_open()
 	return true
 
@@ -725,6 +737,18 @@ func set_punch(on: bool) -> void:
 func seek(seconds: float) -> void:
 	write("/time", [maxf(seconds, 0.0)])
 	_apply("/time", [maxf(seconds, 0.0)])
+
+
+## Reaper's scrub (the pattern's SCRUB, a rotary): a nudge of `/scrub` in the hand's direction,
+## which Reaper sounds as its scrub does, then the playhead put where the hand has it, so the
+## cursor follows the platter and not the rotary's own step size. Playing, a plain seek.
+const SCRUB_ROTARY_MOST := 1.0
+
+
+func scrub(seconds: float, speed: float) -> void:
+	if not state.playing and absf(speed) > 0.0:
+		write("/scrub", [clampf(speed / 4.0, -SCRUB_ROTARY_MOST, SCRUB_ROTARY_MOST)])
+	seek(seconds)
 
 
 func set_loop_range(start: float, end: float) -> void:
@@ -1266,6 +1290,64 @@ func paste_item(track_index: int, start: float, packed: Dictionary) -> void:
 	_edit("PasteItem", paste_request(track_index, item, path))
 
 
+## The sections in a new order, as one bridge call (the bridge's ArrangeSections, one Undo block):
+## shown on the cache at once (DAWBackend._locally_arrange), and Reaper told the pieces, so it cuts and
+## moves its own items, markers, regions and envelopes -- including those of tracks outside the bank
+## -- and, when the clock moved with a section, the new tempo map and signatures.
+func arrange_sections(order: Array) -> void:
+	if _bridge == null or not _bridge.is_open():
+		return
+	var pieces := arrange_pieces(state.regions, order)
+	var brackets := arranged_brackets(state, pieces)
+	var tempo_was := state.tempo_map().to_array()
+	var meter_was := state.meter().to_array()
+	if pieces.is_empty() or not _locally_arrange(order):
+		return
+	var map := state.tempo_map()
+	var tempo: Array = []
+	var meter: Array = []
+	if not _same_clock(map.to_array(), tempo_was):
+		for pt in map.to_array():
+			tempo.append([map.seconds_at(float(pt[0])), float(pt[1]), 0 if int(pt[2]) == DawKitTempoMap.HOLD else 1])
+	# Reaper's signatures are on its tempo markers, which a new tempo map takes away.
+	var plain := state.meter().is_constant() and state.beats_per_bar == 4 and state.beat_unit == 4
+	if not _same_clock(state.meter().to_array(), meter_was) or (not tempo.is_empty() and not plain):
+		meter = state.meter().to_array()
+	_edit("ArrangeSections", arrange_request(pieces, tempo, meter, brackets))
+
+
+## The lyrics, shown on the cache at once and sent as the bridge's SetLyrics: the project notes'
+## `[lyrics]` block (Lyrics.into_notes) made the text, the rest of the notes left alone, one Undo
+## block. The next timeline reads the block back (Lyrics.from_notes).
+func set_lyrics(text: String) -> void:
+	if _bridge == null or not _bridge.is_open() or text == state.lyrics:
+		return
+	_write_lyrics(text)
+	_edit("SetLyrics", [text])
+
+
+## The bridge's argument list for a rearrangement, flat: the piece count and [from, end, to] in
+## seconds for each, in the new order (DAWBackend.arrange_pieces); the tempo map's count and [seconds,
+## bpm, ramps] for each point, none when it stays as it is (as SetTempoMap takes them); the
+## signatures' count and [quarter note, numerator, denominator] each, none to leave them; and the
+## count of brackets that keep a section's harmony (DAWBackend.arranged_brackets) and [seconds,
+## name] each, where it now is: the marker there renamed, or a new one.
+static func arrange_request(pieces: Array, tempo: Array, meter: Array, brackets: Array = []) -> Array:
+	var out: Array = [pieces.size()]
+	for p in pieces:
+		out.append_array([float(p[0]), float(p[1]), float(p[2])])
+	out.append(tempo.size())
+	for pt in tempo:
+		out.append_array([float(pt[0]), float(pt[1]), int(pt[2])])
+	out.append(meter.size())
+	for pt in meter:
+		out.append_array([float(pt[0]), int(pt[1]), int(pt[2])])
+	out.append(brackets.size())
+	for b in brackets:
+		out.append_array([float(b[0]), str(b[1])])
+	return out
+
+
 ## The bridge's argument list for a paste, flat as every request's is: track, start, length, name,
 ## muted, the file's absolute path ("" for MIDI), its offset, fade in and out, their shapes in the
 ## desk's numbering, gain in dB, the loop's start and end in the file (equal for none), reversed,
@@ -1624,6 +1706,11 @@ func _on_timeline(result, asked_at_epoch := -1) -> void:
 	for target in master:
 		if not _same_lane(state.master.automation.get(target, []), master[target]):
 			_apply("/master/automation/%s" % target, MixWire.pack_automation(master[target]))
+	if result.has("notes"):
+		# The lyrics are the notes' [lyrics] block; the rest of the notes are Reaper's own business.
+		var lyrics := Lyrics.from_notes(str(result["notes"]))
+		if lyrics != state.lyrics:
+			_apply("/timeline/lyrics", [lyrics])
 	if result.has("project_name"):
 		var title := str(result["project_name"])
 		var file := str(result.get("project_file", "")).get_file()

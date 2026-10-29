@@ -34,6 +34,16 @@ const TENT_POLES := [
 	Vector3(-6.55, 4.35, 2.1),
 ]
 const TENT_HALF := 6.55
+## And its depth: front poles to back, as drawn (round the old floor, 3.2 m in front of the seat to
+## 7.3 m behind it, 0.35 m and 0.45 m past those).
+const TENT_FRONT := -3.55
+const TENT_BACK := 7.75
+## How far past the floor's front and back the tent's poles stand, at any size.
+const TENT_PAST_FRONT := 0.35
+const TENT_PAST_BACK := 0.45
+## How much taller than drawn: the live room is 5 m high now, not 4, and the lanterns hung from the
+## cloth over the walks want to clear the neighbourhoods' banners.
+const TENT_RISE := 1.15
 ## The middle of the tent's plan, which the guy ropes pull away from.
 const TENT_MIDDLE := Vector2(0.0, 2.1)
 ## The tent's lantern hooks (tools/blender/desert_tent.py HOOKS), by what they hang over: the two
@@ -81,9 +91,10 @@ const HOURS := [
 
 ## The fire in the canyon, in front of the tent and to the left: in view from the desk past the
 ## gear, clear of the guy ropes.
-const FIRE_AT := Vector2(-3.0, -9.5)
-## The oasis's pool: its middle, its radii, and the water's height.
-const POOL := Vector2(0.0, -12.5)
+const FIRE_AT := Vector2(-3.0, -10.3)
+## The oasis's pool: its middle, its radii, and the water's height. Clear of the front guy ropes'
+## stakes, which stand 3.4 m out past the poles.
+const POOL := Vector2(0.0, -13.8)
 const POOL_RADII := Vector2(8.0, 4.6)
 const WATER := -0.3
 ## The dunes' wind (the way it blows, in plan), which lays the ripples and lifts the sand.
@@ -247,25 +258,57 @@ func tent_scale() -> float:
 	return (live_room_half() + 0.25) / TENT_HALF
 
 
+## How much deeper than drawn it is, and where a z of the drawn tent's now stands: the cloth
+## stretched from just in front of the floor's front to just behind its back.
+func tent_depth() -> float:
+	return (LIVE_ROOM_BACK + TENT_PAST_BACK - Studio.ROOM_FRONT + TENT_PAST_FRONT) / (TENT_BACK - TENT_FRONT)
+
+
+func tent_z(drawn: float) -> float:
+	return Studio.ROOM_FRONT - TENT_PAST_FRONT + (drawn - TENT_FRONT) * tent_depth()
+
+
+func tent_middle() -> Vector2:
+	return Vector2(TENT_MIDDLE.x * tent_scale(), tent_z(TENT_MIDDLE.y))
+
+
 func pole_spots() -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for p: Vector3 in TENT_POLES:
-		out.append(Vector3(p.x * tent_scale(), p.y, p.z))
+		out.append(Vector3(p.x * tent_scale(), p.y * TENT_RISE, tent_z(p.z)))
 	return out
 
 
-## The lounges either side of the desk: where each side's tray table, pouffe and floor lantern
-## stand, in studio space.
+## The lounges either side of the desk, in the strips beside it: where each side's tray table,
+## pouffe and floor lantern stand, in studio space. Drawn round the old strip's middle (5.55 m out,
+## LOUNGE_DRAWN), and kept round this one's however wide the control room and the tent have grown.
+const LOUNGE_DRAWN := 5.55
+
+
+func lounge_x(side: float, drawn: float) -> float:
+	return side * ((room_width * 0.5 + live_room_half()) * 0.5 + drawn - LOUNGE_DRAWN)
+
+
 func tray_spot(side: float) -> Vector2:
-	return Vector2(side * (5.05 + _grow()), -1.0 if side < 0.0 else -0.6)
+	return Vector2(lounge_x(side, 5.05), -1.0 if side < 0.0 else -0.6)
 
 
 func pouf_spot(side: float) -> Vector2:
-	return Vector2(side * (4.55 + _grow()), 0.85 if side < 0.0 else -2.2)
+	return Vector2(lounge_x(side, 4.55), 0.85 if side < 0.0 else -2.2)
 
 
+## The water jars, by the poles: one by the front left, two together in front of the right side's
+## middle one (the bricks table stands behind it, and the walk to it between).
 func jar_spots() -> Array[Vector2]:
-	return [Vector2(-(5.9 + _grow()), -2.75), Vector2(5.95 + _grow(), 1.75), Vector2(5.65 + _grow(), 2.25)]
+	var half := live_room_half()
+	return [Vector2(-(half - 0.5), tent_z(-2.75)), Vector2(half - 0.45, 2.6), Vector2(half - 0.45, 3.2)]
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): ringing stones, a
+## lithophone, lying across a ledge of sandstone at the tent's back wall between the kit and the
+## lattice.
+func instrument() -> Dictionary:
+	return {"kind": &"stones", "spot": back_wall_instrument(0.25)}
 
 
 func zone_solids() -> Array:
@@ -273,8 +316,11 @@ func zone_solids() -> Array:
 	for side: float in [-1.0, 1.0]:
 		out.append({"c": tray_spot(side), "h": Vector2(0.36, 0.36), "a": 0.0, "top": 0.43})
 		out.append({"c": pouf_spot(side), "h": Vector2(0.25, 0.25), "a": 0.0, "top": 0.31})
-	for j in jar_spots():
-		out.append({"c": j, "h": Vector2(0.2, 0.2), "a": 0.0, "top": 0.62})
+	# The two that stand together are one thing to walk round, not two with a gap between.
+	var jars := jar_spots()
+	out.append({"c": jars[0], "h": Vector2(0.2, 0.2), "a": 0.0, "top": 0.62})
+	var pair := (jars[1] + jars[2]) * 0.5
+	out.append({"c": pair, "h": Vector2(0.2, 0.2 + absf(jars[2].y - jars[1].y) * 0.5), "a": 0.0, "top": 0.62})
 	return out
 
 
@@ -441,7 +487,8 @@ func _pitch_the_tent() -> void:
 	var tent := _model("desert_tent.glb", Vector3.ZERO, 0.0, {"cloth": cloth, "valance": band, "tassel": tassel,
 			"wall": hanging})
 	tent.name = "Tent"
-	tent.scale = Vector3(tent_scale(), 1.0, 1.0)
+	tent.scale = Vector3(tent_scale(), TENT_RISE, tent_depth())
+	tent.position.z = tent_z(0.0)
 	for mesh: MeshInstance3D in tent.find_children("*", "MeshInstance3D", true, false):
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_DOUBLE_SIDED
 	var wood := Materials.cached_scanned("desert_pole", "weathered_brown_planks", "2k", 0.6, Color(0.55, 0.4, 0.3))
@@ -464,12 +511,13 @@ func _pitch_the_tent() -> void:
 		knob.rings = 5
 		var k := _put(knob, Vector3(p.x, p.y + 0.15, p.z), 0.0, "PoleKnob")
 		k.material_override = brass
-		var out := (Vector2(p.x, p.z) - TENT_MIDDLE).normalized()
-		var corner := absf(absf(p.x) - TENT_HALF * tent_scale()) < 0.01 and (p.z < 0.0 or p.z > 7.0)
+		var out := (Vector2(p.x, p.z) - tent_middle()).normalized()
+		var corner := absf(absf(p.x) - TENT_HALF * tent_scale()) < 0.01 and (p.z < 0.0 or p.z > tent_z(7.0))
 		var spreads: Array = [-0.42, 0.42] if corner else [0.0]
 		for spread: float in spreads:
 			var dir := out.rotated(spread)
-			var reach := p.y * 0.8
+			# As far out as drawn: the ropes pull the poles, not the cloth's new height.
+			var reach := p.y / TENT_RISE * 0.8
 			var stake := Vector3(p.x + dir.x * reach, 0.0, p.z + dir.y * reach)
 			var from := Vector3(p.x, p.y + 0.05, p.z)
 			var to := stake + Vector3(0, 0.12, 0)
@@ -501,15 +549,21 @@ func hook(n: int) -> Vector3:
 # --- the rugs ----------------------------------------------------------------------------------
 
 ## Kilims over the sand: a big one under the desk, others over and beside it at angles, a rug
-## under each lounge and under each zone. (x, z, width, depth, yaw, layer, palette); x is out
-## from the middle at the base width and steps out with the room on its own side.
+## under each lounge. (x, z, width, depth, yaw, layer, palette); x and z are in the control room as
+## first drawn (8 x 6 m) and spread with it, the lounges' x round their strip (lounge_x).
 const RUGS := [
 	[0.0, -0.3, 6.4, 4.8, 0.0, 0, 0.0], [-2.7, 1.7, 2.2, 3.2, 0.22, 1, 1.0], [2.9, -1.9, 2.0, 3.0, -0.28, 1, 2.0],
 	[-2.4, -2.2, 1.5, 2.3, 1.35, 2, 3.0], [2.4, 2.2, 1.4, 2.0, -1.2, 2, 1.3],
 	[-5.15, -0.7, 2.0, 3.6, 0.04, 0, 3.4], [5.15, -0.8, 2.0, 3.4, -0.05, 0, 0.6],
-	[-4.9, 4.6, 3.2, 2.4, 0.08, 0, 2.2], [1.2, 5.4, 3.7, 3.7, 0.0, 1, 0.2], [4.4, 4.7, 2.3, 3.4, -0.06, 0, 1.6],
-	[-2.1, 3.4, 2.1, 1.3, 0.35, 2, 2.7], [-2.2, 5.8, 2.9, 2.9, 0.0, 2, 3.1],
 ]
+## And in the back of house, round what stands there: one under each zone a little bigger than it
+## (the riser carries its own), a runner down the walk between the kit and the booth, and one
+## under each of the toys' and the synth's neighbourhoods. (zone or where, margin or size, yaw,
+## layer, palette).
+const ZONE_RUGS := [[&"vocals", 0.3, 0.04, 0, 2.2], [&"matrix", 0.15, 0.0, 1, 0.2], [&"bricks", 0.45, -0.06, 0, 1.6],
+		[&"drums", 0.5, 0.0, 2, 3.1], [&"synth", 0.3, 0.0, 0, 2.7]]
+const FLOOR_RUGS := [[Vector2(-1.5, 9.8), Vector2(1.3, 4.4), 0.0, 1, 0.9], [Vector2(-6.6, 6.1), Vector2(2.8, 3.2), 0.06, 0, 1.2],
+		[Vector2(5.9, 10.9), Vector2(2.6, 2.8), -0.04, 1, 3.6]]
 ## How thick a rug is, and how much higher each layer lies than the one under it.
 const RUG_THICK := 0.004
 const RUG_LAYER := 0.0037
@@ -521,14 +575,40 @@ func _lay_rugs() -> void:
 	kilim.set_shader_parameter("mode", 0)
 	# The low sun comes in under the cloth and lies along the rugs; the dyes are the same, less lit.
 	kilim.set_shader_parameter("brightness", 0.82 if variant == DUNES else 1.0)
+	# Each [x, z, width, depth, yaw, layer, palette] in studio space.
+	var laid: Array = []
+	var spread := Vector2(room_width / 8.0, Studio.ROOM_DEPTH / 6.0)
 	for i in RUGS.size():
 		var r: Array = RUGS[i]
-		var x: float = r[0] + signf(r[0]) * _grow()
+		if i >= 5:
+			laid.append([lounge_x(signf(r[0]), absf(r[0])), r[1], r[2] + 0.4, r[3], r[4], r[5], r[6]])
+		else:
+			var grow := spread if i == 0 else Vector2.ONE
+			laid.append([r[0] * spread.x, r[1] * spread.y, r[2] * grow.x, r[3] * grow.y, r[4], r[5], r[6]])
+	var z := zones()
+	var half := live_room_half() - 0.05
+	for r: Array in ZONE_RUGS:
+		if not z.has(r[0]):
+			continue
+		var box: AABB = z[r[0]]
+		# Grown by its margin, but no further than the floor: a zone against a wall has its rug up
+		# to the wall, square to it, not running out under the cloth.
+		var m: float = r[1]
+		var lo := Vector2(maxf(box.position.x - m, -half), maxf(box.position.z - m, Studio.ROOM_BACK))
+		var hi := Vector2(minf(box.end.x + m, half), minf(box.end.z + m, LIVE_ROOM_BACK - 0.05))
+		var cut: bool = lo.x > box.position.x - m or hi.x < box.end.x + m or hi.y < box.end.z + m
+		laid.append([(lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5, hi.x - lo.x, hi.y - lo.y, 0.0 if cut else r[2], r[3], r[4]])
+	for r: Array in FLOOR_RUGS:
+		var at: Vector2 = r[0]
+		var size: Vector2 = r[1]
+		laid.append([at.x * live_room_half() / LIVE_ROOM_HALF, at.y, size.x, size.y, r[2], r[3], r[4]])
+	for i in laid.size():
+		var r: Array = laid[i]
 		var box := BoxMesh.new()
 		# A millimetre's difference between any two, so no two edges ever lie in one plane.
 		box.size = Vector3(r[2] + i * 0.001, RUG_THICK, r[3] + i * 0.0013)
 		var top: float = 0.0045 + int(r[5]) * RUG_LAYER + i * 0.0002
-		var rug := _put(box, Vector3(x, top - RUG_THICK * 0.5, r[1]), r[4], "Rug%d" % i)
+		var rug := _put(box, Vector3(r[0], top - RUG_THICK * 0.5, r[1]), r[4], "Rug%d" % i)
 		rug.material_override = kilim
 		rug.set_instance_shader_parameter("rug_size", Vector2(box.size.x, box.size.z))
 		rug.set_instance_shader_parameter("seed", r[6])
@@ -557,7 +637,7 @@ func _furnish_lounges() -> void:
 			Color(0.42, 0.1, 0.18), Color(0.6, 0.5, 0.34)]
 	var n := 0
 	for side: float in [-1.0, 1.0]:
-		var wall_x: float = side * (6.0 + _grow())
+		var wall_x: float = lounge_x(side, 6.0)
 		for k in 4:
 			var z: float = -2.6 + k * 0.68 + (0.0 if side < 0.0 else 0.25)
 			cushions.append(Transform3D(Basis(Vector3.UP, 0.08 * sin(k * 2.0 + side)), Vector3(wall_x, ON_RUGS, z)))
@@ -657,10 +737,66 @@ func _hang_lanterns() -> void:
 		_lantern(foot, "Lantern%d" % n)
 		if n in lit:
 			_lantern_light(foot + Vector3(0, 0.18, 0), 1.5, 5.0)
+	# The tent is twice the floor it was drawn over and its hooks are where they were sewn: more
+	# lanterns, chained from the cloth itself, over the walks between the neighbourhoods and along
+	# the back, so the back of house is lit through its middle and not only round its first half.
+	# None over the lattice, whose top is a reach above head height.
+	var half := live_room_half() / LIVE_ROOM_HALF
+	for at: Vector2 in EXTRA_LANTERNS:
+		var x := at.x * half
+		var top := Vector3(x, _cloth_over(x, at.y), at.y)
+		var drop := 0.75
+		var foot := top - Vector3(0, drop + LANTERN_RING, 0)
+		# Up into the cloth a little, so the chain never stops short of it.
+		var link := ZoneKit.block(self, Vector3(0.01, drop + 0.1, 0.01), top - Vector3(0, drop * 0.5 - 0.05, 0), chain,
+				"ChainExtra")
+		link.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_lantern(foot, "LanternExtra")
+		_lantern_light(foot + Vector3(0, 0.18, 0), 1.5, 5.5)
 	# On the floor in each lounge, by the tray table.
 	for side: float in [-1.0, 1.0]:
 		var at := tray_spot(side)
 		_lantern(Vector3(at.x + side * 0.55, ON_RUGS, at.y + 0.75), "FloorLantern")
+
+
+## Where the extra lanterns hang (x at the base width, z), clear of the lattice and every banner.
+const EXTRA_LANTERNS := [Vector2(-0.7, 9.6), Vector2(-4.9, 8.7), Vector2(6.3, 8.0), Vector2(-3.6, 11.7),
+		Vector2(5.6, 11.6)]
+
+
+## How high the tent's cloth is over (x, z): its nearest vertex overhead, as the tent stands.
+func _cloth_over(x: float, z: float) -> float:
+	if _cloth.is_empty():
+		var tent := get_node_or_null("Tent") as Node3D
+		for mi: MeshInstance3D in tent.find_children("*", "MeshInstance3D", true, false):
+			var xf := tent.transform * _to_tent(mi, tent)
+			for k in mi.mesh.get_surface_count():
+				for v: Vector3 in mi.mesh.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]:
+					var p := xf * v
+					if p.y > 3.0:
+						_cloth.append(p)
+	var best := INF
+	var y := 4.0
+	for p: Vector3 in _cloth:
+		var d := Vector2(p.x - x, p.z - z).length_squared()
+		if d < best:
+			best = d
+			y = p.y
+	return y
+
+
+var _cloth: PackedVector3Array = []
+
+
+## A node's transform relative to `top`, one of its ancestors.
+static func _to_tent(node: Node3D, top: Node3D) -> Transform3D:
+	var at := Transform3D.IDENTITY
+	var up: Node = node
+	while up != null and up != top:
+		if up is Node3D:
+			at = (up as Node3D).transform * at
+		up = up.get_parent()
+	return at
 
 
 # --- the zones ---------------------------------------------------------------------------------
@@ -1075,7 +1211,8 @@ func _soft_dot() -> GradientTexture2D:
 ## the slip face, smaller ones crossing them, and the great swell of the erg under all of it.
 ## Flat where the camp is pitched, in a hollow between them.
 func dune_height(x: float, z: float) -> float:
-	var mask := smoothstep(14.0, 50.0, Vector2(x, z - 2.0).length())
+	# The dunes rise clear of the camp, round the middle of its floor and past its ropes.
+	var mask := smoothstep(18.0, 54.0, Vector2(x, z - (Studio.ROOM_FRONT + LIVE_ROOM_BACK) * 0.5).length())
 	var w := WIND.normalized()
 	var p := Vector2(x, z)
 	var s := p.dot(w) + _noise2(x, z, 0.004) * 60.0
@@ -1383,13 +1520,13 @@ func _build_the_village(mirror: Node3D) -> void:
 			continue
 		# The side walls, back toward the camp, outside the tent's ropes.
 		for s: float in [-1.0, 1.0]:
-			_mud_wall(holder, Vector3(s * 42.0, 0, far + 0.4), Vector3(s * 42.0, 0, 18.0), 2.8, adobe)
+			_mud_wall(holder, Vector3(s * 42.0, 0, far + 0.4), Vector3(s * 42.0, 0, LIVE_ROOM_BACK + 10.7), 2.8, adobe)
 		# A house behind the tent on the left, its door lit.
-		var house := Vector3(-(live_room_half() + 11.0), 0, 14.0)
+		var house := Vector3(-(live_room_half() + 11.0), 0, LIVE_ROOM_BACK + 6.7)
 		ZoneKit.block(holder, Vector3(7.0, 3.6, 5.0), house + Vector3(0, 1.8, 0), adobe, "House")
 		ZoneKit.block(holder, Vector3(1.0, 1.9, 0.1), house + Vector3(2.0, 0.97, -2.52), lit, "HouseDoor")
 		ZoneKit.block(holder, Vector3(0.5, 0.6, 0.1), house + Vector3(-1.6, 2.2, -2.52), lit, "HouseWindow")
-		_tower(holder, Vector2(live_room_half() + 16.0, 20.0), adobe, lit)
+		_tower(holder, Vector2(live_room_half() + 16.0, LIVE_ROOM_BACK + 12.7), adobe, lit)
 
 
 ## A run of mud wall from `a` to `b` (on the ground): the wall, buttresses every few metres on its

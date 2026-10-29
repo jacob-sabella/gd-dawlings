@@ -9,7 +9,8 @@ extends RefCounted
 ## A row (`ALL`) is a station: `id`; `title`, as its plaque and the card letter it; `area`, the
 ## part of the world it is in (CONTROL, LIVE or VENUE, one PLAY page each); `zone`, the
 ## Venue.ZONES zone it is mounted in, or empty for one that stands on the floor by itself; `air`,
-## the free radius it needs round where it is played (m); `spot`, the Venue method that places it
+## the free radius it needs round where it is played (m), and, where a row says it (`air_at`, the
+## theremin's hands), the point in its frame that air is round; `spot`, the Venue method that places it
 ## (a Transform3D, or null where the venue has no room for it); `at`, the point in that frame a
 ## player looks at while playing it; and two lines of help, `desk` (mouse and keys) and `hands`
 ## (hands and buttons); and `frame`, what of it a player should see from where they stand, its
@@ -23,13 +24,31 @@ extends RefCounted
 ## is pushed about on in a studio (Venue.WHEELED), and the solid a venue gives it standing on its
 ## own, so the clearance loop, the trolley and the venue cannot disagree about where it is.
 ##
-## A row that is a surface rather than an instrument (the stage table, slice 18) says so
-## (`surface`, its surface id), stands on a trolley rather than a venue solid (no `foot`), and
-## may say its own `seat`, how far in front of it a player stands (m), where SEAT would leave its
-## back edge out of reach.
+## A row that rides a piece of the control room's furniture (the platter on the tape deck's cart,
+## slice 27) names it (`cart`, the trolley's id): it stands where the cart has been wheeled, has no
+## footprint of its own, and says its own `seat`.
+##
+## A row that is a surface rather than an instrument (the stage table, slice 18, the EQ wall,
+## slice 36) says so (`surface`, its surface id), stands on a trolley rather than a venue solid (no
+## `foot`), and may say its own `seat`, how far in front of it a player stands (m), where SEAT
+## would leave its back edge out of reach, or the whole of a tall one out of view.
+##
+## A zone-mounted row on the bricks table (the wheel, the section blocks, slice 30, and the chord
+## ledge, slice 31) has a band of the table to itself (Venue.TABLE_BANDS, by its id): the clearance loop
+## holds those bands clear of each other rather than their `air`, which is for the floor round it.
+##
+## A row mounted on the venue itself (`mounted`: the venue's own instrument, slice 42, hung from its
+## beam, its eave or its back wall, or set into its railing) is neither: it has no trolley and no
+## zone, and the venue says what it is as well as where (Venue.instrument), so its title, its help
+## lines, what is looked at and its frame are the venue's (`row_in`, VenueInstrument.row_for). Its
+## walker solid is the venue's (Venue.solids). Every venue but the Rig Roulette room has one in the
+## end (slice 43); a venue with none answers null for its spot. So is the venue's weather's switch
+## (`weather`, slice 44, Weather.row_for), on a window's sill or a post, in the arrangements that have
+## weather.
 ##
 ## Things carried, not stood anywhere (the keytar, the shaker, the tambourine, the bells in a
-## hand, the fingertips, the jacks), and what the hands do anywhere (clapping to mute, leaning in),
+## hand, the fingertips, the session in miniature, the jacks), the drum pads (on the desk and on
+## whatever real surface a headset marks, slice 41), and what the hands do anywhere (clapping to mute, leaning in),
 ## are `HELD`: help lines only, on PLAY · HELD.
 
 const CONTROL := &"control"
@@ -39,6 +58,10 @@ const HELD_AREA := &"held"
 ## The areas in the order the card pages them.
 const AREAS: Array[StringName] = [CONTROL, LIVE, VENUE]
 const AREA_TITLES := {&"held": "HELD", &"control": "CONTROL ROOM", &"live": "LIVE ROOM", &"venue": "THIS VENUE"}
+## Where each area is, as a toast says a station is there ("THE HARP, in the control room: ..."):
+## not the page's title lowered, which would say "in the this venue".
+const AREA_WHERE := {&"held": "in hand", &"control": "in the control room", &"live": "in the live room",
+		&"venue": "in this venue"}
 ## How far in front of a station its seat is (m), and the nearest it comes in when something
 ## stands on the floor there: the far side of a table, a wall.
 const SEAT := 1.1
@@ -75,8 +98,26 @@ const ALL := [
 		"id": &"wheel", "title": "FIFTHS WHEEL", "area": LIVE, "zone": &"bricks", "air": 0.5,
 		"spot": &"wheel_spot", "at": Vector3(0, 0.45, -0.2),
 		"frame": [Vector3(0, 0.77, -0.35), Vector3(0, -0.29, 0.06)],
-		"desk": "click a chord to hear it · drag round the hub or wheel for the key · SET writes it",
-		"hands": "press a chord · twist the hub for the key · SET writes them into the song",
+		"desk": "click a chord to hear it · drag round the hub or wheel for the key · SET writes it · drag a strip tile off the board for a chord brick, MAKE BRICKS for the strip",
+		"hands": "press a chord · twist the hub for the key · SET writes them into the song · pull a strip tile out toward you for a chord brick",
+	},
+	{
+		"id": &"sections", "title": "SECTION BLOCKS", "area": LIVE, "zone": &"bricks", "air": 0.3,
+		"spot": &"sections_spot", "at": Vector3(0, 0.04, SectionBlocks.ROW_Z),
+		"frame": [Vector3(0, SectionBlocks.PLAQUE_TOP, SectionBlocks.PLAQUE_Z),
+				Vector3(0, 0, SectionBlocks.ROW_Z + SectionBlocks.DEPTH * 0.5)],
+		"desk": "drag a section along the row to move it, the others make room · [ and ] move the one under the cursor a place · let go and the song is rearranged, one undo step · no sections yet: MAKE SECTIONS FROM MARKERS",
+		"hands": "lift a section and set it down elsewhere in the row · the others make room · let go to rearrange the song · the stick moves it a place",
+	},
+	{
+		"id": &"ledge", "title": "CHORD LEDGE", "area": LIVE, "zone": &"bricks", "air": 0.3,
+		# Close up to the near edge it runs along, its letters a brick's face, and back just far
+		# enough that CLEAR at its left end and the BIN at its right are both in a desk's view.
+		"seat": 0.85, "spot": &"ledge_spot", "at": Vector3(0, 0.04, ChordLedge.SLOT_Z),
+		"frame": [Vector3(0, 0.08, ChordLedge.SLOT_Z),
+				Vector3(0, -0.32, ChordLedge.PLAQUE_Z)],
+		"desk": "MAKE BRICKS on the wheel stands the strip here as chord bricks · wheel over one for 1, 2 or 4 bars · take one and click a lane, a strip or a section block: the whole row is written · click the rail to stand a brick, BIN or CLEAR to bin",
+		"hands": "stand chord bricks in a row: it is the progression · take one and turn it in your hand, or the stick over one, for 1, 2 or 4 bars · aimed back at its slot it goes back in its place · press one into a lane, a strip or a section block to write the row",
 	},
 	{
 		"id": &"stage_table", "title": "STAGE TABLE", "area": CONTROL, "zone": &"", "air": 0.5,
@@ -99,10 +140,159 @@ const ALL := [
 		"spot": &"sampler_spot", "at": Vector3(0, 1.0, 0),
 		"frame": [Vector3(0, 1.33, 0), Vector3(0, 0.3, 0.13)],
 		"foot": Sampler.FOOT, "foot_z": 0.0, "top": Sampler.TOP,
-		"desk": "click REC, then squeeze, click or shake something you carry, or anything used within 1.5 m of its mic: one sample, a WAV and a cassette on the rack · click REC again to stop",
-		"hands": "press REC, then squeeze, hit or shake something in your hand, or near the mic · that one sound is a cassette on the rack · press REC again to stop",
+		"desk": "click REC, then squeeze, click or shake something you carry, do a yo-yo or card trick, or throw the ball to bounce, or use anything within 1.5 m of its mic: one sample, a WAV and a cassette on the rack · click REC again to stop",
+		"hands": "press REC, then squeeze, hit or shake something in your hand, do a yo-yo or card trick, or bounce the ball, or near the mic · that one sound is a cassette on the rack · press REC again to stop",
+	},
+	{
+		"id": &"platter", "title": "PLATTER", "area": CONTROL, "zone": &"", "air": 0.4,
+		"spot": &"platter_spot", "at": Platter.AXIS + Vector3(0, Platter.DISC_TOP, 0),
+		"frame": [Vector3(0.13, 0.1, -0.12), Vector3(0, -0.33, 0.21)],
+		"seat": 0.6, "cart": &"deck_trolley",
+		"desk": "drag round it to scrub the song, a turn a bar · hold still to stop, let go to play on · flick it back fast and let go to spin back · wheel a beat · click a cassette into its slot, then drag to scratch it, in your ears alone",
+		"hands": "take hold of the record and turn it to scrub, a turn a bar · hold it still to stop · flick it back and let go to spin back · stand a cassette in its slot and turn to scratch it, in your ears alone",
+	},
+	{
+		"id": &"eq_wall", "title": "EQ WALL", "area": CONTROL, "zone": &"", "air": 0.5,
+		"spot": &"eq_wall_spot", "at": Vector3(0, 1.15, 0),
+		"frame": [Vector3(0, EqWall.BOTTOM + EqWall.TALL + 0.06, 0), Vector3(0, EqWall.BOTTOM, 0.05)],
+		"seat": 1.9, "surface": &"eq_wall",
+		"desk": "F walks to it, G brings it · each track's shape is its level in each band, 20 Hz at the floor to 20 kHz at the top · a glow is a clash: two tracks both above -30 dB and within 6 dB · hover a glow or a name in the key for its card · drag a glow's side down, or wheel over it, to cut that track there, an EQ at its chain's end · SHOW: all, the soloed or the worst clash · a host on the built-in engine",
+		"hands": "frequency up its height, lows at the floor · each track's shape is its level in each band · where two glow they clash: point at a glow for its card · grab a glow on a track's side and push it into the wall to cut that track there · press SHOW for all, the soloed or the worst clash",
+	},
+	{
+		# The circle of hand drums on the drum riser (HandDrum, slice 40): the ring's middle, its front
+		# toward the desk, the drums round it items of the room, the plaque low between the front two.
+		"id": &"drums", "title": "HAND DRUMS", "area": LIVE, "zone": &"drums", "air": 0.5,
+		"spot": &"drum_circle_spot", "at": Vector3(0, 0.62 + HandDrum.STAND, 0),
+		"frame": [Vector3(0, 0.8 + HandDrum.STAND, -0.51), Vector3(0, DRUM_PLAQUE.y - 0.15, DRUM_PLAQUE.z)],
+		"desk": "click a drum's head: the centre is bass, the rim slap, between the tone · Shift-click softly · the cajón's face: its middle bass, its top corners slap · click a drum's jack to plug it into a track",
+		"hands": "strike the head: centre bass, rim slap · controllers are steadier for fast parts",
+	},
+	{
+		# The looper (Looper, slice 45): a pad on a stand at the drum riser's front corner, played from
+		# the floor in front of it, its screen and LENGTH key behind the pad, its plaque on an arm
+		# off the pole, in front of the case and below it. Its layers are rings on a post over it, and
+		# a LAYERS list over the screen (LooperRings, slice 46). Its frame's top is the last ring the
+		# post could stand (LooperRings.STACK_TOP), so a desk sees the whole stack turn, shine and go
+		# dashed with the plaque's foot under it: so its seat stands 1.7 m back, further than SEAT.
+		"id": &"looper", "title": "LOOPER", "area": LIVE, "zone": &"drums", "air": 0.3,
+		"seat": 1.7, "spot": &"looper_spot", "at": Vector3(0, Looper.PAD_Y, 0.03),
+		"frame": [Vector3(0, LooperRings.STACK_TOP, LooperRings.POST.z), Looper.PLAQUE_FOOT],
+		"reach": 0.5,
+		"desk": "click the pad to loop: a bar's count, then everything you play (keys, hits) for LENGTH bars is a layer on a track of your own · click LENGTH for 1, 2, 4 or 8 · the first sets the loop · click again while it loops to stack a layer · one player at a time · each layer is a ring on the post: click it to mute, again to unmute · the LAYERS list has MUTE and X (delete) for each",
+		"hands": "slap the pad: a bar's count, then everything you play for LENGTH bars is a layer · slap again while it loops to stack another · one player at a time · each layer is a ring: grab to mute, again to unmute, pull away to delete",
+	},
+	{
+		# The music box (MusicBox, slice 47): a brass cylinder on a case on a plinth of its own, standing
+		# on the floor by itself beside the harp, so a trolley in a studio. Its frame's top is the
+		# plaque's top on the open lid, its foot the front edge of its keys on the deck.
+		"id": &"music_box", "title": "MUSIC BOX", "area": LIVE, "zone": &"", "air": 0.5,
+		"spot": &"music_box_spot", "at": MusicBox.AXIS + Vector3(0, -0.05, 0.1),
+		"frame": [MusicBox.FRAME_TOP, MusicBox.FRAME_FOOT],
+		"foot": MusicBox.FOOT, "foot_z": MusicBox.FOOT_Z, "top": MusicBox.TOP,
+		"desk": "click a cell on the cylinder for a peg, a peg to take it out · drag along a row for a run, one undo step · the wheel over it, or dragging the knurled wheel at its right end, turns it round · TRACK, LENGTH, ROOT and SCALE in front: click for the next, the wheel either way · it plays its track's MIDI item as the song plays",
+		"hands": "a fingertip on a cell for a peg, on a peg to take it out · along a row for a run · roll the wheel at its right end, or the stick, to turn it round · a key steps on",
+	},
+	{
+		# The string spool (RoomString.Spool, slice 48): a bobbin of string on a stand of its own, standing
+		# on the floor by itself in the aisle between the drum riser and the lattice (at the lattice's
+		# front corner in the loft; Venue.default_string_spool_spot), so a trolley in a studio. Its
+		# frame's top is the reel's top, its foot its plaque's on the post, opened.
+		"id": &"strings", "title": "STRING SPOOL", "area": LIVE, "zone": &"", "air": 0.5,
+		"spot": &"string_spool_spot", "at": RoomString.SPOOL_AXLE + Vector3(0, -0.15, 0),
+		"frame": [RoomString.SPOOL_FRAME_TOP, RoomString.SPOOL_FRAME_FOOT],
+		"foot": RoomString.SPOOL_FOOT, "foot_z": RoomString.SPOOL_FOOT_Z, "top": RoomString.SPOOL_TOP,
+		"desk": "click the spool for an end · click where it goes, then where it ends: anything the cursor meets, across the room for a bass, a hand's width for a high note · click a string to pluck · wiggle to wobble · Alt + mouse up or down bends · drag it hard off its line, or click a knot, to cut",
+		"hands": "press the spool for an end · press where it goes, carry it, let go where it ends · its length is its note · brush it to pluck · tilt to bend · pull it hard to cut",
+	},
+	{
+		# The marble run (MarbleRun, slice 49): mounted in the lattice zone, its tray at the cube's face
+		# toward the desk, looked past into the lattice. Its frame's top is just over the tray's board,
+		# its foot its plaque's keys under the board, folded, so a seat brought in close (studio:2's
+		# glass) still holds both.
+		"id": &"marbles", "title": "MARBLE RUN", "area": LIVE, "zone": &"matrix", "air": 0.5,
+		"spot": &"marbles_spot", "at": MarbleRun.LOOK,
+		"frame": [MarbleRun.FRAME_TOP, MarbleRun.FRAME_FOOT],
+		"desk": "click a block on the tray (RAMP DROP SPLITTER BELL), then click cells: on the lattice's floor, or a block's face for the cell beside it · Shift + wheel raises the layer, the wheel turns it · click a placed block to move it, Backspace takes it out, Esc puts it back · a marble rolls from the top block each bar, BALL for one now · each bell rings its height's note · its jack records them",
+		"hands": "take a block from the tray and let it go in a cell · the stick turns it · pull one out of the lattice to take it out · a marble rolls from the top block each bar · each bell rings its height's note",
+	},
+	{
+		# The theremin (Theremin, slice 50): free-standing in front of the drum riser's outer end, facing
+		# the desk, its player between it and the control room, so a trolley in a studio. Its `air` is a
+		# metre round where its hands play (`air_at`), toward it and either side. Its frame's top is the
+		# pitch rod's tip, its foot its plaque's under the cabinet, opened.
+		"id": &"theremin", "title": "THEREMIN", "area": LIVE, "zone": &"", "air": 1.0,
+		"spot": &"theremin_spot", "at": Theremin.LOOK, "air_at": Theremin.AIR_AT,
+		"frame": [Theremin.FRAME_TOP, Theremin.FRAME_FOOT],
+		"foot": Theremin.FOOT, "foot_z": Theremin.FOOT_Z, "top": Theremin.TOP,
+		"desk": "rest the cursor on the lettered rule out from the tall rod: across is pitch, nearer the rod higher · the wheel over it is volume, up from silent · hold the button to play it full · SCALE on its front: free, the key's scale or the chord · wiggle to wobble · Alt + mouse up or down bends",
+		"hands": "one hand near the tall rod is the pitch, nearer is higher · the other over the loop is the volume, silent down on it · the lit ring is your note · tilt to bend · shake to wobble",
+	},
+	{
+		# The grain cloud (GrainCloud, slice 54): free-standing in the aisle between the drum riser and
+		# the lattice, behind the string spool, its back to the lattice, so a trolley in a studio. Its
+		# `air` is round the cloud's middle (`air_at`), where the hands play, toward it and either side.
+		# Its frame's top is the cloud's top, its foot its plaque's on the plinth's side toward the
+		# desk, opened.
+		"id": &"grains", "title": "GRAIN CLOUD", "area": LIVE, "zone": &"", "air": GrainCloud.AIR,
+		"spot": &"grains_spot", "at": GrainCloud.LOOK, "air_at": GrainCloud.AIR_AT,
+		"frame": [GrainCloud.FRAME_TOP, GrainCloud.FRAME_FOOT],
+		"foot": GrainCloud.FOOT, "foot_z": GrainCloud.FOOT_Z, "top": GrainCloud.TOP,
+		"desk": "click the bowl with a cassette in your hand (a sample, or any clip pulled off the timeline) and the cloud is its sound · hold the button on the cloud to play grains from there: across is where in the sound, up is longer grains · the wheel widens the spray, Shift + wheel is more grains a second · KEY on its front follows the chord's root · the band hears it · while the song records, your grains go onto the armed track as audio",
+		"hands": "let a cassette go over the bowl · reach into the cloud: across is where in the sound, up is longer grains, further in is more of them · spread your fingers, or squeeze the grip, to widen the spray · KEY follows the chord's root · the band hears it · while the song records, your grains go onto the armed track as audio",
+	},
+	{
+		# The modular wall (ModularWall, slice 51): its help lines say where the world's sockets are
+		# (WorldSocket, slice 53), since they are out in the room and not on it. A surface hung on the synth zone's module rack over
+		# the keyboard stand, its touch keys on the stand's upper deck under it and its plaque beside
+		# it. Mounted in the zone, not a trolley. Its frame's top is the case's top, its foot the touch
+		# keys' near edge; its seat as far back as the bricks table behind it lets, and a headset's
+		# (`reach`) at the decks' front, the panel in arm's reach over them.
+		"id": &"modular", "title": "MODULAR", "area": LIVE, "zone": &"synth", "air": 0.5,
+		"spot": &"modular_spot", "at": ModularWall.LOOK,
+		"frame": [ModularWall.FRAME_TOP, ModularWall.FRAME_FOOT],
+		"seat": 1.3, "reach": 0.8, "surface": &"modular",
+		"desk": "F walks to it, G brings it · drag from a jack to another to patch a cable: an output (pale) into an input · drag a cable's plug out of an input to move it, off the jacks to pull it · drag a knob up or down, or wheel it, to turn it · standing at it your keys play it: the touch keys under it, a MIDI keyboard, or PLAY for A to ' · OUT says which road it sounds on · record at it and the take is its sound, audio named modular · the world plugs in too: click a MODULAR socket (or P over it) by the weather, the venue's instrument, a looper ring or the marble run to step its long cable into the wall's next free input",
+		"hands": "pinch a jack and carry the cable to another: an output (pale) into an input · pull a plug out to move it, or let it go off the jacks · twist a knob · standing at it your keys play it, or touch the keys under it · record at it and the take is its sound · press a MODULAR socket by the weather, the venue's instrument, a looper ring or the marble run to patch the world in",
+	},
+	{
+		# The lyric board (LyricBoard, slice 56): in the vocal booth on a stand of its own, across the mic
+		# stand's foot from the singer, its lines at eye height over the mic as they look out through the
+		# glass. Mounted in the zone, not a trolley: the booth is the venue's. Its seat is at the mic. Its
+		# frame's top is the board's top, its foot its plaque's on the post, opened.
+		"id": &"lyrics", "title": "LYRIC BOARD", "area": LIVE, "zone": &"vocals", "air": 0.15,
+		"spot": &"lyrics_spot", "at": Vector3(0, LyricBoard.EYE + LyricBoard.LINES_UP, 0),
+		"frame": [LyricBoard.FRAME_TOP, LyricBoard.FRAME_FOOT],
+		"seat": LyricBoard.SEAT,
+		"desk": "the song's lyrics at the mic, the line sung now large and marked · M, LYRICS edits them (EDIT opens it) · play the song, click the board, and press Enter or TAP as each untimed line starts",
+		"hands": "the line sung now is large and marked · the song playing, press TAP as the next line starts to time it · EDIT types a line onto the end",
+	},
+	{
+		# The venue's own instrument (VenueInstrument, slice 42): what it is, where and how it is played
+		# are the venue's (`row_in`); these are for a card with no venue to ask.
+		"id": &"venue", "title": "THE VENUE'S INSTRUMENT", "area": VENUE, "zone": &"", "air": 0.5,
+		"spot": &"instrument_spot", "mounted": true, "at": Vector3(0, 1.3, 0),
+		"frame": [Vector3(0, 1.9, 0), Vector3(0, 0.95, 0.1)],
+		"desk": "click a bar, a tube or a crystal to strike it, Shift-click softly · hold the button and drag across them to brush them · each a note of the song's scale",
+		"hands": "strike it with a fingertip or a controller · brush across to ring several · each a note of the song's scale",
+	},
+	{
+		# The venue's weather (Weather, slice 44): its switch on a window's sill, or on a post by the
+		# cave's pools. What it is is the venue's (`row_in`); these are for a card with no venue to ask.
+		"id": &"weather", "title": "THE WEATHER", "area": VENUE, "zone": &"", "air": 0.4,
+		"spot": &"weather_spot", "mounted": true, "at": Vector3(0, 0.95, 0),
+		"frame": [Vector3(0, 1.05, 0), Vector3(0, 0.5, 0.02)],
+		"desk": "click the switch: LISTEN plays each drop as a note of the song's scale, OFF silences them · click its jack to record them onto a track",
+		"hands": "press the switch: LISTEN, each drop a note of the song's scale · OFF, silent · its jack into a track records them",
 	},
 ]
+## Where the hand drums' plaque stands in the ring's frame (Venue.drum_ring), between the front two
+## drums and low, leant back like a lectern's (DRUM_PLAQUE_TILT, radians) so it reads from above and
+## is under the line from the desk's seat to the drums behind it; and how wide it is, to fit between
+## the front two.
+const DRUM_PLAQUE := Vector3(0, 0.28 + HandDrum.STAND, 0.6)
+const DRUM_PLAQUE_TILT := 0.7
+const DRUM_PLAQUE_WIDTH := 0.56
 
 const HELD := [
 	{
@@ -131,6 +321,11 @@ const HELD := [
 		"hands": "hold an empty hand open, palm up, to turn them on · thumb to each fingertip plays · tilt to bend · shake to wobble",
 	},
 	{
+		"id": &"chord_hand", "title": "CHORD SHAPES", "area": HELD_AREA,
+		"desk": "C turns the chord layer on · 1 to 7 pick the key's I to vii° for the harp, the fingertips and a bell you carry · Shift adds the seventh · 0 the song's own · a click still strums · C or Esc ends it",
+		"hands": "hold your chord hand up (the left, or the right if left-handed), palm out: fingers up count I to IV, the thumb too V · palm up, one or two: vi, vii° · open flat or lowered: the song's · controller: click the stick, then push it toward a chord, up is I",
+	},
+	{
 		"id": &"clap", "title": "CLAP TO MUTE", "area": HELD_AREA,
 		"desk": "K held over a track (a stage voice, a strip, a lane, a rack) mutes it while held · a tap latches it, another unlatches",
 		"hands": "palms pressed together, pointing at a track, mute it until they part · a quick clap latches it · controllers: grips together",
@@ -146,6 +341,23 @@ const HELD := [
 		"hands": "pull a clip out of the timeline toward you · hold it to your ear to hear it · push it into a timeline lane, a strip or a stage voice to paste it · hold it by a bandmate's glove for half a second to hand it over · throw it to them · let it go by a rack slot to shelve it",
 	},
 	{
+		"id": &"chord_brick", "title": "A CHORD BRICK", "area": HELD_AREA,
+		"desk": "drag a strip tile off the fifths wheel for one · click a timeline lane, a strip or a stage voice to write its chords there · click a section block for its harmony · from the ledge, its whole row · Q puts it down",
+		"hands": "pull a tile out of the wheel's strip toward you · turn it in your hand for 1, 2 or 4 bars · push it into a lane, a strip or a stage voice to write its chords · into a section block for that section's harmony · taken from the ledge, the whole row",
+	},
+	{
+		"id": &"miniature", "title": "MINIATURE", "area": HELD_AREA,
+		"desk": "the session to hold, on the desk's left wing: click a track to play from there and bring the console · an item to select it on the timeline · a pin to walk to its station · its front edge to carry it",
+		"hands": "point at it or touch it with a fingertip: the card names the track and time · press to play from there and bring the console · an item brings the timeline · a pin travels to its station · take it by its front edge",
+	},
+	{
+		# The drum pads (slice 41): the kit on the desk's front rail, and this player's own on real
+		# surfaces, marked from the PADS card under the rail. Played anywhere, so held, not stood.
+		"id": &"pads", "title": "DRUM PADS", "area": HELD_AREA,
+		"desk": "six on the desk's front rail, KICK SNARE HAT CLAP TOM RIM: click one, Shift-click softly, or 4 to 9 from anywhere · they play the drum track · their jack at the rail's left end plugs them elsewhere",
+		"hands": "tap a pad on the desk's rail · MARK on the PADS card under it, then touch a desk, a crate or a knee with a fingertip, or a controller's tip with its trigger held, and hold still: a pad there · while marking, tap a pad for its next drum, hold still on it to take it away · the stick over one changes its drum",
+	},
+	{
 		"id": &"jacks", "title": "JACKS", "area": HELD_AREA,
 		"desk": "P steps what you carry into a track or a bandmate · Shift-P unplugs",
 		"hands": "with the other hand, press the jack on what you carry · press again to step",
@@ -153,10 +365,35 @@ const HELD := [
 ]
 
 
-## The row with this id, from ALL or HELD; empty if there is none.
+## The venue this player is in, for the rows that are the venue's own (`row_in`) wherever no venue is
+## given: the plaque, the board and the toasts. Set by the studio as it builds one.
+static var here: Venue = null
+
+
+## Where station row `r` is, for a toast: its area's AREA_WHERE ("in this venue"), or "here".
+static func where(r: Dictionary) -> String:
+	return String(AREA_WHERE.get(r.get("area", &""), "here"))
+
+
+## The row with this id, from ALL or HELD, as it is in the venue this player is in (`here`); empty if
+## there is none.
 static func row(id: StringName) -> Dictionary:
+	return row_in(here if here != null and is_instance_valid(here) else null, id)
+
+
+## The row with this id as it is in `venue`: a mounted row (the venue's own instrument, its weather)
+## with the venue's title, help lines, look point and frame over its own (VenueInstrument.row_for,
+## Weather.row_for). Empty if there is none.
+static func row_in(venue: Venue, id: StringName) -> Dictionary:
 	for r: Dictionary in ALL + HELD:
 		if r["id"] == id:
+			if r.get("mounted", false) and venue != null:
+				var own := Weather.row_for(Weather.spec_of(venue)) if id == Weather.STATION \
+						else VenueInstrument.row_for(VenueInstrument.spec_of(venue))
+				if not own.is_empty():
+					var out := r.duplicate()
+					out.merge(own, true)
+					return out
 			return r
 	return {}
 
@@ -176,7 +413,7 @@ static func look_point(venue: Venue, id: StringName) -> Variant:
 	var at: Variant = spot(venue, id)
 	if at == null:
 		return null
-	return (at as Transform3D) * (row(id)["at"] as Vector3)
+	return (at as Transform3D) * (row_in(venue, id)["at"] as Vector3)
 
 
 ## How far inside the edge of the view a station's frame is held (degrees): its foot just inside
@@ -204,7 +441,7 @@ static func look_from(venue: Venue, id: StringName, eye: Vector3, fov: float) ->
 		return look
 	ahead /= along
 	var pitch := atan2(look.y - eye.y, along)
-	var points: Array = row(id).get("frame", [])
+	var points: Array = row_in(venue, id).get("frame", [])
 	if points.size() == 2:
 		var frame := spot(venue, id) as Transform3D
 		var tip := func(p: Vector3) -> float:
@@ -217,17 +454,23 @@ static func look_from(venue: Venue, id: StringName, eye: Vector3, fov: float) ->
 
 
 ## Where a player stands to play station `id`, in the venue's frame: on the floor SEAT in front
-## of it (or its row's own `seat`), facing it (the transform's -Z toward its look point), and level. `fits` (a Vector2 on
+## of it (or its row's own `seat`), facing it (the transform's -Z toward its look point), and level,
+## on whatever is there to stand on (Venue.floor_at: the drum riser's top at the hand drums, so a
+## headset's play space is put down where its real floor is the riser it sees). `fits` (a Vector2 on
 ## the floor -> bool, the walker's own) says where a person may stand; given, the seat comes in
 ## along the station's front toward NEAREST until it fits, then tries either side, and is the
-## plain SEAT in front only when nothing fits. Null where the station does not stand.
-static func seat(venue: Venue, id: StringName, fits := Callable()) -> Variant:
+## plain SEAT in front only when nothing fits. `hands` is a headset's seat: a row that is played
+## only by hand within arm's length (the venue's own set) says how near that is, its `reach`, where
+## a desk's seat stands back far enough to hold the whole of it in view. Null where the station does
+## not stand.
+static func seat(venue: Venue, id: StringName, fits := Callable(), hands := false) -> Variant:
 	var at: Variant = spot(venue, id)
 	if at == null:
 		return null
 	var frame := at as Transform3D
 	var look: Vector3 = look_point(venue, id)
-	var far: float = row(id).get("seat", SEAT)
+	var r := row_in(venue, id)
+	var far: float = r.get("reach", r.get("seat", SEAT)) if hands else r.get("seat", SEAT)
 	var chosen := frame * Vector3(0, 0, far)
 	if fits.is_valid():
 		var found := false
@@ -241,7 +484,7 @@ static func seat(venue: Venue, id: StringName, fits := Callable()) -> Variant:
 				d -= 0.05
 			if found:
 				break
-	chosen.y = 0.0
+	chosen.y = venue.floor_at(Vector2(chosen.x, chosen.z))
 	var toward := Vector3(look.x - chosen.x, 0.0, look.z - chosen.z)
 	if toward.length() < 0.001:
 		toward = -frame.basis.z
@@ -263,11 +506,11 @@ static func by_area(venue: Venue) -> Dictionary:
 	var out := {}
 	for area in AREAS:
 		out[area] = []
-	var here: Array[StringName] = ids(venue)
+	var stood: Array[StringName] = ids(venue)
 	for r: Dictionary in ALL:
-		if venue != null and not here.has(r["id"]):
+		if venue != null and not stood.has(r["id"]):
 			continue
-		(out[r["area"]] as Array).append(r)
+		(out[r["area"]] as Array).append(row_in(venue, r["id"]))
 	return out
 
 

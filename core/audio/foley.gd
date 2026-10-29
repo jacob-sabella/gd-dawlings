@@ -100,6 +100,75 @@ static func reel_motor() -> AudioStreamWAV:
 		return _wav(s, true))
 
 
+## A record spun back by hand (the DJ platter's back-spin, docs/spatial_loop.md part two, slice
+## 27): the music dragged backwards and slowing, which is a pitch falling from high to nothing.
+## Two partials and a band of noise, all sliding down together as the spin dies, a little wow on
+## them for the hand's unevenness, faded to nothing at the end. 0.7 s, once.
+const SPINBACK_SECONDS := 0.7
+
+
+static func spinback() -> AudioStreamWAV:
+	return _cached("spinback", func() -> AudioStreamWAV:
+		var s := _silence(SPINBACK_SECONDS)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 53
+		var phase := 0.0
+		var band := 0.0
+		var low := 0.0
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var left := 1.0 - t / SPINBACK_SECONDS
+			# The speed of the spin: fast at once, dying away as a flywheel does.
+			var speed := left * left
+			var hz := 40.0 + 1400.0 * speed * (1.0 + 0.06 * sin(TAU * 7.0 * t))
+			phase += TAU * hz / float(RATE)
+			var tone := sin(phase) * 0.22 + sin(phase * 2.03) * 0.09
+			# Noise through a lowpass whose corner falls with the spin: the record's hiss going down.
+			var a := 1.0 - exp(-TAU * (200.0 + 4000.0 * speed) / float(RATE))
+			band += a * (rng.randf_range(-1.0, 1.0) - band)
+			low += a * (band - low)
+			s[i] = (tone + low * 0.35) * minf(1.0, t / 0.01) * minf(1.0, left / 0.25)
+		return _wav(s, false))
+
+
+## A needle dragged through a record's groove under the hand: bright, gritty noise with the groove's
+## crackle in it. Looping, held while a platter is turned and scaled by how fast, the way the fader
+## slide is: the platter's own scrub sound where the song's own cannot be heard turning (a guest's).
+static func needle_drag() -> AudioStreamWAV:
+	return _cached("needle", func() -> AudioStreamWAV:
+		var s := _noise(0.6, 0.16, 59)
+		_highpass(s, 900.0)
+		_lowpass(s, 5200.0)
+		for at in [0.043, 0.118, 0.161, 0.257, 0.302, 0.391, 0.447, 0.533]:
+			_impulse(s, at, 0.09, 0.0012, 3100.0, int(at * 1000.0) + 61)
+		_seam(s, 0.030)
+		return _wav(s, true))
+
+
+## The tape deck's history crank passing a notch (ReelCrank, docs/spatial_loop.md part two, slice
+## 28): a ratchet's pawl dropping off a tooth. A hard, bright tick and the reel's hub answering
+## lower a moment after, so twelve of them in a quick turn read as a ratchet rather than as a
+## knob's detents (`knob_detent`), which are softer and have no body.
+static func reel_click() -> AudioStreamWAV:
+	return _cached("reel_click", func() -> AudioStreamWAV:
+		var s := _silence(0.035)
+		_impulse(s, 0.0, 0.42, 0.0016, 3400.0, 67)
+		_impulse(s, 0.004, 0.26, 0.0070, 1150.0, 71)
+		return _wav(s, false))
+
+
+## The history crank turned past either end of the history: a dull knock, the pawl against a
+## stop that will not give. Low and short and muffled, nothing like the click, so the end of the
+## history is heard as an end and not as one more step.
+static func reel_knock() -> AudioStreamWAV:
+	return _cached("reel_knock", func() -> AudioStreamWAV:
+		var s := _silence(0.14)
+		_impulse(s, 0.0, 0.62, 0.0200, 120.0, 73)
+		_impulse(s, 0.0, 0.22, 0.0060, 520.0, 79)
+		_lowpass(s, 1600.0)
+		return _wav(s, false))
+
+
 ## Casters on a hard floor: a low rumble with the wheels' seams ticking through it. Looping,
 ## held while a piece of furniture is moving and scaled by how fast, the way the fader slide is.
 ##
@@ -190,19 +259,28 @@ static func rubber_tap() -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## How each of the ball's bounces (`ball_bounce`'s takes) is tuned against the first: no two
+## bounces off a floor quite alike, baked into the take as the duck's squeaks are (SQUEAK_TUNES),
+## so a bounce sampled (Sampler) is the bounce the room heard.
+const BOUNCE_TUNES: Array[float] = [1.0, 0.95, 1.06, 1.02]
+
+
 ## A small, hard rubber ball hitting the floor: a hollow thump that drops in pitch as the ball
-## leaves the floor, with the sharp pock of the hit on top.
-static func ball_bounce() -> AudioStreamWAV:
-	return _cached("ball_bounce", func() -> AudioStreamWAV:
+## leaves the floor, with the sharp pock of the hit on top. Take `take` (posmod TAKES) is tuned by
+## BOUNCE_TUNES: BallItem rings each bounce of a throw as the next.
+static func ball_bounce(take := 0) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("ball_bounce_%d" % take, func() -> AudioStreamWAV:
+		var tune := BOUNCE_TUNES[take]
 		var seconds := 0.12
 		var s := _silence(seconds)
 		var phase := 0.0
 		for i in s.size():
 			var t := float(i) / float(RATE)
-			var hz := lerpf(330.0, 190.0, minf(1.0, t / 0.05))
+			var hz := lerpf(330.0, 190.0, minf(1.0, t / 0.05)) * tune
 			phase += TAU * hz / float(RATE)
 			s[i] = 0.42 * exp(-t / 0.028) * sin(phase)
-		_impulse(s, 0.0, 0.3, 0.004, 2300.0, 47)
+		_impulse(s, 0.0, 0.3, 0.004, 2300.0 * tune, 47)
 		_lowpass(s, 6000.0)
 		return _wav(s, false))
 
@@ -1192,6 +1270,276 @@ static func conga(take: int) -> AudioStreamWAV:
 		return _wav(s, false))
 
 
+## The hand drums' sounds (HandDrum, docs/spatial_loop.md part two, slice 40), by drum and zone, as
+## the names `sound` knows them by: "djembe_bass", "conga_lo_slap", "cajon_bass".
+const HAND_DRUM_SOUNDS := {
+	&"djembe_bass": [&"djembe", &"bass"], &"djembe_tone": [&"djembe", &"tone"], &"djembe_slap": [&"djembe", &"slap"],
+	&"conga_hi_bass": [&"conga_hi", &"bass"], &"conga_hi_tone": [&"conga_hi", &"tone"],
+	&"conga_hi_slap": [&"conga_hi", &"slap"], &"conga_lo_bass": [&"conga_lo", &"bass"],
+	&"conga_lo_tone": [&"conga_lo", &"tone"], &"conga_lo_slap": [&"conga_lo", &"slap"],
+	&"cajon_bass": [&"cajon", &"bass"], &"cajon_slap": [&"cajon", &"slap"],
+}
+## A round hand drum's voice: [its bass's Hz, its open tone's Hz, where its slap's crack is (Hz)].
+## The djembe's goblet booms lowest and slaps brightest; the low conga's tone is a fourth or so under
+## the high one's.
+const HAND_DRUM_TUNING := {
+	&"djembe": [68.0, 330.0, 2600.0],
+	&"conga_hi": [104.0, 318.0, 2100.0],
+	&"conga_lo": [86.0, 232.0, 1750.0],
+}
+## How a drumhead's overtones stand to its open tone, how loud each is, and how long it rings (s): a
+## membrane's are not whole multiples, which is why a hand drum's tone is a drum's and not a note.
+const MEMBRANE := [[1.0, 0.42, 0.17], [1.59, 0.19, 0.09], [2.14, 0.1, 0.06], [2.3, 0.07, 0.05], [2.65, 0.04, 0.035]]
+
+
+## The name `sound` knows hand drum `kind`'s `zone` by ("djembe_slap").
+static func hand_drum_sound(kind: StringName, zone: StringName) -> StringName:
+	return StringName("%s_%s" % [kind, zone])
+
+
+## A hand drum struck on one of its zones (HandDrum, slice 40), take `take`. On a round head
+## (HAND_DRUM_TUNING): the bass, a palm in the middle, a low thump the head swallows, falling into its
+## lowest mode; the tone, fingers at the edge of the playing area, the head's open ring
+## (MEMBRANE) with a little fall in pitch as it settles; the slap, fingers cracked at the rim, a bright
+## crack of noise and the tone choked short. On the cajón: its bass, the face's middle, a box's boom
+## and the wires under the tapa just touched; its slap, the top corners, a dry crack of wood and the
+## wires' buzz, nearly a snare.
+static func hand_drum(kind: StringName, zone: StringName, take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("hand_%s_%s_%d" % [kind, zone, take], func() -> AudioStreamWAV:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash("%s_%s" % [kind, zone]) + take * 31
+		var tune := rng.randf_range(0.985, 1.015)
+		var seed_value := rng.randi() % 100000
+		if kind == &"cajon":
+			return _wav(_cajon(zone, tune, seed_value), false)
+		var voice: Array = HAND_DRUM_TUNING.get(kind, HAND_DRUM_TUNING[&"djembe"])
+		match zone:
+			&"bass":
+				var s := _silence(0.42)
+				var phase := 0.0
+				var low: float = voice[0] * tune
+				for i in s.size():
+					var t := float(i) / float(RATE)
+					phase += TAU * low * (1.0 + 0.7 * exp(-t / 0.014)) / float(RATE)
+					s[i] += 0.62 * exp(-t / 0.13) * minf(1.0, t / 0.002) * sin(phase)
+				# The heel of the palm on the skin: a soft, dull knock.
+				_impulse(s, 0.0, 0.18, 0.007, 420.0 * tune, seed_value)
+				_lowpass(s, 1400.0)
+				_fade_out(s, 0.05)
+				return _wav(s, false)
+			&"slap":
+				var s := _noise(0.2, 0.7, seed_value)
+				for i in s.size():
+					s[i] *= exp(-float(i) / float(RATE) / 0.022)
+				_highpass(s, float(voice[2]) * 0.6)
+				_membrane(s, float(voice[1]) * tune * 1.04, 0.45, 0.25)
+				_impulse(s, 0.0, 0.32, 0.004, float(voice[2]) * tune * 1.3, seed_value + 1)
+				_lowpass(s, 9000.0)
+				_fade_out(s, 0.03)
+				return _wav(s, false)
+		var tone := _silence(0.45)
+		_membrane(tone, float(voice[1]) * tune, 1.0, 1.0)
+		_impulse(tone, 0.0, 0.1, 0.003, 1600.0 * tune, seed_value)
+		_lowpass(tone, 6500.0)
+		_fade_out(tone, 0.05)
+		return _wav(tone, false))
+
+
+## A drumhead's modes (MEMBRANE) over `s`, from `hz` its open tone, `level` as loud and each ringing
+## `ring` times as long; each starting a little sharp and settling, as a struck skin does.
+static func _membrane(s: PackedFloat32Array, hz: float, level: float, ring: float) -> void:
+	for mode: Array in MEMBRANE:
+		var phase := 0.0
+		var decay: float = float(mode[2]) * ring
+		for i in s.size():
+			var t := float(i) / float(RATE)
+			var env := exp(-t / decay)
+			if env < 0.0008:
+				break
+			phase += TAU * hz * float(mode[0]) * (1.0 + 0.035 * exp(-t / 0.02)) / float(RATE)
+			s[i] += level * float(mode[1]) * env * minf(1.0, t / 0.0008) * sin(phase)
+
+
+## The cajón's two strokes (`hand_drum`): a box's boom with the wires just touched, or a dry crack
+## with them buzzing.
+static func _cajon(zone: StringName, tune: float, seed_value: int) -> PackedFloat32Array:
+	if zone == &"slap":
+		var s := _noise(0.28, 0.5, seed_value)
+		for i in s.size():
+			s[i] *= exp(-float(i) / float(RATE) / 0.075)
+		_highpass(s, 2600.0)
+		_highpass(s, 1900.0)
+		_impulse(s, 0.0, 0.45, 0.007, 1150.0 * tune, seed_value + 1)
+		_impulse(s, 0.0, 0.2, 0.03, 190.0 * tune, seed_value + 2)
+		_lowpass(s, 11000.0)
+		_fade_out(s, 0.04)
+		return s
+	var s := _silence(0.4)
+	var phase := 0.0
+	for i in s.size():
+		var t := float(i) / float(RATE)
+		phase += TAU * 64.0 * tune * (1.0 + 0.9 * exp(-t / 0.012)) / float(RATE)
+		s[i] += 0.66 * exp(-t / 0.11) * minf(1.0, t / 0.0015) * sin(phase)
+	_impulse(s, 0.0, 0.2, 0.018, 240.0 * tune, seed_value + 1)
+	var wires := _noise(0.4, 0.06, seed_value + 2)
+	for i in wires.size():
+		wires[i] *= exp(-float(i) / float(RATE) / 0.05)
+	_highpass(wires, 3000.0)
+	_lowpass(s, 2500.0)
+	for i in s.size():
+		s[i] += wires[i]
+	_fade_out(s, 0.05)
+	return s
+
+
+## The venues' instruments' bars (VenueInstrument, docs/spatial_loop.md part two, slices 42 and 43), by the
+## name `sound` knows each by: the note it rings at as made (MIDI; a bar is pitched from here to its
+## note, VenueInstrument.Bar.sound_pitch), how long it is (s), its partials ([ratio to its note, how
+## long it rings (s), how loud]), the knock of whatever strikes it ([level, how long, Hz]), and a
+## tremolo ([Hz, depth]) for one that has one. A free bar's partials are a struck beam's, not whole
+## multiples, which is what makes a chime or a baluster a struck metal thing and not an organ.
+const VENUE_BAR_SOUNDS := {
+	# Aluminium wind chime tubes: a long, pure strike note and the beam's overtones over it.
+	&"chime": [84, 2.4, [[1.0, 1.5, 0.3], [2.756, 0.8, 0.13], [5.404, 0.35, 0.06], [8.933, 0.16, 0.03]],
+			[0.05, 0.0018, 4200.0], []],
+	# Icicles: glass-bright and short, the overtones gone almost at once, a sharp tick on top.
+	&"icicle": [96, 1.1, [[1.0, 0.6, 0.3], [2.76, 0.22, 0.12], [5.4, 0.07, 0.07], [8.9, 0.035, 0.04]],
+			[0.1, 0.0012, 7000.0], []],
+	# Quartz: a pure note that beats against itself, as a singing bowl's does, and a glassy shimmer.
+	&"crystal": [84, 2.6, [[1.0, 1.9, 0.24], [1.004, 1.9, 0.12], [2.32, 0.7, 0.09], [4.25, 0.3, 0.05]],
+			[0.04, 0.0016, 5200.0], []],
+	# An iron baluster: a hard clang, inharmonic, dying in a second or so.
+	&"baluster": [72, 1.4, [[1.0, 0.85, 0.28], [2.756, 0.42, 0.16], [5.404, 0.18, 0.1], [8.933, 0.08, 0.06]],
+			[0.16, 0.0026, 2600.0], []],
+	# A tubular bell: long, its strike note made by the tube's upper modes, a little of its hum under it.
+	&"tubular": [72, 3.0, [[1.0, 2.3, 0.26], [2.0, 1.5, 0.13], [3.0, 1.0, 0.09], [4.2, 0.5, 0.05], [0.5, 1.2, 0.04]],
+			[0.07, 0.0025, 3200.0], []],
+	# A neon bar: a vibraphone's bar (its 4 and 10 partials) with its motor's slow tremolo.
+	&"neon": [72, 1.8, [[1.0, 1.3, 0.32], [4.0, 0.32, 0.08], [10.0, 0.07, 0.03]],
+			[0.03, 0.002, 2200.0], [5.5, 0.3]],
+	# A xylophone's wooden bar, tuned 1:3, dry and short, the mallet's knock half of it.
+	&"xylophone": [72, 0.7, [[1.0, 0.32, 0.34], [3.0, 0.11, 0.12], [6.0, 0.045, 0.05]],
+			[0.15, 0.004, 1800.0], []],
+	# Slice 43's. A steam pipe: cast iron, lower and longer than a baluster, a dull clank on it.
+	&"pipe": [60, 2.2, [[1.0, 1.4, 0.3], [2.756, 0.7, 0.15], [5.404, 0.3, 0.08], [8.933, 0.12, 0.05]],
+			[0.14, 0.003, 2200.0], []],
+	# A hull panel: a struck plate's crowded modes over its note, with a slow shimmer through it.
+	&"panel": [72, 2.0, [[1.0, 1.2, 0.27], [1.594, 0.9, 0.12], [2.136, 0.6, 0.09], [2.653, 0.4, 0.06], [3.6, 0.2, 0.04]],
+			[0.08, 0.002, 3800.0], [0.9, 0.14]],
+	# Glass: a pure, long note, its few overtones gone quickly, hardly any knock: a fingertip on it.
+	&"glass": [84, 2.4, [[1.0, 2.0, 0.3], [2.0, 0.9, 0.06], [2.98, 0.5, 0.05], [5.1, 0.2, 0.03]],
+			[0.02, 0.001, 6000.0], []],
+	# A piano's string: whole harmonics, stretched a hair as a real string's are, the hammer's thud.
+	&"piano": [60, 1.8, [[1.0, 1.4, 0.3], [2.002, 0.9, 0.16], [3.006, 0.6, 0.1], [4.012, 0.4, 0.06], [5.02, 0.3, 0.04],
+			[6.03, 0.2, 0.025]], [0.05, 0.003, 1500.0], []],
+	# A flowerpot upside down: a short hollow tock, more knock than ring.
+	&"terracotta": [72, 0.6, [[1.0, 0.28, 0.32], [2.14, 0.12, 0.14], [3.6, 0.06, 0.07]],
+			[0.18, 0.004, 1400.0], []],
+	# A tuned cymbal (a crotale): a bright bell, long, its partials close over its note.
+	&"crotale": [96, 2.6, [[1.0, 2.0, 0.26], [2.0, 1.1, 0.1], [2.92, 0.7, 0.07], [4.13, 0.4, 0.05], [5.5, 0.25, 0.03]],
+			[0.05, 0.0015, 7000.0], []],
+	# A tuned gong: its hum an octave under its note, the note and a crowd of partials over it
+	# swelling and beating, a soft mallet's thump, longest of all.
+	&"gong": [69, 4.0, [[0.5, 3.0, 0.14], [1.0, 3.5, 0.26], [1.52, 2.2, 0.1], [2.03, 1.6, 0.07], [2.61, 1.0, 0.05],
+			[3.37, 0.6, 0.04]], [0.06, 0.008, 300.0], [0.6, 0.18]],
+	# A ringing stone of a lithophone: a clear, woody-hard note, short, a stony tick.
+	&"stone": [72, 1.0, [[1.0, 0.6, 0.3], [2.6, 0.25, 0.12], [4.9, 0.1, 0.06]],
+			[0.16, 0.003, 2400.0], []],
+}
+
+
+## The note venue bar sound `kind` rings at as it is made (VENUE_BAR_SOUNDS), C5 for one not known.
+static func venue_bar_note(kind: StringName) -> int:
+	return int((VENUE_BAR_SOUNDS.get(kind, [HANDBELL_NOTE]) as Array)[0])
+
+
+## A venue instrument's bar struck (VENUE_BAR_SOUNDS' `kind`), take `take`: its partials, each from a
+## few milliseconds' rise to its own decay, a hair detuned from take to take, over the knock of the
+## strike. At its own note, pitched to the bar's as it plays. Faded to nothing at its end.
+static func venue_bar(kind: StringName, take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("venue_bar_%s_%d" % [kind, take], func() -> AudioStreamWAV:
+		var made: Array = VENUE_BAR_SOUNDS.get(kind, VENUE_BAR_SOUNDS[&"chime"])
+		var s := _silence(float(made[1]))
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1709 + take * 31 + hash(kind) % 997
+		var hz := 440.0 * pow(2.0, (float(made[0]) - 69.0) / 12.0)
+		var trem: Array = made[4]
+		for mode: Array in made[2]:
+			var ratio: float = float(mode[0]) * (rng.randf_range(0.997, 1.003) if mode[0] != 1.0 else 1.0)
+			var decay: float = mode[1]
+			var level: float = float(mode[2]) * rng.randf_range(0.92, 1.08)
+			var step := TAU * hz * ratio / float(RATE)
+			var phase := rng.randf() * TAU
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.0005:
+					break
+				var wave := level * env * minf(1.0, t / 0.0015) * sin(phase + step * float(i))
+				if not trem.is_empty():
+					wave *= 1.0 - float(trem[1]) * 0.5 * (1.0 - cos(TAU * float(trem[0]) * t))
+				s[i] += wave
+		var knock: Array = made[3]
+		_impulse(s, 0.0, float(knock[0]), float(knock[1]), float(knock[2]), 1723 + take)
+		_lowpass(s, 11000.0)
+		_fade_out(s, minf(0.3, float(made[1]) * 0.3))
+		return _wav(s, false))
+
+
+## The weather's drops (Weather, docs/spatial_loop.md part two, slice 44), by the name its kinds know
+## each by: the note it rings at as made (MIDI; a drop is pitched from here to its note), how long it
+## is (s), its partials ([ratio, how long it rings (s), how loud]), its knock ([level, how long, Hz]),
+## its glide (how far under its note it starts, as a ratio, gone in GLIDE_SECONDS: the "plip" of a
+## drop of water) and a lowpass (Hz). Played through Godot from where the drop lands, never through
+## the hits helper: a drop is the room's, not a hand's, so it has no slots in HIT_SLOTS.
+const WEATHER_SOUNDS := {
+	# A raindrop on glass: a small clear tick that rings for a moment.
+	&"rain_glass": [88, 0.6, [[1.0, 0.18, 0.3], [2.01, 0.07, 0.1], [3.03, 0.035, 0.05]], [0.12, 0.0008, 6500.0], 0.06, 9000.0],
+	# A snowflake on a window: hardly a sound, a soft round note with no edge to it.
+	&"snow": [96, 0.8, [[1.0, 0.32, 0.22], [2.0, 0.08, 0.03]], [0.02, 0.0015, 3000.0], 0.0, 4500.0],
+	# A drip into a pool: the bloop of a drop of water, rising into its note, a little ring after.
+	&"drip": [76, 1.0, [[1.0, 0.4, 0.34], [2.0, 0.12, 0.06]], [0.05, 0.002, 1800.0], 0.35, 7000.0],
+}
+const GLIDE_SECONDS := 0.018
+
+
+## The note weather sound `kind` rings at as it is made (WEATHER_SOUNDS).
+static func weather_drop_note(kind: StringName) -> int:
+	return int((WEATHER_SOUNDS.get(kind, WEATHER_SOUNDS[&"rain_glass"]) as Array)[0])
+
+
+## A weather drop (WEATHER_SOUNDS' `kind`), take `take`: its partials over its knock, each rising out
+## of its glide into its note, a hair detuned from take to take, faded to nothing at its end.
+static func weather_drop(kind: StringName, take: int) -> AudioStreamWAV:
+	take = posmod(take, TAKES)
+	return _cached("weather_%s_%d" % [kind, take], func() -> AudioStreamWAV:
+		var made: Array = WEATHER_SOUNDS.get(kind, WEATHER_SOUNDS[&"rain_glass"])
+		var s := _silence(float(made[1]))
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 2207 + take * 37 + hash(kind) % 991
+		var hz := 440.0 * pow(2.0, (float(made[0]) - 69.0) / 12.0)
+		var glide: float = made[4]
+		for mode: Array in made[2]:
+			var ratio: float = float(mode[0]) * rng.randf_range(0.996, 1.004)
+			var decay: float = mode[1]
+			var level: float = float(mode[2]) * rng.randf_range(0.9, 1.1)
+			var phase := rng.randf() * TAU
+			for i in s.size():
+				var t := float(i) / float(RATE)
+				var env := exp(-t / decay)
+				if env < 0.0005:
+					break
+				phase += TAU * hz * ratio * (1.0 - glide * exp(-t / GLIDE_SECONDS)) / float(RATE)
+				s[i] += level * env * minf(1.0, t / 0.001) * sin(phase)
+		var knock: Array = made[3]
+		_impulse(s, 0.0, float(knock[0]), float(knock[1]), float(knock[2]), 2213 + take)
+		_lowpass(s, float(made[5]))
+		_fade_out(s, minf(0.2, float(made[1]) * 0.3))
+		return _wav(s, false))
+
+
 ## A drum note there is no sound for here: a short, plain click, so a hit is heard where it is
 ## rather than not at all.
 static func click(take: int) -> AudioStreamWAV:
@@ -1246,24 +1594,150 @@ static func sound(kind: StringName, take: int) -> AudioStreamWAV:
 		&"woodblock": return woodblock(take)
 		&"triangle": return triangle(take)
 		&"handbell": return handbell(take)
+	if HAND_DRUM_SOUNDS.has(kind):
+		var drum: Array = HAND_DRUM_SOUNDS[kind]
+		return hand_drum(drum[0], drum[1], take)
+	if VENUE_BAR_SOUNDS.has(kind):
+		return venue_bar(kind, take)
 	return click(take)
 
 
 ## The kinds `sound` knows by name: the struck and shaken sounds an instrument's hit rings.
 const SOUNDS: Array[StringName] = [&"kick", &"snare", &"rim", &"clap", &"hihat", &"pad", &"crash",
 		&"ride", &"tambourine_hit", &"jingle", &"cowbell", &"bongo", &"conga", &"shaker", &"claves",
-		&"woodblock", &"triangle", &"handbell"]
+		&"woodblock", &"triangle", &"handbell",
+		# The hand drums' (slice 40), a sound a zone.
+		&"djembe_bass", &"djembe_tone", &"djembe_slap", &"conga_hi_bass", &"conga_hi_tone", &"conga_hi_slap",
+		&"conga_lo_bass", &"conga_lo_tone", &"conga_lo_slap", &"cajon_bass", &"cajon_slap",
+		# The venues' instruments' (slices 42 and 43), a sound a kind and the gong's: 44 kinds at TAKES
+		# is 176 of HIT_SLOTS.
+		&"chime", &"icicle", &"crystal", &"baluster", &"tubular", &"neon", &"xylophone",
+		&"pipe", &"panel", &"glass", &"piano", &"terracotta", &"crotale", &"gong", &"stone"]
+## How many sounds the hits' helper holds (native/keys.c's SLOTS, which this mirrors): SOUNDS times
+## TAKES must fit.
+const HIT_SLOTS := 256
+
+
+## Things struck heard on the keys' helper (NativeKeys, docs/spatial_loop.md part two, slice 39):
+## every kind `sound` knows, each of its takes, written once at launch as a WAV the helper loads
+## into a slot of its own (`hit_slot`) and then plays by a line, in PipeWire's callback, a few
+## milliseconds after the hand. The helper runs at HIT_RATE and Foley at RATE, so each is read
+## across to the helper's rate (`resampled`), as an AudioStreamPlayer does on its way out anyway.
+const HIT_RATE := 48000
+const HITS_DIR := "user://hits"
+
+
+## The helper's slot for take `take` of `kind` (one of SOUNDS): its place in SOUNDS times TAKES,
+## and the take. -1 for a kind the helper has none of, which plays through Godot.
+static func hit_slot(kind: StringName, take: int) -> int:
+	var i := SOUNDS.find(kind)
+	return -1 if i < 0 else i * TAKES + posmod(take, TAKES)
+
+
+## Take `take` of `kind` as the helper loads it: the very stream `sound` makes, at HIT_RATE.
+static func hit_wav(kind: StringName, take: int) -> AudioStreamWAV:
+	var made := sound(kind, take)
+	var wav := resampled(made, float(RATE) / float(HIT_RATE))
+	if wav == made:
+		wav = made.duplicate() as AudioStreamWAV
+	wav.mix_rate = HIT_RATE
+	return wav
+
+
+## Every kind's every take written to `dir` as a 16-bit mono WAV at HIT_RATE (`hit_wav`), as
+## [[slot, its path on disk], ...]. Slow (a few seconds, the cymbals' and the bells' synthesis), so
+## the studio has it done on a worker thread: the cache is locked, and nothing else is touched.
+static func write_hits(dir := HITS_DIR) -> Array:
+	var where := ProjectSettings.globalize_path(dir)
+	DirAccess.make_dir_recursive_absolute(where)
+	var out: Array = []
+	for kind in SOUNDS:
+		for take in TAKES:
+			var path := where.path_join("%s_%d.wav" % [kind, take])
+			if hit_wav(kind, take).save_to_wav(path) == OK:
+				out.append([hit_slot(kind, take), path])
+	return out
 
 
 ## The sound one use of an item rang, by its kind (Item.use_kind, InstrumentItem.sound_kind) and
 ## its take (Item.use_take, InstrumentItem.sound_take): the duck's squeeze (`duck_squeeze`) and
-## its letting go (`duck_release`), and every sound `sound` knows. The very stream the room played,
-## so what the sampler catches (Sampler) is what the player heard. Null for a kind with none.
+## its letting go (`duck_release`), a ball's bounce (`ball_bounce`, Item.rang), the sounds a yo-yo's
+## and a deck's tricks are made of, a whole trick (`yoyo_trick`, `cards_trick`: FidgetItem's
+## `trick_kind`, all of one trick's sounds where it rings them), and every sound `sound` knows. The
+## very stream the room played, so what the sampler catches (Sampler) is what the player heard, at
+## the pitch it was played (`resampled`). Null for a kind with none.
 static func take_of(kind: StringName, take: int) -> AudioStreamWAV:
 	match kind:
 		&"duck_squeeze": return squeak_take(true, take)
 		&"duck_release": return squeak_take(false, take)
+		&"ball_bounce": return ball_bounce(take)
+		&"yoyo_spin": return yoyo_spin(take)
+		&"yoyo_catch": return yoyo_catch(take)
+		&"card_riffle": return card_riffle(take)
+		&"card_sweep": return card_sweep(take)
+		&"chip_clack": return chip_clack(take)
+		&"yoyo_trick": return YoyoItem.trick_take(take)
+		&"cards_trick": return CardsItem.trick_take(take)
 	return sound(kind, take) if kind in SOUNDS else null
+
+
+## `stream` (16-bit mono, as Foley makes every sound) as it sounds played `ratio` times as fast
+## (an AudioStreamPlayer's pitch_scale): shorter and higher above 1, longer and lower below it, at
+## its own rate. Read between its samples in a straight line. The stream itself for 1.
+static func resampled(stream: AudioStreamWAV, ratio: float) -> AudioStreamWAV:
+	if stream == null or ratio <= 0.0 or is_equal_approx(ratio, 1.0):
+		return stream
+	var s := _floats(stream)
+	if s.size() < 2:
+		return stream
+	var out := PackedFloat32Array()
+	out.resize(int(floorf(float(s.size() - 1) / ratio)) + 1)
+	for j in out.size():
+		var at := float(j) * ratio
+		var i := mini(int(at), s.size() - 2)
+		out[j] = lerpf(s[i], s[i + 1], at - float(i))
+	var wav := _wav(out, false)
+	wav.mix_rate = stream.mix_rate
+	return wav
+
+
+## One sound of several, each [seconds in, stream, level (dB), how fast it is played], laid where
+## they ring and mixed: a trick heard whole (FidgetItem.trick_stream). From the first one's start,
+## the loudest at its own level and the rest as much below it as they are played. Kept as `key`.
+static func layered(key: String, layers: Array) -> AudioStreamWAV:
+	return _cached(key, func() -> AudioStreamWAV:
+		var first := INF
+		var loudest := -INF
+		for layer: Array in layers:
+			first = minf(first, float(layer[0]))
+			loudest = maxf(loudest, float(layer[2]))
+		var parts: Array = []
+		var length := 0
+		for layer: Array in layers:
+			var s := _floats(resampled(layer[1], float(layer[3])))
+			var at := roundi((float(layer[0]) - first) * RATE)
+			length = maxi(length, at + s.size())
+			parts.append([at, s, db_to_linear(float(layer[2]) - loudest)])
+		var out := PackedFloat32Array()
+		out.resize(length)
+		for part: Array in parts:
+			var at: int = part[0]
+			var s: PackedFloat32Array = part[1]
+			var gain: float = part[2]
+			for i in s.size():
+				out[at + i] += s[i] * gain
+		return _wav(out, false))
+
+
+## A 16-bit mono stream's samples, -1 to 1.
+static func _floats(stream: AudioStreamWAV) -> PackedFloat32Array:
+	var s := PackedFloat32Array()
+	if stream == null:
+		return s
+	s.resize(stream.data.size() / 2)
+	for i in s.size():
+		s[i] = stream.data.decode_s16(i * 2) / 32767.0
+	return s
 
 
 # Everything below works on a PackedFloat32Array of mono samples in -1..1 and is deterministic:

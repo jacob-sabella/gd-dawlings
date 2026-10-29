@@ -28,14 +28,36 @@ extends ControlAffordance
 ## do. A guest's SET is a room ask, `harmony` [bar, inside], carrying the bar the guest chose; the
 ## host writes it there (`answer`) and the markers replicate to everyone.
 ##
+## Under a chord shape (docs/spatial_loop.md part two, slice 32; ChordHand) what follows well is
+## raised from the shape's chord rather than the last one pressed, so the wheel sounds out where the
+## hand might go next, and that chord's segment says it is the chord hand's.
+##
 ## Each segment's hover card names it (`F · IV of C major · follows well`), and SET's says where
 ## it will write.
+##
+## It feeds the chord bricks (docs/spatial_loop.md part two, slice 31; ChordBrick): a strip tile
+## pressed plays its chord, and pulled up out of the strip with a hand (PULL toward you), or dragged
+## off the board with the mouse (PULL_EDGE past its edge), is a brick of its chord in that hand
+## (`brick_pulled`, which the studio mints). MAKE BRICKS makes the whole strip as bricks, a bar each,
+## at the end of the ledge's row (`bricks_made`). The strip keeps its chords: a brick is a copy.
 
 ## What the wheel's notes say they came from (Session.send_note's `source`), and the name it
 ## goes by in GuestMidi.instruments.
 const SOURCE := &"wheel"
 ## The room ask a guest's SET is (Session.ROOM_VERBS): [bar, the brackets' inside].
 const VERB := &"harmony"
+## How far a strip tile is pulled to be a brick: a hand PULL toward you out of the board's face, or
+## the point PULL_EDGE past the board's edge (a mouse drags it off), as the timeline's clips are.
+const PULL := 0.08
+const PULL_EDGE := 0.04
+## MAKE BRICKS, on the board between the wheel's rim and SET.
+const MAKE_AT := Vector3(0.375, -0.315, 0)
+const MAKE_SIZE := Vector2(0.1, 0.075)
+
+## A strip tile was pulled out by `hand` (slice 31): a brick of `chord` in `key` for it.
+signal brick_pulled(chord: String, key: String, hand: Node)
+## MAKE BRICKS was pressed: a brick of each of `chords`, in `key`, onto the ledge.
+signal bricks_made(chords: PackedStringArray, key: String)
 ## The most bars the strip holds, and the furthest bar a SET may name.
 const STRIP_MOST := 8
 const BAR_MOST := 100000
@@ -100,6 +122,8 @@ var _set: WheelButton
 var _sounding := PackedInt32Array()
 var _left := 0.0
 var _clock := 0.0
+## The chord shape's chord the follow-ups were raised from last, "" for none (`held_chord`).
+var _held_was := ""
 ## The hub's turn so far while held: where the hand's twist or the contact's angle round the
 ## middle began, and how many fifths it has turned the key since.
 var _grab_twist := NAN
@@ -187,6 +211,12 @@ func _ready() -> void:
 		number.text = str(b + 1)
 		var chord := _letter(tile, 26, Vector3(0, 0, DEPTH * 0.5 + 0.001), Color(0.1, 0.08, 0.06))
 		_tile_letters.append(chord)
+		# What a hand finds of the tile: a press plays it, a pull is a brick of it.
+		var grip := StripTile.new()
+		grip.wheel = self
+		grip.bar = b
+		grip.position = Vector3(x, STRIP_Y, 0)
+		add_child(grip)
 	var clear := _button("CLEAR", Vector3(-0.375, STRIP_Y, 0), Vector2(0.1, 0.062), 22, clear_strip)
 	clear.titled = "FIFTHS WHEEL  CLEAR"
 	clear.says = func() -> String: return "the strip: %s" % " ".join(strip) if not strip.is_empty() else "the strip is empty"
@@ -195,6 +225,11 @@ func _ready() -> void:
 	_set.titled = "FIFTHS WHEEL  SET"
 	_set.says = set_text
 	_set.hinted = "press to write the key and the strip into the song from that bar"
+	var make := _button("MAKE\nBRICKS", MAKE_AT, MAKE_SIZE, 20, make_bricks)
+	make.name = "MakeBricks"
+	make.titled = "FIFTHS WHEEL  MAKE BRICKS"
+	make.says = func() -> String: return "a chord brick of each: %s, onto the ledge" % " ".join(strip) if not strip.is_empty() else "the strip is empty: press chords first"
+	make.hinted = "press to make the strip's chords as bricks on the ledge · or pull a single tile off the board"
 	# In the stand's frame (Venue.wheel_spot), out past the board's bottom edge to the table's end.
 	var plaque := Stations.plaque(&"wheel")
 	var stand := on_stand(Transform3D.IDENTITY).affine_inverse()
@@ -344,12 +379,28 @@ func chord_at(ring: int, i: int) -> String:
 	return (MAJORS[i] if ring == OUTER else MINORS[i]) + quality
 
 
-## Whether segment `i` of `ring` leads well on from the chord pressed last.
+## The chord this player's chord hand holds now (ChordHand, docs/spatial_loop.md part two, slice
+## 32), as its triad: its degree of the song's key where the song is now, which is what the hand
+## plays, and not of the wheel's. With the hub turned to another key the hand still sounds the
+## song's chord, so that is the segment marked as the hand's, and what follows is raised from it
+## into the wheel's key, as from an outsider pressed. "" with none.
+func held_chord() -> String:
+	var hand := ChordHand.mine
+	if hand == null or not is_instance_valid(hand) or not hand.holds():
+		return ""
+	return ChordHand.chord_for(Harmony.at(DAW.state, _moment()[0]), hand.degree)
+
+
+## Whether segment `i` of `ring` leads well on from the chord this player is on: the chord shape
+## they hold, or with none the chord pressed last.
 func rises(ring: int, i: int) -> bool:
-	if last == "":
+	var from := held_chord()
+	if from == "":
+		from = last
+	if from == "":
 		return false
 	var tones := Harmony.chord_tones(chord_at(ring, i))
-	for said in Harmony.follows(key(), last):
+	for said in Harmony.follows(key(), from):
 		if Harmony.chord_tones(said) == tones:
 			return true
 	return false
@@ -363,6 +414,9 @@ func segment_text(ring: int, i: int) -> String:
 	var said := "%s · %s of %s" % [chord, role, k.key_name] if role != "" else "%s · out of %s" % [chord, k.key_name]
 	if rises(ring, i):
 		said += " · follows well"
+	var held := held_chord()
+	if held != "" and Harmony.chord_tones(held) == Harmony.chord_tones(chord):
+		said += " · your chord hand's"
 	return said
 
 
@@ -427,6 +481,15 @@ func touched() -> bool:
 	return false
 
 
+## MAKE BRICKS: the strip's chords, a brick a bar, onto the ledge (`bricks_made`, the studio's to
+## mint); said when the strip is empty.
+func make_bricks() -> void:
+	if strip.is_empty():
+		Session.notice.emit("The strip is empty: press chords on the wheel first, then MAKE BRICKS.")
+		return
+	bricks_made.emit(strip.duplicate(), key_text())
+
+
 func clear_strip() -> void:
 	strip = PackedStringArray()
 	last = ""
@@ -435,6 +498,11 @@ func clear_strip() -> void:
 
 func _process(delta: float) -> void:
 	_clock += delta
+	var held := held_chord()
+	if held != _held_was:
+		# A chord shape taken up, changed or let go: the follow-ups rise from it.
+		_held_was = held
+		_show()
 	if not _sounding.is_empty():
 		_left -= delta
 		if _left <= 0.0:
@@ -500,8 +568,10 @@ static func answer(bar: int, inside: String) -> String:
 
 ## `[inside]` written into the markers at the start of `bar`: onto a marker already there
 ## (Harmony.written, so its section stays and any brackets it had are replaced), or as a marker
-## that is only brackets. One undo step either way, and nothing before the bar changes. What the
-## marker is called now, "" when `inside` is not a key.
+## that is only brackets. A sticky note on the bar line is never renamed (its words would be lost):
+## it is moved Harmony.NOTE_NUDGE along (Harmony.note_spot) and the brackets added at the bar, both
+## in one edit. One undo step either way, and nothing before the bar changes. What the marker is
+## called now, "" when `inside` is not a key.
 static func write(bar: int, inside: String) -> String:
 	var h := Harmony.parse("[%s]" % inside)
 	var s := DAW.state
@@ -509,13 +579,24 @@ static func write(bar: int, inside: String) -> String:
 		return ""
 	var at := s.bar_to_seconds(bar + 1.0)
 	var there := DAWBackend.marker_key(s.markers, at)
+	if not is_nan(there) and not Harmony.is_note(str(s.markers[there])):
+		var named := Harmony.written(str(s.markers[there]), h)
+		DAW.edit_marker(there, there, named)
+		return named
+	var added := Harmony.written("", h)
 	if is_nan(there):
-		var added := Harmony.written("", h)
 		DAW.add_marker(at, added)
 		return added
-	var named := Harmony.written(str(s.markers[there]), h)
-	DAW.edit_marker(there, there, named)
-	return named
+	# A note on the bar line: off it, among the markers as they will be, and the key put down there.
+	var after: Dictionary = s.markers.duplicate()
+	var note := str(after[there])
+	after.erase(there)
+	after[at] = added
+	DAW.open_edit("Harmony at bar %d" % (bar + 1))
+	DAW.edit_marker(there, Harmony.note_spot(after, there), note)
+	DAW.add_marker(at, added)
+	DAW.close_edit()
+	return added
 
 
 # --- showing it ---------------------------------------------------------------------------------
@@ -729,6 +810,81 @@ static func _quad(st: SurfaceTool, corners: Array, normals: Array) -> void:
 	for k in [0, 1, 2, 0, 2, 3]:
 		st.set_normal(normals[k])
 		st.add_vertex(corners[k])
+
+
+## A tile of the strip, as a hand finds it (slice 31): a press plays its chord; pulled up out of the
+## board's face with a hand, or dragged PULL_EDGE off the board, it is a brick of that chord in the
+## hand that pulled it (FifthsWheel.brick_pulled). Its frame is the wheel's, so a held ray stays on
+## the board's plane and a mouse drags along it.
+class StripTile extends ControlAffordance:
+	var wheel: FifthsWheel
+	var bar := 0
+	var _out := NAN
+	var _pulled := false
+
+	func _ready() -> void:
+		collision_layer = 2
+		collision_mask = 0
+		name = "Tile%d" % (bar + 1)
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(FifthsWheel.TILE.x, FifthsWheel.TILE.y, 0.02)
+		shape.shape = box
+		shape.position = Vector3(0, 0, 0.004)
+		add_child(shape)
+
+	func chord() -> String:
+		return wheel.strip[bar] if wheel != null and bar < wheel.strip.size() else ""
+
+	func _default_title() -> String:
+		return "FIFTHS WHEEL  BAR %d" % (bar + 1)
+
+	func _default_readout() -> String:
+		var c := chord()
+		if c.is_empty():
+			return "empty: press a chord on the wheel"
+		var role := wheel.key().numeral(c)
+		return "%s · %s of %s" % [c, role, wheel.key_text()] if role != "" else "%s · out of %s" % [c, wheel.key_text()]
+
+	func hint() -> String:
+		return "press to hear it · pull it out toward you, or drag it off the board, for a chord brick of it" if not chord().is_empty() else ""
+
+	func personal() -> bool:
+		return true
+
+	## How far in front of the board the hand holding it is (m), or NAN for a mouse, whose ray
+	## starts at the eye.
+	func _hand_out() -> float:
+		var by := held_by as Interactor
+		if by == null or by is MouseInteractor or not is_inside_tree():
+			return NAN
+		return (by.aim().origin - global_position).dot(global_basis.z.normalized())
+
+	## Whether the drag at `at` (the board's plane, global) has pulled it out: the hand PULL toward
+	## you since the press, or the point PULL_EDGE past the board's edge.
+	func pulled_out(at: Vector3) -> bool:
+		var out := _hand_out()
+		if not is_nan(out) and not is_nan(_out) and out - _out > FifthsWheel.PULL:
+			return true
+		var p := wheel.to_local(at)
+		var bottom := -FifthsWheel.CENTRE_Y
+		var past := maxf(absf(p.x) - FifthsWheel.BOARD.x * 0.5,
+				maxf(bottom - p.y, p.y - (bottom + FifthsWheel.BOARD.y)))
+		return past > FifthsWheel.PULL_EDGE
+
+	func _on_grab_begin(_at: Vector3) -> void:
+		_pulled = false
+		_out = _hand_out()
+		var c := chord()
+		if not c.is_empty():
+			wheel.play(c)
+
+	func _on_grab_move(at: Vector3) -> void:
+		var c := chord()
+		if _pulled or c.is_empty() or not pulled_out(at):
+			return
+		_pulled = true
+		wheel.brick_pulled.emit(c, wheel.key_text(), held_by)
 
 
 ## A button on the wheel's board: the hub's middle and arrows, CLEAR and SET. Small, pressable by

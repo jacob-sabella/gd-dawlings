@@ -39,6 +39,8 @@ signal bank_changed()
 signal project_replaced()
 ## See MixState.project_named.
 signal project_named()
+## See MixState.lyrics_changed.
+signal lyrics_changed()
 ## The host saved the project here, by its own hand; what went wrong, empty when nothing did.
 signal project_saved(said: PackedStringArray)
 ## See DAWBackend.render_finished.
@@ -51,7 +53,7 @@ signal audio_imported(path: String, result: Dictionary)
 signal audio_import_done(brought: PackedStringArray, failed: PackedStringArray, track: int, who: String)
 
 const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"transport_changed", &"master_changed",
-		&"fx_changed", &"timeline_changed", &"bank_changed", &"project_named"]
+		&"fx_changed", &"timeline_changed", &"bank_changed", &"project_named", &"lyrics_changed"]
 
 ## Every verb a surface may use, as data. The same list as the methods on DAWBackend -- it is
 ## here as well because a guest's intent names its verb, and a verb missing from this list is a
@@ -71,7 +73,7 @@ const COMMANDS := [
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
-	&"open_edit", &"close_edit", &"hold_lane",
+	&"open_edit", &"close_edit", &"hold_lane", &"scrub", &"arrange_sections", &"set_lyrics",
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
@@ -512,6 +514,13 @@ func mark_clean() -> void:
 
 
 func seek(seconds: float) -> void: _do(&"seek", [maxf(seconds, 0.0)])
+## The playhead dragged by hand to `seconds`, the song moving `speed` song-seconds a second
+## (negative is backwards): heard there where the DAW can scrub (DAWBackend.Capability.SCRUB), a
+## quiet seek where it cannot. The DJ platter's turn (Platter). Not history.
+func scrub(seconds: float, speed: float) -> void:
+	_do(&"scrub", [maxf(seconds, 0.0), clampf(speed, -SCRUB_SPEED_MOST, SCRUB_SPEED_MOST)])
+## The fastest a scrub says the song moves (song-seconds a second), either way.
+const SCRUB_SPEED_MOST := 64.0
 func set_loop_range(start: float, end: float) -> void:
 	_do(&"set_loop_range", [maxf(minf(start, end), 0.0), maxf(maxf(start, end), 0.0)])
 ## The loop set round the selected items, from the first one's start to the last one's end, and
@@ -947,6 +956,32 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 			push_warning("DAW: refused a malformed hold_lane intent %s." % [args])
 			return
 		args = [int(args[0]), str(args[1]), MixWire._as_bool([args[2]])]
+	if verb == &"scrub":
+		# Peer input: a place and a speed, both numbers.
+		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
+			push_warning("DAW: refused a malformed scrub intent %s." % [args])
+			return
+		args = [maxf(float(args[0]), 0.0), clampf(float(args[1]), -SCRUB_SPEED_MOST, SCRUB_SPEED_MOST)]
+	if verb == &"arrange_sections":
+		# Peer input: one list, an order of the host's own regions, checked against them as the
+		# host has them now.
+		if args.size() != 1 or not (args[0] is Array) or (args[0] as Array).size() > ARRANGE_SECTIONS_MAX \
+				or (args[0] as Array).any(func(k): return typeof(k) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(k))):
+			push_warning("DAW: refused a malformed arrange_sections intent %s." % [args])
+			return
+		var order: Array = (args[0] as Array).map(func(k): return int(k))
+		var why := arrange_refusal(order)
+		if not why.is_empty():
+			push_warning("DAW: refused arrange_sections %s: %s" % [order, why])
+			return
+		args = [order]
+	if verb == &"set_lyrics":
+		# Peer input: one text, no longer than the song's lyrics may be, cleaned as the host's own is.
+		if args.size() != 1 or typeof(args[0]) not in [TYPE_STRING, TYPE_STRING_NAME] \
+				or str(args[0]).length() > Lyrics.MOST + Lyrics.MOST / 4:
+			push_warning("DAW: refused a malformed set_lyrics intent.")
+			return
+		args = [Lyrics.clean(str(args[0]))]
 	if verb == &"set_track_width":
 		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))) \
 				or int(args[0]) < 1:
@@ -1391,6 +1426,94 @@ func _import_name(path: String) -> String:
 	return AudioImport.file_name_for(path, func(n: String) -> bool:
 		return FileAccess.file_exists(AudioTake.DIR.path_join(n)) or (media is Dictionary and media.has(n)) \
 				or (not _import_job.is_empty() and _import_job[2] == n))
+
+
+## The most sections a guest's order may name: more is not a song.
+const ARRANGE_SECTIONS_MAX := 512
+
+
+## The song's sections in a new order, as one edit (docs/spatial_loop.md part two, slice 29): `order`
+## is MixState.regions, which are in song order, by their indices there, in the order they are to
+## play -- [2, 0, 1] puts the third first. Everything from the first region's start to the last's end
+## is laid end to end that way (DAWBackend.arrange_sections), one undo step under Capability.ARRANGE.
+## A guest's is an intent carrying the order, checked again by the host. Answers why it was not
+## (arrange_refusal), or "" when it was done or asked for.
+func arrange_sections(order: Array) -> String:
+	var why := arrange_refusal(order)
+	if not why.is_empty():
+		return why
+	var clean: Array = order.map(func(k): return int(k))
+	if Session.is_authority():
+		_call(&"arrange_sections", [clean])
+	else:
+		Session.send_intent(&"arrange_sections", [clean])
+	return ""
+
+
+## Why the sections cannot go in `order`, in words for the person who moved them, or "": a DAW
+## that cannot; fewer than two sections; not an order of them all; two that overlap; the order they
+## are in; a tempo or signature change inside a section but at its start, or a tempo ramp through
+## them (DAWBackend.arrange_clock_refusal); a frozen track with something in them; a locked item it
+## would cut or move.
+func arrange_refusal(order: Array) -> String:
+	if backend == null or not can(DAWBackend.Capability.ARRANGE):
+		return "This DAW cannot rearrange sections yet: in Reaper, load the dawlings bridge script."
+	var regions: Array = state.regions if state != null else []
+	if regions.size() < 2:
+		return "There are no sections to rearrange: the song needs two regions or more."
+	var overlap := DAWBackend.regions_overlapping(regions)
+	if not overlap.is_empty():
+		return "%s and %s overlap, so they cannot be laid end to end." % [regions[overlap[0]][2], regions[overlap[1]][2]]
+	var pieces := DAWBackend.arrange_pieces(regions, order)
+	if pieces.is_empty():
+		return "That is not an order of the song's %d sections." % regions.size()
+	var cuts := DAWBackend.arrange_cuts(pieces)
+	if cuts.is_empty():
+		return "The sections are in that order already."
+	var why := DAWBackend.arrange_clock_refusal(state, pieces, section_named)
+	if not why.is_empty():
+		return why
+	for index in state.track_indices():
+		var t := state.track(index)
+		for it: MixState.ItemState in t.items:
+			if not DAWBackend.arrange_touches(it, pieces, cuts):
+				continue
+			if t.is_frozen():
+				return "%s is frozen: thaw it to rearrange the sections." % t.display_name()
+			if it.locked:
+				return "%s on %s is locked: unlock it to rearrange the sections." % [
+						it.name if not it.name.is_empty() else "An item", t.display_name()]
+	return ""
+
+
+## The song's lyrics made `text` (docs/spatial_loop.md part two, slice 56): LRC (Lyrics), the whole
+## text, cleaned (Lyrics.clean), one undo step under Capability.LYRICS. A guest's is an intent carrying
+## the text, cleaned again by the host. Answers why it was not (lyrics_refusal), or "" when it was
+## done or asked for.
+func set_lyrics(text: String) -> String:
+	var why := lyrics_refusal()
+	if not why.is_empty():
+		return why
+	_do(&"set_lyrics", [Lyrics.clean(text)])
+	return ""
+
+
+## Why the lyrics cannot be written here, in words, or "".
+func lyrics_refusal() -> String:
+	if backend == null or not can(DAWBackend.Capability.LYRICS):
+		return "This DAW cannot keep lyrics yet: in Reaper, load the dawlings bridge script."
+	return ""
+
+
+## A section by its start, as a refusal names it: the region's name, or the gap after one.
+func section_named(start: float) -> String:
+	for r in state.regions:
+		if absf(float(r[0]) - start) < DAWBackend.ARRANGE_EPSILON:
+			return str(r[2]) if not str(r[2]).is_empty() else "the section at %s" % state.bar_beat(start)
+	for r in state.regions:
+		if absf(float(r[1]) - start) < DAWBackend.ARRANGE_EPSILON:
+			return "the gap after %s" % r[2]
+	return "the section at %s" % state.bar_beat(start)
 
 
 ## A clip off a cassette onto a track (docs/spatial_loop.md part two, slice 24): `packed` is the

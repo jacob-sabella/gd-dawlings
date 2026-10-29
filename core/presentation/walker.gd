@@ -294,8 +294,15 @@ func reachable(p: Vector2) -> bool:
 
 ## The floor's height at `p`: the top of anything there you step up onto, or 0.
 func ground_at(p: Vector2) -> float:
+	return ground_of(fixed, p)
+
+
+## The floor's height at `p` among `solids` (walker footprints with their tops): the top of any
+## there low enough to step up onto (the drum riser), or 0. What the walker stands on, and where a
+## headset's play space is put down on a travel (Stations.seat).
+static func ground_of(solids: Array, p: Vector2) -> float:
 	var top := 0.0
-	for f in fixed:
+	for f: Dictionary in solids:
 		var t: float = f.get("top", SOLID_HEIGHT)
 		if t <= STEP_HEIGHT and _gap(f, p) <= 0.0:
 			top = maxf(top, t)
@@ -380,14 +387,17 @@ func look(relative: Vector2) -> void:
 	pitch = clampf(pitch - relative.y * LOOK_SPEED, -1.45, 1.35)
 
 
-## Go and stand with your eyes at `at`, looking at `target`.
+## Go and stand with your eyes at `at`, looking at `target`, your feet on whatever is there to
+## stand on (`ground_at`: the drum riser's top at the hand drums), so the eye is that far above it.
 ##
 ## Walked rather than teleported, on a curve, with collision off for the trip: a visit is a
 ## decision to be somewhere, and being stopped half way by the corner of the rack you were
 ## asked to go and look at would be the physics winning an argument nobody was having.
 func travel_to(at: Vector3, target: Vector3, seconds: float) -> void:
-	var feet := Vector3(at.x, 0.0, at.z)
-	var to_eye := clampf(at.y, 0.9, 2.0)
+	var plan := _plan_frame()
+	var on := plan.affine_inverse() * at
+	var feet := plan * Vector3(on.x, ground_at(Vector2(on.x, on.z)), on.z)
+	var to_eye := clampf(at.y - feet.y, 0.9, 2.0)
 	var back := at - target
 	var to_yaw := atan2(back.x, back.z)
 	var to_pitch := -atan2(back.y, Vector2(back.x, back.z).length())

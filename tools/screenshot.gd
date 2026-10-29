@@ -40,6 +40,14 @@ var _pockets: PackedStringArray = []
 ## `--visitor 0.6,-0.4,3.0`: another player, Lin (peer 7), standing there (studio x, z) facing
 ## that yaw, from frame 5: their ghost, and its keys pack (`--carry tablet:keys_7` plugs into it).
 var _visitor: Array = []
+## `--point ruler:37.5`: with --visitor, what Lin points at from frame 5, as Presence publishes it
+## (`ruler:<seconds>`, `room`, `ghost:1`, or a control's key): their ghost's ray to it, their name at
+## its end (docs/spatial_loop.md part two, slice 35). `room` points at `--point-at x,y,z`, session space.
+var _point := ""
+var _point_at := Vector3.ZERO
+## `--note 36:try_a_fill_here`: a sticky note (a NOTE marker, PointAndMark.add_note) at that song
+## time (an underscore a space, for a shell argument), from frame 6, and the timeline's window put round it.
+var _note := ""
 ## `--plug shaker:player_7`: that source's jack stepped into that sink at frame 10, asked as a hand
 ## here asks (Studio._on_plug_asked; docs/spatial_loop.md slices 5 and 6). With --visitor, a
 ## jack into `player_7` runs its cable to Lin's ghost.
@@ -48,9 +56,22 @@ var _plug := ""
 ## of that mask's fingers held down (HandPose's bits: 1 J, 2 K, 4 L, 8 ;), for a shot of the glove
 ## playing them (docs/spatial_loop.md slice 8).
 var _fingertips := -1
+## `--chords 4`: at frame 10 the harp gone to, the chord layer turned on as C turns it, and that
+## key of the number row pressed (1 to 7 the degrees, 0 the song's chord), for a shot of the
+## desktop's chord glove over the harp (docs/spatial_loop.md part two, slice 32).
+var _chords := -1
+## `--chord-from 4`: at frame 10 the harp gone to, and Lin's (peer 7) chord hand plugged into this
+## player holding that degree of the song's key (1 to 7), taken as it comes down the jack
+## (Jacks.received), for a shot of the harp's crown naming the sender (part two, slice 33). Lin is
+## in the room from then, standing where --visitor puts them if it is given.
+var _chord_from := -1
 ## `--stations 2`: I pressed that many times at frame 10, as a desktop player goes to the
 ## instruments one by one (Studio.cycle_stations).
 var _stations := 0
+## `--test-drum`: the suite's fixed test drum (TestDrumItem, docs/spatial_loop.md part two, slice 38)
+## stood on the floor in front of the seat at frame 4, for a shot of an instrument that stands still
+## and its card (`--aim TEST_DRUM`, `--click TEST_DRUM@40`).
+var _test_drum := false
 ## `--cassettes 3`: that many clips pulled out of the timeline at frame 8, each a cassette shelved
 ## in the cassette rack, and the rack gone to, for a shot of it holding them (docs/spatial_loop.md
 ## part two, slice 23).
@@ -60,6 +81,24 @@ var _cassettes := 0
 ## REC pressed once more so it is lit and listening, and the sampler gone to unless SHOT_CAM frames
 ## it (docs/spatial_loop.md part two, slice 26). Its WAVs go to user://shot_samples, never the project's media.
 var _samples := 0
+## `--platter`: at frame 8 a clip off the first track with one, minted as a pull is, stood in the DJ
+## platter's slot on the deck's cart, and the platter gone to unless SHOT_CAM frames it
+## (docs/spatial_loop.md part two, slice 27).
+var _platter := false
+## `--crank N`: at frame 8 five edits made, each its own step, and the tape deck's history crank
+## turned back N notches and left settling, so its readout says where it stands (docs/spatial_loop.md
+## part two, slice 28). Not settled: a shot of the crank, not of the song played back.
+var _crank := 0
+## `--sections N`: at frame 8 MAKE SECTIONS pressed on the section blocks (the demo's markers made
+## regions), the playhead put into the second, and the blocks gone to unless SHOT_CAM frames them;
+## N above 0 also takes block N in a stand-in hand and holds it at the front of the row, so the
+## others have made room (docs/spatial_loop.md part two, slice 30).
+var _sections := -1
+var _sections_hand: Node = null
+## `--bricks N`: at frame 8 the fifths wheel's strip set to N chords of its key (vi IV I V, then on
+## round the key's seven), MAKE BRICKS pressed, the second and the last bricks nudged to 2 bars, and
+## the chord ledge gone to unless SHOT_CAM frames it (docs/spatial_loop.md part two, slice 31).
+var _bricks := 0
 ## `--plaque-rows`: after `--stations`, INSTRUMENTS pressed on the plaque of the station gone to,
 ## at frame 14, for a shot of the board's rows beside it (docs/spatial_loop.md slice 11).
 var _plaque_rows := false
@@ -275,16 +314,38 @@ func _ready() -> void:
 				if i + 1 < args.size(): _on_air = int(args[i + 1])
 			"--visitor":
 				if i + 1 < args.size(): _visitor = Array(args[i + 1].split(",")).map(func(v): return float(v))
+			"--point":
+				if i + 1 < args.size(): _point = args[i + 1]
+			"--point-at":
+				if i + 1 < args.size():
+					var xyz := args[i + 1].split(",")
+					if xyz.size() == 3: _point_at = Vector3(float(xyz[0]), float(xyz[1]), float(xyz[2]))
+			"--note":
+				if i + 1 < args.size(): _note = args[i + 1]
 			"--plug":
 				if i + 1 < args.size(): _plug = args[i + 1]
 			"--fingertips":
 				if i + 1 < args.size(): _fingertips = int(args[i + 1])
 			"--stations":
 				if i + 1 < args.size(): _stations = int(args[i + 1])
+			"--chords":
+				if i + 1 < args.size(): _chords = int(args[i + 1])
+			"--chord-from":
+				if i + 1 < args.size(): _chord_from = int(args[i + 1])
 			"--cassettes":
 				if i + 1 < args.size(): _cassettes = int(args[i + 1])
+			"--test-drum":
+				_test_drum = true
 			"--samples":
 				if i + 1 < args.size(): _samples = int(args[i + 1])
+			"--platter":
+				_platter = true
+			"--crank":
+				if i + 1 < args.size(): _crank = int(args[i + 1])
+			"--sections":
+				if i + 1 < args.size(): _sections = int(args[i + 1])
+			"--bricks":
+				if i + 1 < args.size(): _bricks = int(args[i + 1])
 			"--plaque-rows":
 				_plaque_rows = true
 			"--help-page":
@@ -460,6 +521,25 @@ func _tip_posed_hand(roll: float, offset := Vector3.ZERO) -> void:
 
 ## `--rope`'s rope: tied and pulled at frame 6, the song played from the start of the kick's first
 ## item, and at the shot frame how far it ducks.
+## `--test-drum`: the test drum on the floor where the view sees floor, low on its right: where the
+## ray through that point of the screen meets the floor at the seat's feet.
+func _stand_the_test_drum() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	var camera := get_viewport().get_camera_3d()
+	if studio == null or studio.items == null or camera == null:
+		return
+	var size := get_viewport().get_visible_rect().size
+	var through := Vector2(size.x * 0.82, size.y * 0.72)
+	var from := studio.items.to_local(camera.project_ray_origin(through))
+	var way := studio.items.global_basis.inverse() * camera.project_ray_normal(through)
+	var floor := studio.items.ground(Vector2(from.x, from.z))
+	if way.y > -0.01:
+		return
+	var spot := from + way * ((floor - from.y) / way.y)
+	spot.y = studio.items.ground(Vector2(spot.x, spot.z))
+	studio.items.spawn(&"testdrum", &"testdrum", Transform3D(Basis.IDENTITY, spot))
+
+
 ## `--cassettes`: a clip off each of the first tracks with one, minted as the host mints a pull
 ## (the studio's own `_mint_for`), shelved one to a slot from the top left, and the rack gone to.
 ## Its walk there takes up to two seconds: shoot it at a later frame (`tools/shot.sh out 200 206`).
@@ -483,6 +563,90 @@ func _shelve_cassettes() -> void:
 	var rack := studio.cassette_rack.global_transform
 	print("SHOT_CASSETTES ", studio.items.made_ids(), " rack at ", rack.origin, " facing ", rack.basis.z)
 	studio.go_to_station(&"cassette_rack")
+
+
+## `--platter`: a clip's cassette, minted as the host mints a pull, stood in the platter's slot.
+func _slot_the_platter() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.items == null or studio.platter == null:
+		return
+	for index in DAW.state.track_indices():
+		if DAW.state.track(index).items.is_empty():
+			continue
+		var item := studio._mint_for(CassetteItem.KIND, "clip:%d:0" % index, Session.local_peer_id)
+		if item == null:
+			continue
+		studio.items.slot_item(item, Platter.HOLDER, 0)
+		item.transform = item.resting
+		break
+	var at := studio.platter.global_transform
+	print("SHOT_PLATTER ", studio.items.made_ids(), " platter at ", at.origin, " facing ", at.basis.z)
+	if _cam.size() != 6:
+		studio.go_to_station(&"platter")
+
+
+## `--crank N`: five steps of history, and the deck's crank turned back N of them, held there.
+func _turn_the_crank() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.deck == null or studio.deck.crank == null:
+		return
+	var s := DAW.state
+	var tracks := s.track_indices()
+	for n in mini(5, tracks.size()):
+		DAW.set_track_volume(tracks[n], 0.5 + 0.05 * n)
+	var crank := studio.deck.crank
+	# Held still past SETTLE it would undo them: a frame-less crank stands where it was turned.
+	crank.set_process(false)
+	crank.turn_to(-_crank)
+	print("SHOT_CRANK ", crank.readout_text(), " at ", crank.global_position, " facing ", crank.global_basis.z)
+
+
+## `--sections N`: the demo's markers made sections, the playhead in the second, and block N held at
+## the front of the row when N is above 0.
+func _make_the_sections() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.sections == null:
+		return
+	var blocks := studio.sections
+	if DAW.state.regions.is_empty():
+		blocks.make_sections()
+	if DAW.state.regions.size() > 1:
+		DAW.seek(lerpf(float(DAW.state.regions[1][0]), float(DAW.state.regions[1][1]), 0.3))
+	blocks._process(0.0)
+	if _sections > 0 and _sections <= blocks.blocks().size():
+		var block: SectionBlocks.Block = blocks.blocks()[_sections - 1]
+		_sections_hand = Node.new()
+		add_child(_sections_hand)
+		block.grab_begin(_sections_hand, block.global_position)
+		block.grab_move(_sections_hand, blocks.to_global(Vector3(-SectionBlocks.ROW * 0.5 + block.width * 0.5,
+				SectionBlocks.LIFT, SectionBlocks.ROW_Z)))
+	print("SHOT_SECTIONS ", DAW.state.regions.map(func(r): return r[2]), " shown ", blocks.shown_order(),
+			" at ", blocks.global_position, " facing ", blocks.global_basis.z)
+	if _cam.size() != 6:
+		studio.go_to_station(&"sections")
+
+
+## `--bricks N`: the wheel's strip N chords of its key, made into bricks on the ledge by its own
+## MAKE BRICKS, two of them nudged to 2 bars.
+func _make_the_bricks() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null or studio.wheel == null or studio.ledge == null:
+		return
+	var wheel := studio.wheel
+	var seven := Harmony.diatonic(wheel.key())
+	var order := [4, 0, 1, 2, 3, 5, 6]
+	wheel.clear_strip()
+	for n in mini(_bricks, FifthsWheel.STRIP_MOST):
+		wheel.strip.append(seven[order[n % order.size()]])
+	wheel._show()
+	wheel.make_bricks()
+	var row := ChordBrick.ledge_row(studio.items)
+	for k in [1, row.size() - 1]:
+		if k > 0 and k < row.size():
+			row[k].bars = 2
+	print("SHOT_BRICKS ", ChordBrick.inside_of(row), " at ", studio.ledge.global_position, " facing ", studio.ledge.global_basis.z)
+	if _cam.size() != 6:
+		studio.go_to_station(&"ledge")
 
 
 ## `--samples`: REC, then a use, that many times, by the mouse's hand, as a desktop player samples:
@@ -754,6 +918,16 @@ func _process(_delta: float) -> void:
 		Session.roster_changed.emit()
 	if _frames >= 5 and Session.participants.has(7):
 		(Session.participants[7] as Session.Participant).heard_msec = Time.get_ticks_msec()
+		if _point != "":
+			(Session.participants[7] as Session.Participant).pointing_at = _point
+			(Session.participants[7] as Session.Participant).pointing_local = _point_at
+	if _frames == 6 and _note.contains(":"):
+		var said := _note.split(":", true, 1)
+		PointAndMark.add_note(float(said[0]), said[1].replace("_", " "))
+		var shot_studio := get_tree().current_scene.get_node_or_null("Studio")
+		if shot_studio != null and shot_studio.get("timeline") != null:
+			var tl: TimelineSurface = shot_studio.timeline
+			tl.set_view(maxf(float(said[0]) - 24.0, 0.0), 48.0)
 
 	if _frames == 5 and _posed_hand.size() >= 3:
 		_pose_a_hand()
@@ -776,10 +950,20 @@ func _process(_delta: float) -> void:
 		if _posed_gestures.tracked:
 			_posed_label.global_position = _posed_gestures.joints[HandPose.PALM] + Vector3(0, 0.16, 0)
 
+	if _frames == 4 and _test_drum:
+		_stand_the_test_drum()
 	if _frames == 8 and _cassettes > 0:
 		_shelve_cassettes()
 	if _frames == 8 and _samples > 0:
 		_make_samples()
+	if _frames == 8 and _platter:
+		_slot_the_platter()
+	if _frames == 8 and _sections >= 0:
+		_make_the_sections()
+	if _frames == 8 and _bricks > 0:
+		_make_the_bricks()
+	if _frames == 8 and _crank > 0:
+		_turn_the_crank()
 	if _frames == 10 and _stations > 0:
 		var going := get_tree().current_scene.get_node_or_null("Studio")
 		if going != null and going.has_method("cycle_stations"):
@@ -806,6 +990,31 @@ func _process(_delta: float) -> void:
 			card.page = at
 			card.open()
 			print("SHOT_HELP %s of %s" % [card.page, card.page_names()])
+	if _frames == 10 and _chords >= 0:
+		var chords_at := get_tree().current_scene.get_node_or_null("Studio") as Studio
+		if chords_at != null and chords_at.chord_hand != null:
+			chords_at.go_to_station(&"harp")
+			chords_at.toggle_chords()
+			chords_at.chord_hand.pick(_chords - 1)
+			print("SHOT_CHORDS ", chords_at.chord_hand.hud_text())
+	if _frames == 10 and _chord_from >= 1:
+		var from_studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+		if from_studio != null and from_studio.jacks != null:
+			if not Session.participants.has(7):
+				var lin := Session.Participant.new()
+				lin.peer_id = 7
+				lin.display_name = "Lin"
+				lin.colour_index = 2
+				Session.participants[7] = lin
+				Session.roster_changed.emit()
+			from_studio.go_to_station(&"harp")
+			var source := Jack.chord_source(7)
+			from_studio.jacks.plug(source, Jack.player_sink(Session.local_peer_id))
+			var key := Harmony.at(DAW.state, DAW.state.position_seconds)
+			var chord := ChordHand.chord_for(key, _chord_from - 1)
+			from_studio.jacks.received(source, Jack.Kind.CHORD, Jack.chord_root(chord), Jack.chord_quality(chord), 7,
+					DAW.state.position_seconds)
+			print("SHOT_CHORD_FROM ", from_studio.chord_hand.crown_text(key), " | ", from_studio.chord_hand.hud_text())
 	if _frames == 10 and _fingertips >= 0:
 		var tips_studio := get_tree().current_scene.get_node_or_null("Studio")
 		if tips_studio != null and tips_studio.has_method("toggle_fingertips"):

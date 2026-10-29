@@ -115,6 +115,15 @@ func is_focused() -> bool:
 	return focused_id != &""
 
 
+## The surface this rig may summon by `surface_id`, or null: for something that brings gear by name
+## (the session in miniature, docs/spatial_loop.md part two, slice 34) to ask before it does.
+func surface(surface_id: StringName) -> Surface:
+	for s in surfaces:
+		if is_instance_valid(s) and s.surface_id == surface_id:
+			return s
+	return null
+
+
 ## Re-place everything whenever any surface changes shape.
 ##
 ## Not a refinement. Every distance here is derived from how big a surface is and how small its
@@ -266,7 +275,10 @@ static func bearing_for(index: int) -> float:
 func ring_radius() -> float:
 	var radius := 0.0
 	for surface in surfaces:
-		radius = maxf(radius, ergonomics.fits_in_sweep(surface.content_aabb().size))
+		if is_instance_valid(surface) and _stays_home(surface):
+			continue
+		if is_instance_valid(surface):
+			radius = maxf(radius, ergonomics.fits_in_sweep(surface.content_aabb().size))
 	radius *= PERIPHERAL_PUSH
 	if focused_id != &"":
 		for surface in surfaces:
@@ -421,6 +433,17 @@ func _apply() -> void:
 	for surface in surfaces:
 		if not is_instance_valid(surface):
 			continue
+		if _stays_home(surface):
+			# Home, or back home if it was the one brought a moment ago, and forgotten so it is
+			# measured from there again the next time it is.
+			if _home.has(surface.surface_id):
+				var home: Array = _home[surface.surface_id]
+				surface.compact = false
+				_unmark_berth(surface)
+				_unmark(surface)
+				_move(surface, home[0], home[1])
+				_home.erase(surface.surface_id)
+			continue
 		# Captured on the way in, once, so a cycle between two focused surfaces does not record
 		# the summoned position of the first as the place to put it back.
 		if not _home.has(surface.surface_id):
@@ -437,6 +460,12 @@ func _apply() -> void:
 		_move(surface, body, placement(surface, index))
 	_clear_the_way()
 	placed.emit()
+
+
+## Whether `surface` stays where it stands while another is brought, rather than going out to
+## the arc (Surface.parks).
+func _stays_home(surface: Surface) -> bool:
+	return not surface.parks and surface.surface_id != focused_id
 
 
 ## Reparented into the body frame rather than placed in world space, and that is the whole
@@ -482,6 +511,9 @@ func _clear_the_way() -> void:
 		# Out of the tree during teardown, and asking an orphan where it is in the world is
 		# an error with a plausible-looking identity transform for an answer.
 		if not is_instance_valid(surface) or not surface.is_inside_tree():
+			continue
+		# Standing at home on its own trolley: nothing left it, so nothing is in its way.
+		if _stays_home(surface):
 			continue
 		var box := surface.content_aabb()
 		if box.size.length() > 0.0:

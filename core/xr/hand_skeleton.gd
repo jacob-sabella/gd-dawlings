@@ -15,7 +15,8 @@ extends Node3D
 ##
 ## `wrist` rides the wrist joint, for what is worn there: the player's own keys' jack and, up the
 ## arm from it, the socket that takes out whatever goes into them (docs/spatial_loop.md slice 6),
-## both pressed by the other hand. They are hidden with the hand.
+## and on the chord hand its own jack, MY CHORDS (part two, slice 33), down onto the back of the
+## hand beside MY KEYS; all pressed by the other hand. They are hidden with the hand.
 ##
 ## While the hand's fingertips play notes (docs/spatial_loop.md slice 8), each fingertip is
 ## lettered with the note it plays, grown while pinched, and the chord over the palm (`letter`).

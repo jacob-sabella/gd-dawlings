@@ -31,6 +31,8 @@ const BACK := LIVE_ROOM_BACK + 0.05
 const ARCH_SPACING := 2.4
 ## The rail round the deck's edge.
 const RAIL := 1.0
+## Where along the deck's left-hand rail the singing glass stands (z, its middle).
+const GLASS_ALONG := 0.6
 ## The sun, overhead and a little ahead: its light's direction is the opposite of this.
 const SUN_DIR := Vector3(0.2, 1.0, -0.35)
 ## The collar from the booth to the sub: its height and radius. The sub's own collar flange is
@@ -52,14 +54,15 @@ const WRECK_SUN := Vector3(-0.4, 1.0, -0.55)
 ## The wreck (dome_wreck.glb): where she lies in the clearing ahead of the nose, and how she is
 ## turned -- across the view, her bow off to the right and a little away, her deck heeled toward
 ## the glass.
-const WRECK_AT := Vector3(1.5, -TRENCH, -21.5)
+const WRECK_AT := Vector3(1.5, -TRENCH, -24.5)
 const WRECK_YAW := PI - 0.3
 ## The vent field in the deep (dome_vent.glb): ahead and to the left, where the desk sees it past
 ## the timeline.
-const VENT_AT := Vector3(-8.5, -TRENCH, -17.0)
+const VENT_AT := Vector3(-10.0, -TRENCH, -19.5)
 ## The floodlights on the vault's plinth in the deep: each (round the vault from the right-hand
 ## foot, 0..PI; along the side, as a z), throwing its beam out and down onto the sand.
-const FLOODS := [[0.0, -1.0], [0.0, 4.0], [PI, -1.0], [PI, 4.0]]
+## Spread down the whole of the longer vault; none on the left past the booth, where the sub lies.
+const FLOODS := [[0.0, -1.0], [0.0, 5.0], [0.0, 10.5], [PI, -1.0], [PI, 5.0]]
 const NOSE_FLOODS := [0.55, 1.57, 2.6]
 
 ## Where each kelp stalk stands (studio space), kept for the tests: a headless MultiMesh does not
@@ -91,8 +94,9 @@ var wreck_at := Transform3D.IDENTITY
 var wreck_spots: Array[Transform3D] = []
 ## The path the schools swim: round the nose and down the sides, squared off (`SCHOOL_SQUARE`
 ## below 1) to keep clear of the glass, swept `SCHOOL_SWEEP` radians either side of the nose.
-const SCHOOL_CENTRE := Vector3(0.0, 0.0, -2.3)
-const SCHOOL_RADII := Vector2(9.6, 10.8)
+## Sized for the vault grown round the bigger live room (radius 9.7): about 1.5 m outside its glass.
+const SCHOOL_CENTRE := Vector3(0.0, 0.0, -1.0)
+const SCHOOL_RADII := Vector2(11.4, 14.6)
 const SCHOOL_SQUARE := 0.3
 const SCHOOL_SWEEP := 2.1
 
@@ -247,13 +251,25 @@ func lamp_energy(_index: int, authored: float) -> float:
 
 
 ## The deck: the working footprint and the live room, and the strips either side of the
-## footprint out to the rail.
+## footprint out to the rail, from the nose back to the back of house. Each strip overlaps the
+## footprint's edge and meets the back of house along its front (as Venue.beside_the_desk does): drawn
+## 5 cm off the one and 30 cm short of the other, they were walled islands, and the singing glass on
+## the left one could not be walked to.
 func rooms() -> Array[Rect2]:
 	var half := live_room_half()
 	var cr := room_width * 0.5
+	var depth := Studio.ROOM_BACK - NOSE
 	return [back_of_house(),
-			Rect2(-half, NOSE, half - cr, Studio.ROOM_DEPTH),
-			Rect2(cr, NOSE, half - cr, Studio.ROOM_DEPTH)]
+			Rect2(-half + 0.05, NOSE, half - cr, depth),
+			Rect2(cr - 0.05, NOSE, half - cr, depth)]
+
+
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): eight panes of glass in
+## steel ribs, the vault's own in little, standing at the deck's rail on the left beside the desk,
+## the vault's glass behind them (the bulkhead between the kit and the lattice is the hatch's); a
+## touch rings the glass.
+func instrument() -> Dictionary:
+	return {"kind": &"glass", "spot": side_wall_instrument(-1.0, GLASS_ALONG, 0.03)}
 
 
 func zone_solids() -> Array:
@@ -300,6 +316,7 @@ func _ready() -> void:
 	_build_bulkhead()
 	_run_the_rail()
 	_dock_the_sub()
+	_light_the_deck()
 	match variant:
 		DEEP:
 			_seed_the_reef()
@@ -581,7 +598,7 @@ func _build_bulkhead() -> void:
 		ZoneKit.block(self, Vector3(0.1, 2.7, lock_depth), Vector3(side * 1.15, 1.35, lz), steel, "LockWall")
 	ZoneKit.block(self, Vector3(2.2, 2.7, 0.1), Vector3(0, 1.35, BACK + thick + lock_depth - 0.05), _dark(), "LockDoor")
 	# Two washes on the bulkhead from the spine, so the back of the room is not a black wall.
-	for x in [-3.2, 3.2]:
+	for x in [-radius() * 0.45, radius() * 0.45]:
 		var wash := SpotLight3D.new()
 		wash.name = "BulkheadWash"
 		wash.light_color = Color(0.85, 0.95, 1.0)
@@ -598,6 +615,54 @@ func _build_bulkhead() -> void:
 	lamp.omni_range = 3.0
 	lamp.position = Vector3(0, 2.4, lz)
 	add_child(lamp)
+
+
+## Where the deck's lamps fall: the middle of each neighbourhood round the zones (harmony off the
+## bricks table's long side, synth off its stand, the lattice, the riser, tape and toys off the prop
+## shelf), so a moved zone carries its light.
+func deck_light_spots() -> Array[Vector3]:
+	var z := zones()
+	var out: Array[Vector3] = []
+	if z.has(&"bricks"):
+		var c := (z[&"bricks"] as AABB).get_center()
+		out.append(Vector3(c.x - HARMONY_AISLE, 0, c.z + 0.6))
+	if z.has(&"synth"):
+		var c := (z[&"synth"] as AABB).get_center()
+		out.append(Vector3(c.x - SYNTH_MIDDLE, 0, c.z))
+	for id: StringName in [&"matrix", &"drums"]:
+		if z.has(id):
+			var c := (z[id] as AABB).get_center()
+			out.append(Vector3(c.x, 0, c.z))
+	var shelf := prop_shelf_spot().origin
+	out.append(Vector3(shelf.x + signf(-shelf.x) * TOYS_ACROSS * 0.5, 0, shelf.z + 1.0))
+	return out
+
+
+## The deck is twice the floor it was, and the sun reaches only so far into it (none at all in the
+## deep): a lamp in a dark housing on the vault's arches over each neighbourhood, a cool pool of
+## light down onto it.
+func _light_the_deck() -> void:
+	var r := radius()
+	var housing := _dark()
+	var lens := ZoneKit.glow(Color(0.85, 0.95, 1.0), 1.8)
+	for at in deck_light_spots():
+		# On the glass's inside, straight over the spot (or as near over it as the vault allows).
+		var y := sqrt(maxf(r * r - at.x * at.x, 1.0)) - 0.45
+		var lamp_at := Vector3(at.x * 0.92, y, at.z)
+		var aim := Basis.looking_at(at - lamp_at, Vector3.UP)
+		var lamp := ZoneKit.block(self, Vector3(0.3, 0.3, 0.22), lamp_at, housing, "DeckLampHousing")
+		lamp.basis = aim
+		var face := ZoneKit.block(lamp, Vector3(0.24, 0.24, 0.01), Vector3(0, 0, -0.116), lens, "DeckLampLens")
+		face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var light := SpotLight3D.new()
+		light.name = "DeckLamp"
+		light.light_color = Color(0.85, 0.95, 1.0)
+		light.light_energy = 4.0 if variant == DEEP else 1.6
+		light.spot_range = lamp_at.distance_to(at) + 3.0
+		light.spot_angle = 40.0
+		light.spot_angle_attenuation = 0.8
+		light.transform = Transform3D(aim, lamp_at + aim * Vector3(0, 0, -0.2))
+		add_child(light)
 
 
 func _hazard() -> ShaderMaterial:
@@ -798,8 +863,8 @@ func _seed_the_reef() -> void:
 				kind = ["Rock0", "CoralFan", "Rock2"][rng.randi() % 3]
 			place.call(kind, Vector2(side * (half + 0.45 + rng.randf_range(-0.08, 0.08)), z), rng.randf_range(0.7, 1.0))
 	# Outside: boulders among the kelp, a few in the clearing ahead.
-	for at in [Vector2(-9.5, -12.0), Vector2(6.5, -15.0), Vector2(11.0, -4.0), Vector2(-12.0, 2.0),
-			Vector2(-3.5, -17.0), Vector2(13.0, 6.0)]:
+	for at in [Vector2(-11.5, -14.5), Vector2(7.5, -18.0), Vector2(13.5, -4.0), Vector2(-14.0, 2.0),
+			Vector2(-4.0, -20.0), Vector2(15.0, 7.0), Vector2(-14.5, 15.5), Vector2(14.5, 15.0)]:
 		var kind := "Rock%d" % (rng.randi() % 3)
 		var size := rng.randf_range(2.0, 3.6)
 		# Not on the wreck, nor on the vent's mound.
@@ -963,7 +1028,7 @@ func _slant_the_shafts() -> void:
 ## Bubbles: a few streams rising from the sand outside, and from the sub's vent.
 func _raise_bubbles() -> void:
 	var sub := sub_spot()
-	for at in [Vector3(-11.0, -TRENCH, -6.0), Vector3(12.0, -TRENCH, 1.0), Vector3(4.0, -TRENCH, -16.0),
+	for at in [Vector3(-13.0, -TRENCH, -6.0), Vector3(13.5, -TRENCH, 1.0), Vector3(4.0, -TRENCH, -18.5),
 			sub + Vector3(0, 1.0, 1.4)]:
 		var stream := GPUParticles3D.new()
 		stream.name = "Bubbles"

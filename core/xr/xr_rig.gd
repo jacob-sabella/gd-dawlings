@@ -257,13 +257,15 @@ func _take_mark() -> void:
 
 ## Put the play space's centre at `to` (global; its floor point and the way it faces, levelled:
 ## only its yaw is taken), behind the veil, over `fade` seconds each way, or at once with a fade
-## of 0. A travel already under way is overtaken from wherever its veil has got to.
+## of 0. The floor point's height is kept, so the real floor is put down on what is there to stand
+## on (a station's seat on the drum riser is the riser's top: Stations.seat). A travel already under
+## way is overtaken from wherever its veil has got to.
 func travel(to: Transform3D, fade := FADE) -> void:
 	var ahead := -to.basis.z
 	ahead.y = 0.0
 	if ahead.length() < 0.001:
 		ahead = Vector3.FORWARD
-	var put := Transform3D(Basis.looking_at(ahead.normalized(), Vector3.UP), Vector3(to.origin.x, 0.0, to.origin.z))
+	var put := Transform3D(Basis.looking_at(ahead.normalized(), Vector3.UP), to.origin)
 	var parent := get_parent() as Node3D
 	if parent != null and parent.is_inside_tree():
 		put = parent.global_transform.affine_inverse() * put
@@ -305,6 +307,19 @@ func untravelled(point: Vector3) -> Vector3:
 	if parent != null and parent.is_inside_tree():
 		at_home = parent.global_transform * home
 	return at_home * (global_transform.affine_inverse() * point)
+
+
+## How the play space has been moved from `home` (global): what takes a point in the room's own terms
+## (`untravelled`) to where it is seen now. What a real surface's pad is drawn through (SurfacePads):
+## the real desk travelled with the player. The identity at home.
+func away_from_home() -> Transform3D:
+	if not away:
+		return Transform3D.IDENTITY
+	var at_home := home
+	var parent := get_parent() as Node3D
+	if parent != null and parent.is_inside_tree():
+		at_home = parent.global_transform * home
+	return global_transform * at_home.affine_inverse()
 
 
 func _go(to: Transform3D, away_after: bool, fade: float) -> void:

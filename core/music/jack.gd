@@ -6,10 +6,10 @@ extends RefCounted
 ## patch is `Jacks`, and the plug on an instrument is `JackSocket`.
 ##
 ## A source is what plays: an item's id (`shaker`, `bell2`, a Tour spill's `cowbell2`), `harp`,
-## or `keys:P`, player P's own keys. A sink is where it goes: `track_N`, recorded onto track N as
-## MIDI, or `player_P`, into player P's instrument (slice 6). The empty sink is unplugged, which
-## is what every source is until somebody plugs it: it then does exactly what it did before
-## there were jacks.
+## `keys:P`, player P's own keys, or `chord:P`, player P's chord hand (part two, slice 33). A
+## sink is where it goes: `track_N`, recorded onto track N as MIDI, or `player_P`, into player
+## P's instrument (slice 6). The empty sink is unplugged, which is what every source is until
+## somebody plugs it: it then does exactly what it did before there were jacks.
 ##
 ## A jack sends what its source is. A pitched source (the harp, a player's keys, a bell) sends
 ## NOTE_ON and NOTE_OFF of its own pitches, and CC, its controls beside them: `pitch` the
@@ -18,14 +18,29 @@ extends RefCounted
 ## which a receiving instrument turns into a note of its own (slice 6). Onto a track, both are
 ## recorded as the source would record them anyway: a bell its chord tone on its channel, a
 ## shaker its drum note.
+##
+## A player's chord hand sends CHORD, a shape and not a note: on each change of the chord it holds,
+## `pitch` the chord's root as a pitch class (0 to 11) and `velocity` its quality, one more than
+## its place in Harmony.QUALITIES (`chord_quality`), 0 for no shape held. Into a bandmate it is
+## their chord while it is held (ChordHand.take); it never goes onto a track.
+##
+## The weather is a source that is no item (part two, slice 44): `weather`, the rain or snow on a
+## venue's glass, and `drips`, the cave's (Weather). Every machine schedules the same drops from the
+## song clock, so its jack goes onto a track only, where the host records them; never into a
+## bandmate, who hears the same drops already. So is the marble run's `marbles` (MarbleRun, slice 49),
+## its bells rung by marbles every machine rolls from the clock and the room's blocks.
 
-enum Kind { NOTE_ON, NOTE_OFF, TRIGGER, CC }
+enum Kind { NOTE_ON, NOTE_OFF, TRIGGER, CC, CHORD }
 
 const TRACK := "track_"
 const PLAYER := "player_"
 const KEYS := "keys:"
+const CHORD := "chord:"
 ## The chord harp, the room's to play (ChordHarp.SOURCE).
 const HARP := &"harp"
+## The world's sources: the weather's (Weather.SOURCE, Weather.DRIPS) and the marble run's
+## (MarbleRun.SOURCE).
+const WORLD: Array[StringName] = [&"weather", &"drips", &"marbles"]
 ## The longest a source or a sink's name may be: an item's id is short, and a peer's ask is
 ## bounded before the host stores it.
 const NAME_MOST := 32
@@ -64,10 +79,34 @@ static func keys_player(source: StringName) -> int:
 	return _number_after(source, KEYS)
 
 
-## Whether `source` is an instrument item's (an id), not the harp nor a player's keys: what can
-## go onto a track, where HitRecorder takes its hits down.
+## Player `peer`'s chord hand, as a source.
+static func chord_source(peer: int) -> StringName:
+	return StringName("%s%d" % [CHORD, peer])
+
+
+## The player whose chord hand a source is, or 0 for a source that is not a chord hand.
+static func chord_player(source: StringName) -> int:
+	return _number_after(source, CHORD)
+
+
+## The player a source is part of, their keys or their chord hand, or 0 for the harp or an item:
+## who alone may plug it and send down it.
+static func own_player(source: StringName) -> int:
+	var keys := keys_player(source)
+	return keys if keys > 0 else chord_player(source)
+
+
+## Whether `source` is an instrument item's (an id), not the harp nor a player's keys or chord
+## hand nor the weather: what can go onto a track, where HitRecorder takes its hits down.
 static func is_item(source: StringName) -> bool:
-	return source != HARP and not String(source).begins_with(KEYS)
+	return source != HARP and not String(source).begins_with(KEYS) and not String(source).begins_with(CHORD) \
+			and not is_world(source)
+
+
+## Whether `source` is the world's (WORLD: the weather, the drips, the marbles): no item, onto a
+## track only.
+static func is_world(source: StringName) -> bool:
+	return WORLD.has(source)
 
 
 ## Whether `sink` is a sink at all, by its shape: unplugged (empty), a track or a player. Whether
@@ -87,6 +126,34 @@ static func kinds_of(pitched: bool) -> Array[Kind]:
 	if pitched:
 		return [Kind.NOTE_ON, Kind.NOTE_OFF, Kind.CC]
 	return [Kind.TRIGGER]
+
+
+## How many qualities a CHORD's `velocity` may name: one each of Harmony.QUALITIES, and 0 for none.
+static func quality_count() -> int:
+	return Harmony.QUALITIES.size()
+
+
+## A chord's quality as a CHORD sends it: one more than its place in Harmony.QUALITIES (`F` 1,
+## `Dm` 2, `G7` 10), or 0 for a name that does not read as one.
+static func chord_quality(chord: String) -> int:
+	if Harmony.chord_tones(chord).is_empty():
+		return 0
+	var spelled := chord.left(2) if chord.length() >= 2 and chord[1] in ["#", "b"] else chord.left(1)
+	return Harmony.QUALITIES.keys().find(chord.substr(spelled.length())) + 1
+
+
+## A chord's root as a CHORD sends it, a pitch class, or -1 for a name that does not read.
+static func chord_root(chord: String) -> int:
+	var tones := Harmony.chord_tones(chord)
+	return tones[0] if not tones.is_empty() else -1
+
+
+## The chord a CHORD's `root` and `quality` name, spelled as `key` writes its notes: `F`, `Bb7`;
+## "" for no shape (quality 0) or numbers out of range.
+static func chord_named(root: int, quality: int, key: Harmony) -> String:
+	if root < 0 or root > 11 or quality < 1 or quality > quality_count():
+		return ""
+	return key.note_name(root, false) + str(Harmony.QUALITIES.keys()[quality - 1])
 
 
 ## `name`'s whole number after `prefix`, or 0: `track_12` is 12, `track_`, `track_x` and

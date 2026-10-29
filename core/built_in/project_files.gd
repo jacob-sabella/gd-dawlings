@@ -70,6 +70,7 @@ static func save(backend: OfflineBackend, path: String, copy := false) -> Packed
 	var abs_path := ProjectSettings.globalize_path(path)
 	DirAccess.make_dir_recursive_absolute(abs_path.get_base_dir())
 	warnings.append_array(DawKitDawproject.save(project, abs_path, staging))
+	warnings.append_array(_keep_lyrics(backend.state.lyrics, abs_path))
 	warnings.append_array(_keep_extras(backend, abs_path))
 	if copy:
 		return warnings
@@ -97,6 +98,54 @@ static func _keep_extras(backend: OfflineBackend, path: String) -> PackedStringA
 	zip.close_file()
 	zip.close()
 	return PackedStringArray()
+
+
+## The song's lyrics (MixState.lyrics) in the metadata of the project file just written at `path`,
+## as its Comment: DAWproject's own field for words about the project, which another program shows
+## as the project's comment. dawkit writes only the Title, so the file is written again with
+## metadata.xml given the Comment and every other entry as it was. Nothing when there are none.
+static func _keep_lyrics(lyrics: String, path: String) -> PackedStringArray:
+	if lyrics.strip_edges().is_empty():
+		return PackedStringArray()
+	var reader := ZIPReader.new()
+	if reader.open(path) != OK:
+		return PackedStringArray(["the lyrics could not be added to %s" % path.get_file()])
+	var entries := {}
+	for name in reader.get_files():
+		entries[name] = reader.read_file(name)
+	reader.close()
+	var meta: DawKitXml = DawKitXml.parse(entries["metadata.xml"]) if entries.has("metadata.xml") else null
+	if meta == null:
+		meta = DawKitXml.new("MetaData")
+	var comment := meta.first("Comment")
+	if comment == null:
+		comment = meta.add("Comment")
+	comment.text = lyrics
+	entries["metadata.xml"] = meta.to_text().to_utf8_buffer()
+	var zip := ZIPPacker.new()
+	if zip.open(path) != OK:
+		return PackedStringArray(["the lyrics could not be added to %s" % path.get_file()])
+	for name in entries:
+		zip.start_file(name)
+		zip.write_file(entries[name])
+		zip.close_file()
+	zip.close()
+	return PackedStringArray()
+
+
+## The lyrics kept in the project file at `path` (its metadata's Comment), or empty: a file without
+## them, or from a program that wrote no comment.
+static func lyrics_of(path: String) -> String:
+	var zip := ZIPReader.new()
+	if zip.open(ProjectSettings.globalize_path(path)) != OK:
+		return ""
+	var out := ""
+	if "metadata.xml" in zip.get_files():
+		var meta := DawKitXml.parse(zip.read_file("metadata.xml"))
+		if meta != null and meta.first("Comment") != null:
+			out = Lyrics.clean(meta.first("Comment").text)
+	zip.close()
+	return out
 
 
 ## The game's extras in the project file at `path` ({"widths": {track id: width}}), or empty for
@@ -149,7 +198,7 @@ static func open(backend: OfflineBackend, path: String) -> PackedStringArray:
 			where[name] = full
 			c.source = name
 	backend.set_media(where)
-	var refused := ProjectBridge.load(project, backend, {}, extras_of(path).get("widths", {}))
+	var refused := ProjectBridge.load(project, backend, {}, extras_of(path).get("widths", {}), lyrics_of(path))
 	if not refused.is_empty():
 		return refused
 	backend.project_path = path

@@ -963,6 +963,8 @@ function handlers.GetTimeline()
     -- guest is shown. Both empty for a project never saved.
     project_name = (reaper.GetProjectName(0, '') or ''):gsub('%.[Rr][Pp][Pp]$', ''),
     project_file = (select(2, reaper.EnumProjects(-1)) or ''):match('[^/\\]*$') or '',
+    -- The project notes whole: dawlings reads its lyrics out of their [lyrics] block (Lyrics.from_notes).
+    notes = reaper.GetSetProjectNotes(0, false, '') or '',
     markers = markers,
     regions = regions,
     tempo = tempo,
@@ -1437,6 +1439,280 @@ function handlers.SetTimeSignatures(args)
   return {ok = true}
 end
 
+-- Sections rearranged (docs/spatial_loop.md part two, slice 29), planned on dawlings's side as
+-- pieces: each region, and each gap between two, as {from, stop, to} in seconds, in the new order
+-- (DAWBackend.arrange_pieces). Only where two pieces side by side move by different amounts is
+-- anything cut.
+local ARRANGE_EPSILON = 0.0005
+local ARRANGE_EDGE = 0.001
+
+local function piece_delta(pieces, t)
+  for _, p in ipairs(pieces) do
+    if t >= p.from - 0.000001 and t < p.stop - 0.000001 then return p.to - p.from end
+  end
+  return 0
+end
+
+local function arrange_cuts(pieces)
+  local song = {}
+  for _, p in ipairs(pieces) do song[#song + 1] = p end
+  table.sort(song, function(a, b) return a.from < b.from end)
+  local cuts, left = {}, 0
+  for _, p in ipairs(song) do
+    local d = p.to - p.from
+    if math.abs(d - left) > 0.000001 then cuts[#cuts + 1] = p.from end
+    left = d
+  end
+  if #song > 0 and math.abs(left) > 0.000001 then cuts[#cuts + 1] = song[#song].stop end
+  return cuts
+end
+
+local function cuts_inside(cuts, from, to)
+  local out = {}
+  for _, c in ipairs(cuts) do
+    if c > from + ARRANGE_EPSILON and c < to - ARRANGE_EPSILON then out[#out + 1] = c end
+  end
+  return out
+end
+
+-- An envelope's points ({time, value, shape, tension, selected}, in order) laid out as the pieces
+-- say, as DAWBackend.arranged_lane lays out a lane: each piece's own points moved with it, a point
+-- at a piece's start where it meets one it did not (and one just before an edge it ramps into), and
+-- the song past the last region kept as it was. `value_at` is the envelope's value at a time. Nil
+-- when the envelope has nothing in the pieces and nothing ramping through them.
+local function arranged_points(points, pieces, cuts, first, last, value_at)
+  if #points == 0 then return nil end
+  local E = ARRANGE_EPSILON
+  local function in_force(t)
+    local found = nil
+    for _, pt in ipairs(points) do
+      if pt.time > t then break end
+      found = pt
+    end
+    return found
+  end
+  -- Reaper's square (1) is a hold; every other shape goes somewhere, when there is a next point.
+  local function ramps_at(t)
+    local pt = in_force(t)
+    if not pt or pt.shape == 1 then return false end
+    for _, q in ipairs(points) do
+      if q.time > t then return true end
+    end
+    return false
+  end
+  local function is_cut(t)
+    for _, c in ipairs(cuts) do
+      if math.abs(c - t) < E then return true end
+    end
+    return false
+  end
+  local function has_point(t)
+    for _, pt in ipairs(points) do
+      if math.abs(pt.time - t) < E then return true end
+    end
+    return false
+  end
+  local function opening(at, from)
+    local f = in_force(from)
+    return {time = at, value = value_at(from), shape = f and f.shape or 1, tension = f and f.tension or 0, selected = false}
+  end
+  local any = false
+  for _, pt in ipairs(points) do
+    if pt.time >= first - E and pt.time < last + E then any = true end
+  end
+  if not any and not ramps_at(first) then return nil end
+  local out = {}
+  for _, pt in ipairs(points) do
+    if pt.time < first - E then out[#out + 1] = pt end
+  end
+  local before_any = #out == 0
+  for _, p in ipairs(pieces) do
+    local d = p.to - p.from
+    if is_cut(p.from) and not has_point(p.from) then out[#out + 1] = opening(p.to, p.from) end
+    for _, pt in ipairs(points) do
+      if pt.time >= p.from - E and pt.time < p.stop - E then
+        out[#out + 1] = {time = pt.time + d, value = pt.value, shape = pt.shape, tension = pt.tension, selected = pt.selected}
+      end
+    end
+    local close = p.stop - ARRANGE_EDGE
+    if is_cut(p.stop) and ramps_at(close) then
+      out[#out + 1] = {time = close + d, value = value_at(close), shape = 1, tension = 0, selected = false}
+    end
+  end
+  if is_cut(last) and not has_point(last) then out[#out + 1] = opening(last, last) end
+  for _, pt in ipairs(points) do
+    if pt.time >= last - E then out[#out + 1] = pt end
+  end
+  if before_any and first > ARRANGE_EDGE and #out > 0 and math.abs(out[1].value - points[1].value) > 1e-9 then
+    table.insert(out, 1, {time = 0, value = points[1].value, shape = 1, tension = 0, selected = false})
+  end
+  table.sort(out, function(a, b) return a.time < b.time end)
+  local kept = {}
+  for _, pt in ipairs(out) do
+    if #kept == 0 or pt.time > kept[#kept].time + 0.000001 then kept[#kept + 1] = pt end
+  end
+  return kept
+end
+
+-- Every envelope in the project: the master's and each track's, their plugins' and sends' among them.
+-- Not the master's "Tempo map": that is the clock, which SetTempoMap and SetTimeSignatures set, and
+-- its points carry the signatures, so putting its old points back would undo both.
+local function every_envelope()
+  local out = {}
+  local tracks = {reaper.GetMasterTrack(0)}
+  for t = 0, reaper.CountTracks(0) - 1 do tracks[#tracks + 1] = reaper.GetTrack(0, t) end
+  for _, tr in ipairs(tracks) do
+    for e = 0, reaper.CountTrackEnvelopes(tr) - 1 do
+      local env = reaper.GetTrackEnvelope(tr, e)
+      local _, name = reaper.GetEnvelopeName(env)
+      if name ~= 'Tempo map' then out[#out + 1] = env end
+    end
+  end
+  return out
+end
+
+-- A handler run inside this one's Undo block, its own block left out.
+local function quietly(fn, args)
+  local begin_block, end_block = reaper.Undo_BeginBlock, reaper.Undo_EndBlock
+  reaper.Undo_BeginBlock = function() end
+  reaper.Undo_EndBlock = function() end
+  local ok, result = pcall(fn, args)
+  reaper.Undo_BeginBlock, reaper.Undo_EndBlock = begin_block, end_block
+  return ok and result or {ok = false}
+end
+
+-- args: the piece count, then from, end and to (seconds) per piece in the new order; the tempo
+-- map's count, then seconds, bpm and ramps per point, as SetTempoMap takes them (none: it stays);
+-- the signatures' count, then quarter note, numerator and denominator per change, as
+-- SetTimeSignatures takes them (none: they stay); the brackets' count, then seconds and name per
+-- marker that keeps a section's harmony where it now is (the desk's DAWBackend.arranged_brackets):
+-- the marker there renamed, or a new one. Everything is read where it is first: each item
+-- that crosses a cut is split there (SplitMediaItem) and each part is given where it goes; each
+-- marker and region in the pieces, by its number (SetProjectMarker4); each envelope's points. Then
+-- the tempo map and signatures, and then everything is put where it goes, in seconds, so an item
+-- whose timebase is beats lands where the others do. One undo point, "Arrange sections". A locked
+-- item it would cut or move refuses the lot, with nothing changed.
+function handlers.ArrangeSections(args)
+  local n = math.floor(tonumber(args[1]) or 0)
+  local pieces = {}
+  for k = 0, n - 1 do
+    local at = 2 + k * 3
+    local from, stop, to = tonumber(args[at]), tonumber(args[at + 1]), tonumber(args[at + 2])
+    if not (from and stop and to) or stop <= from then return {ok = false, error = 'a malformed piece'} end
+    pieces[#pieces + 1] = {from = from, stop = stop, to = to}
+  end
+  if #pieces < 2 then return {ok = false, error = 'nothing to arrange'} end
+  local function list_after(at)
+    local count = math.floor(tonumber(args[at]) or 0)
+    local out = {}
+    for k = 1, count * 3 do out[k] = args[at + k] end
+    return out, at + 1 + count * 3
+  end
+  local tempo, at = list_after(2 + n * 3)
+  local meter
+  meter, at = list_after(at)
+  local brackets = {}
+  for k = 1, math.floor(tonumber(args[at]) or 0) do
+    local t, name = tonumber(args[at + k * 2 - 1]), args[at + k * 2]
+    if t and name then brackets[#brackets + 1] = {pos = t, name = tostring(name)} end
+  end
+  local first, last = math.huge, -math.huge
+  for _, p in ipairs(pieces) do
+    first, last = math.min(first, p.from), math.max(last, p.stop)
+  end
+  local cuts = arrange_cuts(pieces)
+  if #cuts == 0 then return {ok = true, moved = 0} end
+
+  local touched = {}
+  for t = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, t)
+    for i = 0, reaper.CountTrackMediaItems(tr) - 1 do
+      local it = reaper.GetTrackMediaItem(tr, i)
+      local pos = reaper.GetMediaItemInfo_Value(it, 'D_POSITION')
+      local length = reaper.GetMediaItemInfo_Value(it, 'D_LENGTH')
+      local inside = cuts_inside(cuts, pos, pos + length)
+      if #inside > 0 or math.abs(piece_delta(pieces, pos + length / 2)) > 0.000001 then
+        if (math.floor(reaper.GetMediaItemInfo_Value(it, 'C_LOCK')) & 1) == 1 then
+          return {ok = false, error = 'a locked item would move'}
+        end
+        touched[#touched + 1] = {item = it, pos = pos, stop = pos + length, inside = inside}
+      end
+    end
+  end
+
+  reaper.Undo_BeginBlock()
+  local moves = {}
+  for _, t in ipairs(touched) do
+    local edges = {t.pos}
+    for _, c in ipairs(t.inside) do edges[#edges + 1] = c end
+    edges[#edges + 1] = t.stop
+    local part = t.item
+    for k = 1, #edges - 1 do
+      moves[#moves + 1] = {item = part, to = edges[k] + piece_delta(pieces, (edges[k] + edges[k + 1]) / 2)}
+      if k < #edges - 1 then part = reaper.SplitMediaItem(part, edges[k + 1]) end
+      if not part then break end
+    end
+  end
+  local marks, landed = {}, {}
+  local _, marker_count, region_count = reaper.CountProjectMarkers(0)
+  for m = 0, marker_count + region_count - 1 do
+    local ok, is_region, pos, rgn_end, name, number, colour = reaper.EnumProjectMarkers3(0, m)
+    if ok ~= 0 then
+      local d = 0
+      if pos >= first - ARRANGE_EPSILON and pos < last - ARRANGE_EPSILON then d = piece_delta(pieces, pos + ARRANGE_EPSILON) end
+      if math.abs(d) > 0.000001 then
+        marks[#marks + 1] = {number = number, region = is_region, pos = pos + d, stop = is_region and rgn_end + d or 0,
+          name = name, colour = colour}
+      end
+      if not is_region then landed[#landed + 1] = {number = number, pos = pos + d, colour = colour} end
+    end
+  end
+  local lanes = {}
+  for _, env in ipairs(every_envelope()) do
+    local points = {}
+    for p = 0, reaper.CountEnvelopePoints(env) - 1 do
+      local ok, time, value, shape, tension, selected = reaper.GetEnvelopePoint(env, p)
+      if ok then points[#points + 1] = {time = time, value = value, shape = shape, tension = tension, selected = selected} end
+    end
+    local laid = arranged_points(points, pieces, cuts, first, last, function(t)
+      local _, v = reaper.Envelope_Evaluate(env, t, 0, 0)
+      return v
+    end)
+    if laid then lanes[#lanes + 1] = {env = env, points = laid} end
+  end
+
+  if #tempo > 0 then quietly(handlers.SetTempoMap, tempo) end
+  if #meter > 0 then quietly(handlers.SetTimeSignatures, meter) end
+  for _, m in ipairs(moves) do
+    reaper.SetMediaItemPosition(m.item, m.to, false)
+  end
+  for _, m in ipairs(marks) do
+    reaper.SetProjectMarker4(0, m.number, m.region, m.pos, m.stop, m.name, m.colour, 0)
+  end
+  for _, b in ipairs(brackets) do
+    local there
+    for _, m in ipairs(landed) do
+      if math.abs(m.pos - b.pos) <= 0.001 then there = m; break end
+    end
+    if there then
+      reaper.SetProjectMarker4(0, there.number, false, there.pos, 0, b.name, there.colour, 0)
+    else
+      reaper.AddProjectMarker2(0, false, b.pos, 0, b.name, -1, 0)
+    end
+  end
+  for _, lane in ipairs(lanes) do
+    reaper.DeleteEnvelopePointRange(lane.env, -1, math.huge)
+    for _, pt in ipairs(lane.points) do
+      reaper.InsertEnvelopePoint(lane.env, pt.time, pt.value, pt.shape, pt.tension, pt.selected, true)
+    end
+    reaper.Envelope_SortPoints(lane.env)
+  end
+  reaper.UpdateArrange()
+  reaper.UpdateTimeline()
+  reaper.Undo_EndBlock('Arrange sections', -1)
+  return {ok = true, moved = #moves, marks = #marks, envelopes = #lanes, brackets = #brackets}
+end
+
 -- args: where (from 1), name. A new track there, as Insert new track does: one undo point.
 function handlers.InsertTrack(args)
   local at = math.max(1, math.min(math.floor(args[1] or 1), reaper.CountTracks(0) + 1))
@@ -1566,6 +1842,39 @@ function handlers.SetTrackWidth(args)
   reaper.SetMediaTrackInfo_Value(tr, 'D_WIDTH', width)
   reaper.Undo_EndBlock('Set track width', 1)
   return {ok = true, mode_set = mode_set, width = width}
+end
+
+-- The song's lyrics, LRC, kept in the project notes between a line saying [lyrics] and one saying
+-- [/lyrics]: the old block taken out wherever it was and the new one put at the end after a blank
+-- line, none for empty lyrics, and everything else in the notes left as it was -- what Lyrics.into_notes
+-- does on dawlings's side. One Undo block. args: text.
+local function lyrics_into_notes(notes, lrc)
+  local kept, open = {}, false
+  for row in ((notes or ''):gsub('\r\n', '\n'):gsub('\r', '\n') .. '\n'):gmatch('(.-)\n') do
+    local lower = row:match('^%s*(.-)%s*$'):lower()
+    if open then
+      open = lower ~= '[/lyrics]'
+    elseif lower == '[lyrics]' then
+      open = true
+    else
+      kept[#kept + 1] = row
+    end
+  end
+  local rest = table.concat(kept, '\n'):match('^%s*(.-)%s*$')
+  local words = (lrc or ''):match('^%s*(.-)%s*$')
+  if words == '' then return rest end
+  local block = '[lyrics]\n' .. words .. '\n[/lyrics]'
+  if rest == '' then return block end
+  return rest .. '\n\n' .. block
+end
+
+function handlers.SetLyrics(args)
+  local text = type(args[1]) == 'string' and args[1] or ''
+  reaper.Undo_BeginBlock()
+  reaper.GetSetProjectNotes(0, true, lyrics_into_notes(reaper.GetSetProjectNotes(0, false, ''), text))
+  reaper.MarkProjectDirty(0)
+  reaper.Undo_EndBlock('Set lyrics', -1)
+  return {ok = true}
 end
 
 -- --- editing ----------------------------------------------------------------------------

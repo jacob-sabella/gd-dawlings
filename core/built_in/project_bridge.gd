@@ -248,9 +248,10 @@ static func _clip(item: MixState.ItemState) -> DawKitClip:
 ## track with none: giving loaded tracks parts by name sounded the band under a count-in and
 ## after a render's range, where a file's own tracks are meant to be silent.
 ## `track_widths`, by track id, is each track's width (TrackState.width) where it is not full: what
-## DAWproject has no word for, kept beside it by ProjectFiles.
+## DAWproject has no word for, kept beside it by ProjectFiles. `lyrics` is the song's (MixState.lyrics),
+## which ProjectFiles keeps in the file's metadata comment: none for a project that has none.
 static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Dictionary = {},
-		track_widths: Dictionary = {}) -> PackedStringArray:
+		track_widths: Dictionary = {}, lyrics := "") -> PackedStringArray:
 	var problems := p.problems()
 	if not problems.is_empty():
 		return problems
@@ -263,6 +264,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	# Another project's takes may share a file name with this one's.
 	backend.take_peaks.clear()
 	s.markers.clear()
+	s.lyrics = Lyrics.clean(lyrics)
 	s.regions = p.regions.map(func(r: DawKitRegion) -> Array: return [r.start, r.end, r.name])
 	backend.project_title = p.title
 	s.beat_unit = p.time_signature.y
@@ -388,6 +390,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 	s.transport_changed.emit()
 	s.timeline_changed.emit()
 	s.master_changed.emit(&"")
+	s.lyrics_changed.emit()
 	s.project_replaced.emit()
 	return PackedStringArray()
 

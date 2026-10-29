@@ -24,6 +24,11 @@ extends Control
 ## is whether the fingertips play, so it lets go on a click as well (`click_releases`): one way
 ## off for the keys and the mouse's grab together.
 ##
+## The chords are a layer over whichever catcher has the keyboard, not a third catcher
+## (docs/spatial_loop.md part two, slice 32): while the chord layer is on (`chord_keys`), the
+## number row picks the chord (ChordHand), since neither layout plays on it, and a click does not
+## take the keys away (`click_releases` waits for the layer to go off).
+##
 ## Alt is not a shortcut here (docs/spatial_loop.md part two, slice 15): held, with the mouse moving
 ## up or down, it bends what the keys play, so a key pressed under Alt plays, and one let go under
 ## any modifier still stops.
@@ -59,6 +64,10 @@ var velocity := VELOCITY
 ## Whether a click anywhere lets the keys go, as Esc does. This control takes no clicks itself
 ## (it is invisible and has no size), so every click is somewhere else.
 var click_releases := false
+## The chord layer (ChordHand.set_layer): (physical key, Shift down, pressed) -> whether it took
+## the key, valid only while the layer is on. Shared by every catcher, as the layer is: it picks
+## the chord in whichever one has the keyboard.
+static var chord_keys: Callable = Callable()
 ## Physical key -> the pitch it started, so a key let go after an octave change stops the note
 ## it started rather than one it did not.
 var _down := {}
@@ -109,6 +118,9 @@ func _gui_input(event: InputEvent) -> void:
 	if key.physical_keycode in ARROWS:
 		accept_event()
 		return
+	if chords_on() and not key.echo and chord_keys.call(key.physical_keycode, key.shift_pressed, key.pressed):
+		accept_event()
+		return
 	if key.echo:
 		if layout.has(key.physical_keycode):
 			accept_event()
@@ -149,11 +161,17 @@ func held() -> Array:
 	return _down.values()
 
 
-## A click somewhere, while this has the keys and lets go on a click: they go back. The click
-## itself goes on to whatever it was on.
+## Whether the chord layer is on (`chord_keys`).
+static func chords_on() -> bool:
+	return chord_keys.is_valid()
+
+
+## A click somewhere, while this has the keys and lets go on a click: they go back, unless the
+## chord layer is on, when a click is the harp's strum. The click itself goes on to whatever it
+## was on.
 func _input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
-	if click_releases and click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT \
+	if click_releases and not chords_on() and click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT \
 			and has_focus():
 		set_active(false)
 

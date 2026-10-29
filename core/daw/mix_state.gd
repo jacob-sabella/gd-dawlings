@@ -33,6 +33,8 @@ signal bank_changed()
 signal project_replaced()
 ## The project's title or file name changed: it was saved somewhere, opened or started.
 signal project_named()
+## The song's lyrics (`lyrics`) changed: written, undone, or another project's.
+signal lyrics_changed()
 
 
 class SendState extends RefCounted:
@@ -516,6 +518,9 @@ var project_length: float = 0.0
 var markers: Dictionary = {}
 ## Named spans: [start, end, name] in seconds, in order of their starts.
 var regions: Array = []
+## The song's words, as LRC text (Lyrics; docs/spatial_loop.md part two, slice 56), empty for none.
+## Written by DAW.set_lyrics, one undo step; not markers, which forty lines would bury the ruler in.
+var lyrics: String = ""
 
 
 ## The region the playhead (or `seconds`) is in, as its index in `regions`, or -1: the latest to

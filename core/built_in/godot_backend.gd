@@ -28,11 +28,17 @@ extends OfflineBackend
 ##     AudioEffectCompressor.sidechain is the key's bus by name (`listen`), and with no key into
 ##     the track again, its own input;
 ##   - meters read off the buses' peaks rather than synthesised;
+##   - a spectrum per track (`track_spectrum`, the EQ wall's; docs/spatial_loop.md part two, slice
+##     36): an AudioEffectSpectrumAnalyzer at the very end of each track bus, after its width and
+##     its pan, where no cue, probe or send copy takes it (they copy the effect slots alone);
 ##   - a cue per track on request (`set_cues`): a third player of the part, through the track's
 ##     own effects but not its fader, on a bus that plays to this machine's headphones only;
 ##   - a lean (`set_lean`, Ears.lean; docs/spatial_loop.md slice 19): one track's cue more, kept
 ##     at the track's own fader plus LEAN_DB, heard with headphones on or off while the mix comes
 ##     down under it, in this player's ears alone;
+##   - a scrub (`scrub`, the DJ platter turned by hand; docs/spatial_loop.md part two slice 27):
+##     with the transport stopped, a short window of the mix (SCRUB_WINDOW) wherever the hand has
+##     just put the playhead, so the song is heard turning under it;
 ##   - a demo song (DemoSong), one synthesised part per instrument, played through the
 ##     timeline's items: an item is a window in which its track's part sounds;
 ##   - MIDI items played through the built-in instrument (DawKitTine), rendered per item; their
@@ -72,6 +78,14 @@ const KEPT_RENDERS := 32
 ## Where a render of a project never saved goes.
 const RENDER_DIR := "user://renders"
 
+## A track's spectrum (`track_spectrum`): the analyzer's FFT, how much it keeps, the gain that
+## brings a sine to its own peak (a Hann window halves a bin), and how long it is read for after
+## the last ask (ms), so a bus nobody looks at costs nothing.
+const SPECTRUM_FFT := AudioEffectSpectrumAnalyzer.FFT_SIZE_4096
+const SPECTRUM_BUFFER := 0.5
+const SPECTRUM_GAIN := 2.0
+const SPECTRUM_KEEP_MSEC := 1500
+
 ## The FX chains the demo opens with: track -> [[kind, {param name: normalised value}]].
 const DEMO_FX := {
 	2: [[&"eq", {"32 Hz": 0.68, "100 Hz": 0.6, "320 Hz": 0.38}], [&"compressor", {"Thresh": 0.62, "Ratio": 0.35, "Makeup": 0.2}]],
@@ -85,6 +99,11 @@ const DEMO_FX := {
 
 ## Track index -> bus index.
 var _bus := {}
+## Track index -> its recent spectrum reads, oldest first (each BANDS powers, before the fader),
+## Spectra.WINDOW's worth; when reading stops unasked (msec) and when the next read is due.
+var _spectra := {}
+var _spectra_until := 0
+var _spectra_next := 0
 ## Track index -> [AudioStreamPlayer...]: the track's own player, then one per send.
 var _players := {}
 ## Track index -> the [slot, destination, key] of each send its buses were built for, so a send
@@ -182,7 +201,7 @@ func summary() -> String:
 
 
 func can(capability: StringName) -> bool:
-	if capability == Capability.RENDER:
+	if capability == Capability.RENDER or capability == Capability.SCRUB or capability == Capability.SPECTRA:
 		return true
 	if capability == Capability.PLUGIN_WINDOW and HostedPlugins.available():
 		return true
@@ -364,7 +383,10 @@ func close() -> void:
 
 func _exit_tree() -> void:
 	_finish_renders()
-	_remove_buses()
+	# Only while it still has buses: closed (DAW.use closes the old engine, then frees it at the
+	# frame's end), its buses are gone, and the "R3D" buses there now are the next engine's.
+	if not _bus.is_empty() or _master_bus >= 0:
+		_remove_buses()
 
 
 func _notification(what: int) -> void:
@@ -640,6 +662,7 @@ func _build_buses() -> void:
 			AudioServer.add_bus_effect(b, _make_effect(kinds[fx_index]))
 		AudioServer.add_bus_effect(b, AudioEffectStereoEnhance.new())
 		AudioServer.add_bus_effect(b, AudioEffectPanner.new())
+		AudioServer.add_bus_effect(b, _new_analyzer())
 	for index in _bus:
 		var parent := parent_of(index)
 		AudioServer.set_bus_send(_bus[index],
@@ -885,6 +908,7 @@ func _remove_buses() -> void:
 		if AudioServer.get_bus_name(i).begins_with(BUS_PREFIX):
 			AudioServer.remove_bus(i)
 	_bus.clear()
+	_spectra.clear()
 	_master_bus = -1
 	_capture = null
 
@@ -1235,6 +1259,50 @@ func item_at(index: int, seconds: float) -> MixState.ItemState:
 	return null
 
 
+# --- scrubbing (docs/spatial_loop.md part two, slice 27) -------------------------------------
+
+## How long one scrub plays the mix for (s), from where it put the playhead, and how slowly the hand
+## may move the song (song-seconds a second) and still be heard. A hand turning the platter scrubs
+## every frame, so the mix is heard as a frame's sliver at each place it passes, a grain of it at
+## a time; held still, it is silent once the last window has played.
+const SCRUB_WINDOW := 0.08
+const SCRUB_STILL := 0.05
+var _scrub_left := 0.0
+var _scrub_fresh := false
+
+
+## The playhead put at `seconds` and, with the transport stopped and the hand moving, the mix heard
+## there for SCRUB_WINDOW: every player started at that place (or the lanes' transport), as if
+## playing, and stopped again once the window is over. Playing, it is a plain seek.
+func scrub(seconds: float, speed: float) -> void:
+	seek(seconds)
+	if state.playing or absf(speed) < SCRUB_STILL:
+		return
+	_scrub_left = SCRUB_WINDOW
+	_scrub_fresh = true
+
+
+## Whether a scrub's window is sounding now.
+func scrubbing() -> bool:
+	return _scrub_left > 0.0 and not state.playing
+
+
+## Whether a scrub has moved the playhead since the mix was last started there: once, for whoever
+## starts it again (the players, or the lanes).
+func take_fresh_scrub() -> bool:
+	var was := _scrub_fresh
+	_scrub_fresh = false
+	return was
+
+
+func _spend_scrub(delta: float) -> void:
+	if state.playing:
+		_scrub_left = 0.0
+		_scrub_fresh = false
+	elif _scrub_left > 0.0:
+		_scrub_left = maxf(0.0, _scrub_left - delta)
+
+
 ## Keeps every track's players where the song clock says they should be: playing inside an
 ## item, silent outside one, and put back when they have drifted. A demo part is locked to the
 ## song's bar grid rather than to the item's start, so splitting or moving an item never shifts
@@ -1243,9 +1311,12 @@ func item_at(index: int, seconds: float) -> MixState.ItemState:
 func _sync_players() -> void:
 	var pos := state.position_seconds
 	var since := AudioServer.get_time_since_last_mix()
+	# A scrub's window sounds the song where the hand has it, each move started afresh there.
+	var scrub := scrubbing()
+	var fresh := take_fresh_scrub() and scrub
 	for index in _players:
 		# Nothing but the click while counting in to a recording, as in Reaper.
-		var it := item_at(index, pos) if state.playing and not state.song_held() else null
+		var it := item_at(index, pos) if (state.playing or scrub) and not state.song_held() else null
 		var stream: AudioStreamWAV = null
 		var expected := 0.0
 		var wraps := false
@@ -1287,9 +1358,12 @@ func _sync_players() -> void:
 				if player.playing:
 					player.stop()
 				continue
-			if player.stream != stream or not player.playing:
+			if player.stream != stream or not player.playing or fresh:
 				player.stream = stream
 				_start(player, expected)
+				continue
+			if scrub:
+				# A window plays on from where it began: the playhead stands still under it.
 				continue
 			var off := _drift(player, player.get_playback_position() + since - expected)
 			if wraps:
@@ -1634,6 +1708,8 @@ func _drive_meters(delta: float) -> void:
 		lanes.drive(delta)
 		state.position_string = state.bar_beat(state.position_seconds)
 		_drive_levels()
+		_drive_spectra()
+		_spend_scrub(delta)
 		return
 	if state.playing:
 		var now := audio_time()
@@ -1656,6 +1732,8 @@ func _drive_meters(delta: float) -> void:
 	_sync_players()
 	_sync_click()
 	_drive_levels()
+	_drive_spectra()
+	_spend_scrub(delta)
 
 
 ## The plugins' own work on the main thread, and any knob a plugin's window moved, to the
@@ -1695,6 +1773,100 @@ func _drive_levels() -> void:
 	record_for_replication("/beat/str", [state.position_string])
 	record_for_replication("/time", [state.position_seconds])
 	state.transport_changed.emit()
+
+
+# --- spectra (the EQ wall, docs/spatial_loop.md part two, slice 36) -------------------------
+
+func _new_analyzer() -> AudioEffectSpectrumAnalyzer:
+	var a := AudioEffectSpectrumAnalyzer.new()
+	a.fft_size = SPECTRUM_FFT
+	a.buffer_length = SPECTRUM_BUFFER
+	return a
+
+
+## Where on a track's bus the analyzer at its end is: found by kind from the end, because a
+## render's capture may hang after it for a while. -1 before the bus is built.
+func spectrum_slot(track_index: int) -> int:
+	if not _bus.has(track_index):
+		return -1
+	var b: int = _bus[track_index]
+	for i in range(AudioServer.get_bus_effect_count(b) - 1, 0, -1):
+		if AudioServer.get_bus_effect(b, i) is AudioEffectSpectrumAnalyzer:
+			return i
+	return -1
+
+
+## The analyzer itself, or null before the bus is built.
+func spectrum_effect(track_index: int) -> AudioEffectSpectrumAnalyzer:
+	var slot := spectrum_slot(track_index)
+	return AudioServer.get_bus_effect(_bus[track_index], slot) as AudioEffectSpectrumAnalyzer if slot >= 0 else null
+
+
+## A track's spectrum as heard: Spectra.BANDS levels in dB of full scale, each band's power
+## averaged over Spectra.WINDOW, then the track's fader (and its VCA) added, since Godot runs a
+## bus's effects before its volume; Spectra.FLOOR_DB throughout while it cannot be heard (muted,
+## or another soloed). Asking keeps it read for SPECTRUM_KEEP_MSEC; the first ask reads at once.
+func track_spectrum(track_index: int) -> PackedFloat32Array:
+	_spectra_until = Time.get_ticks_msec() + SPECTRUM_KEEP_MSEC
+	var out := Spectra.silent()
+	if not _bus.has(track_index) or not state.tracks.has(track_index):
+		return out
+	var reads: Array = _spectra.get(track_index, [])
+	if reads.is_empty():
+		var now := _read_spectrum(track_index)
+		if now.is_empty():
+			return out
+		reads = [now]
+		_spectra[track_index] = reads
+	var t: MixState.TrackState = state.tracks[track_index]
+	if not audible(track_index) or t.volume <= 0.0:
+		return out
+	var gain := taper_to_db(t.volume) + state.vca_db(t.group)
+	for i in Spectra.BANDS:
+		var power := 0.0
+		for r: PackedFloat32Array in reads:
+			power += r[i]
+		power /= float(reads.size())
+		if power > 0.0:
+			out[i] = clampf(10.0 * log(power) / log(10.0) + gain, Spectra.FLOOR_DB, Spectra.TOP_DB)
+	return out
+
+
+## Each band's power as the analyzer reads it now, before the fader: the louder side's peak bin in
+## the band, brought up by SPECTRUM_GAIN, squared. Empty with no analyzer to read.
+func _read_spectrum(track_index: int) -> PackedFloat32Array:
+	var slot := spectrum_slot(track_index)
+	if slot < 0:
+		return PackedFloat32Array()
+	var inst := AudioServer.get_bus_effect_instance(_bus[track_index], slot) as AudioEffectSpectrumAnalyzerInstance
+	if inst == null:
+		return PackedFloat32Array()
+	var out := PackedFloat32Array()
+	out.resize(Spectra.BANDS)
+	for i in Spectra.BANDS:
+		var edge := Spectra.edges(i)
+		var m := inst.get_magnitude_for_frequency_range(edge.x, edge.y)
+		var peak := maxf(m.x, m.y) * SPECTRUM_GAIN
+		out[i] = peak * peak
+	return out
+
+
+## Every track's spectrum read, Spectra.READ_HZ times a second, while anyone has asked lately.
+func _drive_spectra() -> void:
+	var now := Time.get_ticks_msec()
+	if now > _spectra_until or now < _spectra_next:
+		return
+	_spectra_next = now + int(1000.0 / Spectra.READ_HZ)
+	var keep := maxi(1, roundi(Spectra.WINDOW * Spectra.READ_HZ))
+	for index in _bus:
+		var read := _read_spectrum(index)
+		if read.is_empty():
+			continue
+		var reads: Array = _spectra.get(index, [])
+		reads.append(read)
+		while reads.size() > keep:
+			reads.pop_front()
+		_spectra[index] = reads
 
 
 ## A peak in dB as the meters read it: on the fader's own law, the way Reaper's OSC meters are.

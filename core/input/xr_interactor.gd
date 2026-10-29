@@ -226,9 +226,34 @@ const FLICK_PAST := 0.6
 const FLICK_BACK := 0.3
 const FLICK_REPEAT := 0.25
 
+## The stick's click: on the chord hand, what turns the chord stick on and off (ChordHand).
+@export var stick_click_action: StringName = &"primary_click"
+## The chord stick is on (docs/spatial_loop.md part two, slice 32): the stick picks this player's
+## chord (ChordHand.stick_step), so it nudges nothing meanwhile.
+var chord_stick := false
+## The chord stick went off with the stick still out: it nudges again once it has come back.
+var _chords_spent := false
+
 ## The way the stick is flicked now (1 forward, -1 back), 0 when it is back and ready.
 var _flicked := 0
 var _flick_wait := 0.0
+
+
+## This hand points by its stick click, held: the hand that is not the chord hand (its click is
+## the chord stick's), set by the studio (docs/spatial_loop.md part two, "Gestures do not collide").
+## A bare hand points by its pose, either hand (HandPose.pointing).
+var points_by_stick := false
+
+
+## This frame's `pointing`: a tracked bare hand by HandPose.pointing (held on by the index alone
+## once it points), a controller by its stick click while `points_by_stick`; nothing else points.
+func read_pointing() -> void:
+	if _reads_hand():
+		pointing = HandPose.pointing(gestures.joints, gestures.side, pointing)
+	elif controller != null and not bare_hand() and points_by_stick:
+		pointing = stick_clicked()
+	else:
+		pointing = false
 
 
 ## The thumbstick, -1..1 each way; nothing for a bare hand.
@@ -238,9 +263,21 @@ func stick() -> Vector2:
 	return controller.get_vector2(stick_action)
 
 
+## Whether the stick is clicked down now; never for a bare hand.
+func stick_clicked() -> bool:
+	if controller == null or bare_hand():
+		return false
+	return controller.is_button_pressed(stick_click_action)
+
+
 ## One frame of the stick at `along` (its forward reading), `delta` seconds on: the notches it
-## nudged, signed, 0 for none or when nothing took them.
+## nudged, signed, 0 for none or when nothing took them. None while the stick picks chords
+## (`chord_stick`); a push held as it goes off is not a flick until it has come back.
 func flick(along: float, delta: float) -> int:
+	if chord_stick or _chords_spent:
+		_flicked = 0
+		_chords_spent = chord_stick or absf(along) >= FLICK_BACK
+		return 0
 	if _flicked == 0:
 		if absf(along) < FLICK_PAST:
 			return 0
@@ -263,6 +300,9 @@ func flick(along: float, delta: float) -> int:
 
 func _nudge_by_stick(notches: int) -> int:
 	_forget_freed()
+	# A tool that takes the stick (`tool_stick`) has it first, whatever the hand is over.
+	if tool.is_valid() and tool_stick.is_valid() and tool_stick.call(self, notches, fine()):
+		return notches
 	var target: ControlAffordance = held if held != null else hovered
 	if target != null and target.nudge(self, notches, fine()):
 		return notches
@@ -272,6 +312,7 @@ func _nudge_by_stick(notches: int) -> int:
 func _physics_process(delta: float) -> void:
 	_steady_aim(delta)
 	_count_roll()
+	read_pointing()
 	super(delta)
 	flick(stick().y, delta)
 	var now := Time.get_ticks_msec() / 1000.0

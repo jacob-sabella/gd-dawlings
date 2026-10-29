@@ -14,6 +14,16 @@ extends Surface
 ##
 ## What this does NOT do is pretend to be tape: there is no wind, no spooling time, no latency
 ## added anywhere. Reaper's position is the truth and the reels follow it.
+##
+## Its cart has room for one more thing: on a leaf off its far end, away from the seat, stands the
+## DJ platter (Platter, slice 27), the same playhead as these reels, a turn a bar, but one a hand
+## turns. The reels show where the song is; the platter is where it is moved by hand, and both are
+## read from the same DAW state, so they never disagree.
+##
+## The supply reel is also the history (slice 28, idea #11): a crank on its hub (ReelCrank) turned
+## back a notch is a step undone and on a notch a step redone, settled as one DAW.undo_to, with the
+## step it stands at read above the reel (`12 / 15 · 3 BASS: volume`). With the song stopped each
+## settled step plays two bars there. UNDO and REDO and Ctrl-Z are as they were.
 
 ## Drawn size of the deck's keys, against the parts' own 16 by 10 mm (2026-10-13: still tiny at the
 ## seat). The transport three are the bigger set. Pitches between keys leave room for these.
@@ -96,6 +106,9 @@ var _mark_key: PanelButton
 var _section_label: Label3D
 var _loop_label: Label3D
 var _history_keys: Array[PanelButton] = []
+## The supply reel's crank, the history a notch a step, and what it says above the reel.
+var crank: ReelCrank
+var _crank_label: Label3D
 var _tape_runs: Array[MeshInstance3D] = []
 var _song_speed := 0.0
 var _last_position := -1.0
@@ -124,6 +137,7 @@ func _rebuild() -> void:
 	_right_reel = _make_reel(REEL_SPACING * 0.5)
 	_left_pack = _left_reel.get_node_or_null(^"Pack")
 	_right_pack = _right_reel.get_node_or_null(^"Pack")
+	_build_crank()
 
 	_counter = Label3D.new()
 	_counter.font_size = 72
@@ -654,6 +668,29 @@ func _update_packs() -> void:
 				tangent_point(takeup, pack_radius(right), right_guide, 1.0), REEL_RADIUS))
 
 
+## The history crank, on the supply reel's hub, in front of the flange: not a child of the reel,
+## which turns with the song, so it stands where it was turned. Its readout runs along the top of
+## the deck over the reel, above the tempo, in the history keys' amber, and says it in words.
+func _build_crank() -> void:
+	crank = ReelCrank.new()
+	crank.name = "HistoryCrank"
+	crank.position = Vector3(-REEL_SPACING * 0.5, 0.0, CRANK_Z)
+	_adopt(crank)
+	_crank_label = Label3D.new()
+	_crank_label.name = "HistoryReadout"
+	_crank_label.font_size = 34
+	_crank_label.pixel_size = 0.00024
+	_crank_label.position = Vector3(-REEL_SPACING * 0.5, 0.134, 0.002)
+	_crank_label.modulate = Color(0.92, 0.72, 0.38)
+	_crank_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Lettering.range_to_legibility(_crank_label)
+	_adopt(_crank_label)
+
+
+## In front of the reel's flange, behind the transport keys' faces.
+const CRANK_Z := 0.021
+
+
 ## THE LOCATOR, between the reels under the counter: back a marker, drop one, on a marker. And
 ## above the keys, the section the playhead is in -- read off the markers, which is what they are
 ## named for. A performer looks for "where am I in the song", and a bar number is the answer to
@@ -723,47 +760,44 @@ const LOCATOR_PITCH := 0.026
 const LOCATE_SLACK := 0.4
 
 
-## The latest marker strictly before `seconds` less the slack, or -1 when there is none.
+## The latest marker strictly before `seconds` less the slack, or -1 when there is none. A sticky
+## note (Harmony.is_note) is not a place in the song's form, so PREV and NEXT pass it by: they go
+## from section to section, and the 3D ruler's card is where a note is gone to (its LISTEN).
 static func marker_before(markers: Dictionary, seconds: float) -> float:
 	var best := -1.0
 	for at in markers:
-		if float(at) < seconds - LOCATE_SLACK and float(at) > best:
+		if float(at) < seconds - LOCATE_SLACK and float(at) > best and not Harmony.is_note(str(markers[at])):
 			best = float(at)
 	return best
 
 
-## The first marker after `seconds`, or -1.
+## The first marker after `seconds` that is not a note, or -1.
 static func marker_after(markers: Dictionary, seconds: float) -> float:
 	var best := -1.0
 	for at in markers:
-		if float(at) > seconds + 0.001 and (best < 0.0 or float(at) < best):
+		if float(at) > seconds + 0.001 and (best < 0.0 or float(at) < best) and not Harmony.is_note(str(markers[at])):
 			best = float(at)
 	return best
 
 
 ## The marker at or before `seconds`: the section the playhead is in, without the harmony's
-## brackets (Harmony.section_of). "" before the first. A marker that is only brackets changes
-## the harmony, not the section, so it is passed over and the section before it goes on.
+## brackets (Harmony.section_at). "" before the first. A marker that is only brackets changes
+## the harmony, not the section, and a note is neither, so they are passed over and the section
+## before them goes on.
 static func section_at(markers: Dictionary, seconds: float) -> String:
-	var best := -1.0
-	for at in markers:
-		if float(at) <= seconds + 0.001 and float(at) > best and not _only_brackets(str(markers[at])):
-			best = float(at)
-	return Harmony.section_of(str(markers[best])) if best >= 0.0 else ""
+	return Harmony.section_at(markers, seconds)
 
 
 ## What the locator's keys call a marker: its section, or for one that is only brackets the key
-## it sets ("A minor"), which is why PREV and NEXT still stop there.
+## it sets ("A minor"), which is why PREV and NEXT still stop there; a note as `note: its words`.
 static func marker_label(marker_name: String) -> String:
+	if Harmony.is_note(marker_name):
+		return "note: %s" % Harmony.note_text(marker_name)
 	var section := Harmony.section_of(marker_name)
 	if section != "":
 		return section
 	var h := Harmony.parse(marker_name)
 	return h.key_name if h != null else ""
-
-
-static func _only_brackets(marker_name: String) -> bool:
-	return Harmony.section_of(marker_name) == "" and Harmony.parse(marker_name) != null
 
 
 ## What MARK calls the marker it drops: the next free number, the way Reaper numbers markers it
@@ -862,6 +896,8 @@ func _refresh() -> void:
 	for i in _history_keys.size():
 		var depth := DAW.state.undo_depth if i == 0 else DAW.state.redo_depth
 		_history_keys[i].lit = depth != 0
+	if _crank_label != null and crank != null:
+		_crank_label.text = crank.readout_text()
 
 
 ## The knob's sweep, in BPM. Wider than most songs and narrower than Reaper's 1-960, because a

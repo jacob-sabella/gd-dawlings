@@ -26,8 +26,9 @@ extends ControlAffordance
 ##
 ## A socket on no instrument (`JackSocket.new(null, source)`) is the same plug for a source that is
 ## not an item: the chord harp's, on its pillar (`Jack.HARP`), and a player's own keys', on their
-## wrist (`mine_keys`: `keys:P` for whoever this player is now). Its look is its own, facing out
-## along its -Z, and it is there to press while it is drawn and `available` says so.
+## wrist (`mine_keys`: `keys:P` for whoever this player is now), and their chord hand's, on that
+## hand's wrist beside it (`mine_chord`: `chord:P`, part two, slice 33). Its look is its own,
+## facing out along its -Z, and it is there to press while it is drawn and `available` says so.
 ##
 ## Beside a player's own keys' socket on the wrist they wear one more (`into_me`): not a source's
 ## but theirs as a sink, for a headset's hand to do what Shift+P with an empty hand does on a
@@ -64,11 +65,13 @@ var item: InstrumentItem
 var source := &""
 ## A socket for this player's own keys (`keys:P`, P whoever this player is now), on their wrist.
 var mine_keys := false
+## A socket for this player's own chord hand (`chord:P`), on its wrist.
+var mine_chord := false
 ## The socket for what goes into this player, on their wrist: a press unplugs all of it.
 var into_me := false
 ## What goes into this player, as last shown, on an `into_me` socket.
 var ins: Array[StringName] = []
-## What its card calls it, on no instrument: `CHORD HARP`, `MY KEYS`.
+## What its card calls it, on no instrument: `CHORD HARP`, `MY KEYS`, `MY CHORDS`.
 var label := ""
 ## () -> bool: whether it is there to press, on no instrument (a wrist's, while that hand is
 ## tracked). Unset, while it is drawn.
@@ -118,14 +121,16 @@ func _enter_tree() -> void:
 ## What it plugs: the item's id, this player's keys, or the source it was made for.
 func source_id() -> StringName:
 	if item != null and is_instance_valid(item):
-		return item.id
+		return item.jack_source()
 	if mine_keys:
 		return Jack.keys_source(Session.local_peer_id)
+	if mine_chord:
+		return Jack.chord_source(Session.local_peer_id)
 	return source
 
 
 func _ready() -> void:
-	if item == null and source == &"" and not mine_keys and not into_me:
+	if item == null and source == &"" and not mine_keys and not mine_chord and not into_me:
 		return
 	# Its own metal, not Materials' shared one: a held instrument's rim goes on every material in
 	# its body (Item.set_rim), and a shared one would ring every plug on the patchbay too.
@@ -216,9 +221,9 @@ func ins_text(sources: Array[StringName]) -> String:
 	var by_id := {}
 	if is_inside_tree():
 		for node in get_tree().get_nodes_in_group(Item.ITEMS):
-			var thing := node as Item
-			if thing != null and sources.has(thing.id):
-				by_id[thing.id] = thing
+			var thing := node as InstrumentItem
+			if thing != null and sources.has(thing.jack_source()):
+				by_id[thing.jack_source()] = thing
 	var names: Array[String] = []
 	for source in sources:
 		names.append(Jacks.source_name(source, by_id.get(source)).to_upper())
@@ -228,6 +233,18 @@ func ins_text(sources: Array[StringName]) -> String:
 ## What the tag over a jack plugged into `to` says: `-> 3 BASS`.
 static func tag_text(to: StringName) -> String:
 	return "-> %s" % Jacks.sink_name(to)
+
+
+## Where its item's hits go while it is unplugged (InstrumentItem.default_sink), or empty for the
+## armed track, as any unplugged jack's: its card says so (`_default_readout`); its tag, a plug's,
+## stays down.
+func default_sink() -> StringName:
+	return item.default_sink() if item != null and is_instance_valid(item) else &""
+
+
+## What the tag over an unplugged jack with a default says: `-> 1 DRUMS (unplugged)`.
+static func default_text(to: StringName) -> String:
+	return "-> %s (unplugged)" % Jacks.sink_name(to)
 
 
 func _physics_process(delta: float) -> void:
@@ -338,6 +355,8 @@ func _default_title() -> String:
 func _default_readout() -> String:
 	if into_me:
 		return ins_text(ins) if not ins.is_empty() else "nothing goes into you"
+	if sink == &"" and default_sink() != &"":
+		return default_text(default_sink())
 	return tag_text(sink) if sink != &"" else "unplugged"
 
 

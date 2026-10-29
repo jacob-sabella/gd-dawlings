@@ -61,8 +61,31 @@ func trick_name(k: int) -> String:
 	return ["shuffle", "fan them out", "square them up"][k]
 
 
+## How long each trick takes, and what it rings when (FidgetItem.trick_sounds): the riffle and
+## the deck knocked square, the fan's sweep, and the square-up's sweep and knock.
+const SECONDS := [1.1, 0.7, 0.5]
+const SOUNDS := [
+	[[0.32, &"card_riffle", -4.0, 1.0], [0.92, &"chip_clack", -22.0, 0.6]],
+	[[0.05, &"card_sweep", -6.0, 1.0]],
+	[[0.0, &"card_sweep", -8.0, 1.25], [0.9, &"chip_clack", -22.0, 0.6]],
+]
+
+
 func trick_seconds(k: int) -> float:
-	return [1.1, 0.7, 0.5][k]
+	return SECONDS[k]
+
+
+func trick_sounds(k: int) -> Array:
+	return SOUNDS[k]
+
+
+func trick_kind() -> StringName:
+	return &"cards_trick"
+
+
+## Trick `take` heard whole (Foley.take_of's `cards_trick`): what the sampler keeps of one.
+static func trick_take(take: int) -> AudioStreamWAV:
+	return FidgetItem.trick_stream("cards_trick", SOUNDS, SECONDS, take)
 
 
 ## A card's name: "Q♥".
@@ -181,10 +204,6 @@ func pose(k: int, p: float) -> void:
 			_fan(p)
 		2:
 			_fan(1.0 - p)
-			if cue(p, 0.0):
-				Foley.play(self, Foley.card_sweep(tricks_done), -8.0, 1.25)
-			if cue(p, 0.9):
-				Foley.play(self, Foley.chip_clack(tricks_done), -22.0, 0.6)
 
 
 func end(k: int) -> void:
@@ -197,10 +216,6 @@ func end(k: int) -> void:
 ## up at their inside edges, the cards dropping into the middle one at a time, a side each in
 ## turn, as the blocks slide back together. Then square.
 func _shuffle(p: float) -> void:
-	if cue(p, 0.32):
-		Foley.play(self, Foley.card_riffle(tricks_done), -4.0)
-	if cue(p, 0.92):
-		Foley.play(self, Foley.chip_clack(tricks_done), -22.0, 0.6)
 	var split := span(p, 0.0, 0.3)
 	var across := span(split, 0.0, 0.6)
 	var down := span(split, 0.4, 1.0)
@@ -233,8 +248,6 @@ func _shuffle(p: float) -> void:
 
 ## The top FAN cards turned face up and spread about the deck's near end, `p` of the way out.
 func _fan(p: float) -> void:
-	if playing == 1 and cue(p, 0.05):
-		Foley.play(self, Foley.card_sweep(tricks_done), -6.0)
 	var pivot := Vector3(0, 0, LENGTH * 0.5 - 0.012)
 	var top := 2.0 * BLOCK_H + LOOSE * THICK
 	for f in FAN:

@@ -44,7 +44,7 @@ const START := [
 	["Change things", "Click, drag or scroll any control. Hover over it first to see what it does."],
 	["Automation", "While the song plays, a bead rises over the control you point at: drag it up and down to write its automation, one undo a loop. In a headset, pinch it."],
 	["The 2D view", "F2 opens the whole mix as a flat DAW: the precise way into everything the room does, and back."],
-	["Undo", "Ctrl-Z undoes and Ctrl-Shift-Z redoes, from anywhere in the room: a whole drag at a time, however much it moved."],
+	["Undo", "Ctrl-Z undoes and Ctrl-Shift-Z redoes, from anywhere in the room: a whole drag at a time, however much it moved. Or turn the crank on the tape deck's left reel, a notch a step: stopped, it plays you two bars as it was."],
 	["Record", "Press a channel's red key to arm it, then REC on the tape deck. B splits the selected items at the playhead."],
 	["Your keys and mic", "M opens the session panel: \"Play with the computer keys\", \"Open MIDI\", your microphone."],
 	["Instruments", "I walks to each instrument in turn, Shift-I back; the PLAY pages and the board left of the desk name them all. Esc, or BACK on a plaque, comes back to the desk."],
@@ -57,9 +57,13 @@ const TOGETHER := [
 	["Hand it over", "Carrying a cassette (a clip dragged off the timeline's edge), click a bandmate to give it to them. In a headset, hold it by their glove."],
 	["Paste it", "Carrying a cassette, click a timeline lane to paste its clip there, on the beat (Shift: anywhere), or a channel strip or stage voice for that track at the playhead. It stays in your hand to paste again; Ctrl-Z takes it back."],
 	["Listen to it", "Carrying a cassette, hold L to hear its clip in your ears alone, the room 10 dB down. In a headset, hold it to your ear."],
-	["Sample it", "At the SAMPLER by the cassette rack, click REC, then squeeze, click or shake what you carry: that one sound is a WAV and a cassette on the rack, whoever's REC it was."],
-	["A cable to a bandmate", "P steps the jack of what you carry into a track or a bandmate's keys; with an empty hand, your own keys. Shift-P unplugs."],
+	["Sample it", "At the SAMPLER by the cassette rack, click REC, then squeeze, click or shake what you carry, do a yo-yo or card trick, or bounce the ball: that one sound is a WAV and a cassette on the rack, whoever's REC it was."],
+	["Scratch it", "Click a cassette into the slot of the PLATTER on the tape deck's cart, then drag round the record: its clip scratched, in your ears alone. REC first and the scratch is a sample."],
+	["A cable to a bandmate", "P steps the jack of what you carry into a track or a bandmate's keys; with an empty hand, your own keys; with chords on (C), your chord hand, to drive their harp. Shift-P unplugs."],
 	["Headphones", "H puts them on. Best when you record, so the song does not end up in your microphone."],
+	["Point", "Hold Z: bandmates see your ray and your name on what you point at. In a headset, point your index level, or hold in the other hand's stick."],
+	["Sticky notes", "O sticks a note at the ruler's time under the cursor, or the playhead. In a headset, drag one off the note pad at the desk's left end."],
+	["Listen from there", "Z and Enter over the ruler, or a note's LISTEN: the song plays from there for everyone. In a headset, pinch thumb and middle as you point."],
 ]
 const ROOM := [
 	["Walking", "WASD or the arrows walk, Shift runs, Space jumps, right-drag looks. N flies instead, and back."],
@@ -71,6 +75,7 @@ const ROOM := [
 	["Lettering", "+ and - make the room's lettering larger or smaller, 0 puts it back."],
 	["Signal and comfort", "Beads ride every cable, closer, faster and brighter the louder it is: follow them to where the sound stops. M, then COMFORT: Motion, Room reacts, Lift on clip."],
 	["Fingertips", "T makes J K L ; play the song's chord. T, Esc or a click gives the keys back."],
+	["Chords", "C, then 1 to 7: the key's chords for everything you play, Shift the seventh, 0 the song's. C or Esc ends it."],
 	["Bend", "Hold Alt and move the mouse up or down to bend what you are playing; let go and it springs back. A wiggle wobbles it. \"Tilt bends\" in the session panel."],
 ]
 
@@ -272,7 +277,8 @@ static func _held_name() -> String:
 	return "%s · %s" % [PLAY, Stations.AREA_TITLES[Stations.HELD_AREA]]
 
 
-## A section's lines as pages: the one, or as many numbered pages as it takes to fit.
+## A section's lines as pages: the one, or as many numbered pages as it takes to fit, shared out
+## evenly between them where they still fit that way, so the last is not a page of one line.
 func _run_on(section: String, sub: String, lines: Array) -> Array:
 	var chunks: Array = []
 	var chunk: Array = []
@@ -283,6 +289,13 @@ func _run_on(section: String, sub: String, lines: Array) -> Array:
 			chunks.append(chunk)
 			chunk = [line]
 	chunks.append(chunk)
+	if chunks.size() > 1:
+		var even: Array = []
+		var each := ceili(float(lines.size()) / chunks.size())
+		for at in range(0, lines.size(), each):
+			even.append(lines.slice(at, at + each))
+		if even.size() == chunks.size() and even.all(func(c: Array) -> bool: return _fits(section, sub, c)):
+			chunks = even
 	var out: Array = []
 	for n in chunks.size():
 		var name := section if chunks.size() == 1 else "%s %d/%d" % [section, n + 1, chunks.size()]

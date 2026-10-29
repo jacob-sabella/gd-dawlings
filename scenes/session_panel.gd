@@ -120,6 +120,12 @@ var _import_box: VBoxContainer
 var _import_into: OptionButton
 var _import_caption: Label
 var _imports: FileDialog
+## LYRICS (docs/spatial_loop.md part two, slice 56): the song's lyrics as LRC, set whole, and what
+## is said about them.
+var _lyrics_edit: TextEdit
+var _lyrics_said: Label
+## Whether the box holds typing not yet set: the song's lyrics arriving then do not overwrite it.
+var _lyrics_typed := false
 
 ## COMFORT: where it is kept (the body's file, beside the height; the suite points it elsewhere),
 ## and its three controls, which set Ergonomics.current at once.
@@ -480,6 +486,7 @@ func _build_panel() -> void:
 
 	_column = column
 	_build_project(column)
+	_build_lyrics(column)
 	_build_comfort(column)
 
 	var foot := _label("M  close   ·   the mix is the host's; your view is your own", 11, DIM)
@@ -1285,6 +1292,94 @@ func _build_project(column: VBoxContainer) -> void:
 	_imports.use_native_dialog = true
 	_imports.files_selected.connect(func(paths: PackedStringArray): bring_in_files(paths))
 	add_child(_imports)
+
+
+# --- lyrics (docs/spatial_loop.md part two, slice 56) -----------------------------------------
+
+## LYRICS: the song's lyrics whole, as LRC, in a box; SET LYRICS writes them (DAW.set_lyrics, one
+## undo step), UNTIME takes every line's time off so the lyric board's TAP can time them again. The
+## box follows the song's lyrics while it holds nothing typed.
+func _build_lyrics(column: VBoxContainer) -> void:
+	column.add_child(_caption("LYRICS  ·  [01:23.40] BEFORE A LINE TIMES IT; THE BOOTH'S BOARD TAPS THE REST"))
+	_lyrics_edit = TextEdit.new()
+	_lyrics_edit.name = "Lyrics"
+	_lyrics_edit.custom_minimum_size = Vector2(0, 150)
+	_lyrics_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_lyrics_edit.placeholder_text = "The song's words, a line each. A line with no time in front of it is timed at the vocal booth's lyric board: play the song and TAP as it starts."
+	_lyrics_edit.add_theme_font_size_override("font_size", 13)
+	_lyrics_edit.add_theme_color_override("font_color", INK)
+	_lyrics_edit.add_theme_color_override("font_placeholder_color", Color(DIM, 0.6))
+	_lyrics_edit.add_theme_stylebox_override("normal", _box(WELL, 8, 10, EDGE))
+	_lyrics_edit.add_theme_stylebox_override("focus", _box(WELL, 8, 10, Color(0.45, 0.65, 0.95, 0.7)))
+	_lyrics_edit.text_changed.connect(func() -> void: _lyrics_typed = _lyrics_edit.text != DAW.state.lyrics)
+	column.add_child(_lyrics_edit)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	column.add_child(row)
+	var set_button := _button("Set lyrics", true)
+	set_button.name = "SetLyrics"
+	set_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	set_button.tooltip_text = "Writes the box into the song: one undo step"
+	set_button.pressed.connect(func() -> void: set_lyrics(_lyrics_edit.text))
+	row.add_child(set_button)
+	var untime := _button("Untime", false)
+	untime.name = "UntimeLyrics"
+	untime.tooltip_text = "Takes every line's time off, so TAP at the lyric board times them again"
+	untime.pressed.connect(untime_lyrics)
+	row.add_child(untime)
+	_lyrics_said = _label("", 12, DIM)
+	_lyrics_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_lyrics_said)
+	DAW.lyrics_changed.connect(_refresh_lyrics)
+	DAW.project_replaced.connect(func() -> void:
+		_lyrics_typed = false
+		_refresh_lyrics())
+	_refresh_lyrics()
+
+
+## The box made the song's lyrics, unless it holds typing not yet set; and what is said under it.
+func _refresh_lyrics() -> void:
+	if _lyrics_edit == null or DAW.state == null:
+		return
+	if not _lyrics_typed and _lyrics_edit.text != DAW.state.lyrics:
+		_lyrics_edit.text = DAW.state.lyrics
+	var lyr := Lyrics.parse(DAW.state.lyrics)
+	var lines := lyr.sequence().size()
+	var why := DAW.lyrics_refusal()
+	if not why.is_empty():
+		_lyrics_said.text = why
+	elif lines == 0:
+		_lyrics_said.text = "No lyrics yet. They show on the lyric board in the vocal booth."
+	else:
+		var left := lyr.untimed_count()
+		_lyrics_said.text = "%d line%s%s. They show on the lyric board in the vocal booth%s." % [lines, "" if lines == 1 else "s",
+				", all timed" if left == 0 else ", %d to TAP" % left,
+				"" if left == 0 else "; click it and press Enter, the song playing, as each line starts"]
+
+
+## `text` made the song's lyrics; what is said if it cannot be.
+func set_lyrics(text: String) -> void:
+	var why := DAW.set_lyrics(text)
+	if not why.is_empty():
+		toast(why)
+		return
+	_lyrics_typed = false
+	_refresh_lyrics()
+
+
+## Every line's time taken off the box's lyrics, and those set.
+func untime_lyrics() -> void:
+	var lyr := Lyrics.parse(_lyrics_edit.text)
+	lyr.untime()
+	_lyrics_edit.text = lyr.write()
+	set_lyrics(_lyrics_edit.text)
+
+
+## The panel open at LYRICS, the box focused and in view: EDIT on the lyric board at a desk.
+func edit_lyrics() -> void:
+	open()
+	_lyrics_edit.grab_focus()
+	_scroll.ensure_control_visible.call_deferred(_lyrics_edit)
 
 
 func _refresh_project() -> void:

@@ -426,12 +426,83 @@ in, for velocity) are what it reads. On a desktop there is one reader of the key
 takes it back). While they are on the interactor draws a right `Glove` playing them, its pinched
 fingers curled to the thumb and each lettered with its note. docs/spatial_loop.md slice 8.
 
+Chord shapes (`ChordHand`, `core/music/chord_hand.gd`, one per player, made by
+`Studio._lend_chord_hand`) are the player's own chord over the song's: the static
+`ChordHand.at(seconds)` is Harmony.at with the held degree's triad (or seventh) in the key there
+put in its place, and the harp, the fingertips, a bell carried here (`InstrumentItem.harmony_at`)
+and the wheel's follow-ups read it instead of Harmony.at. It is never shared: the shape is this
+machine's, and what it plays goes out as notes with their pitches. Three ways in. The chord hand
+(the left, or the right for a left-handed player) held up, palm toward the room and fingers up,
+counts the fingers held out (`HandPose.extended`, the thumb as the fifth), palm up one or two is vi
+or vii°, read pure over the joints by `shape_of` and counted once held 0.12 s; a fist, a flat hand,
+a point (a level index), a palm to the eyes or a hand lowered below the chest is none. A
+controller's stick click is a mode (`XRInteractor.chord_stick`) in which the stick's direction
+latches a degree and nudges nothing. A desktop's C is a layer over whichever `KeyCatcher` has the
+keyboard (`KeyCatcher.chord_keys`, a static Callable: 1 to 7, Shift, 0, Esc), not a third catcher,
+with the mouse still pressing (`Interactor.presses_while_playing`) so a click strums the harp; a
+left `Glove` in Pose.SHAPE holds the chord up on the screen and the HUD says `CHORDS · IV F`.
+docs/spatial_loop.md part two, slice 32. The one way a shape leaves the machine is the chord hand's
+own jack, `chord:P` (slice 33): into a bandmate, `Jacks.send_chord` sends `ChordHand.own_chord` as
+a `Jack.Kind.CHORD` on each change of it, and on Q `ChordHand.take` makes it Q's chord while Q
+holds none of their own (`their_chord`, the latest taken; the harp's crown `IV from ADA`, the HUD
+`CHORDS · IV F FROM ADA`), let go on quality 0, an unplug or P leaving. Sent once, it is not
+lost to a replug: Q holds a CHORD that beats the room's word on the plug (`_held_chords`) until
+the next patch says yes or no, and P sends it again once the host's room answers the plug
+(`Jacks.answered`).
+
 ## Furniture is not a surface
 
 A surface exists because the project has tracks or plugins, and its size follows them. A stand, a
 cabinet, a trolley means nothing and is not drawn in ROOM mode at all, because the
 participant already has real furniture. Mixing the two means a rack that cannot stand on the
 floor without inventing a plugin to justify its legs.
+
+## Room layout: neighbourhoods round a middle
+
+The room grew one station at a time, each put in whatever gap was left, until twenty stations,
+thirty-six items and forty footprints stood in one 8 x 6 m control room and a 14 x 4.5 m strip of
+live room behind it: thirteen pairs of pieces closer than 0.6 m, the harp, the bells and the music
+box 12 cm apart, the sampler 3 cm off the booth's wall, and with a 0.9 m walkway the harp, the
+music box, the modular and the lyric board could not be reached at all (2026-10-28: "EVERYTHING is
+way too cramped"). The layout is now a rule rather than a residue, in three parts.
+
+**Bigger, through the shared constants.** The control room is `Studio.ROOM_WIDTH` 11.2 x
+`ROOM_DEPTH` 8 m under 3.6 m (it still grows with the desk, `SessionLayout.fit`); the live room
+behind it runs from `Studio.ROOM_BACK` (4.0) to `Venue.LIVE_ROOM_BACK` (12.4) and
+`Venue.LIVE_ROOM_HALF` (8.8) either side, under 5 m: 148 m^2 where it had 64. Every venue draws
+its walls, floor and scenery from these, so all fourteen grew together; scenery that was placed by
+number scales by the room over `Venue.DRAWN_HALF` / `DRAWN_BACK`, the old room's size.
+
+**Named neighbourhoods.** `Neighbourhoods` (core/room/neighbourhoods.gd) says which stations
+belong together, where their middle is, and hangs a banner over it with the name in words (a
+billboard `Label3D`, so it reads from the seat, the far wall and the next cluster alike; text, not
+colour, says which is which). Where each station stands is still the venue's, in its
+`default_*_spot`, derived from the zone boxes, so a venue that moves a zone carries its cluster:
+
+| Neighbourhood | Where | What |
+| --- | --- | --- |
+| MIXING | the control room, a ring round the seat | desk, timeline, rack, deck and platter, patch stand, patch wall, EQ wall, stage table, station board |
+| RHYTHM | straight ahead turned round from the desk | drum riser with the hand drums and the looper; the lattice and its marble run; the venue's instrument on the back wall behind the riser |
+| HARMONY & STRINGS | front right | the bricks table (fifths wheel, chord ledge, section blocks); harp, music box and string spool in a row facing it; handbells across its far end |
+| SYNTH & SOUND DESIGN | back right | the keyboard stand and modular wall; theremin, grain cloud and sampler round a middle in front of it |
+| VOCALS | back left | the booth (3.4 x 3.1 m, a 1.2 m door), the lyric board, room for a talk box |
+| TAPE & TOYS | front left | prop shelf and cassette rack on the wall, hoop and Tour case across the middle from them; the items' homes |
+
+The most-used live stations, the riser and the lattice, are the ones straight ahead of the seat
+turned round; the venue's own instrument and weather belong to no neighbourhood.
+
+**Clearances, measured.** Between any two pieces 0.6 m (but for one activity's own furniture in
+its own zone, and a riser stood on); between neighbourhoods a 1.2 m walkway; nothing within 0.8 m
+of the console but what is played from the seat (the deck's cart, the timeline's stand); and every
+station's seat reached from the desk down a 0.9 m walkway, in every venue and arrangement.
+`tools/layout_dump.tscn` and `tools/layout_map.py` draw it and count it;
+`_test_every_venue_keeps_its_pieces_apart_and_every_station_in_reach` holds it, with the same
+reckoning, and one test per neighbourhood holds that its stations stand together and are signed.
+
+A saved layout from a smaller room would pin the gear in the old places: every piece is saved
+when it settles, moved or not. `Studio.was_an_old_default` knows the old rooms' defaults (the 8 x 6
+room's spots, and its rule's lines for a widened desk), and a saved spot that is one of them is
+nobody's choice, so the piece takes the new room's; a spot a player pushed it to stays.
 
 ## Replication: the address space is the wire format
 
@@ -534,6 +605,35 @@ look changes what you wear, never who you read as. The wardrobe's buttons are `p
 never claimed as holds, never published as what you point at. `--ghost hat=4,eyes=1` dresses a
 run without saving, and `--fresh-layout` captures never save a look either.
 `tools/look_preview.tscn` lines up every hat.
+
+### Pointing at a time, a bandmate or the room
+
+A control key cannot name a moment in the song, a bandmate or a spot on the floor, so
+`pointing_at` takes three more forms (docs/spatial_loop.md part two, slice 35): `ruler:<seconds>`,
+`ghost:<peer>` and `room`, the last with `pointing_local` in session space. It is still the one
+unreliable 20 Hz stream, with no new message. Every receiver redraws a song time where its own
+ruler puts it (`Presence.ruler_point`, the studio's `TimelineSurface.ruler_point`), so a time
+lands on the right bar on everyone's layout, as a control key does. The beam then ends at a dot,
+with the pointer's name and the time (`Lin  0:46`) lettered just back along it
+(`Avatar.point_at(null, point, false, words)`). `Presence.pointing_of` decides which form to use, in
+this order: a ghost nearer than any control, a song time (`Presence.time_at`, filled in by the
+studio's `PointAndMark`: the 3D ruler, the lanes, a note's card and the miniature's bed), a control, and
+otherwise the room. It only does this while the hand is pointing (`Interactor.pointing`: Z held
+at a desk; `HandPose.pointing` for a bare hand; the non-chord controller's stick click held,
+`XRInteractor.points_by_stick`). When the hand is not pointing, the old hover and hold publishing
+is unchanged.
+
+`PointAndMark` (scenes/point_and_mark.gd) is the studio's glue for slice 35, and is not a surface.
+O drops a sticky note, a `NOTE ` marker (see *The song's key is written in its markers*), at the
+hovered time or at the playhead, then asks for its words: NamePrompt at a desk, as the deck's
+rename does, or a TypingPad over the note pad in a headset. Enter with Z held, or a pinch of
+thumb and middle by the pointing hand, plays from the pointed time. `NotePad`
+(hardware/console/note_pad.gd) is a desk prop on the wing's outer strip (`Studio.WING_PAD`); in AR,
+where there is no wing, it stands at the console's left end (`Studio._place_note_pad`). It
+does not know about the song: drag a card off it, let go over something, and it emits `stuck` with
+what was under the ray. Listening is `Session.listen_from`, `DAW.seek` then `DAW.transport_play`,
+which are intents on a guest. The room is told `Ada: listen from 1:23 (CHORUS)` by the host (a
+guest asks with `_listen_asked`), so the line comes from one place.
 
 ### One hand per control, decided by the host
 
@@ -960,7 +1060,12 @@ Before the first bracket it is `Harmony.NONE` (C major, `named` false). Everythi
 marker as a section shows `Harmony.section_of(name)`, the name without its brackets: the chalk
 board, the tape deck's section and locator text, the 3D ruler's flags (with the harmony as a
 second line) and the region page's ADD name. A marker that is only brackets names no section.
-Only the 2D ruler shows the whole name, because that is where it is typed. The stand-in's Intro
+Only the 2D ruler shows the whole name, because that is where it is typed. A marker named `NOTE ...`
+(`Harmony.NOTE_PREFIX`) is a sticky note, not a section. `Harmony.parse` returns null for it, and
+`section_of` returns "", so every section reader skips it, and so do PREV and NEXT on the deck.
+Brackets in a note are words, not harmony. The 3D ruler draws a note as a card over its time,
+and the whole card is a LISTEN key (`TimelineSurface.listen_asked`). A note is kept 1.5 ms off any
+marker at the same time (`Harmony.note_spot`), so it never renames one. The stand-in's Intro
 carries `DemoSong.HARMONY`, so the demo song is in its own key. docs/spatial_loop.md has the
 decisions.
 
@@ -1426,6 +1531,7 @@ arrives on one, so a patchbay (qpwgraph, Helvum, pavucontrol) can send each anyw
 |---|---|---|
 | `dawlings · mix` | the built-in engine's master; on a guest, the host's mix it hears | `MixFeed`, `GodotBackend` |
 | `dawlings · monitor` | a guest's own keys, played the instant they are pressed | `NativeKeys` (`MonitorSynth` where not) |
+| `dawlings · hits` | this player's own strikes and shakes, a few milliseconds after the hand | `NativeKeys` started with no MIDI (`Monitor` bus where not) |
 | `dawlings · gear` | the room: buttons, detents, faders, plugs, reel motors | `Foley.emitter` |
 | `dawlings · mic` (in) | what a guest records | `GuestAudio`, via `MixSource.Piped` |
 | `dawlings · mix tap` (in) | what a host passes on to its guests | `MixTap`, via `MixSource.Piped` |
@@ -1490,6 +1596,35 @@ it. The panel shows it beside "Hear my keys".
 
 The cost: the graph runs at the smallest cycle any node asks for, so while a guest session is
 open everything on that card runs at 128 frames -- more wakeups for every program on it.
+
+### Strikes on the fast path
+
+Everything struck by this player's own hand (a shaker, a bell, a drum's head: every
+`InstrumentItem`) answers a hand as the keys do, so it takes the same road (docs/spatial_loop.md
+part two, slice 39). `native/keys.c` also holds one-shot sample voices: `load SLOT PATH` reads a
+48 kHz 16-bit mono WAV into one of 256 slots (`SLOTS`, mirrored as `Foley.HIT_SLOTS`; 128 until slice 42's seven sounds took Foley's struck sounds past it; slice 43's eight bring them to 44 kinds, 176 slots), on the helper's main loop, and answers `loaded SLOT
+FRAMES` or `refused SLOT WHY`; `hit SLOT GAIN PAN [SPEED]` plays it once on one of 16 voices (the
+oldest stolen), in the realtime callback, added after the tine's saturation so it is its WAV at
+that gain exactly. A slot loaded again stops its voices there and hands the old samples back to the
+main loop to free. `--parse` says what each line was taken as, and `--render` plays hits as it
+plays notes, for the suite.
+
+The studio starts a second helper of its own, `dawlings · hits` with `--no-midi`
+(`Studio._start_hit_voices`), wherever the keys' helper could run. At launch `Foley.write_hits`
+writes every one of `Foley.SOUNDS`' `TAKES` takes, read across from Foley's 44.1 kHz to 48 kHz
+(`hit_wav`, `resampled`), to user://hits/ on a worker thread (`NativeKeys.load_hits`), and `poll`
+loads each into its slot (`Foley.hit_slot`: its place in SOUNDS times TAKES, plus the take).
+`InstrumentItem.play` asks `InstrumentItem.fast_path` (the studio's `_hit_on_fast_path`) first,
+with the hit's Foley kind (its zone's, on a fixed one), take, level (`monitor_gain`: `level_db`
+through the Monitor bus's own fader and mute), pitch and a pan of HAND_PAN (0.3) to the side of
+the hand that played it (`XRInteractor.hand_side`, `Strike.side_of`; the mouse is the middle). It
+is played there when the helper holds that slot, and on the Monitor bus through Godot otherwise:
+not started, its sounds not loaded yet, a kind with no slot (the duck), or the helper gone, which
+`_follow_hit_voices` notices and drops mid-session. A bandmate's hit is never sent there: it is
+placed in the room where they hold it or where it stands, and placing is Godot's. Each
+instrument's hover card and, in a headset, its tag say which way its hits are heard and how late
+(`InstrumentItem.path_tag`: "FAST PATH · 5 ms", "MONITOR · 41 ms"), from the helper's own
+`latency` once it has measured a hit, two cycles before that.
 
 ## Items: things you pick up
 
@@ -1760,6 +1895,584 @@ stamp, never its sound or its sent `at`, half way to the nearest sixteenth when 
 session panel, in a box of its own after the keys, shown whatever the DAW), which
 `Session.item_hit` carries with the hit's Foley take (`snap`, `take`).
 
+An instrument that stands still (docs/spatial_loop.md part two, slice 38) is still an
+`InstrumentItem`, with `Item.fixed` set: a drum head, a chime, a pad. It is never carried. The
+grab contract's `grab_begin` on it is let go of at once and is a strike where it landed
+(`Item.struck_by`, `zone_at`), at 96 or with the fine modifier (Shift) 64. `Interactor.pick_up`,
+`Item.follow` and ItemRoom's `lay`, `throw`, `fly`, `pocket`, `put_down` and `apply` all leave it at
+its station. A headset strikes it through `Strike` (`core/music/strike.gd`), a node the studio
+stands. Every physics frame Strike reads this player's own striking points (`Strike.points`): each
+`HandGestures` hand's tips and palm and its poke's tip while the hand is `confident`, and each
+`XRInteractor` controller's tip and grip point while its pose is HIGH confidence. A strike is a
+point crossing one of the instrument's `faces` inward faster than 0.4 m/s
+(`InstrumentItem.velocity_for` of the speed along the normal). A point must be seen on both frames
+and must not jump more than 0.25 m, and each hand strikes each instrument once per 70 ms. Where it
+crosses is a `zone`, which `played`, `ItemRoom.played`, `Jacks.hit`, `HitRecorder.hit` (its note,
+`zone_note`), `Session.send_item_hit`, `item_hit` and `heard` all carry. The host passes on only a
+short word (`Session.clean_zone`). Nobody holds a fixed instrument, so `Presence._on_item_hit` plays
+a bandmate's strike on it from where it stands, whoever sent it, and the studio sends the strike as a
+hit rather than a use. `TestDrumItem` is the suite's and the probe's fixed kind and is never in
+`ItemRoom.KINDS`.
+
+The first fixed kinds a player meets are the circle of hand drums (`HandDrum`,
+`core/items/hand_drum_item.gd`, slice 40): `djembe`, `conga_hi`, `conga_lo` and `cajon`, last in
+`ItemRoom.KINDS`. They stand round the drum riser's middle (`Venue.drum_ring`, `drum_circle_spot(n)`,
+`DRUM_RING` 0.72 m out on the diagonals, the ring's front toward the mix position), on what a person
+stands on there (`Venue.drum_floor`: the riser's top where it is a step in `zone_solids`, the floor
+where it is only drawn, as in the chalk zone), each on a stand `HandDrum.STAND` (a riser's height)
+tall, so a head is as high above the feet of a player on the riser as it would be on the floor, as the studio's
+`_item_homes`, and the ring's middle is the station `drums` (zone `drums`), where the studio stands
+the plaque on a post (`Studio.drum_circle`). A fixed kind in KINDS never takes a shelf spot:
+`ItemRoom._rehome` stands it at its home or, where the venue has none (the Rig Roulette room, AR),
+puts it away (`ItemRoom.stand(id, null)`: hidden, PROCESS_MODE_DISABLED so out of the physics, and so
+not struck, since Strike reads only what is seen). `ZoneKit.solids` adds each drum's footprint on the
+riser, so the walker goes round them and a throw bounces off them. A round head's zone is by radius
+(bass inside 0.35, slap past 0.8, tone between); the cajón's head is its front face (a rectangle
+face), its top 10 cm the slap and the rest the bass. Each zone is its own Foley sound
+(`Foley.hand_drum(kind, zone, take)`, named `<kind>_<zone>` in `Foley.SOUNDS`, so each has fast-path
+slots: 29 kinds at four takes, 116 of what was then the helper's 128) and its own General MIDI drum on channel 9
+(`HandDrum.NOTES`), which ItemVoices plays back as drums.
+
+The drum pads (slice 41) are one more fixed kind, the room's shared `kit` (`KitItem`,
+`core/items/kit_item.gd`), last in `ItemRoom.KINDS`, whose faces are six pads on the console's front
+rail (`ConsoleSurface.pad_rail`, under the strips' middle; the studio stands the kit there every
+frame it has moved, `Studio._follow_kit`) and this machine's own pads on real surfaces
+(`SurfacePads`, `core/music/surface_pads.gd`, `KitItem.surface`). A face's zone is its drum (`kick`,
+`snare`, `hat`, `clap`, `tom`, `rim`: GM 36, 38, 42, 39, 47, 37 on channel 9, rung as Foley's kick,
+snare, hihat, clap, pad and rim), chosen by the nearest face's middle. SurfacePads keeps up to eight
+pads in the session frame (`frame`: RoomAnchor times `XRRig.away_from_home`, so a pad stays on its
+real surface when the play space travels) and saves them to `user://pads.cfg`, never to the room. A
+pad is marked while MARK on the PADS card (`SurfacePads.build_card`, hung off the rail under the
+kit) is on: a confident index tip, or a controller's tip with its trigger held (`mark_points`),
+still within 12 mm for 0.6 s (`dwell`); its face is level for a tip that came down from above, else
+across the way it came in (`plane_of`), and lifted 6 mm out of the surface so a tap the real
+surface stops still crosses it. A dwell on a pad takes it away, and while marking a strike on one
+steps its drum. Each marked pad is a `SurfacePads.Pad` affordance for a ray (a click or trigger
+strikes it, a nudge steps its drum). An unplugged instrument may say where its hits go by default
+(`InstrumentItem.default_sink`, `Jacks.goes_to`): the kit's is the drum track (`KitItem.drum_track`:
+a track named DRUMS, else the first whose demo part is a drum's), never a bandmate. Since a
+bandmate's pad may be on their own knee, `Presence._on_item_hit` rings their hit on the kit from a
+glove of their ghost (`KitItem.heard_at`, `InstrumentItem.ring_on`). AR's ItemRoom makes only the
+kit (`ItemRoom.only`, `AR_KINDS`), so the hits' wiring (HitRecorder, Strike, Jacks) is built there
+too. At a desk 4 to 9 strike the rail's six (`Studio.strike_desk_pad`), Shift softly.
+
+Every venue has something to play (slices 42 and 43). `VenueInstrument`
+(`core/music/venue_instrument.gd`) is a set of tuned bars, and it adds a third kind of fixed
+instrument: a pitched one, struck where it stands. Every venue in `Venue.IDS` has one; the Rig
+Roulette room has none and no station row for one.
+
+- **The bars.** The room makes eight fixed bars (`VenueInstrument.Bar`, kinds `venue1`..`venue8`
+  in `ItemRoom.KINDS`, after the hand drums). They are dressed differently in every venue.
+- **What the venue says.** A venue says what it has in `Venue.instrument()`: a `kind`, a `count`,
+  a `spot` and a `low` note. `VenueInstrument.filled` fills in the rest from the kind
+  (`VenueInstrument.KINDS`): title, shape (HANG, STAND or LIE), sizes, look, sound and help lines.
+  `Venue.back_wall_instrument` and `side_wall_instrument` place a set against a wall, and
+  `instrument_solids` adds its footprint where the room is solid.
+- **Standing a set.** The studio stands the set's mount, a VenueInstrument node in the venue at
+  its spot, which holds the mount meshes, the plaque and the set's one JackSocket. It then dresses
+  the first `count` bars as the set (`VenueInstrument.dress`) before their homes are stood
+  (`VenueInstrument.homes`, merged into `_item_homes`). A bar with no home is put away
+  (`ItemRoom.stand`).
+- **Pitch.** A bar's note is a scale tone (`VenueInstrument.scale_tone`): the n-th pitch class of
+  `Harmony.scale` (root first), up from the key's root nearest `low`, each above the one before.
+  So the set follows the song's key at every bracket, and each bar letters the note it rings now.
+- **Striking.** A bar is struck through `Strike` on its faces. A vertical bar has four sides (the
+  railing's three), so a brush across a row rings each bar in turn, and a tubular bell also has
+  its cap. A lying bar is struck on its top. At a desk it is the Item grab's click, and
+  `VenueInstrument.brush` strikes each further bar a held drag comes onto.
+- **Sound and recording.** A strike plays and records as every pitched item does: the fast path
+  with `Foley.venue_bar(kind)` pitched from `Foley.venue_bar_note(kind)`, `MELODIC_CHANNEL`, and a
+  bandmate's copy rung where it hangs at their song position.
+- **One jack for the set.** `InstrumentItem.jack_source` and `has_own_jack` make the whole set the
+  one source `VenueInstrument.SOURCE` (`venue`) for `Jacks.hit`, the socket and the patch. The
+  studio's plug checks find its item through `ItemRoom.source_item`.
+- **Its station.** The set is the station `venue` (area VENUE, `mounted`). `Stations.row_in(venue,
+  id)` merges `VenueInstrument.row_for` into the row: title, help lines, look point, frame and
+  seats. `Stations.row` reads it for the venue the studio is in (`Stations.here`), so the help card, the
+  board, I and the plaque all name that venue's set.
+- **Its seats.** A desk's seat (`seat`, `VenueInstrument.seat_for`) stands back as far as it takes
+  for a standing view at the room's lens to hold the set's top and its plaque's foot. A headset's
+  seat (`reach`) is `VenueInstrument.REACH` in front of the set, within a hand's reach;
+  `Stations.seat(..., hands)` picks it for `Studio._travel_to_station`. The plaque and the jack
+  stand in front of `VenueInstrument.front_of`, which is the mount's front where that stands out
+  further than the bars (the crystals' shelf).
+- **Its mounts.** The cave's shelf, the bells' frame and the icicles' eave are modelled
+  (`tools/blender/venue_mounts.py`, `VenueInstrument.MOUNTS`, placed by object name in `_piece`),
+  and so are slice 43's steam pipes' header, valve and tees, the pots' bench, the gong rack and the
+  desert's sandstone ledge.
+- **Slice 43's shapes.** A set's geometry is per bar (`bar_x`, `bar_frame`, `bar_length`,
+  `bar_radius`, `bar_depth`, `bar_shape`), and `half_width`, `half_depth`, `front_of`, `back_of`,
+  `top_of` and `bottom_of` are taken over every bar. A kind may have flat bars (`plate`: the hull
+  panels, the glass), set round an arc (`arc`: the panels face the ring's middle), bars that grow
+  with their length set their own width apart (`grow`, `gap`: the pots), round bars (`disc`: the
+  cymbals), and a gong hung behind the rest as the first bar (`gong`, with its own sound). A bar may
+  ring slower than a strike (`InstrumentItem.strike_least`, `velocity_of`, which `Strike` reads):
+  the dome's glass rings at a touch, softly. A curved mount (the hull's ribs, `_arc_band`) is
+  smooth pieces end to end (`ARC_PIECES`), so each piece's bounds hug the band and a plaque in
+  front of the ring is not inside one box round the whole bend.
+- **The piano.** The club's instrument is its upright's middle octave (`ClubVenue.piano_case`,
+  `instrument`). club.glb and club_showtime.glb leave that octave's keys out (club.py's `GAP`), and
+  the set's eight keys lie in their place, the scale's notes. The mount's sunk black keys
+  (`VenueInstrument.pattern`, `_repattern`) stand in each slot between two keys a whole tone apart,
+  level with them, and each key's tail is notched round them (`Bar.notch`). In the speakeasy the
+  piano stands against the back wall by the stage.
+
+Generative weather (slice 44). `Weather` (`core/music/weather.gd`) is a schedule and a station.
+Four arrangements have one (`Venue.weather`): the loft's Thunderstorm, the greenhouse's Rain, the
+cabin's Snowy night, and the cave's `drips` in the grotto and on the lake.
+
+- **The schedule is a pure function of the song clock.** `Weather.drops(spec, seed, state, from,
+  to)` walks the sixteenths in the span. For each one, `mix(bar, step, seed)` decides whether a
+  drop lands (against the arrangement's `density`, which the storm gusts over `GUST_BARS`), and
+  where it lands on the glass. The cave allows one candidate a bar. The seed is an FNV-1a hash
+  of the venue id (`seed_of`). The note is the scale tone (`VenueInstrument.scale_tone`, from
+  `Harmony.at`) of the drop's height on the glass, or of its pool. Every machine with the same
+  song therefore schedules the same drops, and nothing crosses the wire but the switch.
+- **The switch is a room row.** `weather` (LISTEN or OFF, false when a room starts) is a room
+  verb of one bool (`Session.ROOM_VERBS`). A guest predicts it, as the sampler's REC does
+  (`Studio._on_weather_pressed`, `_predict`, `apply_room`). The station `weather` is a mounted
+  row that `Stations.row_in` fills from `Weather.row_for`. Its switch, plaque and jack stand on
+  the window's sill, or on an iron post (`solid`) where there is no sill.
+- **Its jack is a world source.** `weather` and `drips` are in `Jack.WORLD`: sources that are not
+  items. They go onto a track only (`Jacks.sinks`, `plug_refusal`). On the host, each drop that
+  lands while the song records becomes a note on the plugged track (`HitRecorder.note`, the
+  jacked take), whether the switch is on LISTEN or OFF.
+- **Sound and drawing.** A heard drop is a Foley emitter at its landing (`Foley.weather_drop`,
+  synthesised and pitched to its note). Drops are drawn in two MultiMeshes, beads and rings. At
+  `Ergonomics` motion 0 a bead stays where it landed and fades, and a ring keeps one size. With
+  motion, beads run down the glass and drips fall into their pools. The venue's particle rain
+  is still only decoration.
+
+A looper, by hand (slice 45). `Looper` (`core/music/looper.gd`) is a pad on a tripod stand at the
+drum riser's front corner (`Venue.looper_at`, `looper_spot`; its foot is a `ZoneKit.solids` entry
+marked with its station), station `looper` (LIVE, mounted on the `drums` zone).
+
+- **Who loops is a room row.** `looper` [peer, from_bar, bars] (`Session.ROOM_VERBS`, [] for
+  nobody). A slap is planned where it is heard (`Looper.plan`: the loop's own bars when a loop is
+  set, else the next bar for the player's LENGTH, or -1 with the transport stopped) and answered on
+  the host (`Looper.answer`): another player's row refuses it (`ADA is looping`), a stopped
+  transport is started from the start of the current bar, a far bar becomes the next one, and a
+  first layer sets the loop range to its span and turns looping on. A guest predicts the row
+  (`Studio._predict`) and the host's room is the truth.
+- **The layer is taken down where it is played.** Each machine's Looper follows its own heard clock
+  (`GuestMidi.heard`): COUNT until the song arrives at the span's first bar (crossing it, or the
+  loop going round to it), REC until its end. It takes this player's keys from `GuestMidi.sends`
+  (every source that goes through GuestMidi) and their hits from the studio's `items.played`, the
+  hits as HitRecorder would (snapped, zone notes, channel 9). A key a hair before the first bar is
+  its downbeat (`EARLY`).
+- **The host writes it.** `looper_layer` [start, end, notes] goes to the host, which writes it only
+  while the row is that player's (`Looper.write_layer`: a LOOPER folder at the end of the project
+  the first time, then `<PLAYER> LOOP n` in it, one MIDI item over the span), and clears the row.
+  A guest's write is the guest's (`DAW.on_behalf_of`, which Session wraps room asks in).
+- **Screen in words and shapes.** REC beside a disc, PLAY beside a triangle, READY beside a
+  square, COUNT with the beats left as large dots; who and which bar in words, and the beat as a
+  row of large and small dots.
+- **Layers are rings on its post (slice 46).** `LooperRings` (`core/music/looper_rings.gd`, the
+  looper's child `rings`) draws the project's LOOPER folder (`LooperRings.layers`), so every
+  machine's mirror of the host's mix shows the same stand: a ring a layer round a post over the
+  stand, inside its footprint, lettered `ADA 2`, turning once a pass (`turn_of`, a beat a step at
+  motion 0), as bright as its track's level (`SignalBeads.glow` of `track_level`). It reads this
+  player's hands itself (`hands_in`, `step_hands`): a grip or a pinch begun with the hand inside a
+  ring's band (`band_of`) takes it, and nothing else does (a brush, a poke, the ray, a dwell). A
+  grab is one edit (`DAW.open_edit`/`close_edit`): the mute it toggles, and `remove_track` if it is
+  pulled past PULL (0.4 m). A click on a ring toggles its mute, and the `LayerList` over the screen
+  has MUTE and X per layer. A guest's writes are DAW intents like any edit, and its ring shows the
+  mute or its going at once (PREDICT_MS) until the host's mix says so. The ring's toasts go out
+  through the studio (`told`).
+
+A music-box sequencer (slice 47). `MusicBox` (`core/music/music_box.gd`) is a brass cylinder of 16
+steps by 8 rows on a case on a plinth of its own (tools/blender/music_box.py), station `music_box`
+(LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.music_box_spot`: beside the harp away
+from the bells, or up the loft's aisle).
+
+- **The pattern is one MIDI item, read back, never kept.** Its pegs are the notes of the first MIDI
+  item on its track under its bars (`item_of`, `pegs_of`), each frame: a note moved in the roll
+  moves its peg, an undo takes it back, and every machine's mirror shows the host's pegs. Its bars
+  are the loop's, a LENGTH a page, else the playhead's page (`span_of`); its rows the scale of the
+  song's key at its first bar (`Harmony.at`) from a root, or semitones (`rows_of`). A note on no
+  row is drawn at the nearest one, leaning and collared (by shape).
+- **A peg is an ordinary edit.** A press is `DAW.insert_note` or `delete_note` inside
+  `open_edit`/`close_edit`, and a drag along a row is every cell it passes in the same edit, so one
+  undo step either way. Where there is no MUSIC BOX track or no item, the first peg asks for them
+  (`add_track`, then `insert_midi_take` with the pegs so far as notes) and the rest wait in a queue
+  (`flush`). On a guest these are DAW intents like any edit, its pegs shown at once (`_predicted`)
+  until the host's mix says so, and it waits for its mirror to show what it sent before naming a
+  note index again.
+- **Its settings are a room row.** `music_box` [track, length, root, chromatic]
+  (`Session.ROOM_VERBS`), cleaned on the host (`MusicBox.clean`) and predicted on a guest
+  (`Studio._on_music_box_asked`, `_set_music_box`, `apply_room`); the four keys on its front step it.
+  The view's own turn (`view_steps`) is this player's alone: by the wheel or a stick over the
+  cylinder, or by a hand on the knurled `Thumbwheel` past its right cheek (pushed up or down, or
+  pressed for a step), which is how a tracked hand, with no wheel or stick, reaches the steps
+  round the back.
+- **It turns with the song.** `turn_of` puts the sounding step under the comb at the top; a peg
+  reaching it flicks its row's tooth. At `Ergonomics` motion 0 it steps a step at a time and the
+  teeth stand. It sounds only as the track plays.
+
+A string across the room (slice 48). `RoomString` (`core/music/room_string.gd`) is one string
+between two points the room chose, and `RoomString.Spool` the bobbin on a stand that makes them
+(tools/blender/string_spool.py), station `strings` (LIVE, free-standing, a `Venue.WHEELED` trolley
+at `Venue.string_spool_spot`: in the aisle between the drum riser and the lattice, or at the loft
+lattice's front corner).
+
+- **The strings are a room row.** `strings` {id: [a, b, maker]} (the ends in the venue's frame),
+  asked with `string` [id, a, b] (`Session.ROOM_VERBS`), a and b the same point to cut.
+  `RoomString.answer` is the rule (0.3 to 12 m, ends inside BOUND, at most 8, any id may be cut):
+  the host keeps it (`Studio._answer_string`, the refusal told to whoever asked), and a guest
+  refuses it in words at once where the host would, else predicts it (`ask_string`, `_predict`,
+  `apply_room` folding unanswered asks back on top). The row is the studio's, not the venue's, so
+  a venue change stands the same strings again in the new one (`_show_strings`).
+- **Its length is its note.** `raw_pitch` is 76 - 48 log(l / 0.3) / log(40) (E5 to E1 over the
+  allowed lengths), `pitch_in` snaps it to the key (`Harmony.snap`), never under E1. It is
+  lettered at its middle and retuned as the key changes.
+- **Played as the harp is.** A fingertip whose path goes past the line within TOUCH (`tips`, by
+  default `HandGestures.local_tips`) or a grab (a click, a pinch's ray, a trigger) plucks it on
+  this player's keys with source `&"string"`, ringing RING (2.5 s). It shakes in its shader (a glow
+  instead at motion 0), and one `Wobble` for all strings bends what rings by the plucking hand's
+  tilt. A bandmate's string notes come through `Presence.strings_heard` to the string that plays
+  that pitch here (`Studio._on_string_heard`, `RoomString.heard`, a MonitorSynth of its own).
+  Grabbed and pulled CUT_PULL (0.4 m) off its line, or a knot (`RoomString.Knot`) pressed, it asks
+  to be cut (`cut_asked`).
+- **An end is a tool in the hand.** `Interactor.tool` is a Callable that, while it is set, takes
+  the hand's button in place of pressing what it points at (`_use_tool`). The spool's reel sets it
+  (`Spool.take_end`; a poke's end goes to the same hand's ray, `tying_hand`). The next press ties
+  the first end, and the let-go somewhere else (or, after a press and let-go in one place, the
+  next press) ties the second. Where is the first thing the ray meets (`surface_hit`): any body
+  but the walker's layer, the floor, the ceiling at `Venue.LIVE_ROOM_HEIGHT`, the walker's solids
+  as boxes up to their tops, and the walls round the rooms a person walks in. Between the two ends
+  the string is drawn with its note and length, or TOO LONG or TOO SHORT. Esc, or the reel pressed
+  again, drops the end.
+
+A marble run (slice 49). `MarbleRun` (`core/music/marble_run.gd`) is the lattice zone's 12 by 12 by
+12 cells of 0.25 m with blocks in them (tools/blender/marble_blocks.py: a grooved ramp, a funnelled
+drop, a splitter with a brass vane, a bell block with a bell under an arch), station `marbles` (LIVE,
+mounted on the `matrix` zone at `Venue.marbles_spot`: a tray on a post at the cube's face toward the
+desk, off its middle, whose foot is a `ZoneKit.solids` entry marked with its station).
+
+- **The blocks are a room row.** `marbles` {cell: [kind, facing]} (Vector3i cells), asked with
+  `marble` [cell, kind, facing], an empty kind to take one out (`Session.ROOM_VERBS`).
+  `MarbleRun.answer` is the rule (a cell inside the lattice, one of four kinds and four facings, at
+  most 144): the host keeps it (`Studio._answer_marble`, the refusal told to whoever asked), and a
+  guest refuses it in words at once where the host would, else predicts it (`ask_marble`,
+  `_predict`, `apply_room`). The row is the studio's, so a venue change stands the same run again.
+  `marble_balls` (the beats of the last eight BALL marbles, asked with `marble_ball` [beat]) is a
+  row beside it.
+- **The marbles are a pure function of the song clock, like the weather.** A marble is let go at
+  the run's top (`top_of`) on every bar's downbeat, and at each BALL beat. It walks the blocks a
+  cell a sixteenth (`path`: a ramp or a bell on the way it faces, a drop down, a splitter its way
+  on even marbles and the other on odd ones), never physics, until an empty cell or the lattice's
+  edge, or MOST_STEPS. `rings(rows, balls, state, from, to)` is every bell entered in the span, its
+  note the scale tone of its height (`VenueInstrument.scale_tone` of `Harmony.at`). Every machine
+  with the same rows and song rings the same bells, and nothing crosses the wire but the rows.
+- **Its jack is a world source.** `marbles` is in `Jack.WORLD`, onto a track only. On the host each
+  ring while the song records is a note on the plugged track (`HitRecorder.note`), heard or not.
+  Marbles never touch mix state otherwise. With the song stopped, BALL rolls a preview here alone at
+  the song's tempo, never recorded.
+- **A block is a tool in the hand.** A tray key sets `Interactor.tool`, as the spool's reel does.
+  A mouse keeps the block for click after click; each goes in the cell `pick` finds (a grid walk
+  of the ray: beside the face of the first block it meets, else on the working layer, which Shift
+  and the wheel raise). The wheel turns what is carried, or the block under the cursor, Backspace
+  takes one out and Esc puts the carried one back. A hand lets the block go in the cell it is in,
+  and a placed block taken and let go outside the lattice is taken out. A ghost of the carried
+  block, its cell's edges and words (`BELL  RIGHT  C5 · LAYER 1`) show where it would go.
+- **Sound and drawing.** A ring is a Foley emitter at its block (`Foley.venue_bar`, the chime,
+  pitched to its note), and its bell swings. Marbles are a MultiMesh: with motion they glide from
+  cell to cell and fall as they fade from the last one. At `Ergonomics` motion 0 a marble shows the
+  cell it was in on the beat, a step per beat, and the bells hang still.
+
+A theremin (slice 50). `Theremin` (`core/music/theremin.gd`) is a walnut cabinet on a stand with a
+splayed foot, an upright chrome pitch rod on its right and a level volume loop on its left
+(tools/blender/theremin.py), station `theremin` (LIVE, free-standing, a `Venue.WHEELED` trolley at
+`Venue.theremin_spot`: by default in front of the drum riser's outer end in the ring's frame,
+`Venue.default_theremin_spot`, facing the desk; in the studio's side-room arrangement off the
+riser's long edge, `StudioVenue.default_theremin_spot`). Its row has `air` 1 m round `air_at`, the
+hands' place: the clearance test samples a half disc of that radius toward the station and to
+either side, clear of every solid taller than the hands' lowest and on walkable floor.
+
+- **The law is static and pure.** `pitch_for(distance)` is C6 at NEAR (0.1 m) from the rod's axis
+  down to C3 at FAR (0.6 m), log in distance (each octave the same factor), `distance_for` its
+  inverse; `expression_for(height)` is CC 11, 0 resting on the loop up to 127 VOLUME_SPAN above.
+  `target_for` is the SCALE switch: FREE, the nearest scale step (`Harmony.snap`) or the nearest
+  chord tone, inside the range. Snapped, the played pitch glides to the target (GLIDE, 50 ms).
+- **One note on the keys, bent, handed on.** It plays this player's keys (GuestMidi) with source
+  `&"theremin"`: its first note goes down after its CC 11 and bend, so it sounds where it should
+  from its first moment; within `Wobble.BEND_MOST` (two semitones) it is bent, and past that the
+  nearest note goes down, bent to the hand, before the last lets go (`handed_on`), so no frame is
+  silent and the take is legato notes, bends and CC 11, which play back on any synth. Controls go
+  at most 60 a second. The volume hand down on the loop lets it go, and the keys rest the wheel.
+- **Hands, sorted to their jobs.** `local_hands` is every confident tracked bare palm and every
+  sure tracked controller (or `hands`, a Callable, for the suite, the probe and `--theremin`);
+  `sort_hands` makes the one nearest over the loop the volume hand and, of the rest, the one
+  nearest the rod inside its field the pitch hand. A tracked hand lost for under LOST holds its
+  note; a cursor that leaves the field means it. Tilt and shake are read by a `Wobble` whose
+  `sending` is off (it only measures), and its semitones are added to the glide before the note
+  is chosen, so a tilt past the range hands on as a reach would.
+- **The guide.** Rings round the rod at GUIDE_Y at each scale step (each chord tone in CHORD), the
+  key's root rings heavier, each lettered on a rule out from the rod (the lowest and each root
+  with its octave; alternately over and under it, made smaller where the rings crowd near the
+  rod). The ring nearest the hand's own pitch is lit and its letter larger, a ring is drawn at the
+  hand's distance, and a bar runs from the lit ring to it: how far off it is, not by colour alone.
+  The hover card says it in words (`A4 +30 cents`, the volume, what SCALE snaps to).
+- **At a desk.** `Theremin.Field` is a band DESK_BAND over and under the rule (not the whole air
+  round the rod, so the booth's mic behind it stays clickable from the seat): the cursor resting in
+  it is the pitch hand, across along the lettered rule; the wheel over it is `desk_volume`, from
+  silent, shown as a ghost disc over the loop; the button held plays it full; the cursor leaving
+  puts the volume down. The mouse's wiggle wobbles and Alt bends it, as everywhere.
+  `Theremin.ModeKey`, on the cabinet's front, cycles FREE, SCALE and CHORD (the wheel or a stick
+  steps it); the studio keeps the switch across venues (`Studio.theremin_snap`).
+  `Studio._follow_theremin` reaches for its source while it sounds, its field is hovered or this
+  player stands within ChordHarp.NEAR of it.
+
+A modular synth wall (slice 51). `ModularWall` (`hardware/modular/modular_wall.gd`) is a Surface,
+station `modular` (LIVE, mounted in the `synth` zone, `"surface": &"modular"`), hung at
+`Venue.modular_spot` over the keyboard stand (ZoneKit.keyboard_stand): its panel's face
+MODULAR_BACK in from the zone's middle and its foot MODULAR_BOTTOM up, facing the room, slid along
+the stand by OFF_MIDDLE so the panel and the plaque beside it stand over the stand together. The
+venue's own rack dressing ("Module..." under `Zone_synth`) gives way to it (`ZoneKit.yield_rack`).
+It is in F's round (`parks` false: a place, it stays home while something is brought), and a visit
+walks to its station's seat (`Studio._walk_to_station`), since where `seat_for` would stand a desk
+the bricks table stands.
+
+- **Eleven modules.** `Modular.MODULES` from the left: KEYS (this player's keys' pitch, gate and
+  velocity out, its newest note lettered and a GATE lamp, and PLAY, a `EqWall.WallKey` that takes
+  the computer keys on a KeyCatcher of the studio's, `modular_keys`), LFO, NOISE, VCO 1 and 2, MIX
+  of four, VCF, ENV 1 and 2, VCA and OUT, whose tag says the road and its figure. Its jacks are
+  `ModularJack`s (PatchPoint's jack part, an output's on a pale plate, a ring that lights brighter
+  and grows where a carried cable could go and more where it will), its knobs the console's
+  `Knob`, its cables `PatchCable`s from the room's patch; under it, on the stand's upper deck,
+  thirteen `ModularTouch` keys (the wheel moves them an octave). A lamp on a stalk lights it.
+- **The patch is the room's.** The row `modular` {cables: [[from, to]], knobs: {id: v}}
+  (`Modular.clean`, `default_patch`: KEYS to VCO 1 to the VCF to the VCA to OUT, KEYS' gate to ENV 1
+  to the VCA). The room verbs `modular_patch` [from, to, song] (an empty `to` pulls the cable at
+  `from`) and `modular_knob` [id, v, song] are answered by `Modular.answer_patch` and `answer_knob`
+  (refused: an unknown jack, output to output or input to input, an input with a cable in it
+  already, pulling nothing); the studio's `ask_modular_patch`/`ask_modular_knob` do it on the host
+  and predict it on a guest, and `apply_room` puts this guest's unanswered asks back on top, as
+  the patchbay's `patch`. The wall never changes its own patch: it asks (`patch_asked`,
+  `knob_set`) and shows the room's answer (`show_patch`).
+- **A knob's turn is streamed, not asked.** As it turns the wall says so every change
+  (`knob_turning`), and at most once each STREAM_GAP_MSEC (`knob_streamed`, on an injectable
+  `clock`), which is what every voice here hears (slice 52: `Studio._on_knob_streamed`, so this
+  player hears of their own turn exactly what the band and a take get) and what goes out as
+  `Session.send_knob(id, v, song)`: reliable, on
+  its own GESTURE_CHANNEL, passed by the host to everyone else (`_pass_knob` refuses a knob that is
+  not one and clamps the value), heard as `Session.knob_turned`, which turns the wall's knob and the
+  voice. Only the let-go, once the knob has rested for SETTLE, is a `modular_knob` ask.
+- **Within reach.** The wall's jacks, knobs, keys and the mount's handle take the pointer only
+  while this player is at it (`within_reach`: standing in front of the stand, MODULAR_NEAR to
+  MODULAR_FAR out and MODULAR_SIDE either side where the wall's own seat is the nearest station's,
+  `Studio._station_seats`, or with it visited or brought), so a click from the desk never lands on
+  a 2 cm jack six metres off, and a player at the harp, the music box or the bells beside the stand
+  plays them, not the patch; its plaque's keys always do.
+- **Cables.** Each is a PatchCable at CABLE_SAG; one across more than LONG_CABLE hangs to
+  CABLE_FLOOR under the lowest row of jacks (`cable_sag`), so a busy patch keeps its jacks' names
+  in view.
+- **The DSP, twice.** `Modular` (`core/music/modular/modular.gd`) is the arithmetic in GDScript,
+  `render(patch, events, from, frames)` at 48 kHz in blocks of 64, pure and deterministic (an event
+  at the start of the block it falls in), and runnable a block at a time (`run`, `apply`). Every
+  input reads its source a sample late, only modules whose sound reaches OUT run, and last-note
+  priority keys feed KEYS. `native/modular.c`, included by `native/keys.c`, is the same in C in
+  double precision: the helper takes `mod on N`, `mod clear`, `mod cable X Y`, `mod cut X` and
+  `mod knob ID V` lines (`NativeKeys.modular_lines`, a knob with 17 digits), plays this player's
+  keys through it while `mod on 1` (the tine silent), and `wait N` in `--render` renders N frames
+  before the lines after it. The suite holds the two within 1e-4.
+- **The road.** `ModularVoice` (`core/music/modular/modular_voice.gd`) plays this player's keys
+  through the room's patch while `engaged` (`Studio._follow_modular`: at the wall, or PLAY on): on
+  the helper where the keys' MonitorSynth has one (`modular_patch` and `modular_on`), else on
+  MONITOR through Godot, a Modular of its own on a thread, the MonitorSynth handing it its notes
+  (`MonitorSynth.modular`) instead of playing its tine. `tag()` is OUT's: `HELPER · 5.3 ms`,
+  `THROUGH GODOT · 42 ms`, or how to play it; while a take goes through the wall, OUT says REC on a
+  line of its own at a module title's size under it (`ModularWall.set_recording`).
+
+The modular, recorded and heard by the band (slice 52):
+
+- **What a player sends at the wall is the modular's.** While `Modular.SOURCE` is in GuestMidi's
+  reach (`through_modular`), every note and control their keys send goes out with that source,
+  decided at the note-on and kept for its note-off (`GuestMidi._sent_as`), since everything the
+  keys sound then plays the patch.
+- **Bandmates hear it at the wall.** Presence routes the modular's notes and controls by source
+  alone (`modular_heard`, `modular_control_heard`) to the studio, which keeps a `ModularVoice` for
+  each bandmate playing it (`Studio.modular_heard`): with a `speaker` (the wall) it plays the notes
+  it is handed through the room's patch on a Modular of its own through Godot, out of an emitter at
+  the wall (Foley's, on GEAR). The room's patch, the knob streams and the cables change every voice
+  here (`_modular_voices`), and a bandmate's last note-off rests their wheel. Quiet for
+  `rest_after` (5 s) with no note held, a bandmate's voice rests (`engaged` off: no thread, no
+  emitter) and their next note wakes it on the patch as it stands. Gone, their voice goes.
+- **A take is what was played, not sound.** `ModularTake` (`core/music/modular/modular_take.gd`)
+  is the patch as a take began and every event after it with its song: notes, the wheel (rested at
+  the last note-off on every end), knobs as streamed and cables as the room took them.
+  `render()` is Modular.render of it from its start for its span; `write` puts its 16-bit WAV in
+  AudioTake.DIR. `Session.modular_takes` (`ModularTakes`, `core/session/modular_takes.gd`) holds
+  them. GuestMidi begins this player's own (`mine`) when a take begins with the modular in reach
+  or its first note goes through it (`_take_modular`), feeds it the notes and bends it sends, and at
+  the end calls `finish` with the take's tracks. The notes sent as the modular's are not in the
+  MidiTake; whatever else the take holds (the harp before the player walked up to the wall, the keys
+  after they left it while the take rolled on) is, and goes in by `DAW.insert_midi_take` beside the
+  audio. `Session.send_knob`, `_pass_knob` and `_knob` feed it knobs; the studio's
+  `_show_modular(patch, song)` feeds it each cable pulled or put in and each knob let go that no
+  hand here is turning, at the song the room's verb was asked at (`_take_modular_change`).
+- **The host renders it from what reached it.** A guest marks its take begun and ended twice
+  (`Session.send_modular_take`): `_modular_take_keys` on KEYS_CHANNEL behind its notes and
+  `_modular_take_gestures` on GESTURE_CHANNEL behind its knobs, all reliable. The host takes that
+  guest's modular notes (`heard_note`, from `_note_up`) and wheel (`heard_bend`, from
+  `_modular_bend_up`: each move the take keeps, sent again reliable on KEYS_CHANNEL by
+  `Session.send_modular_bend`, since the live wheel rides CONTROLS_CHANNEL unreliable and a lost
+  move would make the host's render differ) from the keys' begin to the keys' end, with what they hold at the begin at the
+  take's start, and the room's knobs and cables from the gestures' begin, when it takes the patch
+  as it hears it (`ModularTakes.patch`, the studio's `heard_modular_patch`), until it is placed.
+  With both ends in and SETTLE (0.25 s) more, or ENDS_WAIT after one, it renders the take and
+  writes its WAV (the encode and the overview too) on a worker thread, and on the main thread
+  inserts it on the take's tracks at its start as an audio take named `modular`, on the player's
+  behalf (`placed`). A take past AudioTake.MAX_SECONDS is cut there and its player told. A host's own take is `mine`, placed the same
+  way. Everything is stamped, so a sweep heard late lands where it was turned, and the host's render
+  is the player's own (the probe checks the digests).
+
+The world plugs into the modular (slice 53):
+
+- **A world socket is an output of the patch.** `Modular.WORLD` names twelve (`world:weather`,
+  `world:drips`, `world:venue`, `world:ring_1`..`world:ring_8`, `world:marbles`; `is_output`,
+  `is_world`, `world_title`), so a cable from one is a `[from, to]` in the room's `modular` row,
+  asked with `modular_patch` and answered, mirrored and predicted as any other. Each carries a level
+  (`Modular.world`, Event.WORLD) and a gate (`trig`, Event.TRIG: open WORLD_GATE_BLOCKS, 48 ms,
+  shut a block first if already open). The ENVs' gates (`GATE_INS`) read the gate and every other
+  input the level. The output slots run the modules' outs, `_ZERO`, the twelve levels, the twelve
+  gates (`_slot`, `_reads`); native/modular.c is the same (`mod_world`, `mod_trig`, `mod_slot`), and
+  the keys helper reads `mod world NAME V` and `mod trig NAME` (`NativeKeys.modular_world_line`).
+- **What plays into them is worked out, not sent.** `ModularWorld`
+  (`core/music/modular/modular_world.gd`, `Studio.modular_world`) is pure: `events(from, to)` is
+  [song, WORLD or TRIG, socket, value] in order from the song clock and the rows (the weather's
+  `Weather.level` each sixteenth and a gate each `Weather.drops`; the cave's drips, the venue
+  instrument's strikes at their item_hit `song` and the marbles' bells as pulses; each looper layer's
+  own notes' velocities as its ring's level, `ring_level`), the same on every machine and nothing of
+  it on the wire. `levels_at` is where the levels stand at a moment. `follow` hands each frame's span
+  on (`fired`) to every ModularVoice here (`Studio._on_world_fired`): this player's, each bandmate's,
+  and the studio's world-only voice at the wall (`modular_world_voice`), engaged while a world cable
+  is in the patch and the wall is in view. A take hears it once, when finished or placed
+  (`ModularTakes.world` = `for_take`, `ModularTake.hear_world`), so the host's render has it too.
+- **The sockets stand where the sound comes from.** `WorldSocket`
+  (`core/music/modular/world_socket.gd`, a ControlAffordance, group `modular_world_sockets`): beside
+  the weather's track jack (the drips' at the cave's pool), the venue instrument's, on the marble
+  run's tray, and one per looper ring on a rod beside the rings (`LooperRings._show_sockets`). A
+  click, dwell or press steps its cable through the wall's free inputs (`Modular.step_input`,
+  `free_inputs`, WORLD_INPUTS, around to unpatched), P and Shift+P over it at a desk likewise
+  (MouseInteractor), each step asked of the host (`Studio._on_world_step`). Its long cable is a
+  CableSweep along the floor (`WorldSocket.route`, `CableSweep.rest_on`), and its track jack row is
+  untouched, so one socket can record onto a track and drive the filter at once.
+
+A sample as a cloud of grains (slice 54). `GrainCloud` (`core/music/grain_cloud.gd`) is a plaster
+plinth with a turned brass bowl on its cap and two brass posts up to a rail under the cloud's front
+edge (tools/blender/grain_cloud.py), and over it a cloud a metre across, half a metre tall and 40 cm
+deep. Station `grains` (LIVE, free-standing, a `Venue.WHEELED` trolley at `Venue.grains_spot`: by
+default in the aisle between the drum riser and the lattice, behind the string spool, its back
+GRAINS_GAP off the lattice and facing across the aisle, `Venue.default_grains_spot`; in the loft,
+whose aisle is the harp's, on the open floor beside the desk, `LoftVenue.default_grains_spot`). Its
+plaque hangs on the plinth's side toward the desk, since the cloud stands side on to it; its row has
+`air` round `air_at`, the cloud's middle, which the clearance test samples as the theremin's.
+
+- **The bowl is a holder.** `bowl`, one slot (`ItemRoom.HOLDS` takes cassettes), laid by
+  `Studio._hold_the_bowl` wherever the trolley stands. The cassette in it is the cloud's sound, made
+  on a worker as the platter makes its own: a file's (a sample's or an audio clip's, fetched by a
+  guest with FileSend, the tag FETCHING meanwhile), a MIDI clip's render or a demo part's window
+  (`CassetteItem.sound_work`), mono at `GrainVoice.RATE` (24 kHz, `mono_of`), at most SOURCE_MOST
+  (30 s). Its length lies left to right as COLUMNS of motes (a MultiMesh), each as bright as its
+  stretch is loud (`envelope_of`); an empty bowl's motes are faint and grey and its tag says PUT A
+  SAMPLE IN THE BOWL.
+- **The hand's place is the law.** `at_for` across (where in the sound), `length_for` up (SHORTEST
+  20 ms to LONGEST 200 ms), `density_for` in, away from the player (SPARSEST 4 to DENSEST 60 a
+  second, each step the same proportion), `place_for` the inverse. The spray is a bare hand's
+  thumb-to-little-finger span (`spread_of_span`), a controller's grip travel, or the desk's wheel,
+  up to SPREAD_MOST (30%) of the sound either way. `local_hands` is every confident tracked palm and
+  sure controller (or `hands`, a Callable, for the suite and `--grains`); the nearest the middle of
+  those in the cloud plays it.
+- **Events, never the hand.** Thirty times a second (`GrainVoice.EVENT_HZ`) the hand is read into an
+  event (`GrainVoice.event`: tick, at, length, density, spread, pitch; `is_event` checks one), kept
+  in `events`, and the voice plays that. `GrainVoice.Renderer` makes a window's grains from its event
+  alone: their onsets and places drawn from a generator seeded by the event's tick, each read at its
+  pitch under a Hann window, as loud as LEVEL over the root of the overlap, at most MOST (32)
+  sounding, carried window to window. `GrainVoice.render(sound, events)` is the same Renderer over a
+  list, so what the voice played (`kept`, while `keeping`) equals the render of its events sample for
+  sample: what slice 55 sends to bandmates and records.
+- **Heard by its player.** On MONITOR through an AudioStreamGenerator (PREROLL queued ahead of the
+  first window), at `latency_seconds`, said on the tag (`GRAINS · MONITOR 82 ms`): a texture one
+  player makes, as decided. KEY, the room's row `grains_key` (verb `grains_key` [bool],
+  `Studio._on_grains_key_pressed`, predicted), pitches every grain by the chord's root from the key's
+  tonic, a fourth down to a tritone up (`pitch_for`, read from `ChordHand.at`).
+- **At a desk.** `GrainCloud.Face`, the cloud's front, takes only a mouse's button: held, it plays
+  from where it is held (dragged, from where it is dragged); the wheel over it is `desk_spread`, and
+  Shift with it `desk_density`, since the face has no depth. The bowl (`GrainCloud.Bowl`) takes a
+  click with a cassette in the hand. The help card's PLAY page and the hover cards say all of it.
+  Motes and sparks move by `Ergonomics.motion_scale`; the tag says in words what is playing.
+
+The grain cloud recorded and heard (slice 55). Every event the cloud plays is `GrainCloud.played`,
+and the studio sends it (`Session.send_grains(e, GrainTakes.song())`): fourteen bytes
+(`GrainVoice.pack`, `unpack`; `GrainVoice.event` puts each number on the wire's grid as it makes one,
+so the event played and the one unpacked are the same numbers), reliable and ordered on
+`Session.GESTURE_CHANNEL` beside the modular's knobs, through the host, which refuses bytes that are
+not an event (`grains_refused`) and passes the rest on (`Session.grains_played`). Its song stamp is
+what the player hears (GuestMidi.heard) moved on by `GrainVoice.latency_seconds`, -1 while the song
+is not playing.
+- **Heard by the band.** `Presence.grains_heard` gives a bandmate's events to the studio's cloud
+  (`GrainCloud.hear`), which plays them on a `GrainVoice` of theirs (`GrainCloud.theirs`,
+  `voice_of`) from its own sound, out of the air at the cloud on the gear bus (`GrainVoice.speaker`,
+  a `Foley.emitter`). It begins THEIRS_WAIT (3) windows after their first event, then each window
+  plays its own tick's event or a rest, so uneven arrival is ridden over and what is heard of them is
+  `GrainVoice.render` of their events; one later than its window is dropped, and more than
+  THEIRS_MOST waiting skips ahead. Their grains light the sparks where they play from
+  (`GrainCloud.place_for`), the tag says who plays it, and nothing plays while this cloud's sound is
+  still FETCHING or RENDERING: a guest's fetch of the bowl's file is asked once (FileSend.fetch,
+  through `Studio._platter_file`).
+- **Recorded as audio.** `Session.grain_takes` (`GrainTakes`, `core/session/grain_takes.gd`) gets
+  every event this player's cloud sends (`played`). While the song records as they hear it
+  (`GrainTakes.rolling`: past any count-in, inside any punch range) the first event begins a
+  `GrainTake` (`core/audio/grain_take.gd`: the events and each one's song) onto the keys' chosen
+  track or the armed one (`GrainTakes.track`; with neither, the player is told once); recording
+  heard to stop ends it (`finish` drops anything stamped past the end), kept as `last_mine`. A guest
+  marks the take to the host, begun and ended (`Session.send_grain_take`), on the same channel as
+  its events, so the host takes exactly the events between the marks (`heard_event`, `heard_mark`).
+  Ended, the host renders the take from its own copy of the cloud's sound (`GrainTakes.sound`, the
+  studio's `grains_sound`) and writes it as a WAV at AudioTake.RATE (`GrainTake.at_take_rate`: every
+  other sample the render's own, the one between halfway) on a worker thread, then puts it in as an
+  audio take named `grains` at its first event's song (`GrainTake.lands`), on the player's behalf.
+  The render keeps the events' spacing (a window a tick; the cloud counts the ticks of windows a
+  long frame missed), so a hand let go mid-take is a gap in it, and since the live voice plays from
+  the same events, the take is what the player heard, sample for sample.
+
+Lyrics in the booth (slice 56). The song's words are one LRC text, `MixState.lyrics`, replicated as
+`/timeline/lyrics` (durable, in the snapshot; `lyrics_changed`). `Lyrics` (`core/music/lyrics.gd`)
+is the only thing that reads it: `parse` and `write` (tags on lines of their own, a line per stamp,
+one break between verses), `at(seconds)` for the line sung, `sequence` for the order sung (timed by
+time, then untimed as written), `tap(seconds)` stamping the next untimed line, `clean` for what the
+song may keep, and `from_notes`/`into_notes` for Reaper's project notes. The board asks it every
+frame and a song may be a thousand lines, so `sequence`, each line's `place` in it and the counts are
+worked out once per parse (`_index`), again only after `tap`, `add` or `untime` (`changed`), and
+`at` halves its way through the timed lines rather than looking at them all.
+- **Written as one edit.** `DAW.set_lyrics(text)` (a COMMAND, so a guest's is a `set_lyrics` intent
+  the host checks and makes; refused without Capability LYRICS, `lyrics_refusal`). Offline it is one
+  undo step (`lyrics`). Reaper has LYRICS only with the bridge: `SetLyrics` rewrites the `[lyrics]`
+  block of the project notes in one Reaper undo block (the Lua `lyrics_into_notes` is
+  `Lyrics.into_notes` line for line), and GetTimeline's `notes` bring it back on the poll. The
+  built-in engine's .dawproject keeps it as metadata.xml's Comment (`ProjectFiles._keep_lyrics` and
+  `lyrics_of`; `ProjectBridge.load` takes it).
+- **The board.** `LyricBoard` (`core/music/lyric_board.gd`, station `lyrics`, LIVE, zone-mounted at
+  `Venue.lyrics_spot`, beyond the mic stand in the vocal booth, facing the singer at the mic, built to
+  Ergonomics.eye_height) shows the last, the sung and the next line in a scroller. The sung one is
+  large with ▶ before it and a bar filling toward the next timed line, and the line TAP times next
+  reads `TAP ›`. A line on, the scroller glides up for GLIDE times motion_scale, and at motion 0 it
+  steps. Every line and key sits above the mic's body as the singer sees it, and the plaque hangs
+  beside the face (the suite checks this in every booth). `display(heard)` is what it shows, from
+  `heard_source` (GuestMidi.heard unless given). Writes go through `write` (DAW.set_lyrics unless
+  given) and are believed for PREDICT_MSEC until the host's arrive.
+- **TAP and EDIT.** `BoardKey` TAP (a press) and EDIT (dwell-able). A click on the `Face` arms it at
+  a desk, so Enter TAPs and Esc lets go (consumed, so that is all Esc does: the studio's walk back to
+  the desk never hears it), and its top row says so in words; the row is written again only when the
+  text or the arming changes. `arm` is a desk's: in a headset a poke on the face does nothing. EDIT is
+  `Studio.edit_lyrics`: in a headset the TypingPad at PAD_AT by the right hand adds a line, and at a
+  desk `lyrics_edit_asked` opens the session panel's LYRICS box (`SessionPanel.edit_lyrics`: the
+  whole LRC in a text box, Set lyrics, Untime).
+
+The toast on arriving at a station names its area in words (`Stations.where`, `AREA_WHERE`: "in
+the control room", "in this venue"), not the card page's title.
+
 Pitched items are instruments of the same kind whose note is a function of song position
 (`InstrumentItem.note_at`, `channel`, `note_seconds`). The four handbells (`HandbellItem`,
 `bell1`..`bell4`, on a stand beside the chord harp at `Venue.bell_spot`) ring their number's
@@ -1779,8 +2492,8 @@ Every instrument has an output jack (`JackSocket`, `core/music/jack_socket.gd`, 
 a send and not a PipeWire link: `room_state()["jacks"]`, {source: sink}, kept by the studio's
 `Jacks` (`core/music/jacks.gd`) and asked with the `plug` room verb, predicted and rolled back
 like the tablet's `patch`. `Jack` (`core/music/jack.gd`) names the ends: sources are item ids,
-`harp` and `keys:P` (player P's own keys), sinks `track_N` and `player_P`; an empty sink is
-unplugged. Every hit played here goes through `Jacks.hit` (from `ItemRoom.played`): unplugged it
+`harp`, `keys:P` (player P's own keys) and `chord:P` (P's chord hand, part two slice 33), sinks
+`track_N` and `player_P`; an empty sink is unplugged. Every hit played here goes through `Jacks.hit` (from `ItemRoom.played`): unplugged it
 is the old path, onto the armed track; into `track_N`, `HitRecorder` keeps a take of its own for
 N and records it there, armed or not, and not on the armed track as well. A press steps a socket
 through unplugged and every track that takes MIDI (`Jacks.sinks`: all but a frozen one), round
@@ -1806,7 +2519,11 @@ not the sender, the room's patch sends that source into P and the sender is the 
 the holder of an item (Session.holds), P for `keys:P`, anyone for the harp (`Session.jack_refusal`,
 `Session.jack_check`, the studio's `Jacks.send_refusal`). It clamps by kind: a note's or a
 trigger's pitch and velocity to 0-127, a CC's value by its controller (`control_value`, so a bend
-of -8192 arrives intact), and refuses a CC that is not one of `CONTROL_KINDS`. On P, `Jacks.received` plays it on P's
+of -8192 arrives intact), and refuses a CC that is not one of `CONTROL_KINDS`. `chord:P` sends
+only `Jack.Kind.CHORD` and nothing else does: `pitch` the chord's root as a pitch class (clamped to
+0-11), `velocity` one more than its quality's place in `Harmony.QUALITIES` (0 for no shape; past
+their count refused), spelled back on the receiver in its own key (`Jack.chord_named`); only P
+plugs and sends it, never onto a track. On P, `Jacks.received` plays it on P's
 keys with source `&"cable"` at that song position, so it sounds on P's synth, goes to everyone as
 P's notes and lands in P's take where it was played; a TRIGGER is the chord tone at its song, one
 up the chord each hit, for 0.3 s; a CC moves P's wheel as the cable (`GuestMidi.control`), taken
@@ -1814,7 +2531,9 @@ while the cable owns it, and so lands in P's take beside the notes. `&"cable"` i
 goes into P. Whoever a jack goes into may unplug it (a press on it, or Shift+P with an empty hand
 on a desktop), and is told who plugged what. The harp's socket is on its pillar; a player's keys'
 is on their left wrist (`HandSkeleton.wrist`), on the left controller while that hand holds one,
-and P with an empty hand on a desktop. Into a bandmate the socket draws a slack cable to the
+and P with an empty hand on a desktop; the chord hand's (MY CHORDS) is on the chord hand's wrist
+and controller beside it (`Studio._wear_chord_jacks`), and P in the chord layer on a desktop
+(`ChordHand._chord_key`). Into a bandmate the socket draws a slack cable to the
 nearer glove of their ghost (`Presence.cable_end`), rebuilt at most 15 times a second while an
 end moves. docs/spatial_loop.md slice 6.
 
@@ -1865,8 +2584,10 @@ walker stands still; F2 still opens the 2D view, which puts the card away. docs/
 
 A headset goes to a station by travelling, since a play space is two metres square and the live
 room's stations are several metres behind the desk. `XRRig.travel(to)` puts the play space's centre
-(the XROrigin3D) on `to`'s floor point facing its way, so where the player stands in their own play
-space is kept, and `travel_home()` puts it back at `home`, the mix position (`XRRig.settle`: the
+(the XROrigin3D) on `to`'s floor point facing its way, at that point's height, so where the player
+stands in their own play space is kept and their real floor is what they see under them (a seat is on
+whatever is stood on there, `Venue.floor_at`, so at the hand drums the riser's top; the desktop's
+walker is put down on it the same way, `Walker.travel_to` standing on `ground_at`), and `travel_home()` puts it back at `home`, the mix position (`XRRig.settle`: the
 studio centres a VR play space at (0, 0, MIX_POSITION_Z), in front of the desk with the station
 board in view; passthrough keeps its real floor). It is a cut behind a veil, a black sphere round the head drawn through
 everything and never in a mirror, closing over `XRRig.FADE` (0.15 s) and opening again; a plain
@@ -1958,6 +2679,32 @@ else's). Only the hand that has the radio flies it, in the room's frame, from it
 gear) and `ItemRoom.ground`. Presence sends the plane's pose and `Mode` from the flying machine
 (`Session.send_flier`, unreliable, on the motion channel); other machines `hear` it and ease the
 plane toward it. A click on another machine's copy changes nothing: its mode is the flyer's.
+
+### The session in miniature
+
+`MiniatureItem` (kind `miniature`, docs/spatial_loop.md part two, slice 34) is the whole song on a
+40 cm tray to hold, a room item like the duck whose home is the desk's left wing
+(`Venue.miniature_spot`, read from `Studio.desk_wing`, which `_place_desk_wing` keeps beside the
+console's left end as the desk grows, in the floor plan by `_wing_footprint`). It draws the song from
+`DAW.state` in a frame of its own (`_content`, reader at +Z, time along +X): a strip a track with
+its name and a block an item, the regions as bands and the markers as flags (a `NOTE ` marker a
+pinned card) along the far edge, the loop as a bracket, and the playhead, stepped a beat at motion
+0. It redraws on the DAW's timeline, bank, track and project signals, and on a cheap shape key
+every half second. It is all unshaded and its own materials, since `Item.set_rim` rings every
+material under a body. The tray is taken by its front edge only (the item's grip, a box in front
+of the pins): its bed is a `Face` control, a thin box at block height so a glancing ray lands where
+the eye meant, and each station standing here is a `Pin` round the lip on its station's side of
+the mix position (`pin_spots`, spread PIN_GAP apart). Both are turned +Z up (`FACE_UP`), since a
+fingertip (PokeInteractor) lets go as it lifts along a control's +Z. Carried in a hand, the tray
+lies wholly inside that hand's own ray (`held_pose`), so the hand that carries it never points at
+or presses its own bed; the other hand does. The tray maps points and says what was
+pressed (`spot_at`, `card`, `pressed`, `station_pressed`); the studio acts on it
+(`_on_miniature_pressed`): `DAW.seek`, then for an item `DAW.select_item` and the timeline's
+window moved to it (`set_view`) and brought, else `ConsoleSurface.bank_to_track` and the console
+brought. Bringing is `FocusRig.focus` (a visit at a desk, a summons in a headset), except that a
+surface the mount shows on the screen is already in view, so a desk lets its gear go instead
+(`Studio._bring`). A pin is `go_to_station`. Seeks and selections are DAW verbs, so a guest's are
+intents; nothing here is new on the wire.
 
 ## The stage table: the mix as places
 
@@ -2192,13 +2939,234 @@ use rang (the duck's `squeak_take`, an instrument's `sound_take`), sent with the
 `Session.item_used`'s `take`, as slice 17 sent it with `item_hit`. A copy elsewhere rings that same
 take (`Item.heard_use`, Presence). The host's sampler writes `Foley.take_of(kind, take)` as it is,
 its 16-bit samples after a header at Foley's rate (`Sampler.write`, `AudioTake.header(frames,
-rate)`). The file is the very stream the player heard, to the byte. The take's tuning is baked into
-the stream rather than played as a pitch, so there is nothing to apply afterwards. The kind is the
-item's (`Item.use_kind`, `InstrumentItem.sound_kind`): a click or squeeze is a use; a shake reaches
-the host as a hit and is caught as shaken. The file goes into the media (`DAWBackend.media_path`,
+rate)`). The file is the very stream the player heard. A take's own tuning (the duck's squeaks, the
+ball's bounces) is baked into the stream rather than played as a pitch. What the room does play as
+a pitch, an instrument's second voice (`VOICE_PITCH`), a Tour curse and a handbell's chord tone
+(`InstrumentItem.tune_at`, `Item.use_pitch`), reaches `Sampler.heard` as its `pitch`, and the take is
+resampled to it before it is written (`Foley.resampled`). The kind is the item's (`Item.use_kind`,
+`InstrumentItem.sound_kind`): a click or squeeze is a use; a shake reaches the host as a hit and is
+caught as shaken, as is a pitched instrument's click, whose song position only the hit carries. A
+yo-yo's or a deck's trick is a use too. Its take is the trick's count (`FidgetItem`), so a copy that
+hears it plays that trick. Its sound is the whole trick, every sound in the trick's table
+(`trick_sounds`) mixed where it rings (`Foley.layered`, `yoyo_trick`, `cards_trick`). A ball's bounce
+is no use. It is `Item.rang` on every copy, as a throw is flown the same everywhere (Flight), and its
+take is the bounce's number in the throw, so the host's own copy rings the take the thrower heard.
+The host catches it for the thrower. The file goes into the media (`DAWBackend.media_path`,
 `duck_squeeze_3.wav`, the next number free). The cassette is an ordinary made one
 (`ItemRoom.mint`): an audio clip of the file, `sample` in its data, slotted into the rack's first free
 slot. So the ear (FileSend fetches it for a guest) and the paste already work for it.
+
+### The platter: the playhead by hand, and a scratch in your own ears
+
+A DJ platter (docs/spatial_loop.md part two, slice 27). `Platter` (core/music/platter.gd, model
+tools/blender/platter.py) stands on a leaf off the far end of the tape deck's cart, so it rides the
+cart and is pushed with it; its station row says so (`cart`) rather than giving a footprint, and
+`Venue.platter_spot` reads where the cart is now. Its one number is `turns`: bars from the song's
+start, a turn a bar (`MixState.bar_at`, `bar_to_seconds`). Bare and let be, it follows the song and
+its label turns with it.
+
+Turned by a hand (`Platter.Disc`, a ControlAffordance whose plane is the record's face), the angle is
+the song position. On the host that is `DAW.scrub(seconds, speed)`, a verb in the vocabulary like any
+other, and the backend decides what it sounds like (`DAWBackend.Capability.SCRUB`). The base class
+seeks quietly, which is all the stand-in does. The built-in engine seeks and, while stopped, opens a
+short window (`GodotBackend.SCRUB_WINDOW`) in which its players, or the native lanes, play the mix
+from the dragged place, each move afresh (`scrubbing`, `take_fresh_scrub`). Reaper is given OSC's
+`/scrub` and the seek. Its card says which of these a turn is on this machine (`Platter.scrub_words`).
+Holding it stops the transport; letting go plays on if it was playing. A flick back faster than
+BACKSPIN turns a second spins on alone, slowing at a drag that lands it on the bar line its speed
+spun back to, with `Foley.spinback` once; with no motion wanted it lands at once. A guest's turns are
+not scrubs: they are seeks asked of the host, SEEK_HZ a second at most and the last always sent
+(`_send_seek_if_due`), and the needle the guest hears is a Foley loop of its own (`Foley.needle_drag`).
+Let go, a guest's platter stands where its last seek put it until the host's song is within a beat
+of there, or SEEK_WAIT has passed (`_predicting`), so it does not jump back to the host's old place
+for the round trip.
+
+A cassette stood in its slot (the room's holder `platter`, laid by the studio wherever the cart is)
+makes it a scratch instead, and the song is left alone. The clip is rendered as the ear renders it
+(EarCue's MIDI and demo renders on a worker, or the audio file, fetched by a guest) and read by
+`Varispeed` (core/audio/varispeed.gd): an AudioStreamGenerator on MONITOR, through Godot's mixer, fed
+each frame the stretch from where the hand last had the clip to where it has it now, read in a
+straight line, as loud as it is fast. It is this player's alone. Its tag says so at its figure
+(`SCRATCH · MONITOR n ms`, `Varispeed.latency_seconds`). A scratch is also a path (`Varispeed.path`,
+[dt, seconds, ...]), and `Varispeed.render` is the same arithmetic over it, so a scratch let go while
+REC waits is the sample of exactly what was heard: the host renders it from its own render of the
+clip and gives it to `Sampler.heard_stream` (a guest's path comes as the room verb `scratch`).
+A render is real work on the host's main thread, so it is done only when REC waits and would catch
+it (`Sampler.catches`, checked first in `Studio._sample_scratch`), and only of a path that fits
+(`Varispeed.fits`: PATH_MOST steps and PATH_SECONDS, ten seconds, at most; what `follow` records
+always does, and `render` stops at PATH_SECONDS whatever it is given).
+
+### The history reel: undo by a crank
+
+The tape deck's supply reel carries the history list (docs/spatial_loop.md part two, slice 28).
+`ReelCrank` (hardware/transport/reel_crank.gd) is a ControlAffordance on the reel's hub, turned like
+the platter's record: round its middle by a mouse or a fingertip, by a controller's twist. A notch
+(30 degrees) is a step; anticlockwise is back. The crank gathers notches and does nothing to the mix
+while it turns: once it has stood still SETTLE it calls `DAW.undo_to` once, the same verb the
+timeline's history rail commits, so a turn of twelve notches is one jump, a guest's crank is one
+intent, and the backends' undo_to (OfflineBackend's loop of its own undo and redo, Reaper's steps)
+are untouched. Its ends are the history's (`MixState.undo_depth` and `redo_depth`), met with a knock;
+where the DAW does not say its depth, a settle is that many undos or redos instead. Its readout is
+words from `MixState.undo_names`, so an edit group is read by its name. With the song stopped a
+settle plays two bars there with ordinary transport verbs and seeks back, which a guest asks like
+any other; the two bars are timed from `MixState.counting_in()` ending, so a count-in before
+playback is not taken for the song. A hand that settles while it still holds is re-based there, so
+its next move counts from the settled step. It knows the DAW and not the session, as hardware does.
+
+## Sections rearranged, as one edit
+
+`DAW.arrange_sections(order)` (docs/spatial_loop.md part two, slice 29) lays the song's regions end
+to end in a new order: `order` is `MixState.regions`, which are in song order, by their indices
+there. It is a verb in COMMANDS under Capability.ARRANGE, one undo step ("arrange sections"), and it
+answers why not (`DAW.arrange_refusal`) or "". A guest's is an intent carrying the order. The host
+checks it again against its own regions in `apply_intent`, and Session's `_arrange_for` makes it as
+the guest's, tells the room the new order, and tells the guest a refusal.
+
+The plan is DAWBackend's and pure, so every backend and the bridge share it. `arrange_pieces` turns
+the regions and the order into pieces, [from, end, to] in seconds in the new order: each region, and
+each gap between two, which keeps its slot while the regions around it change. Laid end to end from
+the first region's start, they end where the last ended, so nothing after moves. `arrange_cuts` is
+every edge between two pieces side by side (or a piece and the song beyond) that move by different
+amounts. Only there is anything cut, so a section nobody moved is left whole. Then each kind of
+thing is laid out by its own function:
+- items, split at a cut they cross (`item_slice`, on their own lane, notes and controls kept), each
+  part moved with its piece (`arranged_items`);
+- a comp's spans, the same way (`arranged_spans`);
+- markers, with the piece each sits on, so a section's harmony and notes go with it
+  (`arranged_markers`). A section with no bracket at its start plays the one before it (Harmony),
+  which may not be before it now. `arranged_brackets` writes the harmony it had at its new start:
+  onto the marker there ("Verse 2 [A minor]"), or as a marker that is only brackets. A progression
+  is written turned round to start at the bar it had reached. The song after the last region keeps
+  its harmony the same way when anything is there. A section from before any bracket takes what is
+  before it now, since no bracket says "no key";
+- the regions themselves (`arranged_regions`);
+- every lane of automation (`arranged_lane`). Its own points move with the piece. Where a piece
+  now meets one it did not, a point goes at its start with the value it had there, and a point
+  just before an edge it ramps into (ARRANGE_EDGE). A point at the last region's end keeps the
+  rest of the song as it was.
+
+The song's clock moves only at a piece's start. `arrange_clock_refusal` refuses a tempo or
+signature change anywhere else inside, and a tempo ramp through the pieces. So each piece keeps its
+beats, and `arranged_clock` puts the tempo and signature held at each piece's start at its new
+start, in beats, keeping what held past the end.
+
+`_locally_arrange` writes all of it through the replicating addresses. OfflineBackend (and so the
+built-in engine) remembers `_arrangement()` before and after as one step, which `_put_arrangement`
+puts back. ReaperBackend shows it on the cache the same way and sends one bridge
+`ArrangeSections` (`arrange_request`): the pieces, the tempo map and signatures only when they
+moved, and those brackets. In one Undo block, the bridge reads everything first. It splits each item
+at the cuts (SplitMediaItem), learns where each part, marker, region and envelope point goes, sets
+the tempo map, and then puts everything there in seconds (SetMediaItemPosition, SetProjectMarker4,
+InsertEnvelopePoint). A bracket renames the marker where it lands, or is a new one
+(AddProjectMarker2). The master's "Tempo map" envelope is not among the envelopes: it is the clock,
+which SetTempoMap and SetTimeSignatures set, and its points carry the signatures, so putting its old
+points back would undo both. That way an item whose timebase is beats lands where the rest do. Its own
+check refuses a locked item in the way, on tracks outside the bank too.
+
+### Section blocks: the verb's surface
+
+`SectionBlocks` (core/music/section_blocks.gd, station `sections`, slice 30) is the room's way to
+the verb: the regions as a row of blocks along the bricks table's far long edge, each as long as its
+bars. The table is laid out in bands (`Venue.TABLE_BANDS`, in the table's own frame from
+`Venue.bricks_table`): the wheel's board at the end nearest the control room, the blocks along the
+far edge, and the ledge for chord bricks (slice 31) along the near one. `Venue.band_spot` stands a
+band's station facing the near edge, and the clearance loop holds the bands apart by BAND_GAP
+instead of by each station's `air`. Each block is its own ControlAffordance whose frame's +Z is
+up, so a held ray moves it along the table (Interactor._plane_point). While it is held the others
+make room where it would go (`order_with`), and nothing is written. Its let-go is one
+`DAW.arrange_sections` call, or none when it goes back to its place or is let go off the row. [
+and ] (Studio), the wheel and the thumbstick move a block a place, a call each. A guest's row shows
+the order it asked for until the host's regions arrive, or PENDING seconds pass. The row is rebuilt
+from MixState whenever the regions or the clock change, and never under a hand. The block the
+playhead is in is painted lighter and carries a mark at the playhead, a bar at a time at motion 0.
+With no regions the row is one key, MAKE SECTIONS FROM MARKERS: a region per section marker's span
+(`spans`; brackets alone and `Harmony.is_note` notes skipped, the last to the song's end at a bar),
+added inside one open_edit, so it is one undo step and a guest's is that edit's intents.
+
+### Chord bricks: a progression you hold
+
+`ChordBrick` (core/items/chord_brick_item.gd, slice 31) is a made item of kind `brick`, and the
+wheel is what makes them. A strip tile pulled off the board is a brick in the hand that pulled it
+("chord:<key>:<chord>"), and MAKE BRICKS makes the strip into bricks on the ledge
+("ledge:<key>:<chord>"). The host packs {chord, key} from those words alone. A brick's length is
+not in its data but in the room's row `bricks` {id: bars}, so a nudge is one small row and never
+resends what the item carries. A bare hand has no stick, so the brick in a hand is also turned to
+another length (`ChordBrick.follow_turn` on Interactor.twist, a sixth of a turn a step), by the
+same nudge.
+
+The ledge (`ChordLedge`, station `ledge` in the bricks table's near band) is ItemRoom holder
+`ledge`, whose slots' order is the progression (`ledge_row`). Holders now differ in three ways,
+each a table in ItemRoom:
+- `IN_ORDER` holders fill from the row's end (`next_in_order`), except a let-go right on a free
+  slot (SLOT_EXACT), or a brick put back by, or aimed at, the free slot it was taken from;
+- `BINS` swallow what goes in;
+- `HOLDS` names the kinds a holder takes, so a cassette is refused by the ledge and a brick by the
+  rack, and each says why (`kind_refusal`). Aiming along an IN_ORDER holder skips only its
+  taken-slot check, never its kinds, so a cassette aimed along the ledge goes down instead.
+
+Pressing is the cassette's paste, made general. `ControlAffordance.paste_spot_for(item, at, fine)`
+lets a control take one kind of item and refuse another (a section block takes only a brick, at
+its region's start, track ChordBrick.SECTION), and `Item.paste_text(spot)` lets the item word the
+hover card. A brick pressed into a track is one `insert_midi_take` of block chords (a guest's is
+that take's intent). Pressed into a section block, it writes the row's harmony at that section's
+bar through `FifthsWheel.write`, the same one edit_marker the wheel's SET makes (a guest's is the
+wheel's `harmony` ask). So everything that reads Harmony follows it. A sticky note on that bar line
+is never renamed: it is moved `Harmony.NOTE_NUDGE` along and the brackets are added at the bar, in
+one edit (`DAW.open_edit`).
+
+## Spectra: what each track takes of the frequencies
+
+The EQ wall (docs/spatial_loop.md part two, slice 36) shows each track's spectrum and where two
+tracks fight for the same bands. Four parts, each knowing only the next:
+
+- **Measured where the sound is.** `GodotBackend` ends every track bus ("R3D N") with an
+  AudioEffectSpectrumAnalyzer, after the width and the pan, so it hears what the track puts out.
+  Cues, probes and sends copy a bus's effect slots, not its tail, so none of them carries one, and
+  a render's capture goes on after it. Godot runs a bus's effects before its volume, so
+  `track_spectrum(i)` adds the fader (taper and VCA) itself, and a track not heard reads the floor.
+  It reads only while someone has asked in the last 1.5 s: 20 times a second, 31 third-octave
+  bands, the power averaged over 300 ms. Capability SPECTRA says which engines can; Reaper plays
+  to its own outputs and cannot, nor can the stand-in.
+- **Held by one node.** `Spectra` (core/audio/spectra.gd) is the studio's. On a host, or a lone
+  player, it reads every track that makes sound. On a guest it reads `Session.spectra`, while that
+  is fresh. It holds the reference the clash rule and the wall are drawn against: the mix's loudest
+  band, rising at once and falling 6 dB a second, never under -48 dBFS. A fixed -30 dBFS floor
+  found nothing in a mix whose loudest band is -20. Its static half is the arithmetic, with no
+  state: band edges and names, `clashes` (both within 30 dB of the reference, within 6 dB of each
+  other, runs of bands, worst first), and `pack`/`unpack` for the wire. Folders are not measured,
+  being their children's sum. A return fed by sends is measured, but `feeds` keeps it from
+  clashing with any track whose sound reaches it (through a send or a folder's), and a clash with
+  a return ranks after every clash between two dry tracks. In the demo the reverb return otherwise
+  took every glow from the kick and the bass.
+- **Sent as bytes, and allowed to be lost.** `Session.send_spectra` sends the host's bands five
+  times a second, a byte a band per track (0.4 dB steps from -96 to +6) in parcels under 1100
+  bytes, unreliable and ordered on `SPECTRA_CHANNEL`. A lost parcel is replaced 200 ms later, so
+  nothing waits on it, and it shares no channel with an edit.
+- **Drawn without knowing where from.** `EqWall` takes callables (`spectra`, `reference`,
+  `reason`, `motion`) and never names Session or the backend, as no hardware surface does. Its
+  layers are see-through and sorted by render priority (shapes, then glows, then lettering), since
+  a name at a shape's far edge would otherwise be drawn under the shape. Only the worst four
+  clashes that do not overlap glow. A wall lit everywhere points nowhere, and SHOW's WORST CLASH is
+  there for the rest. The glows are laid out first, and the shapes' names are put clear of them
+  and of one another. A name is left off where a glow over its band already names that track.
+- **Carved through the verbs that exist.** A glow is grabbed on one track's side and pushed (slice
+  37). `EqCarve` (core/music/eq_carve.gd) is static and pure, like `Sidechain`: which engine
+  carves, read from the plugin choices so a guest reads it as its host does (the built-in `eq21`
+  kind, AudioEffectEQ21's 21 half-octave bands, or a ReaEQ); which bands a clash's span covers;
+  ReaEQ's band, frequency, bandwidth and gain found by their parameters' names; and the writes.
+  There is no carve verb. The push is `add_fx` (the first one, at the chain's end) and
+  `set_fx_param`, inside the glow's one edit (ControlAffordance.edits_as_one). The EQ is asked for
+  only once the push has cut (a Shift notch's worth): a click or a grab held still asks for nothing
+  and leaves no undo step. The glow keeps its push until the EQ is in the state, so where the EQ
+  comes later (a guest's host, Reaper's poll) the bands are written when DAW.fx_changed says it
+  has come, once the plugin has finished landing; meanwhile the track is remembered as asked for
+  (Clash.asked_for, static, lapsing after ASKED_FOR_MSEC), so a let-go and a grab again carries
+  the waiting push on and never asks twice. The wheel turned during a drag moves the push's base
+  under the drag. On Reaper the carve is ReaEQ's one band, so a carve on a second clash moves it
+  and gives the first back; the card says so where the band is cutting elsewhere. A glow in a hand keeps its clash, so
+  a carve that ends the clash does not put the glow out under the hand. Godot's bands overlap: a
+  sine at the centre of two bands cut 12 dB loses about 5, so the card names the bands it cuts
+  rather than promising a notch.
 
 ## Things that are deliberately not done yet
 

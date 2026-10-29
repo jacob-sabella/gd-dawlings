@@ -4,8 +4,8 @@ extends Venue
 ## A converted warehouse at night: one long brick room, concrete underfoot, steel overhead, and
 ## tall factory windows on a city that is still up. The desk stands in the middle of it rather
 ## than in a room of its own -- a loft has no control room, only the end you work at -- and the
-## activity zones fill the far end, with a steel gallery along the back wall to look down on the
-## lattice from.
+## activity zones fill the far end, with a steel gallery on the back wall between the booth and the
+## lattice to look down on it from.
 ##
 ## Lit the way a loft is at night: enamel pendants hung low on long cords, each zone's own
 ## fitting, and the moon and the city coming in through the glass. Nothing from the ceiling but
@@ -31,23 +31,41 @@ const SILL := 0.95
 const HEAD := 4.6
 const BAY := 1.7
 ## Window bays: centres along the front wall (x) and the left wall (z). The front's middle bay is
-## behind the timeline, which is a shame and also what a real loft would make you do.
-const FRONT_BAYS := [-4.3, -1.6, 1.6, 4.3]
-const LEFT_BAYS := [-0.9, 1.25]
-## Iron columns holding the roof up, either side of the desk: [x, z] at the base width.
-const COLUMNS := [Vector2(-4.6, -0.6), Vector2(4.6, -0.6), Vector2(-4.6, 2.6), Vector2(4.6, 2.6)]
+## behind the timeline, which is a shame and also what a real loft would make you do. Six across the
+## 17.6 m front and four down the left beside the desk, a factory's rhythm of glass and brick; the
+## left wall past them is the toys' shelf and the booth's.
+const FRONT_BAYS := [-7.0, -4.3, -1.6, 1.6, 4.3, 7.0]
+const LEFT_BAYS := [-2.8, -0.9, 1.25, 3.2]
+## Which of the left bays the storm's weather is at (the one beside the sofa's corner), and the two
+## the Sunday dust is lit through (loft_mote.gdshader takes two openings).
+const WEATHER_BAY := 2
+const MOTE_BAYS := [1, 2]
+## Iron columns holding the roof up, either side of the desk: [x, z] at the base width. Out in the
+## floor beside the footprint, 0.65 m past its edge, so the gear's ring round the seat and the walk
+## along the windows both pass them.
+const COLUMNS := [Vector2(-6.2, -0.9), Vector2(6.2, -0.9), Vector2(-6.2, 2.9), Vector2(6.2, 2.9)]
 const COLUMN_RADIUS := 0.13
-## The gallery along the back wall: its deck's height, and how far it reaches into the room.
-## Above every zone's head room (Venue.ZONES), so the lattice stands under it and is seen from it.
+## Where along the right-hand wall the steam pipes run (z, their middle): beside the desk, between
+## the columns.
+const PIPES_ALONG := 0.9
+## The gallery on the back wall: its deck's height, and how far it reaches into the room. Over the
+## lattice's top (Venue.ZONES), so it is seen from up there. It runs only over the floor nobody
+## needs, behind the riser between the booth and the lattice (gallery_span): its deck is solid to
+## the floor for the walker, and the booth's door and every station keep their room.
 const GALLERY_Y := 3.6
 const GALLERY_DEPTH := 0.95
+## How far the gallery and its stair stand clear of the booth's door wall (a walkway out of the
+## door) and of the lattice's side (a piece's clearance).
+const GALLERY_DOOR_CLEAR := 1.22
+const GALLERY_LATTICE_CLEAR := 0.62
 ## The gallery's deck boards, on its frame: what you stand on up there.
 const DECK_TOP := GALLERY_Y + 0.06
-## The stair up to it: a straight flight in front of the gallery's edge, rising toward the right
-## wall, each step a riser no taller than the walker steps (Walker.STEP_HEIGHT) and a tread
-## deep enough to stand on. It lands at the gallery's right-hand end, where the rail stops short.
+## The stair up to it: a straight flight in front of the gallery's edge, rising toward the lattice,
+## each step a riser no taller than the walker steps (Walker.STEP_HEIGHT) and a tread deep enough
+## to stand on. It lands at the gallery's lattice end, where the rail stops short, so the first
+## thing you see at the top is the lattice below you.
 const STAIR_STEPS := 12
-const STAIR_TREAD := 0.3
+const STAIR_TREAD := 0.28
 const STAIR_WIDTH := 0.62
 const LANDING := 1.0
 ## Steel beams across the room under the roof deck, this far apart.
@@ -63,15 +81,17 @@ const STORM := 2
 ## concrete by the desk, and rakes the faces of the towers out in front. Its height is a morning's.
 const SUN_TRAVEL := Vector3(1.0, -0.46, -0.36)
 ## The Sunday corner by the left windows, at the base width: the sofa's middle (it faces the
-## glass), and the low table between it and the windows.
-const SOFA_AT := Vector2(-3.75, 0.6)
+## glass), and the low table between it and the windows. Out beside the footprint, between the
+## left-hand columns.
+const SOFA_AT := Vector2(-7.1, 1.0)
 const SOFA_SIZE := Vector2(0.86, 2.0)
 const SOFA_TOP := 0.8
-const TABLE_AT := Vector2(-5.05, 0.6)
+const TABLE_AT := Vector2(-8.0, 1.0)
 const TABLE_SIZE := Vector2(0.5, 1.0)
 const TABLE_TOP := 0.4
-## Where the storm's leak comes through the roof, at the base width: the bucket stands under it.
-const LEAK_AT := Vector2(4.75, 1.5)
+## Where the storm's leak comes through the roof, at the base width: the bucket stands under it,
+## in the front-right corner by the windows' puddle, clear of the gear and the columns.
+const LEAK_AT := Vector2(7.3, -2.4)
 
 const MODELS := "res://assets/models/"
 
@@ -368,28 +388,6 @@ func lamp_energy(_index: int, authored: float) -> float:
 	return authored * 0.85
 
 
-## The harp: the gallery and its stair take the back wall behind the bricks table, so it stands
-## at the gallery's edge in the aisle between the riser and the lattice, short of the rail, facing
-## the desk like everywhere else.
-func default_harp_spot() -> Transform3D:
-	var at := zones()
-	var aisle := ((at[&"drums"] as AABB).end.x + (at[&"matrix"] as AABB).position.x) * 0.5
-	var z := LIVE_ROOM_BACK - GALLERY_DEPTH - 0.06 - (ChordHarp.FOOT.y - ChordHarp.FOOT_Z)
-	return Transform3D(Basis(Vector3.UP, PI), Vector3(aisle, 0, z))
-
-
-## The bells' stand: the aisle is too narrow for the usual hand's width either side, so it stands
-## in the middle of what is left between the harp's plinth and the drum riser, on the harp's
-## high side as everywhere else, its back in line with the plinth's.
-func default_bell_stand_spot() -> Transform3D:
-	var harp := default_harp_spot()
-	var riser := (zones()[&"drums"] as AABB).end.x
-	var plinth := harp.origin.x - ChordHarp.FOOT.x
-	var x := (riser + plinth) * 0.5
-	var back := ChordHarp.FOOT_Z - ChordHarp.FOOT.y + HandbellItem.STAND.y * 0.5
-	return Transform3D(harp.basis, Vector3(x, 0, (harp * Vector3(0, 0, back)).z))
-
-
 ## Past the footprint the loft is one room: the floor either side of the desk is as walkable as
 ## the far end, so two strips beside the footprint join it to the back of house.
 func rooms() -> Array[Rect2]:
@@ -405,20 +403,51 @@ func _column_spots() -> Array[Vector2]:
 	return out
 
 
+## Its instrument (VenueInstrument, docs/spatial_loop.md part two, slice 43): eight steam pipes
+## dropping from a header along the brick of the right-hand wall, between its two columns (the back
+## wall is the gallery's, its stair and the harp and the bells under it).
+func instrument() -> Dictionary:
+	return {"kind": &"pipes", "spot": side_wall_instrument(1.0, PIPES_ALONG, 0.024)}
+
+
+## Its weather (Weather, docs/spatial_loop.md part two, slice 44): in the Thunderstorm, the rain on
+## the left-hand wall's window by the sofa's corner (WEATHER_BAY), and the switch on its sill, in
+## the reveal, where a hand reaches it from the floor. No weather in the other two.
+func weather() -> Dictionary:
+	if variant != STORM:
+		return {}
+	var half := live_room_half()
+	var along := float(LEFT_BAYS[WEATHER_BAY])
+	var turn := Basis(Vector3.UP, PI * 0.5)
+	return {"kind": &"storm", "spot": Transform3D(turn, Vector3(-half, 0, along)), "sill": SILL,
+			"switch_z": -0.09, "glass": Transform3D(turn, Vector3(-half - WALL * 0.5 + 0.006, (SILL + HEAD) * 0.5, along)),
+			"size": Vector2(BAY - 0.1, HEAD - SILL - 0.1), "low": 72}
+
+
 func zone_solids() -> Array:
 	var out := ZoneKit.solids(zones(), true)
 	for c in _column_spots():
 		out.append({"c": c, "h": Vector2.ONE * COLUMN_RADIUS, "a": 0.0, "top": HEIGHT})
 	# The stair, a step at a time, and the gallery it climbs to: you walk up one onto the other.
 	out.append_array(stair_steps())
-	var half := live_room_half()
+	var span := gallery_span()
 	var front := LIVE_ROOM_BACK - GALLERY_DEPTH
-	out.append({"c": Vector2(0, LIVE_ROOM_BACK - GALLERY_DEPTH * 0.5), "h": Vector2(half, GALLERY_DEPTH * 0.5),
+	# To the walkable floor's edge, 5 cm short of the brick (back_of_house).
+	var reach := GALLERY_DEPTH - 0.05
+	var deep := front + reach * 0.5
+	out.append({"c": Vector2((span.x + span.y) * 0.5, deep), "h": Vector2((span.y - span.x) * 0.5, reach * 0.5),
 			"a": 0.0, "top": DECK_TOP})
-	# And its rail, which keeps you on it except where the stair comes up.
+	# And its rail, which keeps you on it except where the stair comes up: along the front, and
+	# across both open ends.
 	var gap := _landing_x()
-	out.append({"c": Vector2((gap - half) * 0.5, front + 0.03), "h": Vector2((gap + half) * 0.5, 0.03),
+	out.append({"c": Vector2((gap + span.x) * 0.5, front + 0.03), "h": Vector2((gap - span.x) * 0.5, 0.03),
 			"a": 0.0, "top": DECK_TOP + 1.1})
+	for x in [span.x + 0.03, span.y - 0.03]:
+		out.append({"c": Vector2(x, deep), "h": Vector2(0.03, reach * 0.5), "a": 0.0, "top": DECK_TOP + 1.1})
+	# And across the stair's head, which comes up at the gallery's lattice end: the top tread is a
+	# landing, not a ledge to walk off over the lattice.
+	var stair_z: float = stair_steps()[0]["c"].y
+	out.append({"c": Vector2(span.y - 0.03, stair_z), "h": Vector2(0.03, STAIR_WIDTH * 0.5), "a": 0.0, "top": DECK_TOP + 1.1})
 	# Sunday's sofa and its table by the windows; the storm's bucket under the leak.
 	if variant == SUNDAY:
 		out.append({"c": _beside(SOFA_AT), "h": SOFA_SIZE * 0.5, "a": 0.0, "top": SOFA_TOP})
@@ -434,11 +463,20 @@ func _beside(at: Vector2) -> Vector2:
 	return Vector2(at.x + signf(at.x) * _grow(), at.y)
 
 
+## Where the gallery runs along the back wall (x from, x to): from a walkway's width past the booth's
+## door wall to a piece's clearance short of the lattice -- the floor behind the riser that nothing
+## else needs.
+func gallery_span() -> Vector2:
+	var at := zones()
+	var booth: AABB = at.get(&"vocals", ZONES[&"vocals"])
+	var lattice: AABB = at.get(&"matrix", ZONES[&"matrix"])
+	return Vector2(booth.end.x + GALLERY_DOOR_CLEAR, lattice.position.x - GALLERY_LATTICE_CLEAR)
+
+
 ## The stair's steps as walker footprints: each a column from the floor to its tread.
 func stair_steps() -> Array:
 	var out := []
-	var half := live_room_half()
-	var start := half - 0.05 - STAIR_STEPS * STAIR_TREAD
+	var start := gallery_span().y - STAIR_STEPS * STAIR_TREAD
 	var z := LIVE_ROOM_BACK - GALLERY_DEPTH - 0.01 - STAIR_WIDTH * 0.5
 	for i in STAIR_STEPS:
 		out.append({"c": Vector2(start + STAIR_TREAD * (i + 0.5), z), "h": Vector2(STAIR_TREAD, STAIR_WIDTH) * 0.5,
@@ -448,7 +486,7 @@ func stair_steps() -> Array:
 
 ## Where the gallery's rail stops, so the stair can land: the last LANDING of its length.
 func _landing_x() -> float:
-	return live_room_half() - LANDING
+	return gallery_span().y - LANDING
 
 
 func _ready() -> void:
@@ -619,50 +657,68 @@ func _raise_columns() -> void:
 		i += 1
 
 
-## A steel gallery along the back wall: a deck on brackets, a rail, and a stair up to it at the
-## right-hand end, between the keys and the wall. You can climb it, and stand over the lattice --
-## which is made to be looked down on.
+## A steel gallery on the back wall: a deck on brackets, a rail, and a stair up to it along its
+## front, landing at the lattice end. You can climb it, and stand over the lattice -- which is made
+## to be looked down on.
 func _build_gallery(steel: Material) -> void:
-	var half := live_room_half()
+	var span := gallery_span()
 	var wall := LIVE_ROOM_BACK
 	var front := wall - GALLERY_DEPTH
-	var length := half * 2.0 - 0.004
+	var length := span.y - span.x - 0.004
+	var mid := (span.x + span.y) * 0.5
 	ZoneKit.block(self, Vector3(length, 0.06, GALLERY_DEPTH - 0.002),
-			Vector3(0, GALLERY_Y + 0.03, wall - GALLERY_DEPTH * 0.5 - 0.001),
+			Vector3(mid, GALLERY_Y + 0.03, wall - GALLERY_DEPTH * 0.5 - 0.001),
 			Materials.cached_scanned("loft_deck", "black_walnut_veneer_01", "2k", 1.2, Color(0.2, 0.16, 0.13)),
 			"GalleryDeck")
 	# The edge beam under the deck's front, which is what the deck reads as from below.
-	ZoneKit.block(self, Vector3(length - 0.002, 0.24, 0.1), Vector3(0, GALLERY_Y - 0.121, front + 0.05),
+	ZoneKit.block(self, Vector3(length - 0.002, 0.24, 0.1), Vector3(mid, GALLERY_Y - 0.121, front + 0.05),
 			steel, "GalleryBeam")
-	# Brackets back to the wall every couple of metres.
-	var brackets := int(length / 2.0) + 1
+	# Brackets back to the wall a metre or so apart.
+	var brackets := int(length / 1.1) + 1
 	for i in brackets:
-		var x := lerpf(-half + 0.3, half - 0.3, float(i) / (brackets - 1))
+		var x := lerpf(span.x + 0.25, span.y - 0.25, float(i) / (brackets - 1))
 		var brace := ZoneKit.block(self, Vector3(0.06, 0.06, GALLERY_DEPTH * 1.25),
 				Vector3(x, GALLERY_Y - 0.5, wall - GALLERY_DEPTH * 0.48), steel, "GalleryBrace%d" % i)
 		brace.rotation.x = -0.72
-	# The rail: posts, a top rail and a mid rail, stopping where the stair lands.
+	# The rail: posts, a top rail and a mid rail, stopping where the stair lands; and the same
+	# across both open ends, back to the brick.
 	var gap := _landing_x()
-	var railed := gap + half
+	var railed := gap - span.x
 	var posts := int(railed / 1.2) + 1
 	for i in posts:
-		var x := lerpf(-half + 0.05, gap, float(i) / (posts - 1))
+		var x := lerpf(span.x + 0.03, gap, float(i) / (posts - 1))
 		ZoneKit.block(self, Vector3(0.04, 1.0, 0.04), Vector3(x, GALLERY_Y + 0.56, front + 0.03), steel,
 				"GalleryPost%d" % i)
+	ZoneKit.block(self, Vector3(0.04, 1.0, 0.04), Vector3(span.y - 0.03, GALLERY_Y + 0.56, front + 0.03), steel,
+			"GalleryPostEnd")
 	for y in [GALLERY_Y + 1.07, GALLERY_Y + 0.58]:
-		ZoneKit.block(self, Vector3(railed - 0.06, 0.035, 0.03), Vector3((gap - half) * 0.5 + 0.02, y, front + 0.03),
+		ZoneKit.block(self, Vector3(railed - 0.04, 0.035, 0.03), Vector3((gap + span.x) * 0.5 + 0.01, y, front + 0.03),
 				steel, "GalleryRail")
-	# Lamps clamped under the deck's edge beam, grazing the brick behind: the back wall is what
-	# you see from the desk, and grazed brick is what a loft looks like at night.
-	# Not on a sunny morning: the sun is doing it.
-	var grazers := 0 if variant == SUNDAY else 4
-	for i in grazers:
-		var x := lerpf(-half * 0.75, half * 0.75, float(i) / (grazers - 1))
-		var lamp := ZoneKit.spot_down(self, Vector3(x, GALLERY_Y - 0.046, wall - 0.35),
-				Color(1.0, 0.66, 0.4), 5.5, 38.0, 4.8, steel)
-		lamp.rotation_degrees.x = -78.0
-	_string_festoon(front + 0.03, GALLERY_Y + 1.07, length)
+		for x in [span.x + 0.03, span.y - 0.03]:
+			ZoneKit.block(self, Vector3(0.03, 0.035, GALLERY_DEPTH - 0.1), Vector3(x, y, wall - GALLERY_DEPTH * 0.5 + 0.02),
+					steel, "GalleryEndRail")
+	# Lamps grazing the brick of the back wall, the wall you see from the desk -- grazed brick is
+	# what a loft looks like at night: two clamped under the deck's edge beam, and the rest along
+	# the last roof beam, aimed down the wall. Not on a sunny morning: the sun is doing it.
+	if variant != SUNDAY:
+		for x in [span.x + length * 0.25, span.y - length * 0.25]:
+			var lamp := ZoneKit.spot_down(self, Vector3(x, GALLERY_Y - 0.046, wall - 0.35),
+					Color(1.0, 0.66, 0.4), 5.5, 38.0, 4.8, steel)
+			lamp.rotation_degrees.x = -78.0
+		var half := live_room_half()
+		var beam_z := _last_beam_z()
+		for x in [-half * 0.8, half * 0.25, half * 0.55, half * 0.85]:
+			var lamp := ZoneKit.spot_down(self, Vector3(x, _under_beam(), beam_z), Color(1.0, 0.66, 0.4), 6.0,
+					40.0, 7.0, steel)
+			lamp.rotation_degrees.x = -32.0
+	_string_festoon(mid, front + 0.03, GALLERY_Y + 1.07, length)
 	_build_stair(steel)
+
+
+## The roof beam nearest the back wall, which the back wall's grazers hang from.
+func _last_beam_z() -> float:
+	var count := ceili((LIVE_ROOM_BACK - FRONT) / BEAM_SPACING)
+	return FRONT + BEAM_SPACING * (count - 0.5)
 
 
 ## The stair: a steel plate at each step's height (stair_steps), two stringers along its sides,
@@ -690,12 +746,19 @@ func _build_stair(steel: Material) -> void:
 	var handrail := ZoneKit.block(self, Vector3(rise.length() - STAIR_TREAD, 0.035, 0.035),
 			(foot + top) * 0.5 + Vector3(0, 0.98, rail_z - z), steel, "StairRail")
 	handrail.rotation.z = atan2(rise.y, rise.x)
+	# The gallery's end rail carried on across the stair's head, on a post at its front corner.
+	var head: float = last["c"].x + STAIR_TREAD * 0.5 - 0.03
+	var front := LIVE_ROOM_BACK - GALLERY_DEPTH
+	ZoneKit.block(self, Vector3(0.04, 1.0, 0.04), Vector3(head, GALLERY_Y + 0.56, rail_z + 0.005), steel, "StairHeadPost")
+	for y in [GALLERY_Y + 1.065, GALLERY_Y + 0.575]:
+		ZoneKit.block(self, Vector3(0.03, 0.035, front + 0.01 - rail_z), Vector3(head, y, (rail_z + front + 0.01) * 0.5),
+				steel, "StairHeadRail")
 
 
 ## A festoon of bare bulbs hung along the gallery's top rail, each a little drop on its wire:
 ## lit by nothing but themselves, and enough to say where the gallery is from anywhere in the
 ## room. One MultiMesh.
-func _string_festoon(z: float, rail_y: float, length: float) -> void:
+func _string_festoon(mid: float, z: float, rail_y: float, length: float) -> void:
 	var spacing := 0.55
 	var count := int(length / spacing)
 	var bulbs := MultiMesh.new()
@@ -708,7 +771,7 @@ func _string_festoon(z: float, rail_y: float, length: float) -> void:
 	bulbs.mesh = bulb
 	bulbs.instance_count = count
 	for i in count:
-		var x := -length * 0.5 + spacing * (i + 0.5)
+		var x := mid - length * 0.5 + spacing * (i + 0.5)
 		# Every bulb hangs a little lower in the middle of a span, the way wire sags.
 		var sag := 0.1 + 0.05 * sin(PI * fposmod(x / 1.2, 1.0))
 		bulbs.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(x, rail_y - sag, z + 0.03)))
@@ -735,8 +798,12 @@ func _dark_bulb() -> StandardMaterial3D:
 	return m
 
 
-## Enamel factory shades on long cords from the beams, low over the walkway between the desk and
-## the zones: the room's light comes from these, not from the roof.
+## Enamel factory shades on long cords from the beams: a row low over the walk between the desk
+## and the zones, one either side of the desk, and a row further back over the walkways between
+## the neighbourhoods (x +-4: between the lattice and the synths, between the riser and the toys)
+## and before the gallery's stair,
+## never over a neighbourhood's middle, where its banner hangs. The room's light comes from these,
+## not from the roof.
 func _hang_pendants() -> void:
 	var enamel := StandardMaterial3D.new()
 	enamel.albedo_color = Color(0.09, 0.16, 0.13)
@@ -749,7 +816,12 @@ func _hang_pendants() -> void:
 	var spots := [Vector3(-half * 0.68, 3.0, 3.25), Vector3(-half * 0.24, 3.0, 3.25),
 			Vector3(half * 0.24, 3.0, 3.25), Vector3(half * 0.68, 3.0, 3.25),
 			# And one either side of the desk, over the floor beside it.
-			Vector3(-half * 0.72, 3.1, 0.9), Vector3(half * 0.72, 3.1, 0.9)]
+			Vector3(-half * 0.72, 3.1, 0.9), Vector3(half * 0.72, 3.1, 0.9),
+			# And the back row, over the walkways, hung higher: the lattice's 3.4 m and the
+			# banners are under these.
+			Vector3(-4.0, 3.9, 8.4), Vector3(4.0, 3.9, 8.0), Vector3(4.0, 3.9, 11.2),
+			# And one over the foot of the gallery's stair, in front of it.
+			Vector3(-2.4, 3.9, 9.9)]
 	for i in spots.size():
 		var at: Vector3 = spots[i]
 		var drop := HEIGHT - 0.36 - at.y
@@ -946,8 +1018,10 @@ func _let_the_sun_in() -> void:
 	var openings: Array = window_openings["Left"]
 	mote.set_shader_parameter("travel", d)
 	mote.set_shader_parameter("wall_x", -half - WALL * 0.5)
-	mote.set_shader_parameter("opening_a", Vector2(openings[0].z, openings[0].y))
-	mote.set_shader_parameter("opening_b", Vector2(openings[1].z, openings[1].y))
+	var lit_a: Vector3 = openings[MOTE_BAYS[0]]
+	var lit_b: Vector3 = openings[MOTE_BAYS[1]]
+	mote.set_shader_parameter("opening_a", Vector2(lit_a.z, lit_a.y))
+	mote.set_shader_parameter("opening_b", Vector2(lit_b.z, lit_b.y))
 	mote.set_shader_parameter("half_size", Vector2(BAY, tall) * 0.5)
 	mote.set_shader_parameter("rows", float(rows))
 	var speck := QuadMesh.new()
@@ -1064,7 +1138,8 @@ func _make_a_corner() -> void:
 	var sofa_at := _beside(SOFA_AT)
 	var table_at := _beside(TABLE_AT)
 	# A flat-woven rug: a madder-red border round an oatmeal field.
-	var mid := Vector2((sofa_at.x + table_at.x) * 0.5 - 0.2, SOFA_AT.y + 0.05)
+	# Off the brick by a hand's width, more of it under the sofa than the table.
+	var mid := Vector2((sofa_at.x + table_at.x) * 0.5 + 0.15, SOFA_AT.y + 0.05)
 	var border := Materials.cached_scanned("loft_rug_border", "wool_boucle", "1k", 0.35, Color(0.5, 0.17, 0.12))
 	var field := Materials.cached_scanned("loft_rug_field", "wool_boucle", "1k", 0.35, Color(0.72, 0.64, 0.52))
 	var rug := ZoneKit.block(self, Vector3(2.3, 0.01, 2.1), Vector3(mid.x, 0.005, mid.y), border, "Rug")

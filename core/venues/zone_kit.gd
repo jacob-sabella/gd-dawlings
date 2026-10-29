@@ -16,21 +16,38 @@ const TABLE_TOP := Vector3(1.0, 0.05, 2.0)
 const TABLE_HEIGHT := 0.92
 const STAND_WIDTH := 1.5
 const BOOTH_POST := 0.07
-const BOOTH_DOOR := 0.8
+## Wide enough to walk through square on, with a 0.9 m walkway to it (2026-10-28).
+const BOOTH_DOOR := 1.2
 ## Which wall of the booth the door is in: the one facing the middle of the room.
 const BOOTH_DOOR_SIDE := Vector3(1, 0, 0)
 
 
 ## What in the zones stops you, as walker footprints ({c, h, a, top}) in studio space: the
-## riser (a step: low enough to walk up onto), the table, the keyboard stand, the mic stand and,
+## riser (a step: low enough to walk up onto) and the hand drums and the looper's stand on it, the table, the keyboard stand, the mic stand and,
 ## when the
 ## venue builds one with walls, the booth's four walls, less its doorway. The lattice's zone
-## is open floor; you walk into it.
+## is open floor; you walk into it, round the marble run's tray at its face toward the desk.
 static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	var out: Array = []
 	var drums: AABB = zones[&"drums"]
 	out.append(_print(drums, Vector2(drums.size.x, drums.size.z) * 0.5 - Vector2.ONE * RISER_INSET * 0.5,
 			RISER_HEIGHT))
+	# The hand drums standing on it (docs/spatial_loop.md part two, slice 40): you walk round them.
+	for n in HandDrum.KINDS.size():
+		var at := Venue.drum_ring(drums, n)
+		var spec: Dictionary = HandDrum.SPECS[HandDrum.KINDS[n]]
+		# Square, turned to face the ring's middle with a side rather than a corner.
+		out.append({"c": Vector2(at.origin.x, at.origin.z), "h": Vector2.ONE * Venue.DRUM_FOOT,
+				"a": at.basis.get_euler().y + PI * 0.25, "top": RISER_HEIGHT + float(spec["height"])})
+	# The looper's stand at its front corner (slice 45), the station's own, which its clearance leaves
+	# out of its own air (`station`).
+	var looper := Venue.looper_at(drums)
+	out.append({"c": Vector2(looper.origin.x, looper.origin.z), "h": Vector2.ONE * Looper.STAND_FOOT,
+			"a": looper.basis.get_euler().y, "top": RISER_HEIGHT + Looper.TOP, "station": Looper.STATION})
+	# The marble run's tray at the lattice's face toward the desk (slice 49), the station's own; the
+	# lattice itself is open floor.
+	if zones.has(&"matrix"):
+		out.append(MarbleRun.tray_solid(MarbleRun.frame_in(zones[&"matrix"])))
 	out.append(_print(zones[&"bricks"], Vector2(TABLE_TOP.x, TABLE_TOP.z) * 0.5, TABLE_HEIGHT))
 	# The stand's feet are half a metre deep and its decks a little over a metre up.
 	out.append(_print(zones[&"synth"], Vector2(0.25, STAND_WIDTH * 0.5), 1.05))
@@ -38,6 +55,9 @@ static func solids(zones: Dictionary, booth_walls: bool) -> Array:
 	var booth_zone: AABB = zones[&"vocals"]
 	out.append({"c": Vector2(booth_zone.get_center().x + MIC_AT.x, booth_zone.get_center().z + MIC_AT.z),
 			"h": Vector2(0.15, 0.15), "a": 0.0, "top": MIC_HEIGHT})
+	# The lyric board's stand beyond it (slice 56), the station's own.
+	out.append({"c": Vector2(booth_zone.get_center().x + LyricBoard.IN_BOOTH.x, booth_zone.get_center().z + LyricBoard.IN_BOOTH.z),
+			"h": Vector2.ONE * LyricBoard.BASE, "a": 0.0, "top": LyricBoard.FRAME_TOP.y, "station": LyricBoard.STATION})
 	if booth_walls:
 		var booth: AABB = zones[&"vocals"]
 		var c := Vector2(booth.get_center().x, booth.get_center().z)
@@ -436,6 +456,25 @@ static func keyboard_stand(parent: Node3D, width: float, metal: Material, deck: 
 				metal, "Foot")
 	block(parent, Vector3(0.36, 0.025, width), Vector3(-0.04, 0.80, 0), deck, "Deck")
 	block(parent, Vector3(0.28, 0.025, width * 0.9), Vector3(0.14, 1.02, 0), deck, "UpperDeck")
+
+
+## The synth zone's module rack, given way to the modular wall that hangs where it was (ModularWall,
+## Venue.modular_spot, docs/spatial_loop.md part two, slice 51): a venue's own case, lights or panel
+## over the stand (named "Module..."), and whatever outlines one where it stands, hidden; or shown
+## again, where the wall does not hang.
+static func yield_rack(venue: Node3D, yielded := true) -> void:
+	var zone := venue.get_node_or_null("Zone_synth") as Node3D
+	if zone == null:
+		return
+	var at: Array[Vector3] = []
+	for child in zone.get_children():
+		if child is Node3D and String(child.name).begins_with("Module"):
+			(child as Node3D).visible = not yielded
+			at.append((child as Node3D).position)
+	for child in zone.get_children():
+		if child is Node3D and not String(child.name).begins_with("Module") \
+				and at.any(func(p: Vector3) -> bool: return p.is_equal_approx((child as Node3D).position)):
+			(child as Node3D).visible = not yielded
 
 
 ## Where the booth's mic stand stands, in the booth's frame, and which way its boom reaches: by
