@@ -34,6 +34,17 @@ const GOODBYE_SECONDS := 0.3
 ## guest on a slow wifi hop to build its scene and say hello; short enough that a port scan does
 ## not leave a row of ghosts holding slots.
 const ADMIT_SECONDS := 6.0
+## How long a guest by code waits for a punched path before asking for the relay, and then for
+## the relay. Six seconds: ENet's own connect gives up later than a person will wait.
+const LINK_SECONDS := 6.0
+## How long the host sends toward a guest noray announced, ten times a second.
+const PUNCH_SECONDS := 3.0
+## The mix, carried over the session's ENet for a guest by code (MixFeed.carried). Its own
+## channel, so it never waits behind a reliable message on another.
+const MIX_CHANNEL := 9
+## How long a guest's mix socket waits to hear the mix over a punch, then over the relay, before
+## the next way. Shorter than the session's: a mix that is not heard in three seconds is not coming.
+const MIX_LINK_SECONDS := 3.0
 
 ## Handed out in join order, and the host's is the first. Chosen against every venue rather
 ## than for one: each has to read as a light on a dark studio AND on the chalk room's pale
@@ -51,6 +62,8 @@ const PALETTE: Array[Color] = [
 ]
 
 signal participant_joined(peer_id: int)
+## Joining by a code, or hosting online, moved on: found, punched, relayed, or failed. See `online`.
+signal link_changed()
 signal participant_left(peer_id: int)
 signal role_changed()
 ## Names, colours or mediums changed. Fires on everyone, from the host's word on the matter.
@@ -174,6 +187,39 @@ var port: int = DEFAULT_PORT
 ## The hosted session opened to the internet through the router (`open_to_internet`): what the
 ## host tells someone who is not in the room.
 var internet := InternetDoor.new()
+## Online by a code instead of an address, through a noray server: the host's registration there,
+## or a guest's way in. See core/session/noray_link.gd and docs/multiplayer.md.
+var online := NorayLink.new()
+## The mix's own way through noray, beside the session's (MixFeed's socket is not the session's):
+## the host's registration of it, or a guest's punch or relay to it. See `_mix_by_code`.
+var mix_online := NorayLink.new()
+## How a guest by code hears the mix: "direct" (its socket punched through), "relayed" (through
+## noray's relay), "carried" (over the session's ENet, the last resort), "" otherwise.
+var mix_route := ""
+var _mix_phase := ""
+var _mix_clock := 0.0
+## The host's mix code, given with the ticket.
+var _mix_code := ""
+var _mix_punching: Array = []
+## How this guest reached its host: "" by address (or on the LAN), "direct" when noray punched
+## through both routers, "relayed" when its server passes the traffic on.
+var link_kind := ""
+## A guest's way in by a code, while it is under way: "finding", "punching" or "relaying"; "" else.
+var link_phase := ""
+## The code this guest joined by, as noray has it.
+var joined_code := ""
+## Straight to noray's relay, without trying the punch: --relay, and the probe's relayed run.
+var force_relay := false
+## LINK_SECONDS, as a variable for the suite.
+var link_seconds := LINK_SECONDS
+## The noray server for this run (--noray-server); "" for the kept one (NorayLink.server_setting).
+var online_server := ""
+## Host: internet addresses noray said a guest is coming from, punched toward for a while:
+## [ip, port, seconds left].
+var _punching: Array = []
+var _punch_clock := 0.0
+var _link_clock := 0.0
+var _link_door := ""
 ## The code a guest must give to be let in, or "" for an open session. Host side only.
 var code: String = ""
 ## The code this guest will offer. Kept apart from `code` so that joining with one does not
@@ -395,6 +441,14 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	multiplayer.peer_packet.connect(_on_peer_packet)
+	online.changed.connect(_on_online_changed)
+	online.punch.connect(_on_online_punch)
+	online.relay.connect(_on_online_relay)
+	mix_online.changed.connect(_on_mix_online_changed)
+	mix_online.punch.connect(_on_mix_online_punch)
+	mix_online.relay.connect(_on_mix_online_relay)
+	force_relay = OS.get_environment("DAWLINGS_NORAY_RELAY") == "1"
 	# Deferred: DAW is an autoload too, and may not be in the tree yet.
 	(func():
 		DAW.project_replaced.connect(_on_project_replaced)
@@ -412,6 +466,8 @@ func _exit_tree() -> void:
 	if internet.state != InternetDoor.State.CLOSED:
 		internet.close()
 	internet.finish()
+	online.close()
+	mix_online.close()
 	if role != Role.HOST or not _connected():
 		return
 	var peer := multiplayer.multiplayer_peer
@@ -426,6 +482,12 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	_tick_beacon(delta)
 	_tick_admission()
+	online.poll(delta)
+	mix_online.poll(delta)
+	_tick_link(delta)
+	_tick_punches(delta)
+	_tick_mix_link(delta)
+	_carry_mix()
 	for peer in _closing_peers:
 		peer.poll()
 
@@ -444,6 +506,7 @@ static func _default_name() -> String:
 ## Start a solo session: no network, this process also owns the Reaper link.
 func start_solo() -> void:
 	_close_peer()
+	_end_link()
 	if mix_feed != null:
 		mix_feed.stop()
 	_audio_ticket = 0
@@ -495,11 +558,15 @@ func host(at_port: int = DEFAULT_PORT) -> bool:
 	return true
 
 
-func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") -> bool:
+func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "",
+		local_port: int = 0) -> bool:
+	# By address: whatever way in by a code was under way is over. By code, this is its dial.
+	if link_phase.is_empty():
+		_end_link()
 	_close_peer()
 	_offered_code = with_code.strip_edges()
 	var peer := ENetMultiplayerPeer.new()
-	if peer.create_client(address, at_port) != OK:
+	if peer.create_client(address, at_port, 0, 0, 0, local_port) != OK:
 		push_error("Session: cannot reach %s:%d" % [address, at_port])
 		notice.emit("Could not reach %s." % address)
 		return false
@@ -515,8 +582,10 @@ func join(address: String, at_port: int = DEFAULT_PORT, with_code: String = "") 
 	room_seq = 0
 	port = at_port
 	joined_address = address
-	# Same machine, same speakers: the host's Reaper is already audible here.
-	var local := address.begins_with("127.") or address == "localhost" or address == "::1"
+	# Same machine, same speakers: the host's Reaper is already audible here. Never so by a code:
+	# that is for someone elsewhere, and on one machine the relay's address is the loopback too.
+	var local := link_phase.is_empty() and (address.begins_with("127.") or address == "localhost"
+			or address == "::1")
 	hear_mix = (not local) if listen_choice < 0 else listen_choice == 1
 	_has_settled = false
 	local_peer_id = multiplayer.get_unique_id()
@@ -544,6 +613,310 @@ func open_to_internet() -> void:
 
 func close_to_internet() -> void:
 	internet.close()
+
+
+# --- online, by a code --------------------------------------------------------------------
+
+## Host online: registered with a noray server, which hands out a short code (`online.oid`) that
+## finds this session from anywhere, no router asked. Hosts first if on your own. `online.changed`
+## reports; a failure is in `online.why_not`. The session code at the door still applies.
+func host_online(at_port: int = DEFAULT_PORT, server: String = "") -> bool:
+	if role == Role.GUEST:
+		return false
+	if role == Role.SOLO and not host(at_port):
+		return false
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet == null:
+		return false
+	_punching.clear()
+	_mix_punching.clear()
+	online.open(_server(server), NorayLink.via_enet(enet.host))
+	if mix_feed != null and mix_feed.sending:
+		mix_online.registrar_port = online.registrar_port
+		mix_online.open(_server(server), mix_feed.send_raw)
+	link_changed.emit()
+	return true
+
+
+## Off noray: the code stops working. Guests already in stay in.
+func go_offline() -> void:
+	if role == Role.HOST:
+		online.close()
+		mix_online.close()
+		_punching.clear()
+		_mix_punching.clear()
+		link_changed.emit()
+
+
+## Join by the code a host read out: noray finds its internet address, both sides punch, and if
+## no path opens in LINK_SECONDS, noray's relay carries it instead. `with_code` is the session
+## code at the door, if the host asked for one. Reports through `link_changed` and `notice`.
+func join_by_code(typed: String, with_code: String = "", server: String = "") -> bool:
+	var code := NorayLink.clean_code(typed)
+	if code.is_empty():
+		notice.emit("Type the host's join code first.")
+		return false
+	if role != Role.SOLO:
+		leave()
+	_end_link()
+	joined_code = code
+	_link_door = with_code
+	link_phase = "finding"
+	_link_clock = 0.0
+	online.open(_server(server))
+	link_changed.emit()
+	return online.state != NorayLink.State.FAILED
+
+
+## Where a host's guest came in from, for the roster: "relayed" through noray's server, "direct"
+## when noray punched it through, "" by address.
+func route_of(peer_id: int) -> String:
+	if peer_id == local_peer_id:
+		return link_kind
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if role != Role.HOST or enet == null or not online.is_online():
+		return ""
+	var peer := enet.get_peer(peer_id)
+	if peer == null:
+		return ""
+	var ip := peer.get_remote_address()
+	var at := peer.get_remote_port()
+	if ip == online.server_ip and online.relay_ports.has(at):
+		return "relayed"
+	for p in _punched:
+		if p[0] == ip and int(p[1]) == at:
+			return "direct"
+	return ""
+
+
+## Every address noray announced, for route_of: the punching rows only last PUNCH_SECONDS.
+var _punched: Array = []
+
+
+func _server(asked: String) -> String:
+	if not asked.is_empty():
+		return asked
+	return online_server if not online_server.is_empty() else NorayLink.server_setting()
+
+
+func _end_link() -> void:
+	var was := link_phase != "" or link_kind != "" or online.state != NorayLink.State.CLOSED
+	online.close()
+	_end_mix_link()
+	_mix_code = ""
+	link_phase = ""
+	link_kind = ""
+	joined_code = ""
+	_punching.clear()
+	_punched.clear()
+	_mix_punching.clear()
+	if was:
+		link_changed.emit()
+
+
+func _on_online_changed() -> void:
+	if link_phase == "finding" and online.is_online():
+		if force_relay:
+			link_phase = "relaying"
+			_link_clock = 0.0
+			online.ask_relay(joined_code)
+		else:
+			online.ask_direct(joined_code)
+	elif online.state == NorayLink.State.FAILED:
+		if link_phase != "":
+			_link_failed(online.why_not)
+			return
+		if role == Role.HOST:
+			notice.emit(online.why_not)
+	link_changed.emit()
+
+
+## noray says where the other side is. A host punches toward a guest; a guest dials the host.
+func _on_online_punch(ip: String, at_port: int) -> void:
+	if role == Role.HOST:
+		_punching.append([ip, at_port, PUNCH_SECONDS])
+		_punched.append([ip, at_port])
+		_punch_clock = 0.0
+	elif link_phase == "finding":
+		link_phase = "punching"
+		_link_clock = 0.0
+		join(ip, at_port, _link_door, online.local_port)
+		link_changed.emit()
+
+
+## noray gave a relay port. A host punches toward it (the guest will appear from there); a guest
+## dials the noray server at it, from the same registered port.
+func _on_online_relay(relay_port: int) -> void:
+	if role == Role.HOST:
+		_punching.append([online.server_ip, relay_port, PUNCH_SECONDS])
+		_punch_clock = 0.0
+	elif link_phase == "relaying":
+		_link_clock = 0.0
+		join(online.server_ip, relay_port, _link_door, online.local_port)
+		link_changed.emit()
+
+
+func _tick_link(delta: float) -> void:
+	if link_phase != "punching" and link_phase != "relaying":
+		return
+	_link_clock += delta
+	if _link_clock < link_seconds:
+		return
+	if link_phase == "punching":
+		_try_relay()
+	else:
+		_link_failed("Could not reach the session with code %s, directly or through the noray relay." %
+				NorayLink.spoken(joined_code))
+
+
+## No punched path: the same registered port, through the server instead.
+func _try_relay() -> void:
+	if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
+		multiplayer.multiplayer_peer.close()
+	multiplayer.multiplayer_peer = null
+	link_phase = "relaying"
+	_link_clock = 0.0
+	online.ask_relay(joined_code)
+	link_changed.emit()
+
+
+func _link_failed(why: String) -> void:
+	var was_guest := role == Role.GUEST
+	start_solo()
+	if was_guest:
+		_restore_own_mix()
+	notice.emit(why)
+
+
+## Sends to an announced address from the ENet server's own socket, so this router has sent
+## first and lets the guest's packets in. ENet on the far side ignores what is not ENet.
+func _tick_punches(delta: float) -> void:
+	if _punching.is_empty():
+		return
+	_punch_clock -= delta
+	if _punch_clock > 0.0:
+		return
+	_punch_clock = 0.1
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if role != Role.HOST or enet == null or enet.host == null:
+		_punching.clear()
+		return
+	for p in _punching:
+		enet.host.socket_send(p[0], int(p[1]), "dawlings punch".to_ascii_buffer())
+		p[2] = float(p[2]) - 0.1
+	_punching = _punching.filter(func(p): return float(p[2]) > 0.0)
+	for p in _mix_punching:
+		mix_feed.send_raw(p[0], int(p[1]), "dawlings punch".to_ascii_buffer())
+		p[2] = float(p[2]) - 0.1
+	_mix_punching = _mix_punching.filter(func(p): return float(p[2]) > 0.0)
+
+
+# --- the mix by a code --------------------------------------------------------------------
+
+## A guest by code hears the mix on its own socket, as every guest does, at an address noray gives:
+## its mix socket registered and punched toward the host's (the host registered its mix socket
+## too, `host_online`), or the relay if the session itself needed one or the punch is not heard
+## in MIX_LINK_SECONDS. Neither: carried over the session's ENet (MixFeed.carried).
+func _mix_by_code() -> void:
+	if _mix_code.is_empty():
+		_carry_instead()
+		return
+	_mix_phase = "finding"
+	_mix_clock = 0.0
+	mix_online.registrar_port = online.registrar_port
+	mix_online.open(online.where())
+
+
+func _on_mix_online_changed() -> void:
+	if _mix_phase == "finding" and mix_online.is_online():
+		if link_kind == "relayed" or force_relay:
+			_mix_phase = "relaying"
+			mix_online.ask_relay(_mix_code)
+		else:
+			mix_online.ask_direct(_mix_code)
+	elif mix_online.state == NorayLink.State.FAILED and _mix_phase != "":
+		_carry_instead()
+	elif mix_online.state == NorayLink.State.FAILED and role == Role.HOST:
+		notice.emit("The mix will reach guests by code over the session itself: %s" % mix_online.why_not)
+
+
+func _on_mix_online_punch(ip: String, at_port: int) -> void:
+	if role == Role.HOST:
+		_mix_punching.append([ip, at_port, PUNCH_SECONDS])
+		_punch_clock = 0.0
+	elif _mix_phase == "finding":
+		_mix_phase = "punching"
+		_mix_clock = 0.0
+		mix_feed.listen(ip, at_port, _audio_ticket, mix_online.local_port)
+
+
+func _on_mix_online_relay(relay_port: int) -> void:
+	if role == Role.HOST:
+		_mix_punching.append([mix_online.server_ip, relay_port, PUNCH_SECONDS])
+		_punch_clock = 0.0
+	elif _mix_phase == "relaying":
+		_mix_clock = 0.0
+		mix_feed.listen(mix_online.server_ip, relay_port, _audio_ticket, mix_online.local_port)
+
+
+func _tick_mix_link(delta: float) -> void:
+	if _mix_phase != "punching" and _mix_phase != "relaying":
+		return
+	if mix_feed.listening and mix_feed.stats().get("hearing", false):
+		mix_route = "direct" if _mix_phase == "punching" else "relayed"
+		_mix_phase = ""
+		link_changed.emit()
+		return
+	_mix_clock += delta
+	if _mix_clock < MIX_LINK_SECONDS:
+		return
+	if _mix_phase == "punching":
+		mix_feed.stop()
+		_mix_phase = "relaying"
+		_mix_clock = 0.0
+		mix_online.ask_relay(_mix_code)
+	else:
+		_carry_instead()
+
+
+## The last way: the mix over the session's own ENet, which reached the host already.
+func _carry_instead() -> void:
+	mix_online.close()
+	_mix_phase = ""
+	if mix_feed.listening:
+		mix_feed.stop()
+	mix_feed.listen_carried(_audio_ticket)
+	mix_route = "carried"
+	link_changed.emit()
+
+
+func _end_mix_link() -> void:
+	mix_online.close()
+	_mix_phase = ""
+	mix_route = ""
+
+
+## The mix for guests by code, over the session's ENet (MixFeed.carried), flushed at once rather
+## than at the next frame's poll.
+func _carry_mix() -> void:
+	if mix_feed == null or not mix_feed.carries():
+		return
+	var out := mix_feed.take_outgoing()
+	if out.is_empty() or not _connected():
+		return
+	for row in out:
+		var to: int = row[0]
+		if role == Role.HOST and not participants.has(to):
+			continue
+		multiplayer.send_bytes(row[1], to, MultiplayerPeer.TRANSFER_MODE_UNRELIABLE, MIX_CHANNEL)
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet != null and enet.host != null:
+		enet.host.flush()
+
+
+func _on_peer_packet(from: int, packet: PackedByteArray) -> void:
+	if mix_feed != null and (role == Role.HOST and participants.has(from) or role == Role.GUEST and from == 1):
+		mix_feed.hear_carried(from, packet)
 
 
 ## Back to being on your own. A host says goodbye first; a guest gets its own mix back.
@@ -717,10 +1090,21 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
+	if link_phase == "punching" or link_phase == "relaying":
+		link_kind = "direct" if link_phase == "punching" else "relayed"
+		link_phase = ""
+		link_changed.emit()
 	_introduce()
 
 
 func _on_connection_failed() -> void:
+	if link_phase == "punching":
+		_try_relay()
+		return
+	if link_phase == "relaying":
+		_link_failed("Could not reach the session with code %s, directly or through the noray relay." %
+				NorayLink.spoken(joined_code))
+		return
 	var where := joined_address
 	start_solo()
 	_restore_own_mix()
@@ -795,15 +1179,17 @@ func admit(peer_id: int) -> void:
 	if not roll_setup.is_empty() and _connected():
 		_receive_roll_setup.rpc_id(peer_id, roll_setup)
 	if mix_feed != null and mix_feed.sending and _connected():
-		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port)
+		_give_audio_ticket.rpc_id(peer_id, mix_feed.grant(peer_id), mix_feed.port,
+				mix_online.oid if mix_online.is_online() else "")
 
 
 ## The host's leave to listen. Sent over the reliable, admitted channel; the audio socket
 ## answers nothing that does not carry one.
 @rpc("authority", "call_remote", "reliable")
-func _give_audio_ticket(ticket: int, audio_port: int) -> void:
+func _give_audio_ticket(ticket: int, audio_port: int, mix_code: String = "") -> void:
 	_audio_ticket = ticket
 	_audio_port = audio_port
+	_mix_code = mix_code
 	_apply_listening()
 
 
@@ -811,9 +1197,14 @@ func _apply_listening() -> void:
 	if mix_feed == null or role != Role.GUEST:
 		return
 	if hear_mix and _audio_ticket != 0:
-		if not mix_feed.listening:
-			mix_feed.listen(joined_address, _audio_port, _audio_ticket)
-	elif mix_feed.listening:
+		if not mix_feed.listening and _mix_phase.is_empty():
+			if link_kind.is_empty():
+				mix_feed.listen(joined_address, _audio_port, _audio_ticket)
+			else:
+				# By a code, there is no address of the host's to send to: noray finds one.
+				_mix_by_code()
+	elif mix_feed.listening or not _mix_phase.is_empty():
+		_end_mix_link()
 		mix_feed.stop()
 
 

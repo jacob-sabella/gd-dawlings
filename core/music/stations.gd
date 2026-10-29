@@ -268,6 +268,16 @@ const ALL := [
 		"hands": "the line sung now is large and marked · the song playing, press TAP as the next line starts to time it · EDIT types a line onto the end",
 	},
 	{
+		# The Workshop (WorkshopPanel, docs/workshop.md): a panel on the control room's right wall for
+		# asking Claude Code for a change from inside the game. A dev tool: its spot is null, so it is
+		# no station at all, unless Workshop.enabled (a dev flag, this machine, never a guest).
+		"id": &"workshop", "title": "WORKSHOP", "area": CONTROL, "zone": &"", "air": 0.5, "dev": true,
+		"spot": &"workshop_spot", "at": Vector3(0, WorkshopPanel.MIDDLE, 0),
+		"frame": [WorkshopPanel.FRAME_TOP, WorkshopPanel.FRAME_FOOT], "seat": 1.2, "reach": 0.6,
+		"desk": "F9 from anywhere, or ASK: type a change you want, Enter sends it to Claude Code with what you were just doing · it edits the repo, checks it, and the game reloads back here · UNDO LAST takes it back · FIX asks it to fix failed checks · SHOT and CONTEXT say what is sent · dev only, this machine",
+		"hands": "ASK opens a typing pad: OK sends it to Claude Code with what you were just doing · the game reloads back here when it is done · UNDO LAST takes it back · dev only, this machine",
+	},
+	{
 		# The venue's own instrument (VenueInstrument, slice 42): what it is, where and how it is played
 		# are the venue's (`row_in`); these are for a card with no venue to ask.
 		"id": &"venue", "title": "THE VENUE'S INSTRUMENT", "area": VENUE, "zone": &"", "air": 0.5,
@@ -509,6 +519,9 @@ static func by_area(venue: Venue) -> Dictionary:
 	var stood: Array[StringName] = ids(venue)
 	for r: Dictionary in ALL:
 		if venue != null and not stood.has(r["id"]):
+			continue
+		# A dev tool is no station at all where it is off, card or no card (Workshop.enabled).
+		if r.get("dev", false) and not Workshop.enabled():
 			continue
 		(out[r["area"]] as Array).append(row_in(venue, r["id"]))
 	return out

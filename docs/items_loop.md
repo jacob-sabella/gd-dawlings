@@ -243,7 +243,7 @@ ergonomics.
       personal mixer, so the sockets became the tablet's wireless send plugs (next). Also,
       `--walk mirror[,distance]` in `tools/screenshot.gd` stands you in front of the venue's
       mirror; a hand-picked walk point was black inside a wall twice. The patchbay's
-      `PatchPlug`/`PatchCable` (`hardware/patchbay/`) are there to build the senders from.
+      `PatchCable` (`hardware/patchbay/`, with its `JACK_MESH`) is there to build the senders from.
 - [x] The tablet is your personal mixer (the user's design, 2026-10-09). A handheld tablet whose
       face is a patch panel only you see: a row of receivers, each with a level and a meter, and
       what they add up to is what your headphones play. Its senders are wireless patch plugs that

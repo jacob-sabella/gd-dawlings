@@ -10,3 +10,10 @@ static func wire(table: StageTable) -> void:
 	table.told.connect(func(text: String) -> void: Session.notice.emit(text))
 	table.hosting = Session.is_authority
 	table.asking = Session.ask_room
+
+
+## The routing bay stood in the session the same way: its refusals go to the room's notices, and it
+## asks the session whether its presses are carried out here or asked of the host.
+static func wire_bay(bay: PatchbaySurface) -> void:
+	bay.told.connect(func(text: String) -> void: Session.notice.emit(text))
+	bay.hosting = Session.is_authority

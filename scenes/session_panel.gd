@@ -27,6 +27,9 @@ const ROOM_REACTS_TIP := ("The venue's lights breathe with the master, its spark
 const LIFT_TIP := ("A track or the master over 0 dBFS lifts the room's lamps by a third for a moment, at most once every two seconds, and lights the OVER readout on its strip. "
 		+ "Off, only the OVER readout says so. Needs Room reacts.")
 const WIDTH := 360.0
+## How a guest by code hears the mix (Session.mix_route), after its latency.
+const MIX_ROUTE_WORDS := {"direct": "direct", "relayed": "relayed",
+		"carried": "carried by the session (late: noray could not reach your sound socket)"}
 const TOAST_SECONDS := 4.5
 ## How wide a toast's line runs before it wraps: the toasts' column, less the card's margins. A
 ## station's desk line or a cassette's is longer than a 1600-wide window has room for on one line.
@@ -55,6 +58,17 @@ var _host_box: VBoxContainer
 var _internet_button: Button
 var _internet: Label
 var _guest_box: VBoxContainer
+## ONLINE (Session.online, NorayLink): a host's join code and the way to it; a guest's way in by one.
+var _online_button: Button
+var _online_code: Label
+var _online_said: Label
+var _online_copy: Button
+var _join_code_edit: LineEdit
+var _server_edit: LineEdit
+var _finding: Label
+## Where a headset's typing pad goes, for the join code: a 3D node, or null at a desk. Set by
+## scenes/bootstrap.gd from the studio's note pad.
+var pad_parent: Callable = Callable()
 var _address_edit: LineEdit
 var _nearby: VBoxContainer
 var _nearby_empty: Label
@@ -149,6 +163,7 @@ func _ready() -> void:
 	Session.roster_changed.connect(_refresh)
 	Session.role_changed.connect(_refresh)
 	Session.holds_changed.connect(_refresh)
+	Session.link_changed.connect(_refresh)
 	DAW.project_saved.connect(func(_said): _refresh_project())
 	DAW.project_replaced.connect(_refresh_project)
 	DAW.project_named.connect(_refresh_project)
@@ -380,6 +395,32 @@ func _build_panel() -> void:
 	_ask_code.add_theme_font_size_override("font_size", 13)
 	_ask_code.add_theme_color_override("font_color", DIM)
 	host_row.add_child(_ask_code)
+	# Online by a code: no address to read out and no router to ask (docs/multiplayer.md).
+	var online_host := _button("Host online", false)
+	online_host.tooltip_text = "Host, and get a short join code from the noray server: anyone, anywhere, joins by it. No port forwarding."
+	online_host.pressed.connect(_host_online)
+	_solo_box.add_child(online_host)
+	_solo_box.add_child(_caption("JOIN BY CODE  ·  FROM ANYWHERE"))
+	var code_row := HBoxContainer.new()
+	code_row.add_theme_constant_override("separation", 8)
+	_solo_box.add_child(code_row)
+	_join_code_edit = _edit("N6U U9K")
+	_join_code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_join_code_edit.text_submitted.connect(func(t: String): _join_by_code(t))
+	code_row.add_child(_join_code_edit)
+	var code_button := _button("Join by code", false)
+	code_button.pressed.connect(func(): _join_by_code(_join_code_edit.text))
+	code_row.add_child(code_button)
+	_finding = _label("", 13, DIM)
+	_finding.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_solo_box.add_child(_finding)
+	_solo_box.add_child(_caption("NORAY SERVER  ·  WHERE CODES ARE GIVEN OUT"))
+	_server_edit = _edit(NorayLink.DEFAULT_SERVER)
+	_server_edit.text = NorayLink.server_setting()
+	_server_edit.tooltip_text = "The noray server codes come from. Empty for dawlings' own. host or host:port."
+	_server_edit.text_submitted.connect(func(t: String): _keep_server(t))
+	_server_edit.focus_exited.connect(func(): _keep_server(_server_edit.text))
+	_solo_box.add_child(_server_edit)
 	_solo_box.add_child(_caption("ON THIS NETWORK"))
 	_nearby = VBoxContainer.new()
 	_nearby.add_theme_constant_override("separation", 6)
@@ -416,6 +457,30 @@ func _build_panel() -> void:
 	_host_box.add_child(_caption("OTHERS JOIN AT"))
 	_addresses = _label("", 14, INK)
 	_host_box.add_child(_addresses)
+	# Beyond the room, by a code (Session.online): what to read out, and a copy of it.
+	_host_box.add_child(_caption("JOIN CODE  ·  FROM ANYWHERE"))
+	var online_row := HBoxContainer.new()
+	online_row.add_theme_constant_override("separation", 10)
+	_host_box.add_child(online_row)
+	_online_code = _label("", 30, INK)
+	_online_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	online_row.add_child(_online_code)
+	_online_copy = _button("Copy", false)
+	_online_copy.tooltip_text = "Put the join code on the clipboard, to paste into a message."
+	_online_copy.pressed.connect(func():
+		DisplayServer.clipboard_set(NorayLink.spoken(Session.online.oid))
+		toast("Join code copied: %s" % NorayLink.spoken(Session.online.oid)))
+	online_row.add_child(_online_copy)
+	_online_said = _label("", 13, DIM)
+	_online_said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_host_box.add_child(_online_said)
+	_online_button = _button("Go online", false)
+	_online_button.pressed.connect(func():
+		if Session.online.state == NorayLink.State.CLOSED or Session.online.state == NorayLink.State.FAILED:
+			Session.host_online(Session.port)
+		else:
+			Session.go_offline())
+	_host_box.add_child(_online_button)
 	# Beyond the room: the router asked to let people in from the internet (InternetDoor).
 	_internet_button = _button("Open to internet", false)
 	_internet_button.pressed.connect(func():
@@ -511,8 +576,12 @@ func _refresh() -> void:
 		Session.Role.GUEST:
 			var host = Session.participants.get(1)
 			_set_pill("JOINED", host.colour if host != null else colour)
-			_status.text = "In %s's session at %s. Their Reaper, your view." % [
-					Session.name_of(1), Session.joined_address]
+			if Session.link_kind.is_empty() and Session.link_phase.is_empty():
+				_status.text = "In %s's session at %s. Their Reaper, your view." % [
+						Session.name_of(1), Session.joined_address]
+			else:
+				_status.text = "In %s's session by code %s, %s. Their Reaper, your view." % [
+						Session.name_of(1), NorayLink.spoken(Session.joined_code), link_words()]
 	_refresh_sound()
 	_place_mic()
 	_refresh_midi()
@@ -529,6 +598,7 @@ func _refresh() -> void:
 	_addresses.text = "\n".join(_lan_addresses().map(
 			func(a): return "%s : %d" % [a, Session.port]))
 	_refresh_internet()
+	_refresh_online()
 
 	for child in _roster.get_children():
 		child.queue_free()
@@ -564,8 +634,9 @@ func _refresh_sound() -> void:
 			_hearing.text = "Waiting for sound…"
 		else:
 			var drops := int(s.get("underruns", 0)) + int(s.get("lost", 0))
-			_hearing.text = "%d ms behind %s's speakers%s" % [roundi(s.get("latency_ms", 0.0)),
-					Session.name_of(1), "" if drops == 0 else "  ·  %d dropouts" % drops]
+			_hearing.text = "%d ms behind %s's speakers%s%s" % [roundi(s.get("latency_ms", 0.0)),
+					Session.name_of(1), "" if drops == 0 else "  ·  %d dropouts" % drops,
+					"" if Session.mix_route.is_empty() else "  ·  %s" % MIX_ROUTE_WORDS.get(Session.mix_route, "")]
 
 
 # --- a guest's keys -----------------------------------------------------------------------
@@ -1010,6 +1081,9 @@ func _roster_row(p) -> Control:
 			held = key
 	var what: String = ("on " + held.to_lower()) if not held.is_empty() else \
 			"%s · %s" % [_role_word(p.peer_id), ["screen", "ar", "vr"][clampi(p.medium, 0, 2)]]
+	var route := Session.route_of(p.peer_id)
+	if held.is_empty() and not route.is_empty():
+		what += " · " + route
 	row.add_child(_label(what, 12, p.colour if not held.is_empty() else DIM))
 	return row
 
@@ -1034,6 +1108,77 @@ func _host() -> void:
 	_rename(_name_edit.text)
 	Session.code = make_code() if _ask_code.button_pressed else ""
 	Session.host()
+
+
+func _host_online() -> void:
+	_rename(_name_edit.text)
+	Session.code = make_code() if _ask_code.button_pressed else ""
+	Session.host_online()
+
+
+## Join by the code a host read out. Empty in a headset: the keys in the room ask for it.
+func _join_by_code(typed: String) -> void:
+	if typed.strip_edges().is_empty():
+		var parent = pad_parent.call() if pad_parent.is_valid() else null
+		if get_viewport().use_xr and parent is Node3D and is_instance_valid(parent):
+			var pad := TypingPad.ask(parent, "The host's join code", "",
+					Transform3D(Basis(Vector3.RIGHT, -0.5), Vector3(0, 0.16, 0.06)))
+			pad.answered.connect(func(text: String):
+				_join_code_edit.text = text
+				_join_by_code(text))
+		else:
+			_join_code_edit.grab_focus()
+		return
+	_rename(_name_edit.text)
+	_keep_server(_server_edit.text)
+	Session.join_by_code(typed, _code_edit.text)
+
+
+func _keep_server(text: String) -> void:
+	text = text.strip_edges()
+	if text == NorayLink.server_setting():
+		return
+	NorayLink.keep_server(text)
+	_server_edit.text = NorayLink.server_setting()
+
+
+## How a guest by code is in: "direct" or "relayed", and through whom.
+static func link_words() -> String:
+	match Session.link_kind:
+		"direct": return "direct (punched through by noray)"
+		"relayed": return "relayed through %s" % Session.online.where()
+	match Session.link_phase:
+		"punching": return "punching through"
+		"relaying": return "trying the relay"
+	return "finding it"
+
+
+## The host's join code, or what is happening on the way to one; a guest's search for a host.
+func _refresh_online() -> void:
+	if _online_code == null:
+		return
+	var o := Session.online
+	_finding.visible = Session.role == Session.Role.SOLO and not Session.link_phase.is_empty()
+	if _finding.visible:
+		_finding.text = "Finding the session %s through %s…" % [NorayLink.spoken(Session.joined_code), o.where()]
+	_online_copy.visible = o.is_online()
+	_online_code.visible = o.is_online()
+	_online_code.text = NorayLink.spoken(o.oid)
+	match o.state:
+		NorayLink.State.CLOSED:
+			_online_button.text = "Go online"
+			_online_said.text = "Online gives a join code anyone can use from anywhere, through %s. No port forwarding." % o.where() \
+					if not o.server_host.is_empty() else "Online gives a join code anyone can use from anywhere, through a noray server. No port forwarding."
+		NorayLink.State.REACHING, NorayLink.State.REGISTERING:
+			_online_button.text = "Cancel"
+			_online_said.text = "Asking %s for a code…" % o.where()
+		NorayLink.State.ONLINE:
+			_online_button.text = "Go offline"
+			_online_said.text = "Read it out a letter at a time, %s, or copy it into a message. They type it under JOIN BY CODE. Each guest's row says whether it came in direct or relayed." % \
+					NorayLink.letters(o.oid)
+		NorayLink.State.FAILED:
+			_online_button.text = "Try again"
+			_online_said.text = o.why_not
 
 
 ## Four characters, from an alphabet with nothing in it that can be misread across a room or
@@ -1619,6 +1764,12 @@ func _refresh_strip() -> void:
 		label.add_theme_constant_override("outline_size", 5)
 		chip.add_child(label)
 		_strip.add_child(chip)
+	if Session.role == Session.Role.HOST and Session.online.is_online():
+		var code := _label("CODE  " + NorayLink.spoken(Session.online.oid), 13, INK)
+		code.name = "OnlineCode"
+		code.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		code.add_theme_constant_override("outline_size", 5)
+		_strip.add_child(code)
 
 
 # --- parts --------------------------------------------------------------------------------

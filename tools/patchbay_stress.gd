@@ -1,4 +1,5 @@
-## Builds the routing bay at several sizes with random sends and prints what it costs.
+## Builds the routing bay at several sizes with random sends and prints what it costs: the build,
+## a scroll across the whole matrix, and how many nodes it holds (the pool, not the session).
 ## `godot --headless --path . res://tools/patchbay_stress.tscn`
 extends Node
 
@@ -18,15 +19,12 @@ func _ready() -> void:
 			guard += 1
 			var a: int = idx[rng.randi() % idx.size()]
 			var b: int = idx[rng.randi() % idx.size()]
-			if a == b:
-				continue
-			DAW.create_send(a, b)
-			made += 1
+			if DAW.create_send(a, b):
+				made += 1
 		var bay := PatchbaySurface.new()
 		add_child(bay)
 		var t0 := Time.get_ticks_usec()
 		bay._process(0.0)
-		bay._draw_cables()
 		var ms := (Time.get_ticks_usec() - t0) / 1000.0
 		var count := 0
 		var stack: Array = [bay]
@@ -34,12 +32,14 @@ func _ready() -> void:
 			var node: Node = stack.pop_back()
 			count += 1
 			stack.append_array(node.get_children())
-		print("STRESS tracks=%d sends=%d routes=%d plugs=%d cables=%d nodes=%d slots=%d build_ms=%.1f pages=%d" % [n, sends, bay._routes.size(), bay._plugs.size(), bay._cables.size(), count, bay.slots(), ms, bay.page_count()])
-		var shared := 0
-		for key in bay._routes:
-			var r: Dictionary = bay._routes[key]
-			if r["out_slot"] == PatchbaySurface.MAX_SLOTS - 1 or r["in_slot"] == PatchbaySurface.MAX_SLOTS - 1:
-				shared += 1
-		print("STRESS   routes on the last slot (shared bore when a row is fuller): %d" % shared)
+		# A scroll a row and a column at a time from corner to corner, as a drag across it would.
+		var m := bay.matrix
+		var t1 := Time.get_ticks_usec()
+		var steps := maxi(m.row_count() - m.shown_rows(), m.col_count() - m.shown_cols())
+		for k in steps + 1:
+			m.scroll_to(k, k)
+		var scroll_ms := (Time.get_ticks_usec() - t1) / 1000.0 / maxf(steps + 1, 1)
+		print("STRESS tracks=%d sends=%d (made %d) seated=%d window=%dx%d pins=%d nodes=%d build_ms=%.1f scroll_ms_per_step=%.2f" % [
+				n, sends, made, bay.seated_count(), m.shown_rows(), m.shown_cols(), m.pins().size(), count, ms, scroll_ms])
 		bay.free()
 	get_tree().quit()

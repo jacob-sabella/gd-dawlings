@@ -196,6 +196,11 @@ var _tl_road := -1.0
 var _tl_select := ""
 ## `--patch-wall`: the audio-device patch wall, hung in the middle of the room, showing this machine's graph.
 var _patch_wall := false
+## `--patch-graph 60`: the wall shows a made-up graph of about that many ports a side instead (nodes
+## of four, one of a dozen, a few links), for a shot of a busy machine's grid; implies --patch-wall.
+var _patch_graph := 0
+## `--bay-scroll 30,20`: the routing bay's matrix scrolled to that row and column from frame 8.
+var _bay_scroll := Vector2i(-1, -1)
 ## `--comfort`: the session panel open from frame 5 and scrolled to its COMFORT box.
 var _comfort := false
 ## `--no-timeline`: the timeline hidden, for a shot of something it would cover.
@@ -408,6 +413,14 @@ func _ready() -> void:
 				_no_timeline = true
 			"--patch-wall":
 				_patch_wall = true
+			"--patch-graph":
+				if i + 1 < args.size():
+					_patch_graph = int(args[i + 1])
+					_patch_wall = true
+			"--bay-scroll":
+				if i + 1 < args.size():
+					var rc := args[i + 1].split(",")
+					if rc.size() == 2: _bay_scroll = Vector2i(int(rc[0]), int(rc[1]))
 			"--comfort":
 				_comfort = true
 			"--tl-select":
@@ -770,10 +783,19 @@ func _process(_delta: float) -> void:
 
 	if _frames == 3 and _patch_wall:
 		var wall := PatchWallSurface.new()
-		wall.position = Vector3(0, 2.2, 1.0)
+		wall.position = Vector3(0, PatchWallSurface.HEIGHT + 0.25, 1.0)
+		if _patch_graph > 0:
+			wall.follow = false
 		get_tree().current_scene.add_child(wall)
+		if _patch_graph > 0:
+			wall.show_graph(_made_up_graph(_patch_graph))
 		for hidden in get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false):
 			hidden.visible = false
+
+	if _frames == 8 and _bay_scroll.x >= 0:
+		for bay in get_tree().current_scene.find_children("*", "PatchbaySurface", true, false):
+			(bay as PatchbaySurface).matrix.scroll_to(_bay_scroll.x, _bay_scroll.y)
+			print("SHOT_BAY %s" % (bay as PatchbaySurface).matrix.position_words())
 
 	if _frames == 6 and _tl_shelf != "":
 		var tl := get_tree().current_scene.find_children("Timeline", "TimelineSurface", true, false)
@@ -1431,3 +1453,29 @@ func _play_wheel_take(track: int) -> void:
 		(tl as TimelineSurface).set_view(start - 0.4, 4.6)
 		(tl as TimelineSurface).set_size((tl as TimelineSurface).width_scale, TimelineSurface.LANE_HEIGHT_MAX)
 	print("SHOT_WHEEL_TAKE ", gm.last_take)
+
+
+## A graph of about `ports` output and input ports for --patch-graph: an interface with a dozen
+## of each, then nodes of four, a few linked, named as a machine's are.
+func _made_up_graph(ports: int) -> PipeGraph:
+	var outs := ""
+	var ins := ""
+	for k in 12:
+		outs += "alsa_input.usb-Focusrite_Scarlett_18i20:capture_%d\n" % (k + 1)
+		ins += "alsa_output.usb-Focusrite_Scarlett_18i20:playback_%d\n" % (k + 1)
+	var apps := ["Firefox", "dawlings · mix", "dawlings · mic", "Carla", "OBS", "Discord", "Bitwig", "VLC",
+			"Mixxx", "SuperCollider", "Ardour", "qpwgraph"]
+	var n := 0
+	while 12 + n * 4 < ports:
+		var app: String = apps[n % apps.size()] + ("" if n < apps.size() else " %d" % (n / apps.size() + 1))
+		for side in ["output_FL", "output_FR", "output_RL", "output_RR"]:
+			outs += "%s:%s\n" % [app, side]
+		for side in ["input_FL", "input_FR", "input_RL", "input_RR"]:
+			ins += "%s:%s\n" % [app, side]
+		n += 1
+	var links := "dawlings · mix:output_FL\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_1\n" \
+			+ "dawlings · mix:output_FR\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_2\n" \
+			+ "alsa_input.usb-Focusrite_Scarlett_18i20:capture_1\n  |-> dawlings · mic:input_FL\n" \
+			+ "Firefox:output_FL\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_1\n" \
+			+ "Firefox:output_FR\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_2\n"
+	return PipeGraph.parse(outs, ins, links)

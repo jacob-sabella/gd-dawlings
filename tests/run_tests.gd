@@ -20,6 +20,8 @@ func _ready() -> void:
 	OfflineBackend.autosave_every = 0.0
 	# Only the plugins a check puts there: none of this machine's.
 	PluginCatalogue.use_only([])
+	# Never this machine's Workshop (its dev flag may be on): the rooms the suite checks are everyone's.
+	Workshop.forced = 0
 	# DAWLINGS_TESTS=_test_a,_test_b runs only those, for working on one corner of the game
 	# without the whole suite's minutes. The full run is still the one that counts.
 	var only := OS.get_environment("DAWLINGS_TESTS")
@@ -85,12 +87,14 @@ func _ready() -> void:
 	_test_the_built_in_engine_hosts_a_plugin_effect()
 	_test_a_hosted_plugin_comes_back_with_its_project()
 	_test_an_instrument_plugin_plays_a_tracks_notes()
-	_test_one_jack_takes_one_plug()
-	_test_a_big_session_pages_the_bay()
-	_test_a_busy_return_gets_a_jack_a_cable()
-	_test_the_bay_reads_left_to_right()
-	_test_dragging_across_the_bay_patches_and_unpatches()
-	_test_hovering_a_row_picks_out_its_cables()
+	_test_the_bay_is_a_pin_matrix_of_sends()
+	_test_a_pin_pressed_makes_and_pulls_a_send()
+	_test_a_seated_pin_wheels_and_drags_its_level()
+	_test_a_big_session_scrolls_to_every_row_and_column()
+	_test_pointing_at_a_pin_lights_its_line()
+	_test_the_bay_is_read_only_without_the_bridge()
+	_test_a_guests_pin_is_the_hosts_send()
+	_test_the_bays_pins_pulse_with_their_sends()
 	_test_a_removed_send_leaves_the_mix()
 	_test_a_plugin_moves_and_copies_along_the_chains()
 	_test_wet_and_presets_ride_the_wire()
@@ -266,6 +270,11 @@ func _ready() -> void:
 	_test_every_control_says_what_it_is()
 	_test_rig_roulette_rolls_outside_tour()
 	_test_a_hosted_session_opens_to_the_internet_only_when_asked()
+	_test_noray_lines_and_codes_are_read_as_noray_writes_them()
+	await _test_noray_registers_finds_punches_and_relays()
+	await _test_a_guest_by_code_says_direct_or_relayed()
+	await _test_the_mix_is_carried_for_a_guest_by_code()
+	await _test_the_panel_shows_the_join_code_and_what_went_wrong()
 	_test_the_big_board_hangs_clear_in_every_venue()
 	_test_the_big_board_shows_any_surface()
 	_test_a_track_pulls_out_of_the_rack_on_a_rack_of_its_own()
@@ -739,7 +748,57 @@ func _ready() -> void:
 	await _test_the_vocals_neighbourhood_stands_together_and_is_signed()
 	await _test_the_tape_neighbourhood_stands_together_and_is_signed()
 	await _test_an_old_rooms_saved_defaults_give_way_to_the_new_room()
+	_test_workshop_stream()
+	_test_workshop_command()
+	_test_workshop_gating()
+	_test_workshop_undo()
+	await _test_workshop_resume()
+	_test_workshop_check_before_reload()
+	await _test_workshop_journal()
+	await _test_workshop_context()
+	await _test_workshop_run()
 	_report()
+
+
+# --- the Workshop (docs/workshop.md): its checks are in tests/workshop_tests.gd -----------------
+
+const WorkshopTests := preload("res://tests/workshop_tests.gd")
+
+
+func _test_workshop_stream() -> void:
+	WorkshopTests.new(self).stream()
+
+
+func _test_workshop_command() -> void:
+	WorkshopTests.new(self).command()
+
+
+func _test_workshop_gating() -> void:
+	WorkshopTests.new(self).gating()
+
+
+func _test_workshop_undo() -> void:
+	WorkshopTests.new(self).undo()
+
+
+func _test_workshop_resume() -> void:
+	await WorkshopTests.new(self).resume()
+
+
+func _test_workshop_check_before_reload() -> void:
+	WorkshopTests.new(self).check_before_reload()
+
+
+func _test_workshop_journal() -> void:
+	await WorkshopTests.new(self).journal()
+
+
+func _test_workshop_context() -> void:
+	await WorkshopTests.new(self).context()
+
+
+func _test_workshop_run() -> void:
+	await WorkshopTests.new(self).run()
 
 
 func _report() -> void:
@@ -2047,7 +2106,7 @@ func _test_knob_is_the_moulded_part() -> void:
 		Knob.MESH_PATH: {"size": Vector3(0.0230, 0.0140, 0.0230), "accent": "indicator"},
 		Fader.MESH_PATH: {"size": Vector3(0.0152, 0.0224, 0.0140), "accent": "indicator"},
 		TapeDeck.MESH_PATH: {"size": Vector3(0.1705, 0.0160, 0.1705), "accent": "hub"},
-		PatchPoint.MESH_PATH: {"size": Vector3(0.0160, 0.0220, 0.0185), "accent": "bore"},
+		PatchCable.JACK_MESH: {"size": Vector3(0.0160, 0.0220, 0.0185), "accent": "bore"},
 		RackUnit.MESH_PATH: {"size": Vector3(0.4840, 0.0890, 0.0140), "accent": "screw"},
 	}
 	for path in parts:
@@ -2081,20 +2140,6 @@ func _test_knob_is_the_moulded_part() -> void:
 				unpainted += 1
 		check("an unmatched surface falls back rather than going unpainted", unpainted == 0)
 		dressed.free()
-
-	# A hexagon repeats every sixty degrees, so a clocking outside that range is turning nuts
-	# further than there is anywhere to turn them, and two jacks a multiple of sixty apart
-	# would be indistinguishable -- which defeats the point of clocking them at all.
-	var angles := {}
-	for t in 12:
-		for k in [PatchPoint.Kind.OUTPUT, PatchPoint.Kind.INPUT]:
-			var a := PatchPoint.nut_angle(t, k)
-			check("nut clocking stays inside one hex face", a >= 0.0 and a < 60.0)
-			angles[a] = true
-	check("and the bay is not all one angle", angles.size() > 6)
-	close_to("the same jack is clocked the same way twice",
-			PatchPoint.nut_angle(5, PatchPoint.Kind.INPUT),
-			PatchPoint.nut_angle(5, PatchPoint.Kind.INPUT))
 
 	var knob := Knob.new()
 	add_child(knob)
@@ -2935,251 +2980,332 @@ func _test_a_surface_showing_a_bank_says_it_is_showing_a_bank() -> void:
 		surface.queue_free()
 
 
-func _test_one_jack_takes_one_plug() -> void:
-	# The physical premise of a patchbay: four tracks sending to the reverb return must not be
-	# four cables ending in the same bore. The bay gives every row one more jack than its busiest
-	# row needs, so each cable has its own.
-	DAW.use(OfflineBackend.new())
-	var bay := PatchbaySurface.new()
-	add_child(bay)
-	bay._process(0.0)
-	bay._draw_cables()
-
-	var cables: Array = bay._cables
-	check("the stand-in session patches the bay", cables.size() >= 4)
-	var ends: Array[Vector3] = []
-	for cable in cables:
-		var c: PatchCable = cable
-		ends.append(c.from_xform.origin)
-		ends.append(c.to_xform.origin)
-	var closest := INF
-	for i in ends.size():
-		for j in range(i + 1, ends.size()):
-			closest = minf(closest, ends[i].distance_to(ends[j]))
-	check("no two plugs share a bore (%.1fmm apart)" % (closest * 1000.0),
-			closest >= PatchCable.PLUG_RADIUS * 2.0)
-	# The four into the return fill four jacks, and the row still has a free one.
-	var verb := bay.input_row(13)
-	check("the return's row has a plug per send", verb != null and verb.used == 4)
-	check("and a jack to spare", verb.jack_xs.size() > verb.used)
-	check("every row has as many jacks", bay.output_row(1).jack_xs.size() == verb.jack_xs.size())
-	bay.queue_free()
-
-
-func _test_a_big_session_pages_the_bay() -> void:
-	# Past a page of rows the bay is paged, each column on its own, so a row stays as tall as it
-	# was and a send from page 1 to page 3 can still be made.
+## A bay on the stand-in session, built, and a hand to press it with.
+func _bay(tracks := 13) -> PatchbaySurface:
 	var offline := OfflineBackend.new()
-	offline.track_count = 64
+	offline.track_count = tracks
 	DAW.use(offline)
 	var bay := PatchbaySurface.new()
 	add_child(bay)
 	bay._process(0.0)
-	check("64 tracks are three pages", bay.page_count() == 3)
-	check("a column shows one page of rows, not all (%d)" % bay._outputs.size(),
-			bay._outputs.size() == PatchbaySurface.PAGE_ROWS and bay._inputs.size() == PatchbaySurface.PAGE_ROWS)
-	check("so the panel is no taller than a full page's (%.2fm)" % bay.panel_height(),
-			bay.panel_height() <= PatchbaySurface.HEADER + PatchbaySurface.PAGE_ROWS * PatchbaySurface.ROW_MAX + PatchbaySurface.PAGER_FOOTER + 0.001)
-	var seen := {}
-	for page in 3:
-		bay._page["out"] = page
-		bay.mark_dirty()
-		bay._process(0.0)
-		for index in bay._outputs:
-			seen[index] = true
-	check("every track's output is on some page (%d of 64)" % seen.size(), seen.size() == 64)
-	bay._turn("out", 1)
-	bay._turn("in", -1)
-	bay._process(0.0)
-	check("the columns turn on their own and wrap", bay.page_of("out") == 0 and bay.page_of("in") == 2)
-	bay.queue_free()
-	var small := OfflineBackend.new()
-	DAW.use(small)
-	var one := PatchbaySurface.new()
-	add_child(one)
-	one._process(0.0)
-	check("13 tracks are one page, as before", one.page_count() == 1)
-	one.queue_free()
+	return bay
 
 
-func _test_a_busy_return_gets_a_jack_a_cable() -> void:
-	# Eleven tracks into one return: past seven jacks the row closes up rather than putting two
-	# cables in a bore.
-	var offline := OfflineBackend.new()
-	offline.track_count = 16
-	DAW.use(offline)
+func _test_the_bay_is_a_pin_matrix_of_sends() -> void:
+	var bay := _bay()
+	var m := bay.matrix
 	var idx := DAW.state.track_indices()
-	var target: int = idx[idx.size() - 1]
-	var made := 0
-	for i in idx.size():
-		if idx[i] != target and made < 11 and not DAW.state.track(idx[i]).sends.has(0):
-			DAW.create_send(idx[i], target)
-			made += 1
-	var bay := PatchbaySurface.new()
-	add_child(bay)
-	bay._process(0.0)
-	bay._draw_cables()
-	var row := bay.input_row(target)
-	check("a return fed by many has a jack for each (%d jacks, %d used)" % [row.jack_xs.size(), row.used],
-			row.used >= 11 and row.jack_xs.size() > row.used - 1)
-	var ends: Array[Vector3] = []
-	for cable in bay._cables:
-		ends.append((cable as PatchCable).to_xform.origin)
-	var closest := INF
-	for i in ends.size():
-		for j in range(i + 1, ends.size()):
-			closest = minf(closest, ends[i].distance_to(ends[j]))
-	check("and no two plugs share a bore (%.1fmm apart)" % (closest * 1000.0), closest >= PatchCable.PLUG_RADIUS * 2.0)
+	check("every track is a row and a column (%d x %d)" % [m.row_count(), m.col_count()],
+			m.row_count() == idx.size() and m.col_count() == idx.size())
+	check("thirteen tracks fit without scrolling", m.shown_rows() == 13 and m.shown_cols() == 13
+			and m.bars().all(func(b): return not b.visible) and m.arrows().all(func(k): return not k.visible))
+	check("so the foot counts them rather than paging (%s)" % m.position_words(), m.position_words() == "13 FROM  ×  13 TO")
+	check("the matrix fits the panel", m.size().x <= PatchbaySurface.PANEL_WIDTH + 0.001
+			and bay.panel_height() >= m.size().y + PatchbaySurface.HEADER - 0.001)
+	# The stand-in sends four tracks into the reverb return: four seated pins in its column.
+	var seated := 0
+	for src in idx:
+		if m.pin_for(src, 13) != null and m.pin_for(src, 13).cell().get("on", false):
+			seated += 1
+	check("the return's column has a pin for each send into it (%d)" % seated, seated == 4)
+	var pin := m.pin_for(3, 13)
+	check("a seated pin is its source's colour", pin.cell()["tint"] == DAW.state.track(3).shown_colour())
+	check("and has a level bar as high as its send", absf(float(pin.cell()["level"]) - DAW.state.send(3, 1).volume) < 0.0001
+			and m._fills.transform_of(pin.slot).basis.get_scale().y > 0.001)
+	check("a track's own crossing has no socket", m.pin_for(5, 5).cell().get("blocked", false)
+			and m._sockets.transform_of(m.pin_for(5, 5).slot).basis.get_scale().is_zero_approx())
+	check("and says why (%s)" % m.pin_for(5, 5).readout(), m.pin_for(5, 5).readout().contains("cannot send to itself"))
+	check("a pin names its send (%s)" % pin.title(), pin.title() == "%s  →  %s" % [
+			DAW.state.track(3).display_name().to_upper(), DAW.state.track(13).display_name().to_upper()])
+	check("and reads in dB (%s)" % pin.readout(), pin.readout().begins_with("send ") and pin.readout().ends_with(" dB"))
+	# Names in text, never colour alone, big enough to read across the room.
+	var row := m.line_for(3, true)
+	var label: Label3D = m._row_text[m._row_lines.find(row)]
+	check("a row header says its track's name (%s)" % label.text, label.text == DAW.state.track(3).display_name().to_upper())
+	check("in letters big enough to read from the seat (%.1fmm caps)" % (Lettering.cap_height(label) * 1000.0),
+			Lettering.cap_height(label) >= 0.009)
+	var col_label: Label3D = m._col_text[m._col_lines.find(m.line_for(13, false))]
+	check("a column header too, up the column (%s)" % col_label.text,
+			col_label.text == DAW.state.track(13).display_name().to_upper() and is_equal_approx(col_label.rotation.z, PI * 0.5))
+	check("a header says what it is (%s)" % row.title(), row.title().ends_with("  OUT") and m.line_for(13, false).title().ends_with("  IN"))
+	check("and the return says how many send into it (%s)" % m.line_for(13, false).readout(),
+			m.line_for(13, false).readout() == "4 sending in")
 	bay.queue_free()
 
 
-func _test_the_bay_reads_left_to_right() -> void:
-	# FROM on the left, TO on the right, every cable crossing the gap between them: which track
-	# feeds which is something you see.
-	DAW.use(OfflineBackend.new())
-	var bay := PatchbaySurface.new()
-	add_child(bay)
+func _test_a_pin_pressed_makes_and_pulls_a_send() -> void:
+	var bay := _bay()
+	var backend := DAW.backend as OfflineBackend
+	var hand := FakeHand.new()
+	add_child(hand)
+	check("the stand-in can patch", DAW.can(DAWBackend.Capability.ROUTING))
+	var before := DAW.state.track(2).sends.size()
+	_press(bay.pin_for(2, 8))
+	check("a press on an empty crossing makes the send", DAW.state.track(2).sends.size() == before + 1)
+	var made: MixState.SendState = DAW.state.track(2).sends[before + 1]
+	check("to that column, at unity", made.resolve(DAW.state) == 8 and absf(FaderLaw.to_db(made.volume)) < 0.05)
+	bay._run_later()
 	bay._process(0.0)
-	bay._draw_cables()
-	for index in DAW.state.track_indices():
-		check("%d's output is on the left" % index, bay.output_row(index).position.x < 0.0)
-		check("%d's input is on the right" % index, bay.input_row(index).position.x > 0.0)
-	var crossing := true
-	for cable in bay._cables:
-		var c: PatchCable = cable
-		var a := bay.to_local(c.from_xform.origin)
-		var b := bay.to_local(c.to_xform.origin)
-		crossing = crossing and a.x < -0.05 and b.x > 0.05
-	check("every cable runs from the FROM column to the TO column", crossing)
-	# Names inside the bay: the jacks are on the gap side of each column, the names outside.
-	var row := bay.output_row(1)
-	var name_label := row.get_node("Name") as Label3D
-	check("a FROM row's name is outside its jacks", name_label.position.x < row.jack_xs.min())
-	var to_row := bay.input_row(1)
-	check("a TO row's name is outside its jacks",
-			(to_row.get_node("Name") as Label3D).position.x > to_row.jack_xs.max())
-	check("a row's name is big enough to read across a room (%.1fmm caps)"
-			% (Lettering.cap_height(name_label) * 1000.0), Lettering.cap_height(name_label) >= 0.012)
-	bay.queue_free()
-
-
-## A fake hand for the drag tests: an Interactor that is told what it is over.
-func _bay_hand(over: ControlAffordance) -> Interactor:
-	var hand := Interactor.new()
-	hand.hovered = over
-	return hand
-
-
-func _drag(hand: Interactor, from: ControlAffordance, to: ControlAffordance) -> void:
-	from.grab_begin(hand, from.global_position)
-	hand.hovered = to
-	from.grab_move(hand, to.global_position if to != null else from.global_position + Vector3(0, -2, 0))
-	from.grab_end(hand)
-
-
-func _test_dragging_across_the_bay_patches_and_unpatches() -> void:
-	var backend := OfflineBackend.new()
-	DAW.use(backend)
-	var bay := PatchbaySurface.new()
-	add_child(bay)
-	bay._process(0.0)
-	bay._draw_cables()
-	check("the stand-in can patch now", DAW.can(DAWBackend.Capability.ROUTING))
-
-	# A new send: drag the kick's row across to the bass's.
-	var before := DAW.state.track(1).sends.size()
-	var hand := _bay_hand(null)
-	var from := bay.output_row(1)
-	from.grab_begin(hand, from.global_position)
-	check("picking up a row carries a cable", bay.find_child("CarriedCable", true, false) != null)
-	check("the rows it could go to light up",
-			bay.input_row(4).light() == PatchPoint.Light.CANDIDATE)
-	check("but not its own input", bay.input_row(1).light() == PatchPoint.Light.PLAIN)
-	hand.hovered = bay.input_row(4)
-	from.grab_move(hand, bay.input_row(4).global_position)
-	check("the row under it says it is where the cable goes",
-			bay.input_row(4).light() == PatchPoint.Light.TARGET)
-	from.grab_end(hand)
-	check("letting go there makes the send", DAW.state.track(1).sends.size() == before + 1)
-	var made: MixState.SendState = DAW.state.track(1).sends[before + 1]
-	check("to the row it was let go on", made.resolve(DAW.state) == 4)
-	check("at unity", absf(FaderLaw.to_db(made.volume)) < 0.05)
-	check("and nothing is left lit", bay.input_row(4).light() == PatchPoint.Light.PLAIN)
-
-	# Dropped on nothing, nothing happens.
-	bay._process(0.0)
-	bay._draw_cables()
-	var count := DAW.state.track(2).sends.size()
-	_drag(hand, bay.output_row(2), null)
-	check("a cable let go over nothing goes back", DAW.state.track(2).sends.size() == count)
-	# Nor twice into the same place.
-	bay._process(0.0)
-	_drag(hand, bay.output_row(1), bay.input_row(4))
-	check("the same send twice is refused", DAW.state.track(1).sends.size() == before + 1)
-
-	# Scroll a plug: the level.
-	bay._process(0.0)
-	bay._draw_cables()
-	var plug: PatchPlug = bay.plugs_of(1, before + 1)[0]
-	check("the new cable has a plug to hold", plug != null)
-	check("which names the send", plug.title() == "%s  →  %s" % [
-			DAW.state.track(1).display_name().to_upper(), DAW.state.track(4).display_name().to_upper()])
-	plug.nudge(hand, -6, false)
-	close_to("scrolling a plug sets the send level", FaderLaw.to_db(made.volume), -6.0, 0.05)
-	check("and says so", plug.readout() == "-6.0 dB")
-
-	# Re-patch the TO end to another row.
-	var into: PatchPlug = bay.plugs_of(1, before + 1)[1]
-	_drag(hand, into, bay.input_row(6))
-	var moved: Array = DAW.state.track(1).sends.values().map(
-			func(sd): return (sd as MixState.SendState).resolve(DAW.state))
-	check("a plug dragged to another row re-patches", moved.has(6) and not moved.has(4))
-
-	# Pull it off: gone.
-	bay._process(0.0)
-	bay._draw_cables()
-	var last := DAW.state.track(1).sends.size()
-	var pulled: PatchPlug = bay.plugs_of(1, last)[0]
-	_drag(hand, pulled, null)
-	check("a plug pulled off the bay unplugs the send", DAW.state.track(1).sends.size() == last - 1)
-	# A wiggle -- picked up and put back on its own row -- changes nothing.
-	bay._process(0.0)
-	bay._draw_cables()
-	var verb_sends := DAW.state.track(3).sends.size()
-	var wiggled: PatchPlug = bay.plugs_of(3, 1)[0]
-	_drag(hand, wiggled, wiggled.row)
-	check("a plug put back where it was stays patched", DAW.state.track(3).sends.size() == verb_sends)
-
-	# And the whole lot is one undo per change, like Reaper.
+	check("and the pin is seated", bay.pin_for(2, 8).cell().get("on", false))
+	_press(bay.pin_for(2, 8))
+	check("a press on a seated pin pulls the send out", DAW.state.track(2).sends.size() == before)
 	backend.undo()
-	check("undo puts the unplugged send back", DAW.state.track(1).sends.size() == last)
+	check("undo puts it back, one step for the press", DAW.state.track(2).sends.size() == before + 1)
+	backend.undo()
+	check("and undo again takes the first press back", DAW.state.track(2).sends.size() == before)
+	bay._run_later()
+	bay._process(0.0)
+
+	# A send and a sidechain at one crossing come out together, in one step.
+	DAW.create_send(2, 6)
+	DAW.create_sidechain(2, 6)
+	bay._run_later()
+	bay._process(0.0)
+	var both := bay.pin_for(2, 6)
+	check("a crossing with a send and a key send says both (%s)" % both.readout(),
+			both.readout().contains("send ") and both.readout().contains("sidechain "))
+	var count := DAW.state.track(2).sends.size()
+	_press(both)
+	check("a press pulls both out", DAW.state.track(2).sends.size() == count - 2)
+	backend.undo()
+	check("and one undo puts both back", DAW.state.track(2).sends.size() == count)
+	bay._run_later()
+	bay._process(0.0)
+
+	# The routing rules: no send into itself, and none that would loop -- back up a send, or from
+	# a folder into a track that plays into it.
+	check("a folder cannot send into its own track", bay.pin_for(1, 4).cell().get("blocked", false)
+			and bay.pin_for(1, 4).hint().contains("loop"))
+	var own := DAW.state.track(5).sends.size()
+	_press(bay.pin_for(5, 5))
+	check("a track's own crossing makes nothing", DAW.state.track(5).sends.size() == own)
+	var told: Array[String] = []
+	bay.told.connect(func(t: String): told.append(t))
+	var back := DAW.state.track(13).sends.size()
+	check("a send back from the return to a track feeding it is blocked", bay.pin_for(13, 3).cell().get("blocked", false))
+	_press(bay.pin_for(13, 3))
+	check("a press there makes nothing", DAW.state.track(13).sends.size() == back)
+	check("and says why in words (%s)" % [told], told.size() == 1 and told[0].contains("loop"))
+	check("on the bay's foot too (%s)" % bay.matrix.status_words(), bay.matrix.status_words().contains("loop"))
+	check("as the DAW's own rule does for any caller", not DAW.create_send(13, 3) and DAW.state.track(13).sends.size() == back)
+	hand.queue_free()
+	bay.queue_free()
+
+
+func _test_a_seated_pin_wheels_and_drags_its_level() -> void:
+	var bay := _bay()
+	var hand := FakeHand.new()
+	add_child(hand)
+	var pin := bay.pin_for(3, 13)
+	var sd := DAW.state.send(3, 1)
+	sd.volume = FaderLaw.to_taper(0.0)
+	bay.matrix.refresh()
+	pin.nudge(hand, -6, false)
+	close_to("wheeling a seated pin sets its send's level", FaderLaw.to_db(sd.volume), -6.0, 0.05)
+	check("and its card says so (%s)" % pin.readout(), pin.readout() == "send -6.0 dB")
+	check("and its bar comes down with it", absf(float(pin.cell()["level"]) - sd.volume) < 0.0001)
+	# Up the panel is louder: a press that moves past a little way is a drag, not a press.
+	var up := bay.matrix.global_transform.basis.y.normalized()
+	var at := pin.global_position
+	pin.grab_begin(hand, at)
+	var step := PinMatrix.LEVEL_STEP * bay.matrix.cell_size().y
+	pin.grab_move(hand, at + up * bay.matrix.cell_size().y)
+	pin.grab_move(hand, at + up * (bay.matrix.cell_size().y + step * 3.0 + step * 0.5))
+	pin.grab_end(hand)
+	close_to("dragging a seated pin up turns its send up", FaderLaw.to_db(sd.volume), -3.0, 0.05)
+	check("and a drag is not a press: the send is still there", DAW.state.track(3).sends.has(1))
+	# An empty socket's wheel is the grid's, and so is the wheel just after a scroll.
+	var empty := bay.pin_for(2, 8)
+	check("an empty socket's wheel scrolls nothing when everything fits", not empty.nudge(hand, -1, false))
+	hand.queue_free()
+	bay.queue_free()
+
+
+func _test_a_big_session_scrolls_to_every_row_and_column() -> void:
+	var bay := _bay(64)
+	var m := bay.matrix
+	var hand := FakeHand.new()
+	add_child(hand)
+	var idx := DAW.state.track_indices()
+	check("64 tracks are 64 rows and 64 columns, no pages", m.row_count() == 64 and m.col_count() == 64)
+	check("the window shows as many as can be read (%d x %d)" % [m.shown_rows(), m.shown_cols()],
+			m.shown_rows() >= 18 and m.shown_rows() < 64 and m.shown_cols() >= 18 and m.shown_cols() < 64)
+	check("at no less than the smallest readable cell (%s)" % m.cell_size(),
+			m.cell_size().x >= m.col_pitch.x - 0.0001 and m.cell_size().y >= m.row_pitch.x - 0.0001)
+	check("so the panel stops growing (%.2fm)" % bay.panel_height(),
+			bay.panel_height() <= PatchbaySurface.HEADER + PatchbaySurface.MATRIX_AREA.y + PatchbaySurface.CAPTION + 0.001)
+	check("with both scroll bars and their arrows", m.bars().all(func(b): return b.visible)
+			and m.arrows().all(func(k): return k.visible))
+	check("and the foot says where the window is (%s)" % m.position_words(),
+			m.position_words() == "ROWS 1-%d OF 64  ·  COLUMNS 1-%d OF 64" % [m.shown_rows(), m.shown_cols()])
+	var last: int = idx[idx.size() - 1]
+	check("the last track is out of the window at first", m.line_for(last, true) == null and m.pin_for(idx[0], last) == null)
+	# A wheel on the names scrolls them.
+	var first_row := m.line_for(idx[0], true)
+	first_row.nudge(hand, -1, false)
+	check("a wheel notch on a row's name scrolls the rows (%d)" % m.first_row(), m.first_row() == PinMatrix.WHEEL_LINES)
+	m.scroll_to(m.first_row(), m.first_col())
+	# Shift-wheel over a pin goes sideways.
+	var pin := m.pins().filter(func(p): return p.visible)[0] as PinMatrix.Pin
+	pin.nudge(hand, -1, true)
+	check("Shift-wheel over a pin scrolls the columns (%d)" % m.first_col(), m.first_col() == PinMatrix.WHEEL_LINES)
+	# The arrow keys move most of a window.
+	m.scroll_to(0, 0)
+	var down: PinMatrix.Arrow = m.arrows().filter(func(k): return k.vertical and k.step > 0)[0]
+	_press(down)
+	check("the down arrow moves most of a window (%d)" % m.first_row(), m.first_row() == m.shown_rows() - 1)
+	# Every row and every column can be reached, by the bar alone.
+	m.scroll_to(1000, 1000)
+	check("scrolled to the end, the last row and column are in the window",
+			m.line_for(last, true) != null and m.line_for(last, false) != null and m.pin_for(last, idx[0]) == null
+			and m.pin_for(idx[idx.size() - 2], last) != null)
+	check("and the foot says so (%s)" % m.position_words(), m.position_words() == "ROWS %d-64 OF 64  ·  COLUMNS %d-64 OF 64" % [
+			65 - m.shown_rows(), 65 - m.shown_cols()])
+	var from := -1
+	for k in range(idx.size() - 2, idx.size() - m.shown_rows(), -1):
+		if DAW.send_refusal(idx[k], last).is_empty() and bay._sends_between(idx[k], last).is_empty():
+			from = idx[k]
+			break
+	_press(m.pin_for(from, last))
+	check("and a press there patches the last track (from %d)" % from, from > 0 and not bay._sends_between(from, last).is_empty())
+	# A hand grabbing the grid drags it: up the panel shows later rows.
+	m.scroll_to(0, 0)
+	var grab := m.pin_for(idx[2], idx[2])
+	var up := m.global_transform.basis.y.normalized()
+	grab.grab_begin(hand, grab.global_position)
+	grab.grab_move(hand, grab.global_position + up * m.cell_size().y * 5.0)
+	grab.grab_end(hand)
+	check("dragging the grid up by five rows scrolls five (%d)" % m.first_row(), m.first_row() == 5)
+	check("and a drag pressed nothing", bay._sends_between(idx[2], idx[2]).is_empty())
+	# The bar: dragged to its foot, the last rows.
+	var vbar: PinMatrix.Bar = m.bars().filter(func(b): return b.vertical)[0]
+	vbar.grab_begin(hand, vbar.global_position + up * vbar.length * 0.45)
+	vbar.grab_move(hand, vbar.global_position - up * vbar.length * 2.0)
+	vbar.grab_end(hand)
+	check("the bar dragged to its foot shows the last rows (%d)" % m.first_row(), m.first_row() == 64 - m.shown_rows())
+	# A pin re-pointed by a scroll is a different crossing, and says so.
+	m.scroll_to(0, 0)
+	var spot := m.pin_for(idx[0], idx[1])
+	var title := spot.title()
+	m.scroll_to(10, 0)
+	check("a pin the window moved past names its new crossing", spot.title() != title)
+	hand.queue_free()
+	bay.queue_free()
+
+
+func _test_pointing_at_a_pin_lights_its_line() -> void:
+	var bay := _bay()
+	var m := bay.matrix
+	var hand := Node.new()
+	var pin := m.pin_for(3, 13)
+	pin.hover_enter(hand)
+	check("pointing at a pin lights its row and its column", m.lit() == Vector2i(pin.r, pin.c))
+	var other := m.pin_for(7, 13)
+	var off := m.pin_for(7, 9)
+	check("a pin on the lit column keeps its light", m._heads.colour_of(other.slot).v > m._heads.colour_of(m.pin_for(10, 13).slot).v * 0.99)
+	check("and a socket off both lines dims", m._sockets.colour_of(off.slot).v < m._sockets.colour_of(m.pin_for(3, 9).slot).v)
+	var seated_off := m.pin_for(10, 13)
+	pin.hover_exit(hand)
+	var lit_v := m._heads.colour_of(seated_off.slot).v
+	m.line_for(3, true).hover_enter(hand)
+	check("pointing at a name lights its line alone", m.lit() == Vector2i(m.line_for(3, true).index, -1))
+	check("and dims the pins off it", m._heads.colour_of(seated_off.slot).v < lit_v)
+	var label: Label3D = m._row_text[m._row_lines.find(m.line_for(7, true))]
+	check("and the other names", label.modulate.v < m.ink.v - 0.1)
+	m.line_for(3, true).hover_exit(hand)
+	check("leaving lights everything again", m.lit() == Vector2i(-1, -1) and label.modulate == m.ink)
 	hand.free()
 	bay.queue_free()
 
 
-func _test_hovering_a_row_picks_out_its_cables() -> void:
-	DAW.use(OfflineBackend.new())
+func _test_the_bay_is_read_only_without_the_bridge() -> void:
+	var reaper := ReaperBackend.new()
+	reaper.state = MixState.new()
+	for i in [1, 2, 3]:
+		reaper.state.track(i).name = "Track %d" % i
+	add_child(reaper)
+	DAW.use(reaper, false)
+	check("a Reaper without the bridge cannot route", not DAW.can(DAWBackend.Capability.ROUTING))
 	var bay := PatchbaySurface.new()
 	add_child(bay)
 	bay._process(0.0)
-	bay._draw_cables()
-	var hand := Node.new()
-	bay.output_row(3).hover_enter(hand)
-	var lit := 0
-	var dim := 0
-	for cable in bay._cables:
-		if (cable as PatchCable).dimmed:
-			dim += 1
-		else:
-			lit += 1
-	check("hovering a row keeps its own cable lit", lit == 1)
-	check("and dims the rest", dim == bay._cables.size() - 1)
-	check("and lights the row at the other end",
-			bay.input_row(13).light() == PatchPoint.Light.EMPHASIS)
-	bay.output_row(3).hover_exit(hand)
-	check("leaving it lights everything again",
-			bay._cables.all(func(c): return not (c as PatchCable).dimmed))
-	hand.free()
+	var hand := FakeHand.new()
+	add_child(hand)
+	var words := bay.find_children("*", "Label3D", true, false).map(func(l): return (l as Label3D).text)
+	check("the bay says it is read only on its face", words.any(func(w): return str(w).begins_with("READ ONLY")))
+	var pin := bay.pin_for(1, 2)
+	check("and on a pin's card (%s)" % pin.hint(), pin.hint().begins_with("read only"))
+	_press(pin)
+	check("a press makes no send", DAW.state.track(1).sends.is_empty())
+	check("and says why on the foot (%s)" % bay.matrix.status_words(), bay.matrix.status_words().begins_with("Read only"))
+	hand.queue_free()
+	bay.queue_free()
+	reaper.queue_free()
+	DAW.use(OfflineBackend.new())
+
+
+func _test_a_guests_pin_is_the_hosts_send() -> void:
+	var bay := _bay()
+	StageLink.wire_bay(bay)
+	var hand := FakeHand.new()
+	add_child(hand)
+	_as_session(Session.Role.GUEST, 5)
+	Session.keep_intents = true
+	Session.kept_intents.clear()
+	var before := DAW.state.track(2).sends.size()
+	_press(bay.pin_for(2, 8))
+	var asked := Session.kept_intents.filter(func(c): return c[0] == &"create_send")
+	check("a guest's press asks the host for the send (%s)" % [asked], asked.size() == 1 and str(asked[0][1]) == str([2, 8]))
+	check("and makes nothing itself", DAW.state.track(2).sends.size() == before)
+	bay._process(0.0)
+	check("its pin shows as asked for", bay.pin_for(2, 8).cell().get("pending", false)
+			and bay.pin_for(2, 8).readout().contains("asked the host"))
+	Session.kept_intents.clear()
+	_press(bay.pin_for(13, 3))
+	check("a loop is refused on the guest's own machine, nothing asked", Session.kept_intents.is_empty())
+	Session.keep_intents = false
+	# On the host: the intent is the send.
+	Session.start_solo()
+	DAW.apply_intent(&"create_send", [2, 8], 5)
+	check("the host carries the guest's press out as its send", DAW.state.track(2).sends.size() == before + 1
+			and (DAW.state.track(2).sends[before + 1] as MixState.SendState).resolve(DAW.state) == 8)
+	var back := DAW.state.track(13).sends.size()
+	DAW.apply_intent(&"create_send", [13, 3], 5)
+	check("and refuses a guest's loop by the same rule", DAW.state.track(13).sends.size() == back)
+	bay._run_later()
+	bay._process(0.0)
+	check("the send arriving seats the guest's pin", bay.pin_for(2, 8).cell().get("on", false)
+			and not bay.pin_for(2, 8).cell().get("pending", false))
+	hand.queue_free()
+	bay.queue_free()
+
+
+func _test_the_bays_pins_pulse_with_their_sends() -> void:
+	var bay := _bay()
+	var m := bay.matrix
+	var s := DAW.state
+	DAW.transport_stop()
+	for index in s.track_indices():
+		s.track(index).vu_l = 0.0
+		s.track(index).vu_r = 0.0
+	m._pulse(0.0)
+	var pin := m.pin_for(3, 13)
+	check("a silent send's pin is still", m.pulse_of(pin.r, pin.c) == 0.0)
+	var quiet := m._heads.colour_of(pin.slot).v
+	s.track(3).vu_l = 0.6
+	s.track(3).vu_r = 0.6
+	s.send(3, 1).volume = FaderLaw.to_taper(0.0)
+	m._pulse(0.0)
+	close_to("a send at 0 dB pulses with its track's level", m.pulse_of(pin.r, pin.c), 0.6, 0.002)
+	check("and its head burns brighter (%.2f over %.2f)" % [m._heads.colour_of(pin.slot).v, quiet], m._heads.colour_of(pin.slot).v > quiet * 1.5)
+	s.send(3, 1).volume = 0.0
+	m._pulse(0.0)
+	check("a send at zero carries nothing", m.pulse_of(pin.r, pin.c) == 0.0)
+	s.send(3, 1).volume = FaderLaw.to_taper(0.0)
+	s.track(3).mute = true
+	m._pulse(0.0)
+	check("nor does a muted track's", m.pulse_of(pin.r, pin.c) == 0.0)
+	s.track(3).mute = false
 	bay.queue_free()
 
 
@@ -4880,10 +5006,10 @@ func _test_many_little_boxes_are_one_object() -> void:
 	# to be baked into a duplicate of the mesh. The duplicate is the part worth pinning: Part
 	# caches one Mesh per asset and hands it to everyone, so painting the shared copy would
 	# repaint every loose jack in the studio.
-	var source := Part.mesh(PatchPoint.MESH_PATH)
+	var source := Part.mesh(PatchCable.JACK_MESH)
 	if source != null:
 		var authored_0 := source.surface_get_material(0)
-		var jacks := MeshBank.of(PatchPoint.MESH_PATH, Materials.brushed_metal(),
+		var jacks := MeshBank.of(PatchCable.JACK_MESH, Materials.brushed_metal(),
 				{"bore": Materials.recess()})
 		check("a bank of an authored part resolves", jacks != null)
 		check("it keeps every surface the part had",
@@ -20791,61 +20917,66 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 	add_child(wall)
 	wall.show_graph(fetched)
 	wall._process(0.0)
-	check("the wall is a box for each side of each node: 3 sources, 3 sinks, here (%d cables)" % wall.cables,
-			wall.cables == 3 and wall.height > 0.3)
+	var m := wall.matrix
+	check("the wall is a matrix: each node's outputs down it, its inputs across (%d x %d, %d links)" % [
+			m.row_count(), m.col_count(), wall.cables], m.row_count() == 3 + 4 and m.col_count() == 2 + 3 and wall.cables == 3)
 	check("it names itself for the layout", wall.surface_id == &"patch_wall" and wall.surface_kind == &"patchwall")
+	check("and keeps its size, whatever the graph", is_equal_approx(wall.height, PatchWallSurface.HEIGHT))
 	wall.tool = tool
 	var mix_out := "dawlings · mix:output_FL"
 	var aux0 := "alsa_output.usb-Scarlett.pro-output-0:playback_AUX0"
-	check("every port is a jack to take hold of (%d)" % wall._jacks.size(), wall._jacks.size() == 7
-			and (wall._jacks[mix_out] as PatchJack).is_output and not (wall._jacks[aux0] as PatchJack).is_output)
-	check("a jack counts the patches it is in", (wall._jacks[mix_out] as PatchJack).patches == 1
-			and (wall._jacks["Recorder:input_1"] as PatchJack).patches == 1 and (wall._jacks["Mic:capture_1"] as PatchJack).patches == 1)
-	var jack_out: PatchJack = wall._jacks[mix_out]
-	var jack_in: PatchJack = wall._jacks[aux0]
-	check("a cable from an output can be let go on any input, and no output",
-			wall._candidates(jack_out).size() == 3 and wall._candidates(jack_in).size() == 4
-			and wall._target_for(jack_out, jack_in) == jack_in and wall._target_for(jack_out, wall._jacks["Mic:capture_1"]) == null)
-	wall._on_drag_began(jack_out, Vector3.ZERO)
-	check("a cable is carried while it is held, and lights what it could cut", wall.get_node_or_null("CarriedCable") != null
-			and jack_in.light() == PatchJack.Light.CUT and (wall._jacks["Recorder:input_1"] as PatchJack).light() == PatchJack.Light.CANDIDATE)
-	wall._on_drag_finished(jack_out, wall._jacks["Recorder:input_1"])
-	check("let go on an input, the two are patched", FileAccess.get_file_as_string(log).ends_with("\ndawlings · mix:output_FL Recorder:input_1\n")
+	var group_row := m.row_line(0)
+	check("a node heads its ports, by name, with how many (%s)" % [group_row], group_row.get("group", false)
+			and group_row["name"] == "dawlings · mix" and int(group_row["count"]) == 2)
+	check("every port is a crossing to press", m.pin_for(mix_out, aux0) != null and m.pin_for("Mic:capture_1", "Recorder:input_1") != null)
+	check("a link is a seated pin", m.pin_for(mix_out, aux0).cell().get("on", false)
+			and not m.pin_for(mix_out, "Recorder:input_1").cell().get("on", false))
+	check("a pin says what it joins (%s)" % m.pin_for(mix_out, aux0).title(), m.pin_for(mix_out, aux0).title().contains("OUTPUT_FL")
+			and m.pin_for(mix_out, aux0).title().contains("PLAYBACK_AUX0") and m.pin_for(mix_out, aux0).readout() == "patched")
+	check("a port's header counts its links (%s)" % m.line_for(mix_out, true).readout(), m.line_for(mix_out, true).readout() == "patched to 1")
+	_press(m.pin_for(mix_out, "Recorder:input_1"))
+	check("a press on an empty crossing patches the two", FileAccess.get_file_as_string(log).ends_with("\ndawlings · mix:output_FL Recorder:input_1\n")
 			and wall.status.begins_with("patched"))
-	check("and nothing is left carried or lit", jack_in.light() == PatchJack.Light.PLAIN)
+	check("and the foot says so (%s)" % m.status_words(), m.status_words().begins_with("patched"))
 	wall._process(0.0)
-	check("the wall is redrawn after", wall.get_node_or_null("CarriedCable") == null)
-	var in_wall: PatchJack = wall._jacks[aux0]
-	wall._on_drag_began(in_wall, Vector3.ZERO)
-	wall._on_drag_finished(in_wall, wall._jacks[mix_out])
-	check("let go from an input onto an output it is patched to, that cable is cut",
-			FileAccess.get_file_as_string(log).ends_with("\n-d dawlings · mix:output_FL " + aux0 + "\n") and wall.status.begins_with("cut"))
+	_press(m.pin_for(mix_out, aux0))
+	check("a press on a seated pin cuts that link", FileAccess.get_file_as_string(log).ends_with("\n-d dawlings · mix:output_FL " + aux0 + "\n")
+			and wall.status.begins_with("cut"))
+	wall._process(0.0)
+	var words := ""
+	for child in wall.get_children():
+		if child is Label3D and (child as Label3D).text.contains("links"):
+			words = (child as Label3D).text
+	check("the footer says what the last press did (%s)" % words, words.contains("cut"))
+	# Folded and opened.
+	var before := m.row_count()
+	_press(m.line_for("@dawlings · mix", true))
+	check("pressing a node's name folds its ports away", m.row_count() == before - 2 and m.is_collapsed("@dawlings · mix")
+			and m.pin_for(mix_out, aux0) == null)
+	var folded := m.line_for("@dawlings · mix", true)
+	check("and its name says how many it holds (%s)" % m._row_text[m._row_lines.find(folded)].text,
+			m._row_text[m._row_lines.find(folded)].text.ends_with("(2)"))
+	var sum := m.pin_for("@dawlings · mix", "@alsa_output.usb-Scarlett.pro-output-0")
+	check("a crossing with a folded node counts its links (%s)" % sum.readout(), sum.readout() == "2 links")
+	_press(sum)
+	check("and pressing it opens the node", m.row_count() == before and not m.is_collapsed("@dawlings · mix"))
 	var calls := FileAccess.get_file_as_string(log)
-	wall._on_drag_began(jack_out, Vector3.ZERO)
-	wall._on_drag_finished(jack_out, wall._jacks["Mic:capture_1"])
-	check("let go on a port of its own kind, or on nothing, nothing is patched",
-			FileAccess.get_file_as_string(log) == calls)
-	wall._on_drag_began(jack_out, Vector3.ZERO)
-	wall._on_drag_finished(jack_out, null)
-	check("and the cable is dropped", FileAccess.get_file_as_string(log) == calls and (wall.get_node_or_null("CarriedCable") == null or wall.get_node("CarriedCable").is_queued_for_deletion()))
+	_press(m.pin_for("@Mic", "Recorder:input_1"))
+	check("a node's open crossing patches nothing", FileAccess.get_file_as_string(log) == calls)
 	wall._process(0.0)
-	var before := wall.get_child_count()
+	var count := wall.get_child_count()
 	wall.show_graph(PipeGraph.parse(GRAPH_OUT, GRAPH_IN, GRAPH_LINKS))
 	wall._process(0.0)
-	check("the same graph is not drawn again", wall.get_child_count() == before)
+	check("the same graph is not drawn again", wall.get_child_count() == count)
 	var broken := PipeGraph.new()
 	broken.error = "no audio graph"
 	wall.show_graph(broken)
 	wall._process(0.0)
-	check("without a graph it says so and draws no cables", wall.cables == 0)
-	var drawn_before := wall.cables
-	wall._on_jack_hover(true, mix_out)
-	check("hovering a port lights it and keeps every cable (%d)" % wall.cables, wall._lit_port == mix_out and wall.cables == drawn_before)
-	wall._on_jack_hover(false, mix_out)
-	check("and leaving it puts them all back", wall._lit_port == "" and wall.cables == drawn_before)
+	check("without a graph it says so and shows no pins", wall.cables == 0 and not m.visible and m.row_count() == 0)
 	wall.free()
-	# However many nodes there are, every port is on some page of twelve rows, and a node larger
-	# than a page is cut across pages rather than dropped.
+
+	# However big the machine's graph, every port is somewhere a hand can reach: the matrix
+	# scrolls, and nothing is counted at a foot and left out.
 	var big_out := ""
 	var big_in := ""
 	for n in 40:
@@ -20854,42 +20985,43 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 			big_in += "dst%d:in_%d\n" % [n, k]
 	for k in 30:
 		big_out += "huge:out_%d\n" % k
-	var paged := PatchWallSurface.new()
-	paged.follow = false
-	add_child(paged)
-	paged.show_graph(PipeGraph.parse(big_out, big_in, ""))
-	paged._process(0.0)
-	var seen := {}
-	var pages_ok := true
-	var out_pages := paged._pages(true)
-	for pg in out_pages:
-		var rows := 0
-		for part in pg:
-			rows += int(part["to"]) - int(part["from"])
-			for i in range(int(part["from"]), int(part["to"])):
-				seen["%s:%d" % [part["node"], i]] = true
-		pages_ok = pages_ok and rows <= PatchWallSurface.MAX_ROWS
-	check("190 outputs make %d pages of at most twelve rows, every port on exactly one" % out_pages.size(),
-			pages_ok and seen.size() == 190 and out_pages.size() == 16)
-	check("a page draws only its own jacks", paged._jacks.size() <= 24 and paged._jacks.size() >= 12)
-	var first_ports := paged._jacks.keys()
-	paged._turn_page("outputs", 1, out_pages.size())
-	paged._process(0.0)
-	check("turning the page shows other ports", paged._page["outputs"] == 1 and paged._jacks.size() >= 12
-			and not paged._jacks.has(first_ports[0]))
-	paged._turn_page("outputs", -2, out_pages.size())
-	check("pages wrap round", paged._page["outputs"] == out_pages.size() - 1)
-	var linked_big := PipeGraph.parse(big_out, big_in, "src0:out_0\n   |-> dst0:in_0\nsrc39:out_3\n   |-> dst0:in_0\n")
-	paged._page["outputs"] = out_pages.size() - 1
-	paged._page["inputs"] = 0
-	paged.show_graph(linked_big)
-	paged._process(0.0)
-	var words := ""
-	for child in paged.get_children():
-		if child is Label3D and (child as Label3D).text.contains("links"):
-			words = (child as Label3D).text
-	check("a link to a port on another page is counted, not lost (%s)" % words, words.contains("2 to other pages"))
-	paged.free()
+	var big := PatchWallSurface.new()
+	big.follow = false
+	add_child(big)
+	big.show_graph(PipeGraph.parse(big_out, big_in, "src0:out_0\n   |-> dst0:in_0\nsrc39:out_3\n   |-> dst39:in_3\n"))
+	big._process(0.0)
+	var bm := big.matrix
+	check("190 outputs under 41 nodes, 160 inputs under 40 (%d x %d)" % [bm.row_count(), bm.col_count()],
+			bm.row_count() == 190 + 41 and bm.col_count() == 160 + 40)
+	check("shown at a readable size, the rest a scroll away (%d x %d)" % [bm.shown_rows(), bm.shown_cols()],
+			bm.shown_rows() >= 10 and bm.shown_cols() >= 20 and bm.cell_size().y >= bm.row_pitch.x - 0.0001)
+	var seen_rows := {}
+	var seen_cols := {}
+	var top := 0
+	while top < bm.row_count():
+		bm.scroll_to(top, 0)
+		for line in bm._row_lines:
+			if line.index >= 0:
+				seen_rows[line.line()["key"]] = true
+		top += bm.shown_rows()
+	var left := 0
+	while left < bm.col_count():
+		bm.scroll_to(0, left)
+		for line in bm._col_lines:
+			if line.index >= 0:
+				seen_cols[line.line()["key"]] = true
+		left += bm.shown_cols()
+	check("scrolling reaches every output and every input (%d of %d, %d of %d)" % [seen_rows.size(), bm.row_count(),
+			seen_cols.size(), bm.col_count()], seen_rows.size() == bm.row_count() and seen_cols.size() == bm.col_count())
+	bm.scroll_to(1000, 1000)
+	check("the far corner is a crossing to press", bm.pin_for(bm.row_line(bm.row_count() - 1)["key"],
+			bm.col_line(bm.col_count() - 1)["key"]) != null)
+	var texts := big.find_children("*", "Label3D", true, false).map(func(l): return (l as Label3D).text)
+	check("and nothing is left counted at a foot (%s)" % [texts.filter(func(t): return str(t).contains("more") or str(t).contains("page"))],
+			not texts.any(func(t): return str(t).contains("more") or str(t).contains("other page")))
+	check("the foot says where the window is (%s)" % bm.position_words(), bm.position_words().begins_with("ROWS ")
+			and bm.position_words().contains("OF 231"))
+	big.free()
 	DirAccess.remove_absolute(log)
 	DirAccess.remove_absolute(tool)
 
@@ -28665,6 +28797,7 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 	var card := WelcomeCard.new()
 	card.studio = studio
 	var differ: Array = []
+	var low: Array = []
 	for id: StringName in Venue.IDS:
 		studio.set_venue(id, false)
 		var listed: Array[StringName] = []
@@ -28675,8 +28808,13 @@ func _test_the_station_board_is_the_play_pages_and_its_rows_go() -> void:
 						listed.append(line[2])
 		if board.rows() != listed or board.rows() != StationBoard.rows_for(studio.venue):
 			differ.append("%s: %s, card %s" % [id, board.rows(), listed])
+		var foot: float = ((board.get_node("Face") as Node3D).global_transform * Vector3(0, -board.face_height(), 0)).y \
+				- studio.global_position.y
+		if foot < 0.35:
+			low.append("%s: %.2f m over %d rows" % [id, foot, board.rows().size()])
 	card.free()
 	check("in every venue the board's rows are the PLAY pages' stations, in order (%s)" % [differ], differ.is_empty())
+	check("and its face stays well off the floor however many there are, in columns (%s)" % [low], low.is_empty())
 	studio.set_venue(Venue.IDS[0], false)
 	# On a stand of its own pushed about the floor: the stand's footprint is the board's foot.
 	var fixture := board.footprint()
@@ -32810,10 +32948,10 @@ func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
 	var looms := studio._looms.filter(func(l): return is_instance_valid(l))
 	check("every loom carries something (%d)" % looms.size(), not looms.is_empty()
 			and looms.all(func(l: GearLoom) -> bool: return l.level_source.is_valid() and l.is_in_group(SignalBeads.CARRIERS)))
-	studio.patchbay._draw_cables()
-	var cables: Array = studio.patchbay._cables
-	check("every patch cable knows its send (%d)" % cables.size(), not cables.is_empty() and cables.all(
-			func(c: PatchCable) -> bool: return c.source_track > 0 and c.send_index >= 0 and c.is_in_group(SignalBeads.CARRIERS)))
+	var bay := studio.patchbay.matrix
+	check("the routing bay's pins pulse with their sends' level, not beads (%d seated)" % studio.patchbay.seated_count(),
+			studio.patchbay.seated_count() > 0 and bay.signal_of.is_valid()
+			and studio.patchbay.find_children("*", "PatchCable", true, false).is_empty())
 	var base: Array[float] = []
 	for i in studio._lamps.size():
 		base.append(studio.venue.lamp_energy(i, Studio.PRACTICALS[i][2]))
@@ -48084,3 +48222,312 @@ func _test_the_lyric_board_has_no_enter_in_a_headset() -> void:
 	view.queue_free()
 	await get_tree().process_frame
 	_offline()
+
+
+# --- online by a code (noray) -------------------------------------------------------------
+
+const FakeNoray := preload("res://tests/fake_noray.gd")
+
+
+## noray's lines, its errors and its codes, as NorayLink reads and writes them. The protocol is
+## trimsock: data with a space in it comes quoted, and that is how every refusal comes.
+func _test_noray_lines_and_codes_are_read_as_noray_writes_them() -> void:
+	check("a plain line is its name and data", NorayLink.parse_line("set-oid N6UU9K") == ["set-oid", "N6UU9K"])
+	check("a line with no data", NorayLink.parse_line("register-host") == ["register-host", ""])
+	check("an error comes quoted and is unquoted", NorayLink.parse_line(
+			"connect \"Error: Unknown host oid: ZZ\"") == ["connect", "Error: Unknown host oid: ZZ"])
+	check("an address is an address", NorayLink.parse_address("203.0.113.5:55759") == {"ip": "203.0.113.5", "port": 55759})
+	check("and an error is not one, colons and all", NorayLink.parse_address("Error: Unknown host oid: ZZ").is_empty())
+	check("nor is a port out of range", NorayLink.parse_address("1.2.3.4:70000").is_empty())
+	check("a code with a space is sent quoted", NorayLink.chunk("a b") == "\"a b\"" and NorayLink.chunk("N6UU9K") == "N6UU9K")
+	check("a short code is read case-, space- and dash-blind", NorayLink.clean_code(" n6u-u9k ") == "N6UU9K"
+			and NorayLink.clean_code("n6u u9k") == "N6UU9K")
+	check("a long one (another server's) is taken exactly", NorayLink.clean_code("Ab-cDEfgh_ijkLMNopqrs")
+			== "Ab-cDEfgh_ijkLMNopqrs")
+	check("a code is shown in two halves to read aloud", NorayLink.spoken("N6UU9K") == "N6U U9K"
+			and NorayLink.letters("N6U") == "N 6 U")
+	check("a server is host, or host:port", NorayLink.split_server("dawlings.jacobsabella.com") == ["dawlings.jacobsabella.com", 8890]
+			and NorayLink.split_server("127.0.0.1:18890") == ["127.0.0.1", 18890])
+	var path := "user://test_online.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var env := OS.get_environment("DAWLINGS_NORAY")
+	OS.set_environment("DAWLINGS_NORAY", "")
+	check("the default server is dawlings' own", NorayLink.server_setting(path) == NorayLink.DEFAULT_SERVER)
+	NorayLink.keep_server("noray.example.net:9000", path)
+	check("a player's own is kept", NorayLink.server_setting(path) == "noray.example.net:9000")
+	NorayLink.keep_server("", path)
+	check("and emptied, the default is back", NorayLink.server_setting(path) == NorayLink.DEFAULT_SERVER)
+	OS.set_environment("DAWLINGS_NORAY", "127.0.0.1:18890")
+	check("the tooling's environment wins", NorayLink.server_setting(path) == "127.0.0.1:18890")
+	OS.set_environment("DAWLINGS_NORAY", env)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var boot: Node = load("res://scenes/bootstrap.gd").new()
+	var parsed: Dictionary = boot._parse(PackedStringArray(["--online", "--noray-server", "n.example:1", "--relay"]))
+	check("--online, --noray-server and --relay are launch switches", parsed["online"]
+			and parsed["noray_server"] == "n.example:1" and parsed["relay"])
+	check("and --join-code", boot._parse(PackedStringArray(["--join-code", "N6U U9K"]))["join_code"] == "N6U U9K")
+	boot.free()
+
+
+## Waits, polling the fake server and the links, until `done` says so or `seconds` pass.
+func _noray_until(fake, links: Array, done: Callable, seconds: float) -> bool:
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < until:
+		fake.poll()
+		for l in links:
+			(l as NorayLink).poll(1.0 / 60.0)
+		if done.call():
+			return true
+		await get_tree().process_frame
+	return done.call()
+
+
+## A host and a guest against a stand-in noray: registered, the code found, the punch announced to
+## both sides, the relay given to both, and every refusal in words.
+func _test_noray_registers_finds_punches_and_relays() -> void:
+	var fake = FakeNoray.new()
+	check("the stand-in noray is up", fake.start(18890, 18809))
+	var server := ENetMultiplayerPeer.new()
+	check("a host's ENet is up", server.create_server(18832) == OK)
+	var host := NorayLink.new()
+	host.registrar_port = 18809
+	host.open("127.0.0.1:18890", NorayLink.via_enet(server.host))
+	var guest := NorayLink.new()
+	guest.registrar_port = 18809
+	guest.open("127.0.0.1:18890")
+	var both := func(): return host.is_online() and guest.is_online()
+	var ok: bool = await _noray_until(fake, [host, guest], both, 5.0)
+	check("both register (%s, %s: %s)" % [host.state, guest.state, host.why_not + guest.why_not], ok)
+	check("the host has a code", host.oid.begins_with("K7Q"))
+	check("and learned its own address, from the ENet server's socket (%s)" % host.public_address,
+			host.public_address == "127.0.0.1:18832")
+	check("the guest registered a port of its own for ENet to bind", guest.local_port > 0)
+	var host_punches: Array = []
+	var guest_punches: Array = []
+	host.punch.connect(func(ip, port): host_punches.append([ip, port]))
+	guest.punch.connect(func(ip, port): guest_punches.append([ip, port]))
+	guest.ask_direct(host.oid)
+	await _noray_until(fake, [host, guest], func(): return not host_punches.is_empty() and not guest_punches.is_empty(), 2.0)
+	check("the guest is told where the host is (%s)" % [guest_punches], guest_punches == [["127.0.0.1", 18832]])
+	check("and the host where the guest is (%s)" % [host_punches], host_punches == [["127.0.0.1", guest.local_port]])
+	var host_relays: Array = []
+	var guest_relays: Array = []
+	host.relay.connect(func(port): host_relays.append(port))
+	guest.relay.connect(func(port): guest_relays.append(port))
+	guest.ask_relay(host.oid)
+	await _noray_until(fake, [host, guest], func(): return not host_relays.is_empty() and not guest_relays.is_empty(), 2.0)
+	check("a relay is given to each side (%s, %s)" % [host_relays, guest_relays], host_relays.size() == 1
+			and guest_relays.size() == 1 and host_relays[0] != guest_relays[0] and fake.relay_count() == 2)
+	check("and the host keeps the guest's relay port, to say who is relayed", Array(host.relay_ports) == [host_relays[0]])
+	guest.ask_direct("NOSUCH")
+	await _noray_until(fake, [host, guest], func(): return guest.state == NorayLink.State.FAILED, 2.0)
+	check("an unknown code is said in words (%s)" % guest.why_not, guest.state == NorayLink.State.FAILED
+			and guest.why_not.begins_with("No session is online with that code"))
+	check("and the host stays online", host.is_online())
+	host.close()
+	check("closing forgets the code", host.state == NorayLink.State.CLOSED and host.oid == "")
+
+	# A server that is not there.
+	var nobody := NorayLink.new()
+	nobody.reach_seconds = 1.0
+	nobody.open("127.0.0.1:18899")
+	await _noray_until(fake, [nobody], func(): return nobody.state == NorayLink.State.FAILED, 3.0)
+	check("a server that is not there says so, and where to set one (%s)" % nobody.why_not,
+			nobody.state == NorayLink.State.FAILED and nobody.why_not.contains("127.0.0.1:18899")
+			and nobody.why_not.contains("Set your noray server"))
+	var unset := NorayLink.new()
+	unset.open("")
+	check("as does none at all", unset.state == NorayLink.State.FAILED and unset.why_not.contains("No noray server is set"))
+	# One whose registrar never answers: the UDP is blocked somewhere.
+	fake.deaf_registrar = true
+	var deaf := NorayLink.new()
+	deaf.registrar_port = 18809
+	deaf.register_seconds = 0.8
+	deaf.open("127.0.0.1:18890")
+	await _noray_until(fake, [deaf], func(): return deaf.state == NorayLink.State.FAILED, 3.0)
+	check("a registrar that never hears this machine blames the UDP (%s)" % deaf.why_not,
+			deaf.state == NorayLink.State.FAILED and deaf.why_not.contains("UDP"))
+	server.close()
+	fake.stop()
+
+
+## The session itself as a guest by a code: punched through and saying "direct"; and, with the
+## punch going nowhere, falling back to the relay by itself and saying "relayed". The host is an
+## ENet server of the test's own, punching as Session's host does.
+func _test_a_guest_by_code_says_direct_or_relayed() -> void:
+	var fake = FakeNoray.new()
+	check("the stand-in noray is up", fake.start(18890, 18809))
+	var server := ENetMultiplayerPeer.new()
+	server.create_server(18833)
+	var host := NorayLink.new()
+	host.registrar_port = 18809
+	host.open("127.0.0.1:18890", NorayLink.via_enet(server.host))
+	var punch_to := func(ip: String, port: int):
+		for i in 5:
+			server.host.socket_send(ip, port, "punch".to_ascii_buffer())
+	host.punch.connect(punch_to)
+	host.relay.connect(func(port: int): punch_to.call("127.0.0.1", port))
+	await _noray_until(fake, [host], func(): return host.is_online(), 3.0)
+	var notices: Array[String] = []
+	var hear := func(t: String): notices.append(t)
+	Session.notice.connect(hear)
+	Session.start_solo()
+	Session.online.registrar_port = 18809
+	var link_was := Session.link_seconds
+	Session.link_seconds = 1.5
+	var phases: Array[String] = []
+	var watch := func(): if phases.is_empty() or phases[-1] != Session.link_phase + "/" + Session.link_kind:
+		phases.append(Session.link_phase + "/" + Session.link_kind)
+	Session.link_changed.connect(watch)
+	var polled := func(): server.poll(); return Session.link_kind != "" or Session.role == Session.Role.SOLO and Session.link_phase == ""
+	check("joining by a code starts", Session.join_by_code(NorayLink.spoken(host.oid).to_lower(), "", "127.0.0.1:18890"))
+	await _noray_until(fake, [host], polled, 5.0)
+	check("punched through, it says direct (%s, %s)" % [phases, notices], Session.link_kind == "direct"
+			and Session.role == Session.Role.GUEST and Session.joined_code == host.oid)
+	check("by way of finding and punching", phases.has("finding/") and phases.has("punching/"))
+	check("in words, in the panel's", SessionPanel.link_words().begins_with("direct"))
+	Session.leave()
+	check("leaving ends the link", Session.link_kind == "" and Session.online.state == NorayLink.State.CLOSED)
+	# Re-register the host, as the stand-in forgets nothing, then make the punch go nowhere.
+	fake.bad_punch = true
+	phases.clear()
+	Session.join_by_code(host.oid, "", "127.0.0.1:18890")
+	await _noray_until(fake, [host], polled, 6.0)
+	check("a punch that never opens falls back to the relay, and says so (%s, %s)" % [phases, notices],
+			Session.link_kind == "relayed" and Session.role == Session.Role.GUEST)
+	check("having tried the punch first", phases.has("punching/") and phases.has("relaying/"))
+	check("in words, in the panel's", SessionPanel.link_words().begins_with("relayed through 127.0.0.1"))
+	Session.leave()
+	fake.bad_punch = false
+	# A code nobody has.
+	notices.clear()
+	Session.join_by_code("ZZZZZZ", "", "127.0.0.1:18890")
+	await _noray_until(fake, [host], func(): return Session.link_phase == "", 3.0)
+	check("a code nobody has is said, and leaves you on your own (%s)" % [notices],
+			Session.role == Session.Role.SOLO and notices.any(func(n): return n.begins_with("No session is online")))
+	# And the relay forced, as --relay does, with the server still turning the punch away.
+	Session.force_relay = true
+	phases.clear()
+	Session.join_by_code(host.oid, "", "127.0.0.1:18890")
+	await _noray_until(fake, [host], polled, 4.0)
+	check("--relay goes straight to the relay (%s)" % [phases], Session.link_kind == "relayed"
+			and not phases.has("punching/"))
+	Session.leave()
+	Session.force_relay = false
+	Session.link_seconds = link_was
+	Session.online.registrar_port = NorayLink.REGISTRAR_PORT
+	Session.link_changed.disconnect(watch)
+	Session.notice.disconnect(hear)
+	host.close()
+	server.close()
+	fake.stop()
+	_restore_offline()
+
+
+func _restore_offline() -> void:
+	Session.start_solo()
+	DAW.use(OfflineBackend.new())
+
+
+## The mix for a guest by code rides the session's ENet: the same packets, the same ticket, handed
+## across instead of sent on a socket of their own. A ticket used by a peer it was not granted to
+## is not answered.
+func _test_the_mix_is_carried_for_a_guest_by_code() -> void:
+	var host_feed := MixFeed.new()
+	var guest_feed := MixFeed.new()
+	add_child(host_feed)
+	add_child(guest_feed)
+	check("the host sends", host_feed.start_sending(18834, MixSource.Tone.new()))
+	var ticket := host_feed.grant(7)
+	guest_feed.drain = true
+	check("the guest listens, carried", guest_feed.listen_carried(ticket) and guest_feed.carried)
+	var impostor := MixFeed.new()
+	add_child(impostor)
+	impostor.drain = true
+	impostor.listen_carried(ticket)
+	var until := Time.get_ticks_msec() + 1500
+	var up_to: Dictionary = {}
+	var down_to: Dictionary = {}
+	while Time.get_ticks_msec() < until:
+		for row in guest_feed.take_outgoing():
+			up_to[row[0]] = true
+			host_feed.hear_carried(7, row[1])
+		for row in impostor.take_outgoing():
+			host_feed.hear_carried(9, row[1])
+		for row in host_feed.take_outgoing():
+			down_to[row[0]] = true
+			guest_feed.hear_carried(1, row[1])
+		await get_tree().process_frame
+	check("the guest's keepalives go to the host (%s)" % [up_to.keys()], up_to.keys() == [1])
+	check("and the host's mix only to the peer its ticket is for (%s)" % [down_to.keys()], down_to.keys() == [7])
+	var heard := guest_feed.stats()
+	check("one listener, carried (%d)" % host_feed.listener_count(), host_feed.listener_count() == 1)
+	check("the guest hears the mix through the session (%s)" % [heard], heard.get("hearing", false)
+			and int(heard.get("packets", 0)) > 200 and guest_feed.heard_peak > 0.15)
+	check("with its round trip timed on that path (%.1f)" % float(heard.get("rtt_ms", -1)), float(heard.get("rtt_ms", -1)) >= 0.0)
+	var before := int(guest_feed.stats().get("packets", 0))
+	guest_feed.hear_carried(3, MixFeed.encode(99999, PackedVector2Array([Vector2.ONE])))
+	await get_tree().process_frame
+	check("audio from anyone but the host is not taken", int(guest_feed.stats().get("packets", 0)) >= before)
+	# noray's registration and punches leave from the feed's own socket, on its thread.
+	var ear := PacketPeerUDP.new()
+	ear.bind(18835, "127.0.0.1")
+	host_feed.send_raw("127.0.0.1", 18835, "pid".to_ascii_buffer())
+	var heard_raw := ""
+	for i in 60:
+		await get_tree().process_frame
+		if ear.get_available_packet_count() > 0:
+			heard_raw = ear.get_packet().get_string_from_ascii()
+			check("from the mix's port (%d)" % ear.get_packet_port(), ear.get_packet_port() == 18834)
+			break
+	check("a datagram for noray leaves from the feed's socket (%s)" % heard_raw, heard_raw == "pid")
+	ear.close()
+	for f in [host_feed, guest_feed, impostor]:
+		f.stop()
+		f.queue_free()
+
+
+## Host online, seen: the code big in the panel and readable a letter at a time, on the strip at
+## the top while the panel is closed, the online button saying what it would do, and a server that
+## is not there said in the panel's own words.
+func _test_the_panel_shows_the_join_code_and_what_went_wrong() -> void:
+	var fake = FakeNoray.new()
+	check("the stand-in noray is up", fake.start(18890, 18809))
+	Session.start_solo()
+	Session.online.registrar_port = 18809
+	Session.mix_source = func(): return MixSource.Tone.new()
+	var panel := SessionPanel.new()
+	add_child(panel)
+	check("hosting online starts", Session.host_online(18836, "127.0.0.1:18890"))
+	var until := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < until and not (Session.online.is_online() and Session.mix_online.is_online()):
+		fake.poll()
+		await get_tree().process_frame
+	check("online, and the mix's socket too (%s)" % Session.online.why_not, Session.online.is_online()
+			and Session.mix_online.is_online() and Session.mix_online.oid != Session.online.oid)
+	await get_tree().process_frame
+	check("the code is in the panel, in halves (%s)" % panel._online_code.text,
+			panel._online_code.text == NorayLink.spoken(Session.online.oid) and panel._online_code.visible)
+	check("with a copy button", panel._online_copy.visible)
+	check("and a letter at a time to read out", panel._online_said.text.contains(NorayLink.letters(Session.online.oid)))
+	check("and the way off it", panel._online_button.text == "Go offline")
+	panel._refresh_strip()
+	var chip := panel._strip.get_node_or_null("OnlineCode") as Label
+	check("on the strip while the panel is closed", chip != null and chip.text.ends_with(NorayLink.spoken(Session.online.oid)))
+	Session.go_offline()
+	check("offline, the code is gone", not panel._online_code.visible and panel._online_button.text == "Go online")
+	Session.online.reach_seconds = 0.5
+	Session.host_online(18836, "127.0.0.1:18899")
+	until = Time.get_ticks_msec() + 2000
+	while Time.get_ticks_msec() < until and Session.online.state != NorayLink.State.FAILED:
+		await get_tree().process_frame
+	check("a server that is not there is said in the panel (%s)" % panel._online_said.text,
+			panel._online_said.text.contains("127.0.0.1:18899") and panel._online_button.text == "Try again")
+	Session.online.reach_seconds = NorayLink.REACH_SECONDS
+	Session.online.registrar_port = NorayLink.REGISTRAR_PORT
+	Session.mix_online.registrar_port = NorayLink.REGISTRAR_PORT
+	Session.leave()
+	Session.mix_source = Callable()
+	panel.queue_free()
+	fake.stop()
+	_restore_offline()

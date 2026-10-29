@@ -3531,6 +3531,7 @@ func _build_surfaces() -> void:
 	# stand may since have been wheeled somewhere else; riding it (below) takes care of that.
 	patchbay = PatchbaySurface.new()
 	patchbay.name = "Patchbay"
+	StageLink.wire_bay(patchbay)
 	patchbay.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(PATCH_STAND_HEADING)),
 			PATCH_STAND_AT) * Transform3D(Basis.IDENTITY, Vector3(0, PATCH_BAY_TOP, PATCH_BAY_FRONT))
 	studio_set.add_child(patchbay)
@@ -8015,7 +8016,7 @@ func plaque_key(id: StringName, kind: StringName, key: Node3D) -> void:
 	var plate := plaque.get_node_or_null("Plate") as MeshInstance3D
 	var size: Vector3 = (plate.mesh as BoxMesh).size if plate != null else Vector3(Stations.PLAQUE_WIDTH, 0.2, 0.01)
 	var top := plate.position.y + size.y * 0.5 if plate != null else 0.1
-	_beside.position = Vector3(size.x * 0.5 + 0.02 + StationBoard.WIDTH * 0.5, top, 0)
+	_beside.position = Vector3(size.x * 0.5 + 0.02 + _beside.face_width() * 0.5, top, 0)
 	plaque.add_child(_beside)
 	Session.notice.emit("Every instrument, beside the %s's plaque: press one to go there, INSTRUMENTS again to put them away."
 			% String(Stations.row(id).get("title", id)).to_lower())

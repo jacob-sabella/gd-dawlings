@@ -613,18 +613,7 @@ func _follow_instrument(track_index: int) -> void:
 
 ## Which track's bus each track sends into: its folder's, or the master's.
 func parent_of(index: int) -> int:
-	var stack: Array = []
-	for i in state.track_indices():
-		if i == index:
-			return stack[-1] if not stack.is_empty() else 0
-		var t: MixState.TrackState = state.tracks[i]
-		if t.folder_depth > 0:
-			stack.append(i)
-		elif t.folder_depth < 0:
-			for _n in -t.folder_depth:
-				if not stack.is_empty():
-					stack.pop_back()
-	return 0
+	return state.folder_parent(index)
 
 
 func _build_buses() -> void:

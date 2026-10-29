@@ -867,10 +867,30 @@ func insert_midi_take(track_index: int, start: float, end: float, notes: Array,
 ## answer back across the wire yet, and says so by returning false rather than drawing a cable
 ## that may not exist.
 func create_send(from_track: int, to_track: int) -> bool:
+	var why := send_refusal(from_track, to_track)
+	if not why.is_empty():
+		push_warning("DAW: refused a send from %d to %d: %s" % [from_track, to_track, why])
+		return false
 	if not Session.is_authority():
 		Session.send_intent(&"create_send", [from_track, to_track])
 		return false
 	return backend.create_send(from_track, to_track)
+
+
+## Why there can be no send from `from_track` to `to_track`, in words for the person patching
+## it, or "": a track into itself, a track that is not there, or a send that would feed a track
+## back into itself (MixState.feeds) -- a loop that only howls. Asked on every machine, the host's
+## own answer to a guest's intent included, since what reaches what is in every copy of the mix.
+func send_refusal(from_track: int, to_track: int) -> String:
+	if state == null or not state.tracks.has(from_track) or not state.tracks.has(to_track):
+		return "There is no such track to send to."
+	var from_name := state.track(from_track).display_name()
+	var to_name := state.track(to_track).display_name()
+	if from_track == to_track:
+		return "%s cannot send to itself." % from_name
+	if state.feeds(to_track, from_track):
+		return "%s already feeds %s: a send back would loop it into itself." % [to_name, from_name]
+	return ""
 
 
 func remove_send(from_track: int, send_index: int) -> bool:
@@ -1058,6 +1078,16 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 			push_warning("DAW: refused a malformed remove_marker intent %s." % [args])
 			return
 		args = [float(args[0])]
+	if verb == &"create_send":
+		# Peer input: two tracks, and the same rule the host's own hand is held to.
+		if args.size() != 2 or args.any(func(a): return typeof(a) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(a))):
+			push_warning("DAW: refused a malformed create_send intent %s." % [args])
+			return
+		args = [int(args[0]), int(args[1])]
+		var why := send_refusal(args[0], args[1])
+		if not why.is_empty():
+			push_warning("DAW: refused create_send %s: %s" % [args, why])
+			return
 	if verb == &"set_track_input":
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1 \
 				or typeof(args[1]) != TYPE_STRING or (args[1] != "" and not state.inputs.any(func(p): return p[0] == args[1])):

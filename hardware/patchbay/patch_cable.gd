@@ -30,6 +30,11 @@ extends Node3D
 ## the cable's round back immediately exposed the faceting: the specular line came back
 ## dashed, one bright dot per flat, which reads as a chain rather than a cable. Sheen width
 ## and tube resolution are the same decision and have to move together.
+## The jack socket a plug goes into: the authored part, and the radius it is modelled at, for
+## anything that draws one (the modular's jacks, the world's sockets into it) at its own size.
+const JACK_MESH := "res://assets/hardware/jack.glb"
+const JACK_RADIUS := 0.009
+
 const RADIAL := 16
 const SPINE := 32
 const JACKET_RADIUS := 0.0022
@@ -78,6 +83,12 @@ var variation_seed: int = 0
 ## How far it droops, as a share of its span. A bay whose cables cross a gap sideways wants less
 ## than one whose cables loop between rows of the same panel.
 var sag_ratio := SAG_RATIO
+## How much fatter than a real 4mm cable it is drawn. A bay seen from across a room, on a black
+## board, needs its cables thicker than life to be followed at all.
+var thickness := 1.0
+## Dyed and lit from within rather than dark rubber, for a bay whose board is black: a dark
+## jacket on a black board is a cable nobody can see.
+var lit := false
 ## Pushed back while something else on the bay is being looked at.
 var dimmed := false:
 	set(v):
@@ -167,7 +178,7 @@ func signal_level() -> float:
 
 
 func signal_radius() -> float:
-	return JACKET_RADIUS
+	return JACKET_RADIUS * thickness
 
 
 ## A dimmed cable keeps its colour and loses most of its light, so the ones still lit are the
@@ -175,7 +186,7 @@ func signal_radius() -> float:
 func _paint() -> void:
 	var tint := colour.darkened(0.7) if dimmed else colour
 	if _jacket != null:
-		_jacket.material_override = Materials.cable(tint)
+		_jacket.material_override = Materials.cable_lit(tint) if lit else Materials.cable(tint)
 	for boot in _boots:
 		boot.material_override = Materials.cable_boot(tint)
 
@@ -218,13 +229,13 @@ func _sweep(a: Vector3, a_axis: Vector3, b: Vector3, b_axis: Vector3) -> PackedV
 ## The frame maths lives in CableSweep because the floor looms need exactly the same thing at a
 ## different scale. What is specific to a patch cable is only what it is made of.
 func _build_jacket(spine: PackedVector3Array) -> void:
-	var mesh := CableSweep.tube(spine, JACKET_RADIUS, RADIAL)
+	var mesh := CableSweep.tube(spine, JACKET_RADIUS * thickness, RADIAL)
 	if mesh == null:
 		return
 	var jacket := MeshInstance3D.new()
 	jacket.name = "Jacket"
 	jacket.mesh = mesh
-	jacket.material_override = Materials.cable(colour)
+	jacket.material_override = Materials.cable_lit(colour) if lit else Materials.cable(colour)
 	# A cable is 4mm across. Without this it disappears from its own shadow map as speckle, and
 	# a patchbay full of shadow acne looks dirty rather than detailed.
 	jacket.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -254,8 +265,8 @@ func _build_plug(at: Transform3D, tint: Color) -> void:
 	# 4mm cable is not a visible step.
 	var boot := MeshInstance3D.new()
 	var boot_mesh := CylinderMesh.new()
-	boot_mesh.top_radius = JACKET_RADIUS * 1.25
-	boot_mesh.bottom_radius = BOOT_RADIUS
+	boot_mesh.top_radius = JACKET_RADIUS * maxf(1.25, thickness * 1.05)
+	boot_mesh.bottom_radius = maxf(BOOT_RADIUS, boot_mesh.top_radius)
 	boot_mesh.height = BOOT_LENGTH
 	boot_mesh.radial_segments = RADIAL
 	boot.mesh = boot_mesh

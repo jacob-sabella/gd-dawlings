@@ -740,6 +740,69 @@ func folder_level(index: int) -> int:
 	return level
 
 
+## The folder track `index` plays into, or 0 for the master: the innermost folder still open
+## above it, in track order (Reaper's I_FOLDERDEPTH, read as `folder_level` reads it).
+func folder_parent(index: int) -> int:
+	return int(_folder_parents().get(index, 0))
+
+
+## Whether what track `from` plays reaches track `to`'s mix: through its sends (not a key send,
+## which only a detector hears) and through the folders it plays into, however many steps on.
+## A send from `to` back to `from` would then go round for ever, so the routing rules refuse it
+## (DAW.send_refusal).
+func feeds(from: int, to: int) -> bool:
+	if from == to:
+		return true
+	return _reached_from(from, _folder_parents()).has(to)
+
+
+## Every track's `feeds` at once: {track: {each track it reaches: true}}. One pass over the
+## folders for all of them, for a surface that asks it of every crossing it draws.
+func reach() -> Dictionary:
+	var parents := _folder_parents()
+	var out := {}
+	for index in tracks:
+		out[index] = _reached_from(index, parents)
+	return out
+
+
+## {track: the folder it plays into, or 0}, in one pass in track order.
+func _folder_parents() -> Dictionary:
+	var out := {}
+	var stack: Array = []
+	for i in track_indices():
+		out[i] = stack[-1] if not stack.is_empty() else 0
+		var t: TrackState = tracks[i]
+		if t.folder_depth > 0:
+			stack.append(i)
+		elif t.folder_depth < 0:
+			for _n in -t.folder_depth:
+				if not stack.is_empty():
+					stack.pop_back()
+	return out
+
+
+func _reached_from(from: int, parents: Dictionary) -> Dictionary:
+	var seen := {}
+	var open: Array = [from]
+	while not open.is_empty():
+		var at: int = open.pop_back()
+		var t := track(at, false)
+		if t == null:
+			continue
+		var next: Array = [int(parents.get(at, 0))]
+		for k in t.sends:
+			var sd: SendState = t.sends[k]
+			if not sd.key:
+				next.append(sd.resolve(self))
+		for n: int in next:
+			if n <= 0 or seen.has(n) or n == from:
+				continue
+			seen[n] = true
+			open.append(n)
+	return seen
+
+
 ## True when `index` starts a new group. This is what a console puts a gap at.
 ##
 ## NOT simply "the level changed", which is the obvious rule and the wrong one. A folder's

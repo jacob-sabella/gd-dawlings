@@ -28,6 +28,10 @@ signal chosen(id: StringName)
 const WIDTH := 0.36
 const ROW := Vector2(0.32, 0.062)
 const ROW_GAP := 0.012
+## The most a column of rows runs down the face (m). Past it the rows go on in a column beside,
+## so a venue with many stations makes the board wider rather than long enough to lean into the
+## floor; an area is split across columns only when it alone is taller than this.
+const COLUMN_TALL := 0.78
 ## Letter heights (m): the title, the rows, the areas' names and the small print (the line that
 ## says how it works, and a refusal), each legible from where it is read (Lettering).
 const TITLE_CAP := 0.028
@@ -66,6 +70,7 @@ var _rows: Dictionary = {}
 var _why: Label3D
 var _refused_at := 0
 var _height := 0.0
+var _width := WIDTH
 
 
 func _ready() -> void:
@@ -108,6 +113,12 @@ func face_height() -> float:
 	return _height
 
 
+## The face's width (m): WIDTH a column of rows. Known before the face is built, so the rows
+## beside a plaque can be stood clear of it as they are put up.
+func face_width() -> float:
+	return _width if _face != null else WIDTH * _columns(Stations.by_area(venue)).size()
+
+
 ## Say on the face that travel was refused, and why, for REFUSAL_SECONDS.
 func refuse(reason: String) -> void:
 	refusal = reason
@@ -142,7 +153,10 @@ func _build_face() -> void:
 	if not compact:
 		_face.transform = Transform3D(Basis(Vector3.RIGHT, -TILT), Vector3(0, FACE_TOP, 0))
 	add_child(_face)
-	var inner := WIDTH - PAD * 2.0
+	var here := Stations.by_area(venue)
+	var columns := _columns(here)
+	_width = WIDTH * columns.size()
+	var inner := _width - PAD * 2.0
 	var y := -PAD
 	if not compact:
 		var title := _letter("INSTRUMENTS", TITLE_CAP, LETTER, y)
@@ -151,25 +165,30 @@ func _build_face() -> void:
 		var line := _letter(FACE_LINE, SMALL_CAP, SMALL, y, inner)
 		line.name = "Says"
 		y -= _lines(FACE_LINE, inner, SMALL_CAP) * SMALL_CAP * 1.45 + 0.012
-	var here := Stations.by_area(venue)
-	for area in Stations.AREAS:
-		var listed: Array = here[area]
-		if listed.is_empty():
-			continue
-		var heading := _letter(Stations.AREA_TITLES[area], AREA_CAP, SMALL, y)
-		heading.name = "Area_%s" % area
-		y -= AREA_CAP * 1.6
-		for r: Dictionary in listed:
-			var key := Row.new()
-			key.name = "Row_%s" % r["id"]
-			key.board = self
-			key.station = r["id"]
-			key.legend = r["title"]
-			key.area_title = Stations.AREA_TITLES[area]
-			key.position = Vector3(0, y - ROW.y * 0.5, 0)
-			_face.add_child(key)
-			_rows[r["id"]] = key
-			y -= ROW.y + ROW_GAP
+	var top := y
+	var lowest := y
+	for c in columns.size():
+		var x := (c - (columns.size() - 1) * 0.5) * WIDTH
+		y = top
+		for block: Dictionary in columns[c]:
+			var area: StringName = block["area"]
+			var heading := _letter(Stations.AREA_TITLES[area], AREA_CAP, SMALL, y)
+			heading.name = "Area_%s_%d" % [area, c] if block["more"] else "Area_%s" % area
+			heading.position.x = x
+			y -= AREA_CAP * 1.6
+			for r: Dictionary in block["rows"]:
+				var key := Row.new()
+				key.name = "Row_%s" % r["id"]
+				key.board = self
+				key.station = r["id"]
+				key.legend = r["title"]
+				key.area_title = Stations.AREA_TITLES[area]
+				key.position = Vector3(x, y - ROW.y * 0.5, 0)
+				_face.add_child(key)
+				_rows[r["id"]] = key
+				y -= ROW.y + ROW_GAP
+		lowest = minf(lowest, y)
+	y = lowest
 	# Room for two lines of refusal, kept whether one is showing or not, so the face does not
 	# change size under a hand.
 	_why = _letter(("%s · %s" % [REFUSED, refusal]) if refusal != "" else "", SMALL_CAP, WARN, y - 0.004, inner)
@@ -180,7 +199,7 @@ func _build_face() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Plate"
 	var box := BoxMesh.new()
-	box.size = Vector3(WIDTH, _height, 0.01)
+	box.size = Vector3(_width, _height, 0.01)
 	plate.mesh = box
 	plate.position = Vector3(0, -_height * 0.5, -0.005)
 	var ink := StandardMaterial3D.new()
@@ -190,6 +209,36 @@ func _build_face() -> void:
 	_face.add_child(plate)
 	if not compact:
 		_build_stand()
+
+
+## The rows laid out in columns of at most COLUMN_TALL: a list per column of blocks, each an
+## area's name and its rows (`more` on an area carried on from the column before). Areas are
+## kept whole where they fit, in the card's order.
+static func _columns(here: Dictionary) -> Array:
+	var head := AREA_CAP * 1.6
+	var step := ROW.y + ROW_GAP
+	var columns: Array = [[]]
+	var used := 0.0
+	for area in Stations.AREAS:
+		var listed: Array = here[area]
+		if listed.is_empty():
+			continue
+		var whole := head + step * listed.size()
+		if used > 0.0 and used + whole > COLUMN_TALL and whole <= COLUMN_TALL:
+			columns.append([])
+			used = 0.0
+		var block := {"area": area, "rows": [], "more": false}
+		columns[-1].append(block)
+		used += head
+		for r in listed:
+			if used + step > COLUMN_TALL and not (block["rows"] as Array).is_empty():
+				columns.append([])
+				block = {"area": area, "rows": [], "more": true}
+				columns[-1].append(block)
+				used = head
+			(block["rows"] as Array).append(r)
+			used += step
+	return columns
 
 
 ## How far forward of the node the face's middle is over the floor (m): the leant face's bottom

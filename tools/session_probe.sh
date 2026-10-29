@@ -9,6 +9,9 @@ cd "$(dirname "$0")/.."
 #   tools/session_probe.sh --built-in  the host plays the built-in engine's song to the guest, on
 #                                      a real audio driver into the null sink (headless Godot's
 #                                      dummy driver mixes in 85ms lumps, too coarse to time)
+#   PROBE_NORAY=1 tools/session_probe.sh      the guest joins by the host's join code through a noray
+#                                      on this machine, punched through (docs/multiplayer.md)
+#   PROBE_NORAY=relay tools/session_probe.sh  the same, through noray's relay
 PORT="${PORT:-7342}"
 H_ARGS=(); G_ARGS=()
 STARTED_RIG=0
@@ -24,6 +27,17 @@ if [ "${1:-}" = "--reaper" ]; then
   G_ARGS=(--expect-tracks "${EXPECT_TRACKS:-40}" --shift 3 --reaper-host)
 elif [ "${1:-}" = "--built-in" ]; then
   H_ARGS=(--built-in); G_ARGS=(--built-in)
+fi
+# PROBE_NORAY=1 (punch) or PROBE_NORAY=relay: the guest joins by the host's join code through a
+# noray server on this machine (tools/noray_local.sh, started and stopped here if it is not up).
+STARTED_NORAY=0
+if [ -n "${PROBE_NORAY:-}" ]; then
+  if ! tools/noray_local.sh status | grep -q running; then
+    tools/noray_local.sh up >/dev/null || { echo "session_probe: noray would not start" >&2; exit 3; }
+    STARTED_NORAY=1
+  fi
+  export DAWLINGS_NORAY="${DAWLINGS_NORAY:-127.0.0.1}"
+  [ "$PROBE_NORAY" = "relay" ] && export DAWLINGS_NORAY_RELAY=1
 fi
 HOST_LOG="$(mktemp)"; GUEST_LOG="$(mktemp)"
 HOST_GODOT=(godot --headless)
@@ -44,4 +58,5 @@ echo "== guest"; grep -E '^(PASS|FAIL|notices|audio|take:|sent files)|session ch
 [ -n "${KEEP_LOGS:-}" ] && cp "$HOST_LOG" "$KEEP_LOGS.host.log" && cp "$GUEST_LOG" "$KEEP_LOGS.guest.log"
 rm -f "$HOST_LOG" "$GUEST_LOG"
 [ "$STARTED_RIG" -eq 1 ] && tools/reaper_rig.sh down >/dev/null
+[ "$STARTED_NORAY" -eq 1 ] && tools/noray_local.sh down >/dev/null
 [ "$H" -eq 0 ] && [ "$G" -eq 0 ]

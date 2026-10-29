@@ -50,8 +50,8 @@ const START := [
 	["Instruments", "I walks to each instrument in turn, Shift-I back; the PLAY pages and the board left of the desk name them all. Esc, or BACK on a plaque, comes back to the desk."],
 ]
 const TOGETHER := [
-	["Host", "M, then \"Host a session\". Others on this network see it; \"Open to internet\" for everyone else."],
-	["Join", "M, then a session ON THIS NETWORK, or an address under JOIN BY ADDRESS, and its code if it has one."],
+	["Host", "M, then \"Host a session\": others on this network see it. \"Host online\" gives a join code anyone, anywhere can use; read it out or Copy it."],
+	["Join", "M, then a session ON THIS NETWORK, the host's join code under JOIN BY CODE, or an address. The panel says direct or relayed."],
 	["Hear the mix", "As a guest, \"Hear the mix\" in the session panel plays the host's mix to you."],
 	["Into their takes", "\"Record when the host records\" puts your keys and your mic on the host's tracks."],
 	["Hand it over", "Carrying a cassette (a clip dragged off the timeline's edge), click a bandmate to give it to them. In a headset, hold it by their glove."],
@@ -72,6 +72,7 @@ const ROOM := [
 	["Carrying", "Q puts down what you carry. Hold R and let go to throw it. 1 to 3 pocket it, and the wheel picks a pocket."],
 	["Somewhere else", "V changes the venue. Tab opens the stage manager, to move the gear about."],
 	["Rolling stands", "Drag a stand on wheels to roll it somewhere else."],
+	["Routing", "The patchbay's pins are sends, from a row into a column: click one to patch or pull it, wheel it for the level, Shift-wheel to scroll. The AUDIO DEVICES wall does the same for this machine's sound cards."],
 	["Lettering", "+ and - make the room's lettering larger or smaller, 0 puts it back."],
 	["Signal and comfort", "Beads ride every cable, closer, faster and brighter the louder it is: follow them to where the sound stops. M, then COMFORT: Motion, Room reacts, Lift on clip."],
 	["Fingertips", "T makes J K L ; play the song's chord. T, Esc or a click gives the keys back."],

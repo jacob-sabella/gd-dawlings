@@ -1,11 +1,11 @@
 class_name ModularJack
 extends ControlAffordance
 
-## One jack on the modular wall (ModularWall, docs/spatial_loop.md part two, slice 51): a socket in the
-## patchbay's metal (PatchPoint's jack part), lettered with its name over it, an output's on a pale
+## One jack on the modular wall (ModularWall, docs/spatial_loop.md part two, slice 51): the
+## jack socket a patch cable plugs into (PatchCable.JACK_MESH), lettered with its name over it, an output's on a pale
 ## plate and an input's bare, so which way it goes is a shape and a shade before it is a word.
 ##
-## Dragging is the whole gesture, with a mouse and with a hand alike, as on the patchbay: press on a
+## Dragging is the whole gesture, with a mouse and with a hand alike: press on a
 ## jack and a cable comes out of it and follows you, the jacks it could go into light up, and letting
 ## go over one patches it. An input with a cable in it gives up that cable's plug instead, to carry to
 ## another input or off the wall to pull it. The wall does the patching; a jack only says where the
@@ -59,13 +59,13 @@ func _ready() -> void:
 		plate.material_override = pale
 		plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(plate)
-	var socket := Part.build(PatchPoint.MESH_PATH, Materials.brushed_metal(), {"bore": Materials.recess()})
+	var socket := Part.build(PatchCable.JACK_MESH, Materials.brushed_metal(), {"bore": Materials.recess()})
 	var holder := Node3D.new()
 	holder.position = Vector3(0, -0.008, 0.001)
 	add_child(holder)
 	if socket != null:
 		socket.rotation_degrees = Vector3(90, 0, 0)
-		socket.scale = Vector3.ONE * (RADIUS / PatchPoint.RADIUS)
+		socket.scale = Vector3.ONE * (RADIUS / PatchCable.JACK_RADIUS)
 		holder.add_child(socket)
 	# The ring round the socket that lights while a cable could go here.
 	_ring = MeshInstance3D.new()

@@ -92,6 +92,8 @@ godot --path . -- --built-in                 # the built-in DAW: Godot's own aud
 godot --path . -- --reaper                   # host, OSC to a local Reaper
 godot --path . -- --reaper --host            # host, and open the session to peers
 godot --path . -- --join 192.168.1.40 --ar   # join someone else's session, in passthrough
+godot --path . -- --online                   # host, with a join code for anyone, anywhere (docs/multiplayer.md)
+godot --path . -- --join-code N6UU9K         # join by that code: no address, no port forwarding
 godot --path . -- --xr                       # host or join in VR, not passthrough
 godot --path . -- --view 20:52               # open the timeline on seconds 20-52 (start:span)
 godot --path . -- --venue grid               # stand in a given venue (studio / grid / chalk / …)

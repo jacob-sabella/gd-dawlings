@@ -2,30 +2,36 @@ class_name PatchWallSurface
 extends Surface
 
 ## The audio devices' patchbay, as a wall: every node PipeWire has -- the interface, the apps, the
-## dawlings streams -- as a box of ports, the ones that make sound down the left and the ones that
-## take it down the right, a cable for each link between them (PipeGraph). The Carla / qpwgraph
-## picture, big enough to stand in front of. It reads the machine's own graph and follows it.
+## dawlings streams -- as a pin matrix (PinMatrix), the ports that make sound down the left, each
+## under its node's name, and the ports that take it across the top, each under its node's. A pin
+## at a crossing is a link between the two ports (PipeGraph). The Carla / qpwgraph picture, big
+## enough to stand in front of, and read as a grid so a busy machine stays readable. It reads the
+## machine's own graph and follows it.
 ##
-## Patching is by hand: press on a port and drag a cable to a port of the other kind to patch the
-## two, or onto one it is already patched to, to cut that cable (PatchJack). It is the machine's
-## own graph and the player's own hands, so nothing about it is shared with the session.
+## Patching is a press: press a crossing to patch the two ports, or press a seated pin to cut that
+## link. Press a node's name to fold its ports away to one line that says how many it has, and
+## again to open it; a crossing with a folded node counts the links inside it, and pressing it
+## opens the node. However many ports the machine has, the grid scrolls to every one of them --
+## drag it, wheel its names, or use its bars -- so nothing is ever counted at the foot and left
+## out of reach. The foot says what the last press did.
+##
+## It is the machine's own graph and the player's own hands, so nothing about it is shared with
+## the session: a guest's sound card is the guest's.
 
 const WIDTH := 5.2
-const BOX_WIDTH := 1.7
-const ROW := 0.13
-const HEAD := 0.17
-const GAP := 0.11
-## The most port rows in a column; the rest are counted at its foot rather than drawn off the wall.
-const MAX_ROWS := 12
+## The screen's height, fixed: a big graph scrolls rather than growing the wall down the room.
+const HEIGHT := 3.4
+## The title strip over the matrix, and the counts under it.
+const HEAD := 0.26
+const FOOT := 0.2
 const REFRESH_SECONDS := 2.0
-const CABLE_LIMIT := 150
-const RIBBON := 0.022
-const RIBBON_STEPS := 28
 
 const INK := Color(0.92, 0.94, 0.98)
 const DIM := Color(0.72, 0.75, 0.82)
 ## How wide the frame round the screen is.
 const FRAME := 0.10
+## A node's own lines are keyed by its name behind this, so a node and a port never share a key.
+const GROUP := "@"
 
 ## The graph on the wall. Set it to show one; otherwise the machine's own is fetched.
 var graph: PipeGraph
@@ -33,30 +39,50 @@ var graph: PipeGraph
 var tool := "pw-link"
 ## Whether the machine is asked again every few seconds. Off for the suite.
 var follow := true
+## How many links the wall shows seated.
 var cables := 0
-var height := 0.0
+var height := HEIGHT
 
 ## What the last patch or cut did, said in the footer.
 var status := ""
+var matrix: PinMatrix
 var _shown := ""
-## {port: PatchJack} and where each port's jack is, in this surface's space.
-var _jacks := {}
-var _jack_at := {}
-var _drag := {}
 ## What the screen was dressed in (the venue's palette and gear), so a venue change redraws it.
 var _dressed := ""
 var _thread: Thread
 var _next_ask := 0.0
-var _hidden := {"outputs": 0, "inputs": 0}
-## Which page each column is showing, and how many it has.
-var _page := {"outputs": 0, "inputs": 0}
-var _page_count := {"outputs": 1, "inputs": 1}
+## How many links each crossing holds, a node's crossings counting all of its ports':
+## "row key|column key" -> count.
+var _links := {}
+var _outputs := {}
 
 
 func _ready() -> void:
 	surface_id = &"patch_wall"
 	surface_kind = &"patchwall"
 	super()
+	matrix = PinMatrix.new()
+	matrix.name = "Matrix"
+	matrix.row_head = 1.3
+	matrix.col_head = 0.9
+	matrix.row_pitch = Vector2(0.1, 0.14)
+	matrix.col_pitch = Vector2(0.11, 0.16)
+	matrix.area = Vector2(WIDTH - 0.1, HEIGHT - HEAD - FOOT)
+	matrix.bar = 0.1
+	matrix.gap = 0.025
+	matrix.foot = 0.14
+	matrix.px = 0.0017
+	matrix.name_cap = 0.06
+	matrix.chip = 0.07
+	matrix.row_word = "OUTPUTS"
+	matrix.col_word = "INPUTS"
+	matrix.pin_at = _pin_at
+	matrix.toggle = _toggle
+	matrix.describe = _describe
+	matrix.describe_line = _describe_line
+	matrix.position = Vector3(-(WIDTH - 0.1) * 0.5, -HEAD, 0.004)
+	matrix.visible = false
+	add_child(matrix)
 
 
 func _exit_tree() -> void:
@@ -91,284 +117,71 @@ func show_graph(g: PipeGraph) -> void:
 func _rebuild() -> void:
 	_clear_built()
 	cables = 0
-	_jacks.clear()
-	_jack_at.clear()
-	_drag.clear()
 	_dressed = _dress_key()
-	_lit_port = ""
-	if graph == null:
-		_shown = ""
-		_note("listening to the audio graph...", -0.1, 48)
-		height = 0.3
+	_quad(Vector2(WIDTH + 0.16, HEIGHT), Vector3(0, -HEIGHT * 0.5 + 0.08, -0.006), _panel())
+	_frame(Vector2(WIDTH + 0.16, HEIGHT), Vector3(0, -HEIGHT * 0.5 + 0.08, 0.0))
+	_casing(Vector2(WIDTH + 0.16, HEIGHT), Vector3(0, -HEIGHT * 0.5 + 0.08, 0.0))
+	_note("AUDIO DEVICES", -0.12, 56, _brass())
+	if graph == null or not graph.error.is_empty():
+		_shown = "" if graph == null else graph.signature()
+		matrix.visible = false
+		matrix.set_lines([], [])
+		_note("listening to the audio graph..." if graph == null else graph.error, -HEIGHT * 0.4, 48)
 		return
 	_shown = graph.signature()
-	if not graph.error.is_empty():
-		_note(graph.error, -0.1, 48)
-		height = 0.3
-		return
-	var linked := {}
-	for link in graph.links:
-		linked[link[0]] = true
-		linked[link[1]] = true
-	var jacks := {}
-	var top := 0.45
-	var left := _column(true, -WIDTH * 0.5, top, jacks, linked)
-	var right := _column(false, WIDTH * 0.5 - BOX_WIDTH, top, jacks, linked)
-	height = maxf(left, right) + 0.3
-	_quad(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, -0.006), _panel(), 0.0)
-	_frame(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
-	_casing(Vector2(WIDTH + 0.16, height), Vector3(0, -height * 0.5 + 0.08, 0.0))
-	_note("AUDIO DEVICES", -0.05, 56, _brass())
-	for link in graph.links:
-		for end in link:
-			if _jacks.has(end):
-				(_jacks[end] as PatchJack).patches += 1
-	var counts := "%d nodes · %d links" % [graph.nodes.size(), graph.links.size()]
-	# A link with one end on a page that is not showing has no cable to draw, and a wall that does
-	# not say so looks as if the port were free.
-	var elsewhere := 0
-	for link in graph.links:
-		if jacks.has(link[0]) != jacks.has(link[1]):
-			elsewhere += 1
-	if elsewhere > 0:
-		counts += " · %d to other pages" % elsewhere
-	_note(counts if status.is_empty() else "%s · %s" % [counts, status], -height + 0.1, 34)
-	_ribbon_at = jacks
-	_lay_ribbons()
-
-
-## The port a hand is over, whose cables are the only ones lit while it is; "" for none.
-var _lit_port := ""
-var _ribbon_at := {}
-var _ribbon_mesh: MeshInstance3D
-
-
-## Every link as one ribbon mesh. With a port lit, its own cables keep their colour and the rest
-## fall back toward the panel, so one device's routing can be picked out of a crowded wall.
-func _lay_ribbons() -> void:
-	if _ribbon_mesh != null and is_instance_valid(_ribbon_mesh):
-		_ribbon_mesh.queue_free()
-	cables = 0
-	var ribbons := ImmediateMesh.new()
-	for link in graph.links:
-		if cables >= CABLE_LIMIT:
-			break
-		if not _ribbon_at.has(link[0]) or not _ribbon_at.has(link[1]):
-			continue
-		var tint := _tint(PipeGraph.node_of(link[0]))
-		if _lit_port != "" and link[0] != _lit_port and link[1] != _lit_port:
-			tint = tint.lerp(_panel(), 0.82)
-		_ribbon(ribbons, _ribbon_at[link[0]], _ribbon_at[link[1]], tint)
-		cables += 1
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = ribbons
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.vertex_color_use_as_albedo = true
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.material_override = m
-	_adopt(mesh)
-	_ribbon_mesh = mesh
-
-
-func _on_jack_hover(on: bool, port: String) -> void:
-	if not _drag.is_empty():
-		return
-	var next := port if on else ""
-	if next == _lit_port or graph == null:
-		return
-	_lit_port = next
-	_lay_ribbons()
-
-
-## A cable as a ribbon along a curve that leaves one port going sideways and arrives going
-## sideways, as a patchbay program draws it; one strip into `into`, joined to the last by a
-## degenerate pair.
-func _ribbon(into: ImmediateMesh, from: Vector3, to: Vector3, tint: Color) -> void:
-	var run := maxf(absf(to.x - from.x) * 0.5, 0.15)
-	var c1 := from + Vector3(run, 0, 0)
-	var c2 := to - Vector3(run, 0, 0)
-	into.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	for i in RIBBON_STEPS + 1:
-		var t := float(i) / RIBBON_STEPS
-		var u := 1.0 - t
-		var at := from * (u * u * u) + c1 * (3.0 * u * u * t) + c2 * (3.0 * u * t * t) + to * (t * t * t)
-		var ahead := (c1 - from) * (3.0 * u * u) + (c2 - c1) * (6.0 * u * t) + (to - c2) * (3.0 * t * t)
-		var side := Vector3(-ahead.y, ahead.x, 0.0).normalized() * RIBBON * 0.5
-		into.surface_set_color(tint)
-		into.surface_add_vertex(at + side)
-		into.surface_set_color(tint)
-		into.surface_add_vertex(at - side)
-	into.surface_end()
-
-
-## The boxes of one column, packed into pages of at most MAX_ROWS port rows: [{node, from, to}] a
-## page, the ports `from` to `to` of that node. A node with more ports than a page holds is cut
-## across pages, so every port is somewhere a hand can reach however large the graph.
-func _pages(outputs: bool) -> Array:
-	var key := "outputs" if outputs else "inputs"
-	var pages: Array = []
-	var page: Array = []
-	var rows := 0
+	matrix.ground = _panel().lightened(0.05)
+	matrix.ground_banded = _panel().lightened(0.10)
+	matrix.ink = INK
+	matrix.dim_ink = DIM
+	_outputs.clear()
+	_links.clear()
+	var rows: Array = []
+	var cols: Array = []
 	for node in graph.nodes_by_use():
-		var count: int = (graph.nodes[node][key] as Array).size()
-		var at := 0
-		while at < count:
-			if rows >= MAX_ROWS:
-				pages.append(page)
-				page = []
-				rows = 0
-			var take := mini(count - at, MAX_ROWS - rows)
-			page.append({"node": node, "from": at, "to": at + take})
-			rows += take
-			at += take
-	if not page.is_empty():
-		pages.append(page)
-	return pages
-
-
-## One column of node boxes, top down; fills `jacks` with where each port's jack is. Returns how
-## far down it went. Shows the column's current page, with its pager at the foot when there is
-## more than one.
-func _column(outputs: bool, x: float, top: float, jacks: Dictionary, linked: Dictionary) -> float:
-	var key := "outputs" if outputs else "inputs"
-	var y := -top
-	var pages := _pages(outputs)
-	_page_count[key] = pages.size()
-	_page[key] = clampi(int(_page.get(key, 0)), 0, maxi(pages.size() - 1, 0))
-	var shown: Array = pages[_page[key]] if not pages.is_empty() else []
-	var total := 0
-	for pg in pages:
-		for part in pg:
-			total += int(part["to"]) - int(part["from"])
-	for part in shown:
-		var node: String = part["node"]
-		var ports: Array = (graph.nodes[node][key] as Array).slice(part["from"], part["to"])
 		var tint := _tint(node)
-		var tall := HEAD + ports.size() * ROW + 0.02
-		_quad(Vector2(BOX_WIDTH + 0.012, tall + 0.012), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.003), tint.darkened(0.45), 0.0)
-		_quad(Vector2(BOX_WIDTH, tall), Vector3(x + BOX_WIDTH * 0.5, y - tall * 0.5, -0.001), _panel().lightened(0.10), 0.0)
-		_quad(Vector2(BOX_WIDTH, HEAD), Vector3(x + BOX_WIDTH * 0.5, y - HEAD * 0.5, 0.0), tint.darkened(0.15), 0.0)
-		var cut := " (%d-%d)" % [int(part["from"]) + 1, part["to"]] \
-				if ports.size() < (graph.nodes[node][key] as Array).size() else ""
-		var title := _text(PipeGraph.short_name(node, 24) + cut, Vector3(x + 0.1, y - HEAD * 0.5, 0.003), Color(0.04, 0.05, 0.07), 50)
-		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		for i in ports.size():
-			var port: String = ports[i]
-			var py := y - HEAD - (i + 0.5) * ROW - 0.01
-			var used: bool = linked.has(port)
-			var side := x + BOX_WIDTH if outputs else x
-			var jack := MeshInstance3D.new()
-			var disc := CylinderMesh.new()
-			disc.top_radius = 0.04
-			disc.bottom_radius = 0.04
-			disc.height = 0.012
-			jack.mesh = disc
-			jack.rotation_degrees = Vector3(90, 0, 0)
-			jack.position = Vector3(side, py, 0.003)
-			jack.material_override = _paint(tint if used else tint.darkened(0.6))
-			_adopt(jack)
-			jacks[port] = Vector3(side, py, 0.014)
-			var grab := PatchJack.create(port, outputs, tint, Vector2(BOX_WIDTH, ROW * 0.96))
-			grab.position = Vector3(x + BOX_WIDTH * 0.5, py, 0.004)
-			grab.drag_began.connect(_on_drag_began)
-			grab.drag_moved.connect(_on_drag_moved)
-			grab.drag_finished.connect(_on_drag_finished)
-			grab.hover_changed.connect(_on_jack_hover.bind(port))
-			_adopt(grab)
-			_jacks[port] = grab
-			_jack_at[port] = Vector3(side, py, 0.014)
-			var label := _text(PipeGraph.short_name(PipeGraph.label_of(port), 30), Vector3(x + BOX_WIDTH - 0.1 if outputs else x + 0.1, py, 0.003),
-					INK if used else DIM, 46)
-			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if outputs else HORIZONTAL_ALIGNMENT_LEFT
-		y -= tall + GAP
-	_hidden[key] = total - _shown_ports(shown)
-	if pages.size() > 1:
-		_pager(key, x, y - 0.02, pages.size(), total)
-		y -= 0.16
-	return -y
+		for side in ["outputs", "inputs"]:
+			var ports: Array = graph.nodes[node][side]
+			if ports.is_empty():
+				continue
+			var lines: Array = rows if side == "outputs" else cols
+			lines.append({"key": GROUP + node, "name": PipeGraph.short_name(node, 28), "colour": tint,
+					"group": true, "count": ports.size()})
+			for port: String in ports:
+				lines.append({"key": port, "name": PipeGraph.label_of(port), "colour": tint, "of": GROUP + node})
+				if side == "outputs":
+					_outputs[port] = true
+	for link in graph.links:
+		var o: String = link[0]
+		var i: String = link[1]
+		for a in [o, GROUP + PipeGraph.node_of(o)]:
+			for b in [i, GROUP + PipeGraph.node_of(i)]:
+				_links[a + "|" + b] = int(_links.get(a + "|" + b, 0)) + 1
+		cables += 1
+	matrix.visible = true
+	matrix.set_lines(rows, cols)
+	var counts := "%d nodes · %d links" % [graph.nodes.size(), graph.links.size()]
+	_note(counts if status.is_empty() else "%s · %s" % [counts, status], -HEIGHT + 0.08 + FOOT * 0.5, 34)
 
 
-func _shown_ports(shown: Array) -> int:
-	var n := 0
-	for part in shown:
-		n += int(part["to"]) - int(part["from"])
-	return n
+# --- the crossings ----------------------------------------------------------------------------
+
+func _pin_at(out_key: String, in_key: String) -> Dictionary:
+	var node := out_key.trim_prefix(GROUP) if out_key.begins_with(GROUP) else PipeGraph.node_of(out_key)
+	var n := int(_links.get(out_key + "|" + in_key, 0))
+	if out_key.begins_with(GROUP) or in_key.begins_with(GROUP):
+		return {"links": n, "tint": _tint(node)}
+	return {"on": n > 0, "level": -1.0, "tint": _tint(node)}
 
 
-## The foot of a paged column: back, the page it is on, forward. Pressed buttons turn the page
-## and the wall redraws.
-func _pager(key: String, x: float, y: float, count: int, total: int) -> void:
-	var cx := x + BOX_WIDTH * 0.5
-	_text("PAGE %d / %d  ·  %d PORTS" % [int(_page[key]) + 1, count, total], Vector3(cx, y - 0.05, 0.003), DIM, 34)
-	for step in [-1, 1]:
-		var button := PanelButton.new()
-		button.scale = Vector3.ONE * 6.0
-		button.hit_pad = Vector2(1.6, 2.6)
-		button.led_colour = Color(0.45, 0.68, 0.95)
-		button.position = Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.006)
-		button.pressed.connect(_turn_page.bind(key, step, count))
-		_adopt(button)
-		var glyph := _text("<" if step < 0 else ">", Vector3(cx + step * (BOX_WIDTH * 0.5 - 0.1), y - 0.05, 0.032), INK, 40)
-		glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-
-func _turn_page(key: String, step: int, count: int) -> void:
-	_page[key] = posmod(int(_page[key]) + step, count)
-	mark_dirty()
-
-
-# --- carrying a cable ---------------------------------------------------------------------
-
-func _on_drag_began(from: ControlAffordance, at: Vector3) -> void:
-	var jack := from as PatchJack
-	if jack == null:
-		return
-	var carried := MeshInstance3D.new()
-	carried.name = "CarriedCable"
-	carried.mesh = ImmediateMesh.new()
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.vertex_color_use_as_albedo = true
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	carried.material_override = m
-	_adopt(carried)
-	_drag = {"from": jack, "cable": carried, "target": null}
-	for other in _candidates(jack):
-		other.set_light(PatchJack.Light.CUT if graph.is_linked(_pair(jack, other)[0], _pair(jack, other)[1]) else PatchJack.Light.CANDIDATE)
-	_draw_carried(to_local(at))
-
-
-func _on_drag_moved(from: ControlAffordance, at: Vector3, over: ControlAffordance) -> void:
-	if _drag.is_empty() or _drag["from"] != from:
-		return
-	var target := _target_for(from as PatchJack, over)
-	_drag["target"] = target
-	var end := to_local(at)
-	if target != null:
-		end = _jack_at[target.port]
-	_draw_carried(end)
-
-
-func _on_drag_finished(from: ControlAffordance, over: ControlAffordance) -> void:
-	if _drag.is_empty() or _drag["from"] != from:
-		return
-	var jack := from as PatchJack
-	var target := _target_for(jack, over)
-	var carried: MeshInstance3D = _drag["cable"]
-	if is_instance_valid(carried):
-		carried.queue_free()
-	_drag.clear()
-	for other in _jacks.values():
-		(other as PatchJack).set_light(PatchJack.Light.PLAIN)
-	if target != null:
-		patch(jack.port, target.port)
+func _toggle(out_key: String, in_key: String) -> String:
+	patch(out_key, in_key)
+	return status
 
 
 ## Patches two ports, or cuts the patch between them if they are already patched: the output
-## first, whichever the hand started from. Then reads the graph again, so the wall shows it.
+## first, whichever was named first. Then reads the graph again, so the wall shows it.
 func patch(a: String, b: String) -> bool:
-	var out_port := a if (_jacks.has(a) and (_jacks[a] as PatchJack).is_output) else b
+	var out_port := a if _is_output(a) else b
 	var in_port := b if out_port == a else a
 	var cut := graph != null and graph.is_linked(out_port, in_port)
 	var done := PipeGraph.unlink(out_port, in_port, tool) if cut else PipeGraph.link(out_port, in_port, tool)
@@ -379,39 +192,53 @@ func patch(a: String, b: String) -> bool:
 	return done
 
 
-## The ports a cable carried from `from` could be let go on: the other kind, on any node.
-func _candidates(from: PatchJack) -> Array[PatchJack]:
-	var out: Array[PatchJack] = []
-	for jack in _jacks.values():
-		if (jack as PatchJack).is_output != from.is_output:
-			out.append(jack)
-	return out
+func _is_output(port: String) -> bool:
+	if _outputs.has(port):
+		return true
+	if graph == null:
+		return false
+	var node := PipeGraph.node_of(port)
+	return graph.nodes.has(node) and port in (graph.nodes[node]["outputs"] as Array)
 
 
-func _target_for(from: PatchJack, over: ControlAffordance) -> PatchJack:
-	if from == null or not (over is PatchJack):
-		return null
-	return over if over in _candidates(from) else null
+static func _port_words(port: String) -> String:
+	return "%s %s" % [PipeGraph.short_name(PipeGraph.node_of(port), 16).to_upper(),
+			PipeGraph.short_name(PipeGraph.label_of(port), 18).to_upper()]
 
 
-func _pair(a: PatchJack, b: PatchJack) -> Array:
-	return [a.port, b.port] if a.is_output else [b.port, a.port]
+func _describe(out_key: String, in_key: String) -> PackedStringArray:
+	var n := int(_links.get(out_key + "|" + in_key, 0))
+	if out_key.begins_with(GROUP) or in_key.begins_with(GROUP):
+		var a := PipeGraph.short_name(out_key.trim_prefix(GROUP), 18).to_upper() if out_key.begins_with(GROUP) else _port_words(out_key)
+		var b := PipeGraph.short_name(in_key.trim_prefix(GROUP), 18).to_upper() if in_key.begins_with(GROUP) else _port_words(in_key)
+		var folded := matrix.is_collapsed(out_key) or matrix.is_collapsed(in_key)
+		return PackedStringArray(["%s  →  %s" % [a, b], "%d link%s" % [n, "" if n == 1 else "s"],
+				"click to open the folded node" if folded else "patch its ports, below and to the right"])
+	return PackedStringArray(["%s  →  %s" % [_port_words(out_key), _port_words(in_key)],
+			"patched" if n > 0 else "not patched",
+			"click to cut this link" if n > 0 else "click to patch these two ports"])
 
 
-func _draw_carried(end: Vector3) -> void:
-	if _drag.is_empty():
-		return
-	var from: PatchJack = _drag["from"]
-	var mesh := (_drag["cable"] as MeshInstance3D).mesh as ImmediateMesh
-	mesh.clear_surfaces()
-	var start: Vector3 = _jack_at[from.port]
-	if from.is_output:
-		_ribbon(mesh, start, end, from.tint)
-	else:
-		_ribbon(mesh, end, start, from.tint)
+func _describe_line(line: Dictionary, is_row: bool) -> PackedStringArray:
+	var key: String = line["key"]
+	var links := 0
+	for k in _links:
+		var parts := (k as String).split("|")
+		if parts[0 if is_row else 1] == key and not parts[1 if is_row else 0].begins_with(GROUP):
+			links += int(_links[k])
+	if line.get("group", false):
+		var folded := matrix.is_collapsed(key)
+		return PackedStringArray(["%s  %s" % [PipeGraph.short_name(key.trim_prefix(GROUP), 28).to_upper(),
+				"OUTPUTS" if is_row else "INPUTS"], "%d ports · %d links" % [int(line.get("count", 0)), links],
+				"click to open its ports" if folded else "click to fold its ports away"])
+	return PackedStringArray(["%s  %s" % [_port_words(key), "OUT" if is_row else "IN"],
+			"not patched" if links == 0 else "patched to %d" % links,
+			"its %s lights · drag or wheel here to scroll" % ("row" if is_row else "column")])
 
 
-func _quad(size: Vector2, at: Vector3, colour: Color, glow: float) -> void:
+# --- the screen ---------------------------------------------------------------------------------
+
+func _quad(size: Vector2, at: Vector3, colour: Color) -> void:
 	var box := MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = size
@@ -430,6 +257,7 @@ func _text(text: String, at: Vector3, tint: Color, size := 36) -> Label3D:
 	label.position = at
 	label.outline_size = 0
 	label.double_sided = false
+	Lettering.range_to_legibility(label)
 	_adopt(label)
 	return label
 

@@ -370,10 +370,22 @@ var _refused: Array = []
 var _start := 0
 var _reaper_resource := ""
 var _expect_tracks := 20
+## The host's sends a track when the guest arrived, {track: count}: a track with one more by the
+## time it checks is the send the guest's bay pin asked for.
+var _sends_before := {}
+## The guest's routing bay and the crossing it pressed, [from, to], for the check once it is back.
+var _bay: PatchbaySurface = null
+var _bay_pin: Array = []
+## That pin's send as the host found it, [track, slot], taken out again at the end.
+var _pinned: Array = []
 ## Seconds added to every step of the timeline, on both halves: a host on a real Reaper needs a
 ## moment to hear the project before it has anything to share.
 var _shift := 0.0
 var _port := 7342
+## PROBE_NORAY=1 (or punch): the guest joins by the host's code through a noray server
+## (DAWLINGS_NORAY, tools/noray_local.sh) and the punch; PROBE_NORAY=relay: through its relay.
+## Every other check is the same, which is the point: by a code is the same session.
+var _noray := OS.get_environment("PROBE_NORAY")
 ## The host plays the built-in engine's song instead of a test tone: what the guest hears is
 ## then a real mix off the host's master bus, and has no clicks to time.
 var _built_in := false
@@ -483,11 +495,42 @@ func _ready() -> void:
 		_write_epoch()
 		await _host(port)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(_epoch_path()))
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_code_path()))
 	else:
 		await _share_the_hosts_epoch()
 		await _guest(port)
 	print("\n[%s] %d session checks, %d failed" % [role, _checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## Where the host writes its join code, for a guest by code (PROBE_NORAY).
+func _code_path() -> String:
+	return "user://session_probe_%d.code" % _port
+
+
+## Guest: the host's join code, once it has written one this run.
+func _hosts_code() -> String:
+	var mine := Time.get_unix_time_from_system()
+	while Time.get_unix_time_from_system() - mine < 5.0:
+		if FileAccess.file_exists(_code_path()) \
+				and FileAccess.get_modified_time(_code_path()) >= int(mine) - 10:
+			var text := FileAccess.get_file_as_string(_code_path()).strip_edges()
+			if not text.is_empty():
+				return text
+		await get_tree().process_frame
+	return ""
+
+
+## Guest: in, by the code or by the address, and connected (or turned away) before going on.
+func _join(port: int, door: String) -> bool:
+	if _noray.is_empty():
+		return Session.join("127.0.0.1", port, door)
+	var code := await _hosts_code()
+	if not Session.join_by_code(NorayLink.spoken(code).to_lower(), door):
+		return false
+	while not Session.link_phase.is_empty():
+		await get_tree().process_frame
+	return Session.role == Session.Role.GUEST or _notices.any(func(n: String): return n.contains("code"))
 
 
 ## Where the host writes when its timeline began, for the guest's to begin with it.
@@ -558,6 +601,16 @@ func _host(port: int) -> void:
 	if _built_in:
 		Session.mix_source = func(): return (DAW.backend as GodotBackend).mix_source()
 	check("hosts", Session.host(port))
+	if not _noray.is_empty():
+		Session.host_online(port)
+		while Session.online.state in [NorayLink.State.REACHING, NorayLink.State.REGISTERING]:
+			await get_tree().process_frame
+		check("online, with a code (%s %s)" % [Session.online.oid, Session.online.why_not], Session.online.is_online())
+		var f := FileAccess.open(_code_path(), FileAccess.WRITE)
+		if f != null:
+			f.store_string(Session.online.oid)
+	for index in DAW.state.track_indices():
+		_sends_before[index] = DAW.state.track(index).sends.size()
 	# The room as the studio would publish it, and answered the way the studio answers.
 	Session.publish_room({"venue": &"grid", "tablets": {&"tablet_1": [2, 1, "EQ", 0.4, 0.2, 0.0]}})
 	Session.room_motion.connect(func(piece: StringName, x: float, z: float, h: float, from: int):
@@ -637,6 +690,8 @@ func _host(port: int) -> void:
 	var sent := _first_send(DAW.state)
 	check("the guest's send level reached the mix (%s)" % [sent], not sent.is_empty()
 			and absf(DAW.state.send(sent[0], sent[1]).volume - GUEST_SEND) < 0.002)
+	_pinned = _send_the_guests_pin_made()
+	check("the guest's bay pin is a send on the mix (%s)" % [_pinned], not _pinned.is_empty())
 	check("the guest switched the click on", DAW.state.metronome)
 	check("the guest's input monitoring reached the mix (%d)" % DAW.state.track(3).monitor,
 			DAW.state.track(3).monitor == DAW.MONITOR_AUTO)
@@ -1144,6 +1199,8 @@ func _host(port: int) -> void:
 	if not is_nan(send_restore):
 		var first := _first_send(DAW.state)
 		DAW.set_send_volume(first[0], first[1], send_restore)
+	if not _pinned.is_empty():
+		DAW.remove_send(_pinned[0], _pinned[1])
 	DAW.set_lyrics("")
 	await _until(64.83)
 
@@ -2537,12 +2594,15 @@ func _guest(port: int) -> void:
 	Session.item_hit.connect(func(item: StringName, velocity: int, from: int, song: float, snap: bool, take: int, zone: StringName):
 		_item_hits.append([item, velocity, from, song, snap, take, zone]))
 	await _until(0.3)
-	Session.join("127.0.0.1", port, "XX99")
+	await _join(port, "XX99")
 	await _until(1.4)
 	check("the wrong code is turned away (%s)" % [_notices], _notices.has("That is not Ada's code."))
 	check("back on my own after it", Session.role == Session.Role.SOLO)
 	# Read across a room and typed in a hurry: spaces and case are not the code.
-	check("joins", Session.join("127.0.0.1", port, "ab 12"))
+	check("joins", await _join(port, "ab 12"))
+	if not _noray.is_empty():
+		var want := "relayed" if _noray == "relay" else "direct"
+		check("by its code, %s (%s)" % [want, Session.link_kind], Session.link_kind == want)
 	check("as a guest that never opens the DAW", not Session.is_authority())
 	_keep_publishing(Transform3D(Basis.IDENTITY, Vector3(-0.8, 1.5, 0.9)), "")
 
@@ -2577,6 +2637,7 @@ func _guest(port: int) -> void:
 	check("the snapshot carried a send to turn (%s)" % [send], not send.is_empty())
 	if not send.is_empty():
 		DAW.set_send_volume(send[0], send[1], GUEST_SEND)
+	_press_a_bay_pin()
 	Session.claim_hold(KEY)
 	Session.claim_hold(DUCK)
 	Session.send_carry(&"duck", DUCK_AT)
@@ -2595,6 +2656,13 @@ func _guest(port: int) -> void:
 			and Session.room.get("tablets", {}).has(&"tablet_2") and Session.room.get("venue") == &"grid")
 	check("and my send level", not send.is_empty()
 			and absf(DAW.state.send(send[0], send[1]).volume - GUEST_SEND) < 0.002)
+	if _bay != null:
+		_bay._process(0.0)
+		var pin := _bay.pin_for(_bay_pin[0], _bay_pin[1]) if _bay_pin.size() == 2 else null
+		check("the pin I pressed on the bay came back seated from the host (%s)" % [_bay_pin],
+				pin != null and pin.cell().get("on", false) and not pin.cell().get("pending", false))
+		_bay.queue_free()
+		_bay = null
 
 	await _until(4.4)
 	check("the host's attempt on my fader did not take it", Session.holder_of(KEY) == Session.local_peer_id)
@@ -2628,7 +2696,10 @@ func _guest(port: int) -> void:
 
 	await _until(6.8)
 	var heard := Session.mix_feed.stats()
-	print("audio: ", heard, " clicks ", Session.mix_feed.heard_clicks)
+	print("audio: ", heard, " clicks ", Session.mix_feed.heard_clicks, " route ", Session.mix_route)
+	if not _noray.is_empty():
+		var by := "relayed" if _noray == "relay" else "direct"
+		check("the mix came on its own socket, %s through noray (%s)" % [by, Session.mix_route], Session.mix_route == by)
 	check("the host's mix is reaching me", heard.get("hearing", false) and int(heard.get("packets", 0)) > 1000)
 	check("loud enough to be the music (%.3f)" % Session.mix_feed.heard_peak, Session.mix_feed.heard_peak > 0.15)
 	if not _built_in:
@@ -3235,6 +3306,46 @@ func _travel_to_the_harp() -> void:
 
 ## The first send that goes somewhere, as [track, slot]: the same answer on both halves, since
 ## the guest's copy of the project is the host's.
+## A send the way a guest's hand makes one: a pin pressed on the routing bay, from the last track
+## that sends nothing (so `_first_send` stays the one it was) into the first track it may. A guest
+## asks (DAW.create_send's guest branch), the pin shows asked for, and seats when the host's send
+## comes back in its mix.
+func _press_a_bay_pin() -> void:
+	_bay = PatchbaySurface.new()
+	add_child(_bay)
+	StageLink.wire_bay(_bay)
+	_bay._process(0.0)
+	var indices := DAW.state.track_indices()
+	for k in range(indices.size() - 1, -1, -1):
+		var from: int = indices[k]
+		if not DAW.state.track(from).sends.is_empty():
+			continue
+		for to: int in indices:
+			_bay.matrix.show_line(from, true)
+			_bay.matrix.show_line(to, false)
+			var pin := _bay.pin_for(from, to)
+			if pin == null or pin.cell().get("blocked", false) or pin.cell().get("on", false):
+				continue
+			pin.grab_begin(self, pin.global_position)
+			pin.grab_end(self)
+			_bay_pin = [from, to]
+			check("my bay pin %s asks the host, and says so" % [_bay_pin], pin.cell().get("pending", false))
+			return
+	check("the bay had a crossing to press", false)
+
+
+## The send the guest's bay pin made, [track, slot], on the host: the one track with a send more
+## than when the guest came; [] when there is none.
+func _send_the_guests_pin_made() -> Array:
+	for index in DAW.state.track_indices():
+		var t := DAW.state.track(index)
+		if _sends_before.has(index) and t.sends.size() == int(_sends_before[index]) + 1:
+			var slots: Array = t.sends.keys()
+			slots.sort()
+			return [index, int(slots[-1])]
+	return []
+
+
 static func _first_send(state: MixState) -> Array:
 	for index in state.track_indices():
 		var t := state.track(index)

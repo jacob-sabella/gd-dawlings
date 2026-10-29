@@ -48,13 +48,24 @@ ReaScript bridge is actually writable, and false forever for a backend that has 
 The patchbay says READ ONLY on its own face rather than silently dropping writes. Same for
 `RECORD_ARM` and `FX_PARAM_NAMES`. The stand-in backend keeps its own sends, so it can patch.
 
-**The patchbay reads left to right.** FROM (every track's output) down the left, TO (every
-track's input) down the right, and every send a cable across the gap between them. A row is the
-thing you aim at -- chip, name, jacks -- and a cable goes in the row's free jack; each row has one
-more jack than the busiest row needs, so no two plugs share one. Drag a row across to patch, drag
-a plug to another row to re-patch, pull it off to unplug, scroll it for the level. A removed send
-travels as `/track/N/sends` (the count), which is the only address that can say a send is gone.
-The bay stands in its own cabinet on the floor, off to the right of the desk.
+**The patchbay is a pin matrix.** Every track's output is a row (FROM) down the left, every
+track's input a column (TO) across the top, each header a colour chip and the name in letters;
+a send is a seated pin at the crossing, its head the track's colour, its fill the level, and it
+pulses with what the send carries (`SignalBeads.level_between`). Click (or poke) a pin to patch
+or pull it, wheel it (or pinch-drag it) for the level, Shift-wheel or wheel a header to scroll,
+drag the bars or press the arrows; a hover card says `KICK -> BASS DI  send -6.0 dB (sidechain)`
+and pointing at a pin or a header lights its row and column and dims the rest. There are no
+pages: the grid scrolls smoothly under pinned headers and pools only the pins in view, so 256
+tracks cost what 23 do, and the foot says where you are (`ROWS 31-53 OF 64 · COLUMNS 21-43 OF 64`).
+A track's own crossing is blocked, and so is any send that would loop (`DAW.send_refusal`: the
+destination already feeds the source, through sends or folder parents; a key send is a sidechain
+and loops nothing); the pin says why rather than doing nothing. A guest's pin asks the host
+(`apply_intent` refuses a loop there too) and shows pending until the answer lands. A removed
+send travels as `/track/N/sends` (the count), which is the only address that can say a send is
+gone. The bay stands in its own cabinet on the floor, off to the right of the desk. The same
+matrix (`hardware/patchbay/pin_matrix.gd`, `PinMatrix`) is the AUDIO DEVICES wall: PipeWire
+ports grouped under their nodes, a node's row folding its ports away with a count, every port a
+scroll away.
 
 **The taper is the backend's.** `taper_to_db` is virtual, because a fader's 0..1 travel maps to
 dB differently in every DAW, and baking Reaper's curve into the mesh would make every other
@@ -717,6 +728,37 @@ room, not on what the transport happens to deliver:
 
 The beacon says `locked`, and the nearby list shows "code needed".
 
+### Joining by a code, from anywhere
+
+A session across town used to need an address and a router that agreed to forward ports
+(`InternetDoor`, UPnP). **Host online** asks a noray server instead
+([foxssake/noray](https://github.com/foxssake/noray); dawlings runs one at
+`dawlings.jacobsabella.com`) for a six-character join code. A guest types the code under
+**JOIN BY CODE**. Neither of them needs an address or a router setting. The full account is in
+docs/multiplayer.md; in short:
+
+- **`NorayLink`** (core/session/noray_link.gd) is dawlings' own client for noray's line
+  protocol: `register-host` → `set-oid`/`set-pid`, the private id sent over UDP from the socket
+  being registered, then `connect <code>` (the punch) or `connect-relay <code>` (the relay).
+  noray's refusals come back quoted, and are kept in words. The host registers its ENet server's
+  socket through `socket_send`, and confirms the registration by asking `connect` to its own code.
+- **The guest** (`Session.join_by_code`) registers its own UDP port, and has ENet dial from that
+  port. Its phases are `finding`, then `punching`, then `relaying` if no punch connects within
+  `LINK_SECONDS` (6 s). It ends up `link_kind` `"direct"` or `"relayed"`. The panel and the host's
+  roster (`route_of`) say which. **The host** (`Session.host_online`) punches toward every address
+  noray announces, from the ENet socket, ten times a second for three seconds.
+- **The mix** has its own socket, so it gets its own noray registration (`mix_online`). The host
+  registers it through `MixFeed.send_raw`, on the feed's thread. The guest receives the mix's code
+  with its ticket, then punches or relays its own mix socket (`mix_route`). If neither is heard
+  within 3 s, the mix is **carried** over ENet channel 9 (`MixFeed.carried`). That is a last
+  resort: the probe measured it at 110 ms behind, against 22 ms on the mix's own socket.
+- **The door is unchanged.** A guest by code is pending until its `_hello`, which carries the door
+  code. Tickets still gate the mix. The join code finds a session and is not a secret.
+
+`tools/session_probe.sh` with `PROBE_NORAY=1` (or `=relay`) runs the whole session probe through a
+real noray on this machine (`tools/noray_local.sh`). The guest joins by code, and every other check
+has to pass unchanged.
+
 ### Hearing the mix from another room
 
 A guest who is not in the host's room hears nothing, because Reaper plays to the host's
@@ -935,6 +977,9 @@ button, exactly like a MIDI take.
 - **No delta compression.** The full volatile frame goes out every tick.
 - **A door, not a lock.** With a session code, only those told it get in. Nothing is encrypted,
   so the code is for a studio LAN with a neighbour on the wifi, not for the open internet.
+- **Online by a code is unencrypted too.** A relayed session passes through the noray server as
+  it is. A real symmetric NAT (a phone tether) has not been measured, only the relay forced on one
+  machine. See docs/multiplayer.md, *Not done*.
 
 ## Geometry: computed by default, authored where bevels matter
 
@@ -1424,6 +1469,14 @@ The invariant is now pinned directly rather than through a proxy: `_test_one_jac
 collects BOTH ends of every cable in the bay and asserts no two are closer than a 1/4" sleeve
 is wide. It does not know about mults. It would catch any future way of drawing two plugs in
 one hole.
+
+Later the bay stopped being jacks at all (see the pin matrix above). With a session past a
+dozen tracks the cables and mults were a thicket nobody could read from the seat, and the
+answer to "which tracks send where" is a grid, which a pin matrix is in hardware: one pin a
+crossing, so one hole holds one plug by construction and the mult and its test went with the
+cables. The rule still holds: the matrix's pins are a real patch field's, and a crossing the
+mix cannot take (a self-send, a loop) is a blocked socket that says so, not a pin that quietly
+does nothing.
 
 ## A cable is a route and a constraint, and they are different statements
 
@@ -2237,7 +2290,7 @@ the bricks table stands.
   velocity out, its newest note lettered and a GATE lamp, and PLAY, a `EqWall.WallKey` that takes
   the computer keys on a KeyCatcher of the studio's, `modular_keys`), LFO, NOISE, VCO 1 and 2, MIX
   of four, VCF, ENV 1 and 2, VCA and OUT, whose tag says the road and its figure. Its jacks are
-  `ModularJack`s (PatchPoint's jack part, an output's on a pale plate, a ring that lights brighter
+  `ModularJack`s (the jack mesh `PatchCable.JACK_MESH`, an output's on a pale plate, a ring that lights brighter
   and grows where a carried cable could go and more where it will), its knobs the console's
   `Knob`, its cables `PatchCable`s from the room's patch; under it, on the stand's upper deck,
   thirteen `ModularTouch` keys (the wheel moves them an octave). A lamp on a stalk lights it.
@@ -3532,3 +3585,32 @@ point, 0.98m is well past the 0.51m reach: you can read a 90-track wrapped desk 
 touch the far rows. The honest fix is not a cleverer curve — it is a narrower bank, which the
 `BankSelector` already exists to page through. The bank width is currently whatever the protocol
 offers (Reaper's is 64). It should be a body measurement.
+
+## The Workshop: changing the game from inside it
+
+A dev tool, only ever on the developer's own machine (docs/workshop.md has all of it). A request
+typed on the Workshop's panel (station `workshop`, on the control room's right wall, or F9 from
+anywhere at a desk) is handed to the Claude Code CLI, which edits this repo; the game checks the
+change and reloads itself onto it.
+
+- **Gated, not hidden.** `Workshop.enabled()`: a dev flag (`--workshop`, DAWLINGS_WORKSHOP=1, the
+  project setting `dawlings/dev/workshop`, or user://workshop.cfg), not an exported build, `claude`
+  on PATH, and never a guest. Off, `Venue.workshop_spot` is null, so the row (`"dev": true`) is no
+  station at all: not on the card, the board, I's cycle or the clearance loop. The suite forces it
+  off. Nothing of it is replicated; its keys are `personal()`.
+- **Never waited on.** The CLI is a process of its own (`WorkshopRunner`: `claude -p
+  --output-format stream-json --restricted --permission-mode dontAsk` with an allow-list of tools
+  and commands), its stream a file tailed a little each frame (`WorkshopStream` turns it into panel
+  lines); git and the checks run on a thread.
+- **A request's change is its own.** The tree always has other uncommitted work, so a request's
+  change is the files whose git blob ids moved while it ran (`WorkshopCheckpoint`), copied before
+  and after; Undo restores only those, and only where they are still as it left them.
+- **What "this" means.** `WorkshopJournal` keeps the player's last five minutes from the places
+  everything already passes (every ControlAffordance's grab and value, every Item's state, the
+  station, the focus, the transport, the toasts, the engine's log, a sparse trail and what is
+  looked at), and `WorkshopContext` writes it with the game's state to a file the prompt names,
+  scrubbed of codes, tokens, addresses and home paths.
+- **A reload is a new process.** Live script reload with the room standing is fragile, so
+  `WorkshopResume` saves where the player is, the song and the panel's history, starts the game
+  again with `--resume`, and quits; the new one puts it all back. Guests are told; they rejoin by hand
+  (the session has no reconnect yet).

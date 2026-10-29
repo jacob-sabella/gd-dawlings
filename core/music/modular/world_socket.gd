@@ -5,7 +5,7 @@ extends ControlAffordance
 ## #31), out in the room where what it carries is made: on the weather's switch (`world:weather`, or
 ## `world:drips` by the cave's pools), by the venue's instrument's plaque (`world:venue`), on a strip
 ## beside each of the looper's rings (`world:ring_N`), and on the marble run's tray (`world:marbles`).
-## A socket in the patchbay's metal on a small pale plate lettered MODULAR and what it is (pale as the
+## A jack socket (PatchCable.JACK_MESH) on a small pale plate lettered MODULAR and what it is (pale as the
 ## wall's outputs are, since it is one), beside the
 ## station's track jack (JackSocket), which it is independent of: the rain can record onto a track
 ## and drive the filter at once, one a jack row and the other a cable in the modular's patch.
@@ -104,10 +104,10 @@ func _ready() -> void:
 	plate.material_override = pale
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_look.add_child(plate)
-	var bore := Part.build(PatchPoint.MESH_PATH, Materials.brushed_metal(), {"bore": Materials.recess()})
+	var bore := Part.build(PatchCable.JACK_MESH, Materials.brushed_metal(), {"bore": Materials.recess()})
 	if bore != null:
 		bore.rotation_degrees = Vector3(90, 0, 0)
-		bore.scale = Vector3.ONE * (RADIUS / PatchPoint.RADIUS)
+		bore.scale = Vector3.ONE * (RADIUS / PatchCable.JACK_RADIUS)
 		_look.add_child(bore)
 	_look.add_child(_letter("MODULAR", 0.0085, Vector3(0, 0.03, 0.001)))
 	_look.add_child(_letter(short_name(socket), 0.0075, Vector3(0, -0.017, 0.001)))

@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"9c8b7a6d-0000-4000-8000-000000000001","model":"claude-opus-5-5","tools":["Read"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_e1","name":"Write","input":{"file_path":"/repo/tests/fixtures/x.gd","content":"extends Node"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_e1","content":"SCRIPT ERROR: Parse Error: Unexpected token\nFAIL  a thing went wrong","is_error":false}]}}
+not json: a stray warning on stdout
+{"type":"result","subtype":"error_max_budget_usd","is_error":true,"result":"","num_turns":3,"total_cost_usd":5.01,"session_id":"9c8b7a6d-0000-4000-8000-000000000001"}

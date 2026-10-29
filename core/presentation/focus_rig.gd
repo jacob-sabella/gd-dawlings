@@ -254,8 +254,11 @@ func placement(surface: Surface, index_among_unfocused: int) -> Transform3D:
 		return ergonomics.place(0.0, bounds, true, cap)
 	var out := ergonomics.place(bearing_for(index_among_unfocused), bounds, false, cap)
 	# Put on the common ring along its own bearing, which keeps it facing the viewer rather than
-	# sliding sideways out of square.
-	return Transform3D(out.basis, out.origin.normalized() * ring_radius())
+	# sliding sideways out of square. Its centre goes on the ring, not its origin: a panel that
+	# hangs from its top edge (the patchbay) pushed out by its origin rose with the push, and a
+	# bay a little taller than it used to be parked its middle above the eye.
+	var centre := out.origin + out.basis * bounds.get_center()
+	return Transform3D(out.basis, centre.normalized() * ring_radius() - out.basis * bounds.get_center())
 
 
 ## Degrees either side of straight ahead for the nth parked surface, alternating left and right

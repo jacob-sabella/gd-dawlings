@@ -16,7 +16,7 @@ extends Surface
 ##
 ## THE PATCH is the room's (Modular, the row `modular`), shown here (`show_patch`): each cable a
 ## PatchCable from an output's jack to an input's, coloured by the module it comes from, each knob the
-## console's Knob at its value. A drag from a jack carries a cable as the patchbay does (ModularJack):
+## console's Knob at its value. A drag from a jack carries a cable (ModularJack):
 ## the jacks it could go into light, and letting go over one asks for it (`patch_asked`, from and to;
 ## an empty `to` pulls the cable at `from`). An input with a cable in it gives up its plug instead,
 ## to another input (pulled, then patched) or off the jacks (pulled). The wall never changes its own

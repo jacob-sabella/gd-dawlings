@@ -18,6 +18,19 @@ extends Node
 ## Admission rides on the session's: the host hands each admitted guest a random ticket over the
 ## reliable channel, and the audio socket only answers packets that carry one. The guest speaks
 ## first, so the reply finds its way back through the guest's own NAT and firewall.
+##
+## A guest that came in by a code (NorayLink) has no address of the host's it could reach: the
+## session's path was punched or relayed by a noray server for the session's socket alone. So
+## this socket gets a path of its own the same way: the host registers it with noray as well, the
+## guest's is registered and punched toward the host's (or given the relay), and from there it is
+## the same feed on the same thread, just at the address noray gave (Session._mix_by_code).
+##
+## Where even that fails, the same packets are CARRIED as the last way: handed to the session,
+## which sends them as unreliable ENet packets on their own channel (Session.MIX_CHANNEL) and
+## hands back what arrives. The wire is unchanged, ticket and all; what it costs is the frame: ENet
+## is serviced once a frame, so a carried packet waits for the next one, and a frame that hitches
+## is a gap. The probe measured it: 110ms behind and hundreds of packets lost on a busy headless
+## frame, against 25ms on the feed's own socket. Hence a last resort and not the way.
 
 signal changed()
 
@@ -66,6 +79,18 @@ var _listeners: Dictionary = {} # ticket -> {ip, port, heard, echo}
 var _seq := 0
 ## The host's song position, running between the DAW's reports, for stamping packets.
 var song_clock := SongClock.new()
+
+## Carried packets waiting for the session to send them, [peer_id, packet], and carried ones
+## arrived, for the guest's thread. Bounded: a frame that stalls drops the oldest, as a network would.
+const CARRY_MOST := 512
+var _outbox: Array = []
+var _inbox: Array = []
+## Guest: listening through the session's ENet rather than a socket of its own.
+var carried := false
+## Host: datagrams to send from the feed's socket on its own thread ([ip, port, bytes]): noray's
+## registration and the punches toward a guest's mix (Session._mix_by_code). The socket is the
+## thread's; nothing else may send on it.
+var _raw: Array = []
 
 # guest
 var _jitter: JitterBuffer = null
@@ -181,6 +206,7 @@ func _send_loop() -> void:
 	var pending_flags := 0
 	while _running:
 		_hear_listeners()
+		_send_raw()
 		var got := _source.read()
 		if not got.is_empty():
 			pending.append_array(got)
@@ -208,8 +234,11 @@ func _send_loop() -> void:
 				# The guest's last timestamp, echoed, so it can time the round trip on the path
 				# the sound actually takes.
 				packet.encode_u32(8, int(l["echo"]) + (now - int(l["echo_at"])))
-				_socket.set_dest_address(l["ip"], l["port"])
-				_socket.put_packet(packet)
+				if l.has("carrier"):
+					_carry(int(l["carrier"]), packet.duplicate())
+				else:
+					_socket.set_dest_address(l["ip"], l["port"])
+					_socket.put_packet(packet)
 			_mutex.unlock()
 		OS.delay_usec(500)
 
@@ -217,32 +246,113 @@ func _send_loop() -> void:
 func _hear_listeners() -> void:
 	while _socket.get_available_packet_count() > 0:
 		var packet := _socket.get_packet()
-		if packet.size() < 16 or packet.decode_u32(0) != MAGIC_LISTEN:
-			continue
-		var ticket := packet.decode_s64(4)
+		_heard_listener(packet, {"ip": _socket.get_packet_ip(), "port": _socket.get_packet_port()})
+
+
+## A listener's keepalive, from a socket (`by` has its ip and port) or carried (`by` has the
+## peer it came from, which must be the peer its ticket was granted to).
+func _heard_listener(packet: PackedByteArray, by: Dictionary) -> void:
+	if packet.size() < 16 or packet.decode_u32(0) != MAGIC_LISTEN:
+		return
+	var ticket := packet.decode_s64(4)
+	_mutex.lock()
+	if _tickets.has(ticket) and (not by.has("carrier") or int(_tickets[ticket]) == int(by["carrier"])):
+		var fresh := not _listeners.has(ticket)
+		var l := by.duplicate()
+		l["heard"] = Time.get_ticks_msec()
+		l["echo"] = packet.decode_u32(12)
+		l["echo_at"] = Time.get_ticks_msec()
+		_listeners[ticket] = l
+		if fresh:
+			changed.emit.call_deferred()
+	_mutex.unlock()
+
+
+## Host: send `bytes` to `ip:port` from this feed's socket, soon, from its thread. For noray.
+func send_raw(ip: String, to_port: int, bytes: PackedByteArray) -> void:
+	_mutex.lock()
+	_raw.append([ip, to_port, bytes])
+	if _raw.size() > 64:
+		_raw.pop_front()
+	_mutex.unlock()
+
+
+func _send_raw() -> void:
+	_mutex.lock()
+	var out := _raw
+	_raw = []
+	_mutex.unlock()
+	for r in out:
+		_socket.set_dest_address(r[0], int(r[1]))
+		_socket.put_packet(r[2])
+
+
+# --- carried through the session ----------------------------------------------------------
+
+## A packet the session's ENet brought from `from_peer`: a keepalive on the host, the mix on a guest.
+## Called on the main thread; the feed's thread takes it from there.
+func hear_carried(from_peer: int, packet: PackedByteArray) -> void:
+	if packet.size() < 4:
+		return
+	if sending and packet.decode_u32(0) == MAGIC_LISTEN:
+		_heard_listener(packet, {"carrier": from_peer})
+	elif listening and carried and from_peer == 1 and packet.decode_u32(0) == MAGIC_AUDIO:
 		_mutex.lock()
-		if _tickets.has(ticket):
-			var fresh := not _listeners.has(ticket)
-			_listeners[ticket] = {"ip": _socket.get_packet_ip(), "port": _socket.get_packet_port(),
-					"heard": Time.get_ticks_msec(), "echo": packet.decode_u32(12),
-					"echo_at": Time.get_ticks_msec()}
-			if fresh:
-				changed.emit.call_deferred()
+		_inbox.append(packet)
+		if _inbox.size() > CARRY_MOST:
+			_inbox.pop_front()
 		_mutex.unlock()
+
+
+## Everything waiting to be carried, as [peer_id, packet], for the session to send. Emptied.
+func take_outgoing() -> Array:
+	_mutex.lock()
+	var out := _outbox
+	_outbox = []
+	_mutex.unlock()
+	return out
+
+
+## Whether the session has anything to carry for this feed at all.
+func carries() -> bool:
+	return carried or (sending and not _outbox.is_empty())
+
+
+func _carry(to_peer: int, packet: PackedByteArray) -> void:
+	# The caller holds the mutex on the host's send loop; the guest's loop takes it here.
+	_outbox.append([to_peer, packet])
+	if _outbox.size() > CARRY_MOST:
+		_outbox.pop_front()
 
 
 # --- guest --------------------------------------------------------------------------------
 
-func listen(address: String, at_port: int, ticket: int) -> bool:
+## `local_port`: the port noray registered for this guest's mix (Session._mix_by_code); 0, any.
+func listen(address: String, at_port: int, ticket: int, local_port: int = 0) -> bool:
 	stop()
 	_host_ip = address if address.is_valid_ip_address() else IP.resolve_hostname(address, IP.TYPE_IPV4)
 	if _host_ip.is_empty():
 		return false
 	_socket = PacketPeerUDP.new()
+	if local_port > 0 and _socket.bind(local_port) != OK:
+		_socket = null
+		return false
 	if _socket.connect_to_host(_host_ip, at_port) != OK:
 		_socket = null
 		return false
 	port = at_port
+	return _begin_listening(ticket)
+
+
+## Listen through the session's ENet: a guest that came in by a code. See the top of this file.
+func listen_carried(ticket: int) -> bool:
+	stop()
+	carried = true
+	port = 0
+	return _begin_listening(ticket)
+
+
+func _begin_listening(ticket: int) -> bool:
 	_ticket = ticket
 	_jitter = JitterBuffer.new()
 	_jitter.sample_rate = RATE
@@ -292,9 +402,13 @@ func _listen_loop() -> void:
 		var now := Time.get_ticks_msec()
 		if now - last_keepalive >= KEEPALIVE_MSEC:
 			last_keepalive = now
-			_socket.put_packet(listen_packet(_ticket, now))
-		while _socket.get_available_packet_count() > 0:
-			var packet := _socket.get_packet()
+			if carried:
+				_mutex.lock()
+				_carry(1, listen_packet(_ticket, now))
+				_mutex.unlock()
+			else:
+				_socket.put_packet(listen_packet(_ticket, now))
+		for packet: PackedByteArray in _arrived():
 			var decoded := decode(packet)
 			if decoded.is_empty():
 				continue
@@ -331,6 +445,20 @@ func _listen_loop() -> void:
 			heard.observe(_jitter.read_frame() - queued - MIX_STEP * 0.5
 					- AudioServer.get_output_latency() * RATE, Time.get_ticks_usec())
 		OS.delay_usec(500)
+
+
+## What has come in since the last look: from the socket, or carried in by the session.
+func _arrived() -> Array:
+	if carried:
+		_mutex.lock()
+		var got := _inbox
+		_inbox = []
+		_mutex.unlock()
+		return got
+	var out: Array = []
+	while _socket.get_available_packet_count() > 0:
+		out.append(_socket.get_packet())
+	return out
 
 
 ## No sound card to pace the reads, so the wall clock does: the same demand a card would make,
@@ -420,7 +548,11 @@ func stop() -> void:
 	_mutex.lock()
 	_tickets.clear()
 	_listeners.clear()
+	_outbox.clear()
+	_inbox.clear()
+	_raw.clear()
 	_mutex.unlock()
+	carried = false
 	var was := sending or listening
 	sending = false
 	listening = false

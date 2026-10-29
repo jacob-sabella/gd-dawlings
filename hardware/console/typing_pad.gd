@@ -14,11 +14,16 @@ signal answered(text: String)
 const PITCH := 0.026
 const ROW_PITCH := 0.03
 const MAX_LENGTH := NamePrompt.MAX_LENGTH
+## How many of the last letters typed the readout shows.
+const SHOWN := 40
 const ROWS := ["1234567890", "QWERTYUIOP", "ASDFGHJKL'", "ZXCVBNM-.&"]
 const CAPTION := Color(0.62, 0.64, 0.68)
 const TEXT := Color(0.95, 0.93, 0.85)
 
 var text := ""
+## The most it takes: a name's MAX_LENGTH, more for a sentence (the Workshop's request). Only the
+## end of a long line is shown, as a single-line field scrolls.
+var limit := MAX_LENGTH
 ## The starting text is taken whole by the first key.
 var replacing := true
 var shift := true
@@ -111,7 +116,7 @@ func _type(ch: String) -> void:
 	if replacing:
 		text = ""
 		replacing = false
-	if text.length() >= MAX_LENGTH:
+	if text.length() >= limit:
 		return
 	# The rows are drawn in capitals, as keys are; a letter is small unless shifted.
 	text += ch.to_upper() if shift else ch.to_lower()
@@ -149,6 +154,6 @@ func leave() -> void:
 
 
 func _show() -> void:
-	_readout.text = (text if not text.is_empty() else " ") + ("" if replacing else "_")
+	_readout.text = (text.right(SHOWN) if not text.is_empty() else " ") + ("" if replacing else "_")
 	_readout.modulate = TEXT if not replacing else Color(TEXT, 0.6)
 	_shift_key.lit = shift

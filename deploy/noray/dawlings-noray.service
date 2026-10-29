@@ -1,0 +1,34 @@
+# dawlings' noray server, as a systemd USER service of the VPS's `ubuntu` account.
+# Installed by deploy/noray/deploy.sh to ~/.config/systemd/user/; see docs/multiplayer.md.
+#
+# Not a container, on purpose: the VPS's Docker is rootless with rootlesskit's builtin port
+# driver, which rewrites every connection's source address to the bridge gateway. noray's whole
+# job is to learn each player's real public address (its UDP registrar) and to relay to it, so
+# behind that driver every player would look like 172.x.0.1 and no punch or relay could work.
+# Run straight on the host, its ports see the internet as it is. bun (not Node: noray uses Bun's
+# own sockets) is one binary shipped alongside it, so nothing is installed system-wide.
+
+[Unit]
+Description=noray for dawlings (join codes, NAT punchthrough and relay)
+Documentation=https://github.com/foxssake/noray
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/dawlings-noray/noray
+EnvironmentFile=%h/dawlings-noray/noray.env
+ExecStart=%h/dawlings-noray/bin/bun bin/noray.ts
+Restart=on-failure
+RestartSec=5
+# The VPS has about half a GiB free and no swap. noray idles at ~70 MiB RSS; it is throttled
+# past 128 MiB and killed (then restarted) past 192 MiB rather than squeeze its neighbours.
+MemoryHigh=128M
+MemoryMax=192M
+MemorySwapMax=0
+CPUQuota=50%
+TasksMax=64
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

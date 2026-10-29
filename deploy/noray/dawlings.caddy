@@ -1,0 +1,42 @@
+# BEGIN dawlings-noray (managed by dawlings/deploy/noray/deploy.sh; do not edit by hand)
+# The web face of dawlings' noray server: a page saying what it is, and /health for a monitor.
+# noray itself is not behind Caddy: it speaks TCP 8890 and UDP 8809/49152-49215 straight to the
+# internet (Caddy carries HTTP only, and rootless docker would hide every player's address).
+# /health answers from Caddy alone: from inside rootless docker the host's loopback, where
+# noray's metrics listen, cannot be reached. deploy.sh checks noray's own port instead.
+dawlings.jacobsabella.com {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	header X-Content-Type-Options nosniff
+	handle /health {
+		respond "ok" 200
+	}
+	handle {
+		header Content-Type "text/html; charset=utf-8"
+		respond <<HTML
+			<!doctype html>
+			<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>dawlings online</title>
+			<style>
+			:root{color-scheme:light dark;--ink:#1d2026;--dim:#5b6270;--bg:#f6f4ef;--amber:#c76d12}
+			@media (prefers-color-scheme:dark){:root{--ink:#dde2ea;--dim:#8f97a6;--bg:#0e1014;--amber:#f0953a}}
+			body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,sans-serif}
+			main{max-width:40rem;margin:0 auto;padding:3rem 1rem}
+			h1{font-size:1.6rem;margin:0 0 .25rem}h2{font-size:1rem;margin:2rem 0 .5rem;color:var(--amber);letter-spacing:.06em;text-transform:uppercase}
+			p,li{color:var(--ink)}small,.dim{color:var(--dim)}code{font:15px ui-monospace,monospace}
+			</style></head><body><main>
+			<h1>dawlings online</h1>
+			<p class="dim">This server hands out the join codes that let dawlings players reach each other without port forwarding.</p>
+			<h2>Host</h2>
+			<ol><li>Press <b>M</b> for the session panel.</li><li>Choose <b>Host online</b>.</li><li>Read out the six-character join code, or press <b>Copy</b> and send it.</li></ol>
+			<h2>Join</h2>
+			<ol><li>Press <b>M</b>.</li><li>Type the code under <b>JOIN BY CODE</b> and choose <b>Join by code</b>. Case, spaces and dashes do not matter.</li><li>The panel says whether you are in <b>direct</b> or <b>relayed</b> through this server.</li></ol>
+			<h2>Good to know</h2>
+			<ul><li>A code is not a password. If the host turned on <b>Ask for a code</b>, you also need that four-character session code.</li>
+			<li>Most connections go direct. A relayed one passes through here and adds a little delay.</li>
+			<li>Want your own server? See <code>docs/multiplayer.md</code> in the dawlings source.</li></ul>
+			</main></body></html>
+			HTML 200
+	}
+}
+# END dawlings-noray

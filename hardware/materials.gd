@@ -520,6 +520,26 @@ static func cable(colour: Color) -> StandardMaterial3D:
 		return m)
 
 
+## A cable jacket on a black board: the track's colour bright and lit from within, so it reads
+## against the board from across the room, with the same clearcoat streak as the rubber one.
+static func cable_lit(colour: Color) -> StandardMaterial3D:
+	var key := "cable_lit_%s" % colour.to_html(false)
+	return _cached(key, func():
+		var m := StandardMaterial3D.new()
+		var jacket := colour
+		jacket.s = maxf(jacket.s, 0.55)
+		jacket.v = maxf(jacket.v, 0.8)
+		m.albedo_color = jacket
+		m.emission_enabled = true
+		m.emission = jacket
+		m.emission_energy_multiplier = 0.55
+		m.roughness = 0.5
+		m.clearcoat_enabled = true
+		m.clearcoat = 0.6
+		m.clearcoat_roughness = 0.15
+		return m)
+
+
 ## Plug barrel and tip. Nickel rather than chrome -- a mirror-bright plug picks up the whole
 ## room and reads as a chrome bead rather than as hardware.
 static func plug_metal() -> StandardMaterial3D:

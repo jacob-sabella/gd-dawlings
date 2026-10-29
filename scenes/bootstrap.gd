@@ -89,14 +89,25 @@ func _ready() -> void:
 	add_child(welcome)
 	if args["welcome"] or (OS.has_feature("template") and WelcomeCard.first_time()):
 		welcome.open()
-	if args["join"] != "":
+	if args["noray_server"] != "":
+		Session.online_server = args["noray_server"]
+	Session.force_relay = Session.force_relay or args["relay"]
+	if args["join_code"] != "":
+		# By the code a host read out, through the noray server (docs/multiplayer.md).
+		Session.start_solo()
+		_start_daw(args)
+		Session.join_by_code(args["join_code"], args["code"])
+	elif args["join"] != "":
 		# A guest still has a backend: it holds the replicated cache. It just never opens a
 		# link of its own, which is the whole of what "one link per session" means.
 		Session.join(args["join"], args["session_port"], args["code"])
-	elif args["host"]:
+	elif args["host"] or args["online"]:
 		Session.code = args["code"]
-		if Session.host(args["session_port"]) and args["public"]:
-			Session.open_to_internet()
+		if Session.host(args["session_port"]):
+			if args["public"]:
+				Session.open_to_internet()
+			if args["online"]:
+				Session.host_online(args["session_port"])
 		_start_daw(args)
 	else:
 		Session.start_solo()
@@ -158,11 +169,16 @@ func _ready() -> void:
 	add_child(session_panel)
 	# EDIT on the lyric board at a desk opens the panel at its LYRICS box (slice 56).
 	studio.lyrics_edit_asked.connect(session_panel.edit_lyrics)
+	# The join code typed on keys in the room, in a headset: over the note pad, as a note's words are.
+	session_panel.pad_parent = func() -> Node3D: return studio.note_pad
 	if args["session_panel"]:
 		session_panel.open()
 	var tour_hud := TourHud.new()
 	tour_hud.name = "TourHud"
 	add_child(tour_hud)
+	# The Workshop (docs/workshop.md): only with its dev flag, on the host's own machine. It reads
+	# `--workshop` and `--resume` itself, and puts the room back after a reload.
+	Workshop.attach(self, studio)
 	if args["play_into"] > 0:
 		Session.guest_midi.target_track = args["play_into"]
 	if args["mic_into"] > 0:
@@ -391,7 +407,7 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 		# no Reaper. Run from the editor, as the tests and probes are, the silent stand-in.
 		"reaper": false, "built_in": OS.has_feature("template"), "reaper_host": "127.0.0.1",
 		"send_port": DEFAULT_SEND_PORT, "listen_port": DEFAULT_LISTEN_PORT,
-		"host": false, "public": false, "join": "", "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
+		"host": false, "public": false, "join": "", "online": false, "join_code": "", "noray_server": "", "relay": false, "xr": OS.has_feature("android"), "xr_sim": false, "ar": OS.has_feature("android"),
 		"place": {}, "stage": false, "view": Vector2.ZERO, "tracks": 0,
 		"focus": "", "fresh_layout": false, "detach_body": false, "no_motion": false, "feed_level": -1.0, "vision": "", "dwell": 0.0, "step": 0.0, "eyes": 0.0, "seated": false, "height": 0.0, "no_hud": false, "play": false, "slap": false, "rings": 0, "pegs": false, "strings": false, "marbles": false, "theremin": false, "grains": false, "grains_band": false, "lyrics": false, "modular": false, "modular_rec": false, "world": false, "flat": false, "flat_fx": Vector2i.ZERO, "flat_clip": Vector2i.ZERO, "flat_lanes": [], "flat_view": -1,
 		"name": "", "code": "", "mix_tone": false, "audio_stats": false, "session_port": Session.DEFAULT_PORT, "mix_from": "", "listen": -1, "audio_out": "", "direct_audio": false, "session_panel": false, "play_into": 0, "mic_into": 0, "computer_keys": false, "bring_in": PackedStringArray(),
@@ -581,6 +597,17 @@ func _parse(argv: PackedStringArray) -> Dictionary:
 			"--stand-in": out["built_in"] = false
 			"--host": out["host"] = true
 			"--public": out["public"] = true
+			# Online by a code, through a noray server: no address, no router (docs/multiplayer.md).
+			"--online": out["online"] = true
+			"--relay": out["relay"] = true
+			"--join-code":
+				i += 1
+				if i < argv.size():
+					out["join_code"] = argv[i]
+			"--noray-server":
+				i += 1
+				if i < argv.size():
+					out["noray_server"] = argv[i]
 			"--xr": out["xr"] = true
 			"--xr-sim":
 				# A headset simulated from the mouse and keyboard; --ar with it simulates passthrough.

@@ -1,5 +1,10 @@
 # Patch bay loop
 
+**Superseded.** Both surfaces are now one `PinMatrix` (hardware/patchbay/pin_matrix.gd): no pages,
+no jacks or cables, a smoothly scrolled grid under pinned headers (docs/architecture.md, "The
+patchbay is a pin matrix"). What follows is the history of the jack-and-cable design. Still open
+from it: a filter/search by name.
+
 Two patch surfaces, both in hardware/patchbay/:
 
 - **PatchbaySurface** (the routing bay, tracks to tracks): two fixed columns FROM / TO, one row per

@@ -1215,6 +1215,22 @@ func roll_board_spot() -> Transform3D:
 			Vector3(room_width * 0.5 - inset, 2.14, Studio.ROOM_MID))
 
 
+## Where the Workshop's panel hangs (WorkshopPanel, docs/workshop.md), in studio space (its origin
+## the floor under the middle of its face, its front +Z into the room): on the control room's right
+## wall near the live room's end, behind the patchbay's stand and the station board, at eye
+## height, on stand-offs (WorkshopPanel.ON_WALL) in front of what hangs there (the studio's acoustic
+## panel), clear of the roll board (high, at the room's middle) and the door (the front corner);
+## stood WorkshopPanel.OFF_WALL in where the venue has no wall and it stands on a post. Null unless
+## the Workshop is on in this process (Workshop.enabled: a dev flag, this machine, never a guest),
+## so for everybody else there is no such station at all; and in the Rig Roulette room.
+func workshop_spot() -> Variant:
+	if not Workshop.enabled() or venue_id() == ROULETTE_ID:
+		return null
+	var inset := WorkshopPanel.OFF_WALL if back_wall_gear_stands() else WorkshopPanel.ON_WALL + 0.05
+	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
+			Vector3(room_width * 0.5 - inset, 0.0, Studio.ROOM_BACK - WorkshopPanel.FROM_LIVE_ROOM))
+
+
 ## What the gear is made of here (see GearStyle). The studio's own: no change from the
 ## defaults but a steel edge.
 ## The twelve colours tracks are shown in here, in TrackColours.STANDARD's order (red, orange,

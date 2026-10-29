@@ -13,10 +13,10 @@ extends MeshBank
 ## WHAT RIDES. Anything in the CARRIERS group with four methods: `signal_spine()` (its centre
 ## line, world space), `signal_length()` (that line's length, in metres), `signal_level()` (how
 ## loud what it carries is now, 0..1 on the fader law: 0.716 is 0 dBFS) and `signal_radius()` (how
-## thick it is, so a bead sits on it rather than in it). Today: the patch cables (PatchCable), the
-## looms' runs (GearLoom), the instruments' leads and their cables into bandmates (JackSocket) and
-## the stage table's ropes (StageTable.Rope). Run is the same for anything else that wants it: a
-## modular's patch cable when there is one.
+## thick it is, so a bead sits on it rather than in it). Today: the modular's patch cables
+## (PatchCable), the looms' runs (GearLoom), the instruments' leads and their cables into bandmates
+## (JackSocket) and the stage table's ropes (StageTable.Rope). The routing bay has no cables: its
+## pins pulse with `level_between` instead (PinMatrix.signal_of).
 ##
 ## LOUDER IS CLOSER, FASTER AND BRIGHTER, never another colour: the beads are one warm white, and
 ## the level is how many there are along a metre, how fast they go and how brightly they burn. At
