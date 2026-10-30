@@ -7,6 +7,11 @@ name: CI
 #
 # dawkit is a public repository of its own and a submodule here, so a plain recursive checkout
 # gets it.
+#
+# The suite itself is off here for now (2026-10-30: "disable the test in CI for now. if they run
+# locally we'll consider that good enough"): the build and the import still run, so a script that
+# does not parse still fails, and the suite runs again with the repository variable RUN_TESTS set
+# to true (gh variable set RUN_TESTS --body true).
 
 on:
   push:
@@ -76,9 +81,13 @@ jobs:
         run: vendor/dawkit/tools/build_native.sh linux debug
 
       - name: Import
-        run: godot --headless --path . --import || true
+        run: |
+          godot --headless --path . --import 2>&1 | tee import.log || true
+          # The suite is off (above): a script that does not parse is still a failure.
+          ! grep -E "SCRIPT ERROR|Parse Error" import.log
 
       - name: Tests
+        if: vars.RUN_TESTS == 'true'
         run: |
           free -m
           # The whole suite: about half an hour on a desktop by 0.0.7, so an hour's allowance.
@@ -88,7 +97,7 @@ jobs:
           grep -q "checks, 0 failed" tests.log
 
       - name: How the tests ended
-        if: failure()
+        if: failure() && vars.RUN_TESTS == 'true'
         run: |
           echo "exit: the suite printed no tally if it did not finish"
           grep -nE "SCRIPT ERROR|ERROR:|handle_crash|Program crashed|signal 11|Aborted|\[[0-9]+\]" tests.log | tail -n 60 || true
