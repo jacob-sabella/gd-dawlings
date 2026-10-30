@@ -2272,7 +2272,8 @@ either side, clear of every solid taller than the hands' lowest and on walkable 
   silent, shown as a ghost disc over the loop; the button held plays it full; the cursor leaving
   puts the volume down. The mouse's wiggle wobbles and Alt bends it, as everywhere.
   `Theremin.ModeKey`, on the cabinet's front, cycles FREE, SCALE and CHORD (the wheel or a stick
-  steps it); the studio keeps the switch across venues (`Studio.theremin_snap`).
+  steps it), starting FREE as the real instrument is; the studio keeps the switch across venues
+  (`Studio.theremin_snap`).
   `Studio._follow_theremin` reaches for its source while it sounds, its field is hovered or this
   player stands within ChordHarp.NEAR of it.
 
@@ -2858,6 +2859,75 @@ motion) and `lift_on_clip`. Each choice is saved by itself (`Ergonomics.save_com
 `comfort` section of `Ergonomics.HEIGHT_PATH`, beside the height. Bootstrap reads it with
 `Ergonomics.take_comfort`, and `--no-motion` overrides it with Still and a room that does not
 react.
+
+## Seeing the signal: the graph, its meters, and the glasses
+
+`SignalGraph` (`core/audio/signal_graph.gd`, docs/spatial_loop.md part three) is a model, rebuilt
+from MixState whenever it is wanted (`build(state, sources)`, about 15 times a second while the
+view is on): a stage for each place a sound passes (a source, a track's playback and input, each
+plugin, its fader, each send, the master, OUT), ids like `t6:fx0`, `t6:fader`, `t6:send1`,
+`src:harp`. Each stage has a level (`peak_db`, `rms_db`, `gr_db`), says whether it was measured or
+estimated (`level_words()`: "−6.0 dBFS", "≈ −9.1 dBFS", "not measured"), the next stage and any
+branches (sends), and, where the sound stops, `halt` (one of fifteen reasons, each with a heading
+in `HEADINGS`), `why` in words and a `fix` ({label, verb, args, step}). `trace(from)` follows `next`
+to the first halt; a mute on a folder is said as the child's FOLDER_MUTED. `apply_fix` runs the
+fix's DAW verb inside one edit, so a fix is one undo step, and on a guest is the host's intent like
+any other write. Nothing is decided by colour alone: `health()` ("ok", "hot", "clip", "silent")
+always comes with the figure.
+
+The meters are DAW-neutral fields on `MixState.TrackState`: `meter_peak` and `meter_rms` (the
+input, then each plugin, dBFS), `meter_gr` (each plugin's gain reduction, NaN where it has none),
+`meter_sends` and `main_send`. On the wire they are one volatile key, `/track/N/vu/signal` (four
+arrays, `MixWire.pack_meters`), and the durable `/track/N/mainsend`, in the snapshot. A guest
+builds its graph from the host's meters off the replication stream; it measures nothing itself.
+
+Meters cost something, so they are made only while wanted: `DAWBackend.want_signal_meters()`,
+called each frame the view is on, keeps them for `SIGNAL_KEEP_MSEC` (1.5 s), and a host keeps them
+while guests are connected (`signal_meters_wanted`). The built-in engine (`GodotBackend`) builds a
+probe bus a stage, each with copies of the track's chain up to it and an `AudioEffectCapture` at
+its end, played by an extra player into the muted keys bus; peaks at METER_HZ, RMS from the
+capture, the gain reduction worked out from a compressor's in and out RMS (`gr_derived`), sends from
+their buses, recorded at METER_SEND_HZ. Reaper has a track's meter but no stage's: the fader is
+measured, a send estimated from it and the send level (pre-fader: less the fader), and the
+bridge's `GetMeters` (polled at METER_POLL_SECONDS while wanted) adds each plugin's own
+`GainReduction_dB` where the plugin reports it, and the master send.
+
+The view is this player's alone. `SignalView` (`hardware/signal_view.gd`) draws a graph through a
+`place` callable (stage id to a point in the room, or null), so it knows nothing of Session or the
+studio: one MultiMesh of tube segments on arcs (the lamp shader), Label3D pools for signs and
+tags, a bead for a trace, and on a desktop a card on a CanvasLayer. The studio supplies the places
+(`Studio.signal_place`: a track's stages at its stage voice, else its strip; the master at the
+console's master section, OUT above it), the sources (`signal_sources`: instruments onto their
+jack's track or the armed one, the mic onto its voice track, the sampler, grain cloud and platter
+as local) and what a pointed-at thing traces from (`signal_target_of`). `signal_view_on()` is the
+local hand's worn `SignalGlassesItem` or X; neither is room state. The glasses are a personal kind
+and share the one head slot (`Interactor.worn`) with the headphones.
+
+Levels everywhere (part three, D to G). `SignalGraph` has three allocation-free readers for
+anything that meters: `fader_level(t)` (peak, RMS, measured), `send_level(t, slot)` (measured from
+`meter_sends`, else the track's meter plus the send, ESTIMATED), and `arrival_level(state, dest)`
+(the senders' peaks added as amplitudes, the worst case, and how many). `PinMatrix` reads them
+through callables (`row_meter`, `col_meter`, `pin_meter`, `level_db`, `set_level_db`) so it knows
+no DAW: header bars and clip lights always, and with `skyline` on (the studio's
+`_follow_skyline`, while this player's view is on) a tower a pin whose top is a `Tower`
+ControlAffordance, one undo step a drag. The AUDIO DEVICES wall meters only dawlings's own streams
+by their AudioServer buses (PipeWire reports volumes and timings, not levels; a per-port peak would
+need a capture stream on every port), and Reaper's outputs by its master meter.
+
+`LevelsWall` (hardware/levels) is a surface on its own trolley in the MIXING ring: a column a track
+(the fader through `DAW.set_track_volume`, `edits_as_one`), gain reduction from `meter_gr`, and the
+master's loudness from `MasterState.lufs_*`, `true_peak_*` and `correlation`. Those come from
+`LoudnessMeter` (core/audio), an ITU-R BS.1770 meter that `GodotBackend` feeds from a second capture
+on the master bus on a WorkerThreadPool task, only while `loudness_wanted()` (a reader within reach,
+or guests connected), and sends as the volatile `/master/vu/loudness` ([0] when not measured).
+Other backends say `measures_loudness()` false, and the wall says "not measured". RESET is the DAW
+verb `reset_loudness`.
+
+Look to solo is `LookSolo` (core/input), run where the mix is: the host's own, and one per guest
+asked by the room verb `look_solo` [track, held] and run `on_behalf_of` that guest. It keeps what it
+changed ({track: [solo, mute]}) and puts exactly that back, group-free, inside one edit. The studio
+lets go on focus loss, the view going off, a guest leaving and a project replaced; one is held in the
+room at a time.
 
 ## Automation by gesture: a write bead
 

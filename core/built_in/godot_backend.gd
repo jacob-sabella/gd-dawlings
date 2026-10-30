@@ -634,6 +634,11 @@ func _build_buses() -> void:
 	_capture = AudioEffectCapture.new()
 	_capture.buffer_length = 0.25
 	AudioServer.add_bus_effect(_master_bus, _capture)
+	# The loudness meter's own tap (`_drive_loudness`): a second capture, so reading it takes
+	# nothing from what the guests are sent.
+	_loud_capture = AudioEffectCapture.new()
+	_loud_capture.buffer_length = LOUDNESS_BUFFER
+	AudioServer.add_bus_effect(_master_bus, _loud_capture)
 	var keys := AudioServer.bus_count
 	AudioServer.add_bus(keys)
 	AudioServer.set_bus_name(keys, KEYS_BUS)
@@ -893,6 +898,7 @@ func _build_cues() -> void:
 func _remove_buses() -> void:
 	if lanes != null:
 		lanes.clear()
+	_drop_probes()
 	for i in range(AudioServer.bus_count - 1, 0, -1):
 		if AudioServer.get_bus_name(i).begins_with(BUS_PREFIX):
 			AudioServer.remove_bus(i)
@@ -900,6 +906,8 @@ func _remove_buses() -> void:
 	_spectra.clear()
 	_master_bus = -1
 	_capture = null
+	_finish_loudness(false)
+	_loud_capture = null
 
 
 func _connect_state() -> void:
@@ -969,6 +977,13 @@ func _apply_tracks() -> void:
 		var b: int = _bus[index]
 		AudioServer.set_bus_volume_db(b, taper_to_db(t.volume) + (state.vca_db(t.group) if t.volume > 0.0 else 0.0))
 		AudioServer.set_bus_mute(b, not audible(index))
+		# With its master send off (MixState.TrackState.main_send) it plays into the muted keys bus:
+		# heard through its sends alone.
+		var parent := parent_of(index)
+		var to := StringName((AudioServer.get_bus_name(_bus[parent]) if parent > 0 and _bus.has(parent) else MASTER_BUS)
+				if t.main_send else KEYS_BUS)
+		if AudioServer.get_bus_send(b) != to:
+			AudioServer.set_bus_send(b, to)
 		# Slot 0 holds the rack's place and is left at the centre; the pan is the tail's, after
 		# the width, so narrowing a panned track keeps it where it was put.
 		(AudioServer.get_bus_effect(b, 0) as AudioEffectPanner).pan = 0.0
@@ -996,6 +1011,8 @@ func _apply_tracks() -> void:
 				var pre := send != null and send.pre_fader
 				p.volume_db = taper_to_db(send.volume) + (0.0 if pre else taper_to_db(t.volume)) \
 						if send != null else -80.0
+				# Kept for `_sync_players`, which sets each player's level to its item's a frame.
+				p.set_meta(&"gain", p.volume_db)
 				var sb := AudioServer.get_bus_index(p.bus)
 				# A key follows its track's own mute, not the desk's solos: a soloed bass still ducks
 				# under the kick it is keyed by.
@@ -1068,6 +1085,11 @@ func _apply_fx(track_index: int, fx_index: int) -> void:
 		var sb := AudioServer.get_bus_index(send_bus(track_index, row[1]))
 		if sb >= 0 and slot < AudioServer.get_bus_effect_count(sb) - 1:
 			AudioServer.set_bus_effect_enabled(sb, slot, f.enabled)
+	# A meter probe past this slot holds it too, at one place lower (a probe has no slot 0).
+	for probe in _probes.get(track_index, []):
+		var pb := AudioServer.get_bus_index(probe[0])
+		if pb >= 0 and slot - 1 < AudioServer.get_bus_effect_count(pb) - 1:
+			AudioServer.set_bus_effect_enabled(pb, slot - 1, f.enabled)
 
 
 ## The rack asks what a knob reads in the effect's own units. Answered at once: there is no
@@ -1342,7 +1364,8 @@ func _sync_players() -> void:
 		var level := item_level(it, pos) if it != null else 0.0
 		for p in _players[index]:
 			var player := p as AudioStreamPlayer
-			player.volume_db = level
+			# The item's level, and a send's own on top (the send's and the fader's, `_apply_tracks`).
+			player.volume_db = level + float(player.get_meta(&"gain", 0.0))
 			if stream == null:
 				if player.playing:
 					player.stop()
@@ -1747,6 +1770,8 @@ func _drive_plugins() -> void:
 
 ## The meters, and the playhead, to the room.
 func _drive_levels() -> void:
+	_drive_signal(get_process_delta_time())
+	_drive_loudness(get_process_delta_time())
 	for index in _bus:
 		var t: MixState.TrackState = state.tracks[index]
 		t.vu_l = meter(AudioServer.get_bus_peak_volume_left_db(_bus[index], 0))
@@ -1762,6 +1787,281 @@ func _drive_levels() -> void:
 	record_for_replication("/beat/str", [state.position_string])
 	record_for_replication("/time", [state.position_seconds])
 	state.transport_changed.emit()
+
+
+# --- stage meters (the signal glasses, docs/spatial_loop.md part three) --------------------
+
+## Where a probe plays: the track's sound up to one stage of its chain, into the muted keys bus.
+const METER_PREFIX := "R3D Meter "
+## How often the probes are read, and how often what they read goes to guests.
+const METER_HZ := 30.0
+const METER_SEND_HZ := 10.0
+## The most frames a probe's RMS is read from at once, every RMS_STEP-th of them, and how quickly
+## it follows (its power, per read): about 300 ms to settle at METER_HZ.
+const RMS_FRAMES := 1024
+const RMS_STEP := 2
+const RMS_FOLLOW := 0.12
+## Under this a bus peak is no signal (the AudioServer says -200 dB for none).
+const SILENT_DB := -150.0
+
+## Track index -> its probes in stage order (the input, then after each plugin):
+## [bus name, AudioEffectCapture, smoothed power].
+var _probes := {}
+## The players that play them, kept apart from `_players`' lists, which a rebuild replaces.
+var _probe_players: Array[AudioStreamPlayer] = []
+## What the probes were built for (`_probe_shape_now`), and the clocks of reading and sending.
+var _probe_shape := ""
+var _meter_clock := 0.0
+var _meter_send_clock := 0.0
+
+
+static func meter_bus(index: int, stage: int) -> String:
+	return "%s%d@%d" % [METER_PREFIX, index, stage]
+
+
+## The probes, by track: for the suite.
+func probes() -> Dictionary:
+	return _probes
+
+
+## Every track bus and the effect objects on it, so a chain changed, a track added or the buses
+## made again builds the probes again.
+func _probe_shape_now() -> String:
+	var parts := PackedStringArray()
+	for index in _bus:
+		var b: int = _bus[index]
+		var ids := PackedStringArray()
+		for slot in range(1, _fx_end(b)):
+			ids.append(str(AudioServer.get_bus_effect(b, slot).get_instance_id()))
+		parts.append("%d:%s:%s" % [index, AudioServer.get_bus_name(b), ".".join(ids)])
+	return ",".join(parts)
+
+
+## A probe a stage of each track: a bus holding the track bus's own effect objects up to that
+## stage (none for the input; a knob on the rack turns the probe's too), an AudioEffectCapture at its
+## end for the RMS, and one more playback of the track's part on it, as a cue is, sent into the
+## muted keys bus so nobody hears it. Each probe runs its effects once more: they stand only while
+## stage meters are wanted (`signal_meters_wanted`).
+func _build_probes() -> void:
+	_drop_probes()
+	for index in _bus:
+		var b: int = _bus[index]
+		var list: Array = []
+		for stage in _fx_end(b):
+			var pb := AudioServer.bus_count
+			AudioServer.add_bus(pb)
+			AudioServer.set_bus_name(pb, meter_bus(index, stage))
+			AudioServer.set_bus_send(pb, KEYS_BUS)
+			for slot in range(1, stage + 1):
+				AudioServer.add_bus_effect(pb, AudioServer.get_bus_effect(b, slot))
+				AudioServer.set_bus_effect_enabled(pb, slot - 1, AudioServer.is_bus_effect_enabled(b, slot))
+			var cap := AudioEffectCapture.new()
+			cap.buffer_length = 0.1
+			AudioServer.add_bus_effect(pb, cap)
+			var p := AudioStreamPlayer.new()
+			p.bus = meter_bus(index, stage)
+			p.set_meta(&"meter", stage)
+			add_child(p)
+			_players[index].append(p)
+			_probe_players.append(p)
+			list.append([meter_bus(index, stage), cap, 0.0])
+		_probes[index] = list
+	_probe_shape = _probe_shape_now()
+
+
+func _drop_probes() -> void:
+	for p in _probe_players:
+		if is_instance_valid(p):
+			for index in _players:
+				(_players[index] as Array).erase(p)
+			p.stop()
+			p.queue_free()
+	_probe_players.clear()
+	for i in range(AudioServer.bus_count - 1, 0, -1):
+		if AudioServer.get_bus_name(i).begins_with(METER_PREFIX):
+			AudioServer.remove_bus(i)
+	_probes.clear()
+	_probe_shape = ""
+
+
+## The probes read into each track's meters (MixState.TrackState.meter_peak and the rest) at
+## METER_HZ, and sent to guests at METER_SEND_HZ. A probe's peak is the AudioServer's own peak of
+## its bus; its RMS is read from its capture, smoothed. A send's peak is its send bus's. A
+## compressor's gain reduction is worked out from the probes either side of it: RMS out, less RMS
+## in, less its makeup. Host only; with nobody wanting them, the probes go and the meters empty.
+func _drive_signal(delta: float) -> void:
+	if not is_authority:
+		return
+	if not signal_meters_wanted():
+		if not _probes.is_empty():
+			_drop_probes()
+			for index in state.tracks:
+				var t: MixState.TrackState = state.tracks[index]
+				t.meter_peak = PackedFloat32Array()
+				t.meter_rms = PackedFloat32Array()
+				t.meter_gr = PackedFloat32Array()
+				t.meter_sends = PackedFloat32Array()
+				record_for_replication("/track/%d/vu/signal" % index, MixWire.pack_meters(t))
+		return
+	_meter_clock += delta
+	if _meter_clock < 1.0 / METER_HZ and not _probes.is_empty():
+		return
+	_meter_send_clock += _meter_clock
+	_meter_clock = 0.0
+	if _probe_shape_now() != _probe_shape:
+		_build_probes()
+	var sending := _meter_send_clock >= 1.0 / METER_SEND_HZ
+	if sending:
+		_meter_send_clock = 0.0
+	for index in _probes:
+		var t: MixState.TrackState = state.tracks.get(index)
+		if t == null:
+			continue
+		var list: Array = _probes[index]
+		var n := list.size()
+		if t.meter_peak.size() != n:
+			t.meter_peak.resize(n)
+			t.meter_rms.resize(n)
+		for k in n:
+			var probe: Array = list[k]
+			var pb := AudioServer.get_bus_index(probe[0])
+			var peak := maxf(AudioServer.get_bus_peak_volume_left_db(pb, 0), AudioServer.get_bus_peak_volume_right_db(pb, 0)) \
+					if pb >= 0 else -INF
+			t.meter_peak[k] = peak if peak > SILENT_DB else -INF
+			var power := _probe_power(probe[1])
+			# A read between the mixer's blocks finds nothing new: the last reading stands.
+			if power >= 0.0:
+				probe[2] = lerpf(float(probe[2]), power, RMS_FOLLOW) if float(probe[2]) > 0.0 else power
+			t.meter_rms[k] = 10.0 * log(float(probe[2])) / log(10.0) if float(probe[2]) > 1e-15 else -INF
+		_derive_gr(index, t)
+		_read_sends(index, t)
+		if sending:
+			record_for_replication("/track/%d/vu/signal" % index, MixWire.pack_meters(t))
+
+
+## The mean power of what a probe's capture holds, every RMS_STEP-th frame of at most RMS_FRAMES,
+## and the capture emptied for the next read; -1 when it holds nothing new.
+func _probe_power(cap: AudioEffectCapture) -> float:
+	var frames := mini(cap.get_frames_available(), RMS_FRAMES)
+	if frames <= 0:
+		return -1.0
+	var buf := cap.get_buffer(frames)
+	cap.clear_buffer()
+	var sum := 0.0
+	var count := 0
+	for i in range(0, frames, RMS_STEP):
+		var f := buf[i]
+		sum += f.x * f.x + f.y * f.y
+		count += 2
+	return sum / float(count) if count > 0 else 0.0
+
+
+## Each plugin's gain reduction where it is a compressor: from the probes either side of it.
+func _derive_gr(index: int, t: MixState.TrackState) -> void:
+	var b: int = _bus[index]
+	var plugins := _fx_end(b) - 1
+	if t.meter_gr.size() != plugins:
+		t.meter_gr.resize(plugins)
+	for n in plugins:
+		var comp := AudioServer.get_bus_effect(b, n + 1) as AudioEffectCompressor
+		if comp == null or not AudioServer.is_bus_effect_enabled(b, n + 1) or n + 1 >= t.meter_rms.size():
+			t.meter_gr[n] = NAN
+			continue
+		var into := t.meter_rms[n]
+		var out := t.meter_rms[n + 1]
+		t.meter_gr[n] = minf(0.0, out - into - comp.gain) if is_finite(into) and is_finite(out) else 0.0
+
+
+## Each send's peak, off its send bus, in send-slot order.
+func _read_sends(index: int, t: MixState.TrackState) -> void:
+	var rows: Array = _built_sends.get(index, [])
+	if rows.size() != t.sends.size():
+		t.meter_sends = PackedFloat32Array()
+		return
+	if t.meter_sends.size() != rows.size():
+		t.meter_sends.resize(rows.size())
+	for n in rows.size():
+		var sb := AudioServer.get_bus_index(send_bus(index, rows[n][1]))
+		var peak := maxf(AudioServer.get_bus_peak_volume_left_db(sb, 0), AudioServer.get_bus_peak_volume_right_db(sb, 0)) \
+				if sb >= 0 else -INF
+		t.meter_sends[n] = peak if peak > SILENT_DB else -INF
+
+
+# --- the master's loudness (the LEVELS wall, docs/spatial_loop.md part three, F) ------------------
+
+## How much of the master the loudness tap holds between reads (s).
+const LOUDNESS_BUFFER := 0.5
+
+## The meter (BS.1770, LoudnessMeter) on the master's own tap, fed on a worker thread while anyone
+## wants it (`loudness_wanted`): the frames read here each frame and handed over a block at a time,
+## the readings copied back into MixState's master when the block is done, and sent at
+## METER_SEND_HZ. Started again by RESET (`reset_loudness`) and by the transport starting to play,
+## so the integrated figure is the song's from where it was played.
+var loudness := LoudnessMeter.new()
+var _loud_capture: AudioEffectCapture
+var _loud_task := -1
+var _loud_pending := PackedVector2Array()
+var _loud_reset := false
+var _loud_send_clock := 0.0
+var _loud_was_playing := false
+
+
+func measures_loudness() -> bool:
+	return true
+
+
+func reset_loudness() -> void:
+	_loud_reset = true
+
+
+func _drive_loudness(delta: float) -> void:
+	if not is_authority or _loud_capture == null:
+		return
+	if not loudness_wanted():
+		if state.master.loudness_measured:
+			_finish_loudness(false)
+			state.master.loudness_measured = false
+			record_for_replication("/master/vu/loudness", [0])
+			_loud_capture.clear_buffer()
+		return
+	if state.playing and not _loud_was_playing:
+		_loud_reset = true
+	_loud_was_playing = state.playing
+	var n := _loud_capture.get_frames_available()
+	if n > 0:
+		_loud_pending.append_array(_loud_capture.get_buffer(n))
+	if _loud_task >= 0 and not WorkerThreadPool.is_task_completed(_loud_task):
+		return
+	_finish_loudness()
+	if _loud_reset:
+		_loud_reset = false
+		loudness.set_rate(AudioServer.get_mix_rate())
+	if not _loud_pending.is_empty():
+		var block := _loud_pending
+		_loud_pending = PackedVector2Array()
+		_loud_task = WorkerThreadPool.add_task(loudness.feed.bind(block), false, "dawlings loudness")
+	_loud_send_clock += delta
+	if _loud_send_clock >= 1.0 / METER_SEND_HZ:
+		_loud_send_clock = 0.0
+		record_for_replication("/master/vu/loudness", MixWire.pack_loudness(state.master))
+
+
+## The block being measured finished, and its readings into the master's state.
+func _finish_loudness(publish := true) -> void:
+	if _loud_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_loud_task)
+		_loud_task = -1
+	var m := state.master if state != null else null
+	if m == null or not publish:
+		return
+	m.loudness_measured = true
+	m.lufs_m = loudness.momentary
+	m.lufs_s = loudness.short_term
+	m.lufs_i = loudness.integrated
+	m.true_peak_db = loudness.true_peak_db
+	m.true_peak_recent_db = loudness.true_peak_recent_db
+	m.correlation = loudness.correlation
+	m.loudness_seconds = loudness.seconds
 
 
 # --- spectra (the EQ wall, docs/spatial_loop.md part two, slice 36) -------------------------

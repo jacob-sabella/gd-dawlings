@@ -6000,3 +6000,300 @@ none.
     placements survive a publish and a recalibration; the PLAY page's lines in AR. The probe checks
     that a guest's placement in an AR session reaches the host's row. Both sides at 0 failed.
     shots/spatial60.png is a placed harp, shot with `--ar`.
+
+# Part three: seeing the signal
+
+Goal: "the complication of trying to get a sound out the way I want it -- normal DAW stuff, but now
+we're in 3D." A desk answers "is it loud" with a meter and "why is it silent" with nothing. This
+part makes the room answer both where the sound is: put on a pair of signal glasses and the audio
+path is drawn as glowing pipes from every source to its track, along the sends and folders to the
+master and out; where the signal stops, the pipe ends at a sign saying why in words; point at
+anything that should sound and ask, and the chain lights a stage at a time to the first break,
+with a one-press fix where one is safe. Under both, one model of the path with a level at every
+stage (`SignalGraph`), fed by real taps on the built-in engine, by Reaper's meters and the bridge
+where Reaper has them (estimates marked `≈` where it does not), and by the host's meters on a guest.
+Same rules as parts one and two: `godot --headless --path . --editor --quit` after a new
+class_name, targeted tests while building and the whole suite once at the end, a shot of what
+changed (shots/signalN_*.png). Desktop first: every mode has a key, a hover card and an F1 line,
+and the HUD still fits 1600x900. No signal by colour alone: every amber and red carries its words
+and its number.
+
+## Part three: decisions
+
+- **One model of the path, built from the mix and nothing else.** `SignalGraph`
+  (core/audio/signal_graph.gd, pure, RefCounted) is built from a MixState and a list of the room's
+  sources, so a host, a guest and the suite build the same graph from the same cache. Its stages
+  (`SignalGraph.Stage`) are, per track `N`: `tN:play` (what the track itself plays: its items),
+  `tN:in` (what arrives at the track: items, takes, a live input, its folder children), one
+  `tN:fxK` a plugin slot in chain order, `tN:fader` (fader, pan, mute, solo, the master/parent
+  send), one `tN:sendS` a send slot; then `master` and `out` (the speakers). A room source is
+  `src:<id>` and feeds the track it reaches. The main road from a track is in, its plugins, its
+  fader, then its folder's `in` or the master; a send is a branch from the fader (post-fader) or
+  from the last plugin (pre-fader) into its destination's `in`; a key send (a sidechain) is a
+  branch that goes to a detector, never to the ears.
+- **A source is a row the studio gives**: `{id, title, track, kind, jacked}`. `kind` is `notes` (an
+  instrument: heard live on this machine's MONITOR, and onto a track only when it is recorded: its
+  jack's track whether armed or not, else the armed track), `voice` (the mic: the track's live input,
+  heard through the DAW's monitoring), `playback` (a station whose sound is notes on a track, as the
+  music box's pegs are) or `local` (heard in your own ears only: the sampler, the grain cloud and
+  the platter, which reach a track as a cassette pasted onto it). The graph knows no node in the
+  room; the view puts each stage somewhere.
+- **A break is a stage with a reason, and the reasons are words.** `Stage.halt` is one of
+  `muted`, `soloed_out` (another track is soloed, read as the built-in engine's solo-in-place:
+  a soloed track's folders and the returns it sends to stay up), `fader_silent` (the fader at
+  −∞), `send_silent` (a send at −∞), `monitor_off`, `not_armed`, `no_input` (a record input the DAW
+  does not list), `plugin_silent` (a plugin with signal in and none out, from levels), `instrument_
+  bypassed` (an instrument plugin, type ending in `i`, bypassed: it plays nothing), `no_route` (no
+  master/parent send: Reaper's B_MAINSEND off), `folder_muted` (its folder is muted, said where a
+  trace reaches the folder from a child), `stopped` (the transport is stopped, for a track's own
+  playback), `empty` (nothing on the track to play), `no_track` and `local`. An effect bypassed is
+  not a break (the sound passes dry) and its stage says `bypassed`. `Stage.why` is the sentence on
+  the sign, naming what does it: `muted`, `soloed out: KICK is soloed`, `send at −∞`.
+- **A fix is one DAW intent, one undo step, or none.** `Stage.fix` is `{label, verb, args, step}`:
+  UNMUTE (`set_track_mute`), UNSOLO (every solo let go), FADER TO 0 dB, SEND TO −12 dB
+  (`set_send_volume`), MONITOR ON, ARM, BYPASS OFF (`set_fx_enabled`), SEND TO MASTER (a new verb,
+  `set_track_main_send`), MASTER TO 0 dB and PLAY. `SignalGraph.apply_fix` runs it inside
+  `DAW.open_edit(step)` / `close_edit`, so a grouped mute or an unsolo of three tracks is one Ctrl-Z,
+  and through `DAW`, so a guest's fix is an intent the host carries out. A plugin that outputs
+  silence, a missing record input and a source heard locally have no fix: the sign says what to
+  do. Play is not an edit and leaves no step.
+- **Levels are dBFS at every stage, measured where they can be, estimated where they cannot, and
+  marked.** `Stage.peak_db`, `rms_db`, `gr_db` (NAN where nothing reports a gain reduction),
+  `measured`, `estimated`. Thickness is the peak, smoothed (fast up, slow down) and mapped from
+  FLOOR_DB (−60) to +6 dBFS; colour is health: the track's colour while under HOT_DB (−3),
+  amber from there to 0 dBFS, red pulsing over it, and every amber and red stage carries its number
+  (`−1.2 dBFS`, `CLIPPING +2.3 dB at BASS DI fader`). An estimate's figure starts `≈`.
+- **The meters live in MixState and ride the mix's own stream.** TrackState gains `meter_peak` and
+  `meter_rms` (PackedFloat32Array, dBFS: the input, then after each plugin in chain order),
+  `meter_gr` (dB per plugin, NAN none) and `meter_sends` (dBFS per send slot in order), empty when
+  this DAW cannot measure them; and `main_send`. The backend writes them as one volatile key a track,
+  `/track/N/vu/signal` [peak, rms, gr, sends], at METER_SEND_HZ (10), so the host's replication
+  carries them to guests unreliably at a modest rate, parcelled with the other meters, and a guest's
+  graph reads them as the host's. `/track/N/mainsend` is durable and in the snapshot.
+- **Built-in engine taps are real and cost nothing until asked.** While anyone wants stage meters
+  (`DAWBackend.want_signal_meters`, kept alive SIGNAL_KEEP_MSEC by whatever draws them, and always
+  while guests are connected, since any of them may put the glasses on), each track gets meter probes:
+  a bus a stage, `R3D Meter N@K`, holding the track bus's own effect objects up to stage K (none for
+  the input), played by one more playback of the track's lane (as a cue is) and sent into the muted
+  KEYS_BUS, so nobody hears them. A probe's peak is the AudioServer's own bus peak (exact, no script
+  loop); its RMS is an AudioEffectCapture at the probe's end, read at METER_HZ (30), at most
+  RMS_FRAMES a read, every second frame, and cleared. Post-fader is the track bus's peak, each send
+  its send bus's, a folder's sum its own bus's, the master the master bus's: all exact. A
+  compressor's gain reduction is derived from its probes (RMS out less RMS in less makeup) and
+  marked derived; Godot's compressor does not report one. Limits, said: the probes hear what the
+  track plays (items, MIDI through its instrument, takes), not a live input monitored straight
+  into the track bus, so with a live input the stage meters are those of its playback; and each
+  probe runs its effects once more, so they are torn down SIGNAL_KEEP_MSEC after the last ask.
+- **Reaper has a track's meter, not a stage's.** OSC streams each track's post-fader peak (vu) and
+  each send's level. The bridge's `GetMeters` adds what ReaScript has: each track's peak and peak
+  hold (Track_GetPeakInfo, Track_GetPeakHoldDB), its B_MAINSEND, and each plugin's gain reduction
+  where the plugin reports one (TrackFX_GetNamedConfigParm "GainReduction_dB": ReaComp, ReaXcomp
+  and plugins that implement it), polled at METER_POLL_SECONDS (0.25) while meters are wanted. There
+  is no per-plugin in/out peak in the API, so on Reaper a plugin's stage and the track's input are
+  `not measured`, the fader is measured, and a send is estimated from the track's meter and the
+  send's level (post-fader: track peak plus send dB; pre-fader: less the fader too), marked `≈`.
+  `plugin_silent` is never claimed there.
+- **The glasses are this player's alone.** A pair of signal glasses lies on the prop shelf
+  (`SignalGlassesItem`, kind `glasses`, a personal kind as the headphones are: a copy of your own).
+  On your head they turn on the signal view for you; bandmates see them on your ghost, and their
+  room is unchanged. At a desk, X toggles the view with or without the pair ("x-ray"; G is taken by
+  the gear's summoning). The view's on-ness is never room state, never sent, never published:
+  `Studio.signal_view_on()`. The glasses share the head with the headphones (Interactor.worn is one
+  slot), so putting one on sends the other home; the X key is not limited by that.
+- **What the view draws** (`SignalView`, hardware/signal_view.gd, given the graph and a callable
+  that places a stage): one pipe a road between places, a source to its track's place (the stage
+  table's voice, else its console strip), a track to its folder's, a send to its destination's, a
+  track to the master section, and the master to OUT over the desk. Each pipe is a tube of
+  segments drawn as one MultiMesh (one draw call for the room's pipes), on the lamp material,
+  glowing. A road that stops ends at a sign (a billboard: the reason in capitals, the stage, the
+  fix's key), a clipping stage gets a red tag with its figure. At Ergonomics.motion_scale 0 the red
+  does not pulse and the glow alone carries it.
+- **Why can't I hear this** (`SignalGraph.trace(from_id)`, B). With the view on, Y over anything
+  that sounds (an item, a station, a stage voice, a channel strip, a control on one) traces from it:
+  its source, or the track's own playback, along the main road to OUT. The trace card (beside the
+  HUD's toast, and in a headset on the trace's sign) lights the stages one at a time (TRACE_STEP,
+  0.18 s, all at once at motion 0), each with its level, and stops at the first break with its reason
+  and its fix; Shift-Y or the card's FIX key (a click, a poke) does the fix. In a headset, a trigger
+  held still on something for TRACE_HOLD (0.6 s) with the view on traces it; the fix is the sign's
+  key. A trace of something that is heard ends at OUT with HEARD and the level at the master.
+
+## Part three: plan
+
+61. [x] **C. The signal graph and its meters.** Built. The graph, its fifteen reasons in words and
+    their fixes (one undo step each, `SignalGraph.apply_fix`), the meter fields on the wire, the
+    built-in engine's probes (a bus a stage with copies of the chain to it and a capture at its
+    end, torn down SIGNAL_KEEP_MSEC after the last glance, kept while guests are connected) and
+    Reaper's estimates with the bridge's GetMeters (per-plugin GainReduction_dB where the plugin
+    reports one) and SetMainSend. Building it found two engine bugs, both fixed: a send's own
+    player was played at full level, its send level overwritten by `_sync_players` (headless) and
+    by LaneEngine's `_keep_playing`. As planned: `SignalGraph` as decided: `build(state, sources)`,
+    `stage(id)`, `trace(from_id)` (the stages from it to OUT, stopping after the first break, with
+    the reason and fix), `roads()` (every pipe: [from, to, level stage]), `clips()`, `clip_words`,
+    `apply_fix(fix)`, and the statics `soloed_out(state, index)`, `health(peak_db)`, `thickness`.
+    MixState's meter fields and `main_send`; MixWire's `/track/N/vu/signal` (volatile) and
+    `/track/N/mainsend` (durable, in the snapshot). The built-in engine's probes, read at METER_HZ
+    and written at METER_SEND_HZ, built while wanted and while guests are connected. The new verb
+    `set_track_main_send` through DAW, the stand-in (undoable), the built-in engine (a bus with no
+    master send plays into the muted keys bus) and Reaper (the bridge's SetTrackValue B_MAINSEND).
+    The bridge's `GetMeters`, polled by ReaperBackend while wanted, and decoded into the same keys.
+    Touches signal_graph.gd (new), mix_state.gd, mix_wire.gd, daw.gd, daw_backend.gd,
+    offline_backend.gd, godot_backend.gd, reaper_backend.gd, reaper/dawlings_bridge.lua,
+    tests/bridge_decode_test.lua. The suite checks: the graph's stages and roads for a plain track,
+    a plugin chain, a folder and its children, sends post and pre and a key send; every break reason
+    and its words, the solo-in-place cases, a bypassed effect is no break and a bypassed instrument
+    is; the first break wins; each fix is one undo step; the probes with a known signal (a sine
+    take: input, after a plugin, post-fader, the send, the master); the Reaper estimate path (`≈`,
+    post and pre); a guest's graph reads the host's meters off the replicated stream; the bridge's
+    GetMeters against the stand-in.
+
+62. [x] **A. Signal glasses and the pipes.** Built. The pipes are one MultiMesh of short tube
+    segments on arcs (the lamp shader, so they glow), as thick as the smoothed dB, the track's
+    colour, amber at HOT_DB with the figure tagged, red and pulsing (still at Motion 0) past 0 dBFS
+    with a CLIPPING tag; a stage nobody measures (an instrument nobody plays) is a thread; a stopped
+    road is a stub and a sign, stacked where two breaks stand together; OUT carries the words
+    "OUT · TO THE SPEAKERS" and the master's level. A track's stages stand at its stage voice, else
+    its strip. The glasses share the one head slot with the headphones (putting one on sends the
+    other home), which found a bug fixed in `Interactor.wear` (the hand lost what it carried when
+    the old personal copy was despawned). As planned: `SignalGlassesItem` on the prop shelf
+    (Venue.glasses_spot), a personal kind; X at a desk. `SignalView` as decided; the studio places
+    stages (`_signal_place`) and lists the sources (`signal_sources`): every instrument item, the
+    venue's set, the harp, the theremin, the modular, the looper, the mic, the music box, and the
+    sampler, the grain cloud and the platter as local. Hover card and hint on the glasses; the F1
+    ROOM page names X and Y. Touches signal_glasses_item.gd (new), item_room.gd, venue.gd,
+    signal_view.gd (new), studio.gd, welcome_card.gd. The suite checks: the glasses toggle the view
+    for the wearer only (a bandmate wearing them, in the room's state, changes nothing here; nothing
+    of the view is in the room's state); X toggles it without them; the pipes' thickness follows the
+    level and their health its figure; a muted track's road ends at a MUTED sign; a clipping stage's
+    tag says CLIPPING with its figure and stage; the ROOM page still fits. shots/signal62_glasses.png
+    (glasses on, the song playing), shots/signal62_clip.png (a clipping track), shots/signal62_muted.png
+    (a muted break's sign).
+
+63. [x] **B. Why can't I hear this.** Built. A white-hot bead walks the chain (a third of
+    TRACE_STEP between stages that stand at one place, so it does not dwell on a voice), the lit
+    roads drawn white over the pipe, red on the break; the card (desktop, top right) says each
+    stage with ✓ and its level, the break with ✗, its heading and words, then FIX: LABEL (Shift-Y)
+    or HEARD; the toast says it in a line; a FIX key stands by the break for a hand. After a fix the
+    trace is run again (on a guest once the host has had RETRACE_AFTER to answer). As planned: `SignalGraph.trace` driven by the studio: Y (and the
+    headset's held trigger) over a target, `signal_target_of(node)` resolving a control, a strip, a
+    voice, an item or a station to the stage it starts from; the trace card stepping at TRACE_STEP;
+    Shift-Y and the card's FIX. Touches signal_view.gd, studio.gd. The suite checks: a trace stops
+    at the first break with its reason; a heard one ends at OUT; the fix is one undo step and the
+    trace then runs on; a guest's fix is an intent the host carries out; a target with nothing to
+    trace says so. shots/signal63_trace.png (mid-trace).
+
+64. [x] **D. Pin-matrix header meters, pulsing pins, glowing crossings in hot rows (always on).**
+    Built. Each row header of the routing bay carries a thin level bar (the track after its fader:
+    peak fill, RMS mark, a held peak tick), a clip light that stays lit CLIP_MSEC after a peak over
+    0 dBFS, and its figure on hover ("peak −6.0 dBFS · RMS −14.2"); each column header meters what
+    arrives there, the peaks added as amplitudes (the worst case, said "peaks added"), with its own
+    clip light, and a column whose sum passes 0 dBFS while no one send does says so in words: "OVER 0
+    dBFS TOGETHER (+1.4 dB), though no one send is". A seated pin pulses with what its send
+    carries (`SignalGraph.send_level`: measured on the built-in engine, else the track's meter and
+    the send level, marked ≈), and is dull when patched but carrying nothing, its card saying
+    "patched · no signal: <why>" from the graph's halt (the track muted, its folder muted, the
+    transport stopped, nothing sounding). Empty crossings in a hot row (over HOT_DB) glow faintly
+    amber. Cheap: only the visible lines and pins are read, at METER_HZ (30), once a second at
+    Motion 0, every bar a slot of one MeshBank, nothing allocated per read. The AUDIO DEVICES wall
+    meters its ports where dawlings can read them cheaply (below, E). Touches signal_graph.gd
+    (fader_level, send_level, arrival_level, db_words), pin_matrix.gd, patchbay_surface.gd. The
+    suite checks: a row's bar and clip light follow the track, the light holding after the clip and
+    the bar falling rather than dropping; a column sums its senders and says a sum over 0 that no
+    single send reaches; a send's card gives its level and what it carries, ≈ for an estimate and
+    plain when measured; a pin carrying nothing is dull and says why; a stopped transport is said;
+    a hot row's empty crossings glow; reading the meters makes no nodes.
+    shots/signal64_bay.png (the bay with the song playing: row bars, clip lights, a hot row).
+
+65. [x] **E. The pin-matrix skyline (glasses on).** Built. With the view on (glasses or X) each
+    seated pin extrudes out of the bay into a column of light as tall as what its send carries
+    (dB-mapped from FLOOR_DB to TOP_DB, `PinMatrix.level_share`), easing with the music (still
+    between once-a-second readings at Motion 0); each column header stands a sum tower; a top is
+    amber near 0 dBFS and red past it with a "+x dB" tag (TAGS of them at most, the loudest).
+    Pointing at a tower lights its row and column, and its card reads "KICK → BASS DI" over "−6.0 dB
+    send · peaking ≈ −3.1 dBFS". A tower's top is a control: dragged up or down (a desk's drag, a
+    hand's pinch, or pulled out of the bay) it sets the send level, relative to where it was taken,
+    the tower showing the new level while held, one undo step a drag (`edits_as_one`); the wheel is
+    the pin's; a still press and let-go pulls the pin as a crossing's press does. Every write is
+    DAW's, so a guest's drag is an open_edit / set_send_volume / close_edit intent. The AUDIO DEVICES
+    wall: PipeWire reports volumes (pw-dump, pw-cli) and timings (pw-top), not levels; a port's peak
+    would need a capture stream of its own on every port, as pavucontrol opens, which is not cheap.
+    So the wall meters only dawlings's own streams, by the AudioServer bus each one plays
+    (dawlings_mix, dawlings_monitor, dawlings_gear, and the app's own output by the Master bus),
+    and on Reaper the REAPER outputs and dawlings_tap by Reaper's master meter; every other port's
+    card says "level not measured: PipeWire reports none for this port", and its header has no
+    bar. Towers stand there the same, from those levels. Touches pin_matrix.gd (Tower),
+    patchbay_surface.gd, patch_wall_surface.gd, studio.gd (`_follow_skyline`). The suite checks:
+    no towers without the view; a tower as tall as its level, louder taller, amber near 0 with its
+    figure, red past it with "+x dB"; a column's sum tower; Motion 0; the card; a drag is one undo
+    step and Ctrl-Z puts it back; a guest's drag is the host's intent; the view off takes them down;
+    the AUDIO DEVICES wall meters dawlings's own streams and the app's output, and no other port.
+    shots/signal65_skyline.png (the bay's skyline, X on, the song playing).
+
+66. [x] **F. A LEVELS room off MIXING.** Built, as a wall: LEVELS, a station of its own on a
+    trolley at the control room's front left (Studio.LEVELS_IN 2.3 m in from the left wall, z −3.0,
+    turned 40° to face the seat; `Venue.levels_spot`), in the MIXING neighbourhood, on the station
+    list, the I cycle (after the EQ wall), the PLAY page and F1. Nothing stands closer than 0.6 m to
+    it in any of the 14 venues and their 3 variants, at 13 tracks or 40 (tools/layout_dump.tscn,
+    tools/layout_map.py; the pairs under 0.6 m that remain are the loft's and the club's own
+    dressing, and at 40 tracks the desk and the deck's cart, none of them LEVELS). A column a track
+    (`LevelsWall`, hardware/levels/levels_wall.gd), its peak after the fader against fixed lettered
+    lines at −18, −6 and 0 dBFS, falling 24 dB/s, its held peak a tick and a figure over it (red
+    "+2.5" past 0), its name under it, its fader's setting a notch at its side; a compressor's gain
+    reduction a blue bar hanging from the top as many dB long, lettered "GR −4.1" (SignalGraph's
+    `meter_gr`: worked out on the built-in engine, the plugin's own on Reaper). A column dragged up
+    or down (click-drag, a hand's pinch) is the track's fader, a dB a dB of the scale, Shift-fine,
+    one undo step a drag; the wheel 0.5 dB, Shift 0.1; a guest's an intent. More tracks than fit
+    (16) scroll: drag or wheel the names, or ◀ ▶, the foot saying "TRACKS 1-16 OF 40". The master:
+    short-term LUFS large, integrated (since play from stop, or RESET, a DAW verb) and momentary
+    under it, from `LoudnessMeter` (core/audio/loudness_meter.gd), a BS.1770-4 meter: K-weighting
+    (the two biquads, recomputed for the mix rate), 400 ms blocks every 100 ms, the absolute gate
+    at −70 LUFS and the relative at −10 LU over a 0.1 LU histogram, a 4x Catmull-Rom true-ish peak,
+    and the correlation over the last 300 ms. It runs on the built-in engine's master tap (a second
+    AudioEffectCapture), fed on a WorkerThreadPool task so the frame does not pay for it, only while
+    someone reads the wall (`want_loudness`, and while guests are connected), its readings sent to
+    guests as the volatile `/master/vu/loudness`. Checked: a −23 dBFS 1 kHz stereo sine reads −23.0
+    LUFS momentary, short-term and integrated at 48 and 44.1 kHz; silence after it is gated out.
+    A TARGET key steps STREAMING −14, CLUB −8, BROADCAST −23 and CUSTOM (the wheel over it sets
+    custom), this player's own, the loudness a bar against it and in words: "+1.2 LU OVER STREAMING
+    −14", "3.4 LU UNDER CLUB −8", "ON TARGET" within 1 LU. TRUE PEAK "≈ −0.8 dBTP", amber within 1
+    dB of 0 and saying "OVER 0: IT CLIPS" past it; PHASE a needle from −1 to +1 and in words,
+    MONO-SAFE, WIDE ("check it in mono") under +0.5, and "OUT OF PHASE: in mono it cancels" under
+    −0.3. On Reaper the loudness and phase are not measured and it says so (put a loudness meter on
+    Reaper's master), the peak then Reaper's master meter "not a true peak". The wall reads only
+    while this view's camera is within 7 m and turned to it. Touches levels_wall.gd (new),
+    loudness_meter.gd (new), mix_state.gd, mix_wire.gd, daw_backend.gd, daw.gd, godot_backend.gd,
+    stations.gd, venue.gd, neighbourhoods.gd, studio.gd, welcome_card.gd. The suite checks the
+    meter (the sine, the gate, ±1 correlation, 44.1 kHz, RESET), the wire both ways, a guest's
+    RESET as an intent, and the wall: a column a track, its top its peak, the held figure, the fall,
+    the red figure and CLIPPING over 0, the gain reduction's length, place and letters, a drag one
+    undo step, the wheel, a guest's drag an intent, "not measured", the LUFS, the verdict, the
+    target key and custom, the true peak and the phase in words, scrolling a 40-track session,
+    Motion 0; and the trolley: in every venue a station, clear, with room to stand at it, visited by
+    F, riding its trolley. shots/signal66_levels.png (the built-in engine playing, loudness
+    measured), shots/signal66_levels_40.png (40 tracks, scrolled window, a master over 0).
+
+67. [x] **G. Look to solo.** Built. With the view on, hold U at a desk (the track under the cursor)
+    or, in a headset, cup a hand to an ear -- a controller beside the head with its grip squeezed,
+    or a bare hand held there, carrying nothing -- and the track looked at (the head's gaze, through
+    `signal_target_of` as Y resolves it: an instrument is its track) is soloed alone: every other
+    solo let go and its own mute lifted; while held the solo follows the look once it rests 0.3 s
+    on another track; let go, every solo and mute it touched is put back exactly as it was
+    (`LookSolo`, core/input/look_solo.gd), group-free (a grouped track's mates are not soloed with
+    it). While one is held the view puts up no SOLOED OUT sign on every other track
+    (`SignalView.quiet`): they are out on purpose. U without the view on says what it needs. History: one edit "Look to solo" is open from
+    press to let-go, so a Ctrl-Z mid-hold puts every solo back; once let go the step changes
+    nothing (a backend cannot drop a step from its history, Reaper's least of all, so "nothing left
+    in the history" became "one step that does nothing"). A guest: there is no solo in one player's
+    ears alone (a guest hears only the host's stereo mix), so a guest's look-solo asks the host (the
+    room verb `look_solo` [track, held]), the toast saying so, and the host runs a LookSolo for that
+    guest with its writes theirs (`DAW.on_behalf_of`) and tells the room who is soloing what. One at
+    a time: a second while one is held is refused, saying whose it is. Never stuck: the window
+    losing focus lets go (NOTIFICATION_APPLICATION_FOCUS_OUT), the view going off lets go, a guest
+    leaving lets theirs go (Session.participant_left), and a project replaced forgets it. Said in
+    the toast, in X's toast and the F1 ROOM line. Touches look_solo.gd (new), studio.gd,
+    session.gd, welcome_card.gd, tools/screenshot.gd (`--signal look:N`). The suite checks: alone,
+    its mute lifted, another's mute untouched; a glance does not move it, a rest does; let go, every
+    solo and mute as it was; one history step, which undone changes nothing; group mates left
+    alone; pressed at nothing it changes nothing; in the studio U needs the view, U over a strip
+    solos its track and the let-go restores; focus lost and the view off let go; a guest's is run by
+    the host, follows their look, refuses the host's own meanwhile, and their leaving or let-go puts
+    it back. shots/signal67_look_solo.png (U held over RHODES, X on).

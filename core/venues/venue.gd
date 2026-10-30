@@ -429,6 +429,13 @@ func headphones_spot() -> Transform3D:
 	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), hang)
 
 
+## Where the signal glasses lie, in studio space (docs/spatial_loop.md part three): folded flat on
+## the prop shelf's top at its front edge, between the middle two of its spots, lenses out.
+func glasses_spot() -> Transform3D:
+	return prop_shelf_spot() * Transform3D(Basis(Vector3.UP, PI), Vector3(0.0, ZoneKit.SHELF.y + SignalGlassesItem.RIM_RADIUS,
+			ZoneKit.SHELF.z * 0.5 - 0.07))
+
+
 ## Where the tablet lies, in studio space: face up on the prop shelf's lower tier, toward the
 ## lamp's end and out of the headphones' way, its tray toward the back.
 func tablet_spot() -> Transform3D:
@@ -1131,6 +1138,17 @@ func eq_wall_spot() -> Variant:
 	if studio == null or studio.eq_wall_trolley == null or not is_instance_valid(studio.eq_wall_trolley):
 		return null
 	return transform.affine_inverse() * studio.studio_set.transform * studio.eq_wall_trolley.transform
+
+
+## Where the LEVELS wall stands (LevelsWall, docs/spatial_loop.md part three, slice 66), in studio
+## space: on its trolley at the control room's front left, the studio's furniture, read from the
+## studio this venue stands in wherever the trolley has since been wheeled. Its front (+Z) faces the
+## seat. Null for a venue in no studio, or one with no wall (AR).
+func levels_spot() -> Variant:
+	var studio := get_parent() as Studio
+	if studio == null or studio.levels_trolley == null or not is_instance_valid(studio.levels_trolley):
+		return null
+	return transform.affine_inverse() * studio.studio_set.transform * studio.levels_trolley.transform
 
 
 ## Where the DJ platter stands (Platter, docs/spatial_loop.md part two, slice 27), in studio space:

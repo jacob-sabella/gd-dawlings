@@ -92,17 +92,34 @@ func command() -> void:
 	check("command: a quote in a word is quoted", WorkshopRunner.quote("it's") == "'it'\\''s'")
 
 
-## No dev flag, no Workshop: no station, no panel, nothing on the card. A guest never, an exported
-## build never, nor without the CLI.
+## No dev flag, no Workshop: no station, no panel, nothing on the card. Never in a multiplayer
+## session, hosting or joined; an exported build never, nor without the CLI.
 func gating() -> void:
 	var saved := Workshop.forced
-	check("gating: the rule wants the flag, this machine as host or alone, not exported, the CLI found",
+	check("gating: the rule wants the flag, this machine alone, not exported, the CLI found",
 			Workshop.allowed(true, false, false, true) and not Workshop.allowed(false, false, false, true)
 			and not Workshop.allowed(true, true, false, true) and not Workshop.allowed(true, false, true, true)
 			and not Workshop.allowed(true, false, false, false))
 	var why: Array = []
 	Workshop.allowed(true, false, true, true, why)
-	check("gating: a guest is told why", why.size() == 1 and str(why[0]).contains("guest"))
+	check("gating: in a session it says why", why.size() == 1 and str(why[0]).contains("multiplayer"))
+	# Hosting (or joined) the moment it is asked, or as a request finishes: nothing asked, and a
+	# ready change is not reloaded onto under a session.
+	var saved_role: int = Session.role
+	Workshop.forced = 1
+	Session.role = Session.Role.HOST
+	check("gating: hosting, the rule is off however it is forced", not Workshop.enabled())
+	var hosted := Workshop.new()
+	var said: Array = []
+	hosted.told.connect(func(text: String) -> void: said.append(text))
+	check("gating: hosting, a request is refused and says so",
+			hosted.ask("make it amber", "", false).is_empty() and said.size() == 1 and str(said[0]).contains("multiplayer"))
+	said.clear()
+	hosted.reload()
+	check("gating: hosting, a ready change is not reloaded onto, and it says so",
+			said.size() == 1 and str(said[0]).contains("RELOAD"))
+	hosted.free()
+	Session.role = saved_role
 	Workshop.forced = 0
 	var venue := Venue.make(&"studio")
 	check("gating: off, no workshop spot, no station, none on the card",

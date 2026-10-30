@@ -718,6 +718,50 @@ function handlers.SetTrackInput(args)
   return {ok = true}
 end
 
+-- Whether a track plays into its folder or the master at all, B_MAINSEND (the desk's SEND TO
+-- MASTER fix, docs/spatial_loop.md part three). args: track, 1 on or 0 off.
+function handlers.SetMainSend(args)
+  local tr = track_from_osc(args[1])
+  if not tr then return {ok = false, error = 'no such track'} end
+  reaper.SetMediaTrackInfo_Value(tr, 'B_MAINSEND', (args[2] or 1) ~= 0 and 1 or 0)
+  return {ok = true}
+end
+
+-- The meters ReaScript has and OSC does not (docs/spatial_loop.md part three, the signal glasses):
+-- each track's peak a channel (Track_GetPeakInfo: 1.0 is 0 dBFS, past it over), its peak hold in dB
+-- (Track_GetPeakHoldDB answers hundredths of a dB: 0.02 is +2 dB), whether it plays into its folder
+-- or the master (B_MAINSEND), and each plugin's gain reduction in dB where the plugin reports one
+-- (TrackFX_GetNamedConfigParm "GainReduction_dB", Reaper 6.37 and later: ReaComp, ReaXcomp and
+-- the plugins that implement it), "none" where it does not, keeping the plugin's place. Reaper's
+-- API has no peak before or after a plugin in a chain, nor a send's own meter, so there are none.
+-- args: none.
+function handlers.GetMeters()
+  local tracks = {}
+  local named = reaper.TrackFX_GetNamedConfigParm
+  for i = 0, reaper.CountTracks(0) - 1 do
+    local tr = reaper.GetTrack(0, i)
+    local gr = {}
+    for f = 0, reaper.TrackFX_GetCount(tr) - 1 do
+      local v = nil
+      if named then
+        local ok, text = named(tr, f, 'GainReduction_dB')
+        if ok then v = tonumber(text) end
+      end
+      gr[#gr + 1] = v or 'none'
+    end
+    local hold = math.max(reaper.Track_GetPeakHoldDB(tr, 0, false), reaper.Track_GetPeakHoldDB(tr, 1, false))
+    tracks[#tracks + 1] = {
+      index = i + 1,
+      peak = {reaper.Track_GetPeakInfo(tr, 0), reaper.Track_GetPeakInfo(tr, 1)},
+      hold_db = hold * 100,
+      main_send = reaper.GetMediaTrackInfo_Value(tr, 'B_MAINSEND') > 0.5,
+      gr = gr,
+    }
+  end
+  local m = reaper.GetMasterTrack(0)
+  return {ok = true, tracks = tracks, master = {reaper.Track_GetPeakInfo(m, 0), reaper.Track_GetPeakInfo(m, 1)}}
+end
+
 -- Punching in and out: Reaper's record mode, time selection auto-punch (40076) or normal (40252),
 -- checked on the rig to be radio toggles of each other. Reaper's preference, not the project's.
 -- args: 1 to punch, 0 not.

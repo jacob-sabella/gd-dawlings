@@ -328,6 +328,9 @@ func _build_panel() -> void:
 	_root.offset_right = -18
 	_root.offset_top = 70
 	_root.custom_minimum_size = Vector2(WIDTH, 0)
+	# Wider than WIDTH when a line in it will not wrap: grown leftward, into the screen, since it
+	# is pinned to the right edge and grew past it otherwise.
+	_root.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	add_child(_root)
 
 	# Its own height up to the window's, then it scrolls: a guest with keys and a microphone
@@ -1736,6 +1739,7 @@ func _build_strip() -> void:
 	_strip.offset_left = -WIDTH - 18
 	_strip.offset_right = -18
 	_strip.offset_top = 40
+	_strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_strip.alignment = BoxContainer.ALIGNMENT_END
 	_strip.add_theme_constant_override("separation", 14)
 	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE

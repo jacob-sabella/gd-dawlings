@@ -503,6 +503,7 @@ func _ready() -> void:
 	_test_the_hud_fits_and_says_where_the_rest_is()
 	await _test_the_help_card_holds_the_keys_and_walks_to_a_station()
 	await _test_i_walks_to_each_station_in_turn()
+	await _test_the_keys_that_move_you_wait_while_a_piano_has_them()
 	await _test_going_to_a_station_holds_its_controls_in_view()
 	await _test_a_headset_travels_to_a_station_and_back()
 	await _test_a_co_located_headset_stays_where_it_is_seen()
@@ -757,7 +758,98 @@ func _ready() -> void:
 	await _test_workshop_journal()
 	await _test_workshop_context()
 	await _test_workshop_run()
+	_test_signal_graph_roads()
+	_test_signal_graph_breaks()
+	_test_signal_fixes_are_one_step()
+	_test_signal_a_guests_fix_is_an_intent()
+	_test_signal_meters_ride_the_wire()
+	_test_signal_reaper_estimates_its_sends()
+	await _test_signal_the_built_in_engine_taps_every_stage()
+	_test_signal_the_pipes_show_the_level()
+	_test_signal_a_trace_stops_at_the_first_break()
+	await _test_signal_the_glasses_are_yours_alone()
+	_test_signal_bay_meters_always_on()
+	_test_signal_bay_skyline()
+	_test_signal_loudness_meter_measures_bs1770()
+	_test_signal_levels_wall_reads_every_track()
+	await _test_f_visits_levels_on_its_trolley()
+	_test_signal_look_solo_puts_everything_back()
+	await _test_signal_look_solo_in_the_studio()
+	_test_signal_patch_wall_meters_its_own_streams()
 	_report()
+
+
+# --- seeing the signal (docs/spatial_loop.md part three): its checks are in tests/signal_tests.gd --
+
+const SignalTests := preload("res://tests/signal_tests.gd")
+
+
+func _test_signal_the_pipes_show_the_level() -> void:
+	SignalTests.new(self).the_pipes_show_the_level()
+
+
+func _test_signal_a_trace_stops_at_the_first_break() -> void:
+	SignalTests.new(self).a_trace_stops_at_the_first_break()
+
+
+func _test_signal_the_glasses_are_yours_alone() -> void:
+	await SignalTests.new(self).the_glasses_are_yours_alone()
+
+
+func _test_signal_bay_meters_always_on() -> void:
+	SignalTests.new(self).bay_meters_always_on()
+
+
+func _test_signal_bay_skyline() -> void:
+	SignalTests.new(self).bay_skyline()
+
+
+func _test_signal_loudness_meter_measures_bs1770() -> void:
+	SignalTests.new(self).loudness_meter_measures_bs1770()
+
+
+func _test_signal_levels_wall_reads_every_track() -> void:
+	SignalTests.new(self).levels_wall_reads_every_track()
+
+
+func _test_signal_patch_wall_meters_its_own_streams() -> void:
+	SignalTests.new(self).patch_wall_meters_its_own_streams()
+
+
+func _test_signal_look_solo_puts_everything_back() -> void:
+	SignalTests.new(self).look_solo_puts_everything_back()
+
+
+func _test_signal_look_solo_in_the_studio() -> void:
+	await SignalTests.new(self).look_solo_in_the_studio()
+
+
+func _test_signal_graph_roads() -> void:
+	SignalTests.new(self).graph_roads()
+
+
+func _test_signal_graph_breaks() -> void:
+	SignalTests.new(self).graph_breaks()
+
+
+func _test_signal_fixes_are_one_step() -> void:
+	SignalTests.new(self).fixes_are_one_step()
+
+
+func _test_signal_a_guests_fix_is_an_intent() -> void:
+	SignalTests.new(self).a_guests_fix_is_an_intent()
+
+
+func _test_signal_meters_ride_the_wire() -> void:
+	SignalTests.new(self).the_meters_ride_the_wire()
+
+
+func _test_signal_reaper_estimates_its_sends() -> void:
+	SignalTests.new(self).reaper_estimates_its_sends()
+
+
+func _test_signal_the_built_in_engine_taps_every_stage() -> void:
+	await SignalTests.new(self).the_built_in_engine_taps_every_stage()
 
 
 # --- the Workshop (docs/workshop.md): its checks are in tests/workshop_tests.gd -----------------
@@ -3017,7 +3109,8 @@ func _test_the_bay_is_a_pin_matrix_of_sends() -> void:
 	check("and says why (%s)" % m.pin_for(5, 5).readout(), m.pin_for(5, 5).readout().contains("cannot send to itself"))
 	check("a pin names its send (%s)" % pin.title(), pin.title() == "%s  →  %s" % [
 			DAW.state.track(3).display_name().to_upper(), DAW.state.track(13).display_name().to_upper()])
-	check("and reads in dB (%s)" % pin.readout(), pin.readout().begins_with("send ") and pin.readout().ends_with(" dB"))
+	check("and reads in dB, then what it carries (%s)" % pin.readout(), pin.readout().split(" · ")[0].ends_with(" dB send")
+			and pin.readout().contains("patched · no signal"))
 	# Names in text, never colour alone, big enough to read across the room.
 	var row := m.line_for(3, true)
 	var label: Label3D = m._row_text[m._row_lines.find(row)]
@@ -3029,7 +3122,7 @@ func _test_the_bay_is_a_pin_matrix_of_sends() -> void:
 			col_label.text == DAW.state.track(13).display_name().to_upper() and is_equal_approx(col_label.rotation.z, PI * 0.5))
 	check("a header says what it is (%s)" % row.title(), row.title().ends_with("  OUT") and m.line_for(13, false).title().ends_with("  IN"))
 	check("and the return says how many send into it (%s)" % m.line_for(13, false).readout(),
-			m.line_for(13, false).readout() == "4 sending in")
+			m.line_for(13, false).readout().begins_with("4 sending in · arriving, peaks added"))
 	bay.queue_free()
 
 
@@ -3102,7 +3195,7 @@ func _test_a_seated_pin_wheels_and_drags_its_level() -> void:
 	bay.matrix.refresh()
 	pin.nudge(hand, -6, false)
 	close_to("wheeling a seated pin sets its send's level", FaderLaw.to_db(sd.volume), -6.0, 0.05)
-	check("and its card says so (%s)" % pin.readout(), pin.readout() == "send -6.0 dB")
+	check("and its card says so (%s)" % pin.readout(), pin.readout().begins_with("−6.0 dB send"))
 	check("and its bar comes down with it", absf(float(pin.cell()["level"]) - sd.volume) < 0.0001)
 	# Up the panel is louder: a press that moves past a little way is a drag, not a press.
 	var up := bay.matrix.global_transform.basis.y.normalized()
@@ -8406,11 +8499,11 @@ func _test_a_duck_is_picked_up_squeezed_and_put_down() -> void:
 						clear_of_solids = false
 			var before := shelf * Vector3(0, 0, ZoneKit.SHELF.z * 0.5 + Walker.RADIUS + 0.12)
 			var standable: bool = walker.fits(Vector2(before.x, before.z))
-			# A spot on the shelf for everything but the headphones, the tablet, the percussion, the
+			# A spot on the shelf for everything but the headphones, the signal glasses, the tablet, the percussion, the
 			# keytar, the chips, the cards, the darts, the cradle, the yo-yo, the four handbells
 			# (on their stand by the harp), the session in miniature (on the desk's wing) and the hand
 			# drums (in their ring on the riser, counted out by name), which have homes of their own.
-			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 19 \
+			var home_ok := duck.state == Item.State.HOME and spots.size() >= _shelf_kinds().size() - 20 \
 					and duck.position.is_equal_approx(spots[0].origin)
 			check("%s:%d: the prop shelf is off the footprint, clear of the zones and their solids, on the floor, with room to stand at it, and the duck on it"
 					% [id, v], not rect.intersects(studio._room_bounds()) and clear_of_zones
@@ -20932,8 +21025,8 @@ func _test_the_audio_graph_is_read_and_drawn() -> void:
 	check("a link is a seated pin", m.pin_for(mix_out, aux0).cell().get("on", false)
 			and not m.pin_for(mix_out, "Recorder:input_1").cell().get("on", false))
 	check("a pin says what it joins (%s)" % m.pin_for(mix_out, aux0).title(), m.pin_for(mix_out, aux0).title().contains("OUTPUT_FL")
-			and m.pin_for(mix_out, aux0).title().contains("PLAYBACK_AUX0") and m.pin_for(mix_out, aux0).readout() == "patched")
-	check("a port's header counts its links (%s)" % m.line_for(mix_out, true).readout(), m.line_for(mix_out, true).readout() == "patched to 1")
+			and m.pin_for(mix_out, aux0).title().contains("PLAYBACK_AUX0") and m.pin_for(mix_out, aux0).readout().begins_with("patched"))
+	check("a port's header counts its links (%s)" % m.line_for(mix_out, true).readout(), m.line_for(mix_out, true).readout().begins_with("patched to 1"))
 	_press(m.pin_for(mix_out, "Recorder:input_1"))
 	check("a press on an empty crossing patches the two", FileAccess.get_file_as_string(log).ends_with("\ndawlings · mix:output_FL Recorder:input_1\n")
 			and wall.status.begins_with("patched"))
@@ -24908,7 +25001,7 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
@@ -25500,6 +25593,11 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			var trolley := studio.eq_wall_trolley
 			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.eq_wall != null \
 					and trolley.find_child("Plaque", true, false) != null
+		&"levels":
+			# On its trolley at the control room's front left, the LEVELS wall riding it.
+			var trolley := studio.levels_trolley
+			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.levels != null \
+					and trolley.find_child("Plaque", true, false) != null
 		&"venue":
 			# The venue's own instrument (slice 42): its mount, and each bar of it at home on the mount.
 			node = studio.venue_instrument
@@ -25666,7 +25764,7 @@ func _test_each_handbell_rings_its_chord_tone() -> void:
 	check("the room makes bell1..bell4, each its number, and kind_of keeps their digits",
 			bells.all(func(b: HandbellItem) -> bool: return b != null) and bells.map(func(b: HandbellItem) -> int: return b.number) == [1, 2, 3, 4]
 			and bells[2].id == &"bell3" and ItemRoom.kind_of(&"bell3") == &"bell3" and bells[0].item_title() == "HANDBELL 1")
-	check("they are in KINDS, which is 23 kinds now, with the miniature, besides the hand drums", _shelf_kinds().size() == 23
+	check("they are in KINDS, which is 23 kinds now, with the miniature, besides the hand drums", _shelf_kinds().size() == 24
 			and [&"bell1", &"bell2", &"bell3", &"bell4"].all(func(k: StringName) -> bool: return k in ItemRoom.KINDS))
 	var am := s.bar_to_seconds(1.25)
 	var f := s.bar_to_seconds(2.25)
@@ -28485,6 +28583,45 @@ func _in_view(cam: Transform3D, fov: float, aspect: float, p: Vector3, band := 0
 	return up <= 1.0 - 2.0 * band and up >= -1.0 and absf(q.x / -q.z) <= tall * aspect
 
 
+## While the modular's PLAY has the computer keys, I, V and N go nowhere and say Esc first; the
+## keys go on playing; once Esc has given them back, I walks to the next station again.
+func _test_the_keys_that_move_you_wait_while_a_piano_has_them() -> void:
+	DAW.use(OfflineBackend.new())
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().physics_frame
+	var saved_motion := studio.ergonomics.motion_scale
+	studio.ergonomics.motion_scale = 0.0
+	var said: Array = []
+	var listen := func(text: String) -> void: said.append(text)
+	Session.notice.connect(listen)
+	var press := func(code: int) -> void:
+		var key := InputEventKey.new()
+		key.keycode = code
+		key.pressed = true
+		studio._unhandled_input(key)
+	press.call(KEY_I)
+	var first: StringName = studio.station
+	studio._modular_play(true)
+	said.clear()
+	var venue_before: Variant = studio.venue
+	press.call(KEY_I)
+	press.call(KEY_V)
+	press.call(KEY_N)
+	check("with the modular's keys on, I, V and N leave you where you are (%s)" % studio.station,
+			studio.station == first and studio.venue == venue_before and not studio.god_mode)
+	check("and the keys still play", studio.modular_keys.is_active())
+	check("and say Esc first (%s)" % [said], said.size() == 3 and said[0].contains("Esc"))
+	studio.modular_keys.set_active(false)
+	press.call(KEY_I)
+	check("given back, I walks on to the next station (%s)" % studio.station, studio.station != first)
+	Session.notice.disconnect(listen)
+	studio.ergonomics.motion_scale = saved_motion
+	studio.queue_free()
+	await get_tree().process_frame
+
+
 ## I walks to each station in turn, the harp first and the studio's tubular bells last, and one more
 ## comes back round; Shift-I goes back; each time the walker ends at the seat, on floor a person fits on, facing the
 ## station, and a toast says its title and its desk line. God mode is left first. With motion it
@@ -28508,7 +28645,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 21:
+	for n in 22:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -28522,8 +28659,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I twenty times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-first comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
+	check("I twenty-one times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-second comes back round (%s)" % [visits],
+			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -28584,7 +28721,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.
@@ -32950,7 +33087,7 @@ func _test_a_clip_lifts_the_studios_lamps_and_lights_over() -> void:
 			and looms.all(func(l: GearLoom) -> bool: return l.level_source.is_valid() and l.is_in_group(SignalBeads.CARRIERS)))
 	var bay := studio.patchbay.matrix
 	check("the routing bay's pins pulse with their sends' level, not beads (%d seated)" % studio.patchbay.seated_count(),
-			studio.patchbay.seated_count() > 0 and bay.signal_of.is_valid()
+			studio.patchbay.seated_count() > 0 and bay.pin_meter.is_valid()
 			and studio.patchbay.find_children("*", "PatchCable", true, false).is_empty())
 	var base: Array[float] = []
 	for i in studio._lamps.size():
@@ -33442,7 +33579,7 @@ func _test_a_clip_pulled_off_the_timeline_is_a_cassette_in_the_hand() -> void:
 	var room := studio.items
 	var hand := studio.get_node("MouseHand") as MouseInteractor
 	check("the shelf is what it was: no cassette on it (%d kinds, besides the hand drums)" % _shelf_kinds().size(),
-			_shelf_kinds().size() == 23 and not (&"cassette" in ItemRoom.KINDS)
+			_shelf_kinds().size() == 24 and not (&"cassette" in ItemRoom.KINDS)
 			and room.spawned_ids().is_empty() and room.made_ids().is_empty())
 	check("the cassette rack stands in the live room, its slots and its bin the room's",
 			studio.cassette_rack != null and studio.cassette_rack.is_inside_tree()
@@ -36887,7 +37024,7 @@ func _test_the_wheels_strip_is_bricks_on_the_ledge() -> void:
 	var f := row[1]
 	check("each a made brick: kind_of, look_of, its data its chord and key, and no length",
 			ItemRoom.kind_of(&"brick2") == ChordBrick.KIND and ItemRoom.is_made(&"brick2") and ItemRoom.look_of(&"brick2") != null
-			and f.data == {"chord": "F", "key": "A minor"} and not (ItemRoom.KINDS.has(ChordBrick.KIND)) and _shelf_kinds().size() == 23)
+			and f.data == {"chord": "F", "key": "A minor"} and not (ItemRoom.KINDS.has(ChordBrick.KIND)) and _shelf_kinds().size() == 24)
 	check("lettered with its chord and numeral, a bar, one stud (%s / %s)" % [f._letters[0].text, f._letters[1].text],
 			f._letters[0].text == "F" and f._letters[1].text == "VI · 1 BAR" and f.bars == 1 and _studs_shown(f) == 1)
 	check("its card says what it is and where (%s)" % f.readout(), f.readout() == "VI of A minor · 1 bar · on the ledge, 2 of 4: Am F C G")
@@ -38269,8 +38406,8 @@ func _test_the_miniature_is_the_session_to_hold() -> void:
 	var saved_layout := Session.layout
 	var studio: Studio = await _miniature_studio(Presentation.Medium.SCREEN)
 	var mini := studio.items.items.get(MiniatureItem.KIND) as MiniatureItem
-	check("the miniature is a room item, the 23rd kind, with a home of its own",
-			mini != null and MiniatureItem.KIND in ItemRoom.KINDS and _shelf_kinds().size() == 23
+	check("the miniature is a room item, one of the 24 kinds, with a home of its own",
+			mini != null and MiniatureItem.KIND in ItemRoom.KINDS and _shelf_kinds().size() == 24
 			and mini.own_home and mini.state == Item.State.HOME and not ItemRoom.is_made(MiniatureItem.KIND)
 			and not (MiniatureItem.KIND in ItemRoom.PERSONAL_KINDS))
 	if mini == null:
@@ -39941,6 +40078,78 @@ func _test_f_visits_the_eq_wall_on_its_trolley() -> void:
 	studio.focus.release()
 	var before := wall.global_transform
 	trolley.place(Vector2(trolley.position.x - 0.3, trolley.position.z), trolley.rotation.y)
+	for i in 3:
+		await get_tree().physics_frame
+	check("and it rides its trolley when that is pushed", not wall.global_transform.is_equal_approx(before)
+			and wall.global_transform.origin.distance_to(trolley.global_transform.origin) < 0.01)
+	studio.queue_free()
+	await get_tree().process_frame
+	Session.layout = saved_layout
+	_offline()
+
+
+func _test_f_visits_levels_on_its_trolley() -> void:
+	var saved_layout := Session.layout
+	Session.layout = LayoutProfile.new()
+	Session.layout.save_path = "user://test_layout_profile.cfg"
+	_offline()
+	var studio := Studio.new()
+	studio.medium = Presentation.Medium.SCREEN
+	add_child(studio)
+	await get_tree().process_frame
+	var wall := studio.levels
+	var trolley := studio.levels_trolley
+	check("the studio has a LEVELS wall on its trolley", wall != null and trolley != null
+			and studio.floor_plan.pieces.has(trolley) and studio.focus.surfaces.has(wall)
+			and wall.global_transform.is_equal_approx(trolley.global_transform))
+	check("with its plaque on the trolley, folded", trolley.find_child("Plaque", true, false) != null
+			and not Stations.plaque_open(trolley.find_child("Plaque", true, false)))
+	var facing := trolley.global_basis.z
+	# At the front left, turned to the seat.
+	var to_seat := Vector3(0, 0, 0.7) - trolley.position
+	check("at the front left, facing the seat (%s, %s)" % [trolley.position, facing],
+			trolley.position.x < -1.0 and trolley.position.z < -2.5 and facing.dot(to_seat.normalized()) > 0.97)
+	var crowded: Array = []
+	var walker := studio.walker
+	for id: StringName in Venue.IDS:
+		for v in Venue.variant_titles(id).size():
+			studio.set_venue(id, false, v)
+			var tag := "%s:%d" % [id, v]
+			var mine := trolley.footprint_at(Vector2(trolley.position.x, trolley.position.z), trolley.rotation.y)
+			if not Stations.ids(studio.venue).has(&"levels"):
+				crowded.append("%s: not a station" % tag)
+			for f: Dictionary in walker.footprints() + studio.venue.solids():
+				if f == mine or (f["c"] as Vector2).is_equal_approx(mine["c"]):
+					continue
+				if FloorPlan.separation(mine, f) != Vector2.ZERO:
+					crowded.append("%s: %s" % [tag, f["c"]])
+			var room := studio._room_bounds()
+			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+				var p := trolley.transform * Vector3(trolley.footprint_centre.x + c.x * trolley.footprint_half.x, 0,
+						trolley.footprint_centre.y + c.y * trolley.footprint_half.y)
+				if not room.has_point(Vector2(p.x, p.z)):
+					crowded.append("%s: off the floor at %s" % [tag, p])
+			var seat: Variant = Stations.seat(studio.venue, &"levels", walker.fits)
+			if seat == null or not walker.fits(Vector2((seat as Transform3D).origin.x, (seat as Transform3D).origin.z)):
+				crowded.append("%s: no room to stand at it" % tag)
+	check("clear of the desk, the deck, the door and the rest, a station everywhere (%s)" % [crowded.slice(0, 6)],
+			crowded.is_empty())
+	studio.set_venue(&"studio", false, 0)
+	check("its row on the PLAY page's control room",
+			(Stations.by_area(studio.venue)[Stations.CONTROL] as Array).map(func(r): return r["id"]).has(&"levels"))
+	var visited := false
+	for n in studio.focus.surfaces.size() + 1:
+		var key := InputEventKey.new()
+		key.keycode = KEY_F
+		key.pressed = true
+		studio._unhandled_input(key)
+		if studio.focus.focused_id == &"levels":
+			visited = true
+			break
+	check("F visits it", visited)
+	studio.focus.release()
+	var before := wall.global_transform
+	trolley.place(Vector2(trolley.position.x + 0.3, trolley.position.z), trolley.rotation.y)
 	for i in 3:
 		await get_tree().physics_frame
 	check("and it rides its trolley when that is pushed", not wall.global_transform.is_equal_approx(before)
@@ -45006,6 +45215,8 @@ func _test_a_theremins_guide_letters_its_scale_and_lights_the_nearest_ring() -> 
 	gm.reach(Theremin.SOURCE, true)
 	var readings: Array = []
 	var t := _theremin(readings)
+	check("it starts FREE, every pitch between, as the real instrument is", t.snap == Theremin.Snap.FREE)
+	t.snap = Theremin.Snap.SCALE
 	t._process(0.0)
 	var said := t.letters()
 	var h := t.harmony_now()
@@ -45127,6 +45338,7 @@ func _test_a_snapped_theremin_hands_on_to_the_tone_it_glides_to() -> void:
 	gm.reach(Theremin.SOURCE, true)
 	var readings: Array = []
 	var t := _theremin(readings)
+	t.snap = Theremin.Snap.SCALE
 	var h := t.harmony_now()
 	var right := HandGestures.new()
 	_roll_hand(right, 0.0)
@@ -45178,6 +45390,7 @@ func _test_a_desk_theremins_cursor_travel_is_its_pitch_and_not_a_bend() -> void:
 	var spy := _spy_on_keys()
 	gm.reach(Theremin.SOURCE, true)
 	var t := _theremin([])
+	t.snap = Theremin.Snap.SCALE
 	var mouse := MouseInteractor.new()
 	mouse.alt_override = 0
 	add_child(mouse)
@@ -45237,6 +45450,7 @@ func _test_a_desk_plays_the_theremin_across_its_rule_and_its_wheel_is_the_volume
 	var spy := _spy_on_keys()
 	gm.reach(Theremin.SOURCE, true)
 	var t := _theremin([])
+	t.snap = Theremin.Snap.SCALE
 	var mouse := MouseInteractor.new()
 	add_child(mouse)
 	await get_tree().physics_frame

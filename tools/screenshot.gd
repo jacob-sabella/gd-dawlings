@@ -34,6 +34,11 @@ var _walk_mirror := 0.0
 ## tricks before trick 2 and stops trick 2 half way. `--carry rcplane:fly:cut@300` flies the radio
 ## plane and cuts its motor on frame 300; `--carry rcplane:fly@400` takes off on frame 400.
 var _carry := ""
+## `--signal clip:6,mute:8,trace:8,x` (docs/spatial_loop.md part three): at frame 9 track 6's fader
+## to the top so it clips, track 8 muted, X for the signal view, and track 8's "why can't I hear
+## this?" begun fourteen frames before the shot (`trace:8:30`, thirty), so it is caught mid-trace.
+## `look:6`: at frame 12 look to solo held over track 6 (Studio.look_solo), as U held over it does.
+var _signal: PackedStringArray = []
 ## `--pockets duck,ball,keytar`: those items picked up and put in pockets 1, 2 and 3 in turn, from
 ## frame 9, before anything `--carry` puts in the hand.
 var _pockets: PackedStringArray = []
@@ -315,6 +320,8 @@ func _ready() -> void:
 				if i + 1 < args.size(): _pockets = args[i + 1].split(",")
 			"--carry":
 				if i + 1 < args.size(): _carry = args[i + 1]
+			"--signal":
+				if i + 1 < args.size(): _signal = args[i + 1].split(",")
 			"--on-air":
 				if i + 1 < args.size(): _on_air = int(args[i + 1])
 			"--visitor":
@@ -1078,6 +1085,8 @@ func _process(_delta: float) -> void:
 				if item != null:
 					hand.pick_up(item)
 					hand.stow(n)
+	if not _signal.is_empty():
+		_see_the_signal()
 	if _frames == 9 and _carry != "":
 		var studio := get_tree().current_scene.get_node_or_null("Studio")
 		var what := _carry.split(":")
@@ -1479,3 +1488,26 @@ func _made_up_graph(ports: int) -> PipeGraph:
 			+ "Firefox:output_FL\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_1\n" \
 			+ "Firefox:output_FR\n  |-> alsa_output.usb-Focusrite_Scarlett_18i20:playback_2\n"
 	return PipeGraph.parse(outs, ins, links)
+
+
+## `--signal`'s doings, frame by frame.
+func _see_the_signal() -> void:
+	var studio := get_tree().current_scene.get_node_or_null("Studio") as Studio
+	if studio == null:
+		return
+	for word in _signal:
+		var w := word.split(":")
+		var track := int(w[1]) if w.size() > 1 else 0
+		if _frames == 9:
+			match w[0]:
+				"clip": DAW.set_track_volume(track, 1.0)
+				"mute": DAW.set_track_mute(track, true)
+				"x": studio.toggle_signal_view()
+		if w[0] == "look" and _frames == 12:
+			# Look to solo held over the track (docs/spatial_loop.md part three, G), as U held does.
+			var said := studio.look_solo.press(track)
+			if said != "":
+				Session.notice.emit(said)
+		if w[0] == "trace" and _frames == maxi(_shot_frame - (int(w[2]) if w.size() > 2 else 14), 10):
+			studio.trace_from(SignalGraph.play_id(track), DAW.state.track(track).display_name())
+

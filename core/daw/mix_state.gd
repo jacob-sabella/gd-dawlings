@@ -154,6 +154,20 @@ class MasterState extends RefCounted:
 	var automation: Dictionary = {}
 	## As TrackState.automation_mode. `/master/automode`; track 0 to `DAW.set_track_automation_mode`.
 	var automation_mode: int = 0
+	## The master's loudness (docs/spatial_loop.md part three, F: the LEVELS wall), as the built-in
+	## engine's LoudnessMeter reads its master: momentary, short-term and integrated (LUFS), the
+	## true-ish peak since the meter was reset and over the last 3 s (dBTP), the left-right
+	## correlation (−1..+1, NAN in silence), and how long the integrated reading has listened (s).
+	## `loudness_measured` false where nothing measures them (Reaper; a host whose meter is off),
+	## and the figures then mean nothing. Volatile, `/master/vu/loudness`, a guest's the host's.
+	var loudness_measured := false
+	var lufs_m := -INF
+	var lufs_s := -INF
+	var lufs_i := -INF
+	var true_peak_db := -INF
+	var true_peak_recent_db := -INF
+	var correlation := NAN
+	var loudness_seconds := 0.0
 
 
 ## One block of audio or MIDI on the timeline.
@@ -307,6 +321,19 @@ class TrackState extends RefCounted:
 	## Peak 0..1 per channel. Decayed by the meter that draws it, not by Reaper.
 	var vu_l: float = 0.0
 	var vu_r: float = 0.0
+	## The levels along its chain, as the DAW measures them (docs/spatial_loop.md part three,
+	## SignalGraph): peak and RMS in dBFS at its input and then after each plugin in chain order
+	## (`plugins()`), so one more entry than it has plugins; the gain reduction each plugin reports
+	## (dB, NAN for none); and the peak each send carries, by send slot in order (dBFS). Empty where
+	## this DAW cannot measure them (Reaper has no stage meters, only `meter_gr`). Written without a
+	## changed signal, as the vu is. `/track/N/vu/signal`.
+	var meter_peak := PackedFloat32Array()
+	var meter_rms := PackedFloat32Array()
+	var meter_gr := PackedFloat32Array()
+	var meter_sends := PackedFloat32Array()
+	## Whether it plays into its folder or the master at all: Reaper's B_MAINSEND. A track with it
+	## off is heard only through its sends. `/track/N/mainsend`.
+	var main_send := true
 	var fx: Dictionary = {}
 	var sends: Dictionary = {}
 	## ItemState, in start order. Empty when the backend cannot report an arrangement at all,

@@ -16,7 +16,7 @@ extends Node
 ##
 ## Only ever on this machine: `enabled` is a dev flag (`--workshop`, DAWLINGS_WORKSHOP=1, the project
 ## setting `dawlings/dev/workshop`, or `workshop=true` under [dev] in user://workshop.cfg) and not an
-## exported build and `claude` found on PATH and not a guest. Nothing of it goes over the network:
+## exported build and `claude` found on PATH and not in a multiplayer session. Nothing of it goes over the network:
 ## the panel's keys are personal, requests and context stay in the repo's ignored shots/workshop/.
 
 ## Where everything is kept, under the repo (shots/ is ignored by git).
@@ -80,26 +80,28 @@ var _then: Callable
 
 ## Whether the Workshop is on in this process. `why` (optional) gets the reason it is not.
 static func enabled(why: Array = []) -> bool:
-	# A guest never, whatever else is said.
-	var guest := Session.is_networked() and not Session.is_authority()
-	if forced >= 0 and not guest:
+	# Never in a multiplayer session, hosting or joined, whatever else is said: a change built
+	# here would reach this machine only, and its bandmates would play on with the old code.
+	var networked := Session.is_networked()
+	if forced >= 0 and not networked:
 		if forced == 0:
 			why.append("turned off")
 		return forced == 1
-	return allowed(flag_on(), OS.has_feature("template"), guest, find_claude() != "", why)
+	return allowed(flag_on(), OS.has_feature("template"), networked, find_claude() != "", why)
 
 
-## The rule itself: the dev flag on, not an exported build, not a guest, and the CLI found.
-static func allowed(flag: bool, exported: bool, guest: bool, found: bool, why: Array = []) -> bool:
+## The rule itself: the dev flag on, not an exported build, not in a multiplayer session, and the
+## CLI found.
+static func allowed(flag: bool, exported: bool, networked: bool, found: bool, why: Array = []) -> bool:
 	if exported:
 		why.append("an exported build never has it")
-	elif guest:
-		why.append("a guest never has it: only the host's own machine")
+	elif networked:
+		why.append("not in a multiplayer session: leave the session to use it")
 	elif not flag:
 		why.append("the dev flag is off (--workshop, DAWLINGS_WORKSHOP=1, or workshop=true under [dev] in %s)" % SETTINGS)
 	elif not found:
 		why.append("claude is not on PATH")
-	return flag and not exported and not guest and found
+	return flag and not exported and not networked and found
 
 
 ## Whether the dev flag is on, by any of its four ways.
@@ -201,7 +203,10 @@ func stand_panel() -> void:
 ## comes. Answers the request.
 func ask(text: String, parent_id := "", run := true) -> Dictionary:
 	text = text.strip_edges()
-	# Joined someone else's session since it started: a guest never asks.
+	# Hosting or joined since it started: not in a multiplayer session.
+	if text != "" and Session.is_networked():
+		told.emit("Workshop: not in a multiplayer session. Leave the session to ask for a change.")
+		return {}
 	if text == "" or not enabled():
 		return {}
 	var id := "%s-%03d" % [Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "-"), history.size() + 1]
@@ -547,6 +552,11 @@ func fix(id := "") -> void:
 ## `--resume`, this one quit. Guests are told first.
 func reload() -> void:
 	reload_in = -1.0
+	# A session begun while the request ran: the change stays ready, and is reloaded onto once the
+	# session is left (RELOAD on the panel).
+	if Session.is_networked():
+		told.emit("Workshop: ready, but not reloading in a multiplayer session. Leave it, then press RELOAD.")
+		return
 	var last := ""
 	for i in range(history.size() - 1, -1, -1):
 		if history[i]["status"] == READY:
@@ -554,9 +564,6 @@ func reload() -> void:
 			last = history[i]["summary"]
 			break
 	_save_history()
-	if Session.is_networked() and Session.is_authority():
-		Session.tell_room("The host is reloading onto new code: back in a few seconds. Rejoin from the session panel when it is up.")
-		await get_tree().create_timer(1.5).timeout
 	WorkshopResume.save(WorkshopResume.snapshot(studio, history, last))
 	var args := WorkshopResume.this_restart()
 	var pid := OS.create_instance(args)

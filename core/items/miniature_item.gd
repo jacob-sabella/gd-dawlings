@@ -66,7 +66,7 @@ const GRIP_IN := 0.006
 ## Pins: how far in from the tray's edge they stand, how far apart round it at least, how tall,
 ## and their heads; their names lie on the lip this far further in.
 const PIN_IN := 0.008
-const PIN_GAP := 0.062
+const PIN_GAP := 0.06
 const PIN_TALL := 0.016
 const PIN_HEAD := 0.0035
 const PIN_NAME_IN := 0.013
@@ -535,13 +535,43 @@ static func pin_spots(bearings: Array) -> Array:
 	var order: Array = range(along.size())
 	order.sort_custom(func(i: int, j: int) -> bool: return along[i] < along[j])
 	var gap := minf(PIN_GAP, perimeter / maxf(1.0, along.size()))
+	# Round the edge is a ring: the run starts after the widest gap between two neighbours, the
+	# ones before it carried a lap on, so pushing the last ones on never laps them onto the first.
+	if order.size() > 1:
+		var widest := 0
+		var widest_gap := -1.0
+		for k in order.size():
+			var next := along[order[(k + 1) % order.size()]] + (perimeter if k == order.size() - 1 else 0.0)
+			if next - along[order[k]] > widest_gap:
+				widest_gap = next - along[order[k]]
+				widest = k
+		var turned: Array = []
+		for k in order.size():
+			var at := (widest + 1 + k) % order.size()
+			turned.append(order[at])
+			if at <= widest:
+				along[order[at]] += perimeter
+		order = turned
 	var placed := along.duplicate()
-	for k in range(1, order.size()):
-		placed[order[k]] = maxf(placed[order[k]], placed[order[k - 1]] + gap)
-	var pushed := 0.0
-	for k in order.size():
-		pushed += placed[order[k]] - along[order[k]]
-	var back := pushed / maxf(1.0, order.size())
+	var back := 0.0
+	if order.size() * gap > perimeter * 0.85:
+		# Crowded (a pin a station, and there are twenty-odd): evenly round, in their order, turned to
+		# sit as near as they can to where each would be. Pushing on from a crowd laps the last onto
+		# the first.
+		var step := perimeter / order.size()
+		var off := 0.0
+		for k in order.size():
+			off += along[order[k]] - k * step
+		off /= order.size()
+		for k in order.size():
+			placed[order[k]] = off + k * step
+	else:
+		for k in range(1, order.size()):
+			placed[order[k]] = maxf(placed[order[k]], placed[order[k - 1]] + gap)
+		var pushed := 0.0
+		for k in order.size():
+			pushed += placed[order[k]] - along[order[k]]
+		back = pushed / maxf(1.0, order.size())
 	var out: Array = []
 	for i in along.size():
 		var s := fposmod(placed[i] - back, perimeter)

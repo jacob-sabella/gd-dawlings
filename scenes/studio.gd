@@ -265,7 +265,7 @@ var spool: RoomString.Spool
 ## trolley. Its SCALE switch is this player's own, kept across a change of venue (`theremin_snap`).
 ## Null where there are no zones and in AR.
 var theremin: Theremin
-var theremin_snap := Theremin.Snap.SCALE
+var theremin_snap := Theremin.Snap.FREE
 ## The grain cloud in the aisle between the drum riser and the lattice (GrainCloud, docs/spatial_loop.md
 ## part two, slice 54; Venue.default_grains_spot), stood again with each venue at its `grains_spot`, on
 ## its trolley, its bowl the room's holder `bowl`. Null where there are no zones and in AR.
@@ -402,6 +402,8 @@ var stage_trolley: Trolley
 ## control room's side wall, and the spectra it shows (Spectra: measured here, or the host's).
 var eq_wall: EqWall
 var eq_wall_trolley: Trolley
+var levels: LevelsWall
+var levels_trolley: Trolley
 var spectra: Spectra
 ## What stands on the floor by itself and is pushed about like the gear, though it is not in the
 ## control room's rig: the venue's free-standing stations and back-of-house furniture
@@ -415,6 +417,10 @@ var _bell_stand: Node3D
 ## a desk. Two of them, so a key and the hands never let go of each other's press.
 var clap := Clap.new()
 var key_clap := Clap.new()
+## Look to solo (LookSolo, docs/spatial_loop.md part three, G): this machine's own, and on a host
+## each guest's by peer, run for them.
+var look_solo := LookSolo.new()
+var guest_look_solos := {}
 ## Leaning in (Ears.lean): L held at a desk, and the track it was refused for, said once.
 var _lean_key := false
 var _lean_refused := 0
@@ -1408,6 +1414,7 @@ func _build_furniture() -> void:
 	# Before the board, whose rows are the stations standing here, the stage table among them.
 	_build_stage_trolley()
 	_build_eq_wall_trolley()
+	_build_levels_trolley()
 	_build_station_board()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
@@ -1682,6 +1689,53 @@ func _build_eq_wall_trolley() -> void:
 	plaque.position = Vector3(EqWall.PLATE_WIDE * 0.5 - EqWall.SIDE * 0.5,
 			EqWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.012)
 	eq_wall_trolley.add_child(plaque)
+
+
+## Where the LEVELS wall's trolley stands (slice 66): at the control room's front left, this far in
+## from its left-hand wall and from its front, behind the timeline's left shoulder from the seat and
+## clear of the patch wall's legs along that wall, turned to face the seat. Its x follows the wall
+## out as the room widens (`_fit_room_to_session`).
+const LEVELS_IN := 2.3
+const LEVELS_Z := -3.0
+const LEVELS_HEADING := 40.0
+
+
+func _levels_at() -> Vector3:
+	return Vector3(-room_width * 0.5 + LEVELS_IN, 0, LEVELS_Z)
+
+
+## The LEVELS wall's trolley: a plinth on casters and two uprights behind the board's edges, the
+## station's plaque under the master section. The board is a surface and rides it (`_ride`).
+func _build_levels_trolley() -> void:
+	levels_trolley = _trolley("LevelsTrolley", &"levels", _levels_at(), LEVELS_HEADING)
+	var wide := LevelsWall.WIDE + LevelsWall.BORDER * 2.0
+	levels_trolley.footprint_centre = Vector2(0, -0.06)
+	levels_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
+	levels_trolley.follow = 9.0
+	for side in [-1.0, 1.0]:
+		var post := MeshInstance3D.new()
+		post.name = "Upright"
+		var post_mesh := BoxMesh.new()
+		var high := LevelsWall.BOTTOM + LevelsWall.TALL + LevelsWall.BORDER
+		post_mesh.size = Vector3(0.05, high - Caster.HEIGHT, 0.05)
+		post.mesh = post_mesh
+		post.position = Vector3(side * (wide * 0.5 - 0.06), (high + Caster.HEIGHT) * 0.5, -0.06)
+		post.material_override = Materials.brushed_metal()
+		levels_trolley.add_part(post)
+	var plinth := MeshInstance3D.new()
+	plinth.name = "Plinth"
+	var plinth_mesh := BoxMesh.new()
+	plinth_mesh.size = Vector3(wide, 0.04, 0.3)
+	plinth.mesh = plinth_mesh
+	plinth.position = Vector3(0, Caster.HEIGHT + 0.02, -0.06)
+	plinth.material_override = Materials.furniture()
+	GearTrim.edges(plinth)
+	levels_trolley.add_part(plinth)
+	levels_trolley.add_corner_casters(0.06)
+	var plaque := Stations.plaque(&"levels", LevelsWall.MASTER_WIDE)
+	plaque.position = Vector3(LevelsWall.master_left() + LevelsWall.MASTER_WIDE * 0.5,
+			LevelsWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.012)
+	levels_trolley.add_child(plaque)
 
 
 ## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
@@ -2781,6 +2835,8 @@ func _drive_pushed() -> void:
 ## then published the way any change to it is.
 func _on_room_asked(verb: StringName, args: Array, from: int) -> void:
 	match verb:
+		&"look_solo":
+			_on_look_solo_asked(args[0], args[1], from)
 		&"patch":
 			# A monitor only while its performer is on air: off air, there is no socket to plug into.
 			var into := PersonalMix.monitor_of(args[1])
@@ -3090,6 +3146,9 @@ func _fit_room_to_session() -> void:
 		elif id == "eq_wall":
 			var at := _eq_wall_at()
 			want = [Vector2(at.x, at.z), deg_to_rad(EQ_WALL_HEADING)]
+		elif id == "levels":
+			var at := _levels_at()
+			want = [Vector2(at.x, at.z), deg_to_rad(LEVELS_HEADING)]
 		elif id.begins_with("lamp_") and _authored_floor.has(t.piece_id):
 			var home: Transform3D = _authored_floor[t.piece_id]
 			want = [SessionLayout.widen(Vector2(home.origin.x, home.origin.z), room_width),
@@ -3602,6 +3661,15 @@ func _build_surfaces() -> void:
 		studio_set.add_child(eq_wall)
 		mount.register(eq_wall)
 		focus.surfaces.append(eq_wall)
+	# LEVELS (slice 66), on its trolley at the front left; none in AR.
+	if levels_trolley != null:
+		levels = LevelsWall.new()
+		levels.name = "Levels"
+		levels.motion = func() -> float: return ergonomics.motion_scale
+		levels.transform = _authored_floor[&"levels"]
+		studio_set.add_child(levels)
+		mount.register(levels)
+		focus.surfaces.append(levels)
 	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
 	if medium != Presentation.Medium.AR:
 		_build_modular()
@@ -3643,6 +3711,8 @@ func _build_surfaces() -> void:
 			_ride(stage_trolley, stage)
 		if eq_wall != null:
 			_ride(eq_wall_trolley, eq_wall)
+		if levels != null:
+			_ride(levels_trolley, levels)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -3670,6 +3740,11 @@ func _build_surfaces() -> void:
 	# The tablets follow their tracks themselves; what is remembered and told follows them.
 	DAW.tracks_renumbered.connect(_on_tracks_renumbered)
 	Session.room_asked.connect(_on_room_asked)
+	Session.participant_left.connect(_on_look_solo_player_left)
+	DAW.project_replaced.connect(func() -> void:
+		look_solo.forget()
+		_look_by = &""
+		guest_look_solos.clear())
 	Session.role_changed.connect(_on_role_changed)
 	Session.room_motion.connect(_on_room_motion)
 	_publish_room()
@@ -3879,7 +3954,7 @@ func _refresh_looms_if_moved(delta: float) -> void:
 func _item_homes() -> Dictionary:
 	if venue == null:
 		return _kit_homes({})
-	var out := {&"headphones": venue.headphones_spot(), &"tablet": venue.tablet_spot(),
+	var out := {&"headphones": venue.headphones_spot(), &"glasses": venue.glasses_spot(), &"tablet": venue.tablet_spot(),
 			&"shaker": venue.shaker_spot(), &"tambourine": venue.tambourine_spot(),
 			&"keytar": venue.keytar_spot(), &"chips": venue.chips_spot(), &"cards": venue.cards_spot(),
 			&"cradle": venue.cradle_spot(), &"yoyo": venue.yoyo_spot(), &"toy": venue.toy_spot(),
@@ -7317,6 +7392,23 @@ func set_god_mode(on: bool) -> void:
 		walker._place_camera()
 
 
+## The keys that take you somewhere else: F to the gear (and the seat), I to the next instrument,
+## V to the next venue, N up out of your body.
+const MOVES_YOU := [KEY_F, KEY_I, KEY_V, KEY_N]
+
+
+## Whether `keycode` is one that would move you while a piano has the keyboard (KeyCatcher: the
+## modular's PLAY, the keytar, the fingertips): held back, so a stray I in the middle of a phrase
+## does not carry you off to another instrument with the keys still playing this one. Said, so the
+## way on (Esc first) is not a guess.
+func _held_while_playing(keycode: int) -> bool:
+	if not keycode in MOVES_YOU or get_viewport() == null \
+			or not get_viewport().gui_get_focus_owner() is KeyCatcher:
+		return false
+	Session.notice.emit("The keys are playing: Esc gives them back, then %s moves you." % OS.get_keycode_string(keycode))
+	return true
+
+
 ## Orbit on right-drag, zoom on wheel, WASD to walk. Not a replacement for standing in the room;
 ## it is how the screen half of a hybrid session gets around, and how every screenshot of this
 ## project is framed.
@@ -7346,10 +7438,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			key_clap.press(_mouse_track(), true)
 		elif not event.pressed and key_clap.pressed:
 			key_clap.release(key_clap.held_for())
+	elif event is InputEventKey and event.keycode == KEY_U and not event.echo and not event.ctrl_pressed:
+		# Look to solo: U held, with the signal view on, solos the track under the cursor alone.
+		if event.pressed:
+			look_solo_press(&"key")
+		else:
+			look_solo_release(&"key")
 	elif event is InputEventKey and event.keycode == KEY_L and not event.echo and not event.ctrl_pressed:
 		# Lean in to the stage voice under the cursor while L is held.
 		_lean_key = event.pressed
 		_follow_lean()
+	elif event is InputEventKey and event.pressed and not event.echo and _held_while_playing(event.keycode):
+		pass
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			# Walk the gear past you one piece at a time, and off either end to put it back.
@@ -7384,6 +7484,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Headphones on, or off into your hand. H: beside the hand's other item keys.
 			KEY_H:
 				_toggle_headphones()
+			# See the signal (docs/spatial_loop.md part three): X, an x-ray of the mix, with or
+			# without the glasses. G was taken by the gear's summoning.
+			KEY_X when not event.ctrl_pressed and not event.meta_pressed:
+				toggle_signal_view()
+			# Why can't I hear this? Y over it, with the signal showing; Shift-Y does the fix.
+			KEY_Y when not event.ctrl_pressed and not event.meta_pressed:
+				if event.shift_pressed:
+					fix_traced()
+				else:
+					trace_pointed(get_node_or_null("MouseHand") as Interactor)
 			# Your pockets: left hip, right hip, back. What is in the hand goes in, and what was
 			# in comes out.
 			KEY_1, KEY_2, KEY_3:
@@ -7513,9 +7623,11 @@ func _fast_path_latency() -> float:
 
 func _process(delta: float) -> void:
 	_follow_hit_voices()
+	_follow_signal(delta)
 	_drive_pushed()
 	_refresh_looms_if_moved(delta)
 	_follow_clap(delta)
+	_follow_look_solo(delta)
 	_follow_lean()
 	_follow_ear()
 	_follow_keytar()
@@ -8456,3 +8568,467 @@ func strike_desk_pad(n: int, soft := false) -> void:
 	if kit == null or not items.stands(KitItem.KIND):
 		return
 	kit.strike_rail(n, Strike.CLICK_SOFT if soft else Strike.CLICK)
+
+
+# --- seeing the signal (docs/spatial_loop.md part three, A and B) ---------------------------------
+
+## The signal view (SignalView): made the first time it is wanted, and this player's alone. Nothing
+## about it is room state or sent: a bandmate's glasses change nothing here.
+var signal_view: SignalView = null
+## X at a desk: the view on without the glasses.
+var signal_key_on := false
+## The graph the view last drew, rebuilt at SIGNAL_GRAPH_HZ.
+var signal_graph: SignalGraph = null
+const SIGNAL_GRAPH_HZ := 15.0
+var _signal_clock := 0.0
+## What the last trace was traced from (a stage id) and called, so a fix can trace it again.
+var _traced_from := ""
+var _traced_title := ""
+## A trace again this long after a fix, when the host has had time to answer (s).
+const RETRACE_AFTER := 0.35
+var _retrace_in := -1.0
+## The headset's held trigger: the hand, what it is held on, and for how long (s).
+const TRACE_HOLD := 0.6
+var _trace_holds := {}
+## Where OUT stands over the master section.
+const OUT_RISE := 0.9
+
+
+## Whether this player sees the signal: the glasses on this player's own head, or X.
+func signal_view_on() -> bool:
+	if signal_key_on:
+		return true
+	for hand in get_tree().get_nodes_in_group(Interactor.GROUP):
+		var interactor := hand as Interactor
+		if interactor != null and is_instance_valid(interactor.worn) and interactor.worn is SignalGlassesItem:
+			return true
+	return false
+
+
+## X at a desk: the view on or off, glasses or none. Said, with what it shows and the next key.
+func toggle_signal_view() -> void:
+	signal_key_on = not signal_key_on
+	if signal_view_on():
+		Session.notice.emit("Seeing the signal: pipes as thick as the sound, amber near 0 dB, red over, a sign where it stops. Y over anything: why can't I hear it? Hold U over a track: hear it alone. X again: off.")
+	else:
+		Session.notice.emit("The signal view is off.")
+
+
+## The room's sound sources, as SignalGraph.build takes them: every instrument item and the venue's
+## set (onto its jack's track, armed or not, else the armed track), the harp, the theremin and the
+## modular (the armed track), the mic (its voice track), and the sampler, the grain cloud and the
+## platter, heard in one player's ears only.
+func signal_sources() -> Array:
+	var out: Array = []
+	var seen := {}
+	var armed := HitRecorder.armed_track()
+	var row := func(id: StringName, title: String, node: Node3D, kind: StringName, track: int, jacked := false) -> void:
+		if seen.has(id) or node == null or not is_instance_valid(node):
+			return
+		seen[id] = true
+		var r := {"id": String(id), "title": title, "track": track, "kind": kind, "jacked": jacked, "node": node}
+		if jacks != null and jacks.level_of(id) > 0.0:
+			r["level_db"] = linear_to_db(jacks.level_of(id))
+		out.append(r)
+	var onto := func(source: StringName, item: Item) -> Array:
+		var sink: StringName = jacks.goes_to(source, item) if jacks != null else &""
+		var track := Jack.track_of(sink)
+		return [track, true] if track > 0 else [armed, false]
+	if items != null:
+		for item: Item in items.items.values():
+			if not item.visible:
+				continue
+			if item is MicItem:
+				row.call(&"mic", "MIC", item, SignalGraph.VOICE, mic_arm.track if mic_arm.track > 0 else MicArm.track_for(DAW.state.tracks))
+			elif item is InstrumentItem:
+				var source := (item as InstrumentItem).jack_source()
+				var to: Array = onto.call(source, item)
+				row.call(source, (item as InstrumentItem).item_title(), item, SignalGraph.NOTES, to[0], to[1])
+	if harp != null:
+		var to: Array = onto.call(ChordHarp.SOURCE, null)
+		row.call(ChordHarp.SOURCE, "HARP", harp, SignalGraph.NOTES, to[0], to[1])
+	if theremin != null:
+		row.call(Theremin.SOURCE, "THEREMIN", theremin, SignalGraph.NOTES, armed)
+	if modular_wall != null:
+		row.call(Modular.SOURCE, "MODULAR", modular_wall, SignalGraph.NOTES, armed)
+	for local in [[&"sampler", "SAMPLER", sampler], [&"grains", "GRAIN CLOUD", grain_cloud], [&"platter", "PLATTER", platter]]:
+		if local[2] != null:
+			row.call(local[0], local[1], local[2], SignalGraph.LOCAL_SOURCE, 0)
+	return out
+
+
+## Where a stage stands in this room, or null: a source where it is; a track's stages at its voice on
+## the stage table, else its channel strip; the master at the console's master section, OUT over it.
+func signal_place(id: String) -> Variant:
+	if id.begins_with("src:"):
+		for r in _signal_rows:
+			if r["id"] == id.trim_prefix("src:"):
+				return (r["node"] as Node3D).global_position + Vector3.UP * 0.12 if is_instance_valid(r["node"]) else null
+		return null
+	if id == "master" or id == "out":
+		if console == null or console.master == null or not console.master.is_inside_tree():
+			return null
+		return console.master.global_position + Vector3.UP * (0.3 if id == "master" else OUT_RISE)
+	if id.begins_with("t"):
+		var track := int(id.substr(1, id.find(":") - 1))
+		return track_place(track)
+	return null
+
+
+## A track's place in the room: its voice on the stage table where it is shown, else its strip.
+func track_place(track: int) -> Variant:
+	if stage != null and is_instance_valid(stage) and stage.voices.has(track):
+		var voice := stage.voices[track] as Node3D
+		if voice != null and voice.is_inside_tree() and voice.is_visible_in_tree():
+			return voice.global_position + Vector3.UP * 0.08
+	if console != null:
+		for strip in console.strips:
+			if strip.track_index == track and strip.is_inside_tree() and strip.is_visible_in_tree():
+				return strip.global_position + Vector3.UP * 0.25
+	return null
+
+
+var _signal_rows: Array = []
+
+
+## Every frame: the view on or off; while on, the graph rebuilt, the meters kept wanted, the
+## pipes drawn, the headset's held trigger watched, and a trace run again after its fix.
+func _follow_signal(delta: float) -> void:
+	var on := signal_view_on()
+	_follow_skyline(on)
+	if not on:
+		if signal_view != null and signal_view.visible:
+			signal_view.visible = false
+			signal_view.clear_trace()
+			if signal_view.card != null:
+				signal_view.card.visible = false
+		return
+	if signal_view == null:
+		signal_view = SignalView.new()
+		signal_view.name = "SignalView"
+		signal_view.screen_card = medium == Presentation.Medium.SCREEN
+		signal_view.place = signal_place
+		signal_view.fix_asked.connect(_do_signal_fix)
+		add_child(signal_view)
+	signal_view.visible = true
+	signal_view.motion = ergonomics.motion_scale
+	DAW.backend.want_signal_meters()
+	_signal_clock += delta
+	if signal_graph == null or _signal_clock >= 1.0 / SIGNAL_GRAPH_HZ:
+		_signal_clock = 0.0
+		_signal_rows = signal_sources()
+		signal_graph = SignalGraph.build(DAW.state, _signal_rows)
+	signal_view.quiet = [SignalGraph.SOLOED_OUT] if look_solo_held() else []
+	signal_view.update(signal_graph, delta)
+	if _retrace_in >= 0.0:
+		_retrace_in -= delta
+		if _retrace_in < 0.0 and _traced_from != "":
+			signal_graph = SignalGraph.build(DAW.state, signal_sources())
+			signal_view.trace(signal_graph.trace(_traced_from), _traced_title)
+	_follow_trace_holds(delta)
+
+
+## The routing bay and the audio devices' wall stand up as skylines while the view is on
+## (PinMatrix.skyline, docs/spatial_loop.md part three, E): this player's alone, as the view is.
+func _follow_skyline(on: bool) -> void:
+	if patchbay != null and patchbay.matrix != null:
+		patchbay.matrix.skyline = on
+	var wall := venue.get_node_or_null("PatchWall") as PatchWallSurface if venue != null else null
+	if wall != null and wall.matrix != null:
+		wall.matrix.skyline = on
+
+
+# --- look to solo (docs/spatial_loop.md part three, G) -------------------------------------------
+
+## A hand held to an ear this near (m) of it, a little out from the head's middle, is cupped to it.
+const EAR_REACH := 0.16
+const EAR_OUT := 0.09
+## Held there this long (s) before it solos, and away by this much (m) more to let go.
+const EAR_DWELL := 0.2
+const EAR_LEAVE := 0.08
+## What holds this machine's look-solo: &"key" (U) or &"ear", or &"" for nothing.
+var _look_by := &""
+## A hand at the ear, and for how long (s).
+var _ear_for := 0.0
+## A guest's: the track asked for last, and the look resting on another (track, s).
+var _look_asked := 0
+var _look_resting := [0, 0.0]
+
+
+## The track looked at now: in a headset what the head's gaze meets, at a desk what the cursor is
+## over; through what the signal view would trace from it (an instrument, its track). 0 for none.
+func looked_track() -> int:
+	var under: Node = null
+	var point := Vector3.ZERO
+	if rig != null and rig.head != null and rig.head.is_inside_tree():
+		var from := rig.head.global_position
+		var query := PhysicsRayQueryParameters3D.create(from, from - rig.head.global_basis.z * Interactor.RAY_LENGTH)
+		query.collision_mask = 1 << (Interactor.CONTROL_LAYER - 1)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty():
+			under = hit["collider"]
+			point = hit["position"]
+	else:
+		var hand := get_node_or_null("MouseHand") as Interactor
+		if hand != null:
+			under = hand.held if hand.held != null else hand.hovered
+			point = hand.hover_point
+	var target := signal_target_of(under, point)
+	if target.is_empty():
+		return 0
+	var id: String = target[0]
+	if id.begins_with("src:"):
+		for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
+			if SignalGraph.source_id(r["id"]) == id:
+				return int(r["track"])
+		return 0
+	return int(id.substr(1, id.find(":") - 1)) if id.begins_with("t") else 0
+
+
+## Look to solo pressed, by `by` (&"key" or &"ear"): with the signal view on, the track looked at
+## alone; on a guest asked of the host. Said either way.
+func look_solo_press(by: StringName) -> void:
+	if _look_by != &"":
+		return
+	if not signal_view_on():
+		if by == &"key":
+			Session.notice.emit("Look to solo needs the signal view on: X, or the signal glasses. Then hold U over a track to hear it alone.")
+		return
+	_look_by = by
+	var on := looked_track()
+	if Session.is_authority():
+		var other := _look_solo_holder(Session.local_peer_id)
+		if other != "":
+			_look_by = &""
+			Session.notice.emit("Look to solo is %s's just now: one at a time, as the room hears it." % other)
+			return
+		look_solo.peer = 0
+		var words := look_solo.press(on)
+		if words != "":
+			Session.notice.emit(words)
+		return
+	_look_asked = on
+	_look_resting = [on, 0.0]
+	Session.ask_room(&"look_solo", [on, true])
+	Session.notice.emit("Look to solo asks the host: the whole room hears %s alone while you hold, as a guest hears only the host's mix." % (LookSolo._title(on) if on > 0 else "what you look at"))
+
+
+## Look to solo let go by `by`, or by anything (&"" -- the window's focus lost, the view off).
+func look_solo_release(by: StringName = &"") -> void:
+	if _look_by == &"" or (by != &"" and by != _look_by):
+		return
+	_look_by = &""
+	if Session.is_authority():
+		var words := look_solo.release()
+		if words != "":
+			Session.notice.emit(words)
+		return
+	Session.ask_room(&"look_solo", [0, false])
+	_look_asked = 0
+
+
+## Whether a look-solo is held in this room as far as this machine knows: its own (or, on a guest,
+## its ask), or a guest's the host runs.
+func look_solo_held() -> bool:
+	if _look_by != &"" or look_solo.held:
+		return true
+	for p in guest_look_solos:
+		if (guest_look_solos[p] as LookSolo).held:
+			return true
+	return false
+
+
+## Whoever other than `peer` holds a look-solo here (the host's own, or a guest's), by name; "".
+func _look_solo_holder(peer: int) -> String:
+	if look_solo.held and peer != Session.local_peer_id:
+		return Session.name_of(Session.local_peer_id)
+	for p in guest_look_solos:
+		if p != peer and (guest_look_solos[p] as LookSolo).held:
+			return Session.name_of(p)
+	return ""
+
+
+## Host: a guest's look-solo asked (`track`, 0 for nothing; `held` false to let go).
+func _on_look_solo_asked(track: int, held: bool, from: int) -> void:
+	var ls: LookSolo = guest_look_solos.get(from)
+	if not held:
+		if ls != null:
+			var words := ls.release()
+			guest_look_solos.erase(from)
+			if words != "":
+				Session.tell_room("%s let go of look to solo: every solo and mute as it was." % Session.name_of(from))
+		return
+	if ls != null and ls.held:
+		ls.look(track, LookSolo.FOLLOW_AFTER)
+		return
+	var other := _look_solo_holder(from)
+	if other != "":
+		Session.tell(from, "Look to solo is %s's just now: one at a time." % other)
+		return
+	ls = LookSolo.new()
+	ls.peer = from
+	guest_look_solos[from] = ls
+	ls.press(track)
+	if ls.track > 0:
+		Session.tell_room("%s is look-soloing %s: the room hears it alone while they hold." % [Session.name_of(from), LookSolo._title(ls.track)])
+
+
+## Host: a guest gone lets their look-solo go.
+func _on_look_solo_player_left(peer: int) -> void:
+	var ls: LookSolo = guest_look_solos.get(peer)
+	if ls != null:
+		ls.release()
+		guest_look_solos.erase(peer)
+
+
+## Every frame: a hand cupped to an ear holds it in a headset; held, the solo follows the look;
+## the view going off lets go.
+func _follow_look_solo(delta: float) -> void:
+	_follow_ear_cup(delta)
+	if _look_by == &"":
+		return
+	if not signal_view_on():
+		look_solo_release()
+		return
+	var on := looked_track()
+	if Session.is_authority():
+		var words := look_solo.look(on, delta)
+		if words != "":
+			Session.notice.emit(words)
+		return
+	# A guest's look rests FOLLOW_AFTER on another track before it is asked.
+	if on <= 0 or on == _look_asked:
+		_look_resting = [on, 0.0]
+		return
+	if on != int(_look_resting[0]):
+		_look_resting = [on, 0.0]
+	_look_resting[1] = float(_look_resting[1]) + delta
+	if float(_look_resting[1]) >= LookSolo.FOLLOW_AFTER:
+		_look_asked = on
+		Session.ask_room(&"look_solo", [on, true])
+
+
+## A headset's hand cupped to an ear, with the view on: a controller beside the head with its grip
+## squeezed, or a bare hand there, carrying nothing either way. Held EAR_DWELL, it presses; taken
+## away, it lets go.
+func _follow_ear_cup(delta: float) -> void:
+	if rig == null or rig.head == null or not rig.head.is_inside_tree():
+		return
+	var head := rig.head.global_transform
+	var nearest := INF
+	for controller in rig.interactors:
+		var hand := rig.interactors[controller] as XRInteractor
+		if hand == null or not is_instance_valid(hand) or is_instance_valid(hand.carrying) or hand.held != null:
+			continue
+		var palm := hand.clap_palm()
+		if palm.is_empty():
+			continue
+		if not hand._reads_hand() and not (hand.controller != null and hand.controller.is_button_pressed(hand.grip_action)):
+			continue
+		var at: Vector3 = palm[0]
+		for side in [-1.0, 1.0]:
+			nearest = minf(nearest, at.distance_to(head.origin + head.basis.x.normalized() * side * EAR_OUT))
+	if _look_by == &"ear":
+		if nearest > EAR_REACH + EAR_LEAVE:
+			look_solo_release(&"ear")
+		return
+	if nearest <= EAR_REACH and signal_view_on() and _look_by == &"":
+		_ear_for += delta
+		if _ear_for >= EAR_DWELL:
+			look_solo_press(&"ear")
+	else:
+		_ear_for = 0.0
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		# Never a stuck solo: a key let go while another window had focus never comes here.
+		look_solo_release()
+
+
+## The stage a trace of what `node` is starts from, and what it is called: an instrument or a
+## station, its source; anything of a track (a strip, a voice, a control on one), that track's own
+## playback. Empty for nothing that sounds.
+func signal_target_of(node: Node, point := Vector3.ZERO) -> Array:
+	if node == null:
+		return []
+	for r in _signal_rows if not _signal_rows.is_empty() else signal_sources():
+		var n: Node = r["node"]
+		if is_instance_valid(n) and (n == node or n.is_ancestor_of(node)):
+			return [SignalGraph.source_id(r["id"]), str(r["title"])]
+	var track := track_of(node, point)
+	if track > 0 and DAW.state.tracks.has(track):
+		return [SignalGraph.play_id(track), DAW.state.track(track).display_name()]
+	return []
+
+
+## "Why can't I hear this?" for what `hand` points at: traced and shown a stage at a time. True if
+## there was something to trace.
+func trace_pointed(hand: Interactor) -> bool:
+	if not signal_view_on():
+		Session.notice.emit("Put on the signal glasses first (X at a desk, or a pair from the prop shelf): then Y asks why.")
+		return false
+	var under: Node = (hand.held if hand.held != null else hand.hovered) if hand != null else null
+	if under == null and hand != null and is_instance_valid(hand.carrying):
+		under = hand.carrying
+	var target := signal_target_of(under, hand.hover_point if hand != null else Vector3.ZERO)
+	if target.is_empty():
+		Session.notice.emit("Nothing that sounds is under the cursor: point at an instrument, a station, a stage voice or a channel strip.")
+		return false
+	return trace_from(target[0], target[1])
+
+
+## A trace from stage `from`, called `title`, shown in the view and said in the toast.
+func trace_from(from: String, title: String) -> bool:
+	if signal_view == null:
+		_follow_signal(0.0)
+	_signal_rows = signal_sources()
+	signal_graph = SignalGraph.build(DAW.state, _signal_rows)
+	if signal_graph.stage(from) == null:
+		return false
+	_traced_from = from
+	_traced_title = title
+	var tr := signal_graph.trace(from)
+	signal_view.trace(tr, title)
+	if tr.heard():
+		Session.notice.emit("%s is heard: it reaches the speakers." % title)
+	elif tr.broke_at != null:
+		Session.notice.emit("%s stops at %s: %s.%s" % [title, tr.broke_at.title, tr.words,
+				(" Shift-Y: %s." % tr.fix["label"]) if not tr.fix.is_empty() else ""])
+	return true
+
+
+## Shift-Y, the card's FIX or the key by the sign: the trace's fix, one undo step, then traced again.
+func fix_traced() -> bool:
+	if signal_view == null or signal_view.tracing == null or signal_view.tracing.fix.is_empty():
+		Session.notice.emit("No fix to do: trace something with Y first.")
+		return false
+	_do_signal_fix(signal_view.tracing.fix)
+	return true
+
+
+func _do_signal_fix(fix: Dictionary) -> void:
+	if not SignalGraph.apply_fix(fix):
+		return
+	Session.notice.emit("%s: done, one undo step (Ctrl-Z puts it back)." % fix["label"])
+	_retrace_in = 0.0 if Session.is_authority() else RETRACE_AFTER
+
+
+## A headset's trigger held still on something for TRACE_HOLD, with the view on, traces it.
+func _follow_trace_holds(delta: float) -> void:
+	if rig == null:
+		return
+	for controller in rig.interactors:
+		var hand := rig.interactors[controller] as Interactor
+		if hand == null or not is_instance_valid(hand):
+			continue
+		var on: Node = hand.held if hand.held != null else hand.hovered
+		var held: Array = _trace_holds.get(hand, [null, 0.0, false])
+		if hand.is_pressing() and on != null and on == held[0]:
+			held[1] = float(held[1]) + delta
+			if float(held[1]) >= TRACE_HOLD and not held[2]:
+				held[2] = true
+				trace_pointed(hand)
+		else:
+			held = [on if hand.is_pressing() else null, 0.0, false]
+		_trace_holds[hand] = held

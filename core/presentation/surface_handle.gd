@@ -125,7 +125,12 @@ func reposition() -> void:
 	# Lies in the plane of the WORKING FACE, which on a console is laid sixty degrees back
 	# inside the carcass. A tab square to the surface's own axes would stand proud of the panel
 	# it is supposed to be clipped to.
-	transform = Transform3D(_face_basis(), Vector3(bounds.end.x + MARGIN, centre.y, centre.z))
+	# A surface read from across the room asks for a bigger tab (`handle_scale`): LEVELS stands
+	# five metres from the seat, where a desk-sized tab is under 7 px to aim at.
+	var grow: Variant = surface.get(&"handle_scale")
+	var k := float(grow) if grow != null else 1.0
+	transform = Transform3D(_face_basis().scaled_local(Vector3.ONE * k),
+			Vector3(bounds.end.x + MARGIN * k + TARGET.x * (k - 1.0) * 0.5, centre.y, centre.z))
 
 
 func _face_basis() -> Basis:

@@ -624,6 +624,15 @@ func set_track_rec_arm(index: int, armed: bool) -> void:
 	record_for_replication("/track/%d/recarm" % index, [1.0 if armed else 0.0])
 
 
+func set_track_main_send(index: int, on: bool) -> void:
+	if not state.tracks.has(index):
+		return
+	_remember("/track/%d/mainsend" % index, set_track_main_send.bind(index, state.track(index).main_send),
+			set_track_main_send.bind(index, on), false)
+	state.set_track_field(index, &"main_send", on)
+	record_for_replication("/track/%d/mainsend" % index, [1.0 if on else 0.0])
+
+
 func set_track_automation_mode(index: int, mode: int) -> void:
 	if index == 0:
 		_remember("/master/automode", set_track_automation_mode.bind(0, state.master.automation_mode),

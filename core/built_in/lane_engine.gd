@@ -69,7 +69,10 @@ func _lane(held: bool) -> Object:
 func _keep_playing(player: AudioStreamPlayer, lane: Object) -> void:
 	if player.stream != lane:
 		player.stream = lane
-		player.volume_db = 0.0
+		# A send's player keeps the level GodotBackend._apply_tracks gave it (the send's, and the
+		# fader's after it): set to 0 here, a send played at full level until the mix next changed.
+		if not player.has_meta(&"send"):
+			player.volume_db = 0.0
 	if not player.playing:
 		player.play()
 

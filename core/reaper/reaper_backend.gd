@@ -256,6 +256,7 @@ func _process(delta: float) -> void:
 		_bridge.poll()
 		_poll_timeline(delta)
 		_poll_structure(delta)
+		_poll_meters(delta)
 	if _peer:
 		_inbox.append_array(_peer.poll())
 		_apply_inbox()
@@ -405,6 +406,12 @@ func set_track_solo(index: int, soloed: bool) -> void:
 
 func set_track_rec_arm(index: int, armed: bool) -> void:
 	write("/track/%d/recarm" % index, [1.0 if armed else 0.0])
+
+
+## B_MAINSEND, by the bridge (SetMainSend): OSC has no address for it.
+func set_track_main_send(index: int, on: bool) -> void:
+	_apply("/track/%d/mainsend" % index, [1.0 if on else 0.0])
+	_edit("SetMainSend", [index, 1 if on else 0])
 
 
 ## Reaper takes the mode as a float on the same address it reports it on -- seen on the rig: 2.0
@@ -1579,6 +1586,52 @@ func _send_batch(batch: Dictionary) -> void:
 
 ## Routing changes have no OSC pattern -- Reaper streams send VOLUMES but has no message for
 # --- the arrangement ----------------------------------------------------------------------
+
+## How often the bridge is asked for the meters OSC does not carry (GetMeters), while the signal
+## glasses want them (`want_signal_meters`): a file round trip, so a few times a second, not a frame.
+const METER_POLL_SECONDS := 0.25
+var _meters_due := 0.0
+var _meters_in_flight := false
+
+
+func _poll_meters(delta: float) -> void:
+	if not _bridge.is_open() or _meters_in_flight or not signal_meters_wanted():
+		return
+	_meters_due -= delta
+	if _meters_due > 0.0:
+		return
+	_meters_due = METER_POLL_SECONDS
+	_meters_in_flight = _bridge.call_reaper("GetMeters", [], _on_meters)
+
+
+## GetMeters' answer into the cache, through `_apply` so it rides the replication stream: each
+## plugin's gain reduction as `/track/N/vu/signal` (no stage peaks: Reaper's API has none), and
+## B_MAINSEND as `/track/N/mainsend` when it changed.
+func _on_meters(result) -> void:
+	_meters_in_flight = false
+	if typeof(result) != TYPE_DICTIONARY:
+		return
+	for entry in _as_array(result.get("tracks", [])):
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var index := int(entry.get("index", 0))
+		if not state.tracks.has(index):
+			continue
+		_apply("/track/%d/vu/signal" % index, [PackedFloat32Array(), PackedFloat32Array(),
+				meter_gr_of(entry.get("gr", [])), PackedFloat32Array()])
+		var main := bool(entry.get("main_send", true))
+		if main != state.track(index).main_send:
+			_apply("/track/%d/mainsend" % index, [1.0 if main else 0.0])
+
+
+## The bridge's list of gain reductions, "none" (or anything not a number) as NAN in its place.
+static func meter_gr_of(rows) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	if rows is Array:
+		for v in rows:
+			out.append(float(v) if typeof(v) in [TYPE_INT, TYPE_FLOAT] else NAN)
+	return out
+
 
 func _poll_timeline(delta: float) -> void:
 	if not _bridge.is_open() or _timeline_in_flight:

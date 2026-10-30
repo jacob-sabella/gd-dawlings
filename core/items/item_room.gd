@@ -28,7 +28,7 @@ extends Node3D
 ## (VenueInstrument.Bar, slice 42), `venue1` to `venue8`, fixed where the venue's set stands them and
 ## put away past the set's count or where the venue has none. Last is the drum pads' kit (KitItem,
 ## slice 41), fixed on the console's front rail wherever there is a console, AR too.
-const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"tablet", &"shaker",
+const KINDS: Array[StringName] = [&"duck", &"ball", &"plane", &"mic", &"headphones", &"glasses", &"tablet", &"shaker",
 		&"tambourine", &"keytar", &"chips", &"cards", &"dart1", &"dart2", &"dart3",
 		&"cradle", &"yoyo", &"toy", &"rcplane", &"bell1", &"bell2", &"bell3", &"bell4", &"miniature",
 		&"djembe", &"conga_hi", &"conga_lo", &"cajon",
@@ -49,7 +49,7 @@ const AIM_LENGTH := 2.5
 ## (`take_personal`), bound to them (`Item.bound_to`, the same mechanism Tour marks a spill
 ## with) so nobody else's hand can take it. Put down, that copy is gone rather than sent to a
 ## shelf spot that would mean nothing shared between two people's copies (`retire`).
-const PERSONAL_KINDS: Array[StringName] = [&"mic", &"headphones", &"tablet", &"keytar"]
+const PERSONAL_KINDS: Array[StringName] = [&"mic", &"headphones", &"glasses", &"tablet", &"keytar"]
 
 ## The kinds that exist only once somebody makes one while playing (docs/spatial_loop.md part two,
 ## slice 23): never on the shelf (not KINDS), minted by the host (`mint`) under the next free id in
@@ -186,6 +186,8 @@ static func make(kind: StringName) -> Item:
 			return MicItem.new()
 		&"headphones":
 			return HeadphonesItem.new()
+		&"glasses":
+			return SignalGlassesItem.new()
 		&"tablet":
 			return TabletItem.new()
 		&"shaker":

@@ -75,6 +75,8 @@ const ROOM := [
 	["Routing", "The patchbay's pins are sends, from a row into a column: click one to patch or pull it, wheel it for the level, Shift-wheel to scroll. The AUDIO DEVICES wall does the same for this machine's sound cards."],
 	["Lettering", "+ and - make the room's lettering larger or smaller, 0 puts it back."],
 	["Signal and comfort", "Beads ride every cable, closer, faster and brighter the louder it is: follow them to where the sound stops. M, then COMFORT: Motion, Room reacts, Lift on clip."],
+	["See the signal", "X, or the signal glasses off the prop shelf: pipes from every sound to the speakers, thick as loud, amber near 0 dB, red over, a sign where it stops. Y over anything: why can't I hear it? Shift-Y fixes."],
+	["Levels", "Bay rows and columns meter; a dull pin carries nothing (hover: why). View on, pins are towers: drag one for its send. LEVELS, front left: tracks, LUFS. Hold U (or a hand to your ear) to hear what you look at alone."],
 	["Fingertips", "T makes J K L ; play the song's chord. T, Esc or a click gives the keys back."],
 	["Chords", "C, then 1 to 7: the key's chords for everything you play, Shift the seventh, 0 the song's. C or Esc ends it."],
 	["Bend", "Hold Alt and move the mouse up or down to bend what you are playing; let go and it springs back. A wiggle wobbles it. \"Tilt bends\" in the session panel."],

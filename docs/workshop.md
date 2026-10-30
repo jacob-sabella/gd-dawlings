@@ -21,8 +21,10 @@ It needs all four of these:
    - `workshop=true` under `[dev]` in `user://workshop.cfg`.
 2. **Not an exported build.** `OS.has_feature("template")` turns it off whatever else is set.
 3. **`claude` on PATH** (Claude Code 2.1 or later, signed in).
-4. **Not a guest.** On a machine that has joined someone else's session it is off, even with the
-   flag on.
+4. **Not in a multiplayer session.** Hosting or joined, it is off, even with the flag on: a change
+   built here would reach this machine only, and bandmates would play on with the old code. A
+   session begun while a request runs lets the request finish, but its reload waits until the
+   session is left (then RELOAD).
 
 `Workshop.enabled()` is the whole rule (and `Workshop.allowed()` the same rule without the
 process around it, for the suite). With it off there is no station `workshop` at all: no panel,
@@ -129,10 +131,9 @@ the venue, the walker where it stood facing the same way (in a headset, the stat
 again), the song where it was and playing if it was, the project reopened if it was a file; and the
 panel says "reloaded onto <summary>".
 
-**Hosting a session:** guests are told "the host is reloading" (`Session.tell_room`) a moment
-before. The new process hosts again from the same command line (same port and code), but the
-session code has no reconnect: guests have to rejoin by hand from the session panel. That is the
-gap; it wants a guest-side "the host went away, try again for N seconds" in core/session.
+**In a session:** never. The Workshop asks nothing and reloads onto nothing while this machine
+hosts or has joined a session (`Session.is_networked()`), so there is no host that reloads under
+its guests and no two players left on different code.
 
 ## What it can and cannot do
 

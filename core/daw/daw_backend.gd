@@ -220,6 +220,8 @@ func set_track_width(_index: int, _width: float) -> void: pass
 func set_track_mute(_index: int, _muted: bool) -> void: pass
 func set_track_solo(_index: int, _soloed: bool) -> void: pass
 func set_track_rec_arm(_index: int, _armed: bool) -> void: pass
+## See DAW.set_track_main_send.
+func set_track_main_send(_index: int, _on: bool) -> void: pass
 ## Input monitoring, as Reaper's I_RECMON numbers it: 0 off, 1 on, 2 auto (on while armed and
 ## stopped, or recording -- what you hear on a punch-in).
 func set_track_monitor(_index: int, _mode: int) -> void: pass
@@ -283,6 +285,50 @@ var project_path := ""
 ## not be saved, as sentences, empty when all of it was written.
 ## The bus a track's live instrument plays on in this engine, for keys played into it to be heard
 ## through the track; empty where the engine has no such bus (Reaper monitors its own inputs).
+## Someone here is looking at the chain's stage meters (the signal glasses, docs/spatial_loop.md
+## part three): measure them for SIGNAL_KEEP_MSEC more. A backend that cannot measure stages
+## ignores it.
+func want_signal_meters() -> void:
+	_signal_wanted_until = Time.get_ticks_msec() + SIGNAL_KEEP_MSEC
+
+
+## Whether stage meters are wanted now: asked for lately, or guests are here (any of them may have
+## their glasses on, and they read the host's meters).
+func signal_meters_wanted() -> bool:
+	return Time.get_ticks_msec() < _signal_wanted_until or (is_authority and Session.participants.size() > 1)
+
+
+const SIGNAL_KEEP_MSEC := 1500
+var _signal_wanted_until := 0
+
+
+## Something is showing the master's loudness this frame (the LEVELS wall, docs/spatial_loop.md
+## part three, F): measure it for SIGNAL_KEEP_MSEC more. A backend that cannot ignores it.
+func want_loudness() -> void:
+	_loudness_wanted_until = Time.get_ticks_msec() + SIGNAL_KEEP_MSEC
+
+
+## Whether the master's loudness is wanted now: asked for lately, or guests are here (any of them
+## may be at the LEVELS wall, and they read the host's).
+func loudness_wanted() -> bool:
+	return Time.get_ticks_msec() < _loudness_wanted_until or (is_authority and Session.participants.size() > 1)
+
+
+var _loudness_wanted_until := 0
+
+
+## Whether this DAW measures the master's loudness itself (MixState.MasterState.lufs_s and the
+## rest). The built-in engine does; Reaper does not say, and the wall says so.
+func measures_loudness() -> bool:
+	return false
+
+
+## The integrated loudness (and the held true peak) start again: the LEVELS wall's RESET. Not
+## history: it changes nothing in the project.
+func reset_loudness() -> void:
+	pass
+
+
 func monitor_bus(_track_index: int) -> StringName: return &""
 ## A track's instrument plugin, hosted here (DawKitPlugin), or null. Only the built-in engine
 ## hosts plugins itself; a DAW's own are played through the DAW.

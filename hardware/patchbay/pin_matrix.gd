@@ -38,6 +38,27 @@ extends Node3D
 ## group away to one line that says how many it holds, and opens it again. A crossing with a group
 ## line counts the patches inside it, and pressing it opens the group.
 ##
+## LEVELS, always (docs/spatial_loop.md part three, D). Where the owner says how loud a line is
+## (`row_meter`, `col_meter`), each header carries a thin meter: the RMS as a fill, the peak as a
+## tick that holds for HOLD_MSEC, and a light at its end -- a small amber square from
+## SignalGraph.HOT_DB, a tall red bar past 0 dBFS, held CLIP_MSEC -- and its card says the figures
+## and the clip in words. A column's meter is what arrives there, the sends into it added (worst
+## case, peaks together), so a return fed by four quiet sends that would pass 0 dBFS together goes
+## red although no one send is hot. A seated pin's head pulses with what its patch carries
+## (`pin_meter`), dull while it carries nothing; an empty socket in a row over HOT_DB glows faintly,
+## a place a loud line could go somewhere quieter. Read at METER_HZ, only for what the window shows,
+## into lines and slots kept from the build: nothing is made while it runs.
+##
+## THE SKYLINE (part three, E). With `skyline` on (the owner's: the signal glasses), every seated
+## pin with a level stands up out of the board as a column of light as tall as what it carries
+## (SignalGraph.thickness, FLOOR_DB at the board to TOP_DB at `tower_max`), and each column's
+## arrival as a tower on its header. Tops go amber from HOT_DB and red past 0 dBFS, each with its
+## figure on a tag ("+1.8 dB" past 0). Pointing lights a row and a column as ever. A tower's top is
+## a control (`Tower`): drag it up or down, or pull it out of the board or push it in, for the send's
+## level (`level_db` and `set_level_db`); the wheel steps it as a pin's does. One undo step a
+## drag (`edits_as_one`); a guest's is an intent its host carries out, as every DAW write is. At
+## Ergonomics.motion_scale 0 the towers stand still between readings and only move once a second.
+##
 ## The matrix knows nothing of tracks or ports. Its owner gives it the lines (`set_lines`) and answers
 ## for each crossing through the callables below; whatever the owner says goes, so the DAW's
 ## routing rules and PipeWire's are each in one place.
@@ -92,6 +113,26 @@ var describe_line: Callable = Callable()
 ## law, for its pulse. Unset, pins do not pulse.
 var signal_of: Callable = Callable()
 
+## (row key) -> Vector3(peak dBFS, RMS dBFS or NAN, SignalGraph.MEASURED / ESTIMATED / UNKNOWN):
+## how loud the row's line is now, for its header meter. Unset, rows have none.
+var row_meter: Callable = Callable()
+## (column key) -> Vector3(peak dBFS, how many feed it, how): what arrives at the column. Unset,
+## columns have none.
+var col_meter: Callable = Callable()
+## (row key, column key) -> Vector3(peak dBFS, 0, how): what a seated pin carries. Set, the pins
+## pulse with it rather than `signal_of`, dull while it is silent, and the skyline is as tall.
+var pin_meter: Callable = Callable()
+## (row key, column key) -> float: a seated pin's level setting (dB), and (row key, column key,
+## dB) -> bool to set it: a tower's drag.
+var level_db: Callable = Callable()
+var set_level_db: Callable = Callable()
+## The skyline: seated pins and column arrivals stand up out of the board. Set by the owner.
+var skyline := false
+## How tall a tower at SignalGraph.TOP_DB stands out of the board (m).
+var tower_max := 0.24
+## How tall a tag's capitals are on a tower top (m); 0 for the cell's own size.
+var tag_cap := 0.0
+
 ## Group keys folded away.
 var collapsed := {}
 
@@ -111,6 +152,18 @@ const ATTACK := 30.0
 const RELEASE := 4.0
 ## Words in the foot stay this long.
 const SAY_MSEC := 4000
+## How often the meters, the pulses and the towers are read (Hz), and at motion 0 the towers.
+const METER_HZ := 30.0
+const CALM_HZ := 1.0
+## A header's peak tick holds this long, and its clip light this long after the last clip (ms).
+const HOLD_MSEC := 1500
+const CLIP_MSEC := 2000
+## A header meter falls this fast (dB a second) after its peak, as a desk's does.
+const FALL_DB := 24.0
+## How many tower tops carry a figure at once.
+const TAGS := 24
+const AMBER := Color(1.0, 0.64, 0.16)
+const RED := Color(1.0, 0.16, 0.1)
 
 var _rows_all: Array = []
 var _cols_all: Array = []
@@ -155,6 +208,26 @@ var _bands: MeshBank
 var _where: Label3D
 var _status: Label3D
 var _corner: Array[Label3D] = []
+## The header meters, four slots a pooled line (track, fill, tick, light), rows first.
+var _meters: MeshBank
+## A line's meter as shown, by key: [shown dB, held peak dB, held until, clipped until, last peak,
+## last RMS, how], for rows and columns apart.
+var _row_level := {}
+var _col_level := {}
+## Rows whose line is over HOT_DB now, by shown index, so their empty sockets glow.
+var _hot_rows := {}
+var _meter_clock := 0.0
+var _calm_clock := 0.0
+## The skyline's towers, two slots a pin (body, top) then two a pooled column; the tops' controls
+## (one a pin); the figures on them; what each shows (Vector2i(row, col) -> dB, a column's by
+## Vector2i(-1, col)).
+var _towers: MeshBank
+var _tower_keys: Array[Tower] = []
+var _tags: Array[Label3D] = []
+var _tower_db := {}
+var _tags_clock := 0.0
+## For the suite: the figures the tags show now.
+var tags_shown: Array[String] = []
 
 
 # --- what is on it ----------------------------------------------------------------------------
@@ -289,8 +362,25 @@ func _build(shape: Vector2i) -> void:
 	_keys.clear()
 	_corner.clear()
 	_glow.clear()
+	_tower_keys.clear()
+	_tags.clear()
+	_tower_db.clear()
+	_hot_rows.clear()
 	var pr := shape.x + 1 if shape.x > 0 else 0
 	var pc := shape.y + 1 if shape.y > 0 else 0
+
+	_meters = MeshBank.strips()
+	_meters.name = "Meters"
+	for i in (pr + pc) * 4:
+		_meters.claim(_hidden(), Color.BLACK)
+	add_child(_meters)
+	_meters.commit()
+	_towers = MeshBank.strips()
+	_towers.name = "Towers"
+	for i in (pr * pc + pc) * 2:
+		_towers.claim(_hidden(), Color.BLACK)
+	add_child(_towers)
+	_towers.commit()
 
 	_bands = MeshBank.strips()
 	_bands.name = "Bands"
@@ -324,6 +414,27 @@ func _build(shape: Vector2i) -> void:
 			pin.name = "Pin_%d_%d" % [a, b]
 			add_child(pin)
 			_pins.append(pin)
+			var top := Tower.new()
+			top.matrix = self
+			top.pin = pin
+			top.name = "Tower_%d_%d" % [a, b]
+			add_child(top)
+			_tower_keys.append(top)
+	for i in TAGS:
+		var tag := Label3D.new()
+		tag.name = "Tag%d" % i
+		tag.pixel_size = px
+		tag.font_size = 40
+		tag.outline_size = 8
+		tag.outline_modulate = Color(0.02, 0.02, 0.03, 0.9)
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.no_depth_test = true
+		tag.render_priority = 3
+		tag.outline_render_priority = 2
+		tag.visible = false
+		Lettering.range_to_legibility(tag)
+		add_child(tag)
+		_tags.append(tag)
 	for a in pr:
 		var line := Line.new()
 		line.matrix = self
@@ -441,12 +552,18 @@ func _place() -> void:
 	if _lit_by is Pin and is_instance_valid(_lit_by):
 		_lit_row = (_lit_by as Pin).r
 		_lit_col = (_lit_by as Pin).c
+	elif _lit_by is Tower and is_instance_valid(_lit_by):
+		_lit_row = (_lit_by as Tower).pin.r
+		_lit_col = (_lit_by as Tower).pin.c
 	elif _lit_by is Line and is_instance_valid(_lit_by):
 		var held := _lit_by as Line
 		_lit_row = held.index if held.is_row else -1
 		_lit_col = -1 if held.is_row else held.index
 	_lay_chrome()
 	_paint()
+	# The window moved under the towers: they stand again at the next reading, even at motion 0.
+	_calm_clock = 1000.0
+	_meter_clock = 1000.0
 
 
 func _point_line(line: Line, text: Label3D, index: int, at: Vector3) -> void:
@@ -674,6 +791,9 @@ func _paint_pin(pin: Pin) -> void:
 		bore = Color(0.48, 0.5, 0.55)
 	elif dim:
 		bore = Color(0.14, 0.145, 0.16)
+	if not seated and not pending and _hot_rows.has(pin.r):
+		# An empty socket in a hot row glows, faintly: somewhere that loud line could go instead.
+		bore = bore.lerp(Color(0.95, 0.62, 0.22), 0.45 if not dim else 0.2)
 	_sockets.set_colour(k, bore)
 	if seated or pending:
 		var head := small * (0.54 if seated else 0.36)
@@ -706,6 +826,9 @@ func _head_colour(pin: Pin, tint: Color, seated: bool, dim: bool) -> Color:
 	if dim:
 		return lit * 0.22
 	var loud := clampf((float(_glow.get(Vector2i(pin.r, pin.c), 0.0)) - SignalBeads.FLOOR) / (0.716 - SignalBeads.FLOOR), 0.0, 1.0)
+	if pin_meter.is_valid() and loud <= 0.0:
+		# Patched, carrying nothing: dull, so a pin in that is not sounding reads apart from one that is.
+		return lit * 0.32
 	return lit * lerpf(0.8, 2.0, loud)
 
 
@@ -729,14 +852,22 @@ func _process(delta: float) -> void:
 	if moved:
 		_place()
 		scrolled.emit()
-	_pulse(delta)
+	if pin_meter.is_valid() or row_meter.is_valid() or col_meter.is_valid():
+		_meter_clock += delta
+		if _meter_clock >= 1.0 / METER_HZ:
+			var step := minf(_meter_clock, 0.1)
+			_meter_clock = 0.0
+			_pulse(step)
+			_read_meters(step, motion)
+	else:
+		_pulse(delta)
 	if _status != null and _status.visible and Time.get_ticks_msec() >= _said_until:
 		_status.visible = false
 
 
 ## Every seated pin in the window followed to the level through it, as a meter's ballistics.
 func _pulse(delta: float) -> void:
-	if not signal_of.is_valid() or _heads == null:
+	if not (signal_of.is_valid() or pin_meter.is_valid()) or _heads == null:
 		return
 	for pin in _pins:
 		if pin.r < 0:
@@ -745,15 +876,396 @@ func _pulse(delta: float) -> void:
 		if not st.get("on", false):
 			continue
 		var at := Vector2i(pin.r, pin.c)
-		var want := clampf(float(signal_of.call(_rows[pin.r]["key"], _cols[pin.c]["key"])), 0.0, 1.0)
+		var want := 0.0
+		if pin_meter.is_valid():
+			var m: Vector3 = pin_meter.call(_rows[pin.r]["key"], _cols[pin.c]["key"])
+			want = FaderLaw.to_taper(m.x) if m.z != SignalGraph.UNKNOWN and is_finite(m.x) and m.x > SignalGraph.FLOOR_DB else 0.0
+		else:
+			want = clampf(float(signal_of.call(_rows[pin.r]["key"], _cols[pin.c]["key"])), 0.0, 1.0)
 		var was := float(_glow.get(at, 0.0))
 		var follow := ATTACK if want > was else RELEASE
 		var now := lerpf(was, want, clampf(follow * delta, 0.0, 1.0)) if delta > 0.0 else want
+		if want <= 0.0 and now < 0.01:
+			now = 0.0
 		if absf(now - was) < 0.0005 and _glow.has(at):
 			continue
 		_glow[at] = now
 		var dim := (_lit_row >= 0 or _lit_col >= 0) and not _on_lit_line(pin.r, pin.c)
 		_heads.set_colour(pin.slot, _head_colour(pin, st.get("tint", Color.GRAY), true, dim))
+
+
+# --- levels: the header meters and the skyline --------------------------------------------------
+
+## A level's share of a meter or a tower: SignalGraph.FLOOR_DB at nothing to SignalGraph.TOP_DB at
+## all of it, even in decibels, as a pipe's thickness is.
+static func level_share(db: float) -> float:
+	return SignalGraph.thickness(db) if is_finite(db) else 0.0
+
+
+static func _known(m: Vector3) -> bool:
+	return m.z != SignalGraph.UNKNOWN
+
+
+## The header meters, the hot rows' sockets and the towers, read for what the window shows.
+func _read_meters(delta: float, motion: float) -> void:
+	if _meters == null or not is_visible_in_tree():
+		return
+	var now := Time.get_ticks_msec()
+	var lit := _lit_row >= 0 or _lit_col >= 0
+	for a in _row_lines.size():
+		var line := _row_lines[a]
+		var slot := a * 4
+		if line.index < 0 or not row_meter.is_valid():
+			_hide_meter(slot)
+			continue
+		var it: Dictionary = _rows[line.index]
+		var m: Vector3 = row_meter.call(it["key"])
+		var st := _level_state(_row_level, it["key"])
+		_follow_level(st, m, delta, now)
+		_draw_meter(slot, true, line, it, st, now, motion, lit and line.index != _lit_row)
+		var hot := _known(m) and is_finite(m.x) and m.x >= SignalGraph.HOT_DB
+		if hot != _hot_rows.has(line.index):
+			if hot:
+				_hot_rows[line.index] = true
+			else:
+				_hot_rows.erase(line.index)
+			for pin in _pins:
+				if pin.r == line.index:
+					_paint_pin(pin)
+	var base := _row_lines.size() * 4
+	for b in _col_lines.size():
+		var line := _col_lines[b]
+		var slot := base + b * 4
+		if line.index < 0 or not col_meter.is_valid():
+			_hide_meter(slot)
+			continue
+		var it: Dictionary = _cols[line.index]
+		var m: Vector3 = col_meter.call(it["key"])
+		var st := _level_state(_col_level, it["key"])
+		_follow_level(st, m, delta, now)
+		_draw_meter(slot, false, line, it, st, now, motion, lit and line.index != _lit_col)
+	_draw_towers(delta, motion, now)
+
+
+## A line's meter state, kept by its key from the first time it is shown.
+static func _level_state(states: Dictionary, key: Variant) -> Array:
+	var st: Array = states.get(key, [])
+	if st.is_empty():
+		st = [-INF, -INF, 0, 0, -INF, NAN, SignalGraph.UNKNOWN, -INF]
+		states[key] = st
+	return st
+
+
+## One reading into a line's state: the shown level falls at FALL_DB a second after a peak, the
+## held peak stands HOLD_MSEC, a clip is remembered CLIP_MSEC with the most it went over by.
+func _follow_level(st: Array, m: Vector3, delta: float, now: int) -> void:
+	var peak := m.x if _known(m) and is_finite(m.x) else -INF
+	st[4] = peak
+	st[5] = m.y
+	st[6] = m.z
+	var shown: float = st[0]
+	shown = peak if peak >= shown or not is_finite(shown) else maxf(peak, shown - FALL_DB * delta)
+	st[0] = shown
+	if peak >= float(st[1]) or now > int(st[2]):
+		st[1] = peak
+		st[2] = now + HOLD_MSEC
+	if peak > SignalGraph.CLIP_DB:
+		if now > int(st[3]):
+			st[7] = peak
+		st[7] = maxf(float(st[7]), peak)
+		st[3] = now + CLIP_MSEC
+
+
+func _hide_meter(slot: int) -> void:
+	for i in 4:
+		_meters.move_slot(slot + i, _hidden())
+
+
+## A header's meter: a dark track, the RMS (or the level, where there is no RMS) as a fill in the
+## line's colour -- amber from HOT_DB, red past 0 dBFS -- the held peak as a tick, and the light.
+func _draw_meter(slot: int, is_row: bool, line: Line, it: Dictionary, st: Array, now: int, motion: float, dim: bool) -> void:
+	if int(st[6]) == int(SignalGraph.UNKNOWN):
+		_hide_meter(slot)
+		return
+	var at := line.position
+	var tint: Color = it.get("colour", Color.GRAY)
+	var shown: float = st[0]
+	var rms: float = st[5]
+	var fill_db := rms if is_finite(rms) else shown
+	var light := 0
+	if now <= int(st[3]):
+		light = 2
+	elif is_finite(float(st[1])) and float(st[1]) >= SignalGraph.HOT_DB and now <= int(st[2]):
+		light = 1
+	var lane := 0.0
+	var thick := 0.0
+	var from := 0.0
+	var to := 0.0
+	if is_row:
+		var side := minf(_rp * 0.62, chip)
+		thick = _rp * 0.11
+		lane = at.y - _rp * 0.36
+		from = gap + side * 1.6 + _indent(it)
+		to = row_head - gap * 1.5 - _rp * 0.3
+	else:
+		var side := minf(_cp * 0.62, chip)
+		thick = _cp * 0.11
+		lane = at.x + _cp * 0.36
+		from = -col_head + gap + side * 1.8 + _indent(it)
+		to = -gap * 1.5 - _cp * 0.3
+	var run := maxf(to - from, 0.001)
+	var health := SignalGraph.health(shown)
+	var ink := Materials.chip_colour(tint)
+	if health == &"clip":
+		ink = RED * 1.4
+	elif health == &"hot":
+		ink = AMBER * 1.3
+	var fade := 0.35 if dim else 1.0
+	var fill := run * level_share(fill_db)
+	var tick := run * level_share(float(st[1]))
+	_meters.move_slot(slot, _meter_box(is_row, lane, from + run * 0.5, run, thick, 0.0013))
+	_meters.set_colour(slot, Color(0.03, 0.032, 0.036))
+	if fill > 0.0005:
+		_meters.move_slot(slot + 1, _meter_box(is_row, lane, from + fill * 0.5, fill, thick * 0.8, 0.0016))
+		_meters.set_colour(slot + 1, ink * 0.9 * fade)
+	else:
+		_meters.move_slot(slot + 1, _hidden())
+	if tick > 0.0005:
+		_meters.move_slot(slot + 2, _meter_box(is_row, lane, from + tick, maxf(run * 0.012, 0.0012), thick * 1.2, 0.0018))
+		_meters.set_colour(slot + 2, (RED * 1.8 if float(st[1]) > SignalGraph.CLIP_DB else Color(1.0, 0.97, 0.9) * 1.5) * fade)
+	else:
+		_meters.move_slot(slot + 2, _hidden())
+	if light == 0:
+		_meters.move_slot(slot + 3, _hidden())
+	else:
+		# Amber a small square, red a bar half as tall again as the line's meter is thick: told
+		# apart by their shapes, and said in words on the card.
+		var size := (_rp if is_row else _cp) * 0.2
+		var tall := size * (2.2 if light == 2 else 1.0)
+		var end := to + (_rp if is_row else _cp) * 0.17
+		var basis := Basis.from_scale(Vector3(size, tall, 0.001)) if is_row else Basis.from_scale(Vector3(tall, size, 0.001))
+		var where := Vector3(end, lane + (tall - size) * 0.5, 0.0018) if is_row else Vector3(lane - (tall - size) * 0.5, end, 0.0018)
+		_meters.move_slot(slot + 3, Transform3D(basis, where))
+		var pulse := 1.0 if motion <= 0.0 or light != 2 else 0.75 + 0.25 * sin(now * 0.001 * TAU * 2.0)
+		_meters.set_colour(slot + 3, (RED * 2.0 * pulse if light == 2 else AMBER * 1.6) * fade)
+
+
+static func _meter_box(is_row: bool, lane: float, along: float, length: float, thick: float, z: float) -> Transform3D:
+	if is_row:
+		return Transform3D(Basis.from_scale(Vector3(length, thick, 0.0006)), Vector3(along, lane, z))
+	return Transform3D(Basis.from_scale(Vector3(thick, length, 0.0006)), Vector3(lane, along, z))
+
+
+## A header's level in words, for its card: "peak −6.0 dBFS · RMS −14.2 dBFS", the held clip
+## ("CLIPPED +1.2 dB, 1 s ago") or the heat, and for a column how many feed it. "" with no meter.
+func line_level_words(key: Variant, is_row: bool) -> String:
+	var st: Array = (_row_level if is_row else _col_level).get(key, [])
+	if st.is_empty():
+		var m: Vector3 = (row_meter.call(key) if is_row else col_meter.call(key)) if (row_meter if is_row else col_meter).is_valid() else Vector3(-INF, NAN, SignalGraph.UNKNOWN)
+		st = [m.x, m.x, 0, 0, m.x, m.y, m.z, -INF]
+	var how: float = st[6]
+	if how == SignalGraph.UNKNOWN:
+		return "level not measured"
+	var parts := PackedStringArray()
+	parts.append(("arriving, peaks added, %s" if not is_row else "peak %s") % SignalGraph.db_words(float(st[4]), how))
+	if is_row and is_finite(float(st[5])):
+		parts.append("RMS %s" % SignalGraph.db_words(float(st[5])))
+	var now := Time.get_ticks_msec()
+	if now <= int(st[3]):
+		parts.append("CLIPPED +%.1f dB, %d s ago" % [float(st[7]), int((CLIP_MSEC - (int(st[3]) - now)) / 1000.0)])
+	elif float(st[4]) >= SignalGraph.HOT_DB:
+		parts.append("HOT: within 3 dB of 0 dBFS")
+	return " · ".join(parts)
+
+
+## Whether the line is showing its clip light now: for the suite.
+func clip_lit(key: Variant, is_row: bool) -> bool:
+	var st: Array = (_row_level if is_row else _col_level).get(key, [])
+	return not st.is_empty() and Time.get_ticks_msec() <= int(st[3])
+
+
+## Whether row `i` (shown index) is hot, its empty sockets glowing: for the suite.
+func row_hot(i: int) -> bool:
+	return _hot_rows.has(i)
+
+
+## The skyline: a tower a seated pin with a level, as tall as what it carries, and one a column's
+## arrival on its header; amber and red tops carry their figures. Hidden when `skyline` is off.
+func _draw_towers(delta: float, motion: float, now: int) -> void:
+	if _towers == null:
+		return
+	var up := skyline and pin_meter.is_valid() and is_visible_in_tree()
+	if not up:
+		if not _tower_db.is_empty():
+			_tower_db.clear()
+			for i in _towers.count():
+				_towers.move_slot(i, _hidden())
+			for t in _tower_keys:
+				t.lay(false, Vector3.ZERO, 0.0, 0.0)
+			for tag in _tags:
+				tag.visible = false
+			tags_shown.clear()
+		return
+	var calm := motion <= 0.0
+	if calm:
+		_calm_clock += delta
+		if _calm_clock < 1.0 / CALM_HZ and not _tower_db.is_empty():
+			return
+		_calm_clock = 0.0
+	var small := minf(_cp, _rp)
+	var lit := _lit_row >= 0 or _lit_col >= 0
+	var tags := 0
+	var pc := _col_lines.size()
+	for pin in _pins:
+		var k := pin.slot * 2
+		var tower := _tower_keys[pin.slot]
+		var st := cell(pin.r, pin.c) if pin.r >= 0 and pin.c >= 0 else {}
+		var group: bool = pin.r >= 0 and pin.c >= 0 and ((_rows[pin.r] as Dictionary).get("group", false) or (_cols[pin.c] as Dictionary).get("group", false))
+		if not st.get("on", false) or group:
+			_towers.move_slot(k, _hidden())
+			_towers.move_slot(k + 1, _hidden())
+			tower.lay(false, Vector3.ZERO, 0.0, 0.0)
+			continue
+		var at := Vector2i(pin.r, pin.c)
+		var m: Vector3 = pin_meter.call(_rows[pin.r]["key"], _cols[pin.c]["key"])
+		var target := m.x if _known(m) and is_finite(m.x) else SignalGraph.FLOOR_DB
+		if not is_nan(tower.held_db):
+			target = tower.held_db
+		var db := _ease_tower(at, target, delta, calm or not is_nan(tower.held_db))
+		var dim := lit and not _on_lit_line(pin.r, pin.c)
+		tags = _stand_tower(k, pin.position, small, db, st.get("tint", Color.GRAY), dim, motion, now, tags, _known(m) and m.z == SignalGraph.ESTIMATED)
+		tower.lay(st.get("level", -1.0) >= 0.0, pin.position, small, _tower_tall(db, small))
+	for b in pc:
+		var k := (_pins.size() + b) * 2
+		var line := _col_lines[b]
+		var st: Array = _col_level.get(_cols[line.index]["key"], []) if line.index >= 0 else []
+		if st.is_empty() or int(st[6]) == int(SignalGraph.UNKNOWN):
+			_towers.move_slot(k, _hidden())
+			_towers.move_slot(k + 1, _hidden())
+			continue
+		var db := _ease_tower(Vector2i(-1, line.index), float(st[4]) if is_finite(float(st[4])) else SignalGraph.FLOOR_DB, delta, calm)
+		var foot := Vector3(line.position.x, -col_head * 0.5, 0.0)
+		var dim := lit and line.index != _lit_col
+		tags = _stand_tower(k, foot, minf(_cp, col_head) * 0.8, db, Color(0.9, 0.9, 0.95), dim, motion, now, tags, int(st[6]) == int(SignalGraph.ESTIMATED))
+	for i in range(tags, _tags.size()):
+		if _tags[i].visible:
+			_tags[i].visible = false
+			_tags_changed()
+
+
+func _ease_tower(at: Vector2i, target: float, delta: float, now_: bool) -> float:
+	var was := float(_tower_db.get(at, target))
+	if not is_finite(was):
+		was = SignalGraph.FLOOR_DB
+	var db := target if now_ or delta <= 0.0 else lerpf(was, target, clampf((ATTACK if target > was else RELEASE) * delta, 0.0, 1.0))
+	_tower_db[at] = db
+	return db
+
+
+func _tower_tall(db: float, small: float) -> float:
+	return maxf(level_share(db) * tower_max, small * 0.25)
+
+
+## One tower at `at` on the board, a cell `small` across: its body, glowing in its colour, and its
+## top; amber and red tops get a tag. Answers how many tags are in use after it.
+func _stand_tower(k: int, at: Vector3, small: float, db: float, tint: Color, dim: bool, motion: float, now: int, tags: int, estimated: bool) -> int:
+	var tall := _tower_tall(db, small)
+	var wide := small * 0.34
+	var cap := minf(tall * 0.12, small * 0.2)
+	var base := small * 0.1
+	var dyed := tint
+	dyed.s = maxf(dyed.s, 0.5)
+	var glow := Materials.chip_colour(dyed) * lerpf(0.7, 1.8, level_share(db))
+	_towers.move_slot(k, Transform3D(Basis.from_scale(Vector3(wide, wide, tall - cap)), at + Vector3(0, 0, base + (tall - cap) * 0.5)))
+	_towers.set_colour(k, glow * (0.22 if dim else 1.0))
+	var top := Materials.chip_colour(dyed) * 2.0
+	var health := SignalGraph.health(db)
+	if health == &"clip":
+		var pulse := 1.0 if motion <= 0.0 else 0.7 + 0.3 * sin(now * 0.001 * TAU * 2.0)
+		top = RED * 2.2 * pulse
+	elif health == &"hot":
+		top = AMBER * 1.9
+	_towers.move_slot(k + 1, Transform3D(Basis.from_scale(Vector3(wide * 1.25, wide * 1.25, cap)), at + Vector3(0, 0, base + tall - cap * 0.5)))
+	_towers.set_colour(k + 1, top * (0.3 if dim else 1.0))
+	if (health == &"clip" or health == &"hot") and tags < _tags.size():
+		var tag := _tags[tags]
+		var words := ("+%.1f dB" % db) if health == &"clip" else "%s%.1f dBFS" % ["−" if db < 0.0 else "", absf(db)]
+		if estimated:
+			words = "≈ " + words
+		if tag.text != words or not tag.visible:
+			tag.text = words
+			tag.visible = true
+			_tags_changed()
+		var size := tag_cap if tag_cap > 0.0 else clampf(small * 0.45, 0.012, 0.08)
+		tag.font_size = 40
+		tag.pixel_size = size / 40.0 * 1.4
+		tag.modulate = RED.lightened(0.3) if health == &"clip" else AMBER.lightened(0.2)
+		tag.position = at + Vector3(0, small * 0.4, base + tall + size * 0.8)
+		tags += 1
+	return tags
+
+
+func _tags_changed() -> void:
+	tags_shown.clear()
+	for tag in _tags:
+		if tag.visible:
+			tags_shown.append(tag.text)
+
+
+## How tall pin (row, col)'s tower stands now (m), 0 with none: for the suite.
+func tower_height(i: int, j: int) -> float:
+	for pin in _pins:
+		if pin.r == i and pin.c == j:
+			var t := _tower_keys[pin.slot]
+			return t.tall if t.up else 0.0
+	return 0.0
+
+
+## The tower top on pin (row, col), when the window shows it and it stands: for the suite.
+func tower_for(row_key: Variant, col_key: Variant) -> Tower:
+	var pin := pin_for(row_key, col_key)
+	return _tower_keys[pin.slot] if pin != null and _tower_keys[pin.slot].up else null
+
+
+func _tower_begin(tower: Tower, at: Vector3) -> void:
+	var pin := tower.pin
+	tower._start = to_local(at)
+	tower._moved = false
+	tower._notched = 0.0
+	var from := float(level_db.call(_rows[pin.r]["key"], _cols[pin.c]["key"])) if level_db.is_valid() else -INF
+	tower._from_db = from if is_finite(from) else -61.0
+	tower._peak_from = float(_tower_db.get(Vector2i(pin.r, pin.c), SignalGraph.FLOOR_DB))
+
+
+func _tower_move(tower: Tower, at: Vector3) -> void:
+	var pin := tower.pin
+	if pin.r < 0 or pin.c < 0 or not set_level_db.is_valid():
+		return
+	var d := to_local(at) - tower._start
+	if not tower._moved and Vector2(d.y, d.z).length() < DRAG_FROM * minf(_cp, _rp):
+		return
+	tower._moved = true
+	# Up the board, as a pin's drag; or out of it, the top following the hand.
+	var by := d.y / (LEVEL_STEP * _rp) + d.z / maxf(tower_max, 0.01) * (SignalGraph.TOP_DB - SignalGraph.FLOOR_DB)
+	var hand := tower.held_by as Interactor
+	if hand != null and hand.fine():
+		by *= 0.1
+	var want := clampf(snappedf(tower._from_db + by, 0.1), -61.0, 12.0)
+	if is_equal_approx(want, tower._notched):
+		return
+	tower._notched = want
+	set_level_db.call(_rows[pin.r]["key"], _cols[pin.c]["key"], want)
+	tower.held_db = tower._peak_from + (maxf(want, -60.0) - maxf(tower._from_db, -60.0))
+	refresh()
+
+
+func _tower_end(tower: Tower) -> void:
+	var pin := tower.pin
+	var moved := tower._moved
+	tower.held_db = NAN
+	tower._moved = false
+	if not moved and pin.r >= 0 and pin.c >= 0:
+		press(pin.r, pin.c)
 
 
 # --- moving the window ------------------------------------------------------------------------
@@ -1011,9 +1523,13 @@ func _describe_line(line: Line) -> PackedStringArray:
 	if line.index < 0:
 		return PackedStringArray(["SPARE %s HEADER" % ("ROW" if line.is_row else "COLUMN"), "", ""])
 	var it: Dictionary = (_rows if line.is_row else _cols)[line.index]
+	var out := PackedStringArray(["%s  %s" % [str(it["name"]).to_upper(), row_word if line.is_row else col_word], "", ""])
 	if describe_line.is_valid():
-		return describe_line.call(it, line.is_row)
-	return PackedStringArray(["%s  %s" % [str(it["name"]).to_upper(), row_word if line.is_row else col_word], "", ""])
+		out = describe_line.call(it, line.is_row)
+	if (row_meter if line.is_row else col_meter).is_valid():
+		var level := line_level_words(it["key"], line.is_row)
+		out[1] = level if out[1].is_empty() else "%s · %s" % [out[1], level]
+	return out
 
 
 ## One crossing's place to press: no mesh of its own (the matrix's banks draw every pin in a
@@ -1332,3 +1848,77 @@ class Arrow extends ControlAffordance:
 
 	func hint() -> String:
 		return "press to scroll a window's worth that way"
+
+
+## A tower's top, in the skyline (PinMatrix.skyline): the control that sets the send its pin is.
+## Drag it up or down the board, or pull it out and push it in, and the send follows (one undo
+## step a drag); wheel it as a pin; press and let go without moving and the pin comes out, as a
+## press on its crossing does. No mesh of its own: the matrix's bank draws the tower.
+class Tower extends ControlAffordance:
+	var matrix: PinMatrix
+	var pin: Pin
+	## Whether it stands now, and how tall (m).
+	var up := false
+	var tall := 0.0
+	## The level the tower shows while a hand has it (dBFS), NAN when it follows what it carries.
+	var held_db := NAN
+	var _start := Vector3.ZERO
+	var _moved := false
+	var _from_db := 0.0
+	var _peak_from := 0.0
+	var _notched := 0.0
+	var _shape := CollisionShape3D.new()
+	var _box := BoxShape3D.new()
+
+	func _init() -> void:
+		collision_mask = 0
+		_shape.shape = _box
+		add_child(_shape)
+		edits_as_one = true
+		describe_edit = func() -> String: return "%s: send level" % matrix._describe_pin(pin)[0]
+		hover_changed.connect(func(on: bool) -> void:
+			if on:
+				matrix._light(pin.r, pin.c, self)
+			else:
+				matrix._unlight(self))
+		lay(false, Vector3.ZERO, 0.0, 0.0)
+
+	## Standing over a pin at `at`, a cell `small` across, `height` tall; or not at all.
+	func lay(on: bool, at: Vector3, small: float, height: float) -> void:
+		if not on and not up and not visible:
+			return
+		up = on
+		tall = height
+		visible = on
+		collision_layer = 2 if on else 0
+		_shape.disabled = not on
+		if not on:
+			if held_by == null:
+				claimed_by = null
+			return
+		position = at + Vector3(0, 0, small * 0.1 + height)
+		_box.size = Vector3(small * 0.8, small * 0.8, maxf(small * 0.5, 0.012))
+
+	func _on_grab_begin(at: Vector3) -> void:
+		matrix._tower_begin(self, at)
+
+	func _on_grab_move(at: Vector3) -> void:
+		matrix._tower_move(self, at)
+
+	func _on_grab_end() -> void:
+		matrix._tower_end(self)
+
+	func _on_nudge(notches: int, fine: bool) -> bool:
+		return matrix._nudge_pin(pin, notches, fine)
+
+	func dwell_activates() -> bool:
+		return false
+
+	func _default_title() -> String:
+		return matrix._describe_pin(pin)[0]
+
+	func _default_readout() -> String:
+		return matrix._describe_pin(pin)[1]
+
+	func hint() -> String:
+		return "drag the top up or down, or pull it out of the board, for the send's level, one undo step · wheel 1 dB, Shift 0.1 · a click pulls the pin out"

@@ -1704,7 +1704,10 @@ const ROOM_VERBS := {&"open_tablet": [TYPE_INT, TYPE_INT, TYPE_STRING, TYPE_FLOA
 		# (Modular.answer_knob). Each with the song position it was made at. The room's `modular` row.
 		# A cable from one of the world's sockets (slice 53, `world:weather`) is asked the same way.
 		&"modular_patch": [TYPE_STRING_NAME, TYPE_STRING_NAME, TYPE_FLOAT],
-		&"modular_knob": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT]}
+		&"modular_knob": [TYPE_STRING_NAME, TYPE_FLOAT, TYPE_FLOAT],
+		# Look to solo (LookSolo, docs/spatial_loop.md part three, G): the track looked at, held or
+		# let go. The host solos it alone for the room and puts every solo back at the let-go.
+		&"look_solo": [TYPE_INT, TYPE_BOOL]}
 
 
 ## Every made item's row gone from this machine, and said (`made_changed`), so its item goes too.

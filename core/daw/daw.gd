@@ -60,7 +60,7 @@ const RELAYED := [&"project_replaced", &"track_added", &"track_changed", &"trans
 ## verb that silently stops working for everyone who is not the host.
 const COMMANDS := [
 	&"set_track_volume", &"set_track_pan", &"set_track_width", &"set_track_mute", &"set_track_solo",
-	&"set_track_rec_arm", &"set_master_volume", &"set_master_pan",
+	&"set_track_rec_arm", &"set_track_main_send", &"set_master_volume", &"set_master_pan",
 	&"set_fx_param", &"set_fx_enabled", &"read_fx_param_text", &"read_fx_params",
 	&"set_fx_wet", &"step_fx_preset", &"move_fx", &"create_sidechain",
 	&"set_track_bank",
@@ -74,6 +74,7 @@ const COMMANDS := [
 	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 	&"open_edit", &"close_edit", &"hold_lane", &"scrub", &"arrange_sections", &"set_lyrics",
+	&"reset_loudness",
 ]
 
 ## Item edits that name an item, and how many arguments each takes.
@@ -251,10 +252,16 @@ func clear_mutes() -> void:
 		if state.track(index).mute:
 			set_track_mute(index, false)
 func set_track_rec_arm(index: int, armed: bool) -> void: _do(&"set_track_rec_arm", [index, armed])
+## Whether the track plays into its folder or the master at all (MixState.TrackState.main_send):
+## the signal glasses' SEND TO MASTER fix (docs/spatial_loop.md part three).
+func set_track_main_send(index: int, on: bool) -> void: _do(&"set_track_main_send", [index, on])
 
 func set_track_bank(offset: int) -> void: _do(&"set_track_bank", [offset])
 
 func set_master_volume(taper: float) -> void: _do(&"set_master_volume", [taper])
+## The master's integrated loudness started again (the LEVELS wall's RESET, DAWBackend.reset_loudness):
+## a guest's is the host's to do, as the host's meter is the one everybody reads.
+func reset_loudness() -> void: _do(&"reset_loudness", [])
 func set_master_pan(pan: float) -> void: _do(&"set_master_pan", [pan])
 
 func set_fx_param(track_index: int, fx_index: int, param: int, value: float) -> void:
@@ -1094,6 +1101,12 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 			push_warning("DAW: refused a malformed set_track_input intent %s." % [args])
 			return
 		args = [int(args[0]), str(args[1])]
+	if verb == &"set_track_main_send":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])) \
+				or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_main_send intent %s." % [args])
+			return
+		args = [int(args[0]), MixWire._as_bool([args[1]])]
 	if verb == &"set_track_monitor":
 		if args.size() != 2 or int(args[0]) < 1:
 			push_warning("DAW: refused a malformed set_track_monitor intent %s." % [args])

@@ -303,14 +303,18 @@ func wear() -> void:
 	if carrying == null or not is_instance_valid(carrying) or not carrying.wearable():
 		return
 	_end_use()
-	if worn != null and is_instance_valid(worn):
-		var old_room := ItemRoom.of(worn)
-		if old_room != null:
-			old_room.send_home(worn)
-		else:
-			worn.go_home()
+	# Out of the hand before what was on the head goes: a personal copy sent home is despawned,
+	# and its leaving lets go of whatever this hand carries (the glasses for the headphones).
 	var item := carrying
 	carrying = null
+	var old := worn
+	worn = null
+	if old != null and is_instance_valid(old):
+		var old_room := ItemRoom.of(old)
+		if old_room != null:
+			old_room.send_home(old)
+		else:
+			old.go_home()
 	worn = item
 	var room := ItemRoom.of(item)
 	if room != null:

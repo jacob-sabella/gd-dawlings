@@ -237,6 +237,10 @@ static func _apply_master(state: MixState, p: PackedStringArray, args: Array) ->
 			if p.size() == 2:
 				state.set_master_field(&"pan", float(args[0]))
 		"vu":
+			if p.size() == 3 and p[2] == "loudness":
+				# dawlings's own (docs/spatial_loop.md part three, F): the master's loudness.
+				unpack_loudness(state.master, args)
+				return
 			var level := float(args[0])
 			if p.size() == 2:
 				state.set_master_field(&"vu_l", level)
@@ -325,6 +329,11 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# NOT a Reaper OSC address: the bridge reads and writes D_WIDTH (SetTrackWidth).
 			if not args.is_empty():
 				state.set_track_field(idx, &"width", clampf(float(args[0]), 0.0, 1.0))
+		"mainsend":
+			# NOT a Reaper OSC address: the bridge reads and writes B_MAINSEND (GetMeters,
+			# SetTrackValue). Off, the track plays into neither its folder nor the master.
+			if not args.is_empty():
+				state.set_track_field(idx, &"main_send", _as_bool(args))
 		"group":
 			# dawlings's own: Reaper's OSC surface says nothing of track groups.
 			if not args.is_empty():
@@ -357,6 +366,10 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 				t.vu_l = float(args[0])
 			elif p[3] == "R":
 				t.vu_r = float(args[0])
+			elif p[3] == "signal":
+				# dawlings's own (docs/spatial_loop.md part three): the levels along the chain,
+				# [peak, rms, gr, sends], each a PackedFloat32Array or empty. Volatile, as the vu.
+				unpack_meters(t, args)
 		"fx":
 			_apply_fx(state, idx, p, args)
 		"send":
@@ -860,6 +873,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/pan" % index, [t.pan]])
 		# Always, full width too: a renumbering resends the mix onto tracks a guest already has.
 		out.append(["/track/%d/width" % index, [t.width]])
+		if not t.main_send:
+			out.append(["/track/%d/mainsend" % index, [0.0]])
 		out.append(["/track/%d/mute" % index, [1.0 if t.mute else 0.0]])
 		out.append(["/track/%d/solo" % index, [1.0 if t.solo else 0.0]])
 		out.append(["/track/%d/recarm" % index, [1.0 if t.rec_arm else 0.0]])
@@ -965,6 +980,55 @@ static func apply_replicated(state: MixState, batch: Array) -> void:
 	for entry in batch:
 		if entry is Array and entry.size() == 2:
 			apply(state, entry[0], entry[1])
+
+
+## A track's chain meters as `/track/N/vu/signal` carries them (TrackState.meter_peak and the rest).
+static func pack_meters(t: MixState.TrackState) -> Array:
+	return [t.meter_peak, t.meter_rms, t.meter_gr, t.meter_sends]
+
+
+## The other way, into `t`. Anything that is not four arrays of numbers leaves it as it was.
+static func unpack_meters(t: MixState.TrackState, args: Array) -> void:
+	if args.size() < 4:
+		return
+	var got: Array = []
+	for a in args.slice(0, 4):
+		if a is PackedFloat32Array:
+			got.append(a)
+		elif a is PackedFloat64Array or a is Array:
+			got.append(PackedFloat32Array(a))
+		else:
+			return
+	t.meter_peak = got[0]
+	t.meter_rms = got[1]
+	t.meter_gr = got[2]
+	t.meter_sends = got[3]
+
+
+## The master's loudness as `/master/vu/loudness` carries it: [momentary, short-term, integrated,
+## true peak, recent true peak, correlation, seconds], or [0] for not measured (an empty message
+## is dropped on the way in).
+static func pack_loudness(m: MixState.MasterState) -> Array:
+	if not m.loudness_measured:
+		return [0]
+	return [m.lufs_m, m.lufs_s, m.lufs_i, m.true_peak_db, m.true_peak_recent_db, m.correlation, m.loudness_seconds]
+
+
+static func unpack_loudness(m: MixState.MasterState, args: Array) -> void:
+	if args.size() < 7:
+		m.loudness_measured = false
+		return
+	for a in args.slice(0, 7):
+		if not (a is float or a is int):
+			return
+	m.loudness_measured = true
+	m.lufs_m = float(args[0])
+	m.lufs_s = float(args[1])
+	m.lufs_i = float(args[2])
+	m.true_peak_db = float(args[3])
+	m.true_peak_recent_db = float(args[4])
+	m.correlation = float(args[5])
+	m.loudness_seconds = float(args[6])
 
 
 static func pack_inputs(inputs: Array) -> Array:

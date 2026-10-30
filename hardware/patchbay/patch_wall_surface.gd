@@ -15,6 +15,16 @@ extends Surface
 ## drag it, wheel its names, or use its bars -- so nothing is ever counted at the foot and left
 ## out of reach. The foot says what the last press did.
 ##
+## LEVELS, where they can be had cheaply (docs/spatial_loop.md part three, D and E). PipeWire keeps
+## no per-port level anyone can read: `pw-top` reports each node's timing, `pw-dump` and `pw-cli`
+## its volume (a gain, not a level), and a meter would need a capture stream of its own on every
+## port, as pavucontrol opens one a stream (PEAK_DETECT) -- a process or a stream a port, all the
+## time, for a wall. So only the streams whose level this process already knows are metered
+## (`port_level`): dawlings's own outputs (the Mix, Monitor and Gear streams, AudioPorts, and the
+## app's own output) by their AudioServer buses' peaks, and on Reaper the DAW's outputs and the
+## `dawlings_tap` they feed (MixTap) by Reaper's master meter. Every other port's card says it is
+## not measured, and why. The skyline stands a tower on every link out of a metered port.
+##
 ## It is the machine's own graph and the player's own hands, so nothing about it is shared with
 ## the session: a guest's sound card is the guest's.
 
@@ -80,6 +90,10 @@ func _ready() -> void:
 	matrix.toggle = _toggle
 	matrix.describe = _describe
 	matrix.describe_line = _describe_line
+	matrix.row_meter = port_level
+	matrix.col_meter = port_level
+	matrix.pin_meter = func(out_key: String, _in_key: String) -> Vector3: return port_level(out_key)
+	matrix.tower_max = 0.9
 	matrix.position = Vector3(-(WIDTH - 0.1) * 0.5, -HEAD, 0.004)
 	matrix.visible = false
 	add_child(matrix)
@@ -214,8 +228,13 @@ func _describe(out_key: String, in_key: String) -> PackedStringArray:
 		var folded := matrix.is_collapsed(out_key) or matrix.is_collapsed(in_key)
 		return PackedStringArray(["%s  →  %s" % [a, b], "%d link%s" % [n, "" if n == 1 else "s"],
 				"click to open the folded node" if folded else "patch its ports, below and to the right"])
-	return PackedStringArray(["%s  →  %s" % [_port_words(out_key), _port_words(in_key)],
-			"patched" if n > 0 else "not patched",
+	var said := "patched" if n > 0 else "not patched"
+	if n > 0 and metered(out_key):
+		var m := port_level(out_key)
+		said = "patched · %s" % ("carrying %s" % SignalGraph.db_words(m.x) if is_finite(m.x) and m.x > SignalGraph.FLOOR_DB else "no signal just now")
+	elif n > 0:
+		said = "patched · level not measured: PipeWire reports none for this port"
+	return PackedStringArray(["%s  →  %s" % [_port_words(out_key), _port_words(in_key)], said,
 			"click to cut this link" if n > 0 else "click to patch these two ports"])
 
 
@@ -231,9 +250,64 @@ func _describe_line(line: Dictionary, is_row: bool) -> PackedStringArray:
 		return PackedStringArray(["%s  %s" % [PipeGraph.short_name(key.trim_prefix(GROUP), 28).to_upper(),
 				"OUTPUTS" if is_row else "INPUTS"], "%d ports · %d links" % [int(line.get("count", 0)), links],
 				"click to open its ports" if folded else "click to fold its ports away"])
+	var hint := "its %s lights · drag or wheel here to scroll" % ("row" if is_row else "column")
+	if not metered(key):
+		hint += " · no meter: PipeWire gives no port levels, so only dawlings's own streams are metered"
 	return PackedStringArray(["%s  %s" % [_port_words(key), "OUT" if is_row else "IN"],
-			"not patched" if links == 0 else "patched to %d" % links,
-			"its %s lights · drag or wheel here to scroll" % ("row" if is_row else "column")])
+			"not patched" if links == 0 else "patched to %d" % links, hint])
+
+
+# --- levels ------------------------------------------------------------------------------------
+
+## The node names whose ports this process can meter, and how: a dawlings stream by its bus.
+const OWN_STREAMS := {"dawlings_mix": AudioPorts.MIX, "dawlings_monitor": AudioPorts.MONITOR,
+		"dawlings_gear": AudioPorts.GEAR}
+
+
+## How loud port (or a node's group line) `key` is: Vector3(peak dBFS, NAN, SignalGraph.MEASURED)
+## for one of dawlings's own streams or, on Reaper, the DAW's outputs and the tap they feed;
+## SignalGraph.UNKNOWN for anything else (PipeWire reports no levels: see the class note).
+func port_level(key: String) -> Vector3:
+	var unknown := Vector3(-INF, NAN, SignalGraph.UNKNOWN)
+	var group := key.begins_with(GROUP)
+	var node := key.trim_prefix(GROUP) if group else PipeGraph.node_of(key)
+	var side := 0 if group else _side_of(PipeGraph.label_of(key))
+	if OWN_STREAMS.has(node) or node == "dawlings" or node == "Godot Engine":
+		var bus := AudioServer.get_bus_index(AudioPorts.bus(OWN_STREAMS[node])) if OWN_STREAMS.has(node) else 0
+		if bus < 0:
+			return unknown
+		var l := AudioServer.get_bus_peak_volume_left_db(bus, 0)
+		var r := AudioServer.get_bus_peak_volume_right_db(bus, 0)
+		var db := l if side < 0 else (r if side > 0 else maxf(l, r))
+		return Vector3(db if db > -150.0 else -INF, NAN, SignalGraph.MEASURED)
+	if DAW.backend is ReaperBackend and DAW.state != null and (node == MixTap.TAP or _daw_node().search(node) != null):
+		var vu := DAW.state.master.vu_l if side < 0 else (DAW.state.master.vu_r if side > 0 else maxf(DAW.state.master.vu_l, DAW.state.master.vu_r))
+		return Vector3(FaderLaw.to_db(vu), NAN, SignalGraph.MEASURED)
+	return unknown
+
+
+static var _daw_re: RegEx = null
+
+
+static func _daw_node() -> RegEx:
+	if _daw_re == null:
+		_daw_re = RegEx.create_from_string(MixTap.DAW_NODE)
+	return _daw_re
+
+
+## Which side a port's name says it carries: -1 left, 1 right, 0 either or both.
+static func _side_of(label: String) -> int:
+	var l := label.to_upper()
+	if l.ends_with("FL") or l.ends_with("_L") or l.ends_with("LEFT") or l.ends_with("_1"):
+		return -1
+	if l.ends_with("FR") or l.ends_with("_R") or l.ends_with("RIGHT") or l.ends_with("_2"):
+		return 1
+	return 0
+
+
+## Whether `key`'s level is known here: for the cards.
+func metered(key: String) -> bool:
+	return port_level(key).z != SignalGraph.UNKNOWN
 
 
 # --- the screen ---------------------------------------------------------------------------------

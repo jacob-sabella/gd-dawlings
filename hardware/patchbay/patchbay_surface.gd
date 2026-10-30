@@ -17,6 +17,14 @@ extends Surface
 ## Point at a pin and its row and column light while the rest dims, so one track's routing can be
 ## picked out of a busy session; point at a name and that one track's line lights.
 ##
+## Levels, always (docs/spatial_loop.md part three, D): each row's header meters its track after
+## the fader, each column's what its sends bring in added together, and a seated pin pulses with
+## what its send carries -- SignalGraph's figures, measured on the built-in engine, estimated (≈)
+## from the track's meter and the send's level on Reaper -- dull while it carries nothing, its card
+## saying why ("patched · no signal: KICK is muted"). With the signal glasses on the bay is a
+## skyline (PinMatrix.skyline): every send a tower its level tall, whose top is dragged for the
+## send's level, and the card reads "KICK → BASS DI · −6.0 dB send · peaking −3.1 dBFS".
+##
 ## Every change goes through DAW like every other: one undo step a press, a guest's press an
 ## intent the host carries out (`hosting`), the host's own routing rules the only ones
 ## (DAW.send_refusal). A guest's pin shows as asked for until the host's send arrives.
@@ -45,6 +53,10 @@ const STEP_DB := 1.0
 const FINE_DB := 0.1
 ## How long a guest's asked-for pin waits for the host's send before it is let go.
 const ASK_MSEC := 4000
+## How tall a send at SignalGraph.TOP_DB stands out of the bay in the skyline (m).
+const TOWER_MAX := 0.26
+## How long a card's graph (for why a pin carries nothing) is kept before it is built again (ms).
+const WHY_MSEC := 300
 
 ## () -> bool: whether this process carries out its own changes or asks the host to. Wired by
 ## the studio (StageLink.wire_bay); unset, it is the host.
@@ -58,6 +70,8 @@ var _built_key := ""
 var _reach := {}
 ## A guest's sends asked for and not yet there: Vector2i(source, destination) -> when.
 var _asked := {}
+var _why_graph: SignalGraph = null
+var _why_at := 0
 
 
 func _ready() -> void:
@@ -85,7 +99,12 @@ func _ready() -> void:
 	matrix.level = _level
 	matrix.describe = _describe
 	matrix.describe_line = _describe_line
-	matrix.signal_of = SignalBeads.level_between
+	matrix.row_meter = _row_meter
+	matrix.col_meter = _col_meter
+	matrix.pin_meter = _pin_meter
+	matrix.level_db = _level_db
+	matrix.set_level_db = _set_level_db
+	matrix.tower_max = TOWER_MAX
 	add_child(matrix)
 	DAW.track_changed.connect(_on_track_changed)
 
@@ -286,6 +305,74 @@ func _level(src: int, dst: int, notches: int, fine: bool) -> bool:
 	return true
 
 
+# --- levels (docs/spatial_loop.md part three, D and E) ------------------------------------------
+
+func _row_meter(src: int) -> Vector3:
+	var t := DAW.state.track(src, false)
+	return SignalGraph.fader_level(t) if t != null else Vector3(-INF, NAN, SignalGraph.UNKNOWN)
+
+
+func _col_meter(dst: int) -> Vector3:
+	return SignalGraph.arrival_level(DAW.state, dst)
+
+
+## What the crossing's send carries: its ordinary send's, or its sidechain's where that is all.
+func _pin_meter(src: int, dst: int) -> Vector3:
+	var t := DAW.state.track(src, false)
+	if t == null:
+		return Vector3(-INF, 0.0, SignalGraph.UNKNOWN)
+	for k in t.sends:
+		var sd := t.sends[k] as MixState.SendState
+		if not sd.key and sd.resolve(DAW.state) == dst:
+			return SignalGraph.send_level(t, int(k))
+	for k in t.sends:
+		if (t.sends[k] as MixState.SendState).resolve(DAW.state) == dst:
+			return SignalGraph.send_level(t, int(k))
+	return Vector3(-INF, 0.0, SignalGraph.UNKNOWN)
+
+
+func _level_db(src: int, dst: int) -> float:
+	var sends := _sends_between(src, dst)
+	var s := DAW.state.send(src, sends[0], false) if not sends.is_empty() else null
+	return FaderLaw.to_db(s.volume) if s != null and s.volume > 0.0 else -INF
+
+
+## A tower's drag: the crossing's send to `db` (under -60 is off).
+func _set_level_db(src: int, dst: int, db: float) -> bool:
+	var sends := _sends_between(src, dst)
+	if sends.is_empty():
+		return false
+	DAW.set_send_volume(src, sends[0], 0.0 if db < -60.0 else FaderLaw.to_taper(db))
+	return true
+
+
+## Why a patched send carries nothing, in words: its own stop, a stop on the way to it (muted,
+## soloed out, the fader down, a plugin silent, nothing to play), the transport, or nothing playing.
+func why_silent(src: int, dst: int) -> String:
+	var now := Time.get_ticks_msec()
+	if _why_graph == null or now - _why_at > WHY_MSEC:
+		_why_graph = SignalGraph.build(DAW.state)
+		_why_at = now
+	var sends := _sends_between(src, dst)
+	if sends.is_empty():
+		return ""
+	var send := _why_graph.stage(SignalGraph.send_id(src, sends[0]))
+	if send != null and send.halt != &"":
+		return send.why
+	var tr := _why_graph.trace(SignalGraph.play_id(src))
+	for st: SignalGraph.Stage in tr.stages:
+		if st.halt != &"" and (st.track == src or tr.reason == SignalGraph.FOLDER_MUTED):
+			# A send leaves from the fader, so a stop past it (the folder, the master) is no stop here.
+			if st.kind == SignalGraph.Kind.FADER and st.halt == SignalGraph.NO_ROUTE:
+				break
+			return "%s: %s" % [_name_of(src), st.why] if st.track == src else tr.words
+		if st.kind == SignalGraph.Kind.FADER:
+			break
+	if not DAW.state.playing:
+		return "the transport is stopped"
+	return "nothing on %s is sounding just now" % _name_of(src)
+
+
 func _describe(src: int, dst: int) -> PackedStringArray:
 	var title := "%s  →  %s" % [_name_of(src), _name_of(dst)]
 	var sends := _sends_between(src, dst)
@@ -302,10 +389,23 @@ func _describe(src: int, dst: int) -> PackedStringArray:
 	for k in sends:
 		var s := DAW.state.send(src, k, false)
 		var db := FaderLaw.to_db(s.volume) if s != null else -INF
-		var level := "-inf dB" if db < -60.0 else "%+.1f dB" % db
-		words.append(("sidechain %s" if s != null and s.key else "send %s") % level)
+		var level := "−∞ dB" if db < -60.0 else "%s%.1f dB" % ["+" if db > 0.0 else ("−" if db < 0.0 else ""), absf(db)]
+		words.append(("%s sidechain" if s != null and s.key else "%s send") % level)
+	# What it carries: "peaking −3.1 dBFS", or that it is patched and silent, and why.
+	var carried := _pin_meter(src, dst)
+	if carried.z != SignalGraph.UNKNOWN and is_finite(carried.x) and carried.x > SignalGraph.FLOOR_DB:
+		var peak := "peaking %s" % SignalGraph.db_words(carried.x, carried.z)
+		if carried.x > SignalGraph.CLIP_DB:
+			peak = "CLIPPING: " + peak
+		elif carried.x >= SignalGraph.HOT_DB:
+			peak = "HOT: " + peak
+		words.append(peak)
+	else:
+		words.append("patched · no signal: %s" % why_silent(src, dst))
 	var hint := "click to pull the pin out · wheel, or drag up and down, for level" if can \
 			else "read only: wheel for level; patching needs the dawlings bridge in Reaper"
+	if matrix != null and matrix.skyline:
+		hint = "drag the tower's top up or down, or pull it out, for the send's level · " + hint
 	return PackedStringArray([title, " · ".join(words), hint])
 
 
@@ -324,6 +424,15 @@ func _describe_line(line: Dictionary, is_row: bool) -> PackedStringArray:
 	var said := "not patched"
 	if count > 0:
 		said = ("sends to %d" % count) if is_row else ("%d sending in" % count)
+	if not is_row and count > 1:
+		# A return fed by several: whether the sum goes over where no one send does, said.
+		var sum := SignalGraph.arrival_level(DAW.state, index)
+		var loudest := -INF
+		for other in DAW.state.track_indices():
+			for k in _sends_between(other, index):
+				loudest = maxf(loudest, SignalGraph.send_level(DAW.state.track(other), k).x)
+		if sum.x > SignalGraph.CLIP_DB and loudest <= SignalGraph.CLIP_DB:
+			said += " · OVER 0 dBFS TOGETHER (+%.1f dB), though no one send is" % sum.x
 	return PackedStringArray(["%s  %s" % [_name_of(index), "OUT" if is_row else "IN"], said,
 			"its %s lights · drag or wheel here to scroll" % ("row" if is_row else "column")])
 

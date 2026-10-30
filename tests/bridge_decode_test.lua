@@ -423,5 +423,55 @@ local refused = arrange({2, 10.0, 20.0, 0.0, 0.0, 10.0, 10.0, 0, 0})
 check('a locked item in the way refuses the lot, with nothing changed', refused.ok == false and blocks2 == 0
   and locked.D_POSITION == 12 and #set_marks == 0)
 
+-- The signal glasses' meters (docs/spatial_loop.md part three): GetMeters reads each track's peak a
+-- channel, its peak hold in dB (Reaper answers hundredths), B_MAINSEND, and each plugin's gain
+-- reduction where the plugin reports one, "none" keeping the place where it does not or where the
+-- Reaper is too old to have TrackFX_GetNamedConfigParm; and the master's peaks. SetMainSend writes
+-- B_MAINSEND. Against a stand-in Reaper of two tracks, the first with two plugins.
+local _, mfn = decode_request('{"args":[],"fn":"GetMeters","id":12}')
+check('GetMeters decodes with no arguments', mfn == 'GetMeters')
+local main_sends = {[0] = 1, [1] = 0}
+reaper = {
+  CountTracks = function() return 2 end,
+  GetTrack = function(_, n) return n < 2 and n or nil end,
+  GetMasterTrack = function() return 'master' end,
+  TrackFX_GetCount = function(tr) return tr == 0 and 2 or 0 end,
+  TrackFX_GetNamedConfigParm = function(tr, f, name)
+    if name == 'GainReduction_dB' and tr == 0 and f == 1 then return true, '-4.5' end
+    return false, ''
+  end,
+  Track_GetPeakInfo = function(tr, ch)
+    if tr == 'master' then return ch == 0 and 0.5 or 0.25 end
+    if tr == 0 then return ch == 0 and 1.33 or 0.9 end
+    return 0.0
+  end,
+  Track_GetPeakHoldDB = function(tr, ch) return tr == 0 and (ch == 0 and 0.025 or 0.01) or -1.5 end,
+  GetMediaTrackInfo_Value = function(tr, key) return key == 'B_MAINSEND' and main_sends[tr] or 0 end,
+  SetMediaTrackInfo_Value = function(tr, key, v) if key == 'B_MAINSEND' then main_sends[tr] = v end end,
+}
+local meters = assert(load('local handlers, track_from_osc = ...\n'
+  .. lift('function handlers.SetMainSend', '-- Punching in and out') .. '\nreturn handlers.GetMeters, handlers.SetMainSend'))
+local get_meters, set_main = meters({}, function(n) return reaper.GetTrack(0, (n or 1) - 1) end)
+local m = get_meters()
+check('a row a track, numbered as OSC numbers them', m.ok and #m.tracks == 2 and m.tracks[1].index == 1 and m.tracks[2].index == 2)
+check('its peaks a channel, over 1 when it is over', m.tracks[1].peak[1] == 1.33 and m.tracks[1].peak[2] == 0.9)
+check('its peak hold in dB, the louder channel', math.abs(m.tracks[1].hold_db - 2.5) < 1e-9)
+check('whether it plays into the master', m.tracks[1].main_send == true and m.tracks[2].main_send == false)
+check('a gain reduction where the plugin reports one, none keeping the place of one that does not',
+  #m.tracks[1].gr == 2 and m.tracks[1].gr[1] == 'none' and m.tracks[1].gr[2] == -4.5 and #m.tracks[2].gr == 0)
+check('and the master\'s peaks', m.master[1] == 0.5 and m.master[2] == 0.25)
+reaper.TrackFX_GetNamedConfigParm = nil
+local old_reaper = get_meters()
+check('a Reaper without TrackFX_GetNamedConfigParm reports no gain reduction, and still its meters',
+  old_reaper.ok and old_reaper.tracks[1].gr[2] == 'none' and old_reaper.tracks[1].peak[1] == 1.33)
+check('SetMainSend turns a track\'s master send on', set_main({2, 1}).ok and main_sends[1] == 1)
+check('and off', set_main({1, 0}).ok and main_sends[0] == 0)
+check('and refuses a track that is not there', set_main({9, 1}).ok == false)
+local enc = assert(load(text:sub(text:find('local function esc', 1, true), text:find('-- Scalar-only decoder', 1, true) - 1)
+  .. '\nreturn encode'))()
+local wire = enc(old_reaper)
+check('it encodes as JSON the desk reads: a list of tracks, a list of gain reductions',
+  wire:find('"tracks":%[{') ~= nil and wire:find('"gr":%["none","none"%]') ~= nil)
+
 print(string.format('[bridge] %d checks, %d failed', checks, failures))
 os.exit(failures == 0 and 0 or 1)
