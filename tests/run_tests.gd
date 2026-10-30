@@ -285,6 +285,7 @@ func _ready() -> void:
 	_test_each_venue_fits_its_own_shapes_to_the_gear()
 	_test_rack_plugin_search_finds_and_adds_one()
 	_test_channel_strip_name_opens_plugin_search()
+	await _test_arrow_keys_pick_in_the_plugin_search()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
@@ -7035,6 +7036,37 @@ func _test_channel_strip_name_opens_plugin_search() -> void:
 
 	strip.queue_free()
 	DAW.use(OfflineBackend.new())
+
+
+## Up and down move the highlight while the search box has the keys (2026-10-30: "searching for
+## plugins/effects works for search but arrow keys don't for selection"): a LineEdit took them.
+func _test_arrow_keys_pick_in_the_plugin_search() -> void:
+	await get_tree().process_frame
+	var picker := PluginPicker.ask(self, "Add", [["a", "Alpha"], ["b", "Bravo"], ["c", "Charlie"]])
+	await get_tree().process_frame
+	var edit: LineEdit = picker.find_child("Search", true, false)
+	edit.grab_focus()
+	await get_tree().process_frame
+	var picked: Array[String] = []
+	picker.chosen.connect(func(id: String): picked.append(id))
+	var key := func(code: Key) -> void:
+		for down in [true, false]:
+			var e := InputEventKey.new()
+			e.keycode = code
+			e.physical_keycode = code
+			e.pressed = down
+			get_viewport().push_input(e)
+	check("the search box has the keys", edit.has_focus())
+	key.call(KEY_DOWN)
+	key.call(KEY_DOWN)
+	check("two downs, the third row (%d)" % picker._highlighted, picker._highlighted == 2)
+	key.call(KEY_DOWN)
+	check("and no further than the last", picker._highlighted == 2)
+	key.call(KEY_UP)
+	check("up, the second (%d)" % picker._highlighted, picker._highlighted == 1)
+	edit.text_submitted.emit(edit.text)
+	check("Enter adds the one picked (%s)" % [picked], picked == ["b"])
+	await get_tree().process_frame
 
 
 ## A surface pushed into SCREEN mode by a stray tap on its handle -- easy to do reaching for a

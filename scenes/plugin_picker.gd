@@ -52,6 +52,9 @@ func _build(title: String) -> void:
 	_edit.placeholder_text = "type to search"
 	_edit.text_changed.connect(_refilter)
 	_edit.text_submitted.connect(func(_t): _choose(_highlighted))
+	# Up and down move the highlight from the search box itself: it has the keys, and a LineEdit
+	# takes them for its caret, so they never reached `_unhandled_input`.
+	_edit.gui_input.connect(_on_search_key)
 	column.add_child(_edit)
 	_rows = VBoxContainer.new()
 	column.add_child(_rows)
@@ -105,11 +108,29 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		queue_free()
-	elif event.is_action_pressed("ui_down") and not _filtered.is_empty():
+	elif _step(event):
 		get_viewport().set_input_as_handled()
-		_highlighted = mini(_highlighted + 1, mini(_filtered.size(), MAX_SHOWN) - 1)
-		_redraw()
-	elif event.is_action_pressed("ui_up") and not _filtered.is_empty():
-		get_viewport().set_input_as_handled()
-		_highlighted = maxi(_highlighted - 1, 0)
-		_redraw()
+
+
+func _on_search_key(event: InputEvent) -> void:
+	if _step(event):
+		_edit.accept_event()
+
+
+## Up or down (held, it repeats) moves the highlight one row; true if it was one of those.
+func _step(event: InputEvent) -> bool:
+	var by := 0
+	if event.is_action_pressed("ui_down", true):
+		by = 1
+	elif event.is_action_pressed("ui_up", true):
+		by = -1
+	if by == 0:
+		return false
+	if not _filtered.is_empty():
+		move_highlight(by)
+	return true
+
+
+func move_highlight(by: int) -> void:
+	_highlighted = clampi(_highlighted + by, 0, mini(_filtered.size(), MAX_SHOWN) - 1)
+	_redraw()
