@@ -83,3 +83,11 @@ jobs:
           # The whole suite: about half an hour on a desktop by 0.0.7, so an hour's allowance.
           timeout 3600 godot --headless --path . tests/tests.tscn 2>&1 | tee tests.log | grep -E "checks,|  FAIL" || true
           grep -q "checks, 0 failed" tests.log
+
+      - name: How the tests ended
+        if: failure()
+        run: |
+          echo "exit: the suite printed no tally if it did not finish"
+          grep -nE "SCRIPT ERROR|ERROR:|handle_crash|Program crashed|signal 11|Aborted|\[[0-9]+\]" tests.log | tail -n 60 || true
+          echo "--- last 120 lines ---"
+          tail -n 120 tests.log
