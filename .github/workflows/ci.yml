@@ -80,8 +80,11 @@ jobs:
 
       - name: Tests
         run: |
+          free -m
           # The whole suite: about half an hour on a desktop by 0.0.7, so an hour's allowance.
-          timeout 3600 godot --headless --path . tests/tests.tscn 2>&1 | tee tests.log | grep -E "checks,|  FAIL" || true
+          export DAWLINGS_TESTS_PROGRESS=1
+          timeout 3600 godot --headless --path . tests/tests.tscn 2>&1 | tee tests.log \
+              | grep --line-buffered -E "checks,|  FAIL|SCRIPT ERROR|crash|signal" || true
           grep -q "checks, 0 failed" tests.log
 
       - name: How the tests ended

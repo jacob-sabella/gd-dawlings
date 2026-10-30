@@ -916,12 +916,25 @@ func _report() -> void:
 
 func check(label: String, condition: bool) -> void:
 	_checks += 1
+	_progress(label)
 	if not condition:
 		_failures.append(label)
 
 
+## With DAWLINGS_TESTS_PROGRESS set (CI), a line every 500 checks with the latest one and the
+## memory in use, so a run killed before its tally still says how far it got.
+var _report_progress := OS.get_environment("DAWLINGS_TESTS_PROGRESS") != ""
+
+
+func _progress(label: String) -> void:
+	if _report_progress and _checks % 500 == 0:
+		print("[progress] %d checks, %d failed, %d MB static, at: %s" % [_checks, _failures.size(),
+				OS.get_static_memory_usage() / 1048576, label.left(120)])
+
+
 func close_to(label: String, a: float, b: float, epsilon: float = 0.0001) -> void:
 	_checks += 1
+	_progress(label)
 	if absf(a - b) > epsilon:
 		_failures.append("%s (got %.6f, wanted %.6f)" % [label, a, b])
 
