@@ -286,6 +286,8 @@ func _ready() -> void:
 	_test_rack_plugin_search_finds_and_adds_one()
 	_test_channel_strip_name_opens_plugin_search()
 	await _test_arrow_keys_pick_in_the_plugin_search()
+	await _test_tube_reads_links_searches_and_fetches()
+	await _test_tube_frames_follow_the_sound()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
@@ -7056,6 +7058,132 @@ func _test_channel_strip_name_opens_plugin_search() -> void:
 
 ## Up and down move the highlight while the search box has the keys (2026-10-30: "searching for
 ## plugins/effects works for search but arrow keys don't for selection"): a LineEdit took them.
+func _test_tube_reads_links_searches_and_fetches() -> void:
+	# The sampling station's YouTube, against tests/fixtures/fake_tube.sh: never the network.
+	check("a watch link's id", Tube.video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s") == "dQw4w9WgXcQ")
+	check("a watch link with the id later", Tube.video_id("youtube.com/watch?feature=x&v=dQw4w9WgXcQ") == "dQw4w9WgXcQ")
+	check("a short link's id", Tube.video_id(" https://youtu.be/dQw4w9WgXcQ?si=abc ") == "dQw4w9WgXcQ")
+	check("a Shorts link's id", Tube.video_id("https://youtube.com/shorts/aBc_DeF-123") == "aBc_DeF-123")
+	check("a bare id is an id", Tube.video_id("dQw4w9WgXcQ") == "dQw4w9WgXcQ")
+	check("eleven lower-case letters are a search", Tube.video_id("breakbeatss") == "")
+	check("words are a search", Tube.video_id("amen break") == "")
+	check("another site is not a link", Tube.video_id("https://vimeo.com/12345678901") == "")
+	var fake := ProjectSettings.globalize_path("res://tests/fixtures/fake_tube.sh")
+	var was := [Tube.yt_dlp, Tube.ffmpeg, Tube.dir]
+	Tube.yt_dlp = fake
+	Tube.ffmpeg = fake
+	Tube.dir = "user://test_tube"
+	for f in DirAccess.get_files_at(Tube.dir):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(Tube.dir.path_join(f)))
+	check("both tools found", Tube.missing_tool() == "")
+	Tube.ffmpeg = "/nowhere/ffmpeg"
+	check("a missing tool says which (%s)" % Tube.missing_tool(), Tube.missing_tool() == "ffmpeg is not installed")
+	Tube.ffmpeg = fake
+	var tube := Tube.new()
+	var said: Array = []
+	tube.searched.connect(func(q: String, rows: Array, error: String): said.append([q, rows, error]))
+	tube.search("amen break")
+	while said.is_empty():
+		await get_tree().process_frame
+	var rows: Array = said[0][1]
+	check("a search lists what was found (%s)" % [said[0]], rows.size() == 2 and said[0][2] == "")
+	check("each with its title, length and channel", not rows.is_empty() and rows[0].id == "dQw4w9WgXcQ"
+			and rows[0].title == "A song" and rows[0].seconds == 213.0 and rows[0].channel == "Someone")
+	check("a null length is no length, and no channel is its uploader", rows.size() == 2
+			and rows[1].seconds == 0.0 and rows[1].channel == "")
+	var got: Array = []
+	tube.fetched.connect(func(id: String, ok: bool, error: String): got.append([id, ok, error]))
+	check("nothing here before the fetch", not Tube.cached("dQw4w9WgXcQ"))
+	tube.fetch("dQw4w9WgXcQ")
+	while got.is_empty():
+		await get_tree().process_frame
+	check("the fetch answers (%s)" % [got[0]], got[0] == ["dQw4w9WgXcQ", true, ""])
+	check("the video and its sound are kept", Tube.cached("dQw4w9WgXcQ"))
+	check("no half-written sound is left", not FileAccess.file_exists(Tube.wav_path("dQw4w9WgXcQ") + ".part.wav"))
+	check("what it is, from the info", Tube.info("dQw4w9WgXcQ").get("title") == "A song")
+	OS.set_environment("FAKE_TUBE_FAIL", "Private video. Sign in if you've been granted access")
+	got.clear()
+	tube.fetch("dQw4w9WgXcQ")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check("a video here already is not fetched again", got.size() == 1 and got[0][1] == true)
+	got.clear()
+	tube.fetch("aBc_DeF-123")
+	while got.is_empty():
+		await get_tree().process_frame
+	check("a failed fetch says why (%s)" % [got[0]], got[0][1] == false and got[0][2].begins_with("Private video"))
+	check("and keeps nothing", not Tube.cached("aBc_DeF-123"))
+	said.clear()
+	tube.search("anything")
+	while said.is_empty():
+		await get_tree().process_frame
+	check("a failed search says why", said[0][1].is_empty() and said[0][2].begins_with("Private video"))
+	OS.unset_environment("FAKE_TUBE_FAIL")
+	tube.finish()
+	Tube.yt_dlp = was[0]
+	Tube.ffmpeg = was[1]
+	Tube.dir = was[2]
+
+
+func _test_tube_frames_follow_the_sound() -> void:
+	# The TV's picture from tests/fixtures/fake_tube.sh: frame k is every byte k, so a frame says which it is.
+	var fake := ProjectSettings.globalize_path("res://tests/fixtures/fake_tube.sh")
+	var was := Tube.ffmpeg
+	Tube.ffmpeg = fake
+	var said_args := ProjectSettings.globalize_path("user://test_tube_args.txt")
+	DirAccess.remove_absolute(said_args)
+	OS.set_environment("FAKE_TUBE_ARGS", said_args)
+	var which := func(image: Image) -> int:
+		return -1 if image == null else image.get_pixel(TubeFrames.W / 2, TubeFrames.H / 2).r8
+	var frames := TubeFrames.new("dQw4w9WgXcQ")
+	var first: Image = null
+	for i in 200:
+		first = frames.frame_at(0.0)
+		if first != null:
+			break
+		OS.delay_msec(5)
+	check("the first frame comes", first != null and first.get_size() == Vector2i(TubeFrames.W, TubeFrames.H))
+	check("and it is frame 0", which.call(first) == 0)
+	await _until_frame(frames, 2.5 / TubeFrames.FPS)
+	check("a time between frames shows the earlier (%d)" % which.call(frames.frame_at(2.5 / TubeFrames.FPS)),
+			which.call(frames.frame_at(2.5 / TubeFrames.FPS)) == 2)
+	frames._mutex.lock()
+	var held: int = frames._queue.size()
+	frames._mutex.unlock()
+	check("no more than AHEAD decoded past it (%d)" % held, held <= TubeFrames.AHEAD)
+	var opened := FileAccess.get_file_as_string(said_args).count("rawvideo")
+	check("time going on keeps the one pipe", opened == 1)
+	frames.frame_at(0.5 / TubeFrames.FPS)
+	await _until_said(said_args, 2)
+	check("a time back is a seek", FileAccess.get_file_as_string(said_args).count("rawvideo") == 2)
+	frames.frame_at(10.0)
+	await _until_said(said_args, 3)
+	var lines := FileAccess.get_file_as_string(said_args).split("\n")
+	check("so is a leap, from that time", lines.count("rawvideo") == 3 and lines.has("10.000"))
+	frames.close()
+	check("closed, nothing runs", frames._thread == null and frames._pid == -1)
+	OS.unset_environment("FAKE_TUBE_ARGS")
+	Tube.ffmpeg = was
+
+
+## Until the stand-in has been started `times` times (it writes its arguments as it starts).
+func _until_said(path: String, times: int) -> void:
+	for i in 200:
+		if FileAccess.get_file_as_string(path).count("rawvideo") >= times:
+			return
+		await get_tree().process_frame
+
+
+func _until_frame(frames: TubeFrames, t: float) -> void:
+	for i in 200:
+		frames._mutex.lock()
+		var newest: int = frames._queue.back()[0] if not frames._queue.is_empty() else -1
+		frames._mutex.unlock()
+		if newest >= int(t * TubeFrames.FPS):
+			return
+		await get_tree().process_frame
+
+
 func _test_arrow_keys_pick_in_the_plugin_search() -> void:
 	await get_tree().process_frame
 	var picker := PluginPicker.ask(self, "Add", [["a", "Alpha"], ["b", "Bravo"], ["c", "Charlie"]])
