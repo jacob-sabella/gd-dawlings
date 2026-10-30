@@ -88,7 +88,9 @@ func _redraw() -> void:
 		row.focus_mode = Control.FOCUS_NONE
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.pressed.connect(_choose.bind(i))
-		row.mouse_entered.connect(func(): _highlighted = i; _redraw())
+		# The highlight only: rebuilding the rows here made a new button under the mouse, which
+		# entered it again, every frame, and a click could land on one already gone.
+		row.mouse_entered.connect(func(): _highlighted = i; _light())
 		_rows.add_child(row)
 	if _filtered.is_empty():
 		_status.text = "no match"
@@ -96,6 +98,13 @@ func _redraw() -> void:
 		_status.text = "+ %d more — keep typing to narrow it down" % (_filtered.size() - shown)
 	else:
 		_status.text = ""
+
+
+## The highlighted row lit, the rest flat, without making them again.
+func _light() -> void:
+	var rows := _rows.get_children().filter(func(n): return not n.is_queued_for_deletion())
+	for i in rows.size():
+		(rows[i] as Button).flat = i != _highlighted
 
 
 func _choose(i: int) -> void:
@@ -133,4 +142,4 @@ func _step(event: InputEvent) -> bool:
 
 func move_highlight(by: int) -> void:
 	_highlighted = clampi(_highlighted + by, 0, mini(_filtered.size(), MAX_SHOWN) - 1)
-	_redraw()
+	_light()
