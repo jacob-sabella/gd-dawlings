@@ -24,7 +24,7 @@ extends RefCounted
 ## each other, so the near one hangs lower and the far one higher.
 const ALL := [
 	{"id": &"mixing", "title": "MIXING", "colour": Color(0.95, 0.86, 0.62),
-			"stations": [&"stage_table", &"platter", &"eq_wall", &"levels"], "pieces": []},
+			"stations": [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv"], "pieces": []},
 	{"id": &"rhythm", "title": "RHYTHM", "colour": Color(1.0, 0.62, 0.42),
 			"stations": [&"drums", &"looper", &"marbles"], "pieces": []},
 	{"id": &"harmony", "title": "HARMONY & STRINGS", "colour": Color(0.62, 0.86, 1.0),

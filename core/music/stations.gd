@@ -170,6 +170,16 @@ const ALL := [
 		"hands": "a column a track against lines at -18, -6 and 0 dBFS · blue from the top is gain reduction · take hold of a column and raise or lower it for that track's gain · the master's loudness against the TARGET, its true peak and its phase · press TARGET for the next, RESET to start the loudness again",
 	},
 	{
+		# The sampling station's TV (docs/sampling_station.md): YouTube on the control room's front
+		# wall right of the timeline (Venue.tv_mount_spot).
+		"id": &"tv", "title": "SAMPLING STATION", "area": CONTROL, "zone": &"", "air": 0.5,
+		"spot": &"tv_spot", "at": Vector3(0, (TvSurface.TOP + TvSurface.FOOT) * 0.5, 0),
+		"frame": [Vector3(0, TvSurface.TOP + 0.04, 0), Vector3(0, TvSurface.FOOT, 0.05)],
+		"seat": 2.2, "surface": &"tv",
+		"desk": "F walks to it, G brings it · FIND: type a search or paste a YouTube link, then PLAY, ◀ and ▶ · SAMPLE at the start of what to take and again at its end · CHOP: by its hits, or 16, 8 or 4 equal slices · click a pad to play its slice, through the armed track, recorded as a note while the song records · SCALE spreads the last pad across all sixteen in the song's key; KEY and MODE step it",
+		"hands": "YouTube over sixteen pads · PLAY, ◀ and ▶ the video · SAMPLE at the start and the end of what to take · CHOP cuts it · strike a pad for its slice · SCALE spreads one pad across all sixteen in a key; KEY and MODE step it",
+	},
+	{
 		# The circle of hand drums on the drum riser (HandDrum, slice 40): the ring's middle, its front
 		# toward the desk, the drums round it items of the room, the plaque low between the front two.
 		"id": &"drums", "title": "HAND DRUMS", "area": LIVE, "zone": &"drums", "air": 0.5,

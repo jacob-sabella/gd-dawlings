@@ -288,6 +288,8 @@ func _ready() -> void:
 	await _test_arrow_keys_pick_in_the_plugin_search()
 	await _test_tube_reads_links_searches_and_fetches()
 	await _test_tube_frames_follow_the_sound()
+	_test_the_pads_chop_a_sample_and_spread_one_across_a_scale()
+	await _test_the_station_samples_the_tv_and_plays_its_pads()
 	_test_escape_releases_a_surface_fullscreened_by_mistake()
 	_test_hover_is_counted_per_interactor()
 	_test_the_rim_brackets_what_the_cursor_can_hit()
@@ -7184,6 +7186,160 @@ func _until_frame(frames: TubeFrames, t: float) -> void:
 		await get_tree().process_frame
 
 
+func _test_the_pads_chop_a_sample_and_spread_one_across_a_scale() -> void:
+	# Two seconds of quiet with four clicks in it, each a decaying burst, at 0.2, 0.7, 1.1 and 1.6 s.
+	var sound := PackedVector2Array()
+	sound.resize(PadBank.RATE * 2)
+	var hits := [0.2, 0.7, 1.1, 1.6]
+	for h in hits:
+		var at := int(h * PadBank.RATE)
+		for i in 2400:
+			var v := sin(i * 0.3) * exp(-i / 400.0) * 0.8
+			sound[at + i] = Vector2(v, v * 0.9)
+	var bank := PadBank.new()
+	bank.set_sample(sound)
+	check("a sample in is cut into sixteen equal slices", bank.slices[0] == Vector2i(0, 6000)
+			and bank.slices[15] == Vector2i(90000, 96000))
+	var filled := bank.chop_transients()
+	var near := true
+	for i in hits.size():
+		near = near and absi(bank.slices[i].x - int(hits[i] * PadBank.RATE)) < 48
+	check("chopped by its attacks: a pad a click, each from its attack to the next (%d: %s)" % [filled, bank.slices.slice(0, 5)],
+			filled == 4 and near and bank.slices[0].y == bank.slices[1].x and bank.slices[3].y == sound.size()
+			and bank.slices[4] == Vector2i.ZERO)
+	var played: Array = bank.sound_of(bank.slice_of(1))
+	var stream: AudioStreamWAV = played[0]
+	check("a pad's sound is its slice, 16-bit stereo, at its own speed", stream != null and stream.stereo
+			and stream.data.size() == (bank.slices[1].y - bank.slices[1].x) * 4 and played[1] == 1.0)
+	check("an empty pad has no sound", bank.sound_of(bank.slice_of(9))[0] == null)
+	check("out of scale mode pads are notes 36-51, and those notes play them",
+			bank.note_of(0) == 36 and bank.note_of(15) == 51 and bank.play_of(37) == [bank.slices[1], 0]
+			and bank.play_of(52)[0] == Vector2i.ZERO)
+	# Every mode: sixteen degrees, always rising, its root and its octave in it.
+	var all_rise := true
+	for m in PadBank.MODES:
+		var last := -1
+		for d in PadBank.PADS:
+			var st := PadBank.degree_semitones(m, d)
+			all_rise = all_rise and st > last
+			last = st
+		var n: int = PadBank.steps_of(m).size()
+		all_rise = all_rise and PadBank.degree_semitones(m, 0) == 0 and PadBank.degree_semitones(m, n) == 12
+	check("all thirteen scales, the seven modes among them, rise over the sixteen pads, an octave a turn",
+			PadBank.MODES.size() == 13 and all_rise and PadBank.MODES.slice(0, 7) == Harmony.SCALES.keys())
+	check("dorian's pads: 0 2 3 5 7 9 10 12 ... (%s)" % [range(9).map(func(d): return PadBank.degree_semitones("dorian", d))],
+			range(9).map(func(d): return PadBank.degree_semitones("dorian", d)) == [0, 2, 3, 5, 7, 9, 10, 12, 14])
+	bank.scale_on = true
+	bank.scale_pad = 2
+	bank.mode = "minor pentatonic"
+	bank.sample_note = 9
+	bank.root = 0
+	check("the root reached the nearer way: A to C is up 3", bank.root_shift() == 3)
+	bank.root = 7
+	check("and A to G is down 2", bank.root_shift() == -2)
+	check("in scale mode every pad plays the spread pad's slice", bank.slice_of(0) == bank.slices[2]
+			and bank.slice_of(15) == bank.slices[2])
+	check("each a degree up: G, Bb, C, D, F, then G an octave up (%s)" % [range(6).map(bank.pad_label)],
+			range(6).map(bank.pad_label) == ["G4", "A#4", "C5", "D5", "F5", "G5"])
+	var rate: float = bank.sound_of(bank.slice_of(5), bank.pad_semitones(5))[1] \
+			/ bank.sound_of(bank.slice_of(0), bank.pad_semitones(0))[1]
+	check("an octave up the pads is twice as fast (%.3f)" % rate, absf(rate - 2.0) < 1e-4)
+	var back := true
+	for pad in PadBank.PADS:
+		back = back and bank.play_of(bank.note_of(pad)) == [bank.slices[2], bank.pad_semitones(pad)]
+	check("a scale-mode pad recorded is the note it sounds, and played back sounds the same", back)
+	# Cut from a WAV at 44.1 kHz: a ramp, so where each frame came from can be read off it.
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.stereo = true
+	wav.mix_rate = 44100
+	var data := PackedByteArray()
+	data.resize(44100 * 4)
+	for i in 44100:
+		data.encode_s16(i * 4, i % 30000)
+		data.encode_s16(i * 4 + 2, -(i % 30000))
+	wav.data = data
+	var cut := PadBank.cut(wav, 0.5, 0.6)
+	var first := cut[0].x * 32768.0 if not cut.is_empty() else -1.0
+	check("a span cut from a 44.1 kHz WAV is that span, at 48 kHz (%d frames, from %.1f)" % [cut.size(), first],
+			cut.size() == 4800 and absf(first - 22050.0) < 0.5 and absf(cut[0].y * 32768.0 + 22050.0) < 0.5)
+	check("and a span past its end stops at its end", PadBank.cut(wav, 0.95, 1.5).size() < 2400)
+
+
+func _test_the_station_samples_the_tv_and_plays_its_pads() -> void:
+	var tv := TvSurface.new()
+	add_child(tv)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var deck := tv.deck
+	check("the TV has its pads under it, sixteen, and the keys", deck != null and deck.pads.size() == 16
+			and deck.keys.has("SAMPLE") and deck.keys.has("CHOP") and deck.keys.has("SCALE") and deck.keys.has("KEY")
+			and deck.keys.has("MODE"))
+	check("the pads under the screen, the screen over them", deck != null
+			and deck.pads.all(func(p): return p.position.y < TvSurface.CASE_FOOT and p.position.y > TvSurface.FOOT))
+	var told: Array = []
+	tv.pads_said.connect(func(w: String): told.append(w))
+	deck.sample()
+	check("SAMPLE with nothing on the TV says so (%s)" % [told], told.size() == 1 and told[0].contains("TV"))
+	# A video's sound: two seconds at 44.1 kHz, a click every quarter second.
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.stereo = true
+	wav.mix_rate = 44100
+	var data := PackedByteArray()
+	data.resize(88200 * 4)
+	for i in 88200:
+		var k := i % 11025
+		var v := roundi(sin(k * 0.3) * exp(-k / 300.0) * 20000.0)
+		data.encode_s16(i * 4, v)
+		data.encode_s16(i * 4 + 2, v)
+	wav.data = data
+	tv._player.stream = wav
+	tv.video = "test"
+	tv.seconds = 2.0
+	tv.seek(0.5)
+	deck.sample()
+	check("the first press marks the start and lights SAMPLE", deck.marked == 0.5 and deck.keys["SAMPLE"].lit)
+	tv.seek(1.5)
+	deck.sample()
+	check("the second cuts from there to here, a second at 48 kHz, in sixteen (%d)" % tv.bank.frames.size(),
+			tv.bank.frames.size() == 48000 and is_nan(deck.marked) and tv.bank.slices[15].y == 48000
+			and deck.pads.all(func(p): return p.full))
+	deck.step_chop()
+	check("CHOP by its hits: a pad a click, four in the second (%s)" % [tv.bank.slices.slice(0, 5)],
+			PadDeck.CHOPS[deck.chop] == "HITS" and tv.bank.slices.filter(func(s): return s.y > s.x).size() == 4)
+	deck.step_chop()
+	check("then 8 equal", PadDeck.CHOPS[deck.chop] == "8" and tv.bank.slices[7].y == 48000 and tv.bank.slices[8] == Vector2i.ZERO
+			and not deck.pads[8].full)
+	var struck: Array = []
+	tv.pad_struck.connect(func(note: int, velocity: int, sec: float): struck.append([note, velocity, sec]))
+	deck.strike(2, 90)
+	var playing := deck._voices.filter(func(v): return v.playing)
+	check("a pad struck sounds its slice and lights", playing.size() == 1 and deck.pads[2].lit
+			and (playing[0].stream as AudioStreamWAV).data.size() == 6000 * 4)
+	check("and is a note for the take: pad 3 is 38, its slice's length (%s)" % [struck],
+			struck.size() == 1 and struck[0][0] == 38 and struck[0][1] == 90 and absf(struck[0][2] - 0.125) < 1e-4)
+	deck.strike(12)
+	check("an empty pad is silent and no note", struck.size() == 1)
+	deck.toggle_scale()
+	check("SCALE spreads the last pad struck over all sixteen, lettered by note (%s)" % [deck.pads.slice(0, 3).map(func(p): return p.words)],
+			tv.bank.scale_on and tv.bank.scale_pad == 2 and deck.keys["SCALE"].lit and deck.pads[0].words == "C4"
+			and deck.pads[15].full)
+	deck.step_mode()
+	check("MODE steps to the next (%s)" % tv.bank.mode, tv.bank.mode == "dorian")
+	deck.step_root(2)
+	check("KEY steps the root", tv.bank.root == 2 and deck.pads[0].words == "D4")
+	struck.clear()
+	deck.strike(7)
+	var voice: AudioStreamPlayer = deck._voices.filter(func(v): return v.playing).back()
+	check("a scale pad sounds its degree: dorian's eighth is the octave, twice as fast (%.3f)" % voice.pitch_scale,
+			absf(voice.pitch_scale - pow(2.0, 14 / 12.0)) < 1e-4 and struck.size() == 1 and struck[0][0] == 60 + 14)
+	var image := PadDeck.draw_wave(tv.bank, PadDeck.WAVE_PIXELS)
+	check("the waveform is drawn", image.get_pixel(PadDeck.WAVE_PIXELS.x / 2, PadDeck.WAVE_PIXELS.y / 2) != Color(0.03, 0.035, 0.05, 1))
+	tv.queue_free()
+	await get_tree().process_frame
+
+
 func _test_arrow_keys_pick_in_the_plugin_search() -> void:
 	await get_tree().process_frame
 	var picker := PluginPicker.ask(self, "Add", [["a", "Alpha"], ["b", "Bravo"], ["c", "Charlie"]])
@@ -8294,8 +8450,8 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 				studio._lamps[0].light_color == studio.venue.lamp_colour(0, Studio.PRACTICALS[0][1]))
 		var moved := []
 		for surface in studio.focus.surfaces:
-			# LEVELS is in the venue's wall, or stands in from where its wall would be.
-			if surface.surface_id == &"levels":
+			# LEVELS is in the venue's wall, and the TV on it, or both stand in from where its wall would be.
+			if surface.surface_id == &"levels" or surface.surface_id == &"tv":
 				continue
 			if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 				moved.append(surface.surface_id)
@@ -24023,9 +24179,10 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	check("the room the host publishes names it", studio.room_state()["venue"] == Venue.ROULETTE_ID)
 	var moved := []
 	for surface in studio.focus.surfaces:
-		if surface.surface_id != &"levels" and not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
+		if surface.surface_id != &"levels" and surface.surface_id != &"tv" \
+				and not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 			moved.append(surface.surface_id)
-	check("no gear moved, LEVELS aside, which is in the room's wall (%s)" % [moved], moved.is_empty())
+	check("no gear moved, LEVELS and the TV aside, which are on the room's wall (%s)" % [moved], moved.is_empty())
 	check("the setup wall stands in it, and the board", studio.rig_roulette_station != null and studio.roll_board != null)
 	var wall := studio.rig_roulette_station
 	wall.count = 3
@@ -26332,7 +26489,7 @@ func _test_every_venue_stands_every_station_clear() -> void:
 			var tag := "%s:%d" % [id, v]
 			var here := Stations.ids(venue)
 			# And the venue's own instrument where it has one (slice 42).
-			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
+			var stood: Array[StringName] = [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics"]
 			if VENUE_SETS.has(id):
 				stood.append(VenueInstrument.STATION)
 			# And its weather's switch where this arrangement has weather (slice 44).
@@ -26962,6 +27119,11 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			# In its niche in the control room's front wall, the LEVELS wall riding it.
 			var trolley := studio.levels_niche
 			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.levels != null \
+					and trolley.find_child("Plaque", true, false) != null
+		&"tv":
+			# On its bracket on the control room's front wall (or its stand), the TV riding it.
+			var trolley := studio.tv_mount
+			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.tv != null \
 					and trolley.find_child("Plaque", true, false) != null
 		&"venue":
 			# The venue's own instrument (slice 42): its mount, and each bar of it at home on the mount.
@@ -30010,7 +30172,7 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 	var arrived := true
 	var facing := true
 	var toasts := true
-	for n in 22:
+	for n in 23:
 		said.clear()
 		studio._unhandled_input(key)
 		visits.append(studio.station)
@@ -30024,8 +30186,8 @@ func _test_i_walks_to_each_station_in_turn() -> void:
 		var r := Stations.row(studio.station)
 		toasts = toasts and said.size() == 1 and said[0].begins_with("%s, %s: " % [r["title"], Stations.where(r)]) \
 				and said[0].contains(r["desk"]) and not said[0].contains("in the this")
-	check("I twenty-one times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-second comes back round (%s)" % [visits],
-			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
+	check("I twenty-two times walks to the harp, the bells, the wheel, the section blocks, the chord ledge, the stage table, the cassette rack, the sampler, the platter, the EQ wall, LEVELS, the TV, the hand drums, the looper, the music box, the string spool, the marble run, the theremin, the grain cloud, the modular wall, the lyric board and the studio's tubular bells, and a twenty-third comes back round (%s)" % [visits],
+			visits == [&"harp", &"bells", &"wheel", &"sections", &"ledge", &"stage_table", &"cassette_rack", &"sampler", &"platter", &"eq_wall", &"levels", &"tv", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue", &"harp"])
 	check("each time the walker ends at the seat, on walkable floor, facing the station", arrived and facing)
 	check("and a toast says its title, where it is (in the control room, in the live room, in this venue) and its desk line", toasts)
 	key.shift_pressed = true
@@ -30086,7 +30248,7 @@ func _test_a_headset_travels_to_a_station_and_back() -> void:
 	studio.ergonomics.motion_scale = 0.0
 	var board := studio.station_board
 	check("a headset has the station board, by the desk (%s)" % [board.rows() if board != null else null],
-			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
+			board != null and board.is_inside_tree() and board.rows() == [&"stage_table", &"platter", &"eq_wall", &"levels", &"tv", &"harp", &"bells", &"wheel", &"sections", &"ledge", &"cassette_rack", &"sampler", &"drums", &"looper", &"music_box", &"strings", &"marbles", &"theremin", &"grains", &"modular", &"lyrics", &"venue"])
 	# Home is the mix position, in front of the desk, not the room's origin inside the console;
 	# and from there the board is out of the way ahead (the desk is what is in view) and a few
 	# steps behind.

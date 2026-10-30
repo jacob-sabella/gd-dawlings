@@ -51,15 +51,23 @@ trolley, and a sample is still a cassette on the rack as well as a pad.
    (core/sampling/tube_frames.gd), off the main thread, tested against a stand-in for both tools
    (tests/fixtures/fake_tube.sh) so the suite never touches the network. Live: a search in under
    a second, an 8 s video fetched and decoded in about 2 s, its first frame 57 ms after asking.
-2. [ ] **The TV**: a screen on a stand in the control room; search and paste with an overlay like
-   PluginPicker; play, pause, seek; picture from the pipe, sound from the WAV on the monitor.
-3. [ ] **The station**: 16 pads, a screen with the sample's waveform, SAMPLE from the TV (the span
+2. [x] **The TV** (hardware/tv/tv_surface.gd): on the control room's front wall right of the
+   timeline, as LEVELS is left of it, on a bracket (Venue.tv_mount_spot; a stand where the wall is
+   not one to hang it on). FIND asks for a search or a link (NamePrompt), a search's results are
+   chosen in a PluginPicker; PLAY, ◀ and ▶ 5 s; picture from the pipe, sound from the WAV on the
+   monitor bus. The lamp that stood in front of it moved left; the slate panel narrowed.
+3. [x] **The station** (hardware/tv/pad_deck.gd, core/sampling/pad_bank.gd): the pads are a
+   console under the TV, one station (SAMPLING STATION): 16 pads, a screen with the sample's waveform, SAMPLE from the TV (the span
    between two presses, cut from the WAV exactly), chop by transients (DawKitTransients) or into
-   equal slices, a pad a slice; pads heard through the armed track's bus (DAW.monitor_bus).
+   equal slices, a pad a slice; pads heard through the armed track's bus (DAW.monitor_bus), and
+   taken down onto the armed track as notes (36-51) while the song records.
 4. [ ] **Playing and recording the pads**: click, the keyboard's 16 keys, MIDI notes 36-51;
    recorded as notes on a track (HitRecorder.note), and played back from them as the pads' slices.
-5. [ ] **Scale mode**: a pad's sound across all 16 in a key and mode (above): every mode,
+5. [x] **Scale mode**: a pad's sound across all 16 in a key and mode (above): every mode,
    following the song's key unless one is picked, played and recorded at the scale's pitches.
+   SCALE spreads the last pad struck; KEY steps the root, MODE the scale. Still to come with slice
+   4: a track's notes played back as the pads (until then a take plays through the track's own
+   instrument).
 6. [ ] **The other sources**: the room mic (the Sampler's catching), the audio interface input,
    the mix.
 7. [ ] **The room**: the TV's row (video, playing, position at time) and the pads' row; a guest

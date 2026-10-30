@@ -423,9 +423,10 @@ func _treat_control_room() -> void:
 		trap.rotation.y = PI * 0.25
 		ZoneKit.block(self, Vector3(0.09, 1.1, 0.9), Vector3(-cr + 0.05 + 0.046, 1.75, 3.25), _cloth("rust"),
 				"ControlRoomPanel")
-	# Not at the front left, where the wall is LEVELS' niche (Venue.levels_niche_spot).
-	for spec in [[-0.75, "charcoal"], [0.75, "charcoal"], [2.3, "slate"]]:
-		ZoneKit.block(self, Vector3(1.1, 0.9, 0.09), Vector3(spec[0], 2.55, front + 0.046), _cloth(spec[1]),
+	# Not at the front left, where the wall is LEVELS' niche (Venue.levels_niche_spot), and narrower
+	# at the right, short of the TV (Venue.tv_mount_spot).
+	for spec in [[-0.75, "charcoal", 1.1], [0.75, "charcoal", 1.1], [1.77, "slate", 0.8]]:
+		ZoneKit.block(self, Vector3(spec[2], 0.9, 0.09), Vector3(spec[0], 2.55, front + 0.046), _cloth(spec[1]),
 				"ControlRoomPanel")
 	ZoneKit.block(self, Vector3(0.09, 1.1, 0.9), Vector3(cr - 0.05 - 0.046, 1.75, 2.6), _cloth("rust"),
 			"ControlRoomPanel")

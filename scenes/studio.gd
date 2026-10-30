@@ -77,8 +77,10 @@ const PRACTICALS: Array = [
 	[Vector3(-4.3, 1.76, 2.2), Color(1.0, 0.78, 0.52), 6.0],
 	# Clear of the deck trolley from the seat: behind it, it was a lamp you could not take hold of.
 	# Forward on the right since the patch stand took that side of the room: anywhere behind it
-	# the stand was in the way from the seat.
-	[Vector3(2.7, 1.70, -3.1), Color(0.6, 0.78, 1.0), 5.5],
+	# the stand was in the way from the seat. Left of the TV since the TV hung on the front wall
+	# (docs/sampling_station.md): at (2.7, -3.1) it stood in front of the screen, and right of it
+	# there is no room between the EQ wall and the door.
+	[Vector3(1.65, 1.70, -3.2), Color(0.6, 0.78, 1.0), 5.5],
 	# Moved back and out, and turned down, once the desk started being summoned to the mix
 	# position. At (-0.80, 1.72, 0.34) this lamp stood 0.71m from the left end of a summoned
 	# desk and 1.55m from the right; inverse square makes that a five-to-one gradient across
@@ -419,6 +421,10 @@ var eq_wall_trolley: Trolley
 var levels: LevelsWall
 ## The niche in the front wall LEVELS is set into: a piece of the floor plan that never rolls.
 var levels_niche: Trolley
+## The sampling station's TV (TvSurface, docs/sampling_station.md), and what holds it: a bracket on
+## the front wall, or a stand where there is no wall (Venue.tv_mount_spot). Built in, as the niche is.
+var tv: TvSurface
+var tv_mount: Trolley
 var spectra: Spectra
 ## What stands on the floor by itself and is pushed about like the gear, though it is not in the
 ## control room's rig: the venue's free-standing stations and back-of-house furniture
@@ -728,6 +734,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
 	_set_levels_niche()
+	_set_tv_mount()
 	# The venue built its shelf and hoop where their trolleys stood in the last one.
 	_carry_all_live()
 	mirror.wardrobe.look = Session.local_look
@@ -1431,6 +1438,7 @@ func _build_furniture() -> void:
 	_build_stage_trolley()
 	_build_eq_wall_trolley()
 	_build_levels_niche()
+	_build_tv_mount()
 	_build_station_board()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
@@ -1806,6 +1814,114 @@ func _set_levels_niche() -> void:
 	levels_niche.add_child(plaque)
 	var at := _levels_niche_at()
 	levels_niche.place(Vector2(at.origin.x, at.origin.z), at.basis.get_euler().y)
+
+
+## The TV's bracket (docs/sampling_station.md): where it is is the venue's (Venue.tv_mount_spot), in
+## the set's frame.
+func _tv_mount_at() -> Transform3D:
+	return _venue_to_set(venue.tv_mount_spot()) if venue != null \
+			else Transform3D(Basis.IDENTITY, Vector3(room_width * 0.5 - Venue.TV_FROM_RIGHT, 0,
+					ROOM_FRONT + Venue.TV_IN))
+
+
+func _build_tv_mount() -> void:
+	var at := _tv_mount_at()
+	tv_mount = _trolley("TvMount", &"tv", at.origin, rad_to_deg(at.basis.get_euler().y))
+	tv_mount.built_in = true
+	tv_mount.follow = 9.0
+	_set_tv_mount()
+
+
+## The TV's bracket for this venue, or its stand where the wall is not one to hang it on, and the
+## plaque under it; stood where this venue keeps it.
+func _set_tv_mount() -> void:
+	if tv_mount == null:
+		return
+	for old in tv_mount.get_children():
+		if old.has_meta(&"mount"):
+			tv_mount.remove_child(old)
+			old.queue_free()
+	var standing := venue != null and venue.back_wall_gear_stands()
+	var metal := Materials.brushed_metal()
+	var back := -TvSurface.DEPTH
+	if standing:
+		# Two legs from feet on the floor up the case's back, and a bar across them.
+		for side in [-1.0, 1.0]:
+			var x: float = side * TvSurface.SCREEN.x * 0.3
+			# The leg's foot sunk into the foot's top, the foot a hair off the floor: no face shared.
+			_mount_box("Leg", Vector3(0.05, TvSurface.TOP - 0.12, 0.05),
+					Vector3(x, 0.02 + (TvSurface.TOP - 0.12) * 0.5, back - 0.03), metal)
+			_mount_box("Foot", Vector3(0.08, 0.03, 0.62), Vector3(x, 0.017, back - 0.03 + 0.08), metal)
+		# Into the legs, short of their far sides.
+		_mount_box("Bar", Vector3(TvSurface.SCREEN.x * 0.6 - 0.02, 0.04, 0.03),
+				Vector3(0, TvSurface.FOOT + 0.2, back - 0.03), metal)
+		tv_mount.footprint_centre = Vector2(0, back + 0.05)
+		tv_mount.footprint_half = Vector2(TvSurface.SCREEN.x * 0.3 + 0.05, 0.31)
+	else:
+		# An arm from the wall to the case's back.
+		var wall := -Venue.TV_IN + 0.05
+		_mount_box("Arm", Vector3(0.12, 0.12, back - wall - 0.004),
+				Vector3(0, (TvSurface.TOP + TvSurface.FOOT) * 0.5, (back - 0.002 + wall) * 0.5), metal)
+		tv_mount.footprint_centre = Vector2(0, -0.06)
+		tv_mount.footprint_half = Vector2(TvSurface.SCREEN.x * 0.5 + TvSurface.BEZEL, 0.06)
+	var plaque := Stations.plaque(&"tv", TvSurface.SCREEN.x * 0.5)
+	plaque.set_meta(&"mount", true)
+	plaque.position = Vector3(0, TvSurface.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.006)
+	tv_mount.add_child(plaque)
+	var at := _tv_mount_at()
+	tv_mount.place(Vector2(at.origin.x, at.origin.z), at.basis.get_euler().y)
+
+
+func _mount_box(of_name: String, size: Vector3, at: Vector3, paint: Material) -> void:
+	var box := MeshInstance3D.new()
+	box.name = of_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	box.mesh = mesh
+	box.position = at
+	box.material_override = paint
+	box.set_meta(&"mount", true)
+	tv_mount.add_part(box, false)
+
+
+## FIND on the TV: a search or a link asked for on the monitor; a link plays, a search lists what it
+## found (`_on_tv_searched`). From a desk: a headset has no keyboard to type a search with yet.
+func find_on_tv() -> void:
+	if tv == null or not is_instance_valid(tv):
+		return
+	if get_viewport() != null and get_viewport().use_xr:
+		Session.notice.emit("The TV's FIND is typed: from a desk, for now.")
+		return
+	var prompt := NamePrompt.ask(self, "YouTube: a search, or paste a link", "", 300)
+	prompt.answered.connect(func(text: String) -> void:
+		if text.strip_edges() != "" and tv != null and is_instance_valid(tv):
+			tv.find(text))
+
+
+## A pad struck at the sampling station (PadDeck): onto the armed track as a note while the song
+## records, as a played key is. The host takes it down; a guest's pads are slice 7's.
+func _on_pad_struck(note: int, velocity: int, seconds: float) -> void:
+	var track := HitRecorder.armed_track()
+	if track <= 0 or hit_recorder == null or not Session.is_authority():
+		return
+	hit_recorder.note(track, note, velocity, InstrumentItem.MELODIC_CHANNEL, maxf(seconds, 0.05),
+			hit_recorder.stamp())
+
+
+func _on_tv_searched(query: String, rows: Array, error: String) -> void:
+	if error != "" or rows.is_empty() or tv == null or not is_instance_valid(tv):
+		return
+	if get_viewport() != null and get_viewport().use_xr:
+		return
+	var choices: Array = []
+	for row: Dictionary in rows:
+		var long := TvSurface._clock(float(row.seconds)) if float(row.seconds) > 0.0 else "live"
+		var by := ("  ·  " + str(row.channel)) if str(row.channel) != "" else ""
+		choices.append([str(row.id), "%s  ·  %s%s" % [row.title, long, by]])
+	var picker := PluginPicker.ask(self, "YouTube: " + query.strip_edges(), choices)
+	picker.chosen.connect(func(id: String) -> void:
+		if tv != null and is_instance_valid(tv):
+			tv.watch(id))
 
 
 func _niche_box(of_name: String, size: Vector3, at: Vector3, paint: Material) -> void:
@@ -3304,7 +3420,7 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	_authored_floor[id] = piece.transform
 	var key := StringName("floor/%s" % id)
 	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO) \
-			and id == &"levels":
+			and (id == &"levels" or id == &"tv"):
 		# Where LEVELS stood on its trolley before it was built into the wall.
 		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
 	elif Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
@@ -3335,7 +3451,7 @@ const OLD_FLOOR_DEFAULTS := {
 	&"station_board": [Vector2(1.55, 2.3)],
 	&"patch_wall": [Vector2(-3.45, -1.3)],
 	&"lamp_1": [Vector2(-2.85, 1.25)],
-	&"lamp_2": [Vector2(3.10, 0.95), Vector2(1.9, -2.7)],
+	&"lamp_2": [Vector2(3.10, 0.95), Vector2(1.9, -2.7), Vector2(2.7, -3.1)],
 	&"lamp_3": [Vector2(-2.30, 0.95)],
 }
 ## The old rule's lines for the pieces that make room for the desk (SessionLayout.fit): in a room
@@ -3784,6 +3900,19 @@ func _build_surfaces() -> void:
 		studio_set.add_child(levels)
 		mount.register(levels)
 		focus.surfaces.append(levels)
+	# The TV (docs/sampling_station.md), on its bracket right of the timeline; none in AR.
+	if tv_mount != null:
+		tv = TvSurface.new()
+		tv.name = "Tv"
+		tv.transform = _authored_floor[&"tv"]
+		tv.find_asked.connect(find_on_tv)
+		tv.song_position = func() -> float: return hit_recorder.stamp() if hit_recorder != null else 0.0
+		tv.pad_struck.connect(_on_pad_struck)
+		tv.pads_said.connect(func(words: String) -> void: Session.notice.emit(words))
+		tv.searched.connect(_on_tv_searched)
+		studio_set.add_child(tv)
+		mount.register(tv)
+		focus.surfaces.append(tv)
 	# The modular wall, over the synth zone's keyboard stand (slice 51); none in AR.
 	if medium != Presentation.Medium.AR:
 		_build_modular()
@@ -3828,6 +3957,8 @@ func _build_surfaces() -> void:
 			_ride(eq_wall_trolley, eq_wall)
 		if levels != null:
 			_ride(levels_niche, levels)
+		if tv != null:
+			_ride(tv_mount, tv)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced

@@ -1247,6 +1247,32 @@ func levels_niche_spot() -> Transform3D:
 			Vector3(-room_width * 0.5 + LEVELS_NICHE_FROM_LEFT, 0.0, Studio.ROOM_FRONT + inset))
 
 
+## Where the sampling station's TV is (TvSurface, docs/sampling_station.md), in studio space: on
+## its bracket or its stand, read off the studio's.
+func tv_spot() -> Variant:
+	var studio := get_parent() as Studio
+	if studio == null or studio.tv_mount == null or not is_instance_valid(studio.tv_mount):
+		return null
+	return transform.affine_inverse() * studio.studio_set.transform * studio.tv_mount.transform
+
+
+## Where the TV hangs (its origin the floor under the screen's middle, its face +Z into the room):
+## on the front wall right of the timeline, as LEVELS is left of it, short of the door in the
+## right-hand corner. Where the wall is not one to hang it on (`back_wall_gear_stands`), on a
+## stand of its own, in from the edge.
+func tv_mount_spot() -> Transform3D:
+	var inset := TV_STANDS_IN if back_wall_gear_stands() else TV_IN
+	return Transform3D(Basis.IDENTITY,
+			Vector3(room_width * 0.5 - TV_FROM_RIGHT, 0.0, Studio.ROOM_FRONT + inset))
+
+
+## The TV's middle this far in from the right-hand wall; its face this far out from the front
+## wall's line (the wall's face is 5cm in, its bracket between), or a stand's.
+const TV_FROM_RIGHT := 2.6
+const TV_IN := 0.17
+const TV_STANDS_IN := 0.4
+
+
 ## The niche's middle this far in from the left-hand wall (its left edge just clear of a bass trap
 ## up the corner, its right as near the timeline's shoulder from the seat as that leaves it); its
 ## board this far out from the front wall's line (the wall's face is 5cm in, the board's back a little off it); a standing cabinet's
