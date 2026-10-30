@@ -21,7 +21,7 @@ extends Node3D
 ## laid, thrown, flown or pocketed here, and a room's word never moves it: its home is its station.
 
 ## The items there are, in the order they take the shelf's spots. The session in miniature
-## (docs/spatial_loop.md part two, slice 34) is after the shelf's: its home is the desk's left wing,
+## (docs/spatial_loop.md part two, slice 34) is after the shelf's: its home is the side table by the seat,
 ## not the shelf. Then the hand drums (HandDrum, slice 40), fixed kinds that stand in their ring on
 ## the drum riser and never on the shelf: where a venue has no ring (the Rig Roulette room, AR) they
 ## are put away (`stand`), neither seen nor struck. Then the venue's instrument's bars

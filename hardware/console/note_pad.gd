@@ -1,7 +1,7 @@
 class_name NotePad
 extends ControlAffordance
 
-## A pad of sticky notes on the desk's left wing, or at the console's left end in AR, where there is
+## A pad of sticky notes on the side table by the seat, or at the console's left end in AR, where there is
 ## no wing (docs/spatial_loop.md part two, slice 35): take a note off it and stick it on the
 ## timeline's ruler or a lane, or the miniature's bed, and the song time there is where it goes; then its words are typed (TypingPad in a headset, NamePrompt at a
 ## desk) and it is a `NOTE ` marker (Harmony.NOTE_PREFIX), which everyone sees on their ruler.

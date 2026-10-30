@@ -59,6 +59,7 @@ static func capture(backend: OfflineBackend) -> DawKitProject:
 		out.armed = t.rec_arm
 		out.monitor = clampi(t.monitor, 0, 2) as DawKitTrack.Monitor
 		out.input = t.input
+		out.input_off = t.input_off
 		out.group = t.group
 		# A track with notes on it plays them through the engine's instrument, first in its chain.
 		# One the project came with and the engine cannot run is kept as it came.
@@ -319,6 +320,7 @@ static func load(p: DawKitProject, backend: OfflineBackend, track_parts: Diction
 		t.group = clampi(src.group, 0, DAW.GROUPS)
 		t.comp = src.comp.map(func(s): return s.duplicate())
 		t.input = src.input
+		t.input_off = src.input_off
 		t.folder_depth = _depth_delta(p, i)
 		# Instruments are not in the desk's chain: the engine plays every track's notes through its
 		# own (INSTRUMENT), and one it cannot run is left out.

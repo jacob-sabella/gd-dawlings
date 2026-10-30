@@ -720,9 +720,10 @@ func _build_walls() -> void:
 				walnut, "Wainscot")
 		ZoneKit.block(self, Vector3(half * 2.0 - 0.144, 0.05, 0.07), Vector3(0, WAINSCOT + 0.02, z + inward * (WALL * 0.5 + 0.037)),
 				walnut, "CapRail")
-	# The door: in the front wall's left corner, a walnut slab in a black frame, a brass push
-	# plate, the exit sign over it.
-	var door_x := -half + 1.1
+	# The door: on the front wall right of the desk, short of the Rig Roulette door, a walnut slab
+	# in a black frame, a brass push plate, the exit sign over it. Not in the left corner, where it
+	# was: that is LEVELS' niche (Venue.levels_niche_spot).
+	var door_x := rig_roulette_door().origin.x - RouletteDoor.HALF.x - 1.0
 	# (all of it standing proud of the wainscot)
 	var face := FRONT + 0.045
 	ZoneKit.block(self, Vector3(1.0, 2.16, 0.06), Vector3(door_x, 1.08, face + 0.03), walnut, "Door")

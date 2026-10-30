@@ -188,6 +188,7 @@ sockbowl and aa stacks. Everything for it is in `deploy/noray/`:
 | `pin.env` | the noray commit and bun version |
 | `noray.env` | noray's settings: ports, relay range, limits, the code alphabet |
 | `dawlings-noray.service` | the systemd **user** unit, with memory limits |
+| `noray-watchdog.sh`, `dawlings-noray-watchdog.{service,timer}` | every two minutes, asks noray for a join code as a host would, and restarts it if it gives none twice (2026-10-30: its TCP side went quiet for hours while the service looked healthy) |
 | `dawlings.caddy` | the Caddy site block: a landing page and `/health` |
 | `deploy.sh` | the deploy, run by a person from this repo; `--dry-run` says everything first |
 

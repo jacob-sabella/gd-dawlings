@@ -6228,9 +6228,14 @@ and its number.
     the AUDIO DEVICES wall meters dawlings's own streams and the app's output, and no other port.
     shots/signal65_skyline.png (the bay's skyline, X on, the song playing).
 
-66. [x] **F. A LEVELS room off MIXING.** Built, as a wall: LEVELS, a station of its own on a
-    trolley at the control room's front left (Studio.LEVELS_IN 2.3 m in from the left wall, z −3.0,
-    turned 40° to face the seat; `Venue.levels_spot`), in the MIXING neighbourhood, on the station
+66. [x] **F. A LEVELS room off MIXING.** Built, as a wall: LEVELS, a station of its own set into
+    a niche in the control room's front wall, left of the timeline (2026-10-30, from a trolley at
+    the front left: "its own like divet in the wall so it can be an entire wall in each of the
+    venues"). `Venue.levels_niche_spot`, 2.25 m in from the left wall; a plaster surround, sill and
+    lintel standing out of the wall with a lit strip under the lintel, the board drawn
+    LevelsWall.FACE 1.3 times its own measures (3.1 m wide), the master on its left; where the
+    venue's wall is not one to build into (`back_wall_gear_stands`) a cabinet of the same stands
+    0.75 m in. It never rolls (Trolley.built_in). `Venue.levels_spot`; in the MIXING neighbourhood, on the station
     list, the I cycle (after the EQ wall), the PLAY page and F1. Nothing stands closer than 0.6 m to
     it in any of the 14 venues and their 3 variants, at 13 tracks or 40 (tools/layout_dump.tscn,
     tools/layout_map.py; the pairs under 0.6 m that remain are the loft's and the club's own

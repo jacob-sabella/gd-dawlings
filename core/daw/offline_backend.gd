@@ -666,18 +666,47 @@ func set_track_input(index: int, input: String) -> void:
 	record_for_replication("/track/%d/input" % index, [input])
 
 
+func set_track_input_off(index: int, off: bool) -> void:
+	_remember("/track/%d/inputoff" % index, set_track_input_off.bind(index, state.track(index).input_off),
+			set_track_input_off.bind(index, off), false)
+	state.set_track_field(index, &"input_off", off)
+	record_for_replication("/track/%d/inputoff" % index, [1.0 if off else 0.0])
+
+
 ## What a track can record from here: the machine's input devices and its keys.
 func publish_inputs() -> void:
 	# Each device both sides together, and each side alone: an interface's inputs 1 and 2.
 	var inputs: Array = [["audio:", "the default microphone"], ["audio:#1", "the default microphone, input 1"],
 			["audio:#2", "the default microphone, input 2"]]
+	var names := device_names()
 	for d in AudioServer.get_input_device_list():
 		if d != "Default":
-			inputs.append_array([["audio:" + d, d], ["audio:%s#1" % d, "%s, input 1" % d],
-					["audio:%s#2" % d, "%s, input 2" % d]])
+			var said: String = names.get(d, d)
+			inputs.append_array([["audio:" + d, said], ["audio:%s#1" % d, "%s, input 1" % said],
+					["audio:%s#2" % d, "%s, input 2" % said]])
 	inputs.append(["midi", "the keys"])
 	state.inputs = inputs
 	record_for_replication("/inputs", MixWire.pack_inputs(inputs))
+
+
+## The machine's input devices by what the sound server calls them to people, {name: description}:
+## "Scarlett 2i2 USB" for "alsa_input.usb-Focusrite_Scarlett_2i2_USB-00.analog-stereo", which is
+## what Godot lists. Asked of pactl each time the inputs are published; none where there is no
+## pactl, and the names stand as they are.
+static func device_names() -> Dictionary:
+	var out := {}
+	if OS.get_name() != "Linux":
+		return out
+	var said: Array = []
+	if OS.execute("pactl", ["-f", "json", "list", "sources"], said) != 0 or said.is_empty():
+		return out
+	var parsed: Variant = JSON.parse_string(str(said[0]))
+	if not (parsed is Array):
+		return out
+	for source in parsed:
+		if source is Dictionary and source.has("name") and source.has("description"):
+			out[str(source["name"])] = str(source["description"]).replace(" Analog Stereo", "").strip_edges()
+	return out
 
 
 ## Stands for Reaper, so it offers Reaper's stock plugins, by the names Reaper adds them by.

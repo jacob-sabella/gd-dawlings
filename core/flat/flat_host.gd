@@ -84,6 +84,7 @@ static func snapshot(s: MixState) -> DawKitProject:
 		out.armed = t.rec_arm
 		out.monitor = clampi(t.monitor, 0, 2) as DawKitTrack.Monitor
 		out.input = t.input
+		out.input_off = t.input_off
 		out.group = t.group
 		for it in t.items:
 			out.clips.append(ProjectBridge.clip_of(it))
@@ -192,6 +193,9 @@ func can(edit: StringName) -> bool:
 			return DAW.can(DAWBackend.Capability.RENDER)
 		INPUTS:
 			return DAW.state != null and not DAW.state.inputs.is_empty()
+		INPUT_OFF:
+			# The built-in engine's: it monitors and records itself. Reaper does its own.
+			return DAW.backend is OfflineBackend and DAW.state != null and not DAW.state.inputs.is_empty()
 	return edit in [VOLUME, PAN, MUTE, SOLO, TRANSPORT, RECORD, SEEK, LOOP, METRONOME, TEMPO, UNDO, TRACKS,
 			LOOP_RANGE, TEMPO_MAP, COUNT_IN, AUTOMATION, MONITOR]
 
@@ -223,6 +227,14 @@ func clip_peaks(id: String, clip_index: int) -> PackedByteArray:
 	if t == null or clip_index < 0 or clip_index >= t.items.size():
 		return PackedByteArray()
 	return (t.items[clip_index] as MixState.ItemState).peaks
+
+
+## The item's, as the desk's timeline has them (DAW.item_transients): from its file on this
+## machine, in song seconds.
+func clip_transients(id: String, clip_index: int) -> PackedFloat32Array:
+	if id == DawKitProject.MASTER_ID:
+		return PackedFloat32Array()
+	return DAW.item_transients(ProjectBridge.index_of(id), clip_index)
 
 
 func undo_name() -> String:
@@ -276,6 +288,11 @@ func set_input(id: String, input: String) -> void:
 func set_monitor(id: String, mode: int) -> void:
 	if id != DawKitProject.MASTER_ID:
 		DAW.set_track_monitor(ProjectBridge.index_of(id), mode)
+
+
+func set_input_off(id: String, off: bool) -> void:
+	if id != DawKitProject.MASTER_ID:
+		DAW.set_track_input_off(ProjectBridge.index_of(id), off)
 
 
 func play() -> void:

@@ -1141,14 +1141,13 @@ func eq_wall_spot() -> Variant:
 
 
 ## Where the LEVELS wall stands (LevelsWall, docs/spatial_loop.md part three, slice 66), in studio
-## space: on its trolley at the control room's front left, the studio's furniture, read from the
-## studio this venue stands in wherever the trolley has since been wheeled. Its front (+Z) faces the
-## seat. Null for a venue in no studio, or one with no wall (AR).
+## space: in its niche (`levels_niche_spot`), read from the studio this venue stands in. Its front
+## (+Z) faces the room. Null for a venue in no studio, or one with no wall (AR).
 func levels_spot() -> Variant:
 	var studio := get_parent() as Studio
-	if studio == null or studio.levels_trolley == null or not is_instance_valid(studio.levels_trolley):
+	if studio == null or studio.levels_niche == null or not is_instance_valid(studio.levels_niche):
 		return null
-	return transform.affine_inverse() * studio.studio_set.transform * studio.levels_trolley.transform
+	return transform.affine_inverse() * studio.studio_set.transform * studio.levels_niche.transform
 
 
 ## Where the DJ platter stands (Platter, docs/spatial_loop.md part two, slice 27), in studio space:
@@ -1164,10 +1163,10 @@ func platter_spot() -> Variant:
 
 
 ## Where the session in miniature lies at home (MiniatureItem, docs/spatial_loop.md part two, slice
-## 34), in studio space: on the desk's left wing (Studio.desk_wing), the little table bolted to the
-## console's left end, which is the studio's furniture and not the venue's, so read from the studio
-## this venue stands in, wherever the desk has grown to. Its reader's edge (an item's -Z) toward the
-## mix position. Null for a venue in no studio, or one with no wing (AR).
+## 34), in studio space: on the side table by the seat (Studio.desk_wing), which is the studio's
+## furniture and not the venue's, so read from the studio this venue stands in, wherever the table
+## has been pushed to. Its reader's edge (an item's -Z) toward the table's front. Null for a venue
+## in no studio, or one with no table (AR).
 func miniature_spot() -> Variant:
 	var studio := get_parent() as Studio
 	if studio == null or studio.desk_wing == null or not is_instance_valid(studio.desk_wing):
@@ -1231,6 +1230,30 @@ func roll_board_spot() -> Transform3D:
 	var inset := 0.45 if back_wall_gear_stands() else 0.11
 	return Transform3D(Basis(Vector3.UP, -PI * 0.5),
 			Vector3(room_width * 0.5 - inset, 2.14, Studio.ROOM_MID))
+
+
+## Where the LEVELS niche is, in studio space (its origin the floor under the board's middle, its
+## front +Z into the room): in the front wall left of the timeline, the board set back in it
+## (2026-10-30: "its own like divet in the wall so it can be an entire wall in each of the
+## venues"). Left of the timeline as the seat sees it, so not behind it, and short of the left
+## wall, where the patch wall, the mirror and the window are; its right edge stays clear of the
+## timeline's shoulder from the seat. Its x follows the wall out as the room widens.
+##
+## Where the wall is not one to build into (`back_wall_gear_stands`: open ground, rock, glass, a
+## curve) the niche is a cabinet of its own, stood in from the edge as the roll board is.
+func levels_niche_spot() -> Transform3D:
+	var inset := LEVELS_NICHE_STANDS_IN if back_wall_gear_stands() else LEVELS_NICHE_IN
+	return Transform3D(Basis.IDENTITY,
+			Vector3(-room_width * 0.5 + LEVELS_NICHE_FROM_LEFT, 0.0, Studio.ROOM_FRONT + inset))
+
+
+## The niche's middle this far in from the left-hand wall (its left edge just clear of a bass trap
+## up the corner, its right as near the timeline's shoulder from the seat as that leaves it); its
+## board this far out from the front wall's line (the wall's face is 5cm in, the board's back a little off it); a standing cabinet's
+## this far, shallow (`Studio.NICHE_STANDING_OUT`), its front 0.6 m short of the patch wall's legs.
+const LEVELS_NICHE_FROM_LEFT := 2.25
+const LEVELS_NICHE_IN := 0.14
+const LEVELS_NICHE_STANDS_IN := 0.33
 
 
 ## Where the Workshop's panel hangs (WorkshopPanel, docs/workshop.md), in studio space (its origin

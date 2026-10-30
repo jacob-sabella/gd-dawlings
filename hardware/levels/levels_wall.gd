@@ -1,8 +1,10 @@
 class_name LevelsWall
 extends Surface
 
-## LEVELS (docs/spatial_loop.md part three, F): a wall of every track's level, standing in the
-## MIXING ring on a trolley of its own, the desk's front-left, turned to the seat.
+## LEVELS (docs/spatial_loop.md part three, F): a wall of every track's level, set into a niche in
+## the control room's front wall left of the timeline, a whole stretch of wall (2026-10-30: "it would
+## make more sense as its own like divet in the wall so it can be an entire wall in each of the
+## venues"); where a venue has no walls, the niche is a cabinet standing in from the edge.
 ##
 ## THE TRACKS. A column a track, side by side, against three fixed lines across them all: −18
 ## dBFS (where a track sits with room to spare), −6 and 0. Each column is the track's peak after its
@@ -31,17 +33,23 @@ extends Surface
 ## (DAWBackend.want_signal_meters, want_loudness) only then. Nothing is made while it runs: its
 ## bars are one bank, its letters a pool laid out at the build, their texts set only when they change.
 ##
-## Its frame: the origin is the floor under the board's middle, +Y up, +Z out of its face.
+## Its frame: the origin is the floor under the board's middle, +Y up, +Z out of its face. The
+## board is laid out in the metres below and drawn FACE times over (`_face`), so a wall's worth: every
+## measure here is the board's own, and `room_*` turns one into the room's.
 
-## The board, and where on it the scale is (m).
-const WIDE := 2.0
+## The board drawn this many times its own measures, to fill a wall read from the seat 5 m off.
+const FACE := 1.3
+## The board, and where on it the scale is (board metres).
+const WIDE := 2.3
 const BOTTOM := 0.42
 const TALL := 1.5
 const BORDER := 0.04
-## The lettered margin left of the columns, the columns' share, the gap and the master's.
-const MARGIN := 0.11
+## The board's edge either side, the lettered margin left of the columns, the columns' share and
+## the master's.
+const EDGE := 0.05
+const MARGIN := 0.15
 const COLUMNS_WIDE := 1.2
-const MASTER_WIDE := 0.6
+const MASTER_WIDE := 0.85
 ## A column's pitch, least and most (m).
 const PITCH := Vector2(0.075, 0.12)
 ## The strips under and over the scale: names under, numbers over.
@@ -86,8 +94,8 @@ const RED := Color(1.0, 0.16, 0.1)
 const INK := Color(0.92, 0.92, 0.88)
 const DIM := Color(0.6, 0.62, 0.66)
 const GR_INK := Color(0.45, 0.68, 1.0)
-## Where the plaque's top is on the trolley, under the board.
-const PLAQUE_TOP := BOTTOM - 0.15
+## Where the plaque's top is in the niche, on the face of the sill under the board (room metres).
+const PLAQUE_TOP := 0.35
 
 ## () -> float, Ergonomics.motion_scale: at 0 the columns move once a second.
 var motion: Callable = func() -> float: return 1.0
@@ -95,7 +103,9 @@ var motion: Callable = func() -> float: return 1.0
 ## within READ_REACH of it and turned toward it.
 var wanted: Callable = Callable()
 ## The surface handle's size (SurfaceHandle.reposition): it is read from the seat five metres off.
-var handle_scale := 1.4
+var handle_scale := 1.7
+## At the board's left end: its right is behind the timeline's shoulder from the seat.
+var handle_left := true
 ## The target chosen (an index into TARGETS) and CUSTOM's level. This player's, not the room's.
 var target := 0
 var custom_db := -16.0
@@ -104,6 +114,8 @@ var first := 0
 var shown_count := 0
 
 var columns: Array[Column] = []
+## What the board is built in: this node, FACE times over.
+var _face: Node3D
 var _bank: MeshBank
 var _names: Array[Label3D] = []
 var _numbers: Array[Label3D] = []
@@ -180,11 +192,16 @@ func looked_at() -> bool:
 	var eye := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if eye == null:
 		return false
-	var to := global_position + global_basis.y * (BOTTOM + TALL * 0.5) - eye.global_position
+	var to := global_position + global_basis.y * room_y(BOTTOM + TALL * 0.5) - eye.global_position
 	return to.length() < READ_REACH and to.dot(-eye.global_basis.z) > 0.0
 
 
 # --- the arithmetic of the wall ---------------------------------------------------------------
+
+## A height on the board (board metres) as a height in the room.
+static func room_y(board_y: float) -> float:
+	return board_y * FACE
+
 
 ## The scale's foot and its height (m).
 static func scale_foot() -> float:
@@ -206,13 +223,15 @@ static func db_per_m() -> float:
 	return (TOP_DB - FLOOR_DB) / scale_tall()
 
 
-## The columns' left edge, and the master section's.
+## The columns' left edge, and the master section's. The master on the left, the columns on the
+## right with their dBFS lettered in the MARGIN between: from the seat the board's right is behind
+## the timeline's shoulder, and what is read most while playing is the master's loudness.
 static func columns_left() -> float:
-	return -WIDE * 0.5 + MARGIN
+	return WIDE * 0.5 - EDGE - COLUMNS_WIDE
 
 
 static func master_left() -> float:
-	return -WIDE * 0.5 + MARGIN + COLUMNS_WIDE + (WIDE - MARGIN - COLUMNS_WIDE - MASTER_WIDE)
+	return -WIDE * 0.5 + EDGE
 
 
 ## How many columns show for `tracks` tracks: all of them, down to PITCH.x apart, and past that
@@ -280,6 +299,12 @@ static func title_of(track: int) -> String:
 
 func _rebuild() -> void:
 	_clear_built()
+	_face = null
+	var face := Node3D.new()
+	face.name = "Face"
+	face.scale = Vector3.ONE * FACE
+	_adopt(face)
+	_face = face
 	columns.clear()
 	_names.clear()
 	_numbers.clear()
@@ -293,9 +318,9 @@ func _rebuild() -> void:
 	var plate := MeshInstance3D.new()
 	plate.name = "Board"
 	var box := BoxMesh.new()
-	box.size = Vector3(WIDE + BORDER * 2.0, TALL + BORDER * 2.0 + 0.1, 0.03)
+	box.size = Vector3(WIDE + BORDER * 2.0, TALL + BORDER * 2.0 + 0.14, 0.03)
 	plate.mesh = box
-	plate.position = Vector3(0, BOTTOM + TALL * 0.5 - 0.05, -0.016)
+	plate.position = Vector3(0, BOTTOM + TALL * 0.5 - 0.03, -0.016)
 	var paint := StandardMaterial3D.new()
 	paint.albedo_color = Color(0.05, 0.055, 0.068)
 	paint.roughness = 0.92
@@ -324,6 +349,7 @@ func _rebuild() -> void:
 		var mark := _label("%s dBFS" % _signed(db, 0) if db != 0.0 else "0 dBFS", LINE_CAP, DIM)
 		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		mark.position = Vector3(x0 - 0.01, y_of(db), 0.002)
+		Lettering.fit(mark, MARGIN - 0.015, mark.font_size, 12)
 		_adopt(mark)
 
 	for n in shown_count:
@@ -358,16 +384,15 @@ func _rebuild() -> void:
 
 	var title := _label("LEVELS", 0.05, Color(0.95, 0.86, 0.62))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	title.position = Vector3(-WIDE * 0.5 + 0.02, BOTTOM + TALL + 0.03, 0.002)
+	title.position = Vector3(-WIDE * 0.5 + 0.02, BOTTOM + TALL + 0.05, 0.002)
 	_adopt(title)
 	var how := _label("EACH TRACK AFTER ITS FADER · DRAG A COLUMN FOR ITS GAIN · GR PUSHES IT DOWN FROM THE TOP", 0.026, DIM)
 	how.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	how.position = Vector3(-WIDE * 0.5 + 0.26, BOTTOM + TALL + 0.03, 0.002)
+	# Over the columns it is about.
+	how.position = Vector3(columns_left(), BOTTOM + TALL + 0.05, 0.002)
+	Lettering.fit(how, COLUMNS_WIDE, how.font_size, 12)
 	_adopt(how)
-	_foot = _label("", 0.03, DIM)
-	_foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_foot.position = Vector3(x0, BOTTOM - 0.03, 0.002)
-	_adopt(_foot)
+	_foot = _left_label(Vector3(x0, BOTTOM - 0.03, 0.002), 0.03, DIM, COLUMNS_WIDE - 0.27)
 	if tracks > shown_count:
 		_left_key = _key("◀", "the tracks before these", Vector2(0.08, 0.05), Vector3(x0 + COLUMNS_WIDE - 0.2, BOTTOM - 0.03, 0.0), "EARLIER TRACKS")
 		_left_key.pressed.connect(func() -> void: scroll_by(-(shown_count - 1)))
@@ -389,16 +414,14 @@ func _build_master() -> void:
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	head.position = Vector3(mx, top - 0.03, 0.003)
 	_adopt(head)
-	_short = _left_label(Vector3(mx, top - 0.11, 0.003), BIG_CAP, INK)
-	_integrated = _left_label(Vector3(mx, top - 0.19, 0.003), MASTER_CAP * 0.8, INK)
-	_target_words = _left_label(Vector3(mx + 0.19, top - 0.26, 0.003), MASTER_CAP * 0.72, INK)
-	_verdict = _left_label(Vector3(mx, top - 0.32, 0.003), MASTER_CAP * 0.8, INK)
-	_verdict.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_verdict.width = MASTER_WIDE / PIXEL
-	_peak = _left_label(Vector3(mx, top - PEAK_ROW + 0.07, 0.003), MASTER_CAP * 0.85, INK)
-	_phase = _left_label(Vector3(mx, top - PHASE_ROW + 0.08, 0.003), MASTER_CAP * 0.8, INK)
-	_phase.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_phase.width = MASTER_WIDE / PIXEL
+	# Every line one line, as wide as the section and no wider (`_say_in` fits each as its words
+	# change): wrapped, the verdict grew down into the keys and the integrated line ran off the board.
+	_short = _left_label(Vector3(mx, top - 0.11, 0.003), BIG_CAP, INK, MASTER_WIDE)
+	_integrated = _left_label(Vector3(mx, top - 0.19, 0.003), MASTER_CAP * 0.8, INK, MASTER_WIDE)
+	_target_words = _left_label(Vector3(mx + 0.19, top - 0.25, 0.003), MASTER_CAP * 0.72, INK, MASTER_WIDE - 0.19 - 0.17)
+	_verdict = _left_label(Vector3(mx, top - 0.325, 0.003), MASTER_CAP * 0.8, INK, MASTER_WIDE)
+	_peak = _left_label(Vector3(mx, top - PEAK_ROW + 0.07, 0.003), MASTER_CAP * 0.85, INK, MASTER_WIDE)
+	_phase = _left_label(Vector3(mx, top - PHASE_ROW + 0.07, 0.003), MASTER_CAP * 0.8, INK, MASTER_WIDE)
 	_say = _left_label(Vector3(mx, top - PHASE_ROW - 0.15, 0.003), MASTER_CAP * 0.62, DIM)
 	_say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_say.width = MASTER_WIDE / PIXEL
@@ -449,12 +472,25 @@ func _label(words: String, cap: float, colour: Color) -> Label3D:
 	return l
 
 
-func _left_label(at: Vector3, cap: float, colour: Color) -> Label3D:
+## A line lettered from its left end at `at`; given a `room`, kept within it (`_say_in`).
+func _left_label(at: Vector3, cap: float, colour: Color, room := 0.0) -> Label3D:
 	var l := _label("", cap, colour)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	l.position = at
+	if room > 0.0:
+		l.set_meta(&"room", room)
+		l.set_meta(&"cap", l.font_size)
 	_adopt(l)
 	return l
+
+
+## Built into the board, which is FACE times over.
+func _adopt(node: Node) -> void:
+	if _face != null and node != _face:
+		node.set_meta("built", true)
+		_face.add_child(node)
+	else:
+		super(node)
 
 
 func _key(legend: String, says: String, size: Vector2, at: Vector3, called := "") -> EqWall.WallKey:
@@ -501,8 +537,7 @@ func read(delta: float) -> void:
 		var total := DAW.state.track_indices().size()
 		var said := "TRACKS %d-%d OF %d · drag or wheel the names to scroll" % [first + 1, first + shown_count, total] \
 				if total > shown_count else "%d TRACKS" % total
-		if _foot.text != said:
-			_foot.text = said
+		_say_in(_foot, said)
 
 
 func _read_column(c: Column, delta: float, now: int, words: bool) -> void:
@@ -665,6 +700,8 @@ func _read_master(words: bool) -> void:
 func _say_in(label: Label3D, words: String) -> void:
 	if label != null and label.text != words:
 		label.text = words
+		if label.has_meta(&"room"):
+			Lettering.fit(label, float(label.get_meta(&"room")), int(label.get_meta(&"cap")), 12)
 
 
 # --- what the keys and the columns do ---------------------------------------------------------
@@ -700,7 +737,7 @@ func scroll_by(by: int) -> bool:
 
 func _column_begin(c: Column, at: Vector3) -> void:
 	var t := DAW.state.track(c.track, false)
-	c._start = to_local(at)
+	c._start = _face.to_local(at)
 	c._from = FaderLaw.to_db(t.volume) if t != null and t.volume > 0.0 else -61.0
 	c._shown_from = float((_level.get(c.track, [-INF]) as Array)[0])
 	if not is_finite(c._shown_from):
@@ -711,7 +748,7 @@ func _column_begin(c: Column, at: Vector3) -> void:
 func _column_move(c: Column, at: Vector3) -> void:
 	if c.track <= 0:
 		return
-	var d := to_local(at) - c._start
+	var d := _face.to_local(at) - c._start
 	var by := d.y * db_per_m()
 	var hand := c.held_by as Interactor
 	if hand != null and hand.fine():
@@ -824,11 +861,11 @@ class NameStrip extends ControlAffordance:
 		add_child(shape)
 
 	func _on_grab_begin(at: Vector3) -> void:
-		_start = wall.to_local(at).x
+		_start = wall._face.to_local(at).x
 		_from = wall.first
 
 	func _on_grab_move(at: Vector3) -> void:
-		var by := -roundi((wall.to_local(at).x - _start) / wall._pitch)
+		var by := -roundi((wall._face.to_local(at).x - _start) / wall._pitch)
 		wall.scroll_by(_from + by - wall.first)
 
 	func _on_nudge(notches: int, _fine: bool) -> bool:

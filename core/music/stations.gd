@@ -160,12 +160,12 @@ const ALL := [
 		"hands": "frequency up its height, lows at the floor · each track's shape is its level in each band · where two glow they clash: point at a glow for its card · grab a glow on a track's side and push it into the wall to cut that track there · press SHOW for all, the soloed or the worst clash",
 	},
 	{
-		# LEVELS (slice 66): a wall of every track's level and the master's loudness, on a trolley of
-		# its own at the control room's front left, turned to the seat.
+		# LEVELS (slice 66): a wall of every track's level and the master's loudness, set into a niche
+		# in the control room's front wall left of the timeline (Venue.levels_niche_spot).
 		"id": &"levels", "title": "LEVELS", "area": CONTROL, "zone": &"", "air": 0.5,
-		"spot": &"levels_spot", "at": Vector3(0, 1.15, 0),
-		"frame": [Vector3(0, LevelsWall.BOTTOM + LevelsWall.TALL + 0.08, 0), Vector3(0, LevelsWall.BOTTOM, 0.05)],
-		"seat": 2.0, "surface": &"levels",
+		"spot": &"levels_spot", "at": Vector3(0, 1.4, 0),
+		"frame": [Vector3(0, (LevelsWall.BOTTOM + LevelsWall.TALL + 0.08) * LevelsWall.FACE, 0), Vector3(0, LevelsWall.BOTTOM * LevelsWall.FACE, 0.05)],
+		"seat": 2.8, "surface": &"levels",
 		"desk": "F walks to it, G brings it · a column a track, its peak after the fader against lines at -18, -6 and 0 dBFS, the held peak over it · a blue bar down from the top is a compressor's gain reduction · drag a column up or down for that track's gain, wheel 0.5 dB (Shift 0.1) · drag or wheel the names to scroll · the master: short-term and integrated LUFS against the TARGET (press it: streaming -14, club -8, broadcast -23, custom; wheel it for custom), true peak and phase · RESET starts the integrated again",
 		"hands": "a column a track against lines at -18, -6 and 0 dBFS · blue from the top is gain reduction · take hold of a column and raise or lower it for that track's gain · the master's loudness against the TARGET, its true peak and its phase · press TARGET for the next, RESET to start the loudness again",
 	},
@@ -367,7 +367,7 @@ const HELD := [
 	},
 	{
 		"id": &"miniature", "title": "MINIATURE", "area": HELD_AREA,
-		"desk": "the session to hold, on the desk's left wing: click a track to play from there and bring the console · an item to select it on the timeline · a pin to walk to its station · its front edge to carry it",
+		"desk": "the session to hold, on the side table by the seat: click a track to play from there and bring the console · an item to select it on the timeline · a pin to walk to its station · its front edge to carry it · the table itself to push it anywhere",
 		"hands": "point at it or touch it with a fingertip: the card names the track and time · press to play from there and bring the console · an item brings the timeline · a pin travels to its station · take it by its front edge",
 	},
 	{

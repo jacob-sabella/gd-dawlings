@@ -105,6 +105,9 @@ var _chain_down: PanelButton
 var _key: TabletSelector
 var _move_to: TabletSelector
 var _lost_label: Label3D
+## Over the knobs while the plugin loads (the built-in engine loads it on a thread of its own and
+## the slot is there, named, before it has any).
+var _loading_label: Label3D
 var _preset_word: Label3D
 var _window_button: PanelButton
 var _window_word: Label3D
@@ -186,7 +189,12 @@ func find_plugin() -> bool:
 
 func _shape_key() -> String:
 	var count := _params().size()
-	return "%s|%d|%d|%d|%s|%s" % [fx_name, count, page_offset, track_index, lost, showing_window]
+	return "%s|%d|%d|%d|%s|%s|%s" % [fx_name, count, page_offset, track_index, lost, showing_window, _loading()]
+
+
+## Whether the plugin is still loading (DAWBackend.fx_loading).
+func _loading() -> bool:
+	return not lost and DAW.backend != null and DAW.backend.fx_loading(track_index, fx_index)
 
 
 ## Looked at once a frame: Reaper names a thousand plugins in one refresh, and finding this
@@ -381,6 +389,11 @@ func _build_grid() -> void:
 	_lost_label = _label("PLUGIN NOT FOUND", 64, Vector3(0, 0, 0.002), Color(0.95, 0.55, 0.45))
 	_lost_label.name = "Lost"
 	_lost_label.visible = lost
+	_loading_label = _label("LOADING %s…" % fx_name.to_upper(), 56, Vector3(0, 0, 0.002),
+			Color(0.95, 0.80, 0.45))
+	_loading_label.name = "Loading"
+	Lettering.fit(_loading_label, WIDTH - 0.06, 56)
+	_loading_label.visible = _loading()
 
 
 func _build_footer() -> void:
@@ -552,6 +565,8 @@ func refresh() -> void:
 	Lettering.fit(_subtitle, WIDTH - 0.12, 40)
 	_chip_material.albedo_color = Materials.chip_colour(track.shown_colour() if track else Color.GRAY)
 	_lost_label.visible = lost
+	if _loading_label != null and is_instance_valid(_loading_label):
+		_loading_label.visible = here and _loading()
 	_window_button.visible = windows and here
 	_window_word.visible = _window_button.visible
 	_window_button.lit = showing_window

@@ -52,6 +52,18 @@ const TIMELINE_STAND_TOP := TIMELINE_Y - 0.16 * TIMELINE_SCALE
 const TIMELINE_STAND_Z := TIMELINE_Z - 0.04
 ## Where the stand's legs stand, either side of the scaled panel.
 const TIMELINE_LEG_X := 0.36 * TIMELINE_SCALE
+## The clip editor (ClipEditorSurface): clamped to the timeline stand's right-hand leg, just in
+## front of it, under the lanes and right of the timeline's deck: the one stretch of the seated
+## view with nothing in it, so the clip being trimmed and the arrangement it is in are seen
+## together from the desk. Beside the timeline's shoulder it ran off the edge of the frame; above
+## it, out of the top. Turned a few degrees away from the seat, not toward it: turned in, its right
+## end came within 0.3 m of the tape deck's cart, and the room keeps 0.6 m between its pieces
+## (`_test_the_studio_hangs_the_clip_editor_by_the_timeline`). Scaled as the timeline is, a little
+## less. Where its board's left edge is on the floor, the height of its origin, and its turn.
+const CLIP_EDITOR_SCALE := 1.35
+const CLIP_EDITOR_Y := 0.925
+const CLIP_EDITOR_LEFT := Vector2(0.43, -0.985)
+const CLIP_EDITOR_YAW := 7.0
 ## The lamps in the room: where the light comes from, what colour, and how hard.
 ##
 ## One table, read twice -- once by the environment to make the lights and once by the furniture
@@ -359,6 +371,8 @@ var _predicted_track_racks := 0
 var deck: TapeDeck
 var patchbay: PatchbaySurface
 var timeline: TimelineSurface
+## The one clip editor, closed until a clip is opened in it (TimelineSurface.edit_asked).
+var clip_editor: ClipEditorSurface
 
 ## Where each machine's loom leaves it, in that machine's own space, and where it lands across
 ## the back of the bay. One entry per run: machine, exit point, exit direction, the fraction
@@ -403,7 +417,8 @@ var stage_trolley: Trolley
 var eq_wall: EqWall
 var eq_wall_trolley: Trolley
 var levels: LevelsWall
-var levels_trolley: Trolley
+## The niche in the front wall LEVELS is set into: a piece of the floor plan that never rolls.
+var levels_niche: Trolley
 var spectra: Spectra
 ## What stands on the floor by itself and is pushed about like the gear, though it is not in the
 ## control room's rig: the venue's free-standing stations and back-of-house furniture
@@ -712,6 +727,7 @@ func set_venue(id: StringName, persist := true, variant := 0) -> void:
 	var mirror := venue.make_mirror(env)
 	venue.add_child(mirror)
 	_stand_a_patch_wall()
+	_set_levels_niche()
 	# The venue built its shelf and hoop where their trolleys stood in the last one.
 	_carry_all_live()
 	mirror.wardrobe.look = Session.local_look
@@ -1414,7 +1430,7 @@ func _build_furniture() -> void:
 	# Before the board, whose rows are the stations standing here, the stage table among them.
 	_build_stage_trolley()
 	_build_eq_wall_trolley()
-	_build_levels_trolley()
+	_build_levels_niche()
 	_build_station_board()
 
 	# A trolley for the deck. Two uprights and a shelf on a caster base; a tape machine on a
@@ -1691,51 +1707,117 @@ func _build_eq_wall_trolley() -> void:
 	eq_wall_trolley.add_child(plaque)
 
 
-## Where the LEVELS wall's trolley stands (slice 66): at the control room's front left, this far in
-## from its left-hand wall and from its front, behind the timeline's left shoulder from the seat and
-## clear of the patch wall's legs along that wall, turned to face the seat. Its x follows the wall
-## out as the room widens (`_fit_room_to_session`).
-const LEVELS_IN := 2.3
-const LEVELS_Z := -3.0
-const LEVELS_HEADING := 40.0
+## The LEVELS niche (slice 66; 2026-10-30, "its own like divet in the wall so it can be an entire
+## wall"): where it is is the venue's (Venue.levels_niche_spot), in the set's frame.
+func _levels_niche_at() -> Transform3D:
+	return _venue_to_set(venue.levels_niche_spot()) if venue != null \
+			else Transform3D(Basis.IDENTITY, Vector3(-room_width * 0.5 + Venue.LEVELS_NICHE_FROM_LEFT, 0,
+					ROOM_FRONT + Venue.LEVELS_NICHE_IN))
 
 
-func _levels_at() -> Vector3:
-	return Vector3(-room_width * 0.5 + LEVELS_IN, 0, LEVELS_Z)
+## The niche's measures (m): the surround either side, its depth out of the wall (shallower where
+## it stands on its own, to keep 0.6 m from the patch wall's legs), how far its back goes into the
+## wall (or, standing, how deep the cabinet is behind the board), how high it stands, the sill the
+## board stands on, and how far the lintel and the sill sit back from the cheeks' faces.
+const NICHE_SIDE := 0.16
+const NICHE_OUT := 0.3
+const NICHE_STANDING_OUT := 0.2
+const NICHE_INTO_WALL := 0.12
+const NICHE_STANDING_BACK := 0.16
+const NICHE_TOP := 3.3
+const NICHE_SILL := 0.38
+const NICHE_STEP := 0.025
+const NICHE_PLASTER := Color(0.36, 0.35, 0.33)
 
 
-## The LEVELS wall's trolley: a plinth on casters and two uprights behind the board's edges, the
-## station's plaque under the master section. The board is a surface and rides it (`_ride`).
-func _build_levels_trolley() -> void:
-	levels_trolley = _trolley("LevelsTrolley", &"levels", _levels_at(), LEVELS_HEADING)
-	var wide := LevelsWall.WIDE + LevelsWall.BORDER * 2.0
-	levels_trolley.footprint_centre = Vector2(0, -0.06)
-	levels_trolley.footprint_half = Vector2(wide * 0.5, 0.16)
-	levels_trolley.follow = 9.0
+## The niche LEVELS is set into: a surround either side and over it standing out of the wall, a
+## sill under it and a dark back, so the board is sunk in the wall rather than hung on it; a lit
+## strip under the lintel. Where the venue has no wall to build into, a cabinet of the same, with
+## a back of its own. A Trolley so the floor plan, the stations and the board's ride treat it as
+## they treat every piece, but with nothing to take hold of and never rolled: it stays in the wall
+## (`_set_levels_niche`), and a board put down by its handle goes back into it (`_reseat`).
+func _build_levels_niche() -> void:
+	var at := _levels_niche_at()
+	levels_niche = _trolley("LevelsNiche", &"levels", at.origin, rad_to_deg(at.basis.get_euler().y))
+	levels_niche.built_in = true
+	levels_niche.follow = 9.0
+	_set_levels_niche()
+
+
+## Build the niche for this venue and stand it where this venue keeps it. Its boxes overlap where
+## they meet rather than touch, the lintel and the sill a step back from the cheeks, so no two faces
+## share a plane to flicker between.
+func _set_levels_niche() -> void:
+	if levels_niche == null:
+		return
+	for old in levels_niche.get_children():
+		if old.has_meta(&"niche"):
+			levels_niche.remove_child(old)
+			old.queue_free()
+	var standing := venue != null and venue.back_wall_gear_stands()
+	var out := NICHE_STANDING_OUT if standing else NICHE_OUT
+	var board := LevelsWall.room_y(LevelsWall.WIDE * 0.5 + LevelsWall.BORDER)
+	# Room either side for the board's handle, on its left (LevelsWall.handle_left).
+	var open := board + 0.12
+	var outer := open + NICHE_SIDE
+	var back := -(NICHE_STANDING_BACK if standing else NICHE_INTO_WALL)
+	var lintel := LevelsWall.room_y(LevelsWall.BOTTOM + LevelsWall.TALL + LevelsWall.BORDER + 0.08) + 0.06
+	var behind_board := -LevelsWall.room_y(0.031) - 0.004
+	# Plaster a shade off every venue's walls, so it reads as the wall built out round a hollow and
+	# not as one more black cabinet against it.
+	var surround := Materials.painted_wall(NICHE_PLASTER)
 	for side in [-1.0, 1.0]:
-		var post := MeshInstance3D.new()
-		post.name = "Upright"
-		var post_mesh := BoxMesh.new()
-		var high := LevelsWall.BOTTOM + LevelsWall.TALL + LevelsWall.BORDER
-		post_mesh.size = Vector3(0.05, high - Caster.HEIGHT, 0.05)
-		post.mesh = post_mesh
-		post.position = Vector3(side * (wide * 0.5 - 0.06), (high + Caster.HEIGHT) * 0.5, -0.06)
-		post.material_override = Materials.brushed_metal()
-		levels_trolley.add_part(post)
-	var plinth := MeshInstance3D.new()
-	plinth.name = "Plinth"
-	var plinth_mesh := BoxMesh.new()
-	plinth_mesh.size = Vector3(wide, 0.04, 0.3)
-	plinth.mesh = plinth_mesh
-	plinth.position = Vector3(0, Caster.HEIGHT + 0.02, -0.06)
-	plinth.material_override = Materials.furniture()
-	GearTrim.edges(plinth)
-	levels_trolley.add_part(plinth)
-	levels_trolley.add_corner_casters(0.06)
-	var plaque := Stations.plaque(&"levels", LevelsWall.MASTER_WIDE)
-	plaque.position = Vector3(LevelsWall.master_left() + LevelsWall.MASTER_WIDE * 0.5,
-			LevelsWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, 0.012)
-	levels_trolley.add_child(plaque)
+		# A hair off the floor, which the wall's own foot is on.
+		_niche_box("Cheek", Vector3(NICHE_SIDE, NICHE_TOP - 0.002, out - back),
+				Vector3(side * (open + NICHE_SIDE * 0.5), NICHE_TOP * 0.5 + 0.001, (out + back) * 0.5), surround)
+	# Into the cheeks either side; a step back from their faces, and short of their tops and backs.
+	var span := open * 2.0 + NICHE_SIDE
+	var front := out - NICHE_STEP
+	var rear := back + 0.01
+	_niche_box("Lintel", Vector3(span, NICHE_TOP - 0.01 - lintel, front - rear),
+			Vector3(0, (NICHE_TOP - 0.01 + lintel) * 0.5, (front + rear) * 0.5), surround)
+	_niche_box("Sill", Vector3(span, NICHE_SILL - 0.004, front - rear),
+			Vector3(0, (NICHE_SILL + 0.004) * 0.5, (front + rear) * 0.5), surround)
+	_niche_box("Back", Vector3(span - 0.02, lintel - NICHE_SILL + 0.04, 0.02),
+			Vector3(0, (lintel + NICHE_SILL) * 0.5, behind_board - 0.01), Materials.recess())
+	if standing:
+		# Its back: behind the cheeks' and a little inside their sides and top.
+		_niche_box("Cabinet", Vector3(outer * 2.0 - 0.02, NICHE_TOP - 0.02, behind_board - 0.02 - (back - 0.01)),
+				Vector3(0, NICHE_TOP * 0.5 - 0.005, (behind_board - 0.02 + back - 0.01) * 0.5), surround)
+	# Light along the lintel's underside, to the board.
+	var strip := MeshInstance3D.new()
+	var strip_mesh := BoxMesh.new()
+	strip_mesh.size = Vector3(open * 2.0 - 0.1, 0.012, 0.03)
+	strip.mesh = strip_mesh
+	strip.position = Vector3(0, lintel - 0.007, front - 0.06)
+	strip.material_override = Materials.led(Color(1.0, 0.86, 0.66), true)
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	strip.set_meta(&"niche", true)
+	strip.name = "Strip"
+	levels_niche.add_child(strip)
+	# On the floor only in front of the wall: what is in the wall is the wall's.
+	var foot_back := back - 0.01 if standing else -0.08
+	levels_niche.footprint_centre = Vector2(0, (out + foot_back) * 0.5)
+	levels_niche.footprint_half = Vector2(outer, (out - foot_back) * 0.5)
+	var plaque := Stations.plaque(&"levels", LevelsWall.room_y(LevelsWall.MASTER_WIDE))
+	plaque.set_meta(&"niche", true)
+	plaque.position = Vector3(LevelsWall.room_y(LevelsWall.master_left() + LevelsWall.MASTER_WIDE * 0.5),
+			LevelsWall.PLAQUE_TOP - float(plaque.get_meta(&"plaque_tall")) * 0.5, front + 0.006)
+	levels_niche.add_child(plaque)
+	var at := _levels_niche_at()
+	levels_niche.place(Vector2(at.origin.x, at.origin.z), at.basis.get_euler().y)
+
+
+func _niche_box(of_name: String, size: Vector3, at: Vector3, paint: Material) -> void:
+	var box := MeshInstance3D.new()
+	box.name = of_name
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	box.mesh = mesh
+	box.position = at
+	box.material_override = paint
+	box.set_meta(&"niche", true)
+	levels_niche.add_part(box, false)
 
 
 ## The bay's own cabinet: a plinth on casters, a carcass under the panel and a cheek either side
@@ -1960,6 +2042,8 @@ func _carry_live(id: StringName) -> void:
 	if venue == null or not venue.is_inside_tree():
 		return
 	match id:
+		&"mini_table":
+			_rehome_items()
 		&"harp":
 			if harp != null and is_instance_valid(harp):
 				harp.transform = venue.harp_spot()
@@ -3052,8 +3136,9 @@ func _put_back_own_room() -> void:
 			var t := piece as Trolley
 			if t == null or not is_instance_valid(t) or not _authored_floor.has(t.piece_id):
 				continue
-			# Each venue stands these where it does: put back for this one below.
-			if live_pieces.has(t.piece_id):
+			# Each venue stands these where it does: put back for this one below; the niche is in
+			# the venue's wall.
+			if live_pieces.has(t.piece_id) or t.built_in:
 				continue
 			var own: Transform3D = Session.layout.transform_for(StringName("floor/%s" % t.piece_id),
 					Presentation.Mode.STUDIO, _authored_floor[t.piece_id])
@@ -3148,9 +3233,8 @@ func _fit_room_to_session() -> void:
 		elif id == "eq_wall":
 			var at := _eq_wall_at()
 			want = [Vector2(at.x, at.z), deg_to_rad(EQ_WALL_HEADING)]
-		elif id == "levels":
-			var at := _levels_at()
-			want = [Vector2(at.x, at.z), deg_to_rad(LEVELS_HEADING)]
+		elif t.built_in:
+			continue
 		elif id.begins_with("lamp_") and _authored_floor.has(t.piece_id):
 			var home: Transform3D = _authored_floor[t.piece_id]
 			want = [SessionLayout.widen(Vector2(home.origin.x, home.origin.z), room_width),
@@ -3219,10 +3303,18 @@ func _trolley(of_name: String, id: StringName, at: Vector3, heading_degrees: flo
 	piece.rotation_degrees = Vector3(0, heading_degrees, 0)
 	_authored_floor[id] = piece.transform
 	var key := StringName("floor/%s" % id)
-	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
+	if Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO) \
+			and id == &"levels":
+		# Where LEVELS stood on its trolley before it was built into the wall.
+		Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
+	elif Session.layout != null and Session.layout.has_transform(key, Presentation.Mode.STUDIO):
 		var saved := Session.layout.transform_for(key, Presentation.Mode.STUDIO, piece.transform)
 		if not _left_where_it_was_authored(id, saved):
 			piece.transform = saved
+		else:
+			# Forgotten, not only passed over: kept, it read as a spot somebody chose, so the room
+			# never fitted the piece out of the desk's way and saved it back where it stood.
+			Session.layout.clear_transform(key, Presentation.Mode.STUDIO)
 	piece.settled.connect(_on_trolley_settled.bind(piece))
 	piece.moved.connect(_on_trolley_moved.bind(piece))
 	studio_set.add_child(piece)
@@ -3332,6 +3424,23 @@ func _on_trolley_settled(piece: Trolley) -> void:
 ## mode. In both cases the stand still moves, and the surface must come back to where the stand
 ## now is -- so what rides is the surface's studio placement, and the node only moves with it
 ## when the node is actually standing on the trolley.
+## The clip editor, beside the timeline, opened by it: a double click on an item or its EDIT CLIP
+## key opens the item here, or retargets the editor to it if it is open on another.
+func _build_clip_editor() -> void:
+	clip_editor = ClipEditorSurface.new()
+	clip_editor.name = "ClipEditor"
+	var yaw := deg_to_rad(CLIP_EDITOR_YAW)
+	var basis := Basis(Vector3.UP, yaw).scaled(Vector3.ONE * CLIP_EDITOR_SCALE)
+	var left := Vector3(CLIP_EDITOR_LEFT.x, CLIP_EDITOR_Y, CLIP_EDITOR_LEFT.y)
+	var at := Transform3D(basis, left - basis * Vector3(-ClipEditorSurface.WIDE * 0.5, 0, 0))
+	clip_editor.transform = at
+	# Held by an arm from the stand's right-hand leg, which stands just behind it.
+	clip_editor.arm_to = at.affine_inverse() * Vector3(TIMELINE_LEG_X, CLIP_EDITOR_Y + 0.1, TIMELINE_STAND_Z)
+	studio_set.add_child(clip_editor)
+	mount.register(clip_editor)
+	timeline.edit_asked.connect(clip_editor.open)
+
+
 func _ride(piece: Trolley, surface: Surface) -> void:
 	var id := surface.surface_id
 	var standing := func() -> bool:
@@ -3362,6 +3471,8 @@ func _reseat(id: StringName, put: Transform3D) -> void:
 	if not _seated_on.has(id):
 		return
 	var piece: Trolley = _seated_on[id][0]
+	if piece.built_in:
+		return
 	var under: Transform3D = put * (_seated_on[id][1] as Transform3D).affine_inverse()
 	var ahead := under.basis.z
 	piece.place(Vector2(under.origin.x, under.origin.z), atan2(ahead.x, ahead.z))
@@ -3623,6 +3734,7 @@ func _build_surfaces() -> void:
 	mount.register(timeline)
 	# A write bead pulled out shows its lane on the timeline, so the pass is seen to land there.
 	WriteBead.on_pull = _show_written_lane
+	_build_clip_editor()
 
 	deck = TapeDeck.new()
 	deck.name = "TapeDeck"
@@ -3664,7 +3776,7 @@ func _build_surfaces() -> void:
 		mount.register(eq_wall)
 		focus.surfaces.append(eq_wall)
 	# LEVELS (slice 66), on its trolley at the front left; none in AR.
-	if levels_trolley != null:
+	if levels_niche != null:
 		levels = LevelsWall.new()
 		levels.name = "Levels"
 		levels.motion = func() -> float: return ergonomics.motion_scale
@@ -3708,13 +3820,14 @@ func _build_surfaces() -> void:
 		_ride(rack_trolley, rack)
 		_ride(deck_trolley, deck)
 		_ride(timeline_stand, timeline)
+		_ride(timeline_stand, clip_editor)
 		_ride(patch_stand, patchbay)
 		if stage != null:
 			_ride(stage_trolley, stage)
 		if eq_wall != null:
 			_ride(eq_wall_trolley, eq_wall)
 		if levels != null:
-			_ride(levels_trolley, levels)
+			_ride(levels_niche, levels)
 
 	# After the gear, because a loom is measured off the transforms of the two things it joins.
 	# Rebuilt with the bay, because the bay's width is the track count and the glands are spaced
@@ -3951,7 +4064,7 @@ func _refresh_looms_if_moved(delta: float) -> void:
 
 ## The items' homes off the shelf: the headphones on their hook under it, the handbells on their
 ## stand by the harp, the mic in the booth's stand, where the venue has one, the session in
-## miniature on the desk's left wing, the hand drums in their ring on the drum riser, and the venue's
+## miniature on the side table by the seat, the hand drums in their ring on the drum riser, and the venue's
 ## instrument's bars on its mount.
 func _item_homes() -> Dictionary:
 	if venue == null:
@@ -8239,46 +8352,59 @@ func _station_fits() -> Callable:
 
 # --- the session in miniature (docs/spatial_loop.md part two, slice 34) --------------------------
 #
-# A 40 cm model of the song to hold (MiniatureItem), at home on the desk's left wing. A press on its
+# A 40 cm model of the song to hold (MiniatureItem), at home on the side table by the seat. A press on its
 # bed seeks the song there and brings that track's gear by FocusRig: the console, banked to the
 # track. A press on an item selects it and brings the timeline, scrolled to it. A press on one of
 # the stations' pins round its lip goes there, as the station board's rows do: a headset travels, a
 # desk walks (`go_to_station`).
 
-## The desk's left wing: a little table bolted to the console's left end at the desk's height,
-## WING_GAP off its end, standing out toward the seat as a desk's return does, its back edge
-## WING_BACK in behind the desk's front: where the miniature lies at home, within reach of the
-## seat and out of its line to the rack behind (a wide desk's left end is on it). WING is its
-## board, WING_TOP the height of its top.
+## The side table by the seat: a little table of its own on the floor, at the desk's height, where
+## the miniature lies at home within reach of the chair. It stood bolted to the console's left
+## end, the one place it could not be moved from and in the corner of the seated view whatever
+## was looked at (2026-10-30: "i like it allot itself, just not its location"); now it is pushed
+## about like the rest of the gear (`live_pieces`' "mini_table"), the miniature and the note pad
+## riding on it, and stays where it was left. At home off the seat's left hand, turned to face
+## it, out of the seat's line to the desk and the rack. WING is its board, WING_TOP the height of
+## its top.
 const WING := Vector3(0.48, 0.03, 0.36)
 ## The board runs on WING_PAD past the tray's end, outward, for the note pad (NotePad, slice 35):
 ## its own place beside the miniature, out of the tray's way and of the seat's.
 const WING_PAD := 0.10
 const WING_TOP := 0.74
-const WING_GAP := 0.02
-const WING_BACK := 0.1
+## Where the table stands at home, on the floor under the middle of its board, and its turn: its
+## reader's edge (+Z, the side the miniature is read from) toward the mix position.
+const MINI_TABLE_AT := Vector3(-0.92, 0, 0.36)
+const MINI_TABLE_HEADING := 68.0
 ## How far into the timeline's window an item it is brought to starts, of the window's span.
 const SHOWN_IN := 0.1
 
-## The wing, its origin on the floor under the middle of its board. Null in AR.
-var desk_wing: Node3D
-## Whether the wing has been put beside a measured desk yet. Until the console has been built
-## there is no left end to stand it at, and a wing still at the origin is not on the floor: the
-## desk's own footprint is empty then too (`_desk_footprint`).
-var _wing_placed := false
-## Pointing, sticky notes and listening from a spot (slice 35), and the pad of notes: on the wing,
-## or in AR (no wing; the room's furniture is the player's own) at the console's left end, at its
+## The table, its origin on the floor under the middle of its board. Null in AR.
+var desk_wing: Trolley
+## Pointing, sticky notes and listening from a spot (slice 35), and the pad of notes: on the table,
+## or in AR (no table; the room's furniture is the player's own) at the console's left end, at its
 ## height, NOTE_PAD_GAP off it (`_place_note_pad`).
 var point_and_mark: PointAndMark
 var note_pad: NotePad
 const NOTE_PAD_GAP := 0.04
 
 
-## The board, a cheek down to the floor at its outer end and a rail under its inner edge, the
-## desk's own furniture: it stands in the room's floor plan (`_wing_footprint`) and goes where the
-## desk grows to (`_place_desk_wing`).
+## The board on a cheek at either end down to the floor, an apron under its front edge: taken by
+## any of it, the tray's bed still being pressed. The apron first, the grip a click from the seat
+## finds: the board's top is under the tray.
 func _build_desk_wing() -> void:
-	desk_wing = _assembly("DeskWing")
+	desk_wing = _trolley("MiniTable", &"mini_table", MINI_TABLE_AT, MINI_TABLE_HEADING)
+	desk_wing.follow = 10.0
+	desk_wing.rolls = false
+	desk_wing.footprint_centre = Vector2(-WING_PAD * 0.5, 0)
+	desk_wing.footprint_half = Vector2(WING.x + WING_PAD, WING.z) * 0.5
+	var apron := MeshInstance3D.new()
+	apron.name = "Apron"
+	var strip := BoxMesh.new()
+	strip.size = Vector3(WING.x + WING_PAD - 0.08, 0.07, 0.02)
+	apron.mesh = strip
+	apron.position = Vector3(-WING_PAD * 0.5, WING_TOP - WING.y - 0.035, WING.z * 0.5 - 0.03)
+	apron.material_override = Materials.furniture()
+	desk_wing.add_part(apron)
 	var board := MeshInstance3D.new()
 	board.name = "Board"
 	var top := BoxMesh.new()
@@ -8287,61 +8413,19 @@ func _build_desk_wing() -> void:
 	board.position = Vector3(-WING_PAD * 0.5, WING_TOP - WING.y * 0.5, 0)
 	board.material_override = Materials.furniture()
 	GearTrim.edges(board)
-	desk_wing.add_child(board)
-	var cheek := MeshInstance3D.new()
-	cheek.name = "Cheek"
+	desk_wing.add_part(board)
 	var side := BoxMesh.new()
 	side.size = Vector3(0.025, WING_TOP - WING.y, WING.z - 0.04)
-	cheek.mesh = side
-	cheek.position = Vector3(-WING.x * 0.5 - WING_PAD + 0.03, (WING_TOP - WING.y) * 0.5, 0)
-	cheek.material_override = Materials.furniture()
-	desk_wing.add_child(cheek)
-	var rail := MeshInstance3D.new()
-	rail.name = "Rail"
-	var bar := BoxMesh.new()
-	# From the cheek's inner face, not through it: run into the cheek, the rail's top and the
-	# cheek's were one plane under the board.
-	var rail_from := cheek.position.x + side.size.x * 0.5
-	var rail_to := WING.x * 0.5 - 0.03
-	bar.size = Vector3(rail_to - rail_from, 0.05, 0.02)
-	rail.mesh = bar
-	rail.position = Vector3((rail_from + rail_to) * 0.5, WING_TOP - WING.y - 0.025, -WING.z * 0.5 + 0.03)
-	rail.material_override = Materials.brushed_metal()
-	desk_wing.add_child(rail)
-	_place_desk_wing()
-	console.rebuilt.connect(_place_desk_wing)
-	if floor_plan != null:
-		floor_plan.fixtures.append(_wing_footprint)
-
-
-## Beside the desk's left end, where it is at home (as `_desk_footprint` measures it), and the
-## miniature's home with it when it moved.
-func _place_desk_wing() -> void:
-	if desk_wing == null or console == null:
-		return
-	var home := focus.home_of(&"console") if focus != null and focus.holds(&"console") \
-			else console.transform
-	var box := console.content_aabb()
-	if box.size.x <= 0.0:
-		return
-	var flat := home * box
-	var at := Vector3(flat.position.x - WING_GAP - WING.x * 0.5, 0.0, flat.end.z - WING_BACK + WING.z * 0.5)
-	if _wing_placed and desk_wing.position.distance_to(at) < 0.001:
-		return
-	_wing_placed = true
-	desk_wing.position = at
+	var cheeks: Array[float] = [-WING.x * 0.5 - WING_PAD + 0.03, WING.x * 0.5 - 0.03]
+	for n in cheeks.size():
+		var cheek := MeshInstance3D.new()
+		cheek.name = "Cheek%d" % n
+		cheek.mesh = side
+		cheek.position = Vector3(cheeks[n], (WING_TOP - WING.y) * 0.5, 0)
+		cheek.material_override = Materials.furniture()
+		desk_wing.add_part(cheek)
+	_go_live(desk_wing)
 	_rehome_items()
-
-
-## The wing on the floor: the walker and the trolleys stop at it as they do at the desk.
-func _wing_footprint() -> Array:
-	if desk_wing == null or not desk_wing.visible or not _wing_placed:
-		return []
-	# The tray's board, and the note pad's run on past its end.
-	return [FloorPlan.footprint(Vector2(desk_wing.position.x, desk_wing.position.z),
-			Vector2(WING.x, WING.z) * 0.5, 0.0),
-			FloorPlan.footprint(Vector2(desk_wing.position.x - (WING.x + WING_PAD) * 0.5, desk_wing.position.z),
-			Vector2(WING_PAD, WING.z) * 0.5, 0.0)]
 
 
 ## Point, mark and listen together (PointAndMark, docs/spatial_loop.md part two, slice 35): Z, Enter

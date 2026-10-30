@@ -8,8 +8,9 @@ extends TimelinePage
 ## through read, touch and latch: in touch a control moved while the song plays writes its lane
 ## until it is let go, in latch until the transport stops. LANE shows the picked track's
 ## automation over its lane, one control after another (see TimelineSurface.lane_targets), and
-## then none. INPUT steps the picked track through what it records from (`MixState.inputs`, then
-## none chosen); saved with the project. COLOUR steps the picked track through PALETTE, its mark the
+## then none. INPUT opens the picked track's InputPicker at a desk (what it records from, its
+## monitoring, its input set aside); in a headset it steps through what it records from
+## (`MixState.inputs`, then none chosen). Saved with the project. COLOUR steps the picked track through PALETTE, its mark the
 ## track's colour. SCHEME gives every track that has no colour yet one of its own, round the wheel
 ## (TrackColours.scheme_colour), lit while there is a track it would colour. GROUP steps the picked
 ## track through the groups and out (DAW.GROUPS): grouped tracks' faders, mutes and solos move
@@ -106,13 +107,17 @@ func _ready() -> void:
 						LatencyReport.milliseconds(int(mine["own"]), AudioServer.get_mix_rate()), line])
 	DAW.group_free_changed.connect(func() -> void: free.lit = DAW.group_free)
 	_group()
-	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _step_input,
+	input = _key("TrackInput", &"input", Color(0.95, 0.42, 0.38), "TRACKS  INPUT", _input_pressed,
 			func() -> String:
 				var picked: int = surface.picked_track
 				if picked <= 0 or not DAW.state.tracks.has(picked):
 					return "press a track's name first"
-				return "%s records from %s: %s next" % [_name_of(picked),
-						DAW.state.input_name(DAW.state.input_of(picked)), DAW.state.input_name(_next_input())])
+				var set_aside := "  ·  set aside" if not DAW.state.input_live(picked) else ""
+				if surface.types_on_screen():
+					return "%s records from %s%s: press to choose" % [_name_of(picked),
+							DAW.state.input_name(DAW.state.input_of(picked)), set_aside]
+				return "%s records from %s%s: %s next" % [_name_of(picked),
+						DAW.state.input_name(DAW.state.input_of(picked)), set_aside, DAW.state.input_name(_next_input())])
 	_group()
 	auto = _key("TrackAuto", &"auto", Color(0.95, 0.6, 0.25), "TRACKS  AUTOMATION", _auto,
 			func() -> String:
@@ -192,8 +197,8 @@ func refresh() -> void:
 	auto.lit = mode != DAW.AUTOMATION_READ
 	auto.caption = MODE_NAMES.get(mode, "READ") if mode != DAW.AUTOMATION_READ else ""
 	input.lit = picked and DAW.state.input_of(surface.picked_track) != ""
-	input.caption = DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper() \
-			if input.lit else ""
+	input.caption = ("SET ASIDE" if not DAW.state.input_live(surface.picked_track)
+			else DAW.state.input_name(DAW.state.input_of(surface.picked_track)).to_upper()) if input.lit else ""
 	for key in [remove, duplicate, items, rename, input, colour, group, free, vca]:
 		key.available = picked
 	var in_group: int = DAW.state.track(surface.picked_track).group if picked else 0
@@ -285,6 +290,18 @@ func _next_input() -> String:
 	ids.append("")
 	var at := ids.find(DAW.state.input_of(surface.picked_track))
 	return ids[(at + 1) % ids.size()]
+
+
+## At a desk, the picker (InputPicker): every device and side, the monitoring and the input set
+## aside, on one panel. In a headset, a step to the next input.
+func _input_pressed() -> void:
+	var picked: int = surface.picked_track
+	if picked <= 0 or not DAW.state.tracks.has(picked):
+		return
+	if surface.types_on_screen():
+		InputPicker.ask(surface, picked)
+	else:
+		_step_input()
 
 
 func _step_input() -> void:

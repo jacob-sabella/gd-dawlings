@@ -411,7 +411,7 @@ func _dress_room() -> void:
 
 ## The control room's treatment, now it is big enough to ring: a bass trap up the front-left
 ## corner (the right one has the door), panels high on the front wall either side of the desk's
-## eyeline, and one on each side wall behind the seat, clear of the mirror and the station board.
+## eyeline and right of LEVELS' niche, and one on each side wall behind the seat, clear of the mirror and the station board.
 ## Beside, the left wall is the window and its plaster, and has none.
 func _treat_control_room() -> void:
 	var cr := room_width * 0.5
@@ -423,7 +423,8 @@ func _treat_control_room() -> void:
 		trap.rotation.y = PI * 0.25
 		ZoneKit.block(self, Vector3(0.09, 1.1, 0.9), Vector3(-cr + 0.05 + 0.046, 1.75, 3.25), _cloth("rust"),
 				"ControlRoomPanel")
-	for spec in [[-2.3, "slate"], [-0.75, "charcoal"], [0.75, "charcoal"], [2.3, "slate"]]:
+	# Not at the front left, where the wall is LEVELS' niche (Venue.levels_niche_spot).
+	for spec in [[-0.75, "charcoal"], [0.75, "charcoal"], [2.3, "slate"]]:
 		ZoneKit.block(self, Vector3(1.1, 0.9, 0.09), Vector3(spec[0], 2.55, front + 0.046), _cloth(spec[1]),
 				"ControlRoomPanel")
 	ZoneKit.block(self, Vector3(0.09, 1.1, 0.9), Vector3(cr - 0.05 - 0.046, 1.75, 2.6), _cloth("rust"),

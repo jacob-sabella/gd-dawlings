@@ -13,13 +13,27 @@ extends Node
 ##
 ## Each device is read by a capture stream of its own (MixSource.Piped, parec), one for every
 ## track that names it, so monitoring never takes frames from the recorder, which reads Godot's
-## one input. The cost is parec's 3ms plus about a frame here: a voice is still best heard
-## through the interface's own direct monitoring.
+## one input.
+##
+## Fed from a thread of its own, not once a frame (2026-10-30: "input lag through the audio
+## interface into my game is just a LITTLE too much. i cant really play in time"). Fed a frame at a
+## time, each player had to hold a whole frame's sound and then some, and what a slow frame let
+## pile up in it was never given back: a hitch made the monitor later for the rest of the session,
+## up to the player's whole 85 ms. Now the thread reads every device and tops every player up to
+## QUEUE_FRAMES every half millisecond, the keys' own way (MonitorSynth), and what would queue past
+## that is dropped, the oldest first, so what is heard is what is played now. Left are parec's 3 ms,
+## the queue's 16, Godot's mix step and the way out: a voice is still best heard through the
+## interface's own direct monitoring.
 
-## How much sound may wait in a track's player, in seconds: its latency, at most. What does not
-## fit is dropped rather than queued, so the monitor never drifts behind the hand.
-const BUFFER := 0.06
+## How much sound a track's player is kept holding, in frames: enough to ride over Godot's 512-frame
+## mix step and the thread's wake-ups, no more. Its latency, at most.
+const QUEUE_FRAMES := 768
+## The player's own room, in seconds: well over the queue, so a burst from the pipe is trimmed here
+## rather than refused by the player.
+const BUFFER := 0.1
 const RATE := 48000
+## How often the thread tops the players up.
+const FEED_USEC := 500
 
 ## A capture stream for a device ("" the default), as a MixSource: the suite gives its own.
 var make_source: Callable = func(device: String) -> MixSource:
@@ -31,12 +45,21 @@ var _sources := {}
 var _players := {}
 ## Devices whose stream would not start: tried once, not every frame.
 var _failed := {}
+## Whether the players are fed from the thread (the default), or by `feed` called from outside: the
+## suite's, which feeds when it means to.
+var threaded := true
+## What the thread feeds, rebuilt by `drive` under `_lock`: [source, side, [playback, ...]] a heard
+## track each.
+var _routes: Array = []
+var _lock := Mutex.new()
+var _thread: Thread
+var _running := false
 
 
 ## Whether a track's input is heard now.
 static func heard(state: MixState, index: int) -> bool:
 	var t: MixState.TrackState = state.track(index, false)
-	if t == null or not t.input.begins_with("audio:"):
+	if t == null or not t.input.begins_with("audio:") or t.input_off:
 		return false
 	match t.monitor:
 		DAW.MONITOR_ON:
@@ -69,10 +92,13 @@ static func side(frames: PackedVector2Array, channel: int) -> PackedVector2Array
 	return out
 
 
-## Once a frame: open what the plan needs, close what it no longer does, and feed each heard
-## track what its device gave since the last frame. `outlets_of` gives a track's buses, [bus, gain
-## dB] each, its own first.
+## Once a frame: open what the plan needs, close what it no longer does, and tell the thread what
+## to feed where (`_routes`). `outlets_of` gives a track's buses, [bus, gain dB] each, its own first.
 func drive(state: MixState, outlets_of: Callable) -> void:
+	# The thread let go of everything first: a stream may be closed and a player freed below.
+	_lock.lock()
+	_routes = []
+	_lock.unlock()
 	var now := plan(state)
 	var devices := {}
 	for index in now:
@@ -93,14 +119,11 @@ func drive(state: MixState, outlets_of: Callable) -> void:
 		else:
 			_failed[device] = true
 			push_warning("InputMonitor: could not open %s to monitor it." % (device if device != "" else "the default input"))
-	var read := {}
-	for device in _sources:
-		read[device] = (_sources[device] as MixSource).read()
+	var routes: Array = []
 	for index in now:
 		var device := GuestAudio.device_of(now[index])
-		if not read.has(device):
+		if not _sources.has(device):
 			continue
-		var frames := side(read[device], GuestAudio.channel_of(now[index]))
 		var outlets: Array = outlets_of.call(index)
 		var mine: Dictionary = _players.get(index, {})
 		var wanted := {}
@@ -110,10 +133,51 @@ func drive(state: MixState, outlets_of: Callable) -> void:
 			if not wanted.has(bus):
 				_free(mine[bus])
 				mine.erase(bus)
+		var playbacks: Array = []
 		for outlet in outlets:
 			var player := _player_for(index, StringName(outlet[0]), float(outlet[1]))
-			if player != null:
-				_feed(player, frames)
+			var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback if player != null else null
+			if playback != null:
+				playbacks.append(playback)
+		routes.append([_sources[device], GuestAudio.channel_of(now[index]), playbacks])
+	_lock.lock()
+	_routes = routes
+	_lock.unlock()
+	if threaded and not routes.is_empty() and not _running:
+		_running = true
+		_thread = Thread.new()
+		_thread.start(_feed_loop)
+	elif routes.is_empty():
+		_stop_thread()
+
+
+## Read every device once and top every heard track's players up from it. The thread's, every
+## FEED_USEC; the suite's, when it is not threaded.
+func feed() -> void:
+	_lock.lock()
+	var read := {}
+	for route in _routes:
+		var source: MixSource = route[0]
+		if not read.has(source):
+			read[source] = source.read()
+		var frames := side(read[source], route[1])
+		for playback in route[2]:
+			_feed(playback, frames)
+	_lock.unlock()
+
+
+func _feed_loop() -> void:
+	while _running:
+		feed()
+		OS.delay_usec(FEED_USEC)
+
+
+func _stop_thread() -> void:
+	if _thread == null:
+		return
+	_running = false
+	_thread.wait_to_finish()
+	_thread = null
 
 
 ## The tracks heard now, by index: for the strip and the suite.
@@ -130,16 +194,26 @@ func buses_of(index: int) -> Array:
 	return out
 
 
-func _feed(player: AudioStreamPlayer, frames: PackedVector2Array) -> void:
-	var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback
-	if playback == null:
+## Up to QUEUE_FRAMES held, the newest of what came kept and the rest dropped. Past it already (the
+## mixer stalled), nothing is added until it has drained back: the monitor never falls behind.
+static func _feed(playback: AudioStreamGeneratorPlayback, frames: PackedVector2Array) -> void:
+	if frames.is_empty():
 		return
 	var room := playback.get_frames_available()
-	if frames.size() > room:
-		# The newest, so what is heard is what is played now.
-		frames = frames.slice(frames.size() - room)
-	if not frames.is_empty():
-		playback.push_buffer(frames)
+	var queued := _capacity_of(playback) - room
+	var take := mini(frames.size(), mini(room, QUEUE_FRAMES - queued))
+	if take <= 0:
+		return
+	playback.push_buffer(frames if take == frames.size() else frames.slice(frames.size() - take))
+
+
+## What a player holds when empty: its buffer, as Godot rounded it. Read once, on the first push.
+static var _capacities := {}
+static func _capacity_of(playback: AudioStreamGeneratorPlayback) -> int:
+	var id := playback.get_instance_id()
+	if not _capacities.has(id):
+		_capacities[id] = playback.get_frames_available()
+	return _capacities[id]
 
 
 ## The devices open now.
@@ -148,6 +222,10 @@ func open_devices() -> Array:
 
 
 func stop_all() -> void:
+	_stop_thread()
+	_lock.lock()
+	_routes = []
+	_lock.unlock()
 	for source in _sources.values():
 		(source as MixSource).stop()
 	_sources.clear()

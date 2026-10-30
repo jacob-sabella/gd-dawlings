@@ -54,6 +54,9 @@ var steered := false
 ## a person walks through it the way they walk through the rest; the floor plan still keeps
 ## other pieces out of it.
 var walk_through := false
+## Built into the room, not wheeled about it (the LEVELS niche): it has nothing to take hold of,
+## the room is not fitted round it, and a surface riding it put down elsewhere goes back to it.
+var built_in := false
 
 ## Turned this far per wheel notch while held, and this far with the fine modifier.
 const TURN_STEP := deg_to_rad(15.0)
@@ -251,7 +254,8 @@ func place(at: Vector2, heading: float) -> void:
 	# Riders first, from where they sit now, or they would be told to stay behind.
 	_capture_riders()
 	var landed := at
-	if floor_plan != null:
+	# Built in, it is where the room is built: nothing pushes a wall.
+	if floor_plan != null and not built_in:
 		landed = floor_plan.resolve(self, at, heading)["at"]
 	position = Vector3(landed.x, position.y, landed.y)
 	rotation.y = heading

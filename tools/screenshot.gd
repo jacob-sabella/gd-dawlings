@@ -224,6 +224,23 @@ var _recover := false
 ## `--tl-fade T:I:S[:shape]`: item I of track T given fades of S seconds at each end, frame 7,
 ## and with a shape (1: equal power) that shape too.
 var _tl_fade := ""
+## `--clip-editor 3:0`: the clip editor opened on item 0 of track 3 at frame 8. `--clip-take 2:9`: a
+## drum take (the demo song's kick, snare and hats, mixed and written as a file) put on track 2 at
+## bar 9 at frame 6 and the editor opened on it, so its waveform is the file's. `--clip-span 0.25`:
+## the editor's view that many seconds wide round the clip's start. `--clip-hover start`: the
+## pointer parked on that handle (start, end, fade_in, fade_out, gain) from frame 10, for its card.
+## `--clip-fade 0.05`: the clip given fades that long, `--clip-select fade_in` that handle selected,
+## `--clip-zero` ZERO X on, `--clip-screen` the editor put on the glass (SCREEN), for its framing there.
+var _clip_zero := false
+var _clip_screen := false
+var _clip_editor := ""
+## `--input-picker 2`: track 2's InputPicker open over the room at frame 8.
+var _input_picker := 0
+var _clip_take := ""
+var _clip_span := 0.0
+var _clip_hover := ""
+var _clip_fade := 0.0
+var _clip_select := ""
 ## `--tl-xfade T:I`: item I of track T copied to start halfway along itself, and the two
 ## crossfaded over the overlap, frame 7.
 var _tl_xfade := ""
@@ -430,6 +447,24 @@ func _ready() -> void:
 					if rc.size() == 2: _bay_scroll = Vector2i(int(rc[0]), int(rc[1]))
 			"--comfort":
 				_comfort = true
+			"--clip-editor":
+				if i + 1 < args.size(): _clip_editor = args[i + 1]
+			"--input-picker":
+				if i + 1 < args.size(): _input_picker = int(args[i + 1])
+			"--clip-take":
+				if i + 1 < args.size(): _clip_take = args[i + 1]
+			"--clip-span":
+				if i + 1 < args.size(): _clip_span = float(args[i + 1])
+			"--clip-hover":
+				if i + 1 < args.size(): _clip_hover = args[i + 1]
+			"--clip-fade":
+				if i + 1 < args.size(): _clip_fade = float(args[i + 1])
+			"--clip-select":
+				if i + 1 < args.size(): _clip_select = args[i + 1]
+			"--clip-zero":
+				_clip_zero = true
+			"--clip-screen":
+				_clip_screen = true
 			"--tl-select":
 				if i + 1 < args.size(): _tl_select = args[i + 1]
 			"--reopen":
@@ -863,6 +898,10 @@ func _process(_delta: float) -> void:
 			for k in items.size():
 				if is_equal_approx(items[k].start, at):
 					DAW.crossfade_items(int(x[0]), int(x[1]), k)
+	if _clip_editor != "" or _clip_take != "":
+		_drive_clip_editor()
+	if _frames == 8 and _input_picker > 0:
+		InputPicker.ask(self, _input_picker)
 	if _frames == 7 and _tl_fade != "":
 		var f := _tl_fade.split(":")
 		if f.size() >= 3:
@@ -1510,4 +1549,77 @@ func _see_the_signal() -> void:
 				Session.notice.emit(said)
 		if w[0] == "trace" and _frames == maxi(_shot_frame - (int(w[2]) if w.size() > 2 else 14), 10):
 			studio.trace_from(SignalGraph.play_id(track), DAW.state.track(track).display_name())
+
+
+const CLIP_HANDLES := {"start": ClipEditorSurface.START, "end": ClipEditorSurface.END,
+		"fade_in": ClipEditorSurface.FADE_IN, "fade_out": ClipEditorSurface.FADE_OUT, "gain": ClipEditorSurface.GAIN}
+
+
+## `--clip-take` and `--clip-editor`: see their vars.
+func _drive_clip_editor() -> void:
+	var found := get_tree().current_scene.find_children("ClipEditor", "ClipEditorSurface", true, false)
+	if found.is_empty():
+		return
+	var editor := found[0] as ClipEditorSurface
+	if _frames == 6 and _clip_take != "":
+		var spec := _clip_take.split(":")
+		var track := int(spec[0])
+		var at := DAW.state.bar_to_seconds(float(spec[1]) if spec.size() > 1 else 9.0)
+		var mixed := PackedFloat32Array()
+		for role in ["kick", "snare", "hat"]:
+			var part := DemoSong.render(role, DAW.state.tempo)
+			if mixed.is_empty():
+				mixed = part
+			else:
+				for n in mini(mixed.size(), part.size()):
+					mixed[n] += part[n]
+		var file := "shot_drum_take.wav"
+		var path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(file))
+		DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+		DawKitAudioFile.write_wav(path, mixed, 1, DemoSong.RATE)
+		var length := float(mixed.size()) / DemoSong.RATE
+		DAW.insert_audio_take(track, at, file, length, DawKitAudioFile.peaks(mixed, 1, DemoSong.RATE), "Drum take")
+		var items: Array = DAW.state.track(track).items
+		for k in items.size():
+			if absf((items[k] as MixState.ItemState).start - at) < 0.001:
+				_clip_editor = "%d:%d" % [track, k]
+		DAW.item_transients(track, 0)
+		print("SHOT_CLIP take on %s at %.3f s: %s" % [track, at, _clip_editor])
+	if _frames == 8 and _clip_editor != "":
+		var ti := _clip_editor.split(":")
+		var track := int(ti[0])
+		var index := int(ti[1])
+		if _clip_fade > 0.0:
+			DAW.set_item_fades(track, index, _clip_fade, _clip_fade)
+		DAW.select_item(track, index, false)
+		editor.open(track, index)
+		if _clip_span > 0.0:
+			var it := editor.item()
+			editor.set_view(it.start - _clip_span * 0.3, _clip_span)
+		if CLIP_HANDLES.has(_clip_select):
+			editor.select_handle(CLIP_HANDLES[_clip_select])
+		editor.set_zero_crossings(_clip_zero)
+		if _clip_screen:
+			var studio := get_tree().current_scene.find_children("*", "Studio", true, false)
+			if not studio.is_empty():
+				(studio[0] as Studio).mount.set_mode(editor.surface_id, Presentation.Mode.SCREEN)
+		DawKitTransients.settle()
+		ClipWave.settle()
+		print("SHOT_CLIP open=%s view=%.4f+%.4f title=%s" % [editor.target, editor.view_start, editor.view_span, editor.title_text()])
+	if _frames >= 10 and _clip_hover != "" and editor.is_open():
+		var point: Vector3
+		if CLIP_HANDLES.has(_clip_hover):
+			var h: int = CLIP_HANDLES[_clip_hover]
+			var t := editor.handle_time(h)
+			var local := Vector3(editor.x_for(t), ClipEditorSurface.WAVE_MID, 0.002)
+			if h in [ClipEditorSurface.FADE_IN, ClipEditorSurface.FADE_OUT]:
+				local.y = ClipEditorSurface.WAVE_TOP - 0.004
+			elif h == ClipEditorSurface.GAIN:
+				local.y = editor.gain_y(editor.shown("gain"))
+			point = editor.to_global(local)
+		elif editor.key(StringName(_clip_hover)) != null:
+			point = editor.key(StringName(_clip_hover)).to_global(Vector3(0, 0, 0.01))
+		else:
+			return
+		_hover = get_viewport().get_camera_3d().unproject_position(point)
 

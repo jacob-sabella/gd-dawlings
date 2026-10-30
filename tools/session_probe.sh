@@ -12,6 +12,9 @@ cd "$(dirname "$0")/.."
 #   PROBE_NORAY=1 tools/session_probe.sh      the guest joins by the host's join code through a noray
 #                                      on this machine, punched through (docs/multiplayer.md)
 #   PROBE_NORAY=relay tools/session_probe.sh  the same, through noray's relay
+#   PROBE_NORAY_SERVER=dawlings.jacobsabella.com PROBE_NORAY=1 tools/session_probe.sh
+#                                      the same through a noray out on the internet (the hosted
+#                                      one, deploy/noray/), none started here
 PORT="${PORT:-7342}"
 H_ARGS=(); G_ARGS=()
 STARTED_RIG=0
@@ -31,7 +34,10 @@ fi
 # PROBE_NORAY=1 (punch) or PROBE_NORAY=relay: the guest joins by the host's join code through a
 # noray server on this machine (tools/noray_local.sh, started and stopped here if it is not up).
 STARTED_NORAY=0
-if [ -n "${PROBE_NORAY:-}" ]; then
+if [ -n "${PROBE_NORAY:-}" ] && [ -n "${PROBE_NORAY_SERVER:-}" ]; then
+  export DAWLINGS_NORAY="$PROBE_NORAY_SERVER"
+  [ "$PROBE_NORAY" = "relay" ] && export DAWLINGS_NORAY_RELAY=1
+elif [ -n "${PROBE_NORAY:-}" ]; then
   if ! tools/noray_local.sh status | grep -q running; then
     tools/noray_local.sh up >/dev/null || { echo "session_probe: noray would not start" >&2; exit 3; }
     STARTED_NORAY=1

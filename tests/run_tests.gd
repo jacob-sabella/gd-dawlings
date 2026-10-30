@@ -87,6 +87,8 @@ func _ready() -> void:
 	_test_the_built_in_engine_hosts_a_plugin_effect()
 	_test_a_hosted_plugin_comes_back_with_its_project()
 	_test_an_instrument_plugin_plays_a_tracks_notes()
+	await _test_a_plugin_loads_while_the_game_carries_on()
+	await _test_a_plugin_that_will_not_load_leaves_its_chain_as_it_was()
 	_test_the_bay_is_a_pin_matrix_of_sends()
 	_test_a_pin_pressed_makes_and_pulls_a_send()
 	_test_a_seated_pin_wheels_and_drags_its_level()
@@ -330,6 +332,17 @@ func _ready() -> void:
 	_test_the_timeline_clips_are_the_brightest_thing_on_their_lane()
 	_test_the_timelines_keys_are_big_enough_to_aim_at()
 	_test_the_timeline_grid_is_chosen_with_a_token()
+	_test_the_timeline_snaps_only_when_close()
+	_test_the_timeline_trims_to_a_takes_attacks()
+	_test_the_2d_view_trims_to_a_takes_attacks()
+	_test_the_clip_editor_opens_on_a_clip_and_draws_its_file()
+	_test_the_clip_editor_trims_to_an_attack_by_drag()
+	_test_the_clip_editor_nudges_its_selected_handle()
+	_test_the_clip_editor_fades_and_gain_are_one_undo_step_each()
+	_test_the_clip_editor_puts_edges_on_zero_crossings()
+	_test_the_clip_editor_is_opened_retargeted_and_closed()
+	_test_the_clip_editors_lettering_lies_on_its_face()
+	await _test_the_studio_hangs_the_clip_editor_by_the_timeline()
 	_test_a_locked_item_stays_put_on_the_timeline()
 	_test_a_ripple_delete_closes_the_gap()
 	_test_ripple_editing_carries_what_follows()
@@ -772,7 +785,7 @@ func _ready() -> void:
 	_test_signal_bay_skyline()
 	_test_signal_loudness_meter_measures_bs1770()
 	_test_signal_levels_wall_reads_every_track()
-	await _test_f_visits_levels_on_its_trolley()
+	await _test_f_visits_levels_in_its_niche_in_the_wall()
 	_test_signal_look_solo_puts_everything_back()
 	await _test_signal_look_solo_in_the_studio()
 	_test_signal_patch_wall_meters_its_own_streams()
@@ -4567,6 +4580,10 @@ func _test_every_grab_tab_is_clipped_to_its_own_gear() -> void:
 			continue
 		var edge := bounds.end.x
 		var over := handle.position.x - edge
+		# Or on its left end, for a surface that asks (LevelsWall.handle_left).
+		if surface.get(&"handle_left") == true:
+			edge = bounds.position.x
+			over = edge - handle.position.x
 		# Outside the gear, because a tab buried in a fader bank cannot be aimed at. Loose at
 		# the bottom end by a few millimetres: a surface whose content moves after it is built
 		# -- a playhead, a tape run -- grows its own box slightly under a tab already placed.
@@ -8101,6 +8118,9 @@ func _test_venues_change_the_world_and_not_the_setup() -> void:
 				studio._lamps[0].light_color == studio.venue.lamp_colour(0, Studio.PRACTICALS[0][1]))
 		var moved := []
 		for surface in studio.focus.surfaces:
+			# LEVELS is in the venue's wall, or stands in from where its wall would be.
+			if surface.surface_id == &"levels":
+				continue
 			if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 				moved.append(surface.surface_id)
 		check("%s: no gear moves (%s)" % [id, moved], moved.is_empty())
@@ -13092,6 +13112,8 @@ func _test_a_track_records_from_its_own_input() -> void:
 	timeline.pick_track(2)
 	strip.refresh()
 	check("IN is dark for a track that has not chosen", not strip.input.lit)
+	# Typed on the desk's keypad, as in a headset: no panel on the screen, so IN steps.
+	timeline.type_on_desk = true
 	var seen: Array = []
 	for i in DAW.state.inputs.size() + 1:
 		strip.input.pressed.emit()
@@ -13101,7 +13123,92 @@ func _test_a_track_records_from_its_own_input() -> void:
 	strip.input.pressed.emit()
 	strip.refresh()
 	check("and lights once it has", strip.input.lit)
+	DAW.set_track_input_off(2, true)
+	strip.refresh()
+	check("and says SET ASIDE while its input is", strip.input.caption == "SET ASIDE")
+	DAW.set_track_input_off(2, false)
+	timeline.type_on_desk = false
+	# The root takes the panel only once it is done setting up, as it is in a running game.
+	await get_tree().process_frame
+	strip.input.pressed.emit()
+	var pickers := get_tree().root.get_children().filter(func(n: Node) -> bool: return n is InputPicker)
+	check("at a desk IN opens the picked track's input panel instead", pickers.size() == 1 and (pickers[0] as InputPicker).track == 2)
+	for p in pickers:
+		p.free()
 	timeline.queue_free()
+
+
+## A track's input set aside (2026-10-30: "a button to silence input for tracks im done recording
+## on but dont want to see in the frequency and levels view when im playing something else through
+## the same input"): neither heard nor recorded, its choice kept; undoable, sent to guests, saved.
+func _test_a_tracks_input_can_be_set_aside() -> void:
+	var backend := _offline()
+	DAW.backend.publish_inputs()
+	var s := DAW.state
+	s.track(3).input = "audio:scarlett#2"
+	s.track(3).monitor = DAW.MONITOR_ON
+	s.track(3).rec_arm = true
+	s.track(4).input = "audio:scarlett#2"
+	s.track(4).rec_arm = true
+	check("a monitored track is heard before", InputMonitor.heard(s, 3))
+	backend._repl_durable.clear()
+	DAW.set_track_input_off(3, true)
+	check("set aside, it is not heard", s.track(3).input_off and not InputMonitor.heard(s, 3) and not s.input_live(3))
+	check("its input is kept", s.input_of(3) == "audio:scarlett#2")
+	check("and it is out of the take: only the other armed track records", not (3 in GuestAudio._armed()) and 4 in GuestAudio._armed())
+	check("replicated at its own address", backend._repl_durable.get("/track/3/inputoff", []) == [1.0])
+	check("a verb a guest may use", &"set_track_input_off" in DAW.COMMANDS)
+	var guest := MixState.new()
+	for pair in MixWire.snapshot(s):
+		MixWire.apply(guest, pair[0], pair[1])
+	check("a joining guest is told", guest.track(3).input_off and not guest.track(4).input_off)
+	var saved := ProjectBridge.capture(DAW.backend)
+	var t3: DawKitTrack = null
+	for t in saved.tracks:
+		if t.id == ProjectBridge.id_of(3):
+			t3 = t
+	check("saved with the project", t3 != null and t3.input_off and DawKitTrack.from_dict(t3.to_dict()).input_off)
+	DAW.undo()
+	check("undoable", not s.track(3).input_off and InputMonitor.heard(s, 3))
+	DAW.apply_intent(&"set_track_input_off", [3, 1.0])
+	check("a guest's intent sets it", s.track(3).input_off)
+	DAW.apply_intent(&"set_track_input_off", [0, true])
+	DAW.apply_intent(&"set_track_input_off", [3])
+	check("and one naming no track, or no answer, is refused", s.track(3).input_off)
+	_offline()
+
+
+## The input panel at a desk: a row a device by its name, its sides as buttons, the one in use lit;
+## the monitoring; the input set aside. Every press takes at once.
+func _test_the_input_panel_chooses_hears_and_sets_aside() -> void:
+	_offline()
+	var s := DAW.state
+	s.inputs = [["audio:", "the default microphone"], ["audio:#1", "the default microphone, input 1"],
+			["audio:#2", "the default microphone, input 2"], ["audio:scarlett", "Scarlett 2i2 USB"],
+			["audio:scarlett#1", "Scarlett 2i2 USB, input 1"], ["audio:scarlett#2", "Scarlett 2i2 USB, input 2"], ["midi", "the keys"]]
+	var rows := InputPicker.devices(s.inputs)
+	check("each device one row, its sides on it (%s)" % [rows.map(func(r): return r[0])],
+			rows.size() == 3 and rows[1][0] == "Scarlett 2i2 USB"
+			and (rows[1][1] as Array).map(func(c): return c[1]) == ["BOTH", "IN 1", "IN 2"])
+	await get_tree().process_frame
+	var picker := InputPicker.ask(self, 2)
+	var in2: Button = null
+	for row in picker._rows.get_children():
+		if row is HBoxContainer and (row.get_child(0) as Label).text.begins_with("Scarlett"):
+			for b in row.get_children():
+				if b is Button and (b as Button).text == "IN 2":
+					in2 = b
+	check("the Scarlett's input 2 is a button", in2 != null)
+	if in2 != null:
+		in2.pressed.emit()
+	check("pressed, the track records from it", s.input_of(2) == "audio:scarlett#2")
+	(picker.find_child("Monitoring", true, false).get_child(2) as Button).pressed.emit()
+	check("its monitoring is set there too", s.track(2).monitor == DAW.MONITOR_ON)
+	(picker.find_child("InputOff", true, false) as Button).pressed.emit()
+	check("and its input set aside", s.track(2).input_off and s.input_of(2) == "audio:scarlett#2")
+	picker.free()
+	check("devices are named as the sound server names them, or as they are", OfflineBackend.device_names() is Dictionary)
+	_offline()
 
 
 func _test_the_time_signature_changes() -> void:
@@ -13381,6 +13488,47 @@ func _test_the_built_in_engine_monitors_a_track_through_its_bus() -> void:
 	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
 	check("turned off, or out of auto's reach, a track's player goes", monitor.monitoring() == [])
 	check("and its device's stream is closed", monitor.open_devices() == [] and not made["scarlett"].started)
+	monitor.free()
+
+
+## The monitor's players are kept short (2026-10-30: "input lag through the audio interface into my
+## game is just a LITTLE too much"): whatever arrives at once, a player holds QUEUE_FRAMES at most,
+## the newest, and one already full takes nothing more until it drains, so a hitch never leaves the
+## monitor later than it was.
+func _test_the_input_monitor_never_queues_more_than_a_moment() -> void:
+	var s := MixState.new()
+	s.track(1).name = "Gtr"
+	s.track(1).input = "audio:scarlett#1"
+	s.track(1).monitor = DAW.MONITOR_ON
+	var monitor := InputMonitor.new()
+	monitor.threaded = false
+	var held := HeldSource.new()
+	monitor.make_source = func(_device: String) -> MixSource: return held
+	add_child(monitor)
+	monitor.drive(s, func(_index: int) -> Array: return [[&"Master", 0.0]])
+	var player := monitor.get_children()[0] as AudioStreamPlayer
+	var playback := player.get_stream_playback() as AudioStreamGeneratorPlayback
+	check("a heard track's player is playing, fed by the monitor", player.playing and playback != null)
+	if playback == null:
+		monitor.free()
+		return
+	var room := playback.get_frames_available()
+	var burst := PackedVector2Array()
+	burst.resize(InputMonitor.RATE / 10)
+	for i in burst.size():
+		burst[i] = Vector2(float(i), -float(i))
+	held.frames = burst
+	monitor.feed()
+	var queued := room - playback.get_frames_available()
+	check("a tenth of a second at once is cut to the queue's %d frames (%d queued)" % [InputMonitor.QUEUE_FRAMES, queued],
+			queued == InputMonitor.QUEUE_FRAMES)
+	held.frames = burst
+	monitor.feed()
+	check("and a full player takes no more: the monitor is never later than the queue",
+			room - playback.get_frames_available() == InputMonitor.QUEUE_FRAMES)
+	var left := InputMonitor.new()
+	check("fed from a thread of its own when left to itself", left.threaded)
+	left.free()
 	monitor.free()
 
 
@@ -20911,6 +21059,13 @@ func _test_the_timeline_grid_is_chosen_with_a_token() -> void:
 	check("then quarter beats", TimelineLanes.grid == 0.25
 			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.25)))
 	key.pressed.emit()
+	check("then eighths, its mark finer still (%s)" % key.glyph, TimelineLanes.grid == 0.125 and key.glyph == &"grid_32"
+			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.25)))
+	key.pressed.emit()
+	check("then sixteenths", TimelineLanes.grid == 0.0625 and key.glyph == &"grid_64"
+			and is_equal_approx(TimelineLanes.snap(at, false), s.seconds_at_beat(5.3125))
+			and key.readout().contains("sixteenths"))
+	key.pressed.emit()
 	check("then free: nothing snaps", TimelineLanes.grid == TimelineLanes.OFF and key.glyph == &"grid_off"
 			and is_equal_approx(TimelineLanes.snap(at, false), at))
 	key.pressed.emit()
@@ -20924,6 +21079,639 @@ func _test_the_timeline_grid_is_chosen_with_a_token() -> void:
 	check("and round again to the beat", TimelineLanes.grid == 1.0)
 	TimelineLanes.grid = 1.0
 	timeline.free()
+
+
+func _test_the_timeline_snaps_only_when_close() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var lanes: TimelineLanes = timeline._lanes
+	var beat := 60.0 / s.tempo
+	# Zoomed in: two bars across, round the end of Kick's Verse 1 (bar 9 to 25).
+	timeline.set_view(s.bar_to_seconds(23.5), 8.0 * beat)
+	var reach := TimelineLanes.MAGNET * timeline.seconds_per_metre()
+	check("zoomed in, MAGNET of panel is a sliver of a beat (%.3f s)" % reach, reach > 0.0 and reach < beat * 0.2)
+	var b := s.seconds_at_beat(94.0)
+	close_to("a time near a beat is pulled onto it", lanes.magnet(b + reach * 0.5, false), b)
+	close_to("one between beats stays exactly where it is", lanes.magnet(b + beat * 0.4, false), b + beat * 0.4)
+	close_to("and fine is never pulled", lanes.magnet(b + reach * 0.5, true), b + reach * 0.5)
+	close_to("an attack in reach pulls before the grid line under the pointer",
+			TimelineLanes.pull(b, false, reach, PackedFloat32Array([b + reach * 0.5])), b + reach * 0.5)
+	close_to("but not one out of reach", TimelineLanes.pull(b + beat * 0.4, false, reach, PackedFloat32Array([b + beat * 0.9])),
+			b + beat * 0.4)
+
+	var hand := FakeHand.new()
+	add_child(hand)
+	var row := s.track_indices().find(2)
+	var at := func(seconds: float) -> Vector3:
+		return timeline.to_global(Vector3(timeline._x_for(seconds), timeline._lane_y[row], lanes.position.z))
+	var end := s.item(2, 0).end()
+	var grip: Vector3 = timeline.to_global(Vector3(timeline._x_for(end) - 0.0008, timeline._lane_y[row], lanes.position.z))
+	check("the item's right edge is in reach to trim", timeline.item_edge_at_point(grip) == 1)
+	var free_end := end - beat * 1.4
+	lanes.grab_begin(hand, grip)
+	lanes.grab_move(hand, at.call(free_end))
+	lanes.grab_end(hand)
+	close_to("zoomed in, a trim between beats ends exactly where it was let go", s.item(2, 0).end(),
+			end + free_end - timeline.seconds_at_point(grip), 0.002)
+	var near := s.seconds_at_beat(roundf(s.beat_at(free_end))) + reach * 0.4
+	grip = timeline.to_global(Vector3(timeline._x_for(s.item(2, 0).end()) - 0.0008, timeline._lane_y[row], lanes.position.z))
+	lanes.grab_begin(hand, grip)
+	lanes.grab_move(hand, at.call(near + s.item(2, 0).end() - timeline.seconds_at_point(grip)))
+	lanes.grab_end(hand)
+	close_to("and one let go near a beat ends on it", s.item(2, 0).end(), s.seconds_at_beat(roundf(s.beat_at(free_end))), 0.0005)
+	DAW.undo()
+	DAW.undo()
+	# Zoomed out, the same few millimetres are a long way in the song: a drag is on a beat at every step.
+	timeline.set_view(0.0, s.bar_to_seconds(65.0))
+	check("zoomed out, the pull reaches further (%.3f s)" % (TimelineLanes.MAGNET * timeline.seconds_per_metre()),
+			TimelineLanes.MAGNET * timeline.seconds_per_metre() > beat * 0.5)
+	close_to("so a time between beats is on the nearer", lanes.magnet(b + beat * 0.4, false), b)
+	check("the lanes' card says how a drag snaps", lanes.hint().contains("snaps to the grid") and lanes.hint().contains("attacks"))
+	hand.queue_free()
+	timeline.free()
+
+
+## A take in the takes folder, `name`, three seconds of hiss at 48 kHz with a click at each of
+## `clicks` (seconds into it); its path on this machine.
+func _clicks_take(name: String, clicks: Array) -> String:
+	var path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(AudioTake.DIR))
+	var noise := RandomNumberGenerator.new()
+	noise.seed = 3
+	var samples := PackedFloat32Array()
+	samples.resize(48000 * 3)
+	for n in samples.size():
+		samples[n] = noise.randf_range(-0.001, 0.001)
+	for c in clicks:
+		var from := int(round(float(c) * 48000))
+		for n in range(from, mini(from + 480, samples.size())):
+			samples[n] += 0.8 * exp(-float(n - from) / 48.0) * (1.0 if (n - from) % 2 == 0 else -1.0)
+	DawKitAudioFile.write_wav(path, samples, 1, 48000)
+	DawKitTransients.forget()
+	DawKitTransients.of_file(path)
+	return path
+
+
+func _test_the_timeline_trims_to_a_takes_attacks() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var path := _clicks_take("attack_test_take.wav", [0.731, 2.013])
+	var item := s.item(2, 0)
+	item.source = "attack_test_take.wav"
+	item.source_offset = 0.0
+	var start := item.start
+	var attacks := DAW.item_transients(2, 0)
+	check("the desk knows the item's attacks, in song seconds (%s)" % [attacks], attacks.size() == 2
+			and absf(attacks[0] - (start + 0.731)) <= 0.001 and absf(attacks[1] - (start + 2.013)) <= 0.001)
+	check("a MIDI or file-less item has none", DAW.item_transients(3, 0).is_empty() and DAW.item_transients(99, 0).is_empty())
+
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var lanes: TimelineLanes = timeline._lanes
+	timeline.set_view(start - 1.0, 6.0)
+	var reach := TimelineLanes.MAGNET * timeline.seconds_per_metre()
+	var hand := FakeHand.new()
+	add_child(hand)
+	var row := s.track_indices().find(2)
+	var at := func(seconds: float) -> Vector3:
+		return timeline.to_global(Vector3(timeline._x_for(seconds), timeline._lane_y[row], lanes.position.z))
+	var grip: Vector3 = timeline.to_global(Vector3(timeline._x_for(start) + 0.0008, timeline._lane_y[row], lanes.position.z))
+	check("the item's left edge is in reach to trim", timeline.item_edge_at_point(grip) == -1)
+	var offset := start - timeline.seconds_at_point(grip)
+	lanes.grab_begin(hand, grip)
+	lanes.grab_move(hand, at.call(attacks[0] - reach * 0.6 - offset))
+	check("dragging, the trim is drawn on the attack", absf(timeline._preview[2] - attacks[0]) <= 0.001)
+	lanes.grab_end(hand)
+	close_to("let go near the take's attack, the item starts on it", s.item(2, 0).start, attacks[0], 0.001)
+	close_to("its file from there", s.item(2, 0).source_offset, 0.731, 0.001)
+	DAW.undo()
+	hand.holding_shift = true
+	lanes.grab_begin(hand, grip)
+	lanes.grab_move(hand, at.call(attacks[0] - reach * 0.6 - offset))
+	lanes.grab_end(hand)
+	hand.holding_shift = false
+	close_to("fine, it starts where it was let go", s.item(2, 0).start, attacks[0] - reach * 0.6, 0.002)
+	DAW.undo()
+	hand.queue_free()
+	timeline.free()
+	item.source = ""
+	DirAccess.remove_absolute(path)
+	DawKitTransients.forget()
+
+
+func _test_the_2d_view_trims_to_a_takes_attacks() -> void:
+	_offline()
+	var s := DAW.state
+	var path := _clicks_take("attack_test_flat.wav", [0.4, 1.6])
+	var item := s.item(2, 0)
+	item.source = "attack_test_flat.wav"
+	item.source_offset = 0.25
+	var host := FlatHost.new()
+	var id := ProjectBridge.id_of(2)
+	var heard := host.clip_transients(id, 0)
+	check("the 2D view's host says a clip's attacks where the desk hears them (%s)" % [heard], heard.size() == 2
+			and absf(heard[0] - (item.start - 0.25 + 0.4)) <= 0.001 and heard == DAW.item_transients(2, 0))
+	check("none for the master, or a clip that is not there", host.clip_transients(DawKitProject.MASTER_ID, 0).is_empty()
+			and host.clip_transients(id, 99).is_empty())
+	item.source = ""
+	check("nor for one with no file", host.clip_transients(id, 0).is_empty())
+	DirAccess.remove_absolute(path)
+	DawKitTransients.forget()
+
+
+# --- the clip editor (ClipEditorSurface) --------------------------------------------------------
+
+## The stand-in's Kick verse (track 2, item 0) made a take of `name`'s clicks (see _clicks_take),
+## `offset` into the file and two seconds long, so its file runs past both its edges; the take's
+## path.
+func _clip_take_on_kick(name: String, clicks: Array, offset := 0.5) -> String:
+	var path := _clicks_take(name, clicks)
+	var item := DAW.state.item(2, 0)
+	item.source = name
+	item.source_offset = offset
+	DAW.trim_item(2, 0, item.start, item.start + 2.0)
+	ClipWave.forget()
+	ClipWave.of_file(path)
+	return path
+
+
+func _clip_editor_on(track: int, index: int) -> ClipEditorSurface:
+	var editor := ClipEditorSurface.new()
+	add_child(editor)
+	editor.open(track, index)
+	return editor
+
+
+## The point on the editor's face `up` of the way from the middle of the sound to its top, at the
+## height of a fade's corner when `up` is NAN.
+func _clip_at(editor: ClipEditorSurface, seconds: float, up := 0.0) -> Vector3:
+	if is_nan(up):
+		up = (ClipEditorSurface.WAVE_TOP - 0.004 - ClipEditorSurface.WAVE_MID) / ClipEditorSurface.WAVE_HALF
+	return editor.point_for(seconds, up)
+
+
+func _clip_drag(editor: ClipEditorSurface, hand: Node, from: Vector3, to: Vector3) -> void:
+	editor._face.grab_begin(hand, from)
+	editor._face.grab_move(hand, to)
+	editor._face.grab_end(hand)
+
+
+func _clip_cleanup(editor: ClipEditorSurface, hand: Node, path: String) -> void:
+	if hand != null:
+		hand.queue_free()
+	editor.free()
+	DAW.state.item(2, 0).source = ""
+	if path != "":
+		DirAccess.remove_absolute(path)
+	DawKitTransients.forget()
+	ClipWave.forget()
+
+
+func _test_the_clip_editor_opens_on_a_clip_and_draws_its_file() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var path := _clip_take_on_kick("clip_editor_take.wav", [0.731, 2.013])
+	var item := s.item(2, 0)
+	var sound := ClipWave.of_file(path)
+	check("the file is read whole, folded to one channel (%s s)" % sound.get("seconds"),
+			absf(float(sound.get("seconds", 0.0)) - 3.0) < 0.001 and int(sound.get("rate", 0)) == 48000)
+	var on := ClipWave.span(sound, 0.7312, 0.7322)
+	var before := ClipWave.span(sound, 0.729, 0.730)
+	check("a millisecond's column sees the click, and the millisecond before it only hiss (%s, %s)" % [on, before],
+			on.y > 0.5 and before.y < 0.01)
+	var deep := ClipWave.span(sound, 0.7311, 0.73111)
+	check("a column narrower than a frame is the sound there, not a box (%s)" % deep, deep.x == deep.y)
+	close_to("a column of a second reads its summaries, the click's peak in it", ClipWave.span(sound, 0.5, 1.5).y,
+			ClipWave.span(sound, 0.7305, 0.7325).y, 0.02)
+	check("and a stretch outside the file is nothing", ClipWave.span(sound, 5.0, 6.0) == Vector2.ZERO)
+
+	var editor := ClipEditorSurface.new()
+	add_child(editor)
+	check("closed, it is not there: hidden, out of the physics world, no controls",
+			not editor.visible and editor.process_mode == Node.PROCESS_MODE_DISABLED
+			and editor.find_children("*", "ControlAffordance", true, false).is_empty())
+	var opened := []
+	editor.opened.connect(func(t: int, i: int) -> void: opened.append([t, i]))
+	editor.open(2, 0)
+	check("opened on the clip, and says so", editor.is_open() and editor.target == [2, 0] and editor.visible
+			and editor.process_mode != Node.PROCESS_MODE_DISABLED and opened == [[2, 0]])
+	check("its view is the clip and a little either side", editor.view_start < item.start
+			and editor.view_start + editor.view_span > item.end() and editor.view_span < item.length * 1.5)
+	check("the title names the track and the clip (%s)" % editor.title_text(),
+			editor.title_text().contains(s.track(2).display_name().to_upper()) and editor.title_text().contains(item.name))
+	var r := editor.readouts()
+	check("its readouts: start, end, length, fades and gain (%s)" % [r], r.size() == 6 and r[0] == "%.3f s" % item.start
+			and r[1] == "%.3f s" % item.end() and r[2] == "2000.0 ms" and r[3] == "0.0 ms" and r[5] == "+0.0 dB")
+	editor._redraw()
+	check("the sound is drawn from the file, nothing lettered over it ('%s')" % editor.message_text(), editor.message_text() == "")
+	check("the take's attacks are known to it, in song seconds", editor.attacks().size() == 2
+			and absf(editor.attacks()[0] - (item.start - 0.5 + 0.731)) < 0.001)
+	var colours: PackedColorArray = editor._mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var faint := 0
+	for c in colours:
+		if absf(c.r - ClipEditorSurface.BEYOND.r) < 0.01 and absf(c.g - ClipEditorSurface.BEYOND.g) < 0.01 and absf(c.b - ClipEditorSurface.BEYOND.b) < 0.01:
+			faint += 1
+	check("what lies beyond its edges in the file is drawn too, faintly (%d corners)" % faint, faint > 60)
+	# Down to a few milliseconds across, and then a line through the samples.
+	editor.set_view(item.start + 0.229, 0.001)
+	check("the view goes down to a few milliseconds and no further (%.4f s)" % editor.view_span,
+			is_equal_approx(editor.view_span, ClipEditorSurface.MIN_SPAN))
+	editor._redraw()
+	check("zoomed that far, still drawn (%d corners)" % editor._mesh.mesh.surface_get_array_len(0),
+			editor._mesh.mesh.surface_get_array_len(0) > ClipEditorSurface.COLUMNS * 6)
+	editor.fit()
+	var hand := FakeHand.new()
+	add_child(hand)
+	hand.hover_point = editor.point_for(item.start + 0.5)
+	editor._face.hover_enter(hand)
+	var span := editor.view_span
+	editor._face.nudge(hand, 1, false)
+	close_to("a wheel notch zooms in", editor.view_span, span * ClipEditorSurface.ZOOM_STEP, 0.0001)
+	close_to("round the pointer", editor.x_for(item.start + 0.5), editor.to_local(hand.hover_point).x, 0.0001)
+	var from := editor.view_start
+	editor._face.nudge(hand, 1, true)
+	close_to("a fine notch scrolls", editor.view_start, from + editor.view_span * ClipEditorSurface.SCROLL_STEP, 0.0001)
+	check("its card says what bare sound is (%s)" % editor._face.readout(), editor._face.title() == "CLIP EDITOR"
+			and editor._face.readout().contains("from the clip's start") and editor._face.card_hint().contains("wheel zooms"))
+	editor._face.hover_exit(hand)
+	_clip_cleanup(editor, hand, path)
+
+
+func _test_the_clip_editor_trims_to_an_attack_by_drag() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var path := _clip_take_on_kick("clip_trim_take.wav", [0.731, 2.013])
+	var editor := _clip_editor_on(2, 0)
+	var start := s.item(2, 0).start
+	var attack := editor.attacks()[0]
+	editor.set_view(start - 0.1, 1.0)
+	var reach := TimelineLanes.MAGNET * editor.seconds_per_metre()
+	check("at a second across, the pull is a few milliseconds (%.4f s)" % reach, reach > 0.001 and reach < 0.02)
+	var hand := FakeHand.new()
+	add_child(hand)
+	var depth := s.undo_depth
+	editor._face.grab_begin(hand, _clip_at(editor, start))
+	check("pressed on the start edge, it holds that edge and selects it", editor._face.held == ClipEditorSurface.START
+			and editor.selected == ClipEditorSurface.START)
+	editor._face.grab_move(hand, _clip_at(editor, attack - reach * 0.6))
+	check("dragged near the attack, the edge is drawn on it", absf(float(editor.preview.get("start", 0.0)) - attack) < 0.0005
+			and editor.pulled_onto == "attack")
+	check("and its card says so (%s)" % editor._face.readout(), editor._face.title() == "CLIP  START"
+			and editor._face.readout().contains("on the attack"))
+	editor._redraw()
+	check("the readout follows the drag (%s)" % editor.readouts()[0], editor.readouts()[0] == "%.3f s" % float(editor.preview["start"]))
+	editor._face.grab_end(hand)
+	close_to("let go, the clip starts on the attack", s.item(2, 0).start, attack, 0.0005)
+	close_to("its file from there", s.item(2, 0).source_offset, 0.731, 0.0005)
+	check("one undo step for the drag (%d -> %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
+	DAW.undo()
+	close_to("and undone, it is back", s.item(2, 0).start, start)
+	# FREE: exactly where it is let go.
+	editor.key(&"snap").pressed.emit()
+	check("the SNAP key is now FREE", not editor.snapping and editor.key(&"snap").legend == "FREE"
+			and editor.key(&"snap").hint().contains("free"))
+	_clip_drag(editor, hand, _clip_at(editor, start), _clip_at(editor, attack - reach * 0.6))
+	close_to("free, it lands where it was let go", s.item(2, 0).start, attack - reach * 0.6, 0.0002)
+	DAW.undo()
+	editor.key(&"snap").pressed.emit()
+	hand.holding_shift = true
+	_clip_drag(editor, hand, _clip_at(editor, start), _clip_at(editor, attack - reach * 0.6))
+	hand.holding_shift = false
+	close_to("and fine (shift) is free too", s.item(2, 0).start, attack - reach * 0.6, 0.0002)
+	DAW.undo()
+	# Zoomed to a few milliseconds the same few millimetres are microseconds: a trim between hits.
+	DAW.trim_item(2, 0, attack - 0.002, s.item(2, 0).end())
+	editor.set_view(attack - 0.003, 0.006)
+	var near := TimelineLanes.MAGNET * editor.seconds_per_metre()
+	_clip_drag(editor, hand, _clip_at(editor, attack - 0.002), _clip_at(editor, attack - 0.0004))
+	check("zoomed in, a trim 0.4 ms short of the attack stays 0.4 ms short (reach %.6f s)" % near,
+			absf(s.item(2, 0).start - (attack - 0.0004)) < 0.00005)
+	# The end: no further than the file goes.
+	editor.fit()
+	var file_end := s.item(2, 0).start - s.item(2, 0).source_offset + 3.0
+	_clip_drag(editor, hand, _clip_at(editor, s.item(2, 0).end()), _clip_at(editor, file_end + 0.5))
+	close_to("an end dragged past the file stops where the file does", s.item(2, 0).end(), file_end, 0.0005)
+	_clip_cleanup(editor, hand, path)
+
+
+func _test_the_clip_editor_nudges_its_selected_handle() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var path := _clip_take_on_kick("clip_nudge_take.wav", [0.731, 2.013])
+	var editor := _clip_editor_on(2, 0)
+	var start := s.item(2, 0).start
+	var end := s.item(2, 0).end()
+	var attacks := editor.attacks()
+	var depth := s.undo_depth
+	editor.key(&"start").pressed.emit()
+	check("START selected, its key lit", editor.selected == ClipEditorSurface.START and editor.key(&"start").lit
+			and not editor.key(&"end").lit)
+	editor.key(&"plus_1").pressed.emit()
+	close_to("+1 ms: the start a millisecond later", s.item(2, 0).start, start + 0.001, 0.00001)
+	editor.key(&"plus_10").pressed.emit()
+	close_to("+10 ms: eleven", s.item(2, 0).start, start + 0.011, 0.00001)
+	editor.key(&"minus_1").pressed.emit()
+	close_to("-1 ms: ten", s.item(2, 0).start, start + 0.010, 0.00001)
+	check("each a step of its own (%d)" % (s.undo_depth - depth), s.undo_depth == depth + 3)
+	close_to("its end stays put", s.item(2, 0).end(), end, 0.00001)
+	editor.key(&"end").pressed.emit()
+	editor.key(&"minus_10").pressed.emit()
+	close_to("END, -10 ms: the end ten milliseconds earlier", s.item(2, 0).end(), end - 0.010, 0.00001)
+	editor.key(&"fade_in").pressed.emit()
+	editor.key(&"plus_10").pressed.emit()
+	close_to("FADE IN, +10 ms: a fade in of ten milliseconds", s.item(2, 0).fade_in, 0.010, 0.00001)
+	editor.key(&"fade_out").pressed.emit()
+	editor.key(&"minus_1").pressed.emit()
+	close_to("FADE OUT, -1 ms: the fade out starts a millisecond earlier", s.item(2, 0).fade_out, 0.001, 0.00001)
+	editor.key(&"start").pressed.emit()
+	depth = s.undo_depth
+	editor.key(&"hit_on").pressed.emit()
+	close_to("HIT >: onto the take's next attack", s.item(2, 0).start, attacks[0], 0.0001)
+	editor.key(&"hit_on").pressed.emit()
+	close_to("and the one after", s.item(2, 0).start, attacks[1], 0.0001)
+	editor.key(&"hit_back").pressed.emit()
+	close_to("< HIT: back to the one before", s.item(2, 0).start, attacks[0], 0.0001)
+	check("each one step (%d)" % (s.undo_depth - depth), s.undo_depth == depth + 3)
+	var was := s.item(2, 0).start
+	check("before the first there is none: nothing moves", not editor.nudge_to_attack(-1) and is_equal_approx(s.item(2, 0).start, was))
+	check("the nudge keys say what they do", editor.key(&"plus_1").title() == "CLIP  NUDGE +1 ms"
+			and editor.key(&"plus_1").hint().contains("millisecond later"))
+	_clip_cleanup(editor, null, path)
+
+
+func _test_the_clip_editor_fades_and_gain_are_one_undo_step_each() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var path := _clip_take_on_kick("clip_fade_take.wav", [0.731, 2.013])
+	var editor := _clip_editor_on(2, 0)
+	var it := s.item(2, 0)
+	var start := it.start
+	var attack := editor.attacks()[0]
+	var hand := FakeHand.new()
+	add_child(hand)
+	var depth := s.undo_depth
+	check("the top of the start edge is the fade in's corner", editor.handle_at(editor.to_local(_clip_at(editor, start, NAN))) == ClipEditorSurface.FADE_IN)
+	editor._face.grab_begin(hand, _clip_at(editor, start, NAN))
+	editor._face.grab_move(hand, _clip_at(editor, attack + 0.003, NAN))
+	check("dragged, the fade is drawn to the attack near it, not yet made (%s)" % [editor.preview],
+			absf(float(editor.preview.get("fade_in", 0.0)) - (attack - start)) < 0.0005 and is_zero_approx(s.item(2, 0).fade_in))
+	editor._face.grab_end(hand)
+	close_to("let go, the clip fades in to the attack", s.item(2, 0).fade_in, attack - start, 0.0005)
+	check("in one undo step, the start and the fade out untouched", s.undo_depth == depth + 1
+			and is_equal_approx(s.item(2, 0).start, start) and is_zero_approx(s.item(2, 0).fade_out))
+	editor.set_snapping(false)
+	var end := s.item(2, 0).end()
+	_clip_drag(editor, hand, _clip_at(editor, end, NAN), _clip_at(editor, end - 0.3141, NAN))
+	close_to("the end's top corner is the fade out, free to the millisecond", s.item(2, 0).fade_out, 0.3141, 0.0002)
+	check("one more step", s.undo_depth == depth + 2)
+	editor.set_snapping(true)
+	# The gain line: up a sixth of the half height is six decibels.
+	var middle := (start + end) * 0.5
+	var up := (editor.gain_y(0.0) - ClipEditorSurface.WAVE_MID) / ClipEditorSurface.WAVE_HALF
+	check("the gain line is where the press is", editor.handle_at(editor.to_local(editor.point_for(middle, up))) == ClipEditorSurface.GAIN)
+	var per := 1.0 / (ClipEditorSurface.GAIN_HIGH - ClipEditorSurface.GAIN_LOW)
+	_clip_drag(editor, hand, editor.point_for(middle, up), editor.point_for(middle, up + 6.0 * per))
+	close_to("dragged up, the clip is 6 dB louder", s.item(2, 0).gain_db, 6.0, 0.05)
+	editor._redraw()
+	check("in one step, and the readout says so (%s)" % editor.readouts()[5], s.undo_depth == depth + 3
+			and editor.readouts()[5] == "+6.0 dB")
+	hand.holding_shift = true
+	var at_six := (editor.gain_y(6.0) - ClipEditorSurface.WAVE_MID) / ClipEditorSurface.WAVE_HALF
+	_clip_drag(editor, hand, editor.point_for(middle, at_six), editor.point_for(middle, at_six - 6.0 * per))
+	hand.holding_shift = false
+	close_to("fine, the same drag down is a tenth as far", s.item(2, 0).gain_db, 5.4, 0.05)
+	DAW.undo()
+	DAW.undo()
+	close_to("undone twice, the gain is back", s.item(2, 0).gain_db, 0.0)
+	# Locked, nothing moves, and the panel says why.
+	DAW.set_item_locked(2, 0, true)
+	depth = s.undo_depth
+	var fade := s.item(2, 0).fade_in
+	_clip_drag(editor, hand, _clip_at(editor, start), _clip_at(editor, start + 0.2))
+	editor.key(&"plus_10").pressed.emit()
+	editor._redraw()
+	check("a locked clip is not trimmed, faded or nudged here (%s)" % editor.message_text(), s.undo_depth == depth
+			and is_equal_approx(s.item(2, 0).start, start) and is_equal_approx(s.item(2, 0).fade_in, fade)
+			and editor.message_text().contains("LOCKED") and not editor.key(&"plus_10").available)
+	DAW.set_item_locked(2, 0, false)
+	_clip_cleanup(editor, hand, path)
+
+
+func _test_the_clip_editor_puts_edges_on_zero_crossings() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	# Two seconds of a 110 Hz sine: a crossing every 4.5 ms, and between them nothing near zero.
+	var name := "clip_sine_take.wav"
+	var path := ProjectSettings.globalize_path(AudioTake.DIR.path_join(name))
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var samples := PackedFloat32Array()
+	samples.resize(96000)
+	for n in samples.size():
+		samples[n] = 0.5 * sin(TAU * 110.0 * n / 48000.0)
+	DawKitAudioFile.write_wav(path, samples, 1, 48000)
+	ClipWave.forget()
+	var sound := ClipWave.of_file(path)
+	var item := s.item(2, 0)
+	item.source = name
+	item.source_offset = 0.1
+	DAW.trim_item(2, 0, item.start, item.start + 1.5)
+	var editor := _clip_editor_on(2, 0)
+	editor.set_snapping(false)
+	var start := item.start
+	var hand := FakeHand.new()
+	add_child(hand)
+	editor.set_view(start - 0.02, 0.1)
+	var aimed := start + 0.0123
+	_clip_drag(editor, hand, _clip_at(editor, start), _clip_at(editor, aimed))
+	var heard := ClipWave.sample_at(sound, ClipEditorSurface.file_time(s.item(2, 0), s.item(2, 0).start))
+	check("ZERO X off, the edge is where it was let go, mid-wave (%.3f)" % heard,
+			absf(s.item(2, 0).start - aimed) < 0.0001 and absf(heard) > 0.2)
+	DAW.undo()
+	editor.key(&"zero").pressed.emit()
+	check("the ZERO X key is lit, and its card says what it does", editor.zero_crossings and editor.key(&"zero").lit
+			and editor.key(&"zero").hint().contains("zero crossing"))
+	_clip_drag(editor, hand, _clip_at(editor, start), _clip_at(editor, aimed))
+	heard = ClipWave.sample_at(sound, ClipEditorSurface.file_time(s.item(2, 0), s.item(2, 0).start))
+	check("on, the edge lands on the sound's nearest zero crossing (%.5f, %.2f ms away)" % [heard, (s.item(2, 0).start - aimed) * 1000.0],
+			absf(heard) < 0.005 and absf(s.item(2, 0).start - aimed) <= ClipEditorSurface.ZERO_REACH)
+	editor.fit()
+	var end := s.item(2, 0).end()
+	_clip_drag(editor, hand, _clip_at(editor, end), _clip_at(editor, end - 0.0571))
+	heard = ClipWave.sample_at(sound, ClipEditorSurface.file_time(s.item(2, 0), s.item(2, 0).end()))
+	check("and so does the end (%.5f)" % heard, absf(heard) < 0.005 and s.item(2, 0).end() < end - 0.05)
+	_clip_cleanup(editor, hand, path)
+
+
+func _test_the_clip_editor_is_opened_retargeted_and_closed() -> void:
+	_offline()
+	DAW.transport_stop()
+	var s := DAW.state
+	var timeline := TimelineSurface.new()
+	add_child(timeline)
+	timeline._process(0.0)
+	var editor := ClipEditorSurface.new()
+	add_child(editor)
+	timeline.edit_asked.connect(editor.open)
+	var lanes: TimelineLanes = timeline._lanes
+	var it := s.item(2, 0)
+	timeline.set_view(it.start - 1.0, it.length + 2.0)
+	var row := s.track_indices().find(2)
+	var on_it := timeline.to_global(Vector3(timeline._x_for(it.start + it.length * 0.5), timeline._lane_y[row], lanes.position.z))
+	var hand := FakeHand.new()
+	add_child(hand)
+	lanes.grab_begin(hand, on_it)
+	lanes.grab_end(hand)
+	check("one click on a clip selects it and opens nothing", s.item(2, 0).selected and not editor.is_open())
+	lanes.grab_begin(hand, on_it)
+	lanes.grab_end(hand)
+	check("a second, straight after, opens it in the clip editor", editor.is_open() and editor.target == [2, 0])
+	check("the lanes' card says so", lanes.hint().contains("double-click"))
+	editor.close()
+	hand.holding_shift = true
+	lanes.grab_begin(hand, on_it)
+	lanes.grab_end(hand)
+	lanes.grab_begin(hand, on_it)
+	lanes.grab_end(hand)
+	hand.holding_shift = false
+	check("two fine clicks are two edits of the selection, not a double click", not editor.is_open())
+	# The item page's EDIT CLIP key, for a hand that does not double click: a MIDI clip, this time.
+	var midi := []
+	for t in s.track_indices():
+		for i in s.track(t).items.size():
+			if midi.is_empty() and not (s.track(t).items[i] as MixState.ItemState).notes.is_empty():
+				midi = [t, i]
+	DAW.select_item(midi[0], midi[1], false)
+	var page: TimelineItemPage = timeline.item_page
+	page.refresh()
+	check("the item page has an EDIT CLIP key, lit for one selected item", page.edit_clip.glyph == &"clip_edit"
+			and page.edit_clip.available and page.edit_clip.lit and page.edit_clip.readout().contains("clip editor"))
+	page.edit_clip.pressed.emit()
+	check("pressed, the editor opens on it", editor.is_open() and editor.target == midi)
+	editor.open(2, 0)
+	check("opening another retargets the one editor", editor.target == [2, 0])
+	page.edit_clip.pressed.emit()
+	check("and back", editor.target == midi and editor.is_midi())
+	editor._redraw()
+	check("a MIDI clip: no waveform, and the panel says what applies (%s)" % editor.message_text(),
+			editor.message_text().contains("MIDI") and not editor.key(&"fade_in").available
+			and not editor.key(&"zero").available and not editor.key(&"hit_on").available)
+	var end := s.item(midi[0], midi[1]).end()
+	editor.key(&"end").pressed.emit()
+	editor.key(&"minus_10").pressed.emit()
+	close_to("but its edges trim", s.item(midi[0], midi[1]).end(), end - 0.010, 0.00001)
+	DAW.clear_item_selection()
+	page.refresh()
+	check("with nothing selected the key is out of reach", not page.edit_clip.available)
+	var closed := [false]
+	editor.closed.connect(func() -> void: closed[0] = true)
+	editor.key(&"close").pressed.emit()
+	check("CLOSE puts it away: hidden, out of the physics world, no controls left",
+			closed[0] and not editor.is_open() and not editor.visible and editor.process_mode == Node.PROCESS_MODE_DISABLED
+			and editor.find_children("*", "ControlAffordance", true, false).is_empty())
+	editor.open(2, 0)
+	DAW.project_replaced.emit()
+	check("a project replaced closes it", not editor.is_open())
+	hand.queue_free()
+	editor.free()
+	timeline.free()
+
+
+## Every word on the editor lies on its face, read from the front -- the hover card's too: text
+## goes on surfaces, never billboarded in the air.
+func _test_the_clip_editors_lettering_lies_on_its_face() -> void:
+	_offline()
+	var editor := ClipEditorSurface.new()
+	editor.rotation_degrees = Vector3(0, 30, 0)
+	editor.scale = Vector3.ONE * 1.35
+	add_child(editor)
+	editor.open(2, 0)
+	var normal := editor.global_basis.z.normalized()
+	var labels := editor.find_children("*", "Label3D", true, false)
+	var flat := true
+	var why := ""
+	for node in labels:
+		var l := node as Label3D
+		var z := editor.to_local(l.global_position).z
+		if l.billboard != BaseMaterial3D.BILLBOARD_DISABLED or l.fixed_size or l.double_sided \
+				or l.global_basis.z.normalized().dot(normal) < 0.999 or z < 0.0 or z > 0.015:
+			flat = false
+			why = "%s (z %.4f)" % [l.name, z]
+	check("all %d words on it lie flat on its face, facing out %s" % [labels.size(), why], labels.size() > 20 and flat)
+	var card := HoverCard.new()
+	add_child(card)
+	card.show_for(editor._face)
+	var card_flat := true
+	for node in card.find_children("*", "Label3D", true, false):
+		var l := node as Label3D
+		if l.billboard != BaseMaterial3D.BILLBOARD_DISABLED or l.global_basis.z.normalized().dot(normal) < 0.999:
+			card_flat = false
+	check("and its hover card prints on it too, in its plane", card.showing() == editor and card_flat
+			and card.line_text().begins_with("CLIP EDITOR"))
+	card.free()
+	editor.free()
+
+
+## In the studio: one editor, closed, hung by the timeline on its stand; opened by the timeline,
+## under its lanes, in the seat's view, and clear of the rest of the room's gear by 0.6 m.
+func _test_the_studio_hangs_the_clip_editor_by_the_timeline() -> void:
+	var saved_layout := Session.layout
+	var studio := _cassette_studio()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var editor := studio.clip_editor
+	check("the studio has one clip editor, closed", editor != null and not editor.is_open() and not editor.visible
+			and studio.find_children("*", "ClipEditorSurface", true, false).size() == 1)
+	check("it rides the timeline's stand", studio.mount.seats.has(editor.surface_id) and editor.get_parent() == studio.studio_set)
+	studio.timeline.edit_asked.emit(2, 0)
+	await get_tree().process_frame
+	check("the timeline opens it", editor.is_open() and editor.target == [2, 0] and editor.visible)
+	var top := editor.to_global(Vector3(0, ClipEditorSurface.TOP, 0)).y
+	var lanes_bottom := studio.timeline.to_global(Vector3(0, studio.timeline._lanes_bottom, 0)).y
+	check("it hangs under the timeline's lanes (%.3f < %.3f)" % [top, lanes_bottom], top < lanes_bottom)
+	# Its board on the floor, against every other piece's footprint.
+	var ends := [editor.to_global(Vector3(-ClipEditorSurface.WIDE * 0.5, 0, -0.02)), editor.to_global(Vector3(ClipEditorSurface.WIDE * 0.5, 0, 0.005))]
+	var nearest := INF
+	var near_what := ""
+	for piece in studio.floor_plan.pieces:
+		if piece == studio.timeline_stand or not piece.visible or not piece.has_method("footprint_at"):
+			continue
+		var print_of: Dictionary = piece.footprint_at(Vector2(piece.global_position.x, piece.global_position.z), piece.global_rotation.y)
+		for k in 41:
+			var p: Vector3 = (ends[0] as Vector3).lerp(ends[1], k / 40.0)
+			var local := Trolley._floor_rotate(Vector2(p.x, p.z) - (print_of["c"] as Vector2), -float(print_of["a"]))
+			var h: Vector2 = print_of["h"]
+			var d := Vector2(maxf(absf(local.x) - h.x, 0.0), maxf(absf(local.y) - h.y, 0.0)).length()
+			if d < nearest:
+				nearest = d
+				near_what = piece.name
+	check("its board is 0.6 m clear of the room's other pieces (%.2f m from %s)" % [nearest, near_what], nearest >= 0.6)
+	# The seat's camera through a 16:9 monitor (the suite's own window is a 64-pixel square).
+	var cam := studio.get_viewport().get_camera_3d()
+	var tall := tan(deg_to_rad(cam.fov) * 0.5) if cam != null else 0.0
+	var seen := cam != null
+	var worst := Vector2.ZERO
+	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var corner := editor.to_global(Vector3(c.x * ClipEditorSurface.WIDE * 0.5, ClipEditorSurface.TOP if c.y > 0 else ClipEditorSurface.BOTTOM, 0))
+		var p := cam.global_transform.affine_inverse() * corner if cam != null else Vector3.ZERO
+		var across := Vector2(absf(p.x) / maxf(-p.z, 0.0001) / (tall * 16.0 / 9.0), absf(p.y) / maxf(-p.z, 0.0001) / tall)
+		worst = Vector2(maxf(worst.x, across.x), maxf(worst.y, across.y))
+		if p.z >= 0.0 or across.x > 1.0 or across.y > 1.0:
+			seen = false
+	check("from the seat, on a 16:9 monitor, the whole of it is in view (to %.0f%% of the half width, %.0f%% of the half height)"
+			% [worst.x * 100.0, worst.y * 100.0], seen)
+	studio.free()
+	Session.layout = saved_layout
 
 
 func _test_a_locked_item_stays_put_on_the_timeline() -> void:
@@ -23059,9 +23847,9 @@ func _test_the_band_goes_into_the_roulette_room_and_back() -> void:
 	check("the room the host publishes names it", studio.room_state()["venue"] == Venue.ROULETTE_ID)
 	var moved := []
 	for surface in studio.focus.surfaces:
-		if not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
+		if surface.surface_id != &"levels" and not surface.global_transform.is_equal_approx(poses[surface.surface_id]):
 			moved.append(surface.surface_id)
-	check("no gear moved (%s)" % [moved], moved.is_empty())
+	check("no gear moved, LEVELS aside, which is in the room's wall (%s)" % [moved], moved.is_empty())
 	check("the setup wall stands in it, and the board", studio.rig_roulette_station != null and studio.roll_board != null)
 	var wall := studio.rig_roulette_station
 	wall.count = 3
@@ -23788,6 +24576,9 @@ func _hosting_engine() -> GodotBackend:
 		return null
 	PluginCatalogue.use_only(found)
 	var backend := GodotBackend.new()
+	# Each plugin loaded before add_fx answers, so these checks find the slot whole; the game's
+	# load on dawkit's thread is checked by _test_a_plugin_loads_while_the_game_carries_on.
+	backend.hosted.threaded = false
 	backend.state = MixState.new()
 	DAW.use(backend)
 	return backend
@@ -23910,6 +24701,112 @@ func _test_an_instrument_plugin_plays_a_tracks_notes() -> void:
 	PluginCatalogue.use_only([])
 
 
+## 2026-10-30, "loading in certain heavy plugins causes the game to freeze. I would rather that
+## work happen on a background thread and the main ui waits for it to complete": the slot is in
+## the chain at once, named and loading, and fills in -- parameters, effect on the bus -- when
+## dawkit's thread is done, with undo, a copy and a project saved meanwhile all still whole.
+func _test_a_plugin_loads_while_the_game_carries_on() -> void:
+	var backend := _hosting_engine()
+	if backend == null:
+		return
+	backend.hosted.threaded = true
+	var s := DAW.state
+	var bus: int = backend._bus[6]
+	var before := s.track(6).plugins().size()
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.gain")
+	var at: int = s.track(6).plugins()[-1]
+	var f := s.fx(6, at)
+	check("add_fx answers at once with the slot in the chain, named, loading (%s, %s)" % [f.name, backend.fx_loading(6, at)],
+			s.track(6).plugins().size() == before + 1 and f.name == "Test Gain" and f.type == "CLAP"
+			and f.host_key != "" and backend.fx_loading(6, at) and f.param_list.is_empty())
+	check("and holds its place on the bus with nothing that changes the sound meanwhile",
+			AudioServer.get_bus_effect(bus, 1 + at).get_class() == "AudioEffectAmplify"
+			and not backend.has_plugin_window(6, at) and backend.open_plugin_window(6, at) == null)
+	var saved: DawKitEffect = ProjectBridge.capture(backend).tracks[5].effects[-1]
+	check("a project saved while it loads keeps it by format and id (%s)" % saved.plugin_id,
+			saved.plugin_format == "CLAP" and saved.plugin_id == "dawkit.test.gain" and saved.kind == "")
+	var tablet := PluginTablet.create(6, at, f.name)
+	add_child(tablet)
+	tablet._process(0.0)
+	check("its tablet says it is loading (%s)" % tablet._loading_label.text,
+			tablet._loading_label.visible and tablet._loading_label.text == "LOADING TEST GAIN…")
+	await _plugins_loaded(backend)
+	await get_tree().process_frame
+	tablet._process(0.0)
+	check("and once it has loaded, shows its knob instead",
+			not tablet._loading_label.visible and tablet._knobs.size() == 1)
+	tablet.queue_free()
+	f = s.fx(6, at)
+	check("once loaded, the slot has the plugin's parameters and the plugin is on the bus (%s)" % [f.param_list],
+			not backend.fx_loading(6, at) and f.param_names.get(0, "") == "Gain" and f.param_list == [0]
+			and AudioServer.get_bus_effect(bus, 1 + at).get_class() == "DawKitPluginEffect")
+	var key := f.host_key
+	DAW.undo()
+	DAW.redo()
+	check("an add undone and done again brings the loaded plugin back, parameters and all",
+			s.fx(6, at).host_key == key and s.fx(6, at).param_list == [0]
+			and AudioServer.get_bus_effect(bus, 1 + at).get_class() == "DawKitPluginEffect")
+	DAW.set_fx_param(6, at, 0, 0.25)
+	DAW.move_fx(6, at, 6, at + 1, true)
+	var copy := s.fx(6, at + 1)
+	check("a copy loads as a plugin of its own (%s)" % copy.host_key, copy.host_key != key and backend.fx_loading(6, at + 1))
+	await _plugins_loaded(backend)
+	check("and is set as the one it was copied from once loaded",
+			not backend.fx_loading(6, at + 1) and is_equal_approx(backend.hosted_plugin(6, at + 1).get_param(0), 0.25)
+			and is_equal_approx(s.fx(6, at + 1).params.get(0, -1.0), 0.25))
+	backend.close()
+	PluginCatalogue.use_only([])
+
+
+func _test_a_plugin_that_will_not_load_leaves_its_chain_as_it_was() -> void:
+	var found := _test_plugins()
+	if found.is_empty():
+		check("plugins are hosted here, with dawkit's test plugin built", false)
+		return
+	var broken := {"format": "CLAP", "id": "dawkit.test.missing", "name": "Not There", "vendor": "", "version": "",
+			"path": "/nonexistent/not_there.clap", "category": "", "instrument": false, "has_editor": false}
+	var backend := _hosting_engine()
+	PluginCatalogue.use_only(found + [broken])
+	backend.hosted.threaded = true
+	var s := DAW.state
+	var before := s.track(6).plugins().size()
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.missing")
+	check("a plugin that will not load is in the chain, loading, for a moment",
+			s.track(6).plugins().size() == before + 1 and backend.fx_loading(6, s.track(6).plugins()[-1]))
+	var key := s.fx(6, s.track(6).plugins()[-1]).host_key
+	await _plugins_loaded(backend)
+	check("then its slot is gone and the plugin let go of (%d slots)" % s.track(6).plugins().size(),
+			s.track(6).plugins().size() == before and not backend.hosted.has(key))
+	DAW.undo()
+	DAW.redo()
+	check("and an undo and a redo do not bring back a slot for it", s.track(6).plugins().size() == before)
+	# One a project brings, with its state, is kept as it came instead, so saving loses nothing.
+	DAW.add_fx(6, "plugin:CLAP:dawkit.test.gain")
+	await _plugins_loaded(backend)
+	var project := ProjectBridge.capture(backend)
+	var e: DawKitEffect = project.tracks[5].effects[-1]
+	e.plugin_id = "dawkit.test.missing"
+	ProjectBridge.load(project, backend)
+	var at: int = s.track(6).plugins()[-1]
+	check("a project's plugin that will not load is loading at first", backend.fx_loading(6, at))
+	await _plugins_loaded(backend)
+	var kept: DawKitEffect = ProjectBridge.capture(backend).tracks[5].effects[-1]
+	check("then its slot stays, named, and is saved as it came (%s, %d bytes)" % [kept.plugin_id, kept.state.size()],
+			s.fx(6, at).name == "Not There" and not backend.fx_loading(6, at) and backend.hosted_plugin(6, at) == null
+			and kept.plugin_id == "dawkit.test.missing" and kept.state == e.state and not e.state.is_empty())
+	backend.close()
+	PluginCatalogue.use_only([])
+
+
+## Until every plugin loading on dawkit's thread is done and taken in, five seconds at most.
+func _plugins_loaded(backend: GodotBackend) -> void:
+	var until := Time.get_ticks_msec() + 5000
+	while not backend.hosted.loading_keys().is_empty() and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+		backend.drive_plugin_loads()
+	backend.drive_plugin_loads()
+
+
 ## F2's 2D view (FlatView): dawkit's interface over the game's own mix, every edit made at the desk.
 func _test_the_flat_view_is_the_mix_in_2d() -> void:
 	DAW.use(OfflineBackend.new())
@@ -24004,12 +24901,31 @@ func _test_a_tracks_input_and_monitoring_are_set_in_2d() -> void:
 	var pick: Array = s.inputs[2]
 	header._list_inputs()
 	var menu := header.input.get_popup()
-	check("the menu lists every input and none chosen (%d)" % menu.item_count, menu.item_count == s.inputs.size() + 1)
+	var choices := 0
+	for i in menu.item_count:
+		if not menu.is_item_separator(i) and menu.get_item_id(i) != DawKitTrackHeader.SET_ASIDE:
+			choices += 1
+	check("the menu lists every input and none chosen (%d)" % choices, choices == s.inputs.size() + 1)
+	check("each device under a heading of its own, its sides by side", menu.is_item_separator(0)
+			and menu.get_item_text(1) == "both inputs" and menu.get_item_text(2) == "input 1")
 	menu.id_pressed.emit(2)
 	check("choosing one sets the track's input at the desk (%s)" % s.input_of(index), s.input_of(index) == pick[0])
 	view.refresh()
 	header = view.arrange.headers[id]
-	check("and the header says what it records from (%s)" % header.clips_label.text, header.clips_label.text.begins_with(String(pick[1])))
+	check("and the header says what it records from (%s)" % header.clips_label.text, header.clips_label.text.contains(String(pick[1])))
+	check("the IN button says which side it takes (%s)" % header.input.text, header.input.text == DawKitTrackHeader.button_text(pick[0], false)
+			and DawKitTrackHeader.button_text("audio:x#2", false) == "IN2" and DawKitTrackHeader.button_text("midi", false) == "KEY")
+	header._list_inputs()
+	menu = header.input.get_popup()
+	check("the menu can set its input aside", flat.host.can(DawKitHost.INPUT_OFF) and menu.get_item_index(DawKitTrackHeader.SET_ASIDE) >= 0)
+	menu.id_pressed.emit(DawKitTrackHeader.SET_ASIDE)
+	check("and does, the input it had kept", s.track(index).input_off and s.input_of(index) == pick[0])
+	view.refresh()
+	header = view.arrange.headers[id]
+	check("the button then says OFF, dimmed", header.input.text == "OFF" and header.input.modulate.a < 1.0)
+	header._list_inputs()
+	header.input.get_popup().id_pressed.emit(DawKitTrackHeader.SET_ASIDE)
+	check("and taken back, it is in use again", not s.track(index).input_off)
 	header._list_inputs()
 	header.input.get_popup().id_pressed.emit(s.inputs.size())
 	check("and none chosen is a choice", s.input_of(index) == "")
@@ -25416,7 +26332,9 @@ func _room_things(studio: Studio) -> Array:
 		var t := piece as Trolley
 		if t == null or not is_instance_valid(t) or not t.is_inside_tree() or not t.visible:
 			continue
-		add.call(t.piece_id, t.footprint_at(Vector2(t.position.x, t.position.z), t.rotation.y), false, t.walk_through)
+		# Built into the room (the LEVELS niche) it is the venue's wall, as its scenery is.
+		add.call(t.piece_id, t.footprint_at(Vector2(t.position.x, t.position.z), t.rotation.y), false, t.walk_through,
+				t.built_in)
 	for s: Dictionary in venue.solids():
 		var top: float = s.get("top", Walker.SOLID_HEIGHT)
 		var c: Vector2 = s["c"]
@@ -25721,6 +26639,10 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 	Session.layout.set_transform(&"floor/stage_trolley", Presentation.Mode.STUDIO, at.call(-2.1, 1.95, 30.0))
 	Session.layout.set_transform(&"floor/station_board", Presentation.Mode.STUDIO, at.call(1.55, 2.3, Studio.BOARD_HEADING))
 	Session.layout.set_transform(&"floor/lamp_1", Presentation.Mode.STUDIO, at.call(-1.0, 3.0, 0.0))
+	# The tight room's rack and deck, as a layout saved them (2026-10-30: the deck a centimetre off
+	# its old spot, and the room "back to things being pretty cramped around the mixing console").
+	Session.layout.set_transform(&"floor/rack", Presentation.Mode.STUDIO, at.call(-1.18, -0.42, 38.0))
+	Session.layout.set_transform(&"floor/deck_trolley", Presentation.Mode.STUDIO, at.call(0.8102365, -0.22, -32.0))
 	DAW.use(OfflineBackend.new())
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
@@ -25736,6 +26658,16 @@ func _test_an_old_rooms_saved_defaults_give_way_to_the_new_room() -> void:
 		if (t as Trolley).piece_id == &"lamp_1":
 			lamp = t
 	check("a lamp somebody moved stays where they put it", lamp != null and near.call(lamp, -1.0, 3.0))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var rack: Node3D = studio.live_pieces.get(&"rack", studio.rack_trolley)
+	check("the rack and the deck saved at the tight room's spots are fitted out of the desk's way (%s, %s)"
+			% [rack.position, studio.deck_trolley.position],
+			rack.position.x <= SessionLayout.RACK_AT.x + 0.05 and studio.deck_trolley.position.x >= SessionLayout.DECK_AT.x - 0.05)
+	check("and their old spots are not kept as anyone's choice",
+			not Studio.was_an_old_default(&"rack", Session.layout.transform_for(&"floor/rack", Presentation.Mode.STUDIO, rack.transform))
+			and not Studio.was_an_old_default(&"deck_trolley",
+					Session.layout.transform_for(&"floor/deck_trolley", Presentation.Mode.STUDIO, studio.deck_trolley.transform)))
 	studio.queue_free()
 	await get_tree().process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_old_room_layout.cfg"))
@@ -25851,8 +26783,8 @@ func _station_stands(studio: Studio, id: StringName, spot: Transform3D) -> bool:
 			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.eq_wall != null \
 					and trolley.find_child("Plaque", true, false) != null
 		&"levels":
-			# On its trolley at the control room's front left, the LEVELS wall riding it.
-			var trolley := studio.levels_trolley
+			# In its niche in the control room's front wall, the LEVELS wall riding it.
+			var trolley := studio.levels_niche
 			return trolley != null and trolley.transform.is_equal_approx(spot) and studio.levels != null \
 					and trolley.find_child("Plaque", true, false) != null
 		&"venue":
@@ -38685,18 +39617,30 @@ func _test_the_miniature_is_the_session_to_hold() -> void:
 		return
 	var wing := studio.desk_wing
 	var desk: AABB = studio.console.transform * studio.console.content_aabb()
-	check("the desk's wing stands at its left end, out toward the seat from the desk's front (%s, desk %s)" % [wing.position, desk],
-			wing != null and absf(wing.position.x + Studio.WING.x * 0.5 - (desk.position.x - Studio.WING_GAP)) < 0.001
-			and absf(wing.position.z - Studio.WING.z * 0.5 - (desk.end.z - Studio.WING_BACK)) < 0.001
-			and wing.position.z + Studio.WING.z * 0.5 < Studio.MIX_POSITION_Z)
+	var to_seat := Vector2(0, Studio.MIX_POSITION_Z) - Vector2(wing.position.x, wing.position.z)
+	var facing := Vector2(wing.global_basis.z.x, wing.global_basis.z.z)
+	check("the side table stands off the seat's left hand, clear of the desk, its front to the seat (%s, desk %s)" % [wing.position, desk],
+			wing != null and wing.piece_id == &"mini_table" and studio.live_pieces.get(&"mini_table") == wing
+			and wing.position.x < desk.position.x and wing.position.z > desk.end.z - 0.2
+			and to_seat.length() < 1.2 and facing.normalized().dot(to_seat.normalized()) > 0.95)
 	var on_wing := wing.position + Vector3(0, Studio.WING_TOP, 0)
 	check("the miniature lies on it, its reader's edge toward the mix position (%s)" % mini.position,
 			mini.position.distance_to(on_wing) < 0.002 and mini.home.origin.distance_to(on_wing) < 0.001
-			and (-mini.global_basis.z).dot(Vector3.BACK) > 0.99
+			and Vector2(-mini.global_basis.z.x, -mini.global_basis.z.z).normalized().dot(to_seat.normalized()) > 0.95
 			and (studio.venue.miniature_spot() as Transform3D).origin.distance_to(on_wing) < 0.001)
-	check("the wing is in the floor plan: the walker stops at it",
+	check("the table is in the floor plan: the walker stops at it",
 			studio.walker.footprints().any(func(f: Dictionary) -> bool:
-				return (f["c"] as Vector2).is_equal_approx(Vector2(wing.position.x, wing.position.z))))
+				return (f["c"] as Vector2).distance_to(Vector2(wing.position.x, wing.position.z)) < 0.1))
+	# Pushed, it takes the miniature with it, and stays where it was left.
+	var from := wing.position
+	wing.place(Vector2(from.x - 0.3, from.z + 0.4), wing.rotation.y)
+	await get_tree().process_frame
+	var moved_to := wing.position + Vector3(0, Studio.WING_TOP, 0)
+	check("pushed, the table takes the miniature with it (%s)" % mini.position,
+			wing.position.distance_to(from) > 0.2 and mini.position.distance_to(moved_to) < 0.002
+			and mini.home.origin.distance_to(moved_to) < 0.001)
+	wing.place(Vector2(from.x, from.z), wing.rotation.y)
+	await get_tree().process_frame
 	var s := DAW.state
 	s.regions = [[0.0, s.bar_to_seconds(9.0), "Intro"], [s.bar_to_seconds(9.0), s.bar_to_seconds(17.0), "Verse 1"]]
 	mini.rebuild()
@@ -38805,7 +39749,9 @@ func _test_a_press_on_the_miniature_seeks_and_brings_its_gear() -> void:
 	var empty := -1.0
 	var step := s.timeline_length() / 200.0
 	for n in 200:
-		var at := n * step
+		# Half a step in: a time of 0 is the strip's very edge, which a turned table's rounding can
+		# put in the names' column.
+		var at := (n + 0.5) * step
 		if int(mini.spot_at(mini.point_of(track, at))["item"]) < 0:
 			empty = at
 			break
@@ -40357,34 +41303,46 @@ func _test_f_visits_the_eq_wall_on_its_trolley() -> void:
 	_offline()
 
 
-func _test_f_visits_levels_on_its_trolley() -> void:
+func _test_f_visits_levels_in_its_niche_in_the_wall() -> void:
 	var saved_layout := Session.layout
 	Session.layout = LayoutProfile.new()
 	Session.layout.save_path = "user://test_layout_profile.cfg"
+	# Where it stood on its trolley, saved: the wall is where the niche is, whatever was saved.
+	Session.layout.set_transform(&"floor/levels", Presentation.Mode.STUDIO,
+			Transform3D(Basis(Vector3.UP, deg_to_rad(40.0)), Vector3(-3.08, 0, -2.45)))
 	_offline()
 	var studio := Studio.new()
 	studio.medium = Presentation.Medium.SCREEN
 	add_child(studio)
 	await get_tree().process_frame
 	var wall := studio.levels
-	var trolley := studio.levels_trolley
-	check("the studio has a LEVELS wall on its trolley", wall != null and trolley != null
-			and studio.floor_plan.pieces.has(trolley) and studio.focus.surfaces.has(wall)
-			and wall.global_transform.is_equal_approx(trolley.global_transform))
-	check("with its plaque on the trolley, folded", trolley.find_child("Plaque", true, false) != null
-			and not Stations.plaque_open(trolley.find_child("Plaque", true, false)))
-	var facing := trolley.global_basis.z
-	# At the front left, turned to the seat.
-	var to_seat := Vector3(0, 0, 0.7) - trolley.position
-	check("at the front left, facing the seat (%s, %s)" % [trolley.position, facing],
-			trolley.position.x < -1.0 and trolley.position.z < -2.5 and facing.dot(to_seat.normalized()) > 0.97)
+	var niche := studio.levels_niche
+	check("the studio has a LEVELS wall in its niche", wall != null and niche != null and niche.built_in
+			and studio.floor_plan.pieces.has(niche) and studio.focus.surfaces.has(wall)
+			and wall.global_transform.is_equal_approx(niche.global_transform))
+	check("not where the old trolley was saved (%s)" % niche.position, niche.position.z < -3.5)
+	check("with its plaque on the sill, folded", niche.find_child("Plaque", true, false) != null
+			and not Stations.plaque_open(niche.find_child("Plaque", true, false)))
+	check("nothing of it to take hold of and push", niche.find_children("*", "CollisionShape3D", false, false).is_empty())
+	check("a wall's worth: near 3 m wide and up past 2.4 m (%.2f)" % LevelsWall.room_y(LevelsWall.WIDE),
+			LevelsWall.room_y(LevelsWall.WIDE) > 2.9 and LevelsWall.room_y(LevelsWall.BOTTOM + LevelsWall.TALL) > 2.4)
 	var crowded: Array = []
 	var walker := studio.walker
 	for id: StringName in Venue.IDS:
 		for v in Venue.variant_titles(id).size():
 			studio.set_venue(id, false, v)
 			var tag := "%s:%d" % [id, v]
-			var mine := trolley.footprint_at(Vector2(trolley.position.x, trolley.position.z), trolley.rotation.y)
+			var want := studio._levels_niche_at()
+			if not niche.transform.is_equal_approx(want):
+				crowded.append("%s: not in its niche (%s)" % [tag, niche.position])
+			# In the front wall, or standing in from where it would be, facing the room; left of the
+			# desk's middle.
+			var facing := niche.global_basis.z
+			if niche.position.z > -3.0 or facing.dot(Vector3(0, 0, 1)) < 0.99 or niche.position.x > -2.5:
+				crowded.append("%s: not at the front left facing in (%s)" % [tag, niche.position])
+			if not wall.global_transform.is_equal_approx(niche.global_transform):
+				crowded.append("%s: the board is not in it" % tag)
+			var mine := niche.footprint_at(Vector2(niche.position.x, niche.position.z), niche.rotation.y)
 			if not Stations.ids(studio.venue).has(&"levels"):
 				crowded.append("%s: not a station" % tag)
 			for f: Dictionary in walker.footprints() + studio.venue.solids():
@@ -40394,14 +41352,16 @@ func _test_f_visits_levels_on_its_trolley() -> void:
 					crowded.append("%s: %s" % [tag, f["c"]])
 			var room := studio._room_bounds()
 			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-				var p := trolley.transform * Vector3(trolley.footprint_centre.x + c.x * trolley.footprint_half.x, 0,
-						trolley.footprint_centre.y + c.y * trolley.footprint_half.y)
-				if not room.has_point(Vector2(p.x, p.z)):
+				var p := niche.transform * Vector3(niche.footprint_centre.x + c.x * niche.footprint_half.x, 0,
+						niche.footprint_centre.y + c.y * niche.footprint_half.y)
+				if not room.grow(0.01).has_point(Vector2(p.x, p.z)):
 					crowded.append("%s: off the floor at %s" % [tag, p])
 			var seat: Variant = Stations.seat(studio.venue, &"levels", walker.fits)
 			if seat == null or not walker.fits(Vector2((seat as Transform3D).origin.x, (seat as Transform3D).origin.z)):
 				crowded.append("%s: no room to stand at it" % tag)
-	check("clear of the desk, the deck, the door and the rest, a station everywhere (%s)" % [crowded.slice(0, 6)],
+			if studio.venue.back_wall_gear_stands() != (niche.find_child("Cabinet", false, false) != null):
+				crowded.append("%s: a cabinet where there is a wall, or none where there is not" % tag)
+	check("in every venue's wall, clear of the desk, the door and the rest, a station everywhere (%s)" % [crowded.slice(0, 6)],
 			crowded.is_empty())
 	studio.set_venue(&"studio", false, 0)
 	check("its row on the PLAY page's control room",
@@ -40417,12 +41377,9 @@ func _test_f_visits_levels_on_its_trolley() -> void:
 			break
 	check("F visits it", visited)
 	studio.focus.release()
-	var before := wall.global_transform
-	trolley.place(Vector2(trolley.position.x + 0.3, trolley.position.z), trolley.rotation.y)
-	for i in 3:
-		await get_tree().physics_frame
-	check("and it rides its trolley when that is pushed", not wall.global_transform.is_equal_approx(before)
-			and wall.global_transform.origin.distance_to(trolley.global_transform.origin) < 0.01)
+	var home := niche.transform
+	studio._reseat(&"levels", Transform3D(Basis.IDENTITY, niche.position + Vector3(0.5, 0, 1.0)))
+	check("put down elsewhere by its handle, the niche stays in the wall", niche.transform.is_equal_approx(home))
 	studio.queue_free()
 	await get_tree().process_frame
 	Session.layout = saved_layout

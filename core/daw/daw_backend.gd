@@ -228,6 +228,9 @@ func set_track_monitor(_index: int, _mode: int) -> void: pass
 ## What a track records from: one of `state.inputs` by id, or "" for whatever the recorder is set
 ## to. Saved with the project.
 func set_track_input(_index: int, _input: String) -> void: pass
+## A track's input set aside (MixState.TrackState.input_off): the built-in engine's, which does its
+## own monitoring and recording. A DAW that does them itself leaves it to its own controls.
+func set_track_input_off(_index: int, _off: bool) -> void: pass
 func set_track_automation_mode(_index: int, _mode: int) -> void: pass
 
 func set_master_volume(_taper: float) -> void: pass
@@ -266,6 +269,9 @@ func open_plugin_window(_track_index: int, _fx_index: int) -> PluginWindow: retu
 ## Whether this one plugin has a window to open: every one does in a DAW, but Godot's own
 ## effects in the built-in engine have none.
 func has_plugin_window(_track_index: int, _fx_index: int) -> bool: return true
+## Whether this plugin is still being loaded, by a backend that loads plugins itself (the
+## built-in engine's, on a thread of their own): named in its slot, but nothing to show yet.
+func fx_loading(_track_index: int, _fx_index: int) -> bool: return false
 ## Whether the DAW's OWN plugins' windows -- drawn by the DAW's toolkit, not the plugin's -- take
 ## the clicks a PluginWindow passes on, as well as showing. True unless a backend knows otherwise.
 func works_own_plugin_windows() -> bool: return true

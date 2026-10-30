@@ -316,6 +316,9 @@ static func _apply_track(state: MixState, p: PackedStringArray, args: Array) -> 
 			# NOT a Reaper OSC address: the bridge reads and writes I_RECINPUT.
 			if not args.is_empty():
 				state.set_track_field(idx, &"input", str(args[0]))
+		"inputoff":
+			# NOT a Reaper OSC address: the built-in engine's own (TrackState.input_off).
+			state.set_track_field(idx, &"input_off", _as_bool(args))
 		"monitor":
 			# One number, 0 off / 1 on / 2 auto. Reaper's config lists a b/ and an i/ pattern on
 			# this address, but what it sends -- checked on the rig -- is the one float.
@@ -881,6 +884,8 @@ static func snapshot(state: MixState) -> Array:
 		out.append(["/track/%d/monitor" % index, [float(t.monitor)]])
 		if t.input != "":
 			out.append(["/track/%d/input" % index, [t.input]])
+		if t.input_off:
+			out.append(["/track/%d/inputoff" % index, [1.0]])
 		if t.automation_mode != 0:
 			out.append(["/track/%d/automode" % index, [float(t.automation_mode)]])
 		out.append(["/track/%d/select" % index, [1.0 if t.selected else 0.0]])

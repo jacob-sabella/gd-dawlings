@@ -129,8 +129,13 @@ func reposition() -> void:
 	# five metres from the seat, where a desk-sized tab is under 7 px to aim at.
 	var grow: Variant = surface.get(&"handle_scale")
 	var k := float(grow) if grow != null else 1.0
-	transform = Transform3D(_face_basis().scaled_local(Vector3.ONE * k),
-			Vector3(bounds.end.x + MARGIN * k + TARGET.x * (k - 1.0) * 0.5, centre.y, centre.z))
+	# On the left end for a surface whose right is out of sight from the seat (`handle_left`: LEVELS,
+	# whose right end is behind the timeline's shoulder).
+	var left: Variant = surface.get(&"handle_left")
+	var x := bounds.end.x + MARGIN * k + TARGET.x * (k - 1.0) * 0.5
+	if left != null and bool(left):
+		x = bounds.position.x - MARGIN * k - TARGET.x * (k - 1.0) * 0.5
+	transform = Transform3D(_face_basis().scaled_local(Vector3.ONE * k), Vector3(x, centre.y, centre.z))
 
 
 func _face_basis() -> Basis:

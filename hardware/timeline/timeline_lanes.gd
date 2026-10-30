@@ -4,16 +4,21 @@ extends ControlAffordance
 ## The lanes of the timeline, as something a hand can edit.
 ##
 ## Press an item to select it (fine -- shift on a monitor -- adds it to the selection or takes it
-## out). Drag it to move it along its lane, snapped to the beat unless fine. Drag an edge to trim
-## the item there, snapped the same way, its contents staying where they are in the song. Drag a
-## top corner -- or the top of a fade's line -- to set that fade, snapped the same way, one undo
-## step when let go. Press empty lane to
-## drop the selection and put the playhead there. The wheel zooms, round the playhead the way
+## out). Drag it to move it along its lane. Drag an edge to trim the item there, its contents
+## staying where they are in the song. Drag a top corner -- or the top of a fade's line -- to set
+## that fade, one undo step when let go. Every drag is magnetic (`magnet`): pulled onto a line of
+## the grid only when it comes within MAGNET of one on the panel, and left exactly where the hand
+## is otherwise; an audio item's edges and fades are pulled onto its own attacks the same way, and
+## before any grid line (DAW.item_transients), so a take can be trimmed to the hit. Fine lets
+## any of it go anywhere. Press empty lane to
+## drop the selection and put the playhead there. Click an item twice in quick succession
+## (DOUBLE_MSEC) to open it in the clip editor (TimelineSurface.edit_asked), where a trim can be
+## made to the millisecond; the first click has selected it, as one always does. The wheel zooms, round the playhead the way
 ## Reaper zooms round its edit cursor. Splitting is a key, not a gesture: see the surface.
 ##
 ## While the picked track shows a lane of automation (TimelineTrackStrip's LANE key), presses on
-## that track's lane edit the lane instead: press bare lane to add a point there (snapped to the
-## beat unless fine) and drag it into place, drag a point to move it, click a point to make it
+## that track's lane edit the lane instead: press bare lane to add a point there (pulled onto the
+## grid when near a line, unless fine) and drag it into place, drag a point to move it, click a point to make it
 ## hold or ramp to the next, fine-click it to remove it, and the wheel over a point nudges its
 ## value. Each change to the lane is one undo step.
 ##
@@ -22,7 +27,9 @@ extends ControlAffordance
 ## by PULL_EDGE with the mouse (or any hand), and the drag ends there, the arrangement as it was,
 ## and the surface says so (TimelineSurface.clip_pulled) for the host to mint a copy of it. And a
 ## cassette pressed on a lane is pasted there (slice 24, `paste_spot`): a click, a trigger, or the
-## cassette pushed into the face, the lane and time under it, snapped as a drag is.
+## cassette pushed into the face, the lane and time under it, snapped to the grid outright: a
+## hand letting go of something in the air is never as exact as a drag, and the grid is what it
+## is aiming for.
 ##
 ## One control over every lane rather than one per item. Items come and go with every edit and
 ## every poll, and a control rebuilt under a held drag drops the drag; this one is built once.
@@ -68,6 +75,12 @@ var _auto_added := false
 var _grab_y := 0.0
 ## How far in front of the face the hand that pressed was, at the press (m); NAN for a mouse.
 var _grab_out := NAN
+## The held item's attacks (DAW.item_transients), for its edges and fades to be pulled onto.
+var _attacks := PackedFloat32Array()
+## Two clicks on one item no further apart than this (ms) are a double click: the clip editor.
+const DOUBLE_MSEC := 400
+## The last click on an item, [track, item, msec], for the next to be measured against.
+var _last_click: Array = []
 
 
 func _ready() -> void:
@@ -98,8 +111,13 @@ func refresh() -> void:
 const BAR := -1.0
 const OFF := 0.0
 ## The grid token steps through these, in order.
-const GRIDS: Array[float] = [BAR, 1.0, 0.5, 0.25, OFF]
+const GRIDS: Array[float] = [BAR, 1.0, 0.5, 0.25, 0.125, 0.0625, OFF]
 static var grid := 1.0
+## How near a dragged time has to come to a grid line or an attack to be pulled onto it, in metres
+## of the panel: a fixed distance to the eye whatever the zoom, so zoomed in the hand goes free
+## between lines, and zoomed out until the lines are nearer than this it is on one at every step,
+## as a grid always was. Between the edge's grip (EDGE_GRIP) and a hand's jitter.
+const MAGNET := 0.005
 
 
 ## Snapped to the grid, unless fine.
@@ -110,6 +128,25 @@ static func snap(seconds: float, fine: bool) -> float:
 	if grid == BAR:
 		return DAW.state.bar_to_seconds(roundf(DAW.state.bar_at(s)) + 1.0)
 	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s) / grid) * grid)
+
+
+## `seconds` pulled onto whatever is within `reach` seconds of it: the nearest of `attacks` (song
+## seconds, earliest first) first, as an attack is what a trim is nearly always looking for, then
+## the nearest grid line; left as it is when nothing is that near, and always when fine.
+static func pull(seconds: float, fine: bool, reach: float, attacks := PackedFloat32Array()) -> float:
+	var s := maxf(seconds, 0.0)
+	if fine:
+		return s
+	var attack := DawKitTransients.nearest(attacks, s)
+	if not is_nan(attack) and absf(attack - s) <= reach:
+		return maxf(attack, 0.0)
+	var line := snap(s, false)
+	return line if absf(line - s) <= reach else s
+
+
+## `pull` with MAGNET of the panel as it is zoomed now.
+func magnet(seconds: float, fine: bool, attacks := PackedFloat32Array()) -> float:
+	return pull(seconds, fine, MAGNET * surface.seconds_per_metre(), attacks)
 
 
 ## The grid after `g`, round to the first after the last.
@@ -126,6 +163,8 @@ static func grid_name(g: float) -> String:
 		1.0: return "the beat"
 		0.5: return "half beats"
 		0.25: return "quarter beats"
+		0.125: return "eighths of a beat"
+		0.0625: return "sixteenths of a beat"
 	return "%s beats" % g
 
 
@@ -166,12 +205,13 @@ func _on_grab_begin(at: Vector3) -> void:
 		if _auto_added:
 			var target: String = surface.shown_lane
 			var shape := DawKitAutomation.HOLD if DawKitAutomation.kind_of(target) in ["mute", "enable"] else DawKitAutomation.LINEAR
-			_auto_index = _place_point(snap(surface.seconds_at_point(at), _fine()),
+			_auto_index = _place_point(magnet(surface.seconds_at_point(at), _fine()),
 					surface.value_at_point(at), shape)
 			surface.preview_lane(_auto_points)
 		return
 	_grab_seconds = surface.seconds_at_point(at)
 	_hit = surface.item_at_point(at)
+	_attacks = PackedFloat32Array()
 	_grab_out = _hand_out()
 	_edge = 0
 	if not _hit.is_empty():
@@ -194,7 +234,7 @@ func _on_grab_move(at: Vector3) -> void:
 		_dragged = true
 		var shape := int(_auto_points[_auto_index][2])
 		_auto_points.remove_at(_auto_index)
-		_auto_index = _place_point(snap(surface.seconds_at_point(at), _fine()), surface.value_at_point(at), shape)
+		_auto_index = _place_point(magnet(surface.seconds_at_point(at), _fine()), surface.value_at_point(at), shape)
 		surface.preview_lane(_auto_points)
 		return
 	if _hit.is_empty():
@@ -211,27 +251,37 @@ func _on_grab_move(at: Vector3) -> void:
 		return
 	_dragged = true
 	var moved: float = surface.seconds_at_point(at) - _grab_seconds
+	if _fade != 0 or _edge != 0:
+		# The item's attacks, asked for until there are some: they are found in the background, so
+		# the first moves of a drag may come before they are known.
+		if _attacks.is_empty():
+			_attacks = DAW.item_transients(_hit[0], _hit[1])
 	if _fade != 0:
-		# The fade's end snaps to the beat, unless fine; a fade is never longer than the item.
+		# The fade's end is pulled onto an attack or the grid near it, unless fine; a fade is never
+		# longer than the item.
 		var length := _item_end - _item_start
-		var here: float = surface.seconds_at_point(at)
+		var here := magnet(surface.seconds_at_point(at), _fine(), _attacks)
 		if _fade < 0:
-			_fade_in = clampf(snap(here, _fine()) - _item_start, 0.0, length)
+			_fade_in = clampf(here - _item_start, 0.0, length)
 		else:
-			_fade_out = clampf(_item_end - snap(here, _fine()), 0.0, length)
+			_fade_out = clampf(_item_end - here, 0.0, length)
 		surface.preview_fades(_hit[0], _hit[1], _fade_in, _fade_out)
 		return
 	if _edge != 0:
-		# The edge being dragged snaps; the other stays put, and the item keeps a real length.
+		# The edge being dragged is pulled; the other stays put, and the item keeps a real length.
 		if _edge < 0:
-			_target_start = minf(snap(_item_start + moved, _fine()), _item_end - DAWBackend.MIN_ITEM_SECONDS)
+			_target_start = minf(magnet(_item_start + moved, _fine(), _attacks), _item_end - DAWBackend.MIN_ITEM_SECONDS)
 		else:
-			_target_end = maxf(snap(_item_end + moved, _fine()), _item_start + DAWBackend.MIN_ITEM_SECONDS)
+			_target_end = maxf(magnet(_item_end + moved, _fine(), _attacks), _item_start + DAWBackend.MIN_ITEM_SECONDS)
 		surface.preview_item(_hit[0], _hit[1], _target_start, _target_end - _target_start)
 		return
-	# The START snaps, not the distance moved: an item that began off the grid lands on it, which
-	# is what a drag in an arranger is nearly always for.
-	_target_start = snap(_item_start + surface.seconds_at_point(at) - _grab_seconds, _fine())
+	# The START is pulled onto a line near it, not the distance moved: an item that began off the
+	# grid lands on it, which is what a drag in an arranger is nearly always for. Or else its end,
+	# for an item that has to finish on the bar.
+	var start := maxf(_item_start + surface.seconds_at_point(at) - _grab_seconds, 0.0)
+	_target_start = magnet(start, _fine())
+	if is_equal_approx(_target_start, start):
+		_target_start = maxf(magnet(start + _item_end - _item_start, _fine()) - (_item_end - _item_start), 0.0)
 	# And onto whichever lane it is over now: off one shelf and onto another.
 	_target_track = surface.track_at_point(at)
 	if _target_track <= 0:
@@ -258,15 +308,26 @@ func _finish_grab() -> void:
 	if _hit.is_empty():
 		if not _dragged:
 			DAW.clear_item_selection()
-			DAW.seek(snap(_grab_seconds, _fine()))
+			DAW.seek(magnet(_grab_seconds, _fine()))
 		return
 	var item: MixState.ItemState = DAW.state.item(_hit[0], _hit[1])
 	surface.preview_item(-1, -1, 0.0)
 	if item == null:
 		return
 	if not _dragged:
-		DAW.select_item(_hit[0], _hit[1], _fine())
+		var fine := _fine()
+		DAW.select_item(_hit[0], _hit[1], fine)
+		# A second plain click on the same item, soon: open it in the clip editor. Fine clicks add to
+		# and take from the selection, and two of those are two edits of it, not a request.
+		var now := Time.get_ticks_msec()
+		if not fine and _last_click.size() == 3 and _last_click[0] == _hit[0] and _last_click[1] == _hit[1] \
+				and now - int(_last_click[2]) <= DOUBLE_MSEC:
+			_last_click = []
+			surface.edit_asked.emit(_hit[0], _hit[1])
+		else:
+			_last_click = [_hit[0], _hit[1], now] if not fine else []
 		return
+	_last_click = []
 	# Dragging an item that was not selected selects it, as it does in Reaper -- what you just
 	# moved is what you are working on.
 	if not item.selected:
@@ -425,7 +486,7 @@ func _lane_readout() -> String:
 				DAW.state.bar_beat(points[i][0]), ", held" if int(points[i][2]) == DawKitAutomation.HOLD else ""]
 	var at: float = surface.seconds_at_point(by.hover_point)
 	return "press to add a point: %s at %s" % [TimelineSurface.lane_text(target, surface.value_at_point(by.hover_point)),
-			DAW.state.bar_beat(snap(at, false))]
+			DAW.state.bar_beat(magnet(at, false))]
 
 
 func _default_readout() -> String:
@@ -472,4 +533,4 @@ static func controls_text(controls: PackedFloat64Array) -> String:
 
 
 func hint() -> String:
-	return "click to select, shift adds; drag to move, by an edge to trim, by a top corner to fade, off the edge for a cassette of it, and click a cassette onto a lane to paste it; wheel zooms; B or SPLIT cuts at the playhead"
+	return "click to select, shift adds, double-click to open it in the clip editor; drag to move, by an edge to trim, by a top corner to fade (each snaps to the grid, and an edge or fade to the take's attacks, when close; fine for free), off the edge for a cassette of it, and click a cassette onto a lane to paste it; wheel zooms; B or SPLIT cuts at the playhead"

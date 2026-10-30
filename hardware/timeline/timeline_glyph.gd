@@ -150,6 +150,13 @@ func _build() -> void:
 			var hs := [0.3, 0.7, 0.45, 0.85, 0.35, 0.6]
 			for k in hs.size():
 				_box(Vector2(-0.75 + k * 0.3, -0.1), Vector2(0.16, hs[k]), 0.35, 0.4)
+		&"clip_edit":
+			# The item's sound under a lens: the clip editor, where one clip is seen close.
+			var bars := [0.35, 0.8, 0.5, 0.95, 0.4]
+			for k in bars.size():
+				_box(Vector2(-0.95 + k * 0.28, -0.35), Vector2(0.14, bars[k]), 0.35, 0.2)
+			_ring(Vector2(0.28, 0.22), 0.52, 0.12)
+			_rod(Vector2(0.65, -0.15), Vector2(1.0, -0.55), 0.14, 0.4)
 		&"track":
 			_gem(Vector2.ZERO, 0.95)
 		&"track_items":
@@ -459,12 +466,17 @@ func _build() -> void:
 		&"depth_32":
 			_arc(Vector2(-0.475, 0.0), 0.475, 180.0, 0.0, 0.1)
 			_arc(Vector2(0.475, 0.0), 0.475, 180.0, 360.0, 0.1)
-		&"grid_bar", &"grid_4", &"grid_8", &"grid_16", &"grid_off":
+		&"grid_bar", &"grid_4", &"grid_8", &"grid_16", &"grid_32", &"grid_64", &"grid_off":
 			_box(Vector2.ZERO, Vector2(1.9, 0.9), 0.3)
-			var cells: int = {&"grid_4": 4, &"grid_8": 8, &"grid_16": 16}.get(_kind, 1)
+			var cells: int = {&"grid_4": 4, &"grid_8": 8, &"grid_16": 16, &"grid_32": 32, &"grid_64": 64}.get(_kind, 1)
+			# Past sixteen cells the rods would run together, so they are drawn as a ruler's ticks
+			# are: the sixteen full height, the cells between them shorter, finer still shorter.
+			var major := maxi(cells / 16, 1)
 			for k in range(1, cells):
 				var x := -0.95 + 1.9 * k / cells
-				_rod(Vector2(x, -0.62), Vector2(x, 0.62), 0.07 if cells < 16 else 0.04, 0.42)
+				var tall := 1.0 if k % major == 0 else (0.55 if k % 2 == 0 else 0.35)
+				_rod(Vector2(x, -0.62), Vector2(x, -0.62 + 1.24 * tall),
+						0.07 if cells < 16 else (0.04 if k % major == 0 else 0.025), 0.42)
 			if _kind == &"grid_off":
 				_rod(Vector2(-0.9, -0.8), Vector2(0.9, 0.8), 0.12, 0.5)
 		_:

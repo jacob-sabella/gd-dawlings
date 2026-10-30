@@ -1,0 +1,10 @@
+# Every two minutes: a wedged noray costs players at most that long (noray-watchdog.sh).
+[Unit]
+Description=Check noray for dawlings every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+# Checks noray answers a host's `register-host`, and restarts it if not (noray-watchdog.sh).
+[Unit]
+Description=Check noray for dawlings still gives join codes
+
+[Service]
+Type=oneshot
+ExecStart=%h/dawlings-noray/noray-watchdog.sh

@@ -1019,8 +1019,8 @@ func levels_wall_reads_every_track() -> void:
 	for i in 5:
 		c1.grab_move(hand, from + up * (0.02 * (i + 1)))
 	c1.grab_end(hand)
-	close_to("dragged up 10 cm, the fader comes up by the scale's dB (%.1f)" % FaderLaw.to_db(t1.volume),
-			FaderLaw.to_db(t1.volume), -6.0 + 0.1 * LevelsWall.db_per_m(), 0.15)
+	close_to("dragged up 10 cm, the fader comes up by the scale's dB as drawn (%.1f)" % FaderLaw.to_db(t1.volume),
+			FaderLaw.to_db(t1.volume), -6.0 + 0.1 / LevelsWall.FACE * LevelsWall.db_per_m(), 0.15)
 	check("one undo step for the drag (%d → %d)" % [depth, s.undo_depth], s.undo_depth == depth + 1)
 	DAW.undo()
 	close_to("and Ctrl-Z puts it back", FaderLaw.to_db(t1.volume), -6.0, 0.05)

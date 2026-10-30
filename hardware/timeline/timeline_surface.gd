@@ -179,6 +179,10 @@ signal clip_pulled(track: int, index: int, hand: Node)
 ## A note's LISTEN key was pressed (`_build_note_cards`): for the studio to play the song from
 ## `seconds` for everyone (PointAndMark.listen_from). A surface does not talk to the session itself.
 signal listen_asked(seconds: float)
+## Track `track`'s item `index` is to be opened in the clip editor (ClipEditorSurface): a double
+## click on it in the lanes (TimelineLanes), or the item page's EDIT CLIP key. The studio has the
+## one editor; a surface does not reach across the room for another.
+signal edit_asked(track: int, index: int)
 ## The sticky notes' cards on the ruler now, by their time: {seconds: Node3D}, each with its
 ## "Listen" key.
 var note_cards: Dictionary = {}
@@ -610,6 +614,8 @@ static func grid_glyph(g: float) -> StringName:
 		TimelineLanes.OFF: return &"grid_off"
 		0.5: return &"grid_8"
 		0.25: return &"grid_16"
+		0.125: return &"grid_32"
+		0.0625: return &"grid_64"
 	return &"grid_4"
 
 
@@ -894,6 +900,12 @@ func _place_lane_ladder(top: float, bottom: float) -> void:
 	var down := span * float(lane_first) / float(total)
 	_lane_thumb.scale = Vector3(1, tall, 1)
 	_lane_thumb.position = Vector3(x, top - 0.002 - down - tall * 0.5, 0.0016)
+
+
+## How many seconds of the song a metre of the lanes shows, zoomed as they are now: what turns a
+## distance on the panel (TimelineLanes.MAGNET) into time.
+func seconds_per_metre() -> float:
+	return view_span / maxf(_lane_area_width, 0.0001)
 
 
 ## Seconds under a point in the world, through the current window.

@@ -23,6 +23,9 @@ const EDIT_INK := Color(0.90, 0.80, 0.40)
 const GO_INK := Color(0.55, 0.85, 0.55)
 const STOP_INK := Color(0.95, 0.45, 0.40)
 
+## The selected item opened in the clip editor (TimelineSurface.edit_asked), as a double click on
+## it does: the one way to it for a hand that cannot double click.
+var edit_clip: GlyphKey
 var gain: GlyphRail
 var fade_in: GlyphRail
 var fade_out: GlyphRail
@@ -106,6 +109,10 @@ var _pair: Array = []
 func _ready() -> void:
 	tab_name = "ITEM"
 	tab_glyph = &"item"
+	edit_clip = _key("ItemEditClip", &"clip_edit", GO_INK, "ITEM  EDIT CLIP", _edit_clip,
+			func() -> String: return "open it in the clip editor, to trim to the millisecond" if edit_clip.lit \
+					else "select one item")
+	_group()
 	gain = _slider("ItemGain", &"gain", ITEM_INK, func() -> String: return "ITEM  GAIN",
 			func(v: float) -> String: return "%+.1f dB" % _gain_db(v))
 	gain.value_committed.connect(func(v: float):
@@ -213,6 +220,8 @@ func refresh() -> void:
 		_target = []
 	var one := item != null
 	item_name.lit = one
+	edit_clip.available = one
+	edit_clip.lit = one
 	for c in [gain, fade_in, fade_out, fade_in_shape, fade_out_shape, mute, lock, reverse, take_lane, comp_here, flatten, freeze, cc_kind, cc_ramp, normalise, down, up, quant, swing, softer, harder, humanise, legato, staccato, even, retrograde, note_velocity, note_delete, note_add, note_end, note_earlier, note_later, note_up, note_down, item_name]:
 		c.available = one
 	var movable: bool = picked.any(func(p): return not DAW.state.item(p[0], p[1]).locked)
@@ -287,6 +296,11 @@ func refresh() -> void:
 	var n := _note_index()
 	if n >= 0:
 		note_velocity.snap_to((float(item.notes[n * MidiTake.NOTE_WIDTH + 3]) - 1.0) / 126.0)
+
+
+func _edit_clip() -> void:
+	if not _target.is_empty() and surface != null:
+		surface.edit_asked.emit(_target[0], _target[1])
 
 
 static func _velocity_of(v: float) -> int:

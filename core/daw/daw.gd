@@ -71,7 +71,7 @@ const COMMANDS := [
 	&"transpose_item", &"shift_velocity", &"set_note_velocity", &"legato_item", &"staccato_item", &"even_velocity", &"move_note", &"place_note", &"set_note_end", &"insert_note", &"transpose_note", &"delete_note", &"retrograde_item", &"rename_item", &"humanise_item", &"quantize_item", &"groove_item", &"set_tempo_map", &"set_time_signature_map", &"set_automation", &"add_track", &"remove_track", &"move_track", &"duplicate_track", &"rename_track", &"set_track_colour", &"set_track_group", &"set_vca", &"add_fx", &"remove_fx",
 	&"create_send", &"remove_send",
 	&"set_send_volume", &"set_send_pan", &"set_send_pre_fader",
-	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_automation_mode", &"render",
+	&"set_metronome", &"set_count_in", &"set_count_in_play", &"set_pre_roll", &"set_punch", &"add_marker", &"edit_marker", &"remove_marker", &"add_region", &"remove_region", &"edit_region", &"set_track_monitor", &"set_track_input", &"set_track_input_off", &"set_track_automation_mode", &"render",
 	&"insert_midi_take",
 	&"open_edit", &"close_edit", &"hold_lane", &"scrub", &"arrange_sections", &"set_lyrics",
 	&"reset_loudness",
@@ -378,6 +378,13 @@ const MONITOR_ON := 1
 const MONITOR_AUTO := 2
 ## What a track records from: one of `state.inputs` by id, or "" for whatever the recorder is set to.
 func set_track_input(index: int, input: String) -> void: _do(&"set_track_input", [index, input])
+## Ask the machine for its input devices afresh (OfflineBackend.publish_inputs): one plugged in
+## since the game started. The host's; a guest's list is the host's.
+func refresh_inputs() -> void:
+	if backend != null and backend.has_method(&"publish_inputs") and (Session.is_authority() or not Session.is_networked()):
+		backend.publish_inputs()
+## A track's input set aside, or taken back (MixState.TrackState.input_off): `input` is kept.
+func set_track_input_off(index: int, off: bool) -> void: _do(&"set_track_input_off", [index, off])
 func set_track_monitor(index: int, mode: int) -> void:
 	_do(&"set_track_monitor", [index, clampi(mode, MONITOR_OFF, MONITOR_AUTO)])
 ## How a track's controls meet their automation (MixState.TrackState.automation_mode). Track 0
@@ -423,6 +430,31 @@ func project_title() -> String:
 		return str(title)
 	# A DAW with its own files says what its project is called (MixState.project_title).
 	return state.project_title if state != null and not state.project_title.is_empty() else "Untitled"
+
+
+## Where an audio item's attacks are heard, in song seconds, earliest first: what its trimmed
+## edges and its fades are pulled onto in both timelines (TimelineLanes, FlatHost.clip_transients).
+## From its file on this machine (the backend's media_path), found in the background the first
+## time (DawKitTransients.soon), so empty until then -- and always for MIDI, and for a guest, who
+## has the item but not its file. Every attack of the file as the item places it, not only those
+## between its edges, so an edge dragged outward finds the ones it uncovers.
+func item_transients(track_index: int, item_index: int) -> PackedFloat32Array:
+	var it: MixState.ItemState = state.item(track_index, item_index) if state != null else null
+	if it == null or it.source.is_empty() or backend == null:
+		return PackedFloat32Array()
+	return DawKitTransients.placed(DawKitTransients.soon(backend.media_path(it.source), it.reversed),
+			it.start, it.source_offset, it.length, it.loop_start, it.loop_end)
+
+
+## Where an audio item's file is on this machine, for something that reads the sound itself (the
+## clip editor's waveform, ClipWave); "" for MIDI, and where the file is not here -- a guest has
+## the item and its overview but not the host's disk.
+func item_file(track_index: int, item_index: int) -> String:
+	var it: MixState.ItemState = state.item(track_index, item_index) if state != null else null
+	if it == null or it.source.is_empty() or backend == null:
+		return ""
+	var path := backend.media_path(it.source)
+	return path if FileAccess.file_exists(path) else ""
 
 
 ## Where keys played into a track are heard through it: see DAWBackend.monitor_bus.
@@ -1101,6 +1133,11 @@ func apply_intent(verb: StringName, args: Array, from := 0) -> void:
 			push_warning("DAW: refused a malformed set_track_input intent %s." % [args])
 			return
 		args = [int(args[0]), str(args[1])]
+	if verb == &"set_track_input_off":
+		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or int(args[0]) < 1:
+			push_warning("DAW: refused a malformed set_track_input_off intent %s." % [args])
+			return
+		args = [int(args[0]), MixWire._as_bool([args[1]])]
 	if verb == &"set_track_main_send":
 		if args.size() != 2 or typeof(args[0]) not in [TYPE_INT, TYPE_FLOAT] or not is_finite(float(args[0])) \
 				or int(args[0]) < 1:

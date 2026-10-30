@@ -301,6 +301,11 @@ class TrackState extends RefCounted:
 	## What it records from: one of the DAW's `MixState.inputs` by id, or "" for whatever the
 	## recorder is set to. Saved with the project. `/track/N/input`.
 	var input: String = ""
+	## Its input set aside: neither heard nor recorded, and so off its meters, the LEVELS wall and
+	## the EQ wall's spectra, while `input` is kept for when it is wanted again. For a track done
+	## with recording whose input is now someone else's (2026-10-30: "a button to silence input for
+	## tracks im done recording on"). Saved with the project. `/track/N/inputoff`.
+	var input_off: bool = false
 	## The demo song's part this track plays (DemoSong.ROLES), set when the stand-in's song is
 	## made and kept whatever the track is renamed; "" for any other track.
 	var part: String = ""
@@ -496,6 +501,12 @@ var fx_choices: Array = []
 func input_of(index: int) -> String:
 	var t := track(index, false) if index > 0 else null
 	return t.input if t != null else ""
+
+
+## Whether a track's input is in use: one chosen, and not set aside (TrackState.input_off).
+func input_live(index: int) -> bool:
+	var t := track(index, false) if index > 0 else null
+	return t != null and not t.input_off
 
 
 ## A track input's name, or the id itself for one this DAW does not list.

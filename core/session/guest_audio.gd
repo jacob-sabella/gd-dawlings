@@ -166,7 +166,8 @@ static func _armed() -> Array:
 	var out: Array = []
 	for index in DAW.state.track_indices():
 		var t: MixState.TrackState = DAW.state.track(index, false)
-		if t != null and t.rec_arm:
+		# A track whose input is set aside takes nothing, armed or not (TrackState.input_off).
+		if t != null and t.rec_arm and not t.input_off:
 			out.append(index)
 	out.sort()
 	return out

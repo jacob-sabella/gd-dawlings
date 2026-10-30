@@ -730,6 +730,24 @@ Recording, files, MIDI, the click, monitoring and DAWproject are done: see "Buil
   `tools/probe/reaper_menu_live.tscn`. Still to do: a Wine plugin (Gojira) inside Reaper opens no
   menu from a click (not diagnosed); a private Xvfb for plugin windows would make this work on
   every desktop and stop Reaper's plugin window flashing on the real one; Windows menus.
+- **Done 2026-10-30, plugins load behind the game and stay off the desktop:** ("loading in certain
+  heavy plugins causes the game to freeze"; "the neural dsp gojira ui opened it actually on my
+  desktop as well"). dawkit's `DawKitPlugin.begin_load` makes a plugin on a thread of its own, one
+  at a time (LV2 stays on the main thread: lilv), and `HostedPlugins.host` answers at once: the
+  slot is in the chain, named, with a stand-in on the bus, the tablet says LOADING, a toast says
+  it, and `GodotBackend.drive_plugin_loads` fills the slot in when it is done (or takes it out,
+  with a toast, when it would not load). Gojira: add_fx 0 ms, loaded in 4.4 s, worst frame 13 ms
+  (was a 5 s freeze). Its window opens off the main thread too (yabridge plugins only:
+  `open_plugin_window` 3 ms, picture after ~3-5 s, worst frame 23 ms; the tablet says OPENING
+  meanwhile); native plugins' windows still open on the main thread (their toolkits keep the
+  thread that made their windows). Neural DSP plugins share a yabridge group (`neuraldsp`,
+  ~/.vst3/yabridge/yabridge.toml): Tim Henson X after Gojira loads in 0.8 s. On Hyprland the engine's window for a plugin's window had been at x = -1
+  (Hyprland moves windows at x = -30000 on screen), over the desktop's corner; it is now an
+  ordinary window a Lua hook parks on `special:dawkit`, and the same hook, pid-scoped to the
+  game's Wine children, parks their untitled/"menu" windows while a plugin loads or a window is
+  open; titled ones (activation, licence) stay and are toasted. `DAWKIT_PLUGIN_DISPLAY=xvfb` uses a
+  private Xvfb instead (not installed here: `xorg-server-xvfb`). Still to do: a guest sees no
+  LOADING (it is the host's).
 
 ## 1.0 for friends (2026-10-10)
 

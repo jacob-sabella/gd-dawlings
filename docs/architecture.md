@@ -1132,6 +1132,27 @@ recording, blinks. A blink costs a `_process` on the strip, so a strip only proc
 track is on auto. Like the other three keys, the lamp is coded by shape as well as colour -- a
 dot, after record's bar, solo's stub and mute's line -- and the suite checks the four differ.
 
+### A track's input, chosen and set aside
+
+The timeline's INPUT key opens `InputPicker` at a desk: a row a device, by the name the sound
+server gives it (`OfflineBackend.device_names`, pactl's descriptions), its sides as BOTH / IN 1 /
+IN 2, then none chosen, the track's monitoring and INPUT IN USE. In a headset the key still steps
+through the inputs. The 2D view's IN menu is the same list under a heading a device, and its
+button says the side in use (`DawKitTrackHeader.button_text`).
+
+`TrackState.input_off` sets a track's input aside without forgetting it: `InputMonitor.heard` and
+`GuestAudio._armed` both pass it over, so it is neither heard nor recorded, and since the LEVELS
+wall and the EQ wall's spectra read the track's bus, what another track plays through the same
+input no longer shows on it. `/track/N/inputoff`, undoable, saved as `DawKitTrack.input_off`.
+
+### Monitoring is fed from a thread
+
+`InputMonitor` decides once a frame what is heard where (`drive`, which rebuilds `_routes`), and a
+thread of its own reads the devices and tops each player up every 0.5 ms to `QUEUE_FRAMES` (768,
+16 ms), dropping the oldest of what would queue past it. Fed once a frame, a player had to hold a
+frame and more, and a slow frame's backlog was never given back: a hitch made the monitor later
+for the rest of the session.
+
 ### The parent heads its group
 
 Reaper stores `I_FOLDERDEPTH` as a **delta** per track, not a level; the level is a running sum
@@ -1679,6 +1700,40 @@ placed in the room where they hold it or where it stands, and placing is Godot's
 instrument's hover card and, in a headset, its tag say which way its hits are heard and how late
 (`InstrumentItem.path_tag`: "FAST PATH · 5 ms", "MONITOR · 41 ms"), from the helper's own
 `latency` once it has measured a hit, two cycles before that.
+
+## The clip editor: trimming to a hit
+
+The timeline is for arranging. At its scale a millimetre of panel is tens of milliseconds, and
+its 5 mm magnet pulls an edge onto whatever attack or grid line is close, which is right for
+moving a clip and wrong for cutting one to a hit. `ClipEditorSurface`
+(`hardware/timeline/clip_editor_surface.gd`) is a second board for that one clip. It hangs under
+the timeline's lanes on the timeline's stand, so it moves when the stand moves (`studio.gd`
+`_build_clip_editor`, `CLIP_EDITOR_*`). It is hidden and out of physics (`PROCESS_MODE_DISABLED`)
+until it is asked for.
+
+- **Opening it.** Double-click a clip on the lanes (`TimelineLanes`, `DOUBLE_MSEC`) or press EDIT
+  CLIP on the item page. Either one emits `TimelineSurface.edit_asked(track, index)`. Both are grabs, so the
+  mouse, a ray and a poke all open it. There is one editor: a second clip retargets it, and CLOSE
+  hides it.
+- **The sound.** The waveform comes from the file, not from the take's 50-per-second overview.
+  `ClipWave` (`hardware/timeline/clip_wave.gd`) reads it on a worker thread and folds it to mono.
+  It keeps the min/max of every 64 frames and of every 64x64 frames, so any zoom from the whole
+  file down to a few milliseconds is a few hundred lookups per redraw. Below a few samples per
+  column it draws a line through the samples. The file beyond the clip's edges is drawn faintly.
+- **Snapping.** The editor uses `TimelineLanes.pull` and the timeline's grid with the same 5 mm
+  magnet, measured on the editor's own panel. Zoomed in, the pull reaches milliseconds, not
+  beats. SNAP/FREE turns it off, fine (Shift, or a fine grip) skips it, and ZERO X moves a start
+  or end edge to the nearest zero crossing within 5 ms (`ClipWave.zero_crossing`).
+- **Edits.** Every drag and nudge (±1 ms, ±10 ms, to the next or previous attack) is a single
+  `DAW.trim_item`, `set_item_fades` or `set_item_gain` on release. That is one undo step, refused
+  on a locked item and sent as an intent by a guest. While a handle is dragged, the panel shows a
+  local preview. A MIDI clip shows its notes and only trims its edges.
+- **Hearing it.** PLAY seeks to the clip's start and plays. TO END plays the last second and
+  stops at the end. LOOP loops the transport over the clip.
+
+The tests are the `_test_the_clip_editor_*` tests in `tests/run_tests.gd`. For a picture,
+`tools/screenshot.gd` takes `--clip-editor T:I`, `--clip-take T:BAR`, `--clip-span`,
+`--clip-hover`, `--clip-select`, `--clip-zero` and `--clip-screen`.
 
 ## Items: things you pick up
 
@@ -2738,9 +2793,9 @@ plane toward it. A click on another machine's copy changes nothing: its mode is 
 ### The session in miniature
 
 `MiniatureItem` (kind `miniature`, docs/spatial_loop.md part two, slice 34) is the whole song on a
-40 cm tray to hold, a room item like the duck whose home is the desk's left wing
-(`Venue.miniature_spot`, read from `Studio.desk_wing`, which `_place_desk_wing` keeps beside the
-console's left end as the desk grows, in the floor plan by `_wing_footprint`). It draws the song from
+40 cm tray to hold, a room item like the duck whose home is the side table off the seat's left hand
+(`Venue.miniature_spot`, read from `Studio.desk_wing`, a Trolley pushed about like the rest of the
+gear, piece `mini_table`, the miniature rehomed as it rolls). It draws the song from
 `DAW.state` in a frame of its own (`_content`, reader at +Z, time along +X): a strip a track with
 its name and a block an item, the regions as bands and the markers as flags (a `NOTE ` marker a
 pinned card) along the far edge, the loop as a bracket, and the playhead, stepped a beat at motion

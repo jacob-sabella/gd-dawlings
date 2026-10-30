@@ -109,7 +109,8 @@ if [ "$DRY" -eq 0 ]; then
 else
   echo "  would fetch bun@$BUN_VERSION from npm and run: bun install --production in noray"
 fi
-run cp deploy/noray/noray.env deploy/noray/dawlings-noray.service "$STAGE/"
+run cp deploy/noray/noray.env deploy/noray/dawlings-noray.service deploy/noray/noray-watchdog.sh \
+  deploy/noray/dawlings-noray-watchdog.service deploy/noray/dawlings-noray-watchdog.timer "$STAGE/"
 
 say "copying to $HOST:~/$DIR"
 run "${SSH[@]}" "$HOST" "mkdir -p ~/$DIR ~/.config/systemd/user"
@@ -117,6 +118,8 @@ run rsync -a --delete "$STAGE/noray/" "$HOST:$DIR/noray/"
 run rsync -a "$STAGE/bin/" "$HOST:$DIR/bin/"
 run rsync -a "$STAGE/noray.env" "$HOST:$DIR/noray.env"
 run rsync -a "$STAGE/dawlings-noray.service" "$HOST:.config/systemd/user/dawlings-noray.service"
+run rsync -a "$STAGE/noray-watchdog.sh" "$HOST:$DIR/noray-watchdog.sh"
+run rsync -a "$STAGE/dawlings-noray-watchdog.service" "$STAGE/dawlings-noray-watchdog.timer" "$HOST:.config/systemd/user/"
 
 say "installing and (re)starting the service"
 remote <<'EOF'
@@ -124,6 +127,7 @@ set -euo pipefail
 systemctl --user daemon-reload
 systemctl --user enable dawlings-noray.service >/dev/null
 systemctl --user restart dawlings-noray.service
+systemctl --user enable --now dawlings-noray-watchdog.timer >/dev/null
 sleep 2
 systemctl --user --no-pager --lines=0 status dawlings-noray.service | head -5
 if [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]; then

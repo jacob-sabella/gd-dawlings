@@ -36,6 +36,8 @@ func _ready() -> void:
 	catalogue.wait()
 	check("the catalogue found plugins (%d)" % catalogue.plugins().size(), catalogue.plugins().size() > 0)
 	var backend := GodotBackend.new()
+	# Each plugin loaded before add_fx answers, so it can be checked at once.
+	backend.hosted.threaded = false
 	backend.state = MixState.new()
 	DAW.use(backend)
 	check("the engine plays through lanes, with a sound card", backend.lanes != null)

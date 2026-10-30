@@ -3,9 +3,11 @@ extends ControlAffordance
 
 ## One band of the timeline's ruler, as something a hand can work.
 ##
-## SEEK, the bar numbers: press to put the playhead there, drag to scrub it. Snapped to the beat,
-## because the place anyone wants the playhead is "bar 33" and never "bar 32.97" -- and fine
-## (shift on a monitor) takes the snap off for the odd time it is.
+## SEEK, the bar numbers: press to put the playhead there, drag to scrub it. Pulled onto the
+## timeline's grid (TimelineLanes.grid) when it comes within TimelineLanes.MAGNET of a line, because
+## the place anyone wants the playhead is nearly always "bar 33" and never "bar 32.97" -- and left
+## where it is between lines, zoomed in far enough to want somewhere else; fine (shift on a
+## monitor) takes the pull off altogether.
 ##
 ## LOOP, the thin band above: drag out a range to loop, press without dragging to switch the
 ## loop on and off. The same gesture as Reaper's own ruler, and the same pair of bands most
@@ -49,12 +51,13 @@ func refresh() -> void:
 	(_shape.shape as BoxShape3D).size = Vector3(width, height, 0.010)
 
 
-## Snapped to the beat, unless fine.
+## Pulled onto the grid when near a line, unless fine (TimelineLanes.pull): near meaning
+## TimelineLanes.MAGNET along the strip, through the window as it is zoomed now.
 func snap(seconds: float, fine: bool) -> float:
-	var s := maxf(seconds, 0.0)
-	if fine:
-		return s
-	return DAW.state.seconds_at_beat(roundf(DAW.state.beat_at(s)))
+	var reach := 0.0
+	if seconds_at.is_valid():
+		reach = absf(seconds_at.call(TimelineLanes.MAGNET) - seconds_at.call(0.0))
+	return TimelineLanes.pull(seconds, fine, reach)
 
 
 func _seconds(at: Vector3) -> float:
@@ -118,8 +121,8 @@ func _default_readout() -> String:
 
 
 func hint() -> String:
-	return "click or drag to move the playhead" if kind == Kind.SEEK \
-			else "drag a range to loop it, click to switch looping"
+	return "click or drag to move the playhead, snapping to the grid when close (fine for free)" if kind == Kind.SEEK \
+			else "drag a range to loop it, snapping to the grid when close; click to switch looping"
 
 
 static func _clock(seconds: float) -> String:

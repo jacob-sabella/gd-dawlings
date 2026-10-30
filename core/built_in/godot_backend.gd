@@ -231,7 +231,7 @@ func can(capability: StringName) -> bool:
 func open_plugin_window(track_index: int, fx_index: int) -> PluginWindow:
 	var p = hosted_plugin(track_index, fx_index)
 	if p != null:
-		return HostedPluginWindow.opening(p)
+		return HostedPluginWindow.opening(p) if p.is_loaded() else null
 	return super(track_index, fx_index)
 
 
@@ -523,9 +523,12 @@ func _new_fx_row(plugin: String) -> Dictionary:
 				if colon > 0 and HostedPlugins.available() else {}
 		if info.is_empty():
 			return {}
+		# Threaded, the slot goes in at once, named, and fills in once the plugin has loaded
+		# (drive_plugin_loads).
 		var key := hosted.host(info)
 		if key == "":
 			push_warning("%s would not load: %s" % [info["name"], hosted.last_error])
+			Session.notice.emit("%s would not load: %s" % [info["name"], hosted.last_error])
 			return {}
 		return hosted.row(key)
 	var kind := StringName(plugin)
@@ -545,7 +548,11 @@ func _new_fx_row(plugin: String) -> Dictionary:
 ## the effects on the bus follow it, by the name each slot now holds: a copy is a new effect of
 ## the same kind, not the same one.
 func _set_fx_chain(track_index: int, rows: Array) -> void:
-	super(track_index, rows)
+	var kept := []
+	for row in rows:
+		if not _failed_keys.has(row.get("key", "")):
+			kept.append(_filled(row))
+	super(track_index, kept)
 	_restack(track_index)
 
 
@@ -607,7 +614,15 @@ func fx_latency(track_index: int, fx_index: int) -> int:
 	return int(p.latency()) if p != null else 0
 
 
-## The plugin a slot holds, or null.
+## Whether the slot's plugin is still loading (HostedPlugins.host): named, but with nothing on
+## the bus and no parameters yet.
+func fx_loading(track_index: int, fx_index: int) -> bool:
+	var kind := String(fx_kind(track_index, fx_index))
+	return kind.begins_with(HOSTED) and hosted.is_loading(kind.substr(HOSTED.length()))
+
+
+## The plugin a slot holds, or null. One still loading is here too (it names itself and gives the
+## state it is being given, so a project saved meanwhile keeps it), but plays nothing yet.
 func hosted_plugin(track_index: int, fx_index: int) -> Object:
 	var kind := String(fx_kind(track_index, fx_index))
 	return hosted.plugin(kind.substr(HOSTED.length())) if kind.begins_with(HOSTED) else null
@@ -620,7 +635,7 @@ func track_instrument(track_index: int) -> Object:
 		return null
 	for fx_index in state.track(track_index).plugins():
 		var p = hosted_plugin(track_index, fx_index)
-		if p != null and p.is_instrument() and state.fx(track_index, fx_index).enabled:
+		if p != null and p.is_loaded() and p.is_instrument() and state.fx(track_index, fx_index).enabled:
 			return p
 	return null
 
@@ -1787,6 +1802,9 @@ func _drive_meters(delta: float) -> void:
 ## session: as a value, not an edit, as Reaper reports one.
 func _drive_plugins() -> void:
 	HostedPlugins.pump()
+	drive_plugin_loads()
+	for title in HostedPlugins.take_desktop_windows():
+		Session.notice.emit("A plugin opened \"%s\" on your desktop: it is waiting for you there." % title)
 	for t in _kinds:
 		for fx_index in _kinds[t]:
 			var p = hosted_plugin(t, fx_index)
@@ -1801,6 +1819,90 @@ func _drive_plugins() -> void:
 				record_for_replication(at, [v])
 				MixWire.apply(state, at, [v])
 				f.param_text.erase(pi)
+
+
+## Plugins loading on dawkit's thread (HostedPlugins.host), said as they start and once they are
+## done: a slot that was waiting for its plugin gets its parameters and its effect on the bus, and
+## the slots of one that would not load are taken out. Once a frame; the checks call it directly.
+func drive_plugin_loads() -> void:
+	for key in hosted.loading_keys():
+		if not _announced.has(key):
+			_announced[key] = true
+			Session.notice.emit("Loading %s…" % hosted.info(key).get("name", "a plugin"))
+	for done in hosted.poll():
+		_announced.erase(done["key"])
+		_plugin_loaded(done)
+
+
+## Keys of plugins whose loading has been said.
+var _announced := {}
+## Keys of plugins that would not load: a slot naming one (an undo bringing it back) is left out.
+var _failed_keys := {}
+
+
+func _plugin_loaded(done: Dictionary) -> void:
+	var key: String = done["key"]
+	var holding := []
+	for t in state.track_indices():
+		for i in state.track(t).plugins():
+			if state.fx(t, i).host_key == key:
+				holding.append([t, i])
+	if not done["ok"]:
+		_failed_keys[key] = true
+		push_warning("%s would not load: %s" % [done["name"], done["error"]])
+		var state_given: PackedByteArray = done["state"]
+		var tracks := {}
+		for at in holding:
+			tracks[at[0]] = true
+			if not state_given.is_empty():
+				_keep_unhosted(state.fx(at[0], at[1]), done)
+		if state_given.is_empty():
+			Session.notice.emit("%s would not load: %s" % [done["name"], done["error"]])
+			for t in tracks:
+				# Not an edit of anyone's, so not one to undo: the slot never held a plugin.
+				_set_fx_chain(t, _fx_chain_of(t))
+		else:
+			Session.notice.emit("%s would not load (%s): kept as it was, to be saved as it came." % [
+					done["name"], done["error"]])
+			for t in tracks:
+				_restack(t)
+		return
+	Session.notice.emit("%s is ready." % done["name"])
+	var tracks := {}
+	for at in holding:
+		var f := state.fx(at[0], at[1])
+		_write_fx(at[0], at[1], _filled(_fx_row(f)))
+		tracks[at[0]] = true
+	for t in tracks:
+		_restack(t)
+
+
+## A slot whose plugin came with a state of its own (a project's, a copy's) and would not load is
+## kept, named, holding that state, as ProjectBridge keeps a plugin this machine lacks: saving the
+## project then loses nothing.
+func _keep_unhosted(f: MixState.FXState, done: Dictionary) -> void:
+	var e := DawKitEffect.new()
+	e.name = f.name
+	e.enabled = f.enabled
+	e.plugin_format = str(done["info"].get("format", f.type.trim_suffix("i")))
+	e.plugin_id = str(done["info"].get("id", ""))
+	e.instrument = bool(done["info"].get("instrument", false))
+	e.state = done["state"]
+	f.host_key = ""
+	f.set_meta(&"unhosted", e.to_dict())
+
+
+## A slot naming a plugin that has since loaded, given the plugin's parameters as they are now,
+## as it is set (on or bypassed, its mix) kept: a slot laid down while its plugin loaded -- added,
+## or brought back by an undo or a redo remembered then -- has none.
+func _filled(row: Dictionary) -> Dictionary:
+	var key: String = row.get("key", "")
+	if key == "" or not hosted.has(key) or hosted.is_loading(key) or not row.get("param_list", []).is_empty():
+		return row
+	var fresh := hosted.row(key)
+	for kept in ["enabled", "wet", "preset"]:
+		fresh[kept] = row[kept]
+	return fresh
 
 
 ## The meters, and the playhead, to the room.
