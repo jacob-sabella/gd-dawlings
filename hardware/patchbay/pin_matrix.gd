@@ -431,6 +431,8 @@ func _build(shape: Vector2i) -> void:
 		# everything stood in the air in front of the matrix and was too much of it.
 		tag.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 		tag.double_sided = false
+		# Over the towers standing out of the board, which hid it; up only for what is pointed at.
+		tag.no_depth_test = true
 		tag.render_priority = 3
 		tag.outline_render_priority = 2
 		tag.visible = false

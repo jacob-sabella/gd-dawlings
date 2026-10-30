@@ -247,6 +247,8 @@ var guest_audio: GuestAudio = null
 var host_audio: GuestAudio = null
 ## Sound files from a guest's machine into the host's project. See core/session/file_send.gd.
 var files: FileSend = null
+## This player's own sound into their Discord voice channel. See core/audio/discord_feed.gd.
+var discord: DiscordFeed = null
 ## Takes played through the modular wall, recorded as audio from what was played: a player's own,
 ## and on the host each player's, rendered and put in when they end (docs/spatial_loop.md part two,
 ## slice 52). See core/session/modular_takes.gd.
@@ -427,6 +429,9 @@ func _ready() -> void:
 	files = FileSend.new()
 	files.name = "FileSend"
 	add_child(files)
+	discord = DiscordFeed.new()
+	discord.name = "DiscordFeed"
+	add_child(discord)
 	modular_takes = ModularTakes.new()
 	modular_takes.name = "ModularTakes"
 	add_child(modular_takes)

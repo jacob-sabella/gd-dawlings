@@ -144,7 +144,11 @@ func _label(cap: float, colour: Color) -> Label3D:
 	l.set_meta(&"largest", l.font_size)
 	l.modulate = colour
 	l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	l.no_depth_test = false
+	# Drawn over the gear it lies on: flat on the face, the knobs and caps that stand proud of it
+	# hid it. Only ever up for what the pointer is on, which is in view, so it shows through no wall.
+	l.no_depth_test = true
+	l.render_priority = 4
+	l.outline_render_priority = 3
 	l.double_sided = false
 	Lettering.dress(l)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP

@@ -295,6 +295,8 @@ func _process(delta: float) -> void:
 		_refresh_sound()
 		_refresh_midi()
 	_refresh_mic_level()
+	if _discord_meter != null and Session.discord != null:
+		_discord_meter.value = Session.discord.meter
 	if Session.role == Session.Role.SOLO:
 		_listen()
 	else:
@@ -554,6 +556,7 @@ func _build_panel() -> void:
 
 	_column = column
 	_build_project(column)
+	_build_discord(column)
 	_build_lyrics(column)
 	_build_comfort(column)
 
@@ -1356,6 +1359,118 @@ func toast(text: String) -> void:
 
 ## The project: its name and file, and what may be done with it. Anyone may save it where it
 ## is; only the host names a file, and only where the DAW keeps its projects as files here.
+# --- discord ----------------------------------------------------------------------------------
+
+var _discord_on: CheckButton
+var _discord_status: Label
+var _discord_meter: ProgressBar
+var _discord_level: HSlider
+var _discord_sources: VBoxContainer
+## The track keys the sources were last listed for, so the list is made again only when they change.
+var _discord_listed := []
+
+
+## DISCORD: this player's own sound into the Discord voice channel they are in (DiscordFeed): on and
+## off, what goes (the master, the room, the inputs being monitored, any tracks), its level, and
+## what the bot is doing.
+func _build_discord(column: VBoxContainer) -> void:
+	column.add_child(_caption("DISCORD"))
+	_discord_on = _toggle("Send to my Discord voice channel")
+	_discord_on.tooltip_text = "A bot follows you into whatever voice channel you are in and plays what is ticked below. Set it up once: docs/discord.md."
+	_discord_on.toggled.connect(func(on: bool):
+		if Session.discord == null or on == Session.discord.on:
+			return
+		if on:
+			Session.discord.start()
+		else:
+			Session.discord.stop())
+	column.add_child(_discord_on)
+	_discord_status = _label("", 12, DIM)
+	_discord_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_discord_status)
+	var level_row := HBoxContainer.new()
+	level_row.add_theme_constant_override("separation", 10)
+	column.add_child(level_row)
+	level_row.add_child(_label("Level", 14, INK))
+	_discord_level = HSlider.new()
+	_discord_level.min_value = -40.0
+	_discord_level.max_value = 12.0
+	_discord_level.step = 0.5
+	_discord_level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_discord_level.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_discord_level.tooltip_text = "How loud what you send is, for everyone in the channel. Each of them can still turn the bot down."
+	_discord_level.value_changed.connect(func(v: float):
+		if Session.discord != null:
+			Session.discord.set_level(v))
+	level_row.add_child(_discord_level)
+	_discord_meter = ProgressBar.new()
+	_discord_meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_discord_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_discord_meter.show_percentage = false
+	_discord_meter.min_value = 0.0
+	_discord_meter.max_value = 1.0
+	_discord_meter.custom_minimum_size = Vector2(0, 10)
+	_discord_meter.tooltip_text = "What is going to Discord now. Full is clipping."
+	_discord_meter.add_theme_stylebox_override("background", _box(WELL, 4, 0, EDGE))
+	_discord_meter.add_theme_stylebox_override("fill", _box(Color(0.45, 0.5, 0.95), 4, 0))
+	column.add_child(_discord_meter)
+	_discord_sources = VBoxContainer.new()
+	_discord_sources.name = "DiscordSources"
+	_discord_sources.add_theme_constant_override("separation", 2)
+	column.add_child(_discord_sources)
+	if Session.discord != null:
+		Session.discord.changed.connect(_refresh_discord)
+	DAW.timeline_changed.connect(_refresh_discord)
+	DAW.track_changed.connect(func(_index: int, field: StringName):
+		if field == &"name":
+			_refresh_discord())
+	_refresh_discord()
+
+
+## Every source a tick of its own: the master, the inputs being monitored, the room, then each track.
+func _discord_choices() -> Array:
+	var out: Array = [[DiscordFeed.MASTER, "Master out (the whole mix)"],
+			[DiscordFeed.MONITORED, "Whatever I am monitoring (live inputs)"],
+			[DiscordFeed.GEAR, "The room (gear clicks and knocks)"]]
+	if DAW.state != null:
+		for index in DAW.state.track_indices():
+			out.append(["track:%d" % index, "Track %d  %s" % [index, DAW.state.track(index).name]])
+	return out
+
+
+func _refresh_discord() -> void:
+	if _discord_on == null or Session.discord == null:
+		return
+	var feed := Session.discord
+	_discord_on.set_pressed_no_signal(feed.on)
+	_discord_status.text = feed.status()
+	if not is_equal_approx(_discord_level.value, feed.level_db):
+		_discord_level.set_value_no_signal(feed.level_db)
+	var choices := _discord_choices()
+	var keys := choices.map(func(c): return [c[0], c[1]])
+	if keys != _discord_listed:
+		_discord_listed = keys
+		for c in _discord_sources.get_children():
+			c.queue_free()
+		for choice in choices:
+			var tick := CheckBox.new()
+			tick.text = choice[1]
+			tick.add_theme_font_size_override("font_size", 13)
+			tick.add_theme_color_override("font_color", INK)
+			tick.set_meta(&"source", choice[0])
+			var id: String = choice[0]
+			tick.toggled.connect(func(_on: bool): Session.discord.toggle_source(id))
+			_discord_sources.add_child(tick)
+	for tick in _discord_sources.get_children():
+		if tick.is_queued_for_deletion():
+			continue
+		(tick as CheckBox).set_pressed_no_signal(String(tick.get_meta(&"source")) in feed.sources)
+	var engine_ok := DAW.backend is GodotBackend
+	_discord_sources.modulate.a = 1.0 if engine_ok else 0.5
+	if not engine_ok and feed.on:
+		_discord_status.text += "  Only the built-in engine's sound can be sent (launch with --built-in)."
+
+
 func _build_project(column: VBoxContainer) -> void:
 	_project_caption = _caption("PROJECT")
 	column.add_child(_project_caption)

@@ -174,6 +174,8 @@ func _say(what: String) -> void:
 	label.outline_size = 14
 	label.pixel_size = 0.0014
 	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	# Over what stands out of the board (the rim, the darts in it), for the moment it is up.
+	label.no_depth_test = true
 	label.double_sided = false
 	label.modulate = Color(1.0, 0.72, 0.35)
 	label.outline_modulate = Color(0.05, 0.04, 0.03)

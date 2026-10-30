@@ -82,6 +82,8 @@ static func snapshot(s: MixState) -> DawKitProject:
 		out.mute = t.mute
 		out.solo = t.solo
 		out.armed = t.rec_arm
+		out.monitor = clampi(t.monitor, 0, 2) as DawKitTrack.Monitor
+		out.input = t.input
 		out.group = t.group
 		for it in t.items:
 			out.clips.append(ProjectBridge.clip_of(it))
@@ -188,8 +190,10 @@ func can(edit: StringName) -> bool:
 			return DAW.can(DAWBackend.Capability.PROJECT_SAVE)
 		RENDER:
 			return DAW.can(DAWBackend.Capability.RENDER)
+		INPUTS:
+			return DAW.state != null and not DAW.state.inputs.is_empty()
 	return edit in [VOLUME, PAN, MUTE, SOLO, TRANSPORT, RECORD, SEEK, LOOP, METRONOME, TEMPO, UNDO, TRACKS,
-			LOOP_RANGE, TEMPO_MAP, COUNT_IN, AUTOMATION]
+			LOOP_RANGE, TEMPO_MAP, COUNT_IN, AUTOMATION, MONITOR]
 
 
 func position() -> float:
@@ -257,6 +261,21 @@ func set_solo(id: String, on: bool) -> void:
 func set_armed(id: String, on: bool) -> void:
 	if id != DawKitProject.MASTER_ID:
 		DAW.set_track_rec_arm(ProjectBridge.index_of(id), on)
+
+
+## The DAW's own list (MixState.inputs): its devices, each side of one, and the keys.
+func inputs() -> Array:
+	return DAW.state.inputs.duplicate(true) if DAW.state != null else []
+
+
+func set_input(id: String, input: String) -> void:
+	if id != DawKitProject.MASTER_ID:
+		DAW.set_track_input(ProjectBridge.index_of(id), input)
+
+
+func set_monitor(id: String, mode: int) -> void:
+	if id != DawKitProject.MASTER_ID:
+		DAW.set_track_monitor(ProjectBridge.index_of(id), mode)
 
 
 func play() -> void:

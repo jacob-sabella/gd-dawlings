@@ -4583,6 +4583,68 @@ func _test_every_grab_tab_is_clipped_to_its_own_gear() -> void:
 	studio.queue_free()
 
 
+## The Discord feed taps the buses its sources are on, through their faders and mutes, and plays
+## into a sink of its own, never a speaker; its choices are this player's own and kept.
+func _test_the_discord_feed_sends_what_is_ticked_through_its_faders() -> void:
+	var backend := GodotBackend.new()
+	backend.state = MixState.new()
+	DAW.use(backend)
+	var s := DAW.state
+	var master := GodotBackend.MASTER_BUS
+	var rows := DiscordFeed.buses_for([DiscordFeed.MASTER], backend, s)
+	check("the master out is the master's bus (%s)" % [rows], rows.size() == 1 and rows[0][0] == master)
+	var m := AudioServer.get_bus_index(master)
+	var was := AudioServer.get_bus_volume_db(m)
+	AudioServer.set_bus_volume_db(m, -6.0)
+	rows = DiscordFeed.buses_for([DiscordFeed.MASTER], backend, s)
+	check("through its fader, applied by the feed (%.3f)" % rows[0][1], is_equal_approx(rows[0][1], db_to_linear(-6.0)))
+	AudioServer.set_bus_volume_db(m, was)
+	rows = DiscordFeed.buses_for(["track:3"], backend, s)
+	check("a track is its own bus", rows.size() == 1 and rows[0][0] == String(backend.monitor_bus(3)))
+	s.track(3).mute = true
+	backend._apply_tracks()
+	rows = DiscordFeed.buses_for(["track:3"], backend, s)
+	check("and muted, it sends nothing", rows.size() == 1 and rows[0][1] == 0.0)
+	s.track(3).mute = false
+	backend._apply_tracks()
+	for index in s.track_indices():
+		s.track(index).monitor = DAW.MONITOR_OFF
+	s.track(5).input = "audio:scarlett#2"
+	s.track(5).monitor = DAW.MONITOR_ON
+	rows = DiscordFeed.buses_for([DiscordFeed.MONITORED, "track:5"], backend, s)
+	check("what is monitored is the monitored tracks, each once (%s)" % [rows],
+			rows.size() == 1 and rows[0][0] == String(backend.monitor_bus(5)))
+	AudioPorts.ensure_buses()
+	rows = DiscordFeed.buses_for([DiscordFeed.GEAR], backend, s)
+	check("the room is the gear's bus", rows.size() == 1 and rows[0][0] == String(AudioPorts.GEAR))
+	check("on the stand-in, which makes no sound, nothing is tapped but the room",
+			DiscordFeed.buses_for([DiscordFeed.MASTER, "track:3"], OfflineBackend.new(), s).is_empty())
+
+	var feed := DiscordFeed.new()
+	var args := feed.player_args()
+	check("it plays into its own sink, never a speaker", "--device=" + DiscordFeed.SINK in args)
+	feed._retap(DiscordFeed.buses_for([DiscordFeed.MASTER], backend, s))
+	var tapped := false
+	for i in AudioServer.get_bus_effect_count(m):
+		tapped = tapped or AudioServer.get_bus_effect(m, i) == feed._taps.get(master)
+	check("a tap goes on the master's bus", tapped)
+	backend._build_buses()
+	m = AudioServer.get_bus_index(master)
+	feed._retap(DiscordFeed.buses_for([DiscordFeed.MASTER], backend, s))
+	tapped = false
+	for i in AudioServer.get_bus_effect_count(m):
+		tapped = tapped or AudioServer.get_bus_effect(m, i) == feed._taps.get(master)
+	check("and back on it after the buses are made again", tapped)
+	feed._retap([])
+	var left := 0
+	for i in AudioServer.get_bus_effect_count(m):
+		if AudioServer.get_bus_effect(m, i) is AudioEffectCapture and AudioServer.get_bus_effect(m, i) == feed._taps.get(master):
+			left += 1
+	check("ticked off, it is taken off", feed._taps.is_empty() and left == 0)
+	feed.free()
+	_offline()
+
+
 func _test_plugins_are_added_and_removed_from_the_rack() -> void:
 	var backend := GodotBackend.new()
 	backend.state = MixState.new()
@@ -13226,6 +13288,7 @@ func _test_the_hover_card_is_printed_on_the_panel_and_not_in_the_air() -> void:
 	var strip: Node3D = card.get_node("HoverStrip")
 	var label: Label3D = strip.get_child(0)
 	check("flat, never turned to the viewer", label.billboard == BaseMaterial3D.BILLBOARD_DISABLED)
+	check("and drawn over the knobs and caps standing proud of the panel", label.no_depth_test)
 	check("in the panel's own plane, laid back with it",
 			strip.global_basis.z.dot(knob.global_basis.z.normalized()) > 0.999)
 	var local := knob.global_transform.affine_inverse() * strip.global_position
@@ -18051,8 +18114,8 @@ func _test_a_ball_goes_through_the_hoop() -> void:
 	var said := hoop.get_node_or_null("Said") as Label3D
 	check("through it, the hoop counts it and says so (%s)" % [said.text if said else "nothing"],
 			hoop.made == 1 and said != null and said.text == "SWISH")
-	check("on its board, flat on the face and over the rim, not turned to the eye nor drawn through walls",
-			said != null and said.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not said.no_depth_test
+	check("on its board, flat on the face and over the rim, not turned to the eye, drawn over the rim",
+			said != null and said.billboard == BaseMaterial3D.BILLBOARD_DISABLED and said.no_depth_test
 			and said.basis.z.is_equal_approx(Vector3.BACK) and absf(said.position.z - Hoop.BOARD_FRONT) < 0.01
 			and absf(said.position.y - Hoop.BOARD_Y) < Hoop.BOARD_HALF.y and said.position.y > Hoop.RIM_Y)
 	check("and its net swings", hoop.is_processing())
@@ -18167,7 +18230,7 @@ func _test_darts_stick_in_the_board_and_score() -> void:
 	var popup_on := face.affine_inverse() * popup.global_position if popup else Vector3.INF
 	var popup_faces := (face.basis.inverse() * popup.global_basis.z).normalized() if popup else Vector3.ZERO
 	check("on the board, flat on its face just over the dart, not turned to the eye (%s, faces %s)" % [popup_on, popup_faces],
-			popup != null and popup.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not popup.no_depth_test
+			popup != null and popup.billboard == BaseMaterial3D.BILLBOARD_DISABLED and popup.no_depth_test
 			and absf(popup_on.z - DartItem.SCORE_OFF_BOARD) < 0.01 and popup_on.y > on_face.y and popup_faces.z > 0.95)
 	check("it reads as in the board, with its score, not on the floor (%s)" % darts[0].readout(),
 			darts[0].is_stuck() and darts[0].readout() == "in the board: T20")
@@ -23910,6 +23973,48 @@ func _test_the_flat_view_is_the_mix_in_2d() -> void:
 	check("and F2 comes back to 2D", flat.is_open())
 	flat.set_open(false)
 	flat.queue_free()
+
+
+## A track's input and its monitoring are chosen in 2D too, from the DAW's own list, as at the desk.
+func _test_a_tracks_input_and_monitoring_are_set_in_2d() -> void:
+	DAW.use(OfflineBackend.new())
+	var s := DAW.state
+	var flat := FlatView.new()
+	add_child(flat)
+	await get_tree().process_frame
+	flat.set_open(true)
+	var view := flat.view
+	view.refresh()
+	var index: int = s.track_indices()[0]
+	var id := ProjectBridge.id_of(index)
+	var header: DawKitTrackHeader = view.arrange.headers[id]
+	check("the header has a monitor key and an input menu, both live",
+			header.monitor != null and not header.monitor.disabled and header.input != null and not header.input.disabled)
+	check("the 2D host offers the DAW's inputs", flat.host.inputs() == s.inputs and not s.inputs.is_empty())
+	s.track(index).monitor = DAW.MONITOR_OFF
+	header.monitor.emit_signal("pressed")
+	check("a press on I turns monitoring on at the desk", s.track(index).monitor == DAW.MONITOR_ON)
+	view.refresh()
+	header = view.arrange.headers[id]
+	header.monitor.emit_signal("pressed")
+	check("and the next to auto", s.track(index).monitor == DAW.MONITOR_AUTO)
+	view.refresh()
+	header = view.arrange.headers[id]
+	check("lit and marked A on auto", header.monitor.button_pressed and header.monitor.text == "IA")
+	var pick: Array = s.inputs[2]
+	header._list_inputs()
+	var menu := header.input.get_popup()
+	check("the menu lists every input and none chosen (%d)" % menu.item_count, menu.item_count == s.inputs.size() + 1)
+	menu.id_pressed.emit(2)
+	check("choosing one sets the track's input at the desk (%s)" % s.input_of(index), s.input_of(index) == pick[0])
+	view.refresh()
+	header = view.arrange.headers[id]
+	check("and the header says what it records from (%s)" % header.clips_label.text, header.clips_label.text.begins_with(String(pick[1])))
+	header._list_inputs()
+	header.input.get_popup().id_pressed.emit(s.inputs.size())
+	check("and none chosen is a choice", s.input_of(index) == "")
+	flat.queue_free()
+	_offline()
 
 
 func _test_the_2d_view_is_a_panel_in_the_room_in_a_headset() -> void:

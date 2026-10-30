@@ -819,9 +819,9 @@ func bay_skyline() -> void:
 	for tag: Label3D in m._tags:
 		if tag.visible:
 			shown_tags += 1
-			if tag.billboard == BaseMaterial3D.BILLBOARD_DISABLED and not tag.no_depth_test and tag.position.z < 0.01:
+			if tag.billboard == BaseMaterial3D.BILLBOARD_DISABLED and tag.no_depth_test and tag.position.z < 0.01:
 				flat += 1
-	check("a tag lies flat on the board, not turned to the eye nor drawn over what is nearer (%d of %d)" % [flat, shown_tags],
+	check("a tag lies flat on the board, not turned to the eye, and over the towers (%d of %d)" % [flat, shown_tags],
 			shown_tags > 0 and flat == shown_tags)
 	var sum_k := (m.pins().size() + m._col_lines.find(m.line_for(13, false))) * 2
 	check("the column's arrival is a tower on its header", m._towers.transform_of(sum_k).basis.get_scale().z > 0.05)
