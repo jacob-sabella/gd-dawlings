@@ -924,10 +924,13 @@ func check(label: String, condition: bool) -> void:
 ## With DAWLINGS_TESTS_PROGRESS set (CI), a line every 500 checks with the latest one and the
 ## memory in use, so a run killed before its tally still says how far it got.
 var _report_progress := OS.get_environment("DAWLINGS_TESTS_PROGRESS") != ""
+## A progress line every this many checks (DAWLINGS_TESTS_PROGRESS=<n>; on alone, 500).
+var _progress_every := maxi(OS.get_environment("DAWLINGS_TESTS_PROGRESS").to_int(), 1) \
+		if OS.get_environment("DAWLINGS_TESTS_PROGRESS").to_int() > 1 else 500
 
 
 func _progress(label: String) -> void:
-	if _report_progress and _checks % 500 == 0:
+	if _report_progress and _checks % _progress_every == 0:
 		print("[progress] %d checks, %d failed, %d MB static, at: %s" % [_checks, _failures.size(),
 				OS.get_static_memory_usage() / 1048576, label.left(120)])
 
@@ -40482,8 +40485,16 @@ func _test_a_hand_points_by_its_pose() -> void:
 ## window has filled with it.
 func _sine_reads(backend: GodotBackend, sine: SineInto, hz: float, track: int) -> float:
 	sine.hz = hz
-	await _for_seconds(0.8)
-	return backend.track_spectrum(track)[Spectra.band_of(hz)]
+	# Settled: at 0.8 s after a change of note the analyzer still held some of the last one, and a
+	# 1 kHz sine read up to 2 dB under itself (the eq21 check failed on a loaded machine). Then the
+	# middle of five readings, for a dropped buffer.
+	await _for_seconds(1.5)
+	var reads: Array[float] = []
+	for i in 5:
+		reads.append(backend.track_spectrum(track)[Spectra.band_of(hz)])
+		await _for_seconds(0.06)
+	reads.sort()
+	return reads[2]
 
 
 ## FXCatalogue's second EQ kind: AudioEffectEQ21's 21 half-octave bands, gain only, each a parameter
@@ -48867,10 +48878,16 @@ func _test_grain_events_go_to_bandmates_in_a_few_bytes_and_come_back_the_same() 
 	check("an event is %d bytes on the wire, and every one of 200 comes back the same numbers" % GrainVoice.PACKED,
 			GrainVoice.PACKED == 14 and sizes and same)
 	var sound := _grain_sound()
-	var back: Array = events.slice(0, 30).map(func(e: PackedFloat32Array) -> PackedFloat32Array:
+	# Thirty of them a few ticks apart: render plays every window from the first tick to the last,
+	# and the ticks above, up to four million apart, were 16 GB of windows (the CI runner killed).
+	var played: Array = events.slice(0, 30).map(func(e: PackedFloat32Array) -> PackedFloat32Array:
+			var near := e.duplicate()
+			near[GrainVoice.TICK] = float(int(e[GrainVoice.TICK]) % 90)
+			return near)
+	var back: Array = played.map(func(e: PackedFloat32Array) -> PackedFloat32Array:
 			return GrainVoice.unpack(GrainVoice.pack(e)))
 	check("so what bandmates render from them is what its player played, sample for sample",
-			GrainVoice.render(sound, back) == GrainVoice.render(sound, events.slice(0, 30)))
+			GrainVoice.render(sound, back) == GrainVoice.render(sound, played))
 	var e := GrainVoice.event(12, 0.25, 0.08, 30.0, 0.15)
 	check("on its grids, a hand's numbers are kept as near as matters (%s)" % [e], absf(e[GrainVoice.AT] - 0.25) < 1e-6
 			and absf(e[GrainVoice.LENGTH] - 0.08) < 1e-6 and absf(e[GrainVoice.DENSITY] - 30.0) < 1e-4
